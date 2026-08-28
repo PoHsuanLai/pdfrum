@@ -1,6 +1,1194 @@
-//! PDF standard security (ISO 32000 §7.6): RC4 and AES-CBC decryption with
-//! MD5/SHA-1/SHA-2 key derivation via RustCrypto, covering standard security
-//! handler revisions 2–6 with distinct wrong-password reporting and per-class
-//! crypt filters (`/StmF`, `/StrF`) (SPEC.md §3).
+//! PDF standard security (ISO 32000 §7.6): opening an encrypted document and
+//! decrypting its strings and streams, for standard security handler
+//! revisions 2 through 6.
+//!
+//! A document's `/Encrypt` dictionary plus a password produce a
+//! [`SecurityHandler`], and every string and stream the parser reads passes
+//! through [`SecurityHandler::decrypt`] keyed by the indirect object it
+//! belongs to. Revisions 2 to 4 derive an RC4 or AES-128 key by an MD5
+//! ladder over the padded password; revisions 5 and 6 verify a SHA-2 hash and
+//! unwrap a 32-byte AES-256 key that the file stores directly.
+//!
+//! ```
+//! use pdfrum_crypt::{CryptClass, SecurityHandler};
+//! use pdfrum_object::{Dict, NoResolve, ObjRef};
+//!
+//! // A document with no /Encrypt needs no handler: payloads pass through.
+//! let handler = SecurityHandler::Identity;
+//! assert_eq!(handler.decrypt(ObjRef::new(1, 0), CryptClass::Stream, b"raw"), b"raw");
+//! assert_eq!(handler.permissions(false), 0xFFFF_FFFF);
+//! # let _ = (Dict::new(), NoResolve);
+//! ```
+//!
+//! # What this crate does not do
+//!
+//! It decrypts; it does not encrypt. Writing an encrypted file belongs to the
+//! save path and is not part of the read path's contract.
+//!
+//! Two crypto-driven behaviors also live outside this crate, because both need
+//! to walk the object graph, which this crate deliberately cannot:
+//!
+//! - **The signature exemption.** A `/Contents` value whose parent dictionary
+//!   has a `/Type` or `/FT` key is deferred during the decrypt walk; once the
+//!   parent has been decrypted its type can finally be read, and a parent that
+//!   turns out to be a signature dictionary (`/Type /Sig`, or `/FT /Sig` when
+//!   `/Type` is absent) keeps its contents *undecrypted*. The test cannot be
+//!   made earlier because those names are themselves encrypted strings until
+//!   the parent is done. See [`is_signature_dict`], which the walker calls.
+//! - **The metadata exemption.** When [`SecurityHandler::encrypt_metadata`] is
+//!   false the object `/Root/Metadata` points at is not decrypted.
 
 #![forbid(unsafe_code)]
+// Every byte reaching this crate came from an untrusted file or a password:
+// index with `get()` (SPEC.md §3).
+#![warn(clippy::indexing_slicing)]
+
+mod key;
+mod object;
+mod primitives;
+mod rc4;
+mod standard;
+
+#[cfg(test)]
+mod test_fixtures;
+
+pub use key::SmallKey;
+pub use object::CryptClass;
+pub use primitives::sha1;
+pub use rc4::rc4;
+pub use standard::{Cipher, EncryptParams, PAD, PasswordEncoding, parse_encrypt_dict};
+
+use pdfrum_object::{Dict, Name, ObjRef, Resolve, names};
+
+/// What went wrong building a security handler.
+///
+/// The C++ collapses every one of these into a single "password error" at the
+/// parser boundary; splitting them changes no document's fate but lets a
+/// caller tell "this needs a password" from "we cannot do this document's
+/// cryptography" (Divergence D3).
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum Error {
+    /// The password is neither the user nor the owner password.
+    #[error("the supplied password is not the user or owner password")]
+    WrongPassword,
+    /// `/Filter` names a handler other than `/Standard`. Public-key handlers
+    /// (`/Adobe.PubSec`) land here.
+    #[error("/Filter {0:?} is not the standard security handler")]
+    UnsupportedHandler(Box<[u8]>),
+    /// `/StmF` and `/StrF` name different crypt filters, which the standard
+    /// handler refuses rather than using a cipher per class.
+    #[error("/StmF and /StrF name different crypt filters")]
+    MismatchedCryptFilters,
+    /// The named crypt filter is not a key in `/CF`. An empty name lands here
+    /// too: both class keys absent is a rejection, not the specification's
+    /// `/Identity` default.
+    #[error("crypt filter {0:?} is not present in /CF")]
+    MissingCryptFilter(Box<[u8]>),
+    /// The dictionary is structurally unusable.
+    #[error("/Encrypt is malformed: {0}")]
+    MalformedEncryptDict(&'static str),
+    /// The resolved key length is one this cipher does not accept.
+    #[error("key length {len} bytes is invalid for {cipher}")]
+    CipherKeyLength {
+        /// The cipher that rejected the length.
+        cipher: &'static str,
+        /// The length in bytes.
+        len: usize,
+    },
+}
+
+/// A document's decryption state: which cipher, which key, and what the
+/// password unlocked.
+///
+/// A closed enum rather than a trait, because the set of standard security
+/// handlers is closed: adding a variant must break every `match` on it.
+/// `Rc4V2` covers `/V 1` to `/V 4` without an AES crypt filter; `AesV4` is
+/// AESV2, whose per-object key is an MD5 over the object number and the four
+/// bytes `sAlT`; `AesV5` is AESV3, whose 32-byte key is used verbatim with no
+/// per-object derivation; `Identity` is both an unencrypted document and one
+/// naming `/Identity` as its crypt filter.
+#[derive(Debug, Clone)]
+pub enum SecurityHandler {
+    /// RC4, with a 5- to 16-byte file key.
+    Rc4V2 {
+        /// The file encryption key.
+        key: SmallKey,
+        /// `/R`, the handler revision.
+        revision: u8,
+        /// `/P`, as the unsigned word permissions are compared as.
+        permissions: u32,
+        /// Whether the owner password was the one that opened the document.
+        owner_unlocked: bool,
+        /// `/EncryptMetadata`.
+        encrypt_metadata: bool,
+        /// Which password spelling worked.
+        encoding: PasswordEncoding,
+    },
+    /// AESV2: a 16- or 24-byte file key with per-object `sAlT` derivation.
+    AesV4 {
+        /// The file encryption key.
+        key: SmallKey,
+        /// `/R`, the handler revision.
+        revision: u8,
+        /// `/P`, as the unsigned word permissions are compared as.
+        permissions: u32,
+        /// Whether the owner password was the one that opened the document.
+        owner_unlocked: bool,
+        /// `/EncryptMetadata`.
+        encrypt_metadata: bool,
+        /// Which password spelling worked.
+        encoding: PasswordEncoding,
+    },
+    /// AESV3 (`/V 5`, revision 5 or 6): the 32-byte key is used as-is.
+    AesV5 {
+        /// The file encryption key.
+        key: Box<[u8; 32]>,
+        /// `/R`, the handler revision.
+        revision: u8,
+        /// `/P`, as the unsigned word permissions are compared as.
+        permissions: u32,
+        /// Whether the owner password was the one that opened the document.
+        owner_unlocked: bool,
+        /// `/EncryptMetadata`.
+        encrypt_metadata: bool,
+        /// Which password spelling worked.
+        encoding: PasswordEncoding,
+    },
+    /// No encryption, or `/StrF /Identity`.
+    Identity,
+}
+
+impl SecurityHandler {
+    /// Build a handler from the trailer's `/Encrypt` dictionary.
+    ///
+    /// `file_id` is the **first** element of the trailer's `/ID` array as raw
+    /// bytes; pass `&[]` when `/ID` is absent, which contributes nothing to
+    /// the key rather than contributing an empty marker. `password` is the
+    /// caller's raw bytes, uncapped in length — the specification's 127-byte
+    /// limit is not enforced, matching the C++.
+    ///
+    /// A non-empty password is tried as the *owner* password first and only
+    /// then as the user password; an empty password is only ever a user
+    /// password.
+    ///
+    /// ```
+    /// use pdfrum_crypt::{Error, SecurityHandler};
+    /// use pdfrum_object::{Dict, NoResolve, Object, PdfString, names};
+    ///
+    /// // A public-key handler is not the standard one.
+    /// let dict = Dict::from_pairs([(
+    ///     names::FILTER.clone(),
+    ///     Object::Name(pdfrum_object::Name::from("Adobe.PubSec")),
+    /// )]);
+    /// assert!(matches!(
+    ///     SecurityHandler::from_encrypt_dict(&dict, &[], b"", &NoResolve),
+    ///     Err(Error::UnsupportedHandler(_))
+    /// ));
+    /// # let _ = PdfString::literal(b"");
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// [`Error::WrongPassword`] when neither role accepts the password, and
+    /// the parse errors of [`parse_encrypt_dict`] when the dictionary itself
+    /// cannot be used.
+    pub fn from_encrypt_dict(
+        dict: &Dict,
+        file_id: &[u8],
+        password: &[u8],
+        r: &impl Resolve,
+    ) -> Result<Self, Error> {
+        let params = parse_encrypt_dict(dict, r)?;
+        if params.cipher == Cipher::None {
+            return Ok(Self::Identity);
+        }
+
+        if !password.is_empty()
+            && let Some(unlocked) = standard::try_password(&params, password, true, file_id)
+        {
+            return Ok(Self::assemble(&params, unlocked, true));
+        }
+        standard::try_password(&params, password, false, file_id)
+            .map(|unlocked| Self::assemble(&params, unlocked, false))
+            .ok_or(Error::WrongPassword)
+    }
+
+    /// Pick the variant the resolved cipher and key length call for.
+    fn assemble(
+        params: &EncryptParams,
+        unlocked: standard::Unlocked,
+        owner_unlocked: bool,
+    ) -> Self {
+        let standard::Unlocked { key, encoding } = unlocked;
+        let revision = u8::try_from(params.revision).unwrap_or(u8::MAX);
+        let permissions = params.permissions;
+        let encrypt_metadata = params.encrypt_metadata;
+        match params.cipher {
+            Cipher::None => Self::Identity,
+            Cipher::Rc4 => Self::Rc4V2 {
+                key,
+                revision,
+                permissions,
+                owner_unlocked,
+                encrypt_metadata,
+                encoding,
+            },
+            // AESV3 is exactly "AES with a 32-byte key"; PDFium never reads
+            // the /CFM name to tell the two apart.
+            Cipher::Aes if key.len() == SmallKey::MAX_LEN => {
+                let mut full = [0u8; 32];
+                if let Some(head) = full.get_mut(..key.len()) {
+                    head.copy_from_slice(key.bytes());
+                }
+                Self::AesV5 {
+                    key: Box::new(full),
+                    revision,
+                    permissions,
+                    owner_unlocked,
+                    encrypt_metadata,
+                    encoding,
+                }
+            }
+            Cipher::Aes => Self::AesV4 {
+                key,
+                revision,
+                permissions,
+                owner_unlocked,
+                encrypt_metadata,
+                encoding,
+            },
+        }
+    }
+
+    /// Decrypt one string or stream payload belonging to indirect object
+    /// `obj`.
+    ///
+    /// Infallible by design: PDFium never fails a decrypt, it produces a
+    /// best-effort result. An AES payload shorter than seventeen bytes, a
+    /// trailing partial block, and a final block whose padding byte is out of
+    /// range all yield less output than input rather than an error.
+    ///
+    /// `obj` must be the *enclosing indirect object*, not a nested one: a
+    /// direct string inside an indirect dictionary is keyed by the
+    /// dictionary's number and generation.
+    ///
+    /// ```
+    /// use pdfrum_crypt::{CryptClass, SecurityHandler};
+    /// use pdfrum_object::ObjRef;
+    ///
+    /// // Fewer than seventeen bytes of AES ciphertext is all initialisation
+    /// // vector and no payload.
+    /// let handler = SecurityHandler::AesV5 {
+    ///     key: Box::new([0; 32]),
+    ///     revision: 6,
+    ///     permissions: 0xFFFF_FFFC,
+    ///     owner_unlocked: false,
+    ///     encrypt_metadata: true,
+    ///     encoding: pdfrum_crypt::PasswordEncoding::AsGiven,
+    /// };
+    /// assert!(handler.decrypt(ObjRef::new(4, 0), CryptClass::String, &[0; 16]).is_empty());
+    /// ```
+    #[must_use]
+    pub fn decrypt(&self, obj: ObjRef, class: CryptClass, data: &[u8]) -> Vec<u8> {
+        // The class is matched exhaustively but never branches: PDFium
+        // refuses documents whose /StmF and /StrF differ and ignores /EFF
+        // entirely, so one cipher and key serve all three (Divergence D1).
+        match class {
+            CryptClass::Stream | CryptClass::String | CryptClass::Embedded => {}
+        }
+        match self {
+            Self::Identity => data.to_vec(),
+            Self::Rc4V2 { key, .. } => object::decrypt_rc4(key, obj, data),
+            Self::AesV4 { key, .. } => object::decrypt_aes_v4(key, obj, data),
+            Self::AesV5 { key, .. } => object::decrypt_aes_v5(key, data),
+        }
+    }
+
+    /// The permission word as the C++ reports it.
+    ///
+    /// `owner` selects the owner-unlocked override: a document opened with
+    /// the owner password reports all permissions granted, while the user
+    /// reading of the same document still reports what `/P` allows. The
+    /// standard handler then clears the two reserved low bits and forces bits
+    /// 7 through 32 set, so `/P 4092` reports `0xFFFFFFFC` either way.
+    ///
+    /// An unencrypted document has no restrictions at all.
+    ///
+    /// ```
+    /// # use pdfrum_crypt::SecurityHandler;
+    /// assert_eq!(SecurityHandler::Identity.permissions(false), 0xFFFF_FFFF);
+    /// ```
+    #[must_use]
+    pub fn permissions(&self, owner: bool) -> u32 {
+        let (permissions, owner_unlocked) = match self {
+            Self::Identity => return 0xFFFF_FFFF,
+            Self::Rc4V2 {
+                permissions,
+                owner_unlocked,
+                ..
+            }
+            | Self::AesV4 {
+                permissions,
+                owner_unlocked,
+                ..
+            }
+            | Self::AesV5 {
+                permissions,
+                owner_unlocked,
+                ..
+            } => (*permissions, *owner_unlocked),
+        };
+        let base = if owner_unlocked && owner {
+            0xFFFF_FFFF
+        } else {
+            permissions
+        };
+        (base & 0xFFFF_FFFC) | 0xFFFF_F0C0
+    }
+
+    /// Whether the document's metadata stream is encrypted (`/EncryptMetadata`,
+    /// default true).
+    ///
+    /// The parser consults this to decide whether to skip decrypting the
+    /// object `/Root/Metadata` points at.
+    #[must_use]
+    pub fn encrypt_metadata(&self) -> bool {
+        match self {
+            Self::Identity => true,
+            Self::Rc4V2 {
+                encrypt_metadata, ..
+            }
+            | Self::AesV4 {
+                encrypt_metadata, ..
+            }
+            | Self::AesV5 {
+                encrypt_metadata, ..
+            } => *encrypt_metadata,
+        }
+    }
+
+    /// `/R`, the handler revision. Zero for an unencrypted document.
+    #[must_use]
+    pub fn revision(&self) -> u8 {
+        match self {
+            Self::Identity => 0,
+            Self::Rc4V2 { revision, .. }
+            | Self::AesV4 { revision, .. }
+            | Self::AesV5 { revision, .. } => *revision,
+        }
+    }
+
+    /// Whether the owner password opened this document.
+    #[must_use]
+    pub fn owner_unlocked(&self) -> bool {
+        match self {
+            Self::Identity => false,
+            Self::Rc4V2 { owner_unlocked, .. }
+            | Self::AesV4 { owner_unlocked, .. }
+            | Self::AesV5 { owner_unlocked, .. } => *owner_unlocked,
+        }
+    }
+
+    /// Which spelling of the password unlocked the document.
+    #[must_use]
+    pub fn password_encoding(&self) -> PasswordEncoding {
+        match self {
+            Self::Identity => PasswordEncoding::AsGiven,
+            Self::Rc4V2 { encoding, .. }
+            | Self::AesV4 { encoding, .. }
+            | Self::AesV5 { encoding, .. } => *encoding,
+        }
+    }
+}
+
+/// Whether `dict` is a signature dictionary, whose `/Contents` must stay
+/// undecrypted.
+///
+/// The test is on the *direct* `/Type`, falling back to `/FT` only when
+/// `/Type` is absent entirely — a `/Type` of some other value does not let
+/// `/FT` speak. The decrypt walk calls this after the enclosing dictionary
+/// has been decrypted, because until then both names are ciphertext.
+///
+/// ```
+/// use pdfrum_crypt::is_signature_dict;
+/// use pdfrum_object::{Dict, Name, Object, names};
+///
+/// let sig = Dict::from_pairs([(names::TYPE.clone(), Object::Name(names::SIG.clone()))]);
+/// assert!(is_signature_dict(&sig));
+///
+/// // A field dictionary of signature type counts too, via /FT.
+/// let field = Dict::from_pairs([(names::FT.clone(), Object::Name(names::SIG.clone()))]);
+/// assert!(is_signature_dict(&field));
+///
+/// // But a /Type that is present and something else wins over /FT.
+/// let annot = Dict::from_pairs([
+///     (names::TYPE.clone(), Object::Name(Name::from("Annot"))),
+///     (names::FT.clone(), Object::Name(names::SIG.clone())),
+/// ]);
+/// assert!(!is_signature_dict(&annot));
+/// ```
+#[must_use]
+pub fn is_signature_dict(dict: &Dict) -> bool {
+    let key = if dict.contains_key(names::TYPE) {
+        names::TYPE
+    } else {
+        names::FT
+    };
+    signature_valued(dict, key)
+}
+
+/// Whether `key`'s value spells `Sig`, as a name or as a string.
+///
+/// The C++ reads the value through an accessor that gives a name and a string
+/// the same spelling, so a `/Type (Sig)` counts.
+fn signature_valued(dict: &Dict, key: &Name) -> bool {
+    dict.raw(key).is_some_and(|value| {
+        value.as_name().is_some_and(|n| n == names::SIG)
+            || value
+                .as_string()
+                .is_some_and(|s| &*s.bytes == names::SIG.as_bytes())
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{CryptClass, Error, SecurityHandler, is_signature_dict};
+    use crate::standard::Cipher;
+    use crate::test_fixtures::{self, unhex};
+    use pdfrum_object::{Dict, Name, NoResolve, ObjRef, Object, PdfString, names};
+
+    /// The parse-only view a key-length test wants.
+    fn cipher_of(dict: &Dict) -> Result<(Cipher, usize), Error> {
+        super::parse_encrypt_dict(dict, &NoResolve).map(|p| (p.cipher, p.key_len))
+    }
+
+    // ---- T7: the AESV2 fixture, and the /Length promotion it depends on ----
+
+    #[test]
+    fn aes_v2_fixture_promotes_a_byte_length_to_bits() {
+        let dict = test_fixtures::encrypted_pdf_dict();
+        assert_eq!(cipher_of(&dict), Ok((Cipher::Aes, 16)));
+    }
+
+    #[test]
+    fn aes_v2_fixture_opens_with_either_password() {
+        let dict = test_fixtures::encrypted_pdf_dict();
+        let id = unhex("1B0FD0F5E29AD84DBF67775E9E3B009F");
+
+        let user = SecurityHandler::from_encrypt_dict(&dict, &id, b"1234", &NoResolve)
+            .expect("the user password");
+        assert!(matches!(user, SecurityHandler::AesV4 { .. }));
+        assert!(!user.owner_unlocked());
+        assert_eq!(user.permissions(false), 0xFFFF_F2C0);
+        assert_eq!(user.permissions(true), 0xFFFF_F2C0);
+        assert_eq!(user.revision(), 4);
+
+        let owner = SecurityHandler::from_encrypt_dict(&dict, &id, b"5678", &NoResolve)
+            .expect("the owner password");
+        assert!(owner.owner_unlocked());
+        assert_eq!(owner.permissions(true), 0xFFFF_FFFC);
+        assert_eq!(owner.permissions(false), 0xFFFF_F2C0);
+    }
+
+    #[test]
+    fn aes_v2_fixture_rejects_the_wrong_password() {
+        let dict = test_fixtures::encrypted_pdf_dict();
+        let id = unhex("1B0FD0F5E29AD84DBF67775E9E3B009F");
+        for password in [&b""[..], b"tiger"] {
+            assert_eq!(
+                SecurityHandler::from_encrypt_dict(&dict, &id, password, &NoResolve).unwrap_err(),
+                Error::WrongPassword,
+                "password {password:?}"
+            );
+        }
+    }
+
+    // ---- T8 / T9 / T10: the AES-256 revisions ----
+
+    #[test]
+    fn revision_5_fixture_opens_with_all_four_spellings() {
+        let dict = test_fixtures::r5_dict();
+        let id = unhex("7ca64129d20fc9745f1bfc0e4166590a");
+
+        let owner_keys: Vec<_> = [&b"\xe2ge"[..], b"\xc3\xa2ge"]
+            .iter()
+            .map(|password| {
+                let handler = SecurityHandler::from_encrypt_dict(&dict, &id, password, &NoResolve)
+                    .unwrap_or_else(|_| panic!("owner {password:?}"));
+                assert!(handler.owner_unlocked());
+                assert_eq!(handler.revision(), 5);
+                match handler {
+                    SecurityHandler::AesV5 { key, .. } => *key,
+                    _ => panic!("expected AesV5"),
+                }
+            })
+            .collect();
+        // Both spellings of the same role arrive at the same file key.
+        assert_eq!(owner_keys.first(), owner_keys.last());
+
+        for password in [&b"h\xf4tel"[..], b"h\xc3\xb4tel"] {
+            let handler = SecurityHandler::from_encrypt_dict(&dict, &id, password, &NoResolve)
+                .unwrap_or_else(|_| panic!("user {password:?}"));
+            assert!(!handler.owner_unlocked());
+        }
+    }
+
+    // At revision 5 the /ID plays no part: the same passwords work without it.
+    #[test]
+    fn revision_5_ignores_the_file_id() {
+        let dict = test_fixtures::r5_dict();
+        assert!(SecurityHandler::from_encrypt_dict(&dict, &[], b"h\xf4tel", &NoResolve).is_ok());
+        assert!(SecurityHandler::from_encrypt_dict(&dict, &[], b"\xe2ge", &NoResolve).is_ok());
+    }
+
+    // T8 — the /Perms block is genuinely checked, not just decrypted.
+    #[test]
+    fn a_tampered_perms_block_rejects_the_password() {
+        let mut dict = test_fixtures::r5_dict();
+        let mut perms = unhex("c954c264d796dfd131ddb784f5a8b1bf");
+        if let Some(byte) = perms.get_mut(9) {
+            *byte ^= 0xFF;
+        }
+        dict.push(
+            names::PERMS.clone(),
+            Object::Str(PdfString::literal(&perms)),
+        );
+        assert_eq!(
+            SecurityHandler::from_encrypt_dict(&dict, &[], b"h\xf4tel", &NoResolve).unwrap_err(),
+            Error::WrongPassword
+        );
+    }
+
+    // T9 — the only test that drives the hardened hash's 64-round loop, the
+    // SHA-384/512 branches and the mod-3 selector.
+    #[test]
+    fn revision_6_fixture_opens_with_all_four_spellings() {
+        let dict = test_fixtures::r6_dict();
+        for password in [&b"\xe2ge"[..], b"\xc3\xa2ge"] {
+            let handler = SecurityHandler::from_encrypt_dict(&dict, &[], password, &NoResolve)
+                .unwrap_or_else(|_| panic!("owner {password:?}"));
+            assert!(handler.owner_unlocked());
+            assert_eq!(handler.revision(), 6);
+        }
+        for password in [&b"h\xf4tel"[..], b"h\xc3\xb4tel"] {
+            let handler = SecurityHandler::from_encrypt_dict(&dict, &[], password, &NoResolve)
+                .unwrap_or_else(|_| panic!("user {password:?}"));
+            assert!(!handler.owner_unlocked());
+        }
+        assert_eq!(
+            SecurityHandler::from_encrypt_dict(&dict, &[], b"tiger", &NoResolve).unwrap_err(),
+            Error::WrongPassword
+        );
+    }
+
+    // T10 — bug_644.pdf: ASCII passwords, so the encoding fallback must not
+    // fire, and a /P of 4092 that masks to the same word for both roles.
+    //
+    // The roles are the reverse of what the C++ test *names* suggest: `b` is
+    // the owner password and `a` the user one. The embedder test cannot tell,
+    // because both roles report the same permissions here — which is exactly
+    // why `/P 4092` was picked for that fixture.
+    #[test]
+    fn revision_5_alternate_fixture() {
+        let dict = test_fixtures::bug_644_dict();
+        let owner = SecurityHandler::from_encrypt_dict(&dict, &[], b"b", &NoResolve)
+            .expect("the owner password");
+        assert!(owner.owner_unlocked());
+        assert_eq!(owner.permissions(true), 0xFFFF_FFFC);
+        assert_eq!(owner.permissions(false), 0xFFFF_FFFC);
+
+        let user = SecurityHandler::from_encrypt_dict(&dict, &[], b"a", &NoResolve)
+            .expect("the user password");
+        assert!(!user.owner_unlocked());
+        assert_eq!(user.permissions(false), 0xFFFF_FFFC);
+        // Both roles reach the same file key, since /OE and /UE wrap it.
+        assert_eq!(
+            format!("{:?}", (owner.revision(), user.revision())),
+            "(5, 5)"
+        );
+
+        for password in [&b""[..], b"tiger"] {
+            assert_eq!(
+                SecurityHandler::from_encrypt_dict(&dict, &[], password, &NoResolve).unwrap_err(),
+                Error::WrongPassword,
+                "password {password:?}"
+            );
+        }
+        assert_eq!(
+            owner.password_encoding(),
+            crate::PasswordEncoding::AsGiven,
+            "an ASCII password never converts"
+        );
+    }
+
+    // ---- T14: the key-length resolution table ----
+
+    /// One row: `/V`, `/Length`, the crypt filter's own `/Length`, `/CFM`,
+    /// and what the pair should resolve to.
+    type KeyLengthRow = (
+        i64,
+        Option<i64>,
+        Option<i64>,
+        Option<&'static str>,
+        Result<(Cipher, usize), Error>,
+    );
+
+    #[test]
+    fn key_length_resolution_table() {
+        use test_fixtures::encrypt_dict;
+        let cases: [KeyLengthRow; 14] = [
+            (1, None, None, None, Ok((Cipher::Rc4, 5))),
+            // /V 1 is 40-bit by definition; its /Length is ignored outright.
+            (1, Some(128), None, None, Ok((Cipher::Rc4, 5))),
+            (2, None, None, None, Ok((Cipher::Rc4, 5))),
+            (2, Some(40), None, None, Ok((Cipher::Rc4, 5))),
+            (2, Some(128), None, None, Ok((Cipher::Rc4, 16))),
+            (
+                2,
+                Some(256),
+                None,
+                None,
+                Err(Error::CipherKeyLength {
+                    cipher: "RC4",
+                    len: 32,
+                }),
+            ),
+            // The `< 40 ⇒ × 8` promotion lives only in the /V >= 4 branch, so
+            // /Length 8 here is a bare divide to a one-byte key.
+            (
+                2,
+                Some(8),
+                None,
+                None,
+                Err(Error::CipherKeyLength {
+                    cipher: "RC4",
+                    len: 1,
+                }),
+            ),
+            (4, Some(128), None, Some("V2"), Ok((Cipher::Rc4, 16))),
+            (4, Some(128), Some(16), Some("AESV2"), Ok((Cipher::Aes, 16))),
+            (
+                4,
+                Some(128),
+                Some(128),
+                Some("AESV2"),
+                Ok((Cipher::Aes, 16)),
+            ),
+            (4, None, None, Some("AESV2"), Ok((Cipher::Aes, 16))),
+            (
+                4,
+                Some(128),
+                Some(40),
+                Some("AESV2"),
+                Err(Error::CipherKeyLength {
+                    cipher: "AES",
+                    len: 5,
+                }),
+            ),
+            (5, Some(256), Some(32), Some("AESV3"), Ok((Cipher::Aes, 32))),
+            (5, None, None, Some("AESV3"), Ok((Cipher::Aes, 32))),
+        ];
+        for (version, length, filter_length, method, expected) in cases {
+            let dict = encrypt_dict(version, length, filter_length, method);
+            assert_eq!(
+                cipher_of(&dict),
+                expected,
+                "/V {version} /Length {length:?} /CF Length {filter_length:?} /CFM {method:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_negative_filter_length_is_malformed() {
+        let dict = test_fixtures::encrypt_dict(4, Some(128), Some(-8), Some("AESV2"));
+        assert!(matches!(
+            cipher_of(&dict),
+            Err(Error::MalformedEncryptDict(_))
+        ));
+    }
+
+    // The /Identity crypt filter is a handler, not a failure.
+    #[test]
+    fn an_identity_crypt_filter_yields_the_identity_handler() {
+        let dict = test_fixtures::identity_dict();
+        assert_eq!(cipher_of(&dict), Ok((Cipher::None, 0)));
+        let handler = SecurityHandler::from_encrypt_dict(&dict, &[], b"", &NoResolve)
+            .expect("identity needs no password");
+        assert!(matches!(handler, SecurityHandler::Identity));
+        assert_eq!(
+            handler.decrypt(ObjRef::new(3, 0), CryptClass::Stream, b"plain"),
+            b"plain"
+        );
+    }
+
+    // ---- T15: the crypt-filter class rules ----
+
+    #[test]
+    fn differing_stream_and_string_filters_are_refused() {
+        let mut dict = test_fixtures::encrypt_dict(4, Some(128), Some(16), Some("AESV2"));
+        dict.push(names::STR_F.clone(), Object::Name(Name::from("Other")));
+        assert_eq!(cipher_of(&dict), Err(Error::MismatchedCryptFilters));
+    }
+
+    // An absent /StmF against an explicit /StrF is a mismatch too: the
+    // comparison is on the looked-up bytes, and absent reads as empty.
+    #[test]
+    fn an_absent_stream_filter_against_a_named_string_filter_is_a_mismatch() {
+        let mut dict = test_fixtures::bare_v4_dict();
+        dict.push(names::STR_F.clone(), Object::Name(Name::from("StdCF")));
+        assert_eq!(cipher_of(&dict), Err(Error::MismatchedCryptFilters));
+    }
+
+    // Both absent is *not* the specification's /Identity default: the empty
+    // name is looked up in /CF, is not there, and the document is refused.
+    #[test]
+    fn both_class_filters_absent_is_a_missing_filter_not_identity() {
+        let dict = test_fixtures::bare_v4_dict();
+        assert_eq!(
+            cipher_of(&dict),
+            Err(Error::MissingCryptFilter(Box::default()))
+        );
+    }
+
+    #[test]
+    fn a_missing_crypt_filter_dictionary_is_malformed() {
+        let dict = Dict::from_pairs([
+            (names::FILTER.clone(), Object::Name(names::STANDARD.clone())),
+            (names::V.clone(), Object::Int(4)),
+            (names::R.clone(), Object::Int(4)),
+        ]);
+        assert!(matches!(
+            cipher_of(&dict),
+            Err(Error::MalformedEncryptDict(_))
+        ));
+    }
+
+    // ---- Handler-level facts ----
+
+    #[test]
+    fn a_non_standard_filter_is_unsupported() {
+        for spelling in ["Adobe.PubSec", "Nonesuch"] {
+            let dict =
+                Dict::from_pairs([(names::FILTER.clone(), Object::Name(Name::from(spelling)))]);
+            assert_eq!(
+                SecurityHandler::from_encrypt_dict(&dict, &[], b"", &NoResolve).unwrap_err(),
+                Error::UnsupportedHandler(spelling.as_bytes().into())
+            );
+        }
+    }
+
+    // The /Filter check is name-typed, so a string-valued one is not the
+    // standard handler even though it spells "Standard".
+    #[test]
+    fn a_string_valued_filter_is_not_the_standard_handler() {
+        let dict = Dict::from_pairs([(
+            names::FILTER.clone(),
+            Object::Str(PdfString::literal(b"Standard")),
+        )]);
+        assert_eq!(
+            SecurityHandler::from_encrypt_dict(&dict, &[], b"", &NoResolve).unwrap_err(),
+            Error::UnsupportedHandler(Box::default())
+        );
+    }
+
+    // /EncryptMetadata is read boolean-typed before resolving, so an Int(0)
+    // there does not turn metadata encryption off.
+    #[test]
+    fn encrypt_metadata_reads_only_a_boolean() {
+        let mut dict = test_fixtures::encrypt_dict(4, Some(128), Some(16), Some("AESV2"));
+        dict.push(names::ENCRYPT_METADATA.clone(), Object::Int(0));
+        let params = super::parse_encrypt_dict(&dict, &NoResolve).expect("parses");
+        assert!(params.encrypt_metadata, "an integer is not a boolean");
+
+        let mut dict = test_fixtures::encrypt_dict(4, Some(128), Some(16), Some("AESV2"));
+        dict.push(names::ENCRYPT_METADATA.clone(), Object::Bool(false));
+        let params = super::parse_encrypt_dict(&dict, &NoResolve).expect("parses");
+        assert!(!params.encrypt_metadata);
+    }
+
+    #[test]
+    fn identity_reports_no_restrictions_and_no_revision() {
+        let handler = SecurityHandler::Identity;
+        assert_eq!(handler.permissions(false), 0xFFFF_FFFF);
+        assert_eq!(handler.permissions(true), 0xFFFF_FFFF);
+        assert_eq!(handler.revision(), 0);
+        assert!(handler.encrypt_metadata());
+        assert!(!handler.owner_unlocked());
+    }
+
+    #[test]
+    fn the_permission_mask_clears_reserved_bits_and_forces_the_high_ones() {
+        let dict = test_fixtures::encrypted_pdf_dict();
+        let id = unhex("1B0FD0F5E29AD84DBF67775E9E3B009F");
+        let handler = SecurityHandler::from_encrypt_dict(&dict, &id, b"1234", &NoResolve)
+            .expect("the user password");
+        let reported = handler.permissions(false);
+        assert_eq!(reported & 0b11, 0, "the two reserved bits are cleared");
+        assert_eq!(
+            reported & 0xFFFF_F0C0,
+            0xFFFF_F0C0,
+            "the forced bits are set"
+        );
+    }
+
+    // ---- T12 / T13: damage tolerance ----
+
+    #[test]
+    fn a_short_user_entry_rejects_rather_than_reading_out_of_bounds() {
+        for len in 0..16usize {
+            let dict = test_fixtures::r3_dict_with_user_entry(&vec![0xCD; len]);
+            let id = unhex("9b744068bb5efbe920baaba6da63c2bf");
+            assert_eq!(
+                SecurityHandler::from_encrypt_dict(&dict, &id, b"h\xf4tel", &NoResolve)
+                    .unwrap_err(),
+                Error::WrongPassword,
+                "/U of {len} bytes"
+            );
+        }
+    }
+
+    // A /U of 16 to 31 bytes is zero-padded into the working buffer rather
+    // than rejected, so the comparison still runs over its first 16 bytes.
+    #[test]
+    fn a_partial_user_entry_is_zero_padded_and_still_compared() {
+        for len in 16..32usize {
+            let dict = test_fixtures::r3_dict_with_user_entry(&vec![0xCD; len]);
+            let id = unhex("9b744068bb5efbe920baaba6da63c2bf");
+            // No panic; the wrong bytes simply do not match.
+            assert!(
+                SecurityHandler::from_encrypt_dict(&dict, &id, b"h\xf4tel", &NoResolve).is_err(),
+                "/U of {len} bytes"
+            );
+        }
+    }
+
+    // T13 — /O and /U must each be at least 48 bytes whichever role is
+    // checked, because the owner check hashes the whole of /U alongside the
+    // password; /UE must be 32 for a user open and /OE for an owner one.
+    #[test]
+    fn short_version_five_entries_reject_rather_than_panicking() {
+        for len in [0usize, 1, 31, 47] {
+            let short = vec![0xEFu8; len];
+            // Both password entries gate both roles.
+            for key in [names::O, names::U, names::PERMS] {
+                let mut dict = test_fixtures::r5_dict();
+                dict.push(key.clone(), Object::Str(PdfString::literal(&short)));
+                for password in [&b"h\xf4tel"[..], b"\xe2ge"] {
+                    assert!(
+                        SecurityHandler::from_encrypt_dict(&dict, &[], password, &NoResolve)
+                            .is_err(),
+                        "{key:?} of {len} bytes with {password:?}"
+                    );
+                }
+            }
+            // The wrapped-key entries gate only the role that unwraps them.
+            for (key, password) in [(names::UE, &b"h\xf4tel"[..]), (names::OE, b"\xe2ge")] {
+                let mut dict = test_fixtures::r5_dict();
+                dict.push(key.clone(), Object::Str(PdfString::literal(&short)));
+                assert!(
+                    SecurityHandler::from_encrypt_dict(&dict, &[], password, &NoResolve).is_err(),
+                    "{key:?} of {len} bytes"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn an_empty_perms_entry_rejects() {
+        let mut dict = test_fixtures::r5_dict();
+        dict.push(names::PERMS.clone(), Object::Str(PdfString::literal(b"")));
+        assert_eq!(
+            SecurityHandler::from_encrypt_dict(&dict, &[], b"h\xf4tel", &NoResolve).unwrap_err(),
+            Error::WrongPassword
+        );
+    }
+
+    // T11 — the bad-okey fixtures: a truncated /O must fail the open, not
+    // read past its end (crbug.com/42270437).
+    #[test]
+    fn a_truncated_owner_entry_fails_the_open() {
+        for revision in [2i64, 3] {
+            for len in [0usize, 1, 31] {
+                let dict = test_fixtures::rc4_dict_with_owner_entry(revision, &vec![0x11; len]);
+                assert_eq!(
+                    SecurityHandler::from_encrypt_dict(&dict, &[], b"a", &NoResolve).unwrap_err(),
+                    Error::WrongPassword,
+                    "/R {revision} with /O of {len} bytes"
+                );
+            }
+        }
+    }
+
+    // ---- The signature-dictionary predicate ----
+
+    #[test]
+    fn signature_dictionaries_are_recognised_by_type_then_field_type() {
+        let sig_type = Dict::from_pairs([(names::TYPE.clone(), Object::Name(names::SIG.clone()))]);
+        assert!(is_signature_dict(&sig_type));
+
+        let sig_field = Dict::from_pairs([(names::FT.clone(), Object::Name(names::SIG.clone()))]);
+        assert!(is_signature_dict(&sig_field));
+
+        // /Type present and not Sig shuts /FT out.
+        let annot = Dict::from_pairs([
+            (names::TYPE.clone(), Object::Name(Name::from("Annot"))),
+            (names::FT.clone(), Object::Name(names::SIG.clone())),
+        ]);
+        assert!(!is_signature_dict(&annot));
+
+        // Neither key at all.
+        assert!(!is_signature_dict(&Dict::new()));
+    }
+
+    // The value is read through an accessor that spells a name and a string
+    // alike, so a string-valued /Type counts.
+    #[test]
+    fn a_string_valued_type_still_names_a_signature() {
+        let dict =
+            Dict::from_pairs([(names::TYPE.clone(), Object::Str(PdfString::literal(b"Sig")))]);
+        assert!(is_signature_dict(&dict));
+    }
+
+    // ---- The public decrypt entry point ----
+
+    /// The three real fixtures, as opened handlers, for the payload tests.
+    fn opened_handlers() -> Vec<(&'static str, SecurityHandler)> {
+        let aes_v2_id = unhex("1B0FD0F5E29AD84DBF67775E9E3B009F");
+        let rc4_id = unhex("9b744068bb5efbe920baaba6da63c2bf");
+        vec![
+            (
+                "RC4 (/R 3)",
+                SecurityHandler::from_encrypt_dict(
+                    &test_fixtures::r3_dict(),
+                    &rc4_id,
+                    b"h\xf4tel",
+                    &NoResolve,
+                )
+                .expect("the r3 user password"),
+            ),
+            (
+                "AESV2 (/R 4)",
+                SecurityHandler::from_encrypt_dict(
+                    &test_fixtures::encrypted_pdf_dict(),
+                    &aes_v2_id,
+                    b"1234",
+                    &NoResolve,
+                )
+                .expect("the encrypted.pdf user password"),
+            ),
+            (
+                "AESV3 (/R 6)",
+                SecurityHandler::from_encrypt_dict(
+                    &test_fixtures::r6_dict(),
+                    &[],
+                    b"h\xf4tel",
+                    &NoResolve,
+                )
+                .expect("the r6 user password"),
+            ),
+        ]
+    }
+
+    // RC4 is symmetric, so decrypting twice restores the payload; AES is not,
+    // so only its length behavior is asserted here.
+    #[test]
+    fn rc4_decrypt_round_trips_through_the_public_api() {
+        let rc4_id = unhex("9b744068bb5efbe920baaba6da63c2bf");
+        let handler = SecurityHandler::from_encrypt_dict(
+            &test_fixtures::r3_dict(),
+            &rc4_id,
+            b"h\xf4tel",
+            &NoResolve,
+        )
+        .expect("the r3 user password");
+        let obj = ObjRef::new(12, 3);
+        let payload = b"Hello, encrypted world.".to_vec();
+        for class in [CryptClass::Stream, CryptClass::String, CryptClass::Embedded] {
+            let once = handler.decrypt(obj, class, &payload);
+            assert_ne!(once, payload, "{class:?} actually enciphered");
+            assert_eq!(handler.decrypt(obj, class, &once), payload, "{class:?}");
+        }
+    }
+
+    // D1 — all three classes resolve to the same cipher and key, so the same
+    // bytes decrypt identically whichever class they are labelled with.
+    #[test]
+    fn every_crypt_class_decrypts_the_same_way() {
+        for (name, handler) in opened_handlers() {
+            let obj = ObjRef::new(7, 0);
+            let payload: Vec<u8> = (0..64u8).collect();
+            let stream = handler.decrypt(obj, CryptClass::Stream, &payload);
+            assert_eq!(
+                handler.decrypt(obj, CryptClass::String, &payload),
+                stream,
+                "{name}"
+            );
+            assert_eq!(
+                handler.decrypt(obj, CryptClass::Embedded, &payload),
+                stream,
+                "{name}"
+            );
+        }
+    }
+
+    // The object number keys the payload for RC4 and AESV2 but not for
+    // AESV3, whose key is the file key itself.
+    #[test]
+    fn only_the_pre_version_five_handlers_key_by_object() {
+        let payload: Vec<u8> = (0..48u8).map(|i| i.wrapping_mul(5)).collect();
+        for (name, handler) in opened_handlers() {
+            let first = handler.decrypt(ObjRef::new(1, 0), CryptClass::Stream, &payload);
+            let second = handler.decrypt(ObjRef::new(2, 0), CryptClass::Stream, &payload);
+            if handler.revision() >= 5 {
+                assert_eq!(second, first, "{name} uses the file key verbatim");
+            } else {
+                assert_ne!(second, first, "{name} salts by object number");
+            }
+        }
+    }
+
+    // No input length may panic, and nothing may produce more bytes than it
+    // was given.
+    #[test]
+    fn decrypt_never_panics_and_never_grows_a_payload() {
+        for (name, handler) in opened_handlers() {
+            for len in 0..80usize {
+                let payload = vec![0xA5u8; len];
+                let out = handler.decrypt(ObjRef::new(9, 1), CryptClass::Stream, &payload);
+                assert!(out.len() <= len, "{name} at {len} bytes");
+            }
+        }
+        // The identity handler is the one that returns exactly its input.
+        for len in 0..40usize {
+            let payload = vec![0x5Au8; len];
+            assert_eq!(
+                SecurityHandler::Identity.decrypt(ObjRef::new(0, 0), CryptClass::String, &payload),
+                payload
+            );
+        }
+    }
+
+    // ---- The properties a fuzzer would look for ----
+    //
+    // Every byte of an /Encrypt dictionary comes from the file, so no
+    // combination of them may panic. These sweep the shape space
+    // deterministically rather than randomly: a failure names the exact input
+    // instead of a corpus file.
+
+    /// A cheap deterministic byte sequence — no dependency, and reproducible.
+    fn pseudo_random(seed: u64, len: usize) -> Vec<u8> {
+        let mut state = seed.wrapping_mul(0x2545_F491_4F6C_DD1D) | 1;
+        (0..len)
+            .map(|_| {
+                state ^= state << 13;
+                state ^= state >> 7;
+                state ^= state << 17;
+                u8::try_from(state >> 56).unwrap_or(0)
+            })
+            .collect()
+    }
+
+    #[test]
+    fn arbitrary_encrypt_dictionaries_never_panic() {
+        for seed in 0..8u64 {
+            for version in [-1i64, 0, 1, 2, 3, 4, 5, 6, 99] {
+                for revision in [0i64, 2, 3, 4, 5, 6, 7] {
+                    // The extremes are `INT_RANGE`'s: a lexer folds anything
+                    // wider to zero, so nothing outside it can reach here.
+                    for length in [
+                        *pdfrum_object::INT_RANGE.start(),
+                        -8,
+                        0,
+                        8,
+                        40,
+                        128,
+                        256,
+                        4096,
+                        *pdfrum_object::INT_RANGE.end(),
+                    ] {
+                        let mut dict = test_fixtures::encrypt_dict(
+                            version,
+                            Some(length),
+                            Some(length),
+                            Some("AESV2"),
+                        );
+                        dict.push(names::R.clone(), Object::Int(revision));
+                        for key in [names::O, names::U, names::OE, names::UE, names::PERMS] {
+                            let entry = pseudo_random(
+                                seed.wrapping_add(key.as_bytes().len() as u64),
+                                usize::try_from(seed % 60).unwrap_or(0),
+                            );
+                            dict.push(key.clone(), Object::Str(PdfString::literal(entry)));
+                        }
+                        let password = pseudo_random(seed, usize::try_from(seed % 9).unwrap_or(0));
+                        let file_id =
+                            pseudo_random(seed + 1, usize::try_from(seed % 20).unwrap_or(0));
+                        // The only requirement is that it returns.
+                        let _ = SecurityHandler::from_encrypt_dict(
+                            &dict, &file_id, &password, &NoResolve,
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    // The revision 6 loop is the one unbounded-looking construction; a
+    // hostile /U salt cannot make it run away, and a long password only
+    // enlarges each round rather than adding rounds.
+    #[test]
+    fn arbitrary_version_five_entries_terminate() {
+        for seed in 0..4u64 {
+            let mut dict = test_fixtures::r6_dict();
+            for key in [names::O, names::U, names::OE, names::UE, names::PERMS] {
+                let entry = pseudo_random(seed, 48);
+                dict.push(key.clone(), Object::Str(PdfString::literal(entry)));
+            }
+            // Long enough that each round moves real data, short enough that
+            // the worst case — 287 rounds of 64 repetitions — stays quick.
+            let password = pseudo_random(seed, 64);
+            let _ = SecurityHandler::from_encrypt_dict(&dict, &[], &password, &NoResolve);
+        }
+    }
+
+    // T11/T12/T13 as a sweep: any length of any password entry, at any
+    // revision, must return rather than panic.
+    #[test]
+    fn every_password_entry_length_is_survivable() {
+        for len in 0..64usize {
+            let entry = pseudo_random(len as u64, len);
+            // Revision 6 is covered by its own sweep above; running it for
+            // every length here would spend minutes on the hardened hash.
+            for base in [
+                test_fixtures::r2_dict(),
+                test_fixtures::r3_dict(),
+                test_fixtures::encrypted_pdf_dict(),
+                test_fixtures::r5_dict(),
+            ] {
+                for key in [names::O, names::U, names::OE, names::UE, names::PERMS] {
+                    let mut dict = base.clone();
+                    dict.push(key.clone(), Object::Str(PdfString::literal(&entry)));
+                    let _ = SecurityHandler::from_encrypt_dict(&dict, &[], b"pw", &NoResolve);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn handlers_are_send_and_sync() {
+        const fn assert_send_sync<T: Send + Sync>() {}
+        assert_send_sync::<SecurityHandler>();
+        assert_send_sync::<Error>();
+        assert_send_sync::<crate::EncryptParams>();
+    }
+
+    #[test]
+    fn a_handler_debug_dump_never_shows_key_material() {
+        let dict = test_fixtures::encrypted_pdf_dict();
+        let id = unhex("1B0FD0F5E29AD84DBF67775E9E3B009F");
+        let handler = SecurityHandler::from_encrypt_dict(&dict, &id, b"1234", &NoResolve)
+            .expect("the user password");
+        let dump = format!("{handler:?}");
+        assert!(dump.contains("redacted"), "{dump}");
+    }
+}
