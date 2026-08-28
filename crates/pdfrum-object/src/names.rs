@@ -29,6 +29,69 @@ names! {
     /// Length of the decoded data, as a hint (`/DL`).
     DL = "DL";
 
+    // ---- Stream filters and their abbreviations (tables 6 and 92) ----
+
+    /// Deflate compression (`/FlateDecode`).
+    FLATE_DECODE = "FlateDecode";
+    /// Inline-image abbreviation for `/FlateDecode` (`/Fl`).
+    FL = "Fl";
+    /// LZW compression (`/LZWDecode`).
+    LZW_DECODE = "LZWDecode";
+    /// Inline-image abbreviation for `/LZWDecode` (`/LZW`).
+    LZW = "LZW";
+    /// Base-85 text encoding (`/ASCII85Decode`).
+    ASCII85_DECODE = "ASCII85Decode";
+    /// Inline-image abbreviation for `/ASCII85Decode` (`/A85`).
+    A85 = "A85";
+    /// Hexadecimal text encoding (`/ASCIIHexDecode`).
+    ASCII_HEX_DECODE = "ASCIIHexDecode";
+    /// Inline-image abbreviation for `/ASCIIHexDecode` (`/AHx`).
+    AHX = "AHx";
+    /// Byte-oriented run-length compression (`/RunLengthDecode`).
+    RUN_LENGTH_DECODE = "RunLengthDecode";
+    /// Inline-image abbreviation for `/RunLengthDecode` (`/RL`).
+    RL = "RL";
+    /// Group 3/4 fax compression (`/CCITTFaxDecode`).
+    CCITT_FAX_DECODE = "CCITTFaxDecode";
+    /// Inline-image abbreviation for `/CCITTFaxDecode` (`/CCF`).
+    CCF = "CCF";
+    /// Baseline JPEG (`/DCTDecode`).
+    DCT_DECODE = "DCTDecode";
+    /// Inline-image abbreviation for `/DCTDecode` (`/DCT`).
+    DCT = "DCT";
+    /// JPEG 2000 (`/JPXDecode`).
+    JPX_DECODE = "JPXDecode";
+    /// Bi-level JBIG2 compression (`/JBIG2Decode`).
+    JBIG2_DECODE = "JBIG2Decode";
+    /// The crypt filter placeholder (`/Crypt`).
+    CRYPT = "Crypt";
+
+    // ---- Filter parameters (tables 8, 10, 11 and 12) ----
+
+    /// Which predictor was applied before compression (`/Predictor`).
+    PREDICTOR = "Predictor";
+    /// Colour components per sample, for a predictor (`/Colors`).
+    COLORS = "Colors";
+    /// Bits per colour component (`/BitsPerComponent`).
+    BITS_PER_COMPONENT = "BitsPerComponent";
+    /// Samples per row (`/Columns`).
+    COLUMNS = "Columns";
+    /// Whether LZW code lengths grow one code early (`/EarlyChange`).
+    EARLY_CHANGE = "EarlyChange";
+    /// The CCITT encoding scheme selector (`/K`).
+    K = "K";
+    /// Whether CCITT rows are terminated by end-of-line codes (`/EndOfLine`).
+    END_OF_LINE = "EndOfLine";
+    /// Whether each CCITT row starts on a byte boundary (`/EncodedByteAlign`).
+    ENCODED_BYTE_ALIGN = "EncodedByteAlign";
+    /// Number of rows in a CCITT image (`/Rows`).
+    ROWS = "Rows";
+    /// Whether a CCITT 1 bit means black (`/BlackIs1`).
+    BLACK_IS_1 = "BlackIs1";
+    /// Whether a CCITT stream ends with an end-of-block pattern
+    /// (`/EndOfBlock`).
+    END_OF_BLOCK = "EndOfBlock";
+
     // ---- Trailer and cross-reference (tables 15 and 17) ----
 
     /// The document catalog (`/Root`).

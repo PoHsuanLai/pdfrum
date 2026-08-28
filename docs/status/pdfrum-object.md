@@ -18,9 +18,10 @@ Nothing else — SPEC §1 lists the contents exhaustively.
 - `Limits` defaults are the PDFium constants consolidated in the parser
   brief §1.20: nesting 64, xref size 25 165 825, object number 25 165 824,
   header scan 1024, startxref scan 4096, word length 256, page-tree depth
-  1024, page count 0xFFFFF, decoded stream 20 MB. `max_string_len` and
-  `max_array_len` are `usize::MAX` (PDFium has no such cap; the fields exist
-  for fuzz budgets).
+  1024, page count 0xFFFFF, decoded stream 1 GiB (corrected from 20 MB when
+  `pdfrum-filters` landed — see `docs/status/pdfrum-filters.md`).
+  `max_string_len` and `max_array_len` are `usize::MAX` (PDFium has no such
+  cap; the fields exist for fuzz budgets).
 - No `Error` enum and no `thiserror` dependency: the crate has no fallible
   operation. Recorded in SPEC §1 rather than shipping an empty enum.
 
