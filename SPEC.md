@@ -394,6 +394,16 @@ way. `pdfrum-raster-vello` (vello_cpu) and
 
 Pure derivation, no rendering dependency:
 `pub fn extract(page: &Page, r: &impl Resolve) -> TextPage` where
+([spec] 2026-08-29, text brief rulings: `CharBox.unicode` is `u32`, not
+`char` — goldens contain U+0000 and lone surrogates, and the --txt emitter
+must be able to write oracle-exact UTF-32LE code units. The --txt output is
+derived from the UNFILTERED char list, not the search-facing text buffer —
+they are different sequences, verified against the oracle. Char-class and
+bidi-bucket tables are build-script-generated from the oracle's own ICU and
+committed with provenance, cmap-blob precedent — no ICU dependency, and
+`unicode-bidi` may end up unused here since PDFium's four-way bucket predates
+the UBA; keep it pinned until M2 empirics settle it. Q2 interface gaps are
+recomputed locally via `Dict::raw`, no page-crate change.)
 `TextPage { chars: Vec<CharBox> /* unicode, bbox, origin, font-size, angle */, runs: … }`
 plus `TextPage::find(needle, opts) -> impl Iterator<Item=Range<usize>>` and
 `web_links()`. The C++ heuristics (space insertion thresholds, line breaks,
