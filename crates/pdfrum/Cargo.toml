@@ -1,0 +1,12 @@
+[package]
+name = "pdfrum"
+description = "Pure-Rust PDF engine: parse, render, extract text, edit"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]

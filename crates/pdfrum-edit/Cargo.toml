@@ -1,0 +1,12 @@
+[package]
+name = "pdfrum-edit"
+description = "PDF serializer: full/incremental save, page import, subsetting"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]

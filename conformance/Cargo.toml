@@ -1,0 +1,13 @@
+[package]
+name = "conformance"
+description = "Conformance harness: corpus runner, golden diff, scoreboard"
+publish = false
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
