@@ -69,8 +69,11 @@ Violations are review-blockers even when tests pass.
   liberally — `Iterator` (lexer, `Font::decode`, pages, outlines), `Deref`
   (`ByteSpan`, `Resolved`), `TryFrom`, `Default`, `Debug`/`Display`,
   thiserror's `Error`.
-- One sanctioned internal generic trait: `FromObj`, powering
-  `Dict::get_as::<T>()` typed accessors. Private, one file, closed set of impls.
+- (Withdrawn 2026-08-29 during pdfrum-object implementation: the once-sanctioned
+  internal `FromObj` generic accessor is deliberately NOT part of the design —
+  the accessor resolution matrix's rows differ in resolution, type filtering,
+  and fallback shape, which a generic parameter would erase. Explicit accessors
+  are the design; do not reintroduce it.)
 
 **Generics.** Plumbing, never architecture: `&impl Resolve` threading,
 `io::Write` in the serializer, `impl Iterator` return types. Lifetimes stay in
