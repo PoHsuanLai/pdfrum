@@ -1,0 +1,156 @@
+# Rust Style Constitution — pdfrum
+
+Binding for every agent and every crate. `PLAN.md` says *what* and *when*; this
+file says *how code must look*. SPEC.md holds the concrete type contracts.
+Violations are review-blockers even when tests pass.
+
+## 1. Data + functions, not objects
+
+- Model the domain as **plain data types** (`struct`s, `enum`s) transformed by
+  **free functions and inherent methods that read like functions** (take input,
+  return output). No "manager", "handler", "controller", "context-object with
+  15 responsibilities" designs. The C++'s `CFX_GEModule`, `CPDF_ModuleMgr`
+  singletons and observer webs are *anti-patterns to erase*, not port.
+- **Small structs; data and logic separated.** A struct is a record of facts —
+  a handful of fields with an obvious invariant, close to POD. Behavior lives
+  in functions (free or thin inherent methods) that *operate on* the data;
+  a struct that accumulates fields and methods until it is "the thing that
+  does X" must be split into the record and the operations. The C++'s
+  1000-line god classes (`CPDF_Parser`, `CPDF_RenderStatus`, `CFX_FontMapper`)
+  each decompose into several small records plus function modules — never
+  arrive as one struct. Rule of thumb: if you can't state a struct's invariant
+  in one sentence, or a method doesn't need most of its fields, split it.
+- **Enums over class hierarchies.** Every closed set is an enum with exhaustive
+  `match`: PDF objects, filters, colorspaces, functions, shadings, page
+  objects, content operators, blend modes, security handler revisions,
+  annotation types. The C++ simulates this with virtual dispatch + `AsDict()`
+  down-casts; in Rust the compiler enforces the case analysis. Avoid `_ =>`
+  arms on our own enums — when a variant is added, every match site must fail
+  to compile.
+- **Traits only at genuine seams**, and few: `RenderDevice` (swappable raster
+  backends), `Resolve` (indirect-object lookup), and little else. A trait with
+  one implementation is a design smell. No trait-object soups; prefer
+  `impl Trait` / generics at boundaries, `&mut dyn` only where object safety
+  is the point (RenderDevice).
+- **No global state. None.** No `static mut`, no `lazy_static` registries, no
+  process-wide caches. Everything a function needs arrives via parameters.
+  Caches live inside the owning value (`Document`, `GlyphCache`) and are
+  passed down.
+
+## 2. Functional discipline
+
+- Prefer **pure transformations**: content bytes → `Vec<Op>` → page-object
+  graph → device calls. Each stage is a function testable in isolation on
+  values.
+- Iterators and combinators over index loops where they read better; but
+  clarity beats cleverness — a plain `for` beats a five-combinator chain
+  nobody can debug.
+- Immutable by default. Mutation is local and obvious: builders during
+  construction, `&mut` sinks for output accumulation. Interior mutability
+  (`OnceLock`, `RwLock`) only for lazy caches, each one documented with *why*.
+- **No `Rc<RefCell<…>>` object graphs.** Cross-references between PDF objects
+  stay as *ids* (`ObjRef`), resolved through the store — the graph is data,
+  not pointers. Shared immutable payloads use `Arc`.
+- State machines (lexer modes, progressive render, xref recovery) are enums
+  driven by `match`, not boolean-flag clusters.
+- Types encode invariants, not ceremony: newtypes for ids and indices
+  (`ObjRef`, `Gid`, `CharCode`, `PageIndex`), units where confusion is real.
+  No typestate gymnastics or trait-level metaprogramming for its own sake.
+
+## 2b. Traits, generics, macros — the complete map
+
+**Traits.** Two kinds exist in this codebase, and the seam list is closed:
+- *Seams (polymorphism on purpose):* `RenderDevice`/`RasterBackend`
+  (swappable rasterizers; the only `dyn` in the project) and `Resolve`
+  (indirect-object lookup; `&impl Resolve` bounds, real second impls: test
+  resolvers, the editor's flattened view). Adding a third seam is a `[spec]`
+  change.
+- *Vocabulary impls (Rust idiom, not OOP):* implement std/ecosystem traits
+  liberally — `Iterator` (lexer, `Font::decode`, pages, outlines), `Deref`
+  (`ByteSpan`, `Resolved`), `TryFrom`, `Default`, `Debug`/`Display`,
+  thiserror's `Error`.
+- One sanctioned internal generic trait: `FromObj`, powering
+  `Dict::get_as::<T>()` typed accessors. Private, one file, closed set of impls.
+
+**Generics.** Plumbing, never architecture: `&impl Resolve` threading,
+`io::Write` in the serializer, `impl Iterator` return types. Lifetimes stay in
+the zero-copy layer (`Lexer<'a>`, `Token<'a>`, `Resolved<'a>`) and never creep
+into `Page`/`Document`-level types. No type-level programming, no generics
+over pixel formats, no const-generic cleverness. The facade uses concrete
+types only.
+
+**Macros.** Exactly two of our own, both `macro_rules!`, both table-shaped
+(one source of truth for lists that would otherwise desync):
+- `ops!` — the content-operator table: generates the `Op` enum, operand
+  arity/type checking, parse dispatch, and debug names from one declaration.
+- `names!` — the PDF name constants.
+
+Banned: our own proc-macros (derives only from deps: thiserror, insta); any
+`#[derive(FromDict)]`-style dict-to-struct DSL — PDF dicts have inherited
+attributes, resolver-dependent refs, and damage tolerance, so extraction is
+*explicit accessor code by design*, not boilerplate to macro away;
+macro-generated `#[test]`s per corpus file (the conformance harness is a
+data-driven binary; unit tests are hand-written); macros that hide control
+flow.
+
+## 3. Errors
+
+- Every library crate defines one `Error` enum with `thiserror`, variants named
+  by *what went wrong in the domain* (`XrefBroken`, `CipherKeyLength`,
+  `JbxSegmentTruncated`…), carrying the data a caller needs. `anyhow` is
+  allowed **only** in `pdfrum-tool` and the conformance harness.
+- **No panics in library code.** Workspace lints:
+  `clippy::unwrap_used = deny`, `clippy::expect_used = deny`,
+  `clippy::panic = deny`, `clippy::indexing_slicing = warn` in parser-facing
+  crates. All slicing of untrusted input via `get()`. Arithmetic on untrusted
+  sizes via `checked_*`/`saturating_*` — fuzzers enforce this.
+- **Damage tolerance is a first-class channel, not an error.** PDFium's value
+  is opening broken files. Functions that can proceed past damage take a
+  `&mut Diagnostics` sink (plain struct wrapping `Vec<Diagnostic>` + limits)
+  and return the best-effort value; `Err` is reserved for "cannot continue".
+  Never silently swallow a recovery — record it.
+- Fallible conversions are `TryFrom`; `From` never lies.
+
+## 4. API surface
+
+- Follow the [Rust API Guidelines](https://rust-lang.github.io/api-guidelines/):
+  no `get_` prefixes, `iter()`/`into_iter()` conventions, `#[must_use]` on
+  pure functions, `Debug` on everything public, `Clone` where cheap or
+  obviously wanted.
+- Options via plain config structs with `Default` + struct-update syntax, not
+  builder ladders, unless construction is genuinely staged.
+- Public API of every crate fits in one `lib.rs` re-export block a reviewer
+  can read in one screen. Internal modules named by domain (`xref`, `lexer`,
+  `shading`), never `util`, `helpers`, `common`, `misc`.
+- All public types are `Send + Sync` unless a documented reason exists.
+  Rendering multiple pages in parallel with `rayon` must Just Work.
+
+## 5. Dependencies
+
+- The dependency set is **closed** — exactly the table in PLAN.md §3. Adding a
+  crate is a spec change (see SPEC.md §0), not a convenience. When tempted to
+  pull a helper crate for 30 lines of code, write the 30 lines.
+- `unsafe_code = "forbid"` in every crate. If SIMD ever justifies an
+  exception, it gets its own tiny audited crate; that decision is the user's.
+
+## 6. Tests & docs
+
+- `cargo nextest run` is the runner; doctests additionally via
+  `cargo test --doc` (nextest silently skips them).
+- Unit tests port *assertions* from the C++ unittests, restated over our
+  types. Snapshot tests (`insta`) for dump-shaped outputs. Fuzz targets for
+  every byte-consuming entry point.
+- Every public item has a doc comment saying what it does in PDF terms
+  (spec section references — ISO 32000 §x.y — welcome). Module-level docs
+  explain the design, especially where we deliberately diverge from the C++
+  structure. Comments never narrate C++ provenance ("this ports foo.cpp") —
+  that mapping lives in the design brief.
+
+## 7. The transliteration test
+
+Before finishing any file, ask: *would this code look the same if the author
+had never seen the C++?* If a function is a line-by-line shadow of a C++
+method — same locals, same control flow, out-params turned into `&mut` —
+rewrite it. What must survive from the C++ is **behavior** (including recovery
+quirks and limits), captured in the design brief and pinned by tests, never
+its shape.
