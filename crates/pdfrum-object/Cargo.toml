@@ -10,3 +10,6 @@ repository.workspace = true
 workspace = true
 
 [dependencies]
+pdfrum-common.workspace = true
+ryu.workspace = true
+thiserror.workspace = true

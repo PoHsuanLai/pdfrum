@@ -26,7 +26,7 @@ Tiny. Re-exports `kurbo` (geometry: `Affine`, `BezPath`, `Rect`, `Point`).
 Owns exactly:
 
 ```rust
-pub struct Diagnostics { entries: Vec<Diagnostic>, limit: usize }
+pub struct Diagnostics { entries: Vec<Diagnostic>, limit: usize, recorded: usize }
 pub struct Diagnostic { pub severity: Severity, pub what: DiagKind, pub at: Option<u64> /* byte offset */ }
 pub enum Severity { Recovered, Suspicious }
 pub enum DiagKind { /* grows: XrefRebuilt, LengthMismatch, BadEof, ... */ }
@@ -41,8 +41,17 @@ pub struct Limits {           // mirror pdfium's hard limits; values set in brie
 impl Default for Limits { /* pdfium-equivalent values */ }
 ```
 
-No string types, no stream traits, no "utils". If something feels like it
-belongs here, it probably belongs in the crate that uses it.
+`Diagnostics` is bounded: past `limit` (default 4096) entries are counted
+(`recorded()`, `dropped()`) but not stored, so a pathological file cannot turn
+the recovery channel into an out-of-memory condition. `Limits` is deliberately
+**not** `#[non_exhaustive]` — §4 makes struct-update-over-`Default` the
+configuration idiom and the attribute forbids exactly that across crates; new
+fields are additive.
+
+This crate has no fallible operation, so — uniquely — it ships no `Error` enum
+and no `thiserror` dependency. No string types, no stream traits, no "utils".
+If something feels like it belongs here, it probably belongs in the crate that
+uses it.
 
 ## 2. `pdfrum-object`  *(behavior: `core/fpdfapi/parser` object classes, `constants/`)*
 
@@ -63,11 +72,11 @@ pub enum Object {
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Hash)]
-pub struct ObjRef { pub num: u32, pub gen: u16 }
+pub struct ObjRef { pub num: u32, pub generation: u16 }   // `gen` is a reserved keyword in edition 2024
 
 pub struct PdfString { pub bytes: Box<[u8]>, pub hex: bool }  // raw bytes + source spelling (hex vs literal — C++ round-trips it, CPDF_String::is_hex; the writer needs it). Helpers: as_text() -> Cow<str> (PDFDoc/UTF-16BE/UTF-8 detection)
-pub struct Name(Box<[u8]>);               // helpers: as_str(); pub mod names { pub const LENGTH: &Name; ... } for constants/
-pub struct Array(pub Vec<Object>);
+pub struct Name(Cow<'static, [u8]>);      // Cow so `names` constants are const-constructible & zero-copy; parsed names own. Helpers: as_str(), from_static(); pub mod names { pub const LENGTH: &Name; ... } for constants/
+pub struct Array(Vec<Object>);            // private field + `Array::of(values)`; the invariant (no direct streams) is enforced in push()
 pub struct Dict(Vec<(Name, Object)>);     // linear assoc — PDF dicts are small; get() is O(n) scan, last duplicate wins (match C++)
 pub struct Stream { pub dict: Dict, pub data: ByteSpan }
 
@@ -89,25 +98,47 @@ impl Object {
     pub fn resolve<'a>(&'a self, r: &impl Resolve) -> Result<Resolved<'a>, Error>;
 }
 impl Dict {
-    // typed accessors used everywhere; all resolve refs internally:
+    // Resolving accessors (one level; a ref-to-ref result counts as absent):
     pub fn get<'a>(&'a self, key: &Name, r: &impl Resolve) -> Option<Resolved<'a>>;
-    pub fn int(&self, key: &Name, r: &impl Resolve) -> Option<i64>;
+    pub fn int(&self, key: &Name, r: &impl Resolve) -> Option<i64>;   // C-int view
     pub fn number(&self, ...) -> Option<f32>;     // Int|Real coercion, as C++ GetNumber
-    pub fn name(&self, ...) -> Option<&Name>;     /* + str_, array, dict, stream, rect, matrix */
+    pub fn byte_string(&self, ...) -> Option<Vec<u8>>;  /* + text, array, dict, stream, rect, matrix */
+
+    // Non-resolving accessors — NOT an optimization: their C++ counterparts
+    // type-check before resolving, so a ref there reads as absence, and real
+    // recovery behavior depends on it (an indirect /Prev is ignored, an
+    // indirect /Length is chased). See the matrix in the design brief.
+    pub fn raw(&self, key: &Name) -> Option<&Object>;
+    pub fn direct_int(&self, key: &Name) -> Option<i64>;   // Number-typed only
+    pub fn name(&self, key: &Name) -> Option<&Name>;
+    pub fn bool(&self, key: &Name) -> Option<bool>;        // an Int(1) is not a bool
+    pub fn number_obj(&self, key: &Name) -> Option<&Object>;
+    pub fn string(&self, key: &Name) -> Option<&PdfString>;
+    pub fn reference(&self, key: &Name) -> Option<ObjRef>;
 }
+// Array mirrors the same split, index for key (`*_at` suffix), plus
+// `as_rect()` / `as_matrix()` (exact element count or zero rect / identity).
 ```
 
 Decisions: recursion into `Object` is bounded by `Limits.max_object_nesting`
 at *parse* time, so access code may recurse freely. `Object` is `Send + Sync`.
-Equality is structural; no interning v1 (revisit with benchmarks only).
+Equality is structural and `PartialEq`-only (`Real(f32)` has no total
+equality); `ObjRef`, `Name` and `PdfString` are additionally `Eq + Hash`.
+No interning v1 (revisit with benchmarks only).
 Dict order: C++ stores dicts in a sorted `std::map` (so its writer emits keys
 sorted); we deliberately keep insertion order in storage *and* serialization —
 written-file byte layout is not an oracle target (round-trip fidelity is
 semantic: reparse + re-render), so this divergence is accepted and permanent.
 Integer accessor semantics are tri-state (see the resolution matrix and
 `FX_Number` inventory in `docs/design/pdfrum-object.md`): `Int(i64)` stores the
-parsed value; the accessor layer provides the C-int wrapping view
-(`as_c_int() -> i32`) that Tier-A behaviors observe.
+parsed value; the `number` module provides the C-int wrapping view
+(`as_c_int(i64) -> i64`, staying in `i64` so accessors that return `Option<i64>`
+need no second conversion) alongside `as_c_float`, `real_as_c_int`, and the
+oracle-parity spellings `fmt_number(f32) -> String` / `fmt_int(i64) -> String`.
+Also owned here, beside the tables they need: `decode_text`/`encode_text`
+(PDFDocEncoding + BOM detection), `encode_string_literal`/`encode_string_hex`,
+`name_decode`/`name_encode`, and `NoResolve` (the empty store: every reference
+dangles, which is how a damaged file's references already behave).
 
 ## 3. `pdfrum-crypt`  *(behavior: `core/fdrm`, parser security handlers)*
 
