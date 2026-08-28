@@ -70,6 +70,32 @@ pub enum DiagKind {
     PageTreeDepthExceeded,
     /// The password was accepted only after re-encoding it.
     PasswordReencoded,
+    /// An `/Encoding` named no built-in CMap; the font fell back to two-byte
+    /// codes mapped to themselves.
+    CMapNameUnknown,
+    /// An `/Encoding` name matched a known CMap family but no built-in table
+    /// carries that exact name, so the decoder is right and the CID map is not.
+    CMapTableMissing,
+    /// An embedded CMap's `usecmap` was recognised and ignored, so whatever
+    /// the named base map would have contributed is absent.
+    CMapUsecmapIgnored,
+    /// A codespace range's bounds were discarded: a block declaring exactly
+    /// one range keeps only its width.
+    CMapCodespaceDropped,
+    /// A codespace bound had no closing `>` and was read at whatever width its
+    /// digits implied.
+    CMapTruncatedCodespace,
+    /// A `begincidrange` named a start code above its end code, so it mapped
+    /// nothing.
+    CMapReversedRange,
+    /// Character-code mappings at or above `0x1_0000` were dropped because the
+    /// CMap's coding scheme cannot produce codes that wide.
+    CMapWideMappingsDropped,
+    /// A CMap program declared more ranges than `Limits::max_cmap_ranges`
+    /// allows; the rest were dropped.
+    CMapRangeLimit,
+    /// More operands arrived for one CMap construct than it takes.
+    CMapOperandOverflow,
 }
 
 /// One recorded recovery.
