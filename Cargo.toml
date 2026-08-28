@@ -1,0 +1,104 @@
+# pdfrum workspace — see PLAN.md §3 for the crate architecture,
+# STYLE.md for the binding style rules, DEPS.md for the closed dependency set.
+
+[workspace]
+resolver = "2"
+members = [
+    "crates/pdfrum-common",
+    "crates/pdfrum-object",
+    "crates/pdfrum-crypt",
+    "crates/pdfrum-filters",
+    "crates/pdfrum-cmap",
+    "crates/pdfrum-type1",
+    "crates/pdfrum-font",
+    "crates/pdfrum-parser",
+    "crates/pdfrum-page",
+    "crates/pdfrum-render",
+    "crates/pdfrum-raster-vello",
+    "crates/pdfrum-raster-tinyskia",
+    "crates/pdfrum-text",
+    "crates/pdfrum-doc",
+    "crates/pdfrum-edit",
+    "crates/pdfrum",
+    "crates/pdfrum-tool",
+    "conformance",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/pdfrum/pdfrum"
+
+# STYLE.md §3: no unsafe anywhere, no panics in library code.
+# `clippy::indexing_slicing = warn` is added per-crate in parser-facing crates
+# (their input is untrusted); tests may unwrap (see clippy.toml).
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+
+[workspace.lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+pedantic = { level = "warn", priority = -1 }
+# Pedantic opt-outs (strict-and-sane): these two fight our naming and API
+# conventions more than they help; everything else in pedantic stays on.
+module_name_repetitions = "allow"
+must_use_candidate = "allow"
+
+# DEPS.md is the closed manifest; every lib dependency is declared here with an
+# exact pin (versions verified against crates.io 2026-08-29). Member crates
+# inherit an entry only when they actually use it.
+[workspace.dependencies]
+# internal
+pdfrum-common = { path = "crates/pdfrum-common", version = "=0.1.0" }
+pdfrum-object = { path = "crates/pdfrum-object", version = "=0.1.0" }
+pdfrum-crypt = { path = "crates/pdfrum-crypt", version = "=0.1.0" }
+pdfrum-filters = { path = "crates/pdfrum-filters", version = "=0.1.0" }
+pdfrum-cmap = { path = "crates/pdfrum-cmap", version = "=0.1.0" }
+pdfrum-type1 = { path = "crates/pdfrum-type1", version = "=0.1.0" }
+pdfrum-font = { path = "crates/pdfrum-font", version = "=0.1.0" }
+pdfrum-parser = { path = "crates/pdfrum-parser", version = "=0.1.0" }
+pdfrum-page = { path = "crates/pdfrum-page", version = "=0.1.0" }
+pdfrum-render = { path = "crates/pdfrum-render", version = "=0.1.0" }
+pdfrum-raster-vello = { path = "crates/pdfrum-raster-vello", version = "=0.1.0" }
+pdfrum-raster-tinyskia = { path = "crates/pdfrum-raster-tinyskia", version = "=0.1.0" }
+pdfrum-text = { path = "crates/pdfrum-text", version = "=0.1.0" }
+pdfrum-doc = { path = "crates/pdfrum-doc", version = "=0.1.0" }
+pdfrum-edit = { path = "crates/pdfrum-edit", version = "=0.1.0" }
+pdfrum = { path = "crates/pdfrum", version = "=0.1.0" }
+
+# rendering & geometry
+kurbo = "=0.13.1"
+peniko = "=0.6.1"
+vello_cpu = "=0.2.0"
+tiny-skia = "=0.12.0"
+
+# fonts
+skrifa = "=0.46.2"
+read-fonts = "=0.43.3"
+fontdb = "=0.24.0"
+subsetter = "=0.2.6"
+
+# codecs & color
+miniz_oxide = "=0.9.1"
+weezl = "=0.2.1"
+zune-jpeg = "=0.5.15"
+hayro-jpeg2000 = "=0.4.0"
+hayro-jbig2 = "=0.3.0"
+hayro-ccitt = "=0.3.0"
+moxcms = "=0.9.0"
+
+# crypto, text, numeric
+aes = "=0.9.3"
+cbc = "=0.2.1"
+cipher = "=0.5.2"
+md-5 = "=0.11.0"
+sha1 = "=0.11.0"
+sha2 = "=0.11.0"
+unicode-bidi = "=0.3.18"
+ryu = "=1.0.23"
+smallvec = "=1.15.2"
+thiserror = "=2.0.20"
+rayon = "=1.12.0"
