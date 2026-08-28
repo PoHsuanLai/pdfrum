@@ -1,0 +1,15 @@
+# Tier B (perceptual) thresholds — PLAN.md §5.
+#
+# `ssim` is the floor a rendered page must clear against its golden. The
+# ratchet is one-directional: an entry under [per_file] may only be *tighter*
+# than the global floor, and the harness rejects the file outright if one is
+# looser. Tighten entries as clusters go green; never loosen one to make a
+# regression pass.
+
+[global]
+ssim = 0.99
+
+# Per-file overrides, keyed by the corpus-relative path the scoreboard uses
+# (e.g. "corpus/fx/text/hello.pdf", "resources/annots.pdf"). Empty at M0:
+# nothing renders yet, so nothing has earned a tighter floor.
+[per_file]
