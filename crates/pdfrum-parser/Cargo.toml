@@ -10,3 +10,8 @@ repository.workspace = true
 workspace = true
 
 [dependencies]
+pdfrum-common.workspace = true
+pdfrum-object.workspace = true
+pdfrum-crypt.workspace = true
+pdfrum-filters.workspace = true
+thiserror.workspace = true

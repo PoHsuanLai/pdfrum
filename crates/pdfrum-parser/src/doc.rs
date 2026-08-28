@@ -1,0 +1,930 @@
+//! Opening a document: the header, the load ladder, and the page tree.
+//!
+//! # The ladder
+//!
+//! [`load`] is a sequence of attempts, each one falling back to a cruder
+//! repair. Find the header; read the cross-reference information, rebuilding
+//! it from a full-file scan if the structured paths fail; set up decryption;
+//! then check that the trailer names a catalog and that the catalog names at
+//! least one page. If that last check fails the reader *throws away the
+//! table it just built* and rebuilds anyway, because a table that yields no
+//! pages is more likely stale than the file is empty.
+//!
+//! That retry is why the ladder is written as a ladder rather than a straight
+//! line: the same steps run twice with different inputs, and which rung a
+//! file lands on decides whether it opens at all.
+//!
+//! # `/Root` must be a reference
+//!
+//! A trailer whose `/Root` is a dictionary written inline is treated as
+//! having no catalog, even though the dictionary is right there. It reads as
+//! damage, and damage triggers the rebuild — which on real files finds a
+//! better catalog. Honoring the inline dictionary would skip that.
+//!
+//! # Counting pages without walking them
+//!
+//! A `/Pages` node's `/Count` is believed whenever it is positive and below
+//! the cap, without checking it against the tree. Files whose counts are
+//! wrong therefore report the wrong number — and lookups past the real end
+//! fail individually, which is exactly what a reader that trusted the walk
+//! instead would not reproduce.
+
+use std::sync::{Arc, Mutex};
+
+use pdfrum_common::{DiagKind, Diagnostics, Limits, Severity};
+use pdfrum_crypt::SecurityHandler;
+use pdfrum_object::{Dict, NoResolve, ObjRef, Object, Resolve, names};
+
+use crate::error::Error;
+use crate::store::ObjectStore;
+use crate::xref::{Trailer, Xref};
+
+/// How many bytes a `%PDF-1.7\n` header occupies, and the least a file can be.
+const HEADER_SIZE: usize = 9;
+
+/// Why a document could not be opened.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[non_exhaustive]
+pub enum LoadError {
+    /// No `%PDF` header within the first kilobyte, or a file too short to
+    /// hold one.
+    #[error("not a PDF file")]
+    NotPdf,
+
+    /// The document is encrypted and the password given does not open it.
+    /// Distinct from the others because callers ask again rather than give
+    /// up.
+    #[error("wrong password")]
+    WrongPassword,
+
+    /// The document uses a security handler this reader does not implement.
+    #[error("unsupported encryption: {0}")]
+    UnsupportedEncryption(String),
+
+    /// The file is damaged past what recovery could repair: no usable
+    /// cross-reference information, or no catalog with pages in it.
+    #[error("damaged beyond recovery: {0}")]
+    Broken(String),
+}
+
+/// How to open a document.
+#[derive(Debug, Clone, Default)]
+pub struct LoadOptions {
+    /// The password to try, as raw bytes. Not capped in length.
+    pub password: Option<Vec<u8>>,
+    /// Caps to enforce while reading.
+    pub limits: Limits,
+}
+
+/// One page's dictionary, with the attributes it inherits already resolved.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PageDict {
+    /// The page's own dictionary.
+    pub dict: Dict,
+    /// The reference it was reached through, when it had one. A page written
+    /// inline in its parent's `/Kids` has none.
+    pub reference: Option<ObjRef>,
+}
+
+impl PageDict {
+    /// An attribute of this page, looked up through its `/Parent` chain
+    /// (ISO 32000-1 §7.7.3.4).
+    ///
+    /// `/Resources`, `/MediaBox`, `/CropBox` and `/Rotate` are inheritable:
+    /// a page that does not state one takes its parent's, or its
+    /// grandparent's. The walk stops at the first node that states the key
+    /// *directly* — a value that is itself a reference is resolved, but a
+    /// `/Parent` that is not a dictionary ends the chain.
+    #[must_use]
+    pub fn inherited(&self, key: &pdfrum_object::Name, r: &impl Resolve) -> Option<Object> {
+        let mut node = self.dict.clone();
+        let mut seen: Vec<Dict> = Vec::new();
+        for _ in 0..64 {
+            if let Some(value) = node.get(key, r) {
+                return Some(value.get().clone());
+            }
+            // A cycle in the parent chain would otherwise spin forever.
+            if seen.contains(&node) {
+                return None;
+            }
+            seen.push(node.clone());
+            node = node.dict(names::PARENT, r)?;
+        }
+        None
+    }
+}
+
+/// An opened document.
+///
+/// Holds the file, everything the reader learned about where its objects are,
+/// and the lazy store that turns references into objects. `Send + Sync`, so
+/// pages can be rendered in parallel.
+#[derive(Debug)]
+pub struct Document {
+    /// The file from its header onwards; every offset indexes into this.
+    bytes: Arc<[u8]>,
+    /// The trailer, merged across every section that contributed one.
+    trailer: Trailer,
+    /// The object store.
+    store: Arc<ObjectStore>,
+    /// The version the header declared, as major × 10 + minor.
+    version: u8,
+    /// Where the header was found in the original file.
+    header_offset: u64,
+    /// Whether the cross-reference table came from the recovery scan.
+    rebuilt: bool,
+    /// How many pages the catalog says there are.
+    page_count: u32,
+    /// Page dictionaries found so far, by index.
+    pages: Mutex<PageIndex>,
+    /// Everything repaired while opening the file.
+    pub diags: Diagnostics,
+}
+
+/// The page lookup's memory.
+#[derive(Debug, Default)]
+struct PageIndex {
+    /// One slot per page, filled as pages are found.
+    slots: Vec<Option<PageDict>>,
+    /// Whether the tree turned out to be deeper than the cap, which stops
+    /// every later lookup as well.
+    poisoned: bool,
+}
+
+/// Open a document.
+///
+/// `bytes` is the whole file. Every repair the reader performed is in
+/// [`Document::diags`] afterwards, and a document that opened with a rebuilt
+/// table reports so through [`Document::xref_was_rebuilt`].
+///
+/// # Errors
+///
+/// [`LoadError::NotPdf`] for a file with no header, [`LoadError::WrongPassword`]
+/// and [`LoadError::UnsupportedEncryption`] for encryption the password or
+/// the reader cannot handle, and [`LoadError::Broken`] for damage recovery
+/// could not repair.
+///
+/// ```
+/// use std::sync::Arc;
+/// use pdfrum_parser::{LoadError, LoadOptions, load};
+///
+/// let not_a_pdf: Arc<[u8]> = Arc::from(&b"just some bytes"[..]);
+/// assert_eq!(load(not_a_pdf, &LoadOptions::default()).err(), Some(LoadError::NotPdf));
+/// ```
+#[expect(
+    clippy::needless_pass_by_value,
+    reason = "the caller hands the file over: taking it by value says the \
+              document owns it from here, even though a header offset means \
+              what is stored is a slice of it"
+)]
+pub fn load(bytes: Arc<[u8]>, opts: &LoadOptions) -> Result<Document, LoadError> {
+    let mut diags = Diagnostics::default();
+    let header_offset = find_header(&bytes, &opts.limits).ok_or(LoadError::NotPdf)?;
+    if bytes.len() < header_offset.saturating_add(HEADER_SIZE) {
+        return Err(LoadError::NotPdf);
+    }
+    if header_offset > 0 {
+        diags.record(
+            Severity::Recovered,
+            DiagKind::HeaderOffset,
+            Some(header_offset as u64),
+        );
+    }
+
+    // Everything before the header is invisible: offsets in the file are
+    // relative to it, so the reader works on the slice from there on.
+    let body: Arc<[u8]> = Arc::from(bytes.get(header_offset..).unwrap_or_default());
+    let version = read_version(&body);
+
+    let (mut xref, mut trailer, mut rebuilt) =
+        crate::xref::read_xref_full(&body, &opts.limits, &mut diags)
+            .map_err(|e| LoadError::Broken(e.to_string()))?;
+
+    // The catalog has to be reachable and have pages in it. When it is not,
+    // the table is the suspect: rebuild and try once more.
+    let (store, page_count) = loop {
+        let security = build_security(&body, &xref, &trailer.dict, opts, &mut diags)?;
+        let mut store = ObjectStore::new(Arc::clone(&body), xref.clone(), opts.limits, security);
+        exempt_metadata(&mut store, &trailer.dict);
+        let store = Arc::new(store);
+
+        if let Some(count) = catalog_page_count(&store, &trailer.dict, &opts.limits) {
+            break (store, count);
+        }
+
+        if rebuilt {
+            return Err(LoadError::Broken("no document catalog".into()));
+        }
+        // Drop what the structured paths produced and scan the file.
+        diags.record(Severity::Recovered, DiagKind::RootRecovered, None);
+        let mut fresh = Xref::new();
+        let mut fresh_trailer = Trailer::default();
+        if !crate::xref::rebuild(
+            &body,
+            &mut fresh,
+            &mut fresh_trailer,
+            &opts.limits,
+            &mut diags,
+            &NoResolve,
+        ) {
+            return Err(LoadError::Broken("no document catalog".into()));
+        }
+        xref.merge_up(&fresh);
+        crate::xref::merge_trailers(&mut trailer, &fresh_trailer);
+        rebuilt = true;
+    };
+
+    let store_diags = store.drain_diags();
+    for entry in store_diags.entries() {
+        diags.record(entry.severity, entry.what.clone(), entry.at);
+    }
+
+    Ok(Document {
+        bytes: body,
+        trailer,
+        store,
+        version,
+        header_offset: header_offset as u64,
+        rebuilt,
+        page_count,
+        pages: Mutex::new(PageIndex {
+            slots: vec![None; usize::try_from(page_count).unwrap_or(0)],
+            poisoned: false,
+        }),
+        diags,
+    })
+}
+
+/// Find `%PDF` within the first `limits.header_scan` bytes.
+fn find_header(bytes: &[u8], limits: &Limits) -> Option<usize> {
+    let window = usize::try_from(limits.header_scan).unwrap_or(usize::MAX);
+    let last = bytes.len().checked_sub(4)?.min(window);
+    (0..=last).find(|&i| bytes.get(i..i + 4) == Some(b"%PDF"))
+}
+
+/// Read the version digits out of `%PDF-M.N`, as major × 10 + minor.
+///
+/// Never validated: a header claiming version 9.9 opens like any other, and
+/// a non-digit contributes nothing.
+fn read_version(body: &[u8]) -> u8 {
+    let digit = |i: usize| -> u8 {
+        body.get(i)
+            .filter(|b| b.is_ascii_digit())
+            .map_or(0, |b| b - b'0')
+    };
+    digit(5).saturating_mul(10).saturating_add(digit(7))
+}
+
+/// Build the security handler the trailer's `/Encrypt` calls for.
+fn build_security(
+    body: &Arc<[u8]>,
+    xref: &Xref,
+    trailer: &Dict,
+    opts: &LoadOptions,
+    diags: &mut Diagnostics,
+) -> Result<SecurityHandler, LoadError> {
+    let Some(encrypt) = encrypt_dict(body, xref, trailer, opts.limits) else {
+        return Ok(SecurityHandler::Identity);
+    };
+    // The handler name is type-checked before being resolved, so a `/Filter`
+    // written as a string is not the standard handler however it spells it.
+    if encrypt.name(names::FILTER) != Some(names::STANDARD) {
+        return Err(LoadError::UnsupportedEncryption(
+            encrypt
+                .name(names::FILTER)
+                .map_or_else(|| "unnamed".to_owned(), |n| n.as_text().into_owned()),
+        ));
+    }
+
+    let file_id = trailer
+        .array(names::ID, &NoResolve)
+        .and_then(|a| a.string_at(0).map(|s| s.bytes.to_vec()))
+        .unwrap_or_default();
+    let password = opts.password.clone().unwrap_or_default();
+
+    match SecurityHandler::from_encrypt_dict(&encrypt, &file_id, &password, &NoResolve) {
+        Ok(handler) => {
+            if handler.password_encoding() != pdfrum_crypt::PasswordEncoding::AsGiven {
+                diags.record(Severity::Recovered, DiagKind::PasswordReencoded, None);
+            }
+            Ok(handler)
+        }
+        Err(pdfrum_crypt::Error::WrongPassword) => Err(LoadError::WrongPassword),
+        Err(pdfrum_crypt::Error::UnsupportedHandler(name)) => Err(
+            LoadError::UnsupportedEncryption(String::from_utf8_lossy(&name).into_owned()),
+        ),
+        Err(e) => Err(LoadError::UnsupportedEncryption(e.to_string())),
+    }
+}
+
+/// The `/Encrypt` dictionary, written inline or reached through one
+/// reference.
+///
+/// Most files write it indirectly, so the reference has to be chased — but
+/// the real store does not exist yet, and could not read this dictionary if
+/// it did, since it would try to decrypt it with the key this dictionary
+/// defines. So the lookup goes through a throwaway store that decrypts
+/// nothing. That is not a shortcut: the encryption dictionary is the one
+/// object in a document that is always plaintext.
+fn encrypt_dict(body: &Arc<[u8]>, xref: &Xref, trailer: &Dict, limits: Limits) -> Option<Dict> {
+    match trailer.raw(names::ENCRYPT)? {
+        Object::Dict(d) => Some(d.clone()),
+        Object::Ref(r) => {
+            let plain = ObjectStore::new(
+                Arc::clone(body),
+                xref.clone(),
+                limits,
+                SecurityHandler::Identity,
+            );
+            plain.get(r.num).ok()?.as_dict().cloned()
+        }
+        _ => None,
+    }
+}
+
+/// Record the metadata object as exempt from decryption when the document
+/// says its metadata is not encrypted.
+fn exempt_metadata(store: &mut ObjectStore, trailer: &Dict) {
+    if store.security().encrypt_metadata() {
+        return;
+    }
+    let Some(root) = trailer.reference(names::ROOT) else {
+        return;
+    };
+    let Ok(catalog) = store.get(root.num) else {
+        return;
+    };
+    if let Some(metadata) = catalog.as_dict().and_then(|d| d.reference(names::METADATA)) {
+        store.exempt_from_decryption(metadata.num);
+    }
+}
+
+/// How many pages the catalog claims, or `None` when there is no usable
+/// catalog at all.
+fn catalog_page_count(store: &ObjectStore, trailer: &Dict, limits: &Limits) -> Option<u32> {
+    // A `/Root` written as anything but a reference does not name a catalog,
+    // even when it is a perfectly good dictionary.
+    let root = trailer.reference(names::ROOT)?;
+    let catalog = store.get(root.num).ok()?;
+    let catalog = catalog.as_dict()?;
+
+    let count = page_count_of(store, catalog, limits);
+    (count > 0).then_some(count)
+}
+
+/// The number of pages under a catalog.
+///
+/// A catalog without `/Pages` has none. A `/Pages` node without `/Kids` is
+/// itself the single page — that is not a repair, it is what a file with one
+/// page and no tree means.
+fn page_count_of(store: &ObjectStore, catalog: &Dict, limits: &Limits) -> u32 {
+    let Some(pages) = catalog.dict(names::PAGES, store) else {
+        return 0;
+    };
+    if pages.raw(names::KIDS).is_none() {
+        return 1;
+    }
+    let mut seen = Vec::new();
+    count_subtree(store, &pages, limits, 0, &mut seen)
+}
+
+/// Count the leaves under a node.
+///
+/// `/Count` is believed whenever it is positive and under the cap, without
+/// checking it against the tree — so a file that lies about its length
+/// reports the lie, and the individual lookups past its real end are what
+/// fail.
+///
+/// `ancestors` holds the nodes currently being descended through, and is the
+/// cycle guard. Note what it is *not*: a record of every node already seen.
+/// A node listed twice among one parent's `/Kids` is counted twice, because
+/// the second listing is a sibling rather than a loop — and a file whose
+/// tree shares subtrees that way really does have that many pages.
+fn count_subtree(
+    store: &ObjectStore,
+    node: &Dict,
+    limits: &Limits,
+    depth: u32,
+    ancestors: &mut Vec<Dict>,
+) -> u32 {
+    if depth > limits.max_page_tree_depth {
+        return 0;
+    }
+    if let Some(count) = node.int(names::COUNT, store)
+        && count > 0
+        && count < i64::from(limits.max_page_count)
+        && let Ok(count) = u32::try_from(count)
+    {
+        return count;
+    }
+
+    let Some(kids) = node.array(names::KIDS, store) else {
+        return 0;
+    };
+    let mut total: u32 = 0;
+    for kid in kids.iter() {
+        let Some(kid) = kid.resolve(store).ok().and_then(|k| k.as_dict().cloned()) else {
+            continue;
+        };
+        // Only a kid that is already an ancestor would loop.
+        if ancestors.contains(&kid) {
+            continue;
+        }
+        total = total.saturating_add(match node_kind(&kid) {
+            NodeKind::Branch => {
+                ancestors.push(kid.clone());
+                let under = count_subtree(store, &kid, limits, depth + 1, ancestors);
+                ancestors.pop();
+                under
+            }
+            NodeKind::Leaf => 1,
+        });
+        if total >= limits.max_page_count {
+            return 0;
+        }
+    }
+    total
+}
+
+/// What a page-tree node is.
+enum NodeKind {
+    /// An interior node whose `/Kids` hold more nodes.
+    Branch,
+    /// A page.
+    Leaf,
+}
+
+/// Classify a node, guessing when `/Type` does not say.
+///
+/// A node with `/Kids` is a branch and one without is a page, whatever its
+/// `/Type` claims — files write the wrong type often enough that the
+/// structure is the more reliable witness.
+fn node_kind(node: &Dict) -> NodeKind {
+    match node.name(names::TYPE) {
+        Some(t) if t == names::PAGES => NodeKind::Branch,
+        Some(t) if t == names::PAGE => NodeKind::Leaf,
+        _ => {
+            if node.contains_key(names::KIDS) {
+                NodeKind::Branch
+            } else {
+                NodeKind::Leaf
+            }
+        }
+    }
+}
+
+impl Document {
+    /// How many pages the document has.
+    #[must_use]
+    pub fn page_count(&self) -> u32 {
+        self.page_count
+    }
+
+    /// The page at `index`, counting from zero.
+    ///
+    /// The tree is walked in order and the pages found along the way are
+    /// remembered, so reading a document front to back costs one traversal.
+    /// A kid that will not load as a dictionary still **consumes its slot**:
+    /// a missing page leaves a hole rather than shifting every page after it.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::NoPage`] for an index past the count, or one the walk could
+    /// not reach.
+    pub fn page(&self, index: u32) -> Result<PageDict, Error> {
+        if index >= self.page_count {
+            return Err(Error::NoPage(index));
+        }
+        let Ok(mut pages) = self.pages.lock() else {
+            return Err(Error::NoPage(index));
+        };
+        if let Some(Some(found)) = pages
+            .slots
+            .get(usize::try_from(index).unwrap_or(usize::MAX))
+        {
+            return Ok(found.clone());
+        }
+        if pages.poisoned {
+            return Err(Error::NoPage(index));
+        }
+
+        self.walk_pages(&mut pages);
+        pages
+            .slots
+            .get(usize::try_from(index).unwrap_or(usize::MAX))
+            .and_then(Clone::clone)
+            .ok_or(Error::NoPage(index))
+    }
+
+    /// Walk the whole tree once, filling every slot it can reach.
+    fn walk_pages(&self, pages: &mut PageIndex) {
+        let Some(root) = self.trailer.dict.reference(names::ROOT) else {
+            return;
+        };
+        let Ok(catalog) = self.store.get(root.num) else {
+            return;
+        };
+        let Some(node) = catalog
+            .as_dict()
+            .and_then(|d| d.dict(names::PAGES, &*self.store))
+        else {
+            return;
+        };
+
+        let mut next: usize = 0;
+        let mut ancestors = Vec::new();
+        // A `/Pages` node without `/Kids` is itself the one page.
+        if node.raw(names::KIDS).is_none() {
+            let objref = catalog.as_dict().and_then(|d| d.reference(names::PAGES));
+            if let Some(slot) = pages.slots.get_mut(0) {
+                *slot = Some(PageDict {
+                    dict: node,
+                    reference: objref,
+                });
+            }
+            return;
+        }
+        self.visit(&node, None, pages, &mut next, 0, &mut ancestors);
+    }
+
+    /// Depth-first, in order, filling slots as leaves are reached.
+    ///
+    /// `ancestors` is the cycle guard: the nodes on the path from the root to
+    /// here. A node that reappears as a *sibling* is a second page, not a
+    /// loop, so only an ancestor stops the descent.
+    fn visit(
+        &self,
+        node: &Dict,
+        reference: Option<ObjRef>,
+        pages: &mut PageIndex,
+        next: &mut usize,
+        depth: u32,
+        ancestors: &mut Vec<Dict>,
+    ) {
+        if depth > self.store.limits().max_page_tree_depth {
+            pages.poisoned = true;
+            return;
+        }
+        if *next >= pages.slots.len() {
+            return;
+        }
+        match node_kind(node) {
+            NodeKind::Leaf => {
+                if let Some(slot) = pages.slots.get_mut(*next) {
+                    *slot = Some(PageDict {
+                        dict: node.clone(),
+                        reference,
+                    });
+                }
+                *next += 1;
+            }
+            NodeKind::Branch => {
+                let Some(kids) = node.array(names::KIDS, &*self.store) else {
+                    return;
+                };
+                ancestors.push(node.clone());
+                for kid in kids.iter() {
+                    let kid_ref = kid.as_ref_id();
+                    let loaded = kid
+                        .resolve(&*self.store)
+                        .ok()
+                        .and_then(|k| k.as_dict().cloned());
+                    let Some(loaded) = loaded else {
+                        // A kid that will not load still costs a slot, so a
+                        // missing page leaves a hole rather than shifting
+                        // every page after it.
+                        *next += 1;
+                        continue;
+                    };
+                    // Only a kid that is already an ancestor would loop; the
+                    // same node appearing twice as a sibling is two pages.
+                    if ancestors.contains(&loaded) {
+                        continue;
+                    }
+                    self.visit(&loaded, kid_ref, pages, next, depth + 1, ancestors);
+                    if *next >= pages.slots.len() {
+                        break;
+                    }
+                }
+                ancestors.pop();
+            }
+        }
+    }
+
+    /// The trailer dictionary, merged across every section.
+    #[must_use]
+    pub fn trailer(&self) -> &Dict {
+        &self.trailer.dict
+    }
+
+    /// The object number the trailer came from; zero for a bare `trailer`
+    /// dictionary.
+    #[must_use]
+    pub fn trailer_object_number(&self) -> u32 {
+        self.trailer.object_number
+    }
+
+    /// The document catalog.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::NoCatalog`] when the trailer names none.
+    pub fn catalog(&self) -> Result<Dict, Error> {
+        let root = self
+            .trailer
+            .dict
+            .reference(names::ROOT)
+            .ok_or(Error::NoCatalog)?;
+        self.store
+            .get(root.num)
+            .ok()
+            .and_then(|c| c.as_dict().cloned())
+            .ok_or(Error::NoCatalog)
+    }
+
+    /// The version the header declared, as major × 10 + minor: `17` for
+    /// `%PDF-1.7`. Never validated.
+    #[must_use]
+    pub fn version(&self) -> u8 {
+        self.version
+    }
+
+    /// Where the `%PDF` header sat in the original file. Non-zero means
+    /// everything before it was ignored.
+    #[must_use]
+    pub fn header_offset(&self) -> u64 {
+        self.header_offset
+    }
+
+    /// Whether the cross-reference table came from the recovery scan rather
+    /// than the file's own sections. An incremental save is unsafe when it
+    /// did.
+    #[must_use]
+    pub fn xref_was_rebuilt(&self) -> bool {
+        self.rebuilt
+    }
+
+    /// What the document permits, as the permission word.
+    ///
+    /// `owner` asks for the owner's view, which is unrestricted when the
+    /// owner password opened the document.
+    #[must_use]
+    pub fn permissions(&self, owner: bool) -> u32 {
+        self.store.security().permissions(owner)
+    }
+
+    /// Whether the document is encrypted.
+    #[must_use]
+    pub fn is_encrypted(&self) -> bool {
+        !matches!(self.store.security(), SecurityHandler::Identity)
+    }
+
+    /// The file, from its header onwards.
+    #[must_use]
+    pub fn bytes(&self) -> &Arc<[u8]> {
+        &self.bytes
+    }
+
+    /// The object store, for fetching references.
+    #[must_use]
+    pub fn store(&self) -> &Arc<ObjectStore> {
+        &self.store
+    }
+
+    /// Where every object lives.
+    #[must_use]
+    pub fn xref(&self) -> &Xref {
+        self.store.xref()
+    }
+}
+
+impl Resolve for Document {
+    fn fetch(&self, r: ObjRef) -> Result<Arc<Object>, pdfrum_object::Error> {
+        self.store.fetch(r)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{LoadError, LoadOptions, find_header, load, read_version};
+    use pdfrum_common::{DiagKind, Limits};
+    use pdfrum_object::{Name, names};
+    use std::sync::Arc;
+
+    fn open(bytes: &[u8]) -> Result<super::Document, LoadError> {
+        load(Arc::from(bytes), &LoadOptions::default())
+    }
+
+    /// A document with `count` pages under one `/Pages` node.
+    fn build(count: usize) -> Vec<u8> {
+        let mut out = Vec::new();
+        out.extend_from_slice(b"%PDF-1.7\n");
+        let mut offsets = vec![0usize];
+
+        offsets.push(out.len());
+        out.extend_from_slice(b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
+
+        offsets.push(out.len());
+        let kids: Vec<String> = (0..count).map(|i| format!("{} 0 R", i + 3)).collect();
+        out.extend_from_slice(
+            format!(
+                "2 0 obj\n<< /Type /Pages /Count {count} /Kids [{}] /MediaBox [0 0 612 792] >>\nendobj\n",
+                kids.join(" ")
+            )
+            .as_bytes(),
+        );
+
+        for i in 0..count {
+            offsets.push(out.len());
+            out.extend_from_slice(
+                format!(
+                    "{} 0 obj\n<< /Type /Page /Parent 2 0 R /PageNumber {i} >>\nendobj\n",
+                    i + 3
+                )
+                .as_bytes(),
+            );
+        }
+
+        let xref_at = out.len();
+        out.extend_from_slice(format!("xref\n0 {}\n", offsets.len()).as_bytes());
+        out.extend_from_slice(b"0000000000 65535 f \n");
+        for offset in offsets.iter().skip(1) {
+            out.extend_from_slice(format!("{offset:010} 00000 n \n").as_bytes());
+        }
+        out.extend_from_slice(
+            format!(
+                "trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref_at}\n%%EOF\n",
+                offsets.len()
+            )
+            .as_bytes(),
+        );
+        out
+    }
+
+    #[test]
+    fn finds_a_header_at_the_start_or_after_junk() {
+        assert_eq!(find_header(b"%PDF-1.7\n", &Limits::default()), Some(0));
+        assert_eq!(find_header(b"junk%PDF-1.7\n", &Limits::default()), Some(4));
+        assert_eq!(find_header(b"no header", &Limits::default()), None);
+    }
+
+    #[test]
+    fn version_digits_are_read_not_validated() {
+        assert_eq!(read_version(b"%PDF-1.7\n"), 17);
+        assert_eq!(read_version(b"%PDF-2.0\n"), 20);
+        assert_eq!(read_version(b"%PDF-x.y\n"), 0);
+    }
+
+    #[test]
+    fn a_file_without_a_header_is_not_a_pdf() {
+        assert_eq!(open(b"just some bytes").err(), Some(LoadError::NotPdf));
+        // A header at the very end with no room for a document.
+        assert_eq!(open(b"%PDF").err(), Some(LoadError::NotPdf));
+    }
+
+    #[test]
+    fn opens_a_document_and_counts_its_pages() {
+        let doc = open(&build(3)).expect("document");
+        assert_eq!(doc.page_count(), 3);
+        assert_eq!(doc.version(), 17);
+        assert!(!doc.xref_was_rebuilt());
+        assert!(!doc.is_encrypted());
+        assert_eq!(doc.permissions(false), 0xFFFF_FFFF);
+    }
+
+    #[test]
+    fn reads_pages_in_order() {
+        let doc = open(&build(5)).expect("document");
+        let number = Name::from("PageNumber");
+        for i in 0..5u32 {
+            let page = doc.page(i).expect("page");
+            assert_eq!(page.dict.direct_int(&number), Some(i64::from(i)));
+        }
+        assert!(doc.page(5).is_err());
+    }
+
+    #[test]
+    fn reads_pages_in_reverse_and_out_of_order() {
+        let doc = open(&build(5)).expect("document");
+        let number = Name::from("PageNumber");
+        for i in (0..5u32).rev() {
+            assert_eq!(
+                doc.page(i).expect("page").dict.direct_int(&number),
+                Some(i64::from(i))
+            );
+        }
+        // An out-of-range lookup must not poison the ones after it.
+        assert!(doc.page(99).is_err());
+        assert_eq!(doc.page(3).expect("page").dict.direct_int(&number), Some(3));
+    }
+
+    #[test]
+    fn a_count_larger_than_the_tree_reports_the_lie() {
+        let text = String::from_utf8_lossy(&build(3)).replace("/Count 3", "/Count 9");
+        let doc = open(text.as_bytes()).expect("document");
+        // The claimed count is what the document reports...
+        assert_eq!(doc.page_count(), 9);
+        // ...and the pages that exist still resolve.
+        assert!(doc.page(0).is_ok());
+        assert!(doc.page(2).is_ok());
+        // The ones past the real tree do not.
+        assert!(doc.page(3).is_err());
+        assert!(doc.page(8).is_err());
+        // And the real ones still work afterwards.
+        assert!(doc.page(2).is_ok());
+    }
+
+    #[test]
+    fn a_pages_node_without_kids_is_itself_one_page() {
+        let file = b"%PDF-1.7\n\
+                     1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n\
+                     2 0 obj\n<< /Type /Pages /Count 3 >>\nendobj\n\
+                     trailer\n<< /Root 1 0 R >>\nstartxref\n0\n%%EOF\n";
+        let doc = open(file).expect("document");
+        assert_eq!(doc.page_count(), 1);
+        assert!(doc.page(0).is_ok());
+        assert!(doc.page(1).is_err());
+    }
+
+    #[test]
+    fn a_catalog_without_pages_will_not_open() {
+        let file = b"%PDF-1.7\n\
+                     1 0 obj\n<< /Type /Catalog >>\nendobj\n\
+                     trailer\n<< /Root 1 0 R >>\nstartxref\n0\n%%EOF\n";
+        assert!(matches!(open(file), Err(LoadError::Broken(_))));
+    }
+
+    #[test]
+    fn a_root_written_inline_does_not_name_a_catalog() {
+        let file = b"%PDF-1.7\n\
+                     1 0 obj\n<< /Type /Page >>\nendobj\n\
+                     trailer\n<< /Root << /Type /Catalog /Pages 2 0 R >> >>\n\
+                     startxref\n0\n%%EOF\n";
+        assert!(matches!(open(file), Err(LoadError::Broken(_))));
+    }
+
+    #[test]
+    fn a_broken_start_xref_still_opens_the_document() {
+        let text = String::from_utf8_lossy(&build(2)).into_owned();
+        let broken = text
+            .replace("%%EOF", "")
+            .replace("startxref\n", "startxref\n1\n");
+        let doc = open(broken.as_bytes()).expect("document");
+        assert!(doc.xref_was_rebuilt());
+        assert_eq!(doc.page_count(), 2);
+        assert!(doc.diags.contains(&DiagKind::XrefRebuilt));
+    }
+
+    #[test]
+    fn a_header_after_junk_shifts_every_offset() {
+        let mut file = vec![b'x'; 100];
+        file.extend_from_slice(&build(2));
+        let doc = open(&file).expect("document");
+        assert_eq!(doc.header_offset(), 100);
+        assert_eq!(doc.page_count(), 2);
+        assert!(doc.diags.contains(&DiagKind::HeaderOffset));
+    }
+
+    #[test]
+    fn inheritable_attributes_come_from_the_parent() {
+        let doc = open(&build(2)).expect("document");
+        let page = doc.page(0).expect("page");
+        // The page states no /MediaBox; its /Pages parent does.
+        let inherited = page
+            .inherited(names::MEDIA_BOX, &doc)
+            .expect("inherited media box");
+        let array = inherited.as_array().expect("array");
+        assert_eq!(array.number_at(2), Some(612.0));
+        assert_eq!(array.number_at(3), Some(792.0));
+        // A key nobody states is absent.
+        assert!(page.inherited(names::ROTATE, &doc).is_none());
+    }
+
+    #[test]
+    fn a_pages_reference_is_reported() {
+        let doc = open(&build(1)).expect("document");
+        assert_eq!(doc.page(0).expect("page").reference.map(|r| r.num), Some(3));
+    }
+
+    #[test]
+    fn documents_are_send_and_sync() {
+        fn assert_both<T: Send + Sync>() {}
+        assert_both::<super::Document>();
+    }
+
+    #[test]
+    fn never_panics_on_arbitrary_bytes() {
+        let seeds: &[&[u8]] = &[
+            b"",
+            b"%PDF",
+            b"%PDF-1.7",
+            b"%PDF-1.7\nstartxref\n0\n%%EOF",
+            b"%PDF-1.7\ntrailer<</Root 1 0 R>>",
+            b"%PDF-1.7\n1 0 obj<</Length 1 0 R>>stream\n",
+            b"%PDF-1.7\n\x00\xff\x80\x0b",
+        ];
+        for seed in seeds {
+            let _ = open(seed);
+        }
+    }
+}
