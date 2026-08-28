@@ -26,10 +26,12 @@
 //!
 //! A word longer than [`Limits::max_word_len`] bytes keeps its first
 //! `max_word_len` bytes and drops the rest, while still consuming the whole
-//! run. This is observable: a name 300 bytes long compares equal to its
-//! 256-byte prefix, and two such names collide. Files do not do this on
-//! purpose, but fuzzers and damaged files do, and the truncation is what
-//! decides whether their dictionaries have one key or two.
+//! run. A *name* keeps one byte fewer, because the slash it opens with
+//! occupies the first byte of the same budget. This is observable: two names
+//! agreeing on their first 255 payload bytes are the same name, while two
+//! keywords need 256 to collide. Files do not do this on purpose, but
+//! fuzzers and damaged files do, and the truncation is what decides whether
+//! their dictionaries have one key or two.
 
 use std::borrow::Cow;
 
@@ -406,10 +408,13 @@ impl<'a> Lexer<'a> {
                         break;
                     }
                 }
-                Token::Name(truncate(
-                    self.bytes.get(start..self.pos).unwrap_or_default(),
-                    limits,
-                ))
+                // A name's budget is one byte smaller than a keyword's,
+                // because the slash itself occupies the first byte of it.
+                // So two names sharing their first 255 payload bytes are the
+                // same name, while two keywords need 256 to collide.
+                let payload = self.bytes.get(start..self.pos).unwrap_or_default();
+                let budget = limits.max_word_len.saturating_sub(1);
+                Token::Name(payload.get(..budget).unwrap_or(payload))
             }
             b'<' => {
                 if self.peek_byte() == Some(b'<') {
@@ -790,6 +795,23 @@ mod tests {
     }
 
     #[test]
+    fn two_long_names_collide_one_byte_sooner_than_keywords() {
+        // 255 shared payload bytes make two names equal; keywords need 256.
+        let name = |tail: u8| {
+            let mut v = vec![b'/'];
+            v.extend(std::iter::repeat_n(b'a', 255));
+            v.push(tail);
+            v.push(b' ');
+            v
+        };
+        let (x, y) = (name(b'x'), name(b'y'));
+        assert_eq!(
+            Lexer::new(&x).next_word(&limits()),
+            Lexer::new(&y).next_word(&limits())
+        );
+    }
+
+    #[test]
     fn words_truncate_at_the_limit() {
         let long = vec![b'a'; 300];
         let mut source = long.clone();
@@ -803,11 +825,13 @@ mod tests {
     }
 
     #[test]
-    fn names_truncate_to_the_same_budget() {
+    fn names_truncate_one_byte_sooner_than_keywords() {
+        // The slash occupies the first byte of a name's budget, so its
+        // payload gets 255 where a keyword gets 256.
         let mut source = vec![b'/'];
         source.extend(std::iter::repeat_n(b'x', 300));
         let mut lx = Lexer::new(&source);
-        assert_eq!(lx.next_word(&limits()).bytes().len(), 256);
+        assert_eq!(lx.next_word(&limits()).bytes().len(), 255);
     }
 
     #[test]
