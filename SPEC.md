@@ -278,7 +278,17 @@ pub fn decode_image(xobj: &Stream, r: &impl Resolve, ...) -> Result<ImageData, E
 Decisions: `q`/`Q` is a `Vec<GraphicsState>` stack with cheap clone (Arc'd
 heavy fields). Form XObjects recurse through `build_page` with depth guard.
 Inline images (`BI…EI`) handled in `parse_content` with the C++'s EI-scan quirks.
-Decoded-image cache: `HashMap<ObjRef, Arc<ImageData>>` per render/extract session.
+Decoded-image cache: keyed `(ObjRef, RequestedSize)` per render/extract session
+([spec] 2026-08-29: a plain ObjRef key cannot express resolution-dependent
+invalidation — page brief Q8).
+Decisions (orchestrator, from the page brief's open questions): the three
+additive `Limits` fields the brief proposes (colorspace construction depth,
+type-3 stitching nesting, names-tree length) are accepted with generous
+defaults — C++ uses visited-sets, which remain the primary mechanism; the caps
+are unobservable safety nets (Q1). All D1–D22 divergences accepted as written,
+including porting the pixel-visible C++ quirks verbatim (shading LUT
+off-by-one, sampled-function negative-index wrap) and declining the
+crash/aliasing bugs the brief rules pixel-invisible (Q5/Q6).
 
 ## 8. `pdfrum-render` + backends  *(behavior: `core/fpdfapi/render`, `core/fxge`)*
 
@@ -309,8 +319,12 @@ peniko gradients; function-based and mesh shadings (1,4–7) evaluate to a
 rasterize one tile offscreen via `RasterBackend`, draw repeated (respect
 XStep/YStep quirks). Soft masks: render mask subtree offscreen, convert
 (luminosity/alpha + TR function) to `AlphaMask`, pass to `push_layer`.
-Isolated/knockout groups: engine-level compositing over offscreen layers —
-backends never know about knockout. `pdfrum-raster-vello` (vello_cpu) and
+Isolated groups: engine-level compositing over offscreen layers.
+Knockout ([spec] 2026-08-29, page brief Q4): the oracle never parses /K
+anywhere in core/ — v1 matches the oracle and does NOT implement knockout;
+the compositor's layer model keeps a documented (unused) slot for it as a
+post-M8 correctness option. Backends never know about group semantics either
+way. `pdfrum-raster-vello` (vello_cpu) and
 `pdfrum-raster-tinyskia` implement the two traits; conformance Tier C diffs them.
 
 ## 9. `pdfrum-text`  *(behavior: `core/fpdftext`)*
