@@ -374,9 +374,23 @@ pub trait RenderDevice {
 }
 pub trait RasterBackend {  // factory: lets the engine rasterize soft masks & tiles offscreen
     type Device: RenderDevice;
-    fn new_target(&self, w: u32, h: u32) -> Self::Device;
+    fn new_target(&self, w: u32, h: u32, clear: Color) -> Self::Device;      // [spec] E10: explicit clear color
+    fn new_target_with_backdrop(&self, base: &Pixmap) -> Self::Device;       // [spec] E4: non-isolated groups
+    fn snapshot(&self, d: &Self::Device) -> Pixmap;                          // [spec] E3: fill+stroke knockout buffer
     fn finish(&self, d: Self::Device) -> Pixmap;   // RGBA8, premultiplied
 }
+// [spec] E2 (render brief): RenderDevice additionally gets
+//   fn push_clip_rect(&mut self, rect: Rect);   // hard-edged, never antialiased —
+// PDFium's axis-aligned rect fills/clips are integer-snapped and aliased
+// (shrink-wider-side, ties right/bottom); routing them through fill_path
+// would add AA pixels on a large fraction of the corpus.
+// Rulings 2026-08-29: Coons/tensor subdivision capped at depth 32 with a
+// non-finite control-point check (additive safety, render brief Q2); the
+// transfer-function array-reversal question (Q1) resolves in favor of the
+// C++ unittest's asserted observable, with an oracle probe at M3 if doubt
+// remains. Backend capability claims for vello_cpu/tiny-skia (brief §5) are
+// INFERRED and must be verified against fetched crate sources before any
+// backend code is written (brief Q4).
 
 pub struct RenderOptions { pub transform: Affine, pub text_aa: TextAa, pub grayscale: bool, /* (abridged) */ }
 pub fn render_page(page: &Page, opts: &RenderOptions, backend: &impl RasterBackend) -> Pixmap;
