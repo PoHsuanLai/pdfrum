@@ -1,0 +1,449 @@
+//! Finding the cross-reference sections and reading them in the right order
+//! (ISO 32000-1 §7.5.5 and §7.5.6).
+//!
+//! # Newest first, applied last
+//!
+//! A file records its edits as a chain: the newest section sits at the end,
+//! and each links back to the one before through `/Prev`. The walk therefore
+//! visits sections newest-first, but the *entries* have to end up with the
+//! newest version of each object winning. Both are satisfied by loading the
+//! oldest section first and merging every newer one on top of it, which is
+//! why the walk collects offsets before reading anything.
+//!
+//! # Hybrids
+//!
+//! A file can carry both a classic table and a cross-reference stream for the
+//! same section, so that old readers see the table and new ones see the
+//! stream. When both exist the table's entries win, and the stream's are
+//! merged in first. The newest section's `/XRefStm` is deliberately ignored:
+//! hybrid information belongs to update sections, and honoring it in the
+//! newest one changes which objects a file resolves to.
+
+use std::sync::Arc;
+
+use pdfrum_common::{DiagKind, Diagnostics, Limits, Severity};
+use pdfrum_object::{NoResolve, Object, names};
+
+use crate::error::Error;
+use crate::lexer::{Lexer, Token, atoi64};
+use crate::syntax::{Context, Strictness, indirect};
+use crate::xref::{Trailer, Xref, classic, merge_trailers, rebuild, stream};
+
+/// The smallest offset that could name a cross-reference section: nothing
+/// useful fits in the bytes a header occupies.
+const MIN_XREF_OFFSET: i64 = 9;
+
+/// One section of the chain: where its table and its stream are.
+#[derive(Debug, Clone, Copy, Default)]
+struct Section {
+    /// Offset of a classic table, or zero.
+    table: usize,
+    /// Offset of a cross-reference stream, or zero.
+    stream: usize,
+}
+
+/// Read a document's cross-reference information.
+///
+/// Tries the structured chain first and falls back to a full-file scan; the
+/// returned flag says which happened, because a rebuilt table means the file
+/// cannot be incrementally saved.
+pub(crate) fn load(
+    file: &[u8],
+    limits: &Limits,
+    diags: &mut Diagnostics,
+) -> Result<(Xref, Trailer, bool), Error> {
+    let shared: Arc<[u8]> = Arc::from(file);
+    let start = start_xref(file, limits, diags);
+
+    let mut xref = Xref::new();
+    let mut trailer = Trailer::default();
+
+    if start >= MIN_XREF_OFFSET
+        && let Ok(pos) = usize::try_from(start)
+        && read_chain(&shared, pos, &mut xref, &mut trailer, limits, diags)
+    {
+        return Ok((xref, trailer, false));
+    }
+
+    diags.record(Severity::Recovered, DiagKind::XrefRebuilt, None);
+    if rebuild::rebuild(&shared, &mut xref, &mut trailer, limits, diags, &NoResolve) {
+        Ok((xref, trailer, true))
+    } else {
+        Err(Error::XrefBroken)
+    }
+}
+
+/// Find the offset `startxref` names, or zero.
+///
+/// The keyword is searched for backwards from the end of the file within a
+/// fixed window, because everything after it is optional and files append
+/// junk there. An offset at or past the end of the file names nothing.
+pub(crate) fn start_xref(file: &[u8], limits: &Limits, diags: &mut Diagnostics) -> i64 {
+    let from = file.len().saturating_sub(9);
+    let window = usize::try_from(limits.startxref_scan).unwrap_or(usize::MAX);
+    let mut lx = Lexer::at(file, from);
+    let bad = |diags: &mut Diagnostics| {
+        diags.record(Severity::Recovered, DiagKind::BadStartXref, None);
+        0
+    };
+
+    if !lx.search_back(b"startxref", window) {
+        return bad(diags);
+    }
+    // Step over the keyword itself before reading the number.
+    let _ = lx.next_word(limits);
+    match lx.next_word(limits) {
+        Token::Number(word) => {
+            let offset = atoi64(word);
+            if u64::try_from(offset).is_ok_and(|o| o < file.len() as u64) {
+                offset
+            } else {
+                bad(diags)
+            }
+        }
+        _ => bad(diags),
+    }
+}
+
+/// Read the whole chain starting at `pos`.
+///
+/// Returns false when anything about it is unusable, which sends the caller
+/// to the rebuild. Everything read so far is left in `xref`, because the
+/// rebuild overlays rather than replaces.
+pub(crate) fn read_chain(
+    file: &Arc<[u8]>,
+    pos: usize,
+    xref: &mut Xref,
+    trailer: &mut Trailer,
+    limits: &Limits,
+    diags: &mut Diagnostics,
+) -> bool {
+    // Probe: does a classic table live here?
+    let mut probe = Xref::new();
+    let main_is_table = classic::parse_table(file, pos, true, &mut probe, limits, diags).is_some();
+
+    let Some(sections) = walk(file, pos, main_is_table, xref, trailer, limits, diags) else {
+        return false;
+    };
+
+    // The oldest section is loaded first and verified; everything newer is
+    // merged on top of it.
+    let Some((oldest, newer)) = sections.split_first() else {
+        return !xref.is_empty();
+    };
+
+    if oldest.table > 0 {
+        let mut oldest_entries = Xref::new();
+        if classic::parse_table(
+            file,
+            oldest.table,
+            false,
+            &mut oldest_entries,
+            limits,
+            diags,
+        )
+        .is_none()
+        {
+            return false;
+        }
+        // The one sanity check on a table: does the object it names first
+        // actually live where it says?
+        if !classic::verify_table(file, &oldest_entries, limits) {
+            diags.record(
+                Severity::Suspicious,
+                DiagKind::XrefEntriesShifted,
+                Some(oldest.table as u64),
+            );
+            return false;
+        }
+        let mut merged = oldest_entries;
+        merged.merge_up(xref);
+        *xref = merged;
+    }
+
+    // An update section that will not load abandons the whole chain rather
+    // than leaving a partial table: the file has already proved unreliable,
+    // and the recovery scan reads more of it than half a chain does.
+    for section in newer {
+        // Within a section the table wins, so the stream is applied first.
+        if section.stream > 0 {
+            let mut entries = Xref::new();
+            if read_stream_section(file, section.stream, false, &mut entries, limits, diags)
+                .is_none()
+            {
+                return false;
+            }
+            let mut merged = entries;
+            merged.merge_up(xref);
+            *xref = merged;
+        }
+        if section.table > 0 {
+            let mut entries = Xref::new();
+            if classic::parse_table(file, section.table, false, &mut entries, limits, diags)
+                .is_none()
+            {
+                return false;
+            }
+            let mut merged = entries;
+            merged.merge_up(xref);
+            *xref = merged;
+        }
+    }
+
+    if main_is_table {
+        apply_size(xref, trailer, limits);
+    }
+    !xref.is_empty() || !trailer.dict.is_empty()
+}
+
+/// Walk the `/Prev` chain, collecting section offsets oldest-first.
+///
+/// Stream sections have their entries read during the walk — a stream's
+/// `/Prev` is inside the stream, so there is no way to learn where to go next
+/// without reading it. Classic sections only have their offsets recorded.
+fn walk(
+    file: &Arc<[u8]>,
+    main: usize,
+    main_is_table: bool,
+    xref: &mut Xref,
+    trailer: &mut Trailer,
+    limits: &Limits,
+    diags: &mut Diagnostics,
+) -> Option<Vec<Section>> {
+    let mut sections: Vec<Section> = Vec::new();
+    let mut seen: Vec<usize> = vec![main];
+
+    // The newest section, read for its trailer and (if a stream) entries.
+    let mut next = if main_is_table {
+        let end = classic::parse_table(file, main, true, &mut Xref::new(), limits, diags)?;
+        let dict = classic::read_trailer(file, end, limits, diags, &NoResolve)?;
+        let prev = dict.direct_int(names::PREV).unwrap_or(0);
+        let xref_stm = dict.int(names::XREF_STM, &NoResolve).unwrap_or(0);
+        merge_trailers(
+            trailer,
+            &Trailer {
+                dict,
+                object_number: 0,
+            },
+        );
+        sections.push(Section {
+            table: main,
+            // The newest section's hybrid pointer is deliberately not
+            // followed: it describes an update, and this is the base.
+            stream: 0,
+        });
+        let _ = xref_stm;
+        prev
+    } else {
+        // A main cross-reference stream sizes the table *before* its entries
+        // are read, not after, so an entry whose object number equals the
+        // declared `/Size` survives rather than being truncated away.
+        let mut entries = Xref::new();
+        let read = read_stream_section(file, main, true, &mut entries, limits, diags)?;
+        xref.merge_up(&entries);
+        merge_trailers(trailer, &read.trailer);
+        sections.push(Section {
+            table: 0,
+            stream: main,
+        });
+        read.prev
+    };
+
+    while next > 0 {
+        let Ok(pos) = usize::try_from(next) else {
+            return None;
+        };
+        if seen.contains(&pos) {
+            // A chain that points back at a section it already visited would
+            // never terminate; the file is lying about its history.
+            diags.record(
+                Severity::Suspicious,
+                DiagKind::XrefPrevLoop,
+                Some(pos as u64),
+            );
+            return None;
+        }
+        seen.push(pos);
+
+        let mut entries = Xref::new();
+        if let Some(read) = read_stream_section(file, pos, false, &mut entries, limits, diags) {
+            // A stream section: its entries are already merged, and it says
+            // where to look next.
+            let mut merged = entries;
+            merged.merge_up(xref);
+            *xref = merged;
+            merge_trailers(trailer, &read.trailer);
+            sections.insert(
+                0,
+                Section {
+                    table: 0,
+                    stream: pos,
+                },
+            );
+            next = read.prev;
+            continue;
+        }
+
+        // A classic section: record where its table and its hybrid stream
+        // are, and read its trailer for the next pointer.
+        let end = classic::parse_table(file, pos, true, &mut Xref::new(), limits, diags)?;
+        let dict = classic::read_trailer(file, end, limits, diags, &NoResolve)?;
+        let prev = dict.direct_int(names::PREV).unwrap_or(0);
+        // `/XRefStm` is read *through* a reference here, unlike `/Prev`.
+        let hybrid = dict.int(names::XREF_STM, &NoResolve).unwrap_or(0);
+        merge_trailers(
+            trailer,
+            &Trailer {
+                dict,
+                object_number: 0,
+            },
+        );
+        sections.insert(
+            0,
+            Section {
+                table: pos,
+                stream: usize::try_from(hybrid).unwrap_or(0),
+            },
+        );
+        next = prev;
+    }
+
+    Some(sections)
+}
+
+/// Parse the cross-reference stream at `pos` and read its entries.
+fn read_stream_section(
+    file: &Arc<[u8]>,
+    pos: usize,
+    is_main: bool,
+    xref: &mut Xref,
+    limits: &Limits,
+    diags: &mut Diagnostics,
+) -> Option<stream::XrefStream> {
+    let mut lx = Lexer::at(file, pos);
+    let mut ctx = Context {
+        limits,
+        diags,
+        file: Some(file),
+        store: Some(&NoResolve),
+    };
+    let parsed = indirect(&mut lx, &mut ctx, Strictness::Loose, 0).ok()?;
+    if parsed.num == 0 {
+        return None;
+    }
+    let Object::Stream(s) = parsed.object else {
+        return None;
+    };
+    // The entries are compressed like any other stream's payload.
+    let decoded = crate::decode::decoded_bytes(&s, &NoResolve, limits, diags);
+    stream::read_xref_stream(&s, parsed.num, &decoded, is_main, xref, limits, diags)
+}
+
+/// Honor the trailer's `/Size`, which is a claim about how many objects the
+/// document has.
+///
+/// Read without resolving: an indirect `/Size` is ignored, because the table
+/// that would resolve it is the one being sized.
+fn apply_size(xref: &mut Xref, trailer: &Trailer, limits: &Limits) {
+    let Some(size) = trailer.dict.direct_int(names::SIZE) else {
+        return;
+    };
+    if size >= 1
+        && size <= i64::from(limits.max_xref_size)
+        && let Ok(size) = u32::try_from(size)
+    {
+        xref.set_size(size);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{load, start_xref};
+    use crate::xref::Entry;
+    use pdfrum_common::{DiagKind, Diagnostics, Limits};
+    use pdfrum_object::names;
+
+    fn read(file: &[u8]) -> Option<(crate::xref::Xref, crate::xref::Trailer, bool, Diagnostics)> {
+        let mut diags = Diagnostics::default();
+        load(file, &Limits::default(), &mut diags)
+            .ok()
+            .map(|(x, t, r)| (x, t, r, diags))
+    }
+
+    #[test]
+    fn start_xref_reads_the_last_one() {
+        let mut diags = Diagnostics::default();
+        let file = b"junk\nstartxref\n17\n%%EOF\n";
+        assert_eq!(start_xref(file, &Limits::default(), &mut diags), 17);
+    }
+
+    #[test]
+    fn a_missing_start_xref_reads_as_zero() {
+        let mut diags = Diagnostics::default();
+        assert_eq!(
+            start_xref(b"no marker here", &Limits::default(), &mut diags),
+            0
+        );
+        assert!(diags.contains(&DiagKind::BadStartXref));
+    }
+
+    #[test]
+    fn an_offset_past_the_file_reads_as_zero() {
+        let mut diags = Diagnostics::default();
+        let file = b"startxref\n99999\n%%EOF\n";
+        assert_eq!(start_xref(file, &Limits::default(), &mut diags), 0);
+    }
+
+    #[test]
+    fn a_classic_chain_loads() {
+        // A minimal file with a real table.
+        let file = build_classic();
+        let (xref, trailer, rebuilt, _) = read(&file).expect("loaded");
+        assert!(!rebuilt);
+        assert!(matches!(xref.entry(1), Some(Entry::Offset(_))));
+        assert!(trailer.dict.raw(names::ROOT).is_some());
+    }
+
+    #[test]
+    fn a_broken_start_xref_falls_back_to_the_scan() {
+        // Point `startxref` at the middle of the file, where no table is.
+        let text = String::from_utf8_lossy(&build_classic()).into_owned();
+        let Some((head, tail)) = text.rsplit_once("startxref\n") else {
+            panic!("the builder writes a startxref");
+        };
+        let Some((_, after)) = tail.split_once('\n') else {
+            panic!("the offset is on its own line");
+        };
+        let broken = format!("{head}startxref\n30\n{after}");
+
+        let (xref, trailer, rebuilt, diags) = read(broken.as_bytes()).expect("loaded");
+        assert!(rebuilt);
+        assert!(xref.entry(1).is_some());
+        assert!(trailer.dict.raw(names::ROOT).is_some());
+        assert!(diags.contains(&DiagKind::XrefRebuilt));
+    }
+
+    #[test]
+    fn a_file_with_nothing_readable_fails() {
+        assert!(read(b"not a pdf at all").is_none());
+    }
+
+    /// A tiny well-formed document with a classic table.
+    fn build_classic() -> Vec<u8> {
+        let mut out = Vec::new();
+        out.extend_from_slice(b"%PDF-1.7\n");
+        let obj1 = out.len();
+        out.extend_from_slice(b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
+        let obj2 = out.len();
+        out.extend_from_slice(b"2 0 obj\n<< /Type /Pages /Kids [] /Count 0 >>\nendobj\n");
+        let xref_at = out.len();
+        out.extend_from_slice(b"xref\n0 3\n");
+        out.extend_from_slice(b"0000000000 65535 f \n");
+        out.extend_from_slice(format!("{obj1:010} 00000 n \n").as_bytes());
+        out.extend_from_slice(format!("{obj2:010} 00000 n \n").as_bytes());
+        out.extend_from_slice(b"trailer\n<< /Size 3 /Root 1 0 R >>\nstartxref\n");
+        out.extend_from_slice(format!("{xref_at}\n").as_bytes());
+        out.extend_from_slice(b"%%EOF\n");
+        out
+    }
+}

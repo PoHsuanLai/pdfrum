@@ -149,6 +149,15 @@ names! {
     COUNT = "Count";
     /// The parent node of a page-tree node or form field (`/Parent`).
     PARENT = "Parent";
+    /// The resources a page or form needs (`/Resources`). Inheritable
+    /// through the page tree.
+    RESOURCES = "Resources";
+    /// The sheet a page is imaged on (`/MediaBox`). Inheritable.
+    MEDIA_BOX = "MediaBox";
+    /// The region of a page a viewer displays (`/CropBox`). Inheritable.
+    CROP_BOX = "CropBox";
+    /// Clockwise display rotation in degrees (`/Rotate`). Inheritable.
+    ROTATE = "Rotate";
     /// Metadata stream (`/Metadata`).
     METADATA = "Metadata";
     /// A more specific type within a `/Type` (`/Subtype`).
