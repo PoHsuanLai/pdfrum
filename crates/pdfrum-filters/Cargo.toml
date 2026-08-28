@@ -1,0 +1,12 @@
+[package]
+name = "pdfrum-filters"
+description = "PDF stream filters: Flate, LZW, RunLength, ASCIIHex/85, CCITT"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
