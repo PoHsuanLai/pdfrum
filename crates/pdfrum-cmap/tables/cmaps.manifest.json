@@ -1,0 +1,73 @@
+{
+  "generator": "crates/pdfrum-cmap/build.rs",
+  "blob_version": 1,
+  "registries": [
+    { "registry": "GB1", "entries": [
+      { "i": 0, "name": "GB-EUC-H", "word": "kGB_EUC_H_0", "dword": null, "word_count": 90, "dword_count": 0, "type": "Range", "use_offset": 0 },
+      { "i": 1, "name": "GB-EUC-V", "word": "kGB_EUC_V_0", "dword": null, "word_count": 20, "dword_count": 0, "type": "Range", "use_offset": -1 },
+      { "i": 2, "name": "GBpc-EUC-H", "word": "kGBpc_EUC_H_0", "dword": null, "word_count": 91, "dword_count": 0, "type": "Range", "use_offset": 0 },
+      { "i": 3, "name": "GBpc-EUC-V", "word": "kGBpc_EUC_V_0", "dword": null, "word_count": 20, "dword_count": 0, "type": "Range", "use_offset": -1 },
+      { "i": 4, "name": "GBK-EUC-H", "word": "kGBK_EUC_H_2", "dword": null, "word_count": 4071, "dword_count": 0, "type": "Range", "use_offset": 0 },
+      { "i": 5, "name": "GBK-EUC-V", "word": "kGBK_EUC_V_2", "dword": null, "word_count": 20, "dword_count": 0, "type": "Range", "use_offset": -1 },
+      { "i": 6, "name": "GBKp-EUC-H", "word": "kGBKp_EUC_H_2", "dword": null, "word_count": 4070, "dword_count": 0, "type": "Range", "use_offset": -2 },
+      { "i": 7, "name": "GBKp-EUC-V", "word": "kGBKp_EUC_V_2", "dword": null, "word_count": 20, "dword_count": 0, "type": "Range", "use_offset": -1 },
+      { "i": 8, "name": "GBK2K-H", "word": "kGBK2K_H_5", "dword": "kGBK2K_H_5_DWord", "word_count": 4071, "dword_count": 1017, "type": "Range", "use_offset": -4 },
+      { "i": 9, "name": "GBK2K-V", "word": "kGBK2K_V_5", "dword": null, "word_count": 41, "dword_count": 0, "type": "Range", "use_offset": -1 },
+      { "i": 10, "name": "UniGB-UCS2-H", "word": "kUniGB_UCS2_H_4", "dword": null, "word_count": 13825, "dword_count": 0, "type": "Range", "use_offset": 0 },
+      { "i": 11, "name": "UniGB-UCS2-V", "word": "kUniGB_UCS2_V_4", "dword": null, "word_count": 24, "dword_count": 0, "type": "Range", "use_offset": -1 },
+      { "i": 12, "name": "UniGB-UTF16-H", "word": "kUniGB_UCS2_H_4", "dword": null, "word_count": 13825, "dword_count": 0, "type": "Range", "use_offset": 0 },
+      { "i": 13, "name": "UniGB-UTF16-V", "word": "kUniGB_UCS2_V_4", "dword": null, "word_count": 24, "dword_count": 0, "type": "Range", "use_offset": -1 }
+    ] },
+    { "registry": "CNS1", "entries": [
+      { "i": 0, "name": "B5pc-H", "word": "kB5pc_H_0", "dword": null, "word_count": 247, "dword_count": 0, "type": "Range", "use_offset": 0 },
+      { "i": 1, "name": "B5pc-V", "word": "kB5pc_V_0", "dword": null, "word_count": 12, "dword_count": 0, "type": "Range", "use_offset": -1 },
+      { "i": 2, "name": "HKscs-B5-H", "word": "kHKscs_B5_H_5", "dword": null, "word_count": 1210, "dword_count": 0, "type": "Range", "use_offset": 0 },
+      { "i": 3, "name": "HKscs-B5-V", "word": "kHKscs_B5_V_5", "dword": null, "word_count": 13, "dword_count": 0, "type": "Range", "use_offset": -1 },
+      { "i": 4, "name": "ETen-B5-H", "word": "kETen_B5_H_0", "dword": null, "word_count": 254, "dword_count": 0, "type": "Range", "use_offset": 0 },
+      { "i": 5, "name": "ETen-B5-V", "word": "kETen_B5_V_0", "dword": null, "word_count": 13, "dword_count": 0, "type": "Range", "use_offset": -1 },
+      { "i": 6, "name": "ETenms-B5-H", "word": "kETenms_B5_H_0", "dword": null, "word_count": 1, "dword_count": 0, "type": "Range", "use_offset": -2 },
+      { "i": 7, "name": "ETenms-B5-V", "word": "kETenms_B5_V_0", "dword": null, "word_count": 18, "dword_count": 0, "type": "Range", "use_offset": -1 },
+      { "i": 8, "name": "CNS-EUC-H", "word": "kCNS_EUC_H_0", "dword": "kCNS_EUC_H_0_DWord", "word_count": 157, "dword_count": 238, "type": "Range", "use_offset": 0 },
+      { "i": 9, "name": "CNS-EUC-V", "word": "kCNS_EUC_V_0", "dword": "kCNS_EUC_V_0_DWord", "word_count": 180, "dword_count": 261, "type": "Range", "use_offset": 0 },
+      { "i": 10, "name": "UniCNS-UCS2-H", "word": "kUniCNS_UCS2_H_3", "dword": null, "word_count": 16418, "dword_count": 0, "type": "Range", "use_offset": 0 },
+      { "i": 11, "name": "UniCNS-UCS2-V", "word": "kUniCNS_UCS2_V_3", "dword": null, "word_count": 13, "dword_count": 0, "type": "Range", "use_offset": -1 },
+      { "i": 12, "name": "UniCNS-UTF16-H", "word": "kUniCNS_UTF16_H_0", "dword": null, "word_count": 14557, "dword_count": 0, "type": "Single", "use_offset": 0 },
+      { "i": 13, "name": "UniCNS-UTF16-V", "word": "kUniCNS_UCS2_V_3", "dword": null, "word_count": 13, "dword_count": 0, "type": "Range", "use_offset": -1 }
+    ] },
+    { "registry": "Japan1", "entries": [
+      { "i": 0, "name": "83pv-RKSJ-H", "word": "k83pv_RKSJ_H_1", "dword": null, "word_count": 222, "dword_count": 0, "type": "Range", "use_offset": 0 },
+      { "i": 1, "name": "90ms-RKSJ-H", "word": "k90ms_RKSJ_H_2", "dword": null, "word_count": 171, "dword_count": 0, "type": "Range", "use_offset": 0 },
+      { "i": 2, "name": "90ms-RKSJ-V", "word": "k90ms_RKSJ_V_2", "dword": null, "word_count": 78, "dword_count": 0, "type": "Range", "use_offset": -1 },
+      { "i": 3, "name": "90msp-RKSJ-H", "word": "k90msp_RKSJ_H_2", "dword": null, "word_count": 170, "dword_count": 0, "type": "Range", "use_offset": -2 },
+      { "i": 4, "name": "90msp-RKSJ-V", "word": "k90msp_RKSJ_V_2", "dword": null, "word_count": 78, "dword_count": 0, "type": "Range", "use_offset": -1 },
+      { "i": 5, "name": "90pv-RKSJ-H", "word": "k90pv_RKSJ_H_1", "dword": null, "word_count": 263, "dword_count": 0, "type": "Range", "use_offset": 0 },
+      { "i": 6, "name": "Add-RKSJ-H", "word": "kAdd_RKSJ_H_1", "dword": null, "word_count": 635, "dword_count": 0, "type": "Range", "use_offset": 0 },
+      { "i": 7, "name": "Add-RKSJ-V", "word": "kAdd_RKSJ_V_1", "dword": null, "word_count": 57, "dword_count": 0, "type": "Range", "use_offset": -1 },
+      { "i": 8, "name": "EUC-H", "word": "kEUC_H_1", "dword": null, "word_count": 120, "dword_count": 0, "type": "Range", "use_offset": 0 },
+      { "i": 9, "name": "EUC-V", "word": "kEUC_V_1", "dword": null, "word_count": 27, "dword_count": 0, "type": "Range", "use_offset": -1 },
+      { "i": 10, "name": "Ext-RKSJ-H", "word": "kExt_RKSJ_H_2", "dword": null, "word_count": 665, "dword_count": 0, "type": "Range", "use_offset": -4 },
+      { "i": 11, "name": "Ext-RKSJ-V", "word": "kExt_RKSJ_V_2", "dword": null, "word_count": 39, "dword_count": 0, "type": "Range", "use_offset": -1 },
+      { "i": 12, "name": "H", "word": "kH_1", "dword": null, "word_count": 118, "dword_count": 0, "type": "Range", "use_offset": 0 },
+      { "i": 13, "name": "V", "word": "kV_1", "dword": null, "word_count": 27, "dword_count": 0, "type": "Range", "use_offset": -1 },
+      { "i": 14, "name": "UniJIS-UCS2-H", "word": "kUniJIS_UCS2_H_4", "dword": null, "word_count": 9772, "dword_count": 0, "type": "Single", "use_offset": 0 },
+      { "i": 15, "name": "UniJIS-UCS2-V", "word": "kUniJIS_UCS2_V_4", "dword": null, "word_count": 251, "dword_count": 0, "type": "Single", "use_offset": -1 },
+      { "i": 16, "name": "UniJIS-UCS2-HW-H", "word": "kUniJIS_UCS2_HW_H_4", "dword": null, "word_count": 4, "dword_count": 0, "type": "Range", "use_offset": -2 },
+      { "i": 17, "name": "UniJIS-UCS2-HW-V", "word": "kUniJIS_UCS2_HW_V_4", "dword": null, "word_count": 199, "dword_count": 0, "type": "Range", "use_offset": -1 },
+      { "i": 18, "name": "UniJIS-UTF16-H", "word": "kUniJIS_UCS2_H_4", "dword": null, "word_count": 9772, "dword_count": 0, "type": "Single", "use_offset": 0 },
+      { "i": 19, "name": "UniJIS-UTF16-V", "word": "kUniJIS_UCS2_V_4", "dword": null, "word_count": 251, "dword_count": 0, "type": "Single", "use_offset": -1 }
+    ] },
+    { "registry": "Korea1", "entries": [
+      { "i": 0, "name": "KSC-EUC-H", "word": "kKSC_EUC_H_0", "dword": null, "word_count": 467, "dword_count": 0, "type": "Range", "use_offset": 0 },
+      { "i": 1, "name": "KSC-EUC-V", "word": "kKSC_EUC_V_0", "dword": null, "word_count": 16, "dword_count": 0, "type": "Range", "use_offset": -1 },
+      { "i": 2, "name": "KSCms-UHC-H", "word": "kKSCms_UHC_H_1", "dword": null, "word_count": 675, "dword_count": 0, "type": "Range", "use_offset": -2 },
+      { "i": 3, "name": "KSCms-UHC-V", "word": "kKSCms_UHC_V_1", "dword": null, "word_count": 16, "dword_count": 0, "type": "Range", "use_offset": -1 },
+      { "i": 4, "name": "KSCms-UHC-HW-H", "word": "kKSCms_UHC_HW_H_1", "dword": null, "word_count": 675, "dword_count": 0, "type": "Range", "use_offset": 0 },
+      { "i": 5, "name": "KSCms-UHC-HW-V", "word": "kKSCms_UHC_HW_V_1", "dword": null, "word_count": 16, "dword_count": 0, "type": "Range", "use_offset": -1 },
+      { "i": 6, "name": "KSCpc-EUC-H", "word": "kKSCpc_EUC_H_0", "dword": null, "word_count": 509, "dword_count": 0, "type": "Range", "use_offset": -6 },
+      { "i": 7, "name": "UniKS-UCS2-H", "word": "kUniKS_UCS2_H_1", "dword": null, "word_count": 8394, "dword_count": 0, "type": "Range", "use_offset": 0 },
+      { "i": 8, "name": "UniKS-UCS2-V", "word": "kUniKS_UCS2_V_1", "dword": null, "word_count": 18, "dword_count": 0, "type": "Range", "use_offset": -1 },
+      { "i": 9, "name": "UniKS-UTF16-H", "word": "kUniKS_UTF16_H_0", "dword": null, "word_count": 158, "dword_count": 0, "type": "Single", "use_offset": -2 },
+      { "i": 10, "name": "UniKS-UTF16-V", "word": "kUniKS_UCS2_V_1", "dword": null, "word_count": 18, "dword_count": 0, "type": "Range", "use_offset": -1 }
+    ] }
+  ]
+}
