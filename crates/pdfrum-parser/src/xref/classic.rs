@@ -28,11 +28,18 @@ use crate::xref::Xref;
 /// How many bytes one entry occupies.
 const ENTRY_SIZE: usize = 20;
 
-/// Read a classic table at `pos`, into `xref`.
+/// Read a classic table at `pos`, applying its entries to `xref`.
 ///
-/// With `skip` the entries are counted and stepped over rather than recorded,
-/// which is how the chain walk probes an offset to learn whether a table
-/// lives there before deciding what to do with it.
+/// Entries are written **straight into** the table given, rather than into a
+/// fresh one to be merged afterwards. That is not an optimization: applied
+/// directly, an entry of equal generation overwrites what is already there
+/// and a free entry clears it, which is how a section revises the one before
+/// it. Merging instead would let whatever is already recorded win.
+///
+/// With `skip` the entries are stepped over rather than read, which is how
+/// the chain walk probes an offset to learn whether a table lives there.
+/// The size caps below apply only when reading for real, so an absurd
+/// declared count still identifies the offset as holding a classic table.
 ///
 /// Returns where the table ended, so the caller can look for `trailer` there.
 pub(crate) fn parse_table(
@@ -65,12 +72,16 @@ pub(crate) fn parse_table(
                 if start > limits.max_object_number {
                     return None;
                 }
-                let Token::Number(count_word) = lx.next_word(limits) else {
-                    return None;
+                // The count is read leniently: a word that is not a number
+                // counts as zero and is still consumed, so a subsection
+                // header of junk yields an empty subsection rather than
+                // failing the table.
+                let count = match lx.next_word(limits) {
+                    Token::Number(w) => atoui(w),
+                    _ => 0,
                 };
-                let count = atoui(count_word);
                 total = total.saturating_add(u64::from(count));
-                if total > u64::from(limits.max_xref_size) || total > entry_ceiling {
+                if !skip && (total > u64::from(limits.max_xref_size) || total > entry_ceiling) {
                     return None;
                 }
                 lx.skip_to_word();
@@ -91,9 +102,10 @@ pub(crate) fn parse_table(
 
 /// Read one subsection's entries into the table.
 ///
-/// Returns false when an entry is malformed in the way that means the whole
-/// table is untrustworthy: an offset field that is not ten digits yet parses
-/// as zero. Everything else is tolerated.
+/// Returns false when the table cannot be trusted at all: an offset field
+/// that is not ten digits yet parses as zero, an object number past the
+/// largest legal one, or a subsection running off the end of the file.
+/// Everything else is tolerated.
 fn read_subsection(
     file: &[u8],
     start: usize,
@@ -106,11 +118,17 @@ fn read_subsection(
     for i in 0..count {
         let at = start.saturating_add((i as usize).saturating_mul(ENTRY_SIZE));
         let Some(entry) = file.get(at..at.saturating_add(ENTRY_SIZE)) else {
-            // A truncated table keeps what it read.
-            return true;
+            // The table claims more entries than the file holds, so its
+            // arithmetic is wrong and none of it can be relied on.
+            diags.record(
+                Severity::Suspicious,
+                DiagKind::XrefEntriesShifted,
+                Some(at as u64),
+            );
+            return false;
         };
         let Some(num) = first_obj.checked_add(i) else {
-            return true;
+            return false;
         };
 
         let offset_field = entry.get(..10).unwrap_or_default();
@@ -140,6 +158,12 @@ fn read_subsection(
         )]
         let generation = atoi64(entry.get(11..17).unwrap_or_default()) as u16;
 
+        // An object number past the largest legal one fails the whole table:
+        // the file is describing objects that cannot exist.
+        if num > limits.max_object_number {
+            return false;
+        }
+
         if free {
             // A free entry of generation zero says nothing: it is the shape
             // a never-written slot has, and honoring it would erase whatever
@@ -149,7 +173,9 @@ fn read_subsection(
             }
         } else {
             let pos = u64::try_from(offset).unwrap_or(0);
-            xref.add_normal(num, generation, false, pos, limits);
+            if !xref.add_normal(num, generation, false, pos, limits) {
+                return false;
+            }
         }
     }
     true

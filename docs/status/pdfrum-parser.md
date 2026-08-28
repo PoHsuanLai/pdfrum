@@ -95,6 +95,39 @@ All of the brief's divergences D1–D9 are implemented as written. Two notes:
   will not load.** `cpdf_parser.cpp:456-464` returns false, sending the file to
   the rebuild; keeping a partially-merged table instead leaves the reader with
   less than the scan would have found.
+- **Brief clarification — §1.10's `merge_up` model does not describe classic
+  tables.** `LoadCrossRefTable` applies its entries through
+  `MergeCrossRefObjectsData` (`cpdf_parser.cpp:678-705`) *directly against the
+  accumulated table*, so an equal-generation entry overwrites and a free entry
+  clears — which is how a section revises the one before it. Only
+  cross-reference *streams* go through `MergeUp`. Reading the brief's model
+  literally makes a trailer's `/Size` phantom entry win over the real object
+  the table names at that number.
+- **Brief clarification — §1.2's word budget counts the name's slash.** A name
+  keeps 255 payload bytes where a keyword keeps 256
+  (`cpdf_syntax_parser.cpp:193` stores `/` into the buffer first). The brief
+  says this in passing; the consolidated limits table §1.20 does not, and the
+  table is what an implementer reaches for.
+- **Brief clarification — §1.5's depth cap refuses the nested object, not its
+  container.** `GetObjectBodyInternal` increments on entry and returns null
+  (`cpdf_syntax_parser.cpp:540`), and its caller treats that like any element
+  that would not parse. So a file nested past 64 loses its *innermost*
+  contents and keeps everything above them; the brief's "exceeding it returns
+  null" reads as failing the whole parse.
+- **Brief clarification — §1.14's rebuild retry asks only for a catalog.** The
+  first attempt requires `GetRoot() && TryInit()` (catalog *and* pages), but
+  after the rebuild the gate is `if (!GetRoot()) return FORMAT_ERROR`
+  (`cpdf_parser.cpp:305`). A rebuilt document whose catalog is reachable but
+  describes no pages opens, with a page count of zero. Two corpus files
+  (`circular_viewer_ref.pdf`, `repeat_viewer_ref.pdf`) depend on this: the
+  oracle opens both and renders nothing.
+- **Brief clarification — §1.17's `CountPages` has no depth cap**, only the
+  visited set (`cpdf_document.cpp:69-113`), and its `kPageMaxNum` overflow
+  returns `nullopt` that propagates all the way out, making the whole document
+  report zero rather than a partial count. The page *lookup* does have a cap,
+  checked only on the branch path. Separately, `TraversePDFPages` refuses a
+  `/Kids`-less node whose `/Type` says `Pages` (`:271-277`), so such a
+  document reports one page and cannot produce it.
 
 ## `[spec]` changes
 
@@ -106,7 +139,7 @@ One additive change to `pdfrum-object`: four inheritable page-attribute names
 
 ## Tests
 
-169 in-crate, plus 7 doctests. Ported assertion sets:
+172 in-crate, plus 7 doctests. Ported assertion sets:
 
 - `cpdf_syntax_parser_unittest.cpp` — the hexadecimal-string cases with their
   exact bytes and end positions, the invalid-reference rejection, and the
@@ -146,7 +179,11 @@ pages the oracle *rendered* rather than what `FPDF_GetPageCount` reports, so a
 document may hold more pages than the golden names; a golden of zero means the
 oracle opened nothing, and those files are refused here too.
 
-Three genuine bugs were found by that comparison and fixed: the ancestor-scoped
+A fidelity review against the C++ found eighteen further divergences, all
+fixed here; the ones that change which files open are the inverted trailer
+merge during the `/Prev` walk, classic tables merging instead of applying
+directly, the `/Size` ordering on the classic-main path, and the rebuild
+retry's gate. Three earlier bugs came from the corpus comparison: the ancestor-scoped
 page-tree guard described above; an indirect `/Encrypt`, which most encrypted
 files use and which needs a throwaway plaintext store to read; and the
 main cross-reference stream applying `/Size` *before* reading its entries, so

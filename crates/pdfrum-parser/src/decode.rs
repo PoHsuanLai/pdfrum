@@ -51,6 +51,24 @@ pub(crate) fn decoded_bytes<R: Resolve + ?Sized>(
     pdfrum_filters::decode_chain(stream, 0, &r, limits, diags).data
 }
 
+/// Decoded bytes for a stream the *reader itself* has to understand — a
+/// cross-reference stream or an object stream.
+///
+/// Unlike a content stream, these are useless unless the whole chain
+/// produced real bytes. A chain that stops at an image codec has handed back
+/// that codec's input rather than the fields the reader is looking for, so
+/// this answers `None` and the caller falls through to its next repair
+/// instead of reading pixels as offsets.
+pub(crate) fn structural_bytes<R: Resolve + ?Sized>(
+    stream: &Stream,
+    r: &R,
+    limits: &Limits,
+    diags: &mut Diagnostics,
+) -> Option<Vec<u8>> {
+    let decoded = pdfrum_filters::decode_chain(stream, 0, &r, limits, diags);
+    decoded.image.is_none().then_some(decoded.data)
+}
+
 #[cfg(test)]
 mod tests {
     use super::decoded_stream;

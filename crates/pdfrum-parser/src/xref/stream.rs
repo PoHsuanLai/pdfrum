@@ -51,19 +51,22 @@ pub(crate) fn read_xref_stream(
 ) -> Option<XrefStream> {
     let dict = &stream.dict;
 
-    // `/Prev` and `/Size` are read without resolving: a reference here is
-    // ignored rather than chased, because the table that would resolve it is
-    // the one being read.
-    let prev = dict.direct_int(names::PREV).unwrap_or(0);
+    // `/Prev`, `/Size` and `/W` are read through the resolving accessors,
+    // which is what the C++ uses here — but the only store available while
+    // the table is still being built resolves nothing, so an indirect value
+    // reads as absent. Written this way because the distinction is real:
+    // the *classic* trailer reads `/Prev` and `/Size` through accessors that
+    // would not resolve even given a working store.
+    let prev = dict.int(names::PREV, &NoResolve).unwrap_or(0);
     if prev < 0 {
         return None;
     }
-    let size = dict.direct_int(names::SIZE).unwrap_or(0);
+    let size = dict.int(names::SIZE, &NoResolve).unwrap_or(0);
     if size < 0 || size > i64::from(limits.max_xref_size) {
         return None;
     }
 
-    let widths = field_widths(dict, limits)?;
+    let widths = field_widths(dict)?;
     let total_width = widths.total()?;
 
     // The declared size is applied *before* the entries are read, which is
@@ -133,20 +136,24 @@ impl Widths {
 /// Extra entries past the third are ignored rather than rejected: their
 /// widths do not shift anything, because the three fields are read from the
 /// front of each entry.
-fn field_widths(dict: &Dict, limits: &Limits) -> Option<Widths> {
+fn field_widths(dict: &Dict) -> Option<Widths> {
     let w = dict.array(names::W, &NoResolve)?;
     if w.len() < MIN_FIELDS {
         return None;
     }
-    let width = |i: usize| -> Option<u32> {
-        let v = w.get(i, &NoResolve)?.as_direct()?.as_int()?;
-        let cap = u32::try_from(limits.max_word_len).unwrap_or(u32::MAX);
-        u32::try_from(v).ok().filter(|&n| n <= cap)
+    // A width that is not a number reads as zero rather than failing the
+    // stream, and no single field is capped — only their sum has to fit,
+    // which [`Widths::total`] checks.
+    let width = |i: usize| -> u32 {
+        w.get(i, &NoResolve)
+            .and_then(|v| v.as_direct().and_then(Object::as_int))
+            .and_then(|v| u32::try_from(v).ok())
+            .unwrap_or(0)
     };
     Some(Widths {
-        kind: width(0)?,
-        second: width(1)?,
-        third: width(2)?,
+        kind: width(0),
+        second: width(1),
+        third: width(2),
     })
 }
 

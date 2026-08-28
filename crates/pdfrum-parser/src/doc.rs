@@ -200,22 +200,16 @@ pub fn load(bytes: Arc<[u8]>, opts: &LoadOptions) -> Result<Document, LoadError>
         crate::xref::read_xref_full(&body, &opts.limits, &mut diags)
             .map_err(|e| LoadError::Broken(e.to_string()))?;
 
-    // The catalog has to be reachable and have pages in it. When it is not,
-    // the table is the suspect: rebuild and try once more.
-    let (store, page_count) = loop {
-        let security = build_security(&body, &xref, &trailer.dict, opts, &mut diags)?;
-        let mut store = ObjectStore::new(Arc::clone(&body), xref.clone(), opts.limits, security);
-        exempt_metadata(&mut store, &trailer.dict);
-        let store = Arc::new(store);
+    // First attempt: the catalog has to be reachable *and* have pages in it.
+    let mut security = build_security(&body, &xref, &trailer.dict, opts, &mut diags)?;
+    let mut store = build_store(&body, &xref, opts, &trailer.dict, security);
+    let mut page_count = catalog_page_count(&store, &trailer.dict, &opts.limits);
 
-        if let Some(count) = catalog_page_count(&store, &trailer.dict, &opts.limits) {
-            break (store, count);
-        }
-
+    if page_count.is_none() {
         if rebuilt {
             return Err(LoadError::Broken("no document catalog".into()));
         }
-        // Drop what the structured paths produced and scan the file.
+        // The table is the suspect, not the file: scan it and try again.
         diags.record(Severity::Recovered, DiagKind::RootRecovered, None);
         let mut fresh = Xref::new();
         let mut fresh_trailer = Trailer::default();
@@ -232,7 +226,19 @@ pub fn load(bytes: Arc<[u8]>, opts: &LoadOptions) -> Result<Document, LoadError>
         xref.merge_up(&fresh);
         crate::xref::merge_trailers(&mut trailer, &fresh_trailer);
         rebuilt = true;
-    };
+
+        security = build_security(&body, &xref, &trailer.dict, opts, &mut diags)?;
+        store = build_store(&body, &xref, opts, &trailer.dict, security);
+        // Second attempt asks only for a catalog. A rebuilt document whose
+        // catalog is reachable but describes no pages still opens — it is
+        // then a document of zero pages, which is a thing a file can be.
+        if catalog(&store, &trailer.dict).is_none() {
+            return Err(LoadError::Broken("no document catalog".into()));
+        }
+        page_count = catalog_page_count(&store, &trailer.dict, &opts.limits);
+    }
+
+    let page_count = page_count.unwrap_or(0);
 
     let store_diags = store.drain_diags();
     for entry in store_diags.entries() {
@@ -359,16 +365,34 @@ fn exempt_metadata(store: &mut ObjectStore, trailer: &Dict) {
     }
 }
 
-/// How many pages the catalog claims, or `None` when there is no usable
-/// catalog at all.
-fn catalog_page_count(store: &ObjectStore, trailer: &Dict, limits: &Limits) -> Option<u32> {
-    // A `/Root` written as anything but a reference does not name a catalog,
-    // even when it is a perfectly good dictionary.
-    let root = trailer.reference(names::ROOT)?;
-    let catalog = store.get(root.num).ok()?;
-    let catalog = catalog.as_dict()?;
+/// Build a store over the table, with the metadata exemption applied.
+fn build_store(
+    body: &Arc<[u8]>,
+    xref: &Xref,
+    opts: &LoadOptions,
+    trailer: &Dict,
+    security: SecurityHandler,
+) -> Arc<ObjectStore> {
+    let mut store = ObjectStore::new(Arc::clone(body), xref.clone(), opts.limits, security);
+    exempt_metadata(&mut store, trailer);
+    Arc::new(store)
+}
 
-    let count = page_count_of(store, catalog, limits);
+/// The document catalog, if the trailer names one reachably.
+///
+/// A `/Root` written as anything but a reference does not name a catalog,
+/// even when it is a perfectly good dictionary written inline: that reads as
+/// damage, and damage is what triggers the rebuild that finds a better one.
+fn catalog(store: &ObjectStore, trailer: &Dict) -> Option<Dict> {
+    let root = trailer.reference(names::ROOT)?;
+    store.get(root.num).ok()?.as_dict().cloned()
+}
+
+/// How many pages the catalog claims, or `None` when there is no usable
+/// catalog or it describes no pages at all.
+fn catalog_page_count(store: &ObjectStore, trailer: &Dict, limits: &Limits) -> Option<u32> {
+    let catalog = catalog(store, trailer)?;
+    let count = page_count_of(store, &catalog, limits);
     (count > 0).then_some(count)
 }
 
@@ -384,42 +408,46 @@ fn page_count_of(store: &ObjectStore, catalog: &Dict, limits: &Limits) -> u32 {
     if pages.raw(names::KIDS).is_none() {
         return 1;
     }
-    let mut seen = Vec::new();
-    count_subtree(store, &pages, limits, 0, &mut seen)
+    // The root counts as an ancestor from the start, so a kid pointing back
+    // at it is a loop rather than a subtree.
+    let mut ancestors = vec![pages.clone()];
+    count_subtree(store, &pages, limits, &mut ancestors).unwrap_or(0)
 }
 
-/// Count the leaves under a node.
+/// Count the leaves under a node, or `None` when the tree claims more pages
+/// than a document may have.
 ///
 /// `/Count` is believed whenever it is positive and under the cap, without
 /// checking it against the tree — so a file that lies about its length
 /// reports the lie, and the individual lookups past its real end are what
 /// fail.
 ///
+/// The `None` propagates all the way out rather than being absorbed as a
+/// zero: a subtree that overflows makes the *whole* document uncountable,
+/// which is why this returns an `Option` instead of saturating.
+///
 /// `ancestors` holds the nodes currently being descended through, and is the
-/// cycle guard. Note what it is *not*: a record of every node already seen.
-/// A node listed twice among one parent's `/Kids` is counted twice, because
-/// the second listing is a sibling rather than a loop — and a file whose
-/// tree shares subtrees that way really does have that many pages.
+/// cycle guard — the only one, since there is no depth cap here. Note what it
+/// is *not*: a record of every node already seen. A node listed twice among
+/// one parent's `/Kids` is counted twice, because the second listing is a
+/// sibling rather than a loop, and a file whose tree shares subtrees that way
+/// really does have that many pages.
 fn count_subtree(
     store: &ObjectStore,
     node: &Dict,
     limits: &Limits,
-    depth: u32,
     ancestors: &mut Vec<Dict>,
-) -> u32 {
-    if depth > limits.max_page_tree_depth {
-        return 0;
-    }
+) -> Option<u32> {
     if let Some(count) = node.int(names::COUNT, store)
         && count > 0
         && count < i64::from(limits.max_page_count)
         && let Ok(count) = u32::try_from(count)
     {
-        return count;
+        return Some(count);
     }
 
     let Some(kids) = node.array(names::KIDS, store) else {
-        return 0;
+        return Some(0);
     };
     let mut total: u32 = 0;
     for kid in kids.iter() {
@@ -433,17 +461,17 @@ fn count_subtree(
         total = total.saturating_add(match node_kind(&kid) {
             NodeKind::Branch => {
                 ancestors.push(kid.clone());
-                let under = count_subtree(store, &kid, limits, depth + 1, ancestors);
+                let under = count_subtree(store, &kid, limits, ancestors);
                 ancestors.pop();
-                under
+                under?
             }
             NodeKind::Leaf => 1,
         });
         if total >= limits.max_page_count {
-            return 0;
+            return None;
         }
     }
-    total
+    Some(total)
 }
 
 /// What a page-tree node is.
@@ -533,18 +561,8 @@ impl Document {
 
         let mut next: usize = 0;
         let mut ancestors = Vec::new();
-        // A `/Pages` node without `/Kids` is itself the one page.
-        if node.raw(names::KIDS).is_none() {
-            let objref = catalog.as_dict().and_then(|d| d.reference(names::PAGES));
-            if let Some(slot) = pages.slots.get_mut(0) {
-                *slot = Some(PageDict {
-                    dict: node,
-                    reference: objref,
-                });
-            }
-            return;
-        }
-        self.visit(&node, None, pages, &mut next, 0, &mut ancestors);
+        let objref = catalog.as_dict().and_then(|d| d.reference(names::PAGES));
+        self.visit(&node, objref, pages, &mut next, 0, &mut ancestors);
     }
 
     /// Depth-first, in order, filling slots as leaves are reached.
@@ -561,54 +579,63 @@ impl Document {
         depth: u32,
         ancestors: &mut Vec<Dict>,
     ) {
-        if depth > self.store.limits().max_page_tree_depth {
-            pages.poisoned = true;
-            return;
-        }
         if *next >= pages.slots.len() {
             return;
         }
-        match node_kind(node) {
-            NodeKind::Leaf => {
-                if let Some(slot) = pages.slots.get_mut(*next) {
-                    *slot = Some(PageDict {
-                        dict: node.clone(),
-                        reference,
-                    });
-                }
-                *next += 1;
+        // A node without `/Kids` is where the walk stops, whatever it claims
+        // to be — but a node that claims `/Type /Pages` and has no children
+        // is describing a subtree that is not there, so no page comes of it.
+        // (`page_count` still counts such a root as one page; the lookup is
+        // what fails.)
+        if node.raw(names::KIDS).is_none() {
+            if matches!(node_kind(node), NodeKind::Branch) {
+                return;
             }
-            NodeKind::Branch => {
-                let Some(kids) = node.array(names::KIDS, &*self.store) else {
-                    return;
-                };
-                ancestors.push(node.clone());
-                for kid in kids.iter() {
-                    let kid_ref = kid.as_ref_id();
-                    let loaded = kid
-                        .resolve(&*self.store)
-                        .ok()
-                        .and_then(|k| k.as_dict().cloned());
-                    let Some(loaded) = loaded else {
-                        // A kid that will not load still costs a slot, so a
-                        // missing page leaves a hole rather than shifting
-                        // every page after it.
-                        *next += 1;
-                        continue;
-                    };
-                    // Only a kid that is already an ancestor would loop; the
-                    // same node appearing twice as a sibling is two pages.
-                    if ancestors.contains(&loaded) {
-                        continue;
-                    }
-                    self.visit(&loaded, kid_ref, pages, next, depth + 1, ancestors);
-                    if *next >= pages.slots.len() {
-                        break;
-                    }
-                }
-                ancestors.pop();
+            if let Some(slot) = pages.slots.get_mut(*next) {
+                *slot = Some(PageDict {
+                    dict: node.clone(),
+                    reference,
+                });
+            }
+            *next += 1;
+            return;
+        }
+
+        // Only a node with children can be too deep, so the cap is checked
+        // after the leaf case rather than on the way in. Exceeding it stops
+        // every later lookup too, not just this one.
+        if depth >= self.store.limits().max_page_tree_depth {
+            pages.poisoned = true;
+            return;
+        }
+
+        let Some(kids) = node.array(names::KIDS, &*self.store) else {
+            return;
+        };
+        ancestors.push(node.clone());
+        for kid in kids.iter() {
+            let kid_ref = kid.as_ref_id();
+            let loaded = kid
+                .resolve(&*self.store)
+                .ok()
+                .and_then(|k| k.as_dict().cloned());
+            let Some(loaded) = loaded else {
+                // A kid that will not load still costs a slot, so a missing
+                // page leaves a hole rather than shifting every page after it.
+                *next += 1;
+                continue;
+            };
+            // Only a kid that is already an ancestor would loop; the same
+            // node appearing twice as a sibling is two pages.
+            if ancestors.contains(&loaded) {
+                continue;
+            }
+            self.visit(&loaded, kid_ref, pages, next, depth + 1, ancestors);
+            if *next >= pages.slots.len() {
+                break;
             }
         }
+        ancestors.pop();
     }
 
     /// The trailer dictionary, merged across every section.
@@ -835,15 +862,32 @@ mod tests {
     }
 
     #[test]
-    fn a_pages_node_without_kids_is_itself_one_page() {
+    fn a_kids_less_pages_node_counts_as_a_page_it_cannot_produce() {
+        // Counting and looking up disagree here, and both are right. The
+        // count treats a `/Pages` node with no `/Kids` as the document's one
+        // page, but the walk refuses to hand back a node that calls itself a
+        // branch — so the document reports one page and has none.
         let file = b"%PDF-1.7\n\
                      1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n\
                      2 0 obj\n<< /Type /Pages /Count 3 >>\nendobj\n\
                      trailer\n<< /Root 1 0 R >>\nstartxref\n0\n%%EOF\n";
         let doc = open(file).expect("document");
         assert_eq!(doc.page_count(), 1);
-        assert!(doc.page(0).is_ok());
+        assert!(doc.page(0).is_err());
         assert!(doc.page(1).is_err());
+    }
+
+    #[test]
+    fn a_kids_less_node_that_does_not_claim_to_be_a_branch_is_a_page() {
+        // The same shape without the `/Type /Pages` claim: the node has no
+        // children, so it is the page itself and the lookup succeeds.
+        let file = b"%PDF-1.7\n\
+                     1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n\
+                     2 0 obj\n<< /MediaBox [0 0 10 10] >>\nendobj\n\
+                     trailer\n<< /Root 1 0 R >>\nstartxref\n0\n%%EOF\n";
+        let doc = open(file).expect("document");
+        assert_eq!(doc.page_count(), 1);
+        assert!(doc.page(0).is_ok());
     }
 
     #[test]

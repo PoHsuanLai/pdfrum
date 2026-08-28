@@ -80,7 +80,7 @@ impl ObjStm {
             return None;
         }
 
-        let data = crate::decode::decoded_bytes(stream, store, limits, diags);
+        let data = crate::decode::structural_bytes(stream, store, limits, diags)?;
         let entries = read_header(&data, count.cast_unsigned(), limits, diags);
         Some(Self {
             data,

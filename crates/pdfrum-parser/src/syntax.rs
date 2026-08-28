@@ -33,7 +33,7 @@ use pdfrum_object::{
 };
 
 use crate::error::Error;
-use crate::lexer::{Delim, Lexer, Token, atoui, find_word};
+use crate::lexer::{Delim, Lexer, Token, atoui, find_word, is_line_ending, is_whitespace};
 
 /// How much malformed syntax an object parse tolerates.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -81,7 +81,9 @@ impl<R: Resolve + ?Sized> Context<'_, R> {
 ///
 /// [`Error::NoObject`] when the bytes are not an object at all — which is
 /// also how composite parses learn they have reached their closing bracket —
-/// and [`Error::TooDeep`] past `limits.max_object_nesting`.
+/// and [`Error::TooDeep`] when this object is itself nested past
+/// `limits.max_object_nesting`. A composite *containing* something too deep
+/// does not fail: it drops what it could not read.
 ///
 /// ```
 /// use pdfrum_common::{Diagnostics, Limits};
@@ -121,7 +123,13 @@ pub(crate) fn body<R: Resolve + ?Sized>(
     strictness: Strictness,
     depth: u32,
 ) -> Result<Object, Error> {
-    if depth > ctx.limits.max_object_nesting {
+    // `depth` counts the composites already entered, so the outermost body
+    // arrives at zero and a budget of 64 admits exactly 64 nested composites.
+    // Note where the refusal lands: a composite too deep to enter reports
+    // failure to its *parent*, which treats it as an element that would not
+    // parse and closes normally. So a file nested past the cap loses its
+    // innermost contents and keeps everything above them.
+    if depth >= ctx.limits.max_object_nesting {
         return Err(Error::TooDeep(ctx.limits.max_object_nesting));
     }
     let start = lx.pos();
@@ -271,7 +279,10 @@ fn array<R: Resolve + ?Sized>(
                 }
                 out.push(value);
             }
-            Err(Error::TooDeep(n)) => return Err(Error::TooDeep(n)),
+            // Running out of nesting budget is not special: like any element
+            // that will not parse, it ends the array, which then closes with
+            // what it has. So a file nested past the cap loses its innermost
+            // contents rather than its outermost object.
             Err(_) => {
                 // What stopped us? Re-read the token the failed parse
                 // consumed, from where it started.
@@ -339,7 +350,9 @@ fn dictionary<R: Resolve + ?Sized>(
                             dict.push(Name::new(key), value);
                         }
                     }
-                    Err(Error::TooDeep(n)) => return Err(Error::TooDeep(n)),
+                    // As in an array, exhausting the nesting budget is just
+                    // a value that would not parse: the pair is dropped and
+                    // the dictionary carries on.
                     Err(_) => {
                         ctx.note(Severity::Suspicious, DiagKind::MalformedDict, value_start);
                         if strictness == Strictness::Strict {
@@ -494,15 +507,27 @@ fn trim_trailing_eol(bytes: &[u8], pos: usize) -> usize {
 fn resync_after_stream<R: Resolve + ?Sized>(lx: &mut Lexer<'_>, ctx: &mut Context<'_, R>) {
     let before_keyword = lx.pos();
     let word = lx.next_word(ctx.limits);
-    if word.bytes() == b"endobj" {
-        let after = lx.pos();
-        // Only when a line ending follows is this really the object's end;
-        // otherwise it is junk and stays consumed.
-        let mut probe = Lexer::at(lx.bytes(), after);
-        if probe.skip_eol_marker() > 0 || probe.at_eof() {
-            ctx.note(Severity::Recovered, DiagKind::KeywordResync, before_keyword);
-            lx.seek(before_keyword);
-        }
+    // Exactly `endobj`, not a word starting with it: this is the one place a
+    // whole-word match matters, since resyncing on `endobjects` would hand
+    // the frame above a keyword that is not there.
+    if word.bytes() != b"endobj" {
+        return;
+    }
+
+    // Spaces and tabs may sit between the keyword and the line ending, and a
+    // file that writes them still means the object ended here.
+    let mut probe = Lexer::at(lx.bytes(), lx.pos());
+    while probe
+        .peek_byte()
+        .is_some_and(|b| is_whitespace(b) && !is_line_ending(b))
+    {
+        probe.seek(probe.pos() + 1);
+    }
+    // A line ending has to follow. At the end of the file there is none, and
+    // the keyword stays consumed.
+    if probe.skip_eol_marker() > 0 {
+        ctx.note(Severity::Recovered, DiagKind::KeywordResync, before_keyword);
+        lx.seek(before_keyword);
     }
 }
 
@@ -765,13 +790,27 @@ mod tests {
     }
 
     #[test]
-    fn nesting_is_capped() {
-        let deep: Vec<u8> = std::iter::repeat_n(b'[', 200).collect();
-        assert!(matches!(parse(&deep), Err(Error::TooDeep(_))));
-        // Just under the cap still parses.
-        let mut ok: Vec<u8> = std::iter::repeat_n(b'[', 60).collect();
-        ok.extend(std::iter::repeat_n(b']', 60));
-        assert!(parse(&ok).is_ok());
+    fn nesting_past_the_budget_loses_the_middle_not_the_object() {
+        // Depth of the parsed result, which is what the cap actually bounds.
+        fn depth_of(o: &Object) -> usize {
+            match o {
+                Object::Array(a) => 1 + a.iter().map(depth_of).max().unwrap_or(0),
+                _ => 0,
+            }
+        }
+        let nested = |n: usize| -> Vec<u8> {
+            let mut v: Vec<u8> = std::iter::repeat_n(b'[', n).collect();
+            v.extend(std::iter::repeat_n(b']', n));
+            v
+        };
+
+        // Everything up to the budget survives intact.
+        assert_eq!(depth_of(&parse(&nested(63)).expect("array")), 63);
+        assert_eq!(depth_of(&parse(&nested(64)).expect("array")), 64);
+        // Past it the object still parses — the arrays too deep to enter
+        // simply come back empty, so the damage is innermost, not outermost.
+        assert_eq!(depth_of(&parse(&nested(65)).expect("array")), 64);
+        assert_eq!(depth_of(&parse(&nested(500)).expect("array")), 64);
     }
 
     #[test]
@@ -824,6 +863,21 @@ mod tests {
         .expect("stream");
         assert_eq!(&*obj.as_stream().expect("stream").data, b"HELLO");
         assert!(!diags.contains(&DiagKind::LengthMismatch));
+    }
+
+    #[test]
+    fn a_space_before_the_newline_still_resyncs() {
+        // The keyword standing in for `endstream` may be followed by spaces
+        // before its line ending, and it is still the object's end.
+        let mut diags = Diagnostics::default();
+        let obj = parse_in_file(
+            b"<< /Length 99 >>\nstream\nHELLO\nendobj  \n",
+            &NoResolve,
+            &mut diags,
+        )
+        .expect("stream");
+        assert_eq!(&*obj.as_stream().expect("stream").data, b"HELLO");
+        assert!(diags.contains(&DiagKind::KeywordResync));
     }
 
     #[test]
