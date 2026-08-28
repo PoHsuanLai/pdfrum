@@ -3,10 +3,26 @@
 //! re-export of [`kurbo`] as the workspace-wide geometry vocabulary
 //! (`Affine`, `BezPath`, `Rect`, `Point`). Deliberately tiny — anything that
 //! feels like a "util" belongs in the crate that uses it (SPEC.md §1).
+//!
+//! ```
+//! use pdfrum_common::{DiagKind, Diagnostics, Limits, Severity};
+//!
+//! let limits = Limits::default();
+//! assert_eq!(limits.max_object_nesting, 64);
+//!
+//! let mut diags = Diagnostics::default();
+//! diags.record(Severity::Recovered, DiagKind::XrefRebuilt, Some(1234));
+//! assert_eq!(diags.len(), 1);
+//! ```
 
 #![forbid(unsafe_code)]
 
+mod diagnostics;
+mod limits;
+
+pub use diagnostics::{DiagKind, Diagnostic, Diagnostics, Severity};
 pub use kurbo;
+pub use limits::Limits;
 
 #[cfg(test)]
 mod tests {
