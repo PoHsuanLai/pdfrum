@@ -1,6 +1,6 @@
 # PDFium → Rust Rewrite — Master Plan
 
-**Status:** planning approved decisions locked, M0 not started
+**Status:** M0 complete (2026-08-29): oracle built, golden store generated, harness v1 + scoreboard baseline live. M1 in progress.
 **Oracle:** `/mnt/data2/pdfium/pdfium-c++` (read-only C++ PDFium checkout @ `6f2272e`)
 **Workspace:** `/mnt/data2/pdfium/pdfrum` (this repository)
 
