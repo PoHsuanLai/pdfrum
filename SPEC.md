@@ -65,7 +65,7 @@ pub enum Object {
 #[derive(Copy, Clone, Eq, PartialEq, Hash)]
 pub struct ObjRef { pub num: u32, pub gen: u16 }
 
-pub struct PdfString(pub Box<[u8]>);      // raw bytes; helpers: as_text() -> Cow<str> (PDFDoc/UTF-16BE/UTF-8 detection)
+pub struct PdfString { pub bytes: Box<[u8]>, pub hex: bool }  // raw bytes + source spelling (hex vs literal — C++ round-trips it, CPDF_String::is_hex; the writer needs it). Helpers: as_text() -> Cow<str> (PDFDoc/UTF-16BE/UTF-8 detection)
 pub struct Name(Box<[u8]>);               // helpers: as_str(); pub mod names { pub const LENGTH: &Name; ... } for constants/
 pub struct Array(pub Vec<Object>);
 pub struct Dict(Vec<(Name, Object)>);     // linear assoc — PDF dicts are small; get() is O(n) scan, last duplicate wins (match C++)
@@ -100,6 +100,14 @@ impl Dict {
 Decisions: recursion into `Object` is bounded by `Limits.max_object_nesting`
 at *parse* time, so access code may recurse freely. `Object` is `Send + Sync`.
 Equality is structural; no interning v1 (revisit with benchmarks only).
+Dict order: C++ stores dicts in a sorted `std::map` (so its writer emits keys
+sorted); we deliberately keep insertion order in storage *and* serialization —
+written-file byte layout is not an oracle target (round-trip fidelity is
+semantic: reparse + re-render), so this divergence is accepted and permanent.
+Integer accessor semantics are tri-state (see the resolution matrix and
+`FX_Number` inventory in `docs/design/pdfrum-object.md`): `Int(i64)` stores the
+parsed value; the accessor layer provides the C-int wrapping view
+(`as_c_int() -> i32`) that Tier-A behaviors observe.
 
 ## 3. `pdfrum-crypt`  *(behavior: `core/fdrm`, parser security handlers)*
 
