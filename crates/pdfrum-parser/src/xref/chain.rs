@@ -27,7 +27,7 @@ use pdfrum_object::{NoResolve, Object, names};
 use crate::error::Error;
 use crate::lexer::{Lexer, Token, atoi64};
 use crate::syntax::{Context, Strictness, indirect};
-use crate::xref::{Trailer, Xref, classic, merge_trailers, rebuild, stream};
+use crate::xref::{Trailer, Xref, classic, merge_into_walk, merge_trailers, rebuild, stream};
 
 /// The smallest offset that could name a cross-reference section: nothing
 /// useful fits in the bytes a header occupies.
@@ -133,22 +133,13 @@ pub(crate) fn read_chain(
     };
 
     if oldest.table > 0 {
-        let mut oldest_entries = Xref::new();
-        if classic::parse_table(
-            file,
-            oldest.table,
-            false,
-            &mut oldest_entries,
-            limits,
-            diags,
-        )
-        .is_none()
-        {
+        if classic::parse_table(file, oldest.table, false, xref, limits, diags).is_none() {
             return false;
         }
-        // The one sanity check on a table: does the object it names first
-        // actually live where it says?
-        if !classic::verify_table(file, &oldest_entries, limits) {
+        // The one sanity check on a table, and it runs against the whole
+        // accumulation rather than the section alone: the first entry with a
+        // real offset must find its own object number at that offset.
+        if !classic::verify_table(file, xref, limits) {
             diags.record(
                 Severity::Suspicious,
                 DiagKind::XrefEntriesShifted,
@@ -156,16 +147,16 @@ pub(crate) fn read_chain(
             );
             return false;
         }
-        let mut merged = oldest_entries;
-        merged.merge_up(xref);
-        *xref = merged;
     }
 
     // An update section that will not load abandons the whole chain rather
     // than leaving a partial table: the file has already proved unreliable,
     // and the recovery scan reads more of it than half a chain does.
     for section in newer {
-        // Within a section the table wins, so the stream is applied first.
+        // Within a section the table wins, so the stream is applied first —
+        // and a stream's entries merge (leaving what is already recorded
+        // alone) while a table's are applied directly, which is what lets the
+        // table overwrite them.
         if section.stream > 0 {
             let mut entries = Xref::new();
             if read_stream_section(file, section.stream, false, &mut entries, limits, diags)
@@ -177,22 +168,13 @@ pub(crate) fn read_chain(
             merged.merge_up(xref);
             *xref = merged;
         }
-        if section.table > 0 {
-            let mut entries = Xref::new();
-            if classic::parse_table(file, section.table, false, &mut entries, limits, diags)
-                .is_none()
-            {
-                return false;
-            }
-            let mut merged = entries;
-            merged.merge_up(xref);
-            *xref = merged;
+        if section.table > 0
+            && classic::parse_table(file, section.table, false, xref, limits, diags).is_none()
+        {
+            return false;
         }
     }
 
-    if main_is_table {
-        apply_size(xref, trailer, limits);
-    }
     !xref.is_empty() || !trailer.dict.is_empty()
 }
 
@@ -218,7 +200,8 @@ fn walk(
         let end = classic::parse_table(file, main, true, &mut Xref::new(), limits, diags)?;
         let dict = classic::read_trailer(file, end, limits, diags, &NoResolve)?;
         let prev = dict.direct_int(names::PREV).unwrap_or(0);
-        let xref_stm = dict.int(names::XREF_STM, &NoResolve).unwrap_or(0);
+        // This is the newest section, so its trailer simply becomes the
+        // accumulation rather than being merged against one.
         merge_trailers(
             trailer,
             &Trailer {
@@ -226,13 +209,16 @@ fn walk(
                 object_number: 0,
             },
         );
+        // The trailer's `/Size` sizes the table now, before any section is
+        // read — running it afterwards would truncate away entries that
+        // update sections legitimately added above it.
+        apply_size(xref, trailer, limits);
         sections.push(Section {
             table: main,
             // The newest section's hybrid pointer is deliberately not
             // followed: it describes an update, and this is the base.
             stream: 0,
         });
-        let _ = xref_stm;
         prev
     } else {
         // A main cross-reference stream sizes the table *before* its entries
@@ -272,7 +258,7 @@ fn walk(
             let mut merged = entries;
             merged.merge_up(xref);
             *xref = merged;
-            merge_trailers(trailer, &read.trailer);
+            merge_into_walk(trailer, &read.trailer);
             sections.insert(
                 0,
                 Section {
@@ -285,13 +271,21 @@ fn walk(
         }
 
         // A classic section: record where its table and its hybrid stream
-        // are, and read its trailer for the next pointer.
-        let end = classic::parse_table(file, pos, true, &mut Xref::new(), limits, diags)?;
+        // are, and read its trailer for the next pointer. A skip-scan that
+        // does not find a clean table is not fatal — what matters is that a
+        // trailer follows, so the scan's end position is used either way and
+        // only a missing trailer ends the walk.
+        let end =
+            classic::parse_table(file, pos, true, &mut Xref::new(), limits, diags).unwrap_or(pos);
         let dict = classic::read_trailer(file, end, limits, diags, &NoResolve)?;
         let prev = dict.direct_int(names::PREV).unwrap_or(0);
-        // `/XRefStm` is read *through* a reference here, unlike `/Prev`.
+        // `/XRefStm` is the one key here read through an accessor that
+        // *would* follow a reference — but the store it would ask has no
+        // usable table yet, so an indirect one reads as absent either way.
+        // Written with a resolver rather than without to keep the
+        // distinction from `/Prev` above, which never resolves.
         let hybrid = dict.int(names::XREF_STM, &NoResolve).unwrap_or(0);
-        merge_trailers(
+        merge_into_walk(
             trailer,
             &Trailer {
                 dict,
@@ -334,8 +328,10 @@ fn read_stream_section(
     let Object::Stream(s) = parsed.object else {
         return None;
     };
-    // The entries are compressed like any other stream's payload.
-    let decoded = crate::decode::decoded_bytes(&s, &NoResolve, limits, diags);
+    // The entries are compressed like any other stream's payload — but a
+    // chain ending at an image codec yields no fields to read, and such a
+    // stream is not a cross-reference section at all.
+    let decoded = crate::decode::structural_bytes(&s, &NoResolve, limits, diags)?;
     stream::read_xref_stream(&s, parsed.num, &decoded, is_main, xref, limits, diags)
 }
 

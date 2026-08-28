@@ -294,34 +294,58 @@ impl Xref {
     }
 }
 
-/// Merge two trailers, newer keys winning except for the walk's own pointers.
+/// Merge `winner`'s keys onto `base`, leaving the result in `base`.
 ///
-/// `older` is the trailer accumulated so far and `newer` the one just read.
-/// Every key of `newer` overwrites `older`'s — except `/Prev` and `/XRefStm`,
-/// which stay as `older` has them. Those two say where to look next, and
-/// replacing them with the newer section's copies would send the walk
-/// backwards through sections it has already visited.
-pub(crate) fn merge_trailers(older: &mut Trailer, newer: &Trailer) {
-    if older.dict.is_empty() && older.object_number == 0 {
-        *older = newer.clone();
+/// Every key of `winner` overwrites `base`'s — except `/Prev` and `/XRefStm`,
+/// which stay as **`base`** has them. Those two say where to look next, and
+/// replacing them would send the walk through sections it has already read.
+///
+/// The two roles are not "older" and "newer", and getting them backwards is
+/// the easiest mistake in this file. During the `/Prev` walk the trailer
+/// accumulated so far is the *newer* one and wins, while the section just
+/// read is the *older* one supplying the next pointer — so `base` is the
+/// freshly-read older trailer and `winner` is the accumulation. During the
+/// recovery scan the roles invert: what has been scanned so far is `base` and
+/// each newly-found trailer wins. Callers say which they mean by argument
+/// order; see [`merge_into_walk`].
+pub(crate) fn merge_trailers(base: &mut Trailer, winner: &Trailer) {
+    if base.dict.is_empty() && base.object_number == 0 {
+        *base = winner.clone();
         return;
     }
     let kept: Vec<(Name, Option<Object>)> = [names::XREF_STM, names::PREV]
         .into_iter()
-        .map(|key| (key.clone(), older.dict.raw(key).cloned()))
+        .map(|key| (key.clone(), base.dict.raw(key).cloned()))
         .collect();
 
-    for (key, value) in newer.dict.iter() {
-        older.dict.push(key.clone(), value.clone());
+    for (key, value) in winner.dict.iter() {
+        base.dict.push(key.clone(), value.clone());
     }
     for (key, value) in kept {
         match value {
-            Some(v) => older.dict.push(key, v),
-            // The older trailer had no such pointer, so the newer one's must
-            // not survive either.
-            None => remove_key(&mut older.dict, &key),
+            Some(v) => base.dict.push(key, v),
+            // `base` had no such pointer, so the winner's must not survive.
+            None => remove_key(&mut base.dict, &key),
         }
     }
+}
+
+/// Fold a section's trailer into the walk's accumulation.
+///
+/// The walk reads newest-first, so `section` is *older* than everything
+/// `accumulated` holds: its keys lose, and its `/Prev` and `/XRefStm` — the
+/// pointers that say where to go next — are the ones kept. That inversion is
+/// why this wrapper exists rather than callers arranging the arguments
+/// themselves.
+pub(crate) fn merge_into_walk(accumulated: &mut Trailer, section: &Trailer) {
+    let mut merged = section.clone();
+    merge_trailers(&mut merged, accumulated);
+    // The accumulated trailer keeps its own object number, since the walk's
+    // identity is the newest section's.
+    if !accumulated.dict.is_empty() || accumulated.object_number != 0 {
+        merged.object_number = accumulated.object_number;
+    }
+    *accumulated = merged;
 }
 
 /// Drop every entry with this key.
