@@ -10,3 +10,11 @@ repository.workspace = true
 workspace = true
 
 [dependencies]
+pdfrum-object.workspace = true
+aes.workspace = true
+cbc.workspace = true
+cipher.workspace = true
+md-5.workspace = true
+sha1.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
