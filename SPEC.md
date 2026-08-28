@@ -267,7 +267,12 @@ parse_object, read_xref, load.
 - `pdfrum-cmap`: `build.rs` converts the C++ static tables (`core/fpdfapi/cmaps/*.cpp`)
   into a compact binary embedded with `include_bytes!`; runtime API:
   `predefined(name: &Name) -> Option<CMap>`, `CMap::decode(&self, bytes) -> impl Iterator<Item=(CharCode, Cid)>`,
-  plus an embedded-CMap parser (CID ranges, usecmap).
+  plus an embedded-CMap parser (CID ranges). [spec] 2026-08-29 (font brief
+  OQ-1): embedded `usecmap` is a NO-OP, matching PDFium exactly; "usecmap"
+  support means the static predefined-table `use_offset_` chain only. The
+  generated ~615 KiB table blob is COMMITTED with its generator and
+  provenance doc (cmap brief OQ-2); conformance re-derives and diffs it when
+  the oracle checkout is present.
 - `pdfrum-font` core types:
 
 ```rust
@@ -285,10 +290,23 @@ impl Font {
 pub struct CharItem { pub code: CharCode, pub cid: Option<Cid>, pub gid: Gid, pub unicode: SmallVec<[char;2]>, pub width: f32 }
 ```
 
-Substitution/fallback: `fontdb` scan + embedded Foxit fallback faces
+Substitution/fallback: `fontdb` scan + a port of the C++
+`SimilarityScore`/`FindFamilyNameMatch` matcher on top of it, behind a
+`SubstitutionOptions` record whose enumeration-mode default is resolved
+empirically in M2 against oracle --font-dir runs (font brief OQ-6);
+plus embedded Foxit fallback faces
 (`core/fxge/fontdata`, BSD) selected by a port of `CFX_FontMapper`'s
 name/charset/flags heuristics (brief inventories them). Glyph outline cache:
-`GlyphCache` keyed `(font-id, gid, hint-flags)` owned by the render session,
+`GlyphCache` keyed `(font_id, gid, dest_width, weight, italic_angle,
+vertical)` — [spec] 2026-08-29 (font brief OQ-8): dest_width alone changes MM
+outlines, so the old (font-id, gid, hint-flags) key was insufficient; CharItem
+additionally gains `vertical_glyph: bool` (GSUB-substituted vertical forms are
+not derivable downstream). pdfrum-type1 is first-party and MUST cover PFB
+container + eexec + Type1/MM charstrings incl. MM blending (the Foxit MM
+fallback fonts are the terminal substitution rung); read-fonts `ps::type1` may
+be used only if the pinned release exposes what is needed. Unpaired-surrogate
+divergence D3 accepted: both sides converge on U+FFFD through the harness
+transcode, so Tier-A stays byte-exact. Cache owned by the render session,
 not global.
 
 ## 7. `pdfrum-page`  *(behavior: `core/fpdfapi/page`)*
