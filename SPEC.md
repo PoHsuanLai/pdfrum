@@ -390,7 +390,16 @@ pub trait RasterBackend {  // factory: lets the engine rasterize soft masks & ti
 // C++ unittest's asserted observable, with an oracle probe at M3 if doubt
 // remains. Backend capability claims for vello_cpu/tiny-skia (brief §5) are
 // INFERRED and must be verified against fetched crate sources before any
-// backend code is written (brief Q4).
+// backend code is written (brief Q4) — now VERIFIED by probing
+// (docs/design/backend-verification.md, binding for backend implementers):
+// traits hold unchanged; key invariants — vello image draws with alpha != 1.0
+// panic (wrap in an opacity layer); mesh cells are drawn opaque into the
+// scratch pixmap with shading alpha applied once at blit; tiny-skia silently
+// drops fills/clips thinner than 1/4096 (engine pre-guards degenerates); pin
+// vello Level+RenderMode for Tier-C; vello targets are u16-dimensioned
+// (engine tiles or clamps above 65535); build luminosity masks from raw
+// bytes, never the BT.709 helpers; asymmetric /Extend is engine-emulated via
+// Pad + a computed clip.
 
 pub struct RenderOptions { pub transform: Affine, pub text_aa: TextAa, pub grayscale: bool, /* (abridged) */ }
 pub fn render_page(page: &Page, opts: &RenderOptions, backend: &impl RasterBackend) -> Pixmap;
