@@ -10,4 +10,16 @@ repository.workspace = true
 [lints]
 workspace = true
 
+# Tool ring only (DEPS.md "Tools & tests only"). JSON and TOML are hand-rolled
+# over our own closed schemas rather than pulled in as dependencies: the
+# scoreboard is the project's fitness function and the SSIM ratchet must never
+# shift under a dependency update (DEPS.md, same rationale as hand-rolled SSIM).
 [dependencies]
+anyhow.workspace = true
+clap.workspace = true
+png.workspace = true
+sha2.workspace = true
+# STYLE.md §3: the lib-shaped modules in this crate (json, thresholds, ssim,
+# pixels, transcode, suppressions, goldens) carry real `Error` enums; `anyhow`
+# stays at the CLI edge only.
+thiserror.workspace = true
