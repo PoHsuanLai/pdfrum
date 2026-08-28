@@ -118,6 +118,9 @@ Closed enum, not a trait: `pub enum SecurityHandler { Rc4V2 {..}, AesV4 {..}, Ae
 `enum CryptClass { Stream, String, Embedded }` (per-class crypt filters /StmF /StrF).
 Primitives from RustCrypto (`aes`+`cbc`, `md5`, `sha1`, `sha2`); RC4 written
 in-crate (~30 lines, no dep).
+Decisions (orchestrator, from the brief's open questions): passwords are NOT
+capped at ISO's 127 bytes — match the C++ exactly (observable behavior wins);
+all other brief divergences D1–D7 accepted as written.
 
 ## 4. `pdfrum-filters`  *(behavior: `core/fxcodec` basic codecs)*
 
@@ -137,6 +140,13 @@ Flate via `miniz_oxide` with a hard output cap from `Limits`; LZW via `weezl`
 (TIFF variant + EarlyChange); CCITT G3/G4 via `hayro-ccitt`; RLE and AHx/A85
 written in-crate. Decisions: filter chains applied left-to-right by the
 caller; a chain ending in an image codec returns the *pre-image* bytes.
+Decisions (orchestrator, from the brief's open questions):
+`Limits.max_decoded_stream_len` defaults to 1 GiB and exceeding it is an
+`Error` plus diagnostic — a deliberate divergence from the C++'s silent
+1 GiB truncation (unobservable on real corpora; safety wins where fidelity
+is not at stake; conformance will verify no corpus file trips it). The
+four-rung StreamAcc fallback ladder (including handing compressed bytes to
+the consumer on empty decode) is Tier-A behavior — port it exactly.
 
 ## 5. `pdfrum-parser`  *(behavior: `core/fpdfapi/parser` — THE fidelity-critical crate)*
 
