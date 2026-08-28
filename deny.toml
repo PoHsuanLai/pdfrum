@@ -1,0 +1,36 @@
+# cargo-deny configuration — mechanical enforcement of DEPS.md's pure-Rust
+# guarantee and license policy. `scripts/ci.sh` additionally rejects any
+# `*-sys` crate in the normal dependency tree via `cargo tree`.
+
+[graph]
+all-features = false
+
+[licenses]
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-3-Clause",
+    "Zlib",
+    "Unicode-DFS-2016",
+    "Unicode-3.0",
+]
+confidence-threshold = 0.8
+
+[bans]
+multiple-versions = "warn"
+# Pure-Rust guarantee (DEPS.md): no C/C++ build machinery may ever appear in
+# the workspace graph. A transitive dep growing a C build script fails CI.
+deny = [
+    { crate = "cc", reason = "pure-Rust guarantee: no C compiled into any build" },
+    { crate = "cmake", reason = "pure-Rust guarantee: no native build systems" },
+    { crate = "pkg-config", reason = "pure-Rust guarantee: no external C library linkage" },
+    { crate = "bindgen", reason = "pure-Rust guarantee: no C bindings" },
+]
+
+[advisories]
+yanked = "warn"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
