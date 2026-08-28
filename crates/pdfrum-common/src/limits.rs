@@ -47,8 +47,16 @@ pub struct Limits {
     pub max_page_tree_depth: u32,
     /// Maximum number of pages a document may report.
     pub max_page_count: u32,
-    /// Maximum number of bytes any single filter may produce.
-    /// PDFium: `kMaxStreamSize`, 20 MB.
+    /// Maximum number of bytes any single stream filter may produce.
+    ///
+    /// PDFium has *no* cap here: Flate and LZW decode until they stop, and
+    /// only the size it *reports* saturates, at `kMaxTotalOutSize` = 1 GiB
+    /// (`flatemodule.cpp`), silently truncating anything larger. We decline to
+    /// inherit that zip-bomb surface and turn the same ceiling into a hard
+    /// rejection instead; past 1 GiB the oracle's reported size has already
+    /// stopped tracking its content, so no stream that decodes faithfully in
+    /// the C++ changes behavior. `RunLengthDecode` keeps its own, much
+    /// smaller and behaviorally load-bearing 20 MiB cap in `pdfrum-filters`.
     pub max_decoded_stream_len: usize,
 }
 
@@ -71,7 +79,7 @@ impl Default for Limits {
             max_word_len: 256,
             max_page_tree_depth: 1024,
             max_page_count: 0x000F_FFFF,
-            max_decoded_stream_len: 20 * 1024 * 1024,
+            max_decoded_stream_len: 1024 * 1024 * 1024,
         }
     }
 }
@@ -92,7 +100,7 @@ mod tests {
         assert_eq!(l.max_word_len, 256);
         assert_eq!(l.max_page_tree_depth, 1024);
         assert_eq!(l.max_page_count, 1_048_575);
-        assert_eq!(l.max_decoded_stream_len, 20 * 1024 * 1024);
+        assert_eq!(l.max_decoded_stream_len, 1024 * 1024 * 1024);
         assert_eq!(l.max_string_len, usize::MAX);
         assert_eq!(l.max_array_len, usize::MAX);
         assert_eq!(Limits::INVALID_OBJ_NUM, 0xFFFF_FFFF);

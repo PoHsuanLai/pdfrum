@@ -10,3 +10,10 @@ repository.workspace = true
 workspace = true
 
 [dependencies]
+pdfrum-common.workspace = true
+pdfrum-object.workspace = true
+
+hayro-ccitt.workspace = true
+miniz_oxide.workspace = true
+thiserror.workspace = true
+weezl.workspace = true

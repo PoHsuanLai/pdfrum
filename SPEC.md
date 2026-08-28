@@ -159,18 +159,48 @@ Pure functions on slices; no streaming v1 (C++ also decodes to memory):
 
 ```rust
 pub enum Filter { Flate, Lzw, AsciiHex, Ascii85, RunLength, CcittFax, Jbig2, Dct, Jpx, Crypt }
-impl Filter { pub fn from_name(n: &Name) -> Option<Filter>; }  // incl. abbreviations /Fl /AHx ...
+impl Filter {
+    pub fn from_name(n: &Name) -> Option<Filter>;   // incl. abbreviations /Fl /AHx ...
+    pub fn canonical_name(self) -> &'static Name;   // /DCT and /CCF expanded, as the C++ records them
+    pub fn is_image_codec(self) -> bool;            // CcittFax | Jbig2 | Dct | Jpx
+    pub fn is_chainable(self) -> bool;              // the ValidateDecoderPipeline allowlist
+}
 
 pub fn decode(filter: Filter, input: &[u8], params: &Dict, r: &impl Resolve, limits: &Limits, diags: &mut Diagnostics)
     -> Result<DecodeOutput, Error>;
 pub enum DecodeOutput { Bytes(Vec<u8>), Image(NeedsImageCodec) }  // Dct/Jpx/Jbig2 punt to pdfrum-page's image path
+pub struct NeedsImageCodec { pub filter: Option<Filter>, pub name: Name, pub params: Dict }  // the codec's input is DecodedStream::data
 pub fn predictor(data: Vec<u8>, params: PredictorParams) -> Result<Vec<u8>, Error>;  // PNG+TIFF predictors
+pub struct PredictorParams { pub kind: PredictorKind, pub colors: u32, pub bits_per_component: u32, pub columns: u32 }
+pub enum PredictorKind { None, Tiff, Png }
+impl PredictorParams { pub fn from_dict(d: &Dict, r: &impl Resolve) -> Result<Self, Error>; }
+
+// The chain executor and its two halves — the StreamAcc fallback ladder lives
+// here so the parser cannot reinvent it (see below).
+pub struct DecodedStream { pub data: Vec<u8>, pub image: Option<NeedsImageCodec> }
+pub fn decode_chain(s: &Stream, estimated_size: usize, r: &impl Resolve, limits: &Limits, diags: &mut Diagnostics) -> DecodedStream;
+pub fn decoder_list(dict: &Dict, r: &impl Resolve) -> Option<Vec<(Name, Dict)>>;   // GetDecoderArray
+pub fn validate_pipeline(filters: &Array, r: &impl Resolve) -> bool;               // ValidateDecoderPipeline
+
+// Per-filter entry points, for callers that already know the filter. CCITT is
+// reached only from the image path: unlike every other filter it needs the
+// image's own /Width and /Height, because /Columns and /Rows default to them.
+pub fn decode_flate(input: &[u8], estimated_size: usize, limits: &Limits, diags: &mut Diagnostics) -> Result<Vec<u8>, Error>;
+pub fn decode_lzw(input: &[u8], early_change: bool, limits: &Limits, diags: &mut Diagnostics) -> Result<Vec<u8>, Error>;
+pub fn decode_run_length(input: &[u8], diags: &mut Diagnostics) -> Result<(Vec<u8>, usize), Error>;
+pub fn decode_ascii85(input: &[u8]) -> Result<(Vec<u8>, usize), Error>;
+pub fn decode_ascii_hex(input: &[u8]) -> (Vec<u8>, usize);
+pub fn decode_ccitt(input: &[u8], p: CcittParams, image_width: u32, image_height: u32, diags: &mut Diagnostics) -> Result<CcittImage, Error>;
+pub struct CcittParams { pub k: i64, pub end_of_line: bool, pub encoded_byte_align: bool,
+                         pub black_is_1: bool, pub columns: i64, pub rows: i64 }
+pub struct CcittImage { pub width: u32, pub height: u32, pub row_bytes: usize, pub bits: Vec<u8> }
+pub const RUN_LENGTH_MAX_OUTPUT: u64 = 20 * 1024 * 1024;
 ```
 
 Flate via `miniz_oxide` with a hard output cap from `Limits`; LZW via `weezl`
 (TIFF variant + EarlyChange); CCITT G3/G4 via `hayro-ccitt`; RLE and AHx/A85
-written in-crate. Decisions: filter chains applied left-to-right by the
-caller; a chain ending in an image codec returns the *pre-image* bytes.
+written in-crate. Decisions: a chain ending in an image codec returns the
+*pre-image* bytes.
 Decisions (orchestrator, from the brief's open questions):
 `Limits.max_decoded_stream_len` defaults to 1 GiB and exceeding it is an
 `Error` plus diagnostic — a deliberate divergence from the C++'s silent
@@ -178,6 +208,21 @@ Decisions (orchestrator, from the brief's open questions):
 is not at stake; conformance will verify no corpus file trips it). The
 four-rung StreamAcc fallback ladder (including handing compressed bytes to
 the consumer on empty decode) is Tier-A behavior — port it exactly.
+The ladder lives in **this** crate, as `decode_chain`, rather than in
+`pdfrum-parser` as the earlier "chains applied by the caller" wording had it:
+its four fallbacks are inseparable from what each decoder returns, so splitting
+them across a crate boundary invites exactly the silent divergence SPEC §0
+exists to prevent. `pdfrum-parser`'s stream accessor calls `decode_chain` and
+adds nothing. `decode` stays public for a caller holding one known filter.
+`NeedsImageCodec` carries no bytes of its own: the codec's input is
+`DecodedStream::data`, already the right bytes whether earlier filters produced
+them or the codec was the whole chain and the raw stream is what it reads —
+which is the C++'s fourth fallback resolved once instead of at every consumer.
+`RunLengthDecode`'s 20 MiB cap is a *separate* constant, not a `Limits` field:
+it is a rejection the oracle really performs and files depend on, so it is not
+configurable. `bytes_consumed` is reported only by the three filters whose
+inline-image use needs it (RLE, A85, AHx); Flate and LZW do not report it, per
+the brief's Q4.
 
 ## 5. `pdfrum-parser`  *(behavior: `core/fpdfapi/parser` — THE fidelity-critical crate)*
 
