@@ -5,8 +5,14 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
+# The generated table blob is committed and shipped; build.rs only regenerates
+# it when PDFRUM_REGEN_CMAP_TABLES is set (see tables/PROVENANCE.md).
+include = ["src/**", "tables/**", "build.rs", "README*", "LICENSE*"]
 
 [lints]
 workspace = true
 
 [dependencies]
+pdfrum-common.workspace = true
+pdfrum-object.workspace = true
+thiserror.workspace = true

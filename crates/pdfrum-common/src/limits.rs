@@ -58,6 +58,15 @@ pub struct Limits {
     /// the C++ changes behavior. `RunLengthDecode` keeps its own, much
     /// smaller and behaviorally load-bearing 20 MiB cap in `pdfrum-filters`.
     pub max_decoded_stream_len: usize,
+    /// Maximum number of codespace ranges, and separately of wide-code CID
+    /// ranges, one embedded CMap program may declare.
+    ///
+    /// PDFium has no cap: both lists grow with the program. The default here
+    /// is one range per possible two-byte code, which no real CMap approaches
+    /// and which bounds a hostile program's memory at a few megabytes; past it
+    /// further ranges are dropped with a diagnostic rather than erroring, in
+    /// the same spirit as `max_decoded_stream_len`.
+    pub max_cmap_ranges: usize,
 }
 
 impl Limits {
@@ -80,6 +89,7 @@ impl Default for Limits {
             max_page_tree_depth: 1024,
             max_page_count: 0x000F_FFFF,
             max_decoded_stream_len: 1024 * 1024 * 1024,
+            max_cmap_ranges: 65_536,
         }
     }
 }
@@ -101,6 +111,7 @@ mod tests {
         assert_eq!(l.max_page_tree_depth, 1024);
         assert_eq!(l.max_page_count, 1_048_575);
         assert_eq!(l.max_decoded_stream_len, 1024 * 1024 * 1024);
+        assert_eq!(l.max_cmap_ranges, 65_536);
         assert_eq!(l.max_string_len, usize::MAX);
         assert_eq!(l.max_array_len, usize::MAX);
         assert_eq!(Limits::INVALID_OBJ_NUM, 0xFFFF_FFFF);

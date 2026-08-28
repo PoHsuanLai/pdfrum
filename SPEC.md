@@ -48,6 +48,13 @@ the recovery channel into an out-of-memory condition. `Limits` is deliberately
 configuration idiom and the attribute forbids exactly that across crates; new
 fields are additive.
 
+[spec] 2026-08-29 (cmap brief OQ-4): `Limits` gains `max_cmap_ranges`,
+defaulting to **65 536** — a cap on how many codespace ranges, and separately
+how many wide-code CID ranges, one embedded CMap program may declare. PDFium
+caps neither; exceeding it drops further ranges with a diagnostic rather than
+erroring, the same shape as the accepted `max_decoded_stream_len` divergence
+(§4). No real CMap approaches the value.
+
 This crate has no fallible operation, so — uniquely — it ships no `Error` enum
 and no `thiserror` dependency. No string types, no stream traits, no "utils".
 If something feels like it belongs here, it probably belongs in the crate that

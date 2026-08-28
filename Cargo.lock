@@ -379,6 +379,11 @@ version = "0.1.0"
 [[package]]
 name = "pdfrum-cmap"
 version = "0.1.0"
+dependencies = [
+ "pdfrum-common",
+ "pdfrum-object",
+ "thiserror",
+]
 
 [[package]]
 name = "pdfrum-common"
