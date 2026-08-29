@@ -82,6 +82,15 @@ pub struct BuildContext {
     font_instances: HashMap<pdfrum_object::ObjRef, Option<Arc<Font>>>,
     /// The content buffers currently being parsed, which is the form guard.
     in_flight: HashSet<BufferId>,
+    /// How many Type 3 glyph procedures are being interpreted above the
+    /// current one (`kMaxType3FormLevel`).
+    ///
+    /// A glyph procedure may itself show text in a Type 3 font, so
+    /// interpreting one can reach another; the buffer-identity guard catches
+    /// a procedure that invokes *itself*, but not a pair that invoke each
+    /// other through two distinct streams, which is what
+    /// [`MAX_TYPE3_DEPTH`](pdfrum_font::MAX_TYPE3_DEPTH) bounds.
+    type3_depth: u32,
 }
 
 /// A content buffer's identity: the object that holds it, and its extent.
@@ -123,6 +132,24 @@ impl BuildContext {
     #[must_use]
     pub fn forms_in_flight(&self) -> usize {
         self.in_flight.len()
+    }
+
+    /// Enter a Type 3 glyph procedure, or refuse when the cap is reached.
+    ///
+    /// Returns `false` at the cap, in which case the caller must **not** call
+    /// [`Self::leave_type3`]. Compared with `>=`, so four levels nest and the
+    /// fifth is refused.
+    pub(crate) fn enter_type3(&mut self) -> bool {
+        if self.type3_depth >= pdfrum_font::MAX_TYPE3_DEPTH {
+            return false;
+        }
+        self.type3_depth += 1;
+        true
+    }
+
+    /// Leave a Type 3 glyph procedure entered through [`Self::enter_type3`].
+    pub(crate) fn leave_type3(&mut self) {
+        self.type3_depth = self.type3_depth.saturating_sub(1);
     }
 }
 

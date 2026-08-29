@@ -234,6 +234,75 @@ pub fn has_face(font: &Font) -> bool {
     !matches!(font, Font::Type3(_))
 }
 
+/// One Type 3 character, placed.
+///
+/// A Type 3 glyph is a *content stream*, not an outline, so what a placement
+/// yields is the character's code — with which the caller looks up the
+/// procedure's objects — and the matrix taking glyph space to device space.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PlacedType3Char {
+    /// The character code, keying `TextObject::type3_metrics`.
+    pub code: u32,
+    /// Glyph space to device space, `font_matrix * font_size` composed with
+    /// the pen position and the text-to-device transform.
+    pub matrix: Affine,
+}
+
+/// Lay out one Type 3 text object's characters.
+///
+/// The matrix differs from an ordinary glyph's in one way that matters: an
+/// outline arrives pre-scaled to 1000 units per em, so [`glyph_matrix`]
+/// divides the font size by a thousand. A Type 3 procedure's coordinates are
+/// in **glyph space**, whose relationship to text space is stated by the
+/// font's own `/FontMatrix` and is not a thousandth in general — a font may
+/// declare any matrix at all, and several in the corpus do. So the font
+/// matrix is composed in explicitly and the font size scales it, which is
+/// `char_matrix = font_matrix scaled by (font_size, font_size)`.
+///
+/// Advances still come from `/Widths` on the thousandth convention, matching
+/// how `pdfrum-page` computed the object's own advance; making the two
+/// disagree would slide a Type 3 run relative to the pen the page recorded.
+#[must_use]
+pub fn place_type3_chars(
+    object: &TextObject,
+    state: &pdfrum_page::GraphicsState,
+    to_device: Affine,
+) -> Vec<PlacedType3Char> {
+    let Some((font, size)) = &object.font else {
+        return Vec::new();
+    };
+    let Some(type3) = font.type3() else {
+        return Vec::new();
+    };
+    let text_to_device = to_device * object.matrix;
+    let det = object.matrix.determinant();
+    if det == 0.0 || !det.is_finite() {
+        return Vec::new();
+    }
+    let char_matrix = type3.font_matrix * Affine::scale(f64::from(*size));
+    let mut pen = object.matrix.inverse() * object.position;
+    let mut out = Vec::new();
+
+    for segment in &object.segments {
+        pen.x -= f64::from(segment.kerning) / 1000.0 * f64::from(*size);
+        for item in font.decode(&segment.codes) {
+            let advance = f64::from(item.width) / 1000.0 * f64::from(*size)
+                + f64::from(state.text.char_space);
+            let word = if item.code.0 == 0x20 && item.cid.is_none() {
+                f64::from(state.text.word_space)
+            } else {
+                0.0
+            };
+            out.push(PlacedType3Char {
+                code: item.code.0,
+                matrix: text_to_device * Affine::translate((pen.x, pen.y)) * char_matrix,
+            });
+            pen.x += advance + word;
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use kurbo::Point;
