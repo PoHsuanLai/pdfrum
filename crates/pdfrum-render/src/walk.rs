@@ -58,7 +58,7 @@ pub fn render_page<B: RasterBackend>(
     diags: &mut Diagnostics,
 ) -> Result<Pixmap, Error> {
     let (w, h) = target_size(page, opts)?;
-    let clear = opts.background_for(page.transparency.group);
+    let clear = opts.background_for(needs_alpha_background(page));
     let mut device = backend.new_target(w, h, clear);
     let mut caches = RenderCaches::new();
     let ctx = RenderCtx::new(opts.clone(), page.transparency);
@@ -76,6 +76,52 @@ pub fn render_page<B: RasterBackend>(
         diags,
     );
     Ok(backend.finish(device))
+}
+
+/// Whether the page renders onto a transparent background rather than white.
+///
+/// `pdfium_test` asks `FPDFPage_HasTransparency`, and the obvious reading of
+/// that name is wrong: it is **not** whether the page declares a `/Group`.
+/// It returns `CPDF_PageObjectHolder::BackgroundAlphaNeeded`, a flag the
+/// content parser sets in exactly one place — when an `/ExtGState` names a
+/// blend mode **above `Multiply`** (`cpdf_allstates.cpp:105-106`) — and
+/// which then propagates up from a form to its holder
+/// (`cpdf_streamcontentparser.cpp:835-838`).
+///
+/// So a page carrying a plain `/Group` still renders onto opaque white, and
+/// only a page that actually asks for a backdrop-reading blend gets a
+/// transparent one. Reading it as the `/Group` flag turns every such page's
+/// output from RGB to RGBA and, where nothing paints, from white to black —
+/// which is a whole-page difference, not a pixel one.
+#[must_use]
+pub fn needs_alpha_background(page: &Page) -> bool {
+    fn any_deep_blend(objects: &[PageObject]) -> bool {
+        objects.iter().any(|object| {
+            let deep = matches!(
+                object.state().general.blend,
+                pdfrum_page::BlendMode::Screen
+                    | pdfrum_page::BlendMode::Overlay
+                    | pdfrum_page::BlendMode::Darken
+                    | pdfrum_page::BlendMode::Lighten
+                    | pdfrum_page::BlendMode::ColorDodge
+                    | pdfrum_page::BlendMode::ColorBurn
+                    | pdfrum_page::BlendMode::HardLight
+                    | pdfrum_page::BlendMode::SoftLight
+                    | pdfrum_page::BlendMode::Difference
+                    | pdfrum_page::BlendMode::Exclusion
+                    | pdfrum_page::BlendMode::Hue
+                    | pdfrum_page::BlendMode::Saturation
+                    | pdfrum_page::BlendMode::Color
+                    | pdfrum_page::BlendMode::Luminosity
+            );
+            // A form's own objects carry the flag up to their holder.
+            deep || match object {
+                PageObject::Form(f) => any_deep_blend(&f.object.objects),
+                _ => false,
+            }
+        })
+    }
+    any_deep_blend(&page.objects)
 }
 
 /// The device size a page renders at, and the errors that size can be.
@@ -485,10 +531,31 @@ fn render_path<B: RasterBackend>(
     to_device: Affine,
 ) {
     let (fill, stroke) = colors(ctx, state, ObjectKind::Path);
-    let fills = object.fill_rule != pdfrum_page::FillRule::None;
-    if !fills && !object.stroke {
+    let mut fills = object.fill_rule != pdfrum_page::FillRule::None;
+    let mut strokes = object.stroke;
+
+    // `ProcessPathPattern` runs *before* the ordinary draw and **drains**
+    // pattern colours out of it: a pattern fill is painted by the pattern
+    // machinery and the fill type is then set to none, and likewise for a
+    // stroke, so a path with both is drawn twice and the residual ordinary
+    // draw does nothing at all.
+    //
+    // The draining is what matters even while the pattern machinery is
+    // unimplemented. A pattern colour has no components to resolve, so
+    // `to_rgb` reports none and the colour falls back to black — which
+    // would paint a `scn`-with-no-paint-operator rectangle solid black
+    // across the whole page where the oracle draws nothing. Skipping is
+    // wrong by a missing pattern; painting is wrong by an entire page.
+    if fills && state.fill.is_pattern() {
+        fills = false;
+    }
+    if strokes && state.stroke.is_pattern() {
+        strokes = false;
+    }
+    if !fills && !strokes {
         return;
     }
+
     // Under a forced colour scheme a fill may be converted into a stroke
     // wholesale — the only place the two swap roles.
     let (fills, strokes) = if matches!(ctx.opts.color_mode, crate::options::ColorMode::Forced(_))
@@ -497,7 +564,7 @@ fn render_path<B: RasterBackend>(
     {
         (false, true)
     } else {
-        (fills, object.stroke)
+        (fills, strokes)
     };
     let paint = PathPaint {
         fill: fills.then_some(fill),
@@ -537,6 +604,17 @@ fn render_text<B: RasterBackend>(
     };
     if !kinds.fill && !kinds.stroke {
         return; // Tr 7 contributes only to the clip, which the stack owns.
+    }
+    // A pattern-coloured glyph run goes to `DrawTextPathWithPattern`, which
+    // returns before the ordinary draw — so the pattern's absence must skip
+    // the run rather than paint it in the black a pattern colour resolves to.
+    let kinds = crate::text::TextPaintKinds {
+        fill: kinds.fill && !state.fill.is_pattern(),
+        stroke: kinds.stroke && !state.stroke.is_pattern(),
+        ..kinds
+    };
+    if !kinds.fill && !kinds.stroke {
+        return;
     }
     let (fill, stroke) = colors(ctx, state, ObjectKind::Text);
     // `TextObject::matrix` already carries the CTM, so only the
