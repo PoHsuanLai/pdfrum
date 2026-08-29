@@ -1,9 +1,9 @@
 # `pdfrum-render` status
 
-**Updated:** 2026-08-29 · **State:** M8 pixel burn-down wave 5 —
-**85.2% at SSIM ≥ 0.99** (up from 76.6%), the oracle's glyph placement
-ported as the default policy, the page matrix corrected to fit the device
-box, and the substituted-font width solve wired up
+**Updated:** 2026-08-29 · **State:** M8 pixel burn-down wave 6 —
+**86.2% at SSIM ≥ 0.99** (up from 85.2%), **487 byte-exact** (up from 451),
+the sub-0.80 codec tail diagnosed end to end and four of its files taken to
+byte-exact by image-dictionary rules rather than by any codec change
 
 Contract: SPEC.md §8 including the E2/E3/E4/E10 additions and the
 2026-08-29 implementation record. Behavior: `docs/design/pdfrum-render.md`;
@@ -494,6 +494,121 @@ come from the same substitution record and were equally unwired.
 - The gamma table and the LCD downsample are still dead, per wave 4.
 - The remaining tail is **not text**. See the inventory below.
 
+## Wave 6: the codec tail was mostly not the codecs
+
+Wave 5 left ten documents below 0.80 and called them "codecs". Four were,
+and none of the four was a defect in `hayro-jpeg2000` or `hayro-jbig2`. Every
+one was a rule of PDFium's *image dictionary* handling that our wrappers
+around those crates had not reproduced. Four files went byte-exact, the
+store gained **15 passing files (1396 → 1411)** and **36 byte-exact
+(451 → 487)**, and nothing regressed.
+
+### `/BitsPerComponent` survives the JPX early-return
+
+`ValidateDictParam` opens with `bpc_ = bpc_orig_;` and only *then* returns
+early for `JPXDecode`. It skips the bit-depth **check**, not the assignment,
+so a JPX image's declared depth is still live afterwards — and
+`LoadJpxBitmap`'s `/Indexed` downshift reads exactly that field:
+
+```cpp
+} else if (color_space_ && family == kIndexed && bpc_ < 8) {
+  int scale = 8 - bpc_;
+  for (auto& pixel : scanline) { pixel >>= scale; }
+}
+```
+
+We had been storing zero, which made `scale` eight rather than
+`jpxdecode_indexed.in`'s six: every index cleared, and in a debug build the
+shift overflowed outright. The distinction that makes this two rules rather
+than one is which path returns where — a JPX image with **no** `/ColorSpace`
+leaves `LoadColorInfo` before `ValidateDictParam` ever runs, so *that* one
+really does keep a zero depth. `jpxdecode_indexed` 0.460 → **byte-exact**.
+
+### A four-channel JPEG stays four channels
+
+`jpeg_read_header` picks the output space from the codestream's channel
+count, and PDFium only ever narrows it — pinning a three-channel image with
+no Adobe marker to its own `jpeg_color_space`, never widening or reducing.
+Four channels therefore stay `JCS_CMYK`. `zune-jpeg` defaults its output to
+RGB instead and happily converts a CMYK or YCCK image down to three, which
+then read as a component mismatch against the `/DeviceCMYK` dictionary and
+**rejected the whole image**. `bug_718762` and `bug_1646` are the same
+5000×5000 CMYK JPEG, and both drew nothing.
+
+### `/Decode` reaches a codec's output, not only raw samples
+
+`TranslateScanline24bpp` runs on the *decoder's* scanline. Those two files
+carry the Adobe inversion as `/Decode [1 0 1 0 1 0 1 0]`, and we were
+applying `/Decode` only on the raw-sample path — so the image arrived as its
+own negative. The encode back to a byte has to **round**: PDFium keeps these
+values as floats into the colour conversion and truncates only the converted
+byte, and `1 − 253/255` lands a hair under `2/255`, which truncation loses.
+Both files 0.633 → **byte-exact**.
+
+### Components that disagree are refused outright
+
+`CJPX_Decoder::Decode` walks the components and returns false on the first
+that disagrees with the one before it on `dx`, `dy` or `prec`.
+`LoadJpxBitmap` then returns null and the page draws *nothing*.
+`bug_557223` is 904 bytes claiming a 707×6131 three-component image whose
+components declare subsampling 3×7, 1×7, 1×7 at precisions 1, 2 and 3;
+PDFium prints "has an empty bitmap" and paints white, while a decoder that
+presses on invents a picture the file does not contain. The gate reads the
+`SIZ` marker directly, because `hayro-jpeg2000` exposes a component's depth
+only after a decode and its subsampling not at all. 0.773 → **byte-exact**.
+
+### The six that were never codec problems
+
+| file | what it actually is |
+|---|---|
+| `bug_718762`, `bug_1646` | the same DCT file; fixed above, and the "JBIG2/CCITT decode differences" row of wave 4's table was wrong about them |
+| `bug_1396266` | a `/Mask` **stencil**, no image codec involved |
+| `bug_1236` | the JBIG2 decodes correctly — the oracle's own saved image is all-black at 400×400 and so is ours. What differs is its 100×100 `/SMask`, whose alphas cap at 25/255: the oracle's page has no black pixel anywhere, ours has an opaque quadrant. A mask-scaling defect in the image path |
+| `bug_1986` | the `/Filter` array's entries are **indirect references** to objects terminated `enbobj`. PDFium's `GetDecoderArray` and `ValidateDecoderPipeline` both resolve them; our `decoder_list` never sees names because the objects do not load. A parser object-recovery gap |
+| `bug_867501` | the one genuine hayro gap — see below |
+
+### `bug_867501`: a genuine `hayro-jbig2` gap, and it is not truncation
+
+Wave 5 recorded this as needing "PDFium's `DecodeSequential` truncation
+tolerance". Reading the codestream says something narrower and more
+structural. The 77-byte stream is:
+
+| offset | segment | declared data length |
+|---|---|---|
+| 0 | page information (type 48) | **0** |
+| 11 | immediate generic region (type 38) | **0** |
+| 22 | symbol dictionary (type 0) | 33 554 432, with 44 bytes left |
+
+PDFium parses every segment **body from one continuous stream, ignoring the
+declared length entirely** — `ParseSegmentData` reads from the shared
+`stream_` at the offset the header ended. So the zero-length page-info
+segment still reads its 19 bytes (from offset 11), and the zero-length
+region segment still reads its own (from offset 22), where they find a
+generic region **1 pixel wide and 2 tall at (0, 0)**. The third segment's
+absurd length runs `offset_` past the end, `while (getByteLeft() >=
+kMinSegmentSize)` ends the loop, and `DecodeSequential` **returns success**.
+The destination began zeroed and is `~`-inverted at the end, so the row the
+region never reached comes back white. That is exactly the oracle's saved
+image: a 1×3 grey bitmap reading `255 0 255`.
+
+`hayro-jbig2` cannot reach that answer by any wrapper-level change:
+
+- It slices each segment to its declared length and parses each body in
+  isolation, so a zero-length page-info body is an empty slice and
+  `parse_page_information` returns `UnexpectedEof`. Feeding it a prefix does
+  not help — **no prefix of this stream parses**, and the longest run of
+  whole segments is the 22 bytes containing only the two empty ones.
+- Its `parse_segments_sequential` loops to `at_end()` and propagates the
+  error, where PDFium stops at fewer than eleven remaining bytes and calls
+  that success. That half *is* a wrapper-level fix and it is cheap, but on
+  its own it changes nothing here.
+
+Both halves are upstreamable and neither needs a fork. **Recorded as a known
+gap** rather than fixed: the diagnosis above, the 77-byte codestream and the
+expected `255 0 255` output are what an upstream issue needs, and a
+first-party `pdfrum-jbig2` port is not justified by one file — SPEC §12 asks
+for the narrowest faithful fix, and for this file that fix belongs upstream.
+
 ## Numbers
 
 Measured against the golden store on the full corpus (1675 files, 1628 with
@@ -533,6 +648,13 @@ pairs are collapsed. The shape has changed more than the count:
 | 0.90–0.95 | 26 | shadings (`shade`, `shade-tensor`, type 6/7, radial-at-border), the `fx/layer` optional-content pair, uncoloured tiling, vertical text |
 | 0.80–0.90 | 11 | `transfer_function`, `same_color_knockout_fill`, `image_transformer_other`, assorted image singles |
 | below 0.80 | 10 | **codecs**: `jpxdecode_indexed` (0.460), `bug_1986` (0.546), `bug_557223` (0.773) are JPX; `bug_1396266`, `bug_718762`, `bug_867501`, `bug_1236` are decode singles; `en_fqa.pdf` (0.715) and `example_063` (0.747) are the two genuinely dense-type files left |
+
+**Wave 6 empties four rows of that band and re-labels four more.**
+`jpxdecode_indexed`, `bug_557223`, `bug_718762` and `bug_1646` are
+byte-exact. Of what is left, only `bug_867501` is a codec at all:
+`bug_1396266` is a `/Mask` stencil, `bug_1236` is a mask-scaling defect
+around a JBIG2 that decodes correctly, and `bug_1986` is a parser
+object-recovery gap. See "Wave 6" above.
 
 **The 0.95–0.99 band is now the whole story of the text tail**, and it is a
 coverage band rather than a placement one: geometry now agrees, and what is

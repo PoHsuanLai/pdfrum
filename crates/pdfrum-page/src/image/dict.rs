@@ -132,12 +132,18 @@ impl ImageDict {
             });
         }
 
-        // JPX skips the bit-depth check outright.
+        // JPX skips the bit-depth *check* — but not the assignment before it.
+        // `ValidateDictParam` opens with `bpc_ = bpc_orig_;` and only then
+        // returns early for `JPXDecode`, so the dictionary's declared depth
+        // survives on this path and the `/Indexed` downshift below reads it.
+        // (The no-colour-space JPX path above returns from `LoadColorInfo`
+        // before `ValidateDictParam` ever runs, which is why *it* leaves the
+        // depth at zero.)
         if last_filter == Some(Filter::Jpx) {
             return Ok(Self {
                 width: to_u32(width),
                 height: to_u32(height),
-                bpc: 0,
+                bpc: to_u32(bpc_orig),
                 components: 0,
                 image_mask: false,
                 default_decode: default_decode(decode.as_ref()),
@@ -365,6 +371,40 @@ mod tests {
         let mut pairs = base(0);
         pairs.push((Name::from("Filter"), Object::Name(Name::from("JPXDecode"))));
         let got = image(pairs).expect("a JPX image with bpc 0 should load");
+        assert_eq!(got.bpc, 0);
+        assert!(!got.image_mask);
+    }
+
+    #[test]
+    fn jpx_skips_the_check_but_keeps_the_declared_bit_depth() {
+        // `ValidateDictParam` assigns `bpc_ = bpc_orig_` *before* it returns
+        // early for `JPXDecode`, so a depth the check would have rejected is
+        // still the depth the `/Indexed` downshift reads. Two and four are
+        // both legal and both below eight, which is the case that matters.
+        for depth in [1i64, 2, 4, 8, 16] {
+            let mut pairs = base(depth);
+            pairs.push((Name::from("Filter"), Object::Name(Name::from("JPXDecode"))));
+            let got = image(pairs).expect("a JPX image should load at any depth");
+            assert_eq!(got.bpc, u32::try_from(depth).expect("small"), "bpc {depth}");
+        }
+        // A depth the *check* would reject still survives, because the check
+        // never runs on this path.
+        let mut pairs = base(7);
+        pairs.push((Name::from("Filter"), Object::Name(Name::from("JPXDecode"))));
+        assert_eq!(image(pairs).expect("should load").bpc, 7);
+    }
+
+    #[test]
+    fn a_jpx_image_with_no_colorspace_keeps_a_zero_depth() {
+        // This path returns from `LoadColorInfo` before `ValidateDictParam`
+        // ever runs, so the assignment above never happens here.
+        let pairs = vec![
+            (Name::from("Width"), Object::Int(4)),
+            (Name::from("Height"), Object::Int(4)),
+            (Name::from("BitsPerComponent"), Object::Int(8)),
+            (Name::from("Filter"), Object::Name(Name::from("JPXDecode"))),
+        ];
+        let got = image(pairs).expect("should load");
         assert_eq!(got.bpc, 0);
         assert!(!got.image_mask);
     }
