@@ -24,32 +24,76 @@ pub struct Cluster {
 }
 
 /// Clusters a scoreboard's failures, largest first.
+///
+/// A `tierA-mismatch` is split by *which* dump differed, because the tag
+/// alone is not a unit of work: at M1 it covered every file in the corpus
+/// while the metadata and pageinfo dumps were already byte-exact everywhere
+/// and the mismatches were entirely the text and annot dumps no crate
+/// produces yet. One cluster per dump makes that visible, and makes a
+/// burn-down agent's assignment ("the annot dump") readable off the report.
 pub fn cluster(board: &Scoreboard) -> Vec<Cluster> {
     let mut clusters: Vec<Cluster> = Vec::new();
+    let record = |tag: String, path: &str, clusters: &mut Vec<Cluster>| match clusters
+        .iter_mut()
+        .find(|c| c.tag == tag)
+    {
+        Some(cluster) => {
+            cluster.count += 1;
+            if cluster.examples.len() < EXAMPLES {
+                cluster.examples.push(path.to_owned());
+            }
+        }
+        None => clusters.push(Cluster {
+            tag,
+            count: 1,
+            examples: vec![path.to_owned()],
+        }),
+    };
     for result in &board.per_file {
         if result.status != Status::Fail {
             continue;
         }
         for tag in &result.tags {
-            match clusters.iter_mut().find(|c| &c.tag == tag) {
-                Some(cluster) => {
-                    cluster.count += 1;
-                    if cluster.examples.len() < EXAMPLES {
-                        cluster.examples.push(result.path.clone());
-                    }
+            if tag == crate::scoreboard::tag::TIER_A_MISMATCH {
+                let mut classes: Vec<&'static str> = result
+                    .tier_a
+                    .mismatched
+                    .iter()
+                    .map(|name| artifact_class(name))
+                    .collect();
+                classes.sort_unstable();
+                classes.dedup();
+                for class in classes {
+                    record(format!("{tag}:{class}"), &result.path, &mut clusters);
                 }
-                None => clusters.push(Cluster {
-                    tag: tag.clone(),
-                    count: 1,
-                    examples: vec![result.path.clone()],
-                }),
+                continue;
             }
+            record(tag.clone(), &result.path, &mut clusters);
         }
     }
     // Largest cluster first; alphabetical by tag on a tie, so equal-sized
     // clusters do not swap places between runs.
     clusters.sort_by(|a, b| b.count.cmp(&a.count).then_with(|| a.tag.cmp(&b.tag)));
     clusters
+}
+
+/// Which dump an artifact name belongs to.
+///
+/// Deliberately a suffix test and not `Path::extension`: the names are
+/// multi-part (`input.pdf.0.annot.txt`), so an extension lookup sees only
+/// `txt` and cannot tell an annot dump from a text one — which is the single
+/// distinction this function exists to draw.
+fn artifact_class(name: &str) -> &'static str {
+    use crate::generate::has_suffix;
+    match name {
+        "metadata.txt" => "metadata",
+        "pageinfo.txt" => "pageinfo",
+        "structure.txt" => "structure",
+        _ if has_suffix(name, ".annot.txt") => "annot",
+        _ if has_suffix(name, ".txt") => "text",
+        _ if has_suffix(name, ".png") => "png",
+        _ => "other",
+    }
 }
 
 /// Renders clusters as the human report.
@@ -61,6 +105,20 @@ pub fn render(board: &Scoreboard, clusters: &[Cluster]) -> String {
         "conformance triage - {} files, {} pass, {} fail (generated {})",
         totals.files, totals.pass, totals.fail, board.generated_at
     );
+    if let (Some(rate), Some(nonempty)) = (totals.text_rate(), totals.text_nonempty_rate()) {
+        // Both rates, because the first one flatters a tool that extracts
+        // nothing: slightly under half the corpus's text goldens are empty.
+        let _ = writeln!(
+            out,
+            "text {}/{} ({:.1}%), nonempty {}/{} ({:.1}%)",
+            totals.text.matched,
+            totals.text.pages,
+            rate * 100.0,
+            totals.text.substantive_matched,
+            totals.text.substantive,
+            nonempty * 100.0,
+        );
+    }
     if clusters.is_empty() {
         out.push_str("\nno failures\n");
         return out;
@@ -223,6 +281,71 @@ mod tests {
         let report = render(&board, &clusters);
         assert!(report.contains("1400"));
         assert!(report.contains("and 1397 more"));
+    }
+
+    #[test]
+    fn a_tier_a_mismatch_becomes_one_cluster_per_dump_that_differed() {
+        let mismatching = |path: &str, dumps: &[&str]| FileResult {
+            tier_a: TierA {
+                mismatched: dumps.iter().map(|d| (*d).to_owned()).collect(),
+                ..TierA::default()
+            },
+            ..fail(path, &[tag::TIER_A_MISMATCH])
+        };
+        let board = Scoreboard::new(
+            "t".to_owned(),
+            vec![
+                mismatching("a.pdf", &["input.pdf.0.txt", "input.pdf.0.annot.txt"]),
+                mismatching("b.pdf", &["input.pdf.0.annot.txt"]),
+                mismatching("c.pdf", &["metadata.txt"]),
+            ],
+        );
+        let clusters = cluster(&board);
+        let by_tag: Vec<(&str, u64)> = clusters.iter().map(|c| (c.tag.as_str(), c.count)).collect();
+        assert_eq!(
+            by_tag,
+            [
+                ("tierA-mismatch:annot", 2),
+                ("tierA-mismatch:metadata", 1),
+                ("tierA-mismatch:text", 1),
+            ]
+        );
+        // The undifferentiated tag no longer appears: it was never a unit of
+        // work, only a count of everything at once.
+        assert!(!clusters.iter().any(|c| c.tag == tag::TIER_A_MISMATCH));
+    }
+
+    #[test]
+    fn several_pages_of_one_dump_still_count_their_file_once() {
+        let board = Scoreboard::new(
+            "t".to_owned(),
+            vec![FileResult {
+                tier_a: TierA {
+                    mismatched: vec![
+                        "input.pdf.0.txt".to_owned(),
+                        "input.pdf.1.txt".to_owned(),
+                        "input.pdf.2.txt".to_owned(),
+                    ],
+                    ..TierA::default()
+                },
+                ..fail("a.pdf", &[tag::TIER_A_MISMATCH])
+            }],
+        );
+        let clusters = cluster(&board);
+        assert_eq!(clusters.len(), 1);
+        assert_eq!(clusters[0].tag, "tierA-mismatch:text");
+        assert_eq!(clusters[0].count, 1);
+    }
+
+    #[test]
+    fn artifact_names_are_classified_by_their_full_suffix() {
+        assert_eq!(artifact_class("input.pdf.0.txt"), "text");
+        assert_eq!(artifact_class("input.pdf.0.annot.txt"), "annot");
+        assert_eq!(artifact_class("metadata.txt"), "metadata");
+        assert_eq!(artifact_class("pageinfo.txt"), "pageinfo");
+        assert_eq!(artifact_class("structure.txt"), "structure");
+        assert_eq!(artifact_class("input.pdf.0.png"), "png");
+        assert_eq!(artifact_class("input.pdf.attachment.x"), "other");
     }
 
     #[test]

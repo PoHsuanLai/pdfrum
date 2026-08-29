@@ -63,6 +63,41 @@ pub mod tag {
     pub const BAD_PNG: &str = "bad-png";
 }
 
+/// How one file's text dumps scored, counted two ways.
+///
+/// A whole-corpus text pass rate is a misleading number on its own. Slightly
+/// under half of the corpus's text goldens are *empty* — the oracle's `--txt`
+/// wrote a byte-order mark and nothing else, which the store holds as a
+/// zero-length file — because those pages carry no text at all. A tool that
+/// emitted an empty dump for every page would score close to half the pages
+/// right while extracting nothing, and the number would keep rewarding it as
+/// real extraction landed.
+///
+/// So both are recorded: `pages` over every golden, and `substantive` over
+/// the goldens that actually hold text. The second is the one an exit
+/// criterion should read (SPEC.md §9).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct TextScore {
+    /// Text goldens this file has.
+    pub pages: u32,
+    /// Of those, the ones matched byte-for-byte.
+    pub matched: u32,
+    /// Text goldens holding more than a byte-order mark.
+    pub substantive: u32,
+    /// Of those, the ones matched byte-for-byte.
+    pub substantive_matched: u32,
+}
+
+impl TextScore {
+    /// Adds another file's counts.
+    pub fn add(&mut self, other: TextScore) {
+        self.pages += other.pages;
+        self.matched += other.matched;
+        self.substantive += other.substantive;
+        self.substantive_matched += other.substantive_matched;
+    }
+}
+
 /// Tier A (byte-exact) outcome for one file.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct TierA {
@@ -74,6 +109,8 @@ pub struct TierA {
     pub golden_pages: Option<u32>,
     /// Page count our tool reported.
     pub actual_pages: Option<u32>,
+    /// The text dumps, counted separately — see [`TextScore`].
+    pub text: TextScore,
 }
 
 impl TierA {
@@ -138,6 +175,25 @@ pub struct Totals {
     pub fail: u64,
     /// Failure tag to the number of files carrying it.
     pub by_tag: BTreeMap<String, u64>,
+    /// Text dumps across the whole corpus — see [`TextScore`].
+    pub text: TextScore,
+}
+
+impl Totals {
+    /// The share of text goldens matched, over all of them.
+    ///
+    /// `None` when there are none to match; a rate over an empty set is not
+    /// zero, and printing it as zero would read as a failure.
+    pub fn text_rate(&self) -> Option<f64> {
+        (self.text.pages > 0).then(|| f64::from(self.text.matched) / f64::from(self.text.pages))
+    }
+
+    /// The share matched over the goldens that hold more than a byte-order
+    /// mark — the number an exit criterion reads.
+    pub fn text_nonempty_rate(&self) -> Option<f64> {
+        (self.text.substantive > 0)
+            .then(|| f64::from(self.text.substantive_matched) / f64::from(self.text.substantive))
+    }
 }
 
 impl Scoreboard {
@@ -168,6 +224,7 @@ impl Scoreboard {
             for tag in &result.tags {
                 *totals.by_tag.entry(tag.clone()).or_default() += 1;
             }
+            totals.text.add(result.tier_a.text);
         }
         totals
     }
@@ -212,6 +269,7 @@ impl Scoreboard {
                                 .collect(),
                         ),
                     ),
+                    ("text".to_owned(), text_totals_json(&totals)),
                 ]),
             ),
             (
@@ -243,6 +301,35 @@ impl Scoreboard {
             per_file,
         })
     }
+}
+
+/// The corpus-wide text block of the scoreboard's `totals`.
+///
+/// Both rates are written out even though they are derivable, because this
+/// file is read by humans and by burn-down loops that should not have to
+/// divide: `nonempty_rate` is the number PLAN.md §6's M2 criterion means.
+fn text_totals_json(totals: &Totals) -> Json {
+    let rate = |value: Option<f64>| value.map_or(Json::Null, Json::Num);
+    Json::Obj(vec![
+        ("pages".to_owned(), Json::int(u64::from(totals.text.pages))),
+        (
+            "matched".to_owned(),
+            Json::int(u64::from(totals.text.matched)),
+        ),
+        (
+            "nonempty".to_owned(),
+            Json::int(u64::from(totals.text.substantive)),
+        ),
+        (
+            "nonempty_matched".to_owned(),
+            Json::int(u64::from(totals.text.substantive_matched)),
+        ),
+        ("rate".to_owned(), rate(totals.text_rate())),
+        (
+            "nonempty_rate".to_owned(),
+            rate(totals.text_nonempty_rate()),
+        ),
+    ])
 }
 
 impl FileResult {
@@ -289,6 +376,27 @@ impl FileResult {
                             .actual_pages
                             .map_or(Json::Null, |n| Json::int(u64::from(n))),
                     ),
+                    (
+                        "text".to_owned(),
+                        Json::Obj(vec![
+                            (
+                                "pages".to_owned(),
+                                Json::int(u64::from(self.tier_a.text.pages)),
+                            ),
+                            (
+                                "matched".to_owned(),
+                                Json::int(u64::from(self.tier_a.text.matched)),
+                            ),
+                            (
+                                "nonempty".to_owned(),
+                                Json::int(u64::from(self.tier_a.text.substantive)),
+                            ),
+                            (
+                                "nonempty_matched".to_owned(),
+                                Json::int(u64::from(self.tier_a.text.substantive_matched)),
+                            ),
+                        ]),
+                    ),
                 ]),
             ),
         ];
@@ -325,6 +433,14 @@ impl FileResult {
                 .unwrap_or_default()
         };
         let tier_a_json = value.get("tierA").cloned().unwrap_or(Json::Null);
+        let text_json = tier_a_json.get("text").cloned().unwrap_or(Json::Null);
+        let count = |field: &str| {
+            text_json
+                .get(field)
+                .and_then(Json::as_f64)
+                .and_then(crate::json::as_u32)
+                .unwrap_or(0)
+        };
         let tier_a = TierA {
             compared: strings(&tier_a_json, "compared"),
             mismatched: strings(&tier_a_json, "mismatched"),
@@ -336,6 +452,12 @@ impl FileResult {
                 .get("actual_pages")
                 .and_then(Json::as_f64)
                 .and_then(crate::json::as_u32),
+            text: TextScore {
+                pages: count("pages"),
+                matched: count("matched"),
+                substantive: count("nonempty"),
+                substantive_matched: count("nonempty_matched"),
+            },
         };
         let tier_b = value.get("tierB").and_then(|b| {
             Some(TierB {
@@ -374,6 +496,7 @@ mod tests {
                 mismatched: vec![],
                 golden_pages: Some(2),
                 actual_pages: Some(2),
+                text: TextScore::default(),
             },
             tier_b: Some(TierB {
                 ssim: 0.998_5,
@@ -529,6 +652,79 @@ mod tests {
             }
             .is_clean()
         );
+    }
+
+    #[test]
+    fn text_totals_sum_across_files_and_survive_a_round_trip() {
+        let with_text = |path: &str, score: TextScore| FileResult {
+            tier_a: TierA {
+                text: score,
+                ..TierA::default()
+            },
+            ..pass(path)
+        };
+        let board = Scoreboard::new(
+            "t".to_owned(),
+            vec![
+                with_text(
+                    "a.pdf",
+                    TextScore {
+                        pages: 4,
+                        matched: 3,
+                        substantive: 2,
+                        substantive_matched: 1,
+                    },
+                ),
+                with_text(
+                    "b.pdf",
+                    TextScore {
+                        pages: 6,
+                        matched: 6,
+                        substantive: 3,
+                        substantive_matched: 3,
+                    },
+                ),
+            ],
+        );
+        let totals = board.totals();
+        assert_eq!(totals.text.pages, 10);
+        assert_eq!(totals.text.matched, 9);
+        assert_eq!(totals.text.substantive, 5);
+        assert_eq!(totals.text.substantive_matched, 4);
+        assert_eq!(Scoreboard::from_text(&board.to_text()).unwrap(), board);
+    }
+
+    #[test]
+    fn the_nonempty_rate_is_the_one_an_empty_extractor_cannot_flatter() {
+        // The whole point of the second aggregate: a tool that prints nothing
+        // matches every empty golden and no substantive one. The plain rate
+        // rewards that; the nonempty rate is honest about it.
+        let board = Scoreboard::new(
+            "t".to_owned(),
+            vec![FileResult {
+                tier_a: TierA {
+                    text: TextScore {
+                        pages: 100,
+                        matched: 46,
+                        substantive: 54,
+                        substantive_matched: 0,
+                    },
+                    ..TierA::default()
+                },
+                ..pass("a.pdf")
+            }],
+        );
+        let totals = board.totals();
+        assert!((totals.text_rate().unwrap() - 0.46).abs() < 1e-9);
+        assert_eq!(totals.text_nonempty_rate(), Some(0.0));
+    }
+
+    #[test]
+    fn a_rate_over_no_goldens_is_absent_rather_than_zero() {
+        let board = Scoreboard::new("t".to_owned(), vec![fail("a.pdf", &[tag::CRASH])]);
+        let totals = board.totals();
+        assert_eq!(totals.text_rate(), None);
+        assert_eq!(totals.text_nonempty_rate(), None);
     }
 
     #[test]
