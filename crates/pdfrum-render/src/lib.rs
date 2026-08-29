@@ -92,4 +92,4 @@ pub use device::{
 pub use error::Error;
 pub use options::{ColorMode, ColorScheme, RenderOptions, TextAa};
 pub use pixmap::{AlphaMask, Pixmap};
-pub use walk::{needs_alpha_background, render_page};
+pub use walk::{needs_alpha_background, render_page, render_page_with_caches, target_size};

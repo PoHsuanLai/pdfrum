@@ -5,6 +5,9 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
+readme = "README.md"
+keywords = ["pdf", "cli", "render", "pdfium"]
+categories = ["command-line-utilities", "graphics", "text-processing"]
 
 [lints]
 workspace = true

@@ -91,8 +91,16 @@ not a codec).
 ## Tools & tests only
 
 `anyhow`, `clap` (pdfrum-tool CLI), `png` (encode output; also decode goldens
-in harness), `insta` (snapshots), `criterion` (benches), `libfuzzer-sys`
-(fuzz targets), `cargo-deny` / `cargo-nextest` (CI tooling, not deps).
+in harness), `insta` (snapshots), `criterion` (benches, **pinned `=0.5.1`**),
+`libfuzzer-sys` (fuzz targets), `cargo-deny` / `cargo-nextest` (CI tooling,
+not deps).
+
+`criterion` is held at 0.5 deliberately. From 0.6 it depends unconditionally
+on `alloca`, which has a `cc` build-dependency and compiles C — which the
+pure-Rust guarantee above forbids and `cargo-deny` rejects, failing
+`scripts/ci.sh`. No feature flag avoids it (`alloca` is not optional). Unlike
+`libfuzzer-sys`, this one is not worth an exception: `benches/` is inside the
+workspace the ban walks, and 0.5 measures the same thing.
 SSIM is hand-rolled in the harness (~60 lines) — the ratchet metric must
 never shift under a dependency update.
 

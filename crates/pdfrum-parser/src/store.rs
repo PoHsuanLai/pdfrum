@@ -127,6 +127,18 @@ impl ObjectStore {
         }
     }
 
+    /// The repairs recorded so far, *without* emptying the sink.
+    ///
+    /// The read behind [`Document::lazy_diagnostics`](crate::Document::lazy_diagnostics):
+    /// a caller asking what the document has needed so far must be able to
+    /// ask twice and get the same answer, which draining would break.
+    pub(crate) fn peek_diags(&self) -> Diagnostics {
+        match self.diags.lock() {
+            Ok(guard) => guard.clone(),
+            Err(_) => Diagnostics::default(),
+        }
+    }
+
     /// Record a repair.
     fn note(&self, severity: Severity, what: DiagKind, at: Option<u64>) {
         if let Ok(mut guard) = self.diags.lock() {
@@ -139,9 +151,7 @@ impl ObjectStore {
         let mut local = Diagnostics::default();
         let out = f(&mut local);
         if let Ok(mut guard) = self.diags.lock() {
-            for entry in local.entries() {
-                guard.record(entry.severity, entry.what.clone(), entry.at);
-            }
+            guard.extend(&local);
         }
         out
     }

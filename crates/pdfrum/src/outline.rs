@@ -37,15 +37,10 @@ pub struct Outline<'a> {
 impl<'a> Outline<'a> {
     pub(crate) fn load(doc: &'a Document) -> Outline<'a> {
         let mut diags = Diagnostics::default();
-        Outline {
-            entries: pdfrum_doc::nav::outline::walk(
-                &doc.catalog(),
-                &doc.inner,
-                &doc.limits,
-                &mut diags,
-            ),
-            doc,
-        }
+        let entries =
+            pdfrum_doc::nav::outline::walk(&doc.catalog(), &doc.inner, &doc.limits, &mut diags);
+        doc.note(&diags);
+        Outline { doc, entries }
     }
 
     /// How many entries the outline has, at every level.
@@ -128,6 +123,7 @@ impl Bookmark<'_> {
             |num| self.doc.page_index_of(num),
             &mut diags,
         );
+        self.doc.note(&diags);
         u32::try_from(index).ok()
     }
 
