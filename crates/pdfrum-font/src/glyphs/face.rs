@@ -229,6 +229,33 @@ impl Face {
         read_fonts::ps::cff::CffFontRef::new(&self.bytes, 0, None).ok()
     }
 
+    /// The index a bare CFF actually stores a glyph under.
+    ///
+    /// For an ordinary CFF this is the number it was handed. For a **CID-keyed**
+    /// one it is not: the composite-font layer above hands down a CID, because
+    /// that is what PDFium hands FreeType, and FreeType silently maps it
+    /// through the font's charset. A subsetted CID-keyed program holds a
+    /// handful of glyphs numbered from zero while its CIDs are wherever the
+    /// original collection put them, so skipping the mapping asks for a glyph
+    /// number that does not exist and the font draws nothing at all.
+    fn cff_glyph_id(
+        cff: &read_fonts::ps::cff::CffFontRef<'_>,
+        gid: Gid,
+    ) -> read_fonts::types::GlyphId {
+        let raw = read_fonts::types::GlyphId::new(u32::from(gid.0));
+        if !cff.is_cid() {
+            return raw;
+        }
+        // In a CID-keyed font the charset's string identifiers *are* CIDs.
+        cff.charset()
+            .and_then(|charset| {
+                charset
+                    .glyph_id(read_fonts::ps::string::Sid::new(gid.0))
+                    .ok()
+            })
+            .unwrap_or(raw)
+    }
+
     /// Design units per em.
     #[must_use]
     pub fn units_per_em(&self) -> u16 {
@@ -385,7 +412,7 @@ impl Face {
     pub fn outline(&self, gid: Gid) -> Option<BezPath> {
         let mut pen = PathPen::default();
         if let Some(cff) = self.cff() {
-            let id = read_fonts::types::GlyphId::new(u32::from(gid.0));
+            let id = Self::cff_glyph_id(&cff, gid);
             let subfont_index = cff.subfont_index(id)?;
             let subfont = cff.subfont(subfont_index, &[]).ok()?;
             // `ppem: None` means unscaled font units, which is the same
@@ -413,7 +440,7 @@ impl Face {
     #[must_use]
     pub fn advance(&self, gid: Gid) -> Option<f32> {
         if let Some(cff) = self.cff() {
-            let id = read_fonts::types::GlyphId::new(u32::from(gid.0));
+            let id = Self::cff_glyph_id(&cff, gid);
             let subfont_index = cff.subfont_index(id)?;
             let subfont = cff.subfont(subfont_index, &[]).ok()?;
             let mut pen = PathPen::default();
