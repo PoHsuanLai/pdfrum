@@ -830,6 +830,7 @@ name = "pdfrum-edit"
 version = "0.1.0"
 dependencies = [
  "pdfrum-common",
+ "pdfrum-crypt",
  "pdfrum-filters",
  "pdfrum-font",
  "pdfrum-object",

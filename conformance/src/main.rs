@@ -551,13 +551,66 @@ fn tier_c(args: &TierCArgs) -> Result<ExitCode> {
     Ok(ExitCode::SUCCESS)
 }
 
-/// Save every corpus file, check the oracle reopens it, and diff a sample's
-/// pixels against the original's golden render (PLAN.md M7's exit criteria).
+/// Print the sweep's scoreboard.
 ///
-/// The four numbers this prints are what M7 is graded on. Only the first two
-/// are gates: a file the tool could not *open* is skipped rather than failed,
-/// because Tier B already scores that and counting it twice would let a
-/// parse regression read as a writer bug.
+/// Split out from [`save_round_trip`] because the numbers are a report rather
+/// than a step of the check: what each means is documented on
+/// [`saveroundtrip::SaveTotals`], and the only thing decided here is the order
+/// they print in.
+fn report_save_totals(totals: &saveroundtrip::SaveTotals, files: usize) {
+    let percent =
+        |rate: Option<f64>| rate.map_or_else(|| "n/a".to_owned(), |r| format!("{:.2}%", r * 100.0));
+    println!("save round-trip over {files} corpus files");
+    println!(
+        "  saved                         {} ({} skipped before any check)",
+        totals.saved, totals.skipped
+    );
+    println!(
+        "  oracle reopened               {} / {}  {}",
+        totals.oracle_reopened,
+        totals.saved,
+        percent(totals.reopen_rate())
+    );
+    println!("  saved renders as well as the original (fidelity)");
+    println!(
+        "                                {} / {}  {}",
+        totals.matches_original,
+        totals.compared,
+        percent(totals.fidelity_rate())
+    );
+    println!(
+        "  saved clears the Tier-B floor {} / {}  {}",
+        totals.within_floor,
+        totals.compared,
+        percent(totals.pixel_rate())
+    );
+    println!(
+        "  incremental append discipline {} / {}  {}",
+        totals.incremental_ok,
+        totals.incremental_checked,
+        percent(totals.incremental_rate())
+    );
+    // M10: an encrypted file must save encrypted. The oracle opening it with
+    // the password says the cipher is right; the oracle refusing it without
+    // one says a cipher is there at all.
+    if totals.encrypted > 0 {
+        println!(
+            "  encrypted stayed encrypted    {} / {}  {}",
+            totals.still_encrypted,
+            totals.encrypted,
+            percent(totals.still_encrypted_rate())
+        );
+    }
+}
+
+/// Save every corpus file, check the oracle reopens it, and diff a sample's
+/// pixels against the original's golden render (PLAN.md M7's exit criteria,
+/// extended by M10's encrypted round trip).
+///
+/// The numbers this prints are what M7 and M10 are graded on. Only the first
+/// two are gates: a file the tool could not *open* is skipped rather than
+/// failed, because Tier B already scores that and counting it twice would let
+/// a parse regression read as a writer bug.
 fn save_round_trip(args: &SaveArgs) -> Result<ExitCode> {
     let checkout = args.corpus.checkout();
     let font_dir = args
@@ -618,38 +671,7 @@ fn save_round_trip(args: &SaveArgs) -> Result<ExitCode> {
         totals.add(outcome);
     }
 
-    let percent =
-        |rate: Option<f64>| rate.map_or_else(|| "n/a".to_owned(), |r| format!("{:.2}%", r * 100.0));
-    println!("save round-trip over {} corpus files", outcomes.len());
-    println!(
-        "  saved                         {} ({} skipped before any check)",
-        totals.saved, totals.skipped
-    );
-    println!(
-        "  oracle reopened               {} / {}  {}",
-        totals.oracle_reopened,
-        totals.saved,
-        percent(totals.reopen_rate())
-    );
-    println!("  saved renders as well as the original (fidelity)");
-    println!(
-        "                                {} / {}  {}",
-        totals.matches_original,
-        totals.compared,
-        percent(totals.fidelity_rate())
-    );
-    println!(
-        "  saved clears the Tier-B floor {} / {}  {}",
-        totals.within_floor,
-        totals.compared,
-        percent(totals.pixel_rate())
-    );
-    println!(
-        "  incremental append discipline {} / {}  {}",
-        totals.incremental_ok,
-        totals.incremental_checked,
-        percent(totals.incremental_rate())
-    );
+    report_save_totals(&totals, outcomes.len());
 
     let mut failures: Vec<&saveroundtrip::SaveOutcome> = outcomes
         .iter()
@@ -657,7 +679,10 @@ fn save_round_trip(args: &SaveArgs) -> Result<ExitCode> {
         // original renders the same has cost the save nothing.
         .filter(|o| {
             o.saved
-                && (!o.oracle_reopened || !o.matches_original || o.incremental_ok == Some(false))
+                && (!o.oracle_reopened
+                    || !o.matches_original
+                    || o.incremental_ok == Some(false)
+                    || o.still_encrypted == Some(false))
         })
         .collect();
     failures.sort_by(|a, b| a.path.cmp(&b.path));

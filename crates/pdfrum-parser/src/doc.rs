@@ -804,6 +804,22 @@ impl Document {
         !matches!(self.store.security(), SecurityHandler::Identity)
     }
 
+    /// The security handler the password opened this document with.
+    ///
+    /// [`SecurityHandler::Identity`] for an unencrypted document, and for one
+    /// whose crypt filter is `/Identity`.
+    ///
+    /// The writer needs this to save an encrypted document *as encrypted*: it
+    /// re-enciphers every string and stream under the same handler, so the
+    /// result opens with the same password (SPEC.md §11's M10 ruling, which
+    /// supersedes E3's "v1 saves decrypted"). It carries the file key, so it
+    /// is deliberately not `Clone`-friendly to hold onto — borrow it for the
+    /// length of a save and let it go.
+    #[must_use]
+    pub fn security_handler(&self) -> &SecurityHandler {
+        self.store.security()
+    }
+
     /// The file, from its header onwards.
     #[must_use]
     pub fn bytes(&self) -> &Arc<[u8]> {

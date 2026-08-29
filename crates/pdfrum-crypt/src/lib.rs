@@ -20,10 +20,25 @@
 //! # let _ = (Dict::new(), NoResolve);
 //! ```
 //!
-//! # What this crate does not do
+//! # Writing one back out
 //!
-//! It decrypts; it does not encrypt. Writing an encrypted file belongs to the
-//! save path and is not part of the read path's contract.
+//! [`SecurityHandler::encrypt`] is the inverse, added in M10 (SPEC.md §3's
+//! ruling D2, "decrypt only", is lifted). It takes the same handler — the one
+//! the *original* password opened — so a save re-enciphers under the key the
+//! file already had and the result opens with the same password. There is no
+//! re-keying API: changing a document's password is not a v1 feature.
+//!
+//! AES needs a fresh initialisation vector per payload, and this crate has no
+//! randomness of its own — no global state (STYLE.md §1) and no `getrandom`
+//! dependency (DEPS.md). So the vector is an argument, an [`Iv`] the caller
+//! supplies. `pdfrum-edit` derives one deterministically from the file's own
+//! bytes and a per-object counter, which makes a save reproducible; a caller
+//! wanting unpredictable vectors passes its own source.
+//!
+//! What this crate still does **not** do is build an `/Encrypt` dictionary:
+//! `/O`, `/U`, `/OE`, `/UE` and `/Perms` are written by whoever chose the
+//! passwords, and password-preserving save copies the dictionary the file
+//! already had.
 //!
 //! Two crypto-driven behaviors also live outside this crate, because both need
 //! to walk the object graph, which this crate deliberately cannot:
@@ -53,7 +68,7 @@ mod standard;
 mod test_fixtures;
 
 pub use key::SmallKey;
-pub use object::CryptClass;
+pub use object::{CryptClass, Iv};
 pub use primitives::sha1;
 pub use rc4::rc4;
 pub use standard::{Cipher, EncryptParams, PAD, PasswordEncoding, parse_encrypt_dict};
@@ -304,6 +319,70 @@ impl SecurityHandler {
         }
     }
 
+    /// Encipher one string or stream payload belonging to indirect object
+    /// `obj`, the inverse of [`SecurityHandler::decrypt`].
+    ///
+    /// `iv` is the initialisation vector the AES handlers prefix to their
+    /// output; the RC4 handler ignores it, and so does [`Self::Identity`].
+    /// It must be **fresh per payload** for the cipher to be sound — see the
+    /// crate docs for why this crate makes the caller supply it.
+    ///
+    /// Infallible, like its inverse. The one way to produce no output is a
+    /// key AES cannot accept, which no handler this crate builds can hold.
+    ///
+    /// # Lengths
+    ///
+    /// RC4 preserves length exactly. AES grows a payload of `n` bytes to
+    /// `32 + 16 * (n / 16)` — sixteen for the vector, and a PKCS#7 pad that
+    /// is always present, so a payload that is already block-aligned gains a
+    /// whole block.
+    ///
+    /// **An empty payload is the exception: it stays empty.** The C++ tests
+    /// for it in `CPDF_Encryptor::Encrypt`, one level above the cipher, so an
+    /// empty string is written `()` rather than as a bare vector and pad
+    /// block. That matters for the round trip, because the decrypt side reads
+    /// anything under seventeen bytes as all-vector-and-no-payload and would
+    /// return empty either way — but only the short-circuit keeps a save from
+    /// growing every empty string in a document by 32 bytes.
+    ///
+    /// ```
+    /// use pdfrum_crypt::{CryptClass, Iv, SecurityHandler};
+    /// use pdfrum_object::ObjRef;
+    ///
+    /// let handler = SecurityHandler::AesV5 {
+    ///     key: Box::new([0; 32]),
+    ///     revision: 6,
+    ///     permissions: 0xFFFF_FFFC,
+    ///     owner_unlocked: false,
+    ///     encrypt_metadata: true,
+    ///     encoding: pdfrum_crypt::PasswordEncoding::AsGiven,
+    /// };
+    /// let obj = ObjRef::new(4, 0);
+    /// let sealed = handler.encrypt(obj, CryptClass::String, Iv([7; 16]), b"secret");
+    /// // Sixteen of vector, one block of ciphertext.
+    /// assert_eq!(sealed.len(), 32);
+    /// assert_eq!(handler.decrypt(obj, CryptClass::String, &sealed), b"secret");
+    /// ```
+    #[must_use]
+    pub fn encrypt(&self, obj: ObjRef, class: CryptClass, iv: Iv, data: &[u8]) -> Vec<u8> {
+        // One cipher and key serve all three classes, exactly as on the
+        // decrypt side (Divergence D1).
+        match class {
+            CryptClass::Stream | CryptClass::String | CryptClass::Embedded => {}
+        }
+        // `CPDF_Encryptor::Encrypt` returns before reaching the cipher on an
+        // empty payload; see the `# Lengths` note.
+        if data.is_empty() {
+            return Vec::new();
+        }
+        match self {
+            Self::Identity => data.to_vec(),
+            Self::Rc4V2 { key, .. } => object::encrypt_rc4(key, obj, data),
+            Self::AesV4 { key, .. } => object::encrypt_aes_v4(key, obj, iv.bytes(), data),
+            Self::AesV5 { key, .. } => object::encrypt_aes_v5(key, iv.bytes(), data),
+        }
+    }
+
     /// The permission word as the C++ reports it.
     ///
     /// `owner` selects the owner-unlocked override: a document opened with
@@ -452,7 +531,7 @@ fn signature_valued(dict: &Dict, key: &Name) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{CryptClass, Error, SecurityHandler, is_signature_dict};
+    use super::{CryptClass, Error, Iv, SecurityHandler, is_signature_dict};
     use crate::standard::Cipher;
     use crate::test_fixtures::{self, unhex};
     use pdfrum_object::{Dict, Name, NoResolve, ObjRef, Object, PdfString, names};
@@ -1065,6 +1144,162 @@ mod tests {
                 SecurityHandler::Identity.decrypt(ObjRef::new(0, 0), CryptClass::String, &payload),
                 payload
             );
+        }
+    }
+
+    // ---- M10: encrypt-then-decrypt, per revision ----
+
+    /// Every revision the corpus exercises, as an opened handler.
+    ///
+    /// `opened_handlers` covers three; this adds R2 and R5 so the round-trip
+    /// matrix spans /R 2 through /R 6 — which is what "byte-identity per
+    /// revision" in the M10 test plan means.
+    fn every_revision() -> Vec<(&'static str, SecurityHandler)> {
+        let r2_id = unhex("2b778de1bcef1733b35e680882812409");
+        let mut all = vec![(
+            "RC4 (/R 2)",
+            SecurityHandler::from_encrypt_dict(
+                &test_fixtures::r2_dict(),
+                &r2_id,
+                b"h\xf4tel",
+                &NoResolve,
+            )
+            .expect("the r2 user password"),
+        )];
+        all.extend(opened_handlers());
+        all.push((
+            "AESV3 (/R 5)",
+            SecurityHandler::from_encrypt_dict(
+                &test_fixtures::r5_dict(),
+                &[],
+                b"h\xf4tel",
+                &NoResolve,
+            )
+            .expect("the r5 user password"),
+        ));
+        all
+    }
+
+    // The KAT: whatever we encipher, our own decipher returns byte for byte,
+    // at every revision, every class and every length that straddles a block
+    // boundary.
+    #[test]
+    fn every_revision_round_trips_encrypt_then_decrypt() {
+        for (name, handler) in every_revision() {
+            let obj = ObjRef::new(11, 0);
+            for len in [0usize, 1, 15, 16, 17, 31, 32, 33, 64, 127] {
+                let payload: Vec<u8> = (0..len)
+                    .map(|i| u8::try_from(i % 253).unwrap_or(0))
+                    .collect();
+                for class in [CryptClass::Stream, CryptClass::String, CryptClass::Embedded] {
+                    let iv = Iv([u8::try_from(len % 256).unwrap_or(0); 16]);
+                    let sealed = handler.encrypt(obj, class, iv, &payload);
+                    assert_eq!(
+                        handler.decrypt(obj, class, &sealed),
+                        payload,
+                        "{name} {class:?} at {len} bytes"
+                    );
+                }
+            }
+        }
+    }
+
+    // A payload really is enciphered — a handler that returned its input
+    // would pass the round-trip test above and write a plaintext file.
+    #[test]
+    fn an_encrypted_payload_is_not_its_own_plaintext() {
+        let payload = b"Hello, encrypted world.".to_vec();
+        for (name, handler) in every_revision() {
+            let sealed = handler.encrypt(
+                ObjRef::new(4, 0),
+                CryptClass::Stream,
+                Iv([0x5A; 16]),
+                &payload,
+            );
+            assert_ne!(sealed, payload, "{name}");
+        }
+        // Identity is the one handler that passes bytes through untouched.
+        assert_eq!(
+            SecurityHandler::Identity.encrypt(
+                ObjRef::new(4, 0),
+                CryptClass::Stream,
+                Iv([0; 16]),
+                &payload
+            ),
+            payload
+        );
+    }
+
+    // The object reference keys the payload for RC4 and AESV2 and does not
+    // for AESV3 — the same split the decrypt side has, since it is the same
+    // derivation.
+    #[test]
+    fn only_the_pre_version_five_handlers_key_an_encryption_by_object() {
+        let payload = b"payload".to_vec();
+        for (name, handler) in every_revision() {
+            let iv = Iv([1; 16]);
+            let first = handler.encrypt(ObjRef::new(1, 0), CryptClass::Stream, iv, &payload);
+            let second = handler.encrypt(ObjRef::new(2, 0), CryptClass::Stream, iv, &payload);
+            if handler.revision() >= 5 {
+                assert_eq!(second, first, "{name} uses the file key verbatim");
+            } else {
+                assert_ne!(second, first, "{name} salts by object number");
+            }
+        }
+    }
+
+    // Determinism is a parameter here too: the same vector gives the same
+    // bytes, which is what lets `pdfrum-edit` snapshot a whole encrypted file.
+    #[test]
+    fn the_same_vector_produces_the_same_ciphertext() {
+        for (name, handler) in every_revision() {
+            let obj = ObjRef::new(6, 0);
+            let once = handler.encrypt(obj, CryptClass::Stream, Iv([2; 16]), b"stable");
+            let again = handler.encrypt(obj, CryptClass::Stream, Iv([2; 16]), b"stable");
+            assert_eq!(once, again, "{name}");
+            // And a different vector does not, for the ciphers that read it.
+            let other = handler.encrypt(obj, CryptClass::Stream, Iv([3; 16]), b"stable");
+            if handler.revision() >= 4 {
+                assert_ne!(other, once, "{name} mixes the vector in");
+            }
+        }
+    }
+
+    // No length may panic, and the growth is exactly the documented law.
+    #[test]
+    fn encrypt_never_panics_and_grows_by_the_documented_amount() {
+        for (name, handler) in every_revision() {
+            for len in 0..80usize {
+                let out = handler.encrypt(
+                    ObjRef::new(9, 1),
+                    CryptClass::Stream,
+                    Iv([0xC3; 16]),
+                    &vec![0xA5u8; len],
+                );
+                let expected = if len == 0 || matches!(handler, SecurityHandler::Rc4V2 { .. }) {
+                    len
+                } else {
+                    32 + (len / 16) * 16
+                };
+                assert_eq!(out.len(), expected, "{name} at {len} bytes");
+            }
+        }
+    }
+
+    // The one length that skips the cipher entirely. Without it a save would
+    // rewrite every `()` in a document as 32 bytes of vector and padding —
+    // which round-trips, but is not what the oracle writes.
+    #[test]
+    fn an_empty_payload_stays_empty_at_every_revision() {
+        for (name, handler) in every_revision() {
+            for class in [CryptClass::Stream, CryptClass::String, CryptClass::Embedded] {
+                assert!(
+                    handler
+                        .encrypt(ObjRef::new(2, 0), class, Iv([0xFF; 16]), b"")
+                        .is_empty(),
+                    "{name} {class:?}"
+                );
+            }
         }
     }
 

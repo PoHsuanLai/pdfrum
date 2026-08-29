@@ -64,7 +64,7 @@
 
 pub mod content;
 mod doc;
-mod encrypt;
+pub mod encrypt;
 mod error;
 pub mod font;
 pub mod import;
@@ -73,6 +73,7 @@ pub mod write;
 
 pub use content::{write_float, write_matrix, write_point, write_rect};
 pub use doc::EditDoc;
+pub use encrypt::{Encryptor, IvSource};
 pub use error::Error;
 pub use font::{GidMap, Subsetted, subset};
 pub use import::{ImportOptions, NUpOptions, PageRange, import_pages, n_page_to_one};

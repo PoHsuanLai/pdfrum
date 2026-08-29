@@ -14,6 +14,7 @@ workspace = true
 
 [dependencies]
 pdfrum-common.workspace = true
+pdfrum-crypt.workspace = true
 pdfrum-object.workspace = true
 pdfrum-filters.workspace = true
 pdfrum-parser.workspace = true

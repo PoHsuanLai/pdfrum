@@ -186,6 +186,36 @@ Decisions (orchestrator, from the brief's open questions): passwords are NOT
 capped at ISO's 127 bytes — match the C++ exactly (observable behavior wins);
 all other brief divergences D1–D7 accepted as written.
 
+**Ruling 2026-08-30 (M10): the brief's D2 "decrypt only" is LIFTED.** The
+crate gains the encrypt direction, so an encrypted document can be saved
+encrypted (§11):
+
+```rust
+pub struct Iv(pub [u8; 16]);
+impl SecurityHandler {
+    fn encrypt(&self, obj: ObjRef, class: CryptClass, iv: Iv, data: &[u8]) -> Vec<u8>;
+}
+```
+
+RC4 is symmetric, so its encrypt is its decrypt. AES-CBC encrypt prefixes
+`iv` and writes **standard PKCS#7** — always a pad, so a payload of `n` bytes
+becomes `32 + 16 * (n / 16)`. The decrypt side's one-block lag and absent
+padding validation stay DECRYPT-only quirks (D6): they are the reader's
+tolerance for files someone else wrote, and PKCS#7 is inside what they accept.
+Per-object key derivation is **shared** with decrypt — including the AESV2
+`sAlT` and the AESV3 rule that a 32-byte file key is used verbatim with no
+salting — which is what makes the round trip exact. (The C++'s `EncryptContent`
+truncates the AESV2 object key to the file key's length where `DecryptStart`
+does not; the two agree at the only key length AESV2 ever has, and the C++
+would abort at any other, so we implement the shared reading.) An **empty**
+payload encrypts to empty, reproducing `CPDF_Encryptor::Encrypt`'s
+short-circuit above the cipher.
+
+Randomness stays out of the crate: `Iv` is a caller argument (no global
+state per STYLE.md §1, no `getrandom` per DEPS.md). Building an `/Encrypt`
+dictionary — `OnCreate`, `AES256_SetPassword`, `AES256_SetPerms` — remains out
+of scope: v1 preserves passwords and never sets them.
+
 ## 4. `pdfrum-filters`  *(behavior: `core/fxcodec` basic codecs)*
 
 Pure functions on slices; no streaming v1 (C++ also decodes to memory):
@@ -1003,9 +1033,7 @@ changed-object sections + new xref. Page import/reorganization as functions
 `Document::import_pages(...)`.
 Rulings 2026-08-29 (edit brief escalations): `Document` additionally exposes
 `last_xref_offset`, `main_xref_is_stream`, and the raw `/Encrypt` dict —
-additive §5 changes landed with the M7 work (E1/E2). v1 saves encrypted
-documents DECRYPTED (`remove_security` semantics); preserve-encryption save
-is deferred past M7 — no C++ save test exercises it (E3). Font subsetting is
+additive §5 changes landed with the M7 work (E1/E2). Font subsetting is
 **CID fonts only** and the contract is
 `fn subset(font_bytes, gids) -> (Vec<u8>, GidMap)` — the `subsetter` crate
 renumbers GIDs and strips cmap (unlike HarfBuzz RETAIN_GIDS), so /W,
@@ -1015,6 +1043,48 @@ ported — each divergence pinned by its own test (E10). M7's "oracle reopens
 our files" exit is a two-step harness check: pdfrum saves, the oracle
 reopens + renders (E7; pdfium_test has no save flag). Round-trip property
 tests own this crate's correctness.
+
+**Ruling 2026-08-30 (M10): E3 is SUPERSEDED — save preserves encryption.**
+E3 said v1 would save encrypted documents decrypted. It no longer does. A
+document loaded with a password saves **encrypted under the same handler and
+the same file key**, so the output opens with that same password; the writer
+re-enciphers every string and stream through §3's new `encrypt`.
+`SaveOptions::remove_security` stays as the explicit opt-out and keeps its old
+behavior (no `/Encrypt`, plaintext body, forced full save), so
+`Error::EncryptedSaveUnsupported` now means only "this `/Encrypt` names a
+cipher we hold no key for" — an `/Identity` filter, or a handler this reader
+answered with `SecurityHandler::Identity`.
+
+Password-preserving only: there is no API to change a document's password or
+its encryption mode, which is what keeps `/O`, `/U`, `/OE`, `/UE` and `/Perms`
+copyable rather than derivable. Four rules the writer honours:
+
+- The `/Encrypt` dictionary is never enciphered (ISO 32000-1 §7.6.1), and is
+  written **from the plaintext copy the trailer lookup found** rather than
+  through the deciphering object store — which has no exemption for it and
+  would otherwise hand back an `/O` and `/U` run through a cipher keyed by the
+  very material they carry. A trailer holding it inline gets it promoted to a
+  fresh object number, since `/Encrypt` must be a reference.
+- A signature's `/Contents` and an XMP metadata payload keep their existing
+  exemptions.
+- `/P` is copied, not recomputed.
+- The M7 `security_changed_` / `/ID`-rekey / full-save interlock is unchanged
+  and still authoritative: the R2/R3 rekey forces a full save, and so does
+  `remove_security`.
+
+`Document` gains `security_handler(&self) -> &SecurityHandler` (additive §5)
+so the writer can reach the file key. `pdfrum-tool` gains `--save-decrypted`
+for the old behavior; plain `--save` now preserves encryption.
+
+One deliberate divergence (edit brief **D17**): the C++ writer skips the cipher for a
+metadata stream *unconditionally* — `CPDF_Stream::WriteTo` never consults
+`IsMetadataEncrypted()`, whose only callers are in the parser. That leaves a
+file whose `/Encrypt` claims enciphered metadata and whose metadata is
+plaintext, so PDFium's own reader deciphers it into rubbish on the way back
+in. We follow the flag instead: `/EncryptMetadata true` writes an enciphered
+packet, `false` writes a plaintext one. The oracle's *reader* honours the
+flag, so both writers' output opens in both readers — ours simply still has
+its metadata.
 
 ## 12. JBIG2 / JPX integration
 

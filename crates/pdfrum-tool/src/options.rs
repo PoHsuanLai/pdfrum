@@ -77,6 +77,11 @@ pub struct Options {
     /// Whether to rename requested faces to their Croscore equivalents, from
     /// `--croscore-font-names`.
     pub croscore_font_names: bool,
+    /// Drop the security handler when saving, from `--save-decrypted`.
+    ///
+    /// Without it an encrypted document saves encrypted under its own
+    /// handler, so the output needs the same `--password=` the input did.
+    pub save_decrypted: bool,
     /// Write each document back out beside its input, from `--save`.
     ///
     /// **This flag has no oracle counterpart** — `pdfium_test` cannot save a
@@ -203,6 +208,9 @@ pub fn parse(args: &[String]) -> Result<Options, ParseError> {
             options.show_metadata = true;
         } else if arg == "--md5" {
             options.md5 = true;
+        } else if arg == "--save-decrypted" {
+            options.save = true;
+            options.save_decrypted = true;
         } else if arg == "--save" {
             options.save = true;
         } else if let Some(format) = output_format_of(arg) {
@@ -293,6 +301,7 @@ Usage: pdfrum-tool [OPTION] [FILE]...
   --pages=<number>(-<number>) - only render the given 0-based page(s)
   --password=<secret>    - password to decrypt the PDF with
   --save                 - write the document back out as <pdf-name>.saved.pdf
+  --save-decrypted       - the same, with the security handler removed
                            (no oracle counterpart; see Options::save)
 ";
 

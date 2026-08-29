@@ -35,6 +35,23 @@
 //! own generator is lossy (no patterns, no non-RGB colour) — but an ordinary
 //! save regenerates nothing, so every file in this sweep is expected to hold
 //! its original's fidelity exactly.
+//!
+//! # The encrypted files carry a password through every step
+//!
+//! Since M10 an encrypted document saves *encrypted*, so its whole sweep runs
+//! under a password: pdfrum opens it with `--password=`, saves it, and the
+//! oracle is handed the same password to reopen it with. That is the
+//! milestone's exit criterion in one line — a file another implementation can
+//! open with the password it was given, and which renders what it always did.
+//!
+//! It also asks the question the plaintext sweep cannot: the harness first
+//! checks that the oracle **fails** to open the saved file with no password.
+//! A writer that emitted plaintext under an `/Encrypt` declaration, or that
+//! quietly removed the security, would sail through every other check here.
+//!
+//! The passwords are not discoverable from the files, so they live in
+//! [`PASSWORDS`] — recovered from the oracle's own embedder tests and recorded
+//! in `docs/design/pdfrum-crypt.md` §4.2.
 
 use std::path::Path;
 use std::process::Command;
@@ -49,6 +66,58 @@ use crate::thresholds::Thresholds;
 /// How far below the original a saved file's SSIM may land before the
 /// difference is the writer's rather than the rasterizer's.
 const SSIM_EPSILON: f64 = 1e-6;
+
+/// The corpus's encrypted fixtures and a password that opens each.
+///
+/// Matched on the entry id's **file name**, so the same table serves a file
+/// found under `resources/` and one found under `corpus/`. Every password is
+/// one the oracle's `cpdf_security_handler_embeddertest.cpp` uses, spelled as
+/// the bytes `--password=` will carry: `hôtel` and `âge` are Latin-1 there,
+/// and the tools accept either spelling, so the UTF-8 form is passed because
+/// that is what survives a command line.
+///
+/// A file not in this table is swept as a plaintext document; if it turns out
+/// to be encrypted, the tool will fail to open it and the sweep records a
+/// skip rather than a failure, exactly as it did before M10.
+///
+/// The two `_bad_okey` fixtures are deliberately absent. Their `/O` entry is
+/// truncated, so neither the oracle nor this reader opens them *at all* —
+/// which is what those files exist to pin. Listing a password for them would
+/// only turn a correct refusal into a skip with a misleading reason.
+pub const PASSWORDS: &[(&str, &str)] = &[
+    ("encrypted_hello_world_r2.pdf", "hôtel"),
+    ("encrypted_hello_world_r3.pdf", "hôtel"),
+    ("encrypted_hello_world_r5.pdf", "hôtel"),
+    ("encrypted_hello_world_r6.pdf", "hôtel"),
+    ("encrypted.pdf", "1234"),
+    ("bug_644.pdf", "a"),
+];
+
+/// The password for one corpus entry, if it has one.
+///
+/// The id is a slashed corpus path, so the lookup is on its last segment.
+#[must_use]
+pub fn password_for(id: &str) -> Option<&'static str> {
+    let name = id.rsplit('/').next().unwrap_or(id);
+    PASSWORDS
+        .iter()
+        .find(|(fixture, _)| *fixture == name)
+        .map(|(_, password)| *password)
+}
+
+/// The `--password=` argument for one entry, as a zero- or one-element list
+/// so it can be spliced into a command line unconditionally.
+///
+/// An empty `--password=` is not the same as no flag: the oracle reads the
+/// former as "no password given", so passing it would be harmless, but
+/// omitting it keeps the command lines of unencrypted files byte-identical to
+/// what they were before M10 — which is what makes the scoreboard comparable.
+fn password_args(password: Option<&str>) -> Vec<String> {
+    password
+        .map(|p| format!("--password={p}"))
+        .into_iter()
+        .collect()
+}
 
 /// What checking one file found.
 ///
@@ -72,6 +141,13 @@ pub struct SaveOutcome {
     /// Whether the incremental save's output kept the original as its prefix
     /// and chained its cross-reference, and the oracle reopened it too.
     pub incremental_ok: Option<bool>,
+    /// Whether this file was swept under a password, i.e. it is one of the
+    /// encrypted fixtures.
+    pub encrypted: bool,
+    /// For an encrypted file: whether the saved copy is **still** encrypted,
+    /// which the harness establishes by the oracle *refusing* to open it
+    /// without a password. `None` for a plaintext file.
+    pub still_encrypted: Option<bool>,
     /// Pages compared against the original's golden render.
     pub pages: u32,
     /// The worst page's SSIM against the original's golden, when any page
@@ -97,6 +173,8 @@ impl SaveOutcome {
             saved: false,
             oracle_reopened: false,
             incremental_ok: None,
+            encrypted: false,
+            still_encrypted: None,
             pages: 0,
             ssim: None,
             original_ssim: None,
@@ -153,6 +231,7 @@ fn check_inner(
     compare_pixels: bool,
 ) -> SaveOutcome {
     let id = entry.id.clone();
+    let password = password_for(&id);
     if std::fs::create_dir_all(scratch).is_err() {
         return SaveOutcome::skipped(id, "no scratch directory".to_owned());
     }
@@ -168,6 +247,7 @@ fn check_inner(
     let saved = scratch.join("input.pdf.saved.pdf");
     let ran = Command::new(&tool.binary)
         .args(determinism_args(&tool.font_dir))
+        .args(password_args(password))
         .arg("--save")
         .arg(&input)
         .output();
@@ -190,6 +270,8 @@ fn check_inner(
         saved: true,
         oracle_reopened: false,
         incremental_ok: None,
+        encrypted: password.is_some(),
+        still_encrypted: None,
         pages: 0,
         ssim: None,
         original_ssim: None,
@@ -198,10 +280,27 @@ fn check_inner(
         note: String::new(),
     };
 
-    // ---- step 2: the oracle reopens it ----
-    outcome.oracle_reopened = oracle_opens(oracle, &saved);
+    // ---- step 2: the oracle reopens it, under the same password ----
+    outcome.oracle_reopened = oracle_opens(oracle, &saved, password);
     if !outcome.oracle_reopened {
-        "the oracle could not reopen the saved file".clone_into(&mut outcome.note);
+        outcome.note = match password {
+            Some(_) => "the oracle could not reopen the saved file with its password".to_owned(),
+            None => "the oracle could not reopen the saved file".to_owned(),
+        };
+    }
+
+    // ---- step 2b: and refuses it without one ----
+    //
+    // Only meaningful for a file that had a password to begin with. A save
+    // that dropped the security, or wrote plaintext under an `/Encrypt`
+    // declaration, opens here — and that is the one failure every other check
+    // in this sweep would miss.
+    if password.is_some() {
+        let opens_unprotected = oracle_opens(oracle, &saved, None);
+        outcome.still_encrypted = Some(!opens_unprotected);
+        if opens_unprotected && outcome.note.is_empty() {
+            "the saved file opened without a password".clone_into(&mut outcome.note);
+        }
     }
 
     // ---- step 3: our own re-render against the original's golden ----
@@ -211,14 +310,17 @@ fn check_inner(
             tool,
             store,
             thresholds,
-            &bytes,
-            &saved,
-            &input,
+            Subject {
+                original: &bytes,
+                saved: &saved,
+                input: &input,
+                password,
+            },
         );
     }
 
     // ---- step 4: the incremental save's append discipline ----
-    outcome.incremental_ok = Some(check_incremental(oracle, scratch, &bytes));
+    outcome.incremental_ok = Some(check_incremental(oracle, scratch, &bytes, password));
     if outcome.incremental_ok == Some(false) && outcome.note.is_empty() {
         "the incremental save broke the append discipline".clone_into(&mut outcome.note);
     }
@@ -230,9 +332,10 @@ fn check_inner(
 ///
 /// "Processed N pages." on stderr is the oracle's own success line; the
 /// absence of "Load pdf docs unsuccessful" is what says the document opened.
-fn oracle_opens(oracle: &OraclePaths, file: &Path) -> bool {
+fn oracle_opens(oracle: &OraclePaths, file: &Path, password: Option<&str>) -> bool {
     let Ok(out) = Command::new(&oracle.binary)
         .args(determinism_args(&oracle.font_dir))
+        .args(password_args(password))
         .args(Pass::Render.flags())
         .arg(file)
         .output()
@@ -247,6 +350,24 @@ fn oracle_opens(oracle: &OraclePaths, file: &Path) -> bool {
     !stderr.contains("Load pdf docs unsuccessful") && stderr.contains("Processed")
 }
 
+/// The three files one comparison reads, and how to open them.
+///
+/// A record rather than three more arguments: `original` is the input's bytes
+/// (the golden's key), `input` and `saved` are the same document on disk
+/// before and after the save, and `password` opens both. Naming them together
+/// is what keeps the two `Path`s from being passed the wrong way round.
+#[derive(Debug, Clone, Copy)]
+struct Subject<'a> {
+    /// The input document's bytes, which key its golden.
+    original: &'a [u8],
+    /// The saved copy, on disk.
+    saved: &'a Path,
+    /// The input, on disk.
+    input: &'a Path,
+    /// The password both need, when the document is encrypted.
+    password: Option<&'a str>,
+}
+
 /// Render both the saved file and the original, and diff each against the
 /// original's golden.
 ///
@@ -259,10 +380,14 @@ fn compare_render(
     tool: &ToolPaths,
     store: &Store,
     thresholds: &Thresholds,
-    original: &[u8],
-    saved: &Path,
-    input: &Path,
+    subject: Subject<'_>,
 ) {
+    let Subject {
+        original,
+        saved,
+        input,
+        password,
+    } = subject;
     let key = crate::goldens::key_for(original);
     let Ok(manifest) = store.manifest(&key) else {
         // No golden for the original means nothing to compare against; the
@@ -270,14 +395,14 @@ fn compare_render(
         return;
     };
 
-    let Some(rendered) = render_with_tool(tool, saved) else {
+    let Some(rendered) = render_with_tool(tool, saved, password) else {
         "the tool would not render the saved file".clone_into(&mut outcome.note);
         outcome.within_floor = false;
         outcome.matches_original = false;
         return;
     };
     // The same measurement over the input, so the two are comparable.
-    let baseline = render_with_tool(tool, input).unwrap_or_default();
+    let baseline = render_with_tool(tool, input, password).unwrap_or_default();
 
     let floor = thresholds.ssim_for(&outcome.path);
     let mut worst: Option<f64> = None;
@@ -366,9 +491,14 @@ fn compare_render(
 }
 
 /// Render one file with our own tool, returning its PNG artifacts.
-fn render_with_tool(tool: &ToolPaths, file: &Path) -> Option<Vec<(String, Vec<u8>)>> {
+fn render_with_tool(
+    tool: &ToolPaths,
+    file: &Path,
+    password: Option<&str>,
+) -> Option<Vec<(String, Vec<u8>)>> {
     let out = Command::new(&tool.binary)
         .args(determinism_args(&tool.font_dir))
+        .args(password_args(password))
         .args(Pass::Render.flags())
         .arg(file)
         .output()
@@ -387,18 +517,29 @@ fn page_index(name: &str) -> Option<u32> {
 
 /// The append discipline: the original bytes are a prefix of the output, the
 /// cross-reference chains, and the oracle still opens it.
-fn check_incremental(oracle: &OraclePaths, scratch: &Path, original: &[u8]) -> bool {
+fn check_incremental(
+    oracle: &OraclePaths,
+    scratch: &Path,
+    original: &[u8],
+    password: Option<&str>,
+) -> bool {
     // The tool always saves fully; the incremental path is exercised through
     // the library, which is the same code the tool calls.
-    let Ok(doc) = pdfrum_parser::load(
-        std::sync::Arc::from(original),
-        &pdfrum_parser::LoadOptions::default(),
-    ) else {
+    let options = pdfrum_parser::LoadOptions {
+        password: password.map(|p| p.as_bytes().to_vec()),
+        ..pdfrum_parser::LoadOptions::default()
+    };
+    let Ok(doc) = pdfrum_parser::load(std::sync::Arc::from(original), &options) else {
         return true;
     };
     // A document whose table was rebuilt has nothing to chain from, so the
     // save downgrades to a full one and the prefix property does not apply.
-    if doc.xref_was_rebuilt() || doc.encrypt_dict().is_some() {
+    //
+    // An encrypted document is no longer excused: since M10 its appended
+    // objects are enciphered under the key the original bytes already use, so
+    // the append discipline applies to it exactly as it does to any other
+    // file (edit brief §1.9).
+    if doc.xref_was_rebuilt() {
         return true;
     }
 
@@ -444,7 +585,7 @@ fn check_incremental(oracle: &OraclePaths, scratch: &Path, original: &[u8]) -> b
     if std::fs::write(&appended, &out).is_err() {
         return false;
     }
-    oracle_opens(oracle, &appended)
+    oracle_opens(oracle, &appended, password)
 }
 
 /// What a whole sweep found.
@@ -465,6 +606,11 @@ pub struct SaveTotals {
     pub incremental_ok: u64,
     /// Files whose incremental save was checked at all.
     pub incremental_checked: u64,
+    /// Encrypted files swept under a password.
+    pub encrypted: u64,
+    /// Encrypted files whose saved copy the oracle refused to open without a
+    /// password — the M10 exit criterion's other half.
+    pub still_encrypted: u64,
     /// Files skipped before any check ran.
     pub skipped: u64,
 }
@@ -487,6 +633,12 @@ impl SaveTotals {
             }
             if outcome.matches_original {
                 self.matches_original = self.matches_original.saturating_add(1);
+            }
+        }
+        if outcome.encrypted {
+            self.encrypted = self.encrypted.saturating_add(1);
+            if outcome.still_encrypted == Some(true) {
+                self.still_encrypted = self.still_encrypted.saturating_add(1);
             }
         }
         if let Some(ok) = outcome.incremental_ok {
@@ -523,6 +675,15 @@ impl SaveTotals {
     pub fn incremental_rate(&self) -> Option<f64> {
         rate(self.incremental_ok, self.incremental_checked)
     }
+
+    /// The share of encrypted files whose saved copy is still encrypted.
+    ///
+    /// The M10 exit criterion pairs this with [`Self::reopen_rate`]: the
+    /// oracle opens the file *with* the password and refuses it *without*.
+    #[must_use]
+    pub fn still_encrypted_rate(&self) -> Option<f64> {
+        rate(self.still_encrypted, self.encrypted)
+    }
 }
 
 #[expect(
@@ -535,7 +696,7 @@ fn rate(part: u64, whole: u64) -> Option<f64> {
 
 #[cfg(test)]
 mod tests {
-    use super::{SaveOutcome, SaveTotals, page_index};
+    use super::{SaveOutcome, SaveTotals, page_index, password_args, password_for};
 
     fn outcome(saved: bool, reopened: bool, pages: u32, floor: bool) -> SaveOutcome {
         SaveOutcome {
@@ -543,6 +704,8 @@ mod tests {
             saved,
             oracle_reopened: reopened,
             incremental_ok: Some(true),
+            encrypted: false,
+            still_encrypted: None,
             pages,
             ssim: (pages > 0).then_some(0.999),
             original_ssim: (pages > 0).then_some(0.999),
@@ -620,6 +783,60 @@ mod tests {
 
         assert_eq!(totals.pixel_rate(), Some(0.0));
         assert_eq!(totals.fidelity_rate(), Some(0.0));
+    }
+
+    // ---- M10: the encrypted half of the sweep ----
+
+    #[test]
+    fn a_password_is_found_by_file_name_wherever_the_file_sits() {
+        assert_eq!(password_for("resources/encrypted.pdf"), Some("1234"));
+        assert_eq!(password_for("corpus/fx/encrypted.pdf"), Some("1234"));
+        assert_eq!(password_for("encrypted.pdf"), Some("1234"));
+        assert_eq!(
+            password_for("resources/encrypted_hello_world_r6.pdf"),
+            Some("hôtel")
+        );
+        assert_eq!(password_for("resources/hello.pdf"), None);
+        // A name that merely contains a fixture's is not that fixture.
+        assert_eq!(password_for("resources/not_encrypted.pdf"), None);
+    }
+
+    // An unencrypted file's command line is unchanged from before M10, which
+    // is what keeps its scoreboard row comparable.
+    #[test]
+    fn only_a_password_adds_an_argument() {
+        assert!(password_args(None).is_empty());
+        assert_eq!(password_args(Some("1234")), vec!["--password=1234"]);
+    }
+
+    #[test]
+    fn the_encrypted_rate_is_over_the_encrypted_files_alone() {
+        let mut totals = SaveTotals::default();
+        // Two encrypted files, one of which saved decrypted.
+        let mut good = outcome(true, true, 1, true);
+        good.encrypted = true;
+        good.still_encrypted = Some(true);
+        let mut bad = outcome(true, true, 1, true);
+        bad.encrypted = true;
+        bad.still_encrypted = Some(false);
+        // And a plaintext one, which contributes to neither.
+        totals.add(&good);
+        totals.add(&bad);
+        totals.add(&outcome(true, true, 1, true));
+
+        assert_eq!(totals.encrypted, 2);
+        assert_eq!(totals.still_encrypted, 1);
+        assert_eq!(totals.still_encrypted_rate(), Some(0.5));
+        assert_eq!(totals.saved, 3);
+    }
+
+    // With no encrypted file in the sweep the rate is absent rather than
+    // zero, so a limited run does not report a failure it never checked.
+    #[test]
+    fn a_sweep_with_no_encrypted_files_reports_no_rate() {
+        let mut totals = SaveTotals::default();
+        totals.add(&outcome(true, true, 1, true));
+        assert_eq!(totals.still_encrypted_rate(), None);
     }
 
     #[test]

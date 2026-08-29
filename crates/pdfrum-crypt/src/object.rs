@@ -1,15 +1,30 @@
-//! Per-object keys and payload decryption (ISO 32000 §7.6.2, Algorithm 1).
+//! Per-object keys and payload encryption/decryption (ISO 32000 §7.6.2,
+//! Algorithm 1).
 //!
-//! Every string and stream in a document is decrypted under a key derived
+//! Every string and stream in a document is enciphered under a key derived
 //! from the file key and the *enclosing indirect object's* number and
 //! generation — not the number of whatever nested object the string sits in.
 //! AESV3 is the exception: at a 32-byte key the file key is used verbatim,
 //! with no per-object derivation at all.
+//!
+//! # The two directions are not mirror images
+//!
+//! The **object key** derivation is shared: encrypt and decrypt call the same
+//! three functions, which is what makes a round trip work at all.
+//!
+//! The **cipher** is where they part. RC4 is its own inverse, so
+//! [`encrypt_rc4`] and [`decrypt_rc4`] are literally the same call. AES is
+//! not: the decrypt side reproduces PDFium's streaming decoder, whose
+//! one-block lag and unvalidated padding are quirks of *reading* a file
+//! someone else wrote (Divergence D6). Writing one has no such history to
+//! honour — we emit a fresh random IV and standard PKCS#7, which the quirky
+//! reader accepts because a well-formed PKCS#7 tail is exactly the case its
+//! rules were built around. See [`encrypt_aes_cbc`].
 
 use pdfrum_object::ObjRef;
 
 use crate::key::SmallKey;
-use crate::primitives::{BLOCK, aes_cbc_decrypt, md5};
+use crate::primitives::{BLOCK, aes_cbc_decrypt, aes_cbc_encrypt, md5};
 use crate::rc4::rc4;
 
 /// Which crypt filter class a payload belongs to.
@@ -27,6 +42,27 @@ pub enum CryptClass {
     String,
     /// An embedded file stream, nominally governed by `/EFF`.
     Embedded,
+}
+
+/// One AES initialisation vector, supplied by the caller of
+/// [`crate::SecurityHandler::encrypt`].
+///
+/// A named type rather than a bare `[u8; 16]` because the encrypt call
+/// already carries an object reference and a payload, and a bare array beside
+/// those is one `&[u8]` away from being passed the payload by mistake. It
+/// also gives the "where does this come from?" question somewhere to be
+/// answered: nowhere in this crate, is the answer — see the crate docs.
+///
+/// The RC4 handlers ignore it entirely.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Iv(pub [u8; BLOCK]);
+
+impl Iv {
+    /// The vector's bytes.
+    #[must_use]
+    pub const fn bytes(&self) -> &[u8; BLOCK] {
+        &self.0
+    }
 }
 
 /// The four ASCII bytes AESV2 appends before hashing the object key.
@@ -105,6 +141,67 @@ pub(crate) fn decrypt_aes_v5(key: &[u8; 32], data: &[u8]) -> Vec<u8> {
     decrypt_aes_cbc(key, data)
 }
 
+/// Encrypt an RC4 payload. Symmetric, so this is the same call as
+/// [`decrypt_rc4`] — the two names exist so the call sites read in the
+/// direction they mean.
+#[must_use]
+pub(crate) fn encrypt_rc4(key: &SmallKey, obj: ObjRef, data: &[u8]) -> Vec<u8> {
+    rc4(&rc4_object_key(key, obj), data)
+}
+
+/// Encrypt an AESV2 payload under a per-object key, prefixing `iv`.
+///
+/// The object key is [`aes_v4_object_key`]'s full sixteen bytes — the same
+/// derivation the decrypt side uses. The C++'s encrypt path truncates it to
+/// the *file* key's length instead (`EncryptContent` calls `CRYPT_AESSetKey`
+/// with `realkey.first(key_len_)`), which differs whenever the file key is
+/// not sixteen bytes. It never is: AESV2 is 128-bit by definition, so the two
+/// readings coincide on every real document, and at a 24-byte file key the
+/// C++ would ask a 16-byte array for 24 bytes and abort. Sharing one
+/// derivation is what makes encrypt-then-decrypt exact.
+#[must_use]
+pub(crate) fn encrypt_aes_v4(
+    key: &SmallKey,
+    obj: ObjRef,
+    iv: &[u8; BLOCK],
+    data: &[u8],
+) -> Vec<u8> {
+    encrypt_aes_cbc(&aes_v4_object_key(key, obj), iv, data)
+}
+
+/// Encrypt an AESV3 payload under the file key itself, prefixing `iv`.
+#[must_use]
+pub(crate) fn encrypt_aes_v5(key: &[u8; 32], iv: &[u8; BLOCK], data: &[u8]) -> Vec<u8> {
+    encrypt_aes_cbc(key, iv, data)
+}
+
+/// Emit `iv` followed by the PKCS#7-padded, CBC-encrypted plaintext.
+///
+/// Standard PKCS#7 throughout: the padding is always added, so a plaintext
+/// whose length is already a multiple of sixteen grows by a whole block of
+/// `0x10` bytes, and the output is always `16 + 16 * ceil((n + 1) / 16)`
+/// bytes. That is what makes the round trip exact against the quirky decoder
+/// on the other side — its "last plaintext byte under sixteen strips that
+/// many" rule and PKCS#7 agree on every value 1 through 16, and the extra
+/// block is what keeps a length-16 payload from being read as a length-0 one.
+///
+/// A key AES cannot accept yields empty output rather than an error, matching
+/// the decrypt side's contract: this crate never fails a cipher call.
+#[must_use]
+fn encrypt_aes_cbc(key: &[u8], iv: &[u8; BLOCK], data: &[u8]) -> Vec<u8> {
+    let pad = BLOCK - data.len() % BLOCK;
+    let mut body = data.to_vec();
+    // `pad` is 1..=16, so the conversion never saturates.
+    body.extend(std::iter::repeat_n(u8::try_from(pad).unwrap_or(0), pad));
+    if aes_cbc_encrypt(key, iv, &mut body).is_err() {
+        return Vec::new();
+    }
+    let mut out = Vec::with_capacity(BLOCK.saturating_add(body.len()));
+    out.extend_from_slice(iv);
+    out.append(&mut body);
+    out
+}
+
 /// Strip the leading initialisation vector and CBC-decrypt the rest,
 /// reproducing PDFium's buffering rules exactly.
 ///
@@ -164,8 +261,8 @@ fn decrypt_aes_cbc(key: &[u8], data: &[u8]) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::{
-        BLOCK, CryptClass, aes_v4_object_key, decrypt_aes_cbc, decrypt_aes_v5, decrypt_rc4,
-        rc4_object_key,
+        BLOCK, CryptClass, Iv, aes_v4_object_key, decrypt_aes_cbc, decrypt_aes_v4, decrypt_aes_v5,
+        decrypt_rc4, encrypt_aes_cbc, encrypt_aes_v4, encrypt_aes_v5, encrypt_rc4, rc4_object_key,
     };
     use crate::key::SmallKey;
     use crate::primitives::aes_cbc_encrypt;
@@ -359,6 +456,101 @@ mod tests {
                 decrypt_aes_cbc(&bad, &[0xAA; 48]).is_empty(),
                 "{len}-byte key"
             );
+        }
+    }
+
+    // ---- M10: the encrypt direction ----
+
+    // The length law, which is what the writer's `/Length` depends on: a
+    // vector plus a PKCS#7 pad that is *always* added.
+    #[test]
+    fn aes_encryption_grows_a_payload_by_a_vector_and_a_pad() {
+        let k = [0x2Bu8; 16];
+        for (plain, expected) in [
+            (0usize, 32),
+            (1, 32),
+            (15, 32),
+            (16, 48),
+            (17, 48),
+            (31, 48),
+        ] {
+            let out = encrypt_aes_cbc(&k, &[0u8; BLOCK], &vec![0xA5; plain]);
+            assert_eq!(out.len(), expected, "{plain} bytes of plaintext");
+        }
+    }
+
+    // The whole point: our own decoder — quirks and all — reads back exactly
+    // what our encoder wrote, at every length.
+    #[test]
+    fn aes_round_trips_through_the_quirky_decoder_at_every_length() {
+        let k = [0x3Cu8; 16];
+        for len in 0..96usize {
+            let plaintext: Vec<u8> = (0..len)
+                .map(|i| u8::try_from(i % 251).unwrap_or(0))
+                .collect();
+            let iv = [u8::try_from(len % 256).unwrap_or(0); BLOCK];
+            let sealed = encrypt_aes_cbc(&k, &iv, &plaintext);
+            assert_eq!(
+                decrypt_aes_cbc(&k, &sealed),
+                plaintext,
+                "{len} bytes did not survive"
+            );
+        }
+    }
+
+    // The vector really is the first sixteen bytes, and really does change
+    // the ciphertext: two vectors over one plaintext share no block.
+    #[test]
+    fn the_vector_is_the_prefix_and_changes_every_block() {
+        let k = [0x11u8; 32];
+        let plaintext = vec![0u8; 3 * BLOCK];
+        let first = encrypt_aes_cbc(&k, &[1u8; BLOCK], &plaintext);
+        let second = encrypt_aes_cbc(&k, &[2u8; BLOCK], &plaintext);
+        assert_eq!(first.get(..BLOCK), Some(&[1u8; BLOCK][..]));
+        assert_eq!(second.get(..BLOCK), Some(&[2u8; BLOCK][..]));
+        assert_ne!(first.get(BLOCK..), second.get(BLOCK..));
+    }
+
+    // Per-object keys really are per object, in both directions and by the
+    // same derivation — which is what makes the round trip object-keyed.
+    #[test]
+    fn the_object_keyed_ciphers_round_trip_under_the_same_reference() {
+        let k = key(16);
+        let obj = ObjRef::new(12, 3);
+        let payload: Vec<u8> = (0..70u8).collect();
+
+        assert_eq!(
+            decrypt_rc4(&k, obj, &encrypt_rc4(&k, obj, &payload)),
+            payload
+        );
+        let sealed = encrypt_aes_v4(&k, obj, &Iv([9; BLOCK]).0, &payload);
+        assert_eq!(decrypt_aes_v4(&k, obj, &sealed), payload);
+        // A different object cannot read it.
+        assert_ne!(decrypt_aes_v4(&k, ObjRef::new(13, 3), &sealed), payload);
+
+        let file_key = [0x5Au8; 32];
+        let sealed = encrypt_aes_v5(&file_key, &[3; BLOCK], &payload);
+        assert_eq!(decrypt_aes_v5(&file_key, &sealed), payload);
+    }
+
+    // RC4 encrypt and decrypt are the same call, so applying either twice is
+    // the identity.
+    #[test]
+    fn rc4_encryption_is_its_own_inverse() {
+        let k = key(10);
+        let obj = ObjRef::new(3, 0);
+        let payload: Vec<u8> = (0..40u8).map(|i| i.wrapping_mul(7)).collect();
+        assert_eq!(
+            encrypt_rc4(&k, obj, &payload),
+            decrypt_rc4(&k, obj, &payload)
+        );
+        assert!(encrypt_rc4(&k, obj, &[]).is_empty());
+    }
+
+    #[test]
+    fn an_impossible_key_encrypts_to_nothing_rather_than_panicking() {
+        for len in [0usize, 1, 15, 17, 31, 33] {
+            assert!(encrypt_aes_cbc(&vec![0u8; len], &[0; BLOCK], b"payload").is_empty());
         }
     }
 
