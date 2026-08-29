@@ -94,12 +94,29 @@ pub fn overlay<R: Resolve>(
     // stock Helvetica that used to stand in here was the wrong metric source.
     let fonts = ap::FormFonts::load(catalog, r, ctx);
     let generated = ap::generate_appearances_with_text(page_dict, catalog, Some(&fonts), r, diags);
+    // `FORM_DoDocumentOpenAction` runs before the first page is rendered
+    // (`pdfium_test.cc:1779`), so a `/Hide` in the catalog's open action has
+    // already rewritten the flag words the visibility test below reads.
+    let hidden = crate::nav::hidden_by_open_action(catalog, r, limits, diags);
 
     for (slot, annot) in list.annots.iter().enumerate() {
-        if !is_visible(annot) {
+        let flags = hidden.flags(&annot.dict, r);
+        if !is_visible(annot.subtype, flags) {
             continue;
         }
         let index = list.source_indices.get(slot).copied().unwrap_or(slot);
+        // A checkbox or radio button whose *state's* appearance stream is
+        // missing is outlined instead of drawn, and the branch replaces the
+        // appearance rather than following it — see `invalid_outline`.
+        if generated.get(index).is_none()
+            && let Some(object) = invalid_outline(annot, r)
+        {
+            page.objects.push(object);
+            if let Some(object) = highlight(annot, r, limits, diags) {
+                page.objects.push(object);
+            }
+            continue;
+        }
         // A generated appearance may also move the rectangle it draws into:
         // a text markup annotation with a generated AP is placed at its
         // quadrilaterals' bounding box rather than at its `/Rect`
@@ -143,6 +160,122 @@ pub fn overlay<R: Resolve>(
             page.objects.push(object);
         }
     }
+}
+
+/// The hairline grey box drawn over a checkbox or radio button whose state
+/// has no appearance stream.
+///
+/// # Two validity tests, not one
+///
+/// This is the second of two `/AP` tests that read almost the same and answer
+/// differently, and keeping them apart is the whole of this function:
+///
+/// - **Shallow** — `!!GetDictFor("AP")` (`cpdfsdk_baannot.cpp:85-87`). Gates
+///   *regeneration*, in `CPDFSDK_Widget::OnLoad`. A widget with any `/AP`
+///   dictionary is never given a new appearance, however unusable that
+///   dictionary is. [`ap::widget::needs_appearance`] is this one.
+/// - **Deep** — `IsWidgetAppearanceValid` (`cpdfsdk_widget.cpp:364-406`).
+///   Gates *this outline*, in `CPDFSDK_Widget::DrawAppearance`. For a checkbox
+///   or radio button it requires `/AP /N /<AS>` to resolve to a **stream**.
+///
+/// A radio button whose `/AP /N` lists only its on-state while `/AS` reads
+/// `Off` passes the first and fails the second: it keeps having no appearance
+/// *and* gets outlined. Porting either test alone is a measured loss, which is
+/// why they landed together.
+///
+/// Three details are behavior rather than incident:
+///
+/// - **Only checkboxes and radio buttons.** Every other field type — and every
+///   non-widget — falls to the ordinary appearance path. A push button with an
+///   unusable `/AP` draws nothing at all.
+/// - **The state is `/AS` alone.** `GetAppState` reads `/AS` and stops; the
+///   `/V`-and-`/Parent` fallback that [`annot_ap`] performs is a different
+///   function, and a widget with no `/AS` therefore looks up the empty state
+///   name and fails here even where `annot_ap` would have found `Off`.
+/// - **The rectangle is `/Rect`, normalized, with no border inset**, stroked
+///   at line width zero — a hairline, which this engine draws as the thinnest
+///   line the device has.
+fn invalid_outline<R: Resolve>(annot: &Annotation, r: &R) -> Option<pdfrum_page::PageObject> {
+    /// `0xFFAAAAAA`, the one grey `CPDFSDK_Widget::DrawAppearance` strokes
+    /// with (`cpdfsdk_widget.cpp:969`).
+    const OUTLINE_GREY: f32 = 0xAA_u8 as f32 / 255.0;
+
+    if annot.subtype != Subtype::Widget {
+        return None;
+    }
+    let (limits, mut diags) = (Limits::default(), Diagnostics::default());
+    let flags = crate::form::FieldFlags(
+        crate::form::attr::field_attr(&annot.dict, names::FF, r, &limits, &mut diags)
+            .and_then(|value| value.as_int())
+            .unwrap_or(0),
+    );
+    let field_type = crate::form::attr::field_attr(&annot.dict, names::FT, r, &limits, &mut diags)
+        .map(|value| value.to_byte_string())
+        .unwrap_or_default();
+    if !matches!(
+        crate::form::FieldKind::classify(&field_type, flags),
+        Some(crate::form::FieldKind::Check | crate::form::FieldKind::Radio)
+    ) {
+        return None;
+    }
+    if state_appearance_resolves(&annot.dict, r) {
+        return None;
+    }
+
+    let rect = annot.rect;
+    let rect = kurbo::Rect::new(
+        rect.x0.min(rect.x1),
+        rect.y0.min(rect.y1),
+        rect.x0.max(rect.x1),
+        rect.y0.max(rect.y1),
+    );
+    let mut stroke = pdfrum_page::ColorValue::default();
+    stroke.set_space(std::sync::Arc::new(pdfrum_page::ColorSpace::DeviceRgb));
+    stroke.set_components(&[OUTLINE_GREY, OUTLINE_GREY, OUTLINE_GREY]);
+    let state = pdfrum_page::GraphicsState {
+        stroke,
+        stroke_params: pdfrum_page::state::StrokeParams {
+            // `gsd.set_line_width(0.0f)` — a hairline, not a zero-area stroke.
+            width: 0.0,
+            ..pdfrum_page::state::StrokeParams::default()
+        },
+        ..pdfrum_page::GraphicsState::default()
+    };
+    Some(pdfrum_page::PageObject::Path(Box::new(
+        pdfrum_page::Content {
+            object: pdfrum_page::PathObject {
+                path: kurbo::Shape::to_path(&rect, 0.1),
+                matrix: kurbo::Affine::IDENTITY,
+                // `DrawPath` is handed fill argb **0** — fully transparent —
+                // beside the grey stroke, so `EvenOddOptions()` names a rule
+                // for a fill that never happens. `FillRule::None` is how this
+                // engine spells that, and spelling it `EvenOdd` paints the
+                // box solid instead of outlining it.
+                fill_rule: pdfrum_page::FillRule::None,
+                stroke: true,
+            },
+            state,
+            marks: pdfrum_page::state::ContentMarks::default(),
+            content_stream: -1,
+        },
+    )))
+}
+
+/// Whether `/AP /N /<AS>` resolves to a stream, with `/AS` read alone.
+fn state_appearance_resolves<R: Resolve>(dict: &Dict, r: &R) -> bool {
+    let Some(sub) = dict
+        .dict(names::AP, r)
+        .and_then(|ap| ap.get(names::N, r).map(|value| value.get().clone()))
+    else {
+        return false;
+    };
+    // A `/N` that is a stream outright is valid whatever `/AS` says; the
+    // switch on field type only reaches the state lookup for a dictionary.
+    let Some(states) = sub.as_dict() else {
+        return matches!(sub, pdfrum_object::Object::Stream(_));
+    };
+    let state = dict.byte_string(names::AS, r).unwrap_or_default();
+    states.stream(&pdfrum_object::Name::new(state), r).is_some()
 }
 
 /// The form-field highlight `pdfium_test` paints over every fillable widget.
@@ -283,18 +416,17 @@ fn highlight_state() -> pdfrum_page::GraphicsState {
 /// test applies. Neither pass reads `kPrint` here, because
 /// `pdfium_test --png` is not printing: Pass A's `kPrint` requirement is
 /// gated on `bPrinting`, and Pass B has no print check at all.
-fn is_visible(annot: &Annotation) -> bool {
-    if annot.subtype == Subtype::Popup {
+fn is_visible(subtype: Subtype, flags: crate::annot::AnnotFlags) -> bool {
+    if subtype == Subtype::Popup {
         // Drawn only when open, and nothing opens one.
         return false;
     }
-    let flags = annot.flags;
     if flags.is_hidden() || flags.no_view() {
         return false;
     }
     // `CPDFSDK_BAAnnot::IsVisible` adds `kInvisible`, and only widgets reach
     // it — Pass A never tests that bit.
-    if annot.subtype == Subtype::Widget && flags.0 & 1 != 0 {
+    if subtype == Subtype::Widget && flags.0 & 1 != 0 {
         return false;
     }
     true
@@ -302,7 +434,7 @@ fn is_visible(annot: &Annotation) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{highlight, highlight_state, is_visible};
+    use super::{highlight, highlight_state, invalid_outline, is_visible};
     use crate::annot::{AnnotFlags, Annotation, Subtype};
     use pdfrum_common::{Diagnostics, Limits};
     use pdfrum_object::{Dict, Name, NoResolve, Object};
@@ -394,14 +526,117 @@ mod tests {
         assert!(!tinted(&annot(Subtype::Square, 0)));
     }
 
+    /// A widget with the given field type, flags, `/AS` and `/AP /N` states.
+    fn stateful(field_type: &str, ff: i64, as_: &str, states: &[&str]) -> Annotation {
+        let normal = Dict::from_pairs(states.iter().map(|state| {
+            (
+                Name::from(*state),
+                Object::Stream(pdfrum_object::Stream::new(
+                    Dict::new(),
+                    pdfrum_object::ByteSpan::from(b"x".to_vec()),
+                )),
+            )
+        }));
+        let mut annot = widget(field_type, ff);
+        let mut dict = annot.dict.clone();
+        dict.push(
+            Name::from("AP"),
+            Object::Dict(Dict::from_pairs([(Name::from("N"), Object::Dict(normal))])),
+        );
+        dict.push(Name::from("AS"), Object::Name(Name::from(as_)));
+        annot.dict = dict;
+        annot
+    }
+
+    fn outlined(annot: &Annotation) -> bool {
+        invalid_outline(annot, &NoResolve).is_some()
+    }
+
+    #[test]
+    fn a_state_with_no_stream_outlines_a_checkbox_and_a_radio() {
+        // `/AS /Off` against an `/AP /N` that lists only `Yes` — the shape
+        // every widget in `checkbox_radiobutton` has.
+        assert!(outlined(&stateful("Btn", 0, "Off", &["Yes"])), "checkbox");
+        assert!(
+            outlined(&stateful("Btn", 1 << 15, "Off", &["value1"])),
+            "radio"
+        );
+        // And a state that does resolve is drawn rather than outlined.
+        assert!(!outlined(&stateful("Btn", 0, "Yes", &["Yes", "Off"])));
+    }
+
+    #[test]
+    fn only_a_checkbox_or_a_radio_is_ever_outlined() {
+        // The switch in `IsWidgetAppearanceValid` gives every other field type
+        // the `pSub->IsStream()` arm, and `DrawAppearance`'s branch names only
+        // these two anyway.
+        for (ft, ff) in [("Tx", 0), ("Ch", 0), ("Btn", 1 << 16), ("Sig", 0)] {
+            assert!(!outlined(&stateful(ft, ff, "Off", &["Yes"])), "{ft}");
+        }
+        assert!(!outlined(&annot(Subtype::Square, 0)));
+    }
+
+    #[test]
+    fn the_state_is_read_from_as_alone() {
+        // `GetAppState` reads `/AS` and stops — no `/V` fallback, no
+        // `/Parent`. A widget with no `/AS` looks up the empty state name and
+        // finds nothing, where `annot_ap` would have fallen back to `Off`.
+        let with_state = stateful("Btn", 0, "Off", &["Off"]);
+        assert!(!outlined(&with_state), "an `Off` stream resolves");
+        let mut no_state = with_state.clone();
+        no_state.dict = Dict::from_pairs(
+            with_state
+                .dict
+                .keys()
+                .filter(|key| key.as_bytes() != b"AS")
+                .filter_map(|key| {
+                    with_state
+                        .dict
+                        .get(key, &NoResolve)
+                        .map(|value| (key.clone(), value.get().clone()))
+                })
+                .collect::<Vec<_>>(),
+        );
+        assert!(outlined(&no_state), "with no `/AS` nothing resolves");
+    }
+
+    #[test]
+    fn the_outline_is_a_hairline_grey_stroke_and_fills_nothing() {
+        let object = invalid_outline(&stateful("Btn", 0, "Off", &["Yes"]), &NoResolve)
+            .expect("an invalid checkbox");
+        let pdfrum_page::PageObject::Path(path) = object else {
+            panic!("a path")
+        };
+        assert!(path.object.stroke);
+        // `DrawPath` is handed fill argb 0, so nothing is filled — spelling
+        // the rule `EvenOdd` here would paint the box solid.
+        assert_eq!(path.object.fill_rule, pdfrum_page::FillRule::None);
+        assert!(path.state.stroke_params.width.abs() < f32::EPSILON);
+        assert_eq!(
+            path.state
+                .stroke
+                .to_rgb()
+                .expect("a resolved colour")
+                .to_bytes(),
+            [0xAA, 0xAA, 0xAA]
+        );
+    }
+
+    /// `is_visible` over an annotation's own flags, which is what every test
+    /// below means by it — the open-action override is exercised in
+    /// `nav::open_action`.
+    fn visible(subtype: Subtype, flags: i64) -> bool {
+        is_visible(subtype, AnnotFlags(flags))
+    }
+
     #[test]
     fn hidden_and_noview_suppress_in_both_passes_and_print_does_not() {
         for subtype in [Subtype::Widget, Subtype::Square] {
-            assert!(is_visible(&annot(subtype, 0)), "{subtype:?}");
-            assert!(is_visible(&annot(subtype, 4)), "Print alone still shows");
-            assert!(!is_visible(&annot(subtype, 2)), "Hidden");
-            assert!(!is_visible(&annot(subtype, 32)), "NoView");
-            assert!(!is_visible(&annot(subtype, 4 | 32)), "NoView beats Print");
+            assert!(visible(subtype, 0), "{subtype:?}");
+            assert!(visible(subtype, 4), "Print alone still shows");
+            assert!(!visible(subtype, 2), "Hidden");
+            assert!(!visible(subtype, 32), "NoView");
+            assert!(!visible(subtype, 4 | 32), "NoView beats Print");
         }
     }
 
@@ -409,12 +644,12 @@ mod tests {
     fn invisible_suppresses_a_widget_and_only_a_widget() {
         // Pass B tests `kInvisible`; Pass A does not. A square carrying the
         // bit still draws, and a widget carrying it does not.
-        assert!(!is_visible(&annot(Subtype::Widget, 1)));
-        assert!(is_visible(&annot(Subtype::Square, 1)));
+        assert!(!visible(Subtype::Widget, 1));
+        assert!(visible(Subtype::Square, 1));
     }
 
     #[test]
     fn a_popup_is_never_painted() {
-        assert!(!is_visible(&annot(Subtype::Popup, 0)));
+        assert!(!visible(Subtype::Popup, 0));
     }
 }

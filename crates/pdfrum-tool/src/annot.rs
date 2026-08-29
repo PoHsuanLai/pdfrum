@@ -39,6 +39,11 @@ pub fn render<R: Resolve>(
     ctx: &mut BuildContext,
 ) -> String {
     let mut diags = Diagnostics::default();
+    let limits = Limits::default();
+    // The oracle runs `FORM_DoDocumentOpenAction` before it reads any page
+    // (`pdfium_test.cc:1779`), so a `/Hide` in the catalog's open action has
+    // already rewritten the flag words this dump reports.
+    let hidden = pdfrum_doc::nav::hidden_by_open_action(catalog, r, &limits, &mut diags);
     // A free-text annotation and a form field both need a font to set their
     // text with, and each needs the one its own `/DA` names — see
     // `ap::FormFonts` for what taking a stock Helvetica for all of them costs.
@@ -52,7 +57,7 @@ pub fn render<R: Resolve>(
     let objects = |index: usize, dict: &Dict| {
         appearance_objects(index, dict, &overlay, resources.clone(), r, ctx)
     };
-    annot_dump::render(&page.dict, Some(&overlay), objects, r, &mut diags)
+    annot_dump::render(&page.dict, Some(&overlay), &hidden, objects, r, &mut diags)
 }
 
 /// What one annotation's normal appearance stream draws.
