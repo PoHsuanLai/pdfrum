@@ -142,7 +142,7 @@ fn generate_inner(
     for pass in Pass::ALL {
         let run = run_pass(oracle, pass, &input)?;
         if !run.ok {
-            failures.push(format!("{pass:?}"));
+            failures.push(pass.label().to_owned());
         }
         if page_count.is_none() {
             page_count = parse_page_count(&run.stderr);
@@ -270,14 +270,9 @@ fn harvest(scratch: &Path, pass: Pass) -> Result<Vec<(String, Vec<u8>)>> {
         if name == INPUT_NAME || path.is_dir() {
             continue;
         }
-        let wanted = match pass {
-            Pass::Render => has_suffix(name, ".png"),
-            // `.annot.txt` also ends in `.txt`, so exclude it explicitly.
-            Pass::Text => has_suffix(name, ".txt") && !has_suffix(name, ".annot.txt"),
-            Pass::Annot => has_suffix(name, ".annot.txt"),
-            Pass::Metadata | Pass::PageInfo | Pass::Structure => false,
-        };
-        if !wanted {
+        // The stdout passes write no files; their artifacts arrive on the
+        // stream instead.
+        if !pass.owns_artifact(name) || pass.stdout_artifact().is_some() {
             continue;
         }
         let bytes = std::fs::read(&path)?;

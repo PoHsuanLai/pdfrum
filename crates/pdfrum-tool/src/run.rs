@@ -21,7 +21,7 @@ use pdfrum_page::BuildContext;
 use pdfrum_parser::{Document, LoadError, LoadOptions, PageDict};
 
 use crate::options::{Options, OutputFormat, PageRange};
-use crate::{metadata, pageinfo, render, structure, text, unsupported};
+use crate::{annot, metadata, pageinfo, render, structure, text, unsupported};
 
 /// Where a run writes. Separated from the work so the whole pipeline is
 /// testable on buffers rather than on the process's own streams.
@@ -224,6 +224,13 @@ fn write_page_files<R: Resolve>(
     ctx: &mut BuildContext,
 ) -> String {
     match options.format {
+        OutputFormat::Annot => {
+            let Some(path) = annot::output_path(input, index) else {
+                return String::new();
+            };
+            let _ = std::fs::write(path, annot::render(page, r, ctx));
+            String::new()
+        }
         OutputFormat::Text => {
             let Some(path) = text::output_path(input, index) else {
                 return String::new();
@@ -253,8 +260,7 @@ fn write_page_files<R: Resolve>(
         OutputFormat::None
         | OutputFormat::PageInfo
         | OutputFormat::Structure
-        | OutputFormat::Render(_)
-        | OutputFormat::Annot => String::new(),
+        | OutputFormat::Render(_) => String::new(),
     }
 }
 

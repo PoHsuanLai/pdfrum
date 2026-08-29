@@ -98,6 +98,37 @@ impl Pass {
         }
     }
 
+    /// Whether this pass produced the named artifact.
+    ///
+    /// The mirror of what the golden generator harvested, and the way a
+    /// comparison decides which goldens a failed oracle run has poisoned.
+    #[must_use]
+    pub fn owns_artifact(self, name: &str) -> bool {
+        let ends = |suffix: &str| name.len() > suffix.len() && name.ends_with(suffix);
+        match self {
+            Pass::Render => ends(".png"),
+            // `.annot.txt` also ends in `.txt`, so exclude it explicitly.
+            Pass::Text => ends(".txt") && !ends(".annot.txt"),
+            Pass::Annot => ends(".annot.txt"),
+            Pass::Metadata => name == "metadata.txt",
+            Pass::PageInfo => name == "pageinfo.txt",
+            Pass::Structure => name == "structure.txt",
+        }
+    }
+
+    /// The pass name recorded in a manifest's `oracle_failures`.
+    #[must_use]
+    pub fn label(self) -> &'static str {
+        match self {
+            Pass::Render => "Render",
+            Pass::Text => "Text",
+            Pass::Annot => "Annot",
+            Pass::Metadata => "Metadata",
+            Pass::PageInfo => "PageInfo",
+            Pass::Structure => "Structure",
+        }
+    }
+
     /// For stdout-dump passes, the artifact name the dump is stored under.
     ///
     /// The file-writing passes return `None` — their artifacts arrive on disk
