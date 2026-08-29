@@ -1,6 +1,6 @@
 # `pdfrum-page` status
 
-**Updated:** 2026-08-29 · **State:** implemented, all gates green
+**Updated:** 2026-08-30 · **State:** implemented, all gates green
 
 The project's largest crate. Contract: SPEC.md §7 (including the 2026-08-29
 rulings); behavior: `docs/design/pdfrum-page.md` (§1.0–1.21).
@@ -15,6 +15,7 @@ graphics-state stack.
 
 | module | contents |
 |---|---|
+| `mutate.rs` | the editing half (M11): `dirty`/`active`/`content_stream` on each object, `dirty_streams` and `stream_ctms` on the page, and the mutation functions that set them |
 | `ops.rs` + `ops_table.rs` | the `ops!` macro and its 73 rows; `LineCap`, `LineJoin`, `FillRule`, `TextRenderMode`, `TextItem`, `MarkProperties`, `InlineImage` |
 | `tokenize.rs` | the second tokenizer — 255-byte words, 32767-byte strings, the strict dictionary grammar, the `allow_nested_array` rule |
 | `content.rs` | `parse_content`, the 16-slot operand ring with oldest-eviction, the `m`-triggered path run |
@@ -253,6 +254,76 @@ difference decides which branch a near-degenerate radial takes — the linear
 `a == 0` one, which has no negative-radius skip, or the quadratic one, which
 does. `pdfrum-doc`'s `geom.rs` already had it right. See the render status
 doc for what it cost on `radial_shading_point_at_border`.
+
+## M11: the editing half, and the two fields the brief did not foresee
+
+The edit brief's E6 asked for `dirty` and `active` on each page object and a
+dirty-stream set on the page. Those landed as proposed, as plain fields with
+the operations beside them in `mutate.rs` rather than inside them. Two things
+about the shape are worth recording because they were choices, not
+transcription.
+
+**Removal is the only case that needs the page-level set.** A modified or
+hidden object still exists, so the regenerator finds it, reads its `dirty`,
+and knows which stream to rewrite. A *removed* object is gone and nothing is
+left pointing at the stream that has to lose it — which is why
+`Page::remove_object` takes an index and records the stream before the object
+goes, rather than being a `Vec::retain` at the call site.
+
+**Two references the brief did not anticipate, and the reason is structural.**
+A parsed `ImageObject` holds decoded pixels; a parsed `TextObject` holds a
+loaded `Font`. Neither can name the `/XObject` or `/Font` entry that a
+regenerated `Do` or `Tf` must spell — the decoded form has thrown that away.
+So `ImageObject` and `FormObject` gained `source: Option<ObjRef>` and
+`TextObject` gained `font_source`. The interpreter had already resolved both
+for its caches; they now travel on the object as well. `None` means the
+resource was written inline, or the object came from an annotation's `/AP`,
+and such an object is dropped when its stream is rewritten — which is what the
+C++ does with an inline image for the same reason.
+
+**`content_stream` is populated for real now**, which it was not before: it
+existed as a field and was hardcoded to `0`. `StreamBounds` carries where each
+`/Contents` element's operators begin, found by parsing each element on its own
+and counting. That is exact rather than approximate because of the separating
+space the join inserts after every element — it terminates whatever token the
+element ended on, so no operator can span a boundary. Only the editor pays for
+it: `build_page_from_dict` is unchanged and the render and text paths still
+use it.
+
+## A defect M11's oracle comparison found: the real parser was two ulps out
+
+`word_to_number` accumulated a real digit by digit into an `f32`, adding each
+digit times a repeatedly-multiplied `0.1`. That is the *obsolete* `FX_atof`
+this crate was ported from; current PDFium replaced it with a correctly-rounded
+parse (`fx_string.cpp:124-140`, `fast_float::from_chars`). The accumulator also
+stopped at an `e`, so `1.2e34` read as `1.2`.
+
+Both are failures against PDFium's own `ByteStringToFloat` vectors
+(`fx_string_unittest.cpp:123-164`), which are now ported here — with **exact
+equality**, because the tolerance the surrounding tests use is precisely what
+let this sit unnoticed: every existing numeric assertion compared to `1e-4` or
+`1e-6`, and a two-ulp error passes all of them.
+
+**Why two ulps were visible at all.** A rectangle's edge runs through `floor`
+and `ceil` on its way to a device rect (`pdfrum-render`'s `snap_rect`), so a
+1e-7 relative error is quantised into a whole row of pixels. M11's mutation
+sweep is what surfaced it: a regenerated content stream undoes the transform it
+inherited by writing that transform's inverse, and a page whose first element
+leaves `399 0 0 400 cm` in force gets a second element beginning
+`.0025062656 0 0 .0025 0 0 cm`. Reading those two literals a hair high made our
+rectangle one row taller and one column wider than PDFium's, on seven corpus
+files, at a stable SSIM of 0.986289.
+
+Worth recording because the first two hypotheses were both wrong and both
+plausible: that our `f64` matrix composition diverged from PDFium's `f32`
+(`CFX_Matrix::operator*` does round to `f32` at every step — but composing in
+`f32` reproduces the bug just as faithfully), and that the rect fast path was
+being rejected (it was not; every pixel we painted was the fill colour, never
+an antialiased blend). The rect machinery and the matrix width were both
+correct and both fed bad numbers.
+
+`pdfrum-parser`'s object-level `parse_real` already used `str::parse`, so the
+two parsers in the tree had quietly disagreed with each other; they now agree.
 
 ## Not yet exercised
 
