@@ -366,3 +366,116 @@ fn the_saved_body_is_not_the_plaintext() {
         );
     }
 }
+
+// M11 x M10: a page edited *and* saved goes through the cipher like anything
+// else, because the regenerated stream is written the same way as the rest of
+// the body. The failure this guards against is specific and silent — a
+// regenerated stream added to the overlay after the encryptor was set up, and
+// so written in the clear under an `/Encrypt` that claims otherwise. Such a
+// file opens, and its edited page renders as garbage.
+#[test]
+fn a_mutated_encrypted_document_saves_re_encrypted() {
+    for (name, password) in FIXTURES {
+        let Some(doc) = open(name, password) else {
+            return;
+        };
+        let Ok(page_dict) = doc.page(0) else {
+            continue;
+        };
+        let Some(page_ref) = page_dict.reference else {
+            continue;
+        };
+        let resources = page_dict
+            .inherited(names::RESOURCES, &doc)
+            .and_then(|object| object.resolve(&doc).ok()?.as_dict().cloned())
+            .unwrap_or_default();
+
+        // Rebuild the page and dirty every object, which is the mutation with
+        // the largest regenerated stream and therefore the most to leak.
+        let mut ctx = pdfrum_page::BuildContext::new();
+        let mut diags = pdfrum_common::Diagnostics::default();
+        let limits = pdfrum_common::Limits::default();
+        let bytes = page_contents(&doc, &page_dict.dict, &limits, &mut diags);
+        let ops = pdfrum_page::parse_content(&bytes, &limits, &mut diags);
+        let mut page = pdfrum_page::build_page_streams(
+            &ops,
+            &pdfrum_page::StreamBounds::default(),
+            &page_dict.dict,
+            |key| page_dict.inherited(key, &doc),
+            &pdfrum_page::Resources::for_page(Some(resources.clone())),
+            &doc,
+            &mut ctx,
+            &limits,
+            &mut diags,
+        );
+        if page.objects().is_empty() {
+            continue;
+        }
+        for index in 0..page.objects().len() {
+            page.object_mut(index);
+        }
+
+        let mut edit = EditDoc::new(&doc);
+        let rewrite =
+            pdfrum_edit::regenerate(&page, &resources, &doc).expect("every object is dirty");
+        let shared = pdfrum_edit::shared_objects(&edit);
+        pdfrum_edit::apply_rewrite(&mut edit, page_ref, &page_dict.dict, &rewrite, &shared);
+
+        let mut out = Vec::new();
+        save(&edit, &fixed(SaveMode::Full), &mut out).expect("the save succeeds");
+
+        // It still needs the password.
+        assert!(
+            reload(&out, None).is_none(),
+            "{name}: a mutated save opened with no password"
+        );
+        let reopened = reload(&out, Some(password)).expect("reopens with its password");
+        assert_eq!(reopened.page_count(), doc.page_count());
+
+        // And the regenerated operators are not sitting in the file in the
+        // clear. `q\n` opens every stream we write, and the prologue's
+        // literal is long enough that finding it would be no coincidence.
+        let prologue = b"0 0 0 RG 0 0 0 rg 1 w 0 J 0 j";
+        assert!(
+            !out.windows(prologue.len()).any(|w| w == prologue),
+            "{name}: a regenerated stream was written in the clear"
+        );
+    }
+}
+
+/// A page's `/Contents`, decoded and joined — the tool's `assemble`, inlined
+/// so this test needs nothing from the binary crate.
+fn page_contents(
+    doc: &Document,
+    page: &pdfrum_object::Dict,
+    limits: &pdfrum_common::Limits,
+    diags: &mut pdfrum_common::Diagnostics,
+) -> Vec<u8> {
+    let Some(contents) = page.get(names::CONTENTS, doc) else {
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+    let mut push = |object: &Object, out: &mut Vec<u8>| {
+        if let Some(stream) = object.as_stream() {
+            out.extend_from_slice(
+                &pdfrum_filters::decode_chain(stream, 0, doc, limits, diags).data,
+            );
+            out.push(b' ');
+        }
+    };
+    let Some(direct) = contents.as_direct() else {
+        return out;
+    };
+    match direct {
+        Object::Stream(_) => push(direct, &mut out),
+        Object::Array(array) => {
+            for element in array.iter() {
+                if let Ok(resolved) = element.resolve(doc) {
+                    push(resolved.get(), &mut out);
+                }
+            }
+        }
+        _ => {}
+    }
+    out
+}
