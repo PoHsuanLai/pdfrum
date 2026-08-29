@@ -439,11 +439,26 @@ fn visit<R: Resolve>(
     if let Some(kind) = FieldKind::classify(&field_type, flags)
         && !kids_are_fields
     {
+        let name = full_name(dict, r);
+        let widgets = widgets_of(dict, reference, kids.as_ref(), r);
+        // A name already in the tree gets these widgets **added as further
+        // controls** rather than a second field of its own. Upstream's
+        // `AddTerminalField` looks the name up first and only builds a
+        // `CPDF_FormField` when it is new, so two `/Annots` entries sharing a
+        // `/T` are one field with two controls — and the value every one of
+        // them shows is the *field's*, which is the first dictionary's.
+        // `bug_733528` is exactly that: two widgets named `SharedField`, the
+        // first holding `/V (Hello, world)` and the second `/V ()`, and the
+        // golden reports the second drawing the first's text.
+        if let Some(existing) = out.iter_mut().find(|field| field.name == name) {
+            existing.widgets.extend(widgets);
+            return;
+        }
         out.push(Field {
-            name: full_name(dict, r),
+            name,
             kind,
             flags,
-            widgets: widgets_of(dict, reference, kids.as_ref(), r),
+            widgets,
             dict: dict.clone(),
             reference,
         });
@@ -984,6 +999,58 @@ mod tests {
     fn rewriting_an_absent_key_appends_it() {
         let out = rewrite(&Dict::new(), &Name::from("V"), text("v"));
         assert_eq!(out.len(), 1);
+    }
+
+    #[test]
+    fn two_fields_entries_sharing_a_name_are_one_field_with_two_widgets() {
+        // `AddTerminalField` looks the fully-qualified name up before it
+        // builds anything, so the second entry becomes another *control* of
+        // the first's field rather than a field of its own. `bug_733528` is
+        // that shape, and its golden has the second widget drawing the
+        // first's value.
+        let widget = |value: &str| {
+            Object::Dict(dict(&[
+                ("Type", name("Annot")),
+                ("Subtype", name("Widget")),
+                ("FT", name("Tx")),
+                ("T", text("SharedField")),
+                ("V", text(value)),
+            ]))
+        };
+        let catalog = dict(&[(
+            "AcroForm",
+            Object::Dict(dict(&[(
+                "Fields",
+                Object::Array(Array::of([widget("Hello, world"), widget("")])),
+            )])),
+        )]);
+        let form = load(&catalog).expect("a form");
+        let field = only_field(&form);
+        assert_eq!(field.name, "SharedField");
+        assert_eq!(field.widgets.len(), 2);
+        // The field's value is the **first** entry's, which is what both
+        // controls show.
+        assert_eq!(field.value(None, &NoResolve), "Hello, world");
+    }
+
+    #[test]
+    fn two_fields_entries_with_different_names_stay_two_fields() {
+        let widget = |field_name: &str| {
+            Object::Dict(dict(&[
+                ("Type", name("Annot")),
+                ("Subtype", name("Widget")),
+                ("FT", name("Tx")),
+                ("T", text(field_name)),
+            ]))
+        };
+        let catalog = dict(&[(
+            "AcroForm",
+            Object::Dict(dict(&[(
+                "Fields",
+                Object::Array(Array::of([widget("one"), widget("two")])),
+            )])),
+        )]);
+        assert_eq!(load(&catalog).expect("a form").len(), 2);
     }
 
     #[test]
