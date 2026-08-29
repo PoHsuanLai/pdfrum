@@ -10,6 +10,12 @@
 // recognises test *functions*, not the helpers they share, so the allowance is
 // stated once here for the file.
 #![allow(
+    clippy::format_push_string,
+    reason = "the fixture builders below assemble PDF source line by line; \
+              `write!` into a String cannot fail, so the `let _ =` it needs \
+              reads worse than the `push_str` it replaces"
+)]
+#![allow(
     clippy::expect_used,
     reason = "helpers shared by the tests below; a panic here is a failure"
 )]

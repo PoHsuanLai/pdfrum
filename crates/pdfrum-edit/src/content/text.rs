@@ -29,6 +29,7 @@
 use pdfrum_common::kurbo::Affine;
 use pdfrum_font::Font;
 use pdfrum_page::{TextObject, TextSegment};
+use std::fmt::Write as _;
 
 use crate::content::num::{write_float, write_matrix};
 use crate::names;
@@ -140,7 +141,7 @@ fn emit_show_array(out: &mut String, segments: &[TextSegment]) {
         }
         out.push('<');
         for byte in &segment.codes {
-            out.push_str(&format!("{byte:02X}"));
+            let _ = write!(out, "{byte:02X}");
         }
         out.push('>');
     }
