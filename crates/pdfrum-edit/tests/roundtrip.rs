@@ -458,13 +458,22 @@ fn an_incremental_save_chains_to_the_original_table() {
         save(&edit, &fixed_options(SaveMode::Incremental), &mut out).expect("saves");
         let text = String::from_utf8_lossy(&out);
 
+        // The counts are relative to what the original held. A real file can
+        // end in a malformed `%EOF` — `bug_440028542.pdf` in the oracle's
+        // corpus does — so an absolute "two `%%EOF`s" would fail a save that
+        // did everything right, because the prefix contributed none.
+        let before = String::from_utf8_lossy(&bytes);
         assert_eq!(text.matches("/Prev").count(), 1, "{name}: /Prev count");
         assert_eq!(
             text.matches("startxref").count(),
-            2,
-            "{name}: startxref count"
+            before.matches("startxref").count() + 1,
+            "{name}: the append adds exactly one startxref"
         );
-        assert_eq!(text.matches("%%EOF").count(), 2, "{name}: %%EOF count");
+        assert_eq!(
+            text.matches("%%EOF").count(),
+            before.matches("%%EOF").count() + 1,
+            "{name}: the append adds exactly one %%EOF"
+        );
 
         // The `/Prev` names the original's own last section.
         // A number carries a leading space (the serializer's self-delimiting
@@ -502,6 +511,30 @@ fn an_incrementally_saved_file_still_opens() {
             "{name}: the page count changed"
         );
     }
+}
+
+// `bug_440028542.pdf` in the oracle's corpus ends in `%EOF` rather than
+// `%%EOF`. An incremental save of it is still a correct append — the prefix
+// survives, the section chains — and the only thing the malformed marker
+// changes is how many of them the output holds.
+#[test]
+fn a_file_ending_in_a_malformed_eof_still_appends_correctly() {
+    let text = String::from_utf8_lossy(&built(1)).replace("%%EOF", "%EOF");
+    let doc = open(text.as_bytes());
+    assert!(!doc.xref_was_rebuilt(), "the fixture must not rebuild");
+
+    let edit = EditDoc::new(&doc);
+    let mut out = Vec::new();
+    save(&edit, &fixed_options(SaveMode::Incremental), &mut out).expect("saves");
+
+    let original = doc.bytes();
+    assert_eq!(out.get(..original.len()), Some(&original[..]));
+
+    let after = String::from_utf8_lossy(&out);
+    // Ours is the only well-formed marker in the file, and it is there.
+    assert_eq!(after.matches("%%EOF").count(), 1);
+    assert!(after.contains("/Prev"));
+    assert_eq!(open(&out).page_count(), 1);
 }
 
 // A document whose table was rebuilt has no section to chain from, so an

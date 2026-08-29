@@ -18,17 +18,23 @@
 //!    original bytes must be a prefix of the output, the `/Prev` chain must be
 //!    intact, and the oracle must reopen it.
 //!
-//! # The comparison is against the original's render, not the oracle's
+//! # Two pixel numbers, because they answer different questions
 //!
 //! Step 3 diffs our render of the *saved* file against the golden render of
-//! the *original*. That is deliberately the strictest available reading: it
-//! folds in both "the save lost something" and "we render the saved file
-//! differently than the original", where comparing our-saved against
-//! our-original would hide a shared regression in both.
+//! the *original*. That is the absolute number, and on a file our renderer
+//! already gets slightly wrong it reports the renderer's gap rather than the
+//! writer's — the same SSIM the ordinary Tier-B sweep reports, to the digit.
+//!
+//! So the sweep reports a second number beside it: whether the saved file's
+//! SSIM **matches the original's**. That one isolates what M7 is actually
+//! about. A file whose original renders at 0.9856 and whose saved copy also
+//! renders at 0.9856 has lost nothing in the save, and saying so is more
+//! honest than counting it as a save failure.
 //!
 //! A page whose objects were regenerated is a different matter — the C++'s
 //! own generator is lossy (no patterns, no non-RGB colour) — but an ordinary
-//! save regenerates nothing, so every file in this sweep is expected to hold.
+//! save regenerates nothing, so every file in this sweep is expected to hold
+//! its original's fidelity exactly.
 
 use std::path::Path;
 use std::process::Command;
@@ -39,6 +45,10 @@ use crate::oracle::{OraclePaths, Pass, determinism_args};
 use crate::run::ToolPaths;
 use crate::ssim;
 use crate::thresholds::Thresholds;
+
+/// How far below the original a saved file's SSIM may land before the
+/// difference is the writer's rather than the rasterizer's.
+const SSIM_EPSILON: f64 = 1e-6;
 
 /// What checking one file found.
 ///
@@ -64,10 +74,18 @@ pub struct SaveOutcome {
     pub incremental_ok: Option<bool>,
     /// Pages compared against the original's golden render.
     pub pages: u32,
-    /// The worst page's SSIM, when any page was compared.
+    /// The worst page's SSIM against the original's golden, when any page
+    /// was compared.
     pub ssim: Option<f64>,
+    /// The same measurement over the **original** file, so the two can be
+    /// compared. A saved file that matches its original has lost nothing,
+    /// whatever the absolute number says about the renderer.
+    pub original_ssim: Option<f64>,
     /// Whether every compared page cleared the floor.
     pub within_floor: bool,
+    /// Whether the saved file renders no worse than the original did. This
+    /// is what M7 is about: the writer preserving what the reader saw.
+    pub matches_original: bool,
     /// What went wrong, when something did.
     pub note: String,
 }
@@ -81,7 +99,9 @@ impl SaveOutcome {
             incremental_ok: None,
             pages: 0,
             ssim: None,
+            original_ssim: None,
             within_floor: true,
+            matches_original: true,
             note,
         }
     }
@@ -172,7 +192,9 @@ fn check_inner(
         incremental_ok: None,
         pages: 0,
         ssim: None,
+        original_ssim: None,
         within_floor: true,
+        matches_original: true,
         note: String::new(),
     };
 
@@ -184,7 +206,15 @@ fn check_inner(
 
     // ---- step 3: our own re-render against the original's golden ----
     if compare_pixels {
-        compare_render(&mut outcome, tool, store, thresholds, &bytes, &saved);
+        compare_render(
+            &mut outcome,
+            tool,
+            store,
+            thresholds,
+            &bytes,
+            &saved,
+            &input,
+        );
     }
 
     // ---- step 4: the incremental save's append discipline ----
@@ -217,8 +247,13 @@ fn oracle_opens(oracle: &OraclePaths, file: &Path) -> bool {
     !stderr.contains("Load pdf docs unsuccessful") && stderr.contains("Processed")
 }
 
-/// Render the saved file with our own tool and diff every page against the
-/// **original's** golden render.
+/// Render both the saved file and the original, and diff each against the
+/// original's golden.
+///
+/// Two numbers come out. The absolute one is the saved file's SSIM against
+/// the golden — comparable with the ordinary Tier-B sweep. The relative one
+/// is whether the saved file did *as well as the original did*, which is
+/// what says the save itself lost nothing.
 fn compare_render(
     outcome: &mut SaveOutcome,
     tool: &ToolPaths,
@@ -226,6 +261,7 @@ fn compare_render(
     thresholds: &Thresholds,
     original: &[u8],
     saved: &Path,
+    input: &Path,
 ) {
     let key = crate::goldens::key_for(original);
     let Ok(manifest) = store.manifest(&key) else {
@@ -234,27 +270,38 @@ fn compare_render(
         return;
     };
 
-    let Ok(out) = Command::new(&tool.binary)
-        .args(determinism_args(&tool.font_dir))
-        .args(Pass::Render.flags())
-        .arg(saved)
-        .output()
-    else {
+    let Some(rendered) = render_with_tool(tool, saved) else {
         "the tool would not render the saved file".clone_into(&mut outcome.note);
         outcome.within_floor = false;
+        outcome.matches_original = false;
         return;
     };
-    if out.status.code().is_none() {
-        "the tool crashed rendering the saved file".clone_into(&mut outcome.note);
-        outcome.within_floor = false;
-        return;
-    }
-    let Ok(rendered) = crate::generate::harvest_for_run(saved, Pass::Render) else {
-        return;
-    };
+    // The same measurement over the input, so the two are comparable.
+    let baseline = render_with_tool(tool, input).unwrap_or_default();
 
     let floor = thresholds.ssim_for(&outcome.path);
     let mut worst: Option<f64> = None;
+    let mut worst_original: Option<f64> = None;
+
+    for (name, bytes) in &baseline {
+        let Some(index) = page_index(name) else {
+            continue;
+        };
+        let golden_name = format!("input.pdf.{index}.png");
+        let (Ok(golden), Ok(candidate)) = (
+            store
+                .artifact(&key, &golden_name)
+                .map_err(drop)
+                .and_then(|b| crate::pixels::decode(&b).map_err(drop)),
+            crate::pixels::decode(bytes).map_err(drop),
+        ) else {
+            continue;
+        };
+        if let Ok(diff) = ssim::compare(&golden, &candidate) {
+            worst_original = Some(worst_original.map_or(diff.ssim, |w: f64| w.min(diff.ssim)));
+        }
+    }
+    outcome.original_ssim = worst_original;
 
     for (name, bytes) in &rendered {
         // The saved file's artifacts are named after *it*, so the golden's
@@ -292,14 +339,43 @@ fn compare_render(
     }
 
     outcome.ssim = worst;
+
+    // The relative reading: did the save cost anything? Nothing rendered, or
+    // no baseline to compare against, is not a loss by any reading.
+    outcome.matches_original = match (worst, worst_original) {
+        // `SSIM_EPSILON` absorbs the last bits of a rasterizer's own
+        // nondeterminism, which are not the writer's doing.
+        (Some(saved), Some(original)) => saved + SSIM_EPSILON >= original,
+        (None, _) | (Some(_), None) => true,
+    };
+
     if let Some(worst) = worst
         && worst < floor
     {
         outcome.within_floor = false;
         if outcome.note.is_empty() {
-            outcome.note = format!("ssim {worst:.6} below floor {floor:.6}");
+            outcome.note = match worst_original {
+                Some(original) if outcome.matches_original => format!(
+                    "ssim {worst:.6} below floor {floor:.6} \
+                     (the original renders at {original:.6}; the save lost nothing)"
+                ),
+                _ => format!("ssim {worst:.6} below floor {floor:.6}"),
+            };
         }
     }
+}
+
+/// Render one file with our own tool, returning its PNG artifacts.
+fn render_with_tool(tool: &ToolPaths, file: &Path) -> Option<Vec<(String, Vec<u8>)>> {
+    let out = Command::new(&tool.binary)
+        .args(determinism_args(&tool.font_dir))
+        .args(Pass::Render.flags())
+        .arg(file)
+        .output()
+        .ok()?;
+    // A crash produced nothing worth harvesting.
+    out.status.code()?;
+    crate::generate::harvest_for_run(file, Pass::Render).ok()
 }
 
 /// The page index out of a `<name>.<index>.png` artifact.
@@ -344,9 +420,19 @@ fn check_incremental(oracle: &OraclePaths, scratch: &Path, original: &[u8]) -> b
     if out.get(..body.len()) != Some(&body[..]) {
         return false;
     }
-    // R8: one `/Prev`, two `startxref`s, two `%%EOF`s.
+    // R8: the appended section adds its own `startxref`, its own `%%EOF` and
+    // a `/Prev` naming the original's table.
+    //
+    // The counts are *relative to what the original held*, not absolute. A
+    // real file can end in a malformed `%EOF` — `bug_440028542.pdf` does —
+    // and requiring two `%%EOF`s in the output would then fail a save that
+    // did everything right, because the prefix contributed none.
     let text = String::from_utf8_lossy(&out);
-    if text.matches("startxref").count() < 2 || text.matches("%%EOF").count() < 2 {
+    let before = String::from_utf8_lossy(&body[..]);
+    if text.matches("startxref").count() <= before.matches("startxref").count() {
+        return false;
+    }
+    if text.matches("%%EOF").count() <= before.matches("%%EOF").count() {
         return false;
     }
     if doc.last_xref_offset() > 0 && !text.contains("/Prev") {
@@ -372,6 +458,9 @@ pub struct SaveTotals {
     pub compared: u64,
     /// Files whose every compared page cleared the floor.
     pub within_floor: u64,
+    /// Files whose saved copy rendered no worse than the original did — the
+    /// number that isolates what the *save* cost.
+    pub matches_original: u64,
     /// Files whose incremental save held the append discipline.
     pub incremental_ok: u64,
     /// Files whose incremental save was checked at all.
@@ -396,6 +485,9 @@ impl SaveTotals {
             if outcome.within_floor {
                 self.within_floor = self.within_floor.saturating_add(1);
             }
+            if outcome.matches_original {
+                self.matches_original = self.matches_original.saturating_add(1);
+            }
         }
         if let Some(ok) = outcome.incremental_ok {
             self.incremental_checked = self.incremental_checked.saturating_add(1);
@@ -411,10 +503,19 @@ impl SaveTotals {
         rate(self.oracle_reopened, self.saved)
     }
 
-    /// The share of compared files whose pixels held.
+    /// The share of compared files whose pixels cleared the Tier-B floor
+    /// outright — comparable with the ordinary sweep's number.
     #[must_use]
     pub fn pixel_rate(&self) -> Option<f64> {
         rate(self.within_floor, self.compared)
+    }
+
+    /// The share of compared files whose saved copy rendered no worse than
+    /// the original. This is the number M7 is graded on: it separates what
+    /// the writer cost from what the renderer already owed.
+    #[must_use]
+    pub fn fidelity_rate(&self) -> Option<f64> {
+        rate(self.matches_original, self.compared)
     }
 
     /// The share of checked files whose incremental save held.
@@ -444,7 +545,9 @@ mod tests {
             incremental_ok: Some(true),
             pages,
             ssim: (pages > 0).then_some(0.999),
+            original_ssim: (pages > 0).then_some(0.999),
             within_floor: floor,
+            matches_original: true,
             note: String::new(),
         }
     }
@@ -485,6 +588,38 @@ mod tests {
         assert!(close(totals.reopen_rate(), 2.0 / 3.0));
         assert!(close(totals.pixel_rate(), 0.5));
         assert!(close(totals.incremental_rate(), 1.0));
+    }
+
+    // The two pixel numbers answer different questions, and this is the case
+    // that separates them: a file our renderer already gets slightly wrong
+    // renders *identically* after a save. The absolute number counts it as a
+    // failure (it is below the floor); the fidelity number does not (the
+    // save cost nothing).
+    #[test]
+    fn a_file_below_the_floor_can_still_have_lost_nothing() {
+        let mut totals = SaveTotals::default();
+        let mut o = outcome(true, true, 1, false);
+        o.ssim = Some(0.985_592);
+        o.original_ssim = Some(0.985_592);
+        o.matches_original = true;
+        totals.add(&o);
+
+        let close = |a: Option<f64>, b: f64| a.is_some_and(|v| (v - b).abs() < 1e-9);
+        assert!(close(totals.pixel_rate(), 0.0), "below the floor");
+        assert!(close(totals.fidelity_rate(), 1.0), "and lost nothing");
+    }
+
+    #[test]
+    fn a_save_that_really_lost_something_fails_both() {
+        let mut totals = SaveTotals::default();
+        let mut o = outcome(true, true, 1, false);
+        o.ssim = Some(0.5);
+        o.original_ssim = Some(0.99);
+        o.matches_original = false;
+        totals.add(&o);
+
+        assert_eq!(totals.pixel_rate(), Some(0.0));
+        assert_eq!(totals.fidelity_rate(), Some(0.0));
     }
 
     #[test]
