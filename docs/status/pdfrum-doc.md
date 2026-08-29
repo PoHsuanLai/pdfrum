@@ -1,8 +1,8 @@
 # `pdfrum-doc` status
 
-**Updated:** 2026-08-29 · **State:** navigation, annotations, structure tree
-and shape-based appearance generation implemented; the variable-text engine
-and the form-field tree are not yet built.
+**Updated:** 2026-08-29 · **State:** navigation, annotations, structure tree,
+appearance generation and the variable-text layout engine implemented; the
+AcroForm field tree is not yet built.
 
 Contract: SPEC.md §10 (including the 2026-08-29 rulings); behavior:
 `docs/design/pdfrum-doc.md`.
@@ -11,9 +11,9 @@ Contract: SPEC.md §10 (including the 2026-08-29 rulings); behavior:
 
 | Metric | Before | After |
 |---|---|---|
-| `--annot` Tier-A | 3/1832 (0.2%) | **1974/2055 (96.1%)** |
+| `--annot` Tier-A | 3/1832 (0.2%) | **1979/2055 (96.3%)** |
 | `--show-structure` Tier-A | 1408/1468 (95.9%) | **1674/1675 (99.9%)** |
-| Files passing outright | 47/1468 | **1085/1675** |
+| Files passing outright | 47/1468 | **1086/1675** |
 
 Both dumps are wired through `pdfrum-tool`. metadata and pageinfo stay at
 100%, text is unchanged at 99.0% (97.9% non-empty), and pixel is unaffected
@@ -25,10 +25,12 @@ column is the smaller set; the rates are what compare, not the counts. The
 annot denominator is 2055 rather than 2061 because six artifacts are now
 excluded as crash goldens (see E3 below).
 
-Neither tier reaches M6's ≥ 98% exit criterion for `--annot` yet. The 81
-remaining mismatches are almost entirely `Number of objects` lines where the
-oracle counts text objects that a laid-out field body produced — which is the
-work named under "what is not built yet", not a defect in what is here.
+`--annot` does not reach M6's ≥ 98% exit criterion. The 76 remaining
+mismatches are almost entirely `Number of objects` lines where the oracle
+counts text objects that a *widget's* laid-out field body produced — the
+second layout engine SPEC §10 rules out of scope, not a defect in what is
+here. `--show-structure` is past 98% and its one remaining file is blocked
+below this crate.
 
 The structure tier went from 60 mismatched files to one, and that one —
 `bug_717.pdf` — is blocked below this crate: its whole structure tree lives
@@ -56,24 +58,27 @@ while the tree is empty, so it starts passing on its own when the objects do.
 | `ap/border` | the five border styles and the two different width lookups |
 | `ap/da` | the `/DA` tokenizer — a third one, deliberately not shared — and the font and colour lookups |
 | `ap/markup` | the nine shape generators |
+| `ap/freetext` | the free-text generator, its preconditions, and the interactive form it synthesizes when the document has none |
 | `ap/shapes` | the six checkbox and radio glyph outlines |
 | `ap/widget` | widget chrome for a control whose appearance does not resolve |
 | `structure` | the per-page bottom-up build and the `--show-structure` emitter |
+| `vt` | the layout engine: the tokenizer, the classifier, line breaking, automatic sizing, bidi reordering, comb cells, and the operator emitter |
 | `form/attr` | the inherited-attribute walk and the fully-qualified name |
 | `page_label`, `prefs`, `metadata` | the remaining catalog readers |
 
 ## What is not built yet
 
-- **The variable-text layout engine** (`vt/`). Only its character classifier
-  is in place. Without it the two text-bearing appearance generators — free
-  text and pop-ups — produce nothing, and a widget's appearance carries its
-  chrome but no text body.
 - **The AcroForm field tree** (`form/`). Only the inherited-attribute walk and
   the fully-qualified name are in place; field discovery, values, the
   checkbox and radio group semantics and the `/I`-versus-`/V` tie-break are
-  not.
-
-Between them they are what the remaining `--annot` gap is made of.
+  not. Nothing in the two Tier-A dumps needs them, but `set_value` and the
+  form half of SPEC §10 do.
+- **The pop-up generator**, which needs the layout engine that now exists but
+  also a fallback font registered in the appearance's own resources.
+- **The second layout engine** a widget's text body uses — deliberately, per
+  SPEC §10. It is what the residual `--annot` gap is made of: the failing
+  files differ by `Number of objects` lines where the oracle counts text
+  objects a laid-out field body produced.
 
 ## Errata against the design brief
 
