@@ -131,7 +131,11 @@ fn an_empty_page_is_opaque_white() {
 }
 
 #[test]
-fn a_transparent_page_starts_empty() {
+fn a_page_group_alone_does_not_make_the_background_transparent() {
+    // `FPDFPage_HasTransparency` is `BackgroundAlphaNeeded`, not the page's
+    // `/Group`: a page that merely declares a group still renders onto
+    // opaque white. Reading it the other way turns the output from RGB to
+    // RGBA and, wherever nothing paints, from white to black.
     let mut p = page(20.0, 10.0, Vec::new());
     p.transparency = Transparency {
         group: true,
@@ -139,8 +143,43 @@ fn a_transparent_page_starts_empty() {
         knockout: false,
     };
     let (vello, tiny) = render_both(&p, &RenderOptions::default());
-    assert_eq!(vello.pixel(5, 5), Some([0, 0, 0, 0]));
-    assert_eq!(tiny.pixel(5, 5), Some([0, 0, 0, 0]));
+    assert_eq!(vello.pixel(5, 5), Some([255, 255, 255, 255]));
+    assert_eq!(tiny.pixel(5, 5), Some([255, 255, 255, 255]));
+}
+
+#[test]
+fn a_deep_blend_mode_makes_the_background_transparent() {
+    // The one thing that sets the flag: an `/ExtGState` blend mode above
+    // Multiply (`cpdf_allstates.cpp:105-106`).
+    let mut object = filled(rect_path(0.0, 0.0, 4.0, 4.0), [0.0, 0.0, 0.0]);
+    if let PageObject::Path(p) = &mut object {
+        p.state.general.blend = pdfrum_page::BlendMode::Difference;
+    }
+    let (vello, tiny) = render_both(&page(20.0, 10.0, vec![object]), &RenderOptions::default());
+    // A corner the object does not cover keeps the transparent clear.
+    assert_eq!(vello.pixel(18, 8), Some([0, 0, 0, 0]));
+    assert_eq!(tiny.pixel(18, 8), Some([0, 0, 0, 0]));
+}
+
+#[test]
+fn multiply_is_not_deep_enough_to_need_a_backdrop() {
+    // The threshold is `> BlendMode::kMultiply`, so Normal, Compatible and
+    // Multiply all leave the page opaque.
+    for blend in [
+        pdfrum_page::BlendMode::Normal,
+        pdfrum_page::BlendMode::Compatible,
+        pdfrum_page::BlendMode::Multiply,
+    ] {
+        let mut object = filled(rect_path(0.0, 0.0, 4.0, 4.0), [0.0, 0.0, 0.0]);
+        if let PageObject::Path(p) = &mut object {
+            p.state.general.blend = blend;
+        }
+        let p = page(20.0, 10.0, vec![object]);
+        assert!(
+            !pdfrum_render::needs_alpha_background(&p),
+            "{blend:?} must not ask for a transparent background"
+        );
+    }
 }
 
 #[test]
