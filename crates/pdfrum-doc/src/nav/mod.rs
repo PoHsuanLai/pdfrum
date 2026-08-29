@@ -7,6 +7,7 @@ pub mod filespec;
 pub mod link;
 pub mod name_tree;
 pub mod number_tree;
+pub mod open_action;
 pub mod outline;
 
 pub use action::{AActionType, Action, ActionKind, additional_action};
@@ -14,6 +15,7 @@ pub use dest::{Dest, Xyz, ZoomMode};
 pub use filespec::{FileSpec, decode_file_name, encode_file_name};
 pub use link::{Link, enumerate_links, link_at_point, page_links};
 pub use name_tree::{NameTree, lookup_named_dest};
+pub use open_action::{Hidden, hidden_by_open_action};
 pub use outline::Bookmark;
 
 /// A number tree, which has no wrapper type: the two lookups are free

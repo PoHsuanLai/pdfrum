@@ -22,11 +22,12 @@ use kurbo::Rect;
 use pdfrum_common::{DiagKind, Diagnostics, Severity};
 use pdfrum_object::{Array, Dict, Object, Resolve, decode_text, names as obj_names};
 
-use crate::annot::{AnnotFlags, Subtype, appearance, quad};
+use crate::annot::{Subtype, appearance, quad};
 use crate::ap::AnnotOverlay;
 use crate::color::Color;
 use crate::geom;
 use crate::names;
+use crate::nav::open_action::Hidden;
 
 /// What kind of page object an appearance stream drew, as the dump names it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -63,10 +64,16 @@ impl ObjectKind {
 /// appearance stream draws. It is a callback rather than a parameter because
 /// answering means parsing a content stream — which this crate does not do,
 /// and which the caller will want to answer against its own caches.
+///
+/// `hidden` is what the document's open action did to the flag words, for the
+/// same reason the overlay is threaded: a reader runs that action before it
+/// reads any dictionary, so `Flags set:` reports the *post*-action state.
+/// `&Hidden::default()` is the honest answer for a caller that has not run one.
 #[must_use]
 pub fn render<R: Resolve>(
     page: &Dict,
     overlay: Option<&AnnotOverlay>,
+    hidden: &Hidden,
     mut objects_in_ap: impl FnMut(usize, &Dict) -> Vec<ObjectKind>,
     r: &R,
     diags: &mut Diagnostics,
@@ -88,6 +95,7 @@ pub fn render<R: Resolve>(
             &dict,
             index,
             overlay,
+            hidden,
             &mut objects_in_ap,
             r,
             diags,
@@ -97,11 +105,13 @@ pub fn render<R: Resolve>(
 }
 
 /// One annotation's block.
+#[allow(clippy::too_many_arguments)]
 fn write_annotation<R: Resolve>(
     out: &mut String,
     dict: &Dict,
     index: usize,
     overlay: Option<&AnnotOverlay>,
+    hidden: &Hidden,
     objects_in_ap: &mut impl FnMut(usize, &Dict) -> Vec<ObjectKind>,
     r: &R,
     diags: &mut Diagnostics,
@@ -121,7 +131,9 @@ fn write_annotation<R: Resolve>(
         );
     }
 
-    let flags = AnnotFlags(dict.int(names::F, r).unwrap_or(0));
+    // Post-open-action, not as written: a `/Hide` in the document's
+    // `/OpenAction` has already rewritten `/F` by the time anything reads it.
+    let flags = hidden.flags(dict, r);
     let _ = writeln!(out, "Flags set: {}", flags.names().join(", "));
 
     let objects = objects_in_ap(index, dict);
@@ -352,7 +364,7 @@ pub fn is_annotation(object: &Object) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{ObjectKind, render, six_places, three_places};
+    use super::{Hidden, ObjectKind, render, six_places, three_places};
     use pdfrum_common::Diagnostics;
     use pdfrum_object::{Array, ByteSpan, Dict, Name, NoResolve, Object, PdfString, Stream};
 
@@ -371,7 +383,14 @@ mod tests {
 
     fn dump(page: &Dict) -> String {
         let mut diags = Diagnostics::default();
-        render(page, None, |_, _| Vec::new(), &NoResolve, &mut diags)
+        render(
+            page,
+            None,
+            &Hidden::default(),
+            |_, _| Vec::new(),
+            &NoResolve,
+            &mut diags,
+        )
     }
 
     #[test]
@@ -467,6 +486,7 @@ mod tests {
         let got = render(
             &page(&[square]),
             None,
+            &Hidden::default(),
             |_, _| vec![ObjectKind::Text, ObjectKind::Path],
             &NoResolve,
             &mut diags,
