@@ -1621,22 +1621,216 @@ way.
   Ours and the golden have identical gradient statistics; the residue is two
   counts of rounding, not a filter.
 
+## Wave 10: the widget text body, and three things the ruling had guarded
+
+Wave 9 measured the widget text body's price and escalated it: the largest
+named cluster left, 16 of 83 documents, blocked by `SPEC.md` §10's ruling
+against "a second variable-text engine". The orchestrator revised the ruling,
+and the revision turned out to be the cheap half of the wave.
+
+**1513 → 1540 at SSIM ≥ 0.99 (92.9% → 94.6%)**, 1603 → 1605 at 0.95, passing
+1510 → 1569, `pixel-fail` 115 → 88. **65 files up and none down**; no
+byte-exact file moved in either direction. On Tier A the `--annot` waiver
+cluster went from **76 artifacts to 13**, which retires it: M6's exit criterion
+is met outright at 99.4% with no exclusion.
+
+### There was never a second engine to decline
+
+The ruling's stated cost was writing `CPWL_EditImpl`. It is not an engine. It
+is a shell over `CPVT_VariableText` — the engine `pdfrum-doc`'s `vt` module
+already is, in full — and the only thing it adds that a *generated appearance*
+can observe is a vertical alignment offset:
+
+```text
+to_edit(p) = (p.x - (scroll.x - plate.left),
+              p.y - (scroll.y + padding - plate.top))
+```
+
+Scrolling defaults off and none of the three builders turns it on, so the
+scroll term stays at the `(plate.left, plate.top)` its setter seeded and the
+two cancel, leaving `-padding` on y and nothing on x. That is one argument,
+and `ap/freetext.rs` had been passing it since wave 9. The whole port is
+`ap/field_body.rs`: three builders, one shared wrapper, and the option and
+selection accessors.
+
+`listbox_form`'s `--annot` dump was **byte-exact on the first run** — seven
+widgets, twenty-seven text objects, two selection paths interleaved in the
+right places — which is what says the engine underneath was already right.
+
+### `/V`, not `/I`, and the golden says which
+
+Two producers in the C++ build a widget appearance out of a field's value and
+they are near-copies. `GenerateFormAP` is gated on `/NeedAppearances`;
+`SetAsTextField`/`SetAsComboBox`/`SetAsListBox` run on every widget lacking a
+usable `/AP`. Wave 9 argued from the source that it is the second. The golden
+settles it from the outside, and `listbox_form` is the file that does it:
+
+- `Listbox_MultiSelect` has `/V (Banana)` and no `/I`. The gated generator
+  reads only `/I` and would highlight nothing; the golden highlights Banana.
+- `Listbox_MultiSelectMultipleIndices` has `/I [1 3]` and no `/V`. The golden
+  reports five text objects and **no path** — no highlight at all.
+
+The second is the one worth keeping in mind, because it looks like a bug and
+is a consequence. With `/V` absent the selection object becomes `/I`, and the
+lookup then compares each entry's *text* against the option values. An
+integer's text is the empty string, which matches no option. So a list box
+selected only by index highlights nothing, and reproducing that is what makes
+the dump match.
+
+### The metrics the layout stacks lines by are the substituted face's
+
+This is the finding that cost the most and moved the most, and it was invisible
+until the bodies existed.
+
+Both callers of the appearance generators threaded in **one stock Helvetica**
+for the whole page, on the reasoning — written into both files — that a
+non-embedded `/DA` font substitutes to that face anyway, and that the generator
+only wants metrics. The reasoning is sound about *widths*. It is wrong about
+ascent and descent, and the difference is not small:
+
+| source | ascent | descent | list-box row pitch at 12pt |
+|---|---:|---:|---:|
+| base-14 metric tables | 718 | −219 | 11.24 |
+| the substituted face | 905 | −211 | 13.39 |
+
+`CPDF_Font` fills its ascent and descent from the **loaded face** when the font
+dictionary carries no `/FontDescriptor`, which every stock `/BaseFont
+/Helvetica` in the corpus does not. Two extra rows fit in a thirty-unit list
+box under the wrong numbers, and `listbox_form` sat at 0.933 with the dump
+already byte-exact — the tier that would have caught it does not report
+positions.
+
+`ap::FormFonts` now loads every face the form's `/DR /Font` declares, through
+the same loader and the same substitution options the rest of the page uses,
+and hands each annotation the one **its own** `/DA` names. The fallback for a
+name the resources lack goes through that loader too rather than through the
+stock-metrics constructor, which is the same bug one level down and is where
+`bug_1072440` — a field with no `/DR` at all — was auto-sizing four steps too
+large.
+
+`listbox_form` went 0.933 → 0.9997 on that change alone; `text_form_custom_font`
+0.960 → 0.9999.
+
+### Automatic font sizing was inverted, and had been since it was written
+
+`vt/autosize.rs` opened with three paragraphs explaining that the search finds
+the first size that *fits* and returns the step before it, "which by
+construction is one that overflows", that this "looks like an off-by-one" and
+"is the behavior". It is not the behavior. `GetAutoFontSize` is a
+`std::lower_bound` whose comparator is `!IsBigger(font_size)`, and
+`lower_bound` returns the first element for which the comparator is **false** —
+so it finds the first size that is *bigger* than the plate, and the step before
+it is the largest that fits.
+
+The port had the predicate the other way round, so every field with no explicit
+size was set at **4**. Four of the module's five tests asserted that, at
+length, with prose. Nothing caught it because the only consumer was a free-text
+annotation, which almost always carries a size in its `/DA`; `calculate.pdf`'s
+two `/Tx` widgets carry none, and their goldens show twelve-point digits where
+this produced specks two pixels tall.
+
+The lesson is narrower than "check ports against the source", because the port
+*was* checked: it is that **a comment explaining why a surprising result is
+correct is evidence of nothing**, and the more confident the explanation the
+more it is worth re-deriving. Three of this wave's fixes were sitting behind
+one.
+
+### A section's own origin is part of a word's position
+
+With the size right, `calculate.pdf` set its `/Q 2` fields flush **left**.
+
+Placement computes the alignment offset twice — once from the section's width
+to fix its box, once per line from that line's width — and gives each word a
+position *relative to the section box*, which is what makes the two partially
+cancel. The C++ then reads a word's position as `fWordX + pSection->GetRect()
+.left`. Ours added the section's `y` when stacking paragraphs and never its
+`x`, so the surviving alignment — which lives entirely in that left edge — was
+dropped on the floor. Every centred and right-aligned field was flush left, and
+the free-text generator had the same bug for as long as it has existed.
+
+### `GetDeflated` normalizes, and a one-unit field depends on it
+
+`bug_765384`'s second widget is a `/Rect [0 0 1 1]` with a one-unit border.
+Deflating gives `(1, 1, 0, 0)`, and `CFX_FloatRect::GetDeflated` **normalizes
+afterwards**, so the client rectangle comes back as `(0, 0, 1, 1)` — the size
+it started as. Ours did not, so the plate had no width, automatic sizing
+answered zero, a zero size writes no font operator, a run with no font in the
+text state produces no page object, and the golden's one text object was two
+short of being drawn. Four steps between a normalization and a missing glyph.
+
+### What this wave did *not* fix, and why
+
+**The `/AP`-presence rule is deliberately left loose.** `IsAppearanceValid` is
+one dictionary lookup — `!!GetDictFor("AP")` — so a widget whose `/AP /N`
+resolves to nothing still counts as having an appearance and is never
+regenerated. Matching that exactly is a two-line change and clears **four more
+`--annot` artifacts**: `checkbox_radiobutton`'s `Widget8` then keeps having no
+appearance, which is what its golden reports through the two colour lines.
+
+It also takes `bug_707673` down, 0.9944 → 0.9910, and the monotone rule is
+absolute. That file's residual is a **push-button caption** this crate does not
+draw, and the chrome the current rule generates stands in for it by accident.
+Removing the accident before drawing the caption is a net loss, measured. The
+same applies to the grey `0xFFAAAAAA` outline `DrawAppearance` strokes over a
+checkbox whose appearance is invalid: it is real behavior, it is worth +5
+files, and it costs 2 — `checkbox_radiobutton_hide` hides two of its widgets
+through a `/Hide` **OpenAction** we do not execute, so we outline widgets the
+oracle has already hidden. **Port `SetAsPushButton` and the `/Hide` action
+first; then all three land together.**
+
+### The tail after wave 10
+
+88 `pixel-fail`, and **69 unique documents** below 0.99 once the `.in`/`.pdf`
+pairs are collapsed — 83 before this wave. Wave 9's classification survives almost intact, minus the
+cluster this wave removed:
+
+| class | docs | what it is |
+|---|---:|---|
+| image resample residue | 27 | unchanged from wave 9, and see the note below |
+| glyph-only | 20 | unchanged |
+| text + image | 15 | unchanged, including `example_063` at 0.764 |
+| widget text body | **0** | was 16 |
+| other | 5 | unchanged |
+
+The 13 remaining `--annot` artifacts are three named things and none of them is
+the text body: seven are the `/AP`-presence rule above, four are
+`SetAsPushButton`, and two are the annotation font map's per-character fallback
+to a second face, which `bug_725389` needs to set Hebrew in a field whose `/DA`
+names a font its `/DR` does not carry.
+
+### What the next wave should not do again
+
+- **Do not trust a port's own explanation of a surprising result.** Four tests
+  and three paragraphs asserted that automatic font sizing returns a size that
+  overflows on purpose. It was an inverted comparator, and it had been shipping
+  since the module was written.
+- **Do not measure a generated appearance with a stock face.** The widths are
+  right and the ascent is not, and the ascent is what stacks the lines. This is
+  the second time a "we only need the metrics" shortcut has cost a wave: the
+  first was wave 9's determinism triple.
+- **Do not tighten the `/AP`-presence rule, or add the invalid-appearance grey
+  outline, before porting `SetAsPushButton` and the `/Hide` action.** Both are
+  correct, both are measured, and both cost more than they earn today.
+- **Do not look for the widget text body in the tail.** It is gone; the 69
+  documents left are the three clusters wave 9 named plus five singles.
+
+
 ## Numbers
 
 Measured against the golden store on the full corpus (1675 files, 1628 with
 a golden PNG), rendering through `tiny-skia`. The W3 column is the pixel
 burn-down's third wave; M5 is where the burn-down started.
 
-| metric | M5 | M8 (wave 2) | W3/W4 | W5 | W6 | W7 | W8 | **W9** |
-|---|---|---|---|---|---|---|---|---|
-| pixel files at SSIM ≥ 0.99 | 1075 / 1628 (66.0%) | 1243 / 1628 (76.4%) | 1247 / 1628 (76.6%) | 1387 / 1628 (85.2%) | 1403 / 1628 (86.2%) | 1441 / 1628 (88.5%) | 1471 / 1628 (90.4%) | **1513 / 1628 (92.9%)** |
-| at SSIM ≥ 0.95 | 1478 / 1628 (90.8%) | 1518 / 1628 (93.2%) | 1520 / 1628 (93.4%) | 1554 / 1628 (95.5%) | — | 1574 / 1628 (96.7%) | 1595 / 1628 (98.0%) | **1603 / 1628 (98.5%)** |
-| at SSIM ≥ 0.90 | 1544 / 1628 (94.8%) | 1570 / 1628 (96.4%) | 1572 / 1628 (96.6%) | 1591 / 1628 (97.7%) | — | 1597 / 1628 (98.1%) | 1615 / 1628 (99.2%) | **1616 / 1628 (99.3%)** |
-| byte-exact PNGs | 430 / 1628 | 446 / 1628 | 451 / 1628 | 451 / 1628 | 487 / 1628 | 499 / 1628 | 511 / 1628 | **511 / 1628** |
-| files passing (all tiers) | 1146 / 1675 | 1256 / 1675 | 1260 / 1675 | 1396 / 1675 | 1411 / 1675 | 1448 / 1675 | 1478 / 1675 | **1510 / 1675** |
-| `pixel-fail` | 495 | 385 | 381 | 241 | 225 | 187 | 157 | **115** |
-| `size-mismatch` | 0 | 0 | 0 | 0 | 0 | 0 | 0 | **0** |
-| Tier C hard failures | — | 5 | 3 | 3 | 3 | 3 | 3 | **3** |
+| metric | M5 | M8 (wave 2) | W3/W4 | W5 | W6 | W7 | W8 | W9 | **W10** |
+|---|---|---|---|---|---|---|---|---|---|
+| pixel files at SSIM ≥ 0.99 | 1075 / 1628 (66.0%) | 1243 / 1628 (76.4%) | 1247 / 1628 (76.6%) | 1387 / 1628 (85.2%) | 1403 / 1628 (86.2%) | 1441 / 1628 (88.5%) | 1471 / 1628 (90.4%) | 1513 / 1628 (92.9%) | **1540 / 1628 (94.6%)** |
+| at SSIM ≥ 0.95 | 1478 / 1628 (90.8%) | 1518 / 1628 (93.2%) | 1520 / 1628 (93.4%) | 1554 / 1628 (95.5%) | — | 1574 / 1628 (96.7%) | 1595 / 1628 (98.0%) | 1603 / 1628 (98.5%) | **1605 / 1628 (98.6%)** |
+| at SSIM ≥ 0.90 | 1544 / 1628 (94.8%) | 1570 / 1628 (96.4%) | 1572 / 1628 (96.6%) | 1591 / 1628 (97.7%) | — | 1597 / 1628 (98.1%) | 1615 / 1628 (99.2%) | 1616 / 1628 (99.3%) | **1616 / 1628 (99.3%)** |
+| byte-exact PNGs | 430 / 1628 | 446 / 1628 | 451 / 1628 | 451 / 1628 | 487 / 1628 | 499 / 1628 | 511 / 1628 | 511 / 1628 | **511 / 1628** |
+| files passing (all tiers) | 1146 / 1675 | 1256 / 1675 | 1260 / 1675 | 1396 / 1675 | 1411 / 1675 | 1448 / 1675 | 1478 / 1675 | 1510 / 1675 | **1569 / 1675** |
+| `pixel-fail` | 495 | 385 | 381 | 241 | 225 | 187 | 157 | 115 | **88** |
+| `size-mismatch` | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | **0** |
+| Tier C hard failures | — | 5 | 3 | 3 | 3 | 3 | 3 | 3 | **3** |
 
 **The W7 column is wave 7 and wave 7b together**, and the two were measured
 apart before it was written, because they landed on the same tree:
