@@ -1,6 +1,6 @@
 # PDFium → Rust Rewrite — Master Plan
 
-**Status:** Phase 2: M9, M10, M11 met (2026-08-30 — parity 97.4%/annot 100%; encrypted save with full oracle matrix; page mutation 697/697 oracle-reopened). M12 performance program in flight; M13 pending.
+**Status:** Phase 2: M9-M12 ALL MET (2026-08-30). M12 scorecard: warm render geomean 0.97x oracle (FASTER; image 0.24x, vector 0.90x, shading 0.95x; forms 3.35x is the named residue), rayon 3.09x@4/6.09x@16, RSS 1.20x, conformance byte-identical, ratchet green over 440 entries. Per-crate benches + bench-quick landed. M13 (release) NOT STARTED — loop paused by user.
 **Oracle:** `/mnt/data2/pdfium/pdfium-c++` (read-only C++ PDFium checkout @ `6f2272e`)
 **Workspace:** `/mnt/data2/pdfium/pdfrum` (this repository)
 
