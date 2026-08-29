@@ -19,7 +19,7 @@ mod tables;
 
 pub use charset::{Charset, CodePage, PitchFamily, charset_from_unicode, default_face_name};
 pub use db::{
-    FaceHandle, FaceInfo, FontDb, SIMILARITY_SCORE_MAX, SystemFontDb, TestFontDb,
+    CroscoreDb, FaceHandle, FaceInfo, FontDb, SIMILARITY_SCORE_MAX, SystemFontDb, TestFontDb,
     find_family_name_match,
 };
 pub use standard::{
@@ -30,7 +30,7 @@ pub use style::{
     ALT_FONT_FAMILIES, FONT_STYLES, FontStyle, NARROW_FAMILY, font_family, is_narrow_font_name,
     parse_styles, strip_subset_prefix, style_bits, style_type, subst_name, tt_normalize,
 };
-pub use substfont::{SubstFont, skew_from_angle};
+pub use substfont::{GlyphSpacingGate, SubstFont, applies_glyph_spacing, skew_from_angle};
 
 use crate::glyphs::{Face, GlyphSource};
 use crate::{FontFlags, GlyphName};
@@ -92,25 +92,29 @@ pub struct SubstitutionOptions {
     pub skip_font_enumeration: bool,
     /// Directories to scan instead of the system's, for a hermetic run.
     pub font_dirs: Vec<PathBuf>,
-    /// Whether a requested face name is rewritten to its Croscore equivalent
-    /// before the database is asked (`--croscore-font-names`).
+    /// Whether the *family a database lookup asks for* is rewritten to its
+    /// Croscore equivalent (`--croscore-font-names`).
     ///
     /// The oracle's `test_fonts` directory holds no Arial, Times or Courier:
-    /// it holds the metric-compatible Arimo, Tinos and Cousine. So a hermetic
-    /// run wraps its font info in a renamer
-    /// (`testing/test_fonts.cpp:19-45`) that rewrites the request on its way
-    /// in, and without the same rewriting a `/BaseFont /Helvetica` looks for
-    /// a face that is not there and falls through to the built-ins with
-    /// different metrics.
+    /// it holds the metric-compatible Arimo, Tinos and Cousine, so a hermetic
+    /// run needs the rewrite or a `/BaseFont /Helvetica` looks for a face that
+    /// is not there and falls through to the built-ins with different metrics.
+    ///
+    /// The rewrite sits at the database boundary — see [`CroscoreDb`] — and
+    /// **not** at the top of the ladder: the whole name/style/base-14 analysis
+    /// runs on the document's own spelling first.
     pub croscore_font_names: bool,
 }
 
-/// Rewrite a requested face name to its Croscore equivalent
-/// (`RenameFontForTesting`).
+/// Rewrite a family name to its Croscore equivalent.
 ///
 /// Three families map, by substring and in this order; everything else is
 /// returned unchanged, which is deliberate — some fixtures want the built-in
 /// fallback and reaching it depends on *not* matching here.
+///
+/// The style suffixes are appended from the *same* string, so a family the
+/// ladder resolved to `Helvetica-Bold` reaches the database as `Arimo Bold`
+/// and a bold face is what comes back.
 #[must_use]
 pub fn croscore_name(face: &str) -> String {
     let has = |needle: &str| face.contains(needle);
@@ -159,6 +163,9 @@ pub fn resolve(
     opts: &SubstitutionOptions,
     diags: &mut Diagnostics,
 ) -> Substitution {
+    if opts.croscore_font_names {
+        return resolve_inner(req, &CroscoreDb::new(db), opts, diags, false);
+    }
     resolve_inner(req, db, opts, diags, false)
 }
 
@@ -185,22 +192,8 @@ fn resolve_inner(
         italic_angle = 0;
     }
 
-    // Step 0 — the Croscore rewrite, when a hermetic run asked for it.
-    //
-    // Ahead of everything, because the C++ applies it in the wrapper around
-    // its `SystemFontInfoIface`: every request reaching the font info has
-    // already been renamed, so the whole ladder below — the subset-prefix
-    // strip, the style split, the family table — sees the new name.
-    let renamed;
-    let raw_name = if opts.croscore_font_names {
-        renamed = croscore_name(&String::from_utf8_lossy(&req.name)).into_bytes();
-        &renamed
-    } else {
-        &req.name
-    };
-
     // Step 1 — the name.
-    let name = subst_name(raw_name, req.is_truetype);
+    let name = subst_name(&req.name, req.is_truetype);
 
     // Step 2 — the two symbolic short-circuits. Note `ZapfDingbats` has no
     // TrueType condition while `Symbol` does.

@@ -677,3 +677,148 @@ mod croscore {
         assert_eq!(croscore_name("ArialTimes"), "Arimo");
     }
 }
+
+/// Which Croscore face a `/BaseFont` actually lands on.
+///
+/// The rewrite renames the family a *database lookup* asks for, not the
+/// `/BaseFont` name the ladder starts from. That ordering is the whole
+/// behavior: the ladder recognises `Arial,Bold` as the base-14 alias for
+/// `Helvetica-Bold` and carries the bold style and 700 weight forward, and
+/// only the resolved family is renamed — arriving at the database as
+/// `Arimo Bold`. Rename first and `Arial,Bold` becomes `Arimo Bold`, whose
+/// spaces the name normalizer strips to `ArimoBold`, which is no alias at all:
+/// the base-14 recognition, the style parse and the charset decision are all
+/// lost, and a regular face is what comes back.
+mod croscore_faces {
+    use super::super::style::style_bits;
+    use super::*;
+
+    /// The Croscore faces a hermetic run has, named as the enumerator names
+    /// them and carrying the style bits their own tables declare.
+    fn croscore_db() -> TestFontDb {
+        let mut db = TestFontDb::new();
+        for (name, styles) in [
+            ("Arimo", style_bits::NORMAL),
+            ("Arimo Bold", style_bits::FORCE_BOLD),
+            (
+                "Arimo Bold Italic",
+                style_bits::FORCE_BOLD | style_bits::ITALIC,
+            ),
+            ("Arimo Italic", style_bits::ITALIC),
+            ("Cousine", style_bits::NORMAL),
+            ("Cousine Bold", style_bits::FORCE_BOLD),
+            ("Tinos", style_bits::NORMAL),
+            ("Tinos Bold", style_bits::FORCE_BOLD),
+            (
+                "Tinos Bold Italic",
+                style_bits::FORCE_BOLD | style_bits::ITALIC,
+            ),
+            ("Tinos Italic", style_bits::ITALIC),
+        ] {
+            db.push_with_bytes(name, styles, vec![Charset::Ansi], helvetica_bytes());
+        }
+        db
+    }
+
+    fn opts() -> SubstitutionOptions {
+        SubstitutionOptions {
+            croscore_font_names: true,
+            ..SubstitutionOptions::default()
+        }
+    }
+
+    /// Resolve a `/BaseFont` the way a non-embedded font with a complete
+    /// descriptor does, and report the face that was chosen.
+    fn chosen(name: &str, weight: i32, italic_angle: i32) -> String {
+        let req = FontRequest {
+            name: name.as_bytes().to_vec(),
+            is_truetype: true,
+            flags: FontFlags(FontFlags::SYMBOLIC | FontFlags::USE_EXTERN_ATTR),
+            weight,
+            italic_angle,
+            code_page: CodePage::DefAnsi,
+            vertical: false,
+        };
+        resolve(&req, &croscore_db(), &opts(), &mut quiet())
+            .subst
+            .family
+    }
+
+    #[test]
+    fn a_comma_suffixed_bold_alias_reaches_the_bold_face() {
+        // The bug this module exists for: `/Arial,Bold` is the base-14 alias
+        // for `Helvetica-Bold`, and the bold must survive the rename.
+        assert_eq!(chosen("Arial,Bold", 680, 0), "Arimo Bold");
+        assert_eq!(chosen("Arial,BoldItalic", 680, 0), "Arimo Bold Italic");
+        assert_eq!(chosen("Arial,Italic", 400, 0), "Arimo Italic");
+        assert_eq!(chosen("Arial", 400, 0), "Arimo");
+    }
+
+    #[test]
+    fn a_hyphenated_style_reaches_the_same_face_as_a_comma_suffixed_one() {
+        // The two spellings of the same request must not disagree: both name
+        // the same base-14 member, so both land on the same Croscore face.
+        for (comma, hyphen) in [
+            ("Arial,Bold", "Helvetica-Bold"),
+            ("Arial,BoldItalic", "Helvetica-BoldOblique"),
+            ("Arial,Italic", "Helvetica-Oblique"),
+            ("TimesNewRoman,Bold", "Times-Bold"),
+            ("TimesNewRoman,BoldItalic", "Times-BoldItalic"),
+            ("Courier,Bold", "Courier-Bold"),
+        ] {
+            assert_eq!(
+                chosen(comma, 680, 0),
+                chosen(hyphen, 680, 0),
+                "{comma} vs {hyphen}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_serif_and_mono_families_carry_their_styles_too() {
+        assert_eq!(chosen("TimesNewRoman,Bold", 680, 0), "Tinos Bold");
+        assert_eq!(chosen("Times-Roman", 400, 0), "Tinos");
+        assert_eq!(chosen("Courier-Bold", 680, 0), "Cousine Bold");
+    }
+
+    #[test]
+    fn a_subset_prefixed_name_keeps_its_style() {
+        // The six-letter tag goes before the alias table is consulted, so a
+        // producer's subset spelling resolves exactly as the bare one does.
+        assert_eq!(chosen("ABCDEF+Arial-BoldMT", 680, 0), "Arimo Bold");
+        assert_eq!(chosen("ABCDEF+ArialMT", 400, 0), "Arimo");
+    }
+
+    #[test]
+    fn a_family_outside_the_three_is_left_for_the_scoring_to_decide() {
+        // `Calibri` is renamed to the sans family but carries no style word,
+        // so the weight alone chooses between the faces — which is how a
+        // heavy-stemmed descriptor still reaches a bold face.
+        assert_eq!(chosen("ABCDEE+Calibri", 575, 0), "Arimo Bold");
+        assert_eq!(chosen("ABCDEE+Calibri", 400, 0), "Arimo");
+    }
+
+    #[test]
+    fn without_the_option_the_names_are_not_rewritten_at_all() {
+        // The rewrite is a hermetic-run affordance: a database holding only
+        // Croscore faces answers nothing for `Arial,Bold` without it, and the
+        // ladder falls through to the built-in base-14 blob.
+        let req = FontRequest {
+            name: b"Arial,Bold".to_vec(),
+            is_truetype: true,
+            flags: FontFlags(FontFlags::USE_EXTERN_ATTR),
+            weight: 680,
+            italic_angle: 0,
+            code_page: CodePage::DefAnsi,
+            vertical: false,
+        };
+        let s = resolve(
+            &req,
+            &croscore_db(),
+            &SubstitutionOptions::default(),
+            &mut quiet(),
+        );
+        assert_eq!(s.standard, Some(StandardFont::HelveticaBold));
+        assert_ne!(s.subst.family, "Arimo Bold");
+    }
+}
