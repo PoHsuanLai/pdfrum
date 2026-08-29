@@ -1,6 +1,6 @@
 # PDFium → Rust Rewrite — Master Plan
 
-**Status:** Phase 2 in progress: M9 met (97.4%@0.99, annot 100%, 1624/1675 passing), M10 met (encrypted save, full oracle matrix), M11 met (page mutation; oracle agrees on 287/287 mutations). M12/M13 pending.
+**Status:** Phase 2: M9, M10, M11 met (2026-08-30 — parity 97.4%/annot 100%; encrypted save with full oracle matrix; page mutation 697/697 oracle-reopened). M12 performance program in flight; M13 pending.
 **Oracle:** `/mnt/data2/pdfium/pdfium-c++` (read-only C++ PDFium checkout @ `6f2272e`)
 **Workspace:** `/mnt/data2/pdfium/pdfrum` (this repository)
 
