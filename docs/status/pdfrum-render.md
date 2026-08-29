@@ -1,15 +1,21 @@
 # `pdfrum-render` status
 
-**Updated:** 2026-08-29 · **State:** M8 pixel burn-down wave 8 —
-**90.4% at SSIM ≥ 0.99** (up from 88.5%), **98.0% at 0.95**, **511 byte-exact**
-(up from 499), and seven defects none of which was in a rasterizer. Every one
-was a decision made in the wrong place: a Coons patch's colour field walked
-along the axis its geometry was *not* subdivided on, a group's alpha gated on
-the enclosing `/Group` rather than the object's own, a form's identity hashed
-from its bytes rather than from which object it is, a JBIG2 image classified by
-its codec rather than by its dictionary. In each case the code doing the work
-was already correct and already tested; what was wrong was what it was handed.
-Optional content is wired at last, as a pre-pass. **37 files up, none down.**
+**Updated:** 2026-08-29 · **State:** M8 pixel burn-down wave 9 —
+**92.9% at SSIM ≥ 0.99** (up from 90.4%), **98.5% at 0.95**, 511 byte-exact
+unchanged, and **192 files up with none down**, 42 across the 0.99 line. Wave 9 classified the
+0.95–0.99 band before touching it, and the classification was the finding:
+**31 of its 86 documents carried no font at all**, and twenty-five were missing
+*ink* rather than miscovering it. The band had been recorded as "glyph
+coverage" for four waves and is 36% glyph-only when measured. Five defects
+followed from reading it properly — a free-text appearance described but never
+drawn, the one malformed JPEG header PDFium repairs, a text clip whose
+producer was missing, the form-field highlight `pdfium_test` itself paints, and
+pattern-coloured text. The largest single lever, at 178 files, was not in any
+document: it was the host's own configuration.
+
+The largest cluster left — the **widget text body**, 16 documents — is out of
+scope by a standing `[spec]` ruling and is escalated with measurements rather
+than fixed.
 
 Contract: SPEC.md §8 including the E2/E3/E4/E10 additions and the
 2026-08-29 implementation record. Behavior: `docs/design/pdfrum-render.md`;
@@ -1319,22 +1325,318 @@ and re-apply at the blit. Making that change alone does not close the gap
 either. Whoever picks it up has the box half already measured and should start
 from where the second factor of two comes from, not from the box.
 
+## Wave 9: the band was never glyph coverage, and half of it had no glyphs
+
+Waves 3 through 8 each recorded the 0.95–0.99 band as "glyph coverage", "D7 to
+the file", and wave 8 signed off with "89 documents of glyph coverage and about
+twenty scattered singles". Wave 9 was chartered to classify the band before
+fixing anything, and the classification is the finding:
+
+**Of the 86 documents in the band, 31 contained no font dictionary at all.**
+Twenty-five were missing *ink* rather than miscovering it — many with an ink
+ratio of exactly zero, meaning we drew blank paper where the oracle drew a
+picture. The band had been diagnosed from its SSIM and from the shape of its
+worst files, and both readings were four waves old.
+
+**1471 → 1513 at SSIM ≥ 0.99 (90.4% → 92.9%)**, 1595 → 1603 at 0.95, passing
+1478 → 1510, `pixel-fail` 157 → 115. **192 files up and none down**, 42 of them
+across the 0.99 line; no byte-exact file moved in either direction.
+
+### The measurement that unlocked it was not a measurement
+
+The first probe of `example_063` reported 15.4% of pixels differing at a mean
+of 24.7 counts, which looks exactly like the coverage tail the band was filed
+under. Adding the three flags the harness puts on *every* invocation —
+`--time=1399672130 --croscore-font-names --font-dir=<checkout>/third_party/test_fonts`
+(`conformance/src/oracle.rs:148-154`) — took the same file to 8.75% at a mean
+of **2.6**.
+
+Without `--font-dir` and `--croscore-font-names` every substitution in the
+corpus picks a different face, and the resulting mismatch is a page-wide
+per-glyph difference that reads precisely as a coverage tail. Any wave probing
+a file by hand must reproduce the harness's determinism triple or it is
+measuring its own font configuration. It is worth stating as a rule because
+three of this wave's five fixes were invisible under the wrong flags and
+obvious under the right ones.
+
+### The five defects
+
+Each was measured on its own against the scoreboard it started from, and
+committed only after `conformance run --check-regressions` reported none.
+
+| | ≥ 0.99 | ≥ 0.95 | passing | `pixel-fail` | up / down |
+|---|---:|---:|---:|---:|---|
+| W8 | 1471 | 1595 | 1478 | 157 | — |
+| + the free-text appearance | 1475 | 1595 | 1482 | 153 | 5 / 0 |
+| + the JPEG header repair | 1476 | 1595 | 1483 | 152 | 1 / 0 |
+| + the text clip | 1477 | 1597 | 1484 | 151 | 4 / 0 |
+| + the form-field highlight | 1509 | 1603 | 1506 | 119 | 178 / 0 |
+| + pattern-coloured text | **1513** | **1603** | **1510** | **115** | 4 / 0 |
+
+#### A generated free-text appearance was described but never drawn
+
+`--annot` reported `freetext_annotation_without_da`'s appearance in full — the
+right object count, the right content, byte-identical to the golden dump — and
+the page rendered as blank paper. The two disagreed because they called
+different functions: `annot_render::overlay` took `generate_appearances`, which
+has no text-bearing generators at all, and only the dump path took
+`generate_appearances_with_text`.
+
+Upstream has no such split. `GenerateAPIfNeeded` reaches `GenerateFreeTextAP`
+on the same annotation constructor as every other generator
+(`cpdf_generateap.cpp:1603`), so an annotation that is *described* is also
+*drawn*. That the text tier matched exactly is what let this survive.
+
+A second gap sat behind it and would have kept the text invisible anyway: the
+generated stream names its font in a `Tf`, and every call site built the
+stream's `/Resources` with `None` for the font half, so the operator resolved
+to nothing. `GenerateFreeTextAP` passes `GenerateResourceFontDict(doc,
+font_name, font_dict->GetObjNum())` (`:1141-1144`).
+
+#### PDFium repairs exactly one malformed JPEG header, and we repaired none
+
+`bug_86459` is a progressive JPEG whose SOF2 declares height `0xffff` beside a
+correct width of 612, wrapped in a dictionary that says 792. libjpeg refuses
+that header — `0xffff` is above `JPEG_MAX_DIMENSION`, so `JERR_IMAGE_TOO_BIG` —
+and `zune-jpeg` refuses it for its own reason, a 16384-row limit. Either way
+the page came back blank.
+
+PDFium does not accept the header either; it **rewrites** it.
+`LibjpegScanlineDecoder::Start` seeds `cinfo` with the *dictionary's*
+dimensions, and on a failed header read tests for one specific malformation and
+patches the two height bytes before reading again
+(`libjpeg_scanline_decoder.cpp:88-115`). The test is deliberately narrow — the
+dimension bytes at one of exactly two offsets, five bytes past a real
+start-of-frame marker, reading `ff ff` followed by the dictionary's width
+*exactly* — and its own comment calls the checks "lots of possibly redundant
+checks to make sure this has no false positives". It is ported in full, because
+it licenses writing into image bytes.
+
+Everywhere else the codestream still overrides the dictionary's dimensions.
+This is the one case where the codestream is the wrong authority.
+
+#### A clipping text mode clipped nothing
+
+`ClipEntry::Text` existed, `push_text` existed, `bounds` unioned it, and
+`clip::resolve` turned it into a winding-filled device path. `build.rs`
+declared a `text_clip` list, initialised it, and drained it at `ET`. **Nothing
+ever put anything in it.** `Tr 4` through `Tr 7` added nothing to any clip, and
+every swatch drawn after a text clip painted whole — `clipping_text.pdf` is the
+file named for the feature, and it and `path_9.pdf` both lay six colour blocks
+over the glyphs that should have cut them out.
+
+This is the fourth wave running to find a feature built, tested, exported and
+consulted by nobody, and the tell is the same each time: the half that
+*consumes* is complete and the half that *produces* is absent. It is invisible
+to a test that only exercises the consumer, which is the only kind of test such
+a feature ever has.
+
+The entry now holds the **runs**, not outlines, which is what upstream holds:
+`clip_text_list_` collects `CPDF_TextObject`s and `ProcessClipPath` calls
+`ProcessText` on each at clip time (`cpdf_streamcontentparser.cpp:1359-1361`,
+`cpdf_renderstatus.cpp:573-582`). Deriving outlines in the builder would mean a
+second implementation of the advances, the kerning, the spacing and the
+substituted-font width solve; holding the run means the shape that clips is the
+shape `place_glyphs` would have painted, by construction.
+
+Two rules came with it that a simpler port would have missed:
+
+- **The mode at `ET` decides.** `Handle_EndText` re-reads the render mode when
+  the text object closes, not the one each run was shown under, so
+  `BT 7 Tr (x) Tj 0 Tr ET` clips with nothing. The list is cleared either way.
+- **The clipping pass places fractionally.** `ProcessText`'s snapping gate is
+  `if (is_clip || is_stroke)`, and `is_clip` is which *caller* is running —
+  true here, false on the painting pass. So a `Tr 4` run's painted glyphs snap
+  to the blit grid and its clipping glyphs do not. `text.rs`'s own doc had
+  spelled this out since wave 5 and named `pdfrum-page` as where the
+  accumulation would live.
+
+#### The largest single movement was not in the document at all
+
+**178 files up and none down**, from one flat wash of colour.
+
+Twenty-five of the band's eighty-six documents were missing ink, and most were
+missing the *same* ink: a pale-blue tint over every form field. `password.in`
+is the clearest case — two text fields, no appearance streams, no content
+stream at all — where the golden carries 6000 tinted pixels and we drew blank
+paper.
+
+It is a **host** decision. `pdfium_test` opens every file with
+
+```cpp
+FPDF_SetFormFieldHighlightColor(form.get(), FPDF_FORMFIELD_UNKNOWN, 0xFFE4DD);
+FPDF_SetFormFieldHighlightAlpha(form.get(), 100);
+```
+
+(`pdfium_test.cc:1776-1777`), and `CPDFSDK_Widget::DrawShadow`
+(`cpdfsdk_widget.cpp:982-1006`) fills each widget's `/Rect` with that colour
+once the appearance is down. The goldens are what that host produces, so
+reproducing them means reproducing its configuration — which is why this looked
+for four waves like a coverage problem on files that have no coverage problem.
+
+Four details decide whether it lands on the right pixels:
+
+- **`FX_COLORREF` is BGR.** `0xFFE4DD` is blue `0xFF`, green `0xE4`, red
+  `0xDD` — a pale blue, not the pink the hex reads as. Over white at 100/255
+  through the truncating `AlphaMerge` that is exactly the `(241, 244, 255)` the
+  goldens carry.
+- **It is a hard-edged integer rect.** `ToFxRect` **truncates** every edge
+  (`fx_coordinates.cpp:324-327`), so a `/Rect` of `[100 100 200 130]` on a
+  200-tall page tints device rows 70..99 and columns 100..199 — 30 × 100
+  pixels, no antialiasing on any side.
+- **The read-only gate is the *field's* flag**, bit 0 of the inherited `/Ff`
+  (`form_flags.h:13`), where the annotation's own `ReadOnly` is bit 6 of `/F`.
+  Reading the wrong flag word would tint and un-tint almost disjoint sets.
+- **Three kinds of field are never tinted**, each refused at a different level:
+  a push button by `IsFillingAllowed`, a widget with no `/FT` by
+  `IsNeedHighLight(kUnknown)`, and a **signature** by `CPDFSDK_Widget::OnDraw`
+  itself, which short-circuits to `DrawAppearance` and never calls the form
+  filler at all (`cpdfsdk_widget.cpp:719-724`). The signature case is the one
+  that bites: without it six corpus signature files go down and four lose
+  byte-exact status; with it nothing moves down anywhere.
+
+The highlight is painted whether or not the widget had an appearance to draw,
+because upstream paints it after `OnDrawDeactive` either way.
+
+#### Pattern-coloured text is a rectangle its own glyphs clip
+
+A run filled with a shading or tiling pattern drew nothing. The comment said
+`DrawTextPathWithPattern` "returns before the ordinary draw", which is true and
+was read as "so skip the run" — but the function *draws first* and returns
+after.
+
+Its unstroked arm (`cpdf_renderstatus.cpp:1290-1310`) never touches a glyph. It
+builds a synthetic `CPDF_PathObject` out of the run's **bounding rectangle**,
+gives it the text's colour and general state, appends the run itself to a copy
+of the current clip path, and sends that through `RenderSingleObject`. The
+pattern then paints the rectangle and the text clip cuts it back to the glyph
+shapes.
+
+That is a strikingly economical way to fill glyphs with a pattern, and it is
+only expressible once the clip stack can hold text runs — which is why it lands
+in the same wave as the clip and could not have landed before it. The stroked
+arm is different and is left alone: there each glyph outline becomes its own
+path object, which the ordinary draw already handles.
+
+`text::run_rect` is `CalcPositionDataInternal`'s bounding half
+(`cpdf_textobject.cpp:288-357`). The run's origin enters where `place_glyphs`
+puts it, pulled back through the text matrix — starting the pen at zero puts
+the rectangle 600 pixels up the page, which is how the omission was caught.
+
+### What this wave did *not* fix, and why
+
+**The premultiplied round trip is a real one-count loss and the fix makes the
+corpus worse.** `pixmap::premultiply` uses the truncating `mul255` where its
+inverse `unpremultiply_rgb` rounds, so a solid brush's colour does not
+round-trip: a `/ca 0.392` fill of `(221, 228, 255)` comes back as `219` and
+composites to `240` where the oracle writes `241`. Wave 6a's ruling — that
+storing a straight colour into a premultiplied buffer must round — says the
+rounding spelling is right, and it was tried.
+
+Measured over the whole corpus it moves **30 files up and 105 down**, none
+across a threshold, and lands the highlight on `242` against the oracle's
+`241` — one over instead of one under. The truncating spelling is empirically
+closer for a solid brush, so it stays. The residual count is the round trip
+itself, which the oracle never performs because its buffers are straight, and
+closing it properly means not making the trip rather than rounding it better.
+**Do not retry the rounding change on its own.**
+
+### The tail after wave 9, classified rather than named
+
+83 unique documents below 0.99. Every one was classified by reading its file
+and its pixels, not by its score:
+
+| class | docs | what it is |
+|---|---:|---|
+| image resample residue | 27 | no font on the page at all. Measured on `FRC_1_8.2.4`: the ink agrees within 1.6%, there is no shift on either axis, and ours and the golden have **identical** gradient statistics (mean \|dx\| 6.21 both) — so it is not a filter-kernel difference. Mean absolute residue 2.0 counts with a +0.96 bias. Fourteen of the 27 are the one `FRC_8.2.4` file repeated |
+| glyph-only | 20 | a font and no image. This is what the band was *called*, and it is under a quarter of it |
+| **widget text body** | **16** | a `/Tx` or `/Ch` widget with no `/AP`, whose *value* the oracle lays out and we do not. See the escalation below |
+| text + image | 15 | both on the page, including `example_063` (0.764) and `en_fqa` (0.885) |
+| other | 5 | `same_color_knockout_fill`, `bug_1746` (diagnosed in wave 8, deliberately unfixed), assorted singles |
+
+The median of the 83 is 0.9785 and the whole sub-0.90 population is eight
+documents.
+
+### Escalation: the widget text body is 16 documents and a standing `[spec]` ruling
+
+This is the largest named cluster left, and it is **out of scope by rule**, so
+it is reported rather than fixed.
+
+`SPEC.md`'s 2026-08-29 doc-brief rulings say: "*NO second variable-text engine —
+the `cpdfsdk_appstream`/`CPWL_EditImpl` NeedAppearances path is out of scope
+(only ~5 corpus pixel files reach it; they become documented waivers)*". The
+M6-implementation correction beneath it already found the scope estimate wrong —
+`CPDFSDK_Widget::OnLoad` calls `ResetAppearance` **ungated** on any widget
+whose appearance is not valid, so the path reaches every widget lacking a
+usable `/AP`, not the five that set `/NeedAppearances` — and it responded by
+widening the *chrome* while restating that "the text body remains out of scope".
+
+The measurement this wave adds is what that costs in pixels, which neither
+ruling had:
+
+- **16 of the 83 remaining sub-0.99 documents** are in this class, from
+  `listbox_form` at 0.933 to `text_form_color` at 0.989.
+- **Only 2 of the 16 set `/NeedAppearances`.** The other fourteen are ordinary
+  files with an unadorned field.
+- The evidence is unambiguous in Tier A as well as Tier B: `--annot` reports
+  **0** objects where the golden reports 1, 7 and 27 text objects on
+  `bug_983867`, `bug_477200528` and `scrollable_widgets1`.
+- The producer is **not** `GenerateFormAP` — that one *is* gated on
+  `NeedAppearances` (`cpdf_annotlist.cpp:209`). It is
+  `CPDFSDK_AppStream::SetAsTextField` / `SetAsListBox` / `SetAsComboBox`
+  (`cpdfsdk_appstream.cpp:1686`, `:1604`, `:1532`), reached from
+  `cpdfsdk_widget.cpp:1109-1111`. `scrollable_widgets1` proves which: it has no
+  `/I`, so `GenerateListBoxAP` would highlight nothing, and the golden
+  highlights Banana — `SetAsListBox` derives selection from `/V` through
+  `GetSelectedIndex` (`cpdfsdk_appstream.cpp:1631-1636`).
+- The dependency the ruling was protecting against **already exists**.
+  `pdfrum-doc/src/vt/` is a complete variable-text engine — `layout`,
+  `edit_ap::generate`, `comb.rs`, `autosize.rs`, `bidi.rs`, `split.rs` — and
+  `vt::Config` already carries `multi_line`, `auto_return`, `sub_word`,
+  `limit_char` and `char_array`, which are exactly the knobs the text-field
+  case sets. `ap/freetext.rs` is a working consumer of it whose shape matches
+  almost line for line. The gap is wiring: `widget::generate` never receives a
+  `TextFont`, and `ap/mod.rs`'s text-bearing dispatch returns `None` for every
+  subtype but `FreeText`.
+
+So the ruling's stated cost — a second engine — is not the cost any more. The
+orchestrator's decision is whether 16 documents justify wiring the engine this
+crate already has into the widget path, and that is a `[spec]` change either
+way.
+
+### What the next wave should not do again
+
+- **Do not probe a corpus file without the harness's determinism triple.**
+  `--time=1399672130 --croscore-font-names --font-dir=<checkout>/third_party/test_fonts`
+  goes on every invocation of both binaries. Without them a substituted face
+  differs everywhere and reads exactly like a coverage tail; `example_063` shows
+  a mean of 24.7 counts under the wrong flags and 2.6 under the right ones.
+- **Do not take the band's label from the previous wave.** It was recorded as
+  glyph coverage for four waves and was 36% glyph-only when finally measured.
+  Classifying 86 documents took an afternoon and found four defects.
+- **Do not retry the rounding premultiply on its own.** Measured: 30 up, 105
+  down. The count it chases is the round trip, not the rounding.
+- **Do not read `DrawTextPathWithPattern` as a skip.** It draws, then returns.
+- **Do not look for a resample kernel difference in the `FRC_8.2.4` cluster.**
+  Ours and the golden have identical gradient statistics; the residue is two
+  counts of rounding, not a filter.
+
 ## Numbers
 
 Measured against the golden store on the full corpus (1675 files, 1628 with
 a golden PNG), rendering through `tiny-skia`. The W3 column is the pixel
 burn-down's third wave; M5 is where the burn-down started.
 
-| metric | M5 | M8 (wave 2) | W3/W4 | W5 | W6 | W7 | **W8** |
-|---|---|---|---|---|---|---|---|
-| pixel files at SSIM ≥ 0.99 | 1075 / 1628 (66.0%) | 1243 / 1628 (76.4%) | 1247 / 1628 (76.6%) | 1387 / 1628 (85.2%) | 1403 / 1628 (86.2%) | 1441 / 1628 (88.5%) | **1471 / 1628 (90.4%)** |
-| at SSIM ≥ 0.95 | 1478 / 1628 (90.8%) | 1518 / 1628 (93.2%) | 1520 / 1628 (93.4%) | 1554 / 1628 (95.5%) | — | 1574 / 1628 (96.7%) | **1595 / 1628 (98.0%)** |
-| at SSIM ≥ 0.90 | 1544 / 1628 (94.8%) | 1570 / 1628 (96.4%) | 1572 / 1628 (96.6%) | 1591 / 1628 (97.7%) | — | 1597 / 1628 (98.1%) | **1615 / 1628 (99.2%)** |
-| byte-exact PNGs | 430 / 1628 | 446 / 1628 | 451 / 1628 | 451 / 1628 | 487 / 1628 | 499 / 1628 | **511 / 1628** |
-| files passing (all tiers) | 1146 / 1675 | 1256 / 1675 | 1260 / 1675 | 1396 / 1675 | 1411 / 1675 | 1448 / 1675 | **1478 / 1675** |
-| `pixel-fail` | 495 | 385 | 381 | 241 | 225 | 187 | **157** |
-| `size-mismatch` | 0 | 0 | 0 | 0 | 0 | 0 | **0** |
-| Tier C hard failures | — | 5 | 3 | 3 | 3 | 3 | **3** |
+| metric | M5 | M8 (wave 2) | W3/W4 | W5 | W6 | W7 | W8 | **W9** |
+|---|---|---|---|---|---|---|---|---|
+| pixel files at SSIM ≥ 0.99 | 1075 / 1628 (66.0%) | 1243 / 1628 (76.4%) | 1247 / 1628 (76.6%) | 1387 / 1628 (85.2%) | 1403 / 1628 (86.2%) | 1441 / 1628 (88.5%) | 1471 / 1628 (90.4%) | **1513 / 1628 (92.9%)** |
+| at SSIM ≥ 0.95 | 1478 / 1628 (90.8%) | 1518 / 1628 (93.2%) | 1520 / 1628 (93.4%) | 1554 / 1628 (95.5%) | — | 1574 / 1628 (96.7%) | 1595 / 1628 (98.0%) | **1603 / 1628 (98.5%)** |
+| at SSIM ≥ 0.90 | 1544 / 1628 (94.8%) | 1570 / 1628 (96.4%) | 1572 / 1628 (96.6%) | 1591 / 1628 (97.7%) | — | 1597 / 1628 (98.1%) | 1615 / 1628 (99.2%) | **1616 / 1628 (99.3%)** |
+| byte-exact PNGs | 430 / 1628 | 446 / 1628 | 451 / 1628 | 451 / 1628 | 487 / 1628 | 499 / 1628 | 511 / 1628 | **511 / 1628** |
+| files passing (all tiers) | 1146 / 1675 | 1256 / 1675 | 1260 / 1675 | 1396 / 1675 | 1411 / 1675 | 1448 / 1675 | 1478 / 1675 | **1510 / 1675** |
+| `pixel-fail` | 495 | 385 | 381 | 241 | 225 | 187 | 157 | **115** |
+| `size-mismatch` | 0 | 0 | 0 | 0 | 0 | 0 | 0 | **0** |
+| Tier C hard failures | — | 5 | 3 | 3 | 3 | 3 | 3 | **3** |
 
 **The W7 column is wave 7 and wave 7b together**, and the two were measured
 apart before it was written, because they landed on the same tree:
