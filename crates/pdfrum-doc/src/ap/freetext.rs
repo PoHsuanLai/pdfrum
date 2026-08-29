@@ -47,6 +47,17 @@ pub fn free_text<R: Resolve>(
     if !valid_font_resources(&fonts, r) {
         return None;
     }
+    // The appearance stream names this font in a `Tf`, so the stream's own
+    // `/Resources /Font` has to carry it or the operator resolves to nothing
+    // and the text does not draw at all. Upstream builds exactly this
+    // one-entry dictionary — `GenerateResourceFontDict(doc, font_name,
+    // font_dict->GetObjNum())` at `cpdf_generateap.cpp:1141-1142` — from the
+    // font `GetFontFromDrFontDictOrGenerateFallback` returned, which is the
+    // `/DR /Font` entry under that name or, when there is none, a fresh
+    // Helvetica that it also writes back into `/DR /Font`.
+    let name = pdfrum_object::Name::new(appearance.font_name.clone());
+    let font = fonts.dict(&name, r).unwrap_or_else(fallback_font);
+    let font_resources = Dict::from_pairs([(name, Object::Dict(font))]);
 
     let mut out = Content::new();
     out.raw("/GS gs ");
@@ -117,6 +128,7 @@ pub fn free_text<R: Resolve>(
         rect_override: None,
         is_text_markup: false,
         blend_multiply: false,
+        font_resources: Some(font_resources),
     })
 }
 
@@ -361,6 +373,55 @@ mod tests {
         )
         .expect("synthesizes a form");
         assert!(got.contains("(Hi) Tj\n"), "{got}");
+    }
+
+    /// The stream names a font in a `Tf`; the stream's own `/Resources /Font`
+    /// has to carry it under that name or the operator resolves to nothing and
+    /// the text draws as blank paper. Upstream builds the same one-entry
+    /// dictionary in `GenerateResourceFontDict` (`cpdf_generateap.cpp:1141`).
+    #[test]
+    fn the_generated_appearance_carries_the_font_its_tf_names() {
+        let got = free_text(
+            &annot(&[("Contents", Object::Str(PdfString::literal(b"Hi")))]),
+            &catalog(),
+            &NoResolve,
+            &stub::metrics(),
+            &one_byte,
+        )
+        .expect("generates");
+        let fonts = got.font_resources.expect("a text generator names a font");
+        assert_eq!(fonts.keys().collect::<Vec<_>>(), [&Name::from("Helv")]);
+        assert_eq!(
+            fonts.dict(&Name::from("Helv"), &NoResolve),
+            Some(fallback_font())
+        );
+    }
+
+    /// `GetFontFromDrFontDictOrGenerateFallback` returns a fresh Helvetica for
+    /// a `/DA` naming a font the `/DR` does not have, rather than declining —
+    /// so the appearance is still produced, and still resolvable.
+    #[test]
+    fn a_da_naming_an_absent_font_falls_back_rather_than_declining() {
+        let empty_dr = dict(&[(
+            "AcroForm",
+            Object::Dict(dict(&[(
+                "DR",
+                Object::Dict(dict(&[("Font", Object::Dict(Dict::new()))])),
+            )])),
+        )]);
+        let got = free_text(
+            &annot(&[("Contents", Object::Str(PdfString::literal(b"Hi")))]),
+            &empty_dr,
+            &NoResolve,
+            &stub::metrics(),
+            &one_byte,
+        )
+        .expect("falls back rather than declining");
+        let fonts = got.font_resources.expect("names a font");
+        assert_eq!(
+            fonts.dict(&Name::from("Helv"), &NoResolve),
+            Some(fallback_font())
+        );
     }
 
     #[test]

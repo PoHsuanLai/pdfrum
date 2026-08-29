@@ -157,6 +157,29 @@ impl TextFont<'_> {
         out
     }
 
+    /// One code point's width, in thousandths of an em.
+    ///
+    /// A code point the font cannot represent contributes **nothing** rather
+    /// than a default width, which is what keeps an unrepresentable character
+    /// from pushing the line it sits on.
+    ///
+    /// A free function rather than a method because [`Self::metrics_of`] wants
+    /// it as a `&dyn Fn` borrowed for the same lifetime as the font, which a
+    /// closure over `self` cannot supply before `self` exists.
+    #[must_use]
+    pub fn char_width(font: &pdfrum_font::Font, code: u32) -> i32 {
+        let Some(ch) = char::from_u32(code) else {
+            return 0;
+        };
+        let Some(charcode) = font.char_code_from_unicode(ch) else {
+            return 0;
+        };
+        #[allow(clippy::cast_possible_truncation)]
+        {
+            font.char_width(charcode) as i32
+        }
+    }
+
     /// The layout metrics a loaded font supplies.
     #[must_use]
     pub fn metrics_of<'a>(
@@ -270,7 +293,10 @@ fn generate_text_bearing<R: Resolve>(
         stream: generated.stream,
         bbox: dict.rect(obj_names::RECT, r),
         matrix: Affine::IDENTITY,
-        resources: resources_dict(ext_gstate_dict(dict, false, r), None),
+        resources: resources_dict(
+            ext_gstate_dict(dict, false, r),
+            generated.font_resources.clone(),
+        ),
         rect_override: None,
         as_override: None,
     })
@@ -319,7 +345,10 @@ pub fn generate_one<R: Resolve>(
         stream: generated.stream,
         bbox,
         matrix: Affine::IDENTITY,
-        resources: resources_dict(ext_gstate_dict(dict, generated.blend_multiply, r), None),
+        resources: resources_dict(
+            ext_gstate_dict(dict, generated.blend_multiply, r),
+            generated.font_resources.clone(),
+        ),
         rect_override: generated.rect_override,
         as_override: None,
     })

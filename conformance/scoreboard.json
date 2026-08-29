@@ -1,12 +1,12 @@
 {
-  "generated_at": "2026-08-29T11:06:05Z",
+  "generated_at": "2026-08-29T11:31:05Z",
   "totals": {
     "files": 1675,
-    "pass": 1478,
-    "fail": 197,
+    "pass": 1482,
+    "fail": 193,
     "by_tag": {
       "page-count": 2,
-      "pixel-fail": 157,
+      "pixel-fail": 153,
       "tierA-mismatch": 81
     },
     "text": {
@@ -14925,9 +14925,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.994150,
+        "ssim": 0.998191,
         "exact": false,
-        "max_channel_diff": 255,
+        "max_channel_diff": 187,
         "pages": 1
       },
       "notes": ""
@@ -31499,10 +31499,8 @@
     },
     {
       "path": "resources/freetext_annotation_without_da.pdf",
-      "status": "fail",
-      "tags": [
-        "pixel-fail"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -31522,12 +31520,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.955407,
+        "ssim": 0.992839,
         "exact": false,
-        "max_channel_diff": 255,
+        "max_channel_diff": 210,
         "pages": 1
       },
-      "notes": "ssim 0.955407 below floor 0.990000"
+      "notes": ""
     },
     {
       "path": "resources/get_page_aaction.in",
@@ -45928,10 +45926,8 @@
     },
     {
       "path": "resources/pixel/freetext_annotation_with_da.in",
-      "status": "fail",
-      "tags": [
-        "pixel-fail"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -45951,19 +45947,17 @@
         }
       },
       "tierB": {
-        "ssim": 0.959176,
+        "ssim": 0.997844,
         "exact": false,
-        "max_channel_diff": 255,
+        "max_channel_diff": 152,
         "pages": 1
       },
-      "notes": "ssim 0.959176 below floor 0.990000"
+      "notes": ""
     },
     {
       "path": "resources/pixel/freetext_annotation_with_da.pdf",
-      "status": "fail",
-      "tags": [
-        "pixel-fail"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -45983,19 +45977,17 @@
         }
       },
       "tierB": {
-        "ssim": 0.959176,
+        "ssim": 0.997844,
         "exact": false,
-        "max_channel_diff": 255,
+        "max_channel_diff": 152,
         "pages": 1
       },
-      "notes": "ssim 0.959176 below floor 0.990000"
+      "notes": ""
     },
     {
       "path": "resources/pixel/freetext_annotation_without_da.pdf",
-      "status": "fail",
-      "tags": [
-        "pixel-fail"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -46015,12 +46007,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.955407,
+        "ssim": 0.992839,
         "exact": false,
-        "max_channel_diff": 255,
+        "max_channel_diff": 210,
         "pages": 1
       },
-      "notes": "ssim 0.955407 below floor 0.990000"
+      "notes": ""
     },
     {
       "path": "resources/pixel/generation_numbers1.pdf",
