@@ -64,8 +64,8 @@ pub mod transparency;
 pub mod type3;
 
 pub use build::{
-    BuildContext, MAX_FORM_LEVEL, build_page, build_page_from_dict, eliminate_redundant_clips,
-    load_pattern,
+    BuildContext, FoundPattern, MAX_FORM_LEVEL, build_page, build_page_from_dict,
+    eliminate_redundant_clips, load_pattern,
 };
 pub use color::{ColorSpace, ColorValue, PatternValue, Rgb};
 pub use content::parse_content;

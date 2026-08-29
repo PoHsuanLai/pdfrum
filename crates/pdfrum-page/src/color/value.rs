@@ -106,24 +106,34 @@ impl ColorValue {
 
     /// Install a pattern, with the operands an uncoloured one paints with.
     ///
-    /// Operand vectors longer than sixteen are **silently ignored**, leaving
-    /// the previous components in place.
+    /// Two rules, both `CPDF_Color::SetValueForPattern`'s
+    /// (`cpdf_color.cpp:52-66`) and neither obvious:
+    ///
+    /// - **An operand vector longer than sixteen is refused outright.** The
+    ///   C++ returns before touching anything, so the colour keeps whatever it
+    ///   had — the previous pattern, or no pattern at all.
+    /// - **The space becomes `/Pattern` if it was not one already.** A
+    ///   `/P1 scn` with no preceding `/Pattern cs` therefore *is* a pattern
+    ///   colour: the pattern machinery drains it out of the ordinary draw and
+    ///   the object paints the pattern rather than a colour. Leaving the space
+    ///   alone instead resolves the operands through whatever space was
+    ///   current — black in the default `DeviceGray` — and paints the object
+    ///   solid, which on a page-sized rectangle is the whole page.
     pub fn set_pattern(
         &mut self,
         name: Name,
         values: &[f32],
         loaded: Option<Arc<crate::pattern::Pattern>>,
     ) {
-        let components = if values.len() > MAX_PATTERN_COMPONENTS {
-            self.pattern
-                .as_ref()
-                .map_or_else(SmallVec::default, |p| p.components.clone())
-        } else {
-            SmallVec::from_slice(values)
-        };
+        if values.len() > MAX_PATTERN_COMPONENTS {
+            return;
+        }
+        if !self.is_pattern() {
+            self.space = Some(Arc::new(ColorSpace::Pattern(Box::default())));
+        }
         self.pattern = Some(Box::new(PatternValue {
             name,
-            components,
+            components: SmallVec::from_slice(values),
             loaded,
         }));
     }
@@ -212,15 +222,43 @@ mod tests {
     }
 
     #[test]
-    fn a_pattern_operand_vector_over_sixteen_is_ignored() {
+    fn a_pattern_operand_vector_over_sixteen_is_refused_outright() {
+        // `SetValueForPattern` returns *before* touching anything, so the
+        // name is not replaced either — not merely the components.
         let mut c = ColorValue::default();
         c.set_space(Arc::new(ColorSpace::Pattern(Box::default())));
         c.set_pattern(Name::from("P0"), &[0.5, 0.25], None);
         c.set_pattern(Name::from("P1"), &[1.0; 17], None);
         let p = c.pattern.as_ref().expect("pattern");
-        assert_eq!(p.name.as_bytes(), b"P1");
-        // The over-long operands did not replace the previous ones.
+        assert_eq!(p.name.as_bytes(), b"P0", "the whole call is refused");
         assert_eq!(&p.components[..], &[0.5, 0.25]);
+    }
+
+    #[test]
+    fn installing_a_pattern_installs_the_pattern_space() {
+        // A `/P1 scn` with no preceding `/Pattern cs` is still a pattern
+        // colour, because `SetValueForPattern` installs the stock space when
+        // the current one is not already a pattern space. Leaving the space
+        // alone resolves the operands through `DeviceGray` and paints the
+        // object solid black — which on a page-sized rectangle is the whole
+        // page, and is what four of the corpus's fuzz files exercise.
+        let mut c = ColorValue::default();
+        assert!(!c.is_pattern());
+        c.set_pattern(Name::from("P1"), &[], None);
+        assert!(c.is_pattern(), "the stock /Pattern space is installed");
+        // And a pattern space that already has a base keeps it: the C++ only
+        // installs the stock space when the current one is not a pattern.
+        let mut with_base = ColorValue::default();
+        with_base.set_space(Arc::new(ColorSpace::Pattern(Box::new(
+            super::super::PatternSpace {
+                base: Some(Box::new(ColorSpace::DeviceRgb)),
+            },
+        ))));
+        with_base.set_pattern(Name::from("P1"), &[1.0, 0.0, 0.0], None);
+        assert_eq!(
+            with_base.to_rgb().map(super::Rgb::to_bytes),
+            Some([255, 0, 0])
+        );
     }
 
     #[test]

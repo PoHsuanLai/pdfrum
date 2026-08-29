@@ -802,3 +802,46 @@ fn a_white_fill_paints_white_rather_than_nothing() {
         );
     }
 }
+
+#[test]
+fn an_unusable_pattern_paints_nothing_rather_than_the_current_colour() {
+    // `FindPattern` only checks that the resource is a dictionary or a
+    // stream; whether the pattern is *usable* is answered at draw time, and a
+    // failure there means the object paints nothing. So a colour whose
+    // pattern did not load is still a pattern colour — drained out of the
+    // ordinary draw — and must not fall back to whatever colour was current.
+    // Falling back paints a page-sized rectangle solid black, which is what
+    // four of the corpus's fuzz files exercise.
+    let mut state = GraphicsState::default();
+    state
+        .fill
+        .set_stock(ColorSpace::DeviceRgb, &[1.0, 0.0, 0.0]);
+    // `set_pattern` installs the /Pattern space itself, exactly as
+    // `SetValueForPattern` does, so the red above is superseded.
+    state
+        .fill
+        .set_pattern(pdfrum_object::Name::from("Broken"), &[], None);
+    assert!(
+        state.fill.is_pattern(),
+        "the stock /Pattern space is installed"
+    );
+    let object = PageObject::Path(Box::new(Content {
+        object: PathObject {
+            path: rect_path(0.0, 0.0, 8.0, 8.0),
+            matrix: Affine::IDENTITY,
+            fill_rule: FillRule::Winding,
+            stroke: false,
+        },
+        state,
+        marks: ContentMarks::new(),
+        content_stream: 0,
+    }));
+    let (vello, tiny) = render_both(&page(8.0, 8.0, vec![object]), &RenderOptions::default());
+    for surface in [&vello, &tiny] {
+        assert_eq!(
+            surface.pixel(4, 4),
+            Some([255, 255, 255, 255]),
+            "an unusable pattern must paint nothing, not the previous colour"
+        );
+    }
+}
