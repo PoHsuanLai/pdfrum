@@ -510,6 +510,19 @@ fn decode_stencil<R: Resolve>(
     let total = info.total_bytes().ok_or(Error::ImageTooLarge)?;
     let decoded = decode_chain(stream, total, r, limits, diags);
     let row_bytes = info.pitch().ok_or(Error::ImageTooLarge)?;
+
+    // A stencil is still allowed to be JBIG2-coded, and then the codestream —
+    // not the stream's own bytes — is what carries the bits. Missing that
+    // makes a compressed codestream get read as if it were already one bit per
+    // pixel: `bug_527174.pdf`'s single data byte `0x30` unpacked to a set bit
+    // and painted a solid black square where the codec should have refused the
+    // image outright. Nothing else reaches this rung with an image codec in
+    // front, because every other one needs a colour space and a colour space
+    // means this is not a stencil.
+    if info.last_filter == Some(Filter::Jbig2) {
+        return stencil_from_jbig2(stream, info, &decoded.data, r, limits, diags);
+    }
+
     let mut bits = vec![0u8; total];
     let mut padded = false;
     let raw = reads_the_stream_directly(info);
@@ -540,6 +553,53 @@ fn decode_stencil<R: Resolve>(
             row_bytes,
             bits,
         }),
+        mask: None,
+        matte: None,
+        interpolate: stream.dict.bool(names::INTERPOLATE).unwrap_or(false),
+    })
+}
+
+/// A stencil whose bits come out of a JBIG2 codestream.
+///
+/// A codestream that will not decode is **fatal to the image**, not something
+/// to paint around: PDFium tears the half-built bitmap down and reports the
+/// load as failed, so nothing at all is drawn. That is why a `/JBIG2Globals`
+/// stream of binary garbage makes a whole image vanish even though the image
+/// itself is one pixel — the globals are parsed first and their failure is the
+/// image's failure. Returning `Err` here reaches the same place: the builder
+/// drops the object.
+///
+/// The bit sense already matches. JBIG2 sets a bit for a black pixel and a
+/// stencil paints where a bit is set, which is exactly the pairing the default
+/// `/Decode` asks for; `/Decode [1 0]` reverses the meaning of the samples and
+/// so flips every bit.
+fn stencil_from_jbig2<R: Resolve>(
+    stream: &Stream,
+    info: &ImageDict,
+    data: &[u8],
+    r: &R,
+    limits: &Limits,
+    diags: &mut Diagnostics,
+) -> Result<ImageData, Error> {
+    let globals = info
+        .params
+        .stream(names::JBIG2_GLOBALS, r)
+        // Absent or unfetchable globals are silently tolerated; globals that
+        // are present but will not parse are not, and fail inside the codec.
+        .map(|s| decode_chain(&s, 0, r, limits, diags).data);
+    let mut image = decode_jbig2(globals.as_deref(), data, info.width, info.height, limits)
+        .inspect_err(|_| {
+            diags.record(Severity::Suspicious, DiagKind::ImageDecodeFailed, None);
+        })?;
+    if !info.default_decode {
+        for byte in &mut image.bits {
+            *byte = !*byte;
+        }
+    }
+    Ok(ImageData {
+        width: info.width,
+        height: info.height,
+        pixels: Pixels::Stencil(image),
         mask: None,
         matte: None,
         interpolate: stream.dict.bool(names::INTERPOLATE).unwrap_or(false),
@@ -879,7 +939,7 @@ mod tests {
     use crate::color::Rgb;
     use crate::function::FunctionCache;
     use crate::image::BitImage;
-    use pdfrum_common::{Diagnostics, Limits};
+    use pdfrum_common::{DiagKind, Diagnostics, Limits};
     use pdfrum_object::{Array, ByteSpan, Dict, Name, NoResolve, Object, Stream};
 
     fn stream(pairs: Vec<(Name, Object)>, data: &[u8]) -> Stream {
@@ -1055,6 +1115,100 @@ mod tests {
         assert!(
             gray.iter().all(|&v| v == 0),
             "every sample is black: JBIG2's set bit inverts to sample 0"
+        );
+    }
+
+    /// A 69-byte embedded JBIG2 codestream: an 8x8 page whose every row is
+    /// four white pixels then four black, so each row is `0b0000_1111`. Built
+    /// from a page-information segment and one MMR-coded generic region, and
+    /// small enough that a test can state the expected bits outright.
+    const JBIG2_RIGHT_HALF_BLACK: [u8; 69] = [
+        0x00, 0x00, 0x00, 0x00, 0x30, 0x00, 0x01, 0x00, 0x00, 0x00, 0x13, 0x00, 0x00, 0x00, 0x08,
+        0x00, 0x00, 0x00, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x01, 0x26, 0x00, 0x01, 0x00, 0x00, 0x00, 0x1c, 0x00, 0x00, 0x00, 0x08,
+        0x00, 0x00, 0x00, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x36,
+        0xcd, 0xb3, 0x6c, 0xdb, 0x36, 0xcd, 0xb3, 0x6c, 0xdb,
+    ];
+
+    /// A stencil dictionary over `data`, optionally with a `/Decode` array.
+    fn jbig2_stencil(data: &[u8], decode: Option<[i64; 2]>) -> Stream {
+        let mut pairs = vec![
+            (Name::from("Width"), Object::Int(8)),
+            (Name::from("Height"), Object::Int(8)),
+            (Name::from("ImageMask"), Object::Bool(true)),
+            (
+                Name::from("Filter"),
+                Object::Name(Name::from("JBIG2Decode")),
+            ),
+        ];
+        if let Some([lo, hi]) = decode {
+            pairs.push((
+                Name::from("Decode"),
+                Object::Array(Array::of([Object::Int(lo), Object::Int(hi)])),
+            ));
+        }
+        stream(pairs, data)
+    }
+
+    #[test]
+    fn a_jbig2_stencil_takes_its_bits_from_the_codestream() {
+        // Without a colour space the image is a stencil, but the bits still
+        // come from the codec — reading the compressed bytes as if they were
+        // already one bit per pixel paints noise.
+        let image = decode(&jbig2_stencil(&JBIG2_RIGHT_HALF_BLACK, None)).expect("should decode");
+        let Pixels::Stencil(BitImage {
+            bits, row_bytes, ..
+        }) = &image.pixels
+        else {
+            panic!("expected a stencil, got {:?}", image.pixels);
+        };
+        assert_eq!(*row_bytes, 1);
+        assert_eq!(
+            &bits[..],
+            &[0b0000_1111u8; 8][..],
+            "the codestream's black half is where the stencil inks"
+        );
+    }
+
+    #[test]
+    fn a_jbig2_stencil_with_decode_one_zero_flips_every_bit() {
+        // `/Decode [1 0]` reverses what a sample means, so the ink lands on
+        // the half the codestream left white.
+        let image =
+            decode(&jbig2_stencil(&JBIG2_RIGHT_HALF_BLACK, Some([1, 0]))).expect("should decode");
+        let Pixels::Stencil(BitImage { bits, .. }) = &image.pixels else {
+            panic!("expected a stencil, got {:?}", image.pixels);
+        };
+        assert_eq!(&bits[..], &[0b1111_0000u8; 8][..]);
+    }
+
+    #[test]
+    fn a_jbig2_stencil_whose_codestream_will_not_decode_is_refused() {
+        // The whole image fails rather than being painted from whatever the
+        // undecoded bytes happen to look like: PDFium tears the half-built
+        // bitmap down and draws nothing at all. `bug_527174.pdf` is this case
+        // — a one-byte codestream that, read raw, inverted to a set bit and
+        // painted a solid black square.
+        let mut funcs = FunctionCache::new();
+        let mut diags = Diagnostics::default();
+        let got = decode_image(
+            &jbig2_stencil(b"0", None),
+            None,
+            None,
+            RequestedSize::Full,
+            &NoResolve,
+            &mut funcs,
+            &Limits::default(),
+            &mut diags,
+        );
+        assert!(
+            got.is_err(),
+            "an undecodable codestream is fatal, got {got:?}"
+        );
+        assert!(
+            diags.contains(&DiagKind::ImageDecodeFailed),
+            "the refusal is recorded, not silent: {:?}",
+            diags.entries()
         );
     }
 
