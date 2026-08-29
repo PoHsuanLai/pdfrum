@@ -32,9 +32,26 @@ pub fn output_path(input: &Path, page: u32) -> Option<PathBuf> {
 /// note's rectangle is the 20×20 box the generator produced, not the one the
 /// file declared.
 #[must_use]
-pub fn render<R: Resolve>(page: &PageDict, r: &R, ctx: &mut BuildContext) -> String {
+pub fn render<R: Resolve>(
+    page: &PageDict,
+    catalog: &Dict,
+    r: &R,
+    ctx: &mut BuildContext,
+) -> String {
     let mut diags = Diagnostics::default();
-    let overlay = ap::generate_appearances(&page.dict, r, &mut diags);
+    // A free-text annotation needs a font to set its text with. The stock
+    // Helvetica stands in for the one its `/DA` names: this path only needs
+    // the *metrics*, and the widths of the font a viewer would substitute are
+    // what the layout would use anyway.
+    let font =
+        pdfrum_font::Font::load_standard(pdfrum_font::subst::StandardFont::Helvetica, &ctx.fonts);
+    let width = |code: u32| char_width(&font, code);
+    let text_font = ap::TextFont {
+        metrics: ap::TextFont::metrics_of(&font, &width),
+        font: &font,
+    };
+    let overlay =
+        ap::generate_appearances_with_text(&page.dict, catalog, Some(&text_font), r, &mut diags);
 
     let resources = page
         .inherited(pdfrum_object::names::RESOURCES, r)
@@ -79,6 +96,24 @@ fn appearance_objects<R: Resolve>(
     let resources = Resources::choose(own_resources, None, page_resources);
     let form = pdfrum_page::build_page(&ops, &resources, r, ctx, &limits, &mut diags);
     form.objects.iter().map(kind_of).collect()
+}
+
+/// One code point's width, in thousandths of an em.
+///
+/// A code point the font cannot represent contributes **nothing** rather than
+/// a default width, which is what keeps an unrepresentable character from
+/// pushing the line it sits on.
+fn char_width(font: &pdfrum_font::Font, code: u32) -> i32 {
+    let Some(ch) = char::from_u32(code) else {
+        return 0;
+    };
+    let Some(charcode) = font.char_code_from_unicode(ch) else {
+        return 0;
+    };
+    #[allow(clippy::cast_possible_truncation)]
+    {
+        font.char_width(charcode) as i32
+    }
 }
 
 /// The dump's name for one page object.

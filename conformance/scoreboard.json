@@ -1,13 +1,13 @@
 {
-  "generated_at": "2026-08-29T05:01:43Z",
+  "generated_at": "2026-08-29T05:20:21Z",
   "totals": {
     "files": 1675,
-    "pass": 1085,
-    "fail": 590,
+    "pass": 1086,
+    "fail": 589,
     "by_tag": {
       "page-count": 2,
       "pixel-fail": 553,
-      "tierA-mismatch": 96
+      "tierA-mismatch": 91
     },
     "text": {
       "pages": 2061,
@@ -15338,10 +15338,8 @@
     },
     {
       "path": "corpus/pdfium/annots/annotation_freetext.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -15350,9 +15348,7 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.annot.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
@@ -15368,7 +15364,7 @@
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt"
+      "notes": ""
     },
     {
       "path": "corpus/pdfium/annots/annotation_highlight.pdf",
@@ -32102,8 +32098,7 @@
       "path": "resources/freetext_annotation_without_da.pdf",
       "status": "fail",
       "tags": [
-        "pixel-fail",
-        "tierA-mismatch"
+        "pixel-fail"
       ],
       "tierA": {
         "compared": [
@@ -32113,9 +32108,7 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.annot.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
@@ -32131,7 +32124,7 @@
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.955407 below floor 0.990000"
+      "notes": "ssim 0.955407 below floor 0.990000"
     },
     {
       "path": "resources/get_page_aaction.in",
@@ -46710,8 +46703,7 @@
       "path": "resources/pixel/freetext_annotation_with_da.in",
       "status": "fail",
       "tags": [
-        "pixel-fail",
-        "tierA-mismatch"
+        "pixel-fail"
       ],
       "tierA": {
         "compared": [
@@ -46721,9 +46713,7 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.annot.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
@@ -46739,14 +46729,13 @@
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.959176 below floor 0.990000"
+      "notes": "ssim 0.959176 below floor 0.990000"
     },
     {
       "path": "resources/pixel/freetext_annotation_with_da.pdf",
       "status": "fail",
       "tags": [
-        "pixel-fail",
-        "tierA-mismatch"
+        "pixel-fail"
       ],
       "tierA": {
         "compared": [
@@ -46756,9 +46745,7 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.annot.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
@@ -46774,14 +46761,13 @@
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.959176 below floor 0.990000"
+      "notes": "ssim 0.959176 below floor 0.990000"
     },
     {
       "path": "resources/pixel/freetext_annotation_without_da.pdf",
       "status": "fail",
       "tags": [
-        "pixel-fail",
-        "tierA-mismatch"
+        "pixel-fail"
       ],
       "tierA": {
         "compared": [
@@ -46791,9 +46777,7 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.annot.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
@@ -46809,7 +46793,7 @@
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.955407 below floor 0.990000"
+      "notes": "ssim 0.955407 below floor 0.990000"
     },
     {
       "path": "resources/pixel/generation_numbers1.pdf",

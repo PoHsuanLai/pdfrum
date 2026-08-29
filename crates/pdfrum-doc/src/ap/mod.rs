@@ -31,6 +31,7 @@ pub mod border;
 pub mod da;
 pub mod emit;
 pub mod fmt;
+pub mod freetext;
 pub mod markup;
 pub mod shapes;
 pub mod widget;
@@ -41,6 +42,7 @@ use pdfrum_object::{Array, Dict, Name, Object, Resolve, names as obj_names};
 
 use crate::annot::{Subtype, appearance, quad};
 use crate::names;
+use crate::vt;
 
 /// One generated appearance and the dictionary edits it implies.
 #[derive(Debug, Clone, PartialEq)]
@@ -108,12 +110,76 @@ impl AnnotOverlay {
     }
 }
 
+/// The font a text-bearing generator sets its text with.
+///
+/// Threaded in rather than loaded here, because loading one needs a font
+/// cache the caller already owns, and because the layout engine is a pure
+/// function of these numbers — which is what lets it be tested against a stub.
+pub struct TextFont<'a> {
+    /// The loaded font.
+    pub font: &'a pdfrum_font::Font,
+    /// Metrics derived from it, for the layout engine.
+    pub metrics: vt::Metrics<'a>,
+}
+
+impl std::fmt::Debug for TextFont<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TextFont")
+            .field("metrics", &self.metrics)
+            .finish_non_exhaustive()
+    }
+}
+
+impl TextFont<'_> {
+    /// How one code point is written into a content stream.
+    ///
+    /// A `Symbol` or `ZapfDingbats` font takes the code point's **low byte**
+    /// verbatim, relying on the font's built-in encoding: there is no
+    /// named-glyph table and no `/Encoding` consultation anywhere in this
+    /// path. Anything else goes through the reverse `ToUnicode` mapping, and
+    /// a code point the font cannot represent writes **nothing** — the
+    /// character is silently dropped rather than substituted.
+    #[must_use]
+    pub fn encode(&self, code: u32) -> Vec<u8> {
+        let name = self.font.base_font_name();
+        if name == b"Symbol" || name == b"ZapfDingbats" {
+            #[allow(clippy::cast_possible_truncation)]
+            return vec![code as u8];
+        }
+        let Some(ch) = char::from_u32(code) else {
+            return Vec::new();
+        };
+        let Some(charcode) = self.font.char_code_from_unicode(ch) else {
+            return Vec::new();
+        };
+        let mut out = Vec::new();
+        self.font.append_char(&mut out, charcode);
+        out
+    }
+
+    /// The layout metrics a loaded font supplies.
+    #[must_use]
+    pub fn metrics_of<'a>(
+        font: &'a pdfrum_font::Font,
+        width: &'a dyn Fn(u32) -> i32,
+    ) -> vt::Metrics<'a> {
+        vt::Metrics {
+            width,
+            ascent: font.type_ascent(),
+            descent: font.type_descent(),
+        }
+    }
+}
+
 /// Generates appearances for every annotation on a page that wants one.
 ///
 /// The walk mirrors what a viewer does when it opens a page, because that
 /// ordering is what the `--annot` contract describes: pop-ups written into
 /// the file are skipped, everything else is offered to its generator, and the
 /// results are keyed by position in `/Annots`.
+///
+/// The text-bearing generators are skipped here; [`generate_appearances_with_text`]
+/// is the walk that enables them.
 #[must_use]
 pub fn generate_appearances<R: Resolve>(
     page: &Dict,
@@ -142,6 +208,72 @@ pub fn generate_appearances<R: Resolve>(
         }
     }
     overlay
+}
+
+/// The same walk, with the text-bearing generators enabled.
+///
+/// Free-text annotations only produce an appearance when a font is in hand,
+/// so a caller without one gets the same result as [`generate_appearances`].
+#[must_use]
+pub fn generate_appearances_with_text<R: Resolve>(
+    page: &Dict,
+    catalog: &Dict,
+    text_font: Option<&TextFont<'_>>,
+    r: &R,
+    diags: &mut Diagnostics,
+) -> AnnotOverlay {
+    let Some(annots) = page.array(obj_names::ANNOTS, r) else {
+        return AnnotOverlay::default();
+    };
+    let mut overlay = AnnotOverlay::with_capacity(annots.len());
+    for index in 0..annots.len() {
+        let Some(dict) = annots.dict_at(index, r) else {
+            continue;
+        };
+        if crate::annot::is_popup(&dict, r) {
+            continue;
+        }
+        let generated = generate_one(&dict, r, diags)
+            .or_else(|| generate_text_bearing(&dict, catalog, text_font, r, diags))
+            .or_else(|| {
+                widget::generate(&dict, r).inspect(|_| {
+                    diags.record(Severity::Recovered, DiagKind::AppearanceGenerated, None);
+                })
+            });
+        if let Some(generated) = generated {
+            overlay.set(index, generated);
+        }
+    }
+    overlay
+}
+
+/// The free-text generator, when its preconditions and a font allow.
+fn generate_text_bearing<R: Resolve>(
+    dict: &Dict,
+    catalog: &Dict,
+    text_font: Option<&TextFont<'_>>,
+    r: &R,
+    diags: &mut Diagnostics,
+) -> Option<GeneratedAp> {
+    if !should_generate(dict, r) {
+        return None;
+    }
+    let subtype = Subtype::from_bytes(&dict.byte_string(obj_names::SUBTYPE, r).unwrap_or_default());
+    if subtype != Subtype::FreeText {
+        return None;
+    }
+    let font = text_font?;
+    let generated =
+        freetext::free_text(dict, catalog, r, &font.metrics, &|code| font.encode(code))?;
+    diags.record(Severity::Recovered, DiagKind::AppearanceGenerated, None);
+    Some(GeneratedAp {
+        stream: generated.stream,
+        bbox: dict.rect(obj_names::RECT, r),
+        matrix: Affine::IDENTITY,
+        resources: resources_dict(ext_gstate_dict(dict, false, r), None),
+        rect_override: None,
+        as_override: None,
+    })
 }
 
 /// Generates one annotation's appearance, if it should have one.

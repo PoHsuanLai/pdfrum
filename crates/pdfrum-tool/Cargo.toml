@@ -13,6 +13,7 @@ workspace = true
 pdfrum-common.workspace = true
 pdfrum-doc.workspace = true
 pdfrum-filters.workspace = true
+pdfrum-font.workspace = true
 pdfrum-object.workspace = true
 pdfrum-page.workspace = true
 pdfrum-parser.workspace = true
