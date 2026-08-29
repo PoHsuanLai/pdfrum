@@ -105,6 +105,37 @@ workspace the ban walks, and 0.5 measures the same thing.
 SSIM is hand-rolled in the harness (~60 lines) — the ratchet metric must
 never shift under a dependency update.
 
+## Performance ring (Phase 2) — admission by measurement
+
+User ruling 2026-08-30: perf deps are welcome **only if measurably worth it**.
+The protocol, binding for M12:
+
+- **The bar:** a perf dependency lands only beside a committed A/B benchmark
+  in docs/status/M12 — the same change implemented first as a tuned no-dep
+  baseline (autovectorization, buffer reuse), then with the dep. It stays if
+  it clears **>= 10% on at least one bench class or >= 5% on the geomean**
+  over that tuned baseline; otherwise the no-dep version ships. The DEPS row
+  for an admitted dep records its measured number — the "why" is a number.
+- Crates already in the tree transitively carry zero new supply-chain cost;
+  same bar, but ties break toward adoption.
+- `forbid(unsafe_code)` stays intact everywhere: deps carry their own audited
+  unsafe, we write none.
+
+| Candidate | Status | Notes |
+|---|---|---|
+| `fearless_simd` | **preferred SIMD dep** (already in-tree at =0.4.1 via vello_cpu) | Linebender, pure Rust, safe multiversioned runtime dispatch, heading to 1.0. Match vello_cpu's pinned version to avoid a duplicate; upgrading both is a coordinated bump. |
+| `wide` | fallback SIMD (not in tree) | Compile-time-width model where fearless_simd's dispatch doesn't fit a loop. Needs the bar. |
+| `bumpalo` | arena candidate (not in tree) | Bump arena for phase-scoped temporaries (content parse, page-graph build) AFTER RenderCaches buffer reuse is extended (no-dep first). Arena lifetimes must never leak into public types. Needs the bar. |
+| `rustc-hash` | **pre-approved** (in-tree via subsetter) | FxHash for hot maps keyed by small ids (ObjRef store, glyph cache); SipHash is measurable overhead there. Record the number anyway. |
+| `memchr` | candidate (not in tree) | SIMD byte-scan for the lexer and backwards keyword search. BurntSushi, runtime dispatch. Needs the bar. |
+| `slotmap` | available (in-tree via fontdb) | Only if an id-arena store shape emerges; no current need. |
+
+**Rejected for the perf ring:** `std::simd` (nightly-only; we are stable),
+`pulp` (new tree duplicating fearless_simd's role), raw `core::arch`
+intrinsics (breaks `forbid(unsafe)` for no gain over the safe wrappers),
+`mimalloc`/`jemalloc` global allocators (C — the pure-Rust guarantee is not
+for sale for an allocator swap; no mature pure-Rust global allocator exists).
+
 ## Explicitly rejected
 
 `image` (umbrella crate, drags codecs we replace), `freetype-rs` /
