@@ -215,15 +215,46 @@ fn split_sign(text: &str) -> (bool, &str) {
     }
 }
 
-/// Read a decimal integer, saturating rather than wrapping.
+/// Read a decimal integer, folding anything unrepresentable to zero.
+///
+/// The digits accumulate in a **`u32`**, not a wider type, and that width is
+/// load-bearing rather than an implementation detail: it is what makes
+/// `/P -1` and `/P 4294967295` name the same permission bits, and it is the
+/// range [`INT_RANGE`](pdfrum_object::INT_RANGE) promises every
+/// [`Object::Int`] a parse can produce will lie in. Two separate ceilings
+/// follow from it, and a spelling past either is worth **zero** — not the
+/// nearest representable value, which would silently turn an absurd
+/// `/Columns 99999999999999999999` into a plausible one:
+///
+/// - An **unsigned** spelling may reach `u32::MAX`; overflowing the
+///   accumulator itself folds to zero.
+/// - A **signed** spelling — one that led with `+` or `-` — may only reach
+///   `i32::MAX`, or `i32::MAX + 1` when negative so that `-2147483648`
+///   spells itself. Past that it folds to zero too, even though the
+///   accumulator held the value fine.
 fn parse_int(text: &str) -> i64 {
+    let signed = matches!(text.as_bytes().first(), Some(b'-' | b'+'));
     let (negative, digits) = split_sign(text);
-    let magnitude: i64 = digits
-        .bytes()
-        .take_while(u8::is_ascii_digit)
-        .fold(0i64, |acc, b| {
-            acc.saturating_mul(10).saturating_add(i64::from(b - b'0'))
-        });
+
+    // Overflow here is not saturation: a token wider than the accumulator
+    // stops meaning anything at all.
+    let mut magnitude: Option<u32> = Some(0);
+    for byte in digits.bytes().take_while(u8::is_ascii_digit) {
+        magnitude = magnitude
+            .and_then(|acc| acc.checked_mul(10))
+            .and_then(|acc| acc.checked_add(u32::from(byte - b'0')));
+    }
+    let magnitude = magnitude.unwrap_or(0);
+
+    if !signed {
+        return i64::from(magnitude);
+    }
+
+    let limit = i64::from(i32::MAX) + i64::from(negative);
+    let magnitude = i64::from(magnitude);
+    if magnitude > limit {
+        return 0;
+    }
     if negative { -magnitude } else { magnitude }
 }
 
@@ -677,6 +708,64 @@ mod tests {
         // Token-level numbers the value parse has to make sense of.
         assert_eq!(parse(b"1.2.3"), Ok(Object::Real(1.2)));
         assert_eq!(parse(b"--37"), Ok(Object::Int(0)));
+    }
+
+    /// Every integer a parse can produce lies in `pdfrum_object::INT_RANGE`,
+    /// because the accumulator is a `u32` and a spelling that does not fit
+    /// one is worth zero.
+    ///
+    /// Found by the `filters_chain` and `crypt_encrypt_dict` fuzz targets: a
+    /// `/Columns 999999999999999999999999` reached `as_c_int`, whose
+    /// `debug_assert!` on that range is the contract this pins. The bug was
+    /// an `i64` accumulator that *saturated* — turning an absurd token into
+    /// `i64::MAX` rather than into nothing.
+    #[test]
+    fn integers_outside_the_c_int_range_are_zero() {
+        use pdfrum_object::INT_RANGE;
+
+        // An unsigned spelling reaches u32::MAX and stops.
+        assert_eq!(parse(b"4294967295"), Ok(Object::Int(4_294_967_295)));
+        assert_eq!(parse(b"4294967296"), Ok(Object::Int(0)));
+        assert_eq!(parse(b"99999999999999999999999999"), Ok(Object::Int(0)));
+
+        // A signed spelling only reaches i32::MAX...
+        assert_eq!(parse(b"+2147483647"), Ok(Object::Int(2_147_483_647)));
+        assert_eq!(parse(b"+2147483648"), Ok(Object::Int(0)));
+        assert_eq!(parse(b"+4294967295"), Ok(Object::Int(0)));
+        // ...except negatively, where i32::MIN must be spellable.
+        assert_eq!(parse(b"-2147483648"), Ok(Object::Int(-2_147_483_648)));
+        assert_eq!(parse(b"-2147483649"), Ok(Object::Int(0)));
+        assert_eq!(parse(b"-99999999999999999999"), Ok(Object::Int(0)));
+
+        // The invariant itself, over every boundary spelling.
+        for spelling in [
+            &b"0"[..],
+            b"-0",
+            b"+0",
+            b"2147483647",
+            b"2147483648",
+            b"4294967295",
+            b"4294967296",
+            b"-2147483648",
+            b"-2147483649",
+            b"18446744073709551616",
+            b"999999999999999999999999999999",
+            b"-999999999999999999999999999999",
+        ] {
+            let Ok(Object::Int(v)) = parse(spelling) else {
+                panic!(
+                    "{} did not parse as an integer",
+                    String::from_utf8_lossy(spelling)
+                );
+            };
+            assert!(
+                INT_RANGE.contains(&v),
+                "{} parsed to {v}, outside INT_RANGE",
+                String::from_utf8_lossy(spelling)
+            );
+            // The accessor whose debug_assert the fuzzer tripped.
+            let _ = pdfrum_object::as_c_int(v);
+        }
     }
 
     #[test]
