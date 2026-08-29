@@ -16,6 +16,11 @@ workspace = true
 # shift under a dependency update (DEPS.md, same rationale as hand-rolled SSIM).
 [dependencies]
 anyhow.workspace = true
+# The save round-trip mode checks the append discipline through the library
+# rather than through the tool, because `--save` writes a full save and the
+# incremental path has no flag of its own (SPEC.md §11's ruling E7).
+pdfrum-edit.workspace = true
+pdfrum-parser.workspace = true
 clap.workspace = true
 png.workspace = true
 sha2.workspace = true
