@@ -498,9 +498,21 @@ with `enum SaveMode { Full, Incremental }`. Serializer writes objects
 deterministically (stable dict order = insertion order; floats via `ryu`
 shortest, matching dragonbox behavior). Incremental save appends
 changed-object sections + new xref. Page import/reorganization as functions
-`Document::import_pages(...)`. Font subsetting via `subsetter` crate behind
-`fn subset(font_bytes, gids) -> Vec<u8>`. Round-trip property tests own this
-crate's correctness.
+`Document::import_pages(...)`.
+Rulings 2026-08-29 (edit brief escalations): `Document` additionally exposes
+`last_xref_offset`, `main_xref_is_stream`, and the raw `/Encrypt` dict —
+additive §5 changes landed with the M7 work (E1/E2). v1 saves encrypted
+documents DECRYPTED (`remove_security` semantics); preserve-encryption save
+is deferred past M7 — no C++ save test exercises it (E3). Font subsetting is
+**CID fonts only** and the contract is
+`fn subset(font_bytes, gids) -> (Vec<u8>, GidMap)` — the `subsetter` crate
+renumbers GIDs and strips cmap (unlike HarfBuzz RETAIN_GIDS), so /W,
+ToUnicode, and Identity-H content streams are re-keyed through the returned
+map (E4). The four import-path bugs the brief identifies are FIXED, not
+ported — each divergence pinned by its own test (E10). M7's "oracle reopens
+our files" exit is a two-step harness check: pdfrum saves, the oracle
+reopens + renders (E7; pdfium_test has no save flag). Round-trip property
+tests own this crate's correctness.
 
 ## 12. JBIG2 / JPX integration
 
