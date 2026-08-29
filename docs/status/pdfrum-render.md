@@ -1,8 +1,14 @@
 # `pdfrum-render` status
 
-**Updated:** 2026-08-29 · **State:** M8 pixel burn-down wave 9 —
-**92.9% at SSIM ≥ 0.99** (up from 90.4%), **98.5% at 0.95**, 511 byte-exact
-unchanged, and **192 files up with none down**, 42 across the 0.99 line. Wave 9 classified the
+**Updated:** 2026-08-30 · **State:** M9 parity tail closure (wave 12) —
+**97.4% at SSIM ≥ 0.99** (up from 96.2%), **99.4% at 0.95**, 519 byte-exact,
+1624 / 1675 files passing, and the **`--annot` tier clean across all 1675
+files**. The largest remaining cluster was the image downscale kernel; it is
+ported, and rounding its destination size *up* rather than to nearest was worth
+as much again. See "Wave 12" below for the tail, which is now 42 files in four
+measured mechanisms.
+
+*(Historical, wave 9:)* Wave 9 classified the
 0.95–0.99 band before touching it, and the classification was the finding:
 **31 of its 86 documents carried no font at all**, and twenty-five were missing
 *ink* rather than miscovering it. The band had been recorded as "glyph
@@ -2283,21 +2289,251 @@ rather than a bug:
   depending on a wrong face for its score.
 
 
+## Wave 12 (M9): the downscale kernel, and three things standing behind it
+
+M9's worklist was wave 11's tail inventory. Four of its five items landed; the
+fifth — `en_fqa` — was re-derived from scratch, and the answer was that it had
+never been a text file at all.
+
+### The reduction was the largest item, and rounding it up was half of it
+
+`CStretchEngine::WeightTable::CalculateWeights` takes a two-tap bilinear branch
+only when `|scale| < 1`. For a *reduction* it falls to an area-average box
+filter over every source pixel the destination pixel's footprint overlaps,
+weighted by the overlap area, with the fractional residue of each weight
+carried into the next and the unspent remainder landing on the final tap — so
+one destination pixel's weights sum to exactly `1 << 16` and the accumulation
+shifts rather than divides. That invariant is the only thing `cstretchengine_
+unittest.cpp` asserts about the table, and it is what keeps a flat field flat.
+
+We delegated to the backend either way and under-blurred. The filter now runs
+as a **pre-pass in the engine** (`stretch::prescale`), not in either backend:
+both must resample identically or Tier C's interior rule fails, and a pre-pass
+leaves one implementation shared by construction. The backend still does the
+last sub-pixel placement, which is the only part of the pipeline that knows
+where the image lands — so the two agree on the low-pass, which a two-tap
+filter cannot do at all, and differ by at most one two-tap interpolation.
+
+**The destination size rounds up, not to nearest, and that is worth as much as
+the filter.** A footprint of 9.72 device pixels starting at a fraction covers
+eleven device rows; reducing to ten leaves the backend a sample short of the
+outermost two, and an edge row arrives *empty* rather than faint. Rounding to
+nearest first: **1572 at 0.99**. Rounding up: **1586**. One word, fourteen
+files.
+
+### `en_fqa` is not a text file, and wave 10's instrumentation was not why
+
+Wave 10's trace reported 32 runs and 2 glyphs on a page it assumed drew
+thousands, and was recorded as unreliable. It was not: **the page really does
+draw almost no text**. Its one font is `/FirstChar 32 /LastChar 32` — a
+one-glyph font that can render a space — and its six `TJ` operators each show
+exactly one. Every visible line of type is a 2x2 colour swatch whose `/SMask`
+is a 40x3285-wide, 81-to-86-row 1-bit bitmap carrying the glyph shapes, drawn
+through a `cm` that minifies it **8.33x in both axes**, 276 times across the
+document. The instrumentation was right and the inference from it was wrong.
+
+Per-band ink ratios cluster at 0.91 with the deficit negative in 34 of 35
+bands, and per-row measurement puts it precisely: interior rows match at
+0.96–1.16 while the top and bottom row of every line of type collapses to
+0.28–0.34. That is the rounding above, on 276 masks at once. **.885 → .921**,
+with no change to anything in the text pipeline.
+
+### CCITT had a decoder and no caller, and the repack is most of the work
+
+`pdfrum-filters` classes `/CCITTFaxDecode` as an image codec and hands its
+bytes back undecoded, because a codec needs the image dictionary the chain does
+not have — and the image path answered with an error rather than a call. It now
+decodes on both rungs.
+
+The bit sense needed nothing: the fax decoder fills a row white and clears bits
+for black, `/BlackIs1` inverts, and that is already what a one-bit
+`/DeviceGray` sample means. The **stride** needed everything. A fax row is
+padded to four bytes; every consumer here reads rows at `width.div_ceil(8)`.
+At width 20 those are 4 and 3, and reading the wide buffer at the narrow stride
+starts each row a byte further into the previous one — a shear that grows down
+the page. A test over a uniform image cannot see it; the regression test uses
+a row of eight black pixels for that reason, and fails when the stride is
+sabotaged.
+
+### `bug_1746`'s second factor of two was where the alpha is applied
+
+Wave 8 measured the `painted_box` fix as making the file *worse* — .835 → .765
+— because the glyph appeared at half the alpha the oracle gives it, and filed
+it as "a second `ca 0.5` we do not reproduce". There is no second factor. There
+is one factor applied in the wrong place.
+
+The oracle renders a translucent Type 3 procedure into its buffer at the text
+object's **alpha-carrying colour** and blits that buffer *opaquely*
+(`SetFillColor(fill_argb)` then `SetDIBits`). We forced the buffer opaque and
+re-applied at the blit. Both are one factor of alpha, and they differ wherever
+the procedure covers a pixel partially: an edge pixel painted at alpha 128 and
+blitted opaquely keeps 128, while one painted opaquely to coverage 128 and
+blitted at half alpha becomes 64.
+
+With the alpha moved and the buffer sized from `painted` — the objects' own
+extent, which an identity `/FontMatrix` cannot push off the page the way the
+declared box does — **`bug_1746` .835 → .952**, and nothing else moves. Wave 11
+was right that CCITT had to land first: without it the glyph draws garbage.
+
+### Two of the four annot artifacts were not a font map at all
+
+`example_014` and `example_054` reported their colour keys unreadable where the
+oracle reads them. The cause is one rule: **a form field carrying `/Kids` is
+not a control.** `AddControl` is reached only for a field dict with no `/Kids`
+and otherwise for each kid instead (`cpdf_interactiveform.cpp:969-981`), so a
+`/Btn` parent with `/Rect [0 0 0 0]` has no appearance to build — and building
+one anyway produced an empty stream over an empty box, invisible on the page
+and enough to make the dump report the keys as unreadable, because any
+appearance outranks them.
+
+A first attempt gated on `/AS` instead, from `CPDF_AnnotList`'s `GenerateAP`.
+That is a different rule for a different thing — it is an `/AS` *inheritance*
+fixup, not an appearance gate — and it suppressed six real checkbox widgets.
+Measured, reverted, replaced.
+
+### `bug_725389` needed the fallthrough, not the N-slot map
+
+Wave 11 characterised this under gdb as `CPDF_BAFontMap`: N slots, charset-
+driven, slot 1 the alias `_B1` resolving to `Tinos-Regular` with a CP1255
+`/Differences`. That characterisation is correct and the port is large — a
+numeric `FX_Charset`, the eight hi-byte tables, a charset-driven font request,
+a `HasInstalledFont` predicate, a `/Differences` writer, and a multi-font `Tf`
+emitter, none of which exist.
+
+None of it is *observable* here. The map's ladder ends in
+`CPWL_EditImpl::GetPDFWordString`'s fallthrough, which appends the raw code
+point as a character code when no slot knows the character — and on a hermetic
+font set no second face is found, so the fallthrough is the whole of the
+behaviour. Writing the raw code point takes the annotation dump from three text
+objects to six and closes the tier.
+
+The width had to follow the same code: a simple font's codes are one byte and
+the emitter truncates to one, so measuring the untruncated code point advanced
+the layout past characters the stream still contained.
+
+**The `--annot` tier is now clean across all 1675 files.** It costs
+`bug_725389` .0093 of pixel SSIM — the glyph that draws is wrong, the object
+exists — and it stays in the same band. Whether the N-slot map is ever worth
+building is a question this corpus cannot ask.
+
+### The negative result: snapping an image to its outer integer rect
+
+`CPDF_ImageRenderer` takes `GetUnitRect().GetOuterRect()` and stretches to
+`rect.Width()` by `rect.Height()`, so every device pixel an axis-aligned image
+touches is *filled* and its rim carries no partial coverage. Ours antialiases
+that rim, and on `FRC_8.2.4` the boundary ring is 1.6 of a 4.74 mean residual.
+
+Reproducing it measures **+4 files at 0.99 and +14 byte-exact — and regresses
+four**: `image_foxit` .996 → .969, `2_halftone` .992 → .967, `bug_642` .992 →
+.987. A guard meant to fire only on a fractional placement did not fire on
+`image_foxit`, whose 364x140 image lands on 273x105 at the origin: the rect is
+integral in arithmetic and not in floating point, and `273/364 * 364` is not
+273. Reverted rather than tuned, because the four files it costs are real and
+the files it was aimed at do not need it — see below.
+
+### Where the remaining 42 are, measured rather than guessed
+
+Four files sitting just under the threshold were segmented spatially, and they
+share **no** cause:
+
+| file | mechanism | evidence |
+|---|---|---:|
+| `bug_691967` (.9895) | image downscale, **interior** | border ring 2.8% of px differ at meanD 1.5; interior 16.5% at meanD 17.4 |
+| `123` (.9892) | JPX decoder colour, not geometry | border ring **0 of 2890 px** differ; interior 97%, mode difference 3 |
+| `example_057` (.9897) | vector stroke antialiasing | partial-coverage buckets carry 48.5% of error on 37% of pixels; text is 39% of pixels and 5% of error |
+| `checkboxes` (.9899) | ZapfDingbats glyph *shape* | 3 of 6 widgets swap black and white outright (93% of error); the other 3 differ by one LSB of background colour |
+
+The outer-rect issue appears in **none** of them. That is why the snap was
+reverted rather than repaired: it is aimed at a residual these files do not
+have.
+
+### The tail after wave 12
+
+**42 files, 31 unique documents** once `.in`/`.pdf` pairs collapse — down from
+62 files and 51 documents. Every one, with its cause:
+
+| ssim | document | cause |
+|---:|---|---|
+| .6457 | `bug_867501` | upstream `hayro-jbig2`: segment bodies sliced to a declared length of zero. Issue drafted at `docs/upstream/hayro-jbig2-issue.md` |
+| .8710 | `bug_1772` | image transform: a general (sheared) matrix takes the non-axis-aligned path, which the reduction pre-pass declines |
+| .8751 | `image_transformer_other` | same: `CFX_ImageTransformer`'s rotate/shear resampler is not ported |
+| .9208 | `en_fqa` | 276 masks minified 8.33x; residual is the two-stage phase difference the pre-pass leaves, plus the un-snapped rim |
+| .9224 | `vertical_text` | vertical writing mode: per-glyph origin displacement `/W2` defaults are approximated |
+| .9325 | `2_uncolor_tiling` | uncoloured tiling pattern cell rasterized once and blitted; cell-boundary coverage differs |
+| .9464 | `example_009` | image downscale interior, the same residual as `bug_691967` at larger scale |
+| .9502 | `same_color_knockout_fill` | knockout group: same-colour fill and stroke composite order |
+| .9508 | `bug_1442723` | text extraction disagreement (tierA) plus glyph coverage |
+| .9524 | `bug_1746` | Type 3 fax mask; the alpha and box are fixed, the residual is the mask's own rim |
+| .9540 | `en_system` | substituted-face glyph shapes (no embedded font) |
+| .9621 | `3bigpreview` | image downscale interior |
+| .9670 | `quick_start_guide` | substituted-face glyph shapes |
+| .9674 | `bug_725389` | the wrong glyph draws for three Hebrew characters; see above |
+| .9693 | `bug_665467` | shading mesh interior interpolation |
+| .9710 | `example_010` | vector stroke antialiasing |
+| .9751 | `1_image` | image downscale interior |
+| .9779 | `path_7` | vector antialiasing on curve edges |
+| .9805 | `bug_1395648` | glyph coverage on a small size |
+| .9806 | `rotated_image` | rotated image: the non-axis-aligned resampler again |
+| .9817 | `transparent1` | group transparency compositing rounding |
+| .9830 | `example_025` | vector stroke antialiasing |
+| .9831 | `linearized` | glyph coverage |
+| .9855 | `clipping_text` | text-clip coverage at the clip edge |
+| .9875 | `transformation` | vector antialiasing under a general matrix |
+| .9876 | `lines` | thin-line antialiasing |
+| .9879 | `example_058` | vector stroke antialiasing |
+| .9892 | `123` | JPX decoder LSB colour, measured: rim is bit-exact |
+| .9895 | `bug_691967` | image downscale interior, measured |
+| .9897 | `example_057` | vector stroke antialiasing, measured |
+| .9899 | `checkboxes` | ZapfDingbats caption glyph shape, measured |
+
+Nine `tierA` mismatches remain, all `input.pdf.*.txt` — text extraction, not
+rendering and not annotations: `1_10_watermark`, `example_055`, `example_062`,
+`bug_1769`, `bug_1388_3`, `bug_1442723`.
+
+### What the next wave should not do again
+
+- **Do not snap an image to its outer integer rect without measuring the four
+  files it costs.** The behaviour is real and upstream, the residual it removes
+  is real, and it is still a net loss as written. If it is retried, the guard
+  must tolerate floating-point error in "already grid-aligned", and
+  `image_foxit`, `2_halftone` and `bug_642` are the files that say whether it
+  worked.
+- **Do not read `en_fqa` as a text file.** It is 87 image draws and six spaces.
+  Wave 10's instrumentation was accurate and its conclusion was not; the
+  mechanism is the image path from end to end.
+- **Do not port `CPDF_BAFontMap` for `bug_725389`.** The map's whole
+  observable contribution on a hermetic font set is
+  `GetPDFWordString`'s raw-code-point fallthrough, which is three lines. The
+  N-slot machinery would change the *glyph*, which no tier measures, and
+  nothing else.
+- **Do not gate widget appearance generation on `/AS`.** `CPDF_AnnotList::
+  GenerateAP`'s `/Btn` arm is an `/AS` inheritance fixup, not an appearance
+  gate; using it as one suppresses six real checkbox widgets. The gate that
+  works is `/Kids`.
+- **Do not test a repack with a uniform image.** The CCITT stride bug is
+  invisible on an all-white bitmap and obvious on any row that is not constant.
+  The first version of that test passed with the stride deliberately broken.
+- **The remaining tail is four mechanisms, not one.** Image downscale interior
+  (5 documents), vector stroke antialiasing (4), substituted-face glyph shape
+  (4), and the non-axis-aligned image transformer (3). Each was measured
+  spatially rather than inferred from a filename.
+
+
 ## Numbers
 
 Measured against the golden store on the full corpus (1675 files, 1628 with
 a golden PNG), rendering through `tiny-skia`. The W3 column is the pixel
 burn-down's third wave; M5 is where the burn-down started.
 
-| metric | M5 | M8 (wave 2) | W3/W4 | W5 | W6 | W7 | W8 | W9 | W10 | **W11** |
-|---|---|---|---|---|---|---|---|---|---|---|
-| pixel files at SSIM ≥ 0.99 | 1075 / 1628 (66.0%) | 1243 / 1628 (76.4%) | 1247 / 1628 (76.6%) | 1387 / 1628 (85.2%) | 1403 / 1628 (86.2%) | 1441 / 1628 (88.5%) | 1471 / 1628 (90.4%) | 1513 / 1628 (92.9%) | 1540 / 1628 (94.6%) | **1566 / 1628 (96.2%)** |
-| at SSIM ≥ 0.95 | 1478 / 1628 (90.8%) | 1518 / 1628 (93.2%) | 1520 / 1628 (93.4%) | 1554 / 1628 (95.5%) | — | 1574 / 1628 (96.7%) | 1595 / 1628 (98.0%) | 1603 / 1628 (98.5%) | 1605 / 1628 (98.6%) | **1616 / 1628 (99.3%)** |
-| at SSIM ≥ 0.90 | 1544 / 1628 (94.8%) | 1570 / 1628 (96.4%) | 1572 / 1628 (96.6%) | 1591 / 1628 (97.7%) | — | 1597 / 1628 (98.1%) | 1615 / 1628 (99.2%) | 1616 / 1628 (99.3%) | 1616 / 1628 (99.3%) | **1619 / 1628 (99.4%)** |
-| byte-exact PNGs | 430 / 1628 | 446 / 1628 | 451 / 1628 | 451 / 1628 | 487 / 1628 | 499 / 1628 | 511 / 1628 | 511 / 1628 | 511 / 1628 | **516 / 1628** |
-| files passing (all tiers) | 1146 / 1675 | 1256 / 1675 | 1260 / 1675 | 1396 / 1675 | 1411 / 1675 | 1448 / 1675 | 1478 / 1675 | 1510 / 1675 | 1569 / 1675 | **1602 / 1675** |
-| `pixel-fail` | 495 | 385 | 381 | 241 | 225 | 187 | 157 | 115 | 88 | **62** |
-| `size-mismatch` | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | **0** |
+| metric | M5 | M8 (wave 2) | W3/W4 | W5 | W6 | W7 | W8 | W9 | W10 | W11 | **W12 (M9)** |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| pixel files at SSIM ≥ 0.99 | 1075 / 1628 (66.0%) | 1243 / 1628 (76.4%) | 1247 / 1628 (76.6%) | 1387 / 1628 (85.2%) | 1403 / 1628 (86.2%) | 1441 / 1628 (88.5%) | 1471 / 1628 (90.4%) | 1513 / 1628 (92.9%) | 1540 / 1628 (94.6%) | 1566 / 1628 (96.2%) | **1586 / 1628 (97.4%)** |
+| at SSIM ≥ 0.95 | 1478 / 1628 (90.8%) | 1518 / 1628 (93.2%) | 1520 / 1628 (93.4%) | 1554 / 1628 (95.5%) | — | 1574 / 1628 (96.7%) | 1595 / 1628 (98.0%) | 1603 / 1628 (98.5%) | 1605 / 1628 (98.6%) | 1616 / 1628 (99.3%) | **1618 / 1628 (99.4%)** |
+| at SSIM ≥ 0.90 | 1544 / 1628 (94.8%) | 1570 / 1628 (96.4%) | 1572 / 1628 (96.6%) | 1591 / 1628 (97.7%) | — | 1597 / 1628 (98.1%) | 1615 / 1628 (99.2%) | 1616 / 1628 (99.3%) | 1616 / 1628 (99.3%) | 1619 / 1628 (99.4%) | **1623 / 1628 (99.7%)** |
+| byte-exact PNGs | 430 / 1628 | 446 / 1628 | 451 / 1628 | 451 / 1628 | 487 / 1628 | 499 / 1628 | 511 / 1628 | 511 / 1628 | 511 / 1628 | 516 / 1628 | **519 / 1628** |
+| files passing (all tiers) | 1146 / 1675 | 1256 / 1675 | 1260 / 1675 | 1396 / 1675 | 1411 / 1675 | 1448 / 1675 | 1478 / 1675 | 1510 / 1675 | 1569 / 1675 | 1602 / 1675 | **1624 / 1675** |
+| `pixel-fail` | 495 | 385 | 381 | 241 | 225 | 187 | 157 | 115 | 88 | 62 | **42** |
+| `size-mismatch` | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | **0** |
 | Tier C hard failures | — | 5 | 3 | 3 | 3 | 3 | 3 | 3 | 3 | **3** |
 
 **The W7 column is wave 7 and wave 7b together**, and the two were measured
