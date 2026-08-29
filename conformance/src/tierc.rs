@@ -1,5 +1,26 @@
-//! Tier C: the two rasterizers against each other, over our own engine's
+//! Tier C: two rasterizers against each other, over our own engine's
 //! output (PLAN.md §5).
+//!
+//! # Three backends, one gating pair
+//!
+//! There are three `RasterBackend` implementations, and this tier gates on
+//! **`tiny-skia` against `vello_cpu`** only. That is not an oversight and not
+//! a cost saving.
+//!
+//! The tier's whole value is that two *independent* implementations disagree
+//! out loud: neither wrapped rasterizer knows anything about PDF, so anything
+//! they agree on is the engine's decision and anything they differ on is a
+//! rasterizer's own business. `pdfrum-raster-exact` does not have that
+//! independence — it is ours, and it shares the engine's compositing
+//! arithmetic, one `blend::composite_premultiplied` serving the engine and all
+//! three backends. A disagreement between it and either wrapped backend
+//! therefore tests *less* than a disagreement between the two wrapped ones,
+//! because a shared bug cannot produce one.
+//!
+//! So it is measured and reported as a third column
+//! ([`crate::run::TierCOutcome::exact_edge_rate`]) and never gated. If it ever
+//! diverges widely from the pair, that is worth reading — but it is a
+//! question, not a verdict.
 //!
 //! Tier B asks whether we match the oracle; Tier C asks whether the *engine*
 //! is the thing that decided the answer. The design brief makes that precise
@@ -59,7 +80,7 @@
 //! space, at any size. A page one backend fills red and the other fills white
 //! has no agreed boundary anywhere, so every pixel stays interior. That is
 //! not hypothetical — it is `bug_554151`, and
-//! [`tests::a_whole_page_colour_divergence_survives_dilation`] is it reduced
+//! `tests::a_whole_page_colour_divergence_survives_dilation` is it reduced
 //! to sixteen pixels.
 //!
 //! Two absolute failures short-circuit the metric, both from the backend

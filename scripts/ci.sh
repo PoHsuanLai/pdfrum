@@ -17,6 +17,13 @@ cargo nextest run
 echo "==> cargo test --doc (nextest silently skips doctests)"
 cargo test --doc --workspace
 
+# Doctests prove the *examples* compile and run; this proves the prose around
+# them resolves. A broken intra-doc link is invisible to every other gate here
+# — it degrades to plain text in the rendered page — so without this the docs
+# rot silently while the build stays green.
+echo "==> cargo doc --no-deps (deny warnings)"
+RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --workspace
+
 echo "==> cargo deny check"
 if command -v cargo-deny >/dev/null 2>&1; then
     cargo deny check

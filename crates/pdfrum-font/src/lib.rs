@@ -40,7 +40,7 @@
 //! glyphs — PDFium's `LoadCommon` has no failing path, and neither does ours.
 //! Only a Type0 font can fail to load, in the four ways [`Error`] names, and
 //! only because the oracle treats those as "the resource is not there".
-//! Everything else is a [`Diagnostics`](pdfrum_common::Diagnostics) entry and a
+//! Everything else is a [`pdfrum_common::Diagnostics`] entry and a
 //! best-effort result.
 
 #![forbid(unsafe_code)]

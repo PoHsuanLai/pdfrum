@@ -60,7 +60,7 @@ pub struct SimpleFont {
     /// `/ToUnicode` substitute: this is the ladder's own working table, which
     /// several branches write into and later branches read back.
     pub unicodes: [u16; 256],
-    /// The glyph each code selects. [`WIDTH_UNSET`] means "no glyph", which is
+    /// The glyph each code selects. `WIDTH_UNSET` means "no glyph", which is
     /// distinct from glyph 0.
     pub glyph_index: [u16; 256],
     /// The declared widths.
