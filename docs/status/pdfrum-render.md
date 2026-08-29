@@ -70,14 +70,18 @@ a golden PNG), rendering through `tiny-skia`:
 | at SSIM ≥ 0.90 | 1296 / 1421 (91.2%) | — |
 | byte-exact PNGs | 350 / 1421 | — |
 | `size-mismatch` | 1 | — |
-| Tier C hard failures (95-file sample) | **0** | — |
+| Tier C hard failures (295-file sample) | **0** | — |
 
 Tier C's *edge* rate is reported rather than gated; `conformance/src/tierc.rs`
 explains why, and the short version is that the brief's 1% budget is written
 against a trace-derived mask several times larger than the neighbourhood
 proxy the harness can compute today. What the contract actually gates on —
 that every engine decision is identical under both rasterizers — holds at
-zero failures.
+zero failures across 295 files. 89 of those (30%) also fall inside the 1%
+edge budget as measured; the rest disagree only where an antialiased edge
+straddles a pixel boundary, which the two rasterizers split differently by
+construction (a stem `tiny-skia` writes 127/127 and `vello_cpu` writes
+104/150 — the same ink, distributed differently).
 
 Monotone against the previous scoreboard: zero regressions, and the pass
 count rises 45 to 47. Metadata and pageinfo remain 100% Tier-A byte-exact.
