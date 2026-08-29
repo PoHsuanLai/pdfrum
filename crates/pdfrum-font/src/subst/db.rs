@@ -205,6 +205,67 @@ pub trait FontDb {
     }
 }
 
+/// A database whose *by-name* lookups see Croscore family names instead of the
+/// ones the ladder computed.
+///
+/// The `test_fonts` directory carries no Arial, Times or Courier — it carries
+/// the metric-compatible Arimo, Tinos and Cousine — so a hermetic run rewrites
+/// the family a lookup asks for. The rewrite belongs **here**, on the two
+/// by-name queries, and not on the `/BaseFont` name the ladder starts from: the
+/// ladder's base-14 recognition, style parsing and charset decision all run on
+/// the document's own spelling, and only the family that finally reaches the
+/// database is renamed. Rewriting earlier would hide `Arial,Bold` from the
+/// base-14 table and lose the bold with it.
+///
+/// [`faces`](FontDb::faces) and [`face_bytes`](FontDb::face_bytes) pass
+/// straight through: the *installed* names are what the enumeration produced,
+/// and the name-normalizing rung matches against those unrenamed.
+#[derive(Debug, Clone, Copy)]
+pub struct CroscoreDb<'a, D> {
+    inner: &'a D,
+}
+
+impl<'a, D: FontDb> CroscoreDb<'a, D> {
+    /// Wrap a database so its by-name lookups take Croscore family names.
+    #[must_use]
+    pub fn new(inner: &'a D) -> Self {
+        Self { inner }
+    }
+}
+
+impl<D: FontDb> FontDb for CroscoreDb<'_, D> {
+    fn faces(&self) -> &[FaceInfo] {
+        self.inner.faces()
+    }
+
+    fn face_bytes(&self, h: FaceHandle) -> Option<(Arc<[u8]>, u32)> {
+        self.inner.face_bytes(h)
+    }
+
+    fn find_font(
+        &self,
+        weight: i32,
+        italic: bool,
+        charset: Charset,
+        pitch: PitchFamily,
+        family: &str,
+        must_match_name: bool,
+    ) -> Option<FaceHandle> {
+        self.inner.find_font(
+            weight,
+            italic,
+            charset,
+            pitch,
+            &super::croscore_name(family),
+            must_match_name,
+        )
+    }
+
+    fn font_by_name(&self, name: &str) -> Option<FaceHandle> {
+        self.inner.font_by_name(&super::croscore_name(name))
+    }
+}
+
 /// A database backed by an explicit list of faces — the test seam, and what a
 /// hermetic `--font-dir` run uses.
 #[derive(Debug, Clone, Default)]
