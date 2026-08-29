@@ -324,7 +324,7 @@ pub fn decode_image<R: Resolve>(
             }
         }
         Some(Filter::Dct) => {
-            let image = decode_dct(&decoded.data).inspect_err(|_| {
+            let image = decode_dct(&decoded.data, (info.width, info.height)).inspect_err(|_| {
                 diags.record(Severity::Suspicious, DiagKind::ImageDecodeFailed, None);
             })?;
             // The codec's dimensions **override** the dictionary's.

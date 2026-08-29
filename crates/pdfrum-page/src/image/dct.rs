@@ -145,13 +145,103 @@ fn output_space(channels: u8) -> Option<ZColorSpace> {
     (channels == 4).then_some(ZColorSpace::CMYK)
 }
 
+/// The two byte offsets a known-bad SOF height is patched at.
+///
+/// `kKnownBadHeaderWithInvalidHeightByteOffsetStarts`,
+/// `libjpeg_scanline_decoder.cpp:26`. They are *positions*, not a search: the
+/// two encoders that emit this header put their SOF segment at one of exactly
+/// these two places, and PDFium declines to guess anywhere else.
+const KNOWN_BAD_HEIGHT_OFFSETS: [usize; 2] = [94, 163];
+
+/// How far back from the dimension bytes the SOF marker sits.
+///
+/// `kSofMarkerByteOffset`, used at `libjpeg_scanline_decoder.cpp:290`: two
+/// marker bytes, two length bytes and the one-byte sample precision.
+const SOF_MARKER_BACK_OFFSET: usize = 5;
+
+/// Whether a codestream carries the known-bad SOF header with height `0xffff`,
+/// at `offset`.
+///
+/// `HasKnownBadHeaderWithInvalidHeight`,
+/// `libjpeg_scanline_decoder.cpp:272-303`. Its own comment calls the checks
+/// "lots of possibly redundant" ones, and they are kept in full for the reason
+/// it gives: this rewrites image bytes, so a false positive corrupts a picture
+/// that would otherwise have decoded. The declared width must match the
+/// dictionary's *exactly*, which is what makes a bare height of `0xffff`
+/// insufficient on its own.
+fn has_known_bad_height(data: &[u8], offset: usize, declared: (u32, u32)) -> bool {
+    let (width, height) = declared;
+    if width == 0 || width > JPEG_MAX_DIMENSION || height == 0 || height > JPEG_MAX_DIMENSION {
+        return false;
+    }
+    let Some(marker_at) = offset.checked_sub(SOF_MARKER_BACK_OFFSET) else {
+        return false;
+    };
+    // `IsSofSegment`: any of the sixteen start-of-frame markers.
+    if !matches!(
+        data.get(marker_at..marker_at + 2),
+        Some(&[0xff, sof]) if (0xc0..=0xcf).contains(&sof)
+    ) {
+        return false;
+    }
+    let expected = big_endian(width);
+    matches!(
+        data.get(offset..offset + 4),
+        Some(&[0xff, 0xff, high, low]) if [high, low] == expected
+    )
+}
+
+/// libjpeg's own `JPEG_MAX_DIMENSION`.
+///
+/// The reason this repair path exists at all: `0xffff` is above it, so libjpeg
+/// raises `JERR_IMAGE_TOO_BIG` and refuses the header outright rather than
+/// decoding a very tall image.
+const JPEG_MAX_DIMENSION: u32 = 65500;
+
+/// A dimension as the two big-endian bytes a SOF segment stores it in.
+#[allow(clippy::cast_possible_truncation)]
+fn big_endian(dimension: u32) -> [u8; 2] {
+    [((dimension >> 8) & 0xff) as u8, (dimension & 0xff) as u8]
+}
+
 /// Decode a baseline JPEG.
+///
+/// `declared` is the image dictionary's `/Width` and `/Height`, which the
+/// codestream normally overrides — see [`probe`]. It is threaded in for the
+/// one case where the codestream is *wrong* and the dictionary is right:
+/// PDFium seeds `cinfo` with the dictionary's dimensions before reading the
+/// header (`libjpeg_scanline_decoder.cpp:85-86`), and when the header is
+/// refused it looks for a specific malformation and rewrites the bytes.
 ///
 /// # Errors
 ///
 /// [`Error::CodecRejected`] when the codestream will not decode or declares a
 /// component count or bit depth PDF does not allow.
-pub fn decode_dct(data: &[u8]) -> Result<DctImage, Error> {
+pub fn decode_dct(data: &[u8], declared: (u32, u32)) -> Result<DctImage, Error> {
+    // A header this decoder refuses gets one repair attempt, on exactly the
+    // malformation PDFium repairs: a SOF declaring height `0xffff` — above
+    // libjpeg's `JPEG_MAX_DIMENSION`, so `JERR_IMAGE_TOO_BIG` — beside the
+    // dictionary's own width. `PatchUpKnownBadHeaderWithInvalidHeight`
+    // (`libjpeg_scanline_decoder.cpp:309-315`) writes the dictionary's height
+    // over those two bytes and reads the header again. Upstream patches the
+    // source buffer in place through a `const_cast`; a copy is the same
+    // decision without the aliasing.
+    let patched: Option<Vec<u8>> = probe(data)
+        .is_none()
+        .then(|| {
+            KNOWN_BAD_HEIGHT_OFFSETS
+                .into_iter()
+                .find(|&offset| has_known_bad_height(data, offset, declared))
+                .map(|offset| {
+                    let mut copy = data.to_vec();
+                    if let Some(slot) = copy.get_mut(offset..offset + 2) {
+                        slot.copy_from_slice(&big_endian(declared.1));
+                    }
+                    copy
+                })
+        })
+        .flatten();
+    let data = patched.as_deref().unwrap_or(data);
     // The header pass first, so the output space can be pinned to the
     // codestream's channel count before any samples are produced.
     let channels = probe(data).map_or(0, |(_, _, c)| c);
@@ -216,7 +306,7 @@ mod tests {
 
     use super::{
         ADOBE_CMYK_DECODE, ZColorSpace, allows_reduced_resolution, component_mismatch_allowed,
-        decode_dct, output_space, probe, scale_denominator, scaled_size,
+        decode_dct, has_known_bad_height, output_space, probe, scale_denominator, scaled_size,
     };
     use crate::color::{ColorSpace, Indexed};
 
@@ -304,9 +394,58 @@ mod tests {
     #[test]
     fn garbage_is_rejected_rather_than_panicked_on() {
         for data in [&b""[..], b"\xFF\xD8", b"not a jpeg", &[0u8; 64]] {
-            assert!(decode_dct(data).is_err(), "{data:?} should be rejected");
+            assert!(
+                decode_dct(data, (0, 0)).is_err(),
+                "{data:?} should be rejected"
+            );
             assert!(probe(data).is_none());
         }
+    }
+
+    /// A codestream shaped like `bug_86459`'s: a SOF2 at offset 158 declaring
+    /// height `0xffff` and width 612, which is the layout that puts the
+    /// dimension bytes at the second of the two offsets PDFium recognises.
+    fn known_bad_header() -> Vec<u8> {
+        let mut data = vec![0u8; 200];
+        data[158] = 0xff;
+        data[159] = 0xc2;
+        // Length and sample precision fill the three bytes to the dimensions.
+        data[163] = 0xff;
+        data[164] = 0xff;
+        data[165] = 0x02;
+        data[166] = 0x64;
+        data
+    }
+
+    #[test]
+    fn a_sof_height_of_ffff_beside_the_declared_width_is_the_known_bad_header() {
+        let data = known_bad_header();
+        assert!(has_known_bad_height(&data, 163, (612, 792)));
+        // The other sanctioned offset does not match this layout, and no
+        // unlisted offset is even looked at.
+        assert!(!has_known_bad_height(&data, 94, (612, 792)));
+    }
+
+    #[test]
+    fn the_repair_declines_every_way_the_evidence_can_fall_short() {
+        let data = known_bad_header();
+        // A width that is not the dictionary's. This is the check that keeps a
+        // bare `0xffff` from being enough on its own.
+        assert!(!has_known_bad_height(&data, 163, (613, 792)));
+        // A dictionary height of zero, or one above libjpeg's own maximum.
+        assert!(!has_known_bad_height(&data, 163, (612, 0)));
+        assert!(!has_known_bad_height(&data, 163, (612, 65501)));
+        // A marker that is not a start-of-frame.
+        let mut not_sof = data.clone();
+        not_sof[159] = 0xd8;
+        assert!(!has_known_bad_height(&not_sof, 163, (612, 792)));
+        // A height that is not `0xffff` after all.
+        let mut sane = data;
+        sane[163] = 0x03;
+        sane[164] = 0x18;
+        assert!(!has_known_bad_height(&sane, 163, (612, 792)));
+        // And a codestream too short to hold the bytes the test reads.
+        assert!(!has_known_bad_height(&[0xff, 0xc2], 163, (612, 792)));
     }
 
     #[test]
