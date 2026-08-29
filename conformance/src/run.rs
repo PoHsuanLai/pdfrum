@@ -823,3 +823,159 @@ mod tests {
         std::fs::remove_dir_all(&root).ok();
     }
 }
+
+/// What comparing one file under both rasterizers found (Tier C).
+#[derive(Debug, Clone, PartialEq)]
+pub struct TierCOutcome {
+    /// The corpus-relative id.
+    pub path: String,
+    /// Pages compared under both backends.
+    pub pages: u32,
+    /// Whether any page failed the contract outright: a size mismatch, one
+    /// backend painting nothing, or an interior pixel outside the rounding
+    /// budget. Any of the three is an engine bug, not a rasterizer one.
+    pub hard_fail: bool,
+    /// Whether every page also stayed inside the soft edge budget.
+    pub within_budget: bool,
+    /// The worst page's share of differing edge pixels.
+    pub edge_rate: f64,
+    /// What went wrong, when something did.
+    pub note: String,
+}
+
+impl TierCOutcome {
+    fn skipped(path: String, note: String) -> Self {
+        Self {
+            path,
+            pages: 0,
+            hard_fail: false,
+            within_budget: true,
+            edge_rate: 0.0,
+            note,
+        }
+    }
+}
+
+/// Render one file with each rasterizer and diff the two.
+///
+/// Both runs are the same binary with the same flags; only `PDFRUM_BACKEND`
+/// differs, so anything that differs in the output was decided below the
+/// `RenderDevice` seam. A file the tool cannot render at all is *skipped*
+/// rather than failed: Tier B is where "we produced nothing" is scored, and
+/// counting it twice would let a parse regression masquerade as a backend
+/// divergence.
+pub fn compare_backends(
+    entry: &crate::corpus::Entry,
+    tool: &ToolPaths,
+    scratch: &Path,
+    fixup: &Path,
+) -> TierCOutcome {
+    let outcome = compare_backends_inner(entry, tool, scratch, fixup);
+    std::fs::remove_dir_all(scratch).ok();
+    outcome
+}
+
+fn compare_backends_inner(
+    entry: &crate::corpus::Entry,
+    tool: &ToolPaths,
+    scratch: &Path,
+    fixup: &Path,
+) -> TierCOutcome {
+    let id = entry.id.clone();
+    if std::fs::create_dir_all(scratch).is_err() {
+        return TierCOutcome::skipped(id, "no scratch directory".to_owned());
+    }
+    // `materialize_for_run` *returns* the bytes; writing them under the fixed
+    // name is the caller's job, and it is what makes the harvested artifact
+    // names line up with the golden store's.
+    let Ok(bytes) = crate::generate::materialize_for_run(entry, scratch, fixup) else {
+        return TierCOutcome::skipped(id, "could not materialize".to_owned());
+    };
+    let input = scratch.join("input.pdf");
+    if std::fs::write(&input, &bytes).is_err() {
+        return TierCOutcome::skipped(id, "could not write the scratch input".to_owned());
+    }
+
+    let Some(tiny) = render_with(tool, &input, "tiny-skia") else {
+        return TierCOutcome::skipped(id, "tiny-skia produced nothing".to_owned());
+    };
+    let Some(vello) = render_with(tool, &input, "vello") else {
+        return TierCOutcome::skipped(id, "vello produced nothing".to_owned());
+    };
+
+    let mut out = TierCOutcome {
+        path: id,
+        pages: 0,
+        hard_fail: false,
+        within_budget: true,
+        edge_rate: 0.0,
+        note: String::new(),
+    };
+    for (name, tiny_png) in &tiny {
+        let Some((_, vello_png)) = vello.iter().find(|(n, _)| n == name) else {
+            out.hard_fail = true;
+            out.note = format!("{name}: only tiny-skia produced a page");
+            continue;
+        };
+        // Byte-identical output needs no decode, and is the common case for
+        // a page whose every decision the engine made.
+        if tiny_png == vello_png {
+            out.pages += 1;
+            continue;
+        }
+        let (Ok(a), Ok(b)) = (
+            crate::pixels::decode(tiny_png),
+            crate::pixels::decode(vello_png),
+        ) else {
+            out.hard_fail = true;
+            out.note = format!("{name}: a backend's PNG would not decode");
+            continue;
+        };
+        let Some(diff) = crate::tierc::compare(&a, &b) else {
+            out.hard_fail = true;
+            out.note = format!(
+                "{name}: {}x{} vs {}x{} - a size difference is an engine decision",
+                a.width, a.height, b.width, b.height
+            );
+            continue;
+        };
+        out.pages += 1;
+        out.edge_rate = out.edge_rate.max(diff.edge_rate());
+        if diff.hard_fail() {
+            out.hard_fail = true;
+            if out.note.is_empty() {
+                out.note = format!(
+                    "{name}: {} interior pixels differ (max {} counts){}",
+                    diff.interior_differing,
+                    diff.max_channel_diff,
+                    if diff.one_painted_nothing {
+                        "; one backend painted nothing"
+                    } else {
+                        ""
+                    }
+                );
+            }
+        }
+        if !diff.passes() {
+            out.within_budget = false;
+        }
+    }
+    out
+}
+
+/// Run the tool once under one backend and collect the PNGs it wrote.
+fn render_with(tool: &ToolPaths, input: &Path, backend: &str) -> Option<Vec<(String, Vec<u8>)>> {
+    let status = Command::new(&tool.binary)
+        .env("PDFRUM_BACKEND", backend)
+        .args(crate::oracle::determinism_args(&tool.font_dir))
+        .args(crate::oracle::Pass::Render.flags())
+        .arg(input)
+        .output()
+        .ok()?;
+    // A signal-terminated run has no pixels to compare, and Tier B already
+    // scores it as a crash.
+    status.status.code()?;
+    let mut pngs = crate::generate::harvest_for_run(input, crate::oracle::Pass::Render).ok()?;
+    pngs.sort();
+    (!pngs.is_empty()).then_some(pngs)
+}
