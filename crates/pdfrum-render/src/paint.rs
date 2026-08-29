@@ -273,12 +273,18 @@ fn draw_fill_stroke_knockout<B: RasterBackend>(
         );
     }
     if !stroke_color.is_invisible() {
+        // The buffer's translation composes *outermost*, after `post`, so it
+        // rides on the transform argument rather than the geometry. Folding it
+        // into the geometry instead would put it inside the split — the
+        // rasterizer would then apply `post * offset`, and `post` carries the
+        // page's y-flip, so the buffer's upward shift would come back out
+        // downward and drop the stroke off the bottom of the buffer.
         sub.stroke_path(
-            &hard_clip(
-                &(offset
-                    * crate::path::nudge_degenerate_subpaths(&(matrices.pre * path.clone()), path)),
-            ),
-            matrices.post,
+            &hard_clip(&crate::path::nudge_degenerate_subpaths(
+                &(matrices.pre * path.clone()),
+                path,
+            )),
+            offset * matrices.post,
             &Brush::Solid(stroke_color.to_peniko()),
             &stroke,
             aa,
@@ -345,5 +351,60 @@ mod tests {
         p.move_to((0.0, 0.0));
         p.curve_to((1.0, 1.0), (2.0, 2.0), (3.0, 3.0));
         assert!(two_point_line(&p).is_none());
+    }
+
+    /// A knockout buffer's translation must reach the rasterizer *outside*
+    /// the stroke split, because the split's `post` half carries the page's
+    /// y-flip and would otherwise invert the shift.
+    ///
+    /// The stroke is handed `pre * path` as geometry and a transform the
+    /// rasterizer applies per vertex. Composing the offset as
+    /// `offset * post` puts it last; folding it into the geometry instead
+    /// would make the rasterizer compute `post * offset`, and for a page
+    /// whose device matrix is a pure y-flip those two disagree in sign on y.
+    #[test]
+    fn a_knockout_buffer_offset_survives_the_stroke_split() {
+        // A 200-high page's object-to-device matrix: y-up to y-down.
+        let to_device = Affine::new([1.0, 0.0, 0.0, -1.0, 0.0, 200.0]);
+        let matrices = crate::stroke::split_for_stroke(to_device);
+
+        let same = |got: [f64; 6], want: [f64; 6]| {
+            got.iter()
+                .zip(want)
+                .all(|(a, b)| (a - b).abs() < 1e-9)
+                .then_some(())
+                .ok_or(format!("{got:?} != {want:?}"))
+        };
+
+        // The split leaves a translation-free y-flip in `post`, which is what
+        // makes the composition order observable at all.
+        same(matrices.post.as_coeffs(), [1.0, 0.0, 0.0, -1.0, 0.0, 0.0]).expect("a bare y-flip");
+
+        let offset = Affine::translate((-45.0, -45.0));
+
+        // Outermost: the shift stays a shift.
+        same(
+            (offset * matrices.post).as_coeffs(),
+            [1.0, 0.0, 0.0, -1.0, -45.0, -45.0],
+        )
+        .expect("the offset survives");
+        // Innermost: the y-flip turns the upward shift downward, which is the
+        // 90-row displacement that clipped the stroke out of the buffer.
+        same(
+            (matrices.post * offset).as_coeffs(),
+            [1.0, 0.0, 0.0, -1.0, -45.0, 45.0],
+        )
+        .expect("the offset is flipped");
+
+        // A point on the path lands where the fill puts it only under the
+        // outermost spelling. The fill draws `offset * to_device * path`, so
+        // that composition is the reference the stroke has to match.
+        let point = kurbo::Point::new(50.0, 150.0);
+        let fill_lands = (offset * to_device) * point;
+        let stroke_lands = (offset * matrices.post) * (matrices.pre * point);
+        assert!(
+            (fill_lands - stroke_lands).hypot() < 1e-9,
+            "the stroke must land on the fill: {fill_lands:?} vs {stroke_lands:?}"
+        );
     }
 }
