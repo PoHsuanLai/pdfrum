@@ -10,8 +10,17 @@ repository.workspace = true
 workspace = true
 
 [dependencies]
+pdfrum-common.workspace = true
+pdfrum-filters.workspace = true
 pdfrum-object.workspace = true
+pdfrum-page.workspace = true
 pdfrum-parser.workspace = true
+pdfrum-raster-tinyskia.workspace = true
+pdfrum-raster-vello.workspace = true
+pdfrum-render.workspace = true
+pdfrum-text.workspace = true
+kurbo.workspace = true
+peniko.workspace = true
 
 # Tool ring only (DEPS.md "Tools & tests only"; STYLE.md §3 allows `anyhow`
 # here and in the conformance harness, nowhere else). The oracle's command
@@ -19,3 +28,5 @@ pdfrum-parser.workspace = true
 # `--pages=3-5` with `std::stringstream` semantics and rejects unknown flags
 # with one specific message on stderr, and Tier A compares that behaviour.
 anyhow.workspace = true
+md-5.workspace = true
+png.workspace = true

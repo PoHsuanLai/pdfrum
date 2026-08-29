@@ -425,24 +425,33 @@ impl Face {
     }
 
     /// A glyph's bounding box in font units, y-up.
+    ///
+    /// The fast path is the `glyf` table's per-glyph bounds, which only a
+    /// TrueType-outlined face has. A **CFF-flavoured** OpenType face has no
+    /// such table — its bounds live inside each charstring — so it falls
+    /// through to measuring the outline, exactly as the C++'s FreeType
+    /// backend does by loading the glyph and reading its control box. Getting
+    /// this wrong makes every glyph of a CFF font report a zero box, which
+    /// text extraction reads as a degenerate text object and drops whole.
     #[must_use]
     pub fn glyph_bbox(&self, gid: Gid) -> Option<Rect> {
-        if self.backend == Backend::BareCff {
-            // No `hmtx` and no per-glyph bounds table: measure the outline.
-            let path = self.outline(gid)?;
-            let b = pdfrum_common::kurbo::Shape::bounding_box(&path);
-            return (b.width() > 0.0 || b.height() > 0.0).then_some(b);
+        if self.backend != Backend::BareCff {
+            let font = skrifa::FontRef::from_index(&self.bytes, self.index).ok()?;
+            if let Some(b) = font
+                .glyph_metrics(Size::unscaled(), LocationRef::default())
+                .bounds(skrifa::GlyphId::new(u32::from(gid.0)))
+            {
+                return Some(Rect::new(
+                    f64::from(b.x_min),
+                    f64::from(b.y_min),
+                    f64::from(b.x_max),
+                    f64::from(b.y_max),
+                ));
+            }
         }
-        let font = skrifa::FontRef::from_index(&self.bytes, self.index).ok()?;
-        let b = font
-            .glyph_metrics(Size::unscaled(), LocationRef::default())
-            .bounds(skrifa::GlyphId::new(u32::from(gid.0)))?;
-        Some(Rect::new(
-            f64::from(b.x_min),
-            f64::from(b.y_min),
-            f64::from(b.x_max),
-            f64::from(b.y_max),
-        ))
+        let path = self.outline(gid)?;
+        let b = pdfrum_common::kurbo::Shape::bounding_box(&path);
+        (b.width() > 0.0 || b.height() > 0.0).then_some(b)
     }
 
     /// The raw metrics `CheckFontMetrics` derives a bounding box from.

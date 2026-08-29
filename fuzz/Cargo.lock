@@ -458,6 +458,7 @@ dependencies = [
  "pdfrum-object",
  "pdfrum-page",
  "pdfrum-parser",
+ "pdfrum-text",
 ]
 
 [[package]]
@@ -494,6 +495,19 @@ dependencies = [
  "pdfrum-crypt",
  "pdfrum-filters",
  "pdfrum-object",
+ "thiserror",
+]
+
+[[package]]
+name = "pdfrum-text"
+version = "0.1.0"
+dependencies = [
+ "kurbo",
+ "pdfrum-common",
+ "pdfrum-font",
+ "pdfrum-object",
+ "pdfrum-page",
+ "smallvec",
  "thiserror",
 ]
 
