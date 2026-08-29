@@ -1,3 +1,6 @@
 /target/
 /conformance/goldens/
 /out/
+
+# Python bytecode from the fixture generators in scripts/.
+__pycache__/
