@@ -1,0 +1,176 @@
+# pdfrum fuzz ring — a SEPARATE workspace, deliberately not a member of the
+# root one. DEPS.md's Pure-Rust guarantee is that no published crate's
+# dependency tree compiles C or C++; `libfuzzer-sys` links LLVM's C++
+# libFuzzer runtime. Severing this package from the root workspace is what
+# keeps `cargo tree --workspace` in scripts/ci.sh clean — the guarantee then
+# holds by construction rather than by anyone remembering.
+#
+# The empty `[workspace]` table below is what does the severing: without it
+# cargo walks up to `../Cargo.toml` and adopts this package as a member,
+# putting libfuzzer-sys straight into the tree that check inspects. Do not
+# delete it, and do not add `fuzz` to the root manifest's `members`.
+[workspace]
+
+[package]
+name = "pdfrum-fuzz"
+version = "0.0.0"
+edition = "2024"
+# Belt-and-braces on top of the workspace split: this package must never
+# reach a registry, whatever anyone runs at the repo root.
+publish = false
+license = "MIT OR Apache-2.0"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+
+pdfrum-common = { path = "../crates/pdfrum-common" }
+pdfrum-object = { path = "../crates/pdfrum-object" }
+pdfrum-crypt = { path = "../crates/pdfrum-crypt" }
+pdfrum-filters = { path = "../crates/pdfrum-filters" }
+pdfrum-cmap = { path = "../crates/pdfrum-cmap" }
+pdfrum-parser = { path = "../crates/pdfrum-parser" }
+
+# The root workspace forbids `unsafe` and denies panics. This workspace does
+# not inherit those lints (it is a separate workspace by construction), but
+# the targets are still written without `unsafe`: libfuzzer-sys's
+# `fuzz_target!` hands us a safe `&[u8]`, so nothing here needs it. Panics
+# are the *point* here — a panic in a library crate is the bug we are hunting.
+[lints.rust]
+unsafe_code = "forbid"
+
+[profile.release]
+debug = 1
+# Overflow checks on: a wrapping arithmetic bug on untrusted sizes is exactly
+# the class of bug STYLE.md §3 says fuzzers must enforce.
+overflow-checks = true
+
+# cargo-fuzz builds these in release; each gets its own binary.
+
+[[bin]]
+name = "object_decode_text"
+path = "fuzz_targets/object_decode_text.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "object_name_decode"
+path = "fuzz_targets/object_name_decode.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "crypt_encrypt_dict"
+path = "fuzz_targets/crypt_encrypt_dict.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "crypt_decrypt"
+path = "fuzz_targets/crypt_decrypt.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "filters_flate"
+path = "fuzz_targets/filters_flate.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "filters_lzw"
+path = "fuzz_targets/filters_lzw.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "filters_a85"
+path = "fuzz_targets/filters_a85.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "filters_ahx"
+path = "fuzz_targets/filters_ahx.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "filters_rle"
+path = "fuzz_targets/filters_rle.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "filters_predictor"
+path = "fuzz_targets/filters_predictor.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "filters_chain"
+path = "fuzz_targets/filters_chain.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "cmap_embedded"
+path = "fuzz_targets/cmap_embedded.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "cmap_predefined"
+path = "fuzz_targets/cmap_predefined.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "parser_lexer"
+path = "fuzz_targets/parser_lexer.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "parser_object"
+path = "fuzz_targets/parser_object.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "parser_xref"
+path = "fuzz_targets/parser_xref.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "parser_load"
+path = "fuzz_targets/parser_load.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "parser_load_password"
+path = "fuzz_targets/parser_load_password.rs"
+test = false
+doc = false
+bench = false
