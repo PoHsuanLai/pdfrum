@@ -255,12 +255,19 @@ pub fn generate<R: Resolve>(
         });
     let client = client_rect(dict, r);
     let color = text_color(dict, r);
+    // The *value* comes from the field, which is not always this dictionary:
+    // two `/Fields` entries sharing a `/T` are one field with two controls,
+    // and the field is the first of them. Everything else here — the plate,
+    // the colour, the default appearance — is read off the widget, because
+    // those are per-control.
+    let valued = field_dict_of(dict, form.as_ref(), r);
+    let valued = valued.as_ref().unwrap_or(dict);
 
     let mut out = Content::new();
     match kind {
-        Kind::Text => text_field(&mut out, dict, client, &appearance, color, font, r),
-        Kind::Combo => combo_box(&mut out, dict, client, &appearance, color, font, r),
-        Kind::List => list_box(&mut out, dict, client, &appearance, color, font, r),
+        Kind::Text => text_field(&mut out, dict, valued, client, &appearance, color, font, r),
+        Kind::Combo => combo_box(&mut out, valued, client, &appearance, color, font, r),
+        Kind::List => list_box(&mut out, dict, valued, client, &appearance, color, font, r),
         Kind::Button => push_button(&mut out, dict, client, &appearance, color, font, r),
     }
     if out.is_empty() {
@@ -270,6 +277,39 @@ pub fn generate<R: Resolve>(
         stream: out.into_bytes(),
         font_resources: font_resources(&appearance, form.as_ref(), r),
     })
+}
+
+/// The dictionary a widget's **field** value is read from.
+///
+/// Usually the widget itself — a field and its single widget are one
+/// dictionary in the common case, and a widget under a `/Parent` inherits
+/// through it. The exception this exists for is two `/Fields` entries that
+/// share a `/T` and have no parent between them: upstream's `AddTerminalField`
+/// looks each name up before building anything, so the second entry becomes a
+/// second *control* of the first's field rather than a field of its own, and
+/// the value both controls show is the **first** dictionary's.
+///
+/// `bug_733528` is that file, and it is the only shape this answers anything
+/// but the widget for: the walk stops at the first `/Fields` entry whose `/T`
+/// matches, which is the widget itself whenever the widget is in `/Fields` at
+/// all. A widget with a `/Parent`, or one the form does not list, is its own
+/// value source.
+///
+/// Answers `None` rather than the widget so a caller can tell "no other
+/// dictionary applies" from "this one does", which keeps the common case
+/// borrowing rather than cloning.
+fn field_dict_of<R: Resolve>(dict: &Dict, form: Option<&Dict>, r: &R) -> Option<Dict> {
+    // A widget under a parent inherits through the chain and is not a
+    // top-level `/Fields` entry, so the name walk below cannot apply.
+    if dict.contains_key(names::PARENT) {
+        return None;
+    }
+    let name = dict.byte_string(names::T, r)?;
+    let fields = form?.array(names::FIELDS, r)?;
+    let first = (0..fields.len())
+        .filter_map(|index| fields.dict_at(index, r))
+        .find(|entry| entry.byte_string(names::T, r).as_deref() == Some(name.as_slice()))?;
+    (first != *dict).then_some(first)
 }
 
 /// The one-entry font dictionary a body's `Tf` names.
@@ -354,6 +394,7 @@ fn wrap_text(out: &mut Content, plate: Rect, content: Rect, color: Color, writte
 fn text_field<R: Resolve>(
     out: &mut Content,
     dict: &Dict,
+    valued: &Dict,
     client: Rect,
     appearance: &freetext::Appearance,
     color: Color,
@@ -366,7 +407,7 @@ fn text_field<R: Resolve>(
     let max_len = inherited(dict, names::MAX_LEN, r)
         .and_then(|value| value.as_int())
         .unwrap_or(0);
-    let value = field_value(dict, r);
+    let value = field_value(valued, r);
 
     let mut config = vt::Config {
         plate: client,
@@ -535,7 +576,7 @@ fn comb_separators<R: Resolve>(out: &mut Content, dict: &Dict, client: Rect, cel
 /// A combo box's body: one line, then the drop button.
 fn combo_box<R: Resolve>(
     out: &mut Content,
-    dict: &Dict,
+    valued: &Dict,
     client: Rect,
     appearance: &freetext::Appearance,
     color: Color,
@@ -558,13 +599,13 @@ fn combo_box<R: Resolve>(
     // The **label** of the selected option, or the value itself when nothing
     // is selected — which is how a combo box whose `/V` names no option still
     // shows what the file says.
-    let options = options(dict, r);
-    let text = match selected_indices(dict, &options, r).first().copied() {
+    let options = options(valued, r);
+    let text = match selected_indices(valued, &options, r).first().copied() {
         Some(index) => options
             .get(index)
             .map(|option| option.label.clone())
             .unwrap_or_default(),
-        None => field_value(dict, r),
+        None => field_value(valued, r),
     };
 
     let config = vt::Config {
@@ -588,14 +629,15 @@ fn combo_box<R: Resolve>(
 fn list_box<R: Resolve>(
     out: &mut Content,
     dict: &Dict,
+    valued: &Dict,
     client: Rect,
     appearance: &freetext::Appearance,
     color: Color,
     font: &TextFont<'_>,
     r: &R,
 ) {
-    let options = options(dict, r);
-    let selected = selected_indices(dict, &options, r);
+    let options = options(valued, r);
+    let selected = selected_indices(valued, &options, r);
     let top = usize::try_from(
         inherited(dict, names::TI, r)
             .and_then(|value| value.as_int())
@@ -768,7 +810,7 @@ fn border_color<R: Resolve>(dict: &Dict, r: &R) -> Color {
 
 #[cfg(test)]
 mod tests {
-    use super::{Choice, Kind, field_value, options, selected_indices};
+    use super::{Choice, Kind, field_dict_of, field_value, options, selected_indices};
     use crate::ap::{TextFont, freetext};
     use pdfrum_object::{Array, Dict, Name, NoResolve, Object, PdfString};
 
@@ -779,6 +821,66 @@ mod tests {
                 .map(|(k, v)| (Name::from(*k), v.clone()))
                 .collect::<Vec<_>>(),
         )
+    }
+
+    /// A widget in `/Fields` under the given name, holding the given value.
+    fn shared(field_name: &str, value: &str) -> Dict {
+        dict(&[
+            ("Subtype", Object::Name(Name::from("Widget"))),
+            ("FT", Object::Name(Name::from("Tx"))),
+            ("T", text(field_name)),
+            ("V", text(value)),
+        ])
+    }
+
+    #[test]
+    fn a_second_fields_entry_sharing_a_name_takes_the_firsts_value() {
+        let (first, second) = (shared("Same", "Hello, world"), shared("Same", ""));
+        let form = dict(&[(
+            "Fields",
+            Object::Array(Array::of([
+                Object::Dict(first.clone()),
+                Object::Dict(second.clone()),
+            ])),
+        )]);
+        // The first entry *is* the field, so nothing else applies to it.
+        assert_eq!(field_dict_of(&first, Some(&form), &NoResolve), None);
+        // The second reads its value from the first.
+        assert_eq!(
+            field_dict_of(&second, Some(&form), &NoResolve).as_ref(),
+            Some(&first)
+        );
+        assert_eq!(field_value(&second, &NoResolve), "");
+        assert_eq!(field_value(&first, &NoResolve), "Hello, world");
+    }
+
+    #[test]
+    fn a_widget_the_form_does_not_share_a_name_with_is_its_own_field() {
+        let alone = shared("Alone", "mine");
+        let form = dict(&[(
+            "Fields",
+            Object::Array(Array::of([Object::Dict(shared("Other", "theirs"))])),
+        )]);
+        assert_eq!(field_dict_of(&alone, Some(&form), &NoResolve), None);
+        // And with no form at all.
+        assert_eq!(field_dict_of(&alone, None, &NoResolve), None);
+    }
+
+    #[test]
+    fn a_widget_under_a_parent_inherits_rather_than_sharing() {
+        // A parented widget is not a top-level `/Fields` entry, so the
+        // name walk cannot apply to it however its `/T` reads — its value
+        // comes up the `/Parent` chain as it always has.
+        let mut kid = shared("Same", "");
+        kid.push(
+            Name::from("Parent"),
+            Object::Dict(dict(&[("V", text("from the parent"))])),
+        );
+        let form = dict(&[(
+            "Fields",
+            Object::Array(Array::of([Object::Dict(shared("Same", "elsewhere"))])),
+        )]);
+        assert_eq!(field_dict_of(&kid, Some(&form), &NoResolve), None);
     }
 
     fn strings(values: &[&str]) -> Object {
