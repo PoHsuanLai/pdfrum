@@ -45,6 +45,7 @@
 #![forbid(unsafe_code)]
 
 mod annot;
+mod annot_render;
 mod content;
 mod metadata;
 mod options;

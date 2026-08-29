@@ -274,6 +274,89 @@ pub fn build_page_from_dict<R: Resolve>(
     }
 }
 
+/// Build one form `XObject` as a standalone page object, placed by `matrix`.
+///
+/// This is the `Do` handler's body reached from outside a content stream,
+/// which is what an **annotation appearance** needs: `CPDF_Annot::DrawInContext`
+/// hands `CPDF_Form` the annotation matrix rather than a CTM built up by
+/// operators, and the result is appended to the page's own object list.
+///
+/// The form's `/Matrix` composes with `matrix` exactly as it would inside a
+/// `Do`, and a missing `/BBox` is **no clip at all** rather than an empty one.
+/// `resources` is the fallback for a form that declares none; an annotation's
+/// appearance is not part of the page's content stream, so the page's own
+/// resources are what it inherits.
+#[must_use]
+pub fn build_form_object<R: Resolve>(
+    stream: &pdfrum_object::Stream,
+    matrix: Affine,
+    resources: &Resources,
+    r: &R,
+    ctx: &mut BuildContext,
+    limits: &Limits,
+    diags: &mut Diagnostics,
+) -> Option<PageObject> {
+    let content = pdfrum_filters::decode_chain(stream, 0, r, limits, diags).data;
+    let form_matrix = stream.dict.matrix(names::MATRIX, r);
+    let placed = matrix * form_matrix;
+
+    let mut state = GraphicsState {
+        ctm: placed,
+        ..GraphicsState::default()
+    };
+
+    let transparency = Transparency::from_group(stream.dict.dict(names::GROUP, r).as_ref(), r);
+    if transparency.group {
+        state.general.enter_transparency_group();
+    }
+
+    let bbox = stream
+        .dict
+        .array(names::BBOX, r)
+        .filter(|a| a.len() == 4)
+        .map(|a| a.as_rect());
+    // The `/BBox` is a *clip*, and here it has to be pushed onto the state
+    // rather than left as a field: an appearance form reached from a content
+    // stream inherits the enclosing `q`/`Q` clip, but one reached from an
+    // annotation has no enclosing anything, so nothing else would ever apply
+    // it. Without this an ink annotation whose `/InkList` runs outside its
+    // `/Rect` paints strokes the oracle clips away entirely — which is what
+    // `ink_annot.in`'s all-white golden says.
+    if let Some(rect) = bbox {
+        let mut path = kurbo::BezPath::new();
+        path.move_to((rect.x0, rect.y0));
+        path.line_to((rect.x1, rect.y0));
+        path.line_to((rect.x1, rect.y1));
+        path.line_to((rect.x0, rect.y1));
+        path.close_path();
+        state.clip.push_path(placed * path, false);
+    }
+
+    let inner = Resources::choose(
+        stream.dict.dict(names::RESOURCES, r),
+        resources.chosen.clone(),
+        resources.page.clone(),
+    );
+
+    let ops = crate::parse_content(&content, limits, diags);
+    let objects = interpret(&ops, &inner, &state, placed, r, ctx, limits, diags);
+
+    Some(PageObject::Form(Box::new(Content {
+        object: FormObject {
+            objects,
+            matrix: placed,
+            bbox,
+            transparency,
+        },
+        state,
+        marks: ContentMarks::default(),
+        // An annotation appearance is not part of the page's content stream,
+        // so it has no index in one. The dump numbers streams from zero and
+        // the oracle counts an annotation's form as belonging to none.
+        content_stream: -1,
+    })))
+}
+
 /// The fold's mutable working set, kept together so no function needs a
 /// dozen parameters.
 struct Interp<'a, R: Resolve> {
@@ -1669,6 +1752,81 @@ mod tests {
 
     fn build(src: &[u8]) -> (crate::page::Page, Diagnostics) {
         build_with(src, &Resources::default())
+    }
+
+    #[test]
+    fn a_standalone_form_clips_to_its_own_bbox() {
+        // An annotation appearance has no enclosing `q`/`Q` to inherit a clip
+        // from, so `build_form_object` has to push the `/BBox` itself. Without
+        // it an ink annotation whose `/InkList` runs outside its `/Rect` paints
+        // strokes the oracle clips away entirely.
+        use pdfrum_object::{ByteSpan, Dict, Name, Object, Stream};
+        let dict = Dict::from_pairs([(
+            Name::from("BBox"),
+            Object::Array(pdfrum_object::Array::of([
+                Object::Int(0),
+                Object::Int(0),
+                Object::Int(10),
+                Object::Int(20),
+            ])),
+        )]);
+        let stream = Stream::new(dict, ByteSpan::from(b"0 0 100 100 re f".to_vec()));
+        let mut ctx = BuildContext::default();
+        let mut diags = Diagnostics::default();
+        let object = super::build_form_object(
+            &stream,
+            Affine::IDENTITY,
+            &Resources::default(),
+            &NoResolve,
+            &mut ctx,
+            &Limits::default(),
+            &mut diags,
+        )
+        .expect("a form");
+        let PageObject::Form(form) = &object else {
+            panic!("expected a form");
+        };
+        assert_eq!(
+            form.object.bbox,
+            Some(kurbo::Rect::new(0.0, 0.0, 10.0, 20.0))
+        );
+        // The clip reached the child object, which is the half that matters:
+        // the `bbox` field alone is only used for culling.
+        let child = form.object.objects.first().expect("one child");
+        let PageObject::Path(path) = child else {
+            panic!("expected a path");
+        };
+        assert_eq!(path.state.clip.len(), 1, "the bbox is on the child's clip");
+        assert_eq!(
+            path.state.clip.bounds(),
+            Some(kurbo::Rect::new(0.0, 0.0, 10.0, 20.0))
+        );
+    }
+
+    #[test]
+    fn a_form_with_no_bbox_is_unclipped() {
+        use pdfrum_object::{ByteSpan, Dict, Stream};
+        let stream = Stream::new(Dict::new(), ByteSpan::from(b"0 0 100 100 re f".to_vec()));
+        let mut ctx = BuildContext::default();
+        let mut diags = Diagnostics::default();
+        let object = super::build_form_object(
+            &stream,
+            Affine::IDENTITY,
+            &Resources::default(),
+            &NoResolve,
+            &mut ctx,
+            &Limits::default(),
+            &mut diags,
+        )
+        .expect("a form");
+        let PageObject::Form(form) = &object else {
+            panic!("expected a form");
+        };
+        assert_eq!(form.object.bbox, None, "a missing /BBox is no clip at all");
+        let PageObject::Path(path) = form.object.objects.first().expect("one child") else {
+            panic!("expected a path");
+        };
+        assert!(path.state.clip.is_empty());
     }
 
     fn build_with(src: &[u8], resources: &Resources) -> (crate::page::Page, Diagnostics) {
