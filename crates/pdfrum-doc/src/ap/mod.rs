@@ -20,7 +20,9 @@
 //! # Which annotations get one
 //!
 //! Ten subtypes have a generator, and a widget annotation with no `/AP`
-//! dictionary gets its chrome from [`widget`] besides. Generation is refused
+//! dictionary gets its chrome from [`widget`] besides — plus, when the caller
+//! has fonts to set text with, the field body [`field_body`] lays out.
+//! Generation is refused
 //! outright when the
 //! annotation is hidden, or when `/AP /N` already reads as a dictionary —
 //! and a **stream** answers as its own dictionary, so the ordinary "it
@@ -30,6 +32,7 @@
 pub mod border;
 pub mod da;
 pub mod emit;
+pub mod field_body;
 pub mod fmt;
 pub mod freetext;
 pub mod markup;
@@ -194,6 +197,131 @@ impl TextFont<'_> {
     }
 }
 
+/// The faces a form's default resources name, loaded once for a page.
+///
+/// # Why the fonts are loaded rather than substituted for
+///
+/// A generator wants *metrics*, and it was tempting to hand every generator
+/// one stock Helvetica on the reasoning that a non-embedded `/DA` font
+/// substitutes to that face anyway. The metrics do not agree with that
+/// reasoning, and the disagreement is visible: an ascent and descent taken
+/// from the base-14 metric tables are 718 and −219, while the ones taken from
+/// the **substituted face** — the size the layout engine actually stacks lines
+/// by — are the face's own, and for the hermetic corpus's metric-compatible
+/// Helvetica that is 905 and −211. On a list box the difference is the row
+/// pitch: 11.24 units per row against 13.39, which is two extra rows in a
+/// thirty-unit box.
+///
+/// So the font a widget's `/DA` names is loaded from the form's `/DR /Font`,
+/// through the same loader and the same substitution options every other font
+/// on the page goes through. A name the resources do not carry gets a stock
+/// Helvetica, which is what the fallback is actually for.
+pub struct FormFonts {
+    /// Resource name and the face loaded under it, in `/DR /Font` order with
+    /// the fallback last.
+    entries: Vec<(Name, pdfrum_font::Font)>,
+}
+
+impl std::fmt::Debug for FormFonts {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FormFonts")
+            .field(
+                "names",
+                &self.entries.iter().map(|(n, _)| n).collect::<Vec<_>>(),
+            )
+            .finish_non_exhaustive()
+    }
+}
+
+impl FormFonts {
+    /// Loads every font a document's interactive form declares, plus the
+    /// fallback a name outside them resolves to.
+    ///
+    /// The fallback is loaded unconditionally and stored under an empty name,
+    /// so a `/DA` naming nothing — or naming a font the resources lack — still
+    /// has a face to measure with. That is the same substitution a viewer
+    /// performs; it is only the *metric source* that this fixes.
+    #[must_use]
+    pub fn load<R: Resolve>(
+        catalog: &Dict,
+        r: &R,
+        ctx: &mut pdfrum_page::BuildContext,
+    ) -> FormFonts {
+        let (limits, mut diags) = (
+            pdfrum_common::Limits::default(),
+            pdfrum_common::Diagnostics::default(),
+        );
+        let mut load = |dict: &Dict| {
+            pdfrum_font::load_with_options(
+                dict,
+                r,
+                &ctx.fonts,
+                &ctx.substitution,
+                &limits,
+                &mut diags,
+            )
+        };
+
+        let mut entries = Vec::new();
+        let fonts = catalog
+            .dict(names::ACRO_FORM, r)
+            .and_then(|form| form.dict(names::DR, r))
+            .and_then(|resources| resources.dict(names::FONT, r));
+        if let Some(fonts) = fonts {
+            for key in fonts.keys() {
+                let Some(dict) = fonts.dict(key, r) else {
+                    continue;
+                };
+                if let Some(font) = load(&dict) {
+                    entries.push((key.clone(), font));
+                }
+            }
+        }
+        // The fallback goes through the **same loader**, not the stock-metrics
+        // constructor: the point of this type is that the ascent and descent
+        // come from the face that is actually substituted, and a font built
+        // from the base-14 tables would answer 718 and −219 where the face
+        // answers its own. A field with no `/DR` at all is exactly where that
+        // shows, because there is nothing else for it to measure with.
+        entries.extend(load(&freetext::fallback_font()).map(|font| (Name::new(Vec::new()), font)));
+        FormFonts { entries }
+    }
+
+    /// The face filed under one resource name, or the fallback.
+    ///
+    /// Answers nothing only if the fallback itself is missing, which
+    /// [`Self::load`] makes impossible — the caller then generates chrome
+    /// alone rather than being told a face exists that does not.
+    #[must_use]
+    pub fn face(&self, name: &[u8]) -> Option<&pdfrum_font::Font> {
+        self.entries
+            .iter()
+            .find(|(key, _)| key.as_bytes() == name)
+            .or_else(|| self.entries.last())
+            .map(|(_, font)| font)
+    }
+
+    /// A [`TextFont`] over one resource name, with `width` borrowed for the
+    /// same lifetime.
+    ///
+    /// The width closure cannot live inside the returned value — it has to be
+    /// borrowed for the font's lifetime, which a closure over `self` cannot
+    /// supply before `self` exists — so the caller keeps it and passes it in,
+    /// the same shape [`TextFont::metrics_of`] already has.
+    #[must_use]
+    pub fn text_font<'a>(
+        &'a self,
+        name: &[u8],
+        width: &'a dyn Fn(u32) -> i32,
+    ) -> Option<TextFont<'a>> {
+        let font = self.face(name)?;
+        Some(TextFont {
+            metrics: TextFont::metrics_of(font, width),
+            font,
+        })
+    }
+}
+
 /// Generates appearances for every annotation on a page that wants one.
 ///
 /// The walk mirrors what a viewer does when it opens a page, because that
@@ -235,13 +363,18 @@ pub fn generate_appearances<R: Resolve>(
 
 /// The same walk, with the text-bearing generators enabled.
 ///
-/// Free-text annotations only produce an appearance when a font is in hand,
-/// so a caller without one gets the same result as [`generate_appearances`].
+/// The generators only produce an appearance when a font is in hand, so a
+/// caller without one gets the same result as [`generate_appearances`].
+///
+/// Each annotation is measured with the face **its own** `/DA` names, looked
+/// up in the form's default resources — not with one page-wide font. A page
+/// whose fields name two different faces stacks their lines by two different
+/// ascents, which is what a viewer does.
 #[must_use]
 pub fn generate_appearances_with_text<R: Resolve>(
     page: &Dict,
     catalog: &Dict,
-    text_font: Option<&TextFont<'_>>,
+    fonts: Option<&FormFonts>,
     r: &R,
     diags: &mut Diagnostics,
 ) -> AnnotOverlay {
@@ -256,10 +389,26 @@ pub fn generate_appearances_with_text<R: Resolve>(
         if crate::annot::is_popup(&dict, r) {
             continue;
         }
+        // The width closure has to outlive the `TextFont` that borrows it, so
+        // it is built here rather than inside the lookup.
+        let named = fonts.and_then(|fonts| fonts.face(&font_name_of(&dict, catalog, r)));
+        let width = named.map(|font| move |code: u32| TextFont::char_width(font, code));
+        let text_font = named.zip(width.as_ref()).map(|(font, width)| TextFont {
+            metrics: TextFont::metrics_of(font, width),
+            font,
+        });
         let generated = generate_one(&dict, r, diags)
-            .or_else(|| generate_text_bearing(&dict, catalog, text_font, r, diags))
+            .or_else(|| generate_text_bearing(&dict, catalog, text_font.as_ref(), r, diags))
             .or_else(|| {
-                widget::generate(&dict, r).inspect(|_| {
+                // A widget's own body needs the same font the free-text
+                // generator wanted, so a caller with one gets the field's
+                // value laid out and a caller without one gets the chrome
+                // alone.
+                match text_font.as_ref() {
+                    Some(font) => widget::generate_with_text(&dict, catalog, font, r),
+                    None => widget::generate(&dict, r),
+                }
+                .inspect(|_| {
                     diags.record(Severity::Recovered, DiagKind::AppearanceGenerated, None);
                 })
             });
@@ -268,6 +417,17 @@ pub fn generate_appearances_with_text<R: Resolve>(
         }
     }
     overlay
+}
+
+/// The `/DR /Font` resource name one annotation's default appearance names.
+///
+/// Falls back to the form's own `/DA`, then to nothing — and nothing resolves
+/// to [`FormFonts`]'s fallback face rather than declining.
+fn font_name_of<R: Resolve>(dict: &Dict, catalog: &Dict, r: &R) -> Vec<u8> {
+    let form = catalog.dict(names::ACRO_FORM, r).unwrap_or_default();
+    freetext::default_appearance(dict, &form, r)
+        .map(|appearance| appearance.font_name)
+        .unwrap_or_default()
 }
 
 /// The free-text generator, when its preconditions and a font allow.
