@@ -26,6 +26,7 @@
 
 pub mod annot;
 pub mod annot_dump;
+pub mod annot_render;
 pub mod ap;
 pub mod color;
 pub mod error;

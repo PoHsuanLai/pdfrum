@@ -10,3 +10,30 @@ repository.workspace = true
 workspace = true
 
 [dependencies]
+pdfrum-common.workspace = true
+pdfrum-object.workspace = true
+pdfrum-parser.workspace = true
+pdfrum-font.workspace = true
+pdfrum-page.workspace = true
+pdfrum-filters.workspace = true
+pdfrum-render.workspace = true
+pdfrum-raster-vello.workspace = true
+pdfrum-raster-tinyskia.workspace = true
+pdfrum-text.workspace = true
+pdfrum-doc.workspace = true
+pdfrum-edit.workspace = true
+kurbo.workspace = true
+peniko.workspace = true
+thiserror.workspace = true
+
+# DEPS.md marks `rayon` "lib (facade only)": the engine stays single-threaded
+# per page and this is the one crate that owns a *set* of pages, so the
+# data-parallel seam is here or nowhere. It is used by the parallel-render
+# example and by the tests that pin the `Send + Sync` story; the library
+# itself spawns no threads.
+rayon.workspace = true
+
+[dev-dependencies]
+# Encoding a pixmap is not the engine's job — the facade hands out pixels and
+# the examples turn them into files (DEPS.md, "Tools & tests only").
+png.workspace = true
