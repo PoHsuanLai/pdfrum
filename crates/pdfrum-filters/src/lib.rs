@@ -64,7 +64,7 @@ pub use ascii::{decode_ascii_hex, decode_ascii85};
 pub use ccitt::{CcittImage, CcittParams, decode_ccitt};
 pub use chain::{DecodedStream, decode_chain, decoder_list, validate_pipeline};
 pub use error::Error;
-pub use flate::decode_flate;
+pub use flate::{decode_flate, encode_flate};
 pub use lzw::decode_lzw;
 pub use predictor::{PredictorKind, PredictorParams, predictor};
 pub use runlength::{RUN_LENGTH_MAX_OUTPUT, decode_run_length};

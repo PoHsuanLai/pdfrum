@@ -30,6 +30,7 @@ use std::collections::BTreeMap;
 use pdfrum_common::{Diagnostics, Limits};
 use pdfrum_object::{Dict, Name, Object, names};
 
+pub(crate) use chain::XrefShape;
 pub(crate) use rebuild::rebuild;
 
 /// Where one object lives.
@@ -393,12 +394,13 @@ pub fn read_xref(
     Ok((xref, trailer.dict))
 }
 
-/// Read cross-reference information, reporting whether the table was rebuilt.
+/// Read cross-reference information, reporting the shape it turned out to
+/// have — see [`XrefShape`].
 pub(crate) fn read_xref_full(
     file: &[u8],
     limits: &Limits,
     diags: &mut Diagnostics,
-) -> Result<(Xref, Trailer, bool), crate::Error> {
+) -> Result<(Xref, Trailer, XrefShape), crate::Error> {
     chain::load(file, limits, diags)
 }
 
