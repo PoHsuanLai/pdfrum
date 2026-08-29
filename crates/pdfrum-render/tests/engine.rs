@@ -6,6 +6,18 @@
 //! through `vello_cpu` and `tiny-skia` so that anything the engine decides —
 //! as against anything a rasterizer integrates — must agree.
 
+// `clippy.toml`'s `allow-expect-in-tests` covers `#[test]` bodies but not the
+// `render_both` and `divergence` helpers these tests factor themselves into;
+// a render that fails to produce a pixmap *is* the failure signal there. The
+// float and numeric allows are the same bargain: a divergence of `0.0` means
+// bit-identical, and asserting it approximately would defeat the test, while
+// the pixel counts and small integer channel values these convert are far
+// inside every mantissa involved. None of this relaxes anything in the
+// library.
+#![allow(clippy::expect_used, clippy::float_cmp, clippy::cast_precision_loss)]
+
+use std::collections::BTreeMap;
+
 use kurbo::{Affine, BezPath, Point, Rect};
 use pdfrum_common::Diagnostics;
 use pdfrum_page::state::ContentMarks;
@@ -403,6 +415,7 @@ fn invisible_text_paints_nothing() {
             matrix: Affine::IDENTITY,
             font: None,
             render_mode: TextRenderMode::Invisible,
+            type3_metrics: BTreeMap::default(),
         },
         state: GraphicsState::default(),
         marks: ContentMarks::new(),
