@@ -123,6 +123,25 @@ names! {
     /// Offset of the first object in an object stream (`/First`).
     FIRST = "First";
 
+    // ---- Document information dictionary (table 317) ----
+
+    /// The document's title (`/Title`).
+    TITLE = "Title";
+    /// Who wrote the document (`/Author`).
+    AUTHOR = "Author";
+    /// What the document is about (`/Subject`).
+    SUBJECT = "Subject";
+    /// Keywords associated with the document (`/Keywords`).
+    KEYWORDS = "Keywords";
+    /// The application that produced the original document (`/Creator`).
+    CREATOR = "Creator";
+    /// The application that converted it to PDF (`/Producer`).
+    PRODUCER = "Producer";
+    /// When the document was created (`/CreationDate`).
+    CREATION_DATE = "CreationDate";
+    /// When the document was last modified (`/ModDate`).
+    MOD_DATE = "ModDate";
+
     // ---- Catalog and page tree (tables 28 and 29) ----
 
     /// The version override in the catalog (`/Version`).
@@ -137,6 +156,12 @@ names! {
     NAMES = "Names";
     /// The named-destination dictionary (`/Dests`).
     DESTS = "Dests";
+    /// The embedded-file name tree (`/EmbeddedFiles`).
+    EMBEDDED_FILES = "EmbeddedFiles";
+    /// The document-level JavaScript name tree (`/JavaScript`).
+    JAVA_SCRIPT = "JavaScript";
+    /// A portable collection, i.e. a portfolio (`/Collection`).
+    COLLECTION = "Collection";
     /// Viewer preferences (`/ViewerPreferences`).
     VIEWER_PREFERENCES = "ViewerPreferences";
     /// The outline (bookmark) tree root (`/Outlines`).
@@ -156,6 +181,12 @@ names! {
     MEDIA_BOX = "MediaBox";
     /// The region of a page a viewer displays (`/CropBox`). Inheritable.
     CROP_BOX = "CropBox";
+    /// The region clipped to when producing output (`/BleedBox`).
+    BLEED_BOX = "BleedBox";
+    /// The intended finished dimensions after trimming (`/TrimBox`).
+    TRIM_BOX = "TrimBox";
+    /// The extent of the page's meaningful content (`/ArtBox`).
+    ART_BOX = "ArtBox";
     /// Clockwise display rotation in degrees (`/Rotate`). Inheritable.
     ROTATE = "Rotate";
     /// Metadata stream (`/Metadata`).
@@ -221,8 +252,12 @@ names! {
 
     // ---- Entries common to all annotations (table 168) ----
 
+    /// A page's annotation array (`/Annots`).
+    ANNOTS = "Annots";
     /// The annotation's rectangle (`/Rect`).
     RECT = "Rect";
+    /// The intent of a markup or screen annotation (`/IT`).
+    IT = "IT";
     /// The annotation's text, or a page's content stream (`/Contents`).
     CONTENTS = "Contents";
     /// The annotation's name, unique within the page (`/NM`).
@@ -269,6 +304,8 @@ names! {
 
     /// The field type (`/FT`).
     FT = "FT";
+    /// The XFA form packet, whose presence makes a form an XFA one (`/XFA`).
+    XFA = "XFA";
     /// Alternate field name, shown to the user (`/TU`).
     TU = "TU";
     /// Mapping field name, for exporting (`/TM`).

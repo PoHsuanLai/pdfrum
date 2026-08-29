@@ -368,6 +368,7 @@ fn run_corpus(args: &RunArgs) -> Result<ExitCode> {
     for (tag, count) in &totals.by_tag {
         println!("  {tag:<20} {count:>6}");
     }
+    print!("{}", text_summary(&totals));
 
     if let Some(previous_path) = &args.check_regressions {
         let text = std::fs::read_to_string(previous_path)
@@ -391,6 +392,29 @@ fn run_corpus(args: &RunArgs) -> Result<ExitCode> {
         println!("no regressions against {}", previous_path.display());
     }
     Ok(ExitCode::SUCCESS)
+}
+
+/// The two text pass rates, or nothing when no text golden was compared.
+///
+/// Printed as two lines because they answer different questions and the
+/// second is the honest one: nearly half the corpus's text goldens are empty
+/// (the oracle wrote a byte-order mark and no characters), so a tool that
+/// printed nothing at all would score around 46% on the first line while
+/// extracting no text whatsoever.
+fn text_summary(totals: &scoreboard::Totals) -> String {
+    let (Some(rate), Some(nonempty)) = (totals.text_rate(), totals.text_nonempty_rate()) else {
+        return String::new();
+    };
+    let text = &totals.text;
+    format!(
+        "  text                 {}/{} pages ({:.1}%)\n  text-nonempty        {}/{} pages ({:.1}%)\n",
+        text.matched,
+        text.pages,
+        rate * 100.0,
+        text.substantive_matched,
+        text.substantive,
+        nonempty * 100.0,
+    )
 }
 
 fn triage_report(args: &TriageArgs) -> Result<ExitCode> {
@@ -534,6 +558,33 @@ mod tests {
         assert_eq!(stamp.len(), 20);
         assert!(stamp.ends_with('Z'), "{stamp}");
         assert!(stamp.contains('T'), "{stamp}");
+    }
+
+    #[test]
+    fn the_text_summary_reports_both_rates() {
+        let totals = scoreboard::Totals {
+            text: scoreboard::TextScore {
+                pages: 1712,
+                matched: 790,
+                substantive: 922,
+                substantive_matched: 0,
+            },
+            ..scoreboard::Totals::default()
+        };
+        let summary = text_summary(&totals);
+        assert!(
+            summary.contains("text                 790/1712 pages (46.1%)"),
+            "{summary}"
+        );
+        assert!(
+            summary.contains("text-nonempty        0/922 pages (0.0%)"),
+            "{summary}"
+        );
+    }
+
+    #[test]
+    fn the_text_summary_is_silent_when_nothing_was_compared() {
+        assert_eq!(text_summary(&scoreboard::Totals::default()), "");
     }
 
     #[test]
