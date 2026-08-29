@@ -148,7 +148,23 @@ pub(crate) fn read(
     // A second `EI` scan runs from wherever the length inference left the
     // cursor. For an unfiltered image this is the scan that finds the `EI`;
     // for a filtered one the cursor is usually already past it.
-    scan_for_ei(lexer);
+    //
+    // **A scan that reaches the end of the stream drops the image.** Upstream
+    // spells this as a bare `return` out of `AddImageFromStream`'s caller
+    // (`cpdf_streamcontentparser.cpp:691-700`), and it is not a formality:
+    // the scan has already consumed everything after the `ID`, so the
+    // operators the missing `EI` swallowed are gone whatever we do — and
+    // *also* keeping the image would draw a picture the oracle does not.
+    // `bug_412524377.in`'s second page is exactly this, and its comment says
+    // so: "This page only renders as blue due to the missing EI operator."
+    if scan_for_ei(lexer) == EiScan::EndOfData {
+        diags.record(
+            Severity::Recovered,
+            DiagKind::InlineImageAbandoned,
+            Some(start as u64),
+        );
+        return None;
+    }
 
     let mut dict = dict;
     // `/Subtype /Image` is established rather than written back into the
@@ -238,8 +254,17 @@ fn read_stream(
     };
 
     lexer.seek(data_start + size);
-    // Absorb everything up to the next standalone `EI` token.
-    let absorbed = absorb_to_ei(lexer, data_start + size)?;
+    // Absorb everything up to the next standalone `EI` token. A scan that runs
+    // out of stream instead drops the image and keeps the cursor at the end,
+    // which is a recovery and not a silence.
+    let Some(absorbed) = absorb_to_ei(lexer, data_start + size) else {
+        diags.record(
+            Severity::Recovered,
+            DiagKind::InlineImageAbandoned,
+            Some(data_start as u64),
+        );
+        return None;
+    };
     if absorbed > 0 {
         diags.record(
             Severity::Recovered,
@@ -350,7 +375,12 @@ fn jpeg_frame_len(data: &[u8]) -> Option<usize> {
 /// Walk tokens from `from`, adding the span of every non-`EI` element to the
 /// image, until a standalone `EI` keyword or the end of the data.
 ///
-/// `None` means the data ran out first, which fails the whole inline image.
+/// `None` means the data ran out first, which fails the whole inline image —
+/// and **leaves the cursor at the end**, because everything after the `ID` has
+/// by then been consumed looking for the terminator that never came. Rewinding
+/// instead makes the parser read the image's own sample bytes as operators,
+/// which on `bug_412524377.in`'s second page finds a `re f` inside them and
+/// paints a rectangle the oracle does not.
 fn absorb_to_ei(lexer: &mut ContentLexer<'_>, from: usize) -> Option<usize> {
     let mut absorbed = 0usize;
     let mut cursor = from;
@@ -358,10 +388,7 @@ fn absorb_to_ei(lexer: &mut ContentLexer<'_>, from: usize) -> Option<usize> {
     loop {
         let before = lexer.pos();
         match lexer.next_element() {
-            Element::Eof => {
-                lexer.seek(from);
-                return None;
-            }
+            Element::Eof => return None,
             Element::Keyword(word) if &*word == b"EI" => {
                 lexer.seek(cursor);
                 return Some(absorbed);
@@ -375,12 +402,26 @@ fn absorb_to_ei(lexer: &mut ContentLexer<'_>, from: usize) -> Option<usize> {
     }
 }
 
+/// How the scan for a closing `EI` ended.
+///
+/// The distinction is the whole reason this returns anything: an image whose
+/// `EI` never arrives is **not drawn**, and the caller cannot tell which
+/// happened from the cursor alone — both leave it at the end of what the scan
+/// consumed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum EiScan {
+    /// A standalone `EI` keyword closed the image.
+    Closed,
+    /// The stream ran out first.
+    EndOfData,
+}
+
 /// Consume tokens until a standalone `EI` or the end of the data.
-fn scan_for_ei(lexer: &mut ContentLexer<'_>) {
+fn scan_for_ei(lexer: &mut ContentLexer<'_>) -> EiScan {
     loop {
         match lexer.next_element() {
-            Element::Eof => return,
-            Element::Keyword(word) if &*word == b"EI" => return,
+            Element::Eof => return EiScan::EndOfData,
+            Element::Keyword(word) if &*word == b"EI" => return EiScan::Closed,
             _ => {}
         }
     }
@@ -511,6 +552,56 @@ mod tests {
     fn i_is_interpolate_as_a_key_and_indexed_as_a_value() {
         assert_eq!(expand_key_abbreviation(b"I"), b"Interpolate");
         assert_eq!(expand_value_abbreviation(b"I"), b"Indexed");
+    }
+
+    #[test]
+    fn an_inline_image_with_no_ei_takes_the_rest_of_the_stream_with_it() {
+        // `bug_412524377.in`'s second page, whose own comment reads "This page
+        // only renders as blue due to the missing EI operator". The scan for
+        // `EI` consumes everything after the `ID` looking for a terminator
+        // that never comes, so the image is dropped *and* so is every
+        // operator after it — including the green rectangle here, which the
+        // oracle does not paint.
+        let (ops, diags) = parse(
+            b"0 0 1 rg 0 0 200 200 re f\n              BI /W 2 /H 2 /BPC 8 /CS /G ID \x00\x66\xcc\xff\n              0 1 0 rg 100 0 100 100 re f",
+        );
+        assert!(
+            !ops.iter().any(|op| matches!(op, Op::InlineImage(_))),
+            "the unterminated image is not emitted"
+        );
+        // The blue rectangle before the `BI` survives; nothing after it does.
+        let fills = ops.iter().filter(|op| matches!(op, Op::Fill())).count();
+        assert_eq!(
+            fills, 1,
+            "only the fill before the BI is parsed, got {ops:?}"
+        );
+        assert!(
+            diags
+                .entries()
+                .iter()
+                .any(|d| d.what == DiagKind::InlineImageAbandoned),
+            "and the recovery is recorded rather than silent"
+        );
+    }
+
+    #[test]
+    fn an_inline_image_that_does_close_leaves_the_rest_of_the_stream_alone() {
+        // The same content with the `EI` present: the image is emitted and
+        // the operators after it are parsed as usual. This is the pair the
+        // test above needs — dropping everything is right only when the
+        // terminator is genuinely missing.
+        let (ops, _) = parse(
+            b"0 0 1 rg 0 0 200 200 re f\n              BI /W 2 /H 2 /BPC 8 /CS /G ID \x00\x66\xcc\xff EI\n              0 1 0 rg 100 0 100 100 re f",
+        );
+        assert!(
+            ops.iter().any(|op| matches!(op, Op::InlineImage(_))),
+            "a closed image is emitted, got {ops:?}"
+        );
+        assert_eq!(
+            ops.iter().filter(|op| matches!(op, Op::Fill())).count(),
+            2,
+            "and both fills are parsed"
+        );
     }
 
     #[test]
