@@ -32,6 +32,7 @@ const FIXTURES: &[&str] = &[
     "bug_650",
     "cropped_text",
     "embedded_images",
+    "foxittext",
     "latin_extended",
     "many_rectangles",
 ];

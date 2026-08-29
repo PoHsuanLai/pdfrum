@@ -13,9 +13,12 @@ use read_fonts::TableProvider;
 use read_fonts::tables::cmap::PlatformId;
 use skrifa::MetadataProvider;
 use skrifa::instance::{LocationRef, Size};
-use skrifa::outline::{DrawSettings, OutlinePen};
+use skrifa::outline::{
+    DrawSettings, Engine as HintingEngine, HintingInstance, HintingOptions, OutlinePen,
+    Target as HintingTarget,
+};
 use std::fmt;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 /// A charmap's `(platform, encoding)` identity, as the `cmap` table declares
 /// it.
@@ -130,6 +133,25 @@ pub struct Face {
     num_glyphs: u32,
     is_truetype: bool,
     charmaps: Vec<CharmapId>,
+    /// The 64-ppem hinting instance, built on first use.
+    ///
+    /// The one piece of state this type keeps, and the exception STYLE §2
+    /// sanctions for a lazy cache. It earns it by measurement rather than by
+    /// principle: building the instance runs the face's `fpgm` and `prep`
+    /// programs and costs about **50 µs**, against 4 µs to rasterize a glyph
+    /// bitmap and 0.4 µs to blit one. Rebuilding it per glyph made a
+    /// text-heavy page 30% slower than filling outlines; keeping it makes the
+    /// same page faster.
+    ///
+    /// It cannot be a borrowed `HintingInstance<'_>` because there is no such
+    /// type — `skrifa`'s is owned, which is precisely what lets this sit beside
+    /// the bytes without the self-reference the doc above rules out.
+    ///
+    /// `None` inside the lock is a face that cannot be hinted at all, cached so
+    /// that a bare CFF does not re-attempt it once per glyph. The `Arc` shares
+    /// the lock across clones, so two fonts substituted onto one face pay for
+    /// the interpreter once between them.
+    hinting: Arc<OnceLock<Option<HintingInstance>>>,
 }
 
 impl fmt::Debug for Face {
@@ -142,6 +164,7 @@ impl fmt::Debug for Face {
             .field("num_glyphs", &self.num_glyphs)
             .field("is_truetype", &self.is_truetype)
             .field("charmaps", &self.charmaps)
+            .field("hinting", &self.hinting.get().map(Option::is_some))
             .finish()
     }
 }
@@ -194,6 +217,7 @@ impl Face {
             num_glyphs,
             is_truetype,
             charmaps,
+            hinting: Arc::default(),
         }))
     }
 
@@ -218,6 +242,7 @@ impl Face {
             // CFF outlines are cubic charstrings, never `glyf` splines.
             is_truetype: false,
             charmaps: vec![CharmapId::UNICODE_SYNTHETIC, CharmapId::ADOBE_CUSTOM],
+            hinting: Arc::default(),
         }))
     }
 
@@ -402,12 +427,90 @@ impl Face {
             .is_some_and(|p| p.glyph_name(read_fonts::types::GlyphId16::new(0)).is_some())
     }
 
+    /// The pixels-per-em every hinted glyph is grid-fitted at.
+    ///
+    /// It is a constant rather than the glyph's real size because that is what
+    /// the oracle does: `CFX_Face::New` calls `FT_Set_Pixel_Sizes(rec, 64, 64)`
+    /// once (`cfx_face.cpp:376`) and nothing ever changes it, and the real size
+    /// reaches FreeType through `FT_Set_Transform` with the matrix pre-divided
+    /// by 64 (`cfx_face.cpp:822-825`). FreeType applies a transform *after*
+    /// hinting, so the interpreter always fits to a 64-pixel grid whose
+    /// alignment is then scaled away.
+    ///
+    /// The consequence measured in `docs/status/pdfrum-render.md` wave 4 —
+    /// that this moves outline points by about 1/25 of a device pixel at 9 pt —
+    /// is correct and was read as "not worth porting". Wave 7 measured what
+    /// 1/25 of a pixel is *worth* once the glyph is rasterized the oracle's
+    /// way, and the answer is up to 10 counts per pixel on a 6 pt stem.
+    pub const HINT_PPEM: f32 = 64.0;
+
+    /// A glyph's outline grid-fitted at [`Self::HINT_PPEM`], in **64ths of an
+    /// em** — the units a 64-ppem instance draws in.
+    ///
+    /// `None` for anything the oracle would not hint, which is the whole of
+    /// its rule: `CFX_Face::RenderGlyph` adds `FT_LOAD_NO_HINTING` exactly when
+    /// `!IsTtOt()` — when the face has no `FT_FACE_FLAG_SFNT`, i.e. no table
+    /// directory (`cfx_face.cpp:841-843`). A bare CFF is therefore never
+    /// hinted, which matters because all fourteen base-14 blobs are bare CFF.
+    ///
+    /// It is also `None` when the interpreter refuses the face's programs.
+    /// Upstream reaches the same place by a different route: the glyph is
+    /// loaded under `FT_LOAD_PEDANTIC`, and on an error
+    /// `cfx_face.cpp:849-857` reloads it *unhinted* rather than failing.
+    /// Building it costs about 50 µs — the face's `fpgm` and `prep` programs
+    /// run — so it is memoized per face rather than per glyph. See
+    /// [`Self::hinting`].
+    #[must_use]
+    pub fn hinted_outline(&self, gid: Gid) -> Option<BezPath> {
+        let instance = self.hinting_instance()?;
+        let font = skrifa::FontRef::from_index(&self.bytes, self.index).ok()?;
+        let glyph = font
+            .outline_glyphs()
+            .get(skrifa::GlyphId::new(u32::from(gid.0)))?;
+        let mut pen = PathPen::default();
+        glyph
+            .draw(DrawSettings::hinted(instance, false), &mut pen)
+            .ok()?;
+        Some(pen.path)
+    }
+
+    /// The memoized 64-ppem hinting instance, built on first use.
+    fn hinting_instance(&self) -> Option<&HintingInstance> {
+        self.hinting
+            .get_or_init(|| {
+                if self.backend != Backend::Sfnt {
+                    return None;
+                }
+                let font = skrifa::FontRef::from_index(&self.bytes, self.index).ok()?;
+                // `Engine::Interpreter` rather than the default
+                // `AutoFallback`: the autofitter is compiled out of the
+                // oracle's FreeType (`ftmodule.h`), so a face with no
+                // `fpgm`/`prep` gets no hinting there at all, and falling back
+                // to an autohinter here would invent grid-fitting the oracle
+                // never applies. `Target::Smooth`'s default `Normal` mode is
+                // `FT_RENDER_MODE_NORMAL`, which is what `RenderGlyph` selects
+                // by passing no `FT_LOAD_TARGET_*` at all.
+                HintingInstance::new(
+                    &font.outline_glyphs(),
+                    Size::new(Self::HINT_PPEM),
+                    LocationRef::default(),
+                    HintingOptions {
+                        engine: HintingEngine::Interpreter,
+                        target: HintingTarget::default(),
+                    },
+                )
+                .ok()
+            })
+            .as_ref()
+    }
+
     /// A glyph's outline in **font units**, unhinted.
     ///
-    /// Unhinted unconditionally, per the brief's OQ-4: we render text as
-    /// filled outlines, and the only path that would hint requires a face that
-    /// is both SFNT and on FreeType's ~20-font "tricky" list, which `skrifa`
-    /// does not model and which no corpus font needs when filling.
+    /// This is what the *path* side of the oracle draws: `CFX_Face::LoadGlyphPath`
+    /// hints only a face that is both SFNT and on FreeType's ~20-font "tricky"
+    /// list (`cfx_face.cpp:948-951`), which `skrifa` does not model and no
+    /// corpus font needs. The glyph-*bitmap* side is a different rule and a
+    /// different function: see [`Self::hinted_outline`].
     #[must_use]
     pub fn outline(&self, gid: Gid) -> Option<BezPath> {
         let mut pen = PathPen::default();

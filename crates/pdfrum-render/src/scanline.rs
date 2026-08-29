@@ -39,6 +39,20 @@
 //! anywhere in the sweep, so the same path always produces the same bytes on
 //! every machine — the determinism property the conformance harness needs and
 //! that a SIMD-dispatched rasterizer cannot promise for free.
+//!
+//! # Why it lives in the engine rather than in a backend
+//!
+//! It began as `pdfrum-raster-exact`'s private integrator, and the analytic
+//! backend is still its largest consumer. It moved here when a *second*
+//! consumer appeared that is not a backend at all: [`crate::glyph`] rasterizes
+//! every small glyph into an alpha bitmap, and that bitmap must be identical
+//! under all three rasterizers, because the oracle's own glyph bitmap is
+//! produced by FreeType rather than by whatever draws the page's paths.
+//!
+//! That is the same argument [`crate::blend::composite_premultiplied`] already
+//! makes: a decision the *engine* takes has one implementation the engine owns,
+//! and Tier C's guarantee — that every engine decision is identical under both
+//! gating backends — then holds by construction rather than by testing.
 
 use store::CellStore;
 

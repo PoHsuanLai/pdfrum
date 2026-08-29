@@ -870,6 +870,27 @@ fn render_text<B: RasterBackend>(
         kinds,
     );
     for glyph in glyphs {
+        // The oracle's small-text path: an alpha bitmap, blitted whole, rather
+        // than an outline filled where it lands. It is the majority of the
+        // text in the corpus, and reproducing it is what closes the coverage
+        // band `docs/status/pdfrum-render.md` has carried since wave 3. When
+        // it declines — an unhintable face is fine, but a glyph too large or
+        // too degenerate to rasterize is not — the oracle skips the glyph
+        // outright (`if (!glyph.glyph_) continue;`), and so does this.
+        if let Some(placement) = glyph.bitmap
+            && kinds.fill
+            && !kinds.stroke
+        {
+            draw_glyph_bitmap(
+                device,
+                &mut caches.glyph_bitmaps,
+                font,
+                &glyph,
+                placement,
+                fill,
+            );
+            continue;
+        }
         let paint = PathPaint {
             fill: kinds.fill.then_some(fill),
             stroke: kinds.stroke.then_some(stroke),
@@ -888,6 +909,65 @@ fn render_text<B: RasterBackend>(
             &ctx.opts,
         );
     }
+}
+
+/// Blit one glyph as an alpha bitmap (`DrawNormalText`'s per-glyph body,
+/// `cfx_renderdevice.cpp:1330-1367`).
+///
+/// The bitmap is rasterized about the glyph's **own** origin — the matrix's
+/// translation is dropped — so that one bitmap serves the glyph wherever it
+/// lands on the page, which is what makes the cache worth having and what makes
+/// its key match the oracle's. The placement is then two integers and a phase.
+///
+/// The outline it rasterizes is the **hinted** one where the face has hinting
+/// programs and a table directory, falling back to the unhinted outline
+/// otherwise, because that is exactly the oracle's `!IsTtOt()` rule plus its
+/// `FT_LOAD_PEDANTIC` retry.
+fn draw_glyph_bitmap(
+    device: &mut dyn RenderDevice,
+    cache: &mut crate::glyph::BitmapCache,
+    font: &pdfrum_font::Font,
+    glyph: &crate::text::PlacedGlyph,
+    placement: crate::text::BitmapPlacement,
+    fill: Argb,
+) {
+    if fill.is_invisible() {
+        return;
+    }
+    // The glyph's shape in device pixels, with its origin at zero. Dropping the
+    // translation is what the key's four coefficients already assume.
+    let [a, b, c, d, _, _] = glyph.matrix.as_coeffs();
+    let shape = Affine::new([a, b, c, d, 0.0, 0.0]);
+    let key = crate::glyph::BitmapKey::new(glyph.key, shape);
+
+    let Some(lcd) = cache.get_or_insert(key, || {
+        // A hinted outline is worth up to ten counts a pixel at 6 pt and costs
+        // a bytecode run, so it is requested only here — on a cache miss — and
+        // never on the outline path, which the oracle also draws unhinted.
+        let outline = font
+            .hinted_glyph_path(glyph.key.gid)
+            .unwrap_or_else(|| glyph.outline.clone());
+        crate::glyph::render_lcd(&(shape * outline))
+    }) else {
+        return;
+    };
+    let bitmap = lcd.to_gray(placement.phase);
+    let Some(pixels) = crate::glyph::recolour(&bitmap, fill.to_peniko()) else {
+        return;
+    };
+    // `draw_image` maps the image's own pixel grid, so a plain translation puts
+    // texel (0, 0) at the bitmap's top-left corner. Both terms are whole
+    // numbers: the snapped origin by construction, and the bitmap's corner
+    // because FreeType's box is computed in whole pixels.
+    device.draw_image(
+        &pixels,
+        Affine::translate((
+            placement.origin.x + f64::from(bitmap.left),
+            placement.origin.y + f64::from(bitmap.top),
+        )),
+        ImageQuality::Nearest,
+        1.0,
+    );
 }
 
 /// Whether a glyph procedure is the sole-image case *and* taking it through

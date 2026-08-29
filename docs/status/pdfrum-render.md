@@ -1,9 +1,12 @@
 # `pdfrum-render` status
 
-**Updated:** 2026-08-29 · **State:** M8 pixel burn-down wave 6 —
-**86.2% at SSIM ≥ 0.99** (up from 85.2%), **487 byte-exact** (up from 451),
-the sub-0.80 codec tail diagnosed end to end and four of its files taken to
-byte-exact by image-dictionary rules rather than by any codec change
+**Updated:** 2026-08-29 · **State:** M8 pixel burn-down wave 7b —
+**88.5% at SSIM ≥ 0.99** (up from 86.2%), **499 byte-exact** (up from 487),
+and the glyph raster reproduced as the oracle actually performs it: hinted at
+a pinned 64 ppem, rasterized three times as wide, FIR5-filtered and gamma-
+averaged back to gray, then cached and blitted. Three of that pipeline's four
+stages had been measured *in isolation* by earlier waves and correctly
+rejected; assembled, they take a 6 pt stem from twenty counts out to three
 
 Contract: SPEC.md §8 including the E2/E3/E4/E10 additions and the
 2026-08-29 implementation record. Behavior: `docs/design/pdfrum-render.md`;
@@ -32,9 +35,11 @@ rasterizer.
 | `softmask.rs` | the `/BC` backdrop, the luminosity and alpha readbacks, the `/TR` lookup |
 | `pattern.rs` | the tiling and shading pattern draws, `ClipPattern`'s two shapes, the sub-sixteen-pixel cell enlargement, the tile screen buffer |
 | `text.rs` | the `Tr` mode table, the glyph matrix, the stroked-text CTM split, glyph placement, the origin snap and its three gates, `AdjustGlyphSpace`, the substituted-font width solve, type-3 character placement |
+| `glyph.rs` | the FreeType-parity glyph raster: the LCD 3× implosion, `ft_lcd_padding`, the FIR5 filter, `kTextGammaAdjust`, the subpixel phase, and the bitmap cache under the oracle's own key |
+| `scanline.rs` | the analytic cell rasterizer — the engine's, so a glyph bitmap is the same under every backend |
 | `image.rs` | `UseInterpolateBilinear`, the `kHugeImageSize` rule, the CMYK-overprint gate, the flip rule, sample-to-pixmap, the `/Matte` un-premultiply |
 | `ctx.rs` | `RenderCtx`, the depth cap, the type-3 font *set*, `RenderCaches` |
-| `walk.rs` | `render_page`, the object dispatch, the cull test, the page matrix, the group path, the soft-mask group, the type-3 char-proc walk, `DrawPatternImage` |
+| `walk.rs` | `render_page`, the object dispatch, the cull test, the page matrix, the group path, the soft-mask group, the type-3 char-proc walk, `DrawPatternImage`, the glyph-bitmap blit |
 | `pdfrum-raster-tinyskia` | the emulated layer and clip stacks, the conversions, the `1/4096` note |
 | `pdfrum-raster-vello` | the pinned `Level` and `RenderMode`, the opacity-layer wrapper for `draw_image`, the two-stack `pop` |
 
@@ -874,6 +879,186 @@ a `Resolve`, and `render_page` takes neither — it receives a `Page` and no
 document. Threading a resolver through the render API is the decision to
 make, and it is the user's.
 
+## Wave 7b: the glyph raster, and why three waves of measurement missed it
+
+Waves 4 and 5 each measured a piece of the oracle's glyph pipeline, found it
+did not help, and recorded it as dead. Both were right about what they
+measured. Neither had the pipeline.
+
+The oracle does not fill a small glyph's outline. It asks FreeType for a
+**bitmap** and blits it, and producing that bitmap is four stages, each of
+which moves pixels by more than the coverage integral that would otherwise
+decide them. Measured on a 6 pt `H` from Arimo drawn into a 200×200 page —
+the smallest probe that shows all four — every stage is load-bearing and the
+whole is byte-exact on one of the glyph's five rows.
+
+### The recipe, measured before any of it was ported
+
+| # | stage | source |
+|---|---|---|
+| 1 | grid-fit the outline at a **pinned 64 ppem**, never at the drawing size | `FT_Set_Pixel_Sizes(rec, 64, 64)` once at `cfx_face.cpp:376`; the real size arrives through `FT_Set_Transform` pre-divided by 64 (`:822-825`), which FreeType applies *after* hinting |
+| 2 | multiply every x by **3** and pad the box by **43/64** of a subpixel each side | `ft_smooth_raster_lcd`'s "implode" loop, `ftsmooth.c`; `ft_lcd_padding`, `ftlcdfil.c` |
+| 3 | spread each span's coverage over **five** subpixel columns at `{8, 77, 86, 77, 8}`, as `(cov·w + 85) >> 8`, **accumulating** | `ft_smooth_lcd_spans`, with `FT_LCD_FILTER_DEFAULT`'s weights |
+| 4 | average the triples `(r+g+b)/3` and look the result up in `kTextGammaAdjust` | `DrawNormalTextHelper` with `normalize = true`, `cfx_renderdevice.cpp:245-249` |
+
+Then `x_subpixel` shifts the sampling window in stage 4 by 0, 1 or 2
+subpixels — the third-of-a-pixel placement wave 5 already ported, now applied
+where it belongs.
+
+Hinting is enabled for every **SFNT** face and no other: `RenderGlyph` adds
+`FT_LOAD_NO_HINTING` exactly when `!IsTtOt()` (`cfx_face.cpp:841-843`), so a
+bare CFF — which is all fourteen base-14 blobs — is never hinted. `skrifa`'s
+`Engine::Interpreter` is used rather than its default `AutoFallback`, because
+the oracle's FreeType has the autofitter compiled out (`ftmodule.h`) and
+falling back to one would invent grid-fitting the oracle never applies.
+
+### The measurement, glyph by glyph
+
+Oracle against this pipeline, on the 6 pt `H`, columns 99–104:
+
+| row | oracle | wave 7b | unhinted |
+|---|---|---|---|
+| 95 | `255 239 249 255 237 252` | **`255 239 249 255 237 252`** | `255 238 248 255 236 252` |
+| 96 | `253 146 211 245 128 233` | `253 144 210 247 128 233` | `253 144 210 247 128 233` |
+| 97 | `253 137 135 155 102 233` | `253 135 135 155 102 233` | `253 133 126 145  99 233` |
+| 98 | `253 143 182 211 119 233` | `253 140 182 211 119 233` | `253 141 191 222 122 233` |
+| 99 | `253 146 211 245 128 233` | `253 144 210 247 128 233` | `253 144 210 247 128 233` |
+
+Row 95 is byte-exact and the worst residual is **3 counts**. Across seven
+glyphs at 6–12 pt and three subpixel phases the worst is **8** and the mean
+under **2** — against an outline fill that was 20–30 counts off *and missing
+two entire columns*, because the FIR5 filter's tails ink pixels no outline
+reaches. Every glyph's bitmap box matches the oracle's exactly: no oracle ink
+falls outside it in any probe.
+
+### Why the two dead hypotheses were dead, and are not now
+
+- **Wave 4 applied `kTextGammaAdjust` to our own coverage** and the match got
+  worse. Correct: the table's input is `(r+g+b)/3` over three *FIR5-filtered
+  subpixel* coverages, not a pixel's coverage. Applying a stage to the wrong
+  input is not a weaker version of the pipeline — it is a different function.
+- **Wave 4 simulated the LCD downsample alone** and moved the mean by under
+  4%. Correct, and for the same reason: its input is a 3×-wide rasterization
+  of a *hinted* outline, which wave 4 did not have.
+- **Waves 4 and 5 measured hinting at ~0.04 device px and ruled it out.** The
+  number is right. What it does not say is what 1/25 of a pixel is *worth*
+  once the glyph is rasterized this way, and the answer is up to **10 counts
+  per pixel** on a 6 pt stem: a 3×-wide grid resolves a third of the
+  horizontal displacement an ordinary one does, and the filter then spreads
+  that difference over five columns. Turning hinting off in the finished
+  pipeline takes the worst residual from 8 counts to 25 and roughly doubles
+  the mean, per-glyph:
+
+  | glyph | hinted | unhinted |
+  |---|---|---|
+  | `H` 6 pt | max 3, mean 0.50 | max 11, mean 2.13 |
+  | `o` 6 pt | max 8, mean 1.56 | max 20, mean 3.60 |
+  | `e` 8 pt | max 7, mean 1.94 | max 25, mean 4.69 |
+  | `g` 9 pt | max 8, mean 1.80 | max 20, mean 3.98 |
+
+The general lesson is the one wave 6a's `draw_image` finding already made in
+another register: **a pipeline stage measured out of its pipeline measures
+something else.** Three waves rejected three real components of the oracle's
+glyph raster on honest measurements of the wrong function.
+
+### The cache is the oracle's key, and the phase is deliberately not in it
+
+`BitmapKey` is `pdfrum-font`'s `GlyphKey` plus the device matrix quantised as
+`(int)(m · 10000)` on each of `a`, `b`, `c`, `d` — `UniqueKeyGen`,
+`cfx_glyphcache.cpp:62-70`, truncating rather than rounding. Two matrices
+closer than one part in ten thousand share a bitmap in the oracle, so a page
+whose text matrix drifts by rounding error draws identical glyphs there; a
+finer key would draw very slightly different ones.
+
+What is cached is the **3×-wide LCD bitmap**, not the gray one, which is why
+the subpixel phase is absent from the key exactly as it is from the oracle's:
+the phase is a window shift into that buffer applied at blit time, so one
+entry serves all three thirds of a pixel instead of three entries holding the
+same rasterization.
+
+The budget is 16 MB of bitmaps per session and the policy on exhaustion is to
+**stop inserting**, not to evict — the caller still gets its bitmap, the cache
+just stops growing. A page's glyph repertoire is small and hammered, so the
+entries an LRU would evict are the ones about to be wanted again.
+
+### `pdfrum-raster-exact`'s `cell` module is now the engine's `scanline`
+
+The glyph bitmap must be identical under all three rasterizers, because the
+oracle's is produced by FreeType rather than by whatever draws the page's
+paths. So the integrator moved from the analytic backend into the engine,
+unchanged — the same argument `blend::composite_premultiplied` already makes,
+and the same guarantee: Tier C's "every engine decision is identical under
+both gating backends" now holds for glyph coverage **by construction**.
+
+### What it moved
+
+Measured with the zero-area fix already in, so this is the glyph raster alone:
+
+| metric | before | after |
+|---|---|---|
+| pixel files at SSIM ≥ 0.99 | 1418 / 1628 (87.1%) | **1441 / 1628 (88.5%)** |
+| at SSIM ≥ 0.95 | 1574 / 1628 | 1574 / 1628 |
+| byte-exact PNGs | 497 | **499** |
+| files passing (all tiers) | 1426 / 1675 | **1448 / 1675** |
+| `pixel-fail` | 210 | **187** |
+| Tier C hard failures | 3 | 3 |
+
+**665 files up, 15 down**, the largest fall 0.0012 and none of the 15 across
+a threshold; **23 crossed 0.99 upward and none downward**; **no byte-exact
+file lost its status** and two gained it. `--check-regressions` reports none.
+
+The band it was aimed at is where it landed: `example_064` 0.958 → 0.983,
+`foxittext` 0.954 → 0.976, `ch_9_android` 0.956 → 0.968, `example_063` 0.753
+→ 0.764.
+
+### And it is faster, once `draw_image` learns what a blit is
+
+The M8 benchmark finding predicted this and got the mechanism only partly
+right; `docs/status/M8.md` carries the correction. The short version:
+
+- Caching the bitmap is not enough on its own. `draw_image`'s general path —
+  an inverse transform and two floors per pixel, plus an antialiased
+  rasterization of the footprint — cost **2.56 µs** per glyph against
+  **2.20 µs** to fill the outline it replaced. `pdfrum-raster-exact` now
+  recognises a whole-pixel translation and takes a real blit, for every image
+  rather than only for glyphs, and a test pins that the two paths agree byte
+  for byte.
+- **`vello_cpu` structurally cannot benefit.** It is a retained-scene
+  rasterizer — the device accumulates commands and rasterizes at `finish` — so
+  there is no pixel buffer to blit into and a glyph is a scene command either
+  way. It gains ~1.1x where the immediate-mode backends gain 1.4–3.7x.
+
+### `bug_1402` is not a raster problem, and never was
+
+Wave 6a named it "the shape of the whole residue: 6 pt type, where the oracle
+has glyph ink at 251/208/160 and we have white". The 251/208/160 is real and
+the raster now reproduces it — total ink over the page goes from 35112 to
+37473 against the oracle's 37188, over 306 pixels against 309. But the file
+does not improve, because its whole run is **displaced by (−23, +27) device
+pixels**: the oracle draws its three U+3002 ideographic full stops at
+x 123–135 and we draw them at x 101–112, at the same relative spacing and the
+same shape.
+
+That is a substitution question — which CJK fallback face a non-embedded
+`/HonMincho-M` with `/90pv-RKSJ-H` resolves to, and where in the em box that
+face puts the mark — and it is the reason wave 6a's reading of this file was
+wrong. Measuring a coverage residue on a run that is 23 pixels out of place
+measures the offset. Anyone picking it up should start from the face, not the
+raster.
+
+### What the next wave should not do again
+
+- Do not re-test any stage of the glyph pipeline in isolation against our own
+  coverage. All four stages are now implemented together and measured
+  together, and the isolated measurements that rejected three of them are in
+  the table above with the reason each was measuring a different function.
+- Do not read `bug_1402` as a coverage file. It is a substitution offset.
+- Do not expect `vello_cpu` to gain from the glyph cache. Its scene is
+  retained; there is nothing to blit into.
+- Do not measure a glyph cache on `latin_extended`. Its 256 glyphs are 256
+  distinct glyphs — a 0% hit rate — which is why `foxittext.pdf` joined the
+  benchmark fixtures.
+
 ## Numbers
 
 Measured against the golden store on the full corpus (1675 files, 1628 with
@@ -891,10 +1076,19 @@ burn-down's third wave; M5 is where the burn-down started.
 | `size-mismatch` | 0 | 0 | 0 | 0 | 0 | **0** |
 | Tier C hard failures | — | 5 | 3 | 3 | 3 | 3 |
 
-Wave 7's four fixes moved 37 files across the 0.99 line and none down; the
-zero-area early return alone accounts for 27 of them. Three of the four were
+**The W7 column is wave 7 and wave 7b together**, and the two were measured
+apart before it was written, because they landed on the same tree:
+
+| | ≥ 0.99 | byte-exact | passing | `pixel-fail` |
+|---|---:|---:|---:|---:|
+| W6 | 1403 | 487 | 1411 | 225 |
+| + wave 7's four fixes | 1418 | 497 | 1426 | 210 |
+| + wave 7b's glyph raster | **1441** | **499** | **1448** | **187** |
+
+Wave 7's four fixes moved 15 files across the 0.99 line and none down; the
+zero-area early return accounts for most of them, and three of the four were
 one-line or near-one-line changes whose reach was entirely in what they had
-been suppressing.
+been suppressing. Wave 7b's glyph raster moved a further 23 up and none down.
 
 Wave 5 moved 636 files up and 18 down, none of the 18 by more than 0.0026
 and none across the 0.99 line. **Every byte-exact file stayed byte-exact** —
@@ -938,6 +1132,31 @@ Two files sit at the boundary and are worth naming for whoever picks this up:
 dense small type alone loses more than a quarter of the score. If a future
 wave wants a text lever, those are the fixtures; if it does not, the codecs
 above are worth more per file.
+
+### The tail after wave 7b
+
+187 `pixel-fail` entries, **129 unique documents** once the `.in`/`.pdf`
+pairs are collapsed — down from 168 at wave 5 and 138 at wave 7.
+
+| band | documents | what is in it |
+|---|---|---|
+| 0.95–0.99 | 94 | what is left of the coverage tail. It is smaller than wave 5's 121 and it is *no longer only text*: the glyph raster took 23 documents out of it and what remains is a mixture of residual stem counts, image resample rounding and small feature gaps |
+| 0.90–0.95 | 15 | shadings, uncoloured tiling, vertical text |
+| 0.80–0.90 | 13 | `transfer_function`, `same_color_knockout_fill`, `image_transformer_other`, `octest` (optional content, built and unwired — see above), assorted image singles |
+| below 0.80 | 7 | `2_shading_type_6_00` (0.356) and `_001` (0.612) and `shade`/`shade-tensor` are **mesh shadings**, now the worst thing in the store by a wide margin; `example_030` (0.487) and `example_063` (0.764) are dense type; `bug_867501` (0.646) is the known `hayro-jbig2` gap |
+
+**The lever has moved off text.** Wave 5 called the 0.95–0.99 band "the whole
+story of the text tail" and it was; three waves later the text half of it has
+been paid down and the two worst files in the entire store are **type 6 Coons
+mesh shadings**, at 0.36 and 0.61. Whoever picks this up should start there
+rather than on another glyph question: `2_shading_type_6_00` alone is a bigger
+single-file deficit than anything text has left.
+
+The two files wave 5 named as the text lever have split. `example_063` moved
+0.747 → 0.764 and its remaining loss is genuinely the residual stem
+distribution. `en_fqa.pdf` moved 0.715 → 0.885 without the glyph raster
+touching it — it is unchanged across wave 7b — so whatever is left there is
+not the raster either.
 | Tier C hard failures (full store) | 11 | **5** |
 
 Every step was measured with `conformance run --check-regressions` against
