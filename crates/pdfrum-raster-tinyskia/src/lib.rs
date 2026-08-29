@@ -54,7 +54,7 @@
 
 mod convert;
 
-use kurbo::{Affine, BezPath, Rect, Stroke};
+use kurbo::{Affine, BezPath, Rect, Shape, Stroke};
 use pdfrum_page::BlendMode;
 use pdfrum_render::{
     AlphaMask, AntiAlias, Brush, FillRule, ImageQuality, MAX_TARGET_DIMENSION, Pixmap,
@@ -63,6 +63,15 @@ use pdfrum_render::{
 use tiny_skia::{Mask, Paint, PixmapPaint, PixmapRef, Shader, Transform};
 
 pub use convert::{to_blend_mode, to_color, to_path, to_transform};
+
+/// The flattening tolerance the stroke expansion in `stroke_path` uses, in
+/// device pixels.
+///
+/// The same tenth of a pixel `pdfrum_render::stroke::outline` expands a
+/// clip-shaped stroke at, for the same reason: fine enough that the filled
+/// outline lands on the pixels the stroke covers, coarse enough not to emit a
+/// segment per pixel along a long curve.
+const STROKE_TOLERANCE: f64 = 0.1;
 
 /// The `tiny-skia` backend.
 #[derive(Debug, Clone, Copy, Default)]
@@ -205,17 +214,46 @@ impl RenderDevice for TinySkiaDevice {
         stroke: &Stroke,
         aa: AntiAlias,
     ) {
-        let Some(p) = convert::to_path(path) else {
+        // The stroke is expanded to its outline here and *filled*, rather than
+        // handed to `Pixmap::stroke_path`. tiny-skia's own stroker places the
+        // two sides of a stroke asymmetrically: a one-pixel-wide vertical
+        // stroke centred on an integer x covers each neighbouring column by a
+        // half, and AGG — like `vello_cpu`, and like tiny-skia's own *fill* of
+        // the identical rectangle — writes both columns at 128, while its
+        // stroker writes 128 and 127. The bias is a half-count of geometry, so
+        // it lands on every antialiased stroke edge in the corpus and on the
+        // outer tip of every miter corner, where it is large enough to lose the
+        // corner pixel entirely.
+        //
+        // Expanding through `kurbo` removes it and, more importantly, makes the
+        // stroke outline the *engine's* geometry under both rasterizers rather
+        // than each stroker's own — the same argument
+        // `pdfrum_render::stroke::outline` already makes for a stroke used as a
+        // clip (design brief §6.1).
+        let Some(paint) = to_paint(brush, aa) else {
             return;
         };
-        let Some(paint) = to_paint(brush, aa) else {
+        let outline = kurbo::stroke(
+            path.path_elements(STROKE_TOLERANCE),
+            stroke,
+            &kurbo::StrokeOpts::default(),
+            STROKE_TOLERANCE,
+        );
+        let Some(p) = convert::to_path(&outline) else {
             return;
         };
         let transform = convert::to_transform(t);
         let clip = self.clip().cloned();
-        let s = convert::to_stroke(stroke);
         let Some(target) = self.target() else { return };
-        target.stroke_path(&p, &paint, &s, transform, clip.as_ref());
+        // A stroke outline self-overlaps at joins and caps, so it must be
+        // filled non-zero: even-odd would punch the overlaps back out.
+        target.fill_path(
+            &p,
+            &paint,
+            tiny_skia::FillRule::Winding,
+            transform,
+            clip.as_ref(),
+        );
     }
 
     fn draw_image(&mut self, img: &RasterImage, t: Affine, quality: ImageQuality, alpha: f32) {
@@ -452,6 +490,55 @@ mod tests {
             let a = out.pixel(col, 0).map_or(0, |px| px[3]);
             assert!(a == 0 || a == 255, "column {col} has soft alpha {a}");
         }
+    }
+
+    #[test]
+    fn a_stroke_covers_both_sides_of_its_centre_line_equally() {
+        // AGG writes 128 into both columns a unit-wide stroke on an integer x
+        // half-covers; tiny-skia's own stroker writes 128 and 127. Expanding
+        // the outline and filling it removes the bias, so this is the pixel
+        // form of the reason `stroke_path` does not call `Pixmap::stroke_path`.
+        let backend = TinySkiaBackend::new();
+        let mut device = backend.new_target(8, 4, peniko::Color::TRANSPARENT);
+        let mut line = BezPath::new();
+        line.move_to((4.0, 0.0));
+        line.line_to((4.0, 4.0));
+        device.stroke_path(
+            &line,
+            Affine::IDENTITY,
+            &Brush::Solid(peniko::Color::BLACK),
+            &Stroke::new(1.0),
+            AntiAlias::On,
+        );
+        let out = backend.finish(device);
+        let left = out.pixel(3, 2).map_or(0, |px| px[3]);
+        let right = out.pixel(4, 2).map_or(0, |px| px[3]);
+        assert_eq!(left, right, "the two half-covered columns must agree");
+        assert_eq!(left, 128, "AGG's coverage for a half-covered pixel");
+    }
+
+    #[test]
+    fn a_mitred_corner_paints_its_outer_tip() {
+        // The outer tip of a right-angle miter covers a quarter of its pixel,
+        // which AGG paints at alpha 64. The stroker's half-count bias was
+        // enough to lose it entirely, and it recurs at every corner of every
+        // stroked rectangle in the corpus.
+        let backend = TinySkiaBackend::new();
+        let mut device = backend.new_target(16, 16, peniko::Color::TRANSPARENT);
+        let mut corner = BezPath::new();
+        corner.move_to((4.0, 12.0));
+        corner.line_to((4.0, 4.0));
+        corner.line_to((12.0, 4.0));
+        device.stroke_path(
+            &corner,
+            Affine::IDENTITY,
+            &Brush::Solid(peniko::Color::BLACK),
+            &Stroke::new(1.0).with_join(kurbo::Join::Miter),
+            AntiAlias::On,
+        );
+        let out = backend.finish(device);
+        let tip = out.pixel(3, 3).map_or(0, |px| px[3]);
+        assert_eq!(tip, 64, "the miter's outer tip is a quarter-covered pixel");
     }
 
     #[test]

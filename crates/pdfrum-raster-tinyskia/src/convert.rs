@@ -134,48 +134,10 @@ pub fn to_blend_mode(mode: BlendMode) -> tiny_skia::BlendMode {
     }
 }
 
-/// The stroke, with the dash array the engine already normalised.
-///
-/// `StrokeDash::new` rejects an odd length, a negative entry and a
-/// non-positive total; the engine's normalisation guarantees none of those,
-/// and a `None` here means the engine let something through, which draws
-/// solid rather than not at all.
-#[must_use]
-pub fn to_stroke(stroke: &kurbo::Stroke) -> tiny_skia::Stroke {
-    #[expect(clippy::cast_possible_truncation, reason = "tiny-skia is f32")]
-    let width = stroke.width as f32;
-    #[expect(clippy::cast_possible_truncation, reason = "tiny-skia is f32")]
-    let miter = stroke.miter_limit as f32;
-    tiny_skia::Stroke {
-        width,
-        miter_limit: miter,
-        line_cap: match stroke.start_cap {
-            kurbo::Cap::Butt => tiny_skia::LineCap::Butt,
-            kurbo::Cap::Round => tiny_skia::LineCap::Round,
-            kurbo::Cap::Square => tiny_skia::LineCap::Square,
-        },
-        // Miter, not MiterClip: both kurbo and tiny-skia bevel on limit
-        // exceedance, which is what AGG's `miter_join_revert` does.
-        // `MiterClip` truncates instead and would not match.
-        line_join: match stroke.join {
-            kurbo::Join::Miter => tiny_skia::LineJoin::Miter,
-            kurbo::Join::Round => tiny_skia::LineJoin::Round,
-            kurbo::Join::Bevel => tiny_skia::LineJoin::Bevel,
-        },
-        dash: (!stroke.dash_pattern.is_empty())
-            .then(|| {
-                #[expect(clippy::cast_possible_truncation, reason = "tiny-skia is f32")]
-                let array: Vec<f32> = stroke.dash_pattern.iter().map(|v| *v as f32).collect();
-                #[expect(clippy::cast_possible_truncation, reason = "tiny-skia is f32")]
-                let offset = stroke.dash_offset as f32;
-                tiny_skia::StrokeDash::new(array, offset)
-            })
-            .flatten(),
-    }
-}
-
 #[cfg(test)]
 mod tests {
+    use kurbo::Shape;
+
     use super::*;
 
     #[test]
@@ -203,22 +165,48 @@ mod tests {
     }
 
     #[test]
-    fn a_normalised_dash_array_is_accepted() {
-        let stroke = kurbo::Stroke::new(2.0).with_dashes(0.0, [4.0, 2.0]);
-        assert!(to_stroke(&stroke).dash.is_some());
+    fn a_dashed_stroke_expands_to_one_outline_per_dash() {
+        // The dash array reaches the rasterizer through `kurbo::stroke`'s own
+        // expansion rather than a `tiny_skia::StrokeDash`, so this pins that
+        // the dashes survive that route: a 10-unit line dashed 2-on/2-off
+        // becomes three separate closed outlines, not one.
+        let mut line = BezPath::new();
+        line.move_to((0.0, 0.0));
+        line.line_to((10.0, 0.0));
+        let dashed = kurbo::Stroke::new(1.0).with_dashes(0.0, [2.0, 2.0]);
+        let outline = kurbo::stroke(
+            line.path_elements(0.1),
+            &dashed,
+            &kurbo::StrokeOpts::default(),
+            0.1,
+        );
+        let subpaths = outline
+            .elements()
+            .iter()
+            .filter(|el| matches!(el, kurbo::PathEl::MoveTo(_)))
+            .count();
+        assert_eq!(subpaths, 3, "2-on/2-off over 10 units is three dashes");
     }
 
     #[test]
-    fn an_odd_dash_array_would_be_rejected() {
-        // The engine never emits one; this pins that the rejection is real,
-        // so the normalisation is load-bearing rather than defensive.
-        let stroke = kurbo::Stroke::new(2.0).with_dashes(0.0, [4.0, 2.0, 1.0]);
-        assert!(to_stroke(&stroke).dash.is_none());
-    }
-
-    #[test]
-    fn miter_join_is_not_miter_clip() {
-        let stroke = kurbo::Stroke::new(1.0).with_join(kurbo::Join::Miter);
-        assert_eq!(to_stroke(&stroke).line_join, tiny_skia::LineJoin::Miter);
+    fn a_stroke_outline_is_symmetric_about_its_centre_line() {
+        // The reason `stroke_path` expands rather than calling tiny-skia's
+        // stroker: a unit-wide stroke centred on x = 10 must cover exactly
+        // 9.5..10.5, so both neighbouring columns are half covered and AGG
+        // writes them equally. tiny-skia's own stroker biases one side.
+        let mut line = BezPath::new();
+        line.move_to((10.0, 0.0));
+        line.line_to((10.0, 4.0));
+        let outline = kurbo::stroke(
+            line.path_elements(0.1),
+            &kurbo::Stroke::new(1.0),
+            &kurbo::StrokeOpts::default(),
+            0.1,
+        );
+        let bbox = outline.control_box();
+        assert!(
+            (bbox.x0 - 9.5).abs() < 1e-9 && (bbox.x1 - 10.5).abs() < 1e-9,
+            "stroke outline spans {bbox:?}, not 9.5..10.5",
+        );
     }
 }

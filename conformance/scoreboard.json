@@ -1,12 +1,12 @@
 {
-  "generated_at": "2026-08-29T06:37:57Z",
+  "generated_at": "2026-08-29T07:06:03Z",
   "totals": {
     "files": 1675,
-    "pass": 1256,
-    "fail": 419,
+    "pass": 1258,
+    "fail": 417,
     "by_tag": {
       "page-count": 2,
-      "pixel-fail": 385,
+      "pixel-fail": 383,
       "tierA-mismatch": 81
     },
     "text": {
@@ -42,7 +42,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.993404,
+        "ssim": 0.993450,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
@@ -72,7 +72,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.994372,
+        "ssim": 0.994348,
         "exact": false,
         "max_channel_diff": 253,
         "pages": 1
@@ -102,7 +102,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.994003,
+        "ssim": 0.994093,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
@@ -155,9 +155,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.993150,
+        "ssim": 0.993227,
         "exact": false,
-        "max_channel_diff": 239,
+        "max_channel_diff": 240,
         "pages": 1
       },
       "notes": ""
@@ -185,9 +185,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.994542,
+        "ssim": 0.994623,
         "exact": false,
-        "max_channel_diff": 242,
+        "max_channel_diff": 240,
         "pages": 1
       },
       "notes": ""
@@ -307,7 +307,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.994161,
+        "ssim": 0.994141,
         "exact": false,
         "max_channel_diff": 253,
         "pages": 1
@@ -337,7 +337,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.994916,
+        "ssim": 0.994882,
         "exact": false,
         "max_channel_diff": 253,
         "pages": 1
@@ -367,7 +367,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.994802,
+        "ssim": 0.994735,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
@@ -397,7 +397,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.994015,
+        "ssim": 0.993996,
         "exact": false,
         "max_channel_diff": 253,
         "pages": 1
@@ -667,7 +667,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.991250,
+        "ssim": 0.991255,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
@@ -727,9 +727,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999500,
+        "ssim": 0.999879,
         "exact": false,
-        "max_channel_diff": 147,
+        "max_channel_diff": 87,
         "pages": 1
       },
       "notes": ""
@@ -787,9 +787,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999583,
+        "ssim": 0.999892,
         "exact": false,
-        "max_channel_diff": 77,
+        "max_channel_diff": 26,
         "pages": 1
       },
       "notes": ""
@@ -847,9 +847,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999571,
+        "ssim": 0.999885,
         "exact": false,
-        "max_channel_diff": 152,
+        "max_channel_diff": 69,
         "pages": 1
       },
       "notes": ""
@@ -1359,7 +1359,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.997780,
+        "ssim": 0.999013,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
@@ -3307,7 +3307,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.992530,
+        "ssim": 0.992345,
         "exact": false,
         "max_channel_diff": 98,
         "pages": 1
@@ -3337,7 +3337,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.990014,
+        "ssim": 0.990010,
         "exact": false,
         "max_channel_diff": 209,
         "pages": 1
@@ -3369,12 +3369,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.978179,
+        "ssim": 0.978175,
         "exact": false,
         "max_channel_diff": 219,
         "pages": 1
       },
-      "notes": "ssim 0.978179 below floor 0.990000"
+      "notes": "ssim 0.978175 below floor 0.990000"
     },
     {
       "path": "corpus/fx/FRC_8.2.4_part1/FRC_11_8.2.4__remove_ModDate_all.pdf",
@@ -3399,7 +3399,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.990014,
+        "ssim": 0.990010,
         "exact": false,
         "max_channel_diff": 209,
         "pages": 1
@@ -3431,12 +3431,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.978179,
+        "ssim": 0.978175,
         "exact": false,
         "max_channel_diff": 219,
         "pages": 1
       },
-      "notes": "ssim 0.978179 below floor 0.990000"
+      "notes": "ssim 0.978175 below floor 0.990000"
     },
     {
       "path": "corpus/fx/FRC_8.2.4_part1/FRC_12_8.2.4__remove_ModDate_obj_.pdf",
@@ -3461,7 +3461,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.990014,
+        "ssim": 0.990010,
         "exact": false,
         "max_channel_diff": 209,
         "pages": 1
@@ -3493,12 +3493,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.978179,
+        "ssim": 0.978175,
         "exact": false,
         "max_channel_diff": 219,
         "pages": 1
       },
-      "notes": "ssim 0.978179 below floor 0.990000"
+      "notes": "ssim 0.978175 below floor 0.990000"
     },
     {
       "path": "corpus/fx/FRC_8.2.4_part1/FRC_13_8.2.4_remove_Size_value.pdf",
@@ -3523,7 +3523,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.990014,
+        "ssim": 0.990010,
         "exact": false,
         "max_channel_diff": 209,
         "pages": 1
@@ -3555,12 +3555,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.978179,
+        "ssim": 0.978175,
         "exact": false,
         "max_channel_diff": 219,
         "pages": 1
       },
-      "notes": "ssim 0.978179 below floor 0.990000"
+      "notes": "ssim 0.978175 below floor 0.990000"
     },
     {
       "path": "corpus/fx/FRC_8.2.4_part1/FRC_14_8.2.4_remove_Size_all.pdf",
@@ -3585,7 +3585,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.990014,
+        "ssim": 0.990010,
         "exact": false,
         "max_channel_diff": 209,
         "pages": 1
@@ -3617,12 +3617,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.978179,
+        "ssim": 0.978175,
         "exact": false,
         "max_channel_diff": 219,
         "pages": 1
       },
-      "notes": "ssim 0.978179 below floor 0.990000"
+      "notes": "ssim 0.978175 below floor 0.990000"
     },
     {
       "path": "corpus/fx/FRC_8.2.4_part1/FRC_15_8.2.4_remove_Size_obj.pdf",
@@ -3647,7 +3647,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.990014,
+        "ssim": 0.990010,
         "exact": false,
         "max_channel_diff": 209,
         "pages": 1
@@ -3677,7 +3677,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.990014,
+        "ssim": 0.990010,
         "exact": false,
         "max_channel_diff": 209,
         "pages": 1
@@ -3707,7 +3707,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.990014,
+        "ssim": 0.990010,
         "exact": false,
         "max_channel_diff": 209,
         "pages": 1
@@ -3737,7 +3737,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.990014,
+        "ssim": 0.990010,
         "exact": false,
         "max_channel_diff": 209,
         "pages": 1
@@ -3767,7 +3767,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.990014,
+        "ssim": 0.990010,
         "exact": false,
         "max_channel_diff": 209,
         "pages": 1
@@ -3799,12 +3799,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.978179,
+        "ssim": 0.978175,
         "exact": false,
         "max_channel_diff": 219,
         "pages": 1
       },
-      "notes": "ssim 0.978179 below floor 0.990000"
+      "notes": "ssim 0.978175 below floor 0.990000"
     },
     {
       "path": "corpus/fx/FRC_8.2.4_part1/FRC_1_8.2.4__original.pdf",
@@ -3829,7 +3829,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.990014,
+        "ssim": 0.990010,
         "exact": false,
         "max_channel_diff": 209,
         "pages": 1
@@ -3859,7 +3859,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.990014,
+        "ssim": 0.990010,
         "exact": false,
         "max_channel_diff": 209,
         "pages": 1
@@ -3889,7 +3889,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.990014,
+        "ssim": 0.990010,
         "exact": false,
         "max_channel_diff": 209,
         "pages": 1
@@ -3919,7 +3919,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.990014,
+        "ssim": 0.990010,
         "exact": false,
         "max_channel_diff": 209,
         "pages": 1
@@ -3949,7 +3949,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.990014,
+        "ssim": 0.990010,
         "exact": false,
         "max_channel_diff": 209,
         "pages": 1
@@ -3979,7 +3979,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.990014,
+        "ssim": 0.990010,
         "exact": false,
         "max_channel_diff": 209,
         "pages": 1
@@ -4011,12 +4011,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.978179,
+        "ssim": 0.978175,
         "exact": false,
         "max_channel_diff": 219,
         "pages": 1
       },
-      "notes": "ssim 0.978179 below floor 0.990000"
+      "notes": "ssim 0.978175 below floor 0.990000"
     },
     {
       "path": "corpus/fx/FRC_8.2.4_part1/FRC_2_8.2.4__add_type_.pdf",
@@ -4041,7 +4041,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.990014,
+        "ssim": 0.990010,
         "exact": false,
         "max_channel_diff": 209,
         "pages": 1
@@ -4073,12 +4073,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.978179,
+        "ssim": 0.978175,
         "exact": false,
         "max_channel_diff": 219,
         "pages": 1
       },
-      "notes": "ssim 0.978179 below floor 0.990000"
+      "notes": "ssim 0.978175 below floor 0.990000"
     },
     {
       "path": "corpus/fx/FRC_8.2.4_part1/FRC_3_8.2.4__add_type_value.pdf",
@@ -4103,7 +4103,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.990014,
+        "ssim": 0.990010,
         "exact": false,
         "max_channel_diff": 209,
         "pages": 1
@@ -4135,12 +4135,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.978179,
+        "ssim": 0.978175,
         "exact": false,
         "max_channel_diff": 219,
         "pages": 1
       },
-      "notes": "ssim 0.978179 below floor 0.990000"
+      "notes": "ssim 0.978175 below floor 0.990000"
     },
     {
       "path": "corpus/fx/FRC_8.2.4_part1/FRC_4_8.2.4__remove_FileName_value.pdf",
@@ -4165,7 +4165,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.990014,
+        "ssim": 0.990010,
         "exact": false,
         "max_channel_diff": 209,
         "pages": 1
@@ -4197,12 +4197,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.978179,
+        "ssim": 0.978175,
         "exact": false,
         "max_channel_diff": 219,
         "pages": 1
       },
-      "notes": "ssim 0.978179 below floor 0.990000"
+      "notes": "ssim 0.978175 below floor 0.990000"
     },
     {
       "path": "corpus/fx/FRC_8.2.4_part1/FRC_5_8.2.4__remove_FileName_all.pdf",
@@ -4227,7 +4227,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.990014,
+        "ssim": 0.990010,
         "exact": false,
         "max_channel_diff": 209,
         "pages": 1
@@ -4259,12 +4259,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.978179,
+        "ssim": 0.978175,
         "exact": false,
         "max_channel_diff": 219,
         "pages": 1
       },
-      "notes": "ssim 0.978179 below floor 0.990000"
+      "notes": "ssim 0.978175 below floor 0.990000"
     },
     {
       "path": "corpus/fx/FRC_8.2.4_part1/FRC_6_8.2.4__remove_FileName_obj.pdf",
@@ -4289,7 +4289,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.990014,
+        "ssim": 0.990010,
         "exact": false,
         "max_channel_diff": 209,
         "pages": 1
@@ -4321,12 +4321,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.978179,
+        "ssim": 0.978175,
         "exact": false,
         "max_channel_diff": 219,
         "pages": 1
       },
-      "notes": "ssim 0.978179 below floor 0.990000"
+      "notes": "ssim 0.978175 below floor 0.990000"
     },
     {
       "path": "corpus/fx/FRC_8.2.4_part1/FRC_7_8.2.4__remove_Description_value.pdf",
@@ -4351,7 +4351,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.990014,
+        "ssim": 0.990010,
         "exact": false,
         "max_channel_diff": 209,
         "pages": 1
@@ -4383,12 +4383,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.978179,
+        "ssim": 0.978175,
         "exact": false,
         "max_channel_diff": 219,
         "pages": 1
       },
-      "notes": "ssim 0.978179 below floor 0.990000"
+      "notes": "ssim 0.978175 below floor 0.990000"
     },
     {
       "path": "corpus/fx/FRC_8.2.4_part1/FRC_8_8.2.4__remove__Description_all.pdf",
@@ -4413,7 +4413,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.990014,
+        "ssim": 0.990010,
         "exact": false,
         "max_channel_diff": 209,
         "pages": 1
@@ -4445,12 +4445,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.978179,
+        "ssim": 0.978175,
         "exact": false,
         "max_channel_diff": 219,
         "pages": 1
       },
-      "notes": "ssim 0.978179 below floor 0.990000"
+      "notes": "ssim 0.978175 below floor 0.990000"
     },
     {
       "path": "corpus/fx/FRC_8.2.4_part1/FRC_9_8.2.4__remove__Description_obj.pdf",
@@ -4475,7 +4475,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.990014,
+        "ssim": 0.990010,
         "exact": false,
         "max_channel_diff": 209,
         "pages": 1
@@ -4565,7 +4565,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.999500,
+        "ssim": 0.999496,
         "exact": false,
         "max_channel_diff": 111,
         "pages": 1
@@ -4595,7 +4595,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.996671,
+        "ssim": 0.996690,
         "exact": false,
         "max_channel_diff": 229,
         "pages": 1
@@ -4625,7 +4625,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.997060,
+        "ssim": 0.997064,
         "exact": false,
         "max_channel_diff": 126,
         "pages": 1
@@ -4685,7 +4685,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.995234,
+        "ssim": 0.995237,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
@@ -4715,7 +4715,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.997853,
+        "ssim": 0.997854,
         "exact": false,
         "max_channel_diff": 159,
         "pages": 1
@@ -4775,7 +4775,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.997449,
+        "ssim": 0.997448,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
@@ -5199,7 +5199,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.996425,
+        "ssim": 0.996395,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
@@ -5229,7 +5229,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.998783,
+        "ssim": 0.998817,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
@@ -5289,7 +5289,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.996896,
+        "ssim": 0.996958,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
@@ -5319,7 +5319,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.998148,
+        "ssim": 0.998170,
         "exact": false,
         "max_channel_diff": 144,
         "pages": 1
@@ -5469,7 +5469,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.993962,
+        "ssim": 0.993979,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
@@ -5995,7 +5995,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.990153,
+        "ssim": 0.990189,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
@@ -6211,12 +6211,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.986958,
+        "ssim": 0.986994,
         "exact": false,
         "max_channel_diff": 220,
         "pages": 1
       },
-      "notes": "ssim 0.986958 below floor 0.990000"
+      "notes": "ssim 0.986994 below floor 0.990000"
     },
     {
       "path": "corpus/fx/action/123.pdf",
@@ -6273,7 +6273,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.999882,
+        "ssim": 0.999563,
         "exact": false,
         "max_channel_diff": 46,
         "pages": 1
@@ -6303,7 +6303,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.997886,
+        "ssim": 0.998020,
         "exact": false,
         "max_channel_diff": 220,
         "pages": 1
@@ -6365,9 +6365,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999977,
+        "ssim": 0.999997,
         "exact": false,
-        "max_channel_diff": 64,
+        "max_channel_diff": 33,
         "pages": 2
       },
       "notes": ""
@@ -6397,12 +6397,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.982197,
+        "ssim": 0.982122,
         "exact": false,
         "max_channel_diff": 220,
         "pages": 1
       },
-      "notes": "ssim 0.982197 below floor 0.990000"
+      "notes": "ssim 0.982122 below floor 0.990000"
     },
     {
       "path": "corpus/fx/action/action_open_a_file.pdf",
@@ -6489,12 +6489,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.984536,
+        "ssim": 0.984461,
         "exact": false,
         "max_channel_diff": 221,
         "pages": 1
       },
-      "notes": "ssim 0.984536 below floor 0.990000"
+      "notes": "ssim 0.984461 below floor 0.990000"
     },
     {
       "path": "corpus/fx/action/action_run_javascript.pdf",
@@ -6689,7 +6689,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.997621,
+        "ssim": 0.997635,
         "exact": false,
         "max_channel_diff": 239,
         "pages": 1
@@ -6719,7 +6719,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.998247,
+        "ssim": 0.998266,
         "exact": false,
         "max_channel_diff": 220,
         "pages": 1
@@ -6749,9 +6749,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.998891,
+        "ssim": 0.999482,
         "exact": false,
-        "max_channel_diff": 187,
+        "max_channel_diff": 52,
         "pages": 1
       },
       "notes": ""
@@ -6779,7 +6779,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.998946,
+        "ssim": 0.999076,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
@@ -6869,9 +6869,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999979,
+        "ssim": 0.999999,
         "exact": false,
-        "max_channel_diff": 64,
+        "max_channel_diff": 34,
         "pages": 1
       },
       "notes": ""
@@ -6899,9 +6899,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999988,
+        "ssim": 1.000000,
         "exact": false,
-        "max_channel_diff": 64,
+        "max_channel_diff": 20,
         "pages": 1
       },
       "notes": ""
@@ -6929,9 +6929,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999981,
+        "ssim": 0.999999,
         "exact": false,
-        "max_channel_diff": 64,
+        "max_channel_diff": 20,
         "pages": 1
       },
       "notes": ""
@@ -7147,9 +7147,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999731,
+        "ssim": 0.999978,
         "exact": false,
-        "max_channel_diff": 184,
+        "max_channel_diff": 46,
         "pages": 1
       },
       "notes": ""
@@ -7177,7 +7177,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.996470,
+        "ssim": 0.996461,
         "exact": false,
         "max_channel_diff": 207,
         "pages": 1
@@ -7207,7 +7207,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.993023,
+        "ssim": 0.993114,
         "exact": false,
         "max_channel_diff": 85,
         "pages": 1
@@ -7329,7 +7329,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.996230,
+        "ssim": 0.996234,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
@@ -7419,9 +7419,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999047,
+        "ssim": 0.999118,
         "exact": false,
-        "max_channel_diff": 96,
+        "max_channel_diff": 100,
         "pages": 1
       },
       "notes": ""
@@ -7573,12 +7573,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.965935,
+        "ssim": 0.965534,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 2
       },
-      "notes": "ssim 0.965935 below floor 0.990000"
+      "notes": "ssim 0.965534 below floor 0.990000"
     },
     {
       "path": "corpus/fx/form/format_alert_box.pdf",
@@ -8235,7 +8235,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.999542,
+        "ssim": 0.999562,
         "exact": false,
         "max_channel_diff": 94,
         "pages": 1
@@ -8575,12 +8575,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.963828,
+        "ssim": 0.963570,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 5
       },
-      "notes": "ssim 0.963828 below floor 0.990000"
+      "notes": "ssim 0.963570 below floor 0.990000"
     },
     {
       "path": "corpus/fx/layer/4_35.pdf",
@@ -8727,9 +8727,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999995,
-        "exact": false,
-        "max_channel_diff": 64,
+        "ssim": 1,
+        "exact": true,
+        "max_channel_diff": 0,
         "pages": 1
       },
       "notes": ""
@@ -8793,7 +8793,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.999109,
+        "ssim": 0.999167,
         "exact": false,
         "max_channel_diff": 225,
         "pages": 1
@@ -8885,12 +8885,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.985563,
+        "ssim": 0.987518,
         "exact": false,
         "max_channel_diff": 239,
         "pages": 1
       },
-      "notes": "ssim 0.985563 below floor 0.990000"
+      "notes": "ssim 0.987518 below floor 0.990000"
     },
     {
       "path": "corpus/fx/mulobj/1/1_10_watermark.pdf",
@@ -9279,9 +9279,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999970,
+        "ssim": 0.999985,
         "exact": false,
-        "max_channel_diff": 64,
+        "max_channel_diff": 35,
         "pages": 1
       },
       "notes": ""
@@ -9311,7 +9311,7 @@
       "tierB": {
         "ssim": 0.999983,
         "exact": false,
-        "max_channel_diff": 52,
+        "max_channel_diff": 62,
         "pages": 1
       },
       "notes": ""
@@ -9339,7 +9339,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.999463,
+        "ssim": 0.999467,
         "exact": false,
         "max_channel_diff": 147,
         "pages": 1
@@ -9369,7 +9369,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.999729,
+        "ssim": 0.999732,
         "exact": false,
         "max_channel_diff": 140,
         "pages": 1
@@ -9399,9 +9399,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999743,
+        "ssim": 0.999771,
         "exact": false,
-        "max_channel_diff": 137,
+        "max_channel_diff": 136,
         "pages": 1
       },
       "notes": ""
@@ -9431,7 +9431,7 @@
       "tierB": {
         "ssim": 0.999983,
         "exact": false,
-        "max_channel_diff": 52,
+        "max_channel_diff": 62,
         "pages": 1
       },
       "notes": ""
@@ -9549,9 +9549,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999955,
+        "ssim": 0.999970,
         "exact": false,
-        "max_channel_diff": 16,
+        "max_channel_diff": 9,
         "pages": 1
       },
       "notes": ""
@@ -9759,7 +9759,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.998642,
+        "ssim": 0.998654,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
@@ -11167,9 +11167,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999753,
+        "ssim": 0.999934,
         "exact": false,
-        "max_channel_diff": 86,
+        "max_channel_diff": 48,
         "pages": 1
       },
       "notes": ""
@@ -11773,7 +11773,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.996385,
+        "ssim": 0.996389,
         "exact": false,
         "max_channel_diff": 248,
         "pages": 1
@@ -11923,9 +11923,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999126,
+        "ssim": 0.999125,
         "exact": false,
-        "max_channel_diff": 114,
+        "max_channel_diff": 110,
         "pages": 1
       },
       "notes": ""
@@ -12465,12 +12465,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.898270,
+        "ssim": 0.898669,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.898270 below floor 0.990000"
+      "notes": "ssim 0.898669 below floor 0.990000"
     },
     {
       "path": "corpus/fx/other/8.1_viewer_preferences.pdf",
@@ -12527,7 +12527,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.999591,
+        "ssim": 0.999608,
         "exact": false,
         "max_channel_diff": 101,
         "pages": 2
@@ -12637,7 +12637,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.991591,
+        "ssim": 0.992501,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 3
@@ -12819,9 +12819,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999147,
+        "ssim": 0.999955,
         "exact": false,
-        "max_channel_diff": 201,
+        "max_channel_diff": 12,
         "pages": 1
       },
       "notes": ""
@@ -12881,7 +12881,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.999735,
+        "ssim": 0.999731,
         "exact": false,
         "max_channel_diff": 229,
         "pages": 1
@@ -12911,7 +12911,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.995594,
+        "ssim": 0.996093,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
@@ -12943,12 +12943,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.988534,
+        "ssim": 0.988469,
         "exact": false,
         "max_channel_diff": 248,
         "pages": 1
       },
-      "notes": "ssim 0.988534 below floor 0.990000"
+      "notes": "ssim 0.988469 below floor 0.990000"
     },
     {
       "path": "corpus/fx/path/bug_0_width_line.pdf",
@@ -12973,7 +12973,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.999262,
+        "ssim": 0.999259,
         "exact": false,
         "max_channel_diff": 109,
         "pages": 1
@@ -13033,7 +13033,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.995557,
+        "ssim": 0.995551,
         "exact": false,
         "max_channel_diff": 219,
         "pages": 1
@@ -13065,12 +13065,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.914349,
+        "ssim": 0.914516,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.914349 below floor 0.990000"
+      "notes": "ssim 0.914516 below floor 0.990000"
     },
     {
       "path": "corpus/fx/path/edit_getdash.pdf",
@@ -13095,9 +13095,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999999,
+        "ssim": 0.999945,
         "exact": false,
-        "max_channel_diff": 3,
+        "max_channel_diff": 24,
         "pages": 1
       },
       "notes": ""
@@ -13127,7 +13127,7 @@
       "tierB": {
         "ssim": 0.999895,
         "exact": false,
-        "max_channel_diff": 37,
+        "max_channel_diff": 51,
         "pages": 1
       },
       "notes": ""
@@ -13155,9 +13155,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999901,
+        "ssim": 0.999902,
         "exact": false,
-        "max_channel_diff": 28,
+        "max_channel_diff": 13,
         "pages": 1
       },
       "notes": ""
@@ -13185,9 +13185,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999935,
+        "ssim": 0.999970,
         "exact": false,
-        "max_channel_diff": 101,
+        "max_channel_diff": 90,
         "pages": 1
       },
       "notes": ""
@@ -13215,7 +13215,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.999900,
+        "ssim": 0.999901,
         "exact": false,
         "max_channel_diff": 12,
         "pages": 1
@@ -13309,9 +13309,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.997371,
+        "ssim": 0.998842,
         "exact": false,
-        "max_channel_diff": 117,
+        "max_channel_diff": 83,
         "pages": 2
       },
       "notes": ""
@@ -13339,7 +13339,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.997396,
+        "ssim": 0.997410,
         "exact": false,
         "max_channel_diff": 217,
         "pages": 1
@@ -13373,12 +13373,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.989958,
+        "ssim": 0.989640,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 2
       },
-      "notes": "ssim 0.989958 below floor 0.990000"
+      "notes": "ssim 0.989640 below floor 0.990000"
     },
     {
       "path": "corpus/fx/path/path_4.pdf",
@@ -13405,7 +13405,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.996968,
+        "ssim": 0.998400,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 2
@@ -13437,12 +13437,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.989234,
+        "ssim": 0.989732,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.989234 below floor 0.990000"
+      "notes": "ssim 0.989732 below floor 0.990000"
     },
     {
       "path": "corpus/fx/path/path_6_graphics4.5.5.pdf",
@@ -13467,7 +13467,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.997300,
+        "ssim": 0.997347,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
@@ -13501,12 +13501,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.972523,
+        "ssim": 0.972559,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 2
       },
-      "notes": "ssim 0.972523 below floor 0.990000"
+      "notes": "ssim 0.972559 below floor 0.990000"
     },
     {
       "path": "corpus/fx/path/path_9.pdf",
@@ -13533,12 +13533,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.953044,
+        "ssim": 0.953208,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.953044 below floor 0.990000"
+      "notes": "ssim 0.953208 below floor 0.990000"
     },
     {
       "path": "corpus/fx/path/pentagon.pdf",
@@ -13563,7 +13563,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.996596,
+        "ssim": 0.996728,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
@@ -13593,9 +13593,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.998251,
+        "ssim": 0.997508,
         "exact": false,
-        "max_channel_diff": 117,
+        "max_channel_diff": 67,
         "pages": 1
       },
       "notes": ""
@@ -13655,9 +13655,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.996200,
+        "ssim": 0.998123,
         "exact": false,
-        "max_channel_diff": 100,
+        "max_channel_diff": 71,
         "pages": 1
       },
       "notes": ""
@@ -13685,9 +13685,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999938,
+        "ssim": 0.999993,
         "exact": false,
-        "max_channel_diff": 64,
+        "max_channel_diff": 33,
         "pages": 1
       },
       "notes": ""
@@ -13717,12 +13717,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.911241,
+        "ssim": 0.914067,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.911241 below floor 0.990000"
+      "notes": "ssim 0.914067 below floor 0.990000"
     },
     {
       "path": "corpus/fx/shading/2_shading_type1.pdf",
@@ -13747,9 +13747,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999995,
+        "ssim": 1.000000,
         "exact": false,
-        "max_channel_diff": 64,
+        "max_channel_diff": 2,
         "pages": 1
       },
       "notes": ""
@@ -13807,7 +13807,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.999881,
+        "ssim": 0.999928,
         "exact": false,
         "max_channel_diff": 109,
         "pages": 1
@@ -13991,7 +13991,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.994363,
+        "ssim": 0.994987,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
@@ -14023,12 +14023,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.960720,
+        "ssim": 0.960992,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.960720 below floor 0.990000"
+      "notes": "ssim 0.960992 below floor 0.990000"
     },
     {
       "path": "corpus/fx/text/appstoredescription3.1_en_updated.pdf",
@@ -14309,12 +14309,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.945790,
+        "ssim": 0.946480,
         "exact": false,
         "max_channel_diff": 204,
         "pages": 2
       },
-      "notes": "ssim 0.945790 below floor 0.990000"
+      "notes": "ssim 0.946480 below floor 0.990000"
     },
     {
       "path": "corpus/fx/text/en_introduce.pdf",
@@ -14375,12 +14375,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.929856,
+        "ssim": 0.936349,
         "exact": false,
         "max_channel_diff": 250,
         "pages": 1
       },
-      "notes": "ssim 0.929856 below floor 0.990000"
+      "notes": "ssim 0.936349 below floor 0.990000"
     },
     {
       "path": "corpus/fx/text/en_tem.pdf",
@@ -14417,12 +14417,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.945682,
+        "ssim": 0.945767,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 6
       },
-      "notes": "ssim 0.945682 below floor 0.990000"
+      "notes": "ssim 0.945767 below floor 0.990000"
     },
     {
       "path": "corpus/fx/text/en_uicase_.pdf",
@@ -14471,12 +14471,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.964379,
+        "ssim": 0.964646,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 12
       },
-      "notes": "ssim 0.964379 below floor 0.990000"
+      "notes": "ssim 0.964646 below floor 0.990000"
     },
     {
       "path": "corpus/fx/text/en_uicase_2_.pdf",
@@ -14699,12 +14699,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.901657,
+        "ssim": 0.901751,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 7
       },
-      "notes": "ssim 0.901657 below floor 0.990000"
+      "notes": "ssim 0.901751 below floor 0.990000"
     },
     {
       "path": "corpus/fx/text/zh_function_list.pdf",
@@ -14781,12 +14781,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.892666,
+        "ssim": 0.892750,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 7
       },
-      "notes": "ssim 0.892666 below floor 0.990000"
+      "notes": "ssim 0.892750 below floor 0.990000"
     },
     {
       "path": "corpus/fx/text/zh_shared_document.pdf",
@@ -14815,12 +14815,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.926038,
+        "ssim": 0.926109,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 2
       },
-      "notes": "ssim 0.926038 below floor 0.990000"
+      "notes": "ssim 0.926109 below floor 0.990000"
     },
     {
       "path": "corpus/fx/text/zh_webdav.pdf",
@@ -14877,7 +14877,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.998807,
+        "ssim": 0.998809,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
@@ -14907,7 +14907,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.998769,
+        "ssim": 0.998831,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
@@ -14997,7 +14997,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.997188,
+        "ssim": 0.997195,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
@@ -15027,7 +15027,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.997786,
+        "ssim": 0.997794,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
@@ -15057,7 +15057,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.997621,
+        "ssim": 0.997713,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
@@ -15777,7 +15777,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.999276,
+        "ssim": 0.999315,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
@@ -15837,9 +15837,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999301,
+        "ssim": 0.999343,
         "exact": false,
-        "max_channel_diff": 246,
+        "max_channel_diff": 241,
         "pages": 1
       },
       "notes": ""
@@ -15897,7 +15897,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.999304,
+        "ssim": 0.999303,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
@@ -15987,7 +15987,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.999331,
+        "ssim": 0.999343,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
@@ -16017,7 +16017,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.999198,
+        "ssim": 0.999197,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
@@ -16257,9 +16257,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999785,
+        "ssim": 0.999929,
         "exact": false,
-        "max_channel_diff": 108,
+        "max_channel_diff": 63,
         "pages": 1
       },
       "notes": ""
@@ -16287,9 +16287,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999785,
+        "ssim": 0.999929,
         "exact": false,
-        "max_channel_diff": 108,
+        "max_channel_diff": 63,
         "pages": 1
       },
       "notes": ""
@@ -20075,12 +20075,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.987744,
+        "ssim": 0.987935,
         "exact": false,
         "max_channel_diff": 201,
         "pages": 1
       },
-      "notes": "ssim 0.987744 below floor 0.990000"
+      "notes": "ssim 0.987935 below floor 0.990000"
     },
     {
       "path": "corpus/third_party/skia/20180916_098c1355/xfermodes3.pdf",
@@ -20105,7 +20105,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.998757,
+        "ssim": 0.999330,
         "exact": false,
         "max_channel_diff": 87,
         "pages": 1
@@ -20167,12 +20167,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.973595,
+        "ssim": 0.973796,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.973595 below floor 0.990000"
+      "notes": "ssim 0.973796 below floor 0.990000"
     },
     {
       "path": "corpus/third_party/tcpdf/example_002.pdf",
@@ -20261,12 +20261,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.804521,
+        "ssim": 0.792884,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 2
       },
-      "notes": "ssim 0.804521 below floor 0.990000"
+      "notes": "ssim 0.792884 below floor 0.990000"
     },
     {
       "path": "corpus/third_party/tcpdf/example_005.pdf",
@@ -20293,12 +20293,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.863471,
+        "ssim": 0.862996,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.863471 below floor 0.990000"
+      "notes": "ssim 0.862996 below floor 0.990000"
     },
     {
       "path": "corpus/third_party/tcpdf/example_006.pdf",
@@ -20335,12 +20335,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.890546,
+        "ssim": 0.891492,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 6
       },
-      "notes": "ssim 0.890546 below floor 0.990000"
+      "notes": "ssim 0.891492 below floor 0.990000"
     },
     {
       "path": "corpus/third_party/tcpdf/example_007.pdf",
@@ -20369,12 +20369,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.788580,
+        "ssim": 0.789671,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 2
       },
-      "notes": "ssim 0.788580 below floor 0.990000"
+      "notes": "ssim 0.789671 below floor 0.990000"
     },
     {
       "path": "corpus/third_party/tcpdf/example_008.pdf",
@@ -20405,12 +20405,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.948441,
+        "ssim": 0.948560,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 3
       },
-      "notes": "ssim 0.948441 below floor 0.990000"
+      "notes": "ssim 0.948560 below floor 0.990000"
     },
     {
       "path": "corpus/third_party/tcpdf/example_009.pdf",
@@ -20437,12 +20437,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.837146,
+        "ssim": 0.837451,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.837146 below floor 0.990000"
+      "notes": "ssim 0.837451 below floor 0.990000"
     },
     {
       "path": "corpus/third_party/tcpdf/example_010.pdf",
@@ -20475,12 +20475,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.793788,
+        "ssim": 0.793907,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 4
       },
-      "notes": "ssim 0.793788 below floor 0.990000"
+      "notes": "ssim 0.793907 below floor 0.990000"
     },
     {
       "path": "corpus/third_party/tcpdf/example_011.pdf",
@@ -20507,12 +20507,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.963168,
+        "ssim": 0.963333,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.963168 below floor 0.990000"
+      "notes": "ssim 0.963333 below floor 0.990000"
     },
     {
       "path": "corpus/third_party/tcpdf/example_012.pdf",
@@ -20541,12 +20541,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.935924,
+        "ssim": 0.937025,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 2
       },
-      "notes": "ssim 0.935924 below floor 0.990000"
+      "notes": "ssim 0.937025 below floor 0.990000"
     },
     {
       "path": "corpus/third_party/tcpdf/example_013.pdf",
@@ -20573,12 +20573,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.971069,
+        "ssim": 0.970293,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.971069 below floor 0.990000"
+      "notes": "ssim 0.970293 below floor 0.990000"
     },
     {
       "path": "corpus/third_party/tcpdf/example_014.pdf",
@@ -20608,12 +20608,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.969246,
+        "ssim": 0.969365,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.969246 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.969365 below floor 0.990000"
     },
     {
       "path": "corpus/third_party/tcpdf/example_015.pdf",
@@ -20656,12 +20656,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.985497,
+        "ssim": 0.985616,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 9
       },
-      "notes": "ssim 0.985497 below floor 0.990000"
+      "notes": "ssim 0.985616 below floor 0.990000"
     },
     {
       "path": "corpus/third_party/tcpdf/example_016.pdf",
@@ -20688,12 +20688,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.986723,
+        "ssim": 0.986842,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.986723 below floor 0.990000"
+      "notes": "ssim 0.986842 below floor 0.990000"
     },
     {
       "path": "corpus/third_party/tcpdf/example_017.pdf",
@@ -20722,12 +20722,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.790336,
+        "ssim": 0.791159,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 2
       },
-      "notes": "ssim 0.790336 below floor 0.990000"
+      "notes": "ssim 0.791159 below floor 0.990000"
     },
     {
       "path": "corpus/third_party/tcpdf/example_018.pdf",
@@ -20754,12 +20754,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.963749,
+        "ssim": 0.963869,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.963749 below floor 0.990000"
+      "notes": "ssim 0.963869 below floor 0.990000"
     },
     {
       "path": "corpus/third_party/tcpdf/example_019.pdf",
@@ -20786,12 +20786,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.982382,
+        "ssim": 0.982758,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.982382 below floor 0.990000"
+      "notes": "ssim 0.982758 below floor 0.990000"
     },
     {
       "path": "corpus/third_party/tcpdf/example_020.pdf",
@@ -20822,12 +20822,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.832025,
+        "ssim": 0.830778,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 3
       },
-      "notes": "ssim 0.832025 below floor 0.990000"
+      "notes": "ssim 0.830778 below floor 0.990000"
     },
     {
       "path": "corpus/third_party/tcpdf/example_021.pdf",
@@ -20854,12 +20854,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.943954,
+        "ssim": 0.944074,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.943954 below floor 0.990000"
+      "notes": "ssim 0.944074 below floor 0.990000"
     },
     {
       "path": "corpus/third_party/tcpdf/example_022.pdf",
@@ -20886,12 +20886,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.979852,
+        "ssim": 0.979972,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.979852 below floor 0.990000"
+      "notes": "ssim 0.979972 below floor 0.990000"
     },
     {
       "path": "corpus/third_party/tcpdf/example_023.pdf",
@@ -20928,12 +20928,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.987206,
+        "ssim": 0.987326,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 6
       },
-      "notes": "ssim 0.987206 below floor 0.990000"
+      "notes": "ssim 0.987326 below floor 0.990000"
     },
     {
       "path": "corpus/third_party/tcpdf/example_024.pdf",
@@ -20960,12 +20960,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.955787,
+        "ssim": 0.955907,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.955787 below floor 0.990000"
+      "notes": "ssim 0.955907 below floor 0.990000"
     },
     {
       "path": "corpus/third_party/tcpdf/example_025.pdf",
@@ -20992,12 +20992,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.960486,
+        "ssim": 0.960605,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.960486 below floor 0.990000"
+      "notes": "ssim 0.960605 below floor 0.990000"
     },
     {
       "path": "corpus/third_party/tcpdf/example_026.pdf",
@@ -21024,12 +21024,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.874885,
+        "ssim": 0.875328,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.874885 below floor 0.990000"
+      "notes": "ssim 0.875328 below floor 0.990000"
     },
     {
       "path": "corpus/third_party/tcpdf/example_027.pdf",
@@ -21064,12 +21064,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.937807,
+        "ssim": 0.937416,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 5
       },
-      "notes": "ssim 0.937807 below floor 0.990000"
+      "notes": "ssim 0.937416 below floor 0.990000"
     },
     {
       "path": "corpus/third_party/tcpdf/example_028.pdf",
@@ -21112,12 +21112,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.971733,
+        "ssim": 0.966952,
         "exact": false,
         "max_channel_diff": 247,
         "pages": 9
       },
-      "notes": "ssim 0.971733 below floor 0.990000"
+      "notes": "ssim 0.966952 below floor 0.990000"
     },
     {
       "path": "corpus/third_party/tcpdf/example_029.pdf",
@@ -21148,12 +21148,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.983029,
+        "ssim": 0.984068,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 3
       },
-      "notes": "ssim 0.983029 below floor 0.990000"
+      "notes": "ssim 0.984068 below floor 0.990000"
     },
     {
       "path": "corpus/third_party/tcpdf/example_030.pdf",
@@ -21182,12 +21182,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.888411,
+        "ssim": 0.888531,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 2
       },
-      "notes": "ssim 0.888411 below floor 0.990000"
+      "notes": "ssim 0.888531 below floor 0.990000"
     },
     {
       "path": "corpus/third_party/tcpdf/example_031.pdf",
@@ -21214,12 +21214,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.984494,
+        "ssim": 0.984641,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.984494 below floor 0.990000"
+      "notes": "ssim 0.984641 below floor 0.990000"
     },
     {
       "path": "corpus/third_party/tcpdf/example_032.pdf",
@@ -21246,12 +21246,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.980050,
+        "ssim": 0.980173,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.980050 below floor 0.990000"
+      "notes": "ssim 0.980173 below floor 0.990000"
     },
     {
       "path": "corpus/third_party/tcpdf/example_033.pdf",
@@ -21278,12 +21278,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.904583,
+        "ssim": 0.904358,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.904583 below floor 0.990000"
+      "notes": "ssim 0.904358 below floor 0.990000"
     },
     {
       "path": "corpus/third_party/tcpdf/example_034.pdf",
@@ -21310,12 +21310,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.984043,
+        "ssim": 0.984305,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.984043 below floor 0.990000"
+      "notes": "ssim 0.984305 below floor 0.990000"
     },
     {
       "path": "corpus/third_party/tcpdf/example_035.pdf",
@@ -21342,12 +21342,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.985890,
+        "ssim": 0.986009,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.985890 below floor 0.990000"
+      "notes": "ssim 0.986009 below floor 0.990000"
     },
     {
       "path": "corpus/third_party/tcpdf/example_036.pdf",
@@ -21374,12 +21374,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.986458,
+        "ssim": 0.986498,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.986458 below floor 0.990000"
+      "notes": "ssim 0.986498 below floor 0.990000"
     },
     {
       "path": "corpus/third_party/tcpdf/example_037.pdf",
@@ -21406,12 +21406,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.958092,
+        "ssim": 0.957746,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.958092 below floor 0.990000"
+      "notes": "ssim 0.957746 below floor 0.990000"
     },
     {
       "path": "corpus/third_party/tcpdf/example_038.pdf",
@@ -21438,12 +21438,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.983972,
+        "ssim": 0.984091,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.983972 below floor 0.990000"
+      "notes": "ssim 0.984091 below floor 0.990000"
     },
     {
       "path": "corpus/third_party/tcpdf/example_039.pdf",
@@ -21470,12 +21470,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.887204,
+        "ssim": 0.887400,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.887204 below floor 0.990000"
+      "notes": "ssim 0.887400 below floor 0.990000"
     },
     {
       "path": "corpus/third_party/tcpdf/example_040.pdf",
@@ -21508,12 +21508,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.987182,
+        "ssim": 0.988466,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 4
       },
-      "notes": "ssim 0.987182 below floor 0.990000"
+      "notes": "ssim 0.988466 below floor 0.990000"
     },
     {
       "path": "corpus/third_party/tcpdf/example_041.pdf",
@@ -21540,12 +21540,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.987456,
+        "ssim": 0.987575,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.987456 below floor 0.990000"
+      "notes": "ssim 0.987575 below floor 0.990000"
     },
     {
       "path": "corpus/third_party/tcpdf/example_042.pdf",
@@ -21572,12 +21572,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.887670,
+        "ssim": 0.887789,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.887670 below floor 0.990000"
+      "notes": "ssim 0.887789 below floor 0.990000"
     },
     {
       "path": "corpus/third_party/tcpdf/example_043.pdf",
@@ -21604,12 +21604,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.985458,
+        "ssim": 0.985708,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.985458 below floor 0.990000"
+      "notes": "ssim 0.985708 below floor 0.990000"
     },
     {
       "path": "corpus/third_party/tcpdf/example_044.pdf",
@@ -21652,12 +21652,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.986980,
+        "ssim": 0.987100,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 9
       },
-      "notes": "ssim 0.986980 below floor 0.990000"
+      "notes": "ssim 0.987100 below floor 0.990000"
     },
     {
       "path": "corpus/third_party/tcpdf/example_045.pdf",
@@ -21714,12 +21714,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.951998,
+        "ssim": 0.952116,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 16
       },
-      "notes": "ssim 0.951998 below floor 0.990000"
+      "notes": "ssim 0.952116 below floor 0.990000"
     },
     {
       "path": "corpus/third_party/tcpdf/example_046.pdf",
@@ -21746,12 +21746,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.961807,
+        "ssim": 0.961664,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.961807 below floor 0.990000"
+      "notes": "ssim 0.961664 below floor 0.990000"
     },
     {
       "path": "corpus/third_party/tcpdf/example_047.pdf",
@@ -21778,12 +21778,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.983250,
+        "ssim": 0.983369,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.983250 below floor 0.990000"
+      "notes": "ssim 0.983369 below floor 0.990000"
     },
     {
       "path": "corpus/third_party/tcpdf/example_048.pdf",
@@ -21812,12 +21812,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.887744,
+        "ssim": 0.882918,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 2
       },
-      "notes": "ssim 0.887744 below floor 0.990000"
+      "notes": "ssim 0.882918 below floor 0.990000"
     },
     {
       "path": "corpus/third_party/tcpdf/example_049.pdf",
@@ -21846,12 +21846,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.970847,
+        "ssim": 0.970739,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 2
       },
-      "notes": "ssim 0.970847 below floor 0.990000"
+      "notes": "ssim 0.970739 below floor 0.990000"
     },
     {
       "path": "corpus/third_party/tcpdf/example_050.pdf",
@@ -21878,12 +21878,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.914170,
+        "ssim": 0.913038,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.914170 below floor 0.990000"
+      "notes": "ssim 0.913038 below floor 0.990000"
     },
     {
       "path": "corpus/third_party/tcpdf/example_051.pdf",
@@ -21949,12 +21949,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.969001,
+        "ssim": 0.969121,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.969001 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.969121 below floor 0.990000"
     },
     {
       "path": "corpus/third_party/tcpdf/example_053.pdf",
@@ -21981,12 +21981,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.981822,
+        "ssim": 0.981941,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.981822 below floor 0.990000"
+      "notes": "ssim 0.981941 below floor 0.990000"
     },
     {
       "path": "corpus/third_party/tcpdf/example_054.pdf",
@@ -22016,12 +22016,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.978019,
+        "ssim": 0.978138,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.978019 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.978138 below floor 0.990000"
     },
     {
       "path": "corpus/third_party/tcpdf/example_055.pdf",
@@ -22077,12 +22077,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.910469,
+        "ssim": 0.906679,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 14
       },
-      "notes": "dumps differ: input.pdf.13.txt; ssim 0.910469 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.13.txt; ssim 0.906679 below floor 0.990000"
     },
     {
       "path": "corpus/third_party/tcpdf/example_056.pdf",
@@ -22109,12 +22109,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.975162,
+        "ssim": 0.975339,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.975162 below floor 0.990000"
+      "notes": "ssim 0.975339 below floor 0.990000"
     },
     {
       "path": "corpus/third_party/tcpdf/example_057.pdf",
@@ -22145,12 +22145,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.929519,
+        "ssim": 0.929666,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 3
       },
-      "notes": "ssim 0.929519 below floor 0.990000"
+      "notes": "ssim 0.929666 below floor 0.990000"
     },
     {
       "path": "corpus/third_party/tcpdf/example_058.pdf",
@@ -22177,12 +22177,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.962941,
+        "ssim": 0.963430,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.962941 below floor 0.990000"
+      "notes": "ssim 0.963430 below floor 0.990000"
     },
     {
       "path": "corpus/third_party/tcpdf/example_059.pdf",
@@ -22239,12 +22239,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.983502,
+        "ssim": 0.983620,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 16
       },
-      "notes": "ssim 0.983502 below floor 0.990000"
+      "notes": "ssim 0.983620 below floor 0.990000"
     },
     {
       "path": "corpus/third_party/tcpdf/example_060.pdf",
@@ -22273,12 +22273,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.971489,
+        "ssim": 0.972174,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 2
       },
-      "notes": "ssim 0.971489 below floor 0.990000"
+      "notes": "ssim 0.972174 below floor 0.990000"
     },
     {
       "path": "corpus/third_party/tcpdf/example_061.pdf",
@@ -22307,12 +22307,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.874543,
+        "ssim": 0.874663,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 2
       },
-      "notes": "ssim 0.874543 below floor 0.990000"
+      "notes": "ssim 0.874663 below floor 0.990000"
     },
     {
       "path": "corpus/third_party/tcpdf/example_062.pdf",
@@ -22342,12 +22342,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.966596,
+        "ssim": 0.967192,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt; ssim 0.966596 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.0.txt; ssim 0.967192 below floor 0.990000"
     },
     {
       "path": "corpus/third_party/tcpdf/example_063.pdf",
@@ -22392,12 +22392,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.645352,
+        "ssim": 0.647599,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 10
       },
-      "notes": "ssim 0.645352 below floor 0.990000"
+      "notes": "ssim 0.647599 below floor 0.990000"
     },
     {
       "path": "corpus/third_party/tcpdf/example_064.pdf",
@@ -22426,12 +22426,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.801935,
+        "ssim": 0.802380,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 2
       },
-      "notes": "ssim 0.801935 below floor 0.990000"
+      "notes": "ssim 0.802380 below floor 0.990000"
     },
     {
       "path": "corpus/third_party/tcpdf/example_065.pdf",
@@ -22458,12 +22458,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.972281,
+        "ssim": 0.972401,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.972281 below floor 0.990000"
+      "notes": "ssim 0.972401 below floor 0.990000"
     },
     {
       "path": "resources/344775293.in",
@@ -22762,9 +22762,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999960,
+        "ssim": 0.999981,
         "exact": false,
-        "max_channel_diff": 119,
+        "max_channel_diff": 103,
         "pages": 1
       },
       "notes": ""
@@ -22882,7 +22882,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.998481,
+        "ssim": 0.998369,
         "exact": false,
         "max_channel_diff": 160,
         "pages": 1
@@ -22942,9 +22942,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.996907,
+        "ssim": 0.999009,
         "exact": false,
-        "max_channel_diff": 99,
+        "max_channel_diff": 41,
         "pages": 1
       },
       "notes": ""
@@ -22972,9 +22972,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.996907,
+        "ssim": 0.999009,
         "exact": false,
-        "max_channel_diff": 99,
+        "max_channel_diff": 41,
         "pages": 1
       },
       "notes": ""
@@ -24057,9 +24057,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999995,
+        "ssim": 1.000000,
         "exact": false,
-        "max_channel_diff": 64,
+        "max_channel_diff": 33,
         "pages": 1
       },
       "notes": ""
@@ -24087,9 +24087,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999995,
+        "ssim": 1.000000,
         "exact": false,
-        "max_channel_diff": 64,
+        "max_channel_diff": 33,
         "pages": 1
       },
       "notes": ""
@@ -24829,7 +24829,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.999882,
+        "ssim": 0.999563,
         "exact": false,
         "max_channel_diff": 46,
         "pages": 1
@@ -25323,7 +25323,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.998937,
+        "ssim": 0.998250,
         "exact": false,
         "max_channel_diff": 139,
         "pages": 1
@@ -25353,7 +25353,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.998937,
+        "ssim": 0.998250,
         "exact": false,
         "max_channel_diff": 139,
         "pages": 1
@@ -27160,9 +27160,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999989,
+        "ssim": 1.000000,
         "exact": false,
-        "max_channel_diff": 64,
+        "max_channel_diff": 1,
         "pages": 1
       },
       "notes": ""
@@ -27190,9 +27190,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999989,
+        "ssim": 1.000000,
         "exact": false,
-        "max_channel_diff": 64,
+        "max_channel_diff": 1,
         "pages": 1
       },
       "notes": ""
@@ -29125,9 +29125,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999991,
+        "ssim": 0.999909,
         "exact": false,
-        "max_channel_diff": 53,
+        "max_channel_diff": 59,
         "pages": 1
       },
       "notes": ""
@@ -29161,9 +29161,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999828,
+        "ssim": 0.999994,
         "exact": false,
-        "max_channel_diff": 64,
+        "max_channel_diff": 33,
         "pages": 4
       },
       "notes": ""
@@ -29197,9 +29197,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999828,
+        "ssim": 0.999994,
         "exact": false,
-        "max_channel_diff": 64,
+        "max_channel_diff": 33,
         "pages": 4
       },
       "notes": ""
@@ -30397,12 +30397,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.989411,
+        "ssim": 0.989415,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.989411 below floor 0.990000"
+      "notes": "ssim 0.989415 below floor 0.990000"
     },
     {
       "path": "resources/click_form.pdf",
@@ -30429,12 +30429,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.989411,
+        "ssim": 0.989415,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.989411 below floor 0.990000"
+      "notes": "ssim 0.989415 below floor 0.990000"
     },
     {
       "path": "resources/clip_path.in",
@@ -30459,9 +30459,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999164,
+        "ssim": 0.999199,
         "exact": false,
-        "max_channel_diff": 17,
+        "max_channel_diff": 16,
         "pages": 1
       },
       "notes": ""
@@ -30489,9 +30489,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999164,
+        "ssim": 0.999199,
         "exact": false,
-        "max_channel_diff": 17,
+        "max_channel_diff": 16,
         "pages": 1
       },
       "notes": ""
@@ -30835,9 +30835,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999486,
+        "ssim": 0.999993,
         "exact": false,
-        "max_channel_diff": 64,
+        "max_channel_diff": 33,
         "pages": 1
       },
       "notes": ""
@@ -30865,9 +30865,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999486,
+        "ssim": 0.999993,
         "exact": false,
-        "max_channel_diff": 64,
+        "max_channel_diff": 33,
         "pages": 1
       },
       "notes": ""
@@ -31722,9 +31722,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999486,
+        "ssim": 0.999993,
         "exact": false,
-        "max_channel_diff": 64,
+        "max_channel_diff": 33,
         "pages": 1
       },
       "notes": ""
@@ -31752,9 +31752,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999486,
+        "ssim": 0.999993,
         "exact": false,
-        "max_channel_diff": 64,
+        "max_channel_diff": 33,
         "pages": 1
       },
       "notes": ""
@@ -33728,9 +33728,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999973,
+        "ssim": 0.999994,
         "exact": false,
-        "max_channel_diff": 64,
+        "max_channel_diff": 63,
         "pages": 1
       },
       "notes": "dumps differ: input.pdf.0.annot.txt"
@@ -33762,9 +33762,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999973,
+        "ssim": 0.999994,
         "exact": false,
-        "max_channel_diff": 64,
+        "max_channel_diff": 63,
         "pages": 1
       },
       "notes": "dumps differ: input.pdf.0.annot.txt"
@@ -36132,12 +36132,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.982993,
+        "ssim": 0.983037,
         "exact": false,
-        "max_channel_diff": 255,
+        "max_channel_diff": 254,
         "pages": 3
       },
-      "notes": "ssim 0.982993 below floor 0.990000"
+      "notes": "ssim 0.983037 below floor 0.990000"
     },
     {
       "path": "resources/linearized_bug_1055.pdf",
@@ -36305,10 +36305,8 @@
     },
     {
       "path": "resources/many_rectangles.in",
-      "status": "fail",
-      "tags": [
-        "pixel-fail"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -36328,19 +36326,17 @@
         }
       },
       "tierB": {
-        "ssim": 0.960708,
+        "ssim": 0.996422,
         "exact": false,
-        "max_channel_diff": 64,
+        "max_channel_diff": 33,
         "pages": 1
       },
-      "notes": "ssim 0.960708 below floor 0.990000"
+      "notes": ""
     },
     {
       "path": "resources/many_rectangles.pdf",
-      "status": "fail",
-      "tags": [
-        "pixel-fail"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -36360,12 +36356,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.960708,
+        "ssim": 0.996422,
         "exact": false,
-        "max_channel_diff": 64,
+        "max_channel_diff": 33,
         "pages": 1
       },
-      "notes": "ssim 0.960708 below floor 0.990000"
+      "notes": ""
     },
     {
       "path": "resources/many_rectangles_brotli.in",
@@ -36640,9 +36636,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999618,
+        "ssim": 0.999994,
         "exact": false,
-        "max_channel_diff": 64,
+        "max_channel_diff": 33,
         "pages": 1
       },
       "notes": ""
@@ -36670,9 +36666,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999618,
+        "ssim": 0.999994,
         "exact": false,
-        "max_channel_diff": 64,
+        "max_channel_diff": 33,
         "pages": 1
       },
       "notes": ""
@@ -37333,7 +37329,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.994485,
+        "ssim": 0.994376,
         "exact": false,
         "max_channel_diff": 207,
         "pages": 1
@@ -37363,7 +37359,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.994485,
+        "ssim": 0.994376,
         "exact": false,
         "max_channel_diff": 207,
         "pages": 1
@@ -37613,7 +37609,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.999410,
+        "ssim": 0.999414,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
@@ -37643,7 +37639,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.999410,
+        "ssim": 0.999414,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
@@ -37797,7 +37793,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.990869,
+        "ssim": 0.990816,
         "exact": false,
         "max_channel_diff": 128,
         "pages": 1
@@ -37827,7 +37823,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.990869,
+        "ssim": 0.990816,
         "exact": false,
         "max_channel_diff": 128,
         "pages": 1
@@ -38041,7 +38037,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.999888,
+        "ssim": 0.999923,
         "exact": false,
         "max_channel_diff": 114,
         "pages": 1
@@ -38071,7 +38067,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.999888,
+        "ssim": 0.999923,
         "exact": false,
         "max_channel_diff": 114,
         "pages": 1
@@ -38161,7 +38157,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.995036,
+        "ssim": 0.995006,
         "exact": false,
         "max_channel_diff": 128,
         "pages": 1
@@ -38191,7 +38187,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.995036,
+        "ssim": 0.995006,
         "exact": false,
         "max_channel_diff": 128,
         "pages": 1
@@ -38221,9 +38217,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.996946,
+        "ssim": 0.996972,
         "exact": false,
-        "max_channel_diff": 64,
+        "max_channel_diff": 30,
         "pages": 1
       },
       "notes": ""
@@ -38251,9 +38247,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.996946,
+        "ssim": 0.996972,
         "exact": false,
-        "max_channel_diff": 64,
+        "max_channel_diff": 30,
         "pages": 1
       },
       "notes": ""
@@ -38281,9 +38277,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999486,
+        "ssim": 0.999993,
         "exact": false,
-        "max_channel_diff": 64,
+        "max_channel_diff": 33,
         "pages": 1
       },
       "notes": ""
@@ -38371,9 +38367,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999464,
+        "ssim": 0.999664,
         "exact": false,
-        "max_channel_diff": 3,
+        "max_channel_diff": 1,
         "pages": 1
       },
       "notes": ""
@@ -38401,9 +38397,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999464,
+        "ssim": 0.999664,
         "exact": false,
-        "max_channel_diff": 3,
+        "max_channel_diff": 1,
         "pages": 1
       },
       "notes": ""
@@ -38491,9 +38487,9 @@
         }
       },
       "tierB": {
-        "ssim": 1.000000,
+        "ssim": 0.999988,
         "exact": false,
-        "max_channel_diff": 2,
+        "max_channel_diff": 8,
         "pages": 1
       },
       "notes": ""
@@ -38521,9 +38517,9 @@
         }
       },
       "tierB": {
-        "ssim": 1.000000,
+        "ssim": 0.999988,
         "exact": false,
-        "max_channel_diff": 2,
+        "max_channel_diff": 8,
         "pages": 1
       },
       "notes": ""
@@ -38829,7 +38825,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.997756,
+        "ssim": 0.998937,
         "exact": false,
         "max_channel_diff": 160,
         "pages": 1
@@ -38859,7 +38855,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.997756,
+        "ssim": 0.998937,
         "exact": false,
         "max_channel_diff": 160,
         "pages": 1
@@ -38891,12 +38887,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.909420,
+        "ssim": 0.909512,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.909420 below floor 0.990000"
+      "notes": "ssim 0.909512 below floor 0.990000"
     },
     {
       "path": "resources/pixel/bug_1338.pdf",
@@ -38923,12 +38919,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.909420,
+        "ssim": 0.909512,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.909420 below floor 0.990000"
+      "notes": "ssim 0.909512 below floor 0.990000"
     },
     {
       "path": "resources/pixel/bug_1355.in",
@@ -39207,9 +39203,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.997181,
+        "ssim": 0.997300,
         "exact": false,
-        "max_channel_diff": 238,
+        "max_channel_diff": 174,
         "pages": 1
       },
       "notes": ""
@@ -39237,9 +39233,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.997181,
+        "ssim": 0.997300,
         "exact": false,
-        "max_channel_diff": 238,
+        "max_channel_diff": 174,
         "pages": 1
       },
       "notes": ""
@@ -39901,9 +39897,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999474,
+        "ssim": 0.999978,
         "exact": false,
-        "max_channel_diff": 64,
+        "max_channel_diff": 33,
         "pages": 1
       },
       "notes": ""
@@ -39931,9 +39927,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999829,
+        "ssim": 0.999992,
         "exact": false,
-        "max_channel_diff": 64,
+        "max_channel_diff": 17,
         "pages": 1
       },
       "notes": ""
@@ -39961,9 +39957,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999829,
+        "ssim": 0.999992,
         "exact": false,
-        "max_channel_diff": 64,
+        "max_channel_diff": 17,
         "pages": 1
       },
       "notes": ""
@@ -40057,12 +40053,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.968910,
+        "ssim": 0.969045,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.968910 below floor 0.990000"
+      "notes": "ssim 0.969045 below floor 0.990000"
     },
     {
       "path": "resources/pixel/bug_1638.pdf",
@@ -40089,12 +40085,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.968910,
+        "ssim": 0.969045,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.968910 below floor 0.990000"
+      "notes": "ssim 0.969045 below floor 0.990000"
     },
     {
       "path": "resources/pixel/bug_1639_1.in",
@@ -40119,7 +40115,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.999955,
+        "ssim": 0.999938,
         "exact": false,
         "max_channel_diff": 4,
         "pages": 1
@@ -40149,7 +40145,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.999955,
+        "ssim": 0.999938,
         "exact": false,
         "max_channel_diff": 4,
         "pages": 1
@@ -40615,9 +40611,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.998774,
+        "ssim": 0.998871,
         "exact": false,
-        "max_channel_diff": 73,
+        "max_channel_diff": 77,
         "pages": 1
       },
       "notes": ""
@@ -40645,9 +40641,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.998774,
+        "ssim": 0.998871,
         "exact": false,
-        "max_channel_diff": 73,
+        "max_channel_diff": 77,
         "pages": 1
       },
       "notes": ""
@@ -41183,9 +41179,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999633,
+        "ssim": 0.999409,
         "exact": false,
-        "max_channel_diff": 30,
+        "max_channel_diff": 25,
         "pages": 1
       },
       "notes": ""
@@ -41213,9 +41209,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999633,
+        "ssim": 0.999409,
         "exact": false,
-        "max_channel_diff": 30,
+        "max_channel_diff": 25,
         "pages": 1
       },
       "notes": ""
@@ -41427,9 +41423,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999486,
+        "ssim": 0.999993,
         "exact": false,
-        "max_channel_diff": 64,
+        "max_channel_diff": 33,
         "pages": 1
       },
       "notes": ""
@@ -41457,9 +41453,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999486,
+        "ssim": 0.999993,
         "exact": false,
-        "max_channel_diff": 64,
+        "max_channel_diff": 33,
         "pages": 1
       },
       "notes": ""
@@ -41487,9 +41483,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999486,
+        "ssim": 0.999993,
         "exact": false,
-        "max_channel_diff": 64,
+        "max_channel_diff": 33,
         "pages": 1
       },
       "notes": ""
@@ -41547,9 +41543,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999486,
+        "ssim": 0.999993,
         "exact": false,
-        "max_channel_diff": 64,
+        "max_channel_diff": 33,
         "pages": 1
       },
       "notes": ""
@@ -41577,9 +41573,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999486,
+        "ssim": 0.999993,
         "exact": false,
-        "max_channel_diff": 64,
+        "max_channel_diff": 33,
         "pages": 1
       },
       "notes": ""
@@ -41607,9 +41603,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999486,
+        "ssim": 0.999993,
         "exact": false,
-        "max_channel_diff": 64,
+        "max_channel_diff": 33,
         "pages": 1
       },
       "notes": ""
@@ -41701,9 +41697,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999486,
+        "ssim": 0.999993,
         "exact": false,
-        "max_channel_diff": 64,
+        "max_channel_diff": 33,
         "pages": 1
       },
       "notes": ""
@@ -41851,7 +41847,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.999443,
+        "ssim": 0.999506,
         "exact": false,
         "max_channel_diff": 22,
         "pages": 1
@@ -41881,7 +41877,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.999443,
+        "ssim": 0.999506,
         "exact": false,
         "max_channel_diff": 22,
         "pages": 1
@@ -42445,12 +42441,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.955150,
+        "ssim": 0.955226,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.955150 below floor 0.990000"
+      "notes": "ssim 0.955226 below floor 0.990000"
     },
     {
       "path": "resources/pixel/bug_491_invisible.pdf",
@@ -42477,12 +42473,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.955150,
+        "ssim": 0.955226,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.955150 below floor 0.990000"
+      "notes": "ssim 0.955226 below floor 0.990000"
     },
     {
       "path": "resources/pixel/bug_491_unspecified.in",
@@ -42507,9 +42503,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999712,
+        "ssim": 1.000000,
         "exact": false,
-        "max_channel_diff": 64,
+        "max_channel_diff": 1,
         "pages": 1
       },
       "notes": ""
@@ -42537,9 +42533,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999712,
+        "ssim": 1.000000,
         "exact": false,
-        "max_channel_diff": 64,
+        "max_channel_diff": 1,
         "pages": 1
       },
       "notes": ""
@@ -42567,9 +42563,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999712,
+        "ssim": 1.000000,
         "exact": false,
-        "max_channel_diff": 64,
+        "max_channel_diff": 1,
         "pages": 1
       },
       "notes": ""
@@ -42597,9 +42593,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999712,
+        "ssim": 1.000000,
         "exact": false,
-        "max_channel_diff": 64,
+        "max_channel_diff": 1,
         "pages": 1
       },
       "notes": ""
@@ -43595,9 +43591,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999856,
+        "ssim": 0.999822,
         "exact": false,
-        "max_channel_diff": 77,
+        "max_channel_diff": 49,
         "pages": 1
       },
       "notes": ""
@@ -43625,9 +43621,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999856,
+        "ssim": 0.999822,
         "exact": false,
-        "max_channel_diff": 77,
+        "max_channel_diff": 49,
         "pages": 1
       },
       "notes": ""
@@ -43715,7 +43711,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.990632,
+        "ssim": 0.990840,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
@@ -43745,7 +43741,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.990632,
+        "ssim": 0.990840,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
@@ -44325,7 +44321,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.998316,
+        "ssim": 0.998131,
         "exact": false,
         "max_channel_diff": 169,
         "pages": 1
@@ -44359,7 +44355,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.998316,
+        "ssim": 0.998131,
         "exact": false,
         "max_channel_diff": 169,
         "pages": 1
@@ -44393,7 +44389,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.998316,
+        "ssim": 0.998131,
         "exact": false,
         "max_channel_diff": 169,
         "pages": 1
@@ -44427,7 +44423,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.998316,
+        "ssim": 0.998131,
         "exact": false,
         "max_channel_diff": 169,
         "pages": 1
@@ -44461,7 +44457,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.998316,
+        "ssim": 0.998131,
         "exact": false,
         "max_channel_diff": 169,
         "pages": 1
@@ -45474,12 +45470,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.989948,
+        "ssim": 0.989900,
         "exact": false,
         "max_channel_diff": 166,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.989948 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.989900 below floor 0.990000"
     },
     {
       "path": "resources/pixel/checkbox_radiobutton.pdf",
@@ -45509,12 +45505,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.989948,
+        "ssim": 0.989900,
         "exact": false,
         "max_channel_diff": 166,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.989948 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.989900 below floor 0.990000"
     },
     {
       "path": "resources/pixel/checkbox_radiobutton_hide.in",
@@ -45543,7 +45539,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.993614,
+        "ssim": 0.993640,
         "exact": false,
         "max_channel_diff": 166,
         "pages": 1
@@ -45577,7 +45573,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.993614,
+        "ssim": 0.993640,
         "exact": false,
         "max_channel_diff": 166,
         "pages": 1
@@ -45612,12 +45608,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.989948,
+        "ssim": 0.989900,
         "exact": false,
         "max_channel_diff": 166,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.989948 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.989900 below floor 0.990000"
     },
     {
       "path": "resources/pixel/checkbox_radiobutton_reset.pdf",
@@ -45647,12 +45643,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.989948,
+        "ssim": 0.989900,
         "exact": false,
         "max_channel_diff": 166,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.989948 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.989900 below floor 0.990000"
     },
     {
       "path": "resources/pixel/checkboxes.in",
@@ -45679,12 +45675,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.967009,
+        "ssim": 0.968782,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.967009 below floor 0.990000"
+      "notes": "ssim 0.968782 below floor 0.990000"
     },
     {
       "path": "resources/pixel/checkboxes.pdf",
@@ -45711,12 +45707,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.967009,
+        "ssim": 0.968782,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.967009 below floor 0.990000"
+      "notes": "ssim 0.968782 below floor 0.990000"
     },
     {
       "path": "resources/pixel/combobox_form.in",
@@ -47007,9 +47003,9 @@
         }
       },
       "tierB": {
-        "ssim": 1.000000,
-        "exact": false,
-        "max_channel_diff": 1,
+        "ssim": 1,
+        "exact": true,
+        "max_channel_diff": 0,
         "pages": 1
       },
       "notes": ""
@@ -47037,9 +47033,9 @@
         }
       },
       "tierB": {
-        "ssim": 1.000000,
-        "exact": false,
-        "max_channel_diff": 1,
+        "ssim": 1,
+        "exact": true,
+        "max_channel_diff": 0,
         "pages": 1
       },
       "notes": ""
@@ -47435,9 +47431,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999486,
+        "ssim": 0.999993,
         "exact": false,
-        "max_channel_diff": 64,
+        "max_channel_diff": 33,
         "pages": 1
       },
       "notes": ""
@@ -47465,9 +47461,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999486,
+        "ssim": 0.999993,
         "exact": false,
-        "max_channel_diff": 64,
+        "max_channel_diff": 33,
         "pages": 1
       },
       "notes": ""
@@ -47794,12 +47790,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.982627,
+        "ssim": 0.985269,
         "exact": false,
         "max_channel_diff": 127,
         "pages": 1
       },
-      "notes": "ssim 0.982627 below floor 0.990000"
+      "notes": "ssim 0.985269 below floor 0.990000"
     },
     {
       "path": "resources/pixel/single_point_paths.pdf",
@@ -47826,12 +47822,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.982627,
+        "ssim": 0.985269,
         "exact": false,
         "max_channel_diff": 127,
         "pages": 1
       },
-      "notes": "ssim 0.982627 below floor 0.990000"
+      "notes": "ssim 0.985269 below floor 0.990000"
     },
     {
       "path": "resources/pixel/smask_blend.in",
@@ -48424,9 +48420,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999486,
+        "ssim": 0.999993,
         "exact": false,
-        "max_channel_diff": 64,
+        "max_channel_diff": 33,
         "pages": 1
       },
       "notes": ""
@@ -48454,9 +48450,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999486,
+        "ssim": 0.999993,
         "exact": false,
-        "max_channel_diff": 64,
+        "max_channel_diff": 33,
         "pages": 1
       },
       "notes": ""
@@ -48544,9 +48540,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999486,
+        "ssim": 0.999993,
         "exact": false,
-        "max_channel_diff": 64,
+        "max_channel_diff": 33,
         "pages": 1
       },
       "notes": ""
@@ -48574,9 +48570,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999486,
+        "ssim": 0.999993,
         "exact": false,
-        "max_channel_diff": 64,
+        "max_channel_diff": 33,
         "pages": 1
       },
       "notes": ""
@@ -48612,9 +48608,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999747,
+        "ssim": 0.999982,
         "exact": false,
-        "max_channel_diff": 64,
+        "max_channel_diff": 33,
         "pages": 5
       },
       "notes": ""
@@ -48650,9 +48646,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999747,
+        "ssim": 0.999982,
         "exact": false,
-        "max_channel_diff": 64,
+        "max_channel_diff": 33,
         "pages": 5
       },
       "notes": ""
@@ -48688,9 +48684,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999747,
+        "ssim": 0.999982,
         "exact": false,
-        "max_channel_diff": 64,
+        "max_channel_diff": 33,
         "pages": 5
       },
       "notes": ""
@@ -48718,9 +48714,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999486,
+        "ssim": 0.999993,
         "exact": false,
-        "max_channel_diff": 64,
+        "max_channel_diff": 33,
         "pages": 1
       },
       "notes": ""
@@ -48748,9 +48744,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999486,
+        "ssim": 0.999993,
         "exact": false,
-        "max_channel_diff": 64,
+        "max_channel_diff": 33,
         "pages": 1
       },
       "notes": ""
@@ -48778,9 +48774,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999488,
+        "ssim": 0.999993,
         "exact": false,
-        "max_channel_diff": 64,
+        "max_channel_diff": 33,
         "pages": 1
       },
       "notes": ""
@@ -48808,9 +48804,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999488,
+        "ssim": 0.999993,
         "exact": false,
-        "max_channel_diff": 64,
+        "max_channel_diff": 33,
         "pages": 1
       },
       "notes": ""
@@ -49246,9 +49242,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999486,
+        "ssim": 0.999993,
         "exact": false,
-        "max_channel_diff": 64,
+        "max_channel_diff": 33,
         "pages": 1
       },
       "notes": ""
@@ -49276,9 +49272,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999486,
+        "ssim": 0.999993,
         "exact": false,
-        "max_channel_diff": 64,
+        "max_channel_diff": 33,
         "pages": 1
       },
       "notes": ""
@@ -49306,9 +49302,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999486,
+        "ssim": 0.999993,
         "exact": false,
-        "max_channel_diff": 64,
+        "max_channel_diff": 33,
         "pages": 1
       },
       "notes": ""
@@ -49336,9 +49332,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999486,
+        "ssim": 0.999993,
         "exact": false,
-        "max_channel_diff": 64,
+        "max_channel_diff": 33,
         "pages": 1
       },
       "notes": ""
@@ -50158,9 +50154,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999894,
+        "ssim": 0.999910,
         "exact": false,
-        "max_channel_diff": 82,
+        "max_channel_diff": 35,
         "pages": 1
       },
       "notes": ""
@@ -50188,9 +50184,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999894,
+        "ssim": 0.999910,
         "exact": false,
-        "max_channel_diff": 82,
+        "max_channel_diff": 35,
         "pages": 1
       },
       "notes": ""
@@ -50756,7 +50752,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.999506,
+        "ssim": 0.999664,
         "exact": false,
         "max_channel_diff": 225,
         "pages": 1
@@ -51058,9 +51054,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999486,
+        "ssim": 0.999993,
         "exact": false,
-        "max_channel_diff": 64,
+        "max_channel_diff": 33,
         "pages": 1
       },
       "notes": ""
@@ -51088,9 +51084,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999486,
+        "ssim": 0.999993,
         "exact": false,
-        "max_channel_diff": 64,
+        "max_channel_diff": 33,
         "pages": 1
       },
       "notes": ""
