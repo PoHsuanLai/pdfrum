@@ -681,6 +681,34 @@ consumer for variable-text UBA line ordering, validated against the six
 pinned orderings before vt layout is written (E5). `Limits` gains
 `max_name_tree_depth: u32 = 32` (additive).
 
+**[spec] 2026-08-29 (M6 implementation, three corrections to the rulings
+above).**
+
+*E1's scope estimate was wrong, and the ruling still stands.* The brief
+scopes the widget appearance generator to the five corpus files that set
+`/NeedAppearances`, because the form-wide regeneration path is gated on that
+flag. It is — but `CPDFSDK_Widget::OnLoad` calls `ResetAppearance` on any
+widget whose appearance is not valid, **ungated**, so the path reaches every
+widget in the corpus that lacks a usable `/AP`. It is directly Tier-A visible:
+`--annot`'s two colour lines fail whenever an appearance exists, and its
+object count reports what the generated stream drew. The decision not to port
+`CPWL_EditImpl` is unchanged; what changes is that this crate must build the
+*chrome* — background, border, and the checkbox and radio glyph shapes — for
+every such widget rather than for five files. The text body remains out of
+scope and is what the residual `--annot` gap is made of.
+
+*E3 is confirmed and becomes a harness rule.* The golden store **does**
+contain crash artifacts: `redact_annot`'s manifest records
+`oracle_failures: ["Annot"]` beside a zero-byte dump. Rather than waive by
+file, `conformance run` now skips any artifact whose own oracle pass failed —
+a golden written by an aborting process is not an answer, and comparing
+against one pins the crash as the contract. `Pass::owns_artifact` maps an
+artifact name back to the pass that wrote it.
+
+*E4 resolves to "it matters".* `--annot`'s `%.3f` and the structure tree's
+`%f` both go through a hand-written round-half-to-even fixed-point formatter
+rather than Rust's `{:.N}`, which rounds half away from zero.
+
 ## 11. `pdfrum-edit`  *(behavior: `core/fpdfapi/edit`)*
 
 `pub fn save(doc: &Document, mode: SaveMode, out: &mut impl io::Write) -> Result<(), Error>`

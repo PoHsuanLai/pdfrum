@@ -110,13 +110,24 @@ fn the_same_element_tree_is_reachable_from_either_page() {
     assert_eq!(first.matches("S: ").count(), second.matches("S: ").count());
 }
 
+/// The dump must terminate on every one of these, and a stack overflow is
+/// what it used to do.
+///
+/// A kid slot carries two indices from different spaces — its position in the
+/// parent's `/K`, and its position in the tree's element table — and
+/// conflating them made a kid point back at an ancestor, so `dump_element`
+/// recursed until the stack ran out. These four files all have the shape that
+/// triggered it; an overflow aborts the process, so reaching the end of this
+/// test *is* the assertion.
 #[test]
-fn damaged_structure_trees_do_not_panic() {
+fn damaged_structure_trees_terminate_rather_than_recursing_without_bound() {
     for name in [
         "tagged_nested.pdf",
         "bug_1296920.pdf",
+        "tagged_table.pdf",
         "tagged_table_bad_parent.pdf",
         "tagged_table_bad_elem.pdf",
+        "tagged_mcr_objr.pdf",
     ] {
         let _ = dump_page(name, 0);
     }
