@@ -1,0 +1,626 @@
+//! Substitution: choosing a face when the document did not supply one.
+//!
+//! `CFX_FontMapper::FindSubstFace` is a thousand-line class whose only real
+//! job is one decision. Per STYLE.md §1 it decomposes into a request record, a
+//! decision record, a pure function between them, and a database seam — and
+//! the ladder itself stays recognisable, because its *order* is the behavior
+//! (`docs/design/pdfrum-font.md` §1.12).
+
+mod charset;
+mod db;
+mod standard;
+mod style;
+mod substfont;
+// The table doc comments name their C++ source files, which read as
+// identifiers to clippy; the file is machine-generated, so the fix belongs in
+// the extractor, not here.
+#[allow(clippy::doc_markdown)]
+mod tables;
+
+pub use charset::{Charset, CodePage, PitchFamily, charset_from_unicode, default_face_name};
+pub use db::{
+    FaceHandle, FaceInfo, FontDb, SIMILARITY_SCORE_MAX, SystemFontDb, TestFontDb,
+    find_family_name_match,
+};
+pub use standard::{
+    ALL_STANDARD_FONTS, StandardFont, canonical_font_name, is_standard_font_name,
+    standard_font_data, standard_font_index,
+};
+pub use style::{
+    ALT_FONT_FAMILIES, FONT_STYLES, FontStyle, NARROW_FAMILY, font_family, is_narrow_font_name,
+    parse_styles, strip_subset_prefix, style_bits, style_type, subst_name, tt_normalize,
+};
+pub use substfont::{SubstFont, skew_from_angle};
+
+use crate::glyphs::{Face, GlyphSource};
+use crate::{FontFlags, GlyphName};
+use pdfrum_common::{DiagKind, Diagnostics, Severity};
+use std::path::PathBuf;
+use std::sync::Arc;
+
+/// What a font wants from substitution.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FontRequest {
+    /// The `/BaseFont` name, before any normalization.
+    pub name: Vec<u8>,
+    /// Whether the font dictionary said `/TrueType`, which changes how the
+    /// name is normalized and which charmaps are preferred.
+    pub is_truetype: bool,
+    /// The descriptor's `/Flags`.
+    pub flags: FontFlags,
+    /// The requested weight.
+    pub weight: i32,
+    /// The requested italic angle.
+    pub italic_angle: i32,
+    /// The code page a CID collection implies, or `DefAnsi`.
+    pub code_page: CodePage,
+    /// Whether the font writes vertically.
+    pub vertical: bool,
+}
+
+impl Default for FontRequest {
+    fn default() -> Self {
+        Self {
+            name: Vec::new(),
+            is_truetype: false,
+            flags: FontFlags::DEFAULT,
+            weight: 400,
+            italic_angle: 0,
+            code_page: CodePage::DefAnsi,
+            vertical: false,
+        }
+    }
+}
+
+/// How substitution finds faces.
+#[derive(Debug, Clone, Default)]
+pub struct SubstitutionOptions {
+    /// Whether the *font-database* weight rule applies rather than the
+    /// enumeration one.
+    ///
+    /// PDFium guards Branch A's weight reset on an internal flag it sets in
+    /// its "version 2" mode. `fontdb` **is** that mode — there is no
+    /// enumeration callback, we query directly — so `true` is the
+    /// architecturally honest value and bold and light variants survive into
+    /// the query.
+    ///
+    /// The default is **`false`**, because the oracle's own Linux build drives
+    /// `CFX_FolderFontInfo`, which enumerates, and matching the oracle is what
+    /// conformance measures. Set it to `true` for the modern behavior. This is
+    /// the brief's OQ-6(a), resolved toward oracle fidelity with the knob left
+    /// public.
+    pub skip_font_enumeration: bool,
+    /// Directories to scan instead of the system's, for a hermetic run.
+    pub font_dirs: Vec<PathBuf>,
+}
+
+/// What substitution decided.
+pub struct Substitution {
+    /// The face to draw with. Always `Some` unless even the built-in fallback
+    /// failed to parse.
+    pub glyphs: GlyphSource,
+    /// The synthetic adjustments that follow from the choice.
+    pub subst: SubstFont,
+    /// The standard font this resolved to, when it resolved to one.
+    pub standard: Option<StandardFont>,
+}
+
+/// Resolve a font request to a face (`FindSubstFace`).
+///
+/// The ladder has five rungs and always ends in something drawable: the last
+/// rung is one of the two built-in Multiple-Master faces, which are compiled
+/// in and cannot be missing. `glyphs` is `GlyphSource::None` only if even that
+/// failed to parse, which would mean a corrupted build.
+#[must_use]
+pub fn resolve(
+    req: &FontRequest,
+    db: &impl FontDb,
+    opts: &SubstitutionOptions,
+    diags: &mut Diagnostics,
+) -> Substitution {
+    resolve_inner(req, db, opts, diags, false)
+}
+
+// The ladder is one ordered sequence: every step reads state the steps above
+// it left behind, and which rung fires first *is* the result. Splitting it into
+// helpers would hide that order behind call sites, so it stays whole.
+#[allow(clippy::too_many_lines)]
+fn resolve_inner(
+    req: &FontRequest,
+    db: &impl FontDb,
+    opts: &SubstitutionOptions,
+    diags: &mut Diagnostics,
+    retried: bool,
+) -> Substitution {
+    let mut subst = SubstFont::default();
+
+    // Step 0 — normalize. Without `USE_EXTERN_ATTR` the caller's weight and
+    // slant are *discarded entirely*, which is why that flag's five-term
+    // conjunction in §1.2 matters so much.
+    let mut weight = if req.weight == 0 { 400 } else { req.weight };
+    let mut italic_angle = req.italic_angle;
+    if !req.flags.uses_extern_attr() {
+        weight = 400;
+        italic_angle = 0;
+    }
+
+    // Step 1 — the name.
+    let name = subst_name(&req.name, req.is_truetype);
+
+    // Step 2 — the two symbolic short-circuits. Note `ZapfDingbats` has no
+    // TrueType condition while `Symbol` does.
+    if name == b"Symbol" && !req.is_truetype {
+        "Chrome Symbol".clone_into(&mut subst.family);
+        subst.charset = Charset::Symbol;
+        return terminal(
+            Some(StandardFont::Symbol),
+            weight,
+            italic_angle,
+            PitchFamily::default(),
+            subst,
+            diags,
+        );
+    }
+    if name == b"ZapfDingbats" {
+        "Chrome Dingbats".clone_into(&mut subst.family);
+        subst.charset = Charset::Symbol;
+        return terminal(
+            Some(StandardFont::Dingbats),
+            weight,
+            italic_angle,
+            PitchFamily::default(),
+            subst,
+            diags,
+        );
+    }
+
+    // Step 3 — split at the first comma.
+    let (mut family, style_str, has_comma) = style::split_style(&name);
+    let std_font = if has_comma {
+        standard_font_index(&family)
+    } else {
+        standard_font_index(&name)
+    };
+
+    // Step 4 — derive the style. A base-14 font skips name parsing entirely
+    // and reads both style and pitch off its index.
+    let mut has_hyphen = false;
+    let (mut n_style, pitch_family, mut base_font) =
+        if let Some(sf) = std_font.filter(|f| f.index() < 12) {
+            (
+                style_from_standard_font(sf),
+                PitchFamily::from_standard_font(sf),
+                Some(sf),
+            )
+        } else {
+            let mut style_out = style_bits::NORMAL;
+            let mut style_str = style_str.clone();
+            if !has_comma {
+                // The *last* hyphen, not the first.
+                if let Some(p) = family.iter().rposition(|c| *c == b'-') {
+                    style_str = family.get(p + 1..).unwrap_or_default().to_vec();
+                    family.truncate(p);
+                    has_hyphen = true;
+                }
+            }
+            if !has_hyphen
+                && let Some(sr) = std::str::from_utf8(&family)
+                    .ok()
+                    .and_then(|f| style_type(f, true))
+            {
+                family.truncate(family.len().saturating_sub(sr.name.len()));
+                style_out |= sr.style;
+            }
+            let _ = style_str;
+            (style_out, PitchFamily::from_flags(req.flags), None)
+        };
+
+    // Step 5 — bold inference. `old_weight` is the *pre-inference* value, and
+    // which of the two every downstream call passes is behavior: the internal
+    // rungs take the old one, the external rungs the new one.
+    let old_weight = weight;
+    if n_style & style_bits::FORCE_BOLD != 0 {
+        weight = 700;
+    }
+
+    // Step 6 — the style suffix, which may abort the whole parse.
+    let style_source = if has_comma {
+        style_str
+    } else {
+        suffix_after_hyphen(&name, has_hyphen)
+    };
+    let parsed = parse_styles(&style_source, weight, n_style);
+    let mut is_style_available = parsed.is_style_available;
+    if parsed.abort {
+        family.clone_from(&name);
+        base_font = None;
+    } else {
+        weight = parsed.weight;
+        n_style = parsed.style;
+    }
+
+    // Step 7 — with no database at all, go straight to the built-ins.
+    if db.faces().is_empty() {
+        return terminal(
+            base_font,
+            old_weight,
+            italic_angle,
+            pitch_family,
+            subst,
+            diags,
+        );
+    }
+
+    // Step 8 — charset and family rewriting.
+    let charset = request_charset(req.code_page, base_font, req.flags);
+    let is_cjk = charset.is_cjk();
+    let mut is_italic = n_style & style_bits::ITALIC != 0;
+    let family_str = String::from_utf8_lossy(&family).into_owned();
+    let mut family_str = match font_family(n_style, &family_str) {
+        Some(f) => f.to_owned(),
+        None => family_str,
+    };
+
+    // Step 9 — installed-name matching, with a second, looser attempt.
+    let name_str = String::from_utf8_lossy(&name).into_owned();
+    let mut matched = db.match_installed(&tt_normalize(&family_str));
+    if matched.is_none()
+        && family_str != name_str
+        && !has_comma
+        && (!has_hyphen || !is_style_available)
+    {
+        matched = db.match_installed(&tt_normalize(&name_str));
+    }
+
+    // Step 10 — the two branches.
+    let mut pitch_family = pitch_family;
+    if matched.is_none() && base_font.is_none() {
+        if is_cjk {
+            subst.subst_cjk = true;
+            if n_style != 0 {
+                subst.weight_cjk = Some(weight);
+            }
+            if n_style & style_bits::ITALIC != 0 {
+                subst.italic_cjk = true;
+            }
+        } else {
+            if style::is_third_party_font(&family_str) {
+                pitch_family = PitchFamily(pitch_family.0 & !PitchFamily::ROMAN);
+            } else {
+                // The italic decision is *overridden* by the angle here.
+                is_italic = italic_angle != 0;
+                if !opts.skip_font_enumeration {
+                    weight = old_weight;
+                }
+            }
+            if is_narrow_font_name(&name_str) {
+                NARROW_FAMILY.clone_into(&mut family_str);
+            }
+        }
+        // The PDF's own italic flag can still force it on.
+        if req.flags.is_italic() {
+            is_italic = true;
+        }
+    } else {
+        italic_angle = 0;
+        if n_style == style_bits::NORMAL {
+            weight = 400;
+        }
+        if let Some(m) = &matched {
+            family_str.clone_from(m);
+        }
+        if let Some(bf) = base_font {
+            let adjusted = adjust_base_font_for_style(bf, n_style);
+            base_font = Some(adjusted);
+            canonical_font_name(adjusted).clone_into(&mut family_str);
+        }
+    }
+    let _ = &mut is_style_available;
+
+    // Step 11 — rung 1: ask the database.
+    if let Some(h) = db.find_font(weight, is_italic, charset, pitch_family, &family_str, true)
+        && let Some(s) = external(db, h, weight, is_italic, italic_angle, charset, &mut subst)
+    {
+        return Substitution {
+            glyphs: s,
+            subst,
+            standard: base_font,
+        };
+    }
+
+    // Step 12 — rung 2: the exact installed name.
+    if is_cjk {
+        is_italic = italic_angle != 0;
+        weight = old_weight;
+    }
+    if let Some(m) = &matched {
+        return match db.font_by_name(m) {
+            None => terminal(
+                base_font,
+                old_weight,
+                italic_angle,
+                pitch_family,
+                subst,
+                diags,
+            ),
+            Some(h) => {
+                match external(db, h, weight, is_italic, italic_angle, charset, &mut subst) {
+                    Some(s) => Substitution {
+                        glyphs: s,
+                        subst,
+                        standard: base_font,
+                    },
+                    None => terminal(
+                        base_font,
+                        old_weight,
+                        italic_angle,
+                        pitch_family,
+                        subst,
+                        diags,
+                    ),
+                }
+            }
+        };
+    }
+
+    // Step 13 — rung 3: retry a symbolic request as a plain one, **once**.
+    if charset == Charset::Symbol {
+        if name == b"Symbol" {
+            "Chrome Symbol".clone_into(&mut subst.family);
+            subst.charset = Charset::Symbol;
+            return terminal(
+                Some(StandardFont::Symbol),
+                old_weight,
+                italic_angle,
+                pitch_family,
+                subst,
+                diags,
+            );
+        }
+        if !retried {
+            // Dropping the symbolic bit makes `request_charset` return ANSI,
+            // so this rung cannot be re-entered — but the flag makes that a
+            // fact rather than an argument.
+            let retry = FontRequest {
+                name: family.clone(),
+                flags: req.flags.without(FontFlags::SYMBOLIC),
+                weight,
+                italic_angle,
+                code_page: CodePage::DefAnsi,
+                ..req.clone()
+            };
+            return resolve_inner(&retry, db, opts, diags, true);
+        }
+    }
+
+    // Step 14 — rung 4: an ANSI request that found nothing takes the built-ins.
+    if charset == Charset::Ansi {
+        return terminal(
+            base_font,
+            old_weight,
+            italic_angle,
+            pitch_family,
+            subst,
+            diags,
+        );
+    }
+
+    // Step 15 — rung 5: any installed face claiming this charset, in
+    // insertion order.
+    let by_charset = db
+        .faces()
+        .iter()
+        .position(|f| f.charsets.contains(&charset))
+        .map(FaceHandle);
+    match by_charset {
+        None => terminal(
+            base_font,
+            old_weight,
+            italic_angle,
+            pitch_family,
+            subst,
+            diags,
+        ),
+        Some(h) => {
+            if let Some(s) = external(db, h, weight, is_italic, italic_angle, charset, &mut subst) {
+                Substitution {
+                    glyphs: s,
+                    subst,
+                    standard: base_font,
+                }
+            } else {
+                // The one place PDFium returns nothing at all.
+                diags.record(Severity::Suspicious, DiagKind::FontSubstitutionFailed, None);
+                Substitution {
+                    glyphs: GlyphSource::None,
+                    subst,
+                    standard: base_font,
+                }
+            }
+        }
+    }
+}
+
+/// The style bits a base-14 index implies (`GetStyleFromBaseFont`).
+///
+/// Reads `index % 4` against the family layout Regular / Bold / BoldOblique /
+/// Oblique — bold at positions 1 and 2, italic at 2 and 3.
+#[must_use]
+pub fn style_from_standard_font(f: StandardFont) -> u32 {
+    let pos = f.index() % 4;
+    let mut style = style_bits::NORMAL;
+    if pos == 1 || pos == 2 {
+        style |= style_bits::FORCE_BOLD;
+    }
+    if pos / 2 != 0 {
+        style |= style_bits::ITALIC;
+    }
+    style
+}
+
+/// Apply a style to a base-14 index by arithmetic (`AdjustBaseFontForStyle`).
+///
+/// Only the three family heads can be styled; anything else is already a
+/// styled member and is returned unchanged.
+#[must_use]
+pub fn adjust_base_font_for_style(base: StandardFont, style: u32) -> StandardFont {
+    if style == style_bits::NORMAL || !base.is_stylable() {
+        return base;
+    }
+    let bold = style & style_bits::FORCE_BOLD != 0;
+    let italic = style & style_bits::ITALIC != 0;
+    let offset = match (bold, italic) {
+        (true, true) => 2,
+        (true, false) => 1,
+        (false, true) => 3,
+        (false, false) => 0,
+    };
+    StandardFont::from_index(base.index() + offset).unwrap_or(base)
+}
+
+/// The charset a request is for (`GetCharset`).
+#[must_use]
+fn request_charset(cp: CodePage, base: Option<StandardFont>, flags: FontFlags) -> Charset {
+    if cp != CodePage::DefAnsi {
+        return Charset::from_code_page(cp);
+    }
+    // Symbolic *and* not a standard font: only then is it a symbol request.
+    if flags.is_symbolic() && base.is_none() {
+        return Charset::Symbol;
+    }
+    Charset::Ansi
+}
+
+/// The style suffix a hyphen split produced, recomputed rather than threaded
+/// because the split is local to step 4.
+fn suffix_after_hyphen(name: &[u8], has_hyphen: bool) -> Vec<u8> {
+    if !has_hyphen {
+        return Vec::new();
+    }
+    name.iter()
+        .rposition(|c| *c == b'-')
+        .and_then(|p| name.get(p + 1..))
+        .unwrap_or_default()
+        .to_vec()
+}
+
+/// Build a face from a database handle (`external_subst`).
+fn external(
+    db: &impl FontDb,
+    h: FaceHandle,
+    weight: i32,
+    is_italic: bool,
+    italic_angle: i32,
+    charset: Charset,
+    subst: &mut SubstFont,
+) -> Option<GlyphSource> {
+    let (bytes, index) = db.face_bytes(h)?;
+    let face = Face::new(bytes, index)?;
+    let info = db.faces().get(h.0)?;
+    // A database that cannot name its own face falls back to the face's, which
+    // is the `SetSubstFontNameWhenGetFaceNameFails` behavior.
+    let name = if info.name.is_empty() {
+        face.display_name().unwrap_or_default()
+    } else {
+        info.name.clone()
+    };
+    subst.configure_external(
+        name,
+        charset,
+        weight,
+        is_italic,
+        italic_angle,
+        info.styles & style_bits::FORCE_BOLD != 0,
+        info.styles & style_bits::ITALIC != 0,
+    );
+    Some(GlyphSource::Fontations(face))
+}
+
+/// The terminal rung (`internal_subst`), itself two-level.
+///
+/// A resolved base-14 index takes the exact Foxit blob and **leaves the
+/// substitution record untouched** — weight, angle and pitch are all ignored,
+/// because the blob is already the right face. Anything else takes one of the
+/// two Multiple-Master generics, which *do* record the weight, because their
+/// design space is how the weight gets applied at all.
+fn terminal(
+    base_font: Option<StandardFont>,
+    weight: i32,
+    italic_angle: i32,
+    pitch_family: PitchFamily,
+    mut subst: SubstFont,
+    diags: &mut Diagnostics,
+) -> Substitution {
+    if let Some(f) = base_font {
+        let bytes: Arc<[u8]> = Arc::from(standard_font_data(f));
+        let glyphs = Face::new(bytes, 0).map_or(GlyphSource::None, GlyphSource::Fontations);
+        if !glyphs.is_some() {
+            diags.record(Severity::Suspicious, DiagKind::FontSubstitutionFailed, None);
+        }
+        return Substitution {
+            glyphs,
+            subst,
+            standard: Some(f),
+        };
+    }
+
+    subst.is_builtin_generic = true;
+    subst.italic_angle = italic_angle;
+    if weight != 0 {
+        subst.weight = Some(weight);
+    }
+    let serif = pitch_family.has(PitchFamily::ROMAN);
+    let (glyphs, family) = builtin_generic(serif);
+    if serif {
+        subst.use_chrome_serif();
+    } else {
+        family.clone_into(&mut subst.family);
+    }
+    if !glyphs.is_some() {
+        diags.record(Severity::Suspicious, DiagKind::FontSubstitutionFailed, None);
+    }
+    Substitution {
+        glyphs,
+        subst,
+        standard: None,
+    }
+}
+
+/// One of the two built-in Multiple-Master generic faces, and its family name.
+///
+/// These are the reason `pdfrum-type1` exists: they are PFB Type 1 Multiple
+/// Master, and instantiating them at an arbitrary weight and width is what
+/// draws every font neither the document nor the system supplied.
+#[must_use]
+pub fn builtin_generic(serif: bool) -> (GlyphSource, &'static str) {
+    let (bytes, family) = if serif {
+        (
+            &include_bytes!("../../../pdfrum-type1/tests/fixtures/FoxitSerifMM.pfb")[..],
+            "Chrome Serif",
+        )
+    } else {
+        (
+            &include_bytes!("../../../pdfrum-type1/tests/fixtures/FoxitSansMM.pfb")[..],
+            "Chrome Sans",
+        )
+    };
+    let font = pdfrum_type1::Type1Font::parse(
+        bytes,
+        &pdfrum_common::Limits::default(),
+        &mut Diagnostics::with_limit(0),
+    );
+    match font {
+        Ok(f) => (GlyphSource::Type1(Arc::new(f)), family),
+        Err(_) => (GlyphSource::None, family),
+    }
+}
+
+/// A glyph name looked up in the substituted face, for the fallback path.
+#[must_use]
+pub fn fallback_glyph(source: &GlyphSource, name: &GlyphName) -> u16 {
+    source.name_index(name.as_bytes())
+}
+
+#[cfg(test)]
+#[path = "subst_tests.rs"]
+mod tests;

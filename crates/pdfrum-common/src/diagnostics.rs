@@ -114,6 +114,28 @@ pub enum DiagKind {
     /// `/BlendDesignMap` and `/BlendAxisTypes` did not agree on the number of
     /// axes or masters, so the font was treated as non-variable.
     Type1BlendInconsistent,
+    /// A `/ToUnicode` `bfchar` or `bfrange` block declared a different number
+    /// of entries than it contained, or contained a character code the format
+    /// cannot express, so **every mapping in that block** was discarded.
+    ToUnicodeBlockRejected,
+    /// A `/ToUnicode` destination held an unpaired UTF-16 surrogate, which a
+    /// Rust `char` cannot represent; it became U+FFFD (font brief D3).
+    ToUnicodeLoneSurrogate,
+    /// An embedded font program could not be read by any backend, so the font
+    /// was treated as if it had none and went to substitution.
+    FontProgramUnreadable,
+    /// A `/CIDToGIDMap` stream was shorter than the CIDs indexing into it, so
+    /// glyphs past its end resolve to nothing.
+    CidToGidStreamShort,
+    /// A `/W`, `/W2` or `/Widths` array was malformed and parsing stopped
+    /// early or dropped a record; the widths read so far were kept.
+    FontWidthsTruncated,
+    /// An OpenType `GSUB` table could not be read, so vertical glyph
+    /// substitution is unavailable and upright forms are drawn instead.
+    GsubUnreadable,
+    /// No system or embedded face could be found for a font, and even the
+    /// built-in fallback failed to parse.
+    FontSubstitutionFailed,
 }
 
 /// One recorded recovery.

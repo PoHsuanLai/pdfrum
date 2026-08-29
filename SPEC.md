@@ -300,6 +300,49 @@ impl Font {
 pub struct CharItem { pub code: CharCode, pub cid: Option<Cid>, pub gid: Gid, pub unicode: SmallVec<[char;2]>, pub width: f32 }
 ```
 
+[spec] 2026-08-29 (`pdfrum-font` implementation). Five shape corrections, made
+in the same commit as the code:
+
+1. **`GlyphSource::Fontations` does not hold a `FontRef`.** It holds an owning
+   `Face` record over `Arc<[u8]>` that reconstructs the reader per use, because
+   a borrowed `FontRef<'static>` needs a self-reference the closed dependency
+   set has no `yoke`-style crate for. More consequentially, `Face` is a
+   **two-backend** value: `skrifa::FontRef` requires a table directory and
+   therefore **cannot open a bare CFF**, which all fourteen Foxit base-14 blobs
+   are. The second backend is `read_fonts::ps::cff::CffFontRef`. PDFium's own
+   Rust bridge splits exactly the same way (`Sfnt ?? CffFontRef ?? Type1Font`),
+   so this is the shape upstream arrived at; the brief's §1.16.3 records the
+   bridge but its §3.1 sketch did not carry the split into `GlyphSource`.
+   `GlyphSource` also gains a third variant, `None`, for a Type3 font or a
+   program no backend could read — the state `IsEmbedded() == false` describes.
+2. **`CharItem` gains `has_glyph: bool`.** `Gid` cannot express PDFium's `-1`,
+   which is distinct from glyph 0 (`.notdef`) and means "draw nothing"; making
+   `gid` an `Option<Gid>` instead would push the unwrap into every render call
+   site for a case that is common, so the flag plus a `glyph()` accessor is the
+   shape. `vertical_glyph` is present as ruled.
+3. **`SimpleFont`'s field list** is as the brief's §3.1 records it — `unicodes:
+   [u16; 256]` and `glyph_index: [u16; 256]` are first-class — plus `widths`
+   as a `SimpleWidths` record rather than `[f32; 256]`, because the *unset*
+   sentinel (`0xFFFF`) is behaviorally distinct from a zero width and the
+   all-caps aliasing of §1.4 reads that distinction.
+4. **`Font::load` takes a `FontCache` and returns `Option<Font>`**, per the
+   brief; `Type0Font` is boxed inside the enum so the three variants do not
+   differ in size by an order of magnitude.
+5. **Five items are public for `pdfrum-doc`'s appearance generation** (doc
+   brief OQ-3): `Font::char_code_from_unicode`, `Font::char_width`,
+   `Font::append_char`, `Font::base_font_name` and `Font::load_standard`. All
+   five are internals the brief already describes; only their visibility is new.
+
+Also resolved by implementation, with the code as the record: **OQ-3** (both
+halves measured against the oracle, not reasoned about — see
+`docs/status/pdfrum-font.md`), **OQ-4** (always unhinted, no `tricky` list),
+**OQ-6(a)** (`skip_font_enumeration` defaults to `false`, matching the oracle's
+enumeration build, with the knob public), **OQ-6(b)** (`SimilarityScore` and
+`FindFamilyNameMatch` are ported; `fontdb` is a face enumerator only), and
+**OQ-7** (no new `Limits` field — PDFium's own `kOutOfSpecBFLimit` and
+`kMaxType3FormLevel` are ported verbatim and `Limits::max_array_len` already
+bounds the `/W` and `bfchar` collections).
+
 Substitution/fallback: `fontdb` scan + a port of the C++
 `SimilarityScore`/`FindFamilyNameMatch` matcher on top of it, behind a
 `SubstitutionOptions` record whose enumeration-mode default is resolved
