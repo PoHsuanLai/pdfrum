@@ -47,6 +47,7 @@
 mod annot;
 mod content;
 mod metadata;
+mod mutate;
 mod options;
 mod pageinfo;
 mod render;
