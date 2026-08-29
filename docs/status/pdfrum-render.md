@@ -1,8 +1,9 @@
 # `pdfrum-render` status
 
-**Updated:** 2026-08-29 · **State:** M8 pixel burn-down wave 3 —
-**76.6% at SSIM ≥ 0.99**, Tier C hard failures 5 → 3, and D7 measured
-rather than assumed
+**Updated:** 2026-08-29 · **State:** M8 pixel burn-down wave 4 —
+**76.6% at SSIM ≥ 0.99** (unchanged; wave 4 was a measurement wave and
+shipped no pixels), D7 re-attributed from hinting to the oracle's integer
+glyph origins, and the hinter ruled out on numbers
 
 Contract: SPEC.md §8 including the E2/E3/E4/E10 additions and the
 2026-08-29 implementation record. Behavior: `docs/design/pdfrum-render.md`;
@@ -108,6 +109,12 @@ Splitting the band by what is actually on the page:
   gamma on top of our outline. Nothing short of the hinter closes it, and
   PLAN §1 rules the hinter out.
 
+  **Wave 4 disproved that last sentence.** The geometry finding holds; the
+  attribution to hinting does not. The oracle's hinting runs at a fixed
+  64 ppem and moves outlines by ~0.04 device px; what actually displaces the
+  stems is that the oracle blits glyph bitmaps on **integer origins**. See
+  the wave 4 section.
+
 **The brief's tail inventory was wrong about the tcpdf cluster**, and the
 correction matters because it was the largest named secondary target. Those
 ~20 files were recorded as "DCT images at a sub-pixel placement offset". They
@@ -179,6 +186,140 @@ against the oracle rather than by reading either rasterizer's source.
   and `bug_1986` (JPX, 4 files), the JBIG2/CCITT decode differences, and the
   ~20 assorted singles. Those are codec and compositing questions with
   answers.
+
+## Wave 4: D7 is not a hinting problem, and the hinter would not have helped
+
+Wave 3 left the 0.95–0.99 band as "glyph coverage almost to the file" and
+named the hinter as the only thing that could close it. Wave 4 was chartered
+to test that — the font crate's OQ-4 ruling was reopened on the argument that
+PLAN §1 rules out FreeType the C library but not hinting, and that `skrifa`
+ships a pure-Rust bytecode interpreter built for FreeType parity.
+
+**It measured, and it did not build.** Hinting is not the cause, and the
+oracle's own hinting is very nearly a no-op. What the tail is instead is
+measured below.
+
+### The oracle does hint — on a far wider set of faces than OQ-4 said
+
+Below the `|char2device.a| + |char2device.b| > 50` threshold the oracle
+rasterizes glyph *bitmaps*, and that path hints every SFNT face:
+
+```cpp
+// cfx_face.cpp:841-843, CFX_Face::RenderGlyph
+int load_flags = FT_LOAD_NO_BITMAP | FT_LOAD_PEDANTIC;
+if (!IsTtOt()) {                       // !(face_flags & FT_FACE_FLAG_SFNT)
+  load_flags |= FT_LOAD_NO_HINTING;
+}
+```
+
+The `tricky`-list predicate OQ-4 relied on belongs to the *outline* path
+(`cfx_face.cpp:948-951`), which ordinary text does not reach. No
+`FT_LOAD_TARGET_*` is ever passed, so the target is `NORMAL` by omission, and
+the autofitter is compiled out, so non-SFNT faces get no hinting at all. For
+`pdfium_test --png` the anti-alias mode resolves to `kLcd` with
+`normalize = true`: FreeType renders a 3×-wide `FT_RENDER_MODE_LCD` bitmap
+under `FT_LCD_FILTER_DEFAULT`, and `DrawNormalTextHelper` averages the triples
+back to grayscale through a 256-entry `kTextGammaAdjust` table.
+
+### The hinting runs at a fixed 64 ppem, which makes it nearly inert
+
+`CFX_Face::New` calls `FT_Set_Pixel_Sizes(face_rec, 64, 64)` once
+(`cfx_face.cpp:376`) and nothing ever changes it. The real size arrives
+through `FT_Set_Transform`, with the matrix pre-divided by 64
+(`cfx_face.cpp:822-825`) — and FreeType applies the transform *after* hinting.
+So the interpreter always grid-fits to a 64-pixel grid whose alignment is then
+scaled away.
+
+Measured with the pinned `skrifa` 0.46.2 `HintingInstance`
+(`Engine::Interpreter`, `Target::Smooth`/`Normal`), comparing hinted against
+unhinted point positions on real corpus faces:
+
+| face | oracle's config: hinted at 64 ppem, scaled to 9 pt | hinted at 9 ppem |
+|---|---|---|
+| `example_063.pdf` `/FontFile2` | *interpreter errors — see below* | — |
+| `en_fqa.pdf` `/FontFile2` | mean **0.040** device px | mean 0.306 device px |
+| DejaVuSans | mean **0.037** device px | mean 0.260 device px |
+| LiberationSerif | mean **0.049** device px | mean 0.619 device px |
+
+About **1/25 of a device pixel** — an order of magnitude below what hinting at
+the true size would do, and nowhere near enough to explain differences whose
+mean magnitude is 66 counts. `example_063`'s own face is sharper evidence
+still: its `prep` program fails in skrifa's interpreter with
+`InvalidDefinition`, and under `FT_LOAD_PEDANTIC` that is precisely the case
+where `cfx_face.cpp:849-857` reloads the glyph **unhinted**.
+
+And the two fixtures wave 3 named are largely unhinted in the oracle anyway.
+`5.5_simple_font.pdf` embeds no font program at all — every run is a
+substitution onto a Foxit base-14 face, and those ship as **bare CFF**
+(header `01 00 04 02`, no table directory) with the MM fallbacks as Type 1
+PFB. Neither is SFNT, so `IsTtOt()` is false and both take
+`FT_LOAD_NO_HINTING`.
+
+### What the tail actually is: the oracle blits glyphs on integer origins
+
+The oracle does not fill an outline at its fractional device position. It
+snaps every glyph to a whole pixel before blitting the bitmap
+(`cfx_renderdevice.cpp:1254-1257`):
+
+```cpp
+glyph.origin_.x = anti_alias_is_lcd ? (int)floor(device_origin.x)
+                                    : FXSYS_roundf(device_origin.x);
+glyph.origin_.y = FXSYS_roundf(device_origin.y);
+```
+
+We fill each outline where it really lands. A baseline at `y = 100.4` is drawn
+by the oracle at `100` and by us at `100.4`, displacing every horizontal stem
+edge by 0.4 px — which on 9-pixel type is a full-count swing on each edge, in
+both directions, with geometry that still matches to within a pixel. That is
+exactly the signature wave 3 recorded and attributed to the hinter.
+
+Measured on `example_063.pdf`, per text line, as the ink-centroid offset
+between our render and the golden:
+
+- mean **+0.446 px**, sd 0.300, range −0.20 to +0.92 — *fractional and
+  per-line*, not a constant, which rules out a matrix error.
+- Re-aligning each line's baseline onto the oracle's cuts mean |diff| from
+  71.0 to 49.3 (**−30.5%**) and removes **63%** of the ±128 swings
+  (24 431 → 9 070).
+- Fitting an independent sub-pixel shift per 8-pixel band recovers **43.6%**
+  of the residual, with the fitted shifts clustered at |0.5| in 91 of 94
+  bands.
+
+It generalises. Across ten files sampled from the 0.95–0.99 band, every
+text-bearing one shows non-zero per-line sub-pixel offsets — |mean| 0.22 to
+0.55 px — and re-alignment recovers 8–48% of the residual.
+
+Two candidate explanations were tested against the same pixels and **both
+failed**, so neither should be retried: the `kTextGammaAdjust` table applied
+to our coverage makes the match *worse* (the ≤2-count share falls from 42% to
+5% on `5.5_simple_font`), and simulating the LCD pipeline — 3× horizontal
+supersample, FreeType's FIR5 default filter, box-average back down — moves
+mean |diff| by under 4% on either fixture. The residual is positional, not a
+coverage curve.
+
+### One thing that is not D7 at all
+
+`5.5_simple_font.pdf`'s worst band is not antialiasing. Its `/Type_1_F` run
+draws `(abcabcType 1 fonts -- AGaramond-Semibold)`, a non-embedded Type 1 that
+falls to substitution; the oracle renders `abcabc` and we render `a ba b` —
+we drop the `c` and then mis-advance, so the rest of the line drifts. Its
+`/Type_1_MM_F` band renders the right glyphs but visibly **too narrow**, an
+advance-width defect on the MM fallback. Both are glyph-selection and metrics
+bugs sitting inside a file the triage had filed under "coverage", and both are
+worth more than any coverage work on that file.
+
+### What the next wave should not do again
+
+- **Do not port a hinter.** Measured at the oracle's own fixed 64 ppem it
+  moves outlines by ~0.04 device px. OQ-4's ruling stands; only its stated
+  reason was wrong, and `pdfrum-font.md` now carries the corrected one.
+- Do not re-test the text gamma table or the LCD downsample as the cause of
+  the tail. Both were measured here and both make the match no better.
+- The lever on D7, if one is ever wanted, is the **integer glyph origin** —
+  and it is a deliberate divergence with real costs, because snapping glyph
+  positions to whole pixels is exactly what D7 declined in order to keep text
+  geometry exact. It is a rendering-policy decision, not a bug fix, and it
+  belongs to the orchestrator rather than to a burn-down wave.
 
 ## Numbers
 
@@ -446,6 +587,16 @@ repeating here:
   our outline — the mapping the AGG driver applies to path coverage is plain
   `min(255, floor(cov·256))` and there is no gamma table on that side at all.
   See the wave 3 section.
+
+  **Wave 4 corrects the attribution.** It is the bitmap's *placement*, not its
+  hinting. The oracle snaps every glyph origin to a whole pixel before
+  blitting (`cfx_renderdevice.cpp:1254-1257`) while we fill each outline where
+  it truly lands, which displaces stem edges by the baseline's fractional part
+  — measured at mean +0.45 px per line on `example_063.pdf`. The hinting the
+  oracle does run is nearly inert, because it grid-fits at a **fixed 64 ppem**
+  that is then scaled away: ~0.04 device px of point movement at 9 pt. So
+  "reproducing that means porting FreeType's hinter" is false; porting the
+  hinter would change almost nothing. See the wave 4 section.
 - **D5 — non-isolated groups double-count their backdrop.** PDFium seeds
   such a group's buffer with a copy of the page and never removes it before
   compositing back. That is not ISO 32000 §11.4.6, and it is what the oracle

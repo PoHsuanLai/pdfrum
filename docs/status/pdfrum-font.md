@@ -272,6 +272,61 @@ The brief's D1–D13 are implemented as written, with these notes:
   the `FX_MultiByteToWideChar` tails. The static-table scan is normative.
 - **Knockout, hinting, and the `tricky` font list** (OQ-4): we draw filled
   unhinted outlines, so the only path that would hint is unreachable.
+
+  **2026-08-29 — OQ-4 was reopened by the orchestrator and re-closed on
+  measurement. The ruling stands, but the *reason* recorded above was wrong,
+  and the corrected reason is the useful part.** The claim was that the only
+  hinting path needs a face that is both SFNT and on FreeType's `tricky`
+  list. That is true of the oracle's **outline** path
+  (`CFX_Face::LoadGlyphPath`, `cfx_face.cpp:948-951`, whose predicate really
+  is `!IsTtOt() || !IsTricky()`), but the oracle does not reach that path for
+  ordinary text. Below `|char2device.a| + |char2device.b| > 50` it renders
+  **glyph bitmaps** instead (`cfx_renderdevice.cpp:1240-1250`), and that path
+  hints every SFNT face:
+
+  ```cpp
+  // cfx_face.cpp:841-843, CFX_Face::RenderGlyph
+  int load_flags = FT_LOAD_NO_BITMAP | FT_LOAD_PEDANTIC;
+  if (!IsTtOt()) {                       // !(face_flags & FT_FACE_FLAG_SFNT)
+    load_flags |= FT_LOAD_NO_HINTING;
+  }
+  ```
+
+  No `FT_LOAD_TARGET_*` is ever passed, so the target is `NORMAL` by
+  omission; the autofitter is compiled out of pdfium's FreeType
+  (`ftmodule.h`), and `FT_Property_Set` is never called, so the TrueType
+  bytecode interpreter runs at its v40 default. So the oracle **is** hinting,
+  on a much wider set of faces than OQ-4 assumed — and hinting it is still not
+  worth porting, for a reason nobody had measured:
+
+  **The oracle hints at a fixed 64 ppem, never at the device size.**
+  `CFX_Face::New` calls `FT_Set_Pixel_Sizes(face_rec, 64, 64)` once
+  (`cfx_face.cpp:376`) and nothing ever changes it; the per-glyph size arrives
+  through `FT_Set_Transform` with the matrix pre-divided by 64
+  (`cfx_face.cpp:822-825`). FreeType applies the transform *after* hinting, so
+  the bytecode interpreter always grid-fits to a 64-pixel grid whose alignment
+  is then scaled away. Measured with `skrifa` 0.46.2's `HintingInstance`
+  (`Engine::Interpreter`, `Target::Smooth`/`Normal`) over three real TrueType
+  faces — the `/FontFile2` from `example_063.pdf`, the one from `en_fqa.pdf`,
+  and DejaVuSans/LiberationSerif:
+
+  | face | hinted at 64 ppem, scaled to 9 pt | hinted at 9 ppem |
+  |---|---|---|
+  | `en_fqa` `/FontFile2` | mean 0.040 device px | mean 0.306 device px |
+  | DejaVuSans | mean 0.037 device px | mean 0.260 device px |
+  | LiberationSerif | mean 0.049 device px | mean 0.619 device px |
+
+  Hinting in the oracle's own configuration moves outline points by about
+  **1/25 of a device pixel** — an order of magnitude less than hinting at the
+  real size, and far too little to be the pixel tail. (The
+  `example_063` face is more pointed still: its `prep` program fails in
+  skrifa's interpreter with `InvalidDefinition`, which under
+  `FT_LOAD_PEDANTIC` is exactly the case where `cfx_face.cpp:849-857` reloads
+  the glyph *unhinted*.)
+
+  Porting the hinter would therefore buy a sub-1/20-pixel geometry change.
+  The tail it was supposed to close is elsewhere; see
+  `pdfrum-render.md`'s wave 4 section for what it actually is.
 - **CFF/Type 2 charstrings, OpenType wrapping, TTC parsing** — `read-fonts`
   owns all of those.
 
