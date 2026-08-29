@@ -73,6 +73,7 @@ pub mod image;
 pub mod options;
 pub mod paint;
 pub mod path;
+pub mod pattern;
 pub mod pixmap;
 pub mod shading;
 pub mod softmask;

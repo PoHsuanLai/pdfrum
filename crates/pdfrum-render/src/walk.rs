@@ -23,7 +23,7 @@ use pdfrum_common::Diagnostics;
 use pdfrum_page::{Page, PageObject, Transparency};
 
 use crate::clip;
-use crate::color::{ObjectKind, resolve_argb};
+use crate::color::{Argb, ObjectKind, resolve_argb};
 use crate::ctx::{RenderCaches, RenderCtx};
 use crate::device::{Brush, ImageQuality, MAX_TARGET_DIMENSION, RasterBackend, RenderDevice};
 use crate::error::Error;
@@ -32,7 +32,8 @@ use crate::image::{effective_quality, overprint_blend, resample_quality, to_pixm
 use crate::options::RenderOptions;
 use crate::paint::{PathPaint, draw_path};
 use crate::path::{IntRect, is_available_matrix, outer_rect};
-use crate::pixmap::{Pixmap, alpha_byte_rounding};
+use crate::pattern::PatternClip;
+use crate::pixmap::{Pixmap, alpha_byte_rounding, alpha_byte_truncating};
 use crate::shading;
 use crate::text::{has_face, paint_kinds, place_glyphs};
 use crate::transfer::TransferFunc;
@@ -453,7 +454,9 @@ fn render_direct<B: RasterBackend>(
     diags: &mut Diagnostics,
 ) {
     match object {
-        PageObject::Path(p) => render_path(ctx, device, backend, &p.object, &p.state, to_device),
+        PageObject::Path(p) => render_path(
+            ctx, device, backend, caches, &p.object, &p.state, to_device, device_box, diags,
+        ),
         PageObject::Text(t) => {
             render_text(ctx, device, backend, caches, &t.object, &t.state, to_device);
         }
@@ -522,13 +525,78 @@ fn colors(
     (fill, stroke)
 }
 
+/// Paint one object's geometry with the pattern its fill or stroke colour
+/// names.
+///
+/// The uncoloured colour is resolved here rather than in `pattern.rs` because
+/// it is a *colour* question — the `scn` operands read through the pattern
+/// space's base — and because its two fallbacks differ by paint type: a
+/// coloured tiling pattern whose colour will not resolve falls back to mid
+/// grey, everything else to white.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "painting a pattern needs the context, device, backend, caches, \
+              the object's state, which colour names it, its geometry, and \
+              the page transform"
+)]
+fn paint_pattern<B: RasterBackend>(
+    ctx: &RenderCtx<'_>,
+    device: &mut B::Device,
+    backend: &B,
+    caches: &mut RenderCaches,
+    state: &pdfrum_page::GraphicsState,
+    stroking: bool,
+    geometry: &PatternClip<'_>,
+    to_device: Affine,
+    device_box: Rect,
+    diags: &mut Diagnostics,
+) {
+    let color = if stroking { &state.stroke } else { &state.fill };
+    let Some(value) = color.pattern.as_ref() else {
+        return;
+    };
+    let Some(pattern) = value.loaded.as_ref() else {
+        return;
+    };
+    let alpha = if stroking {
+        state.general.stroke_alpha
+    } else {
+        state.general.fill_alpha
+    };
+    let colored_tiling = matches!(&**pattern, pdfrum_page::Pattern::Tiling(t) if t.colored);
+    let space = color
+        .space
+        .as_ref()
+        .map_or(&pdfrum_page::ColorSpace::DeviceGray, |s| &**s);
+    let rgb = pdfrum_page::pattern::uncolored_pattern_rgb(space, &value.components, colored_tiling);
+    let [r, g, b] = rgb.to_bytes();
+    let uncolored = Argb {
+        a: alpha_byte_truncating(alpha),
+        r,
+        g,
+        b,
+    };
+    crate::pattern::draw(
+        ctx, device, backend, caches, pattern, geometry, to_device, device_box, alpha, uncolored,
+        diags,
+    );
+}
+
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the pattern arm needs the caches, device box and diagnostics the \
+              ordinary draw does not"
+)]
 fn render_path<B: RasterBackend>(
     ctx: &RenderCtx<'_>,
     device: &mut B::Device,
     backend: &B,
+    caches: &mut RenderCaches,
     object: &pdfrum_page::PathObject,
     state: &pdfrum_page::GraphicsState,
     to_device: Affine,
+    device_box: Rect,
+    diags: &mut Diagnostics,
 ) {
     let (fill, stroke) = colors(ctx, state, ObjectKind::Path);
     let mut fills = object.fill_rule != pdfrum_page::FillRule::None;
@@ -540,17 +608,53 @@ fn render_path<B: RasterBackend>(
     // stroke, so a path with both is drawn twice and the residual ordinary
     // draw does nothing at all.
     //
-    // The draining is what matters even while the pattern machinery is
-    // unimplemented. A pattern colour has no components to resolve, so
-    // `to_rgb` reports none and the colour falls back to black — which
-    // would paint a `scn`-with-no-paint-operator rectangle solid black
-    // across the whole page where the oracle draws nothing. Skipping is
-    // wrong by a missing pattern; painting is wrong by an entire page.
+    // The draining stands even where the pattern does not resolve. A pattern
+    // colour has no components, so `to_rgb` reports none and the colour falls
+    // back to black — which would paint a `scn`-with-no-paint-operator
+    // rectangle solid black across the whole page where the oracle draws
+    // nothing.
+    let matrix = to_device * object.matrix;
     if fills && state.fill.is_pattern() {
         fills = false;
+        paint_pattern(
+            ctx,
+            device,
+            backend,
+            caches,
+            state,
+            false,
+            &PatternClip::Path {
+                path: &object.path,
+                to_device: matrix,
+                stroking: false,
+                rule: object.fill_rule.into(),
+                stroke: &state.stroke_params,
+            },
+            to_device,
+            device_box,
+            diags,
+        );
     }
     if strokes && state.stroke.is_pattern() {
         strokes = false;
+        paint_pattern(
+            ctx,
+            device,
+            backend,
+            caches,
+            state,
+            true,
+            &PatternClip::Path {
+                path: &object.path,
+                to_device: matrix,
+                stroking: true,
+                rule: object.fill_rule.into(),
+                stroke: &state.stroke_params,
+            },
+            to_device,
+            device_box,
+            diags,
+        );
     }
     if !fills && !strokes {
         return;
@@ -813,7 +917,6 @@ mod tests {
             state,
             marks: ContentMarks::new(),
             content_stream: 0,
-            pattern: None,
         }))
     }
 
@@ -854,7 +957,6 @@ mod tests {
             state: GraphicsState::default(),
             marks: ContentMarks::new(),
             content_stream: 0,
-            pattern: None,
         }));
         assert!(!culled(&obj, Rect::new(1000.0, 1000.0, 1001.0, 1001.0)));
     }

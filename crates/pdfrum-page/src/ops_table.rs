@@ -41,7 +41,7 @@ impl FromOperands for PatternComponents {
         // it takes the numeric branch with an empty set.
         if ring.is_name(0) {
             Self {
-                values: ring.numbers(ring.len().saturating_sub(1)),
+                values: ring.named_numbers(),
                 pattern: Some(Name::new(ring.string(0))),
             }
         } else {
