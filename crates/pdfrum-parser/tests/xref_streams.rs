@@ -305,3 +305,108 @@ fn a_base_entry_survives_a_newer_sections_size_phantom() {
         "the base's last object survives the update's phantom"
     );
 }
+
+/// A hybrid-reference file: a base classic table, then an update section
+/// carrying *both* a classic table and a cross-reference stream.
+///
+/// The update's plain table names only what an old reader must see; its
+/// trailer points a modern reader at the stream through `/XRefStm`. Every
+/// object the tables name is really written, because the reader verifies that
+/// a table's first entry finds its own object header.
+///
+/// Objects 5 and 6 exist twice — an original and a revision — and the three
+/// sections disagree about which copy is current. Returns the file and the
+/// four offsets, in the order (old 5, old 6, new 5, new 6).
+fn hybrid(update_table_names_stale_six: bool) -> (Vec<u8>, [usize; 4]) {
+    let mut out = String::from("%PDF-1.7\n%\u{a0}\u{f2}\u{a4}\u{f4}\n");
+    let obj = |out: &mut String, num: u32, body: &str| {
+        let at = out.len();
+        let _ = write!(out, "{num} 0 obj << {body} >>\nendobj\n");
+        at
+    };
+    let old_five = obj(&mut out, 5, "/Version 1");
+    let old_six = obj(&mut out, 6, "/Version 1");
+
+    let table = |entries: &[(u32, usize)]| {
+        let mut t = String::from("xref\n");
+        for (num, offset) in entries {
+            let _ = write!(t, "{num} 1\n{offset:010} 00000 n \n");
+        }
+        t
+    };
+
+    let base_at = out.len();
+    out.push_str(&table(&[(5, old_five), (6, old_six)]));
+    out.push_str("trailer << /Root 1 0 R /Size 9 >>\n");
+
+    // The update's two revised objects, then the stream that finds them.
+    let new_five = obj(&mut out, 5, "/Version 2");
+    let new_six = obj(&mut out, 6, "/Version 2");
+
+    let stream_at = out.len();
+    let _ = write!(
+        out,
+        "8 0 obj <<\n  /Type /XRef\n  /Filter /ASCIIHexDecode\n  /Root 1 0 R\n  \
+         /Size 9\n  /Index [5 2]\n  /W [1 2 1]\n>>\nstream\n\
+         01 {new_five:04X} 00\n01 {new_six:04X} 00\nendstream\nendobj\n"
+    );
+
+    // The update's plain table speaks only about object 6, so object 5's
+    // revision is reachable through the `/XRefStm` alone.
+    let update_at = out.len();
+    let six = if update_table_names_stale_six {
+        old_six
+    } else {
+        new_six
+    };
+    out.push_str(&table(&[(6, six)]));
+    let _ = write!(
+        out,
+        "trailer << /Root 1 0 R /Size 9 /Prev {base_at} /XRefStm {stream_at} >>\n\
+         startxref\n{update_at}\n%%EOF\n"
+    );
+    (out.into_bytes(), [old_five, old_six, new_five, new_six])
+}
+
+#[test]
+fn the_newest_sections_xref_stm_is_honoured() {
+    // `pixel/bug_1484283.pdf` in miniature. Its second revision's plain table
+    // lists only the objects it rewrote in place; the object it *revised* —
+    // there a `/Pages` node with a new `/MediaBox` — moved into an object
+    // stream and is reachable only through the trailer's `/XRefStm`. Skipping
+    // that pointer leaves the object at its first-revision version, with no
+    // symptom other than a wrong answer.
+    let (file, [_, _, new_five, new_six]) = hybrid(false);
+    let xref = read(&file).expect("a hybrid chain");
+    assert_eq!(
+        xref.entry(5),
+        Some(Entry::Offset(new_five as u64)),
+        "the newest /XRefStm must revise object 5, which no plain table names"
+    );
+    assert_eq!(
+        xref.entry(6),
+        Some(Entry::Offset(new_six as u64)),
+        "and object 6, which the update's plain table names identically"
+    );
+}
+
+#[test]
+fn a_plain_table_still_beats_its_own_sections_xref_stm() {
+    // The other half of ISO 32000-1 §7.5.8.4: within one section the stream
+    // is merged in *first* so the table can overwrite it. Pointing the
+    // update's table at the stale copy of object 6 makes that order visible —
+    // the table's answer must survive the stream's, and honouring the newest
+    // `/XRefStm` must not quietly invert that.
+    let (file, [_, old_six, new_five, _]) = hybrid(true);
+    let xref = read(&file).expect("a hybrid chain");
+    assert_eq!(
+        xref.entry(6),
+        Some(Entry::Offset(old_six as u64)),
+        "the update's plain table beats its own /XRefStm"
+    );
+    assert_eq!(
+        xref.entry(5),
+        Some(Entry::Offset(new_five as u64)),
+        "an object only the stream names is unaffected"
+    );
+}

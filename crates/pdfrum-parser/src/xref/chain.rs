@@ -15,9 +15,15 @@
 //! A file can carry both a classic table and a cross-reference stream for the
 //! same section, so that old readers see the table and new ones see the
 //! stream. When both exist the table's entries win, and the stream's are
-//! merged in first. The newest section's `/XRefStm` is deliberately ignored:
-//! hybrid information belongs to update sections, and honoring it in the
-//! newest one changes which objects a file resolves to.
+//! merged in first.
+//!
+//! The **oldest** section's `/XRefStm` is the one that is ignored, not the
+//! newest's. ISO 32000-1 §7.5.8.4 puts hybrid information in update sections,
+//! and the base of the chain is not an update. Honoring the newest section's
+//! pointer is what makes a hybrid file work at all: its plain table lists
+//! only the objects an old reader must see, and every object the update
+//! *revised* — a `/Pages` node with a new `/MediaBox`, say — reaches a modern
+//! reader through the `/XRefStm` alone.
 
 use std::sync::Arc;
 
@@ -197,6 +203,7 @@ fn walk(
         let end = classic::parse_table(file, main, true, &mut Xref::new(), limits, diags)?;
         let dict = classic::read_trailer(file, end, limits, diags, &NoResolve)?;
         let prev = dict.direct_int(names::PREV).unwrap_or(0);
+        let hybrid = dict.int(names::XREF_STM, &NoResolve).unwrap_or(0);
         // This is the newest section, so its trailer simply becomes the
         // accumulation rather than being merged against one.
         merge_trailers(
@@ -212,9 +219,7 @@ fn walk(
         apply_size(xref, trailer, limits);
         sections.push(Section {
             table: main,
-            // The newest section's hybrid pointer is deliberately not
-            // followed: it describes an update, and this is the base.
-            stream: 0,
+            stream: usize::try_from(hybrid).unwrap_or(0),
         });
         prev
     } else {
