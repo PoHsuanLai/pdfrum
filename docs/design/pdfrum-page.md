@@ -3674,3 +3674,36 @@ lines** or one `include_bytes!` blob. Proposal: a checked-in
 re-derives it and compares — same pattern as `pdfrum-cmap`'s `build.rs`
 (PLAN §3). Confirm that a generated-but-committed table is acceptable rather
 than a `build.rs` that would need the oracle checkout present.
+
+---
+
+## 6. Errata found during implementation (2026-08-29)
+
+Four places where this brief and the C++ disagree, each checked against the
+oracle and resolved in the C++'s favour. Corrected inline above would lose the
+record of *what* was wrong, so they are listed here.
+
+**E1 — §1.14.2: `kSRGBSamples2` is 208 bytes, not 253.** The brief's own
+max-index arithmetic (`1023 / 4 - 48 = 207`) is consistent with 208 and not
+with 253. `crates/pdfrum-page/src/color/srgb_table.rs` holds the real length.
+
+**E2 — §1.1: `[1 [2] 3]` at operator level yields `[1, 2]`, not `[1, 3]`.**
+The brief's stated *mechanism* is right and its stated *result* is not.
+Tracing `ReadNextObject`: the nested `[` returns null; the array loop sees a
+non-`]` word and spins; the next read takes `2` as an ordinary element; the
+inner `]` then terminates the **outer** array, leaving `3` to be tokenized as
+ordinary content. The elements of a refused nested array are absorbed, and its
+closing bracket ends the array that absorbed them.
+
+**E3 — §1.15.5: a malformed `if` aborts *before* popping its condition.** The
+structural check on `operators_[i-1]` precedes `PopInt()`, so `{5 9 if 7}`
+leaves both `5` and `9` on the stack rather than consuming the `9` as a
+condition. The brief says the condition is popped after the check, which is
+right, but the consequence for the stack is worth stating.
+
+**E4 — §1.3, `Tf`.** The brief correctly says the size is always set and the
+font only when the name resolves. The consequence worth naming: a `Tf` with a
+bad name shows subsequent text in the **previous** font at the **new** size.
+This interacts with `FindFont`'s Helvetica fallback — the fallback fires when
+the `/Font` *resource* is missing, not when the font fails to load, so the two
+paths reach different fonts.
