@@ -900,6 +900,82 @@ fn render_path<B: RasterBackend>(
     );
 }
 
+/// A run whose fill is a pattern and which is not stroked
+/// (`DrawTextPathWithPattern`'s first arm, `cpdf_renderstatus.cpp:1290-1310`).
+///
+/// No glyph is drawn. The run's **bounding rectangle** becomes a path object
+/// carrying the text's own colour and general state, and the run itself is
+/// appended to a copy of the current clip path; that object then goes through
+/// the ordinary single-object render, where the pattern machinery paints the
+/// rectangle and the text clip cuts it back to the glyph shapes.
+///
+/// Two things follow from it being a *clip* rather than a mask, and both are
+/// visible: the glyphs are filled winding whatever the run's own mode said,
+/// and a run whose rectangle is empty paints nothing at all.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "a synthetic path object needs everything the real one does"
+)]
+fn render_pattern_text<B: RasterBackend>(
+    ctx: &RenderCtx<'_>,
+    device: &mut B::Device,
+    backend: &B,
+    caches: &mut RenderCaches,
+    object: &pdfrum_page::TextObject,
+    state: &pdfrum_page::GraphicsState,
+    to_device: Affine,
+    device_box: Rect,
+    diags: &mut Diagnostics,
+) {
+    let Some(rect) = crate::text::run_rect(object, state) else {
+        return;
+    };
+    // `path.mutable_clip_path().CopyClipPath(last_clip_path_)` then
+    // `AppendTexts(&pCopy)`: the synthetic object's clip is the current one
+    // plus this run. The *current* half is already on the device — the caller
+    // pushed the text object's stack before dispatching here — so only the
+    // run's own contribution is added, and only it is popped.
+    let mut clip = pdfrum_page::ClipStack::new();
+    if !clip.push_text(vec![pdfrum_page::state::TextClipRun {
+        object: object.clone(),
+        char_space: state.text.char_space,
+        word_space: state.text.word_space,
+    }]) {
+        return;
+    }
+    // The colour and general state are the text's; the clip is *not* carried
+    // on the state, because it is pushed on the device around the draw rather
+    // than resolved again inside it.
+    let synthetic = pdfrum_page::GraphicsState {
+        clip: pdfrum_page::ClipStack::new(),
+        ctm: Affine::IDENTITY,
+        ..state.clone()
+    };
+    // `RenderSingleObject` pushes the object's clip before drawing it, and the
+    // whole point of this path is the clip it just built — so the clip has to
+    // be pushed here rather than left to the caller, which has already pushed
+    // the *text* object's stack and moved on.
+    let clips = clip::resolve(&clip, to_device, &mut caches.glyphs, &ctx.opts);
+    let pushed = clip::push(device, &clips);
+    render_path::<B>(
+        ctx,
+        device,
+        backend,
+        caches,
+        &pdfrum_page::PathObject {
+            path: kurbo::Shape::to_path(&rect, 0.1),
+            matrix: Affine::IDENTITY,
+            fill_rule: pdfrum_page::FillRule::Winding,
+            stroke: false,
+        },
+        &synthetic,
+        to_device,
+        device_box,
+        diags,
+    );
+    clip::pop(device, pushed);
+}
+
 #[expect(
     clippy::too_many_arguments,
     reason = "the type-3 arm needs the device box and diagnostics the ordinary \
@@ -934,8 +1010,27 @@ fn render_text<B: RasterBackend>(
         return;
     }
     // A pattern-coloured glyph run goes to `DrawTextPathWithPattern`, which
-    // returns before the ordinary draw — so the pattern's absence must skip
-    // the run rather than paint it in the black a pattern colour resolves to.
+    // returns before the ordinary draw. Its unstroked arm
+    // (`cpdf_renderstatus.cpp:1290-1310`) does not draw glyphs at all: it
+    // builds a **synthetic path object** — the run's own bounding rectangle,
+    // filled winding, carrying the text's colour and general state, with the
+    // run itself appended to a copy of the current clip path — and sends that
+    // through `RenderSingleObject`. The pattern then paints the rectangle and
+    // the text clip cuts it to the glyphs.
+    //
+    // That is the whole shape, and it is why this could not be written until
+    // the clip stack learned to hold text runs.
+    if kinds.fill && !kinds.stroke && state.fill.is_pattern() {
+        render_pattern_text(
+            ctx, device, backend, caches, object, state, to_device, device_box, diags,
+        );
+        return;
+    }
+    // With a stroke in play the run *is* drawn glyph by glyph, each outline
+    // becoming its own path object — so the ordinary path below handles it,
+    // and only the colour that will not resolve is drained. A pattern colour
+    // has no components, so letting it through would paint the black that
+    // `to_rgb`'s absence falls back to.
     let kinds = crate::text::TextPaintKinds {
         fill: kinds.fill && !state.fill.is_pattern(),
         stroke: kinds.stroke && !state.stroke.is_pattern(),
