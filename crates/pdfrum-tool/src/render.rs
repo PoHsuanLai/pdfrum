@@ -105,7 +105,15 @@ pub fn render<R: Resolve>(
 ) -> Option<Rendered> {
     let limits = Limits::default();
     let mut build_diags = Diagnostics::default();
-    let page = crate::content::build(page, r, ctx, &limits, &mut build_diags);
+    let mut built = crate::content::build(page, r, ctx, &limits, &mut build_diags);
+    // `pdfium_test --png` renders with `FPDF_ANNOT`, so an annotation's
+    // appearance form is part of the page image. It is appended here rather
+    // than in `content::build` because only *this* pass wants it: `--txt`
+    // reads the content stream's text and `--annot` describes the
+    // annotations rather than drawing them, and both would double-count an
+    // appearance the page graph had already absorbed.
+    crate::annot_render::overlay(&mut built, &page.dict, r, ctx, &limits, &mut build_diags);
+    let page = built;
     let opts = RenderOptions {
         transform: kurbo::Affine::scale(scale),
         ..RenderOptions::default()
