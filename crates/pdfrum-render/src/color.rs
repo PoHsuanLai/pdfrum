@@ -147,6 +147,44 @@ fn is_sentinel(rgb: Rgb) -> bool {
     rgb.to_bytes() == [255, 255, 255]
 }
 
+/// The colour ref a pattern colour gets when its operands resolve to nothing
+/// (`CPDF_ColorState::SetPattern`, `cpdf_colorstate.cpp:133-144`).
+///
+/// A pattern is normally *drained* out of the ordinary draw and painted by the
+/// pattern machinery, so this colour rarely reaches a pixel — but it does in
+/// the one place the drain does not happen: a **type-3 text object**, whose
+/// `GetFillArgbForType3` runs before the pattern check and establishes the
+/// colour every uncoloured operation inside its glyph procedures then takes.
+///
+/// The two fallbacks differ, and the difference is the whole point. A
+/// **coloured tiling** pattern gets mid grey, which is visible; everything
+/// else — a shading pattern, an uncoloured tiling one — gets white, which is
+/// the invisibility sentinel and therefore paints *nothing*. Reading that as
+/// "no colour, so inherit" instead makes a shading-patterned type-3 run paint
+/// solid black glyphs where the oracle paints none at all.
+#[must_use]
+fn pattern_fallback(value: &ColorValue) -> Option<Rgb> {
+    let pattern = value.pattern.as_ref()?;
+    let colored_tiling = matches!(
+        pattern.loaded.as_deref(),
+        Some(pdfrum_page::Pattern::Tiling(t)) if t.colored
+    );
+    Some(if colored_tiling {
+        Rgb {
+            r: 191.0 / 255.0,
+            g: 191.0 / 255.0,
+            b: 191.0 / 255.0,
+        }
+    } else {
+        // `0xFFFFFFFF`, which `is_sentinel` then turns into transparent.
+        Rgb {
+            r: 1.0,
+            g: 1.0,
+            b: 1.0,
+        }
+    })
+}
+
 /// Resolve a page object's colour into the ARGB a device paints with.
 ///
 /// `inherited` is the enclosing render state's colour, which a form `XObject`
@@ -163,7 +201,7 @@ pub fn resolve_argb(
     kind: ObjectKind,
     stroking: bool,
 ) -> Argb {
-    let resolved = value.to_rgb();
+    let resolved = value.to_rgb().or_else(|| pattern_fallback(value));
     let base = match resolved {
         Some(rgb) if !is_sentinel(rgb) => {
             let [r, g, b] = rgb.to_bytes();
@@ -196,6 +234,50 @@ mod tests {
         let mut c = ColorValue::default();
         c.set_stock(ColorSpace::DeviceGray, &[v]);
         c
+    }
+
+    #[test]
+    fn a_shading_pattern_colour_is_the_invisibility_sentinel() {
+        // A pattern is normally drained out of the draw, but a type-3 text
+        // object establishes its colour before the drain — and a shading
+        // pattern's colour ref is `0xFFFFFFFF`, which is transparent, not
+        // black. Reading it as "no colour, so inherit" paints solid glyphs.
+        let mut c = ColorValue::default();
+        c.set_space(Arc::new(ColorSpace::Pattern(Box::default())));
+        c.set_pattern(pdfrum_object::Name::from("P0"), &[], None);
+        let argb = resolve_argb(
+            &c,
+            1.0,
+            None,
+            None,
+            &RenderOptions::default(),
+            ObjectKind::Text,
+            false,
+        );
+        assert!(argb.is_invisible(), "got {argb:?}");
+    }
+
+    #[test]
+    fn a_pattern_colour_that_resolves_keeps_its_colour() {
+        // With a base space the operands resolve normally and no fallback
+        // applies at all.
+        let mut c = ColorValue::default();
+        c.set_space(Arc::new(ColorSpace::Pattern(Box::new(
+            pdfrum_page::color::PatternSpace {
+                base: Some(Box::new(ColorSpace::DeviceRgb)),
+            },
+        ))));
+        c.set_pattern(pdfrum_object::Name::from("P0"), &[1.0, 0.0, 0.0], None);
+        let argb = resolve_argb(
+            &c,
+            1.0,
+            None,
+            None,
+            &RenderOptions::default(),
+            ObjectKind::Text,
+            false,
+        );
+        assert_eq!(argb, Argb::opaque(255, 0, 0));
     }
 
     #[test]

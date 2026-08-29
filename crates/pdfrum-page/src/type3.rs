@@ -31,13 +31,31 @@ use pdfrum_object::Resolve;
 /// Text space is a thousandth of glyph space.
 const TEXT_UNIT_IN_GLYPH_UNITS: f64 = 1000.0;
 
-/// What a Type 3 glyph procedure declares about one character.
-#[derive(Debug, Clone, Copy, PartialEq)]
+/// What a Type 3 glyph procedure declares about one character, and what it
+/// paints.
+#[derive(Debug, Clone, PartialEq)]
 pub struct Type3Metrics {
     /// The advance in glyph units, rounded as the C++ rounds it.
     pub width: f32,
     /// The bounding box in glyph units, after the font matrix.
     pub bbox: Rect,
+    /// Whether the procedure declared its own colour with `d0` rather than
+    /// only a width and box with `d1`.
+    ///
+    /// This is the coloured/uncoloured distinction the renderer needs: a `d1`
+    /// glyph takes the *text object's* colour for every drawing operation
+    /// inside it, whatever colours the procedure sets, while a `d0` one keeps
+    /// whatever it sets and falls back to the text object's only where it
+    /// sets none.
+    pub colored: bool,
+    /// The objects the procedure paints, in **glyph space** — the procedure's
+    /// own coordinate system, before the font matrix.
+    ///
+    /// A Type 3 glyph has no outline to cache: it is a content stream, and
+    /// drawing it means walking these. Interpreting them here rather than at
+    /// render time is what keeps the renderer free of the resolver, and it
+    /// costs nothing extra — the metrics already had to open the stream.
+    pub objects: Vec<PageObject>,
 }
 
 /// Reads one Type 3 character's metrics out of its glyph procedure.
@@ -60,11 +78,13 @@ pub fn metrics<R: Resolve>(
 
     // The declaration is whichever of the two operators the procedure used;
     // a procedure that used neither declares nothing and gets a computed box.
-    let mut declared: Option<(f32, Option<Rect>)> = None;
+    // `d0` is the coloured form and `d1` the uncoloured one, and which
+    // appeared decides whether the glyph keeps its own colours.
+    let mut declared: Option<(f32, Option<Rect>, bool)> = None;
     for op in &ops {
         match op {
             Op::Type3Width(wx, _) => {
-                declared = Some((*wx, None));
+                declared = Some((*wx, None, true));
                 break;
             }
             Op::Type3WidthBBox(wx, _, llx, lly, urx, ury) => {
@@ -76,32 +96,54 @@ pub fn metrics<R: Resolve>(
                         f64::from(*urx),
                         f64::from(*ury),
                     )),
+                    false,
                 ));
                 break;
             }
             _ => {}
         }
     }
-    let (width, stated) = declared.unwrap_or((0.0, None));
+    let (width, stated, colored) = declared.unwrap_or((0.0, None, false));
 
-    // A stated box with no positive extent in either direction is not
-    // believed; the procedure's own painted extent stands in for it.
-    let usable = stated.filter(|b| b.x1 > b.x0 && b.y1 > b.y0);
-    let text_box = if let Some(rect) = usable {
-        scale(rect, TEXT_UNIT_IN_GLYPH_UNITS)
-    } else {
+    // The procedure's objects are needed either way — to *draw* the glyph
+    // always, and to measure it when the stated box is not believed — so they
+    // are built once here rather than conditionally.
+    //
+    // A procedure may show text in a Type 3 font, so this recurses; the form
+    // guard catches a procedure that invokes *itself*, and `kMaxType3FormLevel`
+    // is what bounds a pair that invoke each other through two distinct
+    // streams. Without it such a pair overflows the stack.
+    let objects = if ctx.enter_type3() {
         let resources = Resources::choose(
             font.resources.clone(),
             page_resources.cloned(),
             page_resources.cloned(),
         );
         let page = crate::build_page(&ops, &resources, r, ctx, limits, diags);
-        scale(painted_extent(&page.objects), TEXT_UNIT_IN_GLYPH_UNITS)
+        ctx.leave_type3();
+        page.objects
+    } else {
+        diags.record(
+            pdfrum_common::Severity::Recovered,
+            pdfrum_common::DiagKind::FormRecursionRefused,
+            None,
+        );
+        Vec::new()
+    };
+
+    // A stated box with no positive extent in either direction is not
+    // believed; the procedure's own painted extent stands in for it.
+    let usable = stated.filter(|b| b.x1 > b.x0 && b.y1 > b.y0);
+    let text_box = match usable {
+        Some(rect) => scale(rect, TEXT_UNIT_IN_GLYPH_UNITS),
+        None => scale(painted_extent(&objects), TEXT_UNIT_IN_GLYPH_UNITS),
     };
 
     Some(Type3Metrics {
         width: round(f64::from(width) * TEXT_UNIT_IN_GLYPH_UNITS),
         bbox: transform_rect(font.font_matrix, text_box),
+        colored,
+        objects,
     })
 }
 
@@ -215,6 +257,124 @@ mod tests {
     #[test]
     fn a_procedure_that_paints_nothing_has_an_empty_extent() {
         assert_eq!(painted_extent(&[]), Rect::ZERO);
+    }
+
+    /// One indirect object, which is all a one-glyph font needs to resolve.
+    struct OneStream(std::sync::Arc<pdfrum_object::Object>);
+
+    impl pdfrum_object::Resolve for OneStream {
+        fn fetch(
+            &self,
+            r: pdfrum_object::ObjRef,
+        ) -> Result<std::sync::Arc<pdfrum_object::Object>, pdfrum_object::Error> {
+            if r.num == 1 {
+                Ok(std::sync::Arc::clone(&self.0))
+            } else {
+                Err(pdfrum_object::Error::UnresolvedRef(r))
+            }
+        }
+    }
+
+    /// A Type 3 font with one glyph procedure, loaded the way the page
+    /// interpreter loads one.
+    fn one_glyph_font(proc_body: &[u8]) -> (pdfrum_font::Font, OneStream) {
+        use pdfrum_object::{Array, ByteSpan, Dict, Name, Object, Stream};
+        let proc = Stream::new(Dict::new(), ByteSpan::from(proc_body.to_vec()));
+        let store = OneStream(std::sync::Arc::new(Object::Stream(proc)));
+        let font = Dict::from_pairs([
+            (Name::from("Type"), Object::Name(Name::from("Font"))),
+            (Name::from("Subtype"), Object::Name(Name::from("Type3"))),
+            (
+                Name::from("CharProcs"),
+                Object::Dict(Dict::from_pairs([(
+                    Name::from("g"),
+                    Object::Ref(pdfrum_object::ObjRef {
+                        num: 1,
+                        generation: 0,
+                    }),
+                )])),
+            ),
+            (
+                Name::from("Encoding"),
+                Object::Dict(Dict::from_pairs([(
+                    Name::from("Differences"),
+                    Object::Array(
+                        [Object::Int(65), Object::Name(Name::from("g"))]
+                            .into_iter()
+                            .collect::<Array>(),
+                    ),
+                )])),
+            ),
+            (Name::from("FirstChar"), Object::Int(65)),
+            (Name::from("LastChar"), Object::Int(65)),
+            (
+                Name::from("Widths"),
+                Object::Array([Object::Int(100)].into_iter().collect::<Array>()),
+            ),
+        ]);
+        let cache = pdfrum_font::FontCache::new();
+        let mut diags = Diagnostics::default();
+        let loaded = pdfrum_font::load(&font, &store, &cache, &Limits::default(), &mut diags)
+            .expect("a type 3 font");
+        (loaded, store)
+    }
+
+    fn glyph_metrics(proc_body: &[u8]) -> Type3Metrics {
+        let (font, store) = one_glyph_font(proc_body);
+        let type3 = font.type3().expect("a type 3 font");
+        let mut ctx = BuildContext::new();
+        let mut diags = Diagnostics::default();
+        metrics(
+            type3,
+            pdfrum_font::CharCode(65),
+            None,
+            &store,
+            &mut ctx,
+            &Limits::default(),
+            &mut diags,
+        )
+        .expect("the glyph names a procedure")
+    }
+
+    #[test]
+    fn a_d1_procedure_is_uncoloured_and_a_d0_one_is_coloured() {
+        // The whole colour rule turns on which operator opened the procedure:
+        // `d1` glyphs take the text object's colour for every operation
+        // inside, `d0` glyphs keep their own.
+        assert!(!glyph_metrics(b"100 0 0 0 50 50 d1 0 0 50 50 re f").colored);
+        assert!(glyph_metrics(b"100 0 d0 1 0 0 rg 0 0 50 50 re f").colored);
+        // A procedure that declares neither is uncoloured, which is the
+        // default the C++ constructs `CPDF_Type3Char` with.
+        assert!(!glyph_metrics(b"0 0 50 50 re f").colored);
+    }
+
+    #[test]
+    fn a_procedure_yields_the_objects_it_paints() {
+        // The renderer draws a Type 3 glyph by walking these; an empty list
+        // means the glyph paints nothing at all.
+        let m = glyph_metrics(b"100 0 0 0 50 50 d1 0 0 50 50 re f");
+        assert_eq!(m.objects.len(), 1, "one rectangle: {:?}", m.objects);
+        assert!(matches!(m.objects.first(), Some(PageObject::Path(_))));
+        // And a procedure that paints nothing yields none.
+        assert!(glyph_metrics(b"100 0 0 0 50 50 d1").objects.is_empty());
+    }
+
+    #[test]
+    fn a_declared_box_is_believed_and_a_degenerate_one_is_not() {
+        // `d1` states 0 0 10 10; with no font matrix that scales by a
+        // thousand into glyph units.
+        let stated = glyph_metrics(b"100 0 0 0 10 10 d1 0 0 40 40 re f");
+        assert_eq!(stated.bbox, Rect::new(0.0, 0.0, 10_000.0, 10_000.0));
+        // A degenerate stated box is discarded for the painted extent, which
+        // is the rectangle the procedure actually drew.
+        let computed = glyph_metrics(b"100 0 10 10 0 0 d1 0 0 40 40 re f");
+        assert_eq!(computed.bbox, Rect::new(0.0, 0.0, 40_000.0, 40_000.0));
+    }
+
+    #[test]
+    fn the_advance_is_the_declared_width_in_glyph_units() {
+        // `100` in text space is 100_000 in glyph units, rounded.
+        assert_eq!(glyph_metrics(b"100 0 d0 0 0 1 1 re f").width, 100_000.0);
     }
 
     #[test]
