@@ -8,6 +8,8 @@ allow-panic-in-tests = true
 # clippy defaults).
 doc-valid-idents = [
     "PDFium",
+    "FreeType",
+    "PostScript",
     "AcroForm",
     "ToUnicode",
     "RunLength",
