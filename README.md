@@ -129,29 +129,30 @@ Generated `2026-08-29`, over 1675 files. Live numbers are in
 | `--show-structure` | 1675 | 1675 | **100.0%** |
 | `--txt` (all pages) | 2061 | 2052 | **99.6%** |
 | `--txt` (non-empty pages) | 999 | 990 | **99.1%** |
-| `--annot` (page 0) | 1624 | 1554 | 95.7% |
+| `--annot` (page 0) | 1624 | 1620 | **99.8%** |
 
-The residual `--annot` gap is a **documented waiver**, not a defect backlog:
-it is the widget text-body cluster, which upstream renders through a second
-variable-text layout engine (`CPWL_EditImpl`) that this project deliberately
-does not port. See SPEC.md §10, ruling E1.
+Four `--annot` files remain, all in one cluster: an annotation whose `/DA`
+names a font its resources do not carry falls back **per character** to a
+second face chosen by the character's charset, which this project has not
+ported yet.
 
 **Tier B — rendered pixels** (1628 files with a golden)
 
 | | |
 |---|---:|
-| Mean SSIM | 0.9847 |
-| Median SSIM | 0.9991 |
-| At SSIM ≥ 0.99 | 1243 (76.4%) |
-| At SSIM ≥ 0.95 | 1518 (93.2%) |
-| Pixel-exact | 446 |
+| Mean SSIM | 0.9979 |
+| Median SSIM | 1.0000 |
+| At SSIM ≥ 0.99 | 1566 (96.2%) |
+| At SSIM ≥ 0.95 | 1616 (99.3%) |
+| Pixel-exact | 516 |
 
 **Round-trip (save) fidelity** — the oracle reopens 100% of 1638 files we
 wrote; saved-versus-original render parity is 100% over a 233-file sample;
 incremental-append discipline is 100%.
 
-Milestones M1–M3, M6 and M7 are complete; M5's pixel tail is the active
-burn-down, and M8 (this API, docs and release polish) is in flight.
+Milestones M1–M3 and M5–M7 are complete; M8 (this API, docs and release
+polish) is in flight. The pixel tail is 62 files over 51 documents, shallow
+(43 of the 51 above 0.95) and inventoried in `docs/status/pdfrum-render.md`.
 
 ## Building and testing
 
