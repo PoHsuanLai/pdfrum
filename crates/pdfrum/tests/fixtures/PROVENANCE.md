@@ -1,6 +1,6 @@
 # Fixture provenance
 
-The three PDFs in this directory are copied verbatim from the PDFium
+The PDFs in this directory are copied verbatim from the PDFium
 checkout that serves as this project's conformance oracle:
 
 - **Source:** `testing/resources/` of the PDFium repository, at commit
@@ -18,5 +18,17 @@ checkout that serves as this project's conformance oracle:
 | `text_form.pdf` | 932 B | A 300x300 page with an AcroForm holding one `/Tx` (text) field named `Text Box`, present both in `/AcroForm /Fields` and as a `/Widget` annotation in the page's `/Annots`. Drives field enumeration, reading, filling and appearance regeneration. |
 | `bookmarks.pdf` | 2239 B | Two 612x792 pages and a four-entry outline tree two levels deep, mixing `/Dest` names, an explicit `/XYZ` destination array and a `/URI` action. Drives the outline walk, page-count and multi-page paths. |
 
-These three were chosen to be the smallest files that between them reach
-every facade path, so the doctests stay readable and the crate stays small.
+Those three were chosen to be the smallest files that between them reach
+every read-side facade path, so the doctests stay readable and the crate
+stays small.
+
+Four more arrived with page mutation. Each is the file the corresponding
+PDFium embedder test uses, so an assertion here and an assertion there are
+about the same bytes:
+
+| File | Size | What it exercises |
+|---|---:|---|
+| `split_streams.pdf` | 3502 B | Nineteen page objects across **three** `/Contents` elements — 15, 3 and 1. The only fixture that distinguishes a content-stream index from an object index, and the one `RemoveAllFromStream` uses to pin the index collapse. |
+| `hello_world_split_streams.pdf` | 922 B | Three text objects across **two** elements, 2 and 1. The small case: enough to tell "the element still has a sibling" from "the element is now empty", which are the two sides of the array-shrink rule. |
+| `rectangles.pdf` | 633 B | Eight path objects on one page, one element. The visibility and transform tests' fixture: eight distinguishable shapes with no fonts to complicate the resource sweep. |
+| `hello_world_2_pages.pdf` | 962 B | Two pages **sharing one content stream and one resource dictionary**. Editing one page must copy rather than rewrite, and this is the file that fails if it does not. |
