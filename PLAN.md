@@ -1,6 +1,6 @@
 # PDFium → Rust Rewrite — Master Plan
 
-**Status:** M1-M3 complete, M5 at 66.4%@0.99 and climbing, M6 complete-with-waiver (2026-08-29): annot Tier-A 96.3% overall / >99% outside the 76-file widget-text-body waiver cluster (the CPWL second-layout-engine scope exclusion, SPEC §10 E1); aggregate passes 1086/1675. **M7 (edit) meets its exit criteria** (2026-08-29): the oracle reopens 1638/1638 saved corpus files (100%), every saved file in the 233-file pixel sample renders exactly as well as its original (100%), and 1638/1638 incremental saves hold the append discipline. Content regeneration ships as emitters only — the holder-mutation half needs `pdfrum-page` fields that do not exist (brief E6); see `docs/status/pdfrum-edit.md`.
+**Status:** M1-M3, M6 (waiver), M7 complete (2026-08-29): oracle reopens 100% of saved files, saved-vs-original render parity 100%, incremental discipline 100%. M5 burn-down ongoing (~66%->climbing @0.99, passes 1242/1675). M8 (facade/polish) in flight; 24h fuzz gate running.
 **Oracle:** `/mnt/data2/pdfium/pdfium-c++` (read-only C++ PDFium checkout @ `6f2272e`)
 **Workspace:** `/mnt/data2/pdfium/pdfrum` (this repository)
 
