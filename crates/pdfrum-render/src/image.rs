@@ -215,9 +215,22 @@ pub fn image_value_fits(v: f64) -> bool {
 /// they are pre-blended against the matte, so each one is un-premultiplied
 /// by [`matte_source`] before the mask becomes its alpha.
 #[must_use]
-pub fn to_pixmap(image: &ImageData, stencil_color: Argb) -> Pixmap {
+pub fn to_pixmap(
+    image: &ImageData,
+    stencil_color: Argb,
+    transfer: Option<&crate::transfer::TransferFunc<'_>>,
+) -> Pixmap {
     let mut out = Pixmap::new(image.width, image.height);
     let matte = image.matte.map(pdfrum_page::Rgb::to_bytes);
+    // `StartRenderDIBBase` wraps the source in a `CPDF_TransferFuncDIB` when
+    // the state carries a `/TR` that is not the identity, so *every sample*
+    // goes through the three tables — not just the fill colour. Skipping this
+    // leaves an image untouched on a page whose paths all inverted, which is
+    // what `transfer_function.in`'s second page shows.
+    //
+    // A **stencil** takes it through its colour instead: it has no samples of
+    // its own, and `GetFillArgb` already ran the same function over the fill.
+    let transfer = transfer.filter(|t| !t.is_identity());
     for y in 0..image.height {
         for x in 0..image.width {
             let alpha = image.mask.as_ref().map_or(255, |m| m.alpha_at(x, y));
@@ -238,6 +251,11 @@ pub fn to_pixmap(image: &ImageData, stencil_color: Argb) -> Pixmap {
                 let mut rgb = image.pixels.color_at(x, y, image.width).to_bytes();
                 if let Some(matte) = matte {
                     rgb = matte_source(rgb, alpha, matte);
+                }
+                if let Some(transfer) = transfer {
+                    let [r, g, b] = rgb;
+                    let mapped = transfer.translate(Argb { a: 255, r, g, b });
+                    rgb = [mapped.r, mapped.g, mapped.b];
                 }
                 let [r, g, b] = rgb;
                 [mul255(r, alpha), mul255(g, alpha), mul255(b, alpha), alpha]
@@ -458,7 +476,7 @@ mod tests {
             matte: None,
             interpolate: false,
         };
-        let p = to_pixmap(&img, Argb::opaque(255, 0, 0));
+        let p = to_pixmap(&img, Argb::opaque(255, 0, 0), None);
         assert_eq!(p.pixel(0, 0), Some([255, 0, 0, 255]), "the set bit is ink");
         assert_eq!(
             p.pixel(1, 0),
@@ -482,11 +500,42 @@ mod tests {
             matte: None,
             interpolate: false,
         };
-        let p = to_pixmap(&img, Argb::BLACK);
+        let p = to_pixmap(&img, Argb::BLACK, None);
         assert_eq!(
             p.pixel(0, 0),
             Some([128, 128, 128, 128]),
             "premultiplied by the mask"
+        );
+    }
+
+    #[test]
+    fn a_transfer_function_reaches_the_images_own_samples() {
+        // `StartRenderDIBBase` wraps the source in a `CPDF_TransferFuncDIB`,
+        // so a `/TR` runs over every sample rather than only over the fill
+        // colour a stencil takes. An inverting function must turn a white
+        // image black.
+        let invert: [u8; 256] = std::array::from_fn(|i| 255 - u8::try_from(i).unwrap_or(255));
+        let inverting = pdfrum_page::TransferFunc {
+            identity: false,
+            samples: Box::new([invert, invert, invert]),
+        };
+        let func = crate::transfer::TransferFunc::new(&inverting);
+        let img = ImageData {
+            width: 1,
+            height: 1,
+            pixels: Pixels::Rgb8(vec![255, 255, 255].into_boxed_slice()),
+            mask: None,
+            matte: None,
+            interpolate: false,
+        };
+        assert_eq!(
+            to_pixmap(&img, Argb::BLACK, Some(&func)).pixel(0, 0),
+            Some([0, 0, 0, 255])
+        );
+        // Without it the samples travel through untouched.
+        assert_eq!(
+            to_pixmap(&img, Argb::BLACK, None).pixel(0, 0),
+            Some([255, 255, 255, 255])
         );
     }
 
@@ -540,7 +589,7 @@ mod tests {
             matte: Some(Rgb::BLACK),
             interpolate: false,
         };
-        let p = to_pixmap(&img, Argb::BLACK);
+        let p = to_pixmap(&img, Argb::BLACK, None);
         // (64 - 0) * 255 / 128 + 0 = 127, premultiplied by 128/255 = 63.
         let source = u8::try_from(64 * 255 / 128).expect("in range");
         assert_eq!(
@@ -571,7 +620,7 @@ mod tests {
             matte: None,
             interpolate: false,
         };
-        let p = to_pixmap(&img, Argb::BLACK);
+        let p = to_pixmap(&img, Argb::BLACK, None);
         assert_eq!(
             p.pixel(0, 0),
             Some([mul255(64, 128), mul255(64, 128), mul255(64, 128), 128])
@@ -603,7 +652,7 @@ mod tests {
             matte: None,
             interpolate: false,
         };
-        let p = to_pixmap(&img, Argb::BLACK);
+        let p = to_pixmap(&img, Argb::BLACK, None);
         assert_eq!(p.pixel(0, 0), Some([255, 0, 0, 255]));
         assert_eq!(p.pixel(1, 0), Some([0, 0, 255, 255]));
     }

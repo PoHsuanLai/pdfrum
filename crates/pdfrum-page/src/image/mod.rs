@@ -348,6 +348,18 @@ pub fn decode_image<R: Resolve>(
         diags,
     );
 
+    // A colour key is a *predicate on raw samples*, so it has to be resolved
+    // while they are still in hand. PDFium does this inside `GetScanline`,
+    // writing `alpha = out_of_range ? 0xFF : 0` beside each pixel; here the
+    // pixels are already unpacked, so it is one more pass over the same
+    // scanlines. See [`resolve_color_key`].
+    let mask = match mask {
+        Some(ImageMask::ColorKey(key)) => {
+            resolve_color_key(&key, &info, &decoded.data, width, height)
+        }
+        other => other,
+    };
+
     let matte = matte_color(
         stream.dict.array(names::MATTE, r).as_ref(),
         space.as_ref(),
@@ -361,6 +373,70 @@ pub fn decode_image<R: Resolve>(
         mask,
         matte,
         interpolate: stream.dict.bool(names::INTERPOLATE).unwrap_or(false),
+    })
+}
+
+/// Turn a colour key into the alpha plane it implies.
+///
+/// A `/Mask` array names, per component, a closed range of **raw sample**
+/// values that is transparent — so the test cannot be run on the decoded
+/// colours, and it cannot be run at draw time either, because by then the
+/// samples are gone. PDFium runs it inside `CPDF_DIB::GetScanline`, filling a
+/// parallel BGRA buffer whose alpha byte is
+///
+/// ```text
+/// dest.alpha = IsColorIndexOutOfBounds(index, comp_data_[0]) ? 0xFF : 0;
+/// ```
+///
+/// — **in range means transparent**, which reads backwards until you notice
+/// the predicate is named for the opposite. `bug_343075986.in` masks index 0
+/// out of an indexed image so a yellow background shows through; without this
+/// the index paints its palette entry, which is black.
+///
+/// Returns `None` when the key covers nothing, which leaves the image opaque
+/// rather than inventing a fully-opaque plane to carry.
+fn resolve_color_key(
+    key: &ColorKey,
+    info: &ImageDict,
+    data: &[u8],
+    width: u32,
+    height: u32,
+) -> Option<ImageMask> {
+    let components = usize::try_from(info.components).unwrap_or(0);
+    if components == 0 || info.bpc == 0 || key.ranges.is_empty() {
+        return None;
+    }
+    let pitch = info.pitch()?;
+    let pixels_per_row = usize::try_from(width).ok()?;
+    let rows = usize::try_from(height).ok()?;
+    let mut alpha = vec![255u8; pixels_per_row.checked_mul(rows)?];
+    let mut samples = vec![0u32; components];
+    let mut any = false;
+    for y in 0..rows {
+        let (line, availability) = scanline::scanline(data, u32::try_from(y).unwrap_or(0), pitch);
+        // An absent row's samples are all zero, and PDFium's zeroed-output arm
+        // returns before the colour-key pass too, so it stays opaque.
+        if availability == scanline::Availability::Absent {
+            continue;
+        }
+        for x in 0..pixels_per_row {
+            for (c, slot) in samples.iter_mut().enumerate() {
+                let bit_pos = (x * components + c) * info.bpc as usize;
+                *slot = scanline::get_bits(&line, bit_pos, info.bpc);
+            }
+            if key.is_transparent(&samples)
+                && let Some(a) = alpha.get_mut(y * pixels_per_row + x)
+            {
+                *a = 0;
+                any = true;
+            }
+        }
+    }
+    any.then(|| ImageMask::Alpha {
+        width,
+        height,
+        alpha: alpha.into(),
+        stencil: false,
     })
 }
 
@@ -743,6 +819,57 @@ mod tests {
     }
 
     #[test]
+    fn a_colour_key_becomes_an_alpha_plane_on_the_raw_samples() {
+        // `/Mask [0 0]` over a 2x2 eight-bit grey image: the two zero samples
+        // go transparent and the rest stay opaque. The predicate runs on the
+        // *raw* values, so it is the byte 0 that matches, not the colour.
+        let mut mask = Array::default();
+        mask.push(Object::Int(0));
+        mask.push(Object::Int(0));
+        let s = stream(
+            vec![
+                (Name::from("Width"), Object::Int(2)),
+                (Name::from("Height"), Object::Int(2)),
+                (Name::from("BitsPerComponent"), Object::Int(8)),
+                (
+                    Name::from("ColorSpace"),
+                    Object::Name(Name::from("DeviceGray")),
+                ),
+                (Name::from("Mask"), Object::Array(mask)),
+            ],
+            &[0, 200, 0, 255],
+        );
+        let image = decode(&s).expect("should decode");
+        let Some(crate::image::ImageMask::Alpha { alpha, .. }) = image.mask else {
+            panic!("expected a resolved alpha plane, got {:?}", image.mask);
+        };
+        assert_eq!(&*alpha, &[0u8, 255, 0, 255]);
+    }
+
+    #[test]
+    fn a_colour_key_that_matches_nothing_leaves_the_image_opaque() {
+        // No pixel falls in the range, so there is no plane to carry — the
+        // image is opaque and says so by having no mask at all.
+        let mut mask = Array::default();
+        mask.push(Object::Int(7));
+        mask.push(Object::Int(9));
+        let s = stream(
+            vec![
+                (Name::from("Width"), Object::Int(2)),
+                (Name::from("Height"), Object::Int(1)),
+                (Name::from("BitsPerComponent"), Object::Int(8)),
+                (
+                    Name::from("ColorSpace"),
+                    Object::Name(Name::from("DeviceGray")),
+                ),
+                (Name::from("Mask"), Object::Array(mask)),
+            ],
+            &[0, 200],
+        );
+        assert!(decode(&s).expect("should decode").mask.is_none());
+    }
+
+    #[test]
     fn a_row_past_the_end_of_the_stream_skips_the_decode_entirely() {
         // `bug_554151.in` in miniature: a `/Decode` that maps a zero sample
         // to full red, and a stream holding only the first of two rows.
@@ -924,10 +1051,19 @@ mod tests {
             ],
             &[5, 200],
         );
+        // The array is read as a `ColorKey` and then *resolved* against the
+        // raw samples before the image leaves this crate: sample 5 falls in
+        // `0..=10` and goes transparent, 200 does not and stays opaque. The
+        // key itself never reaches a renderer, because by draw time the raw
+        // samples the predicate needs are gone.
         let image = decode(&s).expect("should decode");
-        let Some(super::ImageMask::ColorKey(key)) = &image.mask else {
-            panic!("expected a colour key, got {:?}", image.mask);
+        let Some(super::ImageMask::Alpha { alpha, .. }) = &image.mask else {
+            panic!("expected a resolved alpha plane, got {:?}", image.mask);
         };
+        assert_eq!(&**alpha, &[0u8, 255]);
+        // The predicate itself still reads the way the array wrote it.
+        let key =
+            super::ColorKey::from_array(&Array::of([Object::Int(0), Object::Int(10)]), 1, 255);
         assert!(key.is_transparent(&[5]));
         assert!(!key.is_transparent(&[200]));
     }
