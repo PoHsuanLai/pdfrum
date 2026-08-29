@@ -6,7 +6,7 @@
 //! The C++ page-object holder is a live object graph with observers: touching
 //! a page object flips a flag on it and, for a removal, inserts an index into
 //! a set on the holder. Our [`Page`] is a plain record, so the same two facts
-//! live as two plain fields — [`Content::dirty`] on each object and
+//! live as two plain fields — [`Content::dirty`](crate::Content::dirty) on each object and
 //! [`Page::dirty_streams`] on the page — and the functions in this module are
 //! the only things that set them. Nothing observes anything; a mutation is a
 //! function from a page to a page with two more bits set.
@@ -18,8 +18,8 @@
 //! gone — nothing is left to point at the stream that has to lose it — so its
 //! stream index is recorded on the page before the object goes. That is the
 //! whole reason `dirty_streams` exists, and it is why
-//! [`remove`] takes an index rather than being a `Vec::retain` at the call
-//! site.
+//! [`Page::remove_object`] takes an index rather than being a `Vec::retain`
+//! at the call site.
 //!
 //! An object switched to inactive is the third case and behaves like the
 //! first: it stays in the list, carries `dirty`, and the regenerator skips it
@@ -29,7 +29,7 @@
 //! # The streamless sentinel
 //!
 //! A brand-new object has never been in a content stream, so its
-//! [`Content::content_stream`] is [`NO_CONTENT_STREAM`] (`-1`). It sorts
+//! [`Content::content_stream`](crate::Content::content_stream) is [`NO_CONTENT_STREAM`] (`-1`). It sorts
 //! before stream 0 in the regenerator's ordered walk, which is what gives a
 //! new object the lowest free `/Contents` index rather than one past the end.
 

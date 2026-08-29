@@ -7,7 +7,7 @@ use pdfrum_common::Diagnostics;
 use pdfrum_edit::{EditDoc, SaveMode};
 use pdfrum_object::Object;
 
-use crate::{Document, Form, Result};
+use crate::{Document, Form, PageEdit, Result};
 
 /// How a document is written back out.
 ///
@@ -27,6 +27,14 @@ pub struct SaveOptions {
     /// The PDF version to declare in the header, as major × 10 + minor
     /// (`17` for 1.7). `None` keeps the document's own.
     pub version: Option<u8>,
+    /// Write an encrypted document out in the clear, dropping `/Encrypt`.
+    ///
+    /// Off by default: an encrypted document saves encrypted under the handler
+    /// its password opened, and the output opens with that same password.
+    /// Setting this is the explicit way to decrypt one on the way out, and it
+    /// forces a full rewrite — an incremental append cannot decrypt the bytes
+    /// already in the file.
+    pub remove_security: bool,
 }
 
 /// Whether a save rewrites the whole file or appends to it.
@@ -204,6 +212,80 @@ impl Document {
         write_edit(&edit, *options, out)
     }
 
+    /// Writes the document with edited pages' content regenerated.
+    ///
+    /// Each [`PageEdit`] whose objects were changed has its content streams
+    /// written again from its object graph; a page that was opened and not
+    /// changed, and every page not listed at all, comes through untouched.
+    /// See [`edit`](crate::edit) for what regeneration loses.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::Io`](crate::Error::Io) when the file cannot be written, and
+    /// [`Error::Save`](crate::Error::Save) when the document cannot be
+    /// serialized.
+    ///
+    /// ```
+    /// # let dir = std::env::temp_dir().join("pdfrum-page-edit");
+    /// # std::fs::create_dir_all(&dir)?;
+    /// # let out = dir.join("edited.pdf");
+    /// use pdfrum::SaveOptions;
+    ///
+    /// let doc = pdfrum::Document::open("tests/fixtures/hello_world.pdf")?;
+    /// let mut page = doc.page(0)?.edit();
+    /// assert_eq!(page.len(), 2);
+    /// page.remove(1);
+    /// doc.save_pages(&out, &[page], &SaveOptions::default())?;
+    ///
+    /// // Reopening finds one object where there were two.
+    /// let saved = pdfrum::Document::open(&out)?;
+    /// assert_eq!(saved.page(0)?.edit().len(), 1);
+    /// # std::fs::remove_dir_all(&dir).ok();
+    /// # Ok::<(), pdfrum::Error>(())
+    /// ```
+    pub fn save_pages(
+        &self,
+        path: impl AsRef<Path>,
+        pages: &[PageEdit],
+        options: &SaveOptions,
+    ) -> Result<()> {
+        let mut bytes = Vec::new();
+        self.write_pages_to(&mut bytes, pages, options)?;
+        std::fs::write(path.as_ref(), &bytes)?;
+        Ok(())
+    }
+
+    /// Writes the document with edited pages applied, to any [`Write`] sink.
+    ///
+    /// # Errors
+    ///
+    /// As [`Document::save_pages`].
+    pub fn write_pages_to(
+        &self,
+        out: &mut impl Write,
+        pages: &[PageEdit],
+        options: &SaveOptions,
+    ) -> Result<()> {
+        let mut edit = EditDoc::new(&self.inner);
+        let shared = pdfrum_edit::shared_objects(&edit);
+        for page in pages {
+            let Some(rewrite) =
+                pdfrum_edit::regenerate(page.graph(), &page.resources(self), &self.inner)
+            else {
+                continue;
+            };
+            let Some(reference) = self.inner.page(page.index())?.reference else {
+                // A page written inline in its parent's `/Kids` has no object
+                // to replace, so its content cannot be rewritten. Rather than
+                // half-apply the change, leave the page as it was.
+                continue;
+            };
+            let dict = self.inner.page(page.index())?.dict;
+            pdfrum_edit::apply_rewrite(&mut edit, reference, &dict, &rewrite, &shared);
+        }
+        write_edit(&edit, *options, out)
+    }
+
     /// Copies pages from another document into this one, writing the result
     /// to `path`.
     ///
@@ -265,10 +347,11 @@ fn write_edit(edit: &EditDoc<'_>, options: SaveOptions, out: &mut impl Write) ->
             Update::Incremental => SaveMode::Incremental,
         },
         version: options.version,
-        // An encrypted document saves decrypted: its objects are already
-        // plaintext in memory, so keeping `/Encrypt` would declare a cipher
-        // over content that has none — a file nothing could open.
-        remove_security: true,
+        // An encrypted document saves **encrypted**, under the handler its
+        // password opened, so the output opens with that same password. The
+        // regenerated content streams of an edited page go through the same
+        // cipher as everything else, because they are written the same way.
+        remove_security: options.remove_security,
         ..pdfrum_edit::SaveOptions::default()
     };
     pdfrum_edit::save(edit, &opts, out)?;
