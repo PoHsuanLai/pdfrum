@@ -1278,7 +1278,7 @@ impl<R: Resolve> Interp<'_, R> {
             .byte_string(names::SUBTYPE, self.resolver)
             .as_deref()
         {
-            Some(b"Form") => self.add_form(stream, ctx, limits, diags),
+            Some(b"Form") => self.add_form(stream, reference, ctx, limits, diags),
             Some(b"Image") => self.add_image(stream, reference, ctx, limits, diags),
             // Any other subtype, `PS` and a missing one included, does
             // nothing at all.
@@ -1290,12 +1290,20 @@ impl<R: Resolve> Interp<'_, R> {
     fn add_form(
         &mut self,
         stream: &pdfrum_object::Stream,
+        reference: Option<pdfrum_object::ObjRef>,
         ctx: &mut BuildContext,
         limits: &Limits,
         diags: &mut Diagnostics,
     ) {
         let content = pdfrum_filters::decode_chain(stream, 0, self.resolver, limits, diags).data;
-        let id = BufferId::new(None, &content);
+        // The identity is the *stream object*, not its bytes. Upstream keys
+        // its recursion set on the decoded buffer's address
+        // (`cpdf_streamcontentparser.cpp:1652-1660`), which is per stream
+        // object and distinct for two objects that happen to hold the same
+        // bytes. Hashing the content alone makes a chain of forms that each
+        // say `/X1 Do` — thirty-five of them on `bug_972999.in` — look like
+        // one form calling itself, and the second is refused.
+        let id = BufferId::new(reference, &content);
         // More than forty in flight, or this very buffer already in flight:
         // consume the stream and produce nothing, successfully.
         if ctx.in_flight.len() > MAX_FORM_LEVEL || ctx.in_flight.contains(&id) {
@@ -1842,6 +1850,54 @@ mod tests {
         let mut ctx = BuildContext::new();
         let page = build_page(&ops, resources, &NoResolve, &mut ctx, &limits, &mut diags);
         (page, diags)
+    }
+
+    #[test]
+    fn two_form_objects_with_identical_bytes_are_two_forms() {
+        // The recursion guard's identity is the *stream object*, not its
+        // content. Upstream keys on the decoded buffer's address, which is
+        // distinct per stream object even when two objects hold the same
+        // bytes; hashing the content alone makes a chain of forms that each
+        // say `/X1 Do` — thirty-five of them on `bug_972999.in` — look like
+        // one form calling itself, and every level below the first is
+        // refused.
+        use super::BufferId;
+        use pdfrum_object::ObjRef;
+        let body = b"/X1 Do";
+        let five = BufferId::new(
+            Some(ObjRef {
+                num: 5,
+                generation: 0,
+            }),
+            body,
+        );
+        let six = BufferId::new(
+            Some(ObjRef {
+                num: 6,
+                generation: 0,
+            }),
+            body,
+        );
+        assert_ne!(five, six, "same bytes, different objects, different ids");
+        assert_eq!(
+            five,
+            BufferId::new(
+                Some(ObjRef {
+                    num: 5,
+                    generation: 0
+                }),
+                body
+            ),
+            "the same object really is the same id, which is what catches a \
+             form that draws itself"
+        );
+        // And two anonymous buffers still separate by content, which is what
+        // the id does for a caller with no reference to offer.
+        assert_ne!(
+            BufferId::new(None, b"a"),
+            BufferId::new(None, b"b"),
+            "content still distinguishes two unreferenced buffers"
+        );
     }
 
     #[test]

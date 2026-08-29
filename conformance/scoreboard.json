@@ -1,12 +1,12 @@
 {
-  "generated_at": "2026-08-29T10:54:42Z",
+  "generated_at": "2026-08-29T10:59:54Z",
   "totals": {
     "files": 1675,
-    "pass": 1471,
-    "fail": 204,
+    "pass": 1474,
+    "fail": 201,
     "by_tag": {
       "page-count": 2,
-      "pixel-fail": 164,
+      "pixel-fail": 161,
       "tierA-mismatch": 81
     },
     "text": {
@@ -19860,10 +19860,8 @@
     },
     {
       "path": "corpus/third_party/skia/20180916_098c1355/xfermodes.pdf",
-      "status": "fail",
-      "tags": [
-        "pixel-fail"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -19883,12 +19881,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.988324,
+        "ssim": 0.999827,
         "exact": false,
-        "max_channel_diff": 201,
+        "max_channel_diff": 97,
         "pages": 1
       },
-      "notes": "ssim 0.988324 below floor 0.990000"
+      "notes": ""
     },
     {
       "path": "corpus/third_party/skia/20180916_098c1355/xfermodes3.pdf",
@@ -44748,10 +44746,8 @@
     },
     {
       "path": "resources/pixel/bug_972999.in",
-      "status": "fail",
-      "tags": [
-        "pixel-fail"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -44771,19 +44767,17 @@
         }
       },
       "tierB": {
-        "ssim": 0.856438,
+        "ssim": 0.999994,
         "exact": false,
-        "max_channel_diff": 255,
+        "max_channel_diff": 31,
         "pages": 1
       },
-      "notes": "ssim 0.856438 below floor 0.990000"
+      "notes": ""
     },
     {
       "path": "resources/pixel/bug_972999.pdf",
-      "status": "fail",
-      "tags": [
-        "pixel-fail"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -44803,12 +44797,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.856438,
+        "ssim": 0.999994,
         "exact": false,
-        "max_channel_diff": 255,
+        "max_channel_diff": 31,
         "pages": 1
       },
-      "notes": "ssim 0.856438 below floor 0.990000"
+      "notes": ""
     },
     {
       "path": "resources/pixel/bug_981288.in",
