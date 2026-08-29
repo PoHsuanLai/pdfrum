@@ -92,22 +92,33 @@ Four places where the brief and the C++ disagree, checked against the oracle:
    *previous* font at the *new* size — is worth naming because it is what
    `FindFont`'s Helvetica fallback interacts with.
 
-## A defect found in a landed crate
+## A defect found in a landed crate — since fixed
 
-`pdfrum_object::Object::clone_direct` **panics on real corpus files.** It
+`pdfrum_object::Object::clone_direct` **panicked on real corpus files.** It
 flattens a whole object subtree, and when a reference inside a dictionary
 resolves to a stream it stores that stream as a direct dictionary value —
 tripping `Dict::push`'s own debug assertion that ISO 32000-1 §7.3.8.1 forbids
 exactly that. A `/Resources` dictionary whose `/XObject` entries are indirect
-streams is the common case, so this fires on ordinary files.
+streams is the common case, so this fired on ordinary files.
 
-This crate no longer calls `clone_direct` anywhere; every site wanted one
-level of resolution and now uses `Object::resolve`. **The defect itself is
-unfixed** — the obvious repairs each break `pdfrum-object`'s own tested
-contract (dropping the entry loses data a `/Resources` needs; leaving the
-reference in place contradicts the documented "dangling references are
-dropped" behaviour), so choosing between them is that crate's call, not this
-one's. Recorded here rather than patched around silently.
+**Fixed in `pdfrum-object`**: neither repair this crate weighed was the right
+one. The assertion was, and §7.3.8.1 is a *file-format* constraint rather than
+an in-memory invariant — the C++ clone path writes straight into `map_` /
+`objects_` and so produces inline streams too, which `GetStreamFor` then reads
+back. `Array::push` and `Dict::push` now accept a stream value; the reader
+still drops one found inline while parsing, and the writer (M7) hoists it back
+out. See `docs/status/pdfrum-object.md`.
+
+**This crate is unchanged, deliberately.** It stopped calling `clone_direct`
+because every site wanted *one level* of resolution, and `Object::resolve` is
+the C++-faithful call there:
+`CPDF_StreamContentParser::FindResourceObj` reaches a named resource through
+`GetMutableDirectObjectFor` (`cpdf_streamcontentparser.cpp:1227-1232`), a
+one-level resolve — and `Do` reads its form or image with exactly that,
+`ToStream(FindResourceObj("XObject", name))` (`:792`), never a clone. Nothing
+on the page path calls `CloneDirectObject` at all; its only C++ callers are
+the two in `cpdf_interactiveform.cpp`. Reverting these sites to `clone_direct`
+would deep-flatten whole resource subtrees the C++ never copies.
 
 ## Tests
 

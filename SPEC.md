@@ -83,7 +83,7 @@ pub struct ObjRef { pub num: u32, pub generation: u16 }   // `gen` is a reserved
 
 pub struct PdfString { pub bytes: Box<[u8]>, pub hex: bool }  // raw bytes + source spelling (hex vs literal — C++ round-trips it, CPDF_String::is_hex; the writer needs it). Helpers: as_text() -> Cow<str> (PDFDoc/UTF-16BE/UTF-8 detection)
 pub struct Name(Cow<'static, [u8]>);      // Cow so `names` constants are const-constructible & zero-copy; parsed names own. Helpers: as_str(), from_static(); pub mod names { pub const LENGTH: &Name; ... } for constants/
-pub struct Array(Vec<Object>);            // private field + `Array::of(values)`; the invariant (no direct streams) is enforced in push()
+pub struct Array(Vec<Object>);            // private field + `Array::of(values)`; push() accepts any Object, streams included (see the §7.3.8.1 note below)
 pub struct Dict(Vec<(Name, Object)>);     // linear assoc — PDF dicts are small; get() is O(n) scan, last duplicate wins (match C++)
 pub struct Stream { pub dict: Dict, pub data: ByteSpan }
 
@@ -126,6 +126,29 @@ impl Dict {
 // Array mirrors the same split, index for key (`*_at` suffix), plus
 // `as_rect()` / `as_matrix()` (exact element count or zero rect / identity).
 ```
+
+[spec] 2026-08-29 (object defect, found by the page corpus sweep): **ISO
+32000-1 §7.3.8.1's "no direct stream values" rule is a file-format constraint,
+not an in-memory invariant.** `Array::push`/`Dict::push` originally
+debug-asserted it and so panicked on ordinary files, because
+`Object::clone_direct` flattens references and a `/Resources` whose `/XObject`
+entries are indirect streams — the common case — legitimately produces a
+dictionary holding those streams directly. The C++ does the same: its ordinary
+setters do reject a stream (`CHECK(!pObj->IsStream())` in
+`cpdf_dictionary.cpp:285` / `cpdf_array.cpp:249,264,278`, plus `= delete`d
+overloads and `static_assert`s), but `CPDF_Dictionary::CloneNonCyclic` and
+`CPDF_Array::CloneNonCyclic` insert into `map_`/`objects_` **directly**
+(`cpdf_dictionary.cpp:64`, `cpdf_array.cpp:57`), bypassing those checks, so
+`CloneDirectObject()` really does yield an inline `CPDF_Stream` — and
+`GetStreamFor`/`GetStreamAt` read it back (`ToStream(GetDirectObjectFor…)`).
+So the assertions are removed; both containers accept a stream value and the
+resolving accessors already return it. Enforcement moves to the two ends where
+the C++ puts it: the **reader** drops a stream found inline while parsing
+(already done, `cpdf_syntax_parser.cpp:591-596,645-649`), and the **writer**
+(pdfrum-edit, M7) hoists a direct stream back to an indirect object at
+serialization. `clone_direct` is otherwise unchanged — its `ObjRef`-keyed
+ancestor set is the faithful Rust equivalent of the C++ pointer set, since an
+owned `Object` tree can only form a cycle through a reference.
 
 Decisions: recursion into `Object` is bounded by `Limits.max_object_nesting`
 at *parse* time, so access code may recurse freely. `Object` is `Send + Sync`.

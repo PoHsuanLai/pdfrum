@@ -236,6 +236,153 @@ mod tests {
         );
     }
 
+    // The shape that made `clone_direct` panic on ordinary corpus files: a
+    // `/Resources` whose `/XObject` entries are indirect streams. Flattening
+    // stores each stream as a *direct* dictionary value, which is exactly
+    // what `CPDF_Dictionary::CloneNonCyclic` does — its loop inserts into
+    // `map_` directly and so never reaches the `CHECK(!IsStream())` that
+    // guards the ordinary setters. §7.3.8.1 binds the writer, not this type.
+    #[test]
+    fn clone_direct_stores_a_resolved_stream_as_a_direct_dict_value() {
+        let image = Stream::new(
+            Dict::from_pairs([
+                (names::TYPE.clone(), Object::Name(Name::from("XObject"))),
+                (names::SUBTYPE.clone(), Object::Name(Name::from("Image"))),
+                (names::LENGTH.clone(), Object::Int(4)),
+            ]),
+            ByteSpan::from(b"\xDE\xAD\xBE\xEF".to_vec()),
+        );
+        let store = TestStore::from_pairs([(9, Object::Stream(image.clone()))]);
+
+        let resources = Object::Dict(Dict::from_pairs([(
+            Name::from("XObject"),
+            Object::Dict(Dict::from_pairs([(
+                Name::from("Image9"),
+                Object::Ref(ObjRef::new(9, 0)),
+            )])),
+        )]));
+
+        let cloned = resources.clone_direct(&store);
+        let xobject = cloned
+            .as_dict()
+            .and_then(|d| d.raw(&Name::from("XObject")))
+            .and_then(Object::as_dict)
+            .expect("the /XObject sub-dictionary survives");
+        // Stored directly, not as a reference and not dropped.
+        assert_eq!(
+            xobject.raw(&Name::from("Image9")),
+            Some(&Object::Stream(image.clone()))
+        );
+        // And the resolving accessor reads it back, as `GetStreamFor` does.
+        assert_eq!(
+            xobject.stream(&Name::from("Image9"), &NoResolve),
+            Some(image)
+        );
+    }
+
+    #[test]
+    fn clone_direct_stores_a_resolved_stream_as_a_direct_array_element() {
+        let stream = Stream::new(
+            Dict::from_pairs([(names::LENGTH.clone(), Object::Int(2))]),
+            ByteSpan::from(b"hi".to_vec()),
+        );
+        let store = TestStore::from_pairs([(4, Object::Stream(stream.clone()))]);
+        let array = Object::Array(Array::of([Object::Ref(ObjRef::new(4, 0))]));
+
+        let cloned = array.clone_direct(&store);
+        let cloned = cloned.as_array().expect("still an array");
+        assert_eq!(cloned.raw_at(0), Some(&Object::Stream(stream.clone())));
+        assert_eq!(cloned.stream_at(0, &NoResolve), Some(stream));
+    }
+
+    // The cloned stream carries its **raw**, still-encoded bytes, matching
+    // `CPDF_Stream::CloneNonCyclic`'s `LoadAllDataRaw()` — no filter is run
+    // and `/Filter` stays in the cloned dictionary.
+    #[test]
+    fn clone_direct_keeps_a_streams_raw_bytes_and_filter() {
+        let stream = Stream::new(
+            Dict::from_pairs([
+                (
+                    names::FILTER.clone(),
+                    Object::Name(Name::from("FlateDecode")),
+                ),
+                (names::LENGTH.clone(), Object::Int(3)),
+            ]),
+            ByteSpan::from(b"\x78\x9C\x03".to_vec()),
+        );
+        let store = TestStore::from_pairs([(1, Object::Stream(stream))]);
+
+        let cloned = Object::Ref(ObjRef::new(1, 0)).clone_direct(&store);
+        let cloned = cloned.as_stream().expect("a stream");
+        assert_eq!(&*cloned.data, b"\x78\x9C\x03");
+        assert_eq!(
+            cloned.dict.name(names::FILTER).map(Name::as_str),
+            Some(Some("FlateDecode"))
+        );
+    }
+
+    // A stream reachable by two sibling paths is not a cycle: both clone.
+    #[test]
+    fn clone_direct_clones_a_shared_stream_down_both_sibling_paths() {
+        let stream = Stream::new(Dict::new(), ByteSpan::from(b"xy".to_vec()));
+        let store = TestStore::from_pairs([(6, Object::Stream(stream.clone()))]);
+        let dict = Object::Dict(Dict::from_pairs([
+            (Name::from("a"), Object::Ref(ObjRef::new(6, 0))),
+            (Name::from("b"), Object::Ref(ObjRef::new(6, 0))),
+        ]));
+
+        assert_eq!(
+            dict.clone_direct(&store),
+            Object::Dict(Dict::from_pairs([
+                (Name::from("a"), Object::Stream(stream.clone())),
+                (Name::from("b"), Object::Stream(stream)),
+            ]))
+        );
+    }
+
+    // A stream whose own dictionary points back at the dictionary holding it
+    // still cuts only the cycle edge — the stream itself survives inline.
+    #[test]
+    fn clone_direct_cuts_only_the_cycle_edge_of_an_inlined_stream() {
+        let inner = Stream::new(
+            Dict::from_pairs([(Name::from("Up"), Object::Ref(ObjRef::new(1, 0)))]),
+            ByteSpan::from(b"body".to_vec()),
+        );
+        let store = TestStore::from_pairs([
+            (
+                1,
+                Object::Dict(Dict::from_pairs([(
+                    Name::from("Down"),
+                    Object::Ref(ObjRef::new(2, 0)),
+                )])),
+            ),
+            (2, Object::Stream(inner)),
+        ]);
+
+        let cloned = Object::Ref(ObjRef::new(1, 0)).clone_direct(&store);
+        let down = cloned
+            .as_dict()
+            .and_then(|d| d.raw(&Name::from("Down")))
+            .and_then(Object::as_stream)
+            .expect("the stream is stored directly under /Down");
+        assert_eq!(&*down.data, b"body");
+        assert!(down.dict.is_empty(), "the /Up cycle edge was cut");
+    }
+
+    // Containers accept a stream value in memory: the file-format rule of
+    // §7.3.8.1 is the writer's to enforce, not this type's.
+    #[test]
+    fn containers_accept_a_stream_value_in_memory() {
+        let stream = Object::Stream(Stream::new(Dict::new(), ByteSpan::from(b"z".to_vec())));
+        let mut dict = Dict::new();
+        dict.push(Name::from("S"), stream.clone());
+        assert!(dict.stream(&Name::from("S"), &NoResolve).is_some());
+
+        let mut array = Array::new();
+        array.push(stream);
+        assert!(array.stream_at(0, &NoResolve).is_some());
+    }
+
     #[test]
     fn plain_clone_keeps_references_as_references() {
         let obj = every_variant();
