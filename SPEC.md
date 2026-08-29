@@ -522,7 +522,7 @@ pub trait RasterBackend {  // factory: lets the engine rasterize soft masks & ti
 // bytes, never the BT.709 helpers; asymmetric /Extend is engine-emulated via
 // Pad + a computed clip.
 
-pub struct RenderOptions { pub transform: Affine, pub text_aa: TextAa, pub grayscale: bool, /* (abridged) */ }
+pub struct RenderOptions { pub transform: Affine, pub text_aa: TextAa, pub grayscale: bool, pub subpixel_text_positioning: bool, /* (abridged) */ }
 pub fn render_page(page: &Page, opts: &RenderOptions, backend: &impl RasterBackend) -> Pixmap;
 ```
 
@@ -560,6 +560,27 @@ as the code:
    Option<Color>` — the last resolving render brief Q5 as proposed:
    `render_page` follows `pdium_test`'s white-vs-transparent choice from the
    page's own transparency, and the field is an override only.
+
+   **([spec] 2026-08-29, burn-down wave 5.)** It gains one more field,
+   `subpixel_text_positioning: bool`, **defaulting to `false`**, which is the
+   oracle. Below `|char2device.a| + |char2device.b| > 50` PDFium renders a
+   glyph *bitmap* and blits it on a fixed grid — y on whole pixels, x on
+   **thirds** of one (`cfx_renderdevice.cpp:1254-1257` snaps and integer-
+   floors x; line 1352's `x_subpixel = (int)(device_origin.x * 3) % 3` gives
+   the thirds back through the LCD triple). Filling outlines where they truly
+   land instead displaced every stem edge by the baseline's fractional part.
+   Reproducing the grid is worth **+60 files at SSIM ≥ 0.99** on the corpus.
+
+   The knob is the parity/off-grid tradeoff and it is one knob, not a family:
+   `true` restores fractional placement for a caller who wants text where the
+   PDF puts it rather than where a golden expects it — smooth animation, a
+   non-integer device scale, any use where oracle parity is not the goal.
+   Which rounding runs is decided by `FontAntiAliasingMode`, which
+   `DrawNormalText` derives itself and which `bClearType` does **not** set:
+   the conformance configuration resolves to `kLcd` (thirds in x) and
+   `--no-smoothtext` to `kMono` (whole pixels in x, plus `AdjustGlyphSpace`).
+   The snap does not apply to a stroked or pattern-coloured run, which
+   `ProcessText` sends to `DrawTextPath`, nor above the `> 50` threshold.
 3. **The walk is generic over the backend, not `dyn`.** `RasterBackend::
    snapshot` needs the concrete device to read pixels back, so `&mut dyn
    RenderDevice` survives only where a device is genuinely swappable — the
@@ -579,8 +600,21 @@ as the code:
    for the arithmetic.
 5. **The page-to-device matrix flips y.** `Rotation::display_matrix`
    normalises the crop-box origin and applies `/Rotate` but leaves PDF's
-   y-up convention intact, so `render_page` composes an explicit flip about
-   the page height. Recorded because the symmetric fixtures hide its absence.
+   y-up convention intact, so `render_page` composes an explicit flip.
+   Recorded because the symmetric fixtures hide its absence.
+
+   **([spec] 2026-08-29, burn-down wave 5: the flip is about the *device*
+   box, not the page box.)** `CPDF_Page::GetDisplayMatrixForRect`
+   (`cpdf_page.cpp:216-218`) builds the matrix from an integer `FX_RECT`
+   divided by the page's float size, and
+   `CPDFSDK_RenderPageWithContext` passes it `FX_RECT(0, 0, size_x, size_y)`
+   — the *truncated* bitmap size. So an A4 page 841.89 points tall renders
+   into 841 rows at a y scale of `841 / 841.89`: the page is squeezed to fit
+   the bitmap its size was truncated into, rather than translated by its
+   float height. The difference is up to a device pixel between the top and
+   bottom of a page, which was sub-count while glyphs were filled at their
+   true position and became a whole row once origins are snapped. Correcting
+   it is worth **+74 files at SSIM ≥ 0.99** on top of the snap.
 6. **Two render-brief errata**, both pinned by tests. `kColorSqrt` is not any
    closed form of ISO 32000-1 §11.3.5.2's `D(x)`: 35 of its 256 entries differ
    from `round(255·D)` and 102 from the truncating spelling, so the verbatim
