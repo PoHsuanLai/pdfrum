@@ -113,3 +113,12 @@ rayon = "=1.12.0"
 anyhow = "=1.0.104"
 clap = { version = "=4.6.6", features = ["derive", "env"] }
 png = "=0.18.1"
+
+# M12: a release build carries line tables so `scripts/profile.sh` names
+# functions instead of addresses. `debug = 1` is line-tables-plus-frame-info,
+# not full DWARF locals — it changes no code the optimizer emits, costs only
+# binary size and link time, and without it every profile in docs/status/M12.md
+# would have had to be taken against a separate build that is not the one
+# `cargo bench` measures. Benchmarks and profiles now describe the same binary.
+[profile.release]
+debug = 1

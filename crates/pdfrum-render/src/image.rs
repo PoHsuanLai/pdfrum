@@ -241,10 +241,38 @@ pub fn to_pixmap(
     // A mask on its own grid is drawn separately; folding it in here would
     // sample it at the base's coordinates.
     let fused = image.mask.as_ref().filter(|m| is_coregistered(m, image));
+    // M12: the stencil test is hoisted out of the pixel loop and the
+    // destination is written through its row slice, rather than
+    // `set_pixel` recomputing `(y * width + x) * 4` per pixel.
+    //
+    // The `if let Pixels::Stencil` was inside a loop over every sample of the
+    // image, re-deciding a fact that is a property of the *image* — the
+    // optimizer cannot hoist it on its own because `image.pixels` is behind a
+    // reference it must assume the loop body could change. On the corpus's
+    // large images this function is the single most expensive thing in a
+    // render (`docs/status/M12.md`), so a branch per pixel is worth removing
+    // even though it predicts perfectly.
+    //
+    // The arithmetic per pixel is untouched, and deliberately: `color_at` stays
+    // the one place a sample becomes a colour, matte and transfer still apply
+    // in the same order, and the products are still `mul255`. What changed is
+    // where the loop-invariant work happens.
+    let stencil = match &image.pixels {
+        Pixels::Stencil(bits) => Some(bits),
+        _ => None,
+    };
+    let width = image.width as usize;
     for y in 0..image.height {
-        for x in 0..image.width {
+        let Some(row) = out
+            .data_mut()
+            .get_mut((y as usize).saturating_mul(width).saturating_mul(4)..)
+            .and_then(|rest| rest.get_mut(..width.saturating_mul(4)))
+        else {
+            continue;
+        };
+        for (x, slot) in (0..image.width).zip(row.chunks_exact_mut(4)) {
             let alpha = fused.map_or(255, |m| m.alpha_at(x, y));
-            let px = if let Pixels::Stencil(bits) = &image.pixels {
+            let px = if let Some(bits) = stencil {
                 // A set bit is ink; a clear one paints nothing at all.
                 if bits.pixel(x, y) {
                     let a = mul255(stencil_color.a, alpha);
@@ -270,7 +298,7 @@ pub fn to_pixmap(
                 let [r, g, b] = rgb;
                 [mul255(r, alpha), mul255(g, alpha), mul255(b, alpha), alpha]
             };
-            out.set_pixel(x, y, px);
+            slot.copy_from_slice(&px);
         }
     }
     out
