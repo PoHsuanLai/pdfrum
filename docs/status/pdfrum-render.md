@@ -1781,22 +1781,83 @@ first; then all three land together.**
 ### The tail after wave 10
 
 88 `pixel-fail`, and **69 unique documents** below 0.99 once the `.in`/`.pdf`
-pairs are collapsed — 83 before this wave. Wave 9's classification survives almost intact, minus the
-cluster this wave removed:
+pairs are collapsed — 83 before this wave. It is a thin tail: eight documents
+below 0.90, and **36 of the 69 sit between 0.98 and 0.99**.
 
-| class | docs | what it is |
-|---|---:|---|
-| image resample residue | 27 | unchanged from wave 9, and see the note below |
-| glyph-only | 20 | unchanged |
-| text + image | 15 | unchanged, including `example_063` at 0.764 |
-| widget text body | **0** | was 16 |
-| other | 5 | unchanged |
+| band | docs |
+|---|---:|
+| < 0.80 | 2 |
+| 0.80 – 0.90 | 6 |
+| 0.90 – 0.95 | 8 |
+| 0.95 – 0.98 | 17 |
+| 0.98 – 0.99 | 36 |
 
 The 13 remaining `--annot` artifacts are three named things and none of them is
 the text body: seven are the `/AP`-presence rule above, four are
 `SetAsPushButton`, and two are the annotation font map's per-character fallback
 to a second face, which `bug_725389` needs to set Hebrew in a field whose `/DA`
 names a font its `/DR` does not carry.
+
+#### Wave 9's largest tail cluster was mislabelled, and it is not resampling
+
+Wave 9 filed 27 documents as "image resample residue" — "mean absolute residue
+2.0 counts with a +0.96 bias", "identical gradient statistics", and a
+do-not-retry note against looking for a filter-kernel difference. Fourteen of
+the 27 are the `FRC_8.2.4_part1` cluster, which is one document written
+fourteen times with different byte-level mutations; all fourteen score exactly
+0.984551.
+
+Measured on `FRC_1_8.2.4_Type_8.6_` under the determinism triple, the residue
+is **not** two counts and **not** a resample. It is two things:
+
+- **Edge antialiasing on the logo**, a one-pixel rim around every shape, which
+  is the rasterizer's coverage and not an image filter. The page's only image
+  is a vector logo drawn as paths.
+- **A bold run set with a regular face.** The page's `/DA` names `Arial,Bold`,
+  which substitutes to *Arimo* with a requested weight of 700 — the face is
+  the regular one and the weight is what asks for synthetic emboldening. The
+  visible tell is a line reading "Foxit **Reader** or Foxit **PhantomPDF**" in
+  the golden and "Foxit *Reader* or Foxit *PhantomPDF*" here, alternating
+  because one run's font is embedded and bold and the other's is substituted.
+
+Wave 9's own rule applies to wave 9: do not take the band's label from the
+previous wave. The correct label for these fourteen is **synthetic
+emboldening**, and the next section is why it is still not implemented.
+
+### Two negative results, measured rather than assumed
+
+**Synthetic emboldening reaches one document, and synthetic italic reaches
+none.** `SubstFont::embolden_level_for_render`, `embolden_level_for_load` and
+`effective_skew` are complete, correct and pinned by their own tests, and
+**none of them has a call site**. The obvious conclusion — that a fifth
+producer-without-consumer had been found — was measured before it was acted
+on, over all 1234 `.pdf` corpus files (the 441 `.in` templates were out of
+scope):
+
+| | fonts | files | below 0.99 | unique docs below 0.99 |
+|---|---:|---:|---:|---:|
+| `embolden_level_for_load() > 0` | 62 / 1589 | 38 / 1234 | 14 | **1** |
+| `effective_skew() != 0` | **0** | **0** | 0 | 0 |
+
+Every embolden hit is the same font in the same directory, and the fourteen
+below-threshold files are the one `FRC_8.2.4` document repeated. The other 24
+already pass at 0.9956.
+
+Italic is structurally zero and that is not a sampling artifact. Twenty-nine
+substituted fonts ask for italic — `Helvetica-Oblique`, `Times-BoldItalic`,
+`Courier-Oblique` and the rest — and **all twenty-nine resolve to a real
+italic face**, because `third_party/test_fonts` ships genuine `-Italic` and
+`-BoldItalic` faces for all three Croscore families. `configure_external` sets
+an angle only when the request is italic *and the face is not*, so the branch
+never fires. Synthetic italic is unreachable against this corpus by
+construction.
+
+Porting `FT_Outline_EmboldenXY` — a fixed-point per-point dilation along
+lateral bisectors, over FreeType's own point-and-tag representation, which our
+`kurbo::BezPath` outlines no longer carry — for one document that is already
+at 0.9846, with no guarantee the residual is even stem weight, is not
+justified. Both functions stay, unused and documented as such, because they
+are correct and because a different font set would reach them.
 
 ### What the next wave should not do again
 
@@ -1811,8 +1872,23 @@ names a font its `/DR` does not carry.
 - **Do not tighten the `/AP`-presence rule, or add the invalid-appearance grey
   outline, before porting `SetAsPushButton` and the `/Hide` action.** Both are
   correct, both are measured, and both cost more than they earn today.
-- **Do not look for the widget text body in the tail.** It is gone; the 69
-  documents left are the three clusters wave 9 named plus five singles.
+- **Do not look for the widget text body in the tail.** It is gone.
+- **Do not look for a resample kernel — or a resample — in the `FRC_8.2.4`
+  cluster.** Wave 9's do-not-retry note there was right about the conclusion
+  and wrong about the subject: the fourteen files are one document, their
+  residual is edge antialiasing plus a bold run set with a regular face, and
+  the page's only image is a vector logo.
+- **Do not port `FT_Outline_EmboldenXY`, and do not implement synthetic
+  italic.** Measured over all 1234 corpus `.pdf`s: emboldening gates one unique
+  document that already scores 0.9846, and italic gates nothing at all because
+  the hermetic font set ships real italic faces for every family that is asked
+  for. The unused `SubstFont` methods are correct; they are simply unreachable
+  here.
+- **Do not read a `--png` glyph trace as the whole story.** Instrumenting
+  `place_glyphs` on `en_fqa` reports 32 runs and two glyphs on a page that
+  visibly draws thousands, so the counting is measuring something other than
+  what reaches the raster. Whatever the explanation, the trace is not one, and
+  a wave that starts from it will start from a wrong number.
 
 
 ## Numbers
