@@ -89,35 +89,43 @@ fn is_numeric_char(b: u8) -> bool {
 /// **one** sign and stops at the next non-digit — so `--40` reads as zero.
 /// Collapsing the two would move text on any file that writes a doubled
 /// minus, which a real generator does.
+///
+/// # The real half must be *correctly rounded*, not accumulated
+///
+/// `StringToFloat` hands the digits to a correctly-rounded parser
+/// (`fx_string.cpp:124-140`), so a literal reads as the nearest `f32` to what
+/// it spells. Accumulating digit-by-digit into an `f32` instead — adding each
+/// digit times a repeatedly-multiplied `0.1` — compounds error per digit and
+/// drifts, because `0.1f32` is not one tenth. The two disagree in the last
+/// couple of ulps, which sounds unobservable and is not: a rectangle's edge
+/// runs through `floor` and `ceil` on its way to a device rect, and a 1e-7
+/// relative error there becomes a whole row of pixels.
 fn word_to_number(word: &[u8]) -> f32 {
-    let start = if word.contains(&b'.') {
-        skip_leading_signs(word)
-    } else {
-        0
-    };
+    let has_dot = word.contains(&b'.');
+    let start = if has_dot { skip_leading_signs(word) } else { 0 };
     let word = word.get(start..).unwrap_or_default();
 
+    if has_dot {
+        return parse_real(word);
+    }
+    parse_integer(word)
+}
+
+/// The integer half of `FX_Number`: one sign, then digits, stopping at the
+/// first byte that is neither.
+///
+/// Kept separate from the real half because it genuinely is: the C++ runs it
+/// through a saturating unsigned accumulator rather than the float parser, so
+/// a doubled sign reads as zero here and as a negative number there.
+fn parse_integer(word: &[u8]) -> f32 {
     let mut neg = false;
-    let mut int: i64 = 0;
-    let mut frac: f32 = 0.0;
-    let mut scale: f32 = 0.1;
-    let mut seen_dot = false;
+    let mut value: i64 = 0;
     let mut i = 0;
     while let Some(&b) = word.get(i) {
         match b {
             b'-' if i == 0 => neg = true,
             b'+' if i == 0 => {}
-            b'.' if !seen_dot => seen_dot = true,
-            b'0'..=b'9' => {
-                if seen_dot {
-                    frac += f32::from(b - b'0') * scale;
-                    scale *= 0.1;
-                } else {
-                    int = int.saturating_mul(10).saturating_add(i64::from(b - b'0'));
-                }
-            }
-            // A second sign or dot, or any other byte, ends the number —
-            // matching `FX_Number`'s single forward scan.
+            b'0'..=b'9' => value = value.saturating_mul(10).saturating_add(i64::from(b - b'0')),
             _ => break,
         }
         i += 1;
@@ -126,8 +134,68 @@ fn word_to_number(word: &[u8]) -> f32 {
         clippy::cast_precision_loss,
         reason = "matching the C++'s int-to-float widening exactly, including its loss"
     )]
-    let v = int as f32 + frac;
-    if neg { -v } else { v }
+    let widened = value as f32;
+    if neg { -widened } else { widened }
+}
+
+/// The real half: the longest prefix that is a number, parsed exactly.
+///
+/// The prefix grammar is `fast_float`'s `general` format — an optional sign,
+/// digits with at most one point, and an optional `e`/`E` exponent — which is
+/// what `StringToFloat` passes. A prefix that will not parse, and a word with
+/// no numeric prefix at all, read as zero, matching the C++'s "return 0 for
+/// parsing errors". An overflow reads as infinity rather than zero, because
+/// `result_out_of_range` is one of the two codes the C++ accepts.
+fn parse_real(word: &[u8]) -> f32 {
+    let end = numeric_prefix(word);
+    let Some(prefix) = word.get(..end) else {
+        return 0.0;
+    };
+    let Ok(text) = std::str::from_utf8(prefix) else {
+        return 0.0;
+    };
+    text.parse::<f32>().unwrap_or(0.0)
+}
+
+/// How many bytes of `word` form a `general`-format number.
+///
+/// An `e` is only part of the number when digits actually follow it (after an
+/// optional sign); `1.2e` and `1.2ex` both stop at the `e`, leaving `1.2`.
+fn numeric_prefix(word: &[u8]) -> usize {
+    let mut i = 0;
+    if matches!(word.first(), Some(b'+' | b'-')) {
+        i = 1;
+    }
+    let mantissa_start = i;
+    let mut seen_dot = false;
+    while let Some(&b) = word.get(i) {
+        match b {
+            b'0'..=b'9' => i += 1,
+            b'.' if !seen_dot => {
+                seen_dot = true;
+                i += 1;
+            }
+            _ => break,
+        }
+    }
+    // A sign and a point with no digits between them is not a number.
+    if i == mantissa_start || (seen_dot && i == mantissa_start + 1) {
+        return 0;
+    }
+
+    let mantissa_end = i;
+    if !matches!(word.get(i), Some(b'e' | b'E')) {
+        return mantissa_end;
+    }
+    let mut j = i + 1;
+    if matches!(word.get(j), Some(b'+' | b'-')) {
+        j += 1;
+    }
+    let digits_start = j;
+    while matches!(word.get(j), Some(b'0'..=b'9')) {
+        j += 1;
+    }
+    if j == digits_start { mantissa_end } else { j }
 }
 
 /// How many leading spaces and signs the float parser skips
@@ -612,6 +680,75 @@ mod tests {
         assert!((word_to_number(b"-40") + 40.0).abs() < 1e-6);
         // And a single sign is unaffected either way.
         assert!((word_to_number(b"-40.34") + 40.34).abs() < 1e-4);
+    }
+
+    // `ByteStringToFloat` (`fx_string_unittest.cpp:123-164`), ported whole.
+    //
+    // Asserted with **exact equality**, which is the point of porting it: the
+    // tests above compare to 1e-4 and would pass against a digit-accumulating
+    // parser that is wrong in the last two ulps. A rectangle's edge runs
+    // through `floor` and `ceil` on its way to a device rect, so those two
+    // ulps are a whole row of pixels.
+    #[test]
+    #[expect(
+        clippy::excessive_precision,
+        reason = "the expected values are the C++ test's own literals, spelled \
+                  to more digits than an f32 holds; rounding them here would \
+                  hide which value the vector actually names"
+    )]
+    fn a_real_reads_as_the_nearest_float_to_what_it_spells() {
+        assert_eq!(word_to_number(b"0.0"), 0.0);
+        assert_eq!(word_to_number(b"-0.0"), 0.0);
+        assert_eq!(word_to_number(b"0.25"), 0.25);
+        assert_eq!(word_to_number(b"+0.25"), 0.25);
+        assert_eq!(word_to_number(b"-0.25"), -0.25);
+        assert_eq!(word_to_number(b"100.0"), 100.0);
+        assert_eq!(word_to_number(b"-100.0000"), -100.0);
+
+        // The exact-value assertion the C++ singles out at `:163`.
+        assert_eq!(word_to_number(b"38.895285"), 38.895_286_56);
+        assert_eq!(word_to_number(b"1.000000119"), 1.000_000_119);
+        assert_eq!(word_to_number(b"1.999999881"), 1.999_999_881);
+
+        // The two literals that made a mutated page's rectangle a row too
+        // tall until this parser was correctly rounded.
+        assert_eq!(word_to_number(b"0.0025"), 0.0025);
+        assert_eq!(word_to_number(b".0025062656"), 0.002_506_265_6);
+    }
+
+    #[test]
+    fn an_exponent_is_part_of_the_number() {
+        assert_eq!(word_to_number(b"1.2e34"), 1.2e34);
+        assert_eq!(word_to_number(b"1.5e-3"), 1.5e-3);
+        assert_eq!(word_to_number(b"1.5E+2"), 150.0);
+        // An `e` with no digits after it is not an exponent, so the mantissa
+        // stands alone rather than the whole word reading as zero.
+        assert_eq!(word_to_number(b"1.2e"), 1.2);
+        assert_eq!(word_to_number(b"1.2ex"), 1.2);
+        assert_eq!(word_to_number(b"1.2e+"), 1.2);
+    }
+
+    #[test]
+    fn a_real_that_overflows_reads_as_infinity_and_nonsense_reads_as_zero() {
+        // `result_out_of_range` is one of the two codes the C++ accepts, so
+        // an overflow keeps its value rather than collapsing to zero.
+        assert_eq!(
+            word_to_number(b"999999999999999999999999999999999999999.0"),
+            f32::INFINITY
+        );
+        assert_eq!(
+            word_to_number(b"-999999999999999999999999999999999999999.0"),
+            f32::NEG_INFINITY
+        );
+        // And the largest finite value survives as itself.
+        assert_eq!(
+            word_to_number(b"340282300000000000000000000000000000000.0"),
+            3.402_823e38
+        );
+        // A word with a period but no digits is not a number.
+        assert_eq!(word_to_number(b"."), 0.0);
+        assert_eq!(word_to_number(b"-."), 0.0);
+        assert_eq!(word_to_number(b"inva.lid"), 0.0);
     }
 
     #[test]
