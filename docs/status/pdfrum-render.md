@@ -1891,22 +1891,414 @@ are correct and because a different font set would reach them.
   a wave that starts from it will start from a wrong number.
 
 
+## Wave 11: the line, and a kern that had been one place out since M3
+
+M5's exit criterion is **met**. The wave crossed it on a change that was not
+on its worklist, and three of the four things it *was* pointed at turned out
+to have been described wrongly by the wave that filed them.
+
+### A kerning adjustment follows its string
+
+`TextSegment::kerning` is documented — in its own field comment — as "the
+adjustment following this string", and `build.rs` fills it that way: a
+*leading* `TJ` number goes to the text object's starting position instead,
+which is what says the field cannot also mean "before". All three pen walks in
+`pdfrum-render/src/text.rs` read it at the **top** of the segment loop. Every
+kerned run therefore double-counted its leading adjustment and dropped its
+last one, sitting one adjustment out of place for as long as the rasterizer
+has existed.
+
+`pdfrum-text` had it right, and says so at length — `SetSegments` even zeroes
+the final kerning "because there is no glyph after it to displace". The two
+modules disagreed in the same repository across nine waves.
+
+Nothing caught it because nothing could. Tier A does not report positions; a
+run displaced by one kern still contains every glyph it should, in order, with
+the right widths, so text extraction matched throughout. And the displacement
+is a fraction of an em — large enough to move SSIM, small enough that no page
+looks broken.
+
+**`bug_1922` .9275 → .99998, and 160 further files moved.** +15 at 0.99, +7 at
+0.95, +15 passing, from moving one line to the bottom of three loops.
+
+The lesson is narrower than "check the comment against the code", because the
+comment was right and the code was wrong beneath it: it is that **a field
+whose meaning is stated in one crate and assumed in another is a defect
+waiting for a tier that can see it**. There was no test in `pdfrum-render`
+asserting where a kern lands, and there is one now.
+
+### The three annot items landed, and the fourth was hiding under them
+
+Wave 10 measured `SetAsPushButton`, the `/AP`-presence rule and the grey
+invalid-appearance outline as individually negative and jointly positive, and
+that held — but only after two corrections it could not have made from the
+outside.
+
+**The `/AP`-presence rule and the grey outline are two different tests, and
+the second is the deeper one.** `IsAppearanceValid` is `!!GetDictFor("AP")`
+and gates *regeneration*. `IsWidgetAppearanceValid` resolves `/AP /N /<AS>`
+and requires a **stream**, and gates the grey `0xFFAAAAAA` outline
+`DrawAppearance` strokes over a checkbox or radio button — nothing else.
+A radio button whose `/AP /N` lists only its on-state while `/AS` reads `Off`
+passes the first and fails the second: it keeps having no appearance *and*
+gets outlined. Porting either alone loses; that is the whole of wave 10's
+"land them together".
+
+**And the outline is a stroke with no fill.** `DrawPath` is handed fill argb
+**0** beside the grey stroke, so its `EvenOddOptions()` names a rule for a
+fill that never happens. Spelling that `FillRule::EvenOdd` here paints the
+box solid instead of outlining it — five files down, measured, before the
+transparent fill was noticed. The joint change went from −5 to +6 on that one
+enum variant.
+
+**`/Hide` had to come first, and it is an `/OpenAction`.** `pdfium_test` runs
+`FORM_DoDocumentOpenAction` before it renders anything
+(`pdfium_test.cc:1779`), so a `/Hide` in the catalog's open action has already
+rewritten `/F` by the time either the dump or the render reads it. That is why
+`checkbox_radiobutton_hide`'s golden reports `Flags set: Hidden` for two
+widgets whose file sets no `/F` at all, and why outlining them would have been
+the joint change's own new defect. `nav::open_action` executes exactly that
+one action type, because it is the only one of the eighteen a rendered page or
+a dump can observe without a user, a script engine or a viewer chrome.
+
+The edit is not "set the hidden bit": `Invisible` and `NoView` are cleared
+whichever way the action goes, `/H` defaults to **true**, the fields are named
+in `/T` rather than `/Fields`, and only a **string** entry names one — a `/T`
+holding dictionary references resolves to nothing, which the test file's own
+comment records as surprising and which is behavior.
+
+**The push-button caption is a caption and nothing else.** `SetAsPushButton`
+lays out a caption beside an **icon** in one of seven arrangements chosen by
+`/MK /TP`, scaled by `/MK /IF`. Six of the seven and the whole icon half are
+**unreachable on this corpus**: no file carries a `/MK /I`, `/RI` or `/IX`,
+and with no icon stream every split arrangement collapses to `rcLabel =
+rcBBox` — the caption-only box. The two files that name a `/TP` carry no
+`/MK /CA`, so both produce nothing on any path. What is built is the caption,
+with the three things about it that *are* behavior: both alignments are
+hard-coded centred (a push button ignores the `/Q` every other text field
+obeys), a missing `/DA` means size **12** rather than the automatic size the
+other three read it as, and the clip is written unconditionally.
+
+### `/NeedAppearances` always regenerates; it is usually invisible
+
+This is the wave's one genuinely surprising finding, and it was settled with
+gdb on the oracle rather than by reading.
+
+`NewAnnot` calls `ResetAppearance` unconditionally when the form sets
+`/NeedAppearances`, consulting no `/AP`. Honouring that plainly moves
+`bug_707673` the right way and takes **`bug_861842` from .99986 to .93548** —
+that file sets the flag, and its checkbox's golden reports one `Text` object
+with no background and no border, which is the file's own ZapfDingbats stream
+surviving untouched. Both files reach `ResetAppearance`. Only one of them
+shows it.
+
+The gate is a key mismatch. `SetAsCheckBox` and `SetAsRadioButton` write
+exactly two sub-states, `/AP /N /<GetCheckedAPState()>` and `/AP /N /Off`,
+while every reader — the dump and the renderer alike — resolves
+`/AP /N /<AS>`. When `/AS` names neither, the new streams land in keys nothing
+looks up.
+
+And `GetCheckedAPState` diverges from `/AS` far more readily than it looks: it
+answers the first non-`Off` key of `/AP /N`, **unless the field carries an
+`/Opt` array**, in which case it answers the widget's *control index* as a
+decimal string. `bug_861842` is that file — `/Opt` present, index 0, `/AS /1`
+— so the rebuild writes `/0` and `/Off` while the reader keeps asking for
+`/1`. `bug_707673`'s radios carry no `/Opt` and sit at `/AS /Off`, and `Off`
+is always written literally, so they do rebuild.
+
+Two one-line mutations prove it: changing `/Opt` to `/XOpt`, or `/AS /1` to
+`/AS /0`, each makes `bug_861842` regenerate visibly, and to the same bytes.
+
+With the rule in, `bug_707673` reaches **.99982** and its `--annot` dump is
+byte-exact, and nothing else moves.
+
+### Two widgets sharing a `/T` are one field
+
+`bug_733528` lists two `/Fields` entries both named `SharedField`, the first
+holding `/V (Hello, world)` and the second `/V ()`, with no `/Parent` between
+them. The golden reports the **second** drawing the first's text.
+
+`AddTerminalField` looks a name up before it builds anything and only
+constructs a `CPDF_FormField` when the name is new, so the second entry
+becomes a second *control* of the first's field. The value every control shows
+is the field's, which is the first dictionary's. Our field tree emitted two
+fields with one widget each, and the appearance generator read `/V` off
+whichever widget it was drawing.
+
+Two changes, and the split between them is the point: `Form::load` now merges
+by name, and the *body* builders read their value, options and selection from
+the **field's** dictionary while everything else — the plate, the colour, the
+default appearance — stays read off the widget, because those are per-control.
+
+`bug_733528` .9828 → .99978, and its `--annot` dump is byte-exact.
+
+### A JBIG2 stencil was never handed to the codec
+
+`decode_stencil` unpacked its stream as raw one-bit samples whatever the
+filter chain said — and `decode_chain` hands a JBIG2 image back **undecoded**
+by design, because an image codec needs the image dictionary the chain does
+not have. So a JBIG2-coded `/ImageMask` had its *codestream* read as if it
+were already the bitmap.
+
+`bug_527174` is one data byte, `0x30`, which inverts under the default
+`/Decode` to `0xCF`; its top bit is set, so the one-pixel image came out black
+and `150 0 0 150 200 200 cm` painted it as a solid 150×150 square across a
+region the oracle leaves white.
+
+This was a hole, not a quirk. Every JBIG2 image *with* a `/ColorSpace` was
+already on the working path — the stencil rung simply never dispatched to a
+codec at all, and no corpus file had previously reached it. Our own wrapper
+refuses this codestream too, so the refusal was always available; nothing
+asked for it.
+
+The rejection is also more total than it looks. `ContinueLoadDIBBase` tears
+the half-built bitmap down and returns `kFail`, so a `/JBIG2Globals` of binary
+garbage makes the whole image vanish even though the image is one pixel: the
+globals are parsed first, and their failure is the image's failure.
+
+**bug_527174 .94814 → byte-exact**, two more files reach byte-exact, +5
+byte-exact overall.
+
+### A knockout buffer's offset was composing inside the stroke split
+
+The fill drew `offset * to_device * path` against an identity device matrix,
+while the stroke handed the rasterizer `offset * (pre * path)` with `post` as
+its transform — so what the rasterizer actually computed was
+`post * offset * pre * path`, with the buffer's translation pushed *through*
+`post`. `split_for_stroke` zeroes the translation there, leaving a bare
+y-flip, so on a 200-high page `translate(-45,-45)` came back out as
+`translate(-45,+45)`: the stroke landed ninety rows low and was clipped off
+the bottom of the buffer it was drawn into.
+
+Moving `offset` onto the transform argument composes it outermost and makes
+the geometry identical to the non-knockout path, which it should always have
+matched.
+
+`same_color_knockout_fill` .8931 → .9502, and five further files cross 0.99 —
+`bug_1430333`, `single_point_paths` and `path_9` among them.
+
+### Three corrections to wave 10's map
+
+Wave 10's do-not-retry notes were honoured, and three of them were wrong about
+their subject in a way that mattered.
+
+**The `FRC_8.2.4` cluster is 74% an image kernel, not the bold run.**
+Segmenting the residual spatially: the vector-looking "logo" is a 455×455 JPEG
+downscaled 2.86×, and it carries **74.1%** of the deficit; the bold text
+carries 25.9%. Fixing the text alone leaves the file at .9886 — still failing.
+Fixing the graphic alone reaches .9960 — passing. The prior note had the
+weighting backwards.
+
+**And the bold run is the wrong face, not a missing embolden.** Per-word ink
+measurement splits cleanly: the embedded `Arial-BoldMT` words sit at ratio
+1.006, the non-embedded `Arial,Bold` words at 0.699/0.683/0.704 — and the
+Arimo-Regular:Arimo-Bold ink ratio is **0.687**. Rendering against a font dir
+holding only `Arimo-Bold.ttf` gives 1.005 with no emboldening applied at all.
+The computed embolden level for the page is 14/64 px, far too small to explain
+a 30% ink deficit. There is also **no cheap stroke-based pseudo-bold in the
+oracle**: `FT_Outline_Embolden` is a genuine point dilation, and the only
+`IsSubstFontBold` consumer is the Skia device this build does not use.
+
+**And `bug_725389` is not a two-slot font map.** The `--annot` path for a
+widget whose `/DR` sits on the annotation rather than the AcroForm never
+reaches `GenerateFormAP` at all — `cpdf_generateap.cpp:1469` reads `/DR` off
+the **AcroForm** dict, finds none, and returns. What renders is
+`CPDFSDK_AppStream`, over `CPDF_BAFontMap`, which is the N-slot charset-driven
+map with no `IS_WIN` guards anywhere. Verified under gdb: slot 0 is
+`Helvetica_00` → `Arimo-Regular.ttf`, slot 1 is **`_B1`** — the empty face
+name plus `sprintf("_%02X", FX_Charset::kMSWin_Hebrew)` — resolving through
+the hermetic renamer to **`Tinos-Regular.ttf`**, with a CP1255 `/Differences`
+encoding. The six text objects the golden reports are one per character,
+because the run is RTL and `is_rtl` disables the run-grouping optimization.
+
+### A correct change that measured as a regression, and the feature under it
+
+The most useful thing this wave found is a change that was right, measured
+negative, and turned out to be blocked by a *different* missing feature
+underneath it. Landing the blocker first turned a −2 into a +2, and the pair
+is the wave's cleanest illustration that a measurement is a statement about
+the whole tree rather than about the diff.
+
+**The Croscore rename belongs at the database boundary.**
+`RenameFontForTesting` lives in
+`SystemFontInfoWrapper` (`testing/test_fonts.cpp:47-72`), which wraps
+`SystemFontInfoIface` — **below** `FindSubstFace`, on the `face` argument of
+`MapFont`/`GetFont` only, and *not* on `EnumFontList`. Ours applied it at step
+0, before `subst_name`, so the whole ladder saw the renamed string.
+
+That is why `Arial,Bold` lost its bold. The name is an entry in
+`kAltFontNames`, so `GetSubstName` canonicalizes the **whole** name to
+`Helvetica-Bold` — the comma never reaches the comma-split — which is base-14
+index 5, and *that index* is what carries `ForceBold` and weight 700 down to
+`MapFont("Helvetica-Bold")`, where the wrapper renames it to `Arimo Bold` and
+`FindFont` direct-hits at the perfect score. Renaming early turned it into
+`ArimoBold`, which is no alias, and base-14 recognition, the charset decision
+and the bold went with it.
+
+A `CroscoreDb` decorator renaming only `find_font`/`font_by_name` — with
+`faces`/`face_bytes` passing through, mirroring the untouched `EnumFontList` —
+restores all of it. Measured alone: the whole `FRC_8.2.4` family +0.0031, a
+second FRC group +0.0034, and the target's ink ratio against the golden goes
+**0.699 → 0.994**. And it was **−2 at 0.99 anyway**, because `bug_601362`
+dropped .99078 → .98788: with the *correct* face finally chosen, that file
+started depending on a correction we did not implement. The old code had been
+scoring higher there by accident, on the wrong face — confirmed by forcing the
+identical face into both engines through a single-font `--font-dir`, which
+leaves the pixel delta unchanged.
+
+**The correction it wanted is the §1.15 glyph-spacing heuristic**, and its
+gate had been sitting in the tree as dead code since the module was written:
+`SubstFont::is_actual_font_loaded`, whose doc comment reads "the glyph-spacing
+heuristic of §1.15 turns on it", beside `HasFontWidths` and the
+built-in-generic flag, ported for the same absent caller.
+
+The rule applies when a non-embedded font carries its own `/Widths`, is not a
+standard-14 name, did not resolve to a built-in generic, and the face that
+loaded is *not* the family the document asked for — that last condition being
+the whole point, since a correction only makes sense when the metrics come
+from a face nobody asked for. Its two branches are asymmetric and that is
+behavior: a glyph **narrower** than its declared slot is centred in it, origin
+moved by half the excess and the outline untouched; a glyph **wider** than its
+declared width is squeezed, scaled horizontally about its origin with the
+origin left alone. Neither touches the pen, so the run's advances stay the
+PDF's.
+
+Landed first, it is +2 at 0.99 on its own (`bug_845697` .97800 → .99999,
+`bug_601362` .99078 → .99357), and the Croscore fix on top of it is then 41
+files up and none down, with `bug_601362` reaching **.99912**. Together: **55
+files moved, every one upward.**
+
+**The Type3 translucent buffer should be sized from the painted extent, and
+cannot go in until CCITT is wired up.** This one stays reverted. `render_translucent_char_proc` sizes
+its sub-buffer from `Type3Metrics::bbox`, which is the *declared* `d1` box
+scaled by 1000 and then transformed by the font matrix. Those two cancel only
+for the conventional `/FontMatrix [0.001 …]`; `bug_1746` declares an identity
+one, so the box stays a thousand times too large, lands at device x
+8050–96050, intersects to zero, and the glyph is never drawn. The oracle sizes
+that rect from `matrix.TransformRect(pForm->CalcBoundingBox())` — the form's
+own **painted** extent, unscaled.
+
+Adding a separate `painted_box` (rather than patching `bbox`, which text
+extraction correctly wants as the declared box) fixes the placement exactly:
+the rects move to x 58.2–146.2, matching the golden's painted union. And the
+file still goes **.83506 → .76463**, because `decode_ccitt` in
+`pdfrum-filters` **has no caller** — `chain.rs` has no CCITT arm — so this
+file's `/CCITTFaxDecode` image mask unpacks still-encoded bytes into garbage
+covering 31 of its 92 rows. Confirmed independent of the change by rendering
+an opaque variant of the same file, which truncates identically on the
+untouched path. Blank scores better against a mostly-white golden than
+correctly-placed garbage.
+
+So `bug_1746` is two defects deep, and the outer one is a whole unwired
+filter. That is the item to take first.
+
+### The tail after wave 11
+
+The bands, over the documents left below 0.99 once `.in`/`.pdf` pairs are
+collapsed:
+
+| band | docs |
+|---|---:|
+| < 0.80 | 1 |
+| 0.80 – 0.90 | 5 |
+| 0.90 – 0.95 | 2 |
+| 0.95 – 0.98 | 13 |
+| 0.98 – 0.99 | 30 |
+
+**62 files, 51 unique documents** — down from 88 files and 69 documents. The
+tail is now overwhelmingly shallow: 43 of the 51 sit above 0.95, and 30 of
+those above 0.98.
+
+Two items are external and stay documented rather than fixed:
+
+- **`bug_867501`** (0.646) is an upstream `hayro-jbig2` gap — a segment type
+  the crate does not decode. Our entry point is a wrapper (SPEC §12); the
+  first-party port stays the sanctioned fallback if this ever justifies one.
+- **`example_063`** cleared 0.99 on the kerning fix and is no longer in the
+  tail; its residual was the displacement, not the D7 coverage difference it
+  had been filed under.
+
+Three named items account for most of what is left, and each is a feature
+rather than a bug:
+
+- **The image downscale kernel**, which is one defect with two names.
+  `CStretchEngine::WeightTable::CalculateWeights` takes a 2-tap bilinear
+  branch only when `|scale| < 1`; for a downscale it falls to an
+  **area-average box filter** over every source pixel in the destination
+  footprint. We delegate to the backend's 2-tap bilinear either way and
+  under-blur. That is 74% of the `FRC_8.2.4` cluster's 14 files, all of
+  `example_009`, and a share of several others in the 0.95–0.98 band. It is a
+  subsystem rather than a patch, and it is the largest single item left.
+- **CCITT has no caller.** `pdfrum-filters` implements `decode_ccitt` and
+  `chain.rs` never dispatches to it, so a `/CCITTFaxDecode` image unpacks its
+  still-encoded bytes. `bug_1746` is the visible one; it also blocks the
+  Type3 `painted_box` fix above.
+- **The §1.15 glyph-spacing heuristic**, which gates the Croscore boundary fix
+  above and is what `SubstFont::is_actual_font_loaded` was ported for.
+
+### What the next wave should not do again
+
+- **Do not trust a band's label from the wave that filed it — including this
+  one.** Wave 9 mislabelled the `FRC_8.2.4` cluster as resampling; wave 10
+  corrected it to emboldening and got the weighting backwards *and* the
+  mechanism wrong. The residual is 74% an image kernel and the text half is a
+  face-selection bug. Three waves, three labels, one measurement.
+- **Do not port `FT_Outline_EmboldenXY`.** Wave 10's conclusion survives its
+  own wrong reasoning: emboldening is not what the bold runs need, there is no
+  cheap stroke-based version of it in the oracle, and the face-selection fix
+  is what moves them.
+- **Do not implement `bug_725389`'s fallback as a two-slot map.** It is
+  `CPDF_BAFontMap`, N slots, charset-driven, and the second face is
+  `Tinos-Regular` under the alias `_B1`. The `CPVT_FontMap` reading is a
+  different code path that this file never enters.
+- **Do not honour `/NeedAppearances` without the sub-state rule.** The rebuild
+  always runs and is usually invisible; replacing a good stream with generated
+  chrome because the flag is set costs more than it earns.
+- **Do not assume a page-object field means the same thing in two crates.**
+  The kerning inversion sat between `pdfrum-page`'s definition and
+  `pdfrum-render`'s use, with `pdfrum-text` reading it correctly the whole
+  time.
+- **Do not re-derive the Type3 `painted_box` change.** It is correct, it is
+  measured, and it is blocked on CCITT having a caller. Land the blocker, then
+  the change. (Its sibling, the Croscore boundary fix, was blocked the same way
+  on the §1.15 heuristic and both landed once that was written.)
+- **A change that measures negative may be right and blocked.** The Croscore
+  fix was −2 at 0.99 on its own and +2 with the heuristic under it, and
+  nothing about the diff said which. When a fix you have verified against the
+  oracle measures backwards on one file, ask what that file was depending on.
+- **Do not read `bug_1746` as a Type3 defect.** Its outer cause is that
+  `decode_ccitt` is never called — `pdfrum-filters`'s chain has no CCITT arm
+  at all. A correct Type3 fix makes the file *worse*, because it replaces
+  "draws nothing" with "draws garbage".
+- **Do not measure in the shared working tree while other agents edit it.**
+  Three of this wave's measurements were confounded that way, one of them
+  badly enough to invent two file movements that did not exist. Use a
+  `git worktree` at HEAD with its own `CARGO_TARGET_DIR`, or copy-aside plus
+  `git checkout --` on your own files. **Never `git stash`** — it is
+  tree-global and will take another agent's work with it.
+- **A dead-code function with a doc comment naming its future caller is a
+  standing invitation.** `SubstFont::is_actual_font_loaded` was ported, tested,
+  and documented as "the glyph-spacing heuristic of §1.15 turns on it" —
+  and the heuristic was never written, which is what left `bug_601362`
+  depending on a wrong face for its score.
+
+
 ## Numbers
 
 Measured against the golden store on the full corpus (1675 files, 1628 with
 a golden PNG), rendering through `tiny-skia`. The W3 column is the pixel
 burn-down's third wave; M5 is where the burn-down started.
 
-| metric | M5 | M8 (wave 2) | W3/W4 | W5 | W6 | W7 | W8 | W9 | **W10** |
-|---|---|---|---|---|---|---|---|---|---|
-| pixel files at SSIM ≥ 0.99 | 1075 / 1628 (66.0%) | 1243 / 1628 (76.4%) | 1247 / 1628 (76.6%) | 1387 / 1628 (85.2%) | 1403 / 1628 (86.2%) | 1441 / 1628 (88.5%) | 1471 / 1628 (90.4%) | 1513 / 1628 (92.9%) | **1540 / 1628 (94.6%)** |
-| at SSIM ≥ 0.95 | 1478 / 1628 (90.8%) | 1518 / 1628 (93.2%) | 1520 / 1628 (93.4%) | 1554 / 1628 (95.5%) | — | 1574 / 1628 (96.7%) | 1595 / 1628 (98.0%) | 1603 / 1628 (98.5%) | **1605 / 1628 (98.6%)** |
-| at SSIM ≥ 0.90 | 1544 / 1628 (94.8%) | 1570 / 1628 (96.4%) | 1572 / 1628 (96.6%) | 1591 / 1628 (97.7%) | — | 1597 / 1628 (98.1%) | 1615 / 1628 (99.2%) | 1616 / 1628 (99.3%) | **1616 / 1628 (99.3%)** |
-| byte-exact PNGs | 430 / 1628 | 446 / 1628 | 451 / 1628 | 451 / 1628 | 487 / 1628 | 499 / 1628 | 511 / 1628 | 511 / 1628 | **511 / 1628** |
-| files passing (all tiers) | 1146 / 1675 | 1256 / 1675 | 1260 / 1675 | 1396 / 1675 | 1411 / 1675 | 1448 / 1675 | 1478 / 1675 | 1510 / 1675 | **1569 / 1675** |
-| `pixel-fail` | 495 | 385 | 381 | 241 | 225 | 187 | 157 | 115 | **88** |
-| `size-mismatch` | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | **0** |
-| Tier C hard failures | — | 5 | 3 | 3 | 3 | 3 | 3 | 3 | **3** |
+| metric | M5 | M8 (wave 2) | W3/W4 | W5 | W6 | W7 | W8 | W9 | W10 | **W11** |
+|---|---|---|---|---|---|---|---|---|---|---|
+| pixel files at SSIM ≥ 0.99 | 1075 / 1628 (66.0%) | 1243 / 1628 (76.4%) | 1247 / 1628 (76.6%) | 1387 / 1628 (85.2%) | 1403 / 1628 (86.2%) | 1441 / 1628 (88.5%) | 1471 / 1628 (90.4%) | 1513 / 1628 (92.9%) | 1540 / 1628 (94.6%) | **1566 / 1628 (96.2%)** |
+| at SSIM ≥ 0.95 | 1478 / 1628 (90.8%) | 1518 / 1628 (93.2%) | 1520 / 1628 (93.4%) | 1554 / 1628 (95.5%) | — | 1574 / 1628 (96.7%) | 1595 / 1628 (98.0%) | 1603 / 1628 (98.5%) | 1605 / 1628 (98.6%) | **1616 / 1628 (99.3%)** |
+| at SSIM ≥ 0.90 | 1544 / 1628 (94.8%) | 1570 / 1628 (96.4%) | 1572 / 1628 (96.6%) | 1591 / 1628 (97.7%) | — | 1597 / 1628 (98.1%) | 1615 / 1628 (99.2%) | 1616 / 1628 (99.3%) | 1616 / 1628 (99.3%) | **1619 / 1628 (99.4%)** |
+| byte-exact PNGs | 430 / 1628 | 446 / 1628 | 451 / 1628 | 451 / 1628 | 487 / 1628 | 499 / 1628 | 511 / 1628 | 511 / 1628 | 511 / 1628 | **516 / 1628** |
+| files passing (all tiers) | 1146 / 1675 | 1256 / 1675 | 1260 / 1675 | 1396 / 1675 | 1411 / 1675 | 1448 / 1675 | 1478 / 1675 | 1510 / 1675 | 1569 / 1675 | **1602 / 1675** |
+| `pixel-fail` | 495 | 385 | 381 | 241 | 225 | 187 | 157 | 115 | 88 | **62** |
+| `size-mismatch` | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | **0** |
+| Tier C hard failures | — | 5 | 3 | 3 | 3 | 3 | 3 | 3 | 3 | **3** |
 
 **The W7 column is wave 7 and wave 7b together**, and the two were measured
 apart before it was written, because they landed on the same tree:
