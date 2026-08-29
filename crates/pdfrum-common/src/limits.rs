@@ -67,6 +67,16 @@ pub struct Limits {
     /// further ranges are dropped with a diagnostic rather than erroring, in
     /// the same spirit as `max_decoded_stream_len`.
     pub max_cmap_ranges: usize,
+
+    /// Maximum depth of a name tree, number tree, structure tree, form-field
+    /// `/Parent` walk, field-name trie, or chained `/Next` action.
+    ///
+    /// PDFium caps four of those six at 32 and leaves the number tree and the
+    /// action chain uncapped — both of which are unbounded recursion on a
+    /// cyclic file. One knob covers all six; no real document approaches it,
+    /// and exceeding it answers "not found" with a diagnostic rather than
+    /// erroring.
+    pub max_name_tree_depth: u32,
 }
 
 impl Limits {
@@ -90,6 +100,7 @@ impl Default for Limits {
             max_page_count: 0x000F_FFFF,
             max_decoded_stream_len: 1024 * 1024 * 1024,
             max_cmap_ranges: 65_536,
+            max_name_tree_depth: 32,
         }
     }
 }
@@ -112,6 +123,7 @@ mod tests {
         assert_eq!(l.max_page_count, 1_048_575);
         assert_eq!(l.max_decoded_stream_len, 1024 * 1024 * 1024);
         assert_eq!(l.max_cmap_ranges, 65_536);
+        assert_eq!(l.max_name_tree_depth, 32);
         assert_eq!(l.max_string_len, usize::MAX);
         assert_eq!(l.max_array_len, usize::MAX);
         assert_eq!(Limits::INVALID_OBJ_NUM, 0xFFFF_FFFF);
