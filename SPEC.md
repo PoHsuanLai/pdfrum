@@ -523,6 +523,21 @@ pub trait RasterBackend {  // factory: lets the engine rasterize soft masks & ti
 // (engine tiles or clamps above 65535); build luminosity masks from raw
 // bytes, never the BT.709 helpers; asymmetric /Extend is engine-emulated via
 // Pad + a computed clip.
+// [spec] wave 8: `AntiAlias` gains a third variant, `FullCover`, because AGG
+// has three modes and not two. `full_cover` keeps the rasterizer's own
+// choice of which pixels a span covers and discards their coverage *value*,
+// writing every one at the source alpha (`CFX_AggRenderer::GetSrcAlpha`
+// against `GetSourceAlpha`, cfx_agg_devicedriver.cpp:481-491) — which is a
+// test against zero, not the midpoint threshold `aliased_path` applies.
+// Reading it as `Off` put a white pin-hole through every internal seam of a
+// subdivided Coons patch, because a pixel two abutting cells each half-cover
+// is dropped by both. The engine's integrator expresses it exactly
+// (`scanline::Coverage::Full`), vello's aliasing threshold expresses it
+// exactly at `Some(1)`, and tiny-skia — which has only a bool — maps it to
+// *antialiased*, the nearer of its two: reaching every pixel the oracle
+// reaches and writing some light beats not reaching them at all. The scratch
+// pixmap and the draw-cells-opaque discipline are unchanged and still
+// required (D12, §5.3).
 
 pub struct RenderOptions { pub transform: Affine, pub text_aa: TextAa, pub grayscale: bool, pub subpixel_text_positioning: bool, /* (abridged) */ }
 pub fn render_page(page: &Page, opts: &RenderOptions, backend: &impl RasterBackend) -> Pixmap;

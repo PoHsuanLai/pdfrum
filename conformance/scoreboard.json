@@ -1,12 +1,12 @@
 {
-  "generated_at": "2026-08-29T09:52:40Z",
+  "generated_at": "2026-08-29T10:16:35Z",
   "totals": {
     "files": 1675,
-    "pass": 1448,
-    "fail": 227,
+    "pass": 1457,
+    "fail": 218,
     "by_tag": {
       "page-count": 2,
-      "pixel-fail": 187,
+      "pixel-fail": 178,
       "tierA-mismatch": 81
     },
     "text": {
@@ -13718,10 +13718,8 @@
     },
     {
       "path": "corpus/fx/shading/2_shading_type_6_00.pdf",
-      "status": "fail",
-      "tags": [
-        "pixel-fail"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -13741,19 +13739,17 @@
         }
       },
       "tierB": {
-        "ssim": 0.355881,
-        "exact": false,
-        "max_channel_diff": 248,
+        "ssim": 1,
+        "exact": true,
+        "max_channel_diff": 0,
         "pages": 1
       },
-      "notes": "ssim 0.355881 below floor 0.990000"
+      "notes": ""
     },
     {
       "path": "corpus/fx/shading/2_shading_type_6_001.pdf",
-      "status": "fail",
-      "tags": [
-        "pixel-fail"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -13773,12 +13769,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.612057,
+        "ssim": 0.999828,
         "exact": false,
-        "max_channel_diff": 255,
+        "max_channel_diff": 196,
         "pages": 1
       },
-      "notes": "ssim 0.612057 below floor 0.990000"
+      "notes": ""
     },
     {
       "path": "corpus/fx/text/050_extra_m.pdf",
@@ -20928,10 +20924,8 @@
     },
     {
       "path": "corpus/third_party/tcpdf/example_030.pdf",
-      "status": "fail",
-      "tags": [
-        "pixel-fail"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -20953,12 +20947,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.486847,
+        "ssim": 0.999123,
         "exact": false,
-        "max_channel_diff": 255,
+        "max_channel_diff": 254,
         "pages": 2
       },
-      "notes": "ssim 0.486847 below floor 0.990000"
+      "notes": ""
     },
     {
       "path": "corpus/third_party/tcpdf/example_031.pdf",
@@ -39648,10 +39642,8 @@
     },
     {
       "path": "resources/pixel/bug_1546.in",
-      "status": "fail",
-      "tags": [
-        "pixel-fail"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -39671,19 +39663,17 @@
         }
       },
       "tierB": {
-        "ssim": 0.959089,
+        "ssim": 0.999889,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.959089 below floor 0.990000"
+      "notes": ""
     },
     {
       "path": "resources/pixel/bug_1546.pdf",
-      "status": "fail",
-      "tags": [
-        "pixel-fail"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -39703,12 +39693,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.959089,
+        "ssim": 0.999889,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.959089 below floor 0.990000"
+      "notes": ""
     },
     {
       "path": "resources/pixel/bug_1638.in",
@@ -41877,9 +41867,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999975,
-        "exact": false,
-        "max_channel_diff": 255,
+        "ssim": 1,
+        "exact": true,
+        "max_channel_diff": 0,
         "pages": 1
       },
       "notes": ""
@@ -47269,10 +47259,8 @@
     },
     {
       "path": "resources/pixel/shade-tensor.in",
-      "status": "fail",
-      "tags": [
-        "pixel-fail"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -47292,19 +47280,17 @@
         }
       },
       "tierB": {
-        "ssim": 0.776281,
+        "ssim": 0.996030,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.776281 below floor 0.990000"
+      "notes": ""
     },
     {
       "path": "resources/pixel/shade-tensor.pdf",
-      "status": "fail",
-      "tags": [
-        "pixel-fail"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -47324,19 +47310,17 @@
         }
       },
       "tierB": {
-        "ssim": 0.776281,
+        "ssim": 0.996030,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.776281 below floor 0.990000"
+      "notes": ""
     },
     {
       "path": "resources/pixel/shade.in",
-      "status": "fail",
-      "tags": [
-        "pixel-fail"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -47356,19 +47340,17 @@
         }
       },
       "tierB": {
-        "ssim": 0.794683,
+        "ssim": 0.998955,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.794683 below floor 0.990000"
+      "notes": ""
     },
     {
       "path": "resources/pixel/shade.pdf",
-      "status": "fail",
-      "tags": [
-        "pixel-fail"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -47388,12 +47370,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.794683,
+        "ssim": 0.998955,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.794683 below floor 0.990000"
+      "notes": ""
     },
     {
       "path": "resources/pixel/single_point_paths.in",

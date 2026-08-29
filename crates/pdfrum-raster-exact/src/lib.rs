@@ -195,7 +195,7 @@ impl ExactDevice {
         self.raster.reset();
         self.raster.add_path(path, FLATTEN_TOLERANCE);
         let rule = to_scanline_rule(rule);
-        let antialias = aa == AntiAlias::On;
+        let coverage = to_coverage(aa);
         // Split the borrow: `raster` and the target live in the same struct,
         // and the sweep needs one while the paint closure needs the other.
         let (raster, layers, base) = (&mut self.raster, &mut self.layers, &mut self.base);
@@ -203,7 +203,7 @@ impl ExactDevice {
             Some(layer) => &mut layer.target,
             None => base,
         };
-        raster.sweep(rule, antialias, |x, len, y, alpha| {
+        raster.sweep(rule, coverage, |x, len, y, alpha| {
             paint(target, x, len, y, alpha);
         });
     }
@@ -301,7 +301,7 @@ impl ExactDevice {
         let width = w as usize;
         self.raster.sweep(
             to_scanline_rule(rule),
-            aa == AntiAlias::On,
+            to_coverage(aa),
             |x, len, y, alpha| {
                 let (Ok(row), Ok(w_i32)) = (u32::try_from(y), i32::try_from(w)) else {
                     return;
@@ -393,6 +393,15 @@ fn to_scanline_rule(rule: FillRule) -> scanline::FillRule {
     match rule {
         FillRule::Winding => scanline::FillRule::NonZero,
         FillRule::EvenOdd => scanline::FillRule::EvenOdd,
+    }
+}
+
+/// The integrator's coverage mode for the trait's antialiasing mode.
+fn to_coverage(aa: AntiAlias) -> scanline::Coverage {
+    match aa {
+        AntiAlias::On => scanline::Coverage::Exact,
+        AntiAlias::Off => scanline::Coverage::Thresholded,
+        AntiAlias::FullCover => scanline::Coverage::Full,
     }
 }
 

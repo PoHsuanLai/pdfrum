@@ -69,6 +69,17 @@ pub struct Mesh {
     pub triangles: Vec<Triangle>,
     /// Patches, from types 6 and 7.
     pub patches: Vec<Patch>,
+    /// The first colour component's decode range, `/Decode[4]` and
+    /// `/Decode[5]`.
+    ///
+    /// It is here because a mesh under a `/Function` reads exactly one
+    /// parametric value per colour and this range is its domain: the ramp is
+    /// sampled across it, and each vertex's value is mapped into the ramp's
+    /// 256 entries relative to it. `[0.0, 1.0]` is the common case but by no
+    /// means the only one — `[1, 2]`, `[0, 255]` and `[-128, 127]` all occur
+    /// in the corpus — and assuming the unit interval silently reads the
+    /// wrong end of the ramp for every one of them.
+    pub component_range: [f32; 2],
 }
 
 impl Mesh {
@@ -160,6 +171,19 @@ impl MeshParams {
                 (1u32 << component_bits) - 1
             },
         })
+    }
+
+    /// The first colour component's decode range — `/Decode[4]`, `/Decode[5]`.
+    ///
+    /// Under a `/Function` this is the parametric value's domain, which is
+    /// what a ramp is sampled across. The length check in [`Self::new`] has
+    /// already guaranteed both entries exist.
+    #[must_use]
+    pub fn component_range(&self) -> [f32; 2] {
+        [
+            self.decode.get(4).copied().unwrap_or(0.0),
+            self.decode.get(5).copied().unwrap_or(0.0),
+        ]
     }
 }
 

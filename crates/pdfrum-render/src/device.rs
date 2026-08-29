@@ -14,17 +14,33 @@ use crate::pixmap::{AlphaMask, Pixmap};
 
 /// Whether a primitive's edges are antialiased.
 ///
-/// `Off` is the oracle's `aliased_path`, which thresholds coverage at
-/// `> 127 -> 255` rather than turning the rasterizer off. It is what the
-/// engine asks for on the never-antialiased axis-aligned rect fast path and
-/// on Coons patch cells.
+/// The three modes are AGG's three, and they are genuinely three rather than
+/// a flag and its negation:
+///
+/// - `On` integrates coverage and writes it as alpha.
+/// - `Off` is the oracle's `aliased_path`, which thresholds the *same*
+///   coverage at `> 127 -> 255` rather than turning the rasterizer off. It is
+///   what the axis-aligned rect fast path and a hard-edged clip ask for.
+/// - `FullCover` is the oracle's `full_cover`, which keeps the rasterizer's
+///   choice of *which* pixels a span covers and then ignores the coverage
+///   value, writing every one of them at the source alpha
+///   (`CFX_AggRenderer::GetSrcAlpha` against `GetSourceAlpha`,
+///   `cfx_agg_devicedriver.cpp:481-491`).
+///
+/// The distinction between the last two is the whole reason `FullCover`
+/// exists. Thresholding drops a pixel two abutting cells each cover halfway,
+/// so a subdivided Coons patch shows white pin-holes along every internal
+/// seam; `full_cover` paints it from both cells, which is what makes the
+/// patch continuous.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum AntiAlias {
     /// Antialiased, the default for every ordinary fill and stroke.
     #[default]
     On,
-    /// Hard-edged.
+    /// Hard-edged: coverage thresholded at its midpoint.
     Off,
+    /// Every touched pixel at full alpha, whatever its coverage.
+    FullCover,
 }
 
 /// Which winding rule decides a path's interior.

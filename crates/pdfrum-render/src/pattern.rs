@@ -41,7 +41,6 @@ use crate::ctx::{RenderCaches, RenderCtx};
 use crate::device::{ImageQuality, MAX_TARGET_DIMENSION, RasterBackend, RenderDevice};
 use crate::path::{IntRect, is_available_matrix, outer_rect};
 use crate::pixmap::{AlphaMask, Pixmap, alpha_byte_rounding};
-use crate::shading;
 
 /// The cell area below which a tile is rendered at 8×8 and scaled down
 /// (`cpdf_rendertiling.cpp:217-227`).
@@ -214,16 +213,10 @@ pub fn draw<B: RasterBackend>(
                 }
                 // Rounded here and only here.
                 let a = alpha_byte_rounding(alpha);
-                if let Some(pixels) =
-                    shading::draw_to_pixmap(&p.shading, rect, matrix, a, &ctx.opts)
-                {
-                    device.draw_image(
-                        &pixels,
-                        Affine::translate((f64::from(rect.left), f64::from(rect.top))),
-                        ImageQuality::Nearest,
-                        1.0,
-                    );
-                }
+                // The same rasterizer `sh` reaches, including the scratch
+                // device types 6 and 7 need. Calling the buffer-only entry
+                // here made a Coons or tensor pattern paint nothing at all.
+                crate::walk::draw_shading_into(ctx, device, backend, &p.shading, rect, matrix, a);
             }
         }
         Pattern::Tiling(p) => {
