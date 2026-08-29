@@ -605,3 +605,75 @@ fn every_standard_font_resolves_to_its_own_blob() {
         assert!(s.glyphs.is_some(), "{f:?}");
     }
 }
+
+/// `RenameFontForTesting`, which the oracle applies to every request when
+/// `--croscore-font-names` is given.
+mod croscore {
+    use super::super::croscore_name;
+
+    #[test]
+    fn the_three_families_map_to_their_metric_compatible_faces() {
+        // `test_fonts` holds no Arial, Times or Courier: it holds the
+        // metric-compatible Croscore faces, and the rename is what reaches
+        // them. Matching is by *substring*, so a subset-prefixed or
+        // vendor-qualified spelling maps too.
+        for (asked, want) in [
+            ("Arial", "Arimo"),
+            ("ArialMT", "Arimo"),
+            ("Calibri", "Arimo"),
+            ("Helvetica", "Arimo"),
+            ("Times", "Tinos"),
+            ("TimesNewRoman", "Tinos"),
+            ("Courier", "Cousine"),
+            ("CourierNew", "Cousine"),
+        ] {
+            assert_eq!(croscore_name(asked), want, "{asked}");
+        }
+    }
+
+    #[test]
+    fn an_empty_name_is_serif() {
+        // The one case that is not a substring test: `face.IsEmpty()` shares
+        // the Times arm.
+        assert_eq!(croscore_name(""), "Tinos");
+    }
+
+    #[test]
+    fn anything_else_is_left_alone() {
+        // Deliberate: some fixtures want the built-in fallback, and reaching
+        // it depends on *not* being renamed into a face that exists.
+        for name in ["HonMincho-M", "Wingdings", "Symbol", "ZapfDingbats"] {
+            assert_eq!(croscore_name(name), name, "{name}");
+        }
+    }
+
+    #[test]
+    fn a_subset_prefixed_name_still_matches() {
+        // The test is `Contains`, not equality, so the six-letter subset tag
+        // a producer prepends does not hide the family. `bug_717.pdf`'s
+        // `ABCDEE+Calibri` is a real instance.
+        assert_eq!(croscore_name("ABCDEE+Calibri"), "Arimo");
+        assert_eq!(croscore_name("ABCDEE+Calibri-Bold"), "Arimo Bold");
+    }
+
+    #[test]
+    fn both_style_suffixes_can_apply_and_in_order() {
+        assert_eq!(croscore_name("Arial-Bold"), "Arimo Bold");
+        assert_eq!(croscore_name("Arial-Italic"), "Arimo Italic");
+        // `Oblique` is the other spelling of italic, and a name carrying
+        // both words gets both suffixes, bold first.
+        assert_eq!(croscore_name("Arial-BoldOblique"), "Arimo Bold Italic");
+        assert_eq!(
+            croscore_name("TimesNewRoman,BoldItalic"),
+            "Tinos Bold Italic"
+        );
+    }
+
+    #[test]
+    fn the_family_arms_are_tried_in_order() {
+        // A name matching two arms takes the first: `Arial` beats `Times`
+        // because the sans arm is tested first, which is only observable on
+        // a name carrying both words.
+        assert_eq!(croscore_name("ArialTimes"), "Arimo");
+    }
+}

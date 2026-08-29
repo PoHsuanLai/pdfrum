@@ -92,6 +92,47 @@ pub struct SubstitutionOptions {
     pub skip_font_enumeration: bool,
     /// Directories to scan instead of the system's, for a hermetic run.
     pub font_dirs: Vec<PathBuf>,
+    /// Whether a requested face name is rewritten to its Croscore equivalent
+    /// before the database is asked (`--croscore-font-names`).
+    ///
+    /// The oracle's `test_fonts` directory holds no Arial, Times or Courier:
+    /// it holds the metric-compatible Arimo, Tinos and Cousine. So a hermetic
+    /// run wraps its font info in a renamer
+    /// (`testing/test_fonts.cpp:19-45`) that rewrites the request on its way
+    /// in, and without the same rewriting a `/BaseFont /Helvetica` looks for
+    /// a face that is not there and falls through to the built-ins with
+    /// different metrics.
+    pub croscore_font_names: bool,
+}
+
+/// Rewrite a requested face name to its Croscore equivalent
+/// (`RenameFontForTesting`).
+///
+/// Three families map, by substring and in this order; everything else is
+/// returned unchanged, which is deliberate — some fixtures want the built-in
+/// fallback and reaching it depends on *not* matching here.
+#[must_use]
+pub fn croscore_name(face: &str) -> String {
+    let has = |needle: &str| face.contains(needle);
+    let base = if has("Arial") || has("Calibri") || has("Helvetica") {
+        "Arimo"
+    } else if face.is_empty() || has("Times") {
+        "Tinos"
+    } else if has("Courier") {
+        "Cousine"
+    } else {
+        return face.to_owned();
+    };
+
+    let mut out = base.to_owned();
+    // Both suffixes can apply, and in this order.
+    if has("Bold") {
+        out.push_str(" Bold");
+    }
+    if has("Italic") || has("Oblique") {
+        out.push_str(" Italic");
+    }
+    out
 }
 
 /// What substitution decided.
@@ -144,8 +185,22 @@ fn resolve_inner(
         italic_angle = 0;
     }
 
+    // Step 0 — the Croscore rewrite, when a hermetic run asked for it.
+    //
+    // Ahead of everything, because the C++ applies it in the wrapper around
+    // its `SystemFontInfoIface`: every request reaching the font info has
+    // already been renamed, so the whole ladder below — the subset-prefix
+    // strip, the style split, the family table — sees the new name.
+    let renamed;
+    let raw_name = if opts.croscore_font_names {
+        renamed = croscore_name(&String::from_utf8_lossy(&req.name)).into_bytes();
+        &renamed
+    } else {
+        &req.name
+    };
+
     // Step 1 — the name.
-    let name = subst_name(&req.name, req.is_truetype);
+    let name = subst_name(raw_name, req.is_truetype);
 
     // Step 2 — the two symbolic short-circuits. Note `ZapfDingbats` has no
     // TrueType condition while `Symbol` does.

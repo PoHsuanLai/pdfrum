@@ -10,8 +10,12 @@ Contract: SPEC.md §9 (including the 2026-08-29 rulings); behavior:
 
 | Metric | Before | After |
 |---|---|---|
-| `--txt` Tier-A, all pages | 872/1832 (47.6%) | **1816/1832 (99.1%)** |
-| `--txt` Tier-A, non-empty pages | 0/960 (0%) | **944/960 (98.3%)** |
+| `--txt` Tier-A, all pages | 872/1832 (47.6%) | **2052/2061 (99.6%)** |
+| `--txt` Tier-A, non-empty pages | 0/960 (0%) | **990/999 (99.1%)** |
+
+(The corpus grew from 1832 pages to 2061 across M2–M6, so the rates compare
+and the counts do not. The "after" column is current as of the Q6 fix below,
+which took the non-empty rate from 98.3% to 99.1%.)
 
 The non-empty rate is the M2 exit criterion (SPEC.md §9's `text-nonempty`
 ruling, PLAN.md §6): **≥ 98% is met at 98.3%.** The "before" column is the
@@ -131,26 +135,63 @@ source and, where it was decidable, against the built oracle:
    character above `U+FFFF` mirrors to `)`. Reproduced, and pinned by a test,
    because it is reachable from any RTL run containing one.
 
-## The remaining 16 pages
+## The Q6 cluster, resolved 2026-08-29
 
-Sixteen non-empty pages across thirteen files still differ, and every one of
-them is a **font-metric** difference rather than a heuristic one.
+The diagnosis was right and the cause was one wire, not a scoring subtlety.
+`pdfrum-tool` classified **`--font-dir=` and `--croscore-font-names` as
+accepted-but-unimplemented** and dropped both into `Options::unsupported`, so
+nothing ever built a non-default `SubstitutionOptions`. `font_dirs` was always
+empty, `SystemFontDb::scan` was never called, and every substitution resolved
+against an *empty* database — short-circuiting the ladder at step 7 straight
+into the built-in Foxit MM generics, while the oracle enumerated the 31
+Croscore/Noto faces in `test_fonts` and picked Arimo, Tinos or Cousine.
+Different face, different `hmtx`, different `space_threshold`.
 
-Every space and line-break threshold in the extraction pipeline is a function
-of `GetCharWidth`, which for a non-embedded font without `/Widths` comes from
-the *substituted face*. A different substitute than the oracle's hermetic
-`third_party/test_fonts` set gives different widths, which give different
-thresholds, which move a generated space — a whole-page Tier-A failure with
-no local cause and no local fix. That is exactly the Q6 risk the design brief
-names, and it says where to look: `pdfrum-font`, not here.
+`load_with_options` already existed and had no callers outside its own tests.
+Three things closed the gap:
 
-The clearest cases are `bug_1769.pdf` (characters the overlap logic should
-drop and does not), `bug_1388_3.pdf` (one space too many), `bug_1442723.pdf`
-(private-use codes reaching different Unicodes), and four CJK files whose
-codes map to nothing at all. One embedder test is `#[ignore]`d against
-`bug_1769`.
+- the two flags are parsed into real `Options` fields;
+- `BuildContext` carries a `SubstitutionOptions`, set once per document
+  (substitution must not vary between two pages of one file), and both
+  `pdfrum-page` font-load sites go through `load_with_options`;
+- the Croscore rename is ported (`croscore_name`, from
+  `testing/test_fonts.cpp:19-45`) and applied at the *request* boundary,
+  where the C++ wrapper applies it. Without it a `/BaseFont /Helvetica` looks
+  for a face `test_fonts` does not contain.
 
-The text side has no further work pending on any of them.
+One thing found while wiring it: `SystemFontDb::scan` returned faces in
+`fontdb`'s enumeration order, which is directory order. The C++'s list is a
+`std::map` keyed by face name, and two decisions read it *in order* — a tie in
+`similarity_score` goes to the incumbent, and rung 5 takes the first face
+claiming the charset. The scan now sorts by name.
+
+| metric | before | after |
+|---|---|---|
+| text Tier-A, all pages | 2040/2061 (99.0%) | **2052/2061 (99.6%)** |
+| text Tier-A, non-empty | 978/999 (97.9%) | **990/999 (99.1%)** |
+| files passing outright | 1087 | **1146** |
+| `pixel-fail` | 553 | **495** |
+
+`--check-regressions` reports none. The pixel column moves because the
+substituted face draws as well as measures.
+
+### The 9 pages that remain
+
+Nine non-empty pages across nine path entries, which dedup to **six** distinct
+sources — and they are no longer one cluster:
+
+- `bug_1769.{in,pdf}` — `world wo d` where the oracle gives `wo d wo d`. The
+  overlap logic should drop those characters and does not; the cause is in
+  the dedup pass, **not** in metrics. Its embedder test stays `#[ignore]`d,
+  with the reason corrected.
+- `bug_1388_3.{in,pdf}` — one space too many. This file embeds its font, so
+  substitution was never its problem either.
+- `bug_1442723.{in,pdf}` — private-use codes reaching different Unicodes.
+- `example_055.pdf`, `example_062.pdf`, `1_10_watermark.pdf` — one page each.
+
+The four CJK files the previous note listed (`bug_1402`, `bug_1355` and their
+`.in` twins) are fixed: they produced *no text at all* because the empty
+database gave them no glyphs, and they now match byte for byte.
 
 ## Tests
 

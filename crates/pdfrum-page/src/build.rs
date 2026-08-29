@@ -71,6 +71,15 @@ pub struct BuildContext {
     pub images: ImageCache,
     /// Fonts.
     pub fonts: FontCache,
+    /// How a non-embedded font finds a face to draw with.
+    ///
+    /// Carried here rather than passed in per call because every font load
+    /// under one document must make the same choice: a substitution that
+    /// varied between two `Tf` operators naming the same resource would give
+    /// one line of text different metrics from the next. Defaults to the
+    /// built-in faces alone, which is what keeps tests hermetic; the tool
+    /// fills it from `--font-dir` and `--croscore-font-names`.
+    pub substitution: pdfrum_font::SubstitutionOptions,
     /// Loaded font *instances*, keyed on the reference that named them.
     ///
     /// Separate from [`fonts`](Self::fonts), which hands out identities: this
@@ -126,6 +135,18 @@ impl BuildContext {
     #[must_use]
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// An empty context whose non-embedded fonts resolve through `options`.
+    ///
+    /// The caches start empty either way; this only fixes how substitution
+    /// will answer, which must be settled before the first font loads.
+    #[must_use]
+    pub fn with_substitution(options: pdfrum_font::SubstitutionOptions) -> Self {
+        Self {
+            substitution: options,
+            ..Self::default()
+        }
     }
 
     /// How many form parses are in flight.
@@ -919,9 +940,15 @@ impl<R: Resolve> Interp<'_, R> {
             .find(names::FONT, name, self.resolver)
             .and_then(|o| o.as_dict().cloned());
         let font = match dict {
-            Some(d) => {
-                pdfrum_font::load(&d, self.resolver, &ctx.fonts, limits, diags).map(Arc::new)
-            }
+            Some(d) => pdfrum_font::load_with_options(
+                &d,
+                self.resolver,
+                &ctx.fonts,
+                &ctx.substitution,
+                limits,
+                diags,
+            )
+            .map(Arc::new),
             // A name that resolves to nothing yields the stock font rather
             // than nothing at all.
             None => Some(Arc::new(Font::load_standard(
@@ -1050,14 +1077,16 @@ impl<R: Resolve> Interp<'_, R> {
         let resources = self.resources;
         let resolver = self.resolver;
         let fonts = &ctx.fonts;
+        let substitution = &ctx.substitution;
         let find_font = |spelling: &[u8]| -> Option<Arc<Font>> {
             let dict = resources
                 .find(names::FONT, &Name::new(spelling), resolver)
                 .and_then(|o| o.as_dict().cloned())?;
-            pdfrum_font::load(
+            pdfrum_font::load_with_options(
                 &dict,
                 resolver,
                 fonts,
+                substitution,
                 limits,
                 &mut Diagnostics::with_limit(0),
             )
