@@ -107,10 +107,33 @@ pub fn needs_appearance_in<R: Resolve>(dict: &Dict, catalog: Option<&Dict>, r: &
     if !has_known_field_type(dict, r) {
         return false;
     }
+    if has_kids(dict, r) {
+        return false;
+    }
     if dict.dict(names::AP, r).is_none() {
         return true;
     }
     needs_construct_ap(catalog, r) && rebuild_would_be_seen(dict, r)
+}
+
+/// Whether the dictionary is a form **field** with children rather than a
+/// control of its own.
+///
+/// A field that carries `/Kids` delegates its geometry to them, and the form
+/// loader never registers it as a control — `AddControl` is reached only for a
+/// field dict with no `/Kids`, and otherwise for each kid instead
+/// (`cpdf_interactiveform.cpp:969-981`). So such a dictionary has no
+/// appearance to build even when it names `/Subtype /Widget` and a field type,
+/// which a field shared by several controls routinely does.
+///
+/// **Without this the parent generates chrome as if it were a control.** Its
+/// `/Rect` is `[0 0 0 0]`, so the stream is empty over an empty box —
+/// invisible on the page, and yet enough to make the annotation dump report
+/// the colour keys as unreadable, because any appearance outranks them.
+/// `example_014` and `example_054` are that file.
+fn has_kids<R: Resolve>(dict: &Dict, r: &R) -> bool {
+    dict.array(names::KIDS, r)
+        .is_some_and(|kids| !kids.is_empty())
 }
 
 /// Whether the document's form asks for every appearance to be rebuilt.
