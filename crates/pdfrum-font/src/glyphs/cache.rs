@@ -18,6 +18,13 @@ use std::collections::HashMap;
 /// `hint_flags` is deliberately absent: we draw filled unhinted outlines
 /// unconditionally (OQ-4), so it would be a constant. The other five fields
 /// all genuinely vary an outline for at least one face kind.
+///
+/// Burn-down wave 4 reopened OQ-4 and re-closed it on measurement, so the
+/// field stays out — but note the key would also have to grow a **size** if
+/// it ever came back, since a hinted outline is size-dependent by definition.
+/// Not that it would buy much: the oracle hints every face at a fixed
+/// 64 ppem and scales the result, which moves points by ~0.04 device px at
+/// 9 pt. See `docs/status/pdfrum-font.md` under OQ-4.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct GlyphKey {
     /// Which font — cache entries from two fonts must never be confused even

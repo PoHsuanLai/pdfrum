@@ -5,12 +5,24 @@
 //!
 //! Below `|char2device.a| + |char2device.b| > 50` the oracle rasterizes
 //! *hinted FreeType glyph bitmaps* with LCD filtering, an integer-origin
-//! nudge and a 256-entry gamma table. Reproducing that would mean porting
-//! FreeType's hinter, which is explicitly out of scope. We render every glyph
-//! as a filled `BezPath` at every size. The **geometry** — glyph origins,
-//! advances, matrices — is unchanged and must match exactly; only the
-//! coverage on stem edges differs, which is why text pixels are Tier B and
-//! never Tier A.
+//! nudge and a 256-entry gamma table. We render every glyph as a filled
+//! `BezPath` at every size. The **geometry** — glyph origins, advances,
+//! matrices — is unchanged and must match exactly; only the coverage on stem
+//! edges differs, which is why text pixels are Tier B and never Tier A.
+//!
+//! Of those four differences the **integer-origin nudge** is the one that
+//! costs pixels, measured in burn-down wave 4. The oracle snaps each glyph to
+//! a whole pixel before blitting it (`cfx_renderdevice.cpp:1254-1257`:
+//! `floor` in x under LCD, `round` in y always) while we fill the outline
+//! where it truly lands, so every stem edge moves by the baseline's
+//! fractional part — mean +0.45 px per line on `example_063.pdf`. The hinter
+//! is *not* the cost: the oracle pins every face at 64 ppem
+//! (`FT_Set_Pixel_Sizes(face_rec, 64, 64)`, `cfx_face.cpp:376`) and passes
+//! the real size through `FT_Set_Transform`, which FreeType applies after
+//! hinting, so grid-fitting happens against a grid that is then scaled away —
+//! about 0.04 device px of point movement at 9 pt. The gamma table and the
+//! LCD downsample were both measured against the goldens too, and neither
+//! improves the match. See `docs/status/pdfrum-render.md`, wave 4.
 //!
 //! With the oracle's own flags (`bClearType` false, `bNoTextSmooth` false)
 //! the aliasing type is plain grayscale antialiasing, so subpixel text never
