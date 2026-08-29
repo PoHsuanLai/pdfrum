@@ -666,6 +666,132 @@ fn glyph_origins_snap_to_the_oracles_grid_unless_asked_not_to() {
     );
 }
 
+#[test]
+fn small_text_is_drawn_as_an_lcd_filtered_bitmap_and_large_text_is_not() {
+    // Wave 7's whole claim, as pixels a caller can see rather than as an
+    // internal function's output.
+    //
+    // The FIR5 filter spreads each subpixel span across five columns, so a
+    // small glyph inks *wider* than its own outline — measurably, and only
+    // below the size at which the oracle abandons bitmaps. Above that
+    // threshold the glyph is filled as an outline and the extra columns are
+    // not there, which is what makes this one test of both halves.
+    let widths = vec![600_i64; 128];
+    let font = || substituted_font("SomeFontNobodyHas", 0, &widths);
+
+    let small = {
+        let (object, _keep) = text_object(font(), 8.0, b"H", 10.0, 10.0);
+        let (p, _) = render_both(&page(60.0, 40.0, vec![object]), &RenderOptions::default());
+        ink_runs(&p, 0, p.height())
+    };
+    // 8 pt at one pixel per point is `|a| + |b| == 8`, far under the 50 that
+    // sends a run to `DrawTextPath`; 80 pt is far over it.
+    let large = {
+        let (object, _keep) = text_object(font(), 80.0, b"H", 10.0, 10.0);
+        let (p, _) = render_both(&page(300.0, 200.0, vec![object]), &RenderOptions::default());
+        ink_runs(&p, 0, p.height())
+    };
+    assert!(!small.is_empty(), "the small glyph painted something");
+    assert!(!large.is_empty(), "the large glyph painted something");
+
+    // The filter's reach is a fixed number of device pixels, so it is a large
+    // fraction of a small glyph's width and a negligible one of a big glyph's.
+    // Comparing the two as fractions of the em is what separates the filter
+    // from the glyph merely being bigger.
+    let span = |runs: &[(u32, u32)]| {
+        let lo = runs.first().map_or(0, |r| r.0);
+        let hi = runs.last().map_or(0, |r| r.1);
+        f64::from(hi - lo)
+    };
+    let small_fraction = span(&small) / 8.0;
+    let large_fraction = span(&large) / 80.0;
+    assert!(
+        small_fraction > large_fraction * 1.15,
+        "the small glyph must be relatively wider for the filter's reach: \
+         {small_fraction} vs {large_fraction}"
+    );
+}
+
+#[test]
+fn a_third_of_a_pixel_redistributes_a_small_glyphs_ink_without_moving_it() {
+    // The subpixel phase, which is why the bitmap cache keys on the *matrix*
+    // and the blit applies the phase rather than the other way round.
+    //
+    // Two origins inside one pixel are blitted at the *same* integer column
+    // and differ only in which window of the 3×-wide bitmap is averaged. That
+    // is not "no visible change" — a third of a pixel of ink really does move
+    // between neighbouring columns, and the leading edge can cross a
+    // threshold. What it is not allowed to do is translate the glyph, so the
+    // assertion is that the whole run moves by less than the whole pixel the
+    // two origins share, while the gray changes.
+    let widths = vec![600_i64; 128];
+    let font = || substituted_font("SomeFontNobodyHas", 0, &widths);
+    let at = |x: f64| {
+        let (object, _keep) = text_object(font(), 8.0, b"H", x, 10.0);
+        let (p, _) = render_both(&page(60.0, 40.0, vec![object]), &RenderOptions::default());
+        let runs = ink_runs(&p, 0, p.height());
+        // Every non-white byte on the page, in raster order, so the comparison
+        // cannot land on a blank row.
+        let mut ink = Vec::new();
+        for y in 0..p.height() {
+            for x in 0..p.width() {
+                if let Some(px) = p.pixel(x, y)
+                    && px[0] < 255
+                {
+                    ink.push(px[0]);
+                }
+            }
+        }
+        (runs, ink)
+    };
+    let (zero_runs, zero_row) = at(10.0);
+    let (third_runs, third_row) = at(10.4);
+    let start = |runs: &[(u32, u32)]| i64::from(runs.first().map_or(0, |r| r.0));
+    let end = |runs: &[(u32, u32)]| i64::from(runs.last().map_or(0, |r| r.1));
+    assert!(
+        (start(&zero_runs) - start(&third_runs)).abs() <= 1
+            && (end(&zero_runs) - end(&third_runs)).abs() <= 1,
+        "the ink stays within a pixel of where it was: {zero_runs:?} vs {third_runs:?}"
+    );
+    assert_ne!(
+        zero_row, third_row,
+        "but the phase changes which window of the 3x bitmap is averaged"
+    );
+}
+
+#[test]
+fn the_bitmap_path_and_the_outline_path_place_a_glyph_in_the_same_place() {
+    // The bitmap must not *move* the glyph — it changes how the ink is
+    // distributed, not where it goes. Comparing against
+    // `subpixel_text_positioning`, which still fills outlines, is the
+    // strongest available statement of that: the two disagree about coverage
+    // by construction, so the assertion is about the box.
+    let widths = vec![600_i64; 128];
+    let font = || substituted_font("SomeFontNobodyHas", 0, &widths);
+    let bbox = |opts: &RenderOptions| {
+        let (object, _keep) = text_object(font(), 10.0, b"H", 10.0, 10.0);
+        let (p, _) = render_both(&page(60.0, 40.0, vec![object]), opts);
+        let rows: Vec<u32> = (0..p.height())
+            .filter(|y| (0..p.width()).any(|x| p.pixel(x, *y).is_some_and(|px| px[0] < 250)))
+            .collect();
+        (
+            rows.first().copied().unwrap_or(0),
+            rows.last().copied().unwrap_or(0),
+        )
+    };
+    let bitmap = bbox(&RenderOptions::default());
+    let outline = bbox(&RenderOptions {
+        subpixel_text_positioning: true,
+        ..RenderOptions::default()
+    });
+    // The rows are the axis the bitmap does not filter — the LCD filter is
+    // horizontal — so they must agree exactly rather than approximately.
+    assert_eq!(
+        bitmap, outline,
+        "the bitmap path must not move the glyph vertically"
+    );
+}
+
 /// The first and last inked rows, and the coverage of the topmost one — the
 /// three numbers a sub-pixel vertical shift moves.
 fn ink_rows(p: &Pixmap) -> (u32, u32, u8) {

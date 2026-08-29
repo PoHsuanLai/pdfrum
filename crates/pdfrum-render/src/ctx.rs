@@ -114,7 +114,20 @@ impl RenderCtx<'_> {
 #[derive(Debug, Default)]
 pub struct RenderCaches {
     /// Glyph outlines, keyed as `pdfrum-font` keys them.
+    ///
+    /// Feeds the *path* side of text: display type above the size threshold,
+    /// a stroked or pattern-coloured run, and a caller who asked for fractional
+    /// placement.
     pub glyphs: GlyphCache,
+    /// Glyph bitmaps, keyed by the outline key plus the quantised device
+    /// matrix ([`crate::glyph::BitmapKey`]).
+    ///
+    /// Feeds the ordinary small-text path, which is most of the text in the
+    /// corpus. It is a second cache rather than a second field on the first
+    /// because the two are keyed differently — a bitmap depends on the size it
+    /// is drawn at and an outline does not — and because the outline cache
+    /// lives in `pdfrum-font`, which has no notion of a device.
+    pub glyph_bitmaps: crate::glyph::BitmapCache,
 }
 
 impl RenderCaches {

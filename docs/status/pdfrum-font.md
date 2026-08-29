@@ -293,8 +293,9 @@ The brief's D1–D13 are implemented as written, with these notes:
   `kGlyphNameSubsts` ligature remap. The oracle is built on Linux.
 - **Windows codepage conversion** (D2): the `kFX_CharsetUnicodes` tables and
   the `FX_MultiByteToWideChar` tails. The static-table scan is normative.
-- **Knockout, hinting, and the `tricky` font list** (OQ-4): we draw filled
-  unhinted outlines, so the only path that would hint is unreachable.
+- **Knockout, and the `tricky` font list** (OQ-4). Hinting was here too until
+  burn-down wave 7b measured what it is worth inside the oracle's glyph-bitmap
+  raster; see the note at the end of this entry.
 
   **2026-08-29 — OQ-4 was reopened by the orchestrator and re-closed on
   measurement. The ruling stands, but the *reason* recorded above was wrong,
@@ -350,6 +351,26 @@ The brief's D1–D13 are implemented as written, with these notes:
   Porting the hinter would therefore buy a sub-1/20-pixel geometry change.
   The tail it was supposed to close is elsewhere; see
   `pdfrum-render.md`'s wave 4 section for what it actually is.
+
+  **2026-08-29 — OQ-4 is now closed the other way, and the measurement above
+  is why it took three waves.** Burn-down wave 7b built the oracle's glyph
+  *bitmap* pipeline — the outline hinted at 64 ppem, rasterized three times as
+  wide, FIR5-filtered, gamma-averaged — and inside it the sub-1/20-pixel
+  geometry change is worth **up to 10 counts per pixel** on a 6 pt stem. A
+  3×-wide grid resolves a third of the horizontal displacement an ordinary one
+  does, and the filter then spreads that difference over five columns.
+
+  Nothing above is retracted. Hinting alone really does move points by ~0.04
+  device px, and hinting alone really would not have closed the tail; the
+  error was measuring one stage of a four-stage pipeline against the finished
+  output of a different one. `Face::hinted_outline` and `Font::hinted_glyph_path`
+  are the port, gated exactly as `RenderGlyph` gates it — SFNT faces only,
+  `Engine::Interpreter` because the oracle's FreeType has the autofitter
+  compiled out, and a `None` fallback to the unhinted outline wherever the
+  interpreter refuses the face, which is upstream's `FT_LOAD_PEDANTIC` retry.
+  The instance is memoized per face in a `OnceLock`: building one costs ~50 µs
+  and rebuilding it per glyph made a text page 30% slower than not hinting at
+  all. See `pdfrum-render.md`'s wave 7b section.
 - **CFF/Type 2 charstrings, OpenType wrapping, TTC parsing** — `read-fonts`
   owns all of those.
 

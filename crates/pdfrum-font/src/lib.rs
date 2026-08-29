@@ -175,6 +175,28 @@ impl Font {
         self.glyphs().outline(gid, &glyphs::GlyphParams::default())
     }
 
+    /// A glyph's outline in 1000/em text space, **grid-fitted at 64 ppem**.
+    ///
+    /// The same space [`Self::glyph_path`] returns, so a caller can substitute
+    /// one for the other without touching its matrices — which is what a
+    /// renderer rasterizing a glyph *bitmap* does, since the oracle hints on
+    /// that path and not on the outline one.
+    ///
+    /// `None` whenever the oracle would not hint either: a face with no table
+    /// directory (`!IsTtOt()`, which covers every bare CFF and every Type 1
+    /// program, so every base-14 substitution), a Type 3 font, and a face whose
+    /// own programs the interpreter refuses — the case
+    /// `cfx_face.cpp:849-857` handles by reloading the glyph unhinted. In all
+    /// of them the caller falls back to [`Self::glyph_path`] rather than
+    /// drawing nothing.
+    ///
+    /// Uncached, and *expensive*: it builds a hinting instance and runs the
+    /// face's bytecode. A renderer should call it only on a bitmap-cache miss.
+    #[must_use]
+    pub fn hinted_glyph_path(&self, gid: Gid) -> Option<BezPath> {
+        self.glyphs().hinted_outline(gid)
+    }
+
     /// Is this a vertical-writing font? Only a Type0 font with a `-V` CMap is.
     #[must_use]
     pub fn is_vertical(&self) -> bool {

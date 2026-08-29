@@ -1,25 +1,24 @@
 //! Text as filled glyph outlines (`ProcessText`,
 //! `cpdf_renderstatus.cpp:824-930`, and `CFX_RenderDevice::DrawTextPath`).
 //!
-//! # The one large deliberate divergence
+//! # Two paths, and which one a run takes
 //!
-//! Below `|char2device.a| + |char2device.b| > 50` the oracle rasterizes
-//! *hinted FreeType glyph bitmaps* with LCD filtering, an integer-origin
-//! snap and a 256-entry gamma table. We render every glyph as a filled
-//! `BezPath` at every size. The **coverage** on stem edges therefore differs,
-//! which is why text pixels are Tier B and never Tier A.
+//! The oracle draws small text and large text differently, and so does this.
+//! Below `|char2device.a| + |char2device.b| > 50` it rasterizes a *glyph
+//! bitmap* and blits it at a snapped origin; above, it fills the outline at
+//! its true position through `DrawTextPath`. [`takes_bitmap_path`] is that
+//! threshold and [`snaps_origins`] the three gates around it.
 //!
-//! Of those four differences the **integer origin** is the one that costs
-//! pixels, measured in burn-down wave 4 and ported in wave 5. It is
-//! reproducible without the bitmap, so it is reproduced: see [`snap_origin`]
-//! and [`crate::options::RenderOptions::subpixel_text_positioning`]. The
-//! hinter is *not* the cost — the oracle pins every face at 64 ppem
-//! (`FT_Set_Pixel_Sizes(face_rec, 64, 64)`, `cfx_face.cpp:376`) and passes
-//! the real size through `FT_Set_Transform`, which FreeType applies after
-//! hinting, so grid-fitting happens against a grid that is then scaled away —
-//! about 0.04 device px of point movement at 9 pt. The gamma table and the
-//! LCD downsample were both measured against the goldens too, and neither
-//! improves the match. See `docs/status/pdfrum-render.md`, waves 4 and 5.
+//! This module lays glyphs out and decides which path each run takes. It does
+//! not rasterize: the bitmap pipeline is [`crate::glyph`], which reproduces
+//! all four of the oracle's stages — the 64-ppem grid fit, the 3×-wide LCD
+//! rasterization, FreeType's FIR5 filter, and `kTextGammaAdjust` over the
+//! averaged triples. A run that takes it carries a [`BitmapPlacement`]; one
+//! that does not is drawn by filling [`PlacedGlyph::outline`].
+//!
+//! [`RenderOptions::subpixel_text_positioning`](crate::options::RenderOptions::subpixel_text_positioning)
+//! turns the bitmap path off for a caller who wants text where the PDF puts it
+//! rather than where a golden expects it.
 
 use kurbo::{Affine, BezPath, Vec2};
 
@@ -97,13 +96,42 @@ pub fn paint_kinds(mode: TextRenderMode, has_face: bool) -> Option<TextPaintKind
     }
 }
 
+/// Where a snapped glyph's bitmap goes, and which of its three phases to
+/// average.
+///
+/// Present exactly when the run takes the oracle's glyph-*bitmap* path, which
+/// is what [`snaps_origins`] decides. A run that does not — display type, a
+/// stroke, a caller who asked for fractional placement — carries `None` and is
+/// drawn by filling [`PlacedGlyph::outline`].
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct BitmapPlacement {
+    /// The whole-pixel device origin the bitmap's own origin lands on.
+    ///
+    /// `floor(x)` and `round(y)`: the two halves of the oracle's snap, kept
+    /// separate from the third-of-a-pixel remainder rather than folded into one
+    /// number, because the bitmap is blitted at the integer and the remainder
+    /// selects a *different bitmap* rather than moving this one.
+    pub origin: kurbo::Point,
+    /// Which third of a pixel the true origin sat in.
+    pub phase: crate::glyph::SubpixelPhase,
+}
+
 /// One glyph, placed.
 #[derive(Debug, Clone)]
 pub struct PlacedGlyph {
     /// The outline in 1000-unit text space, straight from the cache.
     pub outline: BezPath,
     /// Text space to device space for this glyph, font size included.
+    ///
+    /// For a snapped glyph this is the matrix *before* the snap: the snap is
+    /// [`Self::bitmap`]'s integer origin, and folding it in here as well would
+    /// apply it twice. For an unsnapped one it is simply where the glyph goes.
     pub matrix: Affine,
+    /// The cache key the outline came back under, which the bitmap path needs
+    /// to key its own cache by.
+    pub key: GlyphKey,
+    /// Where the bitmap goes, when this run takes the bitmap path.
+    pub bitmap: Option<BitmapPlacement>,
 }
 
 impl PlacedGlyph {
@@ -444,6 +472,8 @@ pub fn place_glyphs(
                     out.push(PlacedGlyph {
                         outline: outline.clone(),
                         matrix: glyph_matrix(*size, pen, text_to_device),
+                        key,
+                        bitmap: None,
                     });
                 }
             }
@@ -505,11 +535,21 @@ pub fn snaps_origins(
     !opts.subpixel_text_positioning && !kinds.stroke && takes_bitmap_path(font_size, text_to_device)
 }
 
-/// Snap a whole laid-out run onto integer device origins.
+/// Snap a whole laid-out run onto the oracle's blit grid.
 ///
 /// Split out from [`place_glyphs`] because the two halves are separable and
 /// only this one is the oracle's placement rule: the layout above is where
 /// the glyphs *are*, and this is where the oracle *draws* them.
+///
+/// Two things come out of it, and keeping them apart is the point.
+/// [`PlacedGlyph::matrix`] gets the snap folded in as a device translation, so
+/// that filling the outline lands where the oracle blits — which is what the
+/// pre-wave-7 engine did and what still runs whenever a bitmap cannot be
+/// produced. And [`PlacedGlyph::bitmap`] gets the *integer* origin together
+/// with the third-of-a-pixel remainder as a phase, because the bitmap path does
+/// not translate by a third of a pixel: it averages a different window of the
+/// same 3×-wide bitmap, which is a different set of bytes rather than the same
+/// bytes moved.
 fn snap_run(glyphs: &mut [PlacedGlyph], text_aa: TextAa) {
     if glyphs.is_empty() {
         return;
@@ -532,7 +572,32 @@ fn snap_run(glyphs: &mut [PlacedGlyph], text_aa: TextAa) {
         // snap happens. Folding it into the glyph matrix instead would scale
         // and rotate the nudge by the text matrix.
         glyph.matrix = Affine::translate(delta) * glyph.matrix;
+        glyph.bitmap = bitmap_placement(*from, *to, text_aa);
     }
+}
+
+/// The bitmap origin and phase for one glyph, or `None` in the mono mode,
+/// which has no LCD bitmap to shift a window into.
+///
+/// `snapped.x` is `floor(x) + phase/3` under `kLcd`, so the integer origin is
+/// its own floor — recovered from the snapped value rather than recomputed from
+/// the true one, because `AdjustGlyphSpace` may have moved it and the two must
+/// not disagree.
+fn bitmap_placement(
+    device: kurbo::Point,
+    snapped: kurbo::Point,
+    text_aa: TextAa,
+) -> Option<BitmapPlacement> {
+    if text_aa != TextAa::Grayscale {
+        // `kMono` renders a 1-bit mask through `CompositeOneBPPMask`, not an
+        // LCD triple, and it is reachable only under `--no-smoothtext`. Left on
+        // the outline path, where the whole-pixel snap above already places it.
+        return None;
+    }
+    Some(BitmapPlacement {
+        origin: kurbo::Point::new(snapped.x.floor(), snapped.y),
+        phase: crate::glyph::SubpixelPhase::of(device.x),
+    })
 }
 
 /// Whether a font has real outlines, which decides the stroke-to-fill

@@ -329,6 +329,8 @@ impl Font {
     /// The one text-decoding entry point everything (render, extract) shares:
     pub fn decode(&self, s: &[u8]) -> impl Iterator<Item = CharItem> + '_;
     pub fn glyph_path(&self, gid: Gid) -> Option<BezPath>;   // FontUnits scaled to 1000/em text space
+    /// The same space, grid-fitted at a pinned 64 ppem. [spec] wave 7b.
+    pub fn hinted_glyph_path(&self, gid: Gid) -> Option<BezPath>;
 }
 pub struct CharItem { pub code: CharCode, pub cid: Option<Cid>, pub gid: Gid, pub unicode: SmallVec<[char;2]>, pub width: f32 }
 ```
@@ -526,8 +528,9 @@ pub struct RenderOptions { pub transform: Affine, pub text_aa: TextAa, pub grays
 pub fn render_page(page: &Page, opts: &RenderOptions, backend: &impl RasterBackend) -> Pixmap;
 ```
 
-Engine decisions: text renders as filled glyph `BezPath`s through the glyph
-cache (render modes fill/stroke/clip per Tr). Axial/radial shadings map to
+Engine decisions: large text renders as filled glyph `BezPath`s through the
+glyph cache and small text as cached alpha bitmaps ([spec] wave 7b below);
+render modes fill/stroke/clip per Tr. Axial/radial shadings map to
 peniko gradients; function-based and mesh shadings (1,4–7) evaluate to a
 `Pixmap` via a pure shading evaluator, then `draw_image`. Tiling patterns:
 rasterize one tile offscreen via `RasterBackend`, draw repeated (respect
@@ -582,6 +585,37 @@ as the code:
    `--no-smoothtext` to `kMono` (whole pixels in x, plus `AdjustGlyphSpace`).
    The snap does not apply to a stroked or pattern-coloured run, which
    `ProcessText` sends to `DrawTextPath`, nor above the `> 50` threshold.
+
+   **([spec] 2026-08-29, burn-down wave 7b.)** The sentence above — "text
+   renders as filled glyph `BezPath`s through the glyph cache" — is now true
+   only *above* the threshold. Below it the engine reproduces the oracle's
+   glyph-**bitmap** pipeline, in a new `pdfrum-render::glyph` module:
+
+   - the outline is grid-fitted at a **pinned 64 ppem** for any SFNT face
+     (`Font::hinted_glyph_path`, new on `pdfrum-font`; `RenderGlyph` adds
+     `FT_LOAD_NO_HINTING` exactly when `!IsTtOt()`), transform applied after;
+   - it is rasterized **3× wide** with `ft_lcd_padding`'s 43/64-subpixel
+     margin, each span spread over five subpixel columns by FreeType's FIR5
+     `{8, 77, 86, 77, 8}` filter;
+   - the triples are averaged and passed through `kTextGammaAdjust`, with the
+     window shifted by the `x_subpixel` phase above.
+
+   `RenderCaches` gains a second cache, `glyph_bitmaps`, keyed by the existing
+   `GlyphKey` plus the device matrix quantised as `(int)(m · 10000)` — the
+   oracle's own `UniqueKeyGen` key, phase deliberately excluded because the
+   cached bitmap is the 3×-wide one and the phase is a read of it. The blit
+   goes through the existing `draw_image` seam at a whole-pixel translation,
+   so no trait grows a seventh method.
+
+   `pdfrum-raster-exact`'s `cell` module **moves into the engine** as
+   `pdfrum_render::scanline`, unchanged. A glyph bitmap must be identical
+   under every backend — the oracle's comes from FreeType, not from whatever
+   draws the page's paths — and one integrator in the engine is how that holds
+   by construction, the same argument `blend::composite_premultiplied` makes.
+
+   Worth **+23 files at SSIM ≥ 0.99** and +2 byte-exact, with no regressions,
+   and 1.5–3.5x on a text page for the two immediate-mode backends.
+   `subpixel_text_positioning` still turns the whole thing off.
 3. **The walk is generic over the backend, not `dyn`.** `RasterBackend::
    snapshot` needs the concrete device to read pixels back, so `&mut dyn
    RenderDevice` survives only where a device is genuinely swappable — the

@@ -186,6 +186,37 @@ impl GlyphSource {
         Some(Affine::scale(scale) * trimmed)
     }
 
+    /// A glyph's outline in 1000/em text space, **grid-fitted at 64 ppem**.
+    ///
+    /// The same space [`Self::outline`] returns, so the two are interchangeable
+    /// at every call site and the renderer's glyph matrix does not change. The
+    /// difference is what happened before the scaling: this one ran the face's
+    /// own hinting programs against a 64-pixel grid, which is what the oracle
+    /// does for every SFNT face it draws as a *bitmap*
+    /// (`CFX_Face::RenderGlyph`, `cfx_face.cpp:841-843`).
+    ///
+    /// The conversion is a pure scale — `1000 / 64` — because a 64-ppem
+    /// instance draws in 64ths of an em. That is exactly the composition the
+    /// oracle performs by handing FreeType a matrix pre-divided by 64, and it
+    /// is why grid-fitting at a pinned ppem is not the same thing as
+    /// grid-fitting at the size the glyph is drawn at.
+    ///
+    /// `None` for every face the oracle would not hint, which is the caller's
+    /// signal to fall back to [`Self::outline`] rather than to draw nothing:
+    /// a face with no table directory (`!IsTtOt()` — every bare CFF, so every
+    /// base-14 substitution, and every `Type1` program), and a face whose own
+    /// programs the interpreter refuses, which is the case upstream handles by
+    /// reloading the glyph unhinted (`cfx_face.cpp:849-857`).
+    #[must_use]
+    pub fn hinted_outline(&self, gid: Gid) -> Option<BezPath> {
+        let Self::Fontations(f) = self else {
+            return None;
+        };
+        let raw = f.hinted_outline(gid)?;
+        let trimmed = trim_empty_contours(raw)?;
+        Some(Affine::scale(1000.0 / f64::from(Face::HINT_PPEM)) * trimmed)
+    }
+
     /// A glyph's advance width in 1000/em units.
     ///
     /// Uses the **truncating** normalizer, which is the one
