@@ -20,10 +20,23 @@ use pdfrum_page::shading::Radial;
 use crate::pixmap::Pixmap;
 use crate::shading::steps::ColorSteps;
 
-/// `FXSYS_IsFloatZero`: an epsilon test, not `== 0.0`.
+/// `FXSYS_IsFloatZero` (`fx_system.h:36`): `(f) < 0.0001 && (f) > -0.0001`.
+///
+/// A **fixed 1e-4 tolerance**, not a machine epsilon — roughly 840 times
+/// wider than `f32::EPSILON`, and the difference is pixel-visible. `a` is
+/// `dx² + dy² - dr²`, so when the start point sits on the end circle it is a
+/// catastrophic cancellation: `radial_shading_point_at_border` has
+/// `|start| = 1 + 1.1e-7` against `r1 = 1`, giving `a ≈ 2.4e-7`. That is
+/// above `f32::EPSILON` and far below 1e-4, so the real test takes the
+/// **linear** `a == 0` branch — which has no negative-radius skip — while a
+/// machine epsilon takes the quadratic one and skips 14601 pixels the oracle
+/// paints in `C0`.
 fn is_float_zero(v: f64) -> bool {
-    v.abs() < f64::from(f32::EPSILON)
+    v.abs() < FLOAT_ZERO
 }
+
+/// The `FXSYS_IsFloatZero` tolerance.
+const FLOAT_ZERO: f64 = 1e-4;
 
 /// Whether the shading's radius shrinks fast enough that the *first* root is
 /// the meaningful one.
@@ -265,6 +278,57 @@ mod tests {
             s.is_some_and(|s| 1.0 + s * 5.0 < 0.0),
             "and the radius really is negative"
         );
+    }
+
+    /// `FXSYS_IsFloatZero` is a fixed 1e-4 tolerance, not a machine epsilon,
+    /// and the gap between the two decides which branch a near-degenerate
+    /// radial takes.
+    ///
+    /// `radial_shading_point_at_border` puts the start point on the end
+    /// circle — `|start| = 1 + 1.1e-7` against `r1 = 1` — so `a` cancels to
+    /// ~2.4e-7. Under 1e-4 that is zero and the **linear** branch runs, which
+    /// carries no negative-radius skip; under `f32::EPSILON` (1.19e-7) it is
+    /// not, the quadratic branch runs, and its skip discards 14601 pixels the
+    /// oracle paints in `C0` through the `index < 0` extend clamp. The file
+    /// went from 18.6% of pixels differing at max channel diff 252 to 4
+    /// pixels at diff 1.
+    #[test]
+    fn the_float_zero_tolerance_is_1e_4_not_a_machine_epsilon() {
+        assert!(is_float_zero(9.9e-5), "just inside the tolerance");
+        assert!(!is_float_zero(1.01e-4), "just outside it");
+        // The value that matters: `a` for the point-at-border fixture.
+        let a = 2.4e-7;
+        assert!(
+            is_float_zero(a),
+            "a machine epsilon would call this nonzero"
+        );
+        assert!(a > f64::from(f32::EPSILON), "and it really is above one");
+
+        // The fixture itself: a start point one part in ten million off the
+        // unit circle, with both extends on. Every point must be covered,
+        // because the linear branch never skips.
+        let border = Radial {
+            start: Point::new(-0.223_151, -0.974_784),
+            start_radius: 0.0,
+            end: Point::new(0.0, 0.0),
+            end_radius: 1.0,
+            t_min: 0.0,
+            t_max: 1.0,
+            extend_start: true,
+            extend_end: true,
+        };
+        let decreasing = is_decreasing(&border);
+        for (x, y) in [(-3.0, -0.4), (-3.0, -1.98), (-2.0, -0.8)] {
+            let s = position(&border, Point::new(x, y), decreasing);
+            assert!(
+                s.is_some(),
+                "({x}, {y}) takes the linear branch, which has no skip"
+            );
+            assert!(
+                s.is_some_and(|s| s < 0.0),
+                "and lands below the ramp, where /Extend clamps it to C0"
+            );
+        }
     }
 
     #[test]
