@@ -71,6 +71,7 @@ mod tests {
             backdrop: backdrop_rgb,
             transfer: None,
             matrix: Affine::IDENTITY,
+            objects: Vec::new(),
         }
     }
 

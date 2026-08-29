@@ -1067,6 +1067,73 @@ impl<R: Resolve> Interp<'_, R> {
             limits,
             diags,
         );
+        self.expand_soft_mask_group(ctx, limits, diags);
+    }
+
+    /// Interpret a newly installed soft mask's `/G` group into page objects.
+    ///
+    /// The group is a form `XObject` and what it paints is what the mask *is*,
+    /// so it has to be interpreted before the mask can mean anything — and
+    /// only the interpreter has the resolver and the recursion guard a form
+    /// parse needs, which is why this runs here rather than in `SoftMask::
+    /// load`.
+    ///
+    /// The group renders from a **clean state**, not the installing object's:
+    /// `LoadSMask` builds its status with `Initialize(null, null)`, so the
+    /// mask's own content is unaffected by the alpha, blend or colour in force
+    /// where the `/ExtGState` appeared. Inheriting them instead would make a
+    /// mask under `/ca 0.5` fade *itself* and then fade the object again.
+    fn expand_soft_mask_group(
+        &mut self,
+        ctx: &mut BuildContext,
+        limits: &Limits,
+        diags: &mut Diagnostics,
+    ) {
+        let Some(mask) = self.state.general.soft_mask.as_ref() else {
+            return;
+        };
+        if !mask.objects.is_empty() {
+            return;
+        }
+        let group = mask.group.clone();
+        let matrix = mask.matrix;
+        let content = pdfrum_filters::decode_chain(&group, 0, self.resolver, limits, diags).data;
+        let id = BufferId::new(None, &content);
+        if ctx.in_flight.len() > MAX_FORM_LEVEL || ctx.in_flight.contains(&id) {
+            diags.record(Severity::Recovered, DiagKind::FormRecursionRefused, None);
+            return;
+        }
+        // The group's `/Matrix` composes with the transform the `/ExtGState`
+        // was applied under, which is what places the mask on the page.
+        let form_matrix = group.dict.matrix(names::MATRIX, self.resolver);
+        let inner = GraphicsState {
+            ctm: matrix * form_matrix,
+            ..GraphicsState::default()
+        };
+        // A soft mask's group sees the **page's** resources when it declares
+        // none of its own, not the enclosing form's: `LoadSMask` builds the
+        // form with `PAGE resources`.
+        let resources = Resources::choose(
+            group.dict.dict(names::RESOURCES, self.resolver),
+            self.resources.page.clone(),
+            self.resources.page.clone(),
+        );
+        ctx.in_flight.insert(id);
+        let ops = crate::parse_content(&content, limits, diags);
+        let objects = interpret(
+            &ops,
+            &resources,
+            &inner,
+            inner.ctm,
+            self.resolver,
+            ctx,
+            limits,
+            diags,
+        );
+        ctx.in_flight.remove(&id);
+        if let Some(mask) = self.state.general.soft_mask.as_mut() {
+            Arc::make_mut(mask).objects = objects;
+        }
     }
 
     /// `Do`: a form or an image.

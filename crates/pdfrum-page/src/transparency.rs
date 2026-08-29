@@ -109,6 +109,17 @@ pub struct SoftMask {
     /// The transformation in force when the `/ExtGState` was applied, which
     /// is what places the mask.
     pub matrix: Affine,
+    /// The group's own page objects, interpreted from `group`.
+    ///
+    /// A soft mask's `/G` is a form `XObject` like any other, and what it paints
+    /// is what the mask *is*: a luminosity mask reads the group's rendered
+    /// luminance, an alpha mask its coverage. Left empty the mask is the `/BC`
+    /// backdrop alone — exact for a backdrop-only mask and wrong for every
+    /// other, which is how it silently blanked or revealed whole objects.
+    ///
+    /// Filled in by the interpreter, which is the only layer with a resolver;
+    /// `load` leaves it empty.
+    pub objects: Vec<crate::page::PageObject>,
 }
 
 impl SoftMask {
@@ -191,6 +202,9 @@ impl SoftMask {
             backdrop,
             transfer,
             matrix,
+            // Filled in by the interpreter, which has the resolver and the
+            // recursion guards a form parse needs.
+            objects: Vec::new(),
         })
     }
 
