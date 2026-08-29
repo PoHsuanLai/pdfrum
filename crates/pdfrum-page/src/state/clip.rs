@@ -1,0 +1,273 @@
+//! The clipping path (ISO 32000-1 §8.5.4).
+//!
+//! Two things live here that a naive stack would not have:
+//!
+//! - **An auto-merge.** When the previously pushed clip is a rectangle that
+//!   *contains* the new path's bounding box, the old entry is popped before
+//!   the new one is pushed. It changes no pixels, but it changes clip counts
+//!   in a dump, so it is not an optimization to skip.
+//! - **A text-clip batch is all-or-nothing at 1024 objects.** Adding a batch
+//!   that would take the total past the cap **drops the whole batch**
+//!   silently, rather than truncating it.
+
+use kurbo::{BezPath, Rect, Shape};
+
+/// The most text objects a clipping path may accumulate.
+pub const MAX_TEXT_OBJECTS: usize = 1024;
+
+/// One clipping contribution.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ClipEntry {
+    /// A path, with the rule that decides its interior.
+    Path {
+        /// The path in device-ish space; the drawn path keeps its own matrix.
+        path: BezPath,
+        /// Whether the even-odd rule applies.
+        even_odd: bool,
+    },
+    /// A batch of glyph outlines contributed by a text object in a clipping
+    /// render mode.
+    Text {
+        /// The glyph outlines.
+        glyphs: Vec<BezPath>,
+    },
+}
+
+/// The clipping state: an ordered list of contributions to intersect.
+///
+/// Cloning is cheap enough for `q`/`Q` because the paths are shared through
+/// the enclosing `Arc` on the graphics state.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct ClipStack {
+    entries: Vec<ClipEntry>,
+    /// How many text objects the whole stack holds, for the 1024 cap.
+    text_objects: usize,
+}
+
+impl ClipStack {
+    /// An unclipped state.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// The contributions, outermost first.
+    #[must_use]
+    pub fn entries(&self) -> &[ClipEntry] {
+        &self.entries
+    }
+
+    /// How many contributions there are.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.entries.len()
+    }
+
+    /// Whether nothing clips.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.entries.is_empty()
+    }
+
+    /// Add a path, merging it with a containing rectangle above it.
+    ///
+    /// The merge is what keeps a `re W n` inside a larger `re W n` from
+    /// producing two entries.
+    pub fn push_path(&mut self, path: BezPath, even_odd: bool) {
+        let incoming = path.bounding_box();
+        if let Some(ClipEntry::Path {
+            path: previous,
+            even_odd: _,
+        }) = self.entries.last()
+            && let Some(rect) = as_rectangle(previous)
+            && contains_rect(rect, incoming)
+        {
+            self.entries.pop();
+        }
+        self.entries.push(ClipEntry::Path { path, even_odd });
+    }
+
+    /// Add a batch of glyph outlines.
+    ///
+    /// Returns whether the batch was kept: a batch taking the total past
+    /// [`MAX_TEXT_OBJECTS`] is **dropped whole**, not truncated.
+    pub fn push_text(&mut self, glyphs: Vec<BezPath>) -> bool {
+        if self.text_objects + glyphs.len() > MAX_TEXT_OBJECTS {
+            return false;
+        }
+        self.text_objects += glyphs.len();
+        self.entries.push(ClipEntry::Text { glyphs });
+        true
+    }
+
+    /// Add an empty clip, which blanks everything after it.
+    ///
+    /// This is what a single-point path with a pending clip produces: a
+    /// degenerate rectangle at the origin, whose interior is nothing.
+    pub fn push_empty(&mut self) {
+        self.entries.push(ClipEntry::Path {
+            path: Rect::ZERO.to_path(0.1),
+            even_odd: false,
+        });
+    }
+
+    /// The intersection of every contribution's bounding box, or `None` when
+    /// nothing clips.
+    #[must_use]
+    pub fn bounds(&self) -> Option<Rect> {
+        let mut result: Option<Rect> = None;
+        for entry in &self.entries {
+            let rect = match entry {
+                ClipEntry::Path { path, .. } => path.bounding_box(),
+                // A text layer's contribution is the *union* of its glyphs;
+                // the layers then intersect.
+                ClipEntry::Text { glyphs } => {
+                    let mut union: Option<Rect> = None;
+                    for g in glyphs {
+                        let b = g.bounding_box();
+                        union = Some(union.map_or(b, |u| u.union(b)));
+                    }
+                    union?
+                }
+            };
+            result = Some(result.map_or(rect, |r| r.intersect(rect)));
+        }
+        result
+    }
+}
+
+/// Whether a path is exactly a rectangle, and which one.
+///
+/// PDFium tests the path's own shape rather than its bounding box, and
+/// builds the rectangle from points 0 and 2.
+fn as_rectangle(path: &BezPath) -> Option<Rect> {
+    let points: Vec<_> = path
+        .elements()
+        .iter()
+        .filter_map(|el| match el {
+            kurbo::PathEl::MoveTo(p) | kurbo::PathEl::LineTo(p) => Some(*p),
+            _ => None,
+        })
+        .collect();
+    // A rectangle is five points with the last closing back onto the first,
+    // or four with an explicit close.
+    if !(4..=5).contains(&points.len()) {
+        return None;
+    }
+    let (p0, p2) = (points.first()?, points.get(2)?);
+    let rect = Rect::from_points(*p0, *p2);
+    // Every point must sit on the rectangle's boundary for it to be one.
+    let on_edge = |p: &kurbo::Point| {
+        let x_edge = (p.x - rect.x0).abs() < 1e-9 || (p.x - rect.x1).abs() < 1e-9;
+        let y_edge = (p.y - rect.y0).abs() < 1e-9 || (p.y - rect.y1).abs() < 1e-9;
+        x_edge && y_edge
+    };
+    points.iter().all(on_edge).then_some(rect)
+}
+
+/// Whether `outer` contains `inner`, inclusively.
+fn contains_rect(outer: Rect, inner: Rect) -> bool {
+    outer.x0 <= inner.x0 && outer.y0 <= inner.y0 && outer.x1 >= inner.x1 && outer.y1 >= inner.y1
+}
+
+#[cfg(test)]
+mod tests {
+    // Test fixtures quote the oracle's own vectors, compare floats exactly
+    // where the behaviour being pinned is exact, and index arrays whose
+    // length the fixture itself fixes.
+    #![allow(
+        clippy::unreadable_literal,
+        clippy::float_cmp,
+        clippy::indexing_slicing,
+        clippy::cast_precision_loss,
+        clippy::cast_possible_truncation,
+        reason = "test fixtures quote oracle vectors verbatim and compare exactly"
+    )]
+
+    use super::{ClipStack, MAX_TEXT_OBJECTS};
+    use kurbo::{BezPath, Rect, Shape};
+
+    fn rect_path(x0: f64, y0: f64, x1: f64, y1: f64) -> BezPath {
+        Rect::new(x0, y0, x1, y1).to_path(0.1)
+    }
+
+    #[test]
+    fn a_contained_rectangle_replaces_its_container() {
+        let mut stack = ClipStack::new();
+        stack.push_path(rect_path(0.0, 0.0, 100.0, 100.0), false);
+        assert_eq!(stack.len(), 1);
+        // A smaller rectangle inside the first merges rather than stacking.
+        stack.push_path(rect_path(10.0, 10.0, 50.0, 50.0), false);
+        assert_eq!(stack.len(), 1);
+        let bounds = stack.bounds().expect("bounds");
+        assert!((bounds.width() - 40.0).abs() < 1.0);
+    }
+
+    #[test]
+    fn an_overlapping_rectangle_does_not_merge() {
+        let mut stack = ClipStack::new();
+        stack.push_path(rect_path(0.0, 0.0, 100.0, 100.0), false);
+        // Sticking out to the right: not contained, so both stay.
+        stack.push_path(rect_path(50.0, 50.0, 150.0, 150.0), false);
+        assert_eq!(stack.len(), 2);
+    }
+
+    #[test]
+    fn a_text_batch_past_the_cap_is_dropped_whole() {
+        let mut stack = ClipStack::new();
+        let glyph = || rect_path(0.0, 0.0, 1.0, 1.0);
+        // Exactly the cap fits.
+        let batch: Vec<_> = std::iter::repeat_with(glyph)
+            .take(MAX_TEXT_OBJECTS)
+            .collect();
+        assert!(stack.push_text(batch));
+        assert_eq!(stack.len(), 1);
+        // One more is refused, and nothing is truncated in.
+        assert!(!stack.push_text(vec![glyph()]));
+        assert_eq!(stack.len(), 1);
+    }
+
+    #[test]
+    fn a_batch_that_would_overflow_is_refused_before_any_of_it_lands() {
+        let mut stack = ClipStack::new();
+        let glyph = || rect_path(0.0, 0.0, 1.0, 1.0);
+        let batch: Vec<_> = std::iter::repeat_with(glyph)
+            .take(MAX_TEXT_OBJECTS - 1)
+            .collect();
+        assert!(stack.push_text(batch));
+        // Two more would make 1025: the whole batch is dropped.
+        assert!(!stack.push_text(vec![glyph(), glyph()]));
+        assert_eq!(stack.len(), 1);
+    }
+
+    #[test]
+    fn an_empty_clip_blanks_everything() {
+        let mut stack = ClipStack::new();
+        stack.push_path(rect_path(0.0, 0.0, 100.0, 100.0), false);
+        stack.push_empty();
+        let bounds = stack.bounds().expect("bounds");
+        assert!(bounds.area() < 1e-6, "got {bounds:?}");
+    }
+
+    #[test]
+    fn an_unclipped_stack_has_no_bounds() {
+        assert!(ClipStack::new().bounds().is_none());
+        assert!(ClipStack::new().is_empty());
+    }
+
+    #[test]
+    fn text_layers_union_within_and_intersect_between() {
+        let mut stack = ClipStack::new();
+        // One layer covering two far-apart glyphs unions to a wide box.
+        stack.push_text(vec![
+            rect_path(0.0, 0.0, 10.0, 10.0),
+            rect_path(90.0, 0.0, 100.0, 10.0),
+        ]);
+        let bounds = stack.bounds().expect("bounds");
+        assert!((bounds.width() - 100.0).abs() < 1.0);
+        // A second layer intersects with the first.
+        stack.push_text(vec![rect_path(0.0, 0.0, 20.0, 10.0)]);
+        let bounds = stack.bounds().expect("bounds");
+        assert!(bounds.width() <= 21.0);
+    }
+}

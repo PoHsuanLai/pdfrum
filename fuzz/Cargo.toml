@@ -32,6 +32,7 @@ pdfrum-crypt = { path = "../crates/pdfrum-crypt" }
 pdfrum-filters = { path = "../crates/pdfrum-filters" }
 pdfrum-cmap = { path = "../crates/pdfrum-cmap" }
 pdfrum-parser = { path = "../crates/pdfrum-parser" }
+pdfrum-page = { path = "../crates/pdfrum-page" }
 
 # The root workspace forbids `unsafe` and denies panics. This workspace does
 # not inherit those lints (it is a separate workspace by construction), but
@@ -171,6 +172,62 @@ bench = false
 [[bin]]
 name = "parser_load_password"
 path = "fuzz_targets/parser_load_password.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "page_parse_content"
+path = "fuzz_targets/page_parse_content.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "page_inline_image"
+path = "fuzz_targets/page_inline_image.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "page_colorspace"
+path = "fuzz_targets/page_colorspace.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "page_psengine"
+path = "fuzz_targets/page_psengine.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "page_mesh_stream"
+path = "fuzz_targets/page_mesh_stream.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "page_decode_image"
+path = "fuzz_targets/page_decode_image.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "page_jbig2"
+path = "fuzz_targets/page_jbig2.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "page_jpx"
+path = "fuzz_targets/page_jpx.rs"
 test = false
 doc = false
 bench = false

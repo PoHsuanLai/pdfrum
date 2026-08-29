@@ -10,3 +10,17 @@ repository.workspace = true
 workspace = true
 
 [dependencies]
+pdfrum-common.workspace = true
+pdfrum-object.workspace = true
+pdfrum-filters.workspace = true
+pdfrum-font.workspace = true
+kurbo.workspace = true
+smallvec.workspace = true
+thiserror.workspace = true
+moxcms.workspace = true
+zune-jpeg.workspace = true
+hayro-jpeg2000.workspace = true
+hayro-jbig2.workspace = true
+
+[dev-dependencies]
+pdfrum-parser.workspace = true

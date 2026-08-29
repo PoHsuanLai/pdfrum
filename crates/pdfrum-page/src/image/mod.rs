@@ -1,0 +1,837 @@
+//! Image `XObject`s: from a stream to pixels (ISO 32000-1 §8.9).
+//!
+//! The load is a ladder, and every rung has a failure mode worth knowing:
+//!
+//! 1. **Validate the dictionary** — dimensions, bit depth, the two
+//!    filter-driven coercions. There is no "repair a bad bit depth to eight";
+//!    see [`dict`].
+//! 2. **Resolve the colour space**, consulting form resources only for inline
+//!    images.
+//! 3. **Build the decode mapping** from `/Decode`, or the space's defaults.
+//! 4. **Run the codec** the last filter names, or read raw samples.
+//! 5. **Load the mask**, where `/SMask` beats `/Mask` and a mask that fails
+//!    to load is simply dropped rather than failing the image.
+//!
+//! # Owned pixels, not a lazy scanline source
+//!
+//! PDFium produces scanlines on demand from three mutable scratch buffers.
+//! SPEC.md §7 pins an owned [`ImageData`] instead (design brief D22): every
+//! per-scanline *behaviour* is preserved — the truncated-stream zero pad, the
+//! palette packing, the sixteen-bit high-byte truncation — and only the
+//! laziness is gone. Memory is bounded by the same four-gibibyte cap the C++
+//! enforces.
+
+mod cache;
+mod dct;
+mod decode_array;
+pub mod dict;
+mod jbig2;
+mod jpx;
+mod mask;
+mod scanline;
+
+pub use cache::{ImageCache, MAX_BYTES, MAX_ENTRIES, RequestedSize};
+pub use dct::{
+    ADOBE_CMYK_DECODE, DctImage, allows_reduced_resolution, decode_dct, probe as probe_dct,
+    scale_denominator, scaled_size,
+};
+pub use decode_array::DecodeMap;
+pub use dict::{ImageDict, MAX_DIMENSION};
+pub use jbig2::{BitImage, decode_jbig2};
+pub use jpx::{JpxAction, JpxColorSpace, JpxImage, decode_jpx, is_stock_device};
+pub use mask::{ColorKey, ImageMask, matte_color};
+pub use scanline::{
+    get_bits, invert_line, palette_index, rgb_line_to_bgr, scale_to_byte, scanline,
+};
+
+use crate::color::{ColorSpace, Rgb};
+use crate::error::Error;
+use crate::function::FunctionCache;
+use crate::names;
+use pdfrum_common::{DiagKind, Diagnostics, Limits, Severity};
+use pdfrum_filters::{Filter, decode_chain};
+use pdfrum_object::{Dict, Object, Resolve, Stream};
+
+/// Decoded pixels, in whichever shape the source produced.
+///
+/// Keeping the shape rather than always widening to RGB matters: an indexed
+/// image's palette is what a renderer needs to resample correctly, and a
+/// one-bit stencil is a mask, not a picture.
+#[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
+pub enum Pixels {
+    /// One bit per pixel, packed MSB-first with byte-aligned rows. A set bit
+    /// paints; this is what a stencil mask produces.
+    Stencil(BitImage),
+    /// Eight-bit grey.
+    Gray8(Box<[u8]>),
+    /// Eight-bit red, green, blue.
+    Rgb8(Box<[u8]>),
+    /// Eight-bit cyan, magenta, yellow, black.
+    Cmyk8(Box<[u8]>),
+    /// Palette indices with the palette to resolve them.
+    Indexed {
+        /// One index per pixel.
+        indices: Box<[u8]>,
+        /// The resolved colours, one per index value.
+        palette: Box<[Rgb]>,
+    },
+}
+
+impl Pixels {
+    /// How many components each pixel carries.
+    #[must_use]
+    pub fn components(&self) -> usize {
+        match self {
+            Self::Stencil(_) | Self::Gray8(_) | Self::Indexed { .. } => 1,
+            Self::Rgb8(_) => 3,
+            Self::Cmyk8(_) => 4,
+        }
+    }
+
+    /// Bytes held.
+    #[must_use]
+    pub fn byte_size(&self) -> usize {
+        match self {
+            Self::Stencil(b) => b.bits.len(),
+            Self::Gray8(d) | Self::Rgb8(d) | Self::Cmyk8(d) => d.len(),
+            Self::Indexed { indices, palette } => {
+                indices.len() + palette.len() * std::mem::size_of::<Rgb>()
+            }
+        }
+    }
+
+    /// The colour at `(x, y)` in an image `width` samples across.
+    #[must_use]
+    pub fn color_at(&self, x: u32, y: u32, width: u32) -> Rgb {
+        let Some(index) = usize::try_from(y)
+            .ok()
+            .and_then(|row| row.checked_mul(usize::try_from(width).ok()?))
+            .and_then(|base| base.checked_add(usize::try_from(x).ok()?))
+        else {
+            return Rgb::BLACK;
+        };
+        let byte = |i: usize, data: &[u8]| f32::from(data.get(i).copied().unwrap_or(0)) / 255.0;
+        match self {
+            Self::Stencil(b) => {
+                let v = if b.pixel(x, y) { 0.0 } else { 1.0 };
+                Rgb { r: v, g: v, b: v }
+            }
+            Self::Gray8(d) => {
+                let v = byte(index, d);
+                Rgb { r: v, g: v, b: v }
+            }
+            Self::Rgb8(d) => Rgb {
+                r: byte(index * 3, d),
+                g: byte(index * 3 + 1, d),
+                b: byte(index * 3 + 2, d),
+            },
+            Self::Cmyk8(d) => crate::color::ColorSpace::DeviceCmyk.to_rgb(&[
+                byte(index * 4, d),
+                byte(index * 4 + 1, d),
+                byte(index * 4 + 2, d),
+                byte(index * 4 + 3, d),
+            ]),
+            Self::Indexed { indices, palette } => {
+                let i = indices.get(index).copied().unwrap_or(0);
+                palette.get(usize::from(i)).copied().unwrap_or(Rgb::BLACK)
+            }
+        }
+    }
+}
+
+/// A fully decoded image.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ImageData {
+    /// Width in samples, from the codec when it disagreed with the
+    /// dictionary.
+    pub width: u32,
+    /// Height in samples.
+    pub height: u32,
+    /// The pixels.
+    pub pixels: Pixels,
+    /// The alpha, however it was expressed.
+    pub mask: Option<ImageMask>,
+    /// The `/Matte` colour a pre-blended soft-masked image was composed
+    /// against.
+    pub matte: Option<Rgb>,
+    /// `/Interpolate`, a hint the renderer may honour.
+    pub interpolate: bool,
+}
+
+impl ImageData {
+    /// Bytes held, for the cache's budget.
+    #[must_use]
+    pub fn byte_size(&self) -> usize {
+        self.pixels.byte_size()
+            + match &self.mask {
+                Some(ImageMask::Alpha { alpha, .. }) => alpha.len(),
+                _ => 0,
+            }
+    }
+}
+
+/// Decode an image `XObject`.
+///
+/// `form_resources` is consulted for a named colour space **only for inline
+/// images**; a real image `XObject` sees the page's resources alone. `size`
+/// says how much resolution the caller needs, which only the DCT and JPEG
+/// 2000 codecs act on.
+///
+/// # Errors
+///
+/// [`Error::ImageBadDict`] for a dictionary that will not validate,
+/// [`Error::ImageNoColorSpace`] when a non-mask image has no usable space,
+/// [`Error::ImageUndecodable`] when no codec can produce samples, and
+/// [`Error::CodecRejected`] when one tried and failed.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the image ladder genuinely needs the stream, both resource \
+              dictionaries, the requested size, the resolver, the function \
+              cache, limits and diagnostics"
+)]
+#[expect(
+    clippy::too_many_lines,
+    reason = "the load ladder reads as one sequence; splitting it would hide \
+              the order the rungs run in"
+)]
+pub fn decode_image<R: Resolve>(
+    stream: &Stream,
+    form_resources: Option<&Dict>,
+    page_resources: Option<&Dict>,
+    size: RequestedSize,
+    r: &R,
+    functions: &mut FunctionCache,
+    limits: &Limits,
+    diags: &mut Diagnostics,
+) -> Result<ImageData, Error> {
+    let info = ImageDict::load(&stream.dict, r, diags)?;
+
+    // A stencil mask needs no colour space at all.
+    if info.image_mask {
+        return decode_stencil(stream, &info, r, limits, diags);
+    }
+
+    let space = resolve_space(
+        &stream.dict,
+        form_resources,
+        page_resources,
+        r,
+        functions,
+        limits,
+        diags,
+    );
+    let components = info
+        .components
+        .max(u32::try_from(space.as_ref().map_or(0, ColorSpace::n_components)).unwrap_or(0));
+    let info = ImageDict { components, ..info };
+
+    let decoded = decode_chain(stream, info.total_bytes().unwrap_or(0), r, limits, diags);
+
+    // The codecs, dispatched on the last filter.
+    let (width, height, pixels, jpx_alpha) = match info.last_filter {
+        Some(Filter::Jpx) => {
+            let levels = size.levels(info.width, info.height);
+            let smask_in_data = stream.dict.int(names::SMASK_IN_DATA, r).unwrap_or(0);
+            let image = decode_jpx(&decoded.data, space.as_ref(), smask_in_data, levels, limits)
+                .inspect_err(|_| {
+                    diags.record(Severity::Suspicious, DiagKind::ImageDecodeFailed, None);
+                })?;
+            if image.space_override.is_some() {
+                diags.record(Severity::Recovered, DiagKind::JpxColorSpaceOverride, None);
+            }
+            let pixels = match image.components {
+                1 => Pixels::Gray8(image.data.into()),
+                4 => Pixels::Cmyk8(image.data.into()),
+                _ => Pixels::Rgb8(image.data.into()),
+            };
+            (image.width, image.height, pixels, image.alpha)
+        }
+        Some(Filter::Jbig2) => {
+            let globals = info
+                .params
+                .stream(names::JBIG2_GLOBALS, r)
+                // Absent or unfetchable globals are silently tolerated.
+                .map(|s| decode_chain(&s, 0, r, limits, diags).data);
+            let bits = decode_jbig2(
+                globals.as_deref(),
+                &decoded.data,
+                info.width,
+                info.height,
+                limits,
+            )
+            .inspect_err(|_| {
+                diags.record(Severity::Suspicious, DiagKind::ImageDecodeFailed, None);
+            })?;
+            (info.width, info.height, Pixels::Stencil(bits), None)
+        }
+        Some(Filter::Dct) => {
+            let image = decode_dct(&decoded.data).inspect_err(|_| {
+                diags.record(Severity::Suspicious, DiagKind::ImageDecodeFailed, None);
+            })?;
+            // The codec's dimensions **override** the dictionary's.
+            if image.width != info.width || image.height != info.height {
+                diags.record(
+                    Severity::Recovered,
+                    DiagKind::ImageDimensionsFromCodec,
+                    None,
+                );
+            }
+            if !dct::component_mismatch_allowed(space.as_ref(), image.components) {
+                return Err(Error::ImageUndecodable {
+                    what: "JPEG component count disagrees with the colour space",
+                });
+            }
+            let pixels = match image.components {
+                1 => Pixels::Gray8(image.data.into()),
+                4 => Pixels::Cmyk8(image.data.into()),
+                _ => Pixels::Rgb8(image.data.into()),
+            };
+            (image.width, image.height, pixels, None)
+        }
+        // A filter name we have no codec for, and no bytes came through.
+        Some(Filter::CcittFax) if decoded.image.is_some() => {
+            return Err(Error::ImageUndecodable {
+                what: "CCITT fax data was not decoded by the filter chain",
+            });
+        }
+        _ => {
+            if decoded.image.is_some() && info.last_filter.is_none() {
+                return Err(Error::ImageUndecodable {
+                    what: "an unrecognised filter left no decoder",
+                });
+            }
+            let pixels = unpack(&info, space.as_ref(), &decoded.data, diags)?;
+            (info.width, info.height, pixels, None)
+        }
+    };
+
+    // `/SMask` wins over `/Mask` at every level: when it is present the
+    // colour-key array is never even read.
+    let mask = load_mask(
+        &stream.dict,
+        &info,
+        space.as_ref(),
+        jpx_alpha,
+        r,
+        functions,
+        limits,
+        diags,
+    );
+
+    let matte = matte_color(
+        stream.dict.array(names::MATTE, r).as_ref(),
+        space.as_ref(),
+        usize::try_from(info.components).unwrap_or(0),
+    );
+
+    Ok(ImageData {
+        width,
+        height,
+        pixels,
+        mask,
+        matte,
+        interpolate: stream.dict.bool(names::INTERPOLATE).unwrap_or(false),
+    })
+}
+
+/// A stencil mask: one bit per pixel, inverted when the decode is the
+/// default.
+fn decode_stencil<R: Resolve>(
+    stream: &Stream,
+    info: &ImageDict,
+    r: &R,
+    limits: &Limits,
+    diags: &mut Diagnostics,
+) -> Result<ImageData, Error> {
+    let total = info.total_bytes().ok_or(Error::ImageTooLarge)?;
+    let decoded = decode_chain(stream, total, r, limits, diags);
+    let row_bytes = info.pitch().ok_or(Error::ImageTooLarge)?;
+    let mut bits = vec![0u8; total];
+    let mut padded = false;
+    for y in 0..info.height {
+        let (mut line, was_padded) = scanline::scanline(&decoded.data, y, row_bytes);
+        padded |= was_padded;
+        // The default decode **inverts**; `/Decode [1 0]` copies verbatim.
+        if info.default_decode {
+            scanline::invert_line(&mut line);
+        }
+        let start = usize::try_from(y).unwrap_or(0).saturating_mul(row_bytes);
+        if let Some(dest) = bits.get_mut(start..start + row_bytes) {
+            dest.copy_from_slice(&line);
+        }
+    }
+    if padded {
+        diags.record(Severity::Recovered, DiagKind::ImageStreamTruncated, None);
+    }
+    Ok(ImageData {
+        width: info.width,
+        height: info.height,
+        pixels: Pixels::Stencil(BitImage {
+            width: info.width,
+            height: info.height,
+            row_bytes,
+            bits,
+        }),
+        mask: None,
+        matte: None,
+        interpolate: stream.dict.bool(names::INTERPOLATE).unwrap_or(false),
+    })
+}
+
+/// The colour space, consulting form resources only for an inline image.
+fn resolve_space<R: Resolve>(
+    dict: &Dict,
+    form_resources: Option<&Dict>,
+    page_resources: Option<&Dict>,
+    r: &R,
+    functions: &mut FunctionCache,
+    limits: &Limits,
+    diags: &mut Diagnostics,
+) -> Option<ColorSpace> {
+    let cs_obj = dict.raw(names::COLOR_SPACE)?;
+    // Form resources first when there are any, then the page's.
+    form_resources
+        .and_then(|res| {
+            crate::color::load_colorspace(cs_obj, Some(res), r, functions, limits, diags)
+        })
+        .or_else(|| {
+            crate::color::load_colorspace(cs_obj, page_resources, r, functions, limits, diags)
+        })
+}
+
+/// Unpack raw or losslessly-filtered samples into pixels.
+fn unpack(
+    info: &ImageDict,
+    space: Option<&ColorSpace>,
+    data: &[u8],
+    diags: &mut Diagnostics,
+) -> Result<Pixels, Error> {
+    let space = space.ok_or(Error::ImageNoColorSpace)?;
+    let components = usize::try_from(info.components).unwrap_or(0);
+    if components == 0 || info.bpc == 0 {
+        return Err(Error::ImageUndecodable {
+            what: "zero components or bit depth",
+        });
+    }
+    let pitch = info.pitch().ok_or(Error::ImageTooLarge)?;
+    let pixels_per_row = usize::try_from(info.width).unwrap_or(0);
+    let rows = usize::try_from(info.height).unwrap_or(0);
+    let total_pixels = pixels_per_row
+        .checked_mul(rows)
+        .ok_or(Error::ImageTooLarge)?;
+
+    let decode = DecodeMap::new(Some(space), components, info.bpc, info.decode.as_ref());
+    let max_raw = if info.bpc >= 32 {
+        u32::MAX
+    } else {
+        (1u32 << info.bpc) - 1
+    };
+
+    // An indexed image keeps its indices and a resolved palette, which is
+    // what a renderer needs to resample it without blending indices.
+    if let ColorSpace::Indexed(indexed) = space {
+        let mut indices = vec![0u8; total_pixels];
+        let mut padded = false;
+        for y in 0..rows {
+            let (line, was_padded) = scanline::scanline(data, u32::try_from(y).unwrap_or(0), pitch);
+            padded |= was_padded;
+            for x in 0..pixels_per_row {
+                let raw = scanline::get_bits(&line, x * info.bpc as usize, info.bpc);
+                // An `/Decode` on an indexed image remaps the index itself.
+                #[expect(
+                    clippy::cast_possible_truncation,
+                    clippy::cast_sign_loss,
+                    reason = "the clamp bounds the value to a palette index"
+                )]
+                let mapped = decode.apply(0, f64_to_f32(raw)).clamp(0.0, 255.0) as u8;
+                if let Some(slot) = indices.get_mut(y * pixels_per_row + x) {
+                    *slot = mapped;
+                }
+            }
+        }
+        if padded {
+            diags.record(Severity::Recovered, DiagKind::ImageStreamTruncated, None);
+        }
+        let palette = (0..=indexed.max_index)
+            .map(|i| space.to_rgb(&[f32::from(i)]))
+            .collect();
+        return Ok(Pixels::Indexed {
+            indices: indices.into(),
+            palette,
+        });
+    }
+
+    // Everything else widens to eight bits per component in the space's own
+    // component order.
+    let mut out = vec![
+        0u8;
+        total_pixels
+            .checked_mul(components)
+            .ok_or(Error::ImageTooLarge)?
+    ];
+    let mut padded = false;
+    for y in 0..rows {
+        let (line, was_padded) = scanline::scanline(data, u32::try_from(y).unwrap_or(0), pitch);
+        padded |= was_padded;
+        for x in 0..pixels_per_row {
+            for c in 0..components {
+                let bit_pos = (x * components + c) * info.bpc as usize;
+                let raw = scanline::get_bits(&line, bit_pos, info.bpc);
+                #[expect(
+                    clippy::cast_precision_loss,
+                    reason = "raw samples cap at 16 bits, exact in f32"
+                )]
+                let value = decode.apply(c, raw as f32);
+                #[expect(
+                    clippy::cast_possible_truncation,
+                    clippy::cast_sign_loss,
+                    reason = "the clamp bounds the product to 0..=255"
+                )]
+                let byte = (value.clamp(0.0, 1.0) * 255.0) as u8;
+                if let Some(slot) = out.get_mut((y * pixels_per_row + x) * components + c) {
+                    *slot = byte;
+                }
+            }
+        }
+    }
+    if padded {
+        diags.record(Severity::Recovered, DiagKind::ImageStreamTruncated, None);
+    }
+    let _ = max_raw;
+    Ok(match components {
+        1 => Pixels::Gray8(out.into()),
+        4 => Pixels::Cmyk8(out.into()),
+        _ => Pixels::Rgb8(out.into()),
+    })
+}
+
+/// A raw sample as a float, at the precision the decode arithmetic uses.
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "raw samples cap at sixteen bits, exact in f32"
+)]
+fn f64_to_f32(raw: u32) -> f32 {
+    raw as f32
+}
+
+/// Load `/SMask`, then `/Mask`, then the colour key — in that order, and
+/// stopping at the first that produces something.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "loading a mask recursively needs the same context the base image did"
+)]
+fn load_mask<R: Resolve>(
+    dict: &Dict,
+    info: &ImageDict,
+    space: Option<&ColorSpace>,
+    jpx_alpha: Option<Vec<u8>>,
+    r: &R,
+    functions: &mut FunctionCache,
+    limits: &Limits,
+    diags: &mut Diagnostics,
+) -> Option<ImageMask> {
+    // A JPX image's captured alpha is already a mask.
+    if let Some(alpha) = jpx_alpha {
+        return Some(ImageMask::Alpha {
+            width: info.width,
+            height: info.height,
+            alpha: alpha.into(),
+            stencil: false,
+        });
+    }
+    // `/SMask` first, and its presence means `/Mask` is never consulted.
+    if let Some(smask) = dict.stream(names::SMASK, r) {
+        return load_mask_image(&smask, false, r, functions, limits, diags);
+    }
+    match dict.get(names::MASK, r).as_deref() {
+        // A `/Mask` stream is a stencil, whose sense is inverted.
+        Some(Object::Stream(mask_stream)) => {
+            load_mask_image(mask_stream, true, r, functions, limits, diags)
+        }
+        // A `/Mask` array is a colour key.
+        Some(Object::Array(array)) => {
+            let components = usize::try_from(info.components).unwrap_or(0);
+            if !ColorKey::is_complete(array, components) {
+                diags.record(Severity::Suspicious, DiagKind::ColorKeyArrayShort, None);
+            }
+            let max_raw = if info.bpc >= 32 {
+                u32::MAX
+            } else {
+                (1u32 << info.bpc.max(1)) - 1
+            };
+            let _ = space;
+            Some(ImageMask::ColorKey(ColorKey::from_array(
+                array, components, max_raw,
+            )))
+        }
+        _ => None,
+    }
+}
+
+/// Decode a mask image.
+///
+/// A mask is loaded **at full resolution, with no resources, and with no mask
+/// of its own** — so a four-hundred-pixel mask stays four hundred pixels even
+/// beside a fifty-pixel base image, and a mask can never carry a mask.
+///
+/// A failure here **drops the mask and keeps the base image**; it never fails
+/// the image.
+fn load_mask_image<R: Resolve>(
+    stream: &Stream,
+    stencil: bool,
+    r: &R,
+    functions: &mut FunctionCache,
+    limits: &Limits,
+    diags: &mut Diagnostics,
+) -> Option<ImageMask> {
+    let decoded = decode_image(
+        stream,
+        None,
+        None,
+        // Never resolution-reduced.
+        RequestedSize::Full,
+        r,
+        functions,
+        limits,
+        diags,
+    );
+    let Ok(image) = decoded else {
+        diags.record(Severity::Recovered, DiagKind::MaskDropped, None);
+        return None;
+    };
+    let pixels = usize::try_from(image.width)
+        .ok()?
+        .checked_mul(usize::try_from(image.height).ok()?)?;
+    let mut alpha = vec![0u8; pixels];
+    for y in 0..image.height {
+        for x in 0..image.width {
+            let rgb = image.pixels.color_at(x, y, image.width);
+            let Some(index) = usize::try_from(y)
+                .ok()
+                .and_then(|row| row.checked_mul(usize::try_from(image.width).ok()?))
+                .and_then(|base| base.checked_add(usize::try_from(x).ok()?))
+            else {
+                continue;
+            };
+            if let Some(slot) = alpha.get_mut(index) {
+                // A soft mask's alpha is its luminosity; a stencil's is its
+                // coverage.
+                *slot = rgb.to_bytes()[0];
+            }
+        }
+    }
+    Some(ImageMask::Alpha {
+        width: image.width,
+        height: image.height,
+        alpha: alpha.into(),
+        stencil,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    // Test fixtures quote the oracle's own vectors, compare floats exactly
+    // where the behaviour being pinned is exact, and index arrays whose
+    // length the fixture itself fixes.
+    #![allow(
+        clippy::unreadable_literal,
+        clippy::float_cmp,
+        clippy::indexing_slicing,
+        clippy::cast_precision_loss,
+        clippy::cast_possible_truncation,
+        reason = "test fixtures quote oracle vectors verbatim and compare exactly"
+    )]
+
+    use super::{ImageData, Pixels, RequestedSize, decode_image};
+    use crate::color::Rgb;
+    use crate::function::FunctionCache;
+    use crate::image::BitImage;
+    use pdfrum_common::{Diagnostics, Limits};
+    use pdfrum_object::{Array, ByteSpan, Dict, Name, NoResolve, Object, Stream};
+
+    fn stream(pairs: Vec<(Name, Object)>, data: &[u8]) -> Stream {
+        Stream::new(Dict::from_pairs(pairs), ByteSpan::from(data.to_vec()))
+    }
+
+    fn decode(s: &Stream) -> Result<ImageData, crate::Error> {
+        let mut funcs = FunctionCache::new();
+        let mut diags = Diagnostics::default();
+        decode_image(
+            s,
+            None,
+            None,
+            RequestedSize::Full,
+            &NoResolve,
+            &mut funcs,
+            &Limits::default(),
+            &mut diags,
+        )
+    }
+
+    #[test]
+    fn an_eight_bit_grayscale_image_round_trips() {
+        let s = stream(
+            vec![
+                (Name::from("Width"), Object::Int(2)),
+                (Name::from("Height"), Object::Int(2)),
+                (Name::from("BitsPerComponent"), Object::Int(8)),
+                (
+                    Name::from("ColorSpace"),
+                    Object::Name(Name::from("DeviceGray")),
+                ),
+            ],
+            &[0, 85, 170, 255],
+        );
+        let image = decode(&s).expect("should decode");
+        assert_eq!((image.width, image.height), (2, 2));
+        assert_eq!(
+            image.pixels,
+            Pixels::Gray8(Box::from(&[0u8, 85, 170, 255][..]))
+        );
+        assert!(image.mask.is_none());
+    }
+
+    #[test]
+    fn a_stencil_mask_with_the_default_decode_is_inverted() {
+        let s = stream(
+            vec![
+                (Name::from("Width"), Object::Int(8)),
+                (Name::from("Height"), Object::Int(1)),
+                (Name::from("ImageMask"), Object::Bool(true)),
+            ],
+            &[0b1010_1010],
+        );
+        let image = decode(&s).expect("should decode");
+        let Pixels::Stencil(BitImage { bits, .. }) = &image.pixels else {
+            panic!("expected a stencil, got {:?}", image.pixels);
+        };
+        assert_eq!(bits.first(), Some(&0b0101_0101));
+    }
+
+    #[test]
+    fn a_stencil_mask_with_decode_one_zero_is_copied_verbatim() {
+        let s = stream(
+            vec![
+                (Name::from("Width"), Object::Int(8)),
+                (Name::from("Height"), Object::Int(1)),
+                (Name::from("ImageMask"), Object::Bool(true)),
+                (
+                    Name::from("Decode"),
+                    Object::Array(Array::of([Object::Int(1), Object::Int(0)])),
+                ),
+            ],
+            &[0b1010_1010],
+        );
+        let image = decode(&s).expect("should decode");
+        let Pixels::Stencil(BitImage { bits, .. }) = &image.pixels else {
+            panic!("expected a stencil");
+        };
+        assert_eq!(bits.first(), Some(&0b1010_1010));
+    }
+
+    #[test]
+    fn a_truncated_stream_is_zero_padded_rather_than_rejected() {
+        let s = stream(
+            vec![
+                (Name::from("Width"), Object::Int(2)),
+                (Name::from("Height"), Object::Int(2)),
+                (Name::from("BitsPerComponent"), Object::Int(8)),
+                (
+                    Name::from("ColorSpace"),
+                    Object::Name(Name::from("DeviceGray")),
+                ),
+            ],
+            // Two bytes short of four.
+            &[10, 20],
+        );
+        let image = decode(&s).expect("should still decode");
+        assert_eq!(
+            image.pixels,
+            Pixels::Gray8(Box::from(&[10u8, 20, 0, 0][..]))
+        );
+    }
+
+    #[test]
+    fn an_indexed_image_keeps_its_indices_and_a_palette() {
+        let s = stream(
+            vec![
+                (Name::from("Width"), Object::Int(4)),
+                (Name::from("Height"), Object::Int(1)),
+                (Name::from("BitsPerComponent"), Object::Int(2)),
+                (
+                    Name::from("ColorSpace"),
+                    Object::Array(Array::of([
+                        Object::Name(Name::from("Indexed")),
+                        Object::Name(Name::from("DeviceGray")),
+                        Object::Int(3),
+                        Object::Str(pdfrum_object::PdfString::literal([0u8, 85, 170, 255])),
+                    ])),
+                ),
+            ],
+            // Four two-bit indices: 0, 1, 2, 3.
+            &[0b00_01_10_11],
+        );
+        let image = decode(&s).expect("should decode");
+        let Pixels::Indexed { indices, palette } = &image.pixels else {
+            panic!("expected indexed pixels, got {:?}", image.pixels);
+        };
+        assert_eq!(&**indices, &[0, 1, 2, 3]);
+        assert_eq!(palette.len(), 4);
+        assert!(palette[0].r.abs() < 1e-6);
+        assert!((palette[3].r - 1.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn a_bad_bit_depth_is_an_error_rather_than_a_repair() {
+        let s = stream(
+            vec![
+                (Name::from("Width"), Object::Int(2)),
+                (Name::from("Height"), Object::Int(2)),
+                (Name::from("BitsPerComponent"), Object::Int(3)),
+                (
+                    Name::from("ColorSpace"),
+                    Object::Name(Name::from("DeviceGray")),
+                ),
+            ],
+            &[0; 16],
+        );
+        assert!(decode(&s).is_err());
+    }
+
+    #[test]
+    fn a_colour_key_mask_is_read_from_a_mask_array() {
+        let s = stream(
+            vec![
+                (Name::from("Width"), Object::Int(2)),
+                (Name::from("Height"), Object::Int(1)),
+                (Name::from("BitsPerComponent"), Object::Int(8)),
+                (
+                    Name::from("ColorSpace"),
+                    Object::Name(Name::from("DeviceGray")),
+                ),
+                (
+                    Name::from("Mask"),
+                    Object::Array(Array::of([Object::Int(0), Object::Int(10)])),
+                ),
+            ],
+            &[5, 200],
+        );
+        let image = decode(&s).expect("should decode");
+        let Some(super::ImageMask::ColorKey(key)) = &image.mask else {
+            panic!("expected a colour key, got {:?}", image.mask);
+        };
+        assert!(key.is_transparent(&[5]));
+        assert!(!key.is_transparent(&[200]));
+    }
+
+    #[test]
+    fn pixel_lookup_is_bounds_checked() {
+        let pixels = Pixels::Rgb8(Box::from(&[255u8, 0, 0, 0, 255, 0][..]));
+        let red = pixels.color_at(0, 0, 2);
+        assert!((red.r - 1.0).abs() < 1e-6);
+        // Out of range reads as black rather than panicking.
+        assert_eq!(pixels.color_at(99, 99, 2), Rgb::BLACK);
+        assert_eq!(pixels.components(), 3);
+    }
+}

@@ -1,6 +1,6 @@
 # PDFium → Rust Rewrite — Master Plan
 
-**Status:** M1 code-complete (2026-08-29): 1468/1468 loads agree with the oracle, metadata+pageinfo 100% Tier-A byte-exact; 24h fuzz gate running. M2 (font/text) and M3 briefs done; font implementation in flight.
+**Status:** M1 code-complete (2026-08-29): 1468/1468 loads agree with the oracle, metadata+pageinfo 100% Tier-A byte-exact; 24h fuzz gate running. M2 (font/text) and M3 briefs done; `pdfrum-font` and `pdfrum-page` implemented, all gates green.
 **Oracle:** `/mnt/data2/pdfium/pdfium-c++` (read-only C++ PDFium checkout @ `6f2272e`)
 **Workspace:** `/mnt/data2/pdfium/pdfrum` (this repository)
 
