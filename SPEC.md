@@ -316,6 +316,46 @@ divergence D3 accepted: both sides converge on U+FFFD through the harness
 transcode, so Tier-A stays byte-exact. Cache owned by the render session,
 not global.
 
+[spec] 2026-08-29 (`pdfrum-type1` implementation, resolving font-brief **OQ-2**).
+The pinned `read-fonts = "=0.43.3"` **does** ship `ps::type1`, and it covers
+more than the brief expected: PFB/PFA/bare sniffing, both eexec ciphers, the
+whole Type 1 charstring operator set including `seac` and `flex`, and even the
+Multiple-Master blend othersubrs 14–18. What it does **not** expose is the one
+thing PDFium's `AdjustVariationParams` needs — instantiation at chosen design
+coordinates. `Type1Font::weight_vector` is read-only from the file, there is no
+setter, `/BlendAxisTypes`, `/BlendDesignPositions` and `/BlendDesignMap` are
+not parsed at all, and the public `CharstringContext` trait cannot be
+implemented over their font because the charstring and subroutine bytes have no
+public accessor. **OQ-2 therefore resolves to option 1**: `pdfrum-type1` stays
+first-party and complete. `read-fonts` is still a dependency, for the two
+things it genuinely owns — the Adobe Glyph List (`ps::agl`) and the predefined
+Standard/Expert/ISO-Latin-1 encoding tables (`ps::encoding`) — and its
+`ps::type1` serves as the crate's **differential test oracle** at the file's own
+weight vector. DEPS.md needs no change.
+
+Three shape corrections to §3.6 of the brief, made in the same commit as the code:
+
+1. `Encoding::Custom` carries `Box<[Option<Box<str>>; 256]>`, not
+   `Box<[Option<GlyphName>; 256]>`. `GlyphName` is a `pdfrum-font` type and
+   depending on it here would be the dependency cycle §3.6 itself identifies;
+   `pdfrum-font` maps these names into its own vocabulary at the boundary.
+2. `Gid` is defined **by this crate** (`pub struct Gid(pub u16)`) rather than
+   imported. Same reason.
+3. `outline`/`glyph_bounds` gain a `outline_with_diagnostics` sibling. A
+   charstring that aborts mid-glyph still yields its partial outline, and the
+   caller needs a way to learn that happened without making the common path
+   take a `&mut Diagnostics`.
+
+**Accepted divergence D14 (Tier-B, in our favor).** `read-fonts`/FreeType
+quantize every *unscaled* outline coordinate to a whole font unit (multiply by
+1/64, discard the low 10 bits, shift back). We keep the charstring's arithmetic
+in `f64` and return the unrounded value, because the outline is about to be
+multiplied by a text matrix and rasterized at device resolution, where dropping
+sub-unit precision is pure loss. Pinned by the differential test, which asserts
+the stronger property that their coordinate is exactly ours truncated. We also
+emit the zero-length segments FreeType's stem-darkening filter suppresses;
+suppressing them is a rasterizer's business, not a font parser's.
+
 ## 7. `pdfrum-page`  *(behavior: `core/fpdfapi/page`)*
 
 ```rust

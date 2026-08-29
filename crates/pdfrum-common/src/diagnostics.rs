@@ -96,6 +96,24 @@ pub enum DiagKind {
     CMapRangeLimit,
     /// More operands arrived for one CMap construct than it takes.
     CMapOperandOverflow,
+    /// A PFB container's segment chain ended early: a length running past the
+    /// blob, a missing `0x80` marker, or no end-of-file record. The segments
+    /// read so far were kept.
+    Type1PfbTruncated,
+    /// A PFA font program's hexadecimal private section ended at a byte that
+    /// is not a hex digit, so the tail was dropped.
+    Type1HexTruncated,
+    /// A Type 1 `/Encoding` entry named a glyph the `/CharStrings` dictionary
+    /// does not define, so that character code maps to nothing.
+    Type1EncodingGlyphMissing,
+    /// A Type 1 charstring could not be interpreted to completion — an
+    /// unknown operator, a stack underflow, a missing subroutine, or a
+    /// recursion depth cap. Whatever path had been built is kept.
+    Type1CharstringAborted,
+    /// A Multiple-Master font's `/WeightVector`, `/BlendDesignPositions`,
+    /// `/BlendDesignMap` and `/BlendAxisTypes` did not agree on the number of
+    /// axes or masters, so the font was treated as non-variable.
+    Type1BlendInconsistent,
 }
 
 /// One recorded recovery.
