@@ -24,6 +24,7 @@ members = [
     "crates/pdfrum-tool",
     "conformance",
     "benches",
+    "benches/corpus-list",
 ]
 
 [workspace.package]
@@ -71,6 +72,10 @@ pdfrum-text = { path = "crates/pdfrum-text", version = "=0.1.0" }
 pdfrum-doc = { path = "crates/pdfrum-doc", version = "=0.1.0" }
 pdfrum-edit = { path = "crates/pdfrum-edit", version = "=0.1.0" }
 pdfrum = { path = "crates/pdfrum", version = "=0.1.0" }
+# The M12 bench corpus list. A leaf — it depends on nothing, which is what lets
+# five library crates dev-depend on it without any of them acquiring a
+# dependency on the facade that depends on them. `publish = false`.
+pdfrum-corpus = { path = "benches/corpus-list", version = "=0.1.0" }
 
 # rendering & geometry
 kurbo = "=0.13.1"
@@ -113,6 +118,18 @@ rayon = "=1.12.0"
 anyhow = "=1.0.104"
 clap = { version = "=4.6.6", features = ["derive", "env"] }
 png = "=0.18.1"
+# Criterion, for the five per-crate bench targets and `pdfrum-bench`. Declared
+# here rather than repeated in six manifests so the pin and its reason live in
+# one place.
+#
+# Pinned to 0.5, not the current 0.8: since 0.6 criterion depends
+# unconditionally on `alloca`, which has a `cc` build-dependency and compiles
+# C. DEPS.md's pure-Rust guarantee is enforced by `cargo-deny`, which bans `cc`
+# outright, and `scripts/ci.sh` walks the whole workspace — so 0.8 fails the
+# gate. There is no feature flag that avoids it (`alloca` is not optional). 0.5
+# predates that dependency and is pure Rust; nothing in any bench uses an API
+# newer than it. It appears in no library crate's normal dependency tree.
+criterion = { version = "=0.5.1", default-features = false, features = ["cargo_bench_support"] }
 
 # M12: a release build carries line tables so `scripts/profile.sh` names
 # functions instead of addresses. `debug = 1` is line-tables-plus-frame-info,

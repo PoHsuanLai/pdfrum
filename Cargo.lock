@@ -775,10 +775,10 @@ dependencies = [
 name = "pdfrum-bench"
 version = "0.1.0"
 dependencies = [
- "criterion",
  "kurbo",
  "pdfrum",
  "pdfrum-common",
+ "pdfrum-corpus",
  "pdfrum-page",
  "pdfrum-raster-exact",
  "pdfrum-raster-tinyskia",
@@ -803,6 +803,10 @@ version = "0.1.0"
 dependencies = [
  "kurbo",
 ]
+
+[[package]]
+name = "pdfrum-corpus"
+version = "0.1.0"
 
 [[package]]
 name = "pdfrum-crypt"
@@ -838,7 +842,10 @@ dependencies = [
 name = "pdfrum-edit"
 version = "0.1.0"
 dependencies = [
+ "criterion",
+ "pdfrum",
  "pdfrum-common",
+ "pdfrum-corpus",
  "pdfrum-crypt",
  "pdfrum-filters",
  "pdfrum-font",
@@ -893,11 +900,14 @@ dependencies = [
 name = "pdfrum-page"
 version = "0.1.0"
 dependencies = [
+ "criterion",
  "hayro-jbig2",
  "hayro-jpeg2000",
  "kurbo",
  "moxcms 0.9.0",
+ "pdfrum",
  "pdfrum-common",
+ "pdfrum-corpus",
  "pdfrum-filters",
  "pdfrum-font",
  "pdfrum-object",
@@ -911,7 +921,10 @@ dependencies = [
 name = "pdfrum-parser"
 version = "0.1.0"
 dependencies = [
+ "criterion",
+ "pdfrum",
  "pdfrum-common",
+ "pdfrum-corpus",
  "pdfrum-crypt",
  "pdfrum-filters",
  "pdfrum-object",
@@ -954,8 +967,11 @@ dependencies = [
 name = "pdfrum-render"
 version = "0.1.0"
 dependencies = [
+ "criterion",
  "kurbo",
+ "pdfrum",
  "pdfrum-common",
+ "pdfrum-corpus",
  "pdfrum-font",
  "pdfrum-object",
  "pdfrum-page",
@@ -971,8 +987,11 @@ dependencies = [
 name = "pdfrum-text"
 version = "0.1.0"
 dependencies = [
+ "criterion",
  "kurbo",
+ "pdfrum",
  "pdfrum-common",
+ "pdfrum-corpus",
  "pdfrum-filters",
  "pdfrum-font",
  "pdfrum-object",
