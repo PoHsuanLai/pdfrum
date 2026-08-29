@@ -24,6 +24,7 @@
 //! sets on a single `bfchar`/`bfrange` section.
 
 use std::collections::BTreeMap;
+use std::fmt::Write as _;
 
 /// The most entries one `begin…`/`end…` block may hold (§9.10.3).
 const MAX_BLOCK: usize = 100;
@@ -60,30 +61,31 @@ pub fn to_unicode_cmap(map: &BTreeMap<u32, Vec<u32>>) -> Vec<u8> {
     let (singles, ranges) = classify(&entries);
 
     for block in singles.chunks(MAX_BLOCK) {
-        out.push_str(&format!("{} beginbfchar\n", block.len()));
+        let _ = writeln!(out, "{} beginbfchar", block.len());
         for (code, scalars) in block {
-            out.push_str(&format!("<{code:04X}> <{}>\n", hex_scalars(scalars)));
+            let _ = writeln!(out, "<{code:04X}> <{}>", hex_scalars(scalars));
         }
         out.push_str("endbfchar\n");
     }
 
     for block in ranges.chunks(MAX_BLOCK) {
-        out.push_str(&format!("{} beginbfrange\n", block.len()));
+        let _ = writeln!(out, "{} beginbfrange", block.len());
         for range in block {
             match range {
                 Range::Consecutive { start, end, first } => {
-                    out.push_str(&format!(
-                        "<{start:04X}> <{end:04X}> <{}>\n",
+                    let _ = writeln!(
+                        out,
+                        "<{start:04X}> <{end:04X}> <{}>",
                         hex_scalars(std::slice::from_ref(first))
-                    ));
+                    );
                 }
                 Range::Explicit { start, end, values } => {
-                    out.push_str(&format!("<{start:04X}> <{end:04X}> ["));
+                    let _ = write!(out, "<{start:04X}> <{end:04X}> [");
                     for (i, scalars) in values.iter().enumerate() {
                         if i > 0 {
                             out.push(' ');
                         }
-                        out.push_str(&format!("<{}>", hex_scalars(scalars)));
+                        let _ = write!(out, "<{}>", hex_scalars(scalars));
                     }
                     out.push_str("]\n");
                 }
@@ -195,12 +197,14 @@ fn hex_scalars(scalars: &[u32]) -> String {
         match scalar {
             // A lone surrogate is not a scalar value; the CMap says nothing.
             0xD800..=0xDFFF => out.push_str("0000"),
-            0..=0xFFFF => out.push_str(&format!("{scalar:04X}")),
+            0..=0xFFFF => {
+                let _ = write!(out, "{scalar:04X}");
+            }
             _ => {
                 let shifted = scalar.saturating_sub(0x1_0000);
                 let high = 0xD800 + (shifted >> 10);
                 let low = 0xDC00 + (shifted & 0x3FF);
-                out.push_str(&format!("{high:04X}{low:04X}"));
+                let _ = write!(out, "{high:04X}{low:04X}");
             }
         }
     }
