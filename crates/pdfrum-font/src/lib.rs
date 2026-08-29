@@ -73,7 +73,7 @@ pub mod tounicode;
 mod type3;
 mod widths;
 
-pub use cid::{CidToGid, Type0Font, VerticalMetrics};
+pub use cid::{CidToGid, CidTransform, Type0Font, VerticalMetrics, cid_transform_to_float};
 pub use descriptor::FontDescriptor;
 pub use error::Error;
 pub use glyphs::{GlyphCache, GlyphKey, GlyphSource, em_adjust, normalize_font_metric};
@@ -333,6 +333,24 @@ impl Font {
             Self::Simple(f) => f.char_bbox(code),
             Self::Type0(f) => f.char_bbox(code),
             Self::Type3(_) => Rect::ZERO,
+        }
+    }
+
+    /// The Adobe-Japan1 per-CID transform a character takes, when one applies.
+    ///
+    /// Only a **non-embedded** Japan1 CID font has one, and only for the
+    /// hundred and fifty-four CIDs the table lists. It moves the glyph within
+    /// its em box without touching the advance, so a renderer applies it to
+    /// the drawing origin alone — the pen walks on as if it were not there.
+    ///
+    /// Non-Japan1, embedded and non-CID fonts all answer `None`, which is the
+    /// whole of the C++'s gate (`CPDF_CIDFont::GetCIDTransform`,
+    /// `cpdf_cidfont.cpp:878-887`).
+    #[must_use]
+    pub fn japan1_transform(&self, code: CharCode) -> Option<CidTransform> {
+        match self {
+            Self::Type0(f) => f.japan1_transform(code),
+            Self::Simple(_) | Self::Type3(_) => None,
         }
     }
 
