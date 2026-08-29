@@ -213,7 +213,8 @@ missing-Length ⇒ keyword scan.
 - Position at `document_size − 9` and **search backwards** for the whole word
   `startxref` within the last **4096** bytes (`BackwardsSearchToWord`,
   cpdf_syntax_parser.cpp:939-975; whole-word check with `checkKeyword=false`
-  — delimiters neighboring the word are acceptable boundaries).
+  — delimiters neighboring the word are acceptable boundaries). **The byte at
+  that starting position is inside the search — see correction C1 (§6).**
 - Then skip the keyword, read one word: must be a number token, value via
   `atoi64` (clamps at i64::MAX), must be `< document size` → the xref offset.
   Any failure → 0.
@@ -376,7 +377,9 @@ Chain orchestration `LoadAllCrossRefTablesAndStreams` (cpdf_parser.cpp:395-472):
 Entry-precedence subtlety: merges use `merge_up(new_section_as_current,
 accumulated_as_top)` — since **top wins**, later-loaded (older) sections never
 override already-present entries; combined with `AddNormal`'s gen check inside
-a single section, "newest wins" holds throughout.
+a single section, "newest wins" holds throughout. **This describes
+cross-reference *streams* only; classic tables apply their entries directly —
+see correction C2 (§6).**
 
 ### 1.11 RebuildCrossRef — the recovery scan (cpdf_parser.cpp:761-839)
 
@@ -944,3 +947,89 @@ trailer/Info/encryption permissions). Encrypted-file clusters gate on
 6. **`Limits` field for max in-memory objstm cache** — C++ caches every
    object stream forever (per document). A 38MB objstm decodes once and
    stays; acceptable v1 (matches C++ memory behavior). No limit proposed.
+
+---
+
+## 6. Corrections (post-implementation, 2026-08-29)
+
+Two statements above are **wrong**, not merely underspecified. Both were
+found while implementing the crate, both changed which files the reader
+opens, and both are recorded here rather than edited in place so that a
+future port checked against this brief sees the defect and its resolution
+together. The implementation follows the corrected reading; the sections
+they correct are otherwise unchanged.
+
+(Underspecifications that cost implementation time but state nothing false —
+the name/keyword word-budget asymmetry, the depth cap refusing the nested
+object rather than its container, the page-tree visited set being
+ancestor-scoped, and the rebuild retry's weaker gate — are catalogued in
+`docs/status/pdfrum-parser.md` instead.)
+
+### C1 — §1.7: the backwards-scan origin byte is **inside** the window
+
+§1.7 says to "position at `document_size − 9` and search backwards … within
+the last 4096 bytes" without saying whether the byte *at* that position takes
+part in the comparison. It does.
+
+`GetCharAtBackward(pos, &ch)` (cpdf_syntax_parser.cpp:153-168) reads
+`file_buf_[pos - buf_offset_]` — the byte **at** `pos`. Its name refers to the
+direction the 512-byte block is loaded from, not to an index offset;
+everything else about the function (`pos += header_offset_`, the
+`pos >= file_len_` guard) reads as an off-by-one and is not one.
+`BackwardsSearchToWord` (:946-958) then opens with `pos = pos_`,
+`offset = taglen - 1`, so its first comparison is the keyword's **last**
+character against `bytes[pos_]`.
+
+Net: a match may occupy `[origin − 8, origin]` **inclusive** for a
+nine-character keyword. Implementing the exclusive reading loses exactly one
+position — a `startxref` followed by one separator and a seven-digit offset
+and nothing else, i.e. a file truncated with no trailing end-of-line or
+`%%EOF`. That is precisely the damage this scan exists to rescue, and the
+exclusive reading sends such a file to a full rebuild instead of reading the
+table sitting in it.
+
+No corpus file lands on the boundary, so it is held only by
+`lexer::tests::search_back_includes_the_byte_under_the_cursor` and
+`xref::chain::tests::a_start_xref_ending_at_the_search_origin_is_still_found`;
+both fail against the exclusive arithmetic.
+
+Note for anyone constructing a test here: `"…startxref12345678"` does **not**
+exercise this. `IsWholeWord` (:921-937) rejects it on the right-hand check —
+the byte after the keyword is Numeric — in the C++ as well as in our port, so
+both sides agree and nothing is proved. The separator is what makes the two
+readings diverge.
+
+### C2 — §1.10: classic tables do **not** merge via `merge_up`
+
+§1.10's closing paragraph ("Entry-precedence subtlety: merges use
+`merge_up(new_section_as_current, accumulated_as_top)`") describes *all*
+sections. It is true only of cross-reference **streams**.
+
+`LoadCrossRefTable` (cpdf_parser.cpp:668-676) hands its parsed entries to
+`MergeCrossRefObjectsData` (:678-705), which applies each one **directly
+against the accumulated table** through `SetFree` / `AddNormal` /
+`AddCompressed`. The consequences differ from `merge_up` in three ways that
+files depend on:
+
+- an entry of **equal** generation overwrites (`AddNormal` only declines on
+  `info.gennum > gen_num`), where `merge_up` would keep what is present;
+- `SetFree` overwrites **unconditionally**, clearing an entry a newer
+  section recorded;
+- a rejected object number (past `kMaxObjectNumber`) returns false and
+  **fails the whole table load** → rebuild, where a merge would silently drop
+  the entry.
+
+This is load-bearing for `/Size` ordering, which is how it surfaced. §1.10
+step 2 has the main classic trailer's `/Size` call `SetObjectMapSize` before
+any section is read; `SetObjectMapSize` materializes a phantom free entry at
+`size − 1` (§1.10, `cpdf_cross_ref_table.cpp:115-126`). Under the merge
+reading that phantom **wins** over the real object the table names at that
+number, so the document's last object becomes unfetchable. Applied directly,
+the real entry overwrites the phantom, which is what the C++ does. Getting
+either half wrong alone hides the other: implementing the merge reading with
+`/Size` applied last (also wrong, per §1.10 step 2) happens to produce the
+right answer on well-formed files.
+
+Both halves are pinned by `doc::tests::reads_pages_in_order` and the corpus
+page-count comparison; the phantom-entry interaction specifically is what
+`xref::tests::resizing_truncates_and_materializes_the_last_slot` guards.
