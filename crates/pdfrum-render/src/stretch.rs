@@ -187,7 +187,13 @@ fn reduced_len(src_len: u32, dest_len: f64) -> Option<u32> {
 /// Horizontal first into an intermediate, then vertical — the same order and
 /// the same two weight tables PDFium uses, and the reason a two-pass reduction
 /// costs `O(w * h * (taps_x + taps_y))` rather than their product.
-fn reduce_to(src: &Pixmap, dest_width: u32, dest_height: u32) -> Pixmap {
+///
+/// Public because [`crate::walk`] reduces *inside* a cache miss, where the
+/// size has already been decided by [`reduction_for`] and only the pixels are
+/// wanted; [`prescale`] remains the entry point for a caller who wants the
+/// decision and the pixels together.
+#[must_use]
+pub fn reduce_to(src: &Pixmap, dest_width: u32, dest_height: u32) -> Pixmap {
     let x_taps = axis_taps(src.width(), dest_width);
     let y_taps = axis_taps(src.height(), dest_height);
     if x_taps.is_empty() || y_taps.is_empty() {
@@ -321,6 +327,61 @@ fn reduce_to(src: &Pixmap, dest_width: u32, dest_height: u32) -> Pixmap {
 /// quality loss on a file that has other problems, never a failure.
 const MAX_SOURCE_AXIS: u32 = 1 << 16;
 
+/// The pixel dimensions [`prescale`] would reduce a `src_width` x `src_height`
+/// image to for the device footprint `dest_width` x `dest_height`, or `None`
+/// when it would not reduce at all.
+///
+/// The same decision `prescale` makes, named so a caller can make it *before*
+/// producing any pixels — which is what
+/// [`crate::imagecache::PixmapRequest`] needs, because the cache key must
+/// distinguish two reductions of one image and must be computable on a hit,
+/// where no pixmap exists to measure.
+///
+/// It answers in *integers*, and that is the point rather than a convenience.
+/// The footprint is an `f64` that went through `ceil` and a clamp, so many
+/// distinct footprints land on one output size; a cache keyed on the float
+/// would miss on two draws of one image whose placements differ in the seventh
+/// decimal and whose reduced pixels are byte-identical — which is what a page
+/// stepping one image across a row produces. Keeping the two decisions in one
+/// function is what stops the key and the reduction disagreeing.
+#[must_use]
+pub fn reduction_for(
+    src_width: u32,
+    src_height: u32,
+    dest_width: f64,
+    dest_height: f64,
+) -> Option<(u32, u32)> {
+    if src_width > MAX_SOURCE_AXIS || src_height > MAX_SOURCE_AXIS {
+        return None;
+    }
+    let new_w = reduced_len(src_width, dest_width);
+    let new_h = reduced_len(src_height, dest_height);
+    let (new_w, new_h) = match (new_w, new_h) {
+        (None, None) => return None,
+        (w, h) => (w.unwrap_or(src_width), h.unwrap_or(src_height)),
+    };
+    (new_w != 0 && new_h != 0).then_some((new_w, new_h))
+}
+
+/// The transform [`prescale`] returns for a reduction to `new_w` x `new_h`.
+///
+/// The caller's matrix maps the *source* grid to the device; the reduced image
+/// covers that same grid with fewer pixels, so each of its pixels is
+/// `src / new` of a source pixel wide. Split out from [`prescale`] because a
+/// cache hit has the reduced pixmap already and still needs its transform.
+#[must_use]
+pub fn reduction_transform(
+    to_device: kurbo::Affine,
+    src_width: u32,
+    src_height: u32,
+    new_w: u32,
+    new_h: u32,
+) -> kurbo::Affine {
+    let sx = f64::from(src_width) / f64::from(new_w);
+    let sy = f64::from(src_height) / f64::from(new_h);
+    to_device * kurbo::Affine::scale_non_uniform(sx, sy)
+}
+
 /// Pre-reduce `src` toward the device footprint `dest_width` x `dest_height`,
 /// returning the reduced pixmap and the placement transform that now maps it.
 ///
@@ -339,30 +400,16 @@ pub fn prescale(
     dest_width: f64,
     dest_height: f64,
 ) -> Option<(Pixmap, kurbo::Affine)> {
-    if src.width() > MAX_SOURCE_AXIS || src.height() > MAX_SOURCE_AXIS {
-        return None;
-    }
-    let new_w = reduced_len(src.width(), dest_width);
-    let new_h = reduced_len(src.height(), dest_height);
     // An axis that is not being reduced keeps its own size, so a reduction in
     // one axis alone — a wide image squeezed horizontally — is still filtered
-    // in that axis and left alone in the other.
-    let (new_w, new_h) = match (new_w, new_h) {
-        (None, None) => return None,
-        (w, h) => (w.unwrap_or(src.width()), h.unwrap_or(src.height())),
-    };
-    if new_w == 0 || new_h == 0 {
-        return None;
-    }
+    // in that axis and left alone in the other. `reduction_for` owns that rule
+    // so the cache key computed from it cannot disagree with the pixels
+    // produced here.
+    let (new_w, new_h) = reduction_for(src.width(), src.height(), dest_width, dest_height)?;
     let reduced = reduce_to(src, new_w, new_h);
-    // The caller's transform is written against the source grid; the reduced
-    // image covers that grid with fewer pixels, so each of its pixels is
-    // `src / new` of a source pixel wide.
-    let sx = f64::from(src.width()) / f64::from(new_w);
-    let sy = f64::from(src.height()) / f64::from(new_h);
     Some((
         reduced,
-        to_device * kurbo::Affine::scale_non_uniform(sx, sy),
+        reduction_transform(to_device, src.width(), src.height(), new_w, new_h),
     ))
 }
 

@@ -71,6 +71,7 @@ mod error;
 pub mod glyph;
 pub mod group;
 pub mod image;
+pub mod imagecache;
 pub mod options;
 pub mod paint;
 pub mod path;
