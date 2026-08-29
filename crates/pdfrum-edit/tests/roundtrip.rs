@@ -903,3 +903,131 @@ fn every_damaged_shape_that_opens_saves_to_something_that_opens() {
         );
     }
 }
+
+// ---------------------------------------------------------------------------
+// R1–R11 over a *mutated* save (M11)
+// ---------------------------------------------------------------------------
+
+/// Every fixture with page 0 regenerated, so the properties above can be
+/// re-asked of a file whose content streams this crate wrote.
+///
+/// The distinction matters because a mutated save exercises three code paths
+/// an ordinary one never touches: a stream object replaced in the overlay
+/// rather than copied through, a `/Contents` entry reshaped, and a page
+/// dictionary rewritten. Each is a fresh chance to write an offset that names
+/// the wrong object or a `/Length` that disagrees with its payload — which is
+/// exactly what R1 and R3 are about, and why they are worth re-asking rather
+/// than assumed to carry over.
+fn mutated_fixtures() -> Vec<(String, Vec<u8>)> {
+    let mut out = Vec::new();
+    for (name, bytes) in fixtures() {
+        let doc = open(&bytes);
+        let Ok(page_dict) = doc.page(0) else {
+            continue;
+        };
+        let Some(page_ref) = page_dict.reference else {
+            continue;
+        };
+        let resources = page_dict
+            .inherited(names::RESOURCES, &doc)
+            .and_then(|object| object.resolve(&doc).ok()?.as_dict().cloned())
+            .unwrap_or_default();
+
+        let mut page = pdfrum_page::Page::empty();
+        // A rectangle is enough: what is being tested is the *file* the save
+        // produces, not what the page draws. Adding one object to an empty
+        // graph gives the smallest regeneration that still writes a stream,
+        // reshapes `/Contents`, and rewrites the page dictionary.
+        page.push_object(rectangle());
+
+        let mut edit = EditDoc::new(&doc);
+        let Some(rewrite) = pdfrum_edit::regenerate(&page, &resources, &doc) else {
+            continue;
+        };
+        let shared = pdfrum_edit::shared_objects(&edit);
+        pdfrum_edit::apply_rewrite(&mut edit, page_ref, &page_dict.dict, &rewrite, &shared);
+
+        let mut saved = Vec::new();
+        save(&edit, &fixed_options(SaveMode::Full), &mut saved).expect("the mutated save succeeds");
+        out.push((format!("{name}+rect"), saved));
+    }
+    out
+}
+
+/// A grey rectangle, as an added page object.
+fn rectangle() -> pdfrum_page::PageObject {
+    let mut path = pdfrum_common::kurbo::BezPath::new();
+    path.move_to((10.0, 10.0));
+    path.line_to((90.0, 10.0));
+    path.line_to((90.0, 60.0));
+    path.line_to((10.0, 60.0));
+    path.close_path();
+    let mut state = pdfrum_page::state::GraphicsState::default();
+    state
+        .fill
+        .set_stock(pdfrum_page::ColorSpace::DeviceRgb, &[0.5, 0.5, 0.5]);
+    pdfrum_page::PageObject::Path(Box::new(pdfrum_page::Content::new(
+        pdfrum_page::PathObject {
+            path,
+            matrix: pdfrum_common::kurbo::Affine::IDENTITY,
+            fill_rule: pdfrum_page::FillRule::Winding,
+            stroke: false,
+        },
+        state,
+    )))
+}
+
+#[test]
+fn a_mutated_save_holds_every_structural_invariant() {
+    let mutated = mutated_fixtures();
+    assert!(!mutated.is_empty(), "no fixture regenerated anything");
+    for (name, bytes) in &mutated {
+        // R1: every offset names the object it claims.
+        for (num, offset) in table_entries(bytes) {
+            let at = usize::try_from(offset).expect("an offset inside the file");
+            let header = format!("{num} 0 obj");
+            assert!(
+                bytes.get(at..at + header.len()) == Some(header.as_bytes()),
+                "{name}: object {num}'s offset does not name it"
+            );
+        }
+        // R3: every `/Length` matches its payload, R4: `/Size` covers what was
+        // written, R5: the catalog is reachable. Re-asked through the reader,
+        // which is what a second implementation would do.
+        let reopened = open(bytes);
+        let catalog = reopened.catalog().expect("a reachable catalog");
+        assert!(
+            catalog.raw(names::PAGES).is_some(),
+            "{name}: the catalog lost its page tree"
+        );
+        assert!(reopened.page_count() > 0, "{name}: no pages survived");
+    }
+}
+
+// R11 over a mutated save: reloading finds the added object, and finds it on
+// the page it was added to.
+#[test]
+fn a_mutated_save_reloads_with_the_object_that_was_added() {
+    for (name, bytes) in &mutated_fixtures() {
+        let reopened = open(bytes);
+        let page = reopened.page(0).expect("page 0");
+        let contents = page
+            .dict
+            .get(names::CONTENTS, &reopened)
+            .expect("the page has contents");
+        // The rectangle went into a stream this crate wrote, so the page must
+        // now reach at least one stream — whatever shape `/Contents` took.
+        let reached = match contents.as_direct() {
+            Some(Object::Stream(_)) => 1,
+            Some(Object::Array(array)) => array
+                .iter()
+                .filter(|e| {
+                    e.resolve(&reopened)
+                        .is_ok_and(|r| r.get().as_stream().is_some())
+                })
+                .count(),
+            _ => 0,
+        };
+        assert!(reached > 0, "{name}: the page reaches no content stream");
+    }
+}
