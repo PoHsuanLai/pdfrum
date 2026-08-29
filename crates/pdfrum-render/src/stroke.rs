@@ -85,6 +85,10 @@ fn y_unit(m: Affine) -> f64 {
 /// that hides completely under a translation-free matrix and moves every
 /// stroke off the page under a real one.
 #[must_use]
+#[expect(
+    clippy::many_single_char_names,
+    reason = "a..d are the affine matrix coefficients, named as in the PDF `cm` operands"
+)]
 pub fn split_for_stroke(m: Affine) -> StrokeMatrices {
     let [a, b, c, d, _, _] = m.as_coeffs();
     let scale = a.abs().max(b.abs());
@@ -110,6 +114,13 @@ pub fn split_for_stroke(m: Affine) -> StrokeMatrices {
 /// minimum expressed in pre-transform units. A `line_width` of zero, or of
 /// anything smaller than a pixel, lands exactly on that floor.
 #[must_use]
+#[expect(
+    clippy::manual_midpoint,
+    reason = "`(x + y) / 2.0` is upstream's own spelling of the mean unit; \
+              `f64::midpoint` rounds once where this rounds twice, and the \
+              result feeds the one-device-pixel floor that every hairline in \
+              the corpus lands on exactly"
+)]
 pub fn device_width(line_width: f32, matrices: StrokeMatrices) -> f64 {
     let mean_unit = (x_unit(matrices.post) + y_unit(matrices.post)) / 2.0;
     let unit = if mean_unit > 0.0 && mean_unit.is_finite() {
@@ -233,6 +244,12 @@ mod tests {
     }
 
     #[test]
+    #[expect(
+        clippy::float_cmp,
+        reason = "under the identity the floor is the literal 1.0 and the pass \
+                  -through the literal 3.0; a tolerance here would stop the \
+                  test from catching a floor that drifted by an ulp"
+    )]
     fn min_width_is_one_device_pixel() {
         for m in [
             Affine::IDENTITY,
@@ -375,6 +392,11 @@ mod tests {
     }
 
     #[test]
+    #[expect(
+        clippy::float_cmp,
+        reason = "the hairline split leaves the post matrix the identity, so \
+                  the width is the literal 1.0 the floor writes"
+    )]
     fn hairline_matrices_leave_the_path_in_device_space() {
         let m = Affine::new([2.0, 0.0, 0.0, 3.0, 4.0, 5.0]);
         let h = hairline_matrices(m);

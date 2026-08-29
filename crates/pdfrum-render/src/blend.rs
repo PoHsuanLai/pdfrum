@@ -212,7 +212,8 @@ pub fn blend_gray(mode: BlendMode, back: u8, src: u8) -> u8 {
                 clippy::cast_sign_loss,
                 reason = "the clamp lower bound is 0, so the value fits u8 exactly"
             )]
-            let byte = blend_channel(separable, i32::from(back), i32::from(src)).clamp(0, 255) as u8;
+            let byte =
+                blend_channel(separable, i32::from(back), i32::from(src)).clamp(0, 255) as u8;
             byte
         }
     }
@@ -285,10 +286,7 @@ mod tests {
         // What must hold is that no entry drifts more than one count from
         // `D`, which pins the transcription against a typo.
         for (i, entry) in COLOR_SQRT.iter().enumerate() {
-            #[expect(
-                clippy::cast_precision_loss,
-                reason = "i < 256 is exact in f64"
-            )]
+            #[expect(clippy::cast_precision_loss, reason = "i < 256 is exact in f64")]
             let x = i as f64 / 255.0;
             let d = if x <= 0.25 {
                 ((16.0 * x - 12.0) * x + 4.0) * x

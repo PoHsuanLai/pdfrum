@@ -97,8 +97,8 @@ pub fn position(radial: &Radial, pos: Point, decreasing: bool) -> Option<f64> {
 
 /// Rasterize a radial shading into `dest`.
 pub fn draw(dest: &mut Pixmap, radial: &Radial, steps: &ColorSteps, to_bitmap: Affine) {
-    let det = to_bitmap.determinant();
-    if det == 0.0 || !det.is_finite() {
+    let determinant = to_bitmap.determinant();
+    if determinant == 0.0 || !determinant.is_finite() {
         return;
     }
     let inverse = to_bitmap.inverse();

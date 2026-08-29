@@ -32,6 +32,12 @@ struct Intersection {
 /// A horizontal edge is skipped, and the row must lie within the edge's y
 /// range **inclusively at both ends** — which is what makes a shared vertex
 /// contribute two crossings and trip the `!= 2` drop below.
+#[expect(
+    clippy::float_cmp,
+    reason = "a bit-exact `y0 == y1` is upstream's horizontal-edge test; a \
+              tolerance would drop a near-horizontal edge PDFium intersects, \
+              changing which scanlines get their two crossings"
+)]
 fn scanline_intersect(
     y: f64,
     (x0, y0): (f64, f64),
@@ -65,6 +71,36 @@ fn scanline_intersect(
 /// mesh reader has already mapped it through `component_to_shading_index` at
 /// vertex-read time — and the ramp is indexed by it. Without one, all three
 /// channels interpolate and are converted by truncation.
+#[expect(
+    clippy::too_many_lines,
+    reason = "one scanline loop ported from `DrawGouraud`, whose three nested \
+              stages share the per-row interpolation state; hoisting any of \
+              them out would mean threading that state through a parameter \
+              list longer than the body it replaced"
+)]
+#[expect(
+    clippy::float_cmp,
+    reason = "`min_y == max_y` is upstream's degenerate-triangle test, exact \
+              because a triangle one ulp tall still rasterizes there"
+)]
+#[expect(
+    clippy::many_single_char_names,
+    reason = "a/b/c are the triangle's three vertices and l/h/u the low, high \
+              and unit ends of the per-channel interpolation — the names in \
+              the formula being ported"
+)]
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss,
+    reason = "the row and column bounds are `(int)floor/ceil` in upstream and \
+              are clamped into the pixmap's own i64 dimensions immediately \
+              after; the round trip back to f64 is of a value below the \
+              pixmap height, far inside the f64 mantissa"
+)]
+#[expect(
+    clippy::cast_sign_loss,
+    reason = "the ramp index is clamped to 0.0..=255.0 before the cast"
+)]
 pub fn draw_triangle(
     dest: &mut Pixmap,
     triangle: &Triangle,
@@ -163,22 +199,19 @@ pub fn draw_triangle(
                     break; // Only the red channel advances with a ramp.
                 }
             }
-            let color = match steps {
-                Some(ramp) => {
-                    let index = acc.first().copied().unwrap_or(0.0).clamp(0.0, 255.0) as usize;
-                    match ramp.entry(index) {
-                        Some(c) => c.with_alpha(alpha),
-                        None => continue,
-                    }
-                }
-                None => {
-                    let to_byte = |v: f64| (v.clamp(0.0, 1.0) * 255.0) as u8;
-                    Argb {
-                        a: alpha,
-                        r: to_byte(acc.first().copied().unwrap_or(0.0)),
-                        g: to_byte(acc.get(1).copied().unwrap_or(0.0)),
-                        b: to_byte(acc.get(2).copied().unwrap_or(0.0)),
-                    }
+            let color = if let Some(ramp) = steps {
+                let index = acc.first().copied().unwrap_or(0.0).clamp(0.0, 255.0) as usize;
+                let Some(entry) = ramp.entry(index) else {
+                    continue;
+                };
+                entry.with_alpha(alpha)
+            } else {
+                let to_byte = |v: f64| (v.clamp(0.0, 1.0) * 255.0) as u8;
+                Argb {
+                    a: alpha,
+                    r: to_byte(acc.first().copied().unwrap_or(0.0)),
+                    g: to_byte(acc.get(1).copied().unwrap_or(0.0)),
+                    b: to_byte(acc.get(2).copied().unwrap_or(0.0)),
                 }
             };
             let (Ok(x), Ok(y)) = (u32::try_from(col), u32::try_from(row)) else {

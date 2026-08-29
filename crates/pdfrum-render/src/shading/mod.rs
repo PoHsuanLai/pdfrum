@@ -105,7 +105,16 @@ pub fn draw_to_pixmap(
                 );
             }
             // Patches need a rasterizer; the caller reaches `draw_patches`.
+            #[expect(
+                clippy::match_same_arms,
+                reason = "the two arms decline for different reasons — patches \
+                          are drawn by `draw_patches`, while the three \
+                          non-mesh kinds cannot appear under `Geometry::Mesh` \
+                          at all. Merging them would lose that, and the day \
+                          patches gain an in-buffer path only one arm changes."
+            )]
             ShadingKind::CoonsMesh | ShadingKind::TensorMesh => return None,
+            // A non-mesh kind tagged onto mesh geometry is a malformed file.
             ShadingKind::FunctionBased | ShadingKind::Axial | ShadingKind::Radial => return None,
         },
         _ => return None,

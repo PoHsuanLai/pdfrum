@@ -388,7 +388,14 @@ pub fn alpha_byte_truncating(alpha: f32) -> u8 {
     if alpha.is_nan() {
         return 0;
     }
-    (alpha.clamp(0.0, 1.0) * 255.0) as u8
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "the NaN guard and the clamp bound the product to 0.0..=255.0; \
+                  the truncation *is* the ported behaviour, not an accident"
+    )]
+    let byte = (alpha.clamp(0.0, 1.0) * 255.0) as u8;
+    byte
 }
 
 /// `FXSYS_roundf(255 * alpha)` — the *other* alpha conversion, used where a
@@ -400,13 +407,24 @@ pub fn alpha_byte_rounding(alpha: f32) -> u8 {
     if alpha.is_nan() {
         return 0;
     }
-    (alpha.clamp(0.0, 1.0) * 255.0).round() as u8
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "the NaN guard and the clamp bound the rounded product to 0..=255"
+    )]
+    let byte = (alpha.clamp(0.0, 1.0) * 255.0).round() as u8;
+    byte
 }
 
 /// `a * b / 255`, truncating — the oracle's ubiquitous 8-bit product.
 #[must_use]
 pub fn mul255(a: u8, b: u8) -> u8 {
-    ((u32::from(a) * u32::from(b)) / 255) as u8
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "255*255/255 == 255 is the maximum, so the quotient always fits u8"
+    )]
+    let byte = ((u32::from(a) * u32::from(b)) / 255) as u8;
+    byte
 }
 
 /// `AlphaMerge(d, s, a) = (d*(255-a) + s*a) / 255`, truncating and unclamped
@@ -414,7 +432,13 @@ pub fn mul255(a: u8, b: u8) -> u8 {
 #[must_use]
 pub fn alpha_merge(dest: u8, src: u8, alpha: u8) -> u8 {
     let a = u32::from(alpha);
-    ((u32::from(dest) * (255 - a) + u32::from(src) * a) / 255) as u8
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "the numerator is a convex combination of two 0..=255 bytes \
+                  scaled by 255, so the quotient is itself 0..=255"
+    )]
+    let byte = ((u32::from(dest) * (255 - a) + u32::from(src) * a) / 255) as u8;
+    byte
 }
 
 /// A `peniko::Color` as premultiplied RGBA8.

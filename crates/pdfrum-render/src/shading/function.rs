@@ -28,8 +28,8 @@ pub fn draw(
     // `object_to_bitmap.inverse() * dict_matrix.inverse()`: the composed
     // inverse takes a destination pixel back into the function's domain.
     let combined = to_bitmap * geometry.matrix;
-    let det = combined.determinant();
-    if det == 0.0 || !det.is_finite() {
+    let determinant = combined.determinant();
+    if determinant == 0.0 || !determinant.is_finite() {
         return;
     }
     let inverse = combined.inverse();
@@ -63,7 +63,12 @@ pub fn draw(
                 let Some(slice) = outputs.get_mut(written..) else {
                     break;
                 };
-                let n = f.eval_into(&input[..f.input_count().min(2).max(1)], slice);
+                // One or two inputs: a function declaring more than the two
+                // this shading type supplies is truncated, as upstream does.
+                let Some(used) = input.get(..f.input_count().clamp(1, 2)) else {
+                    break;
+                };
+                let n = f.eval_into(used, slice);
                 written = written.saturating_add(n);
             }
             let rgb = shading.space.to_rgb(&outputs);

@@ -43,6 +43,14 @@ use crate::transfer::TransferFunc;
 /// `opts.transform`; the background follows the oracle — opaque white for a
 /// page without transparency, fully transparent for one with it — unless
 /// overridden, and that choice is load-bearing rather than cosmetic.
+///
+/// # Errors
+///
+/// [`Error::TargetEmpty`] when the page's box under `opts.transform` is not
+/// at least one pixel on both axes (a zero, negative or non-finite size), and
+/// [`Error::TargetTooLarge`] when either axis exceeds
+/// [`MAX_TARGET_DIMENSION`]. Damage inside the page is reported through
+/// `diags` and never becomes an error.
 pub fn render_page<B: RasterBackend>(
     page: &Page,
     opts: &RenderOptions,
@@ -71,6 +79,15 @@ pub fn render_page<B: RasterBackend>(
 }
 
 /// The device size a page renders at, and the errors that size can be.
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "the `is_finite` and `>= 1.0` guards run before the successful \
+              cast, and the `MAX_TARGET_DIMENSION` check runs after it; in \
+              the error arm `max(0.0)` floors the value and Rust's saturating \
+              float-to-int cast turns a huge or NaN size into a reported \
+              number rather than wrapping"
+)]
 fn target_size(page: &Page, opts: &RenderOptions) -> Result<(u32, u32), Error> {
     let (pw, ph) = page.display_size();
     let corners = opts
@@ -242,8 +259,7 @@ fn render_grouped<B: RasterBackend>(
     // The buffer is sized to the object's own device extent intersected with
     // the device, so a group off the page costs nothing.
     let bbox = object_bbox(object)
-        .map(|b| to_device.transform_rect_bbox(b))
-        .unwrap_or(device_box)
+        .map_or(device_box, |b| to_device.transform_rect_bbox(b))
         .intersect(device_box);
     let rect = outer_rect(bbox).intersect(outer_rect(device_box));
     let (Ok(w), Ok(h)) = (u32::try_from(rect.width()), u32::try_from(rect.height())) else {
@@ -516,7 +532,10 @@ fn render_text<B: RasterBackend>(
         return; // Tr 7 contributes only to the clip, which the stack owns.
     }
     let (fill, stroke) = colors(ctx, state, ObjectKind::Text);
-    let glyphs = place_glyphs(object, state, &mut caches.glyphs, to_device * state.ctm);
+    // `TextObject::matrix` already carries the CTM, so only the
+    // page-to-device transform is added — composing `state.ctm` again would
+    // apply it twice.
+    let glyphs = place_glyphs(object, state, &mut caches.glyphs, to_device);
     for glyph in glyphs {
         let paint = PathPaint {
             fill: kinds.fill.then_some(fill),
@@ -538,6 +557,12 @@ fn render_text<B: RasterBackend>(
     }
 }
 
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "`image_value_fits` has already rejected a non-finite extent and \
+              anything at or above MAX_IMAGE_VALUE (2^28), so both rounded \
+              values are well inside i64"
+)]
 fn render_image<D: RenderDevice>(
     ctx: &RenderCtx<'_>,
     device: &mut D,
@@ -602,10 +627,6 @@ fn render_image<D: RenderDevice>(
     }
 }
 
-#[expect(
-    clippy::too_many_arguments,
-    reason = "shadings need the device box for their clip"
-)]
 fn render_shading<B: RasterBackend>(
     ctx: &RenderCtx<'_>,
     device: &mut B::Device,
@@ -623,12 +644,12 @@ fn render_shading<B: RasterBackend>(
     // own; the alpha here is **rounded**, unlike the truncation everywhere
     // else colour is resolved.
     let alpha = alpha_byte_rounding(state.general.fill_alpha);
-    let mut bbox = object.bounds;
-    if !bbox.is_zero_area() {
-        bbox = to_device.transform_rect_bbox(bbox);
+    // A `sh` with no bounds of its own paints the whole device box.
+    let mut bbox = if object.bounds.is_zero_area() {
+        device_box
     } else {
-        bbox = device_box;
-    }
+        to_device.transform_rect_bbox(object.bounds)
+    };
     if let Some(b) = object.shading.bbox {
         bbox = bbox.intersect(matrix.transform_rect_bbox(b));
     }
