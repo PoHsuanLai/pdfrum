@@ -71,7 +71,10 @@ pub mod import;
 mod names;
 pub mod write;
 
-pub use content::{write_float, write_matrix, write_point, write_rect};
+pub use content::{
+    ContentsShape, PageRewrite, Regenerated, ResourceTable, ShareCounts, apply_rewrite, regenerate,
+    shared_objects, write_float, write_matrix, write_point, write_rect,
+};
 pub use doc::EditDoc;
 pub use encrypt::{Encryptor, IvSource};
 pub use error::Error;

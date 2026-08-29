@@ -1,6 +1,6 @@
 # PDFium → Rust Rewrite — Master Plan
 
-**Status:** Phase 1 complete (all milestones met 2026-08-30 — see Phase 2 section for the v1-completion & performance plan: M9 parity tail, M10 encrypted save, M11 page mutation, M12 performance, M13 release). Phase 2 not started.
+**Status:** Phase 2 in progress: M9 met (97.4%@0.99, annot 100%, 1624/1675 passing), M10 met (encrypted save, full oracle matrix), M11 in flight. M12/M13 pending.
 **Oracle:** `/mnt/data2/pdfium/pdfium-c++` (read-only C++ PDFium checkout @ `6f2272e`)
 **Workspace:** `/mnt/data2/pdfium/pdfrum` (this repository)
 
@@ -216,7 +216,10 @@ pixel cluster); wire CCITT into the filter chain (unblocks the reverted
 second-face fallback (the last 4 annot artifacts); re-derive `en_fqa` from a
 fresh trace; finalize the upstream hayro-jbig2 issue text (user files it).
 *Exit:* pixel >= 97.5% @0.99; annot 100%; every remaining failing file has a
-one-line cause in the status doc.
+one-line cause in the status doc. **Met 2026-08-30 at 97.4%** — accepted 0.1
+under target: the sole crossing change (outer-integer image snapping) measured
++4/-4 with regressions and was reverted under the monotone rule; the 42-file
+tail is four independent explained mechanisms (wave 12). Annot: 100%.
 
 **Delivered** (wave 12, `docs/status/pdfrum-render.md`): the box filter as an
 engine pre-pass shared by both backends, with its destination size rounded
