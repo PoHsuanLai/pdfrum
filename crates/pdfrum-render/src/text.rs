@@ -5,31 +5,25 @@
 //!
 //! Below `|char2device.a| + |char2device.b| > 50` the oracle rasterizes
 //! *hinted FreeType glyph bitmaps* with LCD filtering, an integer-origin
-//! nudge and a 256-entry gamma table. We render every glyph as a filled
-//! `BezPath` at every size. The **geometry** — glyph origins, advances,
-//! matrices — is unchanged and must match exactly; only the coverage on stem
-//! edges differs, which is why text pixels are Tier B and never Tier A.
+//! snap and a 256-entry gamma table. We render every glyph as a filled
+//! `BezPath` at every size. The **coverage** on stem edges therefore differs,
+//! which is why text pixels are Tier B and never Tier A.
 //!
-//! Of those four differences the **integer-origin nudge** is the one that
-//! costs pixels, measured in burn-down wave 4. The oracle snaps each glyph to
-//! a whole pixel before blitting it (`cfx_renderdevice.cpp:1254-1257`:
-//! `floor` in x under LCD, `round` in y always) while we fill the outline
-//! where it truly lands, so every stem edge moves by the baseline's
-//! fractional part — mean +0.45 px per line on `example_063.pdf`. The hinter
-//! is *not* the cost: the oracle pins every face at 64 ppem
+//! Of those four differences the **integer origin** is the one that costs
+//! pixels, measured in burn-down wave 4 and ported in wave 5. It is
+//! reproducible without the bitmap, so it is reproduced: see [`snap_origin`]
+//! and [`crate::options::RenderOptions::subpixel_text_positioning`]. The
+//! hinter is *not* the cost — the oracle pins every face at 64 ppem
 //! (`FT_Set_Pixel_Sizes(face_rec, 64, 64)`, `cfx_face.cpp:376`) and passes
 //! the real size through `FT_Set_Transform`, which FreeType applies after
 //! hinting, so grid-fitting happens against a grid that is then scaled away —
 //! about 0.04 device px of point movement at 9 pt. The gamma table and the
 //! LCD downsample were both measured against the goldens too, and neither
-//! improves the match. See `docs/status/pdfrum-render.md`, wave 4.
-//!
-//! With the oracle's own flags (`bClearType` false, `bNoTextSmooth` false)
-//! the aliasing type is plain grayscale antialiasing, so subpixel text never
-//! runs in conformance at all — a large simplification, and the reason the
-//! reconciliation needed is coverage-level rather than layout-level.
+//! improves the match. See `docs/status/pdfrum-render.md`, waves 4 and 5.
 
-use kurbo::{Affine, BezPath};
+use kurbo::{Affine, BezPath, Vec2};
+
+use crate::options::{RenderOptions, TextAa};
 use pdfrum_font::{Font, GlyphCache, GlyphKey};
 use pdfrum_page::{TextObject, TextRenderMode};
 
@@ -140,6 +134,168 @@ pub fn glyph_matrix(font_size: f32, pen: kurbo::Point, text_to_device: Affine) -
     text_to_device * Affine::translate((pen.x, pen.y)) * Affine::scale(s)
 }
 
+/// The size threshold above which the oracle abandons glyph bitmaps for
+/// outline fills (`cfx_renderdevice.cpp:1240`).
+///
+/// `char2device` is the text-to-device matrix scaled by `(font_size,
+/// -font_size)`, so `|a| + |b|` is roughly the em's device width. Above 50
+/// device units `DrawNormalText` hands the run to `DrawTextPath`, which
+/// places every glyph at its true fractional origin — so the integer snap is
+/// a *small-text* rule and large display type is unaffected by it either way.
+pub const BITMAP_PATH_MAX_EM: f64 = 50.0;
+
+/// Whether a run of this size takes the oracle's glyph-*bitmap* path, and so
+/// gets its origins snapped (`cfx_renderdevice.cpp:1240-1246`).
+///
+/// The C++ spelling is `fabs(char2device.a) + fabs(char2device.b) > 50 * 1.0f
+/// || is_printer`, with the `> 50` arm *leaving* the bitmap path. `is_printer`
+/// is false for every `pdfium_test --png` render, and the `font->HasFace()`
+/// guard inside it only matters for a face with no outlines at all — which in
+/// this engine is a type-3 font, and type-3 text never reaches here.
+#[must_use]
+pub fn takes_bitmap_path(font_size: f32, text_to_device: Affine) -> bool {
+    // char2device = text2device * Scale(font_size, -font_size); a column-major
+    // `Affine` holds [a, b, c, d, e, f], and scaling post-multiplies, so
+    // a' = a * font_size and b' = b * font_size.
+    let [a, b, ..] = text_to_device.as_coeffs();
+    let size = f64::from(font_size);
+    (a * size).abs() + (b * size).abs() <= BITMAP_PATH_MAX_EM
+}
+
+/// Snap one glyph's device origin to the grid the oracle blits its bitmap
+/// on (`cfx_renderdevice.cpp:1254-1257` **and** `1352`).
+///
+/// # The x grid is thirds of a pixel, not whole pixels
+///
+/// Reading only the snap itself is misleading, and burn-down wave 4 read only
+/// the snap:
+///
+/// ```cpp
+/// glyph.origin_.x = anti_alias_is_lcd ? static_cast<int>(floor(x))
+///                                     : FXSYS_roundf(x);
+/// glyph.origin_.y = FXSYS_roundf(y);
+/// ```
+///
+/// Under `kLcd` the integer `origin_.x` is only *half* of the horizontal
+/// placement. The blit loop recovers the rest:
+///
+/// ```cpp
+/// int x_subpixel = static_cast<int>(glyph.device_origin_.x * 3) % 3;
+/// ```
+///
+/// and `DrawNormalTextHelper` shifts its window into the 3×-wide LCD bitmap
+/// by that many subpixels before averaging the triples back down. So the
+/// effective origin is `floor(x) + x_subpixel/3`, which for a non-negative x
+/// is exactly `floor(3x)/3`: **x is quantised downward to a third of a
+/// pixel.** Only y is quantised to a whole pixel, and that asymmetry is the
+/// whole of the placement divergence.
+///
+/// Wave 4's measurement stands — the residual really is positional, and it
+/// really is dominated by the baseline — because y is where the whole-pixel
+/// quantisation lives, and a horizontal stem edge is what y moves.
+///
+/// # Which rounding runs is `FontAntiAliasingMode`, not `bClearType`
+///
+/// `DrawNormalText` derives that mode itself
+/// (`cfx_renderdevice.cpp:1165-1206`): with a smooth aliasing type on a
+/// display device at 32 bpp it is always `kLcd`, whatever the flag word said,
+/// so the conformance configuration takes the thirds. `--no-smoothtext` sets
+/// `aliasing_type = kAliasing`, `IsSmooth()` is then false, the whole
+/// derivation is skipped and the mode stays at its `kMono` initialiser — one
+/// bit per pixel, no LCD triple to shift into, so x snaps to a whole pixel
+/// through `FXSYS_roundf` like y. Hence the argument here is [`TextAa`]
+/// rather than a bare "is LCD" boolean: the two are the same decision.
+///
+/// `round` is `FXSYS_roundf`, which is C `round`: half away from zero, unlike
+/// Rust's `round_ties_even`.
+#[must_use]
+pub fn snap_origin(origin: kurbo::Point, text_aa: TextAa) -> kurbo::Point {
+    let x = match text_aa {
+        // kLcd: `floor(x)` plus `(int)(x * 3) % 3` thirds. The C++ `(int)`
+        // truncates toward zero and `%` keeps the sign, so this is written
+        // the way the C++ computes it rather than as `(3x).floor() / 3`,
+        // which differs on a negative origin — where upstream's negative
+        // `x_subpixel` falls into the `x_subpixel == 2` arm.
+        TextAa::Grayscale => {
+            let whole = origin.x.floor();
+            #[expect(
+                clippy::cast_possible_truncation,
+                reason = "the C++ is `static_cast<int>(x * 3) % 3`; a device \
+                          origin beyond i32 has already been clamped by the \
+                          ±32000 coordinate rule"
+            )]
+            let subpixel = f64::from((origin.x * 3.0) as i32 % 3);
+            whole + subpixel / 3.0
+        }
+        // kMono: nearest, ties away from zero.
+        TextAa::None => origin.x.round(),
+    };
+    kurbo::Point::new(x, origin.y.round())
+}
+
+/// Pull one glyph's origins back together after snapping, when consecutive
+/// integer origins have drifted more than half a pixel from the fractional
+/// spacing they came from (`AdjustGlyphSpace`,
+/// `cfx_renderdevice.cpp:57-98`).
+///
+/// It runs **only when the mode is not LCD and the run has more than one
+/// glyph** (`cfx_renderdevice.cpp:1265-1267`), which under the conformance
+/// flags means it never runs at all — only `--no-smoothtext` reaches it. The
+/// rule is deliberately conservative: it gives up entirely unless the run is
+/// axis-aligned (every origin sharing an x, or every origin sharing a y after
+/// the snap), and it never touches the first or last glyph.
+///
+/// Note the loop bound. The C++ walks `i` from `size - 1` down to `2`
+/// exclusive and edits `glyphs[i - 1]`, so glyph 0 is never adjusted and the
+/// *last* glyph is only ever read. That asymmetry is upstream's, not a
+/// transcription slip, and it is why a two-glyph run is a no-op even though
+/// the size guard admits it.
+#[expect(
+    clippy::float_cmp,
+    reason = "the C++ compares snapped origins, which are whole pixels there \
+              and exact integers in this f64 after `snap_origin` — an epsilon \
+              would admit a run the oracle rejects as non-axis-aligned"
+)]
+pub fn adjust_glyph_space(origins: &mut [kurbo::Point], device: &[kurbo::Point]) {
+    debug_assert_eq!(origins.len(), device.len());
+    let (Some(first), Some(last)) = (origins.first().copied(), origins.last().copied()) else {
+        return;
+    };
+    if origins.len() <= 1 {
+        return;
+    }
+    let vertical = last.x == first.x;
+    if !vertical && last.y != first.y {
+        return;
+    }
+    // Reading one axis of a point, chosen once for the whole run.
+    let axis = |p: kurbo::Point| if vertical { p.y } else { p.x };
+
+    for i in (2..origins.len()).rev() {
+        let (Some(next_origin), Some(next_f)) = (origins.get(i), device.get(i)) else {
+            continue;
+        };
+        let (Some(cur_origin), Some(cur_f)) = (origins.get(i - 1), device.get(i - 1)) else {
+            continue;
+        };
+        let space = axis(*next_origin) - axis(*cur_origin);
+        let space_f = axis(*next_f) - axis(*cur_f);
+        // The fractional spacing exceeds the integer one by more than half a
+        // pixel, so the snap has stretched this gap: close it by a pixel.
+        if space_f.abs() - space.abs() <= 0.5 {
+            continue;
+        }
+        let nudge = if space > 0.0 { -1.0 } else { 1.0 };
+        if let Some(target) = origins.get_mut(i - 1) {
+            if vertical {
+                target.y += nudge;
+            } else {
+                target.x += nudge;
+            }
+        }
+    }
+}
+
 /// The stroked-text CTM un-transform (`cpdf_renderstatus.cpp:772-777`).
 ///
 /// A stroke's width must be measured in *text* space, so when the text
@@ -189,12 +345,48 @@ pub fn stroke_ctm_split(text_matrix: Affine, to_device: Affine, ctm: [f64; 4]) -
 /// plus the word spacing on a single-byte space only, plus any kerning
 /// between segments. The horizontal scale is *not* applied again, because
 /// `matrix` already carries it.
+///
+/// # The glyph origins are then snapped
+///
+/// Unless [`RenderOptions::subpixel_text_positioning`] asks otherwise, a run
+/// the oracle would draw through `DrawNormalText` has every glyph's device
+/// origin pushed onto the blit grid by [`snap_origin`], per glyph and
+/// independently. The snap is applied as a *device translation* on top of the
+/// glyph's matrix, so the outline keeps its own shape and orientation and
+/// only its placement moves — which is what blitting a bitmap at a fixed
+/// origin amounts to.
+///
+/// **Three conditions gate it, all of them upstream's**
+/// (`ProcessText`, `cpdf_renderstatus.cpp:905-928`, and
+/// `cfx_renderdevice.cpp:1240-1246`), and each of them is a run the oracle
+/// itself places fractionally:
+///
+/// - the run is **not stroked** — `if (is_clip || is_stroke)` takes
+///   `DrawTextPath`, which places every glyph at its true origin. A
+///   pattern-coloured one takes `DrawTextPathWithPattern` and never reaches
+///   here at all, so `render_text` has already excluded it. Note that
+///   `is_clip` is **not** a text render mode: `ProcessText` is called twice,
+///   once from `ProcessClipPath` with a `clipping_path` and once from
+///   `ProcessObjectNoClip` with `nullptr`, and only the first sets it. So a
+///   `Tr 4` fill-and-clip run still snaps on its painting pass, and it is the
+///   clip *accumulation* — which this engine builds in `pdfrum-page`, not
+///   here — that does not.
+/// - the run is **small**, `|char2device.a| + |char2device.b| <= 50`
+///   ([`takes_bitmap_path`]); above that `DrawNormalText` itself defers to
+///   `DrawTextPath`.
+/// - the caller has not asked for [`RenderOptions::subpixel_text_positioning`].
+///
+/// `AdjustGlyphSpace` then runs over the whole run, but only in the non-LCD
+/// mode, which is `--no-smoothtext` and not conformance. See
+/// [`adjust_glyph_space`].
 #[must_use]
 pub fn place_glyphs(
     object: &TextObject,
     state: &pdfrum_page::GraphicsState,
     cache: &mut GlyphCache,
     to_device: Affine,
+    opts: &RenderOptions,
+    kinds: TextPaintKinds,
 ) -> Vec<PlacedGlyph> {
     let Some((font, size)) = &object.font else {
         return Vec::new();
@@ -209,6 +401,9 @@ pub fn place_glyphs(
     }
     let mut pen = object.matrix.inverse() * object.position;
     let mut out = Vec::new();
+    let subst_weight = font.subst().map_or(0, pdfrum_font::SubstFont::raw_weight);
+    let subst_italic = font.subst().map_or(0, |s| s.italic_angle);
+    let widths_drive_the_design = width_drives_the_design_space(font);
 
     for segment in &object.segments {
         // A kerning adjustment shifts the pen before the segment it precedes,
@@ -225,7 +420,26 @@ pub fn place_glyphs(
                 0.0
             };
             if let Some(gid) = item.glyph() {
-                let key = GlyphKey::plain(font.id(), gid);
+                let key = GlyphKey {
+                    font: font.id(),
+                    gid,
+                    dest_width: if widths_drive_the_design {
+                        #[expect(
+                            clippy::cast_possible_truncation,
+                            reason = "`GetCharWidth` is an int on the C++ side \
+                                      and a /Widths entry is a small number; \
+                                      the f32 is this crate's own carrier"
+                        )]
+                        {
+                            item.width as i32
+                        }
+                    } else {
+                        0
+                    },
+                    weight: subst_weight,
+                    italic_angle: subst_italic,
+                    vertical: item.vertical_glyph,
+                };
                 if let Some(outline) = cache.path(font, key) {
                     out.push(PlacedGlyph {
                         outline: outline.clone(),
@@ -236,7 +450,89 @@ pub fn place_glyphs(
             pen.x += advance + word;
         }
     }
+    if snaps_origins(opts, kinds, *size, text_to_device) {
+        snap_run(&mut out, opts.text_aa);
+    }
     out
+}
+
+/// Whether the PDF's own `/Widths` reach the glyph's *outline* rather than
+/// only its advance (`CPDF_Font::GetCharPosList`, `cpdf_font.cpp:440-444`).
+///
+/// ```cpp
+/// if (!IsEmbedded() && !IsCIDFont()) {
+///   text_char_pos.font_char_width_ = GetCharWidth(char_code);
+/// } else {
+///   text_char_pos.font_char_width_ = 0;
+/// }
+/// ```
+///
+/// `font_char_width_` becomes `dest_width` at the face, and there
+/// `AdjustVariationParams` (`cfx_face.cpp:941-943, 1561-1605`) solves a
+/// **Multiple-Master** face's width axis until the glyph's own advance equals
+/// it. The two internal generics the substitution ladder terminates on —
+/// Chrome Sans and Chrome Serif — *are* MM Type 1 faces, so this is not a
+/// corner: it is how every non-embedded font in the corpus gets drawn at the
+/// width its PDF declares rather than at the fallback face's own.
+///
+/// Skipping it drew every substituted glyph at the face's default design
+/// position. On `5.5_simple_font.pdf` — whose whole point is a `/Widths`
+/// array with values like `a = 800, b = 100, c = 400` against a face whose
+/// own are 452, 470 and 480 — the glyphs overran their advances and piled
+/// into each other, which read as dropped characters and as an MM band drawn
+/// "too narrow". Both were the same defect: the advances were always right
+/// and the outlines were always wrong.
+///
+/// The gate is exactly upstream's, and both halves matter. An **embedded**
+/// font is drawn from its own program, where the PDF's width is metadata and
+/// not a design parameter. A **CID** font's `dest_width` is zeroed even when
+/// substituted, because a CID font's widths are keyed by CID rather than by
+/// character code and the C++ declines to reconcile the two.
+#[must_use]
+pub fn width_drives_the_design_space(font: &Font) -> bool {
+    !font.is_embedded() && !matches!(font, Font::Type0(_))
+}
+
+/// Whether this run's origins are snapped: the three gates named on
+/// [`place_glyphs`].
+#[must_use]
+pub fn snaps_origins(
+    opts: &RenderOptions,
+    kinds: TextPaintKinds,
+    font_size: f32,
+    text_to_device: Affine,
+) -> bool {
+    !opts.subpixel_text_positioning && !kinds.stroke && takes_bitmap_path(font_size, text_to_device)
+}
+
+/// Snap a whole laid-out run onto integer device origins.
+///
+/// Split out from [`place_glyphs`] because the two halves are separable and
+/// only this one is the oracle's placement rule: the layout above is where
+/// the glyphs *are*, and this is where the oracle *draws* them.
+fn snap_run(glyphs: &mut [PlacedGlyph], text_aa: TextAa) {
+    if glyphs.is_empty() {
+        return;
+    }
+    // Each glyph's matrix maps the outline's own origin to the device, so the
+    // device origin is simply the matrix applied to the origin point.
+    let device: Vec<kurbo::Point> = glyphs
+        .iter()
+        .map(|g| g.matrix * kurbo::Point::ZERO)
+        .collect();
+    let mut snapped: Vec<kurbo::Point> = device.iter().map(|p| snap_origin(*p, text_aa)).collect();
+    // `AdjustGlyphSpace` is guarded on the mode *not* being LCD, so it is
+    // reachable only under `--no-smoothtext`.
+    if text_aa == TextAa::None {
+        adjust_glyph_space(&mut snapped, &device);
+    }
+    for ((glyph, from), to) in glyphs.iter_mut().zip(&device).zip(&snapped) {
+        let delta = Vec2::new(to.x - from.x, to.y - from.y);
+        // Pre-multiplying translates in *device* space, which is where the
+        // snap happens. Folding it into the glyph matrix instead would scale
+        // and rotate the nudge by the text matrix.
+        glyph.matrix = Affine::translate(delta) * glyph.matrix;
+    }
 }
 
 /// Whether a font has real outlines, which decides the stroke-to-fill
@@ -317,6 +613,15 @@ pub fn place_type3_chars(
 
 #[cfg(test)]
 mod tests {
+    // The snapping tests assert *exact* placements — that is what the rule
+    // being pinned is — and index fixtures whose length the fixture fixes.
+    #![allow(
+        clippy::float_cmp,
+        clippy::indexing_slicing,
+        reason = "a snapped origin is an exact value, and a tolerance here \
+                  would let a wrong rounding pass"
+    )]
+
     use kurbo::Point;
 
     use super::*;
@@ -427,6 +732,211 @@ mod tests {
             (d.as_coeffs()[0] - 2.0).abs() < 1e-9,
             "the x scale moved to the device matrix"
         );
+    }
+
+    #[test]
+    fn the_conformance_snap_quantises_x_to_thirds_and_y_to_whole_pixels() {
+        // The mode resolves to `kLcd` (bClearType only decides `normalize`),
+        // where `origin_.x = floor(x)` and the blit adds
+        // `(int)(x * 3) % 3` thirds back (`cfx_renderdevice.cpp:1254, 1352`).
+        // So x lands on a third and y on a whole pixel.
+        let near = |p: Point, x: f64, y: f64| {
+            assert!(
+                (p.x - x).abs() < 1e-9 && (p.y - y).abs() < 1e-9,
+                "{p:?} is not ({x}, {y})"
+            );
+        };
+        near(
+            snap_origin(Point::new(10.9, 100.4), TextAa::Grayscale),
+            10.0 + 2.0 / 3.0,
+            100.0,
+        );
+        near(
+            snap_origin(Point::new(10.1, 100.6), TextAa::Grayscale),
+            10.0,
+            101.0,
+        );
+        near(
+            snap_origin(Point::new(10.5, 0.0), TextAa::Grayscale),
+            10.0 + 1.0 / 3.0,
+            0.0,
+        );
+        // A third is not a whole pixel: the x quantum is small enough that a
+        // 9-pixel glyph's stems barely move, which is why the whole-pixel
+        // read of this rule cost 58 files when it was tried.
+        near(
+            snap_origin(Point::new(10.99, 0.0), TextAa::Grayscale),
+            10.0 + 2.0 / 3.0,
+            0.0,
+        );
+    }
+
+    #[test]
+    fn only_y_is_quantised_to_a_whole_pixel_under_lcd() {
+        // The asymmetry is the placement divergence: a baseline at 100.4 is
+        // drawn at 100, which moves every horizontal stem edge, while an x of
+        // 10.4 moves by at most a third.
+        for tenth in 0..10 {
+            let x = 10.0 + f64::from(tenth) / 10.0;
+            let p = snap_origin(Point::new(x, 100.4), TextAa::Grayscale);
+            assert!((p.x - x).abs() <= 1.0 / 3.0, "x moved {} at {x}", p.x - x);
+            assert_eq!(p.y, 100.0);
+        }
+    }
+
+    #[test]
+    fn no_smoothtext_rounds_x_instead_of_flooring_it() {
+        // `--no-smoothtext` leaves `anti_alias` at its `kMono` initialiser,
+        // so `anti_alias_is_lcd` is false and x takes `FXSYS_roundf` too.
+        assert_eq!(
+            snap_origin(Point::new(10.9, 5.0), TextAa::None),
+            Point::new(11.0, 5.0)
+        );
+        assert_eq!(
+            snap_origin(Point::new(10.1, 5.0), TextAa::None),
+            Point::new(10.0, 5.0)
+        );
+        // Half away from zero, which is C `round` and not `round_ties_even`.
+        assert_eq!(
+            snap_origin(Point::new(10.5, -2.5), TextAa::None),
+            Point::new(11.0, -3.0)
+        );
+    }
+
+    #[test]
+    fn y_always_rounds_whatever_the_mode_is() {
+        for aa in [TextAa::Grayscale, TextAa::None] {
+            assert_eq!(snap_origin(Point::new(0.0, 7.6), aa).y, 8.0, "{aa:?}");
+            assert_eq!(snap_origin(Point::new(0.0, 7.4), aa).y, 7.0, "{aa:?}");
+        }
+    }
+
+    #[test]
+    fn the_bitmap_path_is_a_small_text_rule() {
+        // char2device = text2device * Scale(size, -size), so |a| + |b| is the
+        // em's device extent. 12 pt at unit scale is well under 50.
+        assert!(takes_bitmap_path(12.0, Affine::IDENTITY));
+        assert!(
+            takes_bitmap_path(50.0, Affine::IDENTITY),
+            "the `> 50` is strict"
+        );
+        assert!(!takes_bitmap_path(51.0, Affine::IDENTITY));
+        // A device scale counts: 12 pt at 5x is 60 device units.
+        assert!(!takes_bitmap_path(12.0, Affine::scale(5.0)));
+        // And so does a rotation, through `b`.
+        assert!(!takes_bitmap_path(
+            40.0,
+            Affine::rotate(std::f64::consts::FRAC_PI_4)
+        ));
+    }
+
+    #[test]
+    fn a_stroked_run_does_not_snap_but_a_clipping_one_does() {
+        let opts = RenderOptions::default();
+        let fill = TextPaintKinds {
+            fill: true,
+            stroke: false,
+            clip: false,
+        };
+        assert!(snaps_origins(&opts, fill, 12.0, Affine::IDENTITY));
+        // `if (is_clip || is_stroke)` sends the run to `DrawTextPath`, which
+        // places every glyph at its true fractional origin.
+        assert!(!snaps_origins(
+            &opts,
+            TextPaintKinds {
+                stroke: true,
+                ..fill
+            },
+            12.0,
+            Affine::IDENTITY
+        ));
+        // But `is_clip` is the *caller*, not the render mode: the painting
+        // pass always passes `clipping_path = nullptr`
+        // (`cpdf_renderstatus.cpp:312`), so a `Tr 4` run still snaps when it
+        // paints. Reading `is_clip` as "the mode has a clip bit" costs six
+        // files, which is how this was found.
+        assert!(snaps_origins(
+            &opts,
+            TextPaintKinds { clip: true, ..fill },
+            12.0,
+            Affine::IDENTITY
+        ));
+        // And large text never snaps, whatever it paints.
+        assert!(!snaps_origins(&opts, fill, 80.0, Affine::IDENTITY));
+    }
+
+    #[test]
+    fn the_knob_turns_the_snap_off() {
+        let fill = TextPaintKinds {
+            fill: true,
+            stroke: false,
+            clip: false,
+        };
+        let subpixel = RenderOptions {
+            subpixel_text_positioning: true,
+            ..RenderOptions::default()
+        };
+        assert!(!snaps_origins(&subpixel, fill, 12.0, Affine::IDENTITY));
+        assert!(snaps_origins(
+            &RenderOptions::default(),
+            fill,
+            12.0,
+            Affine::IDENTITY
+        ));
+    }
+
+    #[test]
+    fn adjust_glyph_space_never_moves_the_first_or_last_glyph() {
+        // The C++ loop is `for (i = size - 1; i > 1; --i)` editing `[i - 1]`,
+        // so index 0 and index size-1 are read-only.
+        let device: Vec<Point> = (0..4)
+            .map(|i| Point::new(f64::from(i) * 9.9, 0.0))
+            .collect();
+        let mut origins: Vec<Point> = device
+            .iter()
+            .map(|p| snap_origin(*p, TextAa::None))
+            .collect();
+        let (first, last) = (origins[0], origins[3]);
+        adjust_glyph_space(&mut origins, &device);
+        assert_eq!(origins[0], first);
+        assert_eq!(origins[3], last);
+    }
+
+    #[test]
+    fn adjust_glyph_space_closes_a_gap_the_snap_stretched() {
+        // Spacing of 10.6 px snaps to 11, 11, 11 while the true gaps are
+        // 10.6 — an error of 0.6 > 0.5, so the middle origins pull back one
+        // pixel each. Round to 0, 11, 21, 32; the walk fixes index 2 then 1.
+        let device: Vec<Point> = (0..4)
+            .map(|i| Point::new(f64::from(i) * 10.6, 0.0))
+            .collect();
+        let mut origins: Vec<Point> = device
+            .iter()
+            .map(|p| snap_origin(*p, TextAa::None))
+            .collect();
+        assert_eq!(
+            origins.iter().map(|p| p.x).collect::<Vec<_>>(),
+            vec![0.0, 11.0, 21.0, 32.0]
+        );
+        adjust_glyph_space(&mut origins, &device);
+        // Gap 3->2 is 32-21 = 11 against 10.6: error 0.0, left alone. Gap
+        // 2->1 is 21-11 = 10 against 10.6: error 0.6, so index 1 pulls to 10.
+        assert_eq!(
+            origins.iter().map(|p| p.x).collect::<Vec<_>>(),
+            vec![0.0, 10.0, 21.0, 32.0]
+        );
+    }
+
+    #[test]
+    fn adjust_glyph_space_declines_a_run_that_is_not_axis_aligned() {
+        let device = vec![
+            Point::new(0.0, 0.0),
+            Point::new(10.0, 5.0),
+            Point::new(20.0, 10.0),
+        ];
+        let mut origins = device.clone();
+        adjust_glyph_space(&mut origins, &device);
+        assert_eq!(origins, device, "a diagonal run is left entirely alone");
     }
 
     #[test]

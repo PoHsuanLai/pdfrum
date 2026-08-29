@@ -121,6 +121,13 @@ mod tests {
     use pdfrum_object::{Dict, Name, NoResolve, Object};
 
     fn helvetica() -> Font {
+        named("Helvetica")
+    }
+
+    /// A non-embedded Type 1 by name. An unrecognised name falls all the way
+    /// to the built-in Multiple-Master generic, which is the face the width
+    /// solve applies to; a base-14 name resolves to a Foxit blob instead.
+    fn named(base_font: &str) -> Font {
         let dict = Dict::from_pairs([
             (
                 crate::names::SUBTYPE.clone(),
@@ -128,7 +135,7 @@ mod tests {
             ),
             (
                 crate::names::BASE_FONT.clone(),
-                Object::Name(Name::from("Helvetica")),
+                Object::Name(Name::from(base_font)),
             ),
         ]);
         crate::load(
@@ -200,6 +207,80 @@ mod tests {
         assert_eq!(cache.len(), 1, "the miss itself is cached");
         assert!(cache.path(&font, key).is_none());
         assert_eq!(cache.len(), 1);
+    }
+
+    #[test]
+    fn a_dest_width_solves_the_multiple_master_width_axis() {
+        // Burn-down wave 5's font defect, in the form that outlives the file
+        // that exposed it. `AGaramond` is not embedded and is not a base-14
+        // name, so it substitutes onto the built-in generic — a
+        // Multiple-Master Type 1 face — and PDFium then solves that face's
+        // width axis until the glyph's own advance equals the PDF's declared
+        // `/Widths` value
+        // (`AdjustVariationParams`, `cfx_face.cpp:1561-1605`, reached from
+        // `cpdf_font.cpp:440-444`).
+        //
+        // Leaving `dest_width` at zero draws the axis default instead. On
+        // `5.5_simple_font.pdf`, whose `/Widths` say `a = 800` against a face
+        // whose own is 452, the glyphs overran their advances and piled into
+        // each other — which read as dropped characters on the `/Type_1_F`
+        // band and as a "too narrow" `/Type_1_MM_F` band. Both were this.
+        let font = named("AGaramond");
+        assert!(
+            font.subst().is_some_and(|s| s.is_builtin_generic),
+            "the fixture must actually reach the Multiple-Master generic"
+        );
+        let gid = Gid(font.glyphs().name_index(b"a"));
+        let params = |w: i32| GlyphParams {
+            dest_width: w,
+            weight: 0,
+        };
+        let at = |w: i32| font.glyphs().advance(gid, &params(w));
+
+        let default = at(0);
+        let narrow = at(300);
+        let wide = at(900);
+        assert!(default > 0, "the substitute face has a real glyph");
+        assert!(
+            narrow < default && default < wide,
+            "the axis solve tracks dest_width: {narrow} < {default} < {wide}"
+        );
+        // The solve is an interpolation onto the requested advance, so it
+        // lands on it rather than merely moving toward it.
+        // Inside the axis the solve is an *interpolation onto the requested
+        // advance*, so it lands on it exactly rather than merely moving
+        // toward it. This is the assertion the defect would have failed:
+        // before the fix every one of these returned the default, 556.
+        for want in [300, 400, 500, 600, 700] {
+            assert_eq!(at(want), want, "dest_width {want} must be solved for");
+        }
+        // Outside it the advance saturates, because the interpolated design
+        // *coordinate* is unclamped (`AdjustVariationParams` deliberately
+        // extrapolates) but the blend then clamps it to the axis range, which
+        // is what `FT_Set_MM_Design_Coordinates` does. So an extreme
+        // `/Widths` gets the widest or narrowest the face can draw, not a
+        // degenerate outline.
+        assert_eq!(at(900), at(1500), "the wide end saturates");
+        assert_eq!(at(50), at(1), "and so does the narrow end");
+        assert!(at(50) < at(300) && at(700) < at(900));
+    }
+
+    #[test]
+    fn a_dest_width_and_the_default_are_separate_cache_entries() {
+        // The whole reason `dest_width` is in the key: the two draw different
+        // outlines from the same face and glyph.
+        let font = named("AGaramond");
+        let mut cache = GlyphCache::new();
+        let gid = Gid(font.glyphs().name_index(b"a"));
+        let plain = GlyphKey::plain(font.id(), gid);
+        let sized = GlyphKey {
+            dest_width: 300,
+            ..plain
+        };
+        let a = cache.path(&font, plain).cloned();
+        let b = cache.path(&font, sized).cloned();
+        assert_eq!(cache.len(), 2, "two entries, not one");
+        assert_ne!(a, b, "a solved width draws a different outline");
     }
 
     #[test]
