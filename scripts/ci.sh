@@ -36,5 +36,16 @@ if [ -n "$forbidden" ]; then
 fi
 echo "ok: dependency tree is pure Rust"
 
+# Note the check above passes *because* fuzz/ is its own workspace. It brings
+# in `libfuzzer-sys`, which links LLVM's C++ libFuzzer runtime and pulls `cc`
+# — both of which this grep would reject. DEPS.md sanctions that only outside
+# the library ring, and `--workspace` here never reaches fuzz/ because it is
+# not a member. Do not add it to the root Cargo.toml's `members`.
+#
+# The fuzz ring is not part of this gate: it is minutes to days of work where
+# this script is seconds. Its own gate is scripts/fuzz-gate.sh, and PLAN.md
+# §6 makes `scripts/fuzz-gate.sh 86400 parallel` an M1 exit criterion. See
+# fuzz/README.md for how to run and reproduce.
+
 echo
 echo "CI green."

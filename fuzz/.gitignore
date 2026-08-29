@@ -1,0 +1,5 @@
+# Working state, rebuilt by fuzz/seed-corpus.sh from the committed seeds/.
+/corpus/
+/artifacts/
+/coverage/
+/target/

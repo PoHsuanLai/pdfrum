@@ -1,0 +1,5 @@
+A@Bşşbegincmap
+2 begincodespacerange <00> <7F> <8140> <FEFE> endcodespacerange
+1 begincidchar <41> 100 endcidchar
+1 begincidrange <8140> <9FFC> 200 endcidrange
+endcmap
