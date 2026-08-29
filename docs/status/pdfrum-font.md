@@ -164,7 +164,7 @@ but it is recorded in the fixtures' provenance.
 
 ## Tests
 
-`cargo nextest run -p pdfrum-font`: **338** tests (334 unit + 4 integration).
+`cargo nextest run -p pdfrum-font`: **337** tests (333 unit + 4 integration).
 `cargo test --doc -p pdfrum-font`: **9** doctests.
 
 The brief's §4 plan is ported:
