@@ -608,6 +608,18 @@ dependencies = [
 [[package]]
 name = "pdfrum-doc"
 version = "0.1.0"
+dependencies = [
+ "kurbo",
+ "pdfrum-common",
+ "pdfrum-filters",
+ "pdfrum-font",
+ "pdfrum-object",
+ "pdfrum-page",
+ "pdfrum-parser",
+ "ryu",
+ "thiserror",
+ "unicode-bidi",
+]
 
 [[package]]
 name = "pdfrum-edit"
@@ -743,6 +755,7 @@ dependencies = [
  "kurbo",
  "md-5",
  "pdfrum-common",
+ "pdfrum-doc",
  "pdfrum-filters",
  "pdfrum-object",
  "pdfrum-page",
@@ -1009,6 +1022,12 @@ name = "typenum"
 version = "1.20.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6f5e870be6c3b371b77fe0ee0bafb859fa4964b4404c27de1d380043c4dda20"
+
+[[package]]
+name = "unicode-bidi"
+version = "0.3.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5c1cb5db39152898a79168971543b1cb5020dff7fe43c8dc468b0885f5e29df5"
 
 [[package]]
 name = "unicode-ident"

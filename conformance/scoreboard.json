@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-08-29T04:32:24Z",
+  "generated_at": "2026-08-29T04:27:58Z",
   "totals": {
     "files": 1468,
     "pass": 47,
@@ -3679,7 +3679,8 @@
           "structure.txt"
         ],
         "mismatched": [
-          "input.pdf.0.annot.txt"
+          "input.pdf.0.annot.txt",
+          "structure.txt"
         ],
         "golden_pages": 1,
         "actual_pages": 1,
@@ -3696,7 +3697,7 @@
         "max_channel_diff": 212,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.543515 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.0.annot.txt, structure.txt; ssim 0.543515 below floor 0.990000"
     },
     {
       "path": "corpus/fx/FRC_8.2.4_part1/FRC_10_8.2.4__remove_ModDate_value.pdf",
@@ -15413,7 +15414,8 @@
           "structure.txt"
         ],
         "mismatched": [
-          "input.pdf.0.annot.txt"
+          "input.pdf.0.annot.txt",
+          "structure.txt"
         ],
         "golden_pages": 1,
         "actual_pages": 1,
@@ -15430,7 +15432,7 @@
         "max_channel_diff": 117,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt"
+      "notes": "dumps differ: input.pdf.0.annot.txt, structure.txt"
     },
     {
       "path": "corpus/fx/path/transparent1.pdf",
@@ -39570,7 +39572,8 @@
           "structure.txt"
         ],
         "mismatched": [
-          "input.pdf.0.annot.txt"
+          "input.pdf.0.annot.txt",
+          "structure.txt"
         ],
         "golden_pages": 1,
         "actual_pages": 1,
@@ -39587,7 +39590,7 @@
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt"
+      "notes": "dumps differ: input.pdf.0.annot.txt, structure.txt"
     },
     {
       "path": "resources/marked_content_id.pdf",
@@ -39604,7 +39607,8 @@
           "structure.txt"
         ],
         "mismatched": [
-          "input.pdf.0.annot.txt"
+          "input.pdf.0.annot.txt",
+          "structure.txt"
         ],
         "golden_pages": 1,
         "actual_pages": 1,
@@ -39621,7 +39625,7 @@
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt"
+      "notes": "dumps differ: input.pdf.0.annot.txt, structure.txt"
     },
     {
       "path": "resources/matte.in",
@@ -42669,12 +42673,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.985587,
+        "ssim": 0.791771,
         "exact": false,
-        "max_channel_diff": 91,
+        "max_channel_diff": 191,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.985587 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.791771 below floor 0.990000"
     },
     {
       "path": "resources/pixel/bug_1976.in",

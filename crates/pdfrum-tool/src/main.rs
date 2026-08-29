@@ -17,7 +17,11 @@
 //! the `MD5:<path>:<hex>` line the oracle prints, hashed over the **raw
 //! bitmap buffer** rather than over the PNG.
 //!
-//! `--annot`, `--show-structure`, the other raster targets and the save-*
+//! `--show-structure` prints each page's tagged-PDF structure tree over
+//! `pdfrum-doc`, which owns the emitter because its field order, indentation
+//! and sorted attribute keys are behavior rather than presentation.
+//!
+//! `--annot`, the other raster targets and the save-*
 //! family are **accepted and do nothing**, which is deliberate. The harness runs one
 //! fixed set of passes against every candidate; a tool that rejected the flags
 //! for crates that do not exist yet would tag those tiers as a tool error
@@ -41,6 +45,7 @@ mod options;
 mod pageinfo;
 mod render;
 mod run;
+mod structure;
 mod text;
 mod unsupported;
 
@@ -102,11 +107,11 @@ fn unimplemented_format(format: OutputFormat) -> Option<String> {
     let (flag, crate_name) = match format {
         OutputFormat::None
         | OutputFormat::PageInfo
+        | OutputFormat::Structure
         | OutputFormat::Text
         // `--png` is the one render format we produce; the rest are the
         // oracle's other raster and vector targets, which we do not.
         | OutputFormat::Render("png") => return None,
-        OutputFormat::Structure => ("--show-structure", "pdfrum-doc"),
         OutputFormat::Render(extension) => {
             return Some(format!("--{extension} rendering not implemented yet"));
         }
@@ -128,14 +133,13 @@ mod tests {
 
     #[test]
     fn each_unimplemented_format_names_the_crate_that_will_supply_it() {
-        for (format, crate_name) in [
-            (OutputFormat::Annot, "pdfrum-doc"),
-            (OutputFormat::Structure, "pdfrum-doc"),
-        ] {
+        for (format, crate_name) in [(OutputFormat::Annot, "pdfrum-doc")] {
             let note = unimplemented_format(format).unwrap();
             assert!(note.contains(crate_name), "{note}");
             assert!(note.contains("not implemented yet"), "{note}");
         }
+        // `--show-structure` is implemented and must stay silent.
+        assert_eq!(unimplemented_format(OutputFormat::Structure), None);
         // Every raster target but PNG, which we do produce. These name the
         // format rather than a crate: the renderer exists, this output does
         // not.

@@ -10,3 +10,16 @@ repository.workspace = true
 workspace = true
 
 [dependencies]
+pdfrum-common.workspace = true
+pdfrum-object.workspace = true
+pdfrum-font.workspace = true
+pdfrum-filters.workspace = true
+pdfrum-page.workspace = true
+kurbo.workspace = true
+ryu.workspace = true
+thiserror.workspace = true
+unicode-bidi.workspace = true
+
+[dev-dependencies]
+
+pdfrum-parser.workspace = true
