@@ -120,6 +120,33 @@ on the page path calls `CloneDirectObject` at all; its only C++ callers are
 the two in `cpdf_interactiveform.cpp`. Reverting these sites to `clone_direct`
 would deep-flatten whole resource subtrees the C++ never copies.
 
+## `/TR` at M3: the storage was right, the sampler was not
+
+The render status doc reported this crate's `TransferFunc` as storing the
+`/TR` array reversed against its own doc comment, and `pdfrum-render`
+un-reversed it at the boundary. **The storage was right; the doc comment and
+the workaround were wrong**, and the workaround cancelled a correct reversal,
+so every rendered `/TR` array came out with red and blue swapped. The
+derivation — the oracle's expected-sample constants are misnamed, and its ten
+`TranslateColor` pairs settle the channel mapping without relying on any
+constant's name — is recorded in `docs/status/pdfrum-render.md` and in
+`transfer.rs`'s module docs. `array[2]` drives red.
+
+Porting that fixture verbatim then exposed a second divergence this crate
+*did* have: **`sample_channel` clamped where PDFium wraps.** The C++ writes
+`size_t o = FXSYS_roundf(output[0] * 255)` into a `uint8_t` with no clamp, so
+a function whose `/Range` admits negatives folds its lower half back to the
+top of the byte range. The type 4 fixture is one: at input `0xCC` it produces
+`-121.26`, which the oracle stores as `0x87` and we stored as `0x00`. Two of
+the ten asserted pairs turn on it. Clamping quietly flattened every signed
+transfer function's lower half to black, and no synthetic fixture built from
+non-negative functions could have caught it.
+
+The doc comment, the storage rule and the wrap are now stated together in
+`transfer.rs`; the render crate's compensation is gone, and its
+`the_oracle_fixtures_ten_translate_colour_pairs` runs the oracle's own three
+functions end to end.
+
 ## Tests
 
 | suite | count |
