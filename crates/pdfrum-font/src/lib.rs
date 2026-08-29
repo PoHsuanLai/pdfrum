@@ -882,3 +882,40 @@ mod tests {
         assert_ne!(a, b);
     }
 }
+
+#[cfg(test)]
+mod send_sync {
+    //! STYLE.md §4: every public type is `Send + Sync`, so rendering pages in
+    //! parallel with `rayon` needs no wrapper. A compile failure here is the
+    //! whole test.
+
+    use super::*;
+
+    const fn assert_send_sync<T: Send + Sync>() {}
+
+    #[test]
+    fn every_public_type_is_send_and_sync() {
+        assert_send_sync::<Font>();
+        assert_send_sync::<CharItem>();
+        assert_send_sync::<SimpleFont>();
+        assert_send_sync::<Type0Font>();
+        assert_send_sync::<Type3Font>();
+        assert_send_sync::<FontCache>();
+        assert_send_sync::<GlyphCache>();
+        assert_send_sync::<GlyphKey>();
+        assert_send_sync::<GlyphSource>();
+        assert_send_sync::<ToUnicode>();
+        assert_send_sync::<FontDescriptor>();
+        assert_send_sync::<SubstFont>();
+        assert_send_sync::<SubstitutionOptions>();
+        assert_send_sync::<CidWidths>();
+        assert_send_sync::<VerticalMetrics>();
+        assert_send_sync::<CidToGid>();
+        assert_send_sync::<Error>();
+        assert_send_sync::<GlyphName>();
+        assert_send_sync::<subst::FontRequest>();
+        assert_send_sync::<subst::Substitution>();
+        assert_send_sync::<subst::TestFontDb>();
+        assert_send_sync::<subst::SystemFontDb>();
+    }
+}
