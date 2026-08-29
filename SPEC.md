@@ -496,8 +496,10 @@ pub trait RasterBackend {  // factory: lets the engine rasterize soft masks & ti
 // Rulings 2026-08-29: Coons/tensor subdivision capped at depth 32 with a
 // non-finite control-point check (additive safety, render brief Q2); the
 // transfer-function array-reversal question (Q1) resolves in favor of the
-// C++ unittest's asserted observable, with an oracle probe at M3 if doubt
-// remains. Backend capability claims for vello_cpu/tiny-skia (brief §5) are
+// C++ unittest's asserted observable — which, measured at M3, is the
+// reversal itself: two of that unittest's expectation constants are
+// misnamed, and its TranslateColor pairs say array[2] drives red.
+// Backend capability claims for vello_cpu/tiny-skia (brief §5) are
 // INFERRED and must be verified against fetched crate sources before any
 // backend code is written (brief Q4) — now VERIFIED by probing
 // (docs/design/backend-verification.md, binding for backend implementers):
@@ -552,14 +554,19 @@ as the code:
    snapshot` needs the concrete device to read pixels back, so `&mut dyn
    RenderDevice` survives only where a device is genuinely swappable — the
    Coons scratch buffer. The `dyn` budget STYLE §2b sets is unchanged.
-4. **Q1 resolves for the observable, and the reversal is undone in
-   `pdfrum-render`.** `CPDFDocRenderDataTest.TransferFunctionArray` and its
-   ten `TranslateColor` expectations agree that array order maps directly to
-   R, G, B. `pdfrum-page`'s `TransferFunc` stores the array reversed, so
-   `render::transfer` maps channel `i` to slot `2 - i` at the boundary rather
-   than changing the parse. **This is a defect in `pdfrum-page`'s storage**
-   relative to its own doc comment, recorded here rather than silently fixed
-   because the page crate's tests pin the reversed spelling.
+4. **Q1: the `/TR` array reversal is real, and `pdfrum-page` had it right.**
+   `pFuncs[2 - i] = Load(array[i])` is observable: `array[2]` drives red and
+   `array[0]` drives blue. `CPDFDocRenderDataTest.TransferFunctionArray`
+   reads as if it said the opposite only because two of its expectation
+   constants are **misnamed** — `kExpectedType0FunctionSamples` is the type 4
+   program's sine ramp (verified: it matches `sin(v/255 · 360°)/2` on all 128
+   positive samples) and `kExpectedType4FunctionSamples` is the type 0
+   function's flat one. Its ten `TranslateColor` pairs settle it without
+   naming a function at all. An earlier reading of that test concluded the
+   reverse and had `render::transfer` compensate by reading slot `2 - i`,
+   which cancelled a correct parse and swapped red and blue on every rendered
+   `/TR` array; both halves are gone. See `pdfrum-page::transfer`'s module doc
+   for the arithmetic.
 5. **The page-to-device matrix flips y.** `Rotation::display_matrix`
    normalises the crop-box origin and applies `/Rotate` but leaves PDF's
    y-up convention intact, so `render_page` composes an explicit flip about
