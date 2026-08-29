@@ -37,7 +37,7 @@ use pdfrum_object::{Dict, NoResolve, ObjRef, Object, Resolve, names};
 
 use crate::error::Error;
 use crate::store::ObjectStore;
-use crate::xref::{Trailer, Xref};
+use crate::xref::{Trailer, Xref, XrefShape};
 
 /// How many bytes a `%PDF-1.7\n` header occupies, and the least a file can be.
 const HEADER_SIZE: usize = 9;
@@ -131,8 +131,11 @@ pub struct Document {
     version: u8,
     /// Where the header was found in the original file.
     header_offset: u64,
-    /// Whether the cross-reference table came from the recovery scan.
-    rebuilt: bool,
+    /// The shape of the cross-reference the load used, for the writer.
+    xref_shape: XrefShape,
+    /// The `/Encrypt` dictionary as the file wrote it, and whether the
+    /// trailer held it directly rather than by reference.
+    encrypt: Option<(Dict, bool)>,
     /// How many pages the catalog says there are.
     page_count: u32,
     /// Page dictionaries found so far, by index.
@@ -196,7 +199,7 @@ pub fn load(bytes: Arc<[u8]>, opts: &LoadOptions) -> Result<Document, LoadError>
     let body: Arc<[u8]> = Arc::from(bytes.get(header_offset..).unwrap_or_default());
     let version = read_version(&body);
 
-    let (mut xref, mut trailer, mut rebuilt) =
+    let (mut xref, mut trailer, mut xref_shape) =
         crate::xref::read_xref_full(&body, &opts.limits, &mut diags)
             .map_err(|e| LoadError::Broken(e.to_string()))?;
 
@@ -206,7 +209,7 @@ pub fn load(bytes: Arc<[u8]>, opts: &LoadOptions) -> Result<Document, LoadError>
     let mut page_count = catalog_page_count(&store, &trailer.dict, &opts.limits);
 
     if page_count.is_none() {
-        if rebuilt {
+        if xref_shape.rebuilt {
             return Err(LoadError::Broken("no document catalog".into()));
         }
         // The table is the suspect, not the file: scan it and try again.
@@ -225,7 +228,7 @@ pub fn load(bytes: Arc<[u8]>, opts: &LoadOptions) -> Result<Document, LoadError>
         }
         xref.merge_up(&fresh);
         crate::xref::merge_trailers(&mut trailer, &fresh_trailer);
-        rebuilt = true;
+        xref_shape = XrefShape::rebuilt();
 
         security = build_security(&body, &xref, &trailer.dict, opts, &mut diags)?;
         store = build_store(&body, &xref, opts, &trailer.dict, security);
@@ -239,6 +242,9 @@ pub fn load(bytes: Arc<[u8]>, opts: &LoadOptions) -> Result<Document, LoadError>
     }
 
     let page_count = page_count.unwrap_or(0);
+    // Read last, from the trailer as it finally stands, so a rebuild that
+    // replaced the trailer is reflected.
+    let encrypt = encrypt_dict_located(&body, &xref, &trailer.dict, opts.limits);
 
     let store_diags = store.drain_diags();
     for entry in store_diags.entries() {
@@ -251,7 +257,8 @@ pub fn load(bytes: Arc<[u8]>, opts: &LoadOptions) -> Result<Document, LoadError>
         store,
         version,
         header_offset: header_offset as u64,
-        rebuilt,
+        xref_shape,
+        encrypt,
         page_count,
         pages: Mutex::new(PageIndex {
             slots: vec![None; usize::try_from(page_count).unwrap_or(0)],
@@ -333,8 +340,24 @@ fn build_security(
 /// nothing. That is not a shortcut: the encryption dictionary is the one
 /// object in a document that is always plaintext.
 fn encrypt_dict(body: &Arc<[u8]>, xref: &Xref, trailer: &Dict, limits: Limits) -> Option<Dict> {
+    encrypt_dict_located(body, xref, trailer, limits).map(|(d, _)| d)
+}
+
+/// The same lookup, additionally reporting whether the trailer held the
+/// dictionary **directly** rather than by reference.
+///
+/// A writer needs that second fact: an inline encryption dictionary has no
+/// object number of its own, so it must be promoted to a fresh indirect
+/// object before the trailer's `/Encrypt` can name it (ISO 32000-1 §7.6.1
+/// requires `/Encrypt` be indirect). See SPEC.md §5's 2026-08-29 additions.
+fn encrypt_dict_located(
+    body: &Arc<[u8]>,
+    xref: &Xref,
+    trailer: &Dict,
+    limits: Limits,
+) -> Option<(Dict, bool)> {
     match trailer.raw(names::ENCRYPT)? {
-        Object::Dict(d) => Some(d.clone()),
+        Object::Dict(d) => Some((d.clone(), true)),
         Object::Ref(r) => {
             let plain = ObjectStore::new(
                 Arc::clone(body),
@@ -342,7 +365,7 @@ fn encrypt_dict(body: &Arc<[u8]>, xref: &Xref, trailer: &Dict, limits: Limits) -
                 limits,
                 SecurityHandler::Identity,
             );
-            plain.get(r.num).ok()?.as_dict().cloned()
+            Some((plain.get(r.num).ok()?.as_dict().cloned()?, false))
         }
         _ => None,
     }
@@ -688,7 +711,54 @@ impl Document {
     /// did.
     #[must_use]
     pub fn xref_was_rebuilt(&self) -> bool {
-        self.rebuilt
+        self.xref_shape.rebuilt
+    }
+
+    /// Byte offset of the newest cross-reference section the load chained
+    /// from, or **0** when the table was rebuilt by scanning.
+    ///
+    /// This is what an incremental update writes as its `/Prev`, so the zero
+    /// carries meaning rather than being an absence: a rebuilt document has
+    /// no previous section worth naming, and the writer answers by emitting a
+    /// full table after the original bytes instead of a delta.
+    ///
+    /// ```
+    /// # use std::sync::Arc;
+    /// # use pdfrum_parser::{LoadOptions, load};
+    /// let bytes: Arc<[u8]> = Arc::from(&include_bytes!("../tests/files/minimal.pdf")[..]);
+    /// let doc = load(bytes, &LoadOptions::default())?;
+    /// assert!(doc.last_xref_offset() > 0);
+    /// assert!(!doc.xref_was_rebuilt());
+    /// # Ok::<(), pdfrum_parser::LoadError>(())
+    /// ```
+    #[must_use]
+    pub fn last_xref_offset(&self) -> u64 {
+        self.xref_shape.last_offset
+    }
+
+    /// Whether the document's **main** cross-reference — the newest section,
+    /// the one `startxref` names — was a stream rather than a classic table.
+    ///
+    /// Not "the chain contained a stream somewhere": a hybrid file whose
+    /// newest section is a classic table answers `false`. The writer reads it
+    /// to decide whether an incremental update appends a classic delta table
+    /// or folds the cross-reference into a stream object, and matching the
+    /// original keeps a reader that only understands one of the two working.
+    #[must_use]
+    pub fn main_xref_is_stream(&self) -> bool {
+        self.xref_shape.main_is_stream
+    }
+
+    /// The `/Encrypt` dictionary as the file wrote it, and whether the
+    /// trailer held it **directly** rather than by reference.
+    ///
+    /// Returned raw and undecrypted, because the encryption dictionary is the
+    /// one object in a document that is always plaintext. `Some` here does
+    /// not imply the document opened encrypted — a file can declare a handler
+    /// this reader answered with [`SecurityHandler::Identity`].
+    #[must_use]
+    pub fn encrypt_dict(&self) -> Option<(&Dict, bool)> {
+        self.encrypt.as_ref().map(|(d, inline)| (d, *inline))
     }
 
     /// What the document permits, as the permission word.

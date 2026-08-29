@@ -132,9 +132,42 @@ pub fn decode_flate(
     Ok(out)
 }
 
+/// Compression level the writer deflates at.
+///
+/// PDFium calls zlib's `compress()`, which is `Z_DEFAULT_COMPRESSION` — level
+/// 6. Matching it keeps our output sizes in the same neighbourhood as the
+/// oracle's without any claim of byte-identity (the two deflate
+/// implementations differ regardless).
+const ENCODE_LEVEL: u8 = 6;
+
+/// Deflate `input` into a zlib stream, the payload a `/FlateDecode` stream
+/// declares.
+///
+/// The inverse of [`decode_flate`] up to the compressor's choices: the bytes
+/// differ from zlib's for the same input, the decoded content does not. Used
+/// only by the writer (`pdfrum-edit`); nothing on the read path compresses.
+///
+/// ```
+/// use pdfrum_common::{Diagnostics, Limits};
+/// use pdfrum_filters::{decode_flate, encode_flate};
+///
+/// let round = decode_flate(
+///     &encode_flate(b"round trip"),
+///     0,
+///     &Limits::default(),
+///     &mut Diagnostics::default(),
+/// )?;
+/// assert_eq!(round, b"round trip");
+/// # Ok::<(), pdfrum_filters::Error>(())
+/// ```
+#[must_use]
+pub fn encode_flate(input: &[u8]) -> Vec<u8> {
+    miniz_oxide::deflate::compress_to_vec_zlib(input, ENCODE_LEVEL)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::decode_flate;
+    use super::{decode_flate, encode_flate};
     use crate::Error;
     use pdfrum_common::{Diagnostics, Limits};
 
@@ -283,6 +316,30 @@ mod tests {
             decode_flate(&bomb, 0, &limits, &mut diags),
             Err(Error::OutputTooLarge { limit: 1024 * 1024 })
         );
+    }
+
+    // The writer's half (SPEC §4, added with pdfrum-edit): whatever the
+    // compressor chooses, decode_flate must read it back exactly.
+    #[test]
+    fn encode_round_trips_through_decode() {
+        for payload in [
+            Vec::new(),
+            b"round trip".to_vec(),
+            vec![0u8; 100_000],
+            (0..30_000u32).map(|i| (i % 251) as u8).collect(),
+        ] {
+            let mut diags = Diagnostics::default();
+            let out = decode_flate(&encode_flate(&payload), 0, &Limits::default(), &mut diags)
+                .expect("our own output decodes");
+            assert_eq!(out, payload);
+            assert_eq!(diags.len(), 0, "our own output is never damaged");
+        }
+    }
+
+    #[test]
+    fn encode_shrinks_compressible_input() {
+        let payload = vec![b'a'; 50_000];
+        assert!(encode_flate(&payload).len() < payload.len() / 10);
     }
 
     #[test]

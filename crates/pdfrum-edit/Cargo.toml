@@ -10,3 +10,11 @@ repository.workspace = true
 workspace = true
 
 [dependencies]
+pdfrum-common.workspace = true
+pdfrum-object.workspace = true
+pdfrum-filters.workspace = true
+pdfrum-parser.workspace = true
+pdfrum-font.workspace = true
+pdfrum-page.workspace = true
+subsetter.workspace = true
+thiserror.workspace = true

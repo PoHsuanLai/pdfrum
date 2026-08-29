@@ -219,6 +219,7 @@ pub fn validate_pipeline(filters: &Array, r: &impl Resolve) -> bool;            
 // reached only from the image path: unlike every other filter it needs the
 // image's own /Width and /Height, because /Columns and /Rows default to them.
 pub fn decode_flate(input: &[u8], estimated_size: usize, limits: &Limits, diags: &mut Diagnostics) -> Result<Vec<u8>, Error>;
+pub fn encode_flate(input: &[u8]) -> Vec<u8>;   // the writer's half; see below
 pub fn decode_lzw(input: &[u8], early_change: bool, limits: &Limits, diags: &mut Diagnostics) -> Result<Vec<u8>, Error>;
 pub fn decode_run_length(input: &[u8], diags: &mut Diagnostics) -> Result<(Vec<u8>, usize), Error>;
 pub fn decode_ascii85(input: &[u8]) -> Result<(Vec<u8>, usize), Error>;
@@ -256,6 +257,15 @@ it is a rejection the oracle really performs and files depend on, so it is not
 configurable. `bytes_consumed` is reported only by the three filters whose
 inline-image use needs it (RLE, A85, AHx); Flate and LZW do not report it, per
 the brief's Q4.
+[spec] 2026-08-29 (added with `pdfrum-edit`, M7): **`encode_flate` is the one
+compression entry point, and it lives here.** The writer's stream serializer
+(edit brief §1.13) flate-encodes an unfiltered stream, which is the only
+compression in the workspace. It belongs beside `decode_flate` — the same
+codec, the same `miniz_oxide` dependency, and putting it in `pdfrum-edit`
+would make that crate the second place that knows what `/FlateDecode` means.
+Level 6 (`Z_DEFAULT_COMPRESSION`, what PDFium's `compress()` uses); the bytes
+are not byte-identical to zlib's and are not meant to be — round-trip through
+`decode_flate` is the contract.
 
 ## 5. `pdfrum-parser`  *(behavior: `core/fpdfapi/parser` — THE fidelity-critical crate)*
 
