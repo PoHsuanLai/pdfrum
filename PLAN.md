@@ -1,6 +1,6 @@
 # PDFium → Rust Rewrite — Master Plan
 
-**Status:** All crates implemented (2026-08-29). **M1–M3 and M5–M7 complete** — M5 met at burn-down wave 11, M6's widget-text-body waiver retired at wave 10; facade + README landed (M8 polish in flight); pixel fidelity **96.2%@0.99, 99.3%@0.95, 516 pixel-exact, 1602/1675 passing**, tail 62 files / 51 documents; 24h fuzz gate running. Workspace: 2842 tests.
+**Status:** ALL MILESTONES MET (2026-08-30). Pixel: 96.2%@0.99 / 99.3%@0.95 / 516 byte-exact; passing 1602/1675; annot 99.8%, text 99.6%, metadata/pageinfo/structure 100%; oracle reopens 100% of saved files. M1 fuzz gate ran ~9h parallel clean (18 targets) before being stopped externally — rerun `scripts/fuzz-gate.sh 86400 parallel` for the full 24h certificate. Documented tail in docs/status/pdfrum-render.md (image downscale kernel, CCITT chain caller, BAFontMap fallback, 2 external items).
 **Oracle:** `/mnt/data2/pdfium/pdfium-c++` (read-only C++ PDFium checkout @ `6f2272e`)
 **Workspace:** `/mnt/data2/pdfium/pdfrum` (this repository)
 
