@@ -349,7 +349,11 @@ fn four_letter_and_sentence_fixtures_read_plainly() {
 }
 
 #[test]
-#[ignore = "bug_1769 needs the substituted face's own widths; see docs/status/pdfrum-text.md"]
+#[ignore = "bug_1769: we keep glyphs the overlap logic should drop, giving \
+            `world wo d` for `wo d wo d`. Not the substitution-metrics cluster \
+            this was once filed under -- that is fixed, and this file did not \
+            move with it; the cause is in the dedup pass. See \
+            docs/status/pdfrum-text.md."]
 fn two_pinned_upstream_bugs_stay_pinned() {
     // `Bug444176962`: a space that ought to be generated is not
     // (crbug.com/444176962). `Bug1769`: characters the overlap logic drops

@@ -94,6 +94,19 @@ pub fn process_file(
     Ok(counts)
 }
 
+/// The substitution settings a command line asks for.
+///
+/// `skip_font_enumeration` stays at its default `false`: the oracle's Linux
+/// build drives `CFX_FolderFontInfo`, which enumerates, and `--font-dir` is
+/// precisely the flag that puts it in that mode.
+fn substitution_options(options: &Options) -> pdfrum_font::SubstitutionOptions {
+    pdfrum_font::SubstitutionOptions {
+        font_dirs: options.font_dirs.clone(),
+        croscore_font_names: options.croscore_font_names,
+        ..pdfrum_font::SubstitutionOptions::default()
+    }
+}
+
 /// Visits the selected pages, dumping each one.
 fn walk_pages(
     doc: &Document,
@@ -105,7 +118,12 @@ fn walk_pages(
     // One build context for the whole file, so its font, colorspace and
     // image caches are shared across pages the way the oracle's document-wide
     // caches are.
-    let mut ctx = BuildContext::default();
+    // `--font-dir` and `--croscore-font-names` decide which face a
+    // non-embedded font draws with, and therefore the metrics every spacing
+    // threshold in text extraction is computed from. Set once per file,
+    // because the substitution must not vary between two pages of one
+    // document.
+    let mut ctx = BuildContext::with_substitution(substitution_options(options));
     let catalog = doc.catalog().unwrap_or_default();
     let rtl = text::direction_is_r2l(&catalog, doc);
     for index in selected_pages(options.pages, doc.page_count()) {

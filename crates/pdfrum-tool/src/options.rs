@@ -57,6 +57,16 @@ pub struct Options {
     pub md5: bool,
     pub password: String,
     pub pages: Option<PageRange>,
+    /// Directories to enumerate faces from, from `--font-dir`.
+    ///
+    /// Empty means the built-in faces alone. A directory here *replaces* the
+    /// system font path rather than adding to it, which is what makes the
+    /// oracle's `--font-dir=third_party/test_fonts` hermetic
+    /// (`fx_linux_impl.cpp:167-176`).
+    pub font_dirs: Vec<PathBuf>,
+    /// Whether to rename requested faces to their Croscore equivalents, from
+    /// `--croscore-font-names`.
+    pub croscore_font_names: bool,
     /// Flags recognized but not implemented, in the order they were given.
     pub unsupported: Vec<String>,
 }
@@ -98,7 +108,6 @@ const ACCEPTED_SWITCHES: &[&str] = &[
     "--save-thumbs",
     "--save-thumbs-dec",
     "--save-thumbs-raw",
-    "--croscore-font-names",
     "--fontations",
     "--no-system-fonts",
     "--reverse-byte-order-uses-bgra",
@@ -110,7 +119,6 @@ const ACCEPTED_SWITCHES: &[&str] = &[
 const ACCEPTED_VALUED: &[&str] = &[
     "--scale=",
     "--render-repeats=",
-    "--font-dir=",
     "--bin-dir=",
     "--js-flags=",
     "--use-renderer=",
@@ -156,6 +164,11 @@ pub fn parse(args: &[String]) -> Result<Options, ParseError> {
                 ));
             }
             options.pages = Some(parse_page_range(value));
+        } else if let Some(value) = arg.strip_prefix("--font-dir=") {
+            // Repeatable, like the oracle's: each one adds a path to scan.
+            options.font_dirs.push(PathBuf::from(value));
+        } else if arg == "--croscore-font-names" {
+            options.croscore_font_names = true;
         } else if arg == "--show-metadata" {
             options.show_metadata = true;
         } else if arg == "--md5" {
@@ -327,22 +340,29 @@ mod tests {
 
     #[test]
     fn flags_we_do_not_implement_are_accepted_and_recorded() {
+        let options = parse_args(&["--scale=2", "--time=1399672130", "a.pdf"]).unwrap();
+        assert_eq!(options.unsupported, ["--scale=2", "--time=1399672130"]);
+        assert_eq!(options.files, [PathBuf::from("a.pdf")]);
+    }
+
+    #[test]
+    fn the_two_font_flags_are_read_rather_than_recorded() {
+        // Both were accepted-and-ignored while substitution had no font
+        // database to enumerate. They now decide which face a non-embedded
+        // font resolves to, and the harness passes them on every invocation.
         let options = parse_args(&[
             "--croscore-font-names",
             "--font-dir=/fonts",
-            "--time=1399672130",
+            "--font-dir=/more",
             "a.pdf",
         ])
         .unwrap();
+        assert!(options.croscore_font_names);
         assert_eq!(
-            options.unsupported,
-            [
-                "--croscore-font-names",
-                "--font-dir=/fonts",
-                "--time=1399672130"
-            ]
+            options.font_dirs,
+            [PathBuf::from("/fonts"), PathBuf::from("/more")]
         );
-        assert_eq!(options.files, [PathBuf::from("a.pdf")]);
+        assert!(options.unsupported.is_empty());
     }
 
     #[test]

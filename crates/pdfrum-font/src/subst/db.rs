@@ -300,7 +300,33 @@ impl SystemFontDb {
             faces.push(info);
             sources.push((bytes, face.index));
         }
-        Self { faces, sources }
+
+        // Sorted by face name, because the C++'s font list is a
+        // `std::map<ByteString, ...>` (`cfx_folderfontinfo.h:98`) and two of
+        // the ladder's decisions read it *in order*: a face can only displace
+        // the incumbent by scoring strictly higher, so a tie goes to whichever
+        // came first, and rung 5 takes the first face claiming the charset
+        // outright. Leaving these in `fontdb`'s enumeration order — which is
+        // directory order, so it varies by filesystem — would make both
+        // answers depend on something the oracle's does not.
+        let mut order: Vec<usize> = (0..faces.len()).collect();
+        order.sort_by(|&l, &r| match (faces.get(l), faces.get(r)) {
+            (Some(l), Some(r)) => l.name.cmp(&r.name),
+            _ => std::cmp::Ordering::Equal,
+        });
+        let sorted_faces = order
+            .iter()
+            .filter_map(|&i| faces.get(i).cloned())
+            .collect();
+        let sorted_sources = order
+            .iter()
+            .filter_map(|&i| sources.get(i).cloned())
+            .collect();
+
+        Self {
+            faces: sorted_faces,
+            sources: sorted_sources,
+        }
     }
 }
 
