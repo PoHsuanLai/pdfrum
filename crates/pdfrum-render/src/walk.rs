@@ -1086,7 +1086,9 @@ fn render_pattern_stencil<B: RasterBackend>(
     // The stencil, rasterized on the same grid so no resampling is needed
     // when it becomes the alpha. Its set bits are opaque white; the readback
     // takes the alpha channel, which is exactly the coverage.
-    let stencil = to_pixmap(&object.image, Argb::opaque(255, 255, 255));
+    // The stencil is drawn as a coverage mask for a pattern, so its colour
+    // is a placeholder and no transfer function applies to it.
+    let stencil = to_pixmap(&object.image, Argb::opaque(255, 255, 255), None);
     if stencil.width() == 0 || stencil.height() == 0 {
         return;
     }
@@ -1174,7 +1176,14 @@ fn render_image<B: RasterBackend>(
     }
     let (fill, _) = colors(ctx, state, ObjectKind::Other);
     let image = &object.image;
-    let pixels = to_pixmap(image, fill);
+    // `StartRenderDIBBase` runs a non-identity `/TR` over the image's own
+    // samples, not only over the fill colour a stencil takes.
+    let transfer = state
+        .general
+        .transfer
+        .as_ref()
+        .map(|t| TransferFunc::new(t));
+    let pixels = to_pixmap(image, fill, transfer.as_ref());
     if pixels.width() == 0 || pixels.height() == 0 {
         return;
     }
