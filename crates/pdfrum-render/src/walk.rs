@@ -457,10 +457,12 @@ fn render_direct<B: RasterBackend>(
         PageObject::Path(p) => render_path(
             ctx, device, backend, caches, &p.object, &p.state, to_device, device_box, diags,
         ),
-        PageObject::Text(t) => {
-            render_text(ctx, device, backend, caches, &t.object, &t.state, to_device);
-        }
-        PageObject::Image(i) => render_image(ctx, device, &i.object, &i.state, to_device),
+        PageObject::Text(t) => render_text(
+            ctx, device, backend, caches, &t.object, &t.state, to_device, device_box, diags,
+        ),
+        PageObject::Image(i) => render_image(
+            ctx, device, backend, caches, &i.object, &i.state, to_device, device_box, diags,
+        ),
         PageObject::Shading(s) => render_shading(
             ctx, device, backend, &s.object, &s.state, to_device, device_box,
         ),
@@ -691,6 +693,11 @@ fn render_path<B: RasterBackend>(
     );
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the type-3 arm needs the device box and diagnostics the ordinary \
+              glyph draw does not"
+)]
 fn render_text<B: RasterBackend>(
     ctx: &RenderCtx<'_>,
     device: &mut B::Device,
@@ -699,6 +706,8 @@ fn render_text<B: RasterBackend>(
     object: &pdfrum_page::TextObject,
     state: &pdfrum_page::GraphicsState,
     to_device: Affine,
+    device_box: Rect,
+    diags: &mut Diagnostics,
 ) {
     let Some((font, _)) = &object.font else {
         return;
@@ -708,6 +717,14 @@ fn render_text<B: RasterBackend>(
     };
     if !kinds.fill && !kinds.stroke {
         return; // Tr 7 contributes only to the clip, which the stack owns.
+    }
+    // A type-3 font has no outlines to fill: each character is a content
+    // stream, walked with the same machinery a form is.
+    if font.type3().is_some() {
+        render_type3_text(
+            ctx, device, backend, caches, object, state, to_device, device_box, diags,
+        );
+        return;
     }
     // A pattern-coloured glyph run goes to `DrawTextPathWithPattern`, which
     // returns before the ordinary draw — so the pattern's absence must skip
@@ -746,21 +763,370 @@ fn render_text<B: RasterBackend>(
     }
 }
 
+/// Whether a glyph procedure is the sole-image case *and* taking it through
+/// the char-proc path would paint the wrong thing
+/// (`LoadBitmapFromSoleImageOfForm`, `cpdf_type3char.cpp:35-52`).
+///
+/// An uncoloured procedure whose one object is an image has that image lifted
+/// out and blitted as the glyph's 8bpp **mask**, in the text object's colour —
+/// a path this engine does not have.
+///
+/// The distinction that matters is what the image *is*. A stencil
+/// (`/ImageMask true`) already paints in the fill colour wherever its bits are
+/// set, which is what the mask blit does, so walking it as a char proc lands
+/// on the same pixels and it is *not* declined — and declining it would lose
+/// every bitmap-font glyph in the corpus, which is what these procedures
+/// overwhelmingly are. A colour image, by contrast, would paint its own
+/// samples where the oracle paints a mask, so that one is declined.
+///
+/// Exactly one object either way: a procedure that draws an image *and* a
+/// rule is a char proc like any other.
+#[must_use]
+fn sole_color_image(objects: &[PageObject]) -> bool {
+    matches!(objects, [PageObject::Image(i)] if !i.object.is_mask)
+}
+
+/// Draw one type-3 text object, one glyph procedure at a time
+/// (`ProcessType3Text`, `cpdf_renderstatus.cpp:933-1130`).
+///
+/// Four contracts, each of which changes pixels:
+///
+/// - **The colour comes from the *outer* text object**, and a `d1`
+///   (uncoloured) procedure takes it for every drawing operation inside,
+///   whatever colours the procedure sets. A `d0` (coloured) one keeps what it
+///   sets and falls back to the text object's only where it sets none. That
+///   is the [`Type3Frame`] the child context carries.
+/// - **`bForceHalftone` and `bRectAA` are forced on**, and the second is
+///   visible: `bRectAA` disables the axis-aligned rect snapping, so a
+///   rectangle inside a glyph *is* antialiased where the same rectangle on the
+///   page would not be.
+/// - **A translucent procedure goes through its own buffer**, blitted with a
+///   plain normal blend and no group semantics, so the procedure's own
+///   overlapping strokes do not accumulate alpha against each other.
+/// - **The recursion guard is a set of font identities, not a depth.** A font
+///   may not appear twice anywhere in the ancestry, so a glyph that shows
+///   text in its own font draws nothing rather than recursing sixty-four
+///   levels first.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "a glyph procedure needs the context, device, backend, caches, \
+              the text object, its state, and the page transform"
+)]
+fn render_type3_text<B: RasterBackend>(
+    ctx: &RenderCtx<'_>,
+    device: &mut B::Device,
+    backend: &B,
+    caches: &mut RenderCaches,
+    object: &pdfrum_page::TextObject,
+    state: &pdfrum_page::GraphicsState,
+    to_device: Affine,
+    device_box: Rect,
+    diags: &mut Diagnostics,
+) {
+    let Some((font, _)) = &object.font else {
+        return;
+    };
+    // The guard is by font identity and is checked before anything is drawn.
+    if ctx.type3_font_is_active(font.id()) || !ctx.may_recurse() {
+        return;
+    }
+    // `GetFillArgbForType3` skips the type-3 branch, so this is the outer
+    // object's own colour even inside a nested procedure.
+    let fill = resolve_argb(
+        &state.fill,
+        state.general.fill_alpha,
+        state
+            .general
+            .transfer
+            .as_ref()
+            .map(|t| TransferFunc::new(t))
+            .as_ref(),
+        ctx.initial_fill,
+        &ctx.opts,
+        ObjectKind::Text,
+        false,
+    );
+    if fill.is_invisible() {
+        // A pattern-coloured run resolves to the `0xFFFFFFFF` sentinel, which
+        // `GetFillArgbForType3` turns into a zero ARGB. There is no
+        // `DrawTextPathWithPattern` for a type-3 run, so this is where such a
+        // run stops: the glyphs paint nothing at all.
+        return;
+    }
+    let mut ancestry: Vec<pdfrum_font::FontId> = ctx.type3_fonts.to_vec();
+    ancestry.push(font.id());
+
+    for placed in crate::text::place_type3_chars(object, state, to_device) {
+        let Some(metrics) = object.type3_metrics.get(&placed.code) else {
+            continue;
+        };
+        if metrics.objects.is_empty() || !is_available_matrix(placed.matrix) {
+            continue;
+        }
+        // `LoadBitmapFromSoleImageOfForm`: an **uncoloured** procedure whose
+        // one object is an image is not walked as a char proc at all — the
+        // image becomes the glyph's *bitmap*, blitted as an 8bpp mask in the
+        // text colour by a separate path this engine does not have. Walking it
+        // here instead paints the image's own colours where the oracle paints
+        // a mask, so the char-proc path declines it.
+        if !metrics.colored && sole_color_image(&metrics.objects) {
+            continue;
+        }
+        let inner = RenderCtx {
+            opts: ctx.opts.for_type3_char_proc(),
+            type3: Some(crate::ctx::Type3Frame {
+                fill,
+                colored: metrics.colored,
+            }),
+            type3_fonts: &ancestry,
+            initial_fill: Some(fill),
+            initial_stroke: Some(fill),
+            ..ctx.deeper()
+        };
+        if fill.a == 255 {
+            render_object_list(
+                &inner,
+                device,
+                backend,
+                caches,
+                &metrics.objects,
+                placed.matrix,
+                device_box,
+                diags,
+            );
+            continue;
+        }
+        // The translucent path: its own opaque-capable buffer, sized to the
+        // glyph's device extent, blitted back at the object's alpha.
+        let bbox = placed
+            .matrix
+            .transform_rect_bbox(metrics.bbox)
+            .intersect(device_box);
+        let rect = outer_rect(bbox).intersect(outer_rect(device_box));
+        let (Ok(w), Ok(h)) = (u32::try_from(rect.width()), u32::try_from(rect.height())) else {
+            continue;
+        };
+        if w == 0 || h == 0 || w > MAX_TARGET_DIMENSION || h > MAX_TARGET_DIMENSION {
+            continue;
+        }
+        let mut sub = backend.new_target(w, h, peniko::Color::TRANSPARENT);
+        let offset = Affine::translate((-f64::from(rect.left), -f64::from(rect.top)));
+        // Inside the buffer the procedure paints at full opacity; the
+        // object's alpha is applied exactly once, at the blit.
+        let opaque = crate::ctx::Type3Frame {
+            fill: Argb { a: 255, ..fill },
+            colored: metrics.colored,
+        };
+        let inner = RenderCtx {
+            type3: Some(opaque),
+            initial_fill: Some(opaque.fill),
+            initial_stroke: Some(opaque.fill),
+            ..inner
+        };
+        render_object_list(
+            &inner,
+            &mut sub,
+            backend,
+            caches,
+            &metrics.objects,
+            offset * placed.matrix,
+            Rect::new(0.0, 0.0, f64::from(w), f64::from(h)),
+            diags,
+        );
+        let pixels = backend.finish(sub);
+        device.draw_image(
+            &pixels,
+            Affine::translate((f64::from(rect.left), f64::from(rect.top))),
+            ImageQuality::Nearest,
+            f32::from(fill.a) / 255.0,
+        );
+    }
+}
+
+/// The resample quality a stencil-as-mask is drawn at.
+///
+/// A thin wrapper over [`resample_quality`] that guards the destination
+/// extent, which the ordinary image path guards separately.
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "`image_value_fits` rejects a non-finite extent and anything at \
+              or above MAX_IMAGE_VALUE (2^28), so both rounded values are \
+              well inside i64"
+)]
+fn mask_quality(
+    image: &pdfrum_page::ImageData,
+    opts: &RenderOptions,
+    extent: Rect,
+) -> ImageQuality {
+    if !crate::image::image_value_fits(extent.width())
+        || !crate::image::image_value_fits(extent.height())
+    {
+        return ImageQuality::Nearest;
+    }
+    resample_quality(
+        image,
+        opts,
+        image.width,
+        image.height,
+        extent.width().round() as i64,
+        extent.height().round() as i64,
+    )
+}
+
+/// Paint a stencil whose fill colour is a pattern (`DrawPatternImage`,
+/// `cpdf_imagerenderer.cpp:325-374`).
+///
+/// The pattern is drawn into its own buffer over the stencil's device extent,
+/// and the **stencil becomes that buffer's alpha** — so the pattern shows
+/// through the set bits and nothing shows through the clear ones. Painting a
+/// pattern colour through the ordinary image path instead paints the pattern's
+/// *fallback* colour, which for a coloured tiling pattern is mid grey.
+///
+/// The object's alpha is deliberately **not** applied at the blit: unlike
+/// `DrawMaskedImage`, the pattern path has already consumed it inside the
+/// tiling cell's inherited state or the shading's rounded alpha.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the stencil path needs the context, device, backend, caches, the \
+              image, its state and the page transform"
+)]
+fn render_pattern_stencil<B: RasterBackend>(
+    ctx: &RenderCtx<'_>,
+    device: &mut B::Device,
+    backend: &B,
+    caches: &mut RenderCaches,
+    object: &pdfrum_page::ImageObject,
+    state: &pdfrum_page::GraphicsState,
+    to_device: Affine,
+    device_box: Rect,
+    diags: &mut Diagnostics,
+) {
+    if !ctx.may_recurse() {
+        return;
+    }
+    let matrix = to_device * object.matrix;
+    let bbox = matrix
+        .transform_rect_bbox(unit_rect())
+        .intersect(device_box);
+    let rect = outer_rect(bbox).intersect(outer_rect(device_box));
+    let (Ok(w), Ok(h)) = (u32::try_from(rect.width()), u32::try_from(rect.height())) else {
+        return;
+    };
+    if w == 0 || h == 0 || w > MAX_TARGET_DIMENSION || h > MAX_TARGET_DIMENSION {
+        return;
+    }
+    let offset = Affine::translate((-f64::from(rect.left), -f64::from(rect.top)));
+    let inner_box = Rect::new(0.0, 0.0, f64::from(w), f64::from(h));
+
+    // The pattern, over the stencil's whole extent.
+    let mut pattern_target = backend.new_target(w, h, peniko::Color::TRANSPARENT);
+    let inner = RenderCtx {
+        std_cs: true,
+        ..ctx.deeper()
+    };
+    paint_pattern(
+        &inner,
+        &mut pattern_target,
+        backend,
+        caches,
+        state,
+        false,
+        // An image object clips by its transformed bounding box, which here is
+        // the whole buffer.
+        &PatternClip::Rect(inner_box),
+        offset * to_device,
+        inner_box,
+        diags,
+    );
+    let mut pixels = backend.finish(pattern_target);
+
+    // The stencil, rasterized on the same grid so no resampling is needed
+    // when it becomes the alpha. Its set bits are opaque white; the readback
+    // takes the alpha channel, which is exactly the coverage.
+    let stencil = to_pixmap(&object.image, Argb::opaque(255, 255, 255));
+    if stencil.width() == 0 || stencil.height() == 0 {
+        return;
+    }
+    let placement = offset
+        * matrix
+        * Affine::new([
+            1.0 / f64::from(object.image.width),
+            0.0,
+            0.0,
+            -1.0 / f64::from(object.image.height),
+            0.0,
+            1.0,
+        ]);
+    // The mask goes through the ordinary image renderer, so it gets the
+    // ordinary resample selection — which is what puts a soft edge on a
+    // scaled-up stencil rather than a hard one.
+    let extent = placement.transform_rect_bbox(Rect::new(
+        0.0,
+        0.0,
+        f64::from(object.image.width),
+        f64::from(object.image.height),
+    ));
+    let quality = mask_quality(&object.image, &ctx.opts, extent);
+    let mut mask_target = backend.new_target(w, h, peniko::Color::TRANSPARENT);
+    mask_target.draw_image(
+        &stencil,
+        placement,
+        effective_quality(quality, placement),
+        1.0,
+    );
+    let mask = backend.finish(mask_target).alpha_mask();
+    pixels.multiply_alpha_mask(&mask);
+
+    let blend = overprint_blend(None, &state.general);
+    let layered = !matches!(blend, pdfrum_page::BlendMode::Normal);
+    if layered {
+        device.push_layer(blend, 1.0, None);
+    }
+    device.draw_image(
+        &pixels,
+        Affine::translate((f64::from(rect.left), f64::from(rect.top))),
+        ImageQuality::Nearest,
+        1.0,
+    );
+    if layered {
+        device.pop();
+    }
+}
+
 #[expect(
     clippy::cast_possible_truncation,
     reason = "`image_value_fits` has already rejected a non-finite extent and \
               anything at or above MAX_IMAGE_VALUE (2^28), so both rounded \
               values are well inside i64"
 )]
-fn render_image<D: RenderDevice>(
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the pattern-stencil arm needs the backend, caches, device box \
+              and diagnostics the ordinary image draw does not"
+)]
+fn render_image<B: RasterBackend>(
     ctx: &RenderCtx<'_>,
-    device: &mut D,
+    device: &mut B::Device,
+    backend: &B,
+    caches: &mut RenderCaches,
     object: &pdfrum_page::ImageObject,
     state: &pdfrum_page::GraphicsState,
     to_device: Affine,
+    device_box: Rect,
+    diags: &mut Diagnostics,
 ) {
     let matrix = to_device * object.matrix;
     if !is_available_matrix(matrix) {
+        return;
+    }
+    // `DrawPatternImage`: a stencil whose fill colour is a pattern paints the
+    // *pattern* through the stencil, not a colour. The ordinary path would
+    // paint the pattern's fallback colour — mid grey for a coloured tiling
+    // one — across every set bit.
+    if object.is_mask && state.fill.is_pattern() {
+        render_pattern_stencil(
+            ctx, device, backend, caches, object, state, to_device, device_box, diags,
+        );
         return;
     }
     let (fill, _) = colors(ctx, state, ObjectKind::Other);
