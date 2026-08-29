@@ -18,11 +18,35 @@
 //! both counts valid and the space's at least the JPEG's, and every other
 //! family — `Indexed`, `Separation`, `DeviceN`, `Pattern`, `CalGray`,
 //! `CalRGB` — needs them **exactly equal**.
+//!
+//! # The output component count is the codestream's
+//!
+//! PDFium never asks libjpeg to reduce a JPEG's channel count. It leaves
+//! `out_color_space` at the value `jpeg_read_header` chose — `JCS_GRAYSCALE`
+//! for one channel, `JCS_RGB` for three, **`JCS_CMYK` for four** — and only
+//! ever *narrows* that, by pinning a three-channel image with no Adobe marker
+//! to its own `jpeg_color_space`:
+//!
+//! ```text
+//! if (common_.cinfo.num_components == 3 && !jpeg_transform_) {
+//!   common_.cinfo.out_color_space = common_.cinfo.jpeg_color_space;
+//! }
+//! ```
+//!
+//! so `comps_ = cinfo.num_components` always equals the codestream's count.
+//! `zune-jpeg` instead defaults its *output* to RGB and will happily convert
+//! a four-channel CMYK or YCCK image down to three, which then reads as a
+//! component mismatch against a `/DeviceCMYK` image dictionary and rejects
+//! the whole image — `bug_718762` and `bug_1646`, both 5000×5000 CMYK JPEGs.
+//! We therefore choose the output space from the header's channel count
+//! rather than taking the default.
 
 use crate::color::{ColorSpace, Family};
 use crate::error::Error;
 use crate::image::dict::is_allowed_bits_per_component;
 use zune_jpeg::zune_core::bytestream::ZCursor;
+use zune_jpeg::zune_core::colorspace::ColorSpace as ZColorSpace;
+use zune_jpeg::zune_core::options::DecoderOptions;
 
 /// Component counts a JPEG may declare in a PDF.
 const VALID_COMPONENTS: [u8; 3] = [1, 3, 4];
@@ -111,6 +135,16 @@ pub fn component_mismatch_allowed(space: Option<&ColorSpace>, components: u8) ->
     }
 }
 
+/// The output colour space libjpeg would have chosen for `channels`.
+///
+/// `jpeg_read_header` picks the output space from the codestream's channel
+/// count alone, and PDFium leaves that choice standing. Four channels stay
+/// four; anything else takes `zune-jpeg`'s default, which already matches
+/// (`JCS_GRAYSCALE` for one, `JCS_RGB` for three).
+fn output_space(channels: u8) -> Option<ZColorSpace> {
+    (channels == 4).then_some(ZColorSpace::CMYK)
+}
+
 /// Decode a baseline JPEG.
 ///
 /// # Errors
@@ -118,7 +152,15 @@ pub fn component_mismatch_allowed(space: Option<&ColorSpace>, components: u8) ->
 /// [`Error::CodecRejected`] when the codestream will not decode or declares a
 /// component count or bit depth PDF does not allow.
 pub fn decode_dct(data: &[u8]) -> Result<DctImage, Error> {
-    let mut decoder = zune_jpeg::JpegDecoder::new(ZCursor::new(data));
+    // The header pass first, so the output space can be pinned to the
+    // codestream's channel count before any samples are produced.
+    let channels = probe(data).map_or(0, |(_, _, c)| c);
+    let options = output_space(channels)
+        .map(|space| DecoderOptions::default().jpeg_set_out_colorspace(space));
+    let mut decoder = match options {
+        Some(options) => zune_jpeg::JpegDecoder::new_with_options(ZCursor::new(data), options),
+        None => zune_jpeg::JpegDecoder::new(ZCursor::new(data)),
+    };
     let pixels = decoder
         .decode()
         .map_err(|_| Error::CodecRejected { codec: "DCT" })?;
@@ -173,8 +215,8 @@ mod tests {
     )]
 
     use super::{
-        ADOBE_CMYK_DECODE, allows_reduced_resolution, component_mismatch_allowed, decode_dct,
-        probe, scale_denominator, scaled_size,
+        ADOBE_CMYK_DECODE, ZColorSpace, allows_reduced_resolution, component_mismatch_allowed,
+        decode_dct, output_space, probe, scale_denominator, scaled_size,
     };
     use crate::color::{ColorSpace, Indexed};
 
@@ -265,5 +307,20 @@ mod tests {
             assert!(decode_dct(data).is_err(), "{data:?} should be rejected");
             assert!(probe(data).is_none());
         }
+    }
+
+    #[test]
+    fn a_four_channel_jpeg_stays_four_channels() {
+        // libjpeg's `jpeg_read_header` picks `JCS_CMYK` for four channels and
+        // PDFium never overrides it, so the scanline keeps all four. Only
+        // this count needs pinning: one and three already match `zune-jpeg`'s
+        // own default, and asking for a conversion there would be the change.
+        assert_eq!(output_space(4), Some(ZColorSpace::CMYK));
+        assert_eq!(output_space(1), None);
+        assert_eq!(output_space(3), None);
+        // A count PDF does not allow is left alone too — the component gate
+        // above rejects it, and pinning an output space would not save it.
+        assert_eq!(output_space(2), None);
+        assert_eq!(output_space(0), None);
     }
 }

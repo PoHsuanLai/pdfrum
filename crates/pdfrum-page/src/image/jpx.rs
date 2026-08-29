@@ -177,6 +177,66 @@ impl JpxAction {
     }
 }
 
+/// Whether every component in the codestream agrees on subsampling and depth.
+///
+/// `CJPX_Decoder::Decode` walks the components and gives up on the first that
+/// disagrees with the one before it:
+///
+/// ```text
+/// if (components[i].dx != components[i - 1].dx ||
+///     components[i].dy != components[i - 1].dy ||
+///     components[i].prec != components[i - 1].prec) {
+///   return false;
+/// }
+/// ```
+///
+/// The whole image is then refused — `LoadJpxBitmap` returns null and the page
+/// draws nothing at all. It is a real gate rather than a paranoia check:
+/// `bug_557223` is a 904-byte codestream claiming a 707×6131 three-component
+/// image whose components declare subsampling 3×7, 1×7, 1×7 at precisions 1,
+/// 2 and 3. PDFium prints "has an empty bitmap" and paints white; a decoder
+/// that presses on invents a picture that is not in the file.
+///
+/// The fields live in the `SIZ` marker segment, which follows `SOC` at the
+/// head of the codestream, so this reads them directly rather than going
+/// through the decoder — `hayro-jpeg2000` exposes a component's depth only
+/// after a decode and its subsampling not at all.
+///
+/// A codestream this cannot find or parse is left alone: the gate exists to
+/// reject a specific disagreement, not to second-guess the decoder.
+fn components_agree(data: &[u8]) -> bool {
+    // `SOC` immediately followed by `SIZ`, which is the only place the pair
+    // may appear: a raw codestream opens with it, and a JP2 file's `jp2c` box
+    // contains it.
+    let Some(soc) = data.windows(4).position(|w| w == [0xFF, 0x4F, 0xFF, 0x51]) else {
+        return true;
+    };
+    // `Lsiz`(2) `Rsiz`(2) then eight 4-byte grid fields, then `Csiz`(2).
+    let header = soc + 4;
+    let Some(csiz_at) = header.checked_add(2 + 2 + 32) else {
+        return true;
+    };
+    let Some(count) = data
+        .get(csiz_at..)
+        .and_then(<[u8]>::first_chunk::<2>)
+        .map(|b| usize::from(u16::from_be_bytes(*b)))
+    else {
+        return true;
+    };
+    // Three bytes per component: `Ssiz` (depth, biased by one), `XRsiz`,
+    // `YRsiz`.
+    let first = csiz_at + 2;
+    let Some(fields) = count
+        .checked_mul(3)
+        .and_then(|len| data.get(first..first.checked_add(len)?))
+    else {
+        return true;
+    };
+    fields
+        .chunks_exact(3)
+        .all(|c| fields.first_chunk::<3>().is_some_and(|f| c == f))
+}
+
 /// Decode a JPEG 2000 codestream or JP2 file.
 ///
 /// `space` is the PDF dictionary's colour space, and `smask_in_data` its
@@ -185,9 +245,10 @@ impl JpxAction {
 ///
 /// # Errors
 ///
-/// [`Error::CodecRejected`] when the codestream will not decode or the
-/// conversion table refuses the space combination, and
-/// [`Error::ImageTooLarge`] when the result exceeds the byte budget.
+/// [`Error::CodecRejected`] when the codestream will not decode, the
+/// conversion table refuses the space combination, or the components disagree
+/// on subsampling or depth, and [`Error::ImageTooLarge`] when the result
+/// exceeds the byte budget.
 pub fn decode_jpx(
     data: &[u8],
     space: Option<&ColorSpace>,
@@ -195,6 +256,9 @@ pub fn decode_jpx(
     levels: u8,
     limits: &Limits,
 ) -> Result<JpxImage, Error> {
+    if !components_agree(data) {
+        return Err(Error::CodecRejected { codec: "JPX" });
+    }
     let settings = hayro_jpeg2000::DecodeSettings {
         // An `Indexed` PDF space wants the raw indices, not the palette's
         // colours: the palette lives in the PDF, not the codestream.
@@ -317,7 +381,9 @@ mod tests {
         reason = "test fixtures quote oracle vectors verbatim and compare exactly"
     )]
 
-    use super::{JpxAction, JpxColorSpace, conversion_action, decode_jpx, is_stock_device};
+    use super::{
+        JpxAction, JpxColorSpace, components_agree, conversion_action, decode_jpx, is_stock_device,
+    };
     use crate::color::{ColorSpace, Indexed};
     use pdfrum_common::Limits;
 
@@ -437,6 +503,50 @@ mod tests {
         );
         assert_eq!(JpxAction::UseIndexed.space_override(), None);
         assert_eq!(JpxAction::DoNothing.space_override(), None);
+    }
+
+    /// A `SOC`+`SIZ` head with `count` components described by `fields`.
+    fn siz(count: u16, fields: &[[u8; 3]]) -> Vec<u8> {
+        let mut out = vec![0xFF, 0x4F, 0xFF, 0x51];
+        // `Lsiz`, `Rsiz`, then the eight grid words the parser skips.
+        out.extend_from_slice(&[0, 47, 0, 0]);
+        out.extend_from_slice(&[0u8; 32]);
+        out.extend_from_slice(&count.to_be_bytes());
+        for f in fields {
+            out.extend_from_slice(f);
+        }
+        out
+    }
+
+    #[test]
+    fn components_that_disagree_on_subsampling_or_depth_are_refused() {
+        // `bug_557223`'s shape: three components at 3x7, 1x7, 1x7 and
+        // precisions 1, 2, 3. `Ssiz` is the depth biased by one.
+        let bad = siz(3, &[[0, 3, 7], [1, 1, 7], [2, 1, 7]]);
+        assert!(!components_agree(&bad));
+        // Subsampling alone is enough.
+        assert!(!components_agree(&siz(2, &[[7, 1, 1], [7, 2, 1]])));
+        // So is depth alone.
+        assert!(!components_agree(&siz(2, &[[7, 1, 1], [6, 1, 1]])));
+        // Agreement passes, at any component count including one and zero.
+        assert!(components_agree(&siz(
+            3,
+            &[[7, 1, 1], [7, 1, 1], [7, 1, 1]]
+        )));
+        assert!(components_agree(&siz(1, &[[7, 2, 2]])));
+        assert!(components_agree(&siz(0, &[])));
+    }
+
+    #[test]
+    fn a_codestream_the_gate_cannot_read_is_left_to_the_decoder() {
+        // No `SOC`+`SIZ` pair, a truncated header, or a component table that
+        // runs off the end: the gate declines to judge rather than rejecting.
+        assert!(components_agree(b""));
+        assert!(components_agree(b"not a codestream at all"));
+        assert!(components_agree(&[0xFF, 0x4F, 0xFF, 0x51]));
+        let mut short = siz(4, &[[7, 1, 1]]);
+        short.truncate(short.len() - 1);
+        assert!(components_agree(&short));
     }
 
     #[test]
