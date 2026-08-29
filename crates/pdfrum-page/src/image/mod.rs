@@ -49,7 +49,7 @@ use crate::error::Error;
 use crate::function::FunctionCache;
 use crate::names;
 use pdfrum_common::{DiagKind, Diagnostics, Limits, Severity};
-use pdfrum_filters::{Filter, decode_chain};
+use pdfrum_filters::{CcittParams, Filter, decode_ccitt, decode_chain};
 use pdfrum_object::{Dict, Object, Resolve, Stream};
 
 /// Decoded pixels, in whichever shape the source produced.
@@ -349,11 +349,13 @@ pub fn decode_image<R: Resolve>(
             };
             (image.width, image.height, pixels, None)
         }
-        // A filter name we have no codec for, and no bytes came through.
-        Some(Filter::CcittFax) if decoded.image.is_some() => {
-            return Err(Error::ImageUndecodable {
-                what: "CCITT fax data was not decoded by the filter chain",
-            });
+        // A one-bit fax image with a colour space of its own: the bits are the
+        // samples, so they go through `unpack` like any other 1-bit picture and
+        // pick up `/Decode` and the palette on the way.
+        Some(Filter::CcittFax) => {
+            let samples = ccitt_samples(&info, &decoded.data, r, diags)?;
+            let pixels = unpack(&info, space.as_ref(), &samples, diags)?;
+            (info.width, info.height, pixels, None)
         }
         _ => {
             if decoded.image.is_some() && info.last_filter.is_none() {
@@ -523,11 +525,22 @@ fn decode_stencil<R: Resolve>(
         return stencil_from_jbig2(stream, info, &decoded.data, r, limits, diags);
     }
 
+    // A fax-coded stencil is the same story: the codestream, not the stream's
+    // own bytes, carries the bits. Its samples arrive in the ordinary sense —
+    // a set bit is white — so from here they take the ordinary decode, which
+    // is the inversion below.
+    let ccitt = if info.last_filter == Some(Filter::CcittFax) {
+        Some(ccitt_samples(info, &decoded.data, r, diags)?)
+    } else {
+        None
+    };
+    let samples = ccitt.as_deref().unwrap_or(&decoded.data);
+
     let mut bits = vec![0u8; total];
     let mut padded = false;
     let raw = reads_the_stream_directly(info);
     for y in 0..info.height {
-        let (mut line, availability) = scanline::scanline(&decoded.data, y, row_bytes);
+        let (mut line, availability) = scanline::scanline(samples, y, row_bytes);
         padded |= availability != scanline::Availability::Whole;
         // The default decode **inverts**; `/Decode [1 0]` copies verbatim —
         // except on a row the stream never reached, which skips the decode
@@ -557,6 +570,64 @@ fn decode_stencil<R: Resolve>(
         matte: None,
         interpolate: stream.dict.bool(names::INTERPOLATE).unwrap_or(false),
     })
+}
+
+/// Decode a `/CCITTFaxDecode` image into the sample buffer the rest of the
+/// image path expects.
+///
+/// Two conventions have to line up, and only one of them needs work.
+///
+/// The **bit sense already matches**: the fax decoder fills a row with white
+/// and clears bits for black, and `/BlackIs1` inverts — which is exactly what
+/// a one-bit `/DeviceGray` sample means, so the bits are the samples with no
+/// translation. (This is the same pairing the JBIG2 *stencil* rung relies on,
+/// and the opposite of the JBIG2 *sample* rung, which inverts because JBIG2
+/// sets a bit for black.)
+///
+/// The **row stride does not**. A fax row is padded to four bytes, because
+/// that is the decoder's buffer shape; every consumer here reads rows at
+/// [`ImageDict::pitch`], which is `width.div_ceil(8)`. For any width that is
+/// not a multiple of 32 the two differ, and reading the wide buffer at the
+/// narrow stride shears the image progressively — each row starting a few
+/// pixels further into the previous one. Repacking is what this function is
+/// mostly for.
+fn ccitt_samples<R: Resolve>(
+    info: &ImageDict,
+    data: &[u8],
+    r: &R,
+    diags: &mut Diagnostics,
+) -> Result<Vec<u8>, Error> {
+    let params = CcittParams::from_dict(&info.params, r);
+    let image = decode_ccitt(data, params, info.width, info.height, diags).map_err(|_| {
+        diags.record(Severity::Suspicious, DiagKind::ImageDecodeFailed, None);
+        Error::ImageUndecodable {
+            what: "CCITT fax data would not decode",
+        }
+    })?;
+    let pitch = info.pitch().ok_or(Error::ImageTooLarge)?;
+    let total = info.total_bytes().ok_or(Error::ImageTooLarge)?;
+    // White, so a row the decoder never produced — a stream that stops short of
+    // the declared height — reads as blank rather than as black. The decoder
+    // pre-fills its own rows the same way.
+    let mut out = vec![0xffu8; total];
+    for y in 0..info.height {
+        let src = usize::try_from(y)
+            .ok()
+            .and_then(|y| y.checked_mul(image.row_bytes));
+        let dest = usize::try_from(y).ok().and_then(|y| y.checked_mul(pitch));
+        let (Some(src), Some(dest)) = (src, dest) else {
+            continue;
+        };
+        let copy = pitch.min(image.row_bytes);
+        let (Some(from), Some(to)) = (
+            image.bits.get(src..src.saturating_add(copy)),
+            out.get_mut(dest..dest.saturating_add(copy)),
+        ) else {
+            continue;
+        };
+        to.copy_from_slice(from);
+    }
+    Ok(out)
 }
 
 /// A stencil whose bits come out of a JBIG2 codestream.
@@ -1437,5 +1508,148 @@ mod tests {
         let mut data = original.clone();
         super::apply_codec_decode(&mut data, Some(&gray), 1, &info);
         assert_eq!(data, vec![245u8, 55]);
+    }
+
+    /// A Group 4 stream of `rows` all-white rows.
+    ///
+    /// One vertical-zero code — a single set bit — carries a row whose first
+    /// changing element is the row's end, which against an all-white reference
+    /// line is an all-white row.
+    fn all_white_g4(rows: usize) -> Vec<u8> {
+        let mut byte = 0u8;
+        for i in 0..rows.min(8) {
+            byte |= 1 << (7 - i);
+        }
+        vec![byte]
+    }
+
+    /// A Group 4 stream whose first row is eight black pixels then white, and
+    /// whose remaining rows repeat it.
+    ///
+    /// Horizontal mode (`001`) with a zero-length white run (`00110101`) and an
+    /// eight-long black run (`000101`); each further row is a vertical-zero
+    /// code (`1`), which copies the row above.
+    fn black_then_white_g4(rows: usize) -> Vec<u8> {
+        let mut bits = String::from("001001101010001011");
+        for _ in 1..rows {
+            bits.push('1');
+        }
+        while bits.len() % 8 != 0 {
+            bits.push('0');
+        }
+        bits.as_bytes()
+            .chunks(8)
+            .filter_map(|c| {
+                let s = std::str::from_utf8(c).ok()?;
+                u8::from_str_radix(s, 2).ok()
+            })
+            .collect()
+    }
+
+    fn ccitt_stream(width: i64, height: i64, mask: bool, data: &[u8]) -> Stream {
+        let parms = Dict::from_pairs(vec![
+            (Name::from("K"), Object::Int(-1)),
+            (Name::from("Columns"), Object::Int(width)),
+            (Name::from("Rows"), Object::Int(height)),
+        ]);
+        let mut pairs = vec![
+            (Name::from("Width"), Object::Int(width)),
+            (Name::from("Height"), Object::Int(height)),
+            (Name::from("BitsPerComponent"), Object::Int(1)),
+            (
+                Name::from("Filter"),
+                Object::Name(Name::from("CCITTFaxDecode")),
+            ),
+            (Name::from("DecodeParms"), Object::Dict(parms)),
+        ];
+        if mask {
+            pairs.push((Name::from("ImageMask"), Object::Bool(true)));
+        } else {
+            pairs.push((
+                Name::from("ColorSpace"),
+                Object::Name(Name::from("DeviceGray")),
+            ));
+        }
+        stream(pairs, data)
+    }
+
+    #[test]
+    fn a_fax_image_reaches_the_decoder_at_all() {
+        // The chain classifies `/CCITTFaxDecode` as an image codec and hands
+        // its bytes back undecoded, so without a caller in the image path the
+        // codestream was unpacked as if it were already samples. An all-white
+        // image is the smallest thing that tells the two apart: decoded it is
+        // white, undecoded the single data byte `0xE0` paints three black
+        // pixels across the top row.
+        let s = ccitt_stream(20, 3, false, &all_white_g4(3));
+        let image = decode(&s).expect("should decode");
+        assert_eq!((image.width, image.height), (20, 3));
+        for y in 0..3 {
+            for x in 0..20 {
+                assert_eq!(
+                    image.pixels.color_at(x, y, 20),
+                    Rgb {
+                        r: 1.0,
+                        g: 1.0,
+                        b: 1.0
+                    },
+                    "({x},{y}) should be white"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_fax_row_is_repacked_from_four_byte_padding_to_the_images_pitch() {
+        // The decoder pads a row to four bytes; every consumer here reads rows
+        // at `width.div_ceil(8)`. At width 20 those are 4 and 3, so reading the
+        // decoder's buffer at the image's pitch would start each row a byte
+        // further into the previous one and shear the picture. Three rows of a
+        // 20-wide image is 9 sample bytes, not 12.
+        //
+        // The pattern has to be non-uniform for the shear to show. Rows 0 and 1
+        // are eight black pixels then white; row 2 is the decoder's white
+        // prefill, because the byte padding ends the codestream before it.
+        // Read at the decoder's stride instead of the image's, row 1's black
+        // byte would land four bytes on — a third of the way into row 1's
+        // pixels rather than at its start.
+        let s = ccitt_stream(20, 3, false, &black_then_white_g4(3));
+        let image = decode(&s).expect("should decode");
+        let black = Rgb {
+            r: 0.0,
+            g: 0.0,
+            b: 0.0,
+        };
+        let white = Rgb {
+            r: 1.0,
+            g: 1.0,
+            b: 1.0,
+        };
+        for y in 0..3 {
+            for x in 0..20 {
+                let want = if y < 2 && x < 8 { black } else { white };
+                assert_eq!(
+                    image.pixels.color_at(x, y, 20),
+                    want,
+                    "({x},{y}) — a shear puts the black run somewhere else"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_fax_stream_that_will_not_decode_leaves_the_image_white() {
+        // The decoder pre-fills white and gives back the rows it managed; the
+        // repack keeps that, so damage is blank rather than black or an error.
+        let s = ccitt_stream(20, 3, false, &[0x00, 0x00]);
+        let image = decode(&s).expect("damage is not a failure");
+        assert_eq!(
+            image.pixels.color_at(0, 0, 20),
+            Rgb {
+                r: 1.0,
+                g: 1.0,
+                b: 1.0
+            }
+        );
     }
 }

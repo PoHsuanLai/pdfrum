@@ -38,7 +38,20 @@ pub struct Type3Metrics {
     /// The advance in glyph units, rounded as the C++ rounds it.
     pub width: f32,
     /// The bounding box in glyph units, after the font matrix.
+    ///
+    /// This is what the glyph *declares*, and it is the right box for
+    /// measurement. It is the wrong box for a buffer: `d1`'s operands are
+    /// scaled by a thousand on the way in and put back through the font matrix
+    /// on the way out, so a font whose `/FontMatrix` is not the conventional
+    /// thousandth leaves the scale uncancelled and the box far off the page.
+    /// Use [`Type3Metrics::painted`] to size anything.
     pub bbox: Rect,
+    /// The extent the procedure's objects actually cover, in **glyph space**.
+    ///
+    /// The objects' own union, with neither the thousandth scale nor the font
+    /// matrix applied — `CalcBoundingBox`'s answer, and unaffected by an
+    /// unconventional `/FontMatrix` because it never consults one.
+    pub painted: Rect,
     /// Whether the procedure declared its own colour with `d0` rather than
     /// only a width and box with `d1`.
     ///
@@ -134,14 +147,16 @@ pub fn metrics<R: Resolve>(
     // A stated box with no positive extent in either direction is not
     // believed; the procedure's own painted extent stands in for it.
     let usable = stated.filter(|b| b.x1 > b.x0 && b.y1 > b.y0);
+    let painted = painted_extent(&objects);
     let text_box = match usable {
         Some(rect) => scale(rect, TEXT_UNIT_IN_GLYPH_UNITS),
-        None => scale(painted_extent(&objects), TEXT_UNIT_IN_GLYPH_UNITS),
+        None => scale(painted, TEXT_UNIT_IN_GLYPH_UNITS),
     };
 
     Some(Type3Metrics {
         width: round(f64::from(width) * TEXT_UNIT_IN_GLYPH_UNITS),
         bbox: transform_rect(font.font_matrix, text_box),
+        painted,
         colored,
         objects,
     })
@@ -375,6 +390,23 @@ mod tests {
     fn the_advance_is_the_declared_width_in_glyph_units() {
         // `100` in text space is 100_000 in glyph units, rounded.
         assert_eq!(glyph_metrics(b"100 0 d0 0 0 1 1 re f").width, 100_000.0);
+    }
+
+    #[test]
+    fn the_painted_extent_is_the_objects_own_and_ignores_the_declared_box() {
+        // `painted` is what a buffer must be sized from. It is the objects'
+        // union in glyph space, with neither the thousandth scale nor the font
+        // matrix applied — so a declared box that disagrees with the drawing
+        // does not move it, and a font matrix that is not the conventional
+        // thousandth cannot push it off the page.
+        let m = glyph_metrics(b"100 0 0 0 10 10 d1 0 0 40 40 re f");
+        assert_eq!(m.painted, Rect::new(0.0, 0.0, 40.0, 40.0));
+        // The declared box says 10x10 and scales to 10 000 glyph units; the
+        // painted extent is unmoved by either.
+        assert_eq!(m.bbox, Rect::new(0.0, 0.0, 10_000.0, 10_000.0));
+        // A procedure that paints nothing has an empty one, and the buffer
+        // sized from it is empty rather than wrong.
+        assert_eq!(glyph_metrics(b"100 0 0 0 10 10 d1").painted, Rect::ZERO);
     }
 
     #[test]

@@ -79,6 +79,7 @@ pub mod pixmap;
 pub mod scanline;
 pub mod shading;
 pub mod softmask;
+pub mod stretch;
 pub mod stroke;
 pub mod text;
 pub mod transfer;

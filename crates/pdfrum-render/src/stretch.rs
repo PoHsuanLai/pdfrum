@@ -1,0 +1,490 @@
+//! Area-average box downscaling of a decoded image before it reaches a
+//! rasterizer.
+//!
+//! Both backends resample an image with a **two-tap** filter: one tap per axis
+//! for nearest, two for bilinear. That is the right kernel for an *enlargement*
+//! — where the destination samples land between source pixels and two taps
+//! bracket each one — and it is the wrong kernel for a reduction, where a
+//! destination pixel covers many source pixels and two taps see at most two of
+//! them. A 455x455 image drawn 2.86x smaller loses roughly six of every seven
+//! source pixels, which reads as aliasing and, on any page with a photograph,
+//! as a texture the oracle does not have.
+//!
+//! PDFium spells the distinction inside its weight table: bilinear is a
+//! *branch* taken only when the axis is being enlarged (`|scale| < 1`), and a
+//! reduction falls through to a box filter that integrates **every** source
+//! pixel the destination pixel's footprint overlaps, weighted by the overlap
+//! area. This module is that box filter, and only that: it is a pre-pass that
+//! reduces the source to (approximately) its destination size, after which the
+//! backend's two-tap kernel is operating near 1:1 and the choice between them
+//! stops mattering.
+//!
+//! # Why a pre-pass rather than a backend kernel
+//!
+//! The alternative — teaching each backend to box-filter — would put the
+//! answer in two places and make it a rasterizer's decision, which
+//! [`crate::image`] already argues it must not be: both backends must resample
+//! identically or Tier C's interior rule fails. Reducing here leaves one
+//! implementation, shared by construction.
+//!
+//! # What is deliberately not reproduced
+//!
+//! PDFium's engine is a *complete* resampler: it stretches to the exact
+//! destination rectangle, in one axis at a time, writing straight into the
+//! device. Ours reduces to whole-pixel dimensions and hands the remainder —
+//! the fractional scale, the rotation, the shear, the subpixel placement — to
+//! the backend, which is the only part of the pipeline that knows where the
+//! image lands. So the two agree on the *low-pass* (the part a two-tap filter
+//! cannot do at all) and differ by at most the last two-tap interpolation.
+//!
+//! Consequently this runs only for an **axis being reduced**, and never for an
+//! enlargement, where PDFium's own branch is the bilinear one the backends
+//! already implement.
+
+use crate::pixmap::Pixmap;
+
+/// The fixed-point scale the weights are carried in (`kFixedPointBits`).
+///
+/// Weights within one destination pixel sum to exactly this, which is what
+/// lets the accumulation shift rather than divide.
+const FIXED_ONE: u32 = 1 << 16;
+
+/// Round-half-away-from-zero, which is what `FXSYS_round` does and what
+/// `f64::round` also does — spelled out because the weight table's exactness
+/// depends on the tie direction and a reader should not have to check.
+fn fixed_from(v: f64) -> u32 {
+    let scaled = v * f64::from(FIXED_ONE);
+    if !scaled.is_finite() || scaled <= 0.0 {
+        return 0;
+    }
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "clamped to [0, FIXED_ONE] just above and below, both exactly \
+                  representable in f64 and inside u32"
+    )]
+    let rounded = scaled.round().min(f64::from(FIXED_ONE)) as u32;
+    rounded
+}
+
+/// One destination pixel's taps: the first source index it reads, and one
+/// weight per consecutive source pixel from there.
+///
+/// The weights sum to [`FIXED_ONE`] whenever the range is non-empty, so an
+/// accumulation over them needs no normalisation — only a shift.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Taps {
+    start: usize,
+    weights: Vec<u32>,
+}
+
+/// The taps for every destination pixel along one axis being reduced.
+///
+/// Each destination pixel maps back to the half-open source interval
+/// `[d * scale, (d + 1) * scale)`, and each source pixel in it contributes the
+/// share of the *destination* pixel that it covers. Computing the overlap in
+/// destination space rather than source space is what keeps the weights
+/// summing to one without a division per pixel.
+///
+/// The fractional residue of each weight is carried into the next
+/// (`rounding_error`), and whatever is still unspent lands on the final tap —
+/// so the sum is exactly [`FIXED_ONE`] rather than one part in 65536 short,
+/// which over a wide image would otherwise show as a gradient.
+fn axis_taps(src_len: u32, dest_len: u32) -> Vec<Taps> {
+    let (src_len_i, dest_len_i) = (i64::from(src_len), i64::from(dest_len));
+    if src_len_i == 0 || dest_len_i == 0 {
+        return Vec::new();
+    }
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "both are image dimensions, far below 2^53"
+    )]
+    let scale = src_len_i as f64 / dest_len_i as f64;
+    let mut out = Vec::with_capacity(dest_len as usize);
+    for dest in 0..dest_len_i {
+        #[expect(
+            clippy::cast_precision_loss,
+            reason = "a destination index, far below 2^53"
+        )]
+        let dest_f = dest as f64;
+        let span_start = dest_f * scale;
+        let span_end = span_start + scale;
+        // The source pixels the destination pixel's footprint touches, clamped
+        // to the image. `floor(span_end)` is inclusive because a footprint
+        // ending exactly on a boundary still nominally taps the pixel beyond
+        // it — at weight zero, which the area computation then assigns.
+        let first = span_start.floor().max(0.0);
+        let last = span_end.floor().min(f64::from(src_len - 1));
+        #[expect(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            reason = "clamped to [0, src_len - 1] above"
+        )]
+        let (first, last) = (first as usize, last as usize);
+        if first > last {
+            out.push(Taps {
+                start: first.min(src_len as usize - 1),
+                weights: vec![FIXED_ONE],
+            });
+            continue;
+        }
+        let mut weights = Vec::with_capacity(last - first + 1);
+        let mut remaining = FIXED_ONE;
+        let mut rounding_error = 0.0_f64;
+        for src in first..last {
+            #[expect(clippy::cast_precision_loss, reason = "a source index, far below 2^53")]
+            let src_f = src as f64;
+            // This source pixel's extent, expressed in destination pixels.
+            let cover_start = (src_f / scale).max(dest_f);
+            let cover_end = ((src_f + 1.0) / scale).min(dest_f + 1.0);
+            let area = (cover_end - cover_start).max(0.0);
+            let weight = fixed_from(area + rounding_error);
+            weights.push(weight.min(remaining));
+            remaining = remaining.saturating_sub(weight);
+            rounding_error = area - f64::from(weight) / f64::from(FIXED_ONE);
+        }
+        // Whatever the fractional areas did not spend belongs to the last tap;
+        // the alternative — dropping it — biases every reduced image dark by
+        // up to one part in 65536 per tap, which accumulates across the axis.
+        weights.push(remaining);
+        out.push(Taps {
+            start: first,
+            weights,
+        });
+    }
+    out
+}
+
+/// The destination size an axis reduces to, or `None` when it is not being
+/// reduced.
+///
+/// Only a genuine reduction is box-filtered: at or above 1:1 the two-tap
+/// kernel the backends already run *is* the upstream branch, and pre-scaling
+/// would replace it with a worse one.
+///
+/// The size is rounded **up**, not to nearest: a fractional footprint covers
+/// one more device pixel than its width names, and the outermost are partial.
+/// Reducing to the nearest instead leaves the backend a sample short of them,
+/// so an edge row arrives empty rather than faint.
+fn reduced_len(src_len: u32, dest_len: f64) -> Option<u32> {
+    if !dest_len.is_finite() || src_len == 0 {
+        return None;
+    }
+    let target = dest_len.abs().ceil();
+    // A destination smaller than one pixel still reduces — to one pixel, which
+    // is the average of the whole axis and is what the box filter converges to.
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "bounded below by 1.0 and above by src_len, itself a u32"
+    )]
+    let target = target.clamp(1.0, f64::from(src_len)) as u32;
+    (target < src_len).then_some(target)
+}
+
+/// Box-filter `src` down to `dest_width` x `dest_height`, one axis at a time.
+///
+/// Horizontal first into an intermediate, then vertical — the same order and
+/// the same two weight tables PDFium uses, and the reason a two-pass reduction
+/// costs `O(w * h * (taps_x + taps_y))` rather than their product.
+fn reduce_to(src: &Pixmap, dest_width: u32, dest_height: u32) -> Pixmap {
+    let x_taps = axis_taps(src.width(), dest_width);
+    let y_taps = axis_taps(src.height(), dest_height);
+    if x_taps.is_empty() || y_taps.is_empty() {
+        return Pixmap::new(dest_width, dest_height);
+    }
+    // The intermediate is full source height at destination width, held as
+    // fixed-point-shifted bytes exactly like the source: one shift per axis
+    // keeps the arithmetic identical to a single-pass accumulation of the
+    // product weights, up to the two roundings the C++ also performs.
+    let mut inter = Pixmap::new(dest_width, src.height());
+    for y in 0..src.height() {
+        for (x, taps) in x_taps.iter().enumerate() {
+            let mut acc = [0_u32; 4];
+            for (i, &weight) in taps.weights.iter().enumerate() {
+                let Ok(sx) = u32::try_from(taps.start + i) else {
+                    continue;
+                };
+                let Some(px) = src.pixel(sx, y) else { continue };
+                for (slot, &channel) in acc.iter_mut().zip(px.iter()) {
+                    *slot += weight * u32::from(channel);
+                }
+            }
+            #[expect(
+                clippy::cast_possible_truncation,
+                reason = "the weights sum to FIXED_ONE and each channel is a \
+                          byte, so every accumulator is at most 255 << 16"
+            )]
+            let out = acc.map(|a| (a >> 16) as u8);
+            let Ok(dx) = u32::try_from(x) else { continue };
+            inter.set_pixel(dx, y, out);
+        }
+    }
+    let mut dest = Pixmap::new(dest_width, dest_height);
+    for (y, taps) in y_taps.iter().enumerate() {
+        let Ok(dy) = u32::try_from(y) else { continue };
+        for x in 0..dest_width {
+            let mut acc = [0_u32; 4];
+            for (i, &weight) in taps.weights.iter().enumerate() {
+                let Ok(sy) = u32::try_from(taps.start + i) else {
+                    continue;
+                };
+                let Some(px) = inter.pixel(x, sy) else {
+                    continue;
+                };
+                for (slot, &channel) in acc.iter_mut().zip(px.iter()) {
+                    *slot += weight * u32::from(channel);
+                }
+            }
+            #[expect(
+                clippy::cast_possible_truncation,
+                reason = "the weights sum to FIXED_ONE and each channel is a \
+                          byte, so every accumulator is at most 255 << 16"
+            )]
+            let out = acc.map(|a| (a >> 16) as u8);
+            dest.set_pixel(x, dy, out);
+        }
+    }
+    dest
+}
+
+/// The largest source axis this pre-pass will process.
+///
+/// A reduction is `O(source pixels)`, which is the same order as decoding the
+/// image was, so the guard is against a pathological dimension rather than a
+/// large image. Above it the backend's own kernel is used unchanged — a
+/// quality loss on a file that has other problems, never a failure.
+const MAX_SOURCE_AXIS: u32 = 1 << 16;
+
+/// Pre-reduce `src` toward the device footprint `dest_width` x `dest_height`,
+/// returning the reduced pixmap and the placement transform that now maps it.
+///
+/// Returns `None` when neither axis is being reduced, which is the common case
+/// for an enlargement or a 1:1 blit and leaves the caller's own pixmap and
+/// transform untouched.
+///
+/// The returned transform is the caller's, pre-scaled by the reduction ratio,
+/// so the image still lands on exactly the same device rectangle: the caller's
+/// matrix maps the *source* grid to the device, and the reduced image has
+/// fewer pixels covering that same grid.
+#[must_use]
+pub fn prescale(
+    src: &Pixmap,
+    to_device: kurbo::Affine,
+    dest_width: f64,
+    dest_height: f64,
+) -> Option<(Pixmap, kurbo::Affine)> {
+    if src.width() > MAX_SOURCE_AXIS || src.height() > MAX_SOURCE_AXIS {
+        return None;
+    }
+    let new_w = reduced_len(src.width(), dest_width);
+    let new_h = reduced_len(src.height(), dest_height);
+    // An axis that is not being reduced keeps its own size, so a reduction in
+    // one axis alone — a wide image squeezed horizontally — is still filtered
+    // in that axis and left alone in the other.
+    let (new_w, new_h) = match (new_w, new_h) {
+        (None, None) => return None,
+        (w, h) => (w.unwrap_or(src.width()), h.unwrap_or(src.height())),
+    };
+    if new_w == 0 || new_h == 0 {
+        return None;
+    }
+    let reduced = reduce_to(src, new_w, new_h);
+    // The caller's transform is written against the source grid; the reduced
+    // image covers that grid with fewer pixels, so each of its pixels is
+    // `src / new` of a source pixel wide.
+    let sx = f64::from(src.width()) / f64::from(new_w);
+    let sy = f64::from(src.height()) / f64::from(new_h);
+    Some((
+        reduced,
+        to_device * kurbo::Affine::scale_non_uniform(sx, sy),
+    ))
+}
+
+#[cfg(test)]
+mod tests {
+    use kurbo::Affine;
+
+    use super::*;
+
+    /// An opaque grey ramp, so every channel carries the same known value.
+    fn ramp(width: u32, height: u32) -> Pixmap {
+        let mut px = Pixmap::new(width, height);
+        for y in 0..height {
+            for x in 0..width {
+                #[expect(
+                    clippy::cast_possible_truncation,
+                    reason = "test fixture dimensions are small"
+                )]
+                let v = ((x + y * width) % 256) as u8;
+                px.set_pixel(x, y, [v, v, v, 255]);
+            }
+        }
+        px
+    }
+
+    #[test]
+    fn weights_sum_to_one_per_destination_pixel() {
+        for (src, dest) in [(455_u32, 159_u32), (100, 7), (9, 4), (1000, 999), (5, 1)] {
+            for taps in axis_taps(src, dest) {
+                let total: u32 = taps.weights.iter().sum();
+                assert_eq!(total, FIXED_ONE, "src {src} dest {dest}");
+            }
+        }
+    }
+
+    #[test]
+    fn every_source_pixel_is_tapped_at_an_exact_ratio() {
+        // A 4:1 reduction: each destination pixel reads its four source pixels
+        // at a quarter each. This is the property a two-tap filter cannot have
+        // and the whole reason the module exists.
+        //
+        // The footprint's closing boundary lands exactly on a pixel edge, and
+        // that pixel is tapped too — at weight zero, because it contributes no
+        // area. The upstream table does the same (`end_i` is
+        // `floor(src_end)`, inclusive), so the trailing zero is the shared
+        // shape rather than an artefact of ours.
+        let taps = axis_taps(8, 2);
+        let [first, second] = taps.as_slice() else {
+            panic!("two destination pixels");
+        };
+        assert_eq!(first.start, 0);
+        assert_eq!(
+            first.weights,
+            vec![
+                FIXED_ONE / 4,
+                FIXED_ONE / 4,
+                FIXED_ONE / 4,
+                FIXED_ONE / 4,
+                0
+            ]
+        );
+        assert_eq!(second.start, 4);
+        // The second pixel's footprint ends at the image's edge, where the
+        // clamp to `src_len - 1` stops the range: four taps, no trailing zero.
+        assert_eq!(second.weights, vec![FIXED_ONE / 4; 4]);
+    }
+
+    #[test]
+    fn the_weight_sum_holds_over_the_upstream_unit_tests_grid() {
+        // `ExecuteStretchTests`'s own grid of source and destination widths,
+        // restated: whatever the ratio, one destination pixel's weights sum to
+        // exactly one. The C++ asserts precisely this and nothing else about
+        // the table's contents.
+        for src in [1_u32, 2, 187, 256, 809, 1110] {
+            for dest in [1_u32, 2, 337, 512, 808, 2550] {
+                for taps in axis_taps(src, dest) {
+                    let total: u32 = taps.weights.iter().sum();
+                    assert_eq!(total, FIXED_ONE, "src {src} dest {dest}");
+                    assert!(
+                        taps.start + taps.weights.len() <= src as usize + 1,
+                        "src {src} dest {dest}: taps run past the source"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn an_exact_halving_is_the_mean_of_each_two_by_two_block() {
+        let mut src = Pixmap::new(2, 2);
+        src.set_pixel(0, 0, [0, 0, 0, 255]);
+        src.set_pixel(1, 0, [100, 100, 100, 255]);
+        src.set_pixel(0, 1, [200, 200, 200, 255]);
+        src.set_pixel(1, 1, [255, 255, 255, 255]);
+        let out = reduce_to(&src, 1, 1);
+        assert_eq!(out.width(), 1);
+        assert_eq!(out.height(), 1);
+        // (0 + 100 + 200 + 255) / 4 = 138.75, truncated by the fixed-point
+        // shift to 138.
+        let px = out.pixel(0, 0).expect("one pixel");
+        assert_eq!(px, [138, 138, 138, 255]);
+    }
+
+    #[test]
+    fn a_flat_field_survives_any_reduction_exactly() {
+        // The weights summing to one is what makes this true; a filter that
+        // dropped its rounding residue would darken a flat grey.
+        for (dw, dh) in [(1_u32, 1_u32), (3, 7), (13, 5), (64, 64)] {
+            let mut src = Pixmap::new(100, 100);
+            for y in 0..100 {
+                for x in 0..100 {
+                    src.set_pixel(x, y, [77, 77, 77, 255]);
+                }
+            }
+            let out = reduce_to(&src, dw, dh);
+            for y in 0..dh {
+                for x in 0..dw {
+                    assert_eq!(
+                        out.pixel(x, y),
+                        Some([77, 77, 77, 255]),
+                        "flat field at {dw}x{dh} pixel ({x},{y})"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn an_enlargement_is_declined() {
+        let src = ramp(4, 4);
+        assert!(prescale(&src, Affine::IDENTITY, 40.0, 40.0).is_none());
+        // And so is an exact 1:1.
+        assert!(prescale(&src, Affine::IDENTITY, 4.0, 4.0).is_none());
+    }
+
+    #[test]
+    fn one_axis_reducing_leaves_the_other_alone() {
+        let src = ramp(64, 8);
+        let (out, _) = prescale(&src, Affine::IDENTITY, 16.0, 8.0).expect("x reduces");
+        assert_eq!(out.width(), 16);
+        assert_eq!(out.height(), 8);
+    }
+
+    #[test]
+    fn the_returned_transform_covers_the_same_device_rect() {
+        // The reduced image must land where the source would have: the
+        // transform is pre-scaled by exactly the reduction ratio.
+        let src = ramp(100, 50);
+        let placement = Affine::scale_non_uniform(0.25, 0.25);
+        let (out, t) = prescale(&src, placement, 25.0, 12.0).expect("reduces");
+        let src_rect = placement.transform_rect_bbox(kurbo::Rect::new(0.0, 0.0, 100.0, 50.0));
+        let out_rect = t.transform_rect_bbox(kurbo::Rect::new(
+            0.0,
+            0.0,
+            f64::from(out.width()),
+            f64::from(out.height()),
+        ));
+        assert!((src_rect.width() - out_rect.width()).abs() < 1e-9);
+        assert!((src_rect.height() - out_rect.height()).abs() < 1e-9);
+        assert!((src_rect.x0 - out_rect.x0).abs() < 1e-9);
+        assert!((src_rect.y0 - out_rect.y0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn a_sub_pixel_destination_reduces_to_one_pixel() {
+        let src = ramp(32, 32);
+        let (out, _) = prescale(&src, Affine::IDENTITY, 0.4, 0.4).expect("reduces");
+        assert_eq!((out.width(), out.height()), (1, 1));
+    }
+
+    #[test]
+    fn transparency_is_averaged_in_premultiplied_space() {
+        // Half the pixels opaque white, half fully transparent: the average is
+        // half-covered white, which in premultiplied form is 127 everywhere —
+        // not white at half alpha, and not grey.
+        let mut src = Pixmap::new(2, 1);
+        src.set_pixel(0, 0, [255, 255, 255, 255]);
+        src.set_pixel(1, 0, [0, 0, 0, 0]);
+        let out = reduce_to(&src, 1, 1);
+        assert_eq!(out.pixel(0, 0), Some([127, 127, 127, 127]));
+    }
+
+    #[test]
+    fn a_degenerate_axis_yields_an_empty_result_rather_than_panicking() {
+        let src = Pixmap::new(0, 0);
+        assert!(prescale(&src, Affine::IDENTITY, 10.0, 10.0).is_none());
+        let src = ramp(4, 4);
+        assert!(prescale(&src, Affine::IDENTITY, f64::NAN, f64::NAN).is_none());
+    }
+}

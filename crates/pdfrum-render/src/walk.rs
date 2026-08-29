@@ -1296,9 +1296,25 @@ fn render_type3_text<B: RasterBackend>(
 ///
 /// A translucent glyph cannot paint straight onto the page: its procedure may
 /// overlap itself, and compositing each stroke at the object's alpha would
-/// darken the overlaps. So the procedure runs at **full opacity** into a
-/// buffer sized to the glyph's device extent, and the alpha is applied once,
-/// at the blit.
+/// darken the overlaps. So the procedure runs into a buffer sized to the
+/// glyph's device extent, and the buffer is blitted once.
+///
+/// **The alpha rides on the procedure's own fill colour, and the blit is
+/// opaque.** That is one factor of the object's alpha, applied once — but
+/// *where* it is applied is the whole of it: painting the procedure opaquely
+/// and scaling at the blit instead is also one factor, and gives a different
+/// answer wherever the procedure covers a pixel partially. A half-covered edge
+/// pixel painted at alpha 128 and blitted opaquely keeps that 128; painted
+/// opaquely to coverage 128 and blitted at half alpha becomes 64. The oracle
+/// does the former, and `bug_1746` — whose glyph is a fax-coded image mask
+/// under `ca 0.5` — is where the two visibly disagree.
+///
+/// **The buffer is sized from the objects' own extent, not the declared
+/// `/FontBBox`.** A `d1` box is its operands scaled by a thousand and put
+/// through the font matrix; with the conventional thousandth matrix the two
+/// cancel, and with an identity `/FontMatrix` they do not — `bug_1746`'s box
+/// lands at x 8050 on a 200-pixel page, so the buffer misses the glyph
+/// entirely and nothing is drawn at all.
 #[expect(
     clippy::too_many_arguments,
     reason = "the same inputs the opaque path takes, plus the placed glyph and \
@@ -1317,7 +1333,7 @@ fn render_translucent_char_proc<B: RasterBackend>(
 ) {
     let bbox = placed
         .matrix
-        .transform_rect_bbox(metrics.bbox)
+        .transform_rect_bbox(metrics.painted)
         .intersect(device_box);
     let rect = outer_rect(bbox).intersect(outer_rect(device_box));
     let (Ok(w), Ok(h)) = (u32::try_from(rect.width()), u32::try_from(rect.height())) else {
@@ -1328,14 +1344,14 @@ fn render_translucent_char_proc<B: RasterBackend>(
     }
     let mut sub = backend.new_target(w, h, peniko::Color::TRANSPARENT);
     let offset = Affine::translate((-f64::from(rect.left), -f64::from(rect.top)));
-    let opaque = crate::ctx::Type3Frame {
-        fill: Argb { a: 255, ..fill },
+    let translucent = crate::ctx::Type3Frame {
+        fill,
         colored: metrics.colored,
     };
     let inner = RenderCtx {
-        type3: Some(opaque),
-        initial_fill: Some(opaque.fill),
-        initial_stroke: Some(opaque.fill),
+        type3: Some(translucent),
+        initial_fill: Some(fill),
+        initial_stroke: Some(fill),
         ..ctx.clone()
     };
     render_object_list(
@@ -1354,7 +1370,7 @@ fn render_translucent_char_proc<B: RasterBackend>(
         &pixels,
         Affine::translate((f64::from(rect.left), f64::from(rect.top))),
         ImageQuality::Nearest,
-        f32::from(fill.a) / 255.0,
+        1.0,
     );
 }
 
@@ -1484,6 +1500,11 @@ fn render_pattern_stencil<B: RasterBackend>(
         f64::from(object.image.height),
     ));
     let quality = mask_quality(&object.image, &ctx.opts, extent);
+    let (stencil, placement) =
+        match crate::stretch::prescale(&stencil, placement, extent.width(), extent.height()) {
+            Some((reduced, t)) => (reduced, t),
+            None => (stencil, placement),
+        };
     let mut mask_target = backend.new_target(w, h, peniko::Color::TRANSPARENT);
     mask_target.draw_image(
         &stencil,
@@ -1601,6 +1622,14 @@ fn render_image<B: RasterBackend>(
         corners.width().round() as i64,
         corners.height().round() as i64,
     );
+    // A reduction is low-passed here rather than left to the backend's two-tap
+    // kernel, which sees at most two of the many source pixels a shrunken
+    // destination pixel covers.
+    let (pixels, placement) =
+        match crate::stretch::prescale(&pixels, placement, corners.width(), corners.height()) {
+            Some((reduced, t)) => (reduced, t),
+            None => (pixels, placement),
+        };
     let blend = overprint_blend(None, &state.general);
     let layered = !matches!(blend, pdfrum_page::BlendMode::Normal);
     if layered {
@@ -1675,16 +1704,25 @@ fn render_masked_image<B: RasterBackend>(
     }
     let mut base_target = backend.new_target(w, h, peniko::Color::TRANSPARENT);
     let base_placement = offset * matrix * sample_grid(image.width, image.height);
-    let base_quality = mask_quality(
-        image,
-        &ctx.opts,
-        base_placement.transform_rect_bbox(Rect::new(
-            0.0,
-            0.0,
-            f64::from(image.width),
-            f64::from(image.height),
-        )),
-    );
+    let base_extent = base_placement.transform_rect_bbox(Rect::new(
+        0.0,
+        0.0,
+        f64::from(image.width),
+        f64::from(image.height),
+    ));
+    let base_quality = mask_quality(image, &ctx.opts, base_extent);
+    // The base and its mask are reduced independently, each toward its own
+    // device footprint — which is the same footprint, reached from two
+    // different resolutions. Neither ever passes through the other's grid.
+    let (base, base_placement) = match crate::stretch::prescale(
+        &base,
+        base_placement,
+        base_extent.width(),
+        base_extent.height(),
+    ) {
+        Some((reduced, t)) => (reduced, t),
+        None => (base, base_placement),
+    };
     base_target.draw_image(
         &base,
         base_placement,
@@ -1703,6 +1741,15 @@ fn render_masked_image<B: RasterBackend>(
         f64::from(mask_dict.height),
     ));
     let mask_q = mask_quality(&mask_dict, &ctx.opts, mask_extent);
+    let (mask_pixels, mask_placement) = match crate::stretch::prescale(
+        &mask_pixels,
+        mask_placement,
+        mask_extent.width(),
+        mask_extent.height(),
+    ) {
+        Some((reduced, t)) => (reduced, t),
+        None => (mask_pixels, mask_placement),
+    };
     let mut mask_target = backend.new_target(w, h, peniko::Color::TRANSPARENT);
     mask_target.draw_image(
         &mask_pixels,
@@ -1885,6 +1932,7 @@ mod tests {
                 position: kurbo::Point::ZERO,
                 matrix: Affine::IDENTITY,
                 font: None,
+                font_source: None,
                 render_mode: pdfrum_page::TextRenderMode::Fill,
                 type3_metrics: BTreeMap::default(),
             },
