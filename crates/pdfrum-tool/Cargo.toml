@@ -11,6 +11,7 @@ workspace = true
 
 [dependencies]
 pdfrum-common.workspace = true
+pdfrum-doc.workspace = true
 pdfrum-filters.workspace = true
 pdfrum-object.workspace = true
 pdfrum-page.workspace = true

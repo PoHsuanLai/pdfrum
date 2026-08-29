@@ -21,7 +21,7 @@ use pdfrum_page::BuildContext;
 use pdfrum_parser::{Document, LoadError, LoadOptions, PageDict};
 
 use crate::options::{Options, OutputFormat, PageRange};
-use crate::{metadata, pageinfo, render, text, unsupported};
+use crate::{metadata, pageinfo, render, structure, text, unsupported};
 
 /// Where a run writes. Separated from the work so the whole pipeline is
 /// testable on buffers rather than on the process's own streams.
@@ -106,7 +106,8 @@ fn walk_pages(
     // image caches are shared across pages the way the oracle's document-wide
     // caches are.
     let mut ctx = BuildContext::default();
-    let rtl = text::direction_is_r2l(&doc.catalog().unwrap_or_default(), doc);
+    let catalog = doc.catalog().unwrap_or_default();
+    let rtl = text::direction_is_r2l(&catalog, doc);
     for index in selected_pages(options.pages, doc.page_count()) {
         let Some(page) = doc
             .page(index)
@@ -121,7 +122,11 @@ fn walk_pages(
         for feature in unsupported::page_annotations(&page.dict, doc) {
             write!(streams.out, "{}", feature.line())?;
         }
-        write!(streams.out, "{}", dump_page(&page, index, options, doc))?;
+        write!(
+            streams.out,
+            "{}",
+            dump_page(&page, index, options, &catalog, doc)
+        )?;
         let extra = write_page_files(&page, Path::new(name), index, options, doc, rtl, &mut ctx);
         write!(streams.out, "{extra}")?;
         counts.processed += 1;
@@ -184,14 +189,19 @@ fn selected_pages(range: Option<PageRange>, page_count: u32) -> Box<dyn Iterator
 /// The formats we cannot produce yet render as nothing rather than as an
 /// error: the page still counts as processed, so the page-count line agrees
 /// with the oracle and the harness sees an empty artifact instead of a crash.
-fn dump_page(page: &PageDict, index: u32, options: &Options, r: &impl Resolve) -> String {
+fn dump_page(
+    page: &PageDict,
+    index: u32,
+    options: &Options,
+    catalog: &Dict,
+    r: &impl Resolve,
+) -> String {
     match options.format {
         OutputFormat::PageInfo => pageinfo::render(&page.dict, index, r),
-        OutputFormat::None
-        | OutputFormat::Structure
-        | OutputFormat::Render(_)
-        | OutputFormat::Text
-        | OutputFormat::Annot => String::new(),
+        OutputFormat::Structure => structure::render(catalog, page, index, r),
+        OutputFormat::None | OutputFormat::Render(_) | OutputFormat::Text | OutputFormat::Annot => {
+            String::new()
+        }
     }
 }
 

@@ -270,6 +270,68 @@ pub enum DiagKind {
     /// A soft hyphen was called for with no preceding character to attach it
     /// to. The C++ dereferences an empty container here; we emit nothing.
     TextHyphenNoPrevChar,
+
+    // ---- Document features: navigation, annotations, forms, structure ----
+    /// An outline, `/Next` action chain, or field `/Parent` walk revisited a
+    /// node it had already seen; the walk stopped there.
+    NavigationCycle,
+    /// A name, number, structure or field tree exceeded its depth cap. The
+    /// lookup answers "not found" rather than recursing further.
+    TreeDepthExceeded,
+    /// A name-tree node's `/Limits` array was shorter than two entries, or
+    /// held its bounds the wrong way round, and was read as repaired.
+    NameTreeLimitsRepaired,
+    /// A name-tree leaf's `/Names` array had an odd length, so its last key
+    /// has no value.
+    NameTreeMalformed,
+    /// A named destination resolved only through the pre-1.2 `/Dests`
+    /// dictionary, not the name tree.
+    LegacyNamedDest,
+    /// A destination's page could not be turned into an index.
+    DestPageUnresolved,
+    /// An annotation's `/Subtype` matched no known spelling.
+    AnnotSubtypeUnknown,
+    /// An appearance stream was generated for an annotation that had none.
+    AppearanceGenerated,
+    /// A `/QuadPoints` array's length is not a multiple of eight; the tail is
+    /// ignored.
+    QuadPointsTruncated,
+    /// An `/InkList` sub-array was too short to draw, or had an odd length.
+    InkPathDropped,
+    /// A `/DA` string held no `Tf` operator, so the font name is empty and
+    /// the size is zero.
+    DefaultAppearanceMalformed,
+    /// `/DR /Font` is not a dictionary of font dictionaries, so no form
+    /// appearance can be generated.
+    FormResourcesInvalid,
+    /// A form field carries no `/FT` on itself or its parent.
+    FieldSkippedNoType,
+    /// A form field's fully-qualified name came out empty.
+    FieldSkippedNoName,
+    /// A field's `/Kids[0]` is not a dictionary, which abandons the subtree.
+    FieldKidsMalformed,
+    /// An indirect `/T` was flattened to a direct string, or replaced by an
+    /// empty one because it did not resolve to a string.
+    FieldNameNormalized,
+    /// A choice field's `/I` did not agree with its `/V`, so `/V` decides.
+    ChoiceIndicesIgnored,
+    /// A widget's `/MK /R` is not a multiple of 90, which zeroes its bounding
+    /// box.
+    WidgetRotationInvalid,
+    /// A structure element was dropped: its page did not match, or its parent
+    /// could not be linked.
+    StructElementDropped,
+    /// A `/K` slot was reserved but never filled by the parent-tree walk.
+    StructKidUnresolved,
+    /// A page label's `/S` names no known numbering style, so the label is
+    /// its prefix alone.
+    PageLabelStyleUnknown,
+    /// Automatic font sizing produced zero because the plate had no width, so
+    /// no `Tf` operator is written.
+    AutoFontSizeZero,
+    /// A string being written for a dump stopped at an unpaired surrogate,
+    /// matching where the oracle's wide-character conversion gives up.
+    TextTruncatedAtSurrogate,
 }
 
 /// One recorded recovery.
