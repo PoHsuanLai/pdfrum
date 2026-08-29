@@ -156,10 +156,23 @@ impl Radial {
     }
 }
 
-/// PDFium's "is this float effectively zero" test.
+/// `FXSYS_IsFloatZero` (`fx_system.h:36`): `(f) < 0.0001 && (f) > -0.0001`.
+///
+/// A **fixed 1e-4 tolerance**, not a machine epsilon — roughly 840 times
+/// wider than `f32::EPSILON`. `a` is `dx² + dy² - dr²`, a catastrophic
+/// cancellation whenever the start point sits on the end circle, and the two
+/// tolerances then disagree about which branch runs: the linear `a == 0` one,
+/// which has no negative-radius skip, or the quadratic one, which does.
+/// `radial_shading_point_at_border` lands in exactly that gap at `a ≈ 2.4e-7`.
+///
+/// The comparison widens to `f64` as the C++ macro's does — its operand is a
+/// `float` but the literals are `double`.
 fn is_float_zero(v: f32) -> bool {
-    v.abs() < f32::EPSILON
+    f64::from(v).abs() < FLOAT_ZERO
 }
+
+/// The `FXSYS_IsFloatZero` tolerance.
+const FLOAT_ZERO: f64 = 1e-4;
 
 #[cfg(test)]
 mod tests {
