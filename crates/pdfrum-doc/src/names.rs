@@ -55,6 +55,9 @@ pdfrum_object::names! {
     FIELDS = "Fields";
     /// A JavaScript action's program (`/JS`).
     JS = "JS";
+    /// The action a reader runs when the document opens (`/OpenAction`).
+    /// Also legally a destination array, which is not an action.
+    OPEN_ACTION = "OpenAction";
 
     // ---- File specifications ----
 

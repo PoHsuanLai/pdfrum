@@ -77,6 +77,8 @@ pub enum Kind {
     Combo,
     /// `/FT /Ch` without it — every option, stacked.
     List,
+    /// `/FT /Btn` with the push-button flag — a centred caption.
+    Button,
 }
 
 impl Kind {
@@ -93,6 +95,11 @@ impl Kind {
             b"Tx" => Some(Kind::Text),
             b"Ch" if flags(dict, r) & FLAG_COMBO != 0 => Some(Kind::Combo),
             b"Ch" => Some(Kind::List),
+            // A check box and a radio button reach `SetAsCheckBox` /
+            // `SetAsRadioButton`, which draw a glyph rather than set text;
+            // `ap::widget` already builds those. Only the push button has a
+            // body here.
+            b"Btn" if flags(dict, r) & FLAG_PUSH_BUTTON != 0 => Some(Kind::Button),
             _ => None,
         }
     }
@@ -100,6 +107,8 @@ impl Kind {
 
 /// Bit 18 of `/Ff`: a choice field that presents as a combo box.
 const FLAG_COMBO: i64 = 1 << 17;
+/// Bit 17 of `/Ff`: a button that pushes rather than toggling.
+const FLAG_PUSH_BUTTON: i64 = 1 << 16;
 /// Bit 13 of `/Ff`: a text field that may hold several lines.
 const FLAG_MULTILINE: i64 = 1 << 12;
 /// Bit 14 of `/Ff`: a text field that shows its value as bullets.
@@ -236,7 +245,12 @@ pub fn generate<R: Resolve>(
         .filter(|appearance| !appearance.font_name.is_empty())
         .unwrap_or(freetext::Appearance {
             font_name: DEFAULT_FONT_ALIAS.to_vec(),
-            size: 0.0,
+            // A push button reads a missing `/DA` as **twelve points**, where
+            // the other three read it as the automatic size. `GetFont()`
+            // answers nothing only for an *empty* `/DA` string, and
+            // `SetAsPushButton` is the one caller that supplies a default for
+            // that case rather than passing the zero through.
+            size: if kind == Kind::Button { 12.0 } else { 0.0 },
             color: Color::Transparent,
         });
     let client = client_rect(dict, r);
@@ -247,6 +261,7 @@ pub fn generate<R: Resolve>(
         Kind::Text => text_field(&mut out, dict, client, &appearance, color, font, r),
         Kind::Combo => combo_box(&mut out, dict, client, &appearance, color, font, r),
         Kind::List => list_box(&mut out, dict, client, &appearance, color, font, r),
+        Kind::Button => push_button(&mut out, dict, client, &appearance, color, font, r),
     }
     if out.is_empty() {
         return None;
@@ -389,6 +404,87 @@ fn text_field<R: Resolve>(
         &appearance.font_name,
     );
     wrap_text(out, client, content, color, &written);
+}
+
+/// A push button's caption.
+///
+/// # What this builds, and what it deliberately does not
+///
+/// `SetAsPushButton` lays out a caption and an **icon** side by side, in one of
+/// seven arrangements chosen by `/MK /TP`, with the icon scaled and positioned
+/// by `/MK /IF`. Six of the seven arrangements and the whole icon half are
+/// unreachable on this corpus and are not built: **no corpus file carries a
+/// `/MK /I`, `/RI` or `/IX` at all**, and with no icon stream every split
+/// arrangement collapses to `rcLabel = rcBBox` — the same box the caption-only
+/// arrangement uses. The two files that name a `/TP` (`field.fragment`'s
+/// `MyPushButton` at `4` and `MyBadPushButton` at `7`, the latter out of range
+/// and clamped to `0`) carry no `/MK /CA` either, so both produce nothing on
+/// any path. Adding the icon half would be code no golden can distinguish.
+///
+/// What *is* behavior here:
+///
+/// - **Both alignments are centred**, horizontally and vertically, and neither
+///   is read from the dictionary: `SetAlignmentH(1)`/`SetAlignmentV(1)` are
+///   hard-coded, so a push button ignores the `/Q` every other text-bearing
+///   field obeys.
+/// - **The caption is read only when `/MK` has the key.** `HasMKEntry` gates
+///   it, which is a different thing from reading an absent key as empty:
+///   a caption of `()` is a caption, and it lays out to nothing anyway.
+/// - **A missing `/DA` means size 12, not automatic.** `GetFont()` answers
+///   nothing only when the `/DA` string is *empty*; a `/DA` that parses but
+///   names no `Tf` answers size **0**, which is the automatic-size request.
+///   So the fallback size is 12 and it applies to a widget with no `/DA` at
+///   all — the opposite way round from the other three builders, whose
+///   fallback is the automatic size.
+/// - The clip is written **unconditionally**, not only on overflow, and there
+///   are no `/Tx BMC` markers — both unlike [`wrap_text`].
+///
+/// The text colour falls back to black, which is what [`text_color`] already
+/// does for every builder here — the check box's transparent fallback lives in
+/// [`widget::text_color`](crate::ap::widget::text_color), a different reader.
+fn push_button<R: Resolve>(
+    out: &mut Content,
+    dict: &Dict,
+    client: Rect,
+    appearance: &freetext::Appearance,
+    color: Color,
+    font: &TextFont<'_>,
+    r: &R,
+) {
+    let Some(mk) = dict.dict(names::MK, r) else {
+        return;
+    };
+    if !mk.contains_key(names::CA) {
+        return;
+    }
+    let caption = mk.text(names::CA, r).unwrap_or_default();
+    let config = vt::Config {
+        plate: client,
+        // Hard-coded, not `/Q`.
+        alignment: vt::Alignment::Center,
+        font_size: appearance.size,
+        ..vt::Config::default()
+    };
+    let (written, content) = set_text(
+        &caption,
+        &config,
+        font,
+        true,
+        vt::edit_ap::Grouping::Continuous,
+        &appearance.font_name,
+    );
+    if written.is_empty() {
+        return;
+    }
+    // `GetPushButtonAppStream`'s own `q … Q`, with the clip always present.
+    out.raw("q\n");
+    out.rect(client, Float::Shortest);
+    out.raw("re\nW n\n");
+    out.raw("BT\n");
+    out.raw(&color_op_via(color, PaintOp::Fill, Float::G6));
+    out.raw(&written);
+    out.raw("ET\nQ\n");
+    let _ = content;
 }
 
 /// A comb field's cell separators.

@@ -39,18 +39,43 @@ use crate::names;
 
 /// Whether this annotation is a widget that will be given an appearance.
 ///
-/// Three tests, and the middle one is the least obvious. The subtype must be
-/// `/Widget`. The **field type must be one the appearance builder knows**: the
-/// builder dispatches on it and a type it does not recognize falls off the
-/// end, writing nothing at all — so an intermediate field node that carries
-/// `/Kids` and no `/FT` of its own keeps having no appearance, which is
-/// visible in the dump because the two colour lines report a colour exactly
-/// when no appearance stream exists. `field_methods`'s `MyField` is that node.
-/// And the appearance test is whether a **usable normal appearance stream
-/// resolves**, not merely whether an `/AP` key is there: a radio button whose
-/// `/AP /N` lists only its on-state, with `/AS` reading `Off`, has an `/AP`
-/// and yet resolves to nothing — and so gets a fresh appearance built for it,
-/// `Off` state included. Every radio button in `bug_707673.pdf` is that shape.
+/// The subtype must be `/Widget`, and the **field type must be one the
+/// appearance builder knows**: the builder dispatches on it and a type it does
+/// not recognize falls off the end, writing nothing at all — so an intermediate
+/// field node that carries `/Kids` and no `/FT` of its own keeps having no
+/// appearance, which is visible in the dump because the two colour lines report
+/// a colour exactly when no appearance stream exists. `field_methods`'s
+/// `MyField` is that node.
+///
+/// # The appearance test is one dictionary lookup
+///
+/// Past those, a widget is regenerated exactly when it has **no `/AP`
+/// dictionary** (`CPDFSDK_Widget::OnLoad` →
+/// `CPDFSDK_BAAnnot::IsAppearanceValid`, which is literally
+/// `!!GetDictFor("AP")`, `cpdfsdk_baannot.cpp:85-87`). Not whether `/N`
+/// resolves, not whether `/AS` names a state that exists. So a radio button
+/// whose `/AP /N` lists only its on-state while `/AS` reads `Off` **keeps
+/// having no drawable appearance** and is never regenerated.
+///
+/// What draws that widget instead is the grey outline
+/// [`crate::annot_render`] strokes over an invalid checkbox or radio — a
+/// *deeper* validity test, on a different code path. Porting either of those
+/// two without the other is a measured loss, which is why they landed
+/// together.
+///
+/// # `/NeedAppearances` is a third trigger this does not implement
+///
+/// `CPDFSDK_PageView::NewAnnot` also calls `ResetAppearance` unconditionally
+/// when the document's `/AcroForm` sets `/NeedAppearances`
+/// (`cpdfsdk_pageview.cpp:108-113`), consulting no `/AP` at all. Honouring
+/// that was **measured and reverted**: it moves `bug_707673` the right way by
+/// 0.0003 and takes `bug_861842` from .99986 to .93548, because that file sets
+/// the flag and its checkbox carries a real ZapfDingbats appearance stream
+/// whose golden reports **one Text object** and no background — the file's own
+/// stream, untouched. Some gate that neither `NeedConstructAP` nor
+/// `GetControlByDict` explains stops the rebuild there, and until it is
+/// identified the net is negative. `docs/status/pdfrum-render.md`, wave 11,
+/// carries the measurement.
 #[must_use]
 pub fn needs_appearance<R: Resolve>(dict: &Dict, r: &R) -> bool {
     // Read coercively, matching how the annotation list classifies subtypes.
@@ -60,28 +85,7 @@ pub fn needs_appearance<R: Resolve>(dict: &Dict, r: &R) -> bool {
     if !has_known_field_type(dict, r) {
         return false;
     }
-    if dict.dict(names::AP, r).is_none() {
-        return true;
-    }
-    // An `/AP` that is there but resolves to nothing — a radio button whose
-    // `/AP /N` lists only its on-state while `/AS` reads `Off` — is treated
-    // as absent, but **only for a radio button**. A checkbox in the same
-    // shape is left alone, because its widget never reaches the generator:
-    // an ungrouped checkbox is not registered as a form control, and the
-    // appearance path runs per control rather than per annotation.
-    //
-    // Measured 2026-08-29 and deliberately kept. The loader's own validity
-    // test is one dictionary lookup — the mere presence of `/AP` — and
-    // matching it exactly clears four more `--annot` artifacts (a checkbox in
-    // this shape then keeps having no appearance, which is what
-    // `checkbox_radiobutton`'s golden reports) while taking `bug_707673`'s
-    // pixels **down**, from .9944 to .9910. That file's residual is a
-    // push-button caption this crate does not draw, and the generated chrome
-    // stands in for it by accident; removing the accident before drawing the
-    // caption is a net loss. Do not tighten this to `/AP`-presence without
-    // porting `SetAsPushButton` first.
-    is_radio(dict, r)
-        && crate::annot::appearance::annot_ap(dict, crate::annot::ApMode::Normal, true, r).is_none()
+    dict.dict(names::AP, r).is_none()
 }
 
 /// Builds a widget's appearance chrome, with no text body.
@@ -401,11 +405,12 @@ mod tests {
     }
 
     #[test]
-    fn a_radio_whose_state_names_nothing_is_regenerated_where_a_checkbox_is_not() {
-        // `/AP /N` lists only the on-state while `/AS` reads `Off`, so
-        // nothing resolves. A radio button in that shape gets a fresh
-        // appearance; an ungrouped checkbox never reaches the generator and
-        // keeps its unusable one.
+    fn an_unusable_appearance_is_still_an_appearance() {
+        // `/AP /N` lists only the on-state while `/AS` reads `Off`, so nothing
+        // resolves — and the regeneration test does not care, because it is
+        // `!!GetDictFor("AP")` and no more. Neither a checkbox nor a radio is
+        // rebuilt. What draws them is `annot_render::invalid_outline`, which
+        // asks the *deeper* question on a different code path.
         let unusable = [
             (
                 "AP",
@@ -420,14 +425,12 @@ mod tests {
             ("AS", Object::Name(Name::from("Off"))),
             ("FT", Object::Name(Name::from("Btn"))),
         ];
-        let checkbox = widget(&unusable);
-        assert!(!needs_appearance(&checkbox, &NoResolve));
+        assert!(!needs_appearance(&widget(&unusable), &NoResolve));
 
         let mut radio_pairs = unusable.to_vec();
         // Bit 16 is the radio flag.
         radio_pairs.push(("Ff", Object::Int(1 << 15)));
-        let radio = widget(&radio_pairs);
-        assert!(needs_appearance(&radio, &NoResolve));
+        assert!(!needs_appearance(&widget(&radio_pairs), &NoResolve));
     }
 
     #[test]
