@@ -39,9 +39,23 @@ use crate::{Array, Name, Object, PdfString, Resolve, Resolved, Stream};
 
 /// A PDF dictionary: key-value pairs in document order.
 ///
-/// Values are always direct — a dictionary never holds a stream, and streams
-/// reach it only through references (ISO 32000-1 §7.3.8.1). The reader
-/// enforces that while parsing; this type documents and debug-asserts it.
+/// # Streams as values
+///
+/// ISO 32000-1 §7.3.8.1 forbids a *file* from writing a stream as a direct
+/// dictionary value, and the reader enforces that while parsing: a stream
+/// found inline in a dictionary is dropped, exactly as
+/// `cpdf_syntax_parser.cpp:645-649` drops it. But that is a **file-format**
+/// constraint, not an in-memory invariant, and this type deliberately does
+/// not police it. [`Object::clone_direct`](crate::Object::clone_direct)
+/// flattens references, so a `/Resources` whose `/XObject` entries are
+/// indirect streams clones into a dictionary holding those streams directly —
+/// which is what `CPDF_Dictionary::CloneNonCyclic` produces too, since its
+/// loop writes straight into `map_` and bypasses the `CHECK(!IsStream())`
+/// that guards the ordinary setters. [`Dict::stream`] reads such a value
+/// back, mirroring `CPDF_Dictionary::GetStreamFor`.
+///
+/// The §7.3.8.1 constraint is the **writer's** to enforce: `pdfrum-edit`
+/// hoists a direct stream to an indirect object at serialization time.
 ///
 /// ```
 /// use pdfrum_object::{Dict, NoResolve, Object, names};
@@ -74,11 +88,9 @@ impl Dict {
     ///
     /// The later entry wins on lookup, so appending is how a reader records a
     /// duplicate key without losing what the file actually said.
+    ///
+    /// Any object, a stream included — see the type-level note on §7.3.8.1.
     pub fn push(&mut self, key: Name, value: Object) {
-        debug_assert!(
-            !matches!(value, Object::Stream(_)),
-            "a dictionary value is never a direct stream (ISO 32000-1 §7.3.8.1)"
-        );
         self.0.push((key, value));
     }
 

@@ -67,11 +67,49 @@ What is implemented, against the brief's inventory:
   non-parser `Resolve` implementations.
 - **Cloning** (brief §1.9). `clone_direct` flattens references with a
   per-child copy of the ancestor set: sibling sharing survives, ancestor
-  cycles are cut, and a cut edge disappears rather than becoming null.
+  cycles are cut, and a cut edge disappears rather than becoming null. A
+  reference to a stream flattens into the stream itself, stored **directly**
+  in the container that held the reference — see the §7.3.8.1 note below.
+
+## §7.3.8.1 is the writer's rule, not this crate's
+
+`Array::push` and `Dict::push` used to debug-assert that no value is a stream,
+citing ISO 32000-1 §7.3.8.1. That made `clone_direct` **panic on ordinary
+files**: flattening a `/Resources` whose `/XObject` entries are indirect
+streams — the common case — necessarily stores those streams as direct
+dictionary values. The page corpus sweep found it; this is the fix.
+
+The C++ settles it. Its ordinary setters do reject a stream
+(`CHECK(!pObj->IsStream())` at `cpdf_dictionary.cpp:285` and
+`cpdf_array.cpp:249,264,278`, plus `= delete`d `SetFor`/`Append` overloads and
+`static_assert`s in `SetNewFor`/`AppendNew`), but the **clone path bypasses
+every one of them**: `CPDF_Dictionary::CloneNonCyclic` and
+`CPDF_Array::CloneNonCyclic` write into `map_` / `objects_` directly
+(`cpdf_dictionary.cpp:64`, `cpdf_array.cpp:57`). So `CloneDirectObject()` on a
+resources dictionary genuinely yields an inline `CPDF_Stream`, and
+`GetStreamFor` / `GetStreamAt` read it back — both are
+`ToStream(GetDirectObjectFor…)`, which handles a direct stream value, not only
+a resolved reference.
+
+So the rule constrains what a *file* may contain, and enforcement lives at the
+two ends where the C++ puts it:
+
+| end | who enforces | how |
+|---|---|---|
+| reader | `pdfrum-parser` (already) | a stream found inline in a dict or array is dropped with a `StreamInCompositeDropped` diagnostic, as `cpdf_syntax_parser.cpp:591-596,645-649` drops it |
+| writer | `pdfrum-edit` (M7) | hoists a direct stream back out to an indirect object at serialization |
+
+In between, `Dict` and `Array` hold whatever they are given. `clone_direct`
+itself is unchanged: its `ObjRef`-keyed ancestor set is the faithful Rust
+equivalent of the C++ pointer set, because an owned `Object` tree can only
+close a cycle through a reference — direct cycles are unrepresentable.
 
 ## Tests
 
-`cargo nextest run -p pdfrum-object`: **62** unit tests.
+`cargo nextest run -p pdfrum-object`: **68** unit tests + **2** integration
+(`tests/corpus.rs`, which loads `embedded_images.pdf` through `pdfrum-parser`
+and flattens its page resources — the exact shape that panicked — plus a sweep
+flattening every page of every resource file).
 `cargo nextest run -p pdfrum-common`: **6**.
 `cargo test --doc`: **26** doctests in `pdfrum-object`, **3** in
 `pdfrum-common`.

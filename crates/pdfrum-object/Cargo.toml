@@ -13,3 +13,6 @@ workspace = true
 pdfrum-common.workspace = true
 ryu.workspace = true
 thiserror.workspace = true
+
+[dev-dependencies]
+pdfrum-parser.workspace = true

@@ -12,8 +12,23 @@ use crate::{Dict, Name, ObjRef, Object, PdfString, Resolve, Resolved, Stream};
 
 /// A PDF array: an ordered sequence of objects.
 ///
-/// Elements are always direct — an array never holds a stream, and streams
-/// reach it only through references (ISO 32000-1 §7.3.8.1).
+/// # Streams as elements
+///
+/// ISO 32000-1 §7.3.8.1 forbids a *file* from writing a stream as a direct
+/// array element, and the reader enforces that while parsing: a stream found
+/// inline in an array is dropped, exactly as
+/// `cpdf_syntax_parser.cpp:591-596` drops it. But that is a **file-format**
+/// constraint, not an in-memory invariant, and this type deliberately does
+/// not police it. [`Object::clone_direct`](crate::Object::clone_direct)
+/// flattens references, so a `/Resources` whose `/XObject` entries are
+/// indirect streams clones into a dictionary holding those streams directly —
+/// which is what `CPDF_Dictionary::CloneNonCyclic` produces too, since its
+/// loop writes straight into `map_` and bypasses the `CHECK(!IsStream())`
+/// that guards the ordinary setters. [`Array::stream_at`] reads such an
+/// element back, mirroring `CPDF_Array::GetStreamAt`.
+///
+/// The §7.3.8.1 constraint is the **writer's** to enforce: `pdfrum-edit`
+/// hoists a direct stream to an indirect object at serialization time.
 ///
 /// ```
 /// use pdfrum_object::{Array, NoResolve, Object};
@@ -42,11 +57,9 @@ impl Array {
     }
 
     /// Append an element.
+    ///
+    /// Any object, a stream included — see the type-level note on §7.3.8.1.
     pub fn push(&mut self, value: Object) {
-        debug_assert!(
-            !matches!(value, Object::Stream(_)),
-            "an array element is never a direct stream (ISO 32000-1 §7.3.8.1)"
-        );
         self.0.push(value);
     }
 
