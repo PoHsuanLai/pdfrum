@@ -480,12 +480,33 @@ impl Rasterizer {
     /// `emit` receives `(x, len, alpha)` for each run of equal coverage, in
     /// increasing y then increasing x. Only non-zero alphas are emitted, so a
     /// consumer can blend unconditionally.
-    pub fn sweep(&mut self, rule: FillRule, aa: bool, mut emit: impl FnMut(i32, i32, i32, u8)) {
+    pub fn sweep(
+        &mut self,
+        rule: FillRule,
+        coverage: Coverage,
+        mut emit: impl FnMut(i32, i32, i32, u8),
+    ) {
         self.finish();
         for (y, row) in self.store.rows() {
-            sweep_row(row, y, rule, aa, &mut emit);
+            sweep_row(row, y, rule, coverage, &mut emit);
         }
     }
+}
+
+/// How an integrated coverage becomes an alpha byte — AGG's three modes.
+///
+/// See [`AntiAlias`](crate::device::AntiAlias), whose three variants these
+/// mirror one for one; this is the integrator's own spelling of the same
+/// choice, so `scanline` does not depend on the device vocabulary.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Coverage {
+    /// Coverage becomes alpha: `min(255, floor(cov * 256))`.
+    #[default]
+    Exact,
+    /// `aliased_path`: the same coverage thresholded at its midpoint.
+    Thresholded,
+    /// `full_cover`: any touched pixel at 255, whatever its coverage.
+    Full,
 }
 
 /// Which winding rule decides a path's interior.
@@ -506,7 +527,7 @@ fn sweep_row(
     row: &[Cell],
     y: i32,
     rule: FillRule,
-    aa: bool,
+    coverage: Coverage,
     emit: &mut impl FnMut(i32, i32, i32, u8),
 ) {
     let mut cover = 0i32;
@@ -534,7 +555,7 @@ fn sweep_row(
             let alpha = coverage_to_alpha(
                 (cover << (SUBPIXEL_SHIFT + 1)).saturating_sub(area),
                 rule,
-                aa,
+                coverage,
             );
             if alpha != 0 {
                 emit(x, 1, y, alpha);
@@ -546,7 +567,7 @@ fn sweep_row(
         if let Some(&next) = row.get(i)
             && next.x > next_x
         {
-            let alpha = coverage_to_alpha(cover << (SUBPIXEL_SHIFT + 1), rule, aa);
+            let alpha = coverage_to_alpha(cover << (SUBPIXEL_SHIFT + 1), rule, coverage);
             if alpha != 0 {
                 emit(next_x, next.x - next_x, y, alpha);
             }
@@ -573,11 +594,14 @@ fn sweep_row(
 /// `grep gamma` over the oracle's path driver has no hits, and two waves of the
 /// burn-down separately confirmed that looking for one is wasted effort.
 ///
-/// `aa = false` is the oracle's `aliased_path`, which does not turn the
-/// rasterizer off but thresholds the same coverage at the midpoint. That is why
-/// a hard-edged rect clip still goes through the identical integrator.
+/// [`Coverage::Thresholded`] is the oracle's `aliased_path`, which does not
+/// turn the rasterizer off but thresholds the same coverage at the midpoint.
+/// That is why a hard-edged rect clip still goes through the identical
+/// integrator. [`Coverage::Full`] is `full_cover`, which keeps the same choice
+/// of covered pixels and discards the value: every pixel this integrator
+/// reaches at all is written opaque.
 #[must_use]
-pub fn coverage_to_alpha(area: i32, rule: FillRule, aa: bool) -> u8 {
+pub fn coverage_to_alpha(area: i32, rule: FillRule, coverage: Coverage) -> u8 {
     /// The renormalised coverage's full-cover value, 256.
     const COVER_FULL: i32 = 1 << 8;
     /// The largest alpha byte, 255 — the clamp that keeps 256 out.
@@ -595,12 +619,24 @@ pub fn coverage_to_alpha(area: i32, rule: FillRule, aa: bool) -> u8 {
             cover = COVER_FULL * 2 - cover;
         }
     }
-    if !aa {
-        cover = if cover > COVER_MASK / 2 {
-            COVER_MASK
-        } else {
-            0
-        };
+    match coverage {
+        Coverage::Exact => {}
+        Coverage::Thresholded => {
+            cover = if cover > COVER_MASK / 2 {
+                COVER_MASK
+            } else {
+                0
+            };
+        }
+        // Not a threshold: the test is against zero, so a pixel the span
+        // touches at all is opaque. Two cells that each half-cover a pixel
+        // both paint it, which is the seam suppression `full_cover` exists
+        // for; thresholding would drop it from both.
+        Coverage::Full => {
+            if cover > 0 {
+                cover = COVER_MASK;
+            }
+        }
     }
     if cover > COVER_MASK {
         cover = COVER_MASK;
@@ -619,12 +655,12 @@ mod tests {
     use super::*;
 
     /// Fill a path into a width x height coverage plane.
-    fn coverage(path: &kurbo::BezPath, w: i32, h: i32, rule: FillRule, aa: bool) -> Vec<u8> {
+    fn coverage(path: &kurbo::BezPath, w: i32, h: i32, rule: FillRule, mode: Coverage) -> Vec<u8> {
         let cells = usize::try_from(w * h).expect("a test plane fits");
         let mut out = vec![0u8; cells];
         let mut raster = Rasterizer::new();
         raster.add_path(path, 0.1);
-        raster.sweep(rule, aa, |x, len, y, alpha| {
+        raster.sweep(rule, mode, |x, len, y, alpha| {
             if y < 0 || y >= h {
                 return;
             }
@@ -652,7 +688,13 @@ mod tests {
 
     #[test]
     fn a_whole_pixel_rect_is_fully_covered() {
-        let cov = coverage(&rect(1.0, 1.0, 3.0, 3.0), 4, 4, FillRule::NonZero, true);
+        let cov = coverage(
+            &rect(1.0, 1.0, 3.0, 3.0),
+            4,
+            4,
+            FillRule::NonZero,
+            Coverage::Exact,
+        );
         assert_eq!(cov.first().copied(), Some(0), "outside");
         assert_eq!(cov.get(5).copied(), Some(255), "inside (1,1)");
         assert_eq!(cov.get(10).copied(), Some(255), "inside (2,2)");
@@ -663,7 +705,13 @@ mod tests {
     fn a_half_covered_pixel_is_exactly_half() {
         // The whole point of an analytic rasterizer: half a pixel is 128,
         // not the nearest of seventeen supersampled levels.
-        let cov = coverage(&rect(0.0, 0.0, 0.5, 1.0), 1, 1, FillRule::NonZero, true);
+        let cov = coverage(
+            &rect(0.0, 0.0, 0.5, 1.0),
+            1,
+            1,
+            FillRule::NonZero,
+            Coverage::Exact,
+        );
         assert_eq!(cov.first().copied(), Some(128));
     }
 
@@ -673,7 +721,13 @@ mod tests {
         // give 32, 96, 160, 224 -- floor(cov * 256), not round(cov * 255).
         for (num, expected) in [(1, 32u8), (3, 96), (5, 160), (7, 224)] {
             let frac = f64::from(num) / 8.0;
-            let cov = coverage(&rect(0.0, 0.0, frac, 1.0), 1, 1, FillRule::NonZero, true);
+            let cov = coverage(
+                &rect(0.0, 0.0, frac, 1.0),
+                1,
+                1,
+                FillRule::NonZero,
+                Coverage::Exact,
+            );
             assert_eq!(
                 cov.first().copied(),
                 Some(expected),
@@ -686,7 +740,10 @@ mod tests {
     fn full_coverage_clamps_to_255_not_256() {
         // `floor(1.0 * 256)` is 256, which does not fit a byte; the clamp is
         // the only thing keeping it out, and it is why full cover is 255.
-        assert_eq!(coverage_to_alpha(1 << 17, FillRule::NonZero, true), 255);
+        assert_eq!(
+            coverage_to_alpha(1 << 17, FillRule::NonZero, Coverage::Exact),
+            255
+        );
     }
 
     #[test]
@@ -695,8 +752,8 @@ mod tests {
         // non-zero would fill it.
         let mut p = rect(0.0, 0.0, 6.0, 6.0);
         p.extend(rect(2.0, 2.0, 4.0, 4.0).iter());
-        let eo = coverage(&p, 6, 6, FillRule::EvenOdd, true);
-        let nz = coverage(&p, 6, 6, FillRule::NonZero, true);
+        let eo = coverage(&p, 6, 6, FillRule::EvenOdd, Coverage::Exact);
+        let nz = coverage(&p, 6, 6, FillRule::NonZero, Coverage::Exact);
         // (3,3) is inside both squares.
         assert_eq!(eo.get(3 * 6 + 3).copied(), Some(0), "even-odd punches out");
         assert_eq!(nz.get(3 * 6 + 3).copied(), Some(255), "non-zero fills");
@@ -710,10 +767,56 @@ mod tests {
         // `aa = false` is the oracle's aliased_path: it thresholds the same
         // analytic coverage rather than turning the integrator off, so a
         // just-over-half pixel is solid and a just-under-half one is empty.
-        let over = coverage(&rect(0.0, 0.0, 0.6, 1.0), 1, 1, FillRule::NonZero, false);
-        let under = coverage(&rect(0.0, 0.0, 0.4, 1.0), 1, 1, FillRule::NonZero, false);
+        let over = coverage(
+            &rect(0.0, 0.0, 0.6, 1.0),
+            1,
+            1,
+            FillRule::NonZero,
+            Coverage::Thresholded,
+        );
+        let under = coverage(
+            &rect(0.0, 0.0, 0.4, 1.0),
+            1,
+            1,
+            FillRule::NonZero,
+            Coverage::Thresholded,
+        );
         assert_eq!(over.first().copied(), Some(255));
         assert_eq!(under.first().copied(), Some(0));
+    }
+
+    #[test]
+    fn full_cover_tests_against_zero_rather_than_the_midpoint() {
+        // `full_cover` keeps the integrator's choice of covered pixels and
+        // discards the coverage *value*, so the test is `> 0` and not
+        // `> 127`. The distinction is the whole point: two Coons cells that
+        // each cover a shared pixel by 40% both paint it here, where
+        // thresholding drops it from both and leaves a white pin-hole along
+        // every internal seam of a subdivided patch.
+        for frac in [0.4, 0.6, 0.05] {
+            let cov = coverage(
+                &rect(0.0, 0.0, frac, 1.0),
+                1,
+                1,
+                FillRule::NonZero,
+                Coverage::Full,
+            );
+            assert_eq!(
+                cov.first().copied(),
+                Some(255),
+                "coverage {frac} is non-zero, so full_cover writes it opaque"
+            );
+        }
+        // A pixel the path does not reach at all stays empty — the mode does
+        // not flood, it only flattens.
+        let miss = coverage(
+            &rect(2.0, 2.0, 3.0, 3.0),
+            1,
+            1,
+            FillRule::NonZero,
+            Coverage::Full,
+        );
+        assert_eq!(miss.first().copied(), Some(0));
     }
 
     #[test]
@@ -727,7 +830,7 @@ mod tests {
         p.line_to((32.0, 0.0));
         p.line_to((0.0, 32.0));
         p.close_path();
-        let cov = coverage(&p, 32, 32, FillRule::NonZero, true);
+        let cov = coverage(&p, 32, 32, FillRule::NonZero, Coverage::Exact);
         let mut levels: Vec<u8> = cov
             .iter()
             .copied()
@@ -750,7 +853,7 @@ mod tests {
         p.line_to((64.0, 0.0));
         p.line_to((64.0, 5.0));
         p.close_path();
-        let cov = coverage(&p, 64, 8, FillRule::NonZero, true);
+        let cov = coverage(&p, 64, 8, FillRule::NonZero, Coverage::Exact);
         let mut levels: Vec<u8> = cov
             .iter()
             .copied()
@@ -769,14 +872,20 @@ mod tests {
     fn winding_direction_does_not_change_coverage() {
         // A clockwise and a counter-clockwise square fill identically under
         // non-zero: the cover sum's sign is taken as magnitude.
-        let cw = coverage(&rect(0.0, 0.0, 4.0, 4.0), 4, 4, FillRule::NonZero, true);
+        let cw = coverage(
+            &rect(0.0, 0.0, 4.0, 4.0),
+            4,
+            4,
+            FillRule::NonZero,
+            Coverage::Exact,
+        );
         let mut ccw = kurbo::BezPath::new();
         ccw.move_to((0.0, 0.0));
         ccw.line_to((0.0, 4.0));
         ccw.line_to((4.0, 4.0));
         ccw.line_to((4.0, 0.0));
         ccw.close_path();
-        assert_eq!(cw, coverage(&ccw, 4, 4, FillRule::NonZero, true));
+        assert_eq!(cw, coverage(&ccw, 4, 4, FillRule::NonZero, Coverage::Exact));
     }
 
     #[test]
@@ -788,8 +897,17 @@ mod tests {
         open.line_to((4.0, 0.0));
         open.line_to((4.0, 4.0));
         open.line_to((0.0, 4.0));
-        let closed = coverage(&rect(0.0, 0.0, 4.0, 4.0), 4, 4, FillRule::NonZero, true);
-        assert_eq!(coverage(&open, 4, 4, FillRule::NonZero, true), closed);
+        let closed = coverage(
+            &rect(0.0, 0.0, 4.0, 4.0),
+            4,
+            4,
+            FillRule::NonZero,
+            Coverage::Exact,
+        );
+        assert_eq!(
+            coverage(&open, 4, 4, FillRule::NonZero, Coverage::Exact),
+            closed
+        );
     }
 
     #[test]
@@ -813,7 +931,7 @@ mod tests {
         let mut r = Rasterizer::new();
         r.add_path(&kurbo::BezPath::new(), 0.1);
         let mut spans = 0;
-        r.sweep(FillRule::NonZero, true, |_, _, _, _| spans += 1);
+        r.sweep(FillRule::NonZero, Coverage::Exact, |_, _, _, _| spans += 1);
         assert_eq!(spans, 0);
     }
 
@@ -834,7 +952,7 @@ mod tests {
         p.line_to((13.0, 14.0));
         p.line_to((1.0, 12.0));
         p.close_path();
-        let cov = coverage(&p, 16, 16, FillRule::NonZero, true);
+        let cov = coverage(&p, 16, 16, FillRule::NonZero, Coverage::Exact);
         let painted: f64 = cov.iter().map(|&a| f64::from(a) / 256.0).sum();
         // Shoelace over the four vertices.
         let pts = [(2.0, 1.0), (14.0, 3.0), (13.0, 14.0), (1.0, 12.0)];

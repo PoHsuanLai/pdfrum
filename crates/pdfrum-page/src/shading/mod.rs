@@ -397,12 +397,14 @@ fn load_mesh<R: Resolve>(
         return None;
     };
 
+    let component_range = params.component_range();
     let data = decode_chain(stream, 0, r, limits, diags).data;
     let mut reader = MeshReader::new(&data, &params, space, functions);
     let mesh = match kind {
         ShadingKind::FreeFormMesh => Mesh {
             triangles: reader.read_free_form(),
             patches: Vec::new(),
+            component_range,
         },
         ShadingKind::LatticeMesh => {
             let per_row = dict.int(names::VERTICES_PER_ROW, r).unwrap_or(0);
@@ -412,11 +414,13 @@ fn load_mesh<R: Resolve>(
             Mesh {
                 triangles: reader.read_lattice(per_row),
                 patches: Vec::new(),
+                component_range,
             }
         }
         ShadingKind::CoonsMesh | ShadingKind::TensorMesh => Mesh {
             triangles: Vec::new(),
             patches: reader.read_patches(kind == ShadingKind::TensorMesh),
+            component_range,
         },
         _ => return None,
     };
