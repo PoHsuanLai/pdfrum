@@ -2,30 +2,29 @@
 //! §10.4, `cpdf_transferfunc.cpp:34-38`).
 //!
 //! The three 256-entry byte tables are sampled once at parse time by
-//! `pdfrum-page`; what belongs here is only the channel mapping, which is the
-//! subject of the render brief's **Q1** and is settled by the oracle's own
-//! unit test rather than by reading the code.
+//! `pdfrum-page`, already indexed by channel — 0 red, 1 green, 2 blue. What
+//! belongs here is only the packing into an [`Argb`] and the identity
+//! early-out; there is no channel remapping to do.
 //!
-//! # Q1, resolved
+//! # Q1, resolved: the `/TR` array reversal is real
 //!
-//! `CPDF_DocRenderData::CreateTransferFunc` loads the array as
-//! `pFuncs[2 - i] = Load(array[i])` and then fills `samples[i]` from
-//! `pFuncs[i]`, where `samples` is `{samples_r, samples_g, samples_b}` — read
-//! literally, that maps `array[2]` to red. But
-//! `CPDFDocRenderDataTest.TransferFunctionArray` asserts, for the array
-//! `[Type0, Type2, Type4]`, that `GetSamplesR() == Type0`, and its ten
-//! `TranslateColor` expectations agree: `TranslateColor(0x00FFFFFF)` yields
-//! `0x001A0D00`, i.e. `samples_r[255] == 0` (Type0's last entry),
-//! `samples_g[255] == 13` (Type2's) and `samples_b[255] == 26` (Type4's).
-//! **The observable is that array order maps directly to R, G, B.**
-//! SPEC §8 rules for the asserted observable, and that is what this module
-//! implements — `pdfrum-page`'s storage is reversed relative to it, so the
-//! mapping is undone here rather than in the parse.
+//! Q1 asked whether `pFuncs[2 - i] = Load(array[i])` is observable. It is:
+//! `array[2]` drives red and `array[0]` drives blue. The oracle's own unit
+//! test looks like it says otherwise only because
+//! `kExpectedType0FunctionSamples` and `kExpectedType4FunctionSamples` are
+//! misnamed — the former is the type 4 program's sine ramp and the latter the
+//! type 0 function's flat one. `CPDFDocRenderDataTest.TransferFunctionArray`'s
+//! ten `TranslateColor` pairs settle it without naming a function at all, and
+//! `pdfrum-page::transfer` records the arithmetic.
+//!
+//! An earlier reading of that test concluded the opposite and this module
+//! compensated by reading slot `2 - channel`, which cancelled a reversal the
+//! parse had applied correctly and left rendered `/TR` arrays with their red
+//! and blue channels swapped. Both halves are gone.
 
 use crate::color::Argb;
 
-/// A sampled transfer function, with the channel mapping the oracle's
-/// observable requires.
+/// A sampled transfer function, viewed as a colour translation.
 #[derive(Debug, Clone)]
 pub struct TransferFunc<'a> {
     inner: &'a pdfrum_page::TransferFunc,
@@ -54,31 +53,19 @@ impl<'a> TransferFunc<'a> {
     pub fn translate(&self, c: Argb) -> Argb {
         Argb {
             a: c.a,
-            r: self.channel(0, c.r),
-            g: self.channel(1, c.g),
-            b: self.channel(2, c.b),
+            r: self.inner.apply(0, c.r),
+            g: self.inner.apply(1, c.g),
+            b: self.inner.apply(2, c.b),
         }
-    }
-
-    /// Look up one byte on one channel, undoing the parse's array reversal.
-    fn channel(&self, channel: usize, value: u8) -> u8 {
-        // `pdfrum-page` stores `array[i]` at internal slot `2 - i`; the
-        // oracle's observable is `array[i]` on channel `i`. Both statements
-        // are about the same three tables, so reading slot `2 - channel`
-        // here restores the asserted mapping.
-        self.inner
-            .samples
-            .get(2 - channel.min(2))
-            .and_then(|c| c.get(usize::from(value)))
-            .copied()
-            .unwrap_or(value)
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use pdfrum_common::{Diagnostics, Limits};
-    use pdfrum_object::{Array, Dict, Name, NoResolve, Object};
+    use pdfrum_object::{Array, ByteSpan, Dict, Name, NoResolve, Object, Stream};
     use pdfrum_page::function::FunctionCache;
 
     use super::*;
@@ -104,22 +91,95 @@ mod tests {
         pdfrum_page::TransferFunc::load(obj, &NoResolve, &mut cache, &Limits::default(), &mut diags)
     }
 
+    /// Wrap `dict` and `data` as a stream object.
+    fn stream(dict: Dict, data: &[u8]) -> Object {
+        let file: Arc<[u8]> = Arc::from(data);
+        let span = ByteSpan::new(Arc::clone(&file), 0..file.len()).expect("in range");
+        Object::Stream(Stream::new(dict, span))
+    }
+
+    /// The oracle fixture's type 0 function: a four-entry eight-bit ramp
+    /// over `/Range [0 0.5]`, whose samples are the bytes of "1234\0".
+    fn oracle_type0() -> Object {
+        let dict = Dict::from_pairs([
+            (Name::from("FunctionType"), Object::Int(0)),
+            (Name::from("BitsPerSample"), Object::Int(8)),
+            (Name::from("Domain"), nums(&[0.0, 1.0])),
+            (Name::from("Range"), nums(&[0.0, 0.5])),
+            (
+                Name::from("Size"),
+                Object::Array(Array::of([Object::Int(4)])),
+            ),
+        ]);
+        stream(dict, b"1234\0")
+    }
+
+    /// The oracle fixture's type 2 function.
+    fn oracle_type2() -> Object {
+        Object::Dict(Dict::from_pairs([
+            (Name::from("FunctionType"), Object::Int(2)),
+            (Name::from("N"), Object::Int(1)),
+            (Name::from("Domain"), nums(&[0.0, 1.0])),
+            (Name::from("C0"), nums(&[0.1, 0.2, 0.8])),
+            (Name::from("C1"), nums(&[0.05, 0.01, 0.4])),
+        ]))
+    }
+
+    /// The oracle fixture's type 4 program: one sine period, halved.
+    fn oracle_type4() -> Object {
+        let dict = Dict::from_pairs([
+            (Name::from("FunctionType"), Object::Int(4)),
+            (Name::from("Domain"), nums(&[0.0, 1.0])),
+            (Name::from("Range"), nums(&[-1.0, 1.0])),
+        ]);
+        stream(dict, b"{ 360 mul sin 2 div }")
+    }
+
     #[test]
-    fn array_order_maps_directly_to_rgb() {
-        // The Q1 authority: CPDFDocRenderDataTest.TransferFunctionArray with
-        // [f0, f1, f2] asserts GetSamplesR() == f0. Three distinguishable
-        // constants make the mapping unambiguous.
+    fn the_last_array_element_drives_red() {
+        // Three constants no two of which collide. `pdfrum-page` applies the
+        // `/TR` array's reversal, and nothing here undoes it.
         let array = Object::Array(Array::of([
-            constant(0.0),           // -> 0
-            constant(100.0 / 255.0), // -> 100
-            constant(200.0 / 255.0), // -> 200
+            constant(10.0 / 255.0),
+            constant(100.0 / 255.0),
+            constant(200.0 / 255.0),
         ]));
         let parsed = load(&array).expect("should load");
-        let tf = TransferFunc::new(&parsed);
-        let out = tf.translate(Argb::opaque(10, 20, 30));
-        assert_eq!(out.r, 0, "array[0] must drive red");
+        let out = TransferFunc::new(&parsed).translate(Argb::opaque(10, 20, 30));
+        assert_eq!(out.r, 200, "array[2] must drive red");
         assert_eq!(out.g, 100, "array[1] must drive green");
-        assert_eq!(out.b, 200, "array[2] must drive blue");
+        assert_eq!(out.b, 10, "array[0] must drive blue");
+    }
+
+    #[test]
+    fn the_oracle_fixtures_ten_translate_colour_pairs() {
+        // CPDFDocRenderDataTest.TransferFunctionArray, verbatim: the same
+        // three functions in the same order, and the same ten expectations.
+        // FX_COLORREF packs as (b << 16) | (g << 8) | r, so each pair is
+        // written here as (in_r, in_g, in_b) -> (out_r, out_g, out_b).
+        let array = Object::Array(Array::of([oracle_type0(), oracle_type2(), oracle_type4()]));
+        let parsed = load(&array).expect("the oracle's array should load");
+        let tf = TransferFunc::new(&parsed);
+        assert!(!tf.is_identity());
+
+        // 0x00ffffff -> 0x001a0d00, i.e. r=0x00, g=0x0d, b=0x1a. Red comes
+        // from array[2] (the sine, zero at t=1), blue from array[0].
+        for (input, expected) in [
+            ((0xff, 0xff, 0xff), (0x00, 0x0d, 0x1a)),
+            ((0x00, 0x00, 0xff), (0x00, 0x1a, 0x1a)),
+            ((0x00, 0xff, 0x00), (0x00, 0x0d, 0x19)),
+            ((0xff, 0x00, 0x00), (0x00, 0x1a, 0x19)),
+            ((0xcc, 0xcc, 0xcc), (0x87, 0x0f, 0x1a)),
+            ((0x56, 0x34, 0x12), (0x6d, 0x17, 0x19)),
+        ] {
+            let (r, g, b) = input;
+            let out = TransferFunc::new(&parsed).translate(Argb::opaque(r, g, b));
+            assert_eq!(
+                (out.r, out.g, out.b),
+                expected,
+                "translating ({r:#04x}, {g:#04x}, {b:#04x})"
+            );
+        }
     }
 
     #[test]

@@ -8,10 +8,33 @@
 //! - **A `/TR2` that is a Name stores nothing** — so `/TR2 /Identity` and
 //!   `/TR2 /Default` alike disable any transfer function rather than
 //!   installing one.
-//! - The array form needs **at least three elements**, and stores them
-//!   **reversed**: the array is red, green, blue and the internal order is
-//!   blue, green, red. Any element failing to load makes the whole transfer
-//!   function null.
+//! - The array form needs **at least three elements**, and **element `i`
+//!   drives channel `2 - i`**: the last array element is the red channel and
+//!   the first is blue. This is not a storage convenience — it is the
+//!   observable, and it survives to the rendered pixel. Any element failing
+//!   to load makes the whole transfer function null.
+//!
+//! # The array reversal is real
+//!
+//! It is easy to conclude the opposite from the oracle's own unit test.
+//! `CPDFDocRenderDataTest.TransferFunctionArray` builds the array
+//! `[Type0, Type2, Type4]` and asserts `GetSamplesR() ==
+//! kExpectedType0FunctionSamples` — which reads as "element 0 drives red".
+//! **The constants are misnamed.** `kExpectedType0FunctionSamples` begins
+//! `0, 3, 6, 9, 13, 16, …` and ends `…, 250, 253, 0`, which is the *type 4*
+//! program `{ 360 mul sin 2 div }` sampled at `v / 255` — a full sine period,
+//! verified to match all 256 entries exactly. `kExpectedType4FunctionSamples`
+//! is flat at 25/26, which is the *type 0* sampled function's ramp over its
+//! `/Range [0 0.5]`. Only `kExpectedType2FunctionSamples` is named for the
+//! function it actually holds.
+//!
+//! The test's ten `TranslateColor` pairs settle it independently, without
+//! having to name any function: `TranslateColor(0x00FFFFFF)` yields
+//! `0x001A0D00`, and `FX_COLORREF` packs as `(b << 16) | (g << 8) | r`, so
+//! `samples_r[255] == 0`, `samples_g[255] == 13`, `samples_b[255] == 26`.
+//! Zero is the type 4 program's last sample, 13 the type 2 function's, and 26
+//! the type 0 function's — i.e. **`array[2]` is red and `array[0]` is blue**,
+//! exactly what `pFuncs[2 - i] = Load(array[i])` reads like literally.
 
 use crate::function::{Function, FunctionCache};
 use pdfrum_common::{Diagnostics, Limits};
@@ -31,7 +54,12 @@ pub const MAX_OUTPUTS: usize = 16;
 /// Three 256-entry byte tables, one per channel.
 #[derive(Debug, Clone, PartialEq)]
 pub struct TransferFunc {
-    /// The samples, indexed `[channel][input]` with channel 0 red.
+    /// The samples, indexed `[channel][input]` with channel 0 red, 1 green
+    /// and 2 blue.
+    ///
+    /// A consumer indexes by channel and nothing else: the array form's
+    /// reversal is already applied here, so channel 0 holds `/TR`'s *last*
+    /// element.
     pub samples: Box<[[u8; CHANNEL_SAMPLES]; 3]>,
     /// Whether every entry is its own index, in which case the function is a
     /// no-op and a renderer may skip it entirely.
@@ -59,8 +87,8 @@ impl TransferFunc {
         }
         let mut samples = Box::new([[0u8; CHANNEL_SAMPLES]; 3]);
         if let Some(array) = resolved.as_array() {
-            // The array form needs three elements, and is stored reversed:
-            // element 0 is red and lands in the last internal slot.
+            // The array form needs three elements, and is reversed: element
+            // 0 drives blue, element 2 drives red.
             if array.len() < 3 {
                 return None;
             }
@@ -87,7 +115,8 @@ impl TransferFunc {
         Some(Self { samples, identity })
     }
 
-    /// Apply the function to one colour byte on `channel`.
+    /// Apply the function to one colour byte on `channel` — 0 red, 1 green,
+    /// 2 blue.
     #[must_use]
     pub fn apply(&self, channel: usize, value: u8) -> u8 {
         self.samples
@@ -98,7 +127,17 @@ impl TransferFunc {
     }
 }
 
-/// Sample one channel: 256 inputs from `i / 255`, rounded to a byte.
+/// Sample one channel: 256 inputs from `i / 255`, rounded and **wrapped**
+/// into a byte.
+///
+/// The wrap is deliberate and observable. PDFium rounds `output[0] * 255`
+/// into a `size_t` and stores it into a `uint8_t` with no clamp, so a
+/// function whose `/Range` admits negatives — the oracle's own type 4
+/// fixture, `{ 360 mul sin 2 div }` over `[-1 1]`, is one — folds its
+/// negative half back to the top of the byte range rather than to zero.
+/// `CPDFDocRenderDataTest.TransferFunctionArray` pins two such samples:
+/// `-121.26` becomes `0x87`, not `0x00`. Clamping instead would quietly
+/// flatten every signed transfer function's lower half to black.
 ///
 /// A function with too many outputs is skipped and the identity used, which
 /// is where we deliberately diverge from the C++'s stale-output bug.
@@ -122,14 +161,30 @@ fn sample_channel(func: &Function, out: &mut [u8; CHANNEL_SAMPLES]) {
             continue;
         }
         let value = results.first().copied().unwrap_or(0.0);
-        #[expect(
-            clippy::cast_possible_truncation,
-            clippy::cast_sign_loss,
-            reason = "the clamp bounds the product to 0..=255"
-        )]
-        let byte = (value.clamp(0.0, 1.0) * 255.0).round() as u8;
-        *slot = byte;
+        *slot = wrap_to_byte(value * 255.0);
     }
+}
+
+/// Round to the nearest integer and keep the low eight bits.
+///
+/// This is the arithmetic PDFium's `size_t o = FXSYS_roundf(x); u8 = o`
+/// performs — a wrap, not a clamp, so a sample of `-121.26` lands on `135`.
+/// Rust's `as u8` saturates instead, so the two-step cast is written out.
+/// A non-finite sample has no defined wrap and becomes zero.
+fn wrap_to_byte(value: f32) -> u8 {
+    let rounded = value.round();
+    if !rounded.is_finite() {
+        return 0;
+    }
+    // `rem_euclid` folds any magnitude into `0.0..256.0` the way the two
+    // C++ casts do for the values a function can actually produce.
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "rem_euclid bounds the value to 0.0..256.0"
+    )]
+    let wrapped = rounded.rem_euclid(256.0) as u8;
+    wrapped
 }
 
 /// Which of `/TR` and `/TR2` a dictionary's transfer function comes from.
@@ -223,36 +278,62 @@ mod tests {
         assert!(load(&bad).is_none());
     }
 
+    /// A type 2 function that is constant at `v` for every input.
+    fn constant(v: f32) -> Object {
+        Object::Dict(Dict::from_pairs([
+            (Name::from("FunctionType"), Object::Int(2)),
+            (Name::from("Domain"), nums(&[0.0, 1.0])),
+            (Name::from("N"), Object::Int(1)),
+            (Name::from("C0"), nums(&[v])),
+            (Name::from("C1"), nums(&[v])),
+        ]))
+    }
+
     #[test]
-    fn the_array_is_stored_reversed() {
-        // Red inverts, green and blue are the identity.
-        let identity = Object::Dict(Dict::from_pairs([
+    fn the_last_array_element_drives_red() {
+        // Three constants no two of which collide, so the mapping of array
+        // position to channel reads straight off the output bytes.
+        let array = Object::Array(Array::of([
+            constant(10.0 / 255.0),
+            constant(100.0 / 255.0),
+            constant(200.0 / 255.0),
+        ]));
+        let tr = load(&array).expect("should load");
+        // Read through the public accessor, not the raw slots: this is the
+        // observable the render crate consumes.
+        assert_eq!(tr.apply(0, 0), 200, "array[2] must drive red");
+        assert_eq!(tr.apply(1, 0), 100, "array[1] must drive green");
+        assert_eq!(tr.apply(2, 0), 10, "array[0] must drive blue");
+    }
+
+    #[test]
+    fn a_reversed_array_survives_to_the_output_bytes() {
+        // Red inverts, green and blue are the identity — but the inverting
+        // function is in the *last* array slot, because that is the one the
+        // oracle reads as red.
+        let identity = constant_ramp();
+        let array = Object::Array(Array::of([identity.clone(), identity, invert()]));
+        let tr = load(&array).expect("should load");
+        assert!(!tr.identity);
+        assert_eq!(tr.apply(0, 0), 255, "red inverts");
+        assert_eq!(tr.apply(1, 0), 0, "green is the identity");
+        assert_eq!(tr.apply(2, 0), 0, "blue is the identity");
+    }
+
+    /// A type 2 function mapping `t` to `t`.
+    fn constant_ramp() -> Object {
+        Object::Dict(Dict::from_pairs([
             (Name::from("FunctionType"), Object::Int(2)),
             (Name::from("Domain"), nums(&[0.0, 1.0])),
             (Name::from("N"), Object::Int(1)),
             (Name::from("C0"), nums(&[0.0])),
             (Name::from("C1"), nums(&[1.0])),
-        ]));
-        let array = Object::Array(Array::of([invert(), identity.clone(), identity]));
-        let tr = load(&array).expect("should load");
-        // Element 0 is red, which lands in internal slot 2.
-        assert_eq!(
-            tr.samples[2][0], 255,
-            "the red function should have inverted"
-        );
-        assert_eq!(tr.samples[0][0], 0, "blue should be the identity");
+        ]))
     }
 
     #[test]
     fn an_identity_function_is_recognised_as_a_no_op() {
-        let identity = Object::Dict(Dict::from_pairs([
-            (Name::from("FunctionType"), Object::Int(2)),
-            (Name::from("Domain"), nums(&[0.0, 1.0])),
-            (Name::from("N"), Object::Int(1)),
-            (Name::from("C0"), nums(&[0.0])),
-            (Name::from("C1"), nums(&[1.0])),
-        ]));
-        let tr = load(&identity).expect("should load");
+        let tr = load(&constant_ramp()).expect("should load");
         assert!(tr.identity);
         assert_eq!(tr.samples[0].len(), CHANNEL_SAMPLES);
     }
