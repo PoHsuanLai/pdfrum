@@ -213,11 +213,49 @@ pub fn target_size(page: &Page, opts: &RenderOptions) -> Result<(u32, u32), Erro
 /// the y axis must be flipped about the page's height before the caller's
 /// own transform applies. Without it a page renders upside down, which the
 /// symmetric fixtures hide and the asymmetric ones do not.
+///
+/// # The flip is about the *device* box, not the page box
+///
+/// `CPDF_Page::GetDisplayMatrixForRect` (`cpdf_page.cpp:160-220`) builds the
+/// matrix from an `FX_RECT` — **integer** device coordinates — divided by the
+/// page's own float size:
+///
+/// ```cpp
+/// CFX_Matrix matrix((x2 - x0) / page_size_.width, ...,
+///                   (y1 - y0) / page_size_.height, x0, y0);
+/// ```
+///
+/// and `CPDFSDK_RenderPageWithContext` (`cpdfsdk_renderpage.cpp:116-118`)
+/// passes it `FX_RECT(0, 0, size_x, size_y)`, the truncated bitmap size that
+/// [`target_size`] computes. So an A4 page 841.89 points tall renders into
+/// 841 device rows with a y scale of `841 / 841.89`, not of 1 — the page is
+/// very slightly *squeezed* to fit the bitmap it was truncated into.
+///
+/// Flipping about the float height instead leaves a shear of up to a device
+/// pixel between the top of the page and the bottom. That was invisible while
+/// every glyph was filled at its true position, because it moves a stem edge
+/// by a fraction of a count — and it stops being invisible the moment glyph
+/// origins are **snapped**, since a y that was 0.49 off is then a whole row
+/// off. It cost `tcpdf/example_007` and `example_017` about 0.035 SSIM each
+/// before it was found; see `docs/status/pdfrum-render.md`, wave 5.
 #[must_use]
 pub fn page_matrix(page: &Page, opts: &RenderOptions) -> Affine {
-    let (_, height) = page.display_size();
-    let flip = Affine::new([1.0, 0.0, 0.0, -1.0, 0.0, height]);
-    opts.transform * flip * page.rotate.display_matrix(page.crop_box)
+    let (page_w, page_h) = page.display_size();
+    // The device box the oracle fits the page into: the same truncation
+    // `target_size` performs, since that is the bitmap that gets allocated.
+    // A page that cannot be sized at all keeps the float box, which is what
+    // the render is about to reject anyway.
+    let device =
+        target_size(page, opts).map_or((page_w, page_h), |(w, h)| (f64::from(w), f64::from(h)));
+    let (dev_w, dev_h) = device;
+    if page_w <= 0.0 || page_h <= 0.0 || !dev_w.is_finite() || !dev_h.is_finite() {
+        return opts.transform * page.rotate.display_matrix(page.crop_box);
+    }
+    // `opts.transform` has already been consumed in choosing the device box,
+    // exactly as `pdfium_test` consumes its `--scale` in sizing the bitmap
+    // and then asks for the display matrix onto that size.
+    let fit = Affine::new([dev_w / page_w, 0.0, 0.0, -dev_h / page_h, 0.0, dev_h]);
+    fit * page.rotate.display_matrix(page.crop_box)
 }
 
 /// Walk one object list.
@@ -823,7 +861,14 @@ fn render_text<B: RasterBackend>(
     // `TextObject::matrix` already carries the CTM, so only the
     // page-to-device transform is added — composing `state.ctm` again would
     // apply it twice.
-    let glyphs = place_glyphs(object, state, &mut caches.glyphs, to_device);
+    let glyphs = place_glyphs(
+        object,
+        state,
+        &mut caches.glyphs,
+        to_device,
+        &ctx.opts,
+        kinds,
+    );
     for glyph in glyphs {
         let paint = PathPaint {
             fill: kinds.fill.then_some(fill),
@@ -1447,6 +1492,55 @@ mod tests {
             target_size(&page, &RenderOptions::default()).expect("renderable"),
             (595, 841)
         );
+    }
+
+    #[test]
+    fn the_page_matrix_fits_the_page_to_the_truncated_device_box() {
+        // `GetDisplayMatrixForRect` divides the *integer* device rect by the
+        // page's float size (`cpdf_page.cpp:216-218`), and
+        // `CPDFSDK_RenderPageWithContext` passes it the truncated bitmap
+        // size. So an A4 page 841.89 tall renders into 841 rows: page y = 0
+        // lands on device row 841 and page y = 841.89 on row 0, exactly.
+        let a4 = Rect::new(0.0, 0.0, 595.276, 841.89);
+        let page = Page {
+            media_box: a4,
+            crop_box: a4,
+            ..Page::empty()
+        };
+        let m = page_matrix(&page, &RenderOptions::default());
+        let bottom = m * kurbo::Point::new(0.0, 0.0);
+        let top = m * kurbo::Point::new(595.276, 841.89);
+        assert!((bottom.y - 841.0).abs() < 1e-9, "page bottom at {bottom:?}");
+        assert!((top.y - 0.0).abs() < 1e-9, "page top at {top:?}");
+        assert!((top.x - 595.0).abs() < 1e-9, "page right at {top:?}");
+        // Flipping about the float height instead leaves the top of the page
+        // 0.89 device px out — invisible while glyphs were filled at their
+        // true position, and a whole row once their origins are snapped.
+        let midpage = m * kurbo::Point::new(0.0, 420.945);
+        assert!((midpage.y - 420.5).abs() < 1e-9, "midpage at {midpage:?}");
+    }
+
+    #[test]
+    fn a_scaled_render_fits_the_page_to_its_own_truncated_box() {
+        // The caller's transform is consumed in *sizing* the bitmap, exactly
+        // as `pdfium_test` consumes `--scale`; the display matrix is then
+        // built onto that size rather than composed on top of it.
+        let a4 = Rect::new(0.0, 0.0, 595.276, 841.89);
+        let page = Page {
+            media_box: a4,
+            crop_box: a4,
+            ..Page::empty()
+        };
+        let opts = RenderOptions {
+            transform: Affine::scale(2.0),
+            ..RenderOptions::default()
+        };
+        let (w, h) = target_size(&page, &opts).expect("renderable");
+        assert_eq!((w, h), (1190, 1683));
+        let m = page_matrix(&page, &opts);
+        let corner = m * kurbo::Point::new(595.276, 0.0);
+        assert!((corner.x - 1190.0).abs() < 1e-9, "{corner:?}");
+        assert!((corner.y - 1683.0).abs() < 1e-9, "{corner:?}");
     }
 
     #[test]
