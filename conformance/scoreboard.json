@@ -1,12 +1,12 @@
 {
-  "generated_at": "2026-08-29T09:10:00Z",
+  "generated_at": "2026-08-29T09:17:36Z",
   "totals": {
     "files": 1675,
-    "pass": 1419,
-    "fail": 256,
+    "pass": 1421,
+    "fail": 254,
     "by_tag": {
       "page-count": 2,
-      "pixel-fail": 217,
+      "pixel-fail": 215,
       "tierA-mismatch": 81
     },
     "text": {
@@ -46855,10 +46855,8 @@
     },
     {
       "path": "resources/pixel/radial_shading_point_at_border.in",
-      "status": "fail",
-      "tags": [
-        "pixel-fail"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -46878,19 +46876,17 @@
         }
       },
       "tierB": {
-        "ssim": 0.912349,
+        "ssim": 1.000000,
         "exact": false,
-        "max_channel_diff": 252,
+        "max_channel_diff": 1,
         "pages": 1
       },
-      "notes": "ssim 0.912349 below floor 0.990000"
+      "notes": ""
     },
     {
       "path": "resources/pixel/radial_shading_point_at_border.pdf",
-      "status": "fail",
-      "tags": [
-        "pixel-fail"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -46910,12 +46906,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.912349,
+        "ssim": 1.000000,
         "exact": false,
-        "max_channel_diff": 252,
+        "max_channel_diff": 1,
         "pages": 1
       },
-      "notes": "ssim 0.912349 below floor 0.990000"
+      "notes": ""
     },
     {
       "path": "resources/pixel/radial_shading_point_at_border_no_extend.in",
