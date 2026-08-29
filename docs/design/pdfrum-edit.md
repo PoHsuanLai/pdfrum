@@ -1474,6 +1474,23 @@ allocate uniformly *before* graphics for both. The emitted bytes for any single
 object are unchanged; only the numeric suffix assignment across a mixed page
 can differ, which is not observable after re-parse.
 
+**D17 — metadata encryption follows `/EncryptMetadata`; the C++ writer skips
+it unconditionally.** `CPDF_Stream::WriteTo` (`cpdf_stream.cpp:177-190`) tests
+only `IsMetaDataStreamDictionary` before dropping the encryptor, never
+`CPDF_SecurityHandler::IsMetadataEncrypted()` — whose only callers are in the
+*parser* (`cpdf_parser.cpp:305`, `:1287`). So the C++ writes a plaintext XMP
+packet into a file whose `/Encrypt` says metadata is enciphered, and PDFium's
+own reader then deciphers that plaintext into rubbish. Reproducing it would
+mean knowingly destroying a document's metadata on every save of every
+`/EncryptMetadata true` document, which is most of them.
+
+We consult the flag instead: `true` writes an enciphered packet, `false` a
+plaintext one, matching ISO 32000-1 §7.6.1 and matching what the oracle's
+reader expects to find. Neither writer's output is unopenable by either
+reader — the difference is only whether the metadata survives, and ours does.
+The `/Type /Metadata /Subtype /XML` stream is still never *compressed* in
+either implementation (§14.3.2), so that half of the exemption is unchanged.
+
 **D13 — `/Type /Pages` resolves to the destination's real pages node, not the
 hardcoded object 4.** `GetNewObjId`'s `return 4` (`cpdf_pageorganizer.cpp:153`)
 is correct only because `FPDF_CreateNewDocument` happens to number its Pages
@@ -2013,7 +2030,18 @@ pub fn encrypt_dict(&self) -> Option<(&Dict, bool /* inline */)>;
 ```
 
 **E3 — `pdfrum-crypt` has no encryption side, by its own D2 ruling
-(blocking for encrypted saves).** `docs/design/pdfrum-crypt.md` D2 (:515-520)
+(blocking for encrypted saves).** *(RESOLVED in M10, 2026-08-30: the encrypt
+side landed and preserve-encryption save is the default. The scope question
+below was answered "in scope, but for M10 rather than M7"; SPEC §11's M10
+ruling supersedes the E3 deferral, and `remove_security` survives as the
+explicit opt-out. The `EncryptContent` key rule the paragraph below proposes
+was **not** adopted — see the crypt brief's revised D2: the object key is
+derived the same way in both directions, because the two disagree only at key
+lengths AESV2 cannot have, and sharing one derivation is what makes the round
+trip exact. `OnCreate` and `GetEncodedPassword` were not needed either: v1
+preserves passwords rather than setting them, so the R2/R3 `/ID` rekey still
+resolves through the M7 interlock — it forces a full save — rather than
+through a new key. Original text follows.)* `docs/design/pdfrum-crypt.md` D2 (:515-520)
 explicitly defers `OnCreate`, `AES256_SetPassword`, `AES256_SetPerms` and
 `EncryptContent` to M7 "as a `[spec]` change adding `encrypt` to this crate".
 This brief is that trigger. Minimum needed:

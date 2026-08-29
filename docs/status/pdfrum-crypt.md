@@ -192,8 +192,44 @@ lengths if it wants the tag, and the three swallowed recoveries — a dropped
 final AES block, a discarded partial tail, an under-17-byte AES payload — are
 documented on `decrypt` itself.
 
+## The encrypt direction (M10, 2026-08-30)
+
+D2's "decrypt only" is lifted; SPEC §3 records the ruling.
+`SecurityHandler::encrypt(obj, class, iv, data)` is the inverse of `decrypt`,
+and `pdfrum-edit` uses it to save an encrypted document encrypted under the
+handler the original password opened.
+
+Three things are worth knowing before touching it again:
+
+1. **The object-key derivation is shared with decrypt, deliberately.** The
+   C++'s `EncryptContent` truncates the AESV2 object key to the *file* key's
+   length (`realkey.first(key_len_)`) where `DecryptStart` uses all sixteen
+   bytes. The two agree at the only key length AESV2 ever has — 16 — and at 24
+   the C++ would ask a 16-byte array for 24 bytes and abort, so there is no
+   document on which the divergence is observable. Sharing one derivation is
+   what makes encrypt-then-decrypt byte-exact, and the round-trip tests would
+   fail loudly if it were split.
+2. **The AES quirks are decrypt-only.** The one-block lag, the missing padding
+   validation, the dropped partial tail (D6) are a *reader's* tolerance for
+   files other producers wrote. The writer emits standard PKCS#7 with the
+   caller's vector, which those rules accept exactly: their "last plaintext
+   byte under sixteen strips that many" agrees with PKCS#7 on every value 1
+   through 16, and the always-present pad block is what stops a 16-byte
+   payload reading back as an empty one.
+3. **An empty payload encrypts to empty.** The C++ tests for it in
+   `CPDF_Encryptor::Encrypt`, one level above `EncryptContent`, so an empty
+   string stays `()` rather than becoming 32 bytes of vector and padding. Easy
+   to miss, and it changes the bytes of every document with an empty string in
+   it.
+
+Randomness stayed out of the crate: `Iv` is a caller argument, so there is no
+global state and no `getrandom` in DEPS.md. `pdfrum-edit` derives vectors from
+the document's bytes and a counter, which is what makes a save reproducible.
+
 ## Not in scope here
 
-Encryption (`OnCreate`, `AES256_SetPassword`, `EncryptContent`) — D2, M7. The
-`encryption` conformance cluster runs once `pdfrum-parser` can open a document;
-this crate's contribution to it is complete.
+Building an `/Encrypt` dictionary — `OnCreate`, `AES256_SetPassword`,
+`AES256_SetPerms`. v1 preserves passwords and never sets them, so `/O`, `/U`,
+`/OE`, `/UE` and `/Perms` are copied from the file rather than derived.
+Changing a document's password or its encryption mode is post-1.0 (PLAN.md
+Phase 2's closing list).

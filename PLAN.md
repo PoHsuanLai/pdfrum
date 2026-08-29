@@ -218,7 +218,7 @@ fresh trace; finalize the upstream hayro-jbig2 issue text (user files it).
 *Exit:* pixel >= 97.5% @0.99; annot 100%; every remaining failing file has a
 one-line cause in the status doc.
 
-## M10 — Encrypted save  *(reverses ruling E3's deferral)*
+## M10 — Encrypted save  *(reverses ruling E3's deferral)*  — **MET 2026-08-30**
 
 `pdfrum-crypt` gains the encrypt direction ([spec] on SPEC.md §3/D2: RC4 +
 AES-CBC encrypt with per-object keys, PKCS#7 padding, fresh IVs); the writer

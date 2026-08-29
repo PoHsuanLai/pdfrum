@@ -512,12 +512,26 @@ the variant (it documents the PDF concept and gives us a place to implement
 `/EFF` later without a signature change) but `decrypt` matches `Stream |
 Embedded` in one arm. A doc comment records the reason.
 
-**D2 — decryption only; no encryption.** PDFium's `OnCreate`,
-`AES256_SetPassword`, `AES256_SetPerms` and `EncryptContent` exist to write
-encrypted files. Encryption is `pdfrum-edit`'s concern (PLAN.md M7) and is not
-part of the M1 crate. This brief therefore inventories the encrypt paths only
-where they clarify a decrypt path (§1.10). If M7 needs them, they arrive as a
-`[spec]` change adding `encrypt` to this crate.
+**D2 — decryption only; no encryption.** *(Half-lifted in M10, 2026-08-30.)*
+PDFium's `OnCreate`, `AES256_SetPassword`, `AES256_SetPerms` and
+`EncryptContent` exist to write encrypted files. This brief inventories the
+encrypt paths only where they clarify a decrypt path (§1.10).
+
+M10 needed the payload half and took it, as the `[spec]` change to SPEC §3
+this paragraph anticipated: `SecurityHandler::encrypt(obj, class, iv, data)`
+is now `EncryptContent`'s counterpart, with the object-key derivation shared
+with decrypt (§1.10's note on the AESV2 length disagreement resolves in the
+decrypt reading, since the two coincide at every reachable key length), a
+standard PKCS#7 pad rather than the decrypt side's quirks (§1.11's rules are
+what a *reader* tolerates), a caller-supplied `Iv` so no randomness enters
+this crate, and an empty payload short-circuiting to empty as
+`CPDF_Encryptor::Encrypt` does above the cipher.
+
+The **dictionary** half stays deferred and is now post-1.0: `OnCreate`,
+`AES256_SetPassword` and `AES256_SetPerms` write `/O`, `/U`, `/OE`, `/UE` and
+`/Perms`, which only a caller that *chose* the passwords can do. v1 preserves
+passwords, so it copies those entries instead. Re-keying and
+encryption-mode conversion are on PLAN.md Phase 2's explicit post-1.0 list.
 
 **D3 — richer failure typing.** The C++ collapses "unsupported handler",
 "malformed `/Encrypt`", "`/StmF != /StrF`", "bad key length" and "wrong

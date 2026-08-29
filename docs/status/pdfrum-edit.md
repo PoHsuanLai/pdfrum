@@ -196,13 +196,46 @@ fidelity number is what it is.
 The emitters are public and tested, so wiring them up is a `pdfrum-page`
 change plus a driver, not a rewrite.
 
-**Preserve-encryption save is deferred**, per SPEC §11's ruling E3. v1 saves
-encrypted documents decrypted; a save that would keep `/Encrypt` returns
-`Error::EncryptedSaveUnsupported` rather than writing a file that declares a
-cipher over plaintext. The `Encryptor` seam is threaded through every writer
-anyway, so the two mandatory exemptions — a signature's `/Contents`, an XMP
-metadata stream — are visible at the sites that know the context rather than
-discovered when the encrypt side lands.
+**Preserve-encryption save landed in M10** (2026-08-30), superseding SPEC
+§11's ruling E3. An encrypted document now saves encrypted under the handler
+its password opened, and the output opens with that same password;
+`remove_security` is the explicit opt-out. `Error::EncryptedSaveUnsupported`
+survives with a narrower meaning: the document declares `/Encrypt` but this
+reader holds no key for it — an `/Identity` crypt filter, or a handler we
+answered with `SecurityHandler::Identity` — so re-declaring a cipher over
+plaintext would produce a file nothing could open.
+
+Three things the next person should not have to rediscover:
+
+1. **The `/Encrypt` dictionary is written from the trailer lookup's plaintext
+   copy, not through the object store.** The store deciphers every string it
+   hands out and has no exemption for this object, so fetching `/Encrypt`
+   through it yields `/O` and `/U` run through a cipher keyed by the very
+   material they carry — a saved file that looks perfectly well-formed and
+   opens for nobody. The C++ never meets this because it keeps the dictionary
+   in a field beside the handler. The `write::mod` stage that emits it says so
+   at the site.
+2. **Metadata encryption follows `/EncryptMetadata`** (divergence D17). The
+   C++ writer skips the cipher for a metadata stream unconditionally, leaving
+   a file whose `/Encrypt` claims enciphered metadata and whose metadata is
+   plaintext; PDFium's own reader then deciphers it into rubbish. We follow
+   the flag, so the packet survives a save. Both writers' output opens in both
+   readers — the oracle's *reader* honours the flag too.
+3. **Initialisation vectors come from the document's bytes and a counter**
+   (`encrypt::IvSource`), so two saves of one document are byte-identical.
+   That is what lets a whole encrypted file be snapshot-tested; the C++ cannot
+   be, since its vectors come from a process-global Mersenne Twister.
+
+The M7 `security_changed_` / `/ID`-rekey / full-save interlock is unchanged
+and still authoritative: an R2/R3 document with no `/ID` is rekeyed and forced
+full, and so is a `remove_security` save.
+
+Oracle round trip at the milestone: all seven encrypted corpus fixtures
+(`/R` 2, 3, 4, 5 and 6) save, the oracle reopens each with the same password,
+refuses each without one, and renders MD5-identically to the original. Five of
+the six that have a chainable cross-reference also hold the incremental append
+discipline; `bug_644.pdf`'s table is rebuilt, so its save correctly downgrades
+to a full one.
 
 **Subsetting is not wired into `save`.** `subset`, the `GidMap` contract,
 `/W` re-keying and `/ToUnicode` re-keying are all implemented and tested;

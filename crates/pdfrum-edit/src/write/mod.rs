@@ -28,6 +28,22 @@
 //! **changed security key** (the appended objects would be keyed differently
 //! from the bytes before them).
 //!
+//! # An encrypted document stays encrypted
+//!
+//! Objects reach the writer plaintext, because the parser deciphered them on
+//! fetch. A save under a document's own security handler puts the cipher back
+//! on with the same file key, so the saved file opens with the same password
+//! (SPEC.md §11's M10 ruling; [`crate::encrypt`] holds the exemptions and the
+//! initialisation-vector story). [`SaveOptions::remove_security`] is the
+//! explicit opt-out, and turns the save into a plaintext rewrite with no
+//! `/Encrypt` in the trailer.
+//!
+//! Two mechanics follow from `/Encrypt` having to be an indirect object
+//! (ISO 32000-1 §7.6.1). A file that wrote it **inline** in the trailer has no
+//! object number for it, so the writer promotes it to a fresh one past the
+//! highest in play. And whichever number it ends up with, that object is the
+//! one thing the encryptor never touches.
+//!
 //! # The garbage collection is the point
 //!
 //! A full save writes only what the trailer can still reach. Removing every
@@ -48,6 +64,7 @@ use std::io::Write;
 use pdfrum_object::{ObjRef, Object, Resolve, names};
 
 use crate::doc::EditDoc;
+use crate::encrypt;
 use crate::error::Error;
 use crate::write::id::{IdContext, IdSource};
 use crate::write::xref::ObjectOffsets;
@@ -76,11 +93,15 @@ pub struct SaveOptions {
     /// reads this; clearing it there turns the save into a rewrite that keeps
     /// the appended shape.
     pub keep_original: bool,
-    /// Drop the security handler and `/Encrypt`.
+    /// Drop the security handler and `/Encrypt`, writing the document in the
+    /// clear.
     ///
-    /// v1 saves encrypted documents decrypted, so this must be set for an
-    /// encrypted input (SPEC.md §11's ruling E3); the alternative is
-    /// [`Error::EncryptedSaveUnsupported`].
+    /// Off by default: an encrypted document saves encrypted under its own
+    /// handler, and opens with the password it was opened with. Setting this
+    /// is the explicit way to decrypt one on the way out — and it forces a
+    /// full save, since plaintext cannot be appended behind ciphertext.
+    ///
+    /// Has no effect on an unencrypted document.
     pub remove_security: bool,
     /// Subset newly embedded fonts.
     pub subset_new_fonts: bool,
@@ -137,18 +158,26 @@ impl<W: Write> Counting<W> {
 /// # Errors
 ///
 /// [`Error::EncryptedSaveUnsupported`] when the document declares `/Encrypt`
-/// and `remove_security` was not set, and [`Error::Io`] when the sink refuses
-/// the bytes. Damage in the input is not an error: an object that cannot be
-/// fetched is dropped from both the body and the cross-reference, exactly as
-/// the C++ writer drops it.
+/// but this reader never derived a key for it — an `/Identity` crypt filter,
+/// or a handler we opened as [`pdfrum_crypt::SecurityHandler::Identity`] —
+/// and `remove_security` was not set, because re-declaring a cipher over
+/// plaintext would produce a file nothing could open. And [`Error::Io`] when
+/// the sink refuses the bytes.
+///
+/// Damage in the input is not an error: an object that cannot be fetched is
+/// dropped from both the body and the cross-reference, exactly as the C++
+/// writer drops it.
 pub fn save(doc: &EditDoc<'_>, opts: &SaveOptions, out: &mut impl Write) -> Result<(), Error> {
     let base = doc.base();
 
-    // v1 writes plaintext. Objects are already decrypted in memory, so a save
-    // that kept `/Encrypt` would declare a cipher over content that has none
-    // — a file nothing could open (SPEC §11 E3).
-    let encrypted = base.encrypt_dict().is_some();
-    if encrypted && !opts.remove_security {
+    // The document's own handler, when the save is to stay encrypted. A
+    // `/Encrypt` we could not key — `/Identity`, or a filter this reader
+    // answered with the identity handler — would be re-declared over
+    // plaintext, which is the one shape that opens for nobody.
+    let declared = base.encrypt_dict().is_some();
+    let handler = base.security_handler();
+    let keep_security = declared && !opts.remove_security;
+    if keep_security && matches!(handler, pdfrum_crypt::SecurityHandler::Identity) {
         return Err(Error::EncryptedSaveUnsupported);
     }
 
@@ -166,8 +195,21 @@ pub fn save(doc: &EditDoc<'_>, opts: &SaveOptions, out: &mut impl Write) -> Resu
     // previous section to name in `/Prev`; a rekey makes the original bytes
     // unreadable under the new key; and removing security means the appended
     // objects would be plaintext behind ciphertext.
-    let forced_full = base.xref_was_rebuilt() || id.rekeyed || (encrypted && opts.remove_security);
+    let forced_full = base.xref_was_rebuilt() || id.rekeyed || (declared && opts.remove_security);
     let incremental = opts.mode == SaveMode::Incremental && !forced_full;
+
+    // ---- the security seam ----
+    //
+    // The number the `/Encrypt` dictionary will be written as decides two
+    // things at once: which object the encryptor skips, and which one the
+    // body loops leave to the dedicated stage below.
+    let slot = keep_security.then(|| encrypt_slot(doc, base)).flatten();
+    let encrypt_number = slot.as_ref().map(|s| s.number);
+    let security = keep_security.then(|| encrypt::Security {
+        handler,
+        ivs: encrypt::IvSource::from_document(base.bytes()),
+        encrypt_object: encrypt_number,
+    });
 
     let mut sink = Counting::new(out);
     let mut offsets = ObjectOffsets::new();
@@ -192,18 +234,51 @@ pub fn save(doc: &EditDoc<'_>, opts: &SaveOptions, out: &mut impl Write) -> Resu
     let reach = reach::walk(base.trailer(), base.trailer_object_number(), doc);
     for num in old_nums {
         // A full save keeps only what the trailer can still reach.
-        if !reach.is_reachable(num) {
+        if !reach.is_reachable(num) || encrypt_number == Some(num) {
             continue;
         }
-        write_one(&mut sink, &mut offsets, doc, num)?;
+        write_one(&mut sink, &mut offsets, doc, num, security.as_ref())?;
     }
 
     // ---- new objects, written whether or not anything points at them ----
+    let mut new_nums = new_nums;
     for num in new_nums.iter().copied() {
         // A newly added object is written even when nothing references it:
         // the caller added it on purpose, and the sweep above cannot see an
         // intent that has not been wired up yet.
-        write_one(&mut sink, &mut offsets, doc, num)?;
+        if encrypt_number == Some(num) {
+            continue;
+        }
+        write_one(&mut sink, &mut offsets, doc, num, security.as_ref())?;
+    }
+
+    // ---- the encrypt dictionary ----
+    //
+    // Written here rather than by the loops above, whether the file held it
+    // inline or indirectly, for a reason that is not about encryption at all:
+    // it must be written **from the plaintext copy the trailer lookup found**,
+    // not from the object store. The store deciphers every string it hands
+    // out and has no exemption for this object, so fetching `/Encrypt`
+    // through it yields `/O` and `/U` run through a cipher keyed by the very
+    // material they carry. The C++ never has to think about this — it keeps
+    // the dictionary in a field beside the handler and writes that.
+    //
+    // A file that wrote the dictionary inline additionally needs the fresh
+    // object number `encrypt_slot` minted, since ISO 32000-1 §7.6.1 requires
+    // the trailer name it by reference.
+    if let Some(EncryptSlot { number, dict }) = &slot {
+        offsets.set(*number, sink.offset());
+        let mut bytes = Vec::new();
+        // And no encryptor, which is the rule ISO 32000-1 §7.6.1 states: a
+        // reader parses this dictionary before it has a key.
+        object::write_indirect(&mut bytes, *number, &Object::Dict(dict.clone()), None);
+        sink.write(&bytes)?;
+        if incremental && !new_nums.contains(number) {
+            // Appended without re-sorting. Safe for a promoted dictionary
+            // because its number is above everything already there, and for
+            // an indirect one because the guard above kept it out.
+            new_nums.push(*number);
+        }
     }
 
     let last_written = offsets.last();
@@ -232,7 +307,7 @@ pub fn save(doc: &EditDoc<'_>, opts: &SaveOptions, out: &mut impl Write) -> Resu
         id: &id.array,
         last_object_number: last_written,
         prev: (incremental && base.last_xref_offset() > 0).then(|| base.last_xref_offset()),
-        encrypt: None,
+        encrypt: slot.as_ref().map(|s| s.number),
     });
 
     let mut tail = Vec::new();
@@ -297,6 +372,43 @@ fn partition(doc: &EditDoc<'_>, incremental: bool) -> (Vec<u32>, Vec<u32>) {
     (old, new)
 }
 
+/// Where the `/Encrypt` dictionary goes on this save, and what to write there.
+///
+/// `dict` is the **plaintext** dictionary, taken from the trailer lookup that
+/// reads it through a store deciphering nothing — see the writing stage for
+/// why fetching it the ordinary way would corrupt it.
+#[derive(Debug, Clone)]
+struct EncryptSlot {
+    /// The object number the trailer's `/Encrypt` will point at.
+    number: u32,
+    /// The dictionary to write there.
+    dict: pdfrum_object::Dict,
+}
+
+/// Decide the `/Encrypt` dictionary's object number for this save.
+///
+/// A trailer naming it by reference already answers the question. One holding
+/// it inline does not, so the number is minted one past everything in play —
+/// which is what makes the incremental append-without-sorting sound, and what
+/// ISO 32000-1 §7.6.1 requires, since the trailer must name it by reference.
+///
+/// `None` when the trailer's `/Encrypt` is neither a dictionary nor a
+/// reference: there is no dictionary to point at, so the save writes no
+/// `/Encrypt`, and `save`'s plaintext check has already refused the one shape
+/// where that would produce an unopenable file.
+fn encrypt_slot(doc: &EditDoc<'_>, base: &pdfrum_parser::Document) -> Option<EncryptSlot> {
+    let (dict, inline) = base.encrypt_dict()?;
+    let number = if inline {
+        doc.last_object_number().saturating_add(1)
+    } else {
+        base.trailer().reference(names::ENCRYPT)?.num
+    };
+    Some(EncryptSlot {
+        number,
+        dict: dict.clone(),
+    })
+}
+
 /// Write one indirect object, recording where it landed.
 ///
 /// The offset is recorded **before** the fetch and erased if the fetch fails,
@@ -307,6 +419,7 @@ fn write_one<W: Write>(
     offsets: &mut ObjectOffsets,
     doc: &EditDoc<'_>,
     num: u32,
+    security: Option<&encrypt::Security<'_>>,
 ) -> Result<(), Error> {
     offsets.set(num, sink.offset());
     let Ok(obj) = doc.fetch(ObjRef::new(num, 0)) else {
@@ -320,8 +433,11 @@ fn write_one<W: Write>(
         return Ok(());
     }
 
+    // `for_object` is what refuses the `/Encrypt` dictionary its encryptor,
+    // so the rule lives in one place rather than at every call site.
+    let enc = security.and_then(|s| s.for_object(num));
     let mut bytes = Vec::new();
-    object::write_indirect(&mut bytes, num, &obj, None);
+    object::write_indirect(&mut bytes, num, &obj, enc.as_ref());
     sink.write(&bytes)
 }
 
