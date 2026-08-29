@@ -151,7 +151,6 @@ fn a_space_in_the_stream_is_not_generated_but_a_line_break_is() {
 }
 
 #[test]
-#[ignore = "blocked on CFF glyph outlines in pdfrum-font; see docs/status/pdfrum-text.md"]
 fn a_soft_hyphen_becomes_the_sentinel_and_a_hard_one_survives() {
     // `IsHyphen` plus `GetTextWithHyphen` — the two halves of the two-output
     // finding. The *character* at the break holds U+0002; the *text* at the
@@ -262,7 +261,6 @@ fn a_hyphen_sentinel_can_land_mid_string() {
 }
 
 #[test]
-#[ignore = "blocked on CFF glyph outlines in pdfrum-font; see docs/status/pdfrum-text.md"]
 fn a_hyphen_sentinel_replaces_a_hard_hyphen_in_a_non_ascii_word() {
     // `Bug1029`.
     let page = fixture!("bug_1029.pdf");
@@ -270,11 +268,22 @@ fn a_hyphen_sentinel_replaces_a_hard_hyphen_in_a_non_ascii_word() {
     if text.len() < 227 {
         return;
     }
+    // The *text* holds the sentinel at the break; the *character stream*
+    // holds `U+0002` at the same place. The upstream assertion is on the
+    // text, and the design brief's §5.2 quotes the character stream's value
+    // for it -- both are right, about different outputs.
     let slice: String = text[171..227].iter().collect();
     assert_eq!(
         slice,
-        "METADATA table. When the split has committed, it noti\u{2}fi"
+        "METADATA table. When the split has committed, it noti\u{FFFE}fi"
     );
+    let sentinels: Vec<_> = page
+        .chars
+        .iter()
+        .filter(|c| c.char_type == CharType::Hyphen)
+        .collect();
+    assert!(!sentinels.is_empty(), "no soft hyphen at all");
+    assert!(sentinels.iter().all(|c| c.unicode == 0x02));
 }
 
 #[test]

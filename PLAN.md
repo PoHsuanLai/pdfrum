@@ -1,6 +1,6 @@
 # PDFium → Rust Rewrite — Master Plan
 
-**Status:** M2 text exit criterion met (2026-08-29): `--txt` Tier-A byte-exact on **98.0% of non-empty pages** (99.0% of all pages), up from 0%/47.6%; metadata+pageinfo still 100%. `pdfrum-{cmap,type1,font,page,text}` implemented and `pdfrum-tool --txt` wired; all gates green. See `docs/status/M2.md`.
+**Status:** M2 text exit criterion met (2026-08-29): `--txt` Tier-A byte-exact on **98.3% of non-empty pages** (99.1% of all pages), up from 0%/47.6%; metadata+pageinfo still 100%. `pdfrum-{cmap,type1,font,page,text}` implemented and `pdfrum-tool --txt` wired; all gates green. See `docs/status/M2.md`.
 **Oracle:** `/mnt/data2/pdfium/pdfium-c++` (read-only C++ PDFium checkout @ `6f2272e`)
 **Workspace:** `/mnt/data2/pdfium/pdfrum` (this repository)
 

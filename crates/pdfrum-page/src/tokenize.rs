@@ -80,7 +80,23 @@ fn is_numeric_char(b: u8) -> bool {
 
 /// The numeric reading PDFium's `FX_Number` gives a word: a decimal integer
 /// or real, with anything unparsable reading as zero.
+///
+/// The two halves of `FX_Number` disagree about repeated signs, and real
+/// files depend on it. A word **containing a period** goes to the float
+/// parser, which first skips a *run* of spaces and signs and then backs up
+/// one place if the last thing it skipped was a minus — so `--40.34` reads
+/// as `-40.34`. A word with no period goes to the integer parser, which takes
+/// **one** sign and stops at the next non-digit — so `--40` reads as zero.
+/// Collapsing the two would move text on any file that writes a doubled
+/// minus, which a real generator does.
 fn word_to_number(word: &[u8]) -> f32 {
+    let start = if word.contains(&b'.') {
+        skip_leading_signs(word)
+    } else {
+        0
+    };
+    let word = word.get(start..).unwrap_or_default();
+
     let mut neg = false;
     let mut int: i64 = 0;
     let mut frac: f32 = 0.0;
@@ -112,6 +128,23 @@ fn word_to_number(word: &[u8]) -> f32 {
     )]
     let v = int as f32 + frac;
     if neg { -v } else { v }
+}
+
+/// How many leading spaces and signs the float parser skips
+/// (`ParseLeadingChars`).
+///
+/// It consumes the whole run and then gives one place back when the last
+/// character consumed was a minus, so a sign immediately in front of the
+/// digits survives however many precede it.
+fn skip_leading_signs(word: &[u8]) -> usize {
+    let mut start = 0;
+    while matches!(word.get(start), Some(b' ' | b'+' | b'-')) {
+        start += 1;
+    }
+    if start > 0 && word.get(start - 1) == Some(&b'-') {
+        start -= 1;
+    }
+    start
 }
 
 impl<'a> ContentLexer<'a> {
@@ -538,7 +571,7 @@ mod tests {
         reason = "test fixtures quote oracle vectors verbatim and compare exactly"
     )]
 
-    use super::{ContentLexer, Element, MAX_STRING_LEN, MAX_WORD_LEN};
+    use super::{ContentLexer, Element, MAX_STRING_LEN, MAX_WORD_LEN, word_to_number};
     use pdfrum_object::Object;
 
     fn elements(src: &[u8]) -> Vec<Element> {
@@ -560,6 +593,25 @@ mod tests {
         assert!(matches!(got[1], Element::Number(n) if (n + 2.5).abs() < 1e-6));
         assert!(matches!(&got[2], Element::Name(n) if n.as_bytes() == b"Name"));
         assert!(matches!(&got[3], Element::Keyword(k) if &**k == b"Tj"));
+    }
+
+    #[test]
+    fn a_repeated_sign_reads_differently_for_a_real_and_an_integer() {
+        // `FX_Number` routes on the presence of a period, and its two halves
+        // disagree: the float parser skips a run of signs and keeps the last
+        // one, while the integer parser takes one sign and stops at the next
+        // non-digit. A real generator writes `--40.34`, and reading it as
+        // zero moves the text a line.
+        assert!((word_to_number(b"--40.34") + 40.34).abs() < 1e-4);
+        assert!((word_to_number(b"---40.34") + 40.34).abs() < 1e-4);
+        assert!((word_to_number(b"++40.34") - 40.34).abs() < 1e-4);
+        // A plus last in the run leaves the number positive.
+        assert!((word_to_number(b"-+40.34") - 40.34).abs() < 1e-4);
+        // Without a period the integer parser takes over and stops dead.
+        assert_eq!(word_to_number(b"--40"), 0.0);
+        assert!((word_to_number(b"-40") + 40.0).abs() < 1e-6);
+        // And a single sign is unaffected either way.
+        assert!((word_to_number(b"-40.34") + 40.34).abs() < 1e-4);
     }
 
     #[test]

@@ -10,11 +10,11 @@ Contract: SPEC.md §9 (including the 2026-08-29 rulings); behavior:
 
 | Metric | Before | After |
 |---|---|---|
-| `--txt` Tier-A, all pages | 872/1832 (47.6%) | **1813/1832 (99.0%)** |
-| `--txt` Tier-A, non-empty pages | 0/960 (0%) | **941/960 (98.0%)** |
+| `--txt` Tier-A, all pages | 872/1832 (47.6%) | **1816/1832 (99.1%)** |
+| `--txt` Tier-A, non-empty pages | 0/960 (0%) | **944/960 (98.3%)** |
 
 The non-empty rate is the M2 exit criterion (SPEC.md §9's `text-nonempty`
-ruling, PLAN.md §6): **≥ 98% is met at 98.0%.** The "before" column is the
+ruling, PLAN.md §6): **≥ 98% is met at 98.3%.** The "before" column is the
 baseline where the tool emitted nothing, which scored 47.6% overall purely
 from the 872 pages whose golden is a bare byte-order mark — the exact
 flattering number that ruling exists to defuse.
@@ -74,6 +74,19 @@ join) and `text.rs` (the UTF-32LE emitter and the `/ViewerPreferences
   conventions agree on `a` and disagree on which off-diagonal term is called
   `b`; reading the wrong one reflects every angle about the x axis, which
   reads as the first quadrant coming back as the fourth.
+- **A CID-keyed bare CFF needs its charset consulted.** The composite-font
+  layer hands down a CID, because that is what PDFium hands FreeType, and
+  FreeType maps it through the font's charset silently. A subsetted
+  CID-keyed program holds sixteen glyphs numbered from zero while its CIDs
+  are wherever the original collection put them, so skipping the mapping asks
+  for a glyph that does not exist and the font draws *nothing at all* — which
+  the width ladder then reads as a zero-width text object and drops whole.
+- **`FX_Number`'s two halves disagree about repeated signs.** A word
+  containing a period goes to the float parser, which skips a *run* of signs
+  and keeps the last, so `--40.34` is `-40.34`. A word without one goes to
+  the integer parser, which takes one sign and stops, so `--40` is zero. A
+  real generator writes the doubled minus, and reading it as zero puts a
+  whole line of text on top of the one above it.
 
 ## Divergences
 
@@ -118,32 +131,26 @@ source and, where it was decidable, against the built oracle:
    character above `U+FFFF` mirrors to `)`. Reproduced, and pinned by a test,
    because it is reachable from any RTL run containing one.
 
-## The remaining 19 pages
+## The remaining 16 pages
 
-Nineteen non-empty pages across sixteen files still differ. Two causes, both
-outside this crate:
+Sixteen non-empty pages across thirteen files still differ, and every one of
+them is a **font-metric** difference rather than a heuristic one.
 
-**CFF glyph outlines (`pdfrum-font`), ~6 files.** A `CIDFontType0C` bare-CFF
-font program yields no outline and no glyph box for any glyph
-(`Face::outline`'s `cff()` path returns nothing for a CID-keyed CFF). Every
-glyph box comes back zero, so a single-glyph text object has a zero-width
-rectangle and is dropped by the degenerate-width check. `bug_781804.pdf`
-loses its `U+2010`; `bug_1029.pdf`, `3bigpreview.pdf`, `test_m.pdf`,
-`050_extra_m.pdf` and `bug_743.pdf` lose more. Three embedder tests are
-`#[ignore]`d against this. **This is a font-crate bug, not a text-crate one**
-— the same missing outlines will show up as missing glyphs the moment
-rendering reaches those files.
+Every space and line-break threshold in the extraction pipeline is a function
+of `GetCharWidth`, which for a non-embedded font without `/Widths` comes from
+the *substituted face*. A different substitute than the oracle's hermetic
+`third_party/test_fonts` set gives different widths, which give different
+thresholds, which move a generated space — a whole-page Tier-A failure with
+no local cause and no local fix. That is exactly the Q6 risk the design brief
+names, and it says where to look: `pdfrum-font`, not here.
 
-**Substituted-face metric differences, the rest.** Every space and
-line-break threshold is a function of `GetCharWidth`, which for a non-embedded
-font without `/Widths` comes from the substituted face. A different face than
-the oracle's hermetic set changes the widths, which changes the thresholds,
-which changes a generated space — the Q6 risk the brief names, with no local
-cause and no local fix. `bug_1769.pdf` and `bug_1388_3.pdf` are the clearest
-examples.
+The clearest cases are `bug_1769.pdf` (characters the overlap logic should
+drop and does not), `bug_1388_3.pdf` (one space too many), `bug_1442723.pdf`
+(private-use codes reaching different Unicodes), and four CJK files whose
+codes map to nothing at all. One embedder test is `#[ignore]`d against
+`bug_1769`.
 
-Both clusters are worth revisiting when `pdfrum-font`'s CFF path lands; the
-text side has no further work pending on them.
+The text side has no further work pending on any of them.
 
 ## Tests
 
