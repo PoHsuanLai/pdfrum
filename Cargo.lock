@@ -481,6 +481,13 @@ version = "0.1.0"
 [[package]]
 name = "pdfrum-parser"
 version = "0.1.0"
+dependencies = [
+ "pdfrum-common",
+ "pdfrum-crypt",
+ "pdfrum-filters",
+ "pdfrum-object",
+ "thiserror",
+]
 
 [[package]]
 name = "pdfrum-raster-tinyskia"
