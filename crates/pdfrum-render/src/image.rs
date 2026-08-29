@@ -210,9 +210,14 @@ pub fn image_value_fits(v: f64) -> bool {
 /// A stencil (`/ImageMask true`) is painted in `stencil_color`: a set bit is
 /// ink, a clear one is transparent. Everything else takes its own colours,
 /// with any `/SMask`, `/Mask` or colour-key mask folded into the alpha.
+///
+/// A `/Matte` image is the one case where the samples are not the colours:
+/// they are pre-blended against the matte, so each one is un-premultiplied
+/// by [`matte_source`] before the mask becomes its alpha.
 #[must_use]
 pub fn to_pixmap(image: &ImageData, stencil_color: Argb) -> Pixmap {
     let mut out = Pixmap::new(image.width, image.height);
+    let matte = image.matte.map(pdfrum_page::Rgb::to_bytes);
     for y in 0..image.height {
         for x in 0..image.width {
             let alpha = image.mask.as_ref().map_or(255, |m| m.alpha_at(x, y));
@@ -230,7 +235,11 @@ pub fn to_pixmap(image: &ImageData, stencil_color: Argb) -> Pixmap {
                     [0, 0, 0, 0]
                 }
             } else {
-                let [r, g, b] = image.pixels.color_at(x, y, image.width).to_bytes();
+                let mut rgb = image.pixels.color_at(x, y, image.width).to_bytes();
+                if let Some(matte) = matte {
+                    rgb = matte_source(rgb, alpha, matte);
+                }
+                let [r, g, b] = rgb;
                 [mul255(r, alpha), mul255(g, alpha), mul255(b, alpha), alpha]
             };
             out.set_pixel(x, y, px);
@@ -239,37 +248,41 @@ pub fn to_pixmap(image: &ImageData, stencil_color: Argb) -> Pixmap {
     out
 }
 
-/// The `/Matte` un-premultiplication (`CalculateDrawImage`,
-/// `cpdf_imagerenderer.cpp:263-319`).
+/// One pixel of the `/Matte` un-premultiplication (`CalculateDrawImage`,
+/// `cpdf_imagerenderer.cpp:263-319`), in the integer arithmetic the C++ uses.
 ///
-/// Integer, in place, against the matte colour, applied **before** the mask
-/// is — and a pixel whose mask is zero is skipped, which is what avoids the
-/// division by zero rather than a guard.
-pub fn un_premultiply_matte(pixmap: &mut Pixmap, mask: &crate::pixmap::AlphaMask, matte: [u8; 3]) {
-    if mask.width() != pixmap.width() || mask.height() != pixmap.height() {
-        return;
+/// A `/Matte` entry says the image's samples were **already composited**
+/// against that colour at the mask's own coverage, so the sample is not the
+/// colour to draw — the colour to draw is what the sample would have been
+/// before that blend. Recovering it is the inverse blend, and the C++ spells
+/// it with a truncating integer divide by the mask byte and a clamp, not with
+/// floats: `(dest - matte) * 255 / mask + matte`.
+///
+/// **A zero mask is skipped rather than guarded.** The C++ never enters the
+/// loop body for such a pixel, which is what avoids the divide by zero; the
+/// sample is left exactly as it was, and its alpha is zero anyway.
+#[must_use]
+pub fn matte_source(sample: [u8; 3], mask: u8, matte: [u8; 3]) -> [u8; 3] {
+    if mask == 0 {
+        return sample;
     }
-    let matte = matte.map(i32::from);
-    for (chunk, &m) in pixmap.data_mut().chunks_exact_mut(4).zip(mask.data()) {
-        if m == 0 {
+    let m = i32::from(mask);
+    let mut out = sample;
+    for i in 0..3 {
+        let (Some(&dest), Some(&mt)) = (sample.get(i), matte.get(i)) else {
             continue;
-        }
-        let m = i32::from(m);
-        for i in 0..3 {
-            let (Some(&dest), Some(&mt)) = (chunk.get(i), matte.get(i)) else {
-                continue;
-            };
-            let orig = (i32::from(dest) - mt) * 255 / m + mt;
-            if let Some(slot) = chunk.get_mut(i) {
-                #[expect(
-                    clippy::cast_sign_loss,
-                    reason = "the clamp lower bound is 0, so the value fits u8 exactly"
-                )]
-                let byte = orig.clamp(0, 255) as u8;
-                *slot = byte;
-            }
+        };
+        let orig = (i32::from(dest) - i32::from(mt)) * 255 / m + i32::from(mt);
+        if let Some(slot) = out.get_mut(i) {
+            #[expect(
+                clippy::cast_sign_loss,
+                reason = "the clamp lower bound is 0, so the value fits u8 exactly"
+            )]
+            let byte = orig.clamp(0, 255) as u8;
+            *slot = byte;
         }
     }
+    out
 }
 
 #[cfg(test)]
@@ -478,29 +491,91 @@ mod tests {
     }
 
     #[test]
-    fn matte_unpremultiply_skips_zero_mask_pixels() {
-        let mut p = Pixmap::filled(2, 1, peniko::Color::from_rgba8(100, 100, 100, 255));
-        let mask = crate::pixmap::AlphaMask::from_vec(2, 1, vec![0, 128]).expect("sized");
-        un_premultiply_matte(&mut p, &mask, [50, 50, 50]);
-        // The zero-mask pixel is untouched — which is what avoids the divide
-        // by zero, rather than a guard on the division itself.
-        assert_eq!(p.pixel(0, 0).map(|px| px[0]), Some(100));
-        // The other is un-premultiplied against the matte: (100-50)*255/128+50.
-        #[expect(
-            clippy::cast_sign_loss,
-            reason = "the clamp lower bound is 0, so the value fits u8 exactly"
-        )]
-        let expected = ((100 - 50) * 255 / 128 + 50).clamp(0, 255) as u8;
-        assert_eq!(p.pixel(1, 0).map(|px| px[0]), Some(expected));
+    fn matte_unpremultiply_skips_a_zero_mask() {
+        // The zero-mask pixel is returned untouched — which is what avoids
+        // the divide by zero, rather than a guard on the division itself.
+        assert_eq!(
+            matte_source([100, 100, 100], 0, [50, 50, 50]),
+            [100, 100, 100]
+        );
     }
 
     #[test]
-    fn matte_ignores_a_mismatched_mask() {
-        let mut p = Pixmap::filled(2, 1, peniko::Color::from_rgba8(100, 100, 100, 255));
-        let before = p.clone();
-        let mask = crate::pixmap::AlphaMask::filled(4, 4, 200);
-        un_premultiply_matte(&mut p, &mask, [50, 50, 50]);
-        assert_eq!(p, before);
+    fn matte_unpremultiply_is_the_integer_inverse_blend() {
+        // (100 - 50) * 255 / 128 + 50, truncating.
+        let expected = u8::try_from((100 - 50) * 255 / 128 + 50).expect("in range");
+        assert_eq!(
+            matte_source([100, 100, 100], 128, [50, 50, 50])[0],
+            expected
+        );
+        // A fully opaque mask is the identity: nothing was blended away.
+        assert_eq!(
+            matte_source([37, 90, 200], 255, [50, 50, 50]),
+            [37, 90, 200]
+        );
+    }
+
+    #[test]
+    fn matte_unpremultiply_clamps_rather_than_wrapping() {
+        // A sample far above its matte at low coverage overshoots 255.
+        assert_eq!(matte_source([255, 255, 255], 1, [0, 0, 0]), [255, 255, 255]);
+        // And one far below undershoots 0.
+        assert_eq!(matte_source([0, 0, 0], 1, [255, 255, 255]), [0, 0, 0]);
+    }
+
+    #[test]
+    fn a_matte_image_un_premultiplies_before_the_mask_becomes_alpha() {
+        // Half-covered mid grey pre-blended against black: the source colour
+        // was twice as bright as the sample, and the mask is still the alpha.
+        let img = ImageData {
+            width: 1,
+            height: 1,
+            pixels: Pixels::Gray8(vec![64].into_boxed_slice()),
+            mask: Some(ImageMask::Alpha {
+                width: 1,
+                height: 1,
+                alpha: vec![128].into_boxed_slice(),
+                stencil: false,
+            }),
+            matte: Some(Rgb::BLACK),
+            interpolate: false,
+        };
+        let p = to_pixmap(&img, Argb::BLACK);
+        // (64 - 0) * 255 / 128 + 0 = 127, premultiplied by 128/255 = 63.
+        let source = u8::try_from(64 * 255 / 128).expect("in range");
+        assert_eq!(
+            p.pixel(0, 0),
+            Some([
+                mul255(source, 128),
+                mul255(source, 128),
+                mul255(source, 128),
+                128
+            ])
+        );
+    }
+
+    #[test]
+    fn an_image_without_a_matte_takes_its_samples_verbatim() {
+        // The same image without `/Matte` keeps 64, not 127: the
+        // un-premultiplication must never run on a plain soft-masked image.
+        let img = ImageData {
+            width: 1,
+            height: 1,
+            pixels: Pixels::Gray8(vec![64].into_boxed_slice()),
+            mask: Some(ImageMask::Alpha {
+                width: 1,
+                height: 1,
+                alpha: vec![128].into_boxed_slice(),
+                stencil: false,
+            }),
+            matte: None,
+            interpolate: false,
+        };
+        let p = to_pixmap(&img, Argb::BLACK);
+        assert_eq!(
+            p.pixel(0, 0),
+            Some([mul255(64, 128), mul255(64, 128), mul255(64, 128), 128])
+        );
     }
 
     #[test]

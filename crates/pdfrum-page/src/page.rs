@@ -21,7 +21,6 @@
 use crate::color::ColorValue;
 use crate::image::ImageData;
 use crate::names;
-use crate::pattern::Pattern;
 use crate::shading::Shading;
 use crate::state::{ContentMarks, GraphicsState};
 use crate::transparency::Transparency;
@@ -230,8 +229,6 @@ pub struct Content<T> {
     /// Which `/Contents` element it came from, for the editor. `-1` when it
     /// preceded any stream, which cannot happen in practice.
     pub content_stream: i32,
-    /// The pattern painting it, when its colour came from one.
-    pub pattern: Option<Arc<Pattern>>,
 }
 
 impl PageObject {

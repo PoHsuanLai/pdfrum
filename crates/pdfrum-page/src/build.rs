@@ -36,7 +36,7 @@ use crate::page::{
     Content, FormObject, ImageObject, Page, PageObject, PathObject, ShadingObject, TextObject,
     TextSegment,
 };
-use crate::pattern::Pattern;
+use crate::pattern::{Pattern, TilingPattern};
 use crate::resources::Resources;
 use crate::shading::Shading;
 use crate::state::{
@@ -680,7 +680,6 @@ impl<R: Resolve> Interp<'_, R> {
             state: self.state.clone(),
             marks: self.marks.clone(),
             content_stream: 0,
-            pattern: None,
         }
     }
 
@@ -968,24 +967,29 @@ impl<R: Resolve> Interp<'_, R> {
     ) {
         if let Some(name) = &c.pattern {
             // A name that resolves to no pattern makes the operator a no-op.
-            let loaded = load_pattern(
+            let Some(loaded) = load_pattern(
                 name,
                 self.resources,
                 self.parent_matrix,
+                &self.state.general,
                 self.resolver,
                 ctx,
                 limits,
                 diags,
-            );
-            if loaded.is_none() {
+            ) else {
                 return;
-            }
+            };
             let target = if stroking {
                 &mut self.state.stroke
             } else {
                 &mut self.state.fill
             };
-            target.set_pattern(name.clone(), &c.values);
+            // The loaded pattern rides with the colour, so `q`/`Q` save and
+            // restore it for free and every object painted under it carries
+            // the cell or the shading itself. Re-resolving the name at paint
+            // time would need the resources and the resolver the renderer no
+            // longer has.
+            target.set_pattern(name.clone(), &c.values, Some(loaded));
             return;
         }
         let target = if stroking {
@@ -1317,11 +1321,24 @@ fn build_path(points: &[(Point, PointKind)]) -> BezPath {
 ///
 /// The **parent matrix** anchors it, not the current transform — patterns
 /// live in the space they were declared in.
+///
+/// `general` is the painting object's general state, which a tiling pattern's
+/// cell inherits wholesale — its alpha, blend mode and soft mask — while
+/// taking *default* colour, text and path state. That asymmetry is the whole
+/// reason a pattern is loaded where it is installed rather than where the
+/// resource is declared, and it is what makes `/ca 0.5` on the filling object
+/// fade the tiles.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "loading a pattern needs its name, resources, anchor matrix, the \
+              painting object's general state, and the usual four"
+)]
 #[must_use]
 pub fn load_pattern<R: Resolve>(
     name: &Name,
     resources: &Resources,
     parent_matrix: Affine,
+    general: &crate::state::GeneralState,
     r: &R,
     ctx: &mut BuildContext,
     limits: &Limits,
@@ -1333,7 +1350,7 @@ pub fn load_pattern<R: Resolve>(
         return None;
     }
     let colorspaces = resources.color_spaces(r);
-    Pattern::load(
+    let mut pattern = Pattern::load(
         &object,
         parent_matrix,
         colorspaces.as_ref(),
@@ -1341,8 +1358,85 @@ pub fn load_pattern<R: Resolve>(
         &mut ctx.functions,
         limits,
         diags,
-    )
-    .map(Arc::new)
+    )?;
+    if let Pattern::Tiling(tiling) = &mut pattern
+        && let Some(stream) = object.as_stream()
+    {
+        tiling.objects =
+            expand_tiling_cell(tiling, stream, general, resources, r, ctx, limits, diags);
+    }
+    Some(Arc::new(pattern))
+}
+
+/// Interpret a tiling pattern's cell into the objects one tile paints.
+///
+/// Three things about the state it starts from are load-bearing:
+///
+/// - **The general state comes from the painting object**, so a pattern fill
+///   under `/ca 0.5` paints half-transparent tiles.
+/// - **Colour, text and path state are default.** A cell that never sets a
+///   colour paints black, whatever the page was using.
+/// - **The form matrix is the pattern's own** — `pattern_to_form` composed
+///   with the parent — so nested patterns inside the cell anchor to the
+///   cell's space rather than the page's.
+///
+/// The same buffer-identity guard forms use applies: a cell whose content is
+/// already being interpreted higher up produces nothing rather than
+/// recursing.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "expanding a cell needs the pattern, its stream, the inherited \
+              state, resources, resolver and the usual three"
+)]
+fn expand_tiling_cell<R: Resolve>(
+    tiling: &TilingPattern,
+    stream: &pdfrum_object::Stream,
+    general: &crate::state::GeneralState,
+    outer: &Resources,
+    r: &R,
+    ctx: &mut BuildContext,
+    limits: &Limits,
+    diags: &mut Diagnostics,
+) -> Vec<PageObject> {
+    let content = pdfrum_filters::decode_chain(stream, 0, r, limits, diags).data;
+    let id = BufferId::new(None, &content);
+    if ctx.in_flight.len() > MAX_FORM_LEVEL || ctx.in_flight.contains(&id) {
+        diags.record(Severity::Recovered, DiagKind::FormRecursionRefused, None);
+        return Vec::new();
+    }
+    // Default colour, text and path state; the painting object's general one.
+    let mut initial = GraphicsState {
+        general: general.clone(),
+        ctm: tiling.matrix,
+        ..GraphicsState::default()
+    };
+    // The cell clips to its own `/BBox`, which is what stops a tile's content
+    // bleeding into its neighbours.
+    if tiling.bbox.width() > 0.0 && tiling.bbox.height() > 0.0 {
+        initial.clip.push_path(
+            tiling.matrix * kurbo::Shape::to_path(&tiling.bbox, 0.1),
+            false,
+        );
+    }
+    let resources = Resources::choose(
+        tiling.resources.clone(),
+        outer.chosen.clone(),
+        outer.page.clone(),
+    );
+    ctx.in_flight.insert(id);
+    let ops = crate::parse_content(&content, limits, diags);
+    let objects = interpret(
+        &ops,
+        &resources,
+        &initial,
+        tiling.matrix,
+        r,
+        ctx,
+        limits,
+        diags,
+    );
+    ctx.in_flight.remove(&id);
+    objects
 }
 
 /// The clip-elimination post-pass a page runs after interpretation.

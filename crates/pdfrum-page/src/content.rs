@@ -182,6 +182,19 @@ impl OperandRing {
     pub(crate) fn numbers(&self, count: usize) -> SmallVec<[f32; 4]> {
         (0..count).rev().map(|i| self.number(i)).collect()
     }
+
+    /// Every operand **except the newest**, in source order — `GetNamedColors`.
+    ///
+    /// Not `numbers(len - 1)`: that would take the newest `len - 1` operands,
+    /// which for `scn` means the pattern name and all but the *oldest*
+    /// component. The C++ reads `GetNumber(param_count_ - i - 1)`, which skips
+    /// slot zero and keeps every component. The difference shows up only when
+    /// a pattern actually paints, and it shows up as the wrong colour: an
+    /// uncoloured pattern under `1 1 1 /P1 scn` takes `[1, 1, 0]` and paints
+    /// yellow where it should paint white.
+    pub(crate) fn named_numbers(&self) -> SmallVec<[f32; 4]> {
+        (1..self.len()).rev().map(|i| self.number(i)).collect()
+    }
 }
 
 /// Parse content-stream bytes into operators.
@@ -442,6 +455,44 @@ mod tests {
     fn rectangle_reads_x_y_width_height_oldest_first() {
         let (ops, _) = parse(b"10 20 30 40 re");
         assert_eq!(ops, vec![Op::Rectangle(10.0, 20.0, 30.0, 40.0)]);
+    }
+
+    #[test]
+    fn a_named_scn_keeps_every_component_and_drops_only_the_name() {
+        // `GetNamedColors` reads `GetNumber(param_count_ - i - 1)`, which
+        // skips slot zero — the name — and keeps all three components.
+        // Taking the newest `len - 1` instead drops the *oldest* component
+        // and reads the name as a zero, which turns white into yellow on
+        // every uncoloured pattern painted through a three-component base.
+        let (ops, _) = parse(b"1 1 1 /P1 scn");
+        let Some(Op::SetFillColorN(c)) = ops.first() else {
+            panic!("expected a named scn, got {ops:?}");
+        };
+        assert_eq!(&c.values[..], &[1.0, 1.0, 1.0]);
+        assert_eq!(
+            c.pattern.as_ref().map(|n| n.as_bytes().to_vec()),
+            Some(b"P1".to_vec())
+        );
+    }
+
+    #[test]
+    fn an_unnamed_scn_keeps_every_operand() {
+        let (ops, _) = parse(b"0.25 0.5 0.75 scn");
+        let Some(Op::SetFillColorN(c)) = ops.first() else {
+            panic!("expected an scn, got {ops:?}");
+        };
+        assert_eq!(&c.values[..], &[0.25, 0.5, 0.75]);
+        assert!(c.pattern.is_none());
+    }
+
+    #[test]
+    fn a_bare_named_scn_has_no_components_at_all() {
+        // A `/P1 scn` with no operands before it: one slot, all name.
+        let (ops, _) = parse(b"/P1 scn");
+        let Some(Op::SetFillColorN(c)) = ops.first() else {
+            panic!("expected a named scn, got {ops:?}");
+        };
+        assert!(c.values.is_empty(), "got {:?}", c.values);
     }
 
     #[test]

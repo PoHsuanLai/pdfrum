@@ -48,6 +48,14 @@ pub struct PatternValue {
     /// The colour operands, capped at sixteen. Meaningless for a coloured
     /// (`/PaintType 1`) pattern, which supplies its own.
     pub components: SmallVec<[f32; 4]>,
+    /// The pattern the name resolved to, when it resolved to one.
+    ///
+    /// Loading it here rather than at paint time is what lets the renderer
+    /// stay free of the resolver: a tiling cell's page objects and a shading
+    /// pattern's ramp are both already in hand by the time an object carrying
+    /// this colour reaches the walk. `None` only where `scn` named a pattern
+    /// the resources do not define, which is a no-op operator.
+    pub loaded: Option<Arc<crate::pattern::Pattern>>,
 }
 
 impl ColorValue {
@@ -100,7 +108,12 @@ impl ColorValue {
     ///
     /// Operand vectors longer than sixteen are **silently ignored**, leaving
     /// the previous components in place.
-    pub fn set_pattern(&mut self, name: Name, values: &[f32]) {
+    pub fn set_pattern(
+        &mut self,
+        name: Name,
+        values: &[f32],
+        loaded: Option<Arc<crate::pattern::Pattern>>,
+    ) {
         let components = if values.len() > MAX_PATTERN_COMPONENTS {
             self.pattern
                 .as_ref()
@@ -108,7 +121,11 @@ impl ColorValue {
         } else {
             SmallVec::from_slice(values)
         };
-        self.pattern = Some(Box::new(PatternValue { name, components }));
+        self.pattern = Some(Box::new(PatternValue {
+            name,
+            components,
+            loaded,
+        }));
     }
 
     /// The colour to paint with, or `None` when the space cannot produce one
@@ -198,8 +215,8 @@ mod tests {
     fn a_pattern_operand_vector_over_sixteen_is_ignored() {
         let mut c = ColorValue::default();
         c.set_space(Arc::new(ColorSpace::Pattern(Box::default())));
-        c.set_pattern(Name::from("P0"), &[0.5, 0.25]);
-        c.set_pattern(Name::from("P1"), &[1.0; 17]);
+        c.set_pattern(Name::from("P0"), &[0.5, 0.25], None);
+        c.set_pattern(Name::from("P1"), &[1.0; 17], None);
         let p = c.pattern.as_ref().expect("pattern");
         assert_eq!(p.name.as_bytes(), b"P1");
         // The over-long operands did not replace the previous ones.
@@ -217,7 +234,7 @@ mod tests {
         assert!(c.is_pattern());
         // No pattern installed yet: no colour.
         assert!(c.to_rgb().is_none());
-        c.set_pattern(Name::from("P0"), &[0.5]);
+        c.set_pattern(Name::from("P0"), &[0.5], None);
         let rgb = c.to_rgb().expect("colour");
         assert!((rgb.r - 0.5).abs() < 1e-6);
     }
