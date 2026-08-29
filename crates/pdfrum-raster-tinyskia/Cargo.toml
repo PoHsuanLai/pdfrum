@@ -1,6 +1,6 @@
 [package]
 name = "pdfrum-raster-tinyskia"
-description = "tiny-skia rasterizer backend for pdfrum-render"
+description = "tiny-skia implementation of pdfrum-render's RenderDevice"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -10,3 +10,8 @@ repository.workspace = true
 workspace = true
 
 [dependencies]
+pdfrum-render.workspace = true
+pdfrum-page.workspace = true
+kurbo.workspace = true
+peniko.workspace = true
+tiny-skia.workspace = true

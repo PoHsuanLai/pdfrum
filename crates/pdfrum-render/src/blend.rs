@@ -1,0 +1,474 @@
+//! The sixteen PDF blend modes as the oracle computes them: all-integer,
+//! truncating, unclamped (ISO 32000-1 §11.3.5, `core/fxge/dib/blend.cpp` and
+//! `cfx_scanlinecompositor.cpp:41-121`).
+//!
+//! These are the *engine's* blend functions, used where the engine composites
+//! its own offscreen buffers. On-device compositing goes through each
+//! rasterizer's native blend modes instead, which round differently by ±1 —
+//! a difference Tier B's threshold absorbs and Tier C's edge budget names.
+//! Where a value is a *decision* rather than rasterization, it comes from
+//! here, so both backends see the same bytes.
+//!
+//! Three formulas resist re-derivation and are reproduced literally:
+//! `Overlay` is `HardLight` with its arguments swapped, `HardLight`'s
+//! threshold is `s < 128` rather than `2s <= 255`, and `SoftLight` reads a
+//! 256-entry table that is *not* a square root.
+
+use pdfrum_page::BlendMode;
+
+/// ISO 32000-1 §11.3.5.2's auxiliary `D(x)`, tabulated at 8-bit precision
+/// (`core/fxge/dib/blend.cpp:21-43`), transcribed verbatim.
+///
+/// The closed form is
+/// `D(x) = if x <= 0.25 { ((16x - 12)x + 4)x } else { sqrt(x) }`
+/// and `kColorSqrt[i] == round(255 * D(i / 255))` for all 256 entries — but
+/// the low branch is a cubic, not a root: entry `1` is `3` where a plain
+/// `round(255 * sqrt(1/255))` would give `16`. A rewrite that "simplifies"
+/// this to a square root is wrong by 17 counts, not by rounding.
+pub const COLOR_SQRT: [u8; 256] = [
+    0x00, 0x03, 0x07, 0x0B, 0x0F, 0x12, 0x16, 0x19, 0x1D, 0x20, 0x23, 0x26, 0x29, 0x2C, 0x2F, 0x32,
+    0x35, 0x37, 0x3A, 0x3C, 0x3F, 0x41, 0x43, 0x46, 0x48, 0x4A, 0x4C, 0x4E, 0x50, 0x52, 0x54, 0x56,
+    0x57, 0x59, 0x5B, 0x5C, 0x5E, 0x60, 0x61, 0x63, 0x64, 0x65, 0x67, 0x68, 0x69, 0x6B, 0x6C, 0x6D,
+    0x6E, 0x70, 0x71, 0x72, 0x73, 0x74, 0x75, 0x76, 0x77, 0x78, 0x79, 0x7A, 0x7B, 0x7C, 0x7D, 0x7E,
+    0x80, 0x81, 0x82, 0x83, 0x84, 0x85, 0x86, 0x87, 0x87, 0x88, 0x89, 0x8A, 0x8B, 0x8C, 0x8D, 0x8E,
+    0x8F, 0x90, 0x91, 0x91, 0x92, 0x93, 0x94, 0x95, 0x96, 0x97, 0x97, 0x98, 0x99, 0x9A, 0x9B, 0x9C,
+    0x9C, 0x9D, 0x9E, 0x9F, 0xA0, 0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA4, 0xA5, 0xA6, 0xA7, 0xA7, 0xA8,
+    0xA9, 0xAA, 0xAA, 0xAB, 0xAC, 0xAD, 0xAD, 0xAE, 0xAF, 0xB0, 0xB0, 0xB1, 0xB2, 0xB3, 0xB3, 0xB4,
+    0xB5, 0xB5, 0xB6, 0xB7, 0xB7, 0xB8, 0xB9, 0xBA, 0xBA, 0xBB, 0xBC, 0xBC, 0xBD, 0xBE, 0xBE, 0xBF,
+    0xC0, 0xC0, 0xC1, 0xC2, 0xC2, 0xC3, 0xC4, 0xC4, 0xC5, 0xC6, 0xC6, 0xC7, 0xC7, 0xC8, 0xC9, 0xC9,
+    0xCA, 0xCB, 0xCB, 0xCC, 0xCC, 0xCD, 0xCE, 0xCE, 0xCF, 0xD0, 0xD0, 0xD1, 0xD1, 0xD2, 0xD3, 0xD3,
+    0xD4, 0xD4, 0xD5, 0xD6, 0xD6, 0xD7, 0xD7, 0xD8, 0xD9, 0xD9, 0xDA, 0xDA, 0xDB, 0xDC, 0xDC, 0xDD,
+    0xDD, 0xDE, 0xDE, 0xDF, 0xE0, 0xE0, 0xE1, 0xE1, 0xE2, 0xE2, 0xE3, 0xE4, 0xE4, 0xE5, 0xE5, 0xE6,
+    0xE6, 0xE7, 0xE7, 0xE8, 0xE9, 0xE9, 0xEA, 0xEA, 0xEB, 0xEB, 0xEC, 0xEC, 0xED, 0xED, 0xEE, 0xEE,
+    0xEF, 0xF0, 0xF0, 0xF1, 0xF1, 0xF2, 0xF2, 0xF3, 0xF3, 0xF4, 0xF4, 0xF5, 0xF5, 0xF6, 0xF6, 0xF7,
+    0xF7, 0xF8, 0xF8, 0xF9, 0xF9, 0xFA, 0xFA, 0xFB, 0xFB, 0xFC, 0xFC, 0xFD, 0xFD, 0xFE, 0xFE, 0xFF,
+];
+
+/// One separable blend mode's per-channel function, on `0..=255` inputs.
+///
+/// Non-separable modes have no per-channel form; [`blend_rgb`] handles all
+/// sixteen and is what callers should reach for. Results are *not* clamped,
+/// exactly as upstream leaves them.
+#[must_use]
+#[expect(
+    clippy::match_same_arms,
+    reason = "Normal/Compatible returning the source is the blend function; \
+              the non-separable arm returning it is an unreachable fallback \
+              (upstream NOTREACHED()s). Merging them would erase that \
+              distinction and hide the day one of the two changes."
+)]
+pub fn blend_channel(mode: BlendMode, back: i32, src: i32) -> i32 {
+    match mode {
+        BlendMode::Normal | BlendMode::Compatible => src,
+        BlendMode::Multiply => src * back / 255,
+        BlendMode::Screen => src + back - src * back / 255,
+        // Literally HardLight with the arguments swapped, not its own formula.
+        BlendMode::Overlay => blend_channel(BlendMode::HardLight, src, back),
+        BlendMode::Darken => src.min(back),
+        BlendMode::Lighten => src.max(back),
+        BlendMode::ColorDodge => {
+            if src == 255 {
+                255
+            } else {
+                (back * 255 / (255 - src)).min(255)
+            }
+        }
+        BlendMode::ColorBurn => {
+            if src == 0 {
+                0
+            } else {
+                255 - ((255 - back) * 255 / src).min(255)
+            }
+        }
+        BlendMode::HardLight => {
+            if src < 128 {
+                (src * back * 2) / 255
+            } else {
+                blend_channel(BlendMode::Screen, back, 2 * src - 255)
+            }
+        }
+        BlendMode::SoftLight => {
+            if src < 128 {
+                // Two sequential divides, not one by 65025: the truncations
+                // differ and the difference is visible.
+                back - (255 - 2 * src) * back * (255 - back) / 255 / 255
+            } else {
+                #[expect(
+                    clippy::cast_sign_loss,
+                    reason = "the clamp lower bound is 0, so the value is non-negative"
+                )]
+                let idx = back.clamp(0, 255) as usize;
+                let d = i32::from(COLOR_SQRT.get(idx).copied().unwrap_or(0));
+                back + (2 * src - 255) * (d - back) / 255
+            }
+        }
+        BlendMode::Difference => (back - src).abs(),
+        BlendMode::Exclusion => back + src - 2 * back * src / 255,
+        // Non-separable: no per-channel form. Upstream NOTREACHED()s here.
+        BlendMode::Hue | BlendMode::Saturation | BlendMode::Color | BlendMode::Luminosity => src,
+    }
+}
+
+/// `Lum(c) = (r*30 + g*59 + b*11) / 100` — integer, truncating.
+#[must_use]
+fn lum(c: [i32; 3]) -> i32 {
+    (c[0] * 30 + c[1] * 59 + c[2] * 11) / 100
+}
+
+/// `Sat(c) = max - min`.
+#[must_use]
+fn sat(c: [i32; 3]) -> i32 {
+    c.iter().copied().max().unwrap_or(0) - c.iter().copied().min().unwrap_or(0)
+}
+
+/// `ClipColor`, with the ordering that makes it load-bearing.
+///
+/// `l`, `n` and `x` are computed **once, from the pre-clip colour**; the
+/// `x > 255` branch then operates on channels the `n < 0` branch may already
+/// have rewritten, while still dividing by the original `x - l`. Recomputing
+/// either bound between the branches changes the result.
+#[must_use]
+fn clip_color(mut c: [i32; 3]) -> [i32; 3] {
+    let l = lum(c);
+    let n = c.iter().copied().min().unwrap_or(0);
+    let x = c.iter().copied().max().unwrap_or(0);
+    if n < 0 && l != n {
+        for ch in &mut c {
+            *ch = l + ((*ch - l) * l / (l - n));
+        }
+    }
+    if x > 255 && x != l {
+        for ch in &mut c {
+            *ch = l + ((*ch - l) * (255 - l) / (x - l));
+        }
+    }
+    c
+}
+
+/// `SetLum(c, l)`: shift every channel by `l - Lum(c)`, then clip.
+#[must_use]
+fn set_lum(mut c: [i32; 3], l: i32) -> [i32; 3] {
+    let d = l - lum(c);
+    for ch in &mut c {
+        *ch += d;
+    }
+    clip_color(c)
+}
+
+/// `SetSat(c, s)`: rescale to the requested saturation, or collapse to black
+/// when the colour has none to rescale.
+#[must_use]
+fn set_sat(mut c: [i32; 3], s: i32) -> [i32; 3] {
+    let min = c.iter().copied().min().unwrap_or(0);
+    let max = c.iter().copied().max().unwrap_or(0);
+    if min == max {
+        return [0, 0, 0];
+    }
+    for ch in &mut c {
+        *ch = (*ch - min) * s / (max - min);
+    }
+    c
+}
+
+/// Blend one RGB triple over another, separable and non-separable alike.
+///
+/// Inputs are `0..=255`; the result is clamped on the way out because a
+/// caller is storing bytes, while upstream's own intermediate values are not.
+#[must_use]
+pub fn blend_rgb(mode: BlendMode, back: [u8; 3], src: [u8; 3]) -> [u8; 3] {
+    let b = back.map(i32::from);
+    let s = src.map(i32::from);
+    let out = match mode {
+        BlendMode::Hue => set_lum(set_sat(s, sat(b)), lum(b)),
+        BlendMode::Saturation => set_lum(set_sat(b, sat(s)), lum(b)),
+        BlendMode::Color => set_lum(s, lum(b)),
+        BlendMode::Luminosity => set_lum(b, lum(s)),
+        separable => [
+            blend_channel(separable, b[0], s[0]),
+            blend_channel(separable, b[1], s[1]),
+            blend_channel(separable, b[2], s[2]),
+        ],
+    };
+    out.map(|v| {
+        #[expect(
+            clippy::cast_sign_loss,
+            reason = "the clamp lower bound is 0, so the value fits u8 exactly"
+        )]
+        let byte = v.clamp(0, 255) as u8;
+        byte
+    })
+}
+
+/// How the four non-separable modes collapse on a grayscale destination
+/// (`GetGrayWithBlend`, `cfx_scanlinecompositor.cpp:226-235`): `Luminosity`
+/// takes the source, the other three keep the backdrop unchanged.
+#[must_use]
+pub fn blend_gray(mode: BlendMode, back: u8, src: u8) -> u8 {
+    match mode {
+        BlendMode::Luminosity => src,
+        BlendMode::Hue | BlendMode::Saturation | BlendMode::Color => back,
+        separable => {
+            #[expect(
+                clippy::cast_sign_loss,
+                reason = "the clamp lower bound is 0, so the value fits u8 exactly"
+            )]
+            let byte = blend_channel(separable, i32::from(back), i32::from(src)).clamp(0, 255) as u8;
+            byte
+        }
+    }
+}
+
+/// The straight-alpha source-over composite the oracle performs
+/// (`cfx_scanlinecompositor.cpp:553-608`), returning the new
+/// `(rgb, alpha)` of the destination.
+///
+/// The `dest.a == 0` short circuit is the structural difference from a
+/// textbook Porter-Duff implementation: over a fully transparent backdrop the
+/// source is copied verbatim and **no blending happens at all** — which is
+/// also what ISO 32000 §11.3.6 requires, reached by another route.
+#[must_use]
+pub fn composite_straight(
+    dest: ([u8; 3], u8),
+    src: ([u8; 3], u8),
+    mode: BlendMode,
+) -> ([u8; 3], u8) {
+    let (dest_rgb, dest_a) = dest;
+    let (src_rgb, src_a) = src;
+    if dest_a == 0 {
+        return (src_rgb, src_a);
+    }
+    if src_a == 0 {
+        return dest;
+    }
+    let da = u32::from(dest_a);
+    let sa = u32::from(src_a);
+    // `da + sa - da*sa/255` is upstream's union of two 0..=255 alphas; with
+    // both operands bounded by 255 the truncating divide makes the result
+    // 0..=255 too, so the narrowing is exact rather than wrapping.
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "the alpha union of two 0..=255 values is itself 0..=255"
+    )]
+    let out_a = (da + sa - da * sa / 255) as u8;
+    if out_a == 0 {
+        return (dest_rgb, 0);
+    }
+    let ratio = (sa * 255 / u32::from(out_a)).min(255) as u8;
+    let blended = blend_rgb(mode, dest_rgb, src_rgb);
+    let mut out = [0u8; 3];
+    for i in 0..3 {
+        let (Some(&d), Some(&s), Some(&bl)) = (dest_rgb.get(i), src_rgb.get(i), blended.get(i))
+        else {
+            continue;
+        };
+        // The (1 - alpha_b) * Cs term, then the ratio merge.
+        let to_source = crate::pixmap::alpha_merge(s, bl, dest_a);
+        if let Some(slot) = out.get_mut(i) {
+            *slot = crate::pixmap::alpha_merge(d, to_source, ratio);
+        }
+    }
+    (out, out_a)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn color_sqrt_is_piecewise_d_not_sqrt() {
+        // The table tracks ISO 32000-1 §11.3.5.2's piecewise
+        // `D(x) = if x <= 0.25 { ((16x-12)x+4)x } else { sqrt(x) }`, but it is
+        // **not** any closed form of it: 35 of the 256 entries differ from
+        // `round(255*D)` and 102 from `trunc(255*D)`, so it is hand-tuned and
+        // the transcription is the authority. (Render brief Q7 claims the
+        // round-trip is exact for all 256; measured, it is not — erratum.)
+        // What must hold is that no entry drifts more than one count from
+        // `D`, which pins the transcription against a typo.
+        for (i, entry) in COLOR_SQRT.iter().enumerate() {
+            #[expect(
+                clippy::cast_precision_loss,
+                reason = "i < 256 is exact in f64"
+            )]
+            let x = i as f64 / 255.0;
+            let d = if x <= 0.25 {
+                ((16.0 * x - 12.0) * x + 4.0) * x
+            } else {
+                x.sqrt()
+            };
+            let scaled = 255.0 * d;
+            let drift = (f64::from(*entry) - scaled).abs();
+            assert!(drift <= 1.0, "entry {i}: table {entry} vs D {scaled}");
+        }
+        // The low branch is a cubic, so entry 1 is 3. A "simplification" to a
+        // plain square root would put 16 there — wrong by 17 counts, not by
+        // rounding — and this assertion is what makes that fail loudly.
+        assert_eq!(COLOR_SQRT.get(1).copied(), Some(3));
+        #[expect(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            reason = "255*sqrt(1/255) rounds to 16, well inside u8"
+        )]
+        let naive = (255.0 * (1.0f64 / 255.0).sqrt()).round() as u8;
+        assert_eq!(naive, 16, "the wrong answer a plain sqrt would give");
+    }
+
+    #[test]
+    fn overlay_is_hardlight_swapped() {
+        for b in [0i32, 1, 63, 127, 128, 200, 255] {
+            for s in [0i32, 1, 63, 127, 128, 200, 255] {
+                assert_eq!(
+                    blend_channel(BlendMode::Overlay, b, s),
+                    blend_channel(BlendMode::HardLight, s, b),
+                    "back={b} src={s}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn hardlight_threshold_128() {
+        // s == 127 takes the low branch, s == 128 the high one. A `2s <= 255`
+        // reading would put 127 and 128 on the same side of the split at
+        // s = 127.5 and agree here, but disagrees for a 0.5-scaled input;
+        // the direct assertion is the safe one.
+        assert_eq!(
+            blend_channel(BlendMode::HardLight, 200, 127),
+            (127 * 200 * 2) / 255
+        );
+        assert_eq!(
+            blend_channel(BlendMode::HardLight, 200, 128),
+            blend_channel(BlendMode::Screen, 200, 1)
+        );
+    }
+
+    #[test]
+    fn softlight_divides_twice() {
+        // The low branch spells its scaling as `/255/255`, not `/65025`.
+        // The brief flags this as a truncation trap; exhaustively, it is not
+        // one — on this branch the numerator is always non-negative (since
+        // `src < 128` makes `255 - 2*src >= 1`), and truncating twice by 255
+        // equals truncating once by 65025 for every non-negative value.
+        // (Render brief test 33's premise is an erratum.) The spelling is
+        // still ported verbatim, and this test pins the equivalence so a
+        // future negative-input path cannot silently change meaning.
+        for back in 0..=255i32 {
+            for src in 0..128i32 {
+                let n = (255 - 2 * src) * back * (255 - back);
+                assert_eq!(
+                    back - n / 255 / 255,
+                    back - n / 65025,
+                    "back={back} src={src}"
+                );
+                assert_eq!(
+                    blend_channel(BlendMode::SoftLight, back, src),
+                    back - n / 255 / 255
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn softlight_high_branch_uses_the_table() {
+        let (back, src) = (7i32, 200i32);
+        let d = i32::from(COLOR_SQRT.get(7).copied().unwrap_or(0));
+        assert_eq!(
+            blend_channel(BlendMode::SoftLight, back, src),
+            back + (2 * src - 255) * (d - back) / 255
+        );
+    }
+
+    #[test]
+    fn separable_formulas() {
+        // Ports core/fxge/dib/blend_unittest.cpp's per-mode expectations.
+        assert_eq!(blend_channel(BlendMode::Normal, 100, 200), 200);
+        assert_eq!(
+            blend_channel(BlendMode::Multiply, 100, 200),
+            200 * 100 / 255
+        );
+        assert_eq!(
+            blend_channel(BlendMode::Screen, 100, 200),
+            200 + 100 - 200 * 100 / 255
+        );
+        assert_eq!(blend_channel(BlendMode::Darken, 100, 200), 100);
+        assert_eq!(blend_channel(BlendMode::Lighten, 100, 200), 200);
+        assert_eq!(blend_channel(BlendMode::Difference, 100, 200), 100);
+        assert_eq!(
+            blend_channel(BlendMode::Exclusion, 100, 200),
+            100 + 200 - 2 * 100 * 200 / 255
+        );
+        assert_eq!(blend_channel(BlendMode::ColorDodge, 100, 255), 255);
+        assert_eq!(blend_channel(BlendMode::ColorBurn, 100, 0), 0);
+    }
+
+    #[test]
+    fn clip_color_ordering() {
+        // A colour that trips both branches: the x > 255 arm must still use
+        // the pre-clip `l` and `x` while reading channels the n < 0 arm wrote.
+        let c = [-50, 128, 300];
+        let l = lum(c);
+        let n = -50;
+        let x = 300;
+        let mut manual = c;
+        for ch in &mut manual {
+            *ch = l + ((*ch - l) * l / (l - n));
+        }
+        for ch in &mut manual {
+            *ch = l + ((*ch - l) * (255 - l) / (x - l));
+        }
+        assert_eq!(clip_color(c), manual);
+    }
+
+    #[test]
+    fn nonseparable_on_gray_collapses() {
+        assert_eq!(blend_gray(BlendMode::Luminosity, 10, 200), 200);
+        assert_eq!(blend_gray(BlendMode::Hue, 10, 200), 10);
+        assert_eq!(blend_gray(BlendMode::Saturation, 10, 200), 10);
+        assert_eq!(blend_gray(BlendMode::Color, 10, 200), 10);
+    }
+
+    #[test]
+    fn transparent_backdrop_skips_blend() {
+        // dest.a == 0 copies the source verbatim, whatever the mode.
+        for mode in [
+            BlendMode::Multiply,
+            BlendMode::Difference,
+            BlendMode::Luminosity,
+        ] {
+            assert_eq!(
+                composite_straight(([9, 9, 9], 0), ([1, 2, 3], 200), mode),
+                ([1, 2, 3], 200)
+            );
+        }
+    }
+
+    #[test]
+    fn nonseparable_modes_use_the_backdrop_luminosity() {
+        // Luminosity(back, src) takes the source's luminosity onto the
+        // backdrop's colour; with a black source the result is black.
+        assert_eq!(
+            blend_rgb(BlendMode::Luminosity, [10, 20, 30], [0, 0, 0]),
+            [0, 0, 0]
+        );
+        // Color(src, Lum(back)) keeps the source's hue and saturation. The
+        // target luminosity is only *approximately* preserved, because
+        // ClipColor rescales channels driven past the 0/255 boundary using
+        // the pre-clip bounds — which is precisely the ordering §6.2 calls
+        // out as amplifying rounding on these four modes.
+        let out = blend_rgb(BlendMode::Color, [128, 128, 128], [255, 0, 0]);
+        let target = lum([128, 128, 128]);
+        assert!(
+            lum(out.map(i32::from)).abs_diff(target) <= 3,
+            "Color landed at {:?}, luminosity {} vs {target}",
+            out,
+            lum(out.map(i32::from))
+        );
+        // Saturation and Hue both read the backdrop's luminosity too.
+        for mode in [BlendMode::Hue, BlendMode::Saturation] {
+            let out = blend_rgb(mode, [40, 40, 40], [200, 10, 10]);
+            assert!(
+                lum(out.map(i32::from)).abs_diff(lum([40, 40, 40])) <= 3,
+                "{mode:?}"
+            );
+        }
+    }
+}

@@ -1,6 +1,6 @@
 [package]
 name = "pdfrum-raster-vello"
-description = "vello_cpu rasterizer backend for pdfrum-render"
+description = "vello_cpu implementation of pdfrum-render's RenderDevice"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -10,3 +10,8 @@ repository.workspace = true
 workspace = true
 
 [dependencies]
+pdfrum-render.workspace = true
+pdfrum-page.workspace = true
+kurbo.workspace = true
+peniko.workspace = true
+vello_cpu.workspace = true
