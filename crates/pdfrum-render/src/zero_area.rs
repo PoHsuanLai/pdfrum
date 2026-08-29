@@ -35,7 +35,15 @@ pub struct ZeroArea {
 /// reading would give `-2.5`.
 #[must_use]
 pub fn snap_to_pixel_center(c: f64) -> f64 {
-    (c as i32) as f64 + 0.5
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "the truncation toward zero *is* the ported operation — it is \
+                  why -2.7 lands at -1.5 and not -2.5 — and Rust's saturating \
+                  float-to-int cast turns an out-of-range or NaN coordinate \
+                  into a bounded one rather than wrapping"
+    )]
+    let truncated = c as i32;
+    f64::from(truncated) + 0.5
 }
 
 /// The points of one sub-path, with a flag for whether any curve was present.
@@ -57,13 +65,9 @@ fn sub_paths(path: &BezPath) -> Vec<SubPath> {
                     last.points.push(p);
                 }
             }
-            PathEl::QuadTo(_, p) => {
-                if let Some(last) = out.last_mut() {
-                    last.points.push(p);
-                    last.has_curve = true;
-                }
-            }
-            PathEl::CurveTo(_, _, p) => {
+            // Both curve kinds contribute only their endpoint to the point
+            // list; the flag is what suppresses the folding scans downstream.
+            PathEl::QuadTo(_, p) | PathEl::CurveTo(_, _, p) => {
                 if let Some(last) = out.last_mut() {
                     last.points.push(p);
                     last.has_curve = true;
@@ -111,9 +115,9 @@ fn check_simple_line(
             p
         };
         if first {
-            out.move_to(p)
+            out.move_to(p);
         } else {
-            out.line_to(p)
+            out.line_to(p);
         }
     };
     place(p0, true);
@@ -128,7 +132,7 @@ fn check_simple_line(
 /// `CheckPalindromicPath`: an odd point count above three, every pair
 /// mirrored about the midpoint, no curves.
 fn check_palindromic(points: &[Point], has_curve: bool) -> Option<ZeroArea> {
-    if points.len() <= 3 || points.len() % 2 == 0 || has_curve {
+    if points.len() <= 3 || points.len().is_multiple_of(2) || has_curve {
         return None;
     }
     let mid = points.len() / 2;
@@ -153,17 +157,34 @@ fn check_palindromic(points: &[Point], has_curve: bool) -> Option<ZeroArea> {
 
 /// `IsFoldingVerticalLine`: three collinear points on one vertical, with the
 /// middle one outside the other two.
+#[expect(
+    clippy::float_cmp,
+    reason = "upstream's fold tests are bit-exact coordinate equality. A path \
+              doubles back on itself only when the coordinates are literally \
+              the same value; a tolerance would rewrite near-collinear paths \
+              into hairlines PDFium fills normally"
+)]
 fn folding_vertical(a: Point, b: Point, c: Point) -> bool {
     a.x == b.x && b.x == c.x && (b.y - a.y) * (b.y - c.y) > 0.0
 }
 
 /// The horizontal mirror.
+#[expect(
+    clippy::float_cmp,
+    reason = "see `folding_vertical`: bit-exact equality is the ported test"
+)]
 fn folding_horizontal(a: Point, b: Point, c: Point) -> bool {
     a.y == b.y && b.y == c.y && (b.x - a.x) * (b.x - c.x) > 0.0
 }
 
 /// The diagonal case: neither axis shared, but the cross-products match, so
 /// the three points are collinear and the path doubles back.
+#[expect(
+    clippy::float_cmp,
+    reason = "the cross-product equality is upstream's collinearity test, \
+              computed and compared in exactly this order; an epsilon would \
+              admit near-collinear triples PDFium rejects"
+)]
 fn folding_diagonal(a: Point, b: Point, c: Point) -> bool {
     a.x != b.x
         && c.x != b.x
@@ -268,6 +289,12 @@ mod tests {
     }
 
     #[test]
+    #[expect(
+        clippy::float_cmp,
+        reason = "the snap emits `(int)c + 0.5`, which is exactly representable; \
+                  exact equality is what distinguishes truncation from floor, \
+                  the whole point of the test"
+    )]
     fn simple_line_snap_truncates_toward_zero() {
         // (int)c + 0.5, not floor(c) + 0.5: -2.7 truncates to -2, giving -1.5.
         assert_eq!(snap_to_pixel_center(2.7), 2.5);

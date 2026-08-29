@@ -110,14 +110,22 @@ impl PlacedGlyph {
 
 /// The matrix one glyph is drawn under.
 ///
-/// Outlines arrive scaled to 1000 units per em, so the font size divides by
-/// a thousand; the y flip is PDF's text space against a y-down device.
+/// Three spaces compose. Outlines arrive scaled to **1000 units per em**, so
+/// the font size divides by a thousand to reach text space. `pen` is the
+/// glyph's origin in that same text space, where the pen advances left to
+/// right and y grows *upward*. And `text_to_device` — which is
+/// `pdfrum-page`'s `TextObject::matrix`, already carrying the CTM, the text
+/// matrix and the horizontal scale, composed with the page-to-device
+/// transform — takes it the rest of the way.
+///
+/// There is deliberately **no y flip here**: PDF text space and PDF user
+/// space share their orientation, and the single flip that turns y-up into a
+/// y-down device lives in the page matrix, where every object kind sees it.
+/// Flipping again per glyph mirrors every letter about its own baseline.
 #[must_use]
-pub fn glyph_matrix(font_size: f32, origin: kurbo::Point, text_to_device: Affine) -> Affine {
+pub fn glyph_matrix(font_size: f32, pen: kurbo::Point, text_to_device: Affine) -> Affine {
     let s = f64::from(font_size) / 1000.0;
-    text_to_device
-        * Affine::translate((origin.x, origin.y))
-        * Affine::new([s, 0.0, 0.0, -s, 0.0, 0.0])
+    text_to_device * Affine::translate((pen.x, pen.y)) * Affine::scale(s)
 }
 
 /// The stroked-text CTM un-transform (`cpdf_renderstatus.cpp:772-777`).
@@ -127,6 +135,13 @@ pub fn glyph_matrix(font_size: f32, origin: kurbo::Point, text_to_device: Affine
 /// by it and the scale is folded into the device matrix instead. Returns the
 /// adjusted `(text_matrix, device_matrix)` pair.
 #[must_use]
+#[expect(
+    clippy::float_cmp,
+    reason = "the exact `a == 1 && d == 1` is upstream's unit-scale short \
+              circuit; with a tolerance a slightly-off-unit CTM would skip \
+              the split and stroke at the wrong width, which is the whole \
+              point of the function"
+)]
 pub fn stroke_ctm_split(text_matrix: Affine, to_device: Affine, ctm: [f64; 4]) -> (Affine, Affine) {
     let [a, b, c, d] = ctm;
     if a == 1.0 && d == 1.0 {
@@ -142,9 +157,26 @@ pub fn stroke_ctm_split(text_matrix: Affine, to_device: Affine, ctm: [f64; 4]) -
 
 /// Lay out one text object's glyphs.
 ///
+/// # The two coordinate systems this has to keep straight
+///
+/// `pdfrum-page` hands a text object *two* pieces of placement, and they are
+/// in different spaces. `TextObject::matrix` is `ctm * text_matrix *
+/// horizontal_scale` — **text space to page space**, with no font size —
+/// while `TextObject::position` is `ctm * text_matrix` already applied to
+/// the pen, i.e. a **page-space** point.
+///
+/// Composing the two naively applies the matrix twice, which shifts the run
+/// wherever the text matrix has a translation and is invisible wherever it
+/// does not — so it survives every fixture whose `Tm` is the identity. The
+/// run's origin is therefore recovered by pulling `position` *back* through
+/// the matrix, and the pen then advances in text space where the advances
+/// are actually defined.
+///
 /// Advances follow the same rules `pdfrum-page` used to build the object:
-/// each code's width scaled by the font size and horizontal scale, plus the
-/// character and word spacing, plus any kerning between segments.
+/// each code's width scaled by the font size, plus the character spacing,
+/// plus the word spacing on a single-byte space only, plus any kerning
+/// between segments. The horizontal scale is *not* applied again, because
+/// `matrix` already carries it.
 #[must_use]
 pub fn place_glyphs(
     object: &TextObject,
@@ -155,20 +187,27 @@ pub fn place_glyphs(
     let Some((font, size)) = &object.font else {
         return Vec::new();
     };
-    let horz = f64::from(state.text.horz_scale);
     let text_to_device = to_device * object.matrix;
-    let mut pen = object.position;
+    // Pull the page-space start back into the text space the advances live
+    // in. A singular text matrix has no text space to speak of, and the
+    // object would not have been drawable anyway.
+    let det = object.matrix.determinant();
+    if det == 0.0 || !det.is_finite() {
+        return Vec::new();
+    }
+    let mut pen = object.matrix.inverse() * object.position;
     let mut out = Vec::new();
 
     for segment in &object.segments {
         // A kerning adjustment shifts the pen before the segment it precedes,
-        // scaled by the font size and the horizontal scale, and negated —
-        // a positive `TJ` number moves text *left*.
-        pen.x -= f64::from(segment.kerning) / 1000.0 * f64::from(*size) * horz;
+        // and is negated: a positive `TJ` number moves text *left*.
+        pen.x -= f64::from(segment.kerning) / 1000.0 * f64::from(*size);
         for item in font.decode(&segment.codes) {
             let advance = f64::from(item.width) / 1000.0 * f64::from(*size)
                 + f64::from(state.text.char_space);
-            let word = if item.code.0 == u32::from(b' ') {
+            // Word spacing applies to a single-byte space only, which is why
+            // a CID-keyed code of 0x20 does not earn it.
+            let word = if item.code.0 == 0x20 && item.cid.is_none() {
                 f64::from(state.text.word_space)
             } else {
                 0.0
@@ -182,7 +221,7 @@ pub fn place_glyphs(
                     });
                 }
             }
-            pen.x += (advance + word) * horz;
+            pen.x += advance + word;
         }
     }
     out
@@ -250,16 +289,32 @@ mod tests {
     }
 
     #[test]
-    fn glyph_matrix_scales_by_size_over_1000_and_flips_y() {
+    fn glyph_matrix_scales_by_size_over_1000_without_flipping() {
+        // Outlines are 1000 units per em, so a full em at size 1000 is a
+        // whole unit of text space, unmirrored: the single y flip lives in
+        // the page matrix, where every object kind sees it. Flipping here
+        // too would mirror each letter about its own baseline.
         let m = glyph_matrix(1000.0, Point::ZERO, Affine::IDENTITY);
-        // A point one em up in text space lands one em *down* in device y.
         let p = m * Point::new(0.0, 1000.0);
-        assert!((p.y + 1000.0).abs() < 1e-9, "y is flipped: {}", p.y);
+        assert!(
+            (p.y - 1000.0).abs() < 1e-9,
+            "y is not flipped here: {}",
+            p.y
+        );
         assert!((p.x - 0.0).abs() < 1e-9);
 
         let half = glyph_matrix(500.0, Point::ZERO, Affine::IDENTITY);
         let p = half * Point::new(1000.0, 0.0);
         assert!((p.x - 500.0).abs() < 1e-9, "half size halves the advance");
+    }
+
+    #[test]
+    fn the_pen_translates_in_text_space_before_the_size_scale() {
+        // A pen at x = 40 with a size of 12 puts the glyph's own origin at
+        // 40 text units, not at 40 * 12 / 1000.
+        let m = glyph_matrix(12.0, Point::new(40.0, 0.0), Affine::IDENTITY);
+        let origin = m * Point::ZERO;
+        assert!((origin.x - 40.0).abs() < 1e-9, "origin at {}", origin.x);
     }
 
     #[test]

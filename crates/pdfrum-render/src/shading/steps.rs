@@ -16,6 +16,21 @@ use crate::color::Argb;
 /// The ramp's length (`kShadingSteps`, `cpdf_rendershading.cpp:45`).
 pub const STEPS: usize = 256;
 
+/// [`STEPS`] as the `i32` the index comparison is written in upstream.
+///
+/// Derived rather than restated, so the two cannot drift apart: the
+/// `const` block fails to compile if [`STEPS`] ever outgrows `i32`.
+const STEPS_I32: i32 = {
+    const { assert!(STEPS <= i32::MAX as usize) };
+    #[expect(
+        clippy::cast_possible_wrap,
+        clippy::cast_possible_truncation,
+        reason = "the const assertion above proves the value fits"
+    )]
+    let v = STEPS as i32;
+    v
+};
+
 /// A sampled colour ramp, one entry per step, at a fixed alpha.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ColorSteps {
@@ -96,13 +111,19 @@ impl ColorSteps {
                 return None;
             }
             0
-        } else if index >= STEPS as i32 {
+        } else if index >= STEPS_I32 {
             if !extend_end {
                 return None;
             }
             STEPS - 1
         } else {
-            index as usize
+            #[expect(
+                clippy::cast_sign_loss,
+                reason = "the `index < 0` branch above has already returned, so \
+                          the value here is 0..STEPS"
+            )]
+            let idx = index as usize;
+            idx
         };
         self.entries.get(index).copied()
     }
@@ -121,6 +142,13 @@ impl ColorSteps {
 /// divisor and addressed with another, and both spellings are ported as
 /// written.
 #[must_use]
+#[expect(
+    clippy::float_cmp,
+    reason = "the exact `c_min == c_max` is upstream's divide-by-zero guard, \
+              and it must be exact: an epsilon would collapse a narrow but \
+              real component range to a constant 0.0 where PDFium still \
+              interpolates across it"
+)]
 pub fn component_to_shading_index(c: f32, c_min: f32, c_max: f32) -> f32 {
     if c_min == c_max {
         0.0
@@ -184,6 +212,13 @@ mod tests {
         assert!((component_to_shading_index(1.0, 0.0, 1.0) - 255.0).abs() < 1e-6);
         assert!((component_to_shading_index(0.5, 0.0, 1.0) - 127.5).abs() < 1e-6);
         // A degenerate range is zero rather than a division by zero.
-        assert_eq!(component_to_shading_index(7.0, 3.0, 3.0), 0.0);
+        #[expect(
+            clippy::float_cmp,
+            reason = "the guard branch returns the literal 0.0, so exact \
+                      equality is what pins that it is not a computed near-zero"
+        )]
+        {
+            assert_eq!(component_to_shading_index(7.0, 3.0, 3.0), 0.0);
+        }
     }
 }

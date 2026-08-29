@@ -116,6 +116,20 @@ struct Points {
 }
 
 /// De Casteljau at `t = 0.5` on one cubic, returning both halves.
+#[expect(
+    clippy::manual_midpoint,
+    reason = "`(a + b) / 2.0` is the De Casteljau step as PDFium writes it. \
+              `f64::midpoint` is not the same function — it is correctly \
+              rounded where this rounds twice — and swapping it in would move \
+              subdivided patch cells off the oracle's pixels. The overflow \
+              the lint warns about needs a coordinate near f64::MAX, which \
+              `all_finite` on the resulting points already rejects."
+)]
+#[expect(
+    clippy::many_single_char_names,
+    reason = "a..f are De Casteljau's intermediate points in the order the \
+              construction names them; p0..p3 are the input control points"
+)]
 fn split_cubic(p: [Point; 4]) -> ([Point; 4], [Point; 4]) {
     let mid = |a: Point, b: Point| Point::new((a.x + b.x) / 2.0, (a.y + b.y) / 2.0);
     let (p0, p1, p2, p3) = (p[0], p[1], p[2], p[3]);
@@ -272,6 +286,26 @@ impl Points {
 /// `dest` is the scratch device: every cell is drawn at **alpha 1.0** with
 /// antialiasing off, and the shading's alpha is applied by the caller when
 /// the scratch is blitted.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the eight after `dest` are the recursion's own state: the four \
+              corner colours plus the (left, bottom, x_scale, y_scale) \
+              lattice position each half inherits. Bundling them into a \
+              struct would add a construction at every one of the four \
+              recursive calls without removing a single value being threaded."
+)]
+#[expect(
+    clippy::too_many_lines,
+    reason = "the flatness test, the four-way split and the cell fill share \
+              the same subdivision state and each recursive call reads all of \
+              it; splitting them would turn locals into a parameter list as \
+              long as the body"
+)]
+#[expect(
+    clippy::cast_sign_loss,
+    reason = "every colour component is clamped to 0..=255 immediately before \
+              its cast, so no negative value reaches one"
+)]
 fn subdivide(
     dest: &mut dyn RenderDevice,
     points: Points,
@@ -624,7 +658,14 @@ mod tests {
     #[test]
     fn non_finite_control_points_drop_the_patch() {
         let mut patch = square_patch(10.0, [Rgb::BLACK; 4]);
-        patch.points[3] = Point::new(f64::NAN, 0.0);
+        #[expect(
+            clippy::indexing_slicing,
+            reason = "the fixture is a square patch with all twelve boundary \
+                      points present, so index 3 exists by construction"
+        )]
+        {
+            patch.points[3] = Point::new(f64::NAN, 0.0);
+        }
         let outline = patch_outline(&patch, Affine::IDENTITY);
         // The outline still exists as a path, but the subdivider declines it.
         assert!(!outline.elements().is_empty());
