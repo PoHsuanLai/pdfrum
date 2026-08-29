@@ -72,7 +72,7 @@ pdfrum = { path = "crates/pdfrum", version = "=0.1.0" }
 # rendering & geometry
 kurbo = "=0.13.1"
 peniko = "=0.6.1"
-vello_cpu = "=0.2.0"
+vello_cpu = { version = "=0.2.0", default-features = false, features = ["std", "f32_pipeline"] }
 tiny-skia = "=0.12.0"
 
 # fonts
