@@ -259,12 +259,21 @@ pub fn decode_image<R: Resolve>(
                 // indices themselves reach the page as grey, which is what
                 // `jpxdecode_indexed.in` rendered before.
                 (Some(cs @ ColorSpace::Indexed(indexed)), 1) => {
-                    let scale = 8u32.saturating_sub(info.bpc);
-                    let indices: Box<[u8]> = image
-                        .data
-                        .iter()
-                        .map(|&v| if scale == 0 { v } else { v >> scale })
-                        .collect();
+                    // The shift runs only for `bpc_ < 8`, so a declared depth
+                    // of eight or more leaves the samples alone. A *zero*
+                    // depth is the no-colour-space JPX path, where PDFium
+                    // would shift by eight and clear every index; we keep the
+                    // same answer without the overflowing shift.
+                    let indices: Box<[u8]> = if info.bpc >= 8 {
+                        image.data.iter().copied().collect()
+                    } else {
+                        let scale = 8u32.saturating_sub(info.bpc);
+                        image
+                            .data
+                            .iter()
+                            .map(|&v| u8::try_from(u32::from(v) >> scale).unwrap_or(0))
+                            .collect()
+                    };
                     let palette = (0..=indexed.max_index)
                         .map(|i| cs.to_rgb(&[f32::from(i)]))
                         .collect();
@@ -311,10 +320,12 @@ pub fn decode_image<R: Resolve>(
                     what: "JPEG component count disagrees with the colour space",
                 });
             }
+            let mut data = image.data;
+            apply_codec_decode(&mut data, space.as_ref(), image.components, &info);
             let pixels = match image.components {
-                1 => Pixels::Gray8(image.data.into()),
-                4 => Pixels::Cmyk8(image.data.into()),
-                _ => Pixels::Rgb8(image.data.into()),
+                1 => Pixels::Gray8(data.into()),
+                4 => Pixels::Cmyk8(data.into()),
+                _ => Pixels::Rgb8(data.into()),
             };
             (image.width, image.height, pixels, None)
         }
@@ -653,6 +664,58 @@ fn unpack(
         4 => Pixels::Cmyk8(out.into()),
         _ => Pixels::Rgb8(out.into()),
     })
+}
+
+/// Apply a non-default `/Decode` to a codec's eight-bit output, in place.
+///
+/// `TranslateScanline24bpp` runs on the *decoder's* scanline, not only on raw
+/// samples, so a `/Decode` array reaches a DCT or JPEG 2000 image exactly as
+/// it reaches a Flate one. The codecs set `bpc_ = 8` before the scanline is
+/// read, so the mapping is always over `0..=255` here whatever the dictionary
+/// declared. `bug_1646` and `bug_718762` are the fixtures: a CMYK JPEG
+/// carrying the Adobe inversion as `/Decode [1 0 1 0 1 0 1 0]`, which without
+/// this reaches the page as its own negative.
+///
+/// The default mapping is a no-op by construction, so it is skipped rather
+/// than run — which also keeps an `Indexed` codec output (whose indices this
+/// mapping does not describe) untouched.
+fn apply_codec_decode(
+    data: &mut [u8],
+    space: Option<&ColorSpace>,
+    components: u8,
+    info: &ImageDict,
+) {
+    let components = usize::from(components);
+    if components == 0 || info.default_decode {
+        return;
+    }
+    let Some(space) = space else { return };
+    // An indexed space maps indices rather than colour components, and the
+    // codec paths that produce indices resolve them through the palette.
+    if matches!(space, ColorSpace::Indexed(_)) {
+        return;
+    }
+    let decode = DecodeMap::new(Some(space), components, 8, info.decode.as_ref());
+    if decode.default {
+        return;
+    }
+    for (i, sample) in data.iter_mut().enumerate() {
+        let value = decode.apply(i % components, f32::from(*sample));
+        // **Rounding**, not the truncation the raw-sample path uses. PDFium
+        // carries these values as floats all the way into the colour
+        // conversion and only truncates the *converted* byte; we have to land
+        // them back in a byte here, so the encode has to be the one that makes
+        // the round trip exact. Truncating instead loses a count on the
+        // commonest case of all — the `[1 0]` inversion, where `1 - 253/255`
+        // lands a hair under `2/255` and would come back as 1.
+        #[expect(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            reason = "the clamp bounds the product to 0..=255"
+        )]
+        let byte = (value.clamp(0.0, 1.0) * 255.0).round() as u8;
+        *sample = byte;
+    }
 }
 
 /// A raw sample as a float, at the precision the decode arithmetic uses.
@@ -1076,5 +1139,80 @@ mod tests {
         // Out of range reads as black rather than panicking.
         assert_eq!(pixels.color_at(99, 99, 2), Rgb::BLACK);
         assert_eq!(pixels.components(), 3);
+    }
+
+    /// An image dictionary for the codec `/Decode` tests.
+    fn codec_dict(space: &str, decode: Option<Vec<f32>>) -> super::ImageDict {
+        let mut pairs = vec![
+            (Name::from("Width"), Object::Int(2)),
+            (Name::from("Height"), Object::Int(1)),
+            (Name::from("BitsPerComponent"), Object::Int(8)),
+            (Name::from("ColorSpace"), Object::Name(Name::from(space))),
+            (Name::from("Filter"), Object::Name(Name::from("DCTDecode"))),
+        ];
+        if let Some(values) = decode {
+            pairs.push((
+                Name::from("Decode"),
+                Object::Array(values.into_iter().map(Object::Real).collect()),
+            ));
+        }
+        let mut diags = Diagnostics::default();
+        super::ImageDict::load(&Dict::from_pairs(pairs), &NoResolve, &mut diags)
+            .expect("the fixture dictionary should load")
+    }
+
+    #[test]
+    fn a_decode_array_reaches_a_codecs_output_too() {
+        // `TranslateScanline24bpp` runs on the decoder's scanline, so the
+        // Adobe inversion a CMYK JPEG carries as `/Decode [1 0 …]` has to be
+        // applied to the codec's bytes — `bug_1646` and `bug_718762`.
+        let info = codec_dict(
+            "DeviceCMYK",
+            Some(vec![1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0]),
+        );
+        assert!(!info.default_decode);
+        let space = crate::color::ColorSpace::DeviceCmyk;
+        let mut data = vec![255u8, 0, 0, 253, 0, 255, 255, 2];
+        super::apply_codec_decode(&mut data, Some(&space), 4, &info);
+        assert_eq!(data, vec![0u8, 255, 255, 2, 255, 0, 0, 253]);
+    }
+
+    #[test]
+    fn the_default_decode_leaves_a_codecs_output_untouched() {
+        // The default mapping is the identity by construction, so it is
+        // skipped rather than run — no rounding drift on the common path.
+        let info = codec_dict("DeviceCMYK", None);
+        assert!(info.default_decode);
+        let space = crate::color::ColorSpace::DeviceCmyk;
+        let original = vec![255u8, 0, 0, 253, 1, 2, 3, 4];
+        let mut data = original.clone();
+        super::apply_codec_decode(&mut data, Some(&space), 4, &info);
+        assert_eq!(data, original);
+        // An explicit array that *equals* the default is skipped as well.
+        let info = codec_dict(
+            "DeviceCMYK",
+            Some(vec![0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0]),
+        );
+        let mut data = original.clone();
+        super::apply_codec_decode(&mut data, Some(&space), 4, &info);
+        assert_eq!(data, original);
+    }
+
+    #[test]
+    fn a_codec_decode_needs_a_space_and_some_components() {
+        let info = codec_dict("DeviceGray", Some(vec![1.0, 0.0]));
+        let original = vec![10u8, 200];
+        // No colour space, or no components, and nothing happens.
+        let mut data = original.clone();
+        super::apply_codec_decode(&mut data, None, 1, &info);
+        assert_eq!(data, original);
+        let mut data = original.clone();
+        let gray = crate::color::ColorSpace::DeviceGray;
+        super::apply_codec_decode(&mut data, Some(&gray), 0, &info);
+        assert_eq!(data, original);
+        // With both, grey inverts.
+        let mut data = original.clone();
+        super::apply_codec_decode(&mut data, Some(&gray), 1, &info);
+        assert_eq!(data, vec![245u8, 55]);
     }
 }
