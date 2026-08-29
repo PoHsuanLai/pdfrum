@@ -33,9 +33,12 @@
 //!
 //! # The design in one paragraph
 //!
-//! [`cell`] holds the rasterizer: kurbo flattens curves, each segment is
-//! integrated into per-pixel `(cover, area)` cells, and a sweep turns the
-//! sorted cells into spans of constant coverage. [`target`] holds the pixel
+//! [`pdfrum_render::scanline`] holds the rasterizer: kurbo flattens curves,
+//! each segment is integrated into per-pixel `(cover, area)` cells, and a sweep
+//! turns the sorted cells into spans of constant coverage. It lives in the
+//! engine rather than here because the engine's own glyph path needs the same
+//! integrator, and a glyph bitmap must not depend on which rasterizer draws the
+//! page. [`target`] holds the pixel
 //! buffer, the clip — a coverage plane multiplied in per pixel, which is how
 //! the oracle's clip region works too — and the span blitter. [`image`] holds
 //! the inverse-mapped image sampler. The compositing arithmetic itself is
@@ -77,7 +80,6 @@
 // the engine: index with `get()` and do arithmetic with `checked_*`.
 #![warn(clippy::indexing_slicing)]
 
-pub mod cell;
 pub mod image;
 pub mod target;
 
@@ -88,7 +90,7 @@ use pdfrum_render::{
     RasterBackend, RasterImage, RenderDevice, pixmap,
 };
 
-use cell::Rasterizer;
+use pdfrum_render::scanline::{self, Rasterizer};
 use target::Target;
 
 /// The flattening tolerance, in device pixels.
@@ -192,7 +194,7 @@ impl ExactDevice {
     ) {
         self.raster.reset();
         self.raster.add_path(path, FLATTEN_TOLERANCE);
-        let rule = to_cell_rule(rule);
+        let rule = to_scanline_rule(rule);
         let antialias = aa == AntiAlias::On;
         // Split the borrow: `raster` and the target live in the same struct,
         // and the sweep needs one while the paint closure needs the other.
@@ -206,6 +208,90 @@ impl ExactDevice {
         });
     }
 
+    /// Composite an image through the inverse-mapped sampler: the general
+    /// case, for any transform that is not a whole-pixel translation.
+    ///
+    /// `t` maps the image's own **pixel grid** onto the device, not its unit
+    /// square: every engine call site passes a plain translation for a
+    /// device-sized buffer, and the engine has already folded any scale into
+    /// the samples by resampling them. Reading `t` as a unit-square map instead
+    /// collapses a whole-page image onto one pixel.
+    ///
+    /// The image's footprint is its pixel rectangle through `t`, and it is
+    /// filled **antialiased**. Hard-edging it instead thresholds the silhouette
+    /// at half a pixel, which silently deletes any image thin enough to cover
+    /// less than that — a sheared type-3 glyph drawn as an inline image mask is
+    /// exactly such a case, and the oracle paints it at its true partial
+    /// coverage rather than dropping it.
+    ///
+    /// The border is not darkened twice by this. The sampler carries the
+    /// image's *own* alpha and the footprint carries the silhouette's, and the
+    /// two are different quantities: outside the last texel the sampler returns
+    /// nothing at all, so the only pixels the silhouette modulates are the
+    /// boundary ones, where a partial coverage is what the geometry says.
+    fn draw_image_sampled(
+        &mut self,
+        img: &RasterImage,
+        t: Affine,
+        quality: ImageQuality,
+        alpha: u8,
+    ) {
+        let Some(sampler) = image::Sampler::new(img, t, quality) else {
+            return;
+        };
+        let footprint = t * rect_path(Rect::new(
+            0.0,
+            0.0,
+            f64::from(img.width()),
+            f64::from(img.height()),
+        ));
+        self.scan(
+            &footprint,
+            FillRule::Winding,
+            AntiAlias::On,
+            move |target, x, len, y, cov| {
+                target.blend_span_with(x, len, y, cov, BlendMode::Normal, |col, row| {
+                    sampler
+                        .sample(col, row)
+                        .map(|px| image::scale_alpha(px, alpha))
+                });
+            },
+        );
+    }
+
+    /// Composite an image texel-for-pixel at a whole-pixel offset.
+    ///
+    /// The blit `draw_image` degenerates to when its transform is a whole-pixel
+    /// translation. Every row of the image is one span of full coverage, so
+    /// there is nothing to rasterize and nothing to invert: the source column
+    /// is the destination column minus the offset.
+    ///
+    /// The clip still applies, through the same `blend_span_with` the general
+    /// path uses, so a clipped blit lands on exactly the pixels a clipped image
+    /// draw would.
+    fn blit(&mut self, img: &RasterImage, dx: i32, dy: i32, alpha: u8) {
+        let target = match self.layers.last_mut() {
+            Some(layer) => &mut layer.target,
+            None => &mut self.base,
+        };
+        for row in 0..img.height() {
+            let Ok(row_i32) = i32::try_from(row) else {
+                continue;
+            };
+            let Some(y) = row_i32.checked_add(dy) else {
+                continue;
+            };
+            let Ok(width) = i32::try_from(img.width()) else {
+                continue;
+            };
+            target.blend_span_with(dx, width, y, 255, BlendMode::Normal, |col, _| {
+                let src_col = u32::try_from(i64::from(col) - i64::from(dx)).ok()?;
+                img.pixel(src_col, row)
+                    .map(|px| image::scale_alpha(px, alpha))
+            });
+        }
+    }
+
     /// The coverage plane a path fills, device-sized — a clip.
     fn coverage_of(&mut self, path: &BezPath, rule: FillRule, aa: AntiAlias) -> AlphaMask {
         let (w, h) = self.size();
@@ -214,7 +300,7 @@ impl ExactDevice {
         self.raster.add_path(path, FLATTEN_TOLERANCE);
         let width = w as usize;
         self.raster.sweep(
-            to_cell_rule(rule),
+            to_scanline_rule(rule),
             aa == AntiAlias::On,
             |x, len, y, alpha| {
                 let (Ok(row), Ok(w_i32)) = (u32::try_from(y), i32::try_from(w)) else {
@@ -265,11 +351,48 @@ impl ExactDevice {
     }
 }
 
+/// The whole-pixel `(dx, dy)` a transform amounts to, or `None` when it is
+/// anything else.
+///
+/// Exact equality on the four coefficients, not a tolerance: the point is to
+/// take the fast path only where it is provably the *same answer*, and a matrix
+/// a hair off the identity really does resample. The offsets are likewise
+/// required to be exact integers, because half a pixel of translation is a
+/// genuine resample and the general path is the one that performs it.
+fn whole_pixel_offset(transform: Affine) -> Option<(i32, i32)> {
+    let [xx, yx, xy, yy, tx, ty] = transform.as_coeffs();
+    #[expect(
+        clippy::float_cmp,
+        reason = "the fast path must be taken only where the two paths agree \
+                  exactly; a tolerance here would silently skip a resample"
+    )]
+    let unrotated_unscaled = xx == 1.0 && yx == 0.0 && xy == 0.0 && yy == 1.0;
+    if !unrotated_unscaled {
+        return None;
+    }
+    Some((whole(tx)?, whole(ty)?))
+}
+
+/// A float that is exactly an integer, as an `i32`.
+///
+/// Exactly, not nearly: half a pixel of translation is a genuine resample and
+/// belongs on the sampled path.
+fn whole(value: f64) -> Option<i32> {
+    (value.fract() == 0.0 && value.abs() < f64::from(i32::MAX)).then(|| {
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "guarded above: integral and within i32"
+        )]
+        let n = value as i32;
+        n
+    })
+}
+
 /// The rasterizer's fill rule for the trait's.
-fn to_cell_rule(rule: FillRule) -> cell::FillRule {
+fn to_scanline_rule(rule: FillRule) -> scanline::FillRule {
     match rule {
-        FillRule::Winding => cell::FillRule::NonZero,
-        FillRule::EvenOdd => cell::FillRule::EvenOdd,
+        FillRule::Winding => scanline::FillRule::NonZero,
+        FillRule::EvenOdd => scanline::FillRule::EvenOdd,
     }
 }
 
@@ -333,49 +456,27 @@ impl RenderDevice for ExactDevice {
     }
 
     fn draw_image(&mut self, img: &RasterImage, t: Affine, quality: ImageQuality, alpha: f32) {
-        // `t` maps the image's own **pixel grid** onto the device, not its
-        // unit square: every engine call site passes a plain translation for
-        // a device-sized buffer, and the engine has already folded any scale
-        // into the samples by resampling them. Reading `t` as a unit-square
-        // map instead collapses a whole-page image onto one pixel.
-        let Some(sampler) = image::Sampler::new(img, t, quality) else {
-            return;
-        };
         let constant = pixmap::alpha_byte_truncating(alpha);
         if constant == 0 {
             return;
         }
-        // The image's footprint is its pixel rectangle through `t`, and it is
-        // filled **antialiased**. Hard-edging it instead thresholds the
-        // silhouette at half a pixel, which silently deletes any image thin
-        // enough to cover less than that — a sheared type-3 glyph drawn as an
-        // inline image mask is exactly such a case, and the oracle paints it
-        // at its true partial coverage rather than dropping it.
+        // A whole-pixel translation is a *blit*: every device pixel takes one
+        // texel, the footprint's edges land exactly on pixel boundaries, and
+        // the general path computes both facts the expensive way — an inverse
+        // transform and two floors per pixel to recover an index that is a
+        // subtraction, and an antialiased rasterization of a rectangle whose
+        // coverage is everywhere 0 or 255.
         //
-        // The border is not darkened twice by this. The sampler carries the
-        // image's *own* alpha and the footprint carries the silhouette's, and
-        // the two are different quantities: outside the last texel the sampler
-        // returns nothing at all, so the only pixels the silhouette modulates
-        // are the boundary ones, where a partial coverage is what the geometry
-        // actually says.
-        let footprint = t * rect_path(Rect::new(
-            0.0,
-            0.0,
-            f64::from(img.width()),
-            f64::from(img.height()),
-        ));
-        self.scan(
-            &footprint,
-            FillRule::Winding,
-            AntiAlias::On,
-            move |target, x, len, y, cov| {
-                target.blend_span_with(x, len, y, cov, BlendMode::Normal, |col, row| {
-                    sampler
-                        .sample(col, row)
-                        .map(|px| image::scale_alpha(px, constant))
-                });
-            },
-        );
+        // It is a fast path rather than a different answer, and
+        // `an_integer_blit_agrees_with_the_general_path` pins that. It matters
+        // because the glyph path blits one small image per glyph occurrence,
+        // tens of thousands of times on a dense page, where the general path
+        // costs more than filling the outline it replaced.
+        if let Some((dx, dy)) = whole_pixel_offset(t) {
+            self.blit(img, dx, dy, constant);
+            return;
+        }
+        self.draw_image_sampled(img, t, quality, constant);
     }
 
     fn push_clip(&mut self, path: &BezPath, rule: FillRule) {
@@ -914,5 +1015,117 @@ mod tests {
         let out = backend.finish(device);
         let alpha = out.pixel(0, 0).map_or(0, |px| px[3]);
         assert_eq!(alpha, 5, "0.02 coverage is floor(0.02 * 256) == 5");
+    }
+
+    /// A small image whose every texel differs from its neighbours, so a blit
+    /// that shifted or repeated one would be visible.
+    fn checkerboard(w: u32, h: u32) -> Pixmap {
+        let mut p = Pixmap::new(w, h);
+        for y in 0..h {
+            for x in 0..w {
+                let on = (x + y) % 2 == 0;
+                let a = if on { 200 } else { 90 };
+                p.set_pixel(x, y, [a / 2, a / 3, a / 4, a]);
+            }
+        }
+        p
+    }
+
+    #[test]
+    fn a_whole_pixel_transform_is_recognised_and_nothing_else_is() {
+        assert_eq!(whole_pixel_offset(Affine::IDENTITY), Some((0, 0)));
+        assert_eq!(
+            whole_pixel_offset(Affine::translate((3.0, -7.0))),
+            Some((3, -7))
+        );
+        // Half a pixel is a resample, not a blit.
+        assert_eq!(whole_pixel_offset(Affine::translate((3.5, 0.0))), None);
+        // So is any scale, however close to one.
+        assert_eq!(whole_pixel_offset(Affine::scale(1.000_001)), None);
+        assert_eq!(whole_pixel_offset(Affine::rotate(0.001)), None);
+        // And a non-finite offset is not an offset.
+        assert_eq!(whole_pixel_offset(Affine::translate((f64::NAN, 0.0))), None);
+    }
+
+    #[test]
+    fn an_integer_blit_agrees_with_the_general_path() {
+        // The property the fast path is allowed to exist on: it is faster and
+        // it is not different. Both are run over the same image at the same
+        // whole-pixel offset, and the general one is reached by asking for it
+        // rather than by perturbing the transform, because a perturbed
+        // transform would legitimately differ.
+        let image = checkerboard(5, 4);
+        let backend = ExactBackend::new();
+
+        let mut fast = backend.new_target(12, 10, peniko::Color::WHITE);
+        fast.draw_image(
+            &image,
+            Affine::translate((3.0, 2.0)),
+            ImageQuality::Nearest,
+            1.0,
+        );
+        let fast = backend.finish(fast);
+
+        let mut slow_device = backend.new_target(12, 10, peniko::Color::WHITE);
+        slow_device.draw_image_sampled(
+            &image,
+            Affine::translate((3.0, 2.0)),
+            ImageQuality::Nearest,
+            255,
+        );
+        let slow = backend.finish(slow_device);
+
+        assert_eq!(fast.data(), slow.data(), "the blit is the same answer");
+    }
+
+    #[test]
+    fn a_blit_respects_the_clip_and_the_edges_of_the_target() {
+        let image = checkerboard(6, 6);
+        let backend = ExactBackend::new();
+        let mut device = backend.new_target(8, 8, peniko::Color::WHITE);
+        device.push_clip_rect(Rect::new(2.0, 2.0, 5.0, 5.0));
+        // Deliberately hangs off the left and top, to exercise the clamp.
+        device.draw_image(
+            &image,
+            Affine::translate((-1.0, -1.0)),
+            ImageQuality::Nearest,
+            1.0,
+        );
+        device.pop();
+        let out = backend.finish(device);
+        assert_eq!(
+            out.pixel(1, 1),
+            Some([255, 255, 255, 255]),
+            "outside the clip"
+        );
+        assert_eq!(
+            out.pixel(6, 6),
+            Some([255, 255, 255, 255]),
+            "outside the clip"
+        );
+        assert_ne!(out.pixel(3, 3), Some([255, 255, 255, 255]), "inside it");
+    }
+
+    #[test]
+    fn a_partial_alpha_blit_scales_the_source_as_the_general_path_does() {
+        let image = checkerboard(4, 4);
+        let backend = ExactBackend::new();
+        let mut fast = backend.new_target(6, 6, peniko::Color::WHITE);
+        fast.draw_image(
+            &image,
+            Affine::translate((1.0, 1.0)),
+            ImageQuality::Nearest,
+            0.5,
+        );
+        let fast = backend.finish(fast);
+        let mut slow = backend.new_target(6, 6, peniko::Color::WHITE);
+        slow.draw_image_sampled(
+            &image,
+            Affine::translate((1.0, 1.0)),
+            ImageQuality::Nearest,
+            pdfrum_render::pixmap::alpha_byte_truncating(0.5),
+        );
+        let slow = backend.finish(slow);
+        assert_eq!(fast.data(), slow.data());
     }
 }
