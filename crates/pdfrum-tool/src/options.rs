@@ -85,6 +85,15 @@ pub struct Options {
     /// and renders what pdfrum wrote (SPEC.md §11's ruling E7). The asymmetry
     /// is expected, and the harness never diffs this flag against the oracle.
     pub save: bool,
+    /// The rasterizer named by `--use-renderer=`, verbatim.
+    ///
+    /// The oracle has this flag too — it picks between its AGG and Skia
+    /// backends — so unlike `--save` this is not an asymmetry with the oracle's
+    /// surface, and the harness can pass it to both. Our names are our own
+    /// (`exact`, `tiny-skia`, `vello`), and an unrecognised value falls back to
+    /// the default rather than failing, exactly as an unknown renderer name
+    /// does upstream.
+    pub use_renderer: Option<String>,
     /// Flags recognized but not implemented, in the order they were given.
     pub unsupported: Vec<String>,
 }
@@ -139,7 +148,6 @@ const ACCEPTED_VALUED: &[&str] = &[
     "--render-repeats=",
     "--bin-dir=",
     "--js-flags=",
-    "--use-renderer=",
     "--time=",
 ];
 
@@ -182,6 +190,10 @@ pub fn parse(args: &[String]) -> Result<Options, ParseError> {
                 ));
             }
             options.pages = Some(parse_page_range(value));
+        } else if let Some(value) = arg.strip_prefix("--use-renderer=") {
+            // Last one wins rather than being a duplicate error: the oracle
+            // overwrites its own renderer choice the same way.
+            options.use_renderer = Some(value.to_owned());
         } else if let Some(value) = arg.strip_prefix("--font-dir=") {
             // Repeatable, like the oracle's: each one adds a path to scan.
             options.font_dirs.push(PathBuf::from(value));

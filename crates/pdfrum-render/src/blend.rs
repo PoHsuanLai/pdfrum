@@ -271,9 +271,184 @@ pub fn composite_straight(
     (out, out_a)
 }
 
+/// Composite one **premultiplied** RGBA8 source pixel over a premultiplied
+/// destination pixel, blending with `mode` and scaling the source by
+/// `coverage`.
+///
+/// This is [`composite_straight`] wearing the buffer layout both rasterizer
+/// backends and every offscreen target in this crate actually use, and it
+/// exists so there is exactly one place the blend arithmetic lives. It
+/// un-premultiplies, delegates, and premultiplies back rather than deriving a
+/// second premultiplied formula — the round trip costs two divides on a pixel
+/// that is being blended anyway, and a second formula is a second thing to
+/// keep in step with the oracle.
+///
+/// `coverage` is the rasterizer's antialiasing byte, folded into the source
+/// alpha by the same truncating product the oracle folds a clip mask in with.
+/// A zero coverage or a zero source alpha leaves the destination untouched,
+/// which is what lets a caller blend unconditionally.
+#[must_use]
+pub fn composite_premultiplied(
+    dest: [u8; 4],
+    src: [u8; 4],
+    coverage: u8,
+    mode: BlendMode,
+) -> [u8; 4] {
+    let (Some(&sr), Some(&sg), Some(&sb), Some(&sa)) =
+        (src.first(), src.get(1), src.get(2), src.get(3))
+    else {
+        return dest;
+    };
+    let src_alpha = crate::pixmap::mul255(sa, coverage);
+    if src_alpha == 0 {
+        return dest;
+    }
+    let (Some(&dr), Some(&dg), Some(&db), Some(&da)) =
+        (dest.first(), dest.get(1), dest.get(2), dest.get(3))
+    else {
+        return dest;
+    };
+    let src_rgb = crate::pixmap::unpremultiply_rgb(sr, sg, sb, sa);
+    let dest_rgb = crate::pixmap::unpremultiply_rgb(dr, dg, db, da);
+    let (rgb, alpha) = composite_straight((dest_rgb, da), (src_rgb, src_alpha), mode);
+    let (Some(&r), Some(&g), Some(&b)) = (rgb.first(), rgb.get(1), rgb.get(2)) else {
+        return dest;
+    };
+    [
+        premultiply_channel(r, alpha),
+        premultiply_channel(g, alpha),
+        premultiply_channel(b, alpha),
+        alpha,
+    ]
+}
+
+/// `c * a / 255`, **rounding** — premultiplication that survives the trip
+/// back.
+///
+/// The truncating [`mul255`](crate::pixmap::mul255) is the oracle's product
+/// wherever the oracle itself performs one, and it stays that everywhere else.
+/// Here it is wrong for a structural reason: this is not one of the oracle's
+/// products at all, it is the *storage* half of a round trip our premultiplied
+/// buffers impose and the oracle's straight ones do not. Its inverse,
+/// [`unpremultiply_rgb`](crate::pixmap::unpremultiply_rgb), rounds — it is
+/// ported from `CFX_DIBitmap::UnPreMultiply`'s `+ alpha / 2` — so truncating
+/// on the way in makes the pair lose a count on most values instead of none.
+///
+/// Measured: a straight `145` at alpha `223` premultiplies to `126` truncating
+/// and `127` rounding, and only `127` comes back as `145`. That count is
+/// visible in the corpus — it is every pixel of `alpha_composite`'s overlap.
+#[must_use]
+fn premultiply_channel(c: u8, a: u8) -> u8 {
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "(255*255 + 127)/255 == 255 is the maximum, so the quotient fits u8"
+    )]
+    let byte = ((u32::from(c) * u32::from(a) + 127) / 255) as u8;
+    byte
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn premultiplied_composite_agrees_with_the_straight_one() {
+        // The premultiplied spelling must be the straight one in a different
+        // buffer layout, not a second formula that drifts from it.
+        let dest_straight = ([10u8, 200, 30], 255u8);
+        let src_straight = ([250u8, 40, 90], 128u8);
+        let (want_rgb, want_a) =
+            composite_straight(dest_straight, src_straight, BlendMode::Multiply);
+        let premul = |(rgb, a): ([u8; 3], u8)| -> [u8; 4] {
+            [
+                crate::pixmap::mul255(rgb[0], a),
+                crate::pixmap::mul255(rgb[1], a),
+                crate::pixmap::mul255(rgb[2], a),
+                a,
+            ]
+        };
+        let got = composite_premultiplied(
+            premul(dest_straight),
+            premul(src_straight),
+            255,
+            BlendMode::Multiply,
+        );
+        let want = premul((want_rgb, want_a));
+        for i in 0..4 {
+            let (Some(&g), Some(&w)) = (got.get(i), want.get(i)) else {
+                continue;
+            };
+            assert!(g.abs_diff(w) <= 1, "channel {i}: {got:?} vs {want:?}");
+        }
+    }
+
+    #[test]
+    fn premultiplying_survives_the_trip_back() {
+        // The storage round trip a premultiplied buffer imposes must not lose
+        // a count, or every composited pixel drifts one low against a golden
+        // taken from the oracle's straight buffer. The witness that found
+        // this is 145 at alpha 223 -- `alpha_composite`'s overlap colour.
+        assert_eq!(premultiply_channel(145, 223), 127);
+        assert_eq!(
+            crate::pixmap::unpremultiply_rgb(127, 127, 127, 223),
+            [145, 145, 145]
+        );
+        // Premultiplication is genuinely lossy at low alpha — at alpha 1 the
+        // whole colour range collapses onto two representable values — so the
+        // property is not exactness but *optimality*: the round trip lands
+        // within the quantisation step the alpha imposes, and it is never
+        // worse than the truncating spelling. Exhaustively.
+        let mut rounding_wins = 0u32;
+        for a in 1..=255u8 {
+            let step = 255_u32.div_ceil(u32::from(a));
+            for c in 0..=255u8 {
+                let rounded =
+                    crate::pixmap::unpremultiply_rgb(premultiply_channel(c, a), 0, 0, a)[0];
+                let truncated =
+                    crate::pixmap::unpremultiply_rgb(crate::pixmap::mul255(c, a), 0, 0, a)[0];
+                let rounded_err = u32::from(rounded).abs_diff(u32::from(c));
+                let truncated_err = u32::from(truncated).abs_diff(u32::from(c));
+                assert!(rounded_err <= step, "c={c} a={a} drifted {rounded_err}");
+                assert!(
+                    rounded_err <= truncated_err,
+                    "c={c} a={a}: rounding lost to truncating"
+                );
+                if rounded_err < truncated_err {
+                    rounding_wins += 1;
+                }
+            }
+        }
+        // And it is not a distinction without a difference: rounding is
+        // strictly better on a large share of the 65 280 pairs.
+        assert!(
+            rounding_wins > 20_000,
+            "only {rounding_wins} pairs improved"
+        );
+    }
+
+    #[test]
+    fn zero_coverage_leaves_the_destination_alone() {
+        let dest = [1u8, 2, 3, 255];
+        assert_eq!(
+            composite_premultiplied(dest, [255, 255, 255, 255], 0, BlendMode::Normal),
+            dest
+        );
+    }
+
+    #[test]
+    fn full_coverage_opaque_source_replaces() {
+        let out =
+            composite_premultiplied([0, 0, 0, 255], [10, 20, 30, 255], 255, BlendMode::Normal);
+        assert_eq!(out, [10, 20, 30, 255]);
+    }
+
+    #[test]
+    fn coverage_scales_the_source_alpha_truncating() {
+        // Half coverage over an empty destination copies the source at half
+        // alpha, and the product truncates the way the oracle's does.
+        let out = composite_premultiplied([0, 0, 0, 0], [255, 0, 0, 255], 128, BlendMode::Normal);
+        assert_eq!(out[3], 128, "coverage becomes the alpha");
+    }
 
     #[test]
     fn color_sqrt_is_piecewise_d_not_sqrt() {
