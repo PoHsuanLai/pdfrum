@@ -525,13 +525,25 @@ fn tier_c(args: &TierCArgs) -> Result<ExitCode> {
         (hard.len() + soft) as f64 / compared as f64
     };
 
-    println!("tier-c: {compared} files compared under both backends");
+    // The analytic backend is a third column, not a third gate: it shares the
+    // engine's own compositing arithmetic, so diffing it against either
+    // wrapped backend tests less than diffing the two wrapped ones against
+    // each other. `TierCOutcome::exact_edge_rate` records the reasoning.
+    let exact_rates: Vec<f64> = outcomes.iter().filter_map(|o| o.exact_edge_rate).collect();
+    let exact_worst = exact_rates.iter().copied().fold(0.0f64, f64::max);
+
+    println!("tier-c: {compared} files compared under the gating pair (tiny-skia vs vello_cpu)");
     println!("  hard failures (engine bugs)   {}", hard.len());
     println!("  over the 1% edge budget       {soft}");
     println!("  worst edge divergence         {:.4}%", worst * 100.0);
     println!(
         "  divergent files               {:.2}%",
         divergent_rate * 100.0
+    );
+    println!(
+        "  exact backend (reported)      {} files, worst edge divergence {:.4}%",
+        exact_rates.len(),
+        exact_worst * 100.0
     );
     for outcome in hard.iter().take(triage::EXAMPLES) {
         println!("    {} - {}", outcome.path, outcome.note);

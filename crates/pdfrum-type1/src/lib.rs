@@ -61,7 +61,7 @@
 //! private section or no `/CharStrings` at all. Everything short of that —
 //! a truncated PFB segment, hex that stops mid-byte, a charstring that runs
 //! off its end, a Multiple-Master declaration whose parts disagree — yields
-//! the best-effort font with a [`Diagnostics`](pdfrum_common::Diagnostics)
+//! the best-effort font with a [`pdfrum_common::Diagnostics`]
 //! entry recording what was lost. A glyph whose charstring cannot be
 //! interpreted to completion still returns the partial outline; only a glyph
 //! index that does not exist returns `None`.
