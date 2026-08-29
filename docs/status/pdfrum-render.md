@@ -1,7 +1,7 @@
 # `pdfrum-render` status
 
-**Updated:** 2026-08-29 · **State:** M5 pixel burn-down; the four named
-feature clusters are implemented
+**Updated:** 2026-08-29 · **State:** M8 pixel burn-down wave 2 —
+**76.4% at SSIM ≥ 0.99**, Tier C hard failures 11 → 5, annotations render
 
 Contract: SPEC.md §8 including the E2/E3/E4/E10 additions and the
 2026-08-29 implementation record. Behavior: `docs/design/pdfrum-render.md`;
@@ -63,17 +63,85 @@ rasterizer.
 ## Numbers
 
 Measured against the golden store on the full corpus (1675 files, 1628 with
-a golden PNG), rendering through `tiny-skia`:
+a golden PNG), rendering through `tiny-skia`. The M8 column is the pixel
+burn-down's second wave; the M5 column is what it started from.
 
-| metric | value | M3 target |
+| metric | M5 | **M8** |
 |---|---|---|
-| pixel files at SSIM ≥ 0.99 | **1075 / 1628 (66.0%)** | ≥ 60% |
-| at SSIM ≥ 0.95 | 1478 / 1628 (90.8%) | — |
-| at SSIM ≥ 0.90 | 1544 / 1628 (94.8%) | — |
-| byte-exact PNGs | 430 / 1628 | — |
-| `size-mismatch` | 0 | — |
-| Tier C hard failures (295-file sample) | **0** | — |
-| Tier C hard failures (full 1628-file store) | 13 | **11** |
+| pixel files at SSIM ≥ 0.99 | 1075 / 1628 (66.0%) | **1243 / 1628 (76.4%)** |
+| at SSIM ≥ 0.95 | 1478 / 1628 (90.8%) | **1518 / 1628 (93.2%)** |
+| at SSIM ≥ 0.90 | 1544 / 1628 (94.8%) | **1570 / 1628 (96.4%)** |
+| byte-exact PNGs | 430 / 1628 | **446 / 1628** |
+| files passing (all tiers) | 1146 / 1675 | **1256 / 1675** |
+| `pixel-fail` | 495 | **385** |
+| `size-mismatch` | 0 | 0 |
+| Tier C hard failures (full store) | 11 | **5** |
+
+Every step was measured with `conformance run --check-regressions` against
+the scoreboard it started from, so no previously-passing file regressed at
+any point.
+
+### What M8 found, and what it says about the metric
+
+The burn-down opened on the three concrete defects the M5 tail-cleanup had
+named, and all three turned out to be the *same shape*: a feature fully built
+and tested, with nothing consulting it.
+
+- **`/Decode` was being applied to samples the oracle never decodes.**
+  `CPDF_DIB::GetScanline` fills a zeroed *output* buffer and returns before
+  `TranslateScanline24bpp` when a row begins past the end of the stream. We
+  zero-padded the raw samples and decoded those, which on `bug_554151.in` —
+  `/Decode [1.0]` over a 612×104000 image with a kilobyte of data — painted
+  484 704 red pixels where the oracle paints black.
+- **The degenerate-path family was one nudge.** `BuildAggPath` moves a
+  one-point subpath's line endpoint a device pixel right so `vcgen_stroke`
+  has two vertices; the dot the oracle paints is the *stadium* that leaves,
+  21 pixels across rather than 20. All four files it explains dropped out of
+  Tier C's hard count.
+- **`bug_1288_2`'s rounding bias was not in `AlphaMerge`.** That function was
+  already exact. The bias was upstream: an uncoloured tile composites through
+  `CompositeMask`, which carries one flat colour and merges only alpha, and
+  we recoloured the cell into premultiplied RGBA and blitted source-over —
+  blending the colour against itself once per overlap, truncating upward each
+  time. Fixing the shape halved the outliers; the residual one count is the
+  final `draw_image`, which a rasterizer rounds where PDFium truncates.
+
+Three more clusters were found the same way and were larger than any of them:
+
+- **Annotations were not rendered at all** — 280 of the 489 remaining pixel
+  failures mentioned `/Annots`. `pdfium_test` seeds its flags with
+  `FPDF_ANNOT` unconditionally, so an appearance stream is page content.
+  Wiring the M6 appearance machinery into the render pass moved 90 files.
+- **A `/Mask` array was parsed and never evaluated.** The predicate is on raw
+  samples, so it cannot run at draw time; PDFium runs it inside `GetScanline`
+  and so do we now, resolving the key into an alpha plane at decode.
+- **A `/TR` reached fill colours but not image samples.**
+  `StartRenderDIBBase` wraps the source in a `CPDF_TransferFuncDIB`, so every
+  sample goes through the tables.
+
+### Where the remaining 385 are
+
+`pixel-fail` is still a threshold cut through a continuous distribution, and
+the distribution has changed shape: 275 of the 385 sit in the 0.95–0.99 band
+and **159 of those carry no image, shading, pattern or soft mask at all.**
+They are D7 in its pure form — geometry that matches exactly, stem coverage
+that does not, because the oracle rasterizes hinted FreeType bitmaps with LCD
+filtering below `|a| + |b| > 50` and PLAN §1 rules out porting the hinter.
+The goldens read 252/253 where we read 63/191: the same ink, distributed the
+way two different rasterizers distribute it.
+
+Below 0.9 there are 58 files and they are **not** one cluster:
+
+| files | shape |
+|---|---|
+| ~20 | `corpus/third_party/tcpdf/example_*`, DCT images at a sub-pixel placement offset — feature edges land a fraction of a pixel apart across the whole page |
+| 4 | JPX codestreams: `jpxdecode_indexed`, `bug_1986`, `bug_557223`. `bug_1986`'s filter chain reaches JPX through two indirect `/Filter` names |
+| 3 | the tiling *slow path* (`bug_1693`), taken when the cell is larger than the clip, which the engine still declines |
+| ~10 | JBIG2 and CCITT decode differences |
+| ~20 | assorted single files |
+
+The marginal cluster is under three files, which is where the budget said to
+stop. The tail inventory above is what remains.
 
 The golden store widened between M3 and M5, so the store-wide rate is not a
 like-for-like comparison. Over the **same 1421 files** M3 measured, the
@@ -154,8 +222,23 @@ incorrectly. The remaining count should **not** be driven toward zero by
 widening this rule: three of the four classes above are things the interior
 guarantee exists to catch.
 
-Metadata and pageinfo remain 100% Tier-A byte-exact; text holds at 99.0% of
-pages (97.9% of non-empty ones).
+**M8 update: they were, and it caught them.** Every one of the first two
+classes was a real engine bug, and fixing them took the hard count from 11 to
+**5** without touching the edge rule at all. `bug_554151` was `/Decode` being
+applied to samples the oracle never decodes; the four degenerate-path files
+were one missing nudge in `BuildAggPath`. `bug_1288_2` shrank rather than
+cleared — the bias was not in `AlphaMerge`, which was already exact, but in
+recolouring an uncoloured tile into premultiplied RGBA before blitting it,
+which blends the colour against itself once per overlap. What is left is a
+rasterizer's rounding in one `draw_image`, three counts at most.
+
+The lesson stands for the metric rather than for these five files: a rule
+that reports five engine bugs and mislabels one is doing exactly what it is
+for, and the correct response to a hard failure is to read it rather than to
+widen the mask that raised it.
+
+Metadata and pageinfo remain 100% Tier-A byte-exact; text holds at 99.6% of
+pages (99.1% of non-empty ones).
 
 ### M5: the four feature clusters
 
@@ -333,8 +416,33 @@ declines, plus the work that awaits another crate.
   identical to the cached-cell path and performance-only, and the engine
   takes the cached-cell path unconditionally.
 - **`/K` knockout groups**, which PDFium does not implement either (D20).
-- **Annotation appearance layers**, which `pdfrum-doc` now provides the dump
-  for; rendering them is not yet wired into the walk.
+**Annotation appearance layers now render** (M8). They are appended to the
+page's object list by `pdfrum-tool`'s `annot_render`, after the content
+stream and in `/Annots` order, using `pdfrum-doc`'s appearance ladder,
+placement matrix and ten-subtype AP generator — the machinery M6 built for
+the `--annot` dump.
+
+Two things about the wiring are worth knowing, because both were paid for:
+
+- **It belongs to the render pass, not to the shared page builder.** Putting
+  it in `content::build` cost 74 text pages and 67 annotation dumps at once:
+  `--txt` reads the content stream's text and `--annot` describes the
+  annotations rather than drawing them, and both double-count an appearance
+  the page graph has absorbed.
+- **PDFium draws them in two passes with different visibility rules.** The
+  page render's `DisplayAnnots(bShowWidget=false)` skips every `/Widget`;
+  widgets come from `FPDF_FFLDraw`, which `pdfium_test` calls after every
+  bitmap render with no flag guard. Both end in the same `AnnotGetMatrix`
+  arithmetic, so one traversal reproduces them — but Pass B's `IsVisible`
+  tests `kInvisible` and Pass A's `DisplayPass` does not. `is_visible` keys
+  on the subtype so each annotation gets its own pass's rules.
+
+Wiring this also exposed that **a form's `/BBox` was never applied as a
+clip**. A form reached from a content stream inherits an enclosing `q`/`Q`
+and the clip rides along in the graphics state; an annotation appearance has
+no enclosing anything. `build_form_object` pushes it, which is why
+`ink_annot.in`'s golden — an entirely white page, because its two `/InkList`
+strokes run far outside the `/Rect` they are clipped to — is byte-exact.
 
 ## Tests
 

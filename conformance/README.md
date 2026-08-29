@@ -73,17 +73,23 @@ budget purely by enlarging their denominator.
 Hard failures over the 1628-file store: **13 → 11**. The two cleared
 (`ch_9_android.pdf`, `zh_function_list.pdf`) were exactly the blit-seam class.
 
-The 11 that remain are **not** one cluster, and the count should not be driven
-to zero by widening this rule — three of them are real:
+The 11 that remained were **not** one cluster, and the count was never going
+to be driven to zero by widening this rule — most of them were real. Five of
+the six named classes were engine bugs, and M8 fixed them:
 
-| files | cause |
-|---|---|
-| `bug_554151.{in,pdf}` | tiny-skia fills the page **red**, vello_cpu fills it **white**. A whole-page divergence, 484 704 pixels at 255 counts. A genuine backend or engine defect. |
-| `bug_1983.{in,pdf}`, `single_point_paths.{in,pdf}` | one backend paints a degenerate mark (zero-length line, single-point path) and the other paints nothing. The localized form of `one_painted_nothing`. |
-| `bug_0_length_line.pdf`, `bug_0_width_line.pdf` | the same degenerate-path family, at ordinary coverage magnitudes. |
-| `bug_1288_2.{in,pdf}` | **not an edge phenomenon.** vello_cpu writes a constant 127 where tiny-skia writes 129/130 on a 50% blend — a systematic one-sided rounding bias in compositing, two counts over `INTERIOR_TOLERANCE`. Widening the edge mask would hide it; the fix belongs in whichever pipeline is rounding wrong. |
-| `xfermodes3.pdf` | the genuine blit-seam residue: 2x2 cell-corner blocks sitting two pixels in from agreed structure. Radius 2 clears it, at the cost above. |
+| files | cause | outcome |
+|---|---|---|
+| `bug_554151.{in,pdf}` | tiny-skia fills the page **red**, vello_cpu **white**: 484 704 pixels at 255 counts, immune to dilation because there is no agreed boundary anywhere on the page. | **Fixed.** `/Decode` was being applied to samples the oracle never decodes — a row past the end of the stream skips the decode entirely. Byte-exact. |
+| `bug_1983.{in,pdf}`, `single_point_paths.{in,pdf}`, `bug_0_length_line.pdf`, `bug_0_width_line.pdf` | one backend paints a degenerate mark and the other paints nothing. | **Fixed.** `BuildAggPath`'s one-pixel nudge for a degenerate subpath, so both backends receive a real segment to stroke. |
+| `bug_1288_2.{in,pdf}` | **not an edge phenomenon.** A systematic one-sided rounding bias in compositing, two counts over `INTERIOR_TOLERANCE`. | **Reduced, not cleared.** The bias was not in `AlphaMerge` — that was already exact. An uncoloured tile composites through `CompositeMask`, carrying one flat colour and merging only alpha; we recoloured into premultiplied RGBA and blitted, blending the colour against itself once per overlap. Fixing the shape halved the outliers. The residual is a rasterizer's rounding in the final `draw_image`, three counts at most. |
+| `xfermodes3.pdf` | the genuine blit-seam residue: 2x2 cell-corner blocks two pixels in from agreed structure. Radius 2 clears it, at the cost above. | Unchanged, and still a metric artefact rather than a defect. |
+
+Hard failures now: **5**, over two distinct causes. That the rule *found*
+five real engine bugs and only ever mislabelled one file is the argument for
+leaving the interior guarantee exactly where it is.
 
 The prior status note attributed all 13 to the tiling blind spot. Measurement
-does not support that: only `xfermodes3` and `bug_1288_2` involve tiling at
-all, and `bug_1288_2`'s cause is compositing rounding rather than edges.
+did not support that, and the correction was worth more than the two files it
+cleared: `bug_554151`'s whole-page divergence was the single most valuable
+thing the tier-C run was saying, and it sat unread under a heading calling all
+thirteen a blind spot.
