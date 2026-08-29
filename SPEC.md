@@ -844,7 +844,10 @@ Struct tree reader for `--show-structure` parity.
 Rulings 2026-08-29 (doc brief escalations): NO second variable-text engine —
 the `cpdfsdk_appstream`/`CPWL_EditImpl` NeedAppearances path is out of scope
 (only ~5 corpus pixel files reach it; they become documented waivers); ship
-only the checkbox/radio path tables, off by default (E1). Dict keys are
+only the checkbox/radio path tables, off by default (E1 — **superseded, see
+the 2026-08-29 revision below: there was no second engine, and the three
+`SetAs*` producers are now in scope over the `vt` engine this crate already
+has**). Dict keys are
 SORTED at the two --show-structure emission sites only — storage stays
 insertion-order per §2, whose divergence note gains this exception (E2). The
 oracle exits nonzero on Unknown/Redact --annot fixtures (verified at golden
@@ -869,7 +872,9 @@ object count reports what the generated stream drew. The decision not to port
 `CPWL_EditImpl` is unchanged; what changes is that this crate must build the
 *chrome* — background, border, and the checkbox and radio glyph shapes — for
 every such widget rather than for five files. The text body remains out of
-scope and is what the residual `--annot` gap is made of.
+scope and is what the residual `--annot` gap is made of. (**Superseded for the
+body**: the revision below puts it in scope. The decision not to port
+`CPWL_EditImpl` still holds — it turned out not to be what the body needs.)
 
 *E3 is confirmed and becomes a harness rule.* The golden store **does**
 contain crash artifacts: `redact_annot`'s manifest records
@@ -910,8 +915,40 @@ Two things the original ruling could not have known:
   `widget::generate` never receives a `TextFont`, and `ap`'s text-bearing
   dispatch answers only for `FreeText`.
 
-The ruling **stands until changed**: this records the price, not a decision.
-Wiring the widget path is a `[spec]` change and belongs to the orchestrator.
+**[spec] 2026-08-29 — E1 IS REVISED. The widget text body is IN scope; the
+`CPWL_EditImpl` port stays declined.** The ruling declined "a second
+variable-text engine". Wave 9 established that there is no second engine to
+write: `CPWL_EditImpl` is a shell over `CPVT_VariableText`, which `pdfrum-doc`'s
+`vt` module already is in full, and the only thing the shell adds that a
+generated appearance can observe is a **vertical alignment offset** — the same
+argument `ap/freetext.rs` has always passed. What the ruling was protecting
+against does not exist, so the ruling no longer protects anything.
+
+What is authorized: the three producers `SetAsTextField`, `SetAsComboBox` and
+`SetAsListBox`, implemented over the existing `vt` engine as
+`ap::field_body`, reached from `widget::generate_with_text`. What stays
+declined, unchanged: porting `CPWL_EditImpl` itself, and everything else in
+`fpdfsdk/pwl` — the editing widgets, the caret, the scroll bars, the focus
+machinery. None of it is reachable from a generated appearance.
+
+Two further behaviors this makes necessary, both recorded here because they
+are contracts rather than implementation:
+
+- **A generated appearance is measured with the face its own `/DA` names**,
+  loaded from the form's `/DR /Font` through the same substitution the page
+  uses — not with one stock face for the whole document. The ascent and
+  descent the layout stacks lines by come from the *substituted face*, and
+  they differ from the base-14 metric tables enough to change the row count of
+  a list box (718/−219 against 905/−211 for the hermetic corpus's Helvetica,
+  which is 11.24 units of row pitch against 13.39).
+- **A widget whose field type is not one of the six the builder dispatches on
+  gets no appearance at all** — an intermediate `/Kids` node with no `/FT`,
+  and a signature. This is Tier-A visible: `--annot`'s two colour lines report
+  a colour exactly when no appearance stream exists.
+
+The M6 waiver shrinks accordingly: **76 `--annot` artifacts to 13** (72 files
+to 13), which clears M6's exit criterion outright — 99.4% — so the exclusion
+is retired rather than recounted. PLAN.md §M6 is restated to say so.
 
 ## 11. `pdfrum-edit`  *(behavior: `core/fpdfapi/edit`)*
 
