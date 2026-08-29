@@ -302,7 +302,25 @@ impl Object {
     /// of that set: siblings may legitimately share substructure, and only a
     /// reference back to an *ancestor* is a cycle. A cut edge disappears —
     /// the dictionary key is omitted, the array element is omitted — rather
-    /// than becoming null. Unresolvable references disappear the same way.
+    /// than becoming null. Unresolvable references disappear the same way,
+    /// indistinguishably from a cycle, as `CPDF_Reference::CloneNonCyclic`
+    /// returns `nullptr` for both.
+    ///
+    /// # Streams become direct values
+    ///
+    /// A reference to a stream flattens into the stream itself, stored
+    /// *directly* in the dictionary or array that held the reference. A
+    /// `/Resources` whose `/XObject` entries are indirect streams — the
+    /// ordinary case — therefore clones into a dictionary holding those
+    /// streams as values. This is what `CPDF_Dictionary::CloneNonCyclic`
+    /// produces as well: its loop inserts into `map_` directly and so
+    /// bypasses the `CHECK(!IsStream())` that guards the ordinary setters.
+    /// ISO 32000-1 §7.3.8.1 constrains what a *file* may contain, and the
+    /// writer honours it by hoisting such a stream back out to an indirect
+    /// object; it is not an invariant of these in-memory types.
+    ///
+    /// The cloned stream keeps its **raw**, still-encoded bytes, matching
+    /// `CPDF_Stream::CloneNonCyclic`'s `LoadAllDataRaw`.
     ///
     /// ```
     /// # use std::collections::HashMap;
