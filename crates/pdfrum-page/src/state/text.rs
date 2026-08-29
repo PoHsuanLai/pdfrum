@@ -30,6 +30,10 @@ pub struct TextState {
     /// only when the name resolved — so a bad `/Font` name changes the size
     /// and leaves the font standing.
     pub font: Option<(Arc<Font>, f32)>,
+    /// The `/Font` resource entry the current font came from, so a
+    /// regenerated content stream can name the same object. `None` when the
+    /// resource was written inline, and therefore has no object to name.
+    pub font_source: Option<pdfrum_object::ObjRef>,
     /// `Tc`, added after each glyph.
     pub char_space: f32,
     /// `Tw`, added after each single-byte space.
@@ -65,6 +69,7 @@ impl Default for TextState {
     fn default() -> Self {
         Self {
             font: None,
+            font_source: None,
             char_space: 0.0,
             word_space: 0.0,
             horz_scale: 1.0,

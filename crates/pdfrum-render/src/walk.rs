@@ -1898,6 +1898,8 @@ mod tests {
             state,
             marks: ContentMarks::new(),
             content_stream: 0,
+            dirty: false,
+            active: true,
         }))
     }
 
@@ -1939,6 +1941,8 @@ mod tests {
             state: GraphicsState::default(),
             marks: ContentMarks::new(),
             content_stream: 0,
+            dirty: false,
+            active: true,
         }));
         assert!(!culled(&obj, Rect::new(1000.0, 1000.0, 1001.0, 1001.0)));
     }

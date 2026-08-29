@@ -51,6 +51,7 @@ mod error;
 pub mod function;
 pub mod image;
 pub mod inline_image;
+pub mod mutate;
 mod ops;
 pub mod optional;
 mod page;
@@ -64,8 +65,8 @@ pub mod transparency;
 pub mod type3;
 
 pub use build::{
-    BuildContext, FoundPattern, MAX_FORM_LEVEL, build_form_object, build_page,
-    build_page_from_dict, eliminate_redundant_clips, load_pattern,
+    BuildContext, FoundPattern, MAX_FORM_LEVEL, StreamBounds, build_form_object, build_page,
+    build_page_from_dict, build_page_streams, eliminate_redundant_clips, load_pattern,
 };
 pub use color::{ColorSpace, ColorValue, PatternValue, Rgb};
 pub use content::parse_content;
@@ -75,6 +76,7 @@ pub use image::{
     BitImage, ImageCache, ImageData, ImageMask, JpxImage, Pixels, RequestedSize, decode_image,
     decode_jbig2, decode_jpx,
 };
+pub use mutate::NO_CONTENT_STREAM;
 pub use ops::{
     FillRule, InlineImage, LineCap, LineJoin, MarkProperties, Op, TextItem, TextRenderMode,
 };

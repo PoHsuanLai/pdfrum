@@ -38,6 +38,7 @@ fn page(width: f64, height: f64, objects: Vec<PageObject>) -> Page {
         rotate: Rotation::None,
         transparency: Transparency::default(),
         resources: None,
+        ..Page::empty()
     }
 }
 
@@ -64,6 +65,8 @@ fn filled(path: BezPath, rgb: [f32; 3]) -> PageObject {
         state,
         marks: ContentMarks::new(),
         content_stream: 0,
+        dirty: false,
+        active: true,
     }))
 }
 
@@ -81,6 +84,8 @@ fn stroked(path: BezPath, rgb: [f32; 3], width: f32) -> PageObject {
         state,
         marks: ContentMarks::new(),
         content_stream: 0,
+        dirty: false,
+        active: true,
     }))
 }
 
@@ -332,6 +337,8 @@ fn a_clipped_fill_stops_at_the_clip() {
         state,
         marks: ContentMarks::new(),
         content_stream: 0,
+        dirty: false,
+        active: true,
     }))];
     let (vello, tiny) = render_both(&page(12.0, 12.0, objects), &RenderOptions::default());
     for p in [&vello, &tiny] {
@@ -370,6 +377,8 @@ fn an_axial_shading_paints_a_ramp_identically_on_both_backends() {
         state: GraphicsState::default(),
         marks: ContentMarks::new(),
         content_stream: 0,
+        dirty: false,
+        active: true,
     }))];
     let (vello, tiny) = render_both(&page(16.0, 8.0, objects), &RenderOptions::default());
     assert_eq!(
@@ -397,10 +406,13 @@ fn a_form_renders_the_children_the_page_graph_gave_it() {
             bbox: Some(Rect::new(0.0, 0.0, 4.0, 4.0)),
             transparency: Transparency::default(),
             oc: None,
+            source: None,
         },
         state: GraphicsState::default(),
         marks: ContentMarks::new(),
         content_stream: 0,
+        dirty: false,
+        active: true,
     }));
     let (vello, tiny) = render_both(&page(12.0, 8.0, vec![form]), &RenderOptions::default());
     for p in [&vello, &tiny] {
@@ -434,6 +446,8 @@ fn a_translucent_fill_blends_with_the_background() {
         state,
         marks: ContentMarks::new(),
         content_stream: 0,
+        dirty: false,
+        active: true,
     }))];
     let (vello, tiny) = render_both(&page(8.0, 8.0, objects), &RenderOptions::default());
     for p in [&vello, &tiny] {
@@ -482,12 +496,15 @@ fn invisible_text_paints_nothing() {
             position: Point::ZERO,
             matrix: Affine::IDENTITY,
             font: None,
+            font_source: None,
             render_mode: TextRenderMode::Invisible,
             type3_metrics: BTreeMap::default(),
         },
         state: GraphicsState::default(),
         marks: ContentMarks::new(),
         content_stream: 0,
+        dirty: false,
+        active: true,
     }));
     let (vello, tiny) = render_both(&page(8.0, 8.0, vec![object]), &RenderOptions::default());
     assert_eq!(vello.pixel(4, 4), Some([255, 255, 255, 255]));
@@ -541,12 +558,15 @@ fn text_object(
             position: Point::new(x, y),
             matrix: Affine::IDENTITY,
             font: Some((std::sync::Arc::clone(&font), size)),
+            font_source: None,
             render_mode: TextRenderMode::Fill,
             type3_metrics: BTreeMap::default(),
         },
         state: GraphicsState::default(),
         marks: ContentMarks::new(),
         content_stream: 0,
+        dirty: false,
+        active: true,
     }));
     (object, font)
 }
@@ -858,6 +878,8 @@ fn pattern_filled(path: BezPath, pattern: pdfrum_page::Pattern, operands: &[f32]
         state,
         marks: ContentMarks::new(),
         content_stream: 0,
+        dirty: false,
+        active: true,
     }))
 }
 
@@ -1018,6 +1040,8 @@ fn a_pattern_that_did_not_resolve_paints_nothing_rather_than_black() {
         state,
         marks: ContentMarks::new(),
         content_stream: 0,
+        dirty: false,
+        active: true,
     }));
     let (vello, tiny) = render_both(&page(8.0, 8.0, vec![object]), &RenderOptions::default());
     assert_eq!(vello.pixel(4, 4), Some([255, 255, 255, 255]));
@@ -1063,10 +1087,13 @@ fn masked_form(
                 knockout: false,
             },
             oc: None,
+            source: None,
         },
         state,
         marks: ContentMarks::new(),
         content_stream: 0,
+        dirty: false,
+        active: true,
     }))
 }
 
@@ -1184,6 +1211,8 @@ fn an_unusable_pattern_paints_nothing_rather_than_the_current_colour() {
         state,
         marks: ContentMarks::new(),
         content_stream: 0,
+        dirty: false,
+        active: true,
     }));
     let (vello, tiny) = render_both(&page(8.0, 8.0, vec![object]), &RenderOptions::default());
     for surface in [&vello, &tiny] {
@@ -1335,6 +1364,8 @@ fn a_groups_own_alpha_multiplies_the_alpha_inside_it() {
         state: inner_state,
         marks: ContentMarks::new(),
         content_stream: 0,
+        dirty: false,
+        active: true,
     }));
 
     let mut form_state = GraphicsState::default();
@@ -1350,10 +1381,13 @@ fn a_groups_own_alpha_multiplies_the_alpha_inside_it() {
                 knockout: false,
             },
             oc: None,
+            source: None,
         },
         state: form_state,
         marks: ContentMarks::new(),
         content_stream: 0,
+        dirty: false,
+        active: true,
     }));
 
     let page = page(

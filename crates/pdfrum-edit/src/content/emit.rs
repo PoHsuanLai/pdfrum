@@ -441,6 +441,8 @@ mod tests {
             state,
             marks: pdfrum_page::state::ContentMarks::new(),
             content_stream: 0,
+            dirty: false,
+            active: true,
         }))
     }
 
@@ -639,12 +641,15 @@ mod tests {
                 position: Point::ZERO,
                 matrix: Affine::IDENTITY,
                 font: None,
+                font_source: None,
                 render_mode: pdfrum_page::TextRenderMode::Fill,
                 type3_metrics: std::collections::BTreeMap::new(),
             },
             state: GraphicsState::default(),
             marks: pdfrum_page::state::ContentMarks::new(),
             content_stream: 0,
+            dirty: false,
+            active: true,
         }));
         assert!(!emit_object(&mut out, &object, &ResourceNames::default()));
         assert_eq!(out, "existing");

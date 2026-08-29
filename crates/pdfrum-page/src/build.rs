@@ -48,7 +48,7 @@ use kurbo::{Affine, BezPath, Point, Rect};
 use pdfrum_common::{DiagKind, Diagnostics, Limits, Severity};
 use pdfrum_font::{Font, FontCache};
 use pdfrum_object::{Dict, Name, Object, Resolve};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::sync::Arc;
 
 /// The most form parses that may be in flight at once.
@@ -174,6 +174,60 @@ impl BuildContext {
     }
 }
 
+/// Where each `/Contents` element's operators begin, within one flat operator
+/// list.
+///
+/// A page's content is the concatenation of its `/Contents` streams, and the
+/// interpreter reads it as one run — a `q` in one element is closed by the `Q`
+/// in the next, which is legal and common. The editor still needs to know
+/// which element each object came from, so the boundaries travel alongside the
+/// operators rather than being recovered from them.
+///
+/// `starts[i]` is the index of the first operator belonging to element `i`.
+/// An empty record means a single unsplit stream: everything is element 0.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct StreamBounds {
+    starts: Vec<usize>,
+}
+
+impl StreamBounds {
+    /// The boundaries for content split into elements of the given operator
+    /// counts.
+    #[must_use]
+    pub fn from_counts(counts: impl IntoIterator<Item = usize>) -> Self {
+        let mut starts = Vec::new();
+        let mut at = 0usize;
+        for count in counts {
+            starts.push(at);
+            at = at.saturating_add(count);
+        }
+        Self { starts }
+    }
+
+    /// Which element the operator at `op_index` belongs to.
+    ///
+    /// The last element whose start is at or before the operator — so an
+    /// operator past every recorded start belongs to the final element, and a
+    /// record with no starts at all answers `0`.
+    #[must_use]
+    pub fn stream_of(&self, op_index: usize) -> i32 {
+        let count = self.starts.partition_point(|start| *start <= op_index);
+        i32::try_from(count.saturating_sub(1)).unwrap_or(0)
+    }
+
+    /// How many elements the content was split into.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.starts.len()
+    }
+
+    /// Whether the content was never split.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.starts.is_empty()
+    }
+}
+
 /// Build a page from its operators.
 ///
 /// `resources` is what named lookups consult, and `initial` is the state the
@@ -247,6 +301,42 @@ pub fn build_page_from_dict<R: Resolve>(
     limits: &Limits,
     diags: &mut Diagnostics,
 ) -> Page {
+    build_page_streams(
+        ops,
+        &StreamBounds::default(),
+        dict,
+        inherited,
+        resources,
+        r,
+        ctx,
+        limits,
+        diags,
+    )
+}
+
+/// Build a page whose `/Contents` boundaries are known, so every object
+/// records which element it came from.
+///
+/// This is [`build_page_from_dict`] plus the two facts only an editor needs:
+/// each object's content-stream index, and the transform each element leaves
+/// behind. A caller that will only render or extract text wants
+/// [`build_page_from_dict`], which pays for neither.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "as `build_page_from_dict`, plus the stream boundaries"
+)]
+#[must_use]
+pub fn build_page_streams<R: Resolve>(
+    ops: &[Op],
+    bounds: &StreamBounds,
+    dict: &Dict,
+    inherited: impl Fn(&Name) -> Option<Object>,
+    resources: &Resources,
+    r: &R,
+    ctx: &mut BuildContext,
+    limits: &Limits,
+    diags: &mut Diagnostics,
+) -> Page {
     let (media_box, crop_box) = crate::page::derive_boxes(dict, &inherited, r, diags);
     let rotate = crate::page::Rotation::from_degrees(
         dict.int(names::ROTATE, r)
@@ -254,8 +344,9 @@ pub fn build_page_from_dict<R: Resolve>(
             .unwrap_or(0),
     );
     let transparency = Transparency::for_page(dict.dict(names::GROUP, r).as_ref(), r);
-    let objects = interpret(
+    let (objects, stream_ctms) = interpret_streams(
         ops,
+        bounds,
         resources,
         &GraphicsState::default(),
         Affine::IDENTITY,
@@ -271,6 +362,8 @@ pub fn build_page_from_dict<R: Resolve>(
         rotate,
         transparency,
         resources: resources.chosen.clone(),
+        dirty_streams: BTreeSet::new(),
+        stream_ctms,
     }
 }
 
@@ -348,13 +441,21 @@ pub fn build_form_object<R: Resolve>(
             bbox,
             transparency,
             oc: stream.dict.dict(names::OC, r).map(Arc::new),
+            // An annotation appearance is reached from `/AP`, not from a
+            // resource dictionary, so there is no `/XObject` name for it.
+            source: None,
         },
         state,
         marks: ContentMarks::default(),
         // An annotation appearance is not part of the page's content stream,
         // so it has no index in one. The dump numbers streams from zero and
         // the oracle counts an annotation's form as belonging to none.
-        content_stream: -1,
+        content_stream: crate::mutate::NO_CONTENT_STREAM,
+        // An appearance is drawn into the page graph but is not page content:
+        // it is never regenerated into `/Contents`, and marking it dirty
+        // would make an ordinary render rewrite the page.
+        dirty: false,
+        active: true,
     })))
 }
 
@@ -384,6 +485,12 @@ struct Interp<'a, R: Resolve> {
     parent_matrix: Affine,
     resolver: &'a R,
     objects: Vec<PageObject>,
+    /// Which `/Contents` element the operator being applied came from, which
+    /// every object it produces records (see [`crate::mutate`]).
+    stream: i32,
+    /// The transform each element leaves in force at its end, recorded only
+    /// where it changed.
+    stream_ctms: BTreeMap<i32, Affine>,
 }
 
 /// How a path point continues the path.
@@ -397,6 +504,10 @@ enum PointKind {
 }
 
 /// Interpret a run of operators into page objects.
+///
+/// Every object records content stream 0, which is what a form, a pattern and
+/// a glyph procedure want: they are one stream, and their objects are never
+/// separately regenerated.
 #[expect(
     clippy::too_many_arguments,
     reason = "the interpreter needs its operators, resources, initial state, \
@@ -412,6 +523,40 @@ fn interpret<R: Resolve>(
     limits: &Limits,
     diags: &mut Diagnostics,
 ) -> Vec<PageObject> {
+    interpret_streams(
+        ops,
+        &StreamBounds::default(),
+        resources,
+        initial,
+        parent_matrix,
+        r,
+        ctx,
+        limits,
+        diags,
+    )
+    .0
+}
+
+/// Interpret a run of operators whose `/Contents` boundaries are known.
+///
+/// Each object records the element it came from, and the transform each
+/// element leaves behind is returned alongside — the two facts a regenerated
+/// page needs and a rendered one does not.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "as `interpret`, plus the stream boundaries the editor needs"
+)]
+fn interpret_streams<R: Resolve>(
+    ops: &[Op],
+    bounds: &StreamBounds,
+    resources: &Resources,
+    initial: &GraphicsState,
+    parent_matrix: Affine,
+    r: &R,
+    ctx: &mut BuildContext,
+    limits: &Limits,
+    diags: &mut Diagnostics,
+) -> (Vec<PageObject>, BTreeMap<i32, Affine>) {
     let mut interp = Interp {
         state: initial.clone(),
         stack: StateStack::new(),
@@ -426,11 +571,14 @@ fn interpret<R: Resolve>(
         parent_matrix,
         resolver: r,
         objects: Vec::new(),
+        stream: 0,
+        stream_ctms: BTreeMap::new(),
     };
-    for op in ops {
+    for (index, op) in ops.iter().enumerate() {
+        interp.stream = bounds.stream_of(index);
         interp.apply(op, ctx, limits, diags);
     }
-    interp.objects
+    (interp.objects, interp.stream_ctms)
 }
 
 impl<R: Resolve> Interp<'_, R> {
@@ -449,9 +597,15 @@ impl<R: Resolve> Interp<'_, R> {
                 if !self.stack.pop(&mut self.state) {
                     diags.record(Severity::Suspicious, DiagKind::UnbalancedRestore, None);
                 }
+                // A `Q` restores a transform as surely as a `cm` sets one, and
+                // an unbalanced one carries the change into the next stream.
+                self.record_ctm();
             }
             // A **pre**-concatenation: the new matrix applies first.
-            Op::Concat(m) => self.state.ctm *= *m,
+            Op::Concat(m) => {
+                self.state.ctm *= *m;
+                self.record_ctm();
+            }
             Op::SetLineWidth(w) => self.state.stroke_params.width = *w,
             Op::SetLineCap(c) => self.state.stroke_params.cap = *c,
             Op::SetLineJoin(j) => self.state.stroke_params.join = *j,
@@ -571,8 +725,14 @@ impl<R: Resolve> Interp<'_, R> {
             Op::SetFont(name, size) => {
                 // The size is **always** set; the font only when it resolves.
                 let font = self.find_font(name, ctx, limits, diags);
+                let source = self.resources.find_ref(names::FONT, name, self.resolver);
                 match (font, self.state.text.font.take()) {
-                    (Some(f), _) => self.state.text.font = Some((f, *size)),
+                    (Some(f), _) => {
+                        self.state.text.font = Some((f, *size));
+                        self.state.text.font_source = source;
+                    }
+                    // A name that did not resolve leaves the standing font —
+                    // and therefore the resource naming it — in place.
                     (None, Some((old, _))) => self.state.text.font = Some((old, *size)),
                     (None, None) => {}
                 }
@@ -820,8 +980,18 @@ impl<R: Resolve> Interp<'_, R> {
             object,
             state: self.state.clone(),
             marks: self.marks.clone(),
-            content_stream: 0,
+            content_stream: self.stream,
+            // Parsed objects describe bytes that already exist, so nothing
+            // needs rewriting until a caller changes one.
+            dirty: false,
+            active: true,
         }
+    }
+
+    /// Record the transform this stream leaves in force, after an operator
+    /// changed it.
+    fn record_ctm(&mut self) {
+        self.stream_ctms.insert(self.stream, self.state.ctm);
     }
 
     fn push(&mut self, object: PageObject) {
@@ -885,6 +1055,7 @@ impl<R: Resolve> Interp<'_, R> {
             position,
             matrix,
             font: Some((Arc::clone(&font), size)),
+            font_source: self.state.text.font_source,
             render_mode,
             type3_metrics,
         };
@@ -1387,6 +1558,7 @@ impl<R: Resolve> Interp<'_, R> {
             bbox,
             transparency,
             oc: stream.dict.dict(names::OC, self.resolver).map(Arc::new),
+            source: reference,
         };
         self.push(PageObject::Form(Box::new(self.content(object))));
     }
@@ -1433,6 +1605,7 @@ impl<R: Resolve> Interp<'_, R> {
             matrix: self.state.ctm,
             is_mask,
             oc: stream.dict.dict(names::OC, self.resolver).map(Arc::new),
+            source: reference,
         };
         self.push(PageObject::Image(Box::new(self.content(object))));
     }
@@ -1471,6 +1644,9 @@ impl<R: Resolve> Interp<'_, R> {
             // An inline image has no XObject dictionary to carry `/OC`; only
             // an enclosing marked-content sequence can hide it.
             oc: None,
+            // Nor any indirect object to name, so a regenerated stream cannot
+            // write it and drops it.
+            source: None,
         };
         self.push(PageObject::Image(Box::new(self.content(object))));
     }

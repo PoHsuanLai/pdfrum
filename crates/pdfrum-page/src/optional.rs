@@ -900,6 +900,8 @@ mod tests {
             state: crate::GraphicsState::default(),
             marks,
             content_stream: 0,
+            dirty: false,
+            active: true,
         }))
     }
 
@@ -980,10 +982,13 @@ mod tests {
                 bbox: None,
                 transparency: crate::Transparency::default(),
                 oc: Some(std::sync::Arc::new(off.clone())),
+                source: None,
             },
             state: crate::GraphicsState::default(),
             marks: ContentMarks::new(),
             content_stream: 0,
+            dirty: false,
+            active: true,
         }));
         let page = page_of(vec![form]);
         let mut ctx = context_hiding(&off);
@@ -1009,10 +1014,13 @@ mod tests {
                 bbox: None,
                 transparency: crate::Transparency::default(),
                 oc: None,
+                source: None,
             },
             state: crate::GraphicsState::default(),
             marks: ContentMarks::new(),
             content_stream: 0,
+            dirty: false,
+            active: true,
         }));
         let page = page_of(vec![form]);
         let mut ctx = context_hiding(&off);
