@@ -848,7 +848,7 @@ fn report_mutation_tally(tally: &mutation::MutationTally, files: usize) {
     // the mutation did not cause the disagreement and fixing it is somebody
     // else's milestone.
     println!(
-        "  + already disagreed: {} — the two renderers differ on the unmutated page too",
+        "  + already disagreed: {} — the two renderers differ on a plain save of it too",
         tally.baseline_explained
     );
     println!(

@@ -59,11 +59,25 @@
 //! single new pixel having gone wrong**. Comparing the two SSIM numbers would
 //! read that as a regression.
 //!
-//! So the baseline pass counts *pixels* instead. It renders the unmutated file
-//! with both implementations and asks whether they disagreed at all. If they
-//! did, a shortfall on the mutated file is attributed to the standing
-//! disagreement; if they agreed exactly, the shortfall is the mutation's and
-//! the pair fails. Both numbers are reported either way.
+//! So the baseline pass counts *pixels* instead. It renders a file with both
+//! implementations and asks whether they disagreed at all. If they did, a
+//! shortfall on the mutated file is attributed to the standing disagreement;
+//! if they agreed exactly, the shortfall is the mutation's and the pair fails.
+//! Both numbers are reported either way.
+//!
+//! # The baseline is a *plain save*, not the original
+//!
+//! One more subtlety, and it cost a wrong diagnosis to find. The baseline
+//! cannot be the input file, because saving changes some files even with
+//! nothing edited: the writer corrects a `/Length` that lied, so a stream the
+//! original hid behind `/Length 0` comes back with its real payload and the
+//! oracle then draws it. That is the *writer's* behaviour, identical under
+//! `--save` and under `--mutate=`, and blaming a mutation for it would send
+//! somebody hunting through the regenerator for a bug that is not there.
+//!
+//! So the baseline saves the file with no mutation at all and compares the two
+//! implementations' renders of *that*. What is left is exactly the mutation's
+//! contribution, which is the only thing this sweep is entitled to judge.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -107,8 +121,9 @@ pub struct MutationOutcome {
     /// The worst per-page SSIM between the oracle's render and ours, of the
     /// **mutated** file.
     pub ssim: Option<f64>,
-    /// How many pixels the two implementations disagreed on for the
-    /// **unmutated** file. `Some(0)` means they agreed exactly; `None` means
+    /// How many pixels the two implementations disagreed on for a **plain
+    /// save** of the same file — the same document written by the same writer
+    /// with nothing edited. `Some(0)` means they agreed exactly; `None` means
     /// the baseline was not measured, because the mutated file held the floor
     /// and there was nothing to explain.
     pub baseline_pixels: Option<u64>,
@@ -117,9 +132,9 @@ pub struct MutationOutcome {
     /// Whether every compared page reached [`FLOOR`].
     pub within_floor: bool,
     /// Whether the shortfall is explained by a disagreement that predates the
-    /// mutation — the two implementations do not render the *unmutated* file
-    /// identically either, so the edit is not what put the score below the
-    /// floor.
+    /// mutation — the two implementations do not render a plain save of this
+    /// file identically either, so the edit is not what put the score below
+    /// the floor.
     pub holds_baseline: bool,
     /// Why this file was skipped or fell short, when it did.
     pub note: String,
@@ -289,12 +304,13 @@ fn check_inner(
         outcome.note = match pixels {
             Some(count) if count > 0 => format!(
                 "ssim {worst:.6} below the {FLOOR:.2} floor, but the two \
-                 implementations already disagree on {count} pixel(s) of the \
-                 unmutated page"
+                 implementations already disagree on {count} pixel(s) of a \
+                 plain save of this file"
             ),
             Some(_) => format!(
-                "ssim {worst:.6} below the {FLOOR:.2} floor; the unmutated page \
-                 renders identically in both, so the mutation lost this"
+                "ssim {worst:.6} below the {FLOOR:.2} floor; a plain save of \
+                 this file renders identically in both, so the mutation lost \
+                 this"
             ),
             None => format!("ssim {worst:.6} below the {FLOOR:.2} floor (no baseline)"),
         };
@@ -319,6 +335,9 @@ fn tool_and_oracle<'a>(tool: &'a ToolPaths, oracle: &'a OraclePaths) -> Both<'a>
 /// already disagreed — see the module docs on why comparing two SSIM numbers
 /// across a mutation cannot answer that.
 fn baseline(both: &Both<'_>, input: &Path, password: Option<&str>, scratch: &Path) -> Option<u64> {
+    // The subject is a plain save, not the input — see the module docs.
+    let plain = plain_save(both.tool, input, password, scratch)?;
+    let input = plain.as_path();
     let theirs = render(
         &both.oracle.binary,
         &both.oracle.font_dir,
@@ -354,6 +373,33 @@ fn baseline(both: &Both<'_>, input: &Path, password: Option<&str>, scratch: &Pat
         differing = differing.saturating_add(u64::try_from(count).unwrap_or(u64::MAX));
     }
     Some(differing)
+}
+
+/// Save `input` with no mutation, and hand back where the tool wrote it.
+///
+/// The baseline's subject: the same document through the same writer, so what
+/// is left over when it is subtracted is the mutation alone.
+fn plain_save(
+    tool: &ToolPaths,
+    input: &Path,
+    password: Option<&str>,
+    scratch: &Path,
+) -> Option<PathBuf> {
+    let dir = scratch.join("plain");
+    std::fs::create_dir_all(&dir).ok()?;
+    let copy = dir.join("plain.pdf");
+    std::fs::copy(input, &copy).ok()?;
+
+    let out = Command::new(&tool.binary)
+        .args(determinism_args(&tool.font_dir))
+        .args(password_arg(password))
+        .arg("--save")
+        .arg(&copy)
+        .output()
+        .ok()?;
+    out.status.code()?;
+    let saved = dir.join("plain.pdf.saved.pdf");
+    saved.exists().then_some(saved)
 }
 
 /// Render `file` with `binary` into its own copy of the file, so the two
