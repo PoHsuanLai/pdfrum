@@ -262,6 +262,40 @@ fn a_zero_area_fill_becomes_a_quarter_alpha_hairline() {
 }
 
 #[test]
+fn a_fold_inside_a_polygon_does_not_swallow_the_fill() {
+    // `GetZeroAreaPath`'s third case scans an ordinary sub-path for a segment
+    // that doubles back on itself and emits *just that segment* as a
+    // hairline. The C++ loop that calls it has no early return: it draws the
+    // hairlines and then falls through to the ordinary fill
+    // (`cfx_renderdevice.cpp:772-804`).
+    //
+    // So a polygon with a spike must come out filled *and* spiked. Treating
+    // the hairline as a replacement painted `bug_1338`'s five shapes as bare
+    // spikes on white.
+    let mut spiked = BezPath::new();
+    spiked.move_to((18.0, 2.0));
+    spiked.line_to((4.0, 4.0));
+    // The fold: down the same vertical line and part-way back up.
+    spiked.line_to((4.0, 30.0));
+    spiked.line_to((4.0, 16.0));
+    spiked.line_to((18.0, 2.0));
+    let objects = vec![filled(spiked, [0.0, 0.0, 0.0])];
+    let (vello, tiny) = render_both(&page(24.0, 34.0, objects), &RenderOptions::default());
+    for (name, p) in [("vello", &vello), ("tiny-skia", &tiny)] {
+        // Inside the triangle, well clear of every edge.
+        assert!(
+            p.pixel(7, 26).is_some_and(|px| px[0] < 128),
+            "{name}: the polygon the fold hangs off must still be filled"
+        );
+        // A second interior sample, to catch a fill reduced to its own edge.
+        assert!(
+            p.pixel(6, 22).is_some_and(|px| px[0] < 128),
+            "{name}: and filled through its interior, not just outlined"
+        );
+    }
+}
+
+#[test]
 fn a_hairline_stroke_is_one_device_pixel_wide() {
     // `line_width = 0` is not "no stroke": the minimum is one device pixel.
     let mut line = BezPath::new();
