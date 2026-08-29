@@ -334,7 +334,8 @@ fn write_page_files<R: Resolve>(
                 return String::new();
             };
             let backend = render::Backend::resolve(options.use_renderer.as_deref());
-            let Some(rendered) = render::render(page, r, render::DEFAULT_SCALE, backend, ctx)
+            let Some(rendered) =
+                render::render(page, catalog, r, render::DEFAULT_SCALE, backend, ctx)
             else {
                 return String::new();
             };

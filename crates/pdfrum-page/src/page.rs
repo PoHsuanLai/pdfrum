@@ -170,6 +170,13 @@ pub struct ImageObject {
     pub matrix: Affine,
     /// Whether the image is a stencil painted with the fill colour.
     pub is_mask: bool,
+    /// The `/OC` entry from the image `XObject`'s own dictionary.
+    ///
+    /// An image carries optional-content membership on the `XObject` rather
+    /// than through a marked-content sequence, so this is a second, separate
+    /// place visibility is declared and not a cache of the first. An inline
+    /// image has no dictionary of its own to declare it in.
+    pub oc: Option<Arc<Dict>>,
 }
 
 /// A shading painted directly by `sh`.
@@ -196,6 +203,12 @@ pub struct FormObject {
     pub bbox: Option<Rect>,
     /// The form's transparency group, when it declared one.
     pub transparency: Transparency,
+    /// The `/OC` entry from the form `XObject`'s own dictionary.
+    ///
+    /// Like an image's, this is where a form declares optional-content
+    /// membership, alongside and independently of any marked-content
+    /// sequence enclosing the `Do` that drew it.
+    pub oc: Option<Arc<Dict>>,
 }
 
 /// One thing to paint.

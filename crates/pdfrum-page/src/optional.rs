@@ -359,6 +359,172 @@ impl OcContext {
     }
 }
 
+/// Which of a page's objects optional content hides, shaped like the page.
+///
+/// # Why a tree and not a set of ids
+///
+/// A page object has no id. The graph is `Vec<PageObject>` with a form's
+/// children nested inside it, so the only thing that names an object is its
+/// position — and that is exactly what this mirrors: `hidden[i]` answers for
+/// `objects[i]`, and a form's `children` answer for that form's own list.
+/// Walking the two together costs one index per object and needs no identity
+/// the page graph does not have.
+///
+/// An empty tree means nothing is hidden, which is what a document with no
+/// `/OCProperties` produces and what [`Visibility::shows_everything`] reports,
+/// so a renderer can skip the descent entirely.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct Visibility {
+    /// One entry per object in the list this tree describes, in order.
+    nodes: Vec<Node>,
+}
+
+/// One object's answer, plus its children's when it is a form.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+struct Node {
+    /// Whether this object is drawn at all.
+    visible: bool,
+    /// A form's own objects. Empty for every other kind, and also for a form
+    /// that is itself hidden — there is nothing to say about children nobody
+    /// will reach.
+    children: Visibility,
+}
+
+impl Visibility {
+    /// Nothing hidden, for a document with no optional content.
+    #[must_use]
+    pub fn all_visible() -> Self {
+        Self::default()
+    }
+
+    /// Whether this tree hides nothing anywhere beneath it.
+    ///
+    /// A renderer can take this as licence to stop descending: an empty tree
+    /// is the answer for a page with no optional content at all, and
+    /// [`Self::visible`] already reports an absent entry as visible.
+    #[must_use]
+    pub fn shows_everything(&self) -> bool {
+        self.nodes.is_empty()
+    }
+
+    /// Whether the object at `index` is drawn.
+    ///
+    /// **An index this tree does not cover is visible.** That is not
+    /// permissiveness for its own sake: it is what makes `all_visible()` an
+    /// empty tree rather than a vector of `true`, and it means a caller
+    /// whose object list has grown since the pre-pass ran draws the new
+    /// objects rather than silently dropping them.
+    #[must_use]
+    pub fn visible(&self, index: usize) -> bool {
+        self.nodes.get(index).is_none_or(|n| n.visible)
+    }
+
+    /// The tree describing the form at `index`'s own objects.
+    #[must_use]
+    pub fn children(&self, index: usize) -> Self {
+        self.nodes
+            .get(index)
+            .map(|n| n.children.clone())
+            .unwrap_or_default()
+    }
+
+    /// Drop a tree that turned out to hide nothing.
+    ///
+    /// Keeping it would be correct and would cost every renderer the descent
+    /// [`Self::shows_everything`] exists to avoid, so the pre-pass collapses
+    /// as it unwinds and a page with no optional content ends up empty at
+    /// every level rather than only at the root.
+    fn collapsed(self) -> Self {
+        if self
+            .nodes
+            .iter()
+            .all(|n| n.visible && n.children.shows_everything())
+        {
+            Self::default()
+        } else {
+            self
+        }
+    }
+}
+
+/// Resolve which of a page's objects optional content hides.
+///
+/// A **pre-pass**: it runs between building the page and rendering it, reads
+/// the page graph and the document, and produces plain data. Nothing about
+/// rendering enters, and no resolver reaches the render walk — which is the
+/// whole point of the split, because `content_visible` needs `&mut OcContext`
+/// and a `Resolve` and a rasterizer needs neither.
+///
+/// PDFium answers the same question inside `RenderSingleObject`
+/// (`cpdf_renderstatus.cpp:247`) with the context hanging off
+/// `CPDF_RenderOptions`, plus `/OC` on forms (`:401`) and on images
+/// (`cpdf_imagerenderer.cpp:197`). All three are here, and the two `XObject`
+/// ones are genuinely separate from the marked-content one: a form can be
+/// hidden by its own dictionary while the `Do` that drew it sits under no
+/// `/OC` mark at all.
+#[must_use]
+pub fn page_visibility<R: Resolve>(
+    page: &crate::Page,
+    oc: &mut OcContext,
+    r: &R,
+    diags: &mut Diagnostics,
+) -> Visibility {
+    object_visibility(&page.objects, oc, r, diags)
+}
+
+/// [`page_visibility`] for one object list, which is what recursion needs.
+fn object_visibility<R: Resolve>(
+    objects: &[crate::PageObject],
+    oc: &mut OcContext,
+    r: &R,
+    diags: &mut Diagnostics,
+) -> Visibility {
+    let nodes = objects
+        .iter()
+        .map(|object| {
+            let visible = object_visible(object, oc, r, diags);
+            let children = match object {
+                crate::PageObject::Form(f) if visible => {
+                    object_visibility(&f.object.objects, oc, r, diags)
+                }
+                _ => Visibility::default(),
+            };
+            Node { visible, children }
+        })
+        .collect();
+    Visibility { nodes }.collapsed()
+}
+
+/// Whether one object is drawn, by its marks and by its own `/OC`.
+fn object_visible<R: Resolve>(
+    object: &crate::PageObject,
+    oc: &mut OcContext,
+    r: &R,
+    diags: &mut Diagnostics,
+) -> bool {
+    // `CheckPageObjectVisible` scans **every** `/OC` mark on the object, not
+    // just the innermost, so nested sequences each get a veto.
+    if !object
+        .marks()
+        .optional_content_all()
+        .into_iter()
+        .all(|d| oc.content_visible(Some(d), r, diags))
+    {
+        return false;
+    }
+    // An XObject's own `/OC` is a second, independent veto through the same
+    // predicate — `CheckOCGDictVisible` is what both call sites reach, and
+    // an absent one is visible.
+    let own = match object {
+        crate::PageObject::Form(f) => f.object.oc.as_deref(),
+        crate::PageObject::Image(i) => i.object.oc.as_deref(),
+        crate::PageObject::Path(_) | crate::PageObject::Text(_) | crate::PageObject::Shading(_) => {
+            None
+        }
+    };
+    oc.content_visible(own, r, diags)
+}
+
 /// Whether a dictionary's `/Intent` names `element`.
 ///
 /// An absent `/Intent` yields `element == default`, which is how the same
@@ -592,5 +758,269 @@ mod tests {
         assert_eq!(UsageType::View.state_key().as_bytes(), b"ViewState");
         assert_eq!(UsageType::Print.state_key().as_bytes(), b"PrintState");
         assert_eq!(UsageType::Export.as_bytes(), b"Export");
+    }
+
+    /// A store that hands back objects by number, so a `/VE` can point at
+    /// itself and the evaluator has to survive it.
+    struct Store(std::collections::HashMap<u32, std::sync::Arc<Object>>);
+
+    impl pdfrum_object::Resolve for Store {
+        fn fetch(
+            &self,
+            r: pdfrum_object::ObjRef,
+        ) -> Result<std::sync::Arc<Object>, pdfrum_object::Error> {
+            self.0
+                .get(&r.num)
+                .map(std::sync::Arc::clone)
+                .ok_or(pdfrum_object::Error::UnresolvedRef(r))
+        }
+    }
+
+    #[test]
+    fn a_self_referencing_visibility_expression_terminates() {
+        // `1 0 obj [/Not 1 0 R] endobj` — the expression's only operand is
+        // the expression. Nothing in the *data* bounds this; only
+        // `MAX_VE_DEPTH` does, and without it the evaluator would recurse
+        // until the stack ran out on a file a fuzzer produces in seconds.
+        let selfref = Object::Array(Array::of([
+            Object::Name(Name::from("Not")),
+            Object::Ref(pdfrum_object::ObjRef {
+                num: 1,
+                generation: 0,
+            }),
+        ]));
+        let mut objects = std::collections::HashMap::new();
+        objects.insert(1u32, std::sync::Arc::new(selfref.clone()));
+        let store = Store(objects);
+
+        let mut ctx = OcContext::permissive();
+        let mut diags = Diagnostics::default();
+        let d = ocmd(vec![(Name::from("VE"), selfref)]);
+        // The answer itself is whatever the depth cap bottoms out at; that it
+        // returns at all is the property under test.
+        let _ = ctx.content_visible(Some(&d), &store, &mut diags);
+
+        // A cycle through two objects is the same shape one step longer.
+        let mut objects = std::collections::HashMap::new();
+        objects.insert(
+            1u32,
+            std::sync::Arc::new(Object::Array(Array::of([
+                Object::Name(Name::from("Not")),
+                Object::Ref(pdfrum_object::ObjRef {
+                    num: 2,
+                    generation: 0,
+                }),
+            ]))),
+        );
+        objects.insert(
+            2u32,
+            std::sync::Arc::new(Object::Array(Array::of([
+                Object::Name(Name::from("Not")),
+                Object::Ref(pdfrum_object::ObjRef {
+                    num: 1,
+                    generation: 0,
+                }),
+            ]))),
+        );
+        let store = Store(objects);
+        let mut ctx = OcContext::permissive();
+        let d = ocmd(vec![(
+            Name::from("VE"),
+            Object::Ref(pdfrum_object::ObjRef {
+                num: 1,
+                generation: 0,
+            }),
+        )]);
+        let _ = ctx.content_visible(Some(&d), &store, &mut diags);
+    }
+
+    // --- the pre-pass ---
+
+    use crate::ops::MarkProperties;
+    use crate::state::ContentMarks;
+    use crate::{Content, PageObject, PathObject};
+
+    fn off_group() -> Dict {
+        // A group the default configuration turns off.
+        Dict::from_pairs([
+            (Name::from("Type"), Object::Name(Name::from("OCG"))),
+            (Name::from("Name"), Object::Name(Name::from("Hidden"))),
+        ])
+    }
+
+    /// A context whose default configuration switches `off` off.
+    ///
+    /// The catalog's own `/OCGs` has to list the group as well as the
+    /// configuration's `/OFF`: `select_config` declines a group the catalog
+    /// never declared, and a group nothing governs is visible.
+    fn context_hiding(off: &Dict) -> OcContext {
+        let properties = Dict::from_pairs([
+            (
+                Name::from("OCGs"),
+                Object::Array(Array::of([Object::Dict(off.clone())])),
+            ),
+            (
+                Name::from("D"),
+                Object::Dict(Dict::from_pairs([(
+                    Name::from("OFF"),
+                    Object::Array(Array::of([Object::Dict(off.clone())])),
+                )])),
+            ),
+        ]);
+        OcContext::new(Some(properties), UsageType::View)
+    }
+
+    /// One `BDC /OC` mark, written either as a resource name or inline —
+    /// which is the distinction visibility turns on.
+    fn marked(oc: Option<&Dict>, from_resources: bool) -> ContentMarks {
+        let mut marks = ContentMarks::new();
+        if let Some(d) = oc {
+            push_oc(&mut marks, d, from_resources);
+        }
+        marks
+    }
+
+    fn push_oc(marks: &mut ContentMarks, dict: &Dict, from_resources: bool) {
+        let properties = if from_resources {
+            MarkProperties::Named(Name::from("MC0"))
+        } else {
+            MarkProperties::Inline(Box::new(dict.clone()))
+        };
+        marks.push_with_properties(Name::from("OC"), &properties, |_| Some(dict.clone()));
+    }
+
+    fn path_with(marks: ContentMarks) -> PageObject {
+        PageObject::Path(Box::new(Content {
+            object: PathObject {
+                path: kurbo::BezPath::new(),
+                matrix: kurbo::Affine::IDENTITY,
+                fill_rule: crate::FillRule::Winding,
+                stroke: false,
+            },
+            state: crate::GraphicsState::default(),
+            marks,
+            content_stream: 0,
+        }))
+    }
+
+    fn page_of(objects: Vec<PageObject>) -> crate::Page {
+        crate::Page {
+            objects,
+            ..crate::Page::empty()
+        }
+    }
+
+    #[test]
+    fn a_page_with_no_optional_content_produces_an_empty_tree() {
+        let page = page_of(vec![path_with(ContentMarks::new()); 3]);
+        let mut ctx = OcContext::permissive();
+        let mut diags = Diagnostics::default();
+        let v = super::page_visibility(&page, &mut ctx, &NoResolve, &mut diags);
+        assert!(
+            v.shows_everything(),
+            "an all-visible page collapses to nothing, so a renderer can skip \
+             the descent entirely"
+        );
+        // And an absent entry still answers visible.
+        assert!(v.visible(0));
+        assert!(v.visible(99));
+    }
+
+    #[test]
+    fn an_off_group_hides_the_object_its_mark_encloses() {
+        let off = off_group();
+        let page = page_of(vec![
+            path_with(marked(None, false)),
+            path_with(marked(Some(&off), true)),
+            path_with(marked(None, false)),
+        ]);
+        let mut ctx = context_hiding(&off);
+        let mut diags = Diagnostics::default();
+        let v = super::page_visibility(&page, &mut ctx, &NoResolve, &mut diags);
+        assert!(!v.shows_everything());
+        assert!(v.visible(0));
+        assert!(!v.visible(1), "the marked object is hidden");
+        assert!(v.visible(2));
+    }
+
+    #[test]
+    fn an_inline_property_list_never_hides_anything() {
+        // `BDC /OC << … >>` written inline is ignored entirely — visibility
+        // requires the properties to have come from the `/Properties`
+        // resource (`kPropertiesDict`).
+        let off = off_group();
+        let page = page_of(vec![path_with(marked(Some(&off), false))]);
+        let mut ctx = context_hiding(&off);
+        let mut diags = Diagnostics::default();
+        let v = super::page_visibility(&page, &mut ctx, &NoResolve, &mut diags);
+        assert!(v.shows_everything());
+    }
+
+    #[test]
+    fn every_enclosing_mark_gets_a_veto_not_just_the_innermost() {
+        // `CheckPageObjectVisible` scans the whole mark stack, so an outer
+        // sequence hides content an inner visible one is nested in.
+        let off = off_group();
+        let mut marks = marked(Some(&off), true);
+        push_oc(&mut marks, &ocg("Shown"), true);
+        let page = page_of(vec![path_with(marks)]);
+        let mut ctx = context_hiding(&off);
+        let mut diags = Diagnostics::default();
+        let v = super::page_visibility(&page, &mut ctx, &NoResolve, &mut diags);
+        assert!(!v.visible(0));
+    }
+
+    #[test]
+    fn a_hidden_form_says_nothing_about_children_nobody_reaches() {
+        let off = off_group();
+        let form = PageObject::Form(Box::new(Content {
+            object: crate::FormObject {
+                objects: vec![path_with(ContentMarks::new())],
+                matrix: kurbo::Affine::IDENTITY,
+                bbox: None,
+                transparency: crate::Transparency::default(),
+                oc: Some(std::sync::Arc::new(off.clone())),
+            },
+            state: crate::GraphicsState::default(),
+            marks: ContentMarks::new(),
+            content_stream: 0,
+        }));
+        let page = page_of(vec![form]);
+        let mut ctx = context_hiding(&off);
+        let mut diags = Diagnostics::default();
+        let v = super::page_visibility(&page, &mut ctx, &NoResolve, &mut diags);
+        assert!(!v.visible(0), "the form's own `/OC` hides it");
+        assert!(
+            v.children(0).shows_everything(),
+            "and its children are not walked, because nothing reaches them"
+        );
+    }
+
+    #[test]
+    fn a_visible_forms_children_are_answered_in_their_own_frame() {
+        let off = off_group();
+        let form = PageObject::Form(Box::new(Content {
+            object: crate::FormObject {
+                objects: vec![
+                    path_with(ContentMarks::new()),
+                    path_with(marked(Some(&off), true)),
+                ],
+                matrix: kurbo::Affine::IDENTITY,
+                bbox: None,
+                transparency: crate::Transparency::default(),
+                oc: None,
+            },
+            state: crate::GraphicsState::default(),
+            marks: ContentMarks::new(),
+            content_stream: 0,
+        }));
+        let page = page_of(vec![form]);
+        let mut ctx = context_hiding(&off);
+        let mut diags = Diagnostics::default();
+        let v = super::page_visibility(&page, &mut ctx, &NoResolve, &mut diags);
+        assert!(v.visible(0), "the form itself is drawn");
+        let inner = v.children(0);
+        assert!(inner.visible(0));
+        assert!(!inner.visible(1), "but its second child is not");
     }
 }

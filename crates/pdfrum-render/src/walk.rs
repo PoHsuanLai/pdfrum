@@ -20,7 +20,7 @@
 
 use kurbo::{Affine, Rect, Shape};
 use pdfrum_common::Diagnostics;
-use pdfrum_page::{Page, PageObject, Transparency};
+use pdfrum_page::{Page, PageObject, Transparency, Visibility};
 
 use crate::clip;
 use crate::color::{Argb, ObjectKind, resolve_argb};
@@ -61,6 +61,32 @@ pub fn render_page<B: RasterBackend>(
     render_page_with_caches(page, opts, backend, &mut RenderCaches::new(), diags)
 }
 
+/// Render a page, drawing only what optional content leaves visible.
+///
+/// `visible` comes from [`pdfrum_page::page_visibility`], a **pre-pass** over
+/// the same `page` with the document's `/OCProperties`. Splitting it out is
+/// what keeps the render API free of a resolver: deciding visibility needs
+/// indirect-object lookup and a mutable evaluation cache, and consuming the
+/// answer needs neither — it is one index per object.
+///
+/// [`render_page`] is this with [`pdfrum_page::Visibility::all_visible`],
+/// which is the right call for a document with no optional content and for
+/// any caller that wants every layer drawn.
+///
+/// # Errors
+///
+/// As [`render_page`].
+pub fn render_page_with_visibility<B: RasterBackend>(
+    page: &Page,
+    opts: &RenderOptions,
+    backend: &B,
+    visible: &Visibility,
+    caches: &mut RenderCaches,
+    diags: &mut Diagnostics,
+) -> Result<Pixmap, Error> {
+    render_page_inner(page, opts, backend, visible, caches, diags)
+}
+
 /// Render a page into a pixmap, reusing caller-owned [`RenderCaches`].
 ///
 /// Identical to [`render_page`] except that the glyph cache outlives the
@@ -88,6 +114,25 @@ pub fn render_page_with_caches<B: RasterBackend>(
     caches: &mut RenderCaches,
     diags: &mut Diagnostics,
 ) -> Result<Pixmap, Error> {
+    render_page_inner(
+        page,
+        opts,
+        backend,
+        &Visibility::all_visible(),
+        caches,
+        diags,
+    )
+}
+
+/// The body all three entry points share.
+fn render_page_inner<B: RasterBackend>(
+    page: &Page,
+    opts: &RenderOptions,
+    backend: &B,
+    visible: &Visibility,
+    caches: &mut RenderCaches,
+    diags: &mut Diagnostics,
+) -> Result<Pixmap, Error> {
     let (w, h) = target_size(page, opts)?;
     let clear = opts.background_for(needs_alpha_background(page));
     let mut device = backend.new_target(w, h, clear);
@@ -101,6 +146,7 @@ pub fn render_page_with_caches<B: RasterBackend>(
         backend,
         caches,
         &page.objects,
+        visible,
         to_device,
         device_box,
         diags,
@@ -263,9 +309,15 @@ pub fn page_matrix(page: &Page, opts: &RenderOptions) -> Affine {
 /// `device_box` is the device's own extent and is what the cull test works
 /// against, transformed back into object space once for the whole list —
 /// which is why an object's own matrix cannot change it.
+///
+/// `visible` describes *this* list, one entry per object in order. It is the
+/// pre-pass's answer and the walk only reads it — see
+/// [`render_page_with_visibility`]. A tree that hides nothing is the common
+/// case and costs one `is_none_or` per object.
 #[expect(
     clippy::too_many_arguments,
-    reason = "the walk threads context, device, backend and caches"
+    reason = "the walk threads context, device, backend, caches and the \
+              visibility describing this list"
 )]
 pub fn render_object_list<B: RasterBackend>(
     ctx: &RenderCtx<'_>,
@@ -273,6 +325,7 @@ pub fn render_object_list<B: RasterBackend>(
     backend: &B,
     caches: &mut RenderCaches,
     objects: &[PageObject],
+    visible: &Visibility,
     to_device: Affine,
     device_box: Rect,
     diags: &mut Diagnostics,
@@ -281,14 +334,28 @@ pub fn render_object_list<B: RasterBackend>(
         return;
     }
     let cull = cull_rect(to_device, device_box);
-    for object in objects {
+    for (index, object) in objects.iter().enumerate() {
+        // The visibility gate runs first, exactly where `RenderSingleObject`
+        // puts it (`cpdf_renderstatus.cpp:247`): before the clip is pushed,
+        // so a hidden object's clip never reaches the device either.
+        if !visible.visible(index) {
+            continue;
+        }
         if let Some(cull) = cull
             && culled(object, cull)
         {
             continue;
         }
         render_object(
-            ctx, device, backend, caches, object, to_device, device_box, diags,
+            ctx,
+            device,
+            backend,
+            caches,
+            object,
+            &visible.children(index),
+            to_device,
+            device_box,
+            diags,
         );
     }
 }
@@ -337,9 +404,13 @@ fn unit_rect() -> Rect {
 
 /// Render one object, through a transparency group when the predicate says
 /// so and directly otherwise.
+///
+/// `children` describes this object's own object list when it is a form, and
+/// is ignored for every other kind.
 #[expect(
     clippy::too_many_arguments,
-    reason = "the walk threads context, device, backend and caches"
+    reason = "the walk threads context, device, backend, caches and a form's \
+              child visibility"
 )]
 pub fn render_object<B: RasterBackend>(
     ctx: &RenderCtx<'_>,
@@ -347,6 +418,7 @@ pub fn render_object<B: RasterBackend>(
     backend: &B,
     caches: &mut RenderCaches,
     object: &PageObject,
+    children: &Visibility,
     to_device: Affine,
     device_box: Rect,
     diags: &mut Diagnostics,
@@ -359,11 +431,11 @@ pub fn render_object<B: RasterBackend>(
     let inputs = GroupInputs::of(object, initial_alpha);
     if needs_offscreen(inputs) && ctx.may_recurse() {
         render_grouped(
-            ctx, device, backend, caches, object, inputs, to_device, device_box, diags,
+            ctx, device, backend, caches, object, children, inputs, to_device, device_box, diags,
         );
     } else {
         render_direct(
-            ctx, device, backend, caches, object, to_device, device_box, diags,
+            ctx, device, backend, caches, object, children, to_device, device_box, diags,
         );
     }
 
@@ -381,6 +453,7 @@ fn render_grouped<B: RasterBackend>(
     backend: &B,
     caches: &mut RenderCaches,
     object: &PageObject,
+    children: &Visibility,
     inputs: GroupInputs,
     to_device: Affine,
     device_box: Rect,
@@ -433,6 +506,7 @@ fn render_grouped<B: RasterBackend>(
         backend,
         caches,
         object,
+        children,
         offset * to_device,
         inner_box,
         diags,
@@ -526,6 +600,9 @@ fn render_soft_mask<B: RasterBackend>(
             backend,
             caches,
             &mask.objects,
+            // A soft mask's group is its own object list, not the page's, so
+            // the page's visibility tree says nothing about it.
+            &Visibility::all_visible(),
             offset * to_device,
             Rect::new(0.0, 0.0, f64::from(w), f64::from(h)),
             diags,
@@ -569,6 +646,7 @@ fn render_direct<B: RasterBackend>(
     backend: &B,
     caches: &mut RenderCaches,
     object: &PageObject,
+    children: &Visibility,
     to_device: Affine,
     device_box: Rect,
     diags: &mut Diagnostics,
@@ -601,6 +679,7 @@ fn render_direct<B: RasterBackend>(
                 backend,
                 caches,
                 &f.object.objects,
+                children,
                 to_device,
                 device_box,
                 diags,
@@ -1097,57 +1176,83 @@ fn render_type3_text<B: RasterBackend>(
                 backend,
                 caches,
                 &metrics.objects,
+                &Visibility::all_visible(), // the font's objects, not the page's
                 placed.matrix,
                 device_box,
                 diags,
             );
             continue;
         }
-        // The translucent path: its own opaque-capable buffer, sized to the
-        // glyph's device extent, blitted back at the object's alpha.
-        let bbox = placed
-            .matrix
-            .transform_rect_bbox(metrics.bbox)
-            .intersect(device_box);
-        let rect = outer_rect(bbox).intersect(outer_rect(device_box));
-        let (Ok(w), Ok(h)) = (u32::try_from(rect.width()), u32::try_from(rect.height())) else {
-            continue;
-        };
-        if w == 0 || h == 0 || w > MAX_TARGET_DIMENSION || h > MAX_TARGET_DIMENSION {
-            continue;
-        }
-        let mut sub = backend.new_target(w, h, peniko::Color::TRANSPARENT);
-        let offset = Affine::translate((-f64::from(rect.left), -f64::from(rect.top)));
-        // Inside the buffer the procedure paints at full opacity; the
-        // object's alpha is applied exactly once, at the blit.
-        let opaque = crate::ctx::Type3Frame {
-            fill: Argb { a: 255, ..fill },
-            colored: metrics.colored,
-        };
-        let inner = RenderCtx {
-            type3: Some(opaque),
-            initial_fill: Some(opaque.fill),
-            initial_stroke: Some(opaque.fill),
-            ..inner
-        };
-        render_object_list(
-            &inner,
-            &mut sub,
-            backend,
-            caches,
-            &metrics.objects,
-            offset * placed.matrix,
-            Rect::new(0.0, 0.0, f64::from(w), f64::from(h)),
-            diags,
-        );
-        let pixels = backend.finish(sub);
-        device.draw_image(
-            &pixels,
-            Affine::translate((f64::from(rect.left), f64::from(rect.top))),
-            ImageQuality::Nearest,
-            f32::from(fill.a) / 255.0,
+        render_translucent_char_proc(
+            &inner, device, backend, caches, metrics, &placed, fill, device_box, diags,
         );
     }
+}
+
+/// One type-3 glyph procedure drawn through its own buffer.
+///
+/// A translucent glyph cannot paint straight onto the page: its procedure may
+/// overlap itself, and compositing each stroke at the object's alpha would
+/// darken the overlaps. So the procedure runs at **full opacity** into a
+/// buffer sized to the glyph's device extent, and the alpha is applied once,
+/// at the blit.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the same inputs the opaque path takes, plus the placed glyph and \
+              the colour its alpha is read from"
+)]
+fn render_translucent_char_proc<B: RasterBackend>(
+    ctx: &RenderCtx<'_>,
+    device: &mut B::Device,
+    backend: &B,
+    caches: &mut RenderCaches,
+    metrics: &pdfrum_page::type3::Type3Metrics,
+    placed: &crate::text::PlacedType3Char,
+    fill: Argb,
+    device_box: Rect,
+    diags: &mut Diagnostics,
+) {
+    let bbox = placed
+        .matrix
+        .transform_rect_bbox(metrics.bbox)
+        .intersect(device_box);
+    let rect = outer_rect(bbox).intersect(outer_rect(device_box));
+    let (Ok(w), Ok(h)) = (u32::try_from(rect.width()), u32::try_from(rect.height())) else {
+        return;
+    };
+    if w == 0 || h == 0 || w > MAX_TARGET_DIMENSION || h > MAX_TARGET_DIMENSION {
+        return;
+    }
+    let mut sub = backend.new_target(w, h, peniko::Color::TRANSPARENT);
+    let offset = Affine::translate((-f64::from(rect.left), -f64::from(rect.top)));
+    let opaque = crate::ctx::Type3Frame {
+        fill: Argb { a: 255, ..fill },
+        colored: metrics.colored,
+    };
+    let inner = RenderCtx {
+        type3: Some(opaque),
+        initial_fill: Some(opaque.fill),
+        initial_stroke: Some(opaque.fill),
+        ..ctx.clone()
+    };
+    render_object_list(
+        &inner,
+        &mut sub,
+        backend,
+        caches,
+        &metrics.objects,
+        &Visibility::all_visible(), // the font's objects, not the page's
+        offset * placed.matrix,
+        Rect::new(0.0, 0.0, f64::from(w), f64::from(h)),
+        diags,
+    );
+    let pixels = backend.finish(sub);
+    device.draw_image(
+        &pixels,
+        Affine::translate((f64::from(rect.left), f64::from(rect.top))),
+        ImageQuality::Nearest,
+        f32::from(fill.a) / 255.0,
+    );
 }
 
 /// The resample quality a stencil-as-mask is drawn at.

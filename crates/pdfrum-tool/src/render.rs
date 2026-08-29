@@ -23,13 +23,15 @@
 use std::path::{Path, PathBuf};
 
 use pdfrum_common::{Diagnostics, Limits};
-use pdfrum_object::Resolve;
-use pdfrum_page::BuildContext;
+use pdfrum_object::{Name, Resolve};
+use pdfrum_page::{BuildContext, OcContext, UsageType, page_visibility};
 use pdfrum_parser::PageDict;
 use pdfrum_raster_exact::ExactBackend;
 use pdfrum_raster_tinyskia::TinySkiaBackend;
 use pdfrum_raster_vello::VelloBackend;
-use pdfrum_render::{Pixmap, RenderOptions, needs_alpha_background, render_page};
+use pdfrum_render::{
+    Pixmap, RenderCaches, RenderOptions, needs_alpha_background, render_page_with_visibility,
+};
 
 /// The default rendering scale, in device pixels per PDF point.
 ///
@@ -127,6 +129,7 @@ impl Backend {
 #[must_use]
 pub fn render<R: Resolve>(
     page: &PageDict,
+    catalog: &pdfrum_object::Dict,
     r: &R,
     scale: f64,
     backend: Backend,
@@ -148,16 +151,51 @@ pub fn render<R: Resolve>(
         ..RenderOptions::default()
     };
     let mut diags = Diagnostics::default();
+    // Optional content is decided here, between building the page and drawing
+    // it: the pre-pass reads the catalog's `/OCProperties` through the
+    // resolver and hands the walk plain data. `pdfium_test` renders with the
+    // default `View` usage and the document's default configuration, which is
+    // what `OcContext::new` with no usage override reads.
+    let mut oc = OcContext::new(
+        catalog.dict(&Name::from("OCProperties"), r),
+        UsageType::View,
+    );
+    let visible = page_visibility(&page, &mut oc, r, &mut build_diags);
     // The analytic backend is the default. Every backend here is
     // reproducible — tiny-skia is deterministic by construction and
     // `vello_cpu` pins its SIMD level so its output does not move with the
     // host — so the default is chosen for *parity* rather than for
     // determinism: it integrates coverage the way the oracle does, which is
     // what makes a golden comparison measure the engine.
+    let mut caches = RenderCaches::new();
     let pixmap = match backend {
-        Backend::Exact => render_page(&page, &opts, &ExactBackend::new(), &mut diags).ok()?,
-        Backend::TinySkia => render_page(&page, &opts, &TinySkiaBackend::new(), &mut diags).ok()?,
-        Backend::Vello => render_page(&page, &opts, &VelloBackend::new(), &mut diags).ok()?,
+        Backend::Exact => render_page_with_visibility(
+            &page,
+            &opts,
+            &ExactBackend::new(),
+            &visible,
+            &mut caches,
+            &mut diags,
+        )
+        .ok()?,
+        Backend::TinySkia => render_page_with_visibility(
+            &page,
+            &opts,
+            &TinySkiaBackend::new(),
+            &visible,
+            &mut caches,
+            &mut diags,
+        )
+        .ok()?,
+        Backend::Vello => render_page_with_visibility(
+            &page,
+            &opts,
+            &VelloBackend::new(),
+            &visible,
+            &mut caches,
+            &mut diags,
+        )
+        .ok()?,
     };
     // `FPDFPage_HasTransparency` is not the page's `/Group`: it is set only
     // by a blend mode above Multiply. The engine exposes the same predicate

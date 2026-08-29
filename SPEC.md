@@ -541,6 +541,31 @@ pub trait RasterBackend {  // factory: lets the engine rasterize soft masks & ti
 
 pub struct RenderOptions { pub transform: Affine, pub text_aa: TextAa, pub grayscale: bool, pub subpixel_text_positioning: bool, /* (abridged) */ }
 pub fn render_page(page: &Page, opts: &RenderOptions, backend: &impl RasterBackend) -> Pixmap;
+// [spec] wave 8, orchestrator-authorized: optional content is a PRE-PASS,
+// not a render-time decision.
+//   pdfrum_page::page_visibility(&Page, &mut OcContext, &impl Resolve,
+//                                &mut Diagnostics) -> Visibility
+//   pdfrum_render::render_page_with_visibility(page, opts, backend,
+//                                &Visibility, &mut RenderCaches, diags)
+// PDFium hangs a CPDF_OCContext off CPDF_RenderOptions and asks it inside
+// RenderSingleObject (cpdf_renderstatus.cpp:247), on a form's /OC (:401) and
+// on an image's (cpdf_imagerenderer.cpp:197). We do not: deciding visibility
+// needs indirect-object lookup and a mutable evaluation cache, and consuming
+// the answer needs neither, so threading a Resolve into the render API to
+// carry it would put a resolver in front of every rasterizer for one bool per
+// object. `Visibility` is plain data shaped like the page — one entry per
+// object in each list, a form's children nested — because a page object has
+// no id and its position is the only thing that names it. An absent entry is
+// visible, so an all-visible page collapses to an empty tree and `render_page`
+// is `render_page_with_visibility` with `Visibility::all_visible()`. Sub-graphs
+// outside the page's own lists — pattern cells, soft-mask groups, type-3 char
+// procs — take all-visible: the tree does not describe them, and the oracle
+// asks no OC question inside any of them either.
+// Two page-graph additions this needs: `FormObject::oc` and `ImageObject::oc`
+// carry the XObject's own `/OC`, which is a second declaration site
+// independent of any enclosing marked-content sequence; and
+// `ContentMarks::optional_content_all` returns *every* `/OC` mark rather than
+// the innermost, because `CheckPageObjectVisible` gives each one a veto.
 ```
 
 Engine decisions: large text renders as filled glyph `BezPath`s through the

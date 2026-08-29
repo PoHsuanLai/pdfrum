@@ -126,11 +126,25 @@ impl ContentMarks {
     /// ignored entirely and its content stays visible.
     #[must_use]
     pub fn optional_content(&self) -> Option<&Dict> {
-        self.marks.iter().find_map(|m| {
-            (m.tag.as_bytes() == b"OC" && m.from_resources)
-                .then_some(m.properties.as_deref())
-                .flatten()
-        })
+        self.optional_content_all().into_iter().next()
+    }
+
+    /// **Every** optional-content dictionary enclosing this content, outermost
+    /// first.
+    ///
+    /// `CheckPageObjectVisible` (`cpdf_occontext.cpp:189-200`) scans the whole
+    /// mark stack and any one entry can veto, so nested `BDC /OC` sequences
+    /// each get a say — which the innermost alone does not capture. The same
+    /// two conditions apply to each: the tag is exactly `OC`, and the
+    /// properties came from the `/Properties` resource rather than being
+    /// written inline.
+    #[must_use]
+    pub fn optional_content_all(&self) -> Vec<&Dict> {
+        self.marks
+            .iter()
+            .filter(|m| m.tag.as_bytes() == b"OC" && m.from_resources)
+            .filter_map(|m| m.properties.as_deref())
+            .collect()
     }
 }
 
