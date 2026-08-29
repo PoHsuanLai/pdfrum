@@ -197,52 +197,117 @@ fn reduce_to(src: &Pixmap, dest_width: u32, dest_height: u32) -> Pixmap {
     // fixed-point-shifted bytes exactly like the source: one shift per axis
     // keeps the arithmetic identical to a single-pass accumulation of the
     // product weights, up to the two roundings the C++ also performs.
+    // M12: both passes walk row slices rather than calling `pixel`/`set_pixel`
+    // per texel. The arithmetic is unchanged — same taps, same fixed-point
+    // accumulation, same `>> 16` — but `pixel()` returned an `Option<[u8; 4]>`
+    // built from four separate bounds-checked `get`s and `set_pixel` recomputed
+    // the same index to write it back, on every one of the source image's
+    // pixels. On the reduction path that is the whole cost: this function is
+    // `O(source pixels x taps)` and the taps are two or three, so the per-pixel
+    // overhead was comparable to the multiply-accumulate it wrapped.
+    //
+    // The slices are taken with `get`, not indexed, so a malformed dimension
+    // still cannot panic (`clippy::indexing_slicing` is on in this crate); the
+    // difference is that the check now happens once per row instead of four
+    // times per pixel, and the inner loop over a `&[u8]` of known length is
+    // something the optimizer can unroll.
+    let src_width = src.width() as usize;
     let mut inter = Pixmap::new(dest_width, src.height());
-    for y in 0..src.height() {
-        for (x, taps) in x_taps.iter().enumerate() {
+    let inter_width = dest_width as usize;
+    for y in 0..src.height() as usize {
+        let Some(src_row) = src
+            .data()
+            .get(y.saturating_mul(src_width).saturating_mul(4)..)
+            .and_then(|rest| rest.get(..src_width.saturating_mul(4)))
+        else {
+            continue;
+        };
+        let Some(inter_row) = inter
+            .data_mut()
+            .get_mut(y.saturating_mul(inter_width).saturating_mul(4)..)
+            .and_then(|rest| rest.get_mut(..inter_width.saturating_mul(4)))
+        else {
+            continue;
+        };
+        for (taps, out) in x_taps.iter().zip(inter_row.chunks_exact_mut(4)) {
             let mut acc = [0_u32; 4];
             for (i, &weight) in taps.weights.iter().enumerate() {
-                let Ok(sx) = u32::try_from(taps.start + i) else {
+                let Some(px) = taps
+                    .start
+                    .checked_add(i)
+                    .and_then(|sx| sx.checked_mul(4))
+                    .and_then(|at| src_row.get(at..at.checked_add(4)?))
+                else {
                     continue;
                 };
-                let Some(px) = src.pixel(sx, y) else { continue };
                 for (slot, &channel) in acc.iter_mut().zip(px.iter()) {
                     *slot += weight * u32::from(channel);
                 }
             }
-            #[expect(
-                clippy::cast_possible_truncation,
-                reason = "the weights sum to FIXED_ONE and each channel is a \
-                          byte, so every accumulator is at most 255 << 16"
-            )]
-            let out = acc.map(|a| (a >> 16) as u8);
-            let Ok(dx) = u32::try_from(x) else { continue };
-            inter.set_pixel(dx, y, out);
+            for (slot, a) in out.iter_mut().zip(acc) {
+                #[expect(
+                    clippy::cast_possible_truncation,
+                    reason = "the weights sum to FIXED_ONE and each channel is \
+                              a byte, so every accumulator is at most 255 << 16"
+                )]
+                let byte = (a >> 16) as u8;
+                *slot = byte;
+            }
         }
     }
+
     let mut dest = Pixmap::new(dest_width, dest_height);
+    let inter_data = inter.data();
     for (y, taps) in y_taps.iter().enumerate() {
-        let Ok(dy) = u32::try_from(y) else { continue };
-        for x in 0..dest_width {
+        let Some(dest_row) = dest
+            .data_mut()
+            .get_mut(y.saturating_mul(inter_width).saturating_mul(4)..)
+            .and_then(|rest| rest.get_mut(..inter_width.saturating_mul(4)))
+        else {
+            continue;
+        };
+        // The vertical pass taps whole *rows*, so the row slices are resolved
+        // once per destination row rather than once per pixel — the inner loop
+        // is then a walk down a handful of equal-length `&[u8]`s, which is the
+        // shape that autovectorizes. Collected rather than re-derived inside
+        // the column loop because there are two or three of them and
+        // `dest_width` columns.
+        // Paired with its weight rather than collected alongside it: a row the
+        // bounds check rejects must drop its weight with it, and a `filter_map`
+        // into a bare `Vec` zipped against `weights` afterwards would silently
+        // shift every later weight onto the wrong row. That is the one way this
+        // rewrite could have changed a pixel, so the pairing is structural.
+        let rows: Vec<(u32, &[u8])> = taps
+            .weights
+            .iter()
+            .enumerate()
+            .filter_map(|(i, &weight)| {
+                let sy = taps.start.checked_add(i)?;
+                let at = sy.checked_mul(inter_width)?.checked_mul(4)?;
+                let row = inter_data.get(at..at.checked_add(inter_width.checked_mul(4)?)?)?;
+                Some((weight, row))
+            })
+            .collect();
+        for (x, out) in dest_row.chunks_exact_mut(4).enumerate() {
+            let at = x.saturating_mul(4);
             let mut acc = [0_u32; 4];
-            for (i, &weight) in taps.weights.iter().enumerate() {
-                let Ok(sy) = u32::try_from(taps.start + i) else {
-                    continue;
-                };
-                let Some(px) = inter.pixel(x, sy) else {
+            for &(weight, row) in &rows {
+                let Some(px) = row.get(at..at.saturating_add(4)) else {
                     continue;
                 };
                 for (slot, &channel) in acc.iter_mut().zip(px.iter()) {
                     *slot += weight * u32::from(channel);
                 }
             }
-            #[expect(
-                clippy::cast_possible_truncation,
-                reason = "the weights sum to FIXED_ONE and each channel is a \
-                          byte, so every accumulator is at most 255 << 16"
-            )]
-            let out = acc.map(|a| (a >> 16) as u8);
-            dest.set_pixel(x, dy, out);
+            for (slot, a) in out.iter_mut().zip(acc) {
+                #[expect(
+                    clippy::cast_possible_truncation,
+                    reason = "the weights sum to FIXED_ONE and each channel is \
+                              a byte, so every accumulator is at most 255 << 16"
+                )]
+                let byte = (a >> 16) as u8;
+                *slot = byte;
+            }
         }
     }
     dest

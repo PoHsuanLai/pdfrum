@@ -18,9 +18,11 @@
 #![forbid(unsafe_code)]
 
 mod diagnostics;
+mod fasthash;
 mod limits;
 
 pub use diagnostics::{DiagKind, Diagnostic, Diagnostics, Severity};
+pub use fasthash::{FxBuildHasher, FxHasher};
 pub use kurbo;
 pub use limits::Limits;
 

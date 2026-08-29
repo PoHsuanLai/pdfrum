@@ -776,7 +776,16 @@ name = "pdfrum-bench"
 version = "0.1.0"
 dependencies = [
  "criterion",
+ "kurbo",
  "pdfrum",
+ "pdfrum-common",
+ "pdfrum-page",
+ "pdfrum-raster-exact",
+ "pdfrum-raster-tinyskia",
+ "pdfrum-raster-vello",
+ "pdfrum-render",
+ "peniko",
+ "rayon",
 ]
 
 [[package]]
