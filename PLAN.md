@@ -294,9 +294,11 @@ Both lessons are written down where the next person will meet them.
 - **P0 baseline — DONE** (docs/status/M12.md §1): `benches/corpus/` holds 44
   files across six classes, selected by *measured* operator counts and render
   time over all 1375 files in the oracle's two directories rather than by size
-  (a 25 MB file renders in 90 ms; a 1 KB one takes 1.2 s). Six criterion groups
-  (`open`, `render-{exact,tinyskia,vello}`, `text`, `save`);
-  `benches/baseline.json` + `benches/src/bin/ratchet.rs` with empirically
+  (a 25 MB file renders in 90 ms; a 1 KB one takes 1.2 s). Eleven criterion
+  groups (`open`, `build`, `render-{cold,warm}-{exact,tinyskia,vello}`, `text`,
+  `save`), **split per crate** in P3 so `cargo bench -p pdfrum-render` is a
+  command with a meaning; `benches/baseline.json` +
+  `benches/src/bin/ratchet.rs` with empirically
   measured per-group noise bands; `scripts/profile.sh`. **`perf` was
   unavailable** (`perf_event_paranoid = 4`, no root): the harness detects it,
   prints the remedy, and falls back to exact instrumentation at the
@@ -334,17 +336,57 @@ Both lessons are written down where the next person will meet them.
   allocation being the engine half's cost. Still outstanding: the prerequisite
   M12 could not satisfy — a real `perf` profile of the page-graph walk,
   without which the `bumpalo` question cannot be asked honestly.
-- **Targets (adjustable):** single-thread geometric mean >= oracle on the
-  bench corpus — **not met: 3.58x** (docs/status/M12.md §1.7 has the per-class
-  table; `shading` is 1.09x and `vector_paths_1751` 0.46x on the winning end,
-  `image` at 9.38x is the suite measuring our cold cache against the oracle's
-  warm one and is a benchmark defect §9.1 already corrected in the engine);
-  >= 3x oracle throughput on multi-page docs with rayon (**met**:
-  3.09x at 4 threads, 6.09x at 16); peak RSS <= 1.5x oracle (**met on the
-  geometric mean at 1.20x**, and on 39 of 44 files — the five image documents
-  that miss are recorded with their cause in M12.md §9.2 rather than averaged
-  away). Every perf commit re-runs conformance — byte-exact stays byte-exact;
-  the bench ratchet only tightens.
+- **P3 the benchmark convention, and the two outliers — DONE**
+  (docs/status/M12.md §1.8–1.10, §11). The suite measured **cold** renders
+  against a **warm** oracle: criterion built a fresh `RenderSession` per
+  iteration while `pdfium_test --render-repeats` renders in one process with
+  `CPDF_PageImageCache` on by default. §1.7 named the defect and §9.1 had
+  already measured it at fourteen times; P3 fixes it. There are now **two
+  measured conventions** — `render-cold` (first-render latency, ratcheted, no
+  oracle target) and `render-warm` (steady state, and **the convention the
+  exit target is judged on**, because it is the one the oracle column was
+  always taken in). Both re-baselined. The suite is also **split per crate**
+  — `pdfrum-parser` owns `open`, `pdfrum-page` the new `build` group, and so
+  on — with the corpus, the baseline and the ratchet staying in `benches/` as
+  the certificate suite, plus `scripts/bench-quick.sh` (18 files, criterion's
+  floor, ~3 min) as the dev loop. The two outliers §1.7 flagged are
+  **diagnosed but not fixed** (§10), and both diagnoses cost two wrong
+  hypotheses each: `mixed_formfield` is three genuine image decodes behind
+  three widgets, producing 70x53 thumbnails at **15 ms each** — not appearance
+  regeneration (0.19 ms) and not the font re-parsing an earlier draft blamed
+  (measured at 0.38 ms, once); `image_ccitt_transfer` is one JBIG2 decode of a
+  3562x851 codestream page behind a 400x400 dictionary, and the 15.4 ms is
+  inside `hayro-jbig2`'s arithmetic decoder, which no change to our sink can
+  reach. Both are the same gap in different clothes: **M12 made repeated image
+  work free and left single image work exactly where it was**, which should
+  set the next milestone's agenda. Two changes did land and are kept —
+  memoizing the built-in Multiple-Master and base-14 faces (~5 ms on any
+  document with a non-embedded font), and a **correctness** fix where a JBIG2
+  codestream wider than its dictionary bled set pixels into the next row,
+  silently, on every row — but the A/B says neither moves the row it was
+  written for, and §10 reports both non-results rather than rounding them up.
+  Conformance after both: the scoreboard is **byte-identical** to the
+  committed one.
+- **Targets (adjustable): all three MET** (docs/status/M12.md §11 has the
+  scorecard). Single-thread geometric mean >= oracle on the bench corpus —
+  **met: 0.97x**, judged on the **warm** convention P3 established, because
+  that is the one the oracle column was always taken in (§1.8); the sum ratio
+  is 1.00x, 1644.2 ms against 1639.2 ms, and `image` `vector` and `shading`
+  all come in under 1.0. The same corpus measured **cold** is 3.46x and is
+  tracked with its own ratchet entries and no target. **Almost none of that
+  3.58x → 0.97x is a code change**: it is the measurement correction §1.8
+  argues for, and §9.1's cache had already done the work a milestone earlier
+  where the suite could not see it. >= 3x oracle throughput on multi-page docs
+  with rayon (**met**: 3.09x at 4 threads, 6.09x at 16); peak RSS <= 1.5x
+  oracle (**met on the geometric mean at 1.20x**, and on 39 of 44 files — the
+  five image documents that miss are recorded with their cause in M12.md §9.2
+  rather than averaged away). Every perf commit re-runs conformance —
+  byte-exact stays byte-exact; the bench ratchet only tightens. **Named
+  residue, not averaged away:** `forms` at 3.35x warm is the largest remaining
+  gap and the clearest M13 target; `image_en_fqa` at 11.24x warm is the proof
+  that single-image documents are where the engine is genuinely behind, since
+  M12 made *repeated* image work free (§9.1's cache) and left *single* image
+  work exactly where it was (§10.3).
 
 ## M13 — Release
 

@@ -8,10 +8,46 @@
 //! ratchet reports drift; one with a ratchet prevents it.
 //!
 //! ```text
-//! cargo bench -p pdfrum-bench            # produces target/criterion/**
+//! cargo bench --workspace                # produces target/criterion/**
 //! cargo run --release -p pdfrum-bench --bin ratchet -- check
 //! cargo run --release -p pdfrum-bench --bin ratchet -- update
 //! ```
+//!
+//! # Where the benchmarks live, and why this still works
+//!
+//! Since M12's per-crate split there is no single bench crate: `pdfrum-parser`
+//! owns `open`, `pdfrum-page` owns `build`, `pdfrum-render` owns the six render
+//! groups, `pdfrum-text` owns `text` and `pdfrum-edit` owns `save`. That change
+//! is invisible here, and deliberately so — this binary reads
+//! `target/criterion/**`, which criterion keys by *group name*, not by which
+//! crate's binary produced it. `cargo bench --workspace` fills the same
+//! directory the single crate used to. What it does mean is that
+//! `cargo bench -p pdfrum-render` leaves `open`, `build`, `text` and `save`
+//! stale on disk, so `check` would compare four groups against a run that did
+//! not happen; the "not run" report cannot see that, because the files are
+//! there. Run the whole workspace before a `check` that decides anything.
+//!
+//! # The id mapping across the split
+//!
+//! The render group names changed and the ids therefore did too:
+//!
+//! ```text
+//! render-exact/<class>/<stem>   ->  render-cold-exact/<class>/<stem>
+//! render-tinyskia/...           ->  render-cold-tinyskia/...
+//! render-vello/...              ->  render-cold-vello/...
+//! (new)                         ->  render-warm-{exact,tinyskia,vello}/...
+//! (new)                         ->  build/<class>/<stem>
+//! ```
+//!
+//! `open`, `text` and `save` keep their ids exactly. The three renamed groups
+//! measure the same thing they did — a fresh session per iteration — so their
+//! old numbers were *transferable* in principle, and the baseline was
+//! nonetheless re-initialized rather than renamed. The reason is that the same
+//! commit changed what the render path costs (the two outlier fixes), so a
+//! carried-over number would have shown a large improvement in a file whose
+//! purpose is to make improvements visible one at a time. Re-initializing
+//! records the new floor honestly; `docs/status/M12.md` §10 carries the
+//! before/after comparison the ratchet would otherwise have printed.
 //!
 //! # The rule
 //!
@@ -97,13 +133,13 @@ fn main() {
         Ok(measured) => measured,
         Err(err) => {
             eprintln!("cannot read {}: {err}", criterion_dir.display());
-            eprintln!("run `cargo bench -p pdfrum-bench` first.");
+            eprintln!("run `cargo bench --workspace` first.");
             std::process::exit(2);
         }
     };
     if measured.is_empty() {
         eprintln!("no benchmark results under {}", criterion_dir.display());
-        eprintln!("run `cargo bench -p pdfrum-bench` first.");
+        eprintln!("run `cargo bench --workspace` first.");
         std::process::exit(2);
     }
 
@@ -452,7 +488,7 @@ fn write_baseline(path: &Path, entries: &BTreeMap<String, Entry>, bands: &BTreeM
          \x20   \"The M12 performance ratchet. Medians in nanoseconds, taken\",\n\
          \x20   \"from criterion's own estimates.json. Regenerate with:\",\n\
          \x20   \"\",\n\
-         \x20   \"  cargo bench -p pdfrum-bench\",\n\
+         \x20   \"  cargo bench --workspace\",\n\
          \x20   \"  cargo run --release -p pdfrum-bench --bin ratchet -- update\",\n\
          \x20   \"\",\n\
          \x20   \"Edit a number by hand only to record a deliberate trade, and\",\n\
@@ -511,9 +547,19 @@ fn write_baseline(path: &Path, entries: &BTreeMap<String, Entry>, bands: &BTreeM
 fn default_bands() -> BTreeMap<String, f64> {
     [
         ("open", 0.08),
-        ("render-exact", 0.03),
-        ("render-tinyskia", 0.03),
-        ("render-vello", 0.04),
+        ("build", 0.04),
+        ("render-cold-exact", 0.03),
+        ("render-cold-tinyskia", 0.03),
+        ("render-cold-vello", 0.04),
+        // The warm groups run at 20 samples where the cold ones run at 50, and
+        // they measure a quantity that is often an order of magnitude smaller —
+        // so the *absolute* interval is tighter and the *fractional* one is
+        // wider. Both effects are real and they do not cancel; the bands are
+        // re-measured at the warm counts rather than inherited from the cold
+        // ones, and docs/status/M12.md §2 carries the distribution.
+        ("render-warm-exact", 0.04),
+        ("render-warm-tinyskia", 0.04),
+        ("render-warm-vello", 0.05),
         ("text", 0.04),
         ("save", 0.05),
     ]

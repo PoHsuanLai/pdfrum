@@ -27,3 +27,21 @@ thiserror.workspace = true
 # Test-only: the page crate's graphics state carries `SmallVec` dash arrays
 # and colour components, so building one by hand needs the type.
 smallvec.workspace = true
+
+# M12 benches. This crate owns the `save` group: a full rewrite to memory,
+# over the shared corpus in `benches/corpus`. See `benches/save.rs` for what
+# it measures and `docs/status/M12.md` §1.9 for why each crate owns its own.
+#
+# `pdfrum` is a dev-dependency and a *cycle* — the facade depends on this crate.
+# Cargo permits that for dev-dependencies and it appears in no published normal
+# tree. It is here rather than an entry at this crate's own seam because a
+# benchmark's number has to describe the same work as the oracle column it is
+# compared against, and `pdfium_test` renders a document rather than calling one
+# layer of one.
+pdfrum.workspace = true
+pdfrum-corpus.workspace = true
+criterion.workspace = true
+
+[[bench]]
+name = "save"
+harness = false

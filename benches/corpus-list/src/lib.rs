@@ -1,10 +1,20 @@
 //! The benchmark corpus: which documents, and what class each one is in.
 //!
-//! One list, shared by `benches/engine.rs`, the `profile` binary, the ratchet
-//! checker and `scripts/bench-oracle.sh`, so that every number in
-//! `docs/status/M12.md` describes the same 44 files. The files themselves are
-//! in `corpus/`, copied unmodified from the oracle checkout — see
-//! `corpus/PROVENANCE.md` for where each one came from and why it is here.
+//! One list, shared by the five per-crate criterion suites, the `profile`
+//! binary, the ratchet checker and `scripts/bench-oracle.sh`, so that every
+//! number in `docs/status/M12.md` describes the same 44 files. The files
+//! themselves are in `benches/corpus/`, copied unmodified from the oracle
+//! checkout — see its `PROVENANCE.md` for where each one came from and why it
+//! is here.
+//!
+//! # A leaf crate, deliberately
+//!
+//! This crate depends on nothing — not on `pdfrum`, not on criterion. It is
+//! the shared half of the M12 bench split: each of `pdfrum-parser`,
+//! `pdfrum-page`, `pdfrum-render`, `pdfrum-text` and `pdfrum-edit` owns its
+//! own `benches/` target and dev-depends on this list, so `cargo bench -p
+//! pdfrum-parser` builds a parser and a document list rather than the whole
+//! workspace. See `benches/README.md` for the layout.
 //!
 //! # Why a class per document
 //!
@@ -15,6 +25,8 @@
 //! name. A document belongs to exactly one class — the cost that dominates it
 //! — because a file counted in two classes would let one improvement be
 //! reported twice.
+
+#![forbid(unsafe_code)]
 
 /// What a document is in the corpus to measure.
 ///
@@ -312,6 +324,33 @@ pub fn multipage() -> Vec<&'static Doc> {
     CORPUS.iter().filter(|doc| doc.pages >= 8).collect()
 }
 
+/// Where the corpus documents live, as an absolute path.
+///
+/// Resolved from this crate's own `CARGO_MANIFEST_DIR` — baked in at compile
+/// time — rather than from the process's working directory. That distinction
+/// became load-bearing with the per-crate bench split: `cargo bench -p
+/// pdfrum-render` runs the harness with `crates/pdfrum-render` as its working
+/// directory, `cargo bench -p pdfrum-bench` runs it from `benches/`, and a
+/// `cargo run` from the workspace root does neither. A relative `corpus/`
+/// resolved correctly in exactly one of those three and panicked in the other
+/// two.
+#[must_use]
+pub fn dir() -> std::path::PathBuf {
+    // `benches/corpus-list` → `benches/corpus`.
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .map_or_else(
+            || std::path::PathBuf::from("corpus"),
+            |benches| benches.join("corpus"),
+        )
+}
+
+/// The path to one corpus document.
+#[must_use]
+pub fn path(stem: &str) -> std::path::PathBuf {
+    dir().join(format!("{stem}.pdf"))
+}
+
 /// Read one corpus document's bytes.
 ///
 /// # Panics
@@ -320,9 +359,9 @@ pub fn multipage() -> Vec<&'static Doc> {
 /// failing loudly beats reporting a zero.
 #[must_use]
 pub fn bytes(stem: &str) -> std::sync::Arc<[u8]> {
-    let path = format!("corpus/{stem}.pdf");
+    let path = path(stem);
     match std::fs::read(&path) {
         Ok(bytes) => std::sync::Arc::from(bytes),
-        Err(err) => panic!("corpus file {path} is missing: {err}"),
+        Err(err) => panic!("corpus file {} is missing: {err}", path.display()),
     }
 }
