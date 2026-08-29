@@ -1,13 +1,13 @@
 {
-  "generated_at": "2026-08-29T12:15:58Z",
+  "generated_at": "2026-08-29T13:41:05Z",
   "totals": {
     "files": 1675,
-    "pass": 1510,
-    "fail": 165,
+    "pass": 1569,
+    "fail": 106,
     "by_tag": {
       "page-count": 2,
-      "pixel-fail": 115,
-      "tierA-mismatch": 81
+      "pixel-fail": 88,
+      "tierA-mismatch": 22
     },
     "text": {
       "pages": 2061,
@@ -14913,9 +14913,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.998191,
+        "ssim": 0.999999,
         "exact": false,
-        "max_channel_diff": 187,
+        "max_channel_diff": 6,
         "pages": 1
       },
       "notes": ""
@@ -21628,10 +21628,8 @@
     },
     {
       "path": "corpus/third_party/tcpdf/example_052.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -21640,9 +21638,7 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.annot.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
@@ -21658,7 +21654,7 @@
         "max_channel_diff": 240,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt"
+      "notes": ""
     },
     {
       "path": "corpus/third_party/tcpdf/example_053.pdf",
@@ -22764,10 +22760,8 @@
     },
     {
       "path": "resources/annots.in",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -22778,9 +22772,7 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.annot.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 2,
         "actual_pages": 2,
         "text": {
@@ -22791,19 +22783,17 @@
         }
       },
       "tierB": {
-        "ssim": 0.998638,
+        "ssim": 0.999955,
         "exact": false,
-        "max_channel_diff": 155,
+        "max_channel_diff": 70,
         "pages": 2
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt"
+      "notes": ""
     },
     {
       "path": "resources/annots.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -22814,9 +22804,7 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.annot.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 2,
         "actual_pages": 2,
         "text": {
@@ -22827,12 +22815,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.998638,
+        "ssim": 0.999955,
         "exact": false,
-        "max_channel_diff": 155,
+        "max_channel_diff": 70,
         "pages": 2
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt"
+      "notes": ""
     },
     {
       "path": "resources/annots_action_handling.in",
@@ -28900,10 +28888,8 @@
     },
     {
       "path": "resources/bug_765384.in",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -28912,9 +28898,7 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.annot.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
@@ -28925,19 +28909,17 @@
         }
       },
       "tierB": {
-        "ssim": 0.998958,
+        "ssim": 0.999995,
         "exact": false,
-        "max_channel_diff": 152,
+        "max_channel_diff": 52,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt"
+      "notes": ""
     },
     {
       "path": "resources/bug_765384.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -28946,9 +28928,7 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.annot.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
@@ -28959,12 +28939,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.998958,
+        "ssim": 0.999995,
         "exact": false,
-        "max_channel_diff": 152,
+        "max_channel_diff": 52,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt"
+      "notes": ""
     },
     {
       "path": "resources/bug_773229.pdf",
@@ -29268,10 +29248,8 @@
     },
     {
       "path": "resources/bug_889099.in",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -29280,9 +29258,7 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.annot.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
@@ -29293,19 +29269,17 @@
         }
       },
       "tierB": {
-        "ssim": 0.994155,
+        "ssim": 0.999968,
         "exact": false,
-        "max_channel_diff": 151,
+        "max_channel_diff": 55,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt"
+      "notes": ""
     },
     {
       "path": "resources/bug_889099.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -29314,9 +29288,7 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.annot.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
@@ -29327,12 +29299,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.994155,
+        "ssim": 0.999968,
         "exact": false,
-        "max_channel_diff": 151,
+        "max_channel_diff": 55,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt"
+      "notes": ""
     },
     {
       "path": "resources/bug_890322.in",
@@ -29576,10 +29548,8 @@
     },
     {
       "path": "resources/bug_901654_2.in",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -29588,9 +29558,7 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.annot.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
@@ -29601,19 +29569,17 @@
         }
       },
       "tierB": {
-        "ssim": 0.994521,
+        "ssim": 0.999994,
         "exact": false,
-        "max_channel_diff": 155,
+        "max_channel_diff": 14,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt"
+      "notes": ""
     },
     {
       "path": "resources/bug_901654_2.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -29622,9 +29588,7 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.annot.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
@@ -29635,12 +29599,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.994521,
+        "ssim": 0.999994,
         "exact": false,
-        "max_channel_diff": 155,
+        "max_channel_diff": 14,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt"
+      "notes": ""
     },
     {
       "path": "resources/bug_905142.in",
@@ -29918,10 +29882,8 @@
     },
     {
       "path": "resources/calculate.in",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -29930,9 +29892,7 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.annot.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
@@ -29943,19 +29903,17 @@
         }
       },
       "tierB": {
-        "ssim": 0.998101,
+        "ssim": 0.999554,
         "exact": false,
-        "max_channel_diff": 155,
+        "max_channel_diff": 52,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt"
+      "notes": ""
     },
     {
       "path": "resources/calculate.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -29964,9 +29922,7 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.annot.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
@@ -29977,12 +29933,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.998101,
+        "ssim": 0.999554,
         "exact": false,
-        "max_channel_diff": 155,
+        "max_channel_diff": 52,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt"
+      "notes": ""
     },
     {
       "path": "resources/circular_viewer_ref.in",
@@ -30152,11 +30108,8 @@
     },
     {
       "path": "resources/combobox_form.in",
-      "status": "fail",
-      "tags": [
-        "pixel-fail",
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -30165,9 +30118,7 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.annot.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
@@ -30178,20 +30129,17 @@
         }
       },
       "tierB": {
-        "ssim": 0.985173,
+        "ssim": 0.999976,
         "exact": false,
-        "max_channel_diff": 255,
+        "max_channel_diff": 52,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.985173 below floor 0.990000"
+      "notes": ""
     },
     {
       "path": "resources/combobox_form.pdf",
-      "status": "fail",
-      "tags": [
-        "pixel-fail",
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -30200,9 +30148,7 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.annot.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
@@ -30213,12 +30159,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.985173,
+        "ssim": 0.999976,
         "exact": false,
-        "max_channel_diff": 255,
+        "max_channel_diff": 52,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.985173 below floor 0.990000"
+      "notes": ""
     },
     {
       "path": "resources/control_characters.in",
@@ -31488,9 +31434,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.992839,
+        "ssim": 0.999999,
         "exact": false,
-        "max_channel_diff": 210,
+        "max_channel_diff": 4,
         "pages": 1
       },
       "notes": ""
@@ -33123,11 +33069,8 @@
     },
     {
       "path": "resources/javascript/bug_1445426.in",
-      "status": "fail",
-      "tags": [
-        "pixel-fail",
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -33138,9 +33081,7 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.annot.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 2,
         "actual_pages": 2,
         "text": {
@@ -33151,20 +33092,17 @@
         }
       },
       "tierB": {
-        "ssim": 0.972638,
+        "ssim": 0.999983,
         "exact": false,
-        "max_channel_diff": 155,
+        "max_channel_diff": 19,
         "pages": 2
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.972638 below floor 0.990000"
+      "notes": ""
     },
     {
       "path": "resources/javascript/bug_1445426.pdf",
-      "status": "fail",
-      "tags": [
-        "pixel-fail",
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -33175,9 +33113,7 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.annot.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 2,
         "actual_pages": 2,
         "text": {
@@ -33188,20 +33124,17 @@
         }
       },
       "tierB": {
-        "ssim": 0.972638,
+        "ssim": 0.999983,
         "exact": false,
-        "max_channel_diff": 155,
+        "max_channel_diff": 19,
         "pages": 2
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.972638 below floor 0.990000"
+      "notes": ""
     },
     {
       "path": "resources/javascript/bug_1447268.in",
-      "status": "fail",
-      "tags": [
-        "pixel-fail",
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -33218,11 +33151,7 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.1.annot.txt",
-          "input.pdf.2.annot.txt",
-          "input.pdf.4.annot.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 5,
         "actual_pages": 5,
         "text": {
@@ -33233,20 +33162,17 @@
         }
       },
       "tierB": {
-        "ssim": 0.974932,
+        "ssim": 0.999965,
         "exact": false,
-        "max_channel_diff": 155,
+        "max_channel_diff": 19,
         "pages": 5
       },
-      "notes": "dumps differ: input.pdf.1.annot.txt, input.pdf.2.annot.txt, input.pdf.4.annot.txt; ssim 0.974932 below floor 0.990000"
+      "notes": ""
     },
     {
       "path": "resources/javascript/bug_1447268.pdf",
-      "status": "fail",
-      "tags": [
-        "pixel-fail",
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -33263,11 +33189,7 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.1.annot.txt",
-          "input.pdf.2.annot.txt",
-          "input.pdf.4.annot.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 5,
         "actual_pages": 5,
         "text": {
@@ -33278,12 +33200,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.974932,
+        "ssim": 0.999965,
         "exact": false,
-        "max_channel_diff": 155,
+        "max_channel_diff": 19,
         "pages": 5
       },
-      "notes": "dumps differ: input.pdf.1.annot.txt, input.pdf.2.annot.txt, input.pdf.4.annot.txt; ssim 0.974932 below floor 0.990000"
+      "notes": ""
     },
     {
       "path": "resources/javascript/bug_361.in",
@@ -33347,10 +33269,8 @@
     },
     {
       "path": "resources/javascript/bug_421304870.in",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -33359,9 +33279,7 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.annot.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
@@ -33377,14 +33295,12 @@
         "max_channel_diff": 1,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt"
+      "notes": ""
     },
     {
       "path": "resources/javascript/bug_421304870.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -33393,9 +33309,7 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.annot.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
@@ -33411,7 +33325,7 @@
         "max_channel_diff": 1,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt"
+      "notes": ""
     },
     {
       "path": "resources/javascript/bug_492_1.in",
@@ -33779,11 +33693,8 @@
     },
     {
       "path": "resources/javascript/bug_983867.in",
-      "status": "fail",
-      "tags": [
-        "pixel-fail",
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -33792,9 +33703,7 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.annot.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
@@ -33805,20 +33714,17 @@
         }
       },
       "tierB": {
-        "ssim": 0.983478,
+        "ssim": 0.999960,
         "exact": false,
-        "max_channel_diff": 155,
+        "max_channel_diff": 53,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.983478 below floor 0.990000"
+      "notes": ""
     },
     {
       "path": "resources/javascript/bug_983867.pdf",
-      "status": "fail",
-      "tags": [
-        "pixel-fail",
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -33827,9 +33733,7 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.annot.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
@@ -33840,12 +33744,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.983478,
+        "ssim": 0.999960,
         "exact": false,
-        "max_channel_diff": 155,
+        "max_channel_diff": 53,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.983478 below floor 0.990000"
+      "notes": ""
     },
     {
       "path": "resources/javascript/color_methods.in",
@@ -34353,10 +34257,8 @@
     },
     {
       "path": "resources/javascript/field_methods.in",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -34365,9 +34267,7 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.annot.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
@@ -34378,19 +34278,17 @@
         }
       },
       "tierB": {
-        "ssim": 0.997840,
+        "ssim": 0.999987,
         "exact": false,
-        "max_channel_diff": 150,
+        "max_channel_diff": 51,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt"
+      "notes": ""
     },
     {
       "path": "resources/javascript/field_methods.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -34399,9 +34297,7 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.annot.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
@@ -34412,19 +34308,17 @@
         }
       },
       "tierB": {
-        "ssim": 0.997840,
+        "ssim": 0.999987,
         "exact": false,
-        "max_channel_diff": 150,
+        "max_channel_diff": 51,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt"
+      "notes": ""
     },
     {
       "path": "resources/javascript/field_properties.in",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -34433,9 +34327,7 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.annot.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
@@ -34446,19 +34338,17 @@
         }
       },
       "tierB": {
-        "ssim": 0.997840,
+        "ssim": 0.999987,
         "exact": false,
-        "max_channel_diff": 150,
+        "max_channel_diff": 51,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt"
+      "notes": ""
     },
     {
       "path": "resources/javascript/field_properties.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -34467,9 +34357,7 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.annot.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
@@ -34480,12 +34368,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.997840,
+        "ssim": 0.999987,
         "exact": false,
-        "max_channel_diff": 150,
+        "max_channel_diff": 51,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt"
+      "notes": ""
     },
     {
       "path": "resources/javascript/foreground_task.in",
@@ -34609,10 +34497,8 @@
     },
     {
       "path": "resources/javascript/icons.in",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -34621,9 +34507,7 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.annot.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
@@ -34634,19 +34518,17 @@
         }
       },
       "tierB": {
-        "ssim": 0.997840,
+        "ssim": 0.999987,
         "exact": false,
-        "max_channel_diff": 150,
+        "max_channel_diff": 51,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt"
+      "notes": ""
     },
     {
       "path": "resources/javascript/icons.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -34655,9 +34537,7 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.annot.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
@@ -34668,12 +34548,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.997840,
+        "ssim": 0.999987,
         "exact": false,
-        "max_channel_diff": 150,
+        "max_channel_diff": 51,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt"
+      "notes": ""
     },
     {
       "path": "resources/javascript/immutable_proto.in",
@@ -34737,10 +34617,8 @@
     },
     {
       "path": "resources/javascript/listbox_methods.in",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -34749,9 +34627,7 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.annot.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
@@ -34762,19 +34638,17 @@
         }
       },
       "tierB": {
-        "ssim": 0.997840,
+        "ssim": 0.999987,
         "exact": false,
-        "max_channel_diff": 150,
+        "max_channel_diff": 51,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt"
+      "notes": ""
     },
     {
       "path": "resources/javascript/listbox_methods.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -34783,9 +34657,7 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.annot.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
@@ -34796,12 +34668,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.997840,
+        "ssim": 0.999987,
         "exact": false,
-        "max_channel_diff": 150,
+        "max_channel_diff": 51,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt"
+      "notes": ""
     },
     {
       "path": "resources/javascript/mouse_events.in",
@@ -34865,11 +34737,8 @@
     },
     {
       "path": "resources/javascript/public_methods.in",
-      "status": "fail",
-      "tags": [
-        "pixel-fail",
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -34878,9 +34747,7 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.annot.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
@@ -34891,20 +34758,17 @@
         }
       },
       "tierB": {
-        "ssim": 0.975964,
+        "ssim": 0.999881,
         "exact": false,
-        "max_channel_diff": 153,
+        "max_channel_diff": 53,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.975964 below floor 0.990000"
+      "notes": ""
     },
     {
       "path": "resources/javascript/public_methods.pdf",
-      "status": "fail",
-      "tags": [
-        "pixel-fail",
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -34913,9 +34777,7 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.annot.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
@@ -34926,12 +34788,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.975964,
+        "ssim": 0.999881,
         "exact": false,
-        "max_channel_diff": 153,
+        "max_channel_diff": 53,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.975964 below floor 0.990000"
+      "notes": ""
     },
     {
       "path": "resources/javascript/unsupported.in",
@@ -35875,11 +35737,8 @@
     },
     {
       "path": "resources/listbox_form.in",
-      "status": "fail",
-      "tags": [
-        "pixel-fail",
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -35888,9 +35747,7 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.annot.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
@@ -35901,20 +35758,17 @@
         }
       },
       "tierB": {
-        "ssim": 0.933258,
+        "ssim": 0.999731,
         "exact": false,
-        "max_channel_diff": 250,
+        "max_channel_diff": 85,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.933258 below floor 0.990000"
+      "notes": ""
     },
     {
       "path": "resources/listbox_form.pdf",
-      "status": "fail",
-      "tags": [
-        "pixel-fail",
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -35923,9 +35777,7 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.annot.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
@@ -35936,12 +35788,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.933258,
+        "ssim": 0.999731,
         "exact": false,
-        "max_channel_diff": 250,
+        "max_channel_diff": 85,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.933258 below floor 0.990000"
+      "notes": ""
     },
     {
       "path": "resources/many_rectangles.in",
@@ -36185,11 +36037,8 @@
     },
     {
       "path": "resources/multiple_form_types.in",
-      "status": "fail",
-      "tags": [
-        "pixel-fail",
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -36198,9 +36047,7 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.annot.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
@@ -36211,20 +36058,17 @@
         }
       },
       "tierB": {
-        "ssim": 0.987250,
+        "ssim": 0.999968,
         "exact": false,
-        "max_channel_diff": 155,
+        "max_channel_diff": 53,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.987250 below floor 0.990000"
+      "notes": ""
     },
     {
       "path": "resources/multiple_form_types.pdf",
-      "status": "fail",
-      "tags": [
-        "pixel-fail",
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -36233,9 +36077,7 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.annot.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
@@ -36246,12 +36088,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.987250,
+        "ssim": 0.999968,
         "exact": false,
-        "max_channel_diff": 155,
+        "max_channel_diff": 53,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.987250 below floor 0.990000"
+      "notes": ""
     },
     {
       "path": "resources/multiple_graphics_states.in",
@@ -37068,10 +36910,8 @@
     },
     {
       "path": "resources/pixel/bug_1072440.in",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -37080,9 +36920,7 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.annot.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
@@ -37093,19 +36931,17 @@
         }
       },
       "tierB": {
-        "ssim": 0.991938,
+        "ssim": 0.999967,
         "exact": false,
-        "max_channel_diff": 155,
+        "max_channel_diff": 49,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt"
+      "notes": ""
     },
     {
       "path": "resources/pixel/bug_1072440.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -37114,9 +36950,7 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.annot.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
@@ -37127,12 +36961,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.991938,
+        "ssim": 0.999967,
         "exact": false,
-        "max_channel_diff": 155,
+        "max_channel_diff": 49,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt"
+      "notes": ""
     },
     {
       "path": "resources/pixel/bug_1087.pdf",
@@ -38614,11 +38448,8 @@
     },
     {
       "path": "resources/pixel/bug_1372651.in",
-      "status": "fail",
-      "tags": [
-        "pixel-fail",
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -38627,9 +38458,7 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.annot.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
@@ -38640,20 +38469,17 @@
         }
       },
       "tierB": {
-        "ssim": 0.971502,
+        "ssim": 0.999929,
         "exact": false,
-        "max_channel_diff": 155,
+        "max_channel_diff": 52,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.971502 below floor 0.990000"
+      "notes": ""
     },
     {
       "path": "resources/pixel/bug_1372651.pdf",
-      "status": "fail",
-      "tags": [
-        "pixel-fail",
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -38662,9 +38488,7 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.annot.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
@@ -38675,12 +38499,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.971502,
+        "ssim": 0.999929,
         "exact": false,
-        "max_channel_diff": 155,
+        "max_channel_diff": 52,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.971502 below floor 0.990000"
+      "notes": ""
     },
     {
       "path": "resources/pixel/bug_1374.in",
@@ -41922,11 +41746,8 @@
     },
     {
       "path": "resources/pixel/bug_477200528.in",
-      "status": "fail",
-      "tags": [
-        "pixel-fail",
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -41935,9 +41756,7 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.annot.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
@@ -41948,20 +41767,17 @@
         }
       },
       "tierB": {
-        "ssim": 0.975197,
+        "ssim": 0.999903,
         "exact": false,
-        "max_channel_diff": 154,
+        "max_channel_diff": 54,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.975197 below floor 0.990000"
+      "notes": ""
     },
     {
       "path": "resources/pixel/bug_477200528.pdf",
-      "status": "fail",
-      "tags": [
-        "pixel-fail",
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -41970,9 +41786,7 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.annot.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
@@ -41983,12 +41797,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.975197,
+        "ssim": 0.999903,
         "exact": false,
-        "max_channel_diff": 154,
+        "max_channel_diff": 54,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.975197 below floor 0.990000"
+      "notes": ""
     },
     {
       "path": "resources/pixel/bug_491_invisible.in",
@@ -43740,12 +43554,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.978515,
+        "ssim": 0.983815,
         "exact": false,
         "max_channel_diff": 155,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.978515 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.983815 below floor 0.990000"
     },
     {
       "path": "resources/pixel/bug_725389.pdf",
@@ -43775,12 +43589,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.978515,
+        "ssim": 0.983815,
         "exact": false,
         "max_channel_diff": 155,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.978515 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.983815 below floor 0.990000"
     },
     {
       "path": "resources/pixel/bug_733528.in",
@@ -43810,12 +43624,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.965776,
+        "ssim": 0.982776,
         "exact": false,
         "max_channel_diff": 151,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.965776 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.982776 below floor 0.990000"
     },
     {
       "path": "resources/pixel/bug_733528.pdf",
@@ -43845,19 +43659,17 @@
         }
       },
       "tierB": {
-        "ssim": 0.965776,
+        "ssim": 0.982776,
         "exact": false,
         "max_channel_diff": 151,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.965776 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.982776 below floor 0.990000"
     },
     {
       "path": "resources/pixel/bug_736695_1.in",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -43866,9 +43678,7 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.annot.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
@@ -43879,19 +43689,17 @@
         }
       },
       "tierB": {
-        "ssim": 0.998853,
+        "ssim": 0.999998,
         "exact": false,
-        "max_channel_diff": 155,
+        "max_channel_diff": 19,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt"
+      "notes": ""
     },
     {
       "path": "resources/pixel/bug_736695_2.in",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -43900,9 +43708,7 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.annot.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
@@ -43913,19 +43719,17 @@
         }
       },
       "tierB": {
-        "ssim": 0.998853,
+        "ssim": 0.999998,
         "exact": false,
-        "max_channel_diff": 155,
+        "max_channel_diff": 19,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt"
+      "notes": ""
     },
     {
       "path": "resources/pixel/bug_736695_3.in",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -43934,9 +43738,7 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.annot.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
@@ -43947,19 +43749,17 @@
         }
       },
       "tierB": {
-        "ssim": 0.998853,
+        "ssim": 0.999998,
         "exact": false,
-        "max_channel_diff": 155,
+        "max_channel_diff": 19,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt"
+      "notes": ""
     },
     {
       "path": "resources/pixel/bug_736695_4.in",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -43968,9 +43768,7 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.annot.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
@@ -43981,19 +43779,17 @@
         }
       },
       "tierB": {
-        "ssim": 0.998853,
+        "ssim": 0.999998,
         "exact": false,
-        "max_channel_diff": 155,
+        "max_channel_diff": 19,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt"
+      "notes": ""
     },
     {
       "path": "resources/pixel/bug_736695_4.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -44002,9 +43798,7 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.annot.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
@@ -44015,12 +43809,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.998853,
+        "ssim": 0.999998,
         "exact": false,
-        "max_channel_diff": 155,
+        "max_channel_diff": 19,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt"
+      "notes": ""
     },
     {
       "path": "resources/pixel/bug_736703.in",
@@ -45258,10 +45052,8 @@
     },
     {
       "path": "resources/pixel/combobox_form.in",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -45270,9 +45062,7 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.annot.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
@@ -45283,19 +45073,17 @@
         }
       },
       "tierB": {
-        "ssim": 0.998682,
+        "ssim": 0.999999,
         "exact": false,
-        "max_channel_diff": 155,
+        "max_channel_diff": 1,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt"
+      "notes": ""
     },
     {
       "path": "resources/pixel/combobox_form.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -45304,9 +45092,7 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.annot.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
@@ -45317,12 +45103,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.998682,
+        "ssim": 0.999999,
         "exact": false,
-        "max_channel_diff": 155,
+        "max_channel_diff": 1,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt"
+      "notes": ""
     },
     {
       "path": "resources/pixel/composite-and-xnor.in",
@@ -45887,9 +45673,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.997844,
+        "ssim": 0.999853,
         "exact": false,
-        "max_channel_diff": 152,
+        "max_channel_diff": 81,
         "pages": 1
       },
       "notes": ""
@@ -45917,9 +45703,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.997844,
+        "ssim": 0.999853,
         "exact": false,
-        "max_channel_diff": 152,
+        "max_channel_diff": 81,
         "pages": 1
       },
       "notes": ""
@@ -45947,9 +45733,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.992839,
+        "ssim": 0.999999,
         "exact": false,
-        "max_channel_diff": 210,
+        "max_channel_diff": 4,
         "pages": 1
       },
       "notes": ""
@@ -47044,11 +46830,8 @@
     },
     {
       "path": "resources/pixel/scrollable_widgets1.in",
-      "status": "fail",
-      "tags": [
-        "pixel-fail",
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -47057,9 +46840,7 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.annot.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
@@ -47070,20 +46851,17 @@
         }
       },
       "tierB": {
-        "ssim": 0.987700,
+        "ssim": 0.999964,
         "exact": false,
-        "max_channel_diff": 154,
+        "max_channel_diff": 53,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.987700 below floor 0.990000"
+      "notes": ""
     },
     {
       "path": "resources/pixel/scrollable_widgets1.pdf",
-      "status": "fail",
-      "tags": [
-        "pixel-fail",
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -47092,9 +46870,7 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.annot.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
@@ -47105,20 +46881,17 @@
         }
       },
       "tierB": {
-        "ssim": 0.987700,
+        "ssim": 0.999964,
         "exact": false,
-        "max_channel_diff": 154,
+        "max_channel_diff": 53,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.987700 below floor 0.990000"
+      "notes": ""
     },
     {
       "path": "resources/pixel/scrollable_widgets2.in",
-      "status": "fail",
-      "tags": [
-        "pixel-fail",
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -47127,9 +46900,7 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.annot.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
@@ -47140,12 +46911,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.987700,
+        "ssim": 0.999964,
         "exact": false,
-        "max_channel_diff": 154,
+        "max_channel_diff": 53,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.987700 below floor 0.990000"
+      "notes": ""
     },
     {
       "path": "resources/pixel/shade-tensor.in",
@@ -47453,11 +47224,8 @@
     },
     {
       "path": "resources/pixel/text_form_custom_font.in",
-      "status": "fail",
-      "tags": [
-        "pixel-fail",
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -47466,9 +47234,7 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.annot.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
@@ -47479,20 +47245,17 @@
         }
       },
       "tierB": {
-        "ssim": 0.960118,
+        "ssim": 0.999924,
         "exact": false,
-        "max_channel_diff": 155,
+        "max_channel_diff": 51,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.960118 below floor 0.990000"
+      "notes": ""
     },
     {
       "path": "resources/pixel/text_form_custom_font.pdf",
-      "status": "fail",
-      "tags": [
-        "pixel-fail",
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -47501,9 +47264,7 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.annot.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
@@ -47514,20 +47275,17 @@
         }
       },
       "tierB": {
-        "ssim": 0.960118,
+        "ssim": 0.999924,
         "exact": false,
-        "max_channel_diff": 155,
+        "max_channel_diff": 51,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.960118 below floor 0.990000"
+      "notes": ""
     },
     {
       "path": "resources/pixel/text_form_multiline.in",
-      "status": "fail",
-      "tags": [
-        "pixel-fail",
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -47536,9 +47294,7 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.annot.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
@@ -47549,20 +47305,17 @@
         }
       },
       "tierB": {
-        "ssim": 0.975660,
+        "ssim": 0.999586,
         "exact": false,
-        "max_channel_diff": 153,
+        "max_channel_diff": 51,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.975660 below floor 0.990000"
+      "notes": ""
     },
     {
       "path": "resources/pixel/text_form_multiline.pdf",
-      "status": "fail",
-      "tags": [
-        "pixel-fail",
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -47571,9 +47324,7 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.annot.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
@@ -47584,12 +47335,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.975660,
+        "ssim": 0.999586,
         "exact": false,
-        "max_channel_diff": 153,
+        "max_channel_diff": 51,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.975660 below floor 0.990000"
+      "notes": ""
     },
     {
       "path": "resources/pixel/transfer_function.in",
@@ -49777,11 +49528,8 @@
     },
     {
       "path": "resources/text_form_color.in",
-      "status": "fail",
-      "tags": [
-        "pixel-fail",
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -49790,9 +49538,7 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.annot.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
@@ -49803,20 +49549,17 @@
         }
       },
       "tierB": {
-        "ssim": 0.989390,
+        "ssim": 0.999851,
         "exact": false,
-        "max_channel_diff": 154,
+        "max_channel_diff": 51,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.989390 below floor 0.990000"
+      "notes": ""
     },
     {
       "path": "resources/text_form_color.pdf",
-      "status": "fail",
-      "tags": [
-        "pixel-fail",
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -49825,9 +49568,7 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.annot.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
@@ -49838,12 +49579,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.989390,
+        "ssim": 0.999851,
         "exact": false,
-        "max_channel_diff": 154,
+        "max_channel_diff": 51,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.989390 below floor 0.990000"
+      "notes": ""
     },
     {
       "path": "resources/text_form_multiline.in",
@@ -49907,10 +49648,8 @@
     },
     {
       "path": "resources/text_form_multiple.in",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -49919,9 +49658,7 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.annot.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
@@ -49932,19 +49669,17 @@
         }
       },
       "tierB": {
-        "ssim": 0.990982,
+        "ssim": 0.999938,
         "exact": false,
-        "max_channel_diff": 152,
+        "max_channel_diff": 52,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt"
+      "notes": ""
     },
     {
       "path": "resources/text_form_multiple.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -49953,9 +49688,7 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.annot.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
@@ -49966,12 +49699,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.990982,
+        "ssim": 0.999938,
         "exact": false,
-        "max_channel_diff": 152,
+        "max_channel_diff": 52,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt"
+      "notes": ""
     },
     {
       "path": "resources/text_form_negative_fontsize.in",
