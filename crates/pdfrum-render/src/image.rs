@@ -214,6 +214,13 @@ pub fn image_value_fits(v: f64) -> bool {
 /// A `/Matte` image is the one case where the samples are not the colours:
 /// they are pre-blended against the matte, so each one is un-premultiplied
 /// by [`matte_source`] before the mask becomes its alpha.
+///
+/// **The mask is only folded in when it shares the image's sample grid.**
+/// A mask is never resolution-reduced (design brief §1.19.9), so it routinely
+/// has dimensions of its own, and the two are then resampled to the device
+/// *independently* — which is [`separate_mask`]'s job, not this one. Indexing
+/// a mask of a different size at the base's `(x, y)` reads the wrong sample
+/// everywhere and falls off the end into "opaque" for most of the image.
 #[must_use]
 pub fn to_pixmap(
     image: &ImageData,
@@ -231,9 +238,12 @@ pub fn to_pixmap(
     // A **stencil** takes it through its colour instead: it has no samples of
     // its own, and `GetFillArgb` already ran the same function over the fill.
     let transfer = transfer.filter(|t| !t.is_identity());
+    // A mask on its own grid is drawn separately; folding it in here would
+    // sample it at the base's coordinates.
+    let fused = image.mask.as_ref().filter(|m| is_coregistered(m, image));
     for y in 0..image.height {
         for x in 0..image.width {
-            let alpha = image.mask.as_ref().map_or(255, |m| m.alpha_at(x, y));
+            let alpha = fused.map_or(255, |m| m.alpha_at(x, y));
             let px = if let Pixels::Stencil(bits) = &image.pixels {
                 // A set bit is ink; a clear one paints nothing at all.
                 if bits.pixel(x, y) {
@@ -264,6 +274,79 @@ pub fn to_pixmap(
         }
     }
     out
+}
+
+/// Whether a mask shares its image's sample grid, so it can be folded into
+/// the image's own pixels rather than resampled to the device separately.
+///
+/// A colour-key mask always is: it was resolved from the base's own raw
+/// samples at decode time, so it is the base's grid by construction. An
+/// `Alpha` mask is only when its dimensions match, which a `/Mask` stream or
+/// `/SMask` at its own resolution generally does not.
+#[must_use]
+pub fn is_coregistered(mask: &pdfrum_page::ImageMask, image: &ImageData) -> bool {
+    // Only the `Alpha` arm carries a grid of its own; everything else is the
+    // base's own samples by construction, so it is co-registered.
+    let pdfrum_page::ImageMask::Alpha { width, height, .. } = mask else {
+        return true;
+    };
+    *width == image.width && *height == image.height
+}
+
+/// The mask an image carries on a grid of its own, as a standalone image to
+/// be stretched to the device by itself (`DrawMaskedImage` →
+/// `CalculateDrawImage`, `cpdf_imagerenderer.cpp:375-424` and `:263-319`).
+///
+/// PDFium never fuses a mask into its base's samples. It renders the base
+/// into a device-sized buffer, renders the mask into a second buffer over the
+/// *same device rect* through the *same* matrix, and multiplies. Both are
+/// therefore resampled from their own resolution straight to the device, and
+/// neither ever passes through the other's grid — which is what lets a 64×64
+/// stencil keep its detail over a 3×3 base (`bug_1396266`), and a 100×100
+/// `/SMask` cover the whole of a 400×400 base (`bug_1236`).
+///
+/// The returned pixmap carries the mask's coverage in its **alpha** (white,
+/// premultiplied by that coverage), so drawing it into a transparent buffer
+/// and reading that buffer's alpha reproduces `CalculateDrawImage`'s 8-bpp
+/// mask bitmap — including the zero it leaves outside the mask's extent,
+/// which luminance over a transparent ground could not distinguish from a
+/// covered black sample. A stencil's inversion is already applied by
+/// [`pdfrum_page::ImageMask::alpha_at`].
+#[must_use]
+pub fn separate_mask(mask: &pdfrum_page::ImageMask) -> Option<(ImageData, Pixmap)> {
+    let pdfrum_page::ImageMask::Alpha {
+        width,
+        height,
+        alpha,
+        ..
+    } = mask
+    else {
+        return None;
+    };
+    let (w, h) = (*width, *height);
+    if w == 0 || h == 0 {
+        return None;
+    }
+    let mut out = Pixmap::new(w, h);
+    for y in 0..h {
+        for x in 0..w {
+            let a = mask.alpha_at(x, y);
+            out.set_pixel(x, y, [a, a, a, a]);
+        }
+    }
+    // The descriptor the resample selection reads: the mask's own size is
+    // what it is scaled from, and `/Interpolate` is not inherited — the C++
+    // hands `CalculateDrawImage` the *base's* resample options, and the
+    // stretch engine's own size heuristic then decides.
+    let dict = ImageData {
+        width: w,
+        height: h,
+        pixels: Pixels::Gray8(alpha.clone()),
+        mask: None,
+        matte: None,
+        interpolate: false,
+    };
+    Some((dict, out))
 }
 
 /// One pixel of the `/Matte` un-premultiplication (`CalculateDrawImage`,
@@ -505,6 +588,89 @@ mod tests {
             p.pixel(0, 0),
             Some([128, 128, 128, 128]),
             "premultiplied by the mask"
+        );
+    }
+
+    /// A mask on a grid of its own is **not** folded in: `to_pixmap` leaves
+    /// the image opaque and [`separate_mask`] carries the coverage instead.
+    ///
+    /// Folding it would index the mask at the base's coordinates. A base
+    /// larger than its mask then reads out of range — which `alpha_at`
+    /// reports as opaque — so most of the image escapes masking entirely
+    /// (`bug_1236`: a 100×100 `/SMask` over a 400×400 base masked only the
+    /// top-left quarter). A base *smaller* than its mask reads only the mask's
+    /// top-left corner and throws the rest away (`bug_1396266`: a 64×64
+    /// stencil over a 3×3 base kept 9 of its 4096 samples).
+    #[test]
+    fn a_mask_on_its_own_grid_is_not_folded_into_the_samples() {
+        let mask = ImageMask::Alpha {
+            width: 2,
+            height: 2,
+            alpha: vec![0, 0, 0, 0].into_boxed_slice(),
+            stencil: false,
+        };
+        let img = ImageData {
+            width: 1,
+            height: 1,
+            pixels: Pixels::Rgb8(vec![255, 255, 255].into_boxed_slice()),
+            mask: Some(mask.clone()),
+            matte: None,
+            interpolate: false,
+        };
+        assert!(!is_coregistered(&mask, &img), "2x2 mask over a 1x1 base");
+        let p = to_pixmap(&img, Argb::BLACK, None);
+        assert_eq!(
+            p.pixel(0, 0),
+            Some([255, 255, 255, 255]),
+            "the sample stays opaque; the mask is applied at device resolution"
+        );
+
+        // Same dimensions: folded in as before.
+        let same = ImageMask::Alpha {
+            width: 1,
+            height: 1,
+            alpha: vec![64].into_boxed_slice(),
+            stencil: false,
+        };
+        let coreg = ImageData {
+            mask: Some(same.clone()),
+            ..img
+        };
+        assert!(is_coregistered(&same, &coreg));
+        assert_eq!(
+            to_pixmap(&coreg, Argb::BLACK, None).pixel(0, 0),
+            Some([64; 4])
+        );
+    }
+
+    /// The standalone mask carries its coverage in the **alpha** channel, so
+    /// reading the drawn buffer's alpha yields zero outside the mask's extent
+    /// rather than confusing "uncovered" with "covered black".
+    #[test]
+    fn a_separate_mask_carries_its_coverage_in_the_alpha() {
+        let mask = ImageMask::Alpha {
+            width: 2,
+            height: 1,
+            alpha: vec![0, 200].into_boxed_slice(),
+            stencil: false,
+        };
+        let (dict, px) = separate_mask(&mask).expect("an alpha mask yields a pixmap");
+        assert_eq!((dict.width, dict.height), (2, 1));
+        assert_eq!(px.pixel(0, 0), Some([0, 0, 0, 0]));
+        assert_eq!(px.pixel(1, 0), Some([200, 200, 200, 200]));
+
+        // A stencil's inversion is already applied.
+        let stencil = ImageMask::Alpha {
+            width: 1,
+            height: 1,
+            alpha: vec![0].into_boxed_slice(),
+            stencil: true,
+        };
+        let (_, px) = separate_mask(&stencil).expect("a stencil yields a pixmap");
+        assert_eq!(
+            px.pixel(0, 0),
+            Some([255; 4]),
+            "a clear stencil bit is opaque"
         );
     }
 
