@@ -11,6 +11,28 @@
 //! type flag is read from byte 17 and nowhere else, and an offset that parses
 //! as zero without ten leading digits fails the whole table.
 //!
+//! # A free entry here says nothing at all
+//!
+//! Byte 17 being `f` marks the slot free — and this reader then *drops the
+//! entry on the floor* rather than recording it. That looks like a bug and is
+//! not: `ParseAndAppendCrossRefSubsectionData`
+//! (`cpdf_parser.cpp:594-597`) sets `pos` and `type` for a free entry and
+//! never reads its generation field, leaving `gennum` at the struct's default
+//! zero; `MergeCrossRefObjectsData` (`cpdf_parser.cpp:682-686`) then gates
+//! `SetFree` on `gennum > 0`, so the call can never fire from a classic
+//! table. A cross-reference *stream*'s type-0 entry does read its generation
+//! (`cpdf_parser.cpp:970-975`) and does free the slot; only this format's
+//! free entries are inert.
+//!
+//! The consequence is load-bearing for hybrid-reference files (ISO 32000-1
+//! §7.5.8.4). Such a file writes its compressed objects as free in the
+//! classic table — so a reader that predates object streams sees them as
+//! absent rather than as garbage — and describes them for real in the
+//! `/XRefStm` the same trailer names. The chain applies the stream first and
+//! the table second, precisely so the table can revise it; an implementation
+//! that honored these free entries would undo every type-2 entry the stream
+//! just supplied and lose the whole compressed half of the file.
+//!
 //! # Trusting a table, once
 //!
 //! Even a well-formed table can be wrong: a file edited by a tool that
@@ -148,6 +170,20 @@ fn read_subsection(
             return false;
         }
 
+        // An object number past the largest legal one fails the whole table:
+        // the file is describing objects that cannot exist.
+        if num > limits.max_object_number {
+            return false;
+        }
+
+        // A free entry is read and then discarded: it never reaches the map,
+        // whatever generation its field names. See the module note above on
+        // why that is the C++'s behavior rather than an omission of ours,
+        // and why it is what makes a hybrid-reference file work.
+        if free {
+            continue;
+        }
+
         // The generation field is parsed as a signed integer and then kept
         // in sixteen bits, so `70000` lands as 4464 rather than being
         // rejected.
@@ -158,24 +194,9 @@ fn read_subsection(
         )]
         let generation = atoi64(entry.get(11..17).unwrap_or_default()) as u16;
 
-        // An object number past the largest legal one fails the whole table:
-        // the file is describing objects that cannot exist.
-        if num > limits.max_object_number {
+        let pos = u64::try_from(offset).unwrap_or(0);
+        if !xref.add_normal(num, generation, false, pos, limits) {
             return false;
-        }
-
-        if free {
-            // A free entry of generation zero says nothing: it is the shape
-            // a never-written slot has, and honoring it would erase whatever
-            // a newer section put there.
-            if generation > 0 {
-                xref.set_free(num, generation);
-            }
-        } else {
-            let pos = u64::try_from(offset).unwrap_or(0);
-            if !xref.add_normal(num, generation, false, pos, limits) {
-                return false;
-            }
         }
     }
     true
