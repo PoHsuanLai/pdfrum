@@ -631,6 +631,7 @@ dependencies = [
  "pdfrum-object",
  "pdfrum-page",
  "pdfrum-parser",
+ "smallvec",
  "subsetter",
  "thiserror",
 ]

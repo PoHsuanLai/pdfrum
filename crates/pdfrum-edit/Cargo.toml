@@ -18,3 +18,8 @@ pdfrum-font.workspace = true
 pdfrum-page.workspace = true
 subsetter.workspace = true
 thiserror.workspace = true
+
+[dev-dependencies]
+# Test-only: the page crate's graphics state carries `SmallVec` dash arrays
+# and colour components, so building one by hand needs the type.
+smallvec.workspace = true
