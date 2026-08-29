@@ -46,11 +46,12 @@
 //! `open_state_`, which only a mouse click sets and `pdfium_test` never does.
 
 use pdfrum_common::{Diagnostics, Limits};
-use pdfrum_doc::annot::appearance::{ApMode, annot_ap, annot_matrix};
-use pdfrum_doc::annot::{AnnotList, Annotation, Subtype};
-use pdfrum_doc::ap;
 use pdfrum_object::{ByteSpan, Dict, Resolve, Stream};
 use pdfrum_page::{BuildContext, Page, Resources, build_form_object};
+
+use crate::annot::appearance::{ApMode, annot_ap, annot_matrix};
+use crate::annot::{AnnotList, Annotation, Subtype};
+use crate::ap;
 
 /// Appends every visible annotation's appearance to a built page.
 ///
@@ -144,7 +145,7 @@ fn is_visible(annot: &Annotation) -> bool {
 #[cfg(test)]
 mod tests {
     use super::is_visible;
-    use pdfrum_doc::annot::{AnnotFlags, Annotation, Subtype};
+    use crate::annot::{AnnotFlags, Annotation, Subtype};
     use pdfrum_object::{Dict, NoResolve};
 
     fn annot(subtype: Subtype, flags: i64) -> Annotation {
