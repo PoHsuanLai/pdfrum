@@ -23,7 +23,7 @@
 use kurbo::{Affine, BezPath, Vec2};
 
 use crate::options::{RenderOptions, TextAa};
-use pdfrum_font::{Font, GlyphCache, GlyphKey};
+use pdfrum_font::{CharItem, Font, GlyphCache, GlyphKey, cid_transform_to_float};
 use pdfrum_page::{TextObject, TextRenderMode};
 
 /// Which of fill, stroke and clip a text render mode asks for
@@ -160,6 +160,69 @@ impl PlacedGlyph {
 pub fn glyph_matrix(font_size: f32, pen: kurbo::Point, text_to_device: Affine) -> Affine {
     let s = f64::from(font_size) / 1000.0;
     text_to_device * Affine::translate((pen.x, pen.y)) * Affine::scale(s)
+}
+
+/// What the Adobe-Japan1 per-CID transform does to one glyph.
+///
+/// Two separate things, which is why it is not simply a matrix: a shift of
+/// the drawing **origin** in text space, and a reshaping **matrix** applied
+/// to the outline inside its em box.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct Japan1Adjust {
+    /// Added to the pen for this glyph only — never to the running pen.
+    pub origin: Vec2,
+    /// Post-multiplied onto the glyph matrix, so it acts in em space.
+    pub matrix: Affine,
+}
+
+impl Japan1Adjust {
+    /// No adjustment: the identity matrix and no shift.
+    const NONE: Self = Self {
+        origin: Vec2::new(0.0, 0.0),
+        matrix: Affine::IDENTITY,
+    };
+}
+
+/// The Japan1 adjustment one decoded character takes
+/// (`CPDF_Font::GetCharPosList`, `cpdf_font.cpp:482-498`).
+///
+/// A non-embedded Japanese font is substituted onto a face that has only
+/// upright glyphs, so PDFium carries a hand-tuned 154-row table of per-CID
+/// transforms and applies them itself. It is *not* only for vertical writing:
+/// the gate is the charset and the absence of a font program
+/// (`CPDF_CIDFont::GetCIDTransform`, `cpdf_cidfont.cpp:878-887`), and a
+/// horizontal CMap such as `/90pv-RKSJ-H` reaches the listed CIDs perfectly
+/// well. `bug_1402.pdf` is exactly that file, and without this its three
+/// ideographic full stops land 22 device pixels left and 27 up — right shape,
+/// right ink, wrong side of the em box.
+///
+/// **The advance is untouched.** Upstream mutates a per-glyph `origin_`, not
+/// the running pen, so a run's spacing is the same with the transform as
+/// without it and only each glyph's own placement moves.
+///
+/// `is_vertical_glyph` suppresses it: a `GSUB` `vert` substitution has already
+/// produced a rotated form, and rotating it again is the one way to make this
+/// worse than not applying it.
+///
+/// The C++ additionally scales `a` and `b` by the glyph-spacing heuristic's
+/// `scaling_factor` (`cpdf_font.cpp:449-467`). That heuristic is not ported —
+/// it fires only when a PDF's declared width is narrower than the face's own
+/// glyph — and where it does not fire the factor is exactly 1, which is the
+/// case every corpus file with a Japan1 transform is in.
+#[must_use]
+pub fn japan1_adjust(font: &Font, item: &CharItem, font_size: f32) -> Japan1Adjust {
+    if item.vertical_glyph {
+        return Japan1Adjust::NONE;
+    }
+    let Some(t) = font.japan1_transform(item.code) else {
+        return Japan1Adjust::NONE;
+    };
+    let f = |b: u8| f64::from(cid_transform_to_float(b));
+    Japan1Adjust {
+        origin: Vec2::new(f(t.e) * f64::from(font_size), f(t.f) * f64::from(font_size)),
+        // The packed order is the PDF matrix's own: `a b c d`.
+        matrix: Affine::new([f(t.a), f(t.b), f(t.c), f(t.d), 0.0, 0.0]),
+    }
 }
 
 /// The size threshold above which the oracle abandons glyph bitmaps for
@@ -469,9 +532,15 @@ pub fn place_glyphs(
                     vertical: item.vertical_glyph,
                 };
                 if let Some(outline) = cache.path(font, key) {
+                    // The Japan1 per-CID transform moves and reshapes the
+                    // glyph *within* its em box without touching the advance,
+                    // so it applies to this glyph's origin and matrix and the
+                    // pen walks on as if it were not there.
+                    let adjust = japan1_adjust(font, &item, *size);
                     out.push(PlacedGlyph {
                         outline: outline.clone(),
-                        matrix: glyph_matrix(*size, pen, text_to_device),
+                        matrix: glyph_matrix(*size, pen + adjust.origin, text_to_device)
+                            * adjust.matrix,
                         key,
                         bitmap: None,
                     });
@@ -1002,6 +1071,50 @@ mod tests {
         let mut origins = device.clone();
         adjust_glyph_space(&mut origins, &device);
         assert_eq!(origins, device, "a diagonal run is left entirely alone");
+    }
+
+    #[test]
+    fn the_japan1_transform_shifts_the_origin_without_touching_the_advance() {
+        // CID 7888 — U+3002 reached through `/90pv-RKSJ-H`, the row
+        // `bug_1402.pdf` lands on. `{7888, 127, 0, 0, 127, 79, 94}` unpacks to
+        // the identity matrix and a translation of (79/127, 94/127) em, which
+        // is why that file's glyphs had the right shape and the wrong place.
+        let t = pdfrum_font::CidTransform {
+            cid: 7888,
+            a: 127,
+            b: 0,
+            c: 0,
+            d: 127,
+            e: 79,
+            f: 94,
+        };
+        let unpack = |b: u8| f64::from(pdfrum_font::cid_transform_to_float(b));
+        let size = 36.0_f64;
+        let dx = unpack(t.e) * size;
+        let dy = unpack(t.f) * size;
+        // Roughly (+22.4, +26.7) in text space, which after the page matrix's
+        // single y flip is the (-22, +27) device displacement the file showed
+        // when the transform was not applied at all.
+        assert!((dx - 22.394).abs() < 0.01, "e * font_size is {dx}");
+        assert!((dy - 26.646).abs() < 0.01, "f * font_size is {dy}");
+
+        // Byte 127 is exactly 1 and byte 0 exactly 0, so this row's matrix is
+        // the identity: the glyph is moved, never reshaped.
+        assert_eq!(unpack(t.a), 1.0);
+        assert_eq!(unpack(t.b), 0.0);
+        assert_eq!(unpack(t.c), 0.0);
+        assert_eq!(unpack(t.d), 1.0);
+
+        // And the shift reaches the *matrix* rather than the pen: two glyphs
+        // one advance apart stay one advance apart.
+        let origin = Vec2::new(dx, dy);
+        let a = glyph_matrix(36.0, Point::new(0.0, 0.0) + origin, Affine::IDENTITY);
+        let b = glyph_matrix(36.0, Point::new(50.0, 0.0) + origin, Affine::IDENTITY);
+        let step = b.translation() - a.translation();
+        assert!(
+            (step.x - 50.0).abs() < 1e-9 && step.y.abs() < 1e-9,
+            "the advance is unchanged by the adjustment, got {step:?}"
+        );
     }
 
     #[test]

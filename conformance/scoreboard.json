@@ -1,12 +1,12 @@
 {
-  "generated_at": "2026-08-29T10:40:07Z",
+  "generated_at": "2026-08-29T10:45:07Z",
   "totals": {
     "files": 1675,
-    "pass": 1465,
-    "fail": 210,
+    "pass": 1469,
+    "fail": 206,
     "by_tag": {
       "page-count": 2,
-      "pixel-fail": 170,
+      "pixel-fail": 166,
       "tierA-mismatch": 81
     },
     "text": {
@@ -12311,12 +12311,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.924423,
+        "ssim": 0.925062,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.924423 below floor 0.990000"
+      "notes": "ssim 0.925062 below floor 0.990000"
     },
     {
       "path": "corpus/fx/other/8.1_viewer_preferences.pdf",
@@ -38600,10 +38600,8 @@
     },
     {
       "path": "resources/pixel/bug_1355.in",
-      "status": "fail",
-      "tags": [
-        "pixel-fail"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -38623,19 +38621,17 @@
         }
       },
       "tierB": {
-        "ssim": 0.961278,
+        "ssim": 0.999962,
         "exact": false,
-        "max_channel_diff": 225,
+        "max_channel_diff": 17,
         "pages": 1
       },
-      "notes": "ssim 0.961278 below floor 0.990000"
+      "notes": ""
     },
     {
       "path": "resources/pixel/bug_1355.pdf",
-      "status": "fail",
-      "tags": [
-        "pixel-fail"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -38655,12 +38651,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.961278,
+        "ssim": 0.999962,
         "exact": false,
-        "max_channel_diff": 225,
+        "max_channel_diff": 17,
         "pages": 1
       },
-      "notes": "ssim 0.961278 below floor 0.990000"
+      "notes": ""
     },
     {
       "path": "resources/pixel/bug_1372651.in",
@@ -39166,10 +39162,8 @@
     },
     {
       "path": "resources/pixel/bug_1402.in",
-      "status": "fail",
-      "tags": [
-        "pixel-fail"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -39189,19 +39183,17 @@
         }
       },
       "tierB": {
-        "ssim": 0.948947,
+        "ssim": 0.999980,
         "exact": false,
-        "max_channel_diff": 225,
+        "max_channel_diff": 19,
         "pages": 1
       },
-      "notes": "ssim 0.948947 below floor 0.990000"
+      "notes": ""
     },
     {
       "path": "resources/pixel/bug_1402.pdf",
-      "status": "fail",
-      "tags": [
-        "pixel-fail"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -39221,12 +39213,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.948947,
+        "ssim": 0.999980,
         "exact": false,
-        "max_channel_diff": 225,
+        "max_channel_diff": 19,
         "pages": 1
       },
-      "notes": "ssim 0.948947 below floor 0.990000"
+      "notes": ""
     },
     {
       "path": "resources/pixel/bug_1430333.in",
