@@ -1,6 +1,6 @@
 # PDFium → Rust Rewrite — Master Plan
 
-**Status:** M0 complete (2026-08-29): oracle built, golden store generated, harness v1 + scoreboard baseline live. M1 in progress — parser landed; `pdfrum-tool` wired up and the harness now runs against a real binary, with `--show-metadata` and `--show-pageinfo` Tier-A byte-exact on 1468/1468 files and load behavior agreeing with the oracle on every file (`docs/status/M1.md`).
+**Status:** M1 code-complete (2026-08-29): 1468/1468 loads agree with the oracle, metadata+pageinfo 100% Tier-A byte-exact; 24h fuzz gate running. M2 (font/text) and M3 briefs done; font implementation in flight.
 **Oracle:** `/mnt/data2/pdfium/pdfium-c++` (read-only C++ PDFium checkout @ `6f2272e`)
 **Workspace:** `/mnt/data2/pdfium/pdfrum` (this repository)
 
