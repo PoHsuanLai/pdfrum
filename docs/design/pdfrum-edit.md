@@ -1303,7 +1303,7 @@ property test in §6.
 |---|---|
 | R11 | Reloading the output yields the same page count and the same page dictionaries' semantic content (boxes, rotation, resources reachable). |
 | R12 | For every page whose objects were **not** dirtied, `/Contents` is byte-identical to the input's (the early-out of §2.1 guarantees this). |
-| R13 | For every regenerated page, the reparsed page-object list is equivalent to the pre-save one **modulo the documented losses**: non-RGB/Gray colors, patterns, shading objects, Type 3 text, `Tc`/`Tw`/`Tz`/`TL`/`Ts`, miter limit, SMask. These are C++ behaviors (§2.4, §2.5) and are therefore *expected* Tier-B differences, not bugs — the conformance harness must treat "regenerated page" as a distinct cluster with its own threshold. |
+| R13 | For every regenerated page, the reparsed page-object list is equivalent to the pre-save one **modulo the documented losses**: non-RGB/Gray colors, patterns, shading objects, Type 3 text, `Tc`/`Tw`/`Tz`/`TL`/`Ts`, miter limit, SMask. These are C++ behaviors (§2.4, §2.5) and are therefore *expected* Tier-B differences, not bugs — the conformance harness must treat "regenerated page" as a distinct cluster with its own threshold. **(M11, 2026-08-30: measured, and the cluster needed no threshold of its own.** `conformance mutate-round-trip` compares the *oracle's* render of a page we regenerated against *ours* of the same file, so the documented losses fall on both sides and cancel: whatever the emitter dropped, it dropped for both readers. The floor is therefore the ordinary Tier-B 0.99, and 287 of 287 applied mutations reach it. The one thing that had to be added is not a threshold but a second question — see the harness's `mutation` module on why SSIM alone cannot separate a mutation's loss from a disagreement that predates it.) |
 | R14 | Decoded stream bytes survive: a stream that already had a filter is copied verbatim (§1.13 row 2), so `--save-images` md5s must be unchanged for untouched images. |
 | R15 | Text extraction over the reloaded document matches, for pages whose fonts were not subsetted. With subsetting, extraction must still match because `/ToUnicode` is regenerated to cover exactly the used codes (`fpdf_save_embeddertest.cpp:362-383` asserts the extracted text of a subsetted save char-for-char). |
 
@@ -2092,7 +2092,13 @@ overlay costs one extra `Resolve` hop per fetch and requires every edit-aware
 API to thread `&EditDoc` rather than `&Document`. Confirm the overlay in
 review of this brief; it is the default.
 
-**E6 — where does `Page` mutation live?** `generate_content` needs a *mutable*
+**E6 — where does `Page` mutation live?** *(RESOLVED 2026-08-30 in M11. The
+proposal below was accepted and grown by three fields the brief did not
+foresee: `ImageObject`/`FormObject` gained `source: Option<ObjRef>` and
+`TextObject` gained `font_source`, because a parsed object holding decoded
+pixels or a loaded font cannot otherwise name the `/XObject` or `/Font` entry
+a regenerated `Do` or `Tf` must spell. See SPEC §7's M11 entry and
+`docs/status/pdfrum-page.md`.)* `generate_content` needs a *mutable*
 page-object graph with dirty flags — SPEC §7's `Page`/`PageObject` are
 described as records with no behavior, and the page brief carries
 `content_stream: i32` explicitly "because `pdfrum-edit` needs it" but says
@@ -2114,7 +2120,11 @@ like-for-like flag diff. Confirm that shape with the harness owner; it changes
 `conformance/`'s driver, not this crate.
 
 **E8 — the C++'s per-object dedup caches live on the page-object holder, which
-we do not have.** `graphics_map_`, `fonts_map_` and
+we do not have.** *(RESOLVED 2026-08-30 in M11 as proposed: a `ResourceTable`
+created fresh per `regenerate` call. The parking half — `all_removed_resources_map`
+— is inside that table and so is likewise per-call, which means a name freed by
+one regeneration is available to the next. Unobservable after re-parse, as
+predicted.)* `graphics_map_`, `fonts_map_` and
 `all_removed_resources_map_` (`cpdf_pageobjectholder.h:171-176`) persist across
 `GenerateContent` calls on the same page. Our `Page` is a value. Proposal:
 these live in a `ContentGenState` record owned by `generate_content`'s caller
@@ -2123,7 +2133,11 @@ resource gets across *repeated* regenerations of the same page — unobservable
 after re-parse, and no test depends on it. Recording it so the difference is
 not discovered as a bug.
 
-**E9 — nested form regeneration has no depth guard in the C++** (`:705-711`).
+**E9 — nested form regeneration has no depth guard in the C++** *(RESOLVED
+2026-08-30 in M11: not implemented, and not needed. A form page object is
+written as the `Do` that draws it, so its own stream is never rewritten and
+the recursion this escalation guards against does not arise. Should nested
+regeneration ever be wanted, the proposal below still stands.)* (`:705-711`).
 A form referencing itself would recurse forever. `pdfrum-page` already carries
 a form-recursion guard for *parsing* (page brief §1.7, `kMaxFormLevel = 40`
 plus a visited set). Proposal: reuse the same cap and visited-set shape for

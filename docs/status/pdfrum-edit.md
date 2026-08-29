@@ -1,11 +1,13 @@
 # `pdfrum-edit` status
 
-**Updated:** 2026-08-29 · **State:** the document writer, page import, N-up
-and CID font subsetting are implemented and verified against the oracle;
-content regeneration is implemented as *emitters* and is not yet wired to a
-page-object holder (see "What is not here" below).
+**Updated:** 2026-08-30 · **State:** the document writer, page import, N-up
+and CID font subsetting are implemented and verified against the oracle.
+Content regeneration is complete as of M11 — emitters *and* the holder half
+around them — and the oracle reopens and agrees with every mutated page the
+harness produces.
 
-Contract: SPEC.md §11 (including the 2026-08-29 rulings E1–E4, E7, E10);
+Contract: SPEC.md §11 (including the 2026-08-29 rulings E1–E4, E7, E10, the
+2026-08-30 M10 encryption ruling, and the M11 regeneration ruling);
 behavior: `docs/design/pdfrum-edit.md`.
 
 ## M7 verification
@@ -174,27 +176,42 @@ never a mutation that was not allowed.
 secondary note. Verified at implementation time: `cargo tree -p pdfrum-edit`
 resolves exactly one `skrifa` (0.46.2) and one `kurbo` (0.13.1).
 
-## What is not here
+## Content regeneration, and what is still not here
 
-**Content regeneration is emitters only.** Everything that turns a page
-object into operator bytes is implemented and pinned against the C++'s
-verbatim goldens — the graphics frame, the paint matrix, the `re` fast path,
-the transposed `Tm`, the mark diffing, the colour and text losses. What is
-*not* implemented is the holder-mutation half: the dirty-set bookkeeping,
-`/Contents` array surgery, and the `FXF1`/`FXX1`/`FXE1` resource sweep.
+**The holder half landed in M11** (2026-08-30), resolving the brief's
+E6. The emitters were already here and byte-pinned; what this added is the
+holder half around them, in three modules:
 
-That half needs page-crate infrastructure that does not exist:
-`PageObject` has no `dirty` or `active` field, `content_stream` is present
-but hardcoded to `0` at its single construction site, and there is no
-per-stream CTM facility (`GetCTMAtBeginningOfStream`'s equivalent). The
-brief's E6 proposes adding the first two as additive `[spec]` changes to §7;
-the third is new work in `pdfrum-page`'s interpreter. None of it is reachable
-without touching another crate's contract, and M7's exit criteria do not
-depend on it — an ordinary save regenerates nothing, which is why the
-fidelity number is what it is.
+- `content::regen` decides which `/Contents` elements are dirty, frames each
+  one, and drives the emitters over the objects that belong to it. Its
+  `Option` return is the early-out the whole save path rests on: a page
+  nothing dirtied is not rewritten at all.
+- `content::resource` is the `FX{E,F,X}{n}` allocator and the sweep, with the
+  parking rule that keeps a removed entry's name reserved.
+- `content::apply` puts the result into an `EditDoc` — the `/Contents` shape
+  transitions, the index renumbering, and the copy-on-write for an element
+  two pages share.
 
-The emitters are public and tested, so wiring them up is a `pdfrum-page`
-change plus a driver, not a rewrite.
+Two things the next person should not have to rediscover:
+
+1. **Resource usage is recorded over every active object, not only the ones
+   being written.** An object sitting in a stream this run leaves alone still
+   names its font, and a sweep driven by the written objects alone deletes
+   that font and breaks a page nobody edited. The C++ does the same thing
+   (`cpdf_pagecontentgenerator.cpp:498-504`) and it is easy to read as an
+   inefficiency rather than the correctness rule it is. The corresponding
+   asymmetry: an object in a clean stream may only *record* a name it already
+   has, never mint one, or the sweep grows entries nothing refers to.
+2. **A page whose `/Contents` was a lone stream must not reuse that stream's
+   object number for the array that replaces it.** The array's first element
+   *is* that stream, so writing the array over it destroys the content it
+   points at — a file that looks well-formed and renders blank. `set_contents`
+   checks the reference against the element list before reusing it.
+
+What is deliberately still absent is nested form regeneration (the brief's
+E9). A form page object is written as the `Do` that draws it, so its own
+stream is never rewritten and the unguarded recursion E9 worried about does
+not arise.
 
 **Preserve-encryption save landed in M10** (2026-08-30), superseding SPEC
 §11's ruling E3. An encrypted document now saves encrypted under the handler

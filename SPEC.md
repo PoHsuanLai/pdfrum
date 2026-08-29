@@ -502,6 +502,33 @@ Inline images (`BI…EI`) handled in `parse_content` with the C++'s EI-scan quir
 Decoded-image cache: keyed `(ObjRef, RequestedSize)` per render/extract session
 ([spec] 2026-08-29: a plain ObjRef key cannot express resolution-dependent
 invalidation — page brief Q8).
+**[spec] 2026-08-30 (M11): the editing half of the page-object model.** Edit
+brief E6's proposal is accepted and grown. `Content<T>` gains `dirty: bool`
+(false on parse) and `active: bool` (true on parse) beside the
+`content_stream: i32` it already carried, and `Page` gains
+`dirty_streams: BTreeSet<i32>` and `stream_ctms: BTreeMap<i32, Affine>` — the
+`all_ctms_` map the page brief §1.6 said we would carry, now actually carried.
+`NO_CONTENT_STREAM = -1` names the streamless sentinel. All five are plain
+fields with no behavior; the operations on them are free functions in the new
+`mutate` module, per STYLE.md §1.
+
+Three further additions the brief did not anticipate, each because a *parsed*
+object cannot otherwise name the resource a *regenerated* stream must refer
+to. `ImageObject` and `FormObject` gain `source: Option<ObjRef>` and
+`TextObject` gains `font_source: Option<ObjRef>` (mirrored on `TextState`, so
+it survives `q`/`Q`): the interpreter already resolved these references for
+its caches, and a page object holding decoded pixels or a loaded font has no
+other way back to the `/XObject` or `/Font` entry a `Do` or `Tf` has to spell.
+`None` means "written inline, or reached from an annotation's `/AP`", and such
+an object is dropped when its stream is rewritten — which is what the C++ does
+with an inline image too.
+
+`content_stream` is now populated for real. `StreamBounds` records where each
+`/Contents` element's operators begin within the joined operator list, and
+`build_page_streams` is `build_page_from_dict` plus those boundaries; the
+render and text paths keep the cheaper entry point, which pays for neither
+the boundaries nor the CTM map.
+
 Decisions (orchestrator, from the page brief's open questions): the three
 additive `Limits` fields the brief proposes (colorspace construction depth,
 type-3 stitching nesting, names-tree length) are accepted with generous
@@ -1086,6 +1113,52 @@ packet, `false` writes a plaintext one. The oracle's *reader* honours the
 flag, so both writers' output opens in both readers — ours simply still has
 its metadata.
 
+**Ruling 2026-08-30 (M11): E6 is RESOLVED and content regeneration is
+wired.** The emitters were already byte-pinned; what landed is the holder half
+around them. `regenerate(&Page, &Dict, &impl Resolve) -> Option<PageRewrite>`
+is the entry point, and the `None` is load-bearing: a page nothing dirtied is
+not rewritten at all, so an ordinary save stays byte-identical.
+`apply_rewrite` puts a `PageRewrite` into an `EditDoc` — replacing the
+elements that survive, adding the ones that are new, reshaping `/Contents`,
+repointing `/Resources` — and `shared_objects` is the sweep that decides
+between rewriting an element and copying it, because an element two pages
+point at cannot be edited in place.
+
+Four rules the writer honours, all ported from `CPDF_PageContentManager`:
+
+- **`/Contents` shape transitions are not symmetric.** Absent gaining an
+  element becomes a lone stream at index 0; a lone stream gaining a second
+  becomes an array `[old new]` and the new one is index **1**; an array
+  gaining one appends at `len - 1`. A lone stream losing index 0 loses the
+  `/Contents` **key** rather than becoming an empty stream. An array losing
+  elements stays an array — down to one element and down to none.
+- **Removal renumbers every object, and an unmapped index collapses to 0.**
+  That is the C++'s default-inserting `std::map` read literally, and it is
+  deliberate: an object whose element was removed was not written by this
+  regeneration and its recorded index has to point somewhere.
+- **An empty regenerated buffer is a deletion, unless the stream still moves
+  the transform.** A stream that drew nothing but changes the CTM keeps its
+  whole frame, because the streams after it are relying on the move.
+- **A regenerated stream carries no filter.** The bytes are the operators,
+  uncompressed, and any `/Filter` the element had is dropped with its
+  `/DecodeParms` — keeping the key over plaintext describes a stream nothing
+  can read.
+
+The resource sweep maintains exactly `/ExtGState`, `/Font` and `/XObject`,
+names entries `FX{E,F,X}{n}` counting from 1 on **every** call, and parks
+rather than drops what it removes, so a parked name stays reserved. Usage is
+recorded over **every active object**, not only those in the streams being
+written: an object in a clean stream still names its font, and sweeping that
+font away would break a stream nobody asked to change. An object in a clean
+stream can therefore only *record* a name, never mint one.
+
+E8's per-holder dedup caches are a `ResourceTable` created fresh per call, as
+proposed — which changes only which `FX{n}` a resource gets across repeated
+regenerations of one page, and is unobservable after re-parse. E9's nested
+form regeneration is **not** implemented: a form object is written as the
+`Do` that draws it, so its own stream is never rewritten, and the recursion
+the guard was for does not arise.
+
 ## 12. JBIG2 / JPX integration
 
 Decoding rides on `hayro-jbig2` and `hayro-jpeg2000` (see DEPS.md), but
@@ -1117,6 +1190,36 @@ for page in doc.pages() {                                     // lazy, cached
     let text = page.text()?.to_string();
 }
 ```
+
+**[spec] 2026-08-30 (M11): the facade's editing surface.** `Page::edit()`
+returns an owned `PageEdit` holding that page's object graph;
+`Document::save_pages(path, &[PageEdit], &SaveOptions)` and
+`write_pages_to` turn the changes into replacement objects on the way out.
+The document is never mutated, which is the same shape form filling already
+had and is what keeps `Document` `Sync` and editing two pages concurrent.
+
+`PageEdit` offers `objects`/`object_mut`/`push`/`insert`/`remove`/
+`set_visible`/`transform`/`is_modified`, plus `graph`/`graph_mut` as the
+documented escape hatch onto `pdfrum-page`. Taking `object_mut` *is* the edit
+— the object is marked dirty on the way out rather than leaving the caller to
+remember — so a caller that only reads uses `objects`. Three plain config
+structs build objects to add: `PathBuilder` (with a `rect` constructor),
+`TextBuilder` and `ImageBuilder`, each with a `build() -> PageObject`, per
+STYLE §4's preference for struct-update syntax over builder ladders.
+`PageObject` is re-exported, being the currency of the whole surface.
+
+`SaveOptions` gains `remove_security: bool`, defaulting **false** — the M10
+ruling reached the facade, which had been forcing it true. An encrypted
+document therefore saves encrypted through this path as through every other,
+and an edited page's regenerated streams go through the same cipher as the
+rest of the body because they are written the same way.
+
+`pdfrum-tool` gains `--mutate=<add-rect|remove-first|touch-all>`, which
+implies `--save` and has **no oracle counterpart** for the same reason
+`--save` has none. It exists so the harness can run M11's exit check:
+`conformance mutate-round-trip` has pdfrum mutate page 0 and save, has the
+*oracle* reopen and render the result, and compares that render against ours
+of the same file at SSIM >= 0.99.
 
 `pdfrum-tool` mirrors `pdfium_test` flags/outputs byte-for-byte where Tier A
 demands (`--png --md5 --txt --annot --show-metadata --show-pageinfo

@@ -1,6 +1,6 @@
 # `pdfrum` (facade) status
 
-**Updated:** 2026-08-29 · **State:** implemented. The user-facing API over the
+**Updated:** 2026-08-30 · **State:** implemented. The user-facing API over the
 whole stack — open, page, render, text, annotations, form, save, import —
 with runnable doctests on real fixtures, four examples, and integration tests
 over every facade path. The workspace `README.md` is written.
@@ -31,8 +31,43 @@ facade's own types.
 `crop_box`, `rotation() -> Rotation`, `render(&RenderOptions) -> Pixmap`,
 `render_with(…, &mut BuildContext)`, `render_session(…, &mut RenderSession)`,
 `text() -> TextPage`, `text_with(…)`, `text_session(…)`,
-`annotations() -> Vec<Annotation>`, `links()`, and the escape hatch
-`objects()`.
+`annotations() -> Vec<Annotation>`, `links()`, `edit() -> PageEdit`, and the
+escape hatch `objects()`.
+
+**Editing** (M11). `Page::edit()` hands back an owned `PageEdit` over that
+page's object graph; `Document::save_pages(path, &[PageEdit], &SaveOptions)`
+and `write_pages_to` turn the changes into replacement objects on the way out.
+Nothing is mutated before the save — the same shape form filling has, and for
+the same reason: `Document` is a `Sync` shared reader, so editing a page must
+not need `&mut` on it.
+
+`PageEdit` offers `len`/`is_empty`/`objects`/`object_mut`/`push`/`insert`/
+`remove`/`set_visible`/`is_visible`/`transform`/`is_modified`, plus
+`font_of`/`image_of` to name a resource an existing object already uses, and
+`graph`/`graph_mut` as the escape hatch onto `pdfrum-page`. **Taking
+`object_mut` is the edit**: the object is marked dirty on the way out, so a
+caller that only wants to look uses `objects`.
+
+Three plain config structs build objects to add — `PathBuilder` (with a `rect`
+constructor), `TextBuilder`, `ImageBuilder` — each with `build() -> PageObject`,
+and `PageObject` is re-exported because it is the currency of the whole
+surface.
+
+One asymmetry worth knowing: `ImageBuilder` *places* an `/XObject` the
+document already holds rather than encoding new pixels, because that is what an
+image page object is. Its `build()` fills in a one-by-one placeholder bitmap
+that the regenerated stream never looks at, so rendering the edited graph
+before saving shows the placeholder — render the *saved* file to see the
+image.
+
+**Saving.** `save`, `save_with`, `save_incremental`, `write_to`, `save_form`,
+`write_form_to`, `save_pages`, `write_pages_to`, `import_pages`.
+`SaveOptions { update, version, remove_security }` — `remove_security`
+defaults **false** since M11, which is when the M10 ruling reached this crate:
+`write_edit` had been forcing it true, so an encrypted document saved
+decrypted through every facade path. It now saves encrypted under the handler
+its password opened, and an edited page's regenerated streams go through that
+same cipher because they are written the same way as the rest of the body.
 
 **Cache reuse.** `RenderSession { build: BuildContext, caches: RenderCaches }`
 — a plain record of the two caches that live in different crates, added in M8
