@@ -246,6 +246,13 @@ impl<'a> Page<'a> {
                 caches,
                 &mut diags,
             ),
+            Backend::Exact => pdfrum_render::render_page_with_caches(
+                &page,
+                &inner,
+                &pdfrum_raster_exact::ExactBackend::new(),
+                caches,
+                &mut diags,
+            ),
         };
         // Recorded whether or not the render succeeded: a page too large to
         // rasterize may still have reported damage on the way there.

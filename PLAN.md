@@ -87,7 +87,7 @@ Workspace `pdfrum/`, crates under `crates/`. Name **pdfrum**: facade crate `pdfr
 | `pdfrum-render` | fpdfapi/render + fxge device half | `RenderDevice` trait (kurbo/peniko types); engine walking the page graph; layer compositor for isolated/knockout groups and soft masks; image resampling. |
 | `pdfrum-raster-vello` | Skia backend | `vello_cpu` implementation of `RenderDevice`. The facade's default, for API users who want a production rasterizer. |
 | `pdfrum-raster-tinyskia` | AGG backend | `tiny-skia` implementation. Cross-check + determinism baseline; Tier C's gating partner. |
-| `pdfrum-raster-exact` | AGG parity | Analytic scanline rasterizer of our own, no rasterizer dependency. Integrates coverage exactly on the oracle's subpixel grid; the conformance default, so a golden diff measures the engine rather than a sampling policy. |
+| `pdfrum-raster-exact` | AGG parity | Analytic scanline rasterizer of our own, no rasterizer dependency. Integrates coverage exactly on the oracle's subpixel grid; the conformance default, so a golden diff measures the engine rather than a sampling policy. Reachable from the facade as `Backend::Exact`, but not its default — no SIMD. |
 | `pdfrum-text` | fpdftext | Text extraction, reading order/whitespace heuristics, search, link detection. Depends only on parser/font/page — parallelizable with render. |
 | `pdfrum-doc` | fpdfdoc | Bookmarks, named dests, links/actions, annotations + appearance-stream generation (variable text), AcroForm data model (fill/read, no JS), struct tree, metadata. |
 | `pdfrum-edit` | fpdfapi/edit | Serializer, incremental update writer, page import/reorganize, font subsetting (`subsetter`), content-stream generation (`ryu` floats). |

@@ -760,6 +760,7 @@ dependencies = [
  "pdfrum-object",
  "pdfrum-page",
  "pdfrum-parser",
+ "pdfrum-raster-exact",
  "pdfrum-raster-tinyskia",
  "pdfrum-raster-vello",
  "pdfrum-render",

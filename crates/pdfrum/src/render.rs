@@ -6,10 +6,10 @@ pub use pdfrum_render::{ColorMode, ColorScheme, Pixmap, TextAa};
 
 /// Which rasterizer draws a page.
 ///
-/// Both are pure Rust, both are deterministic, and both produce a
-/// [`Pixmap`] — the choice is a trade between speed and being the reference.
-/// The engine above them is the same either way: a backend rasterizes paths
-/// and images, it does not interpret PDF.
+/// All three are pure Rust, all three are deterministic, and all three
+/// produce a [`Pixmap`] — the choice is a trade between speed and matching a
+/// reference renderer's edges. The engine above them is the same either way:
+/// a backend rasterizes paths and images, it does not interpret PDF.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Backend {
     /// `vello_cpu` — the default. A modern sparse-strip rasterizer with SIMD
@@ -21,6 +21,17 @@ pub enum Backend {
     /// baseline. Kept as a cross-check: where the two disagree, the bug is in
     /// a backend rather than in the engine.
     TinySkia,
+    /// The analytic rasterizer — pick this when you want edges that match
+    /// PDFium's rather than the fastest render.
+    ///
+    /// It integrates each pixel's covered area exactly, on PDFium's own
+    /// 256ths-of-a-pixel grid, where the other two sample or approximate: a
+    /// half-covered pixel comes out at exactly half, not at the nearest of
+    /// seventeen supersampled levels. That is what the project's conformance
+    /// runs use, and it is worth reaching for when you are diffing output
+    /// against another PDF renderer. It has no SIMD, so it is the slower
+    /// choice for bulk rendering.
+    Exact,
 }
 
 /// Everything a render is parameterised by.
