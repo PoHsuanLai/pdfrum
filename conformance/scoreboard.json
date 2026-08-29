@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-08-29T17:35:22Z",
+  "generated_at": "2026-08-29T19:37:52Z",
   "totals": {
     "files": 1675,
     "pass": 1624,
@@ -12261,12 +12261,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.962150,
+        "ssim": 0.962106,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.962150 below floor 0.990000"
+      "notes": "ssim 0.962106 below floor 0.990000"
     },
     {
       "path": "corpus/fx/other/8.1_viewer_preferences.pdf",
@@ -22497,7 +22497,7 @@
       "tierB": {
         "ssim": 0.999992,
         "exact": false,
-        "max_channel_diff": 65,
+        "max_channel_diff": 64,
         "pages": 1
       },
       "notes": ""
@@ -36731,7 +36731,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.994581,
+        "ssim": 0.994579,
         "exact": false,
         "max_channel_diff": 207,
         "pages": 1
@@ -36761,7 +36761,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.994581,
+        "ssim": 0.994579,
         "exact": false,
         "max_channel_diff": 207,
         "pages": 1
