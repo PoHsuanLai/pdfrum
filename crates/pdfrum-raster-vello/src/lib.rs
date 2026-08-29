@@ -23,6 +23,25 @@
 //! opacity layer and always hands the sampler `alpha = 1.0`. The regression
 //! test below asserts the wrapped call does not panic, so a future
 //! `vello_cpu` that implements the field cannot silently change our rounding.
+//!
+//! ```
+//! use kurbo::Affine;
+//! use pdfrum_render::{ImageQuality, Pixmap, RasterBackend, RenderDevice};
+//! use pdfrum_raster_vello::VelloBackend;
+//!
+//! let backend = VelloBackend::new();
+//! let mut device = backend.new_target(4, 4, peniko::Color::WHITE);
+//!
+//! // A translucent image draw: the sampler alpha vello_cpu 0.2.0 refuses,
+//! // routed through an opacity layer instead of panicking.
+//! let image = Pixmap::filled(4, 4, peniko::Color::from_rgba8(255, 0, 0, 255));
+//! device.draw_image(&image, Affine::IDENTITY, ImageQuality::Nearest, 0.5);
+//!
+//! let pixmap = backend.finish(device);
+//! let [r, g, b, a] = pixmap.pixel(1, 1).expect("in bounds");
+//! assert_eq!(a, 255, "over an opaque page");
+//! assert!(r > g && g == b, "half red over white: {r},{g},{b}");
+//! ```
 
 #![forbid(unsafe_code)]
 

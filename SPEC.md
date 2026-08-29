@@ -529,6 +529,59 @@ post-M8 correctness option. Backends never know about group semantics either
 way. `pdfrum-raster-vello` (vello_cpu) and
 `pdfrum-raster-tinyskia` implement the two traits; conformance Tier C diffs them.
 
+**([spec] 2026-08-29, `pdfrum-render` implementation.)** The trait surface
+above — the six `RenderDevice` methods plus `push_clip_rect`, and the four
+`RasterBackend` methods including E2/E3/E4/E10 — is implemented **unchanged**
+on both backends. Five corrections and one addition, made in the same commit
+as the code:
+
+1. **`render_page` returns `Result<Pixmap, Error>`, not `Pixmap`.** A target
+   with a zero axis, or one beyond `vello_cpu`'s `u16` dimensions, has no
+   output at all; every *other* failure remains a diagnostic and a skipped
+   object, per STYLE §3. `Error` has exactly those two variants, and
+   `render_page` also takes a `&mut Diagnostics` so the recovery channel
+   reaches the caller.
+2. **`RenderOptions` is the flag surface, not `grayscale: bool`.** It carries
+   `transform`, `color_mode: ColorMode { Normal | Gray | Alpha | Forced }`,
+   `text_aa`, the three smoothing/halftone flags PDFium forces on inside
+   type-3 procs and tile cells, `convert_fill_to_stroke`, and `background:
+   Option<Color>` — the last resolving render brief Q5 as proposed:
+   `render_page` follows `pdium_test`'s white-vs-transparent choice from the
+   page's own transparency, and the field is an override only.
+3. **The walk is generic over the backend, not `dyn`.** `RasterBackend::
+   snapshot` needs the concrete device to read pixels back, so `&mut dyn
+   RenderDevice` survives only where a device is genuinely swappable — the
+   Coons scratch buffer. The `dyn` budget STYLE §2b sets is unchanged.
+4. **Q1 resolves for the observable, and the reversal is undone in
+   `pdfrum-render`.** `CPDFDocRenderDataTest.TransferFunctionArray` and its
+   ten `TranslateColor` expectations agree that array order maps directly to
+   R, G, B. `pdfrum-page`'s `TransferFunc` stores the array reversed, so
+   `render::transfer` maps channel `i` to slot `2 - i` at the boundary rather
+   than changing the parse. **This is a defect in `pdfrum-page`'s storage**
+   relative to its own doc comment, recorded here rather than silently fixed
+   because the page crate's tests pin the reversed spelling.
+5. **The page-to-device matrix flips y.** `Rotation::display_matrix`
+   normalises the crop-box origin and applies `/Rotate` but leaves PDF's
+   y-up convention intact, so `render_page` composes an explicit flip about
+   the page height. Recorded because the symmetric fixtures hide its absence.
+6. **Two render-brief errata**, both pinned by tests. `kColorSqrt` is not any
+   closed form of ISO 32000-1 §11.3.5.2's `D(x)`: 35 of its 256 entries differ
+   from `round(255·D)` and 102 from the truncating spelling, so the verbatim
+   transcription is the authority and brief Q7's "exact for all 256" is wrong.
+   And `SoftLight`'s low branch divides by 255 twice rather than once by
+   65025, but the two are exhaustively equal there (the numerator is
+   non-negative for every `src < 128`), so brief test 33's premise does not
+   hold; the spelling is still ported verbatim.
+
+Deferred to M4/M5 with the code shaped for them, not stubbed around: tiling
+patterns and shading patterns (the pattern is parsed and reaches the object
+graph, but `Content::pattern` is not yet drained into a cell render), type-3
+glyph procedures and their blue-zone cache, the `/SMask` group's own object
+list (a soft mask currently contributes its `/BC` backdrop, which is exact
+for a backdrop-only mask), and the `/Matte` and knockout image paths. Each
+has its ported decision logic and unit tests in place — `pattern.rs`'s
+absence is the one genuine gap, and the rest are wiring.
+
 ## 9. `pdfrum-text`  *(behavior: `core/fpdftext`)*
 
 Pure derivation, no rendering dependency:
