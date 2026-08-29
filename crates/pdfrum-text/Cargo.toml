@@ -5,6 +5,22 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
+readme = "README.md"
+keywords = ["pdf", "text", "extraction", "search"]
+categories = ["text-processing", "parser-implementations"]
+# The generated `unicode.bin` is committed and shipped — `src/unicode.rs`
+# `include_bytes!`s it, so a build without it does not compile. The ICU
+# property dump it was generated *from* is the build script's input, not the
+# library's, and stays out of the package (see `tables/PROVENANCE.md`).
+include = [
+    "src/**",
+    "tables/unicode.bin",
+    "tables/unicode.manifest.json",
+    "tables/PROVENANCE.md",
+    "build.rs",
+    "README*",
+    "LICENSE*",
+]
 
 [lints]
 workspace = true

@@ -5,6 +5,9 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
+readme = "README.md"
+keywords = ["pdf", "font", "glyph", "encoding", "opentype"]
+categories = ["graphics", "text-processing", "parser-implementations"]
 # The 14 Foxit base-14 blobs are shipped: they are the terminal rung of the
 # substitution ladder, so a build without them cannot draw an unresolvable
 # font at all. See `fontdata/PROVENANCE.md`.

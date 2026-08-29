@@ -177,6 +177,7 @@ impl Document {
         let mut edit = EditDoc::new(&self.inner);
         let mut diags = Diagnostics::default();
         let edits = pdfrum_doc::form::apply(form.inner(), form.values(), &self.inner, &mut diags);
+        self.note(&diags);
         for field in edits {
             edit.replace(field.reference, Object::Dict(field.dict));
             for (reference, dict, generated) in field.widgets {

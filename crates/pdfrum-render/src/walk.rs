@@ -58,10 +58,39 @@ pub fn render_page<B: RasterBackend>(
     backend: &B,
     diags: &mut Diagnostics,
 ) -> Result<Pixmap, Error> {
+    render_page_with_caches(page, opts, backend, &mut RenderCaches::new(), diags)
+}
+
+/// Render a page into a pixmap, reusing caller-owned [`RenderCaches`].
+///
+/// Identical to [`render_page`] except that the glyph cache outlives the
+/// call, so a caller rendering many pages of one document flattens each
+/// glyph outline once for the run rather than once per page.
+///
+/// # Determinism
+///
+/// Type-3 blue-zone snapping is order-dependent by design (see
+/// [`RenderCaches`]), so a page rendered with a *warm* cache can differ by a
+/// snapped pixel from the same page rendered with a cold one. Reuse across
+/// pages of one document is the intended use and is what the oracle does;
+/// reusing one set of caches across *unrelated* documents makes a page's
+/// output depend on what was rendered before it. For a byte-identical
+/// baseline — the conformance harness's case — call [`render_page`], which
+/// gives every page fresh caches.
+///
+/// # Errors
+///
+/// As [`render_page`].
+pub fn render_page_with_caches<B: RasterBackend>(
+    page: &Page,
+    opts: &RenderOptions,
+    backend: &B,
+    caches: &mut RenderCaches,
+    diags: &mut Diagnostics,
+) -> Result<Pixmap, Error> {
     let (w, h) = target_size(page, opts)?;
     let clear = opts.background_for(needs_alpha_background(page));
     let mut device = backend.new_target(w, h, clear);
-    let mut caches = RenderCaches::new();
     let ctx = RenderCtx::new(opts.clone(), page.transparency);
     let to_device = page_matrix(page, opts);
     let device_box = Rect::new(0.0, 0.0, f64::from(w), f64::from(h));
@@ -70,7 +99,7 @@ pub fn render_page<B: RasterBackend>(
         &ctx,
         &mut device,
         backend,
-        &mut caches,
+        caches,
         &page.objects,
         to_device,
         device_box,
@@ -127,12 +156,22 @@ pub fn needs_alpha_background(page: &Page) -> bool {
 
 /// The device size a page renders at, and the errors that size can be.
 ///
+/// Public so a caller can size a buffer, lay out a sheet or reject a page
+/// *before* paying for a render — [`render_page`] answers the same question
+/// only by doing the work.
+///
 /// The dimensions **truncate**, they do not round up: `pdfium_test` writes
 /// `static_cast<int>(FPDF_GetPageWidthF(page) * scale)`
 /// (`pdfium_test.cc:1513-1514`), so an A4 page's 595.276 points become 595
 /// device pixels, not 596. Rounding up instead costs a one-pixel border on
 /// every page whose size is not a whole number — which is most of the
 /// non-US-Letter corpus, and a size mismatch rather than a pixel difference.
+///
+/// # Errors
+///
+/// [`Error::TargetEmpty`] when the page's box under `opts.transform` is not
+/// at least one pixel on both axes, and [`Error::TargetTooLarge`] when either
+/// axis exceeds [`MAX_TARGET_DIMENSION`].
 #[expect(
     clippy::cast_possible_truncation,
     clippy::cast_sign_loss,
@@ -142,7 +181,7 @@ pub fn needs_alpha_background(page: &Page) -> bool {
               float-to-int cast turns a huge or NaN size into a reported \
               number rather than wrapping"
 )]
-fn target_size(page: &Page, opts: &RenderOptions) -> Result<(u32, u32), Error> {
+pub fn target_size(page: &Page, opts: &RenderOptions) -> Result<(u32, u32), Error> {
     let (pw, ph) = page.display_size();
     let corners = opts
         .transform

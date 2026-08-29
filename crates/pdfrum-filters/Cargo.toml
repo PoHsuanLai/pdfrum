@@ -5,6 +5,9 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
+readme = "README.md"
+keywords = ["pdf", "flate", "lzw", "ccitt", "decode"]
+categories = ["compression", "encoding", "parser-implementations"]
 
 [lints]
 workspace = true

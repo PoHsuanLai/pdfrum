@@ -393,6 +393,32 @@ impl Diagnostics {
         }
     }
 
+    /// Fold another sink's diagnostics into this one, keeping their order.
+    ///
+    /// A call that reads through the stack collects into its own sink; the
+    /// caller that owns the longer-lived record folds it in when the call
+    /// returns. This crate's own limit still applies, so merging a full sink
+    /// into a full one counts the entries without storing them, exactly as
+    /// [`Diagnostics::record`] does.
+    ///
+    /// ```
+    /// use pdfrum_common::{DiagKind, Diagnostics, Severity};
+    ///
+    /// let mut whole = Diagnostics::default();
+    /// let mut part = Diagnostics::default();
+    /// part.record(Severity::Recovered, DiagKind::XrefRebuilt, Some(9));
+    ///
+    /// whole.extend(&part);
+    /// assert!(whole.contains(&DiagKind::XrefRebuilt));
+    /// // `part` is unchanged: this reads it rather than draining it.
+    /// assert_eq!(part.len(), 1);
+    /// ```
+    pub fn extend(&mut self, other: &Diagnostics) {
+        for entry in other.entries() {
+            self.record(entry.severity, entry.what.clone(), entry.at);
+        }
+    }
+
     /// The stored diagnostics, in the order they were recorded.
     #[must_use]
     pub fn entries(&self) -> &[Diagnostic] {

@@ -23,14 +23,20 @@ facade's own types.
 (lazy iterator, skipping pages that will not load), `page_label(i)`,
 `outline() -> Outline`, `metadata() -> Metadata`, `xmp_metadata()`,
 `form() -> Option<Form>`, `attachments() -> Vec<Attachment>`,
-`diagnostics()`, `version`, `is_encrypted`, `permissions(owner)`,
+`diagnostics()` (load-time) and `all_diagnostics()` (running total),
+`version`, `is_encrypted`, `permissions(owner)`,
 `xref_was_rebuilt`, `bytes`, and the escape hatch `parser()`.
 
 **Page.** `index`, `width`/`height` (rotation applied), `media_box`,
 `crop_box`, `rotation() -> Rotation`, `render(&RenderOptions) -> Pixmap`,
-`render_with(…, &mut BuildContext)`, `text() -> TextPage`, `text_with(…)`,
+`render_with(…, &mut BuildContext)`, `render_session(…, &mut RenderSession)`,
+`text() -> TextPage`, `text_with(…)`, `text_session(…)`,
 `annotations() -> Vec<Annotation>`, `links()`, and the escape hatch
 `objects()`.
+
+**Cache reuse.** `RenderSession { build: BuildContext, caches: RenderCaches }`
+— a plain record of the two caches that live in different crates, added in M8
+so a run over many pages shares its *glyph outlines* as well as its fonts.
 
 **Rendering.** `RenderOptions { transform, backend, color_mode, text_aa,
 no_path_smooth, no_image_smooth, background, annotations }` plus the two
@@ -82,8 +88,8 @@ member crate that grew an `Rc` would otherwise break every rayon caller at
 
 | | |
 |---|---:|
-| Integration tests (`tests/facade.rs`, real fixtures) | **55** |
-| Doctests (every public item, runnable) | **31** |
+| Integration tests (`tests/facade.rs`, real fixtures) | **59** |
+| Doctests (every public item, runnable) | **35** |
 | `pdfrum-doc` unit tests added for the form model | **20** |
 | Examples (compiled by the gate, all run clean) | 4 |
 
@@ -94,9 +100,15 @@ text, a stream with no `/Length`), `text_form.pdf` (AcroForm, widget
 annotation), `bookmarks.pdf` (outline two levels deep, two pages).
 
 Gate: `cargo fmt --check`, `clippy --workspace --all-targets -D warnings`,
-`cargo nextest run` (2632 tests), `cargo test --doc` (143 doctests),
-`cargo doc --no-deps` warning-free, `cargo deny check`, pure-Rust tree check —
-`scripts/ci.sh` green.
+`cargo nextest run` (2640 tests), `cargo test --doc` (149 doctests),
+`cargo deny check`, pure-Rust tree check — `scripts/ci.sh` green.
+
+`cargo doc --no-deps` builds, but is **not** warning-free and was wrongly
+recorded as such here: it emits 34 rustdoc warnings across the workspace
+(redundant explicit link targets, and public docs linking private items) in
+member crates, none of them in the facade. `cargo doc` is not part of
+`scripts/ci.sh`, which is why the discrepancy went unnoticed. Cleaning them up
+and adding the check to the gate is unclaimed work.
 
 ## Two things moved *down* the stack
 
@@ -134,12 +146,14 @@ written and unimplemented, the second relocates code without altering it.
 Things a member crate's API made awkward. None blocks the facade; each is a
 sharp edge a caller would eventually hit.
 
-1. **`render_page` allocates its own `RenderCaches` per call.** There is no
-   `render_page_with_caches`, and `target_size` is private, so a caller
-   cannot reuse a glyph cache across pages without reimplementing the entry
-   point on top of `render_object_list`. `BuildContext` threading works
-   (fonts, colorspaces, images), but *glyph outlines* are re-flattened for
-   every page. The fix is a caches parameter on the public entry point.
+1. ~~**`render_page` allocates its own `RenderCaches` per call.**~~ **Done
+   (M8).** `pdfrum_render::render_page_with_caches` takes the caches,
+   `render_page` delegates to it with a fresh set, and `target_size` is now
+   public. The facade pairs the two caches in `RenderSession`, reached through
+   `Page::render_session` / `Page::text_session`. Measured at 2.1x on a
+   two-page document and 3.1x on a four-page one; see `docs/status/M8.md` §1,
+   including the type-3 snapping caveat that keeps `render_page` the
+   byte-identical baseline.
 
 2. **Two `Resolve` calling conventions coexist.** `pdfrum-object` and
    `pdfrum-parser` take `r: &impl Resolve`; `pdfrum-doc` takes
@@ -152,13 +166,14 @@ sharp edge a caller would eventually hit.
    `Diagnostics` at a dozen call sites purely to satisfy signatures, and
    discards it. Worth auditing which reads actually need the sink.
 
-4. **The facade cannot surface a document-wide diagnostics view.**
-   `Document::diags` collects what the *load* repaired; every later recovery
-   (a stream with a bad `/Length`, a font that had to be substituted) is
-   recorded into whatever short-lived sink the call created. There is no way
-   for a caller to ask "what did this document need repaired, in total". A
-   shared sink on the document — or a documented statement that per-call
-   sinks are the design — would settle it.
+4. ~~**The facade cannot surface a document-wide diagnostics view.**~~ **Done
+   (M8).** `Document::all_diagnostics()` returns a running total over three
+   sinks: the load-time snapshot, the object store's lazy repairs (newly
+   reachable via `pdfrum_parser::Document::lazy_diagnostics`), and this
+   crate's own reads, which now fold their sinks into a `Mutex<Diagnostics>`
+   on the document instead of dropping them. `diagnostics()` is unchanged and
+   still answers the load-time question. No member-crate signature changed.
+   See `docs/status/M8.md` §2.
 
 5. **`Field::value` needs the resolver *and* an optional edit buffer**
    (`value(Option<&FieldValues>, &R)`). The facade hides this by cloning the

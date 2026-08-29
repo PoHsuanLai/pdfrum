@@ -4,3 +4,6 @@
 
 # Python bytecode from the fixture generators in scripts/.
 __pycache__/
+
+# Stray dump output from running pdfrum-tool in a crate directory.
+*.pdf.[0-9]*.txt

@@ -802,8 +802,144 @@ fn pages_render_in_parallel_to_the_same_pixels_as_in_series() {
         })
         .collect();
 
+    let per_worker_session: Vec<_> = pages
+        .par_iter()
+        .map_init(pdfrum::RenderSession::new, |session, page| {
+            page.render_session(&options, session).expect("render")
+        })
+        .collect();
+
     assert_eq!(serial, parallel);
     assert_eq!(serial, per_worker_cache);
+    assert_eq!(serial, per_worker_session);
+}
+
+// ------------------------------------------------------------ render session
+
+#[test]
+fn a_shared_session_renders_the_same_pixels_as_a_fresh_one_per_page() {
+    let doc = Document::open(BOOKMARKS).expect("open");
+    let options = RenderOptions::scaled(2.0);
+
+    let fresh: Vec<_> = doc
+        .pages()
+        .map(|page| page.render(&options).expect("render"))
+        .collect();
+
+    // One session across both pages: the second page draws with a glyph cache
+    // the first page warmed. These fixtures share a font, so this is the case
+    // the reuse exists for, and it must not change what is drawn.
+    let mut session = pdfrum::RenderSession::new();
+    let shared: Vec<_> = doc
+        .pages()
+        .map(|page| page.render_session(&options, &mut session).expect("render"))
+        .collect();
+
+    assert_eq!(fresh, shared);
+}
+
+#[test]
+fn a_session_serves_extraction_and_rendering_from_one_set_of_caches() {
+    let doc = Document::open(BOOKMARKS).expect("open");
+    let mut session = pdfrum::RenderSession::new();
+
+    for page in doc.pages() {
+        let pixmap = page
+            .render_session(&RenderOptions::default(), &mut session)
+            .expect("render");
+        let text = page.text_session(&mut session).all_text();
+        assert!(pixmap.width() > 0);
+        assert!(text.contains("Page"));
+    }
+
+    // The build half is shared with `render_with`/`text_with`, so a caller
+    // holding a session can still reach the narrower API.
+    let text = doc
+        .page(0)
+        .expect("page")
+        .text_with(&mut session.build)
+        .all_text();
+    assert!(text.contains("Page1"));
+}
+
+// --------------------------------------------------------- diagnostics view
+
+#[test]
+fn a_repair_found_after_the_load_reaches_the_document_wide_view() {
+    let doc = Document::open(HELLO).expect("open");
+
+    // This fixture's content stream omits its `/Length`, so the lexer has to
+    // resync on `endstream`. That happens when the stream is first *read* —
+    // long after the load returned — which is exactly the damage the
+    // load-time snapshot structurally cannot see.
+    assert!(
+        doc.diagnostics().is_empty(),
+        "the load itself touched no content stream"
+    );
+    assert!(doc.all_diagnostics().is_empty(), "and nothing has yet");
+
+    let _ = doc
+        .page(0)
+        .expect("page")
+        .render(&RenderOptions::default())
+        .expect("render");
+
+    assert!(
+        doc.all_diagnostics()
+            .contains(&pdfrum::DiagKind::KeywordResync),
+        "the missing /Length is reported once the stream is read: {:?}",
+        doc.all_diagnostics().entries()
+    );
+    // The load-time snapshot is unchanged by the work, which is the whole
+    // point of keeping it a separate accessor: an existing caller's answer
+    // does not start moving under it.
+    assert!(doc.diagnostics().is_empty());
+}
+
+#[test]
+fn a_repair_this_crates_own_reads_make_reaches_the_view_too() {
+    // Not all late damage is the parser's. Generating a widget's missing
+    // appearance is something *this* crate's render path asks for, through a
+    // sink that used to be dropped on return.
+    let doc = Document::open(FORM).expect("open");
+    let _ = doc
+        .page(0)
+        .expect("page")
+        .render(&RenderOptions::default())
+        .expect("render");
+
+    assert!(
+        doc.all_diagnostics()
+            .contains(&pdfrum::DiagKind::AppearanceGenerated),
+        "{:?}",
+        doc.all_diagnostics().entries()
+    );
+}
+
+#[test]
+fn the_document_wide_view_is_a_snapshot_rather_than_a_drain() {
+    let doc = Document::open(HELLO).expect("open");
+    let _ = doc.page(0).expect("page").text();
+
+    let once = doc.all_diagnostics();
+    let twice = doc.all_diagnostics();
+    assert_eq!(once.len(), twice.len());
+    assert_eq!(once.recorded(), twice.recorded());
+}
+
+#[test]
+fn the_document_wide_view_grows_as_the_document_is_used() {
+    let doc = Document::open(HELLO).expect("open");
+    let before = doc.all_diagnostics().recorded();
+    for page in doc.pages() {
+        let _ = page.text();
+        let _ = page.render(&RenderOptions::default());
+    }
+    let after = doc.all_diagnostics().recorded();
+    assert!(
+        after >= before,
+        "a running total only grows: {before} then {after}"
+    );
 }
 
 #[test]

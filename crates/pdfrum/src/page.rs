@@ -5,8 +5,11 @@ use pdfrum_common::Diagnostics;
 use pdfrum_object::Name;
 use pdfrum_page::BuildContext;
 use pdfrum_parser::PageDict;
+use pdfrum_render::RenderCaches;
 
-use crate::{Annotation, Backend, Document, Pixmap, RenderOptions, Result, TextPage};
+use crate::{
+    Annotation, Backend, Document, Pixmap, RenderOptions, RenderSession, Result, TextPage,
+};
 
 /// One page of a [`Document`].
 ///
@@ -42,6 +45,7 @@ impl<'a> Page<'a> {
             &doc.inner,
             &mut diags,
         );
+        doc.note(&diags);
         let rotation = Rotation::from(pdfrum_page::Rotation::from_degrees(
             dict.inherited(&Name::from("Rotate"), &doc.inner)
                 .as_ref()
@@ -159,6 +163,53 @@ impl<'a> Page<'a> {
     ///
     /// As [`Page::render`].
     pub fn render_with(&self, options: &RenderOptions, ctx: &mut BuildContext) -> Result<Pixmap> {
+        self.paint(options, ctx, &mut RenderCaches::new())
+    }
+
+    /// Renders the page reusing a caller-owned [`RenderSession`] — both the
+    /// build caches and the glyph cache.
+    ///
+    /// [`Page::render_with`] threads the resources a page is *built* from,
+    /// which is most of the win but not all of it: the rasterizer still
+    /// flattens every glyph outline afresh for every page. A session carries
+    /// that cache too, so a run over many pages of one document flattens each
+    /// glyph once.
+    ///
+    /// It is `&mut` and not shareable, so under rayon each worker keeps its
+    /// own; see the crate docs. On the caveat about type-3 snapping and a
+    /// warm cache, see [`RenderSession`].
+    ///
+    /// ```
+    /// use pdfrum::{Document, RenderOptions, RenderSession};
+    ///
+    /// let doc = Document::open("tests/fixtures/bookmarks.pdf")?;
+    /// let mut session = RenderSession::new();
+    /// let rendered: Vec<_> = doc
+    ///     .pages()
+    ///     .map(|page| page.render_session(&RenderOptions::default(), &mut session))
+    ///     .collect::<Result<_, _>>()?;
+    /// assert_eq!(rendered.len(), 2);
+    /// # Ok::<(), pdfrum::Error>(())
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// As [`Page::render`].
+    pub fn render_session(
+        &self,
+        options: &RenderOptions,
+        session: &mut RenderSession,
+    ) -> Result<Pixmap> {
+        self.paint(options, &mut session.build, &mut session.caches)
+    }
+
+    /// The one render body, parameterised by which caches it borrows.
+    fn paint(
+        &self,
+        options: &RenderOptions,
+        ctx: &mut BuildContext,
+        caches: &mut RenderCaches,
+    ) -> Result<Pixmap> {
         let mut page = self.build(ctx);
         if options.annotations {
             // An annotation's appearance form is drawn *into* the page graph
@@ -175,24 +226,31 @@ impl<'a> Page<'a> {
                 &self.doc.limits,
                 &mut diags,
             );
+            self.doc.note(&diags);
         }
         let page = page;
         let inner = options.to_inner();
         let mut diags = Diagnostics::default();
-        Ok(match options.backend {
-            Backend::Vello => pdfrum_render::render_page(
+        let pixmap = match options.backend {
+            Backend::Vello => pdfrum_render::render_page_with_caches(
                 &page,
                 &inner,
                 &pdfrum_raster_vello::VelloBackend::new(),
+                caches,
                 &mut diags,
             ),
-            Backend::TinySkia => pdfrum_render::render_page(
+            Backend::TinySkia => pdfrum_render::render_page_with_caches(
                 &page,
                 &inner,
                 &pdfrum_raster_tinyskia::TinySkiaBackend::new(),
+                caches,
                 &mut diags,
             ),
-        }?)
+        };
+        // Recorded whether or not the render succeeded: a page too large to
+        // rasterize may still have reported damage on the way there.
+        self.doc.note(&diags);
+        Ok(pixmap?)
     }
 
     /// Extracts the page's text.
@@ -221,13 +279,27 @@ impl<'a> Page<'a> {
         let options = pdfrum_text::ExtractOptions {
             rtl: self.doc.reads_right_to_left(),
         };
-        pdfrum_text::extract(
+        let text = pdfrum_text::extract(
             &page,
             &self.doc.inner,
             &options,
             &self.doc.limits,
             &mut diags,
-        )
+        );
+        self.doc.note(&diags);
+        text
+    }
+
+    /// Extracts the page's text reusing a [`RenderSession`]'s build caches,
+    /// so one session serves a run that both renders and extracts.
+    ///
+    /// Extraction never touches the glyph cache — it reads the content
+    /// stream's own text and never rasterizes — so this is exactly
+    /// [`Page::text_with`] over `session.build`, offered so a caller holding a
+    /// session need not reach into it.
+    #[must_use]
+    pub fn text_session(&self, session: &mut RenderSession) -> TextPage {
+        self.text_with(&mut session.build)
     }
 
     /// The page's annotations, in `/Annots` order, with pop-ups excluded.
@@ -293,7 +365,7 @@ impl<'a> Page<'a> {
                 .inherited(&Name::from("Resources"), &self.doc.inner)
                 .and_then(|object| object.resolve(&self.doc.inner).ok()?.as_dict().cloned()),
         );
-        pdfrum_page::build_page_from_dict(
+        let page = pdfrum_page::build_page_from_dict(
             &ops,
             &self.dict.dict,
             |key| self.dict.inherited(key, &self.doc.inner),
@@ -302,7 +374,11 @@ impl<'a> Page<'a> {
             ctx,
             &self.doc.limits,
             &mut diags,
-        )
+        );
+        // Where most of a document's lazy damage surfaces: a `/Length` the
+        // filter chain had to work around, a font that had to be substituted.
+        self.doc.note(&diags);
+        page
     }
 
     fn content_bytes(&self, diags: &mut Diagnostics) -> Vec<u8> {

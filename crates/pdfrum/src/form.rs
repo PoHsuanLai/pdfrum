@@ -41,7 +41,9 @@ pub struct Form<'a> {
 impl<'a> Form<'a> {
     pub(crate) fn load(doc: &'a Document) -> Option<Form<'a>> {
         let mut diags = Diagnostics::default();
-        let inner = form::Form::load(&doc.catalog(), &doc.inner, &doc.limits, &mut diags)?;
+        let inner = form::Form::load(&doc.catalog(), &doc.inner, &doc.limits, &mut diags);
+        doc.note(&diags);
+        let inner = inner?;
         Some(Form {
             doc,
             inner,

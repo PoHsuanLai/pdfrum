@@ -5,6 +5,9 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
+readme = "README.md"
+keywords = ["pdf", "cmap", "cjk", "encoding", "cid"]
+categories = ["text-processing", "encoding", "internationalization"]
 # The generated table blob is committed and shipped; build.rs only regenerates
 # it when PDFRUM_REGEN_CMAP_TABLES is set (see tables/PROVENANCE.md).
 include = ["src/**", "tables/**", "build.rs", "README*", "LICENSE*"]
