@@ -950,6 +950,49 @@ The M6 waiver shrinks accordingly: **76 `--annot` artifacts to 13** (72 files
 to 13), which clears M6's exit criterion outright — 99.4% — so the exclusion
 is retired rather than recounted. PLAN.md §M6 is restated to say so.
 
+**[spec] 2026-08-29 (burn-down wave 11) — the appearance-validity rules, and
+`13 → 4`.** Three of the remaining thirteen turned on questions this section
+had left approximate, and they are contracts because each is Tier-A visible.
+
+- **Regeneration is gated on `!!GetDictFor("AP")` and nothing deeper**
+  (`cpdfsdk_baannot.cpp:85-87`). A widget with any `/AP` dictionary is never
+  given a new appearance, however unusable that dictionary is — so a radio
+  button whose `/AP /N` lists only its on-state while `/AS` reads `Off` keeps
+  having no drawable appearance. The earlier text called this "deliberately
+  left loose"; it is not loose, it is the rule, and it only became payable
+  alongside the next two.
+- **A checkbox or radio button whose `/AP /N /<AS>` does not resolve to a
+  stream is outlined**, hairline, in `0xFFAAAAAA`, over its normalized `/Rect`
+  (`cpdfsdk_widget.cpp:364-406`, `:969`). This is a *second, deeper* validity
+  test on a different code path from the one above, and the state is read from
+  `/AS` alone — no `/V` or `/Parent` fallback. The fill argb it is drawn with
+  is **0**: `EvenOddOptions()` there names a rule for a fill that never
+  happens.
+- **`/NeedAppearances` regenerates unconditionally but is usually invisible.**
+  `NewAnnot` calls `ResetAppearance` whenever the flag is set
+  (`cpdfsdk_pageview.cpp:108-113`), consulting no `/AP` — but `SetAsCheckBox`
+  and `SetAsRadioButton` write only `/AP /N /<GetCheckedAPState()>` and
+  `/AP /N /Off`, while every reader resolves `/AP /N /<AS>`. When `/AS` names
+  neither, the new streams land in keys nothing looks up. `GetCheckedAPState`
+  answers the first non-`Off` key **unless the field carries `/Opt`**, in which
+  case it answers the widget's control index as a decimal string
+  (`cpdf_formcontrol.cpp:78-89`). Honouring the flag without that rule costs
+  more than it earns; with it, it is free.
+
+Also in scope and landed: `SetAsPushButton`'s **caption** (its icon half and
+six of its seven `/TP` arrangements stay declined — no corpus file carries a
+`/MK /I`, and with no icon every arrangement collapses to the caption-only
+box); the `/Hide` **document open action**, which is the only one of the
+eighteen action types a rendered page or a dump can observe without a user or
+a script engine, and which must run before either reads `/F`; and the rule
+that **two `/Fields` entries sharing a `/T` are one field with two controls**,
+so the value both show is the first dictionary's while their geometry stays
+their own.
+
+`--annot` artifacts: **13 → 4**, all four now the annotation font map's
+per-character fallback to a second face (`CPDF_BAFontMap`, charset-driven —
+*not* the two-slot `CPVT_FontMap`, which that path never enters).
+
 ## 11. `pdfrum-edit`  *(behavior: `core/fpdfapi/edit`)*
 
 `pub fn save(doc: &Document, mode: SaveMode, out: &mut impl io::Write) -> Result<(), Error>`
