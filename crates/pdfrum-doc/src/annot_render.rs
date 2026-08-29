@@ -256,7 +256,12 @@ fn invalid_outline<R: Resolve>(annot: &Annotation, r: &R) -> Option<pdfrum_page:
             },
             state,
             marks: pdfrum_page::state::ContentMarks::default(),
-            content_stream: -1,
+            content_stream: pdfrum_page::NO_CONTENT_STREAM,
+            // Annotation chrome is drawn into the page graph but is not page
+            // content: it belongs to no `/Contents` element and must never
+            // make an ordinary render count as a mutation.
+            dirty: false,
+            active: true,
         },
     )))
 }
@@ -374,7 +379,12 @@ fn highlight<R: Resolve>(
             },
             state: highlight_state(),
             marks: pdfrum_page::state::ContentMarks::default(),
-            content_stream: -1,
+            content_stream: pdfrum_page::NO_CONTENT_STREAM,
+            // Annotation chrome is drawn into the page graph but is not page
+            // content: it belongs to no `/Contents` element and must never
+            // make an ordinary render count as a mutation.
+            dirty: false,
+            active: true,
         },
     )))
 }
