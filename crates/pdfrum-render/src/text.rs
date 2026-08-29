@@ -162,25 +162,37 @@ pub fn glyph_matrix(font_size: f32, pen: kurbo::Point, text_to_device: Affine) -
     text_to_device * Affine::translate((pen.x, pen.y)) * Affine::scale(s)
 }
 
-/// What the Adobe-Japan1 per-CID transform does to one glyph.
+/// What a per-glyph correction does to one glyph.
 ///
 /// Two separate things, which is why it is not simply a matrix: a shift of
 /// the drawing **origin** in text space, and a reshaping **matrix** applied
-/// to the outline inside its em box.
-#[derive(Debug, Clone, Copy, PartialEq, Default)]
-pub struct Japan1Adjust {
+/// to the outline inside its em box. Neither touches the advance, so the
+/// pen walks the run as if no correction existed and only this one glyph
+/// moves or changes shape.
+///
+/// Two corrections produce this record — the Adobe-Japan1 per-CID transform
+/// ([`japan1_adjust`]) and the glyph-spacing correction
+/// ([`glyph_spacing_adjust`]) — and a glyph can take both.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct GlyphAdjust {
     /// Added to the pen for this glyph only — never to the running pen.
     pub origin: Vec2,
     /// Post-multiplied onto the glyph matrix, so it acts in em space.
     pub matrix: Affine,
 }
 
-impl Japan1Adjust {
+impl GlyphAdjust {
     /// No adjustment: the identity matrix and no shift.
-    const NONE: Self = Self {
+    pub const NONE: Self = Self {
         origin: Vec2::new(0.0, 0.0),
         matrix: Affine::IDENTITY,
     };
+}
+
+impl Default for GlyphAdjust {
+    fn default() -> Self {
+        Self::NONE
+    }
 }
 
 /// The Japan1 adjustment one decoded character takes
@@ -204,25 +216,72 @@ impl Japan1Adjust {
 /// produced a rotated form, and rotating it again is the one way to make this
 /// worse than not applying it.
 ///
-/// The C++ additionally scales `a` and `b` by the glyph-spacing heuristic's
-/// `scaling_factor` (`cpdf_font.cpp:449-467`). That heuristic is not ported —
-/// it fires only when a PDF's declared width is narrower than the face's own
-/// glyph — and where it does not fire the factor is exactly 1, which is the
-/// case every corpus file with a Japan1 transform is in.
+/// The transform **replaces** any narrowing from [`glyph_spacing_adjust`]
+/// rather than composing freely with it: upstream overwrites the whole
+/// four-element adjust matrix here, carrying the spacing factor into only the
+/// `a` and `b` columns. That is exactly right-multiplying by the horizontal
+/// scale, which [`place_glyphs`] does when both fire.
 #[must_use]
-pub fn japan1_adjust(font: &Font, item: &CharItem, font_size: f32) -> Japan1Adjust {
+pub fn japan1_adjust(font: &Font, item: &CharItem, font_size: f32) -> GlyphAdjust {
     if item.vertical_glyph {
-        return Japan1Adjust::NONE;
+        return GlyphAdjust::NONE;
     }
     let Some(t) = font.japan1_transform(item.code) else {
-        return Japan1Adjust::NONE;
+        return GlyphAdjust::NONE;
     };
     let f = |b: u8| f64::from(cid_transform_to_float(b));
-    Japan1Adjust {
+    GlyphAdjust {
         origin: Vec2::new(f(t.e) * f64::from(font_size), f(t.f) * f64::from(font_size)),
         // The packed order is the PDF matrix's own: `a b c d`.
         matrix: Affine::new([f(t.a), f(t.b), f(t.c), f(t.d), 0.0, 0.0]),
     }
+}
+
+/// The spacing correction one glyph takes when
+/// [`Font::applies_glyph_spacing`] passed (`CPDF_Font::GetCharPosList`,
+/// `cpdf_font.cpp:449-467`).
+///
+/// `declared` is the advance the PDF gives this character code and `face` the
+/// advance the substituted face gives the glyph, both in 1000/em units. The
+/// two disagree in either direction and the answers are deliberately **not**
+/// symmetric:
+///
+/// - the document's advance is **wider** than the face's, by more than one
+///   unit: the glyph is drawn at its natural width but *centred* in the
+///   advance the document reserved, by shifting the origin right by half the
+///   excess. The outline is not stretched — a letter set in a wide slot
+///   should sit in the middle of it, not become a fat letter.
+/// - the document's advance is **narrower**: the glyph is squeezed
+///   horizontally to fit, by the ratio of the two, and its origin does not
+///   move. Centring would not help here — the glyph would still overhang the
+///   advance and collide with its neighbour.
+///
+/// The one-unit slack on the wider branch is upstream's and matters: a
+/// rounding difference of a single 1000/em unit is not a design disagreement,
+/// and shifting on it would jitter otherwise well-matched text.
+///
+/// A face advance of zero means the face could not answer, which disables
+/// both branches — there is nothing to compare against. A declared width of
+/// zero disables only the narrowing branch, since scaling a glyph to zero
+/// width erases it.
+#[must_use]
+pub fn glyph_spacing_adjust(declared: i32, face: i32, font_size: f32) -> GlyphAdjust {
+    if face != 0 && declared > face.saturating_add(1) {
+        return GlyphAdjust {
+            origin: Vec2::new(
+                f64::from(declared.saturating_sub(face)) * f64::from(font_size) / 2000.0,
+                0.0,
+            ),
+            matrix: Affine::IDENTITY,
+        };
+    }
+    if declared != 0 && face != 0 && declared < face {
+        return GlyphAdjust {
+            origin: Vec2::ZERO,
+            matrix: Affine::scale_non_uniform(f64::from(declared) / f64::from(face), 1.0),
+        };
+    }
+    GlyphAdjust::NONE
 }
 
 /// The size threshold above which the oracle abandons glyph bitmaps for
@@ -437,6 +496,15 @@ pub fn stroke_ctm_split(text_matrix: Affine, to_device: Affine, ctm: [f64; 4]) -
 /// between segments. The horizontal scale is *not* applied again, because
 /// `matrix` already carries it.
 ///
+/// # Two per-glyph corrections ride along
+///
+/// Both [`japan1_adjust`] and [`glyph_spacing_adjust`] shift and reshape a
+/// glyph *inside* its em box without touching the advance, so each is folded
+/// into that one glyph's origin and matrix and the pen walks the run as if
+/// neither existed. A glyph can take both; the spacing squeeze then sits
+/// innermost, which is what carries its factor into the Japan1 transform's
+/// first column alone.
+///
 /// # The glyph origins are then snapped
 ///
 /// Unless [`RenderOptions::subpixel_text_positioning`] asks otherwise, a run
@@ -495,6 +563,7 @@ pub fn place_glyphs(
     let subst_weight = font.subst().map_or(0, pdfrum_font::SubstFont::raw_weight);
     let subst_italic = font.subst().map_or(0, |s| s.italic_angle);
     let widths_drive_the_design = width_drives_the_design_space(font);
+    let spacing = font.applies_glyph_spacing();
 
     for segment in &object.segments {
         for item in font.decode(&segment.codes) {
@@ -529,15 +598,35 @@ pub fn place_glyphs(
                     vertical: item.vertical_glyph,
                 };
                 if let Some(outline) = cache.path(font, key) {
-                    // The Japan1 per-CID transform moves and reshapes the
-                    // glyph *within* its em box without touching the advance,
-                    // so it applies to this glyph's origin and matrix and the
-                    // pen walks on as if it were not there.
-                    let adjust = japan1_adjust(font, &item, *size);
+                    // Both per-glyph corrections move and reshape the glyph
+                    // *within* its em box without touching the advance, so
+                    // they apply to this glyph's origin and matrix and the pen
+                    // walks on as if neither were there.
+                    let japan1 = japan1_adjust(font, &item, *size);
+                    let space = if spacing {
+                        #[expect(
+                            clippy::cast_possible_truncation,
+                            reason = "a /Widths entry is a small integer on the \
+                                      C++ side too; the f32 is this crate's \
+                                      own carrier"
+                        )]
+                        let declared = item.width as i32;
+                        glyph_spacing_adjust(declared, font.glyph_advance(gid), *size)
+                    } else {
+                        GlyphAdjust::NONE
+                    };
+                    // The spacing squeeze is a *glyph-space* horizontal scale,
+                    // so it sits innermost — to the right of the Japan1
+                    // reshaping, which is what carries the factor into that
+                    // transform's `a` and `b` alone.
                     out.push(PlacedGlyph {
                         outline: outline.clone(),
-                        matrix: glyph_matrix(*size, pen + adjust.origin, text_to_device)
-                            * adjust.matrix,
+                        matrix: glyph_matrix(
+                            *size,
+                            pen + japan1.origin + space.origin,
+                            text_to_device,
+                        ) * japan1.matrix
+                            * space.matrix,
                         key,
                         bitmap: None,
                     });
@@ -1299,5 +1388,97 @@ mod tests {
         let (t, d) = stroke_ctm_split(Affine::IDENTITY, Affine::IDENTITY, [0.0, 0.0, 0.0, 0.0]);
         assert_eq!(t, Affine::IDENTITY);
         assert_eq!(d, Affine::IDENTITY);
+    }
+
+    // -----------------------------------------------------------------------
+    // The glyph-spacing correction (§1.15).
+    // -----------------------------------------------------------------------
+
+    /// A document advance wider than the face's centres the glyph in it, by
+    /// shifting the origin half the excess and leaving the outline alone.
+    #[test]
+    fn a_wider_declared_width_centres_the_glyph_without_stretching_it() {
+        // 700 declared against a 500-unit glyph, at 40 pt: half of 200
+        // thousandths of an em is 100, which is 4 pt.
+        let a = glyph_spacing_adjust(700, 500, 40.0);
+        assert_eq!(a.origin, Vec2::new(4.0, 0.0));
+        assert_eq!(a.matrix, Affine::IDENTITY);
+    }
+
+    /// The one-unit slack: a single 1000/em unit of disagreement is rounding,
+    /// not design, and must not move the glyph.
+    #[test]
+    fn a_declared_width_one_unit_wider_is_left_alone() {
+        assert_eq!(glyph_spacing_adjust(501, 500, 40.0), GlyphAdjust::NONE);
+        assert_eq!(glyph_spacing_adjust(500, 500, 40.0), GlyphAdjust::NONE);
+        // Two units over is past the slack.
+        assert_ne!(glyph_spacing_adjust(502, 500, 40.0), GlyphAdjust::NONE);
+    }
+
+    /// A document advance narrower than the face's squeezes the outline to
+    /// fit and leaves the origin where it was.
+    #[test]
+    fn a_narrower_declared_width_squeezes_the_glyph_without_moving_it() {
+        // `bug_601362.pdf`'s own numbers: /MissingWidth 506 against an 'A'
+        // the face draws 667 units wide.
+        let a = glyph_spacing_adjust(506, 667, 40.0);
+        assert_eq!(a.origin, Vec2::ZERO);
+        let ratio = 506.0 / 667.0;
+        assert_eq!(a.matrix, Affine::scale_non_uniform(ratio, 1.0));
+        // Horizontal only: a point on the baseline moves in, one above it
+        // keeps its height.
+        let p = a.matrix * Point::new(667.0, 700.0);
+        assert!((p.x - 506.0).abs() < 1e-9, "x is {}", p.x);
+        assert_eq!(p.y, 700.0);
+        // And the glyph's own origin is a fixed point, so the squeeze pulls
+        // the outline back toward the pen rather than off it.
+        assert_eq!(a.matrix * Point::ZERO, Point::ZERO);
+    }
+
+    /// A face that cannot report an advance disables both branches, and a
+    /// zero declared width disables only the squeeze — scaling to zero would
+    /// erase the glyph.
+    #[test]
+    fn a_zero_width_on_either_side_declines_the_correction() {
+        assert_eq!(glyph_spacing_adjust(700, 0, 40.0), GlyphAdjust::NONE);
+        assert_eq!(glyph_spacing_adjust(0, 0, 40.0), GlyphAdjust::NONE);
+        assert_eq!(glyph_spacing_adjust(0, 500, 40.0), GlyphAdjust::NONE);
+    }
+
+    /// Neither branch touches the advance: two glyphs one advance apart stay
+    /// one advance apart however far the correction moves or squeezes them.
+    #[test]
+    fn neither_branch_disturbs_the_pen() {
+        for (declared, face) in [(700, 500), (506, 667)] {
+            let a = glyph_spacing_adjust(declared, face, 40.0);
+            let first = glyph_matrix(40.0, Point::ZERO + a.origin, Affine::IDENTITY) * a.matrix;
+            let second =
+                glyph_matrix(40.0, Point::new(20.0, 0.0) + a.origin, Affine::IDENTITY) * a.matrix;
+            let step = second.translation() - first.translation();
+            assert!(
+                (step.x - 20.0).abs() < 1e-9 && step.y.abs() < 1e-9,
+                "declared {declared} face {face} moved the pen by {step:?}"
+            );
+        }
+    }
+
+    /// Where a Japan1 transform and a squeeze both fire, the factor reaches
+    /// the transform's `a` and `b` columns alone — which is what right-
+    /// multiplying by the horizontal scale does.
+    #[test]
+    fn the_squeeze_composes_into_a_japan1_transform_s_first_column() {
+        let japan1 = Affine::new([0.5, 0.25, -0.125, 0.75, 0.0, 0.0]);
+        let squeeze = glyph_spacing_adjust(500, 1000, 40.0).matrix;
+        let [a, b, c, d, ..] = (japan1 * squeeze).as_coeffs();
+        assert_eq!([a, b, c, d], [0.25, 0.125, -0.125, 0.75]);
+    }
+
+    /// A standard-14 font is the gate's fourth refusal, and every run in
+    /// these tests uses one — so the correction never reaches them.
+    #[test]
+    fn a_standard_font_run_declines_the_correction() {
+        let object = run(b"Hi", 0.0, 0.0);
+        let (font, _) = object.font.as_ref().expect("the run has a font");
+        assert!(!font.applies_glyph_spacing());
     }
 }
