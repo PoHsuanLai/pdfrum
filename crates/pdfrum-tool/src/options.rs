@@ -49,6 +49,16 @@ pub struct PageRange {
 }
 
 /// Everything one invocation was told to do.
+///
+/// The flags are independent switches the oracle's own command line offers
+/// separately, not a mode: `--md5` and `--save` and `--show-metadata` compose
+/// freely. Folding them into an enum would invent a grammar the oracle does
+/// not have, and this type's whole job is to read the command line the way
+/// `pdfium_test` reads it.
+#[allow(
+    clippy::struct_excessive_bools,
+    reason = "independent switches, mirroring the oracle's flags"
+)]
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Options {
     pub files: Vec<PathBuf>,
@@ -67,6 +77,14 @@ pub struct Options {
     /// Whether to rename requested faces to their Croscore equivalents, from
     /// `--croscore-font-names`.
     pub croscore_font_names: bool,
+    /// Write each document back out beside its input, from `--save`.
+    ///
+    /// **This flag has no oracle counterpart** — `pdfium_test` cannot save a
+    /// document at all. It exists so the conformance harness can perform the
+    /// two-step check M7 requires: pdfrum saves, and the *oracle* then reopens
+    /// and renders what pdfrum wrote (SPEC.md §11's ruling E7). The asymmetry
+    /// is expected, and the harness never diffs this flag against the oracle.
+    pub save: bool,
     /// Flags recognized but not implemented, in the order they were given.
     pub unsupported: Vec<String>,
 }
@@ -173,6 +191,8 @@ pub fn parse(args: &[String]) -> Result<Options, ParseError> {
             options.show_metadata = true;
         } else if arg == "--md5" {
             options.md5 = true;
+        } else if arg == "--save" {
+            options.save = true;
         } else if let Some(format) = output_format_of(arg) {
             if options.format != OutputFormat::None {
                 return Err(ParseError::Rejected(format!(
@@ -260,6 +280,8 @@ Usage: pdfrum-tool [OPTION] [FILE]...
   --md5                  - write output image paths and their md5 hashes to stdout
   --pages=<number>(-<number>) - only render the given 0-based page(s)
   --password=<secret>    - password to decrypt the PDF with
+  --save                 - write the document back out as <pdf-name>.saved.pdf
+                           (no oracle counterpart; see Options::save)
 ";
 
 #[cfg(test)]

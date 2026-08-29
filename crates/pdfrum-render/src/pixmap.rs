@@ -441,6 +441,19 @@ pub fn alpha_merge(dest: u8, src: u8, alpha: u8) -> u8 {
     byte
 }
 
+/// `AlphaUnion(d, s) = d + s - d*s/255` (`cfx_scanlinecompositor.cpp:37`).
+///
+/// The truncating product makes this *not* the exact `1-(1-d)(1-s)` a float
+/// composite would give, and it never quite reaches 255 from two partial
+/// alphas — `AlphaUnion(128, 128) == 192`, where the float form gives 191.75.
+#[must_use]
+pub fn alpha_union(dest: u8, src: u8) -> u8 {
+    let merged = u32::from(dest) + u32::from(src) - (u32::from(dest) * u32::from(src)) / 255;
+    // Bounded by 255 for every byte pair, but the C++'s `uint8_t` return would
+    // wrap rather than saturate if it were not, so say so rather than cast.
+    u8::try_from(merged).unwrap_or(u8::MAX)
+}
+
 /// A `peniko::Color` as premultiplied RGBA8.
 #[must_use]
 pub fn premultiply(color: peniko::Color) -> [u8; 4] {

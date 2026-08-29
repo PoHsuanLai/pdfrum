@@ -198,9 +198,14 @@ pub fn draw_path<B: RasterBackend>(
         let stroke = resolve_stroke(params, matrices);
         // The stroke's geometry is pre-transformed by matrix1 and the
         // residual matrix2 is applied per vertex, which is what keeps the
-        // stroke width isotropic under an anisotropic CTM.
+        // stroke width isotropic under an anisotropic CTM. `BuildAggPath` is
+        // called with that same matrix1, so the degenerate-subpath nudge is
+        // one pixel *there* — see `nudge_degenerate_subpaths`.
         device.stroke_path(
-            &hard_clip(&(matrices.pre * path.clone())),
+            &hard_clip(&crate::path::nudge_degenerate_subpaths(
+                &(matrices.pre * path.clone()),
+                path,
+            )),
             matrices.post,
             &Brush::Solid(color.to_peniko()),
             &stroke,
@@ -260,7 +265,10 @@ fn draw_fill_stroke_knockout<B: RasterBackend>(
     }
     if !stroke_color.is_invisible() {
         sub.stroke_path(
-            &hard_clip(&(offset * matrices.pre * path.clone())),
+            &hard_clip(
+                &(offset
+                    * crate::path::nudge_degenerate_subpaths(&(matrices.pre * path.clone()), path)),
+            ),
             matrices.post,
             &Brush::Solid(stroke_color.to_peniko()),
             &stroke,

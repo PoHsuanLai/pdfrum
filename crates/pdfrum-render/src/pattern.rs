@@ -40,7 +40,7 @@ use crate::color::Argb;
 use crate::ctx::{RenderCaches, RenderCtx};
 use crate::device::{ImageQuality, MAX_TARGET_DIMENSION, RasterBackend, RenderDevice};
 use crate::path::{IntRect, is_available_matrix, outer_rect};
-use crate::pixmap::{Pixmap, alpha_byte_rounding};
+use crate::pixmap::{AlphaMask, Pixmap, alpha_byte_rounding};
 use crate::shading;
 
 /// The cell area below which a tile is rendered at 8×8 and scaled down
@@ -312,7 +312,16 @@ fn draw_tiling<B: RasterBackend>(
 
     // One screen buffer the size of the clip; every tile blits into it and
     // the whole thing composites once, at full alpha and a normal blend.
-    let mut screen = Pixmap::new(clip_w, clip_h);
+    //
+    // The buffer is **straight**-alpha, not premultiplied, because
+    // `pScreen->Create(..., kBgra)` is and because the difference is visible:
+    // an uncoloured tile composites through `CompositeMask`, which carries one
+    // flat colour and accumulates only alpha, so two overlapping tiles must
+    // leave the colour untouched. Premultiplying first and blitting would
+    // instead blend the colour against itself once per overlap, and the
+    // truncation in each blend biases the result upward by a count or two —
+    // which is exactly the 127-vs-129/130 spread `bug_1288_2` showed.
+    let mut screen = Screen::new(clip_w, clip_h);
     let cell_bbox = pattern_to_device.transform_rect_bbox(pattern.bbox);
     let [_, _, _, _, e, f] = pattern_to_device.as_coeffs();
     let left_offset = cell_bbox.x0 - e;
@@ -332,11 +341,11 @@ fn draw_tiling<B: RasterBackend>(
                 // pattern rather than skipping the tile.
                 return;
             };
-            blit(&mut screen, &cell, x, y);
+            screen.blit(&cell, x, y);
         }
     }
     device.draw_image(
-        &screen,
+        &screen.into_pixmap(),
         Affine::translate((f64::from(clip.left), f64::from(clip.top))),
         ImageQuality::Nearest,
         1.0,
@@ -377,7 +386,7 @@ fn render_cell<B: RasterBackend>(
     to_device: Affine,
     uncolored: Argb,
     diags: &mut Diagnostics,
-) -> Option<Pixmap> {
+) -> Option<Cell> {
     let (Ok(w), Ok(h)) = (u32::try_from(size.0), u32::try_from(size.1)) else {
         return None;
     };
@@ -433,46 +442,48 @@ fn render_cell<B: RasterBackend>(
     );
     let rendered = backend.finish(cell_device);
     if !pattern.colored {
-        // An uncoloured tile is a coverage mask painted in one colour: the
-        // cell's alpha decides where, the `scn` colour decides what.
-        return Some(recolor(&rendered, uncolored, w, h));
+        // An uncoloured tile stays a *coverage mask*. `CPDF_RenderTiling`
+        // hands `DrawPatternBitmap`'s 8bpp result straight to `CompositeMask`,
+        // which carries the fill colour separately; recolouring it into RGBA
+        // here would make every overlap blend the colour against itself.
+        return Some(Cell::Mask {
+            coverage: coverage_of(&rendered, w, h),
+            color: uncolored,
+        });
     }
-    Some(if enlarged {
+    Some(Cell::Colored(if enlarged {
         scale_down(&rendered, w, h)
     } else {
         rendered
-    })
+    }))
 }
 
-/// Repaint a coverage cell in one colour, scaling it to its real size.
-///
-/// `CompositeMask(fill_argb)`: the cell's alpha is the coverage and every
-/// pixel takes the same colour, which is what makes a `/PaintType 2` tile a
-/// stencil rather than an image.
-fn recolor(cell: &Pixmap, color: Argb, w: u32, h: u32) -> Pixmap {
+/// One rendered tile, in the shape `CPDF_RenderTiling` blits it in.
+enum Cell {
+    /// A `/PaintType 1` cell: its own premultiplied pixels, `CompositeBitmap`.
+    Colored(Pixmap),
+    /// A `/PaintType 2` cell: an 8-bit coverage plane plus the one flat colour
+    /// every one of its pixels takes, `CompositeMask`.
+    Mask { coverage: AlphaMask, color: Argb },
+}
+
+/// A cell's alpha channel as a coverage plane, scaled to its real size.
+fn coverage_of(cell: &Pixmap, w: u32, h: u32) -> AlphaMask {
     let scaled = if cell.width() == w && cell.height() == h {
         cell.clone()
     } else {
         scale_down(cell, w, h)
     };
-    let mut out = Pixmap::new(w, h);
+    let mut out = AlphaMask::new(w, h);
+    let plane = out.data_mut();
     for y in 0..h {
         for x in 0..w {
-            let Some(px) = scaled.pixel(x, y) else {
-                continue;
-            };
-            let Some(&coverage) = px.get(3) else { continue };
-            let a = crate::pixmap::mul255(color.a, coverage);
-            out.set_pixel(
-                x,
-                y,
-                [
-                    crate::pixmap::mul255(color.r, a),
-                    crate::pixmap::mul255(color.g, a),
-                    crate::pixmap::mul255(color.b, a),
-                    a,
-                ],
-            );
+            if let Some(px) = scaled.pixel(x, y)
+                && let Some(&coverage) = px.get(3)
+                && let Some(slot) = plane.get_mut((y as usize) * (w as usize) + x as usize)
+            {
+                *slot = coverage;
+            }
         }
     }
     out
@@ -524,33 +535,143 @@ fn span(index: u32, dest: u32, src: u32) -> (u32, u32) {
     (lo, hi)
 }
 
-/// Blit one tile into the screen buffer at a signed offset, source-over.
-fn blit(screen: &mut Pixmap, cell: &Pixmap, x: i32, y: i32) {
-    for sy in 0..cell.height() {
-        for sx in 0..cell.width() {
-            let (Ok(dx), Ok(dy)) = (
-                u32::try_from(i64::from(x) + i64::from(sx)),
-                u32::try_from(i64::from(y) + i64::from(sy)),
-            ) else {
-                continue;
-            };
-            if dx >= screen.width() || dy >= screen.height() {
-                continue;
-            }
-            let (Some(src), Some(dst)) = (cell.pixel(sx, sy), screen.pixel(dx, dy)) else {
-                continue;
-            };
-            let Some(&sa) = src.get(3) else { continue };
-            if sa == 0 {
-                continue;
-            }
-            let inv = 255 - sa;
-            let mut px = [0u8; 4];
-            for (slot, (&s, &d)) in px.iter_mut().zip(src.iter().zip(dst.iter())) {
-                *slot = s.saturating_add(crate::pixmap::mul255(d, inv));
-            }
-            screen.set_pixel(dx, dy, px);
+/// The tile screen buffer: **straight**-alpha BGRA, as `pScreen->Create` makes
+/// it, held as RGBA in our own byte order.
+///
+/// It is a distinct type from [`Pixmap`] precisely because it is not
+/// premultiplied. `CompositeRow_ByteMask2Bgra` and `CompositeRow_Bgra2Bgra`
+/// both work on straight alpha, and the `dest.alpha == 0` early-out that makes
+/// a first touch lossless only exists there.
+struct Screen {
+    width: u32,
+    height: u32,
+    /// Straight-alpha RGBA, four bytes per pixel.
+    data: Vec<u8>,
+}
+
+impl Screen {
+    fn new(width: u32, height: u32) -> Self {
+        let len = (width as usize)
+            .saturating_mul(height as usize)
+            .saturating_mul(4);
+        Self {
+            width,
+            height,
+            data: vec![0; len],
         }
+    }
+
+    fn at(&mut self, x: u32, y: u32) -> Option<&mut [u8]> {
+        let i = (y as usize)
+            .checked_mul(self.width as usize)?
+            .checked_add(x as usize)?
+            .checked_mul(4)?;
+        self.data.get_mut(i..i.checked_add(4)?)
+    }
+
+    /// Blit one tile at a signed offset, by the C++'s two composite rows.
+    fn blit(&mut self, cell: &Cell, x: i32, y: i32) {
+        let (cell_w, cell_h) = match cell {
+            Cell::Colored(pixels) => (pixels.width(), pixels.height()),
+            Cell::Mask { coverage, .. } => (coverage.width(), coverage.height()),
+        };
+        for sy in 0..cell_h {
+            for sx in 0..cell_w {
+                let (Ok(dx), Ok(dy)) = (
+                    u32::try_from(i64::from(x) + i64::from(sx)),
+                    u32::try_from(i64::from(y) + i64::from(sy)),
+                ) else {
+                    continue;
+                };
+                if dx >= self.width || dy >= self.height {
+                    continue;
+                }
+                // The source's straight colour and its alpha. A coloured cell
+                // arrives premultiplied from the rasterizer and is undone
+                // here; an uncoloured one never had a colour to premultiply.
+                let (src, src_alpha) = match cell {
+                    Cell::Colored(pixels) => {
+                        let Some([red, green, blue, alpha]) = pixels.pixel(sx, sy) else {
+                            continue;
+                        };
+                        (
+                            crate::pixmap::unpremultiply_rgb(red, green, blue, alpha),
+                            alpha,
+                        )
+                    }
+                    Cell::Mask { coverage, color } => {
+                        let cov = coverage
+                            .data()
+                            .get((sy as usize) * (coverage.width() as usize) + sx as usize)
+                            .copied()
+                            .unwrap_or(0);
+                        // `GetAlphaWithSrc`: `mask.alpha * src_scan[col] / 255`
+                        // with no clip plane in play.
+                        (
+                            [color.r, color.g, color.b],
+                            crate::pixmap::mul255(color.a, cov),
+                        )
+                    }
+                };
+                let Some(dest) = self.at(dx, dy) else {
+                    continue;
+                };
+                let back_alpha = dest.get(3).copied().unwrap_or(0);
+                // The first touch of a pixel is a plain copy: no arithmetic at
+                // all, and so no rounding. Every tile position in a
+                // non-overlapping tiling takes this arm, which is why the
+                // oracle's uncoloured tilings come out at one exact value.
+                if back_alpha == 0 {
+                    dest.copy_from_slice(&[src[0], src[1], src[2], src_alpha]);
+                    continue;
+                }
+                if src_alpha == 0 {
+                    continue;
+                }
+                let dest_alpha = crate::pixmap::alpha_union(back_alpha, src_alpha);
+                // `src_alpha * 255 / dest_alpha`, and `AlphaUnion`'s
+                // definition puts `src_alpha` no higher than `dest_alpha`, so
+                // the ratio is a byte.
+                let ratio = u8::try_from((u32::from(src_alpha) * 255) / u32::from(dest_alpha))
+                    .unwrap_or(u8::MAX);
+                for (channel, &value) in src.iter().enumerate() {
+                    if let Some(slot) = dest.get_mut(channel) {
+                        *slot = crate::pixmap::alpha_merge(*slot, value, ratio);
+                    }
+                }
+                if let Some(a) = dest.get_mut(3) {
+                    *a = dest_alpha;
+                }
+            }
+        }
+    }
+
+    /// The finished screen as the premultiplied pixmap `draw_image` wants.
+    fn into_pixmap(self) -> Pixmap {
+        let mut out = Pixmap::new(self.width, self.height);
+        for y in 0..self.height {
+            for x in 0..self.width {
+                let base = ((y as usize) * (self.width as usize) + x as usize) * 4;
+                let Some(&[red, green, blue, alpha]) = self
+                    .data
+                    .get(base..base + 4)
+                    .and_then(|bytes| <&[u8; 4]>::try_from(bytes).ok())
+                else {
+                    continue;
+                };
+                out.set_pixel(
+                    x,
+                    y,
+                    [
+                        crate::pixmap::mul255(red, alpha),
+                        crate::pixmap::mul255(green, alpha),
+                        crate::pixmap::mul255(blue, alpha),
+                        alpha,
+                    ],
+                );
+            }
+        }
+        out
     }
 }
 
@@ -581,20 +702,41 @@ mod tests {
 
     #[test]
     fn a_blit_clips_to_the_screen_rather_than_wrapping() {
-        let mut screen = Pixmap::new(2, 2);
-        let cell = Pixmap::filled(2, 2, peniko::Color::from_rgba8(255, 0, 0, 255));
+        let mut screen = Screen::new(2, 2);
+        let cell = Cell::Colored(Pixmap::filled(
+            2,
+            2,
+            peniko::Color::from_rgba8(255, 0, 0, 255),
+        ));
         // Placed off the top left: only the bottom-right cell pixel lands.
-        blit(&mut screen, &cell, -1, -1);
-        assert_eq!(screen.pixel(0, 0), Some([255, 0, 0, 255]));
-        assert_eq!(screen.pixel(1, 1), Some([0, 0, 0, 0]));
+        screen.blit(&cell, -1, -1);
+        let out = screen.into_pixmap();
+        assert_eq!(out.pixel(0, 0), Some([255, 0, 0, 255]));
+        assert_eq!(out.pixel(1, 1), Some([0, 0, 0, 0]));
     }
 
     #[test]
     fn a_blit_composites_source_over_rather_than_replacing() {
-        let mut screen = Pixmap::filled(1, 1, peniko::Color::from_rgba8(0, 0, 255, 255));
-        let cell = Pixmap::filled(1, 1, peniko::Color::from_rgba8(255, 0, 0, 128));
-        blit(&mut screen, &cell, 0, 0);
-        let px = screen.pixel(0, 0).expect("a pixel");
+        let mut screen = Screen::new(1, 1);
+        screen.blit(
+            &Cell::Colored(Pixmap::filled(
+                1,
+                1,
+                peniko::Color::from_rgba8(0, 0, 255, 255),
+            )),
+            0,
+            0,
+        );
+        screen.blit(
+            &Cell::Colored(Pixmap::filled(
+                1,
+                1,
+                peniko::Color::from_rgba8(255, 0, 0, 128),
+            )),
+            0,
+            0,
+        );
+        let px = screen.into_pixmap().pixel(0, 0).expect("a pixel");
         // The half-opaque red covers half the blue; neither channel is lost.
         assert!(px[0] > 100, "red arrived: {px:?}");
         assert!(px[2] > 50, "blue survived: {px:?}");
@@ -605,11 +747,83 @@ mod tests {
     fn an_uncolored_cell_takes_its_colour_from_the_operands() {
         // Coverage in, one colour out — the cell's own colours never survive.
         let cell = Pixmap::filled(1, 1, peniko::Color::from_rgba8(0, 255, 0, 128));
-        let out = recolor(&cell, Argb::opaque(255, 0, 0), 1, 1);
-        let px = out.pixel(0, 0).expect("a pixel");
-        assert_eq!(px[3], 128, "the coverage is the cell's alpha");
-        assert_eq!(px[1], 0, "the cell's own green is gone");
+        let Some(Cell::Mask { coverage, color }) = Some(Cell::Mask {
+            coverage: coverage_of(&cell, 1, 1),
+            color: Argb::opaque(255, 0, 0),
+        }) else {
+            unreachable!()
+        };
+        assert_eq!(coverage.data(), &[128], "the coverage is the cell's alpha");
+        assert_eq!(color.g, 0, "the cell's own green never reaches the blit");
+        let mut screen = Screen::new(1, 1);
+        screen.blit(&Cell::Mask { coverage, color }, 0, 0);
+        let px = screen.into_pixmap().pixel(0, 0).expect("a pixel");
+        assert_eq!(px[3], 128, "the coverage becomes the alpha");
         assert!(px[0] > 100, "the operand colour is what paints: {px:?}");
+    }
+
+    #[test]
+    fn overlapping_uncolored_tiles_keep_one_flat_colour() {
+        // `bug_1288_2` in miniature. An uncoloured pattern composites through
+        // `CompositeMask`, which carries one flat colour and merges only
+        // alpha, so however many tiles overlap a pixel its colour is the fill
+        // colour exactly — never a blend of the colour with itself, whose
+        // truncation would drift upward by a count per overlap.
+        let color = Argb {
+            r: 0,
+            g: 0,
+            b: 255,
+            a: 255,
+        };
+        let mut screen = Screen::new(1, 1);
+        for _ in 0..8 {
+            screen.blit(
+                &Cell::Mask {
+                    coverage: AlphaMask::filled(1, 1, 128),
+                    color,
+                },
+                0,
+                0,
+            );
+        }
+        let straight = screen.data.clone();
+        assert_eq!(
+            straight.get(..3),
+            Some(&[0u8, 0, 255][..]),
+            "eight overlaps and the colour has not moved a count"
+        );
+        // Only the alpha accumulated, by `AlphaUnion` at each step.
+        let mut a = 128u8;
+        for _ in 1..8 {
+            a = crate::pixmap::alpha_union(a, 128);
+        }
+        assert_eq!(straight.get(3), Some(&a));
+    }
+
+    #[test]
+    fn a_single_uncolored_tile_lands_on_the_oracles_exact_value() {
+        // The first touch of a pixel is a copy, not a merge — the arm that
+        // makes a non-overlapping tiling land on one exact value. Half
+        // coverage of blue over white must give the oracle's 127, which is
+        // `AlphaMerge(255, 0, 128)`, and not the 128 a premultiplied
+        // source-over blit produces.
+        let mut screen = Screen::new(1, 1);
+        screen.blit(
+            &Cell::Mask {
+                coverage: AlphaMask::filled(1, 1, 128),
+                color: Argb {
+                    r: 0,
+                    g: 0,
+                    b: 255,
+                    a: 255,
+                },
+            },
+            0,
+            0,
+        );
+        assert_eq!(screen.data, vec![0, 0, 255, 128]);
+        // Composited over white by the same `AlphaMerge` the device uses.
+        assert_eq!(crate::pixmap::alpha_merge(255, 0, 128), 127);
     }
 
     #[test]

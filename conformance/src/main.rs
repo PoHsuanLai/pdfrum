@@ -25,6 +25,7 @@ mod oracle;
 mod pixels;
 mod pool;
 mod run;
+mod saveroundtrip;
 mod scoreboard;
 mod ssim;
 mod suppressions;
@@ -70,6 +71,8 @@ enum Command {
     Triage(TriageArgs),
     /// Diff the two rasterizers against each other over our own engine.
     TierC(TierCArgs),
+    /// Save every corpus file and check that the oracle reopens it (M7).
+    SaveRoundTrip(SaveArgs),
 }
 
 /// Options shared by the corpus-walking subcommands.
@@ -138,6 +141,30 @@ struct TierCArgs {
     font_dir: Option<PathBuf>,
 }
 
+/// Options for the save round-trip sweep.
+///
+/// The only mode that needs **both** binaries: pdfrum writes the file and the
+/// oracle reopens it, because `pdfium_test` cannot save at all.
+#[derive(Debug, Args)]
+struct SaveArgs {
+    #[command(flatten)]
+    corpus: CorpusArgs,
+    /// Path to the pdfrum-tool binary under test.
+    #[arg(long, env = "PDFRUM_TOOL")]
+    tool: Option<PathBuf>,
+    /// Path to the oracle's `pdfium_test` binary, which reopens what we save.
+    #[arg(long, env = "PDFRUM_ORACLE")]
+    oracle: Option<PathBuf>,
+    /// Hermetic font directory (default: `<checkout>/third_party/test_fonts`).
+    #[arg(long)]
+    font_dir: Option<PathBuf>,
+    /// Re-render at most this many saved files and diff them against the
+    /// original's golden (Tier B). Rendering is the slow half, so the sweep
+    /// checks reopening over everything and pixels over a sample.
+    #[arg(long, default_value_t = 250)]
+    render_sample: usize,
+}
+
 #[derive(Debug, Args)]
 struct TriageArgs {
     /// Scoreboard to read (default: conformance/scoreboard.json).
@@ -167,6 +194,20 @@ fn dispatch() -> Result<ExitCode> {
         Command::Run(args) => run_corpus(&args),
         Command::Triage(args) => triage_report(&args),
         Command::TierC(args) => tier_c(&args),
+        Command::SaveRoundTrip(args) => save_round_trip(&args),
+    }
+}
+
+/// The Tier-B floors, or the built-in default when the file is absent.
+///
+/// A malformed file is an error rather than a fallback: the ratchet is the
+/// project's fitness function, and silently reverting to the global floor
+/// would let a typo loosen every per-file threshold at once.
+fn load_thresholds() -> Result<thresholds::Thresholds> {
+    let path = conformance_dir().join("thresholds.toml");
+    match std::fs::read_to_string(&path) {
+        Ok(text) => thresholds::parse(&text).with_context(|| format!("parsing {}", path.display())),
+        Err(_) => Ok(thresholds::Thresholds::default()),
     }
 }
 
@@ -343,12 +384,7 @@ fn run_corpus(args: &RunArgs) -> Result<ExitCode> {
         entries.truncate(limit);
     }
 
-    let thresholds_path = conformance_dir().join("thresholds.toml");
-    let thresholds = match std::fs::read_to_string(&thresholds_path) {
-        Ok(text) => thresholds::parse(&text)
-            .with_context(|| format!("parsing {}", thresholds_path.display()))?,
-        Err(_) => thresholds::Thresholds::default(),
-    };
+    let thresholds = load_thresholds()?;
 
     let store = args.corpus.store();
     let fixup = checkout.join("testing/tools/fixup_pdf_template.py");
@@ -503,6 +539,114 @@ fn tier_c(args: &TierCArgs) -> Result<ExitCode> {
     Ok(ExitCode::SUCCESS)
 }
 
+/// Save every corpus file, check the oracle reopens it, and diff a sample's
+/// pixels against the original's golden render (PLAN.md M7's exit criteria).
+///
+/// The four numbers this prints are what M7 is graded on. Only the first two
+/// are gates: a file the tool could not *open* is skipped rather than failed,
+/// because Tier B already scores that and counting it twice would let a
+/// parse regression read as a writer bug.
+fn save_round_trip(args: &SaveArgs) -> Result<ExitCode> {
+    let checkout = args.corpus.checkout();
+    let font_dir = args
+        .font_dir
+        .clone()
+        .unwrap_or_else(|| checkout.join("third_party/test_fonts"));
+    let tool = ToolPaths {
+        binary: args
+            .tool
+            .clone()
+            .unwrap_or_else(|| repo_root().join("target/release/pdfrum-tool")),
+        font_dir: font_dir.clone(),
+    };
+    let oracle = OraclePaths {
+        binary: args
+            .oracle
+            .clone()
+            .unwrap_or_else(|| repo_root().join(DEFAULT_ORACLE)),
+        font_dir,
+    };
+    generate::check_oracle(&oracle)?;
+
+    let store = args.corpus.store();
+    let thresholds = load_thresholds()?;
+    let suppressed = load_suppressions(&checkout)?;
+    let listing = corpus::list(&Roots::under(&checkout), &suppressed)
+        .with_context(|| format!("walking the corpus under {}", checkout.display()))?;
+    let mut entries = listing.entries;
+    if let Some(limit) = args.corpus.limit {
+        entries.truncate(limit);
+    }
+
+    // Rendering is the slow half, so the pixel diff runs over an evenly
+    // spread sample rather than the first N files — the corpus is grouped by
+    // directory, and taking a prefix would sample one feature cluster.
+    let stride = entries.len().div_ceil(args.render_sample.max(1)).max(1);
+
+    let fixup = checkout.join("testing/tools/fixup_pdf_template.py");
+    let base = scratch_root("save")?;
+    let indexed: Vec<(usize, corpus::Entry)> = entries.into_iter().enumerate().collect();
+    let outcomes: Vec<saveroundtrip::SaveOutcome> =
+        pool::map(&indexed, args.corpus.workers(), |(index, entry)| {
+            saveroundtrip::check_one(
+                entry,
+                &tool,
+                &oracle,
+                &store,
+                &thresholds,
+                &base.join(format!("f{index}")),
+                &fixup,
+                index % stride == 0,
+            )
+        });
+    std::fs::remove_dir_all(&base).ok();
+
+    let mut totals = saveroundtrip::SaveTotals::default();
+    for outcome in &outcomes {
+        totals.add(outcome);
+    }
+
+    let percent =
+        |rate: Option<f64>| rate.map_or_else(|| "n/a".to_owned(), |r| format!("{:.2}%", r * 100.0));
+    println!("save round-trip over {} corpus files", outcomes.len());
+    println!(
+        "  saved                         {} ({} skipped before any check)",
+        totals.saved, totals.skipped
+    );
+    println!(
+        "  oracle reopened               {} / {}  {}",
+        totals.oracle_reopened,
+        totals.saved,
+        percent(totals.reopen_rate())
+    );
+    println!(
+        "  re-render within Tier-B floor {} / {}  {}",
+        totals.within_floor,
+        totals.compared,
+        percent(totals.pixel_rate())
+    );
+    println!(
+        "  incremental append discipline {} / {}  {}",
+        totals.incremental_ok,
+        totals.incremental_checked,
+        percent(totals.incremental_rate())
+    );
+
+    let mut failures: Vec<&saveroundtrip::SaveOutcome> = outcomes
+        .iter()
+        .filter(|o| o.saved && (!o.oracle_reopened || !o.within_floor))
+        .collect();
+    failures.sort_by(|a, b| a.path.cmp(&b.path));
+    for outcome in failures.iter().take(triage::EXAMPLES) {
+        println!("    {} - {}", outcome.path, outcome.note);
+    }
+    if failures.len() > triage::EXAMPLES {
+        println!("    ... and {} more", failures.len() - triage::EXAMPLES);
+    }
+
+    Ok(ExitCode::SUCCESS)
+}
+
 fn triage_report(args: &TriageArgs) -> Result<ExitCode> {
     let path = args
         .scoreboard
@@ -574,7 +718,16 @@ mod tests {
             .get_subcommands()
             .map(|c| c.get_name().to_owned())
             .collect();
-        assert_eq!(names, ["generate-goldens", "run", "triage", "tier-c"]);
+        assert_eq!(
+            names,
+            [
+                "generate-goldens",
+                "run",
+                "triage",
+                "tier-c",
+                "save-round-trip"
+            ]
+        );
     }
 
     #[test]

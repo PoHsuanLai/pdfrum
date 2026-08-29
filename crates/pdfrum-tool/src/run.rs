@@ -14,7 +14,7 @@
 //! 6. `Processed N pages.` on stderr, and `Skipped N bad pages.` if any.
 
 use std::io::Write;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use pdfrum_object::{Dict, Object, Resolve};
 use pdfrum_page::BuildContext;
@@ -87,11 +87,63 @@ pub fn process_file(
     }
 
     let counts = walk_pages(&doc, name, options, streams)?;
+
+    // Written after the page walk so the per-page chatter the harness diffs
+    // keeps its ordering, and before the summary line so a save failure is
+    // visible next to the file it belongs to.
+    if options.save {
+        save_document(&doc, name, streams)?;
+    }
+
     writeln!(streams.err, "Processed {} pages.", counts.processed)?;
     if counts.bad > 0 {
         writeln!(streams.err, "Skipped {} bad pages.", counts.bad)?;
     }
     Ok(counts)
+}
+
+/// Where `--save` writes a document: beside its input, as
+/// `<name>.saved.pdf`.
+///
+/// The oracle has no save flag to mirror, so the naming is ours; the suffix
+/// keeps it out of the way of every `<name>.<page>.<ext>` artifact the other
+/// flags produce.
+#[must_use]
+pub fn save_path(input: &Path) -> Option<PathBuf> {
+    let name = input.file_name()?.to_str()?;
+    Some(input.with_file_name(format!("{name}.saved.pdf")))
+}
+
+/// Write `doc` back out, reporting failure the way the oracle reports a
+/// failed write: a line on stderr, and the run continues.
+fn save_document(doc: &Document, name: &str, streams: &mut Streams<'_>) -> std::io::Result<()> {
+    let Some(path) = save_path(Path::new(name)) else {
+        writeln!(streams.err, "Failed to save: no usable output path.")?;
+        return Ok(());
+    };
+
+    let edit = pdfrum_edit::EditDoc::new(doc);
+    // An encrypted document saves decrypted, which is v1's contract
+    // (SPEC.md §11's ruling E3).
+    let options = pdfrum_edit::SaveOptions {
+        remove_security: true,
+        ..pdfrum_edit::SaveOptions::default()
+    };
+
+    let mut out = Vec::new();
+    if let Err(err) = pdfrum_edit::save(&edit, &options, &mut out) {
+        writeln!(streams.err, "Failed to save: {err}.")?;
+        return Ok(());
+    }
+    match std::fs::write(&path, &out) {
+        Ok(()) => writeln!(
+            streams.err,
+            "Saved {} bytes to {}.",
+            out.len(),
+            path.display()
+        ),
+        Err(err) => writeln!(streams.err, "Failed to write {}: {err}.", path.display()),
+    }
 }
 
 /// The substitution settings a command line asks for.

@@ -35,28 +35,66 @@ pub fn get_bits(data: &[u8], bit_pos: usize, nbits: u32) -> u32 {
     }
 }
 
-/// One scanline's raw sample bytes, zero-padded when the source ran short.
+/// How much of a requested scanline the stream actually held.
 ///
-/// The padding is the truncated-stream fallback: PDFium copies whatever
-/// remains into a zeroed buffer rather than refusing the image, so a file cut
-/// off mid-image still renders its complete rows.
+/// The distinction is load-bearing, and `CPDF_DIB::GetScanline`
+/// (`cpdf_dib.cpp:1129`) is where it comes from. Its three arms are:
+///
+/// ```text
+/// } else if (stream_acc_->GetSize() > line * src_pitch_value) {
+///   ... copy what remains into a zeroed pitch-sized buffer ...
+/// }
+/// if (src_line.empty()) {
+///   std::ranges::fill(result, 0);
+///   return result;                 // <-- returns BEFORE TranslateScanline24bpp
+/// }
+/// ```
+///
+/// A row that begins *inside* the stream is zero-padded and then decoded
+/// normally. A row that begins at or past the end never reaches the decode at
+/// all: PDFium hands back a zeroed *output* buffer, so the pixels are literal
+/// black rather than whatever `/Decode` maps a zero sample to. On
+/// `bug_554151` — a `/Decode [1.0]` that maps sample 0 to full red — the two
+/// spellings differ across the whole page.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Availability {
+    /// The stream held the whole row.
+    Whole,
+    /// The row began inside the stream but ran off its end; the tail is zero.
+    Partial,
+    /// The row began at or past the end of the stream. The decode is skipped
+    /// and the *output* pixels are zero.
+    Absent,
+}
+
+/// One scanline's raw sample bytes, zero-padded when the source ran short,
+/// and how much of it the stream actually held.
 #[must_use]
-pub fn scanline(data: &[u8], line: u32, pitch: usize) -> (Vec<u8>, bool) {
+pub fn scanline(data: &[u8], line: u32, pitch: usize) -> (Vec<u8>, Availability) {
     let Some(start) = usize::try_from(line)
         .ok()
         .and_then(|l| l.checked_mul(pitch))
     else {
-        return (vec![0; pitch], true);
+        return (vec![0; pitch], Availability::Absent);
     };
+    // `GetSize() > line * pitch` is the C++'s test for "this row starts inside
+    // the stream". A pitch of zero makes every row start at zero, so an empty
+    // stream is still `Absent`.
+    if start >= data.len() {
+        return (vec![0; pitch], Availability::Absent);
+    }
     let available = data.get(start..).unwrap_or(&[]);
     if available.len() >= pitch {
-        return (available.get(..pitch).unwrap_or(&[]).to_vec(), false);
+        return (
+            available.get(..pitch).unwrap_or(&[]).to_vec(),
+            Availability::Whole,
+        );
     }
     let mut out = vec![0u8; pitch];
     if let Some(dest) = out.get_mut(..available.len()) {
         dest.copy_from_slice(available);
     }
-    (out, true)
+    (out, Availability::Partial)
 }
 
 /// Invert a one-bit scanline in place, which is what a default-decode stencil
@@ -179,7 +217,10 @@ mod tests {
         reason = "test fixtures quote oracle vectors verbatim and compare exactly"
     )]
 
-    use super::{get_bits, invert_line, palette_index, rgb_line_to_bgr, scale_to_byte, scanline};
+    use super::{
+        Availability, get_bits, invert_line, palette_index, rgb_line_to_bgr, scale_to_byte,
+        scanline,
+    };
 
     #[test]
     fn bits_are_read_msb_first_and_zero_past_the_end() {
@@ -199,17 +240,22 @@ mod tests {
     #[test]
     fn a_truncated_scanline_is_zero_padded() {
         let data = [1u8, 2, 3];
-        let (line, padded) = scanline(&data, 0, 2);
+        let (line, had) = scanline(&data, 0, 2);
         assert_eq!(line, vec![1, 2]);
-        assert!(!padded);
+        assert_eq!(had, Availability::Whole);
         // The second row has only one byte available.
-        let (line, padded) = scanline(&data, 1, 2);
+        let (line, had) = scanline(&data, 1, 2);
         assert_eq!(line, vec![3, 0]);
-        assert!(padded);
-        // Past the end entirely: all zeros.
-        let (line, padded) = scanline(&data, 9, 2);
+        assert_eq!(had, Availability::Partial);
+        // Past the end entirely: all zeros, and `Absent` rather than
+        // `Partial` — the caller must skip the decode, not zero-pad into it.
+        let (line, had) = scanline(&data, 9, 2);
         assert_eq!(line, vec![0, 0]);
-        assert!(padded);
+        assert_eq!(had, Availability::Absent);
+        // The boundary: row 2 starts at byte 4, one past the last byte.
+        assert_eq!(scanline(&data, 2, 2).1, Availability::Absent);
+        // An empty stream has no whole rows at all.
+        assert_eq!(scanline(&[], 0, 4).1, Availability::Absent);
     }
 
     #[test]

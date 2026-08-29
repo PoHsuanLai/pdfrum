@@ -240,9 +240,38 @@ pub fn decode_image<R: Resolve>(
             if image.space_override.is_some() {
                 diags.record(Severity::Recovered, DiagKind::JpxColorSpaceOverride, None);
             }
-            let pixels = match image.components {
-                1 => Pixels::Gray8(image.data.into()),
-                4 => Pixels::Cmyk8(image.data.into()),
+            let pixels = match (&space, image.components) {
+                // An `/Indexed` space keeps its indices and a resolved
+                // palette. The decoder was asked for raw indices rather than
+                // colours (`JpxAction::UseIndexed`), but it still hands them
+                // back as **eight-bit** samples, so a `/BitsPerComponent`
+                // below eight has to be shifted back down:
+                //
+                // ```
+                // } else if (color_space_ && family == kIndexed && bpc_ < 8) {
+                //   int scale = 8 - bpc_;
+                //   for (auto& pixel : scanline) { pixel >>= scale; }
+                // }
+                // ```
+                //
+                // Without it every sample overshoots the palette and clamps
+                // to its last entry; with the palette dropped altogether the
+                // indices themselves reach the page as grey, which is what
+                // `jpxdecode_indexed.in` rendered before.
+                (Some(cs @ ColorSpace::Indexed(indexed)), 1) => {
+                    let scale = 8u32.saturating_sub(info.bpc);
+                    let indices: Box<[u8]> = image
+                        .data
+                        .iter()
+                        .map(|&v| if scale == 0 { v } else { v >> scale })
+                        .collect();
+                    let palette = (0..=indexed.max_index)
+                        .map(|i| cs.to_rgb(&[f32::from(i)]))
+                        .collect();
+                    Pixels::Indexed { indices, palette }
+                }
+                (_, 1) => Pixels::Gray8(image.data.into()),
+                (_, 4) => Pixels::Cmyk8(image.data.into()),
                 _ => Pixels::Rgb8(image.data.into()),
             };
             (image.width, image.height, pixels, image.alpha)
@@ -335,6 +364,33 @@ pub fn decode_image<R: Resolve>(
     })
 }
 
+/// Whether the samples are read straight out of the stream, with no image
+/// codec standing between it and the scanline.
+///
+/// This is the precondition of `CPDF_DIB::GetScanline`'s zeroed-output arm,
+/// and it is easy to get wrong because the arm itself does not name it. The
+/// C++ picks a source in this order:
+///
+/// ```text
+/// if (cached_bitmap_ && ...)          src_line = cached_bitmap_->GetScanline(line);
+/// else if (decoder_)                  src_line = decoder_->GetScanline(line);
+/// else if (GetSize() > line * pitch)  ... zero-pad what remains ...
+/// if (src_line.empty()) { fill(result, 0); return result; }   // decode skipped
+/// ```
+///
+/// A codec — JBIG2, JPX, DCT, CCITT, or a Flate/RunLength predictor built as
+/// a scanline decoder — always hands back a full row, so the empty case never
+/// arises and every row is decoded normally. Only a stream read directly can
+/// run out. Applying the zeroed arm to a codec's output instead makes a
+/// truncated JBIG2 mask stop inverting partway down, which is what
+/// `bug_674771.in` showed.
+fn reads_the_stream_directly(info: &ImageDict) -> bool {
+    !matches!(
+        info.last_filter,
+        Some(Filter::Jbig2 | Filter::Jpx | Filter::Dct | Filter::CcittFax)
+    )
+}
+
 /// A stencil mask: one bit per pixel, inverted when the decode is the
 /// default.
 fn decode_stencil<R: Resolve>(
@@ -349,11 +405,15 @@ fn decode_stencil<R: Resolve>(
     let row_bytes = info.pitch().ok_or(Error::ImageTooLarge)?;
     let mut bits = vec![0u8; total];
     let mut padded = false;
+    let raw = reads_the_stream_directly(info);
     for y in 0..info.height {
-        let (mut line, was_padded) = scanline::scanline(&decoded.data, y, row_bytes);
-        padded |= was_padded;
-        // The default decode **inverts**; `/Decode [1 0]` copies verbatim.
-        if info.default_decode {
+        let (mut line, availability) = scanline::scanline(&decoded.data, y, row_bytes);
+        padded |= availability != scanline::Availability::Whole;
+        // The default decode **inverts**; `/Decode [1 0]` copies verbatim —
+        // except on a row the stream never reached, which skips the decode
+        // altogether and comes back zero. See [`reads_the_stream_directly`]
+        // for why that only applies when there is no image codec in front.
+        if info.default_decode && !(raw && availability == scanline::Availability::Absent) {
             scanline::invert_line(&mut line);
         }
         let start = usize::try_from(y).unwrap_or(0).saturating_mul(row_bytes);
@@ -434,8 +494,15 @@ fn unpack(
         let mut indices = vec![0u8; total_pixels];
         let mut padded = false;
         for y in 0..rows {
-            let (line, was_padded) = scanline::scanline(data, u32::try_from(y).unwrap_or(0), pitch);
-            padded |= was_padded;
+            let (line, availability) =
+                scanline::scanline(data, u32::try_from(y).unwrap_or(0), pitch);
+            padded |= availability != scanline::Availability::Whole;
+            // An absent row returns a zeroed *output* buffer without ever
+            // reaching the decode, so the indices stay zero whatever `/Decode`
+            // maps a zero sample to. See `Availability`.
+            if availability == scanline::Availability::Absent {
+                continue;
+            }
             for x in 0..pixels_per_row {
                 let raw = scanline::get_bits(&line, x * info.bpc as usize, info.bpc);
                 // An `/Decode` on an indexed image remaps the index itself.
@@ -472,8 +539,14 @@ fn unpack(
     ];
     let mut padded = false;
     for y in 0..rows {
-        let (line, was_padded) = scanline::scanline(data, u32::try_from(y).unwrap_or(0), pitch);
-        padded |= was_padded;
+        let (line, availability) = scanline::scanline(data, u32::try_from(y).unwrap_or(0), pitch);
+        padded |= availability != scanline::Availability::Whole;
+        // An absent row never reaches `TranslateScanline24bpp`: PDFium returns
+        // a zeroed *output* buffer, so the pixels are literal black rather
+        // than whatever `/Decode` maps a zero sample to. See `Availability`.
+        if availability == scanline::Availability::Absent {
+            continue;
+        }
         for x in 0..pixels_per_row {
             for c in 0..components {
                 let bit_pos = (x * components + c) * info.bpc as usize;
@@ -667,6 +740,40 @@ mod tests {
             &Limits::default(),
             &mut diags,
         )
+    }
+
+    #[test]
+    fn a_row_past_the_end_of_the_stream_skips_the_decode_entirely() {
+        // `bug_554151.in` in miniature: a `/Decode` that maps a zero sample
+        // to full red, and a stream holding only the first of two rows.
+        //
+        // The first row decodes: `FF` at four bits is 15, and
+        // `1 + (0 - 1) * 15/15` is 0, so it is black. The second row never
+        // reaches the decode at all — `CPDF_DIB::GetScanline` hands back a
+        // zeroed *output* buffer — so it is also black, and emphatically not
+        // the red that decoding a zero sample would give.
+        let mut decode_array = Array::default();
+        decode_array.push(Object::Real(1.0));
+        let s = stream(
+            vec![
+                (Name::from("Width"), Object::Int(2)),
+                (Name::from("Height"), Object::Int(2)),
+                (Name::from("BitsPerComponent"), Object::Int(4)),
+                (
+                    Name::from("ColorSpace"),
+                    Object::Name(Name::from("DeviceRGB")),
+                ),
+                (Name::from("Decode"), Object::Array(decode_array)),
+            ],
+            // One row: two pixels of three four-bit components each.
+            &[0xFF, 0xFF, 0xFF],
+        );
+        let image = decode(&s).expect("should decode");
+        assert_eq!(
+            image.pixels,
+            Pixels::Rgb8(Box::from(&[0u8; 12][..])),
+            "both rows are black; the absent one never reaches `/Decode`"
+        );
     }
 
     #[test]
