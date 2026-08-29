@@ -459,6 +459,193 @@ fn invisible_text_paints_nothing() {
     assert_eq!(tiny.pixel(4, 4), Some([255, 255, 255, 255]));
 }
 
+/// A non-embedded simple font by base name, with the `/Widths` the test
+/// wants. An unrecognised name reaches the built-in Multiple-Master generic,
+/// which is the substitution every non-embedded font in the corpus lands on.
+fn substituted_font(base_name: &str, first_char: i64, widths: &[i64]) -> pdfrum_font::Font {
+    use pdfrum_object::{Dict, Name, NoResolve, Object};
+    let dict = Dict::from_pairs([
+        (Name::from("Subtype"), Object::Name(Name::from("Type1"))),
+        (Name::from("BaseFont"), Object::Name(Name::from(base_name))),
+        (Name::from("FirstChar"), Object::Int(first_char)),
+        (
+            Name::from("LastChar"),
+            Object::Int(first_char + i64::try_from(widths.len()).expect("small") - 1),
+        ),
+        (
+            Name::from("Widths"),
+            Object::Array(widths.iter().map(|w| Object::Int(*w)).collect()),
+        ),
+    ]);
+    pdfrum_font::load(
+        &dict,
+        &NoResolve,
+        &pdfrum_font::FontCache::new(),
+        &pdfrum_common::Limits::default(),
+        &mut Diagnostics::default(),
+    )
+    .expect("a simple font always constructs")
+}
+
+/// One text object showing `codes` in `font` at `size`, with its origin at
+/// `(x, y)` in page space.
+fn text_object(
+    font: pdfrum_font::Font,
+    size: f32,
+    codes: &[u8],
+    x: f64,
+    y: f64,
+) -> (PageObject, std::sync::Arc<pdfrum_font::Font>) {
+    let font = std::sync::Arc::new(font);
+    let object = PageObject::Text(Box::new(Content {
+        object: pdfrum_page::TextObject {
+            segments: Box::new([pdfrum_page::TextSegment {
+                codes: codes.to_vec().into_boxed_slice(),
+                kerning: 0.0,
+            }]),
+            position: Point::new(x, y),
+            matrix: Affine::IDENTITY,
+            font: Some((std::sync::Arc::clone(&font), size)),
+            render_mode: TextRenderMode::Fill,
+            type3_metrics: BTreeMap::default(),
+        },
+        state: GraphicsState::default(),
+        marks: ContentMarks::new(),
+        content_stream: 0,
+    }));
+    (object, font)
+}
+
+/// The x extent of every ink run in a row band, as `(start, end)` columns.
+fn ink_runs(p: &Pixmap, y0: u32, y1: u32) -> Vec<(u32, u32)> {
+    let mut runs = Vec::new();
+    let mut start = None;
+    for x in 0..p.width() {
+        let inked = (y0..y1).any(|y| p.pixel(x, y).is_some_and(|px| px[0] < 200));
+        match (inked, start) {
+            (true, None) => start = Some(x),
+            (false, Some(s)) => {
+                runs.push((s, x));
+                start = None;
+            }
+            _ => {}
+        }
+    }
+    if let Some(s) = start {
+        runs.push((s, p.width()));
+    }
+    runs
+}
+
+#[test]
+fn a_substituted_fonts_glyphs_are_drawn_at_the_widths_the_pdf_declares() {
+    // Burn-down wave 5's font defect, pinned as pixels. `5.5_simple_font.pdf`
+    // shows `abcabc` in a non-embedded `/AGaramond` whose `/Widths` are
+    // deliberately bizarre — a = 800, b = 100, c = 400 — against a fallback
+    // face whose own advances are roughly 450, 470 and 480.
+    //
+    // The oracle solves the Multiple-Master fallback's width axis so each
+    // glyph is *drawn* at the declared width (`AdjustVariationParams`,
+    // `cfx_face.cpp:1561-1605`). We drew every glyph at the axis default and
+    // advanced by the declared width, so the outlines overran their advances
+    // and piled into one another: `abcabc` rendered as `a ba b`, which the
+    // triage recorded as a dropped character and a mis-advance.
+    //
+    // What this asserts is the fix's actual contract: **six separated ink
+    // runs, one per character**, in a font whose own advances would merge
+    // them. Counting the runs is the assertion because merging is exactly the
+    // symptom.
+    let mut widths = vec![0_i64; 128];
+    widths[usize::from(b'a')] = 800;
+    widths[usize::from(b'b')] = 100;
+    widths[usize::from(b'c')] = 400;
+    let font = substituted_font("AGaramond", 0, &widths);
+    assert!(
+        font.subst().is_some_and(|s| s.is_builtin_generic),
+        "the fixture must reach the Multiple-Master generic"
+    );
+
+    // A wide gap after each `c` separates the two `abc` groups, so the two
+    // groups are directly comparable and the run boundaries are stable.
+    let (object, _keep) = text_object(font, 30.0, b"a c a c", 4.0, 10.0);
+    let (vello, tiny) = render_both(&page(160.0, 44.0, vec![object]), &RenderOptions::default());
+    for (name, p) in [("vello", &vello), ("tiny-skia", &tiny)] {
+        let runs = ink_runs(p, 0, 44);
+        assert_eq!(runs.len(), 4, "{name}: four separated glyphs, got {runs:?}");
+        let w: Vec<u32> = runs.iter().map(|(a, b)| b - a).collect();
+        // `a` is declared at 800 units and `c` at 400, so at 30 pt the drawn
+        // `a` must be about twice the drawn `c`. Before the fix both were
+        // drawn at the fallback face's own near-equal advances and the ratio
+        // was about 1.0, which is the assertion that catches the regression.
+        let ratio = f64::from(w[0]) / f64::from(w[1]);
+        assert!(
+            (1.6..2.6).contains(&ratio),
+            "{name}: `a` at 800 units must be about twice `c` at 400, \
+             ratio {ratio:.2} from widths {w:?}"
+        );
+        // And the two groups must be identical, which they are only if the
+        // solve is a function of the declared width alone.
+        assert_eq!(w[0], w[2], "{name}: the two `a`s agree, {w:?}");
+        assert_eq!(w[1], w[3], "{name}: the two `c`s agree, {w:?}");
+    }
+}
+
+#[test]
+fn glyph_origins_snap_to_the_oracles_grid_unless_asked_not_to() {
+    // The wave-5 placement port, as pixels rather than as arithmetic. A
+    // baseline placed a fraction of a pixel off a whole row must round onto
+    // one under the default options, and stay where it is under
+    // `subpixel_text_positioning`.
+    let mut widths = vec![600_i64; 128];
+    widths[usize::from(b'H')] = 700;
+    let font = || substituted_font("SomeFontNobodyHas", 0, &widths);
+
+    // A page 40 tall means device y = 40 - page y; a page y of 10.4 is a
+    // device baseline of 29.6, which the oracle rounds to 30.
+    let snapped = {
+        let (object, _keep) = text_object(font(), 20.0, b"H", 4.0, 10.4);
+        let (p, _) = render_both(&page(60.0, 40.0, vec![object]), &RenderOptions::default());
+        ink_rows(&p)
+    };
+    let whole = {
+        let (object, _keep) = text_object(font(), 20.0, b"H", 4.0, 10.0);
+        let (p, _) = render_both(&page(60.0, 40.0, vec![object]), &RenderOptions::default());
+        ink_rows(&p)
+    };
+    assert_eq!(
+        snapped, whole,
+        "a 0.4 px baseline offset snaps onto the same rows as a whole one"
+    );
+
+    let subpixel = RenderOptions {
+        subpixel_text_positioning: true,
+        ..RenderOptions::default()
+    };
+    let free = {
+        let (object, _keep) = text_object(font(), 20.0, b"H", 4.0, 10.4);
+        let (p, _) = render_both(&page(60.0, 40.0, vec![object]), &subpixel);
+        ink_rows(&p)
+    };
+    assert_ne!(
+        free, snapped,
+        "the knob puts the glyph back where the PDF says it is"
+    );
+}
+
+/// The first and last inked rows, and the coverage of the topmost one — the
+/// three numbers a sub-pixel vertical shift moves.
+fn ink_rows(p: &Pixmap) -> (u32, u32, u8) {
+    let inked = |y: u32| (0..p.width()).any(|x| p.pixel(x, y).is_some_and(|px| px[0] < 250));
+    let rows: Vec<u32> = (0..p.height()).filter(|y| inked(*y)).collect();
+    let first = *rows.first().expect("the glyph painted something");
+    let last = *rows.last().expect("the glyph painted something");
+    let darkest = (0..p.width())
+        .filter_map(|x| p.pixel(x, first).map(|px| px[0]))
+        .min()
+        .unwrap_or(255);
+    (first, last, darkest)
+}
+
 #[test]
 fn a_page_with_many_objects_stays_deterministic_across_runs() {
     let objects: Vec<PageObject> = (0..40)

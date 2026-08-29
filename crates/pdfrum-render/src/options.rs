@@ -5,8 +5,17 @@
 //! else, so the whole option surface collapses to its defaults: colour mode
 //! normal, no forced colours, and — the one that surprises — `bClearType
 //! = false`, because `RenderPageImpl` overwrites the constructor's `true`
-//! from the flag word on every public render call. Subpixel text therefore
-//! never runs in conformance.
+//! from the flag word on every public render call.
+//!
+//! **`bClearType = false` does not mean the LCD path is off.** It sets
+//! `CFX_TextRenderOptions::aliasing_type` to `kAntiAliasing`, and that is a
+//! different variable from `FontAntiAliasingMode`, which `DrawNormalText`
+//! derives separately (`cfx_renderdevice.cpp:1165-1206`): on a display device
+//! at 32 bpp with a smooth aliasing type the mode is `kLcd` *whatever*
+//! `bClearType` said, and `aliasing_type` only decides `normalize`. This
+//! crate's docs asserted the opposite until burn-down wave 5, and it matters
+//! for exactly one thing — the glyph-origin snap floors in x under `kLcd` and
+//! rounds under `kMono`. See [`RenderOptions::subpixel_text_positioning`].
 
 use kurbo::Affine;
 
@@ -90,6 +99,31 @@ pub struct RenderOptions {
     pub rect_aa: bool,
     /// `bConvertFillToStroke`, read only under a forced colour scheme.
     pub convert_fill_to_stroke: bool,
+    /// Place each glyph at its true fractional device origin instead of
+    /// snapping it to a whole pixel.
+    ///
+    /// **Default `false`, which is the oracle.** Below `|char2device.a| +
+    /// |char2device.b| > 50` PDFium renders a glyph *bitmap* and blits it on
+    /// a grid: **y on whole pixels, x on thirds of one**
+    /// (`cfx_renderdevice.cpp:1254-1257` for the snap, `1352` for the
+    /// `x_subpixel` that gives x back its thirds). We fill outlines rather
+    /// than blit bitmaps, but the placement is reproducible and it is the
+    /// larger half of D7: burn-down wave 4 measured the displacement at a
+    /// mean +0.45 px per text line on `example_063.pdf`, and re-aligning each
+    /// line onto the oracle's baseline removed 63% of the ±128 pixel swings.
+    ///
+    /// The knob is the parity/off-grid tradeoff, and it is a real tradeoff.
+    /// Snapping is what the oracle does and what a golden compares against,
+    /// so it is the default; it also *quantises text geometry*, which is what
+    /// D7 originally declined in order to keep glyph origins exact. Set this
+    /// to `true` when a caller wants text placed where the PDF actually puts
+    /// it — smooth animation, a non-integer device scale, or any use where
+    /// oracle parity is not the goal.
+    ///
+    /// It has no effect on large text: above the `> 50` threshold the oracle
+    /// takes `DrawTextPath` and places glyphs fractionally itself, so both
+    /// settings agree there. See [`crate::text::snap_origin`].
+    pub subpixel_text_positioning: bool,
     /// The page background. `None` follows the oracle: opaque white for a
     /// page without transparency, fully transparent for one with it.
     ///
@@ -111,6 +145,7 @@ impl Default for RenderOptions {
             force_halftone: false,
             rect_aa: false,
             convert_fill_to_stroke: false,
+            subpixel_text_positioning: false,
             background: None,
         }
     }
