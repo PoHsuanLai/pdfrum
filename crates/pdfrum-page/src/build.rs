@@ -40,8 +40,8 @@ use crate::pattern::{Pattern, TilingPattern};
 use crate::resources::Resources;
 use crate::shading::Shading;
 use crate::state::{
-    ContentMarks, GraphicsState, StateStack, TextCursor, apply_ext_gstate, glyph_matrix,
-    kerning_shift,
+    ContentMarks, GraphicsState, StateStack, TextClipRun, TextCursor, apply_ext_gstate,
+    glyph_matrix, kerning_shift,
 };
 use crate::transparency::Transparency;
 use kurbo::{Affine, BezPath, Point, Rect};
@@ -374,8 +374,10 @@ struct Interp<'a, R: Resolve> {
     subpath_start: Point,
     /// The current point.
     current: Point,
-    /// Glyph outlines a clipping text mode has accumulated.
-    text_clip: Vec<BezPath>,
+    /// Runs a clipping text mode has accumulated since the last `ET`.
+    ///
+    /// `clip_text_list_`, `cpdf_streamcontentparser.cpp:1359-1361`.
+    text_clip: Vec<TextClipRun>,
     resources: &'a Resources,
     /// The form's or page's coordinate system, which patterns anchor to —
     /// **not** the current transform.
@@ -536,9 +538,16 @@ impl<R: Resolve> Interp<'_, R> {
                 self.cursor.set_matrix(Affine::IDENTITY);
             }
             Op::EndText() => {
-                if !self.text_clip.is_empty() {
-                    let glyphs = std::mem::take(&mut self.text_clip);
-                    self.state.clip.push_text(glyphs);
+                // `Handle_EndText` (`cpdf_streamcontentparser.cpp:921-931`)
+                // re-reads the render mode **at `ET`**, not the one each run
+                // was shown under. A `BT … 7 Tr (x) Tj 0 Tr ET` therefore
+                // clips with nothing at all: the runs were collected, and the
+                // mode that decides whether to keep them has since changed.
+                // Either way the list is cleared, so they do not survive into
+                // the next text object.
+                let runs = std::mem::take(&mut self.text_clip);
+                if !runs.is_empty() && self.state.text.render_mode.clips() {
+                    self.state.clip.push_text(runs);
                 }
             }
             Op::TextMove(tx, ty) => {
@@ -879,6 +888,20 @@ impl<R: Resolve> Interp<'_, R> {
             render_mode,
             type3_metrics,
         };
+        // A run in a clipping mode is held for the `ET` that closes the text
+        // object, which is where it reaches the clip stack. It is *also*
+        // pushed as an ordinary page object: upstream appends to
+        // `clip_text_list_` and then to the object holder from the same block
+        // (`cpdf_streamcontentparser.cpp:1359-1362`), because `Tr 4` fills
+        // and clips, and even `Tr 7` still runs the paint pass — it simply
+        // paints nothing.
+        if render_mode.clips() {
+            self.text_clip.push(TextClipRun {
+                object: object.clone(),
+                char_space: self.state.text.char_space,
+                word_space: self.state.text.word_space,
+            });
+        }
         self.push(PageObject::Text(Box::new(self.content(object))));
         self.cursor.advance(advance, vertical);
     }
@@ -1766,6 +1789,59 @@ mod tests {
 
     fn build(src: &[u8]) -> (crate::page::Page, Diagnostics) {
         build_with(src, &Resources::default())
+    }
+
+    /// The clip stack a page's last object carries, by entry kind.
+    fn clip_kinds(page: &crate::page::Page) -> Vec<&'static str> {
+        page.objects
+            .last()
+            .expect("at least one object")
+            .state()
+            .clip
+            .entries()
+            .iter()
+            .map(|e| match e {
+                crate::state::ClipEntry::Path { .. } => "path",
+                crate::state::ClipEntry::Text { .. } => "text",
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_clipping_text_mode_reaches_the_clip_stack_at_et() {
+        // `Tr 7` shows no ink and contributes its glyphs to the clip, so the
+        // rectangle drawn after `ET` is clipped by the text. Before this was
+        // wired the rectangle painted whole — `clipping_text.pdf` and
+        // `path_9.pdf` both paint their swatches over the glyphs that should
+        // have cut them out.
+        let (page, _) = build(b"BT /F1 24 Tf 7 Tr 10 10 Td (Hi) Tj ET 0 0 50 50 re f");
+        assert_eq!(clip_kinds(&page), ["text"]);
+    }
+
+    #[test]
+    fn a_non_clipping_mode_contributes_nothing() {
+        let (page, _) = build(b"BT /F1 24 Tf 10 10 Td (Hi) Tj ET 0 0 50 50 re f");
+        assert!(clip_kinds(&page).is_empty());
+    }
+
+    /// `Handle_EndText` re-reads the mode **at `ET`**
+    /// (`cpdf_streamcontentparser.cpp:926`), not the one each run was shown
+    /// under, so a run collected under `Tr 7` is discarded when the mode has
+    /// gone back to filling before the text object closes.
+    #[test]
+    fn the_mode_at_et_decides_whether_the_batch_is_kept() {
+        let (page, _) = build(b"BT /F1 24 Tf 7 Tr 10 10 Td (Hi) Tj 0 Tr ET 0 0 50 50 re f");
+        assert!(clip_kinds(&page).is_empty(), "the batch is dropped at ET");
+        // And it does not survive into the next text object either.
+        let (page, _) = build(
+            b"BT /F1 24 Tf 7 Tr 10 10 Td (Hi) Tj 0 Tr ET \
+              BT /F1 24 Tf 7 Tr 10 10 Td (o) Tj ET 0 0 50 50 re f",
+        );
+        assert_eq!(
+            clip_kinds(&page),
+            ["text"],
+            "only the second object's own run clips"
+        );
     }
 
     #[test]
