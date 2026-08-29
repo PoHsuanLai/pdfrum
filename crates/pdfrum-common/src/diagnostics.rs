@@ -136,6 +136,107 @@ pub enum DiagKind {
     /// No system or embedded face could be found for a font, and even the
     /// built-in fallback failed to parse.
     FontSubstitutionFailed,
+
+    // ---- Content streams and page building (`pdfrum-page`) ----
+    /// A content-stream keyword named no operator; it and its operands were
+    /// dropped.
+    UnknownOperator,
+    /// More than sixteen operands accumulated before one operator, so the
+    /// oldest were evicted and the rest silently renumbered.
+    OperandsDropped,
+    /// An operator that demands an exact operand count did not get it, so it
+    /// did nothing at all.
+    OperandCountMismatch,
+    /// A `Q` arrived with no matching `q`; the graphics state was left alone.
+    UnbalancedRestore,
+    /// An `EMC` arrived with no matching `BMC`/`BDC`.
+    UnbalancedMarkedContent,
+    /// A form `XObject` was refused because it re-entered a content buffer
+    /// already being parsed, or because too many parses were in flight. The
+    /// stream was consumed and contributed no objects.
+    FormRecursionRefused,
+    /// A `BI` was followed by a keyword other than `ID`, so the inline image
+    /// was abandoned and the bytes re-read as ordinary content.
+    InlineImageAbandoned,
+    /// The scan for an inline image's `EI` absorbed bytes past the end of its
+    /// inferred sample data.
+    InlineImageResync,
+    /// An inline image named a filter whose length cannot be inferred
+    /// (`JPXDecode`, `JBIG2Decode`, or an unknown name), so it produced
+    /// nothing.
+    InlineImageUnsupported,
+    /// A `Tr` operand outside 0..=7 was ignored, leaving the previous text
+    /// rendering mode in place.
+    BadTextRenderMode,
+    /// A dash pattern was abandoned in favour of a solid line: an element was
+    /// not finite, or the whole cycle fell below the device threshold.
+    DashPatternDropped,
+    /// A dash element at or below one part in a million was replaced by 0.1.
+    DashElementClamped,
+    /// A colorspace could not be built, so the operator naming it did
+    /// nothing.
+    ColorSpaceUnsupported,
+    /// An ICC profile was not usable and its `/Alternate` space was used
+    /// instead.
+    IccAlternateUsed,
+    /// An ICC profile was not usable and no `/Alternate` served, so the stock
+    /// device space for its `/N` was used.
+    IccStockFallback,
+    /// An ICC space's `/Alternate` declared a different component count than
+    /// its `/N`, so the alternate was discarded.
+    IccAlternateMismatch,
+    /// An `/Indexed` space's `/hival` was outside 0..=255 and was clamped.
+    IndexedHivalClamped,
+    /// A `Separation` space's tint transform failed to load or produced too
+    /// few outputs; the space kept working without it.
+    TintTransformDropped,
+    /// A function could not be built, so whatever named it has no transform.
+    FunctionUnsupported,
+    /// A PostScript calculator program pushed past its stack or popped an
+    /// empty one; the values involved were dropped or read as zero.
+    PostScriptStackAbuse,
+    /// A PostScript `if` or `ifelse` was not preceded by the procedures it
+    /// needs, aborting that procedure.
+    PostScriptMalformedProc,
+    /// A shading failed validation and paints nothing.
+    ShadingUnsupported,
+    /// A mesh shading's `/Decode` array was not exactly the length its
+    /// component count requires.
+    MeshDecodeMalformed,
+    /// A mesh stream ran out mid-record; the vertices read so far were kept.
+    MeshTruncated,
+    /// A tiling pattern's `/XStep` or `/YStep` was zero or not finite, so it
+    /// draws nothing.
+    TilingStepInvalid,
+    /// A tiling pattern's tile indices did not fit an `i32`, so it draws
+    /// nothing.
+    TilingRangeOverflow,
+    /// An image's `/BitsPerComponent` was not one of 1, 2, 4, 8 or 16.
+    ImageBadBitDepth,
+    /// An image's `/Width` or `/Height` was zero, negative, or beyond the
+    /// dimension cap.
+    ImageBadDimensions,
+    /// A codec reported dimensions differing from the image dictionary's, and
+    /// the codec's were used.
+    ImageDimensionsFromCodec,
+    /// A JPEG 2000 codestream's own colour space replaced the one the image
+    /// dictionary named.
+    JpxColorSpaceOverride,
+    /// A codec refused an embedded image, so it paints nothing.
+    ImageDecodeFailed,
+    /// An image's mask could not be loaded; the base image was kept unmasked.
+    MaskDropped,
+    /// An image's sample data ended before its last scanline; the remainder
+    /// was zero-filled.
+    ImageStreamTruncated,
+    /// A colour-key `/Mask` array held fewer than two entries per component,
+    /// so the ranges it did not state default to zero.
+    ColorKeyArrayShort,
+    /// A page's `/MediaBox` was missing or empty, so US Letter was used.
+    MediaBoxDefaulted,
+    /// An optional-content membership dictionary named a `/P` policy that is
+    /// none of the four defined ones, which makes its content invisible.
+    OptionalContentPolicyUnknown,
 }
 
 /// One recorded recovery.
