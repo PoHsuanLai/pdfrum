@@ -1,0 +1,814 @@
+//! The master walk: one page-object list, dispatched by kind
+//! (`CPDF_RenderStatus::RenderObjectList` and `ProcessObjectNoClip`,
+//! `cpdf_renderstatus.cpp:216-330`).
+//!
+//! `CPDF_RenderStatus` is a thousand-line class with twenty-four members and
+//! a `Process*` method per object kind. STYLE §1 forbids reproducing it, so
+//! what is here is a dispatch `match` plus one free function per kind, each
+//! taking the small [`RenderCtx`] record and the backend's own device. The
+//! walk is generic over the backend rather than dynamic, because
+//! [`RasterBackend::snapshot`] needs the concrete device to read pixels back;
+//! `dyn RenderDevice` survives only where a device is genuinely swappable —
+//! the Coons scratch buffer.
+//!
+//! Two behaviours of the walk itself are load-bearing. The **cull test** is
+//! computed once per list from the inverse-transformed device clip box and
+//! uses **strict** inequalities, so an object exactly touching the clip edge
+//! is kept. And a **shading that fails is never retried**: every other kind
+//! falls back to a re-render that degenerates to an identical call on a
+//! bitmap device, so a failure is a skipped object and a diagnostic.
+
+use kurbo::{Affine, Rect, Shape};
+use pdfrum_common::Diagnostics;
+use pdfrum_page::{Page, PageObject, Transparency};
+
+use crate::clip;
+use crate::color::{ObjectKind, resolve_argb};
+use crate::ctx::{RenderCaches, RenderCtx};
+use crate::device::{Brush, ImageQuality, MAX_TARGET_DIMENSION, RasterBackend, RenderDevice};
+use crate::error::Error;
+use crate::group::{GroupFinish, GroupInputs, needs_backdrop, needs_offscreen};
+use crate::image::{effective_quality, overprint_blend, resample_quality, to_pixmap};
+use crate::options::RenderOptions;
+use crate::paint::{PathPaint, draw_path};
+use crate::path::{IntRect, is_available_matrix, outer_rect};
+use crate::pixmap::{Pixmap, alpha_byte_rounding};
+use crate::shading;
+use crate::text::{has_face, paint_kinds, place_glyphs};
+use crate::transfer::TransferFunc;
+
+/// Render a page into a pixmap.
+///
+/// The target size comes from the page's display box under
+/// `opts.transform`; the background follows the oracle — opaque white for a
+/// page without transparency, fully transparent for one with it — unless
+/// overridden, and that choice is load-bearing rather than cosmetic.
+pub fn render_page<B: RasterBackend>(
+    page: &Page,
+    opts: &RenderOptions,
+    backend: &B,
+    diags: &mut Diagnostics,
+) -> Result<Pixmap, Error> {
+    let (w, h) = target_size(page, opts)?;
+    let clear = opts.background_for(page.transparency.group);
+    let mut device = backend.new_target(w, h, clear);
+    let mut caches = RenderCaches::new();
+    let ctx = RenderCtx::new(opts.clone(), page.transparency);
+    let to_device = page_matrix(page, opts);
+    let device_box = Rect::new(0.0, 0.0, f64::from(w), f64::from(h));
+
+    render_object_list(
+        &ctx,
+        &mut device,
+        backend,
+        &mut caches,
+        &page.objects,
+        to_device,
+        device_box,
+        diags,
+    );
+    Ok(backend.finish(device))
+}
+
+/// The device size a page renders at, and the errors that size can be.
+fn target_size(page: &Page, opts: &RenderOptions) -> Result<(u32, u32), Error> {
+    let (pw, ph) = page.display_size();
+    let corners = opts
+        .transform
+        .transform_rect_bbox(Rect::new(0.0, 0.0, pw, ph));
+    let w = corners.width().ceil();
+    let h = corners.height().ceil();
+    if !w.is_finite() || !h.is_finite() || w < 1.0 || h < 1.0 {
+        return Err(Error::TargetEmpty {
+            width: w.max(0.0) as u32,
+            height: h.max(0.0) as u32,
+        });
+    }
+    let (w, h) = (w as u32, h as u32);
+    if w > MAX_TARGET_DIMENSION || h > MAX_TARGET_DIMENSION {
+        return Err(Error::TargetTooLarge {
+            width: w,
+            height: h,
+            limit: MAX_TARGET_DIMENSION,
+        });
+    }
+    Ok((w, h))
+}
+
+/// Page space to device space.
+///
+/// Three transforms compose, and the middle one is the easy omission: the
+/// page's display matrix normalises the crop box's origin and applies the
+/// `/Rotate`, but PDF user space is **y-up** and every device is y-down, so
+/// the y axis must be flipped about the page's height before the caller's
+/// own transform applies. Without it a page renders upside down, which the
+/// symmetric fixtures hide and the asymmetric ones do not.
+#[must_use]
+pub fn page_matrix(page: &Page, opts: &RenderOptions) -> Affine {
+    let (_, height) = page.display_size();
+    let flip = Affine::new([1.0, 0.0, 0.0, -1.0, 0.0, height]);
+    opts.transform * flip * page.rotate.display_matrix(page.crop_box)
+}
+
+/// Walk one object list.
+///
+/// `device_box` is the device's own extent and is what the cull test works
+/// against, transformed back into object space once for the whole list —
+/// which is why an object's own matrix cannot change it.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the walk threads context, device, backend and caches"
+)]
+pub fn render_object_list<B: RasterBackend>(
+    ctx: &RenderCtx<'_>,
+    device: &mut B::Device,
+    backend: &B,
+    caches: &mut RenderCaches,
+    objects: &[PageObject],
+    to_device: Affine,
+    device_box: Rect,
+    diags: &mut Diagnostics,
+) {
+    if !ctx.may_recurse() {
+        return;
+    }
+    let cull = cull_rect(to_device, device_box);
+    for object in objects {
+        if let Some(cull) = cull
+            && culled(object, cull)
+        {
+            continue;
+        }
+        render_object(
+            ctx, device, backend, caches, object, to_device, device_box, diags,
+        );
+    }
+}
+
+/// The object-space rectangle the device clip box maps back to, computed once
+/// per list.
+fn cull_rect(to_device: Affine, device_box: Rect) -> Option<Rect> {
+    let det = to_device.determinant();
+    (det != 0.0 && det.is_finite())
+        .then(|| to_device.inverse().transform_rect_bbox(device_box))
+        .filter(|r| r.x0.is_finite() && r.y0.is_finite() && r.x1.is_finite() && r.y1.is_finite())
+}
+
+/// The cull test, with the **strict** inequalities `RenderObjectList` uses.
+///
+/// The progressive renderer spells the complement with `<=`/`>=`, so an
+/// object exactly touching the clip edge is kept there and dropped here.
+/// Only this spelling survives; recorded so nobody "fixes" it later.
+fn culled(object: &PageObject, cull: Rect) -> bool {
+    let Some(bbox) = object_bbox(object) else {
+        return false;
+    };
+    bbox.x0 > cull.x1 || bbox.x1 < cull.x0 || bbox.y0 > cull.y1 || bbox.y1 < cull.y0
+}
+
+/// One object's own bounding box in the coordinate space its list is walked
+/// in, or `None` when it has no meaningful extent.
+fn object_bbox(object: &PageObject) -> Option<Rect> {
+    match object {
+        PageObject::Path(p) => Some((p.object.matrix * p.object.path.clone()).bounding_box()),
+        PageObject::Image(i) => Some(i.object.matrix.transform_rect_bbox(unit_rect())),
+        PageObject::Shading(s) => Some(s.object.bounds),
+        PageObject::Form(f) => f
+            .object
+            .bbox
+            .map(|b| f.object.matrix.transform_rect_bbox(b)),
+        // A text object's extent needs the font's metrics; the cull is an
+        // optimisation, so declining it is always safe.
+        PageObject::Text(_) => None,
+    }
+}
+
+fn unit_rect() -> Rect {
+    Rect::new(0.0, 0.0, 1.0, 1.0)
+}
+
+/// Render one object, through a transparency group when the predicate says
+/// so and directly otherwise.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the walk threads context, device, backend and caches"
+)]
+pub fn render_object<B: RasterBackend>(
+    ctx: &RenderCtx<'_>,
+    device: &mut B::Device,
+    backend: &B,
+    caches: &mut RenderCaches,
+    object: &PageObject,
+    to_device: Affine,
+    device_box: Rect,
+    diags: &mut Diagnostics,
+) {
+    let state = object.state();
+    let clips = clip::resolve(&state.clip, to_device);
+    let pushed = clip::push(device, &clips);
+
+    let initial_alpha = ctx.initial_fill.map_or(1.0, |_| 1.0);
+    let inputs = GroupInputs::of(object, initial_alpha);
+    if needs_offscreen(inputs) && ctx.may_recurse() {
+        render_grouped(
+            ctx, device, backend, caches, object, inputs, to_device, device_box, diags,
+        );
+    } else {
+        render_direct(
+            ctx, device, backend, caches, object, to_device, device_box, diags,
+        );
+    }
+
+    clip::pop(device, pushed);
+}
+
+/// Render one object into its own buffer, then composite that buffer back.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the group path needs every input the direct one had"
+)]
+fn render_grouped<B: RasterBackend>(
+    ctx: &RenderCtx<'_>,
+    device: &mut B::Device,
+    backend: &B,
+    caches: &mut RenderCaches,
+    object: &PageObject,
+    inputs: GroupInputs,
+    to_device: Affine,
+    device_box: Rect,
+    diags: &mut Diagnostics,
+) {
+    let state = object.state();
+    // The buffer is sized to the object's own device extent intersected with
+    // the device, so a group off the page costs nothing.
+    let bbox = object_bbox(object)
+        .map(|b| to_device.transform_rect_bbox(b))
+        .unwrap_or(device_box)
+        .intersect(device_box);
+    let rect = outer_rect(bbox).intersect(outer_rect(device_box));
+    let (Ok(w), Ok(h)) = (u32::try_from(rect.width()), u32::try_from(rect.height())) else {
+        return;
+    };
+    if w == 0 || h == 0 || w > MAX_TARGET_DIMENSION || h > MAX_TARGET_DIMENSION {
+        return;
+    }
+
+    let transparency = match object {
+        PageObject::Form(f) => f.object.transparency,
+        _ => ctx.transparency,
+    };
+    // Isolated means the group starts transparent; non-isolated means it
+    // starts from a copy of what is already on the page, and PDFium never
+    // removes that copy before compositing back.
+    let mut sub = if needs_backdrop(transparency) {
+        let backdrop = backend.snapshot(device);
+        let cropped = crop(&backdrop, rect);
+        backend.new_target_with_backdrop(&cropped)
+    } else {
+        backend.new_target(w, h, peniko::Color::TRANSPARENT)
+    };
+
+    let offset = Affine::translate((-f64::from(rect.left), -f64::from(rect.top)));
+    let inner_ctx = RenderCtx {
+        transparency,
+        in_group: true,
+        std_cs: true,
+        // The group does *not* inherit the parent's colour: `Initialize(null,
+        // null)` in the C++.
+        initial_fill: None,
+        initial_stroke: None,
+        ..ctx.deeper()
+    };
+    let inner_box = Rect::new(0.0, 0.0, f64::from(w), f64::from(h));
+    render_direct(
+        &inner_ctx,
+        &mut sub,
+        backend,
+        caches,
+        object,
+        offset * to_device,
+        inner_box,
+        diags,
+    );
+    let mut pixels = backend.finish(sub);
+
+    // The mask first, then the group alpha, then the inherited one — in that
+    // order, and the last only outside an enclosing group.
+    if let Some(mask) = &state.general.soft_mask {
+        let rendered = render_soft_mask(&inner_ctx, backend, caches, mask, rect, to_device, diags);
+        if let Some(m) = rendered {
+            pixels.multiply_alpha_mask(&m);
+        }
+    }
+    GroupFinish::of(inputs, ctx.transparency, ctx.in_group).apply(&mut pixels);
+
+    // With a premultiplied RGBA target that is both readable and
+    // alpha-capable, PDFium's five-armed compositor collapses to one arm: a
+    // plain blended blit. The arms it does not take need an opaque target
+    // that cannot report alpha, which ours never is.
+    device.push_layer(state.general.blend, 1.0, None);
+    device.draw_image(
+        &pixels,
+        Affine::translate((f64::from(rect.left), f64::from(rect.top))),
+        ImageQuality::Nearest,
+        1.0,
+    );
+    device.pop();
+}
+
+/// Render a soft mask's group and read it back as a device-sized coverage
+/// plane.
+fn render_soft_mask<B: RasterBackend>(
+    ctx: &RenderCtx<'_>,
+    backend: &B,
+    _caches: &mut RenderCaches,
+    mask: &pdfrum_page::SoftMask,
+    rect: IntRect,
+    _to_device: Affine,
+    _diags: &mut Diagnostics,
+) -> Option<crate::pixmap::AlphaMask> {
+    if !ctx.may_recurse() {
+        return None;
+    }
+    let (Ok(w), Ok(h)) = (u32::try_from(rect.width()), u32::try_from(rect.height())) else {
+        return None;
+    };
+    if w == 0 || h == 0 {
+        return None;
+    }
+    // The mask's own group is a form XObject that `pdfrum-page` has not
+    // expanded into page objects, so v1 renders the backdrop alone: an
+    // unpainted luminosity mask contributes its `/BC`, which is the correct
+    // answer for the common `/BC`-only mask and a documented gap otherwise.
+    let device = backend.new_target(w, h, crate::softmask::backdrop(mask));
+    let rendered = backend.finish(device);
+    Some(crate::softmask::readback(mask, &rendered))
+}
+
+/// Copy a sub-rectangle out of a pixmap.
+fn crop(source: &Pixmap, rect: IntRect) -> Pixmap {
+    let (Ok(w), Ok(h)) = (u32::try_from(rect.width()), u32::try_from(rect.height())) else {
+        return Pixmap::new(0, 0);
+    };
+    let mut out = Pixmap::new(w, h);
+    for y in 0..h {
+        for x in 0..w {
+            let (sx, sy) = (
+                i64::from(x) + i64::from(rect.left),
+                i64::from(y) + i64::from(rect.top),
+            );
+            let (Ok(sx), Ok(sy)) = (u32::try_from(sx), u32::try_from(sy)) else {
+                continue;
+            };
+            if let Some(px) = source.pixel(sx, sy) {
+                out.set_pixel(x, y, px);
+            }
+        }
+    }
+    out
+}
+
+/// Dispatch one object to its handler.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the walk threads context, device, backend and caches"
+)]
+fn render_direct<B: RasterBackend>(
+    ctx: &RenderCtx<'_>,
+    device: &mut B::Device,
+    backend: &B,
+    caches: &mut RenderCaches,
+    object: &PageObject,
+    to_device: Affine,
+    device_box: Rect,
+    diags: &mut Diagnostics,
+) {
+    match object {
+        PageObject::Path(p) => render_path(ctx, device, backend, &p.object, &p.state, to_device),
+        PageObject::Text(t) => {
+            render_text(ctx, device, backend, caches, &t.object, &t.state, to_device);
+        }
+        PageObject::Image(i) => render_image(ctx, device, &i.object, &i.state, to_device),
+        PageObject::Shading(s) => render_shading(
+            ctx, device, backend, &s.object, &s.state, to_device, device_box,
+        ),
+        PageObject::Form(f) => {
+            let inner = RenderCtx {
+                initial_fill: ctx.initial_fill,
+                initial_stroke: ctx.initial_stroke,
+                ..ctx.deeper()
+            };
+            // The children's own matrices already carry the form's, because
+            // `build_page` composes `/Matrix` into the CTM before recursing.
+            // Composing it again here would apply it twice.
+            render_object_list(
+                &inner,
+                device,
+                backend,
+                caches,
+                &f.object.objects,
+                to_device,
+                device_box,
+                diags,
+            );
+        }
+    }
+}
+
+/// Resolve one object's fill and stroke colours.
+fn colors(
+    ctx: &RenderCtx<'_>,
+    state: &pdfrum_page::GraphicsState,
+    kind: ObjectKind,
+) -> (crate::color::Argb, crate::color::Argb) {
+    let transfer = state
+        .general
+        .transfer
+        .as_ref()
+        .map(|t| TransferFunc::new(t));
+    // A type-3 char proc imposes its caller's colour on every uncoloured
+    // operation, which is what makes a `d1` glyph take the text object's
+    // colour rather than black.
+    let fill = match ctx.type3 {
+        Some(frame) if !frame.colored || state.fill.to_rgb().is_none() => frame.fill,
+        _ => resolve_argb(
+            &state.fill,
+            state.general.fill_alpha,
+            transfer.as_ref(),
+            ctx.initial_fill,
+            &ctx.opts,
+            kind,
+            false,
+        ),
+    };
+    let stroke = resolve_argb(
+        &state.stroke,
+        state.general.stroke_alpha,
+        transfer.as_ref(),
+        ctx.initial_stroke,
+        &ctx.opts,
+        kind,
+        true,
+    );
+    (fill, stroke)
+}
+
+fn render_path<B: RasterBackend>(
+    ctx: &RenderCtx<'_>,
+    device: &mut B::Device,
+    backend: &B,
+    object: &pdfrum_page::PathObject,
+    state: &pdfrum_page::GraphicsState,
+    to_device: Affine,
+) {
+    let (fill, stroke) = colors(ctx, state, ObjectKind::Path);
+    let fills = object.fill_rule != pdfrum_page::FillRule::None;
+    if !fills && !object.stroke {
+        return;
+    }
+    // Under a forced colour scheme a fill may be converted into a stroke
+    // wholesale — the only place the two swap roles.
+    let (fills, strokes) = if matches!(ctx.opts.color_mode, crate::options::ColorMode::Forced(_))
+        && ctx.opts.convert_fill_to_stroke
+        && fills
+    {
+        (false, true)
+    } else {
+        (fills, object.stroke)
+    };
+    let paint = PathPaint {
+        fill: fills.then_some(fill),
+        stroke: strokes.then_some(stroke),
+        rule: object.fill_rule.into(),
+        text_mode: false,
+    };
+    draw_path(
+        device,
+        backend,
+        &object.path,
+        // `PathObject::matrix` is already the CTM in force when the path was
+        // emitted — `pdfrum-page` folds every enclosing form's matrix into
+        // it — so only the page-to-device transform is added here. Composing
+        // `state.ctm` as well would apply the CTM twice.
+        to_device * object.matrix,
+        paint,
+        &state.stroke_params,
+        &ctx.opts,
+    );
+}
+
+fn render_text<B: RasterBackend>(
+    ctx: &RenderCtx<'_>,
+    device: &mut B::Device,
+    backend: &B,
+    caches: &mut RenderCaches,
+    object: &pdfrum_page::TextObject,
+    state: &pdfrum_page::GraphicsState,
+    to_device: Affine,
+) {
+    let Some((font, _)) = &object.font else {
+        return;
+    };
+    let Some(kinds) = paint_kinds(object.render_mode, has_face(font)) else {
+        return;
+    };
+    if !kinds.fill && !kinds.stroke {
+        return; // Tr 7 contributes only to the clip, which the stack owns.
+    }
+    let (fill, stroke) = colors(ctx, state, ObjectKind::Text);
+    let glyphs = place_glyphs(object, state, &mut caches.glyphs, to_device * state.ctm);
+    for glyph in glyphs {
+        let paint = PathPaint {
+            fill: kinds.fill.then_some(fill),
+            stroke: kinds.stroke.then_some(stroke),
+            rule: crate::device::FillRule::Winding,
+            // The flag that keeps a glyph stem out of the zero-area
+            // hairline conversion.
+            text_mode: true,
+        };
+        draw_path(
+            device,
+            backend,
+            &glyph.outline,
+            glyph.matrix,
+            paint,
+            &state.stroke_params,
+            &ctx.opts,
+        );
+    }
+}
+
+fn render_image<D: RenderDevice>(
+    ctx: &RenderCtx<'_>,
+    device: &mut D,
+    object: &pdfrum_page::ImageObject,
+    state: &pdfrum_page::GraphicsState,
+    to_device: Affine,
+) {
+    let matrix = to_device * object.matrix;
+    if !is_available_matrix(matrix) {
+        return;
+    }
+    let (fill, _) = colors(ctx, state, ObjectKind::Other);
+    let image = &object.image;
+    let pixels = to_pixmap(image, fill);
+    if pixels.width() == 0 || pixels.height() == 0 {
+        return;
+    }
+    // The image's unit square maps through the object matrix, so the device
+    // transform folds in the sample grid's own size and the y flip PDF's
+    // image space needs.
+    let placement = matrix
+        * Affine::new([
+            1.0 / f64::from(image.width),
+            0.0,
+            0.0,
+            -1.0 / f64::from(image.height),
+            0.0,
+            1.0,
+        ]);
+    let corners = placement.transform_rect_bbox(Rect::new(
+        0.0,
+        0.0,
+        f64::from(image.width),
+        f64::from(image.height),
+    ));
+    if !crate::image::image_value_fits(corners.width())
+        || !crate::image::image_value_fits(corners.height())
+    {
+        return;
+    }
+    let quality = resample_quality(
+        image,
+        &ctx.opts,
+        image.width,
+        image.height,
+        corners.width().round() as i64,
+        corners.height().round() as i64,
+    );
+    let blend = overprint_blend(None, &state.general);
+    let layered = !matches!(blend, pdfrum_page::BlendMode::Normal);
+    if layered {
+        device.push_layer(blend, 1.0, None);
+    }
+    device.draw_image(
+        &pixels,
+        placement,
+        effective_quality(quality, placement),
+        state.general.fill_alpha,
+    );
+    if layered {
+        device.pop();
+    }
+}
+
+#[expect(
+    clippy::too_many_arguments,
+    reason = "shadings need the device box for their clip"
+)]
+fn render_shading<B: RasterBackend>(
+    ctx: &RenderCtx<'_>,
+    device: &mut B::Device,
+    backend: &B,
+    object: &pdfrum_page::ShadingObject,
+    state: &pdfrum_page::GraphicsState,
+    to_device: Affine,
+    device_box: Rect,
+) {
+    let matrix = to_device * object.matrix;
+    if !is_available_matrix(matrix) {
+        return;
+    }
+    // A bare `sh` paints its whole clip region, with no geometry clip of its
+    // own; the alpha here is **rounded**, unlike the truncation everywhere
+    // else colour is resolved.
+    let alpha = alpha_byte_rounding(state.general.fill_alpha);
+    let mut bbox = object.bounds;
+    if !bbox.is_zero_area() {
+        bbox = to_device.transform_rect_bbox(bbox);
+    } else {
+        bbox = device_box;
+    }
+    if let Some(b) = object.shading.bbox {
+        bbox = bbox.intersect(matrix.transform_rect_bbox(b));
+    }
+    let rect = outer_rect(bbox.intersect(device_box));
+    if !rect.is_valid() {
+        return;
+    }
+    match object.shading.kind() {
+        pdfrum_page::ShadingKind::CoonsMesh | pdfrum_page::ShadingKind::TensorMesh => {
+            let tensor = object.shading.kind() == pdfrum_page::ShadingKind::TensorMesh;
+            let (Ok(w), Ok(h)) = (u32::try_from(rect.width()), u32::try_from(rect.height())) else {
+                return;
+            };
+            if w == 0 || h == 0 || w > MAX_TARGET_DIMENSION || h > MAX_TARGET_DIMENSION {
+                return;
+            }
+            // Every cell goes into the scratch at full opacity, so abutting
+            // cells overpaint identically on both backends; the shading's
+            // alpha is applied exactly once, at the blit below.
+            let mut scratch = backend.new_target(w, h, peniko::Color::TRANSPARENT);
+            shading::draw_patches(&mut scratch, &object.shading, rect, matrix, tensor);
+            let pixels = backend.finish(scratch);
+            device.draw_image(
+                &pixels,
+                Affine::translate((f64::from(rect.left), f64::from(rect.top))),
+                ImageQuality::Nearest,
+                f32::from(alpha) / 255.0,
+            );
+        }
+        _ => {
+            let Some(pixels) =
+                shading::draw_to_pixmap(&object.shading, rect, matrix, alpha, &ctx.opts)
+            else {
+                return;
+            };
+            device.draw_image(
+                &pixels,
+                Affine::translate((f64::from(rect.left), f64::from(rect.top))),
+                ImageQuality::Nearest,
+                1.0,
+            );
+        }
+    }
+}
+
+/// A solid brush, for callers that want one without reaching into `device`.
+#[must_use]
+pub fn solid(color: crate::color::Argb) -> Brush<'static> {
+    Brush::Solid(color.to_peniko())
+}
+
+/// The transparency a bare page carries when none is declared.
+#[must_use]
+pub fn default_transparency() -> Transparency {
+    Transparency::default()
+}
+
+#[cfg(test)]
+mod tests {
+    use kurbo::BezPath;
+    use pdfrum_page::state::ContentMarks;
+    use pdfrum_page::{Content, GraphicsState, PathObject};
+
+    use super::*;
+
+    fn path_object(path: BezPath, state: GraphicsState) -> PageObject {
+        PageObject::Path(Box::new(Content {
+            object: PathObject {
+                path,
+                matrix: Affine::IDENTITY,
+                fill_rule: pdfrum_page::FillRule::Winding,
+                stroke: false,
+            },
+            state,
+            marks: ContentMarks::new(),
+            content_stream: 0,
+            pattern: None,
+        }))
+    }
+
+    fn rect(x0: f64, y0: f64, x1: f64, y1: f64) -> BezPath {
+        let mut p = BezPath::new();
+        p.move_to((x0, y0));
+        p.line_to((x1, y0));
+        p.line_to((x1, y1));
+        p.line_to((x0, y1));
+        p.close_path();
+        p
+    }
+
+    #[test]
+    fn cull_uses_strict_inequalities() {
+        let cull = Rect::new(0.0, 0.0, 10.0, 10.0);
+        // Exactly touching the right edge is kept, not dropped.
+        let touching = path_object(rect(10.0, 0.0, 20.0, 5.0), GraphicsState::default());
+        assert!(!culled(&touching, cull));
+        // Strictly beyond it is dropped.
+        let beyond = path_object(rect(10.1, 0.0, 20.0, 5.0), GraphicsState::default());
+        assert!(culled(&beyond, cull));
+    }
+
+    #[test]
+    fn a_text_object_is_never_culled() {
+        // Its extent needs the font's metrics, so declining the cull is the
+        // safe answer — it is an optimisation, not a correctness rule.
+        let obj = PageObject::Text(Box::new(Content {
+            object: pdfrum_page::TextObject {
+                segments: Box::new([]),
+                position: kurbo::Point::ZERO,
+                matrix: Affine::IDENTITY,
+                font: None,
+                render_mode: pdfrum_page::TextRenderMode::Fill,
+            },
+            state: GraphicsState::default(),
+            marks: ContentMarks::new(),
+            content_stream: 0,
+            pattern: None,
+        }));
+        assert!(!culled(&obj, Rect::new(1000.0, 1000.0, 1001.0, 1001.0)));
+    }
+
+    #[test]
+    fn a_degenerate_matrix_yields_no_cull_rect() {
+        assert!(cull_rect(Affine::new([0.0; 6]), Rect::new(0.0, 0.0, 10.0, 10.0)).is_none());
+    }
+
+    #[test]
+    fn target_size_rejects_an_empty_page() {
+        let mut page = Page::empty();
+        page.crop_box = Rect::new(0.0, 0.0, 0.0, 0.0);
+        page.media_box = page.crop_box;
+        let err = target_size(&page, &RenderOptions::default()).expect_err("empty");
+        assert!(matches!(err, Error::TargetEmpty { .. }));
+    }
+
+    #[test]
+    fn target_size_rejects_an_oversized_page() {
+        let opts = RenderOptions {
+            transform: Affine::scale(200.0),
+            ..RenderOptions::default()
+        };
+        let err = target_size(&Page::empty(), &opts).expect_err("too large");
+        assert!(matches!(
+            err,
+            Error::TargetTooLarge {
+                limit: MAX_TARGET_DIMENSION,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn crop_lifts_a_sub_rectangle() {
+        let mut src = Pixmap::new(4, 4);
+        src.set_pixel(2, 3, [1, 2, 3, 255]);
+        let out = crop(
+            &src,
+            IntRect {
+                left: 2,
+                top: 2,
+                right: 4,
+                bottom: 4,
+            },
+        );
+        assert_eq!((out.width(), out.height()), (2, 2));
+        assert_eq!(out.pixel(0, 1), Some([1, 2, 3, 255]));
+    }
+
+    #[test]
+    fn crop_of_an_out_of_range_rect_is_transparent() {
+        let src = Pixmap::filled(2, 2, peniko::Color::from_rgba8(9, 9, 9, 255));
+        let out = crop(
+            &src,
+            IntRect {
+                left: 10,
+                top: 10,
+                right: 12,
+                bottom: 12,
+            },
+        );
+        assert_eq!(out.pixel(0, 0), Some([0, 0, 0, 0]));
+    }
+}
