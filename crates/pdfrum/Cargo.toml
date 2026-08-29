@@ -22,6 +22,7 @@ pdfrum-filters.workspace = true
 pdfrum-render.workspace = true
 pdfrum-raster-vello.workspace = true
 pdfrum-raster-tinyskia.workspace = true
+pdfrum-raster-exact.workspace = true
 pdfrum-text.workspace = true
 pdfrum-doc.workspace = true
 pdfrum-edit.workspace = true

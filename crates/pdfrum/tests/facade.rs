@@ -199,7 +199,7 @@ fn a_zero_sized_render_is_an_error_rather_than_an_empty_image() {
 }
 
 #[test]
-fn both_backends_render_the_same_page_at_the_same_size() {
+fn every_backend_renders_the_same_page_at_the_same_size() {
     let doc = Document::open(HELLO).expect("open");
     let page = doc.page(0).expect("page");
     let render = |backend| {
@@ -211,13 +211,17 @@ fn both_backends_render_the_same_page_at_the_same_size() {
     };
     let vello = render(Backend::Vello);
     let tiny = render(Backend::TinySkia);
-    assert_eq!(
-        (vello.width(), vello.height()),
-        (tiny.width(), tiny.height())
-    );
-    // Both must actually draw the text — an all-white page would pass a size
-    // check while rendering nothing.
-    for pixmap in [&vello, &tiny] {
+    let exact = render(Backend::Exact);
+    // The size is an *engine* decision, so it cannot depend on the backend.
+    for pixmap in [&tiny, &exact] {
+        assert_eq!(
+            (vello.width(), vello.height()),
+            (pixmap.width(), pixmap.height())
+        );
+    }
+    // And each must actually draw the text — an all-white page would pass a
+    // size check while rendering nothing.
+    for pixmap in [&vello, &tiny, &exact] {
         assert!(
             pixmap.data().chunks(4).any(|px| px[0] < 128),
             "the page has black glyphs on it"
