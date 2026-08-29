@@ -449,7 +449,8 @@ impl<'a> Page<'a> {
         let mut diags = Diagnostics::default();
         let (bytes, ends) = self.content_segments(&mut diags);
         let ops = pdfrum_page::parse_content(&bytes, &self.doc.limits, &mut diags);
-        let bounds = stream_bounds(&bytes, &ops, &ends, &self.doc.limits);
+        let bounds =
+            pdfrum_page::StreamBounds::from_joined(&bytes, ops.len(), &ends, &self.doc.limits);
         let resources = pdfrum_page::Resources::for_page(
             self.dict
                 .inherited(&Name::from("Resources"), &self.doc.inner)
@@ -469,44 +470,6 @@ impl<'a> Page<'a> {
         self.doc.note(&diags);
         page
     }
-}
-
-/// How many operators each `/Contents` element contributed.
-///
-/// Each element is parsed on its own and its operators counted. That is exact
-/// rather than approximate because of the separating space the join inserts
-/// after every element: it terminates whatever token the element ended on, so
-/// no operator can span a boundary and the per-element counts sum to the
-/// joined list. The last element takes whatever is left over, which absorbs
-/// any disagreement rather than dropping objects off the end.
-///
-/// The diagnostics these parses raise are the ones the joined parse already
-/// recorded, so they are discarded rather than reported twice.
-fn stream_bounds(
-    bytes: &[u8],
-    ops: &[pdfrum_page::Op],
-    ends: &[usize],
-    limits: &pdfrum_common::Limits,
-) -> pdfrum_page::StreamBounds {
-    if ends.len() <= 1 {
-        return pdfrum_page::StreamBounds::default();
-    }
-    let mut counts = Vec::with_capacity(ends.len());
-    let mut start = 0usize;
-    let mut consumed = 0usize;
-    for (index, end) in ends.iter().enumerate() {
-        if index + 1 == ends.len() {
-            counts.push(ops.len().saturating_sub(consumed));
-            break;
-        }
-        let element = bytes.get(start..*end).unwrap_or_default();
-        let mut ignored = Diagnostics::default();
-        let count = pdfrum_page::parse_content(element, limits, &mut ignored).len();
-        consumed = consumed.saturating_add(count);
-        counts.push(count);
-        start = *end;
-    }
-    pdfrum_page::StreamBounds::from_counts(counts)
 }
 
 /// A page's `/Rotate`, normalized to one of four quarter turns
