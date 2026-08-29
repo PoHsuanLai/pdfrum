@@ -73,6 +73,7 @@ a golden PNG), rendering through `tiny-skia`:
 | byte-exact PNGs | 430 / 1628 | — |
 | `size-mismatch` | 0 | — |
 | Tier C hard failures (295-file sample) | **0** | — |
+| Tier C hard failures (full 1628-file store) | 13 | **11** |
 
 The golden store widened between M3 and M5, so the store-wide rate is not a
 like-for-like comparison. Over the **same 1421 files** M3 measured, the
@@ -116,6 +117,42 @@ decision is identical under both rasterizers, and every one this work added —
 the step and range ladders, the cell sizing, the tile positions, the
 recolouring, the screen buffer's compositing — is integer arithmetic in the
 engine and identical by construction.
+
+### Corrected 2026-08-29: the edge rule, and what the 13 actually were
+
+`edge_mask` now dilates, seeded from the **intersection** of the two
+per-image boundary masks. The brief's mask is `dilate(edges, 1px)` and the
+proxy simply omitted the growth; seeding from the union instead would be
+worse than not growing at all, because a differing region carries its own rim
+in one image and dilating that rim inward excuses the very difference it
+marks. `conformance/README.md` documents the rule and the tests that pin both
+directions. Hard failures over the full store: **13 → 11**.
+
+The account above turns out to be wrong about the cluster, and the correction
+matters more than the two files. Measuring all thirteen rather than the three
+named ones shows they are **not one class**:
+
+- `bug_554151.{in,pdf}` — `tiny-skia` fills the page **red** and `vello_cpu`
+  fills it **white**: 484 704 pixels at 255 counts, immune to dilation at any
+  radius because there is no agreed boundary anywhere on the page. This is a
+  real defect and the metric was right to flag it. It is the single most
+  valuable thing the tier-C run is currently saying, and it was sitting
+  unread under a heading that called all thirteen a blind spot.
+- `bug_1983.{in,pdf}`, `single_point_paths.{in,pdf}`, `bug_0_length_line.pdf`,
+  `bug_0_width_line.pdf` — one backend paints a degenerate mark (zero-length
+  line, zero-width line, single-point path) and the other paints nothing.
+  The localized form of the `one_painted_nothing` inversion.
+- `bug_1288_2.{in,pdf}` — tiling, but **not an edge phenomenon**: `vello_cpu`
+  writes a constant 127 where `tiny-skia` writes 129/130 on a 50% blend, a
+  systematic one-sided compositing rounding bias two counts over the interior
+  tolerance. Widening the edge mask would hide it rather than fix it.
+- `xfermodes3.pdf` — the genuine blit-seam residue, 2x2 cell-corner blocks two
+  pixels in from agreed structure.
+
+So the tiling story explains at most two files, one of which it explains
+incorrectly. The remaining count should **not** be driven toward zero by
+widening this rule: three of the four classes above are things the interior
+guarantee exists to catch.
 
 Metadata and pageinfo remain 100% Tier-A byte-exact; text holds at 99.0% of
 pages (97.9% of non-empty ones).

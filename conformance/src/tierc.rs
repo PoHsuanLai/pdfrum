@@ -22,6 +22,46 @@
 //! image*. A flat interior region has no such neighbours, so a divergence
 //! there is counted as interior however large the region is.
 //!
+//! # The proxy is dilated, because the contract's mask is
+//!
+//! The neighbourhood test alone marks the antialiased pixel and stops. The
+//! design brief's mask (`docs/design/pdfrum-render.md` §6.3) is
+//! `dilate(union of primitive edges, 1px)`, so a boundary contributes its own
+//! ramp *and* the ring of pixels around it — and [`edge_mask`] therefore
+//! applies a one-pixel dilation. Skipping it was not a simplification but a
+//! divergence from the contract, and it had a specific consequence.
+//!
+//! A tiling pattern's cell is rasterized once, antialiased like any other
+//! content, and the finished cell is then blitted at every tile position
+//! (`CPDF_RenderTiling`). The cell's own edge pixels arrive at the device
+//! inside a composited image, a pixel or two in from anything the *page* has
+//! a boundary at, and the two rasterizers distribute that cell's coverage
+//! differently. Undilated, such a pixel sits in a locally flat neighbourhood
+//! in both images and is scored as interior — a hard failure attributed to
+//! the engine for a difference the rasterizers are entitled to.
+//!
+//! # Dilating from agreement, not from the difference
+//!
+//! Dilating the *union* of the two masks would be worse than not dilating at
+//! all. A region where the images differ carries a boundary in one of them by
+//! construction — the differing patch's own rim — so growing the union rolls
+//! that rim inward over the difference and calls it an edge. The metric would
+//! then absorb exactly what it exists to detect: a solid patch dropped into a
+//! flat field would score clean.
+//!
+//! So the growth starts from the **intersection**: only pixels where both
+//! backends independently found a boundary seed the dilation. That keeps it
+//! anchored to structure the two agree is there. It can excuse a coverage
+//! difference beside real geometry, and it cannot manufacture the licence for
+//! a difference out of the difference itself.
+//!
+//! What that deliberately leaves as a hard failure: a divergence in open
+//! space, at any size. A page one backend fills red and the other fills white
+//! has no agreed boundary anywhere, so every pixel stays interior. That is
+//! not hypothetical — it is `bug_554151`, and
+//! [`tests::a_whole_page_colour_divergence_survives_dilation`] is it reduced
+//! to sixteen pixels.
+//!
 //! Two absolute failures short-circuit the metric, both from the backend
 //! verification document:
 //!
@@ -182,6 +222,17 @@ pub fn compare(a: &Image, b: &Image) -> Option<Divergence> {
     Some(out)
 }
 
+/// How far the agreed-boundary mask is grown before the interior is scored.
+///
+/// One pixel, which is the brief's own figure (`§6.3`'s
+/// `dilate(..., 1px)`), and it is deliberately not tuned past it. Radius two
+/// was measured over the full store: it clears no further *file*, shrinking
+/// only the pixel counts inside files that fail anyway, while moving 32 files
+/// under the soft edge budget by enlarging their denominator. That is fitting
+/// the target to the instrument, which the [`EDGE_BUDGET`] note above rejects
+/// for the same reason. The radius moves when the brief's radius moves.
+const EDGE_DILATION: u32 = 1;
+
 /// Which pixels sit on an edge in *either* image.
 ///
 /// A pixel is an edge when any of its eight neighbours differs from it by
@@ -190,56 +241,136 @@ pub fn compare(a: &Image, b: &Image) -> Option<Divergence> {
 /// produced still counts as an edge — the conservative direction for the
 /// *edge* population, and therefore the strict direction for the interior
 /// one, which is the population the contract actually gates on.
-#[expect(
-    clippy::many_single_char_names,
-    reason = "a and b are the two images and w, h, x, y, dx, dy are the \
-              coordinates of a raster scan; longer names would obscure the \
-              nested loop rather than clarify it"
-)]
+///
+/// # Dilating only from what both backends drew
+///
+/// The union is then grown by [`EDGE_DILATION`] — but the growth starts from
+/// the **intersection** of the two per-image masks, not from the union, and
+/// that distinction is the whole design.
+///
+/// A region where the two images *differ* has a boundary in one of them by
+/// construction: the differing patch's own rim. Dilating the union would
+/// therefore grow that rim inward over the difference and mark it an edge,
+/// so the metric would absorb precisely the divergences it exists to find —
+/// a 4x4 patch in the middle of a flat field would score clean. Growing only
+/// from pixels where *both* backends independently found a boundary keeps
+/// the dilation anchored to structure the two agree is there, so it can
+/// excuse a coverage difference beside real geometry (a blitted pattern
+/// cell's seam) and can never manufacture the licence for a difference out
+/// of the difference itself.
 fn edge_mask(a: &Image, b: &Image) -> Vec<bool> {
     let (w, h) = (a.width as usize, a.height as usize);
+    let size = w.saturating_mul(h);
+    let per_image = [boundaries(a), boundaries(b)];
+    let mut union = vec![false; size];
+    let mut both = vec![false; size];
+    for index in 0..size {
+        let in_a = per_image[0].get(index).copied().unwrap_or(false);
+        let in_b = per_image[1].get(index).copied().unwrap_or(false);
+        if let Some(slot) = union.get_mut(index) {
+            *slot = in_a || in_b;
+        }
+        if let Some(slot) = both.get_mut(index) {
+            *slot = in_a && in_b;
+        }
+    }
+
+    let grown = dilate(&both, a.width, a.height, EDGE_DILATION);
+    for index in 0..size {
+        if grown.get(index).copied().unwrap_or(false)
+            && let Some(slot) = union.get_mut(index)
+        {
+            *slot = true;
+        }
+    }
+    union
+}
+
+/// Where one image has a boundary: a pixel with a neighbour unlike itself.
+fn boundaries(image: &Image) -> Vec<bool> {
+    let (w, h) = (image.width as usize, image.height as usize);
     let mut mask = vec![false; w.saturating_mul(h)];
-    for image in [a, b] {
-        for y in 0..a.height {
-            for x in 0..a.width {
-                let Some(centre) = pixel(image, x, y) else {
-                    continue;
-                };
+    for y in 0..image.height {
+        for x in 0..image.width {
+            let Some(centre) = pixel(image, x, y) else {
+                continue;
+            };
+            let index = (y as usize) * w + (x as usize);
+            let mut is_edge = false;
+            for dy in -1i64..=1 {
+                for dx in -1i64..=1 {
+                    if dx == 0 && dy == 0 {
+                        continue;
+                    }
+                    let (Ok(nx), Ok(ny)) = (
+                        u32::try_from(i64::from(x) + dx),
+                        u32::try_from(i64::from(y) + dy),
+                    ) else {
+                        continue;
+                    };
+                    let Some(n) = pixel(image, nx, ny) else {
+                        continue;
+                    };
+                    if centre
+                        .iter()
+                        .zip(n.iter())
+                        .any(|(c, v)| c.abs_diff(*v) > INTERIOR_TOLERANCE)
+                    {
+                        is_edge = true;
+                    }
+                }
+            }
+            if is_edge && let Some(slot) = mask.get_mut(index) {
+                *slot = true;
+            }
+        }
+    }
+    mask
+}
+
+/// Grow a mask by `radius` pixels in all eight directions.
+///
+/// Each round marks every pixel with a marked neighbour, so `radius` rounds
+/// reach `radius` pixels out. Reading from the previous round rather than in
+/// place is what keeps that true: growing a mask in place would let a pixel
+/// marked earlier in the same scan seed the next one and smear the mask
+/// across the row.
+fn dilate(mask: &[bool], width: u32, height: u32, radius: u32) -> Vec<bool> {
+    let w = width as usize;
+    let mut current = mask.to_vec();
+    for _ in 0..radius {
+        let previous = current.clone();
+        for y in 0..height {
+            for x in 0..width {
                 let index = (y as usize) * w + (x as usize);
-                if mask.get(index).copied().unwrap_or(false) {
+                if previous.get(index).copied().unwrap_or(false) {
                     continue;
                 }
-                let mut is_edge = false;
+                let mut touched = false;
                 for dy in -1i64..=1 {
                     for dx in -1i64..=1 {
-                        if dx == 0 && dy == 0 {
-                            continue;
-                        }
                         let (Ok(nx), Ok(ny)) = (
                             u32::try_from(i64::from(x) + dx),
                             u32::try_from(i64::from(y) + dy),
                         ) else {
                             continue;
                         };
-                        let Some(n) = pixel(image, nx, ny) else {
+                        if nx >= width || ny >= height {
                             continue;
-                        };
-                        if centre
-                            .iter()
-                            .zip(n.iter())
-                            .any(|(c, v)| c.abs_diff(*v) > INTERIOR_TOLERANCE)
-                        {
-                            is_edge = true;
+                        }
+                        let n = (ny as usize) * w + (nx as usize);
+                        if previous.get(n).copied().unwrap_or(false) {
+                            touched = true;
                         }
                     }
                 }
-                if is_edge && let Some(slot) = mask.get_mut(index) {
+                if touched && let Some(slot) = current.get_mut(index) {
                     *slot = true;
                 }
             }
         }
     }
-    mask
+    current
 }
 
 fn pixel(image: &Image, x: u32, y: u32) -> Option<[u8; 4]> {
@@ -359,6 +490,75 @@ mod tests {
             "the difference is all on the boundary"
         );
         assert!(d.edge_pixels > 0);
+    }
+
+    #[test]
+    fn a_whole_page_colour_divergence_survives_dilation() {
+        // `bug_554151.pdf` in miniature: one backend fills the page red and
+        // the other fills it white. There is no boundary anywhere for the
+        // dilation to grow out of, so every pixel stays interior and the
+        // file stays a hard failure. This is the property that keeps the
+        // contract non-vacuous — if a future radius ever absorbed this, the
+        // interior guarantee would be gone.
+        let a = image(16, 16, [255, 0, 0, 255]);
+        let b = image(16, 16, [255, 255, 255, 255]);
+        let d = compare(&a, &b).expect("same size");
+        assert_eq!(d.edge_pixels, 0, "a flat page has no edges to dilate");
+        assert_eq!(d.interior_differing, d.pixels);
+        assert!(d.hard_fail());
+    }
+
+    #[test]
+    fn a_blit_seam_one_pixel_off_a_boundary_is_an_edge() {
+        // The tiling case (`bug_1288_2`, `xfermodes3`): a pattern cell is
+        // rasterized with antialiasing and then blitted, so the cell's own
+        // coverage difference lands just inside a boundary rather than on
+        // it. The undilated neighbourhood test called that interior and
+        // reported it as an engine bug; one pixel of dilation reaches it.
+        let mut a = image(16, 16, [255, 255, 255, 255]);
+        for y in 0..16 {
+            for x in 0..8 {
+                set(&mut a, x, y, [0, 0, 0, 255]);
+            }
+        }
+        let mut b = a.clone();
+        // Differ one column *inside* the dark side, not on the seam itself.
+        for y in 0..16 {
+            set(&mut b, 6, y, [40, 40, 40, 255]);
+        }
+        let d = compare(&a, &b).expect("same size");
+        assert_eq!(
+            d.interior_differing, 0,
+            "a pixel one step off a real boundary is the rasterizer's business"
+        );
+        assert!(!d.hard_fail(), "and so not a hard failure");
+    }
+
+    #[test]
+    fn dilation_does_not_reach_across_open_space() {
+        // A boundary on the left and a solid differing block well away from
+        // it. The block's own rim makes its outline an edge either way — a
+        // one-pixel-wide difference is indistinguishable from a coverage
+        // ramp and always was — but its *filled centre* is what the interior
+        // population is, and no amount of structure elsewhere may excuse it.
+        let mut a = image(20, 20, [255, 255, 255, 255]);
+        for y in 0..20 {
+            for x in 0..4 {
+                set(&mut a, x, y, [0, 0, 0, 255]);
+            }
+        }
+        let mut b = a.clone();
+        for y in 10..16 {
+            for x in 12..18 {
+                set(&mut b, x, y, [200, 200, 200, 255]);
+            }
+        }
+        let d = compare(&a, &b).expect("same size");
+        assert!(
+            d.interior_differing > 0,
+            "the block's centre is open space, and stays the engine's"
+        );
+        assert!(d.hard_fail());
     }
 
     #[test]
