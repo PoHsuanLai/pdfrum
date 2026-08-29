@@ -385,7 +385,18 @@ fn culled(object: &PageObject, cull: Rect) -> bool {
 /// in, or `None` when it has no meaningful extent.
 fn object_bbox(object: &PageObject) -> Option<Rect> {
     match object {
-        PageObject::Path(p) => Some((p.object.matrix * p.object.path.clone()).bounding_box()),
+        // The transformed box, taken segment by segment rather than by
+        // building a transformed copy of the path.
+        //
+        // `matrix * path` allocates a whole second `BezPath` — every element
+        // of it — and this function runs on *every object of every page* to
+        // decide a cull that then throws the copy away. On `vector_paths_1751`
+        // that is five thousand path allocations per render, none of which
+        // outlives the comparison two lines later. `segments()` walks the
+        // elements by reference, and a segment's own bounding box is exact
+        // (kurbo solves the cubic's extrema rather than hulling its control
+        // points), so the union is the same rectangle the clone produced.
+        PageObject::Path(p) => Some(path_bbox(&p.object.path, p.object.matrix)),
         PageObject::Image(i) => Some(i.object.matrix.transform_rect_bbox(unit_rect())),
         PageObject::Shading(s) => Some(s.object.bounds),
         PageObject::Form(f) => f
@@ -396,6 +407,28 @@ fn object_bbox(object: &PageObject) -> Option<Rect> {
         // optimisation, so declining it is always safe.
         PageObject::Text(_) => None,
     }
+}
+
+/// The bounding box of `path` under `matrix`, without building a transformed
+/// copy of it.
+///
+/// Exactly what `(matrix * path).bounding_box()` returns, including the empty
+/// case: kurbo's own `bounding_box` unions its segments' boxes and answers
+/// `Rect::default()` — the degenerate rectangle at the origin — for a path
+/// with no segments, so a bare `MoveTo` culls against the origin here as it
+/// did before. Reproducing that rather than answering `None` keeps the cull
+/// decision identical on every path, which is what makes this a pure
+/// allocation change.
+fn path_bbox(path: &kurbo::BezPath, matrix: Affine) -> Rect {
+    let mut bbox: Option<Rect> = None;
+    for seg in path.segments() {
+        let seg_bb = (matrix * seg).bounding_box();
+        bbox = Some(match bbox {
+            Some(bb) => bb.union(seg_bb),
+            None => seg_bb,
+        });
+    }
+    bbox.unwrap_or_default()
 }
 
 fn unit_rect() -> Rect {
@@ -1948,6 +1981,47 @@ mod tests {
         // Strictly beyond it is dropped.
         let beyond = path_object(rect(10.1, 0.0, 20.0, 5.0), GraphicsState::default());
         assert!(culled(&beyond, cull));
+    }
+
+    #[test]
+    fn the_allocation_free_bbox_reproduces_the_transformed_clone_exactly() {
+        // The specification of `path_bbox` is the expression it replaced:
+        // `(matrix * path.clone()).bounding_box()`. This is that expression,
+        // required to agree at every shape the cull can meet — including the
+        // curves, where a segment's box is solved rather than hulled, and the
+        // segment-less paths, where kurbo answers the origin rather than
+        // nothing.
+        let mut curved = BezPath::new();
+        curved.move_to((0.0, 0.0));
+        curved.curve_to((10.0, 40.0), (30.0, -20.0), (40.0, 10.0));
+        let mut quad = BezPath::new();
+        quad.move_to((-3.0, 2.0));
+        quad.quad_to((50.0, 60.0), (7.0, -8.0));
+        let mut bare_move = BezPath::new();
+        bare_move.move_to((5.0, 7.0));
+
+        let paths = [
+            rect(1.0, 2.0, 3.0, 4.0),
+            rect(-9.0, -9.0, -1.0, -1.0),
+            curved,
+            quad,
+            bare_move,
+            BezPath::new(),
+        ];
+        let matrices = [
+            Affine::IDENTITY,
+            Affine::scale(2.5),
+            Affine::translate((13.0, -7.0)),
+            Affine::rotate(0.7),
+            Affine::scale_non_uniform(-1.0, 3.0),
+        ];
+        for path in &paths {
+            for m in matrices {
+                let want = (m * path.clone()).bounding_box();
+                let got = path_bbox(path, m);
+                assert_eq!(want, got, "path {path:?} under {m:?}");
+            }
+        }
     }
 
     #[test]

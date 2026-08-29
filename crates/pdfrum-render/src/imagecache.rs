@@ -69,6 +69,39 @@
 //! room for the other and never register a hit — the classic thrash, at 100 MB
 //! a step. Refusing to grow degrades to *no cache*, never to *no image*, and
 //! keeps the bound with no policy to get wrong.
+//!
+//! # What bounds it in practice is the page, which is what upstream relies on
+//!
+//! The budget is a backstop rather than the working mechanism. Every caller in
+//! this workspace builds [`crate::RenderCaches`] **per page** — `pdfrum-tool`
+//! and the facade's `Page::render` both do — so a page's rendered images are
+//! freed when the page is. That is precisely `CPDF_PageImageCache`'s own
+//! lifetime: it is constructed from a `CPDF_Page` and dies with it.
+//!
+//! Upstream's byte budget is not the default path either, and the shape of
+//! that is worth recording because it is the opposite of what the C++ reads
+//! like at first. `CacheOptimization` — the 15-entry cap, then the 100 MiB
+//! budget, oldest first — runs only `if (options.bLimitedImageCache)`, a flag
+//! that is **`false` by default** and opt-in through the public
+//! `FPDF_RENDER_LIMITEDIMAGECACHE`. It also runs once per rendered *layer*,
+//! not per insert. So PDFium's default is an unbounded per-page cache, and
+//! ours is a 64 MiB-bounded per-page cache: strictly the more conservative of
+//! the two, with the same lifetime.
+//!
+//! # The bound was tested for the obvious tightening, and it did not pay
+//!
+//! An opt-in "hold at most one image" mode mirroring `bLimitedImageCache` was
+//! implemented and measured, and is **not** here because the measurement said
+//! it buys nothing (`docs/status/M12.md` §9). The corpus explains why: the
+//! documents with a memory problem — `image_bug_583804`, `image_bug_718762`,
+//! `image_bug_898443` — draw **exactly one image each**, so "at most one
+//! entry" is already what the unbounded cache holds and the two configurations
+//! measure within 500 KB of one another in both directions. The documents that
+//! draw many images (`mixed_en_uicase` at 5208 draws, `image_ccitt_3bigpreview`
+//! at 1129) have small ones and no memory problem at all. The two never
+//! coincide in 44 files, so the knob had no document that could show it
+//! working, and shipping an option whose effect cannot be demonstrated is
+//! how a config surface fills up with things nobody can delete later.
 
 use std::collections::HashMap;
 
@@ -80,7 +113,7 @@ use crate::pixmap::Pixmap;
 
 /// How many bytes of rendered images one render session keeps.
 ///
-/// Deliberately smaller than [`pdfrum_page::MAX_BYTES`], the 100 MiB the
+/// Deliberately smaller than [`pdfrum_page::image::MAX_BYTES`], the 100 MiB the
 /// *decoded* cache is allowed: this cache holds the same images again at four
 /// bytes per pixel, and holding both at the same budget would double a
 /// session's floor for no gain. 64 MiB holds every image in the bench corpus
