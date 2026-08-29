@@ -745,6 +745,108 @@ pub fn place_type3_chars(
     out
 }
 
+/// A text run's bounding rectangle in page space, or `None` when it is empty.
+///
+/// `CPDF_TextObject::CalcPositionDataInternal`'s bounding half
+/// (`cpdf_textobject.cpp:288-357`): the pen walks the run exactly as
+/// [`place_glyphs`] does, and each character's **glyph box** — not its
+/// outline — grows the extent. Horizontal writing accumulates x from the pen
+/// and y from the raw box; vertical writing swaps the two roles and offsets
+/// each box by the character's vertical origin first. The finished box is then
+/// scaled by the font size on the axis that was left in 1000/em units, and
+/// mapped through the run's own matrix.
+///
+/// Only [`crate::walk`]'s pattern-text path wants this, and it wants it
+/// because upstream fills that rectangle rather than the glyphs. The stroke
+/// inflation `CalcPositionDataInternal` applies is deliberately absent: that
+/// arm of `DrawTextPathWithPattern` draws glyph outlines instead and never
+/// reads the rectangle at all.
+#[must_use]
+pub fn run_rect(object: &TextObject, state: &pdfrum_page::GraphicsState) -> Option<kurbo::Rect> {
+    let (font, size) = object.font.as_ref()?;
+    let vertical = font.is_vertical();
+    let (mut min_x, mut max_x) = (f64::MAX, f64::MIN);
+    let (mut min_y, mut max_y) = (f64::MAX, f64::MIN);
+    let det = object.matrix.determinant();
+    if det == 0.0 || !det.is_finite() {
+        return None;
+    }
+    // The same start [`place_glyphs`] uses: the run's page-space origin pulled
+    // back into the text space the advances live in. Upstream keeps the two
+    // apart — `CalcPositionDataInternal` walks from zero and `GetTextMatrix`
+    // carries the origin — and composing them here is the same arithmetic.
+    let start = object.matrix.inverse() * object.position;
+    let mut pen = start.x;
+    let size = f64::from(*size);
+
+    for segment in &object.segments {
+        pen -= f64::from(segment.kerning) / 1000.0 * size;
+        for item in font.decode(&segment.codes) {
+            let bbox = font.char_bbox(item.code);
+            if vertical {
+                let (ox, oy) = font.vert_origin(item.code).unwrap_or((0.0, 880.0));
+                let (left, right) = (bbox.x0 - f64::from(ox), bbox.x1 - f64::from(ox));
+                let (top, bottom) = (bbox.y1 - f64::from(oy), bbox.y0 - f64::from(oy));
+                min_x = min_x.min(left).min(right);
+                max_x = max_x.max(left).max(right);
+                for edge in [pen + top * size / 1000.0, pen + bottom * size / 1000.0] {
+                    min_y = min_y.min(edge);
+                    max_y = max_y.max(edge);
+                }
+            } else {
+                min_y = min_y.min(bbox.y0).min(bbox.y1);
+                max_y = max_y.max(bbox.y0).max(bbox.y1);
+                for edge in [pen + bbox.x0 * size / 1000.0, pen + bbox.x1 * size / 1000.0] {
+                    min_x = min_x.min(edge);
+                    max_x = max_x.max(edge);
+                }
+            }
+            pen += f64::from(item.width) / 1000.0 * size;
+            // Word spacing on a single-byte space only, as everywhere else.
+            if item.code.0 == 0x20 && item.cid.is_none() {
+                pen += f64::from(state.text.word_space);
+            }
+            pen += f64::from(state.text.char_space);
+        }
+    }
+    if min_x > max_x || min_y > max_y {
+        return None;
+    }
+    // The axis still in 1000/em units takes the font size; the other already
+    // has it, because the pen carried it.
+    let (min_x, max_x, min_y, max_y) = if vertical {
+        (
+            start.x + min_x * size / 1000.0,
+            start.x + max_x * size / 1000.0,
+            min_y,
+            max_y,
+        )
+    } else {
+        (
+            min_x,
+            max_x,
+            start.y + min_y * size / 1000.0,
+            start.y + max_y * size / 1000.0,
+        )
+    };
+    let rect = kurbo::Rect::new(min_x, min_y, max_x, max_y);
+    let corners = [
+        (rect.x0, rect.y0),
+        (rect.x1, rect.y0),
+        (rect.x1, rect.y1),
+        (rect.x0, rect.y1),
+    ]
+    .map(|(x, y)| object.matrix * kurbo::Point::new(x, y));
+    let mut out = kurbo::Rect::new(f64::MAX, f64::MAX, f64::MIN, f64::MIN);
+    for p in corners {
+        out.x0 = out.x0.min(p.x);
+        out.y0 = out.y0.min(p.y);
+        out.x1 = out.x1.max(p.x);
+        out.y1 = out.y1.max(p.y);
+    }
+    Some(out)
+}
+
 #[cfg(test)]
 mod tests {
     // The snapping tests assert *exact* placements — that is what the rule
@@ -763,6 +865,72 @@ mod tests {
     #[test]
     fn invisible_paints_nothing() {
         assert_eq!(paint_kinds(TextRenderMode::Invisible, true), None);
+    }
+
+    /// A run showing `text` at page-space `(x, y)`, in Helvetica at 20 pt.
+    fn run(text: &[u8], x: f64, y: f64) -> TextObject {
+        let font = std::sync::Arc::new(pdfrum_font::Font::load_standard(
+            pdfrum_font::StandardFont::Helvetica,
+            &pdfrum_font::FontCache::default(),
+        ));
+        TextObject {
+            segments: Box::new([pdfrum_page::TextSegment {
+                codes: text.to_vec().into_boxed_slice(),
+                kerning: 0.0,
+            }]),
+            position: Point::new(x, y),
+            matrix: Affine::IDENTITY,
+            font: Some((font, 20.0)),
+            render_mode: TextRenderMode::Fill,
+            type3_metrics: std::collections::BTreeMap::new(),
+        }
+    }
+
+    /// The rectangle `DrawTextPathWithPattern` fills is the run's own extent:
+    /// it starts at the run's origin, grows rightward with the advances, and
+    /// its height is the glyph boxes rather than the font size.
+    #[test]
+    fn a_runs_rect_starts_at_its_origin_and_spans_its_advances() {
+        let state = pdfrum_page::GraphicsState::default();
+        let short = run_rect(&run(b"H", 100.0, 50.0), &state).expect("a box");
+        let long = run_rect(&run(b"HHHH", 100.0, 50.0), &state).expect("a box");
+        assert!(
+            (short.x0 - 100.0).abs() < 2.0,
+            "starts at the origin: {short:?}"
+        );
+        assert!(short.y0 > 49.0 && short.y0 < 51.0, "sits on the baseline");
+        assert!(short.y1 > 60.0, "rises to the cap height: {short:?}");
+        assert!(
+            long.width() > short.width() * 3.0,
+            "four glyphs span four advances: {long:?} vs {short:?}"
+        );
+        // The origin moves the box and nothing else.
+        let moved = run_rect(&run(b"H", 200.0, 50.0), &state).expect("a box");
+        assert!((moved.x0 - short.x0 - 100.0).abs() < 1e-6);
+        assert!((moved.width() - short.width()).abs() < 1e-6);
+    }
+
+    /// Character spacing is graphics state, and it widens the box the same way
+    /// it widens the run — `CalcPositionDataInternal` adds it to the pen.
+    #[test]
+    fn character_spacing_widens_the_rect() {
+        let plain = pdfrum_page::GraphicsState::default();
+        let spaced = pdfrum_page::GraphicsState {
+            text: pdfrum_page::TextState {
+                char_space: 10.0,
+                ..pdfrum_page::TextState::default()
+            },
+            ..pdfrum_page::GraphicsState::default()
+        };
+        let a = run_rect(&run(b"HH", 0.0, 0.0), &plain).expect("a box");
+        let b = run_rect(&run(b"HH", 0.0, 0.0), &spaced).expect("a box");
+        assert!(b.width() > a.width() + 9.0, "{a:?} vs {b:?}");
+    }
+
+    #[test]
+    fn a_run_with_no_characters_has_no_rect() {
+        let state = pdfrum_page::GraphicsState::default();
+        assert!(run_rect(&run(b"", 0.0, 0.0), &state).is_none());
     }
 
     #[test]
