@@ -263,12 +263,20 @@ pub fn generate<R: Resolve>(
     let valued = field_dict_of(dict, form.as_ref(), r);
     let valued = valued.as_ref().unwrap_or(dict);
 
+    let input = BodyInput {
+        widget: dict,
+        valued,
+        client,
+        appearance: &appearance,
+        color,
+        font,
+    };
     let mut out = Content::new();
     match kind {
-        Kind::Text => text_field(&mut out, dict, valued, client, &appearance, color, font, r),
-        Kind::Combo => combo_box(&mut out, valued, client, &appearance, color, font, r),
-        Kind::List => list_box(&mut out, dict, valued, client, &appearance, color, font, r),
-        Kind::Button => push_button(&mut out, dict, client, &appearance, color, font, r),
+        Kind::Text => text_field(&mut out, &input, r),
+        Kind::Combo => combo_box(&mut out, &input, r),
+        Kind::List => list_box(&mut out, &input, r),
+        Kind::Button => push_button(&mut out, &input, r),
     }
     if out.is_empty() {
         return None;
@@ -390,17 +398,33 @@ fn wrap_text(out: &mut Content, plate: Rect, content: Rect, color: Color, writte
     out.raw("ET\nQ\nEMC\n");
 }
 
-/// A text field's body, and the comb separators that precede it.
-fn text_field<R: Resolve>(
-    out: &mut Content,
-    dict: &Dict,
-    valued: &Dict,
+/// Everything the four body builders read that is not the output stream.
+///
+/// A record rather than six parameters repeated four times, and the split
+/// inside it is the one that matters: `widget` is the annotation being drawn
+/// and `valued` is the dictionary its **field** value comes from. Those differ
+/// only when two `/Fields` entries share a `/T` — see [`field_dict_of`] — and
+/// conflating them would give a second control the first one's geometry along
+/// with its value.
+struct BodyInput<'a> {
+    /// The widget annotation. Geometry, flags and `/MK` come from here.
+    widget: &'a Dict,
+    /// The field dictionary. The value, options and selection come from here.
+    valued: &'a Dict,
+    /// The plate, already deflated by the border width.
     client: Rect,
-    appearance: &freetext::Appearance,
+    /// The font name and size the inherited `/DA` names.
+    appearance: &'a freetext::Appearance,
+    /// The colour that same `/DA` sets, black when it sets none.
     color: Color,
-    font: &TextFont<'_>,
-    r: &R,
-) {
+    /// The loaded face and the layout metrics taken from it.
+    font: &'a TextFont<'a>,
+}
+
+/// A text field's body, and the comb separators that precede it.
+fn text_field<R: Resolve>(out: &mut Content, input: &BodyInput<'_>, r: &R) {
+    let (dict, valued, client) = (input.widget, input.valued, input.client);
+    let (appearance, color, font) = (input.appearance, input.color, input.font);
     let flags = flags(dict, r);
     let multi_line = flags & FLAG_MULTILINE != 0;
     let comb = flags & FLAG_COMB != 0;
@@ -483,15 +507,9 @@ fn text_field<R: Resolve>(
 /// The text colour falls back to black, which is what [`text_color`] already
 /// does for every builder here — the check box's transparent fallback lives in
 /// [`widget::text_color`](crate::ap::widget::text_color), a different reader.
-fn push_button<R: Resolve>(
-    out: &mut Content,
-    dict: &Dict,
-    client: Rect,
-    appearance: &freetext::Appearance,
-    color: Color,
-    font: &TextFont<'_>,
-    r: &R,
-) {
+fn push_button<R: Resolve>(out: &mut Content, input: &BodyInput<'_>, r: &R) {
+    let (dict, client) = (input.widget, input.client);
+    let (appearance, color, font) = (input.appearance, input.color, input.font);
     let Some(mk) = dict.dict(names::MK, r) else {
         return;
     };
@@ -574,15 +592,9 @@ fn comb_separators<R: Resolve>(out: &mut Content, dict: &Dict, client: Rect, cel
 }
 
 /// A combo box's body: one line, then the drop button.
-fn combo_box<R: Resolve>(
-    out: &mut Content,
-    valued: &Dict,
-    client: Rect,
-    appearance: &freetext::Appearance,
-    color: Color,
-    font: &TextFont<'_>,
-    r: &R,
-) {
+fn combo_box<R: Resolve>(out: &mut Content, input: &BodyInput<'_>, r: &R) {
+    let (valued, client) = (input.valued, input.client);
+    let (appearance, color, font) = (input.appearance, input.color, input.font);
     let button = geom::normalize(geom::rect(
         geom::right(client) - DROP_BUTTON_WIDTH,
         geom::bottom(client),
@@ -626,16 +638,9 @@ fn combo_box<R: Resolve>(
 }
 
 /// A list box's body: every option from `/TI` down.
-fn list_box<R: Resolve>(
-    out: &mut Content,
-    dict: &Dict,
-    valued: &Dict,
-    client: Rect,
-    appearance: &freetext::Appearance,
-    color: Color,
-    font: &TextFont<'_>,
-    r: &R,
-) {
+fn list_box<R: Resolve>(out: &mut Content, input: &BodyInput<'_>, r: &R) {
+    let (dict, valued, client) = (input.widget, input.valued, input.client);
+    let (appearance, color, font) = (input.appearance, input.color, input.font);
     let options = options(valued, r);
     let selected = selected_indices(valued, &options, r);
     let top = usize::try_from(
