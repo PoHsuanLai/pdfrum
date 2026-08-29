@@ -1,12 +1,15 @@
 # `pdfrum-render` status
 
-**Updated:** 2026-08-29 · **State:** M8 pixel burn-down wave 7b —
-**88.5% at SSIM ≥ 0.99** (up from 86.2%), **499 byte-exact** (up from 487),
-and the glyph raster reproduced as the oracle actually performs it: hinted at
-a pinned 64 ppem, rasterized three times as wide, FIR5-filtered and gamma-
-averaged back to gray, then cached and blitted. Three of that pipeline's four
-stages had been measured *in isolation* by earlier waves and correctly
-rejected; assembled, they take a 6 pt stem from twenty counts out to three
+**Updated:** 2026-08-29 · **State:** M8 pixel burn-down wave 8 —
+**90.4% at SSIM ≥ 0.99** (up from 88.5%), **98.0% at 0.95**, **511 byte-exact**
+(up from 499), and seven defects none of which was in a rasterizer. Every one
+was a decision made in the wrong place: a Coons patch's colour field walked
+along the axis its geometry was *not* subdivided on, a group's alpha gated on
+the enclosing `/Group` rather than the object's own, a form's identity hashed
+from its bytes rather than from which object it is, a JBIG2 image classified by
+its codec rather than by its dictionary. In each case the code doing the work
+was already correct and already tested; what was wrong was what it was handed.
+Optional content is wired at last, as a pre-pass. **37 files up, none down.**
 
 Contract: SPEC.md §8 including the E2/E3/E4/E10 additions and the
 2026-08-29 implementation record. Behavior: `docs/design/pdfrum-render.md`;
@@ -1059,22 +1062,279 @@ raster.
   distinct glyphs — a 0% hit rate — which is why `foxittext.pdf` joined the
   benchmark fixtures.
 
+## Wave 8: seven defects, and not one of them was in a rasterizer
+
+Wave 7b left the two worst files in the store as type 6 Coons meshes and told
+the next wave to start there rather than on another glyph question. That was
+right, and what it found generalises past shading: **every defect this wave
+fixed was a decision made in the wrong place, not an arithmetic error.** A
+colour walked along the wrong axis, an alpha gated on the wrong flag, an
+identity hashed from the wrong thing, an image classified by its codec rather
+than by its dictionary. In each case the code doing the work was correct and
+already tested; what was wrong was what it was handed.
+
+**37 files up and none down, 30 across the 0.99 line and none back, no
+byte-exact file lost its status.** 1441 → 1471 at SSIM ≥ 0.99 (88.5% → 90.4%),
+1574 → 1595 at 0.95 (96.7% → 98.0%), 499 → 511 byte-exact, 1448 → 1478 passing,
+`pixel-fail` 187 → 157.
+
+### The Coons colour field was transposed against its own geometry
+
+`2_shading_type_6_00` was the worst file in the store at 0.356 with **98% of
+its pixels differing at a mean of 41 counts** — and its geometry was perfect.
+Probing eight rigid transforms of our render against the golden found the
+answer immediately: our output was the oracle's reflected across the patch's
+anti-diagonal, at a mean of 4.3 counts.
+
+A cell's position in the colour lattice advances on two axes, `left`/`x_scale`
+and `bottom`/`y_scale`, and `bilinear` reads the four corner colours as
+`c0 → c3` along the first and `c0 → c1` along the second. Those correspond to
+the grid's first and second index respectively. The two subdivision functions
+were named `split_horizontal` and `split_vertical` after the *visual* axis
+they appear to cut, and wired to the lattice axis of the other one. Every cell
+came out the right shape in the right place carrying the colour of the cell
+across the patch from it.
+
+The lesson is the naming. `SubdivideVertical` in the C++ splits the *second*
+index — it is named for the direction the cut line runs, not the index it
+walks — and reading it as "the vertical axis" inverts it. The two are now
+`split_along_rows` and `split_along_columns`, named for the index each halves,
+which is the only thing the caller needs to know.
+
+### `full_cover` is a third mode, and reading it as "no antialiasing" punches
+holes
+
+With the axes fixed, `2_shading_type_6_00` still had white pin-holes in a
+lattice down the middle of every patch — 1111 pixels the oracle paints and we
+left blank.
+
+AGG has three coverage modes and this crate had two. `aliased_path` thresholds
+the integrated coverage at its midpoint; `full_cover` keeps the rasterizer's
+own choice of *which* pixels a span covers and discards their coverage
+**value**, writing every one at the source alpha
+(`CFX_AggRenderer::GetSrcAlpha` against `GetSourceAlpha`,
+`cfx_agg_devicedriver.cpp:481-491`). The difference is exactly a pixel that two
+abutting cells each cover by 40%: `full_cover` paints it from both, and the
+midpoint threshold drops it from both.
+
+`AntiAlias::FullCover` is that third mode. The engine's integrator expresses it
+exactly (`scanline::Coverage::Full`, a test against zero rather than against
+127); `vello_cpu`'s aliasing threshold expresses it exactly at `Some(1)`;
+`tiny-skia`, which has only a bool, takes **antialiased** as the nearer of its
+two — reaching every pixel the oracle reaches and writing some of them light
+beats not reaching them at all. `tiny_skia::convert::to_anti_alias` had been a
+`matches!(aa, AntiAlias::On)`, which would have compiled silently past the new
+variant; it is now an exhaustive match with the reasoning written down.
+
+The scratch pixmap and the draw-cells-opaque discipline are unchanged and
+still required: they answer a different question (D12, §5.3), which the
+module doc now says.
+
+### A mesh's ramp spans the mesh's own decode range
+
+`shade.in` draws all seven shading types in a grid and was still 19% wrong at a
+mean of 118 counts, in blocks: solid magenta where the oracle has olive.
+
+`ColorSteps::sample(shading, 0.0, 1.0, …)` — the unit interval, hardcoded, for
+both mesh families. The parametric value's domain is the mesh stream's own
+`/Decode[4..6]`, and `shade.in` carries `[1 2]` and `[0 255]` and `[-128 127]`
+alongside `[0 1]`. Each corner value is then mapped into the ramp's 0..255
+across that same range by `ComponentToShadingIndex`, which the patch
+rasterizer did not do at all — it called `Rgb::to_bytes`, which clamps to
+`[0,1]` and rounds, and is accidentally right for the unit interval and wrong
+for every other.
+
+`Mesh::component_range` carries the range from the stream reader, which had it
+and dropped it. Types 4 and 5 share the fix: their ramp was equally hardcoded,
+and their vertex values equally unmapped — the module doc even claimed the
+mapping happened at read time, which it never did.
+
+### A Coons patch's derived interiors were transposed, and a Coons pattern drew
+nothing
+
+Two smaller ones the above were hiding. `coons_interior` returns the four
+derived points in the formula's own order — p11, p12, p21, p22 — and
+`from_boundary` laid the middle two into each other's grid slots. Only a curved
+patch shows it, which is why the flat fixtures passed.
+
+And a shading *pattern* reached `draw_to_pixmap`, which declines types 6 and 7
+because they need a device rather than a buffer — so a Coons or tensor pattern
+painted **nothing at all**, silently. Both call sites now go through one
+`draw_shading_into`, which is where the fork belongs.
+
+`2_shading_type_6_00` is byte-exact from 0.356. `example_030` — filed by wave 6
+under "dense type", and by wave 3 under "DCT images at a sub-pixel offset" —
+went 0.487 → 0.999, because it was a mesh shading all along.
+
+### Optional content: a pre-pass, not a render-time decision
+
+`OcContext` had been complete, unit-tested, exported and reachable by nobody
+for three waves. Wave 7 diagnosed it exactly and named the obstacle: the
+predicate needs `&mut self` and a `Resolve`, and `render_page` has neither.
+
+The orchestrator authorised a **pre-pass**, and it is the better shape for a
+reason the plumbing argument only hints at. Deciding visibility needs
+indirect-object lookup and a mutable evaluation cache; consuming the answer
+needs neither — it is one `bool` per object. Threading a resolver through the
+render API to carry that would put a resolver in front of every rasterizer for
+a question already settled.
+
+`pdfrum_page::page_visibility(&Page, &mut OcContext, &impl Resolve, diags)`
+returns a `Visibility`: plain data shaped like the page, one entry per object
+in each list with a form's children nested. A page object has no id and its
+position is the only thing that names it, so position is what the tree keys on.
+An absent entry is **visible**, which is what lets an all-visible page collapse
+to an empty tree — so the common case costs one `is_none_or` per object and
+`render_page` is `render_page_with_visibility` with `Visibility::all_visible()`.
+
+Sub-graphs outside the page's own lists — pattern cells, soft-mask groups,
+type-3 char procs — take all-visible. The tree does not describe them, and the
+oracle asks no `/OC` question inside any of them either.
+
+Two things the page graph was not carrying, and both are real:
+
+- **A form's and an image's `/OC` live on the XObject dictionary**, which is a
+  declaration site independent of any enclosing marked-content sequence. A form
+  can be hidden by its own dictionary while the `Do` that drew it sits under no
+  `/OC` mark at all.
+- **`CheckPageObjectVisible` scans the whole mark stack**
+  (`cpdf_occontext.cpp:189-200`), so nested `BDC /OC` sequences each get a veto.
+  `optional_content` returned only the innermost; `optional_content_all` returns
+  every one.
+
+`octest`, `bug_40162073` and `bug_491_invisible` are byte-exact; `4_36` went
+0.908 → 0.979 and its residue is now the ordinary text tail rather than a
+layer. Eight files, none down.
+
+### `bug_1402` is a table that was wired to the measurement and not the drawing
+
+Wave 7b called this a substitution offset and told the next wave to start from
+the face. It is narrower than that and it is not in the substitution at all.
+
+`kJapan1VerticalCIDs` — 154 rows, transcribed verbatim, binary-searched, gated
+on exactly the C++'s condition, unit-tested — was wired into `char_bbox` and
+nothing else. The design brief §1.10.3 names *both* application sites,
+`GetCharBBox` and `GetCharPosList`, and only the first was ported.
+
+The name misleads twice. "Vertical CID" does not mean vertical *writing*:
+`GetCIDTransform` gates on the charset and the absence of a font program and
+never asks about the writing mode, so `/90pv-RKSJ-H` reaches the listed CIDs
+perfectly well — those CIDs are vertical *forms*, a property of the glyph. And
+"transform" overstates it: for CID 7888, which is where U+3002 lands, the
+matrix is the **identity** and the whole content is a translation of
+`(79/127, 94/127)` em. At the file's font size that is `(+22.4, +26.7)` in text
+space, which after the page matrix's single y flip is the `(−23, +27)` device
+displacement wave 7b measured. Right shape, right ink, right spacing, wrong
+place — which is exactly what a pure translation produces and exactly what
+made wave 6a read the file as a coverage problem.
+
+The adjustment reaches the glyph's own matrix and never the pen: upstream
+mutates a per-glyph `origin_`, so a run's advances are identical with the
+transform and without it. `bug_1402` and `bug_1355` are both byte-exact, with
+the ink bounding box matching the oracle's to the pixel.
+
+### Four more, found worst-first, each one line of judgement
+
+- **A JBIG2 image that declares a colour space is a picture, not a stencil.**
+  The pixel layer chose the shape from which codec ran; the dictionary layer had
+  already decided correctly and was overridden. Two things then go wrong at
+  once: the polarity is inverted (the oracle ends `Jbig2Decoder::Decode` with
+  `pix = ~pix`, turning JBIG2's "1 means black" into the PDF convention where 0
+  is black) and the image composites as a mask. `transfer_function`'s
+  400×400 `/IM_1bpp` decoded, in our own wrapper, to a perfectly correct
+  all-black bitmap; we painted the page background over it. 0.820 → 0.9998,
+  residue two counts.
+
+- **An inline image whose `EI` never arrives takes the rest of the stream with
+  it.** The scan consumes everything after the `ID` looking for a terminator,
+  and when the stream runs out it has already eaten every operator that
+  followed. Our scan rewound, so the parser re-read the image's *own sample
+  bytes* as content and found a `re f` inside them.
+  `bug_412524377.in`'s second page is a deliberate fixture and says so in its
+  own comment; its first page is the same content with the `EI` present and was
+  already byte-exact, which is what made the pair worth reading. Both byte-exact.
+
+- **Two form objects with identical bytes are two forms.** The recursion guard
+  hashed the decoded content, so thirty-five distinct form XObjects all reading
+  `/X1 Do` collapsed to one identity and every level below the first was refused
+  as a form drawing itself. Upstream keys on the decoded buffer's *address*,
+  which is per stream object. The reference was already resolved at the call
+  site and already handed to the image path; the form path passed `None`.
+  `bug_972999` byte-exact, and skia's `xfermodes` for the same reason.
+
+- **A group's alpha is gated on the group the object declares, not the one
+  around it.** `ProcessTransparency` reads `pFormObj->form()->GetTransparency()`
+  and multiplies on *that*; we passed the enclosing transparency.
+  The failure is silent in one direction only — `group_alpha` is 1.0 for every
+  non-form, so the wrong flag can only ever *drop* a multiply, never add one —
+  which is why four waves went past it. `bug_1949.in` is the fixture that shows
+  it: it draws the same 0.5-alpha square twice, once under a constant alpha and
+  once under a soft mask, and asserts by construction that the two agree. The
+  masked one was right and the constant one was a factor of two light.
+  `bug_1949`, `bug_346598551` and `group_xobject` all byte-exact.
+
+### What the next wave should not do again
+
+- **Do not read `full_cover` as "antialiasing off".** It is a third mode and
+  the difference is a hole through every internal seam. `scanline::Coverage`
+  has all three and each is documented against the AGG line it comes from.
+- **Do not assume a mesh's parametric range is `[0, 1]`.** It is `/Decode[4..6]`
+  and the corpus carries `[1 2]`, `[0 255]` and `[-128 127]`.
+- **Do not read `bug_1402` as a substitution or a raster question.** Both are
+  settled: it was one table applied in one of its two places, and it is fixed.
+- **Do not diagnose a mesh file from its SSIM.** Three separate waves filed
+  `example_030` under three different wrong causes — DCT placement, then dense
+  type — because a transposed colour field and a missing glyph look alike at
+  that resolution. Probing rigid transforms of the output against the golden
+  took one minute and answered it outright; it is worth doing first on any file
+  whose *geometry* looks right and whose colours do not.
+- The 0.95–0.99 band is still glyph coverage and still D7. Wave 8 did not touch
+  it and did not need to: everything it fixed was below 0.95.
+
+### `bug_1746` is diagnosed and deliberately not fixed
+
+Worth writing down, because the diagnosis is solid and the fix is not.
+
+The file is a Type 3 font whose char proc draws a CCITT image mask, under
+`ca 0.5`, with **`/FontMatrix [1 0 0 1 0 0]`**. We draw nothing at all.
+
+The cause is that the translucent char-proc path sizes its buffer from
+`metrics.bbox` — the *declared* box, which is `d1`'s operands scaled by a
+thousand and then put through the font matrix. With the conventional
+thousandth matrix the scale cancels; with this file's identity matrix it does
+not, and the box lands at x 8050 on a 200-pixel page. The oracle uses
+`pForm->CalcBoundingBox()` instead (`cpdf_renderstatus.cpp:1020`) — the
+objects' own extent, no scale, no font matrix — which is our `painted_extent`
+and is unaffected.
+
+Porting that makes the glyph draw, and the file gets **worse**: 0.835 → 0.765.
+The glyph appears at half the alpha the oracle gives it — 128 where the golden
+writes 192 — so a second `ca 0.5` is applied somewhere in the oracle's path
+that we do not reproduce, and drawing the glyph at the wrong alpha scores below
+not drawing it. The C++'s shape differs from ours in a way that is probably
+related: it renders the procedure into the buffer at the text object's **own**
+alpha-carrying colour and blits the buffer *opaquely*
+(`SetFillColor(fill_argb)` then `SetDIBits`), where we force the buffer opaque
+and re-apply at the blit. Making that change alone does not close the gap
+either. Whoever picks it up has the box half already measured and should start
+from where the second factor of two comes from, not from the box.
+
 ## Numbers
 
 Measured against the golden store on the full corpus (1675 files, 1628 with
 a golden PNG), rendering through `tiny-skia`. The W3 column is the pixel
 burn-down's third wave; M5 is where the burn-down started.
 
-| metric | M5 | M8 (wave 2) | W3/W4 | W5 | W6 | **W7** |
-|---|---|---|---|---|---|---|
-| pixel files at SSIM ≥ 0.99 | 1075 / 1628 (66.0%) | 1243 / 1628 (76.4%) | 1247 / 1628 (76.6%) | 1387 / 1628 (85.2%) | 1403 / 1628 (86.2%) | **1441 / 1628 (88.5%)** |
-| at SSIM ≥ 0.95 | 1478 / 1628 (90.8%) | 1518 / 1628 (93.2%) | 1520 / 1628 (93.4%) | 1554 / 1628 (95.5%) | — | **1574 / 1628 (96.7%)** |
-| at SSIM ≥ 0.90 | 1544 / 1628 (94.8%) | 1570 / 1628 (96.4%) | 1572 / 1628 (96.6%) | 1591 / 1628 (97.7%) | — | **1597 / 1628 (98.1%)** |
-| byte-exact PNGs | 430 / 1628 | 446 / 1628 | 451 / 1628 | 451 / 1628 | 487 / 1628 | **499 / 1628** |
-| files passing (all tiers) | 1146 / 1675 | 1256 / 1675 | 1260 / 1675 | 1396 / 1675 | 1411 / 1675 | **1448 / 1675** |
-| `pixel-fail` | 495 | 385 | 381 | 241 | 225 | **187** |
-| `size-mismatch` | 0 | 0 | 0 | 0 | 0 | **0** |
-| Tier C hard failures | — | 5 | 3 | 3 | 3 | 3 |
+| metric | M5 | M8 (wave 2) | W3/W4 | W5 | W6 | W7 | **W8** |
+|---|---|---|---|---|---|---|---|
+| pixel files at SSIM ≥ 0.99 | 1075 / 1628 (66.0%) | 1243 / 1628 (76.4%) | 1247 / 1628 (76.6%) | 1387 / 1628 (85.2%) | 1403 / 1628 (86.2%) | 1441 / 1628 (88.5%) | **1471 / 1628 (90.4%)** |
+| at SSIM ≥ 0.95 | 1478 / 1628 (90.8%) | 1518 / 1628 (93.2%) | 1520 / 1628 (93.4%) | 1554 / 1628 (95.5%) | — | 1574 / 1628 (96.7%) | **1595 / 1628 (98.0%)** |
+| at SSIM ≥ 0.90 | 1544 / 1628 (94.8%) | 1570 / 1628 (96.4%) | 1572 / 1628 (96.6%) | 1591 / 1628 (97.7%) | — | 1597 / 1628 (98.1%) | **1615 / 1628 (99.2%)** |
+| byte-exact PNGs | 430 / 1628 | 446 / 1628 | 451 / 1628 | 451 / 1628 | 487 / 1628 | 499 / 1628 | **511 / 1628** |
+| files passing (all tiers) | 1146 / 1675 | 1256 / 1675 | 1260 / 1675 | 1396 / 1675 | 1411 / 1675 | 1448 / 1675 | **1478 / 1675** |
+| `pixel-fail` | 495 | 385 | 381 | 241 | 225 | 187 | **157** |
+| `size-mismatch` | 0 | 0 | 0 | 0 | 0 | 0 | **0** |
+| Tier C hard failures | — | 5 | 3 | 3 | 3 | 3 | **3** |
 
 **The W7 column is wave 7 and wave 7b together**, and the two were measured
 apart before it was written, because they landed on the same tree:
@@ -1089,6 +1349,26 @@ Wave 7's four fixes moved 15 files across the 0.99 line and none down; the
 zero-area early return accounts for most of them, and three of the four were
 one-line or near-one-line changes whose reach was entirely in what they had
 been suppressing. Wave 7b's glyph raster moved a further 23 up and none down.
+
+**Wave 8's seven fixes were each measured on their own** against the scoreboard
+they started from, and every one was committed only after
+`conformance run --check-regressions` reported none:
+
+| | ≥ 0.99 | byte-exact | passing | `pixel-fail` | up / down |
+|---|---:|---:|---:|---:|---|
+| W7 | 1441 | 499 | 1448 | 187 | — |
+| + the Coons axes, `full_cover`, the mesh ramp | 1450 | 501 | 1457 | 178 | 10 / 0 |
+| + optional content | 1456 | 505 | 1463 | 172 | 8 / 0 |
+| + the JBIG2 picture | 1456 | 505 | 1465 | 170 | 4 / 0 |
+| + the Japan1 CID transform | 1462 | 505 | 1469 | 166 | 5 / 0 |
+| + the unterminated inline image | 1465 | 507 | 1471 | 164 | 2 / 0 |
+| + the form identity | 1468 | 507 | 1474 | 161 | 3 / 0 |
+| + the group alpha | **1471** | **511** | **1478** | **157** | 5 / 0 |
+
+Not one file moved down at any step, and **no byte-exact file lost its
+status** at any step. The shading fix alone is a bigger single-wave movement in
+the sub-0.80 band than every previous wave combined: it took the store's two
+worst files and a third that three waves had misdiagnosed.
 
 Wave 5 moved 636 files up and 18 down, none of the 18 by more than 0.0026
 and none across the 0.99 line. **Every byte-exact file stayed byte-exact** —
@@ -1157,6 +1437,32 @@ The two files wave 5 named as the text lever have split. `example_063` moved
 distribution. `en_fqa.pdf` moved 0.715 → 0.885 without the glyph raster
 touching it — it is unchanged across wave 7b — so whatever is left there is
 not the raster either.
+
+### The tail after wave 8
+
+157 `pixel-fail` entries, **111 unique documents** — down from 129 at wave 7b
+and 168 at wave 5.
+
+| band | documents | what is in it |
+|---|---|---|
+| 0.95–0.99 | 89 | the coverage tail, and it is D7 to the file. Wave 8 did not touch this band and did not need to: everything it fixed was below 0.95 |
+| 0.90–0.95 | 13 | `clipping_text`, `listbox_form`, `vertical_text`, `3bigpreview`, uncoloured tiling (0.9325), form-field singles |
+| 0.80–0.90 | 7 | `bug_1746` (diagnosed above, deliberately not fixed), `bug_1772`, `image_transformer_other`, `same_color_knockout_fill`, `en_fqa`, two tcpdf |
+| below 0.80 | **2** | `bug_867501` (0.646), the known `hayro-jbig2` gap that belongs upstream, and `example_063` (0.764), the residual stem distribution |
+
+**Below 0.80 is down to two documents, and neither is a defect we should
+fix here.** One is an upstream codec gap with a written-up reproduction; the
+other is D7 in its purest form. The whole sub-0.90 population is nine
+documents, of which one — `bug_1746` — has a half-measured diagnosis above and
+is the only one with an obvious next step.
+
+That is a different shape from every previous wave's tail. Waves 3 through 7b
+each opened with a named cluster worth ten or twenty files; wave 8 emptied the
+last of those, and what is left is **89 documents of glyph coverage** and about
+twenty scattered singles. The next wave has no large lever below 0.95 and
+should expect to work file by file, or else reopen the D7 question the burn-down
+has deferred four times — which is a rendering-policy decision rather than a
+bug hunt, and belongs to the orchestrator.
 | Tier C hard failures (full store) | 11 | **5** |
 
 Every step was measured with `conformance run --check-regressions` against
