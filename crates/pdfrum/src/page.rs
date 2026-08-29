@@ -390,34 +390,123 @@ impl<'a> Page<'a> {
     }
 
     fn content_bytes(&self, diags: &mut Diagnostics) -> Vec<u8> {
+        self.content_segments(diags).0
+    }
+
+    /// The content bytes, and where each `/Contents` element's bytes end.
+    ///
+    /// The joined buffer is what the interpreter reads — an element ending
+    /// mid-token is continued by the next, which is why they are joined rather
+    /// than parsed apart — and the ends are what lets the editor say which
+    /// element each object came from.
+    fn content_segments(&self, diags: &mut Diagnostics) -> (Vec<u8>, Vec<usize>) {
         let r = &self.doc.inner;
         let Some(contents) = self.dict.dict.get(&Name::from("Contents"), r) else {
-            return Vec::new();
+            return (Vec::new(), Vec::new());
         };
         let mut out = Vec::new();
-        let mut push = |object: &pdfrum_object::Object| {
+        let mut ends = Vec::new();
+        let mut push = |object: &pdfrum_object::Object,
+                        out: &mut Vec<u8>,
+                        ends: &mut Vec<usize>| {
             if let Some(stream) = object.as_stream() {
                 let decoded = pdfrum_filters::decode_chain(stream, 0, r, &self.doc.limits, diags);
                 out.extend_from_slice(&decoded.data);
+                // The separating space belongs to the element before it: it is
+                // what terminates a stream ending mid-token.
                 out.push(b' ');
             }
+            ends.push(out.len());
         };
         let Some(direct) = contents.as_direct() else {
-            return out;
+            return (out, ends);
         };
         match direct {
-            pdfrum_object::Object::Stream(_) => push(direct),
+            pdfrum_object::Object::Stream(_) => push(direct, &mut out, &mut ends),
             pdfrum_object::Object::Array(array) => {
                 for element in array.iter() {
                     if let Ok(resolved) = element.resolve(r) {
-                        push(resolved.get());
+                        push(resolved.get(), &mut out, &mut ends);
+                    } else {
+                        // A dangling element still occupies an index, so the
+                        // ones after it keep their numbers.
+                        ends.push(out.len());
                     }
                 }
             }
             _ => {}
         }
-        out
+        (out, ends)
     }
+
+    /// Interpret the content stream, recording which `/Contents` element each
+    /// object came from.
+    ///
+    /// The editor's build: it costs one extra pass over the operators to find
+    /// the element boundaries, which the render and text paths have no use
+    /// for.
+    pub(crate) fn build_for_edit(&self, ctx: &mut BuildContext) -> pdfrum_page::Page {
+        let mut diags = Diagnostics::default();
+        let (bytes, ends) = self.content_segments(&mut diags);
+        let ops = pdfrum_page::parse_content(&bytes, &self.doc.limits, &mut diags);
+        let bounds = stream_bounds(&bytes, &ops, &ends, &self.doc.limits);
+        let resources = pdfrum_page::Resources::for_page(
+            self.dict
+                .inherited(&Name::from("Resources"), &self.doc.inner)
+                .and_then(|object| object.resolve(&self.doc.inner).ok()?.as_dict().cloned()),
+        );
+        let page = pdfrum_page::build_page_streams(
+            &ops,
+            &bounds,
+            &self.dict.dict,
+            |key| self.dict.inherited(key, &self.doc.inner),
+            &resources,
+            &self.doc.inner,
+            ctx,
+            &self.doc.limits,
+            &mut diags,
+        );
+        self.doc.note(&diags);
+        page
+    }
+}
+
+/// How many operators each `/Contents` element contributed.
+///
+/// Each element is parsed on its own and its operators counted. That is exact
+/// rather than approximate because of the separating space the join inserts
+/// after every element: it terminates whatever token the element ended on, so
+/// no operator can span a boundary and the per-element counts sum to the
+/// joined list. The last element takes whatever is left over, which absorbs
+/// any disagreement rather than dropping objects off the end.
+///
+/// The diagnostics these parses raise are the ones the joined parse already
+/// recorded, so they are discarded rather than reported twice.
+fn stream_bounds(
+    bytes: &[u8],
+    ops: &[pdfrum_page::Op],
+    ends: &[usize],
+    limits: &pdfrum_common::Limits,
+) -> pdfrum_page::StreamBounds {
+    if ends.len() <= 1 {
+        return pdfrum_page::StreamBounds::default();
+    }
+    let mut counts = Vec::with_capacity(ends.len());
+    let mut start = 0usize;
+    let mut consumed = 0usize;
+    for (index, end) in ends.iter().enumerate() {
+        if index + 1 == ends.len() {
+            counts.push(ops.len().saturating_sub(consumed));
+            break;
+        }
+        let element = bytes.get(start..*end).unwrap_or_default();
+        let mut ignored = Diagnostics::default();
+        let count = pdfrum_page::parse_content(element, limits, &mut ignored).len();
+        consumed = consumed.saturating_add(count);
+        counts.push(count);
+        start = *end;
+    }
+    pdfrum_page::StreamBounds::from_counts(counts)
 }
 
 /// A page's `/Rotate`, normalized to one of four quarter turns

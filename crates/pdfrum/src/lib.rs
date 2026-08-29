@@ -173,6 +173,7 @@
 
 mod annotation;
 mod document;
+pub mod edit;
 mod error;
 mod form;
 mod outline;
@@ -183,6 +184,7 @@ mod session;
 
 pub use annotation::{AnnotFlags, Annotation, Subtype};
 pub use document::{Attachment, Document, Metadata, OpenOptions};
+pub use edit::{ImageBuilder, PageEdit, PathBuilder, TextBuilder};
 pub use error::{Error, Result};
 pub use form::{Field, FieldFlags, FieldKind, Form};
 pub use outline::{Bookmark, Outline};
@@ -190,6 +192,13 @@ pub use page::{Page, Rotation};
 pub use render::{Backend, ColorMode, ColorScheme, Pixmap, RenderOptions, TextAa};
 pub use save::{SaveOptions, Update};
 pub use session::RenderSession;
+
+/// The things a page draws, as the interpreter produced them.
+///
+/// Returned by [`Page::objects`] and [`PageEdit::objects`], and the currency
+/// of the editing API: [`PathBuilder`], [`TextBuilder`] and [`ImageBuilder`]
+/// each build one.
+pub use pdfrum_page::PageObject;
 
 /// Per-document caches — fonts, colour spaces, decoded images — that a caller
 /// threads through many pages to avoid decoding the same resource twice.
