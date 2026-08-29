@@ -1,9 +1,9 @@
 # `pdfrum-render` status
 
-**Updated:** 2026-08-29 · **State:** M8 pixel burn-down wave 4 —
-**76.6% at SSIM ≥ 0.99** (unchanged; wave 4 was a measurement wave and
-shipped no pixels), D7 re-attributed from hinting to the oracle's integer
-glyph origins, and the hinter ruled out on numbers
+**Updated:** 2026-08-29 · **State:** M8 pixel burn-down wave 5 —
+**85.2% at SSIM ≥ 0.99** (up from 76.6%), the oracle's glyph placement
+ported as the default policy, the page matrix corrected to fit the device
+box, and the substituted-font width solve wired up
 
 Contract: SPEC.md §8 including the E2/E3/E4/E10 additions and the
 2026-08-29 implementation record. Behavior: `docs/design/pdfrum-render.md`;
@@ -20,7 +20,7 @@ rasterizer.
 | `pixmap.rs` | `Pixmap` (premultiplied RGBA8) and `AlphaMask`; the straight/premultiplied conversions, the truncating and rounding alpha bytes, `AlphaMerge`, the BGRA and RGB output encodings |
 | `color.rs` | `resolve_argb`, `ColorRef`'s three states and the `0xFFFFFFFF` invisibility *word*, the truncating alpha, colour-mode translation, `FXRGB2GRAY` |
 | `transfer.rs` | the `/TR` channel mapping, and Q1's resolution |
-| `options.rs` | `RenderOptions`, `ColorMode`, `TextAa`, the oracle-conformance defaults, the type-3 and tile-cell option overrides |
+| `options.rs` | `RenderOptions`, `ColorMode`, `TextAa`, `subpixel_text_positioning`, the oracle-conformance defaults, the type-3 and tile-cell option overrides |
 | `path.rs` | `IsAvailableMatrix`, `CFX_Path::GetRect` with its normalisation, the rect-snapping ladder, `outer_rect`, the ±32000 clamp |
 | `zero_area.rs` | `CheckSimpleLinePath`, `CheckPalindromicPath`, the folding-vertex scan, the `(int)c + 0.5` snap, the `>> 2` alpha |
 | `stroke.rs` | the matrix1/matrix2 split, the one-device-pixel minimum, cap/join/miter mapping, the dash normalisation ladder, the stroke-to-fill outline a pattern clip needs |
@@ -31,7 +31,7 @@ rasterizer.
 | `group.rs` | the offscreen predicate, the backdrop rule, the mask/alpha ordering, the composite transparency |
 | `softmask.rs` | the `/BC` backdrop, the luminosity and alpha readbacks, the `/TR` lookup |
 | `pattern.rs` | the tiling and shading pattern draws, `ClipPattern`'s two shapes, the sub-sixteen-pixel cell enlargement, the tile screen buffer |
-| `text.rs` | the `Tr` mode table, the glyph matrix, the stroked-text CTM split, glyph placement, type-3 character placement |
+| `text.rs` | the `Tr` mode table, the glyph matrix, the stroked-text CTM split, glyph placement, the origin snap and its three gates, `AdjustGlyphSpace`, the substituted-font width solve, type-3 character placement |
 | `image.rs` | `UseInterpolateBilinear`, the `kHugeImageSize` rule, the CMYK-overprint gate, the flip rule, sample-to-pixmap, the `/Matte` un-premultiply |
 | `ctx.rs` | `RenderCtx`, the depth cap, the type-3 font *set*, `RenderCaches` |
 | `walk.rs` | `render_page`, the object dispatch, the cull test, the page matrix, the group path, the soft-mask group, the type-3 char-proc walk, `DrawPatternImage` |
@@ -321,28 +321,231 @@ worth more than any coverage work on that file.
   geometry exact. It is a rendering-policy decision, not a bug fix, and it
   belongs to the orchestrator rather than to a burn-down wave.
 
+  **The orchestrator ruled: oracle parity wins**, and wave 5 implemented it.
+  The cost turned out to be far smaller than that paragraph feared, because
+  the grid is not whole pixels. See below.
+
+## Wave 5: the placement is a third of a pixel, and two of the three defects
+were not text at all
+
+Wave 4 escalated one question — snap or not — and the answer was to snap.
+Porting the rule then found two more defects that only a snapped render can
+see, and one of them was worth more than the snap.
+
+**1247 → 1387 at SSIM ≥ 0.99 (76.6% → 85.2%)**, passing 1260 → 1396, and
+**451 byte-exact files unchanged**. Attributed by measuring each change on
+its own against the same scoreboard:
+
+| change | files at ≥ 0.99 | delta |
+|---|---|---|
+| baseline (wave 4) | 1247 | — |
+| the substituted-font width solve alone | 1252 | +5 |
+| the glyph-origin snap alone | 1307 | +60 |
+| both | 1313 | +66 |
+| **plus the page-matrix correction** | **1387** | **+140** |
+
+### The x grid is thirds of a pixel; only y is whole
+
+Wave 4 read `cfx_renderdevice.cpp:1254-1257` and stopped there:
+
+```cpp
+glyph.origin_.x = anti_alias_is_lcd ? (int)floor(device_origin.x)
+                                    : FXSYS_roundf(device_origin.x);
+glyph.origin_.y = FXSYS_roundf(device_origin.y);
+```
+
+That reads as "both axes quantise to whole pixels", and **porting it that way
+cost 58 files** — 1247 → 1189, measured before the mistake was found. The
+other half is a hundred lines further down, in the blit loop
+(`cfx_renderdevice.cpp:1352`):
+
+```cpp
+int x_subpixel = static_cast<int>(glyph.device_origin_.x * 3) % 3;
+```
+
+`DrawNormalTextHelper` shifts its sampling window into the **3×-wide LCD
+bitmap** by that many subpixels before averaging the triples back to gray. So
+the effective origin is `floor(x) + x_subpixel/3`, which for a non-negative x
+is exactly `floor(3x)/3`: **x is quantised downward to a third of a pixel**,
+and only y to a whole one.
+
+That asymmetry is the entire divergence, and it is why wave 4's *measurement*
+was right while its reading of the code was not. The residual it measured was
+per-line and vertical — a baseline at `y = 100.4` drawn at `100` — which is
+precisely the axis that quantises to a whole pixel. The x error it inferred
+was never there.
+
+### Which rounding runs is `FontAntiAliasingMode`, not `bClearType`
+
+This crate's own docs asserted that `bClearType = false` means "subpixel text
+never runs in conformance". It does not. `bClearType` sets
+`CFX_TextRenderOptions::aliasing_type`, and `DrawNormalText` derives
+`FontAntiAliasingMode` **separately** (`cfx_renderdevice.cpp:1165-1206`): on a
+display device at 32 bpp with a smooth aliasing type the mode is `kLcd`
+whatever the flag word said, and `aliasing_type` only decides `normalize`. So
+the conformance configuration takes the thirds.
+
+`--no-smoothtext` is the one that changes it: `aliasing_type = kAliasing`
+makes `IsSmooth()` false, the whole derivation is skipped, and the mode stays
+at its `kMono` initialiser — one bit per pixel, no LCD triple to shift into,
+so x rounds to a whole pixel like y, and `AdjustGlyphSpace` runs. Both
+spellings are ported; the `TextAa` enum is the same decision under a
+different name.
+
+### Three gates keep a run off the grid, and one of them is a trap
+
+`ProcessText` (`cpdf_renderstatus.cpp:905-928`) sends a run to
+`DrawTextPath` — true fractional placement — when `is_clip || is_stroke`, and
+`DrawNormalText` itself defers above `|char2device.a| + |char2device.b| > 50`.
+A pattern-coloured run goes to `DrawTextPathWithPattern` and never arrives.
+
+**`is_clip` is not a text render mode.** `ProcessText` is called twice: once
+from `ProcessClipPath` with a `clipping_path`, and once from
+`ProcessObjectNoClip` with `nullptr` (`cpdf_renderstatus.cpp:312`). Only the
+first sets it. So a `Tr 4` fill-and-clip run *still snaps* on its painting
+pass, and it is the clip accumulation — which this engine builds in
+`pdfrum-page`, not in the render path — that does not. Reading `is_clip` as
+"the mode has a clip bit" cost six files, 1313 → 1307, and the test that
+pins it says so.
+
+`RenderOptions::subpixel_text_positioning` is the knob, default `false`.
+One field, documented as the parity/off-grid tradeoff: `true` restores
+fractional placement for a caller who wants text where the PDF puts it rather
+than where a golden expects it.
+
+### The page matrix flips about the *device* box, and that was worth more
+
+`tcpdf/example_007` got **worse** under the snap, 0.790 → 0.752, and its
+render was visibly a half-pixel low. Measuring the per-line ink centroid
+against the golden gave a flat **+0.503 px** across the whole body of the
+page — not a rounding spread, a constant.
+
+`CPDF_Page::GetDisplayMatrixForRect` (`cpdf_page.cpp:216-218`) builds the
+matrix from an **integer** `FX_RECT` divided by the page's float size:
+
+```cpp
+CFX_Matrix matrix((x2 - x0) / page_size_.width, ...,
+                  (y1 - y0) / page_size_.height, x0, y0);
+```
+
+and `CPDFSDK_RenderPageWithContext` (`cpdfsdk_renderpage.cpp:116-118`) passes
+it `FX_RECT(0, 0, size_x, size_y)` — the *truncated* bitmap size. An A4 page
+841.89 points tall therefore renders into 841 rows at a y scale of
+`841 / 841.89`: the page is **squeezed to fit the bitmap its size was
+truncated into**. We translated by the float height instead, leaving up to a
+device pixel of shear between the top of a page and the bottom.
+
+That was sub-count while every glyph was filled at its true position, which
+is why it survived four waves. Once origins snap, half a pixel of shear is a
+whole row. Fixing it is worth **74 files** on top of the snap, and it is what
+turned the tcpdf cluster around: `example_007` 0.790 → 0.982, `example_017`
+0.791 → 0.982, `example_004` 0.793 → 0.984.
+
+The lesson generalises past this file. **A sub-pixel placement error is
+invisible under fractional fills and load-bearing under snapping**, so
+porting a quantisation rule is also an audit of everything upstream of it.
+Two of wave 5's three fixes were found that way rather than looked for.
+
+### The two font defects are one bug, and neither is what the triage said
+
+Wave 4 recorded two separate defects on `5.5_simple_font.pdf`: `/Type_1_F`
+rendering `abcabc` as `a ba b` — "a glyph-selection/decode bug dropping a
+char and mis-advancing" — and `/Type_1_MM_F` rendering correct glyphs "at too
+narrow advances". Both descriptions are wrong, and they are the same bug.
+
+**No character was ever dropped and no advance was ever wrong.** The glyph
+ids, the `/Widths` lookup and the pen arithmetic were all correct. What was
+wrong is the *outline*:
+
+`CPDF_Font::GetCharPosList` (`cpdf_font.cpp:440-444`) sets
+`font_char_width_ = GetCharWidth(char_code)` for a font that is neither
+embedded nor CID, and that reaches the face as `dest_width`, where
+`AdjustVariationParams` (`cfx_face.cpp:941-943, 1561-1605`) solves the
+built-in generic's **Multiple-Master width axis** until the glyph's own
+advance equals it. Chrome Sans and Chrome Serif *are* MM Type 1 faces, so
+this is not a corner — it is how every non-embedded font in the corpus is
+drawn at the width its PDF declares.
+
+`GlyphKey::plain` hardcodes `dest_width: 0`, and it was the **only** key the
+renderer ever built. `GlyphSource::mm_instance` — a faithful port of
+`AdjustVariationParams`, already written and already tested — took its
+`dest_width == 0` early-out on every glyph in the corpus.
+
+`/Type_1_F` declares `a = 800, b = 100, c = 400` against a fallback face
+whose own advances are near 450, 470 and 480. The outlines overran their
+advances and piled into each other, so `abcabc` *read* as `a ba b`: three
+merged ink runs where the oracle has six. `/Type_1_MM_F` is the same thing
+seen from the other side — glyphs too wide for correct advances, which looks
+like advances too narrow for correct glyphs. The file goes **0.961 → 0.997**,
+and two other bands on it (`/Ture_Type_F`, the AGaramond one) improve with it
+because they share the cause.
+
+The fix is four lines at the one call site: build the whole `GlyphKey`,
+gating `dest_width` exactly as upstream gates it. `weight` and `italic_angle`
+come from the same substitution record and were equally unwired.
+
+### What the next wave should not do again
+
+- Do not re-derive the glyph grid from `cfx_renderdevice.cpp:1254` alone. The
+  `x_subpixel` at line 1352 is half the rule, and the whole-pixel reading
+  costs 58 files.
+- Do not read `is_clip` in `ProcessText` as a render mode. It is which
+  *caller* is running, and the painting pass always passes `nullptr`.
+- The gamma table and the LCD downsample are still dead, per wave 4.
+- The remaining tail is **not text**. See the inventory below.
+
 ## Numbers
 
 Measured against the golden store on the full corpus (1675 files, 1628 with
 a golden PNG), rendering through `tiny-skia`. The W3 column is the pixel
 burn-down's third wave; M5 is where the burn-down started.
 
-| metric | M5 | M8 (wave 2) | **W3** |
-|---|---|---|---|
-| pixel files at SSIM ≥ 0.99 | 1075 / 1628 (66.0%) | 1243 / 1628 (76.4%) | **1247 / 1628 (76.6%)** |
-| at SSIM ≥ 0.95 | 1478 / 1628 (90.8%) | 1518 / 1628 (93.2%) | **1520 / 1628 (93.4%)** |
-| at SSIM ≥ 0.90 | 1544 / 1628 (94.8%) | 1570 / 1628 (96.4%) | **1572 / 1628 (96.6%)** |
-| byte-exact PNGs | 430 / 1628 | 446 / 1628 | **451 / 1628** |
-| files passing (all tiers) | 1146 / 1675 | 1256 / 1675 | **1260 / 1675** |
-| `pixel-fail` | 495 | 385 | **381** |
-| `size-mismatch` | 0 | 0 | 0 |
-| Tier C hard failures | — | 5 | **3** |
+| metric | M5 | M8 (wave 2) | W3/W4 | **W5** |
+|---|---|---|---|---|
+| pixel files at SSIM ≥ 0.99 | 1075 / 1628 (66.0%) | 1243 / 1628 (76.4%) | 1247 / 1628 (76.6%) | **1387 / 1628 (85.2%)** |
+| at SSIM ≥ 0.95 | 1478 / 1628 (90.8%) | 1518 / 1628 (93.2%) | 1520 / 1628 (93.4%) | **1554 / 1628 (95.5%)** |
+| at SSIM ≥ 0.90 | 1544 / 1628 (94.8%) | 1570 / 1628 (96.4%) | 1572 / 1628 (96.6%) | **1591 / 1628 (97.7%)** |
+| byte-exact PNGs | 430 / 1628 | 446 / 1628 | 451 / 1628 | **451 / 1628** |
+| files passing (all tiers) | 1146 / 1675 | 1256 / 1675 | 1260 / 1675 | **1396 / 1675** |
+| `pixel-fail` | 495 | 385 | 381 | **241** |
+| `size-mismatch` | 0 | 0 | 0 | **0** |
+| Tier C hard failures | — | 5 | 3 | 3 |
+
+Wave 5 moved 636 files up and 18 down, none of the 18 by more than 0.0026
+and none across the 0.99 line. **Every byte-exact file stayed byte-exact** —
+the monotone rule's sharpest edge, and the one that says the placement port
+is a refinement of where ink goes rather than a change to what is drawn.
 
 Wave 3's four files are `bug_1693.{in,pdf}` (byte-exact, the tiling slow
 path) and two the stroke outlining carried over the line; the byte-exact count
 gains five and the Tier C hard count loses two. Every step was measured with
 `conformance run --check-regressions`, so no previously-passing file regressed
 at any point.
+
+### The tail after wave 5, and it is no longer text
+
+241 `pixel-fail` entries, **168 unique documents** once the `.in`/`.pdf`
+pairs are collapsed. The shape has changed more than the count:
+
+| band | documents | what is in it |
+|---|---|---|
+| 0.95–0.99 | 121 | the residual coverage tail — 19 tcpdf, 14 `FRC_8.2.4`, 11 `fx/text`, the rest scattered singles |
+| 0.90–0.95 | 26 | shadings (`shade`, `shade-tensor`, type 6/7, radial-at-border), the `fx/layer` optional-content pair, uncoloured tiling, vertical text |
+| 0.80–0.90 | 11 | `transfer_function`, `same_color_knockout_fill`, `image_transformer_other`, assorted image singles |
+| below 0.80 | 10 | **codecs**: `jpxdecode_indexed` (0.460), `bug_1986` (0.546), `bug_557223` (0.773) are JPX; `bug_1396266`, `bug_718762`, `bug_867501`, `bug_1236` are decode singles; `en_fqa.pdf` (0.715) and `example_063` (0.747) are the two genuinely dense-type files left |
+
+**The 0.95–0.99 band is now the whole story of the text tail**, and it is a
+coverage band rather than a placement one: geometry now agrees, and what is
+left is the stem-edge distribution D7 has always described. Everything below
+0.95 is a feature or a codec with an answer — which is exactly what wave 3
+predicted the tail would resolve to once the positional half was removed, and
+wave 3 was measuring a page whose placement error it could not see.
+
+Two files sit at the boundary and are worth naming for whoever picks this up:
+`en_fqa.pdf` at 0.715 and `example_063` at 0.747 are the last two files where
+dense small type alone loses more than a quarter of the score. If a future
+wave wants a text lever, those are the fixtures; if it does not, the codecs
+above are worth more per file.
 | Tier C hard failures (full store) | 11 | **5** |
 
 Every step was measured with `conformance run --check-regressions` against
@@ -388,6 +591,11 @@ Three more clusters were found the same way and were larger than any of them:
   sample goes through the tables.
 
 ### Where the remaining 385 are
+
+*Superseded by wave 5's inventory above; kept because the reasoning it
+records is what wave 4 and wave 5 were testing. The 159 files this section
+calls "D7 in its pure form" were mostly a **placement** error rather than a
+coverage one, and 140 of them left the band once the placement was ported.*
 
 `pixel-fail` is still a threshold cut through a continuous distribution, and
 the distribution has changed shape: 275 of the 385 sit in the 0.95–0.99 band
@@ -589,14 +797,31 @@ repeating here:
   See the wave 3 section.
 
   **Wave 4 corrects the attribution.** It is the bitmap's *placement*, not its
-  hinting. The oracle snaps every glyph origin to a whole pixel before
-  blitting (`cfx_renderdevice.cpp:1254-1257`) while we fill each outline where
+  hinting. The oracle snaps every glyph origin before blitting
+  (`cfx_renderdevice.cpp:1254-1257`) while we fill each outline where
   it truly lands, which displaces stem edges by the baseline's fractional part
   — measured at mean +0.45 px per line on `example_063.pdf`. The hinting the
   oracle does run is nearly inert, because it grid-fits at a **fixed 64 ppem**
   that is then scaled away: ~0.04 device px of point movement at 9 pt. So
   "reproducing that means porting FreeType's hinter" is false; porting the
   hinter would change almost nothing. See the wave 4 section.
+
+  **Wave 5 corrects it twice more, and D7 is now a smaller divergence than
+  it has ever been.**
+
+  1. *The grid is not whole pixels.* Wave 4 said "snaps every glyph origin to
+     a whole pixel"; only **y** does. `x_subpixel` at
+     `cfx_renderdevice.cpp:1352` gives x back, through the LCD triple, what
+     line 1254 floored away, so x is quantised to a **third** of a pixel. The
+     whole-pixel reading is not a paraphrase of the rule, it is a different
+     rule, and porting it costs 58 files.
+  2. *The placement is no longer a divergence at all.* On the orchestrator's
+     ruling it is now the **default policy**, reproduced exactly, and
+     `RenderOptions::subpixel_text_positioning` is what asks for the old
+     behaviour. So D7 has shrunk to what it was always meant to be: we fill
+     outlines where the oracle blits bitmaps, glyph *positions* now agree to
+     the oracle's own grid, and only stem-edge **coverage** differs. That is
+     the sentence the brief's D7 should be read as carrying from here on.
 - **D5 — non-isolated groups double-count their backdrop.** PDFium seeds
   such a group's buffer with a copy of the page and never removes it before
   compositing back. That is not ISO 32000 §11.4.6, and it is what the oracle
@@ -688,6 +913,28 @@ M5 adds two more, both about the colour ref rather than about a rasterizer.
    an `scn` naming an unusable pattern a no-op, which painted four of the
    corpus's fuzz files entirely black.
 
+Wave 5 adds two more, and both are about placement rather than colour.
+
+6. **The page-to-device matrix fits the page to the *device* box, not to its
+   own height.** `CPDF_Page::GetDisplayMatrixForRect` divides an **integer**
+   `FX_RECT` by the page's float size (`cpdf_page.cpp:216-218`) and
+   `CPDFSDK_RenderPageWithContext` hands it the truncated bitmap size, so an
+   A4 page 841.89 points tall renders into 841 rows at a y scale of
+   `841 / 841.89`. Both the brief and SPEC §8's item 5 describe it as a flip
+   about the page height, which leaves up to a device pixel of shear from the
+   top of a page to the bottom. Invisible under fractional glyph fills;
+   a whole row under snapped ones. Worth 74 files.
+
+7. **`bClearType` does not decide `FontAntiAliasingMode`.** This crate's own
+   `options.rs` said `bClearType = false` meant "subpixel text never runs in
+   conformance". It sets `CFX_TextRenderOptions::aliasing_type`, which is a
+   different variable: `DrawNormalText` derives the anti-aliasing mode itself
+   (`cfx_renderdevice.cpp:1165-1206`), and on a 32-bpp display device with a
+   smooth aliasing type it is `kLcd` regardless. `aliasing_type` only decides
+   `normalize`. The confusion is load-bearing for exactly one thing — which
+   of the two roundings the glyph origin takes — and that is now spelled out
+   where both live.
+
 ## What is not implemented yet
 
 The four M5 clusters are wired; what remains are the narrower paths each one
@@ -736,7 +983,7 @@ strokes run far outside the `/Rect` they are clipped to — is byte-exact.
 
 ## Tests
 
-211 in the three crates plus their integration test — 185 unit, 26
+234 in the three crates plus their integration test — 206 unit, 28
 end-to-end, plus the backends' own. The end-to-end tests render synthetic
 pages through **both** rasterizers and assert that anything the engine
 decided is bit-identical while only antialiased edges may differ, which is

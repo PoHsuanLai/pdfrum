@@ -71,6 +71,29 @@ substitution ladder, vertical writing, and the glyph cache.
   fourteen — the blob is already the right face. Only the generic
   Multiple-Master rung records them, because its design space is how weight is
   applied at all.
+- **The Multiple-Master width solve was built, tested and never driven**, and
+  the render burn-down's wave 5 found out. `GlyphSource::mm_instance` is a
+  faithful port of `AdjustVariationParams` (`cfx_face.cpp:1561-1605`) and
+  `GlyphKey` carries `dest_width` precisely so a caller can drive it — but
+  `pdfrum-render` built every key through `GlyphKey::plain`, which hardcodes
+  zero, so `mm_instance` took its `dest_width == 0` early-out on every glyph
+  in the corpus and the generic was always drawn at its axis defaults.
+
+  The consequence is not subtle. `CPDF_Font::GetCharPosList`
+  (`cpdf_font.cpp:440-444`) passes `/Widths` down as `dest_width` for any font
+  that is neither embedded nor CID, and the generics are MM Type 1 faces, so
+  *every non-embedded font in the corpus* is meant to be drawn at the width
+  its PDF declares. On `5.5_simple_font.pdf`, whose `/Widths` deliberately say
+  `a = 800, b = 100, c = 400` against face advances near 450, the outlines
+  overran their advances and merged — which the render triage recorded as two
+  separate defects, a dropped character and an advance bug, and which was
+  neither. See `docs/status/pdfrum-render.md`, wave 5.
+
+  Two tests now pin it here rather than only at the call site: the solve lands
+  exactly on a requested advance inside the axis, and saturates rather than
+  degenerating outside it, because the interpolated design *coordinate* is
+  unclamped by design while the blend then clamps it — which is what
+  `FT_Set_MM_Design_Coordinates` does.
 - **The Adobe CourierStd `+= 31` rescue** has no general rule behind it: four
   literal font names and a magic offset. Reproduced, and pinned by the oracle's
   own `Bug920636` assertions.
