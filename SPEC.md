@@ -136,6 +136,9 @@ Dict order: C++ stores dicts in a sorted `std::map` (so its writer emits keys
 sorted); we deliberately keep insertion order in storage *and* serialization —
 written-file byte layout is not an oracle target (round-trip fidelity is
 semantic: reparse + re-render), so this divergence is accepted and permanent.
+One exception (doc brief E2): --show-structure prints attribute dicts in
+iteration order and the goldens are alphabetical — the two emission sites in
+pdfrum-doc sort keys locally; storage order is unchanged.
 Integer accessor semantics are tri-state (see the resolution matrix and
 `FX_Number` inventory in `docs/design/pdfrum-object.md`): `Int(i64)` stores the
 parsed value; the `number` module provides the C-int wrapping view
@@ -503,6 +506,19 @@ enum (typed per subtype), AcroForm: `Form { fields: Vec<Field> }`,
 `set_value()` + **appearance-stream generation** (port `cpdfsdk_appstream`/
 variable-text layout — a pure `Field -> content-stream bytes` function).
 Struct tree reader for `--show-structure` parity.
+Rulings 2026-08-29 (doc brief escalations): NO second variable-text engine —
+the `cpdfsdk_appstream`/`CPWL_EditImpl` NeedAppearances path is out of scope
+(only ~5 corpus pixel files reach it; they become documented waivers); ship
+only the checkbox/radio path tables, off by default (E1). Dict keys are
+SORTED at the two --show-structure emission sites only — storage stays
+insertion-order per §2, whose divergence note gains this exception (E2). The
+oracle exits nonzero on Unknown/Redact --annot fixtures (verified at golden
+generation: no crash-artifact goldens exist) — handle gracefully, waiver
+documented (E3). %.3f tie-breaking: implement glibc half-to-even if the M6
+corpus-wide test shows it matters (E4). `unicode-bidi` gains pdfrum-doc as a
+consumer for variable-text UBA line ordering, validated against the six
+pinned orderings before vt layout is written (E5). `Limits` gains
+`max_name_tree_depth: u32 = 32` (additive).
 
 ## 11. `pdfrum-edit`  *(behavior: `core/fpdfapi/edit`)*
 
