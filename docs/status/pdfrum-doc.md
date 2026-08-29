@@ -11,7 +11,7 @@ Contract: SPEC.md §10 (including the 2026-08-29 rulings); behavior:
 
 | Metric | Before | After |
 |---|---|---|
-| `--annot` Tier-A | 3/1832 (0.2%) | **1979/2055 (96.3%)** |
+| `--annot` Tier-A | 3/1832 (0.2%) | 1979/2055 (96.3%) → **2042/2055 (99.4%)** (wave 10) |
 | `--show-structure` Tier-A | 1408/1468 (95.9%) | **1674/1675 (99.9%)** |
 | Files passing outright | 47/1468 | **1086/1675** |
 
@@ -25,12 +25,26 @@ column is the smaller set; the rates are what compare, not the counts. The
 annot denominator is 2055 rather than 2061 because six artifacts are now
 excluded as crash goldens (see E3 below).
 
-`--annot` does not reach M6's ≥ 98% exit criterion. The 76 remaining
-mismatches are almost entirely `Number of objects` lines where the oracle
-counts text objects that a *widget's* laid-out field body produced — the
-second layout engine SPEC §10 rules out of scope, not a defect in what is
-here. `--show-structure` is past 98% and its one remaining file is blocked
-below this crate.
+`--show-structure` is past 98% and its one remaining file is blocked below
+this crate.
+
+**`--annot` reached the exit criterion in burn-down wave 10: 2042/2055
+(99.4%), and the waiver is retired.** It sat at 96.3% here, and the 76
+mismatches were `Number of objects` lines where the oracle counted text
+objects a *widget's* laid-out field body produced — filed against SPEC §10's
+ruling that the layout engine behind them was out of scope. The ruling was
+revised once it was established that there is no second engine to write:
+`CPWL_EditImpl` is a shell over the `CPVT_VariableText` this crate already
+ports in `vt`, and the shell's only observable addition is a vertical
+alignment offset. `ap/field_body.rs` is the three producers over it. See
+`docs/status/pdfrum-render.md`'s wave 10 for the measurement, including the
+two font-metric defects it uncovered.
+
+The **13** artifacts that remain are three named things and none is the text
+body: seven are the `/AP`-presence rule (matching it exactly costs
+`bug_707673` pixels, so it is deliberately left loose), four are
+`SetAsPushButton`, which is unported, and two are the annotation font map's
+per-character fallback to a second face.
 
 The structure tier went from 60 mismatched files to one, and that one —
 `bug_717.pdf` — is blocked below this crate: its whole structure tree lives
