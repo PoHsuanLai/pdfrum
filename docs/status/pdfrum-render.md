@@ -137,21 +137,29 @@ repeating here:
 SPEC §8 gains an implementation record; the six items are summarised there.
 The two that a reader should know without opening it:
 
-**Q1 (the transfer-function array reversal) resolves for the observable.**
-`CPDFDocRenderDataTest.TransferFunctionArray` asserts, for `[Type0, Type2,
-Type4]`, that `GetSamplesR() == Type0`, and its ten `TranslateColor`
-expectations agree. `pdfrum-page`'s `TransferFunc` stores the array reversed
-relative to that — a defect in its storage against its own doc comment —
-so `render::transfer` undoes it at the boundary rather than changing a parse
-whose tests pin the reversed spelling. Worth fixing in `pdfrum-page` when
-that crate is next touched.
+**Q1: the `/TR` array reversal is real.** `array[2]` drives red and
+`array[0]` drives blue, exactly as `pFuncs[2 - i] = Load(array[i])` reads.
+`CPDFDocRenderDataTest.TransferFunctionArray` looks like it says the opposite
+only because two of its expectation constants are **misnamed**:
+`kExpectedType0FunctionSamples` is the type 4 program's sine ramp — it
+matches `sin(v/255 · 360°)/2` on all 128 positive samples — and
+`kExpectedType4FunctionSamples` is the type 0 function's flat one. The ten
+`TranslateColor` pairs settle it without naming a function.
 
-**Q5 resolves as proposed.** `render_page` chooses white-vs-transparent from
-the page's own transparency, matching `pdfium_test`; `RenderOptions.background`
-is an override only. The choice is load-bearing rather than a convenience:
-the engine's single compositing path relies on an opaque page's white being
-real pixels, which is what makes D6's collapse of PDFium's five-armed
-compositor into one arm arithmetically correct.
+This crate briefly had it backwards and compensated by remapping channels at
+the boundary, which cancelled a correct parse and swapped red and blue on
+every rendered `/TR` array. Both halves are gone; the concurrent
+`pdfrum-text` work caught it, and `pdfrum-page::transfer` now carries the
+derivation.
+
+**Q5 resolves as proposed, with a correction to what the predicate is.**
+`render_page` chooses white-vs-transparent itself and `RenderOptions.
+background` is an override only. But `FPDFPage_HasTransparency` is **not**
+the page's `/Group`: it is `BackgroundAlphaNeeded`, which only an
+`/ExtGState` blend mode above `Multiply` sets. The choice is load-bearing
+rather than a convenience — the engine's single compositing path relies on an
+opaque page's white being real pixels, which is what makes D6's collapse of
+PDFium's five-armed compositor into one arm arithmetically correct.
 
 ## Brief errata
 
