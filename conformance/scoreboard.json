@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-08-29T17:29:55Z",
+  "generated_at": "2026-08-29T17:35:22Z",
   "totals": {
     "files": 1675,
     "pass": 1624,
@@ -7,7 +7,7 @@
     "by_tag": {
       "page-count": 2,
       "pixel-fail": 42,
-      "tierA-mismatch": 11
+      "tierA-mismatch": 9
     },
     "text": {
       "pages": 2061,
@@ -43438,8 +43438,7 @@
       "path": "resources/pixel/bug_725389.in",
       "status": "fail",
       "tags": [
-        "pixel-fail",
-        "tierA-mismatch"
+        "pixel-fail"
       ],
       "tierA": {
         "compared": [
@@ -43449,9 +43448,7 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.annot.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
@@ -43462,19 +43459,18 @@
         }
       },
       "tierB": {
-        "ssim": 0.983815,
+        "ssim": 0.967403,
         "exact": false,
-        "max_channel_diff": 155,
+        "max_channel_diff": 145,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.983815 below floor 0.990000"
+      "notes": "ssim 0.967403 below floor 0.990000"
     },
     {
       "path": "resources/pixel/bug_725389.pdf",
       "status": "fail",
       "tags": [
-        "pixel-fail",
-        "tierA-mismatch"
+        "pixel-fail"
       ],
       "tierA": {
         "compared": [
@@ -43484,9 +43480,7 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.annot.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
@@ -43497,12 +43491,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.983815,
+        "ssim": 0.967403,
         "exact": false,
-        "max_channel_diff": 155,
+        "max_channel_diff": 145,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.983815 below floor 0.990000"
+      "notes": "ssim 0.967403 below floor 0.990000"
     },
     {
       "path": "resources/pixel/bug_733528.in",
