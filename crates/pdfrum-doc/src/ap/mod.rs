@@ -133,15 +133,44 @@ impl std::fmt::Debug for TextFont<'_> {
     }
 }
 
+/// The character code a code point the face cannot map is written as.
+///
+/// A simple font's codes are one byte and `Font::append_char` truncates to
+/// one, so the code the stream ends up carrying is the code point's **low
+/// byte** — and the width has to be looked up under that same byte or the
+/// layout advances by a glyph the stream does not name. A composite font
+/// keeps the whole value, because its CMap decides the width itself.
+fn unmapped_code(font: &pdfrum_font::Font, code: u32) -> pdfrum_font::CharCode {
+    match font {
+        pdfrum_font::Font::Type0(_) => pdfrum_font::CharCode(code),
+        pdfrum_font::Font::Simple(_) | pdfrum_font::Font::Type3(_) => {
+            pdfrum_font::CharCode(code & 0xff)
+        }
+    }
+}
+
 impl TextFont<'_> {
     /// How one code point is written into a content stream.
     ///
     /// A `Symbol` or `ZapfDingbats` font takes the code point's **low byte**
     /// verbatim, relying on the font's built-in encoding: there is no
     /// named-glyph table and no `/Encoding` consultation anywhere in this
-    /// path. Anything else goes through the reverse `ToUnicode` mapping, and
-    /// a code point the font cannot represent writes **nothing** — the
-    /// character is silently dropped rather than substituted.
+    /// path. Anything else goes through the reverse `ToUnicode` mapping.
+    ///
+    /// **A code point the font cannot represent is still written**, as its own
+    /// value taken for a character code. The glyph that draws is whatever that
+    /// code happens to name in the chosen face and is usually wrong — but the
+    /// text object exists, occupies the layout, and is what a reader sees.
+    /// Dropping the character instead loses the object entirely, which on
+    /// `bug_725389` — three Hebrew characters in a `/DA` naming Times-Roman —
+    /// is the difference between six text objects and three.
+    ///
+    /// Upstream reaches the same place by a longer road: `CPDF_BAFontMap`
+    /// would first look for a second face that knows the character, and only
+    /// `CPWL_EditImpl::GetPDFWordString`'s fallthrough appends the raw value
+    /// when none does. On a hermetic font set no second face is found, so the
+    /// fallthrough is the whole of the observable behaviour, and the N-slot map
+    /// is not built here for a result it does not change.
     #[must_use]
     pub fn encode(&self, code: u32) -> Vec<u8> {
         let name = self.font.base_font_name();
@@ -149,34 +178,30 @@ impl TextFont<'_> {
             #[allow(clippy::cast_possible_truncation)]
             return vec![code as u8];
         }
-        let Some(ch) = char::from_u32(code) else {
-            return Vec::new();
-        };
-        let Some(charcode) = self.font.char_code_from_unicode(ch) else {
-            return Vec::new();
-        };
         let mut out = Vec::new();
-        self.font.append_char(&mut out, charcode);
+        let mapped = char::from_u32(code)
+            .and_then(|ch| self.font.char_code_from_unicode(ch))
+            .unwrap_or_else(|| unmapped_code(self.font, code));
+        self.font.append_char(&mut out, mapped);
         out
     }
 
     /// One code point's width, in thousandths of an em.
     ///
-    /// A code point the font cannot represent contributes **nothing** rather
-    /// than a default width, which is what keeps an unrepresentable character
-    /// from pushing the line it sits on.
+    /// The width is the one the face gives whatever [`Self::encode`] wrote, so
+    /// an unrepresentable code point measures the glyph its raw value names
+    /// rather than nothing — the two have to agree or the layout advances past
+    /// characters the stream still contains, and the line comes out the wrong
+    /// length.
     ///
     /// A free function rather than a method because [`Self::metrics_of`] wants
     /// it as a `&dyn Fn` borrowed for the same lifetime as the font, which a
     /// closure over `self` cannot supply before `self` exists.
     #[must_use]
     pub fn char_width(font: &pdfrum_font::Font, code: u32) -> i32 {
-        let Some(ch) = char::from_u32(code) else {
-            return 0;
-        };
-        let Some(charcode) = font.char_code_from_unicode(ch) else {
-            return 0;
-        };
+        let charcode = char::from_u32(code)
+            .and_then(|ch| font.char_code_from_unicode(ch))
+            .unwrap_or_else(|| unmapped_code(font, code));
         #[allow(clippy::cast_possible_truncation)]
         {
             font.char_width(charcode) as i32
@@ -678,6 +703,35 @@ mod tests {
         let mut hidden = sticky_note();
         hidden.push(Name::from("F"), Object::Int(2));
         assert!(!should_generate(&hidden, &NoResolve));
+    }
+
+    #[test]
+    fn a_character_the_face_cannot_map_is_still_written() {
+        // `bug_725389` shows three Hebrew characters through a `/DA` naming
+        // Times-Roman, which has no glyph for any of them. Dropping them loses
+        // the text objects entirely — six become three — where the oracle
+        // writes the raw code point as a character code and draws whatever it
+        // names. Wrong glyph, right object count, right layout.
+        let font = pdfrum_font::Font::load_standard(
+            pdfrum_font::StandardFont::Times,
+            &pdfrum_font::FontCache::new(),
+        );
+        let width = |code: u32| super::TextFont::char_width(&font, code);
+        let text = super::TextFont {
+            metrics: super::TextFont::metrics_of(&font, &width),
+            font: &font,
+        };
+        // Hebrew bet, which no standard Latin face encodes.
+        assert_eq!(text.encode(0x05D1), vec![0xD1]);
+        // And a character it does encode still round-trips through the
+        // `ToUnicode` mapping rather than through the fallthrough.
+        assert_eq!(text.encode(u32::from('A')), vec![b'A']);
+        // The width follows whatever `encode` wrote, so the layout advances by
+        // the same glyph the stream names.
+        assert_eq!(
+            super::TextFont::char_width(&font, 0x05D1),
+            super::TextFont::char_width(&font, 0xD1)
+        );
     }
 
     #[test]
