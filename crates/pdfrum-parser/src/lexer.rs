@@ -574,12 +574,20 @@ impl<'a> Lexer<'a> {
     /// "Whole word" here means the neighbouring bytes are not regular or
     /// numeric; a delimiter beside the word is an acceptable boundary. This
     /// is how `startxref` is found in a file whose tail is otherwise junk.
+    ///
+    /// The cursor's own byte is **inside** the search: a match may end at
+    /// `pos()` rather than before it. That one byte matters — the caller
+    /// starts nine bytes from the end of the file, so the position only
+    /// reachable this way is a `startxref` followed by exactly eight bytes of
+    /// offset and nothing else. A file truncated with no trailing end-of-line
+    /// or `%%EOF` has precisely that shape, and it is the shape this search
+    /// exists to rescue.
     pub fn search_back(&mut self, word: &[u8], window: usize) -> bool {
-        if word.is_empty() || self.pos < word.len() {
+        if word.is_empty() || self.pos + 1 < word.len() {
             return false;
         }
         let limit = self.pos.saturating_sub(window);
-        let mut candidate = self.pos.saturating_sub(word.len());
+        let mut candidate = (self.pos + 1).saturating_sub(word.len());
         loop {
             if self.bytes.get(candidate..candidate + word.len()) == Some(word)
                 && is_whole_word(self.bytes, candidate, word.len(), false)
@@ -944,6 +952,37 @@ mod tests {
         let mut lx = Lexer::at(bytes, bytes.len());
         assert!(lx.search_back(b"startxref", 4096));
         assert_eq!(lx.pos(), 12);
+    }
+
+    #[test]
+    fn search_back_includes_the_byte_under_the_cursor() {
+        // The word ends exactly *at* the cursor rather than before it. The
+        // reader starts nine bytes from the end of the file, so reaching this
+        // position means a `startxref` followed by a separator and a
+        // seven-digit offset and nothing else — a file truncated with no
+        // trailing end-of-line or `%%EOF`. No well-formed file lands here,
+        // which is why only this test holds the boundary.
+        let file = b"%PDF-1.7\nstartxref 1234567";
+        let start = 9;
+        let cursor = file.len() - 9;
+        assert_eq!(file.get(start..start + 9), Some(&b"startxref"[..]));
+        // The keyword's last byte *is* the cursor's byte.
+        assert_eq!(start + 8, cursor);
+
+        let mut lx = Lexer::at(file, cursor);
+        assert!(lx.search_back(b"startxref", 4096));
+        assert_eq!(lx.pos(), start);
+    }
+
+    #[test]
+    fn search_back_declines_a_word_that_does_not_fit() {
+        let mut lx = Lexer::at(b"xref", 1);
+        assert!(!lx.search_back(b"startxref", 4096));
+        assert_eq!(lx.pos(), 1);
+        // A word exactly as long as the span up to and including the cursor.
+        let mut lx = Lexer::at(b"abc", 2);
+        assert!(lx.search_back(b"abc", 4096));
+        assert_eq!(lx.pos(), 0);
     }
 
     #[test]

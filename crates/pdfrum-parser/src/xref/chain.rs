@@ -401,6 +401,42 @@ mod tests {
     }
 
     #[test]
+    fn a_start_xref_ending_at_the_search_origin_is_still_found() {
+        // The backward search starts nine bytes from the end, so a file whose
+        // `startxref` keyword ends exactly there sits on the boundary: its
+        // last byte is the very byte the search begins at. Such a file is
+        // truncated — no `%%EOF`, no trailing end-of-line, just the offset —
+        // and reading its table rather than rebuilding depends on the search
+        // including that byte.
+        let base = build_classic();
+        let text = String::from_utf8_lossy(&base).into_owned();
+        let Some((head, tail)) = text.rsplit_once("startxref\n") else {
+            panic!("the builder writes a startxref");
+        };
+        let Some((offset, _)) = tail.split_once('\n') else {
+            panic!("the offset is on its own line");
+        };
+        // "startxref" + one separator + the offset, and nothing after it.
+        // The search begins nine bytes from the end, so eight bytes have to
+        // follow the keyword's last byte for that byte to *be* the origin:
+        // one separator and a seven-digit offset.
+        let padded = format!("{offset:0>7}");
+        let truncated = format!("{head}startxref {padded}");
+
+        let origin = truncated.len() - 9;
+        assert_eq!(
+            truncated.as_bytes().get(origin - 8..=origin),
+            Some(&b"startxref"[..]),
+            "the keyword must end at the search origin"
+        );
+
+        let (xref, trailer, rebuilt, _) = read(truncated.as_bytes()).expect("loaded");
+        assert!(!rebuilt, "the table should be read, not rebuilt");
+        assert!(matches!(xref.entry(1), Some(Entry::Offset(_))));
+        assert!(trailer.dict.raw(names::ROOT).is_some());
+    }
+
+    #[test]
     fn a_broken_start_xref_falls_back_to_the_scan() {
         // Point `startxref` at the middle of the file, where no table is.
         let text = String::from_utf8_lossy(&build_classic()).into_owned();
