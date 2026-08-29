@@ -461,6 +461,55 @@ mod tests {
     }
 
     #[test]
+    fn linking_a_kid_fills_its_element_index_and_leaves_its_slot_alone() {
+        // The two indices live in different spaces, and conflating them is
+        // how a kid ends up pointing back at an ancestor — which the dump
+        // then follows until the stack runs out.
+        let inner = dict(&[("S", Object::Name(Name::from("P")))]);
+        let mut element = StructElement {
+            dict: Dict::new(),
+            reference: None,
+            kind: b"Document".to_vec(),
+            kids: StructElement::load_kids(
+                &dict(&[("K", Object::Dict(inner.clone()))]),
+                0,
+                &NoResolve,
+            ),
+            parent: None,
+        };
+        assert!(element.link_kid(&inner, None, 7));
+        assert_eq!(
+            element.kids,
+            vec![Kid::Element {
+                dict: inner,
+                reference: None,
+                // Still slot zero of the parent's `/K` ...
+                slot: 0,
+                // ... while the element table index is the one just given.
+                linked: Some(7),
+            }]
+        );
+    }
+
+    #[test]
+    fn an_unmatched_kid_keeps_no_element_index_at_all() {
+        let inner = dict(&[("S", Object::Name(Name::from("P")))]);
+        let mut element = StructElement {
+            dict: Dict::new(),
+            reference: None,
+            kind: b"Document".to_vec(),
+            kids: StructElement::load_kids(&dict(&[("K", Object::Dict(inner))]), 0, &NoResolve),
+            parent: None,
+        };
+        let stranger = dict(&[("S", Object::Name(Name::from("Span")))]);
+        assert!(!element.link_kid(&stranger, None, 7));
+        assert!(matches!(
+            element.kids.first(),
+            Some(Kid::Element { linked: None, .. })
+        ));
+    }
+
+    #[test]
     fn the_role_map_replaces_a_type_only_when_it_names_a_nonempty_one() {
         let map = dict(&[("Quote", Object::Name(Name::from("BlockQuote")))]);
         assert_eq!(map_role(Some(&map), b"Quote"), b"BlockQuote");

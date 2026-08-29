@@ -21,7 +21,12 @@
 //! `pdfrum-doc`, which owns the emitter because its field order, indentation
 //! and sorted attribute keys are behavior rather than presentation.
 //!
-//! `--annot`, the other raster targets and the save-*
+//! `--annot` writes each page's annotation dump to
+//! `<input>.<page>.annot.txt`, over `pdfrum-doc` for the format and the
+//! appearance generation it describes, and `pdfrum-page` for the object
+//! counts.
+//!
+//! The other raster targets and the save-*
 //! family are **accepted and do nothing**, which is deliberate. The harness runs one
 //! fixed set of passes against every candidate; a tool that rejected the flags
 //! for crates that do not exist yet would tag those tiers as a tool error
@@ -39,6 +44,7 @@
 
 #![forbid(unsafe_code)]
 
+mod annot;
 mod content;
 mod metadata;
 mod options;
@@ -104,20 +110,21 @@ fn main() -> ExitCode {
 
 /// The note for an output format we accept but cannot produce yet.
 fn unimplemented_format(format: OutputFormat) -> Option<String> {
-    let (flag, crate_name) = match format {
+    match format {
         OutputFormat::None
         | OutputFormat::PageInfo
         | OutputFormat::Structure
+        | OutputFormat::Annot
         | OutputFormat::Text
         // `--png` is the one render format we produce; the rest are the
         // oracle's other raster and vector targets, which we do not.
-        | OutputFormat::Render("png") => return None,
+        | OutputFormat::Render("png") => None,
+        // These name the format rather than a crate: the renderer exists,
+        // this particular output does not.
         OutputFormat::Render(extension) => {
-            return Some(format!("--{extension} rendering not implemented yet"));
+            Some(format!("--{extension} rendering not implemented yet"))
         }
-        OutputFormat::Annot => ("--annot", "pdfrum-doc"),
-    };
-    Some(format!("{flag} not implemented yet (awaits {crate_name})"))
+    }
 }
 
 #[cfg(test)]
@@ -132,17 +139,11 @@ mod tests {
     }
 
     #[test]
-    fn each_unimplemented_format_names_the_crate_that_will_supply_it() {
-        for (format, crate_name) in [(OutputFormat::Annot, "pdfrum-doc")] {
-            let note = unimplemented_format(format).unwrap();
-            assert!(note.contains(crate_name), "{note}");
-            assert!(note.contains("not implemented yet"), "{note}");
-        }
-        // `--show-structure` is implemented and must stay silent.
+    fn only_the_unproduced_raster_targets_carry_a_note() {
+        // The two document dumps are implemented and must stay silent.
         assert_eq!(unimplemented_format(OutputFormat::Structure), None);
-        // Every raster target but PNG, which we do produce. These name the
-        // format rather than a crate: the renderer exists, this output does
-        // not.
+        assert_eq!(unimplemented_format(OutputFormat::Annot), None);
+        // Every raster target but PNG, which we do produce.
         let note = unimplemented_format(OutputFormat::Render("ppm")).unwrap();
         assert!(
             note.contains("ppm") && note.contains("not implemented yet"),

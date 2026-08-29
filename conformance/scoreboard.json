@@ -1,13 +1,13 @@
 {
-  "generated_at": "2026-08-29T04:47:54Z",
+  "generated_at": "2026-08-29T05:01:43Z",
   "totals": {
     "files": 1675,
-    "pass": 1081,
-    "fail": 594,
+    "pass": 1085,
+    "fail": 590,
     "by_tag": {
       "page-count": 2,
       "pixel-fail": 553,
-      "tierA-mismatch": 98
+      "tierA-mismatch": 96
     },
     "text": {
       "pages": 2061,
@@ -33461,23 +33461,17 @@
     },
     {
       "path": "resources/javascript/bug_1098213.in",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
-          "input.pdf.0.annot.txt",
           "input.pdf.0.txt",
-          "input.pdf.1.annot.txt",
           "input.pdf.1.txt",
           "metadata.txt",
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.1.annot.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 2,
         "actual_pages": 2,
         "text": {
@@ -33493,27 +33487,21 @@
         "max_channel_diff": 0,
         "pages": 2
       },
-      "notes": "dumps differ: input.pdf.1.annot.txt"
+      "notes": ""
     },
     {
       "path": "resources/javascript/bug_1098213.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
-          "input.pdf.0.annot.txt",
           "input.pdf.0.txt",
-          "input.pdf.1.annot.txt",
           "input.pdf.1.txt",
           "metadata.txt",
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.1.annot.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 2,
         "actual_pages": 2,
         "text": {
@@ -33529,7 +33517,7 @@
         "max_channel_diff": 0,
         "pages": 2
       },
-      "notes": "dumps differ: input.pdf.1.annot.txt"
+      "notes": ""
     },
     {
       "path": "resources/javascript/bug_1142688.in",
@@ -45824,7 +45812,8 @@
       "path": "resources/pixel/checkbox_radiobutton.in",
       "status": "fail",
       "tags": [
-        "pixel-fail"
+        "pixel-fail",
+        "tierA-mismatch"
       ],
       "tierA": {
         "compared": [
@@ -45834,7 +45823,9 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [],
+        "mismatched": [
+          "input.pdf.0.annot.txt"
+        ],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
@@ -45850,13 +45841,14 @@
         "max_channel_diff": 166,
         "pages": 1
       },
-      "notes": "ssim 0.989948 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.989948 below floor 0.990000"
     },
     {
       "path": "resources/pixel/checkbox_radiobutton.pdf",
       "status": "fail",
       "tags": [
-        "pixel-fail"
+        "pixel-fail",
+        "tierA-mismatch"
       ],
       "tierA": {
         "compared": [
@@ -45866,7 +45858,9 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [],
+        "mismatched": [
+          "input.pdf.0.annot.txt"
+        ],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
@@ -45882,7 +45876,7 @@
         "max_channel_diff": 166,
         "pages": 1
       },
-      "notes": "ssim 0.989948 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.989948 below floor 0.990000"
     },
     {
       "path": "resources/pixel/checkbox_radiobutton_hide.in",
@@ -45956,7 +45950,8 @@
       "path": "resources/pixel/checkbox_radiobutton_reset.in",
       "status": "fail",
       "tags": [
-        "pixel-fail"
+        "pixel-fail",
+        "tierA-mismatch"
       ],
       "tierA": {
         "compared": [
@@ -45966,7 +45961,9 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [],
+        "mismatched": [
+          "input.pdf.0.annot.txt"
+        ],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
@@ -45982,12 +45979,47 @@
         "max_channel_diff": 166,
         "pages": 1
       },
-      "notes": "ssim 0.989948 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.989948 below floor 0.990000"
     },
     {
       "path": "resources/pixel/checkbox_radiobutton_reset.pdf",
       "status": "fail",
       "tags": [
+        "pixel-fail",
+        "tierA-mismatch"
+      ],
+      "tierA": {
+        "compared": [
+          "input.pdf.0.annot.txt",
+          "input.pdf.0.txt",
+          "metadata.txt",
+          "pageinfo.txt",
+          "structure.txt"
+        ],
+        "mismatched": [
+          "input.pdf.0.annot.txt"
+        ],
+        "golden_pages": 1,
+        "actual_pages": 1,
+        "text": {
+          "pages": 1,
+          "matched": 1,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": {
+        "ssim": 0.989948,
+        "exact": false,
+        "max_channel_diff": 166,
+        "pages": 1
+      },
+      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.989948 below floor 0.990000"
+    },
+    {
+      "path": "resources/pixel/checkboxes.in",
+      "status": "fail",
+      "tags": [
         "pixel-fail"
       ],
       "tierA": {
@@ -46009,54 +46041,18 @@
         }
       },
       "tierB": {
-        "ssim": 0.989948,
-        "exact": false,
-        "max_channel_diff": 166,
-        "pages": 1
-      },
-      "notes": "ssim 0.989948 below floor 0.990000"
-    },
-    {
-      "path": "resources/pixel/checkboxes.in",
-      "status": "fail",
-      "tags": [
-        "pixel-fail",
-        "tierA-mismatch"
-      ],
-      "tierA": {
-        "compared": [
-          "input.pdf.0.annot.txt",
-          "input.pdf.0.txt",
-          "metadata.txt",
-          "pageinfo.txt",
-          "structure.txt"
-        ],
-        "mismatched": [
-          "input.pdf.0.annot.txt"
-        ],
-        "golden_pages": 1,
-        "actual_pages": 1,
-        "text": {
-          "pages": 1,
-          "matched": 1,
-          "nonempty": 0,
-          "nonempty_matched": 0
-        }
-      },
-      "tierB": {
         "ssim": 0.933133,
         "exact": false,
         "max_channel_diff": 169,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.933133 below floor 0.990000"
+      "notes": "ssim 0.933133 below floor 0.990000"
     },
     {
       "path": "resources/pixel/checkboxes.pdf",
       "status": "fail",
       "tags": [
-        "pixel-fail",
-        "tierA-mismatch"
+        "pixel-fail"
       ],
       "tierA": {
         "compared": [
@@ -46066,9 +46062,7 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.annot.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
@@ -46084,7 +46078,7 @@
         "max_channel_diff": 169,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.933133 below floor 0.990000"
+      "notes": "ssim 0.933133 below floor 0.990000"
     },
     {
       "path": "resources/pixel/combobox_form.in",
@@ -49206,21 +49200,16 @@
     },
     {
       "path": "resources/redact_annot.in",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
-          "input.pdf.0.annot.txt",
           "input.pdf.0.txt",
           "metadata.txt",
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.annot.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
@@ -49236,25 +49225,20 @@
         "max_channel_diff": 0,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt"
+      "notes": ""
     },
     {
       "path": "resources/redact_annot.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
-          "input.pdf.0.annot.txt",
           "input.pdf.0.txt",
           "metadata.txt",
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "input.pdf.0.annot.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
@@ -49270,7 +49254,7 @@
         "max_channel_diff": 0,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt"
+      "notes": ""
     },
     {
       "path": "resources/redirect.in",

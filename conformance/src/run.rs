@@ -270,6 +270,16 @@ fn compare_tier_a(
         if crate::generate::has_suffix(name, ".png") {
             continue;
         }
+        // A golden whose own oracle run failed is a crash artifact, not an
+        // answer: the oracle aborted partway and whatever landed on disk is
+        // arbitrary. `redact_annot` is the standing example — the dump code
+        // has no arm for a redaction subtype and reaching one aborts it, so
+        // its `.annot.txt` golden is an empty file that no correct tool can
+        // reproduce. Comparing against one would pin the crash as the
+        // contract.
+        if oracle_failed_for(manifest, name) {
+            continue;
+        }
         tier_a.compared.push(name.clone());
         let golden = store.artifact(&manifest.key, name).unwrap_or_default();
         let matched = produced.get(name).unwrap_or_default() == golden.as_slice();
@@ -301,6 +311,15 @@ fn compare_tier_a(
         ));
     }
     tier_a
+}
+
+/// Whether the oracle pass that would have produced this artifact failed.
+fn oracle_failed_for(manifest: &Manifest, name: &str) -> bool {
+    manifest.oracle_failures.iter().any(|failed| {
+        crate::oracle::Pass::ALL
+            .iter()
+            .any(|pass| pass.label() == failed && pass.owns_artifact(name))
+    })
 }
 
 /// Whether an artifact is a page's `--txt` dump.
@@ -549,6 +568,42 @@ mod tests {
         assert!(tier_a.is_clean());
         assert!(tags.is_empty());
         assert_eq!(tier_a.compared.len(), 2);
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn a_golden_from_a_crashed_oracle_pass_is_not_compared() {
+        // `redact_annot`'s shape: the oracle's annotation dump has no arm for
+        // a redaction subtype and aborts on one, leaving a zero-byte file
+        // behind. Comparing against it would make the crash the contract, so
+        // that pass's artifacts drop out of the comparison entirely — while
+        // the passes that *did* succeed still count.
+        let (root, store) = temp_store("crashed-pass");
+        let mut manifest = manifest_with(&["input.pdf.0.annot.txt", "metadata.txt"], 1);
+        manifest.oracle_failures = vec!["Annot".to_owned()];
+        store.write_manifest(&manifest).unwrap();
+        store
+            .write_artifact(&manifest.key, "input.pdf.0.annot.txt", b"")
+            .unwrap();
+        store
+            .write_artifact(&manifest.key, "metadata.txt", b"")
+            .unwrap();
+
+        let produced = Produced {
+            artifacts: vec![
+                (
+                    "input.pdf.0.annot.txt".to_owned(),
+                    b"Number of annotations: 1\n\n".to_vec(),
+                ),
+                ("metadata.txt".to_owned(), b"".to_vec()),
+            ],
+            page_count: Some(1),
+            crashed: vec![],
+        };
+        let (mut tags, mut notes) = (Vec::new(), Vec::new());
+        let tier_a = compare_tier_a(&store, &manifest, &produced, &mut tags, &mut notes);
+        assert!(tier_a.is_clean());
+        assert_eq!(tier_a.compared, ["metadata.txt"]);
         std::fs::remove_dir_all(&root).ok();
     }
 

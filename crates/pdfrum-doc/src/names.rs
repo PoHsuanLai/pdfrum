@@ -174,6 +174,10 @@ pdfrum_object::names! {
     AIS = "AIS";
     /// The blend mode (`/BM`).
     BM = "BM";
+    /// The one blend mode a generated appearance ever asks for beyond normal
+    /// (`/Multiply`), used by the highlight generator so the text below shows
+    /// through.
+    MULTIPLY_BLEND = "Multiply";
     /// A font resource dictionary (`/Font`).
     FONT = "Font";
     /// A Type 1 font subtype (`/Type1`).

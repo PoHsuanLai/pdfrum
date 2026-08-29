@@ -61,13 +61,13 @@ impl ObjectKind {
 ///
 /// `objects_in_ap` is asked, per `/Annots` index, what the annotation's normal
 /// appearance stream draws. It is a callback rather than a parameter because
-/// answering means parsing a content stream, which this crate does not do
-/// itself.
+/// answering means parsing a content stream — which this crate does not do,
+/// and which the caller will want to answer against its own caches.
 #[must_use]
 pub fn render<R: Resolve>(
     page: &Dict,
     overlay: Option<&AnnotOverlay>,
-    objects_in_ap: impl Fn(usize, &Dict) -> Vec<ObjectKind>,
+    mut objects_in_ap: impl FnMut(usize, &Dict) -> Vec<ObjectKind>,
     r: &R,
     diags: &mut Diagnostics,
 ) -> String {
@@ -83,7 +83,15 @@ pub fn render<R: Resolve>(
             out.push_str("Failed to retrieve annotation!\n\n");
             continue;
         };
-        write_annotation(&mut out, &dict, index, overlay, &objects_in_ap, r, diags);
+        write_annotation(
+            &mut out,
+            &dict,
+            index,
+            overlay,
+            &mut objects_in_ap,
+            r,
+            diags,
+        );
     }
     out
 }
@@ -94,7 +102,7 @@ fn write_annotation<R: Resolve>(
     dict: &Dict,
     index: usize,
     overlay: Option<&AnnotOverlay>,
-    objects_in_ap: &impl Fn(usize, &Dict) -> Vec<ObjectKind>,
+    objects_in_ap: &mut impl FnMut(usize, &Dict) -> Vec<ObjectKind>,
     r: &R,
     diags: &mut Diagnostics,
 ) {
@@ -126,8 +134,10 @@ fn write_annotation<R: Resolve>(
         out.push('\n');
     }
 
-    write_color(out, dict, subtype, false, r);
-    write_color(out, dict, subtype, true, r);
+    let has_appearance = overlay.is_some_and(|overlay| overlay.get(index).is_some())
+        || appearance::annot_ap(dict, appearance::ApMode::Normal, true, r).is_some();
+    write_color(out, dict, has_appearance, false, r);
+    write_color(out, dict, has_appearance, true, r);
 
     for (label, key) in [("Content", obj_names::CONTENTS), ("Author", obj_names::T)] {
         let text = dict
@@ -181,14 +191,24 @@ fn write_annotation<R: Resolve>(
 /// One of the two colour lines.
 ///
 /// Both fail — printing a message rather than numbers — whenever the
-/// annotation already resolves to a normal appearance **stream**, because the
-/// stream's own colour operators outrank anything the dictionary says. When
-/// there is no colour array at all the line still succeeds, using the default
-/// the matching appearance generator would have used: yellow for a highlight,
-/// black for everything else.
-fn write_color<R: Resolve>(out: &mut String, dict: &Dict, subtype: Subtype, interior: bool, r: &R) {
+/// annotation resolves to a normal appearance **stream**, because the
+/// stream's own colour operators outrank anything the dictionary says. That
+/// includes a stream this run just generated, which is why `has_appearance`
+/// is passed in rather than looked up: by the time the format describes the
+/// document, generation has already given most annotations one.
+///
+/// When there is no colour array at all the line still succeeds, using the
+/// default the matching appearance generator would have used: yellow for a
+/// highlight, black for everything else.
+fn write_color<R: Resolve>(
+    out: &mut String,
+    dict: &Dict,
+    has_appearance: bool,
+    interior: bool,
+    r: &R,
+) {
     let label = if interior { "Interior color" } else { "Color" };
-    if appearance::annot_ap(dict, appearance::ApMode::Normal, true, r).is_some() {
+    if has_appearance {
         let _ = writeln!(out, "Failed to retrieve {}.", label.to_lowercase());
         return;
     }
@@ -215,7 +235,6 @@ fn write_color<R: Resolve>(out: &mut String, dict: &Dict, subtype: Subtype, inte
         } else {
             writeln!(out, "{label} in RGBA: 0 0 0 {alpha}")
         };
-        let _ = subtype;
         return;
     };
     let (red, green, blue) = Color::from_array(&array).annot_rgb_bytes();
