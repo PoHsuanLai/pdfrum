@@ -174,6 +174,7 @@ mod tests {
             position,
             matrix,
             font: font.map(|f| (f, 10.0)),
+            font_source: None,
             render_mode: TextRenderMode::Fill,
             type3_metrics: BTreeMap::new(),
         }

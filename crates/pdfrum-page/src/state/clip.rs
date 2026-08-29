@@ -240,6 +240,7 @@ mod tests {
                 position: kurbo::Point::new(x, y),
                 matrix: kurbo::Affine::IDENTITY,
                 font: None,
+                font_source: None,
                 render_mode: crate::ops::TextRenderMode::Clip,
                 type3_metrics: std::collections::BTreeMap::new(),
             },

@@ -979,6 +979,7 @@ mod tests {
             position: Point::new(x, y),
             matrix: Affine::IDENTITY,
             font: Some((font, 20.0)),
+            font_source: None,
             render_mode: TextRenderMode::Fill,
             type3_metrics: std::collections::BTreeMap::new(),
         }

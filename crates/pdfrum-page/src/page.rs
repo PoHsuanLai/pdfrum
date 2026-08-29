@@ -28,7 +28,7 @@ use kurbo::{Affine, BezPath, Rect};
 use pdfrum_common::{DiagKind, Diagnostics, Severity};
 use pdfrum_font::Font;
 use pdfrum_object::{Dict, Resolve};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
 /// The default page size when `/MediaBox` is missing or empty: US Letter.
@@ -121,6 +121,9 @@ pub struct TextObject {
     pub matrix: Affine,
     /// The font and size.
     pub font: Option<(Arc<Font>, f32)>,
+    /// The `/Font` resource the font came from, for a regenerated stream to
+    /// name. `None` for a font loaded from an inline dictionary.
+    pub font_source: Option<pdfrum_object::ObjRef>,
     /// How the glyphs are painted.
     pub render_mode: crate::ops::TextRenderMode,
     /// For a Type 3 font only: what each shown character's glyph procedure
@@ -177,6 +180,13 @@ pub struct ImageObject {
     /// place visibility is declared and not a cache of the first. An inline
     /// image has no dictionary of its own to declare it in.
     pub oc: Option<Arc<Dict>>,
+    /// The `XObject` this image was drawn from, when it was a named resource.
+    ///
+    /// The pixels here are decoded, and a regenerated stream must name the
+    /// *undecoded* stream a `Do` can reach — so the reference travels with the
+    /// object. `None` for an inline image, which has no indirect object to
+    /// name and is therefore dropped when its stream is rewritten.
+    pub source: Option<pdfrum_object::ObjRef>,
 }
 
 /// A shading painted directly by `sh`.
@@ -209,6 +219,11 @@ pub struct FormObject {
     /// membership, alongside and independently of any marked-content
     /// sequence enclosing the `Do` that drew it.
     pub oc: Option<Arc<Dict>>,
+    /// The `XObject` this form was drawn from, when it was a named resource.
+    ///
+    /// As an image's: the objects here are already interpreted, so a
+    /// regenerated stream names the stream rather than re-emitting them.
+    pub source: Option<pdfrum_object::ObjRef>,
 }
 
 /// One thing to paint.
@@ -239,12 +254,97 @@ pub struct Content<T> {
     pub state: GraphicsState,
     /// The marked-content sequence enclosing it.
     pub marks: ContentMarks,
-    /// Which `/Contents` element it came from, for the editor. `-1` when it
-    /// preceded any stream, which cannot happen in practice.
+    /// Which `/Contents` element it came from, for the editor.
+    /// [`NO_CONTENT_STREAM`] for an object that was created rather than
+    /// parsed.
+    ///
+    /// [`NO_CONTENT_STREAM`]: crate::mutate::NO_CONTENT_STREAM
     pub content_stream: i32,
+    /// Whether the object has been changed since it was parsed, so its
+    /// content stream must be written again on save
+    /// (see [`mutate`](crate::mutate)).
+    pub dirty: bool,
+    /// Whether the object is painted. An inactive object keeps its place in
+    /// the list but contributes nothing to a regenerated stream.
+    pub active: bool,
+}
+
+/// The fields every page object carries whatever it paints.
+///
+/// A borrowed view rather than a shared base struct: the five variants keep
+/// their own records, and this is how a function that only cares about the
+/// bookkeeping reaches it without matching five times.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Common {
+    pub(crate) content_stream: i32,
+    pub(crate) dirty: bool,
+    pub(crate) active: bool,
+}
+
+/// A mutable view of the same, so a mutation writes through one match.
+pub(crate) struct CommonMut<'a> {
+    pub(crate) content_stream: &'a mut i32,
+    pub(crate) dirty: &'a mut bool,
+    pub(crate) active: &'a mut bool,
+}
+
+impl<T> Content<T> {
+    /// A newly created object, under `state` and enclosed by no marks.
+    ///
+    /// It arrives dirty and streamless, which is what a *created* object is:
+    /// it describes no bytes yet, so the stream it lands in has to be written
+    /// for it to exist at all. An object the interpreter produced from bytes
+    /// is built field-by-field instead, because it is neither.
+    #[must_use]
+    pub fn new(object: T, state: GraphicsState) -> Self {
+        Self {
+            object,
+            state,
+            marks: ContentMarks::new(),
+            content_stream: crate::mutate::NO_CONTENT_STREAM,
+            dirty: true,
+            active: true,
+        }
+    }
+
+    fn common(&self) -> Common {
+        Common {
+            content_stream: self.content_stream,
+            dirty: self.dirty,
+            active: self.active,
+        }
+    }
+
+    fn common_mut(&mut self) -> CommonMut<'_> {
+        CommonMut {
+            content_stream: &mut self.content_stream,
+            dirty: &mut self.dirty,
+            active: &mut self.active,
+        }
+    }
 }
 
 impl PageObject {
+    pub(crate) fn common(&self) -> Common {
+        match self {
+            Self::Path(c) => c.common(),
+            Self::Text(c) => c.common(),
+            Self::Image(c) => c.common(),
+            Self::Shading(c) => c.common(),
+            Self::Form(c) => c.common(),
+        }
+    }
+
+    pub(crate) fn common_mut(&mut self) -> CommonMut<'_> {
+        match self {
+            Self::Path(c) => c.common_mut(),
+            Self::Text(c) => c.common_mut(),
+            Self::Image(c) => c.common_mut(),
+            Self::Shading(c) => c.common_mut(),
+            Self::Form(c) => c.common_mut(),
+        }
+    }
+
     /// The graphics state the object was created under.
     #[must_use]
     pub fn state(&self) -> &GraphicsState {
@@ -294,6 +394,22 @@ pub struct Page {
     /// The page's resource dictionary, for a caller that needs to re-resolve
     /// a name.
     pub resources: Option<Dict>,
+    /// `/Contents` elements that must be written again because objects were
+    /// removed from them (see [`mutate`](crate::mutate)).
+    ///
+    /// Only removals need recording here: a modified or hidden object still
+    /// carries its own [`Content::dirty`], but a removed one leaves nothing
+    /// behind to say its stream lost something.
+    pub dirty_streams: BTreeSet<i32>,
+    /// The transform each `/Contents` element leaves in force at its end,
+    /// keyed by element index.
+    ///
+    /// A content stream can leave the transform changed for the ones after it
+    /// — an unbalanced `q`/`cm` is legal and common — so a stream rewritten on
+    /// its own must first undo what it inherited and then restate what it
+    /// passes on. Only streams that actually changed the transform have an
+    /// entry.
+    pub stream_ctms: BTreeMap<i32, Affine>,
 }
 
 impl Page {
@@ -313,6 +429,8 @@ impl Page {
                 ..Transparency::default()
             },
             resources: None,
+            dirty_streams: BTreeSet::new(),
+            stream_ctms: BTreeMap::new(),
         }
     }
 

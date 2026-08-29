@@ -276,6 +276,7 @@ mod tests {
                 position: kurbo::Point::new(x, 0.0),
                 matrix: Affine::IDENTITY,
                 font: Some((font, 20.0)),
+                font_source: None,
                 render_mode: pdfrum_page::TextRenderMode::Clip,
                 type3_metrics: std::collections::BTreeMap::new(),
             },
