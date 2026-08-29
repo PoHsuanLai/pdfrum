@@ -23,8 +23,13 @@ pub fn to_fill(rule: FillRule) -> vpeniko::Fill {
 /// `None` is ordinary antialiasing. `Some(128)` binarizes coverage at the
 /// midpoint, which is what PDFium's `aliased_path` does too
 /// (`> 127 -> 255`) — the two agree on the *rule*, unlike tiny-skia's
-/// pixel-centre scan converter. That difference is why abutting Coons cells
-/// are drawn opaque into a scratch buffer: vello claims a half-covered shared
+/// pixel-centre scan converter.
+///
+/// `Some(1)` is `full_cover`, and the threshold happens to express it exactly:
+/// the flag keeps the rasterizer's choice of covered pixels and discards only
+/// their coverage *value*, so "opaque wherever coverage is non-zero" is the
+/// whole rule. Abutting Coons cells are still drawn opaque into a scratch
+/// buffer, for the reason §5.3 gives — vello claims a half-covered shared
 /// pixel for *both* cells, which is only harmless when both write the same
 /// opaque colour.
 #[must_use]
@@ -32,6 +37,7 @@ pub fn to_aliasing_threshold(aa: AntiAlias) -> Option<u8> {
     match aa {
         AntiAlias::On => None,
         AntiAlias::Off => Some(128),
+        AntiAlias::FullCover => Some(1),
     }
 }
 

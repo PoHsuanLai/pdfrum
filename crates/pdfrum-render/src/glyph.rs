@@ -59,7 +59,7 @@
 
 use kurbo::{Affine, BezPath, Shape};
 
-use crate::scanline::{FillRule, Rasterizer};
+use crate::scanline::{Coverage, FillRule, Rasterizer};
 
 /// FreeType's `FT_LCD_FILTER_DEFAULT` five-tap weights
 /// (`ftlcdfil.c`'s `default_weights`).
@@ -316,7 +316,7 @@ pub fn render_lcd(outline: &BezPath) -> Option<LcdBitmap> {
 
     let mut ras = Rasterizer::new();
     ras.add_path(&placed, FLATTEN_TOLERANCE);
-    ras.sweep(FillRule::NonZero, true, |x, len, y, alpha| {
+    ras.sweep(FillRule::NonZero, Coverage::Exact, |x, len, y, alpha| {
         if y < 0 || y >= height {
             return;
         }

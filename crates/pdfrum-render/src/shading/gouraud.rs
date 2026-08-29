@@ -14,11 +14,11 @@
 
 use kurbo::Affine;
 use pdfrum_page::Rgb;
-use pdfrum_page::shading::Triangle;
+use pdfrum_page::shading::{Triangle, Vertex};
 
 use crate::color::Argb;
 use crate::pixmap::Pixmap;
-use crate::shading::steps::ColorSteps;
+use crate::shading::steps::{ColorSteps, component_to_shading_index};
 
 /// One edge crossing of a scanline: where it lands and what colour it carries.
 #[derive(Debug, Clone, Copy)]
@@ -227,9 +227,35 @@ pub fn draw(
     dest: &mut Pixmap,
     triangles: &[Triangle],
     steps: Option<&ColorSteps>,
+    component_range: [f32; 2],
     alpha: u8,
     to_bitmap: Affine,
 ) {
+    // With a ramp the mesh carried parametric values, and each one is mapped
+    // into the ramp's 0..255 across the mesh's own decode range *before* the
+    // scanline interpolation — upstream does it at vertex-read time, and the
+    // interpolation is linear, so doing it per triangle is the same function.
+    let mapped: Vec<Triangle>;
+    let triangles = match steps {
+        Some(_) => {
+            let [lo, hi] = component_range;
+            mapped = triangles
+                .iter()
+                .map(|t| Triangle {
+                    vertices: t.vertices.map(|v| Vertex {
+                        point: v.point,
+                        color: Rgb {
+                            r: component_to_shading_index(v.color.r, lo, hi),
+                            g: 0.0,
+                            b: 0.0,
+                        },
+                    }),
+                })
+                .collect();
+            mapped.as_slice()
+        }
+        None => triangles,
+    };
     for t in triangles {
         draw_triangle(dest, t, steps, alpha, to_bitmap);
     }

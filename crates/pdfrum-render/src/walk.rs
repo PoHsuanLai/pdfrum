@@ -1563,9 +1563,29 @@ fn render_shading<B: RasterBackend>(
     if !rect.is_valid() {
         return;
     }
-    match object.shading.kind() {
+    draw_shading_into(ctx, device, backend, &object.shading, rect, matrix, alpha);
+}
+
+/// Rasterize any of the seven shading types into `rect` and blit it.
+///
+/// The seventh and sixth need a rasterizer rather than a buffer, so they take
+/// a scratch device; the other five are pure engine code. Both `sh` and a
+/// shading *pattern* reach a shading exactly this way, and routing them
+/// through one function is what keeps a Coons pattern from being the silent
+/// no-op it was when only `sh` knew about the scratch path.
+pub(crate) fn draw_shading_into<B: RasterBackend>(
+    ctx: &RenderCtx<'_>,
+    device: &mut B::Device,
+    backend: &B,
+    shading: &pdfrum_page::Shading,
+    rect: IntRect,
+    matrix: Affine,
+    alpha: u8,
+) {
+    let at = Affine::translate((f64::from(rect.left), f64::from(rect.top)));
+    match shading.kind() {
         pdfrum_page::ShadingKind::CoonsMesh | pdfrum_page::ShadingKind::TensorMesh => {
-            let tensor = object.shading.kind() == pdfrum_page::ShadingKind::TensorMesh;
+            let tensor = shading.kind() == pdfrum_page::ShadingKind::TensorMesh;
             let (Ok(w), Ok(h)) = (u32::try_from(rect.width()), u32::try_from(rect.height())) else {
                 return;
             };
@@ -1576,27 +1596,16 @@ fn render_shading<B: RasterBackend>(
             // cells overpaint identically on both backends; the shading's
             // alpha is applied exactly once, at the blit below.
             let mut scratch = backend.new_target(w, h, peniko::Color::TRANSPARENT);
-            shading::draw_patches(&mut scratch, &object.shading, rect, matrix, tensor);
+            shading::draw_patches(&mut scratch, shading, rect, matrix, tensor);
             let pixels = backend.finish(scratch);
-            device.draw_image(
-                &pixels,
-                Affine::translate((f64::from(rect.left), f64::from(rect.top))),
-                ImageQuality::Nearest,
-                f32::from(alpha) / 255.0,
-            );
+            device.draw_image(&pixels, at, ImageQuality::Nearest, f32::from(alpha) / 255.0);
         }
         _ => {
-            let Some(pixels) =
-                shading::draw_to_pixmap(&object.shading, rect, matrix, alpha, &ctx.opts)
+            let Some(pixels) = shading::draw_to_pixmap(shading, rect, matrix, alpha, &ctx.opts)
             else {
                 return;
             };
-            device.draw_image(
-                &pixels,
-                Affine::translate((f64::from(rect.left), f64::from(rect.top))),
-                ImageQuality::Nearest,
-                1.0,
-            );
+            device.draw_image(&pixels, at, ImageQuality::Nearest, 1.0);
         }
     }
 }

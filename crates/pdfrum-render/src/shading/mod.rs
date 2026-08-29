@@ -93,13 +93,18 @@ pub fn draw_to_pixmap(
         }
         Geometry::Mesh { kind, mesh } => match kind {
             ShadingKind::FreeFormMesh | ShadingKind::LatticeMesh => {
+                // The ramp spans the mesh's own first-component decode range,
+                // which is the parametric value's domain and need not be the
+                // unit interval.
+                let [t_min, t_max] = mesh.component_range;
                 let ramp = (!shading.functions.is_empty())
-                    .then(|| ColorSteps::sample(shading, 0.0, 1.0, alpha))
+                    .then(|| ColorSteps::sample(shading, t_min, t_max, alpha))
                     .flatten();
                 gouraud::draw(
                     &mut buffer,
                     &mesh.triangles,
                     ramp.as_ref(),
+                    mesh.component_range,
                     alpha,
                     to_bitmap,
                 );
@@ -140,10 +145,15 @@ pub fn draw_patches(
         return;
     };
     let to_bitmap = Affine::translate((-f64::from(rect.left), -f64::from(rect.top))) * to_device;
-    // The ramp is sampled at full alpha for the same reason: the cells are
-    // opaque and the alpha is applied once, at the blit.
+    // The ramp spans the mesh's own first-component decode range, not the
+    // unit interval: that range is the parametric value's domain, and it is
+    // `[1, 2]` and `[0, 255]` as readily as `[0, 1]`.
+    //
+    // The ramp is sampled at full alpha for the same reason the cells are:
+    // they are opaque and the alpha is applied once, at the blit.
+    let [t_min, t_max] = mesh.component_range;
     let ramp = (!shading.functions.is_empty())
-        .then(|| ColorSteps::sample(shading, 0.0, 1.0, 255))
+        .then(|| ColorSteps::sample(shading, t_min, t_max, 255))
         .flatten();
     let (Ok(w), Ok(h)) = (u32::try_from(rect.width()), u32::try_from(rect.height())) else {
         return;
@@ -152,7 +162,7 @@ pub fn draw_patches(
         if patch::patch_is_offscreen(p, to_bitmap, w, h) {
             continue;
         }
-        patch::draw_patch(scratch, p, ramp.as_ref(), to_bitmap, tensor);
+        patch::draw_patch(scratch, p, ramp.as_ref(), [t_min, t_max], to_bitmap, tensor);
     }
 }
 

@@ -93,9 +93,21 @@ pub fn to_fill_rule(rule: FillRule) -> tiny_skia::FillRule {
 }
 
 /// Whether a primitive is antialiased.
+///
+/// tiny-skia has no `full_cover`. Of its two settings, **antialiased** is the
+/// closer one: `full_cover` keeps the rasterizer's own choice of covered
+/// pixels and only flattens their alpha, so an antialiased fill reaches every
+/// pixel the oracle would and merely writes some of them light, while the
+/// aliased setting drops a pixel two abutting cells each half-cover and puts
+/// a white pin-hole through the seam. A patch cell is drawn opaque into a
+/// scratch buffer for the reason §5.3 gives, and against that buffer the
+/// remaining difference is one partial-coverage edge byte rather than a hole.
 #[must_use]
 pub fn to_anti_alias(aa: AntiAlias) -> bool {
-    matches!(aa, AntiAlias::On)
+    match aa {
+        AntiAlias::On | AntiAlias::FullCover => true,
+        AntiAlias::Off => false,
+    }
 }
 
 /// The sampling quality for an image draw.
