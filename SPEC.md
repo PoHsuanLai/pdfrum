@@ -883,6 +883,36 @@ artifact name back to the pass that wrote it.
 `%f` both go through a hand-written round-half-to-even fixed-point formatter
 rather than Rust's `{:.N}`, which rounds half away from zero.
 
+**E1's cost is now measured, and the decision is open.** Burn-down wave 9
+classified every document still below SSIM 0.99 and found the widget text body
+to be the **largest single named cluster: 16 of 83**, from `listbox_form` at
+0.933 to `text_form_color` at 0.989. Only **2 of the 16** set
+`/NeedAppearances`; the rest are ordinary files with an unadorned `/Tx` or
+`/Ch` field. It is Tier-A visible too — `--annot` reports 0 objects where the
+golden reports 1, 7 and 27 on `bug_983867`, `bug_477200528` and
+`scrollable_widgets1`.
+
+Two things the original ruling could not have known:
+
+- The producer is **not** `GenerateFormAP`, which really is gated on
+  `NeedAppearances` (`cpdf_annotlist.cpp:209`). It is
+  `CPDFSDK_AppStream::SetAsTextField`/`SetAsListBox`/`SetAsComboBox`
+  (`cpdfsdk_appstream.cpp:1686`, `:1604`, `:1532`), reached ungated from
+  `cpdfsdk_widget.cpp:1109-1111`. `scrollable_widgets1` distinguishes them: it
+  has no `/I`, so `GenerateListBoxAP` would highlight nothing, and the golden
+  highlights its selection — `SetAsListBox` reads `/V` through
+  `GetSelectedIndex` (`cpdfsdk_appstream.cpp:1631-1636`).
+- **The second engine the ruling declined already exists.** `pdfrum-doc`'s
+  `vt` module is a complete variable-text layout engine, and `vt::Config`
+  already carries `multi_line`, `auto_return`, `sub_word`, `limit_char` and
+  `char_array` — the knobs the text-field case sets. `ap/freetext.rs` is a
+  working consumer of it. The remaining work is wiring, not a port:
+  `widget::generate` never receives a `TextFont`, and `ap`'s text-bearing
+  dispatch answers only for `FreeText`.
+
+The ruling **stands until changed**: this records the price, not a decision.
+Wiring the widget path is a `[spec]` change and belongs to the orchestrator.
+
 ## 11. `pdfrum-edit`  *(behavior: `core/fpdfapi/edit`)*
 
 `pub fn save(doc: &Document, mode: SaveMode, out: &mut impl io::Write) -> Result<(), Error>`
