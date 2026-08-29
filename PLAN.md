@@ -1,6 +1,6 @@
 # PDFium → Rust Rewrite — Master Plan
 
-**Status:** ALL MILESTONES MET (2026-08-30). Pixel: 96.2%@0.99 / 99.3%@0.95 / 516 byte-exact; passing 1602/1675; annot 99.8%, text 99.6%, metadata/pageinfo/structure 100%; oracle reopens 100% of saved files. M1 fuzz gate ran ~9h parallel clean (18 targets) before being stopped externally — rerun `scripts/fuzz-gate.sh 86400 parallel` for the full 24h certificate. Documented tail in docs/status/pdfrum-render.md (image downscale kernel, CCITT chain caller, BAFontMap fallback, 2 external items).
+**Status:** Phase 1 complete (all milestones met 2026-08-30 — see Phase 2 section for the v1-completion & performance plan: M9 parity tail, M10 encrypted save, M11 page mutation, M12 performance, M13 release). Phase 2 not started.
 **Oracle:** `/mnt/data2/pdfium/pdfium-c++` (read-only C++ PDFium checkout @ `6f2272e`)
 **Workspace:** `/mnt/data2/pdfium/pdfrum` (this repository)
 
@@ -198,3 +198,74 @@ Parallelism: after M1, {M2-text} ∥ {M3-render} ∥ {M4-codec ports}; `pdfrum-j
 3. Golden-store generator (drives `pdfium_test` over corpus+resources incl. `.in` fixup, writes `conformance/goldens/`).
 4. Harness v1 + `scoreboard.json` + `--triage`.
 5. Design briefs for `pdfrum-object` + `pdfrum-parser` (first real code of M1).
+
+---
+
+# Phase 2 — v1 completion & performance (planned 2026-08-30)
+
+Phase 1 delivered the feature-complete engine. Phase 2 closes the three real
+feature gaps, grinds the documented parity tail, and runs a measured
+optimization program. Same rules: briefs where behavior is nontrivial,
+`[spec]` protocol, monotone scoreboard, oracle-evidence over reasoning.
+
+## M9 — Parity tail closure  *(small; parallel with M10)*
+
+Port `CStretchEngine`'s area-average box downscale filter (largest remaining
+pixel cluster); wire CCITT into the filter chain (unblocks the reverted
+`bug_1746` Type3 fix); implement the `CPDF_BAFontMap` charset-driven N-slot
+second-face fallback (the last 4 annot artifacts); re-derive `en_fqa` from a
+fresh trace; finalize the upstream hayro-jbig2 issue text (user files it).
+*Exit:* pixel >= 97.5% @0.99; annot 100%; every remaining failing file has a
+one-line cause in the status doc.
+
+## M10 — Encrypted save  *(reverses ruling E3's deferral)*
+
+`pdfrum-crypt` gains the encrypt direction ([spec] on SPEC.md §3/D2: RC4 +
+AES-CBC encrypt with per-object keys, PKCS#7 padding, fresh IVs); the writer
+re-encrypts strings/streams under the original handler on save (the encrypt
+dict itself never encrypted; the security_changed_ / /ID interlock already
+ported in M7 stays authoritative). Password-preserving only — no re-keying
+API in v1. *Exit:* every encrypted corpus fixture saves, the ORACLE reopens
+it with the same password, and the round-trip renders equal; incremental
+save of an encrypted doc holds the append discipline.
+
+## M11 — Page mutation  *(before M12 — it touches pdfrum-page's core types)*
+
+The deferred holder-mutation half of content regeneration (edit brief E6):
+dirty/active tracking on PageObject, content-stream index + per-stream CTM
+facility in pdfrum-page ([spec] §7), regenerate-on-save wired through the
+existing byte-pinned emitters, facade API (add/remove/edit path, text, and
+image objects; `page.objects_mut()`; `doc.save` reflects it). Port the
+relevant FPDFPage_* embeddertest assertions as the behavior net. *Exit:*
+mutate -> save -> oracle reopens and renders the expected result; round-trip
+property tests extended to mutated documents; regenerated-page divergence
+cluster (R13) thresholds unchanged.
+
+## M12 — Performance program  *(after M11; conformance is the regression gate)*
+
+- **P0 baseline:** expand the bench corpus to ~40 files across feature
+  classes (text-heavy, image-heavy, vector, shading, forms); commit a
+  benchmark-baseline JSON with a ratchet like the scoreboard; add a
+  profiling harness (perf/flamegraph scripts under scripts/).
+- **P1 CPU:** measured hotspots first — per-page allocation churn (arena /
+  RenderCaches reuse deeper than the session API), exact-backend scanline
+  loops (restructure for autovectorization BEFORE any SIMD dependency — a
+  new dep is a DEPS.md decision, default no), image resample + composite
+  loops, lexer throughput, `vello_cpu` thread config, rayon multi-page
+  scaling validation.
+- **P2 memory:** peak-RSS harness vs the oracle on large docs; decoded-image
+  cache eviction; Arc/clone pressure audit.
+- **Targets (adjustable):** single-thread geometric mean >= oracle on the
+  bench corpus; >= 3x oracle throughput on multi-page docs with rayon; peak
+  RSS <= 1.5x oracle. Every perf commit re-runs conformance — byte-exact
+  stays byte-exact; the bench ratchet only tightens.
+
+## M13 — Release
+
+MSRV declared and CI-checked; repository URL; bottom-up family publish to
+crates.io per docs/status/M8.md (round-one --no-verify for dev-dep
+back-edges); README badges + final docs pass; the 24h fuzz-gate certificate
+re-run to completion on an idle machine; upstream hayro-jbig2 issue filed.
+*Post-1.0 options (explicitly out of Phase 2):* progressive/linearized
+loading, GPU vello backend, JS actions via boa, re-keying/encryption-mode
+conversion on save.
