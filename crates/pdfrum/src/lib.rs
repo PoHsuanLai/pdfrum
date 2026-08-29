@@ -58,7 +58,8 @@
 //!   document as a whole: [page count](Document::page_count),
 //!   [metadata](Document::metadata), [outline](Document::outline),
 //!   [form](Document::form), [attachments](Document::attachments),
-//!   [diagnostics](Document::diagnostics).
+//!   [diagnostics](Document::diagnostics) and the document-wide
+//!   [running total](Document::all_diagnostics).
 //! - [`Page`] — [render](Page::render) it, [read its text](Page::text), list
 //!   its [annotations](Page::annotations) and [links](Page::links), ask for
 //!   its [boxes](Page::crop_box) and [rotation](Page::rotation).
@@ -78,6 +79,12 @@
 //! damage. [`Error`] is reserved for "no answer can be produced" — a file
 //! that is not a PDF, a password that does not open it, a page index that
 //! does not exist.
+//!
+//! Reading is lazy, so damage surfaces late: a bad `/Length` on page 400 is
+//! found when page 400 is rendered, not when the file opens.
+//! [`Document::diagnostics`] is the load-time snapshot;
+//! [`Document::all_diagnostics`] is the running total over everything the
+//! document has needed since — ask it *after* the work.
 //!
 //! # Rendering pages in parallel
 //!
@@ -127,6 +134,30 @@
 //! `&mut` — sharing one behind a lock would serialize the very work the
 //! parallelism is for.
 //!
+//! [`BuildContext`] caches what a page is *built* from. A page is also
+//! *drawn*, and the rasterizer's flattened glyph outlines are a second cache
+//! that a per-page render throws away. [`RenderSession`] carries both; use it
+//! with [`Page::render_session`] wherever you would have used
+//! `BuildContext`:
+//!
+//! ```
+//! use rayon::prelude::*;
+//! use pdfrum::{Document, RenderOptions, RenderSession};
+//!
+//! let doc = Document::open("tests/fixtures/bookmarks.pdf")?;
+//! let pages: Vec<_> = doc.pages().collect();
+//!
+//! let rendered: Vec<_> = pages
+//!     .par_iter()
+//!     .map_init(RenderSession::new, |session, page| {
+//!         page.render_session(&RenderOptions::default(), session)
+//!     })
+//!     .collect::<Result<_, _>>()?;
+//!
+//! assert_eq!(rendered.len(), 2);
+//! # Ok::<(), pdfrum::Error>(())
+//! ```
+//!
 //! # This crate composes, it does not compute
 //!
 //! Everything here is a thin, ergonomic surface over a stack of member
@@ -148,6 +179,7 @@ mod outline;
 mod page;
 mod render;
 mod save;
+mod session;
 
 pub use annotation::{AnnotFlags, Annotation, Subtype};
 pub use document::{Attachment, Document, Metadata, OpenOptions};
@@ -157,6 +189,7 @@ pub use outline::{Bookmark, Outline};
 pub use page::{Page, Rotation};
 pub use render::{Backend, ColorMode, ColorScheme, Pixmap, RenderOptions, TextAa};
 pub use save::{SaveOptions, Update};
+pub use session::RenderSession;
 
 /// Per-document caches — fonts, colour spaces, decoded images — that a caller
 /// threads through many pages to avoid decoding the same resource twice.
@@ -215,6 +248,9 @@ mod tests {
         send_sync::<SaveOptions>();
         send_sync::<Metadata>();
         send::<BuildContext>();
+        // Same story as `BuildContext`: reached through `&mut`, so it travels
+        // to a rayon worker rather than being shared with one.
+        send::<RenderSession>();
     }
 
     #[test]

@@ -1,7 +1,7 @@
 //! Opening a file and everything that belongs to the document as a whole.
 
 use std::path::Path;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use pdfrum_common::{Diagnostics, Limits};
 use pdfrum_object::{Dict, Name, Object, Resolve};
@@ -54,6 +54,20 @@ pub struct OpenOptions {
 pub struct Document {
     pub(crate) inner: pdfrum_parser::Document,
     pub(crate) limits: Limits,
+    /// What *this crate's* reads have repaired since the file opened.
+    ///
+    /// Interior mutability for a lazy record, documented as STYLE.md §2
+    /// requires: every read below this crate takes a `&mut Diagnostics` and
+    /// this crate's methods take `&self`, so what those reads recover has
+    /// nowhere else to go. A `Mutex` rather than a `RefCell` because
+    /// `Document` is what a rayon `par_iter` shares, and it is only ever
+    /// locked to append a handful of entries — never held across a parse.
+    ///
+    /// It is deliberately *not* what [`Document::diagnostics`] returns: that
+    /// stays the load-time snapshot, so an existing caller's answer does not
+    /// start changing under it. [`Document::all_diagnostics`] is the
+    /// document-wide view.
+    session: Mutex<Diagnostics>,
 }
 
 impl Document {
@@ -141,6 +155,7 @@ impl Document {
         Ok(Document {
             inner: pdfrum_parser::load(bytes, &load)?,
             limits: options.limits,
+            session: Mutex::new(Diagnostics::default()),
         })
     }
 
@@ -192,14 +207,16 @@ impl Document {
     pub fn page_label(&self, index: u32) -> Option<String> {
         let catalog = self.catalog();
         let mut diags = Diagnostics::default();
-        pdfrum_doc::page_label(
+        let label = pdfrum_doc::page_label(
             &catalog,
             i64::from(index),
             self.page_count(),
             &self.inner,
             &self.limits,
             &mut diags,
-        )
+        );
+        self.note(&diags);
+        label
     }
 
     /// The document's outline — its bookmarks, flattened to a pre-order walk
@@ -240,7 +257,9 @@ impl Document {
     #[must_use]
     pub fn xmp_metadata(&self) -> Option<Vec<u8>> {
         let mut diags = Diagnostics::default();
-        pdfrum_doc::xmp(&self.catalog(), &self.inner, &self.limits, &mut diags)
+        let xmp = pdfrum_doc::xmp(&self.catalog(), &self.inner, &self.limits, &mut diags);
+        self.note(&diags);
+        xmp
     }
 
     /// The document's interactive form, if it has one.
@@ -272,7 +291,7 @@ impl Document {
         };
         let tree = pdfrum_doc::NameTree { root: tree };
         let count = tree.count(&self.inner, &self.limits, &mut diags);
-        (0..count)
+        let attachments = (0..count)
             .filter_map(|index| {
                 let (name, value) =
                     tree.lookup_by_index(index, &self.inner, &self.limits, &mut diags)?;
@@ -282,7 +301,9 @@ impl Document {
                     doc: self,
                 })
             })
-            .collect()
+            .collect();
+        self.note(&diags);
+        attachments
     }
 
     /// Everything the reader repaired, worked around, or refused while
@@ -304,6 +325,67 @@ impl Document {
     #[must_use]
     pub fn diagnostics(&self) -> &Diagnostics {
         &self.inner.diags
+    }
+
+    /// Everything this document has needed repaired **in total** — at load,
+    /// and in every lazy read since.
+    ///
+    /// [`Document::diagnostics`] answers only the first of those. PDF is read
+    /// lazily by design: the cross-reference is recovered when the file opens,
+    /// but an object is parsed when something first asks for it, a content
+    /// stream is decoded when its page is rendered, and a font is substituted
+    /// when a glyph from it is drawn. A stream with a bad `/Length` on page
+    /// 400 is a repair that happens hundreds of calls after `open` returned,
+    /// and until now it was recorded into whatever short-lived sink the call
+    /// created and then dropped.
+    ///
+    /// This gathers three sinks into one owned snapshot: the load-time
+    /// diagnostics, the object store's running total
+    /// ([`pdfrum_parser::Document::lazy_diagnostics`]), and what this crate's
+    /// own reads — page building, text extraction, appearance generation,
+    /// attachment decoding — have recorded.
+    ///
+    /// It is a **running total**, so it is worth reading *after* the work
+    /// rather than before: a document that has been opened but not yet
+    /// rendered has nothing to say about its content streams. Reading it twice
+    /// without doing anything in between gives the same answer both times.
+    ///
+    /// ```
+    /// use pdfrum::{Document, RenderOptions};
+    ///
+    /// let doc = Document::open("tests/fixtures/hello_world.pdf")?;
+    /// let at_open = doc.all_diagnostics().len();
+    ///
+    /// // Rendering reaches the content stream, which is where this fixture's
+    /// // missing /Length is discovered.
+    /// let _ = doc.page(0)?.render(&RenderOptions::default())?;
+    /// assert!(doc.all_diagnostics().len() >= at_open);
+    /// # Ok::<(), pdfrum::Error>(())
+    /// ```
+    #[must_use]
+    pub fn all_diagnostics(&self) -> Diagnostics {
+        let mut all = self.inner.diags.clone();
+        all.extend(&self.inner.lazy_diagnostics());
+        if let Ok(guard) = self.session.lock() {
+            all.extend(&guard);
+        }
+        all
+    }
+
+    /// Fold what a call recovered into the document's running record.
+    ///
+    /// Every facade method that reads through the stack creates a sink to
+    /// satisfy the signatures below it; this is where that sink goes instead
+    /// of into the floor. A poisoned lock drops the entries rather than
+    /// panicking — losing a diagnostic is not worth failing a render for
+    /// (STYLE.md §3: no panics in library code).
+    pub(crate) fn note(&self, diags: &Diagnostics) {
+        if diags.is_empty() {
+            return;
+        }
+        if let Ok(mut guard) = self.session.lock() {
+            guard.extend(diags);
+        }
     }
 
     /// The PDF version the header declares, as major × 10 + minor: `17` for
@@ -449,9 +531,9 @@ impl Attachment<'_> {
     pub fn data(&self) -> Option<Vec<u8>> {
         let stream = self.spec.file_stream(&self.doc.inner)?;
         let mut diags = Diagnostics::default();
-        Some(
-            pdfrum_filters::decode_chain(&stream, 0, &self.doc.inner, &self.doc.limits, &mut diags)
-                .data,
-        )
+        let decoded =
+            pdfrum_filters::decode_chain(&stream, 0, &self.doc.inner, &self.doc.limits, &mut diags);
+        self.doc.note(&diags);
+        Some(decoded.data)
     }
 }

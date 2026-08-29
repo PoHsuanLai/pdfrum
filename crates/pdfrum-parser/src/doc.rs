@@ -246,10 +246,7 @@ pub fn load(bytes: Arc<[u8]>, opts: &LoadOptions) -> Result<Document, LoadError>
     // replaced the trailer is reflected.
     let encrypt = encrypt_dict_located(&body, &xref, &trailer.dict, opts.limits);
 
-    let store_diags = store.drain_diags();
-    for entry in store_diags.entries() {
-        diags.record(entry.severity, entry.what.clone(), entry.at);
-    }
+    diags.extend(&store.drain_diags());
 
     Ok(Document {
         bytes: body,
@@ -704,6 +701,37 @@ impl Document {
     #[must_use]
     pub fn header_offset(&self) -> u64 {
         self.header_offset
+    }
+
+    /// What the object store has repaired **since** the file opened.
+    ///
+    /// [`Document::diags`] is a snapshot taken at load: it holds what
+    /// recovering the cross-reference, the trailer and the catalog needed, and
+    /// it never changes afterwards. But the store is lazy — every object is
+    /// parsed on the first request for it — so a stream whose `/Length` was
+    /// wrong, or an object the table pointed at the wrong offset, is
+    /// discovered whenever a caller first reaches that object, which is long
+    /// after `load` returned.
+    ///
+    /// Those later repairs accumulate in the store rather than vanishing, and
+    /// this returns a **snapshot** of them. It does not drain: ask twice
+    /// between two fetches and you get the same answer twice. The count grows
+    /// as the document is used, so it is a running total rather than a fixed
+    /// property of the file.
+    ///
+    /// ```
+    /// # use std::sync::Arc;
+    /// # use pdfrum_parser::{LoadOptions, load};
+    /// let bytes: Arc<[u8]> = Arc::from(&include_bytes!("../tests/files/minimal.pdf")[..]);
+    /// let doc = load(bytes, &LoadOptions::default())?;
+    /// // A clean file repairs nothing, before or after its pages are read.
+    /// let _ = doc.page(0);
+    /// assert!(doc.lazy_diagnostics().is_empty());
+    /// # Ok::<(), pdfrum_parser::LoadError>(())
+    /// ```
+    #[must_use]
+    pub fn lazy_diagnostics(&self) -> Diagnostics {
+        self.store.peek_diags()
     }
 
     /// Whether the cross-reference table came from the recovery scan rather

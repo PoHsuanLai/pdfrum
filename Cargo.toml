@@ -22,6 +22,7 @@ members = [
     "crates/pdfrum",
     "crates/pdfrum-tool",
     "conformance",
+    "benches",
 ]
 
 [workspace.package]

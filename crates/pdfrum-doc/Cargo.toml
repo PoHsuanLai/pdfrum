@@ -5,6 +5,9 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
+readme = "README.md"
+keywords = ["pdf", "annotations", "forms", "bookmarks"]
+categories = ["parser-implementations", "data-structures"]
 
 [lints]
 workspace = true
