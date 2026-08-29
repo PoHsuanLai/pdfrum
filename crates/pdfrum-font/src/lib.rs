@@ -316,6 +316,50 @@ impl Font {
         }
     }
 
+    /// Whether the PDF itself declared the advance widths this font reports.
+    ///
+    /// False only for a **simple** font with no `/Widths` array, where every
+    /// width already comes from the face and comparing the two would be
+    /// comparing a number against itself. A composite font always answers
+    /// true: its `/W` array defaults to `/DW` rather than to the face.
+    ///
+    /// Read by the glyph-spacing correction of §1.15, which only means
+    /// anything when the document's widths and the face's disagree.
+    #[must_use]
+    pub fn has_declared_widths(&self) -> bool {
+        match self {
+            Self::Simple(f) => f.has_font_widths(),
+            Self::Type0(_) | Self::Type3(_) => true,
+        }
+    }
+
+    /// Whether this font's glyphs take the glyph-spacing correction of §1.15.
+    ///
+    /// Reads the font's five relevant facts into a
+    /// [`GlyphSpacingGate`](subst::GlyphSpacingGate) and
+    /// asks [`applies_glyph_spacing`](subst::applies_glyph_spacing), where the
+    /// rule and its reasoning live.
+    #[must_use]
+    pub fn applies_glyph_spacing(&self) -> bool {
+        subst::applies_glyph_spacing(&subst::GlyphSpacingGate {
+            vertical: self.is_vertical(),
+            embedded: self.is_embedded(),
+            declared_widths: self.has_declared_widths(),
+            base_font_name: self.base_font_name(),
+            subst: self.subst(),
+        })
+    }
+
+    /// One glyph's own advance width, in 1000/em units, as the *face* declares
+    /// it — not as the PDF does.
+    ///
+    /// Zero when there is no face or the glyph has no advance, which callers
+    /// treat as "unknown" rather than as a genuine zero-width glyph.
+    #[must_use]
+    pub fn glyph_advance(&self, gid: Gid) -> i32 {
+        self.glyphs().advance(gid, &glyphs::GlyphParams::default())
+    }
+
     /// The bounding box of one character code's glyph, in 1000/em text space
     /// and **y-up**: `Rect::new(left, bottom, right, top)` with
     /// `bottom <= top`.

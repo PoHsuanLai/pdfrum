@@ -150,8 +150,14 @@ impl SubstFont {
     /// which is loose enough to be wrong — the C++'s own comment notes that a
     /// family called `Book` would match `Bookman`. Ported as-is because the
     /// glyph-spacing heuristic of §1.15 turns on it.
+    ///
+    /// `base_name` is a `/BaseFont` name, so it arrives as bytes and **the
+    /// caller lowercases it** — the two sides are lowered separately upstream
+    /// and a caller that has already lowered it for other tests should not
+    /// pay for it twice. An empty family never matches: a substitution that
+    /// named no family did not load the document's font.
     #[must_use]
-    pub fn is_actual_font_loaded(&self, base_name: &str) -> bool {
+    pub fn is_actual_font_loaded(&self, base_name: &[u8]) -> bool {
         let normalized: String = self
             .family
             .chars()
@@ -161,7 +167,7 @@ impl SubstFont {
         if normalized.is_empty() {
             return false;
         }
-        base_name.find(&normalized) == Some(0)
+        base_name.starts_with(normalized.as_bytes())
     }
 
     /// Apply the adjustments `ConfigureExternalSubst` makes when a *system*
@@ -253,11 +259,188 @@ fn weight_level_for_load(index: usize, shift_jis: bool) -> i32 {
     }
 }
 
+/// The facts a font offers the glyph-spacing gate of §1.15.
+///
+/// A borrowed view rather than owned state: the answer is a property of a
+/// loaded font, and pulling the five inputs out makes each of the gate's
+/// refusals sayable on its own.
+#[derive(Debug, Clone, Copy)]
+pub struct GlyphSpacingGate<'a> {
+    /// Whether the font writes vertically — a `-V` CMap.
+    pub vertical: bool,
+    /// Whether the document shipped a usable font program.
+    pub embedded: bool,
+    /// Whether the PDF declared its own advance widths (`HasFontWidths`).
+    pub declared_widths: bool,
+    /// The `/BaseFont` name, subset prefix already stripped, in any case.
+    pub base_font_name: &'a [u8],
+    /// What substitution settled on, or `None` when none ran.
+    pub subst: Option<&'a SubstFont>,
+}
+
+/// Whether a font's glyphs take the glyph-spacing correction of §1.15
+/// (`CPDF_Font::ShouldApplyGlyphSpacingHeuristic`).
+///
+/// The correction exists for one situation: a PDF that declares its own
+/// advance widths, does **not** ship the font program, and got substituted
+/// onto a face that draws its glyphs at some other width. The document's
+/// widths are then the only truth about how wide the text should look, and the
+/// face disagrees with it. Five conditions each say instead "the widths and
+/// the outlines already agree, leave the glyph alone":
+///
+/// - **vertical writing** — the correction is horizontal, while a `-V` CMap's
+///   advances run down the page;
+/// - **an embedded font** — the program in the file *is* the font, so its
+///   glyph widths are the document's own and cannot disagree with `/Widths`;
+/// - **no declared widths** — a simple font with no `/Widths` reads its
+///   advances off the face, so the comparison is a number against itself;
+/// - **a standard-14 `/BaseFont` name** — Helvetica landing on Arial is a
+///   sanctioned alias rather than a failed match, and the two families were
+///   designed to share metrics;
+/// - **a built-in generic** — the Multiple-Master fallbacks solve their own
+///   width axis to the declared width, so their outlines already come out at
+///   it and correcting again would double-count.
+///
+/// What survives is a substitution onto some *named* face, and the last
+/// question is whether that face is the one the document asked for:
+/// [`SubstFont::is_actual_font_loaded`] answers no, and only then does the
+/// correction run. A font with no substitution record at all has no
+/// substituted face to disagree with, and declines.
+#[must_use]
+pub fn applies_glyph_spacing(gate: &GlyphSpacingGate<'_>) -> bool {
+    if gate.vertical || gate.embedded || !gate.declared_widths {
+        return false;
+    }
+    // Both remaining tests are asked in lower case, so the name is lowered
+    // once for the two of them.
+    let lower = gate.base_font_name.to_ascii_lowercase();
+    if super::standard_font_index(&lower).is_some() {
+        return false;
+    }
+    let Some(subst) = gate.subst else {
+        return false;
+    };
+    !subst.is_builtin_generic && !subst.is_actual_font_loaded(&lower)
+}
+
 #[cfg(test)]
 mod tests {
     // Test fixtures are fixed-size arrays with known contents.
     #![allow(clippy::indexing_slicing)]
     use super::*;
+
+    /// A gate that passes, which each refusal test then breaks one way.
+    ///
+    /// A document asking for `Verdana`, substituted onto a `Nimbus Sans`
+    /// that is plainly a different family.
+    fn passing_gate(subst: &SubstFont) -> GlyphSpacingGate<'_> {
+        GlyphSpacingGate {
+            vertical: false,
+            embedded: false,
+            declared_widths: true,
+            base_font_name: b"Verdana",
+            subst: Some(subst),
+        }
+    }
+
+    fn nimbus() -> SubstFont {
+        SubstFont {
+            family: "Nimbus Sans".to_owned(),
+            ..SubstFont::default()
+        }
+    }
+
+    #[test]
+    fn a_substitution_onto_a_different_family_takes_the_correction() {
+        let subst = nimbus();
+        assert!(applies_glyph_spacing(&passing_gate(&subst)));
+    }
+
+    #[test]
+    fn vertical_writing_declines_the_correction() {
+        let subst = nimbus();
+        let gate = GlyphSpacingGate {
+            vertical: true,
+            ..passing_gate(&subst)
+        };
+        assert!(!applies_glyph_spacing(&gate));
+    }
+
+    #[test]
+    fn an_embedded_program_declines_the_correction() {
+        let subst = nimbus();
+        let gate = GlyphSpacingGate {
+            embedded: true,
+            ..passing_gate(&subst)
+        };
+        assert!(!applies_glyph_spacing(&gate));
+    }
+
+    #[test]
+    fn a_font_without_declared_widths_declines_the_correction() {
+        let subst = nimbus();
+        let gate = GlyphSpacingGate {
+            declared_widths: false,
+            ..passing_gate(&subst)
+        };
+        assert!(!applies_glyph_spacing(&gate));
+    }
+
+    /// The standard-14 test goes through the **alias** table, so a name that
+    /// is not one of the fourteen canonical spellings still refuses.
+    #[test]
+    fn a_standard_fourteen_base_font_name_declines_the_correction() {
+        let subst = nimbus();
+        for name in [&b"Helvetica"[..], b"ArialMT", b"arial,bold", b"CourierNew"] {
+            let gate = GlyphSpacingGate {
+                base_font_name: name,
+                ..passing_gate(&subst)
+            };
+            assert!(
+                !applies_glyph_spacing(&gate),
+                "{}",
+                String::from_utf8_lossy(name)
+            );
+        }
+    }
+
+    #[test]
+    fn a_built_in_generic_declines_the_correction() {
+        let subst = SubstFont {
+            family: "Chrome Sans".to_owned(),
+            is_builtin_generic: true,
+            ..SubstFont::default()
+        };
+        assert!(!applies_glyph_spacing(&passing_gate(&subst)));
+    }
+
+    /// The sixth refusal, and the one the gate ends on: the face that was
+    /// loaded *is* the one the document named, so nothing needs correcting.
+    #[test]
+    fn loading_the_document_s_own_face_declines_the_correction() {
+        let subst = SubstFont {
+            family: "Verdana".to_owned(),
+            ..SubstFont::default()
+        };
+        assert!(!applies_glyph_spacing(&passing_gate(&subst)));
+        // And the prefix test is case-insensitive on the document's side,
+        // because the gate lowers the `/BaseFont` name before asking.
+        let bold = GlyphSpacingGate {
+            base_font_name: b"Verdana,Bold",
+            ..passing_gate(&subst)
+        };
+        assert!(!applies_glyph_spacing(&bold));
+    }
+
+    #[test]
+    fn a_font_that_was_never_substituted_declines_the_correction() {
+        let subst = nimbus();
+        let gate = GlyphSpacingGate {
+            subst: None,
+            ..passing_gate(&subst)
+        };
+        assert!(!applies_glyph_spacing(&gate));
+    }
 
     /// `cfx_substfont_unittest.cpp`'s `EffectiveSkew`.
     #[test]
@@ -389,17 +572,17 @@ mod tests {
             family: "Times New Roman".to_owned(),
             ..SubstFont::default()
         };
-        assert!(s.is_actual_font_loaded("timesnewroman,bold"));
-        assert!(s.is_actual_font_loaded("timesnewromanps-bold"));
-        assert!(!s.is_actual_font_loaded("arial,bold"));
+        assert!(s.is_actual_font_loaded(b"timesnewroman,bold"));
+        assert!(s.is_actual_font_loaded(b"timesnewromanps-bold"));
+        assert!(!s.is_actual_font_loaded(b"arial,bold"));
         // The looseness the C++ comment acknowledges.
         let book = SubstFont {
             family: "Book".to_owned(),
             ..SubstFont::default()
         };
-        assert!(book.is_actual_font_loaded("bookman"));
+        assert!(book.is_actual_font_loaded(b"bookman"));
         // An empty family matches nothing rather than everything.
-        assert!(!SubstFont::default().is_actual_font_loaded("anything"));
+        assert!(!SubstFont::default().is_actual_font_loaded(b"anything"));
     }
 
     #[test]
