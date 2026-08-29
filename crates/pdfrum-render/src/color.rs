@@ -2,11 +2,18 @@
 //! with (`GetFillArgb`/`GetStrokeArgb`, `cpdf_renderstatus.cpp:466-532`).
 //!
 //! Four details in that pipeline are pixel-visible and none of them is what a
-//! re-derivation would produce: a resolved colour of white-as-`0xFFFFFFFF` is
-//! the "no colour" sentinel and collapses to *transparent*; the alpha is
-//! truncated from `alpha * 255`, not rounded; the transfer function applies to
-//! the colour before any grayscale translation; and a missing colour inherits
-//! from the enclosing render state rather than defaulting to black.
+//! re-derivation would produce: the alpha is truncated from `alpha * 255`, not
+//! rounded; the transfer function applies to the colour before any grayscale
+//! translation; a missing colour inherits from the enclosing render state
+//! rather than defaulting to black; and the invisibility sentinel is the whole
+//! 32-bit word `0xFFFFFFFF`, which a resolved colour can never be.
+//!
+//! That last one is the trap. `FXSYS_BGR` packs a resolved colour into the low
+//! 24 bits, so a genuinely white fill is `0x00FFFFFF` — while `0xFFFFFFFF`,
+//! the value the invisibility test compares against, is produced only by
+//! `value_or(0xFFFFFFFF)` when nothing resolved and by the pattern fallback.
+//! Testing the *colour* for white instead of the word for the sentinel makes
+//! every white object in the corpus paint nothing.
 
 use pdfrum_page::{ColorValue, Rgb};
 
@@ -138,51 +145,61 @@ fn translate_object_color(opts: &RenderOptions, c: Argb, kind: ObjectKind, strok
     }
 }
 
-/// PDFium's `FX_COLORREF` "no colour resolvable" sentinel: `0x00FFFFFF`, i.e.
-/// pure white in the packed BGR word. `GetFillArgb` returns ARGB `0` for it,
-/// so such an object is *invisible*, not white. Uncoloured tiling patterns use
-/// `0x00BFBFBF` precisely so they do not land on it.
-#[must_use]
-fn is_sentinel(rgb: Rgb) -> bool {
-    rgb.to_bytes() == [255, 255, 255]
+/// What a colour ref resolved to, in the three states PDFium's `FX_COLORREF`
+/// distinguishes.
+///
+/// The distinction matters because two of them are white. `FXSYS_BGR` packs a
+/// resolved colour into the **low 24 bits**, so a genuinely white fill is
+/// `0x00FFFFFF`; the "nothing resolved" value is `value_or(0xFFFFFFFF)`, with
+/// the top byte set, and `GetFillArgb`'s invisibility test is
+/// `colorref == 0xFFFFFFFF` — comparing the whole 32-bit word.
+///
+/// So **a white fill is white, not invisible.** Collapsing the two costs every
+/// white object in the corpus: a transparency group painting a white square
+/// through a soft mask paints nothing, which is not a subtle difference.
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum ColorRef {
+    /// A colour the space produced.
+    Resolved(Rgb),
+    /// `0xFFFFFFFF` — nothing resolved, and the object is invisible.
+    Invisible,
+    /// No colour of its own, so the enclosing state's is inherited
+    /// (`MissingFillColor`).
+    Missing,
 }
 
-/// The colour ref a pattern colour gets when its operands resolve to nothing
-/// (`CPDF_ColorState::SetPattern`, `cpdf_colorstate.cpp:133-144`).
+/// Resolve a colour value the way `CPDF_ColorState` fills its colour ref.
 ///
-/// A pattern is normally *drained* out of the ordinary draw and painted by the
-/// pattern machinery, so this colour rarely reaches a pixel — but it does in
-/// the one place the drain does not happen: a **type-3 text object**, whose
-/// `GetFillArgbForType3` runs before the pattern check and establishes the
-/// colour every uncoloured operation inside its glyph procedures then takes.
-///
-/// The two fallbacks differ, and the difference is the whole point. A
-/// **coloured tiling** pattern gets mid grey, which is visible; everything
-/// else — a shading pattern, an uncoloured tiling one — gets white, which is
-/// the invisibility sentinel and therefore paints *nothing*. Reading that as
-/// "no colour, so inherit" instead makes a shading-patterned type-3 run paint
-/// solid black glyphs where the oracle paints none at all.
+/// A **pattern** never reaches `GetRGB` in the ordinary way: `SetPattern`
+/// takes the pattern space's own answer when it has one, and otherwise picks
+/// between two sentinels — mid grey for a **coloured tiling** pattern, which
+/// is visible, and `0xFFFFFFFF` for everything else, which is not. That path
+/// rarely reaches a pixel, because a pattern is drained out of the ordinary
+/// draw; the exception is a type-3 text object, whose `GetFillArgbForType3`
+/// runs before the pattern check.
 #[must_use]
-fn pattern_fallback(value: &ColorValue) -> Option<Rgb> {
-    let pattern = value.pattern.as_ref()?;
+fn color_ref(value: &ColorValue) -> ColorRef {
+    if let Some(rgb) = value.to_rgb() {
+        return ColorRef::Resolved(rgb);
+    }
+    let Some(pattern) = value.pattern.as_ref() else {
+        return ColorRef::Missing;
+    };
     let colored_tiling = matches!(
         pattern.loaded.as_deref(),
         Some(pdfrum_page::Pattern::Tiling(t)) if t.colored
     );
-    Some(if colored_tiling {
-        Rgb {
+    if colored_tiling {
+        // `0x00BFBFBF`: mid grey, chosen precisely so it is *not* the
+        // invisibility word.
+        ColorRef::Resolved(Rgb {
             r: 191.0 / 255.0,
             g: 191.0 / 255.0,
             b: 191.0 / 255.0,
-        }
+        })
     } else {
-        // `0xFFFFFFFF`, which `is_sentinel` then turns into transparent.
-        Rgb {
-            r: 1.0,
-            g: 1.0,
-            b: 1.0,
-        }
-    })
+        ColorRef::Invisible
+    }
 }
 
 /// Resolve a page object's colour into the ARGB a device paints with.
@@ -201,16 +218,15 @@ pub fn resolve_argb(
     kind: ObjectKind,
     stroking: bool,
 ) -> Argb {
-    let resolved = value.to_rgb().or_else(|| pattern_fallback(value));
-    let base = match resolved {
-        Some(rgb) if !is_sentinel(rgb) => {
+    let base = match color_ref(value) {
+        ColorRef::Resolved(rgb) => {
             let [r, g, b] = rgb.to_bytes();
             Argb { a: 255, r, g, b }
         }
-        Some(_) => return Argb::TRANSPARENT,
+        ColorRef::Invisible => return Argb::TRANSPARENT,
         // "MissingFillColor": no colour of its own, so inherit. With nothing
         // to inherit the C++ reads a zeroed colour ref, which is black.
-        None => inherited.unwrap_or(Argb::BLACK),
+        ColorRef::Missing => inherited.unwrap_or(Argb::BLACK),
     };
 
     let a = alpha_byte_truncating(alpha);
@@ -281,12 +297,54 @@ mod tests {
     }
 
     #[test]
-    fn sentinel_white_is_transparent() {
-        // cpdf_renderstatus.cpp:502 — colorref 0xFFFFFFFF returns ARGB 0.
+    fn a_white_fill_is_white_and_not_the_invisibility_sentinel() {
+        // `FXSYS_BGR` packs a resolved colour into the low 24 bits, so white
+        // is `0x00FFFFFF`; the invisibility test at cpdf_renderstatus.cpp:481
+        // compares the whole word against `0xFFFFFFFF`, which only
+        // `value_or(0xFFFFFFFF)` and the pattern fallback ever produce.
+        //
+        // Reading a resolved white as the sentinel makes every white object
+        // in the corpus paint nothing — a white square in a transparency
+        // group, a white-on-black `/BC` mask, a white page-covering fill.
         let opts = RenderOptions::default();
         let c = resolve_argb(&gray(1.0), 1.0, None, None, &opts, ObjectKind::Path, false);
-        assert_eq!(c, Argb::TRANSPARENT);
-        assert!(c.is_invisible());
+        assert_eq!(c, Argb::opaque(255, 255, 255));
+        assert!(!c.is_invisible());
+    }
+
+    #[test]
+    fn a_colour_that_will_not_resolve_inherits_rather_than_vanishing() {
+        // A `/Separation /None` produces no colour at all. With an enclosing
+        // colour it inherits; with none the C++ reads a zeroed colour ref,
+        // which is black — not transparent.
+        let none = ColorValue {
+            space: Some(Arc::new(ColorSpace::Separation(Box::new(
+                pdfrum_page::color::Separation {
+                    none: true,
+                    alternate: None,
+                    tint: None,
+                },
+            )))),
+            components: SmallVec::from_slice(&[1.0]),
+            pattern: None,
+        };
+        let opts = RenderOptions::default();
+        assert_eq!(
+            resolve_argb(&none, 1.0, None, None, &opts, ObjectKind::Path, false),
+            Argb::BLACK
+        );
+        assert_eq!(
+            resolve_argb(
+                &none,
+                1.0,
+                None,
+                Some(Argb::opaque(9, 8, 7)),
+                &opts,
+                ObjectKind::Path,
+                false
+            ),
+            Argb::opaque(9, 8, 7)
+        );
     }
 
     #[test]

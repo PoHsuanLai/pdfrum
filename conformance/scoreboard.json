@@ -1,12 +1,12 @@
 {
-  "generated_at": "2026-08-29T04:27:58Z",
+  "generated_at": "2026-08-29T04:40:12Z",
   "totals": {
     "files": 1468,
     "pass": 47,
     "fail": 1421,
     "by_tag": {
       "page-count": 2,
-      "pixel-fail": 488,
+      "pixel-fail": 483,
       "tierA-mismatch": 1419
     },
     "text": {
@@ -3667,7 +3667,6 @@
       "path": "corpus/fx/FRC_8.2.4_part1/FRC_10_8.2.4_View_C.pdf",
       "status": "fail",
       "tags": [
-        "pixel-fail",
         "tierA-mismatch"
       ],
       "tierA": {
@@ -3679,8 +3678,7 @@
           "structure.txt"
         ],
         "mismatched": [
-          "input.pdf.0.annot.txt",
-          "structure.txt"
+          "input.pdf.0.annot.txt"
         ],
         "golden_pages": 1,
         "actual_pages": 1,
@@ -3692,12 +3690,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.543515,
+        "ssim": 0.992530,
         "exact": false,
-        "max_channel_diff": 212,
+        "max_channel_diff": 98,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt, structure.txt; ssim 0.543515 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.0.annot.txt"
     },
     {
       "path": "corpus/fx/FRC_8.2.4_part1/FRC_10_8.2.4__remove_ModDate_value.pdf",
@@ -3727,12 +3725,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.467633,
+        "ssim": 0.977051,
         "exact": false,
         "max_channel_diff": 224,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.467633 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.977051 below floor 0.990000"
     },
     {
       "path": "corpus/fx/FRC_8.2.4_part1/FRC_11_8.2.4_View_edit.pdf",
@@ -3762,12 +3760,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.505040,
+        "ssim": 0.965181,
         "exact": false,
         "max_channel_diff": 224,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.505040 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.965181 below floor 0.990000"
     },
     {
       "path": "corpus/fx/FRC_8.2.4_part1/FRC_11_8.2.4__remove_ModDate_all.pdf",
@@ -3797,12 +3795,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.467633,
+        "ssim": 0.977051,
         "exact": false,
         "max_channel_diff": 224,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.467633 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.977051 below floor 0.990000"
     },
     {
       "path": "corpus/fx/FRC_8.2.4_part1/FRC_12_8.2.4_View_remove_all.pdf",
@@ -3832,12 +3830,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.505040,
+        "ssim": 0.965181,
         "exact": false,
         "max_channel_diff": 224,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.505040 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.965181 below floor 0.990000"
     },
     {
       "path": "corpus/fx/FRC_8.2.4_part1/FRC_12_8.2.4__remove_ModDate_obj_.pdf",
@@ -3867,12 +3865,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.467633,
+        "ssim": 0.977051,
         "exact": false,
         "max_channel_diff": 224,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.467633 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.977051 below floor 0.990000"
     },
     {
       "path": "corpus/fx/FRC_8.2.4_part1/FRC_13_8.2.4_View_remove_value.pdf",
@@ -3902,12 +3900,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.505040,
+        "ssim": 0.965181,
         "exact": false,
         "max_channel_diff": 224,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.505040 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.965181 below floor 0.990000"
     },
     {
       "path": "corpus/fx/FRC_8.2.4_part1/FRC_13_8.2.4_remove_Size_value.pdf",
@@ -3937,12 +3935,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.467633,
+        "ssim": 0.977051,
         "exact": false,
         "max_channel_diff": 224,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.467633 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.977051 below floor 0.990000"
     },
     {
       "path": "corpus/fx/FRC_8.2.4_part1/FRC_14_8.2.4_Sort_remove_all.pdf",
@@ -3972,12 +3970,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.505040,
+        "ssim": 0.965181,
         "exact": false,
         "max_channel_diff": 224,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.505040 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.965181 below floor 0.990000"
     },
     {
       "path": "corpus/fx/FRC_8.2.4_part1/FRC_14_8.2.4_remove_Size_all.pdf",
@@ -4007,12 +4005,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.467633,
+        "ssim": 0.977051,
         "exact": false,
         "max_channel_diff": 224,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.467633 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.977051 below floor 0.990000"
     },
     {
       "path": "corpus/fx/FRC_8.2.4_part1/FRC_15_8.2.4_Sort_remove_value.pdf",
@@ -4042,12 +4040,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.505040,
+        "ssim": 0.965181,
         "exact": false,
         "max_channel_diff": 224,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.505040 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.965181 below floor 0.990000"
     },
     {
       "path": "corpus/fx/FRC_8.2.4_part1/FRC_15_8.2.4_remove_Size_obj.pdf",
@@ -4077,12 +4075,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.467633,
+        "ssim": 0.977051,
         "exact": false,
         "max_channel_diff": 224,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.467633 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.977051 below floor 0.990000"
     },
     {
       "path": "corpus/fx/FRC_8.2.4_part1/FRC_16_8.2.4__remove_CompressedSize__value.pdf",
@@ -4112,12 +4110,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.467633,
+        "ssim": 0.977051,
         "exact": false,
         "max_channel_diff": 224,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.467633 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.977051 below floor 0.990000"
     },
     {
       "path": "corpus/fx/FRC_8.2.4_part1/FRC_17_8.2.4__remove_CompressedSize__all.pdf",
@@ -4147,12 +4145,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.467633,
+        "ssim": 0.977051,
         "exact": false,
         "max_channel_diff": 224,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.467633 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.977051 below floor 0.990000"
     },
     {
       "path": "corpus/fx/FRC_8.2.4_part1/FRC_18_8.2.4__remove_CompressedSize__obj.pdf",
@@ -4182,12 +4180,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.467633,
+        "ssim": 0.977051,
         "exact": false,
         "max_channel_diff": 224,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.467633 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.977051 below floor 0.990000"
     },
     {
       "path": "corpus/fx/FRC_8.2.4_part1/FRC_19_8.2.4__remove_CreationDate_value.pdf",
@@ -4217,12 +4215,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.467633,
+        "ssim": 0.977051,
         "exact": false,
         "max_channel_diff": 224,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.467633 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.977051 below floor 0.990000"
     },
     {
       "path": "corpus/fx/FRC_8.2.4_part1/FRC_1_8.2.4_Type_8.6_.pdf",
@@ -4252,12 +4250,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.505040,
+        "ssim": 0.965181,
         "exact": false,
         "max_channel_diff": 224,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.505040 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.965181 below floor 0.990000"
     },
     {
       "path": "corpus/fx/FRC_8.2.4_part1/FRC_1_8.2.4__original.pdf",
@@ -4287,12 +4285,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.467633,
+        "ssim": 0.977051,
         "exact": false,
         "max_channel_diff": 224,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.467633 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.977051 below floor 0.990000"
     },
     {
       "path": "corpus/fx/FRC_8.2.4_part1/FRC_20_8.2.4__remove_CreationDate_all.pdf",
@@ -4322,12 +4320,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.467633,
+        "ssim": 0.977051,
         "exact": false,
         "max_channel_diff": 224,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.467633 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.977051 below floor 0.990000"
     },
     {
       "path": "corpus/fx/FRC_8.2.4_part1/FRC_21_8.2.4__remove_CreationDate_obj.pdf",
@@ -4357,12 +4355,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.467633,
+        "ssim": 0.977051,
         "exact": false,
         "max_channel_diff": 224,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.467633 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.977051 below floor 0.990000"
     },
     {
       "path": "corpus/fx/FRC_8.2.4_part1/FRC_22_8.2.4__remove_Order_value.pdf",
@@ -4392,12 +4390,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.467633,
+        "ssim": 0.977051,
         "exact": false,
         "max_channel_diff": 224,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.467633 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.977051 below floor 0.990000"
     },
     {
       "path": "corpus/fx/FRC_8.2.4_part1/FRC_23_8.2.4__remove_Order_all.pdf",
@@ -4427,12 +4425,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.467633,
+        "ssim": 0.977051,
         "exact": false,
         "max_channel_diff": 224,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.467633 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.977051 below floor 0.990000"
     },
     {
       "path": "corpus/fx/FRC_8.2.4_part1/FRC_24_8.2.4__remove_Order_obj.pdf",
@@ -4462,12 +4460,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.467633,
+        "ssim": 0.977051,
         "exact": false,
         "max_channel_diff": 224,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.467633 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.977051 below floor 0.990000"
     },
     {
       "path": "corpus/fx/FRC_8.2.4_part1/FRC_2_8.2.4_Type_8.6__remove_value.pdf",
@@ -4497,12 +4495,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.505040,
+        "ssim": 0.965181,
         "exact": false,
         "max_channel_diff": 224,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.505040 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.965181 below floor 0.990000"
     },
     {
       "path": "corpus/fx/FRC_8.2.4_part1/FRC_2_8.2.4__add_type_.pdf",
@@ -4532,12 +4530,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.467633,
+        "ssim": 0.977051,
         "exact": false,
         "max_channel_diff": 224,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.467633 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.977051 below floor 0.990000"
     },
     {
       "path": "corpus/fx/FRC_8.2.4_part1/FRC_3_8.2.4_Type_8.6__edit_.pdf",
@@ -4567,12 +4565,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.505040,
+        "ssim": 0.965181,
         "exact": false,
         "max_channel_diff": 224,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.505040 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.965181 below floor 0.990000"
     },
     {
       "path": "corpus/fx/FRC_8.2.4_part1/FRC_3_8.2.4__add_type_value.pdf",
@@ -4602,12 +4600,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.467633,
+        "ssim": 0.977051,
         "exact": false,
         "max_channel_diff": 224,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.467633 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.977051 below floor 0.990000"
     },
     {
       "path": "corpus/fx/FRC_8.2.4_part1/FRC_4_8.2.4_Schema_8.6__remove_all.pdf",
@@ -4637,12 +4635,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.505040,
+        "ssim": 0.965181,
         "exact": false,
         "max_channel_diff": 224,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.505040 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.965181 below floor 0.990000"
     },
     {
       "path": "corpus/fx/FRC_8.2.4_part1/FRC_4_8.2.4__remove_FileName_value.pdf",
@@ -4672,12 +4670,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.467633,
+        "ssim": 0.977051,
         "exact": false,
         "max_channel_diff": 224,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.467633 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.977051 below floor 0.990000"
     },
     {
       "path": "corpus/fx/FRC_8.2.4_part1/FRC_5_8.2.4_Schema_8.6__remove_value.pdf",
@@ -4707,12 +4705,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.505040,
+        "ssim": 0.965181,
         "exact": false,
         "max_channel_diff": 224,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.505040 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.965181 below floor 0.990000"
     },
     {
       "path": "corpus/fx/FRC_8.2.4_part1/FRC_5_8.2.4__remove_FileName_all.pdf",
@@ -4742,12 +4740,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.467633,
+        "ssim": 0.977051,
         "exact": false,
         "max_channel_diff": 224,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.467633 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.977051 below floor 0.990000"
     },
     {
       "path": "corpus/fx/FRC_8.2.4_part1/FRC_6_8.2.4_Schema_8.6__remove_obj.pdf",
@@ -4777,12 +4775,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.505040,
+        "ssim": 0.965181,
         "exact": false,
         "max_channel_diff": 224,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.505040 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.965181 below floor 0.990000"
     },
     {
       "path": "corpus/fx/FRC_8.2.4_part1/FRC_6_8.2.4__remove_FileName_obj.pdf",
@@ -4812,12 +4810,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.467633,
+        "ssim": 0.977051,
         "exact": false,
         "max_channel_diff": 224,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.467633 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.977051 below floor 0.990000"
     },
     {
       "path": "corpus/fx/FRC_8.2.4_part1/FRC_7_8.2.4_View_H.pdf",
@@ -4847,12 +4845,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.505040,
+        "ssim": 0.965181,
         "exact": false,
         "max_channel_diff": 224,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.505040 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.965181 below floor 0.990000"
     },
     {
       "path": "corpus/fx/FRC_8.2.4_part1/FRC_7_8.2.4__remove_Description_value.pdf",
@@ -4882,12 +4880,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.467633,
+        "ssim": 0.977051,
         "exact": false,
         "max_channel_diff": 224,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.467633 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.977051 below floor 0.990000"
     },
     {
       "path": "corpus/fx/FRC_8.2.4_part1/FRC_8_8.2.4_View_D.pdf",
@@ -4917,12 +4915,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.505040,
+        "ssim": 0.965181,
         "exact": false,
         "max_channel_diff": 224,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.505040 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.965181 below floor 0.990000"
     },
     {
       "path": "corpus/fx/FRC_8.2.4_part1/FRC_8_8.2.4__remove__Description_all.pdf",
@@ -4952,12 +4950,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.467633,
+        "ssim": 0.977051,
         "exact": false,
         "max_channel_diff": 224,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.467633 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.977051 below floor 0.990000"
     },
     {
       "path": "corpus/fx/FRC_8.2.4_part1/FRC_9_8.2.4_View_T.pdf",
@@ -4987,12 +4985,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.505040,
+        "ssim": 0.965181,
         "exact": false,
         "max_channel_diff": 224,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.505040 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.965181 below floor 0.990000"
     },
     {
       "path": "corpus/fx/FRC_8.2.4_part1/FRC_9_8.2.4__remove__Description_obj.pdf",
@@ -5022,12 +5020,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.467633,
+        "ssim": 0.977051,
         "exact": false,
         "max_channel_diff": 224,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.467633 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.977051 below floor 0.990000"
     },
     {
       "path": "corpus/fx/FRC_8.4_part1/FRC_8.4.1_Annotations_AP_N_.pdf",
@@ -14145,12 +14143,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.859402,
+        "ssim": 0.888006,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt, input.pdf.0.txt; ssim 0.859402 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.0.annot.txt, input.pdf.0.txt; ssim 0.888006 below floor 0.990000"
     },
     {
       "path": "corpus/fx/other/8.1_viewer_preferences.pdf",
@@ -14625,9 +14623,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999700,
+        "ssim": 0.999735,
         "exact": false,
-        "max_channel_diff": 253,
+        "max_channel_diff": 229,
         "pages": 1
       },
       "notes": "dumps differ: input.pdf.0.annot.txt"
@@ -15414,8 +15412,7 @@
           "structure.txt"
         ],
         "mismatched": [
-          "input.pdf.0.annot.txt",
-          "structure.txt"
+          "input.pdf.0.annot.txt"
         ],
         "golden_pages": 1,
         "actual_pages": 1,
@@ -15432,7 +15429,7 @@
         "max_channel_diff": 117,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt, structure.txt"
+      "notes": "dumps differ: input.pdf.0.annot.txt"
     },
     {
       "path": "corpus/fx/path/transparent1.pdf",
@@ -16428,12 +16425,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.947173,
+        "ssim": 0.964379,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 12
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt, input.pdf.1.annot.txt, input.pdf.10.annot.txt, input.pdf.11.annot.txt, input.pdf.2.annot.txt, input.pdf.3.annot.txt, input.pdf.4.annot.txt, input.pdf.5.annot.txt, input.pdf.6.annot.txt, input.pdf.7.annot.txt, input.pdf.8.annot.txt, input.pdf.9.annot.txt; ssim 0.947173 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.0.annot.txt, input.pdf.1.annot.txt, input.pdf.10.annot.txt, input.pdf.11.annot.txt, input.pdf.2.annot.txt, input.pdf.3.annot.txt, input.pdf.4.annot.txt, input.pdf.5.annot.txt, input.pdf.6.annot.txt, input.pdf.7.annot.txt, input.pdf.8.annot.txt, input.pdf.9.annot.txt; ssim 0.964379 below floor 0.990000"
     },
     {
       "path": "corpus/fx/text/en_uicase_2_.pdf",
@@ -16469,12 +16466,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.966505,
+        "ssim": 0.987444,
         "exact": false,
-        "max_channel_diff": 255,
+        "max_channel_diff": 185,
         "pages": 3
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt, input.pdf.1.annot.txt, input.pdf.2.annot.txt; ssim 0.966505 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.0.annot.txt, input.pdf.1.annot.txt, input.pdf.2.annot.txt; ssim 0.987444 below floor 0.990000"
     },
     {
       "path": "corpus/fx/text/quick_start_guide.pdf",
@@ -18755,7 +18752,6 @@
       "path": "corpus/pdfium/bug_883026.pdf",
       "status": "fail",
       "tags": [
-        "pixel-fail",
         "tierA-mismatch"
       ],
       "tierA": {
@@ -18779,12 +18775,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.952367,
+        "ssim": 0.999937,
         "exact": false,
-        "max_channel_diff": 255,
+        "max_channel_diff": 31,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.952367 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.0.annot.txt"
     },
     {
       "path": "corpus/pdfium/bug_898443.pdf",
@@ -22792,18 +22788,17 @@
         }
       },
       "tierB": {
-        "ssim": 0.941207,
+        "ssim": 0.987744,
         "exact": false,
-        "max_channel_diff": 255,
+        "max_channel_diff": 201,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.941207 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.987744 below floor 0.990000"
     },
     {
       "path": "corpus/third_party/skia/20180916_098c1355/xfermodes3.pdf",
       "status": "fail",
       "tags": [
-        "pixel-fail",
         "tierA-mismatch"
       ],
       "tierA": {
@@ -22827,12 +22822,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.977395,
+        "ssim": 0.998758,
         "exact": false,
-        "max_channel_diff": 214,
+        "max_channel_diff": 87,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.977395 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.0.annot.txt"
     },
     {
       "path": "corpus/third_party/skia/misc/bug_743.pdf",
@@ -22896,12 +22891,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.971713,
+        "ssim": 0.973411,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.971713 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.973411 below floor 0.990000"
     },
     {
       "path": "corpus/third_party/tcpdf/example_002.pdf",
@@ -23280,12 +23275,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.954019,
+        "ssim": 0.960814,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.954019 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.960814 below floor 0.990000"
     },
     {
       "path": "corpus/third_party/tcpdf/example_012.pdf",
@@ -24076,12 +24071,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.977583,
+        "ssim": 0.984062,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.977583 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.984062 below floor 0.990000"
     },
     {
       "path": "corpus/third_party/tcpdf/example_032.pdf",
@@ -24790,12 +24785,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.970405,
+        "ssim": 0.970615,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 2
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt, input.pdf.1.annot.txt; ssim 0.970405 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.0.annot.txt, input.pdf.1.annot.txt; ssim 0.970615 below floor 0.990000"
     },
     {
       "path": "corpus/third_party/tcpdf/example_050.pdf",
@@ -24866,12 +24861,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.840340,
+        "ssim": 0.847580,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 3
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt, input.pdf.1.annot.txt, input.pdf.2.annot.txt; ssim 0.840340 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.0.annot.txt, input.pdf.1.annot.txt, input.pdf.2.annot.txt; ssim 0.847580 below floor 0.990000"
     },
     {
       "path": "corpus/third_party/tcpdf/example_052.pdf",
@@ -25084,12 +25079,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.974427,
+        "ssim": 0.974684,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.974427 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.974684 below floor 0.990000"
     },
     {
       "path": "corpus/third_party/tcpdf/example_057.pdf",
@@ -25160,12 +25155,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.953724,
+        "ssim": 0.961781,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.953724 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.961781 below floor 0.990000"
     },
     {
       "path": "corpus/third_party/tcpdf/example_059.pdf",
@@ -25487,12 +25482,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.970772,
+        "ssim": 0.972281,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.970772 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.972281 below floor 0.990000"
     },
     {
       "path": "resources/344775293.in",
@@ -32477,12 +32472,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.971700,
+        "ssim": 0.971928,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.971700 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.971928 below floor 0.990000"
     },
     {
       "path": "resources/bug_664284.in",
@@ -39572,8 +39567,7 @@
           "structure.txt"
         ],
         "mismatched": [
-          "input.pdf.0.annot.txt",
-          "structure.txt"
+          "input.pdf.0.annot.txt"
         ],
         "golden_pages": 1,
         "actual_pages": 1,
@@ -39590,7 +39584,7 @@
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt, structure.txt"
+      "notes": "dumps differ: input.pdf.0.annot.txt"
     },
     {
       "path": "resources/marked_content_id.pdf",
@@ -39607,8 +39601,7 @@
           "structure.txt"
         ],
         "mismatched": [
-          "input.pdf.0.annot.txt",
-          "structure.txt"
+          "input.pdf.0.annot.txt"
         ],
         "golden_pages": 1,
         "actual_pages": 1,
@@ -39625,7 +39618,7 @@
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt, structure.txt"
+      "notes": "dumps differ: input.pdf.0.annot.txt"
     },
     {
       "path": "resources/matte.in",
@@ -42604,12 +42597,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.000358,
+        "ssim": 0.841577,
         "exact": false,
-        "max_channel_diff": 127,
+        "max_channel_diff": 64,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.000358 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.841577 below floor 0.990000"
     },
     {
       "path": "resources/pixel/bug_1963.in",
@@ -42673,12 +42666,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.791771,
+        "ssim": 0.985587,
         "exact": false,
-        "max_channel_diff": 191,
+        "max_channel_diff": 91,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.791771 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.985587 below floor 0.990000"
     },
     {
       "path": "resources/pixel/bug_1976.in",
@@ -42789,7 +42782,6 @@
       "path": "resources/pixel/bug_1995.in",
       "status": "fail",
       "tags": [
-        "pixel-fail",
         "tierA-mismatch"
       ],
       "tierA": {
@@ -42813,12 +42805,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.619000,
+        "ssim": 0.998228,
         "exact": false,
-        "max_channel_diff": 255,
+        "max_channel_diff": 64,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.619000 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.0.annot.txt"
     },
     {
       "path": "resources/pixel/bug_2106.in",
@@ -45431,9 +45423,9 @@
         }
       },
       "tierB": {
-        "ssim": 1,
-        "exact": true,
-        "max_channel_diff": 0,
+        "ssim": 0.999996,
+        "exact": false,
+        "max_channel_diff": 27,
         "pages": 1
       },
       "notes": "dumps differ: input.pdf.0.annot.txt"
@@ -46928,7 +46920,6 @@
       "path": "resources/pixel/smask_blend.in",
       "status": "fail",
       "tags": [
-        "pixel-fail",
         "tierA-mismatch"
       ],
       "tierA": {
@@ -46952,12 +46943,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.921643,
-        "exact": false,
-        "max_channel_diff": 255,
+        "ssim": 1,
+        "exact": true,
+        "max_channel_diff": 0,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.annot.txt; ssim 0.921643 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.0.annot.txt"
     },
     {
       "path": "resources/pixel/stream_with_indirect_dict.in",

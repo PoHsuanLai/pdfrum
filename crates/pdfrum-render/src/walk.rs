@@ -387,15 +387,28 @@ fn render_grouped<B: RasterBackend>(
 }
 
 /// Render a soft mask's group and read it back as a device-sized coverage
-/// plane.
+/// plane (`LoadSMask`, `cpdf_renderstatus.cpp:1434-1542`).
+///
+/// Four contracts, all pixel-visible:
+///
+/// - **The mask renders at exactly the clip rect's device resolution**, on the
+///   device's own pixel grid, so applying it never resamples.
+/// - **A luminosity buffer is opaque**, cleared to the `/BC` backdrop
+///   (default black), so an area the group never paints contributes the
+///   backdrop's luminosity rather than zero. That is what makes an unpainted
+///   corner of a `/BC`-white mask fully *reveal* rather than fully hide.
+/// - **An alpha buffer starts at nothing** and the group renders in alpha
+///   colour mode, where every drawing operation writes its alpha as gray.
+/// - **The readback is `FXRGB2GRAY`, not BT.709.** Both rasterizers ship a
+///   luminance helper and both use BT.709; neither may be used here.
 fn render_soft_mask<B: RasterBackend>(
     ctx: &RenderCtx<'_>,
     backend: &B,
-    _caches: &mut RenderCaches,
+    caches: &mut RenderCaches,
     mask: &pdfrum_page::SoftMask,
     rect: IntRect,
-    _to_device: Affine,
-    _diags: &mut Diagnostics,
+    to_device: Affine,
+    diags: &mut Diagnostics,
 ) -> Option<crate::pixmap::AlphaMask> {
     if !ctx.may_recurse() {
         return None;
@@ -403,14 +416,44 @@ fn render_soft_mask<B: RasterBackend>(
     let (Ok(w), Ok(h)) = (u32::try_from(rect.width()), u32::try_from(rect.height())) else {
         return None;
     };
-    if w == 0 || h == 0 {
+    if w == 0 || h == 0 || w > MAX_TARGET_DIMENSION || h > MAX_TARGET_DIMENSION {
         return None;
     }
-    // The mask's own group is a form XObject that `pdfrum-page` has not
-    // expanded into page objects, so v1 renders the backdrop alone: an
-    // unpainted luminosity mask contributes its `/BC`, which is the correct
-    // answer for the common `/BC`-only mask and a documented gap otherwise.
-    let device = backend.new_target(w, h, crate::softmask::backdrop(mask));
+    let mut device = backend.new_target(w, h, crate::softmask::backdrop(mask));
+    if !mask.objects.is_empty() {
+        let inner = RenderCtx {
+            opts: RenderOptions {
+                color_mode: match mask.kind {
+                    // An alpha mask's group paints alpha as gray; a
+                    // luminosity one paints its real colours and the
+                    // readback greys them.
+                    pdfrum_page::SoftMaskKind::Alpha => crate::options::ColorMode::Alpha,
+                    pdfrum_page::SoftMaskKind::Luminosity => crate::options::ColorMode::Normal,
+                },
+                ..ctx.opts.clone()
+            },
+            // The group renders from a clean slate: `Initialize(null, null)`.
+            initial_fill: None,
+            initial_stroke: None,
+            type3: None,
+            in_group: true,
+            std_cs: true,
+            ..ctx.deeper()
+        };
+        // The mask's own matrix already places it; only the shift into the
+        // buffer's origin is added, so the mask lands on the device's grid.
+        let offset = Affine::translate((-f64::from(rect.left), -f64::from(rect.top)));
+        render_object_list(
+            &inner,
+            &mut device,
+            backend,
+            caches,
+            &mask.objects,
+            offset * to_device,
+            Rect::new(0.0, 0.0, f64::from(w), f64::from(h)),
+            diags,
+        );
+    }
     let rendered = backend.finish(device);
     Some(crate::softmask::readback(mask, &rendered))
 }

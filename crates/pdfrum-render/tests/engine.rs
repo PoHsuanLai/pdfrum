@@ -675,3 +675,130 @@ fn a_pattern_that_did_not_resolve_paints_nothing_rather_than_black() {
     assert_eq!(vello.pixel(4, 4), Some([255, 255, 255, 255]));
     assert_eq!(tiny.pixel(4, 4), Some([255, 255, 255, 255]));
 }
+
+/// A soft mask whose group paints the given objects, placed by `matrix`.
+fn soft_mask(
+    kind: pdfrum_page::SoftMaskKind,
+    backdrop: pdfrum_page::Rgb,
+    objects: Vec<PageObject>,
+) -> std::sync::Arc<pdfrum_page::SoftMask> {
+    std::sync::Arc::new(pdfrum_page::SoftMask {
+        group: pdfrum_object::Stream {
+            dict: pdfrum_object::Dict::default(),
+            data: pdfrum_object::ByteSpan::empty(),
+        },
+        kind,
+        backdrop,
+        transfer: None,
+        matrix: Affine::IDENTITY,
+        objects,
+    })
+}
+
+/// A form group carrying a soft mask, painting one filled rectangle.
+fn masked_form(
+    inner: BezPath,
+    rgb: [f32; 3],
+    mask: std::sync::Arc<pdfrum_page::SoftMask>,
+    bbox: Rect,
+) -> PageObject {
+    let mut state = GraphicsState::default();
+    state.general.soft_mask = Some(mask);
+    PageObject::Form(Box::new(Content {
+        object: pdfrum_page::FormObject {
+            objects: vec![filled(inner, rgb)],
+            matrix: Affine::IDENTITY,
+            bbox: Some(bbox),
+            transparency: Transparency {
+                group: true,
+                isolated: true,
+                knockout: false,
+            },
+        },
+        state,
+        marks: ContentMarks::new(),
+        content_stream: 0,
+    }))
+}
+
+#[test]
+fn a_luminosity_mask_paints_its_group_through_the_masked_object() {
+    // The mask's group paints a white square over the left half of a black
+    // backdrop: white luminance reveals, black hides. Rendering the backdrop
+    // alone — which is what a mask whose group never renders amounts to —
+    // hides everything, so the two halves are what this test is for.
+    let mask = soft_mask(
+        pdfrum_page::SoftMaskKind::Luminosity,
+        pdfrum_page::Rgb::BLACK,
+        vec![filled(rect_path(0.0, 0.0, 8.0, 16.0), [1.0, 1.0, 1.0])],
+    );
+    let object = masked_form(
+        rect_path(0.0, 0.0, 16.0, 16.0),
+        [1.0, 0.0, 0.0],
+        mask,
+        Rect::new(0.0, 0.0, 16.0, 16.0),
+    );
+    let (vello, tiny) = render_both(&page(16.0, 16.0, vec![object]), &RenderOptions::default());
+    for surface in [&vello, &tiny] {
+        // Under the mask's white square: the red shows.
+        let lit = surface.pixel(4, 8).expect("a pixel");
+        assert!(lit[0] > 200 && lit[1] < 60, "revealed half: {lit:?}");
+        // Where the group painted nothing, the black `/BC` backdrop hides it.
+        assert_eq!(
+            surface.pixel(12, 8),
+            Some([255, 255, 255, 255]),
+            "the backdrop's black luminance must hide the right half"
+        );
+    }
+}
+
+#[test]
+fn a_white_backdrop_reveals_where_the_group_paints_nothing() {
+    // The complement, and the reason the luminosity buffer is cleared opaque:
+    // an area the group never touches contributes the `/BC` luminosity, not
+    // zero. With `/BC` white that area is fully revealed.
+    let mask = soft_mask(
+        pdfrum_page::SoftMaskKind::Luminosity,
+        pdfrum_page::Rgb {
+            r: 1.0,
+            g: 1.0,
+            b: 1.0,
+        },
+        Vec::new(),
+    );
+    let object = masked_form(
+        rect_path(0.0, 0.0, 16.0, 16.0),
+        [1.0, 0.0, 0.0],
+        mask,
+        Rect::new(0.0, 0.0, 16.0, 16.0),
+    );
+    let (vello, tiny) = render_both(&page(16.0, 16.0, vec![object]), &RenderOptions::default());
+    for surface in [&vello, &tiny] {
+        let px = surface.pixel(8, 8).expect("a pixel");
+        assert!(px[0] > 200 && px[1] < 60, "fully revealed: {px:?}");
+    }
+}
+
+#[test]
+fn a_white_fill_paints_white_rather_than_nothing() {
+    // `FXSYS_BGR` packs a resolved colour into the low 24 bits, so white is
+    // `0x00FFFFFF` and never the `0xFFFFFFFF` invisibility word. Reading the
+    // two as one makes every white object in the corpus vanish.
+    let objects = vec![
+        filled(rect_path(0.0, 0.0, 16.0, 16.0), [0.0, 0.0, 0.0]),
+        filled(rect_path(4.0, 4.0, 12.0, 12.0), [1.0, 1.0, 1.0]),
+    ];
+    let (vello, tiny) = render_both(&page(16.0, 16.0, objects), &RenderOptions::default());
+    for surface in [&vello, &tiny] {
+        assert_eq!(
+            surface.pixel(1, 1),
+            Some([0, 0, 0, 255]),
+            "the black ground"
+        );
+        assert_eq!(
+            surface.pixel(8, 8),
+            Some([255, 255, 255, 255]),
+            "the white square must paint over the black, not vanish into it"
+        );
+    }
+}
