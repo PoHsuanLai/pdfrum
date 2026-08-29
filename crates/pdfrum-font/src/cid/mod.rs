@@ -10,7 +10,7 @@ mod glyph;
 mod gsub;
 mod transform;
 
-pub use transform::{CidTransform, japan1_transform};
+pub use transform::{CidTransform, cid_transform_to_float, japan1_transform};
 
 use crate::glyphs::{Charmap, Face, GlyphSource};
 use crate::subst::{
