@@ -521,7 +521,15 @@ fn render_grouped<B: RasterBackend>(
             pixels.multiply_alpha_mask(&m);
         }
     }
-    GroupFinish::of(inputs, ctx.transparency, ctx.in_group).apply(&mut pixels);
+    // `transparency` is the **form's own**, not the enclosing one
+    // (`cpdf_renderstatus.cpp:646`, `:740-742`): the group alpha is applied
+    // exactly when the object being drawn declares a group, and a form drawn
+    // inside a page that declares one does not thereby inherit the multiply.
+    // Reading the enclosing flag instead drops the group alpha on any form
+    // whose own `/Group` is absent — and applies it to a non-form under a
+    // page that has one, where `inputs.group_alpha` is 1.0 and it is
+    // harmless, which is why this only ever showed up as a missing multiply.
+    GroupFinish::of(inputs, transparency, ctx.in_group).apply(&mut pixels);
 
     // With a premultiplied RGBA target that is both readable and
     // alpha-capable, PDFium's five-armed compositor collapses to one arm: a
