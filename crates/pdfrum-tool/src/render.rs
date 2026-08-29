@@ -144,7 +144,15 @@ pub fn render<R: Resolve>(
     // reads the content stream's text and `--annot` describes the
     // annotations rather than drawing them, and both would double-count an
     // appearance the page graph had already absorbed.
-    pdfrum_doc::annot_render::overlay(&mut built, &page.dict, r, ctx, &limits, &mut build_diags);
+    pdfrum_doc::annot_render::overlay(
+        &mut built,
+        &page.dict,
+        catalog,
+        r,
+        ctx,
+        &limits,
+        &mut build_diags,
+    );
     let page = built;
     let opts = RenderOptions {
         transform: kurbo::Affine::scale(scale),
