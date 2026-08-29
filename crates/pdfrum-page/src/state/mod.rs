@@ -15,7 +15,7 @@ pub mod graph;
 pub mod marks;
 pub mod text;
 
-pub use clip::{ClipEntry, ClipStack, MAX_TEXT_OBJECTS};
+pub use clip::{ClipEntry, ClipStack, MAX_TEXT_OBJECTS, TextClipRun};
 pub use extgstate::{apply_ext_gstate, ext_gstate_dash, soft_mask_matrix};
 pub use general::{BlendMode, GeneralState, RenderIntent};
 pub use graph::{MIN_DASH_CYCLE, NormalizedDash, StrokeParams};
