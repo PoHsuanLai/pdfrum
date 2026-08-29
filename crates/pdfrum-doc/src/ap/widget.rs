@@ -63,21 +63,43 @@ use crate::names;
 /// two without the other is a measured loss, which is why they landed
 /// together.
 ///
-/// # `/NeedAppearances` is a third trigger this does not implement
+/// # `/NeedAppearances`, and why it so often changes nothing
 ///
-/// `CPDFSDK_PageView::NewAnnot` also calls `ResetAppearance` unconditionally
+/// `CPDFSDK_PageView::NewAnnot` *also* calls `ResetAppearance` unconditionally
 /// when the document's `/AcroForm` sets `/NeedAppearances`
-/// (`cpdfsdk_pageview.cpp:108-113`), consulting no `/AP` at all. Honouring
-/// that was **measured and reverted**: it moves `bug_707673` the right way by
-/// 0.0003 and takes `bug_861842` from .99986 to .93548, because that file sets
-/// the flag and its checkbox carries a real ZapfDingbats appearance stream
-/// whose golden reports **one Text object** and no background — the file's own
-/// stream, untouched. Some gate that neither `NeedConstructAP` nor
-/// `GetControlByDict` explains stops the rebuild there, and until it is
-/// identified the net is negative. `docs/status/pdfrum-render.md`, wave 11,
-/// carries the measurement.
+/// (`cpdfsdk_pageview.cpp:108-113`), consulting no `/AP` at all. That
+/// rebuild always runs — but for a checkbox or a radio button it is very
+/// often **invisible**, and the reason is a key mismatch rather than a gate:
+///
+/// `SetAsCheckBox` and `SetAsRadioButton` write exactly two sub-states,
+/// `/AP /N /<GetCheckedAPState()>` and `/AP /N /Off`
+/// (`cpdfsdk_appstream.cpp:1405-1414`, `:1520-1524`), while readback resolves
+/// `/AP /N /<AS>` (`cpdf_annot.cpp:112-123`). When `/AS` names neither of
+/// those, the new streams land in keys nothing looks up and the file's own
+/// stream is what draws.
+///
+/// [`checked_ap_state`] is where that goes wrong most often. It answers the
+/// first non-`Off` key of `/AP /N` — **unless** the field carries an `/Opt`
+/// array, in which case it answers the widget's *control index* as a decimal
+/// string. `bug_861842` is that file: `/Opt` present, control index 0, and
+/// `/AS /1`, so the rebuild writes `/0` and `/Off` while the reader keeps
+/// asking for `/1`. Honouring the flag without this rule takes it from .99986
+/// to .93548; with the rule it is untouched, and `bug_707673`'s radios — no
+/// `/Opt`, `/AS /Off`, and `Off` is always written literally — do rebuild.
+///
+/// Measured with gdb on the oracle: both files reach `ResetAppearance`, and
+/// only one of them shows it.
 #[must_use]
 pub fn needs_appearance<R: Resolve>(dict: &Dict, r: &R) -> bool {
+    needs_appearance_in(dict, None, r)
+}
+
+/// The same, knowing the document the widget belongs to.
+///
+/// The catalog is what `/NeedAppearances` is read from; a caller without one
+/// answers as a form that does not set it would.
+#[must_use]
+pub fn needs_appearance_in<R: Resolve>(dict: &Dict, catalog: Option<&Dict>, r: &R) -> bool {
     // Read coercively, matching how the annotation list classifies subtypes.
     if dict.byte_string(obj_names::SUBTYPE, r).as_deref() != Some(b"Widget") {
         return false;
@@ -85,7 +107,91 @@ pub fn needs_appearance<R: Resolve>(dict: &Dict, r: &R) -> bool {
     if !has_known_field_type(dict, r) {
         return false;
     }
-    dict.dict(names::AP, r).is_none()
+    if dict.dict(names::AP, r).is_none() {
+        return true;
+    }
+    needs_construct_ap(catalog, r) && rebuild_would_be_seen(dict, r)
+}
+
+/// Whether the document's form asks for every appearance to be rebuilt.
+///
+/// `CPDF_InteractiveForm::NeedConstructAP` is
+/// `form_dict_ && form_dict_->GetBooleanFor("NeedAppearances", false)`
+/// (`cpdf_interactiveform.cpp:735-737`) — strictly a **boolean**, so a
+/// `/NeedAppearances (true)` written as a string does not set it.
+fn needs_construct_ap<R: Resolve>(catalog: Option<&Dict>, r: &R) -> bool {
+    let Some(form) = catalog.and_then(|catalog| catalog.dict(names::ACRO_FORM, r)) else {
+        return false;
+    };
+    form.get(names::NEED_APPEARANCES, r)
+        .and_then(|value| value.as_direct().and_then(pdfrum_object::Object::as_bool))
+        .unwrap_or(false)
+}
+
+/// Whether a rebuild would land in the sub-state `/AS` reads back.
+///
+/// Only a checkbox or a radio button writes sub-states at all; every other
+/// field type's builder writes `/AP /N` as one stream, which `/AS` never
+/// filters, so a rebuild is always seen. For the two that do, it is seen
+/// exactly when `/AS` names `Off` or [`checked_ap_state`] — and a widget with
+/// no `/AS` reads back the empty key, which a rebuild never writes.
+fn rebuild_would_be_seen<R: Resolve>(dict: &Dict, r: &R) -> bool {
+    if !is_button(dict, r) {
+        return true;
+    }
+    let Some(state) = dict.byte_string(names::AS, r) else {
+        return false;
+    };
+    state == names::OFF.as_bytes() || state == checked_ap_state(dict, r)
+}
+
+/// The sub-state key a rebuilt checkbox or radio button writes its on-state
+/// into (`CPDF_FormControl::GetCheckedAPState`, `cpdf_formcontrol.cpp:78-89`).
+///
+/// The first non-`Off` key of `/AP /N` — in the **sorted** order the C++'s
+/// `std::map` iterates, not the document order this crate's dictionaries keep
+/// — except that a field carrying an `/Opt` array answers the widget's control
+/// index as a decimal string instead, and an answer that comes back empty
+/// becomes `Yes`.
+#[must_use]
+pub fn checked_ap_state<R: Resolve>(dict: &Dict, r: &R) -> Vec<u8> {
+    let (limits, mut diags) = (Limits::default(), Diagnostics::default());
+    if attr::field_attr(dict, names::OPT, r, &limits, &mut diags)
+        .is_some_and(|value| matches!(value, pdfrum_object::Object::Array(_)))
+    {
+        return control_index(dict, r).to_string().into_bytes();
+    }
+    let on = dict
+        .dict(names::AP, r)
+        .and_then(|ap| ap.dict(names::N, r))
+        .map(|normal| {
+            let mut keys: Vec<&[u8]> = normal
+                .keys()
+                .map(pdfrum_object::Name::as_bytes)
+                .filter(|key| *key != names::OFF.as_bytes())
+                .collect();
+            keys.sort_unstable();
+            keys.first().map_or_else(Vec::new, |key| key.to_vec())
+        })
+        .unwrap_or_default();
+    if on.is_empty() { b"Yes".to_vec() } else { on }
+}
+
+/// Which of its field's widgets this one is, by position in `/Kids`.
+///
+/// A merged field-and-widget — the dictionary is its own only control — is
+/// index zero, which is also what an unfindable widget answers, because
+/// `GetControlIndex` returns zero for a control the field does not list.
+fn control_index<R: Resolve>(dict: &Dict, r: &R) -> usize {
+    let Some(kids) = dict
+        .dict(names::PARENT, r)
+        .and_then(|parent| parent.array(names::KIDS, r))
+    else {
+        return 0;
+    };
+    (0..kids.len())
+        .find(|index| kids.dict_at(*index, r).as_ref() == Some(dict))
+        .unwrap_or(0)
 }
 
 /// Builds a widget's appearance chrome, with no text body.
@@ -121,7 +227,7 @@ fn build<R: Resolve>(
     font: Option<&crate::ap::TextFont<'_>>,
     r: &R,
 ) -> Option<GeneratedAp> {
-    if !needs_appearance(dict, r) {
+    if !needs_appearance_in(dict, catalog, r) {
         return None;
     }
     let rect = rotated_rect(dict, r);
@@ -329,7 +435,7 @@ pub fn widget_border<R: Resolve>(dict: &Dict, r: &R) -> BorderStyleInfo {
 
 #[cfg(test)]
 mod tests {
-    use super::{generate, needs_appearance, rotated_rect};
+    use super::{checked_ap_state, generate, needs_appearance, needs_appearance_in, rotated_rect};
     use crate::geom;
     use kurbo::Rect;
     use pdfrum_object::{Array, ByteSpan, Dict, Name, NoResolve, Object, Stream};
@@ -402,6 +508,148 @@ mod tests {
             )])),
         )]);
         assert!(!needs_appearance(&with_stream, &NoResolve));
+    }
+
+    /// A catalog whose form sets `/NeedAppearances` to the given value.
+    fn form_catalog(need: Object) -> Dict {
+        dict(&[("AcroForm", Object::Dict(dict(&[("NeedAppearances", need)])))])
+    }
+
+    /// An `/AP` whose `/N` lists the given sub-states, each a stream.
+    fn states(names: &[&str]) -> Object {
+        Object::Dict(dict(&[(
+            "N",
+            Object::Dict(Dict::from_pairs(
+                names
+                    .iter()
+                    .map(|state| {
+                        (
+                            Name::from(*state),
+                            Object::Stream(Stream::new(Dict::new(), ByteSpan::from(b"x".to_vec()))),
+                        )
+                    })
+                    .collect::<Vec<_>>(),
+            )),
+        )]))
+    }
+
+    #[test]
+    fn need_appearances_rebuilds_a_text_field_that_already_has_one() {
+        // Only a checkbox and a radio button write sub-states, so nothing
+        // filters a rebuilt text field: it is always seen.
+        let field = dict(&[
+            ("Subtype", Object::Name(Name::from("Widget"))),
+            ("FT", Object::Name(Name::from("Tx"))),
+            ("Rect", numbers(&[100.0, 100.0, 200.0, 130.0])),
+            (
+                "AP",
+                Object::Dict(dict(&[(
+                    "N",
+                    Object::Stream(Stream::new(Dict::new(), ByteSpan::from(b"x".to_vec()))),
+                )])),
+            ),
+        ]);
+        assert!(!needs_appearance(&field, &NoResolve));
+        for (need, expected) in [
+            (Object::Bool(true), true),
+            (Object::Bool(false), false),
+            // `GetBooleanFor` reads a boolean and nothing else.
+            (Object::Name(Name::from("true")), false),
+            (
+                Object::Str(pdfrum_object::PdfString::literal(b"true")),
+                false,
+            ),
+        ] {
+            assert_eq!(
+                needs_appearance_in(&field, Some(&form_catalog(need.clone())), &NoResolve),
+                expected,
+                "{need:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_rebuild_a_button_would_never_read_back_does_not_happen() {
+        let catalog = form_catalog(Object::Bool(true));
+        let button = |extra: &[(&str, Object)]| {
+            let mut pairs = vec![
+                ("FT", Object::Name(Name::from("Btn"))),
+                ("AP", states(&["Yes", "Off"])),
+            ];
+            pairs.extend_from_slice(extra);
+            widget(&pairs)
+        };
+
+        // `/AS` names `Off`, which a rebuild always writes literally.
+        let off = button(&[("AS", Object::Name(Name::from("Off")))]);
+        assert!(needs_appearance_in(&off, Some(&catalog), &NoResolve));
+
+        // `/AS` names the on-state a rebuild would write.
+        let on = button(&[("AS", Object::Name(Name::from("Yes")))]);
+        assert!(needs_appearance_in(&on, Some(&catalog), &NoResolve));
+
+        // `/AS` names a third state, which a rebuild leaves untouched — so
+        // the file's own stream keeps drawing and nothing is regenerated.
+        let elsewhere = button(&[("AS", Object::Name(Name::from("Maybe")))]);
+        assert!(!needs_appearance_in(&elsewhere, Some(&catalog), &NoResolve));
+
+        // No `/AS` at all reads back the empty key, which is never written.
+        assert!(!needs_appearance_in(
+            &button(&[]),
+            Some(&catalog),
+            &NoResolve
+        ));
+    }
+
+    #[test]
+    fn an_opt_array_makes_the_on_state_a_control_index() {
+        // `bug_861842`'s shape: `/Opt` present, so the rebuilt on-state is the
+        // widget's control index — `0` — while `/AS` still reads `1`. The two
+        // never meet and the file's own stream survives.
+        let catalog = form_catalog(Object::Bool(true));
+        let with_opt = widget(&[
+            ("FT", Object::Name(Name::from("Btn"))),
+            ("AP", states(&["1", "Off"])),
+            ("AS", Object::Name(Name::from("1"))),
+            ("Opt", numbers(&[0.0, 0.0])),
+        ]);
+        assert_eq!(checked_ap_state(&with_opt, &NoResolve), b"0".to_vec());
+        assert!(!needs_appearance_in(&with_opt, Some(&catalog), &NoResolve));
+
+        // Without `/Opt` the on-state is the first non-`Off` key, `/AS`
+        // matches it, and the rebuild is seen.
+        let without = widget(&[
+            ("FT", Object::Name(Name::from("Btn"))),
+            ("AP", states(&["1", "Off"])),
+            ("AS", Object::Name(Name::from("1"))),
+        ]);
+        assert_eq!(checked_ap_state(&without, &NoResolve), b"1".to_vec());
+        assert!(needs_appearance_in(&without, Some(&catalog), &NoResolve));
+    }
+
+    #[test]
+    fn the_on_state_is_the_first_key_in_sorted_order_and_falls_back_to_yes() {
+        // The C++ walks a `std::map`, so the order is the keys' own, not the
+        // document's. Written `Zed` first, `Alpha` wins.
+        let sorted = widget(&[
+            ("FT", Object::Name(Name::from("Btn"))),
+            ("AP", states(&["Zed", "Off", "Alpha"])),
+        ]);
+        assert_eq!(checked_ap_state(&sorted, &NoResolve), b"Alpha".to_vec());
+
+        // An `/AP /N` with nothing but `Off` — or none at all — answers `Yes`.
+        let off_only = widget(&[
+            ("FT", Object::Name(Name::from("Btn"))),
+            ("AP", states(&["Off"])),
+        ]);
+        assert_eq!(checked_ap_state(&off_only, &NoResolve), b"Yes".to_vec());
+        assert_eq!(
+            checked_ap_state(
+                &widget(&[("FT", Object::Name(Name::from("Btn")))]),
+                &NoResolve
+            ),
+            b"Yes".to_vec()
+        );
     }
 
     #[test]
