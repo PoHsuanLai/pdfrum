@@ -254,15 +254,14 @@ pub fn emit_object(out: &mut String, object: &PageObject, names: &ResourceNames)
 
 /// A matrix that maps everything onto a line or a point — the object it
 /// transforms covers no area.
-fn is_degenerate(m: Affine) -> bool {
-    let c = m.as_coeffs();
-    let (a, b, cc, d) = (
-        c.first().copied().unwrap_or(0.0),
-        c.get(1).copied().unwrap_or(0.0),
-        c.get(2).copied().unwrap_or(0.0),
-        c.get(3).copied().unwrap_or(0.0),
-    );
-    (a == 0.0 && b == 0.0) || (cc == 0.0 && d == 0.0)
+fn is_degenerate(matrix: Affine) -> bool {
+    let coeffs = matrix.as_coeffs();
+    let at = |i: usize| coeffs.get(i).copied().unwrap_or(0.0);
+    // Either basis vector collapsing to zero flattens the unit square onto a
+    // line, so whatever the object covers has no area.
+    let x_axis_collapsed = at(0) == 0.0 && at(1) == 0.0;
+    let y_axis_collapsed = at(2) == 0.0 && at(3) == 0.0;
+    x_axis_collapsed || y_axis_collapsed
 }
 
 fn emit_matrix(out: &mut String, m: Affine) {
