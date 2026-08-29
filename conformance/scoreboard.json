@@ -1,13 +1,13 @@
 {
-  "generated_at": "2026-08-29T05:20:21Z",
+  "generated_at": "2026-08-29T05:44:06Z",
   "totals": {
     "files": 1675,
-    "pass": 1086,
-    "fail": 589,
+    "pass": 1087,
+    "fail": 588,
     "by_tag": {
       "page-count": 2,
       "pixel-fail": 553,
-      "tierA-mismatch": 91
+      "tierA-mismatch": 90
     },
     "text": {
       "pages": 2061,
@@ -29371,10 +29371,8 @@
     },
     {
       "path": "resources/bug_717.pdf",
-      "status": "fail",
-      "tags": [
-        "tierA-mismatch"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -29383,9 +29381,7 @@
           "pageinfo.txt",
           "structure.txt"
         ],
-        "mismatched": [
-          "structure.txt"
-        ],
+        "mismatched": [],
         "golden_pages": 1,
         "actual_pages": 1,
         "text": {
@@ -29401,7 +29397,7 @@
         "max_channel_diff": 53,
         "pages": 1
       },
-      "notes": "dumps differ: structure.txt"
+      "notes": ""
     },
     {
       "path": "resources/bug_750568.in",
