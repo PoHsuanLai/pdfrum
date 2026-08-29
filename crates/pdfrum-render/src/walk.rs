@@ -79,6 +79,13 @@ pub fn render_page<B: RasterBackend>(
 }
 
 /// The device size a page renders at, and the errors that size can be.
+///
+/// The dimensions **truncate**, they do not round up: `pdfium_test` writes
+/// `static_cast<int>(FPDF_GetPageWidthF(page) * scale)`
+/// (`pdfium_test.cc:1513-1514`), so an A4 page's 595.276 points become 595
+/// device pixels, not 596. Rounding up instead costs a one-pixel border on
+/// every page whose size is not a whole number — which is most of the
+/// non-US-Letter corpus, and a size mismatch rather than a pixel difference.
 #[expect(
     clippy::cast_possible_truncation,
     clippy::cast_sign_loss,
@@ -93,8 +100,8 @@ fn target_size(page: &Page, opts: &RenderOptions) -> Result<(u32, u32), Error> {
     let corners = opts
         .transform
         .transform_rect_bbox(Rect::new(0.0, 0.0, pw, ph));
-    let w = corners.width().ceil();
-    let h = corners.height().ceil();
+    let w = corners.width().trunc();
+    let h = corners.height().trunc();
     if !w.is_finite() || !h.is_finite() || w < 1.0 || h < 1.0 {
         return Err(Error::TargetEmpty {
             width: w.max(0.0) as u32,
@@ -709,6 +716,8 @@ pub fn default_transparency() -> Transparency {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
+
     use kurbo::BezPath;
     use pdfrum_page::state::ContentMarks;
     use pdfrum_page::{Content, GraphicsState, PathObject};
@@ -762,6 +771,7 @@ mod tests {
                 matrix: Affine::IDENTITY,
                 font: None,
                 render_mode: pdfrum_page::TextRenderMode::Fill,
+                type3_metrics: BTreeMap::default(),
             },
             state: GraphicsState::default(),
             marks: ContentMarks::new(),
@@ -783,6 +793,23 @@ mod tests {
         page.media_box = page.crop_box;
         let err = target_size(&page, &RenderOptions::default()).expect_err("empty");
         assert!(matches!(err, Error::TargetEmpty { .. }));
+    }
+
+    #[test]
+    fn target_size_truncates_rather_than_rounding_up() {
+        // A4 is 595.276 x 841.89 points; `pdfium_test` casts, so the bitmap
+        // is 595x841. Rounding up costs a one-pixel border, which the
+        // harness reports as a size mismatch rather than a pixel difference.
+        let a4 = Rect::new(0.0, 0.0, 595.276, 841.89);
+        let page = Page {
+            media_box: a4,
+            crop_box: a4,
+            ..Page::empty()
+        };
+        assert_eq!(
+            target_size(&page, &RenderOptions::default()).expect("renderable"),
+            (595, 841)
+        );
     }
 
     #[test]
