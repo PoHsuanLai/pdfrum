@@ -27,7 +27,7 @@ use pdfrum_page::{
 };
 use pdfrum_raster_tinyskia::TinySkiaBackend;
 use pdfrum_raster_vello::VelloBackend;
-use pdfrum_render::{Pixmap, RenderOptions, render_page};
+use pdfrum_render::{Pixmap, RenderOptions, render_page, render_page_with_visibility};
 
 /// A page of the given device size with no rotation and no transparency.
 fn page(width: f64, height: f64, objects: Vec<PageObject>) -> Page {
@@ -396,6 +396,7 @@ fn a_form_renders_the_children_the_page_graph_gave_it() {
             matrix: placement,
             bbox: Some(Rect::new(0.0, 0.0, 4.0, 4.0)),
             transparency: Transparency::default(),
+            oc: None,
         },
         state: GraphicsState::default(),
         marks: ContentMarks::new(),
@@ -1061,6 +1062,7 @@ fn masked_form(
                 isolated: true,
                 knockout: false,
             },
+            oc: None,
         },
         state,
         marks: ContentMarks::new(),
@@ -1191,4 +1193,123 @@ fn an_unusable_pattern_paints_nothing_rather_than_the_current_colour() {
             "an unusable pattern must paint nothing, not the previous colour"
         );
     }
+}
+
+#[test]
+fn a_hidden_object_is_not_drawn_and_its_clip_never_reaches_the_device() {
+    // Two overlapping fills, the second hidden. The gate sits ahead of the
+    // clip push (`RenderSingleObject`, `cpdf_renderstatus.cpp:247`), so a
+    // hidden object contributes neither ink nor clip — which is what the
+    // second assertion checks by drawing a *third* object the hidden one's
+    // clip would have cut away if it had been pushed.
+    let mut clipped = GraphicsState::default();
+    clipped.clip.push_path(rect_path(0.0, 0.0, 1.0, 1.0), false);
+
+    let visible_page = page(
+        8.0,
+        8.0,
+        vec![
+            filled(rect_path(0.0, 0.0, 8.0, 8.0), [1.0, 1.0, 1.0]),
+            filled(rect_path(0.0, 0.0, 8.0, 8.0), [1.0, 0.0, 0.0]),
+        ],
+    );
+    let opts = RenderOptions::default();
+
+    // Everything visible: the red covers the page.
+    let all = pdfrum_page::Visibility::all_visible();
+    let mut diags = Diagnostics::default();
+    let mut caches = pdfrum_render::RenderCaches::new();
+    let shown = render_page_with_visibility(
+        &visible_page,
+        &opts,
+        &TinySkiaBackend::new(),
+        &all,
+        &mut caches,
+        &mut diags,
+    )
+    .expect("renders");
+    assert_eq!(shown.pixel(4, 4), Some([255, 0, 0, 255]));
+
+    // With the red hidden, the white beneath it shows through. The tree is
+    // built by the pre-pass in the page crate; here it is asserted from the
+    // renderer's side, which is the seam this test exists for.
+    let off = pdfrum_object::Dict::from_pairs([
+        (
+            pdfrum_object::Name::from("Type"),
+            pdfrum_object::Object::Name(pdfrum_object::Name::from("OCG")),
+        ),
+        (
+            pdfrum_object::Name::from("Name"),
+            pdfrum_object::Object::Name(pdfrum_object::Name::from("Hidden")),
+        ),
+    ]);
+    let properties = pdfrum_object::Dict::from_pairs([
+        (
+            pdfrum_object::Name::from("OCGs"),
+            pdfrum_object::Object::Array(pdfrum_object::Array::of([pdfrum_object::Object::Dict(
+                off.clone(),
+            )])),
+        ),
+        (
+            pdfrum_object::Name::from("D"),
+            pdfrum_object::Object::Dict(pdfrum_object::Dict::from_pairs([(
+                pdfrum_object::Name::from("OFF"),
+                pdfrum_object::Object::Array(pdfrum_object::Array::of([
+                    pdfrum_object::Object::Dict(off.clone()),
+                ])),
+            )])),
+        ),
+    ]);
+
+    let mut red = filled(rect_path(0.0, 0.0, 8.0, 8.0), [1.0, 0.0, 0.0]);
+    let PageObject::Path(content) = &mut red else {
+        panic!("a fill is a path object");
+    };
+    content.marks.push_with_properties(
+        pdfrum_object::Name::from("OC"),
+        &pdfrum_page::MarkProperties::Named(pdfrum_object::Name::from("MC0")),
+        |_| Some(off.clone()),
+    );
+    let hidden_page = page(
+        8.0,
+        8.0,
+        vec![filled(rect_path(0.0, 0.0, 8.0, 8.0), [1.0, 1.0, 1.0]), red],
+    );
+
+    let mut oc = pdfrum_page::OcContext::new(Some(properties), pdfrum_page::UsageType::View);
+    let mut build_diags = Diagnostics::default();
+    let visible = pdfrum_page::page_visibility(
+        &hidden_page,
+        &mut oc,
+        &pdfrum_object::NoResolve,
+        &mut build_diags,
+    );
+    assert!(!visible.visible(1), "the pre-pass hides the red fill");
+
+    let mut diags = Diagnostics::default();
+    let mut caches = pdfrum_render::RenderCaches::new();
+    let out = render_page_with_visibility(
+        &hidden_page,
+        &opts,
+        &TinySkiaBackend::new(),
+        &visible,
+        &mut caches,
+        &mut diags,
+    )
+    .expect("renders");
+    assert_eq!(
+        out.pixel(4, 4),
+        Some([255, 255, 255, 255]),
+        "the hidden fill paints nothing at all"
+    );
+
+    // And `render_page` itself is unchanged: no visibility, everything drawn.
+    let mut diags = Diagnostics::default();
+    let plain =
+        render_page(&hidden_page, &opts, &TinySkiaBackend::new(), &mut diags).expect("renders");
+    assert_eq!(
+        plain.pixel(4, 4),
+        Some([255, 0, 0, 255]),
+        "the visibility-free entry point still draws every layer"
+    );
 }

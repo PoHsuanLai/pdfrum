@@ -347,6 +347,7 @@ pub fn build_form_object<R: Resolve>(
             matrix: placed,
             bbox,
             transparency,
+            oc: stream.dict.dict(names::OC, r).map(Arc::new),
         },
         state,
         marks: ContentMarks::default(),
@@ -1354,6 +1355,7 @@ impl<R: Resolve> Interp<'_, R> {
             matrix,
             bbox,
             transparency,
+            oc: stream.dict.dict(names::OC, self.resolver).map(Arc::new),
         };
         self.push(PageObject::Form(Box::new(self.content(object))));
     }
@@ -1399,6 +1401,7 @@ impl<R: Resolve> Interp<'_, R> {
             // The unit square transformed by the current matrix.
             matrix: self.state.ctm,
             is_mask,
+            oc: stream.dict.dict(names::OC, self.resolver).map(Arc::new),
         };
         self.push(PageObject::Image(Box::new(self.content(object))));
     }
@@ -1434,6 +1437,9 @@ impl<R: Resolve> Interp<'_, R> {
             image: Arc::new(data),
             matrix: self.state.ctm,
             is_mask,
+            // An inline image has no XObject dictionary to carry `/OC`; only
+            // an enclosing marked-content sequence can hide it.
+            oc: None,
         };
         self.push(PageObject::Image(Box::new(self.content(object))));
     }

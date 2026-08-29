@@ -446,6 +446,12 @@ fn draw_tiling_per_tile<B: RasterBackend>(
                 backend,
                 caches,
                 &pattern.objects,
+                // A pattern's cell is its own object list, outside the page
+                // graph the visibility pre-pass walked, so nothing in it is
+                // hidden by index. An `/OC` inside a cell would need the
+                // pre-pass to reach patterns too — the oracle does not, and
+                // no corpus file asks.
+                &pdfrum_page::Visibility::all_visible(),
                 pattern_to_device * offset,
                 target,
                 diags,
@@ -538,6 +544,9 @@ fn render_cell<B: RasterBackend>(
         backend,
         caches,
         &pattern.objects,
+        // As above: a cell's objects are not the page's, so the page's
+        // visibility tree does not describe them.
+        &pdfrum_page::Visibility::all_visible(),
         adjust * to_device,
         target,
         diags,
