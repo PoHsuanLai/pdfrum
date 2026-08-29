@@ -726,6 +726,7 @@ version = "0.1.0"
 dependencies = [
  "kurbo",
  "pdfrum-common",
+ "pdfrum-filters",
  "pdfrum-font",
  "pdfrum-object",
  "pdfrum-page",
@@ -747,6 +748,7 @@ dependencies = [
  "pdfrum-page",
  "pdfrum-parser",
  "pdfrum-raster-tinyskia",
+ "pdfrum-raster-vello",
  "pdfrum-render",
  "pdfrum-text",
  "peniko",

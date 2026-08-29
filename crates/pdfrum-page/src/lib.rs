@@ -61,6 +61,7 @@ pub mod state;
 mod tokenize;
 pub mod transfer;
 pub mod transparency;
+pub mod type3;
 
 pub use build::{
     BuildContext, MAX_FORM_LEVEL, build_page, build_page_from_dict, eliminate_redundant_clips,
@@ -90,6 +91,7 @@ pub use state::{
 };
 pub use transfer::TransferFunc;
 pub use transparency::{SoftMask, SoftMaskKind, Transparency};
+pub use type3::Type3Metrics;
 
 /// The `/ExtGState`, colorspace, shading, pattern and image dictionary keys
 /// this crate reads.

@@ -1,7 +1,8 @@
 # The pdfrum fuzz ring
 
-Eighteen `cargo-fuzz` targets over every byte-consuming entry point in the
-parser-facing crates, and the gate that PLAN.md §6 makes an M1 exit
+Twenty `cargo-fuzz` targets over every byte-consuming entry point in the
+parser-facing crates, plus the two that drive text extraction's geometry and
+its string scanners, and the gate that PLAN.md §6 makes an M1 exit
 criterion: *parser fuzzers running clean for 24h*.
 
 ## Why this is a separate workspace
@@ -37,7 +38,7 @@ Then, from the repo root:
 ```sh
 bash fuzz/seed-corpus.sh          # populate fuzz/corpus/ (see "Seeds" below)
 cd fuzz
-cargo +nightly fuzz list          # the eighteen targets
+cargo +nightly fuzz list          # every target
 cargo +nightly fuzz build         # build them all
 cargo +nightly fuzz run parser_load corpus/parser_load -- -max_total_time=60
 ```
@@ -104,6 +105,8 @@ deferred-fuzz notes in `docs/status/pdfrum-{object,crypt,filters,cmap,parser}.md
 | `parser_xref` | `read_xref` | a whole file |
 | `parser_load` | `load` | a whole file |
 | `parser_load_password` | `load` with `/Encrypt` | password selector, password chunk, then a whole file |
+| `text_extract` | `pdfrum_text::extract` and the query half | a whole file; the geometry reaching the heuristics is what is being fuzzed, not the bytes |
+| `text_links` | `check_web_link` / `check_mail_link` | raw UTF-8 text, capped at 4 KiB |
 
 Targets that need more than one byte string split the input with
 `fuzz/src/lib.rs`'s `Split`: one length byte, then that many bytes, repeated,

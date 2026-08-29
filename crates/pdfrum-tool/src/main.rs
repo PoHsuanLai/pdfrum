@@ -9,8 +9,16 @@
 //! count out of. `--password=` and `--pages=` affect those dumps as they do in
 //! the oracle.
 //!
-//! `--png`, `--txt`, `--annot`, `--show-structure` and the save-* family are
-//! **accepted and do nothing**, which is deliberate. The harness runs one
+//! `--txt` writes each page's characters as UTF-32LE to
+//! `<input>.<page>.txt`, over `pdfrum-page` and `pdfrum-text`.
+//!
+//! `--png` renders each page to `<input>.<page>.png`, over `pdfrum-page`,
+//! `pdfrum-render` and `pdfrum-raster-tinyskia`; with `--md5` it also prints
+//! the `MD5:<path>:<hex>` line the oracle prints, hashed over the **raw
+//! bitmap buffer** rather than over the PNG.
+//!
+//! `--annot`, `--show-structure`, the other raster targets and the save-*
+//! family are **accepted and do nothing**, which is deliberate. The harness runs one
 //! fixed set of passes against every candidate; a tool that rejected the flags
 //! for crates that do not exist yet would tag those tiers as a tool error
 //! rather than as unimplemented, and would lose the page counts the same
@@ -27,10 +35,13 @@
 
 #![forbid(unsafe_code)]
 
+mod content;
 mod metadata;
 mod options;
 mod pageinfo;
+mod render;
 mod run;
+mod text;
 mod unsupported;
 
 use std::io::Write;
@@ -89,10 +100,16 @@ fn main() -> ExitCode {
 /// The note for an output format we accept but cannot produce yet.
 fn unimplemented_format(format: OutputFormat) -> Option<String> {
     let (flag, crate_name) = match format {
-        OutputFormat::None | OutputFormat::PageInfo => return None,
+        OutputFormat::None
+        | OutputFormat::PageInfo
+        | OutputFormat::Text
+        // `--png` is the one render format we produce; the rest are the
+        // oracle's other raster and vector targets, which we do not.
+        | OutputFormat::Render("png") => return None,
         OutputFormat::Structure => ("--show-structure", "pdfrum-doc"),
-        OutputFormat::Render(_) => ("page rendering", "pdfrum-render"),
-        OutputFormat::Text => ("--txt", "pdfrum-text"),
+        OutputFormat::Render(extension) => {
+            return Some(format!("--{extension} rendering not implemented yet"));
+        }
         OutputFormat::Annot => ("--annot", "pdfrum-doc"),
     };
     Some(format!("{flag} not implemented yet (awaits {crate_name})"))
@@ -106,34 +123,42 @@ mod tests {
     fn the_implemented_formats_carry_no_note() {
         assert_eq!(unimplemented_format(OutputFormat::None), None);
         assert_eq!(unimplemented_format(OutputFormat::PageInfo), None);
+        assert_eq!(unimplemented_format(OutputFormat::Text), None);
     }
 
     #[test]
     fn each_unimplemented_format_names_the_crate_that_will_supply_it() {
         for (format, crate_name) in [
-            (OutputFormat::Text, "pdfrum-text"),
             (OutputFormat::Annot, "pdfrum-doc"),
             (OutputFormat::Structure, "pdfrum-doc"),
-            (OutputFormat::Render("png"), "pdfrum-render"),
         ] {
             let note = unimplemented_format(format).unwrap();
             assert!(note.contains(crate_name), "{note}");
             assert!(note.contains("not implemented yet"), "{note}");
         }
+        // Every raster target but PNG, which we do produce. These name the
+        // format rather than a crate: the renderer exists, this output does
+        // not.
+        let note = unimplemented_format(OutputFormat::Render("ppm")).unwrap();
+        assert!(
+            note.contains("ppm") && note.contains("not implemented yet"),
+            "{note}"
+        );
     }
 
     #[test]
-    fn the_notes_never_say_the_words_the_harness_probes_for() {
-        // `probe_tool` reads "no functionality implemented" / "not
-        // implemented" out of a bare run as the stub marker. Our notes say
-        // "not implemented yet" about one flag, which would be read the same
-        // way -- so they must never appear on the probe's own command line
-        // (`--png --md5`, whose format note is the render one).
-        //
-        // This test pins the *shape*: the probe is a render run, so if the
-        // render note ever stops naming a crate the harness would silently
-        // start tagging every file `unsupported-tool` again.
-        let note = unimplemented_format(OutputFormat::Render("png")).unwrap();
-        assert!(note.contains("pdfrum-render"), "{note}");
+    fn the_probes_own_command_line_carries_no_note() {
+        // `probe_tool` hands the tool `--show-pageinfo` and reads the answer;
+        // a stub is diagnosed by the *absence* of that line rather than by
+        // any wording. The formats the probe and the harness's own passes use
+        // must therefore stay silent, or a working tool would start
+        // announcing itself as unimplemented on every file.
+        for format in [
+            OutputFormat::PageInfo,
+            OutputFormat::Text,
+            OutputFormat::Render("png"),
+        ] {
+            assert_eq!(unimplemented_format(format), None, "{format:?}");
+        }
     }
 }

@@ -294,6 +294,83 @@ impl Font {
         }
     }
 
+    /// The bounding box of one character code's glyph, in 1000/em text space
+    /// and **y-up**: `Rect::new(left, bottom, right, top)` with
+    /// `bottom <= top`.
+    ///
+    /// `Rect::ZERO` when there is no glyph, and always for a Type 3 font,
+    /// whose glyph boxes are a property of the content streams the page layer
+    /// executes rather than of the font.
+    ///
+    /// Text extraction reads this per code — not per decoded string — when it
+    /// builds a character's tight box and when its width ladder has run out of
+    /// better answers.
+    #[must_use]
+    pub fn char_bbox(&self, code: CharCode) -> Rect {
+        match self {
+            Self::Simple(f) => f.char_bbox(code),
+            Self::Type0(f) => f.char_bbox(code),
+            Self::Type3(_) => Rect::ZERO,
+        }
+    }
+
+    /// The width of a string of character codes, decoded through this font's
+    /// own encoding and summed.
+    ///
+    /// Not the same as summing [`char_width`](Self::char_width) over the codes
+    /// a caller already has: the string is re-decoded, so a code that does not
+    /// round-trip through [`append_char`](Self::append_char) — a simple font's
+    /// code above 255, say — comes back as a *different* code and contributes
+    /// a different width. That difference is the whole point of the rung this
+    /// serves in text extraction's width ladder.
+    #[must_use]
+    pub fn string_width(&self, bytes: &[u8]) -> f32 {
+        self.decode(bytes)
+            .map(|item| self.char_width(item.code))
+            .sum()
+    }
+
+    /// The typographic ascent, truncated to an integer as the C++ stores it.
+    #[must_use]
+    pub fn type_ascent(&self) -> i32 {
+        truncate(self.ascent())
+    }
+
+    /// The typographic descent, truncated to an integer, normally negative.
+    #[must_use]
+    pub fn type_descent(&self) -> i32 {
+        truncate(self.descent())
+    }
+
+    /// The CID a character code maps to, for a composite font only.
+    #[must_use]
+    pub fn cid_from_charcode(&self, code: CharCode) -> Option<Cid> {
+        match self {
+            Self::Type0(f) => Some(f.cid_from_charcode(code)),
+            Self::Simple(_) | Self::Type3(_) => None,
+        }
+    }
+
+    /// The vertical origin of a character code, in 1000/em units, for a
+    /// composite font only.
+    #[must_use]
+    pub fn vert_origin(&self, code: CharCode) -> Option<(f32, f32)> {
+        match self {
+            Self::Type0(f) => Some(f.vert_origin(code)),
+            Self::Simple(_) | Self::Type3(_) => None,
+        }
+    }
+
+    /// The vertical advance of a character code, in 1000/em units, for a
+    /// composite font only. Normally negative.
+    #[must_use]
+    pub fn vert_width(&self, code: CharCode) -> Option<f32> {
+        match self {
+            Self::Type0(f) => Some(f.vert_width(code)),
+            Self::Simple(_) | Self::Type3(_) => None,
+        }
+    }
+
     /// The Unicode a character code stands for, `/ToUnicode` first.
     #[must_use]
     pub fn unicode_from_charcode(&self, code: CharCode) -> SmallVec<[char; 2]> {
@@ -468,6 +545,18 @@ impl Iterator for Decoder<'_> {
             }
         })
     }
+}
+
+/// A metric truncated toward zero, which is how the C++ stores ascent and
+/// descent: it reads them into `int` fields at load time, so every consumer
+/// sees the truncation rather than the declared float.
+fn truncate(value: f32) -> i32 {
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "the saturating cast is the point: a metric outside i32 is nonsense"
+    )]
+    let truncated = value.trunc() as i32;
+    truncated
 }
 
 /// Per-document caches: parsed faces, resolved substitutions, font identities.

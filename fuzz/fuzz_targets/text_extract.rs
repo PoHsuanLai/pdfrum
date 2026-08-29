@@ -1,0 +1,103 @@
+//! Whole-file text extraction: bytes → document → page graph → `TextPage`.
+//!
+//! This crate consumes no untrusted bytes directly — it consumes a `Page`,
+//! which is already the product of fuzzed parsing. What it *does* consume is
+//! untrusted **geometry**: matrices that may be singular or non-finite, font
+//! sizes that may be zero or negative, rectangles with their corners the
+//! wrong way round, and character counts in the millions. Every threshold in
+//! the extraction heuristics is arithmetic over those numbers, and several of
+//! them divide.
+//!
+//! Property: never panics and always terminates, and the query half — search,
+//! link extraction, the selection helpers — is exercised on whatever came
+//! out, because its index arithmetic bridges two index spaces that
+//! deliberately disagree.
+
+#![no_main]
+
+use libfuzzer_sys::fuzz_target;
+use pdfrum_object::{Name, Object};
+use pdfrum_page::{BuildContext, Resources, build_page_from_dict, parse_content};
+use pdfrum_text::{ExtractOptions, FindOptions};
+
+fuzz_target!(|data: &[u8]| {
+    let limits = pdfrum_fuzz::limits();
+    let mut diags = pdfrum_fuzz::diags();
+
+    let Ok(doc) = pdfrum_parser::load(data.into(), &pdfrum_parser::LoadOptions::default()) else {
+        return;
+    };
+    // The first few pages only: a document declaring thousands of them would
+    // spend the whole run on one input.
+    let mut ctx = BuildContext::default();
+    for index in 0..doc.page_count().min(4) {
+        let Ok(page) = doc.page(index) else { continue };
+
+        let mut content = Vec::new();
+        if let Some(contents) = page.dict.get(&Name::from("Contents"), &doc) {
+            let mut push = |object: &Object| {
+                if let Some(stream) = object.as_stream() {
+                    content.extend_from_slice(
+                        &pdfrum_filters::decode_chain(stream, 0, &doc, &limits, &mut diags).data,
+                    );
+                    content.push(b' ');
+                }
+            };
+            match contents.as_direct() {
+                Some(direct @ Object::Stream(_)) => push(direct),
+                Some(Object::Array(array)) => {
+                    for element in array.iter() {
+                        if let Ok(resolved) = element.resolve(&doc) {
+                            push(resolved.get());
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        let ops = parse_content(&content, &limits, &mut diags);
+        let resources = Resources::for_page(
+            page.inherited(&Name::from("Resources"), &doc)
+                .and_then(|object| object.resolve(&doc).ok()?.as_dict().cloned()),
+        );
+        let built = build_page_from_dict(
+            &ops,
+            &page.dict,
+            |key| page.inherited(key, &doc),
+            &resources,
+            &doc,
+            &mut ctx,
+            &limits,
+            &mut diags,
+        );
+
+        // Both reading directions, because the right-to-left one reverses
+        // segments and mirrors characters on a path the other never takes.
+        for rtl in [false, true] {
+            let text = pdfrum_text::extract(
+                &built,
+                &doc,
+                &ExtractOptions { rtl },
+                &limits,
+                &mut diags,
+            );
+            // The dump must be a byte-order mark plus four bytes per
+            // character, whatever the page held.
+            let dump = text.to_utf32le();
+            assert_eq!(
+                dump.len(),
+                (text.chars.len() + 1) * 4,
+                "the UTF-32 dump must be one unit per character plus the mark"
+            );
+            // The query half, whose index arithmetic spans two index spaces
+            // that are allowed to disagree.
+            let _ = text.web_links();
+            let _ = text.rects(0, None);
+            let _ = text.page_text(0, text.chars.len());
+            let _ = text
+                .find("e", FindOptions::default())
+                .take(64)
+                .count();
+        }
+    }
+});

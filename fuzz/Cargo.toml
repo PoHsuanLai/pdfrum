@@ -33,6 +33,7 @@ pdfrum-filters = { path = "../crates/pdfrum-filters" }
 pdfrum-cmap = { path = "../crates/pdfrum-cmap" }
 pdfrum-parser = { path = "../crates/pdfrum-parser" }
 pdfrum-page = { path = "../crates/pdfrum-page" }
+pdfrum-text = { path = "../crates/pdfrum-text" }
 
 # The root workspace forbids `unsafe` and denies panics. This workspace does
 # not inherit those lints (it is a separate workspace by construction), but
@@ -231,3 +232,15 @@ path = "fuzz_targets/page_jpx.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "text_extract"
+path = "fuzz_targets/text_extract.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "text_links"
+path = "fuzz_targets/text_links.rs"
+test = false
+doc = false

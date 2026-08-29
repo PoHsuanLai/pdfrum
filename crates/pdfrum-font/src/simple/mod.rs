@@ -24,6 +24,10 @@ use pdfrum_common::{DiagKind, Diagnostics, Limits, Severity};
 use pdfrum_object::{Dict, Resolve};
 use smallvec::SmallVec;
 
+/// The character code an unmapped one borrows its metrics from in a
+/// substituted font (`LoadCharMetrics`'s `LoadCharMetrics(32)` fallback).
+const SPACE: u8 = 32;
+
 /// Which of the two ladders a simple font runs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SimpleKind {
@@ -108,6 +112,26 @@ impl SimpleFont {
         // Nothing declared: ask the face.
         match self.glyph_from_charcode(CharCode(u32::from(code))) {
             Some(gid) => f32::from(self.glyphs.advance_tt(gid) as i16),
+            // A code the encoding could not place has no glyph to measure. In
+            // a **substituted** font it borrows the space's metric instead of
+            // reporting nothing, which is `LoadCharMetrics`'s fallback and is
+            // load-bearing far downstream: a run of unmapped codes advances
+            // the pen, so the text object has a non-degenerate box and text
+            // extraction keeps it rather than dropping it whole. An embedded
+            // font gets no such rescue — its own program is the authority on
+            // what it can draw.
+            None if !self.embedded && code != SPACE => self.space_metric(),
+            None => 0.0,
+        }
+    }
+
+    /// The space glyph's advance, which an unmapped code borrows.
+    fn space_metric(&self) -> f32 {
+        if let Some(w) = self.widths.get(SPACE) {
+            return w;
+        }
+        match self.glyph_from_charcode(CharCode(u32::from(SPACE))) {
+            Some(gid) => f32::from(self.glyphs.advance_tt(gid) as i16),
             None => 0.0,
         }
     }
@@ -161,10 +185,31 @@ impl SimpleFont {
     }
 
     /// The bounding box for a code, in 1000/em units.
+    ///
+    /// A code the encoding could not place borrows the **space's** box in a
+    /// substituted font, the same rescue [`char_width`](Self::char_width)
+    /// applies and for the same reason.
     #[must_use]
     pub fn char_bbox(&self, code: CharCode) -> Rect {
-        let code = if code.0 > 0xff { 0 } else { code.0 as usize };
-        self.char_bbox.get(code).copied().unwrap_or(Rect::ZERO)
+        let code = if code.0 > 0xff { 0 } else { code.0 as u8 };
+        let stored = self
+            .char_bbox
+            .get(usize::from(code))
+            .copied()
+            .unwrap_or(Rect::ZERO);
+        if stored != Rect::ZERO
+            || self.embedded
+            || code == SPACE
+            || self
+                .glyph_from_charcode(CharCode(u32::from(code)))
+                .is_some()
+        {
+            return stored;
+        }
+        self.char_bbox
+            .get(usize::from(SPACE))
+            .copied()
+            .unwrap_or(Rect::ZERO)
     }
 
     /// Build one [`CharItem`].

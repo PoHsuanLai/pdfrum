@@ -237,6 +237,39 @@ pub enum DiagKind {
     /// An optional-content membership dictionary named a `/P` policy that is
     /// none of the four defined ones, which makes its content invisible.
     OptionalContentPolicyUnknown,
+
+    // ---- Text extraction (`pdfrum-text`) ----
+    // `core/fpdftext/` has no error channel at all: every damaged input there
+    // is a silent skip or a default value. These are those silences, named.
+    /// A text object's bounding box had no width, so the object was dropped
+    /// whole and contributed no characters.
+    TextObjectDegenerate,
+    /// A text object was dropped because the one before it showed no glyphs —
+    /// a quirk of the batching, not a property of the dropped object.
+    TextObjectDropped,
+    /// A text object repeated one of the five text objects before it closely
+    /// enough to be a redraw, and was dropped.
+    TextObjectDuplicate,
+    /// Character codes in one text object had no Unicode mapping and were
+    /// emitted as raw code points. Carries how many, because a font with a
+    /// broken `/ToUnicode` would otherwise record one per character and
+    /// flood the sink.
+    TextCharcodesUnmapped(u32),
+    /// Character code zero appeared, which emits a NUL into the character
+    /// stream and nothing into the text.
+    TextCharcodeZero,
+    /// Characters in one text object repeated a character already drawn at
+    /// effectively the same place and were suppressed. Carries how many.
+    TextCharsDeduplicated(u32),
+    /// A marked-content `/ActualText` held no printable character, so the
+    /// object it covered emitted nothing at all.
+    TextActualTextUnprintable,
+    /// An `/ActualText` character at or above `U+FFFD` was skipped, though
+    /// the box progression still stepped past it.
+    TextActualTextCharDropped,
+    /// A soft hyphen was called for with no preceding character to attach it
+    /// to. The C++ dereferences an empty container here; we emit nothing.
+    TextHyphenNoPrevChar,
 }
 
 /// One recorded recovery.

@@ -14,12 +14,14 @@
 //! 6. `Processed N pages.` on stderr, and `Skipped N bad pages.` if any.
 
 use std::io::Write;
+use std::path::Path;
 
 use pdfrum_object::{Dict, Object, Resolve};
-use pdfrum_parser::{Document, LoadError, LoadOptions};
+use pdfrum_page::BuildContext;
+use pdfrum_parser::{Document, LoadError, LoadOptions, PageDict};
 
 use crate::options::{Options, OutputFormat, PageRange};
-use crate::{metadata, pageinfo, unsupported};
+use crate::{metadata, pageinfo, render, text, unsupported};
 
 /// Where a run writes. Separated from the work so the whole pipeline is
 /// testable on buffers rather than on the process's own streams.
@@ -84,7 +86,7 @@ pub fn process_file(
         write!(streams.out, "{}", feature.line())?;
     }
 
-    let counts = walk_pages(&doc, options, streams)?;
+    let counts = walk_pages(&doc, name, options, streams)?;
     writeln!(streams.err, "Processed {} pages.", counts.processed)?;
     if counts.bad > 0 {
         writeln!(streams.err, "Skipped {} bad pages.", counts.bad)?;
@@ -95,10 +97,16 @@ pub fn process_file(
 /// Visits the selected pages, dumping each one.
 fn walk_pages(
     doc: &Document,
+    name: &str,
     options: &Options,
     streams: &mut Streams<'_>,
 ) -> std::io::Result<Counts> {
     let mut counts = Counts::default();
+    // One build context for the whole file, so its font, colorspace and
+    // image caches are shared across pages the way the oracle's document-wide
+    // caches are.
+    let mut ctx = BuildContext::default();
+    let rtl = text::direction_is_r2l(&doc.catalog().unwrap_or_default(), doc);
     for index in selected_pages(options.pages, doc.page_count()) {
         let Some(page) = doc
             .page(index)
@@ -113,11 +121,9 @@ fn walk_pages(
         for feature in unsupported::page_annotations(&page.dict, doc) {
             write!(streams.out, "{}", feature.line())?;
         }
-        write!(
-            streams.out,
-            "{}",
-            dump_page(&page.dict, index, options, doc)
-        )?;
+        write!(streams.out, "{}", dump_page(&page, index, options, doc))?;
+        let extra = write_page_files(&page, Path::new(name), index, options, doc, rtl, &mut ctx);
+        write!(streams.out, "{extra}")?;
         counts.processed += 1;
     }
     Ok(counts)
@@ -178,13 +184,66 @@ fn selected_pages(range: Option<PageRange>, page_count: u32) -> Box<dyn Iterator
 /// The formats we cannot produce yet render as nothing rather than as an
 /// error: the page still counts as processed, so the page-count line agrees
 /// with the oracle and the harness sees an empty artifact instead of a crash.
-fn dump_page(page: &Dict, index: u32, options: &Options, r: &impl Resolve) -> String {
+fn dump_page(page: &PageDict, index: u32, options: &Options, r: &impl Resolve) -> String {
     match options.format {
-        OutputFormat::PageInfo => pageinfo::render(page, index, r),
+        OutputFormat::PageInfo => pageinfo::render(&page.dict, index, r),
         OutputFormat::None
         | OutputFormat::Structure
         | OutputFormat::Render(_)
         | OutputFormat::Text
+        | OutputFormat::Annot => String::new(),
+    }
+}
+
+/// The formats that write a file beside the input rather than to stdout.
+///
+/// A write that fails is ignored, exactly as the oracle ignores one: it
+/// prints a line on stderr and carries on to the next page, because a page
+/// that could not be written is not a page that failed to load.
+///
+/// Returns whatever the format also owes *stdout*, which for `--png --md5` is
+/// the `MD5:<path>:<hex>` line the harness and the oracle both print after
+/// the file lands.
+fn write_page_files<R: Resolve>(
+    page: &PageDict,
+    input: &Path,
+    index: u32,
+    options: &Options,
+    r: &R,
+    rtl: bool,
+    ctx: &mut BuildContext,
+) -> String {
+    match options.format {
+        OutputFormat::Text => {
+            let Some(path) = text::output_path(input, index) else {
+                return String::new();
+            };
+            let extracted = text::extract_page(page, r, rtl, ctx);
+            let _ = std::fs::write(path, extracted.to_utf32le());
+            String::new()
+        }
+        OutputFormat::Render("png") => {
+            let Some(path) = render::output_path(input, index) else {
+                return String::new();
+            };
+            let Some(rendered) = render::render(page, r, render::DEFAULT_SCALE, ctx) else {
+                return String::new();
+            };
+            if std::fs::write(&path, &rendered.png).is_err() {
+                return String::new();
+            }
+            // The oracle prints the hash only when the file was written, and
+            // only under `--md5`.
+            if options.md5 {
+                render::md5_line(&path, &rendered.digest)
+            } else {
+                String::new()
+            }
+        }
+        OutputFormat::None
+        | OutputFormat::PageInfo
+        | OutputFormat::Structure
+        | OutputFormat::Render(_)
         | OutputFormat::Annot => String::new(),
     }
 }

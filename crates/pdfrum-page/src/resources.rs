@@ -73,6 +73,26 @@ impl Resources {
         Some(holder.get(name, r)?.into_owned())
     }
 
+    /// The reference a named resource is reached through, when it is
+    /// indirect.
+    ///
+    /// The identity a cache keys on. A resource written inline in the
+    /// resource dictionary has no reference and therefore no identity to
+    /// share, which is exactly right: two inline copies of the same
+    /// dictionary really are two resources.
+    #[must_use]
+    pub fn find_ref<R: Resolve>(
+        &self,
+        category: &Name,
+        name: &Name,
+        r: &R,
+    ) -> Option<pdfrum_object::ObjRef> {
+        match self.holder(category, r)?.raw(name)? {
+            Object::Ref(reference) => Some(*reference),
+            _ => None,
+        }
+    }
+
     /// The `/ColorSpace` dictionary, which colorspace loading needs by
     /// itself rather than by name.
     #[must_use]

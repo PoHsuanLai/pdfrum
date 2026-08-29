@@ -29,6 +29,7 @@ use kurbo::{Affine, BezPath, Rect};
 use pdfrum_common::{DiagKind, Diagnostics, Severity};
 use pdfrum_font::Font;
 use pdfrum_object::{Dict, Resolve};
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 /// The default page size when `/MediaBox` is missing or empty: US Letter.
@@ -123,6 +124,15 @@ pub struct TextObject {
     pub font: Option<(Arc<Font>, f32)>,
     /// How the glyphs are painted.
     pub render_mode: crate::ops::TextRenderMode,
+    /// For a Type 3 font only: what each shown character's glyph procedure
+    /// declares about itself, keyed by character code.
+    ///
+    /// A Type 3 glyph has no program to measure — its advance and box come
+    /// from the `d0`/`d1` operator inside its content stream — so a consumer
+    /// that needs either has no way to get them from the font alone. The
+    /// interpreter has already opened those streams, so it records the answer
+    /// here rather than making every consumer re-interpret them.
+    pub type3_metrics: BTreeMap<u32, crate::type3::Type3Metrics>,
 }
 
 impl PartialEq for TextObject {
@@ -137,6 +147,7 @@ impl PartialEq for TextObject {
             && self.position == other.position
             && self.matrix == other.matrix
             && self.render_mode == other.render_mode
+            && self.type3_metrics == other.type3_metrics
     }
 }
 
