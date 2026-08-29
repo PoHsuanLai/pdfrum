@@ -497,9 +497,6 @@ pub fn place_glyphs(
     let widths_drive_the_design = width_drives_the_design_space(font);
 
     for segment in &object.segments {
-        // A kerning adjustment shifts the pen before the segment it precedes,
-        // and is negated: a positive `TJ` number moves text *left*.
-        pen.x -= f64::from(segment.kerning) / 1000.0 * f64::from(*size);
         for item in font.decode(&segment.codes) {
             let advance = f64::from(item.width) / 1000.0 * f64::from(*size)
                 + f64::from(state.text.char_space);
@@ -548,6 +545,14 @@ pub fn place_glyphs(
             }
             pen.x += advance + word;
         }
+        // `TextSegment::kerning` is the adjustment that **follows** its
+        // string, and a leading one is carried separately as the object's
+        // starting position — so it moves the pen after the glyphs, not
+        // before them. Applying it at the top of this loop double-counted a
+        // leading adjustment and dropped the last one, which put every kerned
+        // run one adjustment out of place. It is negated: a positive `TJ`
+        // number moves text *left*.
+        pen.x -= f64::from(segment.kerning) / 1000.0 * f64::from(*size);
     }
     if snaps_origins(opts, kinds, *size, text_to_device) {
         snap_run(&mut out, opts.text_aa);
@@ -726,7 +731,6 @@ pub fn place_type3_chars(
     let mut out = Vec::new();
 
     for segment in &object.segments {
-        pen.x -= f64::from(segment.kerning) / 1000.0 * f64::from(*size);
         for item in font.decode(&segment.codes) {
             let advance = f64::from(item.width) / 1000.0 * f64::from(*size)
                 + f64::from(state.text.char_space);
@@ -741,6 +745,9 @@ pub fn place_type3_chars(
             });
             pen.x += advance + word;
         }
+        // After the glyphs, as in `place_glyphs` — the adjustment follows its
+        // string.
+        pen.x -= f64::from(segment.kerning) / 1000.0 * f64::from(*size);
     }
     out
 }
@@ -780,7 +787,6 @@ pub fn run_rect(object: &TextObject, state: &pdfrum_page::GraphicsState) -> Opti
     let size = f64::from(*size);
 
     for segment in &object.segments {
-        pen -= f64::from(segment.kerning) / 1000.0 * size;
         for item in font.decode(&segment.codes) {
             let bbox = font.char_bbox(item.code);
             if vertical {
@@ -808,6 +814,9 @@ pub fn run_rect(object: &TextObject, state: &pdfrum_page::GraphicsState) -> Opti
             }
             pen += f64::from(state.text.char_space);
         }
+        // After the glyphs, as in `place_glyphs` — the adjustment follows its
+        // string.
+        pen -= f64::from(segment.kerning) / 1000.0 * size;
     }
     if min_x > max_x || min_y > max_y {
         return None;
