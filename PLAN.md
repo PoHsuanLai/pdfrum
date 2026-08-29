@@ -291,18 +291,35 @@ Both lessons are written down where the next person will meet them.
 
 ## M12 — Performance program  *(after M11; conformance is the regression gate)*
 
-- **P0 baseline:** expand the bench corpus to ~40 files across feature
-  classes (text-heavy, image-heavy, vector, shading, forms); commit a
-  benchmark-baseline JSON with a ratchet like the scoreboard; add a
-  profiling harness (perf/flamegraph scripts under scripts/).
-- **P1 CPU:** measured hotspots first — per-page allocation churn (arena /
-  RenderCaches reuse deeper than the session API), exact-backend scanline
-  loops (restructure for autovectorization BEFORE any SIMD dependency — a
-  new dep is a DEPS.md decision, default no), image resample + composite
-  loops, lexer throughput, `vello_cpu` thread config, rayon multi-page
-  scaling validation.
+- **P0 baseline — DONE** (docs/status/M12.md §1): `benches/corpus/` holds 44
+  files across six classes, selected by *measured* operator counts and render
+  time over all 1375 files in the oracle's two directories rather than by size
+  (a 25 MB file renders in 90 ms; a 1 KB one takes 1.2 s). Six criterion groups
+  (`open`, `render-{exact,tinyskia,vello}`, `text`, `save`);
+  `benches/baseline.json` + `benches/src/bin/ratchet.rs` with empirically
+  measured per-group noise bands; `scripts/profile.sh`. **`perf` was
+  unavailable** (`perf_event_paranoid = 4`, no root): the harness detects it,
+  prints the remedy, and falls back to exact instrumentation at the
+  engine/rasterizer seam rather than to a sampler that could only report
+  elapsed time.
+- **P1 CPU — DONE for what the profile named** (docs/status/M12.md §3–4).
+  Landed with numbers: the opaque-destination composite fast path (**-58% on
+  the glyph blit, -33% on a text page, -17% on a shading page**, proved
+  byte-identical three ways) and the span blitter's loop-invariant hoist
+  (which also removed a latent narrow-clip read past a mask row). Landed and
+  measured at *no effect*, reported as such rather than rounded up: the image
+  resample loop, the `to_pixmap` stencil hoist, and `FxHash` on both hot maps.
+  **rayon scaling measured: 3.09x at 4 threads, 6.09x at 16, flat past the
+  16 physical cores** — the >= 3x target is met. Two findings redirect later
+  work: the *engine* half (walk + interpretation) is 54–85% of a render and is
+  untouched, and the image class's real cost is `to_pixmap`+`prescale`
+  **re-running on every render of an unchanged image** — a cache, which is P2,
+  not a loop.
 - **P2 memory:** peak-RSS harness vs the oracle on large docs; decoded-image
-  cache eviction; Arc/clone pressure audit.
+  cache eviction — **now also the top CPU item**, see M12.md §3.6; Arc/clone
+  pressure audit. Plus the prerequisite M12 could not satisfy: a real `perf`
+  profile of the page-graph walk, without which the `bumpalo` question cannot
+  be asked honestly.
 - **Targets (adjustable):** single-thread geometric mean >= oracle on the
   bench corpus; >= 3x oracle throughput on multi-page docs with rayon; peak
   RSS <= 1.5x oracle. Every perf commit re-runs conformance — byte-exact

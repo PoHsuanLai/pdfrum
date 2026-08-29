@@ -534,7 +534,17 @@ pub const BITMAP_CACHE_BUDGET: usize = 16 * 1024 * 1024;
 /// no policy.
 #[derive(Debug, Default)]
 pub struct BitmapCache {
-    entries: std::collections::HashMap<BitmapKey, Option<LcdBitmap>>,
+    /// Keyed with [`pdfrum_common::FxBuildHasher`], not `std`'s `SipHash`.
+    ///
+    /// [`BitmapKey`] is a glyph id and four `i32` matrix coefficients — sixteen
+    /// bytes this crate computes, none of which a file supplies directly — and
+    /// it is looked up once per glyph *occurrence*, tens of thousands of times
+    /// on a dense page. `SipHash`'s collision resistance buys nothing against a
+    /// key an attacker cannot choose, and its mixing is several times the cost
+    /// of the lookup it guards. See `pdfrum_common::FxBuildHasher`'s docs for
+    /// which keys may and may not use it, and `docs/status/M12.md` for the
+    /// measurement.
+    entries: std::collections::HashMap<BitmapKey, Option<LcdBitmap>, pdfrum_common::FxBuildHasher>,
     bytes: usize,
 }
 

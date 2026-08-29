@@ -63,11 +63,19 @@ pub struct ObjectStore {
     limits: Limits,
     /// Parsed objects, one slot per object number. The slot is created on
     /// first request and filled once.
-    cells: Mutex<HashMap<u32, Arc<OnceLock<Arc<Object>>>>>,
+    /// Keyed with [`pdfrum_common::FxBuildHasher`], not `std`'s `SipHash`: the
+    /// key is an **object number**, a `u32` this crate assigns from the
+    /// cross-reference table, and every resolve of every indirect reference in
+    /// a document goes through this map. A file cannot choose the key — it can
+    /// choose how many there are, which the `Limits` cap governs — so the
+    /// collision resistance `SipHash` is paying for is not resistance to
+    /// anything. See `pdfrum_common::FxBuildHasher`'s docs and
+    /// `docs/status/M12.md`.
+    cells: Mutex<Cells>,
     /// Object numbers whose parse is running right now.
     in_progress: Mutex<Vec<u32>>,
     /// Decoded object streams, keyed by their own object number.
-    containers: Mutex<HashMap<u32, Option<Arc<ObjStm>>>>,
+    containers: Mutex<Containers>,
     /// How the document's strings and streams are encrypted.
     security: SecurityHandler,
     /// The object holding `/Root/Metadata` when it is exempt from
@@ -76,6 +84,19 @@ pub struct ObjectStore {
     /// Repairs recorded during fetches.
     diags: Mutex<Diagnostics>,
 }
+
+/// The parsed-object slots, keyed by object number.
+///
+/// A named type because the shape is three layers deep and reads badly inline:
+/// an `Arc<OnceLock<_>>` per slot is what lets one thread create the slot and
+/// another wait on the parse without holding the map's lock across it.
+type Cells = HashMap<u32, Arc<OnceLock<Arc<Object>>>, pdfrum_common::FxBuildHasher>;
+
+/// Decoded object streams, keyed by their own object number.
+///
+/// `None` records a container that was tried and could not be decoded, so a
+/// broken object stream is parsed once rather than once per object in it.
+type Containers = HashMap<u32, Option<Arc<ObjStm>>, pdfrum_common::FxBuildHasher>;
 
 impl ObjectStore {
     /// Build a store over a file and its cross-reference table.
@@ -89,9 +110,9 @@ impl ObjectStore {
             bytes,
             xref,
             limits,
-            cells: Mutex::new(HashMap::new()),
+            cells: Mutex::new(HashMap::default()),
             in_progress: Mutex::new(Vec::new()),
-            containers: Mutex::new(HashMap::new()),
+            containers: Mutex::new(HashMap::default()),
             security,
             metadata_exempt: None,
             diags: Mutex::new(Diagnostics::default()),

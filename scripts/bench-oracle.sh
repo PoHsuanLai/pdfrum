@@ -23,7 +23,11 @@ cd "$(dirname "$0")/.."
 ORACLE=${1:-/mnt/data2/pdfium/pdfium-c++/out/Release/pdfium_test}
 REPEATS=${2:-40}
 ROUNDS=${3:-5}
-FIXTURES=benches/fixtures
+# M12 moved the benchmark set from `benches/fixtures` (seven small M8 files) to
+# `benches/corpus` (44 files across six classes). Point this at `fixtures` to
+# reproduce the M8 table instead; the script is otherwise unchanged, and both
+# directories carry their own PROVENANCE.md.
+FIXTURES=${4:-benches/corpus}
 
 if [ ! -x "$ORACLE" ]; then
     echo "error: no pdfium_test at $ORACLE" >&2
@@ -63,8 +67,8 @@ best_of() {
     echo "$best"
 }
 
-printf '%-20s %12s %12s %12s\n' fixture "n=1 (s)" "n=$REPEATS (s)" "per-pass (ms)"
-printf '%-20s %12s %12s %12s\n' -------------------- ------------ ------------ ------------
+printf '%-28s %12s %12s %12s\n' fixture "n=1 (s)" "n=$REPEATS (s)" "per-pass (ms)"
+printf '%-28s %12s %12s %12s\n' ---------------------------- ------------ ------------ ------------
 
 for file in "$FIXTURES"/*.pdf; do
     [ -e "$file" ] || continue
@@ -79,5 +83,5 @@ for file in "$FIXTURES"/*.pdf; do
     many=$(best_of "$file" "$REPEATS" "$ROUNDS")
     per_pass=$(echo "scale=6; ($many - $one) * 1000 / ($REPEATS - 1)" | bc)
 
-    printf '%-20s %12.4f %12.4f %12.3f\n' "$stem" "$one" "$many" "$per_pass"
+    printf '%-28s %12.4f %12.4f %12.3f\n' "$stem" "$one" "$many" "$per_pass"
 done

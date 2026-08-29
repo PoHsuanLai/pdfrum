@@ -24,6 +24,25 @@ must_use_candidate = "allow"
 
 [dependencies]
 pdfrum.workspace = true
+# The `profile` binary wraps a `RasterBackend` in a decorator that clocks every
+# device call, which is how docs/status/M12.md attributes a render's time to
+# the engine half or the raster half on a machine where `perf` is unavailable.
+# That needs the traits themselves, and the facade re-exports pixels and
+# options rather than the engine/rasterizer seam — deliberately, it is not
+# public API. These are the same crates `pdfrum` already depends on, so this
+# adds nothing to any tree; `publish = false` keeps it out of every published
+# one regardless.
+pdfrum-render.workspace = true
+pdfrum-page.workspace = true
+pdfrum-raster-exact.workspace = true
+pdfrum-raster-tinyskia.workspace = true
+pdfrum-raster-vello.workspace = true
+pdfrum-common.workspace = true
+kurbo.workspace = true
+# The `scaling` binary measures the facade's rayon multi-page path, which is
+# the one place DEPS.md admits rayon at all ("lib (facade only)").
+rayon.workspace = true
+peniko.workspace = true
 
 [dev-dependencies]
 # DEPS.md "Tools & tests only": criterion is sanctioned for benches and appears

@@ -126,9 +126,27 @@ The protocol, binding for M12:
 | `fearless_simd` | **preferred SIMD dep** (already in-tree at =0.4.1 via vello_cpu) | Linebender, pure Rust, safe multiversioned runtime dispatch, heading to 1.0. Match vello_cpu's pinned version to avoid a duplicate; upgrading both is a coordinated bump. |
 | `wide` | fallback SIMD (not in tree) | Compile-time-width model where fearless_simd's dispatch doesn't fit a loop. Needs the bar. |
 | `bumpalo` | arena candidate (not in tree) | Bump arena for phase-scoped temporaries (content parse, page-graph build) AFTER RenderCaches buffer reuse is extended (no-dep first). Arena lifetimes must never leak into public types. Needs the bar. |
-| `rustc-hash` | **pre-approved** (in-tree via subsetter) | FxHash for hot maps keyed by small ids (ObjRef store, glyph cache); SipHash is measurable overhead there. Record the number anyway. |
-| `memchr` | candidate (not in tree) | SIMD byte-scan for the lexer and backwards keyword search. BurntSushi, runtime dispatch. Needs the bar. |
+| `rustc-hash` | **NOT ADMITTED** — measured 2026-08-30, M12 | The pre-approval stands; the *measurement* declines it. The no-dep baseline the protocol requires was built (`pdfrum_common::FxHasher`, rustc-hash's own algorithm, ~20 lines) and applied to both named call sites. A/B in docs/status/M12.md §3.7: every render number inside the noise band, in both directions; `open` moved 7 microseconds against renders of milliseconds. **Neither the dep nor the no-dep version clears the bar over doing nothing** — the maps are not hot enough for the hash function to be visible. The no-dep hasher is kept (one file, strictly less work, deterministic iteration order); the dependency is not added. Reopen if a profile ever shows object resolution dominating. |
+| `memchr` | candidate (not in tree) | SIMD byte-scan for the lexer and backwards keyword search. BurntSushi, runtime dispatch. Needs the bar — and needs an *input* first: M12 measured `open` at tens of microseconds on all 44 corpus documents against renders of milliseconds to a second, so nothing in the corpus makes lexing visible. Write the tuned scalar word-at-a-time scan, source a large file, then A/B. |
 | `slotmap` | available (in-tree via fontdb) | Only if an id-arena store shape emerges; no current need. |
+
+**M12's evidence-ranked queue** (docs/status/M12.md §7 has the loops and the
+profile lines that nominate each):
+
+1. **`wide`, then `fearless_simd`** — the span compositor
+   (`blend::composite_premultiplied` under
+   `pdfrum_raster_exact::target::blend_span`). Top profile line for two
+   classes: 63.4% of a shading page, 39.7% of a text page. M12's no-dep work
+   already left it as a contiguous `&mut [u8]` walk with the clip as a parallel
+   `&[u8]`, which is the shape a SIMD kernel wants. The stated risk: the
+   per-pixel `cov == 0` early-out becomes a blend-and-select, so a sparse span
+   may get *slower* — the A/B must be per class.
+2. **`bumpalo`** — the page-graph walk. M12's biggest surprise is that the
+   engine half is 54–85% of a render, and it is untouched. **Not ready for an
+   A/B:** the seam-level profile cannot yet separate allocation churn from
+   colour conversion from interpretation. A real `perf` profile is the
+   prerequisite.
+3. **`memchr`** — as the row above says: needs an input before it needs a bar.
 
 **Rejected for the perf ring:** `std::simd` (nightly-only; we are stable),
 `pulp` (new tree duplicating fearless_simd's role), raw `core::arch`
