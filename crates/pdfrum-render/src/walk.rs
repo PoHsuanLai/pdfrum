@@ -1258,6 +1258,17 @@ fn render_image<B: RasterBackend>(
         );
         return;
     }
+    // `DrawMaskedImage`: a mask on a grid of its own is stretched to the
+    // device by itself rather than through the base's samples.
+    if object
+        .image
+        .mask
+        .as_ref()
+        .is_some_and(|m| !crate::image::is_coregistered(m, &object.image))
+    {
+        render_masked_image(ctx, device, backend, object, state, to_device, device_box);
+        return;
+    }
     let (fill, _) = colors(ctx, state, ObjectKind::Other);
     let image = &object.image;
     // `StartRenderDIBBase` runs a non-identity `/TR` over the image's own
@@ -1316,6 +1327,130 @@ fn render_image<B: RasterBackend>(
     if layered {
         device.pop();
     }
+}
+
+/// Paint an image whose mask has a resolution of its own (`DrawMaskedImage`,
+/// `cpdf_imagerenderer.cpp:375-424`).
+///
+/// A mask is **never resolution-reduced** (design brief §1.19.9), so its
+/// dimensions are its own and generally not the base's: `bug_1396266` puts a
+/// 64×64 stencil on a 3×3 image, `bug_1236` a 100×100 `/SMask` on a 400×400
+/// one. PDFium never reconciles the two grids. It renders the base into a
+/// device-sized buffer, renders the mask into a second buffer over the same
+/// device rect through the same matrix, and multiplies — so each is resampled
+/// from its own resolution straight to the device and neither is ever sampled
+/// at the other's coordinates.
+///
+/// Folding the mask into the base's pixels instead reads the wrong sample
+/// everywhere the sizes differ, and — because [`pdfrum_page::ImageMask::alpha_at`]
+/// reports out-of-range as opaque — leaves the majority of a base larger than
+/// its mask completely unmasked.
+fn render_masked_image<B: RasterBackend>(
+    ctx: &RenderCtx<'_>,
+    device: &mut B::Device,
+    backend: &B,
+    object: &pdfrum_page::ImageObject,
+    state: &pdfrum_page::GraphicsState,
+    to_device: Affine,
+    device_box: Rect,
+) {
+    let image = &object.image;
+    let Some(mask) = image.mask.as_ref() else {
+        return;
+    };
+    let Some((mask_dict, mask_pixels)) = crate::image::separate_mask(mask) else {
+        return;
+    };
+    let matrix = to_device * object.matrix;
+    let bbox = matrix
+        .transform_rect_bbox(unit_rect())
+        .intersect(device_box);
+    let rect = outer_rect(bbox).intersect(outer_rect(device_box));
+    let (Ok(w), Ok(h)) = (u32::try_from(rect.width()), u32::try_from(rect.height())) else {
+        return;
+    };
+    if w == 0 || h == 0 || w > MAX_TARGET_DIMENSION || h > MAX_TARGET_DIMENSION {
+        return;
+    }
+    let offset = Affine::translate((-f64::from(rect.left), -f64::from(rect.top)));
+
+    // The base, over its own extent, with no mask folded in.
+    let (fill, _) = colors(ctx, state, ObjectKind::Other);
+    let transfer = state
+        .general
+        .transfer
+        .as_ref()
+        .map(|t| TransferFunc::new(t));
+    let base = to_pixmap(image, fill, transfer.as_ref());
+    if base.width() == 0 || base.height() == 0 {
+        return;
+    }
+    let mut base_target = backend.new_target(w, h, peniko::Color::TRANSPARENT);
+    let base_placement = offset * matrix * sample_grid(image.width, image.height);
+    let base_quality = mask_quality(
+        image,
+        &ctx.opts,
+        base_placement.transform_rect_bbox(Rect::new(
+            0.0,
+            0.0,
+            f64::from(image.width),
+            f64::from(image.height),
+        )),
+    );
+    base_target.draw_image(
+        &base,
+        base_placement,
+        effective_quality(base_quality, base_placement),
+        1.0,
+    );
+    let mut pixels = backend.finish(base_target);
+
+    // The mask, over the *same* device rect through the *same* matrix, at its
+    // own resolution — which is the whole point of the separate pass.
+    let mask_placement = offset * matrix * sample_grid(mask_dict.width, mask_dict.height);
+    let mask_extent = mask_placement.transform_rect_bbox(Rect::new(
+        0.0,
+        0.0,
+        f64::from(mask_dict.width),
+        f64::from(mask_dict.height),
+    ));
+    let mask_q = mask_quality(&mask_dict, &ctx.opts, mask_extent);
+    let mut mask_target = backend.new_target(w, h, peniko::Color::TRANSPARENT);
+    mask_target.draw_image(
+        &mask_pixels,
+        mask_placement,
+        effective_quality(mask_q, mask_placement),
+        1.0,
+    );
+    pixels.multiply_alpha_mask(&backend.finish(mask_target).alpha_mask());
+
+    let blend = overprint_blend(None, &state.general);
+    let layered = !matches!(blend, pdfrum_page::BlendMode::Normal);
+    if layered {
+        device.push_layer(blend, 1.0, None);
+    }
+    device.draw_image(
+        &pixels,
+        Affine::translate((f64::from(rect.left), f64::from(rect.top))),
+        ImageQuality::Nearest,
+        state.general.fill_alpha,
+    );
+    if layered {
+        device.pop();
+    }
+}
+
+/// The transform from an image's sample grid to its unit square, with the y
+/// flip PDF image space needs.
+fn sample_grid(width: u32, height: u32) -> Affine {
+    Affine::new([
+        1.0 / f64::from(width),
+        0.0,
+        0.0,
+        -1.0 / f64::from(height),
+        0.0,
+        1.0,
+    ])
 }
 
 fn render_shading<B: RasterBackend>(
