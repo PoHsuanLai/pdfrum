@@ -701,9 +701,9 @@ only after a decode and its subsampling not at all. 0.773 → **byte-exact**.
 | file | what it actually is |
 |---|---|
 | `bug_718762`, `bug_1646` | the same DCT file; fixed above, and the "JBIG2/CCITT decode differences" row of wave 4's table was wrong about them |
-| `bug_1396266` | a `/Mask` **stencil**, no image codec involved |
-| `bug_1236` | the JBIG2 decodes correctly — the oracle's own saved image is all-black at 400×400 and so is ours. What differs is its 100×100 `/SMask`, whose alphas cap at 25/255: the oracle's page has no black pixel anywhere, ours has an opaque quadrant. A mask-scaling defect in the image path |
-| `bug_1986` | the `/Filter` array's entries are **indirect references** to objects terminated `enbobj`. PDFium's `GetDecoderArray` and `ValidateDecoderPipeline` both resolve them; our `decoder_list` never sees names because the objects do not load. A parser object-recovery gap |
+| `bug_1396266` | a `/Mask` **stencil**, no image codec involved — **fixed**, see below |
+| `bug_1236` | the JBIG2 decodes correctly — the oracle's own saved image is all-black at 400×400 and so is ours. What differs is its 100×100 `/SMask`, whose alphas cap at 25/255: the oracle's page has no black pixel anywhere, ours has an opaque quadrant. A mask-scaling defect in the image path — **fixed**, see below |
+| `bug_1986` | ~~the `/Filter` array's entries are indirect references to objects terminated `enbobj` … a parser object-recovery gap~~ — **this diagnosis was wrong**, see below. **Fixed**; byte-exact |
 | `bug_867501` | the one genuine hayro gap — see below |
 
 ### `bug_867501`: a genuine `hayro-jbig2` gap, and it is not truncation
@@ -748,22 +748,153 @@ expected `255 0 255` output are what an upstream issue needs, and a
 first-party `pdfrum-jbig2` port is not justified by one file — SPEC §12 asks
 for the narrowest faithful fix, and for this file that fix belongs upstream.
 
+## Wave 7: four defects, and three of the four diagnoses above were wrong
+
+The three files this wave was pointed at were each recorded as a different
+kind of problem. Two turned out to be **one** bug, and the third was not in
+the crate the table blamed.
+
+### A mask has a resolution of its own, and is composited at the device's
+
+`bug_1396266` and `bug_1236` are the same defect from opposite sides.
+`to_pixmap` folded a mask into the base image's samples by indexing
+`alpha_at(x, y)` at the *base's* coordinates — correct only when the two
+happen to be the same size, which §1.19.9 says they generally are not: a mask
+is never resolution-reduced.
+
+PDFium never reconciles the two grids. `DrawMaskedImage`
+(`cpdf_imagerenderer.cpp:375-424`) renders the base into a device-sized
+buffer, renders the mask into a second buffer over the *same* device rect
+through the *same* matrix (`CalculateDrawImage`, `:263-319`), and multiplies —
+so each is resampled from its own resolution straight to the device and
+neither is ever sampled at the other's coordinates.
+
+Because `alpha_at` reports out-of-range as **opaque**, folding failed
+asymmetrically:
+
+| file | geometry | what folding did |
+|---|---|---|
+| `bug_1236` | 100×100 `/SMask` over a 400×400 base | masked the top-left quarter, left three quarters unmasked |
+| `bug_1396266` | 64×64 `/Mask` stencil over a 3×3 base | kept 9 of the stencil's 4096 samples |
+
+`render_masked_image` is the `DrawMaskedImage` path. `bug_1236` is
+byte-exact; `bug_1396266` goes from 37% of pixels differing at max channel
+diff 228 to 2.19% at diff 1 — resample rounding, not structure.
+
+### `bug_1986` was never a parser gap
+
+The table above blamed "a parser object-recovery gap" around the `enbobj`
+terminator. Every part of that was wrong, and it is worth saying why, because
+the wrong diagnosis pointed at the wrong crate for a whole wave:
+
+- **`GetIndirectObject` never looks for `endobj` at all.** It reads objnum,
+  gennum, the `obj` keyword and the body, then returns
+  (`cpdf_syntax_parser.cpp:666-699`). Neither does ours. A malformed
+  terminator is simply never read, by either engine.
+- Objects 6 and 7 therefore load fine, and `decoder_list` resolves all three
+  filters — it goes through `Array::get`, which follows one level.
+- The JPX decode already returned the correct image: 612×792 RGB, `ff 00 00`,
+  the pure red the oracle paints.
+
+The gap was one accessor in the *image dictionary*. `last_filter` read the
+`/Filter` array's last element with `name_at`, which does **not** resolve,
+where `GetDecoderArray` reaches each element through `GetByteStringAt`, which
+does. An unrecognised last filter meant the image's missing `/ColorSpace` —
+legitimate, because a JPX codestream carries its own — forced it down the
+one-bit stencil path. Byte-exact after the fix, which also made
+`/DecodeParms` elements resolve by the same rule.
+
+### `FXSYS_IsFloatZero` is 1e-4, not a machine epsilon
+
+Both radial shading copies tested `|a| < f32::EPSILON`. The macro is
+`(f) < 0.0001 && (f) > -0.0001` (`fx_system.h:36`) — about 840 times wider.
+
+It matters because `a` is `dx² + dy² - dr²`, a catastrophic cancellation
+whenever the start point sits on the end circle, and the two branches it
+selects between disagree about more than precision: the linear `a == 0`
+branch carries **no negative-radius skip** and the quadratic one does.
+`radial_shading_point_at_border` is that geometry deliberately — its own
+comment says so — with `|start| = 1 + 1.1e-7` against `r1 = 1`, giving
+`a ≈ 2.4e-7`, squarely in the gap. Reading it as nonzero ran the quadratic
+branch, whose skip discarded 14601 pixels the oracle paints in `C0` through
+the `index < 0` extend clamp, and rendered the surviving ramp flat. 18.6% of
+pixels differing at max diff 252 → 4 pixels at diff 1.
+
+`pdfrum-doc`'s `geom.rs` already had the constant right, and documents that
+the comparison widens to double as the macro's does.
+
+### The zero-area pass precedes the fill; it does not replace it
+
+The largest single movement of the wave, from removing one early return.
+
+`DrawPath`'s loop calls `DrawZeroAreaPath` on each sub-path and then falls
+**straight through** to the ordinary fill at the end of the function —
+there is no return anywhere between them
+(`cfx_renderdevice.cpp:772-804`). Our port returned as soon as any sub-path
+matched.
+
+On a sub-path that really is degenerate the two are equivalent, because
+filling one paints nothing anyway — which is presumably why it read as safe.
+It is not equivalent, because `GetZeroAreaPath`'s third case does not require
+a degenerate sub-path at all: it scans an ordinary one for a segment that
+doubles back (`IsFoldingVerticalLine` and its horizontal and diagonal
+siblings) and emits **just that segment** as a hairline, leaving the rest of
+the polygon to the fill that was about to happen.
+
+`bug_1338` is five triangles each with a retraced edge; we painted the five
+spikes on white. It is byte-exact now, and because a fold inside a filled
+polygon is an ordinary thing for a generator to emit, **27 files** cleared
+the floor.
+
+### Optional content is implemented, and wired to nothing
+
+`corpus/fx/layer/4_36.pdf` (0.908) and `octest.pdf` (0.879) are the two
+remaining layer files, and they are not an evaluation bug. `OcContext`
+answers correctly — on `4_36` its OCMD, whose `/VE` is
+`[/And 20 0 R [/Not 30 0 R] [/Not 40 0 R]]` with both groups on, evaluates
+`false`, exactly as the oracle behaves.
+
+**Nothing calls it.** `grep` for `content_visible` outside `optional.rs`
+finds only the `pub use` in `lib.rs`. The feature is built, unit-tested,
+exported and unreachable, so every layer draws.
+
+Wiring it is a **`[spec]` change**, not a sweep fix, and the shape is known:
+
+- PDFium makes this purely a render-time decision — `CPDF_RenderOptions`
+  holds the context and the page graph carries only the marks, so resolving
+  visibility at build time would diverge structurally.
+- The gate is one check at the top of `RenderSingleObject`
+  (`cpdf_renderstatus.cpp:247`), which our `render_object` mirrors exactly,
+  plus `/OC` on forms (`:401`) and images (`cpdf_imagerenderer.cpp:197`).
+- `Mark` already carries `from_resources`, which is the C++'s
+  `kPropertiesDict` test.
+
+The obstacle is plumbing, not logic: `content_visible` needs `&mut self` and
+a `Resolve`, and `render_page` takes neither — it receives a `Page` and no
+document. Threading a resolver through the render API is the decision to
+make, and it is the user's.
+
 ## Numbers
 
 Measured against the golden store on the full corpus (1675 files, 1628 with
 a golden PNG), rendering through `tiny-skia`. The W3 column is the pixel
 burn-down's third wave; M5 is where the burn-down started.
 
-| metric | M5 | M8 (wave 2) | W3/W4 | **W5** |
-|---|---|---|---|---|
-| pixel files at SSIM ≥ 0.99 | 1075 / 1628 (66.0%) | 1243 / 1628 (76.4%) | 1247 / 1628 (76.6%) | **1387 / 1628 (85.2%)** |
-| at SSIM ≥ 0.95 | 1478 / 1628 (90.8%) | 1518 / 1628 (93.2%) | 1520 / 1628 (93.4%) | **1554 / 1628 (95.5%)** |
-| at SSIM ≥ 0.90 | 1544 / 1628 (94.8%) | 1570 / 1628 (96.4%) | 1572 / 1628 (96.6%) | **1591 / 1628 (97.7%)** |
-| byte-exact PNGs | 430 / 1628 | 446 / 1628 | 451 / 1628 | **451 / 1628** |
-| files passing (all tiers) | 1146 / 1675 | 1256 / 1675 | 1260 / 1675 | **1396 / 1675** |
-| `pixel-fail` | 495 | 385 | 381 | **241** |
-| `size-mismatch` | 0 | 0 | 0 | **0** |
-| Tier C hard failures | — | 5 | 3 | 3 |
+| metric | M5 | M8 (wave 2) | W3/W4 | W5 | W6 | **W7** |
+|---|---|---|---|---|---|---|
+| pixel files at SSIM ≥ 0.99 | 1075 / 1628 (66.0%) | 1243 / 1628 (76.4%) | 1247 / 1628 (76.6%) | 1387 / 1628 (85.2%) | 1403 / 1628 (86.2%) | **1441 / 1628 (88.5%)** |
+| at SSIM ≥ 0.95 | 1478 / 1628 (90.8%) | 1518 / 1628 (93.2%) | 1520 / 1628 (93.4%) | 1554 / 1628 (95.5%) | — | **1574 / 1628 (96.7%)** |
+| at SSIM ≥ 0.90 | 1544 / 1628 (94.8%) | 1570 / 1628 (96.4%) | 1572 / 1628 (96.6%) | 1591 / 1628 (97.7%) | — | **1597 / 1628 (98.1%)** |
+| byte-exact PNGs | 430 / 1628 | 446 / 1628 | 451 / 1628 | 451 / 1628 | 487 / 1628 | **499 / 1628** |
+| files passing (all tiers) | 1146 / 1675 | 1256 / 1675 | 1260 / 1675 | 1396 / 1675 | 1411 / 1675 | **1448 / 1675** |
+| `pixel-fail` | 495 | 385 | 381 | 241 | 225 | **187** |
+| `size-mismatch` | 0 | 0 | 0 | 0 | 0 | **0** |
+| Tier C hard failures | — | 5 | 3 | 3 | 3 | 3 |
+
+Wave 7's four fixes moved 37 files across the 0.99 line and none down; the
+zero-area early return alone accounts for 27 of them. Three of the four were
+one-line or near-one-line changes whose reach was entirely in what they had
+been suppressing.
 
 Wave 5 moved 636 files up and 18 down, none of the 18 by more than 0.0026
 and none across the 0.99 line. **Every byte-exact file stayed byte-exact** —

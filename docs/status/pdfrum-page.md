@@ -220,6 +220,40 @@ samples whatever the dictionary's `/BitsPerComponent` says —
 `jpxdecode_indexed.in` improved but still differs, and the residual is in the
 codestream decode rather than in this path.
 
+## A `/Filter` array may name its filters by reference
+
+`last_filter` read the array's last element with `Array::name_at`, which does
+not resolve. `GetDecoderArray` reaches each element through
+`GetByteStringAt`, which follows one level of indirection, and reaches
+`/Filter` itself through `GetDirectObjectFor` — so both levels resolve, and
+the filters crate's own `decoder_list` had this right all along via
+`Array::get`.
+
+`bug_1986` is the file that shows it: `/Filter [6 0 R /LZWDecode 7 0 R]` with
+object 7 = `/JPXDecode`, and **no `/ColorSpace`**, which is legitimate because
+a JPX codestream carries its own. An unrecognised last filter means the
+missing colour space is read as "this is a stencil", and
+`ImageDict::load`'s mask forcing sends the image down the one-bit path — so a
+red page rendered as a black-on-white mask. Byte-exact after the fix.
+
+`/DecodeParms` elements now resolve too, by the same rule: `dict_at` in place
+of `raw_at().as_dict()`.
+
+This was recorded in the render status doc as a *parser* object-recovery gap,
+on the theory that objects terminated `enbobj` do not load. They do —
+`GetIndirectObject` never looks for `endobj` at all, and neither do we — and
+the whole filter chain already ran correctly through to a valid JP2. The gap
+was one accessor here.
+
+## `FXSYS_IsFloatZero` is a fixed 1e-4
+
+`shading/radial.rs` tested `f32::EPSILON`, roughly 840 times too tight. The
+macro is `(f) < 0.0001 && (f) > -0.0001` (`fx_system.h:36`), and the
+difference decides which branch a near-degenerate radial takes — the linear
+`a == 0` one, which has no negative-radius skip, or the quadratic one, which
+does. `pdfrum-doc`'s `geom.rs` already had it right. See the render status
+doc for what it cost on `radial_shading_point_at_border`.
+
 ## Not yet exercised
 
 Three areas are implemented and unit-tested but have no pixel-level
