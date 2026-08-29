@@ -57,7 +57,7 @@ pub(crate) fn load(
     file: &[u8],
     limits: &Limits,
     diags: &mut Diagnostics,
-) -> Result<(Xref, Trailer, bool), Error> {
+) -> Result<(Xref, Trailer, XrefShape), Error> {
     let shared: Arc<[u8]> = Arc::from(file);
     let start = start_xref(file, limits, diags);
 
@@ -66,17 +66,64 @@ pub(crate) fn load(
 
     if start >= MIN_XREF_OFFSET
         && let Ok(pos) = usize::try_from(start)
-        && read_chain(&shared, pos, &mut xref, &mut trailer, limits, diags)
     {
-        return Ok((xref, trailer, false));
+        // The probe that decides table-versus-stream is the same one
+        // `read_chain` runs; doing it here keeps the answer even when the
+        // chain load later fails and we fall through to the rebuild.
+        let main_is_stream = !probe_is_table(&shared, pos, limits, diags);
+        if read_chain(&shared, pos, &mut xref, &mut trailer, limits, diags) {
+            return Ok((
+                xref,
+                trailer,
+                XrefShape {
+                    rebuilt: false,
+                    last_offset: u64::try_from(start).unwrap_or(0),
+                    main_is_stream,
+                },
+            ));
+        }
     }
 
     diags.record(Severity::Recovered, DiagKind::XrefRebuilt, None);
     if rebuild::rebuild(&shared, &mut xref, &mut trailer, limits, diags, &NoResolve) {
-        Ok((xref, trailer, true))
+        // A rebuilt table has no previous section to chain from: offset zero
+        // is what makes an incremental save rewrite the whole table instead
+        // of emitting a `/Prev` that names nothing.
+        Ok((xref, trailer, XrefShape::rebuilt()))
     } else {
         Err(Error::XrefBroken)
     }
+}
+
+/// What shape the cross-reference the load actually used had.
+///
+/// Three facts a *writer* needs and a reader does not: whether the table was
+/// reconstructed by scanning, where the newest section starts (an incremental
+/// update's `/Prev`), and whether that section was a stream (which decides
+/// between emitting a classic table and folding the whole cross-reference
+/// into a stream object). See SPEC.md §5's 2026-08-29 additions.
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct XrefShape {
+    pub rebuilt: bool,
+    pub last_offset: u64,
+    pub main_is_stream: bool,
+}
+
+impl XrefShape {
+    /// The shape of a table that was scanned out of the file body.
+    pub(crate) const fn rebuilt() -> Self {
+        Self {
+            rebuilt: true,
+            last_offset: 0,
+            main_is_stream: false,
+        }
+    }
+}
+
+/// Does a classic `xref` table live at `pos`?
+fn probe_is_table(file: &Arc<[u8]>, pos: usize, limits: &Limits, diags: &mut Diagnostics) -> bool {
+    let mut probe = Xref::new();
+    classic::parse_table(file, pos, true, &mut probe, limits, diags).is_some()
 }
 
 /// Find the offset `startxref` names, or zero.
@@ -125,8 +172,7 @@ pub(crate) fn read_chain(
     diags: &mut Diagnostics,
 ) -> bool {
     // Probe: does a classic table live here?
-    let mut probe = Xref::new();
-    let main_is_table = classic::parse_table(file, pos, true, &mut probe, limits, diags).is_some();
+    let main_is_table = probe_is_table(file, pos, limits, diags);
 
     let Some(sections) = walk(file, pos, main_is_table, xref, trailer, limits, diags) else {
         return false;
@@ -363,10 +409,21 @@ mod tests {
     use pdfrum_object::names;
 
     fn read(file: &[u8]) -> Option<(crate::xref::Xref, crate::xref::Trailer, bool, Diagnostics)> {
+        shape(file).map(|(x, t, s, d)| (x, t, s.rebuilt, d))
+    }
+
+    fn shape(
+        file: &[u8],
+    ) -> Option<(
+        crate::xref::Xref,
+        crate::xref::Trailer,
+        super::XrefShape,
+        Diagnostics,
+    )> {
         let mut diags = Diagnostics::default();
         load(file, &Limits::default(), &mut diags)
             .ok()
-            .map(|(x, t, r)| (x, t, r, diags))
+            .map(|(x, t, s)| (x, t, s, diags))
     }
 
     #[test]
@@ -461,6 +518,38 @@ mod tests {
     #[test]
     fn a_file_with_nothing_readable_fails() {
         assert!(read(b"not a pdf at all").is_none());
+    }
+
+    // The three facts the writer reads out of the load (SPEC §5, 2026-08-29).
+    #[test]
+    fn a_classic_chain_reports_its_offset_and_that_it_is_not_a_stream() {
+        let file = build_classic();
+        let (_, _, shape, _) = shape(&file).expect("loaded");
+        assert!(!shape.rebuilt);
+        assert!(!shape.main_is_stream);
+        // The offset names the `xref` keyword, which the file really holds.
+        let at = usize::try_from(shape.last_offset).expect("fits");
+        assert_eq!(file.get(at..at + 4), Some(&b"xref"[..]));
+    }
+
+    #[test]
+    fn a_rebuilt_table_reports_offset_zero() {
+        // Point `startxref` where no table is, forcing the scan.
+        let text = String::from_utf8_lossy(&build_classic()).into_owned();
+        let Some((head, tail)) = text.rsplit_once("startxref\n") else {
+            panic!("the builder writes a startxref");
+        };
+        let Some((_, after)) = tail.split_once('\n') else {
+            panic!("the offset is on its own line");
+        };
+        let broken = format!("{head}startxref\n30\n{after}");
+
+        let (_, _, shape, _) = shape(broken.as_bytes()).expect("loaded");
+        assert!(shape.rebuilt);
+        // Zero here is a value, not an absence: it is what tells an
+        // incremental save it has no previous section to chain from.
+        assert_eq!(shape.last_offset, 0);
+        assert!(!shape.main_is_stream);
     }
 
     /// A tiny well-formed document with a classic table.
