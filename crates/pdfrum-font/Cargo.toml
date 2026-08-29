@@ -5,8 +5,30 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
+# The 14 Foxit base-14 blobs are shipped: they are the terminal rung of the
+# substitution ladder, so a build without them cannot draw an unresolvable
+# font at all. See `fontdata/PROVENANCE.md`.
+include = ["src/**", "fontdata/**", "tests/**", "README*", "LICENSE*"]
 
 [lints]
 workspace = true
 
+# `docs/design/pdfrum-font.md` §3 pins this set. `skrifa` draws outlines,
+# `read-fonts` reads the tables skrifa does not surface (`cmap` subtable
+# platform ids, `GSUB`, `OS/2` code-page ranges) and owns the Adobe Glyph
+# List; `fontdb` is a face *enumerator* only — the matching policy is ours
+# (§3.4, OQ-6).
 [dependencies]
+pdfrum-common.workspace = true
+pdfrum-object.workspace = true
+pdfrum-cmap.workspace = true
+pdfrum-type1.workspace = true
+pdfrum-filters.workspace = true
+skrifa.workspace = true
+read-fonts = { workspace = true, features = ["agl"] }
+fontdb.workspace = true
+smallvec.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+pdfrum-parser.workspace = true
