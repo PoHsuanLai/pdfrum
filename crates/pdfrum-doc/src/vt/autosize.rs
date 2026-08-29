@@ -1,14 +1,25 @@
 //! Choosing a size when the field asks for one.
 //!
-//! A ladder of twenty-five sizes, searched for the largest that fits — except
-//! it does not return that one.
+//! A ladder of twenty-five ascending sizes, searched for the largest that
+//! fits.
 //!
-//! The search partitions the ladder into "too big" then "fits" and finds the
-//! **first fitting** size, then returns the step **before** it, which by
-//! construction is one that overflows. It looks like an off-by-one, it is
-//! visible in rendered output, and it is the behavior; only the two ends are
-//! special-cased, so a field where nothing fits gets the largest candidate
-//! and one where everything fits gets the smallest.
+//! The search is a binary search whose predicate is "this size still fits", so
+//! it lands on the **first size that does not**, and the answer is the step
+//! before it. Both ends are special-cased in the direction that reads
+//! naturally: a field where even the smallest step overflows takes the
+//! smallest, and one where every step fits takes the largest.
+//!
+//! **Corrected 2026-08-29.** This was ported with the predicate inverted —
+//! reading the search as landing on the first size that *fits* and returning
+//! the step before, which is one that overflows — and the module said so, at
+//! length, as deliberate behavior. It is not: `lower_bound`'s comparator is
+//! `!IsBigger(size)`, and `lower_bound` returns the first element for which
+//! the comparator is **false**, so it finds the first size that is *bigger*
+//! than the plate. Every field with no explicit size was therefore set at 4
+//! rather than at the size that fills its box. Nothing caught it because the
+//! only consumer until now was a free-text annotation, which almost always
+//! carries a size in its `/DA`; `calculate.pdf`'s two `/Tx` widgets carry none
+//! and their goldens show twelve-point digits where this produced specks.
 
 use crate::vt::{Config, FONT_SIZE_STEPS, Metrics, Section, split};
 
@@ -29,17 +40,16 @@ pub fn auto_font_size(sections: &[Section], config: &Config, metrics: &Metrics<'
     };
     let steps = FONT_SIZE_STEPS.get(..span).unwrap_or(&FONT_SIZE_STEPS);
 
-    let first_fitting = steps
+    let first_too_big = steps
         .iter()
-        .position(|size| !is_bigger(sections, config, metrics, f32::from(*size)));
+        .position(|size| is_bigger(sections, config, metrics, f32::from(*size)));
 
-    let chosen = match first_fitting {
-        // Nothing fits: the largest candidate.
+    let chosen = match first_too_big {
+        // Every step fits: the largest considered.
         None => steps.last().copied(),
-        // Even the smallest fits: the smallest.
+        // Even the smallest overflows: the smallest, rather than nothing.
         Some(0) => steps.first().copied(),
-        // Otherwise the step before the first that fits — deliberately one
-        // that does not.
+        // Otherwise the largest that still fits.
         Some(index) => steps.get(index - 1).copied(),
     };
     chosen.map_or(0.0, f32::from)
@@ -111,19 +121,8 @@ mod tests {
             plate: geom::rect(0.0, 0.0, 100_000.0, 100_000.0),
             ..Config::default()
         };
-        // Every step fits, so the first fitting is index zero and the
-        // smallest is returned.
-        assert!(
-            (auto_font_size(&sections("hi"), &config, &stub::metrics()) - 4.0).abs() < f32::EPSILON
-        );
-    }
-
-    #[test]
-    fn a_plate_too_small_for_anything_gets_the_largest_candidate() {
-        let config = Config {
-            plate: geom::rect(0.0, 0.0, 0.001, 0.001),
-            ..Config::default()
-        };
+        // No step overflows, so the search runs off the end and the ladder's
+        // last entry is the answer.
         assert!(
             (auto_font_size(&sections("hi"), &config, &stub::metrics()) - 144.0).abs()
                 < f32::EPSILON
@@ -131,13 +130,26 @@ mod tests {
     }
 
     #[test]
-    fn a_multi_line_field_never_sizes_above_twelve() {
+    fn a_plate_too_small_for_anything_gets_the_smallest_candidate() {
         let config = Config {
             plate: geom::rect(0.0, 0.0, 0.001, 0.001),
+            ..Config::default()
+        };
+        // Even the smallest step overflows, and the end guard returns it
+        // rather than nothing.
+        assert!(
+            (auto_font_size(&sections("hi"), &config, &stub::metrics()) - 4.0).abs() < f32::EPSILON
+        );
+    }
+
+    #[test]
+    fn a_multi_line_field_never_sizes_above_twelve() {
+        let config = Config {
+            plate: geom::rect(0.0, 0.0, 100_000.0, 100_000.0),
             multi_line: true,
             ..Config::default()
         };
-        // Nothing fits, so the largest *considered* step is returned — and
+        // Everything fits, so the largest *considered* step is returned — and
         // for a multi-line field the ladder stops at twelve.
         assert!(
             (auto_font_size(&sections("hi"), &config, &stub::metrics()) - 12.0).abs()
@@ -146,29 +158,29 @@ mod tests {
     }
 
     #[test]
-    fn the_search_scans_upwards_so_the_smallest_fitting_step_wins() {
-        // This is the shape of the off-by-one. The ladder ascends and
-        // "fits" *shrinks* with size, so the partition the search assumes —
-        // everything too big, then everything fitting — is upside down: the
-        // first step it finds that fits is the smallest one that does, and
-        // the answer is the step before that.
-        //
-        // With a plate that comfortably admits size 4, the first fitting
-        // step is index zero, the one guard that special-cases the ends
-        // fires, and 4 comes back. Every plate wide and tall enough for the
-        // smallest step behaves this way, which is why automatic sizing so
-        // often lands at 4 rather than at the largest size that would fit.
-        for plate in [
-            geom::rect(0.0, 0.0, 1.5, 100.0),
-            geom::rect(0.0, 0.0, 10_000.0, 1.0),
-            geom::rect(0.0, 0.0, 50.0, 50.0),
+    fn the_answer_is_the_largest_step_that_still_fits() {
+        // The stub font is ten units wide per character at a thousandth of an
+        // em, so "hi" sets `size / 50` wide and `size * 12 / 1000` tall. Each
+        // plate below admits exactly one step and not the next.
+        for (plate, expected) in [
+            // 0.6 wide admits 25 (0.5) and not 30 (0.6 is not *bigger* than
+            // 0.6 — the comparison has a tolerance — so 30 fits too, and 35
+            // at 0.7 does not).
+            (geom::rect(0.0, 0.0, 0.6, 100.0), 30.0),
+            // Tall and narrow: width decides, and 0.2 admits 10 exactly.
+            (geom::rect(0.0, 0.0, 0.2, 100.0), 10.0),
+            // Wide and short: height decides, `size * 0.012 <= 0.1` gives 8.
+            (geom::rect(0.0, 0.0, 10_000.0, 0.1), 8.0),
         ] {
             let config = Config {
                 plate,
                 ..Config::default()
             };
             let chosen = auto_font_size(&sections("hi"), &config, &stub::metrics());
-            assert!((chosen - 4.0).abs() < f32::EPSILON, "{plate:?}: {chosen}");
+            assert!(
+                (chosen - expected).abs() < f32::EPSILON,
+                "{plate:?}: got {chosen}, wanted {expected}"
+            );
         }
     }
 }

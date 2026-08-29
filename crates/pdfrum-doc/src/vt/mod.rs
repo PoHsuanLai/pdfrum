@@ -12,12 +12,16 @@
 //! returned as anything else. The terms stay in the arithmetic so it reads
 //! against the source, but nothing varies them.
 //!
-//! # What this is not
+//! # Who uses it
 //!
-//! It is not the engine a *widget* appearance uses. That is a second,
-//! different implementation, out of scope per SPEC §10; this one serves the
-//! free-text and pop-up annotation generators and the `/NeedAppearances`
-//! form path.
+//! The free-text and pop-up annotation generators, the `/NeedAppearances`
+//! form path, and — since the E1 revision of 2026-08-29 — the **widget**
+//! appearance builders in [`crate::ap::field_body`]. This module used to say
+//! a widget's appearance came from "a second, different implementation, out
+//! of scope per SPEC §10". There is no second implementation: what the widget
+//! path drives is a shell over this engine whose only observable addition is
+//! a vertical alignment offset, which the builders pass as
+//! [`edit_ap::generate`]'s `offset`.
 
 pub mod autosize;
 pub mod bidi;
@@ -331,6 +335,13 @@ pub fn layout(text: &str, config: &Config, metrics: &Metrics<'_>) -> Layout {
 /// The union starts as the **first** section's rectangle rather than as an
 /// empty one, so a document whose first paragraph is empty still contributes
 /// that paragraph's zero-width box.
+///
+/// A section's own origin is folded into the positions it holds, on **both**
+/// axes. Placement gives each word a position relative to the section box —
+/// which is what makes the two alignment offsets partially cancel — and the
+/// box's own left edge is where the alignment that survives lives. Reading a
+/// word's position without adding it back leaves every right-aligned and
+/// centred field flush left.
 fn rearrange(sections: &mut [Section], config: &Config, metrics: &Metrics<'_>) -> Rect {
     let mut y = 0.0;
     let mut union: Option<Rect> = None;
@@ -348,10 +359,13 @@ fn rearrange(sections: &mut [Section], config: &Config, metrics: &Metrics<'_>) -
             crate::geom::right(height),
             crate::geom::top(height) + y,
         );
+        let x = crate::geom::left(height);
         for word in &mut section.words {
+            word.x += x;
             word.y += y;
         }
         for line in &mut section.lines {
+            line.x += x;
             line.y += y;
         }
         y += crate::geom::height(height);
