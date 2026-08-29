@@ -908,6 +908,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "pdfrum-raster-exact"
+version = "0.1.0"
+dependencies = [
+ "kurbo",
+ "pdfrum-page",
+ "pdfrum-render",
+ "peniko",
+]
+
+[[package]]
 name = "pdfrum-raster-tinyskia"
 version = "0.1.0"
 dependencies = [
@@ -976,6 +986,7 @@ dependencies = [
  "pdfrum-object",
  "pdfrum-page",
  "pdfrum-parser",
+ "pdfrum-raster-exact",
  "pdfrum-raster-tinyskia",
  "pdfrum-raster-vello",
  "pdfrum-render",

@@ -44,6 +44,7 @@ Two footnotes outside the library tree:
 | `peniko` **lib** | Brushes, gradients, blend modes, color | Shared vocabulary between our engine and both backends |
 | `vello_cpu` **lib** | Primary rasterizer (`pdfrum-raster-vello`) | Modern sparse-strip CPU renderer; SIMD + multithreaded; native layers/masks/blends; "feature-rich, ready for production use cases" per Linebender, API still moving — pin exactly, wrap fully behind `RenderDevice` |
 | `tiny-skia` **lib** | Cross-check rasterizer (`pdfrum-raster-tinyskia`) | Mature, deterministic Skia-CPU port (resvg's engine); Tier-C referee against vello_cpu |
+| *(none)* | Parity rasterizer (`pdfrum-raster-exact`) | **Adds no dependency.** The analytic backend is written against `kurbo` and `peniko` alone — both already in this table — because the thing it exists to control is precisely what a third-party rasterizer decides for itself: how a partially covered pixel is quantised. Wrapping a fourth crate would reintroduce the question |
 | `vello` *(future)* | GPU backend, post-M8 | Same peniko/kurbo types → near-free third backend |
 
 ## Fonts

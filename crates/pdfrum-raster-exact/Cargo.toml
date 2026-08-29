@@ -1,0 +1,23 @@
+[package]
+name = "pdfrum-raster-exact"
+description = "Analytic scanline rasterizer implementing pdfrum-render's RenderDevice"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+readme = "README.md"
+keywords = ["pdf", "render", "rasterizer", "antialiasing"]
+categories = ["graphics", "rendering"]
+
+[lints]
+workspace = true
+
+# No rasterizer dependency: this crate *is* the rasterizer. kurbo flattens
+# curves and expands stroke outlines, peniko carries colours, and the
+# compositing arithmetic is `pdfrum-render`'s own so that a pixel composited
+# here and a pixel composited by the engine agree by construction.
+[dependencies]
+pdfrum-render.workspace = true
+pdfrum-page.workspace = true
+kurbo.workspace = true
+peniko.workspace = true

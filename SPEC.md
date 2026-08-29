@@ -538,8 +538,9 @@ Knockout ([spec] 2026-08-29, page brief Q4): the oracle never parses /K
 anywhere in core/ — v1 matches the oracle and does NOT implement knockout;
 the compositor's layer model keeps a documented (unused) slot for it as a
 post-M8 correctness option. Backends never know about group semantics either
-way. `pdfrum-raster-vello` (vello_cpu) and
-`pdfrum-raster-tinyskia` implement the two traits; conformance Tier C diffs them.
+way. `pdfrum-raster-vello` (vello_cpu),
+`pdfrum-raster-tinyskia` and `pdfrum-raster-exact` implement the two traits;
+conformance Tier C diffs them.
 
 **([spec] 2026-08-29, `pdfrum-render` implementation.)** The trait surface
 above — the six `RenderDevice` methods plus `push_clip_rect`, and the four
@@ -623,6 +624,61 @@ as the code:
    65025, but the two are exhaustively equal there (the numerator is
    non-negative for every `src < 128`), so brief test 33's premise does not
    hold; the spelling is still ported verbatim.
+
+**([spec] 2026-08-29, wave 6: a third backend, and the default splits in
+two.)** `pdfrum-raster-exact` is an analytic scanline rasterizer of our own,
+implementing the trait surface above **unchanged** and adding **no external
+dependency** — it is written against `kurbo` and `peniko` alone, both already
+in the closed set.
+
+7. **The conformance default and the facade default are now different
+   backends, deliberately.** `pdfrum-tool --use-renderer=` gains `exact`,
+   `tiny-skia` and `vello`, and `exact` is what `--png` uses when nothing asks
+   otherwise; the `pdfrum` facade keeps `vello_cpu`. The two defaults answer
+   different questions and had been sharing one answer.
+
+   A *conformance* run asks whether the engine decided a page's pixels. Any
+   rasterizer's own quantisation policy is noise in that measurement, and
+   `tiny-skia`'s is not small: it supersamples at four subsamples per axis, so
+   a diagonal edge takes one of seventeen coverages and a half-covered pixel
+   lands on 8/16 of the range where the oracle writes the exact half. Over the
+   corpus that is a persistent few-count spread along every non-axis-aligned
+   edge. The analytic backend integrates the same area the oracle integrates,
+   on the same 256ths-of-a-pixel grid, through the same measured mapping
+   `min(255, floor(cov·256))` (`agg_rasterizer_scanline_aa.h:283-297`), so
+   what survives a golden diff is the engine's own work. Worth **+16 files at
+   SSIM ≥ 0.99 and +36 byte-exact**, with zero previously-passing files lost.
+
+   An *API user* asks for a fast, well-maintained production rasterizer, which
+   is what `vello_cpu` is and what the analytic backend does not try to be.
+   Making one backend serve both would either slow the facade down or measure
+   conformance through a sampling policy, so the split is the honest shape.
+
+   Tier C keeps `tiny-skia` against `vello_cpu` as its **gating pair**. The
+   tier's value is that two *independent* implementations disagree out loud,
+   and the analytic backend shares this project's engine-facing arithmetic —
+   `blend::composite_premultiplied` is one authority for all three — so
+   diffing it against either would test less, not more. It is reported as a
+   third column rather than gated.
+
+8. **`draw_image`'s transform maps the image's pixel grid, not its unit
+   square**, and SPEC's own comment said otherwise. Every engine call site
+   passes a plain translation for a device-sized buffer, because the engine
+   has already resampled the image to its device size before the call. The
+   unit-square reading collapses a whole-page image onto one pixel, silently
+   and totally; the trait doc now states the convention the code has always
+   had.
+
+9. **Premultiplying a composited colour rounds; it does not truncate.** The
+   truncating `mul255` is the oracle's product wherever the oracle performs
+   one, and it stays that everywhere. But storing a straight result into a
+   premultiplied buffer is *our* round trip, not one of the oracle's, and its
+   inverse (`CFX_DIBitmap::UnPreMultiply`'s `+ alpha / 2`) rounds — so
+   truncating on the way in loses a count on most values. Measured: straight
+   `145` at alpha `223` premultiplies to `126` truncating and `127` rounding,
+   and only `127` comes back as `145`. That count was every pixel of
+   `alpha_composite`'s overlap. Proved exhaustively never worse than
+   truncating, and strictly better on most of the 65 280 pairs.
 
 Deferred to M4/M5 with the code shaped for them, not stubbed around: tiling
 patterns and shading patterns (the pattern is parsed and reaches the object

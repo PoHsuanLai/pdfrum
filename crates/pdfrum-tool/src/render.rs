@@ -26,6 +26,7 @@ use pdfrum_common::{Diagnostics, Limits};
 use pdfrum_object::Resolve;
 use pdfrum_page::BuildContext;
 use pdfrum_parser::PageDict;
+use pdfrum_raster_exact::ExactBackend;
 use pdfrum_raster_tinyskia::TinySkiaBackend;
 use pdfrum_raster_vello::VelloBackend;
 use pdfrum_render::{Pixmap, RenderOptions, needs_alpha_background, render_page};
@@ -61,34 +62,61 @@ pub struct Rendered {
 
 /// The environment variable that selects a rasterizer.
 ///
-/// Deliberately **not** a command-line flag: the tool's flag surface is
-/// compared against the oracle's, and a flag `pdfium_test` does not have
-/// would be one more thing to keep in step for no benefit. Tier C is our own
-/// concern, so it travels out of band.
+/// This is the *out-of-band* spelling, kept because Tier C drives two runs of
+/// one command line and differing only in the environment is what makes them
+/// otherwise identical. The in-band spelling is `--use-renderer=`, which the
+/// oracle also has, and which [`Backend::resolve`] gives precedence.
 pub const BACKEND_ENV: &str = "PDFRUM_BACKEND";
 
 /// Which rasterizer a render uses.
+///
+/// Three, and the split between them is deliberate (SPEC §8). `Exact` is the
+/// conformance default: it integrates coverage analytically on the oracle's
+/// own subpixel grid, so a comparison against a golden measures the *engine*
+/// rather than a rasterizer's sampling policy. The two wrapped backends stay
+/// because Tier C's whole value is that a second implementation disagrees
+/// out loud, and because `vello_cpu` is the production rasterizer the facade
+/// hands an API user who wants speed rather than byte-comparability.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Backend {
-    /// `tiny-skia` — the default, and the determinism baseline.
+    /// The analytic rasterizer — the default for `--png`.
     #[default]
+    Exact,
+    /// `tiny-skia` — the determinism baseline and Tier C's gating partner.
     TinySkia,
     /// `vello_cpu`, at its pinned SIMD level and render mode.
     Vello,
 }
 
 impl Backend {
-    /// The backend `PDFRUM_BACKEND` selects, defaulting to tiny-skia.
-    ///
-    /// An unrecognised value is the default rather than an error: this is a
-    /// developer-facing knob, and a typo should not change what a
-    /// conformance run means.
+    /// The backend a name selects, or `None` when it names none of them.
     #[must_use]
-    pub fn from_env() -> Self {
-        match std::env::var(BACKEND_ENV).as_deref() {
-            Ok("vello" | "vello_cpu") => Self::Vello,
-            _ => Self::TinySkia,
+    pub fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "exact" => Some(Self::Exact),
+            "tiny-skia" | "tinyskia" => Some(Self::TinySkia),
+            "vello" | "vello_cpu" => Some(Self::Vello),
+            _ => None,
         }
+    }
+
+    /// The backend to render with, given a `--use-renderer=` value.
+    ///
+    /// The flag wins over the environment, and both fall back to the default
+    /// rather than erroring: this is a developer-facing knob, and the oracle
+    /// itself accepts `--use-renderer=` values naming rasterizers we do not
+    /// have. A typo must not silently change what a conformance run means, so
+    /// an unrecognised value lands on the default the run would have used
+    /// anyway.
+    #[must_use]
+    pub fn resolve(flag: Option<&str>) -> Self {
+        flag.and_then(Self::from_name)
+            .or_else(|| {
+                std::env::var(BACKEND_ENV)
+                    .ok()
+                    .and_then(|v| Self::from_name(&v))
+            })
+            .unwrap_or_default()
     }
 }
 
@@ -101,6 +129,7 @@ pub fn render<R: Resolve>(
     page: &PageDict,
     r: &R,
     scale: f64,
+    backend: Backend,
     ctx: &mut BuildContext,
 ) -> Option<Rendered> {
     let limits = Limits::default();
@@ -119,11 +148,14 @@ pub fn render<R: Resolve>(
         ..RenderOptions::default()
     };
     let mut diags = Diagnostics::default();
-    // tiny-skia is the default: it is the determinism baseline, and a tool
-    // whose output moved with the host's SIMD level would make every
-    // conformance comparison unreproducible. `vello_cpu` pins its own level
-    // so it is reproducible too, and Tier C diffs the two.
-    let pixmap = match Backend::from_env() {
+    // The analytic backend is the default. Every backend here is
+    // reproducible — tiny-skia is deterministic by construction and
+    // `vello_cpu` pins its SIMD level so its output does not move with the
+    // host — so the default is chosen for *parity* rather than for
+    // determinism: it integrates coverage the way the oracle does, which is
+    // what makes a golden comparison measure the engine.
+    let pixmap = match backend {
+        Backend::Exact => render_page(&page, &opts, &ExactBackend::new(), &mut diags).ok()?,
         Backend::TinySkia => render_page(&page, &opts, &TinySkiaBackend::new(), &mut diags).ok()?,
         Backend::Vello => render_page(&page, &opts, &VelloBackend::new(), &mut diags).ok()?,
     };
