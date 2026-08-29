@@ -27,7 +27,7 @@ substitution ladder, vertical writing, and the glyph cache.
 | `glyphs/` | the two-backend `Face`, `GlyphSource`, `GlyphCache` |
 | `subst/` | the 15-step ladder, the standard 14, style parsing, `SubstFont`, charsets, the `FontDb` seam |
 | `fontdata/` | the 14 Foxit base-14 CFF blobs + `PROVENANCE.md` |
-| `tests/fixtures/` | 11 synthesized TrueType fonts + `PROVENANCE.md` |
+| `tests/fixtures/` | 12 synthesized TrueType fonts + `PROVENANCE.md` |
 
 ### The behaviors that mattered most
 
