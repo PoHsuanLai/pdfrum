@@ -301,7 +301,27 @@ pub fn decode_image<R: Resolve>(
             .inspect_err(|_| {
                 diags.record(Severity::Suspicious, DiagKind::ImageDecodeFailed, None);
             })?;
-            (info.width, info.height, Pixels::Stencil(bits), None)
+            // A JBIG2 codestream is bi-level, but that does not make every
+            // JBIG2 image a *stencil*. One that declares a `/ColorSpace` and
+            // does not declare `/ImageMask` is an ordinary one-bit picture,
+            // and PDFium draws it as one: `Jbig2Decoder::Decode` finishes with
+            // `pix = ~pix` over the whole buffer (`jbig2_decoder.cpp:33`),
+            // turning JBIG2's "1 means black" into the PDF sample convention
+            // where 0 is black, and the result then goes through the ordinary
+            // colour-space and `/Decode` path like any other 1-bit image.
+            //
+            // The bit layout is already right: a one-bit, one-component row is
+            // `width.div_ceil(8)` bytes, which is exactly `ImageDict::pitch`.
+            if info.image_mask {
+                (info.width, info.height, Pixels::Stencil(bits), None)
+            } else {
+                let mut samples = bits.bits;
+                for byte in &mut samples {
+                    *byte = !*byte;
+                }
+                let pixels = unpack(&info, space.as_ref(), &samples, diags)?;
+                (info.width, info.height, pixels, None)
+            }
         }
         Some(Filter::Dct) => {
             let image = decode_dct(&decoded.data).inspect_err(|_| {
@@ -987,6 +1007,55 @@ mod tests {
             Pixels::Gray8(Box::from(&[0u8, 85, 170, 255][..]))
         );
         assert!(image.mask.is_none());
+    }
+
+    /// The 94-byte JBIG2 codestream from `transfer_function.in`'s
+    /// `/IM_1bpp`, a 400x400 image that decodes to solid black.
+    const JBIG2_ALL_BLACK: [u8; 94] = [
+        0x00, 0x00, 0x00, 0x00, 0x30, 0x00, 0x01, 0x00, 0x00, 0x00, 0x13, 0x00, 0x00, 0x0d, 0xea,
+        0x00, 0x00, 0x03, 0x53, 0x00, 0x00, 0x17, 0x11, 0x00, 0x00, 0x17, 0x11, 0x51, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x01, 0x26, 0x00, 0x01, 0x00, 0x00, 0x00, 0x35, 0x00, 0x00, 0x0d, 0xea,
+        0x00, 0x00, 0x03, 0x53, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x03,
+        0xff, 0xfd, 0xff, 0x02, 0xfe, 0xfe, 0xfe, 0xff, 0x7f, 0x86, 0x53, 0x0f, 0xb6, 0xc9, 0x22,
+        0xcf, 0xff, 0x7f, 0xff, 0x7f, 0xff, 0x7f, 0xff, 0x7f, 0xff, 0x7f, 0xff, 0x7f, 0xff, 0x7f,
+        0xff, 0x7f, 0xff, 0xac,
+    ];
+
+    #[test]
+    fn a_jbig2_image_with_a_colour_space_is_a_picture_and_not_a_stencil() {
+        // A JBIG2 codestream is bi-level, and it is tempting to conclude that
+        // every JBIG2 image is a mask. It is not: this one declares
+        // `/DeviceGray` and no `/ImageMask`, so it is an ordinary one-bit
+        // picture and the sample convention is the PDF's — 0 is black.
+        // Reading it as a stencil paints it in the fill colour wherever
+        // JBIG2 said "black", which for an all-black image drawn on a light
+        // page is a whole square of the wrong colour.
+        let s = stream(
+            vec![
+                (Name::from("Width"), Object::Int(400)),
+                (Name::from("Height"), Object::Int(400)),
+                (Name::from("BitsPerComponent"), Object::Int(1)),
+                (
+                    Name::from("ColorSpace"),
+                    Object::Name(Name::from("DeviceGray")),
+                ),
+                (
+                    Name::from("Filter"),
+                    Object::Name(Name::from("JBIG2Decode")),
+                ),
+            ],
+            &JBIG2_ALL_BLACK,
+        );
+        let image = decode(&s).expect("should decode");
+        assert_eq!((image.width, image.height), (400, 400));
+        let Pixels::Gray8(gray) = &image.pixels else {
+            panic!("expected grey samples, got {:?}", image.pixels);
+        };
+        assert_eq!(gray.len(), 400 * 400);
+        assert!(
+            gray.iter().all(|&v| v == 0),
+            "every sample is black: JBIG2's set bit inverts to sample 0"
+        );
     }
 
     #[test]
