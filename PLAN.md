@@ -1,6 +1,6 @@
 # PDFium → Rust Rewrite — Master Plan
 
-**Status:** M1-M3, M6 (waiver), M7 complete (2026-08-29): oracle reopens 100% of saved files, saved-vs-original render parity 100%, incremental discipline 100%. M5 burn-down ongoing (~66%->climbing @0.99, passes 1242/1675). M8 (facade/polish) in flight; 24h fuzz gate running.
+**Status:** All crates implemented (2026-08-29). M1-M3, M6 (waiver), M7 complete; facade + README landed (M8 polish in flight); M5 burn-down at 76.4%@0.99 with the D7 AA cluster in progress; 24h fuzz gate running. Workspace: 2632 tests.
 **Oracle:** `/mnt/data2/pdfium/pdfium-c++` (read-only C++ PDFium checkout @ `6f2272e`)
 **Workspace:** `/mnt/data2/pdfium/pdfrum` (this repository)
 
