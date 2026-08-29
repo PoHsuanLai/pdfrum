@@ -11,6 +11,9 @@
 //! - `run` scores `pdfrum-tool` against that store and writes the scoreboard,
 //!   optionally enforcing the monotone rule against a previous one.
 //! - `triage` clusters the scoreboard's failures into units of work.
+//! - `tier-c` renders each file with **both** rasterizers and diffs them
+//!   against each other rather than against the oracle, which separates an
+//!   engine bug from a backend one.
 
 #![forbid(unsafe_code)]
 
@@ -26,6 +29,7 @@ mod scoreboard;
 mod ssim;
 mod suppressions;
 mod thresholds;
+mod tierc;
 mod transcode;
 mod triage;
 
@@ -64,6 +68,8 @@ enum Command {
     Run(RunArgs),
     /// Cluster scoreboard failures into units of work.
     Triage(TriageArgs),
+    /// Diff the two rasterizers against each other over our own engine.
+    TierC(TierCArgs),
 }
 
 /// Options shared by the corpus-walking subcommands.
@@ -119,6 +125,19 @@ struct RunArgs {
     check_regressions: Option<PathBuf>,
 }
 
+/// Options for the cross-backend comparison.
+#[derive(Debug, Args)]
+struct TierCArgs {
+    #[command(flatten)]
+    corpus: CorpusArgs,
+    /// Path to the pdfrum-tool binary under test.
+    #[arg(long, env = "PDFRUM_TOOL")]
+    tool: Option<PathBuf>,
+    /// Hermetic font directory (default: `<checkout>/third_party/test_fonts`).
+    #[arg(long)]
+    font_dir: Option<PathBuf>,
+}
+
 #[derive(Debug, Args)]
 struct TriageArgs {
     /// Scoreboard to read (default: conformance/scoreboard.json).
@@ -147,6 +166,7 @@ fn dispatch() -> Result<ExitCode> {
         Command::GenerateGoldens(args) => generate_goldens(&args),
         Command::Run(args) => run_corpus(&args),
         Command::Triage(args) => triage_report(&args),
+        Command::TierC(args) => tier_c(&args),
     }
 }
 
@@ -417,6 +437,72 @@ fn text_summary(totals: &scoreboard::Totals) -> String {
     )
 }
 
+/// Render each file with both rasterizers and diff them against each other.
+///
+/// This is a *cross-backend* check, not an oracle one: it asks whether the
+/// engine decided a page's pixels, or whether a rasterizer did. Both runs go
+/// through the same `pdfrum-tool`, selected by `PDFRUM_BACKEND`, so the two
+/// differ only in which `RasterBackend` the engine was handed.
+fn tier_c(args: &TierCArgs) -> Result<ExitCode> {
+    let checkout = args.corpus.checkout();
+    let tool = ToolPaths {
+        binary: args
+            .tool
+            .clone()
+            .unwrap_or_else(|| repo_root().join("target/release/pdfrum-tool")),
+        font_dir: args
+            .font_dir
+            .clone()
+            .unwrap_or_else(|| checkout.join("third_party/test_fonts")),
+    };
+    let suppressed = load_suppressions(&checkout)?;
+    let listing = corpus::list(&Roots::under(&checkout), &suppressed)
+        .with_context(|| format!("walking the corpus under {}", checkout.display()))?;
+    let mut entries = listing.entries;
+    if let Some(limit) = args.corpus.limit {
+        entries.truncate(limit);
+    }
+
+    let fixup = checkout.join("testing/tools/fixup_pdf_template.py");
+    let base = scratch_root("tierc")?;
+    let indexed: Vec<(usize, corpus::Entry)> = entries.into_iter().enumerate().collect();
+    let outcomes: Vec<run::TierCOutcome> =
+        pool::map(&indexed, args.corpus.workers(), |(index, entry)| {
+            run::compare_backends(entry, &tool, &base.join(format!("f{index}")), &fixup)
+        });
+    std::fs::remove_dir_all(&base).ok();
+
+    let compared = outcomes.iter().filter(|o| o.pages > 0).count();
+    let hard: Vec<&run::TierCOutcome> = outcomes.iter().filter(|o| o.hard_fail).collect();
+    let soft = outcomes
+        .iter()
+        .filter(|o| !o.hard_fail && !o.within_budget)
+        .count();
+    let worst = outcomes.iter().map(|o| o.edge_rate).fold(0.0f64, f64::max);
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "a corpus file count is far inside f64's exact integer range"
+    )]
+    let divergent_rate = if compared == 0 {
+        0.0
+    } else {
+        (hard.len() + soft) as f64 / compared as f64
+    };
+
+    println!("tier-c: {compared} files compared under both backends");
+    println!("  hard failures (engine bugs)   {}", hard.len());
+    println!("  over the 1% edge budget       {soft}");
+    println!("  worst edge divergence         {:.4}%", worst * 100.0);
+    println!(
+        "  divergent files               {:.2}%",
+        divergent_rate * 100.0
+    );
+    for outcome in hard.iter().take(triage::EXAMPLES) {
+        println!("    {} - {}", outcome.path, outcome.note);
+    }
+    Ok(ExitCode::SUCCESS)
+}
+
 fn triage_report(args: &TriageArgs) -> Result<ExitCode> {
     let path = args
         .scoreboard
@@ -488,7 +574,7 @@ mod tests {
             .get_subcommands()
             .map(|c| c.get_name().to_owned())
             .collect();
-        assert_eq!(names, ["generate-goldens", "run", "triage"]);
+        assert_eq!(names, ["generate-goldens", "run", "triage", "tier-c"]);
     }
 
     #[test]
@@ -510,6 +596,29 @@ mod tests {
                 assert_eq!(args.corpus.jobs, Some(4));
                 assert!(args.force);
                 assert!(args.dry_run);
+            }
+            _ => panic!("wrong subcommand parsed"),
+        }
+    }
+
+    #[test]
+    fn tier_c_parses_its_flags() {
+        // Note the absent `--backend`: the two rasterizers are selected by
+        // `PDFRUM_BACKEND` inside the tool, deliberately out of band, so the
+        // tool's flag surface stays exactly the oracle's.
+        let cli = Cli::try_parse_from([
+            "conformance",
+            "tier-c",
+            "--tool",
+            "/t/pdfrum-tool",
+            "--limit",
+            "50",
+        ])
+        .unwrap();
+        match cli.command {
+            Command::TierC(args) => {
+                assert_eq!(args.tool, Some(PathBuf::from("/t/pdfrum-tool")));
+                assert_eq!(args.corpus.limit, Some(50));
             }
             _ => panic!("wrong subcommand parsed"),
         }
