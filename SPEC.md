@@ -474,6 +474,19 @@ committed with provenance, cmap-blob precedent — no ICU dependency, and
 `unicode-bidi` may end up unused here since PDFium's four-way bucket predates
 the UBA; keep it pinned until M2 empirics settle it. Q2 interface gaps are
 recomputed locally via `Dict::raw`, no page-crate change.)
+
+**([spec] 2026-08-29, `text-nonempty` aggregate.) The text tier is scored two
+ways and the exit criterion reads the second.** Of the 1832 `--txt` dumps a
+corpus run compares, **872 are empty** — the oracle wrote a byte-order mark
+and no characters, which the store holds as a zero-length file after
+transcoding, because those pages carry no text. A tool that emitted nothing
+for every page therefore scores 47.6% on a naive pass rate while extracting
+nothing at all, and the number would keep flattering it as real extraction
+landed. So `scoreboard.json`'s `totals.text` carries `pages`/`matched` **and**
+`nonempty`/`nonempty_matched` with both rates, and `conformance run` and
+`triage` print both. **M2's "≥ 98% of corpus" exit criterion (PLAN.md §6) is
+the `nonempty_rate`**, over the 960 dumps that hold characters. `.annot.txt`
+is a different tier and is excluded, as are the three document-level dumps.
 `TextPage { chars: Vec<CharBox> /* unicode, bbox, origin, font-size, angle */, runs: … }`
 plus `TextPage::find(needle, opts) -> impl Iterator<Item=Range<usize>>` and
 `web_links()`. The C++ heuristics (space insertion thresholds, line breaks,
@@ -551,6 +564,28 @@ demands (`--png --md5 --txt --annot --show-metadata --show-pageinfo
 --show-structure --save-images --pages --scale --password --time --font-dir`),
 including UTF-32LE text output and the `MD5:<path>:<hash>` stdout format, so
 the harness diffs like-for-like.
+
+**([spec] 2026-08-29, tool structure and staged flags.)** The tool grows one
+output format per crate, so it is built to accept the whole flag surface from
+the start and implement what it can: a flag whose crate does not exist yet is
+*recognized*, noted once on stderr, and produces no output, because the
+harness runs one fixed set of passes against every candidate and a tool that
+rejected those flags would tag rendering and text as a **tool error** rather
+than as unimplemented — and would lose the page count the same invocation
+reports on stderr. Modules: `options` (the oracle's own hand-written parse,
+`--pages=` stream-extraction semantics included), `run` (the per-file
+sequence, exit conventions and page-count accounting), and one module per
+dump. `run::dump_page` is the single dispatch point a new format plugs into.
+
+Three behaviors the dumps depend on that are *not* in the C++'s dump code and
+are therefore easy to miss: `Unsupported feature: <name>.` notices go to
+**stdout** and so land inside the metadata and pageinfo dumps, in positions
+fixed by which C++ call site raises them; `--show-pageinfo` reads the five
+boxes **off the page's own dictionary**, without inheritance, normalization,
+or the letter-sized default; and `--show-metadata`'s `(N bytes)` figure is the
+UTF-16LE encoding's length *including* its terminator, so an absent key still
+prints a line reading `(2 bytes)` while a document with no usable `/Info`
+prints nothing at all.
 
 ---
 

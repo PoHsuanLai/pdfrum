@@ -153,20 +153,17 @@ pub(crate) fn read_chain(
     // than leaving a partial table: the file has already proved unreliable,
     // and the recovery scan reads more of it than half a chain does.
     for section in newer {
-        // Within a section the table wins, so the stream is applied first —
-        // and a stream's entries merge (leaving what is already recorded
-        // alone) while a table's are applied directly, which is what lets the
-        // table overwrite them.
-        if section.stream > 0 {
-            let mut entries = Xref::new();
-            if read_stream_section(file, section.stream, false, &mut entries, limits, diags)
-                .is_none()
-            {
-                return false;
-            }
-            let mut merged = entries;
-            merged.merge_up(xref);
-            *xref = merged;
+        // Within a section the table wins, so the stream is applied first.
+        // Both are applied *directly* onto the accumulation rather than
+        // merged under it: this pass runs oldest-first, so a later iteration
+        // is a newer section and is meant to overwrite. The newest section is
+        // re-applied here even though the discovery walk already read it,
+        // which is what makes its entries win over everything the walk laid
+        // down in the opposite order.
+        if section.stream > 0
+            && read_stream_section(file, section.stream, false, xref, limits, diags).is_none()
+        {
+            return false;
         }
         if section.table > 0
             && classic::parse_table(file, section.table, false, xref, limits, diags).is_none()
@@ -251,13 +248,14 @@ fn walk(
         }
         seen.push(pos);
 
-        let mut entries = Xref::new();
-        if let Some(read) = read_stream_section(file, pos, false, &mut entries, limits, diags) {
-            // A stream section: its entries are already merged, and it says
-            // where to look next.
-            let mut merged = entries;
-            merged.merge_up(xref);
-            *xref = merged;
+        // The discovery walk loads each stream section it finds, applying its
+        // entries directly onto the accumulation: an entry an older section
+        // declares overwrites whatever a newer one left at that object
+        // number, phantoms from a newer `/Size` included. That inversion is
+        // deliberate in the C++ and is undone afterwards, because every
+        // section — the newest included — is applied a second time in
+        // newest-last order once the chain is known.
+        if let Some(read) = read_stream_section(file, pos, false, xref, limits, diags) {
             merge_into_walk(trailer, &read.trailer);
             sections.insert(
                 0,

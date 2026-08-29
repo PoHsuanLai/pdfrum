@@ -8,6 +8,7 @@
 //! together they are the reason the cross-reference stream path can be
 //! changed later without silently changing behavior.
 
+use std::fmt::Write as _;
 use std::sync::Arc;
 
 use pdfrum_common::{Diagnostics, Limits};
@@ -232,4 +233,75 @@ fn a_start_xref_pointing_at_a_stream_body_builds_no_table() {
         load(bytes, &LoadOptions::default()),
         Err(LoadError::Broken(_))
     ));
+}
+
+/// A two-section chain of cross-reference streams, base first then update.
+///
+/// Both sections are complete stream objects; the update's `/Prev` points at
+/// the base, and `startxref` names the update. Offsets are computed rather
+/// than written by hand so the entries actually name their own objects.
+fn chained(base_dict: &str, base: &[&str], update_dict: &str, update: &[&str]) -> Vec<u8> {
+    let section = |num: u32, dict: &str, entries: &[&str]| {
+        let mut out = format!("{num} 0 obj <<\n  /Filter /ASCIIHexDecode\n{dict}>>\nstream\n");
+        for entry in entries {
+            out.push_str(entry);
+            out.push('\n');
+        }
+        out.push_str("endstream\nendobj\n");
+        out
+    };
+    let mut out = String::from("%PDF-1.7\n%\u{a0}\u{f2}\u{a4}\u{f4}\n");
+    let base_at = out.len();
+    out.push_str(&section(7, base_dict, base));
+    let update_at = out.len();
+    out.push_str(&section(
+        8,
+        &format!("{update_dict}  /Prev {base_at}\n"),
+        update,
+    ));
+    let _ = write!(out, "startxref\n{update_at}\n%%EOF\n");
+    out.into_bytes()
+}
+
+#[test]
+fn an_update_section_wins_over_the_base_for_an_object_both_describe() {
+    // The ordinary incremental-update rule, and the one that must survive any
+    // change to how the chain is walked: `bug_781804.pdf` is the corpus file
+    // whose `/Info` object is described by both its newest and its oldest
+    // cross-reference stream, and reading the older one gives a document the
+    // wrong modification date.
+    let file = chained(
+        "  /Root 1 0 R\n  /Size 6\n  /Index [5 1]\n  /W [1 1 1]\n",
+        &["01 AA 00"],
+        "  /Root 1 0 R\n  /Size 6\n  /Index [5 1]\n  /W [1 1 1]\n",
+        &["01 BB 00"],
+    );
+    let xref = read(&file).expect("a chain of cross-reference streams");
+    assert_eq!(xref.entry(5), Some(Entry::Offset(0xBB)));
+}
+
+#[test]
+fn a_base_entry_survives_a_newer_sections_size_phantom() {
+    // `/Size` materializes a free entry at its last slot even when no section
+    // wrote one. When an update names only a few objects, that phantom must
+    // not bury an object the base section really describes:
+    // `pixel/bug_345274934.pdf` is exactly this shape, and losing object 4
+    // costs it its only page.
+    let file = chained(
+        "  /Root 1 0 R\n  /Size 6\n  /W [1 1 1]\n",
+        &[
+            "00 00 00", "01 11 00", "01 22 00", "01 33 00", "01 44 00", "01 55 00",
+        ],
+        // The update speaks only about object 2, but claims six objects, so
+        // its phantom lands on object 5.
+        "  /Root 1 0 R\n  /Size 6\n  /Index [2 1]\n  /W [1 1 1]\n",
+        &["01 99 00"],
+    );
+    let xref = read(&file).expect("a chain of cross-reference streams");
+    assert_eq!(xref.entry(2), Some(Entry::Offset(0x99)), "the update wins");
+    assert_eq!(
+        xref.entry(5),
+        Some(Entry::Offset(0x55)),
+        "the base's last object survives the update's phantom"
+    );
 }

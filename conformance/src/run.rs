@@ -45,7 +45,29 @@ pub enum ToolState {
     Unsupported(String),
 }
 
+/// A one-page PDF the probe feeds the tool, with a `/MediaBox` on the page
+/// itself so `--show-pageinfo` has something to say about it.
+const PROBE_PDF: &[u8] = b"%PDF-1.7\n\
+1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n\
+2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n\
+3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 200 300]>>endobj\n\
+trailer<</Root 1 0 R/Size 4>>\n";
+
+/// What the probe expects that PDF's `--show-pageinfo` to open with.
+const PROBE_EXPECTED: &str = "Page 0: MediaBox: 0.00 0.00 200.00 300.00";
+
 /// Probes the candidate tool once, before the corpus loop.
+///
+/// The probe asks the tool to do something and checks that it did, rather
+/// than reading its chatter for stub markers. A negative test was right while
+/// the tool printed one fixed line and nothing else, but it cannot survive a
+/// real tool: a partial implementation legitimately says "not implemented"
+/// about the flags it has not grown yet, and matching on that would tag a
+/// working tool `unsupported-tool` and hide every tier it *can* score.
+///
+/// So: hand it a two-hundred-by-three-hundred page and require the pageinfo
+/// line back. A tool that produces it can be asked about the corpus; anything
+/// else — a stub, a crash, a binary that is not ours — cannot.
 pub fn probe_tool(tool: &ToolPaths) -> ToolState {
     if !tool.binary.is_file() {
         return ToolState::Unsupported(format!(
@@ -53,30 +75,31 @@ pub fn probe_tool(tool: &ToolPaths) -> ToolState {
             tool.binary.display()
         ));
     }
-    // The M0 stub exits without doing anything and prints a notice; treat any
-    // run that neither renders nor reports usable flags as unsupported.
+    let probe_dir = std::env::temp_dir().join(format!("pdfrum-probe-{}", std::process::id()));
+    let outcome = probe_in(tool, &probe_dir);
+    std::fs::remove_dir_all(&probe_dir).ok();
+    outcome
+}
+
+fn probe_in(tool: &ToolPaths, dir: &Path) -> ToolState {
+    let input = dir.join("probe.pdf");
+    if std::fs::create_dir_all(dir).is_err() || std::fs::write(&input, PROBE_PDF).is_err() {
+        return ToolState::Unsupported(format!("cannot write a probe PDF under {}", dir.display()));
+    }
     match Command::new(&tool.binary)
-        .arg("--png")
-        .arg("--md5")
+        .arg("--show-pageinfo")
+        .arg(&input)
         .output()
     {
         Err(err) => ToolState::Unsupported(format!("cannot run {}: {err}", tool.binary.display())),
-        Ok(output) => {
-            let chatter = format!(
-                "{}{}",
-                String::from_utf8_lossy(&output.stdout),
-                String::from_utf8_lossy(&output.stderr)
-            );
-            if chatter.contains("no functionality implemented")
-                || chatter.contains("not implemented")
-            {
-                ToolState::Unsupported(
-                    "pdfrum-tool is a stub: no subcommand implemented yet".to_owned(),
-                )
-            } else {
-                ToolState::Ready
-            }
+        Ok(output) if String::from_utf8_lossy(&output.stdout).contains(PROBE_EXPECTED) => {
+            ToolState::Ready
         }
+        Ok(output) => ToolState::Unsupported(format!(
+            "{} did not answer the pageinfo probe (exit {:?}); it is a stub or not a pdfrum-tool",
+            tool.binary.display(),
+            output.status.code()
+        )),
     }
 }
 
@@ -249,8 +272,21 @@ fn compare_tier_a(
         }
         tier_a.compared.push(name.clone());
         let golden = store.artifact(&manifest.key, name).unwrap_or_default();
-        if produced.get(name).unwrap_or_default() != golden.as_slice() {
+        let matched = produced.get(name).unwrap_or_default() == golden.as_slice();
+        if !matched {
             tier_a.mismatched.push(name.clone());
+        }
+        if is_text_dump(name) {
+            tier_a.text.pages += 1;
+            tier_a.text.matched += u32::from(matched);
+            // The store holds text transcoded to UTF-8 with the oracle's
+            // byte-order mark stripped, so "more than a BOM" is simply "not
+            // empty" here. Counting it any other way would have to re-derive
+            // what the transcode already decided.
+            if !golden.is_empty() {
+                tier_a.text.substantive += 1;
+                tier_a.text.substantive_matched += u32::from(matched);
+            }
         }
     }
     if !tier_a.mismatched.is_empty() {
@@ -265,6 +301,19 @@ fn compare_tier_a(
         ));
     }
     tier_a
+}
+
+/// Whether an artifact is a page's `--txt` dump.
+///
+/// `.annot.txt` also ends in `.txt` and is a different tier, so it is excluded
+/// explicitly — the same distinction the golden generator draws when it
+/// harvests the two passes.
+fn is_text_dump(name: &str) -> bool {
+    crate::generate::has_suffix(name, ".txt")
+        && !crate::generate::has_suffix(name, ".annot.txt")
+        && name != "metadata.txt"
+        && name != "pageinfo.txt"
+        && name != "structure.txt"
 }
 
 /// Every golden PNG against the tool's render of the same page. The worst
@@ -422,6 +471,34 @@ mod tests {
     }
 
     #[test]
+    fn a_binary_that_answers_nothing_useful_is_unsupported() {
+        // `true` runs, exits zero and prints nothing -- the shape of a stub.
+        // The probe must reject it on what it did not say, not on what it did:
+        // a real tool legitimately reports flags it has not implemented, and
+        // reading that as a stub marker would tag a working tool's whole
+        // corpus `unsupported-tool`.
+        let state = probe_tool(&ToolPaths {
+            binary: PathBuf::from("/bin/true"),
+            font_dir: PathBuf::from("/fonts"),
+        });
+        match state {
+            ToolState::Unsupported(reason) => {
+                assert!(reason.contains("pageinfo probe"), "{reason}");
+            }
+            ToolState::Ready => panic!("a silent binary must not probe as ready"),
+        }
+    }
+
+    #[test]
+    fn the_probe_document_is_the_one_the_probe_expects_an_answer_about() {
+        // If the fixture and the expected line ever drift apart, every run
+        // silently reports an all-`unsupported-tool` board again.
+        assert!(String::from_utf8_lossy(PROBE_PDF).contains("/MediaBox[0 0 200 300]"));
+        assert!(PROBE_EXPECTED.contains("0.00 0.00 200.00 300.00"));
+        assert!(PROBE_EXPECTED.starts_with("Page 0: MediaBox:"));
+    }
+
+    #[test]
     fn an_unsupported_tool_tags_every_file_the_same_way() {
         let entry = Entry {
             id: "corpus/a.pdf".to_owned(),
@@ -496,6 +573,67 @@ mod tests {
         assert_eq!(tier_a.mismatched, ["metadata.txt"]);
         assert_eq!(tags, [tag::TIER_A_MISMATCH]);
         std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn text_dumps_are_counted_apart_from_the_other_artifacts() {
+        let (root, store) = temp_store("text-score");
+        let manifest = manifest_with(
+            &[
+                "input.pdf.0.txt",
+                "input.pdf.1.txt",
+                "input.pdf.0.annot.txt",
+                "metadata.txt",
+            ],
+            2,
+        );
+        store.write_manifest(&manifest).unwrap();
+        // Page 0 holds text, page 1's dump was a bare byte-order mark and so
+        // is stored empty. Both the annot dump and the metadata dump end in
+        // `.txt` and neither is a text dump.
+        store
+            .write_artifact(&manifest.key, "input.pdf.0.txt", b"Hello")
+            .unwrap();
+        store
+            .write_artifact(&manifest.key, "input.pdf.1.txt", b"")
+            .unwrap();
+        store
+            .write_artifact(&manifest.key, "input.pdf.0.annot.txt", b"")
+            .unwrap();
+        store
+            .write_artifact(&manifest.key, "metadata.txt", b"")
+            .unwrap();
+
+        // Our tool got the empty page right and the substantive one wrong --
+        // exactly the shape the nonempty aggregate exists to expose.
+        let produced = Produced {
+            artifacts: vec![
+                ("input.pdf.0.txt".to_owned(), b"Goodbye".to_vec()),
+                ("input.pdf.1.txt".to_owned(), b"".to_vec()),
+                ("input.pdf.0.annot.txt".to_owned(), b"".to_vec()),
+                ("metadata.txt".to_owned(), b"".to_vec()),
+            ],
+            page_count: Some(2),
+            crashed: vec![],
+        };
+        let (mut tags, mut notes) = (Vec::new(), Vec::new());
+        let tier_a = compare_tier_a(&store, &manifest, &produced, &mut tags, &mut notes);
+        assert_eq!(tier_a.text.pages, 2);
+        assert_eq!(tier_a.text.matched, 1);
+        assert_eq!(tier_a.text.substantive, 1);
+        assert_eq!(tier_a.text.substantive_matched, 0);
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn the_dump_artifacts_are_not_mistaken_for_page_text() {
+        assert!(is_text_dump("input.pdf.0.txt"));
+        assert!(is_text_dump("input.pdf.12.txt"));
+        assert!(!is_text_dump("input.pdf.0.annot.txt"));
+        assert!(!is_text_dump("metadata.txt"));
+        assert!(!is_text_dump("pageinfo.txt"));
+        assert!(!is_text_dump("structure.txt"));
+        assert!(!is_text_dump("input.pdf.0.png"));
     }
 
     #[test]
