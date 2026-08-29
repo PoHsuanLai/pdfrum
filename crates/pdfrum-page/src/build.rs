@@ -993,8 +993,7 @@ impl<R: Resolve> Interp<'_, R> {
         diags: &mut Diagnostics,
     ) {
         if let Some(name) = &c.pattern {
-            // A name that resolves to no pattern makes the operator a no-op.
-            let Some(loaded) = load_pattern(
+            let found = load_pattern(
                 name,
                 self.resources,
                 self.parent_matrix,
@@ -1003,8 +1002,14 @@ impl<R: Resolve> Interp<'_, R> {
                 ctx,
                 limits,
                 diags,
-            ) else {
-                return;
+            );
+            // Only a name the resources do not define at all makes the
+            // operator a no-op; a pattern that exists but will not load still
+            // installs a pattern colour, which paints nothing.
+            let loaded = match found {
+                FoundPattern::Loaded(p) => Some(p),
+                FoundPattern::Unusable => None,
+                FoundPattern::Missing => return,
             };
             let target = if stroking {
                 &mut self.state.stroke
@@ -1016,7 +1021,7 @@ impl<R: Resolve> Interp<'_, R> {
             // the cell or the shading itself. Re-resolving the name at paint
             // time would need the resources and the resolver the renderer no
             // longer has.
-            target.set_pattern(name.clone(), &c.values, Some(loaded));
+            target.set_pattern(name.clone(), &c.values, loaded);
             return;
         }
         let target = if stroking {
@@ -1411,7 +1416,34 @@ fn build_path(points: &[(Point, PointKind)]) -> BezPath {
     path
 }
 
-/// A pattern named in a colour value, loaded through the resources.
+/// What `scn` found when it named a pattern.
+///
+/// The two halves are separate because `FindPattern` and the pattern's own
+/// `Load` are separate in the C++ and fail differently.
+/// `FindPattern` (`cpdf_streamcontentparser.cpp:1295-1303`) checks only that
+/// the resource exists and is a dictionary or a stream; **that** is what
+/// decides whether `scn` installs a pattern colour at all. Whether the
+/// pattern is *usable* — a `/PatternType` it recognises, a shading it can
+/// validate, steps it can tile with — is answered later, at draw time, and a
+/// failure there means the object paints **nothing**.
+///
+/// Collapsing the two makes an `scn` naming an unusable pattern a no-op, so
+/// the object keeps whatever colour was current and paints solid. On a
+/// page-sized rectangle over the default black that is an entirely black
+/// page, which is what four of the corpus's fuzz files produced.
+#[derive(Debug, Clone)]
+pub enum FoundPattern {
+    /// The resource exists and the pattern loaded.
+    Loaded(Arc<Pattern>),
+    /// The resource exists but the pattern is unusable: a pattern colour is
+    /// still installed, and it paints nothing.
+    Unusable,
+    /// No such resource, or it is neither a dictionary nor a stream. `scn` is
+    /// a no-op and the previous colour stands.
+    Missing,
+}
+
+/// A pattern named in a colour value, looked up through the resources.
 ///
 /// The **parent matrix** anchors it, not the current transform — patterns
 /// live in the space they were declared in.
@@ -1422,10 +1454,13 @@ fn build_path(points: &[(Point, PointKind)]) -> BezPath {
 /// reason a pattern is loaded where it is installed rather than where the
 /// resource is declared, and it is what makes `/ca 0.5` on the filling object
 /// fade the tiles.
+///
+/// See [`FoundPattern`] for why "the resource exists" and "the pattern loads"
+/// are two answers rather than one.
 #[expect(
     clippy::too_many_arguments,
-    reason = "loading a pattern needs its name, resources, anchor matrix, the \
-              painting object's general state, and the usual four"
+    reason = "looking a pattern up needs its name, resources, anchor matrix, \
+              the painting object's general state, and the usual four"
 )]
 #[must_use]
 pub fn load_pattern<R: Resolve>(
@@ -1437,14 +1472,16 @@ pub fn load_pattern<R: Resolve>(
     ctx: &mut BuildContext,
     limits: &Limits,
     diags: &mut Diagnostics,
-) -> Option<Arc<Pattern>> {
-    let object = resources.find(names::PATTERN, name, r)?;
+) -> FoundPattern {
+    let Some(object) = resources.find(names::PATTERN, name, r) else {
+        return FoundPattern::Missing;
+    };
     // The resource must be a dictionary or a stream.
     if !matches!(object, Object::Dict(_) | Object::Stream(_)) {
-        return None;
+        return FoundPattern::Missing;
     }
     let colorspaces = resources.color_spaces(r);
-    let mut pattern = Pattern::load(
+    let loaded = Pattern::load(
         &object,
         parent_matrix,
         colorspaces.as_ref(),
@@ -1452,14 +1489,17 @@ pub fn load_pattern<R: Resolve>(
         &mut ctx.functions,
         limits,
         diags,
-    )?;
+    );
+    let Some(mut pattern) = loaded else {
+        return FoundPattern::Unusable;
+    };
     if let Pattern::Tiling(tiling) = &mut pattern
         && let Some(stream) = object.as_stream()
     {
         tiling.objects =
             expand_tiling_cell(tiling, stream, general, resources, r, ctx, limits, diags);
     }
-    Some(Arc::new(pattern))
+    FoundPattern::Loaded(Arc::new(pattern))
 }
 
 /// Interpret a tiling pattern's cell into the objects one tile paints.
