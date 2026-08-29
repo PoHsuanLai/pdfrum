@@ -127,7 +127,18 @@ fn walk_pages(
             "{}",
             dump_page(&page, index, options, &catalog, doc)
         )?;
-        let extra = write_page_files(&page, Path::new(name), index, options, doc, rtl, &mut ctx);
+        let extra = write_page_files(
+            &page,
+            Output {
+                input: Path::new(name),
+                index,
+            },
+            options,
+            &catalog,
+            doc,
+            rtl,
+            &mut ctx,
+        );
         write!(streams.out, "{extra}")?;
         counts.processed += 1;
     }
@@ -205,6 +216,14 @@ fn dump_page(
     }
 }
 
+/// Where a file-writing format puts its output: the input's path and which
+/// page is being written.
+#[derive(Debug, Clone, Copy)]
+struct Output<'a> {
+    input: &'a Path,
+    index: u32,
+}
+
 /// The formats that write a file beside the input rather than to stdout.
 ///
 /// A write that fails is ignored, exactly as the oracle ignores one: it
@@ -216,19 +235,20 @@ fn dump_page(
 /// the file lands.
 fn write_page_files<R: Resolve>(
     page: &PageDict,
-    input: &Path,
-    index: u32,
+    where_: Output<'_>,
     options: &Options,
+    catalog: &Dict,
     r: &R,
     rtl: bool,
     ctx: &mut BuildContext,
 ) -> String {
+    let Output { input, index } = where_;
     match options.format {
         OutputFormat::Annot => {
             let Some(path) = annot::output_path(input, index) else {
                 return String::new();
             };
-            let _ = std::fs::write(path, annot::render(page, r, ctx));
+            let _ = std::fs::write(path, annot::render(page, catalog, r, ctx));
             String::new()
         }
         OutputFormat::Text => {

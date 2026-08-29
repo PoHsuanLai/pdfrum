@@ -757,6 +757,7 @@ dependencies = [
  "pdfrum-common",
  "pdfrum-doc",
  "pdfrum-filters",
+ "pdfrum-font",
  "pdfrum-object",
  "pdfrum-page",
  "pdfrum-parser",
