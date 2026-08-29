@@ -52,8 +52,9 @@ rasterizer.
 - **`kColorSqrt` is hand-tuned.** It tracks ISO 32000-1's piecewise `D(x)`
   but is not any closed form of it: 35 entries differ from `round(255·D)` and
   102 from the truncating spelling. The transcription is the authority.
-- **The `/TR` array maps directly to R, G, B**, per the oracle's own unit
-  test — see the Q1 resolution below.
+- **The `/TR` array is reversed**: `array[2]` drives red and `array[0]` blue.
+  The oracle's unit test appears to say otherwise only because two of its
+  expectation constants are misnamed — see the Q1 resolution below.
 - **The offscreen predicate's absences matter.** A non-isolated group with
   `/Group` present, `/I` absent, `ca` at one and no soft mask draws
   *directly*, with no group semantics at all.
@@ -151,6 +152,17 @@ the boundary, which cancelled a correct parse and swapped red and blue on
 every rendered `/TR` array. Both halves are gone; the concurrent
 `pdfrum-text` work caught it, and `pdfrum-page::transfer` now carries the
 derivation.
+
+Porting the oracle's fixture verbatim — its actual type 0, type 2 and type 4
+functions, and all ten `TranslateColor` pairs, now
+`transfer::tests::the_oracle_fixtures_ten_translate_colour_pairs` — then
+exposed a second, independent bug in the parse: **`sample_channel` clamped
+where PDFium wraps.** The C++ rounds `output[0] * 255` into a `size_t` and
+stores it into a `uint8_t` with no clamp, so a function whose `/Range` admits
+negatives folds its lower half to the top of the byte range. The fixture's
+type 4 program produces `-121.26` at input `0xCC`, which the oracle stores as
+`0x87` and we stored as `0x00`; two of the ten pairs turn on it. See
+`docs/status/pdfrum-page.md`.
 
 **Q5 resolves as proposed, with a correction to what the predicate is.**
 `render_page` chooses white-vs-transparent itself and `RenderOptions.

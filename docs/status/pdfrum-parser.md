@@ -203,6 +203,37 @@ files use and which needs a throwaway plaintext store to read; and the
 main cross-reference stream applying `/Size` *before* reading its entries, so
 that an entry whose object number equals `/Size` survives.
 
+## A hybrid-reference bug found at M3 — since fixed
+
+The conformance run's last page-size mismatch, `pixel/bug_1484283.pdf`, was
+**the newest cross-reference section's `/XRefStm` being dropped**
+(`xref/chain.rs`). The chain walk hardcoded `stream: 0` for that section, on
+the reading that hybrid information belongs to update sections and the newest
+one is the base. That has it backwards on both counts.
+
+The C++ builds its two section vectors by `push_back`-ing the main section
+and then `insert(begin(), …)`-ing every older one
+(`cpdf_parser.cpp:429-430, 729-730, 746-748`), so on return the list runs
+**oldest to newest** and `front()` is the *oldest*. Its apply loop's
+`for (size_t i = 1; …)` therefore skips the oldest section's `/XRefStm`, not
+the newest's — which is what its comment about `xref_stream_list.front()`
+means. Our `sections` vector is built oldest-first already and `read_chain`
+splits the oldest off in the same way, so honouring the newest section's
+pointer was a one-line change and the within-section precedence (stream
+merged first, plain table overwrites) was already right.
+
+The file is the exact shape this protects: its second revision's plain table
+lists only the objects it rewrote in place, and the `/Pages` node it *revised*
+— carrying `/MediaBox [0 0 200 350]` instead of the original `[0 0 200 300]` —
+moved into an object stream reachable only through `/XRefStm`. Dropping the
+pointer left object 2 at the first revision's offset, which has no symptom
+beyond a page rendered at the wrong size. Three tests pin it: two synthetic
+hybrids in `xref_streams.rs` (one for the newest section's pointer being
+honoured, one for the plain table still beating its own stream, so the fix
+cannot be over-applied) and the real file in `real_files.rs`, which asserts
+both that object 2 resolves through an object stream and that the inherited
+`/MediaBox` is the revised one. All three fail without the fix.
+
 ## Not implemented, deliberately
 
 - **Linearized loading** (§1.19, D2) — linearized files load through the normal

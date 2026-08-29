@@ -109,6 +109,47 @@ fn the_rebuild_finds_the_objects_the_oracle_records() {
 }
 
 #[test]
+fn a_hybrid_files_xref_stream_supplies_the_revised_pages_node() {
+    // bug_1484283.pdf is a hybrid: its second revision's plain table lists
+    // only objects 4-6, and the revised `/Pages` node (object 2, carrying
+    // `/MediaBox [0 0 200 350]`) is reachable *only* through the trailer's
+    // `/XRefStm`, which puts it in an object stream. Ignoring that pointer
+    // leaves object 2 at the first revision's 200x300 node, which is the
+    // wrong page size and no other symptom.
+    let Some(result) = open("pixel/bug_1484283.pdf", None) else {
+        return;
+    };
+    let doc = result.expect("bug_1484283.pdf opens");
+    assert!(!doc.xref_was_rebuilt(), "the chain should read cleanly");
+    assert_eq!(doc.page_count(), 1);
+
+    // Object 2 has to have come from the object stream, not from the first
+    // revision's offset.
+    assert!(
+        matches!(
+            doc.xref().entry(2),
+            Some(pdfrum_parser::Entry::InObjStream { .. })
+        ),
+        "object 2 should resolve through the /XRefStm's object stream, got {:?}",
+        doc.xref().entry(2)
+    );
+
+    // The page states no `/MediaBox` of its own, so this is the inherited
+    // one — the whole point of the file.
+    let page = doc.page(0).expect("page 0 resolves");
+    let media = page
+        .inherited(pdfrum_object::names::MEDIA_BOX, doc.store().as_ref())
+        .expect("/MediaBox is inherited from the /Pages node");
+    let array = media.as_array().expect("/MediaBox is an array");
+    let values: Vec<f32> = (0..4).map(|i| array.number_at_or_zero(i)).collect();
+    assert_eq!(
+        values,
+        vec![0.0, 0.0, 200.0, 350.0],
+        "the revised /Pages node's box, not the first revision's 200x300"
+    );
+}
+
+#[test]
 fn a_file_with_neither_a_table_nor_a_trailer_does_not_open() {
     let Some(result) = open("parser_rebuildxref_error_notrailer.pdf", None) else {
         return;
