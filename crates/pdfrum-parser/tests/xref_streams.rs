@@ -12,6 +12,7 @@ use std::fmt::Write as _;
 use std::sync::Arc;
 
 use pdfrum_common::{Diagnostics, Limits};
+use pdfrum_object::Resolve as _;
 use pdfrum_parser::{Entry, LoadError, LoadOptions, Xref, load, read_xref};
 
 /// Build a document whose only cross-reference information is one stream.
@@ -409,4 +410,162 @@ fn a_plain_table_still_beats_its_own_sections_xref_stm() {
         Some(Entry::Offset(new_five as u64)),
         "an object only the stream names is unaffected"
     );
+}
+
+/// Build `bug_717.pdf`'s shape: a hybrid-reference file whose classic table
+/// marks the compressed objects **free** while its `/XRefStm` names them as
+/// members of an object stream.
+///
+/// This is what ISO 32000-1 §7.5.8.4 asks a writer to produce. A reader that
+/// predates object streams sees the compressed objects as absent — which is
+/// better than seeing them as garbage — and a reader that follows the
+/// `/XRefStm` finds them for real. The two descriptions are meant to
+/// disagree, and the free half is the one that must lose.
+///
+/// Written as **two** sections, like the real file: a base table and an
+/// update whose trailer carries the `/XRefStm`. That is not decoration. The
+/// first section's hybrid pointer is deliberately skipped — §7.5.8.4 says an
+/// `/XRefStm` belongs to an update section, and `cpdf_parser.cpp:452-457`
+/// skips `xref_stream_list.front()` accordingly — so a single-section file
+/// would never read the stream at all and would prove nothing.
+///
+/// Returns the file and the offset of the object stream's own header.
+fn hybrid_freeing_its_compressed_objects() -> (Vec<u8>, usize) {
+    let mut out = String::from("%PDF-1.5\n%\u{a0}\u{f2}\u{a4}\u{f4}\n");
+    let plain = {
+        let at = out.len();
+        let _ = write!(out, "1 0 obj << /Type /Catalog /Pages 6 0 R >>\nendobj\n");
+        at
+    };
+    // A page tree, so the first load attempt succeeds and the file is read
+    // through its chain. Without one the loader falls back to the recovery
+    // scan, which finds the compressed objects by other means and would make
+    // the assertions below pass whatever the table said.
+    let pages = out.len();
+    let _ = write!(
+        out,
+        "6 0 obj << /Type /Pages /Count 1 /Kids [7 0 R] >>\nendobj\n"
+    );
+    let page = out.len();
+    let _ = write!(
+        out,
+        "7 0 obj << /Type /Page /Parent 6 0 R /MediaBox [0 0 10 10] >>\nendobj\n"
+    );
+
+    // Object stream 4 holding objects 2 and 3, exactly as a Word-produced
+    // file packs its structure tree away.
+    let two = "<< /Kind /Two >> ";
+    let three = "<< /Kind /Three >>";
+    let header = format!("2 0 3 {} ", two.len());
+    let first = header.len();
+    let payload = format!("{header}{two}{three}");
+    let archive = out.len();
+    let _ = write!(
+        out,
+        "4 0 obj << /Type /ObjStm /N 2 /First {first} /Length {} >>\nstream\n{payload}\n\
+         endstream\nendobj\n",
+        payload.len()
+    );
+
+    // The `/XRefStm`: object 1 in place, objects 2 and 3 compressed into 4.
+    let stream_at = out.len();
+    let _ = write!(
+        out,
+        "5 0 obj <<\n  /Type /XRef\n  /Filter /ASCIIHexDecode\n  /Root 1 0 R\n  \
+         /Size 8\n  /Index [1 4]\n  /W [1 2 1]\n>>\nstream\n\
+         01 {plain:04X} 00\n02 0004 00\n02 0004 01\n01 {archive:04X} 00\n\
+         endstream\nendobj\n"
+    );
+
+    // The base section: everything but the two compressed objects.
+    let base_at = out.len();
+    let _ = write!(
+        out,
+        "xref\n0 2\n\
+         0000000000 65535 f \n\
+         {plain:010} 00000 n \n\
+         4 1\n\
+         {archive:010} 00000 n \n\
+         6 2\n\
+         {pages:010} 00000 n \n\
+         {page:010} 00000 n \n\
+         trailer << /Root 1 0 R /Size 8 >>\n\
+         startxref\n{base_at}\n%%EOF\n"
+    );
+
+    // The update section, whose free entries are the ones under test.
+    // Objects 2 and 3 are written as a free-list chain at generation 65535 —
+    // the spelling a real hybrid file uses — while the `/XRefStm` its own
+    // trailer names says they are members of object stream 4.
+    let table_at = out.len();
+    let _ = write!(
+        out,
+        "xref\n0 8\n\
+         0000000002 65535 f \n\
+         {plain:010} 00000 n \n\
+         0000000003 65535 f \n\
+         0000000000 65535 f \n\
+         {archive:010} 00000 n \n\
+         0000000000 65535 f \n\
+         {pages:010} 00000 n \n\
+         {page:010} 00000 n \n\
+         trailer << /Root 1 0 R /Size 8 /Prev {base_at} /XRefStm {stream_at} >>\n\
+         startxref\n{table_at}\n%%EOF\n"
+    );
+    (out.into_bytes(), archive)
+}
+
+#[test]
+fn a_classic_tables_free_entry_does_not_undo_the_xref_stms_compressed_one() {
+    // `bug_717.pdf`. Its classic table lists objects 8 through 15 as free
+    // while its `/XRefStm` puts all eight inside object stream 14; honouring
+    // the free entries loses the document's whole structure tree, because
+    // the table is applied *after* the stream so that it can revise it.
+    //
+    // The rule that makes this come out right is that a classic table's free
+    // entry never reaches the map at all: PDFium's subsection reader does
+    // not parse the generation field of a free entry, and its merge only
+    // frees a slot when that unparsed generation is non-zero.
+    let (file, archive) = hybrid_freeing_its_compressed_objects();
+    let xref = read(&file).expect("a hybrid chain");
+    for (num, index) in [(2u32, 0u32), (3, 1)] {
+        assert_eq!(
+            xref.entry(num),
+            Some(Entry::InObjStream {
+                stream: pdfrum_object::ObjRef::new(4, 0),
+                index,
+            }),
+            "object {num} must stay compressed, not be freed by the table"
+        );
+    }
+    assert_eq!(xref.entry(4), Some(Entry::Offset(archive as u64)));
+}
+
+#[test]
+fn the_objects_such_a_file_hides_in_its_stream_actually_resolve() {
+    // The same file read the whole way: the entries surviving is only worth
+    // something if the objects behind them come back.
+    let (file, _) = hybrid_freeing_its_compressed_objects();
+    let doc = load(Arc::from(file), &LoadOptions::default()).expect("the document loads");
+    // Through the cross-reference information, not by scanning: the recovery
+    // scan finds these objects either way, so without this the assertions
+    // below would pass even with the free entries honoured.
+    assert!(
+        !doc.xref_was_rebuilt(),
+        "the chain must carry this file, or the test proves nothing"
+    );
+    for (num, kind) in [(2u32, "Two"), (3, "Three")] {
+        let object = doc
+            .fetch(pdfrum_object::ObjRef::new(num, 0))
+            .expect("the object resolves");
+        let name = object
+            .as_dict()
+            .and_then(|d| d.get(&pdfrum_object::Name::new(b"Kind"), &doc))
+            .and_then(|v| v.as_name().map(|n| n.as_bytes().to_vec()));
+        assert_eq!(
+            name.as_deref(),
+            Some(kind.as_bytes()),
+            "object {num} must resolve out of the object stream"
+        );
+    }
 }

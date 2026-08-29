@@ -133,20 +133,16 @@ fn damaged_structure_trees_terminate_rather_than_recursing_without_bound() {
     }
 }
 
-/// Blocked below this crate: `bug_717.pdf` keeps its whole structure tree in
-/// an object stream, and every object in it currently resolves as free, so
-/// the catalog's `/StructTreeRoot` reads as absent and the tree comes out
-/// empty. Nothing in this crate can see past that; the assertion is written
-/// as it should read and is skipped until the objects resolve, so it starts
-/// passing on its own when they do.
+/// `bug_717.pdf` keeps its whole structure tree in an object stream, and the
+/// hybrid-reference table its writer produced lists those objects as free —
+/// so until the parser learned that a classic table's free entry is inert,
+/// `/StructTreeRoot` read as absent and this tree came out empty. The
+/// self-skip that stood here while that was true is gone: the answer is
+/// available now, and a test that tolerates the empty dump would not notice
+/// it going away again.
 #[test]
 fn a_structure_tree_inside_an_object_stream_still_builds() {
-    let Some(got) = dump_page("bug_717.pdf", 0) else {
-        return;
-    };
-    if got == "Structure Tree for Page 0\n\n\n" {
-        return;
-    }
+    let got = dump_page("bug_717.pdf", 0).expect("bug_717.pdf renders a structure tree");
     assert_eq!(
         got,
         "Structure Tree for Page 0\n S: Sect\n Type: StructElem\n   S: P\n   MCID0: 0\n   \
