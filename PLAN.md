@@ -208,7 +208,7 @@ feature gaps, grinds the documented parity tail, and runs a measured
 optimization program. Same rules: briefs where behavior is nontrivial,
 `[spec]` protocol, monotone scoreboard, oracle-evidence over reasoning.
 
-## M9 — Parity tail closure  *(small; parallel with M10)*
+## M9 — Parity tail closure  *(small; parallel with M10)*  — **MET 2026-08-30**
 
 Port `CStretchEngine`'s area-average box downscale filter (largest remaining
 pixel cluster); wire CCITT into the filter chain (unblocks the reverted
@@ -217,6 +217,32 @@ second-face fallback (the last 4 annot artifacts); re-derive `en_fqa` from a
 fresh trace; finalize the upstream hayro-jbig2 issue text (user files it).
 *Exit:* pixel >= 97.5% @0.99; annot 100%; every remaining failing file has a
 one-line cause in the status doc.
+
+**Delivered** (wave 12, `docs/status/pdfrum-render.md`): the box filter as an
+engine pre-pass shared by both backends, with its destination size rounded
+**up** — worth as much again as the filter itself, because a fractional
+footprint covers one more device pixel than its width names. CCITT wired on
+both the sample and the stencil rung, repacked from the decoder's four-byte
+rows to the image's own pitch. `bug_1746`'s Type 3 fix re-landed: its "second
+factor of two" was one factor applied in the wrong place, and the alpha belongs
+on the procedure's fill colour with an opaque blit (.835 → .952). `en_fqa`
+re-derived from scratch and found to be an *image* file — 87 masks minified
+8.33x, one font that can render only a space (.885 → .921). The upstream
+`hayro-jbig2` issue drafted at `docs/upstream/hayro-jbig2-issue.md`.
+
+**Annot 100%** — met, and by two separate fixes, neither the expected one: a
+form field carrying `/Kids` is not a control and must not generate an
+appearance (`example_014`, `example_054`), and `bug_725389` needs only
+`GetPDFWordString`'s raw-code-point fallthrough, not the N-slot map, because on
+a hermetic font set the map finds no second face and the fallthrough is its
+whole observable contribution.
+
+**Pixel 97.4%, 0.1 short of the 97.5% target.** The change that would clear it
+— snapping an axis-aligned image to its outer integer rect, which is what
+`CPDF_ImageRenderer` does — measures +4 at 0.99 and +14 byte-exact while
+regressing four files, and was reverted rather than tuned under the monotone
+rule. The tail's four remaining mechanisms are measured spatially and recorded
+per-file; the shortfall is documented rather than carried as unknown.
 
 ## M10 — Encrypted save  *(reverses ruling E3's deferral)*  — **MET 2026-08-30**
 
