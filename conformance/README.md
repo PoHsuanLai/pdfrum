@@ -39,14 +39,22 @@ passes everywhere else.
 that holds it), `remove-first` (removal bookkeeping and index collapse), and
 `touch-all` (the emitter itself, under an edit that changes nothing).
 
-One thing the sweep had to learn: **SSIM cannot tell a mutation's loss from a
-disagreement that predates it.** The metric is local, so painting a large flat
-rectangle turns busy 8x8 windows into flat ones — and a file whose handful of
-wrong pixels scored 1.000 unmutated can score 0.986 mutated without a single
-new pixel having gone wrong. The baseline pass therefore counts *pixels*
-rather than comparing two SSIM numbers, which is a question with an exact
-answer: did the two implementations disagree at all before the edit? Both
-numbers are reported either way.
+Two things the sweep had to learn, both of which cost a wrong diagnosis:
+
+**SSIM cannot tell a mutation's loss from a disagreement that predates it.**
+The metric is local, so painting a large flat rectangle turns busy 8x8 windows
+into flat ones — and a file whose handful of wrong pixels scored 1.000
+unmutated can score 0.986 mutated without a single new pixel having gone
+wrong. The baseline pass therefore counts *pixels* rather than comparing two
+SSIM numbers, which is a question with an exact answer: did the two
+implementations disagree at all? Both numbers are reported either way.
+
+**The baseline is a plain save, not the original file.** Saving changes some
+files even with nothing edited — the writer corrects a `/Length` that lied, so
+a stream the original hid behind `/Length 0` comes back with its real payload
+and the oracle then draws it. That is the writer's behaviour, identical under
+`--save` and `--mutate=`, and charging it to a mutation sends somebody hunting
+through the regenerator for a bug that is not there.
 
 ## Tier C's edge rule
 
