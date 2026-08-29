@@ -65,10 +65,10 @@ a golden PNG), rendering through `tiny-skia`:
 
 | metric | value | M3 target |
 |---|---|---|
-| pixel files at SSIM ≥ 0.99 | **900 / 1421 (63.3%)** | ≥ 60% |
-| at SSIM ≥ 0.95 | 1230 / 1421 (86.6%) | — |
-| at SSIM ≥ 0.90 | 1294 / 1421 (91.1%) | — |
-| byte-exact PNGs | 346 / 1421 | — |
+| pixel files at SSIM ≥ 0.99 | **908 / 1421 (63.9%)** | ≥ 60% |
+| at SSIM ≥ 0.95 | 1239 / 1421 (87.2%) | — |
+| at SSIM ≥ 0.90 | 1296 / 1421 (91.2%) | — |
+| byte-exact PNGs | 350 / 1421 | — |
 | `size-mismatch` | 1 | — |
 | Tier C hard failures (95-file sample) | **0** | — |
 
@@ -79,8 +79,35 @@ proxy the harness can compute today. What the contract actually gates on —
 that every engine decision is identical under both rasterizers — holds at
 zero failures.
 
-Metadata and pageinfo remain 100% Tier-A byte-exact; the text tier is the
-concurrent `pdfrum-text` work's and is unaffected.
+Monotone against the previous scoreboard: zero regressions, and the pass
+count rises 45 to 47. Metadata and pageinfo remain 100% Tier-A byte-exact.
+
+### Where the remaining 513 pixel failures are
+
+Triaged by feature over the failing set. `pixel-fail` is the predicate
+`ssim < 0.99`, so it is a threshold cut through a continuous distribution
+rather than a set of distinctly broken files: 394 of them sit in the shallow
+0.9–0.99 band and only 45 are below 0.5.
+
+| gap | files | note |
+|---|---|---|
+| `/PatternType` (tiling 18, shading 28) | 46 | 15 of the 45 catastrophic files; the worst per-file defect |
+| `/Type3` | 10 | |
+| `/ExtGState` `/SMask` | 9 | an image `/SMask` is a different thing and works |
+| `/Matte` | 5 | |
+| **union of the four** | **63 (12%)** | |
+
+So patterns are the right *next* fix — they own the dramatic SSIM deltas —
+but they are not where the mass is. 88% of the failures contain none of the
+named gaps, and every one of them also fails its `--annot` dump, which
+awaits `pdfrum-doc`. The aggregate moves when annotation appearances render
+and when glyph coverage closes on the oracle's; individual files move when
+patterns land.
+
+One failure is not ours: `resources/pixel/bug_1484283.pdf` renders 200x300
+against a 200x350 golden because its `/MediaBox` lives on a `/Pages` node
+reached through a hybrid `/XRefStm`, which `pdfrum-parser` does not resolve.
+It is the sole remaining `size-mismatch`.
 
 ## Deliberate divergences
 
