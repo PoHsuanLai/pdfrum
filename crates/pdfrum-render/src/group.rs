@@ -103,6 +103,15 @@ pub struct GroupFinish {
 
 impl GroupFinish {
     /// Work out which alphas apply.
+    ///
+    /// **`transparency` is the object's own, not the enclosing one.** A form
+    /// takes `pFormObj->form()->GetTransparency()` (`cpdf_renderstatus.cpp:646`)
+    /// and the group-alpha multiply is gated on *that* (`:740-742`) — the page
+    /// declaring a group does not make a form inside it take one, and a form
+    /// declaring one takes it whatever the page said. Handing the enclosing
+    /// transparency in instead drops the multiply wherever the two disagree,
+    /// which is silent: `group_alpha` is 1.0 for every non-form, so the wrong
+    /// reading only ever *loses* an alpha and never adds a spurious one.
     #[must_use]
     #[expect(
         clippy::float_cmp,
