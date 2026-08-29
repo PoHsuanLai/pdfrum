@@ -1,7 +1,8 @@
 # `pdfrum-render` status
 
-**Updated:** 2026-08-29 · **State:** M8 pixel burn-down wave 2 —
-**76.4% at SSIM ≥ 0.99**, Tier C hard failures 11 → 5, annotations render
+**Updated:** 2026-08-29 · **State:** M8 pixel burn-down wave 3 —
+**76.6% at SSIM ≥ 0.99**, Tier C hard failures 5 → 3, and D7 measured
+rather than assumed
 
 Contract: SPEC.md §8 including the E2/E3/E4/E10 additions and the
 2026-08-29 implementation record. Behavior: `docs/design/pdfrum-render.md`;
@@ -60,21 +61,147 @@ rasterizer.
   `/Group` present, `/I` absent, `ca` at one and no soft mask draws
   *directly*, with no group semantics at all.
 
+## Wave 3: what the D7 tail actually is
+
+Wave 2 left 159 files in the 0.95–0.99 band carrying no image, shading,
+pattern or soft mask, and called them "D7 in its pure form". Wave 3 opened by
+trying to *disprove* that, on the hypothesis that PDFium's AGG driver applies
+a coverage→alpha mapping — a gamma table or a cover scale — that our linear
+backends do not. **It does not.** The hypothesis is dead, and what replaced it
+is worth more than the two clusters it cost.
+
+### The coverage mapping, measured
+
+A shallow-slope fill rendered at 64×64 through the oracle gives the edge ramp
+`223 159 95 31` on grays whose true coverages are exactly ⅛, ⅜, ⅝, ⅞. That is
+
+```
+alpha = min(255, floor(coverage · 256))
+```
+
+— a **×256 scale clamped at the top**, not ×255, and truncating rather than
+rounding. It comes straight from `calculate_alpha`
+(agg_rasterizer_scanline_aa.h:283-297): `cover = area >> (poly_base_shift·2 +
+1 - 8)` yields 0..256 over `aa_mask = 255`, and the clamp is the only thing
+keeping 256 out. There is **no gamma table anywhere on the path side**, which
+is what the brief's §1.7 already said and what `grep gamma`
+over `cfx_agg_devicedriver.cpp` confirms: not one hit.
+
+The engine's own edge pixels already agree with this to within a count, so the
+mapping was never the tail. Chasing it was still worth the hour, because the
+answer is now measured and the next wave does not have to ask again.
+
+### The tail is two populations, and only one of them is D7
+
+Splitting the band by what is actually on the page:
+
+- **Path and stroke edges** were *not* matching, for two reasons that are
+  each a real defect and neither of which is a coverage curve. Both are fixed
+  below.
+- **Glyph edges** are D7, and D7 is exactly as unfixable as the brief says.
+  On `5.5_simple_font.pdf` the ink bounding boxes agree within a pixel and the
+  total ink within 2.5% — the geometry is right — while 22 013 pixels differ
+  with a mean magnitude of 66 counts, in ±255 swings rather than a bias.
+  Rendering the oracle with `--no-smoothtext` does not move it closer
+  (14 584 differing pixels at a *worse* mean of 118), which settles that the
+  difference is the hinted FreeType bitmap's **geometry**, not a filter or a
+  gamma on top of our outline. Nothing short of the hinter closes it, and
+  PLAN §1 rules the hinter out.
+
+**The brief's tail inventory was wrong about the tcpdf cluster**, and the
+correction matters because it was the largest named secondary target. Those
+~20 files were recorded as "DCT images at a sub-pixel placement offset". They
+are not. Over `example_030.pdf`'s image region — 48 400 pixels — **not one
+pixel differs by more than two counts**; the file's loss is its text, and
+`example_063.pdf`, the worst of them at 0.648, is dense small type showing the
+D7 signature exactly (oracle 0 where we write 16 or 82, oracle 252/253 where
+we write 255). The tcpdf cluster is the text tail wearing a different hat.
+
+### `vello_cpu` is closer to AGG on paths, and that is not a reason to switch
+
+Measured, because the option had to be ruled out rather than assumed: on
+`many_rectangles` vello differs from the oracle in 9 600 pixels against
+tiny-skia's 25 200, and on a 45° fill edge it matches exactly where tiny-skia
+is 32 counts light. AGG and vello both integrate analytic area; tiny-skia
+supersamples at `SUPERSAMPLE_SHIFT = 2`, so a diagonal edge has **17
+coverage levels** and a half-covered pixel quantizes to 6/16.
+
+Over the whole corpus that is worth **six files**, and it costs more than it
+pays: vello loses `bug_554151` outright and drops four shading files by 0.13
+to 0.60. The store-wide score under vello is 1259 against tiny-skia's 1256.
+The default stays where it is, and the diagonal-quantization gap stays a
+backend's own business — which is what Tier C's edge population already says
+it is.
+
+### What did move: two defects that were hiding behind "AA"
+
+Neither is a coverage mapping. Both were found by probing a stroked rectangle
+against the oracle rather than by reading either rasterizer's source.
+
+- **tiny-skia's stroker is half a count off-centre.** A unit-wide vertical
+  stroke on an integer x half-covers both neighbouring columns, and AGG writes
+  128 into each; tiny-skia's stroker writes 128 and 127, while its *fill* of
+  the identical rectangle writes 128 and 128. The same bias costs the outer
+  tip of every miter corner its pixel: AGG paints a stroked rectangle's corner
+  at alpha 64 — a quarter of the pixel's area — and we painted nothing there,
+  2 400 times on `many_rectangles` alone. `stroke_path` now expands the
+  outline through `kurbo` and fills it. The corners become exact.
+
+  The larger gain is Tier C's, and it is why this belongs in the backend
+  rather than in a per-call correction: a stroke outline computed in the
+  engine's vocabulary is identical under both rasterizers **by construction**,
+  which is the argument `stroke::outline` already makes for a stroke used as a
+  clip. Hard failures fall 5 → 3, both `bug_1288_2` files dropping out.
+
+- **The tiling slow path was load-bearing after all.** The brief records
+  `cpdf_rendertiling.cpp:151-184` as behaviorally identical to the cached-cell
+  path and performance-only, so the engine took the cached path
+  unconditionally. It is performance-only where it is also *possible*:
+  `bug_1693`'s cell is 102 400 × 12 800 device pixels behind a 200×200 clip,
+  `render_cell` refuses the allocation, and the whole pattern silently paints
+  nothing against an oracle that fills the page. Rendering the objects once
+  per tile position makes both `bug_1693` files byte-exact.
+
+  Its predicate's third arm — cell *area* over clip area — is **redundant**:
+  neither axis exceeding the clip implies the product does not either, so it
+  can never be the arm that fires. It is kept, spelled as the C++ spells it,
+  with a test that records why.
+
+### What the next wave should not do again
+
+- Do not look for a gamma or a cover-scale LUT. There is none; the mapping is
+  `min(255, floor(cov·256))` and we already agree with it.
+- Do not spend the budget on the 0.95–0.99 band expecting path work. After
+  the two fixes above it is glyph coverage almost to the file, tcpdf included.
+- Do not switch the default backend for the diagonal-coverage gap. Six files,
+  and it loses more elsewhere.
+- The remaining tail worth attacking is **not** antialiasing: `jpxdecode_*`
+  and `bug_1986` (JPX, 4 files), the JBIG2/CCITT decode differences, and the
+  ~20 assorted singles. Those are codec and compositing questions with
+  answers.
+
 ## Numbers
 
 Measured against the golden store on the full corpus (1675 files, 1628 with
-a golden PNG), rendering through `tiny-skia`. The M8 column is the pixel
-burn-down's second wave; the M5 column is what it started from.
+a golden PNG), rendering through `tiny-skia`. The W3 column is the pixel
+burn-down's third wave; M5 is where the burn-down started.
 
-| metric | M5 | **M8** |
-|---|---|---|
-| pixel files at SSIM ≥ 0.99 | 1075 / 1628 (66.0%) | **1243 / 1628 (76.4%)** |
-| at SSIM ≥ 0.95 | 1478 / 1628 (90.8%) | **1518 / 1628 (93.2%)** |
-| at SSIM ≥ 0.90 | 1544 / 1628 (94.8%) | **1570 / 1628 (96.4%)** |
-| byte-exact PNGs | 430 / 1628 | **446 / 1628** |
-| files passing (all tiers) | 1146 / 1675 | **1256 / 1675** |
-| `pixel-fail` | 495 | **385** |
-| `size-mismatch` | 0 | 0 |
+| metric | M5 | M8 (wave 2) | **W3** |
+|---|---|---|---|
+| pixel files at SSIM ≥ 0.99 | 1075 / 1628 (66.0%) | 1243 / 1628 (76.4%) | **1247 / 1628 (76.6%)** |
+| at SSIM ≥ 0.95 | 1478 / 1628 (90.8%) | 1518 / 1628 (93.2%) | **1520 / 1628 (93.4%)** |
+| at SSIM ≥ 0.90 | 1544 / 1628 (94.8%) | 1570 / 1628 (96.4%) | **1572 / 1628 (96.6%)** |
+| byte-exact PNGs | 430 / 1628 | 446 / 1628 | **451 / 1628** |
+| files passing (all tiers) | 1146 / 1675 | 1256 / 1675 | **1260 / 1675** |
+| `pixel-fail` | 495 | 385 | **381** |
+| `size-mismatch` | 0 | 0 | 0 |
+| Tier C hard failures | — | 5 | **3** |
+
+Wave 3's four files are `bug_1693.{in,pdf}` (byte-exact, the tiling slow
+path) and two the stroke outlining carried over the line; the byte-exact count
+gains five and the Tier C hard count loses two. Every step was measured with
+`conformance run --check-regressions`, so no previously-passing file regressed
+at any point.
 | Tier C hard failures (full store) | 11 | **5** |
 
 Every step was measured with `conformance run --check-regressions` against
@@ -142,6 +269,13 @@ Below 0.9 there are 58 files and they are **not** one cluster:
 
 The marginal cluster is under three files, which is where the budget said to
 stop. The tail inventory above is what remains.
+
+**Wave 3 corrects two rows of that table.** The tiling row is fixed — the
+slow path is implemented and `bug_1693` is byte-exact. The tcpdf row's
+*diagnosis* was wrong: those files' images are accurate to within two counts
+over their whole extent, and what fails is their text. See "Wave 3: what the
+D7 tail actually is" above; the row is left standing because the file count is
+still right and the correction is worth reading next to it.
 
 The golden store widened between M3 and M5, so the store-wide rate is not a
 like-for-like comparison. Over the **same 1421 files** M3 measured, the
@@ -307,7 +441,11 @@ repeating here:
   with LCD filtering and a gamma table; reproducing that means porting
   FreeType's hinter, which PLAN §1 rules out. Glyph *geometry* matches
   exactly and only stem-edge coverage differs, which is why text pixels are
-  Tier B and never Tier A.
+  Tier B and never Tier A. Wave 3 measured the size of it and confirmed the
+  cause is the hinted bitmap's geometry rather than any filter or gamma over
+  our outline — the mapping the AGG driver applies to path coverage is plain
+  `min(255, floor(cov·256))` and there is no gamma table on that side at all.
+  See the wave 3 section.
 - **D5 — non-isolated groups double-count their backdrop.** PDFium seeds
   such a group's buffer with a copy of the page and never removes it before
   compositing back. That is not ISO 32000 §11.4.6, and it is what the oracle
@@ -411,11 +549,12 @@ declines, plus the work that awaits another crate.
   image's own samples. A sole-image *stencil* is not declined, because
   painting it as a char proc lands on the same pixels the mask blit would —
   and that is the overwhelmingly common case, every bitmap font in the corpus.
-- **The tiling slow path** (`cpdf_rendertiling.cpp:151-184`), taken when the
-  cell is larger than the clip. The brief records it as behaviorally
-  identical to the cached-cell path and performance-only, and the engine
-  takes the cached-cell path unconditionally.
 - **`/K` knockout groups**, which PDFium does not implement either (D20).
+
+The tiling slow path used to be listed here. Wave 3 implemented it: the brief
+called it performance-only, but a cell larger than the clip is sometimes a
+cell that cannot be allocated at all, and the cached path then paints nothing
+rather than slowly. See the wave 3 section above.
 **Annotation appearance layers now render** (M8). They are appended to the
 page's object list by `pdfrum-tool`'s `annot_render`, after the content
 stream and in `/Annots` order, using `pdfrum-doc`'s appearance ladder,
