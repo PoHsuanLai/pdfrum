@@ -52,6 +52,16 @@ pub struct Generated {
     pub is_text_markup: bool,
     /// The blend mode the graphics state names.
     pub blend_multiply: bool,
+    /// The `/Font` sub-dictionary the appearance stream's `/Resources` needs,
+    /// as `{ resource name: font dictionary }`.
+    ///
+    /// Empty for every generator that writes no text — which is all of them
+    /// but [`crate::ap::freetext::free_text`], since a stream with no `Tf`
+    /// needs no font to resolve. Upstream draws the same distinction by
+    /// passing `nullptr` to `GenerateResourcesDict` from every generator
+    /// except the free-text one, which passes `GenerateResourceFontDict`
+    /// (`cpdf_generateap.cpp:1141-1144`).
+    pub font_resources: Option<Dict>,
 }
 
 impl Generated {
@@ -61,6 +71,7 @@ impl Generated {
             rect_override: None,
             is_text_markup: false,
             blend_multiply: false,
+            font_resources: None,
         }
     }
 

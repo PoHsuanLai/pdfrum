@@ -45,7 +45,7 @@ pub fn render<R: Resolve>(
     // what the layout would use anyway.
     let font =
         pdfrum_font::Font::load_standard(pdfrum_font::subst::StandardFont::Helvetica, &ctx.fonts);
-    let width = |code: u32| char_width(&font, code);
+    let width = |code: u32| ap::TextFont::char_width(&font, code);
     let text_font = ap::TextFont {
         metrics: ap::TextFont::metrics_of(&font, &width),
         font: &font,
@@ -96,24 +96,6 @@ fn appearance_objects<R: Resolve>(
     let resources = Resources::choose(own_resources, None, page_resources);
     let form = pdfrum_page::build_page(&ops, &resources, r, ctx, &limits, &mut diags);
     form.objects.iter().map(kind_of).collect()
-}
-
-/// One code point's width, in thousandths of an em.
-///
-/// A code point the font cannot represent contributes **nothing** rather than
-/// a default width, which is what keeps an unrepresentable character from
-/// pushing the line it sits on.
-fn char_width(font: &pdfrum_font::Font, code: u32) -> i32 {
-    let Some(ch) = char::from_u32(code) else {
-        return 0;
-    };
-    let Some(charcode) = font.char_code_from_unicode(ch) else {
-        return 0;
-    };
-    #[allow(clippy::cast_possible_truncation)]
-    {
-        font.char_width(charcode) as i32
-    }
 }
 
 /// The dump's name for one page object.

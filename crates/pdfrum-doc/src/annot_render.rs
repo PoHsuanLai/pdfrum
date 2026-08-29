@@ -62,6 +62,7 @@ use crate::ap;
 pub fn overlay<R: Resolve>(
     page: &mut Page,
     page_dict: &Dict,
+    catalog: &Dict,
     r: &R,
     ctx: &mut BuildContext,
     limits: &Limits,
@@ -77,8 +78,28 @@ pub fn overlay<R: Resolve>(
     let resources = Resources::for_page(page.resources.clone());
     // `CPDF_Annot`'s constructor runs `GenerateAPIfNeeded`, so an annotation
     // that arrives without a usable `/AP /N` is given one *before* anything
-    // asks it to draw. The dump path already builds exactly this overlay.
-    let generated = ap::generate_appearances(page_dict, r, diags);
+    // asks it to draw.
+    //
+    // The *text-bearing* variant, because `GenerateAPIfNeeded` reaches
+    // `GenerateFreeTextAP` on the same constructor as every other generator
+    // (`cpdf_generateap.cpp:1603`) — there is no second pass, and no route by
+    // which a free-text annotation is described but not drawn. Taking the
+    // font-less walk here painted a synthesized free-text appearance as
+    // nothing at all while `--annot` reported it in full, which is exactly
+    // the shape that let it survive: the tier that compares text matched.
+    //
+    // The stock Helvetica stands in for whatever the `/DA` names, on the same
+    // reasoning the dump path records: the generator wants the *metrics*, and
+    // a non-embedded `/DA` font is substituted to this face anyway.
+    let font =
+        pdfrum_font::Font::load_standard(pdfrum_font::subst::StandardFont::Helvetica, &ctx.fonts);
+    let width = |code: u32| ap::TextFont::char_width(&font, code);
+    let text_font = ap::TextFont {
+        metrics: ap::TextFont::metrics_of(&font, &width),
+        font: &font,
+    };
+    let generated =
+        ap::generate_appearances_with_text(page_dict, catalog, Some(&text_font), r, diags);
 
     for (slot, annot) in list.annots.iter().enumerate() {
         if !is_visible(annot) {

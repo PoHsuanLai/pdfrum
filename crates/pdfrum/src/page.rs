@@ -221,6 +221,7 @@ impl<'a> Page<'a> {
             pdfrum_doc::annot_render::overlay(
                 &mut page,
                 &self.dict.dict,
+                &self.doc.catalog(),
                 &self.doc.inner,
                 ctx,
                 &self.doc.limits,
