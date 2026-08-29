@@ -121,6 +121,20 @@ All of the brief's divergences D1–D9 are implemented as written. Two notes:
   describes no pages opens, with a page count of zero. Two corpus files
   (`circular_viewer_ref.pdf`, `repeat_viewer_ref.pdf`) depend on this: the
   oracle opens both and renders nothing.
+- **Brief correction — §1.7's backward search includes the byte it starts
+  on.** `GetCharAtBackward(pos)` reads the byte *at* `pos`
+  (`cpdf_syntax_parser.cpp:153-167` — the name refers to the direction the
+  512-byte block is loaded from, not to an index offset), and
+  `BackwardsSearchToWord` begins by comparing the keyword's *last* character
+  there. So a match may occupy `[origin-8, origin]` inclusive. Since the
+  search starts nine bytes from the end of the file, the position reachable
+  only this way is a `startxref` followed by one separator and a seven-digit
+  offset and nothing else — a file truncated with no `%%EOF`, which is the
+  damage this search exists to rescue. Nothing in the corpus lands there, so
+  the boundary is held solely by
+  `lexer::tests::search_back_includes_the_byte_under_the_cursor` and
+  `chain::tests::a_start_xref_ending_at_the_search_origin_is_still_found`;
+  both fail against the off-by-one.
 - **Brief clarification — §1.17's `CountPages` has no depth cap**, only the
   visited set (`cpdf_document.cpp:69-113`), and its `kPageMaxNum` overflow
   returns `nullopt` that propagates all the way out, making the whole document
@@ -139,7 +153,7 @@ One additive change to `pdfrum-object`: four inheritable page-attribute names
 
 ## Tests
 
-172 in-crate, plus 7 doctests. Ported assertion sets:
+175 in-crate, plus 7 doctests. Ported assertion sets:
 
 - `cpdf_syntax_parser_unittest.cpp` — the hexadecimal-string cases with their
   exact bytes and end positions, the invalid-reference rejection, and the
