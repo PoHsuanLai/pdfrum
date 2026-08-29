@@ -1,12 +1,12 @@
 {
-  "generated_at": "2026-08-29T10:32:20Z",
+  "generated_at": "2026-08-29T10:40:07Z",
   "totals": {
     "files": 1675,
-    "pass": 1463,
-    "fail": 212,
+    "pass": 1465,
+    "fail": 210,
     "by_tag": {
       "page-count": 2,
-      "pixel-fail": 172,
+      "pixel-fail": 170,
       "tierA-mismatch": 81
     },
     "text": {
@@ -16311,7 +16311,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.994543,
+        "ssim": 0.994549,
         "exact": false,
         "max_channel_diff": 197,
         "pages": 1
@@ -28125,9 +28125,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999294,
+        "ssim": 0.999295,
         "exact": false,
-        "max_channel_diff": 124,
+        "max_channel_diff": 125,
         "pages": 1
       },
       "notes": ""
@@ -47691,10 +47691,8 @@
     },
     {
       "path": "resources/pixel/transfer_function.in",
-      "status": "fail",
-      "tags": [
-        "pixel-fail"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -47716,19 +47714,17 @@
         }
       },
       "tierB": {
-        "ssim": 0.819670,
+        "ssim": 0.999777,
         "exact": false,
-        "max_channel_diff": 204,
+        "max_channel_diff": 2,
         "pages": 2
       },
-      "notes": "ssim 0.819670 below floor 0.990000"
+      "notes": ""
     },
     {
       "path": "resources/pixel/transfer_function.pdf",
-      "status": "fail",
-      "tags": [
-        "pixel-fail"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -47750,12 +47746,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.819670,
+        "ssim": 0.999777,
         "exact": false,
-        "max_channel_diff": 204,
+        "max_channel_diff": 2,
         "pages": 2
       },
-      "notes": "ssim 0.819670 below floor 0.990000"
+      "notes": ""
     },
     {
       "path": "resources/pixel/type3.in",
