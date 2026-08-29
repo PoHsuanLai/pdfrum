@@ -31,7 +31,7 @@ use crate::error::Error;
 use crate::names;
 use pdfrum_common::{DiagKind, Diagnostics, Severity};
 use pdfrum_filters::Filter;
-use pdfrum_object::{Array, Dict, Object, Resolve};
+use pdfrum_object::{Array, Dict, Object, Resolve, Resolved};
 
 /// The largest `/Width` or `/Height` PDFium accepts, `0x01FFFF`.
 pub const MAX_DIMENSION: i64 = 131_071;
@@ -234,32 +234,43 @@ fn default_decode(decode: Option<&Array>) -> bool {
 }
 
 /// The last filter in the chain, its canonical name, and its parameters.
+///
+/// **Every level here resolves.** `GetDecoderArray` reaches `/Filter` through
+/// `GetDirectObjectFor` and each element through `GetByteStringAt`, both of
+/// which follow one level of indirection — so a `/Filter` array may name its
+/// filters by reference, and `bug_1986` does: `[6 0 R /LZWDecode 7 0 R]`,
+/// where object 7 is `/JPXDecode`. Reading those elements raw leaves the last
+/// filter unrecognised, and an image whose colour space lives in its JPX
+/// codestream is then forced to a one-bit stencil instead.
 fn last_filter<R: Resolve>(
     dict: &Dict,
     r: &R,
 ) -> (Option<Filter>, Option<pdfrum_object::Name>, Dict) {
-    let params_obj = dict.raw(names::DECODE_PARMS);
-    match dict.raw(names::FILTER) {
+    let params_obj = dict.get(names::DECODE_PARMS, r);
+    let params_obj = params_obj.as_ref().and_then(Resolved::as_direct);
+    let filter = dict.get(names::FILTER, r);
+    match filter.as_ref().and_then(Resolved::as_direct) {
         Some(Object::Name(n)) => (
             Filter::from_name(n),
             Some(n.clone()),
-            match params_obj.and_then(|o| o.resolve(r).ok()).as_deref() {
+            match params_obj {
                 Some(Object::Dict(d)) => d.clone(),
                 _ => Dict::new(),
             },
         ),
         Some(Object::Array(a)) => {
             let last = a.len().checked_sub(1);
-            let name = last.and_then(|i| a.name_at(i)).cloned();
+            let name = last
+                .and_then(|i| a.get(i, r))
+                .as_ref()
+                .and_then(Resolved::as_direct)
+                .and_then(Object::as_name)
+                .cloned();
             let params = last
                 .and_then(|i| {
                     params_obj
-                        .and_then(|o| o.resolve(r).ok())
-                        .as_deref()
                         .and_then(Object::as_array)
-                        .and_then(|p| p.raw_at(i))
-                        .and_then(Object::as_dict)
-                        .cloned()
+                        .and_then(|p| p.dict_at(i, r))
                 })
                 .unwrap_or_default();
             (name.as_ref().and_then(Filter::from_name), name, params)
@@ -364,6 +375,58 @@ mod tests {
         ));
         // Still rejected: no coercion saves it.
         assert!(image(pairs).is_err());
+    }
+
+    /// A `/Filter` array may name its filters by **indirect reference**, and
+    /// every level of the lookup resolves — `GetDecoderArray` reaches the
+    /// array through `GetDirectObjectFor` and each element through
+    /// `GetByteStringAt`.
+    ///
+    /// `bug_1986` is the file: `/Filter [6 0 R /LZWDecode 7 0 R]` with object
+    /// 7 = `/JPXDecode`, and no `/ColorSpace` because the codestream carries
+    /// it. Reading the last element raw leaves the filter unrecognised, and
+    /// the missing colour space then forces the image to a one-bit stencil —
+    /// a red page rendered as a black-on-white mask.
+    #[test]
+    fn a_filter_array_may_name_its_last_filter_by_reference() {
+        /// Object 7 is `/JPXDecode`; nothing else resolves.
+        struct FilterStore;
+        impl pdfrum_object::Resolve for FilterStore {
+            fn fetch(
+                &self,
+                r: pdfrum_object::ObjRef,
+            ) -> Result<std::sync::Arc<Object>, pdfrum_object::Error> {
+                match r.num {
+                    6 => Ok(std::sync::Arc::new(Object::Name(Name::from(
+                        "ASCIIHexDecode",
+                    )))),
+                    7 => Ok(std::sync::Arc::new(Object::Name(Name::from("JPXDecode")))),
+                    _ => Err(pdfrum_object::Error::UnresolvedRef(r)),
+                }
+            }
+        }
+
+        let dict = Dict::from_pairs(vec![
+            (Name::from("Width"), Object::Int(612)),
+            (Name::from("Height"), Object::Int(792)),
+            (
+                Name::from("Filter"),
+                Object::Array(Array::of([
+                    Object::Ref(pdfrum_object::ObjRef::new(6, 0)),
+                    Object::Name(Name::from("LZWDecode")),
+                    Object::Ref(pdfrum_object::ObjRef::new(7, 0)),
+                ])),
+            ),
+        ]);
+        let mut diags = Diagnostics::default();
+        let got = ImageDict::load(&dict, &FilterStore, &mut diags).expect("should load");
+        assert_eq!(got.last_filter, Some(pdfrum_filters::Filter::Jpx));
+        assert!(
+            !got.image_mask,
+            "a JPX image with no /ColorSpace is not a stencil: the codestream \
+             carries the space"
+        );
+        assert_eq!(got.bpc, 0, "the JPX no-colour-space path leaves it at zero");
     }
 
     #[test]
