@@ -22,11 +22,26 @@
 //! the bytes; we keep it because that is what an XMP packet copied out of a
 //! compressed source looks like in the oracle's output too.
 //!
-//! # Metadata is exempt from everything
+//! # Metadata is exempt from compression, and from encryption on request
 //!
-//! A `/Type /Metadata /Subtype /XML` stream is neither compressed nor
-//! encrypted, because ISO 32000-1 §14.3.2 requires an XMP packet be readable
-//! by a consumer that has neither the file key nor a flate decoder.
+//! A `/Type /Metadata /Subtype /XML` stream is never compressed: ISO 32000-1
+//! §14.3.2 requires an XMP packet be readable by a consumer that has no flate
+//! decoder.
+//!
+//! Encryption is the document's own call, through `/EncryptMetadata`. A
+//! document declaring it **false** gets a plaintext packet — which is the
+//! whole point of the flag, and matches what the parser then expects to find.
+//! A document declaring it **true** gets an enciphered one.
+//!
+//! This is a deliberate divergence (D17). The C++ writer skips the cipher for
+//! a metadata stream *unconditionally* — `CPDF_Stream::WriteTo` never consults
+//! `IsMetadataEncrypted()`, which has callers only in the parser. The result
+//! is a file whose `/Encrypt` says the metadata is enciphered and whose
+//! metadata is not, so PDFium's own reader deciphers the plaintext into
+//! rubbish on the way back in. Reproducing that would mean knowingly
+//! destroying a document's metadata on every save; we follow the flag instead,
+//! which the oracle's *reader* honours, so the file it writes and the file we
+//! write are both openable by both — ours simply still has its metadata.
 //!
 //! # `/Length` is never allowed to be wrong
 //!
@@ -37,6 +52,7 @@
 //! declaring `/Length 0` on the way out.
 
 use crate::encrypt::Encryptor;
+use pdfrum_crypt::CryptClass;
 use pdfrum_filters::encode_flate;
 use pdfrum_object::{Dict, Name, Object, Stream, names};
 
@@ -50,10 +66,13 @@ pub struct Encoded {
 }
 
 /// Run the decision table over one stream.
-pub fn encode(s: &Stream, enc: Option<&Encryptor>) -> Encoded {
+pub fn encode(s: &Stream, enc: Option<&Encryptor<'_>>) -> Encoded {
     let metadata = is_metadata(&s.dict);
     let has_filter = s.dict.contains_key(names::FILTER);
     let want_flate = !metadata;
+    // The document decides whether its own metadata is enciphered; see the
+    // module docs for why this is not the C++'s unconditional skip.
+    let want_cipher = !metadata || enc.is_some_and(Encryptor::encrypts_metadata);
 
     // Three of the four rows copy the payload verbatim and differ only in
     // what they say about it; the fourth is the only compression this crate
@@ -82,9 +101,9 @@ pub fn encode(s: &Stream, enc: Option<&Encryptor>) -> Encoded {
     // Encryption happens after encoding and before /Length is settled, so the
     // declared length describes the ciphertext the file actually holds.
     if let Some(e) = enc
-        && !metadata
+        && want_cipher
     {
-        data = e.encrypt(&data);
+        data = e.encrypt(CryptClass::Stream, &data);
     }
 
     update_length(&mut dict, data.len());

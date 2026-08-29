@@ -22,6 +22,7 @@
 //! cipher, so the rule is visible at the site that knows the context.
 
 use crate::encrypt::Encryptor;
+use pdfrum_crypt::CryptClass;
 use pdfrum_object::{
     Array, Dict, Name, Object, PdfString, Stream, encode_string_hex, encode_string_literal,
     fmt_int, fmt_number, name_encode, names,
@@ -42,7 +43,7 @@ pub enum Exempt {
 /// `enc` is the encryptor for the *enclosing indirect object*; direct
 /// sub-objects share it, which is why it is threaded down rather than looked
 /// up per value.
-pub fn write_object(out: &mut Vec<u8>, obj: &Object, enc: Option<&Encryptor>) {
+pub fn write_object(out: &mut Vec<u8>, obj: &Object, enc: Option<&Encryptor<'_>>) {
     match obj {
         Object::Null => out.extend_from_slice(b" null"),
         Object::Bool(b) => {
@@ -79,9 +80,9 @@ pub fn write_name(out: &mut Vec<u8>, name: &Name) {
     out.extend_from_slice(&name_encode(name.as_bytes()));
 }
 
-fn write_string(out: &mut Vec<u8>, s: &PdfString, enc: Option<&Encryptor>, exempt: Exempt) {
+fn write_string(out: &mut Vec<u8>, s: &PdfString, enc: Option<&Encryptor<'_>>, exempt: Exempt) {
     let bytes = match (enc, exempt) {
-        (Some(e), Exempt::No) => e.encrypt(&s.bytes),
+        (Some(e), Exempt::No) => e.encrypt(CryptClass::String, &s.bytes),
         _ => s.bytes.to_vec(),
     };
     // The spelling round-trips: a file that wrote `<48656C6C6F>` gets it back.
@@ -92,7 +93,7 @@ fn write_string(out: &mut Vec<u8>, s: &PdfString, enc: Option<&Encryptor>, exemp
     }
 }
 
-fn write_array(out: &mut Vec<u8>, a: &Array, enc: Option<&Encryptor>) {
+fn write_array(out: &mut Vec<u8>, a: &Array, enc: Option<&Encryptor<'_>>) {
     out.push(b'[');
     for value in a.iter() {
         write_object(out, value, enc);
@@ -102,7 +103,7 @@ fn write_array(out: &mut Vec<u8>, a: &Array, enc: Option<&Encryptor>) {
 
 /// A dictionary, keys in **insertion order** (SPEC.md §2's permanent
 /// divergence from the C++'s sorted `std::map`).
-pub fn write_dict(out: &mut Vec<u8>, d: &Dict, enc: Option<&Encryptor>) {
+pub fn write_dict(out: &mut Vec<u8>, d: &Dict, enc: Option<&Encryptor<'_>>) {
     let signature = is_signature_dict(d);
     out.extend_from_slice(b"<<");
     for (key, value) in d.iter() {
@@ -137,7 +138,7 @@ fn is_signature_dict(d: &Dict) -> bool {
 /// The payload has already been through [`crate::write::stream::encode`],
 /// whose decision table owns the flate/metadata rules; this function only
 /// lays out the bytes.
-fn write_stream(out: &mut Vec<u8>, s: &Stream, enc: Option<&Encryptor>) {
+fn write_stream(out: &mut Vec<u8>, s: &Stream, enc: Option<&Encryptor<'_>>) {
     let encoded = crate::write::stream::encode(s, enc);
     write_dict(out, &encoded.dict, enc);
     out.extend_from_slice(b"stream\r\n");
@@ -151,7 +152,7 @@ fn write_stream(out: &mut Vec<u8>, s: &Stream, enc: Option<&Encryptor>) {
 /// xref entries say `00000` to match, and every reference written says
 /// `N 0 R`. Generations are read from a file and never written back — the
 /// single most important round-trip simplification (§1.9, invariant R9).
-pub fn write_indirect(out: &mut Vec<u8>, num: u32, obj: &Object, enc: Option<&Encryptor>) {
+pub fn write_indirect(out: &mut Vec<u8>, num: u32, obj: &Object, enc: Option<&Encryptor<'_>>) {
     out.extend_from_slice(num.to_string().as_bytes());
     out.extend_from_slice(b" 0 obj\r\n");
     write_object(out, obj, enc);

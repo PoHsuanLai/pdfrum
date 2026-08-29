@@ -92,7 +92,7 @@ pub fn process_file(
     // keeps its ordering, and before the summary line so a save failure is
     // visible next to the file it belongs to.
     if options.save {
-        save_document(&doc, name, streams)?;
+        save_document(&doc, name, options.save_decrypted, streams)?;
     }
 
     writeln!(streams.err, "Processed {} pages.", counts.processed)?;
@@ -116,17 +116,24 @@ pub fn save_path(input: &Path) -> Option<PathBuf> {
 
 /// Write `doc` back out, reporting failure the way the oracle reports a
 /// failed write: a line on stderr, and the run continues.
-fn save_document(doc: &Document, name: &str, streams: &mut Streams<'_>) -> std::io::Result<()> {
+fn save_document(
+    doc: &Document,
+    name: &str,
+    decrypted: bool,
+    streams: &mut Streams<'_>,
+) -> std::io::Result<()> {
     let Some(path) = save_path(Path::new(name)) else {
         writeln!(streams.err, "Failed to save: no usable output path.")?;
         return Ok(());
     };
 
     let edit = pdfrum_edit::EditDoc::new(doc);
-    // An encrypted document saves decrypted, which is v1's contract
-    // (SPEC.md §11's ruling E3).
+    // An encrypted document saves encrypted, under the handler the
+    // `--password=` opened it with, so the output needs that same password
+    // (SPEC.md §11's M10 ruling). `--save-decrypted` is the way to ask for
+    // the plaintext the earlier ruling E3 produced unconditionally.
     let options = pdfrum_edit::SaveOptions {
-        remove_security: true,
+        remove_security: decrypted,
         ..pdfrum_edit::SaveOptions::default()
     };
 
