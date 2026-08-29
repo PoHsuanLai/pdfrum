@@ -1,6 +1,6 @@
 # The conformance harness
 
-Four subcommands over the oracle checkout and the golden store:
+Six subcommands over the oracle checkout and the golden store:
 
 ```
 conformance generate-goldens   # run pdfium_test, record its answers
@@ -8,7 +8,13 @@ conformance run                # Tier A (byte-exact dumps) + Tier B (pixels)
 conformance run --check-regressions conformance/scoreboard.json
 conformance triage             # cluster the scoreboard's failures
 conformance tier-c             # the two rasterizers against each other
+conformance save-round-trip    # we save, the oracle reopens (M7/M10)
+conformance mutate-round-trip  # we edit and save, both render it (M11)
 ```
+
+The last two are the only ones that need **both** binaries, because
+`pdfium_test` cannot write a document at all: the check is a sequence rather
+than a flag diff.
 
 `--tool` names the `pdfrum-tool` binary and defaults to
 `target/release/pdfrum-tool` **under the repository root**, which is not where
@@ -17,6 +23,30 @@ reports `0 files compared`, that is the reason; pass `--tool` explicitly.
 
 `--limit N` truncates the corpus listing to its first `N` entries. It is a
 smoke-test switch, not a filter: there is no way to select a named file.
+
+## What `mutate-round-trip` compares, and why it is not a golden
+
+Every other pixel check here diffs our render against a golden the oracle made
+from the original file. That cannot answer the question page mutation raises,
+because the file under test is one neither implementation has ever seen: we
+edit a page, regenerate its content stream, and write a new document. So the
+comparison is between two renders of *that* file — the oracle's and ours. A
+regenerated stream only our own interpreter reads back correctly fails here and
+passes everywhere else.
+
+`--mutate=` offers three edits, chosen to break in different places:
+`add-rect` (a brand-new streamless object and the `/Contents` shape transition
+that holds it), `remove-first` (removal bookkeeping and index collapse), and
+`touch-all` (the emitter itself, under an edit that changes nothing).
+
+One thing the sweep had to learn: **SSIM cannot tell a mutation's loss from a
+disagreement that predates it.** The metric is local, so painting a large flat
+rectangle turns busy 8x8 windows into flat ones — and a file whose handful of
+wrong pixels scored 1.000 unmutated can score 0.986 mutated without a single
+new pixel having gone wrong. The baseline pass therefore counts *pixels*
+rather than comparing two SSIM numbers, which is a question with an exact
+answer: did the two implementations disagree at all before the edit? Both
+numbers are reported either way.
 
 ## Tier C's edge rule
 

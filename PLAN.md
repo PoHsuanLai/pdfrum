@@ -1,6 +1,6 @@
 # PDFium → Rust Rewrite — Master Plan
 
-**Status:** Phase 2 in progress: M9 met (97.4%@0.99, annot 100%, 1624/1675 passing), M10 met (encrypted save, full oracle matrix), M11 in flight. M12/M13 pending.
+**Status:** Phase 2 in progress: M9 met (97.4%@0.99, annot 100%, 1624/1675 passing), M10 met (encrypted save, full oracle matrix), M11 met (page mutation; oracle agrees on 287/287 mutations). M12/M13 pending.
 **Oracle:** `/mnt/data2/pdfium/pdfium-c++` (read-only C++ PDFium checkout @ `6f2272e`)
 **Workspace:** `/mnt/data2/pdfium/pdfrum` (this repository)
 
@@ -258,17 +258,31 @@ API in v1. *Exit:* every encrypted corpus fixture saves, the ORACLE reopens
 it with the same password, and the round-trip renders equal; incremental
 save of an encrypted doc holds the append discipline.
 
-## M11 — Page mutation  *(before M12 — it touches pdfrum-page's core types)*
+## M11 — Page mutation  — **MET 2026-08-30**
 
 The deferred holder-mutation half of content regeneration (edit brief E6):
 dirty/active tracking on PageObject, content-stream index + per-stream CTM
 facility in pdfrum-page ([spec] §7), regenerate-on-save wired through the
 existing byte-pinned emitters, facade API (add/remove/edit path, text, and
-image objects; `page.objects_mut()`; `doc.save` reflects it). Port the
-relevant FPDFPage_* embeddertest assertions as the behavior net. *Exit:*
-mutate -> save -> oracle reopens and renders the expected result; round-trip
-property tests extended to mutated documents; regenerated-page divergence
-cluster (R13) thresholds unchanged.
+image objects; `page.edit()`; `doc.save_pages` reflects it). E6, E8 and E9 are
+all resolved in the brief.
+
+*Exit met.* The tool grows `--mutate=` and the harness grows
+`mutate-round-trip`: pdfrum mutates page 0 and saves, the **oracle** reopens
+and renders the result, and its render is compared against ours of that same
+file. Over a 120-file sample x 3 mutations: **287 applied, 287 reopened by the
+oracle, 287 at SSIM >= 0.99.** Scoreboard unmoved at 1624/1675, so R13's
+thresholds are untouched. 23 embeddertest-derived assertions are ported in
+`crates/pdfrum/tests/mutation.rs`, each three-phase — edit, save, reload —
+because each phase can be right while the next is wrong.
+
+The sweep earned its keep immediately: its oracle comparison found that the
+content tokenizer's *real* parser was two ulps out, an obsolete `FX_atof` the
+C++ replaced with a correctly-rounded parse. Invisible to every existing test
+(all compared to `1e-4`) and worth a whole row of pixels once a rectangle's
+edge went through `floor`/`ceil`. Fixed, with PDFium's own
+`ByteStringToFloat` vectors ported at exact equality; that fix is what took
+the sweep from 279/287 to 287/287.
 
 ## M12 — Performance program  *(after M11; conformance is the regression gate)*
 
