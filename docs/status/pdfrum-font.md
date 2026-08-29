@@ -231,6 +231,25 @@ The brief's D1–D13 are implemented as written, with these notes:
   enumeration behavior, since conformance measures against the oracle. The
   brief's architecturally-honest `true` is one struct-update away, and a test
   pins that the two settings really do produce different weights.
+
+  **2026-08-29 — the default was correct and irrelevant, because nothing was
+  enumerating.** `--font-dir` and `--croscore-font-names` were parsed as
+  accepted-but-unimplemented in `pdfrum-tool`, so `SubstitutionOptions` was
+  never built with a non-default value and `load_with_options` had no callers
+  outside this crate's tests. Every substitution ran against an empty
+  database and short-circuited at step 7 into the built-in generics. The
+  options are now threaded tool → `BuildContext` → `load_with_options`; the
+  Croscore rename (`croscore_name`) is ported from
+  `testing/test_fonts.cpp:19-45` and applied at the request boundary, where
+  the C++ wrapper applies it. Text Tier-A on non-empty pages: 98.3% → 99.1%,
+  `pixel-fail` 553 → 495, no regressions. See `docs/status/pdfrum-text.md`.
+
+- **`SystemFontDb::scan` sorts its faces by name.** The C++'s `font_list_` is
+  a `std::map<ByteString, ...>` (`cfx_folderfontinfo.h:98`) and two decisions
+  read it in order: a face displaces the incumbent only by scoring *strictly*
+  higher, so a `similarity_score` tie goes to whichever came first, and rung 5
+  takes the first face claiming the charset outright. `fontdb` enumerates in
+  directory order, which would make both answers depend on the filesystem.
 - **D8** (artificial emboldening) deferred to M3 as the brief proposes: the
   tables and levels are computed and unit-tested against the oracle's own
   assertions, and `pdfrum-render` applies them. `SubstFont::embolden_level_for_render`
