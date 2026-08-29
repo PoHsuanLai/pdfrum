@@ -1313,3 +1313,60 @@ fn a_hidden_object_is_not_drawn_and_its_clip_never_reaches_the_device() {
         "the visibility-free entry point still draws every layer"
     );
 }
+
+#[test]
+fn a_groups_own_alpha_multiplies_the_alpha_inside_it() {
+    // `bug_1949.in`'s left square: a form declaring `/Group /I true`, drawn
+    // under `ca 0.5`, whose content fills white under its own `ca 0.5`. The
+    // two multiply — 0.25 of white over black is 63 — and the gate on the
+    // outer one is the *form's* `/Group`, not the page's.
+    let mut inner_state = GraphicsState::default();
+    inner_state
+        .fill
+        .set_stock(ColorSpace::DeviceRgb, &[1.0, 1.0, 1.0]);
+    inner_state.general.fill_alpha = 0.5;
+    let inner = PageObject::Path(Box::new(Content {
+        object: PathObject {
+            path: rect_path(0.0, 0.0, 8.0, 8.0),
+            matrix: Affine::IDENTITY,
+            fill_rule: FillRule::Winding,
+            stroke: false,
+        },
+        state: inner_state,
+        marks: ContentMarks::new(),
+        content_stream: 0,
+    }));
+
+    let mut form_state = GraphicsState::default();
+    form_state.general.fill_alpha = 0.5;
+    let form = PageObject::Form(Box::new(Content {
+        object: pdfrum_page::FormObject {
+            objects: vec![inner],
+            matrix: Affine::IDENTITY,
+            bbox: Some(Rect::new(0.0, 0.0, 8.0, 8.0)),
+            transparency: Transparency {
+                group: true,
+                isolated: true,
+                knockout: false,
+            },
+            oc: None,
+        },
+        state: form_state,
+        marks: ContentMarks::new(),
+        content_stream: 0,
+    }));
+
+    let page = page(
+        8.0,
+        8.0,
+        vec![filled(rect_path(0.0, 0.0, 8.0, 8.0), [0.0, 0.0, 0.0]), form],
+    );
+    let (vello, tiny) = render_both(&page, &RenderOptions::default());
+    for surface in [&vello, &tiny] {
+        let px = surface.pixel(4, 4).expect("a pixel");
+        assert!(
+            px[0].abs_diff(63) <= 1,
+            "0.5 * 0.5 of white over black is 63, got {px:?}"
+        );
+    }
+}
