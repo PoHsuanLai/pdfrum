@@ -37,7 +37,7 @@ const DEFAULT_LAB_RANGES: [f32; 4] = [-100.0, 100.0, -100.0, 100.0];
 /// A `CalGray` space (ISO 32000-1 §8.6.5.2).
 ///
 /// Every field is parsed and validated, and none of them affects
-/// [`cal_gray_to_rgb`]. See the module docs.
+/// `cal_gray_to_rgb`. See the module docs.
 #[derive(Debug, Clone, PartialEq)]
 pub struct CalGray {
     /// The diffuse white point, `[Xw, Yw, Zw]`.

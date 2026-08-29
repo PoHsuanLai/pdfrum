@@ -34,7 +34,8 @@
 //! `Err` is reserved for "this cannot produce bytes at all": a size
 //! computation that overflows, output past
 //! [`Limits::max_decoded_stream_len`](pdfrum_common::Limits::max_decoded_stream_len),
-//! or one of the two malformations PDFium itself rejects outright (§ [`lzw`]).
+//! or one of the two malformations PDFium itself rejects outright (the `lzw`
+//! module).
 //! A caller that gets `Err` falls back to the raw, undecoded stream bytes —
 //! see [`decode_chain`], which implements that ladder.
 //!

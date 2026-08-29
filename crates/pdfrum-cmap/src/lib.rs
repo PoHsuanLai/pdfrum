@@ -39,7 +39,7 @@
 //! yields a CMap that decodes two-byte codes and maps each code to itself; a
 //! truncated multi-byte code yields character code 0; a CMap program full of
 //! garbage yields whatever it managed to say. Every such recovery is recorded
-//! on a [`Diagnostics`](pdfrum_common::Diagnostics) sink rather than raised, so
+//! on a [`pdfrum_common::Diagnostics`] sink rather than raised, so
 //! a caller can see what was bent without having to handle it.
 //!
 //! # What is *not* here

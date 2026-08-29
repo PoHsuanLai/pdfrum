@@ -494,6 +494,145 @@ come from the same substitution record and were equally unwired.
 - The gamma table and the LCD downsample are still dead, per wave 4.
 - The remaining tail is **not text**. See the inventory below.
 
+## Wave 6a: a rasterizer of our own, and two defects it had to find first
+
+Wave 5 left the 0.95–0.99 band as "the whole story of the text tail" and
+called it a coverage band. That was right about the *text*, and it hid a
+second population: every non-axis-aligned **path** edge in the corpus was also
+losing counts, for a reason the burn-down had already measured and filed as
+"a backend's own business".
+
+`tiny-skia` supersamples at `SUPERSAMPLE_SHIFT = 2` — four subsamples per
+axis. A diagonal edge therefore has **seventeen** possible coverages, and a
+half-covered pixel quantises to 8/16 of the range where the oracle writes the
+exact half. Wave 3 measured this, priced switching to `vello_cpu` at six files,
+and correctly declined: vello loses `bug_554151` outright and drops four
+shading files.
+
+The option wave 3 did not price is **not switching to anyone's rasterizer**.
+
+### `pdfrum-raster-exact`
+
+An analytic scanline rasterizer, a third `RasterBackend`, adding **no external
+dependency**: it is written against `kurbo` and `peniko` alone, both already in
+the closed set. Wrapping a fourth rasterizer would reintroduce exactly the
+question it exists to settle.
+
+kurbo flattens curves; each straight segment is integrated into per-pixel
+`(cover, area)` cells; a sweep turns the sorted cells into spans of constant
+coverage. The grid is the oracle's own 256ths of a pixel, the coordinate
+conversion is the oracle's truncating `int(c · 256)`, and the coverage→alpha
+step is the mapping wave 3 measured and told the next wave not to look for
+again — `min(255, floor(cov · 256))`, re-verified against
+`agg_rasterizer_scanline_aa.h:283-297`. Every intermediate value is an
+integer, so the same path yields the same bytes on every machine.
+
+Two things it deliberately does **not** do. It does not stroke: like both
+wrapped backends it expands an outline through `kurbo` and fills it, so stroke
+geometry is the engine's under all three. And it does not own blend
+arithmetic: `blend::composite_premultiplied` is one authority for the engine
+and all three backends, so a pixel a backend composites and a pixel the engine
+composites in its own offscreen buffers agree by construction.
+
+Curve flattening runs at a tenth of a pixel rather than the oracle's half
+(`agg_curves.cpp:36`'s `m_distance_tolerance_square = 1/4` is a squared
+distance against a squared chord). Matching the number would reproduce AGG's
+*tolerance* but not its subdivision — it bisects recursively where kurbo places
+points adaptively — so the finer value is the safer direction: the flattening
+error stays well below the quantisation the output byte imposes.
+
+### It found two defects before it could be measured at all
+
+Neither is in the new crate, and both are worth more than the rasterizer.
+
+- **`draw_image`'s transform maps the image's *pixel grid*, not its unit
+  square** — and SPEC §8's own comment, plus the trait's doc, said the
+  opposite. Every engine call site passes a plain translation, because the
+  engine has already resampled the image to its device size before the call.
+  Implementing the documented contract collapses a whole-page image onto one
+  pixel, silently and totally, until the first corpus run says so. The doc now
+  states the convention the code always had.
+
+- **Premultiplying a composited colour must round, not truncate.** The
+  truncating `mul255` is the oracle's product wherever the oracle performs
+  one, and it stays that everywhere else. But storing a straight result into a
+  premultiplied buffer is *our* round trip — the oracle's buffers are straight
+  — and its inverse, ported from `CFX_DIBitmap::UnPreMultiply`'s `+ alpha / 2`,
+  rounds. Truncating on the way in therefore loses a count on most values.
+  Measured: straight `145` at alpha `223` premultiplies to `126` truncating and
+  `127` rounding, and only `127` comes back as `145`. That count was every
+  pixel of `alpha_composite`'s overlap. The replacement is proved exhaustively
+  never worse than truncating and strictly better on most of the 65 280 pairs.
+
+A third, smaller: an image's footprint must be filled **antialiased**, not
+hard-edged. Hard-edging thresholds the silhouette at half a pixel, which
+deletes any image thinner than that — `type3.pdf`'s sheared glyph, drawn as an
+inline image mask, is exactly such a case, and the oracle paints it at its true
+partial coverage. The border is not darkened twice, because the sampler returns
+nothing outside the last texel, so the silhouette only modulates boundary
+pixels.
+
+### What moved
+
+**1387 → 1403 at SSIM ≥ 0.99 (85.2% → 86.2%)**, 1554 → 1564 at 0.95,
+**451 → 487 byte-exact**, passing 1396 → 1411. 899 files moved up and 85 down;
+**16 crossed 0.99 upward and none downward**, and `--check-regressions`
+reports none.
+
+Five files lost byte-exact status, every one by a **single count** and every
+one still passing:
+
+- `long_dashed_line` and `bug_660850` are `kurbo`'s dash phase against AGG's
+  `vcgen_dash` — 14 and 60 pixels, at dash boundaries, where the two
+  expansions end a subpixel step apart.
+- `xfermodeimagefilter` is a blend rounding `tiny-skia` happens to get exact
+  through its own pipeline; ours is the engine's shared arithmetic, so it is
+  identical under the analytic backend and the engine's own compositor.
+
+The band itself: **167 → 161 files, 121 → 115 unique documents.** The movement
+inside it is small — mean SSIM `+0.00088`, 92 files up and 10 down — and that
+is the finding rather than a disappointment. The path-edge half of the band is
+gone, which is what the 16 crossings are; what remains is **text**, and it is
+D7 in the form wave 5 left it. `bug_1402.pdf` is the shape of the whole
+residue: 6 pt type, where the oracle has glyph ink at 251/208/160 and we have
+white. That is stem geometry upstream of any rasterizer, and no coverage
+integral reaches it.
+
+### Two defaults, because there are two questions
+
+`pdfrum-tool --use-renderer=` becomes real — `exact`, `tiny-skia`, `vello` —
+and `exact` is what `--png` uses by default. The `pdfrum` facade keeps
+`vello_cpu`.
+
+They had been sharing one answer to two different questions. A conformance run
+asks whether the *engine* decided a page's pixels, and a rasterizer's
+quantisation policy is noise in that measurement. An API user asks for a fast
+production rasterizer, which is what `vello_cpu` is and what the analytic
+backend does not try to be. SPEC §8 records the split.
+
+### Tier C now has three backends and still one gating pair
+
+`tiny-skia` against `vello_cpu` remains the gate; the analytic backend is a
+reported third column. The reasoning is the tier's own: its value is that two
+*independent* implementations disagree out loud, and the analytic backend is
+ours and shares the engine's arithmetic, so a shared bug cannot make it
+disagree. Diffing it against either wrapped backend would test less, not more.
+
+Hard failures are **3**, unchanged. Worst edge divergence for the gating pair
+is 50.0%; for the analytic backend against `tiny-skia`, 36.7% — closer to both,
+which is what an exact integrator between two approximations should be.
+
+### What the next wave should not do again
+
+- Do not look for the coverage mapping again. It is
+  `min(255, floor(cov·256))`, it is now *implemented* rather than merely
+  measured, and `cell::coverage_to_alpha` is where it lives.
+- Do not read `draw_image`'s transform as a unit-square map. It is the pixel
+  grid, and it fails silently and totally.
+- Do not expect the 0.95–0.99 band to yield to rasterization work. What is
+  left in it is glyph geometry; the levers named in waves 4 and 5 still stand,
+  and the codecs below 0.95 are worth more per file.
+
 ## Wave 6: the codec tail was mostly not the codecs
 
 Wave 5 left ten documents below 0.80 and called them "codecs". Four were,

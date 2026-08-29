@@ -20,13 +20,13 @@
 //!
 //! Each module below is a stage that can be tested on values alone:
 //!
-//! - [`lexer`] turns bytes into tokens and owns the byte classifier every
+//! - `lexer` turns bytes into tokens and owns the byte classifier every
 //!   other stage asks questions of.
-//! - [`syntax`] turns tokens into [`Object`](pdfrum_object::Object)s, which
+//! - `syntax` turns tokens into [`Object`](pdfrum_object::Object)s, which
 //!   is where stream `/Length` repair lives.
-//! - [`xref`] finds and reads cross-reference information by every route a
+//! - `xref` finds and reads cross-reference information by every route a
 //!   file can offer, and rebuilds it from scratch when none of them work.
-//! - [`doc`] ties those together into a [`Document`] whose object store
+//! - `doc` ties those together into a [`Document`] whose object store
 //!   fetches lazily, decrypts, and guards against reference cycles.
 //!
 //! # Damage is normal

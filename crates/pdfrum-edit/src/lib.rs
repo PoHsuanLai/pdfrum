@@ -30,7 +30,7 @@
 //!
 //! # Three machines, one serializer
 //!
-//! - [`save`] and the [`write`] module: object enumeration, cross-reference
+//! - [`save`] and the [`mod@write`] module: object enumeration, cross-reference
 //!   emission, trailer construction, incremental append.
 //! - [`content`]: a page-object graph back into operator bytes.
 //! - [`import`]: cross-document deep copy with reference remapping, N-up

@@ -36,7 +36,7 @@
 //!
 //! # Where the rest plugs in
 //!
-//! [`run::dump_page`] is the single dispatch point: a new output format is one
+//! `run::dump_page` is the single dispatch point: a new output format is one
 //! arm there plus a module beside [`pageinfo`], with everything else — the
 //! page walk, the notices, the counts, the exit conventions — already agreeing
 //! with the oracle. Formats that write files rather than stdout will need the

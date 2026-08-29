@@ -93,7 +93,7 @@ impl PostScript {
 
     /// Evaluate, reporting what the engine noticed going wrong.
     ///
-    /// The plain [`Self::eval`] path swallows these, which is the behaviour
+    /// The plain `eval` path swallows these, which is the behaviour
     /// contract; this variant exists so a caller that owns a diagnostics sink
     /// can record them.
     pub fn eval_with_diagnostics(

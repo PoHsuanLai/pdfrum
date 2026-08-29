@@ -894,6 +894,17 @@ pub struct TierCOutcome {
     pub within_budget: bool,
     /// The worst page's share of differing edge pixels.
     pub edge_rate: f64,
+    /// The same worst-page edge rate for the analytic backend against the
+    /// gating pair's baseline, or `None` when it produced no pages.
+    ///
+    /// **Reported, never gated.** Tier C's value is that two *independent*
+    /// implementations disagree out loud; `pdfrum-raster-exact` shares this
+    /// project's engine-facing arithmetic with the engine itself — one
+    /// `blend::composite_premultiplied` serves all three backends — so a
+    /// disagreement between it and either wrapped backend tests less than a
+    /// disagreement between the two wrapped ones, not more. Its column is
+    /// here so a divergence is visible, not so it can fail a run.
+    pub exact_edge_rate: Option<f64>,
     /// What went wrong, when something did.
     pub note: String,
 }
@@ -906,6 +917,7 @@ impl TierCOutcome {
             hard_fail: false,
             within_budget: true,
             edge_rate: 0.0,
+            exact_edge_rate: None,
             note,
         }
     }
@@ -957,6 +969,11 @@ fn compare_backends_inner(
     let Some(vello) = render_with(tool, &input, "vello") else {
         return TierCOutcome::skipped(id, "vello produced nothing".to_owned());
     };
+    // The third backend is rendered but not gated on: see
+    // `TierCOutcome::exact_edge_rate` for why it is a reported column. A file
+    // it cannot render is not a Tier C failure either, so this is an `Option`
+    // rather than an early return.
+    let exact = render_with(tool, &input, "exact");
 
     let mut out = TierCOutcome {
         path: id,
@@ -964,6 +981,7 @@ fn compare_backends_inner(
         hard_fail: false,
         within_budget: true,
         edge_rate: 0.0,
+        exact_edge_rate: None,
         note: String::new(),
     };
     for (name, tiny_png) in &tiny {
@@ -1013,6 +1031,29 @@ fn compare_backends_inner(
         }
         if !diff.passes() {
             out.within_budget = false;
+        }
+    }
+    // The analytic backend's own column, measured against the same baseline
+    // the gating pair's first half uses so the three numbers are comparable.
+    if let Some(exact) = &exact {
+        for (name, tiny_png) in &tiny {
+            let Some((_, exact_png)) = exact.iter().find(|(n, _)| n == name) else {
+                continue;
+            };
+            if tiny_png == exact_png {
+                out.exact_edge_rate = Some(out.exact_edge_rate.unwrap_or(0.0));
+                continue;
+            }
+            let (Ok(a), Ok(b)) = (
+                crate::pixels::decode(tiny_png),
+                crate::pixels::decode(exact_png),
+            ) else {
+                continue;
+            };
+            if let Some(diff) = crate::tierc::compare(&a, &b) {
+                let rate = diff.edge_rate();
+                out.exact_edge_rate = Some(out.exact_edge_rate.unwrap_or(0.0).max(rate));
+            }
         }
     }
     out

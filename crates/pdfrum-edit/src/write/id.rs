@@ -3,7 +3,7 @@
 //! `/ID` is a two-element array. The **first** element is the document's
 //! permanent identity, minted once and preserved across every save the file
 //! ever sees. The **second** changes on each save, so two files sharing an
-//! ID[0] but differing in ID[1] are recognisably versions of one document.
+//! `ID[0]` but differing in `ID[1]` are recognisably versions of one document.
 //!
 //! # Randomness is a parameter here, not a global
 //!
@@ -16,21 +16,21 @@
 //!
 //! # The five branches
 //!
-//! | the input had | ID[0] | ID[1] |
+//! | the input had | `ID[0]` | `ID[1]` |
 //! |---|---|---|
 //! | an `/ID` with a first element | that element, preserved | fresh random |
 //! | an `/ID`, incremental save, encrypted, with a second element | preserved | **preserved** |
 //! | an `/ID` with no first element | fresh random | fresh random |
-//! | no `/ID` at all | fresh random | **a copy of ID[0]** |
-//! | no `/ID` at all, encrypted at revision 2 or 3 | fresh random | copy of ID[0], **and the key is rebuilt** |
+//! | no `/ID` at all | fresh random | **a copy of `ID[0]`** |
+//! | no `/ID` at all, encrypted at revision 2 or 3 | fresh random | copy of `ID[0]`, **and the key is rebuilt** |
 //!
-//! Row 2 exists because R2/R3 key derivation mixes ID[0] in: changing ID[1]
+//! Row 2 exists because R2/R3 key derivation mixes `ID[0]` in: changing `ID[1]`
 //! on an incremental save would be harmless, but the C++ preserves it and a
 //! file's already-written ciphertext is what makes that the safe choice.
 //!
 //! Row 5 is the interesting one. A document with no `/ID` that *is* encrypted
-//! at revision 2 or 3 has just had a fresh ID[0] minted — and since R2/R3
-//! derive the file key from ID[0], the old key is no longer derivable. The
+//! at revision 2 or 3 has just had a fresh `ID[0]` minted — and since R2/R3
+//! derive the file key from `ID[0]`, the old key is no longer derivable. The
 //! C++ answers by rebuilding the security handler from the new ID, which sets
 //! `security_changed_`, which in turn **forces a full save**: appending
 //! freshly-keyed objects after ciphertext under the old key would produce a
@@ -139,7 +139,7 @@ fn mix(seed: &[u8; ID_LEN], nonce: u64) -> [u8; ID_LEN] {
 pub struct FileId {
     /// The two-element array, both elements hex strings of 32 digits.
     pub array: Array,
-    /// Row 5 of the table above: the file key was rebuilt from a fresh ID[0],
+    /// Row 5 of the table above: the file key was rebuilt from a fresh `ID[0]`,
     /// so the original bytes can no longer be appended to and the save must
     /// be a full one.
     pub rekeyed: bool,
@@ -196,7 +196,7 @@ pub fn build(ctx: IdContext<'_>, source: IdSource) -> FileId {
     }
 }
 
-/// Does minting a fresh ID[0] invalidate this handler's key?
+/// Does minting a fresh `ID[0]` invalidate this handler's key?
 ///
 /// Only for the standard handler at revision 2 or 3, whose key derivation
 /// mixes the first `/ID` element in. Revision 4 and up derive from `/O` and
