@@ -34,6 +34,7 @@ pdfrum-cmap = { path = "../crates/pdfrum-cmap" }
 pdfrum-parser = { path = "../crates/pdfrum-parser" }
 pdfrum-page = { path = "../crates/pdfrum-page" }
 pdfrum-text = { path = "../crates/pdfrum-text" }
+pdfrum-edit = { path = "../crates/pdfrum-edit" }
 
 # The root workspace forbids `unsafe` and denies panics. This workspace does
 # not inherit those lints (it is a separate workspace by construction), but
@@ -244,3 +245,24 @@ name = "text_links"
 path = "fuzz_targets/text_links.rs"
 test = false
 doc = false
+
+[[bin]]
+name = "edit_save_roundtrip"
+path = "fuzz_targets/edit_save_roundtrip.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "edit_subset"
+path = "fuzz_targets/edit_subset.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "edit_import"
+path = "fuzz_targets/edit_import.rs"
+test = false
+doc = false
+bench = false

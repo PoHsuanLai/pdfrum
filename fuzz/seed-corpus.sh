@@ -20,6 +20,7 @@ targets=(
     filters_predictor filters_chain
     cmap_embedded cmap_predefined
     parser_lexer parser_object parser_xref parser_load parser_load_password
+    edit_save_roundtrip edit_subset edit_import
 )
 for t in "${targets[@]}"; do
     mkdir -p "corpus/$t"
@@ -31,7 +32,13 @@ done
 # The whole-file targets take real PDFs. Everything the oracle ships is fair
 # game: `testing/resources` is the unit-test fixture set (small, and rich in
 # deliberately broken files), `testing/corpus` is the rendering corpus.
-pdf_targets=(parser_load parser_load_password parser_xref parser_lexer)
+# The writer's targets want the same real PDFs: `edit_save_roundtrip` opens
+# one and writes it back out, and `edit_import` splits the input into two
+# documents, so a real file gives it two halves of real structure.
+pdf_targets=(
+    parser_load parser_load_password parser_xref parser_lexer
+    edit_save_roundtrip edit_import
+)
 if [ -d "$ORACLE/testing" ]; then
     count=0
     while IFS= read -r pdf; do

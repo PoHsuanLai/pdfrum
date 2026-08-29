@@ -64,6 +64,115 @@ pub fn hard_clip(path: &BezPath) -> BezPath {
     out
 }
 
+/// Nudge a degenerate one-point subpath's line endpoint one device pixel
+/// right, so a stroke has something to expand (`BuildAggPath`,
+/// `cfx_agg_devicedriver.cpp:951-956`).
+///
+/// AGG's `vertex_sequence::add` drops a vertex within `1e-14` of the previous
+/// one, and `vcgen_stroke` then bails with fewer than two vertices, so
+/// `50 40 m 50 40 l S` would stroke *nothing*. PDFium's answer is not to
+/// special-case the stroke but to move the endpoint:
+///
+/// ```text
+/// if (i > 0 && points[i - 1].IsTypeAndOpen(kMove) &&
+///     (i + 1 == points.size() || points[i + 1].IsTypeAndOpen(kMove)) &&
+///     points[i].point_ == points[i - 1].point_) {
+///   pos.x += 1;
+/// }
+/// ```
+///
+/// Three details of that condition are load-bearing and each changes which
+/// files it fires on:
+///
+/// - **The equality is on the *pre*-transform points** while the `+1` lands on
+///   the *post*-transform one. So the test asks whether the content stream
+///   repeated a coordinate, and the answer is one device pixel wherever that
+///   coordinate ended up.
+/// - **`IsTypeAndOpen` is `type == kMove && !close_figure_`.** A move that the
+///   `h` rewrite already closed does not qualify.
+/// - **The line must end its subpath.** Three identical points in a row leave
+///   `points[i + 1]` a `kLine`, the nudge does not fire, and AGG collapses
+///   them all — which is why `single_point_paths.in`'s five-fold repetition
+///   draws nothing at all.
+///
+/// `path` is in the space the stroke is built in and `user` is the same path
+/// before the matrix, so the two must have identical element sequences; when
+/// they do not, nothing is nudged.
+#[must_use]
+pub fn nudge_degenerate_subpaths(path: &BezPath, user: &BezPath) -> BezPath {
+    // The elements as (kind, point) pairs, in both spaces at once.
+    let els: Vec<PathEl> = path.elements().to_vec();
+    let user_els: Vec<PathEl> = user.elements().to_vec();
+    if els.len() != user_els.len() {
+        return path.clone();
+    }
+    let mut out = BezPath::new();
+    // A `ClosePath` that a nudged line owns is dropped rather than emitted.
+    //
+    // AGG closes the polygon too, and `vcgen_stroke` then needs three
+    // vertices before it emits anything — so the *closed* two-vertex form is
+    // not what paints the oracle's dot. What paints it is the stadium the
+    // open form gives: `stroke_calc_cap` puts one semicircle at each end of
+    // the nudged unit segment. kurbo reaches the same stadium from an open
+    // subpath and a very different shape from a closed one, where it joins
+    // instead of capping and a round dot becomes a one-pixel bar. Dropping
+    // the close is what makes the two agree.
+    let mut skip_close = false;
+    for (i, el) in els.iter().enumerate() {
+        match *el {
+            PathEl::LineTo(p) if should_nudge(&els, &user_els, i) => {
+                out.line_to(Point::new(p.x + 1.0, p.y));
+                skip_close = matches!(els.get(i + 1), Some(PathEl::ClosePath));
+            }
+            PathEl::MoveTo(p) => out.move_to(p),
+            PathEl::LineTo(p) => out.line_to(p),
+            PathEl::QuadTo(a, b) => out.quad_to(a, b),
+            PathEl::CurveTo(a, b, c) => out.curve_to(a, b, c),
+            PathEl::ClosePath if skip_close => skip_close = false,
+            PathEl::ClosePath => out.close_path(),
+        }
+    }
+    out
+}
+
+/// Whether element `i` — known to be a `LineTo` — meets `BuildAggPath`'s
+/// three-part nudge condition.
+fn should_nudge(els: &[PathEl], user: &[PathEl], i: usize) -> bool {
+    // `points[i - 1]` must be an *open* move. In kurbo's spelling a `MoveTo`
+    // is always open — `close_figure_` attaches to the point it follows, and
+    // kurbo emits it as a separate `ClosePath` after the *line* — so the
+    // element kind is the whole test.
+    if !matches!(
+        (i > 0).then(|| els.get(i - 1)).flatten(),
+        Some(PathEl::MoveTo(_))
+    ) {
+        return false;
+    }
+    // The line must end its subpath. kurbo spells the C++'s `close_figure_`
+    // as its own `ClosePath` element, so both a bare end and a close count.
+    let next_ends_subpath = match els.get(i + 1) {
+        None | Some(PathEl::MoveTo(_) | PathEl::ClosePath) => true,
+        Some(_) => false,
+    };
+    if !next_ends_subpath {
+        return false;
+    }
+    // A `ClosePath` may be followed only by the end or another move; anything
+    // else means this line did not end its subpath after all.
+    if matches!(els.get(i + 1), Some(PathEl::ClosePath))
+        && !matches!(els.get(i + 2), None | Some(PathEl::MoveTo(_)))
+    {
+        return false;
+    }
+    // Finally: the *pre-transform* points must be equal.
+    let (Some(PathEl::MoveTo(um)), Some(PathEl::LineTo(ul))) =
+        ((i > 0).then(|| user.get(i - 1)).flatten(), user.get(i))
+    else {
+        return false;
+    };
+    um == ul
+}
+
 /// The points of a path that is a candidate rectangle: four or five line
 /// segments after an opening move, no curves.
 fn rect_candidate_points(path: &BezPath) -> Option<Vec<Point>> {
@@ -507,6 +616,106 @@ mod tests {
         // The y coordinates are untouched: it distorts, it does not cut.
         assert_eq!(bbox.y0, 5.0);
         assert_eq!(bbox.y1, 7.0);
+    }
+
+    /// The elements of a path as a comparable shape summary.
+    fn shape(p: &BezPath) -> Vec<(&'static str, Option<(f64, f64)>)> {
+        p.elements()
+            .iter()
+            .map(|el| match *el {
+                PathEl::MoveTo(q) => ("m", Some((q.x, q.y))),
+                PathEl::LineTo(q) => ("l", Some((q.x, q.y))),
+                PathEl::QuadTo(_, q) => ("q", Some((q.x, q.y))),
+                PathEl::CurveTo(_, _, q) => ("c", Some((q.x, q.y))),
+                PathEl::ClosePath => ("h", None),
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_degenerate_open_subpath_is_nudged_one_pixel_right() {
+        // `50 40 m 50 40 l S` under a doubling matrix. The equality test is
+        // on the *user*-space points; the `+1` lands in device space, so the
+        // endpoint moves exactly one pixel however the matrix scales.
+        let mut user = BezPath::new();
+        user.move_to((50.0, 40.0));
+        user.line_to((50.0, 40.0));
+        let device = Affine::scale(2.0) * user.clone();
+        let out = nudge_degenerate_subpaths(&device, &user);
+        assert_eq!(
+            shape(&out),
+            vec![("m", Some((100.0, 80.0))), ("l", Some((101.0, 80.0)))],
+            "one device pixel, not one user unit"
+        );
+    }
+
+    #[test]
+    fn a_degenerate_closed_subpath_is_nudged_and_loses_its_close() {
+        // `50 40 m h S` after the page builder's round-cap rewrite. The close
+        // must go: kurbo joins a closed two-vertex loop instead of capping
+        // it, which turns the oracle's 21-wide stadium into a 1-wide bar.
+        let mut user = BezPath::new();
+        user.move_to((50.0, 40.0));
+        user.line_to((50.0, 40.0));
+        user.close_path();
+        let out = nudge_degenerate_subpaths(&user, &user);
+        assert_eq!(
+            shape(&out),
+            vec![("m", Some((50.0, 40.0))), ("l", Some((51.0, 40.0)))]
+        );
+    }
+
+    #[test]
+    fn three_identical_points_are_not_nudged() {
+        // `40 140 m 40 140 l 40 140 l S`. `points[i + 1]` is a `kLine`, so
+        // the condition fails, AGG collapses every vertex into one, and the
+        // subpath paints nothing at all. `single_point_paths.in` relies on
+        // exactly this.
+        let mut user = BezPath::new();
+        user.move_to((40.0, 140.0));
+        user.line_to((40.0, 140.0));
+        user.line_to((40.0, 140.0));
+        assert_eq!(
+            shape(&nudge_degenerate_subpaths(&user, &user)),
+            shape(&user)
+        );
+    }
+
+    #[test]
+    fn a_real_segment_is_left_alone() {
+        // The points differ, so nothing is degenerate and nothing moves.
+        let mut user = BezPath::new();
+        user.move_to((10.0, 10.0));
+        user.line_to((20.0, 10.0));
+        assert_eq!(
+            shape(&nudge_degenerate_subpaths(&user, &user)),
+            shape(&user)
+        );
+        // And a degenerate line that is *not* the first after its move is not
+        // reached either: `points[i - 1]` must be the move itself.
+        let mut two = BezPath::new();
+        two.move_to((10.0, 10.0));
+        two.line_to((20.0, 10.0));
+        two.line_to((20.0, 10.0));
+        assert_eq!(shape(&nudge_degenerate_subpaths(&two, &two)), shape(&two));
+    }
+
+    #[test]
+    fn every_degenerate_subpath_of_a_multi_subpath_path_is_nudged() {
+        let mut user = BezPath::new();
+        user.move_to((1.0, 1.0));
+        user.line_to((1.0, 1.0));
+        user.move_to((5.0, 5.0));
+        user.line_to((5.0, 5.0));
+        assert_eq!(
+            shape(&nudge_degenerate_subpaths(&user, &user)),
+            vec![
+                ("m", Some((1.0, 1.0))),
+                ("l", Some((2.0, 1.0))),
+                ("m", Some((5.0, 5.0))),
+                ("l", Some((6.0, 5.0))),
+            ]
+        );
     }
 
     #[test]

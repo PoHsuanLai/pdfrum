@@ -16,6 +16,7 @@ pdfrum-filters.workspace = true
 pdfrum-font.workspace = true
 pdfrum-object.workspace = true
 pdfrum-page.workspace = true
+pdfrum-edit.workspace = true
 pdfrum-parser.workspace = true
 pdfrum-raster-tinyskia.workspace = true
 pdfrum-raster-vello.workspace = true
