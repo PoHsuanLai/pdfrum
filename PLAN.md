@@ -315,15 +315,32 @@ Both lessons are written down where the next person will meet them.
   untouched, and the image class's real cost is `to_pixmap`+`prescale`
   **re-running on every render of an unchanged image** — a cache, which is P2,
   not a loop.
-- **P2 memory:** peak-RSS harness vs the oracle on large docs; decoded-image
-  cache eviction — **now also the top CPU item**, see M12.md §3.6; Arc/clone
-  pressure audit. Plus the prerequisite M12 could not satisfy: a real `perf`
-  profile of the page-graph walk, without which the `bumpalo` question cannot
-  be asked honestly.
+- **P2 memory — DONE** (docs/status/M12.md §9). The image cache §3.6 demanded
+  is built and is the largest single win in the milestone: **-90% on five
+  image documents** (`image_bug_718762` 837 → 84 ms), keyed `(ObjRef,
+  request)` per SPEC §7, with a **byte-identical** conformance scoreboard —
+  not merely regression-free. `scripts/bench-rss.sh` measures peak RSS against
+  the oracle: **geometric mean 1.20x** against the ≤1.5x target, met on 39 of
+  44 files; the five that miss are image documents where the oracle scales its
+  decode and we materialize, named rather than averaged away. On eviction the
+  C++ answer turned out to be the opposite of what it looks like —
+  `CacheOptimization`'s 15-entry-then-100-MiB policy runs only under
+  `bLimitedImageCache`, **off by default**, so upstream's default is an
+  unbounded *per-page* cache; ours matches that lifetime with a 64 MiB budget
+  on top. An opt-in one-entry mode was built, measured at nothing, and
+  removed — the documents with a memory problem draw one image each. The
+  Arc/clone pass found the walk's per-object path clone and removing it
+  measured inside the noise band, which is the first data point against
+  allocation being the engine half's cost. Still outstanding: the prerequisite
+  M12 could not satisfy — a real `perf` profile of the page-graph walk,
+  without which the `bumpalo` question cannot be asked honestly.
 - **Targets (adjustable):** single-thread geometric mean >= oracle on the
-  bench corpus; >= 3x oracle throughput on multi-page docs with rayon; peak
-  RSS <= 1.5x oracle. Every perf commit re-runs conformance — byte-exact
-  stays byte-exact; the bench ratchet only tightens.
+  bench corpus; >= 3x oracle throughput on multi-page docs with rayon (**met**:
+  3.09x at 4 threads, 6.09x at 16); peak RSS <= 1.5x oracle (**met on the
+  geometric mean at 1.20x**, and on 39 of 44 files — the five image documents
+  that miss are recorded with their cause in M12.md §9.2 rather than averaged
+  away). Every perf commit re-runs conformance — byte-exact stays byte-exact;
+  the bench ratchet only tightens.
 
 ## M13 — Release
 
