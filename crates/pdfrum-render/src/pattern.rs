@@ -296,6 +296,30 @@ fn draw_tiling<B: RasterBackend>(
         return;
     }
 
+    // The C++ chooses between two ways of painting the tiles, and the choice
+    // is only *usually* a performance one. A cell bigger than the clip — or
+    // one whose area exceeds the clip's — is drawn tile by tile straight to
+    // the device, because caching it would mean allocating a buffer larger
+    // than the region it is about to be cropped into. `bug_1693`'s cell is
+    // 102400x12800 device pixels behind a 200x200 clip, so the cached path
+    // cannot allocate it at all and the whole pattern silently paints
+    // nothing.
+    if tiles_one_at_a_time((cell_w, cell_h), (clip.width(), clip.height())) {
+        draw_tiling_per_tile(
+            ctx,
+            device,
+            backend,
+            caches,
+            pattern,
+            &range,
+            pattern_to_device,
+            uncolored,
+            clip,
+            diags,
+        );
+        return;
+    }
+
     let cell = render_cell(
         ctx,
         backend,
@@ -350,6 +374,91 @@ fn draw_tiling<B: RasterBackend>(
         ImageQuality::Nearest,
         1.0,
     );
+}
+
+/// Whether the tiles are drawn one at a time rather than through a cached
+/// cell (`cpdf_rendertiling.cpp:151`).
+///
+/// Either axis larger than the clip's, or a larger area, and the cell is not
+/// worth caching — in the extreme it cannot even be allocated.
+///
+/// The C++'s third arm is **redundant** and is kept only because it is what
+/// the source says: if neither axis exceeds the clip's then neither does the
+/// product, so the area test can never be the one that fires. Reproducing the
+/// spelling costs nothing and keeps the predicate diffable against the C++.
+#[must_use]
+fn tiles_one_at_a_time(cell: (i32, i32), clip: (i32, i32)) -> bool {
+    cell.0 > clip.0
+        || cell.1 > clip.1
+        || i64::from(cell.0) * i64::from(cell.1) > i64::from(clip.0) * i64::from(clip.1)
+}
+
+/// Draw every tile straight to the device, one object list per position.
+///
+/// `CPDF_RenderTiling`'s slow path. There is no cell buffer and nothing is
+/// composited at the end: each tile is a translated render of the pattern's
+/// own objects, clipped to the region the pattern is filling. That makes it
+/// the only way to paint a cell larger than the clip, where allocating the
+/// cell is either impossible or wasteful.
+///
+/// An uncoloured pattern imposes its `scn` colour on every operation inside,
+/// exactly as the cached path does — `CloneObjStates` sets *both* the fill and
+/// the stroke ref to the chosen colour, so a tile's strokes take it too.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the per-tile path needs everything the cached one does, minus \
+              the cell buffer and plus the tile range"
+)]
+fn draw_tiling_per_tile<B: RasterBackend>(
+    ctx: &RenderCtx<'_>,
+    device: &mut B::Device,
+    backend: &B,
+    caches: &mut RenderCaches,
+    pattern: &TilingPattern,
+    range: &pdfrum_page::pattern::TileRange,
+    pattern_to_device: Affine,
+    uncolored: Argb,
+    clip: IntRect,
+    diags: &mut Diagnostics,
+) {
+    let opts = if pattern.colored {
+        crate::options::RenderOptions {
+            force_halftone: true,
+            ..ctx.opts.clone()
+        }
+    } else {
+        ctx.opts.for_uncolored_tile()
+    };
+    let inner = RenderCtx {
+        opts,
+        initial_fill: (!pattern.colored).then_some(uncolored),
+        initial_stroke: (!pattern.colored).then_some(uncolored),
+        std_cs: true,
+        ..ctx.deeper()
+    };
+    let target = clip.to_rect();
+    for row in range.min_row..=range.max_row {
+        for col in range.min_col..=range.max_col {
+            // The tile's offset is a translation in *pattern* space, so it
+            // rides through `pattern.matrix` with the rest of the cell and
+            // needs no rounding of its own — the per-tile path never lands on
+            // an integer pixel grid the way the blitted one does.
+            let offset = Affine::translate((
+                f64::from(col) * f64::from(pattern.x_step),
+                f64::from(row) * f64::from(pattern.y_step),
+            ));
+            crate::walk::render_object_list(
+                &inner,
+                device,
+                backend,
+                caches,
+                &pattern.objects,
+                pattern_to_device * offset,
+                target,
+                diags,
+            );
+        }
+    }
 }
 
 /// One tile's device offset, through the C++'s checked `int` conversion.
@@ -690,6 +799,24 @@ mod tests {
         // twenty pixels and is not enlarged even though one axis is 1.
         assert_eq!(render_size(1, 20), (1, 20));
         assert_eq!(render_size(64, 64), (64, 64));
+    }
+
+    #[test]
+    fn a_cell_bigger_than_its_clip_is_tiled_one_at_a_time() {
+        // A cell that fits inside the clip on both axes and in area takes the
+        // cached path.
+        assert!(!tiles_one_at_a_time((100, 100), (200, 200)));
+        assert!(!tiles_one_at_a_time((200, 200), (200, 200)));
+        // Either axis over is enough.
+        assert!(tiles_one_at_a_time((201, 10), (200, 200)));
+        assert!(tiles_one_at_a_time((10, 201), (200, 200)));
+        // The area arm can never be the one that fires: both axes fitting
+        // implies the product does. Pinned so that a future edit that makes
+        // the axis tests looser has to face the question.
+        assert!(!tiles_one_at_a_time((400, 30), (400, 30)));
+        assert!(!tiles_one_at_a_time((399, 29), (400, 30)));
+        // `bug_1693`'s cell, which cannot be allocated at all.
+        assert!(tiles_one_at_a_time((102_400, 12_800), (200, 200)));
     }
 
     #[test]

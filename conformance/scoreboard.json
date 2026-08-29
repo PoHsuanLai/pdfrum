@@ -1,12 +1,12 @@
 {
-  "generated_at": "2026-08-29T07:06:03Z",
+  "generated_at": "2026-08-29T07:12:21Z",
   "totals": {
     "files": 1675,
-    "pass": 1258,
-    "fail": 417,
+    "pass": 1260,
+    "fail": 415,
     "by_tag": {
       "page-count": 2,
-      "pixel-fail": 383,
+      "pixel-fail": 381,
       "tierA-mismatch": 81
     },
     "text": {
@@ -38037,9 +38037,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999923,
+        "ssim": 0.999948,
         "exact": false,
-        "max_channel_diff": 114,
+        "max_channel_diff": 61,
         "pages": 1
       },
       "notes": ""
@@ -38067,9 +38067,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999923,
+        "ssim": 0.999948,
         "exact": false,
-        "max_channel_diff": 114,
+        "max_channel_diff": 61,
         "pages": 1
       },
       "notes": ""
@@ -40154,10 +40154,8 @@
     },
     {
       "path": "resources/pixel/bug_1693.in",
-      "status": "fail",
-      "tags": [
-        "pixel-fail"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -40177,19 +40175,17 @@
         }
       },
       "tierB": {
-        "ssim": 0.548099,
-        "exact": false,
-        "max_channel_diff": 223,
+        "ssim": 1,
+        "exact": true,
+        "max_channel_diff": 0,
         "pages": 1
       },
-      "notes": "ssim 0.548099 below floor 0.990000"
+      "notes": ""
     },
     {
       "path": "resources/pixel/bug_1693.pdf",
-      "status": "fail",
-      "tags": [
-        "pixel-fail"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -40209,12 +40205,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.548099,
-        "exact": false,
-        "max_channel_diff": 223,
+        "ssim": 1,
+        "exact": true,
+        "max_channel_diff": 0,
         "pages": 1
       },
-      "notes": "ssim 0.548099 below floor 0.990000"
+      "notes": ""
     },
     {
       "path": "resources/pixel/bug_1733.in",
