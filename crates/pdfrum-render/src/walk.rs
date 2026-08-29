@@ -1587,8 +1587,13 @@ fn render_image<B: RasterBackend>(
         .transfer
         .as_ref()
         .map(|t| TransferFunc::new(t));
-    let pixels = to_pixmap(image, fill, transfer.as_ref());
-    if pixels.width() == 0 || pixels.height() == 0 {
+    // The pixmap is the same for every draw of this image at this size, and
+    // producing it is `O(source pixels)` twice over — so the geometry is
+    // settled *first* and the pixels asked for last, from the cache. A
+    // zero-dimension image produces a zero-dimension pixmap, which is what the
+    // old `pixels.width() == 0` guard was testing; asking the image directly
+    // says the same thing without decoding 25 million samples to find out.
+    if image.width == 0 || image.height == 0 {
         return;
     }
     // The image's unit square maps through the object matrix, so the device
@@ -1624,19 +1629,40 @@ fn render_image<B: RasterBackend>(
     );
     // A reduction is low-passed here rather than left to the backend's two-tap
     // kernel, which sees at most two of the many source pixels a shrunken
-    // destination pixel covers.
-    let (pixels, placement) =
-        match crate::stretch::prescale(&pixels, placement, corners.width(), corners.height()) {
-            Some((reduced, t)) => (reduced, t),
-            None => (pixels, placement),
-        };
+    // destination pixel covers. `reduction_for` names the decision `prescale`
+    // makes, in the integers the cache keys on.
+    let reduction =
+        crate::stretch::reduction_for(image.width, image.height, corners.width(), corners.height());
+    let (out_w, out_h) = reduction.unwrap_or((image.width, image.height));
+    let placement = match reduction {
+        Some((new_w, new_h)) => {
+            crate::stretch::reduction_transform(placement, image.width, image.height, new_w, new_h)
+        }
+        None => placement,
+    };
+    // `to_pixmap` and the reduction are pure in `(image, fill, transfer, size)`
+    // and were the largest single cost in the corpus, re-run on every render of
+    // an image that had not changed (`docs/status/M12.md` §3.6). Cached
+    // together, because a caller of one always wants the other: caching the
+    // unreduced pixmap alone would keep the box filter running per draw *and*
+    // hold the larger of the two buffers.
+    let key =
+        crate::imagecache::PixmapRequest::for_image(image, fill, transfer.as_ref(), out_w, out_h);
+    let pixels = caches.images.get_or_render(object.source, key, || {
+        let unreduced = to_pixmap(image, fill, transfer.as_ref());
+        match reduction {
+            Some((new_w, new_h)) => crate::stretch::reduce_to(&unreduced, new_w, new_h),
+            None => unreduced,
+        }
+    });
+    let pixels = &*pixels;
     let blend = overprint_blend(None, &state.general);
     let layered = !matches!(blend, pdfrum_page::BlendMode::Normal);
     if layered {
         device.push_layer(blend, 1.0, None);
     }
     device.draw_image(
-        &pixels,
+        pixels,
         placement,
         effective_quality(quality, placement),
         state.general.fill_alpha,

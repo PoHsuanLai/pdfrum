@@ -44,6 +44,18 @@ impl<'a> TransferFunc<'a> {
         self.inner.identity
     }
 
+    /// The three channels' sample tables, in channel order.
+    ///
+    /// Exposed for [`crate::imagecache::PixmapRequest`], which must put the
+    /// function's *identity* in a cache key: a rendered image is a function of
+    /// these bytes, and two draws under different `/TR` are different pixels.
+    /// A borrow of the tables, digested by the caller — the key owns a `u64`,
+    /// not three quarters of a kilobyte.
+    #[must_use]
+    pub fn samples(&self) -> &[[u8; pdfrum_page::transfer::CHANNEL_SAMPLES]; 3] {
+        &self.inner.samples
+    }
+
     /// Map one colour through the function.
     ///
     /// Alpha is untouched: the transfer function applies to the colour only,

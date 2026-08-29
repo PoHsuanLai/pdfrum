@@ -128,6 +128,18 @@ pub struct RenderCaches {
     /// is drawn at and an outline does not — and because the outline cache
     /// lives in `pdfrum-font`, which has no notion of a device.
     pub glyph_bitmaps: crate::glyph::BitmapCache,
+    /// Rendered images: decoded samples converted to a premultiplied pixmap
+    /// and box-reduced toward their device footprint, keyed by the `XObject`
+    /// they came from and the shape of the request
+    /// ([`crate::imagecache::PixmapRequest`]).
+    ///
+    /// A third cache rather than a field on either of the others because it is
+    /// keyed by neither's key and holds neither's kind of thing: the decoded
+    /// samples upstream of it are `pdfrum-page`'s to cache (SPEC.md §7), and
+    /// what is cached here is the two pure functions *downstream* of those
+    /// samples, which `docs/status/M12.md` §3.6 measured re-running on every
+    /// render of an image that had not changed.
+    pub images: crate::imagecache::RenderedImageCache,
 }
 
 impl RenderCaches {
