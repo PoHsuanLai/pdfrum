@@ -181,6 +181,45 @@ for text and box derivation, `rectangles` for paths, `embedded_images` for the
 last pair is what found the `clone_direct` panic and the `/XObject` lookup
 failure it caused — neither was reachable from a synthesized fixture.
 
+## M8: three image behaviours the pixel burn-down found
+
+Each was implemented, unit-tested, and unreachable — which is the shape a
+crate boundary produces when a decision is recorded rather than applied.
+
+**A row past the end of the stream skips the decode entirely.**
+`CPDF_DIB::GetScanline` picks a source in three arms and then, if it found
+none, fills the *output* buffer with zeros and returns — before
+`TranslateScanline24bpp`, before the stencil inversion. So an absent row is
+literally black, whatever `/Decode` maps a zero sample to. `scanline` now
+reports [`Availability`] with three states rather than a "was padded" bool,
+because *partial* and *absent* are different behaviours and only the second
+one skips the decode. `bug_554151.in` — `/Decode [1.0]` over a 612×104000
+image with a kilobyte of data — painted the whole page red and now paints it
+black, byte-exact.
+
+The arm only exists when the stream is read directly: a JBIG2, JPX, DCT or
+CCITT decoder always returns a full row, so `src_line` is never empty and
+every row decodes. `reads_the_stream_directly` is that gate, and without it a
+truncated JBIG2 mask stops inverting partway down (`bug_674771.in`).
+
+**A `/Mask` array was parsed into a `ColorKey` nothing ever asked.**
+`ImageMask::alpha_at` returned 255 for the colour-key arm unconditionally —
+and it had to, because the predicate is on the *raw samples* and by draw time
+those are gone. PDFium runs it inside `GetScanline`, filling a parallel buffer
+whose alpha byte is `IsColorIndexOutOfBounds(...) ? 0xFF : 0` — in range means
+*transparent*, which reads backwards until you notice the predicate is named
+for the opposite. `resolve_color_key` now turns it into an alpha plane at
+decode time and the renderer sees an ordinary mask. Three files byte-exact.
+
+**A JPX image under an `/Indexed` space was dropping its palette.** The
+decoder was correctly asked for raw indices (`JpxAction::UseIndexed`), and
+then the result became `Pixels::Gray8` and reached the page as grey. The
+indices also need `>> (8 - bpc)`, because the decoder hands back eight-bit
+samples whatever the dictionary's `/BitsPerComponent` says —
+`cpdf_dib.cpp:698-706`. `jpxdecode_indexed2.in` is byte-exact;
+`jpxdecode_indexed.in` improved but still differs, and the residual is in the
+codestream decode rather than in this path.
+
 ## Not yet exercised
 
 Three areas are implemented and unit-tested but have no pixel-level
