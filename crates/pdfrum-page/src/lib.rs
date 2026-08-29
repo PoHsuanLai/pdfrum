@@ -78,7 +78,7 @@ pub use image::{
 pub use ops::{
     FillRule, InlineImage, LineCap, LineJoin, MarkProperties, Op, TextItem, TextRenderMode,
 };
-pub use optional::{OcContext, UsageType};
+pub use optional::{OcContext, UsageType, Visibility, page_visibility};
 pub use page::{
     Content, DEFAULT_MEDIA_BOX, FormObject, ImageObject, Page, PageObject, PathObject, Rotation,
     ShadingObject, TextObject, TextSegment, derive_boxes, is_valid_page_dict,
@@ -100,8 +100,8 @@ pub use type3::Type3Metrics;
 /// are page-content-specific and no other crate spells them.
 pub(crate) mod names {
     pub(crate) use pdfrum_object::names::{
-        BITS_PER_COMPONENT, CROP_BOX, DECODE_PARMS, FILTER, MEDIA_BOX, RESOURCES, ROTATE, SUBTYPE,
-        TR, TYPE,
+        BITS_PER_COMPONENT, CROP_BOX, DECODE_PARMS, FILTER, MEDIA_BOX, OC, RESOURCES, ROTATE,
+        SUBTYPE, TR, TYPE,
     };
     pdfrum_object::names! {
         /// An image's or shading's colour space (`/ColorSpace`).
