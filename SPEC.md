@@ -1157,3 +1157,5 @@ C++ file references); **Divergences** (where we deliberately differ and why);
 (which C++ unittest assertions port, snapshot/fuzz/conformance clusters);
 **Open questions** (resolved before implementation or escalated to the user).
 A brief that proposes changing this spec triggers §0.
+
+Orchestrator affirmation 2026-08-30: pdfrum-edit divergence D17 accepted — metadata encryption follows /EncryptMetadata; the C++'s unconditional skip is a destructive upstream writer bug and is not reproduced.
