@@ -285,6 +285,11 @@ mod tests {
     }
 
     #[test]
+    #[expect(
+        clippy::float_cmp,
+        reason = "entering a group writes the literal 1.0; exact equality is \
+                  what pins that the alpha was reset rather than scaled"
+    )]
     fn entering_a_group_clears_what_it_already_consumed() {
         let mut state = GraphicsState::default();
         state.general.fill_alpha = 0.25;
