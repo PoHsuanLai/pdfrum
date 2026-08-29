@@ -19,6 +19,36 @@
 //! ports PDFium's rectangle snapping and zero-area detection instead, which
 //! removes the bulk of the cases, and the harness turns a residual drop into
 //! a hard failure rather than a quiet drift.
+//!
+//! ```
+//! use kurbo::{Affine, Rect};
+//! use pdfrum_render::{AntiAlias, Brush, FillRule, RasterBackend, RenderDevice};
+//! use pdfrum_raster_tinyskia::TinySkiaBackend;
+//!
+//! let backend = TinySkiaBackend::new();
+//! let mut device = backend.new_target(8, 8, peniko::Color::WHITE);
+//!
+//! // A hard-edged rect clip, which is what an axis-aligned `re W n` becomes.
+//! device.push_clip_rect(Rect::new(0.0, 0.0, 4.0, 8.0));
+//! let mut square = kurbo::BezPath::new();
+//! square.move_to((0.0, 0.0));
+//! square.line_to((8.0, 0.0));
+//! square.line_to((8.0, 8.0));
+//! square.line_to((0.0, 8.0));
+//! square.close_path();
+//! device.fill_path(
+//!     &square,
+//!     Affine::IDENTITY,
+//!     &Brush::Solid(peniko::Color::from_rgba8(255, 0, 0, 255)),
+//!     FillRule::Winding,
+//!     AntiAlias::Off,
+//! );
+//! device.pop();
+//!
+//! let pixmap = backend.finish(device);
+//! assert_eq!(pixmap.pixel(1, 1), Some([255, 0, 0, 255]), "inside the clip");
+//! assert_eq!(pixmap.pixel(6, 1), Some([255, 255, 255, 255]), "outside it");
+//! ```
 
 #![forbid(unsafe_code)]
 
