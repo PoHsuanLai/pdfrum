@@ -619,8 +619,15 @@ fn save_round_trip(args: &SaveArgs) -> Result<ExitCode> {
         totals.saved,
         percent(totals.reopen_rate())
     );
+    println!("  saved renders as well as the original (fidelity)");
     println!(
-        "  re-render within Tier-B floor {} / {}  {}",
+        "                                {} / {}  {}",
+        totals.matches_original,
+        totals.compared,
+        percent(totals.fidelity_rate())
+    );
+    println!(
+        "  saved clears the Tier-B floor {} / {}  {}",
         totals.within_floor,
         totals.compared,
         percent(totals.pixel_rate())
@@ -634,7 +641,12 @@ fn save_round_trip(args: &SaveArgs) -> Result<ExitCode> {
 
     let mut failures: Vec<&saveroundtrip::SaveOutcome> = outcomes
         .iter()
-        .filter(|o| o.saved && (!o.oracle_reopened || !o.within_floor))
+        // Only a real loss is a failure: a file below the floor whose
+        // original renders the same has cost the save nothing.
+        .filter(|o| {
+            o.saved
+                && (!o.oracle_reopened || !o.matches_original || o.incremental_ok == Some(false))
+        })
         .collect();
     failures.sort_by(|a, b| a.path.cmp(&b.path));
     for outcome in failures.iter().take(triage::EXAMPLES) {
