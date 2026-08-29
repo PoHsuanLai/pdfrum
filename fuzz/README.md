@@ -159,9 +159,10 @@ Two seeds are **regression seeds** — inputs that crashed during this
 workspace's own bring-up, kept so they are re-run forever:
 `seeds/crypt_encrypt_dict/regression_int_range` and
 `seeds/filters_chain/regression_int_range` (see below), plus
-`seeds/parser_xref/offset_past_eof` and `seeds/parser_xref/freed_objstm_archive`,
-which are not bugs but pin the two damage-tolerant behaviours the
-`parser_xref` target documents it does *not* assert against.
+`seeds/parser_xref/offset_past_eof`, `seeds/parser_xref/freed_objstm_archive`
+and `seeds/filters_chain/regression_chain_amplifies`, which are not bugs but
+pin damage-tolerant behaviours their targets document they do *not* assert
+against.
 
 ## Bugs this ring has found
 
@@ -182,3 +183,25 @@ sign. `parse_int` now reproduces both, and `syntax.rs`'s
 Saturating was the more dangerous of the two behaviours, which is why it is
 worth spelling out: it turns an absurd `/Columns` into a merely enormous one,
 where folding to zero turns it into nothing at all.
+
+## Assertions this ring got wrong
+
+Not every crash is a bug in a crate; some are a target claiming a property the
+library never promised. Three have been corrected so far — two during target
+authoring, and one from the 24h gate:
+
+**`filters_chain` asserted a whole-chain output cap that does not exist**
+(corrected 2026-08-29, from the M1 gate). The target read
+`Limits::max_decoded_stream_len` as a ceiling on `decode_chain`'s output. It is
+not one: only Flate and LZW consult it. The filters brief's divergence D2
+(`docs/design/pdfrum-filters.md`) makes RunLength's 20 MiB `kMaxStreamSize` a
+*separate* filter-specific constant on purpose, because that cap is a rejection
+PDFium really performs and files depend on it, and the ASCII filters have no
+cap at all — `ASCII85Decode`'s `z` even spells four bytes in one.
+
+So chains amplify, and `/Filter [/FlateDecode /RL /RL /RL /RL]` took 210 raw
+bytes to 7,450,260 with every stage inside its own limit. The target now walks
+the decoder list and composes each stage's real ceiling
+(`chain_ceiling`) rather than asserting one constant, which still catches a
+stage that ignores its own cap. Kept as
+`seeds/filters_chain/regression_chain_amplifies`.

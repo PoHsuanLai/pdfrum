@@ -79,7 +79,7 @@ forever:
 | `filters_chain/regression_int_range` | the same bug, reached through `/Columns 999999999999999999999999` |
 | `parser_xref/offset_past_eof` | *not* a bug — an xref offset outside the file, which the table stores by design |
 | `parser_xref/freed_objstm_archive` | *not* a bug — an object-stream archive a later section freed, dropping the flag |
+| `filters_chain/regression_chain_amplifies` | *not* a bug — `/Filter [/FlateDecode /RL /RL /RL /RL]` turning 210 bytes into 7.4 MB, every stage inside its own cap |
 
-The last two are kept because they are the inputs that taught the
-`parser_xref` target which two properties it must **not** assert; see its
-module docs.
+The last three are kept because they are the inputs that taught their targets
+which properties they must **not** assert; see those targets' module docs.
