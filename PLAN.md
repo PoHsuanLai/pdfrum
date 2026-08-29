@@ -335,7 +335,11 @@ Both lessons are written down where the next person will meet them.
   M12 could not satisfy — a real `perf` profile of the page-graph walk,
   without which the `bumpalo` question cannot be asked honestly.
 - **Targets (adjustable):** single-thread geometric mean >= oracle on the
-  bench corpus; >= 3x oracle throughput on multi-page docs with rayon (**met**:
+  bench corpus — **not met: 3.58x** (docs/status/M12.md §1.7 has the per-class
+  table; `shading` is 1.09x and `vector_paths_1751` 0.46x on the winning end,
+  `image` at 9.38x is the suite measuring our cold cache against the oracle's
+  warm one and is a benchmark defect §9.1 already corrected in the engine);
+  >= 3x oracle throughput on multi-page docs with rayon (**met**:
   3.09x at 4 threads, 6.09x at 16); peak RSS <= 1.5x oracle (**met on the
   geometric mean at 1.20x**, and on 39 of 44 files — the five image documents
   that miss are recorded with their cause in M12.md §9.2 rather than averaged
