@@ -1,12 +1,12 @@
 {
-  "generated_at": "2026-08-29T11:38:26Z",
+  "generated_at": "2026-08-29T11:48:52Z",
   "totals": {
     "files": 1675,
-    "pass": 1483,
-    "fail": 192,
+    "pass": 1484,
+    "fail": 191,
     "by_tag": {
       "page-count": 2,
-      "pixel-fail": 152,
+      "pixel-fail": 151,
       "tierA-mismatch": 81
     },
     "text": {
@@ -12311,12 +12311,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.925062,
+        "ssim": 0.944187,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.925062 below floor 0.990000"
+      "notes": "ssim 0.944187 below floor 0.990000"
     },
     {
       "path": "corpus/fx/other/8.1_viewer_preferences.pdf",
@@ -12909,12 +12909,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.914484,
+        "ssim": 0.985468,
         "exact": false,
-        "max_channel_diff": 255,
+        "max_channel_diff": 235,
         "pages": 1
       },
-      "notes": "ssim 0.914484 below floor 0.990000"
+      "notes": "ssim 0.985468 below floor 0.990000"
     },
     {
       "path": "corpus/fx/path/edit_getdash.pdf",
@@ -13373,12 +13373,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.955768,
+        "ssim": 0.988909,
         "exact": false,
-        "max_channel_diff": 255,
+        "max_channel_diff": 127,
         "pages": 1
       },
-      "notes": "ssim 0.955768 below floor 0.990000"
+      "notes": "ssim 0.988909 below floor 0.990000"
     },
     {
       "path": "corpus/fx/path/pentagon.pdf",
@@ -20766,10 +20766,8 @@
     },
     {
       "path": "corpus/third_party/tcpdf/example_026.pdf",
-      "status": "fail",
-      "tags": [
-        "pixel-fail"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -20789,12 +20787,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.888240,
+        "ssim": 0.998808,
         "exact": false,
-        "max_channel_diff": 255,
+        "max_channel_diff": 194,
         "pages": 1
       },
-      "notes": "ssim 0.888240 below floor 0.990000"
+      "notes": ""
     },
     {
       "path": "corpus/third_party/tcpdf/example_027.pdf",

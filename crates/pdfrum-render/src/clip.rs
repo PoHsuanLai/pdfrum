@@ -14,8 +14,11 @@
 //!   the whole text object and intersected once.
 
 use kurbo::{Affine, BezPath, Rect, Shape};
+use pdfrum_font::GlyphCache;
 use pdfrum_page::ClipStack;
-use pdfrum_page::state::ClipEntry;
+use pdfrum_page::state::{ClipEntry, TextClipRun};
+
+use crate::options::RenderOptions;
 
 use crate::device::{FillRule, RenderDevice};
 use crate::path::{outer_rect, path_rect};
@@ -44,13 +47,68 @@ fn is_degenerate(path: &BezPath) -> bool {
     !b.width().is_finite() || !b.height().is_finite() || b.width() <= 0.0 || b.height() <= 0.0
 }
 
+/// One clipping run's glyph outlines, in device space.
+///
+/// Placed through the same [`crate::text::place_glyphs`] that draws the run,
+/// which is the whole point of holding the run rather than its outlines: the
+/// advances, the kerning, the word and character spacing and the substituted
+/// font's width solve are one implementation, so the shape that clips is the
+/// shape that would have been painted.
+///
+/// The placement is **fractional**. `ProcessText`'s snapping gate is
+/// `if (is_clip || is_stroke)`, and `is_clip` is true for exactly this caller:
+/// `ProcessClipPath` passes a `clipping_path` where the painting pass passes
+/// `nullptr` (`cpdf_renderstatus.cpp:573-581` against `:312`). So a `Tr 4`
+/// run's *painted* glyphs snap to the blit grid and the *same* run's clipping
+/// glyphs do not, and asking for `subpixel_text_positioning` here is how that
+/// is spelled.
+fn text_clip_glyphs(
+    run: &TextClipRun,
+    glyphs: &mut GlyphCache,
+    opts: &RenderOptions,
+    to_device: Affine,
+) -> Vec<BezPath> {
+    let state = pdfrum_page::GraphicsState {
+        text: pdfrum_page::TextState {
+            char_space: run.char_space,
+            word_space: run.word_space,
+            ..pdfrum_page::TextState::default()
+        },
+        ..pdfrum_page::GraphicsState::default()
+    };
+    let opts = RenderOptions {
+        subpixel_text_positioning: true,
+        ..opts.clone()
+    };
+    // `clip: true` with no fill and no stroke: the run contributes its
+    // outlines and paints nothing, which is what this pass is.
+    let kinds = crate::text::TextPaintKinds {
+        fill: false,
+        stroke: false,
+        clip: true,
+    };
+    crate::text::place_glyphs(&run.object, &state, glyphs, to_device, &opts, kinds)
+        .iter()
+        .map(crate::text::PlacedGlyph::device_path)
+        .collect()
+}
+
 /// Reduce a clip stack to the device calls it becomes.
 ///
 /// Entries are outermost first and intersect; the device's own stack does the
 /// intersecting, so this is a straight translation. Every returned clip must
 /// be matched by one [`RenderDevice::pop`].
+///
+/// The glyph cache is taken because a text clip holds *runs*: turning one into
+/// the outlines it clips with is the same placement the painting pass runs,
+/// and it wants the same cache.
 #[must_use]
-pub fn resolve(clip: &ClipStack, to_device: Affine) -> Vec<Clip> {
+pub fn resolve(
+    clip: &ClipStack,
+    to_device: Affine,
+    glyphs: &mut GlyphCache,
+    opts: &RenderOptions,
+) -> Vec<Clip> {
     let mut out = Vec::with_capacity(clip.len());
     for entry in clip.entries() {
         match entry {
@@ -78,12 +136,17 @@ pub fn resolve(clip: &ClipStack, to_device: Affine) -> Vec<Clip> {
                     None => out.push(Clip::Path(to_device * path.clone(), rule)),
                 }
             }
-            ClipEntry::Text { glyphs } => {
-                // The glyph outlines union within one entry: a single path
-                // carrying every glyph, filled non-zero.
+            ClipEntry::Text { runs } => {
+                // Every glyph of every run in the batch unions into one path,
+                // filled non-zero and applied once — `ProcessClipPath`
+                // accumulates into a single `CFX_Path` across the batch and
+                // calls `SetClip_PathFill` when the terminator arrives
+                // (`cpdf_renderstatus.cpp:573-595`).
                 let mut union = BezPath::new();
-                for g in glyphs {
-                    union.extend(to_device * g.clone());
+                for run in runs {
+                    for glyph in text_clip_glyphs(run, glyphs, opts, to_device) {
+                        union.extend(glyph);
+                    }
                 }
                 if union.elements().is_empty() {
                     // A text clip that produced no outlines still clips: an
@@ -156,7 +219,7 @@ mod tests {
     fn empty_path_is_the_offscreen_rect() {
         let mut stack = ClipStack::new();
         stack.push_empty();
-        let clips = resolve(&stack, Affine::IDENTITY);
+        let clips = resolve_bare(&stack);
         assert_eq!(clips.as_slice(), &[Clip::Rect(EMPTY_CLIP_RECT)]);
         // It is a real 1x1 rectangle off the top left, not an empty one.
         #[expect(
@@ -174,7 +237,7 @@ mod tests {
     fn an_axis_aligned_rect_clips_hard_edged_and_snapped() {
         let mut stack = ClipStack::new();
         stack.push_path(rect_path(1.2, 2.7, 5.4, 8.1), false);
-        let clips = resolve(&stack, Affine::IDENTITY);
+        let clips = resolve_bare(&stack);
         // Snapped to the *outer* integer rect, and a Rect rather than a Path
         // so the device takes its hard-edged method.
         assert_eq!(
@@ -191,34 +254,69 @@ mod tests {
         curved.close_path();
         let mut stack = ClipStack::new();
         stack.push_path(curved, true);
-        let clips = resolve(&stack, Affine::IDENTITY);
+        let clips = resolve_bare(&stack);
         assert!(matches!(
             clips.first(),
             Some(Clip::Path(_, FillRule::EvenOdd))
         ));
     }
 
-    #[test]
-    fn text_clips_union_their_glyphs() {
-        let mut stack = ClipStack::new();
-        assert!(stack.push_text(vec![
-            rect_path(0.0, 0.0, 2.0, 2.0),
-            rect_path(8.0, 0.0, 10.0, 2.0)
-        ]));
-        let clips = resolve(&stack, Affine::IDENTITY);
-        let Some(Clip::Path(p, rule)) = clips.first() else {
-            panic!("expected a path clip")
-        };
-        assert_eq!(*rule, FillRule::Winding);
-        let b = p.bounding_box();
-        assert_eq!((b.x0, b.x1), (0.0, 10.0), "both glyphs are in one path");
+    /// A clipping run showing `text` at `x`, in stock Helvetica at 20 pt.
+    fn text_run(text: &[u8], x: f64) -> TextClipRun {
+        let font = std::sync::Arc::new(pdfrum_font::Font::load_standard(
+            pdfrum_font::StandardFont::Helvetica,
+            &pdfrum_font::FontCache::default(),
+        ));
+        TextClipRun {
+            object: pdfrum_page::TextObject {
+                segments: Box::new([pdfrum_page::TextSegment {
+                    codes: text.to_vec().into_boxed_slice(),
+                    kerning: 0.0,
+                }]),
+                position: kurbo::Point::new(x, 0.0),
+                matrix: Affine::IDENTITY,
+                font: Some((font, 20.0)),
+                render_mode: pdfrum_page::TextRenderMode::Clip,
+                type3_metrics: std::collections::BTreeMap::new(),
+            },
+            char_space: 0.0,
+            word_space: 0.0,
+        }
+    }
+
+    fn resolve_bare(stack: &ClipStack) -> Vec<Clip> {
+        let mut glyphs = pdfrum_font::GlyphCache::default();
+        resolve(
+            stack,
+            Affine::IDENTITY,
+            &mut glyphs,
+            &RenderOptions::default(),
+        )
     }
 
     #[test]
+    fn text_clips_union_every_run_in_the_batch_into_one_path() {
+        let mut stack = ClipStack::new();
+        assert!(stack.push_text(vec![text_run(b"H", 0.0), text_run(b"H", 100.0)]));
+        let clips = resolve_bare(&stack);
+        let Some(Clip::Path(p, rule)) = clips.first() else {
+            panic!("expected a path clip, got {clips:?}")
+        };
+        assert_eq!(*rule, FillRule::Winding);
+        let b = p.bounding_box();
+        // One path spanning both runs: the far one is 100 units away, so the
+        // union is far wider than either glyph.
+        assert!(b.x0 < 5.0 && b.x1 > 100.0, "one path over both runs: {b:?}");
+        assert_eq!(clips.len(), 1, "the batch is one clip, not one per run");
+    }
+
+    /// A run that places no glyph at all still clips, and clips *everything*
+    /// out: an empty text-clipping path is not an absent one.
+    #[test]
     fn an_empty_text_clip_still_clips_everything_out() {
         let mut stack = ClipStack::new();
-        assert!(stack.push_text(vec![BezPath::new()]));
-        let clips = resolve(&stack, Affine::IDENTITY);
+        assert!(stack.push_text(vec![text_run(b"", 0.0)]));
+        let clips = resolve_bare(&stack);
         assert_eq!(clips.as_slice(), &[Clip::Rect(EMPTY_CLIP_RECT)]);
     }
 
@@ -227,7 +325,7 @@ mod tests {
         let mut stack = ClipStack::new();
         stack.push_path(rect_path(0.0, 0.0, 10.0, 10.0), false);
         stack.push_path(rect_path(5.0, 5.0, 20.0, 20.0), false);
-        let clips = resolve(&stack, Affine::IDENTITY);
+        let clips = resolve_bare(&stack);
         let b = device_bounds(&clips).expect("bounded");
         assert_eq!((b.x0, b.y0, b.x1, b.y1), (5.0, 5.0, 10.0, 10.0));
     }
@@ -244,13 +342,25 @@ mod tests {
         // A 90-degree turn keeps it axis-aligned, so it stays a rect clip.
         let quarter = Affine::new([0.0, 1.0, -1.0, 0.0, 0.0, 0.0]);
         assert!(matches!(
-            resolve(&stack, quarter).first(),
+            resolve(
+                &stack,
+                quarter,
+                &mut pdfrum_font::GlyphCache::default(),
+                &RenderOptions::default()
+            )
+            .first(),
             Some(Clip::Rect(_))
         ));
         // A 45-degree one does not.
         let eighth = Affine::rotate(std::f64::consts::FRAC_PI_4);
         assert!(matches!(
-            resolve(&stack, eighth).first(),
+            resolve(
+                &stack,
+                eighth,
+                &mut pdfrum_font::GlyphCache::default(),
+                &RenderOptions::default()
+            )
+            .first(),
             Some(Clip::Path(..))
         ));
     }

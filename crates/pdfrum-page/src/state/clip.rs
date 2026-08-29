@@ -25,12 +25,36 @@ pub enum ClipEntry {
         /// Whether the even-odd rule applies.
         even_odd: bool,
     },
-    /// A batch of glyph outlines contributed by a text object in a clipping
-    /// render mode.
+    /// One batch of text objects shown in a clipping render mode, between a
+    /// `BT` and the `ET` that closed it.
+    ///
+    /// The *objects*, not their outlines, because turning a run into glyph
+    /// outlines needs the placement arithmetic — advances, kerning, word and
+    /// character spacing, the substituted-font width solve — that lives in the
+    /// renderer beside the code that draws the same run normally. Upstream
+    /// keeps `CPDF_TextObject`s here for the same reason and calls
+    /// `ProcessText` on each at clip time (`cpdf_renderstatus.cpp:573-582`);
+    /// deriving them twice, once for painting and once for clipping, is how
+    /// the two would drift apart.
     Text {
-        /// The glyph outlines.
-        glyphs: Vec<BezPath>,
+        /// The runs, in the order they were shown.
+        runs: Vec<TextClipRun>,
     },
+}
+
+/// One text run held for clipping, with the state its placement needs.
+///
+/// Character and word spacing are graphics state rather than properties of the
+/// object, and a `Tc` or `Tw` between two runs applies to the second only, so
+/// each run carries the values that were live when it was shown.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TextClipRun {
+    /// The run itself.
+    pub object: crate::TextObject,
+    /// `Tc` when the run was shown.
+    pub char_space: f32,
+    /// `Tw` when the run was shown.
+    pub word_space: f32,
 }
 
 /// The clipping state: an ordered list of contributions to intersect.
@@ -87,16 +111,19 @@ impl ClipStack {
         self.entries.push(ClipEntry::Path { path, even_odd });
     }
 
-    /// Add a batch of glyph outlines.
+    /// Add a batch of clipping text runs.
     ///
     /// Returns whether the batch was kept: a batch taking the total past
-    /// [`MAX_TEXT_OBJECTS`] is **dropped whole**, not truncated.
-    pub fn push_text(&mut self, glyphs: Vec<BezPath>) -> bool {
-        if self.text_objects + glyphs.len() > MAX_TEXT_OBJECTS {
+    /// [`MAX_TEXT_OBJECTS`] is **dropped whole**, not truncated
+    /// (`CPDF_ClipPath::AppendTexts`, `cpdf_clippath.cpp:104-112`) — and the
+    /// caller's list is cleared either way, so a refused batch does not
+    /// re-offer itself at the next `ET`.
+    pub fn push_text(&mut self, runs: Vec<TextClipRun>) -> bool {
+        if self.text_objects + runs.len() > MAX_TEXT_OBJECTS {
             return false;
         }
-        self.text_objects += glyphs.len();
-        self.entries.push(ClipEntry::Text { glyphs });
+        self.text_objects += runs.len();
+        self.entries.push(ClipEntry::Text { runs });
         true
     }
 
@@ -119,12 +146,23 @@ impl ClipStack {
         for entry in &self.entries {
             let rect = match entry {
                 ClipEntry::Path { path, .. } => path.bounding_box(),
-                // A text layer's contribution is the *union* of its glyphs;
-                // the layers then intersect.
-                ClipEntry::Text { glyphs } => {
+                // A text layer's contribution is the *union* of its runs; the
+                // layers then intersect.
+                //
+                // A run contributes only its **origin**, because that is the
+                // only geometry an unplaced run has: the glyph outlines come
+                // into existence when a renderer places them, and this entry
+                // deliberately holds the run instead. So the box under-reports
+                // a text clip, and the renderer must not use it to cull —
+                // which it does not: `clip::resolve` reads `entries()` and
+                // nothing in `pdfrum-render` calls this at all. It answers the
+                // page-graph question "where does this clip start", and a
+                // caller wanting the ink must place the runs.
+                ClipEntry::Text { runs } => {
                     let mut union: Option<Rect> = None;
-                    for g in glyphs {
-                        let b = g.bounding_box();
+                    for run in runs {
+                        let p = run.object.position;
+                        let b = Rect::new(p.x, p.y, p.x, p.y);
                         union = Some(union.map_or(b, |u| u.union(b)));
                     }
                     union?
@@ -184,11 +222,30 @@ mod tests {
         reason = "test fixtures quote oracle vectors verbatim and compare exactly"
     )]
 
-    use super::{ClipStack, MAX_TEXT_OBJECTS};
+    use super::{ClipStack, MAX_TEXT_OBJECTS, TextClipRun};
     use kurbo::{BezPath, Rect, Shape};
 
     fn rect_path(x0: f64, y0: f64, x1: f64, y1: f64) -> BezPath {
         Rect::new(x0, y0, x1, y1).to_path(0.1)
+    }
+
+    /// A clipping run that shows nothing, at `(x, y)`.
+    ///
+    /// The cap and the bounds are the only things these tests ask of a run,
+    /// and both read its position rather than its glyphs.
+    fn run_at(x: f64, y: f64) -> TextClipRun {
+        TextClipRun {
+            object: crate::TextObject {
+                segments: Box::new([]),
+                position: kurbo::Point::new(x, y),
+                matrix: kurbo::Affine::IDENTITY,
+                font: None,
+                render_mode: crate::ops::TextRenderMode::Clip,
+                type3_metrics: std::collections::BTreeMap::new(),
+            },
+            char_space: 0.0,
+            word_space: 0.0,
+        }
     }
 
     #[test]
@@ -215,28 +272,26 @@ mod tests {
     #[test]
     fn a_text_batch_past_the_cap_is_dropped_whole() {
         let mut stack = ClipStack::new();
-        let glyph = || rect_path(0.0, 0.0, 1.0, 1.0);
+        let run = || run_at(0.0, 0.0);
         // Exactly the cap fits.
-        let batch: Vec<_> = std::iter::repeat_with(glyph)
-            .take(MAX_TEXT_OBJECTS)
-            .collect();
+        let batch: Vec<_> = std::iter::repeat_with(run).take(MAX_TEXT_OBJECTS).collect();
         assert!(stack.push_text(batch));
         assert_eq!(stack.len(), 1);
         // One more is refused, and nothing is truncated in.
-        assert!(!stack.push_text(vec![glyph()]));
+        assert!(!stack.push_text(vec![run()]));
         assert_eq!(stack.len(), 1);
     }
 
     #[test]
     fn a_batch_that_would_overflow_is_refused_before_any_of_it_lands() {
         let mut stack = ClipStack::new();
-        let glyph = || rect_path(0.0, 0.0, 1.0, 1.0);
-        let batch: Vec<_> = std::iter::repeat_with(glyph)
+        let run = || run_at(0.0, 0.0);
+        let batch: Vec<_> = std::iter::repeat_with(run)
             .take(MAX_TEXT_OBJECTS - 1)
             .collect();
         assert!(stack.push_text(batch));
         // Two more would make 1025: the whole batch is dropped.
-        assert!(!stack.push_text(vec![glyph(), glyph()]));
+        assert!(!stack.push_text(vec![run(), run()]));
         assert_eq!(stack.len(), 1);
     }
 
@@ -258,15 +313,12 @@ mod tests {
     #[test]
     fn text_layers_union_within_and_intersect_between() {
         let mut stack = ClipStack::new();
-        // One layer covering two far-apart glyphs unions to a wide box.
-        stack.push_text(vec![
-            rect_path(0.0, 0.0, 10.0, 10.0),
-            rect_path(90.0, 0.0, 100.0, 10.0),
-        ]);
+        // One layer covering two far-apart runs unions to a wide box.
+        stack.push_text(vec![run_at(0.0, 0.0), run_at(100.0, 0.0)]);
         let bounds = stack.bounds().expect("bounds");
         assert!((bounds.width() - 100.0).abs() < 1.0);
         // A second layer intersects with the first.
-        stack.push_text(vec![rect_path(0.0, 0.0, 20.0, 10.0)]);
+        stack.push_text(vec![run_at(0.0, 0.0), run_at(20.0, 0.0)]);
         let bounds = stack.bounds().expect("bounds");
         assert!(bounds.width() <= 21.0);
     }

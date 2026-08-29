@@ -424,7 +424,7 @@ pub fn render_object<B: RasterBackend>(
     diags: &mut Diagnostics,
 ) {
     let state = object.state();
-    let clips = clip::resolve(&state.clip, to_device);
+    let clips = clip::resolve(&state.clip, to_device, &mut caches.glyphs, &ctx.opts);
     let pushed = clip::push(device, &clips);
 
     let initial_alpha = ctx.initial_fill.map_or(1.0, |_| 1.0);
