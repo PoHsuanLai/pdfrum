@@ -64,7 +64,6 @@ fn filled(path: BezPath, rgb: [f32; 3]) -> PageObject {
         state,
         marks: ContentMarks::new(),
         content_stream: 0,
-        pattern: None,
     }))
 }
 
@@ -82,7 +81,6 @@ fn stroked(path: BezPath, rgb: [f32; 3], width: f32) -> PageObject {
         state,
         marks: ContentMarks::new(),
         content_stream: 0,
-        pattern: None,
     }))
 }
 
@@ -300,7 +298,6 @@ fn a_clipped_fill_stops_at_the_clip() {
         state,
         marks: ContentMarks::new(),
         content_stream: 0,
-        pattern: None,
     }))];
     let (vello, tiny) = render_both(&page(12.0, 12.0, objects), &RenderOptions::default());
     for p in [&vello, &tiny] {
@@ -339,7 +336,6 @@ fn an_axial_shading_paints_a_ramp_identically_on_both_backends() {
         state: GraphicsState::default(),
         marks: ContentMarks::new(),
         content_stream: 0,
-        pattern: None,
     }))];
     let (vello, tiny) = render_both(&page(16.0, 8.0, objects), &RenderOptions::default());
     assert_eq!(
@@ -370,7 +366,6 @@ fn a_form_renders_the_children_the_page_graph_gave_it() {
         state: GraphicsState::default(),
         marks: ContentMarks::new(),
         content_stream: 0,
-        pattern: None,
     }));
     let (vello, tiny) = render_both(&page(12.0, 8.0, vec![form]), &RenderOptions::default());
     for p in [&vello, &tiny] {
@@ -404,7 +399,6 @@ fn a_translucent_fill_blends_with_the_background() {
         state,
         marks: ContentMarks::new(),
         content_stream: 0,
-        pattern: None,
     }))];
     let (vello, tiny) = render_both(&page(8.0, 8.0, objects), &RenderOptions::default());
     for p in [&vello, &tiny] {
@@ -459,7 +453,6 @@ fn invisible_text_paints_nothing() {
         state: GraphicsState::default(),
         marks: ContentMarks::new(),
         content_stream: 0,
-        pattern: None,
     }));
     let (vello, tiny) = render_both(&page(8.0, 8.0, vec![object]), &RenderOptions::default());
     assert_eq!(vello.pixel(4, 4), Some([255, 255, 255, 255]));
@@ -486,4 +479,199 @@ fn a_page_with_many_objects_stays_deterministic_across_runs() {
         first, second,
         "the pinned SIMD level makes runs reproducible"
     );
+}
+
+/// A page object filled with a pattern colour, the pattern already loaded.
+///
+/// This is what `pdfrum-page` hands the walk after `/Pattern cs … scn`: a
+/// colour whose space is `/Pattern` and whose value carries the loaded
+/// pattern, so nothing at render time needs a resolver.
+fn pattern_filled(path: BezPath, pattern: pdfrum_page::Pattern, operands: &[f32]) -> PageObject {
+    let mut state = GraphicsState::default();
+    state
+        .fill
+        .set_space(std::sync::Arc::new(ColorSpace::Pattern(Box::new(
+            pdfrum_page::color::PatternSpace {
+                base: Some(Box::new(ColorSpace::DeviceRgb)),
+            },
+        ))));
+    state.fill.set_pattern(
+        pdfrum_object::Name::from("P0"),
+        operands,
+        Some(std::sync::Arc::new(pattern)),
+    );
+    PageObject::Path(Box::new(Content {
+        object: PathObject {
+            path,
+            matrix: Affine::IDENTITY,
+            fill_rule: FillRule::Winding,
+            stroke: false,
+        },
+        state,
+        marks: ContentMarks::new(),
+        content_stream: 0,
+    }))
+}
+
+/// A tiling pattern whose cell paints one solid square.
+fn solid_tile(
+    step: f32,
+    colored: bool,
+    cell_rgb: [f32; 3],
+    matrix: Affine,
+) -> pdfrum_page::TilingPattern {
+    // The cell paints the left half of its own bbox, so a tiled fill is
+    // visibly striped rather than uniform and a missing tile is detectable.
+    pdfrum_page::TilingPattern {
+        colored,
+        x_step: step,
+        y_step: step,
+        bbox: Rect::new(0.0, 0.0, f64::from(step), f64::from(step)),
+        matrix,
+        resources: None,
+        content: pdfrum_object::ByteSpan::empty(),
+        objects: vec![filled(
+            rect_path(0.0, 0.0, f64::from(step) / 2.0, f64::from(step)),
+            cell_rgb,
+        )],
+    }
+}
+
+#[test]
+fn a_coloured_tiling_pattern_paints_its_cell_across_the_fill() {
+    // Four-pixel tiles whose left half is red: columns 0-1 red, 2-3 white,
+    // repeating. Nothing about that pattern can come out of the ordinary
+    // fill path, which would paint the whole rectangle one colour.
+    let tiling = solid_tile(4.0, true, [1.0, 0.0, 0.0], Affine::IDENTITY);
+    let object = pattern_filled(
+        rect_path(0.0, 0.0, 16.0, 16.0),
+        pdfrum_page::Pattern::Tiling(Box::new(tiling)),
+        &[],
+    );
+    let (vello, tiny) = render_both(&page(16.0, 16.0, vec![object]), &RenderOptions::default());
+    for surface in [&vello, &tiny] {
+        // A tile's painted half is red...
+        for x in [0, 1, 4, 5, 8, 9] {
+            let px = surface.pixel(x, 8).expect("a pixel");
+            assert!(
+                px[0] > 200 && px[1] < 60,
+                "column {x} should be tile ink, got {px:?}"
+            );
+        }
+        // ...and its unpainted half is the page's white.
+        for x in [2, 3, 6, 7, 10, 11] {
+            assert_eq!(
+                surface.pixel(x, 8),
+                Some([255, 255, 255, 255]),
+                "column {x} is between tiles and must stay white"
+            );
+        }
+    }
+}
+
+#[test]
+fn an_uncoloured_tiling_pattern_takes_the_operand_colour_not_the_cells() {
+    // `/PaintType 2`: the cell's own green is coverage only, and the blue
+    // from the `scn` operands is what paints. Getting this backwards is the
+    // difference between a green fill and a blue one, page-wide.
+    let tiling = solid_tile(4.0, false, [0.0, 1.0, 0.0], Affine::IDENTITY);
+    let object = pattern_filled(
+        rect_path(0.0, 0.0, 16.0, 16.0),
+        pdfrum_page::Pattern::Tiling(Box::new(tiling)),
+        &[0.0, 0.0, 1.0],
+    );
+    let (vello, tiny) = render_both(&page(16.0, 16.0, vec![object]), &RenderOptions::default());
+    for surface in [&vello, &tiny] {
+        let px = surface.pixel(0, 8).expect("a pixel");
+        assert!(
+            px[2] > 200 && px[1] < 60,
+            "an uncoloured tile paints the operand blue, not the cell's green: {px:?}"
+        );
+    }
+}
+
+#[test]
+fn a_pattern_fill_is_clipped_to_the_objects_own_geometry() {
+    // The tiling covers the whole page in pattern space; only the filled
+    // rectangle may show it. A pattern that escapes its object's geometry
+    // paints the whole page, which is the loudest possible failure.
+    let tiling = solid_tile(4.0, true, [1.0, 0.0, 0.0], Affine::IDENTITY);
+    let object = pattern_filled(
+        rect_path(4.0, 4.0, 12.0, 12.0),
+        pdfrum_page::Pattern::Tiling(Box::new(tiling)),
+        &[],
+    );
+    let (vello, tiny) = render_both(&page(16.0, 16.0, vec![object]), &RenderOptions::default());
+    for surface in [&vello, &tiny] {
+        // Outside the fill: untouched white, on every side.
+        for (x, y) in [(1u32, 1u32), (14, 1), (1, 14), (14, 14), (8, 1), (1, 8)] {
+            assert_eq!(
+                surface.pixel(x, y),
+                Some([255, 255, 255, 255]),
+                "({x},{y}) is outside the filled rect and must not be painted"
+            );
+        }
+        // Inside it, at least one pixel is ink.
+        let inside: u32 = (4..12)
+            .map(|x| {
+                u32::from(
+                    surface
+                        .pixel(x, 8)
+                        .is_some_and(|px| px[0] > 200 && px[1] < 60),
+                )
+            })
+            .sum();
+        assert!(inside > 0, "the pattern must paint inside its own geometry");
+    }
+}
+
+#[test]
+fn a_zero_step_tiling_pattern_paints_nothing_at_all() {
+    // The step ladder's first rule, and it is silent in the C++: a zero
+    // `/XStep` draws nothing rather than one tile or an endless run of them.
+    let mut tiling = solid_tile(4.0, true, [1.0, 0.0, 0.0], Affine::IDENTITY);
+    tiling.x_step = 0.0;
+    let object = pattern_filled(
+        rect_path(0.0, 0.0, 16.0, 16.0),
+        pdfrum_page::Pattern::Tiling(Box::new(tiling)),
+        &[],
+    );
+    let (vello, tiny) = render_both(&page(16.0, 16.0, vec![object]), &RenderOptions::default());
+    for surface in [&vello, &tiny] {
+        for x in 0..16 {
+            assert_eq!(
+                surface.pixel(x, 8),
+                Some([255, 255, 255, 255]),
+                "a zero step must paint nothing, but ({x},8) is inked"
+            );
+        }
+    }
+}
+
+#[test]
+fn a_pattern_that_did_not_resolve_paints_nothing_rather_than_black() {
+    // A `scn` naming a pattern the resources do not define is a no-op
+    // operator. Painting it would resolve the pattern colour to black and
+    // fill the object solid, which is worse than the missing pattern.
+    let mut state = GraphicsState::default();
+    state
+        .fill
+        .set_space(std::sync::Arc::new(ColorSpace::Pattern(Box::default())));
+    state
+        .fill
+        .set_pattern(pdfrum_object::Name::from("Missing"), &[], None);
+    let object = PageObject::Path(Box::new(Content {
+        object: PathObject {
+            path: rect_path(0.0, 0.0, 8.0, 8.0),
+            matrix: Affine::IDENTITY,
+            fill_rule: FillRule::Winding,
+            stroke: false,
+        },
+        state,
+        marks: ContentMarks::new(),
+        content_stream: 0,
+    }));
+    let (vello, tiny) = render_both(&page(8.0, 8.0, vec![object]), &RenderOptions::default());
+    assert_eq!(vello.pixel(4, 4), Some([255, 255, 255, 255]));
+    assert_eq!(tiny.pixel(4, 4), Some([255, 255, 255, 255]));
 }

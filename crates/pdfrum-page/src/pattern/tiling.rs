@@ -41,6 +41,16 @@ pub struct TilingPattern {
     pub resources: Option<Dict>,
     /// The tile's content stream, still filtered.
     pub content: ByteSpan,
+    /// The cell's own page objects, interpreted from `content`.
+    ///
+    /// A tile is a content stream like any other, so what it paints is a page
+    /// object list; expanding it at load time is what lets the renderer walk
+    /// a cell with the same code that walks a page. The tile inherits the
+    /// **painting object's general state** — its alpha, blend mode and soft
+    /// mask — and default colour, text and path state, which is why the cell
+    /// is interpreted where the pattern is installed rather than where it is
+    /// declared.
+    pub objects: Vec<crate::page::PageObject>,
 }
 
 /// The range of tile indices covering a clip rectangle.
@@ -80,6 +90,8 @@ impl TilingPattern {
             matrix,
             resources: dict.dict(names::RESOURCES, r),
             content: stream.data.clone(),
+            // Filled in by `load_pattern`, which has the interpreter.
+            objects: Vec::new(),
         }
     }
 
@@ -187,6 +199,7 @@ mod tests {
             matrix: Affine::IDENTITY,
             resources: None,
             content: ByteSpan::empty(),
+            objects: Vec::new(),
         }
     }
 

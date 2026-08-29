@@ -15,7 +15,7 @@
 //!   *before* scaling, an odd-length array doubles its cycle, and only the
 //!   first 32 entries survive.
 
-use kurbo::{Affine, Dashes, Stroke};
+use kurbo::{Affine, BezPath, Dashes, Shape, Stroke};
 use pdfrum_page::{LineCap, LineJoin, StrokeParams};
 
 /// The device-space cycle below which a dash pattern is drawn solid
@@ -229,6 +229,34 @@ pub fn resolve_stroke(params: &StrokeParams, matrices: StrokeMatrices) -> Stroke
     }
     stroke
 }
+
+/// A stroke's outline as a fillable device-space path.
+///
+/// `SetClip_PathStroke` clips by what a stroke *covers*, which neither
+/// rasterizer's clip method can express directly — both take a path to fill.
+/// So the engine expands the stroke itself, through the same matrix split and
+/// the same resolved [`Stroke`] the ordinary draw uses, and hands over the
+/// resulting fill. Expanding it here rather than in a backend is what keeps
+/// the two rasterizers receiving identical geometry (design brief §6.1).
+#[must_use]
+pub fn outline(path: &BezPath, to_device: Affine, params: &StrokeParams) -> BezPath {
+    let matrices = split_for_stroke(to_device);
+    let resolved = resolve_stroke(params, matrices);
+    let expanded = kurbo::stroke(
+        (matrices.pre * path.clone()).path_elements(STROKE_OUTLINE_TOLERANCE),
+        &resolved,
+        &kurbo::StrokeOpts::default(),
+        STROKE_OUTLINE_TOLERANCE,
+    );
+    matrices.post * expanded
+}
+
+/// The flattening tolerance the stroke expansion uses, in device pixels.
+///
+/// A tenth of a pixel: fine enough that the clip edge lands on the same pixel
+/// the drawn stroke would, coarse enough not to emit a segment per pixel on a
+/// long curve.
+const STROKE_OUTLINE_TOLERANCE: f64 = 0.1;
 
 #[cfg(test)]
 mod tests {
