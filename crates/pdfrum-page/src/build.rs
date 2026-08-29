@@ -48,7 +48,7 @@ use kurbo::{Affine, BezPath, Point, Rect};
 use pdfrum_common::{DiagKind, Diagnostics, Limits, Severity};
 use pdfrum_font::{Font, FontCache};
 use pdfrum_object::{Dict, Name, Object, Resolve};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 /// The most form parses that may be in flight at once.
@@ -71,6 +71,15 @@ pub struct BuildContext {
     pub images: ImageCache,
     /// Fonts.
     pub fonts: FontCache,
+    /// Loaded font *instances*, keyed on the reference that named them.
+    ///
+    /// Separate from [`fonts`](Self::fonts), which hands out identities: this
+    /// is what makes two text objects that name the same `/Font` resource
+    /// share one `Arc<Font>`. Text extraction's duplicate suppression
+    /// compares fonts by that pointer, so loading a fresh instance per `Tf`
+    /// would silently stop it firing and let a redrawn line be extracted
+    /// twice.
+    font_instances: HashMap<pdfrum_object::ObjRef, Option<Arc<Font>>>,
     /// The content buffers currently being parsed, which is the form guard.
     in_flight: HashSet<BufferId>,
 }
@@ -434,20 +443,20 @@ impl<R: Resolve> Interp<'_, R> {
                     diags.record(Severity::Suspicious, DiagKind::BadTextRenderMode, None);
                 }
             },
-            Op::ShowText(s) => self.show_text(&[(s.bytes.clone(), 0.0)], 0.0),
+            Op::ShowText(s) => self.show_text(&[(s.bytes.clone(), 0.0)], 0.0, ctx, limits, diags),
             Op::NextLineShowText(s) => {
                 self.cursor.next_line(f64::from(self.state.text.leading));
-                self.show_text(&[(s.bytes.clone(), 0.0)], 0.0);
+                self.show_text(&[(s.bytes.clone(), 0.0)], 0.0, ctx, limits, diags);
             }
             Op::SetSpacingShowText(word, char_space, s) => {
                 self.state.text.word_space = *word;
                 self.state.text.char_space = *char_space;
                 self.cursor.next_line(f64::from(self.state.text.leading));
-                self.show_text(&[(s.bytes.clone(), 0.0)], 0.0);
+                self.show_text(&[(s.bytes.clone(), 0.0)], 0.0, ctx, limits, diags);
             }
             Op::ShowTextAdjusted(array) => {
                 if array.valid {
-                    self.show_adjusted(&array.items);
+                    self.show_adjusted(&array.items, ctx, limits, diags);
                 }
             }
 
@@ -680,7 +689,14 @@ impl<R: Resolve> Interp<'_, R> {
     }
 
     /// `Tj` and friends: one text object from a set of segments.
-    fn show_text(&mut self, segments: &[(Box<[u8]>, f32)], initial_kerning: f32) {
+    fn show_text(
+        &mut self,
+        segments: &[(Box<[u8]>, f32)],
+        initial_kerning: f32,
+        ctx: &mut BuildContext,
+        limits: &Limits,
+        diags: &mut Diagnostics,
+    ) {
         // With no font nothing is produced, which only happens when `Tf` was
         // never issued.
         let Some((font, size)) = self.state.text.font.clone() else {
@@ -722,6 +738,7 @@ impl<R: Resolve> Interp<'_, R> {
             self.state.ctm,
         );
         let advance = self.advance_for(&segments, &font, size);
+        let type3_metrics = self.type3_metrics_for(&segments, &font, ctx, limits, diags);
 
         let object = TextObject {
             segments: segments.into(),
@@ -729,9 +746,48 @@ impl<R: Resolve> Interp<'_, R> {
             matrix,
             font: Some((Arc::clone(&font), size)),
             render_mode,
+            type3_metrics,
         };
         self.push(PageObject::Text(Box::new(self.content(object))));
         self.cursor.advance(advance, vertical);
+    }
+
+    /// What each shown character's Type 3 glyph procedure declares.
+    ///
+    /// Empty for every other kind of font. Reading it here rather than
+    /// downstream is what lets a consumer measure a Type 3 glyph at all: the
+    /// numbers live inside content streams only the interpreter opens.
+    fn type3_metrics_for(
+        &self,
+        segments: &[TextSegment],
+        font: &Font,
+        ctx: &mut BuildContext,
+        limits: &Limits,
+        diags: &mut Diagnostics,
+    ) -> std::collections::BTreeMap<u32, crate::type3::Type3Metrics> {
+        let mut out = std::collections::BTreeMap::new();
+        let Some(type3) = font.type3() else {
+            return out;
+        };
+        for segment in segments {
+            for item in font.decode(&segment.codes) {
+                if out.contains_key(&item.code.0) {
+                    continue;
+                }
+                if let Some(m) = crate::type3::metrics(
+                    type3,
+                    item.code,
+                    self.resources.page.as_ref(),
+                    self.resolver,
+                    ctx,
+                    limits,
+                    diags,
+                ) {
+                    out.insert(item.code.0, m);
+                }
+            }
+        }
+        out
     }
 
     /// The advance a run produces, in text space.
@@ -758,7 +814,13 @@ impl<R: Resolve> Interp<'_, R> {
     }
 
     /// `TJ`: split the array into segments and their accumulated kernings.
-    fn show_adjusted(&mut self, items: &[TextItem]) {
+    fn show_adjusted(
+        &mut self,
+        items: &[TextItem],
+        ctx: &mut BuildContext,
+        limits: &Limits,
+        diags: &mut Diagnostics,
+    ) {
         let strings = items
             .iter()
             .filter(|i| matches!(i, TextItem::Show(_)))
@@ -804,7 +866,7 @@ impl<R: Resolve> Interp<'_, R> {
                 },
             }
         }
-        self.show_text(&segments, initial);
+        self.show_text(&segments, initial, ctx, limits, diags);
     }
 
     /// Look a font up, falling back to Helvetica so `Tf` with a bad name
@@ -816,11 +878,21 @@ impl<R: Resolve> Interp<'_, R> {
         limits: &Limits,
         diags: &mut Diagnostics,
     ) -> Option<Arc<Font>> {
+        // An indirect resource is cached under its reference, so every `Tf`
+        // naming it shares one instance. A resource written inline has no
+        // reference and is loaded afresh — two inline copies genuinely are
+        // two fonts.
+        let reference = self.resources.find_ref(names::FONT, name, self.resolver);
+        if let Some(reference) = reference
+            && let Some(cached) = ctx.font_instances.get(&reference)
+        {
+            return cached.clone();
+        }
         let dict = self
             .resources
             .find(names::FONT, name, self.resolver)
             .and_then(|o| o.as_dict().cloned());
-        match dict {
+        let font = match dict {
             Some(d) => {
                 pdfrum_font::load(&d, self.resolver, &ctx.fonts, limits, diags).map(Arc::new)
             }
@@ -830,7 +902,11 @@ impl<R: Resolve> Interp<'_, R> {
                 pdfrum_font::StandardFont::Helvetica,
                 &ctx.fonts,
             ))),
+        };
+        if let Some(reference) = reference {
+            ctx.font_instances.insert(reference, font.clone());
         }
+        font
     }
 
     /// `cs` and `CS`: install a colour space, resetting the colour.

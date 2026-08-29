@@ -616,6 +616,41 @@ reading order, rotated text, hyphenation) are ported *exactly* — this crate is
 Tier-A byte-exact against the oracle, so brief must enumerate every heuristic
 constant from `cpdf_textpage.cpp` before implementation.
 
+**([spec] 2026-08-29, implementation.)** Three shapes settled while building
+it, all narrowing the sketch above rather than replacing it:
+
+- `TextPage` carries **three** fields, not two: `chars`, `text: Vec<char>` and
+  `runs: CharIndex`. `text` is the search-facing string and is a *different
+  character sequence* from `chars`; making them separate public fields of
+  different types is the only durable defence against a refactor collapsing
+  them, which is the single easiest way to get this crate wrong. `runs` is the
+  segment table bridging the two index spaces (design brief D2).
+- `find` takes `FindOptions` **by value** (it is three booleans and `Copy`),
+  and `extract` takes `(&Page, &impl Resolve, &ExtractOptions, &Limits, &mut
+  Diagnostics)`. The `Limits` parameter is present and unused: nothing here
+  consumes untrusted bytes directly, and no cap of PDFium's applies, but the
+  signature stays uniform with every other crate's entry point so that a cap
+  added later is not a breaking change.
+- `TextPage::to_utf32le()` is public, because `--txt` is a Tier-A contract and
+  the encoding — one byte-order mark, four bytes per *unfiltered* character —
+  belongs beside the data it encodes rather than in the tool.
+
+**([spec] 2026-08-29, two supporting additions in landed crates.)** Text
+extraction needs two things §7 and §6 did not promise, both because a
+byte-exact text tier exposes what a perceptual one cannot:
+
+- `pdfrum-page`'s `TextObject` gains `type3_metrics: BTreeMap<u32,
+  Type3Metrics>`, and the crate gains a `type3` module. A Type 3 glyph's
+  advance and bounding box live inside its `/CharProcs` content stream's
+  `d0`/`d1` operator, so no consumer can measure one from the font alone; the
+  interpreter already opens those streams and records the answer. Six corpus
+  fixtures extracted *nothing at all* without it.
+- `pdfrum-page`'s `BuildContext` gains a font-instance cache keyed on the
+  `/Font` resource's reference, so every `Tf` naming one resource shares one
+  `Arc<Font>`. Duplicate suppression compares fonts by pointer identity
+  (design brief §1.7a), and loading a fresh instance per `Tf` silently
+  disabled it — a double-drawn page extracted twice.
+
 ## 10. `pdfrum-doc`  *(behavior: `core/fpdfdoc`)*
 
 Records + functions over the catalog: `Bookmarks` (outline tree iterator with

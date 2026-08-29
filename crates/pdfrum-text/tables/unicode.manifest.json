@@ -1,0 +1,11 @@
+{
+  "generator": "crates/pdfrum-text/build.rs",
+  "ucd_rows": 65536,
+  "mirror_pairs": 366,
+  "normalization_main": 65536,
+  "normalization_maps": [5376, 1724, 1164, 488],
+  "icu_alpha_ranges": 684,
+  "icu_alnum_ranges": 736,
+  "icu_lower_runs": 678,
+  "blob_bytes": 79932
+}
