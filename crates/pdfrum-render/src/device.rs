@@ -97,8 +97,16 @@ pub trait RenderDevice {
         aa: AntiAlias,
     );
 
-    /// Draw `img` with its top-left unit square mapped through `t`, at a
+    /// Draw `img` with its own **pixel grid** mapped through `t`, at a
     /// constant `alpha`.
+    ///
+    /// `t` maps image pixel `(0, 0)`'s corner to its device position, so an
+    /// identity transform is a texel-for-pixel blit at the origin and a
+    /// translation moves it whole pixels — *not* a unit-square mapping. The
+    /// engine has already resampled an image to its device size before it
+    /// arrives here (`image::resample`), so in practice every call site passes
+    /// a plain translation. Reading `t` the other way collapses a whole-page
+    /// image onto a single pixel, which is silent and total.
     fn draw_image(&mut self, img: &RasterImage, t: Affine, quality: ImageQuality, alpha: f32);
 
     /// Intersect the clip with `path` (already in device space).

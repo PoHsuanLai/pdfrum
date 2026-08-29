@@ -16,6 +16,7 @@ members = [
     "crates/pdfrum-render",
     "crates/pdfrum-raster-vello",
     "crates/pdfrum-raster-tinyskia",
+    "crates/pdfrum-raster-exact",
     "crates/pdfrum-text",
     "crates/pdfrum-doc",
     "crates/pdfrum-edit",
@@ -64,6 +65,7 @@ pdfrum-parser = { path = "crates/pdfrum-parser", version = "=0.1.0" }
 pdfrum-page = { path = "crates/pdfrum-page", version = "=0.1.0" }
 pdfrum-render = { path = "crates/pdfrum-render", version = "=0.1.0" }
 pdfrum-raster-vello = { path = "crates/pdfrum-raster-vello", version = "=0.1.0" }
+pdfrum-raster-exact = { path = "crates/pdfrum-raster-exact", version = "=0.1.0" }
 pdfrum-raster-tinyskia = { path = "crates/pdfrum-raster-tinyskia", version = "=0.1.0" }
 pdfrum-text = { path = "crates/pdfrum-text", version = "=0.1.0" }
 pdfrum-doc = { path = "crates/pdfrum-doc", version = "=0.1.0" }

@@ -333,7 +333,9 @@ fn write_page_files<R: Resolve>(
             let Some(path) = render::output_path(input, index) else {
                 return String::new();
             };
-            let Some(rendered) = render::render(page, r, render::DEFAULT_SCALE, ctx) else {
+            let backend = render::Backend::resolve(options.use_renderer.as_deref());
+            let Some(rendered) = render::render(page, r, render::DEFAULT_SCALE, backend, ctx)
+            else {
                 return String::new();
             };
             if std::fs::write(&path, &rendered.png).is_err() {
