@@ -18,7 +18,7 @@
 
 use kurbo::Rect;
 
-use crate::ap::emit::{Content, Float, PaintOp, color_op};
+use crate::ap::emit::{Content, Float, PaintOp, color_op, color_op_via};
 use crate::color::Color;
 use crate::geom;
 
@@ -87,6 +87,79 @@ pub fn radio_button(bbox: Rect, style: CheckStyle, color: Color) -> String {
         _ => geom::scale_from_center(centre, 2.0 / 3.0),
     };
     shape(fitted, style, color)
+}
+
+/// The grey a combo box's drop button is filled with, as a byte triple over
+/// 255 — the value the source writes rather than the fraction it equals.
+const DROP_BUTTON_GREY: f32 = 220.0 / 255.0;
+
+/// The fixed two-unit beveled border the drop button is drawn with.
+const DROP_BUTTON_BORDER: crate::ap::border::BorderStyleInfo = crate::ap::border::BorderStyleInfo {
+    width: 2.0,
+    style: crate::ap::border::BorderStyle::Beveled,
+    dash: crate::ap::border::Dash {
+        dash: 3,
+        gap: 0,
+        phase: 0,
+    },
+};
+
+/// The arrow-and-bevel button at the right end of a combo box.
+///
+/// Three pieces, each in its own graphics state: a pale grey fill, a beveled
+/// border with fixed greys, and — only when the box exceeds six units on
+/// **both** axes — a downward triangle six wide and three tall about its
+/// centre. An empty box draws nothing at all.
+///
+/// The grey is written through the six-digit writer, which is the one visible
+/// difference between the two producers of this button: 220/255 is
+/// `0.862745` there and `.862745098` through the shortest writer. Every other
+/// number in the button is exact in both.
+#[must_use]
+pub fn drop_button(bbox: Rect) -> String {
+    if geom::is_empty(bbox) {
+        return String::new();
+    }
+    let grey = color_op_via(Color::Gray(DROP_BUTTON_GREY), PaintOp::Fill, Float::G6);
+    let mut out = Content::new();
+
+    out.raw("q\n");
+    out.raw(&grey);
+    out.rect(bbox, Float::Shortest);
+    out.raw("re f\n");
+    out.raw("Q\n");
+
+    let border = crate::ap::border::border_path(bbox, DROP_BUTTON_BORDER, Color::Gray(0.0));
+    if !border.is_empty() {
+        out.raw("q\n");
+        out.raw(&border);
+        out.raw("Q\n");
+    }
+
+    let (cx, cy) = (
+        (geom::left(bbox) + geom::right(bbox)) / 2.0,
+        (geom::top(bbox) + geom::bottom(bbox)) / 2.0,
+    );
+    if geom::is_float_bigger(geom::width(bbox), 6.0)
+        && geom::is_float_bigger(geom::height(bbox), 6.0)
+    {
+        out.raw("q\n0 g\n");
+        for (x, y, op) in [
+            (cx - 3.0, cy + 1.5, "m\n"),
+            (cx + 3.0, cy + 1.5, "l\n"),
+            (cx, cy - 1.5, "l\n"),
+            (cx - 3.0, cy + 1.5, "l f\n"),
+        ] {
+            out.point(x, y, Float::Shortest);
+            out.raw(op);
+        }
+        // The grey is repeated after the arrow, which leaves the state set to
+        // it rather than to black — harmless inside the `q`/`Q`, and part of
+        // the bytes.
+        out.raw(&grey);
+        out.raw("Q\n");
+    }
+    out.as_str().to_owned()
 }
 
 /// One shape, wrapped in its own graphics state.

@@ -110,6 +110,21 @@ impl Content {
 /// "no colour" and "black" produce very different streams.
 #[must_use]
 pub fn color_op(color: Color, paint: PaintOp) -> String {
+    color_op_via(color, paint, Float::Shortest)
+}
+
+/// The same operator through a named float writer.
+///
+/// The choice is not cosmetic and it is not per-colour: it is per **producer**.
+/// The appearance generators in `cpdf_generateap` write their components
+/// through the shortest-round-trip writer, while the form-control appearance
+/// builders stream the float into a C++ `ostream` and get six significant
+/// digits. A colour whose components are integers reads the same either way —
+/// which is why every widget-chrome colour in the corpus was indifferent to it
+/// — but a byte value divided by 255 is not: `51/255` is `.2` through one and
+/// `0.2` through the other, and `113/255` is `.443137254` against `0.443137`.
+#[must_use]
+pub fn color_op_via(color: Color, paint: PaintOp, how: Float) -> String {
     let mut out = String::new();
     let (gray, rgb, cmyk) = match paint {
         PaintOp::Fill => ("g", "rg", "k"),
@@ -117,7 +132,7 @@ pub fn color_op(color: Color, paint: PaintOp) -> String {
     };
     let mut write = |values: &[f32], op: &str| {
         for value in values {
-            let _ = write!(out, "{} ", fmt::shortest(*value));
+            let _ = write!(out, "{} ", how.write(*value));
         }
         let _ = writeln!(out, "{op}");
     };

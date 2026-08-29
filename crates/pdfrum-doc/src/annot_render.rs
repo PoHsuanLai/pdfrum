@@ -89,18 +89,11 @@ pub fn overlay<R: Resolve>(
     // nothing at all while `--annot` reported it in full, which is exactly
     // the shape that let it survive: the tier that compares text matched.
     //
-    // The stock Helvetica stands in for whatever the `/DA` names, on the same
-    // reasoning the dump path records: the generator wants the *metrics*, and
-    // a non-embedded `/DA` font is substituted to this face anyway.
-    let font =
-        pdfrum_font::Font::load_standard(pdfrum_font::subst::StandardFont::Helvetica, &ctx.fonts);
-    let width = |code: u32| ap::TextFont::char_width(&font, code);
-    let text_font = ap::TextFont {
-        metrics: ap::TextFont::metrics_of(&font, &width),
-        font: &font,
-    };
-    let generated =
-        ap::generate_appearances_with_text(page_dict, catalog, Some(&text_font), r, diags);
+    // The fonts the form's default resources declare, loaded through the same
+    // substitution the rest of the page uses. See `ap::FormFonts` for why the
+    // stock Helvetica that used to stand in here was the wrong metric source.
+    let fonts = ap::FormFonts::load(catalog, r, ctx);
+    let generated = ap::generate_appearances_with_text(page_dict, catalog, Some(&fonts), r, diags);
 
     for (slot, annot) in list.annots.iter().enumerate() {
         if !is_visible(annot) {

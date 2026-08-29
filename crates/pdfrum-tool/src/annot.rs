@@ -39,19 +39,12 @@ pub fn render<R: Resolve>(
     ctx: &mut BuildContext,
 ) -> String {
     let mut diags = Diagnostics::default();
-    // A free-text annotation needs a font to set its text with. The stock
-    // Helvetica stands in for the one its `/DA` names: this path only needs
-    // the *metrics*, and the widths of the font a viewer would substitute are
-    // what the layout would use anyway.
-    let font =
-        pdfrum_font::Font::load_standard(pdfrum_font::subst::StandardFont::Helvetica, &ctx.fonts);
-    let width = |code: u32| ap::TextFont::char_width(&font, code);
-    let text_font = ap::TextFont {
-        metrics: ap::TextFont::metrics_of(&font, &width),
-        font: &font,
-    };
+    // A free-text annotation and a form field both need a font to set their
+    // text with, and each needs the one its own `/DA` names — see
+    // `ap::FormFonts` for what taking a stock Helvetica for all of them costs.
+    let fonts = ap::FormFonts::load(catalog, r, ctx);
     let overlay =
-        ap::generate_appearances_with_text(&page.dict, catalog, Some(&text_font), r, &mut diags);
+        ap::generate_appearances_with_text(&page.dict, catalog, Some(&fonts), r, &mut diags);
 
     let resources = page
         .inherited(pdfrum_object::names::RESOURCES, r)

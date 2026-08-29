@@ -10,18 +10,19 @@
 //! that never mentions `/NeedAppearances` still ends up with an appearance
 //! stream, and everything reading the file afterwards sees one.
 //!
-//! What that appearance contains is a background rectangle, a border, comb
-//! separators, and a **text body laid out by a second, different variable-
-//! text engine** from the one this crate ports. That engine is out of scope
-//! (SPEC §10's 2026-08-29 ruling), so this module builds the chrome and
-//! leaves the body empty.
+//! What that appearance contains is a background rectangle, a border, and
+//! then — for the three field types that show text — a **body**: the value,
+//! the selected option, or the option rows. This module builds the chrome;
+//! [`field_body`](crate::ap::field_body) builds the body over the same
+//! variable-text engine the free-text generator already uses, and
+//! [`generate_with_text`] is the entry point that has a font to build one
+//! with.
 //!
-//! The consequence is exact for the common case and approximate for the rest.
-//! A widget with no `/MK` colours and no value produces an empty stream —
-//! which is what the oracle produces too, so its object count and its two
-//! "failed to retrieve colour" lines match byte for byte. A widget with a
-//! value, or a list box, produces text objects we do not; those files are
-//! documented divergences rather than silent ones.
+//! [`generate`] is the font-less door and produces chrome alone. Both are
+//! kept because they answer different questions: a caller with no font in
+//! hand still needs a widget's background and border, and a widget with
+//! neither `/MK` colour nor a value produces an empty stream either way —
+//! which is what the oracle produces too.
 
 use kurbo::Rect;
 use pdfrum_common::{Diagnostics, Limits};
@@ -38,16 +39,25 @@ use crate::names;
 
 /// Whether this annotation is a widget that will be given an appearance.
 ///
-/// The test is whether a **usable normal appearance stream resolves**, not
-/// merely whether an `/AP` key is there. Both halves matter and the second is
-/// the one that surprises: a radio button whose `/AP /N` lists only its
-/// on-state, with `/AS` reading `Off`, has an `/AP` and yet resolves to
-/// nothing — and so gets a fresh appearance built for it, `Off` state
-/// included. Every radio button in `bug_707673.pdf` is that shape.
+/// Three tests, and the middle one is the least obvious. The subtype must be
+/// `/Widget`. The **field type must be one the appearance builder knows**: the
+/// builder dispatches on it and a type it does not recognize falls off the
+/// end, writing nothing at all — so an intermediate field node that carries
+/// `/Kids` and no `/FT` of its own keeps having no appearance, which is
+/// visible in the dump because the two colour lines report a colour exactly
+/// when no appearance stream exists. `field_methods`'s `MyField` is that node.
+/// And the appearance test is whether a **usable normal appearance stream
+/// resolves**, not merely whether an `/AP` key is there: a radio button whose
+/// `/AP /N` lists only its on-state, with `/AS` reading `Off`, has an `/AP`
+/// and yet resolves to nothing — and so gets a fresh appearance built for it,
+/// `Off` state included. Every radio button in `bug_707673.pdf` is that shape.
 #[must_use]
 pub fn needs_appearance<R: Resolve>(dict: &Dict, r: &R) -> bool {
     // Read coercively, matching how the annotation list classifies subtypes.
     if dict.byte_string(obj_names::SUBTYPE, r).as_deref() != Some(b"Widget") {
+        return false;
+    }
+    if !has_known_field_type(dict, r) {
         return false;
     }
     if dict.dict(names::AP, r).is_none() {
@@ -59,11 +69,22 @@ pub fn needs_appearance<R: Resolve>(dict: &Dict, r: &R) -> bool {
     // shape is left alone, because its widget never reaches the generator:
     // an ungrouped checkbox is not registered as a form control, and the
     // appearance path runs per control rather than per annotation.
+    //
+    // Measured 2026-08-29 and deliberately kept. The loader's own validity
+    // test is one dictionary lookup — the mere presence of `/AP` — and
+    // matching it exactly clears four more `--annot` artifacts (a checkbox in
+    // this shape then keeps having no appearance, which is what
+    // `checkbox_radiobutton`'s golden reports) while taking `bug_707673`'s
+    // pixels **down**, from .9944 to .9910. That file's residual is a
+    // push-button caption this crate does not draw, and the generated chrome
+    // stands in for it by accident; removing the accident before drawing the
+    // caption is a net loss. Do not tighten this to `/AP`-presence without
+    // porting `SetAsPushButton` first.
     is_radio(dict, r)
         && crate::annot::appearance::annot_ap(dict, crate::annot::ApMode::Normal, true, r).is_none()
 }
 
-/// Builds a widget's appearance chrome.
+/// Builds a widget's appearance chrome, with no text body.
 ///
 /// Returns nothing when the widget has an appearance already, or is not a
 /// widget. The stream is the background fill followed by the border path;
@@ -71,6 +92,31 @@ pub fn needs_appearance<R: Resolve>(dict: &Dict, r: &R) -> bool {
 /// which is a valid appearance and is what the oracle writes too.
 #[must_use]
 pub fn generate<R: Resolve>(dict: &Dict, r: &R) -> Option<GeneratedAp> {
+    build(dict, None, None, r)
+}
+
+/// The same, with the field's own text set into it.
+///
+/// A text field, a combo box or a list box gains its body; every other field
+/// type produces exactly what [`generate`] does, because only those three set
+/// text at all.
+#[must_use]
+pub fn generate_with_text<R: Resolve>(
+    dict: &Dict,
+    catalog: &Dict,
+    font: &crate::ap::TextFont<'_>,
+    r: &R,
+) -> Option<GeneratedAp> {
+    build(dict, Some(catalog), Some(font), r)
+}
+
+/// The shared builder: chrome, then the body when there is a font for one.
+fn build<R: Resolve>(
+    dict: &Dict,
+    catalog: Option<&Dict>,
+    font: Option<&crate::ap::TextFont<'_>>,
+    r: &R,
+) -> Option<GeneratedAp> {
     if !needs_appearance(dict, r) {
         return None;
     }
@@ -121,14 +167,41 @@ pub fn generate<R: Resolve>(dict: &Dict, r: &R) -> Option<GeneratedAp> {
         });
     }
 
+    // The body follows the chrome, and only a caller with a font can ask for
+    // one. A button reaches here with `None` from the dispatch below, which is
+    // how a checkbox keeps producing exactly the stream it did before.
+    let body = catalog
+        .zip(font)
+        .and_then(|(catalog, font)| crate::ap::field_body::generate(dict, catalog, font, r));
+    let fonts = body.as_ref().and_then(|body| body.font_resources.clone());
+    if let Some(body) = &body {
+        out.raw(&String::from_utf8_lossy(&body.stream));
+    }
+
     Some(GeneratedAp {
         stream: out.into_bytes(),
         bbox: rect,
         matrix: kurbo::Affine::IDENTITY,
-        resources: resources_dict(crate::ap::ext_gstate_dict(dict, false, r), None),
+        resources: resources_dict(crate::ap::ext_gstate_dict(dict, false, r), fonts),
         rect_override: None,
         as_override: None,
     })
+}
+
+/// Whether the widget's inherited `/FT` names a type the builder dispatches
+/// on.
+///
+/// Three of the eight field types reach no builder: a signature, and the two
+/// ways a type can be unknown — no `/FT` anywhere up the `/Parent` chain, and
+/// an `/FT` naming something outside the three the spec defines. Each falls
+/// off the end of the dispatch, and nothing is written.
+#[must_use]
+pub fn has_known_field_type<R: Resolve>(dict: &Dict, r: &R) -> bool {
+    let (limits, mut diags) = (Limits::default(), Diagnostics::default());
+    let kind = attr::field_attr(dict, names::FT, r, &limits, &mut diags)
+        .map(|value| value.to_byte_string())
+        .unwrap_or_default();
+    matches!(kind.as_slice(), b"Btn" | b"Tx" | b"Ch")
 }
 
 /// Whether a button widget is showing its on-state.
@@ -270,9 +343,12 @@ mod tests {
         Object::Array(Array::of(values.iter().copied().map(Object::from)))
     }
 
+    /// A widget of a field type the builder knows, since one it does not is
+    /// refused outright and would test nothing below.
     fn widget(extra: &[(&str, Object)]) -> Dict {
         let mut pairs = vec![
             ("Subtype", Object::Name(Name::from("Widget"))),
+            ("FT", Object::Name(Name::from("Btn"))),
             ("Rect", numbers(&[100.0, 100.0, 200.0, 130.0])),
         ];
         pairs.extend_from_slice(extra);
@@ -282,6 +358,34 @@ mod tests {
     #[test]
     fn a_widget_with_no_appearance_dictionary_gets_one() {
         assert!(needs_appearance(&widget(&[]), &NoResolve));
+    }
+
+    #[test]
+    fn a_field_type_the_builder_does_not_dispatch_on_gets_nothing() {
+        // An intermediate node with `/Kids` and no `/FT` of its own, and a
+        // signature — the two shapes that fall off the end of the dispatch.
+        let no_type = dict(&[
+            ("Subtype", Object::Name(Name::from("Widget"))),
+            ("Rect", numbers(&[100.0, 100.0, 200.0, 130.0])),
+        ]);
+        assert!(!needs_appearance(&no_type, &NoResolve));
+        assert!(generate(&no_type, &NoResolve).is_none());
+
+        let signature = dict(&[
+            ("Subtype", Object::Name(Name::from("Widget"))),
+            ("FT", Object::Name(Name::from("Sig"))),
+            ("Rect", numbers(&[100.0, 100.0, 200.0, 130.0])),
+        ]);
+        assert!(!needs_appearance(&signature, &NoResolve));
+
+        // And the type is inherited, so a kid whose parent names it qualifies.
+        let parent = dict(&[("FT", Object::Name(Name::from("Tx")))]);
+        let kid = dict(&[
+            ("Subtype", Object::Name(Name::from("Widget"))),
+            ("Rect", numbers(&[100.0, 100.0, 200.0, 130.0])),
+            ("Parent", Object::Dict(parent)),
+        ]);
+        assert!(needs_appearance(&kid, &NoResolve));
     }
 
     #[test]
