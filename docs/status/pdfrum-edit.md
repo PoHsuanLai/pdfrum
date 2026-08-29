@@ -92,8 +92,13 @@ the original and our saved copy to the **same MD5**,
 | `font/widths` | `/W`, re-keyed to new glyph IDs |
 | `font/tounicode` | the `/ToUnicode` CMap's three buckets and its 256-code boundary rule |
 
-Roughly 8,000 lines. **263 tests** plus **7 doctests**; the workspace runs
-2,546 tests green.
+Roughly 8,000 lines. **264 tests** plus **7 doctests**.
+
+The ordinary corpus sweep is unaffected by this crate — nothing here runs on
+a read — and `run --check-regressions` against the committed scoreboard
+reports **no regressions**. (It reads 1242/1675 passing against the
+scoreboard's 1086, but that gain is the render work landing in parallel, not
+this crate's; the scoreboard is left for that work to update.)
 
 Three fuzz targets: `edit_save_roundtrip` (a file that opened must save to a
 file that opens), `edit_subset` (the glyph map is contiguous and names only
