@@ -1,12 +1,12 @@
 {
-  "generated_at": "2026-08-29T11:31:05Z",
+  "generated_at": "2026-08-29T11:38:26Z",
   "totals": {
     "files": 1675,
-    "pass": 1482,
-    "fail": 193,
+    "pass": 1483,
+    "fail": 192,
     "by_tag": {
       "page-count": 2,
-      "pixel-fail": 153,
+      "pixel-fail": 152,
       "tierA-mismatch": 81
     },
     "text": {
@@ -16258,10 +16258,8 @@
     },
     {
       "path": "corpus/pdfium/bug_86459.pdf",
-      "status": "fail",
-      "tags": [
-        "pixel-fail"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -16281,12 +16279,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.961619,
+        "ssim": 0.999972,
         "exact": false,
-        "max_channel_diff": 255,
+        "max_channel_diff": 3,
         "pages": 1
       },
-      "notes": "ssim 0.961619 below floor 0.990000"
+      "notes": ""
     },
     {
       "path": "corpus/pdfium/bug_880920.pdf",
