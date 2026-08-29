@@ -36,7 +36,7 @@ use crate::glyphs::{Face, GlyphSource};
 use crate::{FontFlags, GlyphName};
 use pdfrum_common::{DiagKind, Diagnostics, Severity};
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 /// What a font wants from substitution.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -600,8 +600,7 @@ fn terminal(
     diags: &mut Diagnostics,
 ) -> Substitution {
     if let Some(f) = base_font {
-        let bytes: Arc<[u8]> = Arc::from(standard_font_data(f));
-        let glyphs = Face::new(bytes, 0).map_or(GlyphSource::None, GlyphSource::Fontations);
+        let glyphs = builtin_standard(f);
         if !glyphs.is_some() {
             diags.record(Severity::Suspicious, DiagKind::FontSubstitutionFailed, None);
         }
@@ -634,33 +633,101 @@ fn terminal(
     }
 }
 
+/// One of the fourteen standard faces, parsed once per process.
+///
+/// The same memoization [`builtin_generic`] gets and for the same reason: the
+/// blob is an `include_bytes!` constant, so the parse is a pure function of the
+/// `StandardFont` index and there is no key to get wrong. A dense array rather
+/// than a map because the index is already `0..14` and dense — `StandardFont`'s
+/// discriminants are load-bearing arithmetic (see its own docs), not an
+/// arbitrary tag.
+///
+/// `Face` holds its bytes behind an `Arc`, so the clone is a refcount bump and
+/// the 66-113 KB of CFF is stored once rather than once per `Helv` in a form's
+/// resource dictionary.
+fn builtin_standard(f: StandardFont) -> GlyphSource {
+    /// One cell per base-14 index.
+    static FACES: OnceLock<[GlyphSource; 14]> = OnceLock::new();
+
+    let faces = FACES.get_or_init(|| {
+        std::array::from_fn(|i| {
+            let Some(f) = StandardFont::from_index(i) else {
+                return GlyphSource::None;
+            };
+            let bytes: Arc<[u8]> = Arc::from(standard_font_data(f));
+            Face::new(bytes, 0).map_or(GlyphSource::None, GlyphSource::Fontations)
+        })
+    });
+    faces.get(f.index()).cloned().unwrap_or_default()
+}
+
 /// One of the two built-in Multiple-Master generic faces, and its family name.
 ///
 /// These are the reason `pdfrum-type1` exists: they are PFB Type 1 Multiple
 /// Master, and instantiating them at an arbitrary weight and width is what
 /// draws every font neither the document nor the system supplied.
+///
+/// # Parsed once per process, then shared
+///
+/// The two PFB blobs are `include_bytes!` constants, so parsing one is a pure
+/// function of a `bool` — the same 66 KB (sans) or 113 KB of container split,
+/// `eexec` decryption, charstring extraction and glyph-name indexing, producing
+/// the same face, every time. Before M12 it ran on **every call**, and the call
+/// is the last rung of the substitution ladder: it fires for every non-embedded
+/// font whose name is not one of the base fourteen and which no system database
+/// supplied. `mixed_formfield.pdf` has sixteen such fonts in its AcroForm
+/// `/DR /Font` — fifteen of them byte-identical SimSun descriptors under
+/// different resource names — and the form-field appearance pass reloads all of
+/// them on every render, so a single render of a single page paid **fifteen
+/// full Multiple-Master parses**. That was 55 ms of the document's 87 ms.
+///
+/// A `OnceLock` per variant fixes it at the only layer where the memoization is
+/// unconditionally sound: the input is a compile-time constant, so there is no
+/// key to get wrong, no lifetime to scope, and no document whose cache this
+/// could leak across. `GlyphSource::Type1` holds an `Arc`, so the clone handed
+/// to each caller is a refcount bump. `Face` is likewise `Arc<[u8]>`-backed.
+///
+/// This is deliberately *not* the general font cache `FontCache`'s doc comment
+/// promises and its single `AtomicU64` field does not deliver. That remains
+/// outstanding, and it is the fix for a document that loads the same *embedded*
+/// font sixteen times. What is fixed here is the built-in fallback path, which
+/// is the one the corpus actually exercises.
 #[must_use]
 pub fn builtin_generic(serif: bool) -> (GlyphSource, &'static str) {
-    let (bytes, family) = if serif {
+    /// The parsed sans face, or `None` if the blob failed to parse.
+    static SANS: OnceLock<GlyphSource> = OnceLock::new();
+    /// The parsed serif face.
+    static SERIF: OnceLock<GlyphSource> = OnceLock::new();
+
+    let (cell, bytes, family) = if serif {
         (
+            &SERIF,
             &include_bytes!("../../../pdfrum-type1/tests/fixtures/FoxitSerifMM.pfb")[..],
             "Chrome Serif",
         )
     } else {
         (
+            &SANS,
             &include_bytes!("../../../pdfrum-type1/tests/fixtures/FoxitSansMM.pfb")[..],
             "Chrome Sans",
         )
     };
-    let font = pdfrum_type1::Type1Font::parse(
-        bytes,
-        &pdfrum_common::Limits::default(),
-        &mut Diagnostics::with_limit(0),
-    );
-    match font {
-        Ok(f) => (GlyphSource::Type1(Arc::new(f)), family),
-        Err(_) => (GlyphSource::None, family),
-    }
+    // Diagnostics are discarded here exactly as they were before: the limit is
+    // zero, the input is a constant this crate ships, and a caller has no way
+    // to act on damage in a blob they did not supply. `is_some()` is how the
+    // one failure that matters reaches `terminal`.
+    let source = cell.get_or_init(|| {
+        let font = pdfrum_type1::Type1Font::parse(
+            bytes,
+            &pdfrum_common::Limits::default(),
+            &mut Diagnostics::with_limit(0),
+        );
+        match font {
+            Ok(f) => GlyphSource::Type1(Arc::new(f)),
+            Err(_) => GlyphSource::None,
+        }
+    });
+    (source.clone(), family)
 }
 
 /// A glyph name looked up in the substituted face, for the fallback path.
