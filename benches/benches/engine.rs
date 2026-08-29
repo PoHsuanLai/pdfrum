@@ -74,6 +74,22 @@ fn render_with(c: &mut Criterion, name: &str, backend: Backend) {
         let Ok(opened) = Document::from_bytes(bytes(doc.stem)) else {
             continue;
         };
+        // Criterion's floor is `sample_size` iterations *regardless* of the
+        // measurement window, so a benchmark costs `max(window, n x iteration)`.
+        // At a flat 50 the corpus's three pathological image documents — 0.6 to
+        // 1.2 seconds each, per render — become minute-long benchmarks, three
+        // times over for the three backends, and they alone outweigh the other
+        // 41 documents combined. Measured: the suite does not finish in an hour.
+        //
+        // So the sample count is chosen per document from what one iteration
+        // costs. This is not a shortcut, it is the correct allocation: the
+        // standard error of a median falls as 1/sqrt(n), so the *last* thirty
+        // samples of a one-second benchmark buy a few percent of an interval
+        // that is already tighter than the 5% the machine itself contributes,
+        // and cost half an hour. `docs/status/M12.md` §2 carries the measured
+        // bands, which were re-taken at these counts rather than assumed to
+        // carry over.
+        group.sample_size(samples_for(doc.stem));
         group.bench_function(format!("{}/{}", doc.class.name(), doc.stem), |b| {
             b.iter(|| {
                 let mut session = RenderSession::new();
@@ -84,6 +100,28 @@ fn render_with(c: &mut Criterion, name: &str, backend: Backend) {
         });
     }
     group.finish();
+}
+
+/// How many samples one document's render is worth.
+///
+/// Named documents rather than a measured threshold, deliberately: criterion
+/// needs the count *before* it has timed anything, so a "measure then decide"
+/// rule would need a warm-up pass of its own. These five are the corpus's
+/// second-scale renders — the three pathological JPEGs plus the two heaviest
+/// real pages — identified in `corpus/PROVENANCE.md` and stable as long as the
+/// corpus is. A document not named here keeps criterion's floor of 10 raised to
+/// the suite's 50.
+///
+/// If a new document turns out to be slow, the symptom is a suite that takes an
+/// extra ten minutes per backend, and this list is where it is fixed.
+fn samples_for(stem: &str) -> usize {
+    match stem {
+        // ~0.6-1.2 s per render: a 5000x5000 JPEG and its two siblings.
+        "image_bug_718762" | "image_bug_583804" | "image_bug_898443" => 10,
+        // ~0.4-0.7 s per render.
+        "image_en_fqa" | "vector_en_system" => 20,
+        _ => 50,
+    }
 }
 
 /// The analytic parity backend.
