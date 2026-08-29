@@ -109,13 +109,25 @@ pub fn draw_path<B: RasterBackend>(
     }
 
     // 3. Zero-area sub-paths become hairlines at a quarter of the fill alpha.
-    let mut drew_thin = false;
+    //
+    // **This does not replace the fill, it precedes it.** The C++ loop runs
+    // `DrawZeroAreaPath` over each sub-path and then falls through to the
+    // ordinary `DrawPath` at the end of the function — there is no early
+    // return anywhere in it (`cfx_renderdevice.cpp:772-804`).
+    //
+    // The distinction is invisible on a sub-path that really is degenerate,
+    // because filling one paints nothing anyway. It is decisive on a path
+    // that merely *contains* a fold: `GetZeroAreaPath`'s third case scans an
+    // otherwise ordinary sub-path for a segment that doubles back
+    // (`IsFoldingVerticalLine` and its two siblings) and emits **just that
+    // segment** as a hairline. Returning here on the strength of it threw
+    // away the polygon the fold was attached to — `bug_1338` draws five such
+    // shapes and we painted only their spikes.
     if let Some(fill) = paint.fill
         && paint.stroke.is_none()
         && !paint.text_mode
     {
         for zero in zero_area_sub_paths(path, Some(to_device), true) {
-            drew_thin = true;
             if zero.path.elements().is_empty() {
                 continue; // The all-points-identical case draws nothing.
             }
@@ -150,9 +162,6 @@ pub fn draw_path<B: RasterBackend>(
                 &stroke,
                 aa,
             );
-        }
-        if drew_thin {
-            return true;
         }
     }
 
