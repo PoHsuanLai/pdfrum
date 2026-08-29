@@ -90,6 +90,16 @@ pub struct Options {
     /// and renders what pdfrum wrote (SPEC.md §11's ruling E7). The asymmetry
     /// is expected, and the harness never diffs this flag against the oracle.
     pub save: bool,
+    /// A curated page mutation to apply before saving, from `--mutate=`.
+    ///
+    /// Like `--save`, this has **no oracle counterpart** — `pdfium_test`
+    /// cannot edit a document either. It exists so the harness can perform
+    /// M11's exit check: pdfrum mutates page 0 and saves, the oracle reopens
+    /// and renders the result, and the two renders of that same file are
+    /// compared. Implies `--save`; an unrecognised value is refused, because
+    /// silently saving an unmutated file would make the check pass for the
+    /// wrong reason.
+    pub mutate: Option<String>,
     /// The rasterizer named by `--use-renderer=`, verbatim.
     ///
     /// The oracle has this flag too — it picks between its AGG and Skia
@@ -212,6 +222,14 @@ pub fn parse(args: &[String]) -> Result<Options, ParseError> {
             options.save = true;
             options.save_decrypted = true;
         } else if arg == "--save" {
+            options.save = true;
+        } else if let Some(value) = arg.strip_prefix("--mutate=") {
+            if crate::mutate::Mutation::parse(value).is_none() {
+                return Err(ParseError::Rejected(format!(
+                    "Unrecognized mutation {value}"
+                )));
+            }
+            options.mutate = Some(value.to_owned());
             options.save = true;
         } else if let Some(format) = output_format_of(arg) {
             if options.format != OutputFormat::None {

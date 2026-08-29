@@ -92,7 +92,7 @@ pub fn process_file(
     // keeps its ordering, and before the summary line so a save failure is
     // visible next to the file it belongs to.
     if options.save {
-        save_document(&doc, name, options.save_decrypted, streams)?;
+        save_document(&doc, name, options, streams)?;
     }
 
     writeln!(streams.err, "Processed {} pages.", counts.processed)?;
@@ -119,7 +119,7 @@ pub fn save_path(input: &Path) -> Option<PathBuf> {
 fn save_document(
     doc: &Document,
     name: &str,
-    decrypted: bool,
+    options: &Options,
     streams: &mut Streams<'_>,
 ) -> std::io::Result<()> {
     let Some(path) = save_path(Path::new(name)) else {
@@ -127,18 +127,41 @@ fn save_document(
         return Ok(());
     };
 
-    let edit = pdfrum_edit::EditDoc::new(doc);
+    let mut edit = pdfrum_edit::EditDoc::new(doc);
+
+    // A mutation is staged into the overlay first, so the save below writes
+    // the regenerated streams the same way it writes everything else —
+    // through the same cipher, into the same xref.
+    if let Some(name) = &options.mutate
+        && let Some(mutation) = crate::mutate::Mutation::parse(name)
+    {
+        let mut diags = pdfrum_common::Diagnostics::default();
+        let limits = pdfrum_common::Limits::default();
+        match crate::mutate::apply(doc, &mut edit, mutation, &limits, &mut diags) {
+            crate::mutate::Applied::Rewritten { streams: count } => writeln!(
+                streams.err,
+                "Mutated page 0 with {}, rewriting {count} content stream(s).",
+                mutation.name()
+            )?,
+            crate::mutate::Applied::Skipped(why) => writeln!(
+                streams.err,
+                "Mutation {} did nothing: {why}.",
+                mutation.name()
+            )?,
+        }
+    }
+    let edit = edit;
     // An encrypted document saves encrypted, under the handler the
     // `--password=` opened it with, so the output needs that same password
     // (SPEC.md §11's M10 ruling). `--save-decrypted` is the way to ask for
     // the plaintext the earlier ruling E3 produced unconditionally.
-    let options = pdfrum_edit::SaveOptions {
-        remove_security: decrypted,
+    let save_options = pdfrum_edit::SaveOptions {
+        remove_security: options.save_decrypted,
         ..pdfrum_edit::SaveOptions::default()
     };
 
     let mut out = Vec::new();
-    if let Err(err) = pdfrum_edit::save(&edit, &options, &mut out) {
+    if let Err(err) = pdfrum_edit::save(&edit, &save_options, &mut out) {
         writeln!(streams.err, "Failed to save: {err}.")?;
         return Ok(());
     }

@@ -21,6 +21,7 @@ mod corpus;
 mod generate;
 mod goldens;
 mod json;
+mod mutation;
 mod oracle;
 mod pixels;
 mod pool;
@@ -73,6 +74,9 @@ enum Command {
     TierC(TierCArgs),
     /// Save every corpus file and check that the oracle reopens it (M7).
     SaveRoundTrip(SaveArgs),
+    /// Mutate a page of every corpus file, save it, and check that the
+    /// oracle's render of the result matches ours (M11).
+    MutateRoundTrip(MutateArgs),
 }
 
 /// Options shared by the corpus-walking subcommands.
@@ -165,6 +169,34 @@ struct SaveArgs {
     render_sample: usize,
 }
 
+/// Arguments for the mutation sweep (M11's exit check).
+///
+/// Needs both binaries for the same reason the save sweep does, and for a
+/// sharper one: the comparison is between the two implementations' renders of
+/// one file that *neither* has a golden for, because pdfrum wrote it.
+#[derive(Debug, Args)]
+struct MutateArgs {
+    #[command(flatten)]
+    corpus: CorpusArgs,
+    /// Path to the pdfrum-tool binary under test.
+    #[arg(long, env = "PDFRUM_TOOL")]
+    tool: Option<PathBuf>,
+    /// Path to the oracle's `pdfium_test`, which reopens and renders what we
+    /// mutate.
+    #[arg(long, env = "PDFRUM_ORACLE")]
+    oracle: Option<PathBuf>,
+    /// Hermetic font directory (default: `<checkout>/third_party/test_fonts`).
+    #[arg(long)]
+    font_dir: Option<PathBuf>,
+    /// Mutate at most this many files, sampled evenly across the corpus.
+    ///
+    /// Every pair costs three renders, so the sweep samples rather than
+    /// exhausts; the sample is a stride rather than a prefix because the
+    /// corpus is grouped by directory and a prefix would be one feature.
+    #[arg(long, default_value_t = 200)]
+    sample: usize,
+}
+
 #[derive(Debug, Args)]
 struct TriageArgs {
     /// Scoreboard to read (default: conformance/scoreboard.json).
@@ -195,6 +227,7 @@ fn dispatch() -> Result<ExitCode> {
         Command::Triage(args) => triage_report(&args),
         Command::TierC(args) => tier_c(&args),
         Command::SaveRoundTrip(args) => save_round_trip(&args),
+        Command::MutateRoundTrip(args) => mutate_round_trip(&args),
     }
 }
 
@@ -696,6 +729,139 @@ fn save_round_trip(args: &SaveArgs) -> Result<ExitCode> {
     Ok(ExitCode::SUCCESS)
 }
 
+fn mutate_round_trip(args: &MutateArgs) -> Result<ExitCode> {
+    let checkout = args.corpus.checkout();
+    let font_dir = args
+        .font_dir
+        .clone()
+        .unwrap_or_else(|| checkout.join("third_party/test_fonts"));
+    let tool = ToolPaths {
+        binary: args
+            .tool
+            .clone()
+            .unwrap_or_else(|| repo_root().join("target/release/pdfrum-tool")),
+        font_dir: font_dir.clone(),
+    };
+    let oracle = OraclePaths {
+        binary: args
+            .oracle
+            .clone()
+            .unwrap_or_else(|| repo_root().join(DEFAULT_ORACLE)),
+        font_dir,
+    };
+    generate::check_oracle(&oracle)?;
+
+    let suppressed = load_suppressions(&checkout)?;
+    let listing = corpus::list(&Roots::under(&checkout), &suppressed)
+        .with_context(|| format!("walking the corpus under {}", checkout.display()))?;
+    let mut entries = listing.entries;
+    if let Some(limit) = args.corpus.limit {
+        entries.truncate(limit);
+    }
+    let stride = entries.len().div_ceil(args.sample.max(1)).max(1);
+    let sampled: Vec<(usize, corpus::Entry)> = entries
+        .into_iter()
+        .enumerate()
+        .filter(|(index, _)| index % stride == 0)
+        .collect();
+
+    let fixup = checkout.join("testing/tools/fixup_pdf_template.py");
+    let base = scratch_root("mutate")?;
+    let batches: Vec<Vec<mutation::MutationOutcome>> =
+        pool::map(&sampled, args.corpus.workers(), |(index, entry)| {
+            mutation::check_one(
+                entry,
+                &tool,
+                &oracle,
+                &mutation::scratch_for(&base, *index),
+                &fixup,
+            )
+        });
+    std::fs::remove_dir_all(&base).ok();
+    let outcomes: Vec<mutation::MutationOutcome> = batches.into_iter().flatten().collect();
+
+    let mut tally = mutation::MutationTally::default();
+    for outcome in &outcomes {
+        tally.add(outcome);
+    }
+    report_mutation_tally(&tally, sampled.len());
+
+    // A file that never got as far as a save is reported too: the sweep is
+    // meant to exercise the mutation path, and a run where nothing reached it
+    // is a broken harness rather than a clean result.
+    let mut failures: Vec<&mutation::MutationOutcome> = outcomes
+        .iter()
+        .filter(|o| !o.passed() || !o.saved)
+        .collect();
+    failures.sort_by(|a, b| (&a.path, &a.mutation).cmp(&(&b.path, &b.mutation)));
+    // The pixel shortfalls come first: a file the tool cannot open at all is
+    // already Tier B's business, and burying the interesting failures under a
+    // list of those would defeat the report.
+    failures.sort_by_key(|o| !(o.saved && o.mutated));
+    let show = if std::env::var_os("PDFRUM_SHOW_ALL").is_some() {
+        failures.len()
+    } else {
+        triage::EXAMPLES
+    };
+    for outcome in failures.iter().take(show) {
+        println!(
+            "    {} [{}] - {}",
+            outcome.path, outcome.mutation, outcome.note
+        );
+    }
+    if failures.len() > show {
+        println!("    ... and {} more", failures.len() - show);
+    }
+
+    Ok(if failures.is_empty() {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::FAILURE
+    })
+}
+
+/// The mutation sweep's summary, in the shape the save sweep's uses.
+fn report_mutation_tally(tally: &mutation::MutationTally, files: usize) {
+    let pct = |rate: Option<f64>| match rate {
+        Some(rate) => format!("{:.1}%", rate * 100.0),
+        None => "n/a".to_owned(),
+    };
+    println!(
+        "mutate round trip over {files} files x {} mutations",
+        mutation::MUTATIONS.len()
+    );
+    println!("  mutations applied:  {}", tally.mutated);
+    println!("  nothing to mutate:  {}", tally.nothing_to_do);
+    println!("  never saved:        {}", tally.skipped);
+    println!(
+        "  oracle reopened:    {} ({})",
+        tally.reopened,
+        pct(tally.reopen_rate())
+    );
+    println!(
+        "  agreed at >= {:.2}:  {} ({})",
+        mutation::FLOOR,
+        tally.within_floor,
+        pct(tally.agreement_rate())
+    );
+    // A file the two renderers already disagreed on is counted apart, because
+    // the mutation did not cause the disagreement and fixing it is somebody
+    // else's milestone.
+    println!(
+        "  + already disagreed: {} — the two renderers differ on the unmutated page too",
+        tally.baseline_explained
+    );
+    println!(
+        "  lost nothing:       {} ({})",
+        tally.within_floor + tally.baseline_explained,
+        pct(tally.no_loss_rate())
+    );
+    match tally.worst_ssim {
+        Some(worst) => println!("  worst ssim:         {worst:.6}"),
+        None => println!("  worst ssim:         n/a"),
+    }
+}
+
 fn triage_report(args: &TriageArgs) -> Result<ExitCode> {
     let path = args
         .scoreboard
@@ -774,7 +940,8 @@ mod tests {
                 "run",
                 "triage",
                 "tier-c",
-                "save-round-trip"
+                "save-round-trip",
+                "mutate-round-trip"
             ]
         );
     }

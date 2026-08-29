@@ -204,6 +204,44 @@ impl StreamBounds {
         Self { starts }
     }
 
+    /// The boundaries for content joined from elements ending at the given
+    /// byte offsets.
+    ///
+    /// Each element is parsed on its own and its operators counted, which is
+    /// exact rather than approximate because of the separating space a join
+    /// inserts after every element: it terminates whatever token the element
+    /// ended on, so no operator can span a boundary. The last element takes
+    /// whatever the joined list has left over, which absorbs any disagreement
+    /// rather than dropping objects off the end.
+    ///
+    /// `ends[i]` is one past the last byte of element `i`, counting the
+    /// separator. A single element — or none — yields the default, where
+    /// everything is element 0.
+    #[must_use]
+    pub fn from_joined(bytes: &[u8], total_ops: usize, ends: &[usize], limits: &Limits) -> Self {
+        if ends.len() <= 1 {
+            return Self::default();
+        }
+        let mut counts = Vec::with_capacity(ends.len());
+        let mut start = 0usize;
+        let mut consumed = 0usize;
+        for (index, end) in ends.iter().enumerate() {
+            if index.saturating_add(1) == ends.len() {
+                counts.push(total_ops.saturating_sub(consumed));
+                break;
+            }
+            let element = bytes.get(start..*end).unwrap_or_default();
+            // The diagnostics these parses raise are the ones the joined parse
+            // already recorded, so they are discarded rather than doubled.
+            let mut ignored = Diagnostics::default();
+            let count = crate::parse_content(element, limits, &mut ignored).len();
+            consumed = consumed.saturating_add(count);
+            counts.push(count);
+            start = *end;
+        }
+        Self::from_counts(counts)
+    }
+
     /// Which element the operator at `op_index` belongs to.
     ///
     /// The last element whose start is at or before the operator — so an

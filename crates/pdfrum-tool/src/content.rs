@@ -88,6 +88,83 @@ pub fn build<R: Resolve>(
     )
 }
 
+/// A page's content, joined, plus where each `/Contents` element ends.
+///
+/// [`assemble`] with the boundaries kept. Only the editor wants them: the
+/// interpreter reads the joined buffer as one run, and an element's index
+/// matters solely to a save that will write one of them again.
+#[must_use]
+pub fn assemble_segments<R: Resolve>(
+    page: &Dict,
+    r: &R,
+    limits: &Limits,
+    diags: &mut Diagnostics,
+) -> (Vec<u8>, Vec<usize>) {
+    let key = Name::from("Contents");
+    let Some(contents) = page.get(&key, r) else {
+        return (Vec::new(), Vec::new());
+    };
+    let mut out = Vec::new();
+    let mut ends = Vec::new();
+    let mut push = |object: &Object, out: &mut Vec<u8>, ends: &mut Vec<usize>| {
+        if let Some(stream) = object.as_stream() {
+            let decoded = pdfrum_filters::decode_chain(stream, 0, r, limits, diags);
+            out.extend_from_slice(&decoded.data);
+            out.push(b' ');
+        }
+        ends.push(out.len());
+    };
+    let Some(direct) = contents.as_direct() else {
+        return (out, ends);
+    };
+    match direct {
+        Object::Stream(_) => push(direct, &mut out, &mut ends),
+        Object::Array(array) => {
+            for element in array.iter() {
+                if let Ok(resolved) = element.resolve(r) {
+                    push(resolved.get(), &mut out, &mut ends);
+                } else {
+                    // A dangling element still occupies an index, so the ones
+                    // after it keep their numbers.
+                    ends.push(out.len());
+                }
+            }
+        }
+        _ => {}
+    }
+    (out, ends)
+}
+
+/// Interprets one page, recording which `/Contents` element each object came
+/// from.
+///
+/// [`build`] plus the two facts only an editor needs: each object's element
+/// index, and the transform each element leaves behind.
+#[must_use]
+pub fn build_page_for_edit<R: Resolve>(
+    doc: &R,
+    page: &PageDict,
+    resources: &Dict,
+    ctx: &mut BuildContext,
+    limits: &Limits,
+    diags: &mut Diagnostics,
+) -> Page {
+    let (bytes, ends) = assemble_segments(&page.dict, doc, limits, diags);
+    let ops = parse_content(&bytes, limits, diags);
+    let bounds = pdfrum_page::StreamBounds::from_joined(&bytes, ops.len(), &ends, limits);
+    pdfrum_page::build_page_streams(
+        &ops,
+        &bounds,
+        &page.dict,
+        |key| page.inherited(key, doc),
+        &Resources::for_page(Some(resources.clone())),
+        doc,
+        ctx,
+        limits,
+        diags,
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

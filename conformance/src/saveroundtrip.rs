@@ -686,11 +686,14 @@ impl SaveTotals {
     }
 }
 
+/// `part` as a fraction of `whole`, or `None` when there is no whole.
+///
+/// Shared with the mutation sweep, which counts the same kind of thing.
 #[expect(
     clippy::cast_precision_loss,
     reason = "a corpus file count is far inside f64's exact integer range"
 )]
-fn rate(part: u64, whole: u64) -> Option<f64> {
+pub fn rate(part: u64, whole: u64) -> Option<f64> {
     (whole > 0).then(|| part as f64 / whole as f64)
 }
 
