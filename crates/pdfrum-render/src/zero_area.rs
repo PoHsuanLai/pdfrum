@@ -46,44 +46,87 @@ pub fn snap_to_pixel_center(c: f64) -> f64 {
     f64::from(truncated) + 0.5
 }
 
-/// The points of one sub-path, with a flag for whether any curve was present.
-struct SubPath {
+/// The two buffers a zero-area scan needs, kept between calls.
+///
+/// The scan runs on **every fill-only path object of every page**, and on the
+/// corpus it almost never finds anything: `vector_paths_1751` scans 4925 paths
+/// and detects zero. Building a `Vec<SubPath>` — plus one `Vec<Point>` per
+/// sub-path — to answer "no" 4925 times was 9866 allocations per render
+/// (docs/status/M12b-P2.md §4). Now one sub-path's points go into a buffer that
+/// is cleared and refilled, and the results into a second, and a caller that
+/// holds a [`Scratch`] across a page allocates neither after the first path
+/// that needs them.
+///
+/// A record of two buffers, not an object: [`scan_into`] is the operation and
+/// this only holds its working memory. It lives on
+/// [`RenderCaches`](crate::RenderCaches) with the glyph and image caches, which
+/// is where a render session's reusable buffers belong.
+#[derive(Debug, Default)]
+pub struct Scratch {
+    /// One sub-path's points, cleared per sub-path.
     points: Vec<Point>,
-    has_curve: bool,
+    /// The detections, cleared per path.
+    found: Vec<ZeroArea>,
 }
 
-fn sub_paths(path: &BezPath) -> Vec<SubPath> {
-    let mut out: Vec<SubPath> = Vec::new();
+impl Scratch {
+    /// Empty buffers.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+/// Apply the detector to every `MoveTo`-delimited sub-path of `path`, reusing
+/// `scratch`'s buffers, and return what it found.
+///
+/// The borrow is the whole point: the result borrows `scratch`, so the caller
+/// reads the detections and the buffers stay allocated for the next path. A
+/// sub-path the detector rejects is *not* in the result and must still be
+/// filled normally, exactly as [`zero_area_sub_paths`] documents.
+pub fn scan_into<'a>(
+    scratch: &'a mut Scratch,
+    path: &BezPath,
+    transform: Option<kurbo::Affine>,
+    adjust: bool,
+) -> &'a [ZeroArea] {
+    scratch.found.clear();
+    scratch.points.clear();
+    let mut has_curve = false;
+    // A sub-path ends where the next `MoveTo` begins and where the elements
+    // run out, so the detector is invoked from two places — here on the
+    // boundary and once after the loop. Spelling it as a closure would need a
+    // second mutable borrow of `scratch`; spelling it twice is three lines.
     for el in path.elements() {
         match *el {
-            PathEl::MoveTo(p) => out.push(SubPath {
-                points: {
-                    crate::walkprofile::alloc_items(
-                        crate::walkprofile::Site::ZeroAreaPoints,
-                        1,
-                        core::mem::size_of::<Point>(),
-                    );
-                    vec![p]
-                },
-                has_curve: false,
-            }),
+            PathEl::MoveTo(p) => {
+                if let Some(zero) = zero_area_path(&scratch.points, has_curve, transform, adjust) {
+                    scratch.found.push(zero);
+                }
+                scratch.points.clear();
+                has_curve = false;
+                scratch.points.push(p);
+            }
             PathEl::LineTo(p) => {
-                if let Some(last) = out.last_mut() {
-                    last.points.push(p);
+                if !scratch.points.is_empty() {
+                    scratch.points.push(p);
                 }
             }
             // Both curve kinds contribute only their endpoint to the point
             // list; the flag is what suppresses the folding scans downstream.
             PathEl::QuadTo(_, p) | PathEl::CurveTo(_, _, p) => {
-                if let Some(last) = out.last_mut() {
-                    last.points.push(p);
-                    last.has_curve = true;
+                if !scratch.points.is_empty() {
+                    scratch.points.push(p);
+                    has_curve = true;
                 }
             }
             PathEl::ClosePath => {}
         }
     }
-    out
+    if let Some(zero) = zero_area_path(&scratch.points, has_curve, transform, adjust) {
+        scratch.found.push(zero);
+    }
+    &scratch.found
 }
 
 /// `CheckSimpleLinePath`: a two-point `Move,Line`, or a three-point
@@ -259,26 +302,31 @@ pub fn zero_area_path(
         .or_else(|| check_folding(points, has_curve))
 }
 
-/// Apply the detector to every `MoveTo`-delimited sub-path of `path`.
+/// Apply the detector to every `MoveTo`-delimited sub-path of `path`, owning
+/// the result.
 ///
 /// Returns the sub-paths that were degenerate, each with its replacement.
 /// A sub-path the detector rejects is *not* in the result and must still be
 /// filled normally.
+///
+/// The walk does **not** call this — it calls [`scan_into`] with the session's
+/// [`Scratch`], because the scan runs on every fill-only path object and the
+/// allocations this signature forces were 9866 per render on one corpus document
+/// (`docs/status/M12b-P2.md` §5). This stays as the convenient form for a caller
+/// asking the question once.
 #[must_use]
 pub fn zero_area_sub_paths(
     path: &BezPath,
     transform: Option<kurbo::Affine>,
     adjust: bool,
 ) -> Vec<ZeroArea> {
-    let subs = sub_paths(path);
+    let mut scratch = Scratch::new();
     crate::walkprofile::alloc_items(
         crate::walkprofile::Site::ZeroAreaVec,
-        subs.len(),
-        core::mem::size_of::<SubPath>(),
+        path.elements().len(),
+        core::mem::size_of::<Point>(),
     );
-    subs.into_iter()
-        .filter_map(|sp| zero_area_path(&sp.points, sp.has_curve, transform, adjust))
-        .collect()
+    scan_into(&mut scratch, path, transform, adjust).to_vec()
 }
 
 /// The alpha a thin zero-area replacement is stroked at: the fill's alpha
@@ -455,5 +503,96 @@ mod tests {
         p.close_path(); // a real rectangle, not degenerate
         let found = zero_area_sub_paths(&p, None, false);
         assert_eq!(found.len(), 1);
+    }
+
+    /// The scratch-reusing scan must answer exactly what the allocating one
+    /// answered, on the shapes the sub-path split can differ on: a leading
+    /// segment before any `MoveTo`, an empty path, a bare `MoveTo`, several
+    /// sub-paths of different kinds, and a curve (whose flag suppresses two of
+    /// the three detectors). This is the specification of the change — it is a
+    /// memory change and must be nothing else.
+    #[test]
+    fn the_reused_scratch_finds_exactly_what_a_fresh_one_finds() {
+        // The reference is the implementation this replaced, written out here
+        // rather than called, so the assertion compares against the old code
+        // and not against a wrapper around the new code.
+        fn allocating_reference(
+            path: &BezPath,
+            transform: Option<kurbo::Affine>,
+            adjust: bool,
+        ) -> Vec<ZeroArea> {
+            struct SubPath {
+                points: Vec<Point>,
+                has_curve: bool,
+            }
+            let mut subs: Vec<SubPath> = Vec::new();
+            for el in path.elements() {
+                match *el {
+                    PathEl::MoveTo(p) => subs.push(SubPath {
+                        points: vec![p],
+                        has_curve: false,
+                    }),
+                    PathEl::LineTo(p) => {
+                        if let Some(last) = subs.last_mut() {
+                            last.points.push(p);
+                        }
+                    }
+                    PathEl::QuadTo(_, p) | PathEl::CurveTo(_, _, p) => {
+                        if let Some(last) = subs.last_mut() {
+                            last.points.push(p);
+                            last.has_curve = true;
+                        }
+                    }
+                    PathEl::ClosePath => {}
+                }
+            }
+            subs.into_iter()
+                .filter_map(|sp| zero_area_path(&sp.points, sp.has_curve, transform, adjust))
+                .collect()
+        }
+
+        // A `ClosePath` between two sub-paths, and a `MoveTo` immediately
+        // followed by another: both are places the boundary logic could put a
+        // point on the wrong list.
+        let mut boundaries = BezPath::new();
+        boundaries.move_to((0.0, 0.0));
+        boundaries.line_to((9.0, 0.0));
+        boundaries.close_path();
+        boundaries.move_to((1.0, 1.0));
+        boundaries.move_to((2.0, 2.0));
+        boundaries.line_to((2.0, 8.0));
+
+        let mut several = BezPath::new();
+        several.move_to((0.0, 0.0));
+        several.line_to((10.0, 0.0));
+        several.move_to((20.0, 20.0));
+        several.line_to((30.0, 20.0));
+        several.line_to((30.0, 30.0));
+        several.line_to((20.0, 30.0));
+        several.close_path();
+        several.move_to((40.0, 40.0));
+        several.line_to((50.0, 50.0));
+        several.line_to((40.0, 40.0));
+
+        let mut curved = BezPath::new();
+        curved.move_to((0.0, 0.0));
+        curved.curve_to((1.0, 1.0), (2.0, 2.0), (3.0, 3.0));
+
+        let mut bare = BezPath::new();
+        bare.move_to((7.0, 7.0));
+
+        let paths = [boundaries, several, curved, bare, BezPath::new()];
+        // One scratch across all of them, which is the point: the second path
+        // runs against buffers the first left behind.
+        let mut scratch = Scratch::new();
+        for path in &paths {
+            for adjust in [false, true] {
+                for transform in [None, Some(kurbo::Affine::scale(2.0))] {
+                    let fresh = allocating_reference(path, transform, adjust);
+                    let reused = scan_into(&mut scratch, path, transform, adjust);
+                    assert_eq!(fresh.as_slice(), reused, "{path:?} adjust={adjust}");
+                }
+            }
+        }
     }
 }
