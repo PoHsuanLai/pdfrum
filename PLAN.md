@@ -540,6 +540,104 @@ changing the cold convention; it is documented and ratcheted deliberately.
   decode-target contract via `[spec]`, PLAN.md marked, and the bench baseline
   re-committed. Withdrawn claims are recorded, never deleted.
 
+## M12c — GPU backend: `vello` on `wgpu`  *(parallel with M12b; independent crate)*
+
+Promoted out of "post-1.0 options" on 2026-08-31 by an argument that resolves
+the objection which put it there. **The reasoning is worth recording, because it
+is the only place the pure-Rust guarantee is deliberately relaxed.**
+
+DEPS.md left GPU `vello` as "a post-M8 decision" with a careful hedge: `wgpu`
+reaches OS graphics drivers, which it called "system API calls, not vendored C"
+— an *argued exemption* from the pure-Rust rule rather than a clean pass. The
+resolving argument: **pdfrum's most likely consumer is a Rust GUI frontend**
+(egui, iced, dioxus — all wgpu-backed). In that process `wgpu` is *already in
+the dependency tree and a device is already open*. Refusing it preserves purity
+for nobody; it merely forces a CPU rasterize-then-upload path in an application
+that is holding a GPU device the whole time. So the exemption buys a real
+capability and costs a guarantee that, for that consumer, was already spent.
+
+Two constraints keep this from relaxing the guarantee for everyone else, and
+they are not negotiable:
+
+- **Isolation.** The backend lives in its own crate, `pdfrum-raster-vello-gpu`,
+  that **nothing in the core ring depends on** — not the `pdfrum` facade's
+  default, not `pdfrum-tool`'s default features. A headless or embedded build
+  must still resolve a tree with **zero `wgpu`**, and `cargo-deny`'s bans on
+  `cc`/`bindgen`/`cmake`/`pkg-config` stay enforced on every other crate. Prove
+  this with a committed check, not an assertion: a `cargo tree` assertion in CI
+  that the facade's default feature set contains no `wgpu`.
+- **Device injection, not device creation.** The API takes a caller-supplied
+  `wgpu::Device` and `Queue`. A frontend already has them, and standing up a
+  second device inside a PDF library is waste the embedder cannot opt out of.
+  Owning-the-device may exist as a convenience constructor behind a feature for
+  headless use, but the *primary* constructor borrows. This is the difference
+  between a backend an application can adopt and a demo.
+
+**Versions** (checked 2026-08-31): `vello` 0.10 targets `wgpu` 30, which is
+current, so the shared-device story with today's frontends is real rather than a
+version-skew fight. Pin both exactly, as every other dep is pinned.
+
+- **G1 — the backend.** Implement `RenderDevice` (`crates/pdfrum-render/src/device.rs:91`)
+  against `vello` 0.10. The seam is already proven by three backends and the
+  vocabulary types are `kurbo`/`peniko`, which vello consumes natively, so this
+  is mostly a mapping exercise. The parts that are *not* mechanical, and which
+  the status doc must address explicitly:
+  - **Layers and clips.** The trait's contract requires every `push_layer`
+    matched by a `pop`, and vello's scene model is retained rather than
+    immediate. Blend modes, soft masks, and transparency groups are where a
+    naive mapping silently diverges.
+  - **`draw_image`'s prescale contract is CPU-shaped, and on GPU it is
+    backwards.** The docs on that method say a reduced image "has already been
+    box-filtered down to roughly its device size by `prescale`" so the two-tap
+    kernel runs near 1:1. On a GPU you would instead upload the full texture and
+    let the sampler and its mipmaps do the reduction. **Do not unilaterally
+    change that contract** — M12b P1 is concurrently making decode itself
+    resolution-aware, and these two interact. Measure it, write down what the
+    right GPU answer is, and route any contract change through `[spec]` with P1's
+    outcome in hand.
+  - **Pattern cells and shadings**, which the CPU path decomposes into thousands
+    of tiny fills — the same decomposition that made SIMD useless in M12 §3.9.
+    A GPU may want the opposite structure entirely. Note it; do not rewrite the
+    engine for it in this milestone.
+
+- **G2 — what "correct" can even mean here, decided before measuring.** GPU
+  rasterization is **not bit-reproducible across vendors and drivers**, so this
+  backend **cannot join the conformance scoreboard on the CPU backends' terms**
+  and must never be allowed to weaken it. It is a **Tier C** participant only
+  (cross-backend divergence, per PLAN.md's fidelity tiers): the CPU backends
+  remain the oracle-compared ones, and the GPU backend is compared against
+  *them*, with a divergence budget stated up front and justified. Large
+  divergence is a backend bug. **If making the GPU backend agree required
+  changing the CPU output, that is the wrong direction and is forbidden** — the
+  CPU output is what the oracle validates.
+
+- **G3 — measurement, on real hardware.** This machine has two NVIDIA
+  RTX 4090-class cards plus AMD integrated graphics with render nodes present
+  (`/dev/dri/renderD128-130`), so the backend can be *measured*, not written
+  blind. `vulkaninfo` is absent but is only a diagnostic; `wgpu` talks to the
+  loader directly. Benchmark honestly: **include upload and readback**, because
+  an embedder rendering a page to a texture pays them, and a GPU number that
+  excludes them is marketing rather than measurement. Report the crossover —
+  the page complexity below which the CPU backend wins, which for small simple
+  pages it certainly will. A backend that loses on the corpus but wins on
+  heavy vector pages is a **success with a documented envelope**, not a failure;
+  say which documents fall on which side.
+
+- **Targets (adjustable).** Correctness before speed: every corpus document
+  renders without panic or device loss, and Tier-C divergence against
+  `raster-exact` is inside a stated, justified budget on all 44 bench documents.
+  Then: a measured speedup on at least the `vector` and `shading` classes at
+  a stated resolution, upload and readback included, with the CPU-wins
+  crossover documented. **The facade's default backend does not change**, and
+  the conformance scoreboard stays byte-identical throughout — this milestone
+  adds a capability and must not perturb an existing number.
+
+- **Exit:** `docs/status/M12c.md` in M12.md's register (hypothesis, method,
+  measurement, verdict, non-results included); a DEPS.md row for `wgpu`/`vello`
+  that states the exemption, **its blast radius, and the CI check that bounds
+  it**; the isolation check committed; and the crate excluded from the M13
+  publish set unless it is genuinely ready.
+
 ## M13 — Release
 
 MSRV declared and CI-checked; repository URL; bottom-up family publish to
@@ -547,5 +645,5 @@ crates.io per docs/status/M8.md (round-one --no-verify for dev-dep
 back-edges); README badges + final docs pass; the 24h fuzz-gate certificate
 re-run to completion on an idle machine; upstream hayro-jbig2 issue filed.
 *Post-1.0 options (explicitly out of Phase 2):* progressive/linearized
-loading, GPU vello backend, JS actions via boa, re-keying/encryption-mode
-conversion on save.
+loading, JS actions via boa, re-keying/encryption-mode conversion on save.
+*(GPU `vello` was promoted out of this list into M12c on 2026-08-31.)*
