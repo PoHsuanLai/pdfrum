@@ -209,6 +209,9 @@ fn timed_render(args: &Args, bytes: &Arc<[u8]>) {
     black_box(&mut ctx);
 
     timed::reset();
+    // The page-graph build above walks nothing, but `take` is what clears the
+    // walk's accumulator and the loop below must start from zero either way.
+    let _ = pdfrum_render::walkprofile::take();
     let mut caches = pdfrum_render::RenderCaches::default();
     let mut diags = pdfrum_common::Diagnostics::default();
 
@@ -329,6 +332,113 @@ fn report(
     eprintln!(
         "The decorator's own `Instant::now()` pairs are counted in ENGINE, and are\n\
          a few percent of a call that costs a microsecond. See the module docs."
+    );
+    walk_report(iters, engine);
+}
+
+/// Split the ENGINE half further, when the walk's own instrumentation is on.
+///
+/// Without the `walk-profile` feature every counter is zero and this prints the
+/// remedy instead of a table of zeroes, because a table of zeroes reads as a
+/// finding.
+fn walk_report(iters: f64, engine: std::time::Duration) {
+    use pdfrum_render::walkprofile::{Phase, Site};
+
+    let p = pdfrum_render::walkprofile::take();
+    if p.phase_calls.iter().all(|c| *c == 0) && p.site_count.iter().all(|c| *c == 0) {
+        eprintln!();
+        eprintln!(
+            "note: the walk's own phase split is off. Rebuild with it:\n\
+             \x20 cargo build --release -p pdfrum-bench --bin profile --features walk-profile\n\
+             or run `scripts/profile.sh <op> <file> <iters> <backend> --walk`."
+        );
+        return;
+    }
+
+    let engine_ms = engine.as_secs_f64() * 1000.0 / iters;
+    eprintln!();
+    eprintln!("ENGINE, split by phase (the buckets overlap where one phase nests in another):");
+    eprintln!();
+    eprintln!(
+        "{:<16} {:>10} {:>10} {:>12}",
+        "phase", "ms/iter", "of ENGINE", "calls/iter"
+    );
+    eprintln!("{:-<16} {:->10} {:->10} {:->12}", "", "", "", "");
+    let mut named = 0.0;
+    for phase in Phase::ALL {
+        let i = phase.index();
+        let (Some(t), Some(c)) = (p.phase_time.get(i), p.phase_calls.get(i)) else {
+            continue;
+        };
+        let ms = t.as_secs_f64() * 1000.0 / iters;
+        // `PathPrep` wraps the device calls a path makes, which the seam
+        // decorator has already charged to RASTER. Adding it to `named` would
+        // subtract raster time from the interpretation residue and make the
+        // residue negative on a path-heavy document, so it is reported and
+        // excluded from the sum, with the note below saying so.
+        if phase != Phase::PathPrep {
+            named += ms;
+        }
+        eprintln!(
+            "{:<16} {ms:>10.3} {:>9.1}% {:>12.0}{}",
+            phase.name(),
+            if engine_ms > 0.0 {
+                ms * 100.0 / engine_ms
+            } else {
+                0.0
+            },
+            calls_per_iter(*c, iters),
+            if phase == Phase::PathPrep {
+                "  (includes its own fill/stroke calls, counted in RASTER)"
+            } else {
+                ""
+            },
+        );
+    }
+    eprintln!("{:-<16} {:->10} {:->10} {:->12}", "", "", "", "");
+    let rest = engine_ms - named;
+    eprintln!(
+        "{:<16} {rest:>10.3} {:>9.1}%   dispatch, cull, state, recursion, path prep",
+        "INTERPRETATION",
+        if engine_ms > 0.0 {
+            rest * 100.0 / engine_ms
+        } else {
+            0.0
+        },
+    );
+    eprintln!("{:<16} {engine_ms:>10.3} {:>9.1}%", "ENGINE", 100.0);
+
+    eprintln!();
+    eprintln!("Allocation churn in the walk, by site:");
+    eprintln!();
+    eprintln!("{:<22} {:>14} {:>16}", "site", "allocs/iter", "KiB/iter");
+    eprintln!("{:-<22} {:->14} {:->16}", "", "", "");
+    let mut total_allocs = 0.0;
+    let mut total_kib = 0.0;
+    for site in Site::ALL {
+        let i = site.index();
+        let (Some(n), Some(b)) = (p.site_count.get(i), p.site_bytes.get(i)) else {
+            continue;
+        };
+        #[expect(
+            clippy::cast_precision_loss,
+            reason = "a byte total of this size is exact in f64 far beyond any \
+                      render's traffic; the column is a KiB figure to one decimal"
+        )]
+        let kib = (*b as f64) / 1024.0 / iters;
+        let allocs = calls_per_iter(*n, iters);
+        total_allocs += allocs;
+        total_kib += kib;
+        eprintln!("{:<22} {allocs:>14.0} {kib:>16.1}", site.name());
+    }
+    eprintln!("{:-<22} {:->14} {:->16}", "", "", "");
+    eprintln!("{:<22} {total_allocs:>14.0} {total_kib:>16.1}", "TOTAL");
+    eprintln!();
+    eprintln!(
+        "`RenderOptions clone` and `RenderCtx clone` are stack moves, not heap\n\
+         allocations — every field of both is Copy. Their byte column is the\n\
+         value's size and is there for scale, not for allocator traffic; the\n\
+         count is what those two rows mean. An arena reaches the other four."
     );
 }
 

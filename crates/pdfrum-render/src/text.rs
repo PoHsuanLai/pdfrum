@@ -619,6 +619,11 @@ pub fn place_glyphs(
                     // so it sits innermost — to the right of the Japan1
                     // reshaping, which is what carries the factor into that
                     // transform's `a` and `b` alone.
+                    crate::walkprofile::alloc_items(
+                        crate::walkprofile::Site::GlyphOutline,
+                        outline.elements().len(),
+                        core::mem::size_of::<kurbo::PathEl>(),
+                    );
                     out.push(PlacedGlyph {
                         outline: outline.clone(),
                         matrix: glyph_matrix(
@@ -646,6 +651,11 @@ pub fn place_glyphs(
     if snaps_origins(opts, kinds, *size, text_to_device) {
         snap_run(&mut out, opts.text_aa);
     }
+    crate::walkprofile::alloc_items(
+        crate::walkprofile::Site::GlyphVec,
+        out.capacity(),
+        core::mem::size_of::<PlacedGlyph>(),
+    );
     out
 }
 

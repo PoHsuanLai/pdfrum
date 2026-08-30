@@ -22,6 +22,17 @@ pedantic = { level = "warn", priority = -1 }
 module_name_repetitions = "allow"
 must_use_candidate = "allow"
 
+# `walk-profile` forwards to `pdfrum-render`'s feature of the same name, which
+# turns on the per-phase timers and per-site allocation counters inside the
+# walk. It is **off by default and must stay that way**: cargo unifies features
+# across a workspace build, so a default-on forward here would put the
+# instrument inside every criterion group in `pdfrum-render`'s own bench and
+# make the committed numbers measure the instrument. `scripts/profile.sh --walk`
+# builds this one binary with it and nothing else.
+[features]
+default = []
+walk-profile = ["pdfrum-render/walk-profile"]
+
 [dependencies]
 pdfrum.workspace = true
 # The corpus list, which since the M12 per-crate bench split lives in its own

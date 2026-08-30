@@ -2,13 +2,22 @@
 # Profile one pdfrum operation on one file, and say where the time goes.
 #
 # Usage:
-#   scripts/profile.sh <op> <file.pdf> [iterations] [backend]
+#   scripts/profile.sh <op> <file.pdf> [iterations] [backend] [--walk]
 #   scripts/profile.sh render benches/fixtures/foxittext.pdf 50 exact
+#   scripts/profile.sh render benches/corpus/text_foxittext.pdf 30 exact --walk
 #
 #   op        render | text | open | save   (see `pdfrum-bench --help`)
 #   file      a PDF; relative paths resolve from the workspace root
 #   iterations how many times to repeat the op inside one process (default 50)
 #   backend   exact | tinyskia | vello   (render only; default exact)
+#   --walk    also split the ENGINE half into the walk's own phases, and count
+#             the walk's per-object allocations by site. Builds with
+#             `pdfrum-render/walk-profile` and forces the in-process
+#             instrumentation path even where `perf` is available, because the
+#             two answer different questions. **The timers cost real time** —
+#             about a third of a path-heavy render, all of it `Instant::now()`
+#             pairs — so read shares from a `--walk` run and absolute
+#             milliseconds from a plain one. See docs/status/M12b-P2.md §3.
 #
 # Output: a flat symbol profile on stdout, and — when the tooling is present —
 # `target/profile/<op>-<stem>.svg`, a flamegraph.
@@ -36,6 +45,13 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+WALK=0
+ARGV=()
+for arg in "$@"; do
+    if [ "$arg" = "--walk" ]; then WALK=1; else ARGV+=("$arg"); fi
+done
+set -- "${ARGV[@]+"${ARGV[@]}"}"
+
 OP=${1:-render}
 FILE=${2:-benches/fixtures/foxittext.pdf}
 ITERS=${3:-50}
@@ -55,7 +71,11 @@ mkdir -p "$OUT"
 # this free of a separate build; if it is ever removed, this is where the
 # profile goes blind.
 echo "==> building pdfrum-bench --release"
-cargo build --release -p pdfrum-bench --bin profile >/dev/null
+FEATURES=()
+if [ "$WALK" = 1 ]; then
+    FEATURES=(--features walk-profile)
+fi
+cargo build --release -p pdfrum-bench --bin profile "${FEATURES[@]+"${FEATURES[@]}"}" >/dev/null
 
 BIN=$(cargo metadata --format-version 1 --no-deps 2>/dev/null \
     | tr ',' '\n' | grep -o '"target_directory":"[^"]*"' | head -1 \
@@ -68,8 +88,14 @@ fi
 
 ARGS=(--op "$OP" --file "$FILE" --iterations "$ITERS" --backend "$BACKEND")
 
+# `--walk` is about the engine half's internal split, which `perf` does not
+# answer any better than the timers do — and a `perf record` over an already
+# instrumented binary reports the instrument. So it takes the in-process path
+# unconditionally.
 have_perf=0
-if command -v perf >/dev/null 2>&1; then
+if [ "$WALK" = 1 ]; then
+    echo "note: --walk uses the in-process split; skipping perf." >&2
+elif command -v perf >/dev/null 2>&1; then
     paranoid=$(cat /proc/sys/kernel/perf_event_paranoid 2>/dev/null || echo 4)
     if [ "$paranoid" -le 1 ]; then
         have_perf=1
