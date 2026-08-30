@@ -137,6 +137,20 @@ pub fn render<R: Resolve>(
 ) -> Option<Rendered> {
     let limits = Limits::default();
     let mut build_diags = Diagnostics::default();
+    // The decode target has to be set before the build, because the build is
+    // what decodes the images (SPEC.md §7). `scale` is a uniform scale here —
+    // `pdfium_test` has no other kind — so the device box is the display size
+    // times it, truncated exactly as the bitmap allocation truncates.
+    let (page_w, page_h) = pdfrum_page::display_size_from_dict(
+        &page.dict,
+        |key| page.inherited(key, r),
+        r,
+        &mut build_diags,
+    );
+    let previous = std::mem::replace(
+        &mut ctx.decode_target,
+        pdfrum_page::RequestedSize::for_device(page_w * scale, page_h * scale),
+    );
     let mut built = crate::content::build(page, r, ctx, &limits, &mut build_diags);
     // `pdfium_test --png` renders with `FPDF_ANNOT`, so an annotation's
     // appearance form is part of the page image. It is appended here rather
@@ -153,6 +167,7 @@ pub fn render<R: Resolve>(
         &limits,
         &mut build_diags,
     );
+    ctx.decode_target = previous;
     let page = built;
     let opts = RenderOptions {
         transform: kurbo::Affine::scale(scale),

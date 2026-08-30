@@ -446,6 +446,33 @@ impl Page {
     }
 }
 
+/// A page's displayed size, read from its dictionary rather than from a built
+/// [`Page`].
+///
+/// The same crop box and the same `/Rotate` swap [`Page::display_size`]
+/// applies, for a caller that has to know how large a page will draw *before*
+/// building it — which is what the decode target (SPEC.md §7) needs, since the
+/// build is the thing that decodes the images.
+#[must_use]
+pub fn display_size_from_dict<R: Resolve>(
+    dict: &Dict,
+    inherited: impl Fn(&pdfrum_object::Name) -> Option<pdfrum_object::Object>,
+    r: &R,
+    diags: &mut Diagnostics,
+) -> (f64, f64) {
+    let (_, crop_box) = derive_boxes(dict, &inherited, r, diags);
+    let rotate = Rotation::from_degrees(
+        dict.int(crate::names::ROTATE, r)
+            .or_else(|| inherited(crate::names::ROTATE).and_then(|o| o.as_int()))
+            .unwrap_or(0),
+    );
+    let (w, h) = (crop_box.width(), crop_box.height());
+    match rotate {
+        Rotation::Quarter | Rotation::ThreeQuarter => (h, w),
+        Rotation::None | Rotation::Half => (w, h),
+    }
+}
+
 /// Derive a page's boxes from its inherited attributes.
 ///
 /// See the module docs for the three rules. Returns `(media, crop)`.

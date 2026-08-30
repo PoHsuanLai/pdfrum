@@ -228,8 +228,17 @@ fn the_codec_entry_points_survive_random_bytes() {
         let data = rng.bytes(len);
         let _ = decode_jbig2(None, &data, 16, 16, &limits);
         let _ = decode_jbig2(Some(&data), &data, 16, 16, &limits);
-        let _ = decode_jpx(&data, None, 0, 0, &limits);
-        let _ = decode_jpx(&data, None, 1, 3, &limits);
+        let _ = decode_jpx(&data, None, 0, RequestedSize::Full, &limits);
+        let _ = decode_jpx(
+            &data,
+            None,
+            1,
+            RequestedSize::Reduced {
+                width: 8,
+                height: 8,
+            },
+            &limits,
+        );
     }
 }
 

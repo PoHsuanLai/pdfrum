@@ -16,6 +16,7 @@ use pdfrum::{
 const HELLO: &str = "tests/fixtures/hello_world.pdf";
 const FORM: &str = "tests/fixtures/text_form.pdf";
 const BOOKMARKS: &str = "tests/fixtures/bookmarks.pdf";
+const JPX_TWO_SIZES: &str = "tests/fixtures/jpx_two_sizes.pdf";
 
 /// Whether a page dimension is exactly this many points.
 ///
@@ -840,6 +841,117 @@ fn a_shared_session_renders_the_same_pixels_as_a_fresh_one_per_page() {
         .collect();
 
     assert_eq!(fresh, shared);
+}
+
+#[test]
+fn one_image_drawn_at_two_sizes_is_right_at_both() {
+    // The correctness half of the decode target (SPEC.md §7). The page draws
+    // one 1269x1643 JPEG 2000 `XObject` twice: nearly full-page, and as a
+    // 40x50 thumbnail. Rendering the page at 1/16 scale asks for a reduced
+    // decode; rendering it at full scale asks for a much larger one. If
+    // resolution were not part of cache identity, the second render would be
+    // handed the first's thumbnail and the whole page would be a blur — the
+    // kind of failure that leaves the *size* right and only the pixels wrong,
+    // so nothing but a pixel comparison catches it.
+    let doc = Document::open(JPX_TWO_SIZES).expect("open");
+    let small = RenderOptions::scaled(1.0 / 16.0);
+    let large = RenderOptions::default();
+
+    // Each rendered alone, with nothing cached before it.
+    let alone_small = doc
+        .page(0)
+        .expect("page")
+        .render(&small)
+        .expect("small render");
+    let alone_large = doc
+        .page(0)
+        .expect("page")
+        .render(&large)
+        .expect("large render");
+
+    // Then both through one session, small first, so the large render meets a
+    // cache holding a decode far too coarse for it.
+    let mut session = pdfrum::RenderSession::new();
+    let shared_small = doc
+        .page(0)
+        .expect("page")
+        .render_session(&small, &mut session)
+        .expect("small render");
+    let shared_large = doc
+        .page(0)
+        .expect("page")
+        .render_session(&large, &mut session)
+        .expect("large render");
+
+    assert_eq!(
+        alone_small, shared_small,
+        "the small render is unaffected by sharing a session"
+    );
+    assert_eq!(
+        alone_large, shared_large,
+        "the large render must not inherit the small one's decode"
+    );
+
+    // The order the other way round is deliberately *not* symmetric, and the
+    // asymmetry is the oracle's. `CPDF_PageImageCache::Entry::IsCacheValid`
+    // (`cpdf_pageimagecache.cpp:347-358`) accepts a cached bitmap whenever it
+    // is at least as large as the new request, so a small draw that follows a
+    // large one reuses the large decode rather than decoding again. The
+    // guarantee is therefore one-directional: a hit is never *coarser* than a
+    // fresh decode would have been, and may be finer. What must hold is that
+    // the large render is unaffected either way.
+    let mut reversed = pdfrum::RenderSession::new();
+    let large_first = doc
+        .page(0)
+        .expect("page")
+        .render_session(&large, &mut reversed)
+        .expect("large render");
+    let small_after = doc
+        .page(0)
+        .expect("page")
+        .render_session(&small, &mut reversed)
+        .expect("small render");
+    assert_eq!(alone_large, large_first);
+    assert_eq!(
+        (small_after.width(), small_after.height()),
+        (alone_small.width(), alone_small.height()),
+        "reusing a finer decode changes pixels, never the output size"
+    );
+    assert!(
+        detail(&small_after) >= detail(&alone_small),
+        "a hit on a finer decode is at worst as good as decoding afresh"
+    );
+
+    // And the sizes really are the two the test claims, so the assertions
+    // above are about two genuinely different decode targets rather than about
+    // one target asked for twice.
+    assert_eq!((alone_large.width(), alone_large.height()), (600, 800));
+    assert_eq!((alone_small.width(), alone_small.height()), (37, 50));
+}
+
+/// Mean absolute difference between horizontally adjacent red samples, as a
+/// stand-in for "how much of the source survived into these pixels".
+///
+/// Comparing two renders of the *same* size, a coarser decode is smoother, so
+/// more is better. It says nothing across sizes, where the number is dominated
+/// by how many source samples one output pixel spans.
+fn detail(pixmap: &pdfrum::Pixmap) -> f64 {
+    let data = pixmap.data();
+    let (w, h) = (pixmap.width() as usize, pixmap.height() as usize);
+    let mut total = 0u64;
+    let mut count = 0u64;
+    for y in 0..h {
+        for x in 1..w {
+            let a = data.get((y * w + x) * 4).copied().unwrap_or(0);
+            let b = data.get((y * w + x - 1) * 4).copied().unwrap_or(0);
+            total += u64::from(a.abs_diff(b));
+            count += 1;
+        }
+    }
+    if count == 0 {
+        return 0.0;
+    }
+    total as f64 / count as f64
 }
 
 #[test]
