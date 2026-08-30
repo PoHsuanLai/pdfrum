@@ -388,6 +388,158 @@ Both lessons are written down where the next person will meet them.
   M12 made *repeated* image work free (§9.1's cache) and left *single* image
   work exactly where it was (§10.3).
 
+## M12b — Second performance pass: resolution-aware decode, the walk, and the arena question  *(after M12; before release)*
+
+M12 closed the warm number (0.97x geomean) and named its own residue. This
+milestone spends that residue list, in the order the *evidence* ranks it — not
+the order the classes appear in the bench table. Every rule from M12 still
+binds: **the perf-dep bar** (a dep is admitted only on a committed A/B showing
+>= 10% on one class or >= 5% geomean *against a tuned no-dep baseline*),
+**conformance is the regression gate** (`scripts/ci.sh` conformance cluster on
+every perf commit; the scoreboard's monotone rule holds), and the **bench
+ratchet** only tightens. A hypothesis that measures to zero is written down as
+a non-result, not deleted and not rounded up — §10 of M12.md is the model, and
+that section exists because two claims were withdrawn after a proper A/B
+refuted them.
+
+**The framing that must not be lost:** the cold number is 3.46x and the warm
+number is 0.97x *on the same engine*. Part of that spread is a measurement
+asymmetry (the oracle column was always its warm marginal pass — its per-page
+image cache is on by default and unbounded, so `pdfium_test`'s repeat pass
+skips every decode, and its true cold was never measurable). Part of it is real
+missing work. **P1 is the part that is real.** Do not "fix" the asymmetry by
+changing the cold convention; it is documented and ratcheted deliberately.
+
+- **P1 — Resolution-aware image decode.** The single largest confirmed gap, and
+  the one that is a *missing feature* rather than a slow loop. The oracle
+  computes a libjpeg `scale_denom` from the **destination** size
+  (`core/fpdfapi/page/cpdf_dib.cpp:531-566` — "its dimensions are
+  authoritative") and passes it to
+  `core/fxcodec/jpeg/libjpeg_scanline_decoder.cc`, so a 5000x5000 JPEG headed
+  for a 64x64 device rectangle is decoded at reduced resolution *inside the
+  inverse DCT* — 1/64th of the sample work, before a single output pixel
+  exists. We decode full resolution in `crates/pdfrum-page/src/image/dct.rs`
+  (`decoder.decode()`, no scale hint) and then throw 99.98% of it away in
+  `pdfrum_render::stretch::prescale`. This is why `build/image_image_en_fqa` is
+  516 ms and `build/image_image_bug_718762` is 326 ms — **the cost is in
+  `build`, not in the rasterizer**, which is also why M12's compositor work
+  could not touch it.
+
+  The two codecs are *not* the same problem and must not be batched:
+
+  - **JPX is already available and is the cheap half.** `hayro-jpeg2000 0.4.0`
+    exposes `DecodeSettings::target_resolution: Option<(u32, u32)>` — "a hint
+    for the target resolution that the image should be decoded at" — and
+    `crates/pdfrum-page/src/image/jpx.rs` passes `None`. JPEG 2000 carries
+    reduced-resolution levels in the codestream, so this is the format's own
+    mechanism, not an approximation. No new dependency, no upstream work. Wire
+    the device footprint through and A/B it. **Do this first**; it is the
+    lowest-risk proof that the plumbing (see the next bullet) is right.
+  - **JPEG has no such API, and the obvious shortcut is a trap.** zune-jpeg
+    0.5.15 has `idct_1x1_func` and `idct_4x4_func`, which *look* like libjpeg's
+    scaled IDCTs but are not: `src/mcu.rs:585-591` selects them by **coefficient
+    sparsity** (`len <= 1`, `len <= 10`) and they still write a full 8x8 block.
+    They are a sparse-block shortcut, not a scaled-output path, and cannot be
+    repurposed. `DecoderOptions` has `set_max_width`/`set_max_height`, but those
+    are rejection guards, not scale hints. So the JPEG options are, in
+    preference order: **(a)** upstream a real `scale_denom` to zune-jpeg (new
+    block-writing code plus MCU geometry — genuine work, and the *right* home
+    for it); **(b)** decode full-resolution but make the reduction cheaper and
+    fused, so the win is in `prescale`/`to_pixmap` rather than in the decoder;
+    **(c)** a scanline-windowed decode if zune's API permits consuming rows
+    without materializing the whole surface. **Measure (b) before committing to
+    (a)** — (b) is bounded, in-tree, and if it captures most of the win then the
+    upstream patch becomes an optional follow-up rather than a blocker. Filing
+    the zune-jpeg feature request with our numbers attached is worthwhile
+    regardless, alongside the hayro-jbig2 issue M13 already owes.
+
+  **The plumbing is the actual deliverable, and it is shared.** A decoder can
+  only decode to a target if the target is *known at decode time*, and today the
+  device footprint is a render-side fact while decode is a page-side one. That
+  seam — how `pdfrum-render` tells `pdfrum-page` "this image lands on 64x64
+  device pixels" without `pdfrum-page` growing a dependency on the renderer or a
+  transform type leaking into a public image API — is a **SPEC.md contract
+  change** and goes through the `[spec]` protocol before the code lands, not
+  after. The image cache key must include the requested resolution (M12's cache
+  is keyed on `(ObjRef, PixmapRequest)`; a scaled decode makes resolution part
+  of identity, and getting this wrong returns a 64x64 decode for a later
+  full-page draw — a *correctness* bug, so it needs a test that draws the same
+  image at two sizes on one page). And decoding at reduced resolution changes
+  pixels: expect SSIM movement, hold the monotone rule, and if a file regresses,
+  say so and keep the reduction *only* where it is at worst neutral. The oracle
+  does this too, so its own goldens are the evidence for what the tolerance
+  should be.
+
+- **P2 — Profile the walk before touching it, and settle `bumpalo` on data.**
+  M12's biggest surprise, and its most-deferred question: the **engine half is
+  not small** — 85.4% of `mixed_tcpdf_045`, 59.8% of `vector_paths_1751`, 53.8%
+  of `text_foxittext` is `pdfrum_render::walk` and the `Vec` churn under it, not
+  the rasterizer. M12 deliberately refused to reach for an arena there, and the
+  refusal is the point: the profile attributed cost to the *seam*, not to
+  symbols, so "85% is engine" does not distinguish allocation churn from colour
+  conversion from interpretation. **Guessing here is exactly what the dep
+  protocol exists to prevent.**
+
+  So the prerequisite is a real symbol-level profile. `perf` is installed on
+  this machine but `kernel.perf_event_paranoid` is **4**, which blocks it;
+  `scripts/profile.sh` already detects this and degrades rather than failing.
+  Two ways forward, and the agent takes whichever is available without
+  blocking: (a) ask for `sudo sysctl kernel.perf_event_paranoid=1` — record it
+  as a *request to the user in the status doc*, do not attempt privilege
+  escalation; (b) the fallback M12 already specified — finer-grained
+  instrumentation inside the walk, which is dep-free, works under any paranoid
+  setting, and is useful afterwards regardless. **(b) is the default; (a) is a
+  bonus if granted.**
+
+  Only once the profile names symbols does `bumpalo` get decided, and the order
+  is fixed by DEPS.md: **the no-dep path first** — extend `RenderCaches` buffer
+  reuse to the walk's per-object temporaries — then A/B the arena against *that*
+  tuned baseline, not against today's code. Arena lifetimes must never appear in
+  a public type. If allocation turns out not to be the cost, the honest outcome
+  is a **NOT ADMITTED** row in DEPS.md with the profile as evidence, exactly as
+  `rustc-hash` and `fearless_simd` got, and the walk's real cost gets optimized
+  on its own terms instead.
+
+- **P3 — The scalar conversion loops.** `pdfrum_render::image::to_pixmap`
+  measured ~4 us per output pixel (M12 §10) — the number that makes three 70x53
+  widget thumbnails cost 45 ms on `mixed_formfield`, the `forms` class's 3.35x
+  warm residue. M12's P1 optimized the *compositor* and never came back to this
+  path; the per-pixel work (colourspace -> RGBA, premultiply, `/Decode`,
+  transfer function) is scalar against the oracle's scanline kernels. Attack it
+  as loop structure first — hoist per-image decisions out of the per-pixel body
+  the way the stencil test already was, work through row slices, specialize the
+  common `(8bpc, DeviceRGB, no transfer, no mask)` case — and only *then*, if a
+  measurement says the remaining cost is arithmetic rather than dispatch,
+  revisit SIMD. **The `fearless_simd` reopening condition still stands and is
+  about span length, not about this loop** (spans there are 1 px; these are full
+  image rows, which is a *different* workload and may genuinely vectorize — if
+  so, that is a new measurement, not a reversal of §3.9, and it gets its own
+  A/B against a tuned scalar baseline).
+
+- **P4 — `memchr` stays closed, and the reason is written down.** It needs an
+  *input*, not a bar: `open` is tens of microseconds on all 44 corpus documents
+  against renders of milliseconds, because the oracle's checkout contains no
+  large linearized file. If P1-P3 produce no such input, leave the row as-is.
+  Do **not** synthesize a giant PDF purely to justify a dependency — that is
+  benchmarking the benchmark.
+
+- **Targets (adjustable).** Judged on the **cold** convention, since that is the
+  one this milestone is about, with warm held as a **no-regression** gate:
+  cold geomean on the `image` class **>= 40% faster** than the committed
+  baseline (P1 is the mechanism; if the JPEG half lands only as option (b),
+  >= 20% and the JPX half proven separately); `forms` warm **below 2.5x** oracle
+  (P3); warm geomean **no worse than 0.97x** and the conformance scoreboard **no
+  worse than committed** on every commit; and the `bumpalo` question **closed
+  either way** — admitted with an A/B, or declined with a profile — so DEPS.md
+  has no open arena row when the release milestone starts. Every ratchet entry
+  that moves gets re-baselined in the same commit that moves it.
+
+- **Exit:** `docs/status/M12b.md` written in M12.md's register — hypothesis, A/B,
+  verdict, *including the non-results* — plus DEPS.md rows updated for
+  `bumpalo` (and `memchr` if its status changed), SPEC.md carrying the
+  decode-target contract via `[spec]`, PLAN.md marked, and the bench baseline
+  re-committed. Withdrawn claims are recorded, never deleted.
+
 ## M13 — Release
 
 MSRV declared and CI-checked; repository URL; bottom-up family publish to
