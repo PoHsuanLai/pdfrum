@@ -15,7 +15,7 @@ use crate::device::{AntiAlias, Brush, FillRule, RasterBackend, RenderDevice};
 use crate::options::RenderOptions;
 use crate::path::{hard_clip, is_available_matrix, path_rect, snap_rect};
 use crate::stroke::{hairline_matrices, resolve_stroke, split_for_stroke};
-use crate::zero_area::{thin_alpha, zero_area_sub_paths};
+use crate::zero_area::{Scratch, scan_into, thin_alpha};
 
 /// What a path object asks for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -37,6 +37,18 @@ pub struct PathPaint {
 /// `to_device` maps the path's own space to device space and has already
 /// absorbed the object's matrix. Returns whether anything was drawn, which
 /// the walk records as a diagnostic when it is `false` for a visible object.
+///
+/// `zero_area` is the caller's scratch for the degenerate-sub-path scan in step
+/// 3, which runs on every fill-only path object and on the corpus finds nothing
+/// almost every time. Passing it in rather than allocating one here is what
+/// makes the scan free after the first path of a page — see
+/// [`crate::zero_area::Scratch`].
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the decision tree needs the device, the backend behind its \
+              knockout buffer, the geometry, the paint, the stroke parameters, \
+              the options and the caller's scan scratch"
+)]
 pub fn draw_path<B: RasterBackend>(
     device: &mut dyn RenderDevice,
     backend: &B,
@@ -45,13 +57,16 @@ pub fn draw_path<B: RasterBackend>(
     paint: PathPaint,
     params: &StrokeParams,
     opts: &RenderOptions,
+    zero_area: &mut Scratch,
 ) -> bool {
     // The phase covers this function's own decision tree *and* the device
     // calls it makes, which the seam decorator counts separately — so the
     // walk report subtracts nothing here and the two numbers are read side by
     // side rather than nested. See `walkprofile`'s docs on overlapping buckets.
     crate::walkprofile::phase(crate::walkprofile::Phase::PathPrep, || {
-        draw_path_inner(device, backend, path, to_device, paint, params, opts)
+        draw_path_inner(
+            device, backend, path, to_device, paint, params, opts, zero_area,
+        )
     })
 }
 
@@ -61,6 +76,10 @@ pub fn draw_path<B: RasterBackend>(
     reason = "see `draw_path`: one numbered decision tree whose five cases are \
               mutually exclusive early returns read top to bottom"
 )]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the same inputs `draw_path` takes"
+)]
 fn draw_path_inner<B: RasterBackend>(
     device: &mut dyn RenderDevice,
     backend: &B,
@@ -69,6 +88,7 @@ fn draw_path_inner<B: RasterBackend>(
     paint: PathPaint,
     params: &StrokeParams,
     opts: &RenderOptions,
+    zero_area: &mut Scratch,
 ) -> bool {
     // A matrix that collapses in either of the two ways `IsAvailableMatrix`
     // rejects drops the object silently — deliberately *not* a determinant
@@ -144,7 +164,7 @@ fn draw_path_inner<B: RasterBackend>(
         && paint.stroke.is_none()
         && !paint.text_mode
     {
-        for zero in zero_area_sub_paths(path, Some(to_device), true) {
+        for zero in scan_into(zero_area, path, Some(to_device), true) {
             if zero.path.elements().is_empty() {
                 continue; // The all-points-identical case draws nothing.
             }

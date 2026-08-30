@@ -943,6 +943,7 @@ fn render_path<B: RasterBackend>(
         paint,
         &state.stroke_params,
         &ctx.opts,
+        &mut caches.zero_area,
     );
 }
 
@@ -1137,6 +1138,7 @@ fn render_text<B: RasterBackend>(
             paint,
             &state.stroke_params,
             &ctx.opts,
+            &mut caches.zero_area,
         );
     }
 }
