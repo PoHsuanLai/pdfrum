@@ -203,6 +203,28 @@ impl<'a> Page<'a> {
         self.paint(options, &mut session.build, &mut session.caches)
     }
 
+    /// The device box this page's images should be decoded against
+    /// (SPEC.md §7, [spec] 2026-08-31).
+    ///
+    /// The oracle's `max_size_required` is the **render device's own
+    /// dimensions** — `CPDF_ImageRenderer::StartLoadDIBBase` fills it from
+    /// `GetRenderDevice()->GetWidth()/GetHeight()`
+    /// (`cpdf_imagerenderer.cpp:74-77`) — not the rectangle an individual image
+    /// lands in. So this is a property of the render target, one value for the
+    /// whole page, and it can be computed before a single object is
+    /// interpreted: the display size is fixed by the crop box and `/Rotate`
+    /// alone.
+    ///
+    /// The truncation, and the reason the box is the *page's* rather than any
+    /// image's, are both in [`pdfrum_page::RequestedSize::for_device`].
+    fn decode_target(&self, options: &RenderOptions) -> pdfrum_page::RequestedSize {
+        let (pw, ph) = self.display_size();
+        let corners = options
+            .transform
+            .transform_rect_bbox(kurbo::Rect::new(0.0, 0.0, pw, ph));
+        pdfrum_page::RequestedSize::for_device(corners.width(), corners.height())
+    }
+
     /// The one render body, parameterised by which caches it borrows.
     fn paint(
         &self,
@@ -210,6 +232,11 @@ impl<'a> Page<'a> {
         ctx: &mut BuildContext,
         caches: &mut RenderCaches,
     ) -> Result<Pixmap> {
+        // Set before the build, because the build is what decodes the images.
+        // Restored afterwards so a caller threading one context through a
+        // render and then a `Page::objects` call does not silently inherit this
+        // page's device box.
+        let previous = std::mem::replace(&mut ctx.decode_target, self.decode_target(options));
         let mut page = self.build(ctx);
         if options.annotations {
             // An annotation's appearance form is drawn *into* the page graph
@@ -229,6 +256,7 @@ impl<'a> Page<'a> {
             );
             self.doc.note(&diags);
         }
+        ctx.decode_target = previous;
         let page = page;
         let inner = options.to_inner();
         let mut diags = Diagnostics::default();

@@ -231,9 +231,11 @@ pub fn decode_image<R: Resolve>(
     // The codecs, dispatched on the last filter.
     let (width, height, pixels, jpx_alpha) = match info.last_filter {
         Some(Filter::Jpx) => {
-            let levels = size.levels(info.width, info.height);
             let smask_in_data = stream.dict.int(names::SMASK_IN_DATA, r).unwrap_or(0);
-            let image = decode_jpx(&decoded.data, space.as_ref(), smask_in_data, levels, limits)
+            // The request goes to the codec whole rather than as a level
+            // count: JPEG 2000 carries the pyramid, so the decoder is the one
+            // that knows how many levels it has to give.
+            let image = decode_jpx(&decoded.data, space.as_ref(), smask_in_data, size, limits)
                 .inspect_err(|_| {
                     diags.record(Severity::Suspicious, DiagKind::ImageDecodeFailed, None);
                 })?;

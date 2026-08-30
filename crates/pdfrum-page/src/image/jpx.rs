@@ -19,6 +19,7 @@
 
 use crate::color::{ColorSpace, Family};
 use crate::error::Error;
+use crate::image::RequestedSize;
 use pdfrum_common::Limits;
 
 /// A decoded JPEG 2000 image.
@@ -240,8 +241,26 @@ fn components_agree(data: &[u8]) -> bool {
 /// Decode a JPEG 2000 codestream or JP2 file.
 ///
 /// `space` is the PDF dictionary's colour space, and `smask_in_data` its
-/// `/SMaskInData`. `levels` is how many resolution levels to skip, which
-/// halves the dimensions each time.
+/// `/SMaskInData`. `target` says how much resolution the caller needs
+/// (SPEC.md §7).
+///
+/// # The reduction is the codestream's own, not a resample
+///
+/// JPEG 2000 stores an image as a pyramid of resolution levels, so decoding at
+/// half size means decoding fewer packets rather than decoding everything and
+/// then shrinking it. `hayro-jpeg2000` takes the request as a
+/// `target_resolution` hint and applies exactly the rule
+/// `CPDF_DIB::StartLoadDIBBase` applies to `cp_reduce`
+/// (`cpdf_dib.cpp:220-224`): the floored base-two logarithm of the smaller
+/// axis ratio. It clamps that to the levels the codestream actually carries,
+/// and it **refuses the reduction outright for a palettized image**, where
+/// interpolating between two palette indices would produce a third colour that
+/// is in neither.
+///
+/// So the returned dimensions are the decoder's answer and not a calculation
+/// of ours — which is the whole point of the hint contract, and is why this
+/// function reads `image.width()` after the request rather than shifting a
+/// number it computed itself.
 ///
 /// # Errors
 ///
@@ -253,7 +272,7 @@ pub fn decode_jpx(
     data: &[u8],
     space: Option<&ColorSpace>,
     smask_in_data: i64,
-    levels: u8,
+    target: RequestedSize,
     limits: &Limits,
 ) -> Result<JpxImage, Error> {
     if !components_agree(data) {
@@ -264,7 +283,15 @@ pub fn decode_jpx(
         // colours: the palette lives in the PDF, not the codestream.
         resolve_palette_indices: !matches!(space, Some(ColorSpace::Indexed(_))),
         strict: false,
-        target_resolution: None,
+        target_resolution: match target {
+            RequestedSize::Full => None,
+            RequestedSize::Reduced { width, height } => {
+                // A zero on either axis would make the decoder's own
+                // `checked_div` fall through to zero levels; asking for it is
+                // meaningless, so it is spelt as no request at all.
+                (width != 0 && height != 0).then_some((width, height))
+            }
+        },
     };
     let image = hayro_jpeg2000::Image::new(data, &settings)
         .map_err(|_| Error::CodecRejected { codec: "JPX" })?;
@@ -286,9 +313,12 @@ pub fn decode_jpx(
         return Err(Error::CodecRejected { codec: "JPX" });
     }
 
-    // A plain right shift, unlike the DCT path's ceiling division.
-    let width = image.width() >> u32::from(levels);
-    let height = image.height() >> u32::from(levels);
+    // The decoder's own dimensions, already reduced if it honoured the hint.
+    // Shifting them again here — which is what this did while the hint was
+    // never sent — would halve an image that had already been halved, and read
+    // the top-left quarter of the samples as if it were the whole picture.
+    let width = image.width();
+    let height = image.height();
     if width == 0 || height == 0 {
         return Err(Error::CodecRejected { codec: "JPX" });
     }
@@ -382,7 +412,8 @@ mod tests {
     )]
 
     use super::{
-        JpxAction, JpxColorSpace, components_agree, conversion_action, decode_jpx, is_stock_device,
+        JpxAction, JpxColorSpace, RequestedSize, components_agree, conversion_action, decode_jpx,
+        is_stock_device,
     };
     use crate::color::{ColorSpace, Indexed};
     use pdfrum_common::Limits;
@@ -553,7 +584,7 @@ mod tests {
     fn garbage_is_rejected_rather_than_panicked_on() {
         let limits = Limits::default();
         for data in [&b""[..], b"\x00\x00", b"not jpeg2000", &[0xFFu8; 32]] {
-            assert!(decode_jpx(data, None, 0, 0, &limits).is_err());
+            assert!(decode_jpx(data, None, 0, RequestedSize::Full, &limits).is_err());
         }
     }
 
