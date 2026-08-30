@@ -12,6 +12,17 @@ categories = ["graphics", "rendering", "multimedia::images"]
 [lints]
 workspace = true
 
+# `walk-profile` turns on `walkprofile`'s thread-local accumulator: per-phase
+# timers and per-site allocation counters inside the walk, which is how
+# docs/status/M12b-P2.md separates allocation churn from colour conversion from
+# interpretation on a machine where `perf_event_paranoid > 1` forbids a
+# sampler. Off by default and off in every published build; with it off the
+# whole module compiles to empty inline functions. See its docs for why the
+# accumulator is a thread-local and not a threaded `&mut`.
+[features]
+default = []
+walk-profile = []
+
 [dependencies]
 pdfrum-common.workspace = true
 pdfrum-object.workspace = true

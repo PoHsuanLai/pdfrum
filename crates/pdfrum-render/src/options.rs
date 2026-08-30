@@ -71,7 +71,7 @@ pub enum TextAa {
 /// Constructed with `..RenderOptions::default()` struct update, per STYLE §4.
 /// The defaults are the oracle's: reproducing a golden needs no configuration
 /// beyond the target size.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, PartialEq)]
 #[expect(
     clippy::struct_excessive_bools,
     reason = "these are `CPDF_RenderOptions::Options`' independent bit flags \
@@ -132,6 +132,25 @@ pub struct RenderOptions {
     /// the engine's single compositing path relies on the white being real
     /// pixels where the oracle would have replayed a white backdrop.
     pub background: Option<peniko::Color>,
+}
+
+/// Hand-written so that the nested contexts a walk builds — a form's, a char
+/// proc's, a tile cell's, a soft mask's, and one per *run* of a text clip — are
+/// countable at a single point.
+///
+/// The body is `*self`: every field is `Copy`, which is itself the finding
+/// `docs/status/M12b-P2.md` §3 records. Deriving `Clone` would produce exactly
+/// this code and would leave the count unanswerable without a sampling
+/// allocator, which `unsafe_code = "forbid"` puts out of reach.
+impl Clone for RenderOptions {
+    fn clone(&self) -> Self {
+        crate::walkprofile::alloc_items(
+            crate::walkprofile::Site::OptionsClone,
+            1,
+            core::mem::size_of::<Self>(),
+        );
+        Self { ..*self }
+    }
 }
 
 impl Default for RenderOptions {

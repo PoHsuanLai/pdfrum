@@ -85,6 +85,7 @@ pub mod stroke;
 pub mod text;
 pub mod transfer;
 pub mod walk;
+pub mod walkprofile;
 pub mod zero_area;
 
 pub use color::{Argb, ObjectKind};

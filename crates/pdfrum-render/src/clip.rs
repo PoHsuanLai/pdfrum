@@ -110,6 +110,13 @@ pub fn resolve(
     opts: &RenderOptions,
 ) -> Vec<Clip> {
     let mut out = Vec::with_capacity(clip.len());
+    if !clip.is_empty() {
+        crate::walkprofile::alloc_items(
+            crate::walkprofile::Site::ClipVec,
+            clip.len(),
+            core::mem::size_of::<Clip>(),
+        );
+    }
     for entry in clip.entries() {
         match entry {
             ClipEntry::Path { path, even_odd } => {
@@ -129,11 +136,19 @@ pub fn resolve(
                 } else {
                     FillRule::Winding
                 };
-                match path_rect(path, to_device) {
-                    // The rect fast path: snapped outward to whole pixels
-                    // and applied with no antialiasing at all.
-                    Some(r) => out.push(Clip::Rect(outer_rect(r).to_rect())),
-                    None => out.push(Clip::Path(to_device * path.clone(), rule)),
+                // The rect fast path: snapped outward to whole pixels and
+                // applied with no antialiasing at all. Everything else keeps
+                // its curves and is transformed into device space, which is
+                // the clip's one allocation.
+                if let Some(r) = path_rect(path, to_device) {
+                    out.push(Clip::Rect(outer_rect(r).to_rect()));
+                } else {
+                    crate::walkprofile::alloc_items(
+                        crate::walkprofile::Site::ClipPath,
+                        path.elements().len(),
+                        core::mem::size_of::<kurbo::PathEl>(),
+                    );
+                    out.push(Clip::Path(to_device * path.clone(), rule));
                 }
             }
             ClipEntry::Text { runs } => {

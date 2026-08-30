@@ -57,7 +57,14 @@ fn sub_paths(path: &BezPath) -> Vec<SubPath> {
     for el in path.elements() {
         match *el {
             PathEl::MoveTo(p) => out.push(SubPath {
-                points: vec![p],
+                points: {
+                    crate::walkprofile::alloc_items(
+                        crate::walkprofile::Site::ZeroAreaPoints,
+                        1,
+                        core::mem::size_of::<Point>(),
+                    );
+                    vec![p]
+                },
                 has_curve: false,
             }),
             PathEl::LineTo(p) => {
@@ -263,8 +270,13 @@ pub fn zero_area_sub_paths(
     transform: Option<kurbo::Affine>,
     adjust: bool,
 ) -> Vec<ZeroArea> {
-    sub_paths(path)
-        .into_iter()
+    let subs = sub_paths(path);
+    crate::walkprofile::alloc_items(
+        crate::walkprofile::Site::ZeroAreaVec,
+        subs.len(),
+        core::mem::size_of::<SubPath>(),
+    );
+    subs.into_iter()
         .filter_map(|sp| zero_area_path(&sp.points, sp.has_curve, transform, adjust))
         .collect()
 }

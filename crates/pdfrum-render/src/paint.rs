@@ -37,14 +37,31 @@ pub struct PathPaint {
 /// `to_device` maps the path's own space to device space and has already
 /// absorbed the object's matrix. Returns whether anything was drawn, which
 /// the walk records as a diagnostic when it is `false` for a visible object.
+pub fn draw_path<B: RasterBackend>(
+    device: &mut dyn RenderDevice,
+    backend: &B,
+    path: &BezPath,
+    to_device: Affine,
+    paint: PathPaint,
+    params: &StrokeParams,
+    opts: &RenderOptions,
+) -> bool {
+    // The phase covers this function's own decision tree *and* the device
+    // calls it makes, which the seam decorator counts separately — so the
+    // walk report subtracts nothing here and the two numbers are read side by
+    // side rather than nested. See `walkprofile`'s docs on overlapping buckets.
+    crate::walkprofile::phase(crate::walkprofile::Phase::PathPrep, || {
+        draw_path_inner(device, backend, path, to_device, paint, params, opts)
+    })
+}
+
+/// [`draw_path`] without the phase timer around it.
 #[expect(
     clippy::too_many_lines,
-    reason = "one numbered decision tree ported from `ProcessPath`, whose five \
-              cases are mutually exclusive early returns read top to bottom; \
-              splitting them into helpers would scatter the precedence that is \
-              the entire content of the function"
+    reason = "see `draw_path`: one numbered decision tree whose five cases are \
+              mutually exclusive early returns read top to bottom"
 )]
-pub fn draw_path<B: RasterBackend>(
+fn draw_path_inner<B: RasterBackend>(
     device: &mut dyn RenderDevice,
     backend: &B,
     path: &BezPath,
