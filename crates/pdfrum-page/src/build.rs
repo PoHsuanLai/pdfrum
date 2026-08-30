@@ -69,6 +69,21 @@ pub struct BuildContext {
     pub functions: FunctionCache,
     /// Decoded images, keyed on `(reference, requested size)`.
     pub images: ImageCache,
+    /// How much resolution this build's images are wanted at (SPEC.md §7,
+    /// [spec] 2026-08-31).
+    ///
+    /// A **hint**: a codec that cannot reduce returns full resolution and the
+    /// image reports the size it actually decoded at. `Full` — the default —
+    /// asks for every sample, which is what a build with no render target
+    /// behind it wants.
+    ///
+    /// One value per build rather than one per image, because that is the
+    /// granularity the oracle works at: `CPDF_ImageRenderer::StartLoadDIBBase`
+    /// fills `max_size_required` from the *render device's* dimensions
+    /// (`cpdf_imagerenderer.cpp:74-77`), so the question is how much bigger an
+    /// image is than the whole page bitmap, not how small a rectangle it lands
+    /// in.
+    pub decode_target: RequestedSize,
     /// Fonts.
     pub fonts: FontCache,
     /// How a non-embedded font finds a face to draw with.
@@ -1610,7 +1625,7 @@ impl<R: Resolve> Interp<'_, R> {
         limits: &Limits,
         diags: &mut Diagnostics,
     ) {
-        let size = RequestedSize::Full;
+        let size = ctx.decode_target;
         let cached = reference.and_then(|id| ctx.images.get(id, size));
         let image = if let Some(hit) = cached {
             hit
@@ -1665,7 +1680,10 @@ impl<R: Resolve> Interp<'_, R> {
             // Inline images are the **only** ones that see form resources.
             self.resources.chosen.as_ref(),
             self.resources.page.as_ref(),
-            RequestedSize::Full,
+            // An inline image reaches `CPDF_DIB::StartLoadDIBBase` with the
+            // same `max_size_required` an XObject does — being inline changes
+            // which resource dictionary it sees, not how much of it is decoded.
+            ctx.decode_target,
             self.resolver,
             &mut ctx.functions,
             limits,

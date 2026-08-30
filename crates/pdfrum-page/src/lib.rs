@@ -83,7 +83,8 @@ pub use ops::{
 pub use optional::{OcContext, UsageType, Visibility, page_visibility};
 pub use page::{
     Content, DEFAULT_MEDIA_BOX, FormObject, ImageObject, Page, PageObject, PathObject, Rotation,
-    ShadingObject, TextObject, TextSegment, derive_boxes, is_valid_page_dict,
+    ShadingObject, TextObject, TextSegment, derive_boxes, display_size_from_dict,
+    is_valid_page_dict,
 };
 pub use pattern::{Pattern, ShadingPattern, TilingPattern};
 pub use resources::Resources;

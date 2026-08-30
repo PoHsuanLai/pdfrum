@@ -12,13 +12,22 @@
 
 use libfuzzer_sys::fuzz_target;
 use pdfrum_page::color::ColorSpace;
+use pdfrum_page::image::RequestedSize;
 use pdfrum_page::decode_jpx;
 
 fuzz_target!(|data: &[u8]| {
     let mut split = pdfrum_fuzz::Split::new(data);
     let which = split.byte();
     let smask_in_data = i64::from(split.byte() % 4);
-    let levels = split.byte() % 6;
+    // The decode target, spread over the interesting cases: full resolution,
+    // a degenerate zero request, and reductions from mild to extreme.
+    let target = match split.byte() % 6 {
+        0 => RequestedSize::Full,
+        n => RequestedSize::Reduced {
+            width: u32::from(n),
+            height: u32::from(n) * 2,
+        },
+    };
     let body = split.rest();
 
     let space = match which % 4 {
@@ -29,5 +38,5 @@ fuzz_target!(|data: &[u8]| {
     };
 
     let limits = pdfrum_fuzz::limits();
-    let _ = decode_jpx(body, space.as_ref(), smask_in_data, levels, &limits);
+    let _ = decode_jpx(body, space.as_ref(), smask_in_data, target, &limits);
 });

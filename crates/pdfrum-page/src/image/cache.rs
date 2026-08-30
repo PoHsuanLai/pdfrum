@@ -43,6 +43,42 @@ pub enum RequestedSize {
 }
 
 impl RequestedSize {
+    /// The request a device box of `width` by `height` float pixels makes.
+    ///
+    /// This is the oracle's `max_size_required`, and the two things worth
+    /// knowing about it are both about *which* box it is.
+    ///
+    /// It is the **render device's whole extent**, not an image's destination
+    /// rectangle: `CPDF_ImageRenderer::StartLoadDIBBase` fills it from
+    /// `GetRenderDevice()->GetWidth()/GetHeight()`
+    /// (`cpdf_imagerenderer.cpp:74-77`). So a 5000x5000 image on a 612x792
+    /// page is reduced by four, not by however small the `cm` that draws it
+    /// is. That is deliberately conservative and it is what bounds the error:
+    /// a reduction against the page bitmap can never drop a sample the device
+    /// could have resolved.
+    ///
+    /// And the dimensions **truncate**, because the bitmap that gets allocated
+    /// is `static_cast<int>(FPDF_GetPageWidthF(page) * scale)`
+    /// (`pdfium_test.cc:1513-1514`). A box under one pixel on either axis
+    /// names no reduction at all rather than a zero one, since a zero would
+    /// only be a division the level calculation has to guard against anyway.
+    #[must_use]
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "the finite and >= 1.0 guard runs before the cast"
+    )]
+    pub fn for_device(width: f64, height: f64) -> Self {
+        let (w, h) = (width.trunc(), height.trunc());
+        if !w.is_finite() || !h.is_finite() || w < 1.0 || h < 1.0 {
+            return Self::Full;
+        }
+        Self::Reduced {
+            width: w as u32,
+            height: h as u32,
+        }
+    }
+
     /// How many resolution levels to skip to satisfy this request for an
     /// image of `width` by `height`.
     ///
@@ -131,9 +167,14 @@ impl ImageCache {
 
     /// Look an image up, refreshing its recency.
     ///
-    /// A key requesting full resolution also accepts a full-resolution entry
-    /// stored under a reduced key only when that entry is large enough, which
-    /// [`RequestedSize::satisfies`] decides.
+    /// Three rungs, and the third is what
+    /// `CPDF_PageImageCache::Entry::IsCacheValid` (`cpdf_pageimagecache.cpp:347`)
+    /// does: the exact key, then a full-resolution entry — which serves
+    /// anything — then any entry whose *decoded* dimensions already cover the
+    /// request in both axes. The third matters because a decoder is free to
+    /// ignore the hint: an image asked for at 600x600 that came back at 5000x5000
+    /// is stored under the 600x600 request, and a later 300x300 request must
+    /// find it rather than decode the same codestream again.
     pub fn get(&mut self, key: ObjRef, size: RequestedSize) -> Option<Arc<ImageData>> {
         self.tick = self.tick.saturating_add(1);
         let tick = self.tick;
@@ -149,7 +190,15 @@ impl ImageCache {
             entry.last_used = tick;
             return Some(Arc::clone(&entry.image));
         }
-        None
+        // Then any entry large enough. A linear scan, because the cache holds
+        // fifteen entries and the alternative is a second index.
+        let found = self.entries.iter().find_map(|((object, stored), entry)| {
+            (*object == key && stored.satisfies(size, entry.image.width, entry.image.height))
+                .then_some(*stored)
+        })?;
+        let entry = self.entries.get_mut(&(key, found))?;
+        entry.last_used = tick;
+        Some(Arc::clone(&entry.image))
     }
 
     /// Store an image, then evict.
@@ -365,6 +414,127 @@ mod tests {
             tiny(),
         );
         assert!(cache.get(ObjRef::new(1, 0), RequestedSize::Full).is_none());
+    }
+
+    /// A grey image of a given size, so a lookup can be asked about the
+    /// dimensions actually decoded rather than about the key alone.
+    fn gray(width: u32, height: u32) -> Arc<ImageData> {
+        let count = (width as usize) * (height as usize);
+        Arc::new(ImageData {
+            width,
+            height,
+            pixels: Pixels::Gray8(vec![0u8; count].into()),
+            mask: None,
+            matte: None,
+            interpolate: false,
+        })
+    }
+
+    #[test]
+    fn an_entry_that_ignored_the_hint_serves_every_request_it_covers() {
+        // The case that only exists once a decoder is allowed to refuse: an
+        // image asked for at 600x600 that came back at 5000x5000 — because it
+        // is a JPEG whose MCUs are not aligned, or a palettized JPEG 2000 —
+        // is stored under the 600x600 *request*. A later 300x300 request must
+        // find it. Keying on the request alone would miss and decode the same
+        // codestream again; keying on the decoded size alone would lose the
+        // fact that the request was ever made.
+        let mut cache = ImageCache::new();
+        let asked = RequestedSize::Reduced {
+            width: 600,
+            height: 600,
+        };
+        cache.insert(ObjRef::new(1, 0), asked, gray(5000, 5000));
+        let smaller = RequestedSize::Reduced {
+            width: 300,
+            height: 300,
+        };
+        let hit = cache
+            .get(ObjRef::new(1, 0), smaller)
+            .expect("a 5000x5000 entry covers a 300x300 request");
+        assert_eq!((hit.width, hit.height), (5000, 5000));
+        // And it covers a request larger than its key but no larger than
+        // itself.
+        assert!(
+            cache
+                .get(
+                    ObjRef::new(1, 0),
+                    RequestedSize::Reduced {
+                        width: 4000,
+                        height: 4000
+                    }
+                )
+                .is_some()
+        );
+    }
+
+    #[test]
+    fn a_thumbnail_is_never_handed_to_a_request_it_cannot_cover() {
+        // The correctness bug PLAN.md §M12b names: a page that draws one image
+        // small and then large must not get the small decode back for the
+        // large draw. Two axes, tested separately, because a mask that checked
+        // only one would pass the symmetric case and fail every real one.
+        let mut cache = ImageCache::new();
+        let thumb = RequestedSize::Reduced {
+            width: 64,
+            height: 64,
+        };
+        cache.insert(ObjRef::new(1, 0), thumb, gray(64, 64));
+        assert!(
+            cache.get(ObjRef::new(1, 0), RequestedSize::Full).is_none(),
+            "a 64x64 decode cannot answer a full-resolution draw"
+        );
+        for wanted in [
+            RequestedSize::Reduced {
+                width: 65,
+                height: 64,
+            },
+            RequestedSize::Reduced {
+                width: 64,
+                height: 65,
+            },
+            RequestedSize::Reduced {
+                width: 2000,
+                height: 2000,
+            },
+        ] {
+            assert!(
+                cache.get(ObjRef::new(1, 0), wanted).is_none(),
+                "{wanted:?} is larger than the entry on at least one axis"
+            );
+        }
+    }
+
+    #[test]
+    fn a_device_box_becomes_the_request_the_oracle_would_make() {
+        // The truncation is the bitmap allocation's, and a sub-pixel box asks
+        // for everything rather than for nothing.
+        assert_eq!(
+            RequestedSize::for_device(612.0, 792.0),
+            RequestedSize::Reduced {
+                width: 612,
+                height: 792
+            }
+        );
+        assert_eq!(
+            RequestedSize::for_device(595.32, 841.92),
+            RequestedSize::Reduced {
+                width: 595,
+                height: 841
+            }
+        );
+        assert_eq!(RequestedSize::for_device(0.5, 100.0), RequestedSize::Full);
+        assert_eq!(RequestedSize::for_device(100.0, 0.0), RequestedSize::Full);
+        assert_eq!(
+            RequestedSize::for_device(f64::NAN, f64::INFINITY),
+            RequestedSize::Full
+        );
+        // And the level count it then implies is the oracle's own formula: a
+        // 5000x5000 image against a 612x792 page skips two levels, not six.
+        assert_eq!(
+            RequestedSize::for_device(612.0, 792.0).levels(5000, 5000),
+            2
+        );
     }
 
     #[test]

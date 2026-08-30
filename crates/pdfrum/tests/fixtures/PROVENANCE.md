@@ -32,3 +32,12 @@ about the same bytes:
 | `hello_world_split_streams.pdf` | 922 B | Three text objects across **two** elements, 2 and 1. The small case: enough to tell "the element still has a sibling" from "the element is now empty", which are the two sides of the array-shrink rule. |
 | `rectangles.pdf` | 633 B | Eight path objects on one page, one element. The visibility and transform tests' fixture: eight distinguishable shapes with no fonts to complicate the resource sweep. |
 | `hello_world_2_pages.pdf` | 962 B | Two pages **sharing one content stream and one resource dictionary**. Editing one page must copy rather than rewrite, and this is the file that fails if it does not. |
+
+One more arrived with the decode target (M12b P1). It is the only fixture here
+that is **assembled** rather than taken whole from the oracle, because no file
+in the oracle's corpus draws one image twice at two very different sizes, and
+that is precisely the shape the decode target has to be tested against:
+
+| File | Size | What it exercises |
+|---|---:|---|
+| `jpx_two_sizes.pdf` | 49 KB | A 600x800 page drawing **one** 1269x1643 JPEG 2000 `XObject` twice — once at 500x640 device points and once as a 40x50 thumbnail. The image is the `/JPXDecode` stream of `corpus/fx/action/123.pdf`, copied byte for byte into a hand-written six-object PDF; the wrapper is ours, the codestream is the oracle's. It is the only fixture that can fail when a reduced decode is handed back to a full-resolution draw, since every other one has either no image or no second size. `pdfium_test` renders it, which is what makes it usable as an oracle comparison rather than only as a self-consistency check. |
