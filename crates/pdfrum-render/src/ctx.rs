@@ -150,6 +150,18 @@ pub struct RenderCaches {
     /// samples, which `docs/status/M12.md` §3.6 measured re-running on every
     /// render of an image that had not changed.
     pub images: crate::imagecache::RenderedImageCache,
+    /// The degenerate-sub-path scan's working buffers.
+    ///
+    /// Not a cache — nothing is remembered between paths, and it would be wrong
+    /// to remember anything, since the scan's answer depends on the path. What
+    /// is reused is the *memory*: the scan runs on every fill-only path object,
+    /// building a point list and a result list to answer "nothing degenerate
+    /// here" on the overwhelming majority of them, and on `vector_paths_1751`
+    /// that was 9866 allocations per render for 4925 answers of "no"
+    /// (`docs/status/M12b-P2.md` §4). It sits here because this is where a
+    /// render session's reusable memory lives and because the alternative —
+    /// a fresh `Vec` per path — is what the measurement was about.
+    pub zero_area: crate::zero_area::Scratch,
 }
 
 impl RenderCaches {
