@@ -538,6 +538,71 @@ including porting the pixel-visible C++ quirks verbatim (shading LUT
 off-by-one, sampled-function negative-index wrap) and declining the
 crash/aliasing bugs the brief rules pixel-invisible (Q5/Q6).
 
+**[spec] 2026-08-31 (M12b P1): the decode target, and where it enters.** The
+`RequestedSize` this section already names has never had a producer — every
+call site passes `RequestedSize::Full`, so the two codecs that could act on it
+never do. It gains one, and the shape is fixed by a constraint and a reading of
+the oracle.
+
+The constraint: a decoder can only decode to a target if it is told the target
+at decode time, but the device footprint is a *render*-side fact and decode is a
+*page*-side one, and `pdfrum-page` may not depend on `pdfrum-render` (PLAN.md
+§3's dependency rule). So the target travels as **plain data on `BuildContext`**:
+
+```rust
+pub struct BuildContext {
+    /// How much resolution the images on this page are wanted at.
+    pub decode_target: RequestedSize,   // default: Full
+    /* … the existing caches … */
+}
+```
+
+No transform, no affine, no render type — a pair of pixel counts and a variant
+saying "as many as there are". `BuildContext` is already the value a build's
+caches are threaded through by `&mut`, and this is another fact about the build
+rather than a new parameter on four public functions. A caller that sets
+nothing gets today's behaviour exactly.
+
+The reading of the oracle fixes what a caller should *put* there, and it is
+weaker than "this image's destination rectangle".
+`CPDF_DIB::StartLoadDIBBase` (`cpdf_dib.cpp:220-224`) computes the level count
+from `max_size_required`, and `CPDF_ImageRenderer::StartLoadDIBBase`
+(`cpdf_imagerenderer.cpp:74-77`) fills that from
+`GetRenderDevice()->GetWidth()/GetHeight()` — **the whole page bitmap, not the
+image's own footprint.** So the target is a property of the *render target*,
+which is why one value per build is the right granularity and why it can be
+computed before the first object is interpreted. `pdfrum::Page::paint` sets it
+from the device box `pdfrum_render::walk::target_size` would compute; every
+other caller leaves it `Full`.
+
+Three properties the contract carries, none of them optional:
+
+1. **It is a hint.** A decoder may return full resolution and most will: only
+   the JPX path acts on it today, the DCT path is bounded by
+   `allows_reduced_resolution`'s MCU rule and by whether the codec has a scaled
+   path at all, and every other codec ignores it. Nothing downstream may assume
+   the request was honoured.
+2. **The returned image reports what it actually decoded at.** `ImageData`'s
+   `width`/`height` are already the codec's own — "its dimensions are
+   authoritative", `cpdf_dib.cpp:537` — and `pdfrum-render` already maps the
+   sample grid onto the unit square through them, so a reduced image draws in
+   the same place with fewer samples. This is a restatement, not a change: it is
+   *why* the seam can be one value per build.
+3. **Resolution stays part of cache identity, on both sides.**
+   `ImageCache`'s key is `(ObjRef, RequestedSize)` as above and
+   `RequestedSize::satisfies` already reproduces
+   `CPDF_PageImageCache::Entry::IsCacheValid` (`cpdf_pageimagecache.cpp:347`):
+   a full-resolution entry serves any request, a reduced one serves only a
+   request it covers in both axes. `pdfrum-render`'s `RenderedImageCache` keys
+   on `(ObjRef, PixmapRequest)` and `PixmapRequest` already carries the reduced
+   output dimensions. Neither key needed widening; both are pinned by tests that
+   draw one image at two very different sizes on one page.
+
+A `/SMask` or `/Mask` stream is **never** reduced, whatever the target says —
+`CPDF_DIB::StartLoadMaskDIB` passes `{0, 0}` (`cpdf_dib.cpp:880`) — and the
+renderer already stretches a non-co-registered mask separately, so a reduced
+base beside a full-resolution mask is the shape it was written for.
+
 ## 8. `pdfrum-render` + backends  *(behavior: `core/fpdfapi/render`, `core/fxge`)*
 
 ```rust
