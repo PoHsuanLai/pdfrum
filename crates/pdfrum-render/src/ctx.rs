@@ -91,6 +91,16 @@ impl RenderCtx<'_> {
     /// The same context one level deeper.
     #[must_use]
     pub fn deeper(&self) -> Self {
+        // A `RenderCtx` clone is a `RenderOptions` clone plus a handful of
+        // `Copy` fields, and `RenderOptions` is `Copy`-shaped but derives only
+        // `Clone` — so the interesting question is how often this runs, not
+        // how many bytes it moves. Counted at one byte per field-set so the
+        // count is the number and the byte column is not read as heap traffic.
+        crate::walkprofile::alloc_items(
+            crate::walkprofile::Site::CtxClone,
+            1,
+            core::mem::size_of::<Self>(),
+        );
         Self {
             depth: self.depth.saturating_add(1),
             ..self.clone()

@@ -457,7 +457,9 @@ pub fn render_object<B: RasterBackend>(
     diags: &mut Diagnostics,
 ) {
     let state = object.state();
-    let clips = clip::resolve(&state.clip, to_device, &mut caches.glyphs, &ctx.opts);
+    let clips = crate::walkprofile::phase(crate::walkprofile::Phase::Clip, || {
+        clip::resolve(&state.clip, to_device, &mut caches.glyphs, &ctx.opts)
+    });
     let pushed = clip::push(device, &clips);
 
     let initial_alpha = ctx.initial_fill.map_or(1.0, |_| 1.0);
@@ -731,6 +733,17 @@ fn render_direct<B: RasterBackend>(
 
 /// Resolve one object's fill and stroke colours.
 fn colors(
+    ctx: &RenderCtx<'_>,
+    state: &pdfrum_page::GraphicsState,
+    kind: ObjectKind,
+) -> (crate::color::Argb, crate::color::Argb) {
+    crate::walkprofile::phase(crate::walkprofile::Phase::Color, || {
+        colors_inner(ctx, state, kind)
+    })
+}
+
+/// [`colors`] without the phase timer around it.
+fn colors_inner(
     ctx: &RenderCtx<'_>,
     state: &pdfrum_page::GraphicsState,
     kind: ObjectKind,
@@ -1076,14 +1089,16 @@ fn render_text<B: RasterBackend>(
     // `TextObject::matrix` already carries the CTM, so only the
     // page-to-device transform is added — composing `state.ctm` again would
     // apply it twice.
-    let glyphs = place_glyphs(
-        object,
-        state,
-        &mut caches.glyphs,
-        to_device,
-        &ctx.opts,
-        kinds,
-    );
+    let glyphs = crate::walkprofile::phase(crate::walkprofile::Phase::Glyphs, || {
+        place_glyphs(
+            object,
+            state,
+            &mut caches.glyphs,
+            to_device,
+            &ctx.opts,
+            kinds,
+        )
+    });
     for glyph in glyphs {
         // The oracle's small-text path: an alpha bitmap, blitted whole, rather
         // than an outline filled where it lands. It is the majority of the
@@ -1679,14 +1694,21 @@ fn render_image<B: RasterBackend>(
     // together, because a caller of one always wants the other: caching the
     // unreduced pixmap alone would keep the box filter running per draw *and*
     // hold the larger of the two buffers.
-    let key =
-        crate::imagecache::PixmapRequest::for_image(image, fill, transfer.as_ref(), out_w, out_h);
-    let pixels = caches.images.get_or_render(object.source, key, || {
-        let unreduced = to_pixmap(image, fill, transfer.as_ref());
-        match reduction {
-            Some((new_w, new_h)) => crate::stretch::reduce_to(&unreduced, new_w, new_h),
-            None => unreduced,
-        }
+    let pixels = crate::walkprofile::phase(crate::walkprofile::Phase::Image, || {
+        let key = crate::imagecache::PixmapRequest::for_image(
+            image,
+            fill,
+            transfer.as_ref(),
+            out_w,
+            out_h,
+        );
+        caches.images.get_or_render(object.source, key, || {
+            let unreduced = to_pixmap(image, fill, transfer.as_ref());
+            match reduction {
+                Some((new_w, new_h)) => crate::stretch::reduce_to(&unreduced, new_w, new_h),
+                None => unreduced,
+            }
+        })
     });
     let pixels = &*pixels;
     let blend = overprint_blend(None, &state.general);
@@ -1915,7 +1937,10 @@ pub(crate) fn draw_shading_into<B: RasterBackend>(
             device.draw_image(&pixels, at, ImageQuality::Nearest, f32::from(alpha) / 255.0);
         }
         _ => {
-            let Some(pixels) = shading::draw_to_pixmap(shading, rect, matrix, alpha, &ctx.opts)
+            let Some(pixels) =
+                crate::walkprofile::phase(crate::walkprofile::Phase::Shading, || {
+                    shading::draw_to_pixmap(shading, rect, matrix, alpha, &ctx.opts)
+                })
             else {
                 return;
             };
