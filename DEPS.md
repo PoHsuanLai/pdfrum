@@ -153,10 +153,10 @@ never shift under a dependency update.
 ## Performance ring (Phase 2) — admission by measurement
 
 User ruling 2026-08-30: perf deps are welcome **only if measurably worth it**.
-The protocol, binding for M12:
+The protocol, binding for M12 and every performance milestone after it:
 
 - **The bar:** a perf dependency lands only beside a committed A/B benchmark
-  in docs/status/M12 — the same change implemented first as a tuned no-dep
+  in the milestone's status doc — the same change implemented first as a tuned no-dep
   baseline (autovectorization, buffer reuse), then with the dep. It stays if
   it clears **>= 10% on at least one bench class or >= 5% on the geomean**
   over that tuned baseline; otherwise the no-dep version ships. The DEPS row
@@ -170,7 +170,7 @@ The protocol, binding for M12:
 |---|---|---|
 | `fearless_simd` | **NOT ADMITTED** — measured 2026-08-30, M12 | Pre-approved as the preferred SIMD dep; the *measurement* declines it. The span compositor's inner loop was implemented against 0.4.1 (in-tree via vello_cpu, so zero new supply-chain cost) behind a default-off feature, proved byte-identical three ways *and* by 209 byte-identical rendered pages across all 44 corpus documents. A/B in docs/status/M12.md §3.9: **+1.4% geomean — slower** — and slower in every one of the four classes; best single document -1.0%, inside the noise band. **The cause is the workload, not the kernel:** 99.8% of the solid spans on `shading_axial_radial` are *one pixel* long, so a vector body reaches 0.0% of its pixels, and deleting the blend arithmetic entirely — the strict upper bound — buys only 5.4-17.5%. The gated code is deleted; the measurement is kept. Reopen only if the shading rasterizer stops decomposing into thousands of tiny fills. |
 | `wide` | **NOT ADMITTED** — declined on the same evidence, M12 | The fallback for where fearless_simd's dispatch doesn't fit. It was never reached for: fearless_simd 0.4.1's API expressed the kernel fully, so the fallback's trigger never fired. And the negative result is not about the API — `wide`'s compile-time width does not change a span's length, and at the measured distribution a *wider* vector reaches strictly fewer pixels (docs/status/M12.md §3.9's W=4/8/16 table). Implementing it would re-measure the same workload. Reopens with the same condition as the row above. |
-| `bumpalo` | arena candidate (not in tree) | Bump arena for phase-scoped temporaries (content parse, page-graph build) AFTER RenderCaches buffer reuse is extended (no-dep first). Arena lifetimes must never leak into public types. Needs the bar. |
+| `bumpalo` | **NOT ADMITTED** — measured 2026-08-31, M12b P2 | The pre-approval stands and the crate is clean: `3.20.3` has **zero transitive dependencies**, no build script, no C, `MIT OR Apache-2.0` — the tidiest candidate this project has evaluated. The *measurement* declines it, and the profile M12 §7 named as the prerequisite is what made the measurement possible. **The no-dep path came first, as this table requires, and it took the traffic away:** `RenderCaches` buffer reuse for the zero-area scan and the glyph placement, plus an `Arc` in the glyph cache to stop copying an outline nobody reads, cut the walk's allocations on the corpus's heaviest document from **3696 per render to 42** (23 650 KiB → 5.9 KiB) — and that deletion is worth **0.6%** of the render. A/B in docs/status/M12b-P2.md §8: against that tuned baseline the arena is **+265% / +121% / +97%** — *slower*, at all three of the object-count shapes the corpus presents, and slower than the untuned `Vec` too. The cause is structural rather than incidental: a bump allocator is fast at handing out memory and says nothing about touching it, and an arena cannot be reset per object (it is borrowed by the vector it is filling), so it trades a buffer that is warm in L1 for a fresh cold region on every object. Separately and independently disqualifying under PLAN.md's rule: the arena must live on `RenderCaches`, which is `pub caches` on the facade's `RenderSession`, so `Bump` puts a **lifetime in a public type**. The real finding is the split the profile gives: colour conversion ≤ 7.2%, allocation now 0.6%, and **interpretation is 60–90% of the engine half**. Reopen only on a workload where the walk's own allocation traffic exceeds a few percent of a render *after* `RenderCaches` reuse; the largest in the 44-document corpus is 0.6%. |
 | `rustc-hash` | **NOT ADMITTED** — measured 2026-08-30, M12 | The pre-approval stands; the *measurement* declines it. The no-dep baseline the protocol requires was built (`pdfrum_common::FxHasher`, rustc-hash's own algorithm, ~20 lines) and applied to both named call sites. A/B in docs/status/M12.md §3.7: every render number inside the noise band, in both directions; `open` moved 7 microseconds against renders of milliseconds. **Neither the dep nor the no-dep version clears the bar over doing nothing** — the maps are not hot enough for the hash function to be visible. The no-dep hasher is kept (one file, strictly less work, deterministic iteration order); the dependency is not added. Reopen if a profile ever shows object resolution dominating. |
 | `memchr` | candidate (not in tree) | SIMD byte-scan for the lexer and backwards keyword search. BurntSushi, runtime dispatch. Needs the bar — and needs an *input* first: M12 measured `open` at tens of microseconds on all 44 corpus documents against renders of milliseconds to a second, so nothing in the corpus makes lexing visible. Write the tuned scalar word-at-a-time scan, source a large file, then A/B. |
 | `slotmap` | available (in-tree via fontdb) | Only if an id-arena store shape emerges; no current need. |
@@ -186,11 +186,19 @@ profile lines that nominate each):
    docs/status/M12.md §3.9, which also records the reopening condition: make the
    spans long first (a shading rasterizer that does not decompose into thousands
    of tiny fills), then ask about vector width.
-2. **`bumpalo`** — the page-graph walk. M12's biggest surprise is that the
-   engine half is 54–85% of a render, and it is untouched. **Not ready for an
-   A/B:** the seam-level profile cannot yet separate allocation churn from
-   colour conversion from interpretation. A real `perf` profile is the
-   prerequisite.
+2. ~~**`bumpalo`** — the page-graph walk~~ — **RESOLVED, declined 2026-08-31.**
+   The row above carries the number. The prerequisite this entry named — a
+   profile that separates allocation churn from colour conversion from
+   interpretation — was built as in-walk instrumentation rather than as `perf`
+   (`perf_event_paranoid` is still 4 and lowering it needs a root an agent must
+   not take), and it answered the question: **allocation was 0.6%, colour
+   conversion ≤ 7.2%, and interpretation is 60–90% of the engine half.** The
+   no-dep buffer reuse this table demanded first removed 99% of the walk's
+   allocation traffic and bought a few percent on four documents; the arena
+   measured *slower* than that baseline on every shape. docs/status/M12b-P2.md
+   §4 has the split and §8 the A/B. What the entry got right is that the guess
+   would have been wrong: an arena aimed at the engine half would have been
+   aimed at the wrong third of it.
 3. **`memchr`** — as the row above says: needs an input before it needs a bar.
 
 **Rejected for the perf ring:** `std::simd` (nightly-only; we are stable),
