@@ -12,6 +12,7 @@ use super::GlyphParams;
 use crate::{Font, FontId, Gid};
 use pdfrum_common::kurbo::BezPath;
 use std::collections::HashMap;
+use std::sync::Arc;
 
 /// What identifies one cached outline.
 ///
@@ -74,9 +75,16 @@ impl GlyphKey {
 /// A miss is cached too: a glyph that produced no outline is stored as `None`
 /// so it is not recomputed, which is what PDFium's own null-result memoization
 /// does.
+///
+/// The outlines are held behind an `Arc` so a caller that wants one *for longer
+/// than the borrow* — the renderer's per-glyph placement record, which cannot
+/// hold a borrow because placing the next glyph needs the cache mutably again —
+/// takes a refcount rather than a copy of the path. Copying instead was 2891
+/// `BezPath` clones and 3.3 MiB per render of one corpus page, on a document
+/// where the copies were then never read (`docs/status/M12b-P2.md` §6).
 #[derive(Debug, Default)]
 pub struct GlyphCache {
-    entries: HashMap<GlyphKey, Option<BezPath>>,
+    entries: HashMap<GlyphKey, Option<Arc<BezPath>>>,
 }
 
 impl GlyphCache {
@@ -92,9 +100,23 @@ impl GlyphCache {
     /// returns that font's glyph under the wrong key, which is why the key
     /// carries the id at all.
     pub fn path(&mut self, font: &Font, key: GlyphKey) -> Option<&BezPath> {
+        self.entry(font, key).map(AsRef::as_ref)
+    }
+
+    /// The same outline, as a handle that outlives the borrow.
+    ///
+    /// For a caller that needs the outline *after* asking the cache for the next
+    /// glyph. Cloning the returned `Arc` is a refcount bump; cloning what
+    /// [`Self::path`] returns copies every element of the path.
+    pub fn shared(&mut self, font: &Font, key: GlyphKey) -> Option<Arc<BezPath>> {
+        self.entry(font, key).map(Arc::clone)
+    }
+
+    /// The stored entry, drawn on first request.
+    fn entry(&mut self, font: &Font, key: GlyphKey) -> Option<&Arc<BezPath>> {
         self.entries
             .entry(key)
-            .or_insert_with(|| font.glyphs().outline(key.gid, &key.params()))
+            .or_insert_with(|| font.glyphs().outline(key.gid, &key.params()).map(Arc::new))
             .as_ref()
     }
 

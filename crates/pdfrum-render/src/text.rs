@@ -120,7 +120,13 @@ pub struct BitmapPlacement {
 #[derive(Debug, Clone)]
 pub struct PlacedGlyph {
     /// The outline in 1000-unit text space, straight from the cache.
-    pub outline: BezPath,
+    ///
+    /// Shared rather than copied. A placement record cannot borrow the cache —
+    /// placing the next glyph needs it mutably again — and copying the path
+    /// instead was 2891 `BezPath` clones per render of `text_foxittext`, on a
+    /// page whose glyphs all take the *bitmap* path and never read this field
+    /// (`docs/status/M12b-P2.md` §6).
+    pub outline: std::sync::Arc<BezPath>,
     /// Text space to device space for this glyph, font size included.
     ///
     /// For a snapped glyph this is the matrix *before* the snap: the snap is
@@ -138,7 +144,7 @@ impl PlacedGlyph {
     /// The outline in device space.
     #[must_use]
     pub fn device_path(&self) -> BezPath {
-        self.matrix * self.outline.clone()
+        self.matrix * (*self.outline).clone()
     }
 }
 
@@ -597,7 +603,7 @@ pub fn place_glyphs(
                     italic_angle: subst_italic,
                     vertical: item.vertical_glyph,
                 };
-                if let Some(outline) = cache.path(font, key) {
+                if let Some(outline) = cache.shared(font, key) {
                     // Both per-glyph corrections move and reshape the glyph
                     // *within* its em box without touching the advance, so
                     // they apply to this glyph's origin and matrix and the pen
@@ -619,13 +625,8 @@ pub fn place_glyphs(
                     // so it sits innermost — to the right of the Japan1
                     // reshaping, which is what carries the factor into that
                     // transform's `a` and `b` alone.
-                    crate::walkprofile::alloc_items(
-                        crate::walkprofile::Site::GlyphOutline,
-                        outline.elements().len(),
-                        core::mem::size_of::<kurbo::PathEl>(),
-                    );
                     out.push(PlacedGlyph {
-                        outline: outline.clone(),
+                        outline,
                         matrix: glyph_matrix(
                             *size,
                             pen + japan1.origin + space.origin,

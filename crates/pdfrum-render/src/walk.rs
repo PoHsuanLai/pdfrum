@@ -1178,7 +1178,7 @@ fn draw_glyph_bitmap(
         // never on the outline path, which the oracle also draws unhinted.
         let outline = font
             .hinted_glyph_path(glyph.key.gid)
-            .unwrap_or_else(|| glyph.outline.clone());
+            .unwrap_or_else(|| (*glyph.outline).clone());
         crate::glyph::render_lcd(&(shape * outline))
     }) else {
         return;
