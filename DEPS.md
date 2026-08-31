@@ -24,8 +24,13 @@ Two footnotes outside the library tree:
   engine and worth keeping; if even dev-ring C++ is unwanted, the pure-Rust
   alternative is `fuzzcheck` (weaker ecosystem) — decision deferred, fuzz/
   is a separate non-published workspace either way.
-- Future GPU `vello` speaks to OS graphics drivers via `wgpu` (system API
-  calls, not vendored C) — a post-M8 decision.
+- GPU `vello` speaks to OS graphics drivers via `wgpu` (system API calls, not
+  vendored C). No longer a post-M8 decision: promoted into M12c and **landed**
+  as `pdfrum-raster-vello-gpu`. It is the single scoped exemption from the
+  paragraph above, it is confined to that one crate, and the confinement is a
+  CI check rather than a claim — see "The GPU exemption" under Rendering &
+  geometry. Every *other* crate in this workspace remains pure Rust with no
+  `-sys` crate in its tree.
 
 ## Policy
 
@@ -45,7 +50,47 @@ Two footnotes outside the library tree:
 | `vello_cpu` **lib** | Primary rasterizer (`pdfrum-raster-vello`) | Modern sparse-strip CPU renderer; SIMD + multithreaded; native layers/masks/blends; "feature-rich, ready for production use cases" per Linebender, API still moving — pin exactly, wrap fully behind `RenderDevice` |
 | `tiny-skia` **lib** | Cross-check rasterizer (`pdfrum-raster-tinyskia`) | Mature, deterministic Skia-CPU port (resvg's engine); Tier-C referee against vello_cpu |
 | *(none)* | Parity rasterizer (`pdfrum-raster-exact`) | **Adds no dependency.** The analytic backend is written against `kurbo` and `peniko` alone — both already in this table — because the thing it exists to control is precisely what a third-party rasterizer decides for itself: how a partially covered pixel is quantised. Wrapping a fourth crate would reintroduce the question |
-| `vello` *(future)* | GPU backend, post-M8 | Same peniko/kurbo types → near-free third backend |
+| `vello` **lib, scoped** | GPU backend (`pdfrum-raster-vello-gpu`) — M12c | Same peniko/kurbo types the engine already speaks. **The one exemption from the pure-Rust guarantee**; its blast radius and the checks that bound it are below. Pinned `=0.10.0`, which resolves `wgpu` **29** — see the version note |
+
+### The GPU exemption: extent, and the checks that bound it
+
+`wgpu` reaches the platform's graphics drivers, so `pdfrum-raster-vello-gpu` is
+the only crate here that is not pure Rust to the syscall layer. PLAN.md §M12c
+grants that on one argument — pdfrum's likely consumer is a wgpu-backed Rust
+GUI that already holds an open device — and bounds it two ways. Both bounds are
+mechanical, not prose:
+
+- **Blast radius: one crate, nothing in the core ring.**
+  `scripts/check-no-wgpu.sh` (run by `scripts/ci.sh`) asserts that the `pdfrum`
+  facade's default features, `pdfrum-tool`'s default features, and **every
+  other workspace crate** reach none of `wgpu`/`wgpu-core`/`wgpu-hal`/
+  `wgpu-types`/`vello`/`vello_encoding`/`vello_shaders` — plus a fourth
+  assertion that the GPU crate *does* still depend on `vello`, so the other
+  three cannot pass vacuously. Verified by negative control: one edge added
+  from a leaf backend was caught on four crates at once (docs/status/M12c.md
+  §4.4). `cargo add pdfrum` puts no graphics driver in anyone's tree.
+- **`cc` / `cmake` / `bindgen` are not relaxed at all** — none is in the tree,
+  and no C is compiled. `pkg-config` stays banned except through two named
+  `wrappers`, `wayland-sys` and `khronos-egl`, because `wgpu-hal` builds both
+  with a feature that disables the probe (`dlopen` and `dynamic` respectively),
+  so `pkg-config` sits in the graph and does nothing in it. `wrappers` rather
+  than a blanket allow, because that reason is a property of the feature
+  resolution and a third crate reaching for it should fail. Two permissive
+  licences join the allowlist for the same subtree: `CC0-1.0` (`hexf-parse` via
+  `naga`) and `ISC` (`libloading` via `ash`).
+- **Excluded from the M13 publish set** (`publish = false`) unless it is
+  genuinely ready.
+
+**Version note, and it is not a footnote.** `vello 0.10.0` depends on `wgpu`
+**29**, not the 30 PLAN.md originally predicted; there is no vello release
+against 30. Since two `wgpu` majors in one tree are unrelated types, device
+injection works today **only for a caller on `wgpu` 29** — and neither
+`egui-wgpu` 0.36 (`^30.0`) nor `iced_wgpu` 0.14 (`^27.0`) is. So the
+shared-device benefit that justifies this exemption is currently unavailable to
+the frontends it was justified by, and arrives when vello bumps. Depend on
+`wgpu` only *through* `vello` so our manifest cannot disagree with it, and use
+the crate's re-exported `pdfrum_raster_vello_gpu::wgpu`. Full argument and the
+compiler output that proves it: docs/status/M12c.md §1.
 
 ## Fonts
 
