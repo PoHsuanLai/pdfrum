@@ -1404,3 +1404,44 @@ fn a_groups_own_alpha_multiplies_the_alpha_inside_it() {
         );
     }
 }
+
+/// The session's glyph buffer is lent to a text object and given back.
+///
+/// `render_text` takes the buffer out of [`pdfrum_render::RenderCaches`] with
+/// `mem::take` — the loop needs the caches mutably again, so a borrow will not
+/// do — and puts it back after the loop. Nothing between the two is an early
+/// return today, and a future edit that adds one would silently drop the
+/// capacity on the floor: correct output, and the allocation the buffer exists
+/// to remove back on every text object. Renders are byte-identical either way,
+/// so no pixel test can catch it. This one asks the buffer directly.
+#[test]
+fn the_glyph_buffer_comes_back_to_the_session_after_a_text_object() {
+    let font = pdfrum_font::Font::load_standard(
+        pdfrum_font::StandardFont::Helvetica,
+        &pdfrum_font::FontCache::default(),
+    );
+    let (object, _font) = text_object(font, 12.0, b"buffer", 4.0, 20.0);
+    let page = page(120.0, 40.0, vec![object]);
+
+    let mut caches = pdfrum_render::RenderCaches::new();
+    let mut diags = Diagnostics::default();
+    let pixmap = pdfrum_render::render_page_with_caches(
+        &page,
+        &RenderOptions::default(),
+        &TinySkiaBackend::new(),
+        &mut caches,
+        &mut diags,
+    )
+    .expect("renders");
+    // The run drew something, so glyphs really were placed.
+    assert!(
+        (0..pixmap.width()).any(|x| (0..pixmap.height())
+            .any(|y| pixmap.pixel(x, y).is_some_and(|px| px[0] < 200))),
+        "the fixture must actually draw text for this test to mean anything"
+    );
+    // And the buffer is back, holding the capacity it grew to.
+    assert!(
+        caches.placed_glyphs.capacity() > 0,
+        "the placement buffer was not returned to the session"
+    );
+}
