@@ -1,6 +1,6 @@
 # PDFium → Rust Rewrite — Master Plan
 
-**Status:** Phase 2: M9-M12 ALL MET (2026-08-30). M12 scorecard: warm render geomean 0.97x oracle (FASTER; image 0.24x, vector 0.90x, shading 0.95x; forms 3.35x is the named residue), rayon 3.09x@4/6.09x@16, RSS 1.20x, conformance byte-identical, ratchet green over 440 entries. Per-crate benches + bench-quick landed. M13 (release) NOT STARTED — loop paused by user.
+**Status:** Phase 2: M9-M12 ALL MET (2026-08-30); **M12c (GPU backend) MET 2026-08-31**. M12 scorecard: warm render geomean 0.97x oracle (FASTER; image 0.24x, vector 0.90x, shading 0.95x; forms 3.35x is the named residue), rayon 3.09x@4/6.09x@16, RSS 1.20x, conformance byte-identical, ratchet green over 440 entries. Per-crate benches + bench-quick landed. M12c: GPU vello backend landed isolated (zero Tier-C interior differences on 44/44; 4.8x on the heaviest vector page, 2.64x slower overall on rasterization; shading target missed and named) — but its exemption cannot yet be spent, because vello 0.10 pins wgpu 29 while egui is on 30 and iced on 27, so no released frontend can inject a device. M13 (release) NOT STARTED — loop paused by user.
 **Oracle:** `/mnt/data2/pdfium/pdfium-c++` (read-only C++ PDFium checkout @ `6f2272e`)
 **Workspace:** `/mnt/data2/pdfium/pdfrum` (this repository)
 
@@ -20,7 +20,7 @@ progress in `docs/status/`, conformance results in
 |---|---|
 | Scope | Core PDF: parse, render, text extraction, doc features (annots/forms data + appearances), edit/save. **No V8/JS, no XFA** (only `fpdfsdk` referenced them; `core/` is clean of both). JS-in-PDF = AcroForm script actions; executing them is optional forever, and the future slot is a pure-Rust engine (`boa`) behind a trait, never V8. |
 | API | **Pure idiomatic Rust.** No C ABI. C++ is used only as the differential-test oracle. |
-| Rendering | Linebender stack: `kurbo` + `peniko` vocabulary types; `RenderDevice` trait with two backends: **`vello_cpu` (primary)**, **`tiny-skia` (cross-check)**. GPU `vello` is a future third backend. |
+| Rendering | Linebender stack: `kurbo` + `peniko` vocabulary types; `RenderDevice` trait with **`vello_cpu` (facade default)**, **`tiny-skia` (cross-check)** and **`raster-exact` (conformance default)**. GPU `vello` landed in M12c as a fourth, deliberately isolated backend — Tier C only, never the facade's default, and nothing in the core ring depends on it. |
 | Fonts | **Fontations** (`skrifa` + `read-fonts`) for outlines/metrics/charmaps — no FreeType. Upstream PDFium already ships a `cxx`-bridged skrifa backend (`core/fxge/skrifa/`), validating coverage. Type1 needs our own small parser (Fontations doesn't read PFA/PFB). |
 | Fidelity | **Tiered.** Byte-exact where cheap (text extraction, metadata/structure/annot dumps, decoded image bytes); perceptual pixel diff (per-test thresholds, tightened over time) for rendering. |
 | Toolchain | Stable Rust, Cargo workspace, `cargo nextest` for tests, clippy `-D warnings`, rustfmt. `unsafe_code = "forbid"` everywhere except (if ever needed) an isolated SIMD/interop crate. |
@@ -87,6 +87,7 @@ Workspace `pdfrum/`, crates under `crates/`. Name **pdfrum**: facade crate `pdfr
 | `pdfrum-render` | fpdfapi/render + fxge device half | `RenderDevice` trait (kurbo/peniko types); engine walking the page graph; layer compositor for isolated/knockout groups and soft masks; image resampling. |
 | `pdfrum-raster-vello` | Skia backend | `vello_cpu` implementation of `RenderDevice`. The facade's default, for API users who want a production rasterizer. |
 | `pdfrum-raster-tinyskia` | AGG backend | `tiny-skia` implementation. Cross-check + determinism baseline; Tier C's gating partner. |
+| `pdfrum-raster-vello-gpu` | *(new capability)* | GPU `vello` on `wgpu`, M12c. **Outside the core ring by construction**: nothing depends on it, the facade cannot name it, and `scripts/check-no-wgpu.sh` asserts a headless tree resolves with zero `wgpu`. Takes a caller-supplied `wgpu::Device`. Tier C only — GPU rasterization is not bit-reproducible across drivers, so it never joins the scoreboard. `publish = false`. |
 | `pdfrum-raster-exact` | AGG parity | Analytic scanline rasterizer of our own, no rasterizer dependency. Integrates coverage exactly on the oracle's subpixel grid; the conformance default, so a golden diff measures the engine rather than a sampling policy. Reachable from the facade as `Backend::Exact`, but not its default — no SIMD. |
 | `pdfrum-text` | fpdftext | Text extraction, reading order/whitespace heuristics, search, link detection. Depends only on parser/font/page — parallelizable with render. |
 | `pdfrum-doc` | fpdfdoc | Bookmarks, named dests, links/actions, annotations + appearance-stream generation (variable text), AcroForm data model (fill/read, no JS), struct tree, metadata. |
@@ -693,6 +694,40 @@ hand us from the docs rather than from a type error.
   that states the exemption, **its blast radius, and the CI check that bounds
   it**; the isolation check committed; and the crate excluded from the M13
   publish set unless it is genuinely ready.
+
+**MET 2026-08-31, with one target missed and named** (docs/status/M12c.md §10
+is the scorecard). `pdfrum-raster-vello-gpu` renders all 44 bench documents on
+an RTX 4090 with **zero Tier-C interior differences** and no page where one
+backend painted and the other did not; the edge residue is traced to a single
+engine call site (`shading/patch.rs:480`'s `FullCover`, which vello cannot
+express per-primitive) rather than averaged away. Isolation is
+`scripts/check-no-wgpu.sh`, run by `ci.sh` and **verified by negative control**.
+`cargo-deny` needed no relaxation of `cc`/`cmake`/`bindgen` and one `wrappers`-
+scoped `pkg-config` exception whose safety rests on a measured feature
+resolution. The facade's default is unchanged — it cannot name this backend —
+and the scoreboard is byte-identical by construction.
+
+**The `shading` speedup target is missed, and it is the same finding as the
+divergence.** Upload and readback included, the backend is 2.10x slower than
+`vello_cpu` on the corpus, or **2.64x on rasterization alone** once a null
+backend shows four of its apparent wins are pure decode common to both columns.
+But `vector` delivers: **4.8x faster on `vector_en_system`**, the heaviest
+vector page. `shading` comes in at 2.96x, because the engine decomposes patches
+into thousands of tiny fills (M12 §3.9) — the structure a GPU is worst at, and
+the one this milestone forbade restructuring. The crossover is **not a
+threshold**: the cheapest page the GPU wins is 1.40 ms of CPU work and the
+dearest the CPU wins is 180.51 ms. Page *shape* predicts the winner, not size —
+the GPU wins one big scene and loses many small offscreen targets, each of
+which is a texture, a dispatch and a `map_async` host stall.
+
+Two findings outlive the numbers. **The exemption's benefit cannot currently be
+spent** (§1): device injection works and is primary, but vello 0.10 pins `wgpu`
+29 while `egui-wgpu` requires `^30.0` and `iced_wgpu` `^27.0`, so no released
+frontend can hand us its device — the cost is paid now, the benefit waits on an
+upstream release. And **the 2.64x is an interface property, not a shader
+problem** (§8.6): `RasterBackend` returns a `Pixmap`, so every group, soft mask
+and pattern cell is a host round trip. That is where future GPU work starts.
+The crate stays `publish = false` and out of the M13 publish set.
 
 ## M13 — Release
 
