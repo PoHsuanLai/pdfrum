@@ -162,6 +162,14 @@ pub struct RenderCaches {
     /// render session's reusable memory lives and because the alternative —
     /// a fresh `Vec` per path — is what the measurement was about.
     pub zero_area: crate::zero_area::Scratch,
+    /// One text object's placed glyphs, refilled per object.
+    ///
+    /// The same kind of thing as [`Self::zero_area`] and for the same reason:
+    /// after the outline copies went (`docs/status/M12b-P2.md` §6) this was the
+    /// last per-object allocation left in the walk — one `Vec<PlacedGlyph>` per
+    /// text object, 3654 of them on `text_tcpdf_055`. Nothing is remembered
+    /// between objects; the memory is.
+    pub placed_glyphs: Vec<crate::text::PlacedGlyph>,
 }
 
 impl RenderCaches {
