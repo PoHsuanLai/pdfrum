@@ -138,6 +138,85 @@ impl Pixels {
             }
         }
     }
+
+    /// The colour at `(x, y)` as the three bytes a device buffer wants —
+    /// [`color_at`](Self::color_at) followed by [`Rgb::to_bytes`], with the
+    /// floats taken out of the middle.
+    ///
+    /// # Why this is the same answer and not merely a close one
+    ///
+    /// Every arm of `color_at` reaches `Rgb` from a byte through
+    /// `f32::from(b) / 255.0`, and `Rgb::to_bytes` returns from `Rgb` to a byte
+    /// through `(v.clamp(0.0, 1.0) * 255.0).round()`. That pair is **exactly
+    /// the identity on all 256 byte values** — verified exhaustively, and
+    /// pinned by `the_byte_path_is_exactly_the_float_path`. So for `Gray8` and
+    /// `Rgb8` the float trip is a no-op that the compiler cannot elide (it
+    /// cannot know `round` is exact here), and for `Cmyk8` it wraps
+    /// [`adobe_cmyk_to_srgb`](crate::color::adobe_cmyk_to_srgb), which is
+    /// **byte-in, byte-out already**: the wrapper's own encode uses
+    /// `v * 255.0 + 0.5` truncated, which is likewise the identity on all 256.
+    ///
+    /// This matters because `pdfrum_render::image::to_pixmap` runs it once per
+    /// *source* pixel — twenty-five million times on `image_bug_718762` — and
+    /// measured at ~34 ns each it is 90% of that document's render
+    /// (docs/status/M12b-P1.md §6). Nothing about the colour changes; only how
+    /// many float instructions run on the way to it.
+    ///
+    /// An `Indexed` image still pays the palette's `Rgb` → bytes conversion per
+    /// pixel here. Hoisting that is the caller's business, since only the
+    /// caller knows it is about to walk the whole image:
+    /// [`Self::byte_palette`].
+    #[must_use]
+    pub fn sample_bytes(&self, x: u32, y: u32, width: u32) -> [u8; 3] {
+        let Some(index) = usize::try_from(y)
+            .ok()
+            .and_then(|row| row.checked_mul(usize::try_from(width).ok()?))
+            .and_then(|base| base.checked_add(usize::try_from(x).ok()?))
+        else {
+            return [0, 0, 0];
+        };
+        let at = |i: usize, data: &[u8]| data.get(i).copied().unwrap_or(0);
+        match self {
+            Self::Stencil(b) => {
+                let v = if b.pixel(x, y) { 0 } else { 255 };
+                [v, v, v]
+            }
+            Self::Gray8(d) => {
+                let v = at(index, d);
+                [v, v, v]
+            }
+            Self::Rgb8(d) => [at(index * 3, d), at(index * 3 + 1, d), at(index * 3 + 2, d)],
+            Self::Cmyk8(d) => crate::color::adobe_cmyk_to_srgb(
+                at(index * 4, d),
+                at(index * 4 + 1, d),
+                at(index * 4 + 2, d),
+                at(index * 4 + 3, d),
+            ),
+            Self::Indexed { indices, palette } => {
+                let i = indices.get(index).copied().unwrap_or(0);
+                palette
+                    .get(usize::from(i))
+                    .copied()
+                    .unwrap_or(Rgb::BLACK)
+                    .to_bytes()
+            }
+        }
+    }
+
+    /// An `Indexed` image's palette with every entry already encoded as the
+    /// three bytes a device buffer wants.
+    ///
+    /// A palette has at most 256 entries and an image has as many pixels as it
+    /// has; converting the palette once and indexing it is the same answer as
+    /// converting per pixel, and the caller that walks a whole image should do
+    /// it once. `None` for every other kind of image, which has no palette.
+    #[must_use]
+    pub fn byte_palette(&self) -> Option<Vec<[u8; 3]>> {
+        match self {
+            Self::Indexed { palette, .. } => Some(palette.iter().map(|c| c.to_bytes()).collect()),
+            _ => None,
+        }
+    }
 }
 
 /// A fully decoded image.
@@ -1539,6 +1618,109 @@ mod tests {
         let mut data = original.clone();
         super::apply_codec_decode(&mut data, Some(&space), 4, &info);
         assert_eq!(data, original);
+    }
+
+    #[test]
+    fn the_byte_path_is_exactly_the_float_path() {
+        // `sample_bytes` exists only to be `color_at(..).to_bytes()` without the
+        // floats. "Only to be" is a strong claim, so it is checked over every
+        // input each variant can take rather than over a sample of them.
+
+        // The round trip the whole argument rests on, both directions, all 256.
+        for b in 0..=255u8 {
+            let there = f32::from(b) / 255.0;
+            let back = Rgb {
+                r: there,
+                g: there,
+                b: there,
+            }
+            .to_bytes();
+            assert_eq!(back, [b, b, b], "byte {b} does not survive the float trip");
+        }
+
+        // Grey: every byte.
+        let gray = Pixels::Gray8((0..=255u8).collect());
+        for x in 0..256u32 {
+            assert_eq!(
+                gray.sample_bytes(x, 0, 256),
+                gray.color_at(x, 0, 256).to_bytes()
+            );
+        }
+
+        // RGB: a walk that puts every byte in every channel position.
+        let rgb = Pixels::Rgb8((0..=255u8).flat_map(|v| [v, 255 - v, v / 2]).collect());
+        for x in 0..256u32 {
+            assert_eq!(
+                rgb.sample_bytes(x, 0, 256),
+                rgb.color_at(x, 0, 256).to_bytes()
+            );
+        }
+
+        // CMYK is the one with real arithmetic in it. The full domain is 2^32,
+        // so this walks a lattice that hits every value on every axis, plus the
+        // saturated corners the interpolation treats specially.
+        let mut cmyk = Vec::new();
+        let step = 17u16; // 0, 17, ... 255 — sixteen values, exact at both ends.
+        for c in (0..=255u16).step_by(step as usize) {
+            for m in (0..=255u16).step_by(step as usize) {
+                for y in (0..=255u16).step_by(step as usize) {
+                    for k in (0..=255u16).step_by(step as usize) {
+                        cmyk.extend_from_slice(&[c as u8, m as u8, y as u8, k as u8]);
+                    }
+                }
+            }
+        }
+        let pixels = cmyk.len() / 4;
+        let cmyk = Pixels::Cmyk8(cmyk.into());
+        for x in 0..pixels as u32 {
+            assert_eq!(
+                cmyk.sample_bytes(x, 0, pixels as u32),
+                cmyk.color_at(x, 0, pixels as u32).to_bytes(),
+                "cmyk lattice point {x}"
+            );
+        }
+
+        // Indexed, and the byte palette that replaces the per-pixel encode.
+        let palette: Box<[Rgb]> = (0..=255u8)
+            .map(|v| Rgb {
+                r: f32::from(v) / 255.0,
+                g: f32::from(255 - v) / 255.0,
+                b: 0.25,
+            })
+            .collect();
+        let indexed = Pixels::Indexed {
+            indices: (0..=255u8).collect(),
+            palette,
+        };
+        let byte_palette = indexed.byte_palette().expect("an indexed image has one");
+        for x in 0..256u32 {
+            let expected = indexed.color_at(x, 0, 256).to_bytes();
+            assert_eq!(indexed.sample_bytes(x, 0, 256), expected);
+            assert_eq!(byte_palette[x as usize], expected, "the palette agrees too");
+        }
+        assert!(gray.byte_palette().is_none(), "only indexed has a palette");
+
+        // A stencil, both phases, and an out-of-range read on every variant.
+        let bits = BitImage {
+            width: 2,
+            height: 1,
+            row_bytes: 1,
+            bits: vec![0b1000_0000],
+        };
+        let stencil = Pixels::Stencil(bits);
+        for x in 0..2u32 {
+            assert_eq!(
+                stencil.sample_bytes(x, 0, 2),
+                stencil.color_at(x, 0, 2).to_bytes()
+            );
+        }
+        for p in [&gray, &rgb, &cmyk, &indexed, &stencil] {
+            assert_eq!(
+                p.sample_bytes(9999, 9999, 256),
+                p.color_at(9999, 9999, 256).to_bytes(),
+                "an out-of-range read agrees too"
+            );
+        }
     }
 
     #[test]
