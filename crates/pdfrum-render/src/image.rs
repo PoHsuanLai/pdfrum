@@ -261,6 +261,25 @@ pub fn to_pixmap(
         Pixels::Stencil(bits) => Some(bits),
         _ => None,
     };
+    // M12b P1: the sample becomes bytes without a float trip, and an indexed
+    // image's palette is encoded once instead of once per pixel.
+    //
+    // `color_at(..).to_bytes()` reached `Rgb` through `f32::from(b) / 255.0`
+    // and came back through `(v.clamp(0,1) * 255).round()`, which is exactly
+    // the identity on all 256 byte values — so for grey and RGB the whole trip
+    // was a no-op the optimizer cannot remove (it cannot know `round` is exact
+    // here), and for CMYK it wrapped a table lookup that is byte-in byte-out
+    // already. `Pixels::sample_bytes` is the same answer, proved exhaustively
+    // by `the_byte_path_is_exactly_the_float_path` rather than by measurement.
+    //
+    // This runs once per *source* pixel — twenty-five million times on
+    // `image_bug_718762`, where it was 90% of the render
+    // (docs/status/M12b-P1.md §6).
+    let palette = image.pixels.byte_palette();
+    let indices = match &image.pixels {
+        Pixels::Indexed { indices, .. } => Some(&**indices),
+        _ => None,
+    };
     let width = image.width as usize;
     for y in 0..image.height {
         let Some(row) = out
@@ -286,7 +305,26 @@ pub fn to_pixmap(
                     [0, 0, 0, 0]
                 }
             } else {
-                let mut rgb = image.pixels.color_at(x, y, image.width).to_bytes();
+                // The indexed fast path reads the pre-encoded palette; every
+                // other kind goes through `sample_bytes`, which has no palette
+                // to hoist.
+                let mut rgb = match (indices, palette.as_ref()) {
+                    (Some(indices), Some(palette)) => {
+                        // An absent index reads as 0 and an absent palette
+                        // entry as black, which is `color_at`'s own ladder:
+                        // `indices.get(i).unwrap_or(0)`, then
+                        // `palette.get(..).unwrap_or(Rgb::BLACK)`.
+                        let i = (y as usize)
+                            .saturating_mul(width)
+                            .saturating_add(x as usize);
+                        let entry = indices.get(i).copied().unwrap_or(0);
+                        palette
+                            .get(usize::from(entry))
+                            .copied()
+                            .unwrap_or([0, 0, 0])
+                    }
+                    _ => image.pixels.sample_bytes(x, y, image.width),
+                };
                 if let Some(matte) = matte {
                     rgb = matte_source(rgb, alpha, matte);
                 }

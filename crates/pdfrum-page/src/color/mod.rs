@@ -27,6 +27,12 @@ mod srgb_table;
 mod value;
 
 pub use cie::{CalGray, CalRgb, Lab};
+/// The Adobe CMYK -> sRGB table lookup, byte in and byte out.
+///
+/// Re-exported because the image path needs it without the float wrapper
+/// around it: `Pixels::sample_bytes` reaches it directly, and the two spellings
+/// are proved equal exhaustively rather than assumed.
+pub use device::adobe_cmyk_to_srgb;
 pub use icc::{IccBased, IccProfile, is_srgb_profile, is_valid_icc_components};
 pub use indexed::Indexed;
 pub use load::{ColorSpaceCache, load_cached, load_colorspace, stock_for_name};
