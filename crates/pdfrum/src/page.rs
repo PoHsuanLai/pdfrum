@@ -204,7 +204,7 @@ impl<'a> Page<'a> {
     }
 
     /// The device box this page's images should be decoded against
-    /// (SPEC.md §7, [spec] 2026-08-31).
+    /// (SPEC.md §7, `[spec]` 2026-08-31).
     ///
     /// The oracle's `max_size_required` is the **render device's own
     /// dimensions** — `CPDF_ImageRenderer::StartLoadDIBBase` fills it from

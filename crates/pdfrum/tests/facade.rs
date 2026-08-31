@@ -918,7 +918,7 @@ fn one_image_drawn_at_two_sizes_is_right_at_both() {
         "reusing a finer decode changes pixels, never the output size"
     );
     assert!(
-        detail(&small_after) >= detail(&alone_small),
+        at_least_as_detailed(detail(&small_after), detail(&alone_small)),
         "a hit on a finer decode is at worst as good as decoding afresh"
     );
 
@@ -929,13 +929,18 @@ fn one_image_drawn_at_two_sizes_is_right_at_both() {
     assert_eq!((alone_small.width(), alone_small.height()), (37, 50));
 }
 
-/// Mean absolute difference between horizontally adjacent red samples, as a
-/// stand-in for "how much of the source survived into these pixels".
+/// Total absolute difference between horizontally adjacent red samples, and
+/// how many pairs it is over — a stand-in for "how much of the source survived
+/// into these pixels".
+///
+/// Returned as the pair rather than the quotient so callers compare it exactly,
+/// by cross-multiplying: the assertions here are `>=`, and a float division
+/// would put rounding between two integers whose order is the whole question.
 ///
 /// Comparing two renders of the *same* size, a coarser decode is smoother, so
 /// more is better. It says nothing across sizes, where the number is dominated
 /// by how many source samples one output pixel spans.
-fn detail(pixmap: &pdfrum::Pixmap) -> f64 {
+fn detail(pixmap: &pdfrum::Pixmap) -> (u64, u64) {
     let data = pixmap.data();
     let (w, h) = (pixmap.width() as usize, pixmap.height() as usize);
     let mut total = 0u64;
@@ -948,10 +953,14 @@ fn detail(pixmap: &pdfrum::Pixmap) -> f64 {
             count += 1;
         }
     }
-    if count == 0 {
-        return 0.0;
-    }
-    total as f64 / count as f64
+    (total, count)
+}
+
+/// Whether `a`'s mean detail is at least `b`'s, compared without dividing.
+fn at_least_as_detailed(a: (u64, u64), b: (u64, u64)) -> bool {
+    // a.0 / a.1 >= b.0 / b.1, cross-multiplied. An empty pixmap has no detail
+    // and loses to anything that has some.
+    a.0.saturating_mul(b.1) >= b.0.saturating_mul(a.1)
 }
 
 #[test]
