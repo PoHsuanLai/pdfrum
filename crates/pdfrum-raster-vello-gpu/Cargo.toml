@@ -23,3 +23,37 @@ kurbo.workspace = true
 peniko.workspace = true
 thiserror.workspace = true
 vello.workspace = true
+
+[dev-dependencies]
+# G2/G3's harness: the Tier C divergence measurement and the timing run both
+# need whole *documents*, and a document is what the facade opens. This is the
+# same dev-dependency cycle `pdfrum-render` already carries for its benches
+# (cargo permits it; it appears in no published normal tree), and for the same
+# reason — a number that compares two backends has to describe the same work
+# the CPU column describes, which is a page built the way the facade builds it.
+#
+# It does NOT put wgpu in the facade's tree: a dev-dependency is an edge from
+# this crate to the facade, not the reverse. `scripts/check-no-wgpu.sh` uses
+# `cargo tree -e normal` precisely so that this edge cannot make the isolation
+# check pass or fail dishonestly.
+pdfrum.workspace = true
+pdfrum-corpus.workspace = true
+pdfrum-parser.workspace = true
+pdfrum-raster-exact.workspace = true
+pdfrum-raster-vello.workspace = true
+pdfrum-common.workspace = true
+
+# The two harnesses are **examples**, for two reasons. A `[[bin]]` target gets
+# no dev-dependencies, and these need the facade to open a document. And an
+# example is not published in the crate's normal tree, which keeps the
+# dev-dependency cycle on `pdfrum` where it belongs.
+#
+# Not criterion benches either: criterion's sampling model is the wrong
+# instrument for a measurement whose whole point is that one iteration contains
+# a GPU dispatch and a host stall, and `tier-c` is a comparison rather than a
+# timing at all.
+[[example]]
+name = "tier-c"
+
+[[example]]
+name = "bench"
