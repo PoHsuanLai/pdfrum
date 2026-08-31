@@ -15,6 +15,14 @@ allow = [
     "Zlib",
     "Unicode-DFS-2016",
     "Unicode-3.0",
+    # M12c, both reached only through `pdfrum-raster-vello-gpu`. Neither is a
+    # loosening of the policy's intent — both are permissive and
+    # OSI/FSF-recognised — they were simply absent from a tree that had not
+    # needed them before.
+    #   CC0-1.0: hexf-parse <- naga <- wgpu-core (a hex-float literal parser)
+    #   ISC:     libloading <- ash <- gpu-allocator <- wgpu-hal
+    "CC0-1.0",
+    "ISC",
 ]
 confidence-threshold = 0.8
 
@@ -25,8 +33,29 @@ multiple-versions = "warn"
 deny = [
     { crate = "cc", reason = "pure-Rust guarantee: no C compiled into any build" },
     { crate = "cmake", reason = "pure-Rust guarantee: no native build systems" },
-    { crate = "pkg-config", reason = "pure-Rust guarantee: no external C library linkage" },
     { crate = "bindgen", reason = "pure-Rust guarantee: no C bindings" },
+    # M12c scopes ONE exception, and this is its whole extent. `pkg-config`
+    # stays banned everywhere except as a build-dependency of the two crates
+    # named below, both of which reach the tree only through
+    # `pdfrum-raster-vello-gpu` — the crate PLAN.md §M12c grants the exemption
+    # to, and which nothing in the core ring depends on
+    # (scripts/check-no-wgpu.sh asserts that separately).
+    #
+    # The exception is narrow because the *reason* it is safe is narrow. In
+    # both cases `wgpu-hal` selects a feature that turns the probe off, so
+    # `pkg-config` sits in the graph and does nothing in it:
+    #
+    #   wayland-sys  built with `dlopen` — build.rs returns before probing
+    #   khronos-egl  built with `dynamic`, not `static` — the whole probe is
+    #                `#[cfg(feature = "static")]` and is not even compiled
+    #
+    # That is a property of the feature resolution rather than of the crates,
+    # which is a weaker guarantee than "it is not there" — so `wrappers` pins
+    # the two parents that were actually verified rather than allowing
+    # `pkg-config` at large. A third crate reaching for it fails the build,
+    # which is the point. docs/status/M12c.md §2 has the measurement, including
+    # the claim it withdrew.
+    { crate = "pkg-config", wrappers = ["wayland-sys", "khronos-egl"], reason = "pure-Rust guarantee: no external C library linkage. M12c: both wrappers select a feature that disables the probe (wayland-sys `dlopen`, khronos-egl `dynamic`), so nothing is located or linked" },
 ]
 
 [advisories]

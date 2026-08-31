@@ -573,9 +573,31 @@ they are not negotiable:
   headless use, but the *primary* constructor borrows. This is the difference
   between a backend an application can adopt and a demo.
 
-**Versions** (checked 2026-08-31): `vello` 0.10 targets `wgpu` 30, which is
+**Versions** — ~~(checked 2026-08-31): `vello` 0.10 targets `wgpu` 30, which is
 current, so the shared-device story with today's frontends is real rather than a
-version-skew fight. Pin both exactly, as every other dep is pinned.
+version-skew fight.~~ **WRONG, and withdrawn on measurement during
+implementation (docs/status/M12c.md §1). `vello` 0.10.0 — the newest published
+vello — depends on `wgpu` 29, and no vello release targets 30.** Two `wgpu`
+majors in one tree are unrelated types, proved by compiling it: `expected
+vello::wgpu::Device, found wgpu::Device`, with no conversion possible. And the
+gap is not a lag the ecosystem is closing — `egui-wgpu` 0.36 requires `^30.0`
+and `iced_wgpu` 0.14 requires `^27.0`, so vello sits *between* two of the three
+frontends this section names and matches neither.
+
+**That is a finding about this milestone's own premise, not a pin detail.** The
+exemption above is bought entirely with the claim that a frontend "already has
+a device open" — so it is worth stating plainly what ships: device injection is
+implemented and is the primary constructor, and today it works only for a
+caller on `wgpu` 29. For an egui or iced application right now the shared-device
+story does **not** work; such a caller must hold its graphics stack back to
+vello's `wgpu` or let this backend open its own device, which is the cost the
+exemption was granted to avoid. The block is upstream and the fix is a version
+bump rather than a redesign — when vello publishes against `wgpu` 30 the pin is
+the only line in this workspace that changes — but until then the exemption's
+cost is paid here and its benefit arrives on someone else's release schedule.
+Pin through `vello` exactly (never a direct `wgpu` dependency, which could
+disagree) and re-export vello's own `wgpu` so an embedder learns which one to
+hand us from the docs rather than from a type error.
 
 - **G1 — the backend.** Implement `RenderDevice` (`crates/pdfrum-render/src/device.rs:91`)
   against `vello` 0.10. The seam is already proven by three backends and the

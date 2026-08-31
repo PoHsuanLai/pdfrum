@@ -33,15 +33,35 @@ else
 fi
 
 echo "==> pure-Rust check (no -sys / cc / cmake / pkg-config / bindgen)"
+# M12c scopes one exemption to `pdfrum-raster-vello-gpu` and bounds it two
+# ways. The `cc`/`cmake`/`pkg-config`/`bindgen` half of the guarantee is NOT
+# relaxed — measured 2026-08-31, the whole vello/wgpu tree has none of them as
+# a build dependency, so no C is compiled and nothing below changes for them.
+#
+# What the GPU tree does bring is two `-sys` crates, `renderdoc-sys` and
+# `wayland-sys`, and both are `dlopen`-style declaration shims rather than
+# bindings to a compiled library. They are exempted **by name**, not by
+# pattern: a third one arriving is a decision someone should have to make
+# deliberately, and adding it here is how they make it. Every other `*-sys`
+# crate in the workspace, in this crate's tree or anyone else's, still fails.
+#
+# The other half of the bound — that the core ring never reaches this tree at
+# all — is scripts/check-no-wgpu.sh, run below.
+gpu_sys_exemptions='^(renderdoc-sys|wayland-sys)$'
 forbidden=$(cargo tree -e normal --workspace --prefix none \
     | awk '{print $1}' | sort -u \
-    | grep -E -- '-sys$|^(cc|cmake|pkg-config|bindgen)$' || true)
+    | grep -E -- '-sys$|^(cc|cmake|pkg-config|bindgen)$' \
+    | grep -E -v -- "$gpu_sys_exemptions" || true)
 if [ -n "$forbidden" ]; then
     echo "error: forbidden native-build crates in the dependency tree:" >&2
     printf '  %s\n' $forbidden >&2
     exit 1
 fi
 echo "ok: dependency tree is pure Rust"
+
+# The exemption above is only tolerable because it cannot reach an embedder who
+# did not ask for it. That is the claim, and this is the check.
+./scripts/check-no-wgpu.sh
 
 # Note the check above passes *because* fuzz/ is its own workspace. It brings
 # in `libfuzzer-sys`, which links LLVM's C++ libFuzzer runtime and pulls `cc`
