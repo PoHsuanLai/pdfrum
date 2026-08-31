@@ -1435,7 +1435,13 @@ name = "pdfrum-raster-vello-gpu"
 version = "0.1.0"
 dependencies = [
  "kurbo",
+ "pdfrum",
+ "pdfrum-common",
+ "pdfrum-corpus",
  "pdfrum-page",
+ "pdfrum-parser",
+ "pdfrum-raster-exact",
+ "pdfrum-raster-vello",
  "pdfrum-render",
  "peniko",
  "thiserror",
