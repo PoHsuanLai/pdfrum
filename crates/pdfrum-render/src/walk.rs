@@ -35,7 +35,7 @@ use crate::path::{IntRect, is_available_matrix, outer_rect};
 use crate::pattern::PatternClip;
 use crate::pixmap::{Pixmap, alpha_byte_rounding, alpha_byte_truncating};
 use crate::shading;
-use crate::text::{has_face, paint_kinds, place_glyphs};
+use crate::text::{has_face, paint_kinds};
 use crate::transfer::TransferFunc;
 
 /// Render a page into a pixmap.
@@ -1090,17 +1090,26 @@ fn render_text<B: RasterBackend>(
     // `TextObject::matrix` already carries the CTM, so only the
     // page-to-device transform is added — composing `state.ctm` again would
     // apply it twice.
-    let glyphs = crate::walkprofile::phase(crate::walkprofile::Phase::Glyphs, || {
-        place_glyphs(
+    // The session's placement buffer, lent out for this object and given back
+    // below. `take` rather than a borrow because the loop needs `caches`
+    // mutably again — for the bitmap cache and for the zero-area scratch — and
+    // two mutable borrows of one record do not coexist. The buffer left behind
+    // is empty, so a re-entrant walk (a form inside this text object, which
+    // cannot happen, or a future caller for which it could) gets a valid empty
+    // buffer rather than the one being iterated.
+    let mut glyphs = std::mem::take(&mut caches.placed_glyphs);
+    crate::walkprofile::phase(crate::walkprofile::Phase::Glyphs, || {
+        crate::text::place_glyphs_into(
+            &mut glyphs,
             object,
             state,
             &mut caches.glyphs,
             to_device,
             &ctx.opts,
             kinds,
-        )
+        );
     });
-    for glyph in glyphs {
+    for glyph in &glyphs {
         // The oracle's small-text path: an alpha bitmap, blitted whole, rather
         // than an outline filled where it lands. It is the majority of the
         // text in the corpus, and reproducing it is what closes the coverage
@@ -1116,7 +1125,7 @@ fn render_text<B: RasterBackend>(
                 device,
                 &mut caches.glyph_bitmaps,
                 font,
-                &glyph,
+                glyph,
                 placement,
                 fill,
             );
@@ -1141,6 +1150,8 @@ fn render_text<B: RasterBackend>(
             &mut caches.zero_area,
         );
     }
+    // Back to the session, with its capacity, for the next text object.
+    caches.placed_glyphs = glyphs;
 }
 
 /// Blit one glyph as an alpha bitmap (`DrawNormalText`'s per-glyph body,
