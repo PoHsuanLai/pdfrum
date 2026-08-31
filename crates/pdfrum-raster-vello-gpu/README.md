@@ -23,8 +23,9 @@ granted for one reason and bounded by two rules:
   paragraph.
 - **Device injection.** `VelloGpuBackend::new` takes the caller's `Device` and
   `Queue` **by reference**. Opening a second device inside a PDF library is
-  waste an embedder cannot opt out of. `with_own_device()` exists for headless
-  use behind the off-by-default `own-device` feature.
+  waste an embedder cannot opt out of. `request_adapter()` exists for a
+  headless process that has no device to lend — it is named after
+  `wgpu::Instance::request_adapter`, which is what it does.
 
 ## Which `wgpu`
 
