@@ -832,6 +832,23 @@ fn unpack(
 /// The default mapping is a no-op by construction, so it is skipped rather
 /// than run — which also keeps an `Indexed` codec output (whose indices this
 /// mapping does not describe) untouched.
+///
+/// # It is a table, because the mapping has 256 possible answers per component
+///
+/// The value written for a byte depends on the component index and the byte,
+/// and on nothing else — so the whole mapping is `components * 256` bytes,
+/// at most a kibibyte. Evaluating it per sample instead costs an integer
+/// division (`i % components`), two bounds-checked slice reads, a float
+/// multiply-add, a clamp, a `round` and a cast, on **every byte of the image**.
+///
+/// On `image_bug_718762` — a 5000x5000 CMYK JPEG whose `/Decode
+/// [1 0 1 0 1 0 1 0]` is the Adobe inversion written out, so the
+/// `default_decode` short circuit above does not fire — that loop ran over
+/// 100,000,000 bytes at 2.9 ns each and was **83% of the whole image decode**,
+/// against 17% for `zune_jpeg` itself (docs/status/M12b-P1.md §4.2). The table
+/// is built from the same [`DecodeMap::apply`] and the same rounding, so every
+/// output byte is identical by construction; only the number of times the
+/// arithmetic runs changes.
 fn apply_codec_decode(
     data: &mut [u8],
     space: Option<&ColorSpace>,
@@ -852,23 +869,52 @@ fn apply_codec_decode(
     if decode.default {
         return;
     }
-    for (i, sample) in data.iter_mut().enumerate() {
-        let value = decode.apply(i % components, f32::from(*sample));
-        // **Rounding**, not the truncation the raw-sample path uses. PDFium
-        // carries these values as floats all the way into the colour
-        // conversion and only truncates the *converted* byte; we have to land
-        // them back in a byte here, so the encode has to be the one that makes
-        // the round trip exact. Truncating instead loses a count on the
-        // commonest case of all — the `[1 0]` inversion, where `1 - 253/255`
-        // lands a hair under `2/255` and would come back as 1.
-        #[expect(
-            clippy::cast_possible_truncation,
-            clippy::cast_sign_loss,
-            reason = "the clamp bounds the product to 0..=255"
-        )]
-        let byte = (value.clamp(0.0, 1.0) * 255.0).round() as u8;
-        *sample = byte;
+    let table = decode_table(&decode, components);
+    // Chunked by component so the row index is a position in the chunk rather
+    // than a division: `chunks_mut` gives back the whole trailing partial
+    // chunk too, which is what keeps an image whose byte count is not a whole
+    // number of pixels mapping exactly as the per-sample loop did.
+    for chunk in data.chunks_mut(components) {
+        for (component, sample) in chunk.iter_mut().enumerate() {
+            if let Some(row) = table.get(component)
+                && let Some(mapped) = row.get(usize::from(*sample))
+            {
+                *sample = *mapped;
+            }
+        }
     }
+}
+
+/// Every answer [`DecodeMap::apply`] can give, one row of 256 per component.
+///
+/// The rounding is the per-sample loop's, verbatim: **`round`, not the
+/// truncation the raw-sample path uses.** PDFium carries these values as floats
+/// all the way into the colour conversion and only truncates the *converted*
+/// byte; we have to land them back in a byte here, so the encode has to be the
+/// one that makes the round trip exact. Truncating instead loses a count on the
+/// commonest case of all — the `[1 0]` inversion, where `1 - 253/255` lands a
+/// hair under `2/255` and would come back as 1.
+fn decode_table(decode: &DecodeMap, components: usize) -> Vec<[u8; 256]> {
+    (0..components)
+        .map(|component| {
+            let mut row = [0u8; 256];
+            for (raw, slot) in row.iter_mut().enumerate() {
+                #[expect(
+                    clippy::cast_precision_loss,
+                    reason = "a table index below 256 is exact in f32"
+                )]
+                let value = decode.apply(component, raw as f32);
+                #[expect(
+                    clippy::cast_possible_truncation,
+                    clippy::cast_sign_loss,
+                    reason = "the clamp bounds the product to 0..=255"
+                )]
+                let byte = (value.clamp(0.0, 1.0) * 255.0).round() as u8;
+                *slot = byte;
+            }
+            row
+        })
+        .collect()
 }
 
 /// A raw sample as a float, at the precision the decode arithmetic uses.
@@ -1005,6 +1051,7 @@ mod tests {
         clippy::indexing_slicing,
         clippy::cast_precision_loss,
         clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
         reason = "test fixtures quote oracle vectors verbatim and compare exactly"
     )]
 
@@ -1492,6 +1539,60 @@ mod tests {
         let mut data = original.clone();
         super::apply_codec_decode(&mut data, Some(&space), 4, &info);
         assert_eq!(data, original);
+    }
+
+    #[test]
+    fn the_decode_table_is_exhaustively_the_per_sample_arithmetic() {
+        // The table replaces a loop that ran the float mapping on every byte of
+        // the image. It is only allowed to be faster, never different — so this
+        // asserts the equality on *every* input the mapping can receive:
+        // each of the four component slots, each of the 256 byte values, over
+        // several arrays that reach different corners of the arithmetic
+        // (the Adobe inversion, an asymmetric range, one that clamps at both
+        // ends, and a degenerate zero-width range).
+        let arrays: [Vec<f32>; 4] = [
+            vec![1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0],
+            vec![0.0, 0.5, 0.25, 1.0, 0.1, 0.9, 0.0, 1.0],
+            vec![-1.0, 2.0, 2.0, -1.0, -0.5, 1.5, 1.5, -0.5],
+            vec![0.3, 0.3, 0.0, 1.0, 1.0, 0.0, 0.7, 0.2],
+        ];
+        let space = crate::color::ColorSpace::DeviceCmyk;
+        for values in arrays {
+            let info = codec_dict("DeviceCMYK", Some(values));
+            let decode = super::DecodeMap::new(Some(&space), 4, 8, info.decode.as_ref());
+            let table = super::decode_table(&decode, 4);
+            for (component, row) in table.iter().enumerate() {
+                for raw in 0..=255u8 {
+                    let value = decode.apply(component, f32::from(raw));
+                    let expected = (value.clamp(0.0, 1.0) * 255.0).round() as u8;
+                    assert_eq!(
+                        row[usize::from(raw)],
+                        expected,
+                        "component {component}, raw {raw}"
+                    );
+                }
+            }
+            assert_eq!(table.len(), 4, "one row per component");
+        }
+    }
+
+    #[test]
+    fn a_trailing_partial_pixel_maps_by_its_position_in_the_pixel() {
+        // The per-sample loop keyed on `i % components`, so a buffer whose
+        // length is not a whole number of pixels still mapped its last bytes as
+        // components 0, 1, … The chunked loop has to agree, which it does only
+        // because `chunks_mut` yields the short trailing chunk rather than
+        // dropping it. Four components, six bytes: the last two are components
+        // 0 and 1 of a pixel that is not all there.
+        let info = codec_dict(
+            "DeviceCMYK",
+            Some(vec![1.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0]),
+        );
+        let space = crate::color::ColorSpace::DeviceCmyk;
+        let mut data = vec![10u8, 20, 30, 40, 50, 60];
+        super::apply_codec_decode(&mut data, Some(&space), 4, &info);
+        // Components 0 and 2 invert; 1 and 3 are the identity.
+        assert_eq!(data, vec![245u8, 20, 225, 40, 205, 60]);
     }
 
     #[test]
