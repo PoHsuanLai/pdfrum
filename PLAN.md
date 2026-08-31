@@ -335,7 +335,10 @@ Both lessons are written down where the next person will meet them.
   measured inside the noise band, which is the first data point against
   allocation being the engine half's cost. Still outstanding: the prerequisite
   M12 could not satisfy — a real `perf` profile of the page-graph walk,
-  without which the `bumpalo` question cannot be asked honestly.
+  without which the `bumpalo` question cannot be asked honestly. **(Satisfied by
+  M12b P2, not by `perf` — which is still blocked — but by in-walk
+  instrumentation. This §9.5 datum held: allocation is 0.6% of the walk and the
+  arena is declined. docs/status/M12b-P2.md.)**
 - **P3 the benchmark convention, and the two outliers — DONE**
   (docs/status/M12.md §1.8–1.10, §11). The suite measured **cold** renders
   against a **warm** oracle: criterion built a fresh `RenderSession` per
@@ -471,10 +474,40 @@ changing the cold convention; it is documented and ratcheted deliberately.
   should be.
 
 - **P2 — Profile the walk before touching it, and settle `bumpalo` on data.**
+  **DONE — the arena question is closed, against** (docs/status/M12b-P2.md;
+  DEPS.md's `bumpalo` row is now `NOT ADMITTED` and the evidence queue's second
+  entry is struck through, so **no open arena row remains**). `perf` stayed
+  blocked (`perf_event_paranoid` is still 4; the one-line request is recorded in
+  the status doc and nothing depends on it), so path (b) is what landed: in-walk
+  phase timers and per-site allocation counters behind a default-off feature,
+  kept as permanent introspection. **The three-way split the milestone asked
+  for:** colour conversion **≤ 7.2%** and under 0.5% on three of four documents;
+  allocation churn **0.6%**; interpretation **60–90% of the engine half** and
+  the majority on three of four. The no-dep path went first and took the traffic
+  away — `RenderCaches` buffer reuse for the zero-area scan and the glyph
+  placement, plus an `Arc` in the glyph cache to stop copying an outline the
+  bitmap path never reads — cutting the heaviest document from **3696
+  allocations per render to 42** for **-9.7%** on `vector_paths_1751` and
+  **-6.0%/-5.5%/-4.3%** on the text documents, every one byte-identical on the
+  scoreboard. Against *that* baseline the arena measures **+265%/+121%/+97% —
+  slower**, and it would also have put a lifetime in a public type
+  (`RenderCaches` is `pub caches` on the facade's `RenderSession`), which
+  disqualifies the design on its own. **What is left, named and deliberately not
+  attempted:** interpretation is 794 ns per object of per-object constant
+  overhead — a question about the walk's shape, not a loop or a buffer. Two
+  numbers handed to other items rather than acted on: the `image` phase is
+  **1.2%** of a *warm* engine half, so P3's case must be made cold; and
+  `shading_axial_radial`'s engine half is 61% `pattern.rs` residue, which has no
+  owner.
+
   M12's biggest surprise, and its most-deferred question: the **engine half is
   not small** — 85.4% of `mixed_tcpdf_045`, 59.8% of `vector_paths_1751`, 53.8%
   of `text_foxittext` is `pdfrum_render::walk` and the `Vec` churn under it, not
-  the rasterizer. M12 deliberately refused to reach for an arena there, and the
+  the rasterizer. (P2 re-measured these before changing anything and found
+  `mixed_tcpdf_045` at **50.2%**, not 85.4% — M12's own P2 image cache landed
+  after §3.1 was taken and moved that document's balance. The other two
+  reproduce. See docs/status/M12b-P2.md §2; the "engine half is not small"
+  premise survives, the single largest figure does not.) M12 deliberately refused to reach for an arena there, and the
   refusal is the point: the profile attributed cost to the *seam*, not to
   symbols, so "85% is engine" does not distinguish allocation churn from colour
   conversion from interpretation. **Guessing here is exactly what the dep
@@ -531,8 +564,9 @@ changing the cold convention; it is documented and ratcheted deliberately.
   (P3); warm geomean **no worse than 0.97x** and the conformance scoreboard **no
   worse than committed** on every commit; and the `bumpalo` question **closed
   either way** — admitted with an A/B, or declined with a profile — so DEPS.md
-  has no open arena row when the release milestone starts. Every ratchet entry
-  that moves gets re-baselined in the same commit that moves it.
+  has no open arena row when the release milestone starts (**met: declined with
+  both, 2026-08-31**). Every ratchet entry that moves gets re-baselined in the
+  same commit that moves it.
 
 - **Exit:** `docs/status/M12b.md` written in M12.md's register — hypothesis, A/B,
   verdict, *including the non-results* — plus DEPS.md rows updated for
