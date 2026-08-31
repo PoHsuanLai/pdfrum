@@ -70,7 +70,7 @@ pub struct BuildContext {
     /// Decoded images, keyed on `(reference, requested size)`.
     pub images: ImageCache,
     /// How much resolution this build's images are wanted at (SPEC.md §7,
-    /// [spec] 2026-08-31).
+    /// `[spec]` 2026-08-31).
     ///
     /// A **hint**: a codec that cannot reduce returns full resolution and the
     /// image reports the size it actually decoded at. `Full` — the default —
