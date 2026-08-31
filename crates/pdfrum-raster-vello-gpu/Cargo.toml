@@ -1,0 +1,25 @@
+[package]
+name = "pdfrum-raster-vello-gpu"
+description = "GPU vello implementation of pdfrum-render's RenderDevice, on a caller-supplied wgpu device"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+readme = "README.md"
+keywords = ["pdf", "render", "vello", "wgpu", "gpu"]
+categories = ["graphics", "rendering"]
+# PLAN.md §M12c: excluded from the M13 publish set until it is genuinely ready.
+# It is a capability, not part of the core ring, and nothing in that ring
+# depends on it.
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+pdfrum-render.workspace = true
+pdfrum-page.workspace = true
+kurbo.workspace = true
+peniko.workspace = true
+thiserror.workspace = true
+vello.workspace = true
