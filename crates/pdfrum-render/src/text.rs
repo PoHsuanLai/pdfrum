@@ -553,8 +553,38 @@ pub fn place_glyphs(
     opts: &RenderOptions,
     kinds: TextPaintKinds,
 ) -> Vec<PlacedGlyph> {
+    let mut out = Vec::new();
+    place_glyphs_into(&mut out, object, state, cache, to_device, opts, kinds);
+    out
+}
+
+/// [`place_glyphs`] into a buffer the caller owns.
+///
+/// `out` is cleared first and refilled; a caller that walks many text objects
+/// keeps one buffer and allocates once for the run rather than once per object.
+/// That is the whole difference — the placement is identical, and
+/// [`place_glyphs`] is this with a fresh `Vec`.
+///
+/// It exists because the buffer was the last per-object allocation left in the
+/// walk after `docs/status/M12b-P2.md` §5 and §6: one `Vec<PlacedGlyph>` per
+/// text object, 3654 of them on `text_tcpdf_055`.
+pub fn place_glyphs_into(
+    out: &mut Vec<PlacedGlyph>,
+    object: &TextObject,
+    state: &pdfrum_page::GraphicsState,
+    cache: &mut GlyphCache,
+    to_device: Affine,
+    opts: &RenderOptions,
+    kinds: TextPaintKinds,
+) {
+    // The capacity the buffer arrives with. Only a *growth* past it is an
+    // allocation, and the instrument must count that rather than the number of
+    // calls — otherwise reusing the buffer leaves the allocation column
+    // unchanged and reads as if the reuse had not happened.
+    let arrived_with = out.capacity();
+    out.clear();
     let Some((font, size)) = &object.font else {
-        return Vec::new();
+        return;
     };
     let text_to_device = to_device * object.matrix;
     // Pull the page-space start back into the text space the advances live
@@ -562,10 +592,9 @@ pub fn place_glyphs(
     // object would not have been drawable anyway.
     let det = object.matrix.determinant();
     if det == 0.0 || !det.is_finite() {
-        return Vec::new();
+        return;
     }
     let mut pen = object.matrix.inverse() * object.position;
-    let mut out = Vec::new();
     let subst_weight = font.subst().map_or(0, pdfrum_font::SubstFont::raw_weight);
     let subst_italic = font.subst().map_or(0, |s| s.italic_angle);
     let widths_drive_the_design = width_drives_the_design_space(font);
@@ -650,14 +679,15 @@ pub fn place_glyphs(
         pen.x -= f64::from(segment.kerning) / 1000.0 * f64::from(*size);
     }
     if snaps_origins(opts, kinds, *size, text_to_device) {
-        snap_run(&mut out, opts.text_aa);
+        snap_run(out, opts.text_aa);
     }
-    crate::walkprofile::alloc_items(
-        crate::walkprofile::Site::GlyphVec,
-        out.capacity(),
-        core::mem::size_of::<PlacedGlyph>(),
-    );
-    out
+    if out.capacity() > arrived_with {
+        crate::walkprofile::alloc_items(
+            crate::walkprofile::Site::GlyphVec,
+            out.capacity(),
+            core::mem::size_of::<PlacedGlyph>(),
+        );
+    }
 }
 
 /// Whether the PDF's own `/Widths` reach the glyph's *outline* rather than
