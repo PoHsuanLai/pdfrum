@@ -414,7 +414,34 @@ skips every decode, and its true cold was never measurable). Part of it is real
 missing work. **P1 is the part that is real.** Do not "fix" the asymmetry by
 changing the cold convention; it is documented and ratcheted deliberately.
 
-- **P1 — Resolution-aware image decode.** The single largest confirmed gap, and
+- **P1 — Resolution-aware image decode — DONE, and its premise was wrong**
+  (docs/status/M12b-P1.md). The seam landed via `[spec]` and the JPX half is
+  wired, byte-identically; the **speed came from somewhere else entirely**, and
+  that is the item's real finding. Only **one** of the four documents this
+  bullet names as evidence is a JPEG at all — `image_bug_898443`,
+  `image_bug_583804` and `image_en_fqa` are Flate, which the oracle does not
+  resolution-reduce either (`cpdf_dib.cpp` passes the level count to exactly two
+  branches, JPX and DCT). And on the one file that *is* a JPEG, instrumenting
+  the decode found `zune_jpeg` at 17% of the build against `apply_codec_decode`
+  at 83% — a `/Decode` array evaluated per byte over a hundred million bytes,
+  which is a kibibyte of lookup table (**-67.9%** on that build). The larger win
+  was downstream of every codec: `to_pixmap` reached bytes through a float round
+  trip that is provably the identity on all 256 values, and deleting it is
+  **-35% on the `image` class's cold render geomean** — helping the JBIG2 and
+  Flate documents as much as the JPEG. Both changes are *proved* pixel-identical
+  by exhaustive test, and conformance was **byte-identical** after each of the
+  three commits. **Target missed: -33.4% against ≥40%**, the shortfall being
+  `image_en_fqa` (552 small images; `to_pixmap` totals 0.1 ms there, so its cost
+  is per-image and out of scope) and `image_ccitt_3bigpreview` (band edge). The
+  zune-jpeg `scale_denom` request is written up at
+  `docs/upstream/zune-jpeg-scaled-decode.md` with our numbers *including* the
+  one that argues against its urgency — it is worth ~59 ms of decode plus most
+  of a remaining 464 ms of buffer-sized downstream work on one file, against the
+  658 ms option (b) already took off it. Still owed: `ratchet update` on an idle
+  machine (§9.2 — the machine carried load 9–15 all session and a baseline
+  written under that permanently loosens a one-way ratchet).
+
+  *Original brief:* The single largest confirmed gap, and
   the one that is a *missing feature* rather than a slow loop. The oracle
   computes a libjpeg `scale_denom` from the **destination** size
   (`core/fpdfapi/page/cpdf_dib.cpp:531-566` — "its dimensions are
