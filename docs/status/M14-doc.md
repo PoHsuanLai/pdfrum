@@ -11,8 +11,11 @@ existing changed shape; `crates/pdfrum-doc/**` is the only tree touched.
 | `Place::start()` and `Hash`, for the consumer | `src/vt/hit.rs` | `a43928c` |
 | `annot_render::overlay_with` and `ap::Appearance` | `src/annot_render.rs`, `src/ap/mod.rs` | `68bfd46` |
 
-`FieldFlags`' three new predicates — the first item on §2b's list — were not
-part of this slice and are not in these commits.
+~~`FieldFlags`' three new predicates — the first item on §2b's list — were not
+part of this slice and are not in these commits.~~ **Withdrawn 2026-09-01 by
+the orchestrator:** they were landed earlier the same day by the first (Grok)
+session of this slice as `567f0b9` (`src/form/field.rs`), with tests. All
+three of §2b's `pdfrum-doc` items are on main.
 
 ---
 
@@ -245,9 +248,9 @@ as `None` from `get`, and `appearance()` is what tells the two apart.
 
 ## 6. Open items
 
-- **`FieldFlags`' three predicates** (`is_editable_combo`, `is_multi_select`,
+- ~~**`FieldFlags`' three predicates** (`is_editable_combo`, `is_multi_select`,
   `do_not_scroll`) — the first of §2b's three `pdfrum-doc` items — are not in
-  this slice.
+  this slice.~~ Withdrawn — landed as `567f0b9` (see §1 note).
 - **`Suppressed` has no producer.** By design, but it means the draw-loop
   branch that honours it is currently exercised only by unit tests.
 - **U3 remains open** — `/NeedAppearances` interacting with a live edit is
