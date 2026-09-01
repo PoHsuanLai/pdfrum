@@ -52,6 +52,28 @@
 //! use [`crate::geom::is_float_bigger`] and its sibling, so a point within
 //! `0.0001` of a section or line edge counts as *inside* it.
 //!
+//! # Right-to-left runs, where every x reverses
+//!
+//! A right-to-left run is laid out with **descending** x: its first character
+//! in logical order is drawn at the run's right end. Three of this module's
+//! answers turn on that, and each of them is the opposite of its
+//! left-to-right form:
+//!
+//! - **The caret after a character** is that character's *left* edge, not its
+//!   right — its origin, with no advance added. Adding the advance puts every
+//!   caret in the run one character too far right.
+//! - **A line's header** — the position before the first character — is the
+//!   line's *right* edge when that first character is right-to-left, because
+//!   that is where it is drawn.
+//! - **A click** is resolved by a bisection over a predicate that is monotone
+//!   only left to right, so down a run it answers one of the run's two
+//!   logical ends rather than the character nearest the point. A scan would
+//!   answer the run's beginning for every click in it, and the caret would
+//!   never move.
+//!
+//! Each is transcribed at its own function below, with the reason it cannot
+//! be folded into the left-to-right case.
+//!
 //! # Out-of-content points never fail
 //!
 //! A point above every section yields the very first place; one below every
@@ -322,6 +344,26 @@ fn line_range(line: crate::vt::Line) -> std::ops::Range<usize> {
 ///
 /// Returns `-1` for the line header. This is the tie-break the module docs
 /// describe: strictly past a character's midpoint puts the caret after it.
+///
+/// # Why this bisects rather than scans
+///
+/// The predicate — past the midpoint — is monotone along a left-to-right
+/// line, and a scan and a bisection agree on every monotone input. A
+/// right-to-left run is **not** monotone: the layout gives its characters
+/// descending x, so the first character's midpoint is the rightmost one on
+/// the line and a scan stops at it, answering the header for every click left
+/// of it. Upstream bisects anyway and takes whatever the narrowing lands on,
+/// which for a descending run resolves toward the run's *last* logical
+/// character — the one drawn at the line's left edge — and so puts the caret
+/// at the end of the run rather than at its beginning.
+///
+/// That is not an incidental difference. A click in the left half of a Hebrew
+/// word is the common case, and the two answers name opposite ends of it. So
+/// the bisection is transcribed rather than simplified, including the three
+/// details that decide where it lands: `nMid` is recomputed from the halved
+/// interval each step, the two `nMid == nLeft` / `nMid == nRight` guards are
+/// what terminate it, and **the answer is the post-loop test at `nMid`
+/// alone** — not the running maximum a scan would keep.
 fn word_at_x(
     section: &Section,
     range: std::ops::Range<usize>,
@@ -329,21 +371,41 @@ fn word_at_x(
     metrics: &Metrics<'_>,
     x: f32,
 ) -> i32 {
-    let mut answer: i32 = -1;
-    for index in range {
-        let Some(word) = section.words.get(index) else {
-            break;
-        };
-        let midpoint = word.x + word_width(word, config, metrics, config.font_size) * 0.5;
-        // Raw `>`, no epsilon: the boundary belongs to the character's left
-        // half, so a click exactly on a midpoint lands before that character.
-        if x > midpoint {
-            answer = i32::try_from(index).unwrap_or(answer);
-        } else {
+    // Raw `>`, no epsilon: the boundary belongs to the character's left half,
+    // so a click exactly on a midpoint lands before that character.
+    let past_midpoint = |index: usize| {
+        section.words.get(index).is_some_and(|word| {
+            x > word.x + word_width(word, config, metrics, config.font_size) * 0.5
+        })
+    };
+
+    if range.is_empty() {
+        return -1;
+    }
+    let (mut left, mut right) = (range.start, range.end);
+    let mut mid = left.saturating_add(right) / 2;
+    while left < right {
+        if mid == left {
             break;
         }
+        if mid == right {
+            mid = mid.saturating_sub(1);
+            break;
+        }
+        if section.words.get(mid).is_none() {
+            break;
+        }
+        if past_midpoint(mid) {
+            left = mid;
+        } else {
+            right = mid;
+        }
+        mid = left.saturating_add(right) / 2;
     }
-    answer
+    if past_midpoint(mid) {
+        return i32::try_from(mid).unwrap_or(-1);
+    }
+    -1
 }
 
 /// Where a caret at `place` is drawn, in PDF user space.
@@ -408,18 +470,63 @@ fn caret_position(
     };
     let top = line.y - line.ascent;
     if place.word < 0 {
-        // The line header sits at the line's own left edge, which alignment
-        // may have moved away from the plate's.
-        return (line.x, top);
+        return (line_caret_x(section, *line), top);
     }
     let index = usize::try_from(place.word).unwrap_or(0);
     let Some(word) = section.words.get(index) else {
-        return (line.x, top);
+        return (line_caret_x(section, *line), top);
     };
-    (
-        word.x + word_width(word, config, metrics, config.font_size),
-        top,
-    )
+    (caret_x(word, config, metrics), top)
+}
+
+/// The x a caret sitting **after** one character is drawn at.
+///
+/// A left-to-right character's trailing edge is its right one, so the caret is
+/// the character's origin plus its advance. A right-to-left character advances
+/// the other way — its origin is already the *right* end of the cell the layout
+/// gave it, and the caret after it belongs on its **left**, which is the
+/// origin itself. Adding the advance to both is the same one-advance error
+/// everywhere it happens: every caret in a Hebrew or Arabic run lands one
+/// character to the right of the gap it names.
+fn caret_x(word: &crate::vt::Word, config: &Config, metrics: &Metrics<'_>) -> f32 {
+    if word.is_rtl {
+        word.x
+    } else {
+        word.x + word_width(word, config, metrics, config.font_size)
+    }
+}
+
+/// The x a caret sitting at a line's **header** — before its first character —
+/// is drawn at.
+///
+/// The header is the position before the first character *in logical order*,
+/// and in a right-to-left line that character is drawn at the line's right
+/// end. So the answer is the line's trailing edge, not its leading one: a
+/// left-to-right line answers its left edge and a right-to-left line answers
+/// `x + width`. An empty line has no first character and keeps the left edge,
+/// which is what puts an empty right-aligned field's caret where its
+/// alignment already put the line.
+///
+/// The direction comes from the **first word alone**, not from the line's
+/// dominant direction: a line whose first run is right-to-left and whose
+/// second is not still answers its right edge.
+fn line_caret_x(section: &Section, line: crate::vt::Line) -> f32 {
+    if line.begin < 0 {
+        return line.x;
+    }
+    let first = usize::try_from(line.begin).ok().and_then(|index| {
+        // Only a word this line actually owns decides: a `begin` past the
+        // section's words is a layout that shrank under an edit, and it
+        // answers the left edge rather than reading a neighbour's direction.
+        (line.begin <= line.end)
+            .then(|| section.words.get(index))
+            .flatten()
+    });
+    if first.is_some_and(|word| word.is_rtl) {
+        line.x + line.width
+    } else {
+        line.x
+    }
 }
 
 /// The height of the line a place sits on.
@@ -1075,5 +1182,266 @@ mod tests {
         );
         assert_eq!(before.word, -1);
         assert_eq!(after.word, 0);
+    }
+
+    /// Every character five hundred per mille, so a twelve-point run steps in
+    /// whole sixes and the caret positions below are exact.
+    fn half_em(_: u32) -> i32 {
+        500
+    }
+
+    fn halves() -> Metrics<'static> {
+        Metrics {
+            width: &half_em,
+            ascent: 1000,
+            descent: -200,
+        }
+    }
+
+    /// A three-character Hebrew word in a plate whose left edge is one, laid
+    /// out at twelve points with six-unit advances.
+    ///
+    /// The run is right-to-left, so it is drawn right to left across
+    /// `1 ..= 19`: the first character in logical order occupies `13 ..= 19`,
+    /// the second `7 ..= 13`, the third `1 ..= 7`.
+    fn rtl_run() -> (Config, Metrics<'static>, vt::Layout) {
+        let config = Config {
+            plate: geom::rect(1.0, 1.0, 99.0, 29.0),
+            font_size: 12.0,
+            ..Config::default()
+        };
+        let metrics = halves();
+        let layout = vt::layout("\u{5D1}\u{5D7}\u{5E8}", &config, &metrics);
+        (config, metrics, layout)
+    }
+
+    /// The four caret positions of a right-to-left word, in place order.
+    ///
+    /// `CPVT_Word::CaretX` (`core/fpdfdoc/cpvt_word.h:42`) is
+    /// `is_rtl ? x : x + width`, and
+    /// `CPVT_VariableText::Iterator::GetLineCaretX`
+    /// (`core/fpdfdoc/cpvt_variabletext.cpp:103-118`) answers
+    /// `line.ptLine.x + line.fLineWidth` when the line's first word is
+    /// right-to-left. Together they walk the caret **leftward** as the place
+    /// advances: the header sits at the run's right end and each further
+    /// character moves it one advance left.
+    ///
+    /// Adding the advance in both directions instead — which is what a
+    /// left-to-right-only port does — gives `1, 19, 13, 7`: the header at the
+    /// wrong end, and every other caret one full advance right of the gap it
+    /// names.
+    #[test]
+    fn a_right_to_left_words_carets_walk_leftward_from_its_right_edge() {
+        let (config, metrics, layout) = rtl_run();
+        let got: Vec<f64> = (-1..3)
+            .map(|word| {
+                point_at_place(
+                    &layout,
+                    config.plate,
+                    &config,
+                    &metrics,
+                    (0.0, 0.0),
+                    Place::new(0, 0, word),
+                )
+                .x
+            })
+            .collect();
+        let want = [19.0, 13.0, 7.0, 1.0];
+        for (place, (&got, &want)) in got.iter().zip(want.iter()).enumerate() {
+            assert!(
+                (got - want).abs() < 1e-4,
+                "place {} caret is {got}, want {want}: {got:?}",
+                i32::try_from(place).unwrap_or(0) - 1
+            );
+        }
+    }
+
+    /// The same four positions through [`caret_rect`], which is what the
+    /// focused field actually draws, so the rectangle's left edge is the
+    /// caret's x rather than that x plus a width.
+    #[test]
+    fn the_drawn_caret_rectangle_follows_the_same_right_to_left_walk() {
+        let (config, metrics, layout) = rtl_run();
+        for (word, want) in (-1..3).zip([19.0_f64, 13.0, 7.0, 1.0]) {
+            let rect = caret_rect(
+                &layout,
+                config.plate,
+                &config,
+                &metrics,
+                (0.0, 0.0),
+                Place::new(0, 0, word),
+                0.4,
+            );
+            assert!(
+                (rect.x0 - want).abs() < 1e-4,
+                "caret after {word} starts at {}, want {want}",
+                rect.x0
+            );
+            assert!((rect.x1 - rect.x0 - 0.4).abs() < 1e-4, "{rect:?}");
+        }
+    }
+
+    /// A left-to-right line is untouched: its header is the left edge and
+    /// every caret is a character's right edge, which is what every existing
+    /// assertion in this module already depends on.
+    #[test]
+    fn a_left_to_right_run_still_walks_rightward_from_its_left_edge() {
+        let config = Config {
+            plate: geom::rect(1.0, 1.0, 99.0, 29.0),
+            font_size: 12.0,
+            ..Config::default()
+        };
+        let metrics = halves();
+        let layout = vt::layout("abc", &config, &metrics);
+        let got: Vec<f64> = (-1..3)
+            .map(|word| {
+                point_at_place(
+                    &layout,
+                    config.plate,
+                    &config,
+                    &metrics,
+                    (0.0, 0.0),
+                    Place::new(0, 0, word),
+                )
+                .x
+            })
+            .collect();
+        for (place, (&got, &want)) in got.iter().zip([1.0, 7.0, 13.0, 19.0].iter()).enumerate() {
+            assert!(
+                (got - want).abs() < 1e-4,
+                "place {} caret is {got}, want {want}",
+                i32::try_from(place).unwrap_or(0) - 1
+            );
+        }
+    }
+
+    /// A click in a right-to-left run answers one of the run's two ends, and
+    /// the **middle** character's midpoint is what divides them.
+    ///
+    /// The predicate `SearchWordPlaceImpl` bisects on
+    /// (`core/fpdfdoc/cpvt_section.cpp:412-424`) is monotone only along a
+    /// left-to-right line. Down a descending run the bisection's first probe
+    /// is the middle character, and the answer follows that one probe alone:
+    /// a click **left** of its midpoint narrows to index 0, whose own
+    /// midpoint is the run's *rightmost*, so the post-loop test there fails
+    /// and the answer is the header; a click right of it narrows to the last
+    /// index, whose midpoint is the run's *leftmost*, which the click is past.
+    ///
+    /// The two places are the run's two logical ends — its beginning and its
+    /// end — and in a right-to-left run those are drawn at the right and left
+    /// edges respectively. So the caret crosses the whole run at the middle
+    /// character's midpoint rather than stepping character by character. That
+    /// is upstream's behaviour and not an approximation of it: the assertion
+    /// here is the transcription, not a claim that it is the nicest answer.
+    /// What a scan-based port does instead is worse and not merely
+    /// different — it answers the header for **every** click in the run, so
+    /// the caret never moves at all.
+    #[test]
+    fn a_click_in_a_right_to_left_run_answers_the_end_the_bisection_narrows_to() {
+        let (config, metrics, layout) = rtl_run();
+        let at = |x: f64| {
+            place_at_point(
+                &layout,
+                config.plate,
+                &config,
+                &metrics,
+                (0.0, 0.0),
+                Point::new(x, 15.0),
+            )
+            .word
+        };
+        let caret = |x: f64| {
+            point_at_place(
+                &layout,
+                config.plate,
+                &config,
+                &metrics,
+                (0.0, 0.0),
+                Place::new(0, 0, at(x)),
+            )
+            .x
+        };
+        // The run occupies PDF x 1..19. The middle character is drawn over
+        // 7..13, so its midpoint is at 10 — the one probe that decides.
+        assert_eq!(at(2.0), -1, "left of the middle midpoint: the header");
+        assert_eq!(at(9.9), -1);
+        assert_eq!(at(10.0), -1, "exactly on the midpoint is not past it");
+        assert_eq!(at(10.1), 2, "past it: the run's last character");
+        assert_eq!(at(18.0), 2);
+
+        // The two places are the run's logical ends, drawn at its right and
+        // left edges: the caret crosses the run rather than stepping across
+        // it.
+        assert!((caret(2.0) - 19.0).abs() < 1e-4, "{}", caret(2.0));
+        assert!((caret(18.0) - 1.0).abs() < 1e-4, "{}", caret(18.0));
+    }
+
+    /// A line whose first character is right-to-left answers its right edge
+    /// for the header even when a left-to-right run follows it, because
+    /// `GetLineCaretX` reads the **first word alone**.
+    #[test]
+    fn a_mixed_line_takes_its_header_from_its_first_word_only() {
+        let config = Config {
+            plate: geom::rect(1.0, 1.0, 99.0, 29.0),
+            font_size: 12.0,
+            ..Config::default()
+        };
+        let metrics = halves();
+        let rtl_first = vt::layout("\u{5D1}\u{5D7}ab", &config, &metrics);
+        let header = point_at_place(
+            &rtl_first,
+            config.plate,
+            &config,
+            &metrics,
+            (0.0, 0.0),
+            Place::START,
+        )
+        .x;
+        let line_width = rtl_first
+            .sections
+            .first()
+            .and_then(|section| section.lines.first())
+            .map_or(0.0, |line| line.width);
+        assert!(
+            (header - f64::from(1.0 + line_width)).abs() < 1e-4,
+            "header is the line's right edge: {header} against width {line_width}"
+        );
+
+        // And the mirror: a left-to-right first word keeps the left edge even
+        // with a right-to-left run behind it.
+        let ltr_first = vt::layout("ab\u{5D1}\u{5D7}", &config, &metrics);
+        let header = point_at_place(
+            &ltr_first,
+            config.plate,
+            &config,
+            &metrics,
+            (0.0, 0.0),
+            Place::START,
+        )
+        .x;
+        assert!((header - 1.0).abs() < 1e-4, "{header}");
+    }
+
+    /// An empty line has no first character to take a direction from, so its
+    /// header stays at the line's own left edge.
+    #[test]
+    fn an_empty_line_keeps_its_left_edge_for_a_header() {
+        let config = Config {
+            plate: geom::rect(1.0, 1.0, 99.0, 29.0),
+            font_size: 12.0,
+            ..Config::default()
+        };
+        let metrics = halves();
+        let layout = vt::layout("", &config, &metrics);
+        let header = point_at_place(
+            &layout,
+            config.plate,
+            &config,
+            &metrics,
+            (0.0, 0.0),
+            Place::START,
+        )
+        .x;
+        assert!((header - 1.0).abs() < 1e-4, "{header}");
     }
 }
