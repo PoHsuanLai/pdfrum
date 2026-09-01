@@ -339,9 +339,22 @@ fn ensure_event_goldens(
         store
             .write_artifact(key, name, bytes)
             .with_context(|| format!("writing golden artifact {name}"))?;
+    }
+    // Re-read before merging. Several fixtures can share one key (they expand
+    // to the same PDF and differ only in their script) and run in parallel, so
+    // the copy read above may already be stale: a sibling that finished while
+    // the oracle ran here has added its own artifact. Writing the stale copy
+    // back would drop that entry, leaving the PNG on disk but absent from the
+    // manifest, which scores as "no golden for script ...".
+    if let Ok(fresh) = store.manifest(key) {
+        manifest = fresh;
+    }
+    for (name, _) in &event_artifacts {
         manifest.artifacts.push(name.clone());
     }
     manifest.md5.extend(event_md5);
+    manifest.md5.sort_by(|a, b| a.path.cmp(&b.path));
+    manifest.md5.dedup_by(|a, b| a.path == b.path);
     manifest.artifacts.sort();
     manifest.artifacts.dedup();
     store
