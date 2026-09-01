@@ -56,12 +56,16 @@ fn report(effects: &pdfrum_script::AfEffects, context: &Context) {
 /// then throws*, and the transcript records both lines — which is why
 /// `Thrown` carries effects at all and why an `Err` here reports before it
 /// returns.
-fn settle<T>(result: Result<T, pdfrum_script::Thrown>, context: &Context) -> JsResult<T> {
+fn settle<T>(
+    result: Result<T, pdfrum_script::Thrown>,
+    context: &Context,
+    name: &str,
+) -> JsResult<T> {
     match result {
         Ok(value) => Ok(value),
         Err(thrown_error) => {
             report(&thrown_error.effects, context);
-            Err(thrown(&thrown_error.error))
+            Err(thrown(name, &thrown_error.error))
         }
     }
 }
@@ -93,9 +97,9 @@ fn truthy(args: &[JsValue], index: usize) -> bool {
 /// Every `AF*` function checks its own arity upstream and answers the same
 /// message; the checks are asserted by the fixtures and are the 72 assertions
 /// `pdfrum-script` alone could not reach.
-fn arity(args: &[JsValue], expected: usize) -> JsResult<()> {
+fn arity(args: &[JsValue], expected: usize, name: &str) -> JsResult<()> {
     if args.len() < expected {
-        return Err(param_error());
+        return Err(param_error(name));
     }
     Ok(())
 }
@@ -228,19 +232,27 @@ fn apply_keystroke(
 
 // ---- the twenty-two ----
 
+/// One bound `AF*` function.
+///
+/// The Acrobat name is threaded in as `name` because **every error a bound
+/// function throws carries it** — `JSFormatErrorString`
+/// (`fxjs/js_resources.cpp:97-108`) prefixes `"<name>: "`, and roughly
+/// seventy golden assertions quote the qualified form. The macro exists so
+/// that name is written once per function rather than once per `throw`.
 macro_rules! af {
-    ($name:ident, $body:expr) => {
-        fn $name(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    ($fn_name:ident, $acrobat:literal, $body:expr) => {
+        fn $fn_name(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
             #[allow(clippy::redundant_closure_call)]
-            ($body)(args, context)
+            ($body)(args, context, $acrobat)
         }
     };
 }
 
 af!(
     af_number_format,
-    |args: &[JsValue], context: &mut Context| {
-        arity(args, 6)?;
+    "AFNumber_Format",
+    |args: &[JsValue], context: &mut Context, name: &str| {
+        arity(args, 6, name)?;
         let (n_dec, sep, neg) = (
             int(args, 0, context)?,
             int(args, 1, context)?,
@@ -259,13 +271,15 @@ af!(
 
 af!(
     af_number_keystroke,
-    |args: &[JsValue], context: &mut Context| {
-        arity(args, 6)?;
+    "AFNumber_Keystroke",
+    |args: &[JsValue], context: &mut Context, name: &str| {
+        arity(args, 6, name)?;
         let (n_dec, sep) = (int(args, 0, context)?, int(args, 1, context)?);
         let event = keystroke_of(context)?;
         let out = settle(
             pdfrum_script::af_number_keystroke(&event, n_dec, sep),
             context,
+            name,
         )?;
         report(&out.effects, context);
         apply_keystroke(&out.outcome, context)?;
@@ -275,14 +289,16 @@ af!(
 
 af!(
     af_percent_format,
-    |args: &[JsValue], context: &mut Context| {
-        arity(args, 2)?;
+    "AFPercent_Format",
+    |args: &[JsValue], context: &mut Context, name: &str| {
+        arity(args, 2, name)?;
         let (n_dec, sep) = (int(args, 0, context)?, int(args, 1, context)?);
         let prepend = args.len() < 3 || truthy(args, 2);
         let event = keystroke_of(context)?;
         let out = settle(
             pdfrum_script::af_percent_format(&event.value, n_dec, sep, prepend),
             context,
+            name,
         )?;
         report(&out.effects, context);
         write_event_value(formatted(out.outcome), context)?;
@@ -292,14 +308,16 @@ af!(
 
 af!(
     af_percent_keystroke,
-    |args: &[JsValue], context: &mut Context| {
-        arity(args, 2)?;
+    "AFPercent_Keystroke",
+    |args: &[JsValue], context: &mut Context, name: &str| {
+        arity(args, 2, name)?;
         let sep = int(args, 1, context)?;
         let event = keystroke_of(context)?;
         let n_dec = int(args, 0, context)?;
         let out = settle(
             pdfrum_script::af_percent_keystroke(&event, n_dec, sep),
             context,
+            name,
         )?;
         report(&out.effects, context);
         apply_keystroke(&out.outcome, context)?;
@@ -307,30 +325,37 @@ af!(
     }
 );
 
-af!(af_date_format, |args: &[JsValue], context: &mut Context| {
-    arity(args, 1)?;
-    let index = int(args, 0, context)?;
-    let now = now_ms(context);
-    let event = keystroke_of(context)?;
-    let out = settle(
-        pdfrum_script::af_date_format(&event.value, index, now),
-        context,
-    )?;
-    report(&out.effects, context);
-    write_event_value(formatted(out.outcome), context)?;
-    Ok(JsValue::undefined())
-});
+af!(
+    af_date_format,
+    "AFDate_Format",
+    |args: &[JsValue], context: &mut Context, name: &str| {
+        arity(args, 1, name)?;
+        let index = int(args, 0, context)?;
+        let now = now_ms(context);
+        let event = keystroke_of(context)?;
+        let out = settle(
+            pdfrum_script::af_date_format(&event.value, index, now),
+            context,
+            name,
+        )?;
+        report(&out.effects, context);
+        write_event_value(formatted(out.outcome), context)?;
+        Ok(JsValue::undefined())
+    }
+);
 
 af!(
     af_date_format_ex,
-    |args: &[JsValue], context: &mut Context| {
-        arity(args, 1)?;
+    "AFDate_FormatEx",
+    |args: &[JsValue], context: &mut Context, name: &str| {
+        arity(args, 1, name)?;
         let format = text(args, 0, context)?;
         let now = now_ms(context);
         let event = keystroke_of(context)?;
         let out = settle(
             pdfrum_script::af_date_format_ex(&event.value, &format, now),
             context,
+            name,
         )?;
         report(&out.effects, context);
         write_event_value(formatted(out.outcome), context)?;
@@ -340,8 +365,9 @@ af!(
 
 af!(
     af_date_keystroke,
-    |args: &[JsValue], context: &mut Context| {
-        arity(args, 1)?;
+    "AFDate_Keystroke",
+    |args: &[JsValue], context: &mut Context, name: &str| {
+        arity(args, 1, name)?;
         let index = int(args, 0, context)?;
         let now = now_ms(context);
         let event = keystroke_of(context)?;
@@ -354,12 +380,13 @@ af!(
 
 af!(
     af_date_keystroke_ex,
-    |args: &[JsValue], context: &mut Context| {
+    "AFDate_KeystrokeEx",
+    |args: &[JsValue], context: &mut Context, name: &str| {
         // The one function whose arity error is its own message, because
         // upstream checks it separately: `AFDate_KeystrokeEx's parameter size
         // not correct`.
         if args.len() != 1 {
-            return Err(thrown(&pdfrum_script::Error::DateKeystrokeArity));
+            return Err(thrown(name, &pdfrum_script::Error::DateKeystrokeArity));
         }
         let format = text(args, 0, context)?;
         let now = now_ms(context);
@@ -371,30 +398,37 @@ af!(
     }
 );
 
-af!(af_time_format, |args: &[JsValue], context: &mut Context| {
-    arity(args, 1)?;
-    let index = int(args, 0, context)?;
-    let now = now_ms(context);
-    let event = keystroke_of(context)?;
-    let out = settle(
-        pdfrum_script::af_time_format(&event.value, index, now),
-        context,
-    )?;
-    report(&out.effects, context);
-    write_event_value(formatted(out.outcome), context)?;
-    Ok(JsValue::undefined())
-});
+af!(
+    af_time_format,
+    "AFTime_Format",
+    |args: &[JsValue], context: &mut Context, name: &str| {
+        arity(args, 1, name)?;
+        let index = int(args, 0, context)?;
+        let now = now_ms(context);
+        let event = keystroke_of(context)?;
+        let out = settle(
+            pdfrum_script::af_time_format(&event.value, index, now),
+            context,
+            name,
+        )?;
+        report(&out.effects, context);
+        write_event_value(formatted(out.outcome), context)?;
+        Ok(JsValue::undefined())
+    }
+);
 
 af!(
     af_time_format_ex,
-    |args: &[JsValue], context: &mut Context| {
-        arity(args, 1)?;
+    "AFTime_FormatEx",
+    |args: &[JsValue], context: &mut Context, name: &str| {
+        arity(args, 1, name)?;
         let format = text(args, 0, context)?;
         let now = now_ms(context);
         let event = keystroke_of(context)?;
         let out = settle(
             pdfrum_script::af_time_format_ex(&event.value, &format, now),
             context,
+            name,
         )?;
         report(&out.effects, context);
         write_event_value(formatted(out.outcome), context)?;
@@ -404,8 +438,9 @@ af!(
 
 af!(
     af_time_keystroke,
-    |args: &[JsValue], context: &mut Context| {
-        arity(args, 1)?;
+    "AFTime_Keystroke",
+    |args: &[JsValue], context: &mut Context, name: &str| {
+        arity(args, 1, name)?;
         let index = int(args, 0, context)?;
         let now = now_ms(context);
         let event = keystroke_of(context)?;
@@ -418,8 +453,9 @@ af!(
 
 af!(
     af_time_keystroke_ex,
-    |args: &[JsValue], context: &mut Context| {
-        arity(args, 1)?;
+    "AFTime_KeystrokeEx",
+    |args: &[JsValue], context: &mut Context, name: &str| {
+        arity(args, 1, name)?;
         let format = text(args, 0, context)?;
         let now = now_ms(context);
         let event = keystroke_of(context)?;
@@ -432,8 +468,9 @@ af!(
 
 af!(
     af_special_format,
-    |args: &[JsValue], context: &mut Context| {
-        arity(args, 1)?;
+    "AFSpecial_Format",
+    |args: &[JsValue], context: &mut Context, name: &str| {
+        arity(args, 1, name)?;
         let kind = int(args, 0, context)?;
         let event = keystroke_of(context)?;
         let out = pdfrum_script::af_special_format(&event.value, kind);
@@ -445,8 +482,9 @@ af!(
 
 af!(
     af_special_keystroke,
-    |args: &[JsValue], context: &mut Context| {
-        arity(args, 1)?;
+    "AFSpecial_Keystroke",
+    |args: &[JsValue], context: &mut Context, name: &str| {
+        arity(args, 1, name)?;
         let kind = int(args, 0, context)?;
         let event = keystroke_of(context)?;
         let out = pdfrum_script::af_special_keystroke(&event, kind);
@@ -458,8 +496,9 @@ af!(
 
 af!(
     af_special_keystroke_ex,
-    |args: &[JsValue], context: &mut Context| {
-        arity(args, 1)?;
+    "AFSpecial_KeystrokeEx",
+    |args: &[JsValue], context: &mut Context, name: &str| {
+        arity(args, 1, name)?;
         let mask = text(args, 0, context)?;
         let event = keystroke_of(context)?;
         let out = pdfrum_script::af_special_keystroke_ex(&event, &mask);
@@ -471,8 +510,9 @@ af!(
 
 af!(
     af_range_validate,
-    |args: &[JsValue], context: &mut Context| {
-        arity(args, 4)?;
+    "AFRange_Validate",
+    |args: &[JsValue], context: &mut Context, name: &str| {
+        arity(args, 4, name)?;
         let check_min = truthy(args, 0);
         let min = number(args, 1, context)?;
         let check_max = truthy(args, 2);
@@ -505,9 +545,12 @@ af!(
 
 af!(
     af_merge_change,
-    |args: &[JsValue], context: &mut Context| {
+    "AFMergeChange",
+    // The one function that reads no argument and cannot fail: it merges the
+    // event's own change into its own value, so there is nothing to check an
+    // arity against and nothing to throw.
+    |_args: &[JsValue], context: &mut Context, _name: &str| {
         let event = keystroke_of(context)?;
-        let _ = args;
         Ok(JsValue::from(boa_engine::js_string!(
             pdfrum_script::af_merge_change(&event)
         )))
@@ -516,14 +559,16 @@ af!(
 
 af!(
     af_parse_date_ex,
-    |args: &[JsValue], context: &mut Context| {
-        arity(args, 2)?;
+    "AFParseDateEx",
+    |args: &[JsValue], context: &mut Context, name: &str| {
+        arity(args, 2, name)?;
         let value = text(args, 0, context)?;
         let format = text(args, 1, context)?;
         let now = now_ms(context);
         let millis = settle(
             pdfrum_script::af_parse_date_ex(&value, &format, now),
             context,
+            name,
         )?;
         Ok(JsValue::from(millis))
     }
@@ -531,8 +576,9 @@ af!(
 
 af!(
     af_extract_nums,
-    |args: &[JsValue], context: &mut Context| {
-        arity(args, 1)?;
+    "AFExtractNums",
+    |args: &[JsValue], context: &mut Context, name: &str| {
+        arity(args, 1, name)?;
         let value = text(args, 0, context)?;
         // `false`, not an empty array, when the string holds no digits at all —
         // `AFExtractNums`'s own answer, which `public_methods.in` asserts.
@@ -547,25 +593,34 @@ af!(
     }
 );
 
-af!(af_make_number, |args: &[JsValue], context: &mut Context| {
-    arity(args, 1)?;
-    let value = text(args, 0, context)?;
-    Ok(JsValue::from(pdfrum_script::af_make_number(&value)))
-});
+af!(
+    af_make_number,
+    "AFMakeNumber",
+    |args: &[JsValue], context: &mut Context, name: &str| {
+        arity(args, 1, name)?;
+        let value = text(args, 0, context)?;
+        Ok(JsValue::from(pdfrum_script::af_make_number(&value)))
+    }
+);
 
-af!(af_simple, |args: &[JsValue], context: &mut Context| {
-    arity(args, 3)?;
-    let op = text(args, 0, context)?;
-    let a = number(args, 1, context)?;
-    let b = number(args, 2, context)?;
-    let value = settle(pdfrum_script::af_simple(&op, a, b), context)?;
-    Ok(JsValue::from(value))
-});
+af!(
+    af_simple,
+    "AFSimple",
+    |args: &[JsValue], context: &mut Context, name: &str| {
+        arity(args, 3, name)?;
+        let op = text(args, 0, context)?;
+        let a = number(args, 1, context)?;
+        let b = number(args, 2, context)?;
+        let value = settle(pdfrum_script::af_simple(&op, a, b), context, name)?;
+        Ok(JsValue::from(value))
+    }
+);
 
 af!(
     af_split_field_list,
-    |args: &[JsValue], context: &mut Context| {
-        arity(args, 1)?;
+    "AFMakeArrayFromList",
+    |args: &[JsValue], context: &mut Context, name: &str| {
+        arity(args, 1, name)?;
         let value = text(args, 0, context)?;
         let names = pdfrum_script::af_split_field_list(&value);
         let array = boa_engine::object::builtins::JsArray::new(context)?;
