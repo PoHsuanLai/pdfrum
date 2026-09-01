@@ -21,6 +21,8 @@ fn document() -> Document {
 const X: f32 = 102.0;
 /// The **first visible row** of each field, from `:588-600`.
 const SINGLE_FIRST: f32 = 371.0;
+/// And its **second** visible row, `kSingleFormYSecondVisibleOption`.
+const SINGLE_SECOND: f32 = 358.0;
 const MULTI_FIRST: f32 = 423.0;
 const INDICES_FIRST: f32 = 273.0;
 const VALUES_FIRST: f32 = 223.0;
@@ -68,24 +70,9 @@ fn a_value_array_selects_every_row_it_names() {
 }
 
 /// `CheckIfMultipleSelectedIndices`, and it currently **diverges from the
-/// oracle**. The divergence is asserted as it stands rather than hidden, so
-/// that fixing it turns this test red rather than leaving it silently green.
-///
-/// Upstream expects rows 1 and 3 selected. `CPDF_FormField::IsItemSelected`
-/// (`cpdf_formfield.cpp:546-554`) consults **`/I` first** — as integer
-/// indices — and falls back to `/V` only when `/I` is not usable, where
-/// "usable" is `UseSelectedIndicesObject` (`:863-935`): there is no `/V` at
-/// all, or `/I` has the same number of entries as `/V` and every index names
-/// an option whose value appears in `/V`.
-///
-/// `pdfrum-doc`'s `ap::field_body::selected_indices` inverts that: it reads
-/// `/V` first and consults `/I` only when `/V` is absent, and then compares
-/// each entry as *text*, so an integer index matches no option. The two agree
-/// on the `/V`-only and the mismatch fields — which is why those two rows
-/// pass — and disagree on exactly this one.
-///
-/// **This is a `pdfrum-doc` reader, not this crate's**, and it is recorded in
-/// `docs/status/M14.md` for that slice's owner.
+/// oracle**. Asserted as it stands rather than hidden, so that wiring the
+/// interaction reader turns this test red rather than leaving it green.
+/// See `docs/status/M14.md`.
 #[test]
 fn an_index_array_alone_currently_selects_nothing() {
     let doc = document();
@@ -117,19 +104,88 @@ fn the_value_array_wins_over_a_disagreeing_index_array() {
     );
 }
 
-/// A single-select list box: clicking a row selects exactly that row.
+/// A single-select list box: clicking the **first visible row** selects that
+/// row, index 0 — not merely "one row".
+///
+/// This is the assertion that catches a click computed in the wrong space.
+/// The widget is `/Rect [100 350 200 380]`, so its client rectangle lives at
+/// the origin while the click arrives at page y 371; subtracting the one from
+/// the other without `FFLtoPWL` gives a large negative offset, no row, and a
+/// click that focuses the widget and selects nothing. The old assertion could
+/// not see it, because the file already had one row selected.
 #[test]
-fn a_single_select_list_selects_the_row_clicked() {
+fn a_single_select_list_selects_the_first_visible_row_clicked() {
     let doc = document();
     let mut session = FormSession::new(&doc);
     click(&mut session, SINGLE_FIRST);
 
     assert!(session.focused_annot().is_some());
-    let rows = selected_rows(&session, 26);
+    assert_eq!(selected_rows(&session, 26), vec![0]);
+}
+
+/// And clicking the **second** visible row selects row 1, which is what makes
+/// the row arithmetic — not just the origin — assertable.
+///
+/// `kSingleFormYSecondVisibleOption` is 358, thirteen points below the first,
+/// which is one laid-out row of the 12-point face rather than twelve.
+#[test]
+fn clicking_the_second_visible_row_selects_the_second_option() {
+    let doc = document();
+    let mut session = FormSession::new(&doc);
+    click(&mut session, SINGLE_SECOND);
+
+    assert_eq!(selected_rows(&session, 26), vec![1]);
+}
+
+/// A row is the **laid-out** line tall, not the `/DA` font size.
+///
+/// `CPWL_ListCtrl::Item::GetItemHeight` (`cpwl_list_ctrl.cpp:49-51`) is the
+/// item's own `GetContentRect().Height()`, and `ReArrange` (`:525-551`)
+/// stacks the items by exactly that. The laid-out line is
+/// `(ascent - descent) * size / 1000`, which equals the font size only for a
+/// face whose pair happens to sum to 1000 — Arimo's sums to 1116, giving
+/// 13.392 units at 12 points where the size would say 12.
+///
+/// The number cannot be written down here, because it is the face's and this
+/// binary does not load the corpus's. What *is* assertable is that the row
+/// boundaries are evenly spaced by a step that is **not** the 12-point font
+/// size, which is the property that failed before: rows 0, 1 and 2 begin at
+/// equal intervals, and that interval is not 12.
+#[test]
+fn a_row_is_the_laid_out_line_tall_not_the_font_size() {
+    let doc = document();
+
+    // Walk down the widget and record where the selected row changes.
+    let mut boundaries = Vec::new();
+    let mut previous: Option<Vec<usize>> = None;
+    let mut y = 379.0_f32;
+    while y > 351.0 {
+        let mut session = FormSession::new(&doc);
+        click(&mut session, y);
+        let rows = selected_rows(&session, 26);
+        if previous.as_ref().is_some_and(|was| *was != rows) {
+            boundaries.push(y);
+        }
+        previous = Some(rows);
+        y -= 0.05;
+    }
+
     assert_eq!(
-        rows.len(),
-        1,
-        "a single-select list holds one row, got {rows:?}"
+        boundaries.len(),
+        2,
+        "three rows fit, so there are two edges"
+    );
+    let step = boundaries[0] - boundaries[1];
+    assert!(
+        (step - 12.0).abs() > 0.5,
+        "a row is the laid-out line, not the 12-point size; measured {step}"
+    );
+    // And the two edges are one step apart from the client's top, which is
+    // what "evenly stacked" means.
+    let client_top = 380.0 - 1.0; // /Rect top, less the one-unit border.
+    assert!(
+        ((client_top - boundaries[0]) - step).abs() < 0.2,
+        "the first row starts at the client's top"
     );
 }
 
