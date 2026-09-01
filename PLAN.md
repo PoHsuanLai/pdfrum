@@ -1078,6 +1078,46 @@ missing is the *editing* state machine on top of it and the event model.
   (`Form::on_mouse_down(...)`, `on_char(...)`, …) documented with an example;
   existing scoreboard unmoved.
 
+**Rulings 2026-09-01 (orchestrator, on the brief's §5 escalations; the user
+may overrule any of these — each is a doc edit and a crate boundary, nothing
+irreversible).** The brief is `docs/design/pdfrum-form.md` (`dc2e53f`).
+
+- **E2 accepted — the counts above were wrong both ways.** 11 of the 139 are
+  V8-gated (not 2), 7 are XFA, and four `pwl/`+`formfiller/` embeddertest
+  files hold **70 uncounted V8-free tests**. Exit criterion restated:
+  **191/191** assertions ported and passing (121 + 70); the 11 V8-gated names
+  are listed in the brief §4.1 for M15. Of the 59 `.evt` files, 32 are XFA
+  (excluded), 4 are JavaScript (suppressed naming M15), **27** are M14's.
+  The harness baseline (`6f33c82`) scored 38 event rows — the reviewer of the
+  harness slice must reconcile 38 with 27 before goldens are treated as the
+  target.
+- **E3 accepted — new crate `pdfrum-form`**, depending on `pdfrum-doc`,
+  no new external dependency (DEPS.md unchanged, verified mechanically at
+  close). Three additive `pdfrum-doc` changes authorized (brief §2b table).
+  SPEC §15 is written by the implementation agent from brief §3.2 as its
+  first `[spec]` commit.
+- **E1 accepted — clarifying clause, not reversal**, applied to SPEC §10 in
+  the same commit as this ruling.
+- **E4 accepted — `Cascade` is the third seam.** STYLE §2b's list is amended
+  under the `[spec]` protocol that clause itself names. The enum alternative
+  would put a feature-gated `boa` type into `pdfrum-form`'s public surface;
+  the generic-parameter fallback would put a type parameter on the facade.
+  One `&mut dyn Cascade` at one call site.
+- **E5 accepted** — `Limits.max_undo_items: u32 = 10_000`, minimum 4,
+  recorded in SPEC §10's Limits line.
+- **U1 answered by the baseline**: 15 of the 38 event rows already pass with
+  the unfocused appearance; the 23 that fail are where the work is.
+- **U2 (`SearchWordPlace` tie-break) is assigned to the `pdfrum-doc` slice**,
+  which must read `cpvt_variabletext.cpp` and record the rule in its status
+  doc before `place_at_point` is written.
+- **OQ6 (caret phase)**: settle by inspecting one golden PNG at the start of
+  the edit-control work; record in `docs/status/M14.md`.
+
+**Work split (cross-vendor rule: each vendor reviews the other's slice).**
+Grok: `.evt` harness (landed `0eff591`..`6f33c82`, Claude reviews), then the
+`pdfrum-doc` additive slice. Claude/Opus: `pdfrum-form` + facade + SPEC §15,
+Grok reviews.
+
 ## M15 — JavaScript via `boa`  *(after M14, whose event cascade the field scripts hang off)*
 
 Settled 2026-09-01: **the engine is boa**, pinned exactly, behind a cargo

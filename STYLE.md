@@ -61,9 +61,13 @@ Violations are review-blockers even when tests pass.
 
 **Traits.** Two kinds exist in this codebase, and the seam list is closed:
 - *Seams (polymorphism on purpose):* `RenderDevice`/`RasterBackend`
-  (swappable rasterizers; the only `dyn` in the project) and `Resolve`
-  (indirect-object lookup; `&impl Resolve` bounds, real second impls: test
-  resolvers, the editor's flattened view). Adding a third seam is a `[spec]`
+  (swappable rasterizers), `Resolve` (indirect-object lookup; `&impl Resolve`
+  bounds, real second impls: test resolvers, the editor's flattened view), and
+  — added by `[spec]` 2026-09-01 for M14 — `Cascade` in `pdfrum-form` (the
+  form-commit script hooks; second impl is M15's `boa` engine, the first is
+  the no-script default whose method defaults *are* the V8-off behaviour).
+  `dyn` exists at exactly two places: `RenderDevice` and one `&mut dyn
+  Cascade` in `pdfrum-form::commit`. Adding a fourth seam is a `[spec]`
   change.
 - *Vocabulary impls (Rust idiom, not OOP):* implement std/ecosystem traits
   liberally — `Iterator` (lexer, `Font::decode`, pages, outlines), `Deref`
