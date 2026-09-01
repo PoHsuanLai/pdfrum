@@ -122,17 +122,22 @@ pub enum Site {
     /// The `Vec<ZeroArea>` that scan returns, which is empty for the
     /// overwhelming majority of paths and still costs the call.
     ZeroAreaVec,
-    /// The device-space `BezPath` [`crate::paint::draw_path`]'s ordinary case
-    /// builds for a fill or a stroke, and the second one
-    /// [`crate::path::hard_clip`] builds from it. Two heap buffers the whole
-    /// length of the path, per drawn path object, discarded at the device
-    /// call. **Not in P2's site list**, which is why P2's "allocation is 0.6%"
+    /// The device-space `BezPath`s [`crate::paint::draw_path`]'s ordinary case
+    /// builds for a fill or a stroke: one per fill since M12b P3 fused the
+    /// transform and the clamp ([`crate::path::transform_hard_clip`]), three
+    /// on the stroke arm, which still composes a nudge between them.
+    ///
+    /// **Not in P2's site list**, which is why P2's "allocation is 0.6%"
     /// covered less of the walk than it appeared to — see M12b-P3.md §3.
     PathGeometry,
-    /// The three `Vec<Point>`s [`crate::path::path_rect`] builds — the
+    /// The three `Vec<Point>`s [`crate::path::path_rect`] used to build — the
     /// candidate points, their normalization, and their transform — on every
-    /// fill-only path object, whether or not it turns out to be a rectangle.
-    /// Also absent from P2's list.
+    /// fill-only path object, whether or not it turned out to be a rectangle.
+    ///
+    /// **This row should read zero**, and reads zero because M12b P3 replaced
+    /// all three with one inline `Points` buffer. It is kept rather than
+    /// deleted so that a future edit which puts a `Vec` back into the rect test
+    /// shows up here as a number instead of only as a millisecond.
     RectPoints,
 }
 
