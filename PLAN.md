@@ -596,10 +596,25 @@ changing the cold convention; it is documented and ratcheted deliberately.
   a bisection and does not exist — `--sample` shows the same document at −1.1%
   with every phase agreeing to three decimals. That is the third false finding
   this milestone; read §4 before trusting a number from that binary.
-  **Still owed: `ratchet update` on an idle machine**, now carrying this item's
-  improvements too, and §9 warns that a `ratchet check` reads whatever the last
-  `cargo bench` left under `target/criterion` — which during this session was
-  two days stale and named a regression that is §4's ghost.
+  **A full 264-benchmark run was taken** and the warm family — the convention
+  M12's exit target is judged on — is **clean: 132 entries, 32 improved, zero
+  regressed**, with `vector_paths_1751` at **−14.5% / −10.4% / −9.4%** across
+  the exact, vello and tinyskia backends. Three independent rasterizers agreeing
+  is what places the saving in the engine code they share.
+  **The `ratchet update` is nevertheless still owed**, deliberately: all eight
+  regressions are in `render-cold`, which rebuilds the page graph per iteration,
+  and five of them have no case argued in advance — so they block the update
+  under a rule written down *before* the numbers
+  (`scripts/ratchet-decide.py`, committed at benchmark 57 of 266). Each is
+  regressed in exactly one of its four group/backend cells while improving in
+  its own warm counterpart, and a self-A/B of byte-identical binaries moves the
+  two largest by −4.4% and +7.0% — but that evidence was gathered *after* they
+  blocked, and retrofitting a case is the drift the ratchet exists to prevent.
+  **A ratchet that declines to write a file is not a verdict on the
+  engineering.** Whoever pays the debt should know the cold family will move
+  enormously for reasons that are **not P3's**: `image_bug_718762` (−56%),
+  `vector_tcpdf_009` (−67%) and `text_quick_start` (−47%) are **P1's image work
+  landing in a baseline that has not been rewritten since before P1**.
 
   *Original brief:* **Retargeted 2026-08-31, after P1 and P2 took the original target away.** The
   item as first written aimed at `to_pixmap`'s ~4 us per output pixel (M12 §10).
