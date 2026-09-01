@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-01T10:42:47Z",
+  "generated_at": "2026-09-01T10:47:05Z",
   "totals": {
     "files": 1705,
     "pass": 1636,
@@ -47420,12 +47420,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.982957,
+        "ssim": 0.982131,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.982957 below floor 0.990000"
+      "notes": "ssim 0.982131 below floor 0.990000"
     },
     {
       "path": "resources/pixel/scrollable_widgets1.pdf",
@@ -47476,12 +47476,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.982957,
+        "ssim": 0.982131,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.982957 below floor 0.990000"
+      "notes": "ssim 0.982131 below floor 0.990000"
     },
     {
       "path": "resources/pixel/scrollable_widgets2.in",
@@ -47532,12 +47532,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.981054,
+        "ssim": 0.985859,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.981054 below floor 0.990000"
+      "notes": "ssim 0.985859 below floor 0.990000"
     },
     {
       "path": "resources/pixel/shade-tensor.in",

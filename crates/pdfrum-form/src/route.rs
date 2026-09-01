@@ -576,13 +576,23 @@ fn choice_key<R: Resolve>(
     annot: AnnotId,
     key: Key,
 ) -> Response {
+    let rows = ctx
+        .widget(annot)
+        .map_or(0, |widget| visible_rows(ctx, widget));
     let moved = match session.fields.get_mut(&field) {
-        Some(FieldState::Choice(state)) => match key {
-            Key::UP => field::choice::move_selection(state, -1),
-            Key::DOWN => field::choice::move_selection(state, 1),
-            Key::RETURN | Key::SPACE => return Response::consumed(),
-            _ => return Response::ignored(),
-        },
+        Some(FieldState::Choice(state)) => {
+            let moved = match key {
+                Key::UP => field::choice::move_selection(state, -1),
+                Key::DOWN => field::choice::move_selection(state, 1),
+                Key::RETURN | Key::SPACE => return Response::consumed(),
+                _ => return Response::ignored(),
+            };
+            // The view follows the caret only when it would otherwise leave
+            // the box — the same rule the wheel obeys, because upstream they
+            // are the same operation.
+            let caret = state.caret_index.unwrap_or(0);
+            moved | field::choice::scroll_into_view(state, caret, rows)
+        }
         _ => return Response::ignored(),
     };
     if !moved {
@@ -737,26 +747,23 @@ fn font_size<R: Resolve>(ctx: &Context<'_, R>, widget: &WidgetInfo) -> f32 {
         .map_or(0.0, |appearance| appearance.size)
 }
 
-/// Scrolls a choice field by a wheel notch.
+/// A wheel notch over a list box.
 ///
-/// The clamp is the same **no-overscroll** rule `top_visible_for` applies to
-/// `/TI`: a list stops scrolling as soon as its last row reaches the bottom
-/// of the box, so the box never shows blank space below the options. Without
-/// it a wheel run to the end leaves one row drawn against an empty widget,
-/// where the oracle keeps the box full.
+/// **It moves the selection, not the view.** `CPWL_ListBox::OnMouseWheel`
+/// (`cpwl_list_box.cpp:357-368`) calls the very same `OnVK_DOWN`/`OnVK_UP`
+/// the arrow keys do, and the view follows only when the newly selected row
+/// would otherwise be off screen. Reading the wheel as a scrollbar drag — the
+/// obvious guess — leaves the selection behind on a row that has scrolled out
+/// of sight, where the oracle keeps it under the pointer's last step.
 fn scroll_choice(state: &mut ChoiceState, delta_y: i32, visible_rows: usize) -> bool {
     if delta_y == 0 || state.options.is_empty() {
         return false;
     }
-    let was = state.top_visible;
-    // A negative delta is downward, which moves the first visible row later.
-    let wanted = if delta_y < 0 {
-        state.top_visible.saturating_add(1)
-    } else {
-        state.top_visible.saturating_sub(1)
-    };
-    state.top_visible = field::choice::top_visible_for(state.options.len(), visible_rows, wanted);
-    state.top_visible != was
+    // A negative delta is downward, which is the *next* row.
+    let moved = field::choice::move_selection(state, if delta_y < 0 { 1 } else { -1 });
+    let caret = state.caret_index.unwrap_or(0);
+    let scrolled = field::choice::scroll_into_view(state, caret, visible_rows);
+    moved || scrolled
 }
 
 /// Scrolls a text field by a wheel notch.
@@ -1314,12 +1321,28 @@ fn caret_row_box<R: Resolve>(
     if bottom >= client.y1 || top <= client.y0 {
         return ap::FocusBox::None;
     }
+    // `client_rect` is in the appearance stream's own space — `rotated_rect`
+    // puts the box at the origin — and a focus box is in **page** space, so
+    // the widget's own corner is added back. Skipping this strokes a band at
+    // the foot of the page, which is where the widget would be if its
+    // rectangle started at zero.
+    let origin = pdfrum_doc::geom::normalize(widget_rect(widget));
     ap::FocusBox::Rect(kurbo::Rect::new(
-        client.x0,
-        bottom.max(client.y0),
-        client.x1,
-        top.min(client.y1),
+        client.x0 + origin.x0,
+        bottom.max(client.y0) + origin.y0,
+        client.x1 + origin.x0,
+        top.min(client.y1) + origin.y0,
     ))
+}
+
+/// A widget's `/Rect` as `kurbo` sees it.
+fn widget_rect(widget: &WidgetInfo) -> kurbo::Rect {
+    kurbo::Rect::new(
+        f64::from(widget.rect.left),
+        f64::from(widget.rect.bottom),
+        f64::from(widget.rect.right),
+        f64::from(widget.rect.top),
+    )
 }
 
 /// The rows a choice field has selected, as the generator wants them.
