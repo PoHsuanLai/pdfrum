@@ -159,8 +159,8 @@ fn bind_param_error() -> &'static str {
     "Incorrect number of parameters passed to function."
 }
 
-/// **Every error a bound function throws carries its own name**, and the
-/// goldens quote the qualified form.
+/// **Every error a bound function throws carries its own name and nothing
+/// else**, which is the form the goldens quote.
 ///
 /// `JSFormatErrorString` (`fxjs/js_resources.cpp:97-108`) is
 /// `class_name` + optional `"." + property` + `": "` + the message, and every
@@ -170,14 +170,24 @@ fn bind_param_error() -> &'static str {
 /// `AFDate_Format: Incorrect number of parameters passed to function.` and
 /// `util_printd_expected.txt` reads `util.printd: …`, not the bare message.
 ///
-/// Roughly seventy of the golden assertions are arity checks, so a bare
-/// message fails all of them — which is why this is a test rather than a
-/// comment.
+/// And it is thrown as a **bare string**, not an `Error`:
+/// `fxv8::ThrowExceptionHelper` is `ThrowException(NewStringHelper(...))`
+/// (`fxjs/fxv8.cpp:350-356`), so `'' + e` is the message alone. The goldens
+/// show the difference directly — PDFium's own errors read
+/// `threw app.alert: Incorrect number of parameters passed to function.`
+/// while the two genuine V8 exceptions in `immutable_proto` read
+/// `threw TypeError: Immutable prototype object …`.
+///
+/// Roughly seventy of the golden assertions are arity checks and every one
+/// goes through `expect.js`'s `' threw ' + e`, so a `TypeError:` prefix or a
+/// bare message fails all of them. Hence a test rather than a comment.
 #[test]
 fn every_thrown_error_carries_the_function_name() {
+    // `'' + e`, exactly as `expect.js` stringifies it — not `e.message`,
+    // which would hide the very thing being asserted.
     let caught = |source: &str| {
         let mut cascade = session();
-        let script = format!("try {{ {source} }} catch (e) {{ app.alert(e.message); }}");
+        let script = format!("try {{ {source} }} catch (e) {{ app.alert('' + e); }}");
         assert!(
             cascade.run(&script, "test"),
             "the wrapper itself must not throw"
@@ -210,6 +220,69 @@ fn every_thrown_error_carries_the_function_name() {
         caught("AFDate_KeystrokeEx();"),
         "Alert: AFDate_KeystrokeEx: AFDate_KeystrokeEx's parameter size not correct\n"
     );
+}
+
+/// **`expect.js` itself, verbatim, driving four of its own fixtures' cases.**
+///
+/// Seven of the 47 fixtures `{{include}}` this file, and every one of their
+/// assertions goes through it — so this is the integration test that says the
+/// binding works the way the goldens are written, rather than the way the
+/// unit tests are written. It is the oracle's source, copied unchanged from
+/// `testing/resources/javascript/expect.js`.
+///
+/// The two things it exercises that nothing else does: `eval`, which
+/// `expect` is built on and which is therefore not removable (brief §5.3
+/// keeps it, and this is why), and `' threw ' + e`, which is what makes the
+/// bare-string throw observable.
+#[test]
+fn expect_js_drives_the_binding_the_way_the_fixtures_do() {
+    const EXPECT_JS: &str = r"
+function expect(expression, expected) {
+  try {
+    var actual = eval(expression);
+    if (actual == expected) {
+      app.alert('PASS: ' + expression + ' = ' + actual);
+    } else {
+      app.alert('FAIL: ' + expression + ' = ' + actual + ', expected ' + expected + ' ');
+    }
+  } catch (e) {
+    app.alert('ERROR: ' + e);
+  }
+}
+
+function expectError(expression) {
+  try {
+    var actual = eval(expression);
+    app.alert('FAIL: ' + expression + ' = ' + actual + ', expected to throw');
+  } catch (e) {
+    app.alert('PASS: ' + expression + ' threw ' + e);
+  }
+}
+";
+
+    let mut cascade = session();
+    assert!(cascade.run(EXPECT_JS, "expect.js"));
+    assert!(cascade.run(
+        r#"
+expect("app.viewerType", "pdfium");
+expect("app.alert('message')", 0);
+expectError("app.alert()");
+expectError("app.execMenuItem()");
+"#,
+        "test"
+    ));
+
+    // `app_methods_expected.txt`'s own lines, for the cases this covers.
+    let expected = concat!(
+        "Alert: PASS: app.viewerType = pdfium\n",
+        "Alert: message\n",
+        "Alert: PASS: app.alert('message') = 0\n",
+        "Alert: PASS: app.alert() threw app.alert: ",
+        "Incorrect number of parameters passed to function.\n",
+        "Alert: PASS: app.execMenuItem() threw app.execMenuItem: ",
+        "Operation not supported.\n",
+    );
+    assert_eq!(cascade.transcript_text(), expected);
 }
 
 // ---- console, util ----
@@ -788,8 +861,10 @@ fn the_declined_methods_answer_the_oracles_own_message() {
     ] {
         let mut cascade = session();
         let source = format!(
+            // `'' + e`, because what is thrown is a bare string and has no
+            // `.message` — which is itself the behaviour being asserted.
             "try {{ app.{name}(); app.alert('no throw'); }} \
-             catch (e) {{ app.alert(e.message); }}"
+             catch (e) {{ app.alert('' + e); }}"
         );
         assert!(cascade.run(&source, "test"));
         assert_eq!(
