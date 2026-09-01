@@ -1,67 +1,166 @@
 //! The session record: everything an interaction remembers between events.
 //!
-//! # Why this is a record and not a widget tree
+//! A session is a record of facts, and applying an event is a function over
+//! it. There is nothing here that owns a widget, points at one, or observes
+//! one — a focus target is an identifier, a dirty entry is an identifier, and
+//! a function that mutates the session cannot invalidate a reference someone
+//! else is holding. The C++ this reproduces re-checks a weak pointer after
+//! every callback, sixteen times in two functions; here the checks are not
+//! forgotten, they are unnecessary.
 //!
-//! The reference implementation models interaction as four cooperating class
-//! families with per-widget heap objects, virtual dispatch and back-pointers:
-//! a filler owns a map from widget pointer to field object, each field object
-//! owns a map from page-view pointer to window object, each window owns
-//! children and a back-pointer to a notifier and an observed pointer back to
-//! the widget. Object lifetime is fragile enough that the code re-checks an
-//! observed pointer after *every* callback — sixteen such checks in the commit
-//! and keystroke paths alone.
-//!
-//! Here a session is a record of facts. A focus target is an id, a dirty entry
-//! is an id, and a function that mutates the session cannot invalidate a
-//! reference someone else holds, because nobody holds one. The sixteen
-//! re-checks become zero and become *unnecessary* rather than forgotten.
-//!
-//! The per-page window map goes with it. State is keyed by field, not by
-//! (field, page-view) pair; the pair exists upstream because one widget can be
-//! visible in several views at once, which is a viewer's problem. A library
-//! that hands back appearance streams has no views.
+//! Focus is owned per **document**, not per page: one field has the keyboard
+//! at a time, whichever page it is on.
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use pdfrum_doc::Subtype;
 
+use crate::edit::Place;
 use crate::event::Modifiers;
 use crate::field::FieldState;
 
-/// One interaction session over one document.
+/// Which field a session is talking about: an index into the form's field
+/// list.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct FieldId(pub u32);
+
+/// Which annotation: a page and an index into that page's annotation list.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct AnnotId {
+    /// Which page.
+    pub page: u32,
+    /// Which annotation of it, in load order.
+    pub index: u32,
+}
+
+impl AnnotId {
+    /// An annotation identifier.
+    #[must_use]
+    pub fn new(page: u32, index: u32) -> AnnotId {
+        AnnotId { page, index }
+    }
+}
+
+/// Where keyboard input goes.
 ///
-/// Per document, not per page: focus is owned document-wide, exactly as it is
-/// upstream, and clicking into a field on page 2 takes focus away from one on
-/// page 1.
+/// A non-widget annotation can hold focus too, once a caller adds its subtype
+/// to the focus ring — which is how tabbing to a link and pressing Return
+/// fires the link's action.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FocusTarget {
+    /// A form field's widget.
+    Widget(FieldId, AnnotId),
+    /// A focusable annotation that is not a form widget.
+    Annot(AnnotId),
+}
+
+impl FocusTarget {
+    /// The annotation holding focus, whichever kind of target this is.
+    #[must_use]
+    pub fn annot(self) -> AnnotId {
+        match self {
+            FocusTarget::Widget(_, annot) | FocusTarget::Annot(annot) => annot,
+        }
+    }
+
+    /// The field holding focus, if the target is a widget.
+    #[must_use]
+    pub fn field(self) -> Option<FieldId> {
+        match self {
+            FocusTarget::Widget(field, _) => Some(field),
+            FocusTarget::Annot(_) => None,
+        }
+    }
+}
+
+/// A mouse drag in progress.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DragAnchor {
+    /// Which field the drag started in.
+    pub field: FieldId,
+    /// Where in that field's text it started.
+    pub start: Place,
+}
+
+/// The switches a caller sets once and the engine reads.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SessionConfig {
+    /// Which modifier means "this is a shortcut, not text".
+    ///
+    /// Control everywhere but Apple keyboards, where it is Meta. A field
+    /// rather than a compile-time platform test, so that both behaviours are
+    /// reachable — and testable — on one machine.
+    pub accelerator: Modifiers,
+    /// Whether the accelerator with `Y` redoes.
+    ///
+    /// True off Apple, false on it, where the same gesture is spelled with
+    /// shift and `Z`. That asymmetry is real and is reproduced.
+    pub redo_on_ctrl_y: bool,
+    /// Which annotation subtypes join the focus ring. Widgets alone by
+    /// default.
+    pub focusable: Vec<Subtype>,
+    /// How many undo items a field keeps.
+    ///
+    /// Clamped up to four: a replace-selection group is four items, and a
+    /// capacity that could not hold one would have to evict half a group.
+    pub max_undo_items: u32,
+    /// How deep a calculation may trigger another calculation.
+    pub max_calculate_depth: u32,
+}
+
+impl SessionConfig {
+    /// The defaults for an Apple keyboard: Meta accelerates, and the
+    /// accelerator with `Y` does nothing.
+    #[must_use]
+    pub fn apple() -> SessionConfig {
+        SessionConfig {
+            accelerator: Modifiers::META,
+            redo_on_ctrl_y: false,
+            ..SessionConfig::default()
+        }
+    }
+}
+
+impl Default for SessionConfig {
+    fn default() -> SessionConfig {
+        SessionConfig {
+            accelerator: Modifiers::CONTROL,
+            redo_on_ctrl_y: true,
+            focusable: vec![Subtype::Widget],
+            max_undo_items: crate::edit::UndoStack::DEFAULT_MAX,
+            max_calculate_depth: 8,
+        }
+    }
+}
+
+/// One interaction session over one document.
 #[derive(Debug, Clone, Default)]
 pub struct FormSession {
-    /// The field that owns keyboard input, if any.
+    /// What has the keyboard, if anything.
     pub focus: Option<FocusTarget>,
-    /// Per-field interaction state, created lazily the first time an event
-    /// reaches a field. A field nobody has touched has no entry, which is what
-    /// makes pure event *ordering* observable: upstream, only four of its
-    /// nineteen dispatcher entries create interaction state at all, and the
-    /// rest no-op when it is absent. That is why the tests' click gesture
-    /// begins with a mouse move.
+    /// Per-field interaction state, created when a field is first touched.
+    ///
+    /// A field keeps its state across focus changes, which is why clicking
+    /// away from a half-typed field and back finds the typing still there.
     pub fields: BTreeMap<FieldId, FieldState>,
-    /// The annotation the pointer is currently over.
+    /// What the pointer is over, for enter and exit.
     pub hover: Option<AnnotId>,
-    /// A live mouse drag, if one is in progress.
+    /// A drag in progress, if one is.
     pub drag: Option<DragAnchor>,
-    /// Fields whose interaction state differs from the value in the document.
+    /// Fields whose interaction state has outrun the document's value.
     pub dirty: BTreeSet<FieldId>,
-    /// Platform and policy switches.
+    /// The switches.
     pub config: SessionConfig,
 }
 
 impl FormSession {
-    /// A fresh session with default configuration.
+    /// An empty session with the default switches.
     #[must_use]
     pub fn new() -> FormSession {
         FormSession::default()
     }
 
-    /// A fresh session with the given configuration.
+    /// An empty session with the given switches.
     #[must_use]
     pub fn with_config(config: SessionConfig) -> FormSession {
         FormSession {
@@ -70,166 +169,33 @@ impl FormSession {
         }
     }
 
-    /// The focused field, if focus is on a widget rather than on a plain
-    /// annotation.
+    /// The field that currently has the keyboard, if a field does.
     #[must_use]
     pub fn focused_field(&self) -> Option<FieldId> {
-        match self.focus {
-            Some(FocusTarget::Widget(field, _)) => Some(field),
-            Some(FocusTarget::Annot(_)) | None => None,
-        }
+        self.focus.and_then(FocusTarget::field)
     }
 
-    /// The focused annotation, whatever kind it is.
-    #[must_use]
-    pub fn focused_annot(&self) -> Option<AnnotId> {
-        match self.focus {
-            Some(FocusTarget::Widget(_, annot) | FocusTarget::Annot(annot)) => Some(annot),
-            None => None,
-        }
-    }
-
-    /// The focused field's interaction state, if there is one.
+    /// The interaction state of the focused field, if there is one.
     #[must_use]
     pub fn focused_state(&self) -> Option<&FieldState> {
         self.fields.get(&self.focused_field()?)
     }
 
-    /// The focused field's interaction state, mutably.
+    /// The interaction state of the focused field, mutably.
     pub fn focused_state_mut(&mut self) -> Option<&mut FieldState> {
         let field = self.focused_field()?;
         self.fields.get_mut(&field)
     }
-}
 
-/// Where keyboard input goes.
-///
-/// A widget, or a plain annotation — the tab ring is over a configurable set
-/// of annotation subtypes, and a document that puts links in it can focus one
-/// and fire its action with Return.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum FocusTarget {
-    /// A form widget, and the field it belongs to.
-    Widget(FieldId, AnnotId),
-    /// A focusable non-widget annotation.
-    Annot(AnnotId),
-}
-
-/// Which field, by position in the form's field list.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct FieldId(
-    /// The field's position in the form's field list.
-    pub u32,
-);
-
-/// Which annotation, by page and by position in that page's `/Annots` array.
-///
-/// The index is into the array as the file wrote it, not into any sorted or
-/// filtered view of it, so two different orderings of the same page (draw
-/// order, tab order) name the same annotation by the same id.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct AnnotId {
-    /// Which page, zero-based.
-    pub page: u32,
-    /// Which entry of that page's `/Annots` array.
-    pub index: u32,
-}
-
-impl AnnotId {
-    /// The annotation at `index` on `page`.
-    #[must_use]
-    pub const fn new(page: u32, index: u32) -> AnnotId {
-        AnnotId { page, index }
-    }
-}
-
-/// A mouse drag in progress: where it started, so a move can extend a
-/// selection from there.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct DragAnchor {
-    /// The field the drag started in. A drag that leaves the field still
-    /// belongs to it.
-    pub field: FieldId,
-}
-
-/// Platform and policy switches.
-///
-/// # Why the accelerator is configuration
-///
-/// Upstream decides the editing accelerator at compile time — Meta on Apple,
-/// Control everywhere else — and the same build flag decides whether Ctrl+Y is
-/// redo (it is, except on Apple, where Cmd+Shift+Z is the only redo). Both
-/// halves are asserted by tests, so a compile-time choice makes half of three
-/// test bodies unrunnable on any one machine. Making it a field costs nothing,
-/// keeps the default matching the reference implementation on every platform,
-/// and lets one machine test both.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SessionConfig {
-    /// The modifier that turns a letter into an editing accelerator.
-    pub accelerator: Modifiers,
-    /// Whether the accelerator plus `Y` redoes. False where the accelerator is
-    /// Meta, matching the platform split above.
-    pub redo_on_ctrl_y: bool,
-    /// Which annotation subtypes join the tab ring. Widgets alone by default;
-    /// signature widgets are excluded from it whatever this says.
-    pub focusable: Vec<Subtype>,
-    /// The undo stack's depth cap, clamped up to [`MIN_UNDO_ITEMS`].
+    /// Whether a shortcut's modifiers match this session's accelerator
+    /// exactly, ignoring shift.
     ///
-    /// Lives here rather than on the shared parse limits because an undo bound
-    /// is a property of an interaction, not of a document: no crate but this
-    /// one would ever read it.
-    pub max_undo_items: u32,
-    /// How many recoveries one call keeps before it starts counting instead.
-    pub max_recoveries: usize,
-}
-
-/// The undo stack's default depth.
-pub const DEFAULT_UNDO_ITEMS: u32 = 10_000;
-
-/// The smallest undo depth that can hold one grouped edit.
-///
-/// A replace-selection is four items — an opening sentinel, the clear, the
-/// insert, and a closing sentinel — and a cap that could not hold all four
-/// would evict half a group.
-pub const MIN_UNDO_ITEMS: u32 = 4;
-
-impl Default for SessionConfig {
-    fn default() -> SessionConfig {
-        let apple = cfg!(target_vendor = "apple");
-        SessionConfig {
-            accelerator: if apple {
-                Modifiers::META
-            } else {
-                Modifiers::CONTROL
-            },
-            redo_on_ctrl_y: !apple,
-            focusable: vec![Subtype::Widget],
-            max_undo_items: DEFAULT_UNDO_ITEMS,
-            max_recoveries: 64,
-        }
-    }
-}
-
-impl SessionConfig {
-    /// The undo depth actually used, with the group-atomicity floor applied.
-    #[must_use]
-    pub fn undo_depth(&self) -> usize {
-        self.max_undo_items.max(MIN_UNDO_ITEMS) as usize
-    }
-
-    /// Whether these modifier bits are exactly the editing accelerator, with
-    /// no other decided modifier alongside it.
-    ///
-    /// Shift is not consulted here — several accelerators are shift-sensitive
-    /// and each decides for itself.
+    /// "Exactly" is the point: the assertions check that the *other*
+    /// platform's modifier is rejected, so a subset test would pass tests
+    /// that should fail.
     #[must_use]
     pub fn is_accelerator(&self, modifiers: Modifiers) -> bool {
-        let other = if self.accelerator == Modifiers::META {
-            Modifiers::CONTROL
-        } else {
-            Modifiers::META
-        };
-        modifiers.contains(self.accelerator) && !modifiers.contains(other)
+        modifiers.without(Modifiers::SHIFT) == self.config.accelerator
     }
 }
 
@@ -238,44 +204,60 @@ mod tests {
     use super::*;
 
     #[test]
-    fn the_undo_floor_is_a_group() {
-        let cfg = SessionConfig {
-            max_undo_items: 0,
-            ..SessionConfig::default()
-        };
-        assert_eq!(cfg.undo_depth(), 4);
-        let cfg = SessionConfig {
-            max_undo_items: 7,
-            ..SessionConfig::default()
-        };
-        assert_eq!(cfg.undo_depth(), 7);
+    fn a_fresh_session_has_no_focus_and_no_state() {
+        let session = FormSession::new();
+        assert!(session.focus.is_none());
+        assert!(session.focused_field().is_none());
+        assert!(session.fields.is_empty());
+        assert!(session.dirty.is_empty());
     }
 
     #[test]
-    fn the_default_depth_is_the_reference_value() {
-        assert_eq!(SessionConfig::default().undo_depth(), 10_000);
+    fn a_focus_target_names_its_annotation_either_way() {
+        let annot = AnnotId::new(0, 3);
+        let widget = FocusTarget::Widget(FieldId(1), annot);
+        let plain = FocusTarget::Annot(annot);
+
+        assert_eq!(widget.annot(), annot);
+        assert_eq!(plain.annot(), annot);
+        assert_eq!(widget.field(), Some(FieldId(1)));
+        assert_eq!(plain.field(), None);
+    }
+
+    /// The defaults reproduce each platform's own behaviour, and both are
+    /// reachable from one machine — which is what makes the shortcut
+    /// assertions runnable at all.
+    #[test]
+    fn the_two_platform_configurations_differ_in_exactly_two_switches() {
+        let general = SessionConfig::default();
+        let apple = SessionConfig::apple();
+
+        assert_eq!(general.accelerator, Modifiers::CONTROL);
+        assert!(general.redo_on_ctrl_y);
+        assert_eq!(apple.accelerator, Modifiers::META);
+        assert!(!apple.redo_on_ctrl_y);
+        assert_eq!(general.focusable, apple.focusable);
+        assert_eq!(general.max_undo_items, apple.max_undo_items);
+    }
+
+    /// The wrong platform's modifier is rejected, which is asserted as hard
+    /// as the right one being accepted.
+    #[test]
+    fn the_accelerator_test_rejects_the_other_platforms_modifier() {
+        let session = FormSession::new();
+        assert!(session.is_accelerator(Modifiers::CONTROL));
+        assert!(session.is_accelerator(Modifiers::CONTROL | Modifiers::SHIFT));
+        assert!(!session.is_accelerator(Modifiers::META));
+        assert!(!session.is_accelerator(Modifiers::NONE));
+        assert!(!session.is_accelerator(Modifiers::CONTROL | Modifiers::ALT));
+
+        let apple = FormSession::with_config(SessionConfig::apple());
+        assert!(apple.is_accelerator(Modifiers::META));
+        assert!(!apple.is_accelerator(Modifiers::CONTROL));
     }
 
     #[test]
-    fn the_wrong_platform_modifier_is_not_an_accelerator() {
-        let ctrl = SessionConfig {
-            accelerator: Modifiers::CONTROL,
-            redo_on_ctrl_y: true,
-            ..SessionConfig::default()
-        };
-        assert!(ctrl.is_accelerator(Modifiers::CONTROL));
-        assert!(!ctrl.is_accelerator(Modifiers::META));
-        assert!(!ctrl.is_accelerator(Modifiers::NONE));
-        // Shift alongside is still the accelerator; the shortcut decides.
-        assert!(ctrl.is_accelerator(Modifiers::CONTROL.union(Modifiers::SHIFT)));
-    }
-
-    #[test]
-    fn a_fresh_session_focuses_nothing() {
-        let s = FormSession::new();
-        assert_eq!(s.focus, None);
-        assert_eq!(s.focused_field(), None);
-        assert_eq!(s.focused_annot(), None);
-        assert!(s.fields.is_empty());
+    fn only_widgets_are_focusable_by_default() {
+        assert_eq!(SessionConfig::default().focusable, vec![Subtype::Widget]);
     }
 }

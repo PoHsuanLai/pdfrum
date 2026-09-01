@@ -25,10 +25,16 @@
 // index with `get()`.
 #![warn(clippy::indexing_slicing)]
 
+pub mod cascade;
 pub mod edit;
 pub mod error;
 pub mod event;
+pub mod field;
+pub mod session;
 
+pub use cascade::{Cascade, FieldRef, FieldWrites, Keystroke, KeystrokeOutcome, NoScripts};
 pub use edit::{Place, Range, Selection, UndoItem, UndoStack};
 pub use error::Error;
 pub use event::{Button, Event, Key, Modifiers, Point};
+pub use field::{ChoiceConfig, ChoiceState, FieldState, TextConfig, TextState, ToggleState};
+pub use session::{AnnotId, DragAnchor, FieldId, FocusTarget, FormSession, SessionConfig};
