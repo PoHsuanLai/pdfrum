@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-01T08:35:00Z",
+  "generated_at": "2026-09-01T10:25:06Z",
   "totals": {
     "files": 1705,
     "pass": 1636,
@@ -37296,7 +37296,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.991774,
+        "ssim": 0.994807,
         "exact": false,
         "max_channel_diff": 153,
         "pages": 1
@@ -37350,7 +37350,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.991774,
+        "ssim": 0.994807,
         "exact": false,
         "max_channel_diff": 153,
         "pages": 1
@@ -38614,12 +38614,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.918875,
+        "ssim": 0.905231,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.918875 below floor 0.990000"
+      "notes": "ssim 0.905231 below floor 0.990000"
     },
     {
       "path": "resources/pixel/bug_1372651.pdf",
@@ -38670,12 +38670,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.918875,
+        "ssim": 0.905231,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.918875 below floor 0.990000"
+      "notes": "ssim 0.905231 below floor 0.990000"
     },
     {
       "path": "resources/pixel/bug_1374.in",
@@ -41956,12 +41956,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.975664,
+        "ssim": 0.948919,
         "exact": false,
-        "max_channel_diff": 135,
+        "max_channel_diff": 248,
         "pages": 1
       },
-      "notes": "ssim 0.975664 below floor 0.990000"
+      "notes": "ssim 0.948919 below floor 0.990000"
     },
     {
       "path": "resources/pixel/bug_477200528.pdf",
@@ -42012,12 +42012,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.975664,
+        "ssim": 0.948919,
         "exact": false,
-        "max_channel_diff": 135,
+        "max_channel_diff": 248,
         "pages": 1
       },
-      "notes": "ssim 0.975664 below floor 0.990000"
+      "notes": "ssim 0.948919 below floor 0.990000"
     },
     {
       "path": "resources/pixel/bug_491_invisible.in",
@@ -45850,12 +45850,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.926985,
+        "ssim": 0.947667,
         "exact": false,
-        "max_channel_diff": 248,
+        "max_channel_diff": 236,
         "pages": 1
       },
-      "notes": "ssim 0.926985 below floor 0.990000"
+      "notes": "ssim 0.947667 below floor 0.990000"
     },
     {
       "path": "resources/pixel/form_textfield_focused_rtl.in",
@@ -45906,12 +45906,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.930355,
+        "ssim": 0.907758,
         "exact": false,
-        "max_channel_diff": 255,
+        "max_channel_diff": 248,
         "pages": 1
       },
-      "notes": "ssim 0.930355 below floor 0.990000"
+      "notes": "ssim 0.907758 below floor 0.990000"
     },
     {
       "path": "resources/pixel/form_textfield_focused_rtl.pdf",
@@ -45962,12 +45962,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.930355,
+        "ssim": 0.907758,
         "exact": false,
-        "max_channel_diff": 255,
+        "max_channel_diff": 248,
         "pages": 1
       },
-      "notes": "ssim 0.930355 below floor 0.990000"
+      "notes": "ssim 0.907758 below floor 0.990000"
     },
     {
       "path": "resources/pixel/form_textfield_selected_ltr.in",
@@ -46018,12 +46018,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.909175,
+        "ssim": 0.937902,
         "exact": false,
         "max_channel_diff": 240,
         "pages": 1
       },
-      "notes": "ssim 0.909175 below floor 0.990000"
+      "notes": "ssim 0.937902 below floor 0.990000"
     },
     {
       "path": "resources/pixel/form_textfield_selected_rtl.in",
@@ -46074,12 +46074,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.908047,
+        "ssim": 0.913307,
         "exact": false,
         "max_channel_diff": 240,
         "pages": 1
       },
-      "notes": "ssim 0.908047 below floor 0.990000"
+      "notes": "ssim 0.913307 below floor 0.990000"
     },
     {
       "path": "resources/pixel/freetext_annotation_with_ap.in",
@@ -46944,12 +46944,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.953963,
+        "ssim": 0.955176,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.953963 below floor 0.990000"
+      "notes": "ssim 0.955176 below floor 0.990000"
     },
     {
       "path": "resources/pixel/password.pdf",
@@ -47000,12 +47000,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.953963,
+        "ssim": 0.955176,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.953963 below floor 0.990000"
+      "notes": "ssim 0.955176 below floor 0.990000"
     },
     {
       "path": "resources/pixel/radial_shading_point_at_border.in",
@@ -47420,12 +47420,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.986707,
+        "ssim": 0.982319,
         "exact": false,
-        "max_channel_diff": 240,
+        "max_channel_diff": 244,
         "pages": 1
       },
-      "notes": "ssim 0.986707 below floor 0.990000"
+      "notes": "ssim 0.982319 below floor 0.990000"
     },
     {
       "path": "resources/pixel/scrollable_widgets1.pdf",
@@ -47476,12 +47476,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.986707,
+        "ssim": 0.982319,
         "exact": false,
-        "max_channel_diff": 240,
+        "max_channel_diff": 244,
         "pages": 1
       },
-      "notes": "ssim 0.986707 below floor 0.990000"
+      "notes": "ssim 0.982319 below floor 0.990000"
     },
     {
       "path": "resources/pixel/scrollable_widgets2.in",
@@ -47532,12 +47532,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.979377,
+        "ssim": 0.980332,
         "exact": false,
-        "max_channel_diff": 244,
+        "max_channel_diff": 248,
         "pages": 1
       },
-      "notes": "ssim 0.979377 below floor 0.990000"
+      "notes": "ssim 0.980332 below floor 0.990000"
     },
     {
       "path": "resources/pixel/shade-tensor.in",
