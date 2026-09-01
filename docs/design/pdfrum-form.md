@@ -1314,6 +1314,17 @@ enum class TabOrder : uint8_t { kStructure = 0, kRow, kColumn };
   leftmost), append it, then append every remaining annot whose vertical
   centre `(top + bottom) / 2` lies **strictly** between that annot's `bottom`
   and `top`, in ascending index (left-to-right) order.
+
+  > **Correction (2026-09-01, M14 implementation).** The parenthetical above is
+  > wrong about the tie-break, and the error was found by compiling the C++
+  > loop and diffing it against the port. Scanning downward with a strict `>`
+  > means a tie **never displaces** the running best, and the running best when
+  > a tie is met was set by a *higher* index — so ties resolve to the
+  > **highest** index, i.e. the **rightmost** after the left-ascending sort.
+  > The authority is `docs/status/M14.md`'s seed rule 1 and the test named for
+  > it, `row_order_seeds_each_band_with_the_rightmost_of_the_topmost`; this
+  > paragraph is left as written so the record of what was believed stays
+  > readable.
 - **`kColumn`** (`:164-199`): the mirror, sorting by `top` descending and
   banding on horizontal centre `(left + right) / 2` strictly between `left`
   and `right`.
