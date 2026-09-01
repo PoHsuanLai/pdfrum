@@ -810,10 +810,19 @@ resolve to the same font. The older
 finds nothing installs nothing either way — and is kept with a note saying so.
 **0 rows.**
 
-### A31 — `SASLprep` and the 127-byte truncation (a `[spec]` change)
+### A31 — `SASLprep` and the 127-byte truncation (`b144fed`, a `[spec]` change)
 
 *(§7's item 6, deferred out of the first tranche and applied in a pass of its
 own — which is what the deferral asked for.)*
+
+**A note on the hash.** A31's ten files landed inside `b144fed`, a commit whose
+message is about `util.printd`: two agents were staging in one working tree and
+a concurrent `git commit` swept this change's already-staged index into it. The
+code, the tests and the DEPS/SPEC amendments are all there and are all A31's;
+only the commit message is somebody else's. Recorded rather than rewritten,
+because the history is pushed and the rule against rewriting it outranks the
+tidiness of the record. The A31 rationale that message should have carried is
+this section.
 
 `cpdf_security_handler.cpp:425-455` performs **none** of Algorithm 2.A step
 (a)'s three operations. It tries the bytes as given and, only when the password
@@ -953,3 +962,12 @@ under-stated, recorded here so §6's list of stale records stays complete:
    pattern cache in `pdfrum-page`, so the status doc's "all of D1–D22 are
    implemented as the brief specifies" is not accurate for D15 — in the
    direction of being stronger, not weaker.
+
+A fourth, from the A31 pass (2026-09-02):
+
+4. **The row's "pdf.js has real SASLprep" is half true.** `sasl_prep.js`
+   implements the mapping and the NFKC normalisation and stops there; a comment
+   in the file says the prohibited-output and bidirectional checks are
+   "intentionally omitted", to stay permissive for non-conforming producers. The
+   citation `sasl_prep.js:27` in §1's table is the `saslPrep` function itself,
+   not a four-step implementation. Corrected in §1 and §3.
