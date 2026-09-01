@@ -45,7 +45,7 @@
 use pdfrum_common::{Diagnostics, Limits};
 use pdfrum_doc::ap;
 use pdfrum_object::{Array, ByteSpan, Dict, Name, Object, PdfString, Resolve, Stream};
-use pdfrum_page::{BuildContext, Page, Resources, build_form_object};
+use pdfrum_page::{BuildContext, Page, Resources, build_form_object_with};
 
 /// The list's border width, in PDF units — `lcp.dwBorderWidth = 1`.
 const BORDER_WIDTH: i64 = 1;
@@ -154,7 +154,17 @@ pub fn push_popup<R: Resolve>(
     if !matrix.as_coeffs().iter().all(|c| c.is_finite()) {
         return;
     }
-    if let Some(object) = build_form_object(&stream, matrix, &resources, r, ctx, limits, diags) {
+    // `live_edit = true`: the list's rows are drawn with **ClearType**, like
+    // every other run the form filler draws. `CPWL_ListBox::DrawThisAppearance`
+    // (`cpwl_list_box.cpp:66-84`) sets each row through
+    // `CPWL_EditImpl::DrawEdit` → `DrawTextString` (`cpwl_edit_impl.cpp:40-57`),
+    // which is the same local `CPDF_RenderOptions` a focused text field's
+    // glyphs go through — the popup is a `CPWL_Wnd` and every `CPWL_Wnd`'s text
+    // takes that path. Drawing it grey left 419 coloured pixels of the golden's
+    // fringes unmatched inside the list alone.
+    if let Some(object) =
+        build_form_object_with(&stream, matrix, &resources, r, ctx, limits, diags, true)
+    {
         page.objects.push(object);
     }
 }
