@@ -1862,7 +1862,7 @@ fn render_masked_image<B: RasterBackend>(
     let Some(mask) = image.mask.as_ref() else {
         return;
     };
-    let Some((mask_dict, mask_pixels)) = crate::image::separate_mask(mask) else {
+    let Some((mask_dict, mask_plane)) = crate::image::separate_mask(mask) else {
         return;
     };
     let matrix = to_device * object.matrix;
@@ -1928,15 +1928,19 @@ fn render_masked_image<B: RasterBackend>(
         f64::from(mask_dict.height),
     ));
     let mask_q = mask_quality(&mask_dict, &ctx.opts, mask_extent);
-    let (mask_pixels, mask_placement) = match crate::stretch::prescale(
-        &mask_pixels,
+    // The reduction runs on the coverage plane and the pixmap is built from
+    // the *reduced* plane — the same bytes prescaling the expanded pixmap
+    // produces, over a quarter of the memory and, once the reduction fires, a
+    // small fraction of the buffer. `crate::image::reduced_mask_pixmap` owns
+    // that equivalence.
+    let (mask_pixels, mask_placement) = crate::image::reduced_mask_pixmap(
+        &mask_plane,
+        mask_dict.width,
+        mask_dict.height,
         mask_placement,
         mask_extent.width(),
         mask_extent.height(),
-    ) {
-        Some((reduced, t)) => (reduced, t),
-        None => (mask_pixels, mask_placement),
-    };
+    );
     let mut mask_target = backend.new_target(w, h, peniko::Color::TRANSPARENT);
     mask_target.draw_image(
         &mask_pixels,

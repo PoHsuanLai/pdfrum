@@ -182,6 +182,121 @@ fn reduced_len(src_len: u32, dest_len: f64) -> Option<u32> {
     (target < src_len).then_some(target)
 }
 
+/// Box-filter a **single-channel** plane down to `dest_width` x `dest_height`.
+///
+/// Byte for byte the same filter [`reduce_to`] runs — the same two tap tables,
+/// the same fixed-point accumulation, the same `>> 16` — over one channel
+/// instead of four. It exists for the soft-mask path, where the plane being
+/// reduced is a coverage map and the other three channels of a `Pixmap` would
+/// carry copies of it.
+///
+/// `src` is `src_width * src_height` bytes in row-major order; a buffer of any
+/// other length reduces to an all-zero plane rather than reading out of range,
+/// which is the same degradation [`reduce_to`]'s bounds checks produce.
+///
+/// # Why this is not `reduce_to` with a channel count
+///
+/// The four-channel loop's inner body is `acc[c] += weight * px[c]` over a
+/// four-byte slice, which is the shape the optimizer unrolls. Making the
+/// channel count dynamic would put a loop bound it cannot see into the hottest
+/// loop in the module to save a function whose body is thirty lines. The two
+/// are kept in step by
+/// `the_gray_reduction_is_the_rgba_reduction_on_a_gray_image`, which asserts
+/// the equality over a lattice of sizes rather than trusting the reader.
+#[must_use]
+pub fn reduce_gray_to(
+    src: &[u8],
+    src_width: u32,
+    src_height: u32,
+    dest_width: u32,
+    dest_height: u32,
+) -> Vec<u8> {
+    let dest_len = (dest_width as usize).saturating_mul(dest_height as usize);
+    let x_taps = axis_taps(src_width, dest_width);
+    let y_taps = axis_taps(src_height, dest_height);
+    let src_w = src_width as usize;
+    let dest_w = dest_width as usize;
+    if x_taps.is_empty()
+        || y_taps.is_empty()
+        || src.len() != src_w.saturating_mul(src_height as usize)
+    {
+        return vec![0; dest_len];
+    }
+
+    // Horizontal pass into an intermediate of full source height at
+    // destination width, exactly as `reduce_to` does.
+    let mut inter = vec![0_u8; dest_w.saturating_mul(src_height as usize)];
+    for y in 0..src_height as usize {
+        let Some(src_row) = src
+            .get(y.saturating_mul(src_w)..)
+            .and_then(|rest| rest.get(..src_w))
+        else {
+            continue;
+        };
+        let Some(inter_row) = inter
+            .get_mut(y.saturating_mul(dest_w)..)
+            .and_then(|rest| rest.get_mut(..dest_w))
+        else {
+            continue;
+        };
+        for (taps, out) in x_taps.iter().zip(inter_row.iter_mut()) {
+            let mut acc = 0_u32;
+            for (i, &weight) in taps.weights.iter().enumerate() {
+                let Some(&sample) = taps.start.checked_add(i).and_then(|sx| src_row.get(sx)) else {
+                    continue;
+                };
+                acc += weight * u32::from(sample);
+            }
+            #[expect(
+                clippy::cast_possible_truncation,
+                reason = "the weights sum to FIXED_ONE and the sample is a byte, \
+                          so the accumulator is at most 255 << 16"
+            )]
+            let byte = (acc >> 16) as u8;
+            *out = byte;
+        }
+    }
+
+    // Vertical pass. The row slices are resolved once per destination row and
+    // paired with their weights, for the reason `reduce_to` spells out: a row
+    // the bounds check rejects must drop its weight with it.
+    let mut dest = vec![0_u8; dest_len];
+    for (y, taps) in y_taps.iter().enumerate() {
+        let Some(dest_row) = dest
+            .get_mut(y.saturating_mul(dest_w)..)
+            .and_then(|rest| rest.get_mut(..dest_w))
+        else {
+            continue;
+        };
+        let rows: Vec<(u32, &[u8])> = taps
+            .weights
+            .iter()
+            .enumerate()
+            .filter_map(|(i, &weight)| {
+                let sy = taps.start.checked_add(i)?;
+                let at = sy.checked_mul(dest_w)?;
+                let row = inter.get(at..at.checked_add(dest_w)?)?;
+                Some((weight, row))
+            })
+            .collect();
+        for (x, out) in dest_row.iter_mut().enumerate() {
+            let mut acc = 0_u32;
+            for &(weight, row) in &rows {
+                let Some(&sample) = row.get(x) else { continue };
+                acc += weight * u32::from(sample);
+            }
+            #[expect(
+                clippy::cast_possible_truncation,
+                reason = "the weights sum to FIXED_ONE and the sample is a byte, \
+                          so the accumulator is at most 255 << 16"
+            )]
+            let byte = (acc >> 16) as u8;
+            *out = byte;
+        }
+    }
+    dest
+}
+
 /// Box-filter `src` down to `dest_width` x `dest_height`, one axis at a time.
 ///
 /// Horizontal first into an intermediate, then vertical — the same order and
@@ -598,5 +713,54 @@ mod tests {
         assert!(prescale(&src, Affine::IDENTITY, 10.0, 10.0).is_none());
         let src = ramp(4, 4);
         assert!(prescale(&src, Affine::IDENTITY, f64::NAN, f64::NAN).is_none());
+    }
+
+    /// The single-channel reducer is the four-channel one, byte for byte, on
+    /// an image whose four channels are equal.
+    ///
+    /// This is the licence [`crate::image::reduced_mask_pixmap`] spends: the
+    /// soft-mask path reduces one channel where it used to reduce four copies
+    /// of it, and the two must not be allowed to drift. Asserted over a
+    /// lattice of ratios rather than one, because the tap tables differ per
+    /// size and an equality that held only at 8:1 would be an accident.
+    #[test]
+    fn the_gray_reduction_is_the_rgba_reduction_on_a_gray_image() {
+        for (w, h, dw, dh) in [
+            (64_u32, 40_u32, 8_u32, 5_u32),
+            (137, 85, 17, 11),
+            (1339, 81, 392, 11),
+            (455, 455, 159, 159),
+            (9, 9, 1, 1),
+            (100, 7, 7, 1),
+            (1000, 999, 999, 998),
+            (5, 3, 4, 2),
+        ] {
+            let plane: Vec<u8> = (0..w * h).map(|i| (i * 37 % 251) as u8).collect();
+            let mut rgba = Pixmap::new(w, h);
+            for (slot, &v) in rgba.data_mut().chunks_exact_mut(4).zip(plane.iter()) {
+                slot.copy_from_slice(&[v, v, v, v]);
+            }
+
+            let gray = reduce_gray_to(&plane, w, h, dw, dh);
+            let four = reduce_to(&rgba, dw, dh);
+
+            assert_eq!(gray.len(), (dw as usize) * (dh as usize), "{w}x{h}");
+            for (i, &g) in gray.iter().enumerate() {
+                assert_eq!(
+                    four.data().get(i * 4..i * 4 + 4),
+                    Some(&[g, g, g, g][..]),
+                    "{w}x{h} -> {dw}x{dh}, sample {i}"
+                );
+            }
+        }
+    }
+
+    /// A plane whose length disagrees with the dimensions reduces to zeroes
+    /// rather than reading out of range or panicking.
+    #[test]
+    fn a_gray_plane_of_the_wrong_length_reduces_to_zeroes() {
+        assert_eq!(reduce_gray_to(&[1, 2, 3], 4, 4, 2, 2), vec![0; 4]);
+        assert_eq!(reduce_gray_to(&[], 0, 0, 2, 2), vec![0; 4]);
+        assert!(reduce_gray_to(&[1; 16], 4, 4, 0, 2).is_empty());
     }
 }
