@@ -1,0 +1,25 @@
+[package]
+name = "pdfrum-form"
+description = "Form interaction: events, focus, the edit control, the commit cascade"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+readme = "README.md"
+keywords = ["pdf", "forms", "acroform", "widgets"]
+categories = ["parser-implementations", "data-structures"]
+
+[lints]
+workspace = true
+
+[dependencies]
+pdfrum-common.workspace = true
+pdfrum-object.workspace = true
+pdfrum-doc.workspace = true
+pdfrum-page.workspace = true
+pdfrum-font.workspace = true
+kurbo.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+pdfrum-parser.workspace = true
