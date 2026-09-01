@@ -24,17 +24,40 @@ use crate::field::FieldState;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct FieldId(pub u32);
 
-/// Which annotation: a page and an index into that page's annotation list.
+/// Which annotation: a page and its index in that page's **raw `/Annots`
+/// array**.
+///
+/// # The index space is the raw array, not a filtered position
+///
+/// This distinction is invisible until a page carries a pop-up annotation,
+/// and then it decides whether an appearance lands on the right widget.
+///
+/// A page's annotation list, as the rendering path builds it, **drops
+/// pop-ups** — they are synthesized separately from the annotations they
+/// belong to — so a widget's position in that list is not its position in the
+/// file's `/Annots` array. On a page whose first annotation is a pop-up,
+/// every later widget's filtered position is one lower than its raw index.
+///
+/// The appearance overlay a caller draws through is keyed by the **raw**
+/// index. So that is what this carries: hand back a filtered position and
+/// every appearance after the first pop-up is applied to the wrong
+/// annotation, silently, with no type to catch it.
+///
+/// This is also the natural choice rather than a concession, because hit
+/// testing walks `/Annots` itself: the raw index is what the walk already
+/// has, and the filtered one would have to be computed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct AnnotId {
     /// Which page.
     pub page: u32,
-    /// Which annotation of it, in load order.
+    /// Which entry of that page's `/Annots` array — the raw index, counting
+    /// pop-ups.
     pub index: u32,
 }
 
 impl AnnotId {
-    /// An annotation identifier.
+    /// An annotation identifier, from a page index and a **raw** `/Annots`
+    /// index.
     #[must_use]
     pub fn new(page: u32, index: u32) -> AnnotId {
         AnnotId { page, index }
