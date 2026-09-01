@@ -36,6 +36,7 @@ pub mod geom;
 pub mod hit;
 pub mod session;
 pub mod tab;
+pub mod update;
 
 pub use cascade::{Cascade, FieldRef, FieldWrites, Keystroke, KeystrokeOutcome, NoScripts};
 pub use commit::CommitOutcome;
@@ -48,3 +49,4 @@ pub use geom::{Plate, Rotation};
 pub use hit::{Candidate, LayoutBand, Permissions, WidgetHit};
 pub use session::{AnnotId, DragAnchor, FieldId, FocusTarget, FormSession, SessionConfig};
 pub use tab::{FocusRing, Focusable, TabOrder};
+pub use update::{AppearanceUpdate, Response, UpdateKind};
