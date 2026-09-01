@@ -894,6 +894,12 @@ fn tab_to_next<R: Resolve>(
 }
 
 /// The page's focus ring, filtered to the session's focusable subtypes.
+///
+/// The order is the **page's**, from its `/Tabs`, not a constant.
+/// `CPDFSDK_AnnotIterator`'s constructor reads it per page view
+/// (`cpdfsdk_annotiterator.cpp:41`), and `annotiter.pdf` is the fixture that
+/// tells the three apart: its first Tab lands on annot 1 under `/R` where
+/// structure order would answer 0.
 fn focus_ring<R: Resolve>(session: &FormSession, ctx: &Context<'_, R>) -> tab::FocusRing {
     let focusables: Vec<tab::Focusable> = ctx
         .page
@@ -902,7 +908,7 @@ fn focus_ring<R: Resolve>(session: &FormSession, ctx: &Context<'_, R>) -> tab::F
         .filter(|(subtype, _)| session.config.focusable.contains(subtype))
         .map(|(_, focusable)| *focusable)
         .collect();
-    tab::FocusRing::build(&focusables, tab::TabOrder::Structure)
+    tab::FocusRing::build(&focusables, ctx.page.tab_order)
 }
 
 /// Gives focus to a target, committing whatever held it.

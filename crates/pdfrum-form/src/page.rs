@@ -47,9 +47,15 @@ const MAX_LEN: &Name = &Name::from_static(b"MaxLen");
 const TI: &Name = &Name::from_static(b"TI");
 /// `/Fields` — the form's field array, under the catalog's `/AcroForm`.
 const FIELDS: &Name = &Name::from_static(b"Fields");
+/// `/Tabs` — the page's declared focus-traversal order.
+///
+/// Read from the page dictionary **directly**, not inherited from the page
+/// tree: `CPDFSDK_AnnotIterator::GetTabOrder` calls `GetByteStringFor` on the
+/// page's own dictionary, so a `/Tabs` on `/Pages` reaches no page.
+const TABS: &Name = &Name::from_static(b"Tabs");
 use crate::hit::{Candidate, LayoutBand, WidgetHit};
 use crate::session::{AnnotId, FieldId};
-use crate::tab::{Focusable, Rect};
+use crate::tab::{Focusable, Rect, TabOrder};
 
 /// Everything one page contributes to routing.
 ///
@@ -66,6 +72,14 @@ pub struct PageForm {
     /// Every annotation as a focus-ring candidate, paired with its subtype
     /// so the caller's `focusable` list can filter them.
     pub focusables: Vec<(Subtype, Focusable)>,
+    /// The traversal order this page's `/Tabs` asks for.
+    ///
+    /// A property of the **page**, not of the session: `annotiter.pdf` is
+    /// three pages of identical annotations under `/R`, `/C` and `/S`, and
+    /// the first Tab lands on a different one on each. Defaults to
+    /// [`TabOrder::Structure`], which is also what an unrecognized spelling
+    /// means.
+    pub tab_order: TabOrder,
     /// The widgets, with what a field's interaction state needs.
     pub widgets: Vec<WidgetInfo>,
     /// Every annotation's dictionary, keyed by its raw `/Annots` index.
@@ -156,6 +170,7 @@ impl WidgetInfo {
 pub fn read<R: Resolve>(page: u32, page_dict: &Dict, catalog: &Dict, r: &R) -> PageForm {
     let mut form = PageForm {
         page,
+        tab_order: TabOrder::from_tabs(page_dict.byte_string(TABS, r).as_deref()),
         ..PageForm::default()
     };
     let Some(annots) = page_dict.array(obj_names::ANNOTS, r) else {
