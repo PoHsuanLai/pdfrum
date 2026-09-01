@@ -91,7 +91,7 @@ use pdfrum_render::{
 };
 
 use pdfrum_render::scanline::{self, Rasterizer};
-use target::Target;
+use target::{Source, Target};
 
 /// The flattening tolerance, in device pixels.
 ///
@@ -340,10 +340,20 @@ impl ExactDevice {
         self.target().set_clip(clip);
     }
 
-    /// The solid premultiplied source colour a brush paints, if it has one.
-    fn solid(brush: &Brush<'_>) -> Option<[u8; 4]> {
+    /// The solid source colour a brush paints, if it has one.
+    ///
+    /// **Straight**, not premultiplied. Premultiplying here and
+    /// un-premultiplying inside the composite would quantise the colour to the
+    /// `alpha + 1` values a premultiplied byte can hold — one count of red off
+    /// the form-field tint, at the highlight's alpha of 100 — for no gain: the
+    /// oracle's own render targets are straight-alpha and the composite takes a
+    /// straight source directly.
+    fn solid(brush: &Brush<'_>) -> Option<Source> {
         match brush {
-            Brush::Solid(color) => Some(pixmap::premultiply(*color)),
+            Brush::Solid(color) => {
+                let [r, g, b, a] = color.to_rgba8().to_u8_array();
+                Some(Source::Straight([r, g, b], a))
+            }
             // An image brush reaches the device through `draw_image`; the
             // engine never fills a path with one.
             Brush::Image(_) => None,
@@ -568,7 +578,14 @@ impl RenderDevice for ExactDevice {
                         }
                         let Ok(col) = i32::try_from(x) else { continue };
                         let Ok(row) = i32::try_from(y) else { continue };
-                        target.blend_span(col, 1, row, 255, src, layer.blend);
+                        target.blend_span(
+                            col,
+                            1,
+                            row,
+                            255,
+                            Source::Premultiplied(src),
+                            layer.blend,
+                        );
                     }
                 }
                 target.set_clip(saved);
