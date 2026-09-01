@@ -1224,6 +1224,7 @@ dependencies = [
  "pdfrum-edit",
  "pdfrum-filters",
  "pdfrum-font",
+ "pdfrum-form",
  "pdfrum-object",
  "pdfrum-page",
  "pdfrum-parser",
