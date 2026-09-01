@@ -904,14 +904,24 @@ The items sort into two kinds, and the split is the plan.
 
 ### Engineering debts — start now, disjoint file ownership
 
-- **D1 — `shading/patch.rs` gets its owner** (M12b §10 item 3). The Coons and
-  tensor mesh rasterizer was in no measurement bucket until P3 gave it
-  `Phase::Patches`. **Take the netted figure:** the bucket reads 28.7 ms /
-  47.1 ms on `shading_axial_radial` / `shading_tcpdf_030` but wraps its own
-  device calls; engine-side work is ~**2.5 ms / 6.1 ms**. `shading_coons` (a
-  Coons document with zero patch calls) is the control. `pattern.rs` is
-  exonerated — do not go back there. Owns `crates/pdfrum-render/src/shading/`.
-  Pure perf: byte-identical scoreboard required.
+- **D1 — `shading/patch.rs` gets its owner** (M12b §10 item 3) — **DONE
+  2026-09-01, record `docs/status/M12d-D1.md`.** The netted patch figure falls
+  **−22.7% / −25.2% / −18.5%** on `shading_axial_radial` / `shading_tcpdf_030`
+  / `shading_tensor`, and the engine half **−13.7% / −16.0% / −16.5%**,
+  measured in both orders against a ±2% floor bought by a self-A/B.
+  `shading_coons`, the control, is unmoved. Conformance byte-identical on the
+  scoreboard and on all 202 page hashes of a direct two-binary comparison.
+  **One change carried it** — a single path buffer per patch in place of a
+  `BezPath` per cell, 28 368 of them on one document. **Four directions
+  measured to zero and three of those are structurally zero**: merging adjacent
+  cells has nothing to merge (the longest run of same-coloured neighbours is 2,
+  usually 1, because the split test and the merge test are the same test with
+  opposite signs), no cell in the corpus is outside the buffer it draws into,
+  and the compiler had already seen through the `Option` scaffolding. **M12
+  §3.9's reopening condition is therefore still unmet and now has a reason:**
+  making these spans long is a different rasterizer, not an optimization of
+  this one. `pattern.rs` stays exonerated and was not revisited. The ratchet
+  was **not** touched — see M1.
 
 - **D2 — the §1.15 glyph-spacing heuristic** (M12b §10 item 8). **Premise
   withdrawn 2026-09-01:** steps 1 and 2 below were already on `main`
