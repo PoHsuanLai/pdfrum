@@ -1,6 +1,6 @@
 # PDFium → Rust Rewrite — Master Plan
 
-**Status:** Phase 2: M9-M12 ALL MET (2026-08-30); **M12c (GPU backend) MET 2026-08-31**; **M12b MET 2026-09-01 with two targets missed and named** (docs/status/M12b.md). M12 scorecard: warm render geomean 0.97x oracle (FASTER; image 0.24x, vector 0.90x, shading 0.95x; forms 3.35x is the named residue), rayon 3.09x@4/6.09x@16, RSS 1.20x, conformance byte-identical, ratchet green over 440 entries. Per-crate benches + bench-quick landed. M12b: three of its four items had their premise corrected by measurement — P1's scaled-decode diagnosis was wrong on three of its four cited documents and its target is MISSED at -33.4% against >=40%; P2 closed the arena question AGAINST bumpalo (+265%/+121%/+97% slower than a tuned no-dep baseline) and produced the profile M12 asked for (colour conversion <=7.2%, allocation ~0, interpretation 60-90% of the engine half); P3 was retargeted mid-milestone and delivered -42.6% on the engine half of vector_paths_1751 and -27.9% on the whole render, agreed by three independent rasterizer backends. Conformance byte-identical after every commit. Four near-false findings were caught rather than published (M12b.md §7). The bench ratchet re-baseline is an UNPAID DEBT, deliberately: warm is 132 entries / 32 improved / ZERO regressed, every regression is in cold, and five blocked with no pre-argued case. forms warm was never re-measured and stands at M12's 3.35x. M12c: GPU vello backend landed isolated (zero Tier-C interior differences on 44/44; 4.8x on the heaviest vector page, 2.64x slower overall on rasterization; shading target missed and named) — but its exemption cannot yet be spent, because vello 0.10 pins wgpu 29 while egui is on 30 and iced on 27, so no released frontend can inject a device. M13 (release) NOT STARTED — loop paused by user; it inherits the ratchet debt, an oracle side-by-side, and shading/patch.rs as the largest unattributed engine cost.
+**Status:** Phase 2: M9-M12 ALL MET (2026-08-30); **M12c (GPU backend) MET 2026-08-31**; **M12b MET 2026-09-01 with two targets missed and named** (docs/status/M12b.md). M12 scorecard: warm render geomean 0.97x oracle (FASTER; image 0.24x, vector 0.90x, shading 0.95x; forms 3.35x is the named residue), rayon 3.09x@4/6.09x@16, RSS 1.20x, conformance byte-identical, ratchet green over 440 entries. Per-crate benches + bench-quick landed. M12b: three of its four items had their premise corrected by measurement — P1's scaled-decode diagnosis was wrong on three of its four cited documents and its target is MISSED at -33.4% against >=40%; P2 closed the arena question AGAINST bumpalo (+265%/+121%/+97% slower than a tuned no-dep baseline) and produced the profile M12 asked for (colour conversion <=7.2%, allocation ~0, interpretation 60-90% of the engine half); P3 was retargeted mid-milestone and delivered -42.6% on the engine half of vector_paths_1751 and -27.9% on the whole render, agreed by three independent rasterizer backends. Conformance byte-identical after every commit. Four near-false findings were caught rather than published (M12b.md §7). The bench ratchet re-baseline is an UNPAID DEBT, deliberately: warm is 132 entries / 32 improved / ZERO regressed, every regression is in cold, and five blocked with no pre-argued case. forms warm was never re-measured and stands at M12's 3.35x. M12c: GPU vello backend landed isolated (zero Tier-C interior differences on 44/44; 4.8x on the heaviest vector page, 2.64x slower overall on rasterization; shading target missed and named) — but its exemption cannot yet be spent, because vello 0.10 pins wgpu 29 while egui is on 30 and iced on 27, so no released frontend can inject a device. **M12d MET 2026-09-01, with M1 and M2 restated as owed** (docs/status/M12d.md): it paid M12b's three engineering debts and, like M12b, had its premise corrected by measurement on two of three items. D1 gave shading/patch.rs its owner — one BezPath buffer per patch instead of one per cell, netted −22.7% / −25.2% / −18.5% on the three shading documents, control unmoved, byte-identical across 202 page hashes — and refuted cell-merging by counting (the longest same-colour run is 2, usually 1), so M12 §3.9's SIMD reopening condition stays unmet *with a reason*. D2 was owed one third of its brief: the glyph-spacing heuristic and the croscore fix were on main since 2026-08-29 (ba8662f, 10905fe) and never reverted — the scoreboard's timestamp merely predated them — so that story is withdrawn in place (d81ac68); its real work was the serif bit plus a fontdb name-ID divergence it found itself, both moving 0 of 1675 files and paid on the oracle comparison rather than on a number. D3's inherited digest was wrong about what image_en_fqa is (301 draws of a 2x2 RGB image carrying an /SMask, not 552 minified 1-bit masks), and correcting it is what located the cost: cold 679.7 → 158.7 ms (−76.7%), build −83.7%, image class cold geomean −14.5% on top of P1's −33.4%; on image_bug_718762 the brief's ordering hypothesis is refuted, to_pixmap is −10.4%, and the remaining ~360 ms is the upstream scaled-decode gap. Two cross-vendor Grok reviews (both MERGEABLE-WITH-NITS) landed three GPU should-fixes — a device leaked before the check that would refuse it, a documented TargetTooLarge never constructed with a 17 GiB allocation reachable behind it, and a device-loss panic hook — and the walk review's NaN finding was real but ran the opposite direction from its own reasoning. Conformance byte-identical after every commit; no dependency fact moved, verified mechanically. **M1 (ratchet re-baseline) and M2 (oracle side-by-side) are STILL OWED**, unpaid for a second milestone: load never dropped below ~7 and stood at 42 at close, with two unrelated python3 jobs at 450-490% CPU. Until M2 runs, every "versus PDFium" figure in this line dates from M12 — forms warm included, still 3.35x unmeasured. M13 (release) NOT STARTED — loop paused by user; it inherits M1, M2, and the filings and pins that were always the user's or upstream's.
 **Oracle:** `/mnt/data2/pdfium/pdfium-c++` (read-only C++ PDFium checkout @ `6f2272e`)
 **Workspace:** `/mnt/data2/pdfium/pdfrum` (this repository)
 
@@ -890,7 +890,7 @@ problem** (§8.6): `RasterBackend` returns a `Pixmap`, so every group, soft mask
 and pattern cell is a host round trip. That is where future GPU work starts.
 The crate stays `publish = false` and out of the M13 publish set.
 
-## M12d — Paying M12b's debts  *(before release; the release itself is the user's)*
+## M12d — Paying M12b's debts  *(before release; the release itself is the user's)*  — **MET 2026-09-01, with M1 and M2 restated as owed** (docs/status/M12d.md)
 
 M12b closed with nine items stated as owed (docs/status/M12b.md §10). The user
 is doing M13 themselves, so this milestone exists to hand them a tree with the
@@ -1002,13 +1002,25 @@ GPU exemption waits on a vello release) and 9 (`perf_event_paranoid`, the
 user's machine) are the user's or upstream's. They are listed so no one
 re-derives them.
 
-- **Targets.** D1: a measured reduction on the netted patch figure with the
-  control unchanged. D2: `bug_601362` back above 0.99 *on the oracle's face*,
-  the croscore fix landed, no file regressed. D3: a measured reduction on
-  `image_en_fqa` and/or `image_bug_718762` cold. M1/M2: paid, or re-stated as
-  owed with the load that prevented it.
+- **Targets**, scored in docs/status/M12d.md §8. D1: a measured reduction on
+  the netted patch figure with the control unchanged — **MET**, −22.7% /
+  −25.2% / −18.5% netted, `shading_coons` unmoved, byte-identical on all 202
+  page hashes. D2: `bug_601362` back above 0.99 *on the oracle's face* —
+  **SUPERSEDED**, it stood at 0.999117 *before the item opened*, earned by
+  `ba8662f`/`10905fe`, which the brief wrongly called reverted; the croscore
+  fix landed — **SUPERSEDED**, same two commits; no file regressed — **MET**,
+  0 of 1675 moved. D3: a measured reduction on `image_en_fqa` and/or
+  `image_bug_718762` cold — **MET**, −76.7% cold on the first and −10.4% of
+  `to_pixmap` on the second. M1/M2: paid, or re-stated as owed with the load
+  that prevented it — **OWED, re-stated**: load never below ~7 and 42 at close,
+  two unrelated `python3` jobs at 450–490% CPU (§7).
 - **Exit:** `docs/status/M12d.md` in M12.md's register, PLAN.md marked, and the
-  tree handed to the user for M13 with no engineering debt left unaddressed.
+  tree handed to the user for M13 with no engineering debt left unaddressed —
+  **MET.** The three engineering debts are paid or accounted for, two of them
+  by first correcting a false premise in the brief that named them; what
+  remains is M1, M2, and the items that were always the user's or upstream's.
+  DEPS.md needed no change and that was verified mechanically, not assumed:
+  no `Cargo.toml`, `Cargo.lock` or DEPS.md line moved in the whole milestone.
 
 ## M13 — Release
 
