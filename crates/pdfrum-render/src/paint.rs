@@ -232,16 +232,15 @@ fn draw_path_inner<B: RasterBackend>(
         && !fill.is_invisible()
     {
         let geometry = crate::walkprofile::phase(crate::walkprofile::Phase::PathXform, || {
-            // Two buffers, counted as two: the transformed copy and the
-            // clamped copy of *that*, each the whole length of the path.
-            for _ in 0..2 {
-                crate::walkprofile::alloc_items(
-                    crate::walkprofile::Site::PathGeometry,
-                    path.elements().len(),
-                    core::mem::size_of::<PathEl>(),
-                );
-            }
-            hard_clip(&(to_device * path.clone()))
+            // One buffer, reserved to the source's length: the transform and
+            // the clamp are one pass. It used to be two whole `BezPath`s, the
+            // first discarded at this call — see `transform_hard_clip`.
+            crate::walkprofile::alloc_items(
+                crate::walkprofile::Site::PathGeometry,
+                path.elements().len(),
+                core::mem::size_of::<PathEl>(),
+            );
+            crate::path::transform_hard_clip(to_device, path)
         });
         device.fill_path(
             &geometry,
@@ -262,10 +261,10 @@ fn draw_path_inner<B: RasterBackend>(
         // called with that same matrix1, so the degenerate-subpath nudge is
         // one pixel *there* — see `nudge_degenerate_subpaths`.
         let geometry = crate::walkprofile::phase(crate::walkprofile::Phase::PathXform, || {
-            // Four buffers on this arm: the transformed copy, the two element
-            // vectors `nudge_degenerate_subpaths` takes, its output, and the
-            // clamp. Counted as four because the question is allocator traffic.
-            for _ in 0..4 {
+            // Three buffers on this arm: the transformed copy, the nudge's
+            // output, and the clamp. The nudge's own two element copies went
+            // with the borrow — see `nudge_degenerate_subpaths`.
+            for _ in 0..3 {
                 crate::walkprofile::alloc_items(
                     crate::walkprofile::Site::PathGeometry,
                     path.elements().len(),
@@ -329,7 +328,7 @@ fn draw_fill_stroke_knockout<B: RasterBackend>(
     let aa = opts.path_aa();
     if !fill.is_invisible() {
         sub.fill_path(
-            &hard_clip(&(offset * to_device * path.clone())),
+            &crate::path::transform_hard_clip(offset * to_device, path),
             Affine::IDENTITY,
             &Brush::Solid(fill.to_peniko()),
             rule,

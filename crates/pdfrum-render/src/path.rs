@@ -64,6 +64,38 @@ pub fn hard_clip(path: &BezPath) -> BezPath {
     out
 }
 
+/// Transform a path into device space and apply [`hard_clip`] in one pass.
+///
+/// Exactly `hard_clip(&(matrix * path.clone()))`, which is what every ordinary
+/// fill and stroke in [`crate::paint::draw_path`] used to spell literally. That
+/// spelling builds **two** whole `BezPath`s per drawn path object — the
+/// transformed copy, then the clamped copy of it — and discards the first at the
+/// device call. On `vector_paths_1751` that was 10010 `BezPath` builds and
+/// 4.5 MiB of allocator traffic per render (docs/status/M12b-P3.md §3).
+///
+/// The composition is associative on points — `clamp(matrix * p)` for every
+/// coordinate either way — so fusing them changes no coordinate, and the
+/// capacity is reserved from the source's element count so the single buffer
+/// never grows.
+#[must_use]
+pub fn transform_hard_clip(matrix: Affine, path: &BezPath) -> BezPath {
+    let clamp = |p: Point| {
+        let p = matrix * p;
+        Point::new(p.x.clamp(-MAX_POS, MAX_POS), p.y.clamp(-MAX_POS, MAX_POS))
+    };
+    let mut out = BezPath::with_capacity(path.elements().len());
+    for el in path.elements() {
+        match *el {
+            PathEl::MoveTo(p) => out.move_to(clamp(p)),
+            PathEl::LineTo(p) => out.line_to(clamp(p)),
+            PathEl::QuadTo(a, b) => out.quad_to(clamp(a), clamp(b)),
+            PathEl::CurveTo(a, b, c) => out.curve_to(clamp(a), clamp(b), clamp(c)),
+            PathEl::ClosePath => out.close_path(),
+        }
+    }
+    out
+}
+
 /// Nudge a degenerate one-point subpath's line endpoint one device pixel
 /// right, so a stroke has something to expand (`BuildAggPath`,
 /// `cfx_agg_devicedriver.cpp:951-956`).
@@ -100,13 +132,16 @@ pub fn hard_clip(path: &BezPath) -> BezPath {
 /// they do not, nothing is nudged.
 #[must_use]
 pub fn nudge_degenerate_subpaths(path: &BezPath, user: &BezPath) -> BezPath {
-    // The elements as (kind, point) pairs, in both spaces at once.
-    let els: Vec<PathEl> = path.elements().to_vec();
-    let user_els: Vec<PathEl> = user.elements().to_vec();
+    // The elements as (kind, point) pairs, in both spaces at once. Borrowed
+    // rather than copied: `should_nudge` reads slices and `BezPath::elements`
+    // already is one, so the two `to_vec`s this used to take were two whole
+    // extra copies of the path on every stroked object.
+    let els = path.elements();
+    let user_els = user.elements();
     if els.len() != user_els.len() {
         return path.clone();
     }
-    let mut out = BezPath::new();
+    let mut out = BezPath::with_capacity(els.len());
     // A `ClosePath` that a nudged line owns is dropped rather than emitted.
     //
     // AGG closes the polygon too, and `vcgen_stroke` then needs three
@@ -120,7 +155,7 @@ pub fn nudge_degenerate_subpaths(path: &BezPath, user: &BezPath) -> BezPath {
     let mut skip_close = false;
     for (i, el) in els.iter().enumerate() {
         match *el {
-            PathEl::LineTo(p) if should_nudge(&els, &user_els, i) => {
+            PathEl::LineTo(p) if should_nudge(els, user_els, i) => {
                 out.line_to(Point::new(p.x + 1.0, p.y));
                 skip_close = matches!(els.get(i + 1), Some(PathEl::ClosePath));
             }
@@ -173,24 +208,69 @@ fn should_nudge(els: &[PathEl], user: &[PathEl], i: usize) -> bool {
     um == ul
 }
 
+/// A rectangle candidate's points, held inline.
+///
+/// The three `Vec<Point>`s this replaced — the candidate list, its
+/// normalization and its transform — ran on **every fill-only path object**
+/// through [`path_rect`], whether or not the path turned out to be a
+/// rectangle, and were three heap allocations per object for a test that on
+/// `vector_paths_1751` answers "not a rectangle" 4970 times out of 4970
+/// (docs/status/M12b-P3.md §3). Nothing about the sizes was ever dynamic:
+/// [`rect_candidate_points`] bails above 32 points and may append one closing
+/// point, and [`normalize_points`] returns exactly five or nothing.
+///
+/// A record of a buffer and a length, not a collection: it grows by `push` and
+/// is read as a slice, and `push` past the capacity is a *rejection* rather
+/// than a panic — a path with more points than this holds is one
+/// `rect_candidate_points` was already going to decline.
+#[derive(Debug, Clone, Copy)]
+struct Points {
+    buf: [Point; Points::CAP],
+    len: usize,
+}
+
+impl Points {
+    /// Thirty-two points plus the one a close may append, which is exactly
+    /// `rect_candidate_points`'s own bound.
+    const CAP: usize = 33;
+
+    fn new() -> Self {
+        Self {
+            buf: [Point::ZERO; Self::CAP],
+            len: 0,
+        }
+    }
+
+    /// Append a point, or report that the path is past the bound.
+    fn push(&mut self, p: Point) -> Option<()> {
+        *self.buf.get_mut(self.len)? = p;
+        self.len += 1;
+        Some(())
+    }
+
+    fn as_slice(&self) -> &[Point] {
+        self.buf.get(..self.len).unwrap_or(&[])
+    }
+}
+
 /// The points of a path that is a candidate rectangle: four or five line
 /// segments after an opening move, no curves.
-fn rect_candidate_points(path: &BezPath) -> Option<Vec<Point>> {
-    let mut points = Vec::with_capacity(6);
+fn rect_candidate_points(path: &BezPath) -> Option<Points> {
+    let mut points = Points::new();
     let mut closed = false;
     for el in path.elements() {
         match *el {
             PathEl::MoveTo(p) => {
-                if !points.is_empty() {
+                if points.len != 0 {
                     return None; // A second sub-path is never a rect.
                 }
-                points.push(p);
+                points.push(p)?;
             }
             PathEl::LineTo(p) => {
-                if points.is_empty() || closed {
+                if points.len == 0 || closed {
                     return None;
                 }
-                points.push(p);
+                points.push(p)?;
             }
             // `close_figure_` in the C++ marks the *preceding* point; kurbo
             // spells it as its own element. A close after four or five points
@@ -198,13 +278,14 @@ fn rect_candidate_points(path: &BezPath) -> Option<Vec<Point>> {
             PathEl::ClosePath => closed = true,
             PathEl::QuadTo(..) | PathEl::CurveTo(..) => return None,
         }
-        if points.len() > 32 {
+        if points.len > 32 {
             return None; // Far past anything normalization could rescue.
         }
     }
-    if closed && points.len() >= 4 && points.first() != points.last() {
-        let first = *points.first()?;
-        points.push(first);
+    let slice = points.as_slice();
+    if closed && points.len >= 4 && slice.first() != slice.last() {
+        let first = *slice.first()?;
+        points.push(first)?;
     }
     Some(points)
 }
@@ -212,30 +293,35 @@ fn rect_candidate_points(path: &BezPath) -> Option<Vec<Point>> {
 /// `GetNormalizedPoints` (`cfx_path.cpp:70-108`): collapse zero-length
 /// segments in a path of more than five points, bailing when more than five
 /// survive.
-fn normalize_points(points: &[Point]) -> Option<Vec<Point>> {
+fn normalize_points(points: &[Point]) -> Option<Points> {
+    let mut out = Points::new();
     if points.len() <= 5 {
-        return Some(points.to_vec());
+        for &p in points {
+            out.push(p)?;
+        }
+        return Some(out);
     }
     if points.first() != points.last() {
         return None;
     }
-    let mut out: Vec<Point> = Vec::with_capacity(6);
-    out.push(*points.first()?);
+    out.push(*points.first()?)?;
     for (i, p) in points.iter().enumerate().skip(1) {
         // Exactly five points left: stop normalizing and take the remainder.
-        if out.len() + (points.len() - i) == 5 {
-            out.extend_from_slice(points.get(i..)?);
+        if out.len + (points.len() - i) == 5 {
+            for &q in points.get(i..)? {
+                out.push(q)?;
+            }
             break;
         }
-        if out.last() == Some(p) {
+        if out.as_slice().last() == Some(p) {
             continue; // The line does not move.
         }
-        out.push(*p);
-        if out.len() > 5 {
+        out.push(*p)?;
+        if out.len > 5 {
             return None;
         }
     }
-    (out.len() == 5).then_some(out)
+    (out.len == 5).then_some(out)
 }
 
 /// `XYBothNotEqual`: two points that differ on *both* axes cannot be adjacent
@@ -280,27 +366,16 @@ fn is_rect_pre_transform(points: &[Point]) -> bool {
 /// PDFium has and we must share.
 #[must_use]
 pub fn path_rect(path: &BezPath, matrix: Affine) -> Option<Rect> {
-    crate::walkprofile::alloc_items(
-        crate::walkprofile::Site::RectPoints,
-        6,
-        core::mem::size_of::<Point>(),
-    );
     let candidate = rect_candidate_points(path)?;
-    crate::walkprofile::alloc_items(
-        crate::walkprofile::Site::RectPoints,
-        candidate.len(),
-        core::mem::size_of::<Point>(),
-    );
-    let points = normalize_points(&candidate)?;
-    if !is_rect_pre_transform(&points) {
+    let points = normalize_points(candidate.as_slice())?;
+    if !is_rect_pre_transform(points.as_slice()) {
         return None;
     }
-    crate::walkprofile::alloc_items(
-        crate::walkprofile::Site::RectPoints,
-        points.len(),
-        core::mem::size_of::<Point>(),
-    );
-    let transformed: Vec<Point> = points.iter().map(|&p| matrix * p).collect();
+    let mut transformed = Points::new();
+    for &p in points.as_slice() {
+        transformed.push(matrix * p)?;
+    }
+    let transformed = transformed.as_slice();
     for i in 1..transformed.len() {
         let (Some(&cur), Some(&prev)) = (transformed.get(i), transformed.get(i - 1)) else {
             return None;
