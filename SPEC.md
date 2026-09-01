@@ -186,6 +186,22 @@ Decisions (orchestrator, from the brief's open questions): passwords are NOT
 capped at ISO's 127 bytes — match the C++ exactly (observable behavior wins);
 all other brief divergences D1–D7 accepted as written.
 
+**[spec] 2026-09-02 (oracle-divergence audit A26): the crypt brief's D1 —
+`CryptClass::Embedded` collapsing onto `Stream` — is reversed, and `/EFF` is
+read.** `grep '"EFF"' core/ fpdfsdk/` over the oracle returns zero hits and
+`cpdf_security_handler.cpp:303-311` builds one crypto handler from one filter
+name, so PDFium decrypts an embedded file stream with the *stream* filter
+whatever `/EFF` says. ISO 32000-1 §7.6.5 table 20 defines `/EFF` as a
+distinct default; pdf.js reads it separately (`crypto.js:1120`, `:1206`,
+`:1336`). PLAN.md §212–229 therefore obliges the correct behaviour. Shape:
+`EncryptParams` gains `embedded_cipher: Option<Cipher>` and each
+`SecurityHandler` variant gains the same field, `None` meaning table 20's own
+"as `/StmF`" default; `SecurityHandler::embedded_cipher() -> Option<Cipher>`
+is public. Only the cipher can differ — §7.6.5 gives every `/CF` entry the
+one file encryption key. `pdfrum-parser` passes `CryptClass::Embedded` for a
+stream whose `/Type` is `/EmbeddedFile`. Zero scoreboard rows: no corpus file
+carries an `/EFF`.
+
 **Ruling 2026-08-30 (M10): the brief's D2 "decrypt only" is LIFTED.** The
 crate gains the encrypt direction, so an encrypted document can be saved
 encrypted (§11):
@@ -1026,6 +1042,20 @@ documents in a shared process applies an external wall-clock and RSS
 condition: a consumer stating that threat model, at which point the fix is
 a cooperative deadline at boa's limit tick if that hook is reachable, and
 otherwise out-of-process execution — not engine surgery.*
+**[spec] 2026-09-02 (M15 step 1, PLAN §M15's E6): `Form::calculation_order`.**
+The `/AcroForm /CO` walk the M14 brief promised and did not build lands here,
+additively: `Form::calculation_order(&self, catalog: &Dict, r: &R) ->
+Vec<usize>`, the indices into `Form::fields` in the order the array lists
+them. **A document with no `/CO` array runs no calculation at all**, however
+many of its fields carry an `/AA /C` — `CountFieldsInCalculationOrder`
+returns 0 and `GetFieldInCalculationOrder` returns null the moment
+`GetArrayFor("CO")` finds nothing (`core/fpdfdoc/cpdf_interactiveform.cpp:739-761`),
+and the sweep that drives calculation walks exactly that list. An empty answer
+is therefore *the* answer and not a fallback: reading it as "every field, in
+`/Fields` order" recalculates documents the oracle leaves alone. Entries that
+resolve to nothing, to a non-dictionary, or to a dictionary that is not one of
+this form's terminal fields are dropped (`GetFieldByDict` answering null);
+duplicates are kept, because the array is indexed positionally.
 
 **[spec] 2026-08-29 (M6 implementation, three corrections to the rulings
 above).**
@@ -1417,6 +1447,7 @@ The routed entry point is one total function over a borrowed view:
 pub fn apply<R: Resolve>(
     session: &mut FormSession,
     ctx: &Context<'_, R>,
+    cascade: &mut dyn Cascade,
     event: Event,
 ) -> Response;
 
@@ -1436,12 +1467,47 @@ rather than `FormContext`, and it carries a `PageForm` — one page's `/Annots`
 walk — rather than the document's `Form`, because routing needs the page's
 geometry and not the field tree.
 
-**One gap remains, and it is named rather than assumed.** `apply` takes no
-`cascade` and no `diags`. The `Cascade` seam (§15.7) exists and is
-implemented by `NoScripts`, but nothing threads it through routing, so a
-keystroke hook cannot yet observe or reject an edit. That is M15's, with the
-V8 rows it gates; the payload a hook would receive is already built and
-tested (`cascade::Keystroke`).
+**[spec] 2026-09-02 (M15 step 1, PLAN §M15's E1 ruling): the cascade is
+threaded, as a second parameter.** The gap this paragraph used to name —
+`apply` taking no cascade, `Cascade::keystroke` having no call site,
+`commit::run` being called by nothing but its own unit tests — is closed.
+The **three** entry points that can commit a field take one:
+
+```rust
+pub fn apply<R: Resolve>(session, ctx, cascade: &mut dyn Cascade, event) -> Response;
+pub fn choose<R: Resolve>(session, ctx, cascade: &mut dyn Cascade, annot, index) -> Response;
+pub fn kill_focus<R: Resolve>(session, ctx, cascade: &mut dyn Cascade) -> Response;
+```
+
+`close_popup`, `focus_of`, `popup_view` and `scroll_view` commit nothing and
+are unchanged. **A parameter rather than a `Context` field**, per the brief's
+§2.3 argument: `Context`'s own doc comment says it "owns nothing" and is a
+borrowed view assembled at the call site, and a `&mut dyn` in it would
+contradict that sentence — a cascade is not a borrowed view of the document,
+it is a live thing with state. The field would also have made `Context`
+`&mut` at ~40 internal call sites; the parameter costs three public
+signatures.
+
+The wires the parameter feeds:
+
+- **`commit::run` is called** from `take_focus` and `kill_focus`, on the
+  outgoing field, before focus moves. That is `KillFocusForAnnot`'s call to
+  `CommitData` (`fpdfsdk/formfiller/cffl_formfield.cpp:306`), the only place
+  upstream where the gates run over a whole field value.
+- **`Cascade::keystroke` is called** from the typing path — `perform_text`
+  for a text field, `choice_char` for an editable combo — before the edit is
+  applied, with `willCommit` false. A refusal drops the character and leaves
+  the field unchanged; a rewritten change is applied through
+  `Keystroke::applied` rather than the offered action.
+- **`Cascade::calculate`'s writes land** on the fields it names.
+
+`NoScripts` remains the default and every existing caller's behaviour is
+byte-identical, which is precisely why M14's exit criteria could not have
+caught that none of these wires existed: *a cascade that changes nothing is
+indistinguishable from one that never runs*. The tests that would have caught
+it are `crates/pdfrum-form/tests/cascade_wiring.rs`, which assert the
+opposite property — that a cascade which *does* something changes what
+routing does.
 
 ### 15.2 The session record
 
@@ -1648,8 +1714,15 @@ has no analogue here.
 ### 15.7 The `Cascade` seam
 
 The third and — under the `[spec]` protocol STYLE §2b names — final trait
-seam in the project, alongside `RenderDevice` and `Resolve`. One
-`&mut dyn Cascade` at exactly one call site, `commit::run`.
+seam in the project, alongside `RenderDevice` and `Resolve`.
+
+*Amended 2026-09-02 (M15 step 1).* The `&mut dyn Cascade` is no longer at one
+call site: it is a parameter on the three public entry points that can commit
+a field (§15.1) and is threaded to `commit::run` and to the typing path.
+`ScriptCascade`, the `boa`-backed implementor, is the seam's **second
+implementation**, which is what it was admitted for — not a fourth seam
+(STYLE §2b, clarified 2026-09-02). The alert transcript a script produces
+comes back as a value the host reads, not as a `ScriptHost` trait.
 
 ```rust
 pub trait Cascade {
@@ -1671,17 +1744,38 @@ PDFium build without V8 substitutes `CJS_RuntimeStub` and runs the identical
 code path with exactly three mutation points inert: the accept flag never goes
 false, the change string is never rewritten, and calculate and format return at
 their first line. M14 is therefore not "the real thing minus JS"; it is the
-real thing with the identity cascade. M15 adds `BoaScripts` and changes no call
-site. The recursion guard belongs to the implementation, not the seam:
-`FieldWrites` carries a depth `calculate` may not exceed.
+real thing with the identity cascade. M15 adds `ScriptCascade` and changes no
+*implementation* — the call sites it needed are the ones M15 step 1 built
+(§15.1). The recursion guard belongs to the implementation, not the seam:
+`FieldWrites` carries a depth `calculate` may not exceed, defaulting to **1**
+because upstream's `busy_` flag permits no nesting at all
+(`fpdfsdk/cpdfsdk_interactiveform.cpp:259-264`).
+
+`Keystroke`'s selection indices are **`i32`**, not `u32`
+(`[spec]` 2026-09-02, brief §2.3 A4): `event.selStart` is settable to any
+`i32` upstream (`fxjs/cjs_event.cpp:206`), and `-1` is a value scripts write.
+`Keystroke::applied` reproduces `CalcMergedString`'s two halves exactly
+(`fxjs/cjs_publicmethods.cpp:127-137`), which do **not** agree with each
+other: an out-of-range `selStart` yields an *empty prefix* rather than a
+clamp, because `First(n)` is `Substr(0, n)` and returns nothing when `n`
+exceeds the length; an out-of-range `selEnd` yields an empty suffix behind an
+explicit guard. A reversed selection is not swapped.
 
 The commit order is fixed and normative:
 `is_changed → keystroke_commit → validate → save → calculate → format`.
 
-**A failing validate does not keep focus.** Upstream's `CommitData` returns
-true on rejection, so kill-focus proceeds and the edit is silently reverted;
-this is reproduced deliberately, named in the code, and flagged for M15, where
-it becomes user-visible for the first time.
+**A failing validate KEEPS focus — `[oracle-bug]`, changed 2026-09-02.**
+Upstream's `CommitData` returns `true` on both refusal paths
+(`fpdfsdk/formfiller/cffl_formfield.cpp:525-531`), which is its only caller's
+guard (`:306`), so the caret goes and the user's typing with it — a rejection
+is indistinguishable from an acceptance and there is no way to correct what
+the script objected to. ISO 32000-1 §12.7.5.3 gives Validate the job of
+rejecting the *value*, and pdf.js implements that with the comment to prove
+it: `focus: true, // Stay in the field.`
+(`src/scripting_api/event.js:277`). Under PLAN.md's oracle-bug rule pdfrum
+reverts the edit **and keeps the field**;
+[`CommitOutcome::keeps_focus`] is that answer. Zero board cost — the branch is
+unreachable without scripts, since nothing can refuse.
 
 ### 15.8 The facade surface
 
