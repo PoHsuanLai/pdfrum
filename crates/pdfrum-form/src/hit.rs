@@ -51,9 +51,20 @@ pub enum LayoutBand {
 }
 
 /// What the hit test needs to know about one annotation.
+///
+/// # Build these from the raw `/Annots` array
+///
+/// A candidate's `id` carries a **raw** `/Annots` index, pop-ups counted —
+/// see [`AnnotId`]. Pop-ups appear here as ordinary candidates in the
+/// [`LayoutBand::Popup`] band rather than being filtered out, precisely so
+/// that a caller can walk the array once and index it directly. Filtering
+/// them out on the way in and then reporting positions in the filtered list
+/// is the mistake this type is shaped to prevent: the appearance overlay is
+/// keyed by the raw index, so every widget after a pop-up would be off by
+/// one.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Candidate {
-    /// Which annotation.
+    /// Which annotation, by its raw `/Annots` index.
     pub id: AnnotId,
     /// Its rectangle, normalized.
     pub rect: Rect,
@@ -501,6 +512,58 @@ mod tests {
     fn an_empty_page_hits_nothing() {
         assert_eq!(widget_at_point(&[], None, Permissions::ALL, 0.0, 0.0), None);
         assert_eq!(annot_at_point(&[], None, 0.0, 0.0), None);
+    }
+
+    /// The case the whole index-space contract exists for: a page whose
+    /// first `/Annots` entry is a pop-up. A hit on the widget at raw index 1
+    /// must report **1**, not the 0 it would occupy in a pop-up-filtered
+    /// list — the appearance overlay is keyed by the raw index, so reporting
+    /// the filtered position would draw this widget's appearance onto the
+    /// pop-up.
+    #[test]
+    fn a_page_with_a_popup_reports_raw_annots_indices() {
+        // /Annots = [ popup, widget, widget ]
+        let candidates = [
+            popup(0, box_at(0.0, 600.0)),
+            widget(1, box_at(100.0, 400.0)),
+            widget(2, box_at(100.0, 200.0)),
+        ];
+
+        // The first widget is at raw index 1 even though it is the list's
+        // first *widget*.
+        assert_eq!(
+            widget_at_point(&candidates, None, Permissions::ALL, 150.0, 425.0),
+            Some(AnnotId::new(0, 1))
+        );
+        assert_eq!(
+            widget_at_point(&candidates, None, Permissions::ALL, 150.0, 225.0),
+            Some(AnnotId::new(0, 2))
+        );
+
+        // Hover skips the pop-up, and still answers in the raw index space.
+        assert_eq!(annot_at_point(&candidates, None, 50.0, 625.0), None);
+        assert_eq!(
+            annot_at_point(&candidates, None, 150.0, 425.0),
+            Some(AnnotId::new(0, 1))
+        );
+    }
+
+    /// Sorting into bands must not renumber anything: the pop-up moves to the
+    /// front of the order while every id keeps the raw index it arrived with.
+    #[test]
+    fn the_band_sort_reorders_without_renumbering() {
+        let candidates = [
+            widget(0, box_at(0.0, 0.0)),
+            popup(1, box_at(0.0, 0.0)),
+            widget(2, box_at(0.0, 0.0)),
+        ];
+        let ordered: Vec<u32> = hit_order(&candidates, None)
+            .iter()
+            .map(|c| c.id.index)
+            .collect();
+
+        // The pop-up sorts first, but it is still annotation 1.
+        assert_eq!(ordered, vec![1, 0, 2]);
     }
 
     #[test]
