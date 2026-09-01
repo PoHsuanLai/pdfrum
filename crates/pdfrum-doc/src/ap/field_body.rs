@@ -129,7 +129,28 @@ const LIST_ROW_DEFAULT_SIZE: f32 = 12.0;
 
 /// The colour behind a selected list-box row, as the byte triple the source
 /// writes rather than the fraction it equals.
+///
+/// The same triple is the focused-field selection band
+/// (`ArgbEncode(255, 0, 51, 113)` in `cpwl_edit_impl.cpp`).
 const SELECTION_FILL: Color = Color::Rgb(0.0, 51.0 / 255.0, 113.0 / 255.0);
+
+/// The caret's width in PDF units (`cpwl_caret.h`).
+pub const CARET_WIDTH: f32 = 0.4;
+
+/// Overlay a focused field draws on top of its unfocused body.
+///
+/// Rectangles are in PDF user space (y-up), the same space the body's `Td`
+/// operators already use. A caret is a filled rectangle
+/// [`CARET_WIDTH`] units wide; a selection band is filled
+/// `ArgbEncode(255, 0, 51, 113)` and the text over it is white. A field with
+/// a live selection shows no caret.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Highlight {
+    /// The caret rectangle, or `None` when a selection is showing.
+    pub caret: Option<Rect>,
+    /// Selection bands, painted behind the text.
+    pub selection: Vec<Rect>,
+}
 
 /// The resource name a field with no `/DA` font sets its text under.
 ///
@@ -223,12 +244,17 @@ pub struct Body {
 /// the order the three builders concatenate their pieces in — for a comb text
 /// field the cell separators sit between them, and are part of what this
 /// returns because they are the same builder's work.
+///
+/// `caret_and_selection` is the focused-field overlay. Passing [`None`] is
+/// the unfocused path and is byte-identical to the stream this function
+/// produced before the parameter existed.
 #[must_use]
 pub fn generate<R: Resolve>(
     dict: &Dict,
     catalog: &Dict,
     font: &TextFont<'_>,
     r: &R,
+    caret_and_selection: Option<&Highlight>,
 ) -> Option<Body> {
     let kind = Kind::of(dict, r)?;
     let form = catalog.dict(names::ACRO_FORM, r);
@@ -270,6 +296,7 @@ pub fn generate<R: Resolve>(
         appearance: &appearance,
         color,
         font,
+        caret_and_selection,
     };
     let mut out = Content::new();
     match kind {
@@ -383,8 +410,21 @@ fn set_text(
 /// The clip is written **only on overflow** — a body that fits its plate has
 /// no `W n` in its stream at all — and the colour operator sits inside the
 /// text object rather than before it.
-fn wrap_text(out: &mut Content, plate: Rect, content: Rect, color: Color, written: &str) {
-    if written.is_empty() {
+///
+/// A focused overlay, when present, is painted *inside* the same `q`/`Q`:
+/// selection bands before the text (so they sit behind it), the caret after
+/// `ET` (so it sits on top). Passing [`None`] writes exactly the operators
+/// this function wrote before the overlay existed.
+fn wrap_text(
+    out: &mut Content,
+    plate: Rect,
+    content: Rect,
+    color: Color,
+    written: &str,
+    caret_and_selection: Option<&Highlight>,
+) {
+    let overlay = caret_and_selection.filter(|h| h.caret.is_some() || !h.selection.is_empty());
+    if written.is_empty() && overlay.is_none() {
         return;
     }
     out.raw("/Tx BMC\nq\n");
@@ -392,10 +432,38 @@ fn wrap_text(out: &mut Content, plate: Rect, content: Rect, color: Color, writte
         out.rect(plate, Float::Shortest);
         out.raw("re\nW\nn\n");
     }
-    out.raw("BT\n");
-    out.raw(&color_op_via(color, PaintOp::Fill, Float::G6));
-    out.raw(written);
-    out.raw("ET\nQ\nEMC\n");
+    if let Some(highlight) = overlay {
+        for band in &highlight.selection {
+            out.raw("q\n");
+            out.raw(&color_op_via(SELECTION_FILL, PaintOp::Fill, Float::G6));
+            out.rect(*band, Float::Shortest);
+            out.raw("re\nf\nQ\n");
+        }
+    }
+    if !written.is_empty() {
+        out.raw("BT\n");
+        let fill = if overlay.is_some_and(|h| !h.selection.is_empty()) {
+            Color::Gray(1.0)
+        } else {
+            color
+        };
+        out.raw(&color_op_via(fill, PaintOp::Fill, Float::G6));
+        out.raw(written);
+        out.raw("ET\n");
+    }
+    if let Some(caret) = overlay.and_then(|h| {
+        if h.selection.is_empty() {
+            h.caret
+        } else {
+            None
+        }
+    }) {
+        out.raw("q\n");
+        out.raw(&color_op_via(Color::Gray(0.0), PaintOp::Fill, Float::G6));
+        out.rect(caret, Float::Shortest);
+        out.raw("re\nf\nQ\n");
+    }
+    out.raw("Q\nEMC\n");
 }
 
 /// Everything the four body builders read that is not the output stream.
@@ -419,6 +487,8 @@ struct BodyInput<'a> {
     color: Color,
     /// The loaded face and the layout metrics taken from it.
     font: &'a TextFont<'a>,
+    /// Focused-field caret and selection, if this body is a live edit.
+    caret_and_selection: Option<&'a Highlight>,
 }
 
 /// A text field's body, and the comb separators that precede it.
@@ -468,7 +538,14 @@ fn text_field<R: Resolve>(out: &mut Content, input: &BodyInput<'_>, r: &R) {
         },
         &appearance.font_name,
     );
-    wrap_text(out, client, content, color, &written);
+    wrap_text(
+        out,
+        client,
+        content,
+        color,
+        &written,
+        input.caret_and_selection,
+    );
 }
 
 /// A push button's caption.
@@ -633,7 +710,14 @@ fn combo_box<R: Resolve>(out: &mut Content, input: &BodyInput<'_>, r: &R) {
         vt::edit_ap::Grouping::Continuous,
         &appearance.font_name,
     );
-    wrap_text(out, plate, content, color, &written);
+    wrap_text(
+        out,
+        plate,
+        content,
+        color,
+        &written,
+        input.caret_and_selection,
+    );
     out.raw(&shapes::drop_button(button));
 }
 
@@ -815,8 +899,11 @@ fn border_color<R: Resolve>(dict: &Dict, r: &R) -> Color {
 
 #[cfg(test)]
 mod tests {
-    use super::{Choice, Kind, field_dict_of, field_value, options, selected_indices};
+    use super::{
+        CARET_WIDTH, Choice, Highlight, Kind, field_dict_of, field_value, options, selected_indices,
+    };
     use crate::ap::{TextFont, freetext};
+    use crate::geom;
     use pdfrum_object::{Array, Dict, Name, NoResolve, Object, PdfString};
 
     fn dict(pairs: &[(&str, Object)]) -> Dict {
@@ -940,6 +1027,10 @@ mod tests {
     /// font's reverse `ToUnicode`. The numbers below are therefore Helvetica's
     /// and not the stub's ten-per-character.
     fn body(widget: &Dict) -> Option<String> {
+        body_with(widget, None)
+    }
+
+    fn body_with(widget: &Dict, caret_and_selection: Option<&Highlight>) -> Option<String> {
         let cache = pdfrum_font::FontCache::new();
         let face =
             pdfrum_font::Font::load_standard(pdfrum_font::subst::StandardFont::Helvetica, &cache);
@@ -948,8 +1039,81 @@ mod tests {
             metrics: TextFont::metrics_of(&face, &width),
             font: &face,
         };
-        super::generate(widget, &catalog(), &font, &NoResolve)
+        super::generate(widget, &catalog(), &font, &NoResolve, caret_and_selection)
             .map(|body| String::from_utf8_lossy(&body.stream).into_owned())
+    }
+
+    /// The widgets the existing body tests already exercise.
+    fn widget_fixtures() -> Vec<(&'static str, Dict)> {
+        vec![
+            ("tx_hello", widget_of("Tx", &[("V", text("Hello"))])),
+            (
+                "tx_comb",
+                widget_of(
+                    "Tx",
+                    &[
+                        ("V", text("ab")),
+                        ("Ff", Object::Int(1 << 24)),
+                        ("MaxLen", Object::Int(3)),
+                    ],
+                ),
+            ),
+            (
+                "ch_combo",
+                widget_of(
+                    "Ch",
+                    &[
+                        ("Ff", Object::Int(1 << 17)),
+                        (
+                            "Opt",
+                            Object::Array(Array::of([
+                                strings(&["a", "Apple"]),
+                                strings(&["b", "Banana"]),
+                            ])),
+                        ),
+                        ("V", text("b")),
+                    ],
+                ),
+            ),
+            (
+                "ch_list_v",
+                widget_of(
+                    "Ch",
+                    &[("Opt", strings(&["Dog", "Cat"])), ("V", text("Cat"))],
+                ),
+            ),
+            (
+                "ch_list_ti",
+                widget_of(
+                    "Ch",
+                    &[("Opt", strings(&["a", "b", "c"])), ("TI", Object::Int(2))],
+                ),
+            ),
+            (
+                "ch_list_i",
+                widget_of(
+                    "Ch",
+                    &[
+                        ("Opt", strings(&["a", "b", "c"])),
+                        (
+                            "I",
+                            Object::Array(Array::of([Object::Int(0), Object::Int(2)])),
+                        ),
+                    ],
+                ),
+            ),
+            // The two that generate nothing at all: an empty text field and a
+            // caption-only push button. Their `<none>` rows are as much a part
+            // of the identity as the streams above.
+            ("tx_empty", widget_of("Tx", &[])),
+            (
+                "btn",
+                widget_of(
+                    "Btn",
+                    &[("MK", Object::Dict(dict(&[("CA", text("Push"))])))],
+                ),
+            ),
+        ]
     }
 
     #[test]
@@ -1209,5 +1373,82 @@ mod tests {
         .expect("a body");
         assert!(!got.contains("0 0.2 0.443137 rg\n"), "{got}");
         assert_eq!(got.matches("BT\n").count(), 3);
+    }
+
+    #[test]
+    fn none_is_byte_identical_on_every_existing_widget_fixture() {
+        // `tests/data/unfocused_field_bodies.txt` was captured by running the
+        // fixtures below through the generator *as it stood before the
+        // overlay parameter existed*. Comparing against it — rather than
+        // against a second `None` call, which would only restate itself — is
+        // what makes this a byte-identity check: every operator, every
+        // rounded coordinate and every absent operator is pinned.
+        let want = include_str!("../../tests/data/unfocused_field_bodies.txt");
+        let mut got = String::new();
+        for (name, widget) in widget_fixtures() {
+            got.push_str("=== ");
+            got.push_str(name);
+            got.push_str(" ===\n");
+            match body_with(&widget, None) {
+                Some(stream) => got.push_str(&stream),
+                None => got.push_str("<none>\n"),
+            }
+        }
+        assert_eq!(got, want, "the unfocused path changed shape");
+    }
+
+    #[test]
+    fn a_caret_is_a_filled_rectangle_four_tenths_wide() {
+        let caret = geom::rect(110.0, 104.0, 110.0 + CARET_WIDTH, 120.0);
+        let highlight = Highlight {
+            caret: Some(caret),
+            selection: Vec::new(),
+        };
+        let got =
+            body_with(&widget_of("Tx", &[("V", text("Hello"))]), Some(&highlight)).expect("a body");
+        let none = body(&widget_of("Tx", &[("V", text("Hello"))])).expect("a body");
+        assert_ne!(got, none, "a caret must change the stream");
+        assert!(got.contains("0 g\n"), "{got}");
+        assert!(got.contains("re\nf\n"), "{got}");
+        // After the text, not before it.
+        let et = got.find("ET\n").expect("text");
+        let re = got.find("re\nf\n").expect("caret fill");
+        assert!(re > et, "caret sits on top of the text: {got}");
+        assert!((CARET_WIDTH - 0.4).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn a_selection_band_is_filled_behind_white_text() {
+        let band = geom::rect(100.0, 100.0, 140.0, 130.0);
+        let highlight = Highlight {
+            caret: Some(geom::rect(140.0, 104.0, 140.4, 120.0)),
+            selection: vec![band],
+        };
+        let got =
+            body_with(&widget_of("Tx", &[("V", text("Hello"))]), Some(&highlight)).expect("a body");
+        // The list-box selection colour, six-digit spelling of 0/51/113.
+        assert!(got.contains("0 0.2 0.443137 rg\n"), "{got}");
+        // Selected text is white.
+        assert!(got.contains("1 g\n"), "{got}");
+        // A live selection hides the caret (brief §1.20.5 rule 7).
+        let sel = got.find("0 0.2 0.443137 rg\n").expect("band");
+        let bt = got.find("BT\n").expect("text");
+        assert!(sel < bt, "selection sits behind the text: {got}");
+        assert!(
+            !got.contains("0 g\n"),
+            "a selection suppresses the caret: {got}"
+        );
+    }
+
+    #[test]
+    fn an_empty_field_with_a_caret_still_emits_a_body() {
+        let highlight = Highlight {
+            caret: Some(geom::rect(101.0, 101.0, 101.4, 129.0)),
+            selection: Vec::new(),
+        };
+        let got = body_with(&widget_of("Tx", &[]), Some(&highlight)).expect("caret-only body");
+        assert!(got.contains("/Tx BMC\n"), "{got}");
+        assert!(got.contains("re\nf\n"), "{got}");
+        assert!(!got.contains("BT\n"), "{got}");
     }
 }
