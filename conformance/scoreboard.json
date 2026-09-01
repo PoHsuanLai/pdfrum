@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-01T10:47:05Z",
+  "generated_at": "2026-09-01T11:21:50Z",
   "totals": {
     "files": 1705,
     "pass": 1636,
@@ -41956,12 +41956,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.964683,
+        "ssim": 0.965673,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.964683 below floor 0.990000"
+      "notes": "ssim 0.965673 below floor 0.990000"
     },
     {
       "path": "resources/pixel/bug_477200528.pdf",
@@ -42012,12 +42012,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.964683,
+        "ssim": 0.965673,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.964683 below floor 0.990000"
+      "notes": "ssim 0.965673 below floor 0.990000"
     },
     {
       "path": "resources/pixel/bug_491_invisible.in",
@@ -47420,12 +47420,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.982131,
+        "ssim": 0.982372,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.982131 below floor 0.990000"
+      "notes": "ssim 0.982372 below floor 0.990000"
     },
     {
       "path": "resources/pixel/scrollable_widgets1.pdf",
@@ -47476,12 +47476,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.982131,
+        "ssim": 0.982372,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.982131 below floor 0.990000"
+      "notes": "ssim 0.982372 below floor 0.990000"
     },
     {
       "path": "resources/pixel/scrollable_widgets2.in",
@@ -47532,12 +47532,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.985859,
+        "ssim": 0.985970,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.985859 below floor 0.990000"
+      "notes": "ssim 0.985970 below floor 0.990000"
     },
     {
       "path": "resources/pixel/shade-tensor.in",
