@@ -89,7 +89,10 @@ pub enum Phase {
     ZeroScan,
     /// The geometry `draw_path`'s ordinary case hands the device: the path
     /// transformed into device space and clamped by
-    /// [`crate::path::hard_clip`]. Two `BezPath` builds per fill, per object.
+    /// [`crate::path::hard_clip`]. One reserved `BezPath` per fill, per
+    /// object — [`crate::path::transform_hard_clip`] fuses the transform and
+    /// the clamp into a single pass, where until M12b P3 they were two builds
+    /// with the intermediate thrown away.
     PathXform,
     /// [`crate::shading::draw_patches`] — the Coons and tensor mesh half of a
     /// shading, which rasterizes patch by patch through a scratch device
