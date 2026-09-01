@@ -181,6 +181,29 @@ pub struct ChoiceState {
     pub anchor: Option<usize>,
     /// The first row currently visible.
     pub top_visible: usize,
+    /// Whether a combo box's dropdown is open.
+    ///
+    /// `CPWL_ComboBox::is_popup_`, toggled by `SetPopup`
+    /// (`fpdfsdk/pwl/cpwl_combo_box.cpp:325-377`). Meaningless on a list box,
+    /// which has no second window to open, and never set on one.
+    ///
+    /// Open is a *session* fact and not a document one: nothing a file can
+    /// say opens a dropdown, and the only thing that does is a click on the
+    /// drop button, a `Return`, or a `Space` on a gated combo. What it
+    /// changes is where a click lands — a point below the widget is inside
+    /// the list rather than a miss — and what a host is told to draw
+    /// ([`crate::popup::PopupView`]).
+    pub popup_open: bool,
+    /// The row the pointer is over while the dropdown is open.
+    ///
+    /// The list is created with `Styles::kListboxHoverSel`
+    /// (`cpwl_combo_box.cpp:210-211`), whose whole effect is
+    /// `CPWL_ListBox::OnMouseMove` calling `Select(GetItemIndex(point))` —
+    /// hovering a row *selects* it. Kept beside the selection rather than
+    /// folded into it so that closing the list without clicking can leave the
+    /// stored selection alone, which is what `bug_736695_4` asserts by
+    /// rendering an untouched field after hovering one.
+    pub hovered: Option<usize>,
     /// How the field is configured.
     pub config: ChoiceConfig,
     /// What an **editable** combo box has in its text box.

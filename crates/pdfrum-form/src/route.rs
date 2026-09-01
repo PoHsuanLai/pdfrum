@@ -133,6 +133,16 @@ fn mouse_move<R: Resolve>(session: &mut FormSession, ctx: &Context<'_, R>, at: P
     let moved = session.hover != over;
     session.hover = over;
 
+    // An open dropdown carries `Styles::kListboxHoverSel`
+    // (`cpwl_combo_box.cpp:210-211`), whose whole effect in
+    // `CPWL_ListBox::OnMouseMove` (`cpwl_list_box.cpp:167-181`) is to select
+    // the row under the pointer. It is recorded as *hover* rather than folded
+    // into the selection because dismissing the list must leave the stored
+    // value alone — which is exactly what `bug_736695_4` renders.
+    if let Some(response) = hover_in_popup(session, ctx, at) {
+        return response;
+    }
+
     // A drag in progress extends the selection, which is the one thing a
     // bare move can change about a field's appearance.
     if let Some(anchor) = session.drag {
@@ -154,6 +164,15 @@ fn mouse_down<R: Resolve>(
     at: Point,
     modifiers: Modifiers,
 ) -> Response {
+    // An open dropdown is a **window in front of the page**, so it is tested
+    // before the annotations under it. Upstream this is not a special case at
+    // all — `CPWL_Wnd::OnLButtonDown` walks its children first, and the list
+    // is a child — but here the widget hit test is containment over
+    // `/Annots`, which the list is not in. Without this the same click read
+    // as a miss and killed focus (see `popup_hit`).
+    if let Some((field, annot, index)) = popup_hit(session, ctx, at) {
+        return press_in_popup(session, ctx, field, annot, index);
+    }
     let hit = hit::widget_at_point(
         &ctx.page.candidates,
         session.focus.map(FocusTarget::annot),
@@ -189,6 +208,15 @@ fn mouse_down<R: Resolve>(
             session.drag = caret_anchor(session, field);
         }
         Some(FieldState::Choice(_)) => {
+            // `CPWL_CBButton::OnLButtonDown` (`cpwl_cbbutton.cpp:65-75`)
+            // notifies its parent, and `CPWL_ComboBox::NotifyLButtonDown`
+            // (`cpwl_combo_box.cpp:497-503`) is `SetPopup(!is_popup_)` — a
+            // **toggle**, so a second click on the button shuts the list it
+            // opened. A click anywhere else in the box does not.
+            if toggle_popup_at(session, ctx, field, id, at) {
+                response.absorb(redraw(session, ctx, field, id));
+                return response;
+            }
             if let Some(update) = choice_click(session, ctx, field, id, at, modifiers) {
                 response.push(update);
                 return response;
@@ -217,6 +245,11 @@ fn mouse_up<R: Resolve>(session: &mut FormSession, ctx: &Context<'_, R>, at: Poi
     session.drag = None;
     if let Some(update) = finished {
         return Response::with(vec![update]);
+    }
+    // The release inside an open dropdown is what *commits* the row — see
+    // `release_in_popup` for why the press only hovers it.
+    if let Some((field, annot, index)) = popup_hit(session, ctx, at) {
+        return release_in_popup(session, ctx, field, annot, index);
     }
     let hit = hit::widget_at_point(
         &ctx.page.candidates,
@@ -729,10 +762,34 @@ fn choice_char<R: Resolve>(
     annot: AnnotId,
     ch: char,
 ) -> Response {
-    let editable = match session.fields.get(&field) {
-        Some(FieldState::Choice(state)) => state.config.editable,
-        _ => false,
+    let (combo, editable) = match session.fields.get(&field) {
+        Some(FieldState::Choice(state)) => (state.config.combo, state.config.editable),
+        _ => (false, false),
     };
+    // `CPWL_ComboBox::OnChar` (`cpwl_combo_box.cpp:441-497`) reads two
+    // characters before anything else, and they are **not** symmetric:
+    //
+    // - `Return` **toggles** the list, editable or not, and then re-reads the
+    //   current row into the edit half — so a second Return shuts what the
+    //   first opened;
+    // - `Space` opens it, only on a **gated** combo, and only when it is
+    //   shut. An editable combo's Space falls through and types a space.
+    //
+    // Both return `true` whatever happened, which is why the responses below
+    // are consumed even where the list refused to move.
+    if combo && matches!(ch, '\r' | '\n') {
+        return toggle_popup_by_key(session, ctx, field, annot);
+    }
+    if combo && !editable && ch == ' ' {
+        let shut = matches!(
+            session.fields.get(&field),
+            Some(FieldState::Choice(state)) if !state.popup_open
+        );
+        if shut {
+            return toggle_popup_by_key(session, ctx, field, annot);
+        }
+        return Response::consumed();
+    }
     if editable {
         // An editable combo's typed text goes to its own edit control, and
         // typing clears the index selection.
@@ -776,6 +833,8 @@ fn choice_click<R: Resolve>(
 ) -> Option<AppearanceUpdate> {
     let widget = ctx.widget(id)?;
     let row = row_at(ctx, widget, session.fields.get(&field), at)?;
+    // A combo box's own box has no rows — `row_at` says so — so the drop
+    // button, handled by the caller, is the only thing a click in one does.
     let multi = match session.fields.get(&field) {
         Some(FieldState::Choice(state)) => state.config.multi_select,
         _ => false,
@@ -858,6 +917,476 @@ fn visible_rows<R: Resolve>(
     )]
     let rows = (pdfrum_doc::geom::height(client) / height) as usize;
     rows
+}
+
+/// The width of a combo box's drop button, in PDF units.
+///
+/// `kDefaultButtonWidth` (`fpdfsdk/pwl/cpwl_combo_box.cpp:22`), the same
+/// constant `ap::shapes::drop_button` draws with. `RepositionChildWnd`
+/// (`:284-289`) places it as the right `kDefaultButtonWidth` of the client
+/// rectangle, clamped to the client's left edge for a widget narrower than
+/// the button — which is why the `max` below is not decoration.
+const DROP_BUTTON_WIDTH: f32 = 13.0;
+
+/// Whether a page-space point is inside a combo box's drop button.
+///
+/// The button is a child window in *plate* space, so the point is mapped
+/// through the widget's own rotation before it is compared: a `/MK /R 90`
+/// combo has its button on the top edge as drawn, not the right one.
+fn on_drop_button<R: Resolve>(ctx: &Context<'_, R>, widget: &WidgetInfo, at: Point) -> bool {
+    let client = ap::field_body::client_rect(&widget.dict, ctx.resolve);
+    let (left, right) = (
+        pdfrum_doc::geom::left(client),
+        pdfrum_doc::geom::right(client),
+    );
+    let edge = (right - DROP_BUTTON_WIDTH).max(left);
+    let point = to_plate(widget, at);
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "a plate coordinate is a widget-sized number"
+    )]
+    let (x, y) = (point.x as f32, point.y as f32);
+    x >= edge
+        && x <= right
+        && y >= pdfrum_doc::geom::bottom(client)
+        && y <= pdfrum_doc::geom::top(client)
+}
+
+/// Where a combo box's dropdown would be, whether or not it is open.
+///
+/// [`None`] for anything that is not a combo, and for a combo whose list has
+/// no room to open — `SetPopup`'s two "refuse, but report success" exits.
+fn popup_geometry<R: Resolve>(
+    ctx: &Context<'_, R>,
+    widget: &WidgetInfo,
+    choice: &ChoiceState,
+) -> Option<crate::popup::PopupGeometry> {
+    if !choice.config.combo {
+        return None;
+    }
+    crate::popup::place(
+        widget.rect,
+        ctx.page.page_height,
+        choice.options.len(),
+        row_height(ctx, widget, choice),
+    )
+}
+
+/// Opens or closes a combo box's dropdown, reporting whether the state moved.
+///
+/// `CPWL_ComboBox::SetPopup` (`cpwl_combo_box.cpp:325-377`) and its **three
+/// failure returns**, all of which are `true` — the call reports success and
+/// changes nothing:
+///
+/// - no list at all (a field that is not a combo);
+/// - a list whose content rectangle has no height (no options);
+/// - a `QueryWherePopup` that comes back with nothing (no room on the page).
+///
+/// So a click on the drop button of a combo with nowhere to open is still
+/// *consumed*; it simply leaves the list shut. That is why this returns
+/// "did anything move" rather than "did it succeed": the caller wants to know
+/// whether to redraw, and the two questions have different answers here.
+fn set_popup<R: Resolve>(
+    ctx: &Context<'_, R>,
+    widget: &WidgetInfo,
+    choice: &mut ChoiceState,
+    open: bool,
+) -> bool {
+    if !choice.config.combo || open == choice.popup_open {
+        return false;
+    }
+    if !open {
+        choice.popup_open = false;
+        choice.hovered = None;
+        return true;
+    }
+    if popup_geometry(ctx, widget, choice).is_none() {
+        return false;
+    }
+    choice.popup_open = true;
+    // `RepositionChildWnd` (`cpwl_combo_box.cpp:275`) runs
+    // `ScrollToListItem(select_item_)` as it opens, so an already-selected
+    // row is scrolled into view rather than the list opening at the top.
+    // Recomputed *after* the flag is set because the geometry is the same
+    // either way — the popup's size does not depend on whether it is showing.
+    if let Some(selected) = choice.selected.iter().next().copied() {
+        let rows =
+            popup_geometry(ctx, widget, choice).map_or(0, |geometry| geometry.visible_rows());
+        field::choice::scroll_into_view(choice, selected, rows);
+    }
+    true
+}
+
+/// Shuts every open dropdown on the page.
+///
+/// `CPWL_ComboBox::KillFocus` (`cpwl_combo_box.cpp:52-58`) closes the list
+/// before the base class drops focus, so nothing survives a focus change —
+/// and because a session focuses one field at a time, closing *every* one is
+/// the same operation stated without a special case for which field it was.
+fn close_all_popups(session: &mut FormSession) -> bool {
+    let mut closed = false;
+    for state in session.fields.values_mut() {
+        if let FieldState::Choice(choice) = state
+            && choice.popup_open
+        {
+            choice.popup_open = false;
+            choice.hovered = None;
+            closed = true;
+        }
+    }
+    closed
+}
+
+/// The field whose dropdown is open on this page, if one is.
+///
+/// At most one, because opening one takes focus and taking focus closes the
+/// last. The walk is over the page's widgets rather than over the session's
+/// fields so that a field with a control on two pages answers for the page
+/// being asked about.
+fn open_popup_of(session: &FormSession, page: &PageForm) -> Option<(FieldId, AnnotId)> {
+    page.widgets
+        .iter()
+        .find_map(|widget| match session.fields.get(&widget.field) {
+            Some(FieldState::Choice(choice)) if choice.popup_open => {
+                Some((widget.field, widget.id))
+            }
+            _ => None,
+        })
+}
+
+/// The open dropdown a page-space point falls inside, with the row it names.
+///
+/// **This is the routing gap the pixels could not show.** A mouse-down below
+/// an open combo is inside the list window, and upstream `CPWL_Wnd::OnLButtonDown`
+/// walks the child windows before the widget's own hit test — so it selects a
+/// row. Here the widget hit test is rect containment over `/Annots`, and the
+/// list is not in `/Annots`, so the same click read as a **miss** and dropped
+/// focus. `bug_736695_3` scored 0.997 anyway, because a wrong 150×15 box is
+/// under the SSIM floor; the selection it never made is invisible to the
+/// metric and plain in the state.
+fn popup_hit<R: Resolve>(
+    session: &FormSession,
+    ctx: &Context<'_, R>,
+    at: Point,
+) -> Option<(FieldId, AnnotId, usize)> {
+    let (field, annot) = open_popup_of(session, ctx.page)?;
+    let widget = ctx.widget(annot)?;
+    let FieldState::Choice(choice) = session.fields.get(&field)? else {
+        return None;
+    };
+    let geometry = popup_geometry(ctx, widget, choice)?;
+    let offset = geometry.row_at(at.x, at.y)?;
+    let index = crate::popup::option_at(choice, offset)?;
+    Some((field, annot, index))
+}
+
+/// A pointer move over an open dropdown, which hover-selects a row.
+///
+/// [`None`] when the pointer is not over an open list, which is what lets
+/// `mouse_move` fall through to hover and drag as before. A move that stays
+/// on the same row answers `Some(consumed)` with no update: the pointer is
+/// still inside a window, so the event is not the page's, but nothing was
+/// repainted.
+fn hover_in_popup<R: Resolve>(
+    session: &mut FormSession,
+    ctx: &Context<'_, R>,
+    at: Point,
+) -> Option<Response> {
+    let (field, annot, index) = popup_hit(session, ctx, at)?;
+    let moved = match session.fields.get_mut(&field) {
+        Some(FieldState::Choice(choice)) => {
+            let moved = choice.hovered != Some(index);
+            choice.hovered = Some(index);
+            moved
+        }
+        _ => false,
+    };
+    if !moved {
+        return Some(Response::consumed());
+    }
+    let mut response = Response::consumed();
+    response.absorb(redraw(session, ctx, field, annot));
+    Some(response)
+}
+
+/// A left-down on the drop button, reporting whether the list moved.
+///
+/// Returns `false` for a click that is not on the button, which is what lets
+/// the caller fall through to the ordinary click handling; a click that *is*
+/// on it but cannot open the list — no options, no room — also answers
+/// `false`, because nothing moved and there is nothing to redraw. Either way
+/// the click stays consumed: the widget took focus before this ran.
+fn toggle_popup_at<R: Resolve>(
+    session: &mut FormSession,
+    ctx: &Context<'_, R>,
+    field: FieldId,
+    id: AnnotId,
+    at: Point,
+) -> bool {
+    let Some(widget) = ctx.widget(id) else {
+        return false;
+    };
+    let combo = matches!(
+        session.fields.get(&field),
+        Some(FieldState::Choice(choice)) if choice.config.combo
+    );
+    if !combo || !on_drop_button(ctx, widget, at) {
+        return false;
+    }
+    let Some(FieldState::Choice(choice)) = session.fields.get_mut(&field) else {
+        return false;
+    };
+    let open = !choice.popup_open;
+    // Split so the immutable `ctx.widget` borrow and the mutable state borrow
+    // do not overlap: `set_popup` needs both, and the widget is `ctx`'s.
+    let mut taken = std::mem::take(choice);
+    let moved = set_popup(ctx, widget, &mut taken, open);
+    if let Some(FieldState::Choice(choice)) = session.fields.get_mut(&field) {
+        *choice = taken;
+    }
+    moved
+}
+
+/// `Return` (or a gated combo's `Space`) toggling the dropdown.
+///
+/// The keyboard spelling of `toggle_popup_at`, without a point to test. The
+/// response is always consumed — `CPWL_ComboBox::OnChar`'s two early cases
+/// return `true` even when `SetPopup` refused — so a list with nowhere to
+/// open still swallows the key rather than letting it type a character.
+fn toggle_popup_by_key<R: Resolve>(
+    session: &mut FormSession,
+    ctx: &Context<'_, R>,
+    field: FieldId,
+    annot: AnnotId,
+) -> Response {
+    let Some(widget) = ctx.widget(annot) else {
+        return Response::consumed();
+    };
+    let Some(FieldState::Choice(choice)) = session.fields.get_mut(&field) else {
+        return Response::consumed();
+    };
+    let open = !choice.popup_open;
+    let mut taken = std::mem::take(choice);
+    let moved = set_popup(ctx, widget, &mut taken, open);
+    if let Some(FieldState::Choice(choice)) = session.fields.get_mut(&field) {
+        *choice = taken;
+    }
+    if !moved {
+        return Response::consumed();
+    }
+    let mut response = Response::consumed();
+    response.absorb(redraw(session, ctx, field, annot));
+    response
+}
+
+/// A left-down inside an open dropdown's rows.
+///
+/// **Down hovers, up selects.** `CPWL_ListBox::OnLButtonDown`
+/// (`cpwl_list_box.cpp:137-150`) runs `list_ctrl_->OnMouseDown`, which moves
+/// the list control's own selection; the *commit* — copying the row's text
+/// into the edit half and shutting the list — is
+/// `CPWL_ComboBox::NotifyLButtonUp` (`cpwl_combo_box.cpp:505-516`), reached
+/// from `CPWL_CBListBox::OnLButtonUp`. Splitting them matters because a press
+/// that drags off the list before releasing must leave the field alone.
+fn press_in_popup<R: Resolve>(
+    session: &mut FormSession,
+    ctx: &Context<'_, R>,
+    field: FieldId,
+    annot: AnnotId,
+    index: usize,
+) -> Response {
+    if let Some(FieldState::Choice(choice)) = session.fields.get_mut(&field) {
+        choice.hovered = Some(index);
+    }
+    let mut response = Response::consumed();
+    response.absorb(redraw(session, ctx, field, annot));
+    response
+}
+
+/// A left-up inside an open dropdown's rows: the row is chosen.
+///
+/// `CPWL_ComboBox::NotifyLButtonUp` (`cpwl_combo_box.cpp:505-516`) in order —
+/// `SetSelectText()`, `SelectAllText()`, `edit_->SetFocus()`,
+/// `SetPopup(false)`. The first is what makes the chosen row the field's
+/// value, and it routes through `ReplaceSelection` upstream so **every combo
+/// selection is undoable**; here `select_only` is the same state change over
+/// this crate's model. The last is why the list shuts on release rather than
+/// on press.
+fn release_in_popup<R: Resolve>(
+    session: &mut FormSession,
+    ctx: &Context<'_, R>,
+    field: FieldId,
+    annot: AnnotId,
+    index: usize,
+) -> Response {
+    let label = match session.fields.get_mut(&field) {
+        Some(FieldState::Choice(choice)) => {
+            field::choice::select_only(choice, index);
+            choice.popup_open = false;
+            choice.hovered = None;
+            choice
+                .options
+                .get(index)
+                .map(|option| option.label.clone())
+                .unwrap_or_default()
+        }
+        _ => return Response::consumed(),
+    };
+    // An editable combo shows the chosen row in its text half, which is what
+    // `SetSelectText`'s `edit_->ReplaceSelection(list_->GetText())` puts
+    // there. A gated one has no text half and reads its label from the
+    // selection instead.
+    set_combo_text(session, field, label);
+    session.dirty.insert(field);
+    let mut response = Response::consumed();
+    response.absorb(redraw(session, ctx, field, annot));
+    response
+}
+
+/// Puts a chosen row's label into an editable combo's text half.
+fn set_combo_text(session: &mut FormSession, field: FieldId, label: String) {
+    let Some(FieldState::Choice(choice)) = session.fields.get_mut(&field) else {
+        return;
+    };
+    if !choice.config.editable {
+        return;
+    }
+    choice.edit_text = label;
+    // The live control, if one was ever built by typing, is stale now. It is
+    // dropped rather than rewritten: `with_combo_edit` rebuilds it from
+    // `edit_text` on the next keystroke, which is one place the text can come
+    // from instead of two that must agree.
+    choice.edit = None;
+}
+
+/// What a host draws for one page's open dropdown, if one is open.
+///
+/// The **state-plus-geometry** half of the M14 chrome ruling (STYLE §2b): the
+/// library says where the list is and what is in it, and the host paints it
+/// on its own schedule. Nothing here is a callback and nothing is a trait —
+/// a viewer that never asks is never told, and one that asks twice gets the
+/// same answer.
+///
+/// [`None`] when nothing on the page has its dropdown open, which is the
+/// common case: only a click on a drop button, a `Return` or a `Space` on a
+/// gated combo opens one.
+#[must_use]
+pub fn popup_view<'a, R: Resolve>(
+    session: &'a FormSession,
+    ctx: &Context<'_, R>,
+) -> Option<crate::popup::PopupView<'a>> {
+    let (field, annot) = open_popup_of(session, ctx.page)?;
+    let widget = ctx.widget(annot)?;
+    let FieldState::Choice(choice) = session.fields.get(&field)? else {
+        return None;
+    };
+    let geometry = popup_geometry(ctx, widget, choice)?;
+    Some(crate::popup::PopupView {
+        annot,
+        anchor: widget.rect,
+        geometry,
+        options: &choice.options,
+        selected: choice.selected.iter().next().copied(),
+        hovered: choice.hovered,
+        top_visible: choice.top_visible,
+        edit_text: choice.config.editable.then_some(choice.edit_text.as_str()),
+    })
+}
+
+/// How far one scrollable control has scrolled, in rows.
+///
+/// The second value getter the chrome ruling asks for, and the reason it is
+/// keyed by annotation rather than carried on [`popup_view`]: a **list box**
+/// scrolls without any dropdown being open, and its scroll bar is the host's
+/// to draw for exactly the same reason the dropdown is.
+///
+/// [`None`] for an annotation that is not a choice widget, or one the session
+/// has never built state for.
+#[must_use]
+pub fn scroll_view<R: Resolve>(
+    session: &FormSession,
+    ctx: &Context<'_, R>,
+    annot: AnnotId,
+) -> Option<crate::popup::ScrollView> {
+    let widget = ctx.widget(annot)?;
+    let FieldState::Choice(choice) = session.fields.get(&widget.field)? else {
+        return None;
+    };
+    // An open dropdown scrolls in its own window, which is taller than the
+    // widget; a closed combo and a list box scroll inside the widget's box.
+    let visible = match popup_geometry(ctx, widget, choice).filter(|_| choice.popup_open) {
+        Some(geometry) => geometry.visible_rows(),
+        None => visible_rows(ctx, widget, choice),
+    };
+    Some(crate::popup::ScrollView {
+        top_visible: choice.top_visible,
+        visible_rows: visible,
+        total: choice.options.len(),
+    })
+}
+
+/// The host reporting that the user picked a row of an open dropdown.
+///
+/// The **intent** half of the chrome ruling: a host that drew the list from
+/// [`popup_view`] tells the session what was chosen, and the session does
+/// what a click on that row would have done — select it, shut the list, and
+/// hand back the widget's new appearance. Exactly `NotifyLButtonUp`'s
+/// sequence, reachable without synthesizing a click at coordinates the host
+/// would have to compute backwards from the geometry it was given.
+///
+/// An index past the end of the options is ignored, and the response is
+/// [`Response::ignored`] — a host cannot corrupt a field by miscounting.
+pub fn choose<R: Resolve>(
+    session: &mut FormSession,
+    ctx: &Context<'_, R>,
+    annot: AnnotId,
+    index: usize,
+) -> Response {
+    let Some(widget) = ctx.widget(annot) else {
+        return Response::ignored();
+    };
+    let field = widget.field;
+    let in_range = matches!(
+        session.fields.get(&field),
+        Some(FieldState::Choice(choice)) if index < choice.options.len()
+    );
+    if !in_range {
+        return Response::ignored();
+    }
+    release_in_popup(session, ctx, field, annot, index)
+}
+
+/// The host reporting that an open dropdown was dismissed without a choice.
+///
+/// `SetPopup(false)`, and nothing else: the stored selection is untouched,
+/// which is what `bug_736695_4` asserts by hovering a row, clicking away, and
+/// rendering a field that never changed.
+///
+/// [`Response::ignored`] when that annotation had no dropdown open, so a host
+/// may call it unconditionally.
+pub fn close_popup<R: Resolve>(
+    session: &mut FormSession,
+    ctx: &Context<'_, R>,
+    annot: AnnotId,
+) -> Response {
+    let Some(widget) = ctx.widget(annot) else {
+        return Response::ignored();
+    };
+    let field = widget.field;
+    let closed = match session.fields.get_mut(&field) {
+        Some(FieldState::Choice(choice)) if choice.popup_open => {
+            choice.popup_open = false;
+            choice.hovered = None;
+            true
+        }
+        _ => false,
+    };
+    if !closed {
+        return Response::ignored();
+    }
+    let mut response = Response::consumed();
+    response.absorb(redraw(session, ctx, field, annot));
+    response
 }
 
 /// The height of one list-box row: the **laid-out** line, not the font size.
@@ -1088,9 +1617,23 @@ fn take_focus<R: Resolve>(
 /// (brief §3.3 step 6), so a version that only reported `FocusChanged` would
 /// leave the caret and the live text on the page.
 pub fn kill_focus<R: Resolve>(session: &mut FormSession, ctx: &Context<'_, R>) -> Response {
+    // `CPWL_ComboBox::KillFocus` (`cpwl_combo_box.cpp:52-58`) shuts the list
+    // *before* the base class drops focus, and returns early if it could not
+    // — so a dropdown never outlives the focus that opened it. Run
+    // unconditionally, ahead of `focus::kill`, because it must happen even
+    // when the outgoing field is not the one that had a list open.
+    let closed = close_all_popups(session);
     let change = focus::kill(session);
     let Some(was) = change.from else {
-        return Response::ignored();
+        // Nothing held focus, but a list may still have been open — a host
+        // that opened one through `choose`'s sibling entry points, or a
+        // session whose focus was force-killed. Report the redraw rather than
+        // leaving a shut list drawn.
+        return if closed {
+            Response::consumed()
+        } else {
+            Response::ignored()
+        };
     };
     let mut response = Response::consumed();
     if let Some(field) = was.field() {

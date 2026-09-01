@@ -52,6 +52,27 @@
 //! use [`crate::geom::is_float_bigger`] and its sibling, so a point within
 //! `0.0001` of a section or line edge counts as *inside* it.
 //!
+//! # Every size here is the layout's, never the caller's request
+//!
+//! [`Config::font_size`] is a **request**, and `0.0` is the request for
+//! automatic sizing. [`crate::vt::layout`] resolves it — picking the largest
+//! step that fits, exactly as `CPVT_VariableText::Rearrange`
+//! (`core/fpdfdoc/cpvt_variabletext.cpp:834-846`) does — and records the
+//! answer in [`Layout::font_size`], which is the field upstream's
+//! `SetFontSize(GetAutoFontSize())` writes and every later `GetFontSize()`
+//! reads. So the size that placed the words is the layout's, and the
+//! caller's `Config` still holds the zero it asked with.
+//!
+//! Every query in this module therefore measures with [`Layout::font_size`].
+//! Measuring with the config's instead is not a rounding difference on an
+//! auto-sized field, it is **zero**: every advance collapses, so a caret
+//! lands on the leading edge of the character it should trail, every
+//! midpoint becomes the character's own origin, and a line's fallback height
+//! is nothing at all. The visible form on `password` — a field with no `/DA`
+//! at all, so the request is zero and the layout resolves 25 — was a caret
+//! at device column 189, the fifth asterisk's *left* edge, against the
+//! oracle's 199.
+//!
 //! # Right-to-left runs, where every x reverses
 //!
 //! A right-to-left run is laid out with **descending** x: its first character
@@ -226,7 +247,7 @@ pub fn place_at_point(
 
     match find_section(layout, y) {
         Found::Inside(index, section) => {
-            let mut place = place_in_section(section, config, metrics, x, y);
+            let mut place = place_in_section(section, config, metrics, layout.font_size, x, y);
             place.section = clamp_index(index);
             place
         }
@@ -276,10 +297,14 @@ fn find_section(layout: &Layout, y: f32) -> Found<'_> {
 }
 
 /// The place a point selects within one section, in layout space.
+///
+/// `font_size` is the **layout's** resolved size, not the config's request —
+/// see the module docs.
 fn place_in_section(
     section: &Section,
     config: &Config,
     metrics: &Metrics<'_>,
+    font_size: f32,
     x: f32,
     y: f32,
 ) -> Place {
@@ -296,7 +321,7 @@ fn place_in_section(
     Place::new(
         0,
         clamp_index(index),
-        word_at_x(section, line_range(line), config, metrics, x),
+        word_at_x(section, line_range(line), config, metrics, font_size, x),
     )
 }
 
@@ -369,14 +394,22 @@ fn word_at_x(
     range: std::ops::Range<usize>,
     config: &Config,
     metrics: &Metrics<'_>,
+    font_size: f32,
     x: f32,
 ) -> i32 {
     // Raw `>`, no epsilon: the boundary belongs to the character's left half,
     // so a click exactly on a midpoint lands before that character.
+    //
+    // `font_size` is the layout's, so an auto-sized field's midpoints are the
+    // real ones. Measured with the config's request instead, every advance is
+    // zero and every midpoint collapses onto the character's own origin —
+    // which makes the bisection answer by position alone and puts the caret
+    // one character early everywhere in the line.
     let past_midpoint = |index: usize| {
-        section.words.get(index).is_some_and(|word| {
-            x > word.x + word_width(word, config, metrics, config.font_size) * 0.5
-        })
+        section
+            .words
+            .get(index)
+            .is_some_and(|word| x > word.x + word_width(word, config, metrics, font_size) * 0.5)
     };
 
     if range.is_empty() {
@@ -449,7 +482,7 @@ pub fn caret_rect(
     width: f32,
 ) -> Rect {
     let (x, top) = caret_position(layout, config, metrics, place);
-    let height = line_extent(layout, config, metrics, place);
+    let height = line_extent(layout, metrics, place);
     let (left, top) = Layout::to_pdf(plate, x, top);
     let (left, top) = (left + offset.0, top + offset.1);
     geom::rect(left, top - height, left + width, top)
@@ -476,7 +509,7 @@ fn caret_position(
     let Some(word) = section.words.get(index) else {
         return (line_caret_x(section, *line), top);
     };
-    (caret_x(word, config, metrics), top)
+    (caret_x(word, config, metrics, layout.font_size), top)
 }
 
 /// The x a caret sitting **after** one character is drawn at.
@@ -488,11 +521,16 @@ fn caret_position(
 /// origin itself. Adding the advance to both is the same one-advance error
 /// everywhere it happens: every caret in a Hebrew or Arabic run lands one
 /// character to the right of the gap it names.
-fn caret_x(word: &crate::vt::Word, config: &Config, metrics: &Metrics<'_>) -> f32 {
+///
+/// The advance is measured at the **layout's** resolved `font_size`. At the
+/// config's request it would be zero on an auto-sized field, which collapses
+/// the left-to-right branch onto the right-to-left one: every caret would sit
+/// on its character's leading edge, one advance short of the gap it names.
+fn caret_x(word: &crate::vt::Word, config: &Config, metrics: &Metrics<'_>, font_size: f32) -> f32 {
     if word.is_rtl {
         word.x
     } else {
-        word.x + word_width(word, config, metrics, config.font_size)
+        word.x + word_width(word, config, metrics, font_size)
     }
 }
 
@@ -530,10 +568,15 @@ fn line_caret_x(section: &Section, line: crate::vt::Line) -> f32 {
 }
 
 /// The height of the line a place sits on.
-fn line_extent(layout: &Layout, config: &Config, metrics: &Metrics<'_>, place: Place) -> f32 {
+///
+/// The fallback — for a place naming a line the layout does not have — is one
+/// line at the **layout's** resolved size. At the config's request an
+/// auto-sized field would answer a caret of zero height, which is a caret
+/// that draws nothing.
+fn line_extent(layout: &Layout, metrics: &Metrics<'_>, place: Place) -> f32 {
     let fallback = || {
-        crate::vt::font_ascent(metrics, config.font_size)
-            - crate::vt::font_descent(metrics, config.font_size)
+        crate::vt::font_ascent(metrics, layout.font_size)
+            - crate::vt::font_descent(metrics, layout.font_size)
     };
     layout
         .sections
@@ -1443,5 +1486,195 @@ mod tests {
         )
         .x;
         assert!((header - 1.0).abs() < 1e-4, "{header}");
+    }
+
+    /// The `password` fixture's own geometry, laid out with the size it asks
+    /// for — **zero**, meaning automatic.
+    ///
+    /// `testing/resources/pixel/password.in`'s second widget is
+    /// `/Rect [100 160 200 190]` with `/MaxLen 5`, `/Q 2` and the password
+    /// flag, and the file carries no `/DA` and no `/DR` at all — so the size
+    /// requested is zero and the fallback Helvetica substitutes to Arimo
+    /// (ascent 905, descent −211, `'*'` 389/1000). The evt types `tiger` and
+    /// four more characters the limit drops.
+    fn password_field() -> (Config, Metrics<'static>, vt::Layout) {
+        fn arimo(ch: u32) -> i32 {
+            match char::from_u32(ch) {
+                Some('*') => 389,
+                Some('t') => 278,
+                Some('i') => 222,
+                Some('r') => 333,
+                _ => 556,
+            }
+        }
+        let config = Config {
+            // `/Rect` deflated by the default one-unit border.
+            plate: geom::rect(101.0, 161.0, 199.0, 189.0),
+            alignment: vt::Alignment::Right,
+            font_size: 0.0,
+            sub_word: Some('*'),
+            limit_char: 5,
+            ..Config::default()
+        };
+        let metrics = Metrics {
+            width: &arimo,
+            ascent: 905,
+            descent: -211,
+        };
+        let layout = vt::layout("tigerssss", &config, &metrics);
+        (config, metrics, layout)
+    }
+
+    /// An auto-sized field's carets are measured at the size the layout
+    /// resolved, not at the zero its config still holds.
+    ///
+    /// This is `password`'s defect, in one assertion. `vt::layout` resolves
+    /// the zero to 25 and writes it to [`vt::Layout::font_size`] — which is
+    /// what `CPVT_VariableText::Rearrange` does with
+    /// `SetFontSize(GetAutoFontSize())` — and `edit_ap` already draws with
+    /// that. Reading `config.font_size` here instead made every advance zero,
+    /// so the caret after the last of five asterisks sat on that asterisk's
+    /// **left** edge: 189.275 rather than 199.0, which is the ten device
+    /// columns the golden showed.
+    ///
+    /// The five carets are one advance apart and the last is the plate's own
+    /// right edge, because the field is right-aligned and full.
+    #[test]
+    fn an_auto_sized_fields_carets_are_measured_at_the_size_the_layout_resolved() {
+        let (config, metrics, layout) = password_field();
+        assert!(
+            (layout.font_size - 25.0).abs() < 1e-4,
+            "auto size resolved to {}",
+            layout.font_size
+        );
+        assert!(
+            config.font_size == 0.0,
+            "the config still holds the request, which is the whole point"
+        );
+        // The limit keeps five characters of the nine typed.
+        assert_eq!(end_place(&layout), Place::new(0, 0, 4));
+
+        let advance = 389.0 * 25.0 / 1000.0;
+        let first = 150.375_f32;
+        for word in -1..5 {
+            let got = point_at_place(
+                &layout,
+                config.plate,
+                &config,
+                &metrics,
+                (0.0, 0.0),
+                Place::new(0, 0, word),
+            )
+            .x;
+            #[allow(clippy::cast_precision_loss)]
+            let want = f64::from(first + advance * (word + 1) as f32);
+            assert!(
+                (got - want).abs() < 1e-3,
+                "caret after {word} is {got}, want {want}"
+            );
+        }
+    }
+
+    /// The same size, through [`caret_rect`], which is what the focused field
+    /// draws — the rectangle's x **and** its height.
+    ///
+    /// The height is the second half of the same defect: `line_extent`'s
+    /// fallback read the config too, so a place naming a line the layout does
+    /// not have would have answered a caret of no height at all.
+    #[test]
+    fn the_drawn_caret_of_an_auto_sized_field_has_the_resolved_sizes_height() {
+        let (config, metrics, layout) = password_field();
+        let rect = caret_rect(
+            &layout,
+            config.plate,
+            &config,
+            &metrics,
+            (0.0, 0.0),
+            end_place(&layout),
+            0.4,
+        );
+        // Flush with the plate's right edge: right-aligned and full.
+        assert!((rect.x0 - 199.0).abs() < 1e-3, "{rect:?}");
+        assert!((rect.x1 - rect.x0 - 0.4).abs() < 1e-4, "{rect:?}");
+        // (905 + 211) * 25 / 1000, the line's own ascent and descent.
+        assert!((rect.y1 - rect.y0 - 27.9).abs() < 1e-3, "{rect:?}");
+
+        // And a place naming a line the layout does not have falls back to
+        // one line at the same resolved size rather than to nothing.
+        let missing = caret_rect(
+            &layout,
+            config.plate,
+            &config,
+            &metrics,
+            (0.0, 0.0),
+            Place::new(0, 7, 0),
+            0.4,
+        );
+        assert!((missing.y1 - missing.y0 - 27.9).abs() < 1e-3, "{missing:?}");
+    }
+
+    /// A click into an auto-sized field lands by the midpoint rule at the
+    /// resolved size, not by position alone.
+    ///
+    /// The third face of the same defect. At a zero size every advance is
+    /// zero, so every midpoint collapses onto the character's own origin and
+    /// the bisection answers whichever end its first probe falls on — the
+    /// caret would jump to a line end instead of stepping.
+    #[test]
+    fn a_click_in_an_auto_sized_field_uses_the_resolved_midpoints() {
+        let (config, metrics, layout) = password_field();
+        let advance = 389.0 * 25.0 / 1000.0;
+        let first = f64::from(150.375_f32);
+        for index in 0..5 {
+            // A hair past the midpoint of character `index` lands after it.
+            let x = first + advance * (f64::from(index) + 0.5) + 0.01;
+            let place = place_at_point(
+                &layout,
+                config.plate,
+                &config,
+                &metrics,
+                (0.0, 0.0),
+                Point::new(x, 175.0),
+            );
+            assert_eq!(place.word, index, "click at {x} landed at {place:?}");
+        }
+        // Left of the first character's midpoint is the line header.
+        let header = place_at_point(
+            &layout,
+            config.plate,
+            &config,
+            &metrics,
+            (0.0, 0.0),
+            Point::new(first + advance * 0.5 - 0.01, 175.0),
+        );
+        assert_eq!(header.word, -1, "{header:?}");
+    }
+
+    /// A field that asks for an explicit size is untouched, which is why
+    /// every other assertion in this module still reads the same.
+    ///
+    /// The two sizes are the same number there, so the fix can only move an
+    /// auto-sized field — and an auto-sized field is exactly the one no
+    /// assertion covered.
+    #[test]
+    fn an_explicitly_sized_field_answers_the_same_as_it_always_did() {
+        let config = config();
+        let metrics = metrics();
+        let layout = vt::layout("ABC", &config, &metrics);
+        assert!((layout.font_size - config.font_size).abs() < f32::EPSILON);
+        let caret = point_at_place(
+            &layout,
+            config.plate,
+            &config,
+            &metrics,
+            (0.0, 0.0),
+            Place::new(0, 0, 0),
+        )
+        .x;
+        // 'A' is 667/1000 at twelve points, from the plate's left edge.
+        assert!(
+            (caret - (101.0 + 667.0 * 12.0 / 1000.0)).abs() < 1e-3,
+            "{caret}"
+        );
     }
 }
