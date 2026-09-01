@@ -628,6 +628,10 @@ fn move_caret(
     } else {
         edit.set_caret_index(to);
     }
+    // Upstream runs `ScrollToCaret` after every one of these, which is what
+    // lets an arrow key walk off the visible end of a long value and bring
+    // the view with it.
+    ops::scroll_to_caret(edit, config, metrics);
     true
 }
 
@@ -1275,7 +1279,7 @@ fn build_edit<R: Resolve>(
 ) -> TextEdit {
     let plate = ap::field_body::client_rect(&widget.dict, ctx.resolve);
     let vt_config = text_config(ctx, widget, plate, config);
-    with_font(ctx, widget, |font, _substitute| {
+    let mut edit = with_font(ctx, widget, |font, _substitute| {
         TextEdit::new(value, &vt_config, &font.metrics, !config.multi_line)
     })
     .unwrap_or_else(|| {
@@ -1288,7 +1292,13 @@ fn build_edit<R: Resolve>(
             descent: 0,
         };
         TextEdit::new(value, &vt_config, &metrics, !config.multi_line)
-    })
+    });
+    // `CFFL_TextField::GetCreateParam` (`cffl_textfield.cpp:54-63`) raises
+    // `kEditAutoScroll` for a text field without `DoNotScroll`, multi-line or
+    // not, and `CPWL_Edit::OnCreated` (`cpwl_edit.cpp:131`) hands it to the
+    // control. This is the one place that knows the flag.
+    edit.auto_scroll = config.auto_scroll;
+    edit
 }
 
 /// The layout configuration a text field's body is set with.
