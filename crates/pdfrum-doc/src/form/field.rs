@@ -734,6 +734,181 @@ fn merge(base: &Dict, overlay: &Dict) -> Dict {
     out
 }
 
+/// Which rows of a choice field an **interaction** treats as selected.
+///
+/// # Why this is not the appearance's answer
+///
+/// A choice field records its selection twice — `/I` as indices, `/V` as the
+/// selected options' export values — and upstream reads the pair *differently
+/// depending on who is asking*. The two readers are not reconcilable and
+/// pretending they are is how a corpus row moves in the wrong direction:
+///
+/// - **Interaction** — "is row `n` selected?", the question a click, an arrow
+///   key or an embedder's query asks — is `CPDF_FormField::IsItemSelected`
+///   (`core/fpdfdoc/cpdf_formfield.cpp:546-554`). It consults **`/I` first**,
+///   as integer indices, and falls back to `/V` only when `/I` is not usable.
+///   That is this function.
+/// - **Appearance** — what the generated `/AP` draws a band behind — is
+///   `CPDFSDK_AppStream::SetAsListBox` by way of
+///   `CPDF_FormField::GetSelectedIndex` (`:GetSelectedIndex`), which reads
+///   `GetValueOrSelectedIndicesObject` — **`/V` first**, `/I` only when there
+///   is no `/V` — and then matches each entry's *text* against the option
+///   values, so an integer index matches nothing. That is
+///   [`crate::ap::field_body::selected_indices`], and it is deliberately the
+///   other way round.
+///
+/// So `listbox_form.pdf`'s `Listbox_MultiSelectMultipleIndices` — `/I [1 3]`
+/// and no `/V` — draws **no** selection band while an embedder asking about
+/// its rows is told 1 and 3 are selected. Both are correct; they are answers
+/// to different questions.
+///
+/// # What "usable" means
+///
+/// `indices_are_usable` is the test, from `UseSelectedIndicesObject`
+/// (`cpdf_formfield.cpp:863-950`), and it is strict because its job is to
+/// catch a stale `/I` left behind by an editor that rewrote `/V`. `/I` is
+/// usable when either
+///
+/// - there is **no `/V` at all** — nothing can contradict it; or
+/// - `/I` and `/V` **agree exactly**: the same number of entries, every index
+///   in range, and the multiset of options those indices name equal to the
+///   multiset `/V` lists. A duplicate on one side must be matched by a
+///   duplicate on the other, which is why occurrences are counted rather than
+///   membership tested.
+///
+/// One disagreement anywhere discards `/I` entirely — it is not repaired
+/// entry by entry — and `/V` then decides alone, matched as text exactly as
+/// the appearance reader does.
+///
+/// `options` is the field's `/Opt` in order, as the **values** a selection is
+/// compared against: an `[export, label]` pair contributes its export, never
+/// its label.
+#[must_use]
+pub fn selected_indices_for_interaction<R: Resolve>(
+    dict: &Dict,
+    options: &[String],
+    r: &R,
+) -> Vec<usize> {
+    // `/V` and `/I` are inheritable field attributes, and a damaged
+    // inheritance chain is not this function's to report on: it answers with
+    // what it could reach.
+    let (limits, mut diags) = (Limits::default(), Diagnostics::default());
+    let value = field_attr(dict, names::V, r, &limits, &mut diags);
+    let indices = field_attr(dict, names::I, r, &limits, &mut diags);
+    if let Some(indices) = indices.as_ref()
+        && indices_are_usable(indices, value.as_ref(), options, r)
+    {
+        return listed_indices(indices, r)
+            .into_iter()
+            .filter_map(|index| usize::try_from(index).ok())
+            .filter(|index| *index < options.len())
+            .collect();
+    }
+    let Some(value) = value else {
+        return Vec::new();
+    };
+    let wanted: Vec<String> = match value.as_array() {
+        Some(array) => (0..array.len())
+            .map(|slot| {
+                array
+                    .get(slot, r)
+                    .as_deref()
+                    .map(Object::to_text)
+                    .unwrap_or_default()
+            })
+            .collect(),
+        None => vec![value.to_text()],
+    };
+    wanted
+        .into_iter()
+        .filter_map(|text| options.iter().position(|option| *option == text))
+        .collect()
+}
+
+/// `/I`'s entries as raw integers, or nothing when any entry is not a number.
+///
+/// A bare number stands for a one-entry array, which is the shape
+/// `UseSelectedIndicesObject` admits alongside the array.
+fn listed_indices<R: Resolve>(indices: &Object, r: &R) -> Vec<i64> {
+    match indices.as_array() {
+        Some(array) => (0..array.len())
+            .map(|slot| array.get(slot, r).as_deref().and_then(Object::as_int))
+            .collect::<Option<Vec<i64>>>()
+            .unwrap_or_default(),
+        None => indices.as_int().into_iter().collect(),
+    }
+}
+
+/// Whether `/I` may be believed in preference to `/V`.
+///
+/// See [`selected_indices_for_interaction`] for the rule and why it is all or
+/// nothing.
+fn indices_are_usable<R: Resolve>(
+    indices: &Object,
+    value: Option<&Object>,
+    options: &[String],
+    r: &R,
+) -> bool {
+    // No `/V` to contradict it.
+    let Some(value) = value else {
+        return true;
+    };
+    // A non-number entry anywhere fails outright: `/I` is trusted whole or
+    // not at all, and an empty answer here would be indistinguishable from a
+    // genuinely empty `/I`.
+    let listed = listed_indices(indices, r);
+    let declared = match indices.as_array() {
+        Some(array) => array.len(),
+        None => usize::from(indices.as_int().is_some()),
+    };
+    if listed.len() != declared || declared == 0 {
+        return false;
+    }
+
+    // `/V`'s texts, as counts, so a repeated value needs a repeated index.
+    let mut wanted: std::collections::BTreeMap<String, usize> = std::collections::BTreeMap::new();
+    if let Some(array) = value.as_array() {
+        if array.len() != listed.len() {
+            return false;
+        }
+        for slot in 0..array.len() {
+            // Only strings are counted — upstream ignores any other type
+            // here, which then leaves a count `/I` cannot satisfy.
+            if let Some(object) = array.get(slot, r)
+                && object.as_string().is_some()
+            {
+                *wanted.entry(object.to_text()).or_default() += 1;
+            }
+        }
+    } else {
+        // A lone string is the one-selection spelling, so it can only ever
+        // account for one index.
+        if listed.len() != 1 {
+            return false;
+        }
+        if value.as_string().is_some() {
+            *wanted.entry(value.to_text()).or_default() += 1;
+        }
+    }
+
+    for index in listed {
+        let Ok(index) = usize::try_from(index) else {
+            return false;
+        };
+        let Some(option) = options.get(index) else {
+            return false;
+        };
+        let Some(count) = wanted.get_mut(option) else {
+            return false;
+        };
+        *count -= 1;
+        if *count == 0 {
+            wanted.remove(option);
+        }
+    }
+    wanted.is_empty()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -754,6 +929,141 @@ mod tests {
 
     fn name(value: &str) -> Object {
         Object::Name(Name::from(value))
+    }
+
+    /// The four `listbox_form.pdf` shapes, as the interaction reader sees
+    /// them. Contrast `ap::field_body::selected_indices`, which answers the
+    /// appearance's question and disagrees on the first of these on purpose.
+    fn opts() -> Vec<String> {
+        ["Albania", "Belgium", "Croatia", "Denmark", "Estonia"]
+            .iter()
+            .map(|s| (*s).to_owned())
+            .collect()
+    }
+
+    fn selected(pairs: &[(&str, Object)]) -> Vec<usize> {
+        selected_indices_for_interaction(&dict(pairs), &opts(), &NoResolve)
+    }
+
+    fn strings(values: &[&str]) -> Object {
+        Object::Array(Array::of(
+            values.iter().map(|v| text(v)).collect::<Vec<_>>(),
+        ))
+    }
+
+    #[test]
+    fn indices_alone_are_believed_because_nothing_contradicts_them() {
+        // `Listbox_MultiSelectMultipleIndices`: `/I [1 3]`, no `/V`.
+        assert_eq!(
+            selected(&[(
+                "I",
+                Object::Array(Array::of([Object::Int(1), Object::Int(3)]))
+            )]),
+            vec![1, 3]
+        );
+        // A bare number is the one-entry spelling.
+        assert_eq!(selected(&[("I", Object::Int(2))]), vec![2]);
+    }
+
+    #[test]
+    fn a_value_alone_selects_every_option_it_names() {
+        // `Listbox_MultiSelectMultipleValues`, restated over these options.
+        assert_eq!(
+            selected(&[("V", strings(&["Belgium", "Denmark"]))]),
+            vec![1, 3]
+        );
+        // And a lone string is the single-selection spelling.
+        assert_eq!(selected(&[("V", text("Croatia"))]), vec![2]);
+        // A value naming no option selects nothing rather than guessing.
+        assert_eq!(selected(&[("V", text("Zambia"))]), Vec::<usize>::new());
+    }
+
+    #[test]
+    fn consistent_indices_win_over_the_values_they_agree_with() {
+        // Same count, in range, naming exactly what `/V` lists.
+        assert_eq!(
+            selected(&[
+                ("V", strings(&["Belgium", "Denmark"])),
+                (
+                    "I",
+                    Object::Array(Array::of([Object::Int(1), Object::Int(3)]))
+                ),
+            ]),
+            vec![1, 3]
+        );
+        // Occurrences are counted, not sequences compared, so the two may be
+        // listed in different orders — and `/I`'s order is what comes back.
+        assert_eq!(
+            selected(&[
+                ("V", strings(&["Denmark", "Belgium"])),
+                (
+                    "I",
+                    Object::Array(Array::of([Object::Int(3), Object::Int(1)]))
+                ),
+            ]),
+            vec![3, 1]
+        );
+    }
+
+    #[test]
+    fn inconsistent_indices_are_discarded_whole_and_the_values_decide() {
+        // `Listbox_MultiSelectMultipleMismatch`'s shape: three indices
+        // against two values, so the counts differ and `/I` is rejected
+        // before any index is looked up.
+        assert_eq!(
+            selected(&[
+                ("V", strings(&["Albania", "Croatia"])),
+                (
+                    "I",
+                    Object::Array(Array::of([Object::Int(1), Object::Int(3), Object::Int(4),])),
+                ),
+            ]),
+            vec![0, 2]
+        );
+        // Equal counts, but an index naming an option `/V` does not list.
+        assert_eq!(
+            selected(&[
+                ("V", strings(&["Albania"])),
+                ("I", Object::Array(Array::of([Object::Int(1)]))),
+            ]),
+            vec![0]
+        );
+        // An index out of range poisons the whole array rather than being
+        // dropped on its own.
+        assert_eq!(
+            selected(&[
+                ("V", strings(&["Albania", "Croatia"])),
+                (
+                    "I",
+                    Object::Array(Array::of([Object::Int(0), Object::Int(9)]))
+                ),
+            ]),
+            vec![0, 2]
+        );
+        // Two indices naming one option cannot satisfy two distinct values.
+        assert_eq!(
+            selected(&[
+                ("V", strings(&["Albania", "Belgium"])),
+                (
+                    "I",
+                    Object::Array(Array::of([Object::Int(0), Object::Int(0)]))
+                ),
+            ]),
+            vec![0, 1]
+        );
+        // A non-number entry fails the whole array too.
+        assert_eq!(
+            selected(&[
+                ("V", strings(&["Albania"])),
+                ("I", Object::Array(Array::of([text("0")]))),
+            ]),
+            vec![0]
+        );
+    }
+
+    #[test]
+    fn a_field_declaring_neither_selects_nothing() {
+        assert_eq!(selected(&[]), Vec::<usize>::new());
     }
 
     fn load(catalog: &Dict) -> Option<Form> {
