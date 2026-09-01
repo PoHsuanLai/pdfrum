@@ -176,6 +176,7 @@ mod document;
 pub mod edit;
 mod error;
 mod form;
+mod form_session;
 mod outline;
 mod page;
 mod render;
@@ -187,6 +188,10 @@ pub use document::{Attachment, Document, Metadata, OpenOptions};
 pub use edit::{ImageBuilder, PageEdit, PathBuilder, TextBuilder};
 pub use error::{Error, Result};
 pub use form::{Field, FieldFlags, FieldKind, Form};
+pub use form_session::{
+    AppearanceUpdate, EventModifiers, EventResponse, FormSession, MouseButton, UpdateKind,
+    VirtualKey,
+};
 pub use outline::{Bookmark, Outline};
 pub use page::{Page, Rotation};
 pub use render::{Backend, ColorMode, ColorScheme, Pixmap, RenderOptions, TextAa};

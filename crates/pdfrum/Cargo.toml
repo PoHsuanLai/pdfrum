@@ -25,6 +25,7 @@ pdfrum-raster-tinyskia.workspace = true
 pdfrum-raster-exact.workspace = true
 pdfrum-text.workspace = true
 pdfrum-doc.workspace = true
+pdfrum-form.workspace = true
 pdfrum-edit.workspace = true
 kurbo.workspace = true
 peniko.workspace = true
