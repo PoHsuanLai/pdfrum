@@ -289,9 +289,16 @@ fn band(annots: &[Focusable], axis: Axis) -> FocusRing {
 
 /// Picks the next band's seed, or `None` when nothing qualifies.
 ///
-/// The scan runs **downward** with a strict comparison, so a tie resolves to
-/// the lowest index — which after the primary sort means the leftmost of the
-/// tied annotations for a row pass.
+/// The scan runs **downward** with a strict comparison, so a tie never
+/// displaces the running best — and the running best when a tie is met was
+/// set by a *higher* index. So the winner among ties is the **highest** index,
+/// which after the left-ascending sort is the **rightmost** of the tied
+/// annotations for a row pass.
+///
+/// The design brief's §1.15.2 says "lowest index, i.e. leftmost" here and is
+/// wrong; `docs/status/M14.md`'s seed rule 1 is the authority, and
+/// `row_order_seeds_each_band_with_the_rightmost_of_the_topmost` is the test
+/// that would fail if this were changed to match the brief.
 fn seed_index(remaining: &[Focusable], axis: Axis) -> Option<usize> {
     match axis {
         Axis::Row => {

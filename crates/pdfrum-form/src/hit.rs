@@ -66,7 +66,8 @@ pub enum LayoutBand {
 pub struct Candidate {
     /// Which annotation, by its raw `/Annots` index.
     pub id: AnnotId,
-    /// Its rectangle, normalized.
+    /// Its rectangle, as the file wrote it. Need not be normalized:
+    /// [`contains`] normalizes before comparing.
     pub rect: Rect,
     /// Which band it sorts into.
     pub band: LayoutBand,
@@ -144,10 +145,17 @@ impl Permissions {
 
 /// Whether a point lies inside a rectangle.
 ///
-/// Inclusive on every edge, which is what the oracle's containment does, and
-/// what makes a click exactly on a widget's boundary land in it.
+/// Inclusive on every edge, which is what makes a click exactly on a widget's
+/// boundary land in it.
+///
+/// **Normalizes first**, so a rectangle a file wrote inside out is still
+/// hit-testable — which is what the oracle's own containment does, by
+/// copying and normalizing before it compares. Leaving this as a
+/// precondition on the caller would make an inverted `/Rect` silently
+/// unclickable, and real files contain them.
 #[must_use]
 pub fn contains(rect: Rect, x: f32, y: f32) -> bool {
+    let rect = crate::geom::normalize(rect);
     x >= rect.left && x <= rect.right && y >= rect.bottom && y <= rect.top
 }
 
@@ -305,6 +313,27 @@ mod tests {
 
     fn box_at(left: f32, bottom: f32) -> Rect {
         Rect::new(left, bottom, left + 100.0, bottom + 50.0)
+    }
+
+    /// A file may write a rectangle inside out, and the widget is still
+    /// clickable — which is what the oracle does and what this crate would
+    /// otherwise get silently wrong, since every comparison fails when the
+    /// edges are swapped.
+    #[test]
+    fn an_inside_out_rectangle_is_still_hit_testable() {
+        // The shape a real corpus field has: top written below bottom.
+        let inverted = Rect::new(100.0, 100.0, 200.0, -130.0);
+        assert!(contains(inverted, 150.0, 0.0));
+        assert!(contains(inverted, 150.0, -100.0));
+        assert!(!contains(inverted, 150.0, 200.0));
+
+        let mut candidate = widget(0, inverted);
+        candidate.rect = inverted;
+        assert_eq!(
+            widget_at_point(&[candidate], None, Permissions::ALL, 150.0, 0.0),
+            Some(AnnotId::new(0, 0)),
+            "an inverted rect must not make a widget unclickable"
+        );
     }
 
     #[test]

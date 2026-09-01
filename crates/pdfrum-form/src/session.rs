@@ -210,15 +210,13 @@ impl FormSession {
         self.fields.get_mut(&field)
     }
 
-    /// Whether a shortcut's modifiers match this session's accelerator
-    /// exactly, ignoring shift.
+    /// Whether these modifiers make a gesture a shortcut in this session.
     ///
-    /// "Exactly" is the point: the assertions check that the *other*
-    /// platform's modifier is rejected, so a subset test would pass tests
-    /// that should fail.
+    /// One predicate, shared with the key router rather than restated here:
+    /// two spellings of the same question drift, and the oracle has only one.
     #[must_use]
     pub fn is_accelerator(&self, modifiers: Modifiers) -> bool {
-        modifiers.without(Modifiers::SHIFT) == self.config.accelerator
+        crate::field::text::is_shortcut(modifiers, self.config.accelerator)
     }
 }
 
@@ -272,7 +270,10 @@ mod tests {
         assert!(session.is_accelerator(Modifiers::CONTROL | Modifiers::SHIFT));
         assert!(!session.is_accelerator(Modifiers::META));
         assert!(!session.is_accelerator(Modifiers::NONE));
+        // Alt disqualifies; an extra modifier does not, which is the
+        // oracle's subset answer.
         assert!(!session.is_accelerator(Modifiers::CONTROL | Modifiers::ALT));
+        assert!(session.is_accelerator(Modifiers::CONTROL | Modifiers::META));
 
         let apple = FormSession::with_config(SessionConfig::apple());
         assert!(apple.is_accelerator(Modifiers::META));
