@@ -165,6 +165,51 @@ pub trait Cascade {
     }
 }
 
+impl Keystroke {
+    /// The payload a field offers its keystroke hook, read off a live edit.
+    ///
+    /// The four fields are exactly what `CFFL_TextField::GetActionData`
+    /// gathers: the text being inserted, the field's value *before* the
+    /// change, and the selection the change replaces — which is a caret's
+    /// position twice over when nothing is selected.
+    #[must_use]
+    pub fn of(edit: &crate::edit::TextEdit, change: impl Into<String>) -> Keystroke {
+        let (start, end) = edit.selection_indices();
+        Keystroke {
+            change: change.into(),
+            value: edit.text.clone(),
+            selection_start: u32::try_from(start).unwrap_or(u32::MAX),
+            selection_end: u32::try_from(end).unwrap_or(u32::MAX),
+        }
+    }
+
+    /// The value this keystroke produces: its selection replaced by its
+    /// change.
+    ///
+    /// A hook that rewrote `change` — or moved the selection — is answered by
+    /// applying what it returned rather than what was offered, which is the
+    /// whole point of handing the payload back. Indices past the text clamp
+    /// to its end rather than panicking, because a script may set them.
+    #[must_use]
+    pub fn applied(&self) -> String {
+        let chars: Vec<char> = self.value.chars().collect();
+        let len = chars.len();
+        let start = usize::try_from(self.selection_start)
+            .unwrap_or(len)
+            .min(len);
+        let end = usize::try_from(self.selection_end).unwrap_or(len).min(len);
+        let (lo, hi) = if start <= end {
+            (start, end)
+        } else {
+            (end, start)
+        };
+        let mut out: String = chars.get(..lo).unwrap_or_default().iter().collect();
+        out.push_str(&self.change);
+        out.extend(chars.get(hi..).unwrap_or_default().iter());
+        out
+    }
+}
+
 /// The script-free cascade, and this crate's only implementation.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct NoScripts;
