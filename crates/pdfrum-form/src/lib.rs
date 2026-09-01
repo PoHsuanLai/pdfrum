@@ -26,6 +26,7 @@
 #![warn(clippy::indexing_slicing)]
 
 pub mod cascade;
+pub mod commit;
 pub mod edit;
 pub mod error;
 pub mod event;
@@ -36,6 +37,7 @@ pub mod session;
 pub mod tab;
 
 pub use cascade::{Cascade, FieldRef, FieldWrites, Keystroke, KeystrokeOutcome, NoScripts};
+pub use commit::CommitOutcome;
 pub use edit::{Place, Range, Selection, UndoItem, UndoStack};
 pub use error::Error;
 pub use event::{Button, Event, Key, Modifiers, Point};
