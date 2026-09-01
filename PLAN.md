@@ -1,6 +1,6 @@
 # PDFium → Rust Rewrite — Master Plan
 
-**Status:** Phase 2: M9-M12 ALL MET (2026-08-30); **M12c (GPU backend) MET 2026-08-31**. M12 scorecard: warm render geomean 0.97x oracle (FASTER; image 0.24x, vector 0.90x, shading 0.95x; forms 3.35x is the named residue), rayon 3.09x@4/6.09x@16, RSS 1.20x, conformance byte-identical, ratchet green over 440 entries. Per-crate benches + bench-quick landed. M12c: GPU vello backend landed isolated (zero Tier-C interior differences on 44/44; 4.8x on the heaviest vector page, 2.64x slower overall on rasterization; shading target missed and named) — but its exemption cannot yet be spent, because vello 0.10 pins wgpu 29 while egui is on 30 and iced on 27, so no released frontend can inject a device. M13 (release) NOT STARTED — loop paused by user.
+**Status:** Phase 2: M9-M12 ALL MET (2026-08-30); **M12c (GPU backend) MET 2026-08-31**; **M12b MET 2026-09-01 with two targets missed and named** (docs/status/M12b.md). M12 scorecard: warm render geomean 0.97x oracle (FASTER; image 0.24x, vector 0.90x, shading 0.95x; forms 3.35x is the named residue), rayon 3.09x@4/6.09x@16, RSS 1.20x, conformance byte-identical, ratchet green over 440 entries. Per-crate benches + bench-quick landed. M12b: three of its four items had their premise corrected by measurement — P1's scaled-decode diagnosis was wrong on three of its four cited documents and its target is MISSED at -33.4% against >=40%; P2 closed the arena question AGAINST bumpalo (+265%/+121%/+97% slower than a tuned no-dep baseline) and produced the profile M12 asked for (colour conversion <=7.2%, allocation ~0, interpretation 60-90% of the engine half); P3 was retargeted mid-milestone and delivered -42.6% on the engine half of vector_paths_1751 and -27.9% on the whole render, agreed by three independent rasterizer backends. Conformance byte-identical after every commit. Four near-false findings were caught rather than published (M12b.md §7). The bench ratchet re-baseline is an UNPAID DEBT, deliberately: warm is 132 entries / 32 improved / ZERO regressed, every regression is in cold, and five blocked with no pre-argued case. forms warm was never re-measured and stands at M12's 3.35x. M12c: GPU vello backend landed isolated (zero Tier-C interior differences on 44/44; 4.8x on the heaviest vector page, 2.64x slower overall on rasterization; shading target missed and named) — but its exemption cannot yet be spent, because vello 0.10 pins wgpu 29 while egui is on 30 and iced on 27, so no released frontend can inject a device. M13 (release) NOT STARTED — loop paused by user; it inherits the ratchet debt, an oracle side-by-side, and shading/patch.rs as the largest unattributed engine cost.
 **Oracle:** `/mnt/data2/pdfium/pdfium-c++` (read-only C++ PDFium checkout @ `6f2272e`)
 **Workspace:** `/mnt/data2/pdfium/pdfrum` (this repository)
 
@@ -392,7 +392,25 @@ Both lessons are written down where the next person will meet them.
   M12 made *repeated* image work free (§9.1's cache) and left *single* image
   work exactly where it was (§10.3).
 
-## M12b — Second performance pass: resolution-aware decode, the walk, and the arena question  *(after M12; before release)*
+## M12b — Second performance pass: resolution-aware decode, the walk, and the arena question  *(after M12; before release)*  — **MET 2026-09-01, with two targets missed and named**
+
+**Milestone record: docs/status/M12b.md** (§9 is the scorecard, §10 what is owed
+to M13). All four items are done. **Three of the four had their premise
+corrected by measurement**, and the corrections are the milestone's real
+output: P1's scaled-decode diagnosis was wrong on three of its four cited
+documents, P2 closed the arena question *against* `bumpalo`, and P3 was
+retargeted mid-milestone after P1 and P2 jointly retired its original premise —
+then delivered the largest result, **−42.6%** on the engine half of
+`vector_paths_1751` and **−27.9%** on the whole render, confirmed on three
+independent rasterizer backends. Conformance was **byte-identical after every
+commit**. **Missed and recorded as missed:** the `image` class at −33.4%
+against ≥40%, and the ratchet re-baseline, which is an unpaid debt rather than a
+decision. **Superseded and never measured:** the `forms` warm target — no item
+in this milestone ran an oracle side-by-side, so `forms` stands where M12 left
+it at 3.35x. The measurement-integrity thread is the milestone's character:
+**four near-false findings were caught rather than published** (M12b.md §7),
+including a reproducible +5% regression that survived a bisection and did not
+exist.
 
 M12 closed the warm number (0.97x geomean) and named its own residue. This
 milestone spends that residue list, in the order the *evidence* ranks it — not
@@ -679,11 +697,44 @@ changing the cold convention; it is documented and ratcheted deliberately.
   both, 2026-08-31**). Every ratchet entry that moves gets re-baselined in the
   same commit that moves it.
 
+  **Scored 2026-09-01** (docs/status/M12b.md §9 is the scorecard): `image` cold
+  geomean **MISSED at −33.4%** against ≥40%, though the fallback clause
+  (≥20% if the JPEG half lands only as option (b), which is what happened) is
+  met and the JPX half is proven as plumbing rather than as speed. `forms` warm
+  below 2.5x is **SUPERSEDED and not measured** — P3 was retargeted away from it
+  and no item ran an oracle side-by-side, so `forms` stands at M12's 3.35x and
+  is the largest single item handed to M13. Warm geomean no worse than 0.97x is
+  **met as the no-regression gate it exists to enforce** (132 warm entries, zero
+  regressed) but **not re-measured against the oracle**, and is stated as an
+  inference rather than a measurement. Conformance **met and stronger**:
+  byte-identical, not merely regression-free. `bumpalo` **met**. `memchr`
+  **met — untouched**, no large lexing input was produced and none was
+  synthesized. The re-baseline clause is **missed and owed** (see Exit).
+
 - **Exit:** `docs/status/M12b.md` written in M12.md's register — hypothesis, A/B,
   verdict, *including the non-results* — plus DEPS.md rows updated for
   `bumpalo` (and `memchr` if its status changed), SPEC.md carrying the
   decode-target contract via `[spec]`, PLAN.md marked, and the bench baseline
   re-committed. Withdrawn claims are recorded, never deleted.
+
+  **Met 2026-09-01, with one clause outstanding and named.** `docs/status/M12b.md`
+  is written as the milestone record above the four item docs — §7 collects the
+  four near-false findings with their mechanisms, §9 scores every target
+  met/missed/superseded, §10 lists what is owed. DEPS.md's `bumpalo` row is
+  `NOT ADMITTED` with the A/B and the profile, `memchr` is unchanged (it needs an
+  input, not a bar), and `wgpu`/`vello` carry M12c's scoped exemption with the CI
+  check that bounds it. SPEC.md §7 carries the decode-target contract via
+  `[spec]` (P1). **The bench baseline is NOT re-committed**, and that clause is
+  the milestone's declared debt: `scripts/ratchet-decide.py` returns exit 2 over
+  the committed run at `docs/status/data/M12b-P3-bench.txt` because five entries
+  regressed with no case argued in advance, and building a case after an entry
+  blocks is the drift rule R1 exists to prevent. Every regression in the
+  milestone is in `render-cold`, which rebuilds the page graph per iteration;
+  the **warm family — the convention M12's exit target is judged on — is 132
+  entries, 32 improved, ZERO regressed.** A ratchet that declines to write a
+  file is not a verdict on the engineering. Verified for the exit rather than
+  assumed: `scripts/ci.sh` green, `cargo nextest run` 3049/3049, and the
+  conformance scoreboard per-file identical to the committed one.
 
 ## M12c — GPU backend: `vello` on `wgpu`  *(parallel with M12b; independent crate)*
 
