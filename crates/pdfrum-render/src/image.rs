@@ -9,6 +9,8 @@
 //! `bNoSmoothing` wins over `/Interpolate`, and an image above 60 million
 //! bytes forces bilinear on unless halftoning was asked for.
 
+use std::borrow::Cow;
+
 use kurbo::Affine;
 use pdfrum_page::{BlendMode, ColorSpace, ImageData, Pixels};
 
@@ -391,8 +393,14 @@ pub fn is_coregistered(mask: &pdfrum_page::ImageMask, image: &ImageData) -> bool
 /// [`reduced_mask_pixmap`] reduce in one channel and expand once, at the
 /// destination size.
 #[must_use]
-pub fn separate_mask(mask: &pdfrum_page::ImageMask) -> Option<(ImageData, Vec<u8>)> {
-    let pdfrum_page::ImageMask::Alpha { width, height, .. } = mask else {
+pub fn separate_mask(mask: &pdfrum_page::ImageMask) -> Option<(ImageData, Cow<'_, [u8]>)> {
+    let pdfrum_page::ImageMask::Alpha {
+        width,
+        height,
+        alpha,
+        stencil,
+    } = mask
+    else {
         return None;
     };
     let (w, h) = (*width, *height);
@@ -400,12 +408,24 @@ pub fn separate_mask(mask: &pdfrum_page::ImageMask) -> Option<(ImageData, Vec<u8
         return None;
     }
     let len = (w as usize).checked_mul(h as usize)?;
-    let mut plane = Vec::with_capacity(len);
-    for y in 0..h {
-        for x in 0..w {
-            plane.push(mask.alpha_at(x, y));
+    // The mask already *is* a coverage plane: `ImageMask::Alpha` holds one
+    // byte per sample, and `alpha_at` differs from reading it only by the
+    // stencil inversion and the out-of-range answer. When neither applies —
+    // no inversion, and the buffer is exactly the size the dimensions name —
+    // the plane is the buffer, and copying it is copying it for nothing.
+    // `image_en_fqa` takes this arm on all 301 of its draws and it is 29.8
+    // million bytes a render.
+    let plane = if !*stencil && alpha.len() == len {
+        Cow::Borrowed(&**alpha)
+    } else {
+        let mut plane = Vec::with_capacity(len);
+        for y in 0..h {
+            for x in 0..w {
+                plane.push(mask.alpha_at(x, y));
+            }
         }
-    }
+        Cow::Owned(plane)
+    };
     // The descriptor the resample selection reads: the mask's own size is
     // what it is scaled from, and `/Interpolate` is not inherited — the C++
     // hands `CalculateDrawImage` the *base's* resample options, and the
@@ -807,6 +827,41 @@ mod tests {
             Some([255; 4]),
             "a clear stencil bit is opaque"
         );
+    }
+
+    /// The borrow arm and the copy arm must agree byte for byte. They differ
+    /// only where `alpha_at` does — the stencil inversion, and a buffer whose
+    /// length disagrees with the dimensions — so those are what this walks.
+    #[test]
+    fn the_borrowed_mask_plane_is_the_walked_one() {
+        let walked = |mask: &ImageMask, w: u32, h: u32| -> Vec<u8> {
+            (0..h)
+                .flat_map(|y| (0..w).map(move |x| (x, y)))
+                .map(|(x, y)| mask.alpha_at(x, y))
+                .collect()
+        };
+        for (w, h, len, stencil) in [
+            (4_u32, 3_u32, 12_usize, false),
+            (4, 3, 12, true),
+            (4, 3, 7, false),
+            (4, 3, 20, false),
+            (1, 1, 1, false),
+        ] {
+            let mask = ImageMask::Alpha {
+                width: w,
+                height: h,
+                alpha: (0..len)
+                    .map(|i| u8::try_from(i * 41 % 256).unwrap_or(0))
+                    .collect(),
+                stencil,
+            };
+            let (_, plane) = separate_mask(&mask).expect("an alpha mask yields a plane");
+            assert_eq!(
+                &plane[..],
+                &walked(&mask, w, h)[..],
+                "{w}x{h}, {len} bytes, stencil {stencil}"
+            );
+        }
     }
 
     /// The descriptor `separate_mask` returns is read for its *shape* — the
