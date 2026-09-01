@@ -317,12 +317,16 @@ fn walk_pages(
         // *after* the load guard above and before every dump below.
         //
         // The updates are collected rather than dropped so a renderer can be
-        // handed the post-event state; see `render_updates` for what the
-        // facade currently gives it, and `docs/status/M14.md` for what it
-        // does not.
-        let updates = match session.as_deref_mut() {
-            Some(session) => dispatch::replay_page(session, index, script, streams.err),
-            None => Vec::new(),
+        // handed the post-event state, and the focus alongside them: a widget
+        // the form filler is editing must not be given the form-field
+        // highlight, which is a fact about the *session* rather than about
+        // any one appearance.
+        let (updates, focus) = match session.as_deref_mut() {
+            Some(session) => {
+                let updates = dispatch::replay_page(session, index, script, streams.err);
+                (updates, session.focus_for_page(index))
+            }
+            None => (Vec::new(), None),
         };
         // The annotation walk happens when the page is first opened, before
         // anything is dumped for it.
@@ -340,6 +344,7 @@ fn walk_pages(
                 input: Path::new(name),
                 index,
                 updates: &updates,
+                focus,
             },
             options,
             &catalog,
@@ -431,9 +436,11 @@ struct Output<'a> {
     input: &'a Path,
     index: u32,
     /// The appearance updates this page's event replay produced — the tool's
-    /// `FPDF_FFLDraw` input. Empty for every run without `--send-events`, and
-    /// (today) for every run with it, because dispatch is inert.
+    /// `FPDF_FFLDraw` input. Empty for every run without `--send-events`.
     updates: &'a [pdfrum::AppearanceUpdate],
+    /// Which annotation on this page holds focus, if one does. Decides which
+    /// widget is *not* tinted, which no appearance can say for itself.
+    focus: Option<pdfrum_doc::ap::Focus>,
 }
 
 /// The formats that write a file beside the input rather than to stdout.
@@ -462,6 +469,7 @@ fn write_page_files<R: Resolve>(
         input,
         index,
         updates,
+        focus,
     } = where_;
     match options.format {
         OutputFormat::Annot => {
@@ -492,6 +500,7 @@ fn write_page_files<R: Resolve>(
                 backend,
                 ctx,
                 updates,
+                focus,
             ) else {
                 return String::new();
             };

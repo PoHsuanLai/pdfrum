@@ -134,18 +134,39 @@ impl Backend {
 /// the difference is already in the stream. An update that reverts to the
 /// file's own appearance contributes nothing, which is exactly right —
 /// absence from the overlay *is* "use what the file declares".
-fn session_overlay(updates: &[pdfrum::AppearanceUpdate]) -> Option<pdfrum_doc::AnnotOverlay> {
+fn session_overlay(
+    updates: &[pdfrum::AppearanceUpdate],
+    focus: Option<pdfrum_doc::ap::Focus>,
+) -> Option<pdfrum_doc::AnnotOverlay> {
     let highest = updates
         .iter()
         .filter(|update| update.kind.appearance().is_some())
         .map(|update| update.annot.index as usize)
-        .max()?;
+        .max();
+    // Focus alone is reason enough to supply an overlay, even with no
+    // appearance in it: "this widget is not tinted" is an instruction the
+    // annotation pass cannot reach any other way, and a focused field whose
+    // value never changed produces no appearance to carry it.
+    let (highest, focus) = match (highest, focus) {
+        (None, None) => return None,
+        (highest, focus) => (
+            highest
+                .into_iter()
+                .chain(focus.map(|focus| focus.annot))
+                .max()
+                .unwrap_or(0),
+            focus,
+        ),
+    };
 
     let mut overlay = pdfrum_doc::AnnotOverlay::with_capacity(highest + 1);
     for update in updates {
         if let Some(appearance) = update.kind.appearance() {
             overlay.set(update.annot.index as usize, appearance.clone());
         }
+    }
+    if let Some(focus) = focus {
+        overlay.set_focus(focus);
     }
     Some(overlay)
 }
@@ -187,6 +208,12 @@ fn session_overlay(updates: &[pdfrum::AppearanceUpdate]) -> Option<pdfrum_doc::A
 /// working, and the debug assertion below is what will fail loudly — in tests
 /// and in the debug binary — on the first run where that stops being true.
 #[must_use]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the page, its catalog, the resolver, the scale, the backend, \
+              the build cache and the session's two outputs are eight \
+              independent inputs; bundling them would only move the list"
+)]
 pub fn render<R: Resolve>(
     page: &PageDict,
     catalog: &pdfrum_object::Dict,
@@ -195,6 +222,7 @@ pub fn render<R: Resolve>(
     backend: Backend,
     ctx: &mut BuildContext,
     updates: &[pdfrum::AppearanceUpdate],
+    focus: Option<pdfrum_doc::ap::Focus>,
 ) -> Option<Rendered> {
     let limits = Limits::default();
     let mut build_diags = Diagnostics::default();
@@ -219,7 +247,7 @@ pub fn render<R: Resolve>(
     // reads the content stream's text and `--annot` describes the
     // annotations rather than drawing them, and both would double-count an
     // appearance the page graph had already absorbed.
-    let supplied = session_overlay(updates);
+    let supplied = session_overlay(updates, focus);
     pdfrum_doc::annot_render::overlay_with(
         &mut built,
         &page.dict,
