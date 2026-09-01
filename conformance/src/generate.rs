@@ -33,9 +33,17 @@ const INPUT_NAME: &str = "input.pdf";
 /// `.pdf` → `.evt` replacement (`pdfium_test.cc:2154-2156`) finds it.
 const INPUT_EVT: &str = "input.evt";
 
-/// Suffix that keeps a `--send-events` PNG from colliding with the plain
-/// render of the same page (`input.pdf.0.png` vs `input.pdf.0.events.png`).
-pub const EVENTS_PNG_SUFFIX: &str = ".events.png";
+/// Marks a `--send-events` PNG so it cannot collide with the plain render of
+/// the same page, and carries the script digest so two fixtures that expand to
+/// the same PDF but drive it with different `.evt` scripts do not collide with
+/// each other: `input.pdf.0.png` vs `input.pdf.0.events-1f4a09c3.png`.
+///
+/// The digest is required because the golden key is `sha256(pdf_bytes)` alone
+/// (`goldens::key_for`): `bug_736695_2/3/4`, the four `form_textfield_*`
+/// fixtures and `scrollable_widgets1/2` each expand to byte-identical PDFs and
+/// differ only in their script, so a script-independent name would let
+/// whichever ran first define the golden for all of them.
+pub const EVENTS_PNG_INFIX: &str = ".events-";
 
 /// What happened to one corpus entry.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -185,7 +193,12 @@ fn generate_inner(
         }
     }
 
-    let (event_artifacts, event_md5) = harvest_send_events(entry, oracle, scratch, &input)?;
+    let evt_key = match entry.sibling_evt() {
+        Some(script) => evt_digest(&std::fs::read(script)?),
+        None => String::new(),
+    };
+    let (event_artifacts, event_md5) =
+        harvest_send_events(entry, oracle, scratch, &input, &evt_key)?;
     artifacts.extend(event_artifacts);
     md5.extend(event_md5);
 
@@ -232,23 +245,52 @@ pub fn harvest_for_run(input: &Path, pass: Pass) -> Result<Vec<(String, Vec<u8>)
 }
 
 /// Whether a stored artifact is a `--send-events` PNG rather than a plain
-/// render of the same page.
+/// render of the same page, whichever script produced it.
+///
+/// The plain-render walk uses this to exclude every event-driven artifact in
+/// a shared golden directory; the event walk needs the narrower
+/// [`is_events_png_for`], which also matches the script.
 #[must_use]
 pub fn is_events_png(name: &str) -> bool {
-    has_suffix(name, EVENTS_PNG_SUFFIX)
+    events_digest_of(name).is_some()
 }
 
-/// The distinct name a plain render PNG is stored under after `--send-events`.
-///
-/// `input.pdf.0.png` → `input.pdf.0.events.png`. Already-renamed names pass
-/// through so a second rename cannot collide with itself.
+/// The script digest an event-driven PNG name carries, if it is one.
 #[must_use]
-pub fn events_png_name(render_name: &str) -> Option<String> {
+pub fn events_digest_of(name: &str) -> Option<&str> {
+    let stem = name.strip_suffix(".png")?;
+    let (_, digest) = stem.rsplit_once(EVENTS_PNG_INFIX)?;
+    (!digest.is_empty() && digest.bytes().all(|b| b.is_ascii_hexdigit())).then_some(digest)
+}
+
+/// Whether a stored artifact is the `--send-events` PNG for *this* script.
+#[must_use]
+pub fn is_events_png_for(name: &str, digest: &str) -> bool {
+    events_digest_of(name) == Some(digest)
+}
+
+/// The distinct name a plain render PNG is stored under after `--send-events`
+/// with the script whose bytes hash to `digest`.
+///
+/// `input.pdf.0.png` → `input.pdf.0.events-1f4a09c3.png`. A name already
+/// carrying this script's digest passes through, so a second rename cannot
+/// collide with itself; a name carrying a *different* script's digest is not
+/// a plain render and yields `None`.
+#[must_use]
+pub fn events_png_name(render_name: &str, digest: &str) -> Option<String> {
     let stem = render_name.strip_suffix(".png")?;
-    if stem.ends_with(".events") {
-        return Some(render_name.to_owned());
+    match events_digest_of(render_name) {
+        Some(found) if found == digest => Some(render_name.to_owned()),
+        Some(_) => None,
+        None => Some(format!("{stem}{EVENTS_PNG_INFIX}{digest}.png")),
     }
-    Some(format!("{stem}.events.png"))
+}
+
+/// The first 8 hex digits of the script's SHA-256, the disambiguator in an
+/// event-driven artifact name.
+#[must_use]
+pub fn evt_digest(script: &[u8]) -> String {
+    crate::goldens::key_for(script)[..8].to_owned()
 }
 
 /// Copies the source sibling `.evt` to `input.evt` next to the scratch PDF.
@@ -272,16 +314,23 @@ fn ensure_event_goldens(
     input: &Path,
     key: &str,
 ) -> Result<usize> {
-    if entry.sibling_evt().is_none() {
+    let Some(script) = entry.sibling_evt() else {
         return Ok(0);
-    }
+    };
     let Ok(mut manifest) = store.manifest(key) else {
         return Ok(0);
     };
-    if manifest.artifacts.iter().any(|name| is_events_png(name)) {
+    let digest = evt_digest(&std::fs::read(&script)?);
+    // Only this script's artifact short-circuits: a sibling fixture with the
+    // same PDF bytes and a different script stores its own PNG here.
+    if manifest
+        .artifacts
+        .iter()
+        .any(|name| is_events_png_for(name, &digest))
+    {
         return Ok(0);
     }
-    let (event_artifacts, event_md5) = harvest_send_events(entry, oracle, scratch, input)?;
+    let (event_artifacts, event_md5) = harvest_send_events(entry, oracle, scratch, input, &digest)?;
     if event_artifacts.is_empty() {
         return Ok(0);
     }
@@ -311,6 +360,7 @@ fn harvest_send_events(
     oracle: &OraclePaths,
     scratch: &Path,
     input: &Path,
+    digest: &str,
 ) -> Result<(Vec<Harvested>, Vec<Md5Line>)> {
     if entry.sibling_evt().is_none() {
         return Ok((Vec::new(), Vec::new()));
@@ -319,12 +369,12 @@ fn harvest_send_events(
     let harvested = harvest(scratch, Pass::Render)?;
     let artifacts: Vec<(String, Vec<u8>)> = harvested
         .into_iter()
-        .filter_map(|(name, bytes)| events_png_name(&name).map(|renamed| (renamed, bytes)))
+        .filter_map(|(name, bytes)| events_png_name(&name, digest).map(|renamed| (renamed, bytes)))
         .collect();
     let md5 = parse_md5_lines(&run.stdout)
         .into_iter()
         .filter_map(|line| {
-            let renamed = events_png_name(line.file_name())?;
+            let renamed = events_png_name(line.file_name(), digest)?;
             Some(Md5Line {
                 path: renamed,
                 digest: line.digest,
@@ -520,16 +570,47 @@ mod tests {
 
     #[test]
     fn events_png_names_cannot_collide_with_the_plain_render() {
+        let a = "1f4a09c3";
         assert_eq!(
-            events_png_name("input.pdf.0.png").as_deref(),
-            Some("input.pdf.0.events.png")
+            events_png_name("input.pdf.0.png", a).as_deref(),
+            Some("input.pdf.0.events-1f4a09c3.png")
         );
+        // Idempotent for the same script, so a second rename cannot collide.
         assert_eq!(
-            events_png_name("input.pdf.0.events.png").as_deref(),
-            Some("input.pdf.0.events.png")
+            events_png_name("input.pdf.0.events-1f4a09c3.png", a).as_deref(),
+            Some("input.pdf.0.events-1f4a09c3.png")
         );
-        assert!(events_png_name("input.pdf.0.txt").is_none());
-        assert!(is_events_png("input.pdf.0.events.png"));
+        assert!(events_png_name("input.pdf.0.txt", a).is_none());
+        assert!(is_events_png("input.pdf.0.events-1f4a09c3.png"));
         assert!(!is_events_png("input.pdf.0.png"));
+    }
+
+    #[test]
+    fn two_scripts_over_the_same_pdf_get_different_artifact_names() {
+        // bug_736695_2/3/4 expand to byte-identical PDFs and share one golden
+        // key; only the script digest keeps their event goldens apart.
+        let (a, b) = ("1f4a09c3", "deadbeef");
+        assert_ne!(
+            events_png_name("input.pdf.0.png", a),
+            events_png_name("input.pdf.0.png", b)
+        );
+        let mine = events_png_name("input.pdf.0.png", a).unwrap();
+        assert!(is_events_png_for(&mine, a));
+        assert!(!is_events_png_for(&mine, b));
+        // Another script's artifact is not a plain render to be renamed.
+        assert!(events_png_name(&mine, b).is_none());
+    }
+
+    #[test]
+    fn evt_digest_is_eight_hex_digits_of_the_script() {
+        let d = evt_digest(b"mousemove,128,713\n");
+        assert_eq!(d.len(), 8);
+        assert!(d.bytes().all(|c| c.is_ascii_hexdigit()));
+        assert_ne!(d, evt_digest(b"mousemove,128,714\n"));
+        assert_eq!(events_digest_of("input.pdf.0.png"), None);
+        assert_eq!(
+            events_digest_of("input.pdf.0.events-1f4a09c3.png"),
+            Some("1f4a09c3")
+        );
     }
 }
