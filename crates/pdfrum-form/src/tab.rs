@@ -31,6 +31,11 @@
 //! does**, and this is the one place in the crate where the behaviour is
 //! deliberately better rather than identical.
 
+// The banding arithmetic mirrors the oracle's bit for bit: sums halved rather
+// than `midpoint`, and comparisons left strict. Both lints below would suggest
+// changes that move annotations between bands.
+#![allow(clippy::manual_midpoint, clippy::float_cmp)]
+
 use crate::session::AnnotId;
 
 /// A rectangle in page space, as a focusable annotation's `/Rect`.
@@ -62,12 +67,19 @@ impl Rect {
     }
 
     /// The vertical midpoint, which row banding tests.
+    ///
+    /// Written as the oracle writes it — sum then halve — rather than as
+    /// `f32::midpoint`, which rounds differently at the extremes. The banding
+    /// comparisons are strict, so a midpoint that differs in the last bit
+    /// moves an annotation between bands.
     #[must_use]
     pub fn center_y(self) -> f32 {
         (self.top + self.bottom) / 2.0
     }
 
     /// The horizontal midpoint, which column banding tests.
+    ///
+    /// Sum then halve, for the reason [`Rect::center_y`] gives.
     #[must_use]
     pub fn center_x(self) -> f32 {
         (self.left + self.right) / 2.0
@@ -488,7 +500,8 @@ mod tests {
             for i in 0..6u32 {
                 let mut next = || {
                     bits = bits.wrapping_mul(1_103_515_245).wrapping_add(12_345);
-                    ((bits >> 16) % 1000) as f32 - 500.0
+                    // Bounded to 0..1000, so the conversion is exact.
+                    f32::from(u16::try_from((bits >> 16) % 1000).unwrap_or(0)) - 500.0
                 };
                 let (x, y) = (next(), next());
                 annots.push(annot(i, x, y, x + 20.0, y + 20.0));
