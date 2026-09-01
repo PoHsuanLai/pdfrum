@@ -105,3 +105,62 @@ fn a_control_with_no_on_state_stays_clear() {
     activate(&mut state, ToggleKind::Radio, false);
     assert!(!state.is_checked());
 }
+
+/// **Which kid of a radio group draws its on-state, and which draws `Off`.**
+///
+/// `CPDF_FormField::CheckControl` (`cpdf_formfield.cpp:683-716`) sets the
+/// clicked control's `/AS` to its own on state and every *other* control of
+/// the field to `Off`. A session holds one [`ToggleState`] per **field**, so
+/// the only thing it can record is which control was chosen — which is
+/// exactly what `state_for_control` turns back into a per-kid answer, and
+/// what `route.rs` passes as `LiveInput::appearance_state`.
+///
+/// Recorded in `docs/status/M14.md`'s OWED table as item 8: the recording
+/// landed in M14 and the drawing could not, because the generator read `/AS`
+/// from the widget dictionary and took no override.
+#[test]
+fn a_radio_groups_siblings_answer_off_and_the_chosen_kid_answers_its_own_name() {
+    use pdfrum_form::session::AnnotId;
+
+    let (first, second) = (AnnotId::new(0, 0), AnnotId::new(0, 1));
+
+    // Before anything is clicked there is no chosen control, and the answer
+    // is `None` — "read the widget's own `/AS`", which is what makes a group
+    // loaded from a file render exactly as the file wrote it, kid by kid.
+    let mut state = ToggleState::new(OFF_STATE, "Kid0");
+    assert_eq!(state.state_for_control(first), None);
+    assert_eq!(state.state_for_control(second), None);
+
+    // A click on the first kid: it shows its own on-state name, the sibling
+    // shows `Off` whatever its dictionary still says.
+    activate(&mut state, ToggleKind::Radio, false);
+    state.checked_control = Some(first);
+    assert_eq!(state.state_for_control(first), Some("Kid0"));
+    assert_eq!(state.state_for_control(second), Some(OFF_STATE));
+
+    // Choosing the other kid swaps both answers with no second state record.
+    state.checked_control = Some(second);
+    assert_eq!(state.state_for_control(first), Some(OFF_STATE));
+    assert_eq!(state.state_for_control(second), Some("Kid0"));
+}
+
+/// A **check box** is a field with one control, so the per-control answer is
+/// its own state either way — the accessor is not a radio-only special case
+/// bolted onto a shared record.
+#[test]
+fn a_check_boxs_only_control_answers_its_own_state() {
+    use pdfrum_form::session::AnnotId;
+
+    let only = AnnotId::new(0, 3);
+    let mut state = ToggleState::new(OFF_STATE, "Yes");
+    activate(&mut state, ToggleKind::Check, false);
+    state.checked_control = Some(only);
+    assert_eq!(state.state_for_control(only), Some("Yes"));
+
+    activate(&mut state, ToggleKind::Check, false);
+    assert_eq!(
+        state.state_for_control(only),
+        Some(OFF_STATE),
+        "unchecking it moves the answer, because it moves `state`"
+    );
+}

@@ -190,13 +190,31 @@ impl PopupGeometry {
     }
 }
 
-/// Everything a host needs to draw one open dropdown, in one borrow.
+/// Everything a host needs to draw one open dropdown.
 ///
-/// Returned by `FormSession::popup_for_page`. The options are borrowed from
-/// the session's own [`ChoiceState`], so the view is cheap to produce and
-/// cannot drift from what the session believes.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct PopupView<'a> {
+/// Returned by `FormSession::popup_for_page` and by [`crate::route::popup_view`].
+///
+/// # Owned, and not borrowed from the session
+///
+/// The M14 ruling sketched this with a lifetime — `options: &'a [String]`,
+/// `edit_text: Option<&'a str>` — and it is owned instead, deliberately. Two
+/// reasons, one practical and one from the ruling's own text:
+///
+/// - The facade's per-page entry point assembles a borrowed
+///   [`crate::route::Context`] around a `PageForm` it owns, drives the body,
+///   and drops it. A view borrowing the session cannot outlive that scope, so
+///   a borrowed `PopupView` is reachable from `pdfrum-form` and **not** from
+///   `pdfrum::FormSession` — which is the one caller the ruling names.
+/// - STYLE §2b's ruling says the point of exposing state rather than
+///   inverting is to avoid "a trait object threaded through the session, a
+///   synchronous mid-dispatch callback contract, **or a lifetime on a public
+///   type**". An owned view is the ruling's own preference stated plainly.
+///
+/// The cost is a `Vec<String>` per query, on a query a host makes once per
+/// render of a page that has a dropdown open — which is at most one page in a
+/// session, and only while a list is showing.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PopupView {
     /// Which widget the list belongs to, by **raw** `/Annots` index — the
     /// same key space appearance updates and the annotation overlay use.
     pub annot: AnnotId,
@@ -204,14 +222,13 @@ pub struct PopupView<'a> {
     pub anchor: Rect,
     /// Where the list is and how tall its rows are.
     pub geometry: PopupGeometry,
-    /// The rows, in option order.
+    /// The rows' labels, in option order.
     ///
-    /// Borrowed from the session's own state: a host draws [`ChoiceOption::label`]
-    /// and never [`ChoiceOption::value`], which is the string the field
-    /// *stores* rather than the one it shows. Handing over both rather than
-    /// only the labels avoids an allocation per query and keeps the view a
-    /// window onto the state instead of a copy of it.
-    pub options: &'a [crate::field::ChoiceOption],
+    /// Labels and not values: a list shows [`crate::field::ChoiceOption::label`],
+    /// while `value` is what the field *stores* when they differ, and drawing
+    /// the latter would put the wrong string on the page for every `/Opt`
+    /// entry written as a two-element array.
+    pub options: Vec<String>,
     /// Which option is selected, if any.
     ///
     /// A combo box selects at most one — `field::choice::select_only` is the
@@ -229,7 +246,37 @@ pub struct PopupView<'a> {
     pub top_visible: usize,
     /// An **editable** combo's text half, which is a typed string rather than
     /// an option's label. [`None`] for a gated combo, which has no text half.
-    pub edit_text: Option<&'a str>,
+    pub edit_text: Option<String>,
+}
+
+impl PopupView {
+    /// The label of one visible row, counting `offset` rows down from the
+    /// first one showing.
+    ///
+    /// The pairing for [`PopupGeometry::row_rect`]: the two take the same
+    /// offset, so a painter walks `0..visible_rows()` asking each for its
+    /// rectangle and its text without doing the `top_visible` arithmetic
+    /// itself.
+    #[must_use]
+    pub fn label_at(&self, offset: usize) -> Option<&str> {
+        let index = self.top_visible.checked_add(offset)?;
+        self.options.get(index).map(String::as_str)
+    }
+
+    /// Whether the row at `offset` visible rows down is the selected one.
+    ///
+    /// The band `CPWL_ListBox::DrawThisAppearance` (`cpwl_list_box.cpp:66-84`)
+    /// fills navy behind and writes white text into. **Hover counts**: the
+    /// list is created with `kListboxHoverSel`, so the row under the pointer
+    /// is selected as far as the drawing is concerned even though the field's
+    /// stored value has not moved.
+    #[must_use]
+    pub fn is_banded(&self, offset: usize) -> bool {
+        let Some(index) = self.top_visible.checked_add(offset) else {
+            return false;
+        };
+        self.hovered == Some(index) || (self.hovered.is_none() && self.selected == Some(index))
+    }
 }
 
 /// How far a scrollable control has scrolled, in rows.

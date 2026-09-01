@@ -417,6 +417,81 @@ impl<'a> FormSession<'a> {
         self.with_page(page, |inner, ctx| pdfrum_form::focus_of(inner, ctx))
     }
 
+    /// The open combo-box dropdown on `page`, if one is open — where it is,
+    /// what is in it, and which row is selected or hovered.
+    ///
+    /// **The library does not draw this and does not ask you to.** A dropdown
+    /// is one of the two pieces of PDFium's `fpdfsdk/pwl` chrome that live
+    /// *outside* a widget's `/Rect` (the other is a scroll bar,
+    /// [`Self::scroll_view`]), and drawing outside the rectangle means
+    /// creating a window — which is the host's job, not a PDF library's. So
+    /// this is a value you pull on your own schedule rather than a callback
+    /// you must implement: ask before you paint a page, draw the list if the
+    /// answer is `Some`, and report what the user does with it through
+    /// [`Self::choose`] and [`Self::close_popup`].
+    ///
+    /// The three pieces of chrome that live *inside* the rectangle — the
+    /// caret, the selection band and the focus rectangle — are already in the
+    /// appearance stream a session hands back, so nothing extra is needed for
+    /// them.
+    ///
+    /// Answers `None` for every page with no list open, which is every page
+    /// almost all of the time: only a click on a combo's drop button, a
+    /// `Return`, or a `Space` on a non-editable combo opens one.
+    #[must_use]
+    pub fn popup_for_page(&mut self, page: u32) -> Option<pdfrum_form::PopupView> {
+        self.with_page(page, |inner, ctx| pdfrum_form::popup_view(inner, ctx))
+    }
+
+    /// How far one choice widget has scrolled, in rows — the numbers a scroll
+    /// bar is drawn from.
+    ///
+    /// The second value getter beside [`Self::popup_for_page`], and keyed by
+    /// annotation rather than by page because a **list box** scrolls with no
+    /// dropdown involved: `scrollable_widgets1.pdf` is nothing but two of
+    /// them. [`ScrollView::is_scrollable`](pdfrum_form::ScrollView::is_scrollable)
+    /// answers whether a bar would be drawn at all.
+    ///
+    /// Answers `None` for an annotation that is not a choice widget, or one
+    /// this session has never built state for — which is any field no event
+    /// has reached.
+    #[must_use]
+    pub fn scroll_view(
+        &mut self,
+        annot: pdfrum_form::session::AnnotId,
+    ) -> Option<pdfrum_form::ScrollView> {
+        self.with_page(annot.page, |inner, ctx| {
+            pdfrum_form::scroll_view(inner, ctx, annot)
+        })
+    }
+
+    /// Reports that the user picked row `index` of an open dropdown.
+    ///
+    /// The intent half of [`Self::popup_for_page`]: a host that drew the list
+    /// says what was chosen, and the session does what a click on that row
+    /// would have done — select it, shut the list, and hand back the widget's
+    /// new appearance in the returned updates. There is no need to synthesize
+    /// a click at coordinates computed backwards from the geometry.
+    ///
+    /// An `index` past the end of the options is ignored and the response is
+    /// unconsumed, so a host cannot corrupt a field by miscounting.
+    pub fn choose(&mut self, annot: pdfrum_form::session::AnnotId, index: usize) -> EventResponse {
+        self.with_page(annot.page, |inner, ctx| {
+            pdfrum_form::route::choose(inner, ctx, annot, index)
+        })
+    }
+
+    /// Reports that an open dropdown was dismissed without a choice.
+    ///
+    /// The stored selection is left alone — a row the pointer merely rested
+    /// on was never chosen. Safe to call on an annotation whose list is
+    /// already shut, which answers an unconsumed response.
+    pub fn close_popup(&mut self, annot: pdfrum_form::session::AnnotId) -> EventResponse {
+        self.with_page(annot.page, |inner, ctx| {
+            pdfrum_form::route::close_popup(inner, ctx, annot)
+        })
+    }
+
     /// Which annotation on `page` the pointer is inside — the answer the
     /// annotation pass needs to know a synthesized pop-up note is **open**.
     ///

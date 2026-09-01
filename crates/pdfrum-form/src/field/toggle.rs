@@ -68,6 +68,40 @@ impl ToggleState {
         self.state != OFF_STATE && !self.state.is_empty()
     }
 
+    /// The appearance state one **control** of this field should draw.
+    ///
+    /// The per-control answer a shared [`ToggleState`] can give, and the
+    /// resolution of the half of `CPDF_FormField::CheckControl`
+    /// (`cpdf_formfield.cpp:683-716`) that a field-level record could not
+    /// reach before: the clicked control shows its own on state and every
+    /// other control of the same field shows `Off`.
+    ///
+    /// Three cases, and the middle one is why this is not simply
+    /// [`Self::state`]:
+    ///
+    /// - **Nothing has been clicked** ([`Self::checked_control`] is `None`):
+    ///   answers `None`, meaning "read the widget's own `/AS`". A group
+    ///   loaded from a file is in this state and must render exactly as the
+    ///   file wrote it, kid by kid.
+    /// - **This control is the chosen one**: its own on state, which for a
+    ///   radio group is a name only this kid carries.
+    /// - **A sibling was chosen**: [`OFF_STATE`], whatever the file's `/AS`
+    ///   still says — which is the case the shared record could not express
+    ///   and the one a group of two kids makes visible.
+    ///
+    /// A **check box** is a field with one control, so `control` is always
+    /// the chosen one once anything has been clicked and the answer is its
+    /// own state either way.
+    #[must_use]
+    pub fn state_for_control(&self, control: crate::session::AnnotId) -> Option<&str> {
+        let chosen = self.checked_control?;
+        if chosen == control {
+            Some(&self.state)
+        } else {
+            Some(OFF_STATE)
+        }
+    }
+
     /// Sets the control checked or clear.
     ///
     /// Checking a control with no on state leaves it clear: there is no
