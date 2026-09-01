@@ -1632,9 +1632,10 @@ it becomes user-visible for the first time.
 to, and offers one method per `FORM_*` entry that is not a no-op, named to the
 Rust API guidelines.
 
-**Present today:** `on_mouse_move`, `on_mouse_down`, `on_mouse_up`,
-`on_button`, `on_double_click`, `on_mouse_wheel`, `on_focus_at`,
-`on_key_down`, `on_char`, `force_kill_focus`, `focused_text`, `focused_annot`,
+**Present:** `on_mouse_move`, `on_mouse_down`, `on_mouse_up`, `on_button`,
+`on_double_click`, `on_mouse_wheel`, `on_focus_at`, `on_key_down`, `on_char`,
+`force_kill_focus`, `focused_text`, `focused_annot`, `selected_text`,
+`replace_selection`, `focus_for_page`, `set_page_in_view`, `page_in_view`,
 `can_undo`, `can_redo`, `is_index_selected`, `set_index_selected`, `config`,
 `inner`.
 
@@ -1642,12 +1643,23 @@ Rust API guidelines.
 corpus forces: scripts contain right-button lines, a bridge must be able to
 express them, and the correct behaviour for those lines is to consume nothing.
 
-**Not yet present:** `selected_text`, `select_all`, `replace_selection`,
-`replace_and_keep_selection`, `undo`, `redo`, `set_focused_annot`,
-`field_at_point`. The operations behind all eight exist in the crate
-(`edit::ops`, `focus`, `hit`); what they wait on is the routed dispatch of
-§15.1, since each needs to reach the focused field's live state through a
-context the facade does not yet assemble.
+**`set_page_in_view` is this crate's spelling of a parameter the oracle puts
+on the call.** `FORM_OnKeyDown` takes a page, and its callers fill it in with
+whatever the embedder is showing. Here keyboard methods take no page, because
+a key normally goes to the field holding focus and that field knows its own
+page — but **one keyboard event arrives with nothing focused and must still
+act: Tab**, which is what enters the focus ring in the first place. Refusing
+it would make the ring unreachable from the keyboard, and hard-coding page 0
+would be a silent guess on any document showing another page. So the page in
+view is session state, set by the embedder, defaulting to 0. `pdfrum-tool`
+sets it per page as it replays, since a replay knows which page it is
+replaying.
+
+**Not present:** `select_all`, `replace_and_keep_selection`, `undo`, `redo`,
+`set_focused_annot`, `field_at_point`. The operations behind all six exist in
+the crate (`edit::ops`, `focus`, `hit`) and are reachable through the event
+methods — select-all and undo have keyboard spellings that the ported
+assertions drive — so what is missing is the direct call, not the behaviour.
 
 Each event method returns a `Response` carrying both the `consumed` boolean the
 C++ returns as `FPDF_BOOL` and the `Vec<AppearanceUpdate>` the C++ pushes

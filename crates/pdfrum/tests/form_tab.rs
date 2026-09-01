@@ -229,3 +229,36 @@ fn a_mouse_move_over_nothing_is_harmless() {
     );
     assert!(session.focused_annot().is_none());
 }
+
+/// A Tab with nothing focused enters the ring on the page the embedder says
+/// it is showing — not always page 0.
+///
+/// This fixture is the only one that can show the difference: all three pages
+/// carry the same four annotations, so the *page* of the focused annotation is
+/// the only thing that moves.
+#[test]
+fn a_tab_from_nothing_enters_the_ring_on_the_page_in_view() {
+    let doc = document();
+
+    for page in 0..doc.page_count() {
+        let mut session = FormSession::new(&doc);
+        session.set_page_in_view(page);
+        assert_eq!(session.page_in_view(), page);
+
+        assert!(tab(&mut session, EventModifiers::NONE));
+        let landed = session.focused_annot().expect("the Tab lands somewhere");
+        assert_eq!(
+            landed.page, page,
+            "a Tab from nothing must enter the ring on the page in view"
+        );
+    }
+}
+
+/// The default is page 0, which is right for a single-page document and for a
+/// viewer that has not scrolled.
+#[test]
+fn the_page_in_view_defaults_to_the_first() {
+    let doc = document();
+    let session = FormSession::new(&doc);
+    assert_eq!(session.page_in_view(), 0);
+}
