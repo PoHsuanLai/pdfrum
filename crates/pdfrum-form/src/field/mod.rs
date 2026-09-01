@@ -18,6 +18,7 @@
 
 pub mod button;
 pub mod choice;
+pub mod text;
 pub mod toggle;
 
 use std::num::NonZeroU32;
