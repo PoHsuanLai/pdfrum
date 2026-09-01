@@ -64,10 +64,34 @@ pub struct GeneratedAp {
     pub as_override: Option<Name>,
 }
 
+/// What an overlay says about one annotation.
+///
+/// Three states, not two, and the third is why this is an enum rather than an
+/// `Option`. "Nothing was generated" and "this annotation draws nothing" are
+/// different instructions: the first falls through to whatever `/AP` the file
+/// carries, the second **suppresses** it. A field whose appearance has been
+/// cleared — focus left it and it went back to drawing nothing — needs the
+/// second, and expressing it as the absence of an entry would make it
+/// indistinguishable from the first.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub enum Appearance {
+    /// Nothing to say. The file's own `/AP` is used, if it has one.
+    #[default]
+    Untouched,
+    /// Draw this instead of the file's `/AP`.
+    Generated(GeneratedAp),
+    /// Draw nothing at all, even if the file carries an `/AP`.
+    ///
+    /// Nothing sets this yet. It exists so a cleared appearance has a
+    /// spelling that is not "absent", which is what keeps the merge below
+    /// able to express one later without changing shape.
+    Suppressed,
+}
+
 /// Per-annotation generated appearances, keyed by `/Annots` index.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct AnnotOverlay {
-    entries: Vec<Option<GeneratedAp>>,
+    entries: Vec<Appearance>,
 }
 
 impl AnnotOverlay {
@@ -75,21 +99,63 @@ impl AnnotOverlay {
     #[must_use]
     pub fn with_capacity(count: usize) -> AnnotOverlay {
         AnnotOverlay {
-            entries: vec![None; count],
+            entries: vec![Appearance::Untouched; count],
         }
     }
 
     /// Records a generated appearance at one `/Annots` index.
     pub fn set(&mut self, index: usize, generated: GeneratedAp) {
+        self.set_appearance(index, Appearance::Generated(generated));
+    }
+
+    /// Records any of the three states at one `/Annots` index.
+    pub fn set_appearance(&mut self, index: usize, appearance: Appearance) {
         if let Some(slot) = self.entries.get_mut(index) {
-            *slot = Some(generated);
+            *slot = appearance;
         }
     }
 
     /// What was generated at one `/Annots` index, if anything.
+    ///
+    /// A suppressed entry answers [`None`], the same as an untouched one —
+    /// callers that only want a stream to draw need not distinguish them.
+    /// [`AnnotOverlay::appearance`] is what tells them apart.
     #[must_use]
     pub fn get(&self, index: usize) -> Option<&GeneratedAp> {
-        self.entries.get(index).and_then(Option::as_ref)
+        match self.appearance(index) {
+            Appearance::Generated(generated) => Some(generated),
+            Appearance::Untouched | Appearance::Suppressed => None,
+        }
+    }
+
+    /// The full state at one `/Annots` index, suppression included.
+    ///
+    /// An index past the overlay's end reads as [`Appearance::Untouched`],
+    /// which is what makes a short overlay safe to consult for any index.
+    #[must_use]
+    pub fn appearance(&self, index: usize) -> &Appearance {
+        self.entries.get(index).unwrap_or(&Appearance::Untouched)
+    }
+
+    /// Lays `other`'s entries over this one's.
+    ///
+    /// Every entry `other` has anything to say about — generated **or**
+    /// suppressed — replaces this overlay's, and its [`Appearance::Untouched`]
+    /// entries leave this one's alone. So a caller-supplied overlay wins
+    /// wherever it speaks and defers everywhere else, which is the merge a
+    /// live edit needs: the session has an opinion about the one field being
+    /// edited and none about the rest of the page.
+    ///
+    /// Indices are raw `/Annots` indices in both overlays. An entry of
+    /// `other` past this overlay's end is dropped, because there is no
+    /// annotation for it to apply to.
+    pub fn merge_over(&mut self, other: &AnnotOverlay) {
+        for (index, entry) in other.entries.iter().enumerate() {
+            if matches!(entry, Appearance::Untouched) {
+                continue;
+            }
+            self.set_appearance(index, entry.clone());
+        }
     }
 
     /// The rectangle an annotation should be read as having.
@@ -657,7 +723,10 @@ fn rect_array(rect: Rect) -> Array {
 
 #[cfg(test)]
 mod tests {
-    use super::{ext_gstate_dict, generate_appearances, generate_one, should_generate};
+    use super::{
+        AnnotOverlay, Appearance, GeneratedAp, ext_gstate_dict, generate_appearances, generate_one,
+        should_generate,
+    };
     use crate::geom;
     use pdfrum_common::Diagnostics;
     use pdfrum_object::{Array, ByteSpan, Dict, Name, NoResolve, Object, Stream};
@@ -812,5 +881,79 @@ mod tests {
             state.name(&Name::from("BM")).map(Name::as_bytes),
             Some(&b"Multiply"[..])
         );
+    }
+
+    /// A generated appearance, distinguishable by its stream.
+    fn made(stream: &str) -> GeneratedAp {
+        GeneratedAp {
+            stream: stream.as_bytes().to_vec(),
+            bbox: geom::rect(0.0, 0.0, 1.0, 1.0),
+            matrix: kurbo::Affine::IDENTITY,
+            resources: Dict::default(),
+            rect_override: None,
+            as_override: None,
+        }
+    }
+
+    /// The merge's whole contract in one test: the supplied overlay wins
+    /// where it speaks, defers where it does not, and can say "draw nothing"
+    /// as a value rather than as an absence.
+    #[test]
+    fn a_supplied_overlay_wins_only_where_it_has_something_to_say() {
+        let mut base = AnnotOverlay::with_capacity(4);
+        base.set(0, made("base zero"));
+        base.set(1, made("base one"));
+        base.set(2, made("base two"));
+
+        let mut supplied = AnnotOverlay::with_capacity(4);
+        supplied.set(1, made("live one"));
+        supplied.set_appearance(2, Appearance::Suppressed);
+        // Index 0 and 3 are untouched and must not disturb the base.
+
+        base.merge_over(&supplied);
+
+        assert_eq!(
+            base.get(0).map(|g| g.stream.clone()),
+            Some(b"base zero".to_vec()),
+            "an untouched entry leaves the generated one alone"
+        );
+        assert_eq!(
+            base.get(1).map(|g| g.stream.clone()),
+            Some(b"live one".to_vec()),
+            "a supplied entry replaces the generated one"
+        );
+        assert_eq!(
+            base.appearance(2),
+            &Appearance::Suppressed,
+            "suppression survives the merge as a value"
+        );
+        assert_eq!(base.get(2), None, "a suppressed entry has no stream");
+        assert_eq!(base.appearance(3), &Appearance::Untouched);
+    }
+
+    /// Suppression and absence read the same to `get` and differently to
+    /// `appearance` — which is the distinction the enum exists to carry.
+    #[test]
+    fn suppressed_and_untouched_differ_only_where_it_matters() {
+        let mut overlay = AnnotOverlay::with_capacity(2);
+        overlay.set_appearance(0, Appearance::Suppressed);
+        assert_eq!(overlay.get(0), None);
+        assert_eq!(overlay.get(1), None);
+        assert_ne!(overlay.appearance(0), overlay.appearance(1));
+        // An index past the end is untouched rather than a panic, so a short
+        // overlay is safe to consult for any annotation.
+        assert_eq!(overlay.appearance(99), &Appearance::Untouched);
+    }
+
+    /// An entry past the end of the overlay being merged into is dropped:
+    /// there is no annotation for it to apply to.
+    #[test]
+    fn a_supplied_entry_past_the_end_is_dropped() {
+        let mut base = AnnotOverlay::with_capacity(1);
+        let mut supplied = AnnotOverlay::with_capacity(5);
+        supplied.set(4, made("nowhere"));
+        base.merge_over(&supplied);
+        assert_eq!(base.len(), 1);
+        assert_eq!(base.get(4), None);
     }
 }

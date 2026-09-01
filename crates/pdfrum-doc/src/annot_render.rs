@@ -69,6 +69,46 @@ pub fn overlay<R: Resolve>(
     limits: &Limits,
     diags: &mut Diagnostics,
 ) {
+    overlay_with(page, page_dict, catalog, r, ctx, limits, diags, None);
+}
+
+/// The same pass, with an overlay the caller has already filled in.
+///
+/// `supplied` is laid over what this function generates, per
+/// [`ap::AnnotOverlay::merge_over`]: wherever it has something to say about
+/// an annotation the caller's entry wins, and wherever it is untouched the
+/// generated one stands. Passing [`None`] is exactly [`overlay`], down to the
+/// operators emitted.
+///
+/// This is how a live edit reaches the page. A form session holds appearances
+/// for the fields it has touched — a focused field with a caret, a committed
+/// value, or a field whose appearance it has cleared — and hands them here
+/// rather than having them regenerated from the document, which would not
+/// know about the edit.
+///
+/// # Keying
+///
+/// Both overlays are keyed by the **raw** `/Annots` index — the index into
+/// the array as the file writes it, which is what `AnnotList::source_indices`
+/// recovers after the list has dropped and reordered entries. A caller
+/// building `supplied` must use that index and not the position an annotation
+/// ended up at in the loaded list.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the pass reads six independent inputs plus its two sinks; \
+              bundling them into a context struct is the god-object shape \
+              STYLE §1 forbids"
+)]
+pub fn overlay_with<R: Resolve>(
+    page: &mut Page,
+    page_dict: &Dict,
+    catalog: &Dict,
+    r: &R,
+    ctx: &mut BuildContext,
+    limits: &Limits,
+    diags: &mut Diagnostics,
+    supplied: Option<&ap::AnnotOverlay>,
+) {
     #[expect(
         clippy::cast_possible_truncation,
         reason = "a page width beyond f32 has already lost meaning, and the \
@@ -93,7 +133,11 @@ pub fn overlay<R: Resolve>(
     // substitution the rest of the page uses. See `ap::FormFonts` for why the
     // stock Helvetica that used to stand in here was the wrong metric source.
     let fonts = ap::FormFonts::load(catalog, r, ctx);
-    let generated = ap::generate_appearances_with_text(page_dict, catalog, Some(&fonts), r, diags);
+    let mut generated =
+        ap::generate_appearances_with_text(page_dict, catalog, Some(&fonts), r, diags);
+    if let Some(supplied) = supplied {
+        generated.merge_over(supplied);
+    }
     // `FORM_DoDocumentOpenAction` runs before the first page is rendered
     // (`pdfium_test.cc:1779`), so a `/Hide` in the catalog's open action has
     // already rewritten the flag words the visibility test below reads.
@@ -105,6 +149,16 @@ pub fn overlay<R: Resolve>(
             continue;
         }
         let index = list.source_indices.get(slot).copied().unwrap_or(slot);
+        // A suppressed appearance draws nothing at all — not the file's
+        // `/AP`, not a generated one, not the invalid-state outline below.
+        // Only the widget highlight survives, because it is painted after the
+        // appearance and independently of it.
+        if matches!(generated.appearance(index), ap::Appearance::Suppressed) {
+            if let Some(object) = highlight(annot, r, limits, diags) {
+                page.objects.push(object);
+            }
+            continue;
+        }
         // A checkbox or radio button whose *state's* appearance stream is
         // missing is outlined instead of drawn, and the branch replaces the
         // appearance rather than following it — see `invalid_outline`.
