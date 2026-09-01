@@ -98,8 +98,8 @@ pub fn overlay<R: Resolve>(
 ///
 /// `supplied` may also name the annotation that holds the keyboard focus,
 /// through [`ap::AnnotOverlay::set_focus`]. That annotation is drawn
-/// *without* the widget tint and with [`focus_rect`]'s dashed outline over
-/// whatever focus box it declares — see [`focus_rect`] for why the two travel
+/// *without* the widget tint and with `focus_rect`'s dashed outline over
+/// whatever focus box it declares — see `focus_rect` for why the two travel
 /// together and why most field types declare none.
 #[expect(
     clippy::too_many_arguments,
