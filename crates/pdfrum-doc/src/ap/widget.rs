@@ -225,7 +225,7 @@ fn control_index<R: Resolve>(dict: &Dict, r: &R) -> usize {
 /// which is a valid appearance and is what the oracle writes too.
 #[must_use]
 pub fn generate<R: Resolve>(dict: &Dict, r: &R) -> Option<GeneratedAp> {
-    build(dict, None, None, None, None, r)
+    build(dict, None, None, None, None, None, r)
 }
 
 /// The same, with the field's own text set into it.
@@ -241,9 +241,10 @@ pub fn generate_with_text<R: Resolve>(
     dict: &Dict,
     catalog: &Dict,
     font: &crate::ap::TextFont<'_>,
+    substitute: Option<crate::ap::Substitute<'_>>,
     r: &R,
 ) -> Option<GeneratedAp> {
-    build(dict, Some(catalog), Some(font), None, None, r)
+    build(dict, Some(catalog), Some(font), substitute, None, None, r)
 }
 
 /// The same again, for a widget a form session is currently editing.
@@ -265,6 +266,7 @@ pub fn generate_with_live<R: Resolve>(
         dict,
         Some(catalog),
         Some(font),
+        None,
         caret_and_selection,
         live,
         r,
@@ -276,6 +278,7 @@ fn build<R: Resolve>(
     dict: &Dict,
     catalog: Option<&Dict>,
     font: Option<&crate::ap::TextFont<'_>>,
+    substitute: Option<crate::ap::Substitute<'_>>,
     caret_and_selection: Option<&crate::ap::field_body::Highlight>,
     live: Option<&crate::ap::field_body::LiveState<'_>>,
     r: &R,
@@ -334,7 +337,15 @@ fn build<R: Resolve>(
     // one. A button reaches here with `None` from the dispatch below, which is
     // how a checkbox keeps producing exactly the stream it did before.
     let body = catalog.zip(font).and_then(|(catalog, font)| {
-        crate::ap::field_body::generate(dict, catalog, font, r, caret_and_selection, live)
+        crate::ap::field_body::generate(
+            dict,
+            catalog,
+            font,
+            substitute,
+            r,
+            caret_and_selection,
+            live,
+        )
     });
     let fonts = body.as_ref().and_then(|body| body.font_resources.clone());
     if let Some(body) = &body {
@@ -878,7 +889,7 @@ mod tests {
         };
 
         let stored = stream(super::generate_with_text(
-            &widget, &catalog, &font, &NoResolve,
+            &widget, &catalog, &font, None, &NoResolve,
         ));
         assert!(stored.contains("(stored) Tj\n"), "{stored}");
 
