@@ -223,6 +223,21 @@ enum Axis {
 /// the cross axis lies **strictly** inside the seed's extent, in index order.
 /// The comparisons are strict at both ends, so an annotation exactly level
 /// with a band's edge starts a new band rather than joining that one.
+//
+// [oracle-bug] cpdfsdk_annotiterator.cpp:137-147 cannot terminate when no
+// candidate remains. The row pass seeds `float fTop = 0.0f;` (:137) and tests
+// `rcAnnot.top > fTop` (:140), so a page whose remaining annotations all have
+// a non-positive top leaves `nLeftTopIndex` at -1; the `continue` at :146 then
+// re-enters `while (!sa.empty())` (:135) without erasing anything, so the loop
+// state is bit-identical on every pass and the iterator spins forever. A
+// non-positive top is ordinary: §12.5.5 places `/Tabs R` order in the page's
+// own coordinate space, which a `/MediaBox` with a negative or zero origin
+// puts entirely at or below zero. pdf.js implements no `/Tabs` order at all —
+// every widget gets `tabIndex = 0` (annotation_layer.js:412) and the DOM
+// decides — so it cannot hang here either. We terminate instead: with no
+// candidate, the remainder is appended in index order and the ring records
+// `degenerate`. A library that hangs on input its own spec admits is a bug
+// whatever the oracle does (PLAN.md §226, the M14 ruling this generalises).
 fn band(annots: &[Focusable], axis: Axis) -> FocusRing {
     // Sort by the axis's primary key, keeping annotation order within ties.
     let mut remaining: Vec<Focusable> = annots.to_vec();
@@ -246,8 +261,9 @@ fn band(annots: &[Focusable], axis: Axis) -> FocusRing {
 
     while !remaining.is_empty() {
         let Some(seed) = seed_index(&remaining, axis) else {
-            // No candidate: the oracle would spin here. Append what is left
-            // in index order and say so.
+            // No candidate: this is the `[oracle-bug]` above, at the line
+            // where it bites — `cpdfsdk_annotiterator.cpp:145-147` spins
+            // forever here. Append what is left in index order and say so.
             degenerate = true;
             order.extend(remaining.iter().map(|a| a.id));
             break;
