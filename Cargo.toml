@@ -25,6 +25,7 @@ members = [
     "crates/pdfrum-text",
     "crates/pdfrum-doc",
     "crates/pdfrum-form",
+    "crates/pdfrum-script",
     "crates/pdfrum-edit",
     "crates/pdfrum",
     "crates/pdfrum-tool",
