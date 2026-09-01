@@ -22,9 +22,10 @@
 //! re-seed is a vertical move, because the whole point of the sticky column
 //! is to survive a run of them.
 
+use pdfrum_doc::ap::field_body::Highlight;
 use pdfrum_doc::vt::{self, Layout, Metrics};
 
-use super::place::{Place, PlaceExt, Range};
+use super::place::{Place, Range};
 use super::select::Selection;
 use super::undo::{UndoItem, UndoStack};
 
@@ -56,17 +57,59 @@ pub struct TextEdit {
     pub sticky_x: f32,
     /// How far the view is scrolled, in layout space.
     pub scroll: (f32, f32),
+    /// The vertical alignment offset the text is *drawn* with.
+    ///
+    /// A single-line field is drawn vertically centred in its plate, so its
+    /// glyphs sit below where the layout placed them. Every geometric query —
+    /// turning a click into a place, a place into a caret rectangle — has to
+    /// be told about that shift or it works against the wrong box: a click at
+    /// a real field's mid-height falls *below* the content and clamps to the
+    /// end of the text, silently, putting the caret at the end of the field
+    /// instead of where it was clicked.
+    ///
+    /// It is recomputed on every relayout because it depends on the content's
+    /// height, which an edit changes.
+    pub offset: (f32, f32),
+    /// Whether the field draws its text vertically centred.
+    pub centred: bool,
     /// The undo stack.
     pub undo: UndoStack,
 }
 
+/// The offset a field's text is drawn with.
+///
+/// Top alignment shifts nothing; centred alignment shifts by half the slack
+/// between the content and the plate. The same rule the appearance path uses,
+/// because the two must agree — a caret computed against a different offset
+/// from the one the glyphs were drawn with lands in the wrong place.
+#[must_use]
+pub fn vertical_offset(centred: bool, config: &vt::Config, layout: &Layout) -> (f32, f32) {
+    if !centred {
+        return (0.0, 0.0);
+    }
+    let content = layout.content_rect_pdf(config.plate);
+    (
+        0.0,
+        (pdfrum_doc::geom::height(content) - pdfrum_doc::geom::height(config.plate)) * 0.5,
+    )
+}
+
 impl TextEdit {
     /// An edit control over `text`, laid out with `config`.
+    ///
+    /// `centred` says whether the field draws its text vertically centred,
+    /// which a single-line field does and a multiline one does not.
     #[must_use]
-    pub fn new(text: impl Into<String>, config: &vt::Config, metrics: &Metrics<'_>) -> TextEdit {
+    pub fn new(
+        text: impl Into<String>,
+        config: &vt::Config,
+        metrics: &Metrics<'_>,
+        centred: bool,
+    ) -> TextEdit {
         let text = text.into();
         let layout = vt::layout(&text, config, metrics);
         let caret = vt::hit::begin_place(&layout);
+        let offset = vertical_offset(centred, config, &layout);
         TextEdit {
             text,
             layout,
@@ -75,6 +118,8 @@ impl TextEdit {
             selection: Selection::collapsed_at(caret),
             sticky_x: 0.0,
             scroll: (0.0, 0.0),
+            centred,
+            offset,
             undo: UndoStack::default(),
         }
     }
@@ -162,6 +207,9 @@ pub fn room_for(edit: &TextEdit, max_len: Option<u32>, replacing: usize) -> Opti
 /// truncates the insertion — never the field — so inserting a long string
 /// into a nearly-full field puts in as much as fits and leaves the rest of
 /// the text alone.
+#[allow(clippy::too_many_arguments)] // The one primitive; every other
+// mutation is a short call into it, so the arguments live here rather than
+// being spread across five near-identical bodies.
 pub fn replace_range(
     edit: &mut TextEdit,
     config: &vt::Config,
@@ -376,6 +424,8 @@ pub fn replace_and_keep_selection(
 /// Re-lays the text out and puts the caret back where its index says.
 fn relayout(edit: &mut TextEdit, config: &vt::Config, metrics: &Metrics<'_>) {
     edit.layout = vt::layout(&edit.text, config, metrics);
+    // The offset depends on the content's height, which the edit just moved.
+    edit.offset = vertical_offset(edit.centred, config, &edit.layout);
 }
 
 /// The shared tail of every mutation: re-seed the column a vertical move
@@ -392,7 +442,7 @@ pub fn caret_x(edit: &TextEdit, config: &vt::Config, metrics: &Metrics<'_>) -> f
         config.plate,
         config,
         metrics,
-        (0.0, 0.0),
+        edit.offset,
         edit.caret,
     );
     #[allow(clippy::cast_possible_truncation)]
@@ -520,4 +570,172 @@ fn apply(edit: &mut TextEdit, config: &vt::Config, metrics: &Metrics<'_>, item: 
         }
         UndoItem::GroupBoundary => {}
     }
+}
+
+/// The place a click at `point` selects.
+///
+/// `point` is in PDF user space. The field's own drawing offset is applied,
+/// which is what makes a click at a field's visible mid-height land on the
+/// character under the pointer rather than clamping to the end of the text.
+#[must_use]
+pub fn place_at_point(
+    edit: &TextEdit,
+    config: &vt::Config,
+    metrics: &Metrics<'_>,
+    point: kurbo::Point,
+) -> Place {
+    vt::hit::place_at_point(
+        &edit.layout,
+        config.plate,
+        config,
+        metrics,
+        edit.offset,
+        point,
+    )
+}
+
+/// Moves the caret to a click, collapsing the selection and dropping a fresh
+/// anchor there.
+pub fn click_at(
+    edit: &mut TextEdit,
+    config: &vt::Config,
+    metrics: &Metrics<'_>,
+    point: kurbo::Point,
+) {
+    let place = place_at_point(edit, config, metrics, point);
+    edit.previous_caret = edit.caret;
+    edit.caret = place;
+    edit.selection = Selection::collapsed_at(place);
+    edit.sticky_x = caret_x(edit, config, metrics);
+}
+
+/// Extends the selection to a point, keeping the anchor — a mouse drag.
+pub fn drag_to(
+    edit: &mut TextEdit,
+    config: &vt::Config,
+    metrics: &Metrics<'_>,
+    point: kurbo::Point,
+) {
+    let place = place_at_point(edit, config, metrics, point);
+    edit.previous_caret = edit.caret;
+    edit.caret = place;
+    edit.selection.set_active(place);
+}
+
+/// Selects the whole line under a point — what a double click does.
+///
+/// The whole line, deliberately, and not the word under the pointer: a double
+/// click in a field holding `"Hello World"` selects all of it.
+pub fn select_line_at(
+    edit: &mut TextEdit,
+    config: &vt::Config,
+    metrics: &Metrics<'_>,
+    point: kurbo::Point,
+) {
+    let place = place_at_point(edit, config, metrics, point);
+    let (begin, end) = line_bounds(edit, place);
+    edit.selection = Selection::new(begin, end);
+    edit.previous_caret = edit.caret;
+    edit.caret = end;
+}
+
+/// The first and last places of the line a place sits on.
+fn line_bounds(edit: &TextEdit, place: Place) -> (Place, Place) {
+    let begin = Place::new(place.section, place.line, -1);
+    let end = edit
+        .layout
+        .sections
+        .get(place.section as usize)
+        .and_then(|section| section.lines.get(place.line as usize))
+        .map_or(begin, |line| {
+            Place::new(place.section, place.line, line.end)
+        });
+    (begin, end)
+}
+
+/// The overlay a focused field draws: its caret, or its selection bands.
+///
+/// A field showing a selection shows **no** caret — the two are alternatives,
+/// not additions, which is what the two `form_textfield_selected_*` goldens
+/// pin against the two `form_textfield_focused_*` ones.
+#[must_use]
+pub fn highlight(
+    edit: &TextEdit,
+    config: &vt::Config,
+    metrics: &Metrics<'_>,
+    caret_width: f32,
+) -> Highlight {
+    if edit.has_selection() {
+        return Highlight {
+            caret: None,
+            selection: selection_bands(edit, config, metrics),
+        };
+    }
+    Highlight {
+        caret: Some(vt::hit::caret_rect(
+            &edit.layout,
+            config.plate,
+            config,
+            metrics,
+            edit.offset,
+            edit.caret,
+            caret_width,
+        )),
+        selection: Vec::new(),
+    }
+}
+
+/// One band per line the selection covers, since a selection spanning a line
+/// break is not one rectangle.
+fn selection_bands(
+    edit: &TextEdit,
+    config: &vt::Config,
+    metrics: &Metrics<'_>,
+) -> Vec<kurbo::Rect> {
+    let range = edit.selection.range();
+    let (from, to) = (
+        vt::hit::word_index_of_place(&edit.layout, range.begin()),
+        vt::hit::word_index_of_place(&edit.layout, range.end()),
+    );
+    if from >= to {
+        return Vec::new();
+    }
+
+    let mut bands: Vec<kurbo::Rect> = Vec::new();
+    let mut index = from;
+    while index < to {
+        let place = vt::hit::place_of_word_index(&edit.layout, index);
+        let (_, line_end) = line_bounds(edit, place);
+        let line_end_index = vt::hit::word_index_of_place(&edit.layout, line_end);
+        let stop = to.min(line_end_index.max(index.saturating_add(1)));
+
+        let start_rect = vt::hit::caret_rect(
+            &edit.layout,
+            config.plate,
+            config,
+            metrics,
+            edit.offset,
+            place,
+            0.0,
+        );
+        let stop_place = vt::hit::place_of_word_index(&edit.layout, stop);
+        let stop_rect = vt::hit::caret_rect(
+            &edit.layout,
+            config.plate,
+            config,
+            metrics,
+            edit.offset,
+            stop_place,
+            0.0,
+        );
+
+        bands.push(kurbo::Rect::new(
+            start_rect.x0.min(stop_rect.x0),
+            start_rect.y0.min(stop_rect.y0),
+            start_rect.x1.max(stop_rect.x1),
+            start_rect.y1.max(stop_rect.y1),
+        ));
+        index = stop;
+    }
+    bands
 }

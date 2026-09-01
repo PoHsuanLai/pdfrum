@@ -37,7 +37,7 @@ fn config() -> Config {
 }
 
 fn edit(text: &str) -> TextEdit {
-    TextEdit::new(text, &config(), &metrics())
+    TextEdit::new(text, &config(), &metrics(), true)
 }
 
 /// Types characters one at a time, as a keyboard would.
