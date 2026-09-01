@@ -1,23 +1,24 @@
-//! Ported undo and redo assertions — the stack-shape half.
+//! The undo **stack's** own shape: how far one undo walks, and what eviction
+//! does to a group.
 //!
-//! The upstream tests drive real typing and read the field's text back. That
-//! second half needs the layout queries the text engine is still growing, so
-//! what is pinned here is the half that does not: **how many items each
-//! operation pushes, and how far one undo walks.** That is where every one of
-//! these tests actually disagrees with the design a reasonable author would
-//! reach for, so it is the half worth having first.
+//! These drive `UndoStack` with hand-built items, so they pin the walk and the
+//! eviction rules and **not** the granularity — how many items an operation
+//! pushes is decided by the operation layer, and a test that pushes five items
+//! and then counts five is testing its own loop. The granularity assertions
+//! that upstream's `UndoRedo`, `CutAllTextUndoRestoresAllCharacters` and
+//! `ReplaceSelection` really make are in `text_editing.rs`, which drives the
+//! real editing operations and reads the text back.
 //!
-//! Each test names the upstream test it restates and reproduces its step
-//! sequence exactly, including the intermediate `can_undo` and `can_redo`
-//! readings the original checks after every step.
+//! Keeping the two apart matters for the ported count: naming a test after an
+//! upstream test it cannot fail against would inflate it.
 
 use pdfrum_form::edit::{Place, Selection, UndoItem, UndoStack};
 
 /// One typed character.
 fn typed(ch: char, before: Selection) -> UndoItem {
     UndoItem::InsertWord {
-        old: Place::START,
-        new: Place::START,
+        old: Place::start(),
+        new: Place::start(),
         ch,
         before,
     }
@@ -30,15 +31,15 @@ fn replace_group(removed: &str, inserted: &str, before: Selection) -> Vec<UndoIt
     let mut items = vec![UndoItem::GroupBoundary];
     if !removed.is_empty() {
         items.push(UndoItem::Clear {
-            range: pdfrum_form::edit::Range::empty_at(Place::START),
+            range: pdfrum_form::edit::Range::empty_at(Place::start()),
             text: removed.to_string(),
             before,
         });
     }
     if !inserted.is_empty() {
         items.push(UndoItem::InsertText {
-            old: Place::START,
-            new: Place::START,
+            old: Place::start(),
+            new: Place::start(),
             text: inserted.to_string(),
             before,
         });
@@ -53,17 +54,18 @@ fn push_all(stack: &mut UndoStack, items: Vec<UndoItem>) {
     }
 }
 
-/// `UndoRedo`: typing five characters gives five undo steps, one per
-/// character, and walking back and forth reports the ends correctly at every
-/// step.
+/// Five loose items give five undo steps, and the walk reports both ends
+/// correctly at every one. The *granularity* claim — that typing five
+/// characters pushes five items — is `text_editing.rs`'s, since only the
+/// operation layer decides it.
 #[test]
-fn typing_five_characters_undoes_one_character_at_a_time() {
+fn five_stacked_items_undo_and_redo_one_at_a_time() {
     let mut stack = UndoStack::default();
     assert!(!stack.can_undo());
     assert!(!stack.can_redo());
 
     for ch in "ABCDE".chars() {
-        stack.push(typed(ch, Selection::EMPTY));
+        stack.push(typed(ch, Selection::empty()));
     }
     assert_eq!(stack.len(), 5, "one item per character, never coalesced");
     assert!(stack.can_undo());
@@ -92,7 +94,7 @@ fn typing_five_characters_undoes_one_character_at_a_time() {
 fn a_focus_change_to_another_field_empties_the_stack() {
     let mut stack = UndoStack::default();
     for ch in "ABC".chars() {
-        stack.push(typed(ch, Selection::EMPTY));
+        stack.push(typed(ch, Selection::empty()));
     }
     assert!(stack.can_undo());
 
@@ -103,7 +105,7 @@ fn a_focus_change_to_another_field_empties_the_stack() {
 
     // Typing again and undoing to the bottom reports the bottom.
     for ch in "ABC".chars() {
-        stack.push(typed(ch, Selection::EMPTY));
+        stack.push(typed(ch, Selection::empty()));
     }
     for _ in 0..3 {
         stack.undo();
@@ -114,9 +116,9 @@ fn a_focus_change_to_another_field_empties_the_stack() {
 /// `ContinuouslyReplaceAndKeepSelection`: three characters inserted by one
 /// call are **one** undo step, not three.
 #[test]
-fn a_three_character_replace_is_one_undo_step() {
+fn a_bracketed_group_is_one_undo_step_however_many_members() {
     let mut stack = UndoStack::default();
-    push_all(&mut stack, replace_group("", "UVW", Selection::EMPTY));
+    push_all(&mut stack, replace_group("", "UVW", Selection::empty()));
     assert!(stack.can_undo());
 
     // One undo consumes the whole bracketed group.
@@ -132,15 +134,15 @@ fn a_three_character_replace_is_one_undo_step() {
 /// are three steps, but the cut that removes all of them is **one** — the cut
 /// is atomic even though what it removed was built piecemeal.
 #[test]
-fn a_cut_is_one_step_however_many_characters_it_removed() {
+fn a_group_above_loose_items_undoes_without_disturbing_them() {
     let mut stack = UndoStack::default();
     for ch in "ABC".chars() {
-        stack.push(typed(ch, Selection::EMPTY));
+        stack.push(typed(ch, Selection::empty()));
     }
     assert_eq!(stack.len(), 3);
 
     // Selecting all records nothing; the cut that follows is one group.
-    push_all(&mut stack, replace_group("ABC", "", Selection::EMPTY));
+    push_all(&mut stack, replace_group("ABC", "", Selection::empty()));
 
     // One undo restores the whole cut.
     stack.undo();
@@ -158,14 +160,13 @@ fn a_cut_is_one_step_however_many_characters_it_removed() {
     assert_eq!(steps, 3);
 }
 
-/// `ReplaceSelection`: typing two characters and then replacing one of them
-/// leaves exactly three steps, walkable to the bottom and back.
+/// Two loose items under one group are three walk steps in each direction.
 #[test]
-fn typing_twice_then_replacing_leaves_three_steps() {
+fn two_loose_items_and_a_group_are_three_walk_steps() {
     let mut stack = UndoStack::default();
-    stack.push(typed('A', Selection::EMPTY));
-    stack.push(typed('B', Selection::EMPTY));
-    push_all(&mut stack, replace_group("A", "XYZ", Selection::EMPTY));
+    stack.push(typed('A', Selection::empty()));
+    stack.push(typed('B', Selection::empty()));
+    push_all(&mut stack, replace_group("A", "XYZ", Selection::empty()));
 
     let mut down = 0;
     while stack.can_undo() {
@@ -182,16 +183,15 @@ fn typing_twice_then_replacing_leaves_three_steps() {
     assert_eq!(up, 3, "and the walk back up matches");
 }
 
-/// `ReplaceAndKeepSelection` step 9: a fresh edit after an undo truncates the
-/// redo branch.
+/// A fresh push after an undo truncates the redo branch.
 #[test]
 fn a_fresh_edit_after_an_undo_drops_the_redo_branch() {
     let mut stack = UndoStack::default();
-    push_all(&mut stack, replace_group("", "XYZ", Selection::EMPTY));
+    push_all(&mut stack, replace_group("", "XYZ", Selection::empty()));
     stack.undo();
     assert!(stack.can_redo());
 
-    push_all(&mut stack, replace_group("", "UVW", Selection::EMPTY));
+    push_all(&mut stack, replace_group("", "UVW", Selection::empty()));
     assert!(stack.can_undo());
     assert!(!stack.can_redo(), "the redo branch is gone");
 }
@@ -218,17 +218,25 @@ fn an_item_carries_the_selection_from_before_the_edit() {
     assert_eq!(UndoItem::GroupBoundary.before(), None);
 }
 
-/// `ReplaceSelectionUndoQueueLimit` / `…RedoQueueLimit`: with the capacity at
-/// its floor, a replace group still fits and eviction never splits one.
+/// With the capacity at its floor, the **worst-case four-item** group still
+/// fits and eviction never splits one. Four is the floor precisely because of
+/// this shape, so it is the one the test must build.
 #[test]
 fn a_replace_group_fits_at_the_smallest_capacity() {
     let mut stack = UndoStack::with_max(4);
     assert_eq!(stack.max(), 4, "four is the floor, being the group's size");
 
     for round in 0..6 {
+        // A *non-empty* removal, so the group is the full four items —
+        // boundary, clear, insert, boundary — which an empty one is not.
         push_all(
             &mut stack,
-            replace_group("", &format!("v{round}"), Selection::EMPTY),
+            replace_group("A", &format!("v{round}"), Selection::empty()),
+        );
+        assert_eq!(
+            stack.len(),
+            4,
+            "the worst-case group exactly fills the floor"
         );
 
         assert!(stack.len() <= 4, "the capacity holds");
@@ -245,13 +253,13 @@ fn a_replace_group_fits_at_the_smallest_capacity() {
     }
 }
 
-/// `SelectAllText` records nothing: selecting is not an undoable edit, so
-/// after typing one character and selecting everything, one undo returns the
-/// field to empty rather than merely dropping the selection.
+/// A stack that received one item has exactly one step in it — the shape
+/// behind "select-all records nothing", whose behavioural half is
+/// `text_editing.rs`'s `select_all_on_an_empty_field_selects_nothing`.
 #[test]
-fn selecting_all_is_not_an_undoable_edit() {
+fn one_pushed_item_is_one_step() {
     let mut stack = UndoStack::default();
-    stack.push(typed('A', Selection::EMPTY));
+    stack.push(typed('A', Selection::empty()));
 
     // A select-all pushes nothing, so the single typed character is still the
     // top of the stack and one undo reaches the bottom.

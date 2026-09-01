@@ -193,9 +193,9 @@ fn the_undo_stack_never_panics_and_holds_its_invariants() {
                         stack.push(UndoItem::GroupBoundary);
                         for _ in 0..rng.below(3) {
                             stack.push(UndoItem::Clear {
-                                range: Range::empty_at(Place::START),
+                                range: Range::empty_at(Place::start()),
                                 text: String::new(),
-                                before: Selection::EMPTY,
+                                before: Selection::empty(),
                             });
                         }
                         stack.push(UndoItem::GroupBoundary);
@@ -208,10 +208,10 @@ fn the_undo_stack_never_panics_and_holds_its_invariants() {
                     }
                     // A lone item, as a typed character does.
                     _ => stack.push(UndoItem::InsertWord {
-                        old: Place::START,
-                        new: Place::START,
+                        old: Place::start(),
+                        new: Place::start(),
                         ch: 'x',
-                        before: Selection::EMPTY,
+                        before: Selection::empty(),
                     }),
                 }
 
