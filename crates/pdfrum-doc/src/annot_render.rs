@@ -93,6 +93,14 @@ pub fn overlay<R: Resolve>(
 /// recovers after the list has dropped and reordered entries. A caller
 /// building `supplied` must use that index and not the position an annotation
 /// ended up at in the loaded list.
+///
+/// # Focus
+///
+/// `supplied` may also name the annotation that holds the keyboard focus,
+/// through [`ap::AnnotOverlay::set_focus`]. That annotation is drawn
+/// *without* the widget tint and with [`focus_rect`]'s dashed outline over
+/// whatever focus box it declares — see [`focus_rect`] for why the two travel
+/// together and why most field types declare none.
 #[expect(
     clippy::too_many_arguments,
     reason = "the pass reads six independent inputs plus its two sinks; \
@@ -142,6 +150,7 @@ pub fn overlay_with<R: Resolve>(
     // (`pdfium_test.cc:1779`), so a `/Hide` in the catalog's open action has
     // already rewritten the flag words the visibility test below reads.
     let hidden = crate::nav::hidden_by_open_action(catalog, r, limits, diags);
+    let focus = generated.focus();
 
     for (slot, annot) in list.annots.iter().enumerate() {
         let flags = hidden.flags(&annot.dict, r);
@@ -154,9 +163,7 @@ pub fn overlay_with<R: Resolve>(
         // Only the widget highlight survives, because it is painted after the
         // appearance and independently of it.
         if matches!(generated.appearance(index), ap::Appearance::Suppressed) {
-            if let Some(object) = highlight(annot, r, limits, diags) {
-                page.objects.push(object);
-            }
+            push_chrome(page, annot, index, focus, r, limits, diags);
             continue;
         }
         // A checkbox or radio button whose *state's* appearance stream is
@@ -166,9 +173,7 @@ pub fn overlay_with<R: Resolve>(
             && let Some(object) = invalid_outline(annot, r)
         {
             page.objects.push(object);
-            if let Some(object) = highlight(annot, r, limits, diags) {
-                page.objects.push(object);
-            }
+            push_chrome(page, annot, index, focus, r, limits, diags);
             continue;
         }
         // A generated appearance may also move the rectangle it draws into:
@@ -192,9 +197,7 @@ pub fn overlay_with<R: Resolve>(
                 // `cffl_interactiveformfiller.cpp:85-94`), so a field with no
                 // `/AP` at all still tints. `password.in` is nothing but two
                 // such fields.
-                if let Some(object) = highlight(annot, r, limits, diags) {
-                    page.objects.push(object);
-                }
+                push_chrome(page, annot, index, focus, r, limits, diags);
                 continue;
             };
             (form, annot.clone())
@@ -210,10 +213,158 @@ pub fn overlay_with<R: Resolve>(
         if let Some(object) = build_form_object(&form, matrix, &resources, r, ctx, limits, diags) {
             page.objects.push(object);
         }
-        if let Some(object) = highlight(annot, r, limits, diags) {
+        push_chrome(page, annot, index, focus, r, limits, diags);
+    }
+}
+
+/// Appends whichever of the two pieces of widget chrome this annotation
+/// earns, after its appearance is down.
+///
+/// The two are **exclusive**, and that exclusivity is the whole of this
+/// function. `CFFL_InteractiveFormFiller::OnDraw`
+/// (`cffl_interactiveformfiller.cpp:68-95`) is one `if`/`else` over whether
+/// the widget has a live form-field control:
+///
+/// - With one (`:69-83`) it draws the control's own appearance, and then
+///   *returns* — through one of three exits, none of which reaches the tint.
+///   It returns immediately when the widget is not the focus annotation, it
+///   returns when the focus box comes back empty, and it returns after
+///   stroking the focus rectangle. **A widget being edited is never tinted.**
+/// - Without one (`:85-94`) it draws the file's appearance and then
+///   `DrawShadow` — the tint.
+///
+/// A live control exists only for a widget an event has reached, and a
+/// session focuses one field at a time, so the focused annotation is the one
+/// that takes the first branch. Every other annotation on the page takes the
+/// second and is unaffected by focus existing at all.
+fn push_chrome<R: Resolve>(
+    page: &mut Page,
+    annot: &Annotation,
+    index: usize,
+    focus: Option<ap::Focus>,
+    r: &R,
+    limits: &Limits,
+    diags: &mut Diagnostics,
+) {
+    if let Some(focus) = focus.filter(|focus| focus.annot == index) {
+        if let Some(object) = focus_rect(annot, focus.box_) {
             page.objects.push(object);
         }
+        return;
     }
+    if let Some(object) = highlight(annot, r, limits, diags) {
+        page.objects.push(object);
+    }
+}
+
+/// The dashed black rectangle stroked around a focused widget's focus box.
+///
+/// `CFX_DrawUtils::DrawFocusRect` (`core/fxge/cfx_drawutils.cpp:16-39`) walks
+/// the box's four corners as an explicit move-and-four-lines path — top-left,
+/// bottom-left, bottom-right, top-right, back to top-left — and strokes it
+/// with a `CFX_GraphStateData` carrying nothing but `set_dash_array({1.0f})`.
+/// Everything else is that struct's defaults (`cfx_graphstatedata.h:52-55`):
+/// width **1.0**, phase **0**, butt caps, miter joins. The colour is
+/// `ArgbEncode(255, 0, 0, 0)` — opaque black — and the fill argb is **0**, so
+/// the `EvenOddOptions()` beside it names a rule for a fill that never
+/// happens. That is [`pdfrum_page::FillRule::None`] here, the same spelling
+/// [`invalid_outline`] uses for the same reason.
+///
+/// # Which widgets have a focus box at all
+///
+/// Most have none, and the empty answer is not an edge case — it is the
+/// common one. `CFFL_FormField::GetFocusBox` (`cffl_formfield.cpp:480-489`)
+/// asks the live control for `GetFocusRect`, and the overrides disagree:
+///
+/// | control | `GetFocusRect` | box |
+/// |---|---|---|
+/// | `CPWL_Edit` — text field (`cpwl_edit.cpp:313-315`) | empty | none |
+/// | `CPWL_ComboBox` — combo box (`cpwl_combo_box.cpp:321-323`) | empty | none |
+/// | `CPWL_ListBox`, multi-select (`cpwl_list_box.cpp:227-234`) | the caret item's rectangle, clipped to the client area | [`ap::FocusBox::Rect`] |
+/// | `CPWL_ListBox`, single-select, and the buttons | `CPWL_Wnd::GetFocusRect` (`cpwl_wnd.cpp:713-719`) — the window rectangle inflated by 1 | [`ap::FocusBox::Inflated`] |
+/// | `CPWL_PushButton` (`cpwl_special_button.cpp:21-24`) | the window rectangle *deflated* by the border width | [`ap::FocusBox::Rect`] |
+///
+/// So a focused text field draws no outline whatever, which is what the four
+/// `form_textfield_focused_*` goldens carry: a caret and glyphs over plain
+/// white, with neither a tint nor a dashed box. The one corpus file that does
+/// stroke one is `scrollable_widgets1`, a multi-select list box, and its
+/// dashes trace a **14-row band inside** the widget — the caret item — rather
+/// than the widget's own edges.
+///
+/// A caller that has the list control's scroll and caret state names the
+/// rectangle it computed; a caller that does not says [`ap::FocusBox::None`]
+/// and still gets the tint suppressed, which is the half of the behaviour
+/// that does not need the control.
+///
+/// # The page-space clip that is not applied here
+///
+/// `GetFocusBox` also drops the rectangle when the page's `/MediaBox` does
+/// not *contain* it (`cffl_formfield.cpp:487-488`), which is a containment
+/// test rather than an intersection — a box hanging one unit off the page
+/// edge is discarded whole. That test belongs to whoever computes the
+/// rectangle, because it needs the page box; this function strokes what it is
+/// given.
+#[must_use]
+fn focus_rect(annot: &Annotation, box_: ap::FocusBox) -> Option<pdfrum_page::PageObject> {
+    let rect = match box_ {
+        ap::FocusBox::None => return None,
+        ap::FocusBox::Rect(rect) => rect,
+        // `CFX_FloatRect::Inflate(1, 1)` then `Normalize()`, which is
+        // `CPWL_Wnd::GetFocusRect` over a window rectangle that is the
+        // annotation's own — `CFFL_FormField`'s window is created at
+        // `GetPDFAnnotRect` and mapped back by `PWLtoFFL`.
+        ap::FocusBox::Inflated => normalized(annot.rect).inflate(1.0, 1.0),
+    };
+    let rect = normalized(rect);
+    // `CFX_FloatRect::IsEmpty` is `right <= left || top <= bottom`, so a
+    // degenerate box strokes nothing and `OnDraw` returns at `:76-78`.
+    if rect.width() <= 0.0 || rect.height() <= 0.0 {
+        return None;
+    }
+    let mut stroke = pdfrum_page::ColorValue::default();
+    stroke.set_space(std::sync::Arc::new(pdfrum_page::ColorSpace::DeviceRgb));
+    stroke.set_components(&[0.0, 0.0, 0.0]);
+    let state = pdfrum_page::GraphicsState {
+        stroke,
+        stroke_params: pdfrum_page::state::StrokeParams {
+            // `CFX_GraphStateData`'s own defaults, none of which
+            // `DrawFocusRect` overrides.
+            width: 1.0,
+            dash: [1.0].into_iter().collect(),
+            dash_phase: 0.0,
+            ..pdfrum_page::state::StrokeParams::default()
+        },
+        ..pdfrum_page::GraphicsState::default()
+    };
+    Some(pdfrum_page::PageObject::Path(Box::new(
+        pdfrum_page::Content {
+            object: pdfrum_page::PathObject {
+                path: kurbo::Shape::to_path(&rect, 0.1),
+                matrix: kurbo::Affine::IDENTITY,
+                // Fill argb 0 beside the black stroke: nothing is filled.
+                fill_rule: pdfrum_page::FillRule::None,
+                stroke: true,
+            },
+            state,
+            marks: pdfrum_page::state::ContentMarks::default(),
+            content_stream: pdfrum_page::NO_CONTENT_STREAM,
+            // Annotation chrome is drawn into the page graph but is not page
+            // content: it belongs to no `/Contents` element and must never
+            // make an ordinary render count as a mutation.
+            dirty: false,
+            active: true,
+        },
+    )))
+}
+
+/// A rectangle with its corners sorted, which is `CFX_FloatRect::Normalize`.
+fn normalized(rect: kurbo::Rect) -> kurbo::Rect {
+    kurbo::Rect::new(
+        rect.x0.min(rect.x1),
+        rect.y0.min(rect.y1),
+        rect.x0.max(rect.x1),
+        rect.y0.max(rect.y1),
+    )
 }
 
 /// The hairline grey box drawn over a checkbox or radio button whose state
@@ -276,13 +427,7 @@ fn invalid_outline<R: Resolve>(annot: &Annotation, r: &R) -> Option<pdfrum_page:
         return None;
     }
 
-    let rect = annot.rect;
-    let rect = kurbo::Rect::new(
-        rect.x0.min(rect.x1),
-        rect.y0.min(rect.y1),
-        rect.x0.max(rect.x1),
-        rect.y0.max(rect.y1),
-    );
+    let rect = normalized(annot.rect);
     let mut stroke = pdfrum_page::ColorValue::default();
     stroke.set_space(std::sync::Arc::new(pdfrum_page::ColorSpace::DeviceRgb));
     stroke.set_components(&[OUTLINE_GREY, OUTLINE_GREY, OUTLINE_GREY]);
@@ -410,16 +555,10 @@ fn highlight<R: Resolve>(
     // (`cpdfsdk_widget.cpp:719-724`), so the highlight that every other
     // fillable field gets is never painted over it. Six corpus signature
     // files say so, four of them byte-exact.
-    let rect = annot.rect;
     // `CFX_FloatRect::Normalize` before `ToFxRect`: `GetRect` hands back a
     // normalized rectangle, and a `/Rect` written corner-first would
     // otherwise truncate to an empty one.
-    let rect = kurbo::Rect::new(
-        rect.x0.min(rect.x1),
-        rect.y0.min(rect.y1),
-        rect.x0.max(rect.x1),
-        rect.y0.max(rect.y1),
-    );
+    let rect = normalized(annot.rect);
     if rect.width() <= 0.0 || rect.height() <= 0.0 {
         return None;
     }
@@ -498,10 +637,12 @@ fn is_visible(subtype: Subtype, flags: crate::annot::AnnotFlags) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{highlight, highlight_state, invalid_outline, is_visible};
+    use super::{focus_rect, highlight, highlight_state, invalid_outline, is_visible, push_chrome};
     use crate::annot::{AnnotFlags, Annotation, Subtype};
+    use crate::ap;
     use pdfrum_common::{Diagnostics, Limits};
     use pdfrum_object::{Dict, Name, NoResolve, Object};
+    use pdfrum_page::PageObject;
 
     fn annot(subtype: Subtype, flags: i64) -> Annotation {
         let mut annot = Annotation::read(&Dict::new(), &NoResolve);
@@ -715,5 +856,254 @@ mod tests {
     #[test]
     fn a_popup_is_never_painted() {
         assert!(!visible(Subtype::Popup, 0));
+    }
+
+    /// The chrome one annotation earns, as the loop appends it.
+    fn chrome(annot: &Annotation, index: usize, focus: Option<ap::Focus>) -> Vec<PageObject> {
+        let (limits, mut diags) = (Limits::default(), Diagnostics::default());
+        let mut page = pdfrum_page::Page::empty();
+        push_chrome(
+            &mut page, annot, index, focus, &NoResolve, &limits, &mut diags,
+        );
+        page.objects
+    }
+
+    /// The one path object a slice of chrome holds.
+    fn only_path(objects: &[PageObject]) -> &pdfrum_page::Content<pdfrum_page::PathObject> {
+        match objects {
+            [PageObject::Path(path)] => path,
+            _ => panic!("exactly one path"),
+        }
+    }
+
+    /// `CFFL_InteractiveFormFiller::OnDraw`'s live-control branch returns
+    /// before `DrawShadow` through all three of its exits, so the widget
+    /// being edited carries none of the tint every other fillable field does.
+    /// Measured on `form_textfield_focused_ltr`: the plain golden tints all
+    /// 3000 pixels of the widget and every `--send-events` golden of the same
+    /// file tints none of them.
+    #[test]
+    fn the_focused_annotation_loses_its_tint() {
+        let widget = widget("Tx", 0);
+        assert_eq!(chrome(&widget, 3, None).len(), 1, "unfocused: a tint");
+        assert!(
+            chrome(&widget, 3, Some(ap::Focus::at(3))).is_empty(),
+            "focused with no focus box: nothing at all"
+        );
+    }
+
+    /// A focused text field draws no outline: `CPWL_Edit::GetFocusRect`
+    /// answers an empty rectangle and `OnDraw` returns at `:76-78`. All four
+    /// `form_textfield_focused_*` goldens carry a caret and glyphs over plain
+    /// white with no dashes anywhere.
+    #[test]
+    fn a_focus_box_of_none_strokes_nothing_but_still_suppresses_the_tint() {
+        let widget = widget("Tx", 0);
+        let focused = ap::Focus {
+            annot: 0,
+            box_: ap::FocusBox::None,
+        };
+        assert!(chrome(&widget, 0, Some(focused)).is_empty());
+        assert_eq!(focus_rect(&widget, ap::FocusBox::None), None);
+    }
+
+    /// The dashed rectangle itself: `CFX_DrawUtils::DrawFocusRect` strokes
+    /// opaque black at width 1 with a one-unit dash array and fills nothing.
+    #[test]
+    fn a_focused_widget_strokes_a_dashed_black_hairline_over_its_focus_box() {
+        let widget = widget("Tx", 0);
+        let box_ = kurbo::Rect::new(101.0, 402.0, 186.0, 416.0);
+        let objects = chrome(
+            &widget,
+            0,
+            Some(ap::Focus {
+                annot: 0,
+                box_: ap::FocusBox::Rect(box_),
+            }),
+        );
+        let path = only_path(&objects);
+        assert!(path.object.stroke);
+        // Fill argb 0 beside the stroke: `EvenOddOptions()` names a rule for
+        // a fill that never happens.
+        assert_eq!(path.object.fill_rule, pdfrum_page::FillRule::None);
+        assert_eq!(
+            path.state.stroke.to_rgb().expect("a colour").to_bytes(),
+            [0, 0, 0]
+        );
+        // `CFX_GraphStateData`'s defaults, none of which `DrawFocusRect`
+        // overrides but the dash array.
+        assert!((path.state.stroke_params.width - 1.0).abs() < f32::EPSILON);
+        assert_eq!(path.state.stroke_params.dash.as_slice(), [1.0]);
+        assert!(path.state.stroke_params.dash_phase.abs() < f32::EPSILON);
+        // And it traces exactly the box it was handed, in page space.
+        assert_eq!(path.object.matrix, kurbo::Affine::IDENTITY);
+        assert_eq!(kurbo::Shape::bounding_box(&path.object.path), box_);
+        assert!(!path.dirty, "annotation chrome is not page content");
+    }
+
+    /// `scrollable_widgets1`'s acceptance geometry, read off the oracle's own
+    /// `--send-events` goldens.
+    ///
+    /// The file is a **multi-select list box** (`/FT /Ch`, `/Ff 2097152`)
+    /// over `/Rect [100 400 200 430]` on a 300x600 page, so the widget covers
+    /// device rows 170..199 and columns 100..199. Both events goldens stroke
+    /// a dashed box over **rows 185..198 and columns 101..186** (the second,
+    /// with a different scroll, over rows 171..184) — a 14-row band *inside*
+    /// the widget, which is `CPWL_ListBox::GetFocusRect`'s caret item
+    /// clipped to the client area, not the widget's own edges. Neither
+    /// golden carries a single tinted pixel.
+    #[test]
+    fn the_list_box_focus_box_is_the_caret_item_not_the_widget_rect() {
+        let mut listbox = widget("Ch", 1 << 21);
+        listbox.rect = kurbo::Rect::new(100.0, 400.0, 200.0, 430.0);
+        // Device row 185 on a 600-tall page is y = 415..414; the golden's
+        // band is rows 185..198, so y = 401 up to y = 415.
+        let caret_item = kurbo::Rect::new(101.0, 401.0, 186.0, 415.0);
+        let objects = chrome(
+            &listbox,
+            0,
+            Some(ap::Focus {
+                annot: 0,
+                box_: ap::FocusBox::Rect(caret_item),
+            }),
+        );
+        let bounds = kurbo::Shape::bounding_box(&only_path(&objects).object.path);
+        assert_eq!(bounds, caret_item);
+        // 14 device rows tall and 85 columns wide, inside a widget that is 30
+        // by 100.
+        assert!((bounds.height() - 14.0).abs() < f64::EPSILON);
+        assert!(bounds.width() < listbox.rect.width());
+    }
+
+    /// `CPWL_Wnd::GetFocusRect` inflates the window rectangle by one unit on
+    /// every side, which for a check box or a radio button is the
+    /// annotation's own rectangle grown by one.
+    #[test]
+    fn an_inflated_focus_box_grows_the_annotation_rect_by_one_unit() {
+        let mut check = widget("Btn", 0);
+        check.rect = kurbo::Rect::new(100.0, 100.0, 200.0, 130.0);
+        let objects = chrome(
+            &check,
+            0,
+            Some(ap::Focus {
+                annot: 0,
+                box_: ap::FocusBox::Inflated,
+            }),
+        );
+        assert_eq!(
+            kurbo::Shape::bounding_box(&only_path(&objects).object.path),
+            kurbo::Rect::new(99.0, 99.0, 201.0, 131.0)
+        );
+        // A `/Rect` written corner-first normalizes first, so inflating it
+        // grows rather than collapses it.
+        let mut backwards = check.clone();
+        backwards.rect = kurbo::Rect::new(200.0, 130.0, 100.0, 100.0);
+        let objects = chrome(
+            &backwards,
+            0,
+            Some(ap::Focus {
+                annot: 0,
+                box_: ap::FocusBox::Inflated,
+            }),
+        );
+        assert_eq!(
+            kurbo::Shape::bounding_box(&only_path(&objects).object.path),
+            kurbo::Rect::new(99.0, 99.0, 201.0, 131.0)
+        );
+    }
+
+    /// A degenerate box is `CFX_FloatRect::IsEmpty` and `OnDraw` returns at
+    /// `:76-78` without stroking — but the tint is still gone, because that
+    /// return is inside the live-control branch.
+    #[test]
+    fn an_empty_focus_box_strokes_nothing_and_does_not_bring_the_tint_back() {
+        let widget = widget("Tx", 0);
+        for degenerate in [
+            kurbo::Rect::new(100.0, 100.0, 100.0, 130.0),
+            kurbo::Rect::new(100.0, 100.0, 200.0, 100.0),
+        ] {
+            assert_eq!(focus_rect(&widget, ap::FocusBox::Rect(degenerate)), None);
+            assert!(
+                chrome(
+                    &widget,
+                    0,
+                    Some(ap::Focus {
+                        annot: 0,
+                        box_: ap::FocusBox::Rect(degenerate)
+                    })
+                )
+                .is_empty()
+            );
+        }
+    }
+
+    /// Focus is one index, and every other annotation on the page draws
+    /// exactly what it drew before focus existed — the same objects, compared
+    /// by value.
+    #[test]
+    fn every_index_but_the_focused_one_is_unchanged() {
+        let widgets = [
+            widget("Tx", 0),
+            widget("Ch", 0),
+            widget("Btn", 0),
+            // The three that were never tinted anyway.
+            widget("Btn", 1 << 16),
+            widget("Sig", 0),
+            widget("Tx", 1),
+        ];
+        let focused = ap::Focus {
+            annot: 1,
+            box_: ap::FocusBox::Inflated,
+        };
+        for (index, annot) in widgets.iter().enumerate() {
+            let before = chrome(annot, index, None);
+            let after = chrome(annot, index, Some(focused));
+            if index == focused.annot {
+                assert_ne!(before, after, "the focused index does change");
+                continue;
+            }
+            assert_eq!(before, after, "index {index} moved");
+        }
+    }
+
+    /// The `None` path is the byte-identical one: with no focus at all every
+    /// annotation gets exactly the tint decision `highlight` alone makes,
+    /// which is what the pass did before focus was expressible.
+    #[test]
+    fn no_focus_is_the_pass_as_it_was() {
+        let (limits, mut diags) = (Limits::default(), Diagnostics::default());
+        for annot in [
+            widget("Tx", 0),
+            widget("Ch", 0),
+            widget("Btn", 0),
+            widget("Btn", 1 << 15),
+            widget("Btn", 1 << 16),
+            widget("Sig", 0),
+            widget("Tx", 1),
+            annot(Subtype::Square, 0),
+        ] {
+            let expected: Vec<PageObject> = highlight(&annot, &NoResolve, &limits, &mut diags)
+                .into_iter()
+                .collect();
+            for index in 0..3 {
+                assert_eq!(chrome(&annot, index, None), expected, "index {index}");
+            }
+        }
+    }
+
+    /// An overlay's focus survives a merge and is not bounded by its length —
+    /// a session sized for the one appearance it produced can still name the
+    /// annotation that holds the focus.
+    #[test]
+    fn focus_merges_over_and_is_not_bounded_by_the_overlay() {
+        let mut base = ap::AnnotOverlay::with_capacity(4);
+        assert_eq!(base.focus(), None);
+        let mut supplied = ap::AnnotOverlay::with_capacity(1);
+        supplied.set_focus(ap::Focus::at(9));
+        base.merge_over(&supplied);
+        assert_eq!(base.focus(), Some(ap::Focus::at(9)));
+        // An overlay with nothing to say about focus leaves the base's alone.
+        base.merge_over(&ap::AnnotOverlay::with_capacity(4));
+        assert_eq!(base.focus(), Some(ap::Focus::at(9)));
     }
 }
