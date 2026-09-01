@@ -134,7 +134,10 @@ impl Backend {
 ///
 /// None of the three can be derived from the others, and any one of them on
 /// its own is reason to build an overlay.
-#[derive(Debug, Clone, Copy, Default)]
+// Not `Copy`: the popup carries its option labels, which are owned strings —
+// see `pdfrum::PopupView` for why the view is owned rather than borrowed from
+// the session.
+#[derive(Debug, Clone, Default)]
 pub struct SessionView<'a> {
     /// The appearance updates this page's event replay produced.
     pub updates: &'a [pdfrum::AppearanceUpdate],
@@ -142,6 +145,26 @@ pub struct SessionView<'a> {
     pub focus: Option<pdfrum_doc::ap::Focus>,
     /// Which annotation the pointer is inside, by raw `/Annots` index.
     pub hover: Option<usize>,
+    /// The open combo-box dropdown on this page, if one is open.
+    ///
+    /// The library publishes this rather than drawing it — a dropdown is a
+    /// window and `pdfrum-form` does not make windows (STYLE.md §2b). This
+    /// tool is the host that draws it, in [`crate::chrome`], because the
+    /// oracle's `FPDF_FFLDraw` does and a golden comparison has to see the
+    /// same pixels.
+    pub popup: Option<pdfrum::PopupView>,
+}
+
+/// One annotation's dictionary, by **raw** `/Annots` index.
+///
+/// The chrome painter needs the combo box's own dictionary to read the two
+/// things the list inherits from it: `/MK`'s colours and `/DA`'s font. Read
+/// straight from the array rather than through `AnnotList`, because that list
+/// drops pop-ups and reorders, and the index here is the raw one.
+fn widget_dict<R: Resolve>(page: &PageDict, index: usize, r: &R) -> Option<pdfrum_object::Dict> {
+    page.dict
+        .array(pdfrum_object::names::ANNOTS, r)?
+        .dict_at(index, r)
 }
 
 /// Collects a form session's updates into the overlay the annotation pass
@@ -276,6 +299,26 @@ pub fn render<R: Resolve>(
         &mut build_diags,
         supplied.as_ref(),
     );
+    // The one piece of chrome the annotation pass cannot place, because it
+    // falls **outside** the widget's `/Rect` and an appearance form is fitted
+    // into that rectangle rather than translated to it. Appended after the
+    // pass, which is also the order the oracle composites in: `FPDF_FFLDraw`
+    // runs after `FPDF_RenderPageBitmap`, so the list covers whatever it
+    // overlaps.
+    if let Some(popup) = &session.popup
+        && let Some(widget) = widget_dict(page, popup.annot.index as usize, r)
+    {
+        crate::chrome::push_popup(
+            &mut built,
+            popup,
+            &widget,
+            catalog,
+            r,
+            ctx,
+            &limits,
+            &mut build_diags,
+        );
+    }
     ctx.decode_target = previous;
     let page = built;
     let opts = RenderOptions {

@@ -1271,10 +1271,10 @@ fn set_combo_text(session: &mut FormSession, field: FieldId, label: String) {
 /// common case: only a click on a drop button, a `Return` or a `Space` on a
 /// gated combo opens one.
 #[must_use]
-pub fn popup_view<'a, R: Resolve>(
-    session: &'a FormSession,
+pub fn popup_view<R: Resolve>(
+    session: &FormSession,
     ctx: &Context<'_, R>,
-) -> Option<crate::popup::PopupView<'a>> {
+) -> Option<crate::popup::PopupView> {
     let (field, annot) = open_popup_of(session, ctx.page)?;
     let widget = ctx.widget(annot)?;
     let FieldState::Choice(choice) = session.fields.get(&field)? else {
@@ -1285,11 +1285,15 @@ pub fn popup_view<'a, R: Resolve>(
         annot,
         anchor: widget.rect,
         geometry,
-        options: &choice.options,
+        options: choice
+            .options
+            .iter()
+            .map(|option| option.label.clone())
+            .collect(),
         selected: choice.selected.iter().next().copied(),
         hovered: choice.hovered,
         top_visible: choice.top_visible,
-        edit_text: choice.config.editable.then_some(choice.edit_text.as_str()),
+        edit_text: choice.config.editable.then(|| choice.edit_text.clone()),
     })
 }
 
@@ -1675,17 +1679,18 @@ fn clear_undo(session: &mut FormSession, field: FieldId) {
 ///
 /// # What this still cannot do, and why it is recorded rather than faked
 ///
-/// Drawing the difference needs one more thing that is not in this crate.
-/// A toggle's appearance is its `/AS` state, which
-/// `ap::widget::generate_with_live` reads from the **widget dictionary** — it
-/// takes a `LiveState` for a body's text and a `Highlight` for a caret, but no
-/// override for the appearance state, so a session cannot tell it to draw a
-/// kid `Off`. Until `pdfrum-doc` offers that, a radio group's siblings render
-/// from the file's `/AS` whatever the session believes, and the two kids of a
-/// group are only distinguishable through this field.
+/// # And how the difference is drawn
 ///
-/// Recording the chosen control now is what makes that a one-line change when
-/// the seam exists, rather than a second state model.
+/// A toggle's appearance is its `/AS` state, which the generator used to read
+/// only from the **widget dictionary** — so a session could record the chosen
+/// kid and not show it, which is how this landed in M14's OWED list. It now
+/// reads [`ap::widget::LiveInput::appearance_state`] first, and `generate`
+/// fills that in from [`ToggleState::state_for_control`]: the chosen kid its
+/// own on-state name, every sibling `Off`, and a group nothing has clicked
+/// `None`, which is the file's own `/AS` unchanged.
+///
+/// Recording the chosen control was what made that a one-line change when the
+/// seam arrived, rather than a second state model — and it was.
 fn clear_siblings<R: Resolve>(
     session: &mut FormSession,
     ctx: &Context<'_, R>,
@@ -2097,6 +2102,17 @@ fn generate<R: Resolve>(
     let selected = selected_rows(state);
     let live = live_state(state, &selected);
     let highlight = focused.then(|| highlight_of(ctx, widget, state)).flatten();
+    // A radio group's kids each carry a different on-state name, and a click
+    // on one sets that kid's `/AS` to its own name and every sibling's to
+    // `Off`. A session holds one record per *field*, so this is the per-kid
+    // half of `CheckControl` the record can express — see
+    // `ToggleState::state_for_control`, and `clear_siblings` for what puts
+    // the chosen control there. `None` means "read the widget's own `/AS`",
+    // which is every widget nothing has clicked.
+    let as_override = match state {
+        FieldState::Toggle(toggle) => toggle.state_for_control(widget.id),
+        FieldState::Text(_) | FieldState::Choice(_) | FieldState::Button(_) => None,
+    };
     with_font(ctx, widget, |font, substitute| {
         ap::widget::generate_with_live_faces(
             &widget.dict,
@@ -2107,6 +2123,7 @@ fn generate<R: Resolve>(
                 caret_and_selection: highlight.as_ref(),
                 live: live.as_ref(),
                 substitute,
+                appearance_state: as_override.map(str::as_bytes),
             },
         )
     })

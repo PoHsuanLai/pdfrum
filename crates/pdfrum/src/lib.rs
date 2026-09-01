@@ -192,8 +192,15 @@ pub use form_session::{
     AppearanceUpdate, EventModifiers, EventResponse, FormSession, MouseButton, SessionConfig,
     UpdateKind, VirtualKey,
 };
+// The viewer chrome a host draws for itself: an open combo dropdown and a
+// scrolled choice widget. Values, not a trait — see `FormSession::popup_for_page`
+// and STYLE.md §2b's 2026-09-01 ruling for why this is state a caller pulls
+// rather than a seam the library calls back through.
 pub use outline::{Bookmark, Outline};
 pub use page::{Page, Rotation};
+pub use pdfrum_form::session::AnnotId;
+pub use pdfrum_form::tab::Rect as FormRect;
+pub use pdfrum_form::{Placement, PopupGeometry, PopupView, ScrollView};
 pub use render::{Backend, ColorMode, ColorScheme, Pixmap, RenderOptions, TextAa};
 pub use save::{SaveOptions, Update};
 pub use session::RenderSession;

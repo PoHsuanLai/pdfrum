@@ -246,9 +246,16 @@ fn a_click_on_the_drop_button_opens_the_list_below() {
     let view = route::popup_view(&session, &ctx).expect("an open list has a view");
     assert_eq!(view.geometry.placement, pdfrum_form::Placement::Below);
     assert_eq!(view.options.len(), 2);
-    assert_eq!(view.options[0].label, "Spain");
-    assert_eq!(view.options[1].label, "Sweden");
+    assert_eq!(view.options[0], "Spain");
+    assert_eq!(view.options[1], "Sweden");
     assert_eq!(view.selected, None, "nothing is selected until a row is");
+    assert_eq!(view.label_at(0), Some("Spain"));
+    assert_eq!(view.label_at(1), Some("Sweden"));
+    assert_eq!(view.label_at(2), None, "there is no third row to draw");
+    assert!(
+        !view.is_banded(0) && !view.is_banded(1),
+        "an untouched list bands nothing"
+    );
     // Two rows plus a one-unit border on each side, hanging from the
     // widget's own bottom edge — which is what the golden's rows 26..54
     // measure back to. The row height is the *substituted* face's laid-out
