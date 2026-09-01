@@ -170,6 +170,36 @@ impl<'a> FormSession<'a> {
     /// Starts a session with explicit switches *and* a caller-owned
     /// [`BuildContext`] — [`FormSession::with_config`] and
     /// [`FormSession::with_context`] together.
+    ///
+    /// The pair exists because the two questions are independent: which
+    /// keyboard the accelerator is for, and which faces the document's fonts
+    /// resolve to. A caller that has both answers should not have to give up
+    /// one to state the other.
+    ///
+    /// ```
+    /// use pdfrum::{
+    ///     BuildContext, Document, EventModifiers, FormSession, SessionConfig, VirtualKey,
+    /// };
+    ///
+    /// let doc = Document::open("tests/fixtures/text_form.pdf")?;
+    /// let mut ctx = BuildContext::new();
+    /// // An Apple keyboard, resolved through the caller's own context.
+    /// let mut session =
+    ///     FormSession::with_config_in(&doc, SessionConfig::apple(), &mut ctx);
+    ///
+    /// // The field is `/Rect [100 100 200 130]`, so (120, 115) is inside it.
+    /// session.on_mouse_move(0, 120.0, 115.0, EventModifiers::NONE);
+    /// session.on_mouse_down(0, 120.0, 115.0, EventModifiers::NONE);
+    /// session.on_mouse_up(0, 120.0, 115.0, EventModifiers::NONE);
+    /// assert!(session.focused_annot().is_some());
+    ///
+    /// // And the Apple switch is live: Command is the accelerator, so
+    /// // Command+A selects all where Control+A types nothing.
+    /// session.on_char('x', EventModifiers::NONE);
+    /// session.on_key_down(VirtualKey::A, EventModifiers::META);
+    /// assert_eq!(session.selected_text().as_deref(), Some("x"));
+    /// # Ok::<(), pdfrum::Error>(())
+    /// ```
     #[must_use]
     pub fn with_config_in(
         doc: &'a Document,
