@@ -214,6 +214,28 @@ mod tests {
     }
 
     #[test]
+    fn form_events_failures_cluster_under_their_own_tag() {
+        let board = Scoreboard::new(
+            "t".to_owned(),
+            vec![
+                fail("a.pdf#form-events", &[tag::FORM_EVENTS]),
+                fail("b.pdf#form-events", &[tag::FORM_EVENTS]),
+                fail("c.pdf", &[tag::PIXEL_FAIL]),
+            ],
+        );
+        let clusters = cluster(&board);
+        let form = clusters.iter().find(|c| c.tag == tag::FORM_EVENTS).unwrap();
+        assert_eq!(form.count, 2);
+        assert_eq!(
+            form.examples,
+            [
+                "a.pdf#form-events".to_owned(),
+                "b.pdf#form-events".to_owned()
+            ]
+        );
+    }
+
+    #[test]
     fn equal_sized_clusters_break_ties_alphabetically() {
         let board = Scoreboard::new(
             "t".to_owned(),
