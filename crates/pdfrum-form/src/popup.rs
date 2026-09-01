@@ -11,7 +11,7 @@
 //! taken over the host's job.
 //!
 //! So this module publishes what the C++'s `CPWL_ComboBox` knows and lets the
-//! host paint: **where** the list would be ([`PopupView::rect`]), **what** is
+//! host paint: **where** the list would be ([`PopupView::geometry`]), **what** is
 //! in it ([`PopupView::options`]), **which** row is selected or hovered, and
 //! how tall a row is. A host that wants to draw the dropdown has every number
 //! it needs; a host that does not want to draw it is not asked to. The
