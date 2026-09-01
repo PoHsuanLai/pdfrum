@@ -239,3 +239,249 @@ honest limit of what this commit can claim.
   Neither change is expected to cost: `composite_solid` removes two divides per
   channel from the solid-fill path rather than adding any, and
   `draw_glyph_lcd` is unreachable until a caller opts in.
+
+## Track A — fonts and metrics (`pdfrum-font`, `pdfrum-doc`)
+
+Three items: OWED 1 (`char_width` against the substituted face), OWED 6
+(`caret_rect` and `is_rtl`), OWED 9 (the seven unported charset tables). Two
+closed, one was already closed before this track started, and one item from
+another track's queue was landed here because only this crate can hold it.
+
+| OWED | verdict | commit |
+|---|---|---|
+| 1 | **closed** — but the recorded mechanism was one layer off | `0f77c8e` + `8b1f76e` |
+| 6 | **already closed** at M14's own close; verified, no code | `bb53fa7` (M14-doc §8.1) |
+| 9 | **closed** | `f5dc65b` |
+| 8 | closed on this crate's side, at Track B's request | `6e87424` |
+
+### OWED 1 — the caret was measured at the size that was *asked for*
+
+**The recorded mechanism is not the defect.** The OWED row reads it as
+`Font::char_width` answering the base-14 table where the substituted face
+draws — 311/1000 for `'*'` under a `/Helvetica` with no `/Widths`, against
+Arimo's 389. Measured, `char_width` already answers **389**, under a default
+`SubstitutionOptions` and under the hermetic one alike. It is
+`LoadCharMetrics`'s `use_font_width_` branch
+(`core/fpdfapi/font/cpdf_facebasedsimplefont.cpp:46-86`), and
+`SimpleFont::char_width` implements it: no `/Widths` sets `use_face_widths`,
+and the face substitution has already replaced `glyphs` by the time a width is
+asked for. The row's C++ citation, `CPDF_Font::GetCharWidthF`, does not exist
+in the oracle checkout at all — the accessor is `GetCharWidth`, and it is
+where our port already agrees.
+
+What was actually wrong is one layer up, and it is the same *class* of error:
+measuring with the wrong number.
+
+`Config::font_size` is a **request**; `0.0` is the request for automatic
+sizing. `vt::layout` resolves it and records the answer in
+`Layout::font_size` — which is exactly `CPVT_VariableText::Rearrange`
+(`core/fpdfdoc/cpvt_variabletext.cpp:834-846`) calling
+`SetFontSize(GetAutoFontSize())`, writing the resolved size into the field
+every later `GetFontSize()` reads, `CPVT_Word::CaretX`'s advance and
+`CPVT_Section::SearchWordPlaceImpl`'s midpoint included. `vt::hit` read the
+**config's** in three places, so on an auto-sized field it measured with zero:
+
+- `caret_x` added a zero advance, so every caret sat on the leading edge of
+  the character it should trail — one advance short of the gap it names, the
+  left-to-right branch collapsed onto the right-to-left one;
+- `word_at_x`'s midpoints collapsed onto each character's own origin, so the
+  bisection answered by position alone rather than by the midpoint rule;
+- `line_extent`'s fallback answered a caret of no height.
+
+`vt::edit_ap` already drew with `layout.font_size`, which is why this stayed
+invisible until a caret was drawn beside glyphs that disagreed with it.
+
+**How it was found.** Rendering `password` with `--send-events` under the
+harness flags and profiling the ink column by column: our five asterisks land
+on the oracle's columns *exactly* — 150, 160, 170, 180, 190, peak for peak —
+while our caret sits at column 189 and the oracle's at 198–199. Glyphs right,
+caret wrong, and the gap is one advance of 389/1000 at 25pt. A probe over the
+fixture's own geometry then reproduced 189.275 for place `word: 4` at a config
+size of zero and 199.0 at the layout's 25. `password` carries **no `/DA` and
+no `/DR` at all**, which is what makes the request zero and the fixture the
+one that shows it.
+
+#### The third site was reverted, because it was reasoned rather than measured
+
+Isolated on the board from M14's close (`9352635`), three release builds:
+
+| change | rows up | rows down | `password#form-events` |
+|---|---:|---:|---|
+| `caret_x` + `word_at_x` | **2** | **0** | 0.991764 → **0.999016** |
+| + `line_extent`'s fallback | 133 | **37** | 0.999022 |
+
+`line_extent`'s fallback is reached only for a place naming a line the layout
+does **not** have, and there the two sizes say different things: the layout's
+invents a height for a line that does not exist, the config's gives an
+auto-sized caller nothing. The second is upstream's —
+`CPWL_EditImpl::GetCaretRect` reads an empty word range for a missing place,
+so the caret it returns has no height. Thirty-five of the 37 drops are
+non-form-events rows, which the brief's gate does not permit, and the whole of
+`password`'s gain from it is +0.000006 against the +0.007252 the other two are
+worth. So it stays on the config's size, its doc now carries the numbers, and
+the `caret_rect` test asserts the missing-line caret has **no** height — so
+substituting the layout's size turns a test red rather than moving 170 rows
+silently.
+
+**On the two 37s.** Track C's tint change reports the same 133-up/37-down
+signature on the same rows. That is a coincidence of *population*, not a
+contaminated measurement: both changes touch every tinted form widget, so the
+same 170 rows respond to either. The trees were checked — the raster crates
+are byte-identical across all three of this track's builds — and this track's
+kept change moves two rows and no others.
+
+#### The delta, measured
+
+Against `9352635`, with the reverted fallback in place:
+
+| row | before | after |
+|---|---|---|
+| `resources/pixel/password.in#form-events` | 0.991764 | **0.999016** |
+| `resources/pixel/password.pdf#form-events` | 0.991764 | **0.999016** |
+
+**Exactly two rows move, both upward. The other 1703 are byte-identical**,
+tags and text rates unchanged; totals stay 1705 files, 1651 pass, 54 fail, and
+`--check-regressions` reports none. Measured with release tools built from
+trees archived out of git, because the working tree carries two other tracks'
+uncommitted work. The baseline reproduced `HEAD`'s committed scoreboard row
+for row, and a **second** baseline run reproduced itself row for row — the
+board carries no run-to-run noise, so every difference above is real.
+
+What is left on `password` is not this crate's: the widget tint (OWED 3, Track
+C's, now fixed) and one character of `ScrollToCaret` scroll in `pdfrum-form`.
+
+### OWED 6 — already closed, verified rather than re-fixed
+
+`vt::hit::caret_rect` does **not** ignore `is_rtl`. Both places the OWED row
+names were ported in `bb53fa7` and are recorded in M14-doc §8.1: `caret_x` is
+`if word.is_rtl { word.x } else { word.x + advance }`, which is
+`CPVT_Word::CaretX` (`core/fpdfdoc/cpvt_word.h:42`), and `line_caret_x`
+answers `line.x + line.width` when the line's first word is rtl, which is
+`GetLineCaretX` (`core/fpdfdoc/cpvt_variabletext.cpp:103-118`). The exact test
+the item asks for — `בחר` at 12pt in a plate starting at x = 1, carets
+`19, 13, 7, 1` — exists as
+`a_right_to_left_words_carets_walk_leftward_from_its_right_edge`, with
+`the_drawn_caret_rectangle_follows_the_same_right_to_left_walk` asserting the
+same four through `caret_rect`. Both pass. The OWED row is stale: it was
+written from the state before §8.1 landed and never struck.
+
+No code was written for this item. Both RTL rows still pass, and the board
+diff above shows neither moved.
+
+### OWED 9 — the seven tables, and how a table nothing renders is checked
+
+`ap::font_map::charset_unicodes` now carries all eight rows of
+`kFX_CharsetUnicodes` (`core/fxcrt/fx_codepage.cpp:208-217`) — Thai, Eastern
+European, Cyrillic, Greek, Turkish, Hebrew, Arabic, Baltic — transcribed
+verbatim. The `_` arm that swallowed every other charset is spelled out, so a
+new `Charset` variant is a compile error rather than a silent `None`.
+
+The item's own objection was that a table nothing exercises is a table nothing
+can catch a typo in. What answers it is that the transcription is checked
+against sources that are not the Rust file:
+
+1. **One FNV-1a-32 digest per row**, computed from the C++ rather than from
+   the transcription. A single flipped nibble anywhere in a row fails that
+   row's test — which a set of spot checks over 128 values cannot promise.
+2. **Each row's own script run**, which is checkable by eye against the
+   Unicode standard where a digest is not: Cyrillic's `0xC0..=0xFF` is
+   U+0410..=U+044F, Hebrew's `0xE0..=0xFA` is U+05D0..=U+05EA, Greek's two
+   runs split at `0xD2` where U+03A2 is unassigned, Arabic's `0xC1..=0xD6` is
+   U+0621..=U+0636.
+3. **The hole count**, which catches a value dropped or gained without
+   shifting the rest. Arabic has none at all — 1256 encodes every code — and
+   that is asserted too.
+
+All eight were additionally decoded byte for byte under Python's `cp874`,
+`cp1250`, `cp1251`, `cp1253`, `cp1254`, `cp1255`, `cp1256` and `cp1257`
+codecs, **zero mismatches**; the same check run against the already-landed
+Hebrew row round-tripped it exactly, which is what established the extraction
+was faithful before the other seven were taken from it. That fourth source is
+recorded in the test module's doc rather than run there: it needs a codec
+table DEPS.md has no dependency for, and restating 1024 literals would only
+verify the copy against itself.
+
+**`SUBSTITUTABLE_CHARSETS` deliberately still names Hebrew alone.** The tables
+say how a charset's characters would be *written*; that list decides which
+charsets a field actually reaches a second face for, and widening it changes
+what the corpus renders. Each added charset also needs M14-doc §8.2's
+default-face question answered for it — Hebrew's answer, the serif fallback
+via `RenameFontForTesting`'s empty-name mapping, is not automatically the
+others'. Having the table is what makes adding one a one-line change rather
+than a transcription. So this is **behaviour-neutral**: outside the tests,
+`charset_code` and `substitute_font_dict` are reached only for
+`SUBSTITUTABLE_CHARSETS`, and the board confirms no row moved.
+
+Two existing tests used Cyrillic as "the charset with no table" and could no
+longer. They move to a CJK charset, which `kFX_CharsetUnicodes` has no row for
+and is not expected to grow one, its encoding being multi-byte and a 128-entry
+high half unable to express it. Both now also assert the positive side, so
+each is about the table rather than about the function.
+
+### OWED 8 — landed here at Track B's request
+
+`ap::widget::LiveInput` grows `appearance_state: Option<&[u8]>`, and
+`is_checked` grows a sibling `is_checked_with` that takes it. Track B owns the
+state that needs it and cannot edit this crate.
+
+The reason a seam is needed at all: a radio group is **one field with several
+kid controls, each carrying a different on-state name**. Clicking one is
+`CPDF_FormField::CheckControl` (`core/fpdfdoc/cpdf_formfield.cpp:683-716`),
+which sets the clicked control's `/AS` to that control's own on-state and
+every *other* control's to `Off` — one click restating the state of every kid,
+in as many different names. A session holds one record per *field*, so all it
+can say is which control was chosen; turning that into what each kid draws is
+per-kid, and the dictionary on disk still names the state before the click.
+
+`build` now takes the whole `LiveInput` rather than a seventh positional
+`Option`, which is what that record's doc already promised. `is_checked` keeps
+its public signature — `pdfrum/src/form.rs` and `pdfrum-doc/src/form/field.rs`
+both call it with no override — and is now that function handed `None`.
+Byte-identical for every current caller: `generate` and `generate_with_text`
+pass a default record, `generate_with_live` forwards `appearance_state: None`
+beside the `substitute: None` it already forwarded, both spelled out so a
+fifth field is a compile error there rather than a silent change. The
+byte-identity golden `tests/data/unfocused_field_bodies.txt` is untouched and
+green.
+
+**One thing the next reader needs.** `LiveInput` has no `#[non_exhaustive]`,
+so adding a field breaks any *exhaustive* struct literal. `route.rs` at
+`0f77c8e` carried one, and `pdfrum-form` did not compile against `6e87424`
+until Track B's own edit — already in its working tree — switched that literal
+to `..Default::default()`. Whoever adds a sixth field should either mark the
+struct `#[non_exhaustive]` first or coordinate the same way.
+
+### A process note, recorded because it cost another track
+
+Commit `0f77c8e` was made with a bare `git add` and swept in six files
+belonging to Tracks B and C — `crates/pdfrum-form/{popup.rs, route.rs,
+page.rs, field/mod.rs, lib.rs, tests/combo_popup.rs}`,
+`crates/pdfrum-raster-exact/{lib.rs, target.rs}` and
+`crates/pdfrum-render/blend.rs` — under a message naming only `vt::hit`. It
+was already pushed when it was noticed, so it was left alone rather than
+amended or reverted; the content is correct and the other tracks record the
+attribution. Every commit after it in this track is path-scoped
+(`git commit -- <paths>`) with `git status --short` checked first. The
+constraint exists because concurrent tracks share one worktree, and the same
+sweep would have caught half-finished work just as easily.
+
+### Gates
+
+- `cargo fmt -p pdfrum-doc -- --check`, `cargo fmt -p pdfrum-font -- --check`:
+  clean. Deliberately per-crate; `--all` would reformat the other tracks'
+  uncommitted work, and `scripts/ci.sh` was not run for the same reason.
+- `cargo clippy -p pdfrum-doc --all-targets -- -D warnings`: clean.
+- `RUSTDOCFLAGS="-D warnings" cargo doc --no-deps -p pdfrum-doc`: clean.
+- `cargo nextest run -p pdfrum-doc`: **440 pass**, up from 402 at M14's close
+  and from 424 before this track — ten for the charset tables, four for the
+  auto-sized caret, two for the appearance-state override.
+- `cargo test --doc -p pdfrum-doc`: 3 pass.
+- `cargo build -p pdfrum-form -p pdfrum -p pdfrum-tool`: clean against the
+  final state of this track's crates.
+- Conformance: **1705 files, 1651 pass, 54 fail**, `--check-regressions`
+  clean, **two rows moved and both upward**, 1703 byte-identical. The
+  scoreboard is **not** re-committed from this track: its totals are unchanged
+  and two other tracks were re-scoring the same file concurrently, so
+  committing a board measured from archived trees would have overwritten
+  theirs.
+- No benchmarks and no ratchet update, as instructed.
