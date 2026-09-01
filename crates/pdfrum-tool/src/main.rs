@@ -46,6 +46,7 @@
 
 mod annot;
 mod content;
+pub mod events;
 mod metadata;
 mod mutate;
 mod options;
