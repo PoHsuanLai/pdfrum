@@ -826,3 +826,310 @@ to preserve a signature nothing calls would be ceremony.
 --workspace` (3508 pass, 1 skipped). Conformance `run --check-regressions`:
 **no regressions**, and a field-by-field board diff moves **0 rows**. The
 byte-identity golden is untouched.
+
+---
+
+## 8. The right-to-left session: a caret that walks the wrong way, and a face the field never had
+
+Three tasks and a measurement pass. Two of the three landed; the third
+is held on one row and the reason is now exact rather than approximate.
+
+| # | Change | Commit |
+|---|---|---|
+| 2 | Right-to-left caret geometry in `vt::hit` | `bb53fa7` (+ `b454795`, board) |
+| 3 | The second face, for a character the `/DA` font cannot write | `266783f` (+ `3278266`, board) |
+| 1 | F2, the selection whitening | **held** — see §8.4 |
+| 4 | Measurement only, no code | — |
+
+### 8.1 Every x in a right-to-left run reverses (`bb53fa7`)
+
+Three answers in `vt::hit` read a run's x the wrong way round, and each
+is its own line of C++:
+
+- **`CPVT_Word::CaretX`** (`core/fpdfdoc/cpvt_word.h:42`) is
+  `is_rtl ? location_.x : location_.x + width_`. Ours always added the
+  advance, so every caret in a Hebrew run sat one character right of the
+  gap it names.
+- **`CPVT_VariableText::Iterator::GetLineCaretX`**
+  (`core/fpdfdoc/cpvt_variabletext.cpp:103-118`) answers
+  `line.ptLine.x + line.fLineWidth` when the line's **first** word is
+  right-to-left, else `line.ptLine.x`. Ours always answered the left
+  edge, so a run's header sat at the opposite end from where its first
+  character is drawn. The direction comes from the first word **alone**,
+  which is why a mixed line takes its header from that word and not from
+  the line's dominant direction; upstream's own unit test
+  (`cpvt_variabletext_unittest.cpp:144-199`) pins both, including the
+  empty-text case at three alignments.
+- **`CPVT_Section::SearchWordPlaceImpl`**
+  (`core/fpdfdoc/cpvt_section.cpp:392-428`) **bisects** rather than
+  scans, and the difference only shows where the predicate stops being
+  monotone — which is exactly a descending run.
+
+Measured on `בחר` at twelve points in a plate starting at x = 1, the
+four caret positions were **1, 19, 13, 7** and are now **19, 13, 7, 1**.
+
+#### The bisection was the surprise
+
+A scan and a bisection agree on every monotone line, so the scan had
+been indistinguishable from the port until a right-to-left run arrived.
+Down a descending run the bisection's first probe is the middle
+character and the answer follows that one probe: left of its midpoint it
+narrows to index 0, whose own midpoint is the run's *rightmost*, and the
+post-loop test fails — the header; right of it, it narrows to the last
+index, whose midpoint is the run's *leftmost*, which the click is past.
+
+So a click in a right-to-left run answers one of the run's two **logical
+ends**, and the caret crosses the whole run at the middle character's
+midpoint rather than stepping across it. That is upstream's behaviour
+and the port is a transcription of it, not an endorsement. What a scan
+does instead is worse and not merely different: it answers the header for
+**every** click in the run, so the caret never moves however the run is
+clicked.
+
+Three details of the bisection decide where it lands and are transcribed
+rather than tidied: `nMid` is recomputed from the halved interval each
+step, the two `nMid == nLeft` / `nMid == nRight` guards are what
+terminate it, and the answer is the post-loop test **at `nMid` alone**,
+not the running maximum a scan would keep.
+
+**No signature changed.** `caret_rect`, `point_at_place` and
+`place_at_point` keep their parameters; the three new functions are
+private. Nothing left to right moves: `caret_x` and `line_caret_x` reduce
+to their old bodies when no word is rtl, and the bisection agrees with
+the scan on every monotone line, which the existing assertions pin.
+
+Six new tests, all in `vt::hit::tests`:
+`a_right_to_left_words_carets_walk_leftward_from_its_right_edge`,
+`the_drawn_caret_rectangle_follows_the_same_right_to_left_walk`,
+`a_left_to_right_run_still_walks_rightward_from_its_left_edge`,
+`a_click_in_a_right_to_left_run_answers_the_end_the_bisection_narrows_to`,
+`a_mixed_line_takes_its_header_from_its_first_word_only`,
+`an_empty_line_keeps_its_left_edge_for_a_header`.
+
+| row | before | after |
+|---|---|---|
+| `form_textfield_focused_rtl.in#form-events` | 0.930445 | 0.934692 |
+| `form_textfield_focused_rtl.pdf#form-events` | 0.930445 | 0.934692 |
+
+No drops.
+
+### 8.2 The second face a field adds for a charset its `/DA` cannot write (`266783f`)
+
+`src/ap/font_map.rs` is new. The rule is a **charset comparison made
+before any mapping is attempted** — `CPDF_BAFontMap::GetWordFontIndex`
+(`core/fpdfdoc/cpdf_bafontmap.cpp:116-151`), which lives in `core/`, not
+in `fpdfsdk/` where the brief places it:
+
+- every code point has a charset from a range ladder
+  (`CFX_Font::GetCharSetFromUnicode`, `core/fxge/cfx_font.cpp:83-140`);
+- the `/DA` font has the one its substitution chose, ANSI otherwise
+  (`cpdf_bafontmap.cpp:77-93`);
+- the `/DA` font writes the character only when the two agree **and** it
+  can map it. Otherwise a face is added for the character's charset.
+
+Both halves matter. A Latin field keeps its own font for `.` because the
+charsets agree; the same field never even asks whether it could map `ב`,
+because Hebrew is not ANSI. That is why one word can be set in two faces
+with two sets of advances.
+
+#### Which face, and why it is a serif one
+
+The ask is the charset's default face, and **Hebrew has no entry** in
+`kDefaultTTFMap` (`core/fxge/cfx_font.cpp:34-49`) — so the ask is the
+universal default `"Arial Unicode MS"`, which the hermetic set does not
+have, and `GetNativeFontName` returns empty. `AddSystemFont`
+(`cpdf_bafontmap.cpp:458-469`) then calls `LoadSubstFace("")`, and an
+empty face name is what `RenameFontForTesting`
+(`testing/test_fonts.cpp:19-45`) maps to **Tinos**.
+
+So a Hebrew run in a field whose `/DA` names a *sans* font is set in a
+**serif** one. Measured against the oracle's own pixels on
+`form_textfield_selected_rtl`: the selection band is 51.0 units wide, and
+Tinos's Hebrew plus Arimo's ASCII predicts 50.596 (device columns
+51..101, which is what the golden carries) where Arimo's own Hebrew
+predicts 55.7. That measurement is what identified the face; the rename
+table then explained it.
+
+#### How the character is written
+
+`CPDF_DocPageData::AddFont`
+(`core/fpdfapi/page/cpdf_docpagedata.cpp:545-601`) writes a TrueType
+whose `/Encoding` is a dictionary with `/BaseEncoding /WinAnsiEncoding`
+and a `/Differences` array from 128, one Adobe glyph name per entry of
+the charset's own Unicode table, `.notdef` at each hole. For Hebrew that
+table (`core/fxcrt/fx_codepage.cpp:113-130`) is byte-for-byte **code page
+1255** — verified against Python's `cp1255` codec, zero mismatches — so
+`ב` is written as `0xE1`. Only that one table is transcribed; a charset
+without one leaves its characters to the `/DA` font, as before.
+
+#### Two things had to change beside it
+
+**The widths enter through the same seam as the bytes.** A run set in
+two faces advances by two faces' metrics, so the width closure the layout
+is built from consults the substitute too. Measuring the whole run with
+the first face gives a line the wrong length wherever the second writes.
+
+**`edit_ap::render` was destroying every byte above 127**, and had been
+since it was written. It spelled the show operand through
+`String::from_utf8_lossy`, so a code-page byte became U+FFFD — three
+bytes naming a different code. No appearance had ever carried a high
+byte, so nothing caught it, and it was invisible until the second face
+produced one. High bytes are now spelled `\ooo`, the literal syntax's own
+spelling (ISO 32000 §7.3.4.2); every existing ASCII stream is
+byte-identical.
+
+This was the whole of the residual: with the encoding right and the
+lossy conversion still in place, `bug_725389` rendered Latin glyphs at
+correct Hebrew advances. With both, it is the oracle's page.
+
+#### The descriptor exists for one bit
+
+The substitute carries a `/FontDescriptor` with `/Flags` non-symbolic and
+nothing else. A TrueType reaches its glyph **names** only on the first
+rung of `LoadGlyphMap`
+(`core/fpdfapi/font/cpdf_truetypefont.cpp:60-61`), which wants a plain
+Latin encoding *without* `/Differences`, or a non-symbolic declaration. A
+font carrying `/Differences` satisfies only the second, and only if it
+says so. `CalculateFlags`
+(`cpdf_docpagedata.cpp:103-131`) sets non-symbolic for every charset but
+Symbol. (Our `FontFlags::DEFAULT` already implies non-symbolic when no
+descriptor is present, so this is belt and braces here — but it is what
+upstream writes, and a future descriptor with real flags would need it.)
+
+#### The seam
+
+`vt::edit_ap::generate` takes a `Face` per code point in place of the
+fixed alias and encoder, because the run boundary is now a
+per-character decision — which is the same thing `DrawEdit`'s
+`font_index != nFontIndex` test does (`cpwl_edit_impl.cpp:676-690`). The
+three single-face generators pass `Face::single`.
+
+**Additive on the `pdfrum-form` side.** The new argument is on
+`widget::generate_with_text`; `generate_with_live` — that crate's only
+entry point — forwards `None`. `crates/pdfrum-form` compiles untouched.
+
+| row | before | after |
+|---|---|---|
+| `resources/pixel/bug_725389.in` | 0.967403 fail | **0.999583 pass** |
+| `resources/pixel/bug_725389.pdf` | 0.967403 fail | **0.999583 pass** |
+| `form_textfield_focused_rtl.{in,pdf}#form-events` | 0.934692 | 0.947061 |
+| `form_textfield_selected_rtl.in#form-events` | 0.947057 | 0.947819 |
+
+Totals **1639/66 → 1641/64**. No drops. The byte-identity golden
+`tests/data/unfocused_field_bodies.txt` is untouched and green.
+
+### 8.3 What the second face does **not** reach
+
+`generate_with_live` forwards `None`, so a field being **typed into**
+still writes its `/DA` font's low bytes. `form_textfield_selected_rtl`
+and `form_textfield_focused_rtl` type their Hebrew rather than storing
+it, so both still draw Latin mojibake; they improved only because §8.1
+moved their carets. Closing it needs the substitute threaded onto
+`generate_with_live` (this crate) **and** passed by `route.rs` (not this
+crate), which is one change in two commits — see §8.4.
+
+### 8.4 F2 is still held, and the residual is a thousandth
+
+`§5`'s finding 2 — the selection whitening — was re-derived against
+current main. The parked file was not stale; `field_body.rs` had not
+moved since it was parked.
+
+| row | without F2 | with F2 |
+|---|---|---|
+| `form_textfield_selected_rtl.in#form-events` | 0.947819 | **0.946872** |
+| `form_textfield_selected_ltr.in#form-events` | 0.968879 | 0.968892 |
+
+The drop is **−0.00095**, down from **−0.0157** when it was first parked.
+Two of the three defects behind it are fixed: the RTL band's extent
+(`pdfrum-form`'s `adf3a8b`) and the stored-value encoding (`266783f`).
+The third is §8.3: the live path still writes mojibake, whose Latin
+glyphs are wider than the Hebrew ones the oracle sets, so our band ends
+at device column 101 while our glyphs run to 111 — ten columns by
+fourteen rows that stay dark where the oracle's are white. Painting the
+whole run white used to hide exactly that.
+
+The rebased fix, with its three tests, is at
+`scratchpad/field_body_with_f2_rebased.rs`; the measurement and the
+one-line request that closes it are in `scratchpad/m14-rtl-drops.md`.
+
+### 8.5 The three LTR form-events rows, measured (Task 4, no code)
+
+Full workings in `scratchpad/m14-task4-measurements.md`. **Nothing in
+this crate contributes to any of the three**; the generated streams were
+dumped and check out against each fixture's geometry.
+
+| row | differing px | mechanism |
+|---|---:|---|
+| `form_textfield_focused_ltr` | 371 | LCD subpixel AA **291**, one-device-row offset 80 |
+| `form_textfield_selected_ltr` | 448 | LCD subpixel AA **447**, the same offset on the band |
+| `password` | 3543 | tint one count low **2440**, one character of scroll ~1100 |
+
+**LCD antialiasing is the largest single residue on both LTR rows, and it
+is real behaviour.** `DrawTextString`
+(`fpdfsdk/pwl/cpwl_edit_impl.cpp:51-56`) builds a **local**
+`CPDF_RenderOptions`, whose constructor
+(`core/fpdfapi/render/cpdf_renderoptions.cpp:23-27`) sets
+`bClearType = true` — and `CHECK`s it. The two public render paths clear
+it from the flag word (`cpdfsdk_renderpage.cpp:37`,
+`fpdf_formfill.cpp:272`, both `!!(flags & FPDF_LCD_TEXT)`), which
+`pdfium_test` never sets — but `DrawTextString` is reached from neither.
+So **the text a live edit draws is the only text on the page rendered
+with ClearType on**, `aliasing_type` becomes `kLcd`
+(`cpdf_textrenderer.cpp:36-40`), and the oracle's glyphs carry colour
+fringes ours cannot. Our render has **zero** non-grey pixels on either
+page against the oracle's 291 and 447.
+
+**The one-row offset is base-14 metrics for a substituted face.** Our
+caret is 11.244 units tall, which is exactly `(718 + 219) * 12/1000` —
+the base-14 Helvetica pair — where the face this widget substitutes to,
+Arimo, is 905/−211 and gives 13.392. Working the chain from each: base-14
+predicts a form-space `Td` of `12.006` (what we emit) and Arimo predicts
+`10.836` (the oracle's). `vt::hit::caret_rect` is **not** the defect:
+called with the `FormFonts` face under the hermetic options it answers
+device rows 38.304–51.696, the oracle's exactly. The wrong metrics come
+from `crates/pdfrum/src/form_session.rs:135`, which builds its
+`BuildContext` with `::new()` — default substitution, no `font_dirs`, no
+Croscore rename — while the render path uses
+`::with_substitution(...)` (`crates/pdfrum-tool/src/run.rs:302`). The
+session's fonts and the page's fonts are measured by two different
+substitutions on the same document. `docs/status/pdfrum-render.md`
+already records this class of error; the session is the one caller that
+never got the fix.
+
+`password` adds two of its own: the widget tint composites to
+`(240, 244, 255)` where the oracle has `(241, 244, 255)` — one count on
+one channel over 2440 pixels, and lower than truncation, rounding *or*
+the float product, so it is the backend's compositing rather than the
+colour, which `annot_render`'s own test still pins correctly — and the
+field is scrolled one character short, which is `ScrollToCaret`
+(`cpwl_edit_impl.cpp:1246-1286`) in `pdfrum-form`. The `'*'` substitution
+itself is right and matches `cpwl_edit.cpp:125`.
+
+### 8.6 Gates
+
+`cargo fmt -p pdfrum-doc -- --check`; `cargo clippy -p pdfrum-doc
+--all-targets -- -D warnings`; `RUSTDOCFLAGS="-D warnings" cargo doc
+--no-deps -p pdfrum-doc`; `cargo nextest run -p pdfrum-doc` (**420**
+pass, up from 402); `cargo test --doc -p pdfrum-doc` (3 pass);
+`cargo build -p pdfrum-form -p pdfrum -p pdfrum-tool` (clean, all three
+untouched). Conformance: **1705 files, 1641 pass, 64 fail**, a
+field-by-field board diff showing **7 rows moved, all upward, two of them
+onto the board**. The scoreboard was committed twice, alone, with its row
+deltas.
+
+### 8.7 Open items
+
+- **The second face does not reach the live-edit path.** §8.3. The
+  request: an `Option<ap::Substitute<'_>>` parameter on
+  `widget::generate_with_live` (this crate) and `route.rs::with_font`
+  building one from `ctx.fonts` and consulting it in its width closure
+  (not this crate). Both halves are spelled out in
+  `scratchpad/m14-rtl-drops.md`.
+- **F2 stays parked** until that lands. §8.4.
+- **The session's fonts are substituted differently from the page's.**
+  §8.5. One line in `crates/pdfrum/src/form_session.rs`.
+- **LCD antialiasing has no per-draw switch.** §8.5. It is the floor on
+  both LTR rows and needs `crates/pdfrum-render`.
+- **Seven charset tables are unported.** `font_map::charset_unicodes`
+  answers only Hebrew, which is the only one the corpus reaches. A
+  charset without a table leaves its characters where they were.
