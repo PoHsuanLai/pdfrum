@@ -913,7 +913,14 @@ The items sort into two kinds, and the split is the plan.
   exonerated — do not go back there. Owns `crates/pdfrum-render/src/shading/`.
   Pure perf: byte-identical scoreboard required.
 
-- **D2 — the §1.15 glyph-spacing heuristic** (M12b §10 item 8). A parity
+- **D2 — the §1.15 glyph-spacing heuristic** (M12b §10 item 8). **Premise
+  withdrawn 2026-09-01:** steps 1 and 2 below were already on `main`
+  (`ba8662f`, `10905fe`, 2026-08-29, never reverted — the scoreboard's timestamp
+  predates them, which is what made them look absent). D2's only owed work was
+  step 3; it also found and fixed a second divergence (fontdb naming faces by
+  name ID 16 where the oracle's enumerator uses ID 1). Both fixes move
+  **0 of 1675** files — paid on the oracle comparison, not on a number. The
+  text below is kept as written. A parity
   feature, not a perf item. `CPDF_Font::LoadCharPositions`
   (cpdf_font.cpp:449-467) gated by `ShouldApplyGlyphSpacingHeuristic`
   (cpdf_font.cpp:240-264): when the PDF's declared width is narrower than the
