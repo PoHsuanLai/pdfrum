@@ -962,6 +962,14 @@ fn scroll_choice(
 }
 
 /// Scrolls a text field by a wheel notch.
+///
+/// A `DoNotScroll` field does not move, and the gate is upstream's own:
+/// `CPWL_EditImpl::SetScrollPosY` (`fpdfsdk/pwl/cpwl_edit_impl.cpp:1175-1178`)
+/// returns at its first statement when `enable_scroll_` is clear, so every
+/// caller — the wheel included — writes nothing.
+/// `CFFL_TextField::GetCreateParam` (`cffl_textfield.cpp:54-57`) withholds
+/// `kWindowVScroll` from such a field besides, so upstream draws it no
+/// scrollbar to drag either.
 fn scroll_text<R: Resolve>(
     session: &mut FormSession,
     ctx: &Context<'_, R>,
@@ -973,20 +981,7 @@ fn scroll_text<R: Resolve>(
     }
     let mut moved = false;
     with_edit(session, ctx, field, |edit, config, _metrics| {
-        let content = edit.layout.content_rect_pdf(config.plate);
-        let slack = pdfrum_doc::geom::height(content) - pdfrum_doc::geom::height(config.plate);
-        if slack <= 0.0 {
-            return;
-        }
-        let step = pdfrum_doc::geom::height(config.plate) * 0.25;
-        let was = edit.scroll.1;
-        #[expect(
-            clippy::cast_precision_loss,
-            reason = "a wheel delta is a small notch count"
-        )]
-        let by = -(delta_y as f32) * step;
-        edit.scroll.1 = (edit.scroll.1 + by).clamp(0.0, slack);
-        moved = (edit.scroll.1 - was).abs() > f32::EPSILON;
+        moved = ops::scroll_by(edit, config, delta_y);
     });
     moved
 }
@@ -1785,4 +1780,173 @@ fn highlight_of<R: Resolve>(
             ap::field_body::CARET_WIDTH,
         )
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pdfrum_object::{Name, NoResolve, Object, PdfString};
+
+    /// A page carrying one `/Tx` widget whose `/DA` names `/Arial`, under a
+    /// catalog whose `/AcroForm /DR /Font` declares that name as a bare
+    /// non-embedded TrueType — `form_textfield_focused_ltr`'s shape, and the
+    /// one that makes the substitution question arise at all.
+    fn page_and_catalog() -> (Dict, Dict) {
+        let font = Dict::from_pairs([
+            (
+                pdfrum_object::names::TYPE.clone(),
+                Object::Name(Name::from_static(b"Font").clone()),
+            ),
+            (
+                pdfrum_object::names::SUBTYPE.clone(),
+                Object::Name(Name::from_static(b"TrueType").clone()),
+            ),
+            (
+                Name::from_static(b"BaseFont").clone(),
+                Object::Name(Name::from_static(b"Arial").clone()),
+            ),
+        ]);
+        let catalog = Dict::from_pairs([(
+            Name::from_static(b"AcroForm").clone(),
+            Object::Dict(Dict::from_pairs([(
+                Name::from_static(b"DR").clone(),
+                Object::Dict(Dict::from_pairs([(
+                    Name::from_static(b"Font").clone(),
+                    Object::Dict(Dict::from_pairs([(
+                        Name::from_static(b"Arial").clone(),
+                        Object::Dict(font),
+                    )])),
+                )])),
+            )])),
+        )]);
+        let widget = Dict::from_pairs([
+            (
+                pdfrum_object::names::TYPE.clone(),
+                Object::Name(Name::from_static(b"Annot").clone()),
+            ),
+            (
+                pdfrum_object::names::SUBTYPE.clone(),
+                Object::Name(Name::from_static(b"Widget").clone()),
+            ),
+            (
+                Name::from_static(b"FT").clone(),
+                Object::Name(Name::from_static(b"Tx").clone()),
+            ),
+            (
+                Name::from_static(b"T").clone(),
+                Object::Str(PdfString::literal(*b"Text Box")),
+            ),
+            (
+                Name::from_static(b"Rect").clone(),
+                Object::Array(
+                    [
+                        Object::Int(50),
+                        Object::Int(40),
+                        Object::Int(150),
+                        Object::Int(70),
+                    ]
+                    .into_iter()
+                    .collect(),
+                ),
+            ),
+            (
+                Name::from_static(b"DA").clone(),
+                Object::Str(PdfString::literal(*b"/Arial 12 Tf 0 0 0 rg")),
+            ),
+        ]);
+        let page = Dict::from_pairs([(
+            Name::from_static(b"Annots").clone(),
+            Object::Array([Object::Dict(widget)].into_iter().collect()),
+        )]);
+        (page, catalog)
+    }
+
+    /// The width closure `with_font` hands the layout **measures a character
+    /// the `/DA` font cannot write in the second face**, not in the `/DA`
+    /// font's fallback.
+    ///
+    /// # The defect this pins, which the appearance-stream test cannot
+    ///
+    /// `8e45897` gave the typed path the second face, and the assertion it
+    /// shipped with reads the emitted stream for `/_B1`. That catches a
+    /// regression in the *encoder* and misses one in the **widths**: a
+    /// version that puts the substitute on `LiveInput` and leaves the closure
+    /// on the `/DA` font still writes `/_B1` and still emits the right bytes,
+    /// while every advance, caret column and selection band comes out of the
+    /// wrong table.
+    ///
+    /// That is not hypothetical — it is the F2 residue this crate carried:
+    /// `form_textfield_selected_rtl`'s band ended at device column 101 with
+    /// its glyphs running to 111, ten columns of dark where the oracle's are
+    /// white, because Latin advances were measuring a Hebrew run.
+    ///
+    /// # What upstream does
+    ///
+    /// `CPWL_EditImpl::Provider::GetCharWidth`
+    /// (`fpdfsdk/pwl/cpwl_edit_impl.cpp:124-137`) measures the face
+    /// `GetWordFontIndex` (`core/fpdfdoc/cpdf_bafontmap.cpp:116-151`)
+    /// selected for that character. Layout and encoding share the one index,
+    /// so a character written in the second face is measured in it too.
+    ///
+    /// The numbers are the two faces' own and are asserted as a **relation**
+    /// rather than as constants: which face stands in for `/Arial` depends on
+    /// the substitution options, and the claim is that the two differ and
+    /// that the closure takes the substitute's.
+    #[test]
+    fn the_width_closure_measures_an_unwritable_character_in_the_second_face() {
+        // Bet, which an Ansi `/DA` font cannot write.
+        const BET: u32 = 0x05D1;
+
+        let (page, catalog) = page_and_catalog();
+        let resolve = NoResolve;
+        let form = crate::page::read(0, &page, &catalog, &resolve);
+        let widget = form.widgets.first().expect("one /Tx widget");
+
+        let mut build = pdfrum_page::BuildContext::new();
+        let fonts = ap::FormFonts::load(&catalog, &resolve, &mut build);
+        let ctx = Context {
+            page: &form,
+            catalog: &catalog,
+            resolve: &resolve,
+            fonts: &fonts,
+            permissions: hit::Permissions::ALL,
+        };
+
+        let da = fonts.face(b"Arial").expect("the /DR declares one face");
+        let substitute = fonts
+            .substitute(pdfrum_font::subst::Charset::Hebrew)
+            .expect("the Hebrew second face loads with no font directory at all");
+        assert!(
+            !ap::font_map::da_font_writes(da, ap::font_map::font_charset(da), BET),
+            "the fixture's own font must be unable to write the character, \
+             or the substitution never arises"
+        );
+
+        let (da_width, substitute_width) = (
+            TextFont::char_width(da, BET),
+            ap::font_map::substitute_width(substitute.font, BET),
+        );
+        assert_ne!(
+            da_width, substitute_width,
+            "the two faces must disagree, or this test cannot tell them apart"
+        );
+
+        let measured = with_font(&ctx, widget, |font, _substitute| {
+            (
+                (font.metrics.width)(BET),
+                (font.metrics.width)(u32::from(b'a')),
+            )
+        })
+        .expect("the widget's /DA resolves to a face");
+
+        assert_eq!(
+            measured.0, substitute_width,
+            "a character the /DA font cannot write is measured in the second face"
+        );
+        assert_eq!(
+            measured.1,
+            TextFont::char_width(da, u32::from(b'a')),
+            "and one it can is still measured in the /DA font"
+        );
+    }
 }
