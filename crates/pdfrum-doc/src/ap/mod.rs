@@ -95,17 +95,25 @@ pub enum Appearance {
 /// answers when asked for a focus rectangle depends on which control it is —
 /// three answers, not one, and two of the three are *no rectangle at all*:
 ///
-/// - A **text field** and an **editable combo box** answer an empty rectangle
-///   outright, so nothing is stroked over them. This is the common case and
-///   it is why the focused text-field goldens carry a caret and glyphs but no
-///   outline.
-/// - A **check box**, a **radio button** and a **read-only combo box** answer
-///   their window rectangle inflated by one unit on every side, which is
-///   [`FocusBox::Inflated`].
+/// - A **text field** and a **combo box** — editable or not — answer an empty
+///   rectangle outright, so nothing is stroked over them. This is the common
+///   case and it is why the focused text-field goldens carry a caret and
+///   glyphs but no outline. `CPWL_ComboBox::GetFocusRect`
+///   (`fpdfsdk/pwl/cpwl_combo_box.cpp:321-323`) returns an empty rectangle
+///   with **no editability test in it**; a caller that inflates a read-only
+///   combo strokes a box upstream never draws.
+/// - A **check box**, a **radio button** and a **single-select list box**
+///   answer their window rectangle inflated by one unit on every side, which
+///   is [`FocusBox::Inflated`] — `CPWL_Wnd::GetFocusRect`
+///   (`cpwl_wnd.cpp:713-719`), which the list box falls through to when it is
+///   not multi-select.
 /// - A **multi-select list box** answers the rectangle of the item its caret
 ///   sits on, clipped to the client area — a rectangle only the list control's
 ///   own scroll and caret state can name, so a caller that has it supplies it
 ///   as [`FocusBox::Rect`].
+///
+/// `annot_render`'s own table says the same thing; the two are kept in step
+/// deliberately, because this is the one a `pdfrum-form` caller reads.
 ///
 /// [`FocusBox::None`] is the empty answer and the default: a focused entry
 /// that names it is still *focused* — it draws no tint — and simply strokes

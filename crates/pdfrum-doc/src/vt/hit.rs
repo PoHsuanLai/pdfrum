@@ -78,7 +78,7 @@ use crate::vt::{Config, Layout, Metrics, Section, word_width};
 ///
 /// `word == -1` is the line header — the position before the line's first
 /// character. Every other value names the character the caret sits after.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Place {
     /// Which paragraph.
     pub section: u32,
@@ -105,9 +105,31 @@ impl Place {
     /// layout — the first caret position is `(0, 0, -1)` whatever the text
     /// is, including no text at all. [`begin_place`] is the same value,
     /// spelled for symmetry with [`end_place`], which does need the layout.
+    pub const START: Place = Place {
+        section: 0,
+        line: 0,
+        word: -1,
+    };
+
+    /// [`Place::START`], as a function.
     #[must_use]
     pub fn start() -> Place {
-        Place::new(0, 0, -1)
+        Place::START
+    }
+}
+
+/// The beginning of the text, not `(0, 0, 0)`.
+///
+/// `#[derive(Default)]` would zero all three fields, and a zero `word` is the
+/// position *after* the first character — a different, valid-looking caret
+/// that no layout ever means by "the default". `GetBeginWordPlace`
+/// (`core/fpdfdoc/cpvt_variabletext.cpp:413-415`) is `(0, 0, -1)`, and a
+/// `CPVT_WordPlace` left unset is `(-1, -1, -1)`, which is not a position at
+/// all. Between the two, the one a caller reaching for a default wants is the
+/// beginning.
+impl Default for Place {
+    fn default() -> Place {
+        Place::START
     }
 }
 
@@ -421,21 +443,60 @@ fn line_extent(layout: &Layout, config: &Config, metrics: &Metrics<'_>, place: P
 /// caret before the first character is zero, and the index after the last is
 /// the text's length.
 ///
-/// A place pointing past what the layout holds is clamped to the end, which
-/// makes this total.
+/// # A wrapped line's header is not a position of its own
+///
+/// `place_at_point` names the *line header* — `word == -1` — for a click left
+/// of every midpoint on a line, and on a wrapped line that header is the same
+/// caret position as the end of the line above it. Upstream folds the two
+/// before counting: `WordPlaceToWordIndex`
+/// (`core/fpdfdoc/cpvt_variabletext.cpp:361-379`) runs `UpdateWordPlace`
+/// first, whose `PrevLineHeaderPlace` (`:715-720`) is
+///
+/// ```cpp
+/// if (place.nWordIndex < 0 && place.nLineIndex > 0)
+///     return GetPrevWordPlace(place);
+/// ```
+///
+/// So the header of line 1 of a section whose first line holds characters
+/// `0..=4` counts as **5**, not 0. Skipping the fold is not a rounding
+/// difference: it sends a caret clicked at the start of a wrapped line to the
+/// start of the whole field, and the next keystroke lands there.
+///
+/// # A place past the layout
+///
+/// Clamped to the end, and the clamp counts **no trailing section break** —
+/// `WordPlaceToWordIndex`'s loop adds `kReturnLength` only when `i != sz - 1`
+/// (`:372-374`), so an out-of-range section index yields the last section's
+/// end rather than one past it.
 #[must_use]
 pub fn word_index_of_place(layout: &Layout, place: Place) -> usize {
+    // The fold, before anything is counted. A header on the first line has no
+    // line above it and stays where it is.
+    if place.word < 0 && place.line > 0 {
+        let previous = layout
+            .sections
+            .get(place.section as usize)
+            .and_then(|section| section.lines.get(place.line as usize))
+            .map(|line| Place::new(place.section, place.line - 1, line.begin - 1));
+        if let Some(previous) = previous {
+            return word_index_of_place(layout, previous);
+        }
+    }
+
     let target = place.section as usize;
+    let last = layout.sections.len().saturating_sub(1);
     let mut index: usize = 0;
     for (position, section) in layout.sections.iter().enumerate() {
         if position >= target {
             break;
         }
+        index = index.saturating_add(section.words.len());
         // The break between this section and the next counts as one
-        // character, exactly as the tokenizer counted it on the way in.
-        index = index
-            .saturating_add(section.words.len())
-            .saturating_add(SECTION_BREAK_LENGTH);
+        // character, exactly as the tokenizer counted it on the way in — and
+        // there is no break after the last section to count.
+        if position != last {
+            index = index.saturating_add(SECTION_BREAK_LENGTH);
+        }
     }
     let Some(section) = layout.sections.get(target) else {
         return index;
@@ -751,6 +812,75 @@ mod tests {
         assert_eq!(word_index_of_place(&layout, blank), 3);
     }
 
+    /// A defaulted `Place` is the beginning of the text, not the position
+    /// after the first character.
+    #[test]
+    fn a_default_place_is_the_start_and_not_a_zero_word() {
+        assert_eq!(Place::default(), Place::START);
+        assert_eq!(Place::default(), Place::start());
+        assert_eq!(Place::START.word, -1, "a zero word is after character 0");
+    }
+
+    /// A wrapped line's header is the previous line's end, and it is a
+    /// *caret position*, not zero.
+    ///
+    /// `PrevLineHeaderPlace` (`cpvt_variabletext.cpp:715-720`) folds
+    /// `word < 0 && line > 0` onto `GetPrevWordPlace` before
+    /// `WordPlaceToWordIndex` counts anything. Without the fold a click at
+    /// the start of the second visual line reports index 0 — the start of the
+    /// whole field — and the next keystroke is inserted there.
+    #[test]
+    fn a_wrapped_lines_header_indexes_to_the_end_of_the_line_above() {
+        // `tens()` is ten thousandths of an em, so at 10pt each character
+        // advances 0.1 units: a 0.45-unit plate holds four per line and
+        // "abcdefgh" wraps after "abcd".
+        let config = Config {
+            plate: geom::rect(0.0, 0.0, 0.45, 200.0),
+            font_size: 10.0,
+            multi_line: true,
+            auto_return: true,
+            ..Config::default()
+        };
+        let layout = vt::layout("abcdefgh", &config, &tens());
+        let section = layout.sections.first().expect("one section");
+        assert!(section.lines.len() >= 2, "the text must wrap: {section:?}");
+        let first_line_end = section.lines.first().expect("a first line").end;
+
+        // The second line's header, which is what a click left of its first
+        // midpoint produces.
+        let header = Place::new(0, 1, -1);
+        assert_eq!(
+            word_index_of_place(&layout, header),
+            word_index_of_place(&layout, Place::new(0, 0, first_line_end)),
+            "the header must be the line above's end, not the field's start"
+        );
+        assert_ne!(word_index_of_place(&layout, header), 0);
+    }
+
+    /// A place naming a section the layout does not have is the end, and the
+    /// end is not one past it.
+    ///
+    /// `WordPlaceToWordIndex`'s loop adds `kReturnLength` only when
+    /// `i != sz - 1` (`cpvt_variabletext.cpp:372-374`), so the clamp counts no
+    /// trailing section break.
+    #[test]
+    fn a_place_past_the_last_section_indexes_to_the_very_end() {
+        let config = Config {
+            plate: geom::rect(0.0, 0.0, 200.0, 200.0),
+            font_size: 10.0,
+            multi_line: true,
+            ..Config::default()
+        };
+        for text in ["abc", "ab\ncd", "a\nb\nc"] {
+            let layout = vt::layout(text, &config, &tens());
+            assert_eq!(
+                word_index_of_place(&layout, Place::new(9, 0, 0)),
+                word_index_of_place(&layout, end_place(&layout)),
+                "{text:?}"
+            );
+        }
+    }
+
     /// The round trip brief §4.4's P6 states: every place a layout can name
     /// survives being turned into an index and back.
     #[test]
@@ -768,23 +898,36 @@ mod tests {
                 for (l, line) in section.lines.iter().enumerate() {
                     let last = if line.begin < 0 { -1 } else { line.end };
                     for word in -1..=last {
-                        // A line header is only reachable as an index when it
-                        // is the section's first line; a later line's header
-                        // is the same index as the previous line's end, and
-                        // the round trip lands on the earlier spelling. That
-                        // is the same collapse upstream performs.
-                        if word < 0 && l > 0 {
-                            continue;
-                        }
                         let place = Place::new(
                             u32::try_from(s).unwrap_or(0),
                             u32::try_from(l).unwrap_or(0),
                             word,
                         );
                         let index = word_index_of_place(&layout, place);
+                        // A later line's header is not a caret position of
+                        // its own: it collapses to the end of the line above,
+                        // which is where the round trip lands. Asserting the
+                        // collapse *target* is the point — skipping the case
+                        // is what let it collapse to zero unnoticed.
+                        let expected = if word < 0 && l > 0 {
+                            let previous = section.lines.get(l - 1).expect("a line above");
+                            place_of_word_index(
+                                &layout,
+                                word_index_of_place(
+                                    &layout,
+                                    Place::new(
+                                        u32::try_from(s).unwrap_or(0),
+                                        u32::try_from(l - 1).unwrap_or(0),
+                                        previous.end,
+                                    ),
+                                ),
+                            )
+                        } else {
+                            place
+                        };
                         assert_eq!(
                             place_of_word_index(&layout, index),
-                            place,
+                            expected,
                             "{text:?} at {place:?} (index {index})"
                         );
                     }
