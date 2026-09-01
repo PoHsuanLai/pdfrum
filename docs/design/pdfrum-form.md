@@ -663,6 +663,18 @@ stack.
 | `MouseMove(p)` while a drag anchor is live | extend selection from anchor to `p`'s index |
 | `LButtonUp(p)` | end the drag; selection is `anchor..index`, normalized |
 | `LButtonDoubleClick(p)` | **select the entire line**, not the word under the cursor — `DoubleClickInTextField` (:2765-2779) inserts `"Hello World"` and asserts the double-click selection is the whole `"Hello World"` |
+
+  > **Correction (2026-09-01, M14 block 3).** "The entire line" is the
+  > embeddertest's own comment, and the body it comments on is
+  > `edit_impl_->SelectAll()` (`cpwl_edit.cpp:636-644`) — the whole **field**,
+  > not the line under the pointer. The two coincide on that fixture because
+  > its field is single-line, which is why the comment survived. They part on
+  > a multiline field, where selecting the line takes one of several. The port
+  > calls `select_all`, gated on the same `ClientHitTest` upstream gates it on;
+  > `acceptance_click.rs`'s
+  > `a_double_click_on_a_multiline_field_takes_every_line` asserts the two
+  > readings actually differ before pinning the one the oracle takes. This row
+  > is left as written so the record of what was believed stays readable.
 | `Char(c)` with a selection | replace the selection with `c`, collapse the caret after it, push **one** undo item |
 | `Char(c)` with no selection | insert `c` at the caret, advance, push **one** undo item; refuse if `/MaxLen` is reached |
 | `KeyDown(Left/Right)` no shift | move the caret one character, clear selection |
@@ -2040,6 +2052,29 @@ is an empty stub (§1.16), so the scroll position is **never persisted**.
 The mouse wheel over a list box **changes the selection rather than scrolling
 the view** (`cpwl_list_box.cpp:357-368`).
 
+> **Added 2026-09-01 (M14 block 3).** Two things that paragraph leaves out,
+> and the port needed both.
+>
+> `OnMouseWheel` passes `IsSHIFTKeyDown(nFlag)` and `IsCTRLKeyDown(nFlag)`
+> into `OnVK_DOWN`/`OnVK_UP`, and those flags decide what a **multi-select**
+> list does with the row it lands on. `CPWL_ListCtrl::OnVK`
+> (`cpwl_list_ctrl.cpp:242-265`) branches three ways: **Ctrl's body is
+> empty** — only the caret moves, which is how a caret is walked to a row
+> before the row is toggled; Shift deselects all and adds the run from
+> `foot_index_` to the new row; neither deselects all, selects the one row,
+> and re-anchors. A single-select list ignores all three, because that whole
+> structure sits inside `IsMultipleSel()`. The arrow keys take the same path,
+> since `OnKeyDown` (`:103-119`) passes the same two flags to the same
+> functions — so the wheel and the arrow keys are **one** operation upstream
+> and must not diverge in a port.
+>
+> And a **combo box is not a list under the wheel**. It has no
+> `OnMouseWheel` override at all, so it falls through to
+> `CPWL_Wnd::OnMouseWheel` (`cpwl_wnd.cpp:412-429`), which returns `false`
+> unless a child holds the keyboard capture — and a closed combo's list
+> window is not shown. Sharing the list's arm with it lets a wheel notch
+> silently change a committed value.
+
 **The combo box dropdown state machine** — `SetPopup(bool)`
 (`cpwl_combo_box.cpp:325-377`):
 
@@ -3072,6 +3107,10 @@ The load-bearing rows:
 
 - **`DoubleClickInTextField`**: a double-click selects **the whole line**
   (`"Hello World"`), not the word under the cursor.
+
+  > **Corrected 2026-09-01 (M14 block 3):** the whole **field**. See the
+  > correction under §1's mouse table — on this single-line fixture the two
+  > readings give the same answer, and the upstream body is `SelectAll()`.
 - **The eight char-limit rows** pin §1.7.1's truncation table exactly:
   `"HiElephant"`, `"ElephHiant"`, `"ElephantHi"`, `"Hippopotam"`,
   `"Hippophant"`, `"ElHippopnt"`, `"ElepHippop"`.
