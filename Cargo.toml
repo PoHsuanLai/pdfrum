@@ -82,6 +82,7 @@ pdfrum-raster-vello-gpu = { path = "crates/pdfrum-raster-vello-gpu", version = "
 pdfrum-text = { path = "crates/pdfrum-text", version = "=0.1.0" }
 pdfrum-doc = { path = "crates/pdfrum-doc", version = "=0.1.0" }
 pdfrum-form = { path = "crates/pdfrum-form", version = "=0.1.0" }
+pdfrum-script = { path = "crates/pdfrum-script", version = "=0.1.0" }
 pdfrum-edit = { path = "crates/pdfrum-edit", version = "=0.1.0" }
 pdfrum = { path = "crates/pdfrum", version = "=0.1.0" }
 # The M12 bench corpus list. A leaf — it depends on nothing, which is what lets
@@ -137,6 +138,18 @@ ryu = "=1.0.23"
 smallvec = "=1.15.2"
 thiserror = "=2.0.20"
 rayon = "=1.12.0"
+
+# JavaScript engine — M15. Reachable ONLY through `pdfrum-form`'s default-off
+# `script` feature, which `scripts/check-no-boa.sh` asserts mechanically in
+# both directions (absent by default; present with the feature, so the first
+# check cannot pass vacuously).
+#
+# `default-features = false` is load-bearing, not tidiness: the three defaults
+# are `float16`, `xsum` and `temporal`, and `temporal` alone drags
+# `icu_calendar`, `temporal_rs` and `timezone_provider` — an ICU tree for a
+# `Temporal` API no PDF script has ever called. See DEPS.md for the measured
+# admission (132 crates, zero `-sys`, zero `cc`, `cargo deny` clean).
+boa_engine = { version = "=0.22.0", default-features = false }
 
 # tools & tests only (DEPS.md "Tools & tests only"): never in a library crate.
 anyhow = "=1.0.104"

@@ -134,6 +134,68 @@ not a codec).
 | `thiserror` **lib** | Per-crate `Error` enums | The convention |
 | `rayon` **lib** (facade only) | Parallel page rendering | Data-parallel fits; engine itself stays single-threaded per page (vello_cpu multithreads internally) |
 
+## Scripting (M15) — feature-gated, default-off
+
+| Crate | Use | Why this one |
+|---|---|---|
+| `boa_engine` **lib, feature-gated** | JavaScript engine (`pdfrum-form --features script`) — M15 | Pure Rust, 116 added crates, **zero `-sys`, zero `cc`/`cmake`/`bindgen`**, `cargo-deny` clean against the existing allowlist with no edit. 95.5% of test262; register VM; `RuntimeLimits` for loop/recursion/stack, which is a bound the C++ has no equivalent of. Pinned `=0.22.0`, `default-features = false`. **Reachable from no crate's default features**, asserted mechanically by `scripts/check-no-boa.sh`. Alternatives `rquickjs` and `deno_core` bind C and V8 and fail the purity rule outright |
+
+### The audit, run rather than promised — 2026-09-02
+
+DEPS.md admits nothing on a claim. Every number below was measured on this
+machine, `x86_64-unknown-linux-gnu`, at the pin above.
+
+| question | answer |
+|---|---|
+| crate and version | `boa_engine = "=0.22.0"`, pinned exactly, per the policy |
+| features | `default-features = false`, nothing enabled |
+| crates added to `pdfrum-form`'s normal tree | **116** (50 → 166) |
+| `-sys` crates | **none** |
+| `cc` / `cmake` / `pkg-config` / `bindgen` | **none** |
+| build scripts compiling C | **none** |
+| `cargo deny --all-features check` | **advisories ok, bans ok, licenses ok, sources ok** |
+| licence spread of the 116 | 54 `MIT OR Apache-2.0`, 18 `Unicode-3.0`, 17 `Apache-2.0 OR MIT`, 16 `MIT`, 10 `Unlicense OR MIT`, 2 `Zlib`, 2 `MIT/Apache-2.0`, 2 `BSD-3-Clause OR MIT OR Apache-2.0`, 1 `Apache-2.0/MIT`, 1 `Apache-2.0 OR BSL-1.0`. **Every `OR` resolves to an allowlisted branch**, so `deny.toml` needed no edit |
+| boa crates in the **default** workspace tree | **zero**, verified by `cargo tree` over every member |
+| MSRV | **1.91.0**, declared by every `boa_*` crate |
+
+**`default-features = false` is load-bearing, not tidiness.** The three
+defaults are `float16`, `xsum` and `temporal`; `temporal` alone drags
+`icu_calendar`, `temporal_rs` and `timezone_provider` — an ICU tree, in a
+project whose text section boasts that `unicode-bidi` "replaces the entire ICU
+dependency" — for a `Temporal` API no PDF script has ever called. The dates
+PDF scripts *do* use go through `util.printd`/`util.scand`, which are pure
+functions in `pdfrum-script` and reach no engine at all.
+
+**The MSRV is the one number that touches another milestone.** M13's exit
+criterion is "MSRV declared and CI-checked", and `boa 0.22` sets a floor of
+1.91.0 for any build with `--features script`. Because the feature is
+default-off, the floor applies **to the feature rather than to the
+workspace** — but it must be written down in M13's declaration as a
+per-feature MSRV rather than discovered by a consumer. Recorded here so M13
+inherits a fact instead of a surprise.
+
+### The isolation is a feature flag, which is the weaker mechanism
+
+The GPU exemption is isolated by being *a crate nothing depends on*. The
+engine is isolated by *a flag any workspace member can turn on*, and feature
+unification means one member enabling it enables it for the whole build. That
+is a real weakness of features and it is why `scripts/check-no-boa.sh` is not
+optional. It asserts, on the same four-part shape as `check-no-wgpu.sh`: the
+`pdfrum` facade's default features, `pdfrum-tool`'s default features, and
+**every** workspace member (`conformance/` and `benches/` included) reach none
+of `boa_engine`/`boa_ast`/`boa_parser`/`boa_gc`/`boa_interner`/`boa_string`/
+`boa_macros` — plus the converse, that `pdfrum-form --features script` *does*
+reach `boa_engine`, so the first three cannot pass vacuously. `scripts/ci.sh`
+runs it.
+
+**What the engine's limits do and do not bound** is a security fact and is
+recorded in SPEC §10 with the measurement rather than here: boa's
+`RuntimeLimits` bound loop iterations, recursion and stack — which V8 under
+PDFium does not, at all — and bound neither heap growth nor regex
+backtracking, which V8 under PDFium also does not. pdfrum is therefore
+bounded where the oracle hangs and unbounded only where the oracle is too.
+The measurement is `docs/status/data/v8probe/REPORT.md`.
+
 ## Tools & tests only
 
 `anyhow`, `clap` (pdfrum-tool CLI), `png` (encode output; also decode goldens

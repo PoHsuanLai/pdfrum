@@ -37,6 +37,12 @@ pub mod hit;
 pub mod page;
 pub mod popup;
 pub mod route;
+/// The `boa`-backed [`Cascade`] — a document's own scripts, run.
+///
+/// Behind the default-off `script` feature; see the module documentation for
+/// why it is a feature and what `scripts/check-no-boa.sh` asserts about it.
+#[cfg(feature = "script")]
+pub mod script;
 pub mod session;
 pub mod tab;
 pub mod update;
@@ -55,6 +61,8 @@ pub use popup::{Placement, PopupGeometry, PopupView, ScrollView};
 pub use route::{
     Context, apply, choose, close_popup, focus_of, kill_focus, popup_view, scroll_view,
 };
+#[cfg(feature = "script")]
+pub use script::{ScriptCascade, ScriptConfig, TranscriptLine};
 pub use session::{AnnotId, DragAnchor, FieldId, FocusTarget, FormSession, SessionConfig};
 pub use tab::{FocusRing, Focusable, TabOrder};
 pub use update::{AppearanceUpdate, Response, UpdateKind};

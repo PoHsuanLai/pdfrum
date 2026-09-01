@@ -63,6 +63,12 @@ echo "ok: dependency tree is pure Rust"
 # did not ask for it. That is the claim, and this is the check.
 ./scripts/check-no-wgpu.sh
 
+# M15's engine is isolated by a cargo feature rather than by a crate nothing
+# depends on, which is the weaker of the two mechanisms — feature unification
+# means any workspace member can turn it on for the whole build. This is the
+# check that says whether one has.
+./scripts/check-no-boa.sh
+
 # Note the check above passes *because* fuzz/ is its own workspace. It brings
 # in `libfuzzer-sys`, which links LLVM's C++ libFuzzer runtime and pulls `cc`
 # — both of which this grep would reject. DEPS.md sanctions that only outside
