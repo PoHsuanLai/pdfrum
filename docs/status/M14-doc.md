@@ -405,3 +405,205 @@ something further down the event pipeline still gates those rows, and finding
 it is `pdfrum-form`'s work rather than this crate's. Recorded here so the next
 reader does not re-derive the seam looking for the cause; the evidence that
 *this* half is right is the unit tests above, not the scoreboard.
+
+---
+
+## 6. Focus: the tint the edited field does not get (`6da06a3`)
+
+`src/annot_render.rs`, `src/ap/mod.rs`, `src/lib.rs`. Additive; the `None`
+path is the pass as it was.
+
+### The rule, and where it is written
+
+`CFFL_InteractiveFormFiller::OnDraw` (`fpdfsdk/formfiller/cffl_interactiveformfiller.cpp:59-95`)
+is **one `if`/`else` over whether the widget has a live form-field control**,
+not a switch on focus:
+
+```cpp
+68  CFFL_FormField* pFormField = GetFormField(pWidget);
+69  if (pFormField && pFormField->IsValid()) {
+70    pFormField->OnDraw(pPageView, pWidget, pDevice, mtUser2Device);
+71    if (callback_iface_->GetFocusAnnot() != pWidget) {
+72      return;                                    // exit 1
+73    }
+75    CFX_FloatRect rcFocus = pFormField->GetFocusBox(pPageView);
+76    if (rcFocus.IsEmpty()) {
+77      return;                                    // exit 2
+78    }
+80    CFX_DrawUtils::DrawFocusRect(pDevice, mtUser2Device, rcFocus);
+82    return;                                      // exit 3
+83  }
+85  if (pFormField) { pFormField->OnDrawDeactive(...); }
+86  else            { pWidget->DrawAppearance(...); }
+89  if (!IsReadOnly(pWidget) && IsFillingAllowed(pWidget)) {
+90    pWidget->DrawShadow(pDevice, pPageView);      // the tint
+91  }
+```
+
+**All three exits are inside the live-control branch, and none of them
+reaches `DrawShadow`.** So the tint is not "suppressed when focused" — it is
+simply on the other side of a branch the edited widget never takes. That is
+one fact with two consequences, and the second is the one that was easy to
+miss: an empty focus box (exit 2) still costs the tint.
+
+### The focus box has three answers, and two of them are nothing
+
+`CFFL_FormField::GetFocusBox` (`fpdfsdk/formfiller/cffl_formfield.cpp:480-489`)
+asks the live PWL control for `GetFocusRect` and then discards the result
+unless the page box *contains* it. The overrides disagree, and the table is
+the design:
+
+| control | `GetFocusRect` | our `FocusBox` |
+|---|---|---|
+| `CPWL_Edit` — text field (`fpdfsdk/pwl/cpwl_edit.cpp:313-315`) | **empty** | `None` |
+| `CPWL_ComboBox` (`fpdfsdk/pwl/cpwl_combo_box.cpp:321-323`) | **empty** | `None` |
+| `CPWL_ListBox`, multi-select (`fpdfsdk/pwl/cpwl_list_box.cpp:227-234`) | the **caret item's** rect ∩ client rect | `Rect(..)` |
+| `CPWL_ListBox` single-select, check box, radio (`fpdfsdk/pwl/cpwl_wnd.cpp:713-719`) | window rect `Inflate(1,1)` | `Inflated` |
+| `CPWL_PushButton` (`fpdfsdk/pwl/cpwl_special_button.cpp:21-24`) | window rect deflated by the border width | `Rect(..)` |
+
+**The task brief was wrong about the text field.** It specified the widget
+rect via `GetViewBBox`; `GetViewBBox` (`cffl_formfield.cpp:38-53`) is the
+*invalidation* rectangle — it unions the focus box with the annot rect and
+inflates by one — and is never what `OnDraw` strokes. `OnDraw` strokes
+`GetFocusBox`, and for a text field that is empty. **A focused text field
+draws no outline at all.**
+
+### How it was confirmed against the goldens
+
+Two files, read directly out of `conformance/goldens`.
+
+**`form_textfield_focused_ltr` — the tint, and the absence of an outline.**
+`7c9ffc0dafcfa42f`, `/Rect [50 40 150 70]` on a 200x100 page, so device rows
+30..59 and columns 50..149 — 3000 pixels.
+
+| artifact | tinted `(241,244,255)` pixels | dashed outline |
+|---|---|---|
+| `input.pdf.0.png` (no events) | **3000** | none |
+| `input.pdf.0.events-{6e0b1e47,a631b3ae,de654ec5,ea28932b}.png` | **0** each | none |
+
+All four events goldens carry glyphs, a selection band or a caret (the
+one-pixel column at x=100 in `a631b3ae`, rows 39..50) over plain white. Not a
+single tinted pixel, and not a single dash. That is exits 1 and 2 of the
+branch above.
+
+**`scrollable_widgets1` — the one focus rectangle in the corpus.**
+`1b74251ab464ae5e`, a **multi-select list box** (`/FT /Ch`, `/Ff 2097152` =
+bit 22) at `/Rect [100 400 200 430]` on a 300x600 page, so the widget covers
+device rows 170..199 and columns 100..199. Both events goldens are untinted,
+and both stroke a dashed near-black rectangle at **alternating x, step 2** —
+the `{1.0f}` dash array at width 1:
+
+| golden | dashed rows | dashed columns |
+|---|---|---|
+| `events-6128e0d0` | 185 and 198, with vertical dashes at x=101 and x=186 | 101..186 |
+| `events-70812be1` | 171 and 184, same columns | 101..186 |
+
+**14 device rows tall and 85 columns wide, entirely inside a widget that is
+30 by 100** — and the two goldens differ only in *where* the band sits, which
+is the scroll position their `.evt` files set. That is
+`CPWL_ListBox::GetFocusRect`'s caret item clipped to the client area, not the
+widget's edges and not the widget's edges inflated. The brief's "one pixel
+outside the widget's bottom edge, device row 199" does not describe either
+golden.
+
+### The shape, and why it is a field rather than a parameter
+
+Option (b). `ap::AnnotOverlay` gains
+
+```rust
+pub struct Focus { pub annot: usize, pub box_: FocusBox }
+pub enum FocusBox { None, Inflated, Rect(kurbo::Rect) }
+```
+
+with `AnnotOverlay::set_focus(Focus)` / `focus() -> Option<Focus>`.
+`overlay_with`'s signature is **unchanged**; `pdfrum-tool`, `pdfrum` and
+`pdfrum-form` all compile untouched. Three reasons this beat a ninth
+parameter:
+
+- The focus is set by the same session that sets the appearances, from the
+  same raw `/Annots` index space, and travels with them through the same
+  `merge_over`.
+- `overlay_with` already carries an `#[expect(clippy::too_many_arguments)]`.
+  Adding a ninth argument to a function that needs a waiver to have eight is
+  the wrong direction.
+- The focus needs to survive the merge, and a parameter would not: a session
+  overlay sized for the one appearance it produced can still name a focused
+  annotation past its end, which `merge_over` now carries across explicitly
+  (an *entry* past the end is still dropped — it names a slot; a *focus* is
+  not — it names an annotation).
+
+`FocusBox` is three-valued rather than an `Option<Rect>` because `Inflated`
+is derivable from the annotation alone while `Rect` is not, and collapsing
+them would force every caller to know the inflation rule. `None` is the
+default and is not a failure: a focused entry that names it still loses the
+tint.
+
+### In the pass
+
+The four `highlight(...)` call sites became one `push_chrome(...)`, which is
+the branch transcribed: when `focus.annot == index` it appends `focus_rect`'s
+output (often nothing) and returns; otherwise it appends `highlight`'s. The
+two are exclusive by construction, which is what makes the `Suppressed`
+interaction fall out rather than need a rule — a suppressed *focused* widget
+gets neither the appearance nor the tint, and still gets its outline, because
+the focus rect is chrome painted after the appearance and independently of
+it, exactly as the tint was.
+
+`focus_rect` itself transcribes `CFX_DrawUtils::DrawFocusRect`
+(`core/fxge/cfx_drawutils.cpp:16-39`): the four corners as a closed path,
+stroked opaque black with dash array `{1.0}`, phase 0, and the rest of
+`CFX_GraphStateData`'s defaults (`core/fxge/cfx_graphstatedata.h:52-55`) —
+width **1.0**, butt caps, miter joins. Fill argb is **0**, so the
+`EvenOddOptions()` beside it names a rule for a fill that never happens;
+that is `FillRule::None` here, the same spelling `invalid_outline` already
+uses for the same reason.
+
+The page-box containment test at `cffl_formfield.cpp:487-488` is deliberately
+**not** applied here. It is a `Contains`, not an intersection — a box hanging
+one unit off the page is discarded whole — and it needs the page box, so it
+belongs to whoever computes the rectangle.
+
+### Tests
+
+Nine, all in `src/annot_render.rs`.
+
+| Test | What it pins |
+|---|---|
+| `the_focused_annotation_loses_its_tint` | The pixel claim: one object unfocused, none focused. |
+| `a_focus_box_of_none_strokes_nothing_but_still_suppresses_the_tint` | Exit 2 — the text-field case. |
+| `a_focused_widget_strokes_a_dashed_black_hairline_over_its_focus_box` | Colour, width 1, dash `[1.0]`, phase 0, `FillRule::None`, identity matrix, exact bounds, `dirty: false`. |
+| `the_list_box_focus_box_is_the_caret_item_not_the_widget_rect` | `scrollable_widgets1`'s geometry: 14 rows tall, narrower than the widget. |
+| `an_inflated_focus_box_grows_the_annotation_rect_by_one_unit` | `CPWL_Wnd::GetFocusRect`, including a corner-first `/Rect` that normalizes before inflating. |
+| `an_empty_focus_box_strokes_nothing_and_does_not_bring_the_tint_back` | A degenerate box on either axis. |
+| `every_index_but_the_focused_one_is_unchanged` | Six widgets, focus on index 1: every other index compares equal by value. |
+| `no_focus_is_the_pass_as_it_was` | `None` over eight annotations at three indices each equals `highlight` alone. |
+| `focus_merges_over_and_is_not_bounded_by_the_overlay` | Merge semantics, and a focus past the overlay's end. |
+
+`tests/data/unfocused_field_bodies.txt` and its test are untouched.
+
+### Gates
+
+`cargo fmt -p pdfrum-doc -- --check`; `cargo clippy -p pdfrum-doc
+--all-targets -- -D warnings`; `cargo nextest run -p pdfrum-doc` (387 pass);
+`cargo test --doc -p pdfrum-doc` (3 pass); `cargo build -p pdfrum-form -p
+pdfrum -p pdfrum-tool` (clean, unchanged); `cargo nextest run --workspace`
+(3430 pass, 1 skipped). Conformance `run --check-regressions`: **no
+regressions** — 1705 files, 1636 pass, 69 fail, and a per-file diff of the two
+scoreboards shows **0 rows differing**. Nothing supplies a focus yet, so the
+change is inert by construction.
+
+### Open items
+
+- **Nothing sets a focus yet.** The producer is `pdfrum-form`'s: it holds the
+  focused `AnnotId` and must call `AnnotOverlay::set_focus` beside the
+  appearances it already sets. Until it does, the eighteen `form-events` rows
+  keep their tint and stay where they are — the tint is the whole of the
+  `form_textfield_focused_*` delta, so those rows should move on the first
+  commit that sets it.
+- **Only `FocusBox::None` is reachable from a text field, which is all four
+  `form_textfield_focused_*` rows need.** `Rect` needs the list control's
+  scroll and caret state, which lives in `pdfrum-form`; `scrollable_widgets1`
+  stays failing until that crate computes and supplies it.
+- **The page-box containment test is unimplemented by design** (above). A
+  caller supplying a `Rect` must apply it, or a focus box hanging off the page
+  will be stroked where the oracle drops it. No corpus file exercises this.
