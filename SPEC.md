@@ -1727,3 +1727,132 @@ it and the correct behaviour for those lines is "consume nothing".
   diagnostic. This is the one place the crate is deliberately *better* rather
   than identical: a library that can hang on input is a bug regardless of what
   the oracle does — the same reasoning §M15 applies to boa's runtime limits.
+
+### 15.10 The viewer chrome a host draws: `PopupView` and `ScrollView`
+
+**[spec] 2026-09-01 — written under STYLE §2b's ruling of the same date, which
+this section is the type contract for.**
+
+PDFium's `fpdfsdk/pwl` layer is a **closed list of five** chrome pieces: the
+caret, the selection band, the focus rectangle, the scroll bar and the combo
+box's dropdown. The split that decides where each one lives here is *whether
+it falls inside the widget's `/Rect`*:
+
+| piece | inside `/Rect` | where it lives |
+|---|---|---|
+| caret | yes | the appearance stream (`ap::field_body::Highlight`) |
+| selection band | yes | the appearance stream |
+| focus rectangle | yes (inflated by one) | `ap::Focus` / `ap::FocusBox` |
+| scroll bar | **no** | the host's, from [`ScrollView`](#) |
+| combo dropdown | **no** | the host's, from [`PopupView`](#) |
+
+The first three are already generated, because an appearance form is *fitted*
+onto `/Rect` by `CFX_Matrix::MatchRect` and anything inside that rectangle
+arrives with it. The last two are drawn outside it, and drawing outside it
+means creating a window — which a PDF library has no business doing.
+
+**So there is no `FormChrome` trait and no fourth seam.** The seam list stays
+`RenderDevice`, `Resolve`, `Cascade`. What the crate exposes instead is
+**state + geometry + intent**:
+
+```rust
+pub struct PopupGeometry { pub rect: Rect, pub placement: Placement, pub row_height: f32 }
+pub enum Placement { Below, Above }
+
+pub struct PopupView {
+    pub annot: AnnotId,          // raw /Annots index
+    pub anchor: Rect,            // the widget's /Rect, page space
+    pub geometry: PopupGeometry,
+    pub options: Vec<String>,    // labels
+    pub selected: Option<usize>,
+    pub hovered: Option<usize>,
+    pub top_visible: usize,
+    pub edit_text: Option<String>,
+}
+
+pub struct ScrollView { pub top_visible: usize, pub visible_rows: usize, pub total: usize }
+
+// on `pdfrum::FormSession`
+fn popup_for_page(&mut self, page: u32) -> Option<PopupView>;
+fn scroll_view(&mut self, annot: AnnotId) -> Option<ScrollView>;
+fn choose(&mut self, annot: AnnotId, index: usize) -> Response;
+fn close_popup(&mut self, annot: AnnotId) -> Response;
+```
+
+Four deviations from the ruling's sketch, each argued rather than assumed:
+
+1. **`PopupView` is owned, not `PopupView<'a>`.** The facade's per-page entry
+   point assembles a borrowed `Context` around a `PageForm` it owns, drives the
+   body and drops it, so a view borrowing the session cannot outlive that
+   scope — a borrowed view would be reachable from `pdfrum-form` and **not**
+   from `pdfrum::FormSession`, which is the one caller the ruling names. STYLE
+   §2b also lists "a lifetime on a public type" among the things exposing state
+   rather than inverting is meant to avoid. The cost is one `Vec<String>` per
+   query, on a query a host makes once per render of a page with a list open.
+
+2. **The geometry is a nested `PopupGeometry` rather than three flat fields.**
+   `rect`, `placement` and `row_height` are one fact — where the window is —
+   and the operations over them (`plate`, `row_rect`, `row_at`,
+   `visible_rows`) need all three. A painter walks `0..visible_rows()` asking
+   for each row's rectangle; a hit-tester asks `row_at`. Flattening would put
+   those methods on the view and make it the thing that does X (STYLE §1).
+
+3. **`options` is `Vec<String>` of labels**, not of `ChoiceOption`. A list
+   draws `label`; `value` is what the field *stores* when the two differ, and
+   handing a host both invites drawing the wrong one on every `/Opt` entry
+   written as a two-element array.
+
+4. **`ScrollView` is keyed by annotation, not carried on the popup.** A list
+   box scrolls with no dropdown involved — `scrollable_widgets1.pdf` is two of
+   them — and the scroll bar is host chrome for the same reason the dropdown
+   is. Putting it on `PopupView` would make a closed list box unable to ask.
+
+**Placement is `QueryWherePopup`, ported as arithmetic.**
+`popup::place(anchor, page_height, rows, row_height)` is
+`CPWL_ComboBox::SetPopup`'s clamp (`cpwl_combo_box.cpp:325-377`) followed by
+`CFFL_InteractiveFormFiller::QueryWherePopup`
+(`cffl_interactiveformfiller.cpp:670-729`). Three parts of it are easy to get
+backwards and are normative here:
+
+- the three-row **floor** applies only above **three** options (`> 3`, not
+  `>= 3`), and it **outranks** the 140-unit cap, because upstream clamps the
+  *constant* into `[min, max]` rather than clamping the wanted height;
+- the side is below if the room below exceeds the wanted height, else above if
+  the room above does, else **whichever side is larger — at that side's room**,
+  not at the height that was asked for;
+- `place` answers `None` for the two cases `SetPopup` refuses on while still
+  returning `true`: no options, and no room. A click on the drop button of a
+  combo that cannot open is therefore **consumed and does nothing**, which is
+  a different answer from ignored.
+
+**Which events close it, from the C++ and not from intuition.** Kill-focus
+(`cpwl_combo_box.cpp:52-58`), a release on a list row (`:505-516`), a second
+press on the drop button (`:497-503`, a toggle), and `Return`
+(`:452-457`, also a toggle). **`Escape` does not**: `CPWL_Edit::OnCharInternal`
+filters it (`cpwl_edit.cpp:586-590`) and a combo never reaches
+`CFFL_TextField`'s escape handler, because `CFFL_ComboBox::OnChar` forwards to
+`CFFL_TextObject`. `Space` opens a **gated** combo and never shuts it, which
+is the asymmetry with `Return` a symmetric implementation gets wrong.
+
+**Routing is the correctness half, and it is independent of pixels.** A
+mouse-down inside the popup's computed rectangle **selects that row**. Upstream
+this is not a special case — `CPWL_Wnd::OnLButtonDown` walks its children
+first and the list is a child — but here the widget hit test is containment
+over `/Annots`, which the list is not in, so the same click read as a miss and
+killed focus. Down hover-selects and **up commits**
+(`CPWL_CBListBox::OnLButtonUp` → `NotifyLButtonUp`), which is what makes a
+press that drags off the list leave the field alone.
+
+**Hover is recorded separately from selection.** The list carries
+`Styles::kListboxHoverSel`, so upstream a pointer over a row *selects* it. Kept
+apart here because dismissing the list must leave the stored value untouched,
+which is exactly what `bug_736695_4` renders. `PopupView::is_banded` is where
+the two are recombined for drawing: hovered outranks selected.
+
+**Nothing in this section rasterizes, and nothing in the library draws a
+list.** `pdfrum-tool` draws one, in a test-only module, because the oracle's
+`pdfium_test` is a host and a golden comparison has to see the same pixels. It
+draws it by describing the popup as a list box and asking the ordinary
+appearance generator to draw that, into a rectangle of its own appended after
+the annotation pass — never folded into the widget's `/AP`, which is fitted
+onto `/Rect` and would scale the list rather than let it overflow.
