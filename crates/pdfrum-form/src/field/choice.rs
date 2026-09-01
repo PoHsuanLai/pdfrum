@@ -175,6 +175,56 @@ pub fn move_selection(state: &mut ChoiceState, delta: i32) -> bool {
     select_only(state, next)
 }
 
+/// Moves the caret one row **with modifiers**, which is what an arrow key and
+/// a wheel notch both do.
+///
+/// `CPWL_ListCtrl::OnVK` (`cpwl_list_ctrl.cpp:242-265`) branches three ways on
+/// a multi-select list, and the first of them is the surprising one:
+///
+/// - **Ctrl** — the body is *empty*. Only the caret moves; the selection is
+///   left exactly as it was. Upstream writes it as `if (bCtrl) {}`, which is
+///   easy to read as an oversight and is not: it is how a user walks the
+///   caret to a row before toggling it.
+/// - **Shift** — deselect everything, then select the whole run from the
+///   anchor to the new row.
+/// - **neither** — deselect everything, select the one row, and re-anchor.
+///
+/// A single-select list ignores all three and just selects the row, because
+/// `OnVK`'s whole `bShift`/`bCtrl` structure is inside `IsMultipleSel()`.
+///
+/// [`move_selection`] is this function with both flags clear, and is kept
+/// because that is what most callers want.
+pub fn move_caret_by(state: &mut ChoiceState, delta: i32, shift: bool, ctrl: bool) -> bool {
+    if state.options.is_empty() {
+        return false;
+    }
+    let last = state.options.len() - 1;
+    let current = state
+        .caret_index
+        .or_else(|| state.selected.iter().next().copied())
+        .unwrap_or(0);
+    let next = if delta < 0 {
+        current.saturating_sub(delta.unsigned_abs() as usize)
+    } else {
+        (current + delta.unsigned_abs() as usize).min(last)
+    };
+    if !state.config.multi_select {
+        return select_only(state, next);
+    }
+    if ctrl {
+        // The caret moves and nothing else does. Reported as a change,
+        // because the caret is what a multi-select list answers its focused
+        // text with and what its focus box strokes.
+        let moved = state.caret_index != Some(next);
+        state.caret_index = Some(next);
+        return moved;
+    }
+    if shift {
+        return select_range_to(state, next);
+    }
+    select_only(state, next)
+}
+
 /// Applies a typed character as type-ahead.
 ///
 /// Returns whether a row was landed on. The search starts from the row last

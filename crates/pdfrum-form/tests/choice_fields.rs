@@ -13,8 +13,8 @@
 use std::collections::BTreeSet;
 
 use pdfrum_form::field::choice::{
-    initial_selection, is_index_selected, select_only, set_index_selected, top_visible_for,
-    type_ahead,
+    initial_selection, is_index_selected, move_caret_by, select_only, set_index_selected,
+    top_visible_for, type_ahead,
 };
 use pdfrum_form::field::{ChoiceConfig, ChoiceOption, ChoiceState};
 
@@ -294,4 +294,75 @@ fn a_field_with_no_rows_refuses_every_index() {
     assert!(!set_index_selected(&mut empty, 100, true));
     assert!(!is_index_selected(&empty, 0));
     assert_eq!(empty.focused_text(), "");
+}
+
+/// `CPWL_ListCtrl::OnVK` with **Control**: the caret moves and the selection
+/// does not.
+///
+/// The upstream body is literally `if (bCtrl) {}` — an empty branch — which
+/// reads as an oversight and is not: it is how a caret is walked to a row
+/// before the row is toggled. An arrow key and a wheel notch both take this
+/// path, because `OnKeyDown` and `OnMouseWheel` call the same function with
+/// the same flags.
+#[test]
+fn the_accelerator_moves_a_multi_selects_caret_without_its_selection() {
+    let mut list = multi_list(&FRUIT);
+    select_only(&mut list, 3);
+    assert_eq!(list.selected, BTreeSet::from([3]));
+
+    assert!(move_caret_by(&mut list, 1, false, true));
+    assert_eq!(list.caret_index, Some(4), "the caret moved");
+    assert_eq!(
+        list.selected,
+        BTreeSet::from([3]),
+        "and the selection did not"
+    );
+}
+
+/// With **Shift** the same gesture ranges from the anchor instead.
+#[test]
+fn shift_ranges_a_multi_selects_selection_from_its_anchor() {
+    let mut list = multi_list(&FRUIT);
+    select_only(&mut list, 3);
+
+    assert!(move_caret_by(&mut list, 1, true, false));
+    assert_eq!(list.selected, BTreeSet::from([3, 4]));
+
+    // The anchor does not follow, so a second step widens the same run.
+    assert!(move_caret_by(&mut list, 1, true, false));
+    assert_eq!(list.selected, BTreeSet::from([3, 4, 5]));
+}
+
+/// With neither, it replaces — and re-anchors, so a later Shift ranges from
+/// the new row rather than the old one.
+#[test]
+fn a_bare_step_replaces_the_selection_and_re_anchors() {
+    let mut list = multi_list(&FRUIT);
+    select_only(&mut list, 3);
+
+    assert!(move_caret_by(&mut list, 1, false, false));
+    assert_eq!(list.selected, BTreeSet::from([4]));
+
+    assert!(move_caret_by(&mut list, 1, true, false));
+    assert_eq!(
+        list.selected,
+        BTreeSet::from([4, 5]),
+        "the bare step re-anchored on row 4"
+    );
+}
+
+/// A **single-select** list ignores all three, because `OnVK`'s whole
+/// modifier structure sits inside `IsMultipleSel()`.
+#[test]
+fn a_single_select_list_ignores_the_modifiers_entirely() {
+    for (shift, ctrl) in [(false, false), (true, false), (false, true), (true, true)] {
+        let mut list = single_list(&FRUIT);
+        select_only(&mut list, 3);
+        move_caret_by(&mut list, 1, shift, ctrl);
+        assert_eq!(
+            list.selected,
+            BTreeSet::from([4]),
+            "shift={shift} ctrl={ctrl} must still just select row 4"
+        );
+    }
 }
