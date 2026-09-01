@@ -90,6 +90,22 @@ pub fn scan_into<'a>(
     transform: Option<kurbo::Affine>,
     adjust: bool,
 ) -> &'a [ZeroArea] {
+    // The timer lives inside the function rather than around the call, because
+    // the result borrows `scratch` and a wrapping closure would have to run the
+    // scan twice or hand the borrow back out of it. See M12b-P3.md §3.
+    let started = crate::walkprofile::phase_start();
+    let out = scan_into_inner(scratch, path, transform, adjust);
+    started.end(crate::walkprofile::Phase::ZeroScan);
+    out
+}
+
+/// [`scan_into`] without the phase timer around it.
+fn scan_into_inner<'a>(
+    scratch: &'a mut Scratch,
+    path: &BezPath,
+    transform: Option<kurbo::Affine>,
+    adjust: bool,
+) -> &'a [ZeroArea] {
     scratch.found.clear();
     scratch.points.clear();
     let mut has_curve = false;
