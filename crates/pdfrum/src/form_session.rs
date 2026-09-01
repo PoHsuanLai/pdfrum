@@ -37,31 +37,44 @@ pub use pdfrum_form::{Modifiers as EventModifiers, Response as EventResponse};
 /// value and moves a field from the first to the second.
 ///
 /// ```
-/// use pdfrum::{Document, FormSession, EventModifiers};
+/// use pdfrum::{Document, FormSession, EventModifiers, VirtualKey};
 ///
 /// let doc = Document::open("tests/fixtures/text_form.pdf")?;
 /// let mut session = FormSession::new(&doc);
 ///
 /// // Nothing has the keyboard yet.
 /// assert!(session.focused_annot().is_none());
+/// assert!(session.focused_text().is_none());
 ///
 /// // A click is three events, and the move is not decoration: it is what
-/// // tells the widget the pointer is over it.
-/// let at = (120.0, 120.0);
+/// // tells the widget the pointer is over it. The fixture's one text field
+/// // is `/Rect [100 100 200 130]`, so (120, 115) lands inside it.
+/// let at = (120.0, 115.0);
 /// session.on_mouse_move(0, at.0, at.1, EventModifiers::NONE);
 /// session.on_mouse_down(0, at.0, at.1, EventModifiers::NONE);
-/// let response = session.on_mouse_up(0, at.0, at.1, EventModifiers::NONE);
-/// let _ = response.consumed;
+/// session.on_mouse_up(0, at.0, at.1, EventModifiers::NONE);
+/// assert!(session.focused_annot().is_some());
 ///
-/// // Typing sends characters. Navigation and shortcuts would go through
-/// // `on_key_down` instead — the two paths never overlap.
-/// for ch in "ABC".chars() {
+/// // Typing sends characters. Navigation and shortcuts go through
+/// // `on_key_down` instead — the two paths never overlap, and a character
+/// // carrying the accelerator is neither.
+/// for ch in "Hello".chars() {
 ///     session.on_char(ch, EventModifiers::NONE);
 /// }
+/// assert_eq!(session.focused_text().as_deref(), Some("Hello"));
 ///
-/// // Dropping focus commits the value and regenerates the appearance.
-/// let updates = session.force_kill_focus();
-/// let _ = updates.updates;
+/// // Undo is one keystroke and one character: typing records an item per
+/// // character, so this leaves "Hell".
+/// assert!(session.can_undo());
+/// session.on_key_down(VirtualKey::Z, EventModifiers::CONTROL);
+/// assert_eq!(session.focused_text().as_deref(), Some("Hell"));
+///
+/// // Dropping focus commits the value and moves the field from drawing its
+/// // live editor state to drawing a generated appearance stream. What comes
+/// // back is what changed, for a caller to re-render.
+/// let committed = session.force_kill_focus();
+/// assert!(session.focused_annot().is_none());
+/// assert!(!committed.updates.is_empty());
 /// # Ok::<(), pdfrum::Error>(())
 /// ```
 #[derive(Debug)]
