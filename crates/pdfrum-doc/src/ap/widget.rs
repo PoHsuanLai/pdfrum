@@ -225,7 +225,7 @@ fn control_index<R: Resolve>(dict: &Dict, r: &R) -> usize {
 /// which is a valid appearance and is what the oracle writes too.
 #[must_use]
 pub fn generate<R: Resolve>(dict: &Dict, r: &R) -> Option<GeneratedAp> {
-    build(dict, None, None, r)
+    build(dict, None, None, None, None, r)
 }
 
 /// The same, with the field's own text set into it.
@@ -233,6 +233,9 @@ pub fn generate<R: Resolve>(dict: &Dict, r: &R) -> Option<GeneratedAp> {
 /// A text field, a combo box or a list box gains its body; every other field
 /// type produces exactly what [`generate`] does, because only those three set
 /// text at all.
+///
+/// The text is the one the **file** stores. A field being edited shows
+/// something else, and [`generate_with_live`] is the entry point for that.
 #[must_use]
 pub fn generate_with_text<R: Resolve>(
     dict: &Dict,
@@ -240,7 +243,32 @@ pub fn generate_with_text<R: Resolve>(
     font: &crate::ap::TextFont<'_>,
     r: &R,
 ) -> Option<GeneratedAp> {
-    build(dict, Some(catalog), Some(font), r)
+    build(dict, Some(catalog), Some(font), None, None, r)
+}
+
+/// The same again, for a widget a form session is currently editing.
+///
+/// `caret_and_selection` is the focused-field overlay and `live` is what the
+/// session is showing in place of the stored `/V`, `/I` and `/TI`. Passing
+/// [`None`] for both is exactly [`generate_with_text`], byte for byte — the
+/// two differ only in what this one is allowed to be handed.
+#[must_use]
+pub fn generate_with_live<R: Resolve>(
+    dict: &Dict,
+    catalog: &Dict,
+    font: &crate::ap::TextFont<'_>,
+    r: &R,
+    caret_and_selection: Option<&crate::ap::field_body::Highlight>,
+    live: Option<&crate::ap::field_body::LiveState<'_>>,
+) -> Option<GeneratedAp> {
+    build(
+        dict,
+        Some(catalog),
+        Some(font),
+        caret_and_selection,
+        live,
+        r,
+    )
 }
 
 /// The shared builder: chrome, then the body when there is a font for one.
@@ -248,6 +276,8 @@ fn build<R: Resolve>(
     dict: &Dict,
     catalog: Option<&Dict>,
     font: Option<&crate::ap::TextFont<'_>>,
+    caret_and_selection: Option<&crate::ap::field_body::Highlight>,
+    live: Option<&crate::ap::field_body::LiveState<'_>>,
     r: &R,
 ) -> Option<GeneratedAp> {
     if !needs_appearance_in(dict, catalog, r) {
@@ -303,9 +333,9 @@ fn build<R: Resolve>(
     // The body follows the chrome, and only a caller with a font can ask for
     // one. A button reaches here with `None` from the dispatch below, which is
     // how a checkbox keeps producing exactly the stream it did before.
-    let body = catalog
-        .zip(font)
-        .and_then(|(catalog, font)| crate::ap::field_body::generate(dict, catalog, font, r, None));
+    let body = catalog.zip(font).and_then(|(catalog, font)| {
+        crate::ap::field_body::generate(dict, catalog, font, r, caret_and_selection, live)
+    });
     let fonts = body.as_ref().and_then(|body| body.font_resources.clone());
     if let Some(body) = &body {
         out.raw(&String::from_utf8_lossy(&body.stream));
@@ -799,6 +829,80 @@ mod tests {
                 &NoResolve
             ),
             Rect::ZERO
+        );
+    }
+
+    /// A text widget with a `/DA` the font resource below satisfies.
+    fn text_widget(value: &str) -> Dict {
+        dict(&[
+            ("Subtype", Object::Name(Name::from("Widget"))),
+            ("FT", Object::Name(Name::from("Tx"))),
+            ("Rect", numbers(&[100.0, 100.0, 200.0, 130.0])),
+            (
+                "DA",
+                Object::Str(pdfrum_object::PdfString::literal(b"0 0 0 rg /Helv 12 Tf")),
+            ),
+            ("V", Object::Str(pdfrum_object::PdfString::literal(value))),
+        ])
+    }
+
+    fn text_catalog() -> Dict {
+        dict(&[(
+            "AcroForm",
+            Object::Dict(dict(&[(
+                "DR",
+                Object::Dict(dict(&[(
+                    "Font",
+                    Object::Dict(dict(&[(
+                        "Helv",
+                        Object::Dict(crate::ap::freetext::fallback_font()),
+                    )])),
+                )])),
+            )])),
+        )])
+    }
+
+    #[test]
+    fn the_live_entry_point_carries_its_override_down_to_the_body() {
+        let cache = pdfrum_font::FontCache::new();
+        let face =
+            pdfrum_font::Font::load_standard(pdfrum_font::subst::StandardFont::Helvetica, &cache);
+        let width = |code: u32| crate::ap::TextFont::char_width(&face, code);
+        let font = crate::ap::TextFont {
+            metrics: crate::ap::TextFont::metrics_of(&face, &width),
+            font: &face,
+        };
+        let (widget, catalog) = (text_widget("stored"), text_catalog());
+        let stream = |ap: Option<super::GeneratedAp>| {
+            String::from_utf8_lossy(&ap.expect("an appearance").stream).into_owned()
+        };
+
+        let stored = stream(super::generate_with_text(
+            &widget, &catalog, &font, &NoResolve,
+        ));
+        assert!(stored.contains("(stored) Tj\n"), "{stored}");
+
+        let live = crate::ap::field_body::LiveState {
+            text: "typed",
+            ..crate::ap::field_body::LiveState::default()
+        };
+        let edited = stream(super::generate_with_live(
+            &widget,
+            &catalog,
+            &font,
+            &NoResolve,
+            None,
+            Some(&live),
+        ));
+        assert!(edited.contains("(typed) Tj\n"), "{edited}");
+        assert!(!edited.contains("stored"), "{edited}");
+
+        // And handed nothing, the live entry point is the stored one.
+        assert_eq!(
+            stored,
+            stream(super::generate_with_live(
+                &widget, &catalog, &font, &NoResolve, None, None,
+            ))
         );
     }
 }
