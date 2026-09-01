@@ -175,13 +175,9 @@ fn mouse_down<R: Resolve>(
     // Where the click lands inside the widget is the field kind's business.
     match session.fields.get(&field) {
         Some(FieldState::Text(_)) => {
+            let point = to_plate(widget, at);
             with_edit(session, ctx, field, |edit, config, metrics| {
-                ops::click_at(
-                    edit,
-                    config,
-                    metrics,
-                    kurbo::Point::new(at.x.into(), at.y.into()),
-                );
+                ops::click_at(edit, config, metrics, point);
             });
             session.drag = caret_anchor(session, field);
         }
@@ -203,7 +199,18 @@ fn mouse_down<R: Resolve>(
 
 /// The primary button coming up: activate a toggle, end a drag.
 fn mouse_up<R: Resolve>(session: &mut FormSession, ctx: &Context<'_, R>, at: Point) -> Response {
+    // The release **finishes** the drag before ending it. Dropping the anchor
+    // first loses the last leg of the selection, which is the whole of it
+    // when the pointer never moved between the intermediate positions and the
+    // release — and a drag whose only move is the release point is exactly
+    // what the upstream `SelectTextWithMouse` sends.
+    let finished = session
+        .drag
+        .and_then(|anchor| drag_to(session, ctx, anchor, at));
     session.drag = None;
+    if let Some(update) = finished {
+        return Response::with(vec![update]);
+    }
     let hit = hit::widget_at_point(
         &ctx.page.candidates,
         session.focus.map(FocusTarget::annot),
@@ -252,13 +259,14 @@ fn double_click<R: Resolve>(
     if !matches!(session.fields.get(&field), Some(FieldState::Text(_))) {
         return Response::ignored();
     }
+    let Some(point) = ctx
+        .widget_of_field(field)
+        .map(|widget| to_plate(widget, at))
+    else {
+        return Response::consumed();
+    };
     with_edit(session, ctx, field, |edit, config, metrics| {
-        ops::select_line_at(
-            edit,
-            config,
-            metrics,
-            kurbo::Point::new(at.x.into(), at.y.into()),
-        );
+        ops::select_line_at(edit, config, metrics, point);
     });
     let Some(id) = session.focus.map(FocusTarget::annot) else {
         return Response::consumed();
@@ -960,13 +968,11 @@ fn drag_to<R: Resolve>(
     at: Point,
 ) -> Option<AppearanceUpdate> {
     let field = anchor.field;
+    let point = ctx
+        .widget_of_field(field)
+        .map(|widget| to_plate(widget, at))?;
     with_edit(session, ctx, field, |edit, config, metrics| {
-        ops::drag_to(
-            edit,
-            config,
-            metrics,
-            kurbo::Point::new(at.x.into(), at.y.into()),
-        );
+        ops::drag_to(edit, config, metrics, point);
     });
     let id = session.focus.map(FocusTarget::annot)?;
     appearance_of(session, ctx, field, id)
@@ -1120,6 +1126,19 @@ fn with_font<R: Resolve, T>(
         font,
     };
     Some(body(&text_font))
+}
+
+/// A page-space point in the widget's **appearance-stream** space.
+///
+/// The two differ by the widget's own corner, and forgetting it is silent
+/// rather than loud: `ap::widget::rotated_rect` places a widget's box at the
+/// origin, so a plate is always `(0, 0)`-based while an event's point is
+/// wherever the widget sits on the page. Passing a page-space point straight
+/// to a layout query puts every click far to the right of the text, where the
+/// hit test clamps it to one end and every caret lands at the same place.
+fn to_plate(widget: &WidgetInfo, at: Point) -> kurbo::Point {
+    let origin = pdfrum_doc::geom::normalize(widget_rect(widget));
+    kurbo::Point::new(f64::from(at.x) - origin.x0, f64::from(at.y) - origin.y0)
 }
 
 /// Runs `body` against a text field's live edit control.
