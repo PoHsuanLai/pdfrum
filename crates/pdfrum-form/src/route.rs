@@ -290,9 +290,10 @@ fn wheel<R: Resolve>(
     };
     let field = widget.field;
     ensure_state(session, ctx, field);
+    let rows = visible_rows(ctx, widget);
 
     let moved = match session.fields.get_mut(&field) {
-        Some(FieldState::Choice(state)) => scroll_choice(state, delta.1),
+        Some(FieldState::Choice(state)) => scroll_choice(state, delta.1, rows),
         Some(FieldState::Text(_)) => scroll_text(session, ctx, field, delta.1),
         Some(FieldState::Toggle(_) | FieldState::Button(_)) | None => false,
     };
@@ -699,6 +700,25 @@ fn row_at<R: Resolve>(
     (row < choice.options.len()).then_some(row)
 }
 
+/// How many rows of a list box fit in its client area.
+///
+/// The count the no-overscroll clamp is stated against: a list scrolls only
+/// far enough to put its last row at the bottom of the box.
+fn visible_rows<R: Resolve>(ctx: &Context<'_, R>, widget: &WidgetInfo) -> usize {
+    let client = ap::field_body::client_rect(&widget.dict, ctx.resolve);
+    let height = row_height(ctx, widget);
+    if height <= 0.0 {
+        return 0;
+    }
+    #[expect(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "a row count is bounded by the widget's height in points"
+    )]
+    let rows = (pdfrum_doc::geom::height(client) / height) as usize;
+    rows
+}
+
 /// The height of one list-box row.
 fn row_height<R: Resolve>(ctx: &Context<'_, R>, widget: &WidgetInfo) -> f32 {
     let size = font_size(ctx, widget);
@@ -718,18 +738,24 @@ fn font_size<R: Resolve>(ctx: &Context<'_, R>, widget: &WidgetInfo) -> f32 {
 }
 
 /// Scrolls a choice field by a wheel notch.
-fn scroll_choice(state: &mut ChoiceState, delta_y: i32) -> bool {
+///
+/// The clamp is the same **no-overscroll** rule `top_visible_for` applies to
+/// `/TI`: a list stops scrolling as soon as its last row reaches the bottom
+/// of the box, so the box never shows blank space below the options. Without
+/// it a wheel run to the end leaves one row drawn against an empty widget,
+/// where the oracle keeps the box full.
+fn scroll_choice(state: &mut ChoiceState, delta_y: i32, visible_rows: usize) -> bool {
     if delta_y == 0 || state.options.is_empty() {
         return false;
     }
-    // A negative delta is downward, which moves the first visible row later.
     let was = state.top_visible;
-    let last = state.options.len().saturating_sub(1);
-    state.top_visible = if delta_y < 0 {
-        state.top_visible.saturating_add(1).min(last)
+    // A negative delta is downward, which moves the first visible row later.
+    let wanted = if delta_y < 0 {
+        state.top_visible.saturating_add(1)
     } else {
         state.top_visible.saturating_sub(1)
     };
+    state.top_visible = field::choice::top_visible_for(state.options.len(), visible_rows, wanted);
     state.top_visible != was
 }
 
