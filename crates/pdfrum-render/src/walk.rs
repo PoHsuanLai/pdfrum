@@ -375,10 +375,103 @@ fn cull_rect(to_device: Affine, device_box: Rect) -> Option<Rect> {
 /// object exactly touching the clip edge is kept there and dropped here.
 /// Only this spelling survives; recorded so nobody "fixes" it later.
 fn culled(object: &PageObject, cull: Rect) -> bool {
+    // A path's exact box is the expensive one and the cull almost never needs
+    // it, so the two cheap boxes that bracket it are tried first. See
+    // `path_cull_bounds`.
+    if let PageObject::Path(p) = object {
+        if let Some((inner, outer)) = path_cull_bounds(&p.object.path, p.object.matrix) {
+            // The endpoint box is a *subset* of the exact box, so an endpoint
+            // box that reaches the clip proves the exact box does — keep, no
+            // solve.
+            if !outside(inner, cull) {
+                return false;
+            }
+            // The control-point hull is a *superset*, so a hull entirely off
+            // the clip proves the exact box is too — cull, no solve.
+            if outside(outer, cull) {
+                return true;
+            }
+        }
+        // Either the bracket declined the path, or the answer lies in the band
+        // between its two boxes. Both need the cubic extrema.
+        return outside(path_bbox(&p.object.path, p.object.matrix), cull);
+    }
     let Some(bbox) = object_bbox(object) else {
         return false;
     };
+    outside(bbox, cull)
+}
+
+/// The strict inequalities `RenderObjectList` culls with.
+///
+/// The progressive renderer spells the complement with `<=`/`>=`, so an object
+/// exactly touching the clip edge is kept there and dropped here.
+fn outside(bbox: Rect, cull: Rect) -> bool {
     bbox.x0 > cull.x1 || bbox.x1 < cull.x0 || bbox.y0 > cull.y1 || bbox.y1 < cull.y0
+}
+
+/// Two boxes that bracket a transformed path's exact bounding box: the box of
+/// its **on-curve endpoints**, which is contained in it, and the box of **every
+/// control point**, which contains it. `None` when the path has no segments.
+///
+/// Both are one pass over the elements with four `min`/`max` per point and no
+/// segment reconstruction. The exact box — [`path_bbox`] — solves each cubic's
+/// extrema, which kurbo does honestly and which costs 156 ns per object on
+/// `vector_paths_1751` (docs/status/M12b-P3.md §3) for a decision that on that
+/// document is "keep" 5010 times out of 5010.
+///
+/// The bracket is what makes skipping the solve *exact* rather than
+/// approximate: a subset that reaches the clip proves the true box reaches it,
+/// and a superset that misses proves the true box misses. Only a path whose
+/// curve bulges across the clip edge while its endpoints and hull straddle it
+/// differently pays for the solve, and it still gets the same answer.
+fn path_cull_bounds(path: &kurbo::BezPath, matrix: Affine) -> Option<(Rect, Rect)> {
+    // A path that does not open with a move is not a shape kurbo's `segments`
+    // reads the way this bracket assumes, so it takes the exact spelling.
+    if !matches!(path.elements().first(), Some(kurbo::PathEl::MoveTo(_))) {
+        return None;
+    }
+    let mut inner: Option<Rect> = None;
+    let mut outer: Option<Rect> = None;
+    let add = |bounds: &mut Option<Rect>, p: kurbo::Point| {
+        let p = matrix * p;
+        *bounds = Some(match *bounds {
+            Some(r) => Rect::new(r.x0.min(p.x), r.y0.min(p.y), r.x1.max(p.x), r.y1.max(p.y)),
+            None => Rect::new(p.x, p.y, p.x, p.y),
+        });
+    };
+    for el in path.elements() {
+        match *el {
+            // A `MoveTo` goes only into the superset. It *usually* starts a
+            // segment and so is usually in the exact box too — but a `MoveTo`
+            // immediately followed by another one starts no segment at all,
+            // and putting it in the subset would make the subset larger than
+            // the exact box on exactly that path. The superset is unharmed by
+            // a point the exact box does not have.
+            kurbo::PathEl::MoveTo(p) => add(&mut outer, p),
+            kurbo::PathEl::LineTo(p) => {
+                add(&mut inner, p);
+                add(&mut outer, p);
+            }
+            kurbo::PathEl::QuadTo(c, p) => {
+                add(&mut inner, p);
+                add(&mut outer, c);
+                add(&mut outer, p);
+            }
+            kurbo::PathEl::CurveTo(c1, c2, p) => {
+                add(&mut inner, p);
+                add(&mut outer, c1);
+                add(&mut outer, c2);
+                add(&mut outer, p);
+            }
+            kurbo::PathEl::ClosePath => {}
+        }
+    }
+    // A path with no drawn segment at all — one bare `MoveTo`, or a move and a
+    // close — has no endpoint box, and its exact box is `Rect::default()`
+    // rather than the point it names. The two disagree, so it goes the exact
+    // way; there is nothing to save on a path of one element anyway.
+    Some((inner?, outer?))
 }
 
 /// One object's own bounding box in the coordinate space its list is walked
@@ -2019,6 +2112,80 @@ mod tests {
         // Strictly beyond it is dropped.
         let beyond = path_object(rect(10.1, 0.0, 20.0, 5.0), GraphicsState::default());
         assert!(culled(&beyond, cull));
+    }
+
+    /// The two-box bracket must never change a cull decision, only reach it
+    /// sooner. Its specification is the exact box, so this compares against it
+    /// over every path shape the cull can meet and every position of the clip
+    /// relative to that shape — including the one the bracket exists to
+    /// handle badly, a curve whose bulge crosses an edge its endpoints do not.
+    #[test]
+    fn the_cull_bracket_never_changes_the_answer() {
+        let mut bulging = BezPath::new();
+        bulging.move_to((0.0, 0.0));
+        // Control points far above the curve, which peaks at y = 7.5.
+        bulging.curve_to((0.0, 10.0), (10.0, 10.0), (10.0, 0.0));
+
+        let mut two_moves = BezPath::new();
+        two_moves.move_to((100.0, 100.0)); // starts no segment
+        two_moves.move_to((0.0, 0.0));
+        two_moves.line_to((1.0, 1.0));
+
+        let mut bare_move = BezPath::new();
+        bare_move.move_to((50.0, 50.0));
+
+        let mut move_close = BezPath::new();
+        move_close.move_to((50.0, 50.0));
+        move_close.close_path();
+
+        let shapes = [
+            rect(0.0, 0.0, 10.0, 10.0),
+            bulging,
+            two_moves,
+            bare_move,
+            move_close,
+            BezPath::new(),
+        ];
+        let matrices = [
+            Affine::IDENTITY,
+            Affine::translate((3.0, -4.0)),
+            Affine::new([2.0, 0.5, -0.5, 2.0, 1.0, 1.0]),
+        ];
+        for shape in &shapes {
+            for matrix in matrices {
+                let object = PageObject::Path(Box::new(Content {
+                    object: PathObject {
+                        path: shape.clone(),
+                        matrix,
+                        fill_rule: pdfrum_page::FillRule::Winding,
+                        stroke: false,
+                    },
+                    state: GraphicsState::default(),
+                    marks: ContentMarks::new(),
+                    content_stream: 0,
+                    dirty: false,
+                    active: true,
+                }));
+                let exact = path_bbox(shape, matrix);
+                // A grid of clips that slides across the shape a half unit at
+                // a time, so every edge relation — clear, touching, straddling
+                // — is exercised on both axes.
+                let mut x = -12.0;
+                while x < 14.0 {
+                    let mut y = -12.0;
+                    while y < 14.0 {
+                        let cull = Rect::new(x, y, x + 4.0, y + 4.0);
+                        assert_eq!(
+                            culled(&object, cull),
+                            outside(exact, cull),
+                            "bracket disagreed at {cull:?} on {shape:?} under {matrix:?}"
+                        );
+                        y += 0.5;
+                    }
+                    x += 0.5;
+                }
+            }
+        }
     }
 
     #[test]
