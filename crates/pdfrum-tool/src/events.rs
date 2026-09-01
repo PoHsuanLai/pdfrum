@@ -4,8 +4,13 @@
 //! lines, unknown verbs, and lines whose argument count the C++ rejects are
 //! skipped rather than failing the parse — `SendPageEvents` never aborts a
 //! file. Numbers go through C `atoi` (leading whitespace, optional sign,
-//! trailing junk ignored, no digits → 0). Coordinates are integer device
-//! pixels, the values `FORM_On*` receive, not PDF user space.
+//! trailing junk ignored, no digits → 0). Coordinates are the integers
+//! `FORM_On*` receives, and those are **page space** — PDF user space, y-up
+//! (`public/fpdf_formfill.h` documents `page_x`/`page_y` that way for
+//! `OnMouseMove`, `OnLButtonDown`, `OnFocus` and `DoubleClick`, and
+//! `fpdf_formfill.cpp` passes them through with no transform). The header's
+//! "in device" on `FORM_OnLButtonUp` is an upstream doc bug: its body is
+//! identical to `OnLButtonDown`'s.
 //!
 //! Mouse verbs in event.cc:63, 85, 105, 135 test arity with `size < N &&
 //! size > N+1`, which is never true. Extra tokens on those verbs are therefore
@@ -57,9 +62,9 @@ pub enum Event {
     MouseDown {
         /// `left` or `right`; any other button name is skipped.
         button: MouseButton,
-        /// Device-pixel X, `atoi` of the third token.
+        /// Page-space X, `atoi` of the third token.
         x: i32,
-        /// Device-pixel Y, `atoi` of the fourth token.
+        /// Page-space Y, `atoi` of the fourth token.
         y: i32,
         /// Optional fifth token; 0 when omitted.
         modifiers: u32,
@@ -68,9 +73,9 @@ pub enum Event {
     MouseUp {
         /// `left` or `right`; any other button name is skipped.
         button: MouseButton,
-        /// Device-pixel X.
+        /// Page-space X.
         x: i32,
-        /// Device-pixel Y.
+        /// Page-space Y.
         y: i32,
         /// Optional fifth token; 0 when omitted.
         modifiers: u32,
@@ -80,25 +85,25 @@ pub enum Event {
     /// Only `left` is accepted; a right double-click prints "bad button name"
     /// and is skipped.
     MouseDoubleClick {
-        /// Device-pixel X.
+        /// Page-space X.
         x: i32,
-        /// Device-pixel Y.
+        /// Page-space Y.
         y: i32,
         /// Optional fifth token; 0 when omitted.
         modifiers: u32,
     },
     /// `mousemove,<x>,<y>` — event.cc:119-130.
     MouseMove {
-        /// Device-pixel X, `atoi` of the first argument.
+        /// Page-space X, `atoi` of the first argument.
         x: i32,
-        /// Device-pixel Y, `atoi` of the second argument.
+        /// Page-space Y, `atoi` of the second argument.
         y: i32,
     },
     /// `mousewheel,<x>,<y>,<dx>,<dy>[,modifiers]` — event.cc:132-146.
     MouseWheel {
-        /// Device-pixel X of the wheel event.
+        /// Page-space X of the wheel event.
         x: i32,
-        /// Device-pixel Y of the wheel event.
+        /// Page-space Y of the wheel event.
         y: i32,
         /// Horizontal wheel delta.
         delta_x: i32,
@@ -109,9 +114,9 @@ pub enum Event {
     },
     /// `focus,<x>,<y>` — event.cc:148-159.
     Focus {
-        /// Device-pixel X.
+        /// Page-space X.
         x: i32,
-        /// Device-pixel Y.
+        /// Page-space Y.
         y: i32,
     },
 }
@@ -611,14 +616,42 @@ mod tests {
             "oracle checkout should still hold 59 .evt files, found {}",
             files.len()
         );
+        // `parse_evt` is infallible by construction, so `Ok` alone proves
+        // nothing. Every corpus script holds at least one real verb, so the
+        // load-bearing assertion is that each file yields events: a grammar
+        // regression that skipped every line would still return `Ok(vec![])`.
+        let mut total = 0usize;
         for path in &files {
             let text = std::fs::read_to_string(path).unwrap_or_else(|err| {
                 panic!("reading {}: {err}", path.display());
             });
-            parse_evt(&text).unwrap_or_else(|err| {
+            let events = parse_evt(&text).unwrap_or_else(|err| {
                 panic!("{}: {err}", path.display());
             });
+            assert!(
+                !events.is_empty(),
+                "{} parsed to no events at all",
+                path.display()
+            );
+            // Every non-comment, non-blank line of the corpus is a verb the
+            // grammar knows, so nothing may be dropped.
+            let verbs = text
+                .split('\n')
+                .filter(|line| !line.split('#').next().unwrap_or("").is_empty())
+                .count();
+            assert_eq!(
+                events.len(),
+                verbs,
+                "{}: {verbs} verb lines but {} events",
+                path.display(),
+                events.len()
+            );
+            total += events.len();
         }
+        assert!(
+            total > 200,
+            "corpus should parse to many events, got {total}"
+        );
     }
 
     fn collect_evt(dir: &Path, out: &mut Vec<PathBuf>) {
