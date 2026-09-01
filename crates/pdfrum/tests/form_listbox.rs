@@ -50,8 +50,8 @@ fn selected_rows(session: &FormSession<'_>, count: usize) -> Vec<usize> {
         .collect()
 }
 
-/// `CheckIfMultipleSelectedValues`: `/V` as an array selects every row it
-/// names.
+/// `CheckIfMultipleSelectedValues`: `/V [(Gamma) (Epsilon)]` selects rows
+/// **2 and 4**, the upstream row's own two indices.
 #[test]
 fn a_value_array_selects_every_row_it_names() {
     let doc = document();
@@ -62,29 +62,33 @@ fn a_value_array_selects_every_row_it_names() {
         session.focused_annot().is_some(),
         "the click must reach the field"
     );
-    let rows = selected_rows(&session, 10);
-    assert!(
-        rows.len() >= 2,
-        "/V [(Epsilon) (Gamma)] names two rows, got {rows:?}"
-    );
+    assert_eq!(selected_rows(&session, 5), vec![2, 4]);
 }
 
-/// `CheckIfMultipleSelectedIndices`, and it currently **diverges from the
-/// oracle**. Asserted as it stands rather than hidden, so that wiring the
-/// interaction reader turns this test red rather than leaving it green.
-/// See `docs/status/M14.md`.
+/// `CheckIfMultipleSelectedIndices`: `/I [1 3]` with **no `/V`** selects rows
+/// 1 and 3 — 'Belgium' and 'Denmark'.
+///
+/// This is the one shape where the two readers of a selection disagree, and
+/// both are right about their own job. `CPDF_FormField::IsItemSelected`
+/// (`cpdf_formfield.cpp:546-554`) consults **`/I` first**, as integer
+/// indices, and falls back to `/V` only when `/I` is not *usable* —
+/// `UseSelectedIndicesObject` (`:863-935`): there is no `/V` at all, or `/I`
+/// has the same number of entries as `/V` and every index names an option
+/// whose value appears in `/V`. That is the reader interaction uses.
+///
+/// The **appearance** producer for a file with no `/NeedAppearances` is a
+/// different function — `CPDFSDK_AppStream::SetAsListBox` →
+/// `GetValueOrSelectedIndicesObject` — which takes `/V` first and matches it
+/// as text, and that is what `ap::field_body::selected_indices` reproduces.
+/// So the two are not a bug and a fix; they are two questions.
 #[test]
-fn an_index_array_alone_currently_selects_nothing() {
+fn an_index_array_alone_selects_the_rows_it_names() {
     let doc = document();
     let mut session = FormSession::new(&doc);
     focus(&mut session, INDICES_FIRST);
 
     assert!(session.focused_annot().is_some());
-    assert_eq!(
-        selected_rows(&session, 10),
-        Vec::<usize>::new(),
-        "the oracle selects rows 1 and 3 here; see this test's doc comment"
-    );
+    assert_eq!(selected_rows(&session, 5), vec![1, 3]);
 }
 
 /// `CheckIfMultipleSelectedMismatch`: **`/V` wins**, and the fixture is built
