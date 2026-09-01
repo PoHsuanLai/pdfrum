@@ -34,7 +34,7 @@ use super::undo::{UndoItem, UndoStack};
 /// The invariant is one sentence: `caret` and both ends of `selection` are
 /// places in `layout`, and `layout` is what laying `text` out again would
 /// produce.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct TextEdit {
     /// The text as the user has it, which may differ from the field's stored
     /// value until the edit commits.
