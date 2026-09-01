@@ -34,6 +34,7 @@ pub mod da;
 pub mod emit;
 pub mod field_body;
 pub mod fmt;
+pub mod font_map;
 pub mod freetext;
 pub mod markup;
 pub mod popup;
@@ -420,6 +421,23 @@ impl TextFont<'_> {
     }
 }
 
+/// One second face: the resource name it is filed under, the dictionary the
+/// appearance's `/Resources /Font` carries, and the loaded face itself.
+///
+/// A borrow of what [`FormFonts`] already holds. The three travel together
+/// because a generator needs all three to write one character — the alias for
+/// the `Tf`, the face for the width, and the dictionary so the name resolves
+/// when the stream is drawn.
+#[derive(Debug, Clone, Copy)]
+pub struct Substitute<'a> {
+    /// The `Tf` name, and the key in the appearance's font resources.
+    pub alias: &'a Name,
+    /// The font dictionary that key maps to.
+    pub dict: &'a Dict,
+    /// The loaded face, for widths and for the codes it can write.
+    pub font: &'a pdfrum_font::Font,
+}
+
 /// The faces a form's default resources name, loaded once for a page.
 ///
 /// # Why the fonts are loaded rather than substituted for
@@ -443,6 +461,14 @@ pub struct FormFonts {
     /// Resource name and the face loaded under it, in `/DR /Font` order with
     /// the fallback last.
     entries: Vec<(Name, pdfrum_font::Font)>,
+    /// The faces added for characters no declared font's charset covers, one
+    /// per charset, keyed by the alias they are filed under.
+    ///
+    /// These are not in `/DR`, and no `/DA` names one: they are added when a
+    /// field is asked to write a character its own font cannot, and they go
+    /// into the **appearance stream's** own `/Resources /Font` rather than the
+    /// form's. See [`font_map`].
+    substitutes: Vec<(Name, Dict, pdfrum_font::Font)>,
 }
 
 impl std::fmt::Debug for FormFonts {
@@ -507,7 +533,44 @@ impl FormFonts {
         // answers its own. A field with no `/DR` at all is exactly where that
         // shows, because there is nothing else for it to measure with.
         entries.extend(load(&freetext::fallback_font()).map(|font| (Name::new(Vec::new()), font)));
-        FormFonts { entries }
+
+        // The second faces, loaded here rather than where a field discovers it
+        // needs one: loading needs the page's font cache, and the generators
+        // are pure functions of the faces they are handed. There is one per
+        // charset the font map can add for, which is one — see [`font_map`].
+        let mut substitutes = Vec::new();
+        for charset in font_map::SUBSTITUTABLE_CHARSETS {
+            let Some(dict) = font_map::substitute_font_dict(*charset) else {
+                continue;
+            };
+            if let Some(font) = load(&dict) {
+                substitutes.push((Name::new(font_map::substitute_alias(*charset)), dict, font));
+            }
+        }
+        FormFonts {
+            entries,
+            substitutes,
+        }
+    }
+
+    /// The second face a character of `charset` is written in, with the alias
+    /// it is filed under and the dictionary that goes into the appearance's
+    /// own resources.
+    ///
+    /// Answers nothing for a charset with no encoding table, and for one whose
+    /// face would not load — in both cases the caller leaves the character to
+    /// the `/DA` font, which is the behaviour that predates this.
+    #[must_use]
+    pub fn substitute(&self, charset: pdfrum_font::subst::Charset) -> Option<Substitute<'_>> {
+        let alias = font_map::substitute_alias(charset);
+        self.substitutes
+            .iter()
+            .find(|(name, _, _)| name.as_bytes() == alias)
+            .map(|(name, dict, font)| Substitute {
+                alias: name,
+                dict,
+                font,
+            })
     }
 
     /// The face filed under one resource name, or the fallback.
@@ -615,7 +678,27 @@ pub fn generate_appearances_with_text<R: Resolve>(
         // The width closure has to outlive the `TextFont` that borrows it, so
         // it is built here rather than inside the lookup.
         let named = fonts.and_then(|fonts| fonts.face(&font_name_of(&dict, catalog, r)));
-        let width = named.map(|font| move |code: u32| TextFont::char_width(font, code));
+        // A second face, for the characters this one's charset does not cover.
+        // The **widths** have to know about it as well as the bytes: a run set
+        // in two faces advances by two faces' metrics, and measuring it all
+        // with the first gives a line the wrong length wherever the second one
+        // writes. So the substitute enters through the width closure the
+        // layout is built from, not only through the encoder.
+        let da_charset = named.map_or(pdfrum_font::subst::Charset::Ansi, font_map::font_charset);
+        let substitute = fonts.and_then(|fonts| {
+            font_map::SUBSTITUTABLE_CHARSETS
+                .iter()
+                .find(|charset| **charset != da_charset)
+                .and_then(|charset| fonts.substitute(*charset))
+        });
+        let width = named.map(|font| {
+            move |code: u32| match substitute {
+                Some(sub) if !font_map::da_font_writes(font, da_charset, code) => {
+                    font_map::substitute_width(sub.font, code)
+                }
+                _ => TextFont::char_width(font, code),
+            }
+        });
         let text_font = named.zip(width.as_ref()).map(|(font, width)| TextFont {
             metrics: TextFont::metrics_of(font, width),
             font,
@@ -628,7 +711,7 @@ pub fn generate_appearances_with_text<R: Resolve>(
                 // value laid out and a caller without one gets the chrome
                 // alone.
                 match text_font.as_ref() {
-                    Some(font) => widget::generate_with_text(&dict, catalog, font, r),
+                    Some(font) => widget::generate_with_text(&dict, catalog, font, substitute, r),
                     None => widget::generate(&dict, r),
                 }
                 .inspect(|_| {

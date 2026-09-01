@@ -32,12 +32,54 @@ pub enum Grouping {
     PerCharacter,
 }
 
+/// How one code point is written: which font sets it, under which resource
+/// name, and as which bytes.
+///
+/// A field is not always set in one face. A character its `/DA` font's charset
+/// does not cover is set in a second face the field adds for that charset, and
+/// the stream switches between them with a `Tf` per run — which is why the
+/// resource name is answered **per code point** rather than fixed for the
+/// whole text.
+///
+/// `index` is what decides where a run ends: two adjacent characters with
+/// different indices are two runs, and the `Tf` between them names the second
+/// one's `alias`. The index is otherwise opaque here; the caller assigns it
+/// and only its equality is read.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Face {
+    /// Which font in the field's map. Only equality is read.
+    pub index: i32,
+    /// The resource name a `Tf` naming this font carries. An empty one
+    /// suppresses the `Tf`.
+    pub alias: Vec<u8>,
+    /// The bytes the code point is written as, through this font.
+    pub bytes: Vec<u8>,
+}
+
+impl Face {
+    /// The face of a text set entirely in one font, which is every generator
+    /// but the one that adds a second face for a charset its `/DA` cannot
+    /// write.
+    ///
+    /// The index is a constant, so no run ever ends on a font change and the
+    /// stream carries exactly one `Tf` — which is what the appearances that
+    /// predate the second face already contain.
+    #[must_use]
+    pub fn single(alias: &[u8], bytes: Vec<u8>) -> Face {
+        Face {
+            index: 0,
+            alias: alias.to_vec(),
+            bytes,
+        }
+    }
+}
+
 /// Writes a laid-out text's operators.
 ///
-/// `offset` shifts every position, in PDF space. `font_alias` is the resource
-/// name the `Tf` operator will carry; an empty one, or a size at or below
-/// zero, suppresses the `Tf` entirely and the text inherits whatever font the
-/// enclosing stream had set.
+/// `offset` shifts every position, in PDF space. `face` answers, for one code
+/// point, which font writes it and as what — see [`Face`]. A face whose alias
+/// is empty, or a size at or below zero, suppresses the `Tf` entirely and the
+/// text inherits whatever font the enclosing stream had set.
 #[must_use]
 pub fn generate<F>(
     layout: &Layout,
@@ -45,11 +87,10 @@ pub fn generate<F>(
     metrics: &Metrics<'_>,
     offset: (f32, f32),
     grouping: Grouping,
-    font_alias: &[u8],
-    encode: F,
+    face: F,
 ) -> String
 where
-    F: Fn(u32) -> Vec<u8>,
+    F: Fn(u32) -> Face,
 {
     let mut out = String::new();
     let mut line = String::new();
@@ -65,6 +106,10 @@ where
             i32::try_from(line_index).unwrap_or(0),
         );
         let (x, y) = position(layout, config, word, offset);
+        // The face is asked for the character that is actually written, so a
+        // password field's substitute decides the run rather than the value
+        // it hides.
+        let face = face(shown(word, config));
 
         if grouping == Grouping::Continuous && !word.is_rtl {
             if place != previous_place {
@@ -86,7 +131,7 @@ where
                 old_x = x;
                 old_y = y;
             }
-            if word.font_index != current_font {
+            if face.index != current_font {
                 // The pending characters flush into `line`, but `line` does
                 // **not** flush into the stream — which is what makes a line
                 // ending right after a font change order the way it does.
@@ -94,10 +139,10 @@ where
                     line.push_str(&render(&words));
                     words.clear();
                 }
-                line.push_str(&font_op(font_alias, layout.font_size));
-                current_font = word.font_index;
+                line.push_str(&font_op(&face.alias, layout.font_size));
+                current_font = face.index;
             }
-            words.extend(encode(shown(word, config)));
+            words.extend(face.bytes);
         } else {
             if !words.is_empty() {
                 line.push_str(&render(&words));
@@ -110,11 +155,11 @@ where
                 old_x = x;
                 old_y = y;
             }
-            if word.font_index != current_font {
-                out.push_str(&font_op(font_alias, layout.font_size));
-                current_font = word.font_index;
+            if face.index != current_font {
+                out.push_str(&font_op(&face.alias, layout.font_size));
+                current_font = face.index;
             }
-            out.push_str(&render(&encode(shown(word, config))));
+            out.push_str(&render(&face.bytes));
         }
         previous_place = place;
         let _ = word_width(word, config, metrics, layout.font_size);
@@ -174,17 +219,43 @@ fn font_op(alias: &[u8], size: f32) -> String {
 }
 
 /// The `Tj` for a run of encoded bytes.
+/// The `Tj` for a run of encoded bytes.
+///
+/// # Why the high bytes are spelled in octal
+///
+/// A show operand is a byte string, and a character code above 127 is an
+/// ordinary byte in it. This stream is assembled as text, though, and a byte
+/// above 127 is not valid UTF-8 on its own — writing it raw and reading the
+/// buffer back as a string replaces it with U+FFFD, three bytes that name a
+/// different code and draw a different glyph. That is silent: it costs
+/// nothing until a field is set in a face whose codes run past 127, and then
+/// every one of them is wrong.
+///
+/// `\ooo` is the literal syntax's own spelling for such a byte
+/// (ISO 32000 §7.3.4.2), it is exactly what the byte means, and it keeps the
+/// whole stream inside ASCII. A run that is already ASCII is written
+/// unchanged, so no existing appearance moves a byte.
 fn render(words: &[u8]) -> String {
     if words.is_empty() {
         return String::new();
     }
     let literal = pdfrum_object::encode_string_literal(words);
-    format!("{} Tj\n", String::from_utf8_lossy(&literal))
+    let mut out = String::with_capacity(literal.len() + 8);
+    for byte in literal {
+        if byte.is_ascii() {
+            out.push(char::from(byte));
+        } else {
+            use std::fmt::Write;
+            let _ = write!(out, "\\{byte:03o}");
+        }
+    }
+    out.push_str(" Tj\n");
+    out
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{Grouping, generate};
+    use super::{Face, Grouping, generate};
     use crate::geom;
     use crate::vt::{Config, Layout, layout, stub};
 
@@ -214,8 +285,7 @@ mod tests {
             &stub::metrics(),
             (0.0, 0.0),
             Grouping::Continuous,
-            b"Helv",
-            one_byte,
+            |code| Face::single(b"Helv", one_byte(code)),
         );
         assert_eq!(got.matches(" Tj\n").count(), 1);
         assert!(got.contains("(hi) Tj\n"), "{got}");
@@ -231,8 +301,7 @@ mod tests {
             &stub::metrics(),
             (0.0, 0.0),
             Grouping::PerCharacter,
-            b"Helv",
-            one_byte,
+            |code| Face::single(b"Helv", one_byte(code)),
         );
         assert_eq!(got.matches(" Tj\n").count(), 2);
     }
@@ -246,8 +315,7 @@ mod tests {
             &stub::metrics(),
             (0.0, 0.0),
             Grouping::Continuous,
-            b"",
-            one_byte,
+            |code| Face::single(b"", one_byte(code)),
         );
         assert!(!nameless.contains(" Tf\n"), "{nameless}");
 
@@ -260,8 +328,7 @@ mod tests {
             &stub::metrics(),
             (0.0, 0.0),
             Grouping::Continuous,
-            b"Helv",
-            one_byte,
+            |code| Face::single(b"Helv", one_byte(code)),
         );
         assert!(!sized.contains(" Tf\n"), "{sized}");
     }
@@ -278,8 +345,7 @@ mod tests {
             &stub::metrics(),
             (0.0, 0.0),
             Grouping::Continuous,
-            b"Helv",
-            one_byte,
+            |code| Face::single(b"Helv", one_byte(code)),
         );
         assert!(got.contains("(**) Tj\n"), "{got}");
         assert!(!got.contains('h'), "{got}");
@@ -294,8 +360,7 @@ mod tests {
             &stub::metrics(),
             (0.0, 0.0),
             Grouping::Continuous,
-            b"Helv",
-            one_byte,
+            |code| Face::single(b"Helv", one_byte(code)),
         );
         // One move to the start of the only line, and no more.
         assert_eq!(got.matches(" Td\n").count(), 1);
@@ -314,8 +379,7 @@ mod tests {
             &stub::metrics(),
             (0.0, 0.0),
             Grouping::Continuous,
-            b"Helv",
-            one_byte,
+            |code| Face::single(b"Helv", one_byte(code)),
         );
         assert_eq!(got.matches(" Td\n").count(), 3);
         assert_eq!(got.matches(" Tj\n").count(), 3);
@@ -331,8 +395,7 @@ mod tests {
             &stub::metrics(),
             (0.0, 0.0),
             Grouping::Continuous,
-            b"Helv",
-            one_byte,
+            |code| Face::single(b"Helv", one_byte(code)),
         );
         let shifted = generate(
             &text,
@@ -340,8 +403,7 @@ mod tests {
             &stub::metrics(),
             (3.0, -3.0),
             Grouping::Continuous,
-            b"Helv",
-            one_byte,
+            |code| Face::single(b"Helv", one_byte(code)),
         );
         assert_ne!(plain, shifted);
         assert_eq!(
@@ -359,8 +421,7 @@ mod tests {
             &stub::metrics(),
             (0.0, 0.0),
             Grouping::Continuous,
-            b"Helv",
-            one_byte,
+            |code| Face::single(b"Helv", one_byte(code)),
         );
         assert_eq!(got, "");
     }

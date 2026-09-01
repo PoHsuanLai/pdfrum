@@ -185,10 +185,19 @@ pdfrum_object::names! {
     FONT = "Font";
     /// A Type 1 font subtype (`/Type1`).
     TYPE1 = "Type1";
+    /// A TrueType font subtype (`/TrueType`), which is what a face added for
+    /// a charset the `/DA` font cannot write is written as.
+    TRUE_TYPE = "TrueType";
     /// A simple font's encoding (`/Encoding`).
     ENCODING = "Encoding";
+    /// The encoding a `/Differences` array modifies (`/BaseEncoding`).
+    BASE_ENCODING = "BaseEncoding";
+    /// Per-code overrides on the base encoding (`/Differences`).
+    DIFFERENCES = "Differences";
     /// The PostScript name of a font (`/BaseFont`).
     BASE_FONT = "BaseFont";
+    /// A font's descriptor (`/FontDescriptor`).
+    FONT_DESCRIPTOR = "FontDescriptor";
 
     // ---- Form fields ----
 

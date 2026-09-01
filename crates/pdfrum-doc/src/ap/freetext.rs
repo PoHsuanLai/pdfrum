@@ -105,8 +105,7 @@ pub fn free_text<R: Resolve>(
         metrics,
         offset,
         vt::edit_ap::Grouping::Continuous,
-        &appearance.font_name,
-        encode,
+        |code| vt::edit_ap::Face::single(&appearance.font_name, encode(code)),
     );
     if !written.is_empty() {
         out.raw("/Tx BMC\nq\n");

@@ -139,8 +139,7 @@ fn body<R: Resolve>(
         metrics,
         TEXT_OFFSET,
         vt::edit_ap::Grouping::Continuous,
-        FONT_ALIAS,
-        encode,
+        |code| vt::edit_ap::Face::single(FONT_ALIAS, encode(code)),
     )
 }
 
