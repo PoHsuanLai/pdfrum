@@ -491,14 +491,24 @@ impl<'a> FormSession<'a> {
     /// one holding focus — which is why typing works after a click and does
     /// nothing before one.
     fn dispatch_keyboard(&mut self, event: Event) -> Response {
-        let Some(page) = self
-            .inner
-            .focus
-            .map(|target| pdfrum_form::session::FocusTarget::annot(target).page)
-        else {
-            return Response::ignored();
-        };
-        self.dispatch(page, event)
+        if let Some(target) = self.inner.focus {
+            let page = pdfrum_form::session::FocusTarget::annot(target).page;
+            return self.dispatch(page, event);
+        }
+        // **Tab is the exception**, and it is the reason this is not simply
+        // "no focus, no keyboard": a Tab with nothing focused is what *takes*
+        // focus, so refusing it here would make the ring unreachable from the
+        // keyboard. It goes to the first page, which is where an embedder
+        // holding one page at a time would send it — the oracle's own
+        // `FORM_OnKeyDown` takes the page as an argument and its callers pass
+        // the page in view.
+        //
+        // Every other key really does need a focused field, and answers
+        // unhandled without one.
+        match event {
+            Event::KeyDown { key, .. } if key == Key::TAB => self.dispatch(0, event),
+            _ => Response::ignored(),
+        }
     }
 
     /// Reads one page's annotations, or `None` when the page will not load.
