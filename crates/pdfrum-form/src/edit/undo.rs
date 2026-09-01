@@ -347,10 +347,10 @@ mod tests {
 
     fn word(ch: char) -> UndoItem {
         UndoItem::InsertWord {
-            old: Place::START,
-            new: Place::START,
+            old: Place::start(),
+            new: Place::start(),
             ch,
-            before: Selection::EMPTY,
+            before: Selection::empty(),
         }
     }
 

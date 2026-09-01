@@ -20,7 +20,7 @@ use super::place::{Place, Range};
 
 /// A selection: an anchor and an active end, in that order, unordered by
 /// value.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Selection {
     /// The fixed end.
     pub begin: Place,
@@ -30,10 +30,13 @@ pub struct Selection {
 
 impl Selection {
     /// A collapsed selection at the start of the text.
-    pub const EMPTY: Selection = Selection {
-        begin: Place::START,
-        end: Place::START,
-    };
+    #[must_use]
+    pub fn empty() -> Selection {
+        Selection {
+            begin: Place::start(),
+            end: Place::start(),
+        }
+    }
 
     /// A selection anchored at `begin`, active at `end`.
     #[must_use]
@@ -117,7 +120,7 @@ impl Selection {
 
 impl Default for Selection {
     fn default() -> Selection {
-        Selection::EMPTY
+        Selection::empty()
     }
 }
 
