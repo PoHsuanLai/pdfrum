@@ -17,6 +17,7 @@
 //! depict, without a rasterizer in the way.
 
 use pdfrum_doc::ap;
+use pdfrum_form::NoScripts;
 use pdfrum_form::event::{Button, Event, Modifiers, Point};
 use pdfrum_form::field::FieldState;
 use pdfrum_form::hit::Permissions;
@@ -187,6 +188,7 @@ fn open_the_dropdown(session: &mut FormSession, ctx: &Context<'_, NoResolve>, x:
     route::apply(
         session,
         ctx,
+        &mut NoScripts,
         Event::MouseMove {
             at,
             modifiers: Modifiers::NONE,
@@ -195,6 +197,7 @@ fn open_the_dropdown(session: &mut FormSession, ctx: &Context<'_, NoResolve>, x:
     route::apply(
         session,
         ctx,
+        &mut NoScripts,
         Event::MouseDown {
             button: Button::Left,
             at,
@@ -204,6 +207,7 @@ fn open_the_dropdown(session: &mut FormSession, ctx: &Context<'_, NoResolve>, x:
     route::apply(
         session,
         ctx,
+        &mut NoScripts,
         Event::MouseUp {
             button: Button::Left,
             at,
@@ -321,6 +325,7 @@ fn dismissing_without_choosing_changes_nothing() {
     route::apply(
         &mut session,
         &ctx,
+        &mut NoScripts,
         Event::MouseMove {
             at: Point { x: 312.0, y: 310.0 },
             modifiers: Modifiers::NONE,
@@ -479,7 +484,7 @@ fn the_host_can_report_a_choice_without_a_click() {
         .expect("an open list has a view")
         .annot;
 
-    let response = route::choose(&mut session, &ctx, annot, 0);
+    let response = route::choose(&mut session, &ctx, &mut NoScripts, annot, 0);
     assert!(response.consumed);
     let choice = choice(&session);
     assert_eq!(choice.selected.iter().copied().collect::<Vec<_>>(), vec![0]);
@@ -502,7 +507,7 @@ fn a_choice_past_the_end_is_ignored() {
         .expect("an open list has a view")
         .annot;
 
-    let response = route::choose(&mut session, &ctx, annot, 9);
+    let response = route::choose(&mut session, &ctx, &mut NoScripts, annot, 9);
     assert!(!response.consumed);
     assert_eq!(
         choice(&session)
@@ -559,7 +564,7 @@ fn losing_focus_shuts_the_list() {
     open_the_dropdown(&mut session, &ctx, 140.0, 145.0);
     assert!(choice(&session).popup_open);
 
-    route::kill_focus(&mut session, &ctx);
+    route::kill_focus(&mut session, &ctx, &mut NoScripts);
     assert!(!choice(&session).popup_open);
     assert!(route::popup_view(&session, &ctx).is_none());
 }
@@ -582,9 +587,9 @@ fn return_toggles_the_list_on_an_editable_combo() {
         ch: '\r',
         modifiers: Modifiers::NONE,
     };
-    assert!(route::apply(&mut session, &ctx, ret).consumed);
+    assert!(route::apply(&mut session, &ctx, &mut NoScripts, ret).consumed);
     assert!(choice(&session).popup_open, "Return opens it");
-    assert!(route::apply(&mut session, &ctx, ret).consumed);
+    assert!(route::apply(&mut session, &ctx, &mut NoScripts, ret).consumed);
     assert!(!choice(&session).popup_open, "a second Return shuts it");
 }
 
@@ -606,9 +611,9 @@ fn space_opens_a_gated_combo_and_never_shuts_it() {
         ch: ' ',
         modifiers: Modifiers::NONE,
     };
-    assert!(route::apply(&mut session, &ctx, space).consumed);
+    assert!(route::apply(&mut session, &ctx, &mut NoScripts, space).consumed);
     assert!(choice(&session).popup_open, "Space opens it");
-    assert!(route::apply(&mut session, &ctx, space).consumed);
+    assert!(route::apply(&mut session, &ctx, &mut NoScripts, space).consumed);
     assert!(
         choice(&session).popup_open,
         "a second Space leaves it open — this is the asymmetry with Return"

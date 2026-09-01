@@ -77,6 +77,41 @@ pub struct Limits {
     /// and exceeding it answers "not found" with a diagnostic rather than
     /// erroring.
     pub max_name_tree_depth: u32,
+
+    // ---- The script engine (SPEC §10, `[spec]` 2026-09-02, M15 brief E4) ----
+    //
+    // The first three map one-for-one onto `boa`'s `RuntimeLimits`; the
+    // fourth is ours. What they do **not** bound is heap growth and regex
+    // backtracking, which no `RuntimeLimits` field covers — and which a
+    // V8-enabled PDFium does not bound either, measured rather than assumed
+    // (`docs/status/data/v8probe/REPORT.md`). So pdfrum is bounded where the
+    // oracle hangs, and unbounded only where the oracle is too. A host
+    // running untrusted documents in a shared process applies an external
+    // wall-clock and RSS cap, which is the only thing that works for either.
+    /// How many loop iterations one script may run before it is stopped.
+    ///
+    /// Roughly ten seconds of the tightest possible loop. No real form script
+    /// iterates a thousand times; the number is a ceiling on a hostile file,
+    /// not a budget a legitimate one has to fit inside. Exhausting it is a
+    /// `Diagnostic` and the *refusing* answer from the hook that was running
+    /// — never a hang, never a panic, and never a silent acceptance.
+    ///
+    /// PDFium has no equivalent at all: `while(true){}` under V8 runs until
+    /// the process is killed from outside.
+    pub max_script_loop_iterations: u64,
+    /// How deep one script may recurse. `boa`'s own default.
+    pub max_script_recursion: usize,
+    /// How large one script's value stack may grow. `boa`'s own default.
+    pub max_script_stack: usize,
+    /// How deep a calculation may trigger another calculation.
+    ///
+    /// **One, because upstream permits no nesting at all.**
+    /// `CPDFSDK_InteractiveForm::busy_`
+    /// (`fpdfsdk/cpdfsdk_interactiveform.cpp:259-264`) is a flag, not a
+    /// counter: the outer sweep is authoritative and every nested call
+    /// returns immediately. The field makes that configurable rather than
+    /// looser.
+    pub max_calculate_depth: u32,
 }
 
 impl Limits {
@@ -101,6 +136,10 @@ impl Default for Limits {
             max_decoded_stream_len: 1024 * 1024 * 1024,
             max_cmap_ranges: 65_536,
             max_name_tree_depth: 32,
+            max_script_loop_iterations: 10_000_000,
+            max_script_recursion: 512,
+            max_script_stack: 10_240,
+            max_calculate_depth: 1,
         }
     }
 }

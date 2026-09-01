@@ -100,26 +100,53 @@ fn a_deletion_is_a_keystroke_with_an_empty_change() {
     assert_eq!(keystroke.applied(), "Bana");
 }
 
-/// Indices past the text clamp rather than panicking — a script can set them,
-/// so they are untrusted input.
+/// An out-of-range index yields **nothing** rather than clamping, which is
+/// `CalcMergedString` over `First`/`Substr`
+/// (`fxjs/cjs_publicmethods.cpp:127-137`,
+/// `core/fxcrt/string_view_template.h:226-249`). A script can set these, so
+/// they are untrusted input — and `-1` is a value a script really writes.
 #[test]
-fn out_of_range_indices_clamp_rather_than_panic() {
+fn out_of_range_indices_yield_an_empty_piece_rather_than_a_clamp() {
     let field = edit("Banana");
-    for (start, end) in [
-        (0, u32::MAX),
-        (u32::MAX, 0),
-        (100, 200),
-        (u32::MAX, u32::MAX),
-    ] {
-        let keystroke = Keystroke {
+    let applied = |start: i32, end: i32| {
+        Keystroke {
             change: "X".to_string(),
             value: field.text.clone(),
             selection_start: start,
             selection_end: end,
-        };
-        // The only requirement is an answer, not a particular one.
-        let _ = keystroke.applied();
+        }
+        .applied()
+    };
+
+    // `First(-1 as size_t)` is out of range, so the whole prefix goes.
+    assert_eq!(applied(-1, 6), "X");
+    // A past-the-end `selEnd` drops the suffix, which is also what a clamp
+    // would do — the two rules only diverge on the prefix.
+    assert_eq!(applied(3, 99), "BanX");
+    assert_eq!(applied(3, -1), "BanX");
+    // `count == len` is in range: the whole string is the prefix.
+    assert_eq!(applied(6, 6), "BananaX");
+    // And a start past the end takes the prefix with it.
+    assert_eq!(applied(7, 7), "X");
+    // Extremes answer rather than panicking.
+    for (start, end) in [(i32::MIN, i32::MAX), (i32::MAX, i32::MIN)] {
+        assert_eq!(applied(start, end), "X");
     }
+}
+
+/// The oracle does **not** swap a reversed selection: the prefix is read from
+/// `selStart` and the suffix from `selEnd`, independently, so a script that
+/// crosses them duplicates text rather than deleting it.
+#[test]
+fn a_reversed_selection_is_not_swapped() {
+    let field = edit("Banana");
+    let keystroke = Keystroke {
+        change: "-".to_string(),
+        value: field.text.clone(),
+        selection_start: 4,
+        selection_end: 2,
+    };
+    assert_eq!(keystroke.applied(), "Bana-nana");
 }
 
 /// The script-free cascade accepts every keystroke unchanged, which is what

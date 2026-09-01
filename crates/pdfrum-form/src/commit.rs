@@ -11,19 +11,30 @@
 //! rather than a reduced one, which is what lets a scripting implementation
 //! drop in without a redesign.
 //!
-//! # The quirk that must not be tidied
+//! # A rejected commit keeps focus — where we diverge from the oracle
 //!
-//! **A rejected commit still loses focus.** When a validation hook refuses,
-//! the field is reverted to its stored value and the commit reports
-//! *success* — so the caller carries on and drops focus exactly as it would
-//! after an accepted commit. A user who typed something a script rejected
-//! finds the caret gone and their typing discarded.
+//! **In PDFium a refused commit still loses focus, and that is a defect.**
+//! `CFFL_FormField::CommitData` reverts the edit and returns `true` on both
+//! refusal paths (`fpdfsdk/formfiller/cffl_formfield.cpp:525-531`), which
+//! makes a rejection indistinguishable from an acceptance to its only
+//! caller; `KillFocusForAnnot`'s sole guard is that return value
+//! (`:306`), so `pWnd->KillFocus()` (`:311`) and `EscapeFiller()` (`:324`)
+//! run either way. A user who typed something a validation script rejected
+//! finds the caret gone and their typing discarded, with no way to correct
+//! it — which defeats the purpose of a validation hook.
 //!
-//! This is not what a reader expects, it is not what other viewers do, and
-//! many files are written assuming the opposite. It is reproduced
-//! deliberately, and [`CommitOutcome`] is shaped to say so: `committed` and
-//! `reverted` are separate answers precisely because "the commit finished"
-//! and "the value was stored" are different questions here.
+//! ISO 32000-1 §12.7.5.3 gives the Validate event the job of *rejecting the
+//! value*, not of ending the interaction, and pdf.js implements the rule with
+//! the comment to prove it: on the not-valid branch it sends
+//! `focus: true, // Stay in the field.`
+//! (`src/scripting_api/event.js:277`). Under PLAN.md's oracle-bug rule we
+//! implement the correct behaviour: **a refused commit reverts the edit and
+//! keeps focus**, so the user can fix what the script objected to.
+//!
+//! [`CommitOutcome`] is shaped to say all three things separately, because
+//! "the commit finished", "the value was stored" and "focus should move on"
+//! are three different questions: `committed`, `reverted` and
+//! [`CommitOutcome::keeps_focus`].
 //!
 //! Without scripts the rejection branch is unreachable — nothing can refuse —
 //! so this costs nothing today and becomes visible the moment scripts arrive.
@@ -59,6 +70,17 @@ impl CommitOutcome {
             writes: Vec::new(),
         }
     }
+
+    /// Whether the field that just committed should **keep** the keyboard.
+    ///
+    /// True exactly when a hook refused. See the module documentation: the
+    /// oracle drops focus here and it is a defect
+    /// (`cffl_formfield.cpp:525-531` versus pdf.js
+    /// `src/scripting_api/event.js:277`).
+    #[must_use]
+    pub fn keeps_focus(&self) -> bool {
+        self.reverted
+    }
 }
 
 /// Runs the cascade for one field.
@@ -77,8 +99,16 @@ pub fn run(
         return CommitOutcome::unchanged();
     }
 
-    // A refusal at either gate reverts the field and reports success, so the
-    // caller's focus handling proceeds exactly as it would on an acceptance.
+    // A refusal at either gate reverts the field and reports the commit as
+    // finished — but, unlike the oracle, it does not let focus move on.
+    //
+    // [oracle-bug] `CFFL_FormField::CommitData` returns `true` from both
+    // refusal paths (`fpdfsdk/formfiller/cffl_formfield.cpp:525-531`), and
+    // that return value is `KillFocusForAnnot`'s only guard (`:306`), so a
+    // rejected value loses the caret exactly as an accepted one does.
+    // ISO 32000-1 §12.7.5.3 makes Validate reject the *value*; pdf.js keeps
+    // the field with the comment to prove it — `focus: true, // Stay in the
+    // field.`, `src/scripting_api/event.js:277`. `keeps_focus` is that fix.
     if !cascade.keystroke_commit(field, edited) || !cascade.validate(field, edited) {
         return CommitOutcome {
             committed: true,
@@ -152,10 +182,17 @@ mod tests {
         assert!(outcome.writes.is_empty(), "no calculation without scripts");
     }
 
-    /// The quirk: a refusal reports the commit as finished, so the caller
-    /// drops focus exactly as it would have on an acceptance.
+    /// A refusal reports the commit as finished — and **keeps the field**,
+    /// which is where we diverge from the oracle on purpose.
+    ///
+    /// PDFium's `CommitData` returns `true` on this path
+    /// (`cffl_formfield.cpp:525-531`), which is its caller's only guard
+    /// (`:306`), so the caret goes and the typing with it. pdf.js keeps the
+    /// field at `src/scripting_api/event.js:277`, commented `// Stay in the
+    /// field.`, and ISO 32000-1 §12.7.5.3 agrees: Validate rejects the value,
+    /// not the interaction.
     #[test]
-    fn a_refused_commit_still_reports_success() {
+    fn a_refused_commit_reports_success_and_keeps_the_field() {
         struct Refusing;
         impl Cascade for Refusing {
             fn validate(&mut self, _f: &FieldRef, _v: &str) -> bool {
@@ -170,9 +207,13 @@ mod tests {
         );
         assert!(outcome.reverted, "…but it must say the value was put back");
         assert_eq!(outcome.stored, None, "and nothing was stored");
+        assert!(
+            outcome.keeps_focus(),
+            "[oracle-bug] the user must be able to correct what was rejected"
+        );
     }
 
-    /// Either gate refusing has the same shape.
+    /// Either gate refusing has the same shape, focus included.
     #[test]
     fn the_keystroke_gate_refuses_the_same_way() {
         struct Refusing;
@@ -186,6 +227,15 @@ mod tests {
         assert!(outcome.committed);
         assert!(outcome.reverted);
         assert_eq!(outcome.stored, None);
+        assert!(outcome.keeps_focus());
+    }
+
+    /// An accepted commit lets focus go, which is the ordinary path and the
+    /// one that must not change.
+    #[test]
+    fn an_accepted_commit_lets_focus_move_on() {
+        assert!(!run(&field(), "old", "new", &mut NoScripts, 8).keeps_focus());
+        assert!(!CommitOutcome::unchanged().keeps_focus());
     }
 
     /// The order is normative, so it is asserted rather than assumed.
