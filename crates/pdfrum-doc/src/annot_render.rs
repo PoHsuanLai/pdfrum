@@ -42,8 +42,11 @@
 //!   moves. Later annotations paint over earlier ones with no z-ordering of
 //!   their own; `bug_1304714.in` stacks three widgets to pin exactly that.
 //!
-//! A pop-up is in the list but never painted: `ShouldDrawAnnotation` requires
-//! `open_state_`, which only a mouse click sets and `pdfium_test` never does.
+//! A pop-up is in the list and painted only while it is **open**:
+//! `ShouldDrawAnnotation` requires `open_state_`, and the one thing that sets
+//! it is the pointer entering the *parent* annotation's rectangle. So a plain
+//! render draws no note cards at all, and a render driven by a script that
+//! moves the mouse over an annotated passage draws exactly one.
 
 use pdfrum_common::{Diagnostics, Limits};
 use pdfrum_object::{ByteSpan, Dict, Resolve, Stream};
@@ -214,6 +217,101 @@ pub fn overlay_with<R: Resolve>(
             page.objects.push(object);
         }
         push_chrome(page, annot, index, focus, r, limits, diags);
+    }
+    push_open_popup(
+        page,
+        &list,
+        generated.hover(),
+        &fonts,
+        &resources,
+        r,
+        ctx,
+        limits,
+        diags,
+    );
+}
+
+/// Draws the note card belonging to the annotation the pointer is inside.
+///
+/// A synthesized pop-up is appended to the list *after* every annotation the
+/// file declares, and the display walk is that list in order, so the card
+/// paints **last** — over the page's own text and over its parent, which is
+/// what makes a note legible where it overlaps the passage it annotates.
+///
+/// At most one card is ever open, because the pointer is in one place. The
+/// hover index is a raw `/Annots` index naming the *parent*: the card itself
+/// has no index to be named by, since it is not in the file.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the same six inputs plus two sinks the pass itself carries; \
+              see `overlay_with`"
+)]
+fn push_open_popup<R: Resolve>(
+    page: &mut Page,
+    list: &AnnotList,
+    hover: Option<usize>,
+    fonts: &ap::FormFonts,
+    resources: &Resources,
+    r: &R,
+    ctx: &mut BuildContext,
+    limits: &Limits,
+    diags: &mut Diagnostics,
+) {
+    let Some(hover) = hover else {
+        return;
+    };
+    // The hover names a raw `/Annots` index; the pop-up list is keyed by
+    // position in the *loaded* list, which has dropped the file's own pop-ups.
+    let Some(slot) = list.source_indices.iter().position(|&index| index == hover) else {
+        return;
+    };
+    let Some((_, popup)) = list.popups.iter().find(|(parent, _)| *parent == slot) else {
+        return;
+    };
+    // No `/DA` names a face, so the card takes the fallback the form fonts
+    // always carry — the loaded Helvetica, whose ascent and descent are the
+    // ones the wrap must be measured with.
+    let Some(font) = fonts.face(b"") else {
+        return;
+    };
+    let width = |code: u32| ap::TextFont::char_width(font, code);
+    let metrics = ap::TextFont::metrics_of(font, &width);
+    let encode = |code: u32| {
+        ap::TextFont {
+            font,
+            metrics: ap::TextFont::metrics_of(font, &width),
+        }
+        .encode(code)
+    };
+    let Some(made) = ap::popup::popup(&popup.dict, &metrics, &encode, r) else {
+        return;
+    };
+    diags.record(
+        pdfrum_common::Severity::Recovered,
+        pdfrum_common::DiagKind::AppearanceGenerated,
+        None,
+    );
+    let generated = ap::GeneratedAp {
+        stream: made.stream,
+        bbox: popup.rect,
+        matrix: kurbo::Affine::IDENTITY,
+        resources: ap::resources_dict(
+            ap::ext_gstate_dict(&popup.dict, false, r),
+            made.font_resources,
+        ),
+        rect_override: None,
+        as_override: None,
+    };
+    let form = Stream::new(
+        ap::stream_dict(&generated),
+        ByteSpan::from(generated.stream.clone()),
+    );
+    let matrix = annot_matrix(popup, &form.dict, 0, kurbo::Affine::IDENTITY, r);
+    if !matrix.as_coeffs().iter().all(|c| c.is_finite()) {
+        return;
+    }
+    if let Some(object) = build_form_object(&form, matrix, resources, r, ctx, limits, diags) {
+        page.objects.push(object);
     }
 }
 
@@ -621,7 +719,10 @@ fn highlight_state() -> pdfrum_page::GraphicsState {
 /// gated on `bPrinting`, and Pass B has no print check at all.
 fn is_visible(subtype: Subtype, flags: crate::annot::AnnotFlags) -> bool {
     if subtype == Subtype::Popup {
-        // Drawn only when open, and nothing opens one.
+        // A pop-up never draws on this walk. The file's own pop-ups are
+        // dropped from the list before it, and a synthesized one is drawn
+        // afterwards by `push_open_popup` — which owns the open-state test
+        // this function has no way to make.
         return false;
     }
     if flags.is_hidden() || flags.no_view() {

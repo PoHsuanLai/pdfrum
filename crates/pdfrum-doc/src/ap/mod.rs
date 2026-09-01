@@ -36,6 +36,7 @@ pub mod field_body;
 pub mod fmt;
 pub mod freetext;
 pub mod markup;
+pub mod popup;
 pub mod shapes;
 pub mod widget;
 
@@ -162,6 +163,7 @@ impl Focus {
 pub struct AnnotOverlay {
     entries: Vec<Appearance>,
     focus: Option<Focus>,
+    hover: Option<usize>,
 }
 
 impl AnnotOverlay {
@@ -171,6 +173,7 @@ impl AnnotOverlay {
         AnnotOverlay {
             entries: vec![Appearance::Untouched; count],
             focus: None,
+            hover: None,
         }
     }
 
@@ -188,6 +191,29 @@ impl AnnotOverlay {
     #[must_use]
     pub fn focus(&self) -> Option<Focus> {
         self.focus
+    }
+
+    /// Records which annotation the pointer is inside.
+    ///
+    /// A raw `/Annots` index, like [`Self::set_focus`]'s, and equally
+    /// unbounded by the overlay's length. Hover is a separate fact from focus
+    /// and the two move independently: a pointer resting on an annotation
+    /// leaves the keyboard focus wherever it was, and the annotation under the
+    /// pointer need not be focusable at all — a highlight is the case that
+    /// matters, since it is *only* reachable this way.
+    ///
+    /// What it decides is whether that annotation's synthesized pop-up note is
+    /// **open**. A note card is drawn only while the pointer is inside its
+    /// parent, and nothing a file can say opens one, so this is the whole of
+    /// the signal.
+    pub fn set_hover(&mut self, annot: usize) {
+        self.hover = Some(annot);
+    }
+
+    /// Which annotation the pointer is inside, if any.
+    #[must_use]
+    pub fn hover(&self) -> Option<usize> {
+        self.hover
     }
 
     /// Records a generated appearance at one `/Annots` index.
@@ -237,10 +263,10 @@ impl AnnotOverlay {
     /// `other` past this overlay's end is dropped, because there is no
     /// annotation for it to apply to.
     ///
-    /// `other`'s [`Focus`] replaces this overlay's when it has one, and
-    /// leaves it alone when it does not — the same "wins wherever it speaks"
-    /// rule the entries follow. Unlike an entry, a focus past this overlay's
-    /// end survives: it names an annotation, not a slot.
+    /// `other`'s [`Focus`] and its hover each replace this overlay's when it
+    /// has one, and leave it alone when it does not — the same "wins wherever
+    /// it speaks" rule the entries follow. Unlike an entry, either one past
+    /// this overlay's end survives: both name an annotation, not a slot.
     pub fn merge_over(&mut self, other: &AnnotOverlay) {
         for (index, entry) in other.entries.iter().enumerate() {
             if matches!(entry, Appearance::Untouched) {
@@ -250,6 +276,9 @@ impl AnnotOverlay {
         }
         if let Some(focus) = other.focus {
             self.focus = Some(focus);
+        }
+        if let Some(hover) = other.hover {
+            self.hover = Some(hover);
         }
     }
 
