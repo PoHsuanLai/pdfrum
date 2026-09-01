@@ -209,6 +209,25 @@ feature gaps, grinds the documented parity tail, and runs a measured
 optimization program. Same rules: briefs where behavior is nontrivial,
 `[spec]` protocol, monotone scoreboard, oracle-evidence over reasoning.
 
+**Oracle-bug rule (user-ruled 2026-09-02, M15).** The oracle is the
+arbiter of *what PDF means*, not of *what is correct*. When the C++ is shown
+to be wrong against the specification or against an independent
+implementation (Acrobat's documented behaviour; pdf.js as tiebreaker) —
+verified at the cited line, not asserted — pdfrum implements the **correct**
+behaviour, marks the site `[oracle-bug]` with both citations, and moves the
+golden assertions that pin the wrong answer into the
+**not-achievable-by-construction** bucket with the assertion, the oracle
+line and our answer listed. It never reproduces the bug to make a golden
+pass, and it never deletes the golden. First applied to `AF*`: PDFium's
+leap-year test is inverted (`fx_date_helpers.cpp:71`, one character), its
+two-digit years are hard-windowed to 2000–2099 with the intended formula
+sitting in a comment (`:330`), noon is AM (`:519`), and `AVG` divides only
+when spelled in capitals (`cjs_publicmethods.cpp:1343`). This generalises
+M14's tab-order ruling ("a library that hangs on input is a bug whatever
+the oracle does") from robustness to correctness. Where the oracle is merely
+*surprising* but matches Adobe (negative style 1 draws red with no sign),
+it is reproduced, cited, and not called a bug.
+
 ## M9 — Parity tail closure  *(small; parallel with M10)*  — **MET 2026-08-30**
 
 Port `CStretchEngine`'s area-average box downscale filter (largest remaining
