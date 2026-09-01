@@ -627,17 +627,27 @@ fn big_order_64_bits_mod3(data: &[u8]) -> u64 {
     acc
 }
 
-/// Which of the two password encodings unlocked a document.
+/// ISO 32000-2 §7.6.4.3.3 (Algorithm 2.A) step (a): the byte length a
+/// revision-6 password is truncated to, **after** UTF-8 encoding.
+const R6_PASSWORD_BYTES: usize = 127;
+
+/// Which spelling of a password unlocked a document.
 ///
-/// PDFium retries a non-ASCII password in the other encoding, and the *save*
-/// path re-encrypts with the spelling that worked. This crate only decrypts
-/// (Divergence D2), so the value is reportable state rather than an input to
+/// The authentication path tries a document's password in several spellings
+/// (see [`try_password`]) and this records the one that worked. This crate
+/// never *sets* a password — SPEC.md §3 keeps `/Encrypt` construction out of
+/// scope, and the save path re-uses the file key the original password already
+/// produced — so the value is reportable state rather than an input to
 /// anything here.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum PasswordEncoding {
     /// The password bytes as supplied unlocked the document.
     #[default]
     AsGiven,
+    /// The bytes were valid UTF-8, `SASLprep` (RFC 4013) changed them, and the
+    /// prepared form — re-encoded as UTF-8 and cut to 127 bytes — unlocked the
+    /// document. ISO 32000-2 §7.6.4.3.3's own preparation, revision 6 only.
+    SaslPrepped,
     /// Each byte was read as a Latin-1 scalar and re-encoded as UTF-8
     /// (revision 5 and up, where passwords are nominally UTF-8).
     Latin1ToUtf8,
@@ -654,24 +664,76 @@ pub(crate) struct Unlocked {
     pub encoding: PasswordEncoding,
 }
 
-/// Try `password` in the given role, retrying in the other encoding when the
-/// bytes as given fail.
+/// Try `password` in the given role, in each spelling the format admits, and
+/// return the first that authenticates.
 ///
-/// A pure-ASCII password is a fixed point of both conversions, so the retry is
-/// skipped for one — the early return is observable as the *absence* of extra
-/// work, and is what the ASCII-password fixtures pin.
+/// The candidates, in order:
+///
+/// 1. **The specification's preparation**, revision 6 only: `SASLprep`
+///    (RFC 4013), UTF-8, truncated to 127 *bytes* — ISO 32000-2 §7.6.4.3.3
+///    Algorithm 2.A step (a). Skipped when the password is not valid UTF-8
+///    (nothing to prepare), when `SASLprep` refuses it (a prohibited character
+///    or a bidirectional violation), and when preparation is the identity, in
+///    which case candidate 2 already covers it.
+///
+///    Revision 5 is deliberately **not** prepared. Algorithm 2.A is what
+///    revision 6 is; the Adobe extension level 3 algorithm that revision 5
+///    implements has no preparation step, and pdf.js draws the line at the
+///    same place — `crypto.js:1142` guards the `saslPrep` call with
+///    `revision === 6`, and its `algorithm === 5` branch two lines later
+///    encodes UTF-8 with no preparation at all.
+///
+/// 2. **The bytes as given.** A file whose producer skipped the preparation
+///    hashed the raw bytes, so the raw bytes must still be tried. This is
+///    pdf.js's tolerance, at `crypto.js:1178-1180`, where a prepped password
+///    that differs from the raw one yields *two* candidates rather than one.
+///
+/// 3. **PDFium's transcode**, `[oracle-bug]`. `cpdf_security_handler.cpp:425-455`
+///    performs none of the specification's three steps; instead it retries a
+///    non-ASCII password with a Latin-1→UTF-8 transcode (revision 5 and up) or
+///    a UTF-8→Latin-1 one (revisions 2 to 4). That is not the specification and
+///    it is not `PDFDocEncoding` either — the three disagree across `0x80..0x9F`
+///    — but it rescues a real class of embedder mis-encoding (a host that
+///    handed the library bytes in the wrong one of two encodings), no
+///    independent implementation contradicts it, and by running last it can
+///    only turn a failure into a success. Kept as a tolerance under PLAN.md's
+///    oracle-bug rule, which obliges the correct behaviour *first*; pdf.js has
+///    no equivalent (`crypto.js:1136-1152` transcodes nothing).
+///
+/// A pure-ASCII password is a fixed point of every one of these conversions,
+/// so all three candidates collapse to one attempt — the early returns make
+/// that observable as the absence of extra work, which is what the
+/// ASCII-password fixtures pin.
 pub(crate) fn try_password(
     p: &EncryptParams,
     password: &[u8],
     owner: bool,
     file_id: &[u8],
 ) -> Option<Unlocked> {
+    // (1) The specification's preparation.
+    if let Some(prepped) = r6_prepared(p.revision, password)
+        && prepped.as_slice() != password.get(..R6_PASSWORD_BYTES).unwrap_or(password)
+        && let Some(key) = check_password(p, &prepped, owner, file_id)
+    {
+        return Some(Unlocked {
+            key,
+            encoding: PasswordEncoding::SaslPrepped,
+        });
+    }
+
+    // (2) The bytes as given.
     if let Some(key) = check_password(p, password, owner, file_id) {
         return Some(Unlocked {
             key,
             encoding: PasswordEncoding::AsGiven,
         });
     }
+
+    // (3) [oracle-bug] PDFium's transcode retry, kept last as a tolerance:
+    // `cpdf_security_handler.cpp:425-455` performs none of ISO 32000-2
+    // §7.6.4.3.3's three preparation steps and substitutes this instead;
+    // pdf.js transcodes nothing (`crypto.js:1136-1152`). Running after the
+    // two correct candidates, it can only turn a failure into a success.
     if password.is_ascii() {
         return None;
     }
@@ -683,12 +745,48 @@ pub(crate) fn try_password(
     check_password(p, &converted, owner, file_id).map(|key| Unlocked { key, encoding })
 }
 
+/// ISO 32000-2 §7.6.4.3.3 Algorithm 2.A step (a) applied to `password`, or
+/// `None` when the revision is not 6, the bytes are not UTF-8, or `SASLprep`
+/// refuses them.
+///
+/// The truncation cuts the **UTF-8 byte string**, not the character sequence,
+/// which is what the specification says and what pdf.js does
+/// (`crypto.js:896-897`, `Math.min(127, password.length)` over the already
+/// encoded byte array). A multi-byte character straddling byte 127 is
+/// therefore cut mid-sequence, leaving bytes that are not valid UTF-8 — and
+/// that is correct, because the hash is over bytes and both implementations
+/// hash the same ones.
+///
+/// Cutting here as well as in [`check_password`] is not redundant: it is what
+/// makes the `prepped != password` test below compare the bytes that will
+/// actually be hashed, so a preparation whose only effect lies past byte 127
+/// does not buy a second identical attempt.
+fn r6_prepared(revision: i64, password: &[u8]) -> Option<Vec<u8>> {
+    if revision != 6 {
+        return None;
+    }
+    let text = core::str::from_utf8(password).ok()?;
+    let prepared = crate::saslprep::saslprep(text)?;
+    let mut bytes = prepared.into_bytes();
+    bytes.truncate(R6_PASSWORD_BYTES);
+    Some(bytes)
+}
+
 /// One password attempt with no encoding fallback.
 ///
 /// Below revision 5 the user check runs twice, once honoring
 /// `/EncryptMetadata` and once ignoring it, for files that wrote
 /// `/EncryptMetadata false` but computed `/U` without the tag. The key kept is
 /// the one the *successful* attempt derived.
+///
+/// At revision 5 and up the password is first cut to 127 bytes — ISO 32000-2
+/// §7.6.4.3.3 Algorithm 2.A step (a). The cut belongs *here* rather than to
+/// one candidate because it is a property of the AES-256 hash, not of the
+/// preparation: pdf.js applies it inside the key derivation, so every
+/// candidate it tries is cut (`crypto.js:896-897`). PDFium applies it nowhere,
+/// and hashes a 200-byte password whole — `[oracle-bug]`,
+/// `cpdf_security_handler.cpp:425-455`, superseding SPEC.md §3's original
+/// "passwords are NOT capped at ISO's 127 bytes" ruling.
 fn check_password(
     p: &EncryptParams,
     password: &[u8],
@@ -696,7 +794,8 @@ fn check_password(
     file_id: &[u8],
 ) -> Option<SmallKey> {
     if p.revision >= 5 {
-        return check_password_aes256(p, password, owner).map(SmallKey::from_full);
+        let capped = password.get(..R6_PASSWORD_BYTES).unwrap_or(password);
+        return check_password_aes256(p, capped, owner).map(SmallKey::from_full);
     }
     let effective = if owner {
         recover_user_password(p, password)
@@ -987,5 +1086,152 @@ mod tests {
         let id = unhex("9b744068bb5efbe920baaba6da63c2bf");
         assert!(try_password(&p, b"h\xf4tel", false, &id).is_some());
         assert!(try_password(&p, b"h\xf4tel", false, &[]).is_none());
+    }
+
+    // ---- A31: ISO 32000-2 §7.6.4.3.3 password preparation ----
+
+    // The end-to-end proof that the preparation is *required*, not merely
+    // permitted: pdf.js's `saslprep-r6.pdf`, whose /U was computed from the
+    // prepared spelling of `S\u{00AA}SL\u{00AD}prep`. Neither the raw bytes
+    // nor either Latin-1↔UTF-8 transcode opens it, so this file fails on the
+    // old behaviour and is what candidate (1) exists for.
+    #[test]
+    fn the_pdfjs_saslprep_fixture_needs_the_preparation() {
+        let dict = test_fixtures::saslprep_r6_dict();
+        let p = super::parse_encrypt_dict(&dict, &pdfrum_object::NoResolve)
+            .unwrap_or_else(|e| panic!("{e:?}"));
+
+        let raw = "S\u{00AA}SL\u{00AD}prep".as_bytes();
+        let unlocked =
+            try_password(&p, raw, false, &[]).unwrap_or_else(|| panic!("the prepared candidate"));
+        assert_eq!(unlocked.encoding, PasswordEncoding::SaslPrepped);
+
+        // The prepared spelling given directly opens it too, and reports
+        // itself as the bytes as given — nothing was left to prepare.
+        let prepped = try_password(&p, b"SaSLprep", false, &[])
+            .unwrap_or_else(|| panic!("the prepared spelling"));
+        assert_eq!(prepped.encoding, PasswordEncoding::AsGiven);
+        assert_eq!(unlocked.key.bytes(), prepped.key.bytes());
+
+        // And the wrong password still fails, so the ladder is not a
+        // universal acceptor.
+        assert!(try_password(&p, b"SASLprep", false, &[]).is_none());
+    }
+
+    // Normalisation is two-directional: either spelling of an accented
+    // password opens a file keyed on the other, because NFKC sends both to
+    // the same string.
+    #[test]
+    fn a_decomposed_and_a_composed_password_prepare_alike() {
+        assert_eq!(
+            super::r6_prepared(6, "cafe\u{0301}".as_bytes()),
+            super::r6_prepared(6, "caf\u{00E9}".as_bytes()),
+        );
+        assert_eq!(
+            super::r6_prepared(6, "cafe\u{0301}".as_bytes()).as_deref(),
+            Some("caf\u{00E9}".as_bytes()),
+        );
+    }
+
+    // Revision 5 is not prepared: Algorithm 2.A is revision 6's, and pdf.js
+    // draws the same line at `crypto.js:1142`.
+    #[test]
+    fn only_revision_six_is_prepared() {
+        let decomposed = "cafe\u{0301}".as_bytes();
+        assert!(super::r6_prepared(6, decomposed).is_some());
+        for revision in [2i64, 3, 4, 5] {
+            assert_eq!(
+                super::r6_prepared(revision, decomposed),
+                None,
+                "R{revision}"
+            );
+        }
+    }
+
+    // The truncation cuts the UTF-8 *bytes*, so a multi-byte character
+    // straddling byte 127 is cut mid-sequence — which is what pdf.js does at
+    // `crypto.js:896-897`, where the cut is applied to the encoded array.
+    #[test]
+    fn the_cut_is_at_byte_one_hundred_twenty_seven_not_at_a_character() {
+        // 126 ASCII bytes then a two-byte character: byte 127 is that
+        // character's lead byte, and the trail byte is dropped.
+        let mut password = "a".repeat(126);
+        password.push('\u{00E9}');
+        let prepared =
+            super::r6_prepared(6, password.as_bytes()).unwrap_or_else(|| panic!("preparable"));
+        assert_eq!(prepared.len(), 127);
+        assert_eq!(prepared.get(126), Some(&0xC3));
+        assert!(core::str::from_utf8(&prepared).is_err());
+
+        // And an all-ASCII password of 130 bytes keeps its first 127.
+        let long = "z".repeat(130);
+        let cut = super::r6_prepared(6, long.as_bytes()).unwrap_or_else(|| panic!("preparable"));
+        assert_eq!(cut, "z".repeat(127).into_bytes());
+    }
+
+    // A password 130 bytes long opens a file keyed on its first 127 — the
+    // truncation applies to every candidate, because it lives in the
+    // revision-5-and-up check rather than in the preparation. This is what
+    // supersedes SPEC.md §3's original "not capped at ISO's 127 bytes".
+    #[test]
+    fn a_password_past_one_hundred_twenty_seven_bytes_is_cut_for_every_candidate() {
+        let dict = test_fixtures::saslprep_r6_dict();
+        let p = super::parse_encrypt_dict(&dict, &pdfrum_object::NoResolve)
+            .unwrap_or_else(|e| panic!("{e:?}"));
+        let mut overlong = b"SaSLprep".to_vec();
+        overlong.resize(200, b'!');
+        // The first 127 bytes are not the password, so this must still fail —
+        // the point of the assertion is that it is *the cut bytes* that are
+        // hashed, which the next assertion pins from the other side.
+        assert!(try_password(&p, &overlong, false, &[]).is_none());
+
+        let mut padded = b"SaSLprep".to_vec();
+        padded.resize(127, b'!');
+        let short = try_password(&p, &padded, false, &[]);
+        let mut long = padded.clone();
+        long.resize(130, b'?');
+        // Two byte strings agreeing on their first 127 bytes authenticate
+        // identically.
+        assert_eq!(
+            short.is_some(),
+            try_password(&p, &long, false, &[]).is_some()
+        );
+    }
+
+    // A password SASLprep refuses skips candidate (1) and falls through to the
+    // raw bytes, which is what keeps a file whose producer skipped the
+    // preparation opening.
+    #[test]
+    fn a_prohibited_password_falls_through_to_the_raw_bytes() {
+        // U+202A is table C.8; the preparation therefore yields nothing.
+        assert_eq!(super::r6_prepared(6, "a\u{202A}b".as_bytes()), None);
+        // Invalid UTF-8 has nothing to prepare either.
+        assert_eq!(super::r6_prepared(6, b"\xe2ge"), None);
+
+        // And the revision-6 fixture, whose passwords are the raw Latin-1
+        // bytes, still opens through candidates (2) and (3).
+        let dict = test_fixtures::r6_dict();
+        let p = super::parse_encrypt_dict(&dict, &pdfrum_object::NoResolve)
+            .unwrap_or_else(|e| panic!("{e:?}"));
+        let raw = try_password(&p, b"h\xf4tel", false, &[])
+            .unwrap_or_else(|| panic!("the transcode candidate"));
+        assert_eq!(raw.encoding, PasswordEncoding::Latin1ToUtf8);
+        let utf8 = try_password(&p, "h\u{00F4}tel".as_bytes(), false, &[])
+            .unwrap_or_else(|| panic!("the bytes as given"));
+        assert_eq!(utf8.encoding, PasswordEncoding::AsGiven);
+    }
+
+    // An ASCII password is a fixed point of every conversion, so the ladder
+    // collapses to one attempt and reports the identity.
+    #[test]
+    fn an_ascii_password_reports_the_bytes_as_given() {
+        let dict = test_fixtures::r6_dict();
+        let p = super::parse_encrypt_dict(&dict, &pdfrum_object::NoResolve)
+            .unwrap_or_else(|e| panic!("{e:?}"));
+        assert!(try_password(&p, b"tiger", false, &[]).is_none());
+        assert_eq!(
+            super::r6_prepared(6, b"tiger").as_deref(),
+            Some(&b"tiger"[..])
+        );
     }
 }

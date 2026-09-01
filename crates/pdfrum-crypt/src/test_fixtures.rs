@@ -157,6 +157,26 @@ pub(crate) fn r6_dict() -> Dict {
     )
 }
 
+/// pdf.js's `test/pdfs/saslprep-r6.pdf` — `/V 5 /R 6` with the user password
+/// `S\u{00AA}SL\u{00AD}prep`, which `SASLprep` maps to `SaSLprep` (U+00AA folds
+/// to `a` under NFKC; U+00AD is deleted by table B.1).
+///
+/// The only end-to-end proof available that the preparation is *required*: the
+/// file's `/U` was computed from the prepared spelling, so the raw bytes do
+/// not open it and neither does either Latin-1↔UTF-8 transcode. Its manifest
+/// entry is `test/test_manifest.json`, id `saslprep-r6`.
+pub(crate) fn saslprep_r6_dict() -> Dict {
+    aes256_dict(
+        6,
+        -4,
+        "2114dff5892a5f97b6b7ebf850027d59fd9582cabd1ca6545e8b7101fc9dd200847af489e83e58df71cfcef246a6b295",
+        "41f1bf91aa8bf033d86dcf0b1419d6bf8b2a4ffa6c6eaa6285f253427ccffb58",
+        "981e8012145993440b792f07715ecc7bd1cd672c5b32ddb7c07dc7d51f355123bdca31fd6d7bb7d160297691d233e1b4",
+        "772076efadec02adc61b06de50debe38dda5dbc7378e03354c1dfddd1383ac9b",
+        "0efe0222fb3566a638740c6111174a66",
+    )
+}
+
 /// `bug_644.pdf` — `/V 5 /R 5` with `/P 4092` and the ASCII passwords
 /// `a` (owner) and `b` (user).
 pub(crate) fn bug_644_dict() -> Dict {
@@ -171,7 +191,7 @@ pub(crate) fn bug_644_dict() -> Dict {
     )
 }
 
-/// The shared shape of the three `/V 5` fixtures.
+/// The shared shape of the four `/V 5` fixtures.
 fn aes256_dict(
     revision: i64,
     permissions: i64,
