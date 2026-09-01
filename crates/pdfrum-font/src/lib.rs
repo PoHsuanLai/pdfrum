@@ -834,6 +834,8 @@ pub(crate) mod names {
         FONT_MATRIX = "FontMatrix";
         /// A Type3 font's glyph procedures (`/CharProcs`).
         CHAR_PROCS = "CharProcs";
+        /// The CMap an `/Encoding` stream inherits from (`/UseCMap`).
+        USE_CMAP = "UseCMap";
     }
 }
 
