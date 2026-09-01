@@ -51,6 +51,8 @@
 //! `Listbox_MultiSelectMultipleIndices` is exactly that file and its golden
 //! reports five text objects and no path.
 
+use std::borrow::Cow;
+
 use kurbo::Rect;
 use pdfrum_common::{Diagnostics, Limits};
 use pdfrum_object::{Array, Dict, Name, Object, Resolve};
@@ -152,6 +154,65 @@ pub struct Highlight {
     pub selection: Vec<Rect>,
 }
 
+/// What a focused field is showing, when that is not what the file stores.
+///
+/// A field being edited draws from the session that owns the edit, not from
+/// the dictionary: the text the user has typed has not been written to `/V`
+/// yet, and it must not be until the field commits. Every field of this
+/// record overrides one dictionary read, and passing [`None`] for the whole
+/// record leaves all four reads exactly as they were.
+///
+/// The scroll offset is the one field that is not a substitution. It shifts
+/// the drawn text by the distance the content has been scrolled away from its
+/// resting position, which is what makes the visible window of a long value
+/// move: upstream keeps a scroll *position* seeded at the plate's top-left
+/// corner and subtracts `(scroll.x - plate.left, scroll.y - plate.top)` from
+/// every drawn point, so the difference from the seed is the whole of what a
+/// reader can observe. That difference is what this carries, which is why
+/// `(0.0, 0.0)` is the unscrolled field and needs no plate to interpret.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct LiveState<'a> {
+    /// The text as the user has it. Overrides the field's `/V`.
+    pub text: &'a str,
+    /// Which options are selected, overriding `/V` / `/I`.
+    pub selected: &'a [usize],
+    /// The first visible row, overriding `/TI`.
+    pub top_visible: usize,
+    /// How far the content is scrolled, in layout units, away from the
+    /// resting top-left. `(0.0, 0.0)` is an unscrolled field; each component
+    /// moves the drawn text by that much in the negative direction of the
+    /// PDF axis, so a positive x shows text further right and a positive y
+    /// shows text further down the value.
+    pub scroll: (f32, f32),
+}
+
+impl Default for LiveState<'_> {
+    fn default() -> Self {
+        LiveState {
+            text: "",
+            selected: &[],
+            top_visible: 0,
+            scroll: (0.0, 0.0),
+        }
+    }
+}
+
+impl LiveState<'_> {
+    /// The shift this scroll applies to every drawn point, in PDF space.
+    ///
+    /// Upstream's transform subtracts the scroll's distance from its seed, so
+    /// both components negate.
+    #[must_use]
+    fn shift(&self) -> (f32, f32) {
+        (-self.scroll.0, -self.scroll.1)
+    }
+}
+
+/// The shift a body applies to its text, which only a scrolled live edit has.
+fn live_shift(live: Option<&LiveState<'_>>) -> (f32, f32) {
+    live.map_or((0.0, 0.0), LiveState::shift)
+}
+
 /// The resource name a field with no `/DA` font sets its text under.
 ///
 /// The font map names every face it adds by its own family with the spaces
@@ -245,9 +306,10 @@ pub struct Body {
 /// field the cell separators sit between them, and are part of what this
 /// returns because they are the same builder's work.
 ///
-/// `caret_and_selection` is the focused-field overlay. Passing [`None`] is
-/// the unfocused path and is byte-identical to the stream this function
-/// produced before the parameter existed.
+/// `caret_and_selection` is the focused-field overlay and `live` is what a
+/// focused field is showing in place of what the file stores. Passing
+/// [`None`] for both is the unfocused path and is byte-identical to the
+/// stream this function produced before either parameter existed.
 #[must_use]
 pub fn generate<R: Resolve>(
     dict: &Dict,
@@ -255,6 +317,7 @@ pub fn generate<R: Resolve>(
     font: &TextFont<'_>,
     r: &R,
     caret_and_selection: Option<&Highlight>,
+    live: Option<&LiveState<'_>>,
 ) -> Option<Body> {
     let kind = Kind::of(dict, r)?;
     let form = catalog.dict(names::ACRO_FORM, r);
@@ -297,6 +360,7 @@ pub fn generate<R: Resolve>(
         color,
         font,
         caret_and_selection,
+        live,
     };
     let mut out = Content::new();
     match kind {
@@ -381,6 +445,10 @@ fn vertical_offset(centred: bool, plate: Rect, content: Rect) -> (f32, f32) {
 }
 
 /// Lays a string out and writes its operators.
+///
+/// `shift` is the scroll a live edit adds on top of the vertical alignment;
+/// it is `(0.0, 0.0)` for every stored appearance, and adding zero writes the
+/// same `Td` operators as not adding it at all.
 fn set_text(
     text: &str,
     config: &vt::Config,
@@ -388,10 +456,12 @@ fn set_text(
     offset_centred: bool,
     grouping: vt::edit_ap::Grouping,
     alias: &[u8],
+    shift: (f32, f32),
 ) -> (String, Rect) {
     let layout = vt::layout(text, config, &font.metrics);
     let content = layout.content_rect_pdf(config.plate);
-    let offset = vertical_offset(offset_centred, config.plate, content);
+    let padding = vertical_offset(offset_centred, config.plate, content);
+    let offset = (padding.0 + shift.0, padding.1 + shift.1);
     let written = vt::edit_ap::generate(
         &layout,
         config,
@@ -489,11 +559,27 @@ struct BodyInput<'a> {
     font: &'a TextFont<'a>,
     /// Focused-field caret and selection, if this body is a live edit.
     caret_and_selection: Option<&'a Highlight>,
+    /// What a focused field is showing instead of the stored value.
+    live: Option<&'a LiveState<'a>>,
+}
+
+impl BodyInput<'_> {
+    /// The text a text field or an editable combo box draws.
+    ///
+    /// The live text when a session has one, else the stored `/V`. Borrowed
+    /// in the live case and owned in the stored one, which is what the `Cow`
+    /// is for — the stored read builds its string out of the dictionary.
+    fn text<R: Resolve>(&self, r: &R) -> Cow<'_, str> {
+        match self.live {
+            Some(live) => Cow::Borrowed(live.text),
+            None => Cow::Owned(field_value(self.valued, r)),
+        }
+    }
 }
 
 /// A text field's body, and the comb separators that precede it.
 fn text_field<R: Resolve>(out: &mut Content, input: &BodyInput<'_>, r: &R) {
-    let (dict, valued, client) = (input.widget, input.valued, input.client);
+    let (dict, client) = (input.widget, input.client);
     let (appearance, color, font) = (input.appearance, input.color, input.font);
     let flags = flags(dict, r);
     let multi_line = flags & FLAG_MULTILINE != 0;
@@ -501,7 +587,7 @@ fn text_field<R: Resolve>(out: &mut Content, input: &BodyInput<'_>, r: &R) {
     let max_len = inherited(dict, names::MAX_LEN, r)
         .and_then(|value| value.as_int())
         .unwrap_or(0);
-    let value = field_value(valued, r);
+    let value = input.text(r);
 
     let mut config = vt::Config {
         plate: client,
@@ -537,6 +623,7 @@ fn text_field<R: Resolve>(out: &mut Content, input: &BodyInput<'_>, r: &R) {
             vt::edit_ap::Grouping::Continuous
         },
         &appearance.font_name,
+        live_shift(input.live),
     );
     wrap_text(
         out,
@@ -608,6 +695,9 @@ fn push_button<R: Resolve>(out: &mut Content, input: &BodyInput<'_>, r: &R) {
         true,
         vt::edit_ap::Grouping::Continuous,
         &appearance.font_name,
+        // A push button draws a caption from `/MK`, never a value, so nothing
+        // a session holds can override it and it never scrolls.
+        (0.0, 0.0),
     );
     if written.is_empty() {
         return;
@@ -685,16 +775,23 @@ fn combo_box<R: Resolve>(out: &mut Content, input: &BodyInput<'_>, r: &R) {
         geom::top(client),
     ));
 
-    // The **label** of the selected option, or the value itself when nothing
-    // is selected — which is how a combo box whose `/V` names no option still
-    // shows what the file says.
+    // A focused combo box draws the edit box's own text, whichever option it
+    // does or does not name: an editable one is being typed into, and a
+    // read-only one has had its text set from the row the user picked. Either
+    // way the session already resolved the label, so no lookup happens here.
+    //
+    // Unfocused, the **label** of the selected option, or the value itself
+    // when nothing is selected — which is how a combo box whose `/V` names no
+    // option still shows what the file says.
     let options = options(valued, r);
-    let text = match selected_indices(valued, &options, r).first().copied() {
-        Some(index) => options
-            .get(index)
-            .map(|option| option.label.clone())
-            .unwrap_or_default(),
-        None => field_value(valued, r),
+    let text: Cow<'_, str> = match input.live {
+        Some(live) => Cow::Borrowed(live.text),
+        None => match selected_indices(valued, &options, r).first().copied() {
+            Some(index) => options
+                .get(index)
+                .map_or(Cow::Borrowed(""), |option| Cow::Owned(option.label.clone())),
+            None => Cow::Owned(field_value(valued, r)),
+        },
     };
 
     let config = vt::Config {
@@ -709,6 +806,7 @@ fn combo_box<R: Resolve>(out: &mut Content, input: &BodyInput<'_>, r: &R) {
         true,
         vt::edit_ap::Grouping::Continuous,
         &appearance.font_name,
+        live_shift(input.live),
     );
     wrap_text(
         out,
@@ -726,13 +824,26 @@ fn list_box<R: Resolve>(out: &mut Content, input: &BodyInput<'_>, r: &R) {
     let (dict, valued, client) = (input.widget, input.valued, input.client);
     let (appearance, color, font) = (input.appearance, input.color, input.font);
     let options = options(valued, r);
-    let selected = selected_indices(valued, &options, r);
-    let top = usize::try_from(
-        inherited(dict, names::TI, r)
-            .and_then(|value| value.as_int())
-            .unwrap_or(0),
-    )
-    .unwrap_or(0);
+    // A focused list box's selection lives in the session, not in `/V` — the
+    // arrow keys move it long before anything is committed — and the same is
+    // true of the first visible row, which scrolling changes. Both are read
+    // from the dictionary only when no session is holding them.
+    let selected: Cow<'_, [usize]> = input.live.map_or_else(
+        || Cow::Owned(selected_indices(valued, &options, r)),
+        |live| Cow::Borrowed(live.selected),
+    );
+    let top = input.live.map_or_else(
+        || {
+            usize::try_from(
+                inherited(dict, names::TI, r)
+                    .and_then(|value| value.as_int())
+                    .unwrap_or(0),
+            )
+            .unwrap_or(0)
+        },
+        |live| live.top_visible,
+    );
+    let (shift_x, shift_y) = live_shift(input.live);
 
     // Each row is laid out into a plate of **zero height**, so the layout
     // reports the row's own extent rather than the box's.
@@ -756,7 +867,7 @@ fn list_box<R: Resolve>(out: &mut Content, input: &BodyInput<'_>, r: &R) {
             &layout,
             &config,
             &font.metrics,
-            (0.0, y),
+            (shift_x, y + shift_y),
             vt::edit_ap::Grouping::Continuous,
             &appearance.font_name,
             |code| font.encode(code),
@@ -764,8 +875,15 @@ fn list_box<R: Resolve>(out: &mut Content, input: &BodyInput<'_>, r: &R) {
         if selected.contains(&index) {
             rows.raw("q\n");
             rows.raw(&color_op_via(SELECTION_FILL, PaintOp::Fill, Float::G6));
+            // The band moves with its row, so a scrolled box keeps the fill
+            // under the text it belongs to rather than where the row rested.
             rows.rect(
-                geom::rect(geom::left(client), y - height, geom::right(client), y),
+                geom::rect(
+                    geom::left(client) + shift_x,
+                    y + shift_y - height,
+                    geom::right(client) + shift_x,
+                    y + shift_y,
+                ),
                 Float::Shortest,
             );
             rows.raw("re\nf\nQ\n");
@@ -900,7 +1018,8 @@ fn border_color<R: Resolve>(dict: &Dict, r: &R) -> Color {
 #[cfg(test)]
 mod tests {
     use super::{
-        CARET_WIDTH, Choice, Highlight, Kind, field_dict_of, field_value, options, selected_indices,
+        CARET_WIDTH, Choice, Highlight, Kind, LiveState, field_dict_of, field_value, options,
+        selected_indices,
     };
     use crate::ap::{TextFont, freetext};
     use crate::geom;
@@ -1031,6 +1150,19 @@ mod tests {
     }
 
     fn body_with(widget: &Dict, caret_and_selection: Option<&Highlight>) -> Option<String> {
+        body_live(widget, caret_and_selection, None)
+    }
+
+    /// The same body, for a widget a session is editing.
+    fn live_body(widget: &Dict, live: &LiveState<'_>) -> Option<String> {
+        body_live(widget, None, Some(live))
+    }
+
+    fn body_live(
+        widget: &Dict,
+        caret_and_selection: Option<&Highlight>,
+        live: Option<&LiveState<'_>>,
+    ) -> Option<String> {
         let cache = pdfrum_font::FontCache::new();
         let face =
             pdfrum_font::Font::load_standard(pdfrum_font::subst::StandardFont::Helvetica, &cache);
@@ -1039,8 +1171,15 @@ mod tests {
             metrics: TextFont::metrics_of(&face, &width),
             font: &face,
         };
-        super::generate(widget, &catalog(), &font, &NoResolve, caret_and_selection)
-            .map(|body| String::from_utf8_lossy(&body.stream).into_owned())
+        super::generate(
+            widget,
+            &catalog(),
+            &font,
+            &NoResolve,
+            caret_and_selection,
+            live,
+        )
+        .map(|body| String::from_utf8_lossy(&body.stream).into_owned())
     }
 
     /// The widgets the existing body tests already exercise.
@@ -1450,5 +1589,291 @@ mod tests {
         assert!(got.contains("/Tx BMC\n"), "{got}");
         assert!(got.contains("re\nf\n"), "{got}");
         assert!(!got.contains("BT\n"), "{got}");
+    }
+
+    #[test]
+    fn a_live_text_field_draws_what_the_session_holds_rather_than_its_value() {
+        // The whole point of the override: an empty field being typed into
+        // must show the typing, and a field whose `/V` still reads the old
+        // value must not show it.
+        let empty = widget_of("Tx", &[]);
+        assert_eq!(body(&empty), None, "an empty field draws nothing");
+        let typed = live_body(
+            &empty,
+            &LiveState {
+                text: "Hello",
+                ..LiveState::default()
+            },
+        )
+        .expect("a live body");
+        assert!(typed.contains("(Hello) Tj\n"), "{typed}");
+
+        let stale = widget_of("Tx", &[("V", text("stored"))]);
+        let live = live_body(
+            &stale,
+            &LiveState {
+                text: "edited",
+                ..LiveState::default()
+            },
+        )
+        .expect("a live body");
+        assert!(live.contains("(edited) Tj\n"), "{live}");
+        assert!(!live.contains("stored"), "{live}");
+    }
+
+    #[test]
+    fn a_live_text_field_still_obeys_the_flags_its_dictionary_sets() {
+        // The override replaces the *value*, not the layout: a password field
+        // bullets the live text exactly as it bullets the stored one, and a
+        // comb field still places one character per cell.
+        let secret = live_body(
+            &widget_of("Tx", &[("V", text("old")), ("Ff", Object::Int(1 << 13))]),
+            &LiveState {
+                text: "abcd",
+                ..LiveState::default()
+            },
+        )
+        .expect("a live body");
+        assert!(secret.contains("(****) Tj\n"), "{secret}");
+        assert!(!secret.contains("abcd"), "{secret}");
+
+        let comb = live_body(
+            &widget_of(
+                "Tx",
+                &[
+                    ("V", text("z")),
+                    ("Ff", Object::Int(1 << 24)),
+                    ("MaxLen", Object::Int(4)),
+                ],
+            ),
+            &LiveState {
+                text: "xy",
+                ..LiveState::default()
+            },
+        )
+        .expect("a live body");
+        assert_eq!(comb.matches(" Tj\n").count(), 2, "{comb}");
+        assert!(
+            comb.contains("(x) Tj\n") && comb.contains("(y) Tj\n"),
+            "{comb}"
+        );
+    }
+
+    /// An editable combo box whose options do not contain what is typed.
+    fn editable_combo() -> Dict {
+        widget_of(
+            "Ch",
+            &[
+                // The combo flag plus bit 19, "the value may be edited".
+                ("Ff", Object::Int((1 << 17) | (1 << 18))),
+                (
+                    "Opt",
+                    Object::Array(Array::of([
+                        strings(&["a", "Apple"]),
+                        strings(&["b", "Banana"]),
+                    ])),
+                ),
+                ("V", text("b")),
+            ],
+        )
+    }
+
+    #[test]
+    fn a_live_combo_box_draws_the_typed_text_rather_than_an_options_label() {
+        let combo = editable_combo();
+        let stored = body(&combo).expect("a body");
+        assert!(stored.contains("(Banana) Tj\n"), "{stored}");
+
+        let typed = live_body(
+            &combo,
+            &LiveState {
+                text: "Bana",
+                ..LiveState::default()
+            },
+        )
+        .expect("a live body");
+        assert!(typed.contains("(Bana) Tj\n"), "{typed}");
+        assert!(!typed.contains("(Banana) Tj\n"), "{typed}");
+        // The drop button is chrome, not value, so it is drawn either way.
+        assert!(typed.contains("0.862745 g\n"), "{typed}");
+    }
+
+    /// A three-row list box with nothing selected and no `/TI`.
+    fn list_of_three() -> Dict {
+        widget_of("Ch", &[("Opt", strings(&["Ant", "Bee", "Cat"]))])
+    }
+
+    #[test]
+    fn a_live_list_box_paints_the_sessions_selection_not_the_files() {
+        let list = list_of_three();
+        let stored = body(&list).expect("a body");
+        // Nothing selected in the file at all.
+        assert!(!stored.contains("0 0.2 0.443137 rg\n"), "{stored}");
+
+        let live = live_body(
+            &list,
+            &LiveState {
+                selected: &[1, 2],
+                ..LiveState::default()
+            },
+        )
+        .expect("a live body");
+        assert_eq!(live.matches("0 0.2 0.443137 rg\n").count(), 2, "{live}");
+        // Two white rows and one in the `/DA`'s black.
+        assert_eq!(live.matches("1 g\n").count(), 2, "{live}");
+        assert_eq!(live.matches("BT\n").count(), 3, "{live}");
+    }
+
+    #[test]
+    fn a_live_selection_overrides_a_stored_one_rather_than_adding_to_it() {
+        let list = widget_of(
+            "Ch",
+            &[("Opt", strings(&["Ant", "Bee", "Cat"])), ("V", text("Ant"))],
+        );
+        let live = live_body(
+            &list,
+            &LiveState {
+                selected: &[2],
+                ..LiveState::default()
+            },
+        )
+        .expect("a live body");
+        assert_eq!(live.matches("0 0.2 0.443137 rg\n").count(), 1, "{live}");
+        // The band belongs to the last row, so the white text drawn after it
+        // is `Cat` and `Ant` stays black.
+        let band = live.find("0 0.2 0.443137 rg\n").expect("a band");
+        assert!(live.find("(Cat) Tj\n") > Some(band), "{live}");
+        assert!(live.find("(Ant) Tj\n") < Some(band), "{live}");
+    }
+
+    #[test]
+    fn a_live_list_box_starts_at_the_sessions_top_row_not_its_ti() {
+        // `/TI` says one; the session has scrolled to the third.
+        let list = widget_of(
+            "Ch",
+            &[
+                ("Opt", strings(&["Ant", "Bee", "Cat"])),
+                ("TI", Object::Int(1)),
+            ],
+        );
+        let stored = body(&list).expect("a body");
+        assert_eq!(stored.matches("BT\n").count(), 2, "{stored}");
+
+        let live = live_body(
+            &list,
+            &LiveState {
+                top_visible: 2,
+                ..LiveState::default()
+            },
+        )
+        .expect("a live body");
+        assert_eq!(live.matches("BT\n").count(), 1, "{live}");
+        assert!(live.contains("(Cat) Tj\n"), "{live}");
+        assert!(!live.contains("(Bee) Tj\n"), "{live}");
+
+        // And a session resting at the top shows every row, `/TI` or no.
+        let unscrolled = live_body(&list, &LiveState::default()).expect("a live body");
+        assert_eq!(unscrolled.matches("BT\n").count(), 3, "{unscrolled}");
+    }
+
+    /// The first `Td`'s two operands, which are where a shift shows up.
+    fn first_move(stream: &str) -> (f32, f32) {
+        let line = stream
+            .lines()
+            .find(|line| line.ends_with(" Td"))
+            .unwrap_or_else(|| panic!("no Td in {stream}"));
+        let mut parts = line.split_whitespace();
+        let x: f32 = parts.next().and_then(|n| n.parse().ok()).expect("an x");
+        let y: f32 = parts.next().and_then(|n| n.parse().ok()).expect("a y");
+        (x, y)
+    }
+
+    #[test]
+    fn scrolling_shifts_the_drawn_text_by_the_scroll_offset() {
+        // Upstream subtracts the scroll's distance from its resting seed on
+        // the way from the layout to the drawn point, so the text moves the
+        // other way from the number.
+        let field = widget_of("Tx", &[("V", text("Hello"))]);
+        let (rest_x, rest_y) = first_move(&body(&field).expect("a body"));
+        let scrolled = live_body(
+            &field,
+            &LiveState {
+                text: "Hello",
+                scroll: (7.0, 3.0),
+                ..LiveState::default()
+            },
+        )
+        .expect("a live body");
+        let (x, y) = first_move(&scrolled);
+        assert!((x - (rest_x - 7.0)).abs() < 1e-3, "{x} against {rest_x}");
+        assert!((y - (rest_y - 3.0)).abs() < 1e-3, "{y} against {rest_y}");
+    }
+
+    #[test]
+    fn an_unscrolled_live_edit_draws_where_the_stored_value_would() {
+        // A zero scroll is not merely close to no scroll: it is the same
+        // stream, which is what lets the focused path reuse the geometry the
+        // unfocused one pinned.
+        let field = widget_of("Tx", &[("V", text("Hello"))]);
+        let stored = body(&field).expect("a body");
+        let live = live_body(
+            &field,
+            &LiveState {
+                text: "Hello",
+                ..LiveState::default()
+            },
+        )
+        .expect("a live body");
+        assert_eq!(stored, live);
+    }
+
+    #[test]
+    fn a_scrolled_list_box_moves_its_rows_and_their_selection_bands_together() {
+        let live = live_body(
+            &list_of_three(),
+            &LiveState {
+                selected: &[0],
+                scroll: (0.0, 5.0),
+                ..LiveState::default()
+            },
+        )
+        .expect("a live body");
+        let rest = live_body(
+            &list_of_three(),
+            &LiveState {
+                selected: &[0],
+                ..LiveState::default()
+            },
+        )
+        .expect("a live body");
+        assert_ne!(live, rest, "a scroll must move the rows");
+        let (_, y) = first_move(&live);
+        let (_, rest_y) = first_move(&rest);
+        assert!((y - (rest_y - 5.0)).abs() < 1e-3, "{y} against {rest_y}");
+        // The band is still exactly one row tall and still there.
+        assert_eq!(live.matches("0 0.2 0.443137 rg\n").count(), 1, "{live}");
+    }
+
+    #[test]
+    fn none_and_a_default_live_state_agree_on_every_widget_fixture() {
+        // The complement of the byte-identity golden: `None` pins the stored
+        // path against a captured stream, and this pins the *live* path
+        // against `None` wherever the file itself stores nothing to override.
+        // Every fixture that *does* store something legitimately differs — a
+        // default `LiveState` is an empty field with nothing selected resting
+        // at row zero, which is a different appearance from `Hello` or from a
+        // list box whose `/V` picks a row — so the agreeing set is named
+        // rather than left to silence.
+        for (name, widget) in widget_fixtures() {
+            if !matches!(name, "ch_list_i" | "tx_empty" | "btn") {
+                continue;
+            }
+            let live = LiveState::default();
+            assert_eq!(
+                body_live(&widget, None, Some(&live)),
+                body_live(&widget, None, None),
+                "{name} moved under an empty live state"
+            );
+        }
     }
 }
