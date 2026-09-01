@@ -410,6 +410,34 @@ fn face_bytes_of(_db: &fontdb::Database, face: &fontdb::FaceInfo) -> Option<Arc<
     }
 }
 
+/// The three style bits an enumerated face carries, from its two name strings
+/// (`CFX_FolderFontInfo::ReportFace`, `cfx_folderfontinfo.cpp:349-358`).
+///
+/// `name` is the joined face name — family, then the style unless the style is
+/// `Regular` — and `style` is the subfamily on its own. The asymmetry is the
+/// port's, not a simplification: bold and italic read the **style**, serif
+/// reads the **whole face name**. So a family literally called `PT Serif`
+/// carries the bit through every one of its faces, and no other family carries
+/// it at all.
+///
+/// All three tests are case-sensitive substring tests, as `ByteString::Contains`
+/// is. A `SERIF` in caps or a `serif` in lower case does not match, and that is
+/// ported rather than corrected — the scoring must agree with the oracle's,
+/// including where the oracle's is crude.
+fn face_styles(name: &str, style: &str) -> u32 {
+    let mut styles = style_bits::NORMAL;
+    if style.contains("Bold") {
+        styles |= style_bits::FORCE_BOLD;
+    }
+    if style.contains("Italic") || style.contains("Oblique") {
+        styles |= style_bits::ITALIC;
+    }
+    if name.contains("Serif") {
+        styles |= STYLE_SERIF;
+    }
+    styles
+}
+
 /// Read a face's display name, style bits and charsets from its own tables.
 ///
 /// The charsets come from `OS/2`'s code-page ranges, which `fontdb` does not
@@ -417,6 +445,36 @@ fn face_bytes_of(_db: &fontdb::Database, face: &fontdb::FaceInfo) -> Option<Arc<
 /// the database's metadata. ANSI is added unconditionally, matching the folder
 /// enumerator, so a face with no code-page claims at all is still usable for
 /// Latin text.
+///
+/// The three **style bits are read off the two name strings**, not off the
+/// face's own tables, because that is what the enumerator this stands in for
+/// does (`CFX_FolderFontInfo::ReportFace`, `cfx_folderfontinfo.cpp:349-358`):
+///
+/// ```cpp
+/// pInfo->styles_ = 0;
+/// if (style.Contains("Bold")) { pInfo->styles_ |= kFontStyleForceBold; }
+/// if (style.Contains("Italic") || style.Contains("Oblique")) {
+///   pInfo->styles_ |= kFontStyleItalic;
+/// }
+/// if (facename.Contains("Serif")) { pInfo->styles_ |= kFontStyleSerif; }
+/// ```
+///
+/// Three bits, three substring tests, and **nothing else is ever set** — the
+/// script and fixed-pitch bits stay zero for every enumerated face, so the two
+/// terms of [`FaceInfo::similarity_score`] that read them score for exactly
+/// the requests whose pitch family is neither script nor fixed.
+///
+/// This is coarser than the face's own tables and deliberately so. Reading the
+/// serif bit from `OS/2`'s PANOSE — which is the *other* rule PDFium has, in
+/// `CFX_Face::GetFontStyle` (`cfx_face.cpp:1608-1633`) — is only reachable
+/// from the XFA and Android font managers, never from the folder enumerator a
+/// `--font-dir` run goes through. The two disagree loudly on the hermetic font
+/// set: PANOSE gives `Tinos`, `Cousine`, `GardinerMod` and three of the four
+/// `Gelasio` faces a serif bit the oracle gives none of them, and it gives
+/// `Gelasio Bold` no serif bit while giving its own Regular and Bold Italic
+/// siblings one. A rule that splits a single family three ways is a rule
+/// scoring on something other than the family, and the 16-point serif term is
+/// the largest in the score.
 fn describe(
     families: &[(String, fontdb::Language)],
     index: u32,
@@ -440,27 +498,10 @@ fn describe(
         format!("{family} {style}")
     };
 
-    let mut styles = 0u32;
+    let styles = face_styles(&name, &style);
+
     let mut charsets = vec![Charset::Ansi];
     if let Ok(os2) = font.os2() {
-        let selection = os2.fs_selection().bits();
-        // `fsSelection` bit 0 is italic, bit 5 is bold.
-        if selection & 0x01 != 0 {
-            styles |= style_bits::ITALIC;
-        }
-        if selection & 0x20 != 0 {
-            styles |= style_bits::FORCE_BOLD;
-        }
-        // PANOSE byte 0 is the family kind: 2 is Latin text (serif decided by
-        // byte 1), 3 is scripts, 4 is decorative.
-        let panose = os2.panose_10();
-        if panose.first() == Some(&3) {
-            styles |= STYLE_SCRIPT;
-        }
-        if matches!(panose.first(), Some(2)) && !matches!(panose.get(1), Some(0 | 1 | 11..=15)) {
-            styles |= STYLE_SERIF;
-        }
-
         let ranges = u64::from(os2.ul_code_page_range_1().unwrap_or(0))
             | (u64::from(os2.ul_code_page_range_2().unwrap_or(0)) << 32);
         for bit in 0..64u32 {
@@ -473,9 +514,6 @@ fn describe(
                 charsets.push(c);
             }
         }
-    }
-    if font.post().is_ok_and(|p| p.is_fixed_pitch() != 0) {
-        styles |= STYLE_FIXED_PITCH;
     }
 
     Some(FaceInfo {
@@ -725,5 +763,131 @@ mod tests {
         );
         assert!(db.font_by_name("Arial").is_none());
         assert!(db.face_bytes(FaceHandle(0)).is_none());
+    }
+}
+
+/// What an *enumerated* face's style bits are read from.
+///
+/// The bits decide 48 of [`FaceInfo::similarity_score`]'s 68 points, so the
+/// rule that sets them is the rule that picks the face. These tests pin it to
+/// `CFX_FolderFontInfo::ReportFace` and to nothing else — in particular not to
+/// the face's own `OS/2` PANOSE, which is a different rule PDFium reaches only
+/// from XFA and Android.
+#[cfg(test)]
+mod face_style_bits {
+    use super::*;
+
+    /// The bold bit is the style string's, and the style string's alone.
+    #[test]
+    fn bold_reads_the_style_not_the_face_name() {
+        assert_eq!(
+            face_styles("Arimo Bold", "Bold") & style_bits::FORCE_BOLD,
+            style_bits::FORCE_BOLD
+        );
+        assert_eq!(
+            face_styles("Arimo Bold Italic", "Bold Italic") & style_bits::FORCE_BOLD,
+            style_bits::FORCE_BOLD
+        );
+        assert_eq!(face_styles("Arimo", "Regular") & style_bits::FORCE_BOLD, 0);
+        // A family whose *name* says Bold but whose subfamily does not is not
+        // bold: the two strings are read separately and only one is asked.
+        assert_eq!(
+            face_styles("Bold Sans", "Regular") & style_bits::FORCE_BOLD,
+            0
+        );
+    }
+
+    /// Italic takes `Oblique` too — the one place the port reads two words.
+    #[test]
+    fn italic_takes_oblique_as_well() {
+        assert_eq!(
+            face_styles("X Italic", "Italic") & style_bits::ITALIC,
+            style_bits::ITALIC
+        );
+        assert_eq!(
+            face_styles("X Oblique", "Oblique") & style_bits::ITALIC,
+            style_bits::ITALIC
+        );
+        assert_eq!(face_styles("X", "Regular") & style_bits::ITALIC, 0);
+    }
+
+    /// The serif bit is a substring test on the **face name**, which is the
+    /// divergence this test exists for: PANOSE would answer differently for
+    /// every serif family in the hermetic set.
+    #[test]
+    fn serif_is_the_face_name_containing_serif() {
+        assert_eq!(
+            face_styles("PT Serif", "Regular") & STYLE_SERIF,
+            STYLE_SERIF
+        );
+        assert_eq!(
+            face_styles("Noto Serif Bold", "Bold") & STYLE_SERIF,
+            STYLE_SERIF
+        );
+        // Case-sensitive, as `ByteString::Contains` is.
+        assert_eq!(face_styles("PT SERIF", "Regular") & STYLE_SERIF, 0);
+        assert_eq!(face_styles("PT serif", "Regular") & STYLE_SERIF, 0);
+    }
+
+    /// Every face in the oracle's own hermetic font directory, by name, with
+    /// the bits `ReportFace` gives it. **No** face there is serif: the
+    /// Croscore serif family is called `Tinos` and the Gelasio one `Gelasio`,
+    /// and neither spelling contains the word. Reading the bit from PANOSE
+    /// instead gives eleven of these faces a serif bit the oracle gives none
+    /// of them — and splits `Gelasio` three ways, since `Gelasio Bold`'s
+    /// PANOSE disagrees with its own siblings'.
+    #[test]
+    fn no_face_in_the_hermetic_font_set_is_serif() {
+        for (name, style) in [
+            ("Ahem", "Regular"),
+            ("Arimo", "Regular"),
+            ("Arimo Bold", "Bold"),
+            ("Arimo Bold Italic", "Bold Italic"),
+            ("Arimo Italic", "Italic"),
+            ("Cousine", "Regular"),
+            ("Cousine Bold", "Bold"),
+            ("DejaVu Sans Book", "Book"),
+            ("GardinerMod", "Regular"),
+            ("Garuda", "Regular"),
+            ("Gelasio", "Regular"),
+            ("Gelasio Bold", "Bold"),
+            ("Gelasio Bold Italic", "Bold Italic"),
+            ("Gelasio Italic", "Italic"),
+            ("Noto Color Emoji", "Regular"),
+            ("Tinos", "Regular"),
+            ("Tinos Bold", "Bold"),
+            ("Tinos Bold Italic", "Bold Italic"),
+            ("Tinos Italic", "Italic"),
+        ] {
+            let bits = face_styles(name, style);
+            assert_eq!(bits & STYLE_SERIF, 0, "{name} took a serif bit");
+            assert_eq!(bits & STYLE_SCRIPT, 0, "{name} took a script bit");
+            assert_eq!(bits & STYLE_FIXED_PITCH, 0, "{name} took a fixed-pitch bit");
+        }
+    }
+
+    /// The enumerator sets three bits and no others, so the script and
+    /// fixed-pitch terms of the score are decided entirely by the *request*.
+    ///
+    /// `Cousine` is the case that would otherwise bite: it is the monospaced
+    /// Croscore face, its `post` table says so, and a `FIXED` request would
+    /// score 8 more for it than for `Arimo` — which the oracle does not do,
+    /// because the folder enumerator never asked the `post` table anything.
+    #[test]
+    fn a_monospaced_face_takes_no_fixed_pitch_bit() {
+        let cousine = face_styles("Cousine", "Regular");
+        let arimo = face_styles("Arimo", "Regular");
+        assert_eq!(cousine, arimo);
+        let fixed = PitchFamily(PitchFamily::FIXED);
+        let info = |styles| FaceInfo {
+            name: String::new(),
+            styles,
+            charsets: vec![Charset::Ansi],
+        };
+        assert_eq!(
+            info(cousine).similarity_score(400, false, fixed, false),
+            info(arimo).similarity_score(400, false, fixed, false),
+            "a fixed-pitch request must not separate Cousine from Arimo"
+        );
     }
 }
