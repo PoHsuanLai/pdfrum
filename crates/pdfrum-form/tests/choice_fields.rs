@@ -62,6 +62,11 @@ const PROVINCES: [&str; 10] = [
     "Saskatchewan",
 ];
 
+/// `Listbox_SingleSelectLastSelected`'s own `/Rect` and `/DA` font size,
+/// which together decide how many rows the widget shows.
+const LAST_SELECTED_RECT: (f32, f32, f32, f32) = (100.0, 100.0, 200.0, 130.0);
+const LAST_SELECTED_FONT_SIZE: f32 = 12.0;
+
 fn options(labels: &[&str]) -> Vec<ChoiceOption> {
     labels
         .iter()
@@ -137,8 +142,15 @@ fn a_list_does_not_overscroll_past_its_last_full_page() {
         assert_eq!(is_index_selected(&list, i), i == 9);
     }
 
-    // The widget shows two rows, so a top index of 9 clamps to 8.
-    let top = top_visible_for(PROVINCES.len(), 2, 9);
+    // How many rows the widget shows is the fixture's geometry, not a
+    // number chosen to make the arithmetic come out: /Rect [100 100 200 130]
+    // is thirty units tall and /DA sets twelve points, so two rows fit.
+    let rect_height = LAST_SELECTED_RECT.3 - LAST_SELECTED_RECT.1;
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let visible_rows = (rect_height / LAST_SELECTED_FONT_SIZE).floor() as usize;
+    assert_eq!(visible_rows, 2, "the fixture's own geometry shows two rows");
+
+    let top = top_visible_for(PROVINCES.len(), visible_rows, 9);
     assert_eq!(top, 8, "scrolling to 9 would leave the box short");
 
     // Clicking the first visible row therefore selects Quebec.
