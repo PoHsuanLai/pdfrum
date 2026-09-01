@@ -117,11 +117,18 @@ impl TabOrder {
 }
 
 /// One annotation eligible for focus.
+///
+/// The `id` carries a **raw** `/Annots` index, pop-ups counted — see
+/// [`AnnotId`]. Unlike hit testing, pop-ups never appear here at all: they
+/// are not a focusable subtype. That makes it tempting to number the ring
+/// from its own positions, and it would be wrong for the same reason —
+/// whatever the ring hands back is used to key an appearance.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Focusable {
-    /// Which annotation.
+    /// Which annotation, by its raw `/Annots` index.
     pub id: AnnotId,
-    /// Its rectangle.
+    /// Its rectangle, from the raw `/Rect` rather than a focused widget's
+    /// inflated box.
     pub rect: Rect,
 }
 
@@ -516,6 +523,25 @@ mod tests {
                 assert_eq!(seen, vec![0, 1, 2, 3, 4, 5], "duplicate at seed {seed}");
             }
         }
+    }
+
+    /// The ring is built only from focusable annotations, but it reports the
+    /// raw `/Annots` indices those annotations have — so a page whose
+    /// pop-ups and non-widgets leave gaps in the numbering keeps the gaps.
+    #[test]
+    fn the_ring_keeps_the_gaps_that_unfocusable_annotations_leave() {
+        // /Annots = [ popup, widget, highlight, widget ]; only 1 and 3 are
+        // focusable, so those are the indices the ring must carry.
+        let annots = [
+            annot(1, 100.0, 400.0, 200.0, 450.0),
+            annot(3, 100.0, 200.0, 200.0, 250.0),
+        ];
+        let ring = FocusRing::build(&annots, TabOrder::Structure);
+
+        assert_eq!(ids(&ring), vec![1, 3], "the ring is not renumbered");
+        assert_eq!(ring.first(), Some(AnnotId::new(0, 1)));
+        assert_eq!(ring.next(AnnotId::new(0, 1)), Some(AnnotId::new(0, 3)));
+        assert_eq!(ring.next(AnnotId::new(0, 3)), None);
     }
 
     #[test]
