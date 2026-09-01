@@ -1,0 +1,57 @@
+%PDF-1.7
+% ò¤ô
+1 0 obj <<
+  /Type /Catalog
+  /Pages 2 0 R
+  /OpenAction 10 0 R
+>>
+endobj
+2 0 obj <<
+  /Type /Pages
+  /Count 1
+  /Kids [ 3 0 R ]
+>>
+endobj
+3 0 obj <<
+  /Type /Page
+  /Parent 2 0 R
+  /MediaBox [0 0 612 792]
+>>
+endobj
+10 0 obj <<
+  /Type /Action
+  /S /JavaScript
+  /JS 11 0 R
+>>
+endobj
+11 0 obj <<
+  /Length 177
+>>
+stream
+
+app.alert("util.scand('dd/mm/yy','31/12/85') = " + util.scand("dd/mm/yy", "31/12/85"));
+app.alert("util.scand('dd/mm/yy','31/12/49') = " + util.scand("dd/mm/yy", "31/12/49"));
+
+endstream
+endobj
+xref
+0 12
+0000000000 65535 f 
+0000000015 00000 n 
+0000000089 00000 n 
+0000000154 00000 n 
+0000000000 65535 f 
+0000000000 65535 f 
+0000000000 65535 f 
+0000000000 65535 f 
+0000000000 65535 f 
+0000000000 65535 f 
+0000000231 00000 n 
+0000000299 00000 n 
+trailer <<
+  /Root 1 0 R
+  /Size 12
+>>
+startxref
+530
+%%EOF
