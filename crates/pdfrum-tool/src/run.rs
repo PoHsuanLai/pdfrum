@@ -321,12 +321,16 @@ fn walk_pages(
         // the form filler is editing must not be given the form-field
         // highlight, which is a fact about the *session* rather than about
         // any one appearance.
-        let (updates, focus) = match session.as_deref_mut() {
+        let (updates, focus, hover) = match session.as_deref_mut() {
             Some(session) => {
                 let updates = dispatch::replay_page(session, index, script, streams.err);
-                (updates, session.focus_for_page(index))
+                let focus = session.focus_for_page(index);
+                // Hover is read after the replay, like focus: the script's
+                // last `mousemove` is what leaves a note card open, and a
+                // highlight's card is reachable no other way.
+                (updates, focus, session.hover_for_page(index))
             }
-            None => (Vec::new(), None),
+            None => (Vec::new(), None, None),
         };
         // The annotation walk happens when the page is first opened, before
         // anything is dumped for it.
@@ -343,8 +347,11 @@ fn walk_pages(
             Output {
                 input: Path::new(name),
                 index,
-                updates: &updates,
-                focus,
+                session: crate::render::SessionView {
+                    updates: &updates,
+                    focus,
+                    hover,
+                },
             },
             options,
             &catalog,
@@ -435,12 +442,11 @@ fn dump_page(
 struct Output<'a> {
     input: &'a Path,
     index: u32,
-    /// The appearance updates this page's event replay produced — the tool's
-    /// `FPDF_FFLDraw` input. Empty for every run without `--send-events`.
-    updates: &'a [pdfrum::AppearanceUpdate],
-    /// Which annotation on this page holds focus, if one does. Decides which
-    /// widget is *not* tinted, which no appearance can say for itself.
-    focus: Option<pdfrum_doc::ap::Focus>,
+    /// What this page's event replay left behind — the appearances the
+    /// tool's `FPDF_FFLDraw` lays over, which widget is focused (and so *not*
+    /// tinted), and which annotation the pointer is inside (and so whose note
+    /// card is open). Entirely empty for every run without `--send-events`.
+    session: crate::render::SessionView<'a>,
 }
 
 /// The formats that write a file beside the input rather than to stdout.
@@ -468,8 +474,7 @@ fn write_page_files<R: Resolve>(
     let Output {
         input,
         index,
-        updates,
-        focus,
+        session,
     } = where_;
     match options.format {
         OutputFormat::Annot => {
@@ -499,8 +504,7 @@ fn write_page_files<R: Resolve>(
                 render::DEFAULT_SCALE,
                 backend,
                 ctx,
-                updates,
-                focus,
+                &session,
             ) else {
                 return String::new();
             };
