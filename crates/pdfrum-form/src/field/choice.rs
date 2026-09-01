@@ -250,6 +250,51 @@ pub fn combo_text_config(editable: bool, read_only: bool) -> TextConfig {
     }
 }
 
+/// Carries the currently selected option into the combo box's text half.
+///
+/// # This is where the four-item undo group comes from
+///
+/// Upstream spells it as three operations — select all, replace the
+/// selection, select all again (`cpwl_combo_box.cpp:522-527`) — and the
+/// middle one is itself a group of two, a removal and an insertion. So
+/// choosing an option from an open combo box pushes **four** undo items that
+/// must undo together, which is the worst case `SessionConfig::max_undo_items`
+/// is clamped to four to hold: a capacity that could not fit one whole group
+/// would have to evict half of it.
+///
+/// The two `select_all`s are not redundant. The first is what makes the
+/// replacement replace the *whole* text rather than inserting at a caret; the
+/// second leaves the new text selected, so typing immediately after choosing
+/// an option overwrites it rather than appending to it.
+///
+/// Answers whether anything was carried across, which is `false` for a combo
+/// with no current selection.
+pub fn set_select_text(
+    state: &mut ChoiceState,
+    config: &pdfrum_doc::vt::Config,
+    metrics: &pdfrum_doc::vt::Metrics<'_>,
+) -> bool {
+    let Some(index) = state
+        .caret_index
+        .or_else(|| state.selected.iter().next().copied())
+    else {
+        return false;
+    };
+    let Some(option) = state.options.get(index) else {
+        return false;
+    };
+    let text = option.label.clone();
+
+    let edit = state
+        .edit
+        .get_or_insert_with(|| Box::new(crate::edit::TextEdit::new("", config, metrics, true)));
+    edit.select_all();
+    crate::edit::ops::replace_selection(edit, config, metrics, &text, None);
+    edit.select_all();
+    state.edit_text.clone_from(&edit.text);
+    true
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
