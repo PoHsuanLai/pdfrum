@@ -255,3 +255,143 @@ as `None` from `get`, and `appearance()` is what tells the two apart.
   branch that honours it is currently exercised only by unit tests.
 - **U3 remains open** — `/NeedAppearances` interacting with a live edit is
   untouched here and still has no corpus fixture.
+
+---
+
+## 7. The fifth change: the live-state override (`6c672a9`)
+
+The seam the eighteen `form-events` rows were waiting on, and the one thing
+§5's overlay could not carry: **what a focused field is showing**, when that
+is not what the file stores.
+
+### What was wrong
+
+Every path into the generators read the value out of the dictionary and
+offered no way past it. `text_field` called `field_value(valued, r)`,
+`combo_box` called `selected_indices` and then `field_value`, `list_box`
+called `selected_indices` and read `/TI` — and `ap::widget::generate_with_text`
+wrapped all three with a literal `None` at its one call site. So a field the
+user had typed into rendered its stored `/V`; an empty one rendered empty,
+with §5's caret sitting correctly at position zero of a string nobody was
+editing. The caret half worked and the text half did not, which made the
+overlay's own correctness invisible.
+
+### The shape
+
+One optional parameter, a record of the four displaced reads:
+
+```rust
+pub struct LiveState<'a> {
+    pub text: &'a str,
+    pub selected: &'a [usize],
+    pub top_visible: usize,
+    pub scroll: (f32, f32),
+}
+```
+
+`ap::field_body::generate` takes it after `caret_and_selection`; `BodyInput`
+carries it as `live: Option<&'a LiveState<'a>>`; the builders read it in place
+of the dictionary. `ap::widget` gains a sibling entry point rather than a
+sixth argument on the existing one:
+
+```rust
+pub fn generate_with_live<R: Resolve>(
+    dict: &Dict, catalog: &Dict, font: &TextFont<'_>, r: &R,
+    caret_and_selection: Option<&field_body::Highlight>,
+    live: Option<&field_body::LiveState<'_>>,
+) -> Option<GeneratedAp>;
+```
+
+`generate_with_text` keeps its signature and its two existing callers
+(`ap::mod`'s dispatch and `pdfrum-form`'s `route.rs`) untouched; it is now
+`generate_with_live` with two `None`s. That is why the change is additive on
+both sides of the seam rather than only on ours.
+
+Ownership: `field_value` returns an owned `String` and `live.text` is
+borrowed, so the two meet in a `Cow<'_, str>` — a `BodyInput::text` helper for
+the text field, and inline in the combo box, whose stored branch has a second
+owned source (an option's label) the live branch does not. The list box's
+selection is a `Cow<'_, [usize]>` for the same reason.
+
+### Where the scroll enters the geometry
+
+`CPWL_EditImpl::VTToEdit` — `fpdfsdk/pwl/cpwl_edit_impl.cpp:1087-1107`:
+
+```cpp
+1105  return CFX_PointF(point.x - (scroll_pos_point_.x - rcPlate.left),
+1106                    point.y - (scroll_pos_point_.y + fPadding - rcPlate.top));
+```
+
+That is the only transform between the layout and the drawn point, and every
+drawn thing goes through it: `Iterator::GetWord` rewrites each word's location
+with it (`:75`), `GetLine` each line's (`:85`), and the caret and the
+selection rects are published through it too (`:1430-1431`).
+
+Three consequences the port turns on:
+
+- **`scroll_pos_point_` is a position, not a delta**, and `SetPlateRect`
+  (`:746`) seeds it at `(rcPlate.left, rcPlate.top)`. So at rest the two
+  bracketed terms cancel and only `-fPadding` survives — which is exactly the
+  `vertical_offset` this module already had, and why the unscrolled stream was
+  right without ever naming a scroll.
+- **What a reader can observe is therefore the difference from that seed
+  alone.** `LiveState::scroll` carries the difference rather than the
+  position, which is what makes `(0.0, 0.0)` mean "unscrolled" without the
+  record having to know a plate to interpret itself against. `shift()` negates
+  both components, matching the subtraction above.
+- It reaches the emitter through **the same `offset` argument the vertical
+  alignment already travelled on** — `set_text` adds the two and passes one
+  pair to `vt::edit_ap::generate`. No new plumbing, and adding zero writes the
+  identical `Td` operators.
+
+The list box does not go through `set_text` (its rows are laid out one at a
+time into a zero-height plate), so it applies the shift itself — to the row
+origin **and** to the selection band, which must stay under the row it belongs
+to rather than where that row rested. `1.20.9` of the brief is what says the
+`scrollable_widgets{1,2}` fixtures can observe a scroll *only* through which
+words are drawn and where, and this is the "where".
+
+### What is deliberately not overridden
+
+A **push button** takes `(0.0, 0.0)` outright, named at the call site: its
+text is a `/MK /CA` caption, never a value, so nothing a session holds can
+displace it and it never scrolls.
+
+A **focused combo box** ignores the option-label lookup entirely and draws
+`live.text` — an editable one is being typed into, and a read-only one has had
+its text set from the row the user picked, so the session has already resolved
+the label either way.
+
+### Byte identity
+
+Unchanged and still enforced. §4's golden
+(`tests/data/unfocused_field_bodies.txt`) and its test were not touched, and
+they pass against the new code, which is the evidence that `None` for both
+optional parameters is the stream that existed before either. Two new tests
+approach it from the live side:
+`an_unscrolled_live_edit_draws_where_the_stored_value_would` asserts a live
+edit holding the same text at zero scroll is byte-equal to the stored path,
+and `none_and_a_default_live_state_agree_on_every_widget_fixture` asserts the
+same across the fixtures whose dictionaries store nothing to override
+(`ch_list_i`, `tx_empty`, `btn`). The other five fixtures legitimately differ
+under a default `LiveState` — an empty field with nothing selected at row zero
+is a different appearance from `Hello` — and are excluded by name rather than
+by silence.
+
+### Gates
+
+`fmt`, `clippy -D warnings`, `nextest -p pdfrum-doc` (378 pass, up from 367 — ten new tests in
+`field_body`, one in `widget`),
+`cargo test --doc -p pdfrum-doc`, `cargo build -p pdfrum-form` (clean),
+`cargo nextest run --workspace` (3385 pass). Conformance
+`run --check-regressions`: **no regressions** — 1705 files, 1636 pass, 69
+fail, the same 18 `form-events` / 2 `page-count` / 42 `pixel-fail` / 9
+`tierA-mismatch` split as before.
+
+### Open item
+
+**Nothing constructs a `LiveState` yet.** Like `Suppressed` in §5, it is a
+value waiting for its producer: `pdfrum-form`'s `route.rs` still calls
+`generate_with_text` and still carries the `let _ = highlight;` its own doc
+comment describes. Wiring it up is that crate's change, and the eighteen
+`form-events` rows stay red until it lands.
