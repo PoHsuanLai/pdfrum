@@ -90,6 +90,19 @@ pub enum Disposition {
     Ignore,
 }
 
+/// Whether these modifiers make a gesture a shortcut.
+///
+/// A **subset** test, as the oracle's is — the accelerator bit is set and alt
+/// is not — rather than exact equality. The difference shows on a chord
+/// carrying an extra modifier: equality would call it plain text, and the
+/// oracle calls it a shortcut. Shift is deliberately not consulted here,
+/// because each call site reads it differently: select-all and redo-with-Y
+/// are disqualified by it, while undo-with-Z takes it as meaning redo.
+#[must_use]
+pub fn is_shortcut(modifiers: Modifiers, accelerator: Modifiers) -> bool {
+    modifiers.contains(accelerator) && !modifiers.contains(Modifiers::ALT)
+}
+
 /// Routes a key-down.
 ///
 /// `accelerator` is the modifier that means "shortcut" — the platform's own,
@@ -108,9 +121,19 @@ pub fn route_key(
     redo_on_y: bool,
     has_selection: bool,
 ) -> Disposition {
-    let shortcut = modifiers.without(Modifiers::SHIFT | Modifiers::ALT) == accelerator;
+    // The oracle's test is a plain subset — the accelerator bit is set —
+    // with shift and alt handled per call site rather than folded in here.
+    // An exact-equality test would answer "not a shortcut" for a chord that
+    // carries an extra modifier, where the oracle answers "shortcut".
+    let shortcut = is_shortcut(modifiers, accelerator);
     let shift = modifiers.contains(Modifiers::SHIFT);
     let alt = modifiers.contains(Modifiers::ALT);
+    // Document-wise Home and End are gated on Control on **every** platform,
+    // not on the session's accelerator: the oracle reads the control bit
+    // directly here and carries an open bug (crbug 448699368) saying the meta
+    // key ought to work on Apple keyboards too. Reproduced rather than
+    // improved, so that a caret-position assertion agrees with the oracle.
+    let document_wise = modifiers.contains(Modifiers::CONTROL);
 
     // A forward delete with a selection is rewritten to a plain
     // clear-selection before the table is consulted, which is why deleting a
@@ -138,7 +161,7 @@ pub fn route_key(
             extend: shift,
         }),
         Key::HOME => Disposition::Do(TextAction::Move {
-            motion: if shortcut {
+            motion: if document_wise {
                 Motion::DocStart
             } else {
                 Motion::LineStart
@@ -146,7 +169,7 @@ pub fn route_key(
             extend: shift,
         }),
         Key::END => Disposition::Do(TextAction::Move {
-            motion: if shortcut {
+            motion: if document_wise {
                 Motion::DocEnd
             } else {
                 Motion::LineEnd
@@ -194,14 +217,21 @@ pub fn route_char(
     const BACKSPACE: char = '\u{08}';
     const RETURN: char = '\u{0D}';
 
-    if matches!(ch, LINE_FEED | ESCAPE | DELETE) {
+    // Escape never reaches the edit control's own filter: the field handler
+    // above it intercepts the key, discards the in-progress edit and reports
+    // the event consumed. Line feed and the delete control code really are
+    // the filter's, and really do fall through unhandled.
+    if ch == ESCAPE {
+        return Disposition::Do(TextAction::Escape);
+    }
+    if matches!(ch, LINE_FEED | DELETE) {
         return Disposition::Ignore;
     }
 
     // The accelerator makes a character a shortcut's business, not text — and
     // shortcuts are decided on the key path, so this is simply a refusal.
     // Adding alt takes it back out of shortcut territory.
-    if modifiers.contains(accelerator) && !modifiers.contains(Modifiers::ALT) {
+    if is_shortcut(modifiers, accelerator) {
         return Disposition::Ignore;
     }
 
@@ -322,7 +352,6 @@ mod tests {
     #[test]
     fn navigation_keys_are_handled() {
         for platform in [GENERAL, APPLE] {
-            let (accel, _) = platform;
             assert_eq!(
                 key(Key::LEFT, Modifiers::NONE, platform),
                 Disposition::Do(TextAction::Move {
@@ -338,7 +367,7 @@ mod tests {
                 })
             );
             assert_eq!(
-                key(Key::HOME, accel, platform),
+                key(Key::HOME, Modifiers::CONTROL, platform),
                 Disposition::Do(TextAction::Move {
                     motion: Motion::DocStart,
                     extend: false
@@ -438,18 +467,81 @@ mod tests {
         );
     }
 
-    /// Three characters are filtered before anything else looks at them. The
+    /// Two characters are filtered before anything else looks at them. The
     /// delete refusal matters: an embedder may send a character alongside a
     /// delete key, and taking both would delete twice.
     #[test]
-    fn line_feed_escape_and_delete_are_filtered() {
-        for c in ['\u{0A}', '\u{1B}', '\u{7F}'] {
+    fn line_feed_and_delete_are_filtered() {
+        for c in ['\u{0A}', '\u{7F}'] {
             assert_eq!(
                 ch(c, Modifiers::NONE, GENERAL),
                 Disposition::Ignore,
                 "{c:?} must not reach the text"
             );
         }
+    }
+
+    /// Escape is **not** one of them: it is intercepted a layer above the
+    /// edit control's filter, discards the in-progress edit, and reports the
+    /// event consumed.
+    #[test]
+    fn escape_discards_the_edit_and_is_consumed() {
+        assert_eq!(
+            ch('\u{1B}', Modifiers::NONE, GENERAL),
+            Disposition::Do(TextAction::Escape)
+        );
+        // A read-only field has nothing to discard, but the key is still the
+        // field handler's rather than the filter's.
+        assert_eq!(
+            route_char('\u{1B}', Modifiers::NONE, Modifiers::CONTROL, true, false),
+            Disposition::Do(TextAction::Escape)
+        );
+    }
+
+    /// Home and End take document-wise motion from **Control** on every
+    /// platform, not from the session's accelerator: the oracle reads the
+    /// control bit directly and carries an open bug saying the meta key
+    /// ought to work on Apple keyboards too.
+    #[test]
+    fn document_wise_motion_is_control_on_every_platform() {
+        for platform in [GENERAL, APPLE] {
+            assert_eq!(
+                key(Key::HOME, Modifiers::CONTROL, platform),
+                Disposition::Do(TextAction::Move {
+                    motion: Motion::DocStart,
+                    extend: false
+                }),
+                "Control+Home is document-wise everywhere"
+            );
+        }
+
+        // On an Apple configuration the accelerator is Meta, and it does
+        // *not* widen the motion — reproduced, not improved.
+        assert_eq!(
+            key(Key::HOME, Modifiers::META, APPLE),
+            Disposition::Do(TextAction::Move {
+                motion: Motion::LineStart,
+                extend: false
+            })
+        );
+    }
+
+    /// The shortcut test is a subset test, so a chord carrying an extra
+    /// modifier is still a shortcut — which is what the oracle answers and
+    /// what an exact-equality test would get wrong.
+    #[test]
+    fn an_extra_modifier_does_not_stop_a_chord_being_a_shortcut() {
+        assert!(is_shortcut(Modifiers::CONTROL, Modifiers::CONTROL));
+        assert!(is_shortcut(
+            Modifiers::CONTROL | Modifiers::META,
+            Modifiers::CONTROL
+        ));
+        // Alt takes it back out of shortcut territory.
+        assert!(!is_shortcut(
+            Modifiers::CONTROL | Modifiers::ALT,
+            Modifiers::CONTROL
+        ));
+        assert!(!is_shortcut(Modifiers::META, Modifiers::CONTROL));
     }
 
     /// Return passes through and means different things by field shape;
@@ -483,7 +575,7 @@ mod tests {
         // The filter still runs first: a filtered character is ignored, not
         // consumed, even by a read-only field.
         assert_eq!(
-            route_char('\u{1B}', Modifiers::NONE, Modifiers::CONTROL, true, false),
+            route_char('\u{0A}', Modifiers::NONE, Modifiers::CONTROL, true, false),
             Disposition::Ignore
         );
     }
