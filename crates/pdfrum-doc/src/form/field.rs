@@ -133,6 +133,18 @@ impl FieldFlags {
         self.0 & (1 << 17) != 0
     }
 
+    /// Bit 19, on a `/Ch`: the combo box includes an editable text box.
+    #[must_use]
+    pub fn is_editable_combo(self) -> bool {
+        self.0 & (1 << 18) != 0
+    }
+
+    /// Bit 22, on a `/Ch`: more than one option may be selected at once.
+    #[must_use]
+    pub fn is_multi_select(self) -> bool {
+        self.0 & (1 << 21) != 0
+    }
+
     /// Bit 13, on a `/Tx`: the field accepts more than one line.
     #[must_use]
     pub fn is_multiline(self) -> bool {
@@ -144,6 +156,13 @@ impl FieldFlags {
     #[must_use]
     pub fn is_password(self) -> bool {
         self.0 & (1 << 13) != 0
+    }
+
+    /// Bit 24, on a `/Tx`: the field does not scroll to fit more text than
+    /// its rectangle holds.
+    #[must_use]
+    pub fn do_not_scroll(self) -> bool {
+        self.0 & (1 << 23) != 0
     }
 }
 
@@ -1069,6 +1088,17 @@ mod tests {
         assert!(FieldFlags(2).is_required());
         assert!(FieldFlags(1 << 12).is_multiline());
         assert!(FieldFlags(1 << 13).is_password());
+        assert!(FieldFlags(1 << 18).is_editable_combo());
+        assert!(FieldFlags(1 << 21).is_multi_select());
+        assert!(FieldFlags(1 << 23).do_not_scroll());
         assert!(!FieldFlags(0).is_read_only());
+        assert!(!FieldFlags(0).is_editable_combo());
+        assert!(!FieldFlags(0).is_multi_select());
+        assert!(!FieldFlags(0).do_not_scroll());
+        // Neighbouring bits must not alias: combo (bit 18) is not editable
+        // combo (bit 19), and do-not-spell-check (bit 23) is not do-not-scroll
+        // (bit 24).
+        assert!(!FieldFlags(1 << 17).is_editable_combo());
+        assert!(!FieldFlags(1 << 22).do_not_scroll());
     }
 }
