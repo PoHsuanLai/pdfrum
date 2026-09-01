@@ -144,7 +144,6 @@ fn score_inner(
     std::fs::create_dir_all(scratch)?;
     let pdf_bytes = crate::generate::materialize_for_run(entry, scratch, fixup)?;
     let key = key_for(&pdf_bytes);
-
     let Ok(manifest) = store.manifest(&key) else {
         return Ok(FileResult {
             path: entry.id.clone(),
@@ -352,7 +351,7 @@ fn compare_tier_b(
         floor,
         tags,
         notes,
-        PngSet {
+        &PngSet {
             select: |name| {
                 crate::generate::has_suffix(name, ".png") && !crate::generate::is_events_png(name)
             },
@@ -367,6 +366,7 @@ fn compare_events_pngs(
     manifest: &Manifest,
     produced: &Produced,
     floor: f64,
+    digest: &str,
     tags: &mut Vec<String>,
     notes: &mut Vec<String>,
 ) -> Option<TierB> {
@@ -377,30 +377,33 @@ fn compare_events_pngs(
         floor,
         tags,
         notes,
-        PngSet {
-            select: crate::generate::is_events_png,
+        &PngSet {
+            select: |name: &str| crate::generate::is_events_png_for(name, digest),
             fail_tag: tag::FORM_EVENTS,
         },
     )
 }
 
 /// Which PNGs a pixel walk compares, and the tag a miss scores as.
-#[derive(Clone, Copy)]
-struct PngSet {
-    select: fn(&str) -> bool,
+///
+/// `select` is a closure rather than a bare `fn` because the event walk must
+/// match one *script's* artifacts, not every event-driven artifact in a
+/// golden directory shared by several fixtures.
+struct PngSet<F: Fn(&str) -> bool> {
+    select: F,
     fail_tag: &'static str,
 }
 
 /// Shared pixel walk. `fail_tag` is `pixel-fail` for the plain render and
 /// `form-events` for the event-driven one, so the two clusters stay apart.
-fn compare_pngs(
+fn compare_pngs<F: Fn(&str) -> bool>(
     store: &Store,
     manifest: &Manifest,
     produced: &Produced,
     floor: f64,
     tags: &mut Vec<String>,
     notes: &mut Vec<String>,
-    set: PngSet,
+    set: &PngSet<F>,
 ) -> Option<TierB> {
     let pngs: Vec<&String> = manifest
         .artifacts
@@ -485,6 +488,32 @@ pub fn scratch_events(base: &Path, index: usize) -> PathBuf {
     base.join(format!("job-evt-{index:06}"))
 }
 
+/// `.evt` fixtures whose events only do something with a JavaScript engine,
+/// and the milestone that will enable them.
+///
+/// These four scripts drive fields whose behaviour is entirely in a field
+/// script (`testing/resources/javascript/`), so a JS-free renderer cannot
+/// reproduce the oracle's event render no matter how complete the form layer
+/// is. They are deferred rather than deleted, and the milestone is named here
+/// so the row is retired instead of forgotten (PLAN.md §M14 rulings, brief
+/// §4.6). The names are the corpus stem, matching both the `.in` template and
+/// the checked-in `.pdf` that expands to the same bytes.
+const DEFERRED_FORM_EVENTS: &[(&str, &str)] = &[
+    ("resources/javascript/bug_1445426", "M15"),
+    ("resources/javascript/bug_1447268", "M15"),
+    ("resources/javascript/mouse_events", "M15"),
+    ("resources/javascript/public_methods", "M15"),
+];
+
+/// The milestone a corpus id's `#form-events` row is deferred to, if any.
+#[must_use]
+pub fn form_events_deferred_to(id: &str) -> Option<&'static str> {
+    let stem = id.strip_suffix(".pdf").or_else(|| id.strip_suffix(".in"))?;
+    DEFERRED_FORM_EVENTS
+        .iter()
+        .find_map(|(name, milestone)| (*name == stem).then_some(*milestone))
+}
+
 /// Scoreboard path for a `--send-events` comparison.
 ///
 /// Distinct from the plain-render row so existing entries do not move.
@@ -509,6 +538,11 @@ pub fn score_form_events(
 ) -> Option<FileResult> {
     let _script = entry.sibling_evt()?;
     if !matches!(state, ToolState::Ready) {
+        return None;
+    }
+    // A JS-only fixture scores no row at all until its milestone lands: a
+    // permanently-failing row would read as work this milestone owes.
+    if form_events_deferred_to(&entry.id).is_some() {
         return None;
     }
     let result = match score_form_events_inner(entry, tool, store, thresholds, scratch, fixup) {
@@ -538,6 +572,10 @@ fn score_form_events_inner(
     let pdf_bytes = crate::generate::materialize_for_run(entry, scratch, fixup)?;
     let key = key_for(&pdf_bytes);
     let path = form_events_path(&entry.id);
+    let script = entry
+        .sibling_evt()
+        .context("scoring form events without a sibling .evt")?;
+    let digest = crate::generate::evt_digest(&std::fs::read(&script)?);
 
     let Ok(manifest) = store.manifest(&key) else {
         return Ok(FileResult {
@@ -552,7 +590,7 @@ fn score_form_events_inner(
     if !manifest
         .artifacts
         .iter()
-        .any(|name| crate::generate::is_events_png(name))
+        .any(|name| crate::generate::is_events_png_for(name, &digest))
     {
         return Ok(FileResult {
             path,
@@ -560,18 +598,16 @@ fn score_form_events_inner(
             tags: vec![tag::FORM_EVENTS.to_owned()],
             tier_a: TierA::default(),
             tier_b: None,
-            notes: "no --send-events golden; run generate-goldens".to_owned(),
+            notes: format!("no --send-events golden for script {digest}; run generate-goldens"),
         });
     }
 
     let input = scratch.join("input.pdf");
     std::fs::write(&input, &pdf_bytes)?;
-    if let Some(src) = entry.sibling_evt() {
-        std::fs::copy(src, scratch.join("input.evt"))?;
-    }
+    std::fs::copy(&script, scratch.join("input.evt"))?;
 
-    let produced =
-        invoke_tool_send_events(tool, &input).context("invoking pdfrum-tool --send-events")?;
+    let produced = invoke_tool_send_events(tool, &input, &digest)
+        .context("invoking pdfrum-tool --send-events")?;
     let mut tags = Vec::new();
     let mut notes = Vec::new();
     if !produced.crashed.is_empty() {
@@ -583,6 +619,7 @@ fn score_form_events_inner(
         &manifest,
         &produced,
         thresholds.ssim_for(&entry.id),
+        &digest,
         &mut tags,
         &mut notes,
     );
@@ -606,7 +643,7 @@ fn score_form_events_inner(
 }
 
 /// `--png --md5 --send-events`, harvesting PNGs under the events name.
-fn invoke_tool_send_events(tool: &ToolPaths, input: &Path) -> Result<Produced> {
+fn invoke_tool_send_events(tool: &ToolPaths, input: &Path, digest: &str) -> Result<Produced> {
     let output = Command::new(&tool.binary)
         .args(crate::oracle::determinism_args(&tool.font_dir))
         .args(["--png", "--md5", "--send-events"])
@@ -626,7 +663,7 @@ fn invoke_tool_send_events(tool: &ToolPaths, input: &Path) -> Result<Produced> {
     produced.artifacts = harvested
         .into_iter()
         .filter_map(|(name, bytes)| {
-            crate::generate::events_png_name(&name).map(|renamed| (renamed, bytes))
+            crate::generate::events_png_name(&name, digest).map(|renamed| (renamed, bytes))
         })
         .collect();
     produced.artifacts.sort();
@@ -1067,14 +1104,18 @@ mod tests {
         // A form-events golden lives in the same directory; comparing it
         // here would fail every existing file that gained one.
         let (root, store) = temp_store("events-ignored");
-        let manifest = manifest_with(&["input.pdf.0.png", "input.pdf.0.events.png"], 1);
+        let manifest = manifest_with(&["input.pdf.0.png", "input.pdf.0.events-1f4a09c3.png"], 1);
         store.write_manifest(&manifest).unwrap();
         let plain = png(8, 8, 40);
         store
             .write_artifact(&manifest.key, "input.pdf.0.png", &plain)
             .unwrap();
         store
-            .write_artifact(&manifest.key, "input.pdf.0.events.png", &png(8, 8, 200))
+            .write_artifact(
+                &manifest.key,
+                "input.pdf.0.events-1f4a09c3.png",
+                &png(8, 8, 200),
+            )
             .unwrap();
 
         let produced = Produced {
@@ -1092,6 +1133,84 @@ mod tests {
     }
 
     #[test]
+    fn two_scripts_sharing_a_golden_key_compare_against_their_own_png() {
+        // bug_736695_2/3/4 expand to byte-identical PDFs, so they share one
+        // golden directory. Before the script digest entered the artifact
+        // name, whichever generated first defined the golden for all three
+        // and the other two passed against the wrong image.
+        let (root, store) = temp_store("events-two-scripts");
+        let manifest = manifest_with(
+            &[
+                "input.pdf.0.png",
+                "input.pdf.0.events-aaaaaaaa.png",
+                "input.pdf.0.events-bbbbbbbb.png",
+            ],
+            1,
+        );
+        store.write_manifest(&manifest).unwrap();
+        let (mine, theirs) = (png(8, 8, 10), png(8, 8, 250));
+        store
+            .write_artifact(&manifest.key, "input.pdf.0.png", &png(8, 8, 40))
+            .unwrap();
+        store
+            .write_artifact(&manifest.key, "input.pdf.0.events-aaaaaaaa.png", &mine)
+            .unwrap();
+        store
+            .write_artifact(&manifest.key, "input.pdf.0.events-bbbbbbbb.png", &theirs)
+            .unwrap();
+
+        // A tool that reproduces script "aaaaaaaa" passes on that row...
+        let produced = Produced {
+            artifacts: vec![("input.pdf.0.events-aaaaaaaa.png".to_owned(), mine)],
+            page_count: Some(1),
+            crashed: vec![],
+        };
+        let (mut tags, mut notes) = (Vec::new(), Vec::new());
+        let tier_b = compare_events_pngs(
+            &store, &manifest, &produced, 0.99, "aaaaaaaa", &mut tags, &mut notes,
+        )
+        .unwrap();
+        assert_eq!(tier_b.pages, 1, "only this script's golden is compared");
+        assert!(tags.is_empty(), "{tags:?}");
+
+        // ...and does not thereby pass the sibling script's row.
+        let (mut tags, mut notes) = (Vec::new(), Vec::new());
+        compare_events_pngs(
+            &store, &manifest, &produced, 0.99, "bbbbbbbb", &mut tags, &mut notes,
+        )
+        .unwrap();
+        assert_eq!(tags, [tag::FORM_EVENTS]);
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn javascript_only_fixtures_are_deferred_to_m15_by_name() {
+        // Both the template and the .pdf that expands to the same bytes.
+        assert_eq!(
+            form_events_deferred_to("resources/javascript/mouse_events.in"),
+            Some("M15")
+        );
+        assert_eq!(
+            form_events_deferred_to("resources/javascript/mouse_events.pdf"),
+            Some("M15")
+        );
+        assert_eq!(
+            form_events_deferred_to("resources/javascript/public_methods.pdf"),
+            Some("M15")
+        );
+        // M14's own fixtures are not deferred.
+        assert_eq!(
+            form_events_deferred_to("resources/pixel/checkbox_radiobutton.in"),
+            None
+        );
+        assert_eq!(
+            form_events_deferred_to("corpus/pdfium/annots/annotation_highlight_no_content.pdf"),
+            None
+        );
+        assert_eq!(DEFERRED_FORM_EVENTS.len(), 4, "the brief counts 4 JS .evt");
+    }
+
+    #[test]
     fn form_events_path_does_not_collide_with_the_plain_id() {
         assert_eq!(
             form_events_path("resources/pixel/checkbox_radiobutton.pdf"),
@@ -1103,23 +1222,29 @@ mod tests {
     #[test]
     fn an_events_mismatch_is_tagged_form_events_not_pixel_fail() {
         let (root, store) = temp_store("events-mismatch");
-        let manifest = manifest_with(&["input.pdf.0.png", "input.pdf.0.events.png"], 1);
+        let manifest = manifest_with(&["input.pdf.0.png", "input.pdf.0.events-1f4a09c3.png"], 1);
         store.write_manifest(&manifest).unwrap();
         store
             .write_artifact(&manifest.key, "input.pdf.0.png", &png(8, 8, 40))
             .unwrap();
         store
-            .write_artifact(&manifest.key, "input.pdf.0.events.png", &png(8, 8, 0))
+            .write_artifact(
+                &manifest.key,
+                "input.pdf.0.events-1f4a09c3.png",
+                &png(8, 8, 0),
+            )
             .unwrap();
 
         let produced = Produced {
-            artifacts: vec![("input.pdf.0.events.png".to_owned(), png(8, 8, 255))],
+            artifacts: vec![("input.pdf.0.events-1f4a09c3.png".to_owned(), png(8, 8, 255))],
             page_count: Some(1),
             crashed: vec![],
         };
         let (mut tags, mut notes) = (Vec::new(), Vec::new());
-        let tier_b =
-            compare_events_pngs(&store, &manifest, &produced, 0.99, &mut tags, &mut notes).unwrap();
+        let tier_b = compare_events_pngs(
+            &store, &manifest, &produced, 0.99, "1f4a09c3", &mut tags, &mut notes,
+        )
+        .unwrap();
         assert!(tier_b.ssim < 0.99);
         assert_eq!(tags, [tag::FORM_EVENTS]);
         assert!(!tags.iter().any(|t| t == tag::PIXEL_FAIL));
