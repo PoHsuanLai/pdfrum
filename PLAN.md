@@ -1201,6 +1201,21 @@ defaults being the script-free behaviour rather than a stub of it — so item
 (3) below attaches a `boa` implementation to an existing trait rather than
 threading a new parameter through routing.
 
+*Withdrawn 2026-09-02 (brief E1, `docs/design/pdfrum-script.md` §7).* The
+second half of that sentence is false and is exactly the sentence that would
+have let the work be under-budgeted: the seam's one call site, `commit::run`,
+is called by nothing but its own tests; `route::apply` has no cascade and
+`route::Context` no field for one; `Cascade::keystroke` has no caller. M14's
+exit criteria could not have caught it — a cascade that changes nothing is
+indistinguishable from one that never runs. **Ruling:** thread the cascade as
+a second parameter on the three entry points that can commit a field
+(`apply`, `choose`, `kill_focus`), not as a `&mut dyn` field on `Context`,
+per the brief's §2.3 argument; that threading is the largest non-`boa` item
+in the milestone and is budgeted as such. Also ruled from the same brief:
+the `/AcroForm /CO` calculation-order walk the M14 brief promised was never
+built (E6) — it is M15's, with the rule that a document with no `/CO` array
+runs no calculation at all (`cpdf_interactiveform.cpp:739-745`).
+
 Settled 2026-09-01: **the engine is boa**, pinned exactly, behind a cargo
 feature, admitted to DEPS.md on the pure-Rust bar (verify its tree with
 `cargo-deny` — no C, no `-sys`). Boa is at 95.5% of test262, register VM,
@@ -1228,11 +1243,21 @@ library (`AFNumber_Format`, `AFDate_*`, `AFSimple_Calculate`, …). Alternatives
   recursion, stack) are configured from `Limits`, the DOM exposes no I/O, and
   a script that exhausts a limit is a `Diagnostic`, never a hang or a panic.
   This is a *stronger* property than the C++ has; say so in the brief.
-- **Exit**: 46/46 `_expected.txt` byte-exact; `AF*` formatting reproduces
-  the oracle's field appearances on the forms corpus (V8 build) or, without
-  it, on hand-verified fixtures; 2/2 V8-gated formfill tests pass; a script
-  with `while(true)` terminates via the limit; boa admitted in DEPS.md with
-  its tree audit.
+- **Exit** *(restated 2026-09-02 by the brief's E3/E5, user-ruled)*:
+  **47/47 `_expected.txt` accounted for — 44 byte-exact, 3 not achievable by
+  construction** (`apply`, `array_buffer`, `immutable_proto` assert V8's own
+  exception strings, not PDF behaviour; matching them would encode another
+  engine's diagnostics as our contract), the 47th fixture (`bug_1445426`)
+  asserting byte-empty output being a real scored assertion; `AF*` formatting
+  reproduces the oracle's field appearances on the forms corpus (V8 build) or,
+  without it, on hand-verified fixtures; **11/11 V8-gated formfill tests**
+  accounted for (M14's count, brief §6.4 — not "2/2"); a script with
+  `while(true)` terminates via the limit; boa admitted in DEPS.md with its
+  tree audit. The sandbox claim above is under measurement (brief E2: boa's
+  limits bound loops, recursion and stack but not memory or regex
+  backtracking) — the user's ruling is *document, provided PDFium+V8 bounds
+  none of them either*, and a prebuilt V8-enabled PDFium is being run to
+  settle that; the outcome is recorded in `docs/status/M15.md` and SPEC §10.
 
 ## M16 — Linearized and progressive loading
 

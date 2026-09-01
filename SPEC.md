@@ -988,6 +988,14 @@ enforced minimum. An undo bound is a property of an interaction session, not
 of a document parse, and no crate but `pdfrum-form` would ever read it —
 see SPEC §15.2 for the argument. The behaviour this clause specifies is
 unchanged; only its home is.)*
+**[spec] 2026-09-02 (M15 brief E4):** `Limits` gains four additive fields for
+the script engine — `max_script_loop_iterations: u64 = 10_000_000`,
+`max_script_recursion: usize = 512`, `max_script_stack: usize = 10_240`, and
+`max_calculate_depth: u32 = 1` (upstream's `busy_` flag permits no nesting at
+all, `cjs_runtime.cpp`). The first three map onto boa's `RuntimeLimits`; what
+they do NOT bound — heap growth and regex backtracking — is recorded in
+`docs/status/M15.md` with the measurement, pending the oracle comparison the
+user asked for.
 
 **[spec] 2026-08-29 (M6 implementation, three corrections to the rulings
 above).**
