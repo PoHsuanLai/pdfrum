@@ -831,13 +831,20 @@ mod face_style_bits {
         assert_eq!(face_styles("PT serif", "Regular") & STYLE_SERIF, 0);
     }
 
-    /// Every face in the oracle's own hermetic font directory, by name, with
-    /// the bits `ReportFace` gives it. **No** face there is serif: the
-    /// Croscore serif family is called `Tinos` and the Gelasio one `Gelasio`,
-    /// and neither spelling contains the word. Reading the bit from PANOSE
-    /// instead gives eleven of these faces a serif bit the oracle gives none
-    /// of them — and splits `Gelasio` three ways, since `Gelasio Bold`'s
-    /// PANOSE disagrees with its own siblings'.
+    /// All thirty distinct faces of the oracle's own hermetic font directory,
+    /// by name, with the bits `ReportFace` gives them — which for the serif,
+    /// script and fixed-pitch terms is **none, for every one of them**.
+    ///
+    /// No face there is serif because the Croscore serif family is spelled
+    /// `Tinos` and the other one `Gelasio`, and neither contains the word.
+    /// Reading the bit from PANOSE instead gives eleven of these faces a serif
+    /// bit and three a fixed-pitch bit, and splits `Gelasio` three ways —
+    /// `Gelasio Bold`'s PANOSE disagrees with its own Regular and Bold Italic
+    /// siblings'. Serif is the 16-point term, the largest in the score.
+    ///
+    /// The whole directory is listed rather than only the faces that were
+    /// wrong, so the test reads as a comparison against the oracle's
+    /// enumeration and not as a list of past failures.
     #[test]
     fn no_face_in_the_hermetic_font_set_is_serif() {
         for (name, style) in [
@@ -848,6 +855,9 @@ mod face_style_bits {
             ("Arimo Italic", "Italic"),
             ("Cousine", "Regular"),
             ("Cousine Bold", "Bold"),
+            ("Cousine Bold Italic", "Bold Italic"),
+            ("Cousine Italic", "Italic"),
+            ("DejaVu Sans Bold", "Bold"),
             ("DejaVu Sans Book", "Book"),
             ("GardinerMod", "Regular"),
             ("Garuda", "Regular"),
@@ -855,7 +865,15 @@ mod face_style_bits {
             ("Gelasio Bold", "Bold"),
             ("Gelasio Bold Italic", "Bold Italic"),
             ("Gelasio Italic", "Italic"),
+            ("Lohit Devanagari", "Regular"),
+            ("Lohit Gurmukhi", "Regular"),
+            ("Lohit Tamil", "Regular"),
+            ("Mukti Narrow", "Regular"),
             ("Noto Color Emoji", "Regular"),
+            ("Noto Sans CJK JP Regular", "Regular"),
+            ("Noto Sans Khmer", "Regular"),
+            ("Noto Sans Symbols2", "Regular"),
+            ("Noto Sans Tibetan", "Regular"),
             ("Tinos", "Regular"),
             ("Tinos Bold", "Bold"),
             ("Tinos Bold Italic", "Bold Italic"),
