@@ -371,48 +371,115 @@ pub fn is_coregistered(mask: &pdfrum_page::ImageMask, image: &ImageData) -> bool
 /// stencil keep its detail over a 3×3 base (`bug_1396266`), and a 100×100
 /// `/SMask` cover the whole of a 400×400 base (`bug_1236`).
 ///
-/// The returned pixmap carries the mask's coverage in its **alpha** (white,
-/// premultiplied by that coverage), so drawing it into a transparent buffer
-/// and reading that buffer's alpha reproduces `CalculateDrawImage`'s 8-bpp
-/// mask bitmap — including the zero it leaves outside the mask's extent,
-/// which luminance over a transparent ground could not distinguish from a
-/// covered black sample. A stencil's inversion is already applied by
+/// The returned plane carries the mask's coverage, one byte per sample, and
+/// [`mask_pixmap`] is what turns it into the pixmap a device draws: white
+/// premultiplied by that coverage, so drawing it into a transparent buffer and
+/// reading that buffer's alpha reproduces `CalculateDrawImage`'s 8-bpp mask
+/// bitmap — including the zero it leaves outside the mask's extent, which
+/// luminance over a transparent ground could not distinguish from a covered
+/// black sample. A stencil's inversion is already applied by
 /// [`pdfrum_page::ImageMask::alpha_at`].
+///
+/// # Why a plane rather than the pixmap
+///
+/// The mask is grey by construction — every pixel of the pixmap this used to
+/// return was `[a, a, a, a]` — and the caller's next act is to box-filter it
+/// toward a device footprint that is, on a soft-masked thumbnail, an order of
+/// magnitude smaller in each axis. Building the four-byte form first makes
+/// both the build and the filter touch four times the bytes they need to, and
+/// three of every four are copies. Returning the plane lets
+/// [`reduced_mask_pixmap`] reduce in one channel and expand once, at the
+/// destination size.
 #[must_use]
-pub fn separate_mask(mask: &pdfrum_page::ImageMask) -> Option<(ImageData, Pixmap)> {
-    let pdfrum_page::ImageMask::Alpha {
-        width,
-        height,
-        alpha,
-        ..
-    } = mask
-    else {
+pub fn separate_mask(mask: &pdfrum_page::ImageMask) -> Option<(ImageData, Vec<u8>)> {
+    let pdfrum_page::ImageMask::Alpha { width, height, .. } = mask else {
         return None;
     };
     let (w, h) = (*width, *height);
     if w == 0 || h == 0 {
         return None;
     }
-    let mut out = Pixmap::new(w, h);
+    let len = (w as usize).checked_mul(h as usize)?;
+    let mut plane = Vec::with_capacity(len);
     for y in 0..h {
         for x in 0..w {
-            let a = mask.alpha_at(x, y);
-            out.set_pixel(x, y, [a, a, a, a]);
+            plane.push(mask.alpha_at(x, y));
         }
     }
     // The descriptor the resample selection reads: the mask's own size is
     // what it is scaled from, and `/Interpolate` is not inherited — the C++
     // hands `CalculateDrawImage` the *base's* resample options, and the
     // stretch engine's own size heuristic then decides.
+    //
+    // `Pixels::Gray8` names the plane's shape for `resample_quality`'s
+    // component count and nothing reads its samples through this descriptor,
+    // so it borrows the plane's length rather than a second copy of it: the
+    // buffer this used to clone was the mask's whole sample array, allocated
+    // and memcpy'd on every draw so that `components()` could answer 1.
     let dict = ImageData {
         width: w,
         height: h,
-        pixels: Pixels::Gray8(alpha.clone()),
+        pixels: Pixels::Gray8(Box::default()),
         mask: None,
         matte: None,
         interpolate: false,
     };
-    Some((dict, out))
+    Some((dict, plane))
+}
+
+/// A coverage plane as the pixmap a device draws: white, premultiplied by the
+/// coverage, which is `[a, a, a, a]` per sample.
+///
+/// A plane of the wrong length yields a transparent pixmap rather than reading
+/// out of range — the same degradation the rest of this module's bounds checks
+/// produce on a malformed file.
+#[must_use]
+pub fn mask_pixmap(plane: &[u8], width: u32, height: u32) -> Pixmap {
+    let mut out = Pixmap::new(width, height);
+    if plane.len() != (width as usize).saturating_mul(height as usize) {
+        return out;
+    }
+    for (slot, &a) in out.data_mut().chunks_exact_mut(4).zip(plane.iter()) {
+        slot.copy_from_slice(&[a, a, a, a]);
+    }
+    out
+}
+
+/// A coverage plane reduced toward a device footprint and expanded into the
+/// pixmap a device draws, with the placement transform that now maps it.
+///
+/// This is [`crate::stretch::prescale`] for the soft-mask path, and it differs
+/// from it in exactly one way: the box filter runs over **one** channel rather
+/// than four, and the expansion to four happens afterwards, at the reduced
+/// size. Every output byte is identical to prescaling the expanded pixmap —
+/// the filter is per-channel and the four channels are equal — and
+/// `the_gray_reduction_is_the_rgba_reduction_on_a_gray_image` in
+/// [`crate::stretch`] pins that.
+///
+/// On a soft-masked thumbnail the saving is the whole point rather than a
+/// margin: `image_en_fqa` reduces 29.8 million mask samples per render at
+/// roughly 8.3x in each axis, so the four-channel form built and filtered
+/// 119 MB where one channel needs 30 MB, and the expanded buffer it hands the
+/// device is 1/69th the size of the one it used to build.
+#[must_use]
+pub fn reduced_mask_pixmap(
+    plane: &[u8],
+    width: u32,
+    height: u32,
+    to_device: kurbo::Affine,
+    dest_width: f64,
+    dest_height: f64,
+) -> (Pixmap, kurbo::Affine) {
+    match crate::stretch::reduction_for(width, height, dest_width, dest_height) {
+        Some((new_w, new_h)) => {
+            let reduced = crate::stretch::reduce_gray_to(plane, width, height, new_w, new_h);
+            (
+                mask_pixmap(&reduced, new_w, new_h),
+                crate::stretch::reduction_transform(to_device, width, height, new_w, new_h),
+            )
+        }
+        None => (mask_pixmap(plane, width, height), to_device),
+    }
 }
 
 /// One pixel of the `/Matte` un-premultiplication (`CalculateDrawImage`,
@@ -720,8 +787,10 @@ mod tests {
             alpha: vec![0, 200].into_boxed_slice(),
             stencil: false,
         };
-        let (dict, px) = separate_mask(&mask).expect("an alpha mask yields a pixmap");
+        let (dict, plane) = separate_mask(&mask).expect("an alpha mask yields a plane");
         assert_eq!((dict.width, dict.height), (2, 1));
+        assert_eq!(plane, vec![0, 200]);
+        let px = mask_pixmap(&plane, dict.width, dict.height);
         assert_eq!(px.pixel(0, 0), Some([0, 0, 0, 0]));
         assert_eq!(px.pixel(1, 0), Some([200, 200, 200, 200]));
 
@@ -732,12 +801,91 @@ mod tests {
             alpha: vec![0].into_boxed_slice(),
             stencil: true,
         };
-        let (_, px) = separate_mask(&stencil).expect("a stencil yields a pixmap");
+        let (d, plane) = separate_mask(&stencil).expect("a stencil yields a plane");
         assert_eq!(
-            px.pixel(0, 0),
+            mask_pixmap(&plane, d.width, d.height).pixel(0, 0),
             Some([255; 4]),
             "a clear stencil bit is opaque"
         );
+    }
+
+    /// The descriptor `separate_mask` returns is read for its *shape* — the
+    /// resample selection's component count and the two dimensions — and never
+    /// for its samples, which is why it no longer clones the mask's whole
+    /// buffer to carry them.
+    ///
+    /// If a future edit starts reading `dict.pixels`, this test is the one that
+    /// says the samples were never there.
+    #[test]
+    fn the_separate_masks_descriptor_carries_shape_and_not_samples() {
+        let mask = ImageMask::Alpha {
+            width: 4,
+            height: 3,
+            alpha: vec![7; 12].into_boxed_slice(),
+            stencil: false,
+        };
+        let (dict, plane) = separate_mask(&mask).expect("an alpha mask yields a plane");
+        assert_eq!(
+            dict.pixels.components(),
+            1,
+            "the component count is the use"
+        );
+        assert_eq!((dict.width, dict.height), (4, 3));
+        assert_eq!(plane.len(), 12, "the coverage is in the plane");
+    }
+
+    /// A plane whose length disagrees with the dimensions yields a transparent
+    /// pixmap rather than a panic or an out-of-range read.
+    #[test]
+    fn a_mask_plane_of_the_wrong_length_is_transparent() {
+        let px = mask_pixmap(&[1, 2, 3], 4, 4);
+        assert_eq!((px.width(), px.height()), (4, 4));
+        assert!(px.data().iter().all(|b| *b == 0));
+    }
+
+    /// [`reduced_mask_pixmap`] must produce exactly what prescaling the
+    /// expanded pixmap produced, transform included — that equality is the
+    /// whole licence for reducing in one channel, and the conformance gate
+    /// cannot see a mask the corpus happens not to exercise.
+    #[test]
+    #[expect(
+        clippy::float_cmp,
+        reason = "the placement transform must be bit-identical to the one \
+                  `prescale` produced, not merely close: a caller compares it \
+                  for equality nowhere, but a difference in the last bit would \
+                  land the mask on a different device pixel"
+    )]
+    fn the_reduced_mask_pixmap_is_the_prescaled_expanded_one() {
+        for (w, h, dw, dh) in [
+            (64_u32, 40_u32, 8.0_f64, 5.0_f64),
+            (137, 85, 16.4, 10.2),
+            (1339, 81, 391.5, 10.2),
+            (9, 9, 9.0, 9.0),
+            (9, 9, 20.0, 20.0),
+            (13, 7, 1.0, 1.0),
+        ] {
+            let plane: Vec<u8> = (0..w * h).map(|i| (i * 37 % 251) as u8).collect();
+            let at = kurbo::Affine::new([1.5, 0.0, 0.0, 2.5, 3.0, 4.0]);
+
+            let (got, got_at) = reduced_mask_pixmap(&plane, w, h, at, dw, dh);
+            let expanded = mask_pixmap(&plane, w, h);
+            let (want, want_at) = match crate::stretch::prescale(&expanded, at, dw, dh) {
+                Some(pair) => pair,
+                None => (expanded, at),
+            };
+
+            assert_eq!(
+                (got.width(), got.height()),
+                (want.width(), want.height()),
+                "{w}x{h} -> {dw}x{dh}"
+            );
+            assert_eq!(got.data(), want.data(), "{w}x{h} -> {dw}x{dh}");
+            assert_eq!(
+                got_at.as_coeffs(),
+                want_at.as_coeffs(),
+                "{w}x{h} -> {dw}x{dh}"
+            );
+        }
     }
 
     #[test]
