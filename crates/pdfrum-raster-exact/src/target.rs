@@ -115,7 +115,7 @@ impl Target {
         len: i32,
         y: i32,
         coverage: u8,
-        src: [u8; 4],
+        src: Source,
         mode: BlendMode,
     ) {
         let Some((x0, x1, row)) = self.span_range(x, len, y) else {
@@ -216,7 +216,7 @@ impl Target {
             let Some(src) = sample(col, row) else {
                 continue;
             };
-            blend_into(dest, src, cov, mode);
+            blend_into(dest, Source::Premultiplied(src), cov, mode);
         }
     }
 
@@ -282,7 +282,27 @@ fn clip_span(
     ))
 }
 
-/// Composite one premultiplied source pixel into a four-byte destination slot.
+/// The colour a span composites, in the alpha convention it arrived in.
+///
+/// The distinction is not cosmetic and it is not a micro-optimisation: a
+/// premultiplied byte at alpha `a` can express only `a + 1` of the 256
+/// straight channel values, so storing a straight colour premultiplied and
+/// reading it back **quantises it**. Every solid brush already has its
+/// straight colour in hand — the engine hands the device a `peniko::Color` —
+/// and the oracle's own AGG targets are straight-alpha `kBgra`, so premultiplying
+/// on the way in was a loss with nothing on the other side of it.
+///
+/// [`Source::Premultiplied`] is for a source that has no straight form left to
+/// preserve: an image texel, or a layer's own pixels being composited back.
+#[derive(Debug, Clone, Copy)]
+pub enum Source {
+    /// A straight RGB triple plus its alpha — a solid brush.
+    Straight([u8; 3], u8),
+    /// A premultiplied RGBA pixel — an image sample or a layer's pixel.
+    Premultiplied([u8; 4]),
+}
+
+/// Composite one source pixel into a four-byte destination slot.
 ///
 /// A free function over `&mut [u8]` rather than a method taking `(x, y)`,
 /// because the span loops above already hold the destination row as a slice
@@ -296,13 +316,20 @@ fn clip_span(
 /// backend composites and a pixel the engine composites in its own offscreen
 /// buffers must agree exactly, and one authority is how that is guaranteed
 /// rather than hoped for.
-fn blend_into(dest: &mut [u8], src: [u8; 4], coverage: u8, mode: BlendMode) {
+fn blend_into(dest: &mut [u8], src: Source, coverage: u8, mode: BlendMode) {
     let (Some(&r), Some(&g), Some(&b), Some(&a)) =
         (dest.first(), dest.get(1), dest.get(2), dest.get(3))
     else {
         return;
     };
-    let out = blend::composite_premultiplied([r, g, b, a], src, coverage, mode);
+    let out = match src {
+        Source::Straight(rgb, alpha) => {
+            blend::composite_solid([r, g, b, a], rgb, alpha, coverage, mode)
+        }
+        Source::Premultiplied(px) => {
+            blend::composite_premultiplied([r, g, b, a], px, coverage, mode)
+        }
+    };
     if let Some(slot) = dest.get_mut(..4) {
         slot.copy_from_slice(&out);
     }
@@ -312,8 +339,8 @@ fn blend_into(dest: &mut [u8], src: [u8; 4], coverage: u8, mode: BlendMode) {
 mod tests {
     use super::*;
 
-    fn opaque(r: u8, g: u8, b: u8) -> [u8; 4] {
-        [r, g, b, 255]
+    fn opaque(r: u8, g: u8, b: u8) -> Source {
+        Source::Straight([r, g, b], 255)
     }
 
     /// A mask whose bytes are all distinct modulo 251, so a slice taken from
@@ -472,7 +499,7 @@ mod tests {
     fn a_varying_span_skips_where_the_source_has_nothing() {
         let mut t = Target::new(4, 1, peniko::Color::TRANSPARENT);
         t.blend_span_with(0, 4, 0, 255, BlendMode::Normal, |x, _| {
-            (x % 2 == 0).then_some(opaque(0, 0, 255))
+            (x % 2 == 0).then_some([0, 0, 255, 255])
         });
         assert_eq!(t.pixels().pixel(0, 0).map(|p| p[3]), Some(255));
         assert_eq!(t.pixels().pixel(1, 0).map(|p| p[3]), Some(0));
