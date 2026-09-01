@@ -562,7 +562,46 @@ changing the cold convention; it is documented and ratcheted deliberately.
   on its own terms instead.
 
 - **P3 — ~~The scalar conversion loops~~ → the walk's per-object overhead.**
-  **Retargeted 2026-08-31, after P1 and P2 took the original target away.** The
+  **DONE** (docs/status/M12b-P3.md). The engine half of `vector_paths_1751`
+  falls **2.526 → 1.451 ms (−42.6%)** and its per-object constant **504 → 290
+  ns**, for **−27.9%** on the whole render, from two changes that are neither a
+  loop nor an arena: the cull test's exact box is now **bracketed** between a
+  subset and a superset that decide it without solving a cubic (`b7fe49e`,
+  −14.8%), and the five heap buffers a path object took to hand the device one
+  geometry are now one (`d51ef60`, −13.3%). Both byte-identical on the
+  conformance scoreboard over all 1675 files. **The five named suspects
+  measured**, and two of them were nothing: the `RenderCtx` threading is one
+  field-set per render on a flat object list, and **no measurement found a cost
+  in the dispatch `match`** — a five-variant jump table was never the expense;
+  what the arms *call* was.
+
+  **Two corrections came out of it, and neither reverses a verdict.** P2's
+  "allocation in the walk is 0.6%" was taken on a `Site` list covering `walk.rs`
+  and `clip.rs`; with `paint.rs` and `path.rs` counted the same render was making
+  **21421 allocations and 5.6 MiB**, not one. And `shading_axial_radial`'s
+  "61% `pattern.rs` residue" is **not `pattern.rs`** — it is the Coons/tensor
+  mesh rasterizer in `shading/patch.rs`, which `Phase::Shading` never wrapped
+  because the mesh kinds do not reach `draw_to_pixmap`. **That item should be
+  re-aimed rather than closed**: it is 28.7 ms of `shading_axial_radial` and
+  47.1 ms of `shading_tcpdf_030`, it is the largest unattributed engine cost
+  left in the corpus, and `shading_coons` — a Coons document with *zero* patch
+  calls — is the control to start from. The arena verdict and the colour-
+  conversion closure are untouched by both.
+
+  **Three non-results are recorded** (§6), one of them a *reverted* change that
+  measured zero because LLVM was already doing it. **And a harness trap is
+  documented at length** (§4): `profile`'s plain loop rebuilds the page graph
+  every iteration and is 82% `pdfrum-page` on a content-heavy document, so it
+  produced a reproducible **+5% "regression"** on `vector_en_tem` that survived
+  a bisection and does not exist — `--sample` shows the same document at −1.1%
+  with every phase agreeing to three decimals. That is the third false finding
+  this milestone; read §4 before trusting a number from that binary.
+  **Still owed: `ratchet update` on an idle machine**, now carrying this item's
+  improvements too, and §9 warns that a `ratchet check` reads whatever the last
+  `cargo bench` left under `target/criterion` — which during this session was
+  two days stale and named a regression that is §4's ghost.
+
+  *Original brief:* **Retargeted 2026-08-31, after P1 and P2 took the original target away.** The
   item as first written aimed at `to_pixmap`'s ~4 us per output pixel (M12 §10).
   Two independent measurements retired that premise before this item started,
   which is the system working rather than a plan failing:
