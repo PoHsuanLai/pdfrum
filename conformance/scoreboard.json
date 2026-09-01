@@ -1,10 +1,11 @@
 {
-  "generated_at": "2026-08-29T19:37:52Z",
+  "generated_at": "2026-09-01T07:58:11Z",
   "totals": {
-    "files": 1675,
-    "pass": 1624,
-    "fail": 51,
+    "files": 1713,
+    "pass": 1639,
+    "fail": 74,
     "by_tag": {
+      "form-events": 23,
       "page-count": 2,
       "pixel-fail": 42,
       "tierA-mismatch": 9
@@ -14931,6 +14932,32 @@
       "notes": ""
     },
     {
+      "path": "corpus/pdfium/annots/annotation_highlight_author_content.pdf#form-events",
+      "status": "fail",
+      "tags": [
+        "form-events"
+      ],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": {
+        "ssim": 0.976851,
+        "exact": false,
+        "max_channel_diff": 255,
+        "pages": 1
+      },
+      "notes": "ssim 0.976851 below floor 0.990000"
+    },
+    {
       "path": "corpus/pdfium/annots/annotation_highlight_empty_content.pdf",
       "status": "pass",
       "tags": [],
@@ -14950,6 +14977,30 @@
           "matched": 1,
           "nonempty": 1,
           "nonempty_matched": 1
+        }
+      },
+      "tierB": {
+        "ssim": 0.999999,
+        "exact": false,
+        "max_channel_diff": 6,
+        "pages": 1
+      },
+      "notes": ""
+    },
+    {
+      "path": "corpus/pdfium/annots/annotation_highlight_empty_content.pdf#form-events",
+      "status": "pass",
+      "tags": [],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
         }
       },
       "tierB": {
@@ -15021,6 +15072,32 @@
       "notes": ""
     },
     {
+      "path": "corpus/pdfium/annots/annotation_highlight_long_content.pdf#form-events",
+      "status": "fail",
+      "tags": [
+        "form-events"
+      ],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": {
+        "ssim": 0.924741,
+        "exact": false,
+        "max_channel_diff": 255,
+        "pages": 1
+      },
+      "notes": "ssim 0.924741 below floor 0.990000"
+    },
+    {
       "path": "corpus/pdfium/annots/annotation_highlight_no_author.pdf",
       "status": "pass",
       "tags": [],
@@ -15049,6 +15126,32 @@
         "pages": 1
       },
       "notes": ""
+    },
+    {
+      "path": "corpus/pdfium/annots/annotation_highlight_no_author.pdf#form-events",
+      "status": "fail",
+      "tags": [
+        "form-events"
+      ],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": {
+        "ssim": 0.978698,
+        "exact": false,
+        "max_channel_diff": 255,
+        "pages": 1
+      },
+      "notes": "ssim 0.978698 below floor 0.990000"
     },
     {
       "path": "corpus/pdfium/annots/annotation_highlight_no_author_no_content.pdf",
@@ -15081,6 +15184,30 @@
       "notes": ""
     },
     {
+      "path": "corpus/pdfium/annots/annotation_highlight_no_author_no_content.pdf#form-events",
+      "status": "pass",
+      "tags": [],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": {
+        "ssim": 0.999999,
+        "exact": false,
+        "max_channel_diff": 6,
+        "pages": 1
+      },
+      "notes": ""
+    },
+    {
       "path": "corpus/pdfium/annots/annotation_highlight_no_content.pdf",
       "status": "pass",
       "tags": [],
@@ -15100,6 +15227,30 @@
           "matched": 1,
           "nonempty": 1,
           "nonempty_matched": 1
+        }
+      },
+      "tierB": {
+        "ssim": 0.999999,
+        "exact": false,
+        "max_channel_diff": 6,
+        "pages": 1
+      },
+      "notes": ""
+    },
+    {
+      "path": "corpus/pdfium/annots/annotation_highlight_no_content.pdf#form-events",
+      "status": "pass",
+      "tags": [],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
         }
       },
       "tierB": {
@@ -33020,6 +33171,32 @@
       "notes": ""
     },
     {
+      "path": "resources/javascript/bug_1445426.in#form-events",
+      "status": "fail",
+      "tags": [
+        "form-events"
+      ],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": {
+        "ssim": 0.971025,
+        "exact": false,
+        "max_channel_diff": 240,
+        "pages": 2
+      },
+      "notes": "ssim 0.971025 below floor 0.990000"
+    },
+    {
       "path": "resources/javascript/bug_1445426.pdf",
       "status": "pass",
       "tags": [],
@@ -33050,6 +33227,32 @@
         "pages": 2
       },
       "notes": ""
+    },
+    {
+      "path": "resources/javascript/bug_1445426.pdf#form-events",
+      "status": "fail",
+      "tags": [
+        "form-events"
+      ],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": {
+        "ssim": 0.971025,
+        "exact": false,
+        "max_channel_diff": 240,
+        "pages": 2
+      },
+      "notes": "ssim 0.971025 below floor 0.990000"
     },
     {
       "path": "resources/javascript/bug_1447268.in",
@@ -33090,6 +33293,32 @@
       "notes": ""
     },
     {
+      "path": "resources/javascript/bug_1447268.in#form-events",
+      "status": "fail",
+      "tags": [
+        "form-events"
+      ],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": {
+        "ssim": 0.986923,
+        "exact": false,
+        "max_channel_diff": 209,
+        "pages": 5
+      },
+      "notes": "ssim 0.986923 below floor 0.990000"
+    },
+    {
       "path": "resources/javascript/bug_1447268.pdf",
       "status": "pass",
       "tags": [],
@@ -33126,6 +33355,32 @@
         "pages": 5
       },
       "notes": ""
+    },
+    {
+      "path": "resources/javascript/bug_1447268.pdf#form-events",
+      "status": "fail",
+      "tags": [
+        "form-events"
+      ],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": {
+        "ssim": 0.986923,
+        "exact": false,
+        "max_channel_diff": 209,
+        "pages": 5
+      },
+      "notes": "ssim 0.986923 below floor 0.990000"
     },
     {
       "path": "resources/javascript/bug_361.in",
@@ -34626,6 +34881,30 @@
       "notes": ""
     },
     {
+      "path": "resources/javascript/mouse_events.in#form-events",
+      "status": "pass",
+      "tags": [],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": {
+        "ssim": 1.000000,
+        "exact": false,
+        "max_channel_diff": 1,
+        "pages": 1
+      },
+      "notes": ""
+    },
+    {
       "path": "resources/javascript/mouse_events.pdf",
       "status": "pass",
       "tags": [],
@@ -34643,6 +34922,30 @@
         "text": {
           "pages": 1,
           "matched": 1,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": {
+        "ssim": 1.000000,
+        "exact": false,
+        "max_channel_diff": 1,
+        "pages": 1
+      },
+      "notes": ""
+    },
+    {
+      "path": "resources/javascript/mouse_events.pdf#form-events",
+      "status": "pass",
+      "tags": [],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
           "nonempty": 0,
           "nonempty_matched": 0
         }
@@ -34686,6 +34989,32 @@
       "notes": ""
     },
     {
+      "path": "resources/javascript/public_methods.in#form-events",
+      "status": "fail",
+      "tags": [
+        "form-events"
+      ],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": {
+        "ssim": 0.986814,
+        "exact": false,
+        "max_channel_diff": 240,
+        "pages": 1
+      },
+      "notes": "ssim 0.986814 below floor 0.990000"
+    },
+    {
       "path": "resources/javascript/public_methods.pdf",
       "status": "pass",
       "tags": [],
@@ -34714,6 +35043,32 @@
         "pages": 1
       },
       "notes": ""
+    },
+    {
+      "path": "resources/javascript/public_methods.pdf#form-events",
+      "status": "fail",
+      "tags": [
+        "form-events"
+      ],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": {
+        "ssim": 0.986814,
+        "exact": false,
+        "max_channel_diff": 240,
+        "pages": 1
+      },
+      "notes": "ssim 0.986814 below floor 0.990000"
     },
     {
       "path": "resources/javascript/unsupported.in",
@@ -37129,6 +37484,30 @@
       "notes": ""
     },
     {
+      "path": "resources/pixel/bug_113910.in#form-events",
+      "status": "pass",
+      "tags": [],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": {
+        "ssim": 0.991774,
+        "exact": false,
+        "max_channel_diff": 153,
+        "pages": 1
+      },
+      "notes": ""
+    },
+    {
       "path": "resources/pixel/bug_113910.pdf",
       "status": "pass",
       "tags": [],
@@ -37154,6 +37533,30 @@
         "ssim": 0.999990,
         "exact": false,
         "max_channel_diff": 1,
+        "pages": 1
+      },
+      "notes": ""
+    },
+    {
+      "path": "resources/pixel/bug_113910.pdf#form-events",
+      "status": "pass",
+      "tags": [],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": {
+        "ssim": 0.991774,
+        "exact": false,
+        "max_channel_diff": 153,
         "pages": 1
       },
       "notes": ""
@@ -38397,6 +38800,32 @@
       "notes": ""
     },
     {
+      "path": "resources/pixel/bug_1372651.in#form-events",
+      "status": "fail",
+      "tags": [
+        "form-events"
+      ],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": {
+        "ssim": 0.918875,
+        "exact": false,
+        "max_channel_diff": 255,
+        "pages": 1
+      },
+      "notes": "ssim 0.918875 below floor 0.990000"
+    },
+    {
       "path": "resources/pixel/bug_1372651.pdf",
       "status": "pass",
       "tags": [],
@@ -38425,6 +38854,32 @@
         "pages": 1
       },
       "notes": ""
+    },
+    {
+      "path": "resources/pixel/bug_1372651.pdf#form-events",
+      "status": "fail",
+      "tags": [
+        "form-events"
+      ],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": {
+        "ssim": 0.918875,
+        "exact": false,
+        "max_channel_diff": 255,
+        "pages": 1
+      },
+      "notes": "ssim 0.918875 below floor 0.990000"
     },
     {
       "path": "resources/pixel/bug_1374.in",
@@ -41687,6 +42142,32 @@
       "notes": ""
     },
     {
+      "path": "resources/pixel/bug_477200528.in#form-events",
+      "status": "fail",
+      "tags": [
+        "form-events"
+      ],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": {
+        "ssim": 0.975664,
+        "exact": false,
+        "max_channel_diff": 135,
+        "pages": 1
+      },
+      "notes": "ssim 0.975664 below floor 0.990000"
+    },
+    {
       "path": "resources/pixel/bug_477200528.pdf",
       "status": "pass",
       "tags": [],
@@ -41715,6 +42196,32 @@
         "pages": 1
       },
       "notes": ""
+    },
+    {
+      "path": "resources/pixel/bug_477200528.pdf#form-events",
+      "status": "fail",
+      "tags": [
+        "form-events"
+      ],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": {
+        "ssim": 0.975664,
+        "exact": false,
+        "max_channel_diff": 135,
+        "pages": 1
+      },
+      "notes": "ssim 0.975664 below floor 0.990000"
     },
     {
       "path": "resources/pixel/bug_491_invisible.in",
@@ -43619,6 +44126,30 @@
       "notes": ""
     },
     {
+      "path": "resources/pixel/bug_736695_2.in#form-events",
+      "status": "pass",
+      "tags": [],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": {
+        "ssim": 0.999998,
+        "exact": false,
+        "max_channel_diff": 19,
+        "pages": 1
+      },
+      "notes": ""
+    },
+    {
       "path": "resources/pixel/bug_736695_3.in",
       "status": "pass",
       "tags": [],
@@ -43636,6 +44167,30 @@
         "text": {
           "pages": 1,
           "matched": 1,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": {
+        "ssim": 0.999998,
+        "exact": false,
+        "max_channel_diff": 19,
+        "pages": 1
+      },
+      "notes": ""
+    },
+    {
+      "path": "resources/pixel/bug_736695_3.in#form-events",
+      "status": "pass",
+      "tags": [],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
           "nonempty": 0,
           "nonempty_matched": 0
         }
@@ -43679,6 +44234,30 @@
       "notes": ""
     },
     {
+      "path": "resources/pixel/bug_736695_4.in#form-events",
+      "status": "pass",
+      "tags": [],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": {
+        "ssim": 0.999998,
+        "exact": false,
+        "max_channel_diff": 19,
+        "pages": 1
+      },
+      "notes": ""
+    },
+    {
       "path": "resources/pixel/bug_736695_4.pdf",
       "status": "pass",
       "tags": [],
@@ -43696,6 +44275,30 @@
         "text": {
           "pages": 1,
           "matched": 1,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": {
+        "ssim": 0.999998,
+        "exact": false,
+        "max_channel_diff": 19,
+        "pages": 1
+      },
+      "notes": ""
+    },
+    {
+      "path": "resources/pixel/bug_736695_4.pdf#form-events",
+      "status": "pass",
+      "tags": [],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
           "nonempty": 0,
           "nonempty_matched": 0
         }
@@ -44701,6 +45304,30 @@
       "notes": ""
     },
     {
+      "path": "resources/pixel/checkbox_radiobutton.in#form-events",
+      "status": "pass",
+      "tags": [],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": {
+        "ssim": 0.990167,
+        "exact": false,
+        "max_channel_diff": 170,
+        "pages": 1
+      },
+      "notes": ""
+    },
+    {
       "path": "resources/pixel/checkbox_radiobutton.pdf",
       "status": "pass",
       "tags": [],
@@ -44726,6 +45353,30 @@
         "ssim": 0.999978,
         "exact": false,
         "max_channel_diff": 23,
+        "pages": 1
+      },
+      "notes": ""
+    },
+    {
+      "path": "resources/pixel/checkbox_radiobutton.pdf#form-events",
+      "status": "pass",
+      "tags": [],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": {
+        "ssim": 0.990167,
+        "exact": false,
+        "max_channel_diff": 170,
         "pages": 1
       },
       "notes": ""
@@ -44945,6 +45596,30 @@
       "notes": ""
     },
     {
+      "path": "resources/pixel/combobox_form.in#form-events",
+      "status": "pass",
+      "tags": [],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": {
+        "ssim": 0.994617,
+        "exact": false,
+        "max_channel_diff": 255,
+        "pages": 1
+      },
+      "notes": ""
+    },
+    {
       "path": "resources/pixel/combobox_form.pdf",
       "status": "pass",
       "tags": [],
@@ -44970,6 +45645,30 @@
         "ssim": 0.999999,
         "exact": false,
         "max_channel_diff": 1,
+        "pages": 1
+      },
+      "notes": ""
+    },
+    {
+      "path": "resources/pixel/combobox_form.pdf#form-events",
+      "status": "pass",
+      "tags": [],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": {
+        "ssim": 0.994617,
+        "exact": false,
+        "max_channel_diff": 255,
         "pages": 1
       },
       "notes": ""
@@ -45335,6 +46034,32 @@
       "notes": ""
     },
     {
+      "path": "resources/pixel/form_textfield_focused_ltr.in#form-events",
+      "status": "fail",
+      "tags": [
+        "form-events"
+      ],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": {
+        "ssim": 0.930355,
+        "exact": false,
+        "max_channel_diff": 255,
+        "pages": 1
+      },
+      "notes": "ssim 0.930355 below floor 0.990000"
+    },
+    {
       "path": "resources/pixel/form_textfield_focused_rtl.in",
       "status": "pass",
       "tags": [],
@@ -45363,6 +46088,32 @@
         "pages": 1
       },
       "notes": ""
+    },
+    {
+      "path": "resources/pixel/form_textfield_focused_rtl.in#form-events",
+      "status": "fail",
+      "tags": [
+        "form-events"
+      ],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": {
+        "ssim": 0.930355,
+        "exact": false,
+        "max_channel_diff": 255,
+        "pages": 1
+      },
+      "notes": "ssim 0.930355 below floor 0.990000"
     },
     {
       "path": "resources/pixel/form_textfield_focused_rtl.pdf",
@@ -45395,6 +46146,32 @@
       "notes": ""
     },
     {
+      "path": "resources/pixel/form_textfield_focused_rtl.pdf#form-events",
+      "status": "fail",
+      "tags": [
+        "form-events"
+      ],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": {
+        "ssim": 0.930355,
+        "exact": false,
+        "max_channel_diff": 255,
+        "pages": 1
+      },
+      "notes": "ssim 0.930355 below floor 0.990000"
+    },
+    {
       "path": "resources/pixel/form_textfield_selected_ltr.in",
       "status": "pass",
       "tags": [],
@@ -45425,6 +46202,32 @@
       "notes": ""
     },
     {
+      "path": "resources/pixel/form_textfield_selected_ltr.in#form-events",
+      "status": "fail",
+      "tags": [
+        "form-events"
+      ],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": {
+        "ssim": 0.930355,
+        "exact": false,
+        "max_channel_diff": 255,
+        "pages": 1
+      },
+      "notes": "ssim 0.930355 below floor 0.990000"
+    },
+    {
       "path": "resources/pixel/form_textfield_selected_rtl.in",
       "status": "pass",
       "tags": [],
@@ -45453,6 +46256,32 @@
         "pages": 1
       },
       "notes": ""
+    },
+    {
+      "path": "resources/pixel/form_textfield_selected_rtl.in#form-events",
+      "status": "fail",
+      "tags": [
+        "form-events"
+      ],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": {
+        "ssim": 0.930355,
+        "exact": false,
+        "max_channel_diff": 255,
+        "pages": 1
+      },
+      "notes": "ssim 0.930355 below floor 0.990000"
     },
     {
       "path": "resources/pixel/freetext_annotation_with_ap.in",
@@ -46299,6 +47128,32 @@
       "notes": ""
     },
     {
+      "path": "resources/pixel/password.in#form-events",
+      "status": "fail",
+      "tags": [
+        "form-events"
+      ],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": {
+        "ssim": 0.953963,
+        "exact": false,
+        "max_channel_diff": 255,
+        "pages": 1
+      },
+      "notes": "ssim 0.953963 below floor 0.990000"
+    },
+    {
       "path": "resources/pixel/password.pdf",
       "status": "pass",
       "tags": [],
@@ -46327,6 +47182,32 @@
         "pages": 1
       },
       "notes": ""
+    },
+    {
+      "path": "resources/pixel/password.pdf#form-events",
+      "status": "fail",
+      "tags": [
+        "form-events"
+      ],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": {
+        "ssim": 0.953963,
+        "exact": false,
+        "max_channel_diff": 255,
+        "pages": 1
+      },
+      "notes": "ssim 0.953963 below floor 0.990000"
     },
     {
       "path": "resources/pixel/radial_shading_point_at_border.in",
@@ -46723,6 +47604,32 @@
       "notes": ""
     },
     {
+      "path": "resources/pixel/scrollable_widgets1.in#form-events",
+      "status": "fail",
+      "tags": [
+        "form-events"
+      ],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": {
+        "ssim": 0.986707,
+        "exact": false,
+        "max_channel_diff": 240,
+        "pages": 1
+      },
+      "notes": "ssim 0.986707 below floor 0.990000"
+    },
+    {
       "path": "resources/pixel/scrollable_widgets1.pdf",
       "status": "pass",
       "tags": [],
@@ -46753,6 +47660,32 @@
       "notes": ""
     },
     {
+      "path": "resources/pixel/scrollable_widgets1.pdf#form-events",
+      "status": "fail",
+      "tags": [
+        "form-events"
+      ],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": {
+        "ssim": 0.986707,
+        "exact": false,
+        "max_channel_diff": 240,
+        "pages": 1
+      },
+      "notes": "ssim 0.986707 below floor 0.990000"
+    },
+    {
       "path": "resources/pixel/scrollable_widgets2.in",
       "status": "pass",
       "tags": [],
@@ -46781,6 +47714,32 @@
         "pages": 1
       },
       "notes": ""
+    },
+    {
+      "path": "resources/pixel/scrollable_widgets2.in#form-events",
+      "status": "fail",
+      "tags": [
+        "form-events"
+      ],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": {
+        "ssim": 0.986707,
+        "exact": false,
+        "max_channel_diff": 240,
+        "pages": 1
+      },
+      "notes": "ssim 0.986707 below floor 0.990000"
     },
     {
       "path": "resources/pixel/shade-tensor.in",
