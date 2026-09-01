@@ -390,8 +390,18 @@ fail, the same 18 `form-events` / 2 `page-count` / 42 `pixel-fail` / 9
 
 ### Open item
 
-**Nothing constructs a `LiveState` yet.** Like `Suppressed` in §5, it is a
-value waiting for its producer: `pdfrum-form`'s `route.rs` still calls
-`generate_with_text` and still carries the `let _ = highlight;` its own doc
-comment describes. Wiring it up is that crate's change, and the eighteen
-`form-events` rows stay red until it lands.
+~~**Nothing constructs a `LiveState` yet.**~~ **Closed the same day.** It was
+written as an open item — the producer is `pdfrum-form`'s change, not this
+one — and that crate's routing commit (`8e1fca1`) landed on top of this seam
+within the hour, calling `generate_with_live` and building a `LiveState` from
+both `FieldState::Text` and `FieldState::Choice`. The seam is consumed end to
+end; unlike §5's `Suppressed`, it did not have to wait.
+
+**The eighteen `form-events` rows did not move.** A second conformance run
+*after* `8e1fca1` — so with the seam built, consumed, and a `LiveState`
+actually reaching the generators — reports the identical 1636/69 split and the
+identical eighteen. So the override was necessary and is not sufficient:
+something further down the event pipeline still gates those rows, and finding
+it is `pdfrum-form`'s work rather than this crate's. Recorded here so the next
+reader does not re-derive the seam looking for the cause; the evidence that
+*this* half is right is the unit tests above, not the scoreboard.
