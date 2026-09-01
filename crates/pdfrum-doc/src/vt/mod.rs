@@ -28,6 +28,7 @@ pub mod bidi;
 pub mod classify;
 pub mod comb;
 pub mod edit_ap;
+pub mod hit;
 pub mod place;
 pub mod split;
 
