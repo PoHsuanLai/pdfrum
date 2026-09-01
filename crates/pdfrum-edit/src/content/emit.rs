@@ -197,6 +197,24 @@ pub struct ResourceNames {
 /// Returns whether anything was written. `out` is left untouched on a `false`
 /// — the bytes are built into a scratch buffer and committed only on success,
 /// so an unsupported object never contributes an unbalanced fragment (D6).
+//
+// [oracle-bug] cpdf_pagecontentgenerator.cpp:945-946 writes the graphics
+// prefix and then `*buf << "BT ";`, and `:968-970` is a bare `return` for any
+// font class that is neither Type1, TrueType nor CID — a Type 3 font, most
+// obviously. So the emitted stream carries a `q` and a `BT` that nothing ever
+// closes. §7.8.2 requires a content stream's operators to be balanced: `BT`
+// pairs with `ET` (§9.4.1) and `q` with `Q` (§8.4.4), and an unmatched `BT`
+// leaves every operator after it inside a text object that was never meant to
+// contain them. pdf.js has no counterpart to weigh — it does not regenerate
+// page content at all — so the reading rests on the spec, and on the fact
+// that PDFium is writing a file it will itself have to re-parse. We build
+// each object's bytes into a scratch buffer and commit only on success, so an
+// object we cannot express contributes *nothing*. For well-formed input the
+// rendered result is identical: the stream-level `Q` closes the oracle's
+// stray `q`, and end-of-stream closes the `BT`. What differs is that our
+// output stays parseable. This is the audit's A72, previously recorded as
+// design brief D6 — a divergence we chose, where the oracle-bug rule makes it
+// obligatory.
 pub fn emit_object(out: &mut String, object: &PageObject, names: &ResourceNames) -> bool {
     let mut body = String::new();
     body.push_str("q ");
