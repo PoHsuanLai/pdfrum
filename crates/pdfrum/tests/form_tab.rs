@@ -35,84 +35,71 @@ fn focused(session: &FormSession<'_>) -> Option<u32> {
     session.focused_annot().map(|annot| annot.index)
 }
 
-/// `FormFillFirstTab`: a Tab with nothing focused takes the **first**
-/// annotation of the ring.
+/// The walk one page produces, forward or backward, until the ring refuses.
+fn walk(page: u32, modifiers: EventModifiers) -> Vec<u32> {
+    let doc = document();
+    let mut session = FormSession::new(&doc);
+    session.set_page_in_view(page);
+
+    let mut visited = Vec::new();
+    while tab(&mut session, modifiers) {
+        visited.push(focused(&session).expect("a consumed Tab lands somewhere"));
+    }
+    visited
+}
+
+/// `FormFillFirstTab`: a Tab with nothing focused lands on annot **1**.
+///
+/// Not "somewhere": page 0 is `/Tabs /R`, and row order over this geometry is
+/// `1, 2, 3, 0`. Structure order would answer 0, so this is the assertion
+/// that tells a page's declared order from the default.
 #[test]
-fn a_first_tab_lands_on_the_rings_first_entry() {
+fn a_first_tab_lands_on_annot_one() {
     let doc = document();
     let mut session = FormSession::new(&doc);
     assert!(session.focused_annot().is_none());
 
     assert!(tab(&mut session, EventModifiers::NONE));
-    assert!(
-        focused(&session).is_some(),
-        "a Tab from nothing must land somewhere"
-    );
+    assert_eq!(focused(&session), Some(1));
 }
 
-/// `FormFillFirstShiftTab`: a Shift+Tab with nothing focused lands on a
-/// **different** annotation from a plain Tab — the cursor starts between the
-/// ends rather than before them.
+/// `FormFillFirstShiftTab`: a Shift+Tab with nothing focused lands on annot
+/// **0** — the ring's other end, since the cursor starts between them.
 #[test]
-fn a_first_shift_tab_lands_somewhere_else_than_a_first_tab() {
-    let doc = document();
-
-    let forward = {
-        let mut session = FormSession::new(&doc);
-        tab(&mut session, EventModifiers::NONE);
-        focused(&session)
-    };
-    let backward = {
-        let mut session = FormSession::new(&doc);
-        tab(&mut session, EventModifiers::SHIFT);
-        focused(&session)
-    };
-
-    assert!(forward.is_some() && backward.is_some());
-    assert_ne!(
-        forward, backward,
-        "forward and backward Tab from nothing are the ring's two ends"
-    );
-}
-
-/// `FormFillContinuousTab`: four Tabs visit four distinct annotations, and
-/// the **fifth is refused** — the ring does not wrap.
-#[test]
-fn four_tabs_visit_four_annotations_and_the_fifth_is_refused() {
+fn a_first_shift_tab_lands_on_annot_zero() {
     let doc = document();
     let mut session = FormSession::new(&doc);
 
-    let mut seen = Vec::new();
-    for _ in 0..4 {
-        assert!(tab(&mut session, EventModifiers::NONE));
-        seen.push(focused(&session).expect("each Tab lands somewhere"));
-    }
-    seen.sort_unstable();
-    seen.dedup();
-    assert_eq!(seen.len(), 4, "four Tabs visit four distinct annotations");
-
-    assert!(
-        !tab(&mut session, EventModifiers::NONE),
-        "the ring does not wrap: the fifth Tab is unhandled"
-    );
+    assert!(tab(&mut session, EventModifiers::SHIFT));
+    assert_eq!(focused(&session), Some(0));
 }
 
-/// The same backwards.
+/// `FormFillContinuousTab`: four Tabs visit **1, 2, 3, 0** and the fifth is
+/// refused — the ring does not wrap.
 #[test]
-fn four_shift_tabs_visit_four_annotations_and_the_fifth_is_refused() {
-    let doc = document();
-    let mut session = FormSession::new(&doc);
+fn four_tabs_visit_one_two_three_zero_and_the_fifth_is_refused() {
+    assert_eq!(walk(0, EventModifiers::NONE), vec![1, 2, 3, 0]);
+}
 
-    let mut seen = Vec::new();
-    for _ in 0..4 {
-        assert!(tab(&mut session, EventModifiers::SHIFT));
-        seen.push(focused(&session).expect("each Tab lands somewhere"));
-    }
-    seen.sort_unstable();
-    seen.dedup();
-    assert_eq!(seen.len(), 4);
+/// `FormFillContinuousShiftTab`: the same backwards, **0, 3, 2, 1**.
+#[test]
+fn four_shift_tabs_visit_zero_three_two_one_and_the_fifth_is_refused() {
+    assert_eq!(walk(0, EventModifiers::SHIFT), vec![0, 3, 2, 1]);
+}
 
-    assert!(!tab(&mut session, EventModifiers::SHIFT));
+/// The three pages ask for the three orders and get three different answers
+/// over the **same four annotations**.
+///
+/// This is the assertion the fixture exists for: `annotiter.pdf`'s pages
+/// differ only in `/Tabs` (`/R`, `/C`, `/S`), so an implementation that
+/// ignored the entry would return one answer three times. The three
+/// expectations were confirmed against a verbatim compilation of
+/// `CPDFSDK_AnnotIterator::GenerateResults`.
+#[test]
+fn each_pages_declared_order_produces_its_own_walk() {
+    assert_eq!(walk(0, EventModifiers::NONE), vec![1, 2, 3, 0], "/Tabs /R");
+    assert_eq!(walk(1, EventModifiers::NONE), vec![1, 3, 2, 0], "/Tabs /C");
+    assert_eq!(walk(2, EventModifiers::NONE), vec![0, 1, 2, 3], "/Tabs /S");
 }
 
 /// `TabWithModifiers`: every modifier but shift refuses the gesture — all six
