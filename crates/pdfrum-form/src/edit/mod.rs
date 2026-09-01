@@ -18,6 +18,6 @@ pub mod place;
 pub mod select;
 pub mod undo;
 
-pub use place::{Place, Range};
+pub use place::{Place, PlaceExt, Range};
 pub use select::Selection;
 pub use undo::{UndoItem, UndoStack};
