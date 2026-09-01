@@ -1401,7 +1401,7 @@ pub struct FormSession {
 pub enum FocusTarget { Widget(FieldId, AnnotId), Annot(AnnotId) }
 
 pub struct FieldId(pub u32);                                  // index into Form::fields
-pub struct AnnotId { pub page: u32, pub index: u32 }
+pub struct AnnotId { pub page: u32, pub index: u32 }          // index into the RAW /Annots array
 pub struct DragAnchor { pub field: FieldId, pub start: Place }
 
 pub struct SessionConfig {
@@ -1531,11 +1531,31 @@ pub struct AppearanceUpdate { pub annot: AnnotId, pub kind: UpdateKind }
 pub enum UpdateKind {
     Regenerated(GeneratedAp),                        // committed value → new stream
     LiveEdit(GeneratedAp),                           // focused field, caret + selection band
-    Cleared,
+    RevertedToFileAppearance,                        // drop the generated one; the file's /AP shows
     ActionRequested { action: Action, modifiers: Modifiers },
     FocusChanged { from: Option<AnnotId>, to: Option<AnnotId> },
 }
 ```
+
+**`AnnotId::index` is the raw `/Annots` index, pop-ups counted.** Normative,
+because the alternative reading is invisible until a page carries a pop-up and
+then silently wrong. `pdfrum-doc`'s annotation list drops pop-ups, so a
+widget's position in that list is not its position in the file's array — while
+the appearance overlay a caller applies these updates through is keyed by the
+**raw** index (`AnnotList::source_indices`). Reporting a filtered position
+would apply every appearance after the first pop-up to the wrong annotation.
+It is also the cheaper choice: hit testing walks `/Annots` itself, so the raw
+index is what the walk already holds.
+
+**`RevertedToFileAppearance` means "use the file's own `/AP`", not "draw
+nothing".** A caller applies an update by keying an overlay, and *absence*
+from that overlay already means "use what the file declares" — so this variant
+is expressible and a positive blank is not. Nothing in this milestone needs
+one: `ResetAppearance` always writes an appearance rather than suppressing
+one, and the widgets that genuinely draw nothing (signature, and types the
+classifier cannot name) never receive interaction state, so they never produce
+an update at all. Real suppression would need a new variant **and** a positive
+marker in the overlay; it must not be spelled by re-reading this one.
 
 `Regenerated` versus `LiveEdit` is the whole M6/M14 seam and is one `if`: **a
 focused field renders from live editor state, an unfocused one from a
