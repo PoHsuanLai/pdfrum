@@ -16,10 +16,11 @@
 //!   the caller's `Device` and `Queue` by reference. Standing up a second
 //!   device inside a PDF library is waste an embedder cannot opt out of.
 //!   [`request_adapter`] exists for a headless process that has no device to
-//!   lend — a benchmark, a test, a thumbnailer — and it leaks the device it
-//!   makes, which its own documentation says loudly. Borrowing is primary;
-//!   requesting is the fallback, and the ordering is expressed by which one
-//!   the type's own constructor is.
+//!   lend — a benchmark, a test, a thumbnailer — and it leaks the one device it
+//!   makes, which its own documentation says loudly; a second call reuses that
+//!   device rather than leaking another. Borrowing is primary; requesting is
+//!   the fallback, and the ordering is expressed by which one the type's own
+//!   constructor is.
 //!
 //! # Which `wgpu`
 //!
@@ -90,6 +91,7 @@ mod error;
 mod readback;
 
 use std::cell::RefCell;
+use std::sync::{Arc, Mutex};
 
 use kurbo::{Affine, BezPath, Rect, Stroke};
 use pdfrum_page::BlendMode;
@@ -146,6 +148,7 @@ pub struct VelloGpuBackend<'a> {
     queue: &'a wgpu::Queue,
     renderer: RefCell<Renderer>,
     limits: Limits,
+    faults: Faults,
     /// Present only when [`request_adapter`] built this backend, rather than
     /// an embedder handing it a device.
     owned: Option<Box<OwnedDevice>>,
@@ -155,6 +158,52 @@ pub struct VelloGpuBackend<'a> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct Limits {
     max_dimension: u32,
+}
+
+/// The first `wgpu` error no error scope caught, if one has happened.
+///
+/// `wgpu`'s default handler for an uncaptured error is `panic!`, and a lost
+/// device — a driver reset, a hung GPU, a watchdog timeout — arrives that way:
+/// not as a `Result` from the call that provoked it, but as a callback on
+/// whichever thread was driving the device. A library that panics on a hostile
+/// environment violates STYLE §3, and "the display driver restarted" is
+/// exactly the condition a PDF renderer must survive rather than abort its
+/// host over. [`VelloGpuBackend::new`] therefore installs a handler that
+/// *records*, and the rasterizing entry points consult it.
+///
+/// `Arc<Mutex<…>>` and not a `static`: STYLE §1 forbids global state, and the
+/// handler must be `Send + Sync + 'static` while the backend only borrows its
+/// device. The `Arc` is what lets the two share one cell without a
+/// process-wide one. Only the *first* fault is kept — a lost device produces a
+/// cascade of them, and the first is the one that says what happened.
+#[derive(Debug, Clone, Default)]
+struct Faults(Arc<Mutex<Option<String>>>);
+
+impl Faults {
+    /// Record `message` unless a fault is already recorded.
+    fn record(&self, message: String) {
+        // A poisoned mutex means a previous holder panicked while recording,
+        // which is itself a fault; the recovered guard still holds a usable
+        // `Option`, and STYLE §3 forbids the `unwrap` that would be the
+        // idiomatic spelling here.
+        let mut slot = match self.0.lock() {
+            Ok(slot) => slot,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        slot.get_or_insert(message);
+    }
+
+    /// The recorded fault, if any.
+    ///
+    /// Reading does not clear it, because a device that has been lost stays
+    /// lost: every later render on it would fail the same way, and reporting
+    /// only the first would let the rest look successful.
+    fn seen(&self) -> Option<String> {
+        match self.0.lock() {
+            Ok(slot) => slot.clone(),
+            Err(poisoned) => poisoned.into_inner().clone(),
+        }
+    }
 }
 
 impl std::fmt::Debug for VelloGpuBackend<'_> {
@@ -178,7 +227,29 @@ impl<'a> VelloGpuBackend<'a> {
     ///
     /// [`Error::Renderer`] if vello cannot build its pipelines on this device
     /// — typically a missing compute feature or a shader compilation failure.
+    ///
+    /// # The uncaptured-error handler
+    ///
+    /// This **replaces** the device's uncaptured-error handler, which is
+    /// process-wide per device and which `wgpu` defaults to `panic!`. An
+    /// embedder that installed its own will find it displaced; that is the
+    /// price of STYLE §3 holding on a borrowed device, and the alternative —
+    /// leaving the default in place — is a PDF library that aborts the host
+    /// application when a driver resets. Recorded faults surface from
+    /// [`device_fault`][Self::device_fault],
+    /// [`try_finish`][Self::try_finish] and
+    /// [`try_snapshot`][Self::try_snapshot].
     pub fn new(device: &'a wgpu::Device, queue: &'a wgpu::Queue) -> Result<Self, Error> {
+        let faults = Faults::default();
+        {
+            // Installed *before* the renderer, because building vello's
+            // pipelines is itself device work that can fault, and a fault
+            // during it would otherwise take the default handler's path.
+            let sink = faults.clone();
+            device.on_uncaptured_error(Arc::new(move |error: wgpu::Error| {
+                sink.record(error.to_string());
+            }));
+        }
         let renderer = Renderer::new(
             device,
             RendererOptions {
@@ -196,8 +267,21 @@ impl<'a> VelloGpuBackend<'a> {
             limits: Limits {
                 max_dimension: device.limits().max_texture_dimension_2d,
             },
+            faults,
             owned: None,
         })
+    }
+
+    /// The first `wgpu` error this backend's device reported outside an error
+    /// scope, if any.
+    ///
+    /// `None` on a healthy device. `Some` after a device loss, a driver reset
+    /// or a validation failure — the events `wgpu` would otherwise have
+    /// panicked on. It is not cleared by reading: a lost device stays lost,
+    /// and every render after the first would fail the same way.
+    #[must_use]
+    pub fn device_fault(&self) -> Option<String> {
+        self.faults.seen()
     }
 
     /// The largest target dimension this device will accept in one axis.
@@ -216,6 +300,87 @@ impl<'a> VelloGpuBackend<'a> {
         w <= self.limits.max_dimension && h <= self.limits.max_dimension
     }
 
+    /// The same question as [`accepts`][Self::accepts], answered with the
+    /// dimensions that failed.
+    ///
+    /// The fallible half of [`RasterBackend::new_target`], which has no
+    /// failure channel and must therefore clamp. A caller that would rather
+    /// know than be clamped — a thumbnailer choosing a scale, an embedder
+    /// sizing a page — asks here first.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::TargetTooLarge`], carrying `w`, `h` and the device's
+    /// `max_texture_dimension_2d`.
+    pub fn check_target(&self, w: u32, h: u32) -> Result<(), Error> {
+        if self.accepts(w, h) {
+            return Ok(());
+        }
+        Err(Error::TargetTooLarge {
+            w,
+            h,
+            max: self.limits.max_dimension,
+        })
+    }
+
+    /// A target of the given size, or [`Error::TargetTooLarge`] if this device
+    /// cannot render one.
+    ///
+    /// [`RasterBackend::new_target`] clamps instead, because the trait it
+    /// implements has no failure channel and three CPU backends share it. This
+    /// is the same constructor with the answer the clamp swallows.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::TargetTooLarge`] when either axis exceeds the device's
+    /// `max_texture_dimension_2d`.
+    pub fn try_new_target(
+        &self,
+        w: u32,
+        h: u32,
+        clear: peniko::Color,
+    ) -> Result<VelloGpuDevice, Error> {
+        self.check_target(w, h)?;
+        Ok(self.new_target(w, h, clear))
+    }
+
+    /// [`RasterBackend::finish`] with the device's own failures reported.
+    ///
+    /// The trait returns a [`Pixmap`] and so must fail open on a blank one.
+    /// This returns what went wrong instead — the readback that never
+    /// completed, or the uncaptured device error `wgpu` would have panicked
+    /// on.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::Device`] when the device reported an uncaptured error at any
+    /// point in its life — a device loss or a driver reset, which is
+    /// unrecoverable and taints every later render. [`Error::Render`] and
+    /// [`Error::Readback`] for a dispatch or a map that failed on its own.
+    pub fn try_finish(&self, mut d: VelloGpuDevice) -> Result<Pixmap, Error> {
+        while !d.frames.is_empty() {
+            d.pop();
+        }
+        self.try_rasterize(&d)
+    }
+
+    /// [`RasterBackend::snapshot`] with the device's own failures reported.
+    ///
+    /// # Errors
+    ///
+    /// As [`try_finish`][Self::try_finish].
+    pub fn try_snapshot(&self, d: &VelloGpuDevice) -> Result<Pixmap, Error> {
+        self.try_rasterize(d)
+    }
+
+    /// The largest target this device will actually accept, in either axis.
+    ///
+    /// The tighter of the trait's ceiling and the adapter's, which is what
+    /// [`RasterBackend::new_target`] clamps to.
+    fn ceiling(&self) -> u32 {
+        self.limits.max_dimension.min(MAX_TARGET_DIMENSION)
+    }
+
     /// Rasterize a device's scene and read the pixels back to the host.
     ///
     /// The whole GPU round trip: allocate a storage texture, dispatch vello's
@@ -229,17 +394,43 @@ impl<'a> VelloGpuBackend<'a> {
     /// [`RasterBackend`] has no failure channel — the engine already refuses
     /// out-of-range targets before it gets here, and failing open on a blank
     /// is the same shape the CPU backends take.
+    ///
+    /// The `!accepts` arm is now reachable only through
+    /// [`RasterBackend::new_target_with_backdrop`], whose size comes from a
+    /// [`Pixmap`] the caller has *already* allocated, so the blank it returns
+    /// costs no more than the backdrop it was handed.
+    /// [`RasterBackend::new_target`] clamps to [`ceiling`][Self::ceiling] and
+    /// cannot reach it at all.
     fn rasterize(&self, target: &VelloGpuDevice) -> Pixmap {
-        let (w, h) = (target.width, target.height);
-        if w == 0 || h == 0 || !self.accepts(w, h) {
-            return Pixmap::new(w, h);
+        self.try_rasterize(target)
+            .unwrap_or_else(|_| Pixmap::new(target.width, target.height))
+    }
+
+    /// [`rasterize`][Self::rasterize] with its failures returned rather than
+    /// blanked.
+    ///
+    /// The device fault is checked **after** the round trip as well as before
+    /// it: an uncaptured error raised by this very dispatch arrives during the
+    /// poll, so a pre-check alone would report the pixels of a render the
+    /// driver had already abandoned.
+    fn try_rasterize(&self, target: &VelloGpuDevice) -> Result<Pixmap, Error> {
+        if let Some(fault) = self.faults.seen() {
+            return Err(Error::Device(fault));
         }
+        let (w, h) = (target.width, target.height);
+        if w == 0 || h == 0 {
+            // Not a failure: the engine reaches this with clipped-away
+            // geometry constantly, and an empty pixmap is the right answer.
+            return Ok(Pixmap::new(w, h));
+        }
+        self.check_target(w, h)?;
         // Only borrowed elsewhere if a caller re-entered `finish` from inside
-        // it, which the trait's shape makes impossible; a blank beats a panic.
+        // it, which the trait's shape makes impossible; an error beats a
+        // panic (STYLE §3).
         let Ok(mut renderer) = self.renderer.try_borrow_mut() else {
-            return Pixmap::new(w, h);
+            return Err(Error::Render("the renderer was already in use".to_owned()));
         };
-        readback::render_and_read(
+        let pixels = readback::render_and_read(
             self.device,
             self.queue,
             &mut renderer,
@@ -255,8 +446,13 @@ impl<'a> VelloGpuBackend<'a> {
                 height: h,
                 antialiasing_method: PINNED_AA,
             },
-        )
-        .unwrap_or_else(|_| Pixmap::new(w, h))
+        );
+        // The device's verdict outranks the round trip's own: a readback that
+        // "succeeded" against a lost device read whatever was in the buffer.
+        if let Some(fault) = self.faults.seen() {
+            return Err(Error::Device(fault));
+        }
+        pixels
     }
 }
 
@@ -503,7 +699,17 @@ impl RasterBackend for VelloGpuBackend<'_> {
     type Device = VelloGpuDevice;
 
     fn new_target(&self, w: u32, h: u32, clear: peniko::Color) -> Self::Device {
-        let (w, h) = (w.min(MAX_TARGET_DIMENSION), h.min(MAX_TARGET_DIMENSION));
+        // Clamped to the *device's* ceiling, not only the trait's. The trait's
+        // is 65535 and this adapter's is typically 8192 or 16384, so a request
+        // between the two used to produce a target `rasterize` then had to
+        // refuse — and refusing meant a blank pixmap of the requested size,
+        // which at 65535 square is seventeen gibibytes of zeros allocated on
+        // the way to reporting failure. Clamping here makes that branch
+        // unreachable and bounds the worst allocation at what an accepted
+        // target would have cost anyway. A caller who would rather be told
+        // than clamped uses [`VelloGpuBackend::try_new_target`].
+        let ceiling = self.ceiling();
+        let (w, h) = (w.min(ceiling), h.min(ceiling));
         // A transparent clear needs no backdrop draw at all, which is the
         // common case (every group, mask and pattern cell) and the one worth
         // keeping free of an image upload.
@@ -622,6 +828,49 @@ mod tests {
         );
         d.pop();
         assert!(d.frames.is_empty());
+    }
+
+    #[test]
+    fn a_recorded_fault_is_the_first_one_and_survives_reading() {
+        // The hook's contract, exercised without a device: a lost device
+        // produces a cascade of errors and the first is the one that says what
+        // happened, so later ones must not overwrite it. And reading must not
+        // clear it — a device that has been lost stays lost, and clearing
+        // would let every render after the first look successful.
+        let faults = Faults::default();
+        assert_eq!(faults.seen(), None, "a healthy device reports nothing");
+        faults.record("device lost".to_owned());
+        faults.record("and everything after it".to_owned());
+        assert_eq!(faults.seen().as_deref(), Some("device lost"));
+        assert_eq!(faults.seen().as_deref(), Some("device lost"), "not cleared");
+    }
+
+    #[test]
+    fn a_target_past_the_limit_is_refused_and_the_clamp_agrees_with_it() {
+        // `Error::TargetTooLarge` used to be documented and never constructed,
+        // and the branch that should have built it allocated `w * h * 4` zeros
+        // first. Both halves of the fix are decided by `Limits` alone, so they
+        // are checked here rather than on hardware: the refusal carries the
+        // request and the bound, and the clamp the infallible constructor
+        // applies lands on something the same bound accepts.
+        let limits = Limits {
+            max_dimension: 8192,
+        };
+        let refused = |w: u32, h: u32| w > limits.max_dimension || h > limits.max_dimension;
+        assert!(refused(8193, 16), "one past the device's bound");
+        assert!(!refused(8192, 8192), "exactly at it is renderable");
+
+        let ceiling = limits.max_dimension.min(MAX_TARGET_DIMENSION);
+        assert_eq!(ceiling, 8192, "the adapter binds well below the trait's");
+        // The worst case the reviewer priced: a 65535-square request used to
+        // reach `Pixmap::new` at seventeen gibibytes on the way to failing.
+        assert!(
+            !refused(
+                MAX_TARGET_DIMENSION.min(ceiling),
+                MAX_TARGET_DIMENSION.min(ceiling)
+            ),
+            "the clamp must land inside what the device accepts"
+        );
     }
 
     #[test]
