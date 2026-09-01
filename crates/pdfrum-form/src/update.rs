@@ -60,8 +60,28 @@ pub enum UpdateKind {
     /// The focused path. Which of these two a field takes is the whole seam
     /// between appearance generation and interaction, and it is one `if`.
     LiveEdit(Box<GeneratedAp>),
-    /// The widget no longer draws anything generated.
-    Cleared,
+    /// The widget has no generated appearance any more: it falls back to
+    /// the **file's own** `/AP`.
+    ///
+    /// # This is not "draw nothing"
+    ///
+    /// The distinction matters because the two are easy to conflate and only
+    /// one of them is expressible. A caller applies these updates by keying
+    /// an appearance overlay, and *absence* from that overlay already means
+    /// "use whatever the file declares". So this variant says: drop any
+    /// appearance an earlier event generated for this widget, and let the
+    /// file's own stream show through again.
+    ///
+    /// Suppressing a widget that has an `/AP` — painting nothing where the
+    /// file says something — is a different instruction, and this cannot
+    /// carry it: an overlay keyed by presence has no way to spell a positive
+    /// "blank". Nothing here needs it. A widget that genuinely draws nothing
+    /// is one whose field type gets no appearance at all — a signature, or a
+    /// type the classifier could not name — and those never receive
+    /// interaction state, so they never produce an update of any kind. If a
+    /// later milestone needs real suppression, it needs a new variant *and* a
+    /// positive marker in the overlay, not a re-reading of this one.
+    RevertedToFileAppearance,
     /// An action fired and the caller decides whether to perform it.
     ///
     /// The modifiers held when it fired ride along, because a link's action
@@ -209,7 +229,10 @@ mod tests {
 
     #[test]
     fn folding_responses_keeps_both_orders() {
-        let mut first = Response::with(vec![AppearanceUpdate::new(annot(), UpdateKind::Cleared)]);
+        let mut first = Response::with(vec![AppearanceUpdate::new(
+            annot(),
+            UpdateKind::RevertedToFileAppearance,
+        )]);
         let second = Response::with(vec![AppearanceUpdate::new(
             AnnotId::new(0, 4),
             UpdateKind::FocusChanged {
@@ -262,8 +285,27 @@ mod tests {
 
     #[test]
     fn a_response_with_no_actions_yields_none() {
-        let response = Response::with(vec![AppearanceUpdate::new(annot(), UpdateKind::Cleared)]);
+        let response = Response::with(vec![AppearanceUpdate::new(
+            annot(),
+            UpdateKind::RevertedToFileAppearance,
+        )]);
         assert_eq!(response.actions().count(), 0);
+    }
+
+    /// Reverting carries no appearance, which is what makes it mean "use the
+    /// file's own" rather than "use this blank one".
+    #[test]
+    fn reverting_carries_no_appearance_of_its_own() {
+        let reverted = UpdateKind::RevertedToFileAppearance;
+        assert!(reverted.appearance().is_none());
+        assert!(!reverted.is_live_edit());
+
+        // And it is a distinct answer from generating one, which is the whole
+        // point: a caller keys an overlay by presence, so these two take
+        // different branches.
+        let generated = UpdateKind::Regenerated(Box::new(appearance()));
+        assert_ne!(reverted, generated);
+        assert!(generated.appearance().is_some());
     }
 
     /// The focused and unfocused paths are distinguishable, because which one
@@ -277,6 +319,6 @@ mod tests {
         assert!(!regenerated.is_live_edit());
         assert!(live.appearance().is_some());
         assert!(regenerated.appearance().is_some());
-        assert!(UpdateKind::Cleared.appearance().is_none());
+        assert!(UpdateKind::RevertedToFileAppearance.appearance().is_none());
     }
 }
