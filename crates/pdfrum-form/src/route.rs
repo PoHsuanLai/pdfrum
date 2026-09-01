@@ -111,7 +111,11 @@ pub fn apply<R: Resolve>(
             ..
         } => Response::ignored(),
         Event::DoubleClick { at, .. } => double_click(session, ctx, at),
-        Event::MouseWheel { at, delta, .. } => wheel(session, ctx, at, delta),
+        Event::MouseWheel {
+            at,
+            delta,
+            modifiers,
+        } => wheel(session, ctx, at, delta, modifiers),
         Event::Focus { at, .. } => focus_at(session, ctx, at),
         Event::KeyDown { key, modifiers } => key_down(session, ctx, key, modifiers),
         Event::Char { ch, modifiers } => char_typed(session, ctx, ch, modifiers),
@@ -262,14 +266,34 @@ fn double_click<R: Resolve>(
     if !matches!(session.fields.get(&field), Some(FieldState::Text(_))) {
         return Response::ignored();
     }
-    let Some(point) = ctx
-        .widget_of_field(field)
-        .map(|widget| to_plate(widget, at))
-    else {
+    // A double click selects the **whole field**, not the line under the
+    // pointer. `CPWL_Edit::OnLButtonDblClk` (`cpwl_edit.cpp:636-644`) calls
+    // `edit_impl_->SelectAll()`; the embeddertest's comment says "the entire
+    // line" and its field is single-line, so the two agree there and only
+    // there. A multiline field is where the wrong reading shows.
+    //
+    // The point is still needed: upstream selects only when the click is
+    // inside the client area (or the field overflows), so a double click on
+    // the border selects nothing.
+    let Some(widget) = ctx.widget_of_field(field) else {
         return Response::consumed();
     };
-    with_edit(session, ctx, field, |edit, config, metrics| {
-        ops::select_line_at(edit, config, metrics, point);
+    let point = to_plate(widget, at);
+    let client =
+        pdfrum_doc::geom::normalize(ap::field_body::client_rect(&widget.dict, ctx.resolve));
+    // `CFX_FloatRect::Contains` (`fx_coordinates.cpp:229-234`) is inclusive on
+    // all four edges, where `kurbo::Rect::contains` is half-open — a click
+    // exactly on the client's top or right edge selects upstream and would
+    // not here.
+    let inside = point.x >= client.x0
+        && point.x <= client.x1
+        && point.y >= client.y0
+        && point.y <= client.y1;
+    if !inside {
+        return Response::consumed();
+    }
+    with_edit(session, ctx, field, |edit, _config, _metrics| {
+        edit.select_all();
     });
     let Some(id) = session.focus.map(FocusTarget::annot) else {
         return Response::consumed();
@@ -280,11 +304,24 @@ fn double_click<R: Resolve>(
 }
 
 /// The wheel scrolls whatever is under the pointer, focused or not.
+///
+/// A **list box** moves its selection rather than its view, with the wheel's
+/// own Shift and Control passed through — `CPWL_ListBox::OnMouseWheel`
+/// (`cpwl_list_box.cpp:357-368`) hands `IsSHIFTKeyDown`/`IsCTRLKeyDown` to the
+/// same `OnVK_DOWN`/`OnVK_UP` the arrow keys call, and those flags change what
+/// a multi-select list does with the row it lands on.
+///
+/// A **combo box** does nothing. It has no `OnMouseWheel` of its own, so it
+/// falls through to `CPWL_Wnd::OnMouseWheel` (`cpwl_wnd.cpp:412-429`), which
+/// returns false unless a child holds the keyboard capture — and a closed
+/// combo's list window is not shown, so nothing moves. Treating it as a list
+/// would let a wheel notch silently change a committed value.
 fn wheel<R: Resolve>(
     session: &mut FormSession,
     ctx: &Context<'_, R>,
     at: Point,
     delta: (i32, i32),
+    modifiers: Modifiers,
 ) -> Response {
     let hit = hit::widget_at_point(
         &ctx.page.candidates,
@@ -310,7 +347,9 @@ fn wheel<R: Resolve>(
     };
 
     let moved = match session.fields.get_mut(&field) {
-        Some(FieldState::Choice(state)) => scroll_choice(state, delta.1, rows),
+        // A combo box is not a list under the wheel; see this function's docs.
+        Some(FieldState::Choice(state)) if state.config.combo => false,
+        Some(FieldState::Choice(state)) => scroll_choice(state, delta.1, rows, modifiers),
         Some(FieldState::Text(_)) => scroll_text(session, ctx, field, delta.1),
         Some(FieldState::Toggle(_) | FieldState::Button(_)) | None => false,
     };
@@ -367,7 +406,7 @@ fn key_down<R: Resolve>(
 
     match session.fields.get(&field) {
         Some(FieldState::Text(_)) => text_key(session, ctx, field, annot, key, modifiers),
-        Some(FieldState::Choice(_)) => choice_key(session, ctx, field, annot, key),
+        Some(FieldState::Choice(_)) => choice_key(session, ctx, field, annot, key, modifiers),
         Some(FieldState::Toggle(_)) => {
             // Return and Space activate; a read-only control consumes them
             // and does nothing, which is a different answer from ignoring.
@@ -630,12 +669,19 @@ fn line_y(edit: &TextEdit, section: u32, line: i64) -> f32 {
 }
 
 /// A key for a focused choice field.
+///
+/// The arrow keys carry their modifiers for the same reason the wheel does:
+/// `CPWL_ListBox::OnKeyDown` (`cpwl_list_box.cpp:103-119`) hands
+/// `IsSHIFTKeyDown`/`IsCTRLKeyDown` to the very `OnVK_UP`/`OnVK_DOWN` that
+/// `OnMouseWheel` calls, so the two gestures are one operation upstream and
+/// must not diverge here.
 fn choice_key<R: Resolve>(
     session: &mut FormSession,
     ctx: &Context<'_, R>,
     field: FieldId,
     annot: AnnotId,
     key: Key,
+    modifiers: Modifiers,
 ) -> Response {
     let rows = match (ctx.widget(annot), session.fields.get(&field)) {
         (Some(widget), Some(FieldState::Choice(choice))) => visible_rows(ctx, widget, choice),
@@ -643,9 +689,13 @@ fn choice_key<R: Resolve>(
     };
     let moved = match session.fields.get_mut(&field) {
         Some(FieldState::Choice(state)) => {
+            let (shift, ctrl) = (
+                modifiers.contains(Modifiers::SHIFT),
+                modifiers.contains(Modifiers::CONTROL),
+            );
             let moved = match key {
-                Key::UP => field::choice::move_selection(state, -1),
-                Key::DOWN => field::choice::move_selection(state, 1),
+                Key::UP => field::choice::move_caret_by(state, -1, shift, ctrl),
+                Key::DOWN => field::choice::move_caret_by(state, 1, shift, ctrl),
                 Key::RETURN | Key::SPACE => return Response::consumed(),
                 _ => return Response::ignored(),
             };
@@ -884,12 +934,24 @@ fn font_size<R: Resolve>(ctx: &Context<'_, R>, widget: &WidgetInfo) -> f32 {
 /// would otherwise be off screen. Reading the wheel as a scrollbar drag — the
 /// obvious guess — leaves the selection behind on a row that has scrolled out
 /// of sight, where the oracle keeps it under the pointer's last step.
-fn scroll_choice(state: &mut ChoiceState, delta_y: i32, visible_rows: usize) -> bool {
+fn scroll_choice(
+    state: &mut ChoiceState,
+    delta_y: i32,
+    visible_rows: usize,
+    modifiers: Modifiers,
+) -> bool {
     if delta_y == 0 || state.options.is_empty() {
         return false;
     }
-    // A negative delta is downward, which is the *next* row.
-    let moved = field::choice::move_selection(state, if delta_y < 0 { 1 } else { -1 });
+    // A negative delta is downward, which is the *next* row. The wheel's own
+    // modifiers are handed on, because `OnMouseWheel` hands them to `OnVK`
+    // and they decide what a multi-select list does with the row.
+    let moved = field::choice::move_caret_by(
+        state,
+        if delta_y < 0 { 1 } else { -1 },
+        modifiers.contains(Modifiers::SHIFT),
+        modifiers.contains(Modifiers::CONTROL),
+    );
     let caret = state.caret_index.unwrap_or(0);
     let scrolled = field::choice::scroll_into_view(state, caret, visible_rows);
     moved || scrolled
@@ -1019,7 +1081,14 @@ fn take_focus<R: Resolve>(
 }
 
 /// Drops focus, redrawing what held it as a committed appearance.
-fn kill_focus<R: Resolve>(session: &mut FormSession, ctx: &Context<'_, R>) -> Response {
+///
+/// Public because it is not only a left click's miss path: the embedder's own
+/// `FORM_ForceToKillFocus` is the same operation, and a second implementation
+/// of it would be a second chance to forget the redraw. Dropping focus is
+/// what turns a field's live editor state back into a generated stream
+/// (brief §3.3 step 6), so a version that only reported `FocusChanged` would
+/// leave the caret and the live text on the page.
+pub fn kill_focus<R: Resolve>(session: &mut FormSession, ctx: &Context<'_, R>) -> Response {
     let change = focus::kill(session);
     let Some(was) = change.from else {
         return Response::ignored();
@@ -1049,6 +1118,32 @@ fn clear_undo(session: &mut FormSession, field: FieldId) {
 }
 
 /// A radio button's siblings on this page lose their state when it is set.
+///
+/// `CPDF_FormField::CheckControl` (`cpdf_formfield.cpp:683-716`) walks every
+/// control of the field: the one at the clicked index takes its own on state
+/// and **every other one is set to `Off`**. Which control is which matters,
+/// because two kids of a radio group carry different on-state names — that is
+/// how `/V` names the chosen one.
+///
+/// A field's controls share one [`ToggleState`] here, so the per-control `/AS`
+/// that walk writes cannot be stored control by control. What *is* storable is
+/// **which** control is the checked one, and that is what this records: a
+/// caller reading [`ToggleState::checked_control`] can tell the chosen kid
+/// from its siblings, where before the two were indistinguishable.
+///
+/// # What this still cannot do, and why it is recorded rather than faked
+///
+/// Drawing the difference needs one more thing that is not in this crate.
+/// A toggle's appearance is its `/AS` state, which
+/// `ap::widget::generate_with_live` reads from the **widget dictionary** — it
+/// takes a `LiveState` for a body's text and a `Highlight` for a caret, but no
+/// override for the appearance state, so a session cannot tell it to draw a
+/// kid `Off`. Until `pdfrum-doc` offers that, a radio group's siblings render
+/// from the file's `/AS` whatever the session believes, and the two kids of a
+/// group are only distinguishable through this field.
+///
+/// Recording the chosen control now is what makes that a one-line change when
+/// the seam exists, rather than a second state model.
 fn clear_siblings<R: Resolve>(
     session: &mut FormSession,
     ctx: &Context<'_, R>,
@@ -1061,10 +1156,9 @@ fn clear_siblings<R: Resolve>(
     if toggle_kind(widget) != Some(ToggleKind::Radio) {
         return;
     }
-    // Every control of the same field but the one clicked goes to Off. They
-    // share one FieldState here, so what this records is the chosen control
-    // rather than a per-control state.
-    let _ = (session, field);
+    if let Some(FieldState::Toggle(state)) = session.fields.get_mut(&field) {
+        state.checked_control = Some(chosen);
+    }
 }
 
 /// Which toggle a widget is, if it is one.
@@ -1450,10 +1544,28 @@ fn generate<R: Resolve>(
 /// what is stroked in the tint's place, which most field types answer with
 /// nothing at all.
 ///
-/// A text field and an editable combo box answer [`ap::FocusBox::None`] —
-/// they draw a caret and glyphs over plain white, with neither a tint nor a
-/// dashed outline. That is what the four `form_textfield_focused_*` goldens
-/// carry, and it is why "focused" here is mostly a *negative* instruction.
+/// The whole table, each row from the control's own `GetFocusRect`, which is
+/// what `CFFL_FormField::GetFocusBox` (`cffl_formfield.cpp:480-489`) asks:
+///
+/// | control | `GetFocusRect` | here |
+/// |---|---|---|
+/// | text field (`cpwl_edit.cpp:313-315`) | empty | [`ap::FocusBox::None`] |
+/// | **any** combo box (`cpwl_combo_box.cpp:321-323`) | empty | [`ap::FocusBox::None`] |
+/// | multi-select list (`cpwl_list_box.cpp:227-234`) | the caret item ∩ client | [`caret_row_box`] |
+/// | single-select list, check box, radio (`cpwl_wnd.cpp:713-719`) | window inflated by 1 | [`ap::FocusBox::Inflated`] |
+/// | push button (`cpwl_special_button.cpp:21-24`) | window **deflated by the border** | [`ap::FocusBox::Rect`] |
+///
+/// Two rows are easy to get wrong in the same direction, by reaching for the
+/// generic `CPWL_Wnd` answer where a subclass overrides it. A combo box
+/// returns an empty rectangle **whatever** its custom-text flag says — the
+/// override takes no branch at all, so the editable and gated cases are one
+/// row, not two. And a push button deflates where the generic answer
+/// inflates, which is the opposite sign on the same number.
+///
+/// So "focused" is mostly a *negative* instruction: it suppresses the tint,
+/// and only three of the five controls stroke anything in its place. That is
+/// what the four `form_textfield_focused_*` goldens carry — a caret and
+/// glyphs over plain white, with no outline of any kind.
 #[must_use]
 pub fn focus_of<R: Resolve>(session: &FormSession, ctx: &Context<'_, R>) -> Option<ap::Focus> {
     let target = session.focus?;
@@ -1468,19 +1580,51 @@ pub fn focus_of<R: Resolve>(session: &FormSession, ctx: &Context<'_, R>) -> Opti
         return Some(ap::Focus::at(index));
     };
     let box_ = match session.fields.get(&field) {
-        // A text field and an editable combo stroke nothing. A field with no
-        // state yet has no control to ask, so it strokes nothing either.
+        // A text field strokes nothing. A field with no state yet has no
+        // control to ask, so it strokes nothing either.
         Some(FieldState::Text(_)) | None => ap::FocusBox::None,
-        Some(FieldState::Choice(choice)) if choice.config.editable => ap::FocusBox::None,
-        // A single-select list box, a non-editable combo and the buttons take
-        // the window rectangle inflated by one.
+        // A combo box strokes nothing whether it is editable or gated:
+        // `CPWL_ComboBox::GetFocusRect` returns an empty rectangle
+        // unconditionally.
+        Some(FieldState::Choice(choice)) if choice.config.combo => ap::FocusBox::None,
+        // A single-select list box takes the window rectangle inflated by one
+        // — the generic `CPWL_Wnd` answer, which it does not override.
         Some(FieldState::Choice(choice)) if !choice.config.multi_select => ap::FocusBox::Inflated,
         // A multi-select list box strokes its **caret row** rather than its
         // own edges, which is why its dashes trace a band inside the widget.
         Some(FieldState::Choice(choice)) => caret_row_box(ctx, annot, choice),
-        Some(FieldState::Toggle(_) | FieldState::Button(_)) => ap::FocusBox::Inflated,
+        // A check box and a radio button take the generic inflation.
+        Some(FieldState::Toggle(_)) => ap::FocusBox::Inflated,
+        // A push button deflates by its own border instead.
+        Some(FieldState::Button(_)) => push_button_box(ctx, annot),
     };
     Some(ap::Focus { annot: index, box_ })
+}
+
+/// The rectangle a push button strokes: its window, deflated by the border.
+///
+/// `CPWL_PushButton::GetFocusRect` (`cpwl_special_button.cpp:21-24`) is
+/// `GetWindowRect().GetDeflated(GetBorderWidth(), GetBorderWidth())`, and the
+/// deflation is by the border on **each** side — the same `widget_border`
+/// width `ap::field_body::client_rect` already reads. Unlike every other row
+/// in the table this is a real rectangle rather than a rule, so it is
+/// produced in page space, which is what [`ap::FocusBox::Rect`] carries.
+fn push_button_box<R: Resolve>(ctx: &Context<'_, R>, annot: AnnotId) -> ap::FocusBox {
+    let Some(widget) = ctx.widget(annot) else {
+        return ap::FocusBox::None;
+    };
+    let width = f64::from(ap::widget::widget_border(&widget.dict, ctx.resolve).width);
+    let rect = pdfrum_doc::geom::normalize(widget_rect(widget));
+    // `CFX_FloatRect::GetDeflated` on a box narrower than twice its border
+    // turns it inside out rather than emptying it, and `GetFocusBox` then
+    // drops it for not being inside the page. Normalizing keeps the same
+    // answer without a second rule.
+    ap::FocusBox::Rect(pdfrum_doc::geom::normalize(kurbo::Rect::new(
+        rect.x0 + width,
+        rect.y0 + width,
+        rect.x1 - width,
+        rect.y1 - width,
+    )))
 }
 
 /// The rectangle a multi-select list box strokes: its caret row, clipped to
