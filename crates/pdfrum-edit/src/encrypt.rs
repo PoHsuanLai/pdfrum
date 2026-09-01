@@ -217,6 +217,9 @@ mod tests {
             owner_unlocked: false,
             encrypt_metadata: true,
             encoding: pdfrum_crypt::PasswordEncoding::AsGiven,
+            // No /EFF, so the embedded class takes the stream cipher —
+            // ISO 32000-1 §7.6.5 table 20's own default.
+            embedded_cipher: None,
         }
     }
 

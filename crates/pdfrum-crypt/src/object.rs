@@ -29,11 +29,13 @@ use crate::rc4::rc4;
 
 /// Which crypt filter class a payload belongs to.
 ///
-/// PDFium refuses documents whose `/StmF` and `/StrF` differ and never reads
-/// `/EFF` at all, so all three classes resolve to one cipher and one key.
-/// The distinction is kept because it is the specification's, and because an
-/// `/EFF` implementation would otherwise need a signature change (Divergence
-/// D1).
+/// `Stream` and `String` resolve to one cipher because PDFium refuses a
+/// document whose `/StmF` and `/StrF` differ (Divergence D1). `Embedded` is
+/// the one class that can genuinely name another cipher — see
+/// [`crate::SecurityHandler::embedded_cipher`] and the `[oracle-bug]` note on
+/// `standard::embedded_cipher`, which records that the oracle reads `/EFF`
+/// nowhere. Only the *cipher* differs: ISO 32000-1 §7.6.5 gives every `/CF`
+/// entry the same file encryption key.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum CryptClass {
     /// A stream's data, governed by `/StmF`.
