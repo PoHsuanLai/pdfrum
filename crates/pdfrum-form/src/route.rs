@@ -895,7 +895,7 @@ fn row_height<R: Resolve>(ctx: &Context<'_, R>, widget: &WidgetInfo, choice: &Ch
         .options
         .first()
         .map_or("", |option| option.label.as_str());
-    let measured = with_font(ctx, widget, |font| {
+    let measured = with_font(ctx, widget, |font, _substitute| {
         let layout = vt::layout(label, &config, &font.metrics);
         pdfrum_doc::geom::height(layout.content_rect_pdf(plate))
     });
@@ -1275,7 +1275,7 @@ fn build_edit<R: Resolve>(
 ) -> TextEdit {
     let plate = ap::field_body::client_rect(&widget.dict, ctx.resolve);
     let vt_config = text_config(ctx, widget, plate, config);
-    with_font(ctx, widget, |font| {
+    with_font(ctx, widget, |font, _substitute| {
         TextEdit::new(value, &vt_config, &font.metrics, !config.multi_line)
     })
     .unwrap_or_else(|| {
@@ -1321,15 +1321,32 @@ fn text_config<R: Resolve>(
     vt_config
 }
 
-/// Runs `body` with the face a widget's `/DA` names.
+/// Runs `body` with the face a widget's `/DA` names, and the **second face**
+/// for the characters that face's charset cannot write.
 ///
 /// Answers `None` only when the form declares no font at all, which is a
 /// document with no `/DR` and no fallback — there is no metric to lay text
 /// out with, so the caller declines rather than inventing one.
+///
+/// # Why the width closure has to know about the second face
+///
+/// This is the same construction `ap::generate_appearances_with_text` makes
+/// for the *stored* path, and it is made here rather than borrowed because
+/// the closure has to outlive the [`TextFont`] that borrows it.
+///
+/// The point worth restating is that the substitute enters through the
+/// **width closure** and not only through the encoder. A run set in two faces
+/// advances by two faces' metrics; measuring it all with the first gives a
+/// line the wrong length wherever the second one writes — which is exactly
+/// how a Hebrew selection band came to end ten units short of the glyphs it
+/// was supposed to cover. `CPDF_BAFontMap::GetWordFontIndex`
+/// (`core/fpdfdoc/cpdf_bafontmap.cpp:116-151`) asks the same question per
+/// character and knows nothing about whether the character was typed or
+/// stored, so the typed path takes the same answer.
 fn with_font<R: Resolve, T>(
     ctx: &Context<'_, R>,
     widget: &WidgetInfo,
-    body: impl FnOnce(&TextFont<'_>) -> T,
+    body: impl FnOnce(&TextFont<'_>, Option<ap::Substitute<'_>>) -> T,
 ) -> Option<T> {
     let form = ctx
         .catalog
@@ -1341,12 +1358,22 @@ fn with_font<R: Resolve, T>(
     // `face` falls back to the last declared face on its own, so a name the
     // form does not declare still lays out rather than declining.
     let font = ctx.fonts.face(&name)?;
-    let width = move |code: u32| TextFont::char_width(font, code);
+    let da_charset = ap::font_map::font_charset(font);
+    let substitute = ap::font_map::SUBSTITUTABLE_CHARSETS
+        .iter()
+        .find(|charset| **charset != da_charset)
+        .and_then(|charset| ctx.fonts.substitute(*charset));
+    let width = move |code: u32| match substitute {
+        Some(sub) if !ap::font_map::da_font_writes(font, da_charset, code) => {
+            ap::font_map::substitute_width(sub.font, code)
+        }
+        _ => TextFont::char_width(font, code),
+    };
     let text_font = TextFont {
         metrics: TextFont::metrics_of(font, &width),
         font,
     };
-    Some(body(&text_font))
+    Some(body(&text_font, substitute))
 }
 
 /// Replaces a field's selection with `text`, or deletes it when `text` is
@@ -1427,7 +1454,7 @@ fn with_edit<R: Resolve>(
     };
     let plate = ap::field_body::client_rect(&widget.dict, ctx.resolve);
     let config = text_config(ctx, &widget, plate, &state.config);
-    with_font(ctx, &widget, |font| {
+    with_font(ctx, &widget, |font, _substitute| {
         body(&mut state.edit, &config, &font.metrics);
     });
 }
@@ -1458,7 +1485,7 @@ fn with_combo_edit<R: Resolve>(
         return;
     }
     let text = state.edit_text.clone();
-    with_font(ctx, &widget, |font| {
+    with_font(ctx, &widget, |font, _substitute| {
         let mut edit = state
             .edit
             .take()
@@ -1522,14 +1549,17 @@ fn generate<R: Resolve>(
     let selected = selected_rows(state);
     let live = live_state(state, &selected);
     let highlight = focused.then(|| highlight_of(ctx, widget, state)).flatten();
-    with_font(ctx, widget, |font| {
-        ap::widget::generate_with_live(
+    with_font(ctx, widget, |font, substitute| {
+        ap::widget::generate_with_live_faces(
             &widget.dict,
             ctx.catalog,
             font,
             ctx.resolve,
-            highlight.as_ref(),
-            live.as_ref(),
+            ap::widget::LiveInput {
+                caret_and_selection: highlight.as_ref(),
+                live: live.as_ref(),
+                substitute,
+            },
         )
     })
     .flatten()
@@ -1737,7 +1767,7 @@ fn highlight_of<R: Resolve>(
     };
     let plate = ap::field_body::client_rect(&widget.dict, ctx.resolve);
     let config = text_config(ctx, widget, plate, &text.config);
-    with_font(ctx, widget, |font| {
+    with_font(ctx, widget, |font, _substitute| {
         ops::highlight(
             &text.edit,
             &config,
