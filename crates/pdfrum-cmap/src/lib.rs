@@ -42,13 +42,20 @@
 //! on a [`pdfrum_common::Diagnostics`] sink rather than raised, so
 //! a caller can see what was bent without having to handle it.
 //!
-//! # What is *not* here
+//! # Inheritance
 //!
-//! `usecmap` inside an embedded CMap program is recognised and ignored — a
-//! program that inherits a predefined base and overrides a few codes gets only
-//! its overrides (SPEC.md §6). The inheritance that *is* implemented is the
-//! built-in tables' own chaining, which is what makes `GB-EUC-V` a thin
-//! override of `GB-EUC-H`.
+//! Three mechanisms, all live:
+//!
+//! - the built-in tables' own chaining, which is what makes `GB-EUC-V` a thin
+//!   override of `GB-EUC-H`;
+//! - `usecmap` inside an embedded program, resolved by [`parse_embedded`];
+//! - the `/UseCMap` key of an `/Encoding` stream's dictionary, attached by
+//!   [`inherit_from`], which supersedes the operator.
+//!
+//! The last two are ISO 32000-1 §9.7.5.3's two channels, and both are
+//! child-wins: a code the child maps is the child's answer, and only a code
+//! it maps to nothing reaches the parent. The oracle implements neither — see
+//! the marked site in `parser.rs`.
 
 #![forbid(unsafe_code)]
 // Every byte reaching this crate came from an untrusted file or a generated
@@ -109,6 +116,11 @@ pub struct CMap {
     loaded: bool,
     charset: CidSet,
     coding: CidCoding,
+    /// The CMap this one inherits from, named by a `usecmap` operator inside
+    /// the program or by the `/UseCMap` key of its stream dictionary
+    /// (ISO 32000-1 §9.7.5.3). Consulted only where this CMap maps nothing,
+    /// which is what makes inheritance child-wins.
+    inherited: Option<Box<CMap>>,
 }
 
 impl CMap {
@@ -122,6 +134,7 @@ impl CMap {
             loaded: false,
             charset: CidSet::Unknown,
             coding: CidCoding::Unknown,
+            inherited: None,
         }
     }
 
@@ -174,10 +187,14 @@ impl CMap {
 
     /// The CID a character code maps to. Unmapped codes give [`Cid(0)`](Cid),
     /// which is `.notdef`.
+    ///
+    /// A CMap that inherits another through `usecmap` or `/UseCMap` answers
+    /// from its own tables first and asks its parent only where it maps
+    /// nothing — the child-wins rule of ISO 32000-1 §9.7.5.3.
     #[must_use]
     pub fn cid(&self, code: CharCode) -> Cid {
         let charcode = code.0;
-        Cid(match &self.map {
+        let own = match &self.map {
             CidMap::Identity => charcode as u16,
             CidMap::Static { registry, index } => {
                 static_lookup::cid_from_charcode(*registry, *index, charcode)
@@ -185,7 +202,19 @@ impl CMap {
             CidMap::Embedded { direct, additional } => direct
                 .get(charcode)
                 .unwrap_or_else(|| lookup_additional(additional, charcode)),
-        })
+        };
+        // CID 0 is `.notdef` and is the crate's single "maps nothing" answer,
+        // so it is also the point at which the parent is asked. A child that
+        // wants a code to *be* `.notdef` cannot say so — the same limitation
+        // pdf.js has, whose `contains` is likewise a presence test over a map
+        // that never stores a zero.
+        if own != 0 {
+            return Cid(own);
+        }
+        match &self.inherited {
+            Some(parent) => parent.cid(code),
+            None => Cid(0),
+        }
     }
 
     /// The character code that maps to `cid`, or [`CharCode(0)`](CharCode)
@@ -326,6 +355,7 @@ pub fn predefined(name: &Name) -> Option<CMap> {
             loaded: true,
             charset: CidSet::Unknown,
             coding: CidCoding::Cid,
+            inherited: None,
         });
     }
     let row = predefined::resolve(raw)?;
@@ -353,6 +383,7 @@ pub fn predefined(name: &Name) -> Option<CMap> {
         loaded,
         charset: row.charset,
         coding: row.coding,
+        inherited: None,
     })
 }
 
@@ -396,6 +427,12 @@ pub fn from_encoding_name(name: &Name, diags: &mut Diagnostics) -> CMap {
 /// codespace and wide-code ranges one program may declare, which the oracle
 /// leaves unbounded.
 ///
+/// A `usecmap` operator inside the program names a parent, which is resolved
+/// against the built-in CMaps and consulted for every code this program does
+/// not map itself (ISO 32000-1 §9.7.5.3). For the other inheritance channel —
+/// the stream dictionary's `/UseCMap` key, which may name a stream rather
+/// than a built-in — use [`inherit_from`], which takes precedence.
+///
 /// ```
 /// use pdfrum_cmap::{CharCode, Cid, CodingScheme, parse_embedded};
 /// use pdfrum_common::{Diagnostics, Limits};
@@ -415,8 +452,30 @@ pub fn from_encoding_name(name: &Name, diags: &mut Diagnostics) -> CMap {
 #[must_use]
 pub fn parse_embedded(bytes: &[u8], limits: &Limits, diags: &mut Diagnostics) -> CMap {
     let parsed = parser::parse(bytes, limits, diags);
+    // The `usecmap` operand names a built-in CMap. That is the whole reachable
+    // set: a program can only name what the consumer can find without the
+    // document, and pdf.js draws the same line — `createBuiltInCMap`
+    // (cmap.js:672-680) throws on a name outside `BUILT_IN_CMAPS`. So the
+    // parent chain is the built-in tables' own `use_offset` chain, which
+    // `static_lookup::MAX_CHAIN` already bounds; there is no unbounded
+    // recursion to guard on this channel. The `/UseCMap` *dictionary* key can
+    // name a stream, and `inherit_from` carries the depth guard for it.
+    let inherited = parsed.use_cmap.as_deref().and_then(|name| {
+        let cmap = predefined(&Name::from(predefined::strip_slash(name)))?;
+        Some(Box::new(cmap))
+    });
+    if parsed.use_cmap.is_some() && inherited.is_none() {
+        diags.record(Severity::Suspicious, DiagKind::CMapUsecmapUnknown, None);
+    }
+    // §9.7.5.3: a program that declares no codespace range of its own reads
+    // codes the way its parent does. pdf.js copies the parent's ranges under
+    // exactly this condition (`extendCMap`, cmap.js:653-659).
+    let decoder = match &inherited {
+        Some(parent) if !parsed.declared_codespace => parent.decoder.clone(),
+        _ => parsed.decoder,
+    };
     CMap {
-        decoder: parsed.decoder,
+        decoder,
         map: CidMap::Embedded {
             direct: parsed.direct,
             additional: parsed.additional,
@@ -425,7 +484,62 @@ pub fn parse_embedded(bytes: &[u8], limits: &Limits, diags: &mut Diagnostics) ->
         loaded: true,
         charset: parsed.charset,
         coding: CidCoding::Unknown,
+        inherited,
     }
+}
+
+/// Attach the parent a CMap stream's `/UseCMap` key names (ISO 32000-1
+/// §9.7.5.3) — the second of the specification's two inheritance channels.
+///
+/// The dictionary key **supersedes** whatever a `usecmap` operator inside the
+/// program named: the file's explicit statement wins over the program's own.
+/// pdf.js orders the two the same way — `cmap.js:639-643` takes the embedded
+/// operand only `if (!useCMap && embeddedUseCMap)`.
+///
+/// The key may name a stream rather than a built-in CMap, which is why this
+/// takes an already-built parent rather than a name: only the caller has the
+/// resolver. `depth` is the caller's recursion depth, and a chain longer than
+/// [`Limits::max_name_tree_depth`] is refused with a diagnostic — a stream
+/// whose `/UseCMap` names itself would otherwise never terminate, which the
+/// oracle cannot experience because it reads the key at all.
+///
+/// Inheriting codespace ranges is *not* redone here: `parse_embedded` has
+/// already settled the decoder, and a program with no ranges of its own that
+/// reaches this function reads codes the way this parent does.
+///
+/// ```
+/// use pdfrum_cmap::{CharCode, Cid, inherit_from, parse_embedded, predefined};
+/// use pdfrum_common::{Diagnostics, Limits};
+/// use pdfrum_object::Name;
+///
+/// let limits = Limits::default();
+/// let mut diags = Diagnostics::default();
+/// let child = parse_embedded(
+///     b"begincodespacerange <00> <ff> endcodespacerange
+///       1 begincidchar <41> 7 endcidchar",
+///     &limits,
+///     &mut diags,
+/// );
+/// let parent = predefined(&Name::from("Identity-H")).unwrap();
+/// let child = inherit_from(child, parent, 0, &limits, &mut diags);
+///
+/// assert_eq!(child.cid(CharCode(0x41)), Cid(7));      // the child's own
+/// assert_eq!(child.cid(CharCode(0x42)), Cid(0x42));   // inherited
+/// ```
+#[must_use]
+pub fn inherit_from(
+    mut cmap: CMap,
+    parent: CMap,
+    depth: u32,
+    limits: &Limits,
+    diags: &mut Diagnostics,
+) -> CMap {
+    if depth >= limits.max_name_tree_depth {
+        diags.record(Severity::Suspicious, DiagKind::CMapUsecmapDepth, None);
+        return cmap;
+    }
+    cmap.inherited = Some(Box::new(parent));
+    cmap
 }
 
 /// The Unicode scalar a character collection assigns to a CID

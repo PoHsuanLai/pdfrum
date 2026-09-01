@@ -342,7 +342,23 @@ parse_object, read_xref, load.
   `predefined(name: &Name) -> Option<CMap>`, `CMap::decode(&self, bytes) -> impl Iterator<Item=(CharCode, Cid)>`,
   plus an embedded-CMap parser (CID ranges). [spec] 2026-08-29 (font brief
   OQ-1): embedded `usecmap` is a NO-OP, matching PDFium exactly; "usecmap"
-  support means the static predefined-table `use_offset_` chain only. The
+  support means the static predefined-table `use_offset_` chain only.
+  **[spec] 2026-09-02 (oracle-divergence audit A1): the 2026-08-29 ruling is
+  reversed — both of ISO 32000-1 §9.7.5.3's inheritance channels are
+  implemented.** PDFium's `cpdf_cmapparser.cpp:61` is an empty
+  `} else if (word == "usecmap") {` and the `/UseCMap` dictionary key is read
+  nowhere under `core/fpdfapi/`, so the oracle inherits nothing on either
+  channel and an inheriting CMap silently loses every base code; pdf.js
+  implements both with dictionary-key precedence and child-wins merging
+  (`cmap.js:608-613`, `:639-648`, `extendCMap` `:650-669`). PLAN.md §212–229's
+  oracle-bug rule therefore obliges the correct behaviour. API:
+  `parse_embedded` resolves the operator's operand against the built-in CMaps;
+  `inherit_from(cmap, parent, depth, limits, diags) -> CMap` attaches the
+  parent a stream's `/UseCMap` names and supersedes the operator. Lookup is
+  child-wins (only CID 0 reaches the parent); codespace ranges are inherited
+  only when the child declares none; the chain is bounded by
+  `Limits::max_name_tree_depth`. `DiagKind::CMapUsecmapIgnored` is retired and
+  `CMapUsecmapUnknown` / `CMapUsecmapDepth` added. Zero scoreboard rows. The
   generated ~615 KiB table blob is COMMITTED with its generator and
   provenance doc (cmap brief OQ-2); conformance re-derives and diffs it when
   the oracle checkout is present.
