@@ -69,6 +69,23 @@ Violations are review-blockers even when tests pass.
   `dyn` exists at exactly two places: `RenderDevice` and one `&mut dyn
   Cascade` in `pdfrum-form::commit`. Adding a fourth seam is a `[spec]`
   change.
+
+  *When a fourth is proposed, the test is what the library needs from the
+  other side.* Invert — take a trait — only when the library must **ask a
+  question it cannot answer** and cannot proceed until it hears back:
+  `RenderDevice` (rasterize this), `Cascade` (run this script, give me the
+  result), `Resolve` (fetch this object). Do **not** invert to let a host draw
+  something the library merely **knows about**: expose the state and let the
+  host pull it on its own schedule. Ruled 2026-09-01 on M14's viewer chrome —
+  PDFium's `fpdfsdk/pwl` layer is a *closed* list of five pieces (caret,
+  selection band, focus rectangle, scroll bar, combo dropdown), of which only
+  the last two are host UI, so `PopupView`/`ScrollView` value getters plus
+  intent methods (`choose`, `close_popup`) say everything a `FormChrome` trait
+  would, without a trait object threaded through the session, a synchronous
+  mid-dispatch callback contract, or a lifetime on a public type. The same
+  rule explains why the chrome the oracle bakes *inside* a widget's `/Rect`
+  (caret, selection band, the 12-unit scroll-bar reservation) belongs in the
+  appearance stream, while chrome *outside* it is the host's to draw.
 - *Vocabulary impls (Rust idiom, not OOP):* implement std/ecosystem traits
   liberally — `Iterator` (lexer, `Font::decode`, pages, outlines), `Deref`
   (`ByteSpan`, `Resolved`), `TryFrom`, `Default`, `Debug`/`Display`,
