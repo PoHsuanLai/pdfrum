@@ -2013,6 +2013,20 @@ diverge from the oracle** — but only on an input where the oracle crashes, and
 a crashing oracle produces no golden, so no Tier-A comparison exists. Flagged
 in Q5 in case a release-mode oracle silently produces something.
 
+**Relabelled 2026-09-02 (oracle-divergence audit, A50): an oracle bug, so
+declining it is obligatory rather than our choice, and Q5 no longer needs an
+answer.** Verified at the line: `cpdf_textpage.cpp:1357` is
+`CharInfo& charinfo = temp_char_list_.back();` with **no** emptiness guard,
+directly after the `while` at `:1352-1356` that pops trailing spaces from
+`temp_char_list_` and `temp_text_buf_` together. Nothing in §9.10 asks a text
+extractor to crash, and pdf.js has no staging list of this shape to
+dereference — its soft hyphen is normalised to `-` (`unicode.js:57-58`) and
+rejoined at query time (`pdf_find_controller.js:290-307`), so there is no
+sentinel and no back-reference. Q5 asked what a release-mode oracle produces
+instead of crashing; PLAN.md §212–229 settles the case without that answer,
+since a crashing oracle writes no golden either way. `pipeline.rs` carries
+`// [oracle-bug]`. No code change; 0 rows.
+
 **D5 — Link extraction's index mismatch is ported.** §1.15's
 `page_text` (text-buffer indexed) vs `pos`/`start` (char-list indexed)
 mismatch is a genuine upstream bug that changes which substring is checked.

@@ -103,6 +103,21 @@ D1–D10 are implemented as the brief specifies. Three are worth restating:
 - **D4**: the hyphen path's empty-container dereference is declined, not
   ported. It is a crash in the C++ on a crafted file, and a crashing oracle
   writes no golden.
+
+  *Relabelled 2026-09-02 (audit A50): an **oracle bug**, so declining it is
+  obligatory rather than our choice, and the brief's Q5 no longer needs an
+  answer.* Verified at the line: `cpdf_textpage.cpp:1357` is
+  `CharInfo& charinfo = temp_char_list_.back();` with no emptiness guard,
+  straight after the `while` at `:1352-1356` that pops trailing spaces from
+  both staging containers; the arm is reachable with the list empty because
+  `IsHyphen` consults the *finished* `text_buf_` when the staging buffer is
+  empty. `CHECK` failure in debug, undefined behaviour in release. Nothing in
+  §9.10 asks an extractor to crash, and pdf.js has no such staging list to
+  dereference — its soft hyphen is normalised to `-` (`unicode.js:57-58`) and
+  rejoined at query time (`pdf_find_controller.js:290-307`). Q5 asked what a
+  release-mode oracle produces instead of crashing; the oracle-bug rule
+  settles the case without that answer. `pipeline.rs` carries
+  `// [oracle-bug]`. No code change, 0 rows.
 - **D5**: link extraction's character-index-into-text-buffer slice is ported
   as written, with a bounds-checked slice that yields an empty candidate where
   the C++ yields an empty string.

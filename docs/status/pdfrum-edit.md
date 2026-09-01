@@ -150,6 +150,22 @@ Also: **D6**, an object we cannot express contributes nothing rather than an
 unclosed `q`; **D11**, the xref stream's `/Length` is the true byte count;
 **D4**, determinism is a parameter rather than a process-global RNG.
 
+**Relabelled 2026-09-02 (oracle-divergence audit).** D13–D16 (A73), D6 (A72)
+and D3 (A74) are **oracle bugs**, not divergences taken at our discretion —
+PLAN.md §212–229 makes implementing the correct behaviour obligatory, which
+in particular removes the "departure from this program's usual rule" that
+escalation E10 describes. All three sites carry `// [oracle-bug]` with the
+PDFium line and the spec clause: `import/mod.rs` for the four import defects
+(`cpdf_pageorganizer.cpp:150-153` against §7.7.3.2; `cpdf_page.cpp:33-36`;
+`cpdf_npagetooneexporter.cpp:224-228` with `:171`/`:180`/`:284-285` against
+§8.10.1; and the non-transactional import), `content/emit.rs` for the
+unclosed `q`/`BT` (`cpdf_pagecontentgenerator.cpp:945-946` and `:968-970`
+against §7.8.2, §9.4.1, §8.4.4), and `write/xref.rs` for the truncated offset
+(`cpdf_creator.cpp:404`, `:445` with `cpdf_creator.h:95` and
+`fx_types.h:16`, against §7.5.4). pdf.js implements none of page import, N-up
+imposition or content regeneration, so each reading rests on the spec — stated
+rather than read as agreement. No code changed and no golden moves; 0 rows.
+
 ## Errata against the design brief
 
 **R12 is stated too strongly.** The brief says an untouched page's

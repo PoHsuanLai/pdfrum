@@ -30,6 +30,46 @@
 //! accepted. `/BleedBox`, `/TrimBox` and `/ArtBox` are **not** in the list
 //! and are lost unless the page stated them itself.
 
+// [oracle-bug] The four import-path defects this module fixes rather than
+// ports, each verified at the line. They were ruled on as escalation E10 —
+// "a departure from this program's usual rule", taken at our discretion; the
+// audit's A73 relabels all four as **oracle bugs**, which PLAN.md §212-229
+// makes obligatory rather than optional to fix. Each is pinned by its own
+// test in `tests/import.rs`.
+//
+// 1. **The hardcoded destination object number.**
+//    `cpdf_pageorganizer.cpp:150-153`: a cloned object whose `/Type` is
+//    `Pages` returns the literal `4`, which is right only because
+//    `FPDF_CreateNewDocument` happens to number its page tree node 4. Any
+//    other destination gets a reference to whatever object 4 is. §7.7.3.2
+//    makes `/Parent` a reference to the node's actual parent, not to a
+//    number a producer guessed. Ours returns the destination's real
+//    `/Root /Pages`.
+// 2. **Import is not transactional.** A missing source page returns false
+//    *after* the destination page was created and inserted, and after
+//    earlier pages of the batch were exported, leaving a stray blank page
+//    and a half-imported document. Nothing in ISO 32000-1 sanctions a failed
+//    operation leaving debris; ours stages every mutation in the overlay.
+// 3. **The source is mutated.** `CPDF_Page`'s constructor writes
+//    `/Type /Page` into a source page dictionary that lacked one
+//    (`cpdf_page.cpp:33-36`), so the N-up path is not read-only with respect
+//    to what it copies from. Ours cannot be: the source is shared immutable
+//    bytes, and the missing `/Type` is supplied on the copy.
+// 4. **The N-up name reuse.** `cpdf_npagetooneexporter.cpp:224-228`
+//    (`AddSubPage`) reuses a name from `src_page_xobject_map_`, cleared once
+//    at `:171`, but the registry it must also appear in,
+//    `xobject_name_to_number_map_`, is cleared **per output sheet** at
+//    `:180` and written only inside `MakeXObjectFromPage` (`:284-285`),
+//    which the cache hit skips. So a source page reused on a later sheet
+//    emits `/Xn Do` against a `/Resources /XObject` with no `Xn` entry:
+//    §8.10.1 requires the name to be in the resources, and the sub-page
+//    renders blank. Ours registers the name on every sheet it appears on.
+//
+// pdf.js implements no page import or N-up imposition, so there is no
+// independent implementation to weigh; the reading rests on the spec, and on
+// three of the four producing output PDFium itself would then fail to render
+// correctly. Two are annotated as bugs in the C++ source.
+
 mod copy;
 mod inherit;
 mod nup;

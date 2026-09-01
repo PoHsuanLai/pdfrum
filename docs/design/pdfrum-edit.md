@@ -1391,6 +1391,18 @@ behavior change. Similarly `WriteDWord`'s `FXSYS_itoa(uint32_t → int)` would
 misprint object numbers above 2³¹, which `kMaxObjectNumber = 24 · 1024 · 1024`
 (`cpdf_parser.h:64`) makes unreachable.
 
+**Relabelled 2026-09-02 (oracle-divergence audit, A74): this is an oracle
+bug, so the fix is obligatory rather than optional.** Verified:
+`cpdf_creator.cpp:404` and `:445` pass `object_offsets_[…]` — a
+`std::map<uint32_t, FX_FILESIZE>` (`cpdf_creator.h:95`) whose value type is
+`int64_t` (`fx_types.h:16`) — through a `%d` conversion that reads 32 bits.
+Past 2 GiB the printed offset is the low half read as signed, and §7.5.4
+requires the entry to give the object's byte offset from the file's
+beginning, so the table names the wrong bytes and no reader can open the
+file. A format-string type mismatch, not a decision. pdf.js has no comparable
+serializer path. `write/xref.rs` carries `// [oracle-bug]`; 0 rows, since no
+fixture is 2 GiB.
+
 **D4 — determinism is a parameter, not a global.** §4.3. `SaveOptions` carries
 `id_source` and the subset-tag seed. Default behavior matches the C++
 (fresh randomness per save); tests pin a seed. This is *required* by STYLE §1's
@@ -1415,6 +1427,17 @@ same for every well-formed input (the C++'s trailing `q`/`BT` are closed by the
 stream-level `Q` and by `ET`-less end-of-stream, both of which PDFium tolerates
 on re-parse); the difference is only that our output stays parseable. Recorded
 as a deliberate divergence with a diagnostic.
+
+**Relabelled 2026-09-02 (oracle-divergence audit, A72): an oracle bug, so
+declining it is obligatory rather than a preference.** Verified:
+`cpdf_pagecontentgenerator.cpp:945-946` writes the graphics prefix and then
+`*buf << "BT ";`, and `:968-970` is a bare `return` for any font class that is
+neither Type1, TrueType nor CID — a Type 3 font, most obviously. §7.8.2
+requires a content stream's operators to be balanced, `BT` with `ET` (§9.4.1)
+and `q` with `Q` (§8.4.4); an unmatched `BT` leaves every later operator
+inside a text object never meant to hold them. pdf.js does not regenerate page
+content, so the reading rests on the spec and on PDFium writing a file it must
+itself re-parse. `content/emit.rs` carries `// [oracle-bug]`. 0 rows.
 
 **D7 — `Document` stays immutable; edits live in an overlay.** The C++
 `CPDF_Document` is a mutable indirect-object holder that the writer walks,
@@ -2157,6 +2180,25 @@ bugs in the C++ source itself. Confirm the ruling; the conservative
 alternative is to port each verbatim behind a diagnostic and revisit if
 conformance shows a difference, which costs nothing but leaves us shipping
 known-broken output.
+
+**Relabelled 2026-09-02 (oracle-divergence audit, A73): all four are oracle
+bugs, which removes the departure this escalation describes.** PLAN.md
+§212–229's rule, ruled 2026-09-02, makes implementing the correct behaviour
+obligatory wherever the C++ is shown wrong against the specification — so E10
+is no longer an exception to the program's usual rule but an instance of it.
+Verified at the line: the hardcoded `return 4`
+(`cpdf_pageorganizer.cpp:150-153`) against §7.7.3.2's `/Parent`; the
+non-transactional import, which no clause sanctions; the source mutation
+(`cpdf_page.cpp:33-36`); and the N-up name reuse, where
+`cpdf_npagetooneexporter.cpp:224-228` takes a cached name while the registry
+that must also carry it (`xobject_name_to_number_map_`) is cleared per sheet
+at `:180` and written only at `:284-285` inside the path the cache hit skips,
+so §8.10.1's requirement that an invoked name be present in the resources is
+broken and the sub-page renders blank. pdf.js implements neither page import
+nor N-up, so the reading rests on the spec and on three of the four producing
+output PDFium itself would fail to render. `import/mod.rs` carries the
+umbrella `// [oracle-bug]`; each fix stays pinned in `tests/import.rs`. 0
+rows.
 
 **E11 — `Bug40162073` is a known-bad import golden.** `fpdf_ppo_embeddertest.cpp:576`
 asserts that importing a page from `bug_40162073.pdf` renders to

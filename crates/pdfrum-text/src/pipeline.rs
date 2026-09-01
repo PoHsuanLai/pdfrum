@@ -894,6 +894,25 @@ impl<'a, R: Resolve> Builder<'a, R> {
         while self.line.last_unit() == Some(0x20) {
             self.line.pop();
         }
+        // [oracle-bug] cpdf_textpage.cpp:1357 is
+        // `CharInfo& charinfo = temp_char_list_.back();` with **no emptiness
+        // guard**, immediately after the `while` at `:1352-1356` that pops
+        // trailing spaces from `temp_char_list_` and `temp_text_buf_`
+        // together. Reaching the arm requires `IsHyphen` to have said yes,
+        // and `IsHyphen` consults `text_buf_` — the *finished* text — when
+        // the staging buffer is empty, so a crafted file can arrive here with
+        // `temp_char_list_` empty and take `back()` on it. That is a `CHECK`
+        // failure in debug and undefined behaviour in release. No reading of
+        // §9.10 asks a text extractor to crash, and STYLE.md §3 forbids the
+        // equivalent outright. pdf.js keeps no sentinel and no staging list of
+        // this shape — its soft hyphen is normalised to `-`
+        // (`unicode.js:57-58`) and rejoined at query time
+        // (`pdf_find_controller.js:290-307`) — so there is nothing there to
+        // dereference. We record a diagnostic and emit no hyphen. This is the
+        // audit's A50, previously recorded as design brief D4 and Q5 — a
+        // divergence flagged in case a release-mode oracle produced something
+        // rather than crashing; the oracle-bug rule settles it without
+        // needing that answer, since a crash writes no golden either way.
         let Some(last) = self.line.last_char_mut() else {
             // The C++ dereferences an empty list here, which is a crash on a
             // crafted file. We decline it (design brief D4): a crashing

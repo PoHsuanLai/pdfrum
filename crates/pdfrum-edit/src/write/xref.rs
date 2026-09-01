@@ -91,6 +91,25 @@ impl ObjectOffsets {
 
 /// One entry line: a ten-digit offset, a five-digit generation of zero, and
 /// the in-use marker.
+//
+// [oracle-bug] cpdf_creator.cpp:404 and :445 write the entry as
+// `ByteString::Format("%010d 00000 n\r\n", object_offsets_[i])`, where
+// `object_offsets_` is a `std::map<uint32_t, FX_FILESIZE>`
+// (`cpdf_creator.h:95`) and `FX_FILESIZE` is `int64_t`
+// (`fx_types.h:16`) — so a 64-bit offset is passed through a `%d` conversion
+// that reads 32 bits. Past 2 GiB the printed offset is the low half,
+// reinterpreted as signed: §7.5.4 requires the entry to give the byte offset
+// of the object from the file's beginning, and a table whose offsets name the
+// wrong bytes is a file no reader can open. This is a format-string type
+// mismatch, not a design decision — the same function's `WriteDWord` has the
+// mirror-image `FXSYS_itoa(uint32_t -> int)` problem, which
+// `kMaxObjectNumber = 24 * 1024 * 1024` (`cpdf_parser.h:64`) happens to make
+// unreachable. pdf.js writes incremental updates with its own serializer and
+// has no comparable path. We format `u64` with `{:010}`, which produces
+// identical bytes below 2^31 and correct bytes above it. This is the audit's
+// A74, previously recorded as design brief D3 — "a fix, not a behavior
+// change", where the oracle-bug rule makes the fix obligatory. Unreachable on
+// the corpus: no fixture is 2 GiB.
 fn entry_line(out: &mut Vec<u8>, offset: u64) {
     out.extend_from_slice(format!("{offset:010} 00000 n\r\n").as_bytes());
 }
