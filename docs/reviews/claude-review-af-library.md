@@ -421,6 +421,17 @@ main, and I re-ran the workspace there to confirm after landing.
 Two of the six are one-line repros and worth reporting. Paragraphs written to
 be pasted as-is.
 
+> **2026-09-02, superseded in part.** The file-ready text now lives in
+> `docs/upstream/pdfium-js-issues.md`, in the Chromium tracker's template, with
+> observed output from a V8-enabled PDFium and one repro PDF per issue under
+> `docs/upstream/pdfium-repro/`. Five issues, not two: the am/pm parse, the
+> Sunday weekday and the case-split `AVG` divide reproduce as cleanly as these.
+> One claim below is withdrawn: `FX_ParseDateUsingFormat(L"29/02/2000", …)`
+> does **not** return `kBadDate` — measured, it succeeds, because the
+> day-of-month check is a range check and the two month tables agree through
+> February. The observable damage is the one-day shift from March on and
+> `00/00/2000` for 31 December. The paragraph is left as written.
+
 **`IsLeapYear` has an inverted century-exception clause.**
 `fxjs/fx_date_helpers.cpp:71` reads
 `return (year % 4 == 0) && ((year % 100 != 0) || (year % 400 != 0));`. The
