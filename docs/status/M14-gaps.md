@@ -556,3 +556,297 @@ sweep would have caught half-finished work just as easily.
   written from here would overwrite whatever the others measure next. The
   numbers are here so whoever does commit it can check them.
 - No benchmarks and no ratchet update, as instructed.
+
+## Track B — the popup as an API (`pdfrum-form`, `pdfrum`, `pdfrum-tool`)
+
+Three items: OWED 4 (the open combo dropdown), OWED 8 (`clear_siblings` cannot
+draw the difference) and OWED 10 (the last `generate_with_live` note). **All
+three closed.**
+
+### The ruling this track implements
+
+STYLE §2b, 2026-09-01: *a library has no business creating a dropdown window*.
+`fpdfsdk/pwl` is a closed list of five chrome pieces — caret, selection band,
+focus rectangle, scroll bar, combo dropdown — and the line between them is
+whether the piece falls **inside** the widget's `/Rect`. The first three do,
+so they arrive with the appearance stream, which is fitted onto that rectangle.
+The last two do not, and drawing outside it means creating a window.
+
+So: **no `FormChrome` trait and no fourth seam.** The seam list stays
+`RenderDevice`, `Resolve`, `Cascade`. What ships is state + geometry + intent —
+`PopupView`, `ScrollView`, `choose`, `close_popup` — written up as SPEC §15.10
+in `4d883d4`, including the four places the shipped shape differs from the
+ruling's sketch and why each one differs.
+
+### A record before the items: where the first block actually landed
+
+The state-and-geometry half of OWED 4 — `popup.rs`, and the changes to
+`route.rs`, `page.rs`, `field/mod.rs`, `lib.rs` and `tests/combo_popup.rs` —
+is committed inside **`0f77c8e`**, whose message describes only Track A's
+`vt::hit` caret work and says nothing about a dropdown. It got there because a
+concurrent track ran a non-path-scoped commit (`git add -A` or `git commit -a`)
+while those six files were staged and about to be committed under their own
+message.
+
+The content is correct and `0f77c8e` was already pushed, so it stays where it
+is: the fix for a wrong attribution is the record, not a rewrite of shared
+history. M14.md's OWED row for item 4 therefore cites `0f77c8e` alongside
+`1e9365a` and `1475455`, and this paragraph is here so a reader following that
+row is not surprised by a commit message that never mentions the thing they
+came looking for.
+
+This is also the concrete cost of `git add -A` in a shared tree, which is why
+the constraint against it exists.
+
+### OWED 4 — the open combo dropdown. **Closed, `0f77c8e` + `1e9365a` + `1475455`.**
+
+Four parts, and the third is the one that mattered most.
+
+**(a) State.** `ChoiceState` gains `popup_open` and `hovered`. Which events
+open and close it is read from the C++ rather than assumed, and two of the four
+answers are counter-intuitive:
+
+- **`Escape` does not close it.** `CPWL_Edit::OnCharInternal`
+  (`cpwl_edit.cpp:586-590`) filters `kEscape` out, and a combo box never
+  reaches `CFFL_TextField`'s escape handler because `CFFL_ComboBox::OnChar`
+  forwards to `CFFL_TextObject`. Only a text field's filler destroys its
+  window on Escape.
+- **`Space` opens a gated combo and never shuts it**, where `Return` toggles.
+  `CPWL_ComboBox::OnChar` (`:452-472`) runs `SetPopup(true)` only when the list
+  is already closed, and returns `true` either way. A symmetric implementation
+  gets this wrong in the direction that looks tidier.
+
+The four that *do* close it: kill-focus (`:52-58`), a release on a list row
+(`:505-516`), a second press on the drop button (`:497-503`, a toggle), and
+`Return`. `SetPopup`'s **failure returns are reproduced too** — a list with no
+options and one with no room both leave it shut while the click stays
+*consumed*, which is a different answer from ignored.
+
+**(b) Geometry.** `popup::place` is `SetPopup`'s clamp (`:325-377`) followed by
+`QueryWherePopup` (`cffl_interactiveformfiller.cpp:670-729`), as one function
+over numbers. Three parts are easy to get backwards and are pinned by tests:
+the three-row floor applies only **above** three options (`> 3`), it
+**outranks** the 140-unit cap because upstream clamps the constant into
+`[min, max]` rather than clamping the wanted height, and a popup squeezed on
+both sides takes the larger side's **room** rather than the height it asked
+for.
+
+Verified against both goldens' own pixels. `bug_736695_2`'s list is
+28.784 units — two rows of 13.392 plus a 2-unit border — hanging from the
+widget's bottom edge at page y 315.9, which is device rows 26..54 in a 342-tall
+page: exactly the band the golden paints. `bug_1372651`'s is 42.176, three
+rows, device rows 65..107.
+
+**(c) Routing — the real correctness gap, and it was invisible to the metric.**
+A mouse-down inside the popup's computed rectangle now **selects that row**.
+Upstream this is not a special case at all: `CPWL_Wnd::OnLButtonDown` walks its
+child windows before anything else and the list is a child. Here the widget hit
+test is rect containment over `/Annots`, which the list is not in — so the same
+click read as a **miss**, and a miss kills focus.
+
+`bug_736695_3.in#form-events` scored **0.997003 while selecting nothing**, and
+M14.md recorded it as a false pass for exactly that reason: the whole
+disagreement is a 150×15 box on a 595×342 page, which SSIM cannot resolve.
+Two tests in `crates/pdfrum-form/tests/combo_popup.rs` —
+`a_click_inside_the_open_list_selects_that_row` and
+`choosing_the_second_row_selects_it` — fail on the old behaviour. Verified by
+disabling the two `popup_hit` interceptions and watching exactly those two go
+red, and nothing else.
+
+Down hover-selects and **up commits** (`CPWL_CBListBox::OnLButtonUp` →
+`NotifyLButtonUp`), which is what makes a press that drags off the list leave
+the field alone. Hover is recorded apart from selection because dismissing the
+list must leave the stored value untouched — which is precisely what
+`bug_736695_4` renders, and why that row was already passing at 0.999998.
+
+`1475455` finished the commit half: `SetSelectText` (`:518-523`) *ends* on a
+`SelectAllText()` and `NotifyLButtonUp` calls another one, so a chosen row
+lands in the text half **with every character selected**. And `highlight_of`
+answered `None` for anything but a text field, so even a selected editable
+combo had no band to draw. An editable combo's text half **is** a `CPWL_Edit`
+(`:190-203`), read-only only when the box is gated (`:115-118`), so it gets the
+same caret and the same bands — measured in the plate left of the drop button,
+which is the box `with_combo_edit` lays the text out in. A gated combo still
+answers nothing, which is right.
+
+**(d) Oracle parity, in the tool only.** `crates/pdfrum-tool/src/chrome.rs`.
+The oracle's `pdfium_test` **is** a host — it composites `FPDF_FFLDraw` over
+its bitmap — so the tool has to be one too, and it draws the list the library
+declines to.
+
+It draws it by **describing the popup as a list box and asking the ordinary
+appearance generator to draw that**. `ap::field_body`'s list-box body already
+has the row stack from the plate's top, the laid-out line height, the navy
+`(0, 51, 113)` band, the white text on it and the clip; reusing it is what
+keeps a popup's rows and a list box's rows from drifting apart, and it is a
+synthetic dictionary rather than a second painter. Placed by `MatchRect` into
+a rectangle of its own and appended after the annotation pass — never folded
+into the widget's `/AP`, which is fitted onto `/Rect` and would have squeezed
+twenty-nine units into fourteen.
+
+Two details cost a measurement each and are worth the record:
+
+- **The band is written as `/V`, the row's text, never as `/I`.**
+  `ap::field_body::selected_indices` is `/V`-first and matches by *value*.
+  That is correct for its own job — OWED item 7 settles it: without
+  `/NeedAppearances` the producer is `CPDFSDK_AppStream::SetAsListBox` →
+  `GetSelectedIndex`, and making the appearance reader index-first would flip
+  `listbox_form.{in,pdf}` to fail. So an `/I [2]` here matched nothing and
+  banded no row at all. A synthetic dictionary should speak the channel the
+  reader speaks rather than ask the reader to change.
+- **A widget with no `/DA` anywhere falls through to `FormFonts`' own
+  fallback face** rather than giving up. `bug_736695_4.pdf` has no `/DA` on
+  the widget and none on the form, and reaching for `default_appearance`
+  alone drew no list at all on it — which was the whole of `bug_736695_2`.
+
+The 12-unit scroll-bar reservation **does not apply**: `GetListRect`
+(`cpwl_list_box.cpp:352-355`) is what `SetPlateRect` receives and therefore
+what the rows are measured against, and it deflates by the border alone. Only
+`GetClientRect` subtracts a bar, and `GetScrollBarWidth` answers **zero** while
+the bar is invisible, which it is whenever the content fits. Neither target
+fixture scrolls.
+
+### OWED 8 — `clear_siblings` records the chosen control and cannot draw it. **Closed, `1e9365a`, on `6e87424`.**
+
+The `pdfrum-doc` half was requested additively and landed as `6e87424`:
+`ap::widget::LiveInput` gained `appearance_state: Option<&[u8]>`, threaded to
+the single `is_checked` call site, with `None` reading the widget's own `/AS`
+byte for byte.
+
+The `pdfrum-form` half is `ToggleState::state_for_control`, which is the
+per-kid answer a field-level record can give:
+`CPDF_FormField::CheckControl` (`cpdf_formfield.cpp:683-716`) sets the clicked
+control's `/AS` to **that control's own** on-state name and every other
+control of the field to `Off`. A session holds one record per field, so all it
+can store is which control was chosen — and turning that back into a per-kid
+state is three cases: the chosen kid its own name, a sibling `Off`, and a
+group nothing has clicked `None`, which is the file's `/AS` unchanged so a
+loaded group renders exactly as written.
+
+M14 recorded that storing the chosen control now would make this a one-line
+change once the seam existed. It was: one `match` in `route.rs`'s `generate`.
+
+### OWED 10 — the last `generate_with_live` caller. **Closed, `1e9365a`.**
+
+Half of this was already paid in M14 (`8e45897` migrated `generate`); what
+remained was, on inspection, **only the note**. `route.rs` had no
+`generate_with_live` caller left — its one live call site was already
+`generate_with_live_faces` — and the survivor was a doc comment on
+`clear_siblings` naming the migration as still owed. That comment is now the
+paragraph describing how the `/AS` override actually works, so the note is
+gone because the thing it pointed at is done rather than because it was
+deleted.
+
+### Conformance: six rows, all of them form-events, all upward
+
+Measured in isolation, which is the only honest way to attribute a delta with
+three tracks in one tree. A worktree at this track's HEAD with **only** Track
+B's three commits reverted (and `6e87424`'s construction site patched shut, so
+the baseline builds at all) was scored against the same corpus and goldens,
+and the two boards diffed field by field:
+
+```
+rows 1705 -> 1705,  0 added, 0 removed
+differing rows: 6
+rows with no `#form-events` in the path that Track B moved: 0
+```
+
+| status | ssim | delta | row |
+|---|---|---|---|
+| fail → fail | 0.910500 → 0.981546 | **+0.071046** | `bug_1372651.in#form-events` |
+| fail → fail | 0.910500 → 0.981546 | **+0.071046** | `bug_1372651.pdf#form-events` |
+| fail → **pass** | 0.979073 → 0.999650 | **+0.020577** | `bug_736695_2.in#form-events` |
+| pass → pass | 0.997017 → 0.999787 | +0.002770 | `bug_736695_3.in#form-events` |
+| pass → pass | 0.995299 → 0.999998 | +0.004699 | `combobox_form.in#form-events` |
+| pass → pass | 0.995299 → 0.999998 | +0.004699 | `combobox_form.pdf#form-events` |
+
+Those are the popup's own numbers, measured before the ClearType call site
+below existed. The final board, with it, reads `bug_1372651.{in,pdf}`
+**0.981722**, `bug_736695_2.in` **0.999673** and `bug_736695_3.in`
+**0.999800**; the `combobox_form` pair is unchanged at 0.999998.
+
+**All 1699 rows without `#form-events` in their path are byte-identical** —
+status, tags, tier A, tier B and notes. (The `tags` field is empty on passing
+rows, a scoreboard convention, so the path is the reliable discriminator and
+the count above uses it.)
+
+Two of the six deserve a word. `bug_736695_3` is the **false pass M14 recorded
+becoming a real one**: it now selects `Spain`, leaves it selected, and draws
+the navy band the golden draws — 157 band pixels against the golden's 135, in
+the right place with the glyphs knocked out. And `combobox_form.{in,pdf}` is
+one of M14's three starred sub-1% false passes, closing as a side effect of the
+editable combo's selection band.
+
+`bug_1372651` does not cross the 0.99 floor and this is the honest reason: its
+residue is glyph antialiasing. Measured against its golden directly, differing
+pixels went **3590 → 1044** and max channel **255 → 250**, with the `Item3`
+navy band matching pixel for pixel and the list at the right size in the right
+place. What is left is subpixel-filter arithmetic, and the ClearType call site
+below closed the larger half of it: 1044 → 875 differing pixels, with the
+list's coloured fringe pixels going from 1092 to **1509 against the golden's
+1511**. The remainder — 315 in the widget's own text at max channel 250, 560 in
+the popup's glyphs and 295 on the sibling push button's caption, all at 105 —
+is the LCD filter's precision rather than anything about the dropdown, whose
+geometry, border and selection band are exact.
+
+### OWED 2's call site — landed here, `703a94a` + the popup's own `live_edit`
+
+Track C's first plumbing commit named a call site in `pdfrum-form` that could
+not exist, this track said so, and `f505534` replaced it with a per-object
+carrier: `AnnotOverlay::set_live_edit` → `annot_render` →
+`build_form_object_with` → `FormObject::live_edit` → `walk.rs`'s form options,
+which folds the override into that subtree alone. The two call sites are both
+in `pdfrum-tool` and both are one line:
+
+- `session_overlay` marks the annotation whose appearance is a `LiveEdit`;
+- `chrome::push_popup` builds its form object with `live_edit = true`.
+
+The second is not an afterthought. The oracle's list is a `CPWL_Wnd`, and
+`CPWL_ListBox::DrawThisAppearance` (`cpwl_list_box.cpp:66-84`) sets every row
+through `CPWL_EditImpl::DrawEdit` → `DrawTextString`
+(`cpwl_edit_impl.cpp:40-57`) — the same local `CPDF_RenderOptions` a focused
+text field's glyphs take. Drawing the popup grey left 419 of the golden's
+fringe pixels unmatched inside the list alone.
+
+Board effect of the pair, on rows that are not this track's: `focused_ltr`
+0.999311 → 0.999513, `selected_ltr` 0.999682 → **0.999936** with max channel
+84 → **31**. That is the first corpus evidence the LCD filter has had — Track
+C could pin its arithmetic in unit tests but had no oracle pixels to compare
+against — and the fringes do match: within two pixels on the popup's count,
+and a max channel that more than halves on the row with the most selected
+text.
+
+### Verification
+
+- Final board, all three tracks in tree: **1705 files, 1652 pass, 53 fail**,
+  `--check-regressions` clean. One row crosses and it is this track's:
+  `bug_736695_2.in#form-events` fail → pass. Four form-events rows still fail —
+  `bug_1372651.{in,pdf}` at 0.981722 and `scrollable_widgets1.{in,pdf}` at
+  0.989732, the latter being OWED 5's scroll-bar chrome, out of M14 by the
+  brief's appendix.
+- `cargo nextest run -p pdfrum-form -p pdfrum -p pdfrum-tool`: **612 passed**,
+  up from 566 at M14's close. `pdfrum-form` alone is 324, up from 307 before
+  the select-all half.
+- `cargo test --doc -p pdfrum`: 43 passed.
+- `cargo clippy -p pdfrum-form -p pdfrum -p pdfrum-tool --all-targets
+  -- -D warnings`: clean.
+- `cargo fmt -p <crate>` per crate, never `--all`, and `scripts/ci.sh` was not
+  run: two other tracks hold uncommitted work in this tree and either would
+  have reformatted or re-scored their files.
+- **The scoreboard is not committed.** The board this track measured is the
+  three-track tree's, so committing it from here would attribute two other
+  tracks' movements to this one and overwrite whatever they measure next. The
+  isolated six-row delta above is the number that belongs to Track B.
+- No benchmarks and no ratchet update, as instructed.
+
+### One durable note for whoever touches `LiveInput` next
+
+`ap::widget::LiveInput` is **not** `#[non_exhaustive]`, and `6e87424`'s new
+`appearance_state` field therefore broke this crate's exhaustive struct literal
+and left `pdfrum-form` failing to build for a period. The answer is *not* to
+spell the literal loosely — naming every field is what makes an upstream
+addition a compile error at the call site rather than a silent default, which
+is the property that caught this one. It is to mark the struct: whoever adds a
+sixth field should put `#[non_exhaustive]` on it first and give it a `Default`,
+so a caller outside `pdfrum-doc` can still build one. The note also lives at
+the construction site in `route.rs`, where a reader will actually hit it.
