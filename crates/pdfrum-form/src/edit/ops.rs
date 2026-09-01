@@ -76,6 +76,49 @@ pub struct TextEdit {
     pub undo: UndoStack,
 }
 
+/// The text as the layout will hold it, given whether the field is
+/// multiline.
+///
+/// A **single-line** field has no way to represent a line break, so every one
+/// is **removed** — not replaced with a space, and not treated as a
+/// terminator that truncates the rest. `"Foo\nBar"` is `"FooBar"`, and
+/// `"Foo\n"` is `"Foo"`. A `\r\n` or `\n\r` pair is one break rather than
+/// two, which is why the pairs are consumed together.
+///
+/// A multiline field keeps its breaks, normalized to `'\n'` so that the four
+/// spellings of one break compare equal.
+///
+/// This is not a convenience: the layout engine already applies exactly this
+/// rule when it lays the text out, so a control that stored the raw string
+/// would disagree with its own layout about how many characters it has.
+#[must_use]
+pub fn normalize_breaks(text: &str, multi_line: bool) -> String {
+    let chars: Vec<char> = text.chars().collect();
+    let mut out = String::with_capacity(text.len());
+    let mut index = 0;
+    while index < chars.len() {
+        let ch = chars.get(index).copied().unwrap_or('\0');
+        match ch {
+            '\r' | '\n' => {
+                // The partner of a pair is consumed with it, so a `\r\n` is
+                // one break and not two empty lines.
+                let partner = if ch == '\r' { '\n' } else { '\r' };
+                if chars.get(index + 1) == Some(&partner) {
+                    index += 1;
+                }
+                if multi_line {
+                    out.push('\n');
+                }
+            }
+            // A tab is set as a space, which the layout also does.
+            '\t' => out.push(' '),
+            _ => out.push(ch),
+        }
+        index += 1;
+    }
+    out
+}
+
 /// The offset a field's text is drawn with.
 ///
 /// Top alignment shifts nothing; centred alignment shifts by half the slack
@@ -99,6 +142,13 @@ impl TextEdit {
     ///
     /// `centred` says whether the field draws its text vertically centred,
     /// which a single-line field does and a multiline one does not.
+    ///
+    /// The text is **normalized to what the layout will hold** before it is
+    /// stored — see [`normalize_breaks`]. Storing the caller's string
+    /// unchanged would break the invariant this type exists to keep: a
+    /// single-line field's layout silently drops line breaks, so a raw
+    /// `"Foo\nBar"` would report seven characters while the layout held six,
+    /// and every index derived from one would miss in the other.
     #[must_use]
     pub fn new(
         text: impl Into<String>,
@@ -106,7 +156,7 @@ impl TextEdit {
         metrics: &Metrics<'_>,
         centred: bool,
     ) -> TextEdit {
-        let text = text.into();
+        let text = normalize_breaks(&text.into(), config.multi_line);
         let layout = vt::layout(&text, config, metrics);
         let caret = vt::hit::begin_place(&layout);
         let offset = vertical_offset(centred, config, &layout);
@@ -185,6 +235,45 @@ impl TextEdit {
     /// Drops the selection, leaving a live anchor at the caret.
     pub fn select_none(&mut self) {
         self.selection = Selection::collapsed_at(self.caret);
+    }
+
+    /// Selects a **signed** character range, the way an embedder asks for one.
+    ///
+    /// The signs are not an accident of the C API and are not clamping: they
+    /// are three distinct instructions sharing one signature, and the order
+    /// they are tested in is what makes them unambiguous.
+    ///
+    /// - `(0, negative)` selects **everything**. This is the documented
+    ///   spelling of "to the end", and it is tested first, so it wins over
+    ///   the rule below even though its end is also negative.
+    /// - `(negative, anything)` selects **nothing**. A negative *start* is
+    ///   not clamped to zero — it clears the selection outright, so
+    ///   `(-8, -1)` is empty rather than the whole field.
+    /// - otherwise the two are ordered and used as they are, so `(23, 12)`
+    ///   and `(12, 23)` select the same run. An end past the text clamps to
+    ///   its end, which is ordinary index saturation rather than a fourth
+    ///   rule.
+    pub fn set_selection(&mut self, start: i32, end: i32) {
+        if start == 0 && end < 0 {
+            self.select_all();
+            return;
+        }
+        if start < 0 {
+            self.select_none();
+            return;
+        }
+        let len = self.len_chars();
+        let clamp = |index: i32| usize::try_from(index).unwrap_or(0).min(len);
+        let (from, to) = if start < end {
+            (clamp(start), clamp(end))
+        } else {
+            (clamp(end), clamp(start))
+        };
+        let begin = vt::hit::place_of_word_index(&self.layout, from);
+        let finish = vt::hit::place_of_word_index(&self.layout, to);
+        self.selection = Selection::new(begin, finish);
+        self.previous_caret = self.caret;
+        self.caret = finish;
     }
 }
 
