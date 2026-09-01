@@ -42,14 +42,34 @@ pub(crate) const NOT_SUPPORTED: &str = "Operation not supported.";
 /// `JSMessage::kParamError`, the message sixteen of the goldens assert.
 pub(crate) const PARAM_ERROR: &str = "Incorrect number of parameters passed to function.";
 
-/// The error a declined method throws.
-fn unsupported() -> JsError {
-    JsNativeError::typ().with_message(NOT_SUPPORTED).into()
+/// **Every error a bound function throws carries its own name.**
+///
+/// `JSFormatErrorString` (`fxjs/js_resources.cpp:97-108`) is
+/// `class_name` + optional `"." + property_name` + `": "` + the message, and
+/// every call site in `fxjs/` routes through it — the `AF*` wrapper at
+/// `cjs_publicmethods.cpp:159-161`, and `JSMethod`/`JSPropGetter` for the
+/// object methods. So the goldens read
+/// `util.printd: Incorrect number of parameters passed to function.` and
+/// `AFDate_Format: Incorrect number of parameters passed to function.`, not
+/// the bare message.
+///
+/// This is a scoring requirement rather than a nicety: roughly seventy of the
+/// golden assertions are arity checks, and every one of them quotes the
+/// qualified form. A bare message fails all of them.
+pub(crate) fn qualified(name: &str, message: &str) -> JsError {
+    JsNativeError::typ()
+        .with_message(format!("{name}: {message}"))
+        .into()
 }
 
-/// The error a call with too few arguments throws.
-pub(crate) fn param_error() -> JsError {
-    JsNativeError::typ().with_message(PARAM_ERROR).into()
+/// The error a declined method throws, qualified by its own name.
+fn unsupported(name: &str) -> JsError {
+    qualified(name, NOT_SUPPORTED)
+}
+
+/// The error a call with too few arguments throws, qualified by its own name.
+pub(crate) fn param_error(name: &str) -> JsError {
+    qualified(name, PARAM_ERROR)
 }
 
 /// The host state, or `None` if the realm was built without one — which
@@ -99,7 +119,7 @@ fn string_of(value: &JsValue, context: &mut Context) -> JsResult<String> {
 fn app_alert(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let expanded = expand_keywords(args, &["cMsg", "nIcon", "nType", "cTitle"], context)?;
     let Some(message_value) = expanded.first().filter(|v| !v.is_undefined()) else {
-        return Err(param_error());
+        return Err(param_error("app.alert"));
     };
     let message_value = message_value.clone();
 
@@ -195,7 +215,7 @@ fn expand_keywords(
 /// (`cjs_app.cpp:283-286`).
 fn app_beep(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     if args.len() != 1 {
-        return Err(param_error());
+        return Err(param_error("app.beep"));
     }
     let kind = args.get_or_undefined(0).to_i32(context)?;
     say(context, TranscriptLine::Beep(kind));
@@ -211,7 +231,7 @@ fn app_response(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsR
         context,
     )?;
     if expanded.first().is_none_or(JsValue::is_undefined) {
-        return Err(param_error());
+        return Err(param_error("app.response"));
     }
     let text = |index: usize, context: &mut Context| -> JsResult<String> {
         match expanded.get(index).filter(|v| !v.is_undefined()) {
@@ -265,9 +285,23 @@ fn app_noop(_this: &JsValue, _args: &[JsValue], _context: &mut Context) -> JsRes
 /// [`NOT_SUPPORTED`] — `execMenuItem`, `newDoc`, `openDoc`, `popUpMenu`,
 /// `popUpMenuEx`. Answering the same message is the specified behaviour
 /// rather than a stub of one.
-fn declined(_this: &JsValue, _args: &[JsValue], _context: &mut Context) -> JsResult<JsValue> {
-    Err(unsupported())
+macro_rules! declined {
+    ($fn_name:ident, $acrobat:literal) => {
+        fn $fn_name(
+            _this: &JsValue,
+            _args: &[JsValue],
+            _context: &mut Context,
+        ) -> JsResult<JsValue> {
+            Err(unsupported($acrobat))
+        }
+    };
 }
+
+declined!(app_exec_menu_item, "app.execMenuItem");
+declined!(app_new_doc, "app.newDoc");
+declined!(app_open_doc, "app.openDoc");
+declined!(app_popup_menu, "app.popUpMenu");
+declined!(app_popup_menu_ex, "app.popUpMenuEx");
 
 /// `app.setTimeOut(cExpr, nMilliseconds)` and `app.setInterval`.
 ///
@@ -288,7 +322,7 @@ fn declined(_this: &JsValue, _args: &[JsValue], _context: &mut Context) -> JsRes
 /// later milestone fires these; the registry is per-session, never global.
 fn app_set_timer(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     if args.len() < 2 {
-        return Err(param_error());
+        return Err(param_error("app.setTimeOut"));
     }
     let script = string_of(&args.get_or_undefined(0).clone(), context)?;
     let interval = args.get_or_undefined(1).clone().to_i32(context)?;
@@ -337,7 +371,7 @@ fn console_println(_this: &JsValue, args: &[JsValue], context: &mut Context) -> 
 /// into a thrown exception.
 fn util_printf(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let Some(format) = args.first().cloned() else {
-        return Err(param_error());
+        return Err(param_error("util.printf"));
     };
     let format = string_of(&format, context)?;
 
@@ -347,7 +381,7 @@ fn util_printf(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsRe
     }
     match pdfrum_script::util_printf(&format, &values) {
         Ok(text) => Ok(JsValue::from(boa_engine::js_string!(text))),
-        Err(error) => Err(thrown(&error)),
+        Err(error) => Err(thrown("util.printf", &error)),
     }
 }
 
@@ -367,7 +401,7 @@ fn printf_arg(value: &JsValue, context: &mut Context) -> JsResult<pdfrum_script:
 /// `pdfrum_script::util_printd`.
 fn util_printd(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     if args.len() < 2 {
-        return Err(param_error());
+        return Err(param_error("util.printd"));
     }
     let format = args.get_or_undefined(0).clone();
     let date = args.get_or_undefined(1).clone();
@@ -385,14 +419,14 @@ fn util_printd(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsRe
     };
     match result {
         Ok(text) => Ok(JsValue::from(boa_engine::js_string!(text))),
-        Err(error) => Err(thrown(&error)),
+        Err(error) => Err(thrown("util.printd", &error)),
     }
 }
 
 /// `util.printx(cFormat, cSource)` — bound to `pdfrum_script::util_printx`.
 fn util_printx(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     if args.len() < 2 {
-        return Err(param_error());
+        return Err(param_error("util.printx"));
     }
     let mask = string_of(&args.get_or_undefined(0).clone(), context)?;
     let source = string_of(&args.get_or_undefined(1).clone(), context)?;
@@ -408,7 +442,7 @@ fn util_printx(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsRe
 /// throwing (`cjs_util.cpp:296-311`).
 fn util_scand(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     if args.len() < 2 {
-        return Err(param_error());
+        return Err(param_error("util.scand"));
     }
     let format = string_of(&args.get_or_undefined(0).clone(), context)?;
     let text = string_of(&args.get_or_undefined(1).clone(), context)?;
@@ -430,11 +464,11 @@ fn util_byte_to_char(
     context: &mut Context,
 ) -> JsResult<JsValue> {
     if args.len() != 1 {
-        return Err(param_error());
+        return Err(param_error("util.byteToChar"));
     }
     let code = args.get_or_undefined(0).to_i32(context)?;
     let Ok(byte) = u8::try_from(code) else {
-        return Err(thrown(&pdfrum_script::Error::Value));
+        return Err(thrown("util.byteToChar", &pdfrum_script::Error::Value));
     };
     let text = char::from(byte).to_string();
     Ok(JsValue::from(boa_engine::js_string!(text)))
@@ -448,8 +482,8 @@ fn util_byte_to_char(
 /// assert exception text verbatim, which is why `pdfrum_script::Error`'s
 /// `Display` carries `fxjs/js_resources.cpp`'s table word for word and this
 /// function does nothing but pass it through.
-pub(crate) fn thrown(error: &pdfrum_script::Error) -> JsError {
-    JsNativeError::typ().with_message(error.to_string()).into()
+pub(crate) fn thrown(name: &str, error: &pdfrum_script::Error) -> JsError {
+    qualified(name, &error.to_string())
 }
 
 /// Milliseconds since the epoch from a value the script offered as a date.
@@ -545,15 +579,17 @@ fn install_app(context: &mut Context) -> JsResult<()> {
         ] {
             init.function(native(app_noop), boa_engine::js_string!(name), 0);
         }
-        // The five that already error upstream with the same message.
-        for name in [
-            "execMenuItem",
-            "newDoc",
-            "openDoc",
-            "popUpMenu",
-            "popUpMenuEx",
+        // The five that already error upstream with the same message — and
+        // each carries its own qualified name, because `JSFormatErrorString`
+        // prefixes it and the goldens quote the prefixed form.
+        for (name, function) in [
+            ("execMenuItem", app_exec_menu_item as super::af::Bound),
+            ("newDoc", app_new_doc),
+            ("openDoc", app_open_doc),
+            ("popUpMenu", app_popup_menu),
+            ("popUpMenuEx", app_popup_menu_ex),
         ] {
-            init.function(native(declined), boa_engine::js_string!(name), 0);
+            init.function(native(function), boa_engine::js_string!(name), 0);
         }
         // `cjs_app.cpp:38-52`. The values are PDFium's own, and
         // `app_properties.in` asserts each.
