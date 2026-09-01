@@ -1,11 +1,11 @@
 {
-  "generated_at": "2026-09-01T14:07:31Z",
+  "generated_at": "2026-09-01T14:24:15Z",
   "totals": {
     "files": 1705,
-    "pass": 1641,
-    "fail": 64,
+    "pass": 1651,
+    "fail": 54,
     "by_tag": {
-      "form-events": 15,
+      "form-events": 5,
       "page-count": 2,
       "pixel-fail": 40,
       "tierA-mismatch": 9
@@ -37290,9 +37290,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.994807,
+        "ssim": 0.999958,
         "exact": false,
-        "max_channel_diff": 153,
+        "max_channel_diff": 51,
         "pages": 1
       },
       "notes": ""
@@ -37344,9 +37344,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.994807,
+        "ssim": 0.999958,
         "exact": false,
-        "max_channel_diff": 153,
+        "max_channel_diff": 51,
         "pages": 1
       },
       "notes": ""
@@ -41933,10 +41933,8 @@
     },
     {
       "path": "resources/pixel/bug_477200528.in#form-events",
-      "status": "fail",
-      "tags": [
-        "form-events"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [],
         "mismatched": [],
@@ -41950,12 +41948,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.974366,
+        "ssim": 0.998139,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.974366 below floor 0.990000"
+      "notes": ""
     },
     {
       "path": "resources/pixel/bug_477200528.pdf",
@@ -41989,10 +41987,8 @@
     },
     {
       "path": "resources/pixel/bug_477200528.pdf#form-events",
-      "status": "fail",
-      "tags": [
-        "form-events"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [],
         "mismatched": [],
@@ -42006,12 +42002,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.974366,
+        "ssim": 0.998139,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.974366 below floor 0.990000"
+      "notes": ""
     },
     {
       "path": "resources/pixel/bug_491_invisible.in",
@@ -45823,10 +45819,8 @@
     },
     {
       "path": "resources/pixel/form_textfield_focused_ltr.in#form-events",
-      "status": "fail",
-      "tags": [
-        "form-events"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [],
         "mismatched": [],
@@ -45840,12 +45834,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.975161,
+        "ssim": 0.999311,
         "exact": false,
-        "max_channel_diff": 230,
+        "max_channel_diff": 89,
         "pages": 1
       },
-      "notes": "ssim 0.975161 below floor 0.990000"
+      "notes": ""
     },
     {
       "path": "resources/pixel/form_textfield_focused_rtl.in",
@@ -45879,10 +45873,8 @@
     },
     {
       "path": "resources/pixel/form_textfield_focused_rtl.in#form-events",
-      "status": "fail",
-      "tags": [
-        "form-events"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [],
         "mismatched": [],
@@ -45896,12 +45888,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.947061,
+        "ssim": 0.997558,
         "exact": false,
-        "max_channel_diff": 255,
+        "max_channel_diff": 156,
         "pages": 1
       },
-      "notes": "ssim 0.947061 below floor 0.990000"
+      "notes": ""
     },
     {
       "path": "resources/pixel/form_textfield_focused_rtl.pdf",
@@ -45935,10 +45927,8 @@
     },
     {
       "path": "resources/pixel/form_textfield_focused_rtl.pdf#form-events",
-      "status": "fail",
-      "tags": [
-        "form-events"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [],
         "mismatched": [],
@@ -45952,12 +45942,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.947061,
+        "ssim": 0.997558,
         "exact": false,
-        "max_channel_diff": 255,
+        "max_channel_diff": 156,
         "pages": 1
       },
-      "notes": "ssim 0.947061 below floor 0.990000"
+      "notes": ""
     },
     {
       "path": "resources/pixel/form_textfield_selected_ltr.in",
@@ -45991,10 +45981,8 @@
     },
     {
       "path": "resources/pixel/form_textfield_selected_ltr.in#form-events",
-      "status": "fail",
-      "tags": [
-        "form-events"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [],
         "mismatched": [],
@@ -46008,12 +45996,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.968892,
+        "ssim": 0.999682,
         "exact": false,
-        "max_channel_diff": 255,
+        "max_channel_diff": 84,
         "pages": 1
       },
-      "notes": "ssim 0.968892 below floor 0.990000"
+      "notes": ""
     },
     {
       "path": "resources/pixel/form_textfield_selected_rtl.in",
@@ -46047,10 +46035,8 @@
     },
     {
       "path": "resources/pixel/form_textfield_selected_rtl.in#form-events",
-      "status": "fail",
-      "tags": [
-        "form-events"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [],
         "mismatched": [],
@@ -46064,12 +46050,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.946872,
+        "ssim": 0.999385,
         "exact": false,
-        "max_channel_diff": 255,
+        "max_channel_diff": 189,
         "pages": 1
       },
-      "notes": "ssim 0.946872 below floor 0.990000"
+      "notes": ""
     },
     {
       "path": "resources/pixel/freetext_annotation_with_ap.in",
@@ -46917,10 +46903,8 @@
     },
     {
       "path": "resources/pixel/password.in#form-events",
-      "status": "fail",
-      "tags": [
-        "form-events"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [],
         "mismatched": [],
@@ -46934,12 +46918,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.960984,
+        "ssim": 0.991764,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.960984 below floor 0.990000"
+      "notes": ""
     },
     {
       "path": "resources/pixel/password.pdf",
@@ -46973,10 +46957,8 @@
     },
     {
       "path": "resources/pixel/password.pdf#form-events",
-      "status": "fail",
-      "tags": [
-        "form-events"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [],
         "mismatched": [],
@@ -46990,12 +46972,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.960984,
+        "ssim": 0.991764,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.960984 below floor 0.990000"
+      "notes": ""
     },
     {
       "path": "resources/pixel/radial_shading_point_at_border.in",
@@ -47410,12 +47392,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.982013,
+        "ssim": 0.989687,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.982013 below floor 0.990000"
+      "notes": "ssim 0.989687 below floor 0.990000"
     },
     {
       "path": "resources/pixel/scrollable_widgets1.pdf",
@@ -47466,12 +47448,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.982013,
+        "ssim": 0.989687,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.982013 below floor 0.990000"
+      "notes": "ssim 0.989687 below floor 0.990000"
     },
     {
       "path": "resources/pixel/scrollable_widgets2.in",
@@ -47505,10 +47487,8 @@
     },
     {
       "path": "resources/pixel/scrollable_widgets2.in#form-events",
-      "status": "fail",
-      "tags": [
-        "form-events"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [],
         "mismatched": [],
@@ -47522,12 +47502,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.986360,
+        "ssim": 0.996613,
         "exact": false,
-        "max_channel_diff": 255,
+        "max_channel_diff": 228,
         "pages": 1
       },
-      "notes": "ssim 0.986360 below floor 0.990000"
+      "notes": ""
     },
     {
       "path": "resources/pixel/shade-tensor.in",
