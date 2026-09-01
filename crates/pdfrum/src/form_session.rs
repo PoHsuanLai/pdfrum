@@ -380,6 +380,43 @@ impl<'a> FormSession<'a> {
         }
     }
 
+    /// Replaces the focused field's selection with `text`, or deletes it when
+    /// `text` is empty.
+    ///
+    /// The embedder's paste and cut: this crate has no clipboard, so a cut is
+    /// a caller reading [`FormSession::selected_text`] and then calling this
+    /// with an empty string. With no selection the text is inserted at the
+    /// caret, and an empty string then does nothing at all.
+    ///
+    /// Answers whether the field changed.
+    pub fn replace_selection(&mut self, text: &str) -> bool {
+        let Some(target) = self.inner.focus else {
+            return false;
+        };
+        let Some(field) = target.field() else {
+            return false;
+        };
+        let page = target.annot().page;
+        if !self.pages.contains_key(&page) {
+            let Some(read) = self.read_page(page) else {
+                return false;
+            };
+            self.pages.insert(page, read);
+        }
+        let Some(form) = self.pages.get(&page) else {
+            return false;
+        };
+        let catalog = self.doc.catalog();
+        let ctx = pdfrum_form::Context {
+            page: form,
+            catalog: &catalog,
+            resolve: self.doc.parser(),
+            fonts: &self.fonts,
+            permissions: self.permissions(),
+        };
+        pdfrum_form::route::replace_selection(&mut self.inner, &ctx, field, text)
+    }
+
     /// Whether a row of the focused choice field is selected.
     #[must_use]
     pub fn is_index_selected(&self, index: usize) -> bool {
