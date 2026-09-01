@@ -466,7 +466,7 @@ key (first 4 bytes). Every value is `GetMutableDirect()`-resolved first;
 | `/ML` | number | `miter_limit` | :61-63 |
 | `/D` | array | Must be an Array; **element 0 must itself be an Array** else skip; dash = element 0, phase = `GetFloatAt(1)` | :64-77 |
 | `/RI` | string | `render_intent_` as an id: `Abso`→1, `Satu`→2, `Perc`→3, anything else→0 (cpdf_generalstate.cpp:17-32). **Stored, never consumed by rendering.** | :78-80 |
-| `/Font` | array | Must be an Array; `font_size = GetFloatAt(1)`, font = `FindFont(GetByteStringAt(0))`. Note: **the name is looked up in `/Font` resources**, not taken as an indirect font dict — a `[<ref> size]` array (the spec form) therefore resolves the ref to a *string* (empty) and yields the fallback font. Port this quirk. | :81-91 |
+| `/Font` | array | Must be an Array; `font_size = GetFloatAt(1)`, font = `FindFont(GetByteStringAt(0))`. Note: **the name is looked up in `/Font` resources**, not taken as an indirect font dict — a `[<ref> size]` array (the spec form) therefore resolves the ref to a *string* (empty) and yields the fallback font. Port this quirk. | :81-91 |<br><br>**Reversed 2026-09-02 (oracle-divergence audit, A18): this is an oracle bug, not a quirk to port.** Table 58 makes the first element an *indirect reference to a font dictionary*, so the conformant spelling silently draws Helvetica in the oracle — verified at `cpdf_allstates.cpp:87-89` (`FindFont(font->GetByteStringAt(0))`) with the substitution at `cpdf_streamcontentparser.cpp:1239`. pdf.js resolves the reference: `evaluator.js:1142-1154` hands `value[0]` straight to `handleSetFont`, whose `loadFont` opens with "Loading by ref" — `if (font instanceof Ref) { fontRef = font; }` (`evaluator.js:1256-1261`). *(This corrects the audit table's own "pdf.js ignores ExtGState `/Font`", which is wrong.)* PLAN.md §212–229 therefore obliges resolving the reference. We try the reference first (**spec**) and keep the resource-name lookup (**tolerance**, for files written against the oracle); a direct dictionary is accepted too, since nothing else it could mean. Blast radius **0 rows** — no corpus file uses either form. The site carries `// [oracle-bug]`.
 | `/TR` | object | **Skipped entirely if `/TR2` also exists in the same dict** (:92-96). Otherwise falls through to the TR2 handler. |
 | `/TR2` | object | `SetTR(obj)` — **but only if the object is not a Name**; a Name (e.g. `/Default`, `/Identity`) stores **null**, disabling any transfer function (:97-100). |
 | `/BM` | name or array | If an Array, take element 0 as a string; else the object's string. `GetBlendTypeInternal` (generalstate.cpp:34-73) maps by 4-byte id; **unknown → Normal**. If the resulting type is `> Multiply`, sets `BackgroundAlphaNeeded` on the holder (:101-109). | |
@@ -3090,6 +3090,19 @@ producing a garbage ramp. We use identity for that channel. Affects only
 functions with >16 outputs feeding `/TR`, which no real file has; flagged for
 conformance.
 
+**Relabelled 2026-09-02 (oracle-divergence audit, A11): this is an oracle
+bug, and the rule makes not-porting it obligatory rather than our choice.**
+Verified at the line, and it is worse than "stale": `:132-137` guards the
+`Call` but not the read that follows, and since `OutputCount()` is
+loop-invariant the guard fails on all 256 iterations, so `output[0]` is never
+written **at all** — the curve is all-black, not a garbage ramp. The **array**
+branch at `:119-122` meets the identical condition correctly with
+`samples[i][v] = v; continue;`, which settles it as an oversight rather than a
+policy, and §8.6.5.9 gives no reading under which an unusable function blacks
+a channel out. pdf.js builds transfer functions per array element with no
+output-count cap (`evaluator.js:944-959`), so the case cannot arise there.
+Blast radius 0 rows. `transfer.rs` carries `// [oracle-bug]`.
+
 **D8 — An explicit colorspace depth cap.** The C++ has *no* numeric cap; it
 relies on the visited sets plus the native stack. A crafted file with a
 10000-deep `/Indexed` chain of distinct arrays would overflow. We add
@@ -3139,6 +3152,25 @@ inherits the first user's `parent_matrix`. Real files reuse a pattern at one
 nesting level, so this is unobservable in practice — but it is a genuine bug
 we decline to reproduce. Flagged for conformance (Open question Q6).
 
+**Relabelled 2026-09-02 (oracle-divergence audit, A24): an oracle bug, and
+what shipped is stronger than this paragraph describes.** Verified:
+`cpdf_docpagedata.cpp:388` keys `pattern_map_` on the pattern **object
+alone** and `:406` stores there, while the `matrix` is a *construction*
+parameter (`:396`, `:400`) — baked into the first instance built and
+inherited by every later user. §8.7.3 anchors a pattern in the space of the
+content stream in which it is *used*, which makes the shared matrix wrong
+rather than merely surprising. A second defect in the same map: `GetShading`
+(`:410-424`) reads and writes it too while constructing with
+`bShading = true` where `GetPattern` passes `false`, so an object reached
+once through `sh` and once through `scn` returns whichever came first, with
+the wrong `/Background` handling for the other. pdf.js is canvas-backed and
+has no pattern cache to compare against. **We have no pattern cache at all** —
+patterns load afresh at each use — which over-satisfies the
+`(ObjRef, parent_matrix)` key this paragraph proposes and cannot alias on
+either axis; a future cache must key on
+`(ObjRef, parent_matrix, is_shading)`. Blast radius 0 rows.
+`pattern/mod.rs` carries `// [oracle-bug]`.
+
 **D16 — The shading LUT off-by-one IS reproduced.** Sampling at `i/256` while
 indexing at `s*255` is a real, pixel-visible artifact on smooth gradients.
 Both halves ported verbatim.
@@ -3154,6 +3186,20 @@ first flagged patch, under-reading every later record and producing a
 too-small bbox that can clip visible output. We compute the correct bbox.
 Flagged (Open question Q5) because it can only *grow* the `sh` object's rect
 relative to the oracle.
+
+**Relabelled 2026-09-02 (oracle-divergence audit, A23): an oracle bug, and
+not-porting it is obligatory rather than our choice.** Verified at the line:
+`cpdf_streamcontentparser.cpp:120-122` runs `point_count -= 4;
+color_count -= 2;` inside `while (!stream.IsEOF())` on the variables declared
+as the record shape at `:94-109`, so the subtraction is cumulative and
+permanent — the second flagged patch under-reads by eight, and the counts run
+to zero and below. §8.7.4.5.5–7 give the bbox no licence to omit a declared
+control point. What settles it as a slip rather than a reading is PDFium's
+**own second copy** of the same loop: `cpdf_rendershading.cpp:900-917` uses
+per-iteration `iStartPoint`/`iStartColor` against an untouched `point_count`,
+which is exactly what `mesh.rs::read_patches` does. pdf.js has no counterpart,
+so the oracle's own renderer is the independent reading. Blast radius 0 rows.
+`shading/mesh.rs` carries `// [oracle-bug]`.
 
 **D19 — Uninitialized colour-key ranges get an explicit default.** When a
 `/Mask` array is too short, C++ leaves `color_key_min/max` uninitialized while

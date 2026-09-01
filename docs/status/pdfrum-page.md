@@ -66,6 +66,34 @@ sampled function's negative-index wrap to the *top* cell (D12). The two C++
 bugs the brief declines (D7's stale transfer output, D18's mesh-bbox counter
 mutation) are not ported.
 
+**Corrected 2026-09-02 (oracle-divergence audit).** Three amendments:
+
+- **D7 and D18 are relabelled `[oracle-bug]` (audit A11, A23).** Not
+  reproducing them was recorded as our choice; PLAN.md §212–229 makes it
+  obligatory. D7 is also worse than "stale": `cpdf_docrenderdata.cpp:132-137`
+  guards the `Call` but not the read, and `OutputCount()` is loop-invariant,
+  so `output[0]` is never written at all and the curve is **all-black**. D18's
+  cumulative `point_count -= 4` is contradicted by PDFium's own second copy of
+  the loop at `cpdf_rendershading.cpp:900-917`. Both cost 0 rows.
+- **D15 is relabelled (audit A24) and the claim above is not accurate for
+  it.** There is **no pattern cache** in this crate at all — patterns load
+  afresh at each use — where the brief specifies a `(ObjRef, parent_matrix)`
+  key. That over-satisfies D15 rather than under-satisfying it (no cache
+  cannot alias), and it also covers the second half of the oracle's defect the
+  brief does not mention: `GetPattern` and `GetShading` share **one** map
+  (`cpdf_docpagedata.cpp:388`, `:415`) while constructing with opposite
+  `bShading` flags. A cache added later must key on
+  `(ObjRef, parent_matrix, is_shading)`.
+- **`/ExtGState /Font` now resolves the spec's `[<ref> size]` form (audit
+  A18)**, where the brief said to port the oracle's name-in-the-resources
+  reading. `cpdf_allstates.cpp:87-89` reads the first element as a byte
+  string, so a reference yields `""`, the lookup misses, and
+  `cpdf_streamcontentparser.cpp:1239` substitutes stock Helvetica — the
+  conformant spelling silently draws the wrong font. Table 58 makes it an
+  indirect reference; pdf.js resolves it (`evaluator.js:1142-1154`, and
+  `loadFont`'s "Loading by ref" at `:1256-1261`). The resource-name lookup is
+  kept as **tolerance** for files written against the oracle. 0 rows.
+
 The three additive `Limits`-shaped caps (Q1) are constants in the modules that
 enforce them rather than `Limits` fields, since nothing outside this crate
 configures them: `color::load::DEFAULT_MAX_DEPTH` (32),

@@ -425,6 +425,28 @@ impl<'a> MeshReader<'a> {
     }
 
     /// Decode a Coons (type 6) or tensor (type 7) patch mesh.
+    ///
+    /// `point_count` is a loop **invariant**: a flagged patch reuses four
+    /// points and two colours from its predecessor, which moves where this
+    /// patch starts reading, never how many records the format has.
+    //
+    // [oracle-bug] cpdf_streamcontentparser.cpp:120-122 gets that backwards
+    // in its bbox helper: inside `while (!stream.IsEOF())` it runs
+    // `point_count -= 4; color_count -= 2;` on every flagged patch, mutating
+    // the very variables declared as the record shape at :94-109. The
+    // subtraction is therefore **cumulative and permanent** — after the first
+    // flagged patch every later patch under-reads by four points, after the
+    // second by eight, and the counts run to zero and below. The bbox that
+    // results is too small, and §8.7.4.5.5-7 give the bbox no licence to omit
+    // a declared control point. That it is a slip rather than a reading of
+    // the spec is settled by PDFium's own second copy of the same loop:
+    // `cpdf_rendershading.cpp:900-917` uses per-iteration `iStartPoint`/
+    // `iStartColor` locals against an untouched `point_count` — correct, and
+    // what this function does. pdf.js has no counterpart (it composites mesh
+    // patches on a canvas and needs no bbox helper), so the oracle's own
+    // renderer is the independent reading here. This is the audit's A23,
+    // previously recorded as design brief D18 — "declined", where the
+    // oracle-bug rule makes it obligatory.
     #[must_use]
     pub fn read_patches(&mut self, tensor: bool) -> Vec<Patch> {
         let point_count = if tensor { 16 } else { 12 };

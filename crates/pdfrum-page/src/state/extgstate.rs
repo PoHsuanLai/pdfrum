@@ -10,9 +10,12 @@
 //! - **`/BG` is skipped when `/BG2` is present**, and `/UCR` when `/UCR2` is.
 //! - **`/OP` also sets the non-stroking overprint flag unless `/op` is
 //!   present** in the same dictionary.
-//! - **`/Font` looks its name up in the `/Font` *resources***, not as an
-//!   indirect font dictionary — so the spec's `[<ref> size]` form resolves
-//!   the reference to an empty string and yields the fallback font.
+//! - **`/Font` takes both spellings of its first element.** Table 58 makes it
+//!   an *indirect reference to a font dictionary*, which is what we resolve
+//!   first; the oracle instead reads the element as a byte string and looks
+//!   that up in the `/Font` resources, so its own form never resolves the
+//!   spec's. We keep the resource lookup as tolerance for files written
+//!   against it. See the `[oracle-bug]` note on the `Font` arm.
 
 use super::{BlendMode, GraphicsState, RenderIntent};
 use crate::function::FunctionCache;
@@ -30,8 +33,10 @@ use std::sync::Arc;
 ///
 /// One arm per key, in the dictionary's own order.
 ///
-/// `find_font` resolves a `/Font` array's name through the `/Font` resources,
-/// which is where the quirk in the module docs lives.
+/// `find_font` is given the `/Font` array's **first element, unresolved** —
+/// an indirect reference to a font dictionary in the spec's form, a name in
+/// the oracle's — and returns the font either names. See the `[oracle-bug]`
+/// note on the `Font` arm.
 #[expect(
     clippy::too_many_lines,
     reason = "the key table is a flat dispatch by design: one arm per key"
@@ -39,7 +44,7 @@ use std::sync::Arc;
 pub fn apply_ext_gstate<R: Resolve>(
     state: &mut GraphicsState,
     ext: &Dict,
-    find_font: impl Fn(&[u8]) -> Option<Arc<Font>>,
+    find_font: impl Fn(Option<&Object>) -> Option<Arc<Font>>,
     r: &R,
     functions: &mut FunctionCache,
     limits: &Limits,
@@ -94,10 +99,25 @@ pub fn apply_ext_gstate<R: Resolve>(
             b"RI" => {
                 state.general.render_intent = RenderIntent::from_name(&value.to_byte_string());
             }
+            // [oracle-bug] cpdf_allstates.cpp:87-89 reads the array's first
+            // element as a **byte string** — `FindFont(font->GetByteStringAt(0))`
+            // — and looks that up in the page's `/Font` resources. Table 58
+            // specifies `[font size]` where *font* is an **indirect reference
+            // to a font dictionary**, so on the spec's own form
+            // `GetByteStringAt(0)` yields `""`, the resource lookup misses,
+            // and `cpdf_streamcontentparser.cpp:1239` substitutes stock
+            // Helvetica: the conformant spelling silently draws the wrong
+            // font. pdf.js resolves the reference — `handleSetFont` is given
+            // `value[0]` straight (evaluator.js:1142-1154) and `loadFont`'s
+            // first branch is literally "Loading by ref",
+            // `if (font instanceof Ref) { fontRef = font; }`
+            // (evaluator.js:1256-1261). We resolve the reference first, and
+            // keep the name lookup as **tolerance** for the oracle's form,
+            // which real files written against PDFium will use.
             b"Font" => {
                 if let Some(array) = value.as_array() {
-                    state.text.font = find_font(&array.byte_string_at(0).unwrap_or_default())
-                        .map(|f| (f, array.number_at_or_zero(1)));
+                    state.text.font =
+                        find_font(array.raw_at(0)).map(|f| (f, array.number_at_or_zero(1)));
                 }
             }
             // `/TR` is skipped outright when `/TR2` is also present.
@@ -368,10 +388,60 @@ mod tests {
         // The resolver here always fails, so a `/Font` array clears the font
         // rather than installing one — which is the observable half of the
         // quirk: the spec's `[<ref> size]` form never resolves.
+        //
+        // Kept as written 2026-09-02 (audit A18) because it still holds: a
+        // resolver that finds nothing installs nothing either way. What
+        // changed is *what the lookup is given* — see the two tests below.
         let s = apply(vec![(
             Name::from("Font"),
             Object::Array(Array::of([Object::Name(Name::from("F1")), Object::Int(12)])),
         )]);
         assert!(s.text.font.is_none());
+    }
+
+    /// What the `/Font` arm hands its resolver, for each spelling of the
+    /// array's first element.
+    fn font_lookup_argument(first: Object) -> Option<Object> {
+        use std::cell::RefCell;
+        let seen: RefCell<Option<Object>> = RefCell::new(None);
+        let mut state = GraphicsState::default();
+        let mut funcs = FunctionCache::new();
+        let mut diags = Diagnostics::default();
+        apply_ext_gstate(
+            &mut state,
+            &Dict::from_pairs(vec![(
+                Name::from("Font"),
+                Object::Array(Array::of([first, Object::Int(12)])),
+            )]),
+            |o| {
+                *seen.borrow_mut() = o.cloned();
+                None
+            },
+            &NoResolve,
+            &mut funcs,
+            &Limits::default(),
+            &mut diags,
+        );
+        seen.into_inner()
+    }
+
+    /// Table 58's own form — `[<ref> size]` — reaches the resolver **as the
+    /// reference**, which is what lets it be followed to a font dictionary.
+    /// The oracle turns it into `""` at `cpdf_allstates.cpp:88`
+    /// (`GetByteStringAt(0)` on a reference), and this test fails against
+    /// that reading. pdf.js takes the same reference at
+    /// `evaluator.js:1256-1261` ("Loading by ref").
+    #[test]
+    fn the_specs_indirect_reference_form_reaches_the_lookup_intact() {
+        let seen = font_lookup_argument(Object::Ref(pdfrum_object::ObjRef::new(7, 0)));
+        assert_eq!(seen, Some(Object::Ref(pdfrum_object::ObjRef::new(7, 0))));
+    }
+
+    /// The oracle's form still reaches the lookup as a name, so the resource
+    /// spelling keeps working. This is tolerance, not the specification.
+    #[test]
+    fn the_oracles_resource_name_form_still_reaches_the_lookup() {
+        let seen = font_lookup_argument(Object::Name(Name::from("F1")));
+        assert_eq!(seen, Some(Object::Name(Name::from("F1"))));
     }
 }

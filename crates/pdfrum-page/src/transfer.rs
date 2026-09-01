@@ -46,9 +46,23 @@ pub const CHANNEL_SAMPLES: usize = 256;
 /// The most outputs a function feeding a transfer function may have.
 ///
 /// A function above this is **skipped and the identity used for that
-/// channel**. PDFium instead reuses the previous iteration's stale output,
-/// producing a garbage ramp; that is a plain bug and is not ported
-/// (design brief D7).
+/// channel**, on both the array and the single-function path.
+//
+// [oracle-bug] cpdf_docrenderdata.cpp:132-137 guards the `Call` on the
+// single-function path — `if (pFuncs[0]->OutputCount() <= kMaxOutputs)` — but
+// not the read that follows it, so `FXSYS_roundf(output[0] * 255)` runs over
+// a buffer nothing ever wrote. `OutputCount()` is loop-invariant, so the
+// guard fails on every one of the 256 iterations and `output[0]` is never
+// written at all: the curve comes out all-black. That it is an oversight
+// rather than a policy is settled by the **array** branch twelve lines above,
+// `:119-122`, which meets the identical condition with `samples[i][v] = v;
+// continue;` — the identity, which is what we do on both paths. §8.6.5.9
+// gives no reading under which a transfer function whose function is
+// unusable should black the channel out. pdf.js has no equivalent: its
+// transfer functions are built per array element with no output-count cap
+// (`evaluator.js:944-959`), so the case cannot arise there.
+// This is the audit's A11, previously recorded as design brief D7 —
+// "declined", where the oracle-bug rule makes it obligatory.
 pub const MAX_OUTPUTS: usize = 16;
 
 /// Three 256-entry byte tables, one per channel.
@@ -139,8 +153,8 @@ impl TransferFunc {
 /// `-121.26` becomes `0x87`, not `0x00`. Clamping instead would quietly
 /// flatten every signed transfer function's lower half to black.
 ///
-/// A function with too many outputs is skipped and the identity used, which
-/// is where we deliberately diverge from the C++'s stale-output bug.
+/// A function with too many outputs is skipped and the identity used — the
+/// `[oracle-bug]` on [`MAX_OUTPUTS`], at the line where it bites.
 fn sample_channel(func: &Function, out: &mut [u8; CHANNEL_SAMPLES]) {
     if func.output_count() > MAX_OUTPUTS {
         for (i, slot) in out.iter_mut().enumerate() {
