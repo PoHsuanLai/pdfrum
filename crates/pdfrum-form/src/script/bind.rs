@@ -30,7 +30,7 @@
 
 use boa_engine::object::ObjectInitializer;
 use boa_engine::property::Attribute;
-use boa_engine::{Context, JsArgs, JsError, JsNativeError, JsResult, JsValue, NativeFunction};
+use boa_engine::{Context, JsArgs, JsError, JsResult, JsValue, NativeFunction};
 
 use super::host::{Host, HostState};
 use super::transcript::{DEFAULT_ALERT_TITLE, TranscriptLine};
@@ -56,10 +56,25 @@ pub(crate) const PARAM_ERROR: &str = "Incorrect number of parameters passed to f
 /// This is a scoring requirement rather than a nicety: roughly seventy of the
 /// golden assertions are arity checks, and every one of them quotes the
 /// qualified form. A bare message fails all of them.
+/// # And it is thrown as a **bare string**, not an `Error`
+///
+/// `fxv8::ThrowExceptionHelper` is
+/// `pIsolate->ThrowException(NewStringHelper(pIsolate, str))`
+/// (`fxjs/fxv8.cpp:350-356`) — a string primitive, not an `Error` object. So
+/// `'' + e` is the message alone, with **no `TypeError: ` prefix**, and
+/// `expect.js`'s `'PASS: ' + expression + ' threw ' + e` produces
+/// `threw app.alert: Incorrect number of parameters passed to function.`
+///
+/// The goldens show the difference directly: PDFium's own errors carry no
+/// class name, while the two genuine V8 exceptions in `immutable_proto` read
+/// `threw TypeError: Immutable prototype object …`. A `JsNativeError` here
+/// would prefix every one of ours, failing every `expectError` assertion in
+/// the seven fixtures that include `expect.js` — so the throw is
+/// `JsError::from_opaque` over a string.
 pub(crate) fn qualified(name: &str, message: &str) -> JsError {
-    JsNativeError::typ()
-        .with_message(format!("{name}: {message}"))
-        .into()
+    JsError::from_opaque(JsValue::from(boa_engine::js_string!(format!(
+        "{name}: {message}"
+    ))))
 }
 
 /// The error a declined method throws, qualified by its own name.
