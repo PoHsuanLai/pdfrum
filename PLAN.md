@@ -890,6 +890,89 @@ problem** (§8.6): `RasterBackend` returns a `Pixmap`, so every group, soft mask
 and pattern cell is a host round trip. That is where future GPU work starts.
 The crate stays `publish = false` and out of the M13 publish set.
 
+## M12d — Paying M12b's debts  *(before release; the release itself is the user's)*
+
+M12b closed with nine items stated as owed (docs/status/M12b.md §10). The user
+is doing M13 themselves, so this milestone exists to hand them a tree with the
+engineering debts paid and the measurement debts either paid or honestly
+re-stated. Every M12 rule binds: **the perf-dep bar**, **conformance as the
+regression gate** (pure-perf changes leave the scoreboard byte-identical;
+parity changes may only move it *up*), the **monotone ratchet**, and the
+register of M12.md §10 — a refuted claim is withdrawn in place, never deleted.
+
+The items sort into two kinds, and the split is the plan.
+
+### Engineering debts — start now, disjoint file ownership
+
+- **D1 — `shading/patch.rs` gets its owner** (M12b §10 item 3). The Coons and
+  tensor mesh rasterizer was in no measurement bucket until P3 gave it
+  `Phase::Patches`. **Take the netted figure:** the bucket reads 28.7 ms /
+  47.1 ms on `shading_axial_radial` / `shading_tcpdf_030` but wraps its own
+  device calls; engine-side work is ~**2.5 ms / 6.1 ms**. `shading_coons` (a
+  Coons document with zero patch calls) is the control. `pattern.rs` is
+  exonerated — do not go back there. Owns `crates/pdfrum-render/src/shading/`.
+  Pure perf: byte-identical scoreboard required.
+
+- **D2 — the §1.15 glyph-spacing heuristic** (M12b §10 item 8). A parity
+  feature, not a perf item. `CPDF_Font::LoadCharPositions`
+  (cpdf_font.cpp:449-467) gated by `ShouldApplyGlyphSpacingHeuristic`
+  (cpdf_font.cpp:240-264): when the PDF's declared width is narrower than the
+  substituted face's, the glyph is scaled horizontally (`adjust_matrix_ =
+  [pdf/font, 0, 0, 1]`), with a second branch that shifts the origin. On
+  `bug_601362`, `/MissingWidth 506` vs Arimo's 667 = 0.759 — the oracle's glyph
+  is 20 px wide where ours is 28 px at equal height. `SubstFont::is_actual_font_loaded`
+  exists as dead code and is the gate. **The evidence came from a reverted
+  branch (patch at `scratchpad/croscore-fix/`): re-derive before building.**
+  Order matters: land the heuristic first, *then* re-apply the croscore-boundary
+  fix from that patch (which was correct and was reverted only because this
+  heuristic was missing — it made `bug_601362` regress from 0.99078 to
+  0.98788 on the *right* face). Also close the serif-bit divergence the same
+  investigation found (`SystemFontDb::describe` from PANOSE vs the oracle's
+  face-name-contains-"Serif"). Owns `crates/pdfrum-render/src/text.rs` and
+  `crates/pdfrum-font/src/subst/`. Parity: scoreboard may only improve;
+  monotone rule absolute.
+
+- **D3 — single-image work** (M12b §10 item 5, M12 §10.3). `image_en_fqa` is
+  552 small images at ~600 ms with `to_pixmap` totalling 0.1 ms — so the cost
+  is **per-image overhead**, not per-pixel; an earlier digest measured every
+  one of those images as an 8.33x-minified 1-bit mask. And `image_bug_718762`
+  keeps ~403 ms in the Adobe CMYK 4-D interpolated table (P1 §, deliberately
+  left). Two different problems under one heading; rank them by measurement
+  first. Owns `crates/pdfrum-render/src/image.rs`, `stretch.rs`, and
+  `crates/pdfrum-page/src/image/`. Pure perf: byte-identical scoreboard.
+
+- **Deferred, on purpose:** interpretation (item 4). P3 took it 504 → 290 ns per
+  object and named the two suspects that measured at nothing. Reopen only if an
+  oracle side-by-side (below) shows it still matters; do not spend a third pass
+  on it blind.
+
+### Measurement debts — gated on an idle machine, not on work
+
+- **M1 — the ratchet re-baseline** (item 1). The one hard debt. Cannot be paid
+  while unrelated jobs hold load at 8+; five cold-group entries block and the
+  rule is that they are re-judged on a *fresh* run. `scripts/ratchet-decide.py`
+  runs first, then `ratchet update`. The cold family will move enormously for
+  **P1's** reasons — say so in the commit.
+- **M2 — the oracle side-by-side** (item 2). `scripts/bench-oracle.sh`, never
+  run in M12b. Until it runs, every "versus PDFium" claim dates from M12.
+  `forms` warm stands at 3.35x unmeasured. Run it in the same idle window as
+  M1, and re-score M12b's `forms` target against the result.
+
+### Not this milestone
+
+Items 6 (two upstream filings — drafts written, filing is the user's), 7 (the
+GPU exemption waits on a vello release) and 9 (`perf_event_paranoid`, the
+user's machine) are the user's or upstream's. They are listed so no one
+re-derives them.
+
+- **Targets.** D1: a measured reduction on the netted patch figure with the
+  control unchanged. D2: `bug_601362` back above 0.99 *on the oracle's face*,
+  the croscore fix landed, no file regressed. D3: a measured reduction on
+  `image_en_fqa` and/or `image_bug_718762` cold. M1/M2: paid, or re-stated as
+  owed with the load that prevented it.
+- **Exit:** `docs/status/M12d.md` in M12.md's register, PLAN.md marked, and the
+  tree handed to the user for M13 with no engineering debt left unaddressed.
+
 ## M13 — Release
 
 MSRV declared and CI-checked; repository URL; bottom-up family publish to
