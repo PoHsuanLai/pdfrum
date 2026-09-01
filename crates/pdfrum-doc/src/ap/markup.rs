@@ -383,22 +383,6 @@ pub fn text_symbol(rect: Rect) -> String {
     out.as_str().to_owned()
 }
 
-/// A `Popup`'s chrome: a yellow box with a black outline. The text inside it
-/// is added by the caller, which owns the layout engine.
-#[must_use]
-pub fn popup_frame<R: Resolve>(dict: &Dict, r: &R) -> Content {
-    let mut out = Content::new();
-    // A newline here, where every other generator writes a space.
-    out.raw("/GS gs\n");
-    out.raw(&color_op(Color::Rgb(1.0, 1.0, 0.0), PaintOp::Fill));
-    out.raw(&color_op(Color::Rgb(0.0, 0.0, 0.0), PaintOp::Stroke));
-    out.raw("1 w\n");
-    let rect = geom::deflate(geom::normalize(dict.rect(obj_names::RECT, r)), 0.5, 0.5);
-    out.rect(rect, Float::G6);
-    out.raw("re b\n");
-    out
-}
-
 /// The shared opening of the square and circle generators: the two colours,
 /// the border width and dash pattern, and the rectangle they draw into.
 fn shape_preamble<R: Resolve>(dict: &Dict, r: &R) -> (Content, Rect, bool, bool) {
