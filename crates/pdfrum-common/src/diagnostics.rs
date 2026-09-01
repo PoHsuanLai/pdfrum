@@ -335,6 +335,23 @@ pub enum DiagKind {
     /// A string being written for a dump stopped at an unpaired surrogate,
     /// matching where the oracle's wide-character conversion gives up.
     TextTruncatedAtSurrogate,
+
+    /// A document's script exhausted one of the [`Limits`](crate::Limits)
+    /// script bounds — loop iterations, recursion depth or stack — and was
+    /// stopped.
+    ///
+    /// **The hook it was running then takes its *refusing* answer**, not its
+    /// permissive one: a script that ran out of budget did not say "accept",
+    /// and inventing an acceptance on its behalf is what would let a hostile
+    /// file walk past a validator. A build without the script feature can
+    /// never record this.
+    ScriptLimitReached,
+    /// A document's script threw, or would not parse, and was abandoned.
+    ///
+    /// An ordinary outcome for untrusted input rather than an error: the rest
+    /// of the document is unaffected, and the hook takes its refusing answer
+    /// for the same reason as [`DiagKind::ScriptLimitReached`].
+    ScriptFailed,
 }
 
 /// One recorded recovery.
