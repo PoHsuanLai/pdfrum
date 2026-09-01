@@ -66,9 +66,15 @@ Violations are review-blockers even when tests pass.
   — added by `[spec]` 2026-09-01 for M14 — `Cascade` in `pdfrum-form` (the
   form-commit script hooks; second impl is M15's `boa` engine, the first is
   the no-script default whose method defaults *are* the V8-off behaviour).
-  `dyn` exists at exactly two places: `RenderDevice` and one `&mut dyn
-  Cascade` in `pdfrum-form::commit`. Adding a fourth seam is a `[spec]`
-  change.
+  `dyn` exists in exactly two *kinds* of place: `RenderDevice`, and `&mut dyn
+  Cascade` on `pdfrum-form`'s commit path. *Corrected 2026-09-02 (M15 step
+  1):* that second one used to be described as "one `&mut dyn Cascade` in
+  `pdfrum-form::commit`", which was true and was the problem — the seam was
+  at one call site because nothing called it. It is now a parameter on
+  `apply`, `choose` and `kill_focus` and is threaded to `commit::run` and the
+  typing path (SPEC §15.1). One seam, more call sites; **the count that
+  matters is the seams, and it is still three.** Adding a fourth is a
+  `[spec]` change.
 
   *When a fourth is proposed, the test is what the library needs from the
   other side.* Invert — take a trait — only when the library must **ask a
