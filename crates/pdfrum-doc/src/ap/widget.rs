@@ -247,12 +247,48 @@ pub fn generate_with_text<R: Resolve>(
     build(dict, Some(catalog), Some(font), substitute, None, None, r)
 }
 
+/// What a form session shows a widget it is editing, beyond the widget's own
+/// dictionary.
+///
+/// Three borrows that travel together because the live path needs all three
+/// to draw one field: the overlay it paints, the text it paints instead of
+/// the stored `/V`, and the second face for the characters the `/DA` font
+/// cannot write. A record rather than three more parameters, so a fourth
+/// answer can be added without moving anyone's call.
+///
+/// [`Default`] is "a field with nothing live about it", which
+/// [`generate_with_live_faces`] renders exactly as [`generate_with_text`]
+/// does with no substitute.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct LiveInput<'a> {
+    /// The focused-field caret and selection bands.
+    pub caret_and_selection: Option<&'a crate::ap::field_body::Highlight>,
+    /// What the session is showing in place of the stored `/V`, `/I` and
+    /// `/TI`.
+    pub live: Option<&'a crate::ap::field_body::LiveState<'a>>,
+    /// The second face, for characters the `/DA` font's charset does not
+    /// cover. [`None`] leaves every character to the `/DA` font, which is
+    /// what a Hebrew value being typed into a Latin field used to get: the
+    /// low byte of each code point, drawn as Latin.
+    pub substitute: Option<crate::ap::Substitute<'a>>,
+}
+
 /// The same again, for a widget a form session is currently editing.
 ///
 /// `caret_and_selection` is the focused-field overlay and `live` is what the
 /// session is showing in place of the stored `/V`, `/I` and `/TI`. Passing
 /// [`None`] for both is exactly [`generate_with_text`], byte for byte — the
 /// two differ only in what this one is allowed to be handed.
+///
+/// # Superseded by [`generate_with_live_faces`]
+///
+/// This one forwards no substitute, so a live edit whose text needs a second
+/// face writes the `/DA` font's low bytes for it — Latin glyphs where the
+/// value is Hebrew. **`pdfrum-form`'s `route.rs` should migrate to
+/// [`generate_with_live_faces`]**, which takes the same two answers plus that
+/// face in one [`LiveInput`]; this signature is kept only so the migration
+/// need not be simultaneous, and it delegates there with
+/// [`LiveInput::substitute`] unset.
 #[must_use]
 pub fn generate_with_live<R: Resolve>(
     dict: &Dict,
@@ -262,13 +298,47 @@ pub fn generate_with_live<R: Resolve>(
     caret_and_selection: Option<&crate::ap::field_body::Highlight>,
     live: Option<&crate::ap::field_body::LiveState<'_>>,
 ) -> Option<GeneratedAp> {
+    generate_with_live_faces(
+        dict,
+        catalog,
+        font,
+        r,
+        LiveInput {
+            caret_and_selection,
+            live,
+            substitute: None,
+        },
+    )
+}
+
+/// The live entry point that can reach a **second face**.
+///
+/// [`generate_with_live`] with the substitute carried in the same record as
+/// the overlay and the live text. A field being typed into asks the same
+/// charset question a stored value does — `CPDF_BAFontMap::GetWordFontIndex`
+/// (`core/fpdfdoc/cpdf_bafontmap.cpp:116-151`) is per character and knows
+/// nothing about where the characters came from — so the typed path needs the
+/// same answer the stored one gets from
+/// [`generate_with_text`]'s `substitute`.
+///
+/// `LiveInput::default()` here is [`generate`]-with-a-font, byte for byte:
+/// the three fields are each [`None`] and nothing downstream distinguishes
+/// them from the stored path's arguments.
+#[must_use]
+pub fn generate_with_live_faces<R: Resolve>(
+    dict: &Dict,
+    catalog: &Dict,
+    font: &crate::ap::TextFont<'_>,
+    r: &R,
+    input: LiveInput<'_>,
+) -> Option<GeneratedAp> {
     build(
         dict,
         Some(catalog),
         Some(font),
-        None,
-        caret_and_selection,
-        live,
+        input.substitute,
+        input.caret_and_selection,
+        input.live,
         r,
     )
 }
@@ -914,6 +984,103 @@ mod tests {
             stream(super::generate_with_live(
                 &widget, &catalog, &font, &NoResolve, None, None,
             ))
+        );
+    }
+
+    /// Text a session is **typing** reaches the second face, which is the one
+    /// thing [`super::generate_with_live`] cannot do: it forwards no
+    /// substitute, so the same string comes out as the `/DA` font's low
+    /// bytes.
+    ///
+    /// The expectations are the stored path's, from
+    /// `field_body::tests::a_value_the_da_font_cannot_write_switches_to_a_second_face`:
+    /// aleph is written `\340` and bet `\341` — code page 1255 — and not
+    /// `\320`/`\321`, which are the low bytes of U+05D0 and U+05D1 and the
+    /// mojibake this replaces.
+    #[test]
+    fn the_live_path_with_a_second_face_writes_hebrew_through_it() {
+        let cache = pdfrum_font::FontCache::new();
+        let options = pdfrum_font::SubstitutionOptions::default();
+        let mut ctx = pdfrum_page::BuildContext::with_substitution(options);
+        let catalog = text_catalog();
+        let fonts = crate::ap::FormFonts::load(&catalog, &NoResolve, &mut ctx);
+        let substitute = fonts
+            .substitute(pdfrum_font::subst::Charset::Hebrew)
+            .expect("a Hebrew substitute");
+
+        let face =
+            pdfrum_font::Font::load_standard(pdfrum_font::subst::StandardFont::Helvetica, &cache);
+        let charset = crate::ap::font_map::font_charset(&face);
+        // The run is measured by the face that writes each character, or it
+        // is set in two faces and laid out by one.
+        let width = |code: u32| {
+            if crate::ap::font_map::da_font_writes(&face, charset, code) {
+                crate::ap::TextFont::char_width(&face, code)
+            } else {
+                crate::ap::font_map::substitute_width(substitute.font, code)
+            }
+        };
+        let font = crate::ap::TextFont {
+            metrics: crate::ap::TextFont::metrics_of(&face, &width),
+            font: &face,
+        };
+
+        // Typed, not stored: the widget's `/V` is Latin and stays unread.
+        let widget = text_widget("stored");
+        let state = crate::ap::field_body::LiveState {
+            text: "ab\u{5D0}\u{5D1}",
+            ..crate::ap::field_body::LiveState::default()
+        };
+        let live = |substitute| {
+            super::generate_with_live_faces(
+                &widget,
+                &catalog,
+                &font,
+                &NoResolve,
+                super::LiveInput {
+                    live: Some(&state),
+                    substitute,
+                    ..super::LiveInput::default()
+                },
+            )
+            .expect("an appearance")
+        };
+
+        // Compared as bytes: a code-page byte is not valid UTF-8, so reading
+        // the stream as text could not tell 0xE0 from 0xD0.
+        let got = live(Some(substitute));
+        let stream = got.stream.clone();
+        let has = |needle: &[u8]| stream.windows(needle.len()).any(|w| w == needle);
+
+        assert!(has(b"/Helv 12 Tf\n"), "{stream:02X?}");
+        let mut tf = b"/".to_vec();
+        tf.extend_from_slice(substitute.alias.as_bytes());
+        tf.extend_from_slice(b" 12 Tf\n");
+        assert!(has(&tf), "the second face names itself: {stream:02X?}");
+        assert!(has(b"\\340"), "aleph as 0xE0: {stream:02X?}");
+        assert!(has(b"\\341"), "bet as 0xE1: {stream:02X?}");
+        assert!(!has(b"\\320"), "no low-byte aleph: {stream:02X?}");
+        assert!(!has(b"\\321"), "no low-byte bet: {stream:02X?}");
+        assert!(
+            got.resources
+                .dict(crate::names::FONT, &NoResolve)
+                .is_some_and(|fonts| fonts.contains_key(substitute.alias)),
+            "the second face is in the appearance's own resources: {:?}",
+            got.resources
+        );
+
+        // Without it, the same string is the mojibake this closes — which is
+        // exactly what `generate_with_live` still produces.
+        let plain = live(None);
+        assert_ne!(plain.stream, stream);
+        let plain_has = |needle: &[u8]| plain.stream.windows(needle.len()).any(|w| w == needle);
+        assert!(plain_has(b"\\320"), "{:02X?}", plain.stream);
+        assert_eq!(
+            plain.stream,
+            super::generate_with_live(&widget, &catalog, &font, &NoResolve, None, Some(&state),)
+                .expect("an appearance")
+                .stream,
+            "the old entry point is the new one with no substitute"
         );
     }
 }
