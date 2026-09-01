@@ -949,14 +949,34 @@ The items sort into two kinds, and the split is the plan.
   `crates/pdfrum-font/src/subst/`. Parity: scoreboard may only improve;
   monotone rule absolute.
 
-- **D3 — single-image work** (M12b §10 item 5, M12 §10.3). `image_en_fqa` is
-  552 small images at ~600 ms with `to_pixmap` totalling 0.1 ms — so the cost
-  is **per-image overhead**, not per-pixel; an earlier digest measured every
-  one of those images as an 8.33x-minified 1-bit mask. And `image_bug_718762`
-  keeps ~403 ms in the Adobe CMYK 4-D interpolated table (P1 §, deliberately
-  left). Two different problems under one heading; rank them by measurement
-  first. Owns `crates/pdfrum-render/src/image.rs`, `stretch.rs`, and
-  `crates/pdfrum-page/src/image/`. Pure perf: byte-identical scoreboard.
+- **D3 — single-image work** (M12b §10 item 5, M12 §10.3) — **DONE
+  2026-09-01, record `docs/status/M12d-D3.md`.** `image_en_fqa` falls
+  **−76.7% cold** (679.7 → 158.7 ms), its page-graph build **−83.7%** and its
+  warm walk **−40.4%**; the `image` class cold geomean is **−14.5%** on top of
+  P1's −33.4%. Conformance byte-identical after every one of four commits.
+  **The brief's premise was wrong about what the document is**, and correcting
+  it is what located the cost: not 552 minified 1-bit masks but **301 draws of
+  a 2x2 RGB image carrying an `/SMask`**, the 8.33x minification being the
+  *mask's*. Those draws take `render_masked_image`, which sits outside
+  `Phase::Image` **and** outside M12 §9.1's render cache — so 73.5% of the
+  render was in the profile's unattributed residue. Three costs, all the
+  mask's: `separate_mask` copied a coverage plane `ImageMask::Alpha` already
+  holds (32.0% → 0.008 ms, now a borrow); the reduction box-filtered four
+  identical copies of one channel (41.7% → 25.4%, now `reduce_gray_to` with
+  the expansion after the reduction); and — the larger half, in the *build* —
+  `load_mask_image` ran the float round trip **P1 §7 deleted from `to_pixmap`
+  and could not reach**, because it lives in `pdfrum-page`. Every change is
+  proved byte-identical by test, not by the corpus. **Caching measured to
+  8%** — 276 distinct masks in 301 draws — so the work had to get cheaper, not
+  be skipped, which is M12 §10.3's residue in its exact form.
+  **`image_bug_718762`: the brief's ordering hypothesis is refuted.** The box
+  filter taps all 5000 source columns, so no pixel `to_pixmap` converts is one
+  `prescale` discards; and P1 §8.3's oracle evidence against averaging-before-
+  converting stands. What was reachable — the row walk's index, in front of the
+  4-D table — is **−10.4% of `to_pixmap`** (409.9 → 367.3 ms, non-overlapping
+  sets). The remaining ~360 ms is the `scale_denom` decode, still upstream's.
+  Owned `crates/pdfrum-render/src/image.rs`, `stretch.rs`, and
+  `crates/pdfrum-page/src/image/`.
 
 - **Deferred, on purpose:** interpretation (item 4). P3 took it 504 → 290 ns per
   object and named the two suspects that measured at nothing. Reopen only if an
