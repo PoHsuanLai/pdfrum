@@ -22,6 +22,13 @@
 //! and it is the wrong one for a benchmark: a lost device or a wedged driver
 //! would hang the suite forever, and PLAN.md §M12c's guardrails say a GPU test
 //! must degrade rather than hang.
+//!
+//! Bounded is not the same as spinning, and only [`block_on`] spins. It has to:
+//! a plain future has no object to wait *on*, so the loop re-polls, and the
+//! futures it drives — adapter and device requests — resolve on the calling
+//! thread in microseconds. [`poll_until`] waits for a GPU, which takes as long
+//! as a page takes, so it hands the driver a bounded [`POLL_SLICE`] and is
+//! parked for it rather than burning a core.
 
 use std::future::Future;
 use std::task::{Context, Poll, Waker};
@@ -60,27 +67,47 @@ pub fn block_on<F: Future>(fut: F) -> Option<F::Output> {
     }
 }
 
+/// How long one `poll` blocks before the loop checks the clock again.
+///
+/// `PollType::Wait` with a timeout is `wgpu` 29's bounded wait: it parks the
+/// thread inside the driver until the submission completes *or* this elapses,
+/// and returns either way. That is the whole reason the slice exists — an
+/// indefinite wait would never come back to check [`TIMEOUT`], and
+/// `PollType::Poll`, which returns immediately, turns the loop into a busy
+/// spin that burns a core for as long as the GPU takes.
+///
+/// Ten milliseconds is short enough that [`TIMEOUT`] is honoured to within one
+/// slice and long enough that a page-sized render costs a handful of wakeups
+/// rather than millions. Nothing is measured on it; it is a bound, not a
+/// tuning parameter.
+const POLL_SLICE: Duration = Duration::from_millis(10);
+
 /// Poll `device` until `ready` yields a value, or until [`TIMEOUT`].
 ///
 /// The device is polled *first*, before `ready` is consulted, because that is
-/// what runs the callbacks `ready` is waiting on. Polling with a short bounded
-/// wait rather than `wait_indefinitely` is what makes the timeout reachable at
-/// all — an indefinite poll never returns to check the clock.
+/// what runs the callbacks `ready` is waiting on. Each poll is a bounded wait
+/// of [`POLL_SLICE`] rather than `wgpu`'s `wait_indefinitely`, which is what
+/// makes the outer timeout reachable at all — an indefinite poll never returns
+/// to check the clock — and rather than a non-blocking `Poll`, which would
+/// reach the clock by spinning on it.
 pub fn poll_until<T>(device: &wgpu::Device, mut ready: impl FnMut() -> Option<T>) -> Option<T> {
     let deadline = Instant::now() + TIMEOUT;
     loop {
-        // A poll error means the device is gone; the loop then falls through
-        // to the deadline rather than spinning on a corpse, and the caller
-        // reports a readback failure. STYLE §3 forbids the `unwrap` wgpu's
-        // own examples use here.
-        let _ = device.poll(wgpu::PollType::Poll);
+        // A poll error means the device is gone, or that this slice expired
+        // with work outstanding; either way the loop falls through to the
+        // deadline rather than spinning on a corpse, and the caller reports a
+        // readback failure. STYLE §3 forbids the `unwrap` wgpu's own examples
+        // use here.
+        let _ = device.poll(wgpu::PollType::Wait {
+            submission_index: None,
+            timeout: Some(POLL_SLICE),
+        });
         if let Some(value) = ready() {
             return Some(value);
         }
         if Instant::now() >= deadline {
             return None;
         }
-        std::thread::yield_now();
     }
 }
 
@@ -122,5 +149,16 @@ mod tests {
         // problem in miniature.
         assert!(TIMEOUT >= Duration::from_secs(5), "long enough for a page");
         assert!(TIMEOUT <= Duration::from_mins(1), "short enough to report");
+    }
+
+    #[test]
+    fn the_device_wait_is_a_slice_of_the_timeout_not_a_spin() {
+        // The property that distinguishes a bounded wait from a busy loop: the
+        // slice must be short enough that `TIMEOUT` is still honoured to
+        // within one of them, and long enough that a render costs wakeups in
+        // the hundreds rather than a saturated core. Asserted on the constants
+        // because the alternative is a timing test.
+        assert!(POLL_SLICE > Duration::ZERO, "zero would be the spin again");
+        assert!(POLL_SLICE <= TIMEOUT / 100, "the timeout stays reachable");
     }
 }
