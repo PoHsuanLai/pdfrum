@@ -358,6 +358,28 @@ impl<'a> FormSession<'a> {
         }
     }
 
+    /// The text currently selected in the focused field, if any.
+    ///
+    /// A focused field with an empty selection answers `Some("")`, and no
+    /// focus at all answers `None` — a distinction the oracle's byte-length
+    /// return cannot make, since it reports zero for both.
+    #[must_use]
+    pub fn selected_text(&self) -> Option<String> {
+        match self.inner.focused_state()? {
+            pdfrum_form::field::FieldState::Text(text) => Some(text.edit.selected_text()),
+            pdfrum_form::field::FieldState::Choice(choice) => Some(
+                choice
+                    .edit
+                    .as_ref()
+                    .map(|edit| edit.selected_text())
+                    .unwrap_or_default(),
+            ),
+            // Neither holds selectable text.
+            pdfrum_form::field::FieldState::Toggle(_)
+            | pdfrum_form::field::FieldState::Button(_) => None,
+        }
+    }
+
     /// Whether a row of the focused choice field is selected.
     #[must_use]
     pub fn is_index_selected(&self, index: usize) -> bool {
