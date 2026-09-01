@@ -282,6 +282,10 @@ pub fn to_pixmap(
         Pixels::Indexed { indices, .. } => Some(&**indices),
         _ => None,
     };
+    let cmyk = match &image.pixels {
+        Pixels::Cmyk8(data) => Some(&**data),
+        _ => None,
+    };
     let width = image.width as usize;
     for y in 0..image.height {
         let Some(row) = out
@@ -310,8 +314,8 @@ pub fn to_pixmap(
                 // The indexed fast path reads the pre-encoded palette; every
                 // other kind goes through `sample_bytes`, which has no palette
                 // to hoist.
-                let mut rgb = match (indices, palette.as_ref()) {
-                    (Some(indices), Some(palette)) => {
+                let mut rgb = match (indices, palette.as_ref(), cmyk) {
+                    (Some(indices), Some(palette), _) => {
                         // An absent index reads as 0 and an absent palette
                         // entry as black, which is `color_at`'s own ladder:
                         // `indices.get(i).unwrap_or(0)`, then
@@ -324,6 +328,24 @@ pub fn to_pixmap(
                             .get(usize::from(entry))
                             .copied()
                             .unwrap_or([0, 0, 0])
+                    }
+                    // CMYK is the one remaining kind whose per-sample cost is
+                    // large enough for the index arithmetic to show beside it:
+                    // `adobe_cmyk_to_srgb` is a four-dimensional interpolated
+                    // table, and `sample_bytes` reaches it through a
+                    // `checked_mul` and a `checked_add` the row walk has
+                    // already done. Measured on `image_bug_718762`'s 25
+                    // million CMYK samples, hoisting it is -10.4% of
+                    // `to_pixmap` (409.9 ms best-of-five to 367.3 ms, the two
+                    // sets not overlapping). The bytes are `sample_bytes`'s
+                    // own — same fallback of 0 for a short buffer, same table.
+                    (_, _, Some(data)) => {
+                        let i = (y as usize)
+                            .saturating_mul(width)
+                            .saturating_add(x as usize)
+                            .saturating_mul(4);
+                        let at = |o: usize| data.get(i.saturating_add(o)).copied().unwrap_or(0);
+                        pdfrum_page::color::adobe_cmyk_to_srgb(at(0), at(1), at(2), at(3))
                     }
                     _ => image.pixels.sample_bytes(x, y, image.width),
                 };
@@ -827,6 +849,40 @@ mod tests {
             Some([255; 4]),
             "a clear stencil bit is opaque"
         );
+    }
+
+    /// `to_pixmap`'s CMYK arm reaches `adobe_cmyk_to_srgb` with an index the
+    /// row walk already has, where `sample_bytes` recomputes it. The two must
+    /// give the same byte for every sample, including past the end of a buffer
+    /// shorter than its declared size — which is the one place the two index
+    /// ladders could differ.
+    #[test]
+    fn the_cmyk_fast_arm_is_sample_bytes() {
+        for (w, h, len) in [(4_u32, 3_u32, 48_usize), (4, 3, 20), (4, 3, 100), (1, 1, 4)] {
+            let data: Box<[u8]> = (0..len)
+                .map(|i| u8::try_from(i * 53 % 256).unwrap_or(0))
+                .collect();
+            let pixels = Pixels::Cmyk8(data.clone());
+            let image = ImageData {
+                width: w,
+                height: h,
+                pixels: pixels.clone(),
+                mask: None,
+                matte: None,
+                interpolate: false,
+            };
+            let out = to_pixmap(&image, Argb::opaque(0, 0, 0), None);
+            for y in 0..h {
+                for x in 0..w {
+                    let [r, g, b] = pixels.sample_bytes(x, y, w);
+                    assert_eq!(
+                        out.pixel(x, y),
+                        Some([r, g, b, 255]),
+                        "{w}x{h}, {len} bytes, sample ({x}, {y})"
+                    );
+                }
+            }
+        }
     }
 
     /// The borrow arm and the copy arm must agree byte for byte. They differ
