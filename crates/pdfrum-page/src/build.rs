@@ -1439,10 +1439,25 @@ impl<R: Resolve> Interp<'_, R> {
         let resolver = self.resolver;
         let fonts = &ctx.fonts;
         let substitution = &ctx.substitution;
-        let find_font = |spelling: &[u8]| -> Option<Arc<Font>> {
-            let dict = resources
-                .find(names::FONT, &Name::new(spelling), resolver)
-                .and_then(|o| o.as_dict().cloned())?;
+        // The `/Font` array's first element, both ways round. Table 58's own
+        // form is an indirect reference to a font dictionary, so that is
+        // tried first; a name is the oracle's spelling, kept as tolerance
+        // because files written against PDFium use it. See the
+        // `[oracle-bug]` note in `state::extgstate`.
+        let find_font = |first: Option<&Object>| -> Option<Arc<Font>> {
+            let dict = match first? {
+                // Spec (table 58): an indirect reference to a font dict.
+                r @ Object::Ref(_) => r.resolve(resolver).ok()?.as_dict().cloned()?,
+                // Tolerance: the oracle's name-in-the-resources reading.
+                Object::Name(name) => resources
+                    .find(names::FONT, name, resolver)
+                    .and_then(|o| o.as_dict().cloned())?,
+                // A direct dictionary is neither spelling, but there is
+                // nothing else it could mean and refusing it would lose a
+                // font a file plainly named.
+                Object::Dict(d) => d.clone(),
+                _ => return None,
+            };
             pdfrum_font::load_with_options(
                 &dict,
                 resolver,
@@ -2191,6 +2206,121 @@ mod tests {
         let mut ctx = BuildContext::new();
         let page = build_page(&ops, resources, &NoResolve, &mut ctx, &limits, &mut diags);
         (page, diags)
+    }
+
+    // -----------------------------------------------------------------
+    // `/ExtGState /Font` — audit A18. Table 58 makes the array's first
+    // element an *indirect reference to a font dictionary*;
+    // `cpdf_allstates.cpp:87-89` reads it as a byte string and looks that up
+    // in the page's `/Font` resources, so the spec's form yields `""`, misses,
+    // and `cpdf_streamcontentparser.cpp:1239` substitutes stock Helvetica.
+    // pdf.js resolves the reference (`evaluator.js:1142-1154`, `:1256-1261`).
+    // No corpus file uses either form, so these fixtures are constructed.
+    // -----------------------------------------------------------------
+
+    /// A map-backed resolver, so a `Ref` in a fixture can actually be
+    /// followed. `NoResolve` cannot, which is why the older `/Font` test
+    /// could only observe "nothing was installed".
+    #[derive(Debug, Default)]
+    struct Store(std::collections::HashMap<u32, std::sync::Arc<pdfrum_object::Object>>);
+
+    impl pdfrum_object::Resolve for Store {
+        fn fetch(
+            &self,
+            r: pdfrum_object::ObjRef,
+        ) -> Result<std::sync::Arc<pdfrum_object::Object>, pdfrum_object::Error> {
+            self.0
+                .get(&r.num)
+                .map(std::sync::Arc::clone)
+                .ok_or(pdfrum_object::Error::UnresolvedRef(r))
+        }
+    }
+
+    /// A `/Type1 /Helvetica` font dictionary, which loads without any
+    /// embedded program.
+    fn helvetica() -> pdfrum_object::Dict {
+        use pdfrum_object::{Dict, Name, Object};
+        Dict::from_pairs([
+            (Name::from("Type"), Object::Name(Name::from("Font"))),
+            (Name::from("Subtype"), Object::Name(Name::from("Type1"))),
+            (
+                Name::from("BaseFont"),
+                Object::Name(Name::from("Helvetica")),
+            ),
+        ])
+    }
+
+    /// Build `/GS gs` where `/GS` holds `/Font [<first> 12]`, against a store
+    /// that has a font dictionary at object 7 and resources naming it `F1`.
+    fn font_from_ext_gstate(first: pdfrum_object::Object) -> Option<f32> {
+        use pdfrum_object::{Array, Dict, Name, Object};
+        let store = Store(
+            [(7u32, std::sync::Arc::new(Object::Dict(helvetica())))]
+                .into_iter()
+                .collect(),
+        );
+        let gs = Dict::from_pairs([(
+            Name::from("Font"),
+            Object::Array(Array::of([first, Object::Int(12)])),
+        )]);
+        let resources = Resources {
+            chosen: Some(Dict::from_pairs([
+                (
+                    Name::from("ExtGState"),
+                    Object::Dict(Dict::from_pairs([(Name::from("GS"), Object::Dict(gs))])),
+                ),
+                (
+                    Name::from("Font"),
+                    Object::Dict(Dict::from_pairs([(
+                        Name::from("F1"),
+                        Object::Dict(helvetica()),
+                    )])),
+                ),
+            ])),
+            page: None,
+        };
+        let limits = Limits::default();
+        let mut diags = Diagnostics::default();
+        let ops = crate::parse_content(b"/GS gs BT (x) Tj ET", &limits, &mut diags);
+        let mut ctx = BuildContext::new();
+        let mut state = GraphicsState::default();
+        // Drive the interpreter far enough to apply the `gs`, then read the
+        // font size the arm installed — non-`None` exactly when a font was
+        // found, and 12 when it came from this array.
+        let page = build_page(&ops, &resources, &store, &mut ctx, &limits, &mut diags);
+        let _ = &mut state;
+        page.objects
+            .first()
+            .and_then(|o| o.state().text.font.as_ref())
+            .map(|(_, size)| *size)
+    }
+
+    /// Table 58's own form resolves. This fails against the oracle's
+    /// reading, where `GetByteStringAt(0)` on a reference is `""`.
+    #[test]
+    fn an_ext_gstate_font_resolves_the_specs_indirect_reference() {
+        let size =
+            font_from_ext_gstate(pdfrum_object::Object::Ref(pdfrum_object::ObjRef::new(7, 0)));
+        assert_eq!(size, Some(12.0));
+    }
+
+    /// The oracle's form keeps working — tolerance, not the specification.
+    #[test]
+    fn an_ext_gstate_font_still_takes_the_oracles_resource_name() {
+        let size =
+            font_from_ext_gstate(pdfrum_object::Object::Name(pdfrum_object::Name::from("F1")));
+        assert_eq!(size, Some(12.0));
+    }
+
+    /// A reference to nothing installs nothing, rather than falling back to
+    /// a stock face as the oracle does — the fallback is the interpreter's
+    /// job at `Tf`, not this arm's.
+    #[test]
+    fn an_ext_gstate_font_reference_to_nothing_installs_nothing() {
+        let size = font_from_ext_gstate(pdfrum_object::Object::Ref(pdfrum_object::ObjRef::new(
+            99, 0,
+        )));
+        assert_eq!(size, None);
     }
 
     #[test]

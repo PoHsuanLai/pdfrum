@@ -66,6 +66,30 @@ impl Pattern {
     /// current transformation matrix. Dispatch is on `/PatternType`: 1 is
     /// tiling, 2 is shading, and anything else — including a missing key —
     /// yields no pattern at all.
+    ///
+    /// **There is no pattern cache.** A pattern is loaded afresh at each use,
+    /// so the `parent_matrix` a use is given is the one it gets.
+    //
+    // [oracle-bug] cpdf_docpagedata.cpp:388 looks a pattern up in
+    // `pattern_map_` keyed on **the pattern object alone**, and :406 stores it
+    // there. The `matrix` argument is a *construction* parameter (:396, :400),
+    // so it is baked into whichever instance was built first and every later
+    // user of the same object silently inherits it. Two forms at different
+    // nesting levels naming one pattern therefore paint it in one form's
+    // coordinate system — §8.7.3 anchors a pattern in the space of the
+    // content stream in which it is *used*, which is what makes the shared
+    // matrix wrong rather than merely surprising. Worse, `GetShading`
+    // (:410-424) consults and writes **the same map** while constructing with
+    // `bShading = true` where `GetPattern` passes `false` (:400), so an object
+    // reached once through `sh` and once through `scn` returns whichever was
+    // built first — with the wrong `/Background` handling for the other. There
+    // is no independent implementation to weigh: pdf.js is canvas-backed and
+    // has no pattern cache at all. We keep no cache either, which cannot
+    // alias; if one is ever added it must be keyed on
+    // `(ObjRef, parent_matrix, is_shading)`. This is the audit's A24,
+    // previously recorded as design brief D15 — "declined", where the
+    // oracle-bug rule makes it obligatory. Note the brief describes the fix as
+    // a `(ObjRef, parent_matrix)` key; what shipped is stronger.
     #[must_use]
     pub fn load<R: Resolve>(
         obj: &Object,
