@@ -66,9 +66,18 @@ pub use pdfrum_form::{Modifiers as EventModifiers, Response as EventResponse};
 /// ```
 #[derive(Debug)]
 pub struct FormSession<'a> {
-    #[allow(dead_code)]
     doc: &'a Document,
     inner: Inner,
+    /// The pages this session has already read, by index.
+    ///
+    /// Read on the first event that names a page and kept, because a replay
+    /// sends dozens of events at one page and the walk is the expensive half.
+    /// A page's annotation geometry does not change under a session — the
+    /// session changes *appearances*, which are produced on the way out and
+    /// never written back here.
+    pages: std::collections::BTreeMap<u32, pdfrum_form::PageForm>,
+    /// The form's default-resource fonts, loaded once.
+    fonts: pdfrum_doc::ap::FormFonts,
 }
 
 impl<'a> FormSession<'a> {
@@ -80,19 +89,26 @@ impl<'a> FormSession<'a> {
     /// one machine. Pass [`SessionConfig::apple`] for Apple keyboards.
     #[must_use]
     pub fn new(doc: &'a Document) -> FormSession<'a> {
-        FormSession {
-            doc,
-            inner: Inner::new(),
-        }
+        FormSession::build(doc, Inner::new())
     }
 
     /// Starts a session with explicit switches — the accelerator modifier,
     /// which annotation subtypes join the focus ring, and the undo bound.
     #[must_use]
     pub fn with_config(doc: &'a Document, config: SessionConfig) -> FormSession<'a> {
+        FormSession::build(doc, Inner::with_config(config))
+    }
+
+    /// The shared constructor: a session plus the fonts its appearances are
+    /// laid out with.
+    fn build(doc: &'a Document, inner: Inner) -> FormSession<'a> {
+        let mut ctx = pdfrum_page::BuildContext::new();
+        let fonts = pdfrum_doc::ap::FormFonts::load(&doc.catalog(), doc.parser(), &mut ctx);
         FormSession {
             doc,
-            inner: Inner::with_config(config),
+            inner,
+            pages: std::collections::BTreeMap::new(),
+            fonts,
         }
     }
 
@@ -263,7 +279,7 @@ impl<'a> FormSession<'a> {
     #[must_use]
     pub fn can_undo(&self) -> bool {
         match self.inner.focused_state() {
-            Some(pdfrum_form::field::FieldState::Text(text)) => text.undo.can_undo(),
+            Some(pdfrum_form::field::FieldState::Text(text)) => text.edit.undo.can_undo(),
             Some(
                 pdfrum_form::field::FieldState::Choice(_)
                 | pdfrum_form::field::FieldState::Toggle(_)
@@ -277,7 +293,7 @@ impl<'a> FormSession<'a> {
     #[must_use]
     pub fn can_redo(&self) -> bool {
         match self.inner.focused_state() {
-            Some(pdfrum_form::field::FieldState::Text(text)) => text.undo.can_redo(),
+            Some(pdfrum_form::field::FieldState::Text(text)) => text.edit.undo.can_redo(),
             Some(
                 pdfrum_form::field::FieldState::Choice(_)
                 | pdfrum_form::field::FieldState::Toggle(_)
@@ -294,7 +310,7 @@ impl<'a> FormSession<'a> {
     #[must_use]
     pub fn focused_text(&self) -> Option<String> {
         match self.inner.focused_state()? {
-            pdfrum_form::field::FieldState::Text(text) => Some(text.text.clone()),
+            pdfrum_form::field::FieldState::Text(text) => Some(text.text().to_string()),
             pdfrum_form::field::FieldState::Choice(choice) => Some(choice.focused_text()),
             // Neither holds text: a toggle's value is a state name and a
             // button has none at all.
@@ -348,22 +364,68 @@ impl<'a> FormSession<'a> {
 
     /// Routes an event that names a page.
     ///
-    /// Mouse routing needs the per-page annotation geometry and the
-    /// caret-placement queries the layout engine is still growing. Until both
-    /// are in place every event reports itself unhandled, which is the honest
-    /// answer: a bridge can rely on "not consumed" not to change meaning when
-    /// the routing lands, whereas a guess would.
+    /// The page is read on first use and kept: a replay sends dozens of
+    /// events at one page, and the `/Annots` walk is the expensive half.
     fn dispatch(&mut self, page: u32, event: Event) -> Response {
-        let _ = (page, event, &mut self.inner);
-        Response::ignored()
+        if !self.pages.contains_key(&page) {
+            let Some(read) = self.read_page(page) else {
+                return Response::ignored();
+            };
+            self.pages.insert(page, read);
+        }
+        let Some(form) = self.pages.get(&page) else {
+            return Response::ignored();
+        };
+        let catalog = self.doc.catalog();
+        let ctx = pdfrum_form::Context {
+            page: form,
+            catalog: &catalog,
+            resolve: self.doc.parser(),
+            fonts: &self.fonts,
+            permissions: self.permissions(),
+        };
+        pdfrum_form::apply(&mut self.inner, &ctx, event)
     }
 
     /// Routes an event that goes to whatever holds focus.
     ///
-    /// Unhandled for the same reason as [`FormSession::dispatch`].
+    /// Keyboard events name no page, so the page they route against is the
+    /// one holding focus — which is why typing works after a click and does
+    /// nothing before one.
     fn dispatch_keyboard(&mut self, event: Event) -> Response {
-        let _ = (event, &mut self.inner);
-        Response::ignored()
+        let Some(page) = self
+            .inner
+            .focus
+            .map(|target| pdfrum_form::session::FocusTarget::annot(target).page)
+        else {
+            return Response::ignored();
+        };
+        self.dispatch(page, event)
+    }
+
+    /// Reads one page's annotations, or `None` when the page will not load.
+    fn read_page(&self, page: u32) -> Option<pdfrum_form::PageForm> {
+        let loaded = self.doc.page(page).ok()?;
+        Some(pdfrum_form::page::read(
+            page,
+            &loaded.dict.dict,
+            &self.doc.catalog(),
+            self.doc.parser(),
+        ))
+    }
+
+    /// What the document permits, which gates every non-push-button click.
+    fn permissions(&self) -> pdfrum_form::Permissions {
+        if !self.doc.is_encrypted() {
+            return pdfrum_form::Permissions::ALL;
+        }
+        let bits = self.doc.permissions(false);
+        pdfrum_form::Permissions {
+            // Bit 9 (value 256) is fill-in; bit 6 (value 32) is annotation
+            // modification. Either one suffices.
+            fill_form: bits & 0x100 != 0,
+            modify_annotation: bits & 0x20 != 0,
+        }
     }
 }
 
