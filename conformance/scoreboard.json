@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-01T13:27:50Z",
+  "generated_at": "2026-09-01T14:07:31Z",
   "totals": {
     "files": 1705,
     "pass": 1641,
@@ -46008,12 +46008,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.968879,
+        "ssim": 0.968892,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.968879 below floor 0.990000"
+      "notes": "ssim 0.968892 below floor 0.990000"
     },
     {
       "path": "resources/pixel/form_textfield_selected_rtl.in",
@@ -46064,12 +46064,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.947819,
+        "ssim": 0.946872,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.947819 below floor 0.990000"
+      "notes": "ssim 0.946872 below floor 0.990000"
     },
     {
       "path": "resources/pixel/freetext_annotation_with_ap.in",
