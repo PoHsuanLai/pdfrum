@@ -21,6 +21,11 @@ pdfrum-object.workspace = true
 pdfrum-page.workspace = true
 pdfrum-edit.workspace = true
 pdfrum-parser.workspace = true
+# The facade, for `--send-events`: `pdfrum::FormSession` is the event surface
+# the bridge in `dispatch.rs` drives, and driving the facade rather than
+# `pdfrum-form` directly is what makes the tool exercise the API a consumer
+# would use.
+pdfrum.workspace = true
 pdfrum-raster-exact.workspace = true
 pdfrum-raster-tinyskia.workspace = true
 pdfrum-raster-vello.workspace = true

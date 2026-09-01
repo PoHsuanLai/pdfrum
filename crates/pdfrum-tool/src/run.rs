@@ -15,13 +15,14 @@
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use pdfrum_object::{Dict, Object, Resolve};
 use pdfrum_page::BuildContext;
 use pdfrum_parser::{Document, LoadError, LoadOptions, PageDict};
 
 use crate::options::{Options, OutputFormat, PageRange};
-use crate::{annot, events, metadata, pageinfo, render, structure, text, unsupported};
+use crate::{annot, dispatch, events, metadata, pageinfo, render, structure, text, unsupported};
 
 /// Where a run writes. Separated from the work so the whole pipeline is
 /// testable on buffers rather than on the process's own streams.
@@ -53,8 +54,8 @@ pub fn process_file(
     writeln!(streams.err, "Processing PDF file {name}.")?;
 
     // `pdfium_test.cc:2152-2171` loads the sibling `.evt` after announcing
-    // the PDF and before opening it. Dispatch onto widgets is the other M14
-    // slice; we parse and count so the run summary records the script.
+    // the PDF and before opening it — the script is read once for the whole
+    // document and replayed against each page in the walk below.
     let parsed_events = if options.send_events {
         load_events(name, streams)?
     } else {
@@ -68,7 +69,12 @@ pub fn process_file(
         password: (!options.password.is_empty()).then(|| options.password.clone().into_bytes()),
         ..LoadOptions::default()
     };
-    let doc = match pdfrum_parser::load(bytes.into(), &load) {
+    // Shared rather than moved, because `--send-events` opens the same file a
+    // second time through the facade (below) and the store is lazy: both
+    // documents read objects out of these bytes on demand, so a second copy
+    // would double a large file's footprint for nothing.
+    let bytes: Arc<[u8]> = bytes.into();
+    let doc = match pdfrum_parser::load(Arc::clone(&bytes), &load) {
         Ok(doc) => doc,
         Err(err) => {
             writeln!(
@@ -96,7 +102,37 @@ pub fn process_file(
         write!(streams.out, "{}", feature.line())?;
     }
 
-    let counts = walk_pages(&doc, name, options, streams)?;
+    // The form-fill environment, when there is a script to drive it. Opened
+    // from the same bytes and the same password: a session over a *different*
+    // reading of the file would route clicks against annotations the render
+    // path never saw. A file the facade refuses — which cannot happen when
+    // the parser accepted it, since both call the same loader — leaves the
+    // session absent, and the events then parse and count exactly as before.
+    let facade = (!parsed_events.is_empty())
+        .then(|| {
+            pdfrum::Document::from_bytes_with(
+                Arc::clone(&bytes),
+                &pdfrum::OpenOptions {
+                    password: load.password.clone(),
+                    ..pdfrum::OpenOptions::default()
+                },
+            )
+            .ok()
+        })
+        .flatten();
+    // One session for the whole document, as the oracle holds one
+    // `FPDF_FORMHANDLE` for the whole document: what page 0's script leaves
+    // focused is what page 1's script starts from.
+    let mut session = facade.as_ref().map(pdfrum::FormSession::new);
+
+    let counts = walk_pages(
+        &doc,
+        name,
+        options,
+        &parsed_events,
+        session.as_mut(),
+        streams,
+    )?;
 
     // Written after the page walk so the per-page chatter the harness diffs
     // keeps its ordering, and before the summary line so a save failure is
@@ -241,10 +277,17 @@ fn substitution_options(options: &Options) -> pdfrum_font::SubstitutionOptions {
 }
 
 /// Visits the selected pages, dumping each one.
+///
+/// `script` and `session` are `--send-events`'s: the whole script is replayed
+/// against each page before anything is written for it, which is
+/// `PdfProcessor::ProcessPage` (`pdfium_test.cc:1474-1482`) — `SendPageEvents`
+/// is its first statement, ahead of every dump and every render.
 fn walk_pages(
     doc: &Document,
     name: &str,
     options: &Options,
+    script: &[events::Event],
+    mut session: Option<&mut pdfrum::FormSession<'_>>,
     streams: &mut Streams<'_>,
 ) -> std::io::Result<Counts> {
     let mut counts = Counts::default();
@@ -268,6 +311,19 @@ fn walk_pages(
             counts.bad += 1;
             continue;
         };
+        // Fact 6 — the whole stream, once, before this page's image is
+        // saved. `ProcessPage` sends events as its very first statement, and
+        // a page that would not load never reaches it, which is why this sits
+        // *after* the load guard above and before every dump below.
+        //
+        // The updates are collected rather than dropped so a renderer can be
+        // handed the post-event state; see `render_updates` for what the
+        // facade currently gives it, and `docs/status/M14.md` for what it
+        // does not.
+        let updates = match session.as_deref_mut() {
+            Some(session) => dispatch::replay_page(session, index, script, streams.err),
+            None => Vec::new(),
+        };
         // The annotation walk happens when the page is first opened, before
         // anything is dumped for it.
         for feature in unsupported::page_annotations(&page.dict, doc) {
@@ -283,6 +339,7 @@ fn walk_pages(
             Output {
                 input: Path::new(name),
                 index,
+                updates: &updates,
             },
             options,
             &catalog,
@@ -367,12 +424,16 @@ fn dump_page(
     }
 }
 
-/// Where a file-writing format puts its output: the input's path and which
-/// page is being written.
+/// Where a file-writing format puts its output: the input's path, which page
+/// is being written, and what `--send-events` left that page in.
 #[derive(Debug, Clone, Copy)]
 struct Output<'a> {
     input: &'a Path,
     index: u32,
+    /// The appearance updates this page's event replay produced — the tool's
+    /// `FPDF_FFLDraw` input. Empty for every run without `--send-events`, and
+    /// (today) for every run with it, because dispatch is inert.
+    updates: &'a [pdfrum::AppearanceUpdate],
 }
 
 /// The formats that write a file beside the input rather than to stdout.
@@ -384,6 +445,10 @@ struct Output<'a> {
 /// Returns whatever the format also owes *stdout*, which for `--png --md5` is
 /// the `MD5:<path>:<hex>` line the harness and the oracle both print after
 /// the file lands.
+/// `updates` is what `--send-events` left this page in, and it reaches only
+/// the `--png` arm: `FPDF_FFLDraw` is a *bitmap* call, so the event state
+/// changes what a page renders and nothing about what `--txt`, `--annot` or
+/// `--show-pageinfo` report.
 fn write_page_files<R: Resolve>(
     page: &PageDict,
     where_: Output<'_>,
@@ -393,7 +458,11 @@ fn write_page_files<R: Resolve>(
     rtl: bool,
     ctx: &mut BuildContext,
 ) -> String {
-    let Output { input, index } = where_;
+    let Output {
+        input,
+        index,
+        updates,
+    } = where_;
     match options.format {
         OutputFormat::Annot => {
             let Some(path) = annot::output_path(input, index) else {
@@ -415,9 +484,15 @@ fn write_page_files<R: Resolve>(
                 return String::new();
             };
             let backend = render::Backend::resolve(options.use_renderer.as_deref());
-            let Some(rendered) =
-                render::render(page, catalog, r, render::DEFAULT_SCALE, backend, ctx)
-            else {
+            let Some(rendered) = render::render(
+                page,
+                catalog,
+                r,
+                render::DEFAULT_SCALE,
+                backend,
+                ctx,
+                updates,
+            ) else {
                 return String::new();
             };
             if std::fs::write(&path, &rendered.png).is_err() {
@@ -668,6 +743,110 @@ trailer<</Root 1 0 R/Size 5>>\n";
         assert!(err.contains("Sent 2 events."), "{err}");
         assert!(err.contains("Processed 1 pages."), "{err}");
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// A two-page document, so the per-page replay has something to be per.
+    const TWO_PAGES: &[u8] = b"%PDF-1.7\n\
+1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n\
+2 0 obj<</Type/Pages/Kids[3 0 R 4 0 R]/Count 2>>endobj\n\
+3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 200 300]>>endobj\n\
+4 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 200 300]>>endobj\n\
+trailer<</Root 1 0 R/Size 5>>\n";
+
+    /// Runs `--send-events` over a scratch directory holding `pdf` and a
+    /// sibling `.evt` with `script`, returning stdout and stderr.
+    fn run_with_script(pdf: &[u8], script: &str, args: &[&str]) -> (String, String) {
+        let dir = std::env::temp_dir().join(format!(
+            "pdfrum-dispatch-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let pdf_path = dir.join("input.pdf");
+        std::fs::write(&pdf_path, pdf).unwrap();
+        std::fs::write(dir.join("input.evt"), script).unwrap();
+
+        let mut command_line: Vec<String> = vec!["--send-events".to_owned()];
+        command_line.extend(args.iter().map(|a| (*a).to_owned()));
+        let options = crate::options::parse(&command_line).unwrap();
+        let (mut out, mut err) = (Vec::new(), Vec::new());
+        let mut streams = Streams {
+            out: &mut out,
+            err: &mut err,
+        };
+        process_file(
+            &pdf_path.to_string_lossy(),
+            pdf.to_vec(),
+            &options,
+            &mut streams,
+        )
+        .unwrap();
+        std::fs::remove_dir_all(&dir).ok();
+        (
+            String::from_utf8_lossy(&out).into_owned(),
+            String::from_utf8_lossy(&err).into_owned(),
+        )
+    }
+
+    #[test]
+    fn the_whole_script_replays_once_per_page_before_that_page_is_written() {
+        // Fact 6. `ProcessPage` sends the entire stream as its first
+        // statement, for every page, so a two-page document replays a
+        // three-line script twice — six sends, not three, and not one pass
+        // split across the pages.
+        //
+        // The count reported is still the *script's* length, because that is
+        // what the oracle's `Sent N events.` counts: it is a property of the
+        // file, not of how many times it was dispatched.
+        let (_, err) = run_with_script(
+            TWO_PAGES,
+            "mousemove,10,20\nmousedown,left,10,20\nmouseup,left,10,20\n",
+            &["--show-pageinfo"],
+        );
+        assert!(err.contains("Sent 3 events."), "{err}");
+        assert!(err.contains("Processed 2 pages."), "{err}");
+    }
+
+    #[test]
+    fn an_invalid_code_point_is_reported_on_stderr_and_leaves_stdout_alone() {
+        // Fact 3's stderr note. It must not reach stdout: that stream is
+        // byte-compared against the oracle's, and the oracle prints nothing
+        // here.
+        let (out, err) = run_with_script(
+            MINIMAL,
+            "charcode,97\ncharcode,55296\ncharcode,98\n",
+            &["--show-pageinfo"],
+        );
+        assert!(
+            err.contains("charcode 55296 is not a Unicode scalar value; skipped."),
+            "{err}"
+        );
+        assert!(!out.contains("charcode"), "{out}");
+        // All three lines still *parsed*, so the oracle-compatible count is
+        // three: the skip happens at dispatch, not at parse.
+        assert!(err.contains("Sent 3 events."), "{err}");
+    }
+
+    #[test]
+    fn a_script_that_dispatches_does_not_change_the_rendered_page_yet() {
+        // The inert-correctness property this slice is scored on: the
+        // facade reports every event unhandled, so a page's image with a
+        // script is the image without one. When dispatch lands this test is
+        // the one that should start failing, and its message says so.
+        let (with_events, _) = run_with_script(
+            MINIMAL,
+            "mousedown,left,10,20\nmouseup,left,10,20\n",
+            &["--show-pageinfo"],
+        );
+        let (without, _) = run(MINIMAL, &["--show-pageinfo"]);
+        assert_eq!(
+            with_events, without,
+            "dispatch is inert today; when it stops being, the renderer must \
+             honour the updates before this may differ"
+        );
     }
 
     #[test]
