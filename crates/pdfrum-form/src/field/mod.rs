@@ -17,6 +17,7 @@
 //! is a named field read once when the field is first touched.
 
 pub mod button;
+pub mod choice;
 pub mod toggle;
 
 use std::num::NonZeroU32;
