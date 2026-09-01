@@ -21,7 +21,7 @@ use pdfrum_page::BuildContext;
 use pdfrum_parser::{Document, LoadError, LoadOptions, PageDict};
 
 use crate::options::{Options, OutputFormat, PageRange};
-use crate::{annot, metadata, pageinfo, render, structure, text, unsupported};
+use crate::{annot, events, metadata, pageinfo, render, structure, text, unsupported};
 
 /// Where a run writes. Separated from the work so the whole pipeline is
 /// testable on buffers rather than on the process's own streams.
@@ -52,6 +52,15 @@ pub fn process_file(
 ) -> std::io::Result<Counts> {
     writeln!(streams.err, "Processing PDF file {name}.")?;
 
+    // `pdfium_test.cc:2152-2171` loads the sibling `.evt` after announcing
+    // the PDF and before opening it. Dispatch onto widgets is the other M14
+    // slice; we parse and count so the run summary records the script.
+    let parsed_events = if options.send_events {
+        load_events(name, streams)?
+    } else {
+        Vec::new()
+    };
+
     // An empty `--password=` is "no password given", which is how the oracle
     // reads it (`options.password.empty()` decides whether to pass one at
     // all), and the two are not equivalent to a security handler.
@@ -67,6 +76,7 @@ pub fn process_file(
                 "Load pdf docs unsuccessful: {}.",
                 load_error_text(&err)
             )?;
+            write_event_summary(options, parsed_events.len(), streams)?;
             return Ok(Counts::default());
         }
     };
@@ -99,7 +109,48 @@ pub fn process_file(
     if counts.bad > 0 {
         writeln!(streams.err, "Skipped {} bad pages.", counts.bad)?;
     }
+    write_event_summary(options, parsed_events.len(), streams)?;
     Ok(counts)
+}
+
+/// `Using event file` / `Sending events from:` as `pdfium_test.cc:2158-2163`
+/// prints them, then the parsed events. An unreadable or empty file is a
+/// silent no-op, matching `access` + `GetFileContents`.
+fn load_events(pdf_name: &str, streams: &mut Streams<'_>) -> std::io::Result<Vec<events::Event>> {
+    let Some(path) = events::sibling_evt_path(pdf_name) else {
+        return Ok(Vec::new());
+    };
+    if !events::evt_is_readable(&path) {
+        return Ok(Vec::new());
+    }
+    writeln!(streams.err, "Using event file {}.", path.display())?;
+    let Ok(bytes) = std::fs::read(&path) else {
+        return Ok(Vec::new());
+    };
+    if bytes.is_empty() {
+        return Ok(Vec::new());
+    }
+    writeln!(streams.err, "Sending events from: {}", path.display())?;
+    let text = String::from_utf8_lossy(&bytes);
+    match events::parse_evt(&text) {
+        Ok(parsed) => Ok(parsed),
+        Err(err) => {
+            writeln!(streams.err, "{err}")?;
+            Ok(Vec::new())
+        }
+    }
+}
+
+/// The parsed-event count, only when `--send-events` was given.
+fn write_event_summary(
+    options: &Options,
+    count: usize,
+    streams: &mut Streams<'_>,
+) -> std::io::Result<()> {
+    if options.send_events {
+        writeln!(streams.err, "Sent {count} events.")?;
+    }
+    Ok(())
 }
 
 /// Where `--save` writes a document: beside its input, as
@@ -579,5 +630,66 @@ trailer<</Root 1 0 R/Size 5>>\n";
         let (out, err) = run(MINIMAL, &["--txt"]);
         assert_eq!(out, "");
         assert!(err.contains("Processed 1 pages."), "{err}");
+    }
+
+    #[test]
+    fn send_events_parses_the_sibling_script_and_leaves_the_page_untouched() {
+        let dir = std::env::temp_dir().join(format!(
+            "pdfrum-evt-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let pdf = dir.join("input.pdf");
+        let evt = dir.join("input.evt");
+        std::fs::write(&pdf, MINIMAL).unwrap();
+        std::fs::write(&evt, "mousemove,10,20\n# skip\ncharcode,97\nunknown,1\n").unwrap();
+
+        let name = pdf.to_string_lossy().into_owned();
+        let options = crate::options::parse(&["--send-events".to_owned()]).unwrap();
+        let (mut out, mut err) = (Vec::new(), Vec::new());
+        let mut streams = Streams {
+            out: &mut out,
+            err: &mut err,
+        };
+        process_file(&name, MINIMAL.to_vec(), &options, &mut streams).unwrap();
+        let err = String::from_utf8_lossy(&err);
+        assert!(
+            err.contains(&format!("Using event file {}.", evt.display())),
+            "{err}"
+        );
+        assert!(
+            err.contains(&format!("Sending events from: {}", evt.display())),
+            "{err}"
+        );
+        assert!(err.contains("Sent 2 events."), "{err}");
+        assert!(err.contains("Processed 1 pages."), "{err}");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn send_events_without_a_sibling_script_counts_zero() {
+        // A name with `.pdf` so the C++ replacement runs, but no file at the
+        // resulting `.evt` path. `run` uses `input.pdf`, which would pick up
+        // a leftover sibling in the working directory.
+        let options = crate::options::parse(&["--send-events".to_owned()]).unwrap();
+        let (mut out, mut err) = (Vec::new(), Vec::new());
+        let mut streams = Streams {
+            out: &mut out,
+            err: &mut err,
+        };
+        process_file(
+            "/no-such-pdfrum-evt-sibling.pdf",
+            MINIMAL.to_vec(),
+            &options,
+            &mut streams,
+        )
+        .unwrap();
+        let err = String::from_utf8_lossy(&err);
+        assert!(err.contains("Sent 0 events."), "{err}");
+        assert!(!err.contains("Using event file"), "{err}");
     }
 }
