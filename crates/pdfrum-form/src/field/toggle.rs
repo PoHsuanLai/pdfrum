@@ -34,6 +34,21 @@ pub struct ToggleState {
     /// The name this control shows when checked, from its appearance
     /// dictionary. Empty when the control offers no on state at all.
     pub on_state: String,
+    /// Which **control** of the field is the checked one, by its raw
+    /// `/Annots` index, once one has been chosen.
+    ///
+    /// A field's controls share one state here, which is right for a check
+    /// box (a field with one kid) and not enough for a radio group. Upstream
+    /// keeps a per-control `/AS`: `CPDF_FormField::CheckControl`
+    /// (`cpdf_formfield.cpp:683-716`) sets the clicked control to its own on
+    /// state and every other control of the field to `Off`. This records the
+    /// half of that a shared state *can* express — **which** control is on —
+    /// so a sibling's appearance can be answered `Off` without inventing a
+    /// second state record.
+    ///
+    /// `None` before any control has been activated, which is the state a
+    /// group loaded from a file with no `/V` is in.
+    pub checked_control: Option<crate::session::AnnotId>,
 }
 
 impl ToggleState {
@@ -43,6 +58,7 @@ impl ToggleState {
         ToggleState {
             state: state.into(),
             on_state: on_state.into(),
+            checked_control: None,
         }
     }
 
