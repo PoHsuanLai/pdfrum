@@ -56,7 +56,24 @@ pub struct TextEdit {
     /// caret started in.
     pub sticky_x: f32,
     /// How far the view is scrolled, in layout space.
+    ///
+    /// A **distance**, not a position: `LiveState::shift` negates it to move
+    /// the drawn text. Upstream's `scroll_pos_point_` is the same quantity
+    /// seeded at `rcPlate.left`, so ours is upstream's minus that — see
+    /// [`scroll_to_caret`].
     pub scroll: (f32, f32),
+    /// Whether the view follows the caret out of the plate.
+    ///
+    /// Upstream's `enable_scroll_` (`cpwl_edit_impl.h:284`), which
+    /// `CPWL_Edit::OnCreated` (`cpwl_edit.cpp:131`) sets from
+    /// `Styles::kEditAutoScroll`, and which `CFFL_TextField::GetCreateParam`
+    /// (`cffl_textfield.cpp:54-63`) raises for any text field **without** the
+    /// `DoNotScroll` flag — single-line and multi-line alike.
+    ///
+    /// It gates `SetScrollPosX` and `SetScrollPosY` at their first statement,
+    /// so a field that declines it never moves its view at all, however far
+    /// past the plate the caret goes.
+    pub auto_scroll: bool,
     /// The vertical alignment offset the text is *drawn* with.
     ///
     /// A single-line field is drawn vertically centred in its plate, so its
@@ -168,6 +185,10 @@ impl TextEdit {
             selection: Selection::collapsed_at(caret),
             sticky_x: 0.0,
             scroll: (0.0, 0.0),
+            // The permissive default, because it is what every caller in this
+            // crate wants: the one field flag that clears it is read where the
+            // field's config is, and `route.rs` sets it from there.
+            auto_scroll: true,
             centred,
             offset,
             undo: UndoStack::default(),
@@ -518,9 +539,105 @@ fn relayout(edit: &mut TextEdit, config: &vt::Config, metrics: &Metrics<'_>) {
 }
 
 /// The shared tail of every mutation: re-seed the column a vertical move
-/// aims for.
+/// aims for, then bring the caret back into view.
 fn settle(edit: &mut TextEdit, config: &vt::Config, metrics: &Metrics<'_>) {
     edit.sticky_x = caret_x(edit, config, metrics);
+    scroll_to_caret(edit, config, metrics);
+}
+
+/// Scrolls the view so the caret is inside the plate — `ScrollToCaret`
+/// (`fpdfsdk/pwl/cpwl_edit_impl.cpp:1246-1286`).
+///
+/// Upstream runs this after essentially every mutation and every caret move.
+/// Without it a field never scrolls at all: `password` types nine characters
+/// into a box five wide and the oracle shows the last five with the caret
+/// against the right edge, while an unscrolled view shows the first five and
+/// hides the caret entirely.
+///
+/// # The two coordinate systems, which is the whole of the port
+///
+/// Upstream keeps `scroll_pos_point_.x` as an **absolute layout position**
+/// seeded at `rcPlate.left`, and `VTToEdit`
+/// (`cpwl_edit_impl.cpp:1105-1106`) converts a layout point to the plate's
+/// own frame by subtracting `scroll_pos_point_.x - rcPlate.left`. We store a
+/// **distance** instead — [`TextEdit::scroll`] is what
+/// `LiveState::shift` negates to move the drawn text — so ours is upstream's
+/// minus `plate.left`, and every branch below drops that term:
+///
+/// | upstream | here |
+/// |---|---|
+/// | `VTToEdit(head).x` | `head - edit.scroll.0` |
+/// | `SetScrollPosX(ptHead.x)` | `edit.scroll.0 = head - plate.left` |
+/// | `SetScrollPosX(ptHead.x - rcPlate.Width())` | `edit.scroll.0 = head - plate.left - width` |
+///
+/// # The asymmetry is deliberate and is the bug it fixes
+///
+/// The comparisons are made on the **edit-space** point and the assignment is
+/// made from the **layout-space** one. Reading both in one frame is the
+/// obvious simplification and it is wrong by exactly one advance: it lands
+/// the caret one character short of the plate's right edge, which is
+/// `password`'s six asterisks and a caret at device column 189 where the
+/// oracle draws five and a caret at 199.
+///
+/// # `FXSYS_IsFloatSmaller`, not `<`
+///
+/// The three comparisons carry the `0.0001` tolerance of
+/// `core/fxcrt/fx_system.h:36-41`. A caret landing exactly on the plate edge
+/// must count as *inside*, or a field scrolls by a whole advance on a
+/// rounding error. This is the opposite of the hit test's tie-break, which is
+/// the one float comparison upstream makes raw.
+///
+/// Only the horizontal half is ported. Upstream's vertical branches have
+/// doubled conditions to stop a caret taller than its plate from thrashing,
+/// and nothing in the corpus reaches them: a field that scrolls vertically is
+/// multi-line, and `scroll_text` — the wheel — is the only thing that moves
+/// `scroll.1` today.
+pub fn scroll_to_caret(edit: &mut TextEdit, config: &vt::Config, metrics: &Metrics<'_>) {
+    if !edit.auto_scroll {
+        return;
+    }
+    let plate = config.plate;
+    let (left, width) = (
+        pdfrum_doc::geom::left(plate),
+        pdfrum_doc::geom::width(plate),
+    );
+    if is_float_equal(left, pdfrum_doc::geom::right(plate)) {
+        return;
+    }
+    // `SetScrollLimit` (`cpwl_edit_impl.cpp:1207-1234`) runs first, and a
+    // plate wider than its content pins the view at the origin — which is
+    // what keeps a short value left-aligned rather than drifting.
+    let content = edit.layout.content_rect_pdf(plate);
+    let (content_left, content_right) = (
+        pdfrum_doc::geom::left(content),
+        pdfrum_doc::geom::right(content),
+    );
+    if width > pdfrum_doc::geom::width(content) {
+        edit.scroll.0 = 0.0;
+    } else {
+        edit.scroll.0 = edit
+            .scroll
+            .0
+            .clamp(content_left - left, content_right - left - width);
+    }
+
+    let head = caret_x(edit, config, metrics);
+    let head_edit = head - edit.scroll.0;
+    if is_float_smaller(head_edit, left) || is_float_equal(head_edit, left) {
+        edit.scroll.0 = head - left;
+    } else if is_float_smaller(left + width, head_edit) {
+        edit.scroll.0 = head - left - width;
+    }
+}
+
+/// `FXSYS_IsFloatEqual` (`core/fxcrt/fx_system.h:41`).
+fn is_float_equal(a: f32, b: f32) -> bool {
+    (a - b).abs() < 0.0001
+}
+
+/// `FXSYS_IsFloatSmaller` (`core/fxcrt/fx_system.h:39-40`).
+fn is_float_smaller(a: f32, b: f32) -> bool {
+    a < b && !is_float_equal(a, b)
 }
 
 /// The caret's horizontal position in layout space.
@@ -696,6 +813,7 @@ pub fn click_at(
     edit.caret = place;
     edit.selection = Selection::collapsed_at(place);
     edit.sticky_x = caret_x(edit, config, metrics);
+    scroll_to_caret(edit, config, metrics);
 }
 
 /// Extends the selection to a point, keeping the anchor — a mouse drag.
@@ -709,6 +827,7 @@ pub fn drag_to(
     edit.previous_caret = edit.caret;
     edit.caret = place;
     edit.selection.set_active(place);
+    scroll_to_caret(edit, config, metrics);
 }
 
 /// Selects the whole line under a point — what a double click does.
@@ -726,6 +845,7 @@ pub fn select_line_at(
     edit.selection = Selection::new(begin, end);
     edit.previous_caret = edit.caret;
     edit.caret = end;
+    scroll_to_caret(edit, config, metrics);
 }
 
 /// The first and last places of the line a place sits on.
