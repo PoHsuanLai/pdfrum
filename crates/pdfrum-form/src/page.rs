@@ -47,12 +47,17 @@ const MAX_LEN: &Name = &Name::from_static(b"MaxLen");
 const TI: &Name = &Name::from_static(b"TI");
 /// `/Fields` — the form's field array, under the catalog's `/AcroForm`.
 const FIELDS: &Name = &Name::from_static(b"Fields");
+/// `/MK` — a widget's appearance characteristics, which carry its rotation.
+const MK: &Name = &Name::from_static(b"MK");
+/// `/R` — the widget's rotation within its `/Rect`, in degrees.
+const R: &Name = &Name::from_static(b"R");
 /// `/Tabs` — the page's declared focus-traversal order.
 ///
 /// Read from the page dictionary **directly**, not inherited from the page
 /// tree: `CPDFSDK_AnnotIterator::GetTabOrder` calls `GetByteStringFor` on the
 /// page's own dictionary, so a `/Tabs` on `/Pages` reaches no page.
 const TABS: &Name = &Name::from_static(b"Tabs");
+use crate::geom::Rotation;
 use crate::hit::{Candidate, LayoutBand, WidgetHit};
 use crate::session::{AnnotId, FieldId};
 use crate::tab::{Focusable, Rect, TabOrder};
@@ -105,6 +110,16 @@ pub struct WidgetInfo {
     pub flags: FieldFlags,
     /// The widget's `/Rect` as written.
     pub rect: Rect,
+    /// The widget's `/MK /R`, as the quadrant the appearance stream is set
+    /// into.
+    ///
+    /// Read the way `ap::widget::rotated_rect` reads it — `% 360`, and
+    /// anything that is not `0`, `90`, `180` or `270` after that is upright —
+    /// rather than the way [`Rotation::from_degrees`] normalizes, because
+    /// routing and the generator must agree about which box a click lands in.
+    /// `CPDFSDK_Widget::GetRotate` (`cpdfsdk_widget.cpp:458-461`) takes the
+    /// same truncating modulo, so a `/R -90` is upright to both.
+    pub rotation: Rotation,
     /// The widget's dictionary, for the readers that want the long tail.
     pub dict: Dict,
     /// The field dictionary the **value** is read from, when that is not the
@@ -211,6 +226,7 @@ pub fn read<R: Resolve>(page: u32, page_dict: &Dict, catalog: &Dict, r: &R) -> P
                 kind: info.kind,
                 flags: info.flags,
                 rect,
+                rotation: widget_rotation(&dict, r),
                 dict: dict.clone(),
                 valued,
             });
@@ -222,6 +238,20 @@ pub fn read<R: Resolve>(page: u32, page_dict: &Dict, catalog: &Dict, r: &R) -> P
         form.dicts.insert(id.index, dict);
     }
     form
+}
+
+/// A widget's `/MK /R`, as the quadrant its appearance stream is set into.
+///
+/// The truncating `% 360` is deliberate and is `ap::widget::rotated_rect`'s;
+/// see [`WidgetInfo::rotation`].
+fn widget_rotation<R: Resolve>(dict: &Dict, r: &R) -> Rotation {
+    let degrees = dict.dict(MK, r).and_then(|mk| mk.int(R, r)).unwrap_or(0);
+    match degrees % 360 {
+        90 => Rotation::Quarter,
+        180 => Rotation::Half,
+        270 => Rotation::ThreeQuarter,
+        _ => Rotation::None,
+    }
 }
 
 /// What reading a widget's own dictionary answers.
