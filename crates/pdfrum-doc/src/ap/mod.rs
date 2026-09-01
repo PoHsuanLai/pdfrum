@@ -88,10 +88,80 @@ pub enum Appearance {
     Suppressed,
 }
 
+/// The shape a focused widget's focus rectangle takes.
+///
+/// A widget being edited has a live control behind it, and what that control
+/// answers when asked for a focus rectangle depends on which control it is —
+/// three answers, not one, and two of the three are *no rectangle at all*:
+///
+/// - A **text field** and an **editable combo box** answer an empty rectangle
+///   outright, so nothing is stroked over them. This is the common case and
+///   it is why the focused text-field goldens carry a caret and glyphs but no
+///   outline.
+/// - A **check box**, a **radio button** and a **read-only combo box** answer
+///   their window rectangle inflated by one unit on every side, which is
+///   [`FocusBox::Inflated`].
+/// - A **multi-select list box** answers the rectangle of the item its caret
+///   sits on, clipped to the client area — a rectangle only the list control's
+///   own scroll and caret state can name, so a caller that has it supplies it
+///   as [`FocusBox::Rect`].
+///
+/// [`FocusBox::None`] is the empty answer and the default: a focused entry
+/// that names it is still *focused* — it draws no tint — and simply strokes
+/// nothing.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub enum FocusBox {
+    /// No rectangle: nothing is stroked. A text field and an editable combo
+    /// box always answer this.
+    #[default]
+    None,
+    /// The annotation's own rectangle, inflated by one unit on every side.
+    Inflated,
+    /// An explicit rectangle in page space, already in its final position.
+    Rect(Rect),
+}
+
+/// Which annotation on the page holds the keyboard focus, and what its focus
+/// rectangle is.
+///
+/// Both halves are needed and they are independent. The *index* alone decides
+/// the tint: a widget with a live control is never tinted, focused or not, and
+/// the focused one is the only widget a live control reaches in a
+/// single-focus session. The *box* decides whether anything is stroked in its
+/// place, which most field types answer with nothing.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Focus {
+    /// The raw `/Annots` index of the focused annotation — the same key space
+    /// [`AnnotOverlay::set`] uses.
+    pub annot: usize,
+    /// The rectangle to stroke, in page space.
+    pub box_: FocusBox,
+}
+
+impl Focus {
+    /// Focus on one annotation with no rectangle to stroke — the answer a
+    /// text field and an editable combo box give.
+    #[must_use]
+    pub fn at(annot: usize) -> Focus {
+        Focus {
+            annot,
+            box_: FocusBox::None,
+        }
+    }
+}
+
 /// Per-annotation generated appearances, keyed by `/Annots` index.
+///
+/// Besides the per-annotation entries the overlay carries at most one
+/// [`Focus`], because a session focuses one field at a time. It travels here
+/// rather than as another parameter on the annotation pass for two reasons:
+/// it is set by the same session that sets the appearances, from the same
+/// index space, and adding it here left every existing caller compiling
+/// unchanged.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct AnnotOverlay {
     entries: Vec<Appearance>,
+    focus: Option<Focus>,
 }
 
 impl AnnotOverlay {
@@ -100,7 +170,24 @@ impl AnnotOverlay {
     pub fn with_capacity(count: usize) -> AnnotOverlay {
         AnnotOverlay {
             entries: vec![Appearance::Untouched; count],
+            focus: None,
         }
+    }
+
+    /// Records which annotation holds the focus, and what to stroke over it.
+    ///
+    /// The index is a raw `/Annots` index. It is **not** bounded by the
+    /// overlay's length: an overlay sized for the appearances it carries can
+    /// still name a focused annotation past its end, and the annotation pass
+    /// keys on the index rather than on an entry.
+    pub fn set_focus(&mut self, focus: Focus) {
+        self.focus = Some(focus);
+    }
+
+    /// Which annotation holds the focus, if any.
+    #[must_use]
+    pub fn focus(&self) -> Option<Focus> {
+        self.focus
     }
 
     /// Records a generated appearance at one `/Annots` index.
@@ -149,12 +236,20 @@ impl AnnotOverlay {
     /// Indices are raw `/Annots` indices in both overlays. An entry of
     /// `other` past this overlay's end is dropped, because there is no
     /// annotation for it to apply to.
+    ///
+    /// `other`'s [`Focus`] replaces this overlay's when it has one, and
+    /// leaves it alone when it does not — the same "wins wherever it speaks"
+    /// rule the entries follow. Unlike an entry, a focus past this overlay's
+    /// end survives: it names an annotation, not a slot.
     pub fn merge_over(&mut self, other: &AnnotOverlay) {
         for (index, entry) in other.entries.iter().enumerate() {
             if matches!(entry, Appearance::Untouched) {
                 continue;
             }
             self.set_appearance(index, entry.clone());
+        }
+        if let Some(focus) = other.focus {
+            self.focus = Some(focus);
         }
     }
 

@@ -42,7 +42,7 @@ mod metadata;
 mod names;
 
 pub use annot::{AnnotFlags, Annotation, Subtype};
-pub use ap::{AnnotOverlay, GeneratedAp};
+pub use ap::{AnnotOverlay, Focus, FocusBox, GeneratedAp};
 pub use color::Color;
 pub use error::Error;
 pub use metadata::xmp;
