@@ -250,6 +250,30 @@ pub fn combo_text_config(editable: bool, read_only: bool) -> TextConfig {
     }
 }
 
+/// Scrolls the view just far enough to bring `index` into it.
+///
+/// **Only when it is not already visible**, which is the whole rule
+/// (`cpwl_list_ctrl.cpp:263-265`): moving the caret within the visible rows
+/// scrolls nothing, and moving it past either edge scrolls by exactly the
+/// overshoot. That is what keeps a run of arrow keys — or wheel notches,
+/// which are the same operation — from scrolling on every step.
+///
+/// Answers whether the view moved.
+pub fn scroll_into_view(state: &mut ChoiceState, index: usize, visible_rows: usize) -> bool {
+    if visible_rows == 0 {
+        return false;
+    }
+    let was = state.top_visible;
+    if index < state.top_visible {
+        // Above the view: the item becomes the first visible row.
+        state.top_visible = index;
+    } else if index >= state.top_visible.saturating_add(visible_rows) {
+        // Below it: the item becomes the last, so the box stays full.
+        state.top_visible = index.saturating_sub(visible_rows - 1);
+    }
+    state.top_visible != was
+}
+
 /// Carries the currently selected option into the combo box's text half.
 ///
 /// # This is where the four-item undo group comes from
