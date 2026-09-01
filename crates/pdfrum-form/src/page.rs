@@ -146,11 +146,34 @@ impl WidgetInfo {
             .collect()
     }
 
-    /// Which options the file says are selected.
+    /// Which options the file says are selected, as **interaction** reads it.
+    ///
+    /// Deliberately not `ap::field_body::selected_indices`, and the two are
+    /// both right. There are two producers of a list box's selection upstream
+    /// and they disagree on purpose:
+    ///
+    /// - the **appearance** reader is `CPDFSDK_AppStream::SetAsListBox` →
+    ///   `GetSelectedIndex` → `GetValueOrSelectedIndicesObject`, which takes
+    ///   `/V` first and matches it as text. That is what draws a file with no
+    ///   `/AP`, and it is what `ap::field_body::selected_indices` reproduces.
+    /// - the **interaction** reader is `CPDF_FormField::IsItemSelected`
+    ///   (`cpdf_formfield.cpp:546-554`), which consults `/I` first, as
+    ///   integer indices, and falls back to `/V` only when `/I` is not
+    ///   *usable* — `UseSelectedIndicesObject` (`:863-935`). That is what
+    ///   `FORM_IsIndexSelected` answers and what a session's state must be
+    ///   seeded from.
+    ///
+    /// They agree except on one shape — `/I` present, `/V` absent — where the
+    /// first selects nothing and the second selects the rows `/I` names.
+    /// `listbox_form.pdf`'s indices field is exactly that shape, and
+    /// `CheckIfMultipleSelectedIndices` expects rows 1 and 3.
     #[must_use]
     pub fn selected<R: Resolve>(&self, r: &R) -> Vec<usize> {
-        let options = ap::field_body::options(&self.valued, r);
-        ap::field_body::selected_indices(&self.valued, &options, r)
+        let values: Vec<String> = ap::field_body::options(&self.valued, r)
+            .into_iter()
+            .map(|choice| choice.value)
+            .collect();
+        pdfrum_doc::form::selected_indices_for_interaction(&self.valued, &values, r)
     }
 
     /// The text configuration, read from the flags and `/MaxLen`.
