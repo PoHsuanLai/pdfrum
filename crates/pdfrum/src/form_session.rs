@@ -73,10 +73,18 @@ pub use pdfrum_form::{Modifiers as EventModifiers, Response as EventResponse};
 ///
 /// // Dropping focus commits the value and moves the field from drawing its
 /// // live editor state to drawing a generated appearance stream. What comes
-/// // back is what changed, for a caller to re-render.
+/// // back is what changed, for a caller to re-render — and it is *two*
+/// // things, not one: the regenerated appearance, and the focus change
+/// // itself. A response carrying only the focus change would mean the field
+/// // was still drawing its caret.
 /// let committed = session.force_kill_focus();
 /// assert!(session.focused_annot().is_none());
-/// assert!(!committed.updates.is_empty());
+///
+/// let regenerated = committed
+///     .updates
+///     .iter()
+///     .any(|update| update.kind.appearance().is_some());
+/// assert!(regenerated, "the committed field is redrawn, not just unfocused");
 /// # Ok::<(), pdfrum::Error>(())
 /// ```
 #[derive(Debug)]
@@ -296,20 +304,17 @@ impl<'a> FormSession<'a> {
     /// Drops focus, committing the field that held it.
     ///
     /// This is what moves a field from drawing its live editor state to
-    /// drawing a generated appearance stream.
+    /// drawing a generated appearance stream — so it is the **same**
+    /// operation a left click that misses every widget performs, and it goes
+    /// through the same `route::kill_focus` rather than reimplementing it.
+    /// A version that only reported `FocusChanged` would leave the outgoing
+    /// field's caret and live text on the page, which is what this did.
     pub fn force_kill_focus(&mut self) -> Response {
-        let change = pdfrum_form::focus::kill(&mut self.inner);
-        let Some(was) = change.from.map(pdfrum_form::session::FocusTarget::annot) else {
+        let Some(page) = self.focused_annot().map(|annot| annot.page) else {
             // Nothing held focus, so nothing moved.
             return Response::ignored();
         };
-        Response::with(vec![pdfrum_form::update::AppearanceUpdate::new(
-            was,
-            UpdateKind::FocusChanged {
-                from: Some(was),
-                to: None,
-            },
-        )])
+        self.with_page(page, pdfrum_form::kill_focus)
     }
 
     /// Which annotation currently has the keyboard, if any.
@@ -497,14 +502,30 @@ impl<'a> FormSession<'a> {
     /// The page is read on first use and kept: a replay sends dozens of
     /// events at one page, and the `/Annots` walk is the expensive half.
     fn dispatch(&mut self, page: u32, event: Event) -> Response {
+        self.with_page(page, |inner, ctx| pdfrum_form::apply(inner, ctx, event))
+    }
+
+    /// Reads a page, builds its routing context, and runs `body` against it.
+    ///
+    /// The one place a `Context` is assembled, so that every operation
+    /// needing one — routing an event, and dropping focus — goes through the
+    /// same page cache and the same borrow of the catalog.
+    fn with_page<T: Default>(
+        &mut self,
+        page: u32,
+        body: impl FnOnce(
+            &mut pdfrum_form::FormSession,
+            &pdfrum_form::Context<'_, pdfrum_parser::Document>,
+        ) -> T,
+    ) -> T {
         if !self.pages.contains_key(&page) {
             let Some(read) = self.read_page(page) else {
-                return Response::ignored();
+                return T::default();
             };
             self.pages.insert(page, read);
         }
         let Some(form) = self.pages.get(&page) else {
-            return Response::ignored();
+            return T::default();
         };
         let catalog = self.doc.catalog();
         let ctx = pdfrum_form::Context {
@@ -514,7 +535,7 @@ impl<'a> FormSession<'a> {
             fonts: &self.fonts,
             permissions: self.permissions(),
         };
-        pdfrum_form::apply(&mut self.inner, &ctx, event)
+        body(&mut self.inner, &ctx)
     }
 
     /// Routes an event that goes to whatever holds focus.
