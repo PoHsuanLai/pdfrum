@@ -167,6 +167,25 @@ fn split_cubic(p: [Point; 4]) -> ([Point; 4], [Point; 4]) {
     ([p0, a, d, f], [f, e, c, p3])
 }
 
+/// What one walk of a cell's control points establishes.
+#[derive(Debug, Clone, Copy)]
+struct Survey {
+    /// False if any coordinate is NaN or infinite. Additive safety over
+    /// upstream, which has no such test and no termination without one.
+    finite: bool,
+    x0: f64,
+    y0: f64,
+    x1: f64,
+    y1: f64,
+}
+
+impl Survey {
+    /// `IsSmall`: under two device units in both axes.
+    fn is_small(self) -> bool {
+        self.x1 - self.x0 < SMALL_PATCH && self.y1 - self.y0 < SMALL_PATCH
+    }
+}
+
 impl Points {
     /// The twelve boundary control points, in the order the mesh stream
     /// gives them, plus the four derived interior ones for a Coons patch.
@@ -206,44 +225,46 @@ impl Points {
         Some(Self { grid })
     }
 
-    fn all_finite(&self) -> bool {
-        self.grid
-            .iter()
-            .flatten()
-            .all(|p| p.x.is_finite() && p.y.is_finite())
+    /// One walk of the sixteen control points, answering both questions the
+    /// subdivider asks of them at once: are they all finite, and what is their
+    /// extent.
+    ///
+    /// The two were separate walks, and the subdivider ran them back to back
+    /// at every recursion node — 53 348 nodes on `shading_tcpdf_030`, so 1.7
+    /// million point visits where 853 000 will do. They fuse cleanly because
+    /// the finiteness answer cannot be read off the extent: `f64::min` returns
+    /// its non-NaN operand, so a NaN coordinate leaves no trace in a min/max
+    /// fold and has to be tested for as it goes past.
+    ///
+    /// The extent itself is a fold rather than a chain of [`Rect::union`]s,
+    /// which is the same arithmetic — `union` is four `min`/`max`es over a
+    /// `Rect` whose corners are equal — without sixteen degenerate `Rect`s and
+    /// an `Option` branch per point.
+    fn survey(&self) -> Survey {
+        let mut s = Survey {
+            finite: true,
+            x0: f64::INFINITY,
+            y0: f64::INFINITY,
+            x1: f64::NEG_INFINITY,
+            y1: f64::NEG_INFINITY,
+        };
+        for p in self.grid.iter().flatten() {
+            s.finite &= p.x.is_finite() && p.y.is_finite();
+            s.x0 = s.x0.min(p.x);
+            s.y0 = s.y0.min(p.y);
+            s.x1 = s.x1.max(p.x);
+            s.y1 = s.y1.max(p.y);
+        }
+        s
     }
 
-    /// The extent of the sixteen control points, as `(x0, y0, x1, y1)`.
-    ///
-    /// A fold rather than a chain of [`Rect::union`]s, which is the same
-    /// arithmetic — `union` is four `min`/`max`es over a `Rect` whose corners
-    /// are equal — with sixteen degenerate `Rect`s and an `Option` branch per
-    /// point removed. Every caller has already established the points are
-    /// finite, which is the one condition under which `f64::min` and `Rect`'s
-    /// own comparison could disagree.
-    fn extent(&self) -> (f64, f64, f64, f64) {
-        let mut x0 = f64::INFINITY;
-        let mut y0 = f64::INFINITY;
-        let mut x1 = f64::NEG_INFINITY;
-        let mut y1 = f64::NEG_INFINITY;
-        for p in self.grid.iter().flatten() {
-            x0 = x0.min(p.x);
-            y0 = y0.min(p.y);
-            x1 = x1.max(p.x);
-            y1 = y1.max(p.y);
-        }
-        (x0, y0, x1, y1)
+    fn all_finite(&self) -> bool {
+        self.survey().finite
     }
 
     fn bbox(&self) -> Rect {
-        let (x0, y0, x1, y1) = self.extent();
-        Rect::new(x0, y0, x1, y1)
-    }
-
-    /// `IsSmall`: under two device units in both axes.
-    fn is_small(&self) -> bool {
-        let (x0, y0, x1, y1) = self.extent();
-        x1 - x0 < SMALL_PATCH && y1 - y0 < SMALL_PATCH
+        let s = self.survey();
+        Rect::new(s.x0, s.y0, s.x1, s.y1)
     }
 
     /// Split every row at `t = 0.5`, halving the patch along its **second**
@@ -447,10 +468,11 @@ impl Lattice {
               its cast, so no negative value reaches one"
 )]
 fn subdivide(cells: &mut Cells<'_>, points: Points, at: Lattice, depth: u32) {
-    if !points.all_finite() {
+    let survey = points.survey();
+    if !survey.finite {
         return; // Additive: a crafted mesh cannot spin the recursion forever.
     }
-    let small = points.is_small();
+    let small = survey.is_small();
     let Some(c0) = at.color_at(cells.colors) else {
         return;
     };
@@ -825,12 +847,39 @@ mod tests {
         );
     }
 
+    /// A NaN coordinate is caught by the survey's own flag, not by its extent.
+    ///
+    /// `f64::min` and `f64::max` return their non-NaN operand, so a NaN point
+    /// passes through a min/max fold leaving the extent finite and plausible.
+    /// Fusing the finiteness test into that fold is only correct because the
+    /// flag is carried separately, and this is what says so.
+    #[test]
+    fn a_nan_control_point_leaves_the_extent_finite_and_the_flag_false() {
+        let mut patch = square_patch(10.0, [Rgb::BLACK; 4]);
+        #[expect(
+            clippy::indexing_slicing,
+            reason = "the fixture is a square patch with all twelve boundary \
+                      points present, so index 5 exists by construction"
+        )]
+        {
+            patch.points[5] = Point::new(f64::NAN, f64::NAN);
+        }
+        let s = Points::from_boundary(&patch.points)
+            .expect("built")
+            .survey();
+        assert!(!s.finite, "the flag catches it");
+        assert!(
+            s.x0.is_finite() && s.y0.is_finite() && s.x1.is_finite() && s.y1.is_finite(),
+            "and the extent does not: min/max swallowed the NaN"
+        );
+    }
+
     #[test]
     fn is_small_is_a_two_device_unit_bbox() {
         let p = Points::from_boundary(&square_patch(1.5, [Rgb::BLACK; 4]).points).expect("built");
-        assert!(p.is_small());
+        assert!(p.survey().is_small());
         let p = Points::from_boundary(&square_patch(3.0, [Rgb::BLACK; 4]).points).expect("built");
-        assert!(!p.is_small());
+        assert!(!p.survey().is_small());
     }
 
     #[test]
