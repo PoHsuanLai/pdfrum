@@ -34,6 +34,7 @@ pub mod field;
 pub mod focus;
 pub mod geom;
 pub mod hit;
+pub mod page;
 pub mod session;
 pub mod tab;
 pub mod update;
@@ -47,6 +48,7 @@ pub use field::{ChoiceConfig, ChoiceState, FieldState, TextConfig, TextState, To
 pub use focus::FocusChange;
 pub use geom::{Plate, Rotation};
 pub use hit::{Candidate, LayoutBand, Permissions, WidgetHit};
+pub use page::{PageForm, WidgetInfo};
 pub use session::{AnnotId, DragAnchor, FieldId, FocusTarget, FormSession, SessionConfig};
 pub use tab::{FocusRing, Focusable, TabOrder};
 pub use update::{AppearanceUpdate, Response, UpdateKind};
