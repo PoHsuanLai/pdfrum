@@ -275,6 +275,32 @@ impl<'a> FormSession<'a> {
             .map(pdfrum_form::session::FocusTarget::annot)
     }
 
+    /// Which annotation on `page` holds focus, and what its focus rectangle
+    /// is — the answer the annotation pass needs to know **not** to tint it.
+    ///
+    /// A widget the form filler is editing is never given the form-field
+    /// highlight, and most field types stroke nothing in its place: a text
+    /// field and an editable combo box draw a caret and glyphs over plain
+    /// white. Answers `None` when nothing on that page holds focus, which is
+    /// the ordinary case for every page but one.
+    #[must_use]
+    pub fn focus_for_page(&mut self, page: u32) -> Option<pdfrum_doc::ap::Focus> {
+        if !self.pages.contains_key(&page) {
+            let read = self.read_page(page)?;
+            self.pages.insert(page, read);
+        }
+        let form = self.pages.get(&page)?;
+        let catalog = self.doc.catalog();
+        let ctx = pdfrum_form::Context {
+            page: form,
+            catalog: &catalog,
+            resolve: self.doc.parser(),
+            fonts: &self.fonts,
+            permissions: self.permissions(),
+        };
+        pdfrum_form::focus_of(&self.inner, &ctx)
+    }
+
     /// Whether the focused field can undo.
     #[must_use]
     pub fn can_undo(&self) -> bool {
