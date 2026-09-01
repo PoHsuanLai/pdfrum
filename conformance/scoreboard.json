@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-01T12:41:18Z",
+  "generated_at": "2026-09-01T12:54:12Z",
   "totals": {
     "files": 1705,
     "pass": 1639,
@@ -45900,12 +45900,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.930445,
+        "ssim": 0.934692,
         "exact": false,
-        "max_channel_diff": 255,
+        "max_channel_diff": 251,
         "pages": 1
       },
-      "notes": "ssim 0.930445 below floor 0.990000"
+      "notes": "ssim 0.934692 below floor 0.990000"
     },
     {
       "path": "resources/pixel/form_textfield_focused_rtl.pdf",
@@ -45956,12 +45956,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.930445,
+        "ssim": 0.934692,
         "exact": false,
-        "max_channel_diff": 255,
+        "max_channel_diff": 251,
         "pages": 1
       },
-      "notes": "ssim 0.930445 below floor 0.990000"
+      "notes": "ssim 0.934692 below floor 0.990000"
     },
     {
       "path": "resources/pixel/form_textfield_selected_ltr.in",
@@ -46012,12 +46012,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.968892,
+        "ssim": 0.968879,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.968892 below floor 0.990000"
+      "notes": "ssim 0.968879 below floor 0.990000"
     },
     {
       "path": "resources/pixel/form_textfield_selected_rtl.in",
@@ -46068,12 +46068,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.938166,
+        "ssim": 0.947057,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "ssim 0.938166 below floor 0.990000"
+      "notes": "ssim 0.947057 below floor 0.990000"
     },
     {
       "path": "resources/pixel/freetext_annotation_with_ap.in",
