@@ -57,6 +57,22 @@ the embedded-CMap program reader — in nine modules plus the committed blob.
 - **`usecmap` is a no-op**, per SPEC §6's 2026-08-29 ruling: an embedded CMap
   inheriting `/GBK-EUC-H` gets *none* of it. Recorded as a diagnostic so the
   loss is visible. The `use_offset` chain is the "usecmap" the contract means.
+
+  *Superseded 2026-09-02 (audit A1): this is an **oracle bug**, not a
+  behaviour to match.* `cpdf_cmapparser.cpp:61` is an empty `else if` and the
+  `/UseCMap` dictionary key is read nowhere in `core/fpdfapi/`, so both of
+  ISO 32000-1 §9.7.5.3's inheritance channels are dead in the oracle and an
+  inheriting CMap loses every base code to CID 0 — total loss, not
+  degradation. pdf.js implements both, dictionary-key-first, child-wins
+  (`cmap.js:608-613`, `:639-648`, `extendCMap` `:650-669`). Both channels now
+  work here: the operator is resolved in `parse_embedded`, the dictionary key
+  by `pdfrum-font`'s `use_cmap_parent` through `inherit_from`, which
+  supersedes the operator. Codespace ranges are inherited only when the child
+  declares none, and the chain is depth-guarded at
+  `Limits::max_name_tree_depth`. Blast radius measured at **0 rows** — no
+  corpus file uses either channel. `CMapUsecmapIgnored` retired in favour of
+  `CMapUsecmapUnknown` and `CMapUsecmapDepth`; SPEC §6 amended in the same
+  commit; the sites carry `// [oracle-bug]`.
 - **`/Ordering (Japan1)` sets nothing.** The operand reader is a blunt
   two-byte slice, so a parenthesised PostScript string never matches a
   collection name — embedded CMaps effectively never set their own charset and

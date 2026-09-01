@@ -76,9 +76,12 @@ pub enum DiagKind {
     /// An `/Encoding` name matched a known CMap family but no built-in table
     /// carries that exact name, so the decoder is right and the CID map is not.
     CMapTableMissing,
-    /// An embedded CMap's `usecmap` was recognised and ignored, so whatever
-    /// the named base map would have contributed is absent.
-    CMapUsecmapIgnored,
+    /// An embedded CMap's `usecmap`, or a stream's `/UseCMap`, named a CMap
+    /// that is not one of the built-in ones, so nothing was inherited.
+    CMapUsecmapUnknown,
+    /// A `/UseCMap` chain ran deeper than `Limits::max_name_tree_depth`; the
+    /// rest of the chain was not followed.
+    CMapUsecmapDepth,
     /// A codespace range's bounds were discarded: a block declaring exactly
     /// one range keeps only its width.
     CMapCodespaceDropped,

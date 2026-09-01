@@ -290,6 +290,43 @@ impl Type0Font {
     }
 }
 
+/// The CMap an `/Encoding` stream's `/UseCMap` key names, or `None` when it
+/// has none.
+///
+/// The key may be a name — the built-in CMap of that name — or a stream
+/// holding another CMap program, which is read the same way the `/Encoding`
+/// stream itself was. Anything else is not an inheritance and is ignored.
+//
+// [oracle-bug] `grep -rn 'usecmap|UseCMap' core/fpdfapi/` over the oracle
+// returns exactly one line — `cpdf_cmapparser.cpp:61`, an empty
+// `} else if (word == "usecmap") {` — so the `/UseCMap` *dictionary* key is
+// not read anywhere in PDFium at all, and neither of the two inheritance
+// channels ISO 32000-1 §9.7.5.3 defines exists. A CMap stream that says
+// `/UseCMap /GBK-EUC-H` and overrides a handful of codes therefore decodes
+// every inherited code to CID 0 rather than to the base map's answer: total
+// loss, not degradation. pdf.js reads the key, and gives it precedence over
+// the program's own `usecmap` operator — `cmap.js:639-643` takes the embedded
+// operand only `if (!useCMap && embeddedUseCMap)` — then merges child-wins in
+// `extendCMap` (:650-669). We do the same; `pdfrum_cmap::inherit_from` is the
+// call that overrides whatever the program named.
+fn use_cmap_parent(
+    dict: &Dict,
+    r: &impl Resolve,
+    limits: &Limits,
+    diags: &mut Diagnostics,
+) -> Option<CMap> {
+    if let Some(stream) = dict.stream(names::USE_CMAP, r) {
+        let bytes = pdfrum_filters::decode_chain(&stream, 0, r, limits, diags).data;
+        // Depth 1: this is already one link down from the `/Encoding` stream.
+        // A parent naming its own `/UseCMap` is not followed further, which
+        // is what keeps a stream that names itself from recursing.
+        return Some(pdfrum_cmap::parse_embedded(&bytes, limits, diags));
+    }
+    let resolved = dict.get(names::USE_CMAP, r)?;
+    let name = resolved.as_name()?;
+    Some(pdfrum_cmap::from_encoding_name(name, diags))
+}
+
 /// Load a Type0 font (`CPDF_CIDFont::Load`).
 ///
 /// # Errors
@@ -332,7 +369,11 @@ pub(crate) fn load(
         Object::Stream(_) | Object::Ref(_) => {
             if let Some(stream) = dict.stream(names::ENCODING, r) {
                 let bytes = pdfrum_filters::decode_chain(&stream, 0, r, limits, diags).data;
-                pdfrum_cmap::parse_embedded(&bytes, limits, diags)
+                let cmap = pdfrum_cmap::parse_embedded(&bytes, limits, diags);
+                match use_cmap_parent(&stream.dict, r, limits, diags) {
+                    Some(parent) => pdfrum_cmap::inherit_from(cmap, parent, 0, limits, diags),
+                    None => cmap,
+                }
             } else {
                 // A reference is only usable if it resolves to a stream or a
                 // name; anything else is one of the four fatal cases.

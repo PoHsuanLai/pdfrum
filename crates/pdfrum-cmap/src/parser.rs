@@ -10,12 +10,11 @@
 //!   CID was expected resets the machine instead of being read as a number.
 //!   A truncated `begincidchar` block therefore cannot corrupt the block after
 //!   it.
-//! - **`usecmap` does nothing.** The operator is recognised and discarded: a
-//!   CMap that inherits a predefined base and overrides a handful of codes
-//!   gets *none* of the base, only its own overrides. This matches the oracle
-//!   and is what text extraction is measured against (SPEC.md §6); the
-//!   inheritance that *is* implemented is the predefined tables' own static
-//!   chain. A diagnostic records each ignored operator so the loss is visible.
+//! - **`usecmap` names a parent.** The operator's operand — the word before
+//!   it — is captured here and resolved by [`crate::parse_embedded`], which
+//!   builds the inheritance. This crate used to discard it, matching the
+//!   oracle's empty `else if`; that is an oracle bug (see the marked site
+//!   below) and §9.7.5.3's two inheritance channels are now both live.
 //! - **Nothing here fails.** Every malformed construct is skipped, clamped or
 //!   ignored, and the CMap that comes out is whatever the program managed to
 //!   say.
@@ -56,6 +55,12 @@ pub(crate) struct Parsed {
     pub(crate) additional: Vec<CidRange>,
     pub(crate) charset: CidSet,
     pub(crate) vertical: bool,
+    /// The name a `usecmap` operator named, if the program used one. The word
+    /// *before* the operator, exactly as written including its leading slash.
+    pub(crate) use_cmap: Option<Vec<u8>>,
+    /// Whether the program declared any codespace range of its own. A program
+    /// that declared none inherits its parent's (§9.7.5.3).
+    pub(crate) declared_codespace: bool,
 }
 
 /// The machine's mutable state. Kept separate from [`Parsed`] so the CMap is
@@ -77,6 +82,10 @@ struct Builder<'a> {
     vertical: bool,
     /// Set once `max_cmap_ranges` is hit, so the diagnostic is recorded once.
     ranges_capped: bool,
+    /// The operand of the first `usecmap` the program used.
+    use_cmap: Option<Vec<u8>>,
+    /// Whether any `endcodespacerange` settled a scheme of this program's own.
+    declared_codespace: bool,
 }
 
 /// A zeroed dense table, allocated on the heap.
@@ -137,6 +146,8 @@ pub(crate) fn parse(bytes: &[u8], limits: &Limits, diags: &mut Diagnostics) -> P
         charset: CidSet::Unknown,
         vertical: false,
         ranges_capped: false,
+        use_cmap: None,
+        declared_codespace: false,
     };
     for word in crate::lexer::Words::new(bytes) {
         b.feed(word, limits, diags);
@@ -164,7 +175,29 @@ impl<'a> Builder<'a> {
                 self.status = Status::CodeSpaceRange;
                 self.code_seq = 0;
             }
-            b"usecmap" => diags.record(Severity::Suspicious, DiagKind::CMapUsecmapIgnored, None),
+            // [oracle-bug] cpdf_cmapparser.cpp:61 is `} else if (word ==
+            // "usecmap") {` with an **empty body** — the operator is
+            // recognised only so it does not fall through into the operand
+            // handlers below it, and the name sitting in `last_word_` is
+            // discarded unread. A tree-wide grep for `usecmap|UseCMap` under
+            // `core/fpdfapi/` returns that one line, so the dictionary
+            // `/UseCMap` key of §9.7.5.3 is unimplemented too: both of the
+            // two channels the spec sanctions are dead. The result is not
+            // degradation but total loss — a CMap that inherits a predefined
+            // base and overrides a handful of codes gets *only* its
+            // overrides, and every inherited code decodes to CID 0.
+            // §9.7.5.3 defines both channels and the inherit-then-override
+            // rule; pdf.js implements both, capturing the operator's operand
+            // at cmap.js:608-613, letting an explicit `/UseCMap` win at
+            // :639-648, and merging in `extendCMap` (:650-669) — codespace
+            // ranges inherited only when the child declared none, mappings
+            // merged under `if (!cMap.contains(key))`, which is child-wins.
+            // We record the name and resolve it in `lib.rs::parse_embedded`.
+            b"usecmap" => {
+                if self.use_cmap.is_none() {
+                    self.use_cmap = Some(self.last_word.to_vec());
+                }
+            }
             _ => match self.status {
                 Status::CidChar | Status::CidRange => self.handle_cid(word, limits, diags),
                 Status::Registry | Status::Supplement => self.status = Status::Start,
@@ -279,6 +312,9 @@ impl<'a> Builder<'a> {
     /// the two-byte scheme.
     fn end_codespace(&mut self, diags: &mut Diagnostics) {
         let segs = self.ranges.len() + self.pending_ranges.len();
+        // A block that settled a scheme is a declaration of this program's
+        // own, and stops the parent's codespace ranges being inherited.
+        self.declared_codespace |= segs > 0;
         if segs == 1 {
             let width = self
                 .ranges
@@ -333,6 +369,8 @@ impl<'a> Builder<'a> {
             additional,
             charset: self.charset,
             vertical: self.vertical,
+            use_cmap: self.use_cmap,
+            declared_codespace: self.declared_codespace,
         }
     }
 }

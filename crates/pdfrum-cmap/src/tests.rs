@@ -451,21 +451,132 @@ fn wide_cid_ranges_need_a_four_byte_scheme() {
     assert_eq!(wide.cid(CharCode(0x0_FFFF)), Cid(0));
 }
 
-/// `usecmap` contributes nothing: the base map's codes stay unmapped.
+/// `usecmap` inherits the named base, and the child's own mappings win
+/// (ISO 32000-1 §9.7.5.3). This is audit A1: the oracle's
+/// `cpdf_cmapparser.cpp:61` is an empty `else if` and inherits nothing, so
+/// this test fails against the behaviour we shipped before 2026-09-02.
 #[test]
-fn usecmap_is_recognised_and_ignored() {
-    let (cmap, diags) = embedded(
+fn usecmap_inherits_the_named_base_and_the_child_wins() {
+    let (cmap, _) = embedded(
         b"/GBK-EUC-H usecmap
           begincodespacerange <0000> <ffff> endcodespacerange
           1 begincidchar <20> <100> endcidchar",
     );
-    assert!(diags.contains(&DiagKind::CMapUsecmapIgnored));
-    // Only the explicit override maps.
+    // The child's own mapping is the child's answer.
     assert_eq!(cmap.cid(CharCode(0x20)), Cid(0x100));
-    // A code GBK-EUC-H covers well is nevertheless unmapped here.
+    // A code the child says nothing about comes from the base.
     let (gbk, _) = resolve("GBK-EUC-H");
-    assert_ne!(gbk.cid(CharCode(0xA1A1)), Cid(0));
+    let inherited = gbk.cid(CharCode(0xA1A1));
+    assert_ne!(inherited, Cid(0));
+    assert_eq!(cmap.cid(CharCode(0xA1A1)), inherited);
+    // A code neither maps is still nothing.
+    assert_eq!(gbk.cid(CharCode(0xFEFE)), Cid(0));
+    assert_eq!(cmap.cid(CharCode(0xFEFE)), Cid(0));
+}
+
+/// A `usecmap` naming something that is not a built-in CMap inherits nothing
+/// and says so. pdf.js draws the same line, throwing on a name outside
+/// `BUILT_IN_CMAPS` (`cmap.js:677`).
+#[test]
+fn usecmap_naming_no_built_in_inherits_nothing() {
+    let (cmap, diags) = embedded(
+        b"/NotACMap usecmap
+          begincodespacerange <0000> <ffff> endcodespacerange
+          1 begincidchar <20> <100> endcidchar",
+    );
+    assert!(diags.contains(&DiagKind::CMapUsecmapUnknown));
+    assert_eq!(cmap.cid(CharCode(0x20)), Cid(0x100));
     assert_eq!(cmap.cid(CharCode(0xA1A1)), Cid(0));
+}
+
+/// A program that declares no codespace range of its own reads codes the way
+/// its parent does — `extendCMap`'s codespace clone (`cmap.js:653-659`).
+#[test]
+fn a_child_with_no_codespace_range_decodes_like_its_parent() {
+    // GBK-EUC-H is a mixed two-byte scheme: 0x41 is one byte, 0xA1A1 is two.
+    let (child, _) = embedded(b"/GBK-EUC-H usecmap 1 begincidchar <41> <7> endcidchar");
+    let codes: Vec<CharCode> = child.decode(&[0x41, 0xA1, 0xA1]).map(|(c, _)| c).collect();
+    assert_eq!(codes, vec![CharCode(0x41), CharCode(0xA1A1)]);
+    // And a program that *does* declare one keeps its own.
+    let (own, _) = embedded(
+        b"/GBK-EUC-H usecmap
+          begincodespacerange <0000> <ffff> endcodespacerange
+          1 begincidchar <41> <7> endcidchar",
+    );
+    let codes: Vec<CharCode> = own.decode(&[0x41, 0xA1]).map(|(c, _)| c).collect();
+    assert_eq!(codes, vec![CharCode(0x41A1)]);
+}
+
+/// The `/UseCMap` dictionary key is the second channel, and it supersedes the
+/// program's own `usecmap` — pdf.js takes the embedded operand only
+/// `if (!useCMap && embeddedUseCMap)` (`cmap.js:639-643`).
+#[test]
+fn the_use_cmap_dictionary_key_supersedes_the_operator() {
+    let limits = Limits::default();
+    let mut diags = Diagnostics::default();
+    let child = parse_embedded(
+        b"/GBK-EUC-H usecmap
+          begincodespacerange <0000> <ffff> endcodespacerange
+          1 begincidchar <20> <100> endcidchar",
+        &limits,
+        &mut diags,
+    );
+    // As parsed, 0xA1A1 comes from GBK-EUC-H.
+    let (gbk, _) = resolve("GBK-EUC-H");
+    assert_eq!(child.cid(CharCode(0xA1A1)), gbk.cid(CharCode(0xA1A1)));
+
+    // The dictionary key replaces that parent outright.
+    let parent = predefined(&Name::from("Identity-H")).unwrap();
+    let child = super::inherit_from(child, parent, 0, &limits, &mut diags);
+    assert_eq!(child.cid(CharCode(0x20)), Cid(0x100)); // still the child's
+    assert_eq!(child.cid(CharCode(0xA1A1)), Cid(0xA1A1)); // now Identity-H's
+}
+
+/// A `/UseCMap` chain deeper than the limit stops rather than recursing — a
+/// CMap that uses itself must not loop. The oracle cannot experience this
+/// because it never reads the key; we can, so it is guarded.
+#[test]
+fn a_use_cmap_chain_stops_at_the_depth_limit() {
+    let limits = Limits::default();
+    let mut diags = Diagnostics::default();
+    let program = b"begincodespacerange <0000> <ffff> endcodespacerange
+                    1 begincidchar <20> <100> endcidchar";
+
+    // Build a chain by hand, each link claiming to be one deeper than the
+    // last; the link at the limit is refused and inherits nothing.
+    let mut cmap = parse_embedded(program, &limits, &mut diags);
+    for depth in 0..limits.max_name_tree_depth {
+        let parent = predefined(&Name::from("Identity-H")).unwrap();
+        cmap = super::inherit_from(cmap, parent, depth, &limits, &mut diags);
+    }
+    assert!(!diags.contains(&DiagKind::CMapUsecmapDepth));
+
+    let parent = predefined(&Name::from("Identity-H")).unwrap();
+    let cmap = super::inherit_from(
+        cmap,
+        parent,
+        limits.max_name_tree_depth,
+        &limits,
+        &mut diags,
+    );
+    assert!(diags.contains(&DiagKind::CMapUsecmapDepth));
+    // The refusal is a no-op, not a corruption: the CMap still works.
+    assert_eq!(cmap.cid(CharCode(0x20)), Cid(0x100));
+}
+
+/// A CMap naming *itself* through `usecmap` terminates. The operator resolves
+/// only against the built-in tables, whose own `use_offset` chain is bounded,
+/// so the self-reference simply finds no built-in of that name.
+#[test]
+fn a_cmap_that_uses_itself_terminates() {
+    let (cmap, diags) = embedded(
+        b"/ThisVeryCMap usecmap
+          begincodespacerange <0000> <ffff> endcodespacerange
+          1 begincidchar <20> <100> endcidchar",
+    );
+    assert!(diags.contains(&DiagKind::CMapUsecmapUnknown));
+    assert_eq!(cmap.cid(CharCode(0x20)), Cid(0x100));
+    assert_eq!(cmap.cid(CharCode(0x21)), Cid(0));
 }
 
 /// An operator appearing where an operand was expected resets the machine,

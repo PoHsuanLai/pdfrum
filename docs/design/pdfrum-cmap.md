@@ -469,6 +469,10 @@ Things worth stating explicitly because they are load-bearing:
   and then only overrides a handful of codes gets **none** of the base map.
   Its `direct_charcode_to_cidtable_` has whatever it set explicitly and zeros
   everywhere else. SPEC §6 says the API offers "usecmap" — see §2 D1.
+  *(Correction 2026-09-02, audit A1: this describes the oracle correctly and
+  is now a description of an **oracle bug** rather than of our behaviour —
+  `cpdf_cmapparser.cpp:61` against §9.7.5.3 and pdf.js `cmap.js:608-669`. We
+  implement both channels; see D1's reversal.)*
 - `CMap_GetString` (`:23-28`) is `word.len() <= 2 ? "" : word[2..]`. For
   `/Ordering` the following word is expected to be a PostScript string
   `(Japan1)`, and the tokenizer hands back `"(Japan1)"` including both parens;
@@ -860,6 +864,37 @@ This is a `[spec]`-adjacent reading of the contract, not a contract change; the
 brief records it here and SPEC §6's wording is satisfied by the static chain. If
 the orchestrator disagrees, the alternative is a feature-flagged second
 resolution mode, defaulted off. **Escalated as OQ-1.**
+
+**Reversed 2026-09-02 (oracle-divergence audit, A1) — this is an oracle bug,
+and it is now implemented.** The 2026-08-29 ruling above weighed the change
+as a Tier-A regression risk and matched the oracle. The audit re-read the
+oracle at the line and the calculus changes: `cpdf_cmapparser.cpp:61` is
+`} else if (word == "usecmap") {` with an **empty body** — the operator is
+recognised only so it does not fall into the operand handlers below it, and
+the name in `last_word_` is discarded unread — and a tree-wide grep for
+`usecmap|UseCMap` under `core/fpdfapi/` returns that one line, so the
+`/UseCMap` *dictionary* key is unimplemented too. ISO 32000-1 §9.7.5.3
+defines **both** channels and the inherit-then-override rule, and pdf.js
+implements both: `cmap.js:608-613` captures the operator's operand,
+`:639-648` gives an explicit `/UseCMap` precedence over it, and `extendCMap`
+(`:650-669`) inherits the parent's codespace ranges when the child declared
+none and merges mappings under `if (!cMap.contains(key))` — child-wins. Under
+PLAN.md's oracle-bug rule (§212–229) that makes reproducing it not a choice.
+The regression risk the ruling feared is **measured at zero**: no corpus file
+contains a `usecmap` or a `/UseCMap`, so the blast radius is 0 rows.
+
+*What shipped:* the operand is captured in `parser.rs`'s `usecmap` arm and
+resolved against the built-in CMaps by `parse_embedded`; the dictionary key
+is read by `pdfrum-font`'s `use_cmap_parent` and attached by
+`pdfrum_cmap::inherit_from`, which supersedes the operator as pdf.js orders
+them. Lookup is child-wins by construction — a code the child maps is the
+child's answer and only CID 0 reaches the parent. Codespace ranges are
+inherited only when the child declared none. The chain is depth-guarded at
+`Limits::max_name_tree_depth`, which the oracle needs no equivalent of
+because it never follows the chain at all. `DiagKind::CMapUsecmapIgnored` is
+retired; `CMapUsecmapUnknown` and `CMapUsecmapDepth` replace it. Both sites
+carry `// [oracle-bug]` with both citations. SPEC §6 was amended in the same
+commit.
 
 **D2 — bounds on `GetCodeRange`'s digit reads.** The C++ reads
 `first[i*2+1]` / `first[i*2+2]` past the token's logical end when no `>` was
