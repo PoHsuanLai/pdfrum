@@ -93,6 +93,19 @@ pub struct PageForm {
     /// cannot read as dictionaries, so the indices have gaps and a positional
     /// list would silently shift everything after one.
     pub dicts: std::collections::BTreeMap<u32, Dict>,
+    /// The page's height in PDF units, for the one thing that needs it: how
+    /// much room a combo box has to open its dropdown into.
+    ///
+    /// `CFFL_InteractiveFormFiller::QueryWherePopup`
+    /// (`cffl_interactiveformfiller.cpp:679-680`) builds its page rectangle
+    /// as `(0, GetPageHeight(), GetPageWidth(), 0)` normalized — from the
+    /// **origin**, whatever the crop box says — and measures the widget's
+    /// `/Rect` against it. So this is the display height and the comparison
+    /// is against zero on the other side, reproduced rather than corrected:
+    /// a page whose crop box starts away from the origin gets the oracle's
+    /// answer, right or wrong, because the popup's position is what a golden
+    /// pins.
+    pub page_height: f32,
 }
 
 /// One widget annotation, read far enough to build its field's state.
@@ -209,6 +222,7 @@ pub fn read<R: Resolve>(page: u32, page_dict: &Dict, catalog: &Dict, r: &R) -> P
     let mut form = PageForm {
         page,
         tab_order: TabOrder::from_tabs(page_dict.byte_string(TABS, r).as_deref()),
+        page_height: page_height(page_dict, r),
         ..PageForm::default()
     };
     let Some(annots) = page_dict.array(obj_names::ANNOTS, r) else {
@@ -261,6 +275,40 @@ pub fn read<R: Resolve>(page: u32, page_dict: &Dict, catalog: &Dict, r: &R) -> P
         form.dicts.insert(id.index, dict);
     }
     form
+}
+
+/// The page's display height, the one number a dropdown's placement needs.
+///
+/// `/MediaBox` and `/CropBox` are inheritable (ISO 32000-1 §7.7.3.4), so the
+/// walk climbs `/Parent` for a page that states neither — `derive_boxes`
+/// takes the closure that does the climbing, and applies `/Rotate` after it,
+/// because a quarter-turned page's *height* is its crop box's width and the
+/// popup's room is measured on the page as shown.
+fn page_height<R: Resolve>(page_dict: &Dict, r: &R) -> f32 {
+    let inherited = |key: &Name| -> Option<pdfrum_object::Object> {
+        let mut node = page_dict.clone();
+        // The same bound `PageDict::inherited` uses; a `/Parent` cycle in a
+        // damaged file would otherwise spin here.
+        for _ in 0..64 {
+            if let Some(value) = node.get(key, r) {
+                return Some(value.get().clone());
+            }
+            node = node.dict(obj_names::PARENT, r)?;
+        }
+        None
+    };
+    // The boxes are derived, not read: a missing or degenerate `/MediaBox` is
+    // US Letter rather than nothing, which is the size the oracle would have
+    // measured the room against too.
+    let mut diags = Diagnostics::default();
+    let (_, height) = pdfrum_page::display_size_from_dict(page_dict, inherited, r, &mut diags);
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "a page taller than f32 has already lost meaning; the value \
+                  only decides which side a dropdown opens on"
+    )]
+    let height = height as f32;
+    height
 }
 
 /// A widget's `/MK /R`, as the quadrant its appearance stream is set into.
