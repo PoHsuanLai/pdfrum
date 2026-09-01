@@ -607,3 +607,115 @@ change is inert by construction.
 - **The page-box containment test is unimplemented by design** (above). A
   caller supplying a `Rect` must apply it, or a focus box hanging off the page
   will be stroked where the oracle drops it. No corpus file exercises this.
+
+---
+
+## 4. The three highlight rows: it was never the routing
+
+`7249c98` unbreaks the cargo doc gate (`overlay_with` linked to the private
+`focus_rect` with intra-doc syntax; the link is prose now, the function stays
+private). `dae5bbd` is the investigation below.
+
+### The finding, in one paragraph
+
+`annotation_highlight_{author_content,no_author,long_content}` had not moved
+under any event routing because their delta is not an event-routing delta at
+all: it is a **whole missing appearance**. Each `.evt` is one line —
+`mousemove,128,713` — and the point is inside the highlight's `/Rect`
+(`[115.75 706.33 157.00 719.27]`). In the oracle that reaches
+`CPDFSDK_PageView::OnMouseMove` → `EnterWidget` → `CPDFSDK_BAAnnot::OnMouseEnter`
+(`fpdfsdk/cpdfsdk_baannot.cpp:309-312`), which calls `SetOpenState(true)` →
+`CPDF_Annot::SetPopupAnnotOpenState` (`core/fpdfdoc/cpdf_annot.cpp:239-243`),
+and `ShouldDrawAnnotation` (`cpdf_annot.cpp:169-174`) then admits the
+synthesized pop-up. We drew **nothing**: `markup::popup_frame` existed with no
+callers, no generator laid out the text, and `is_visible` filtered every
+pop-up out unconditionally. Diffed region by region the delta is a single
+200×200 block at device x 72-315, y 75-285 — 40 941 pixels, all of it the card.
+
+### The split that proves it
+
+Six highlight fixtures carry a `#form-events` row. The three that fail are
+exactly the three whose parent has a **non-empty `/Contents`**; the three that
+pass — `empty_content` (a bare byte-order mark), `no_content`,
+`no_author_no_content` — are exactly the ones `CreatePopupAnnot`
+(`core/fpdfdoc/cpdf_annotlist.cpp`) declines to synthesize a card for, because
+`PDF_DecodeText(contents).IsEmpty()`. `no_content` passes **while carrying a
+`/T`**, so the title alone is not the trigger; the note is.
+
+### What the card is
+
+`CPDF_GenerateAP::GeneratePopupAP` (`core/fpdfdoc/cpdf_generateap.cpp:1282-1321`)
+and `GetPopupContentsString` (`:600-631`). Nothing in it reads the annotation:
+1-unit border, `1 1 0 rg` fill, `0 0 0 RG` stroke, 12-point type, all fixed.
+Two joins decide the pixels and both are now recorded in `ap::popup`'s module
+docs:
+
+- **The title and the note are one string joined by `\n`**, laid out in a
+  single pass (`:606-608`). A card with no `/T` spends its first line on the
+  empty title and starts the note on the second.
+- **The plate is the card's raw `/Rect`**, not the rectangle the border was
+  stroked into, and the 3-unit inset arrives afterwards as `CFX_PointF(3, -3)`
+  passed to `GenerateEditAP` (`:620-621`).
+
+### The face, which is the part that would have been got wrong
+
+The wrap and the line pitch come from `FormFonts`' fallback — the *substituted*
+Helvetica, 905/−211 — not the base-14 tables' 718/−207. Measured off the
+oracle's own PNG the three text baselines sit at PDF y ≈ 691, 678, 667; the
+substituted face predicts 692.5, 679.1, 665.7 and the base-14 pair predicts
+694.7, 683.6, 672.5, which is 2 to 5 device rows out. The text's left edge
+measures at device x 119 against the predicted 118.75 = 115.75 + 3, confirming
+the inset and the plate together.
+
+### What landed
+
+| Change | Where |
+|---|---|
+| `ap::popup::popup` — the card and its text | `src/ap/popup.rs` (new) |
+| `AnnotOverlay::set_hover` / `hover` | `src/ap/mod.rs` |
+| `push_open_popup` — the card drawn last, over the passage | `src/annot_render.rs` |
+| `markup::popup_frame` removed (callerless, superseded) | `src/ap/markup.rs` |
+
+Six unit tests in `ap::popup::tests` pin the chrome byte for byte, the fixed
+12-point `Tf`, the unmatched trailing `Q`, the one-string join, the title-less
+card's line spend, and the empty card declining to draw.
+
+### Gates
+
+`cargo fmt -p pdfrum-doc -- --check`; `cargo clippy -p pdfrum-doc
+--all-targets -- -D warnings`; `cargo nextest run -p pdfrum-doc` (393 pass);
+`cargo test --doc -p pdfrum-doc` (3 pass); `cargo build -p pdfrum-form -p
+pdfrum -p pdfrum-tool` (clean); `cargo nextest run --workspace` (3457 pass, 1
+skipped). Conformance `run --check-regressions`: **no regressions** — 1705
+files, 1636 pass, 69 fail, and a per-file diff of the two boards shows **0 rows
+differing**. The scoreboard was therefore not committed: its only diff was the
+`generated_at` stamp.
+
+### Open item — the one call the other side owes
+
+The card cannot open until someone says the pointer is inside the parent.
+`pdfrum-form` **already has the answer**: `FormSession.hover`
+(`crates/pdfrum-form/src/session.rs:170`), set on every move by
+`route::mouse_move` (`route.rs:117-140`) from `hit::annot_at_point`, which is
+`GetFXAnnotAtPoint` ported down to skipping the pop-up band
+(`fpdfsdk/cpdfsdk_pageview.cpp:125-137`). It is simply not exposed. The
+request, additive and two lines of body:
+
+```rust
+// crates/pdfrum/src/form_session.rs, beside `focus_for_page`
+/// Which annotation on `page` the pointer is inside, as a raw `/Annots`
+/// index — the index space `AnnotOverlay::set_hover` keys on.
+pub fn hover_for_page(&self, page: u32) -> Option<usize>;
+```
+
+answering `self.inner.hover.filter(|id| id.page == page).map(|id| id.index as
+usize)`, plus the tool threading it: `run.rs` carrying it beside `focus` in
+`Output`, and `render.rs`'s `session_overlay` calling
+`overlay.set_hover(hover)` exactly where it calls `set_focus(focus)` — noting
+that `session_overlay` must then also size the overlay to admit a hover-only
+run, the same `max` it already does for a focus-only one.
+
+Nothing else is needed: `merge_over` already carries hover, and
+`push_open_popup` does the rest. On the first commit that supplies it, the
+three rows above should move; the other fifteen `form-events` rows are
+untouched by hover and should not.
