@@ -1551,9 +1551,9 @@ fn generate<R: Resolve>(
 /// |---|---|---|
 /// | text field (`cpwl_edit.cpp:313-315`) | empty | [`ap::FocusBox::None`] |
 /// | **any** combo box (`cpwl_combo_box.cpp:321-323`) | empty | [`ap::FocusBox::None`] |
-/// | multi-select list (`cpwl_list_box.cpp:227-234`) | the caret item ∩ client | [`caret_row_box`] |
+/// | multi-select list (`cpwl_list_box.cpp:227-234`) | the caret item ∩ client | its caret row |
 /// | single-select list, check box, radio (`cpwl_wnd.cpp:713-719`) | window inflated by 1 | [`ap::FocusBox::Inflated`] |
-/// | push button (`cpwl_special_button.cpp:21-24`) | window **deflated by the border** | [`ap::FocusBox::Rect`] |
+/// | push button (`cpwl_special_button.cpp:21-24`) | window **deflated by the border** | [`ap::FocusBox::Rect`] of that box |
 ///
 /// Two rows are easy to get wrong in the same direction, by reaching for the
 /// generic `CPWL_Wnd` answer where a subclass overrides it. A combo box
