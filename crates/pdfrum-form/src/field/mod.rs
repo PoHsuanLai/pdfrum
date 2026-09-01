@@ -130,18 +130,27 @@ pub enum FieldState {
 
 /// A text field's interaction state.
 ///
-/// The layout, caret and undo stack live here once the editing operations
-/// land; for now it carries the configuration and the text, which is what the
-/// commit path and the non-mouse assertions need.
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+/// The edit control **is** the state: the text, its layout, the caret, the
+/// selection, the scroll offset and the undo stack are one record with one
+/// invariant, rather than a string here and a stack there that a mutation has
+/// to remember to keep in step. `text` used to be a bare `String` beside a
+/// detached `UndoStack`, and the two could disagree — undoing moved one and
+/// not the other.
+#[derive(Debug, Clone, PartialEq)]
 pub struct TextState {
-    /// The text as the user has it, which may differ from the field's stored
-    /// value until the edit commits.
-    pub text: String,
+    /// The live edit control: text, layout, caret, selection, undo.
+    pub edit: crate::edit::TextEdit,
     /// How the field is configured.
     pub config: TextConfig,
-    /// The undo stack.
-    pub undo: crate::edit::UndoStack,
+}
+
+impl TextState {
+    /// The text as the user has it, which may differ from the field's stored
+    /// value until the edit commits.
+    #[must_use]
+    pub fn text(&self) -> &str {
+        &self.edit.text
+    }
 }
 
 /// One row of a choice field.
@@ -154,7 +163,7 @@ pub struct ChoiceOption {
 }
 
 /// A combo box or list box's interaction state.
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct ChoiceState {
     /// The rows.
     pub options: Vec<ChoiceOption>,
@@ -174,6 +183,20 @@ pub struct ChoiceState {
     pub top_visible: usize,
     /// How the field is configured.
     pub config: ChoiceConfig,
+    /// What an **editable** combo box has in its text box.
+    ///
+    /// Kept as a string beside the control rather than only inside it, so a
+    /// combo that has never been typed into still answers its text without a
+    /// layout — and so the control itself can be dropped and rebuilt when the
+    /// font or the plate changes.
+    pub edit_text: String,
+    /// The editable combo's live edit control, once one has been typed into.
+    ///
+    /// `None` until the first character: a non-editable combo never has one,
+    /// and an editable one that has only been clicked does not need one. It
+    /// is boxed because it is much larger than the rest of this record and
+    /// absent in the common case.
+    pub edit: Option<Box<crate::edit::TextEdit>>,
 }
 
 impl ChoiceState {
