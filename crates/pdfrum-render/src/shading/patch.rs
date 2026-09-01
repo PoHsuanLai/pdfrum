@@ -99,6 +99,13 @@ fn interpolate(c0: i32, c1: i32, delta1: i32, delta2: i32) -> Option<i32> {
 }
 
 /// The bilinear blend of a patch's four corner colours at a cell position.
+///
+/// The four corners and their three components are destructured by pattern
+/// rather than subscripted. Both shapes are fixed-size arrays, so every
+/// subscript was statically in bounds and every `Option` it produced statically
+/// `Some` — but the subdivider reaches this four times per recursion node and
+/// tens of thousands of times per mesh, and a `None` arm the compiler must
+/// still carry is a branch on a path that has none.
 fn bilinear(
     colors: &[IntColor; 4],
     left: i32,
@@ -106,31 +113,23 @@ fn bilinear(
     x_scale: i32,
     y_scale: i32,
 ) -> Option<IntColor> {
-    let mut out = [0i32; 3];
-    for i in 0..3 {
-        let (Some(&c0), Some(&c1), Some(&c2), Some(&c3)) = (
-            colors.first().and_then(|c| c.get(i)),
-            colors.get(1).and_then(|c| c.get(i)),
-            colors.get(2).and_then(|c| c.get(i)),
-            colors.get(3).and_then(|c| c.get(i)),
-        ) else {
-            return None;
-        };
+    let [[r0, g0, b0], [r1, g1, b1], [r2, g2, b2], [r3, g3, b3]] = *colors;
+    let blend = |c0, c1, c2, c3| {
         let bottom_edge = interpolate(c0, c3, left, x_scale)?;
         let top_edge = interpolate(c1, c2, left, x_scale)?;
-        let v = interpolate(bottom_edge, top_edge, bottom, y_scale)?;
-        *out.get_mut(i)? = v;
-    }
-    Some(out)
+        interpolate(bottom_edge, top_edge, bottom, y_scale)
+    };
+    Some([
+        blend(r0, r1, r2, r3)?,
+        blend(g0, g1, g2, g3)?,
+        blend(b0, b1, b2, b3)?,
+    ])
 }
 
 /// `Distance`: the maximum per-component absolute difference.
 fn distance(a: IntColor, b: IntColor) -> i32 {
-    a.iter()
-        .zip(b.iter())
-        .map(|(x, y)| (x - y).abs())
-        .max()
-        .unwrap_or(0)
+    let ([ar, ag, ab], [br, bg, bb]) = (a, b);
+    (ar - br).abs().max((ag - bg).abs()).max((ab - bb).abs())
 }
 
 /// A patch's sixteen (or twelve) control points, as the subdivider handles
@@ -214,22 +213,37 @@ impl Points {
             .all(|p| p.x.is_finite() && p.y.is_finite())
     }
 
-    fn bbox(&self) -> Rect {
-        let mut r: Option<Rect> = None;
+    /// The extent of the sixteen control points, as `(x0, y0, x1, y1)`.
+    ///
+    /// A fold rather than a chain of [`Rect::union`]s, which is the same
+    /// arithmetic — `union` is four `min`/`max`es over a `Rect` whose corners
+    /// are equal — with sixteen degenerate `Rect`s and an `Option` branch per
+    /// point removed. Every caller has already established the points are
+    /// finite, which is the one condition under which `f64::min` and `Rect`'s
+    /// own comparison could disagree.
+    fn extent(&self) -> (f64, f64, f64, f64) {
+        let mut x0 = f64::INFINITY;
+        let mut y0 = f64::INFINITY;
+        let mut x1 = f64::NEG_INFINITY;
+        let mut y1 = f64::NEG_INFINITY;
         for p in self.grid.iter().flatten() {
-            let cell = Rect::new(p.x, p.y, p.x, p.y);
-            r = Some(match r {
-                Some(acc) => acc.union(cell),
-                None => cell,
-            });
+            x0 = x0.min(p.x);
+            y0 = y0.min(p.y);
+            x1 = x1.max(p.x);
+            y1 = y1.max(p.y);
         }
-        r.unwrap_or(Rect::ZERO)
+        (x0, y0, x1, y1)
+    }
+
+    fn bbox(&self) -> Rect {
+        let (x0, y0, x1, y1) = self.extent();
+        Rect::new(x0, y0, x1, y1)
     }
 
     /// `IsSmall`: under two device units in both axes.
     fn is_small(&self) -> bool {
-        let b = self.bbox();
-        b.width() < SMALL_PATCH && b.height() < SMALL_PATCH
+        let (x0, y0, x1, y1) = self.extent();
+        x1 - x0 < SMALL_PATCH && y1 - y0 < SMALL_PATCH
     }
 
     /// Split every row at `t = 0.5`, halving the patch along its **second**
@@ -307,19 +321,16 @@ impl Points {
     /// time. `truncate(0)` keeps the capacity, so after the first cell the
     /// path costs six pushes into memory that is already warm.
     fn write_boundary_path(&self, into: &mut BezPath) {
-        let g = |r: usize, c: usize| {
-            self.grid
-                .get(r)
-                .and_then(|row| row.get(c))
-                .copied()
-                .unwrap_or(Point::ZERO)
-        };
+        // The boundary walks row 0 left to right, the last column down, row 3
+        // back, and the first column up — so the two middle rows contribute
+        // only their ends, and the interior four points never appear.
+        let [top, upper, lower, bottom] = self.grid;
         into.truncate(0);
-        into.move_to(g(0, 0));
-        into.curve_to(g(0, 1), g(0, 2), g(0, 3));
-        into.curve_to(g(1, 3), g(2, 3), g(3, 3));
-        into.curve_to(g(3, 2), g(3, 1), g(3, 0));
-        into.curve_to(g(2, 0), g(1, 0), g(0, 0));
+        into.move_to(top[0]);
+        into.curve_to(top[1], top[2], top[3]);
+        into.curve_to(upper[3], lower[3], bottom[3]);
+        into.curve_to(bottom[2], bottom[1], bottom[0]);
+        into.curve_to(lower[0], upper[0], top[0]);
         into.close_path();
     }
 
