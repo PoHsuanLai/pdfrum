@@ -1367,24 +1367,24 @@ DEPS.md, which this milestone does not change**.
 
 Events go in, appearance updates come out. There is no widget object
 hierarchy, no callback table and no invalidation channel: a session is a
-record of facts and `apply` is a function over it (brief D1, D2).
+record of facts and dispatch is a function over it (brief D1, D2).
 
 ```rust
-pub fn apply(
-    session: &mut FormSession,
-    ctx: &FormContext<'_>,
-    event: Event,
-    cascade: &mut dyn Cascade,
-    diags: &mut Diagnostics,
-) -> Response;
-
 pub struct Response { pub consumed: bool, pub updates: Vec<AppearanceUpdate> }
 ```
 
-`FormContext` is the borrowed read-only view the engine needs — the document's
-`Form`, the per-page annotation lists, the page geometry and the resolver —
-assembled by the caller once and reused for every event. It exists because
+**Not yet present: the routed entry point.** A single
+`apply(session, ctx, event, cascade, diags) -> Response` over a borrowed
+`FormContext` — the document's `Form`, the per-page annotation lists, the page
+geometry and the resolver — is the intended shape, and it exists because
 `FormSession` must stay free of borrows so the facade can own it across calls.
+Neither `apply` nor `FormContext` has landed. What routes events today is the
+facade's `pdfrum::FormSession`, whose event methods return `Response` and
+currently report every event unconsumed; the per-kind machines
+(`field::text::route_key`, `field::choice`, `field::toggle`), the hit tests and
+the focus rules are all present and directly callable. This paragraph is
+marked rather than deleted because the shape is still the target — see
+`docs/status/M14.md` for what gates it.
 
 ### 15.2 The session record
 
@@ -1405,10 +1405,11 @@ pub struct AnnotId { pub page: u32, pub index: u32 }          // index into the 
 pub struct DragAnchor { pub field: FieldId, pub start: Place }
 
 pub struct SessionConfig {
-    pub accelerator: Modifiers,   // Control off Apple, Meta on Apple (D6)
-    pub redo_on_ctrl_y: bool,     // false on Apple (D6)
-    pub focusable: Vec<Subtype>,  // default [Widget]
-    pub max_undo_items: u32,      // default 10_000, clamped up to 4
+    pub accelerator: Modifiers,     // Control off Apple, Meta on Apple (D6)
+    pub redo_on_ctrl_y: bool,       // false on Apple (D6)
+    pub focusable: Vec<Subtype>,    // default [Widget]
+    pub max_undo_items: u32,        // default 10_000, clamped up to 4
+    pub max_calculate_depth: u32,   // how deep a calculation may recurse
 }
 ```
 
@@ -1427,18 +1428,31 @@ One variant per behaviour family, not per PDF field type: combo and list share
 a machine, check and radio share one.
 
 ```rust
-pub enum FieldState { Text(TextEdit), Choice(ChoiceEdit), Toggle(ToggleState), Button(ButtonState) }
+pub enum FieldState { Text(TextState), Choice(ChoiceState), Toggle(ToggleState), Button(ButtonState) }
 
-/// Invariant, one sentence: `caret` and both ends of `selection` are valid
-/// places in `layout`, and `layout` is what laying `text` out again produces.
+/// The field's *session* state: what it holds and how it is configured.
+pub struct TextState {
+    pub text: String,
+    pub config: TextConfig,
+    pub undo: UndoStack,
+}
+
+/// The edit control proper, in `edit::ops`. Its invariant is one sentence:
+/// `caret` and both ends of `selection` are places in `layout`, and `layout`
+/// is what laying `text` out again would produce.
 pub struct TextEdit {
     pub text: String,
     pub layout: vt::Layout,
-    pub config: TextConfig,
     pub caret: Place,
+    pub previous_caret: Place,
     pub selection: Selection,
     pub sticky_x: f32,
     pub scroll: (f32, f32),
+    /// The vertical alignment offset the text is *drawn* with. A single-line
+    /// field draws centred, so every geometric query must be told about the
+    /// shift or a click at the field's mid-height clamps to the end.
+    pub offset: (f32, f32),
+    pub centred: bool,
     pub undo: UndoStack,
 }
 
@@ -1451,19 +1465,26 @@ pub struct Place { pub section: u32, pub line: u32, pub word: i32 }
 /// a *live collapsed anchor* and is distinct from `Selection::reset()`.
 pub struct Selection { pub begin: Place, pub end: Place }
 
-pub struct ChoiceEdit {
+pub struct ChoiceState {
     pub options: Vec<ChoiceOption>,
     pub selected: BTreeSet<usize>,
     pub caret_index: Option<usize>,   // the "last index acted upon" (brief §1.7.4)
     pub anchor: Option<usize>,        // the shift pivot
     pub top_visible: usize,
-    pub popup: Option<PopupState>,
-    pub edit: Option<TextEdit>,       // Some only for an editable combo
+    pub config: ChoiceConfig,
 }
 
-pub struct ToggleState { pub state: Vec<u8> }   // the /AS name
+/// Both the state shown and the name it shows when checked: the `/AS` name
+/// alone cannot say what "checked" would be for a control whose on state a
+/// file spells anything it likes.
+pub struct ToggleState { pub state: String, pub on_state: String }
 pub struct ButtonState { pub pressed: bool }
 ```
+
+**Not yet present on `ChoiceState`: `popup: Option<PopupState>` and
+`edit: Option<TextEdit>`.** The second is what an editable combo box's text
+half needs, and with it the four-item undo group every combo selection change
+pushes; both are named in `docs/status/M14.md`'s blocked list.
 
 ### 15.4 The undo model
 
@@ -1529,13 +1550,17 @@ DEPS.md is closed and this is nine constants (STYLE §5).
 pub struct AppearanceUpdate { pub annot: AnnotId, pub kind: UpdateKind }
 
 pub enum UpdateKind {
-    Regenerated(GeneratedAp),                        // committed value → new stream
-    LiveEdit(GeneratedAp),                           // focused field, caret + selection band
+    Regenerated(Box<GeneratedAp>),                   // committed value → new stream
+    LiveEdit(Box<GeneratedAp>),                      // focused field, caret + selection band
     RevertedToFileAppearance,                        // drop the generated one; the file's /AP shows
-    ActionRequested { action: Action, modifiers: Modifiers },
+    ActionRequested { action: Box<Action>, modifiers: Modifiers },
     FocusChanged { from: Option<AnnotId>, to: Option<AnnotId> },
 }
 ```
+
+The three payloads are boxed: a `GeneratedAp` carries a stream, a rectangle, a
+matrix and a resource dictionary, and an unboxed variant would make every
+`UpdateKind` — including the two that carry nothing — that large.
 
 **`AnnotId::index` is the raw `/Annots` index, pop-ups counted.** Normative,
 because the alternative reading is invisible until a page carries a pop-up and
@@ -1605,12 +1630,24 @@ it becomes user-visible for the first time.
 
 `pdfrum::FormSession` wraps the crate's session with the document it belongs
 to, and offers one method per `FORM_*` entry that is not a no-op, named to the
-Rust API guidelines: `on_mouse_move`, `on_mouse_down`, `on_mouse_up`,
-`on_double_click`, `on_mouse_wheel`, `on_focus_at`, `on_key_down`, `on_char`,
-`force_kill_focus`, `focused_text`, `selected_text`, `select_all`,
-`replace_selection`, `replace_and_keep_selection`, `can_undo`, `can_redo`,
-`undo`, `redo`, `set_index_selected`, `is_index_selected`, `focused_annot`,
-`set_focused_annot`, `field_at_point`.
+Rust API guidelines.
+
+**Present today:** `on_mouse_move`, `on_mouse_down`, `on_mouse_up`,
+`on_button`, `on_double_click`, `on_mouse_wheel`, `on_focus_at`,
+`on_key_down`, `on_char`, `force_kill_focus`, `focused_text`, `focused_annot`,
+`can_undo`, `can_redo`, `is_index_selected`, `set_index_selected`, `config`,
+`inner`.
+
+`on_button` is not in the oracle's list and exists for a reason the `.evt`
+corpus forces: scripts contain right-button lines, a bridge must be able to
+express them, and the correct behaviour for those lines is to consume nothing.
+
+**Not yet present:** `selected_text`, `select_all`, `replace_selection`,
+`replace_and_keep_selection`, `undo`, `redo`, `set_focused_annot`,
+`field_at_point`. The operations behind all eight exist in the crate
+(`edit::ops`, `focus`, `hit`); what they wait on is the routed dispatch of
+§15.1, since each needs to reach the focused field's live state through a
+context the facade does not yet assemble.
 
 Each event method returns a `Response` carrying both the `consumed` boolean the
 C++ returns as `FPDF_BOOL` and the `Vec<AppearanceUpdate>` the C++ pushes
