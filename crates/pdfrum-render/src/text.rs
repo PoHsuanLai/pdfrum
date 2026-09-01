@@ -372,7 +372,11 @@ pub fn snap_origin(origin: kurbo::Point, text_aa: TextAa) -> kurbo::Point {
         // the way the C++ computes it rather than as `(3x).floor() / 3`,
         // which differs on a negative origin — where upstream's negative
         // `x_subpixel` falls into the `x_subpixel == 2` arm.
-        TextAa::Grayscale => {
+        // Both smooth modes land here: `IsSmooth()` is true for `kAntiAliasing`
+        // and `kLcd` alike, so `FontAntiAliasingMode` is `kLcd` either way and
+        // the thirds are taken either way. `bClearType` decides only whether
+        // the triples are averaged afterwards, which is a later stage.
+        TextAa::Grayscale | TextAa::LcdSubpixel => {
             let whole = origin.x.floor();
             #[expect(
                 clippy::cast_possible_truncation,
