@@ -347,7 +347,7 @@ fn nested(phase: pdfrum_render::walkprofile::Phase) -> bool {
     use pdfrum_render::walkprofile::Phase;
     matches!(
         phase,
-        Phase::PathPrep | Phase::RectTest | Phase::ZeroScan | Phase::PathXform
+        Phase::PathPrep | Phase::RectTest | Phase::ZeroScan | Phase::PathXform | Phase::Patches
     )
 }
 
@@ -403,7 +403,8 @@ fn walk_report(iters: f64, engine: std::time::Duration) {
             },
             calls_per_iter(*c, iters),
             match phase {
-                Phase::PathPrep => "  (includes its own fill/stroke calls, counted in RASTER)",
+                Phase::PathPrep | Phase::Patches =>
+                    "  (includes its own fill/stroke calls, counted in RASTER)",
                 Phase::RectTest | Phase::ZeroScan | Phase::PathXform => "  (nested in path prep)",
                 _ => "",
             },
