@@ -29,6 +29,14 @@ use crate::transcode::utf32le_to_utf8;
 /// the artifact naming across the whole store.
 const INPUT_NAME: &str = "input.pdf";
 
+/// The sibling `.evt` is copied next to [`INPUT_NAME`] so the oracle's
+/// `.pdf` → `.evt` replacement (`pdfium_test.cc:2154-2156`) finds it.
+const INPUT_EVT: &str = "input.evt";
+
+/// Suffix that keeps a `--send-events` PNG from colliding with the plain
+/// render of the same page (`input.pdf.0.png` vs `input.pdf.0.events.png`).
+pub const EVENTS_PNG_SUFFIX: &str = ".events.png";
+
 /// What happened to one corpus entry.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Outcome {
@@ -127,12 +135,30 @@ fn generate_inner(
             manifest.sources.sort();
             store.write_manifest(&manifest).ok();
         }
-        return Ok(Outcome::Skipped { key });
+        if entry.sibling_evt().is_none() {
+            return Ok(Outcome::Skipped { key });
+        }
+        // Plain goldens already exist; still fill in the `--send-events`
+        // PNGs when they are missing.
+        let input = scratch.join(INPUT_NAME);
+        std::fs::write(&input, &pdf_bytes)
+            .with_context(|| format!("writing {}", input.display()))?;
+        copy_sibling_evt(entry, scratch)?;
+        let added = ensure_event_goldens(entry, oracle, store, scratch, &input, &key)?;
+        return Ok(if added > 0 {
+            Outcome::Generated {
+                key,
+                artifacts: added,
+            }
+        } else {
+            Outcome::Skipped { key }
+        });
     }
 
     // The oracle works on this copy, never on the checkout.
     let input = scratch.join(INPUT_NAME);
     std::fs::write(&input, &pdf_bytes).with_context(|| format!("writing {}", input.display()))?;
+    copy_sibling_evt(entry, scratch)?;
 
     let mut artifacts: Vec<(String, Vec<u8>)> = Vec::new();
     let mut md5: Vec<Md5Line> = Vec::new();
@@ -158,6 +184,10 @@ fn generate_inner(
             artifacts.extend(harvest(scratch, pass)?);
         }
     }
+
+    let (event_artifacts, event_md5) = harvest_send_events(entry, oracle, scratch, &input)?;
+    artifacts.extend(event_artifacts);
+    md5.extend(event_md5);
 
     let mut names: Vec<String> = artifacts.iter().map(|(name, _)| name.clone()).collect();
     names.sort();
@@ -199,6 +229,123 @@ pub fn materialize_for_run(entry: &Entry, scratch: &Path, fixup: &Path) -> Resul
 pub fn harvest_for_run(input: &Path, pass: Pass) -> Result<Vec<(String, Vec<u8>)>> {
     let dir = input.parent().unwrap_or(Path::new("."));
     harvest(dir, pass)
+}
+
+/// Whether a stored artifact is a `--send-events` PNG rather than a plain
+/// render of the same page.
+#[must_use]
+pub fn is_events_png(name: &str) -> bool {
+    has_suffix(name, EVENTS_PNG_SUFFIX)
+}
+
+/// The distinct name a plain render PNG is stored under after `--send-events`.
+///
+/// `input.pdf.0.png` → `input.pdf.0.events.png`. Already-renamed names pass
+/// through so a second rename cannot collide with itself.
+#[must_use]
+pub fn events_png_name(render_name: &str) -> Option<String> {
+    let stem = render_name.strip_suffix(".png")?;
+    if stem.ends_with(".events") {
+        return Some(render_name.to_owned());
+    }
+    Some(format!("{stem}.events.png"))
+}
+
+/// Copies the source sibling `.evt` to `input.evt` next to the scratch PDF.
+fn copy_sibling_evt(entry: &Entry, scratch: &Path) -> Result<()> {
+    let Some(src) = entry.sibling_evt() else {
+        return Ok(());
+    };
+    let dest = scratch.join(INPUT_EVT);
+    std::fs::copy(&src, &dest)
+        .with_context(|| format!("copying {} to {}", src.display(), dest.display()))?;
+    Ok(())
+}
+
+/// Runs the oracle with `--send-events` and stores the renamed PNGs when
+/// they are not already in the manifest.
+fn ensure_event_goldens(
+    entry: &Entry,
+    oracle: &OraclePaths,
+    store: &Store,
+    scratch: &Path,
+    input: &Path,
+    key: &str,
+) -> Result<usize> {
+    if entry.sibling_evt().is_none() {
+        return Ok(0);
+    }
+    let Ok(mut manifest) = store.manifest(key) else {
+        return Ok(0);
+    };
+    if manifest.artifacts.iter().any(|name| is_events_png(name)) {
+        return Ok(0);
+    }
+    let (event_artifacts, event_md5) = harvest_send_events(entry, oracle, scratch, input)?;
+    if event_artifacts.is_empty() {
+        return Ok(0);
+    }
+    let added = event_artifacts.len();
+    for (name, bytes) in &event_artifacts {
+        store
+            .write_artifact(key, name, bytes)
+            .with_context(|| format!("writing golden artifact {name}"))?;
+        manifest.artifacts.push(name.clone());
+    }
+    manifest.md5.extend(event_md5);
+    manifest.artifacts.sort();
+    manifest.artifacts.dedup();
+    store
+        .write_manifest(&manifest)
+        .with_context(|| format!("writing manifest for {key}"))?;
+    Ok(added)
+}
+
+/// One named artifact harvested from a scratch directory.
+type Harvested = (String, Vec<u8>);
+
+/// One `--send-events --png --md5` oracle run, with PNGs renamed so they
+/// cannot collide with the plain render.
+fn harvest_send_events(
+    entry: &Entry,
+    oracle: &OraclePaths,
+    scratch: &Path,
+    input: &Path,
+) -> Result<(Vec<Harvested>, Vec<Md5Line>)> {
+    if entry.sibling_evt().is_none() {
+        return Ok((Vec::new(), Vec::new()));
+    }
+    let run = run_send_events(oracle, input)?;
+    let harvested = harvest(scratch, Pass::Render)?;
+    let artifacts: Vec<(String, Vec<u8>)> = harvested
+        .into_iter()
+        .filter_map(|(name, bytes)| events_png_name(&name).map(|renamed| (renamed, bytes)))
+        .collect();
+    let md5 = parse_md5_lines(&run.stdout)
+        .into_iter()
+        .filter_map(|line| {
+            let renamed = events_png_name(line.file_name())?;
+            Some(Md5Line {
+                path: renamed,
+                digest: line.digest,
+            })
+        })
+        .collect();
+    Ok((artifacts, md5))
+}
+
+fn run_send_events(oracle: &OraclePaths, input: &Path) -> Result<Run> {
+    let output = Command::new(&oracle.binary)
+        .args(determinism_args(&oracle.font_dir))
+        .args(["--png", "--md5", "--send-events"])
+        .arg(input)
+        .output()
+        .context("running the oracle (--send-events)")?;
+    Ok(Run {
+        ok: output.status.success(),
+        stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
+        stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
+    })
 }
 
 fn materialize(entry: &Entry, scratch: &Path, fixup: &Path) -> Result<Vec<u8>> {
@@ -369,5 +516,20 @@ mod tests {
         let base = Path::new("/tmp/base");
         assert_ne!(scratch_for(base, 0), scratch_for(base, 1));
         assert_eq!(scratch_for(base, 42), Path::new("/tmp/base/job-000042"));
+    }
+
+    #[test]
+    fn events_png_names_cannot_collide_with_the_plain_render() {
+        assert_eq!(
+            events_png_name("input.pdf.0.png").as_deref(),
+            Some("input.pdf.0.events.png")
+        );
+        assert_eq!(
+            events_png_name("input.pdf.0.events.png").as_deref(),
+            Some("input.pdf.0.events.png")
+        );
+        assert!(events_png_name("input.pdf.0.txt").is_none());
+        assert!(is_events_png("input.pdf.0.events.png"));
+        assert!(!is_events_png("input.pdf.0.png"));
     }
 }

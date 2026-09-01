@@ -345,10 +345,67 @@ fn compare_tier_b(
     tags: &mut Vec<String>,
     notes: &mut Vec<String>,
 ) -> Option<TierB> {
+    compare_pngs(
+        store,
+        manifest,
+        produced,
+        floor,
+        tags,
+        notes,
+        PngSet {
+            select: |name| {
+                crate::generate::has_suffix(name, ".png") && !crate::generate::is_events_png(name)
+            },
+            fail_tag: tag::PIXEL_FAIL,
+        },
+    )
+}
+
+/// `--send-events` PNGs against the oracle's event-driven goldens.
+fn compare_events_pngs(
+    store: &Store,
+    manifest: &Manifest,
+    produced: &Produced,
+    floor: f64,
+    tags: &mut Vec<String>,
+    notes: &mut Vec<String>,
+) -> Option<TierB> {
+    compare_pngs(
+        store,
+        manifest,
+        produced,
+        floor,
+        tags,
+        notes,
+        PngSet {
+            select: crate::generate::is_events_png,
+            fail_tag: tag::FORM_EVENTS,
+        },
+    )
+}
+
+/// Which PNGs a pixel walk compares, and the tag a miss scores as.
+#[derive(Clone, Copy)]
+struct PngSet {
+    select: fn(&str) -> bool,
+    fail_tag: &'static str,
+}
+
+/// Shared pixel walk. `fail_tag` is `pixel-fail` for the plain render and
+/// `form-events` for the event-driven one, so the two clusters stay apart.
+fn compare_pngs(
+    store: &Store,
+    manifest: &Manifest,
+    produced: &Produced,
+    floor: f64,
+    tags: &mut Vec<String>,
+    notes: &mut Vec<String>,
+    set: PngSet,
+) -> Option<TierB> {
     let pngs: Vec<&String> = manifest
         .artifacts
         .iter()
-        .filter(|name| crate::generate::has_suffix(name, ".png"))
+        .filter(|name| (set.select)(name))
         .collect();
     if pngs.is_empty() {
         return None;
@@ -369,7 +426,7 @@ fn compare_tier_b(
             worst.ssim = 0.0;
             worst.exact = false;
             worst.max_channel_diff = u8::MAX;
-            tags.push(tag::PIXEL_FAIL.to_owned());
+            tags.push(set.fail_tag.to_owned());
             notes.push(format!("{name} not produced"));
             continue;
         };
@@ -410,8 +467,8 @@ fn compare_tier_b(
         }
     }
 
-    if worst.ssim < floor && !tags.iter().any(|t| t == tag::PIXEL_FAIL) {
-        tags.push(tag::PIXEL_FAIL.to_owned());
+    if worst.ssim < floor && !tags.iter().any(|t| t == set.fail_tag) {
+        tags.push(set.fail_tag.to_owned());
         notes.push(format!("ssim {:.6} below floor {floor:.6}", worst.ssim));
     }
     Some(worst)
@@ -420,6 +477,160 @@ fn compare_tier_b(
 /// Builds the per-entry scratch path for a run.
 pub fn scratch(base: &Path, index: usize) -> PathBuf {
     scratch_for(base, index)
+}
+
+/// Scratch directory for a `--send-events` scoring pass, distinct from the
+/// plain-render scratch so the two cannot harvest each other's PNGs.
+pub fn scratch_events(base: &Path, index: usize) -> PathBuf {
+    base.join(format!("job-evt-{index:06}"))
+}
+
+/// Scoreboard path for a `--send-events` comparison.
+///
+/// Distinct from the plain-render row so existing entries do not move.
+#[must_use]
+pub fn form_events_path(id: &str) -> String {
+    format!("{id}#form-events")
+}
+
+/// Scores one corpus entry's sibling `.evt` against the event-driven golden.
+///
+/// Returns `None` when there is no sibling script, or when the tool cannot
+/// be asked (those files already have an `unsupported-tool` row). Dispatch
+/// is stubbed in `pdfrum-tool`, so a mismatch is the expected baseline.
+pub fn score_form_events(
+    entry: &Entry,
+    tool: &ToolPaths,
+    state: &ToolState,
+    store: &Store,
+    thresholds: &Thresholds,
+    scratch: &Path,
+    fixup: &Path,
+) -> Option<FileResult> {
+    let _script = entry.sibling_evt()?;
+    if !matches!(state, ToolState::Ready) {
+        return None;
+    }
+    let result = match score_form_events_inner(entry, tool, store, thresholds, scratch, fixup) {
+        Ok(result) => result,
+        Err(err) => FileResult {
+            path: form_events_path(&entry.id),
+            status: Status::Fail,
+            tags: vec![tag::FORM_EVENTS.to_owned()],
+            tier_a: TierA::default(),
+            tier_b: None,
+            notes: format!("{err:#}"),
+        },
+    };
+    std::fs::remove_dir_all(scratch).ok();
+    Some(result)
+}
+
+fn score_form_events_inner(
+    entry: &Entry,
+    tool: &ToolPaths,
+    store: &Store,
+    thresholds: &Thresholds,
+    scratch: &Path,
+    fixup: &Path,
+) -> Result<FileResult> {
+    std::fs::create_dir_all(scratch)?;
+    let pdf_bytes = crate::generate::materialize_for_run(entry, scratch, fixup)?;
+    let key = key_for(&pdf_bytes);
+    let path = form_events_path(&entry.id);
+
+    let Ok(manifest) = store.manifest(&key) else {
+        return Ok(FileResult {
+            path,
+            status: Status::Fail,
+            tags: vec![tag::FORM_EVENTS.to_owned()],
+            tier_a: TierA::default(),
+            tier_b: None,
+            notes: format!("no golden for {key}; run generate-goldens first"),
+        });
+    };
+    if !manifest
+        .artifacts
+        .iter()
+        .any(|name| crate::generate::is_events_png(name))
+    {
+        return Ok(FileResult {
+            path,
+            status: Status::Fail,
+            tags: vec![tag::FORM_EVENTS.to_owned()],
+            tier_a: TierA::default(),
+            tier_b: None,
+            notes: "no --send-events golden; run generate-goldens".to_owned(),
+        });
+    }
+
+    let input = scratch.join("input.pdf");
+    std::fs::write(&input, &pdf_bytes)?;
+    if let Some(src) = entry.sibling_evt() {
+        std::fs::copy(src, scratch.join("input.evt"))?;
+    }
+
+    let produced =
+        invoke_tool_send_events(tool, &input).context("invoking pdfrum-tool --send-events")?;
+    let mut tags = Vec::new();
+    let mut notes = Vec::new();
+    if !produced.crashed.is_empty() {
+        tags.push(tag::FORM_EVENTS.to_owned());
+        notes.push(format!("died by signal on {}", produced.crashed.join(", ")));
+    }
+    let tier_b = compare_events_pngs(
+        store,
+        &manifest,
+        &produced,
+        thresholds.ssim_for(&entry.id),
+        &mut tags,
+        &mut notes,
+    );
+    if tags.is_empty() && tier_b.is_none() {
+        tags.push(tag::FORM_EVENTS.to_owned());
+        notes.push("no --send-events PNGs compared".to_owned());
+    }
+    let status = if tags.is_empty() {
+        Status::Pass
+    } else {
+        Status::Fail
+    };
+    Ok(FileResult {
+        path,
+        status,
+        tags,
+        tier_a: TierA::default(),
+        tier_b,
+        notes: notes.join("; "),
+    })
+}
+
+/// `--png --md5 --send-events`, harvesting PNGs under the events name.
+fn invoke_tool_send_events(tool: &ToolPaths, input: &Path) -> Result<Produced> {
+    let output = Command::new(&tool.binary)
+        .args(crate::oracle::determinism_args(&tool.font_dir))
+        .args(["--png", "--md5", "--send-events"])
+        .arg(input)
+        .output()?;
+    let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+    let mut produced = Produced {
+        page_count: parse_page_count(&stderr),
+        crashed: if output.status.code().is_none() {
+            vec!["send-events".to_owned()]
+        } else {
+            Vec::new()
+        },
+        artifacts: Vec::new(),
+    };
+    let harvested = crate::generate::harvest_for_run(input, crate::oracle::Pass::Render)?;
+    produced.artifacts = harvested
+        .into_iter()
+        .filter_map(|(name, bytes)| {
+            crate::generate::events_png_name(&name).map(|renamed| (renamed, bytes))
+        })
+        .collect();
+    produced.artifacts.sort();
+    Ok(produced)
 }
 
 #[cfg(test)]
@@ -848,6 +1059,70 @@ mod tests {
         assert!(tier_b.ssim < 0.01);
         assert!(!tier_b.exact);
         assert_eq!(tier_b.pages, 2);
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn send_events_pngs_are_ignored_by_the_plain_tier_b_walk() {
+        // A form-events golden lives in the same directory; comparing it
+        // here would fail every existing file that gained one.
+        let (root, store) = temp_store("events-ignored");
+        let manifest = manifest_with(&["input.pdf.0.png", "input.pdf.0.events.png"], 1);
+        store.write_manifest(&manifest).unwrap();
+        let plain = png(8, 8, 40);
+        store
+            .write_artifact(&manifest.key, "input.pdf.0.png", &plain)
+            .unwrap();
+        store
+            .write_artifact(&manifest.key, "input.pdf.0.events.png", &png(8, 8, 200))
+            .unwrap();
+
+        let produced = Produced {
+            artifacts: vec![("input.pdf.0.png".to_owned(), plain)],
+            page_count: Some(1),
+            crashed: vec![],
+        };
+        let (mut tags, mut notes) = (Vec::new(), Vec::new());
+        let tier_b =
+            compare_tier_b(&store, &manifest, &produced, 0.99, &mut tags, &mut notes).unwrap();
+        assert_eq!(tier_b.pages, 1);
+        assert_eq!(tier_b.ssim, 1.0);
+        assert!(tags.is_empty(), "{tags:?}");
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn form_events_path_does_not_collide_with_the_plain_id() {
+        assert_eq!(
+            form_events_path("resources/pixel/checkbox_radiobutton.pdf"),
+            "resources/pixel/checkbox_radiobutton.pdf#form-events"
+        );
+        assert_ne!(form_events_path("resources/x.pdf"), "resources/x.pdf");
+    }
+
+    #[test]
+    fn an_events_mismatch_is_tagged_form_events_not_pixel_fail() {
+        let (root, store) = temp_store("events-mismatch");
+        let manifest = manifest_with(&["input.pdf.0.png", "input.pdf.0.events.png"], 1);
+        store.write_manifest(&manifest).unwrap();
+        store
+            .write_artifact(&manifest.key, "input.pdf.0.png", &png(8, 8, 40))
+            .unwrap();
+        store
+            .write_artifact(&manifest.key, "input.pdf.0.events.png", &png(8, 8, 0))
+            .unwrap();
+
+        let produced = Produced {
+            artifacts: vec![("input.pdf.0.events.png".to_owned(), png(8, 8, 255))],
+            page_count: Some(1),
+            crashed: vec![],
+        };
+        let (mut tags, mut notes) = (Vec::new(), Vec::new());
+        let tier_b =
+            compare_events_pngs(&store, &manifest, &produced, 0.99, &mut tags, &mut notes).unwrap();
+        assert!(tier_b.ssim < 0.99);
+        assert_eq!(tags, [tag::FORM_EVENTS]);
+        assert!(!tags.iter().any(|t| t == tag::PIXEL_FAIL));
         std::fs::remove_dir_all(&root).ok();
     }
 

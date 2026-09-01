@@ -61,6 +61,10 @@ pub mod tag {
     pub const SIZE_MISMATCH: &str = "size-mismatch";
     /// A golden or candidate PNG would not decode.
     pub const BAD_PNG: &str = "bad-png";
+    /// A `--send-events` render differed from the oracle's event-driven
+    /// golden. A separate scoreboard row (`{path}#form-events`), so the
+    /// plain-render entry is not moved.
+    pub const FORM_EVENTS: &str = "form-events";
 }
 
 /// How one file's text dumps scored, counted two ways.
