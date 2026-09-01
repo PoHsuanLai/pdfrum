@@ -91,6 +91,17 @@ pub enum Phase {
     /// transformed into device space and clamped by
     /// [`crate::path::hard_clip`]. Two `BezPath` builds per fill, per object.
     PathXform,
+    /// [`crate::shading::draw_patches`] — the Coons and tensor mesh half of a
+    /// shading, which rasterizes patch by patch through a scratch device
+    /// rather than writing a buffer.
+    ///
+    /// It sits beside `shading`, not inside it: `Phase::Shading` wraps
+    /// `draw_to_pixmap`, which the mesh kinds never reach. Until M12b P3 added
+    /// this the mesh half was in no bucket at all, and its cost showed up as
+    /// interpretation — which is why `shading_axial_radial`'s engine residue
+    /// was read as unattributed `pattern.rs` overhead. Like `path prep`, the
+    /// span covers the device calls it makes.
+    Patches,
 }
 
 /// One allocation site in the walk, named by what it allocates.
@@ -148,9 +159,9 @@ pub enum Site {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Profile {
     /// Time in each phase, indexed as [`Phase`] orders them.
-    pub phase_time: [Duration; 10],
+    pub phase_time: [Duration; 11],
     /// How many times each phase was entered.
-    pub phase_calls: [u64; 10],
+    pub phase_calls: [u64; 11],
     /// How many allocations each site made, indexed as [`Site`] orders them.
     pub site_count: [u64; 10],
     /// How many bytes those allocations asked for, where the size is knowable
@@ -174,11 +185,12 @@ impl Phase {
             Phase::RectTest => 7,
             Phase::ZeroScan => 8,
             Phase::PathXform => 9,
+            Phase::Patches => 10,
         }
     }
 
     /// The phases in the order the arrays index them.
-    pub const ALL: [Phase; 10] = [
+    pub const ALL: [Phase; 11] = [
         Phase::Clip,
         Phase::Color,
         Phase::Glyphs,
@@ -189,6 +201,7 @@ impl Phase {
         Phase::RectTest,
         Phase::ZeroScan,
         Phase::PathXform,
+        Phase::Patches,
     ];
 
     /// A short name for a report column.
@@ -205,6 +218,7 @@ impl Phase {
             Phase::RectTest => "rect test",
             Phase::ZeroScan => "zero scan",
             Phase::PathXform => "path xform",
+            Phase::Patches => "patches",
         }
     }
 }
@@ -273,8 +287,8 @@ mod imp {
         /// form's objects are walked from inside the phase timing an enclosing
         /// object.
         static PROFILE: Cell<Profile> = const { Cell::new(Profile {
-            phase_time: [Duration::ZERO; 10],
-            phase_calls: [0; 10],
+            phase_time: [Duration::ZERO; 11],
+            phase_calls: [0; 11],
             site_count: [0; 10],
             site_bytes: [0; 10],
         }) };

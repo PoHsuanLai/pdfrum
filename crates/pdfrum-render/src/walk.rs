@@ -2038,7 +2038,16 @@ pub(crate) fn draw_shading_into<B: RasterBackend>(
             // cells overpaint identically on both backends; the shading's
             // alpha is applied exactly once, at the blit below.
             let mut scratch = backend.new_target(w, h, peniko::Color::TRANSPARENT);
-            shading::draw_patches(&mut scratch, shading, rect, matrix, tensor);
+            // The mesh half of the shading phase. It was outside every bucket
+            // until M12b P3, which is why `shading_axial_radial`'s engine
+            // residue looked like unattributed `pattern.rs` overhead: the
+            // document draws 28368 patches through `fill_path` and none of the
+            // engine-side work that decides them was counted anywhere. Like
+            // `path prep`, the span covers the device calls it makes, which
+            // the seam decorator has already charged to RASTER.
+            crate::walkprofile::phase(crate::walkprofile::Phase::Patches, || {
+                shading::draw_patches(&mut scratch, shading, rect, matrix, tensor);
+            });
             let pixels = backend.finish(scratch);
             device.draw_image(&pixels, at, ImageQuality::Nearest, f32::from(alpha) / 255.0);
         }
