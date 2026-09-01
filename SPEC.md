@@ -994,8 +994,22 @@ the script engine — `max_script_loop_iterations: u64 = 10_000_000`,
 `max_calculate_depth: u32 = 1` (upstream's `busy_` flag permits no nesting at
 all, `cjs_runtime.cpp`). The first three map onto boa's `RuntimeLimits`; what
 they do NOT bound — heap growth and regex backtracking — is recorded in
-`docs/status/M15.md` with the measurement, pending the oracle comparison the
-user asked for.
+`docs/status/M15.md` with the measurement. *Settled 2026-09-02 by
+measurement against a V8-enabled PDFium (prebuilt `chromium/8021`, three
+days from our pinned oracle; `docs/status/data/v8probe/REPORT.md`): the
+oracle bounds **none** of loop, heap or regex with any policy of its own —
+`while(true)` ran until an external SIGKILL at 600 s; heap growth ran to
+1.58 GB and then died in V8's own `Reached heap limit` abort **with a core
+dump**, which PDFium exposes no callback to survive; `/(a+)+$/` is
+exponential with no budget. Its one authored cap, 256 MiB per `ArrayBuffer`,
+touches none of the three. Ruling (user): document. pdfrum is therefore
+bounded where the oracle is unbounded (loop, recursion, stack) and unbounded
+only where the oracle is too (heap, regex); a host running untrusted
+documents in a shared process applies an external wall-clock and RSS
+(cgroup) cap, which is also the only thing that works for PDFium. Reopening
+condition: a consumer stating that threat model, at which point the fix is
+a cooperative deadline at boa's limit tick if that hook is reachable, and
+otherwise out-of-process execution — not engine surgery.*
 
 **[spec] 2026-08-29 (M6 implementation, three corrections to the rulings
 above).**
