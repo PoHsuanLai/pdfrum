@@ -561,21 +561,50 @@ changing the cold convention; it is documented and ratcheted deliberately.
   `rustc-hash` and `fearless_simd` got, and the walk's real cost gets optimized
   on its own terms instead.
 
-- **P3 — The scalar conversion loops.** `pdfrum_render::image::to_pixmap`
-  measured ~4 us per output pixel (M12 §10) — the number that makes three 70x53
-  widget thumbnails cost 45 ms on `mixed_formfield`, the `forms` class's 3.35x
-  warm residue. M12's P1 optimized the *compositor* and never came back to this
-  path; the per-pixel work (colourspace -> RGBA, premultiply, `/Decode`,
-  transfer function) is scalar against the oracle's scanline kernels. Attack it
-  as loop structure first — hoist per-image decisions out of the per-pixel body
-  the way the stencil test already was, work through row slices, specialize the
-  common `(8bpc, DeviceRGB, no transfer, no mask)` case — and only *then*, if a
-  measurement says the remaining cost is arithmetic rather than dispatch,
-  revisit SIMD. **The `fearless_simd` reopening condition still stands and is
-  about span length, not about this loop** (spans there are 1 px; these are full
-  image rows, which is a *different* workload and may genuinely vectorize — if
-  so, that is a new measurement, not a reversal of §3.9, and it gets its own
-  A/B against a tuned scalar baseline).
+- **P3 — ~~The scalar conversion loops~~ → the walk's per-object overhead.**
+  **Retargeted 2026-08-31, after P1 and P2 took the original target away.** The
+  item as first written aimed at `to_pixmap`'s ~4 us per output pixel (M12 §10).
+  Two independent measurements retired that premise before this item started,
+  which is the system working rather than a plan failing:
+  - **P1 already took the largest piece.** `to_pixmap`'s float round trip was
+    *proved* to be the identity on all 256 byte values and deleted (`bfb6f42`),
+    and the `/Decode` array became a 1 KiB lookup table instead of an
+    evaluation per byte over 100 M bytes (`33bcc3f`). Those are the loop-
+    structure wins this item was going to go looking for.
+  - **P2 measured what was left and it is small.** The `image` phase is **1.2%
+    of a warm engine half**, because M12 §9.1's cache already pays it, and
+    colour conversion is **≤ 7.2%** of the engine half on every profiled
+    document. On `image_en_fqa` — the document the original P3 text leaned on —
+    `to_pixmap` totals **0.1 ms**. The residue is per-image overhead across 552
+    small images, which is a different problem from a slow per-pixel loop.
+
+  What is left there is genuinely arithmetic and genuinely small: the Adobe
+  CMYK 4-D interpolated table, ~403 ms on `image_bug_718762` (P1 §, left
+  deliberately). It stays a candidate but it is **not** the biggest one.
+
+  **The biggest one, and this item's new remit: interpretation.** P2's profile
+  (docs/status/M12b-P2.md §9) leaves exactly one bucket standing —
+  **interpretation is 60–90% of the engine half, and after P2's three landed
+  changes it is essentially all of it.** It is not one function and not a loop:
+  on `vector_paths_1751` the engine half is 3.98 ms across 5010 objects,
+  **794 ns per object**, spent in the dispatch `match`, the cull test,
+  `GraphicsState` reads, the `RenderCtx` threading, and `draw_path`'s five-case
+  decision tree. **No P-item owned this**, which is why it is being given one.
+
+  This is per-object *constant* overhead, so the only way to move it is to **do
+  less per object**. Rank by measurement before touching anything: the cull test
+  (an object rejected early costs nothing else), the dispatch shape, and the
+  `GraphicsState`/`RenderCtx` access pattern are the three named suspects, and
+  P2's default-off instrument (`0ebc7e9`) is already in the tree to attribute
+  between them. **Vectorization is not the tool here** and neither is an arena —
+  P2 closed that. `shading_axial_radial`'s engine half is **61% `pattern.rs`
+  residue**, which P2 flagged as unowned; fold it into this item's ranking.
+
+  Two constraints carried from the retired text, because they still bind: the
+  `fearless_simd` reopening condition is about **span length** and nothing in
+  this item reopens it; and if a measurement ever does justify SIMD on full
+  image rows, that is a *new* measurement against a tuned scalar baseline, not a
+  reversal of M12 §3.9.
 
 - **P4 — `memchr` stays closed, and the reason is written down.** It needs an
   *input*, not a bar: `open` is tens of microseconds on all 44 corpus documents
