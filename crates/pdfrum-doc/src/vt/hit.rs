@@ -78,7 +78,7 @@ use crate::vt::{Config, Layout, Metrics, Section, word_width};
 ///
 /// `word == -1` is the line header — the position before the line's first
 /// character. Every other value names the character the caret sits after.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct Place {
     /// Which paragraph.
     pub section: u32,
@@ -98,13 +98,24 @@ impl Place {
             word,
         }
     }
+
+    /// The place every layout begins at: the header of its first line.
+    ///
+    /// A constant rather than a query, because it does not depend on the
+    /// layout — the first caret position is `(0, 0, -1)` whatever the text
+    /// is, including no text at all. [`begin_place`] is the same value,
+    /// spelled for symmetry with [`end_place`], which does need the layout.
+    #[must_use]
+    pub fn start() -> Place {
+        Place::new(0, 0, -1)
+    }
 }
 
 /// The first place in a layout: the header of its first line.
 #[must_use]
 pub fn begin_place(layout: &Layout) -> Place {
     let _ = layout;
-    Place::new(0, 0, -1)
+    Place::start()
 }
 
 /// The last place in a layout: after the last character of its last line.
