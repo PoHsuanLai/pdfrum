@@ -85,7 +85,10 @@ PRE_ARGUED = {
 # the contamination signature (M12b P2 saw +66.8% on one), not a result.
 CONTAMINATION_PCT = 40.0
 
-UNIT = {"ns": 1.0, "us": 1e3, "ms": 1e6, "s": 1e9}
+# criterion prints microseconds with the MICRO SIGN (U+00B5), not "us", and a
+# fast benchmark is the only place it does — which is why the warm groups were
+# the first to hit it. Both spellings are accepted so neither can be missed.
+UNIT = {"ns": 1.0, "us": 1e3, "µs": 1e3, "ms": 1e6, "s": 1e9}
 
 # `render-warm` hoists the RenderSession out of the timed closure and is the
 # group that isolates the render; M12's exit target is judged on it.
