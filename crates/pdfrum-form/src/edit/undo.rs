@@ -324,6 +324,17 @@ impl UndoStack {
     }
 }
 
+/// Two stacks are equal when they hold the same items with the cursor in the
+/// same place. The capacity and the enable switch are configuration rather
+/// than content, so they do not participate.
+impl PartialEq for UndoStack {
+    fn eq(&self, other: &UndoStack) -> bool {
+        self.pos == other.pos && self.items == other.items
+    }
+}
+
+impl Eq for UndoStack {}
+
 impl Default for UndoStack {
     fn default() -> UndoStack {
         UndoStack::with_max(UndoStack::DEFAULT_MAX)
