@@ -1090,33 +1090,68 @@ fn load_mask_image<R: Resolve>(
         diags.record(Severity::Recovered, DiagKind::MaskDropped, None);
         return None;
     };
-    let pixels = usize::try_from(image.width)
-        .ok()?
-        .checked_mul(usize::try_from(image.height).ok()?)?;
-    let mut alpha = vec![0u8; pixels];
-    for y in 0..image.height {
-        for x in 0..image.width {
-            let rgb = image.pixels.color_at(x, y, image.width);
-            let Some(index) = usize::try_from(y)
-                .ok()
-                .and_then(|row| row.checked_mul(usize::try_from(image.width).ok()?))
-                .and_then(|base| base.checked_add(usize::try_from(x).ok()?))
-            else {
-                continue;
-            };
-            if let Some(slot) = alpha.get_mut(index) {
-                // A soft mask's alpha is its luminosity; a stencil's is its
-                // coverage.
-                *slot = rgb.to_bytes()[0];
-            }
-        }
-    }
+    let alpha = mask_plane(&image.pixels, image.width, image.height)?;
     Some(ImageMask::Alpha {
         width: image.width,
         height: image.height,
-        alpha: alpha.into(),
+        alpha,
         stencil,
     })
+}
+
+/// A decoded mask image's samples as the one-byte-per-pixel coverage plane an
+/// [`ImageMask::Alpha`] carries.
+///
+/// A soft mask's alpha is its luminosity and a stencil's is its coverage;
+/// both are the **first byte of the sample**, so this is
+/// [`Pixels::sample_bytes`] over the image — the byte path
+/// `the_byte_path_is_exactly_the_float_path` proves equal to
+/// `color_at(..).to_bytes()` over the whole domain — rather than the float
+/// round trip through [`Rgb`](crate::color::Rgb) that M12b P1 §7 removed from
+/// `pdfrum_render::image::to_pixmap` for -35% on the image class.
+///
+/// **That change reached the render path only.** This is the one call site in
+/// the *build* that walks a whole image the same way, and on a document of
+/// soft-masked thumbnails it is the larger of the two: `image_en_fqa` builds
+/// 29.8 million mask samples per page and never converts more than four of the
+/// base image's.
+///
+/// Two arms then take the index out of the loop as well. `sample_bytes`
+/// derives it from `(x, y, width)` with a `checked_mul` and a `checked_add`
+/// per sample, and a row-major walk already knows it; an `Indexed` mask's
+/// palette is encoded once rather than per sample, which is what
+/// [`Pixels::byte_palette`] exists for. Both are pinned against the general
+/// arm by `the_mask_planes_fast_arms_are_the_general_one`.
+///
+/// `None` only when the dimensions do not multiply inside a `usize`.
+fn mask_plane(pixels: &Pixels, width: u32, height: u32) -> Option<Box<[u8]>> {
+    let len = usize::try_from(width)
+        .ok()?
+        .checked_mul(usize::try_from(height).ok()?)?;
+    let mut alpha = Vec::with_capacity(len);
+    match (pixels, pixels.byte_palette()) {
+        // The overwhelmingly common shape, and the one every `/SMask` in the
+        // corpus takes: a one-component plane whose sample *is* the alpha.
+        (Pixels::Gray8(data), _) => alpha.extend(data.iter().take(len).copied()),
+        (Pixels::Indexed { indices, .. }, Some(palette)) => alpha.extend(
+            indices
+                .iter()
+                .take(len)
+                .map(|&i| palette.get(usize::from(i)).map_or(0, |entry| entry[0])),
+        ),
+        _ => {
+            for y in 0..height {
+                for x in 0..width {
+                    alpha.push(pixels.sample_bytes(x, y, width)[0]);
+                }
+            }
+        }
+    }
+    // A source plane shorter than the image it describes reads as fully
+    // transparent past its end, which is what the zero-filled `Vec` the old
+    // walk wrote into did for exactly those samples.
+    alpha.resize(len, 0);
+    Some(alpha.into())
 }
 
 #[cfg(test)]
@@ -1721,6 +1756,56 @@ mod tests {
                 "an out-of-range read agrees too"
             );
         }
+    }
+
+    /// [`super::mask_plane`]'s two fast arms must be its general arm, which is
+    /// `sample_bytes` per pixel, which is in turn the float path by the test
+    /// above. Asserted here rather than argued in the comment, because the
+    /// conformance gate can only see the mask shapes the corpus happens to
+    /// carry and an `Indexed` `/SMask` is not one of them.
+    #[test]
+    fn the_mask_planes_fast_arms_are_the_general_one() {
+        let general = |pixels: &Pixels, w: u32, h: u32| -> Vec<u8> {
+            (0..h)
+                .flat_map(|y| (0..w).map(move |x| (x, y)))
+                .map(|(x, y)| pixels.sample_bytes(x, y, w)[0])
+                .collect()
+        };
+
+        // Grey, at the exact length, short, and long.
+        for (w, h, len) in [(4_u32, 3_u32, 12_usize), (4, 3, 7), (4, 3, 20), (1, 1, 1)] {
+            let data: Box<[u8]> = (0..len).map(|i| (i * 31 % 256) as u8).collect();
+            let pixels = Pixels::Gray8(data);
+            let got = super::mask_plane(&pixels, w, h).expect("dimensions multiply");
+            let mut want = general(&pixels, w, h);
+            want.resize((w * h) as usize, 0);
+            assert_eq!(&got[..], &want[..], "gray {w}x{h}, {len} bytes");
+        }
+
+        // Indexed, whose palette the fast arm encodes once.
+        let palette: Box<[Rgb]> = (0..=255u8)
+            .map(|v| Rgb {
+                r: f32::from(v) / 255.0,
+                g: 0.5,
+                b: 0.25,
+            })
+            .collect();
+        for (w, h, len) in [(8_u32, 4_u32, 32_usize), (8, 4, 10)] {
+            let pixels = Pixels::Indexed {
+                indices: (0..len).map(|i| (i * 7 % 256) as u8).collect(),
+                palette: palette.clone(),
+            };
+            let got = super::mask_plane(&pixels, w, h).expect("dimensions multiply");
+            let mut want = general(&pixels, w, h);
+            want.resize((w * h) as usize, 0);
+            assert_eq!(&got[..], &want[..], "indexed {w}x{h}, {len} indices");
+        }
+
+        // And the general arm still answers for the kinds that have no fast
+        // one, so a mask that is not grey is not silently dropped.
+        let rgb = Pixels::Rgb8((0..24u8).collect());
+        let got = super::mask_plane(&rgb, 4, 2).expect("dimensions multiply");
+        assert_eq!(&got[..], &general(&rgb, 4, 2)[..]);
     }
 
     #[test]
