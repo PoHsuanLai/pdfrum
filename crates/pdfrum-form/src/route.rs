@@ -42,6 +42,9 @@ use crate::field::text::{Disposition, Motion, TextAction};
 use crate::field::{self, ChoiceState, FieldState, ToggleKind, ToggleState};
 use crate::hit::{self, Permissions};
 use crate::page::{PageForm, WidgetInfo};
+
+/// `/A` — the action an annotation performs when it is activated.
+const ACTION: &pdfrum_object::Name = &pdfrum_object::Name::from_static(b"A");
 use crate::session::{AnnotId, DragAnchor, FieldId, FocusTarget, FormSession};
 use crate::update::{AppearanceUpdate, Response, UpdateKind};
 use crate::{focus, tab};
@@ -350,7 +353,9 @@ fn key_down<R: Resolve>(
         return Response::ignored();
     };
     let Some(field) = target.field() else {
-        return Response::ignored();
+        // A focused annotation that is not a widget — a link, once a caller
+        // has put links in the focus ring — fires its action on Return.
+        return annot_key(session, ctx, target.annot(), key, modifiers);
     };
     let annot = target.annot();
 
@@ -416,6 +421,48 @@ fn char_typed<R: Resolve>(
         }
         Some(FieldState::Button(_)) | None => Response::ignored(),
     }
+}
+
+/// A key for a focused annotation that is not a form widget.
+///
+/// **Return fires its action, and nothing else does.** Shift, Space and the
+/// accelerator are each explicitly *not* an activation — the ported
+/// assertions check those rejections as specifically as they check the
+/// acceptance, because "any key activates a link" is the plausible wrong
+/// implementation.
+///
+/// The action comes back as a **request** the caller may inspect, ignore or
+/// perform, with the modifiers that were held riding along: a link's action
+/// is expected to see them, which is how a control-click opens in a new
+/// window. Nothing is followed here — this crate navigates nothing.
+fn annot_key<R: Resolve>(
+    session: &FormSession,
+    ctx: &Context<'_, R>,
+    annot: AnnotId,
+    key: Key,
+    modifiers: Modifiers,
+) -> Response {
+    let _ = session;
+    if key != Key::RETURN {
+        return Response::ignored();
+    }
+    let Some(action) = action_of(ctx, annot) else {
+        return Response::ignored();
+    };
+    Response::with(vec![AppearanceUpdate::new(
+        annot,
+        UpdateKind::ActionRequested {
+            action: Box::new(action),
+            modifiers,
+        },
+    )])
+}
+
+/// The action an annotation carries, from its `/A`.
+fn action_of<R: Resolve>(ctx: &Context<'_, R>, annot: AnnotId) -> Option<pdfrum_doc::nav::Action> {
+    let dict = ctx.page.dicts.get(&annot.index)?;
+    let action = dict.dict(ACTION, ctx.resolve)?;
+    Some(pdfrum_doc::nav::Action::new(action))
 }
 
 /// A key for a focused text field.

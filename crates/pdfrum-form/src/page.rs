@@ -68,6 +68,12 @@ pub struct PageForm {
     pub focusables: Vec<(Subtype, Focusable)>,
     /// The widgets, with what a field's interaction state needs.
     pub widgets: Vec<WidgetInfo>,
+    /// Every annotation's dictionary, keyed by its raw `/Annots` index.
+    ///
+    /// A `BTreeMap` rather than a `Vec` because the walk skips entries it
+    /// cannot read as dictionaries, so the indices have gaps and a positional
+    /// list would silently shift everything after one.
+    pub dicts: std::collections::BTreeMap<u32, Dict>,
 }
 
 /// One widget annotation, read far enough to build its field's state.
@@ -198,6 +204,7 @@ pub fn read<R: Resolve>(page: u32, page_dict: &Dict, catalog: &Dict, r: &R) -> P
         // The focus ring's membership is the caller's choice of subtypes, so
         // every annotation is offered here and the ring filters.
         form.focusables.push((subtype, Focusable { id, rect }));
+        form.dicts.insert(id.index, dict);
     }
     form
 }

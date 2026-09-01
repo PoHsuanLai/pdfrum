@@ -1,7 +1,9 @@
 //! A live form-filling session: events in, appearance updates out.
 
 use pdfrum_form::session::FormSession as Inner;
-use pdfrum_form::{Button, Event, Key, Modifiers, Point, Response, SessionConfig};
+use pdfrum_form::{Button, Event, Key, Modifiers, Point, Response};
+
+pub use pdfrum_form::SessionConfig;
 
 use crate::Document;
 
