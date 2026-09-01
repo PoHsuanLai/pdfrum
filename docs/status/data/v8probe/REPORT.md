@@ -69,7 +69,7 @@ Run harness per case:
 |---|---|---|---|---|---|---|
 | control | `app.alert('hi')` | 120s | 0.02s | 0 | 16.6 MB | `Alert: hi` |
 | **(a) loop** | `while(true){}` | 120s | **120.00s** | **137 SIGKILL(timeout)** | 2.0 MB | `before-loop` only; never returns |
-| (a) loop confirm | `while(true){}` | 600s | **600.00s** | **137 SIGKILL(timeout)** | 2.0 MB | `before-loop` only; never returns |
+| (a) loop confirm | `while(true){}` | 600s | **600.01s** | **137 SIGKILL(timeout)** | 2.0 MB | `before-loop` only; never returns |
 | **(b) string** | `s='a'; 30x s=s+s` | 120s | **0.04s** | **0** | 17.2 MB | `before-string` only -- silent RangeError, no `after` |
 | (b) string N=28 | 28x (len 2^28) | 120s | 0.00s | 0 | 17.4 MB | completes: `after-string len=268435456` |
 | (b) string N=29 | 29x (len 2^29) | 120s | 0.00s | 0 | 17.4 MB | `before-string` only -- silent RangeError |
