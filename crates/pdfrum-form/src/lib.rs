@@ -30,6 +30,7 @@ pub mod edit;
 pub mod error;
 pub mod event;
 pub mod field;
+pub mod hit;
 pub mod session;
 pub mod tab;
 
@@ -38,5 +39,6 @@ pub use edit::{Place, Range, Selection, UndoItem, UndoStack};
 pub use error::Error;
 pub use event::{Button, Event, Key, Modifiers, Point};
 pub use field::{ChoiceConfig, ChoiceState, FieldState, TextConfig, TextState, ToggleState};
+pub use hit::{Candidate, LayoutBand, Permissions, WidgetHit};
 pub use session::{AnnotId, DragAnchor, FieldId, FocusTarget, FormSession, SessionConfig};
 pub use tab::{FocusRing, Focusable, TabOrder};
