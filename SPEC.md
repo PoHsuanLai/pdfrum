@@ -979,6 +979,9 @@ corpus-wide test shows it matters (E4). `unicode-bidi` gains pdfrum-doc as a
 consumer for variable-text UBA line ordering, validated against the six
 pinned orderings before vt layout is written (E5). `Limits` gains
 `max_name_tree_depth: u32 = 32` (additive).
+**[spec] 2026-09-01 (M14):** `Limits` gains `max_undo_items: u32 = 10_000`
+(the oracle's `kEditUndoMaxItems`), enforced minimum 4 (`kMinEditUndoMaxItems`
+— a `ReplaceSelection` undo group is four items). Additive.
 
 **[spec] 2026-08-29 (M6 implementation, three corrections to the rulings
 above).**
@@ -1052,6 +1055,19 @@ What is authorized: the three producers `SetAsTextField`, `SetAsComboBox` and
 declined, unchanged: porting `CPWL_EditImpl` itself, and everything else in
 `fpdfsdk/pwl` — the editing widgets, the caret, the scroll bars, the focus
 machinery. None of it is reachable from a generated appearance.
+
+**[spec] 2026-09-01 (M14) — clarifying clause, not a reversal.** The sentence
+above stays true and continues to bind `pdfrum-doc`: none of `fpdfsdk/pwl` is
+reachable from a generated appearance, and the editing machinery stays out of
+this crate on that ground. PLAN.md §M14 puts the *interaction* half — focus,
+caret, selection, undo, the event cascade — in a separate crate `pdfrum-form`
+(SPEC §15), which consumes this crate's `vt` and `ap` modules and adds nothing
+to them beyond three additive changes: `FieldFlags` gains `is_editable_combo`,
+`is_multi_select`, `do_not_scroll`; `ap::field_body` gains an optional
+caret/selection highlight; `vt` gains `place_at_point`, `point_at_place` and
+the word-index/place pair. The guard this ruling was written for — no second
+variable-text engine — is preserved: `docs/design/pdfrum-form.md` §1.20
+measures the editing half at six additions over `vt`, none of them layout.
 
 Two further behaviors this makes necessary, both recorded here because they
 are contracts rather than implementation:
@@ -1327,3 +1343,12 @@ C++ file references); **Divergences** (where we deliberately differ and why);
 A brief that proposes changing this spec triggers §0.
 
 Orchestrator affirmation 2026-08-30: pdfrum-edit divergence D17 accepted — metadata encryption follows /EncryptMetadata; the C++'s unconditional skip is a destructive upstream writer bug and is not reproduced.
+
+## 15. `pdfrum-form`  *(behavior: `fpdfsdk/formfiller`, `fpdfsdk/pwl` — the interaction half)*
+
+**[spec] 2026-09-01 — section opened by the M14 ruling (PLAN.md §M14).**
+Contracts are written here by the M14 implementation agent from
+`docs/design/pdfrum-form.md` §3.2 (types beyond SPEC), §3.5 (facade API) and
+§3.6 (the `Cascade` seam) in its first `[spec]` commit. Until then that brief
+is the contract. Crate sits between `pdfrum-doc` and `pdfrum` in the publish
+order; no back-edge; no new external dependency.
