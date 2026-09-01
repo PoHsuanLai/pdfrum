@@ -24,6 +24,7 @@ members = [
     "crates/pdfrum-raster-vello-gpu",
     "crates/pdfrum-text",
     "crates/pdfrum-doc",
+    "crates/pdfrum-form",
     "crates/pdfrum-edit",
     "crates/pdfrum",
     "crates/pdfrum-tool",
@@ -79,6 +80,7 @@ pdfrum-raster-tinyskia = { path = "crates/pdfrum-raster-tinyskia", version = "=0
 pdfrum-raster-vello-gpu = { path = "crates/pdfrum-raster-vello-gpu", version = "=0.1.0" }
 pdfrum-text = { path = "crates/pdfrum-text", version = "=0.1.0" }
 pdfrum-doc = { path = "crates/pdfrum-doc", version = "=0.1.0" }
+pdfrum-form = { path = "crates/pdfrum-form", version = "=0.1.0" }
 pdfrum-edit = { path = "crates/pdfrum-edit", version = "=0.1.0" }
 pdfrum = { path = "crates/pdfrum", version = "=0.1.0" }
 # The M12 bench corpus list. A leaf — it depends on nothing, which is what lets

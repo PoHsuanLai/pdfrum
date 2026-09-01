@@ -1354,6 +1354,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "pdfrum-form"
+version = "0.1.0"
+dependencies = [
+ "kurbo",
+ "pdfrum-common",
+ "pdfrum-doc",
+ "pdfrum-font",
+ "pdfrum-object",
+ "pdfrum-page",
+ "pdfrum-parser",
+ "thiserror",
+]
+
+[[package]]
 name = "pdfrum-object"
 version = "0.1.0"
 dependencies = [
