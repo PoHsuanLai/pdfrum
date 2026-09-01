@@ -260,7 +260,7 @@ mod tests {
         set(&mut session, widget(0, 1));
         session.drag = Some(DragAnchor {
             field: FieldId(0),
-            start: Place::START,
+            start: Place::start(),
         });
 
         set(&mut session, widget(1, 2));

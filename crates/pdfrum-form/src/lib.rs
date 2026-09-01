@@ -40,7 +40,7 @@ pub mod update;
 
 pub use cascade::{Cascade, FieldRef, FieldWrites, Keystroke, KeystrokeOutcome, NoScripts};
 pub use commit::CommitOutcome;
-pub use edit::{Place, Range, Selection, UndoItem, UndoStack};
+pub use edit::{Place, PlaceExt, Range, Selection, UndoItem, UndoStack};
 pub use error::Error;
 pub use event::{Button, Event, Key, Modifiers, Point};
 pub use field::{ChoiceConfig, ChoiceState, FieldState, TextConfig, TextState, ToggleState};
