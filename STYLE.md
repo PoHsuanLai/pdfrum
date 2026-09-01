@@ -86,6 +86,11 @@ Violations are review-blockers even when tests pass.
   rule explains why the chrome the oracle bakes *inside* a widget's `/Rect`
   (caret, selection band, the 12-unit scroll-bar reservation) belongs in the
   appearance stream, while chrome *outside* it is the host's to draw.
+  *Clarified 2026-09-02 for M15:* `ScriptCascade` (the `boa`-backed
+  implementor) is `Cascade`'s **second implementation**, which is what the
+  seam was admitted for — not a fourth seam. The alert transcript a script
+  produces comes back as a value the host reads, not as a `ScriptHost` trait
+  the host implements; the list stays closed at three.
 - *Vocabulary impls (Rust idiom, not OOP):* implement std/ecosystem traits
   liberally — `Iterator` (lexer, `Font::decode`, pages, outlines), `Deref`
   (`ByteSpan`, `Resolved`), `TryFrom`, `Default`, `Debug`/`Display`,
