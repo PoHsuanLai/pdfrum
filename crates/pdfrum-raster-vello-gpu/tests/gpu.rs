@@ -13,7 +13,7 @@
 
 use kurbo::{Affine, BezPath, Rect};
 use pdfrum_page::BlendMode;
-use pdfrum_raster_vello_gpu::{VelloGpuBackend, try_real_gpu};
+use pdfrum_raster_vello_gpu::{Error, VelloGpuBackend, try_real_gpu};
 use pdfrum_render::{
     AlphaMask, AntiAlias, Brush, FillRule, ImageQuality, Pixmap, RasterBackend, RenderDevice,
 };
@@ -154,6 +154,139 @@ fn a_device_sized_mask_halves_what_it_covers() {
         "the mask should halve the alpha, got {}",
         px[3]
     );
+}
+
+#[test]
+fn a_masked_layer_popped_with_no_draws_is_transparent() {
+    // The degenerate half of the deferred-mask design. `pop` emits the
+    // luminance-mask layer over "the content this layer just drew" — and here
+    // there is none, so the mask multiplies nothing and the result must be
+    // transparent rather than the mask's own grey plane leaking through as
+    // pixels. Getting this wrong would paint a soft mask's coverage as visible
+    // ink on every empty group a page contains.
+    let Some(backend) = gpu() else { return };
+    let mut device = backend.new_target(16, 16, peniko::Color::TRANSPARENT);
+    let mask = AlphaMask::filled(16, 16, 200);
+    device.push_layer(BlendMode::Normal, 1.0, Some(&mask));
+    device.pop();
+    let out = backend.finish(device);
+    assert_eq!(
+        out.pixel(8, 8),
+        Some([0, 0, 0, 0]),
+        "an empty masked layer must contribute nothing"
+    );
+}
+
+#[test]
+fn nested_masked_layers_multiply_and_unwind_in_order() {
+    // Nesting is where the one-stack design could go wrong: each `pop` of a
+    // masked frame emits *two* extra `pop_layer`s beyond the frame's own, and
+    // those extra layers are deliberately not on `frames`. If the LIFO were
+    // misaligned the inner mask would close the outer layer and the second
+    // fill would escape its clip. Two half-masks nested must land near a
+    // quarter, and the fill after both pops must be unaffected.
+    let Some(backend) = gpu() else { return };
+    let mut device = backend.new_target(32, 16, peniko::Color::TRANSPARENT);
+    let half = AlphaMask::filled(32, 16, 128);
+    device.push_layer(BlendMode::Normal, 1.0, Some(&half));
+    device.push_layer(BlendMode::Normal, 1.0, Some(&half));
+    device.fill_path(
+        &square(0.0, 0.0, 16.0, 16.0),
+        Affine::IDENTITY,
+        &Brush::Solid(peniko::Color::from_rgba8(255, 255, 255, 255)),
+        FillRule::Winding,
+        AntiAlias::On,
+    );
+    device.pop(); // the inner masked layer
+    device.pop(); // the outer masked layer
+    // Both masks are closed, so this must arrive at full alpha.
+    device.fill_path(
+        &square(16.0, 0.0, 32.0, 16.0),
+        Affine::IDENTITY,
+        &Brush::Solid(peniko::Color::from_rgba8(0, 0, 255, 255)),
+        FillRule::Winding,
+        AntiAlias::On,
+    );
+    let out = backend.finish(device);
+    let masked = out.pixel(8, 8).expect("in bounds");
+    assert!(
+        masked[3] > 40 && masked[3] < 90,
+        "two half masks should compound to about a quarter, got {}",
+        masked[3]
+    );
+    assert_eq!(
+        out.pixel(24, 8),
+        Some([0, 0, 255, 255]),
+        "the fill after both pops is outside every mask"
+    );
+}
+
+#[test]
+fn a_target_past_the_device_limit_is_refused_rather_than_allocated() {
+    // `Error::TargetTooLarge` was documented and never constructed, and the
+    // path that should have produced it allocated `w * h * 4` zeros — up to
+    // seventeen gibibytes — on its way to reporting failure. The fallible
+    // constructor now refuses first, and the infallible one clamps rather than
+    // building a target the device cannot render.
+    let Some(backend) = gpu() else { return };
+    let over = backend.max_dimension().saturating_add(1);
+    let err = backend
+        .try_new_target(over, 16, peniko::Color::TRANSPARENT)
+        .expect_err("a target past the device's limit must be refused");
+    assert!(
+        matches!(err, Error::TargetTooLarge { w, max, .. }
+            if w == over && max == backend.max_dimension()),
+        "the error must carry the request and the limit, got {err}"
+    );
+    // And the trait's own constructor, which has no failure channel, clamps to
+    // something renderable instead of handing back a target `finish` would
+    // have to refuse.
+    let clamped = backend.new_target(over, 16, peniko::Color::TRANSPARENT);
+    let out = backend.finish(clamped);
+    assert!(
+        backend.accepts(out.width(), out.height()),
+        "the clamped target must be one this device can render, got {}x{}",
+        out.width(),
+        out.height()
+    );
+}
+
+#[test]
+fn the_process_opens_one_device_however_many_backends_ask() {
+    // The leak `request_adapter` documents is one device per *process*, not
+    // one per call: fourteen GPU tests in one binary must not leak fourteen
+    // devices. Proved through the adapter report, which is the only observable
+    // the shared device has — two backends built independently must be looking
+    // at the same adapter.
+    let Some(first) = gpu() else { return };
+    let Some(second) = gpu() else { return };
+    assert_eq!(
+        first.adapter_report(),
+        second.adapter_report(),
+        "both backends must be on the process's one device"
+    );
+}
+
+#[test]
+fn a_healthy_device_reports_no_fault() {
+    // The uncaptured-error hook records rather than panics, which is only
+    // observable in the negative on working hardware: a render that succeeded
+    // must leave the fault slot empty, or the hook is recording noise and
+    // every later `try_finish` would fail on a device that is fine.
+    let Some(backend) = gpu() else { return };
+    let mut device = backend.new_target(16, 16, peniko::Color::TRANSPARENT);
+    device.fill_path(
+        &square(0.0, 0.0, 16.0, 16.0),
+        Affine::IDENTITY,
+        &Brush::Solid(peniko::Color::from_rgba8(9, 9, 9, 255)),
+        FillRule::Winding,
+        AntiAlias::On,
+    );
+    let out = backend
+        .try_finish(device)
+        .expect("a healthy device renders without a fault");
+    assert_eq!(out.pixel(8, 8), Some([9, 9, 9, 255]));
+    assert_eq!(backend.device_fault(), None);
 }
 
 #[test]
