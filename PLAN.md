@@ -1118,6 +1118,18 @@ Grok: `.evt` harness (landed `0eff591`..`6f33c82`, Claude reviews), then the
 `pdfrum-doc` additive slice. Claude/Opus: `pdfrum-form` + facade + SPEC §15,
 Grok reviews.
 
+*Amended 2026-09-01 17:10.* Grok completed the harness slice and part 1 of
+the `pdfrum-doc` slice (`567f0b9`), then its runner died at turn start three
+times in a row (16:20, 17:03, 17:04) with zero output, including the session
+holding the `pdfrum-form` review. The rest of the `pdfrum-doc` slice (the
+uncommitted `field_body` caret/selection overlay, then the four `vt` place
+queries with the strict half-width tie-break from U2) is reassigned to a
+Claude/Opus agent under the same `pdfrum-doc`-only ownership; the
+`pdfrum-form` review is retried on Grok once, else a Claude/Opus reviewer
+does it. Grok keeps the cross-review of the `--send-events` wiring and of
+the `vt` slice if it can hold a session. Recorded so the cross-vendor rule's
+gaps are visible, not silent.
+
 ## M15 — JavaScript via `boa`  *(after M14, whose event cascade the field scripts hang off)*
 
 Settled 2026-09-01: **the engine is boa**, pinned exactly, behind a cargo
