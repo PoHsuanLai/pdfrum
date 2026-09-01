@@ -181,60 +181,121 @@ stripe, `AlphaMerge` into that stripe's own channel, the clip folded into each
 channel's alpha by the same truncating product every other primitive uses, and
 the pixel left opaque.
 
-#### What remains, and whose it is
+#### The call site: a correction, and where it actually went
 
-**The caller.** Nothing in the corpus reaches the new branch:
-`text_aa_override` defaults to `None`, and the only text the oracle draws with
-ClearType is a live edit's. The caller that must set it is **`pdfrum-form`'s
-live-edit path**, which is another agent's crate and deliberately untouched
-here.
+**The first plumbing commit named a call site that does not exist.** It said
+`pdfrum-form`'s live-edit path should call
+`opts.for_text_run(TextAa::LcdSubpixel)`. That crate cannot: it emits an
+appearance **stream** (`UpdateKind::LiveEdit(GeneratedAp)`), never sees a
+`RenderOptions`, and does not depend on `pdfrum-render` at all. The claim was
+made without checking the dependency edge, and it was wrong.
 
-**The one line.** Where the live-edit path builds the `RenderOptions` it draws
-the edited run's text under — the port of `DrawTextString`'s local
-`CPDF_RenderOptions` — it needs:
+Worse, the shape was wrong wherever it was put. By the time anything
+rasterizes, the live edit's appearance is one form XObject among the page's
+objects — merged in by `annot_render::overlay_with` — and both `pdfrum-tool`'s
+`render::render` and the facade build exactly **one** `RenderOptions` and make
+exactly **one** `render_page_with_visibility` call for the whole page. A
+`for_text_run` there would hoist ClearType onto every run on the page, which is
+the precise thing the oracle's two public entry points exist to prevent.
 
-```rust
-let opts = opts.for_text_run(pdfrum_render::TextAa::LcdSubpixel);
+**So the override travels with the object.** `FormObject::live_edit` records
+*where the form came from* — a fact about the document, not an instruction to a
+renderer, which is why `pdfrum-page` can hold it without naming a rasterizer's
+type — and `walk.rs`'s `form_options` folds it into that subtree's options,
+the same shape `for_type3_char_proc` already uses to force options around one
+glyph procedure. A caller's own `text_aa_override` outranks it: the flag
+describes the document, the override describes the request.
+
+The chain, end to end:
+
+```
+AnnotOverlay::set_live_edit(index)          // pdfrum-doc, the session's signal
+  -> annot_render, at the supplied-appearance site
+  -> build_form_object_with(.., live_edit)  // pdfrum-page
+  -> FormObject::live_edit
+  -> walk.rs form_options                   // pdfrum-render, folds in the override
+  -> to_subpixel + draw_glyph_lcd
 ```
 
-That is the whole of it. `for_text_run` returns a fresh `RenderOptions` with
-the override set and everything else cloned, so it wants to be built for the
-one run and dropped afterwards, exactly as the oracle's local options are. It
-must **not** be hoisted to the page's options: doing so would draw the whole
-page with ClearType, which is what the two public entry points exist to
-prevent.
+Every step is **additive**: `build_form_object` keeps its signature and
+delegates with `false`, so every existing caller compiles unchanged and every
+existing producer — the file's own appearance streams, and a session's
+*regenerated* ones — stays ordinary.
 
-**What that will be worth.** Ruling (i) measured 291 of
-`form_textfield_focused_ltr`'s 319 remaining differing pixels — 91% — as
-exactly this, with 447 on `selected_ltr` at the time of its own measurement.
-Those rows cannot move until the call site lands. Once it does, the residue
-should be the fringe pixels' arithmetic rather than their absence, and the two
-`form_textfield_focused_*` rows are the ones to re-score.
+**The producer line, for `pdfrum-tool` (Track B's crate, not edited here).** In
+`render.rs`'s `session_overlay`, inside the loop that already sets appearances:
 
-**One thing not verified.** The per-channel filter is pinned against the C++
-by transcription and by unit tests over its own arithmetic — that the window
-matches the gray path's, that the gamma table is applied once per stripe, that
-a saturated pixel has no fringe while an edge pixel does, that the merge and
-the clip and the opaque write are the oracle's. It has **not** been compared
-against oracle pixels end to end, because no corpus row reaches it yet. That
-comparison is the first thing to do after the call site lands, and it is the
-honest limit of what this commit can claim.
+```rust
+if update.kind.is_live_edit() {
+    overlay.set_live_edit(update.annot.index as usize);
+}
+```
+
+`UpdateKind::is_live_edit()` already exists. The API name to wire is
+**`pdfrum_doc::AnnotOverlay::set_live_edit(index)`**, taking the same raw
+`/Annots` index `overlay.set` takes.
+
+#### The filter's first corpus evidence
+
+Wired end to end (the tool line applied locally to measure, then reverted), the
+whole board moves **1651 pass / 54 fail -> 1652 pass / 53 fail**, with
+`bug_736695_2.in#form-events` going fail -> pass. Every `form_textfield_*` row
+improved:
+
+| row | before | after |
+|---|---|---|
+| `focused_ltr#form-events` | 0.999311 (max diff 89) | **0.999513** (89) |
+| `focused_rtl#form-events` | 0.997558 (156) | **0.997777** (156) |
+| `selected_ltr#form-events` | 0.999682 (84) | **0.999936** (31) |
+| `selected_rtl#form-events` | 0.999385 (189) | **0.999758** (149) |
+| the five plain `form_textfield_*` | 0.999984 (1) | **1.000000** (0) |
+
+On `focused_ltr` against its golden, the fringes themselves:
+
+- **non-grey pixels: 0 -> 288, against the oracle's 291.** Before this, our
+  render had *no* coloured pixel anywhere on the row; ruling (i)'s 291 was
+  exactly the count of the oracle's.
+- **231 of our 288 are co-located** with one of the oracle's fringe pixels.
+- total absolute error **74838 -> 70500**.
+
+**What that does not say.** No fringe is byte-exact, and the differing-pixel
+count is essentially flat (370 -> 374). The reason is measurable and it is not
+the filter: comparing the *pre-LCD* render to the golden in pure **luminance**,
+before any colour is involved, the glyphs already disagree by a mean of **62.6
+counts and up to 218**. The glyph shapes are wrong on this row — that is OWED
+1's font-substitution territory — and a subpixel filter can only colour ink
+that is already in the right place. Testing the filter where that confound is
+absent, on the 37 pixels whose pre-LCD shape already agreed within 8 counts,
+absolute error falls **1908 -> 1451, a 24% improvement**. That is the fair test
+of the filter and it passes; 37 pixels is suggestive rather than conclusive,
+and it stays that way until the glyphs land correctly.
+
+So the honest status of the filter is: **it produces fringes, in the right
+columns, in roughly the right count, and it moves every row that reaches it
+upward — but it has not been shown byte-exact against the oracle, and cannot be
+on this corpus until OWED 1's glyph shapes are right.** Re-scoring these rows is
+the thing to do after that lands.
 
 ### Verification
 
-- `cargo test -p pdfrum-render --lib`: **308 passed.**
-- `cargo test -p pdfrum-raster-exact --lib`: **53 passed.**
-- `cargo test --doc` on both: green.
+- `cargo nextest run -p pdfrum-page -p pdfrum-doc -p pdfrum-render -p
+  pdfrum-raster-exact`: **1282 passed**, after the per-object carrier landed.
+- `cargo test --doc` on the touched crates: green.
 - `cargo clippy -D warnings` and `RUSTDOCFLAGS="-D warnings" cargo doc
-  --no-deps` on both: clean. (Per-crate deliberately: two sibling tracks held
-  uncompiling work in `pdfrum-doc` and `pdfrum-form` in this tree throughout,
-  which is theirs and not diagnosed here.)
+  --no-deps` on all four: clean; `cargo build --workspace` clean.
+  (Per-crate deliberately: sibling tracks held uncompiling work in
+  `pdfrum-doc` and `pdfrum-form` in this tree for part of the window, which is
+  theirs and not diagnosed here.)
 - All four backends — exact, tiny-skia, vello_cpu, the isolated GPU crate —
   build against the extended trait.
 - `cargo nextest run` over the whole workspace after the compositing change:
   **3565 passed, 1 skipped.**
-- `conformance run --check-regressions`: 1705 files, 1651 pass, 54 fail, no
-  regressions; the field-by-field analysis of the 37 SSIM dips is above.
+- `conformance run --check-regressions`, compositing alone, measured from a
+  clean worktree: 1705 files, 1651 pass, 54 fail, no regressions; the
+  field-by-field analysis of its 37 SSIM dips is above.
+- With the live-edit carrier wired end to end: **1652 pass, 53 fail**, one row
+  better, no status regressions, and the same 35 non-form-events fifth-decimal
+  dips as the compositing change alone.
 - No benchmarks were run and the bench ratchet was not touched, as instructed.
   Neither change is expected to cost: `composite_solid` removes two divides per
   channel from the solid-fill path rather than adding any, and
