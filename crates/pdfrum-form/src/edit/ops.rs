@@ -311,6 +311,117 @@ pub fn room_for(edit: &TextEdit, max_len: Option<u32>, replacing: usize) -> Opti
     Some(max.saturating_sub(after_removal))
 }
 
+/// Whether an insertion that first removes `[from, to)` is refused because
+/// the field is full.
+///
+/// Upstream's order is `ClearSelection()` **then** `InsertText`
+/// (`CPWL_EditImpl::ReplaceSelection`, `:1881-1890`; `TypeChar`, `:1892-1924`),
+/// and the overflow test is `InsertText`'s first statement — so it is asked
+/// of the text with the selection already gone. Typing over a full field's
+/// entire contents therefore works, which is the behaviour a user relies on
+/// to correct an overfull field, and asking before the removal would break
+/// it.
+///
+/// The removal is measured rather than performed: a trial layout of the text
+/// as it would stand answers the same question without an undo item or a
+/// caret move to roll back.
+fn insertion_is_refused(
+    edit: &TextEdit,
+    config: &vt::Config,
+    metrics: &Metrics<'_>,
+    from: usize,
+    to: usize,
+) -> bool {
+    if edit.auto_scroll || config.char_array > 0 {
+        return false;
+    }
+    if from == to {
+        return is_text_overflow(edit, config);
+    }
+    let mut trial = String::with_capacity(edit.text.len());
+    trial.extend(edit.text.chars().take(from));
+    trial.extend(edit.text.chars().skip(to));
+    let layout = vt::layout(
+        &normalize_breaks(&trial, config.multi_line),
+        config,
+        metrics,
+    );
+    layout_overflows(&layout, config)
+}
+
+/// Whether the plate is already full, so that no further text is accepted —
+/// `CPWL_EditImpl::IsTextOverflow` (`fpdfsdk/pwl/cpwl_edit_impl.cpp:1984-1996`).
+///
+/// # Why a full field refuses rather than merely not scrolling
+///
+/// [`TextEdit::auto_scroll`] is upstream's `enable_scroll_`, and it gates two
+/// separate things. The visible half is `SetScrollPosX`/`Y`, which
+/// [`scroll_to_caret`] already honours. The half that had no port is this
+/// one: `IsTextOverflow` is true when the field can neither scroll nor
+/// overflow **and** its content is bigger than its plate, and every insertion
+/// entry point — `InsertWord` (`:1698`), `InsertReturn` (`:1719`) and
+/// `InsertText` (`:1839`) — returns without mutating when it is. PDF 32000-1
+/// Table 228 says the same thing about `DoNotScroll`: once the field is full,
+/// no further text is accepted. Without this gate a `DoNotScroll` field keeps
+/// taking characters, the caret walks off the plate, and the extra text sits
+/// invisibly in the value.
+///
+/// # The check is made *before* the character, so the overflowing one is kept
+///
+/// Upstream asks the question against the content as it stands and then
+/// inserts, so the character that first makes the content exceed the plate is
+/// accepted and the **next** one is refused. Reproduced exactly: this is
+/// called at the top of the insertion, never after the relayout.
+///
+/// # `enable_overflow_` is a comb field's, and only a comb field's
+///
+/// `SetTextOverflow(true)` is reached from two places, and both are combs:
+/// `CPWL_Edit::OnCreated` under `Styles::kEditTextOverflow`
+/// (`cpwl_edit.cpp:134-136`) and `SetCharArray` (`:285`), and
+/// `CFFL_TextField::GetCreateParam` raises that style only for
+/// `kTextComb` (`cffl_textfield.cpp:66-68`). A comb therefore never refuses,
+/// which is why the `char_array` test comes first here.
+#[must_use]
+pub fn is_text_overflow(edit: &TextEdit, config: &vt::Config) -> bool {
+    if edit.auto_scroll || config.char_array > 0 {
+        return false;
+    }
+    layout_overflows(&edit.layout, config)
+}
+
+/// The two size comparisons `IsTextOverflow` makes once its two flags have
+/// let it through, against a layout that need not be the control's own.
+///
+/// Split out so [`insertion_is_refused`] can ask the question of the text as
+/// it *would* stand after a selection is removed, which is the order upstream
+/// runs the two operations in.
+fn layout_overflows(layout: &vt::Layout, config: &vt::Config) -> bool {
+    let plate = config.plate;
+    let content = layout.content_rect_pdf(plate);
+    // The multi-line branch needs more than one line before a taller content
+    // counts: a single line taller than its plate is the ordinary case for a
+    // field whose font does not quite fit, and upstream declines to lock
+    // those out.
+    let lines: usize = layout
+        .sections
+        .iter()
+        .map(|section| section.lines.len())
+        .sum();
+    if config.multi_line
+        && lines > 1
+        && is_float_bigger(
+            pdfrum_doc::geom::height(content),
+            pdfrum_doc::geom::height(plate),
+        )
+    {
+        return true;
+    }
+    is_float_bigger(
+        pdfrum_doc::geom::width(content),
+        pdfrum_doc::geom::width(plate),
+    )
+}
+
 /// Replaces a flat character range with `insert`, recording one undo item.
 ///
 /// The single mutation every other one is written in terms of. `max_len`
@@ -427,6 +538,10 @@ fn insertion_item(old: Place, new: Place, inserted: &str, before: Selection) -> 
 ///
 /// Exactly one undo item, whether or not a selection was replaced — which is
 /// what makes a run of typing undo one keystroke at a time.
+///
+/// A field that has filled its plate and may not scroll refuses outright —
+/// see [`is_text_overflow`], which is `InsertWord`'s and `InsertReturn`'s
+/// first statement upstream.
 pub fn insert_char(
     edit: &mut TextEdit,
     config: &vt::Config,
@@ -440,6 +555,9 @@ pub fn insert_char(
         let at = edit.caret_index();
         (at, at)
     };
+    if insertion_is_refused(edit, config, metrics, from, to) {
+        return false;
+    }
     let mut buffer = [0u8; 4];
     replace_range(
         edit,
@@ -485,6 +603,11 @@ pub fn delete(edit: &mut TextEdit, config: &vt::Config, metrics: &Metrics<'_>) -
 ///
 /// One undo item however long the text, which is the difference from typing
 /// the same characters one at a time.
+///
+/// A `DoNotScroll` field already at its plate's edge refuses the insertion
+/// half — see [`is_text_overflow`] — but the *removal* half still runs
+/// upstream, because `ReplaceSelection` clears before it inserts. Deleting a
+/// selection therefore always works, however full the field is.
 pub fn replace_selection(
     edit: &mut TextEdit,
     config: &vt::Config,
@@ -497,6 +620,11 @@ pub fn replace_selection(
     } else {
         let at = edit.caret_index();
         (at, at)
+    };
+    let text = if insertion_is_refused(edit, config, metrics, from, to) {
+        ""
+    } else {
+        text
     };
     replace_range(edit, config, metrics, from, to, text, max_len, true)
 }
@@ -519,6 +647,11 @@ pub fn replace_and_keep_selection(
     } else {
         let at = edit.caret_index();
         (at, at)
+    };
+    let text = if insertion_is_refused(edit, config, metrics, from, to) {
+        ""
+    } else {
+        text
     };
     let before = from;
     if !replace_range(edit, config, metrics, from, to, text, max_len, true) {
@@ -545,14 +678,57 @@ fn settle(edit: &mut TextEdit, config: &vt::Config, metrics: &Metrics<'_>) {
     scroll_to_caret(edit, config, metrics);
 }
 
+/// Scrolls a multiline field's view vertically by a wheel notch, answering
+/// whether it moved.
+///
+/// # A `DoNotScroll` field does not move
+///
+/// The gate is upstream's own and it is not this function's invention:
+/// `CPWL_EditImpl::SetScrollPosY` (`fpdfsdk/pwl/cpwl_edit_impl.cpp:1175-1178`)
+/// returns at its first statement when `enable_scroll_` is clear, so **every**
+/// writer of the vertical scroll position no-ops, the wheel included.
+/// `CFFL_TextField::GetCreateParam` (`cffl_textfield.cpp:54-57`) withholds
+/// `kWindowVScroll` from a multiline `DoNotScroll` field besides, so upstream
+/// gives it no scrollbar to drag either — the field simply does not pan.
+///
+/// The step is a quarter of the plate per notch, and the position is clamped
+/// to the slack between content and plate, so a field with nothing to scroll
+/// answers `false` rather than accumulating an offset it cannot use.
+pub fn scroll_by(edit: &mut TextEdit, config: &vt::Config, delta_y: i32) -> bool {
+    if !edit.auto_scroll || delta_y == 0 {
+        return false;
+    }
+    let content = edit.layout.content_rect_pdf(config.plate);
+    let slack = pdfrum_doc::geom::height(content) - pdfrum_doc::geom::height(config.plate);
+    if slack <= 0.0 {
+        return false;
+    }
+    let step = pdfrum_doc::geom::height(config.plate) * 0.25;
+    let was = edit.scroll.1;
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "a wheel delta is a small notch count"
+    )]
+    let by = -(delta_y as f32) * step;
+    edit.scroll.1 = (edit.scroll.1 + by).clamp(0.0, slack);
+    (edit.scroll.1 - was).abs() > f32::EPSILON
+}
+
 /// Scrolls the view so the caret is inside the plate — `ScrollToCaret`
 /// (`fpdfsdk/pwl/cpwl_edit_impl.cpp:1246-1286`).
 ///
-/// Upstream runs this after essentially every mutation and every caret move.
-/// Without it a field never scrolls at all: `password` types nine characters
-/// into a box five wide and the oracle shows the last five with the caret
-/// against the right edge, while an unscrolled view shows the first five and
+/// Upstream runs this after essentially every mutation and every caret move,
+/// and without it [`TextEdit::scroll`]`.0` is never written at all — a field
+/// whose text outruns its plate keeps drawing from the first character and
 /// hides the caret entirely.
+///
+/// It is **not** what `password` needed. That fixture's two fields are
+/// `/MaxLen 5` and its `.evt` types nine characters, so each holds `"tiger"`,
+/// five asterisks fit the plate, and neither implementation scrolls; its
+/// residual caret column is a font-metric question recorded in
+/// `docs/status/M14.md`, not this one. The port is here because it is the
+/// postlude upstream runs after every mutation, not because one row asked
+/// for it.
 ///
 /// # The two coordinate systems, which is the whole of the port
 ///
@@ -574,10 +750,12 @@ fn settle(edit: &mut TextEdit, config: &vt::Config, metrics: &Metrics<'_>) {
 ///
 /// The comparisons are made on the **edit-space** point and the assignment is
 /// made from the **layout-space** one. Reading both in one frame is the
-/// obvious simplification and it is wrong by exactly one advance: it lands
-/// the caret one character short of the plate's right edge, which is
-/// `password`'s six asterisks and a caret at device column 189 where the
-/// oracle draws five and a caret at 199.
+/// obvious simplification and it is wrong by exactly one advance: a field
+/// scrolled that way lands its caret one character short of the plate's right
+/// edge on every scroll. The table above is the whole of the difference, and
+/// `tests/scroll_to_caret.rs` pins it — including at two different plate
+/// origins, which is the assertion a port that kept upstream's absolute
+/// position fails.
 ///
 /// # `FXSYS_IsFloatSmaller`, not `<`
 ///
@@ -615,10 +793,17 @@ pub fn scroll_to_caret(edit: &mut TextEdit, config: &vt::Config, metrics: &Metri
     if width > pdfrum_doc::geom::width(content) {
         edit.scroll.0 = 0.0;
     } else {
-        edit.scroll.0 = edit
-            .scroll
-            .0
-            .clamp(content_left - left, content_right - left - width);
+        // Not `f32::clamp`: `SetScrollLimit` (`cpwl_edit_impl.cpp:1215-1220`)
+        // tests each bound with `FXSYS_IsFloatSmaller`/`IsFloatBigger`, so a
+        // value within 0.0001 of one is left where it is rather than being
+        // snapped onto it. Raw `<=`/`>=` would pull a rounding-edge caret a
+        // hair further than upstream does.
+        let (low, high) = (content_left - left, content_right - left - width);
+        if is_float_smaller(edit.scroll.0, low) {
+            edit.scroll.0 = low;
+        } else if is_float_bigger(edit.scroll.0, high) {
+            edit.scroll.0 = high;
+        }
     }
 
     let head = caret_x(edit, config, metrics);
@@ -638,6 +823,11 @@ fn is_float_equal(a: f32, b: f32) -> bool {
 /// `FXSYS_IsFloatSmaller` (`core/fxcrt/fx_system.h:39-40`).
 fn is_float_smaller(a: f32, b: f32) -> bool {
     a < b && !is_float_equal(a, b)
+}
+
+/// `FXSYS_IsFloatBigger` (`core/fxcrt/fx_system.h:37-38`).
+fn is_float_bigger(a: f32, b: f32) -> bool {
+    a > b && !is_float_equal(a, b)
 }
 
 /// The caret's horizontal position in layout space.
