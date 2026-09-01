@@ -217,6 +217,14 @@ impl ChoiceState {
     /// one deliberately is not.
     #[must_use]
     pub fn focused_text(&self) -> String {
+        // An **editable** combo box reports what is in its text half, which
+        // is not an option's label: typing into one inserts characters rather
+        // than jumping between options, and clears the index selection as it
+        // goes. A gated box has no text half to consult and answers with the
+        // row last acted upon.
+        if self.config.editable {
+            return self.edit_text.clone();
+        }
         let index = self
             .caret_index
             .or_else(|| self.selected.iter().next().copied());
