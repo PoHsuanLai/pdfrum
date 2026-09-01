@@ -1212,6 +1212,90 @@ fn generate<R: Resolve>(
     .flatten()
 }
 
+/// Which annotation holds focus, and what its focus rectangle is.
+///
+/// The two halves are independent and both are needed. The **index** decides
+/// the tint: a widget the form filler is editing is never given the
+/// form-field highlight, focused or not, and in a single-focus session the
+/// focused one is the only widget a live control reaches. The **box** decides
+/// what is stroked in the tint's place, which most field types answer with
+/// nothing at all.
+///
+/// A text field and an editable combo box answer [`ap::FocusBox::None`] —
+/// they draw a caret and glyphs over plain white, with neither a tint nor a
+/// dashed outline. That is what the four `form_textfield_focused_*` goldens
+/// carry, and it is why "focused" here is mostly a *negative* instruction.
+#[must_use]
+pub fn focus_of<R: Resolve>(session: &FormSession, ctx: &Context<'_, R>) -> Option<ap::Focus> {
+    let target = session.focus?;
+    let annot = target.annot();
+    if annot.page != ctx.page.page {
+        // Focus belongs to the document, not the page, so a page that does
+        // not hold it contributes no focus to its own render.
+        return None;
+    }
+    let index = usize::try_from(annot.index).unwrap_or(0);
+    let Some(field) = target.field() else {
+        return Some(ap::Focus::at(index));
+    };
+    let box_ = match session.fields.get(&field) {
+        // A text field and an editable combo stroke nothing. A field with no
+        // state yet has no control to ask, so it strokes nothing either.
+        Some(FieldState::Text(_)) | None => ap::FocusBox::None,
+        Some(FieldState::Choice(choice)) if choice.config.editable => ap::FocusBox::None,
+        // A single-select list box, a non-editable combo and the buttons take
+        // the window rectangle inflated by one.
+        Some(FieldState::Choice(choice)) if !choice.config.multi_select => ap::FocusBox::Inflated,
+        // A multi-select list box strokes its **caret row** rather than its
+        // own edges, which is why its dashes trace a band inside the widget.
+        Some(FieldState::Choice(choice)) => caret_row_box(ctx, annot, choice),
+        Some(FieldState::Toggle(_) | FieldState::Button(_)) => ap::FocusBox::Inflated,
+    };
+    Some(ap::Focus { annot: index, box_ })
+}
+
+/// The rectangle a multi-select list box strokes: its caret row, clipped to
+/// the client area.
+fn caret_row_box<R: Resolve>(
+    ctx: &Context<'_, R>,
+    annot: AnnotId,
+    choice: &ChoiceState,
+) -> ap::FocusBox {
+    let Some(widget) = ctx.widget(annot) else {
+        return ap::FocusBox::None;
+    };
+    let Some(caret) = choice.caret_index else {
+        return ap::FocusBox::None;
+    };
+    let client = ap::field_body::client_rect(&widget.dict, ctx.resolve);
+    let height = f64::from(row_height(ctx, widget));
+    if height <= 0.0 {
+        return ap::FocusBox::None;
+    }
+    // Rows are drawn from the top down, starting at the first visible one.
+    let Some(offset) = caret.checked_sub(choice.top_visible) else {
+        return ap::FocusBox::None;
+    };
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "a row offset is bounded by the option count, which a file \
+                  cannot make large enough to lose a mantissa bit"
+    )]
+    let top = client.y1 - height * offset as f64;
+    let bottom = top - height;
+    // Clipped to the client area, so a caret scrolled out of view strokes
+    // nothing rather than a band outside the widget.
+    if bottom >= client.y1 || top <= client.y0 {
+        return ap::FocusBox::None;
+    }
+    ap::FocusBox::Rect(kurbo::Rect::new(
+        client.x0,
+        bottom.max(client.y0),
+        client.x1,
+        top.min(client.y1),
+    ))
+}
+
 /// The rows a choice field has selected, as the generator wants them.
 ///
 /// Materialized separately because [`ap::field_body::LiveState`] borrows the
