@@ -478,10 +478,20 @@ sweep would have caught half-finished work just as easily.
 - `cargo test --doc -p pdfrum-doc`: 3 pass.
 - `cargo build -p pdfrum-form -p pdfrum -p pdfrum-tool`: clean against the
   final state of this track's crates.
-- Conformance: **1705 files, 1651 pass, 54 fail**, `--check-regressions`
-  clean, **two rows moved and both upward**, 1703 byte-identical. The
-  scoreboard is **not** re-committed from this track: its totals are unchanged
-  and two other tracks were re-scoring the same file concurrently, so
-  committing a board measured from archived trees would have overwritten
-  theirs.
+- Conformance, **this track alone** (base `9352635` vs this track's crates):
+  1705 files, 1651 pass, 54 fail, `--check-regressions` clean, **two rows
+  moved and both upward**, 1703 byte-identical.
+- Conformance, **all three tracks' committed work** (a clean archive of
+  `c35cd76`, scored against the committed scoreboard): **1705 files, 1652
+  pass, 53 fail, no regressions** — one row crosses,
+  `bug_736695_2.in#form-events` fail → pass, which is Track B's. `password`'s
+  two rows read **0.999022** there rather than this track's 0.999016; the
+  extra +0.000006 is Track C's tint fix on the same page. The 38 dips on that
+  joint board are Track C's, analysed in their section above.
+- **The scoreboard is not re-committed from this track.** This track's own
+  delta leaves the totals unchanged, and the joint board above is a
+  three-track result whose dips another track has already ruled on — so
+  recording it is a cross-track decision rather than this one's, and a board
+  written from here would overwrite whatever the others measure next. The
+  numbers are here so whoever does commit it can check them.
 - No benchmarks and no ratchet update, as instructed.
