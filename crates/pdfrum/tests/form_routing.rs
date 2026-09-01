@@ -477,3 +477,77 @@ fn select_all_on_an_empty_field_selects_nothing_and_succeeds() {
     assert_eq!(session.selected_text().as_deref(), Some(""));
     assert_eq!(session.focused_text().as_deref(), Some(""));
 }
+
+// --- Ported focus-observation and graceful-failure rows ---------------------
+
+/// `FocusAnnotationUpdateToEmbedder`: a click that takes focus reports the
+/// focus change **in the returned updates**.
+///
+/// Upstream this is a callback that exists only in some versions of the
+/// embedding interface, which is why its expectation is `Times(0)` off XFA
+/// and `Times(1)` on: the *observation* is version-dependent there. Here a
+/// focus change is an ordinary entry in the returned list, so there is one
+/// answer and no version split — which is the divergence D2 records, asserted
+/// rather than assumed.
+#[test]
+fn taking_focus_reports_the_change_in_the_updates() {
+    let doc = document();
+    let mut session = FormSession::new(&doc);
+
+    session.on_mouse_move(0, INSIDE.0, INSIDE.1, EventModifiers::NONE);
+    let response = session.on_mouse_down(0, INSIDE.0, INSIDE.1, EventModifiers::NONE);
+
+    let focus_changes = response
+        .updates
+        .iter()
+        .filter(|update| matches!(update.kind, pdfrum::UpdateKind::FocusChanged { .. }))
+        .count();
+    assert_eq!(
+        focus_changes, 1,
+        "one focus change is reported, whatever the embedding interface"
+    );
+}
+
+/// Re-clicking the field that already has focus reports **no** focus change:
+/// the caret moves and nothing else does.
+#[test]
+fn re_clicking_the_focused_field_reports_no_focus_change() {
+    let doc = document();
+    let mut session = FormSession::new(&doc);
+    click(&mut session, INSIDE);
+
+    let response = session.on_mouse_down(0, 130.0, 115.0, EventModifiers::NONE);
+    let focus_changes = response
+        .updates
+        .iter()
+        .filter(|update| matches!(update.kind, pdfrum::UpdateKind::FocusChanged { .. }))
+        .count();
+    assert_eq!(
+        focus_changes, 0,
+        "clicking inside the field that already has focus moves the caret only"
+    );
+}
+
+/// `IsIndexSelectedShouldFailGracefully` / `SetIndexSelected…`: a **text**
+/// field has no rows, so every index query is false and every set is refused.
+/// It answers rather than failing, which is the "gracefully" in the name.
+#[test]
+fn a_text_field_has_no_selectable_rows() {
+    let doc = document();
+    let mut session = FormSession::new(&doc);
+    type_run(&mut session, 3);
+    assert_eq!(session.focused_text().as_deref(), Some("ABC"));
+
+    for index in [0, 1, 100, usize::MAX] {
+        assert!(
+            !session.is_index_selected(index),
+            "a text field has no row {index}"
+        );
+        assert!(
+            !session.set_index_selected(index, true),
+            "and none can be selected"
+        );
+    }
+    // And none of that disturbed the text.
+    assert_eq!(session.focused_text().as_deref(), Some("ABC"));
+}
