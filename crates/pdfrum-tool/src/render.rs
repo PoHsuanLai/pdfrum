@@ -122,6 +122,34 @@ impl Backend {
     }
 }
 
+/// Collects a form session's updates into the overlay the annotation pass
+/// lays over what it generates.
+///
+/// Keyed by the **raw** `/Annots` index, which is the index space both an
+/// `AnnotId` and the overlay use — the two agree on every page without a
+/// pop-up, so a mismatch here would be invisible until one appeared.
+///
+/// A focused field's live appearance and a committed one are laid over
+/// identically: which of the two a field produced is its own business, and
+/// the difference is already in the stream. An update that reverts to the
+/// file's own appearance contributes nothing, which is exactly right —
+/// absence from the overlay *is* "use what the file declares".
+fn session_overlay(updates: &[pdfrum::AppearanceUpdate]) -> Option<pdfrum_doc::AnnotOverlay> {
+    let highest = updates
+        .iter()
+        .filter(|update| update.kind.appearance().is_some())
+        .map(|update| update.annot.index as usize)
+        .max()?;
+
+    let mut overlay = pdfrum_doc::AnnotOverlay::with_capacity(highest + 1);
+    for update in updates {
+        if let Some(appearance) = update.kind.appearance() {
+            overlay.set(update.annot.index as usize, appearance.clone());
+        }
+    }
+    Some(overlay)
+}
+
 /// Render one page and encode it the way the oracle does, with whatever
 /// appearance updates a form session produced for it — the tool's
 /// `FPDF_RenderPageBitmap` plus `FPDF_FFLDraw`.
@@ -140,16 +168,17 @@ impl Backend {
 /// change about an image, which is why an unfocused fixture renders
 /// identically with and without `--send-events`.
 ///
-/// [`pdfrum_doc::annot_render::overlay`] is the first step and it is complete.
-/// The second is what `updates` carries: each
+/// Both steps are now here. `annot_render::overlay_with` is the first, and
+/// the second is what `updates` carries: each
 /// [`UpdateKind::Regenerated`](pdfrum::UpdateKind) or
-/// [`LiveEdit`](pdfrum::UpdateKind) holds the `GeneratedAp` that should
-/// replace what the annotation would otherwise draw. **It is not applied
-/// yet**, because the seam to apply it through does not exist: `overlay`
-/// builds its own `AnnotOverlay` internally from the document, takes no
-/// caller-supplied one, and adding that parameter is a `pdfrum-doc` change
-/// this slice does not own. `docs/status/M14.md` §"Dispatch wiring" records
-/// exactly what is missing.
+/// [`LiveEdit`](pdfrum::UpdateKind) holds the `GeneratedAp` that replaces
+/// what the annotation would otherwise draw, collected by
+/// [`session_overlay`] and laid over the pass's own output.
+///
+/// So an event can change an image from here on. A fixture whose events leave
+/// nothing focused and commit no value still renders identically with and
+/// without `--send-events`, because the session produces no appearance to lay
+/// over — which is the property that keeps the unfocused rows stable.
 ///
 /// This is currently inert rather than wrong: the facade's dispatch reports
 /// every event unhandled by design, so `updates` is always empty and the
@@ -167,13 +196,6 @@ pub fn render<R: Resolve>(
     ctx: &mut BuildContext,
     updates: &[pdfrum::AppearanceUpdate],
 ) -> Option<Rendered> {
-    debug_assert!(
-        !updates
-            .iter()
-            .any(|update| update.kind.appearance().is_some()),
-        "a form session produced an appearance this renderer cannot honour \
-         yet; see docs/status/M14.md \"Dispatch wiring\""
-    );
     let limits = Limits::default();
     let mut build_diags = Diagnostics::default();
     // The decode target has to be set before the build, because the build is
@@ -197,7 +219,8 @@ pub fn render<R: Resolve>(
     // reads the content stream's text and `--annot` describes the
     // annotations rather than drawing them, and both would double-count an
     // appearance the page graph had already absorbed.
-    pdfrum_doc::annot_render::overlay(
+    let supplied = session_overlay(updates);
+    pdfrum_doc::annot_render::overlay_with(
         &mut built,
         &page.dict,
         catalog,
@@ -205,6 +228,7 @@ pub fn render<R: Resolve>(
         ctx,
         &limits,
         &mut build_diags,
+        supplied.as_ref(),
     );
     ctx.decode_target = previous;
     let page = built;
