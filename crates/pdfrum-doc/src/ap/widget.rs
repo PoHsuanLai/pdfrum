@@ -225,7 +225,7 @@ fn control_index<R: Resolve>(dict: &Dict, r: &R) -> usize {
 /// which is a valid appearance and is what the oracle writes too.
 #[must_use]
 pub fn generate<R: Resolve>(dict: &Dict, r: &R) -> Option<GeneratedAp> {
-    build(dict, None, None, None, None, None, r)
+    build(dict, None, None, LiveInput::default(), r)
 }
 
 /// The same, with the field's own text set into it.
@@ -244,7 +244,16 @@ pub fn generate_with_text<R: Resolve>(
     substitute: Option<crate::ap::Substitute<'_>>,
     r: &R,
 ) -> Option<GeneratedAp> {
-    build(dict, Some(catalog), Some(font), substitute, None, None, r)
+    build(
+        dict,
+        Some(catalog),
+        Some(font),
+        LiveInput {
+            substitute,
+            ..LiveInput::default()
+        },
+        r,
+    )
 }
 
 /// What a form session shows a widget it is editing, beyond the widget's own
@@ -271,6 +280,30 @@ pub struct LiveInput<'a> {
     /// what a Hebrew value being typed into a Latin field used to get: the
     /// low byte of each code point, drawn as Latin.
     pub substitute: Option<crate::ap::Substitute<'a>>,
+    /// The appearance state a session is showing, overriding the widget
+    /// dictionary's own `/AS`. [`None`] reads `/AS` as before, byte for byte.
+    ///
+    /// # Why a session cannot say this through `/AS`
+    ///
+    /// A radio group is one field with several kid controls, and each kid
+    /// carries a **different** on-state name in its own `/AP /N`. Clicking one
+    /// is `CPDF_FormField::CheckControl`
+    /// (`core/fpdfdoc/cpdf_formfield.cpp:683-716`), which sets the clicked
+    /// control's `/AS` to that control's own on-state and every *other*
+    /// control's to `Off` — so one click restates the state of every kid in
+    /// the group, in as many different names.
+    ///
+    /// A session holds one state record per **field**, so all it can say is
+    /// which control the click chose. Turning that into what each kid draws is
+    /// per-kid, and the widget dictionary on disk still names the state before
+    /// the click. This is how the session tells the generator which kid to
+    /// draw off — the value it passes being `Off` for a sibling and the
+    /// control's own on-state for the chosen one.
+    ///
+    /// Only the on/off question is overridden, not the state's *name*: what
+    /// the generator does with it is [`is_checked_with`]'s single comparison
+    /// against `Off`, so any non-`Off` bytes draw the on-state shape.
+    pub appearance_state: Option<&'a [u8]>,
 }
 
 /// The same again, for a widget a form session is currently editing.
@@ -306,7 +339,13 @@ pub fn generate_with_live<R: Resolve>(
         LiveInput {
             caret_and_selection,
             live,
+            // Both spelled out rather than left to `..Default::default()`:
+            // this function's contract is that it produces exactly what it
+            // produced before either field existed, and naming them is what
+            // makes a third addition a compile error here rather than a
+            // silent change of behaviour.
             substitute: None,
+            appearance_state: None,
         },
     )
 }
@@ -332,25 +371,18 @@ pub fn generate_with_live_faces<R: Resolve>(
     r: &R,
     input: LiveInput<'_>,
 ) -> Option<GeneratedAp> {
-    build(
-        dict,
-        Some(catalog),
-        Some(font),
-        input.substitute,
-        input.caret_and_selection,
-        input.live,
-        r,
-    )
+    build(dict, Some(catalog), Some(font), input, r)
 }
 
 /// The shared builder: chrome, then the body when there is a font for one.
+/// The shared builder's live answers travel as one [`LiveInput`] rather than
+/// as four positional `Option`s, which is the same reason the public entry
+/// point takes one: a fifth answer then costs no call site a change.
 fn build<R: Resolve>(
     dict: &Dict,
     catalog: Option<&Dict>,
     font: Option<&crate::ap::TextFont<'_>>,
-    substitute: Option<crate::ap::Substitute<'_>>,
-    caret_and_selection: Option<&crate::ap::field_body::Highlight>,
-    live: Option<&crate::ap::field_body::LiveState<'_>>,
+    input: LiveInput<'_>,
     r: &R,
 ) -> Option<GeneratedAp> {
     if !needs_appearance_in(dict, catalog, r) {
@@ -391,7 +423,7 @@ fn build<R: Resolve>(
     // more. The shape is drawn whatever the text colour is: a transparent one
     // writes no colour operator but leaves the path behind, which is why an
     // unadorned radio button still reports one path object.
-    if is_checked(dict, r)
+    if is_checked_with(dict, r, input.appearance_state)
         && let Some(style) = check_style(dict, r)
     {
         let client = geom::deflate(rect, info.width, info.width);
@@ -411,10 +443,10 @@ fn build<R: Resolve>(
             dict,
             catalog,
             font,
-            substitute,
+            input.substitute,
             r,
-            caret_and_selection,
-            live,
+            input.caret_and_selection,
+            input.live,
         )
     });
     let fonts = body.as_ref().and_then(|body| body.font_resources.clone());
@@ -455,9 +487,26 @@ pub fn has_known_field_type<R: Resolve>(dict: &Dict, r: &R) -> bool {
 /// when it finds none.
 #[must_use]
 pub fn is_checked<R: Resolve>(dict: &Dict, r: &R) -> bool {
-    match dict.byte_string(names::AS, r) {
+    is_checked_with(dict, r, None)
+}
+
+/// [`is_checked`], with a session's appearance state allowed to override the
+/// dictionary's `/AS`.
+///
+/// `None` is exactly [`is_checked`]. A `Some` is read by the same rule the
+/// dictionary's own value is — anything but `Off` is on — so a session that
+/// passes a sibling's `Off` draws chrome alone and one that passes the chosen
+/// control's on-state draws the shape, whatever that state happens to be
+/// named. See [`LiveInput::appearance_state`] for why the session cannot say
+/// this through the dictionary instead.
+#[must_use]
+pub fn is_checked_with<R: Resolve>(dict: &Dict, r: &R, override_state: Option<&[u8]>) -> bool {
+    match override_state {
         Some(state) => state != names::OFF.as_bytes(),
-        None => false,
+        None => match dict.byte_string(names::AS, r) {
+            Some(state) => state != names::OFF.as_bytes(),
+            None => false,
+        },
     }
 }
 
@@ -1082,5 +1131,99 @@ mod tests {
                 .stream,
             "the old entry point is the new one with no substitute"
         );
+    }
+
+    /// A session's appearance state overrides the widget's own `/AS`, in both
+    /// directions.
+    ///
+    /// This is what lets a radio group's click be drawn. Clicking one kid is
+    /// `CPDF_FormField::CheckControl`
+    /// (`core/fpdfdoc/cpdf_formfield.cpp:683-716`), which sets the clicked
+    /// control's `/AS` to that control's own on-state and every other
+    /// control's to `Off` — one click, one state per kid, in as many different
+    /// names. A session holds one record per **field**, so it can only say
+    /// which control was chosen; this is how it says what each kid draws.
+    ///
+    /// The dictionary is untouched either way: the same widget answers both
+    /// ways depending only on what is passed.
+    #[test]
+    fn a_sessions_appearance_state_overrides_the_dictionarys_own() {
+        let catalog = Dict::new();
+        let cache = pdfrum_font::FontCache::new();
+        let font =
+            pdfrum_font::Font::load_standard(pdfrum_font::subst::StandardFont::Helvetica, &cache);
+        let width = |code: u32| crate::ap::TextFont::char_width(&font, code);
+        let text = crate::ap::TextFont {
+            metrics: crate::ap::TextFont::metrics_of(&font, &width),
+            font: &font,
+        };
+        let radio = |state: &str| {
+            widget(&[
+                ("FT", Object::Name(Name::from("Btn"))),
+                ("Ff", Object::Int(1 << 15)),
+                ("AS", Object::Name(Name::from(state))),
+            ])
+        };
+        let draw = |dict: &Dict, override_state: Option<&[u8]>| {
+            super::generate_with_live_faces(
+                dict,
+                &catalog,
+                &text,
+                &NoResolve,
+                super::LiveInput {
+                    appearance_state: override_state,
+                    ..super::LiveInput::default()
+                },
+            )
+            .expect("is a widget")
+            .stream
+        };
+        // A circle is what a radio with no caption draws, so its presence is
+        // the on-state and its absence the off.
+        let drawn = |stream: &[u8]| String::from_utf8_lossy(stream).contains(" c\n");
+
+        // On by its dictionary, forced off by the session — the sibling of a
+        // control that was just clicked.
+        let on = radio("Yes");
+        assert!(drawn(&draw(&on, None)), "its own /AS says Yes");
+        assert!(!drawn(&draw(&on, Some(b"Off"))), "the session says Off");
+
+        // Off by its dictionary, forced on — the control that was clicked,
+        // whose on-state is its own name and not the sibling's.
+        let off = radio("Off");
+        assert!(!drawn(&draw(&off, None)), "its own /AS says Off");
+        assert!(drawn(&draw(&off, Some(b"Yes"))), "the session says Yes");
+        assert!(
+            drawn(&draw(&off, Some(b"2"))),
+            "any non-Off state is on, whatever it is named"
+        );
+
+        // And `None` is byte-for-byte the unoverridden stream, which is what
+        // keeps every existing caller where it was.
+        assert_eq!(draw(&on, None), draw(&on, None));
+        assert_eq!(
+            draw(&on, Some(b"Yes")),
+            draw(&on, None),
+            "an override naming the state already shown changes nothing"
+        );
+    }
+
+    /// `is_checked` is `is_checked_with` handed no override, and the public
+    /// signature `pdfrum/src/form.rs` and `form/field.rs` call is unchanged.
+    #[test]
+    fn is_checked_is_the_unoverridden_case_of_is_checked_with() {
+        for state in ["Off", "Yes", "2", ""] {
+            let dict = widget(&[("AS", Object::Name(Name::from(state)))]);
+            assert_eq!(
+                super::is_checked(&dict, &NoResolve),
+                super::is_checked_with(&dict, &NoResolve, None),
+                "{state:?}"
+            );
+        }
+        // A widget with no `/AS` at all is off, and an override still speaks.
+        let bare = widget(&[]);
+        assert!(!super::is_checked(&bare, &NoResolve));
+        assert!(!super::is_checked_with(&bare, &NoResolve, Some(b"Off")));
+        assert!(super::is_checked_with(&bare, &NoResolve, Some(b"Yes")));
     }
 }
