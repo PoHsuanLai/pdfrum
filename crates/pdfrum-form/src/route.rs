@@ -36,6 +36,8 @@ use pdfrum_doc::ap::{self, TextFont};
 use pdfrum_doc::vt;
 use pdfrum_object::{Dict, Resolve};
 
+use crate::cascade::{Cascade, FieldRef, Keystroke, KeystrokeOutcome};
+use crate::commit;
 use crate::edit::ops::{self, TextEdit};
 use crate::event::{Button, Event, Key, Modifiers, Point};
 use crate::field::text::{Disposition, Motion, TextAction};
@@ -85,6 +87,7 @@ impl<R: Resolve> Context<'_, R> {
 pub fn apply<R: Resolve>(
     session: &mut FormSession,
     ctx: &Context<'_, R>,
+    cascade: &mut dyn Cascade,
     event: Event,
 ) -> Response {
     match event {
@@ -93,7 +96,7 @@ pub fn apply<R: Resolve>(
             button: Button::Left,
             at,
             modifiers,
-        } => mouse_down(session, ctx, at, modifiers),
+        } => mouse_down(session, ctx, cascade, at, modifiers),
         Event::MouseUp {
             button: Button::Left,
             at,
@@ -116,9 +119,9 @@ pub fn apply<R: Resolve>(
             delta,
             modifiers,
         } => wheel(session, ctx, at, delta, modifiers),
-        Event::Focus { at, .. } => focus_at(session, ctx, at),
-        Event::KeyDown { key, modifiers } => key_down(session, ctx, key, modifiers),
-        Event::Char { ch, modifiers } => char_typed(session, ctx, ch, modifiers),
+        Event::Focus { at, .. } => focus_at(session, ctx, cascade, at),
+        Event::KeyDown { key, modifiers } => key_down(session, ctx, cascade, key, modifiers),
+        Event::Char { ch, modifiers } => char_typed(session, ctx, cascade, ch, modifiers),
     }
 }
 
@@ -161,6 +164,7 @@ fn mouse_move<R: Resolve>(session: &mut FormSession, ctx: &Context<'_, R>, at: P
 fn mouse_down<R: Resolve>(
     session: &mut FormSession,
     ctx: &Context<'_, R>,
+    cascade: &mut dyn Cascade,
     at: Point,
     modifiers: Modifiers,
 ) -> Response {
@@ -185,7 +189,7 @@ fn mouse_down<R: Resolve>(
         // held it is what turns its live editor state back into a generated
         // appearance.
         return if focus::miss_drops_focus(Button::Left) {
-            kill_focus(session, ctx)
+            kill_focus(session, ctx, cascade)
         } else {
             Response::ignored()
         };
@@ -195,7 +199,7 @@ fn mouse_down<R: Resolve>(
     };
     let field = widget.field;
 
-    let mut response = take_focus(session, ctx, FocusTarget::Widget(field, id));
+    let mut response = take_focus(session, ctx, cascade, FocusTarget::Widget(field, id));
     ensure_state(session, ctx, field);
 
     // Where the click lands inside the widget is the field kind's business.
@@ -395,7 +399,12 @@ fn wheel<R: Resolve>(
 }
 
 /// Focus requested at a point, without a click.
-fn focus_at<R: Resolve>(session: &mut FormSession, ctx: &Context<'_, R>, at: Point) -> Response {
+fn focus_at<R: Resolve>(
+    session: &mut FormSession,
+    ctx: &Context<'_, R>,
+    cascade: &mut dyn Cascade,
+    at: Point,
+) -> Response {
     let hit = hit::widget_at_point(
         &ctx.page.candidates,
         session.focus.map(FocusTarget::annot),
@@ -410,7 +419,7 @@ fn focus_at<R: Resolve>(session: &mut FormSession, ctx: &Context<'_, R>, at: Poi
         return Response::ignored();
     };
     let field = widget.field;
-    let mut response = take_focus(session, ctx, FocusTarget::Widget(field, id));
+    let mut response = take_focus(session, ctx, cascade, FocusTarget::Widget(field, id));
     ensure_state(session, ctx, field);
     response.absorb(redraw(session, ctx, field, id));
     response
@@ -420,12 +429,13 @@ fn focus_at<R: Resolve>(session: &mut FormSession, ctx: &Context<'_, R>, at: Poi
 fn key_down<R: Resolve>(
     session: &mut FormSession,
     ctx: &Context<'_, R>,
+    cascade: &mut dyn Cascade,
     key: Key,
     modifiers: Modifiers,
 ) -> Response {
     // Tab moves focus, and it does so whether or not anything holds it.
     if key == Key::TAB {
-        return tab_to_next(session, ctx, modifiers);
+        return tab_to_next(session, ctx, cascade, modifiers);
     }
     let Some(target) = session.focus else {
         return Response::ignored();
@@ -438,7 +448,7 @@ fn key_down<R: Resolve>(
     let annot = target.annot();
 
     match session.fields.get(&field) {
-        Some(FieldState::Text(_)) => text_key(session, ctx, field, annot, key, modifiers),
+        Some(FieldState::Text(_)) => text_key(session, ctx, cascade, field, annot, key, modifiers),
         Some(FieldState::Choice(_)) => choice_key(session, ctx, field, annot, key, modifiers),
         Some(FieldState::Toggle(_)) => {
             // Return and Space activate; a read-only control consumes them
@@ -457,6 +467,7 @@ fn key_down<R: Resolve>(
 fn char_typed<R: Resolve>(
     session: &mut FormSession,
     ctx: &Context<'_, R>,
+    cascade: &mut dyn Cascade,
     ch: char,
     modifiers: Modifiers,
 ) -> Response {
@@ -473,9 +484,9 @@ fn char_typed<R: Resolve>(
         Some(FieldState::Text(state)) => {
             let (read_only, multi_line) = (state.config.read_only, state.config.multi_line);
             let action = field::text::route_char(ch, modifiers, accelerator, read_only, multi_line);
-            perform_text(session, ctx, field, annot, action)
+            perform_text(session, ctx, cascade, field, annot, action)
         }
-        Some(FieldState::Choice(_)) => choice_char(session, ctx, field, annot, ch),
+        Some(FieldState::Choice(_)) => choice_char(session, ctx, cascade, field, annot, ch),
         Some(FieldState::Toggle(_)) => {
             // A check box takes Return and Space as activation, and consumes
             // them read-only or not.
@@ -547,6 +558,7 @@ fn action_of<R: Resolve>(ctx: &Context<'_, R>, annot: AnnotId) -> Option<pdfrum_
 fn text_key<R: Resolve>(
     session: &mut FormSession,
     ctx: &Context<'_, R>,
+    cascade: &mut dyn Cascade,
     field: FieldId,
     annot: AnnotId,
     key: Key,
@@ -563,13 +575,14 @@ fn text_key<R: Resolve>(
         session.config.redo_on_ctrl_y,
         has_selection,
     );
-    perform_text(session, ctx, field, annot, action)
+    perform_text(session, ctx, cascade, field, annot, action)
 }
 
 /// Performs a routed text action.
 fn perform_text<R: Resolve>(
     session: &mut FormSession,
     ctx: &Context<'_, R>,
+    cascade: &mut dyn Cascade,
     field: FieldId,
     annot: AnnotId,
     action: Disposition,
@@ -584,11 +597,31 @@ fn perform_text<R: Resolve>(
     match action {
         TextAction::Commit | TextAction::Escape => {
             let mut response = Response::consumed();
-            response.absorb(kill_focus(session, ctx));
+            response.absorb(kill_focus(session, ctx, cascade));
             return response;
         }
         _ => {}
     }
+
+    // The per-character keystroke hook, before the edit is applied.
+    //
+    // `CFFL_InteractiveFormFiller::OnChar` gathers the field action and runs
+    // `/AA /K` with `willCommit` false (`cffl_interactiveformfiller.cpp:1020`)
+    // ahead of the insertion, then applies `SetSelection` and
+    // `ReplaceSelection` from what the script left behind
+    // (`cffl_textfield.cpp:216-222`). A refusal is "do nothing": the character
+    // is dropped and the field is unchanged, which is `:1052`'s
+    // `RecreatePWLWindowFromSavedState` restated.
+    let action = match keystroke_hook(session, ctx, cascade, field, action) {
+        Keyed::Perform(action) => action,
+        Keyed::Refused => return Response::consumed(),
+        Keyed::Rewrote => {
+            session.dirty.insert(field);
+            let mut response = Response::consumed();
+            response.absorb(redraw(session, ctx, field, annot));
+            return response;
+        }
+    };
 
     let max_len = match session.fields.get(&field) {
         Some(FieldState::Text(state)) => state.config.max_len.map(std::num::NonZeroU32::get),
@@ -605,6 +638,66 @@ fn perform_text<R: Resolve>(
     let mut response = Response::consumed();
     response.absorb(redraw(session, ctx, field, annot));
     response
+}
+
+/// What the per-character keystroke hook left for routing to do.
+enum Keyed {
+    /// Go ahead with this action, unchanged.
+    Perform(TextAction),
+    /// The hook rewrote the text; it is already applied, so edit nothing more.
+    Rewrote,
+    /// The hook refused. The character is dropped and the field is unchanged.
+    Refused,
+}
+
+/// Offers a text action to the per-character keystroke hook.
+///
+/// # Which actions reach a script, and which do not
+///
+/// Only the ones that **change the text**: an insertion, a return, and the
+/// two deletions. Caret movement, selection, undo, redo and scrolling never
+/// build a `CFFL_FieldAction` upstream, because `OnChar` and `OnKeyDown` gate
+/// the whole gathering on there being a change to describe — a script that
+/// saw arrow keys would be seeing keystrokes the specification says a
+/// keystroke event is not about.
+///
+/// A hook that rewrites `change` is answered by *replacing the selection*
+/// with what it returned, which is `SetActionData`
+/// (`fpdfsdk/formfiller/cffl_textfield.cpp:216-222`) — `SetSelection` then
+/// `ReplaceSelection` — rather than by re-running the original action.
+fn keystroke_hook<R: Resolve>(
+    session: &mut FormSession,
+    ctx: &Context<'_, R>,
+    cascade: &mut dyn Cascade,
+    field: FieldId,
+    action: TextAction,
+) -> Keyed {
+    let change = match action {
+        TextAction::Insert(ch) => ch.to_string(),
+        TextAction::InsertReturn => "\n".to_string(),
+        // A deletion is a keystroke whose change is empty; the selection it
+        // replaces is what the edit control already holds.
+        TextAction::Backspace | TextAction::Delete => String::new(),
+        _ => return Keyed::Perform(action),
+    };
+    let Some(reference) = field_ref(ctx, field) else {
+        return Keyed::Perform(action);
+    };
+    let Some(FieldState::Text(state)) = session.fields.get(&field) else {
+        return Keyed::Perform(action);
+    };
+    let offered = Keystroke::of(&state.edit, change);
+
+    match cascade.keystroke(&reference, offered.clone()) {
+        KeystrokeOutcome::Reject => Keyed::Refused,
+        KeystrokeOutcome::Accept(back) if back == offered => Keyed::Perform(action),
+        KeystrokeOutcome::Accept(back) => {
+            // The script moved the caret, rewrote the text, or both. Apply
+            // what it left rather than what was offered.
+            set_field_text(session, field, &back.applied());
+            Keyed::Rewrote
+        }
+    }
 }
 
 /// One text action against a live edit control.
@@ -758,6 +851,7 @@ fn choice_key<R: Resolve>(
 fn choice_char<R: Resolve>(
     session: &mut FormSession,
     ctx: &Context<'_, R>,
+    cascade: &mut dyn Cascade,
     field: FieldId,
     annot: AnnotId,
     ch: char,
@@ -791,6 +885,32 @@ fn choice_char<R: Resolve>(
         return Response::consumed();
     }
     if editable {
+        // The keystroke hook sees an editable combo's typing exactly as it
+        // sees a text field's: `CFFL_ComboBox` builds the same
+        // `CFFL_FieldAction` from its edit half
+        // (`fpdfsdk/formfiller/cffl_combobox.cpp:180-196`).
+        if let Some(reference) = field_ref(ctx, field)
+            && let Some(FieldState::Choice(state)) = session.fields.get(&field)
+            && let Some(edit) = state.edit.as_ref()
+        {
+            let offered = Keystroke::of(edit, ch.to_string());
+            match cascade.keystroke(&reference, offered.clone()) {
+                KeystrokeOutcome::Reject => return Response::consumed(),
+                KeystrokeOutcome::Accept(back) if back != offered => {
+                    set_field_text(session, field, &back.applied());
+                    if let Some(FieldState::Choice(state)) = session.fields.get_mut(&field) {
+                        state.selected.clear();
+                        state.caret_index = None;
+                        state.edit = None;
+                    }
+                    session.dirty.insert(field);
+                    let mut response = Response::consumed();
+                    response.absorb(redraw(session, ctx, field, annot));
+                    return response;
+                }
+                KeystrokeOutcome::Accept(_) => {}
+            }
+        }
         // An editable combo's typed text goes to its own edit control, and
         // typing clears the index selection.
         let mut changed = false;
@@ -1368,9 +1488,19 @@ pub fn scroll_view<R: Resolve>(
 pub fn choose<R: Resolve>(
     session: &mut FormSession,
     ctx: &Context<'_, R>,
+    cascade: &mut dyn Cascade,
     annot: AnnotId,
     index: usize,
 ) -> Response {
+    // The cascade is taken but not spent here, and that is upstream's shape
+    // rather than an omission: `CFFL_ComboBox::SaveData`
+    // (`fpdfsdk/formfiller/cffl_combobox.cpp:90`) runs only from
+    // `CommitData`, which only `KillFocusForAnnot` calls — so choosing a row
+    // changes the selection and the scripts run when the field is left.
+    // The parameter is on the signature because this is one of the three
+    // entry points that *can* reach a commit (PLAN §M15's E1 ruling), and a
+    // caller must not have to discover later that it needs one.
+    let _ = &cascade;
     let Some(widget) = ctx.widget(annot) else {
         return Response::ignored();
     };
@@ -1548,6 +1678,7 @@ fn scroll_text<R: Resolve>(
 fn tab_to_next<R: Resolve>(
     session: &mut FormSession,
     ctx: &Context<'_, R>,
+    cascade: &mut dyn Cascade,
     modifiers: Modifiers,
 ) -> Response {
     // Every modifier but shift refuses the gesture outright.
@@ -1578,7 +1709,7 @@ fn tab_to_next<R: Resolve>(
         Some(widget) => FocusTarget::Widget(widget.field, next),
         None => FocusTarget::Annot(next),
     };
-    let mut response = take_focus(session, ctx, target);
+    let mut response = take_focus(session, ctx, cascade, target);
     if let Some(field) = target.field() {
         ensure_state(session, ctx, field);
         response.absorb(redraw(session, ctx, field, next));
@@ -1604,12 +1735,111 @@ fn focus_ring<R: Resolve>(session: &FormSession, ctx: &Context<'_, R>) -> tab::F
     tab::FocusRing::build(&focusables, ctx.page.tab_order)
 }
 
+/// How a field a caller is leaving named itself to its scripts.
+///
+/// `None` for a target that is not a widget, or one this page does not carry
+/// — a script cannot be run for a field the routing context cannot see.
+fn field_ref<R: Resolve>(ctx: &Context<'_, R>, field: FieldId) -> Option<FieldRef> {
+    let widget = ctx.widget_of_field(field)?;
+    Some(FieldRef {
+        name: widget.name.clone(),
+        index: field.0,
+    })
+}
+
+/// The text a field currently holds in the session, for the commit gate.
+///
+/// Only the two families that carry text have one: a toggle's value is its
+/// `/AS` state and a push button has none, and neither reaches the commit
+/// cascade upstream either (`CFFL_CheckBox`/`CFFL_RadioButton` reach
+/// `CommitData` through `IsDataChanged`, which their own `SaveData` answers
+/// without a keystroke script).
+fn edited_text(session: &FormSession, field: FieldId) -> Option<String> {
+    match session.fields.get(&field)? {
+        FieldState::Text(text) => Some(text.edit.text.clone()),
+        FieldState::Choice(choice) if choice.config.editable => Some(choice.edit_text.clone()),
+        FieldState::Choice(_) | FieldState::Toggle(_) | FieldState::Button(_) => None,
+    }
+}
+
+/// Runs the commit cascade for a field that is losing focus.
+///
+/// This is `CFFL_FormField::KillFocusForAnnot`'s call to `CommitData`
+/// (`fpdfsdk/formfiller/cffl_formfield.cpp:306`), which is the *only* place
+/// upstream where the script gates run over a whole field value. The answer
+/// says whether focus may proceed: see [`commit::CommitOutcome::keeps_focus`]
+/// and `commit`'s module documentation for why a refusal keeps the field here
+/// where the oracle drops it.
+///
+/// `None` when nothing ran — a field with no text, or one whose value has not
+/// moved — which is the ordinary case and the one that must cost nothing.
+fn commit_field<R: Resolve>(
+    session: &mut FormSession,
+    ctx: &Context<'_, R>,
+    cascade: &mut dyn Cascade,
+    field: FieldId,
+) -> Option<commit::CommitOutcome> {
+    let reference = field_ref(ctx, field)?;
+    let edited = edited_text(session, field)?;
+    let stored = ctx.widget_of_field(field)?.value(ctx.resolve);
+    let outcome = commit::run(
+        &reference,
+        &stored,
+        &edited,
+        cascade,
+        session.config.max_calculate_depth,
+    );
+
+    if outcome.reverted {
+        // The gate refused: the field goes back to what the document holds.
+        set_field_text(session, field, &stored);
+        return Some(outcome);
+    }
+    for (index, value) in &outcome.writes {
+        // A calculation names fields by their index in the form's list, which
+        // is what `FieldId` is.
+        set_field_text(session, FieldId(*index), value);
+        session.dirty.insert(FieldId(*index));
+    }
+    Some(outcome)
+}
+
+/// Puts a field's text back to `value`, whichever text-bearing family it is.
+fn set_field_text(session: &mut FormSession, field: FieldId, value: &str) {
+    match session.fields.get_mut(&field) {
+        Some(FieldState::Text(text)) => {
+            text.edit.text = value.to_string();
+            text.edit.undo = crate::edit::UndoStack::default();
+        }
+        Some(FieldState::Choice(choice)) if choice.config.editable => {
+            choice.edit_text = value.to_string();
+        }
+        _ => {}
+    }
+}
+
 /// Gives focus to a target, committing whatever held it.
 fn take_focus<R: Resolve>(
     session: &mut FormSession,
     ctx: &Context<'_, R>,
+    cascade: &mut dyn Cascade,
     target: FocusTarget,
 ) -> Response {
+    // The outgoing field's scripts run *before* focus moves, because a
+    // refusal keeps it — `commit`'s module doc, and A63.
+    if let Some(previous) = session.focus.and_then(FocusTarget::field)
+        && session.focus != Some(target)
+        && let Some(outcome) = commit_field(session, ctx, cascade, previous)
+        && outcome.keeps_focus()
+    {
+        let annot = session.focus.map(FocusTarget::annot);
+        let mut response = Response::consumed();
+        if let Some(annot) = annot {
+            response.absorb(redraw(session, ctx, previous, annot));
+        }
+        return response;
+    }
+
     let change = focus::set(session, target);
     if !change.moved() {
         return Response::consumed();
@@ -1645,13 +1875,32 @@ fn take_focus<R: Resolve>(
 /// what turns a field's live editor state back into a generated stream
 /// (brief §3.3 step 6), so a version that only reported `FocusChanged` would
 /// leave the caret and the live text on the page.
-pub fn kill_focus<R: Resolve>(session: &mut FormSession, ctx: &Context<'_, R>) -> Response {
+pub fn kill_focus<R: Resolve>(
+    session: &mut FormSession,
+    ctx: &Context<'_, R>,
+    cascade: &mut dyn Cascade,
+) -> Response {
     // `CPWL_ComboBox::KillFocus` (`cpwl_combo_box.cpp:52-58`) shuts the list
     // *before* the base class drops focus, and returns early if it could not
     // — so a dropdown never outlives the focus that opened it. Run
     // unconditionally, ahead of `focus::kill`, because it must happen even
     // when the outgoing field is not the one that had a list open.
     let closed = close_all_popups(session);
+    // The commit runs before focus goes, because a refusal keeps the field
+    // (`commit`'s module doc, A63). `FORM_ForceToKillFocus` is the same
+    // operation and the same gate: `KillFocusForAnnot` consults `CommitData`
+    // first (`fpdfsdk/formfiller/cffl_formfield.cpp:306`).
+    if let Some(previous) = session.focus.and_then(FocusTarget::field)
+        && let Some(outcome) = commit_field(session, ctx, cascade, previous)
+        && outcome.keeps_focus()
+    {
+        let annot = session.focus.map(FocusTarget::annot);
+        let mut response = Response::consumed();
+        if let Some(annot) = annot {
+            response.absorb(redraw(session, ctx, previous, annot));
+        }
+        return response;
+    }
     let change = focus::kill(session);
     let Some(was) = change.from else {
         // Nothing held focus, but a list may still have been open — a host
