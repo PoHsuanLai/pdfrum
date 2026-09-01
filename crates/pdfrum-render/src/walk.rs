@@ -412,7 +412,8 @@ fn outside(bbox: Rect, cull: Rect) -> bool {
 
 /// Two boxes that bracket a transformed path's exact bounding box: the box of
 /// its **on-curve endpoints**, which is contained in it, and the box of **every
-/// control point**, which contains it. `None` when the path has no segments.
+/// control point**, which contains it. `None` when the path has no segments,
+/// and `None` when any coordinate is not finite.
 ///
 /// Both are one pass over the elements with four `min`/`max` per point and no
 /// segment reconstruction. The exact box — [`path_bbox`] — solves each cubic's
@@ -425,6 +426,30 @@ fn outside(bbox: Rect, cull: Rect) -> bool {
 /// and a superset that misses proves the true box misses. Only a path whose
 /// curve bulges across the clip edge while its endpoints and hull straddle it
 /// differently pays for the solve, and it still gets the same answer.
+///
+/// # Why a non-finite coordinate declines the whole path
+///
+/// `f64::min` and `f64::max` *drop* a NaN operand and return the other, and
+/// the first point of a box is taken rather than folded — so a NaN on a drawn
+/// **endpoint** lands in the inner box unfolded. `outside` compares with `>`
+/// and `<`, and every comparison against a NaN is false, so
+/// `!outside(inner, cull)` answered *keep* for every clip on the page.
+///
+/// The exact box does not agree. kurbo's extrema solve drops the NaN exactly
+/// as `min`/`max` do, so `path_bbox` comes back finite and `outside` answers
+/// it honestly: cull, for a clip the path's finite points miss. The bracket
+/// kept where the exact test culled — a missed cull rather than a wrong one,
+/// so nothing was ever drawn incorrectly, but a disagreement all the same, and
+/// agreeing is the bracket's whole contract.
+///
+/// A NaN *control* point is harmless by the same accident: it reaches only the
+/// outer box, where the fold drops it, and kurbo drops it too. The guard is
+/// written on finiteness rather than on which box a point reaches because that
+/// symmetry is a property of today's kurbo, not a promise.
+///
+/// So any non-finite coordinate declines the bracket and the path takes the
+/// exact spelling — the same policy [`cull_rect`] applies to a clip box it
+/// cannot invert finitely. No corpus document reaches it; a crafted one could.
 fn path_cull_bounds(path: &kurbo::BezPath, matrix: Affine) -> Option<(Rect, Rect)> {
     // A path that does not open with a move is not a shape kurbo's `segments`
     // reads the way this bracket assumes, so it takes the exact spelling.
@@ -433,8 +458,17 @@ fn path_cull_bounds(path: &kurbo::BezPath, matrix: Affine) -> Option<(Rect, Rect
     }
     let mut inner: Option<Rect> = None;
     let mut outer: Option<Rect> = None;
-    let add = |bounds: &mut Option<Rect>, p: kurbo::Point| {
+    // Set by `add` on the first non-finite transformed point, and checked once
+    // at the end: a path with a NaN in it is rare enough that bailing out of
+    // the loop early would buy nothing, and the flag keeps `add` an
+    // expression.
+    let mut finite = true;
+    let mut add = |bounds: &mut Option<Rect>, p: kurbo::Point| {
         let p = matrix * p;
+        // After the transform, not before: an affine with a non-finite
+        // coefficient turns finite input non-finite, and it is the point the
+        // box is built from that has to be checked.
+        finite &= p.x.is_finite() && p.y.is_finite();
         *bounds = Some(match *bounds {
             Some(r) => Rect::new(r.x0.min(p.x), r.y0.min(p.y), r.x1.max(p.x), r.y1.max(p.y)),
             None => Rect::new(p.x, p.y, p.x, p.y),
@@ -466,6 +500,9 @@ fn path_cull_bounds(path: &kurbo::BezPath, matrix: Affine) -> Option<(Rect, Rect
             }
             kurbo::PathEl::ClosePath => {}
         }
+    }
+    if !finite {
+        return None;
     }
     // A path with no drawn segment at all — one bare `MoveTo`, or a move and a
     // close — has no endpoint box, and its exact box is `Rect::default()`
@@ -2106,6 +2143,23 @@ mod tests {
         }))
     }
 
+    /// [`path_object`] with the object matrix the cull actually applies.
+    fn path_object_with_matrix(path: BezPath, matrix: Affine) -> PageObject {
+        PageObject::Path(Box::new(Content {
+            object: PathObject {
+                path,
+                matrix,
+                fill_rule: pdfrum_page::FillRule::Winding,
+                stroke: false,
+            },
+            state: GraphicsState::default(),
+            marks: ContentMarks::new(),
+            content_stream: 0,
+            dirty: false,
+            active: true,
+        }))
+    }
+
     fn rect(x0: f64, y0: f64, x1: f64, y1: f64) -> BezPath {
         let mut p = BezPath::new();
         p.move_to((x0, y0));
@@ -2166,19 +2220,7 @@ mod tests {
         ];
         for shape in &shapes {
             for matrix in matrices {
-                let object = PageObject::Path(Box::new(Content {
-                    object: PathObject {
-                        path: shape.clone(),
-                        matrix,
-                        fill_rule: pdfrum_page::FillRule::Winding,
-                        stroke: false,
-                    },
-                    state: GraphicsState::default(),
-                    marks: ContentMarks::new(),
-                    content_stream: 0,
-                    dirty: false,
-                    active: true,
-                }));
+                let object = path_object_with_matrix(shape.clone(), matrix);
                 let exact = path_bbox(shape, matrix);
                 // A grid of clips that slides across the shape a half unit at
                 // a time, so every edge relation — clear, touching, straddling
@@ -2199,6 +2241,126 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// The two inputs the sliding-clip test above cannot reach: a clip of zero
+    /// size, and a path carrying a coordinate that is not a number.
+    ///
+    /// The zero-size clip is the easy half — `outside` is unchanged by it, so
+    /// a degenerate clip is only a rectangle like any other, and this pins
+    /// that rather than assuming it.
+    ///
+    /// The NaN half is the finding. `f64::min` and `f64::max` drop a NaN
+    /// operand and return the other, so the bracket's fold over a path with a
+    /// NaN *endpoint* used to put that NaN straight into the inner box — and
+    /// `outside` compares with `>` and `<`, every comparison against a NaN
+    /// being false, so `!outside(inner, cull)` answered **keep** for every
+    /// clip on the page. The exact box does not agree: kurbo's extrema solve
+    /// drops the NaN the same way `min`/`max` do, so `path_bbox` is finite and
+    /// `outside` answers it honestly. The bracket kept where the exact test
+    /// culled, and a bracket that changes the answer at all is the one thing
+    /// this bracket may not do.
+    ///
+    /// The direction matters for how alarming this was: the disagreement is a
+    /// *missed* cull, not a wrong one, so nothing was ever drawn incorrectly.
+    /// It is still a disagreement, and the review found it before a document
+    /// did — no corpus file reaches it.
+    #[test]
+    fn a_degenerate_clip_and_a_non_finite_point_agree_with_the_exact_answer() {
+        // A NaN on a drawn endpoint, which is what reaches the inner box. The
+        // other coordinates are finite and far from the clips below, so the
+        // exact box says "cull" clearly and the disagreement is unambiguous.
+        let mut nan_endpoint = BezPath::new();
+        nan_endpoint.move_to((100.0, 100.0));
+        nan_endpoint.line_to((f64::NAN, 130.0));
+
+        // The same, with a finite endpoint after it, so the inner box is a
+        // real rectangle with a NaN folded into it rather than a NaN point.
+        let mut nan_midpoint = BezPath::new();
+        nan_midpoint.move_to((100.0, 100.0));
+        nan_midpoint.line_to((f64::NAN, 130.0));
+        nan_midpoint.line_to((105.0, 105.0));
+
+        // A NaN control point, which reaches only the outer box. This one the
+        // two always agreed on — kurbo drops it exactly as the fold does — and
+        // it is here so a later reader can see that the guard is not what makes
+        // them agree.
+        let mut nan_control = BezPath::new();
+        nan_control.move_to((100.0, 100.0));
+        nan_control.curve_to((f64::NAN, 110.0), (120.0, 110.0), (130.0, 100.0));
+
+        let mut infinite_endpoint = BezPath::new();
+        infinite_endpoint.move_to((100.0, 100.0));
+        infinite_endpoint.line_to((f64::INFINITY, 100.0));
+
+        let mut ordinary = BezPath::new();
+        ordinary.move_to((100.0, 100.0));
+        ordinary.line_to((130.0, 130.0));
+
+        let shapes = [
+            nan_endpoint.clone(),
+            nan_midpoint,
+            nan_control.clone(),
+            infinite_endpoint.clone(),
+            ordinary.clone(),
+            rect(0.0, 0.0, 2.0, 2.0),
+        ];
+        for shape in &shapes {
+            for matrix in [
+                Affine::IDENTITY,
+                Affine::new([2.0, 0.5, -0.5, 2.0, 1.0, 1.0]),
+            ] {
+                let object = path_object_with_matrix(shape.clone(), matrix);
+                let exact = path_bbox(shape, matrix);
+                // The clip the review asked for, plus a slide across the
+                // region where the NaN paths' boxes actually live — the
+                // disagreement was never at the origin.
+                let mut x = -20.0;
+                while x < 140.0 {
+                    let mut y = 90.0;
+                    while y < 140.0 {
+                        for (w, h) in [(0.0, 0.0), (30.0, 30.0)] {
+                            let cull = Rect::new(x, y, x + w, y + h);
+                            assert_eq!(
+                                culled(&object, cull),
+                                outside(exact, cull),
+                                "bracket disagreed at {cull:?} on {shape:?} under {matrix:?}"
+                            );
+                        }
+                        y += 2.5;
+                    }
+                    x += 2.5;
+                }
+                // The zero-size clip the review named, at the exact spot it
+                // named it.
+                let degenerate = Rect::new(1.0, 1.0, 1.0, 1.0);
+                assert_eq!(
+                    culled(&object, degenerate),
+                    outside(exact, degenerate),
+                    "bracket disagreed on the degenerate clip"
+                );
+            }
+        }
+
+        // And the mechanism directly, rather than only through the agreement
+        // above: a non-finite coordinate declines the bracket, so it is the
+        // exact test that answers.
+        for declined in [&nan_endpoint, &nan_control, &infinite_endpoint] {
+            assert!(
+                path_cull_bounds(declined, Affine::IDENTITY).is_none(),
+                "a non-finite coordinate must decline the bracket: {declined:?}"
+            );
+        }
+        assert!(
+            path_cull_bounds(&ordinary, Affine::IDENTITY).is_some(),
+            "a finite path must still take the bracket"
+        );
+        // A finite path under a non-finite transform declines too: the check
+        // is on the transformed point, which is the one the box is built from.
+        assert!(
+            path_cull_bounds(&ordinary, Affine::translate((f64::NAN, 0.0))).is_none(),
+            "a non-finite matrix must decline the bracket"
+        );
     }
 
     #[test]
