@@ -109,6 +109,12 @@ pub struct Options {
     /// the default rather than failing, exactly as an unknown renderer name
     /// does upstream.
     pub use_renderer: Option<String>,
+    /// Apply the sibling `.evt` script, from `--send-events`.
+    ///
+    /// The parser is [`crate::events::parse_evt`]; dispatch onto widgets is
+    /// the other M14 slice, so this flag currently records the parsed count
+    /// and leaves the page pixels unchanged.
+    pub send_events: bool,
     /// Flags recognized but not implemented, in the order they were given.
     pub unsupported: Vec<String>,
 }
@@ -129,7 +135,6 @@ pub enum ParseError {
 /// must not fail on them, because the harness runs one fixed command line
 /// against every candidate and reads the tiers from what comes back.
 const ACCEPTED_SWITCHES: &[&str] = &[
-    "--send-events",
     "--mem-document",
     "--render-oneshot",
     "--lcd-text",
@@ -214,6 +219,8 @@ pub fn parse(args: &[String]) -> Result<Options, ParseError> {
             options.font_dirs.push(PathBuf::from(value));
         } else if arg == "--croscore-font-names" {
             options.croscore_font_names = true;
+        } else if arg == "--send-events" {
+            options.send_events = true;
         } else if arg == "--show-metadata" {
             options.show_metadata = true;
         } else if arg == "--md5" {
@@ -318,6 +325,7 @@ Usage: pdfrum-tool [OPTION] [FILE]...
   --md5                  - write output image paths and their md5 hashes to stdout
   --pages=<number>(-<number>) - only render the given 0-based page(s)
   --password=<secret>    - password to decrypt the PDF with
+  --send-events          - send input described by .evt file
   --save                 - write the document back out as <pdf-name>.saved.pdf
   --save-decrypted       - the same, with the security handler removed
                            (no oracle counterpart; see Options::save)
@@ -404,6 +412,13 @@ mod tests {
         let options = parse_args(&["--scale=2", "--time=1399672130", "a.pdf"]).unwrap();
         assert_eq!(options.unsupported, ["--scale=2", "--time=1399672130"]);
         assert_eq!(options.files, [PathBuf::from("a.pdf")]);
+    }
+
+    #[test]
+    fn send_events_is_read_rather_than_recorded_as_unsupported() {
+        let options = parse_args(&["--send-events", "a.pdf"]).unwrap();
+        assert!(options.send_events);
+        assert!(options.unsupported.is_empty());
     }
 
     #[test]
