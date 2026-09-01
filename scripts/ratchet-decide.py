@@ -68,10 +68,10 @@ import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BASE = os.path.join(ROOT, "benches", "baseline.json")
-DEFAULT_LOG = (
-    "/tmp/claude-1002/-mnt-data2-pdfium/"
-    "ede35de1-5746-41fa-ab05-706565ff2804/scratchpad/bench2.log"
-)
+# M12b P3's own run, kept in the tree so its verdict is reproducible from the
+# repository alone rather than from a scratch directory that no longer exists.
+# Pass a path to check a fresh run instead.
+DEFAULT_LOG = os.path.join(ROOT, "docs", "status", "data", "M12b-P3-bench.txt")
 
 # The only entries with a pre-argued structural case. Adding to this set is a
 # decision someone has to make deliberately, in a commit that precedes the run.
