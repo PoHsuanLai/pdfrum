@@ -46,9 +46,15 @@ pub struct Keystroke {
     /// The field's text before the change.
     pub value: String,
     /// Where the replaced range starts, as a character index.
-    pub selection_start: u32,
-    /// Where it ends, as a character index.
-    pub selection_end: u32,
+    ///
+    /// Signed, and negative is a real value a script can write: `event.selStart`
+    /// is stored as an `int` upstream (`fxjs/cjs_event.cpp:206` takes it
+    /// through `ToInt32Reentrant`) and read back into `CalcMergedString`
+    /// without a clamp. See [`Keystroke::applied`] for what an out-of-range
+    /// index does.
+    pub selection_start: i32,
+    /// Where it ends, as a character index. Signed for the same reason.
+    pub selection_end: i32,
 }
 
 /// What the keystroke hook decided.
@@ -178,8 +184,8 @@ impl Keystroke {
         Keystroke {
             change: change.into(),
             value: edit.text.clone(),
-            selection_start: u32::try_from(start).unwrap_or(u32::MAX),
-            selection_end: u32::try_from(end).unwrap_or(u32::MAX),
+            selection_start: i32::try_from(start).unwrap_or(i32::MAX),
+            selection_end: i32::try_from(end).unwrap_or(i32::MAX),
         }
     }
 
@@ -188,24 +194,50 @@ impl Keystroke {
     ///
     /// A hook that rewrote `change` — or moved the selection — is answered by
     /// applying what it returned rather than what was offered, which is the
-    /// whole point of handing the payload back. Indices past the text clamp
-    /// to its end rather than panicking, because a script may set them.
+    /// whole point of handing the payload back.
+    ///
+    /// # An out-of-range index yields nothing, not a clamp
+    ///
+    /// This is `CalcMergedString` (`fxjs/cjs_publicmethods.cpp:127-137`)
+    /// reproduced exactly, and the two halves do not agree with each other:
+    ///
+    /// - the **prefix** is `value.First(SelStart())`, and `First(n)` is
+    ///   `Substr(0, n)`, which returns the **empty** string whenever `n`
+    ///   exceeds the length (`core/fxcrt/string_view_template.h:226-249`).
+    ///   `SelStart()` is an `int` widened to `size_t`, so a script writing
+    ///   `event.selStart = -1` produces an enormous count and an empty prefix
+    ///   — the field's leading text vanishes.
+    /// - the **suffix** is guarded explicitly by `end >= 0 && end < length`,
+    ///   so a negative or past-the-end `selEnd` yields an empty suffix, which
+    ///   is the same answer a clamp to the end would give.
+    ///
+    /// Clamping the prefix instead — which is the reasonable behaviour, and
+    /// what this function used to do — would keep text the oracle drops on
+    /// an input any `/AA /K` script can produce in one assignment.
     #[must_use]
     pub fn applied(&self) -> String {
         let chars: Vec<char> = self.value.chars().collect();
         let len = chars.len();
-        let start = usize::try_from(self.selection_start)
-            .unwrap_or(len)
-            .min(len);
-        let end = usize::try_from(self.selection_end).unwrap_or(len).min(len);
-        let (lo, hi) = if start <= end {
-            (start, end)
-        } else {
-            (end, start)
-        };
-        let mut out: String = chars.get(..lo).unwrap_or_default().iter().collect();
+        // `First(count)`: in range or nothing. Note `count == len` is in
+        // range and yields the whole string.
+        let prefix: String = usize::try_from(self.selection_start)
+            .ok()
+            .filter(|start| *start <= len)
+            .and_then(|start| chars.get(..start))
+            .unwrap_or_default()
+            .iter()
+            .collect();
+        // `Substr(end)`, behind the caller's own `end >= 0 && end < length`.
+        let suffix: String = usize::try_from(self.selection_end)
+            .ok()
+            .filter(|end| *end < len)
+            .and_then(|end| chars.get(end..))
+            .unwrap_or_default()
+            .iter()
+            .collect();
+        let mut out = prefix;
         out.push_str(&self.change);
-        out.extend(chars.get(hi..).unwrap_or_default().iter());
+        out.push_str(&suffix);
         out
     }
 }

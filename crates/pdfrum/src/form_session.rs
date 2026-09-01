@@ -393,7 +393,7 @@ impl<'a> FormSession<'a> {
             // Nothing held focus, so nothing moved.
             return Response::ignored();
         };
-        self.with_page(page, pdfrum_form::kill_focus)
+        self.with_page_scripted(page, pdfrum_form::kill_focus)
     }
 
     /// Which annotation currently has the keyboard, if any.
@@ -476,8 +476,8 @@ impl<'a> FormSession<'a> {
     /// An `index` past the end of the options is ignored and the response is
     /// unconsumed, so a host cannot corrupt a field by miscounting.
     pub fn choose(&mut self, annot: pdfrum_form::session::AnnotId, index: usize) -> EventResponse {
-        self.with_page(annot.page, |inner, ctx| {
-            pdfrum_form::route::choose(inner, ctx, annot, index)
+        self.with_page_scripted(annot.page, |inner, ctx, cascade| {
+            pdfrum_form::route::choose(inner, ctx, cascade, annot, index)
         })
     }
 
@@ -665,7 +665,9 @@ impl<'a> FormSession<'a> {
     /// The page is read on first use and kept: a replay sends dozens of
     /// events at one page, and the `/Annots` walk is the expensive half.
     fn dispatch(&mut self, page: u32, event: Event) -> Response {
-        self.with_page(page, |inner, ctx| pdfrum_form::apply(inner, ctx, event))
+        self.with_page_scripted(page, |inner, ctx, cascade| {
+            pdfrum_form::apply(inner, ctx, cascade, event)
+        })
     }
 
     /// Reads a page, builds its routing context, and runs `body` against it.
@@ -699,6 +701,28 @@ impl<'a> FormSession<'a> {
             permissions: self.permissions(),
         };
         body(&mut self.inner, &ctx)
+    }
+
+    /// [`FormSession::with_page`] for the three entry points that can commit
+    /// a field, which take the script hooks as a second parameter.
+    ///
+    /// The hooks are [`NoScripts`](pdfrum_form::NoScripts) — the script-free
+    /// cascade, whose method defaults *are* a JavaScript-off viewer's
+    /// behaviour rather than a stub of it. A build that runs a document's own
+    /// scripts substitutes a different value here and changes no call site,
+    /// which is the whole reason the seam is a trait.
+    fn with_page_scripted<T: Default>(
+        &mut self,
+        page: u32,
+        body: impl FnOnce(
+            &mut pdfrum_form::FormSession,
+            &pdfrum_form::Context<'_, pdfrum_parser::Document>,
+            &mut dyn pdfrum_form::Cascade,
+        ) -> T,
+    ) -> T {
+        self.with_page(page, |inner, ctx| {
+            body(inner, ctx, &mut pdfrum_form::NoScripts)
+        })
     }
 
     /// Routes an event that goes to whatever holds focus.

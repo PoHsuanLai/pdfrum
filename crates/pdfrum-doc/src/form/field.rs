@@ -398,6 +398,59 @@ impl Form {
     pub fn field(&self, name: &str) -> Option<&Field> {
         self.fields.iter().find(|field| field.name == name)
     }
+
+    /// The order a recalculation visits fields in, read from `/AcroForm /CO`.
+    ///
+    /// Indices into [`Form::fields`], in the order the array lists them.
+    ///
+    /// # An absent `/CO` is the answer, not a fallback
+    ///
+    /// A document with no `/CO` array recalculates **nothing**, however many
+    /// of its fields carry an `/AA /C` script. `CountFieldsInCalculationOrder`
+    /// returns 0 and `GetFieldInCalculationOrder` returns null the moment
+    /// `GetArrayFor("CO")` finds nothing
+    /// (`core/fpdfdoc/cpdf_interactiveform.cpp:739-761`), and the sweep that
+    /// drives calculation walks exactly that list. So an empty answer here is
+    /// "no calculation runs", and a reader tempted to fall back to "every
+    /// field, in `/Fields` order" would recalculate documents the oracle
+    /// leaves alone — visibly, on any file with a calculation script and no
+    /// `/CO`.
+    ///
+    /// Entries that resolve to nothing, to a non-dictionary, or to a
+    /// dictionary that is not one of this form's terminal fields are dropped,
+    /// which is `GetFieldByDict` answering null. Duplicates are kept: the
+    /// array is the order, and the oracle indexes it positionally.
+    #[must_use]
+    pub fn calculation_order<R: Resolve>(&self, catalog: &Dict, r: &R) -> Vec<usize> {
+        let Some(acro) = catalog.dict(names::ACRO_FORM, r) else {
+            return Vec::new();
+        };
+        let Some(order) = acro.array(names::CALCULATION_ORDER, r) else {
+            return Vec::new();
+        };
+        let mut out = Vec::new();
+        for index in 0..order.len() {
+            // The reference identifies the field where there is one, which is
+            // the ordinary shape — `/CO` holds indirect references to the same
+            // field dictionaries `/Fields` does. A directly-written entry is
+            // matched on the dictionary itself, which is what `GetFieldByDict`
+            // compares.
+            let reference = order.reference_at(index);
+            let dict = order.dict_at(index, r);
+            let found = self
+                .fields
+                .iter()
+                .position(|field| match (reference, &dict) {
+                    (Some(reference), _) if field.reference == Some(reference) => true,
+                    (_, Some(dict)) => field.reference.is_none() && &field.dict == dict,
+                    _ => false,
+                });
+            if let Some(found) = found {
+                out.push(found);
+            }
+        }
+        out
+    }
 }
 
 /// Walks one node of the field tree, collecting the terminal fields under it.
@@ -1410,5 +1463,121 @@ mod tests {
         // (bit 24).
         assert!(!FieldFlags(1 << 17).is_editable_combo());
         assert!(!FieldFlags(1 << 22).do_not_scroll());
+    }
+
+    // ---- `/CO`, the calculation order ----
+
+    /// A map-backed resolver, because `/CO` is a list of *references* and
+    /// `NoResolve` cannot follow one.
+    struct Store(std::collections::HashMap<u32, std::sync::Arc<Object>>);
+
+    impl Store {
+        fn of(pairs: impl IntoIterator<Item = (u32, Object)>) -> Store {
+            Store(
+                pairs
+                    .into_iter()
+                    .map(|(num, obj)| (num, std::sync::Arc::new(obj)))
+                    .collect(),
+            )
+        }
+    }
+
+    impl Resolve for Store {
+        fn fetch(&self, r: ObjRef) -> Result<std::sync::Arc<Object>, pdfrum_object::Error> {
+            self.0
+                .get(&r.num)
+                .map(std::sync::Arc::clone)
+                .ok_or(pdfrum_object::Error::UnresolvedRef(r))
+        }
+    }
+
+    fn reference(num: u32) -> Object {
+        Object::Ref(ObjRef { num, generation: 0 })
+    }
+
+    /// Three text fields as objects 1, 2 and 3, and the catalog that lists
+    /// them — `co` becomes the `/CO` array when it is `Some`.
+    fn three_fields(co: Option<Object>) -> (Dict, Store) {
+        let field_of = |title: &str| {
+            Object::Dict(dict(&[
+                ("FT", name("Tx")),
+                ("T", text(title)),
+                ("V", text("")),
+            ]))
+        };
+        let store = Store::of([(1, field_of("a")), (2, field_of("b")), (3, field_of("c"))]);
+        let mut acro = vec![(
+            "Fields",
+            Object::Array(Array::of([reference(1), reference(2), reference(3)])),
+        )];
+        if let Some(co) = co {
+            acro.push(("CO", co));
+        }
+        let catalog = dict(&[("AcroForm", Object::Dict(dict(&acro)))]);
+        (catalog, store)
+    }
+
+    fn order_of(co: Option<Object>) -> Vec<usize> {
+        let (catalog, store) = three_fields(co);
+        let (limits, mut diags) = (Limits::default(), Diagnostics::default());
+        let form = Form::load(&catalog, &store, &limits, &mut diags).expect("form");
+        assert_eq!(form.len(), 3, "the fixture has three fields");
+        form.calculation_order(&catalog, &store)
+    }
+
+    /// The rule the whole feature turns on: no `/CO`, no calculation. Falling
+    /// back to "every field" here would recalculate documents the oracle
+    /// leaves alone (`cpdf_interactiveform.cpp:739-745`).
+    #[test]
+    fn a_document_with_no_calculation_order_calculates_nothing() {
+        assert_eq!(order_of(None), Vec::<usize>::new());
+        // An empty array is the same answer arrived at the other way.
+        assert_eq!(order_of(Some(Object::Array(Array::of([])))), Vec::new());
+    }
+
+    /// The array's order is the answer, and it need not be `/Fields`' order.
+    #[test]
+    fn the_array_is_the_order() {
+        assert_eq!(
+            order_of(Some(Object::Array(Array::of([
+                reference(3),
+                reference(1),
+                reference(2),
+            ])))),
+            vec![2, 0, 1]
+        );
+        // A subset is legal: only the fields listed are calculated.
+        assert_eq!(
+            order_of(Some(Object::Array(Array::of([reference(2)])))),
+            vec![1]
+        );
+    }
+
+    /// `GetFieldByDict` answers null for anything it cannot map, and the
+    /// sweep skips it rather than stopping.
+    #[test]
+    fn entries_that_resolve_to_nothing_are_dropped() {
+        assert_eq!(
+            order_of(Some(Object::Array(Array::of([
+                reference(9),   // no such object
+                Object::Int(7), // not a dictionary at all
+                reference(2),
+            ])))),
+            vec![1]
+        );
+        // A `/CO` that is not an array is not an order.
+        assert_eq!(order_of(Some(Object::Int(1))), Vec::<usize>::new());
+    }
+
+    /// The oracle indexes the array positionally, so a repeated field is
+    /// calculated twice rather than de-duplicated.
+    #[test]
+    fn duplicates_are_kept_because_the_array_is_indexed_positionally() {
+        assert_eq!(
+            order_of(Some(Object::Array(Array::of(
+                [reference(1), reference(1),]
+            )))),
+            vec![0, 0]
+        );
     }
 }

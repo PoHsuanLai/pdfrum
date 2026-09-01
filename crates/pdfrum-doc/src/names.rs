@@ -53,6 +53,8 @@ pdfrum_object::names! {
     FLAGS = "Flags";
     /// The fields a form action applies to (`/Fields`).
     FIELDS = "Fields";
+    /// The order a recalculation visits fields in (`/AcroForm /CO`).
+    CALCULATION_ORDER = "CO";
     /// A JavaScript action's program (`/JS`).
     JS = "JS";
     /// The action a reader runs when the document opens (`/OpenAction`).

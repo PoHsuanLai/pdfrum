@@ -128,6 +128,16 @@ pub struct SessionConfig {
     /// capacity that could not hold one would have to evict half a group.
     pub max_undo_items: u32,
     /// How deep a calculation may trigger another calculation.
+    ///
+    /// **One by default, which is the oracle's answer and not a loose
+    /// reading of it.** `CPDFSDK_InteractiveForm::busy_`
+    /// (`fpdfsdk/cpdfsdk_interactiveform.cpp:259-264`) is a plain flag: the
+    /// outer sweep is authoritative and every nested call it provokes returns
+    /// immediately, so upstream permits **no** nesting at all. The knob makes
+    /// that configurable rather than looser — mirroring
+    /// [`Limits::max_calculate_depth`](pdfrum_common::Limits::max_calculate_depth),
+    /// which is where the same number lives for a caller configuring the
+    /// script engine rather than the session.
     pub max_calculate_depth: u32,
 }
 
@@ -151,7 +161,7 @@ impl Default for SessionConfig {
             redo_on_ctrl_y: true,
             focusable: vec![Subtype::Widget],
             max_undo_items: crate::edit::UndoStack::DEFAULT_MAX,
-            max_calculate_depth: 8,
+            max_calculate_depth: pdfrum_common::Limits::default().max_calculate_depth,
         }
     }
 }
