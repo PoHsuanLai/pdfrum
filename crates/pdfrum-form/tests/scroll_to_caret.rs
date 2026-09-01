@@ -148,8 +148,11 @@ fn deleting_back_to_the_start_unscrolls() {
 /// `auto_scroll` gates the whole thing, as `enable_scroll_` gates
 /// `SetScrollPosX` at its first statement (`cpwl_edit_impl.cpp:1163`).
 ///
-/// A field carrying `DoNotScroll` keeps its view at the origin however far
-/// past the plate the caret goes — which is the flag's entire meaning.
+/// A field carrying `DoNotScroll` keeps its view at the origin. The flag's
+/// *other* half — that such a field also stops accepting characters once its
+/// plate is full, `CPWL_EditImpl::IsTextOverflow` (`:1984-1996`) — is
+/// `tests/text_overflow.rs`; here the run is longer than the field will take
+/// and the assertion is only that nothing moved.
 #[test]
 fn a_field_that_declines_to_scroll_does_not() {
     let config = config();
