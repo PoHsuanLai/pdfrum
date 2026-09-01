@@ -415,27 +415,71 @@ fn printf_arg(value: &JsValue, context: &mut Context) -> JsResult<pdfrum_script:
 /// `util.printd(cFormat, oDate, bXFAPicture)` — bound to
 /// `pdfrum_script::util_printd`.
 fn util_printd(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    const NAME: &str = "util.printd";
     if args.len() < 2 {
-        return Err(param_error("util.printd"));
+        return Err(param_error(NAME));
     }
     let format = args.get_or_undefined(0).clone();
     let date = args.get_or_undefined(1).clone();
-    let millis = date_millis(&date, context)?;
 
-    // A numeric first argument selects one of the built-in styles rather than
-    // being a picture string (`cjs_util.cpp:117-140`).
-    let result = if let Some(style) = format.as_number() {
+    // The four gates, in `CJS_Util::printd`'s own order
+    // (`fxjs/cjs_util.cpp:172-222`), because each has its own message and
+    // `util_printd_expected.txt` asserts all four verbatim.
+    //
+    // (1) The second argument must be a `Date` **object**, not something
+    //     that could become one: `42` and `"clams"` are refused rather than
+    //     coerced (`:176-178`).
+    let Some(object) = date.as_object().filter(is_date) else {
+        return Err(thrown(NAME, &pdfrum_script::Error::NotADate));
+    };
+    // (2) …and it must not hold NaN, which `new Date(undefined)` does
+    //     (`:180-182`).
+    let millis = {
+        let time = object.get(boa_engine::js_string!("getTime"), context)?;
+        let Some(callable) = time.as_callable() else {
+            return Err(thrown(NAME, &pdfrum_script::Error::NotADate));
+        };
+        callable.call(&date, &[], context)?.to_number(context)?
+    };
+    if millis.is_nan() {
+        return Err(thrown(NAME, &pdfrum_script::Error::InvalidDate));
+    }
+    // `FX_LocalTime` before the components are read — `:185`.
+    let millis = to_local_time(millis, context);
+
+    // (3) A numeric first argument selects one of four canned styles, and a
+    //     number outside `0..=2` is a *value* error (`:193-214`).
+    if let Some(style) = format.as_number() {
         #[allow(clippy::cast_possible_truncation)]
         let style = style as i32;
-        pdfrum_script::util_printd_style(style, millis)
-    } else {
-        let format = string_of(&format, context)?;
-        pdfrum_script::util_printd(&format, millis)
-    };
-    match result {
-        Ok(text) => Ok(JsValue::from(boa_engine::js_string!(text))),
-        Err(error) => Err(thrown("util.printd", &error)),
+        return match pdfrum_script::util_printd_style(style, millis) {
+            Ok(text) => Ok(JsValue::from(boa_engine::js_string!(text))),
+            Err(error) => Err(thrown(NAME, &error)),
+        };
     }
+    // (4) …and anything that is neither a number nor a string is a *type*
+    //     error, which is why `util.printd({clams: 3}, d)` does not
+    //     stringify its argument (`:216-217`).
+    if !format.is_string() {
+        return Err(thrown(NAME, &pdfrum_script::Error::Type));
+    }
+    // XFA pictures are declined upstream too, with their own message
+    // (`:219-222`).
+    if args.len() > 2 && args.get_or_undefined(2).to_boolean() {
+        return Err(thrown(NAME, &pdfrum_script::Error::NotSupported));
+    }
+
+    let format = string_of(&format, context)?;
+    match pdfrum_script::util_printd(&format, millis) {
+        Ok(text) => Ok(JsValue::from(boa_engine::js_string!(text))),
+        Err(error) => Err(thrown(NAME, &error)),
+    }
+}
+
+/// Whether an object is a `Date` — `fxv8::IsDate`, which is a type test and
+/// not a coercion.
+fn is_date(object: &boa_engine::JsObject) -> bool {
+    object.is::<boa_engine::builtins::date::Date>()
 }
 
 /// `util.printx(cFormat, cSource)` — bound to `pdfrum_script::util_printx`.
@@ -501,19 +545,38 @@ pub(crate) fn thrown(name: &str, error: &pdfrum_script::Error) -> JsError {
     qualified(name, &error.to_string())
 }
 
-/// Milliseconds since the epoch from a value the script offered as a date.
+/// `FX_LocalTime` — an epoch instant shifted into the viewer's local zone.
 ///
-/// A `Date` gives its own time; anything else is coerced to a number, which
-/// is what `ToDateReentrant` does.
-fn date_millis(value: &JsValue, context: &mut Context) -> JsResult<f64> {
-    if let Some(object) = value.as_object() {
-        let time = object.get(boa_engine::js_string!("getTime"), context)?;
-        if let Some(callable) = time.as_callable() {
-            return callable.call(value, &[], context)?.to_number(context);
-        }
-    }
-    value.to_number(context)
+/// **`util.printd` prints *local* time, and this is where that happens.**
+/// `CJS_Util::printd` calls `FX_LocalTime(ToDoubleReentrant(v8_date))`
+/// (`fxjs/cjs_util.cpp:185`) *before* extracting year, month, day, hour,
+/// minute and second, and `FX_LocalTime` is
+/// `d + GetLocalTZA() + GetDaylightSavingTA(d)`
+/// (`fxjs/fx_date_helpers.cpp:254-256`).
+///
+/// Missing it is an 8-hour error on every `util_printd` golden line, because
+/// the fixture's `new Date(2014, 6, 4, 15, 59, 58)` is a **local-time**
+/// constructor: the instant is `22:59:58Z`, and the golden prints
+/// `14:59:58` — the local wall clock, one hour off the constructor's
+/// argument because the offset is the *standard* one and July is not.
+///
+/// The DST term is the reason the shift is applied here rather than folded
+/// into the frozen clock: the clock is one instant, and the offset depends
+/// on which instant is being printed.
+fn to_local_time(millis: f64, context: &Context) -> f64 {
+    let offset = context.get_data::<PrintdOffset>().map_or(0, |o| o.0);
+    millis + f64::from(offset) * 1000.0
 }
+
+/// `FX_LocalTime`'s offset, in the context's own data slot.
+///
+/// A separate value from the `Date` timezone on purpose: the two are an hour
+/// apart all summer under the fixture runner, because `pdfium_test` replaces
+/// `localtime` with `gmtime` and `FX_LocalTime`'s daylight-saving term
+/// therefore always reads zero. See
+/// `ScriptConfig::printd_offset_secs`.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct PrintdOffset(pub(crate) i32);
 
 /// A JavaScript `Date` at `millis`.
 fn new_date(millis: f64, context: &mut Context) -> JsResult<JsValue> {

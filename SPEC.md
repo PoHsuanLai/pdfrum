@@ -182,9 +182,45 @@ Closed enum, not a trait: `pub enum SecurityHandler { Rc4V2 {..}, AesV4 {..}, Ae
 `enum CryptClass { Stream, String, Embedded }` (per-class crypt filters /StmF /StrF).
 Primitives from RustCrypto (`aes`+`cbc`, `md5`, `sha1`, `sha2`); RC4 written
 in-crate (~30 lines, no dep).
-Decisions (orchestrator, from the brief's open questions): passwords are NOT
-capped at ISO's 127 bytes — match the C++ exactly (observable behavior wins);
+Decisions (orchestrator, from the brief's open questions): ~~passwords are NOT
+capped at ISO's 127 bytes — match the C++ exactly (observable behavior wins)~~
+— **superseded 2026-09-02, see the A31 note below**;
 all other brief divergences D1–D7 accepted as written.
+
+**[spec] 2026-09-02 (oracle-divergence audit A31): revision-6 passwords are
+prepared per ISO 32000-2 §7.6.4.3.3 (Algorithm 2.A) before hashing, and the
+127-byte cap above is reinstated for revision 5 and up.** Algorithm 2.A step
+(a) requires SASLprep (RFC 4013), then UTF-8, then truncation to 127 **bytes**.
+`cpdf_security_handler.cpp:425-455` performs none of the three; instead it
+retries a non-ASCII password with a Latin-1→UTF-8 transcode (R5+) or a
+UTF-8→Latin-1 one (R2–R4). pdf.js implements the specification — `saslPrep`
+at `crypto.js:1142`, the byte cut at `:896-897` — and adds its own
+prepped-then-raw retry at `:1178-1180`. PLAN.md §212–229 therefore obliges the
+correct behaviour first. Shape:
+
+- A private `saslprep` module in `pdfrum-crypt` implements RFC 4013 in full,
+  returning `Option<String>` — `None` for a prohibited character or a
+  bidirectional violation, which skips a candidate rather than failing
+  authentication. It needs NFKC, which admits `unicode-normalization` to
+  DEPS.md (measured there).
+- `try_password` becomes an ordered ladder of three candidates: (1) the
+  prepared form, **revision 6 only** — pdf.js guards its own call the same way
+  at `crypto.js:1142`, and Algorithm 2.A is what revision 6 *is*; (2) the bytes
+  as given, pdf.js's tolerance for producers that skipped the preparation;
+  (3) PDFium's transcode, `[oracle-bug]`, kept last because it rescues a real
+  embedder mis-encoding and, running last, can only turn a failure into a
+  success.
+- `PasswordEncoding` **gains** a `SaslPrepped` variant rather than being
+  replaced; the existing three keep their meanings.
+- The 127-byte cut lives in the revision-5-and-up branch of `check_password`,
+  so every candidate is cut — which is where pdf.js puts it. It cuts the
+  **UTF-8 bytes**, so a multi-byte character straddling byte 127 is severed.
+- The *writing* direction has no site: SPEC §11's save re-uses the file key the
+  original password produced and copies the original `/Encrypt` dictionary
+  verbatim, so no `/U` or `/O` is ever recomputed from a password here.
+
+Zero scoreboard rows: `encrypted_hello_world_r5`/`_r6` use ASCII passwords,
+which are a fixed point of every candidate.
 
 **[spec] 2026-09-02 (oracle-divergence audit A26): the crypt brief's D1 —
 `CryptClass::Embedded` collapsing onto `Stream` — is reversed, and `/EFF` is

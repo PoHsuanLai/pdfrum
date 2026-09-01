@@ -62,6 +62,7 @@ mod key;
 mod object;
 mod primitives;
 mod rc4;
+mod saslprep;
 mod standard;
 
 #[cfg(test)]

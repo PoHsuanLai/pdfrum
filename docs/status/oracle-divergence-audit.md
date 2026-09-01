@@ -90,7 +90,7 @@ is a lower bound, marked "≥".
 | **A28** | crypt | `/Length` under 40 reinterpreted as **bytes** and multiplied by 8 | `cpdf_security_handler.cpp:271` | §7.6.3.2 table 20: bits, 40–128 — so `16` is non-conformant | `crypto.js:1092-1093` has the **same fixup**, commented as a producer bug | **ROBUSTNESS** | 7 | keep: both independents recover the same way |
 | **A29** | crypt | AES padding **stripped without validation**; `back()==16` drops a whole block; `back()==0` emits all 16 as data | `cpdf_crypto_handler.cpp:217-224` — only `block_buf.back()` is inspected | §7.6.2 requires PKCS#5 padding | `crypto.js:436-441` **checks every pad byte**; on mismatch keeps all 16 (`psLen = 0`) | **ROBUSTNESS** | 7 | keep (crypt D6): reading a malformed file; both recover leniently |
 | **A30** | crypt | a trailing **partial block is silently discarded** and the decrypt still reports success; a full block completing exactly at a chunk end is held back one call | `cpdf_crypto_handler.cpp:191`, `:217` | §7.6.2: ciphertext is always a multiple of 16 | pdf.js retains the tail in `this.buffer` but never emits it either | **ROBUSTNESS** | 7 | keep |
-| **A31** | crypt | password retried in the **other encoding** (Latin-1↔UTF-8) when non-ASCII | `cpdf_security_handler.cpp:425-455` | §7.6.4.3.3 mandates **SASLprep** + UTF-8 + 127-byte truncation for R6 — PDFium does none | `sasl_prep.js:27` via `crypto.js:1142`; truncation `:896-897`; prepped-then-raw retry `:1178-1180` | **BUG** | 2 | §3 (A31) |
+| **A31** | crypt | password retried in the **other encoding** (Latin-1↔UTF-8) when non-ASCII | `cpdf_security_handler.cpp:425-455` | §7.6.4.3.3 mandates **SASLprep** + UTF-8 + 127-byte truncation for R6 — PDFium does none | `sasl_prep.js` via `crypto.js:1142` (steps 1-2 only, by its own comment); truncation `:896-897`; prepped-then-raw retry `:1178-1180` | **BUG** | 2 | §3 (A31); **APPLIED** §8 |
 | **A32** | crypt | short `/O` out-of-bounds read (crbug.com/42270437) | **fixed at this pin**: `cpdf_security_handler.cpp:512-515` early-returns, `:532` clamps the copy | — | n/a | **SPEC** | — | nothing to do; our guard matches the fixed oracle |
 | **A33** | filters | RunLengthDecode rejects at **20 MiB** (`>=`), hard | `fpdf_parser_decode.cpp:41`, applied `:277-280` (**not** in `core/fxcodec/`) | no size limit in the spec | **no cap** (`run_length_stream.js`, 57 lines) | **ROBUSTNESS** | 1 | keep (filters D2) |
 | **A34** | filters | **no** output cap on Flate or LZW; `kMaxTotalOutSize` is an arithmetic clamp, not a limit | `flatemodule.cpp:58`, consumed only by `FlateGetPossiblyTruncatedTotalOut` | — | no cap | **ROBUSTNESS** | 0 | keep our 1 GiB cap — but see §6, the stated justification is wrong |
@@ -289,11 +289,15 @@ bytes as given and, only for a non-ASCII password, retries a Latin-1↔UTF-8
 transcode whose direction depends on the revision. §7.6.4.3.3 (Algorithm 2.A)
 requires **SASLprep** (RFC 4013), then UTF-8, then truncation to 127 bytes for
 R6; PDFium implements none of the three, and a Latin-1↔UTF-8 transcode is not
-PDFDocEncoding either (they differ across 0x80–0x9F). pdf.js has real SASLprep
-(`sasl_prep.js:27` via `crypto.js:1142`), the truncation (`:896-897`), and its
-own prepped-then-raw retry (`:1178-1180`). The two retry axes do not subsume
-one another. **2 rows** (`encrypted_hello_world_r5`, `_r6`), both using ASCII
-passwords — so the difference is unreachable on the corpus today.
+PDFDocEncoding either (they differ across 0x80–0x9F). pdf.js has SASLprep's
+mapping and normalisation (`sasl_prep.js` via `crypto.js:1142`) — its own
+comment says the prohibited-output and bidi checks are deliberately omitted, so
+"real SASLprep" here overstates steps 3 and 4 — the truncation (`:896-897`),
+and its own prepped-then-raw retry (`:1178-1180`). The two retry axes do not
+subsume one another. **2 rows** (`encrypted_hello_world_r5`, `_r6`), both using
+ASCII passwords — so the difference is unreachable on the corpus today.
+**Applied 2026-09-02** as a three-candidate ladder with the transcode last and
+marked `[oracle-bug]`; see §8. 0 rows moved.
 
 **A40 + A43 — one root cause, two pinned bugs.** `cpdf_textpage.cpp:881`
 and `:1076` reject a text object when
@@ -663,7 +667,7 @@ scoreboard rows that would move from **pass** to
 | 3 | **A26** | `/EFF` | **0** | no corpus file has it; the `Embedded` variant already exists in our enum with a comment reserving it. Pure addition. |
 | 4 | **A18** | `/ExtGState /Font`'s indirect form | **0** | no corpus file uses it; try resolving a reference before falling back to the resource-name lookup, keeping the fallback for the oracle's form. |
 | 5 | **A63** | a failing validate loses focus | **0** | unreachable until M15 wires scripts, so it costs nothing *now* and becomes load-bearing later. pdf.js settles it at a commented line. Rule on it before it has a blast radius. |
-| 6 | **A31** | password SASLprep / 127-byte truncation | **0** | both R5/R6 rows use ASCII passwords so the corpus cannot tell; keep PDFium's transcode retry as a second candidate. |
+| 6 | **A31** | password SASLprep / 127-byte truncation | **0** — **measured 0, APPLIED 2026-09-02, §8** | both R5/R6 rows use ASCII passwords so the corpus cannot tell; keep PDFium's transcode retry as a second candidate. *Applied as written, with one correction: the transcode is the **third** candidate, not the second — pdf.js's prepped-then-raw retry (`crypto.js:1178-1180`) sits between them, and running the oracle's transcode last is what makes it unable to shadow a correct answer. Also: preparation is R6-only (`crypto.js:1142`), and the 127-byte cut applies to every candidate, not only the prepared one. `unicode-normalization` admitted for NFKC.* |
 | 7 | **A9 + A10** | `/TR` array order and the unclamped sample | **2** | `transfer_function.in`/`.pdf`. Self-contained, table 58 is explicit, and A11 is already declined — ruling here completes `/TR`. |
 | 8 | **A40 + A43** | the glyph-bbox object gate | **2** | one root cause, two upstream bugs, two rows (`whitespace.pdf`, `bug_444176962.pdf`). The fix is to gate on advance width; §9.4.3 is explicit. Best value-per-row on the list. |
 | 9 | **A66** | column-pass seed index zero | **2** | `annotiter`; only pages with negative x reach the guard, so the effective loss is probably 0. Measure first. |
@@ -806,16 +810,106 @@ resolve to the same font. The older
 finds nothing installs nothing either way — and is kept with a note saying so.
 **0 rows.**
 
+### A31 — `SASLprep` and the 127-byte truncation (a `[spec]` change)
+
+*(§7's item 6, deferred out of the first tranche and applied in a pass of its
+own — which is what the deferral asked for.)*
+
+`cpdf_security_handler.cpp:425-455` performs **none** of Algorithm 2.A step
+(a)'s three operations. It tries the bytes as given and, only when the password
+is non-ASCII, retries a Latin-1→UTF-8 transcode (R5 and up) or a UTF-8→Latin-1
+one (R2–R4), remembering which worked. ISO 32000-2 §7.6.4.3.3 requires SASLprep
+(RFC 4013), then UTF-8, then truncation to 127 bytes. pdf.js does the
+specification — `saslPrep` at `crypto.js:1142`, the byte cut at `:896-897` —
+and adds a tolerance of its own at `:1178-1180`, where a prepped password that
+differs from the raw one yields two candidates rather than one.
+
+Three things this reading settled that the audit row left open:
+
+1. **pdf.js preps revision 6 only.** `crypto.js:1142` guards the call with
+   `revision === 6`; the `algorithm === 5` branch two lines later is plain
+   UTF-8 with no preparation. That is the specification's own scope — Algorithm
+   2.A *is* revision 6 — so `r6_prepared` returns `None` for every other
+   revision, pinned by `only_revision_six_is_prepared`.
+2. **pdf.js's `sasl_prep.js` implements steps 1 and 2 only.** It maps table
+   C.1.2 and B.1 and normalises NFKC, and its own comment says the
+   prohibited-output and bidirectional checks are "intentionally omitted…
+   Being permissive lets us handle non-conforming files". So the audit row's
+   "pdf.js has real SASLprep" is true of the mapping and the normalisation and
+   overstated about steps 3 and 4. We implement all four, and the divergence
+   costs nothing, because a refusal here *skips a candidate* rather than
+   failing authentication — the raw bytes are still tried, so every file pdf.js
+   opens by being permissive, we open by falling through.
+3. **Unassigned code points are permitted.** RFC 4013 §2.5 forbids them in
+   *stored* strings only; a password checked against an existing `/U` is a
+   query. This crate never creates a password hash, so the stored direction has
+   no site.
+
+**The candidate ladder**, `crates/pdfrum-crypt/src/standard.rs`
+`try_password`:
+
+1. the prepared form (R6 only), skipped when the bytes are not UTF-8, when
+   SASLprep refuses them, or when preparation is the identity;
+2. the bytes as given — pdf.js's tolerance, `crypto.js:1178-1180`;
+3. **`[oracle-bug]`** PDFium's transcode, `crates/pdfrum-crypt/src/standard.rs`
+   in `try_password`'s doc comment and at the site, citing
+   `cpdf_security_handler.cpp:425-455` and `crypto.js:1136-1152` (where pdf.js
+   transcodes nothing). Kept last under PLAN.md §212–229's proviso that the
+   correct behaviour goes first: it rescues a real class of embedder
+   mis-encoding, and running last it can only turn a failure into a success.
+
+`PasswordEncoding` **gains** `SaslPrepped`; the three existing variants keep
+their meanings. The 127-byte cut lives in `check_password`'s revision-5-and-up
+branch rather than in the preparation, so *every* candidate is cut — which is
+where pdf.js puts it, and which **supersedes SPEC.md §3's original "passwords
+are NOT capped at ISO's 127 bytes"** (struck in place there, not deleted). The
+cut is on the **UTF-8 bytes**, so a character straddling byte 127 is severed
+mid-sequence; that is the specification and both implementations then hash the
+same bytes.
+
+**The writing direction has no site.** `crates/pdfrum-edit/src/encrypt.rs` does
+not derive `/U`, `/O`, `/UE` or `/OE` from a password at all: SPEC §11's save
+re-uses the file key the original password already produced and copies the
+original `/Encrypt` dictionary verbatim. Checked by `grep` for the four keys
+across `pdfrum-edit` — zero hits outside prose. So there is nothing to prepare
+on the way out.
+
+**`unicode-normalization` admitted** (`=0.1.25`) for NFKC, which must not be
+hand-rolled or vendored. +3 crates to `pdfrum-crypt`'s tree (31 → 34) and **+1
+to the workspace's** — `tinyvec`/`tinyvec_macros` were already there through
+`fontdb`. No `-sys`, no build script, `cargo deny check` clean with `deny.toml`
+untouched. Measured table in DEPS.md.
+
+**Eight new tests** (115 → 123 in `pdfrum-crypt`): RFC 4013 §3's seven examples
+verbatim, the non-ASCII-space mapping, the bidi rule in both directions, one
+member of each prohibited table, the byte-level straddle cut, and — the one
+that matters — **an end-to-end fixture that fails on the old behaviour**:
+pdf.js's `test/pdfs/saslprep-r6.pdf`, manifest id `saslprep-r6`, whose user
+password is `S\u{00AA}SL\u{00AD}prep` and whose `/U` was computed from the
+prepared spelling `SaSLprep`. Neither the raw bytes nor either transcode opens
+it. Its `/Encrypt` dictionary is transcribed into `test_fixtures.rs` as
+`saslprep_r6_dict`, and disabling candidate (1) makes the test fail — verified,
+not assumed. pdfrum cannot write R6, so a self-made fixture was not an option;
+this borrowed one is strictly better, being a file a *different* implementation
+produced.
+
+**0 rows.** `encrypted_hello_world_r5` and `_r6` both still pass, as do
+`bug_644` and `encrypted.pdf`; ASCII passwords are a fixed point of every
+candidate. Board measured in an isolated worktree carrying only this change:
+**1705 files, 1652 pass, 53 fail** before and after, `no regressions`.
+
 ### Not attempted, and why
 
 - **A63** (validate loses focus) — owned by the M15 agent on the validate path,
   where the branch becomes reachable. Left alone deliberately.
-- **A31** (SASLprep and the 127-byte truncation) — §7's item 6, also zero rows.
-  Not attempted here: it is a second independent ruling of its own size, and
-  unlike A1/A26/A18 it *adds* an algorithm (RFC 4013 stringprep) rather than
-  reading a key the oracle ignores, so it deserves its own pass rather than
-  being folded into a tranche whose defining property was that each item was
-  small and self-contained.
+- ~~**A31** (SASLprep and the 127-byte truncation) — §7's item 6, also zero
+  rows. Not attempted here: it is a second independent ruling of its own size,
+  and unlike A1/A26/A18 it *adds* an algorithm (RFC 4013 stringprep) rather
+  than reading a key the oracle ignores, so it deserves its own pass rather
+  than being folded into a tranche whose defining property was that each item
+  was small and self-contained.~~ **Applied 2026-09-02** in the pass this
+  paragraph asked for — see "A31" immediately above. The reasoning stands as
+  written; only the "not attempted" is now false.
 - The **§7 items 7 onward** all cost rows, and none was in scope.
 
 ### The board, measured

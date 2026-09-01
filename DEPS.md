@@ -129,10 +129,36 @@ not a codec).
 | `aes`, `cbc`, `cipher` **lib** | AESV2/V3 | RustCrypto; audited, pure Rust |
 | `md-5`, `sha1`, `sha2` **lib** | Key derivation, /R 2–6 | RustCrypto (RC4 is ~30 lines in-crate — no dep) |
 | `unicode-bidi` **lib** | Bidi for text extraction | Servo's; replaces the entire ICU dependency |
+| `unicode-normalization` **lib** | NFKC for the revision-6 password preparation in `pdfrum-crypt` (RFC 4013 SASLprep, step 2 of ISO 32000-2 §7.6.4.3.3) | unicode-rs; the ecosystem's normalisation crate. Admitted by the A31 `[spec]` change below — NFKC needs Unicode decomposition and composition tables that must not be hand-rolled or vendored. Pinned `=0.1.25` |
 | `ryu` **lib** | Shortest float formatting in the writer | Same guarantees class as the C++'s dragonbox |
 | `smallvec` **lib** | Hot small collections (`CharItem` unicode, dash arrays) | Boring, ubiquitous |
 | `thiserror` **lib** | Per-crate `Error` enums | The convention |
 | `rayon` **lib** (facade only) | Parallel page rendering | Data-parallel fits; engine itself stays single-threaded per page (vello_cpu multithreads internally) |
+
+### `unicode-normalization`, measured — 2026-09-02 (`[spec]`, audit A31)
+
+Same rule as `boa_engine` below: nothing is admitted on a claim. Measured on
+this machine, `x86_64-unknown-linux-gnu`, at the pin.
+
+| question | answer |
+|---|---|
+| crate and version | `unicode-normalization = "=0.1.25"`, pinned exactly |
+| features | default (`std`); nothing added |
+| crates added to `pdfrum-crypt`'s tree | **3** (31 → 34): itself, `tinyvec`, `tinyvec_macros` |
+| crates added to the **workspace** tree | **1**. `tinyvec` and `tinyvec_macros` were already in `Cargo.lock`, reached through `fontdb` → `pdfrum-font`, so only `unicode-normalization` is new to the graph |
+| `-sys` crates | **none** |
+| `cc` / `cmake` / `pkg-config` / `bindgen` | **none** |
+| build scripts | **none** — neither crate ships a `build.rs` |
+| `cargo deny check` | **advisories ok, bans ok, licenses ok, sources ok**, with `deny.toml` untouched |
+| licences | `unicode-normalization` `MIT OR Apache-2.0`; `tinyvec` `Zlib OR Apache-2.0 OR MIT`; `tinyvec_macros` `MIT OR Apache-2.0 OR Zlib`. Every `OR` resolves to an allowlisted branch |
+| `unsafe` | the crate declares `#![deny(missing_docs, unsafe_code)]` itself |
+| MSRV | **1.36**, well under the workspace floor |
+
+The alternative was writing NFKC by hand or vendoring the Unicode
+decomposition, composition and canonical-combining-class tables. STYLE.md §5's
+"write the 30 lines" test is about *helpers*, and this is not one: NFKC is
+several thousand table entries that change with every Unicode release, and a
+hand-rolled copy would be wrong in exactly the places a password uses.
 
 ## Scripting (M15) — feature-gated, default-off
 
