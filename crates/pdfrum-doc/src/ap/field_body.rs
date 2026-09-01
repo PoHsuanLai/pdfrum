@@ -552,6 +552,25 @@ fn face_for(
 /// selection bands before the text (so they sit behind it), the caret after
 /// `ET` (so it sits on top). Passing [`None`] writes exactly the operators
 /// this function wrote before the overlay existed.
+///
+/// # Only the selected glyphs are white
+///
+/// A selection whitens the text it covers and nothing else. `DrawEdit`
+/// (`fpdfsdk/pwl/cpwl_edit_impl.cpp:650-653`) switches the fill colour per
+/// word — white for `place > wrSelect.BeginPos && place <= wrSelect.EndPos`,
+/// `crTextFill` for everything else — so a partial selection leaves the
+/// unselected characters in the field's own colour.
+///
+/// [`Highlight`] carries rectangles rather than a character range, so the
+/// split is made geometrically instead of by place: the run is set twice,
+/// once in the field's colour and once in white under a clip whose shape is
+/// the bands themselves. The two reach the same glyphs because the clip and
+/// the bands are the same rectangles, and the overdraw is exact — the second
+/// pass writes identical operators at identical positions, so an unselected
+/// glyph is covered by nothing and a selected one completely.
+///
+/// Whitening the whole run because *some* band exists is what this replaces,
+/// and it drew the unselected characters white on the untinted field.
 fn wrap_text(
     out: &mut Content,
     plate: Rect,
@@ -578,15 +597,27 @@ fn wrap_text(
         }
     }
     if !written.is_empty() {
+        // The whole run in the field's own colour, first.
         out.raw("BT\n");
-        let fill = if overlay.is_some_and(|h| !h.selection.is_empty()) {
-            Color::Gray(1.0)
-        } else {
-            color
-        };
-        out.raw(&color_op_via(fill, PaintOp::Fill, Float::G6));
+        out.raw(&color_op_via(color, PaintOp::Fill, Float::G6));
         out.raw(written);
         out.raw("ET\n");
+        // Then the same run again in white, clipped to the bands, so only the
+        // glyphs a band covers come out white. See the note above.
+        let bands = overlay.map(|h| h.selection.as_slice()).unwrap_or_default();
+        if !bands.is_empty() {
+            out.raw("q\n");
+            for band in bands {
+                out.rect(*band, Float::Shortest);
+                out.raw("re\n");
+            }
+            out.raw("W\nn\n");
+            out.raw("BT\n");
+            out.raw(&color_op_via(Color::Gray(1.0), PaintOp::Fill, Float::G6));
+            out.raw(written);
+            out.raw("ET\n");
+            out.raw("Q\n");
+        }
     }
     if let Some(caret) = overlay.and_then(|h| {
         if h.selection.is_empty() {
@@ -1722,6 +1753,75 @@ mod tests {
             !got.contains("0 g\n"),
             "a selection suppresses the caret: {got}"
         );
+    }
+
+    /// A partial selection leaves the unselected glyphs in the field's own
+    /// colour.
+    ///
+    /// `CPWL_EditImpl::DrawEdit` (`fpdfsdk/pwl/cpwl_edit_impl.cpp:650-653`)
+    /// sets white only for words inside the selected range —
+    /// `place > wrSelect.BeginPos && place <= wrSelect.EndPos` — and leaves
+    /// everything else in `crTextFill`. Whitening the whole run because *a*
+    /// band exists draws the unselected text white on the untinted field.
+    #[test]
+    fn a_partial_selection_leaves_the_unselected_run_in_the_fields_colour() {
+        let band = geom::rect(120.0, 104.0, 140.0, 120.0);
+        let highlight = Highlight {
+            caret: None,
+            selection: vec![band],
+        };
+        let got = body_with(
+            &widget_of("Tx", &[("V", text("ABCDEFGH"))]),
+            Some(&highlight),
+        )
+        .expect("a body");
+
+        // The field colour is still written, and it is written *before* the
+        // white one — the untouched run underneath, the clipped white run on
+        // top of it.
+        let dark = got.find("0 0 0 rg\n").expect("the field colour");
+        let white = got.find("1 g\n").expect("the selected colour");
+        assert!(dark < white, "{got}");
+        // Exactly one clip guards the white pass, and the band is its shape.
+        assert_eq!(got.matches("W\nn\n").count(), 1, "{got}");
+        assert!(got.contains("120 104 20 16 re\n"), "{got}");
+        // The glyphs are emitted twice, once per pass.
+        assert_eq!(got.matches("(ABCDEFGH) Tj\n").count(), 2, "{got}");
+    }
+
+    /// Two disjoint bands both clip the same white pass, so a selection that
+    /// upstream would express as two ranges of words still whitens exactly
+    /// those glyphs and no others.
+    #[test]
+    fn every_band_contributes_to_the_one_clip_the_white_pass_runs_under() {
+        let highlight = Highlight {
+            caret: None,
+            selection: vec![
+                geom::rect(110.0, 104.0, 120.0, 120.0),
+                geom::rect(140.0, 104.0, 150.0, 120.0),
+            ],
+        };
+        let got = body_with(
+            &widget_of("Tx", &[("V", text("ABCDEFGH"))]),
+            Some(&highlight),
+        )
+        .expect("a body");
+        // One clip, built from both rectangles — a clip per band would
+        // intersect them to nothing.
+        assert_eq!(got.matches("W\nn\n").count(), 1, "{got}");
+        assert!(got.contains("110 104 10 16 re\n"), "{got}");
+        assert!(got.contains("140 104 10 16 re\n"), "{got}");
+        assert_eq!(got.matches("(ABCDEFGH) Tj\n").count(), 2, "{got}");
+    }
+
+    /// With no selection at all the second pass is not written, which is what
+    /// keeps every unfocused stream byte-identical.
+    #[test]
+    fn no_selection_writes_one_text_pass_and_no_clip() {
+        let got = body(&widget_of("Tx", &[("V", text("ABCDEFGH"))])).expect("a body");
+        assert_eq!(got.matches("(ABCDEFGH) Tj\n").count(), 1, "{got}");
+        assert!(!got.contains("1 g\n"), "{got}");
+        assert!(!got.contains("W\nn\n"), "{got}");
     }
 
     #[test]
