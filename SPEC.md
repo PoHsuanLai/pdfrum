@@ -1651,6 +1651,20 @@ it becomes user-visible for the first time.
 to, and offers one method per `FORM_*` entry that is not a no-op, named to the
 Rust API guidelines.
 
+**Four constructors, and the pair taking a context is not a convenience.**
+`new` and `with_config` build a default `BuildContext`; `with_context` and
+`with_config_in` take the caller's. A session lays out the appearances it
+hands back — the glyph run, the caret, the selection band — from the ascent,
+descent and advances of the face the field's `/DA` font *resolves to*, and
+that resolution is the context's `SubstitutionOptions`. So a caller that
+renders through `BuildContext::with_substitution` and starts its session with
+`new` measures one document two ways: under the determinism recipe of PLAN.md
+§4 the page's `/Arial` is Arimo at 905/-211 while the session's falls through
+to the built-in base-14 Helvetica at 718/-219, which at 12pt puts the caret a
+whole device row off. `pdfrum-tool` therefore makes one context per file and
+hands it to both. `SubstitutionOptions` is re-exported from the facade so a
+caller can build one without reaching for `pdfrum-font`.
+
 **Present:** `on_mouse_move`, `on_mouse_down`, `on_mouse_up`, `on_button`,
 `on_double_click`, `on_mouse_wheel`, `on_focus_at`, `on_key_down`, `on_char`,
 `force_kill_focus`, `focused_text`, `focused_annot`, `selected_text`,
