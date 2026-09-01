@@ -134,6 +134,9 @@ md-5 = "=0.11.0"
 sha1 = "=0.11.0"
 sha2 = "=0.11.0"
 unicode-bidi = "=0.3.18"
+# A31: RFC 4013 SASLprep needs NFKC for the revision-6 password preparation
+# (ISO 32000-2 §7.6.4.3.3). Pure Rust, one transitive dep (`tinyvec`).
+unicode-normalization = "=0.1.25"
 ryu = "=1.0.23"
 smallvec = "=1.15.2"
 thiserror = "=2.0.20"

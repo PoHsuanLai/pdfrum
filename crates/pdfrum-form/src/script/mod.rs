@@ -66,9 +66,44 @@ pub use transcript::TranscriptLine;
 /// and an ordinary embedder must not.
 pub const PDFIUM_TEST_CLOCK_MS: i64 = 1_399_672_130_000;
 
-/// PDFium's own test timezone: `TZ=America/Los_Angeles` at that instant,
-/// which is `GMT-0700`.
+/// The timezone the **engine's `Date`** sees: `TZ=America/Los_Angeles` as V8
+/// resolves it for the fixtures' July dates, which is `GMT-0700`.
+///
+/// This is `Date`'s offset only. `util.printd` uses a *different* one — see
+/// [`PDFIUM_TEST_FX_LOCALTIME_OFFSET_SECS`], and read that doc before
+/// assuming the two should agree.
 pub const PDFIUM_TEST_TZ_OFFSET_SECS: i32 = -7 * 3600;
+
+/// The offset **`FX_LocalTime` applies**, which is not the one `Date` uses:
+/// a flat `GMT-0800`, with no daylight saving, whatever the date.
+///
+/// # Why the two differ, which is not a bug in either
+///
+/// `CJS_Util::printd` converts its instant with `FX_LocalTime`
+/// (`fxjs/cjs_util.cpp:185`) before reading the components, and
+/// `FX_LocalTime` is `d + GetLocalTZA() + GetDaylightSavingTA(d)`
+/// (`fxjs/fx_date_helpers.cpp:254-256`). Both terms go through PDFium's own
+/// overridable clock hooks, and the test binary overrides them:
+///
+/// ```text
+/// FSDK_SetTimeFunction([]() { return time_ret; });
+/// FSDK_SetLocaltimeFunction([](const time_t* tp) { return gmtime(tp); });
+/// ```
+/// (`testing/pdfium_test/pdfium_test.cc:2133-2134`)
+///
+/// **`localtime` is replaced by `gmtime`.** So `GetDaylightSavingTA` reads
+/// `tm_isdst == 0` for every instant and contributes nothing (`:54-68`),
+/// while `GetLocalTZA` still reads glibc's `timezone` global — the zone's
+/// **standard** offset, PST, −8 hours (`:38-52`). V8's own `Date`, which
+/// never goes through those hooks, keeps the real −7. The two are one hour
+/// apart, all summer, by construction.
+///
+/// Confirmed against the goldens rather than reasoned:
+/// `util_printd_expected.txt:4` prints `14:59:58` from an instant
+/// `new Date(2014, 6, 4, 15, 59, 58)` places at `22:59:58Z` — −8, not −7 —
+/// while `util_scand`'s every line round-trips to the UTC string it was
+/// given, which only holds if `Date` and the parser agree on −7.
+pub const PDFIUM_TEST_FX_LOCALTIME_OFFSET_SECS: i32 = -8 * 3600;
 
 /// What a scripting session is allowed to do, and what it sees.
 #[derive(Debug, Clone, Default)]
@@ -87,6 +122,10 @@ pub struct ScriptConfig {
     /// PDFium's Los Angeles offset, and a golden run in another zone must
     /// still produce them.
     pub timezone_offset_secs: i32,
+    /// The offset `util.printd` applies before reading a date's components —
+    /// `FX_LocalTime`'s, which is **not** the one `Date` uses. See
+    /// [`PDFIUM_TEST_FX_LOCALTIME_OFFSET_SECS`] for why they differ.
+    pub printd_offset_secs: i32,
 }
 
 impl ScriptConfig {
@@ -98,6 +137,7 @@ impl ScriptConfig {
             limits: Limits::default(),
             clock_ms: Some(PDFIUM_TEST_CLOCK_MS),
             timezone_offset_secs: PDFIUM_TEST_TZ_OFFSET_SECS,
+            printd_offset_secs: PDFIUM_TEST_FX_LOCALTIME_OFFSET_SECS,
         }
     }
 }
@@ -212,6 +252,7 @@ impl ScriptCascade {
         runtime_limits.set_stack_size_limit(config.limits.max_script_stack);
         context.set_runtime_limits(runtime_limits);
 
+        context.insert_data(bind::PrintdOffset(config.printd_offset_secs));
         let host = bind::new_host();
         bind::install(&mut context, Rc::clone(&host)).map_err(|error| BuildError {
             message: error.to_string(),
