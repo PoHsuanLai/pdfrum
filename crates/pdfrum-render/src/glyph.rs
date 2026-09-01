@@ -109,6 +109,56 @@ pub const TEXT_GAMMA_ADJUST: [u8; 256] = [
 /// and `DrawNormalText` skips the glyph.
 pub const MAX_GLYPH_DIMENSION: i32 = 2048;
 
+/// One glyph rasterized to **three** coverages per pixel — one per LCD stripe.
+///
+/// The same bitmap [`GlyphBitmap`] holds, with the 3× subpixel triples kept
+/// apart instead of averaged. It is what the oracle produces when `normalize`
+/// is false (`DrawNormalTextHelper`'s `MergeGammaAdjustRgb` arm), which happens
+/// for exactly one kind of text on a page: a live edit's, whose `DrawTextString`
+/// builds a local `CPDF_RenderOptions` with `bClearType` left at its
+/// constructor's `true`.
+///
+/// The three bytes are the destination's **red, green and blue** coverages in
+/// that order — the oracle assumes RGB-ordered stripes, mapping the leftmost
+/// subpixel to red. Each is gamma-adjusted and merged into its own destination
+/// channel independently, which is what puts colour on the fringes of a glyph
+/// drawn in a single colour.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SubpixelBitmap {
+    /// The device x of column 0, relative to the glyph's snapped origin.
+    pub left: i32,
+    /// The device y of row 0, relative to the glyph's snapped origin.
+    pub top: i32,
+    /// Columns.
+    pub width: i32,
+    /// Rows.
+    pub height: i32,
+    /// `height * width * 3` gamma-adjusted coverages, row-major, `[r, g, b]`
+    /// per pixel.
+    pub channels: Vec<u8>,
+}
+
+impl SubpixelBitmap {
+    /// The `[r, g, b]` coverages at `(x, y)`, or zeroes outside the bitmap.
+    #[must_use]
+    pub fn at(&self, x: i32, y: i32) -> [u8; 3] {
+        if x < 0 || y < 0 || x >= self.width || y >= self.height {
+            return [0; 3];
+        }
+        let Ok(i) = usize::try_from((y * self.width + x) * 3) else {
+            return [0; 3];
+        };
+        let get = |k: usize| self.channels.get(i + k).copied().unwrap_or(0);
+        [get(0), get(1), get(2)]
+    }
+
+    /// Whether the bitmap has no pixels at all, which a blank glyph produces.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.width <= 0 || self.height <= 0
+    }
+}
+
 /// One glyph rasterized to gray coverage, positioned by its top-left corner.
 ///
 /// The coverages are what [`recolour`] multiplies a colour's alpha by; they are
@@ -428,6 +478,64 @@ impl LcdBitmap {
             coverage,
         }
     }
+
+    /// Stage 4 with `normalize = false`: the three subpixels kept apart.
+    ///
+    /// The window is [`Self::to_gray`]'s, shifted by the same phase; what
+    /// differs is that the triple is *not* averaged. Each subpixel is
+    /// gamma-adjusted on its own and becomes one destination channel's
+    /// coverage — leftmost to red, then green, then blue.
+    ///
+    /// The left edge is reproduced rather than corrected, and it is not the
+    /// same rule as the gray path's. Where `to_gray` averages the surviving
+    /// samples *over the same divisor of three* — darkening the first column —
+    /// the oracle's per-channel arm simply **does not write** the channels
+    /// whose subpixel would come from before the bitmap
+    /// (`if (start_col > left)` guards them), leaving the destination's own
+    /// value there. A zero coverage is how that is expressed here: the merge
+    /// below leaves a channel untouched at coverage zero, which is the same
+    /// destination byte the oracle's skipped write leaves.
+    #[must_use]
+    pub fn to_subpixel(&self, phase: SubpixelPhase) -> SubpixelBitmap {
+        let shift = i32::try_from(phase.shift()).unwrap_or(0);
+        let sub_width = self.width * 3;
+        let mut channels = vec![0u8; self.subpixels.len()];
+        for y in 0..self.height {
+            let row = y * sub_width;
+            for x in 0..self.width {
+                let start = row + x * 3 - shift;
+                for k in 0..3 {
+                    let idx = start + k;
+                    // Only the first column can reach left of its row, and the
+                    // oracle leaves that channel unwritten rather than clamping.
+                    if idx < row {
+                        continue;
+                    }
+                    let raw = usize::try_from(idx)
+                        .ok()
+                        .and_then(|i| self.subpixels.get(i))
+                        .copied()
+                        .unwrap_or(0);
+                    let gamma = TEXT_GAMMA_ADJUST
+                        .get(usize::from(raw))
+                        .copied()
+                        .unwrap_or(0);
+                    if let Ok(i) = usize::try_from((y * self.width + x) * 3 + k)
+                        && let Some(cell) = channels.get_mut(i)
+                    {
+                        *cell = gamma;
+                    }
+                }
+            }
+        }
+        SubpixelBitmap {
+            left: self.left,
+            top: self.top,
+            width: self.width,
+            height: self.height,
+            channels,
+        }
+    }
 }
 
 /// Floor division for a positive divisor.
@@ -628,6 +736,45 @@ impl BitmapCache {
         self.entries.clear();
         self.bytes = 0;
     }
+}
+
+/// Collapse a subpixel bitmap's three channels back to one gray coverage.
+///
+/// The fallback [`crate::device::RenderDevice::draw_glyph_lcd`]'s default takes
+/// for a backend that cannot address channels separately. It is **not** the
+/// oracle's own gray path and must not be mistaken for it: `to_gray` averages
+/// the *raw* subpixels and gamma-adjusts the average once, where this averages
+/// three values the gamma table has already been applied to. The two differ by
+/// a few counts on a partially covered pixel, because the table is not linear.
+///
+/// Reaching for it means the LCD render is already not happening; this makes
+/// the result grey and legible rather than absent, and the honest description
+/// of it is an approximation of the wrong branch, not a second opinion on the
+/// right one.
+///
+/// Returns `None` for a bitmap with no pixels.
+#[must_use]
+pub fn average_to_gray(bitmap: &SubpixelBitmap) -> Option<GlyphBitmap> {
+    if bitmap.is_empty() {
+        return None;
+    }
+    let mut coverage = Vec::with_capacity(bitmap.channels.len() / 3);
+    for triple in bitmap.channels.chunks_exact(3) {
+        let sum: u32 = triple.iter().map(|&v| u32::from(v)).sum();
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "three bytes divided by three is at most 255"
+        )]
+        let byte = (sum / 3) as u8;
+        coverage.push(byte);
+    }
+    Some(GlyphBitmap {
+        left: bitmap.left,
+        top: bitmap.top,
+        width: bitmap.width,
+        height: bitmap.height,
+        coverage,
+    })
 }
 
 /// One glyph's coverage recoloured into a premultiplied pixmap, ready to blit.
@@ -842,5 +989,105 @@ mod tests {
         assert_eq!(bmp.at(0, -1), 0);
         assert_eq!(bmp.at(bmp.width, 0), 0);
         assert_eq!(bmp.at(0, bmp.height), 0);
+    }
+
+    #[test]
+    fn the_subpixel_bitmap_reads_the_same_window_as_the_gray_one() {
+        // `to_subpixel` and `to_gray` differ in one thing only: whether the
+        // triple is averaged. So the gamma of the average must sit between the
+        // smallest and largest of the three gammas the subpixel form keeps —
+        // which it cannot if the two are reading different windows, which is
+        // the mistake a phase shift invites.
+        let outline = square(3.0, 2.0);
+        let lcd = render_lcd(&outline).expect("rasterizes");
+        for phase in [SubpixelPhase::Zero, SubpixelPhase::One, SubpixelPhase::Two] {
+            let gray = lcd.to_gray(phase);
+            let sub = lcd.to_subpixel(phase);
+            assert_eq!((sub.width, sub.height), (gray.width, gray.height));
+            assert_eq!((sub.left, sub.top), (gray.left, gray.top));
+            for y in 0..gray.height {
+                for x in 0..gray.width {
+                    let three = sub.at(x, y);
+                    let (lo, hi) = (
+                        three.iter().copied().min().unwrap_or(0),
+                        three.iter().copied().max().unwrap_or(0),
+                    );
+                    let g = gray.at(x, y);
+                    assert!(
+                        g >= lo.saturating_sub(2) && g <= hi.saturating_add(2),
+                        "{phase:?} at ({x},{y}): gray {g} outside subpixels {three:?}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_fully_covered_pixel_has_no_fringe_and_an_edge_does() {
+        // The whole point of the subpixel form. Inside a solid glyph all three
+        // stripes are saturated, so there is nothing to tell apart and the
+        // pixel is neutral; at the glyph's vertical edge they differ, which is
+        // the colour fringe `bClearType` exists to produce. A form that
+        // averaged internally would show neither.
+        let lcd = render_lcd(&square(6.0, 2.0)).expect("rasterizes");
+        let sub = lcd.to_subpixel(SubpixelPhase::Zero);
+        let interior = sub.at(sub.width / 2, 0);
+        assert_eq!(
+            interior[0], interior[2],
+            "a fully covered pixel must have no fringe, got {interior:?}"
+        );
+        let edges: Vec<_> = (0..sub.width)
+            .map(|x| sub.at(x, 0))
+            .filter(|c| c[0] != c[2])
+            .collect();
+        assert!(
+            !edges.is_empty(),
+            "no pixel had unequal stripes; the triples are being averaged \
+             somewhere they should not be"
+        );
+    }
+
+    #[test]
+    fn the_gamma_table_is_applied_once_per_stripe_not_once_per_pixel() {
+        // `MergeGammaAdjustRgb` calls `TextGammaAdjust` on each of the three
+        // subpixels separately (`cfx_renderdevice.cpp:132-140`); the gray path
+        // calls it once on their average. Every byte the subpixel form emits
+        // must therefore be a value the table can produce.
+        let lcd = render_lcd(&square(4.0, 1.0)).expect("rasterizes");
+        let sub = lcd.to_subpixel(SubpixelPhase::One);
+        for &byte in &sub.channels {
+            assert!(
+                TEXT_GAMMA_ADJUST.contains(&byte),
+                "{byte} is not in the gamma table's range"
+            );
+        }
+    }
+
+    #[test]
+    fn averaging_back_to_gray_keeps_the_bitmaps_shape() {
+        // The fallback a backend without per-channel addressing takes. It must
+        // preserve position and size exactly — a glyph that moved or resized
+        // when a backend declined the LCD path would be a worse failure than
+        // the missing fringes it is standing in for.
+        let lcd = render_lcd(&square(3.0, 2.0)).expect("rasterizes");
+        let sub = lcd.to_subpixel(SubpixelPhase::Zero);
+        let gray = average_to_gray(&sub).expect("has pixels");
+        assert_eq!((gray.width, gray.height), (sub.width, sub.height));
+        assert_eq!((gray.left, gray.top), (sub.left, sub.top));
+        assert_eq!(gray.coverage.len(), sub.channels.len() / 3);
+    }
+
+    #[test]
+    fn an_empty_subpixel_bitmap_averages_to_nothing() {
+        let empty = SubpixelBitmap {
+            left: 0,
+            top: 0,
+            width: 0,
+            height: 0,
+            channels: Vec::new(),
+        };
+        assert!(empty.is_empty());
+        assert!(average_to_gray(&empty).is_none());
+        assert_eq!(empty.at(0, 0), [0; 3]);
     }
 }

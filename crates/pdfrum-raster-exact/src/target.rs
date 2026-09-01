@@ -220,6 +220,85 @@ impl Target {
         }
     }
 
+    /// Merge one `ClearType` glyph pixel: three coverages, three destination
+    /// channels, each merged on its own alpha.
+    ///
+    /// `MergeGammaAdjustRgb` (`cfx_renderdevice.cpp:132-140`) followed by
+    /// `SetAlpha`. The coverages arrive **already gamma-adjusted** — the table
+    /// is applied where the triples are demultiplexed, so this is only the
+    /// `CalcAlpha` product and the merge:
+    ///
+    /// - `a_c = coverage_c · colour_alpha / 255`, truncating;
+    /// - `dest_c = (dest_c·(255 − a_c) + colour_c·a_c) / 255`, truncating;
+    /// - and the destination is left **opaque**, which is `SetAlpha`'s
+    ///   `alpha[3] = 255`.
+    ///
+    /// That last line is why this is not source-over and cannot be one. Three
+    /// independent alphas have no single-alpha expression, so the oracle
+    /// resolves the coverage into the colour and declares the pixel solid; it
+    /// gets away with it because `DrawNormalText` seeds its scratch bitmap with
+    /// the real backdrop (`GetDIBits`) before the merge. Here the destination
+    /// *is* the backdrop, so the merge happens in place and the same thing is
+    /// true for the same reason.
+    ///
+    /// The clip still applies, as a coverage multiplied into each channel's
+    /// alpha — the same product every other primitive folds it in with.
+    /// Out-of-range coordinates are a no-op rather than a panic.
+    pub fn merge_lcd_pixel(
+        &mut self,
+        x: i32,
+        y: i32,
+        colour: [u8; 3],
+        colour_alpha: u8,
+        coverage: [u8; 3],
+    ) {
+        let (Ok(col), Ok(row)) = (u32::try_from(x), u32::try_from(y)) else {
+            return;
+        };
+        if col >= self.width() || row >= self.height() {
+            return;
+        }
+        // One pixel, so the span hoist `blend_span` makes would buy nothing:
+        // the clip byte is read the simple way.
+        let mask = match self.clip.as_ref() {
+            None => 255,
+            Some(mask) => (row as usize)
+                .checked_mul(mask.width() as usize)
+                .and_then(|r| r.checked_add(col as usize))
+                .and_then(|i| mask.data().get(i).copied())
+                .unwrap_or(0),
+        };
+        if mask == 0 {
+            return;
+        }
+        let width = self.pixels.width() as usize;
+        let Some(start) = (row as usize)
+            .checked_mul(width)
+            .map(|r| (r + col as usize) * 4)
+        else {
+            return;
+        };
+        let Some(dest) = self.pixels.data_mut().get_mut(start..start + 4) else {
+            return;
+        };
+        for i in 0..3 {
+            let (Some(&cov), Some(&ch)) = (coverage.get(i), colour.get(i)) else {
+                continue;
+            };
+            let alpha = pixmap::mul255(pixmap::mul255(cov, colour_alpha), mask);
+            if alpha == 0 {
+                continue;
+            }
+            if let Some(slot) = dest.get_mut(i) {
+                *slot = pixmap::alpha_merge(*slot, ch, alpha);
+            }
+        }
+        // `SetAlpha`: the pixel is declared opaque once any channel is written.
+        if let Some(slot) = dest.get_mut(3) {
+            *slot = 255;
+        }
+    }
+
     /// The in-bounds column range and row of a span, or `None` when it misses
     /// the target entirely.
     fn span_range(&self, x: i32, len: i32, y: i32) -> Option<(u32, u32, u32)> {
@@ -493,6 +572,84 @@ mod tests {
         t.set_clip(Some(AlphaMask::new(2, 2)));
         t.blend_span(0, 2, 0, 255, opaque(255, 0, 0), BlendMode::Normal);
         assert_eq!(t.pixels(), &before);
+    }
+
+    #[test]
+    fn an_lcd_pixel_merges_each_stripe_into_its_own_channel() {
+        // Black text on white with the three stripes fully, half and not
+        // covered: `MergeGammaAdjustRgb` gives each channel its own alpha, so
+        // the pixel comes out (0, 127, 255) — a colour fringe from a colour
+        // that has none.
+        let mut t = Target::new(1, 1, peniko::Color::WHITE);
+        t.merge_lcd_pixel(0, 0, [0, 0, 0], 255, [255, 128, 0]);
+        // R: merge(255, 0, 255) = 0. G: merge(255, 0, 128) = 127.
+        // B: alpha 0, so the channel is left alone at 255.
+        assert_eq!(t.pixels().pixel(0, 0), Some([0, 127, 255, 255]));
+    }
+
+    #[test]
+    fn an_lcd_pixel_is_left_opaque_however_little_it_covered() {
+        // `SetAlpha` writes 255 unconditionally: three alphas have no
+        // single-alpha expression, so the oracle resolves them into the colour
+        // and calls the pixel solid.
+        let mut t = Target::new(1, 1, peniko::Color::WHITE);
+        t.merge_lcd_pixel(0, 0, [0, 0, 0], 255, [1, 0, 0]);
+        assert_eq!(t.pixels().pixel(0, 0).map(|p| p[3]), Some(255));
+    }
+
+    #[test]
+    fn an_lcd_pixel_with_no_coverage_anywhere_leaves_the_pixel_alone() {
+        let mut t = Target::new(1, 1, peniko::Color::WHITE);
+        t.merge_lcd_pixel(0, 0, [0, 0, 0], 255, [0, 0, 0]);
+        // Every channel's alpha is zero, so nothing is merged — and the
+        // opacity write is the only thing that runs, on an already-opaque
+        // pixel.
+        assert_eq!(t.pixels().pixel(0, 0), Some([255, 255, 255, 255]));
+    }
+
+    #[test]
+    fn an_lcd_pixel_folds_the_clip_into_every_channels_alpha() {
+        // The clip is a coverage, multiplied in by the same truncating product
+        // every other primitive uses. At clip 128 a fully covered black stripe
+        // gives alpha `255*255/255 * 128/255 = 128`, and `merge(255, 0, 128)`
+        // is `255*127/255 = 127` — the destination keeps rather than loses the
+        // odd count, which is the truncating merge's own asymmetry.
+        let mut t = Target::new(1, 1, peniko::Color::WHITE);
+        t.set_clip(Some(AlphaMask::filled(1, 1, 128)));
+        t.merge_lcd_pixel(0, 0, [0, 0, 0], 255, [255, 255, 255]);
+        let px = t.pixels().pixel(0, 0).expect("a pixel");
+        assert_eq!([px[0], px[1], px[2]], [127, 127, 127]);
+        // A fully clipped-out pixel is untouched, alpha included.
+        let mut t = Target::new(1, 1, peniko::Color::WHITE);
+        t.set_clip(Some(AlphaMask::filled(1, 1, 0)));
+        t.merge_lcd_pixel(0, 0, [0, 0, 0], 255, [255, 255, 255]);
+        assert_eq!(t.pixels().pixel(0, 0), Some([255, 255, 255, 255]));
+    }
+
+    #[test]
+    fn an_lcd_pixel_outside_the_target_is_a_no_op() {
+        // A rasterizer must not panic on a crafted file, and a glyph's box can
+        // run off any edge.
+        let mut t = Target::new(2, 2, peniko::Color::WHITE);
+        for (x, y) in [(-1, 0), (0, -1), (2, 0), (0, 2), (99, 99)] {
+            t.merge_lcd_pixel(x, y, [0, 0, 0], 255, [255, 255, 255]);
+        }
+        for y in 0..2 {
+            for x in 0..2 {
+                assert_eq!(t.pixels().pixel(x, y), Some([255, 255, 255, 255]));
+            }
+        }
+    }
+
+    #[test]
+    fn a_translucent_text_colour_scales_every_stripe() {
+        // `CalcAlpha(gamma, bgra.alpha)` is applied per stripe, so the colour's
+        // own alpha and the stripe's coverage compose exactly once each.
+        let mut t = Target::new(1, 1, peniko::Color::WHITE);
+        t.merge_lcd_pixel(0, 0, [0, 0, 0], 128, [255, 255, 255]);
+        let px = t.pixels().pixel(0, 0).expect("a pixel");
+        // 255*128/255 = 128, then merge(255, 0, 128) = 127.
+        assert_eq!([px[0], px[1], px[2]], [127, 127, 127]);
     }
 
     #[test]

@@ -56,7 +56,13 @@ pub struct ColorScheme {
 ///
 /// The oracle's own choice with `FPDF_ANNOT` alone is [`TextAa::Grayscale`]:
 /// `bNoTextSmooth` and `bClearType` are both false, so `kAntiAliasing` wins
-/// and LCD filtering never runs. [`TextAa::None`] is `bNoTextSmooth`.
+/// and the three subpixel coverages are averaged back to grey.
+/// [`TextAa::None`] is `bNoTextSmooth`.
+///
+/// The three map onto `CFX_TextRenderOptions::aliasing_type`'s three
+/// (`GetTextRenderOptionsHelper`, `cpdf_textrenderer.cpp:27-47`) — `kAliasing`,
+/// `kAntiAliasing` and `kLcd` — and the last one is genuinely reachable:
+/// see [`TextAa::LcdSubpixel`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum TextAa {
     /// Grayscale coverage — the oracle's conformance setting.
@@ -64,6 +70,22 @@ pub enum TextAa {
     Grayscale,
     /// Hard-edged glyph fills.
     None,
+    /// `ClearType`: each pixel's three LCD stripes keep their own coverage and
+    /// merge into their own destination channel, so a glyph drawn in one colour
+    /// carries colour fringes.
+    ///
+    /// This is `bClearType`, and it is **not** something only a caller asks
+    /// for. `bClearType` starts *true* in `CPDF_RenderOptions`' constructor
+    /// (`cpdf_renderoptions.cpp:23-27`); the two public render entry points
+    /// clear it from their flag word (`!!(flags & FPDF_LCD_TEXT)`), which is
+    /// why an ordinary page render is grayscale. But `DrawTextString`
+    /// (`cpwl_edit_impl.cpp:40-57`) builds a **local** `CPDF_RenderOptions`
+    /// that no flag word ever touches, and `CHECK`s that `bClearType` survived.
+    /// So a live edit's text — and only that text — is drawn with `ClearType` on
+    /// while the rest of the page is not, which is why this is a *per-draw*
+    /// selection rather than a whole-render one. See
+    /// [`RenderOptions::text_aa_override`].
+    LcdSubpixel,
 }
 
 /// Everything a render is parameterised by.
@@ -84,8 +106,23 @@ pub struct RenderOptions {
     pub transform: Affine,
     /// The colour mode, normally [`ColorMode::Normal`].
     pub color_mode: ColorMode,
-    /// Glyph antialiasing.
+    /// Glyph antialiasing, for the whole render.
     pub text_aa: TextAa,
+    /// Glyph antialiasing for *this draw only*, overriding [`Self::text_aa`].
+    ///
+    /// The oracle's own text antialiasing is per-draw, not per-render, and the
+    /// difference is load-bearing rather than theoretical: `DrawTextString`
+    /// builds a local `CPDF_RenderOptions` whose `bClearType` no flag word
+    /// clears, so on a page whose every other run is grayscale a live edit's
+    /// text is drawn with `ClearType`. `text_aa` alone cannot say that, because
+    /// it says one thing about the whole page.
+    ///
+    /// `None` — the default, and the whole corpus — means [`Self::text_aa`]
+    /// decides. A caller drawing one run differently sets this on a clone of
+    /// its options for that run and lets it fall out of scope afterwards; it is
+    /// deliberately not a mutation of `text_aa`, so the page's own setting
+    /// stays readable while a run is overridden.
+    pub text_aa_override: Option<TextAa>,
     /// `bNoPathSmooth`: hard-edge every path fill and stroke.
     pub no_path_smooth: bool,
     /// `bNoImageSmooth`: never interpolate an image, whatever `/Interpolate`
@@ -159,6 +196,7 @@ impl Default for RenderOptions {
             transform: Affine::IDENTITY,
             color_mode: ColorMode::Normal,
             text_aa: TextAa::Grayscale,
+            text_aa_override: None,
             no_path_smooth: false,
             no_image_smooth: false,
             force_halftone: false,
@@ -193,11 +231,37 @@ impl RenderOptions {
         }
     }
 
-    /// Whether glyph outlines are antialiased under these options.
+    /// The text antialiasing in force for the draw being made: the per-draw
+    /// [`Self::text_aa_override`] when a caller set one, else [`Self::text_aa`].
+    #[must_use]
+    pub fn effective_text_aa(&self) -> TextAa {
+        self.text_aa_override.unwrap_or(self.text_aa)
+    }
+
+    /// The options one text run draws under with `aa` forced.
+    ///
+    /// The spelling `pdfrum-form`'s live-edit path wants: `DrawTextString`'s
+    /// local `CPDF_RenderOptions` as one expression, leaving the page's own
+    /// options untouched.
+    #[must_use]
+    pub fn for_text_run(&self, aa: TextAa) -> Self {
+        Self {
+            text_aa_override: Some(aa),
+            ..self.clone()
+        }
+    }
+
+    /// Whether glyph *outlines* are antialiased under these options.
+    ///
+    /// The outline path has no subpixel spelling — above the oracle's size
+    /// threshold `DrawTextPath` fills a path and reads only `!is_text_smooth`
+    /// — so [`TextAa::LcdSubpixel`] antialiases here exactly like
+    /// [`TextAa::Grayscale`]. The subpixel choice is expressed on the *bitmap*
+    /// path, which is the only place the oracle expresses it either.
     #[must_use]
     pub fn text_antialias(&self) -> crate::device::AntiAlias {
-        match self.text_aa {
-            TextAa::Grayscale => crate::device::AntiAlias::On,
+        match self.effective_text_aa() {
+            TextAa::Grayscale | TextAa::LcdSubpixel => crate::device::AntiAlias::On,
             TextAa::None => crate::device::AntiAlias::Off,
         }
     }
@@ -259,6 +323,31 @@ mod tests {
         let inner = RenderOptions::default().for_type3_char_proc();
         assert!(inner.rect_aa);
         assert!(inner.force_halftone);
+    }
+
+    #[test]
+    fn a_per_draw_override_wins_over_the_render_wide_setting() {
+        // The shape the oracle's `DrawTextString` has: one run drawn with
+        // ClearType on a page whose every other run is grayscale.
+        let page = RenderOptions::default();
+        assert_eq!(page.effective_text_aa(), TextAa::Grayscale);
+        let run = page.for_text_run(TextAa::LcdSubpixel);
+        assert_eq!(run.effective_text_aa(), TextAa::LcdSubpixel);
+        // And the page's own setting is untouched, which is what makes this an
+        // override rather than a mutation.
+        assert_eq!(page.effective_text_aa(), TextAa::Grayscale);
+        assert_eq!(run.text_aa, TextAa::Grayscale);
+    }
+
+    #[test]
+    fn the_subpixel_mode_still_antialiases_outlines() {
+        // Above the size threshold the oracle abandons bitmaps for
+        // `DrawTextPath`, which reads only `!is_text_smooth` — so ClearType and
+        // grayscale fill an outline identically and only `None` hard-edges it.
+        let lcd = RenderOptions::default().for_text_run(TextAa::LcdSubpixel);
+        assert_eq!(lcd.text_antialias(), crate::device::AntiAlias::On);
+        let off = RenderOptions::default().for_text_run(TextAa::None);
+        assert_eq!(off.text_antialias(), crate::device::AntiAlias::Off);
     }
 
     #[test]
