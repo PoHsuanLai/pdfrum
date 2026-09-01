@@ -1022,6 +1022,131 @@ re-derives them.
   DEPS.md needed no change and that was verified mechanically, not assumed:
   no `Cargo.toml`, `Cargo.lock` or DEPS.md line moved in the whole milestone.
 
+---
+
+# Phase 3 — The functionality the charter excluded, where the oracle has a corpus  *(planned 2026-09-01)*
+
+Phase 1 drew the scope line at "no JS, no XFA, no interactive widget UI, whole
+file in memory". That line was right for getting to a conformance-proven core.
+This phase revisits it with one criterion: **a feature is planned here only if
+the oracle checkout carries fixtures to measure it against.** The survey that
+produced this plan (2026-09-01, `testing/` in the READ-ONLY checkout):
+
+| Feature | Fixtures | Where |
+|---|---|---|
+| JavaScript | 146 files, **46 `_expected.txt` goldens**, 4 `.evt` | `testing/resources/javascript/`, `run_javascript_tests.py` |
+| Form interaction (FORM_On* events) | **139 embeddertests**, only 2 gated on V8 | `fpdfsdk/fpdf_formfill_embeddertest.cpp`, `pdfium_test --send-events` |
+| Linearized / progressive load | **103** corpus PDFs with `/Linearized`; 14 tests | `fpdf_dataavail_embeddertest.cpp` |
+| Flatten | 13 tests | `fpdf_flatten_embeddertest.cpp` |
+| Thumbnails | 14 tests | `fpdf_thumbnail_embeddertest.cpp` |
+| Signatures (read) / attachments / searchex | 10 / 14 / 6 tests | respective embeddertests |
+| XFA | 35 corpus PDFs | `testing/corpus/xfa_specific/` |
+
+Every rule from Phases 1–2 binds: design brief before code, `[spec]` protocol,
+the closed dependency manifest, conformance as the regression gate with the
+monotone rule, M12.md §10's register for status docs, path-scoped commits.
+**The existing scoreboard must not move except upward** — none of this touches
+the rendering core's numbers, and any milestone that does has a bug.
+
+## M14 — Form interaction  *(first: no new dependency, and it unblocks M15's event cascade)*
+
+The CPWL/formfiller layer Phase 1 excluded on the grounds that it "only matters
+with JS". The survey refutes that premise: **137 of 139** form-interaction
+tests run with V8 off. What it is: hit-testing, focus, mouse and keyboard
+events on widgets (`FORM_OnLButtonDown/Up`, `OnChar`, `OnKeyDown`, focus
+in/out), text-field editing with selection/undo/redo, checkbox and radio
+toggling, combo/list selection — and appearance regeneration after each.
+**The text-layout half already exists**: `pdfrum-doc/src/vt/` is the variable-
+text engine M6 built and M10-era wave 10 wired to widget bodies; what is
+missing is the *editing* state machine on top of it and the event model.
+
+- **Brief first** (`docs/design/pdfrum-form.md`): behaviour inventory of
+  `fpdfsdk/formfiller/` + `fpdfsdk/pwl/` (the state machines, not the C++
+  class shapes — STYLE §1), the exact event ordering, what each `.evt` verb
+  means (`pdfium_test`'s `--send-events` parser is the spec), and every
+  assertion in the 137 non-V8 embeddertests as the port target.
+- **Design constraint**: no widget object hierarchy. A form session is a data
+  record (focused field, selection, undo stack, dirty set) plus functions that
+  take an event and return the appearance updates — the same data/logic split
+  every crate here has. Lives in `pdfrum-doc` (or a `pdfrum-form` crate if the
+  brief argues the boundary; `[spec]` either way).
+- **Oracle**: the existing V8-off build already runs `--send-events`. Add the
+  `.evt`-driven pixel goldens to the golden store and a `form-events` cluster
+  to the harness; port the 137 embeddertest assertions as nextest tests.
+- **Exit**: 137/137 non-V8 embeddertest assertions pass; `.evt` corpus pixel
+  goldens pass at the standard threshold; facade gains an event API
+  (`Form::on_mouse_down(...)`, `on_char(...)`, …) documented with an example;
+  existing scoreboard unmoved.
+
+## M15 — JavaScript via `boa`  *(after M14, whose event cascade the field scripts hang off)*
+
+Settled 2026-09-01: **the engine is boa**, pinned exactly, behind a cargo
+feature, admitted to DEPS.md on the pure-Rust bar (verify its tree with
+`cargo-deny` — no C, no `-sys`). Boa is at 95.5% of test262, register VM,
+runtime limits for loop/recursion/stack — and PDF JavaScript is ES3-era
+"core JavaScript", so the *language* is not the risk. The work is the
+**Acrobat object model**, which PDFium implements in `fxjs/` (~20k LOC C++):
+`app`, `Doc`, `Field`, `event`, `util`, `color`, `global`, and the `AF*`
+library (`AFNumber_Format`, `AFDate_*`, `AFSimple_Calculate`, …). Alternatives
+(`rquickjs`, `deno_core`) bind C/V8 and fail the purity rule outright.
+
+- **Scoring needs no V8 build**: the 46 `_expected.txt` goldens are checked in
+  — they are `Alert:` transcripts of `app.alert` output, byte-exact Tier-A.
+  `testing/tools/run_javascript_tests.py` is the comparison contract. A V8-
+  enabled oracle build (`pdf_enable_v8=true`) is needed only for *pixel*
+  goldens of JS-driven forms; treat it as an optional M15b, since V8 is heavy
+  to build and the checked-in goldens carry the milestone.
+- **Order inside the milestone, by value**: (1) engine binding + `util` +
+  `app.alert` (scores the transcripts); (2) the `AF*` format/calculate/
+  validate functions and the document-open action — this is where a JS-off
+  renderer *visibly* differs (a field with `AFNumber_Format` shows raw text
+  where Acrobat shows `$1,234.00`), and it needs no user interaction; (3) the
+  full field-event cascade (keystroke → validate → calculate → format) on top
+  of M14's event model; (4) `Doc`/`Field` mutation surface.
+- **Sandbox is a first-class requirement**: boa's runtime limits (iteration,
+  recursion, stack) are configured from `Limits`, the DOM exposes no I/O, and
+  a script that exhausts a limit is a `Diagnostic`, never a hang or a panic.
+  This is a *stronger* property than the C++ has; say so in the brief.
+- **Exit**: 46/46 `_expected.txt` byte-exact; `AF*` formatting reproduces
+  the oracle's field appearances on the forms corpus (V8 build) or, without
+  it, on hand-verified fixtures; 2/2 V8-gated formfill tests pass; a script
+  with `while(true)` terminates via the limit; boa admitted in DEPS.md with
+  its tree audit.
+
+## M16 — Linearized and progressive loading
+
+The v1 decision was whole-file-in-memory. 103 corpus files are linearized and
+`fpdf_dataavail` has 14 tests, so the feature has an oracle. What it is: the
+linearization dictionary + hint tables, first-page-first availability, and an
+availability API (`is_doc_avail`, `is_page_avail`, `is_form_avail`) over a
+byte-range source. The parser brief already inventoried the C++'s linearized
+path (and flagged its metadata-decryption inconsistency, parser OQ). Design
+constraint: `Document` keeps its current whole-file constructor unchanged;
+progressive load is an *additional* source abstraction, not a rewrite of
+`ObjectStore`. **Exit**: 14/14 dataavail assertions; every linearized corpus
+file renders page 1 with only its first-page byte range supplied; full-file
+load numbers unchanged (bench ratchet).
+
+## M17 — The small APIs with tests
+
+- **Flatten** (13 tests): bake annotation appearances into page content. Both
+  halves exist — appearance streams (M6) and page mutation + regeneration
+  (M11); this is composition plus the C++'s ordering/`/Rect` rules.
+- **Thumbnails** (14 tests): `/Thumb` decode via the existing image ladder,
+  plus the raw-stream accessor.
+- **Audit, then close**: signatures (read: 10 tests), attachments (14),
+  searchex (6). `pdfrum-doc` already touches all three; port the assertions,
+  fix what fails, and record what was already covered.
+- **Exit**: every listed embeddertest assertion ported and passing.
+
+## XFA — declined, with the count written down
+
+35 corpus files exist, so it *qualifies* under this phase's criterion, and the
+decision to decline is therefore stated rather than implied: XFA is
+~140k LOC of C++ (`xfa/` + `fxjs/xfa`), is deprecated by its own vendor, is
+disabled in Chrome, and its 35 files are 2% of the corpus. It stays out.
+Reopen only with a consumer who needs it, not a corpus that has it.
+
 ## M13 — Release
 
 MSRV declared and CI-checked; repository URL; bottom-up family publish to
