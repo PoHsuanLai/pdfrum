@@ -47,10 +47,31 @@ const INSIDE: (f32, f32) = (100.0, 55.0);
 /// Returns `None` when the sibling checkout is not present, which is the one
 /// thing a test in this crate may not require: the workspace builds without
 /// it.
+///
+/// # The skip is announced, and can be made an error
+///
+/// A test that silently returns green when its fixture is missing is a test
+/// that stops being read. The absence goes to **stderr** on every run, and
+/// setting `PDFRUM_REQUIRE_ORACLE_FONTS=1` turns it into a failure — which is
+/// what a machine that *does* have the oracle checkout should set, so that a
+/// path typo cannot quietly retire the only assertion pinning 13.392.
 fn hermetic_font_dir() -> Option<std::path::PathBuf> {
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../../pdfium-c++/third_party/test_fonts/test_fonts");
-    dir.is_dir().then_some(dir)
+    if dir.is_dir() {
+        return Some(dir);
+    }
+    let message = format!(
+        "the oracle's hermetic font set is not at {}; the substituted-face \
+         assertions are skipped",
+        dir.display()
+    );
+    assert!(
+        std::env::var_os("PDFRUM_REQUIRE_ORACLE_FONTS").is_none(),
+        "PDFRUM_REQUIRE_ORACLE_FONTS is set but {message}"
+    );
+    eprintln!("note: {message}");
+    None
 }
 
 /// Focuses the widget and returns the live appearance stream it draws.
@@ -218,4 +239,39 @@ fn a_hebrew_live_edit_sets_its_text_in_the_second_face() {
         resources.contains("_B1"),
         "the second face must be declared in the appearance's own resources, got:\n{resources}"
     );
+
+    // And the run is **laid out** in that face, not merely encoded through it.
+    //
+    // The two are separable and only the second is what the pixels see: an
+    // implementation that puts the substitute on `LiveInput` and leaves the
+    // width closure on the `/DA` font emits exactly the `/_B1` and the
+    // resource entry asserted above, and then advances every character by
+    // Arial's table. That is the F2 residue this commit closed —
+    // `form_textfield_selected_rtl`'s band ending at device column 101 with
+    // its glyphs running to 111.
+    //
+    // The number is the substitute face's own advance for U+05D1: 250/1000 of
+    // an em at 12 points is **3.0 units**, where the `/DA` fallback's 722
+    // would be 8.664. Right-to-left, so the `Td` steps are negative.
+    let advances: Vec<f32> = stream
+        .lines()
+        .filter_map(|line| line.strip_suffix(" Td"))
+        .filter_map(|operands| {
+            let mut parts = operands.split_whitespace();
+            let x: f32 = parts.next()?.parse().ok()?;
+            parts.next().filter(|y| *y == "0")?;
+            Some(x)
+        })
+        .collect();
+    assert!(
+        !advances.is_empty(),
+        "a three-character run steps between its characters, got:\n{stream}"
+    );
+    for advance in advances {
+        assert!(
+            (advance.abs() - 3.0).abs() < 1e-3,
+            "each Hebrew character advances by the second face's 250/1000 at \
+             12pt, which is 3.0 and not the /DA font's 8.664; got {advance}"
+        );
+    }
 }
