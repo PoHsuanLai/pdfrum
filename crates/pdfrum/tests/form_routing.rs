@@ -183,3 +183,123 @@ fn an_event_on_a_missing_page_answers_rather_than_panicking() {
     assert!(!response.consumed);
     assert!(session.focused_annot().is_none());
 }
+
+// --- Ported mouse-driven selection assertions -------------------------------
+//
+// `GetSelectedTextEmptyAndBasicMouse` and `GetSelectedTextFragmentsMouse`
+// drag through the text field and read the selection back. The upstream
+// fixture is `text_form_multiple.pdf`, whose "Text Box" carries the same
+// `/Rect [100 100 200 130]` and `/DA` as this one's, so the x coordinates
+// below are the upstream constants unchanged: `kFormBeginX = 102`,
+// `kFormEndX = 195`, `kRegularFormY = 115`.
+
+/// The upstream fixture constants.
+const FORM_BEGIN_X: f32 = 102.0;
+const FORM_END_X: f32 = 195.0;
+const FORM_Y: f32 = 115.0;
+
+/// `SelectTextWithMouse`: press at `from`, move to `to`, release. The move
+/// while the button is down is what extends the selection — without it the
+/// drag is two clicks and selects nothing.
+fn drag(session: &mut FormSession<'_>, from: f32, to: f32) {
+    session.on_mouse_move(0, from, FORM_Y, EventModifiers::NONE);
+    session.on_mouse_down(0, from, FORM_Y, EventModifiers::NONE);
+    session.on_mouse_move(0, to, FORM_Y, EventModifiers::NONE);
+    session.on_mouse_up(0, to, FORM_Y, EventModifiers::NONE);
+}
+
+/// Types `count` characters starting at `'A'`, the upstream helper's run.
+fn type_run(session: &mut FormSession<'_>, count: u32) {
+    session.on_mouse_move(0, FORM_BEGIN_X, FORM_Y, EventModifiers::NONE);
+    session.on_mouse_down(0, FORM_BEGIN_X, FORM_Y, EventModifiers::NONE);
+    session.on_mouse_up(0, FORM_BEGIN_X, FORM_Y, EventModifiers::NONE);
+    for i in 0..count {
+        let ch = char::from_u32(u32::from(b'A') + i).unwrap_or('?');
+        session.on_char(ch, EventModifiers::NONE);
+    }
+}
+
+/// `GetSelectedTextEmptyAndBasicMouse`: nothing selected until something is.
+#[test]
+fn a_drag_selects_what_it_crosses() {
+    let doc = document();
+    let mut session = FormSession::new(&doc);
+
+    // Before any focus, both answers are "no field", not "empty field".
+    assert!(session.focused_text().is_none());
+    assert!(session.selected_text().is_none());
+
+    type_run(&mut session, 3);
+    assert_eq!(session.focused_text().as_deref(), Some("ABC"));
+
+    // A drag back across all three selects all three.
+    drag(&mut session, 125.0, FORM_BEGIN_X);
+    assert_eq!(session.selected_text().as_deref(), Some("ABC"));
+}
+
+/// A focused field with nothing selected answers `Some("")` — distinguishable
+/// from no focus at all, which the oracle's byte-length return cannot express.
+#[test]
+fn an_empty_selection_is_distinguishable_from_no_field() {
+    let doc = document();
+    let mut session = FormSession::new(&doc);
+    type_run(&mut session, 3);
+
+    // Clicking without dragging leaves a caret, not a selection.
+    drag(&mut session, 125.0, 125.0);
+    assert_eq!(session.selected_text().as_deref(), Some(""));
+    assert!(session.focused_text().is_some());
+}
+
+/// `GetSelectedTextFragmentsMouse`: a drag selects the same run in either
+/// direction, which is the property the whole test exists for.
+#[test]
+fn a_drag_selects_the_same_run_in_either_direction() {
+    let doc = document();
+    let mut session = FormSession::new(&doc);
+    type_run(&mut session, 12);
+    assert_eq!(session.focused_text().as_deref(), Some("ABCDEFGHIJKL"));
+
+    let backwards = {
+        drag(&mut session, 170.0, 125.0);
+        session.selected_text()
+    };
+    let forwards = {
+        drag(&mut session, 125.0, 170.0);
+        session.selected_text()
+    };
+    assert_eq!(
+        backwards, forwards,
+        "a drag must select the same run whichever way it is made"
+    );
+    assert!(
+        backwards.is_some_and(|text| !text.is_empty()),
+        "and it must select something"
+    );
+}
+
+/// A drag across the whole field selects the whole value.
+#[test]
+fn a_drag_across_the_whole_field_selects_all_of_it() {
+    let doc = document();
+    let mut session = FormSession::new(&doc);
+    type_run(&mut session, 12);
+
+    drag(&mut session, FORM_END_X, FORM_BEGIN_X);
+    assert_eq!(session.selected_text().as_deref(), Some("ABCDEFGHIJKL"));
+}
+
+/// `DoubleClickInTextField`: a double click selects **the whole line**, not
+/// the word under the cursor.
+#[test]
+fn a_double_click_selects_the_whole_line() {
+    let doc = document();
+    let mut session = FormSession::new(&doc);
+    type_run(&mut session, 0);
+    for ch in "Hello World".chars() {
+        session.on_char(ch, EventModifiers::NONE);
+    }
+
+    session.on_double_click(0, 130.0, FORM_Y, EventModifiers::NONE);
+    assert_eq!(session.selected_text().as_deref(), Some("Hello World"));
+}
