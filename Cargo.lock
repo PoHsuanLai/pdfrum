@@ -1484,6 +1484,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "pdfrum-script"
+version = "0.1.0"
+dependencies = [
+ "thiserror",
+]
+
+[[package]]
 name = "pdfrum-text"
 version = "0.1.0"
 dependencies = [
