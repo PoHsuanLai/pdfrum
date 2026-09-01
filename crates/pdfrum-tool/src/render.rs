@@ -122,6 +122,28 @@ impl Backend {
     }
 }
 
+/// Everything a form session contributes to one page's image.
+///
+/// Three facts, and each reaches the annotation pass a different way, which
+/// is why they travel together rather than as one map:
+///
+/// - `updates` are per-annotation **appearances**, keyed positionally;
+/// - `focus` says which widget is **not** tinted, and what if anything is
+///   stroked in the tint's place;
+/// - `hover` says which annotation's synthesized **note card** is open.
+///
+/// None of the three can be derived from the others, and any one of them on
+/// its own is reason to build an overlay.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct SessionView<'a> {
+    /// The appearance updates this page's event replay produced.
+    pub updates: &'a [pdfrum::AppearanceUpdate],
+    /// Which annotation holds focus, and its focus rectangle.
+    pub focus: Option<pdfrum_doc::ap::Focus>,
+    /// Which annotation the pointer is inside, by raw `/Annots` index.
+    pub hover: Option<usize>,
+}
+
 /// Collects a form session's updates into the overlay the annotation pass
 /// lays over what it generates.
 ///
@@ -134,39 +156,42 @@ impl Backend {
 /// the difference is already in the stream. An update that reverts to the
 /// file's own appearance contributes nothing, which is exactly right —
 /// absence from the overlay *is* "use what the file declares".
-fn session_overlay(
-    updates: &[pdfrum::AppearanceUpdate],
-    focus: Option<pdfrum_doc::ap::Focus>,
-) -> Option<pdfrum_doc::AnnotOverlay> {
-    let highest = updates
+fn session_overlay(view: &SessionView<'_>) -> Option<pdfrum_doc::AnnotOverlay> {
+    let highest = view
+        .updates
         .iter()
         .filter(|update| update.kind.appearance().is_some())
         .map(|update| update.annot.index as usize)
         .max();
-    // Focus alone is reason enough to supply an overlay, even with no
-    // appearance in it: "this widget is not tinted" is an instruction the
-    // annotation pass cannot reach any other way, and a focused field whose
-    // value never changed produces no appearance to carry it.
-    let (highest, focus) = match (highest, focus) {
-        (None, None) => return None,
-        (highest, focus) => (
-            highest
-                .into_iter()
-                .chain(focus.map(|focus| focus.annot))
-                .max()
-                .unwrap_or(0),
-            focus,
-        ),
-    };
+    // Focus and hover are each reason enough to supply an overlay, even with
+    // no appearance in it. "This widget is not tinted" and "this annotation's
+    // note is open" are instructions the annotation pass cannot reach any
+    // other way, and neither one produces an appearance to carry it: a
+    // focused field whose value never changed generates nothing, and a
+    // highlight's note card is synthesized by the pass itself.
+    if highest.is_none() && view.focus.is_none() && view.hover.is_none() {
+        return None;
+    }
+    // Sized to the highest index anything names, since `set` is positional
+    // even though `set_focus` and `set_hover` are not.
+    let highest = highest
+        .into_iter()
+        .chain(view.focus.map(|focus| focus.annot))
+        .chain(view.hover)
+        .max()
+        .unwrap_or(0);
 
     let mut overlay = pdfrum_doc::AnnotOverlay::with_capacity(highest + 1);
-    for update in updates {
+    for update in view.updates {
         if let Some(appearance) = update.kind.appearance() {
             overlay.set(update.annot.index as usize, appearance.clone());
         }
     }
-    if let Some(focus) = focus {
+    if let Some(focus) = view.focus {
         overlay.set_focus(focus);
+    }
+    if let Some(hover) = view.hover {
+        overlay.set_hover(hover);
     }
     Some(overlay)
 }
@@ -201,19 +226,13 @@ fn session_overlay(
 /// without `--send-events`, because the session produces no appearance to lay
 /// over — which is the property that keeps the unfocused rows stable.
 ///
-/// This is currently inert rather than wrong: the facade's dispatch reports
-/// every event unhandled by design, so `updates` is always empty and the
-/// image this produces is the image the plain path produces. The parameter is
-/// threaded through anyway so the wiring is one function body away from
-/// working, and the debug assertion below is what will fail loudly — in tests
-/// and in the debug binary — on the first run where that stops being true.
+/// The **third** thing a session contributes is hover, and it is not part of
+/// either pass above: a text highlight's note card is synthesized by the
+/// annotation pass itself, and is drawn only while the pointer is inside its
+/// parent. Nothing a file can say opens one, so [`SessionView::hover`] is the
+/// whole of that signal — which is why the six `annotation_highlight_*`
+/// fixtures are scripts of bare `mousemove` lines and nothing else.
 #[must_use]
-#[expect(
-    clippy::too_many_arguments,
-    reason = "the page, its catalog, the resolver, the scale, the backend, \
-              the build cache and the session's two outputs are eight \
-              independent inputs; bundling them would only move the list"
-)]
 pub fn render<R: Resolve>(
     page: &PageDict,
     catalog: &pdfrum_object::Dict,
@@ -221,8 +240,7 @@ pub fn render<R: Resolve>(
     scale: f64,
     backend: Backend,
     ctx: &mut BuildContext,
-    updates: &[pdfrum::AppearanceUpdate],
-    focus: Option<pdfrum_doc::ap::Focus>,
+    session: &SessionView<'_>,
 ) -> Option<Rendered> {
     let limits = Limits::default();
     let mut build_diags = Diagnostics::default();
@@ -247,7 +265,7 @@ pub fn render<R: Resolve>(
     // reads the content stream's text and `--annot` describes the
     // annotations rather than drawing them, and both would double-count an
     // appearance the page graph had already absorbed.
-    let supplied = session_overlay(updates, focus);
+    let supplied = session_overlay(session);
     pdfrum_doc::annot_render::overlay_with(
         &mut built,
         &page.dict,

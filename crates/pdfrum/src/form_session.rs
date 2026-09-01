@@ -335,20 +335,29 @@ impl<'a> FormSession<'a> {
     /// the ordinary case for every page but one.
     #[must_use]
     pub fn focus_for_page(&mut self, page: u32) -> Option<pdfrum_doc::ap::Focus> {
-        if !self.pages.contains_key(&page) {
-            let read = self.read_page(page)?;
-            self.pages.insert(page, read);
-        }
-        let form = self.pages.get(&page)?;
-        let catalog = self.doc.catalog();
-        let ctx = pdfrum_form::Context {
-            page: form,
-            catalog: &catalog,
-            resolve: self.doc.parser(),
-            fonts: &self.fonts,
-            permissions: self.permissions(),
-        };
-        pdfrum_form::focus_of(&self.inner, &ctx)
+        self.with_page(page, |inner, ctx| pdfrum_form::focus_of(inner, ctx))
+    }
+
+    /// Which annotation on `page` the pointer is inside — the answer the
+    /// annotation pass needs to know a synthesized pop-up note is **open**.
+    ///
+    /// A separate fact from focus, and they move independently: a pointer
+    /// resting on an annotation leaves the keyboard wherever it was, and the
+    /// annotation under the pointer need not be focusable at all. A text
+    /// highlight is the case that matters, because its note card is *only*
+    /// reachable this way — nothing a file can say opens one. Upstream the
+    /// path is `CPDFSDK_BAAnnot::OnMouseEnter`
+    /// (`cpdfsdk_baannot.cpp:309-312`) calling `SetPopupAnnotOpenState`
+    /// (`cpdf_annot.cpp:239-243`), which is why the six
+    /// `annotation_highlight_*` fixtures are bare `mousemove` scripts.
+    ///
+    /// The result is a **raw `/Annots` index**, the key space
+    /// [`pdfrum_doc::AnnotOverlay::set_hover`] wants. Answers `None` when the
+    /// pointer is over nothing, or over an annotation on another page.
+    #[must_use]
+    pub fn hover_for_page(&self, page: u32) -> Option<usize> {
+        let hover = self.inner.hover?;
+        (hover.page == page).then_some(hover.index as usize)
     }
 
     /// Whether the focused field can undo.
