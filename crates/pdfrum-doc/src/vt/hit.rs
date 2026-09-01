@@ -52,7 +52,7 @@
 //! use [`crate::geom::is_float_bigger`] and its sibling, so a point within
 //! `0.0001` of a section or line edge counts as *inside* it.
 //!
-//! # Every size here is the layout's, never the caller's request
+//! # A measured line's size is the layout's, not the caller's request
 //!
 //! [`Config::font_size`] is a **request**, and `0.0` is the request for
 //! automatic sizing. [`crate::vt::layout`] resolves it — picking the largest
@@ -63,15 +63,19 @@
 //! reads. So the size that placed the words is the layout's, and the
 //! caller's `Config` still holds the zero it asked with.
 //!
-//! Every query in this module therefore measures with [`Layout::font_size`].
-//! Measuring with the config's instead is not a rounding difference on an
-//! auto-sized field, it is **zero**: every advance collapses, so a caret
-//! lands on the leading edge of the character it should trail, every
-//! midpoint becomes the character's own origin, and a line's fallback height
-//! is nothing at all. The visible form on `password` — a field with no `/DA`
-//! at all, so the request is zero and the layout resolves 25 — was a caret
-//! at device column 189, the fifth asterisk's *left* edge, against the
-//! oracle's 199.
+//! Every query over a line the layout **has** therefore measures with
+//! [`Layout::font_size`]. Measuring with the config's instead is not a
+//! rounding difference on an auto-sized field, it is **zero**: every advance
+//! collapses, so a caret lands on the leading edge of the character it should
+//! trail and every midpoint becomes the character's own origin. The visible
+//! form on `password` — a field with no `/DA` at all, so the request is zero
+//! and the layout resolves 25 — was a caret at device column 189, the fifth
+//! asterisk's *left* edge, against the oracle's 199. Fixing it moves that row
+//! from 0.991764 to 0.999016 and leaves the other 1703 byte-identical.
+//!
+//! The one place that keeps the config's size is `line_extent`'s **fallback**,
+//! for a place naming a line the layout does not have; its own doc says why,
+//! and the answer there was measured rather than reasoned.
 //!
 //! # Right-to-left runs, where every x reverses
 //!
@@ -482,7 +486,7 @@ pub fn caret_rect(
     width: f32,
 ) -> Rect {
     let (x, top) = caret_position(layout, config, metrics, place);
-    let height = line_extent(layout, metrics, place);
+    let height = line_extent(layout, config, metrics, place);
     let (left, top) = Layout::to_pdf(plate, x, top);
     let (left, top) = (left + offset.0, top + offset.1);
     geom::rect(left, top - height, left + width, top)
@@ -569,14 +573,27 @@ fn line_caret_x(section: &Section, line: crate::vt::Line) -> f32 {
 
 /// The height of the line a place sits on.
 ///
-/// The fallback — for a place naming a line the layout does not have — is one
-/// line at the **layout's** resolved size. At the config's request an
-/// auto-sized field would answer a caret of zero height, which is a caret
-/// that draws nothing.
-fn line_extent(layout: &Layout, metrics: &Metrics<'_>, place: Place) -> f32 {
+/// # The fallback deliberately keeps the **config's** size
+///
+/// It is reached only for a place naming a line the layout does not have, and
+/// the two sizes then say different things. `Layout::font_size` is what the
+/// resolved layout used, and on an auto-sized field it answers a height for a
+/// line that does not exist; the config's is what the *caller* asked for, and
+/// a caller that asked for automatic sizing gets nothing. That second answer
+/// is upstream's: `CPWL_EditImpl::GetCaretRect` reads a word range that is
+/// empty for a missing place, so the caret it hands back has no height.
+///
+/// This was measured, not reasoned. Substituting the layout's size here moves
+/// **170 rows, 37 of them downward** — every widget whose caret rect is asked
+/// for a line it does not have gains a height it did not have before, and the
+/// checkbox and radio families lose by it. The upward move on `password` is
+/// +0.000006 of the +0.007252 this module's other two size fixes are worth.
+/// So this one stays as it is; the two that matter are `caret_x` and
+/// `word_at_x`, and both take the layout's size for a line that does exist.
+fn line_extent(layout: &Layout, config: &Config, metrics: &Metrics<'_>, place: Place) -> f32 {
     let fallback = || {
-        crate::vt::font_ascent(metrics, layout.font_size)
-            - crate::vt::font_descent(metrics, layout.font_size)
+        crate::vt::font_ascent(metrics, config.font_size)
+            - crate::vt::font_descent(metrics, config.font_size)
     };
     layout
         .sections
@@ -1599,8 +1616,11 @@ mod tests {
         // (905 + 211) * 25 / 1000, the line's own ascent and descent.
         assert!((rect.y1 - rect.y0 - 27.9).abs() < 1e-3, "{rect:?}");
 
-        // And a place naming a line the layout does not have falls back to
-        // one line at the same resolved size rather than to nothing.
+        // A place naming a line the layout does **not** have keeps the
+        // config's size, which for an auto-sized field is a caret of no
+        // height. That is deliberate and measured — see `line_extent` — and
+        // it is asserted here so substituting the layout's size turns this
+        // red rather than moving 170 conformance rows silently.
         let missing = caret_rect(
             &layout,
             config.plate,
@@ -1610,7 +1630,7 @@ mod tests {
             Place::new(0, 7, 0),
             0.4,
         );
-        assert!((missing.y1 - missing.y0 - 27.9).abs() < 1e-3, "{missing:?}");
+        assert!((missing.y1 - missing.y0).abs() < 1e-6, "{missing:?}");
     }
 
     /// A click into an auto-sized field lands by the midpoint rule at the
