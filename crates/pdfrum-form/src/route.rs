@@ -1236,27 +1236,52 @@ fn release_in_popup<R: Resolve>(
     // `SetSelectText`'s `edit_->ReplaceSelection(list_->GetText())` puts
     // there. A gated one has no text half and reads its label from the
     // selection instead.
-    set_combo_text(session, field, label);
+    set_combo_text(session, ctx, field, label);
     session.dirty.insert(field);
     let mut response = Response::consumed();
     response.absorb(redraw(session, ctx, field, annot));
     response
 }
 
-/// Puts a chosen row's label into an editable combo's text half.
-fn set_combo_text(session: &mut FormSession, field: FieldId, label: String) {
-    let Some(FieldState::Choice(choice)) = session.fields.get_mut(&field) else {
-        return;
-    };
-    if !choice.config.editable {
+/// `SetSelectText()` then `SelectAllText()`: the chosen row's label into the
+/// combo's text half, **left selected**.
+///
+/// Both halves matter and the second is the one that shows.
+/// `CPWL_ComboBox::SetSelectText` (`cpwl_combo_box.cpp:518-523`) is
+/// `SelectAllText(); ReplaceSelection(list_->GetText()); SelectAllText();` —
+/// it *ends* on a select-all — and `NotifyLButtonUp` (`:505-516`) then calls
+/// `SelectAllText()` again for good measure. So after choosing a row the
+/// text half holds that row's label with **every character selected**, which
+/// is why `bug_736695_3`'s golden shows `Spain` as white glyphs on a navy
+/// band rather than as black text on white.
+///
+/// The control is rebuilt from the label rather than edited in place: the
+/// whole text is being replaced, so there is nothing of the old one to keep,
+/// and `with_combo_edit` is the one place that knows the plate and the face
+/// to build it with.
+fn set_combo_text<R: Resolve>(
+    session: &mut FormSession,
+    ctx: &Context<'_, R>,
+    field: FieldId,
+    label: String,
+) {
+    let editable = matches!(
+        session.fields.get(&field),
+        Some(FieldState::Choice(choice)) if choice.config.editable
+    );
+    if !editable {
         return;
     }
-    choice.edit_text = label;
-    // The live control, if one was ever built by typing, is stale now. It is
-    // dropped rather than rewritten: `with_combo_edit` rebuilds it from
-    // `edit_text` on the next keystroke, which is one place the text can come
-    // from instead of two that must agree.
-    choice.edit = None;
+    if let Some(FieldState::Choice(choice)) = session.fields.get_mut(&field) {
+        choice.edit_text = label;
+        // Dropped rather than rewritten, so `with_combo_edit` below lays the
+        // new label out from scratch: one place the text can come from
+        // instead of two that must agree.
+        choice.edit = None;
+    }
+    with_combo_edit(session, ctx, field, |edit, _config, _metrics| {
+        edit.select_all();
+    });
 }
 
 /// What a host draws for one page's open dropdown, if one is open.
@@ -2327,19 +2352,55 @@ fn highlight_of<R: Resolve>(
     widget: &WidgetInfo,
     state: &FieldState,
 ) -> Option<ap::field_body::Highlight> {
-    let FieldState::Text(text) = state else {
-        return None;
-    };
-    let plate = ap::field_body::client_rect(&widget.dict, ctx.resolve);
-    let config = text_config(ctx, widget, plate, &text.config);
-    with_font(ctx, widget, |font, _substitute| {
-        ops::highlight(
-            &text.edit,
-            &config,
-            &font.metrics,
-            ap::field_body::CARET_WIDTH,
-        )
-    })
+    match state {
+        FieldState::Text(text) => {
+            let plate = ap::field_body::client_rect(&widget.dict, ctx.resolve);
+            let config = text_config(ctx, widget, plate, &text.config);
+            with_font(ctx, widget, |font, _substitute| {
+                ops::highlight(
+                    &text.edit,
+                    &config,
+                    &font.metrics,
+                    ap::field_body::CARET_WIDTH,
+                )
+            })
+        }
+        // **An editable combo box has a caret and a selection band too**, and
+        // for the same reason a text field does: its text half *is* a
+        // `CPWL_Edit` (`cpwl_combo_box.cpp:190-203`), read-only only when the
+        // box is gated (`:115-118`). Choosing a row leaves that edit holding
+        // the row's label with everything selected, which is what draws the
+        // navy band under `bug_736695_3`'s `Spain`; clicking into an empty
+        // one leaves a caret, which is the 24-pixel bar at columns 166-167 of
+        // `bug_736695_2`'s golden.
+        //
+        // A **gated** combo answers nothing: its edit is read-only and shows
+        // neither, which is `CPWL_Edit::GetFocusRect` returning empty for
+        // every combo and `SetCaret` forcing the caret invisible on one that
+        // is not focused in its own right.
+        FieldState::Choice(choice) if choice.config.editable => {
+            let edit = choice.edit.as_deref()?;
+            let client = ap::field_body::client_rect(&widget.dict, ctx.resolve);
+            // The text sits left of the drop button, which is the plate
+            // `with_combo_edit` laid it out in — the band has to be measured
+            // in the same box or it lands a button's width off.
+            let plate = kurbo::Rect::new(
+                client.x0,
+                client.y0,
+                client.x1 - f64::from(DROP_BUTTON_WIDTH),
+                client.y1,
+            );
+            let config = vt::Config {
+                plate,
+                font_size: font_size(ctx, widget),
+                ..vt::Config::default()
+            };
+            with_font(ctx, widget, |font, _substitute| {
+                ops::highlight(edit, &config, &font.metrics, ap::field_body::CARET_WIDTH)
+            })
+        }
+        FieldState::Choice(_) | FieldState::Toggle(_) | FieldState::Button(_) => None,
+    }
 }
 
 #[cfg(test)]
