@@ -50,7 +50,7 @@ pub use focus::FocusChange;
 pub use geom::{Plate, Rotation};
 pub use hit::{Candidate, LayoutBand, Permissions, WidgetHit};
 pub use page::{PageForm, WidgetInfo};
-pub use route::{Context, apply, focus_of};
+pub use route::{Context, apply, focus_of, kill_focus};
 pub use session::{AnnotId, DragAnchor, FieldId, FocusTarget, FormSession, SessionConfig};
 pub use tab::{FocusRing, Focusable, TabOrder};
 pub use update::{AppearanceUpdate, Response, UpdateKind};
