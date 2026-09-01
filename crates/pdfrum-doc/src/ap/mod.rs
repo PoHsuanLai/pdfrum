@@ -173,6 +173,7 @@ pub struct AnnotOverlay {
     entries: Vec<Appearance>,
     focus: Option<Focus>,
     hover: Option<usize>,
+    live_edit: Option<usize>,
 }
 
 impl AnnotOverlay {
@@ -183,6 +184,7 @@ impl AnnotOverlay {
             entries: vec![Appearance::Untouched; count],
             focus: None,
             hover: None,
+            live_edit: None,
         }
     }
 
@@ -223,6 +225,36 @@ impl AnnotOverlay {
     #[must_use]
     pub fn hover(&self) -> Option<usize> {
         self.hover
+    }
+
+    /// Records that one annotation's supplied appearance is a **live edit's**
+    /// — the field the session is currently typing in.
+    ///
+    /// A raw `/Annots` index, like [`Self::set_focus`]'s and equally unbounded
+    /// by the overlay's length. At most one annotation can be under live edit,
+    /// because a session focuses one field at a time; a second call replaces
+    /// the first rather than accumulating.
+    ///
+    /// It is a separate signal from focus, and the two are **not**
+    /// interchangeable. A field can hold the focus without being edited — it
+    /// was tabbed to and nothing has been typed — in which case the session
+    /// generates no appearance for it and there is nothing to mark. What this
+    /// records is that the appearance carried at this index came from an
+    /// editor, which is what makes the oracle draw its text with `ClearType`.
+    pub fn set_live_edit(&mut self, annot: usize) {
+        self.live_edit = Some(annot);
+    }
+
+    /// Which annotation's appearance is a live edit's, if any.
+    #[must_use]
+    pub fn live_edit(&self) -> Option<usize> {
+        self.live_edit
+    }
+
+    /// Whether the appearance at one `/Annots` index came from a live edit.
+    #[must_use]
+    pub fn is_live_edit(&self, index: usize) -> bool {
+        self.live_edit == Some(index)
     }
 
     /// Records a generated appearance at one `/Annots` index.
@@ -288,6 +320,9 @@ impl AnnotOverlay {
         }
         if let Some(hover) = other.hover {
             self.hover = Some(hover);
+        }
+        if let Some(live_edit) = other.live_edit {
+            self.live_edit = Some(live_edit);
         }
     }
 
@@ -1170,5 +1205,61 @@ mod tests {
         base.merge_over(&supplied);
         assert_eq!(base.len(), 1);
         assert_eq!(base.get(4), None);
+    }
+
+    #[test]
+    fn only_the_named_annotation_is_a_live_edit() {
+        let mut overlay = AnnotOverlay::with_capacity(3);
+        overlay.set(0, made("a"));
+        overlay.set(1, made("b"));
+        assert_eq!(overlay.live_edit(), None);
+        assert!(!overlay.is_live_edit(0));
+        overlay.set_live_edit(1);
+        assert_eq!(overlay.live_edit(), Some(1));
+        assert!(overlay.is_live_edit(1));
+        // Every other annotation's appearance is an ordinary one, which is
+        // what keeps ClearType off the rest of the page.
+        assert!(!overlay.is_live_edit(0));
+        assert!(!overlay.is_live_edit(2));
+    }
+
+    #[test]
+    fn a_session_editing_a_second_field_replaces_the_first() {
+        // One field is edited at a time, so this is a replacement rather than
+        // a set: a stale mark would draw a field's committed text with
+        // ClearType long after the editor left it.
+        let mut overlay = AnnotOverlay::with_capacity(3);
+        overlay.set_live_edit(0);
+        overlay.set_live_edit(2);
+        assert_eq!(overlay.live_edit(), Some(2));
+        assert!(!overlay.is_live_edit(0));
+    }
+
+    #[test]
+    fn merging_carries_the_live_edit_mark_over() {
+        // The mark has to survive `merge_over` or it would be lost exactly
+        // where it matters — the supplied overlay is the session's, and the
+        // base is what the annotation pass generated.
+        let mut base = AnnotOverlay::with_capacity(2);
+        let mut supplied = AnnotOverlay::with_capacity(2);
+        supplied.set(1, made("edited"));
+        supplied.set_live_edit(1);
+        base.merge_over(&supplied);
+        assert!(base.is_live_edit(1));
+        // And a merge that says nothing about it leaves the mark alone.
+        let untouched = AnnotOverlay::with_capacity(2);
+        base.merge_over(&untouched);
+        assert!(base.is_live_edit(1));
+    }
+
+    #[test]
+    fn an_overlay_that_marks_no_live_edit_leaves_every_index_ordinary() {
+        // The default, and the whole corpus outside the form-events rows.
+        let mut overlay = AnnotOverlay::with_capacity(4);
+        overlay.set(2, made("generated"));
+        assert_eq!(overlay.live_edit(), None);
+        for index in 0..6 {
+            assert!(!overlay.is_live_edit(index), "index {index}");
+        }
     }
 }

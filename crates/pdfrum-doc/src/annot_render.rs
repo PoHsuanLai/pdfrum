@@ -213,7 +213,14 @@ pub fn overlay_with<R: Resolve>(
         if !matrix.as_coeffs().iter().all(|c| c.is_finite()) {
             continue;
         }
-        if let Some(object) = build_form_object(&form, matrix, &resources, r, ctx, limits, diags) {
+        // A live edit's appearance is marked so the renderer can draw its text
+        // the way the oracle does — with ClearType, which no other text on the
+        // page gets. The flag rides the object because by the time anything
+        // rasterizes, this form is one entry in the page's object list.
+        let live_edit = supplied.is_some_and(|overlay| overlay.is_live_edit(index));
+        if let Some(object) = pdfrum_page::build_form_object_with(
+            &form, matrix, &resources, r, ctx, limits, diags, live_edit,
+        ) {
             page.objects.push(object);
         }
         push_chrome(page, annot, index, focus, r, limits, diags);

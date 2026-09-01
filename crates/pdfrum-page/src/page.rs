@@ -224,6 +224,26 @@ pub struct FormObject {
     /// As an image's: the objects here are already interpreted, so a
     /// regenerated stream names the stream rather than re-emitting them.
     pub source: Option<pdfrum_object::ObjRef>,
+    /// Whether this form is a **live edit's** appearance — a field the user is
+    /// currently typing in, rather than anything the file itself carries.
+    ///
+    /// It is a fact about *where the object came from*, not an instruction to
+    /// a renderer, which is why a page crate can hold it: the file's own
+    /// appearance streams and a form session's regenerated ones are both
+    /// `false`, and only the appearance a session produces for the field it is
+    /// editing is `true`.
+    ///
+    /// A renderer needs it because the oracle draws that one form differently
+    /// from every other object on the page. `CPWL_EditImpl::DrawTextString`
+    /// builds a **local** `CPDF_RenderOptions` whose `bClearType` no flag word
+    /// ever clears, so the text of a live edit — and no other text — is drawn
+    /// with subpixel antialiasing. The distinction has to travel with the
+    /// object because by the time anything rasterizes, this form is one entry
+    /// in the page's object list among all the others, and the whole page is
+    /// rendered under a single set of options.
+    ///
+    /// Defaults to `false`, so every existing producer keeps its meaning.
+    pub live_edit: bool,
 }
 
 /// One thing to paint.
