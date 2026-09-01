@@ -982,6 +982,12 @@ pinned orderings before vt layout is written (E5). `Limits` gains
 **[spec] 2026-09-01 (M14):** `Limits` gains `max_undo_items: u32 = 10_000`
 (the oracle's `kEditUndoMaxItems`), enforced minimum 4 (`kMinEditUndoMaxItems`
 — a `ReplaceSelection` undo group is four items). Additive.
+*(Amended by the M14 implementation, same day: the field lands on
+`pdfrum-form`'s `SessionConfig` instead, with the same default and the same
+enforced minimum. An undo bound is a property of an interaction session, not
+of a document parse, and no crate but `pdfrum-form` would ever read it —
+see SPEC §15.2 for the argument. The behaviour this clause specifies is
+unchanged; only its home is.)*
 
 **[spec] 2026-08-29 (M6 implementation, three corrections to the rulings
 above).**
@@ -1346,9 +1352,266 @@ Orchestrator affirmation 2026-08-30: pdfrum-edit divergence D17 accepted — met
 
 ## 15. `pdfrum-form`  *(behavior: `fpdfsdk/formfiller`, `fpdfsdk/pwl` — the interaction half)*
 
-**[spec] 2026-09-01 — section opened by the M14 ruling (PLAN.md §M14).**
-Contracts are written here by the M14 implementation agent from
-`docs/design/pdfrum-form.md` §3.2 (types beyond SPEC), §3.5 (facade API) and
-§3.6 (the `Cascade` seam) in its first `[spec]` commit. Until then that brief
-is the contract. Crate sits between `pdfrum-doc` and `pdfrum` in the publish
-order; no back-edge; no new external dependency.
+**[spec] 2026-09-01 — section opened by the M14 ruling (PLAN.md §M14) and
+written from `docs/design/pdfrum-form.md` §3.2, §3.5 and §3.6.** The brief
+remains the behaviour contract; this section is the *shape* contract, and §0's
+rule applies to it as to every other section.
+
+The crate sits between `pdfrum-doc` and `pdfrum` in the publish order, with no
+back-edge: `pdfrum-doc` gains no event-related field and no event-related
+argument. Dependencies are `pdfrum-common`, `pdfrum-object`, `pdfrum-doc`,
+`pdfrum-page`, `pdfrum-font`, `kurbo` and `thiserror` — **all already in
+DEPS.md, which this milestone does not change**.
+
+### 15.1 What the crate is, in one sentence
+
+Events go in, appearance updates come out. There is no widget object
+hierarchy, no callback table and no invalidation channel: a session is a
+record of facts and `apply` is a function over it (brief D1, D2).
+
+```rust
+pub fn apply(
+    session: &mut FormSession,
+    ctx: &FormContext<'_>,
+    event: Event,
+    cascade: &mut dyn Cascade,
+    diags: &mut Diagnostics,
+) -> Response;
+
+pub struct Response { pub consumed: bool, pub updates: Vec<AppearanceUpdate> }
+```
+
+`FormContext` is the borrowed read-only view the engine needs — the document's
+`Form`, the per-page annotation lists, the page geometry and the resolver —
+assembled by the caller once and reused for every event. It exists because
+`FormSession` must stay free of borrows so the facade can own it across calls.
+
+### 15.2 The session record
+
+```rust
+pub struct FormSession {
+    pub focus: Option<FocusTarget>,
+    pub fields: BTreeMap<FieldId, FieldState>,
+    pub hover: Option<AnnotId>,
+    pub drag: Option<DragAnchor>,
+    pub dirty: BTreeSet<FieldId>,
+    pub config: SessionConfig,
+}
+
+pub enum FocusTarget { Widget(FieldId, AnnotId), Annot(AnnotId) }
+
+pub struct FieldId(pub u32);                                  // index into Form::fields
+pub struct AnnotId { pub page: u32, pub index: u32 }
+pub struct DragAnchor { pub field: FieldId, pub start: Place }
+
+pub struct SessionConfig {
+    pub accelerator: Modifiers,   // Control off Apple, Meta on Apple (D6)
+    pub redo_on_ctrl_y: bool,     // false on Apple (D6)
+    pub focusable: Vec<Subtype>,  // default [Widget]
+    pub max_undo_items: u32,      // default 10_000, clamped up to 4
+}
+```
+
+**Where `max_undo_items` lives is a deliberate deviation from the E5 ruling's
+letter.** §10 records it as a `Limits` field. `Limits` is `pdfrum-common`'s and
+is consumed by every parsing crate; an undo-stack bound is a property of an
+*interaction session*, not of a document parse, and no other crate would ever
+read it. It is therefore a `SessionConfig` field with the same default (10 000)
+and the same enforced minimum (4, the worst-case `ReplaceSelection` group:
+sentinel + clear + insert + sentinel). The behaviour E5 specified is exactly
+preserved; only its home differs, and §10's line is annotated to say so.
+
+### 15.3 Per-field state
+
+One variant per behaviour family, not per PDF field type: combo and list share
+a machine, check and radio share one.
+
+```rust
+pub enum FieldState { Text(TextEdit), Choice(ChoiceEdit), Toggle(ToggleState), Button(ButtonState) }
+
+/// Invariant, one sentence: `caret` and both ends of `selection` are valid
+/// places in `layout`, and `layout` is what laying `text` out again produces.
+pub struct TextEdit {
+    pub text: String,
+    pub layout: vt::Layout,
+    pub config: TextConfig,
+    pub caret: Place,
+    pub selection: Selection,
+    pub sticky_x: f32,
+    pub scroll: (f32, f32),
+    pub undo: UndoStack,
+}
+
+/// After word `word` of line `line` of section `section`; `word == -1` means
+/// before the first word of that line.
+pub struct Place { pub section: u32, pub line: u32, pub word: i32 }
+
+/// Stored directional — `begin` is the anchor, `end` the active end.
+/// Normalized only on read, by `range()`. Empty iff `begin == end`, which is
+/// a *live collapsed anchor* and is distinct from `Selection::reset()`.
+pub struct Selection { pub begin: Place, pub end: Place }
+
+pub struct ChoiceEdit {
+    pub options: Vec<ChoiceOption>,
+    pub selected: BTreeSet<usize>,
+    pub caret_index: Option<usize>,   // the "last index acted upon" (brief §1.7.4)
+    pub anchor: Option<usize>,        // the shift pivot
+    pub top_visible: usize,
+    pub popup: Option<PopupState>,
+    pub edit: Option<TextEdit>,       // Some only for an editable combo
+}
+
+pub struct ToggleState { pub state: Vec<u8> }   // the /AS name
+pub struct ButtonState { pub pressed: bool }
+```
+
+### 15.4 The undo model
+
+Normative, because a reasonable design gets it wrong and four ported
+assertions fail against the wrong one (brief D5):
+
+- an item records the selection **before** the edit, restores it on **undo**,
+  and does **not** restore it on redo;
+- undo is **replay of the inverse operation against the live layout**, never a
+  snapshot restore;
+- a typed character is one item; a paste, a cut or a delete-of-selection is
+  **exactly one** item whatever its length; `select_all` records **none**;
+- a focus change to another field clears the stack;
+- grouping is a pair of `GroupBoundary` sentinels, not a begin/end API, and
+  head eviction is **group-atomic** — a group is never left half-evicted.
+
+```rust
+pub struct UndoStack { /* items: VecDeque<UndoItem>, pos, max, enabled */ }
+
+pub enum UndoItem {
+    InsertWord   { old: Place, new: Place, ch: char, before: Selection },
+    InsertReturn { old: Place, new: Place, before: Selection },
+    Backspace    { old: Place, new: Place, ch: char, section_break: bool, before: Selection },
+    Delete       { old: Place, new: Place, ch: char, section_break: bool, before: Selection },
+    Clear        { range: Range, text: String, before: Selection },
+    InsertText   { old: Place, new: Place, text: String, before: Selection },
+    GroupBoundary,
+}
+```
+
+### 15.5 The input vocabulary
+
+`Event` here is the **semantic** enum the engine consumes, distinct by design
+from `pdfrum_tool::events::Event`, which is the grammar-level one the `.evt`
+parser produces; `pdfrum-tool` owns the bridge between them. There is no
+`KeyUp` variant (upstream's is a documented permanent no-op returning false)
+and no `Idle` variant (M15's concern).
+
+```rust
+pub enum Event {
+    MouseMove   { at: Point, modifiers: Modifiers },
+    MouseDown   { button: Button, at: Point, modifiers: Modifiers },
+    MouseUp     { button: Button, at: Point, modifiers: Modifiers },
+    DoubleClick { at: Point, modifiers: Modifiers },
+    MouseWheel  { at: Point, delta: (i32, i32), modifiers: Modifiers },
+    Focus       { at: Point, modifiers: Modifiers },
+    KeyDown     { key: Key, modifiers: Modifiers },
+    Char        { ch: char, modifiers: Modifiers },
+}
+
+pub struct Point { pub x: f32, pub y: f32 }   // page space (PDF user space), y-up
+pub enum Button { Left, Right }
+pub struct Key(pub u16);                      // FWL_VKEY, a newtype not an enum
+pub struct Modifiers(pub u32);                // FWL_EVENTFLAG bits, hand-rolled
+```
+
+`Modifiers` is a hand-written bitflag newtype rather than the `bitflags` crate:
+DEPS.md is closed and this is nine constants (STYLE §5).
+
+### 15.6 The output channel
+
+```rust
+pub struct AppearanceUpdate { pub annot: AnnotId, pub kind: UpdateKind }
+
+pub enum UpdateKind {
+    Regenerated(GeneratedAp),                        // committed value → new stream
+    LiveEdit(GeneratedAp),                           // focused field, caret + selection band
+    Cleared,
+    ActionRequested { action: Action, modifiers: Modifiers },
+    FocusChanged { from: Option<AnnotId>, to: Option<AnnotId> },
+}
+```
+
+`Regenerated` versus `LiveEdit` is the whole M6/M14 seam and is one `if`: **a
+focused field renders from live editor state, an unfocused one from a
+generated appearance stream.** Focus change is an observable rather than a
+callback, which is why the oracle's form-fill-info version 1/version 2 split
+has no analogue here.
+
+### 15.7 The `Cascade` seam
+
+The third and — under the `[spec]` protocol STYLE §2b names — final trait
+seam in the project, alongside `RenderDevice` and `Resolve`. One
+`&mut dyn Cascade` at exactly one call site, `commit::run`.
+
+```rust
+pub trait Cascade {
+    fn keystroke(&mut self, _f: &FieldRef, change: Keystroke) -> KeystrokeOutcome {
+        KeystrokeOutcome::Accept(change)
+    }
+    fn keystroke_commit(&mut self, _f: &FieldRef, _value: &str) -> bool { true }
+    fn validate(&mut self, _f: &FieldRef, _value: &str) -> bool { true }
+    fn calculate(&mut self, _writes: &mut FieldWrites, _trigger: &FieldRef) {}
+    fn format(&mut self, _f: &FieldRef, _value: &str) -> Option<String> { None }
+}
+
+pub struct NoScripts;
+impl Cascade for NoScripts {}
+```
+
+**The method defaults are not stubs — they *are* the V8-off behaviour.** A
+PDFium build without V8 substitutes `CJS_RuntimeStub` and runs the identical
+code path with exactly three mutation points inert: the accept flag never goes
+false, the change string is never rewritten, and calculate and format return at
+their first line. M14 is therefore not "the real thing minus JS"; it is the
+real thing with the identity cascade. M15 adds `BoaScripts` and changes no call
+site. The recursion guard belongs to the implementation, not the seam:
+`FieldWrites` carries a depth `calculate` may not exceed.
+
+The commit order is fixed and normative:
+`is_changed → keystroke_commit → validate → save → calculate → format`.
+
+**A failing validate does not keep focus.** Upstream's `CommitData` returns
+true on rejection, so kill-focus proceeds and the edit is silently reverted;
+this is reproduced deliberately, named in the code, and flagged for M15, where
+it becomes user-visible for the first time.
+
+### 15.8 The facade surface
+
+`pdfrum::FormSession` wraps the crate's session with the document it belongs
+to, and offers one method per `FORM_*` entry that is not a no-op, named to the
+Rust API guidelines: `on_mouse_move`, `on_mouse_down`, `on_mouse_up`,
+`on_double_click`, `on_mouse_wheel`, `on_focus_at`, `on_key_down`, `on_char`,
+`force_kill_focus`, `focused_text`, `selected_text`, `select_all`,
+`replace_selection`, `replace_and_keep_selection`, `can_undo`, `can_redo`,
+`undo`, `redo`, `set_index_selected`, `is_index_selected`, `focused_annot`,
+`set_focused_annot`, `field_at_point`.
+
+Each event method returns a `Response` carrying both the `consumed` boolean the
+C++ returns as `FPDF_BOOL` and the `Vec<AppearanceUpdate>` the C++ pushes
+through callbacks. `FORM_OnKeyUp`, `FORM_OnRButtonDown` and `FORM_OnRButtonUp`
+have no facade methods: the first is a documented permanent no-op and the other
+two do nothing outside XFA builds, which PLAN.md declines. A right button is
+still *representable* on `Event::MouseDown`, because the `.evt` corpus contains
+it and the correct behaviour for those lines is "consume nothing".
+
+### 15.9 Two behaviours that are contracts rather than implementation
+
+- **Two different hit tests, and the asymmetry is deliberate.** Hover
+  (`MouseMove`) is rect containment over **every** annotation subtype except
+  popups — which is what makes a bare `mousemove` over a `/Highlight`
+  annotation raise its popup. Every other mouse handler goes through the widget
+  hit test, which additionally rejects signature widgets, invisible widgets,
+  **read-only widgets**, and non-push-buttons without fill-form or
+  modify-annotation permission. Reproduce both.
+- **Tab-order banding terminates.** Upstream's row-order loop spins forever
+  when every remaining annotation has a non-positive top. pdfrum's banding is a
+  fold that consumes its input and appends the remainder in index order with a
+  diagnostic. This is the one place the crate is deliberately *better* rather
+  than identical: a library that can hang on input is a bug regardless of what
+  the oracle does — the same reasoning §M15 applies to boa's runtime limits.
