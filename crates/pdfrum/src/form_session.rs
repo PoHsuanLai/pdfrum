@@ -89,6 +89,13 @@ pub struct FormSession<'a> {
     /// session changes *appearances*, which are produced on the way out and
     /// never written back here.
     pages: std::collections::BTreeMap<u32, pdfrum_form::PageForm>,
+    /// Which page the embedder is showing.
+    ///
+    /// Only ever consulted for a keyboard event that arrives with **nothing
+    /// focused**, which in practice means Tab entering the focus ring. Every
+    /// other key goes to the page holding focus, and mouse events name their
+    /// own page.
+    page_in_view: u32,
     /// The form's default-resource fonts, loaded once.
     fonts: pdfrum_doc::ap::FormFonts,
 }
@@ -121,8 +128,31 @@ impl<'a> FormSession<'a> {
             doc,
             inner,
             pages: std::collections::BTreeMap::new(),
+            page_in_view: 0,
             fonts,
         }
+    }
+
+    /// Tells the session which page the embedder is showing.
+    ///
+    /// This exists for exactly one case, and naming it is the point: a
+    /// keyboard event that arrives with **nothing focused** has no field to
+    /// route to and no page of its own, and the one such event that must
+    /// still do something is **Tab** — it is what enters the focus ring in
+    /// the first place. The oracle spells the same fact as a page parameter
+    /// on `FORM_OnKeyDown`, which its callers fill in with the page in view.
+    ///
+    /// Defaults to page 0, which is right for a single-page document and for
+    /// a viewer that has not scrolled. A caller showing any other page should
+    /// say so, or a Tab from nothing will enter the ring on the wrong one.
+    pub fn set_page_in_view(&mut self, page: u32) {
+        self.page_in_view = page;
+    }
+
+    /// Which page the embedder last said it was showing.
+    #[must_use]
+    pub fn page_in_view(&self) -> u32 {
+        self.page_in_view
     }
 
     /// The session's switches.
@@ -498,15 +528,16 @@ impl<'a> FormSession<'a> {
         // **Tab is the exception**, and it is the reason this is not simply
         // "no focus, no keyboard": a Tab with nothing focused is what *takes*
         // focus, so refusing it here would make the ring unreachable from the
-        // keyboard. It goes to the first page, which is where an embedder
-        // holding one page at a time would send it — the oracle's own
-        // `FORM_OnKeyDown` takes the page as an argument and its callers pass
-        // the page in view.
+        // keyboard. It enters the ring on the page the embedder says it is
+        // showing — see `set_page_in_view`, which is how this crate spells
+        // the page argument the oracle puts on `FORM_OnKeyDown` itself.
         //
         // Every other key really does need a focused field, and answers
         // unhandled without one.
         match event {
-            Event::KeyDown { key, .. } if key == Key::TAB => self.dispatch(0, event),
+            Event::KeyDown { key, .. } if key == Key::TAB => {
+                self.dispatch(self.page_in_view, event)
+            }
             _ => Response::ignored(),
         }
     }

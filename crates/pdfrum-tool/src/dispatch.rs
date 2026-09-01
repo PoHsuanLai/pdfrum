@@ -65,6 +65,11 @@ pub fn replay_page(
     script: &[events::Event],
     err: &mut dyn Write,
 ) -> Vec<pdfrum::AppearanceUpdate> {
+    // The page being replayed *is* the page in view: `pdfium_test` holds one
+    // page at a time and passes it to every `FORM_On*` call. Without this a
+    // Tab with nothing focused would enter the focus ring on page 0 whichever
+    // page the script is being replayed against.
+    session.set_page_in_view(page);
     let mut updates = Vec::new();
     for event in script {
         let Some(call) = to_call(event) else {
