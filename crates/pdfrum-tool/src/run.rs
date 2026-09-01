@@ -334,16 +334,22 @@ fn walk_pages(
         // the form filler is editing must not be given the form-field
         // highlight, which is a fact about the *session* rather than about
         // any one appearance.
-        let (updates, focus, hover) = match session.as_deref_mut() {
+        let (updates, focus, hover, popup) = match session.as_deref_mut() {
             Some(session) => {
                 let updates = dispatch::replay_page(session, index, script, streams.err);
                 let focus = session.focus_for_page(index);
                 // Hover is read after the replay, like focus: the script's
                 // last `mousemove` is what leaves a note card open, and a
                 // highlight's card is reachable no other way.
-                (updates, focus, session.hover_for_page(index))
+                let hover = session.hover_for_page(index);
+                // And so is the open dropdown, for the same reason: the
+                // script's last click is what leaves a combo box's list
+                // showing, and the library publishes it rather than drawing
+                // it — this tool is the host that draws it, standing in for
+                // the oracle's `FPDF_FFLDraw`.
+                (updates, focus, hover, session.popup_for_page(index))
             }
-            None => (Vec::new(), None, None),
+            None => (Vec::new(), None, None, None),
         };
         // The annotation walk happens when the page is first opened, before
         // anything is dumped for it.
@@ -364,6 +370,7 @@ fn walk_pages(
                     updates: &updates,
                     focus,
                     hover,
+                    popup,
                 },
             },
             options,
@@ -451,7 +458,9 @@ fn dump_page(
 
 /// Where a file-writing format puts its output: the input's path, which page
 /// is being written, and what `--send-events` left that page in.
-#[derive(Debug, Clone, Copy)]
+// Not `Copy` since the session view gained the open dropdown, whose option
+// labels are owned strings.
+#[derive(Debug, Clone)]
 struct Output<'a> {
     input: &'a Path,
     index: u32,
