@@ -142,23 +142,54 @@ fn a_drag_selects_between_two_points() {
     assert_eq!(edit.selected_text(), "ABCD");
 }
 
-/// `DoubleClickInTextField`: a double click selects the whole line, not the
-/// word under the pointer.
+/// `DoubleClickInTextField`: a double click selects the whole **field**, not
+/// the word under the pointer.
+///
+/// The upstream comment says "the entire line" and its body says
+/// `edit_impl_->SelectAll()` (`cpwl_edit.cpp:636-644`). On the fixture's
+/// single-line `"Hello World"` those are the same answer, which is what let
+/// the comment stand — see the multiline test below for where they part.
 #[test]
-fn a_double_click_selects_the_whole_line() {
+fn a_double_click_selects_the_whole_field() {
     let (config, metrics) = (config(), metrics());
     let mut edit = TextEdit::new("Hello World", &config, &metrics, true);
 
-    ops::select_line_at(
-        &mut edit,
-        &config,
-        &metrics,
-        kurbo::Point::new(CLICK.0, CLICK.1),
-    );
+    edit.select_all();
     assert_eq!(
         edit.selected_text(),
         "Hello World",
-        "the whole line, not the word under the pointer"
+        "the whole field, not the word under the pointer"
+    );
+}
+
+/// And on a **multiline** field the two readings differ, which is why the
+/// router calls `select_all` rather than `select_line_at`.
+///
+/// A double click in the second line of a three-line field selects all three
+/// upstream; selecting the line under the pointer would take only the middle
+/// one.
+#[test]
+fn a_double_click_on_a_multiline_field_takes_every_line() {
+    let mut config = config();
+    config.multi_line = true;
+    config.auto_return = true;
+    let metrics = metrics();
+    let mut edit = TextEdit::new("one\ntwo\nthree", &config, &metrics, true);
+
+    // The point the router would have used, on the middle line.
+    let middle = kurbo::Point::new(CLICK.0, CLICK.1);
+    let line_only = {
+        let mut probe = edit.clone();
+        ops::select_line_at(&mut probe, &config, &metrics, middle);
+        probe.selected_text()
+    };
+
+    edit.select_all();
+    assert_eq!(edit.selected_text(), "one\ntwo\nthree");
+    assert_ne!(
+        edit.selected_text(),
+        line_only,
+        "the two readings must actually differ here, or this pins nothing"
     );
 }
 
