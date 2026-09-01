@@ -688,3 +688,174 @@ items 1–6 — the eight relabels, `usecmap`, `/EFF`, `/ExtGState /Font`, the
 validate-focus rule, and password preparation. Together they cost no golden,
 close six `[oracle-bug]` sites, and settle A63 while its blast radius is still
 zero.
+
+---
+
+## 8. Applied — the first tranche
+
+**Date:** 2026-09-02. §7's recommended first tranche, minus A63 (owned by the
+M15 agent on the validate path) and A31 (not attempted; see the end of this
+section). Eight relabels and three implementations, all of which the table
+predicted would cost zero scoreboard rows — confirmed by a field-by-field diff
+against the parent commit, with the board's totals unchanged.
+
+Each fix carries `// [oracle-bug]` at the site with **both** citations, in the
+form `docs/status/M15.md` established for `AF*`: the PDFium file and line, and
+the ISO 32000-1 clause together with the pdf.js file and line where pdf.js
+implements the feature. Where pdf.js does not implement it, that is stated at
+the site rather than read as agreement, per §4's discipline.
+
+### The eight relabels (`e75a834`, `a2464fc`, `4ff2908`)
+
+No code changed and no golden moved. What changed is the *record*: each of
+these was written up as a divergence pdfrum chose, and PLAN.md §212–229 makes
+implementing the correct behaviour obligatory rather than optional. Every one
+was re-verified at the cited line for this application, and three turned out to
+be worse than the briefs recorded:
+
+| id | site | correction to the record |
+|---|---|---|
+| **A64** | `pdfrum-form/src/tab.rs` | design brief D10 and `docs/status/M14.md` amended. `cpdfsdk_annotiterator.cpp:137,140,145-147` re-verified; §12.5.5 puts `/Tabs R` order in page space, where a non-positive top is ordinary rather than hostile. |
+| **A11** | `pdfrum-page/src/transfer.rs` | **worse than D7 says.** `cpdf_docrenderdata.cpp:132-137` guards the `Call` but not the read after it, and `OutputCount()` is loop-invariant, so `output[0]` is never written *at all* — the curve is all-black, not the "stale ramp" D7 describes. |
+| **A23** | `pdfrum-page/src/shading/mesh.rs` | `cpdf_streamcontentparser.cpp:120-122` subtracts from the variables declared as the record shape at `:94-109` *inside* the loop that reads them, so the shrink is cumulative. Settled as a slip, not a reading, by PDFium's own second copy of the loop at `cpdf_rendershading.cpp:900-917`. |
+| **A24** | `pdfrum-page/src/pattern/mod.rs` | **the status doc was wrong.** It claimed "all of D1–D22 are implemented as the brief specifies"; there is **no pattern cache in the crate at all**, where D15 specifies a `(ObjRef, parent_matrix)` key. That over-satisfies D15 rather than under-satisfying it, and also covers the half the brief omits: `GetPattern` (`:388`) and `GetShading` (`:415`) share **one** map with opposite `bShading` flags. A cache added later must key on `(ObjRef, parent_matrix, is_shading)`. |
+| **A72** | `pdfrum-edit/src/content/emit.rs` | `cpdf_pagecontentgenerator.cpp:945-946` writes `q` and `BT`, `:968-970` returns bare. §7.8.2 with §9.4.1 and §8.4.4. |
+| **A73** | `pdfrum-edit/src/import/mod.rs` | the relabel **removes escalation E10's own framing** as "a departure from this program's usual rule" — it is now an instance of it. The N-up half is the sharpest of the four: `cpdf_npagetooneexporter.cpp:224-228` takes a cached name while `xobject_name_to_number_map_` is cleared per sheet at `:180` and written only at `:284-285`, inside the path the cache hit skips, breaking §8.10.1. |
+| **A74** | `pdfrum-edit/src/write/xref.rs` | `cpdf_creator.cpp:404`, `:445` against `cpdf_creator.h:95` and `fx_types.h:16` — a `%d` conversion over an `int64_t`, against §7.5.4. |
+| **A50** | `pdfrum-text/src/pipeline.rs` | `cpdf_textpage.cpp:1357` re-verified. **This retires escalation Q5**, which asked what a release-mode oracle produces instead of crashing: the rule settles the case without needing that answer. |
+
+### A1 — `usecmap` and `/UseCMap` (`97a3647`, a `[spec]` change)
+
+Reverses the cmap brief's D1 / OQ-1 ruling of 2026-08-29, which matched the
+oracle on a stated fear of Tier-A regression. The fear measures at zero: no
+corpus file contains either channel. `cpdf_cmapparser.cpp:61` is
+`} else if (word == "usecmap") {` with an empty body, and the tree-wide grep
+returns that one line, so the dictionary key is dead too — total loss of every
+inherited code, not degradation.
+
+What shipped follows pdf.js's structure exactly, because pdf.js settles the two
+questions the spec leaves implicit. `parse_embedded` resolves the operator's
+operand against the **built-in** CMaps — the whole reachable set, and where
+pdf.js draws the same line (`createBuiltInCMap` throws outside
+`BUILT_IN_CMAPS`, `cmap.js:672-680`), which is also why that channel needs no
+depth guard: the built-in `use_offset` chain is already bounded.
+`inherit_from` attaches the parent a stream's `/UseCMap` names and
+**supersedes** the operator, matching `cmap.js:639-643`'s
+`if (!useCMap && embeddedUseCMap)`. Lookup is child-wins by construction: CID
+0 is this crate's single "maps nothing" answer, so only a code the child maps
+to nothing reaches the parent — the same presence test `cMap.contains(key)`
+performs at `:665`. Codespace ranges are inherited only when the child declared
+none (`:653-659`). The `/UseCMap` chain, which *can* name a stream, is guarded
+at `Limits::max_name_tree_depth`.
+
+Six tests, the first of which fails on the shipped-until-now behaviour: both
+channels, the dictionary key overriding the operator, codespace inheritance and
+its negative, the depth guard, and a CMap naming itself.
+`DiagKind::CMapUsecmapIgnored` retired for `CMapUsecmapUnknown` and
+`CMapUsecmapDepth`. **0 rows.**
+
+### A26 — `/EFF` (`4aef6bf`)
+
+`grep '"EFF"' core/ fpdfsdk/` returns zero hits;
+`cpdf_security_handler.cpp:303-311` builds one crypto handler from one filter
+name. So a document whose `/EFF` names an AES filter while `/StmF` names an RC4
+one produces **garbage for every attachment** — a loss, not a degradation.
+§7.6.5 table 20; pdf.js at `crypto.js:1120` (`eff = dict.get("EFF") || stmf`),
+`:1206`, `:1336`.
+
+The load-bearing observation is that **only the cipher can differ**: §7.6.5
+gives every `/CF` entry the one file encryption key and a `/CFM` of its own. So
+`EncryptParams` and each `SecurityHandler` variant carry
+`embedded_cipher: Option<Cipher>`, `None` being table 20's own "as `/StmF`"
+default — which an absent key, a name equal to `/StmF`'s, and a `/CFM`
+resolving to the same cipher all produce. `/Identity` gives `Cipher::None`; a
+name `/CF` does not carry falls back rather than refusing the document, since
+the streams still decrypt. `pdfrum-parser` passes `CryptClass::Embedded` for a
+stream whose `/Type` is `/EmbeddedFile`, read before the decrypt because a name
+is never enciphered.
+
+Six tests, two of which fail on the old behaviour. **The corpus has no `/EFF`
+at all**, as the table predicted, so the fixture is constructed: `encrypted.pdf`'s
+dictionary — whose `/O`/`/U` are real, so it opens with `1234` — given a second
+`/CF` entry for `/EFF` to name. **0 rows.** SPEC.md §3 amended (the amendment
+was written in this working tree and landed inside `ac89ebd`).
+
+### A18 — `/ExtGState /Font`'s indirect form (`a2464fc`)
+
+`cpdf_allstates.cpp:87-89` calls `FindFont(font->GetByteStringAt(0))`, reading
+the array's first element as a byte string; on table 58's own `[<ref> size]`
+form that yields `""`, the resource lookup misses, and
+`cpdf_streamcontentparser.cpp:1239` substitutes stock Helvetica — the
+conformant spelling silently draws the wrong font.
+
+**This corrects the table's own pdf.js column, which records pdf.js as not
+implementing ExtGState `/Font`. It does.** `evaluator.js:1142-1154` hands
+`value[0]` straight to `handleSetFont`, and `loadFont`'s first branch is
+literally "Loading by ref" — `if (font instanceof Ref) { fontRef = font; }`
+(`evaluator.js:1256-1261`). So A18 has a genuine independent implementation
+behind it, not only the spec, which strengthens the row.
+
+The closure now takes the array's first element **unresolved** rather than a
+byte string. A reference is resolved first (**spec**); a name keeps the
+resource lookup (**tolerance**, because files written against PDFium use it);
+a direct dictionary is accepted, there being nothing else it could mean. Five
+tests, two of which fail on the old behaviour: what the arm hands its lookup
+for each spelling, and an end-to-end build in which a reference and a name each
+resolve to the same font. The older
+`a_font_array_looks_its_name_up_in_the_resources` still holds — a resolver that
+finds nothing installs nothing either way — and is kept with a note saying so.
+**0 rows.**
+
+### Not attempted, and why
+
+- **A63** (validate loses focus) — owned by the M15 agent on the validate path,
+  where the branch becomes reachable. Left alone deliberately.
+- **A31** (SASLprep and the 127-byte truncation) — §7's item 6, also zero rows.
+  Not attempted here: it is a second independent ruling of its own size, and
+  unlike A1/A26/A18 it *adds* an algorithm (RFC 4013 stringprep) rather than
+  reading a key the oracle ignores, so it deserves its own pass rather than
+  being folded into a tranche whose defining property was that each item was
+  small and self-contained.
+- The **§7 items 7 onward** all cost rows, and none was in scope.
+
+### The board, measured
+
+`conformance run --check-regressions conformance/scoreboard.json` against
+`4ff2908`, with the release `pdfrum-tool`:
+
+```
+run: 1705 files, 1652 pass, 53 fail
+  form-events               4
+  page-count                2
+  pixel-fail               40
+  tierA-mismatch            9
+  text                 2052/2061 pages (99.6%)
+  text-nonempty        990/999 pages (99.1%)
+no regressions against conformance/scoreboard.json
+```
+
+Identical to this document's own header figure (1705 files, 1652 pass, 53
+fail) and to every per-cluster count. A field-by-field comparison of the
+written scoreboard against the one at the parent commit differs in exactly one
+field, `generated_at`; every row, total and cluster is byte-identical, so the
+diff was reverted rather than committed. **Nothing moved in either direction,
+which is what the table predicted for all eleven items.**
+
+Also green at `4ff2908`: `cargo nextest run --workspace` (3777 passed, 1
+skipped), `cargo test --doc --workspace`, `cargo clippy --workspace
+--all-targets -- -D warnings`, and rustdoc with `-D warnings` on every touched
+crate.
+
+### The correction ledger
+
+Three things this application found that the audit itself got wrong or
+under-stated, recorded here so §6's list of stale records stays complete:
+
+1. **A18's pdf.js column is wrong.** pdf.js implements `/ExtGState /Font` and
+   resolves the reference (`evaluator.js:1142-1154`, `:1256-1261`).
+2. **A11 is worse than "stale output".** `output[0]` is never written at all,
+   so the curve is all-black.
+3. **A24's site does not exist as the brief describes it.** There is no
+   pattern cache in `pdfrum-page`, so the status doc's "all of D1–D22 are
+   implemented as the brief specifies" is not accurate for D15 — in the
+   direction of being stronger, not weaker.
