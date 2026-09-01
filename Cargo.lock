@@ -1508,6 +1508,7 @@ dependencies = [
  "anyhow",
  "kurbo",
  "md-5",
+ "pdfrum",
  "pdfrum-common",
  "pdfrum-doc",
  "pdfrum-edit",

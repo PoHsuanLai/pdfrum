@@ -122,10 +122,41 @@ impl Backend {
     }
 }
 
-/// Render one page and encode it the way the oracle does.
+/// Render one page and encode it the way the oracle does, with whatever
+/// appearance updates a form session produced for it — the tool's
+/// `FPDF_RenderPageBitmap` plus `FPDF_FFLDraw`.
 ///
 /// Returns `None` when the page has no renderable size, which the oracle
 /// also skips — a page still counts as processed either way.
+///
+/// # What the oracle does here, and what this can do yet
+///
+/// `pdfium_test` renders in two steps: `FPDF_RenderPageBitmap` with
+/// `FPDF_ANNOT` paints the page and every annotation's `/AP`, and then
+/// `PageRenderer::Finish` calls `FPDF_FFLDraw` over the same bitmap
+/// (`pdfium_test.cc:1046`, `:1130`) to paint the **form-filler's** view of the
+/// widgets — the focused field's live editor state, its caret and its
+/// selection band — on top. That second pass is the only thing an event can
+/// change about an image, which is why an unfocused fixture renders
+/// identically with and without `--send-events`.
+///
+/// [`pdfrum_doc::annot_render::overlay`] is the first step and it is complete.
+/// The second is what `updates` carries: each
+/// [`UpdateKind::Regenerated`](pdfrum::UpdateKind) or
+/// [`LiveEdit`](pdfrum::UpdateKind) holds the `GeneratedAp` that should
+/// replace what the annotation would otherwise draw. **It is not applied
+/// yet**, because the seam to apply it through does not exist: `overlay`
+/// builds its own `AnnotOverlay` internally from the document, takes no
+/// caller-supplied one, and adding that parameter is a `pdfrum-doc` change
+/// this slice does not own. `docs/status/M14.md` §"Dispatch wiring" records
+/// exactly what is missing.
+///
+/// This is currently inert rather than wrong: the facade's dispatch reports
+/// every event unhandled by design, so `updates` is always empty and the
+/// image this produces is the image the plain path produces. The parameter is
+/// threaded through anyway so the wiring is one function body away from
+/// working, and the debug assertion below is what will fail loudly — in tests
+/// and in the debug binary — on the first run where that stops being true.
 #[must_use]
 pub fn render<R: Resolve>(
     page: &PageDict,
@@ -134,7 +165,15 @@ pub fn render<R: Resolve>(
     scale: f64,
     backend: Backend,
     ctx: &mut BuildContext,
+    updates: &[pdfrum::AppearanceUpdate],
 ) -> Option<Rendered> {
+    debug_assert!(
+        !updates
+            .iter()
+            .any(|update| update.kind.appearance().is_some()),
+        "a form session produced an appearance this renderer cannot honour \
+         yet; see docs/status/M14.md \"Dispatch wiring\""
+    );
     let limits = Limits::default();
     let mut build_diags = Diagnostics::default();
     // The decode target has to be set before the build, because the build is
