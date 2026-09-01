@@ -1133,3 +1133,131 @@ deltas.
 - **Seven charset tables are unported.** `font_map::charset_unicodes`
   answers only Hebrew, which is the only one the corpus reaches. A
   charset without a table leaves its characters where they were.
+
+## 9. The live path gets the second face, and F2 lands
+
+Two changes, one of which had been parked since §5 and is the reason
+§8.4 exists.
+
+| # | Change | Commit |
+|---|---|---|
+| 1 | The live entry point that can carry a substitute | `6542afb` |
+| 2 | F2, the selection whitening | `80b4e0a` (+ `376dc77`, board) |
+
+### 9.1 A second entry point rather than a changed one (`6542afb`)
+
+§8.3's open item, closed on this crate's side. The parameter could not
+go **on** `generate_with_live`: `pdfrum-form`'s `route.rs` is that
+function's only caller and was being edited concurrently, so a changed
+signature would have broken another agent's build mid-flight. So the
+answer is a sibling and a record:
+
+```rust
+pub struct LiveInput<'a> {
+    pub caret_and_selection: Option<&'a field_body::Highlight>,
+    pub live: Option<&'a field_body::LiveState<'a>>,
+    pub substitute: Option<crate::ap::Substitute<'a>>,
+}
+
+pub fn generate_with_live_faces<R: Resolve>(
+    dict: &Dict,
+    catalog: &Dict,
+    font: &crate::ap::TextFont<'_>,
+    r: &R,
+    input: LiveInput<'_>,
+) -> Option<GeneratedAp>;
+```
+
+`generate_with_live` keeps every parameter it had and delegates with
+`substitute: None`, which is byte-identical to what it produced before —
+the new test asserts that by comparing the two streams directly rather
+than by inspection. **`route.rs` should migrate to
+`generate_with_live_faces`**, and the doc comment on the old entry point
+says so; the record is what makes a fourth live answer cost no caller a
+change.
+
+The test is the stored path's expectations restated over a *typed*
+value: a widget whose `/V` is Latin, a `LiveState` holding
+`ab\u{5D0}\u{5D1}`, and the substitute in hand. Aleph comes out `\340`
+and bet `\341` — code page 1255, the same bytes
+`field_body::tests::a_value_the_da_font_cannot_write_switches_to_a_second_face`
+pins — the second face names itself in a `Tf` and appears in the
+appearance's own `/Resources /Font`, and handed no substitute the same
+string comes out `\320`, which is both the mojibake this closes and
+exactly what `generate_with_live` still writes.
+
+**No row moved.** Nothing calls the new entry point yet; the caller that
+will is in `pdfrum-form`.
+
+### 9.2 F2, landed, with its drop recorded (`80b4e0a`)
+
+The parked file was re-derived against current main first: at `f253597`
+plus `6542afb`, `scratchpad/field_body_with_f2_rebased.rs` still applies
+with no drift, and the file as landed is byte-identical to it.
+
+`CPWL_EditImpl::DrawEdit` (`fpdfsdk/pwl/cpwl_edit_impl.cpp:650-653`)
+picks the fill **per word** — white inside
+`place > wrSelect.BeginPos && place <= wrSelect.EndPos`, `crTextFill`
+outside — so a partially selected field keeps its unselected characters
+in its own colour. Ours whitened the whole run as soon as a band
+existed, which drew the unselected half white on an untinted plate.
+
+`Highlight` carries rectangles rather than a character range, so the
+split is made **geometrically**: the run is set once in the field's
+colour, then set again in white under one clip whose shape is the bands
+themselves. The two passes emit identical operators at identical
+positions, so an unselected glyph is covered by nothing and a selected
+one completely. With no selection the second pass is not written at all
+— which is what keeps `tests/data/unfocused_field_bodies.txt` untouched
+and green.
+
+Three tests: `a_partial_selection_leaves_the_unselected_run_in_the_fields_colour`,
+`every_band_contributes_to_the_one_clip_the_white_pass_runs_under` (a
+clip per band would intersect two disjoint bands to nothing), and
+`no_selection_writes_one_text_pass_and_no_clip`.
+
+#### The accepted delta
+
+| row | before | after | delta |
+|---|---|---|---|
+| `form_textfield_selected_ltr.in#form-events` | 0.968879 | 0.968892 | +0.000013 |
+| `form_textfield_selected_rtl.in#form-events` | 0.947819 | **0.946872** | **−0.000947** |
+
+**The RTL drop is accepted**, ruled on by the owner of the other side.
+It is not this change's doing: §8.4's third defect is still open, so the
+live path writes the `/DA` font's low bytes for Hebrew and our glyphs
+run to device column 111 while the band that now clips the white pass
+ends at 101. Ten columns by fourteen rows stay dark where the oracle's
+are white, and painting the whole run white was hiding exactly that
+overhang — the metric was rewarding the bug. Neither row crosses the
+pass/fail line; both were failing before and after. `route.rs` calling
+§9.1's entry point is what turns it around.
+
+Measured with two release tools built from **`HEAD` alone** and
+`HEAD` + this change, in trees archived out of git, because the working
+tree carried another agent's uncommitted `form_session.rs` and `run.rs`
+edits that would otherwise have contaminated the board. The baseline
+rebuild reproduced `HEAD`'s committed scoreboard row for row, zero
+differences.
+
+### 9.3 Gates
+
+`cargo fmt -p pdfrum-doc -- --check`; `cargo clippy -p pdfrum-doc
+--all-targets -- -D warnings`; `RUSTDOCFLAGS="-D warnings" cargo doc
+--no-deps -p pdfrum-doc`; `cargo nextest run -p pdfrum-doc` (**424**
+pass, up from 420); `cargo test --doc -p pdfrum-doc` (3 pass);
+`cargo build -p pdfrum-form -p pdfrum -p pdfrum-tool` (clean);
+`cargo nextest run --workspace` (**3547** pass, 1 skipped). Conformance:
+1705 files, **1641 pass, 64 fail**, unchanged; `--check-regressions`
+against `HEAD`'s scoreboard reports none; a field-by-field diff moves
+**two rows and leaves the other 1703 byte-identical**, with tags and
+text rates unchanged.
+
+### 9.4 Open items
+
+- **`route.rs` still calls `generate_with_live`.** The migration to
+  `generate_with_live_faces`, plus a `with_font` width closure that
+  consults the substitute — spelled out in `scratchpad/m14-rtl-drops.md`
+  — is what recovers §9.2's accepted −0.00095 and more.
+- §8.7's other three items stand: the session's font substitution, LCD
+  antialiasing, and the seven unported charset tables.
