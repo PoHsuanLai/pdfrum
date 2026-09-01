@@ -301,7 +301,13 @@ fn wheel<R: Resolve>(
     };
     let field = widget.field;
     ensure_state(session, ctx, field);
-    let rows = visible_rows(ctx, widget);
+    // Read against the state that already exists: a row's height is measured
+    // from an option's label, so the count cannot be taken before the field
+    // has options.
+    let rows = match session.fields.get(&field) {
+        Some(FieldState::Choice(choice)) => visible_rows(ctx, widget, choice),
+        _ => 0,
+    };
 
     let moved = match session.fields.get_mut(&field) {
         Some(FieldState::Choice(state)) => scroll_choice(state, delta.1, rows),
@@ -631,9 +637,10 @@ fn choice_key<R: Resolve>(
     annot: AnnotId,
     key: Key,
 ) -> Response {
-    let rows = ctx
-        .widget(annot)
-        .map_or(0, |widget| visible_rows(ctx, widget));
+    let rows = match (ctx.widget(annot), session.fields.get(&field)) {
+        (Some(widget), Some(FieldState::Choice(choice))) => visible_rows(ctx, widget, choice),
+        _ => 0,
+    };
     let moved = match session.fields.get_mut(&field) {
         Some(FieldState::Choice(state)) => {
             let moved = match key {
@@ -751,16 +758,27 @@ fn row_at<R: Resolve>(
         return None;
     }
     let client = ap::field_body::client_rect(&widget.dict, ctx.resolve);
-    let height = row_height(ctx, widget);
+    let height = row_height(ctx, widget, choice);
     if height <= 0.0 {
         return None;
     }
+    // The point arrives in **page** space and the client rectangle is in the
+    // appearance stream's, which is the widget's own box at the origin. They
+    // are the same space only for a widget whose `/Rect` happens to start at
+    // (0, 0); anywhere else the subtraction below is a difference of two
+    // unrelated numbers, and it was — a list box at y 371 produced a large
+    // negative quotient, a saturating `usize`, and no row at all, so the
+    // click focused the widget and then selected nothing.
+    //
+    // `CFFL_FormField::OnLButtonDown` (`cffl_formfield.cpp:103`) passes
+    // `FFLtoPWL(point)` into the list for exactly this reason.
+    let point = to_plate(widget, at);
     #[expect(
         clippy::cast_possible_truncation,
         clippy::cast_sign_loss,
         reason = "the quotient is bounded by the option count immediately below"
     )]
-    let offset = (((client.y1 as f32) - at.y) / height) as usize;
+    let offset = ((client.y1 - point.y) / f64::from(height)) as usize;
     let row = choice.top_visible.checked_add(offset)?;
     (row < choice.options.len()).then_some(row)
 }
@@ -769,9 +787,13 @@ fn row_at<R: Resolve>(
 ///
 /// The count the no-overscroll clamp is stated against: a list scrolls only
 /// far enough to put its last row at the bottom of the box.
-fn visible_rows<R: Resolve>(ctx: &Context<'_, R>, widget: &WidgetInfo) -> usize {
+fn visible_rows<R: Resolve>(
+    ctx: &Context<'_, R>,
+    widget: &WidgetInfo,
+    choice: &ChoiceState,
+) -> usize {
     let client = ap::field_body::client_rect(&widget.dict, ctx.resolve);
-    let height = row_height(ctx, widget);
+    let height = row_height(ctx, widget, choice);
     if height <= 0.0 {
         return 0;
     }
@@ -784,13 +806,65 @@ fn visible_rows<R: Resolve>(ctx: &Context<'_, R>, widget: &WidgetInfo) -> usize 
     rows
 }
 
-/// The height of one list-box row.
-fn row_height<R: Resolve>(ctx: &Context<'_, R>, widget: &WidgetInfo) -> f32 {
+/// The height of one list-box row: the **laid-out** line, not the font size.
+///
+/// `CPWL_ListCtrl::Item::GetItemHeight` (`cpwl_list_ctrl.cpp:49-51`) is the
+/// item's own edit's `GetContentRect().Height()`, and `ReArrange` (`:525-551`)
+/// stacks the items by exactly that. At 12 points in Arimo that is **13.392**
+/// units, not 12: the line is `(ascent - descent) * size / 1000` and the pair
+/// sums to 1116, not 1000. Returning the font size made every row an eighth
+/// short, which moved the scroll clamp, the wheel's visible-row count and the
+/// hit test together — and put the drawn selection band two device rows short
+/// of the golden's on `scrollable_widgets2`.
+///
+/// The call below is deliberately the **same one** `ap::field_body::list_box`
+/// makes per row — `vt::layout(label, &config, &metrics)`, into a zero-height
+/// plate so the layout reports the row's extent rather than the box's — so the
+/// height that is hit-tested and the height that is drawn cannot drift apart.
+/// The first option's label is measured because every row shares one font and
+/// one size, which is what makes a uniform division the right model at all.
+fn row_height<R: Resolve>(ctx: &Context<'_, R>, widget: &WidgetInfo, choice: &ChoiceState) -> f32 {
+    let client = ap::field_body::client_rect(&widget.dict, ctx.resolve);
+    let plate = pdfrum_doc::geom::rect(
+        pdfrum_doc::geom::left(client),
+        0.0,
+        pdfrum_doc::geom::right(client),
+        0.0,
+    );
     let size = font_size(ctx, widget);
-    // A list box's rows are one line of the `/DA` size, which is what
-    // `top_visible_for` counts against the box's height.
-    if size > 0.0 { size } else { 12.0 }
+    let config = vt::Config {
+        plate,
+        font_size: if size > 0.0 {
+            size
+        } else {
+            LIST_ROW_DEFAULT_SIZE
+        },
+        ..vt::Config::default()
+    };
+    let label = choice
+        .options
+        .first()
+        .map_or("", |option| option.label.as_str());
+    let measured = with_font(ctx, widget, |font| {
+        let layout = vt::layout(label, &config, &font.metrics);
+        pdfrum_doc::geom::height(layout.content_rect_pdf(plate))
+    });
+    // A widget whose `/DA` names a font the form does not declare has no face
+    // to measure with. Falling back to the font size keeps the clamp finite
+    // rather than dividing by zero; it is the old behaviour, kept only for
+    // the path that cannot do better.
+    match measured {
+        Some(height) if height > 0.0 => height,
+        _ => config.font_size,
+    }
 }
+
+/// The size a list box's rows are set at when its `/DA` leaves it automatic.
+///
+/// `ap::field_body`'s own `LIST_ROW_DEFAULT_SIZE`, which is private to that
+/// crate; the two must agree, and a test asserts a measured row against a
+/// drawn one so they cannot quietly stop agreeing.
+const LIST_ROW_DEFAULT_SIZE: f32 = 12.0;
 
 /// The `/DA` font size, zero meaning automatic.
 fn font_size<R: Resolve>(ctx: &Context<'_, R>, widget: &WidgetInfo) -> f32 {
@@ -1214,17 +1288,34 @@ pub fn replace_selection<R: Resolve>(
     changed
 }
 
-/// A page-space point in the widget's **appearance-stream** space.
+/// A page-space point in the widget's **appearance-stream** space, y-up.
 ///
-/// The two differ by the widget's own corner, and forgetting it is silent
-/// rather than loud: `ap::widget::rotated_rect` places a widget's box at the
-/// origin, so a plate is always `(0, 0)`-based while an event's point is
-/// wherever the widget sits on the page. Passing a page-space point straight
-/// to a layout query puts every click far to the right of the text, where the
-/// hit test clamps it to one end and every caret lands at the same place.
+/// This is `CFFL_FormField::FFLtoPWL`, and the two spaces differ by two
+/// things rather than one.
+///
+/// The widget's own corner, first: `ap::widget::rotated_rect` places a
+/// widget's box at the origin, so a plate is always `(0, 0)`-based while an
+/// event's point is wherever the widget sits on the page. Forgetting it is
+/// silent rather than loud — it puts every click far to the right of the
+/// text, where the hit test clamps it to one end and every caret lands in the
+/// same place.
+///
+/// And the widget's **rotation**: at `/MK /R 90` the appearance stream is set
+/// into a box whose axes are exchanged, so a click that is not un-rotated
+/// arrives on the wrong axis entirely. [`geom::Plate::to_widget`] carries the
+/// table.
+///
+/// The result stays y-**up**, because that is what every consumer wants:
+/// `ap::field_body::client_rect` is y-up, and `vt::hit`'s queries take a y-up
+/// point and do their own flip. Handing them a y-down one flips it twice.
 fn to_plate(widget: &WidgetInfo, at: Point) -> kurbo::Point {
-    let origin = pdfrum_doc::geom::normalize(widget_rect(widget));
-    kurbo::Point::new(f64::from(at.x) - origin.x0, f64::from(at.y) - origin.y0)
+    let point = plate_of(widget).to_widget(at);
+    kurbo::Point::new(f64::from(point.x), f64::from(point.y))
+}
+
+/// The widget's page↔plate mapping, rotation included.
+fn plate_of(widget: &WidgetInfo) -> crate::geom::Plate {
+    crate::geom::Plate::new(widget.rect, widget.rotation)
 }
 
 /// Runs `body` against a text field's live edit control.
@@ -1406,7 +1497,7 @@ fn caret_row_box<R: Resolve>(
         return ap::FocusBox::None;
     };
     let client = ap::field_body::client_rect(&widget.dict, ctx.resolve);
-    let height = f64::from(row_height(ctx, widget));
+    let height = f64::from(row_height(ctx, widget, choice));
     if height <= 0.0 {
         return ap::FocusBox::None;
     }

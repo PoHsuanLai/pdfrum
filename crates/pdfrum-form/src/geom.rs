@@ -120,10 +120,31 @@ impl Plate {
         if self.rotation.swaps_axes() { w } else { h }
     }
 
-    /// Converts a page-space point into plate space: y-down from the plate's
-    /// top-left.
+    /// Converts a page-space point into the widget's own upright box:
+    /// **y-up**, origin at the plate's bottom-left.
+    ///
+    /// This is `CFFL_FormField::FFLtoPWL` (`cffl_formfield.cpp:499-500`), the
+    /// inverse of `GetCurMatrix` (`:442-464`), and it is the space every
+    /// appearance-stream query in `pdfrum-doc` consumes — `client_rect`,
+    /// `place_at_point`, a list box's rows. Writing out the inverse of the
+    /// four matrices that function builds:
+    ///
+    /// | rotation | page → PWL |
+    /// |---|---|
+    /// | 0° | `(x - left, y - bottom)` |
+    /// | 90° | `(y - bottom, W - (x - left))` |
+    /// | 180° | `(W - (x - left), H - (y - bottom))` |
+    /// | 270° | `(H - (y - bottom), x - left)` |
+    ///
+    /// where `W`/`H` are the *widget's* width and height, before the quadrant
+    /// swap — which is why they are not [`Plate::width`] and
+    /// [`Plate::height`].
+    ///
+    /// Prefer this over [`Plate::to_plate`] for anything handed to a layout
+    /// query: those flip y themselves, so passing them a y-down point flips
+    /// it twice and lands every click on the wrong line.
     #[must_use]
-    pub fn to_plate(self, at: Point) -> Point {
+    pub fn to_widget(self, at: Point) -> Point {
         // Offset into the widget's own box first, y-up.
         let dx = at.x - self.rect.left;
         let dy = at.y - self.rect.bottom;
@@ -133,15 +154,23 @@ impl Plate {
         );
 
         // Undo the widget's rotation, landing in an upright box, still y-up.
-        let (ux, uy) = match self.rotation {
-            Rotation::None => (dx, dy),
-            Rotation::Quarter => (dy, w - dx),
-            Rotation::Half => (w - dx, h - dy),
-            Rotation::ThreeQuarter => (h - dy, dx),
-        };
+        match self.rotation {
+            Rotation::None => Point::new(dx, dy),
+            Rotation::Quarter => Point::new(dy, w - dx),
+            Rotation::Half => Point::new(w - dx, h - dy),
+            Rotation::ThreeQuarter => Point::new(h - dy, dx),
+        }
+    }
 
-        // Flip to y-down from the top-left of the (possibly swapped) plate.
-        Point::new(ux, self.height() - uy)
+    /// Converts a page-space point into plate space: y-down from the plate's
+    /// top-left.
+    ///
+    /// [`Plate::to_widget`] plus the y flip. Callers wanting to hand the
+    /// result to a `vt` query want that one instead.
+    #[must_use]
+    pub fn to_plate(self, at: Point) -> Point {
+        let upright = self.to_widget(at);
+        Point::new(upright.x, self.height() - upright.y)
     }
 
     /// Converts a plate-space point back into page space.
@@ -228,6 +257,77 @@ mod tests {
         assert_eq!(plate(Rotation::None).height(), 50.0);
         assert_eq!(plate(Rotation::Quarter).width(), 50.0);
         assert_eq!(plate(Rotation::Quarter).height(), 100.0);
+    }
+
+    /// `to_widget` is `FFLtoPWL` on all four quadrants, corner for corner.
+    ///
+    /// The expectations are not derived from the table in the doc comment;
+    /// they were produced by compiling `CFFL_FormField::GetCurMatrix`
+    /// (`cffl_formfield.cpp:442-464`) verbatim, inverting it the way
+    /// `FFLtoPWL` (`:499-500`) does, and transforming this widget's four
+    /// corners. Reading the four matrices off the source and writing the
+    /// inverse by hand is exactly where a sign or an axis goes missing, and
+    /// the resulting click lands on the wrong line with nothing to say so.
+    #[test]
+    fn to_widget_reproduces_the_four_inverse_matrices() {
+        // The widget's four page-space corners, anticlockwise from its own
+        // bottom-left.
+        let corners = [
+            Point::new(20.0, 30.0),
+            Point::new(120.0, 30.0),
+            Point::new(120.0, 80.0),
+            Point::new(20.0, 80.0),
+        ];
+        let expected = [
+            (
+                Rotation::None,
+                [(0.0, 0.0), (100.0, 0.0), (100.0, 50.0), (0.0, 50.0)],
+            ),
+            (
+                Rotation::Quarter,
+                [(0.0, 100.0), (0.0, 0.0), (50.0, 0.0), (50.0, 100.0)],
+            ),
+            (
+                Rotation::Half,
+                [(100.0, 50.0), (0.0, 50.0), (0.0, 0.0), (100.0, 0.0)],
+            ),
+            (
+                Rotation::ThreeQuarter,
+                [(50.0, 0.0), (50.0, 100.0), (0.0, 100.0), (0.0, 0.0)],
+            ),
+        ];
+
+        for (rotation, wanted) in expected {
+            let p = plate(rotation);
+            for (corner, (x, y)) in corners.iter().zip(wanted) {
+                assert!(
+                    close(p.to_widget(*corner), Point::new(x, y)),
+                    "{rotation:?} sends {corner:?} to {:?}, wanted ({x}, {y})",
+                    p.to_widget(*corner)
+                );
+            }
+        }
+    }
+
+    /// `to_plate` is `to_widget` plus the y flip, and nothing else — the
+    /// property that lets a caller pick the one its consumer wants.
+    #[test]
+    fn a_plate_point_is_a_widget_point_flipped() {
+        for rotation in [
+            Rotation::None,
+            Rotation::Quarter,
+            Rotation::Half,
+            Rotation::ThreeQuarter,
+        ] {
+            let p = plate(rotation);
+            for at in [Point::new(20.0, 30.0), Point::new(70.0, 55.0)] {
+                let upright = p.to_widget(at);
+                assert!(close(
+                    p.to_plate(at),
+                    Point::new(upright.x, p.height() - upright.y)
+                ));
+            }
+        }
     }
 
     /// An upright widget's plate is its box, flipped to y-down and moved to
