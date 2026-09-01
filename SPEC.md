@@ -1373,18 +1373,37 @@ record of facts and dispatch is a function over it (brief D1, D2).
 pub struct Response { pub consumed: bool, pub updates: Vec<AppearanceUpdate> }
 ```
 
-**Not yet present: the routed entry point.** A single
-`apply(session, ctx, event, cascade, diags) -> Response` over a borrowed
-`FormContext` — the document's `Form`, the per-page annotation lists, the page
-geometry and the resolver — is the intended shape, and it exists because
-`FormSession` must stay free of borrows so the facade can own it across calls.
-Neither `apply` nor `FormContext` has landed. What routes events today is the
-facade's `pdfrum::FormSession`, whose event methods return `Response` and
-currently report every event unconsumed; the per-kind machines
-(`field::text::route_key`, `field::choice`, `field::toggle`), the hit tests and
-the focus rules are all present and directly callable. This paragraph is
-marked rather than deleted because the shape is still the target — see
-`docs/status/M14.md` for what gates it.
+The routed entry point is one total function over a borrowed view:
+
+```rust
+pub fn apply<R: Resolve>(
+    session: &mut FormSession,
+    ctx: &Context<'_, R>,
+    event: Event,
+) -> Response;
+
+pub struct Context<'a, R: Resolve> {
+    pub page: &'a PageForm,          // the page's annotations, already read
+    pub catalog: &'a Dict,           // for the form's default resources
+    pub resolve: &'a R,
+    pub fonts: &'a ap::FormFonts,    // what `/DR` declares
+    pub permissions: Permissions,
+}
+```
+
+`Context` is a **borrowed view assembled at the call site**, not an owned
+context object: it holds nothing, which is what keeps `FormSession` free of
+borrows so the facade can own a session across calls. It is named `Context`
+rather than `FormContext`, and it carries a `PageForm` — one page's `/Annots`
+walk — rather than the document's `Form`, because routing needs the page's
+geometry and not the field tree.
+
+**One gap remains, and it is named rather than assumed.** `apply` takes no
+`cascade` and no `diags`. The `Cascade` seam (§15.7) exists and is
+implemented by `NoScripts`, but nothing threads it through routing, so a
+keystroke hook cannot yet observe or reject an edit. That is M15's, with the
+V8 rows it gates; the payload a hook would receive is already built and
+tested (`cascade::Keystroke`).
 
 ### 15.2 The session record
 
@@ -1635,9 +1654,19 @@ Rust API guidelines.
 **Present:** `on_mouse_move`, `on_mouse_down`, `on_mouse_up`, `on_button`,
 `on_double_click`, `on_mouse_wheel`, `on_focus_at`, `on_key_down`, `on_char`,
 `force_kill_focus`, `focused_text`, `focused_annot`, `selected_text`,
-`replace_selection`, `focus_for_page`, `set_page_in_view`, `page_in_view`,
-`can_undo`, `can_redo`, `is_index_selected`, `set_index_selected`, `config`,
-`inner`.
+`replace_selection`, `focus_for_page`, `hover_for_page`, `set_page_in_view`,
+`page_in_view`, `can_undo`, `can_redo`, `is_index_selected`,
+`set_index_selected`, `config`, `inner`.
+
+**`focus_for_page` and `hover_for_page` are what a renderer asks**, and they
+are two facts rather than one. Focus decides which widget is *not* given the
+form-field highlight, and what — if anything — is stroked in its place. Hover
+decides whether an annotation's synthesized pop-up note is **open**, which
+nothing a file can say controls: `CPDFSDK_BAAnnot::OnMouseEnter`
+(`cpdfsdk_baannot.cpp:309-312`) calls `SetPopupAnnotOpenState`, and that is
+the whole of the signal. The two move independently — a pointer resting on an
+annotation leaves the keyboard where it was, and the annotation under it need
+not be focusable at all.
 
 `on_button` is not in the oracle's list and exists for a reason the `.evt`
 corpus forces: scripts contain right-button lines, a bridge must be able to
