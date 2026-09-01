@@ -344,10 +344,12 @@ pub struct Body {
 /// [`None`] for both is the unfocused path and is byte-identical to the
 /// stream this function produced before either parameter existed.
 #[must_use]
+#[allow(clippy::too_many_arguments)]
 pub fn generate<R: Resolve>(
     dict: &Dict,
     catalog: &Dict,
     font: &TextFont<'_>,
+    substitute: Option<crate::ap::Substitute<'_>>,
     r: &R,
     caret_and_selection: Option<&Highlight>,
     live: Option<&LiveState<'_>>,
@@ -392,6 +394,7 @@ pub fn generate<R: Resolve>(
         appearance: &appearance,
         color,
         font,
+        substitute,
         caret_and_selection,
         live,
     };
@@ -407,7 +410,7 @@ pub fn generate<R: Resolve>(
     }
     Some(Body {
         stream: out.into_bytes(),
-        font_resources: font_resources(&appearance, form.as_ref(), r),
+        font_resources: font_resources(&appearance, substitute, form.as_ref(), r),
     })
 }
 
@@ -451,6 +454,7 @@ fn field_dict_of<R: Resolve>(dict: &Dict, form: Option<&Dict>, r: &R) -> Option<
 /// entry under that name, or a stock Helvetica when there is none.
 fn font_resources<R: Resolve>(
     appearance: &freetext::Appearance,
+    substitute: Option<crate::ap::Substitute<'_>>,
     form: Option<&Dict>,
     r: &R,
 ) -> Option<Dict> {
@@ -463,7 +467,16 @@ fn font_resources<R: Resolve>(
         .and_then(|resources| resources.dict(names::FONT, r))
         .and_then(|fonts| fonts.dict(&name, r))
         .unwrap_or_else(freetext::fallback_font);
-    Some(Dict::from_pairs([(name, Object::Dict(entry))]))
+    let mut resources = Dict::from_pairs([(name, Object::Dict(entry))]);
+    // The second face is added unconditionally when one exists, the way
+    // `AddFontToAnnotDict` (`core/fpdfdoc/cpdf_bafontmap.cpp:318-357`) writes
+    // it into the annotation's own `/AP` resources the moment the map decides
+    // to hold it — not only when a character actually reached it. A resource
+    // nothing names costs a dictionary entry and changes no pixel.
+    if let Some(sub) = substitute {
+        resources.push(sub.alias.clone(), Object::Dict(sub.dict.clone()));
+    }
+    Some(resources)
 }
 
 /// The offset that carries a layout's vertical alignment.
@@ -482,10 +495,12 @@ fn vertical_offset(centred: bool, plate: Rect, content: Rect) -> (f32, f32) {
 /// `shift` is the scroll a live edit adds on top of the vertical alignment;
 /// it is `(0.0, 0.0)` for every stored appearance, and adding zero writes the
 /// same `Td` operators as not adding it at all.
+#[allow(clippy::too_many_arguments)]
 fn set_text(
     text: &str,
     config: &vt::Config,
     font: &TextFont<'_>,
+    substitute: Option<crate::ap::Substitute<'_>>,
     offset_centred: bool,
     grouping: vt::edit_ap::Grouping,
     alias: &[u8],
@@ -495,16 +510,35 @@ fn set_text(
     let content = layout.content_rect_pdf(config.plate);
     let padding = vertical_offset(offset_centred, config.plate, content);
     let offset = (padding.0 + shift.0, padding.1 + shift.1);
-    let written = vt::edit_ap::generate(
-        &layout,
-        config,
-        &font.metrics,
-        offset,
-        grouping,
-        alias,
-        |code| font.encode(code),
-    );
+    let written = vt::edit_ap::generate(&layout, config, &font.metrics, offset, grouping, |code| {
+        face_for(font, substitute, alias, code)
+    });
     (written, content)
+}
+
+/// Which font writes one code point, and as what.
+///
+/// The `/DA` font when its charset covers the character and it can map it;
+/// otherwise the second face, under its own alias — which is what puts a `Tf`
+/// between the two runs. See [`crate::ap::font_map`] for the rule and where it
+/// is written.
+fn face_for(
+    font: &TextFont<'_>,
+    substitute: Option<crate::ap::Substitute<'_>>,
+    alias: &[u8],
+    code: u32,
+) -> vt::edit_ap::Face {
+    let da_charset = crate::ap::font_map::font_charset(font.font);
+    match substitute {
+        Some(sub) if !crate::ap::font_map::da_font_writes(font.font, da_charset, code) => {
+            vt::edit_ap::Face {
+                index: 1,
+                alias: sub.alias.as_bytes().to_vec(),
+                bytes: crate::ap::font_map::substitute_encode(sub.font, code),
+            }
+        }
+        _ => vt::edit_ap::Face::single(alias, font.encode(code)),
+    }
 }
 
 /// Wraps a body in the markers and the clip a text field and a combo box
@@ -590,6 +624,9 @@ struct BodyInput<'a> {
     color: Color,
     /// The loaded face and the layout metrics taken from it.
     font: &'a TextFont<'a>,
+    /// The second face, for characters the `/DA` font's charset does not
+    /// cover. `None` leaves every character to the `/DA` font.
+    substitute: Option<crate::ap::Substitute<'a>>,
     /// Focused-field caret and selection, if this body is a live edit.
     caret_and_selection: Option<&'a Highlight>,
     /// What a focused field is showing instead of the stored value.
@@ -649,6 +686,7 @@ fn text_field<R: Resolve>(out: &mut Content, input: &BodyInput<'_>, r: &R) {
         &value,
         &config,
         font,
+        input.substitute,
         !multi_line,
         if comb {
             vt::edit_ap::Grouping::PerCharacter
@@ -725,6 +763,7 @@ fn push_button<R: Resolve>(out: &mut Content, input: &BodyInput<'_>, r: &R) {
         &caption,
         &config,
         font,
+        input.substitute,
         true,
         vt::edit_ap::Grouping::Continuous,
         &appearance.font_name,
@@ -836,6 +875,7 @@ fn combo_box<R: Resolve>(out: &mut Content, input: &BodyInput<'_>, r: &R) {
         &text,
         &config,
         font,
+        input.substitute,
         true,
         vt::edit_ap::Grouping::Continuous,
         &appearance.font_name,
@@ -915,8 +955,7 @@ fn list_box<R: Resolve>(out: &mut Content, input: &BodyInput<'_>, r: &R) {
             &font.metrics,
             (shift_x, y + shift_y),
             vt::edit_ap::Grouping::Continuous,
-            &appearance.font_name,
-            |code| font.encode(code),
+            |code| face_for(font, input.substitute, &appearance.font_name, code),
         );
         if selected.contains(&index) {
             rows.raw("q\n");
@@ -1171,6 +1210,16 @@ mod tests {
         Object::Str(PdfString::literal(value.as_bytes()))
     }
 
+    /// A text string in UTF-16BE behind the byte-order mark, which is how a
+    /// `/V` spells a code point `PDFDocEncoding` has no byte for.
+    fn utf16(value: &str) -> Object {
+        let mut bytes = vec![0xFE, 0xFF];
+        for unit in value.encode_utf16() {
+            bytes.extend_from_slice(&unit.to_be_bytes());
+        }
+        Object::Str(PdfString::literal(bytes))
+    }
+
     fn numbers(values: &[f32]) -> Object {
         Object::Array(Array::of(values.iter().copied().map(Object::from)))
     }
@@ -1240,6 +1289,7 @@ mod tests {
             widget,
             &catalog(),
             &font,
+            None,
             &NoResolve,
             caret_and_selection,
             live,
@@ -1684,6 +1734,123 @@ mod tests {
         assert!(got.contains("/Tx BMC\n"), "{got}");
         assert!(got.contains("re\nf\n"), "{got}");
         assert!(!got.contains("BT\n"), "{got}");
+    }
+
+    /// A value mixing Latin and Hebrew is set in **two** faces: the `/DA`
+    /// font writes the Latin, and the second face writes the Hebrew under its
+    /// own alias, with a `Tf` at each crossing.
+    ///
+    /// The dictionary the second face adds is in the appearance's own
+    /// resources beside the first — `AddFontToAnnotDict`
+    /// (`core/fpdfdoc/cpdf_bafontmap.cpp:318-357`) — because a `Tf` naming a
+    /// resource the stream does not carry sets no font at all.
+    #[test]
+    fn a_value_the_da_font_cannot_write_switches_to_a_second_face() {
+        let cache = pdfrum_font::FontCache::new();
+        let options = pdfrum_font::SubstitutionOptions::default();
+        let mut ctx = pdfrum_page::BuildContext::with_substitution(options);
+        let fonts = crate::ap::FormFonts::load(&catalog(), &NoResolve, &mut ctx);
+        let substitute = fonts
+            .substitute(pdfrum_font::subst::Charset::Hebrew)
+            .expect("a Hebrew substitute");
+
+        let face =
+            pdfrum_font::Font::load_standard(pdfrum_font::subst::StandardFont::Helvetica, &cache);
+        let charset = crate::ap::font_map::font_charset(&face);
+        let width = |code: u32| {
+            if crate::ap::font_map::da_font_writes(&face, charset, code) {
+                TextFont::char_width(&face, code)
+            } else {
+                crate::ap::font_map::substitute_width(substitute.font, code)
+            }
+        };
+        let font = TextFont {
+            metrics: TextFont::metrics_of(&face, &width),
+            font: &face,
+        };
+        // `ab` in the `/DA` font, then two Hebrew letters in the second.
+        //
+        // Written UTF-16BE behind a byte-order mark, which is the only
+        // spelling a `/V` has for a code point outside PDFDocEncoding — the
+        // `bug_725389` fixture writes its Hebrew the same way. A UTF-8 `/V`
+        // would be read one byte per character and never reach the second
+        // face at all.
+        let widget = widget_of("Tx", &[("V", utf16("ab\u{5D0}\u{5D1}"))]);
+        let body = super::generate(
+            &widget,
+            &catalog(),
+            &font,
+            Some(substitute),
+            &NoResolve,
+            None,
+            None,
+        )
+        .expect("a body");
+        // Compared as **bytes**. A code-page byte is not valid UTF-8, so
+        // reading the stream as text replaces it with a replacement character
+        // and the assertions below could not tell 0xE0 from 0xD0 — which is
+        // the whole difference this change makes.
+        let stream = body.stream.clone();
+        let has = |needle: &[u8]| stream.windows(needle.len()).any(|w| w == needle);
+
+        // Both faces set text, so both name themselves.
+        assert!(has(b"/Helv 12 Tf\n"), "{stream:02X?}");
+        let mut tf = b"/".to_vec();
+        tf.extend_from_slice(substitute.alias.as_bytes());
+        tf.extend_from_slice(b" 12 Tf\n");
+        assert!(has(&tf), "{stream:02X?}");
+        // Each Hebrew letter is written as its code-page byte — aleph 0xE0,
+        // bet 0xE1, spelled in octal because a show operand's high bytes are
+        // — and not as the low byte of its code point, which would be 0xD0
+        // and 0xD1 and is the mojibake this replaces.
+        assert!(has(b"\\340"), "aleph as 0xE0: {stream:02X?}");
+        assert!(has(b"\\341"), "bet as 0xE1: {stream:02X?}");
+        assert!(!has(b"\\320"), "no low-byte aleph: {stream:02X?}");
+        assert!(!has(b"\\321"), "no low-byte bet: {stream:02X?}");
+
+        let resources = body.font_resources.expect("font resources");
+        assert!(
+            resources.contains_key(&pdfrum_object::Name::from("Helv")),
+            "{resources:?}"
+        );
+        assert!(resources.contains_key(substitute.alias), "{resources:?}");
+    }
+
+    /// A value the `/DA` font can write entirely is one run in one face, and
+    /// the second face's resource is the only thing the substitute adds.
+    #[test]
+    fn a_latin_value_writes_no_font_switch_even_with_a_substitute_in_hand() {
+        let cache = pdfrum_font::FontCache::new();
+        let options = pdfrum_font::SubstitutionOptions::default();
+        let mut ctx = pdfrum_page::BuildContext::with_substitution(options);
+        let fonts = crate::ap::FormFonts::load(&catalog(), &NoResolve, &mut ctx);
+        let substitute = fonts
+            .substitute(pdfrum_font::subst::Charset::Hebrew)
+            .expect("a Hebrew substitute");
+        let face =
+            pdfrum_font::Font::load_standard(pdfrum_font::subst::StandardFont::Helvetica, &cache);
+        let width = |code: u32| TextFont::char_width(&face, code);
+        let font = TextFont {
+            metrics: TextFont::metrics_of(&face, &width),
+            font: &face,
+        };
+        let widget = widget_of("Tx", &[("V", text("Hello"))]);
+        let offered = super::generate(
+            &widget,
+            &catalog(),
+            &font,
+            Some(substitute),
+            &NoResolve,
+            None,
+            None,
+        )
+        .expect("a body");
+        let plain = super::generate(&widget, &catalog(), &font, None, &NoResolve, None, None)
+            .expect("a body");
+        assert_eq!(
+            offered.stream, plain.stream,
+            "a substitute nothing reaches writes the same stream"
+        );
     }
 
     #[test]
