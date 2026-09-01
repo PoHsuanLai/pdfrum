@@ -839,6 +839,7 @@ fn render_direct<B: RasterBackend>(
         ),
         PageObject::Form(f) => {
             let inner = RenderCtx {
+                opts: form_options(&ctx.opts, f.object.live_edit),
                 initial_fill: ctx.initial_fill,
                 initial_stroke: ctx.initial_stroke,
                 ..ctx.deeper()
@@ -858,6 +859,31 @@ fn render_direct<B: RasterBackend>(
                 diags,
             );
         }
+    }
+}
+
+/// The options a form `XObject`'s contents render under.
+///
+/// One rule: a **live edit's** appearance draws its text with `ClearType`, and
+/// every other form draws under the options it inherited.
+///
+/// That is where the oracle puts the decision too.
+/// `CPWL_EditImpl::DrawTextString` builds a *local* `CPDF_RenderOptions` whose
+/// `bClearType` no flag word ever clears, so on a page whose every other run is
+/// grayscale the text of the field being edited — and no other text — carries
+/// subpixel antialiasing. The scope of the override is one subtree, which is
+/// the same shape [`RenderOptions::for_type3_char_proc`] already uses to force
+/// options around a single glyph procedure.
+///
+/// A caller's own [`RenderOptions::text_aa_override`] **wins**: it was set
+/// deliberately for this render, where the flag on the object is a property of
+/// the document. That ordering also makes the whole thing testable without a
+/// document — see this module's tests.
+fn form_options(opts: &RenderOptions, live_edit: bool) -> RenderOptions {
+    if live_edit && opts.text_aa_override.is_none() {
+        opts.for_text_run(crate::options::TextAa::LcdSubpixel)
+    } else {
+        opts.clone()
     }
 }
 
@@ -2570,5 +2596,60 @@ mod tests {
             },
         );
         assert_eq!(out.pixel(0, 0), Some([0, 0, 0, 0]));
+    }
+
+    #[test]
+    fn only_a_live_edits_form_turns_clear_type_on() {
+        use crate::options::TextAa;
+        let page = RenderOptions::default();
+        // An ordinary form — the file's own appearance, or any `Do` — inherits
+        // the page's grayscale unchanged. This is the whole corpus.
+        assert_eq!(
+            form_options(&page, false).effective_text_aa(),
+            TextAa::Grayscale
+        );
+        // The live edit's form, and only it, gets ClearType.
+        assert_eq!(
+            form_options(&page, true).effective_text_aa(),
+            TextAa::LcdSubpixel
+        );
+        // And the page's own options are untouched either way, so the *next*
+        // sibling form is grayscale again — the override is scoped to the
+        // subtree, not latched for the rest of the page.
+        assert_eq!(page.effective_text_aa(), TextAa::Grayscale);
+    }
+
+    #[test]
+    fn a_callers_own_text_aa_override_outranks_the_objects_flag() {
+        use crate::options::TextAa;
+        // A caller who asked for one thing for this whole render gets it: the
+        // flag on the object describes the document, the override describes
+        // the request, and the request is the more specific instruction.
+        let forced = RenderOptions::default().for_text_run(TextAa::None);
+        assert_eq!(
+            form_options(&forced, true).effective_text_aa(),
+            TextAa::None
+        );
+    }
+
+    #[test]
+    fn the_live_edit_fold_changes_nothing_else_about_the_options() {
+        use crate::options::TextAa;
+        // The fold must be exactly one field. A form that quietly reset the
+        // colour mode or the background would be a much larger bug than a
+        // missing fringe, and would only show up on the one row that reaches
+        // this branch.
+        let page = RenderOptions {
+            color_mode: crate::options::ColorMode::Gray,
+            no_path_smooth: true,
+            background: Some(peniko::Color::BLACK),
+            ..RenderOptions::default()
+        };
+        let inner = form_options(&page, true);
+        assert_eq!(inner.text_aa_override, Some(TextAa::LcdSubpixel));
+        assert_eq!(inner.color_mode, page.color_mode);
+        assert!(inner.no_path_smooth);
+        assert_eq!(inner.background, page.background);
+        assert_eq!(inner.text_aa, page.text_aa);
     }
 }

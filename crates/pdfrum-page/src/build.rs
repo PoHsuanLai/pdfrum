@@ -442,6 +442,35 @@ pub fn build_form_object<R: Resolve>(
     limits: &Limits,
     diags: &mut Diagnostics,
 ) -> Option<PageObject> {
+    build_form_object_with(stream, matrix, resources, r, ctx, limits, diags, false)
+}
+
+/// The same build, told whether the appearance is a **live edit's**.
+///
+/// [`build_form_object`] is this with `live_edit = false`, which is every
+/// appearance the file itself carries. A form session hands `true` for the one
+/// field it is currently editing, and that flag lands on
+/// [`FormObject::live_edit`] for a renderer to read — see its documentation for
+/// why the distinction has to travel with the object rather than with the
+/// render call.
+#[must_use]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "one more than `build_form_object`, which is already at the \
+              limit; grouping the resolver, context, limits and sink into a \
+              struct is a change to every builder entry point in this crate \
+              and not this function's to make"
+)]
+pub fn build_form_object_with<R: Resolve>(
+    stream: &pdfrum_object::Stream,
+    matrix: Affine,
+    resources: &Resources,
+    r: &R,
+    ctx: &mut BuildContext,
+    limits: &Limits,
+    diags: &mut Diagnostics,
+    live_edit: bool,
+) -> Option<PageObject> {
     let content = pdfrum_filters::decode_chain(stream, 0, r, limits, diags).data;
     let form_matrix = stream.dict.matrix(names::MATRIX, r);
     let placed = matrix * form_matrix;
@@ -497,6 +526,7 @@ pub fn build_form_object<R: Resolve>(
             // An annotation appearance is reached from `/AP`, not from a
             // resource dictionary, so there is no `/XObject` name for it.
             source: None,
+            live_edit,
         },
         state,
         marks: ContentMarks::default(),
@@ -1612,6 +1642,9 @@ impl<R: Resolve> Interp<'_, R> {
             transparency,
             oc: stream.dict.dict(names::OC, self.resolver).map(Arc::new),
             source: reference,
+            // A `Do` inside a content stream is the file drawing its own form,
+            // never a session's live edit.
+            live_edit: false,
         };
         self.push(PageObject::Form(Box::new(self.content(object))));
     }
@@ -2416,5 +2449,64 @@ mod tests {
         let state = GraphicsState::default();
         assert_eq!(state.ctm, Affine::IDENTITY);
         assert_eq!(state.stroke_params.cap, LineCap::Butt);
+    }
+
+    #[test]
+    fn an_appearance_is_not_a_live_edit_unless_it_is_built_as_one() {
+        // The flag is off for every existing producer, which is what makes it
+        // additive: the file's own appearance streams and a session's
+        // *regenerated* ones are both ordinary, and only the appearance a
+        // session produces for the field it is editing is marked.
+        let stream = pdfrum_object::Stream::new(
+            pdfrum_object::Dict::new(),
+            pdfrum_object::ByteSpan::from(b"0 0 10 10 re f".to_vec()),
+        );
+        let build = |live_edit| {
+            let mut ctx = BuildContext::default();
+            let mut diags = Diagnostics::default();
+            let object = super::build_form_object_with(
+                &stream,
+                Affine::IDENTITY,
+                &Resources::default(),
+                &NoResolve,
+                &mut ctx,
+                &Limits::default(),
+                &mut diags,
+                live_edit,
+            )
+            .expect("a form");
+            let PageObject::Form(form) = object else {
+                panic!("expected a form");
+            };
+            form.object.live_edit
+        };
+        assert!(!build(false));
+        assert!(build(true));
+    }
+
+    #[test]
+    fn the_plain_entry_point_never_marks_a_live_edit() {
+        // `build_form_object` is `build_form_object_with(.., false)`, and every
+        // caller that predates the flag goes through it.
+        let stream = pdfrum_object::Stream::new(
+            pdfrum_object::Dict::new(),
+            pdfrum_object::ByteSpan::from(b"0 0 10 10 re f".to_vec()),
+        );
+        let mut ctx = BuildContext::default();
+        let mut diags = Diagnostics::default();
+        let object = super::build_form_object(
+            &stream,
+            Affine::IDENTITY,
+            &Resources::default(),
+            &NoResolve,
+            &mut ctx,
+            &Limits::default(),
+            &mut diags,
+        )
+        .expect("a form");
+        let PageObject::Form(form) = object else {
+            panic!("expected a form");
+        };
+        assert!(!form.object.live_edit);
     }
 }
