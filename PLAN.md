@@ -1235,6 +1235,24 @@ the `/AcroForm /CO` calculation-order walk the M14 brief promised was never
 built (E6) — it is M15's, with the rule that a document with no `/CO` array
 runs no calculation at all (`cpdf_interactiveform.cpp:739-745`).
 
+**Step 1 DONE 2026-09-02** (`docs/status/M15.md` § "Step 1"). E1's threading
+landed as ruled — a second parameter on `apply`, `choose` and `kill_focus`,
+`commit::run` called from both focus paths, `Cascade::keystroke` called from
+the typing path — with the board **0 rows changed field-by-field across all
+1705**, which is the whole of what "byte-identical for every existing caller"
+means. E6's `/CO` walk landed as `Form::calculation_order`, E4's four
+`Limits` fields landed with `max_calculate_depth` at 1, and boa landed on a
+measured admission (116 crates, zero `-sys`, `cargo deny --all-features`
+clean, `scripts/check-no-boa.sh` asserting isolation both ways). One
+correction to the brief: **§2.4's crate-versus-module argument reasoned from
+`AF*` being a module in `pdfrum-form`, and `AF*` shipped as the separate
+`pdfrum-script` crate** — re-run against what shipped, the recommendation
+survives, because putting `ScriptCascade` in `pdfrum-script` would create the
+back-edge §2.4 warned about while a `pdfrum-form` module needs only the
+forward edge `pdfrum-form → pdfrum-script`. A63 (a failing validate losing
+focus) was fixed here under the oracle-bug rule, since it sits in the path
+this step rewired.
+
 Settled 2026-09-01: **the engine is boa**, pinned exactly, behind a cargo
 feature, admitted to DEPS.md on the pure-Rust bar (verify its tree with
 `cargo-deny` — no C, no `-sys`). Boa is at 95.5% of test262, register VM,
