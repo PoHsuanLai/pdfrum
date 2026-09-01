@@ -1,6 +1,6 @@
 # PDFium → Rust Rewrite — Master Plan
 
-**Status:** Phase 2: M9-M12 ALL MET (2026-08-30); **M12c (GPU backend) MET 2026-08-31**; **M12b MET 2026-09-01 with two targets missed and named** (docs/status/M12b.md). M12 scorecard: warm render geomean 0.97x oracle (FASTER; image 0.24x, vector 0.90x, shading 0.95x; forms 3.35x is the named residue), rayon 3.09x@4/6.09x@16, RSS 1.20x, conformance byte-identical, ratchet green over 440 entries. Per-crate benches + bench-quick landed. M12b: three of its four items had their premise corrected by measurement — P1's scaled-decode diagnosis was wrong on three of its four cited documents and its target is MISSED at -33.4% against >=40%; P2 closed the arena question AGAINST bumpalo (+265%/+121%/+97% slower than a tuned no-dep baseline) and produced the profile M12 asked for (colour conversion <=7.2%, allocation ~0, interpretation 60-90% of the engine half); P3 was retargeted mid-milestone and delivered -42.6% on the engine half of vector_paths_1751 and -27.9% on the whole render, agreed by three independent rasterizer backends. Conformance byte-identical after every commit. Four near-false findings were caught rather than published (M12b.md §7). The bench ratchet re-baseline is an UNPAID DEBT, deliberately: warm is 132 entries / 32 improved / ZERO regressed, every regression is in cold, and five blocked with no pre-argued case. forms warm was never re-measured and stands at M12's 3.35x. M12c: GPU vello backend landed isolated (zero Tier-C interior differences on 44/44; 4.8x on the heaviest vector page, 2.64x slower overall on rasterization; shading target missed and named) — but its exemption cannot yet be spent, because vello 0.10 pins wgpu 29 while egui is on 30 and iced on 27, so no released frontend can inject a device. **M12d MET 2026-09-01, with M1 and M2 restated as owed** (docs/status/M12d.md): it paid M12b's three engineering debts and, like M12b, had its premise corrected by measurement on two of three items. D1 gave shading/patch.rs its owner — one BezPath buffer per patch instead of one per cell, netted −22.7% / −25.2% / −18.5% on the three shading documents, control unmoved, byte-identical across 202 page hashes — and refuted cell-merging by counting (the longest same-colour run is 2, usually 1), so M12 §3.9's SIMD reopening condition stays unmet *with a reason*. D2 was owed one third of its brief: the glyph-spacing heuristic and the croscore fix were on main since 2026-08-29 (ba8662f, 10905fe) and never reverted — the scoreboard's timestamp merely predated them — so that story is withdrawn in place (d81ac68); its real work was the serif bit plus a fontdb name-ID divergence it found itself, both moving 0 of 1675 files and paid on the oracle comparison rather than on a number. D3's inherited digest was wrong about what image_en_fqa is (301 draws of a 2x2 RGB image carrying an /SMask, not 552 minified 1-bit masks), and correcting it is what located the cost: cold 679.7 → 158.7 ms (−76.7%), build −83.7%, image class cold geomean −14.5% on top of P1's −33.4%; on image_bug_718762 the brief's ordering hypothesis is refuted, to_pixmap is −10.4%, and the remaining ~360 ms is the upstream scaled-decode gap. Two cross-vendor Grok reviews (both MERGEABLE-WITH-NITS) landed three GPU should-fixes — a device leaked before the check that would refuse it, a documented TargetTooLarge never constructed with a 17 GiB allocation reachable behind it, and a device-loss panic hook — and the walk review's NaN finding was real but ran the opposite direction from its own reasoning. Conformance byte-identical after every commit; no dependency fact moved, verified mechanically. **M1 (ratchet re-baseline) and M2 (oracle side-by-side) are STILL OWED**, unpaid for a second milestone: load never dropped below ~7 and stood at 42 at close, with two unrelated python3 jobs at 450-490% CPU. Until M2 runs, every "versus PDFium" figure in this line dates from M12 — forms warm included, still 3.35x unmeasured. M13 (release) NOT STARTED — loop paused by user; it inherits M1, M2, and the filings and pins that were always the user's or upstream's.
+**Status:** Phase 2: M9-M12 ALL MET (2026-08-30); **M12c (GPU backend) MET 2026-08-31**; **M12b MET 2026-09-01 with two targets missed and named** (docs/status/M12b.md). M12 scorecard: warm render geomean 0.97x oracle (FASTER; image 0.24x, vector 0.90x, shading 0.95x; forms 3.35x is the named residue), rayon 3.09x@4/6.09x@16, RSS 1.20x, conformance byte-identical, ratchet green over 440 entries. Per-crate benches + bench-quick landed. M12b: three of its four items had their premise corrected by measurement — P1's scaled-decode diagnosis was wrong on three of its four cited documents and its target is MISSED at -33.4% against >=40%; P2 closed the arena question AGAINST bumpalo (+265%/+121%/+97% slower than a tuned no-dep baseline) and produced the profile M12 asked for (colour conversion <=7.2%, allocation ~0, interpretation 60-90% of the engine half); P3 was retargeted mid-milestone and delivered -42.6% on the engine half of vector_paths_1751 and -27.9% on the whole render, agreed by three independent rasterizer backends. Conformance byte-identical after every commit. Four near-false findings were caught rather than published (M12b.md §7). The bench ratchet re-baseline is an UNPAID DEBT, deliberately: warm is 132 entries / 32 improved / ZERO regressed, every regression is in cold, and five blocked with no pre-argued case. forms warm was never re-measured and stands at M12's 3.35x. M12c: GPU vello backend landed isolated (zero Tier-C interior differences on 44/44; 4.8x on the heaviest vector page, 2.64x slower overall on rasterization; shading target missed and named) — but its exemption cannot yet be spent, because vello 0.10 pins wgpu 29 while egui is on 30 and iced on 27, so no released frontend can inject a device. **M12d MET 2026-09-01, with M1 and M2 restated as owed** (docs/status/M12d.md): it paid M12b's three engineering debts and, like M12b, had its premise corrected by measurement on two of three items. D1 gave shading/patch.rs its owner — one BezPath buffer per patch instead of one per cell, netted −22.7% / −25.2% / −18.5% on the three shading documents, control unmoved, byte-identical across 202 page hashes — and refuted cell-merging by counting (the longest same-colour run is 2, usually 1), so M12 §3.9's SIMD reopening condition stays unmet *with a reason*. D2 was owed one third of its brief: the glyph-spacing heuristic and the croscore fix were on main since 2026-08-29 (ba8662f, 10905fe) and never reverted — the scoreboard's timestamp merely predated them — so that story is withdrawn in place (d81ac68); its real work was the serif bit plus a fontdb name-ID divergence it found itself, both moving 0 of 1675 files and paid on the oracle comparison rather than on a number. D3's inherited digest was wrong about what image_en_fqa is (301 draws of a 2x2 RGB image carrying an /SMask, not 552 minified 1-bit masks), and correcting it is what located the cost: cold 679.7 → 158.7 ms (−76.7%), build −83.7%, image class cold geomean −14.5% on top of P1's −33.4%; on image_bug_718762 the brief's ordering hypothesis is refuted, to_pixmap is −10.4%, and the remaining ~360 ms is the upstream scaled-decode gap. Two cross-vendor Grok reviews (both MERGEABLE-WITH-NITS) landed three GPU should-fixes — a device leaked before the check that would refuse it, a documented TargetTooLarge never constructed with a 17 GiB allocation reachable behind it, and a device-loss panic hook — and the walk review's NaN finding was real but ran the opposite direction from its own reasoning. Conformance byte-identical after every commit; no dependency fact moved, verified mechanically. **M1 (ratchet re-baseline) and M2 (oracle side-by-side) are STILL OWED**, unpaid for a second milestone: load never dropped below ~7 and stood at 42 at close, with two unrelated python3 jobs at 450-490% CPU. Until M2 runs, every "versus PDFium" figure in this line dates from M12 — forms warm included, still 3.35x unmeasured. **M14 (form interaction) MET 2026-09-01, with three documented residues and a ten-item owed list** (docs/status/M14.md §"M14 close"): 191/191 assertions accounted for — 181 ported and passing, 10 not portable by construction with a reason each, and the 11 V8-gated recorded for M15 outside the denominator, the `121 + 70` derivation re-verified by enumerating every `TEST_F` including the 26 two-line declarations a single-line regex undercounts; form-events **25/30** from a 12/30 baseline, the five shortfalls being **two** named mechanisms — the open combo dropdown window (`bug_1372651` ×2, `bug_736695_2`; a second PWL window FFLDraw composites outside the widget's `/Rect`, no `SetPopup` here) and the erased scrollbar chrome (`scrollable_widgets1` ×2, by the brief's appendix ruling), with `bug_736695_3` recorded as passing only because SSIM cannot see a missed selection in a 150×15 box; the scoreboard moved **only upward**, 1636 → 1651 pass with fifteen rows crossing and none falling, two of them not form-events rows (`bug_725389.{in,pdf}`, one of the four items M5's tail named by mechanism, closed because form interaction and that tail item were one question about fonts), the other 1675 rows byte-identical and the board not re-committed; no new dependency, DEPS.md untouched and verified mechanically. The cross-vendor rule held with one recorded gap — Grok's account was exhausted (402) when the first `pdfrum-form` review was due, so a Claude reviewer did it; Grok reviewed block 2, the `pdfrum-doc` slice and block 4 and diagnosed `bug_736695_2`, and its findings ran **18 of 18 real, 0 dismissed**, two of them right about the defect and wrong about the fix in ways that would have made the pixels worse. Three premises were withdrawn in place rather than rewritten (the per-row residue table, the ascent/descent metric, the dashed focus rectangle), and the assertion port found nine defects no `.evt` fixture could reach. **Owed**: `pdfrum-font`'s `char_width` answering the base-14 table where the substituted face draws (`password`'s caret at column 189 against 199), LCD subpixel AA on live-edit text (91% of `focused_ltr`'s residue, `pdfrum-render`), the tint one count low (raster crates), the combo popup, the scrollbar chrome, and five smaller `pdfrum-doc`/`pdfrum-form` items. M13 (release) NOT STARTED — loop paused by user; it inherits M1, M2, and the filings and pins that were always the user's or upstream's.
 **Oracle:** `/mnt/data2/pdfium/pdfium-c++` (read-only C++ PDFium checkout @ `6f2272e`)
 **Workspace:** `/mnt/data2/pdfium/pdfrum` (this repository)
 
@@ -1048,7 +1048,7 @@ monotone rule, M12.md §10's register for status docs, path-scoped commits.
 **The existing scoreboard must not move except upward** — none of this touches
 the rendering core's numbers, and any milestone that does has a bug.
 
-## M14 — Form interaction  *(first: no new dependency, and it unblocks M15's event cascade)*
+## M14 — Form interaction  *(first: no new dependency, and it unblocks M15's event cascade)*  — **MET 2026-09-01, with three documented residues and a ten-item owed list** (docs/status/M14.md, §"M14 close")
 
 The CPWL/formfiller layer Phase 1 excluded on the grounds that it "only matters
 with JS". The survey refutes that premise: **137 of 139** form-interaction
@@ -1130,7 +1130,76 @@ does it. Grok keeps the cross-review of the `--send-events` wiring and of
 the `vt` slice if it can hold a session. Recorded so the cross-vendor rule's
 gaps are visible, not silent.
 
+**MET 2026-09-01** (docs/status/M14.md, §"M14 close" scores each criterion
+one by one). Every exit criterion holds, two of them on numbers this
+milestone's own rulings restated and one on a floor the rulings explicitly
+allow a named mechanism to sit below.
+
+- **191/191 assertions accounted for**, per the E2 restatement: **181 ported
+  and passing**, **10 not portable by construction** with a reason each — a
+  negative index into a `usize` parameter, a null handle where there is no
+  handle, an embedder callback D2 removed by design — and the **11 V8-gated
+  rows recorded for M15**, outside the denominator because `139 − 11 − 7 =
+  121` subtracted them to reach it. That derivation was re-verified against
+  the C++ by enumerating every `TEST_F` in the five files, including the 26
+  two-line declarations a single-line regex undercounts by a fifth. 184 test
+  functions drive the 181 rows and are **not** the score; three later files
+  pinning C++ behaviour no upstream row asserts are named as deliberately
+  outside the bucket rather than counted into it. 200 test functions across
+  21 files is the coverage figure.
+- **form-events 25/30**, from a 12/30 baseline. The five below 0.99 are **two
+  mechanisms**, both named before they were measured: the **open combo
+  dropdown window** (`bug_1372651` ×2 at 0.9105, `bug_736695_2` at 0.979073 —
+  a second PWL window `FPDF_FFLDraw` composites *outside* the widget's
+  `/Rect`, with no `SetPopup` in `pdfrum-form` and no seam in
+  `annot_render` to paint one; same class as the erased scrollbar) and the
+  **erased scrollbar chrome** (`scrollable_widgets1` ×2 at 0.989687, by the
+  brief's appendix ruling, ~1771 lines the plan never accounted for; its
+  12-unit reservation *is* honoured). `bug_736695_3` is recorded as passing
+  only because SSIM cannot see a missed selection in a 150×15 box — its click
+  at y=310 lands in the open list we do not draw and is treated as a miss.
+- **The facade's event API is documented with a worked example**, and 43
+  doctests pass in `pdfrum` — the type's own asserts an appearance comes back
+  from a commit rather than merely a non-empty response, which is the weaker
+  assertion that had hidden a missing redraw.
+- **The scoreboard moved only upward.** 1636 → **1651 pass**, 69 → 54 fail;
+  **fifteen rows crossed and none fell**. Two are not form-events rows:
+  `bug_725389.{in,pdf}` (0.967403 → 0.999583), one of the four items M5's tail
+  inventory named by mechanism — `CPDF_BAFontMap`'s charset fallback to a
+  second face — closed because form interaction and that tail item turned out
+  to be one question about fonts. The 1675 non-form-events rows are otherwise
+  byte-identical, diffed field by field; the board was not re-committed
+  because only its timestamp moved.
+- **No new dependency.** DEPS.md is untouched across the whole milestone,
+  verified mechanically by `scripts/ci.sh`'s dependency-tree gate.
+- **Cross-vendor rule held with one recorded gap**: Grok's account was
+  exhausted (402) when the first `pdfrum-form` review was due, so a
+  Claude/Opus reviewer did it. Grok reviewed block 2, the `pdfrum-doc` slice
+  and block 4, and diagnosed `bug_736695_2`. Its findings ran **18 of 18
+  real, 0 dismissed**, with two right about the defect and wrong about the fix
+  in ways that would have made the pixels worse. All five review records are
+  in `docs/reviews/`.
+
+**Owed, with owners** (docs/status/M14.md §OWED has the measurements): (1)
+`pdfrum-font`'s `char_width` answering the base-14 table for a `/Helvetica`
+with no `/Widths` where the substituted Arimo face is what draws — 311/1000
+against 389/1000, which is `password`'s caret at column 189 against 199; (2)
+LCD subpixel AA on live-edit text, **91% of `focused_ltr`'s remaining
+residue**, needing a per-draw `text_aa` in `pdfrum-render` (ruling i); (3) the
+widget tint one count low on red, 240 against 241, the raster crates' alpha
+rounding (ruling ii); (4) the combo popup window; (5) the scrollbar chrome;
+(6) `vt::hit::caret_rect` ignoring `is_rtl` in two places; (7) the `/I`-versus-
+`/V` appearance reader; (8) `clear_siblings` recording a chosen control it
+cannot draw; (9) seven unported charset tables; (10) `generate_with_live`'s
+remaining doc-named migration.
+
 ## M15 — JavaScript via `boa`  *(after M14, whose event cascade the field scripts hang off)*
+
+**M14's `Cascade` seam is where the field scripts hang.** It landed as E4
+ruled — one `&mut dyn Cascade` at one call site, with `NoScripts`'s method
+defaults being the script-free behaviour rather than a stub of it — so item
+(3) below attaches a `boa` implementation to an existing trait rather than
+threading a new parameter through routing.
 
 Settled 2026-09-01: **the engine is boa**, pinned exactly, behind a cargo
 feature, admitted to DEPS.md on the pure-Rust bar (verify its tree with
