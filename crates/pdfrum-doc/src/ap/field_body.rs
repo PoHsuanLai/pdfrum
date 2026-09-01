@@ -129,6 +129,39 @@ const DROP_BUTTON_WIDTH: f32 = 13.0;
 /// substitutes twelve outright.
 const LIST_ROW_DEFAULT_SIZE: f32 = 12.0;
 
+/// The width a **live** list box keeps clear on its right for the vertical
+/// scroll bar.
+///
+/// # Only a live one, and that is the whole of the subtlety
+///
+/// Two different producers draw a list box's rows and they disagree about
+/// this, so a change that looks like one rule is really two:
+///
+/// - The **generated appearance** — what a file without an `/AP` is given
+///   when the page opens — lays every row into the body rectangle whole.
+///   There is no window, no scroll bar and no reservation: it is plain
+///   layout into the box the border leaves behind.
+/// - The **live control** — which exists only once an event has focused the
+///   field — is a window, and its window asks for a vertical scroll bar when
+///   it is created without ever consulting how many options there are. The
+///   client rectangle then loses this much from its right edge, so a
+///   three-option box that could never scroll is laid out into the same
+///   narrowed box as a thirty-option one.
+///
+/// Applying the reservation to both is a measurable mistake and not a subtle
+/// one: it narrows the band on every list box in the corpus that is drawn
+/// without events, which is most of them.
+///
+/// Everything the client rectangle decides moves with it — where a row wraps,
+/// how wide the selection band is drawn, and how far right a click still
+/// counts as landing on a row — so the live path's hit testing has to reserve
+/// the same width or the band and the target disagree.
+///
+/// The bar itself is never drawn here either way. The oracle paints it from
+/// its own widget tree rather than from any appearance stream, so the space is
+/// real and its occupant is not.
+const LIST_SCROLLBAR_WIDTH: f32 = 12.0;
+
 /// The colour behind a selected list-box row, as the byte triple the source
 /// writes rather than the fraction it equals.
 ///
@@ -821,7 +854,20 @@ fn combo_box<R: Resolve>(out: &mut Content, input: &BodyInput<'_>, r: &R) {
 
 /// A list box's body: every option from `/TI` down.
 fn list_box<R: Resolve>(out: &mut Content, input: &BodyInput<'_>, r: &R) {
-    let (dict, valued, client) = (input.widget, input.valued, input.client);
+    let (dict, valued) = (input.widget, input.valued);
+    // A **live** list box reserves the scroll bar's width; a generated
+    // appearance does not — see [`LIST_SCROLLBAR_WIDTH`] for why the two
+    // disagree and which upstream function each one is.
+    let client = if input.live.is_some() {
+        geom::rect(
+            geom::left(input.client),
+            geom::bottom(input.client),
+            geom::right(input.client) - LIST_SCROLLBAR_WIDTH,
+            geom::top(input.client),
+        )
+    } else {
+        input.client
+    };
     let (appearance, color, font) = (input.appearance, input.color, input.font);
     let options = options(valued, r);
     // A focused list box's selection lives in the session, not in `/V` — the
@@ -1484,6 +1530,36 @@ mod tests {
     }
 
     #[test]
+    fn only_a_live_list_box_keeps_the_scroll_bars_width_clear() {
+        // The widget fixtures are 100 wide with a one-unit border, so the
+        // client is 98 and the narrowed box is 86.
+        let list = widget_of(
+            "Ch",
+            &[("Opt", strings(&["Dog", "Cat"])), ("V", text("Cat"))],
+        );
+
+        // Generated: the whole body, because `GenerateListBoxAP` knows nothing
+        // about windows or scroll bars.
+        let stored = body(&list).expect("a body");
+        assert!(stored.contains("1 1 98 28 re\n"), "{stored}");
+        assert!(stored.contains(" 98 11.244 re\n"), "{stored}");
+
+        // Live: twelve units narrower — and narrower even here, where two
+        // options in a 28-unit box could never scroll. That the reservation
+        // does not wait for there to be something to scroll is the rule.
+        let live = live_body(
+            &list,
+            &LiveState {
+                selected: &[1],
+                ..LiveState::default()
+            },
+        )
+        .expect("a live body");
+        assert!(live.contains("1 1 86 28 re\n"), "{live}");
+        assert!(live.contains(" 86 11.244 re\n"), "{live}");
+    }
+
+    #[test]
     fn a_list_box_starts_at_its_top_visible_index() {
         let got = body(&widget_of(
             "Ch",
@@ -1864,8 +1940,15 @@ mod tests {
         // at row zero, which is a different appearance from `Hello` or from a
         // list box whose `/V` picks a row — so the agreeing set is named
         // rather than left to silence.
+        //
+        // A **list box** left the agreeing set when the scroll bar's width
+        // started being reserved, because that reservation is precisely a
+        // live-versus-stored difference and applies however empty the live
+        // state is: `ch_list_i` is 12 units narrower live, by design. See
+        // `LIST_SCROLLBAR_WIDTH`, and `only_a_live_list_box_keeps_the_scroll_bars_width_clear`
+        // for the pin.
         for (name, widget) in widget_fixtures() {
-            if !matches!(name, "ch_list_i" | "tx_empty" | "btn") {
+            if !matches!(name, "tx_empty" | "btn") {
                 continue;
             }
             let live = LiveState::default();
