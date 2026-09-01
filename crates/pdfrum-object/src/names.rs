@@ -158,6 +158,8 @@ names! {
     DESTS = "Dests";
     /// The embedded-file name tree (`/EmbeddedFiles`).
     EMBEDDED_FILES = "EmbeddedFiles";
+    /// The `/Type` of an embedded file stream (`/EmbeddedFile`).
+    EMBEDDED_FILE = "EmbeddedFile";
     /// The document-level JavaScript name tree (`/JavaScript`).
     JAVA_SCRIPT = "JavaScript";
     /// A portable collection, i.e. a portfolio (`/Collection`).

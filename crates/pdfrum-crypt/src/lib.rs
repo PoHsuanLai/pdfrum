@@ -138,6 +138,10 @@ pub enum SecurityHandler {
         encrypt_metadata: bool,
         /// Which password spelling worked.
         encoding: PasswordEncoding,
+        /// The cipher `/EFF` names for embedded file streams, when it differs
+        /// from this variant's own (ISO 32000-1 §7.6.5 table 20). `None` is
+        /// table 20's default: the embedded class uses the stream cipher.
+        embedded_cipher: Option<Cipher>,
     },
     /// AESV2: a 16- or 24-byte file key with per-object `sAlT` derivation.
     AesV4 {
@@ -153,6 +157,10 @@ pub enum SecurityHandler {
         encrypt_metadata: bool,
         /// Which password spelling worked.
         encoding: PasswordEncoding,
+        /// The cipher `/EFF` names for embedded file streams, when it differs
+        /// from this variant's own (ISO 32000-1 §7.6.5 table 20). `None` is
+        /// table 20's default: the embedded class uses the stream cipher.
+        embedded_cipher: Option<Cipher>,
     },
     /// AESV3 (`/V 5`, revision 5 or 6): the 32-byte key is used as-is.
     AesV5 {
@@ -168,6 +176,10 @@ pub enum SecurityHandler {
         encrypt_metadata: bool,
         /// Which password spelling worked.
         encoding: PasswordEncoding,
+        /// The cipher `/EFF` names for embedded file streams, when it differs
+        /// from this variant's own (ISO 32000-1 §7.6.5 table 20). `None` is
+        /// table 20's default: the embedded class uses the stream cipher.
+        embedded_cipher: Option<Cipher>,
     },
     /// No encryption, or `/StrF /Identity`.
     Identity,
@@ -247,6 +259,7 @@ impl SecurityHandler {
                 owner_unlocked,
                 encrypt_metadata,
                 encoding,
+                embedded_cipher: params.embedded_cipher,
             },
             // AESV3 is exactly "AES with a 32-byte key"; PDFium never reads
             // the /CFM name to tell the two apart.
@@ -262,6 +275,7 @@ impl SecurityHandler {
                     owner_unlocked,
                     encrypt_metadata,
                     encoding,
+                    embedded_cipher: params.embedded_cipher,
                 }
             }
             Cipher::Aes => Self::AesV4 {
@@ -271,6 +285,7 @@ impl SecurityHandler {
                 owner_unlocked,
                 encrypt_metadata,
                 encoding,
+                embedded_cipher: params.embedded_cipher,
             },
         }
     }
@@ -300,22 +315,63 @@ impl SecurityHandler {
     ///     owner_unlocked: false,
     ///     encrypt_metadata: true,
     ///     encoding: pdfrum_crypt::PasswordEncoding::AsGiven,
+    ///     embedded_cipher: None,   // no /EFF: the stream cipher serves
     /// };
     /// assert!(handler.decrypt(ObjRef::new(4, 0), CryptClass::String, &[0; 16]).is_empty());
     /// ```
     #[must_use]
     pub fn decrypt(&self, obj: ObjRef, class: CryptClass, data: &[u8]) -> Vec<u8> {
-        // The class is matched exhaustively but never branches: PDFium
-        // refuses documents whose /StmF and /StrF differ and ignores /EFF
-        // entirely, so one cipher and key serve all three (Divergence D1).
-        match class {
-            CryptClass::Stream | CryptClass::String | CryptClass::Embedded => {}
+        // `/StmF` and `/StrF` share one cipher because the oracle refuses a
+        // document whose two names differ (Divergence D1); `/EFF` is the one
+        // class that can genuinely name another, and does so by cipher only —
+        // §7.6.5 gives every `/CF` entry the same file key.
+        if let (CryptClass::Embedded, Some(cipher)) = (class, self.embedded_cipher()) {
+            return self.decrypt_with(obj, cipher, data);
         }
         match self {
             Self::Identity => data.to_vec(),
             Self::Rc4V2 { key, .. } => object::decrypt_rc4(key, obj, data),
             Self::AesV4 { key, .. } => object::decrypt_aes_v4(key, obj, data),
             Self::AesV5 { key, .. } => object::decrypt_aes_v5(key, data),
+        }
+    }
+
+    /// The `/EFF` cipher override, or `None` when the embedded class uses the
+    /// stream cipher — which ISO 32000-1 §7.6.5 table 20 makes the default.
+    #[must_use]
+    pub fn embedded_cipher(&self) -> Option<Cipher> {
+        match self {
+            Self::Identity => None,
+            Self::Rc4V2 {
+                embedded_cipher, ..
+            }
+            | Self::AesV4 {
+                embedded_cipher, ..
+            }
+            | Self::AesV5 {
+                embedded_cipher, ..
+            } => *embedded_cipher,
+        }
+    }
+
+    /// Decrypt with a named cipher over this handler's own file key — the
+    /// `/EFF` path, where the algorithm differs from the stream class's but
+    /// the key does not.
+    ///
+    /// The AES arm branches on key length exactly as [`Self::assemble`] does,
+    /// because AESV2 and AESV3 differ only there: a 32-byte key is used
+    /// verbatim, anything shorter takes the `sAlT` per-object derivation.
+    fn decrypt_with(&self, obj: ObjRef, cipher: Cipher, data: &[u8]) -> Vec<u8> {
+        let Some(key) = self.file_key() else {
+            return data.to_vec();
+        };
+        match cipher {
+            Cipher::None => data.to_vec(),
+            Cipher::Rc4 => object::decrypt_rc4(&key, obj, data),
+            Cipher::Aes => match <[u8; 32]>::try_from(key.bytes()) {
+                Ok(full) => object::decrypt_aes_v5(&full, data),
+                Err(_) => object::decrypt_aes_v4(&key, obj, data),
+            },
         }
     }
 
@@ -356,6 +412,7 @@ impl SecurityHandler {
     ///     owner_unlocked: false,
     ///     encrypt_metadata: true,
     ///     encoding: pdfrum_crypt::PasswordEncoding::AsGiven,
+    ///     embedded_cipher: None,   // no /EFF: the stream cipher serves
     /// };
     /// let obj = ObjRef::new(4, 0);
     /// let sealed = handler.encrypt(obj, CryptClass::String, Iv([7; 16]), b"secret");
@@ -365,21 +422,50 @@ impl SecurityHandler {
     /// ```
     #[must_use]
     pub fn encrypt(&self, obj: ObjRef, class: CryptClass, iv: Iv, data: &[u8]) -> Vec<u8> {
-        // One cipher and key serve all three classes, exactly as on the
-        // decrypt side (Divergence D1).
-        match class {
-            CryptClass::Stream | CryptClass::String | CryptClass::Embedded => {}
-        }
         // `CPDF_Encryptor::Encrypt` returns before reaching the cipher on an
         // empty payload; see the `# Lengths` note.
         if data.is_empty() {
             return Vec::new();
+        }
+        // `/EFF`'s override, the mirror of the decrypt side. A document we
+        // write does not itself set `/EFF` — `pdfrum-edit` writes one filter
+        // — but a handler opened from a file that does must re-seal what it
+        // opened with the same cipher, or the round trip is not one.
+        if let (CryptClass::Embedded, Some(cipher)) = (class, self.embedded_cipher()) {
+            return self.encrypt_with(obj, cipher, iv, data);
         }
         match self {
             Self::Identity => data.to_vec(),
             Self::Rc4V2 { key, .. } => object::encrypt_rc4(key, obj, data),
             Self::AesV4 { key, .. } => object::encrypt_aes_v4(key, obj, iv.bytes(), data),
             Self::AesV5 { key, .. } => object::encrypt_aes_v5(key, iv.bytes(), data),
+        }
+    }
+
+    /// Encipher with a named cipher over this handler's own file key, the
+    /// inverse of [`Self::decrypt_with`].
+    fn encrypt_with(&self, obj: ObjRef, cipher: Cipher, iv: Iv, data: &[u8]) -> Vec<u8> {
+        let Some(key) = self.file_key() else {
+            return data.to_vec();
+        };
+        match cipher {
+            Cipher::None => data.to_vec(),
+            Cipher::Rc4 => object::encrypt_rc4(&key, obj, data),
+            Cipher::Aes => match <[u8; 32]>::try_from(key.bytes()) {
+                Ok(full) => object::encrypt_aes_v5(&full, iv.bytes(), data),
+                Err(_) => object::encrypt_aes_v4(&key, obj, iv.bytes(), data),
+            },
+        }
+    }
+
+    /// This handler's file encryption key, or `None` for [`Self::Identity`],
+    /// which has none. Every `/CF` entry shares it (ISO 32000-1 §7.6.5), so
+    /// it is what the `/EFF` override runs its own cipher over.
+    fn file_key(&self) -> Option<SmallKey> {
+        match self {
+            Self::Identity => None,
+            Self::Rc4V2 { key, .. } | Self::AesV4 { key, .. } => Some(key.clone()),
+            Self::AesV5 { key, .. } => Some(SmallKey::from_full(**key)),
         }
     }
 
@@ -1108,6 +1194,163 @@ mod tests {
                 "{name}"
             );
         }
+    }
+
+    // -----------------------------------------------------------------
+    // `/EFF` — audit A26. The oracle reads the key nowhere
+    // (`grep '"EFF"' core/ fpdfsdk/` is empty), so an embedded file stream
+    // decrypts with the stream filter whatever `/EFF` says. The corpus has
+    // no file with an `/EFF` at all, let alone one differing from `/StmF`,
+    // so these fixtures are constructed rather than taken from it.
+    // -----------------------------------------------------------------
+
+    /// The `encrypted.pdf` dictionary — whose `/StmF` is AESV2 and whose
+    /// `/O`/`/U` are real, so it opens with `1234` — extended with a second
+    /// `/CF` entry that `/EFF` names.
+    fn eff_dict(embedded_method: &str) -> Dict {
+        use pdfrum_object::Name;
+        let mut dict = test_fixtures::encrypted_pdf_dict();
+        let std_cf = Dict::from_pairs([
+            (names::CFM.clone(), Object::Name(Name::from("AESV2"))),
+            (names::LENGTH.clone(), Object::Int(16)),
+        ]);
+        let emb_cf = Dict::from_pairs([
+            (
+                names::CFM.clone(),
+                Object::Name(Name::from(embedded_method)),
+            ),
+            (names::LENGTH.clone(), Object::Int(16)),
+        ]);
+        dict.push(
+            names::CF.clone(),
+            Object::Dict(Dict::from_pairs([
+                (Name::from("StdCF"), Object::Dict(std_cf)),
+                (Name::from("EmbCF"), Object::Dict(emb_cf)),
+            ])),
+        );
+        dict.push(names::EFF.clone(), Object::Name(Name::from("EmbCF")));
+        dict
+    }
+
+    /// The handler `eff_dict` opens to, under `encrypted.pdf`'s password.
+    fn eff_handler(dict: &Dict) -> SecurityHandler {
+        SecurityHandler::from_encrypt_dict(
+            dict,
+            &unhex("1B0FD0F5E29AD84DBF67775E9E3B009F"),
+            b"1234",
+            &NoResolve,
+        )
+        .expect("the encrypted.pdf user password")
+    }
+
+    /// An `/EFF` naming a filter with a different `/CFM` gives the embedded
+    /// class its own cipher — pdf.js `crypto.js:1120`, `:1336`; ISO 32000-1
+    /// §7.6.5 table 20. Fails on the old behaviour, which folded `Embedded`
+    /// onto `Stream`.
+    #[test]
+    fn an_eff_naming_another_filter_decrypts_embedded_files_with_it() {
+        let dict = eff_dict("V2");
+        let params = super::parse_encrypt_dict(&dict, &NoResolve).unwrap();
+        assert_eq!(params.cipher, Cipher::Aes);
+        assert_eq!(params.embedded_cipher, Some(Cipher::Rc4));
+
+        let handler = eff_handler(&dict);
+        assert_eq!(handler.embedded_cipher(), Some(Cipher::Rc4));
+
+        let obj = ObjRef::new(9, 0);
+        let payload: Vec<u8> = (0..48u8).collect();
+        // The two classes now genuinely differ: AES reads the first sixteen
+        // bytes as an initialisation vector, RC4 preserves length.
+        let as_stream = handler.decrypt(obj, CryptClass::Stream, &payload);
+        let as_embedded = handler.decrypt(obj, CryptClass::Embedded, &payload);
+        assert_eq!(as_embedded.len(), payload.len());
+        assert_ne!(as_embedded, as_stream);
+        // And the string class follows the stream, as `/StrF` names `StdCF`.
+        assert_eq!(
+            handler.decrypt(obj, CryptClass::String, &payload),
+            as_stream
+        );
+    }
+
+    /// The embedded class round-trips through its own cipher.
+    #[test]
+    fn the_embedded_class_round_trips_under_its_own_cipher() {
+        let dict = eff_dict("V2");
+        let handler = eff_handler(&dict);
+        let obj = ObjRef::new(9, 0);
+        let payload = b"an attachment".to_vec();
+        let sealed = handler.encrypt(obj, CryptClass::Embedded, Iv([3; 16]), &payload);
+        assert_eq!(handler.decrypt(obj, CryptClass::Embedded, &sealed), payload);
+        // Sealed under RC4, so it is not what the stream cipher would make.
+        assert_ne!(
+            sealed,
+            handler.encrypt(obj, CryptClass::Stream, Iv([3; 16]), &payload)
+        );
+    }
+
+    /// Table 20's default for an absent `/EFF` is `/StmF`, so a document
+    /// without the key — every file in the corpus — is unchanged.
+    #[test]
+    fn an_absent_eff_leaves_every_class_on_the_stream_cipher() {
+        for (name, handler) in opened_handlers() {
+            assert_eq!(handler.embedded_cipher(), None, "{name}");
+        }
+        let dict = test_fixtures::encrypt_dict(4, Some(128), Some(16), Some("AESV2"));
+        let params = super::parse_encrypt_dict(&dict, &NoResolve).unwrap();
+        assert_eq!(params.embedded_cipher, None);
+    }
+
+    /// Naming `/StmF`'s own filter is the default written out, and an `/EFF`
+    /// whose `/CFM` resolves to the same cipher needs no override either.
+    #[test]
+    fn an_eff_that_agrees_with_the_stream_filter_is_no_override() {
+        use pdfrum_object::Name;
+        let mut same = test_fixtures::encrypt_dict(4, Some(128), Some(16), Some("AESV2"));
+        same.push(names::EFF.clone(), Object::Name(Name::from("StdCF")));
+        assert_eq!(
+            super::parse_encrypt_dict(&same, &NoResolve)
+                .unwrap()
+                .embedded_cipher,
+            None
+        );
+        // Different filter name, same cipher — AESV3 and AESV2 are both
+        // `Cipher::Aes`, which is the level `/EFF` can actually change.
+        let agreeing = eff_dict("AESV3");
+        assert_eq!(
+            super::parse_encrypt_dict(&agreeing, &NoResolve)
+                .unwrap()
+                .embedded_cipher,
+            None
+        );
+    }
+
+    /// `/EFF /Identity` leaves embedded files in the clear while the streams
+    /// stay enciphered — the case that makes `/EFF` worth reading at all.
+    #[test]
+    fn an_identity_eff_leaves_embedded_files_unenciphered() {
+        let mut dict = test_fixtures::encrypted_pdf_dict();
+        dict.push(names::EFF.clone(), Object::Name(names::IDENTITY.clone()));
+        let handler = eff_handler(&dict);
+        assert_eq!(handler.embedded_cipher(), Some(Cipher::None));
+        let obj = ObjRef::new(9, 0);
+        let payload: Vec<u8> = (0..48u8).collect();
+        assert_eq!(
+            handler.decrypt(obj, CryptClass::Embedded, &payload),
+            payload
+        );
+        assert_ne!(handler.decrypt(obj, CryptClass::Stream, &payload), payload);
+    }
+
+    /// An `/EFF` naming a filter `/CF` does not have is damage, not a reason
+    /// to refuse the document: the streams still decrypt, and the embedded
+    /// class falls back to the stream cipher — the absent-key default.
+    #[test]
+    fn an_eff_naming_a_missing_filter_falls_back_rather_than_failing() {
+        use pdfrum_object::Name;
+        let mut dict = test_fixtures::encrypt_dict(4, Some(128), Some(16), Some("AESV2"));
+        dict.push(names::EFF.clone(), Object::Name(Name::from("NoSuchCF")));
+        let params = super::parse_encrypt_dict(&dict, &NoResolve).expect("still opens");
+        assert_eq!(params.embedded_cipher, None);
     }
 
     // The object number keys the payload for RC4 and AESV2 but not for

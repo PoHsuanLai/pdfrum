@@ -85,6 +85,10 @@ pub struct EncryptParams {
     pub permissions: u32,
     /// The cipher `/V`, `/CF` and `/CFM` resolve to.
     pub cipher: Cipher,
+    /// The cipher `/EFF` resolves to when it differs from [`Self::cipher`]
+    /// (ISO 32000-1 §7.6.5 table 20), and `None` when the embedded class uses
+    /// the stream cipher — which table 20 makes the default.
+    pub embedded_cipher: Option<Cipher>,
     /// The file encryption key length in bytes, 0 to 32.
     pub key_len: usize,
     /// `/EncryptMetadata`. Default `true`.
@@ -125,9 +129,11 @@ pub fn parse_encrypt_dict(dict: &Dict, r: &impl Resolve) -> Result<EncryptParams
     let encrypt_metadata = dict.bool(names::ENCRYPT_METADATA).unwrap_or(true);
 
     let (cipher, key_len) = resolve_cipher(dict, version, r)?;
+    let embedded_cipher = embedded_cipher(dict, version, cipher, r)?;
 
     Ok(EncryptParams {
         version,
+        embedded_cipher,
         revision,
         permissions,
         cipher,
@@ -219,6 +225,69 @@ fn resolve_cipher(dict: &Dict, version: i64, r: &impl Resolve) -> Result<(Cipher
         });
     }
     Ok((cipher, key_len))
+}
+
+/// The cipher an embedded-file stream is decrypted with — `/EFF`'s filter
+/// (ISO 32000-1 §7.6.5 table 20), or `None` when `/EFF` is absent or names
+/// the same filter the streams use.
+///
+/// `None` is not "no encryption": it means the embedded class needs no
+/// override, and [`crate::CryptClass::Embedded`] falls back to the stream
+/// cipher, which is table 20's own default for a missing `/EFF`.
+///
+/// Only the *cipher* can differ. §7.6.5 gives every `/CF` entry the one file
+/// encryption key and a `/CFM` of its own, so a differing `/EFF` changes
+/// which algorithm decrypts an embedded file, never which key.
+//
+// [oracle-bug] `grep '"EFF"' core/ fpdfsdk/` over the oracle returns **zero
+// hits**: `/EFF` is read nowhere in PDFium. `CPDF_SecurityHandler::LoadDict`
+// (cpdf_security_handler.cpp:303-311) takes one filter name and builds one
+// `CPDF_CryptoHandler`, so an embedded file stream is decrypted with the
+// stream filter whatever `/EFF` says — and a document whose `/EFF` names an
+// AES filter while `/StmF` names an RC4 one silently produces garbage for
+// every attachment. §7.6.5 table 20 defines `/EFF` as a distinct default for
+// embedded file streams, independent of `/StmF`. pdf.js carries it
+// separately: `crypto.js:1120` reads it with the `/StmF` default
+// (`eff = dict.get("EFF") || stmf`), consults it at `:1206` and hands it to
+// the cipher transform as `embeddedFilterName` at `:1336`.
+fn embedded_cipher(
+    dict: &Dict,
+    version: i64,
+    stream_cipher: Cipher,
+    r: &impl Resolve,
+) -> Result<Option<Cipher>, Error> {
+    // Below version 4 there are no crypt filters at all, so there is nothing
+    // for `/EFF` to name.
+    if version < 4 {
+        return Ok(None);
+    }
+    let Some(name) = dict.byte_string(names::EFF, r) else {
+        return Ok(None);
+    };
+    // Table 20's default for an absent `/EFF` is `/StmF`, so naming `/StmF`'s
+    // own filter is the default written out and needs no override.
+    if name == dict.byte_string(names::STM_F, r).unwrap_or_default() {
+        return Ok(None);
+    }
+    if name == names::IDENTITY.as_bytes() {
+        return Ok(Some(Cipher::None));
+    }
+    let filters = dict.dict(names::CF, r).ok_or(Error::MalformedEncryptDict(
+        "/CF is missing or not a dictionary",
+    ))?;
+    let Some(filter) = filters.dict(&Name::from(name.as_slice()), r) else {
+        // An `/EFF` naming a filter `/CF` does not have is damage, not a
+        // reason to refuse the document: the streams still decrypt. Fall back
+        // to the stream cipher, which is what the absent-key default gives.
+        return Ok(None);
+    };
+    let method = filter.byte_string(names::CFM, r).unwrap_or_default();
+    let cipher = if method == b"AESV2" || method == b"AESV3" {
+        Cipher::Aes
+    } else {
+        Cipher::Rc4
+    };
+    Ok((cipher != stream_cipher).then_some(cipher))
 }
 
 /// The crypt filter both `/StmF` and `/StrF` must name.
