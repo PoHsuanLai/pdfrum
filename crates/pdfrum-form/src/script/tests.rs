@@ -159,6 +159,59 @@ fn bind_param_error() -> &'static str {
     "Incorrect number of parameters passed to function."
 }
 
+/// **Every error a bound function throws carries its own name**, and the
+/// goldens quote the qualified form.
+///
+/// `JSFormatErrorString` (`fxjs/js_resources.cpp:97-108`) is
+/// `class_name` + optional `"." + property` + `": "` + the message, and every
+/// throw in `fxjs/` routes through it — the `AF*` wrapper at
+/// `cjs_publicmethods.cpp:159-161` included. So
+/// `public_methods_expected.txt` reads
+/// `AFDate_Format: Incorrect number of parameters passed to function.` and
+/// `util_printd_expected.txt` reads `util.printd: …`, not the bare message.
+///
+/// Roughly seventy of the golden assertions are arity checks, so a bare
+/// message fails all of them — which is why this is a test rather than a
+/// comment.
+#[test]
+fn every_thrown_error_carries_the_function_name() {
+    let caught = |source: &str| {
+        let mut cascade = session();
+        let script = format!("try {{ {source} }} catch (e) {{ app.alert(e.message); }}");
+        assert!(
+            cascade.run(&script, "test"),
+            "the wrapper itself must not throw"
+        );
+        cascade.transcript_text()
+    };
+
+    // An `AF*` global: bare name, no dot.
+    assert_eq!(
+        caught("AFDate_Format();"),
+        format!("Alert: AFDate_Format: {}\n", bind_param_error())
+    );
+    // A `util` method: class, dot, property.
+    assert_eq!(
+        caught("util.printd();"),
+        format!("Alert: util.printd: {}\n", bind_param_error())
+    );
+    assert_eq!(
+        caught("util.printf();"),
+        format!("Alert: util.printf: {}\n", bind_param_error())
+    );
+    // And `app.alert` itself, which is how `app_methods.in` reaches it.
+    assert_eq!(
+        caught("app.alert();"),
+        format!("Alert: app.alert: {}\n", bind_param_error())
+    );
+    // `AFDate_KeystrokeEx` is the one with its own arity message, and it is
+    // qualified the same way.
+    assert_eq!(
+        caught("AFDate_KeystrokeEx();"),
+        "Alert: AFDate_KeystrokeEx: AFDate_KeystrokeEx's parameter size not correct\n"
+    );
+}
+
 // ---- console, util ----
 
 /// All four `console` methods are empty upstream, so `println` records
@@ -741,8 +794,9 @@ fn the_declined_methods_answer_the_oracles_own_message() {
         assert!(cascade.run(&source, "test"));
         assert_eq!(
             cascade.transcript_text(),
-            "Alert: Operation not supported.\n",
-            "app.{name} must answer the oracle's own message"
+            format!("Alert: app.{name}: Operation not supported.\n"),
+            "app.{name} must answer the oracle's own message, qualified by \
+             its own name — `JSFormatErrorString`, js_resources.cpp:97-108"
         );
     }
 }
