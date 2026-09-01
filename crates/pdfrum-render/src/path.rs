@@ -550,6 +550,78 @@ mod tests {
         p
     }
 
+    /// The inline `Points` buffer must **reject** a path past its bound, never
+    /// panic on one, and its capacity must stay one above
+    /// `rect_candidate_points`'s own `> 32` guard.
+    ///
+    /// Those are two different numbers — a capacity of 33 and a guard at 32 —
+    /// and they have to agree: the guard fires *after* a push, and a closed
+    /// candidate appends one more point at the end, so 33 is the smallest
+    /// capacity that does not turn a legal closed rectangle into a rejection.
+    /// Lowering `CAP` to 32 would still not panic, which is exactly why this is
+    /// a test rather than a comment: the failure would be silent and would look
+    /// like a rendering bug, not like a bounds bug.
+    #[test]
+    fn the_rect_candidate_buffer_rejects_rather_than_panicking() {
+        // Well past the bound: a hundred-segment polyline. The scan must
+        // decline it, and must do so without unwinding.
+        let mut long = BezPath::new();
+        long.move_to((0.0, 0.0));
+        for i in 1..100 {
+            long.line_to((f64::from(i), f64::from(i % 7)));
+        }
+        assert_eq!(path_rect(&long, Affine::IDENTITY), None);
+
+        // Exactly at the guard: 33 points is one past `> 32`, so it is
+        // declined too — and the decline is the guard's, not the buffer's.
+        let mut at_bound = BezPath::new();
+        at_bound.move_to((0.0, 0.0));
+        for i in 1..33 {
+            at_bound.line_to((f64::from(i), 0.0));
+        }
+        assert_eq!(path_rect(&at_bound, Affine::IDENTITY), None);
+
+        // And the capacity really is one clear of the guard. The input that
+        // proves it is a rectangle written with **repeated points** — thirty-two
+        // of them, which survives the `> 32` guard exactly, is closed, and does
+        // not end where it started, so `rect_candidate_points` appends a
+        // thirty-third. `normalize_points` then collapses the duplicates back to
+        // five and the fast path recognises it.
+        //
+        // With a capacity of 32 that final append fails, the candidate is
+        // rejected, and this rectangle silently stops being hard-edged — a
+        // rendering change, not a crash, which is why the assertion is on the
+        // recognition and not merely on the constant.
+        let mut padded = BezPath::new();
+        padded.move_to((0.0, 0.0));
+        for corner in [(10.0, 0.0), (10.0, 5.0), (0.0, 5.0)] {
+            // Ten repeats of each corner: 1 + 3*10 = 31 points, plus one more
+            // repeat below to reach the guard exactly.
+            for _ in 0..10 {
+                padded.line_to(corner);
+            }
+        }
+        padded.line_to((0.0, 5.0));
+        padded.close_path();
+        assert_eq!(
+            padded.elements().len() - 1,
+            32,
+            "the candidate must sit exactly on the guard for this to bite"
+        );
+        assert_eq!(
+            path_rect(&padded, Affine::IDENTITY),
+            Some(Rect::new(0.0, 0.0, 10.0, 5.0)),
+            "a rectangle written with repeated points must still be recognised"
+        );
+
+        // The ordinary four-corner case, for good measure.
+        assert!(
+            path_rect(&rect_path(0.0, 0.0, 10.0, 5.0), Affine::IDENTITY).is_some(),
+            "a closed rectangle must still be recognised"
+        );
+        const { assert!(Points::CAP == 33) };
+    }
+
     #[test]
     fn is_available_matrix_is_not_a_determinant_test() {
         // A genuinely singular matrix passes; only the two collapsing
