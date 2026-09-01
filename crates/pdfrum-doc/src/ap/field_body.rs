@@ -1028,6 +1028,25 @@ pub fn field_value<R: Resolve>(dict: &Dict, r: &R) -> String {
 /// index matches nothing — which is why the `/I` fallback selects nothing at
 /// all. A number-valued selection object is the one shape read as an index
 /// directly, and it is read before the text comparison rather than through it.
+///
+/// # This is the appearance's answer, and it is not the only one
+///
+/// Upstream reads `/V` and `/I` **two different ways**, and they disagree.
+/// This function is the one that draws:
+/// `CPDFSDK_AppStream::SetAsListBox` asks `CPDF_FormField::GetSelectedIndex`,
+/// which reads `GetValueOrSelectedIndicesObject` — `/V` first, `/I` only in
+/// its absence — and then matches each entry's text against the option
+/// values (`core/fpdfdoc/cpdf_formfield.cpp`, `GetSelectedIndex`). An integer
+/// index has no text that names an option, so `/I` alone draws no band.
+///
+/// The *interaction* reader is the other way round and lives in
+/// [`crate::form::selected_indices_for_interaction`]: `/I` first, as indices,
+/// with `/V` as the fallback. `listbox_form.pdf`'s
+/// `Listbox_MultiSelectMultipleIndices` is the fixture where the two part
+/// company — the oracle's `--annot` dump shows five text objects and **no**
+/// path for it, while an embedder asking about its rows is told 1 and 3 are
+/// selected. Making this function follow the interaction rule turns that
+/// fixture's row red; the two readers have to stay apart.
 #[must_use]
 pub fn selected_indices<R: Resolve>(dict: &Dict, options: &[Choice], r: &R) -> Vec<usize> {
     let Some(value) = inherited(dict, names::V, r).or_else(|| inherited(dict, names::I, r)) else {

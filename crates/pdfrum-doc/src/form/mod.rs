@@ -9,4 +9,7 @@ pub mod attr;
 pub mod field;
 
 pub use attr::{field_attr, full_name};
-pub use field::{Field, FieldEdit, FieldFlags, FieldKind, FieldValues, Form, Widget, apply};
+pub use field::{
+    Field, FieldEdit, FieldFlags, FieldKind, FieldValues, Form, Widget, apply,
+    selected_indices_for_interaction,
+};
