@@ -280,11 +280,26 @@ fn is_rect_pre_transform(points: &[Point]) -> bool {
 /// PDFium has and we must share.
 #[must_use]
 pub fn path_rect(path: &BezPath, matrix: Affine) -> Option<Rect> {
+    crate::walkprofile::alloc_items(
+        crate::walkprofile::Site::RectPoints,
+        6,
+        core::mem::size_of::<Point>(),
+    );
     let candidate = rect_candidate_points(path)?;
+    crate::walkprofile::alloc_items(
+        crate::walkprofile::Site::RectPoints,
+        candidate.len(),
+        core::mem::size_of::<Point>(),
+    );
     let points = normalize_points(&candidate)?;
     if !is_rect_pre_transform(&points) {
         return None;
     }
+    crate::walkprofile::alloc_items(
+        crate::walkprofile::Site::RectPoints,
+        points.len(),
+        core::mem::size_of::<Point>(),
+    );
     let transformed: Vec<Point> = points.iter().map(|&p| matrix * p).collect();
     for i in 1..transformed.len() {
         let (Some(&cur), Some(&prev)) = (transformed.get(i), transformed.get(i - 1)) else {

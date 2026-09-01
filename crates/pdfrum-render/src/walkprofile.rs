@@ -74,6 +74,23 @@ pub enum Phase {
     /// axis-aligned-rectangle test, the zero-area sub-path scan and the stroke
     /// split — everything a path object costs above the device call.
     PathPrep,
+    /// The per-object cull test in [`crate::walk::render_object_list`]:
+    /// [`crate::walk`]'s `object_bbox` and the four comparisons against the
+    /// list's object-space clip box. Added by M12b P3, which had to know
+    /// whether an object rejected early is cheap because the *test* is cheap.
+    Cull,
+    /// [`crate::path::path_rect`] and `snap_rect` — `draw_path`'s case 2, the
+    /// axis-aligned-rectangle fast path, which runs on every fill-only path
+    /// object whether or not it is a rectangle.
+    RectTest,
+    /// [`crate::zero_area::scan_into`] — `draw_path`'s case 3, which runs on
+    /// every fill-only non-glyph path object and on the corpus almost never
+    /// finds anything.
+    ZeroScan,
+    /// The geometry `draw_path`'s ordinary case hands the device: the path
+    /// transformed into device space and clamped by
+    /// [`crate::path::hard_clip`]. Two `BezPath` builds per fill, per object.
+    PathXform,
 }
 
 /// One allocation site in the walk, named by what it allocates.
@@ -105,6 +122,18 @@ pub enum Site {
     /// The `Vec<ZeroArea>` that scan returns, which is empty for the
     /// overwhelming majority of paths and still costs the call.
     ZeroAreaVec,
+    /// The device-space `BezPath` [`crate::paint::draw_path`]'s ordinary case
+    /// builds for a fill or a stroke, and the second one
+    /// [`crate::path::hard_clip`] builds from it. Two heap buffers the whole
+    /// length of the path, per drawn path object, discarded at the device
+    /// call. **Not in P2's site list**, which is why P2's "allocation is 0.6%"
+    /// covered less of the walk than it appeared to — see M12b-P3.md §3.
+    PathGeometry,
+    /// The three `Vec<Point>`s [`crate::path::path_rect`] builds — the
+    /// candidate points, their normalization, and their transform — on every
+    /// fill-only path object, whether or not it turns out to be a rectangle.
+    /// Also absent from P2's list.
+    RectPoints,
 }
 
 /// Everything one render's walk accumulated.
@@ -114,15 +143,15 @@ pub enum Site {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Profile {
     /// Time in each phase, indexed as [`Phase`] orders them.
-    pub phase_time: [Duration; 6],
+    pub phase_time: [Duration; 10],
     /// How many times each phase was entered.
-    pub phase_calls: [u64; 6],
+    pub phase_calls: [u64; 10],
     /// How many allocations each site made, indexed as [`Site`] orders them.
-    pub site_count: [u64; 8],
+    pub site_count: [u64; 10],
     /// How many bytes those allocations asked for, where the size is knowable
     /// from the value itself (a `Vec`'s capacity times its element size, a
     /// `BezPath`'s element count times a `PathEl`).
-    pub site_bytes: [u64; 8],
+    pub site_bytes: [u64; 10],
 }
 
 impl Phase {
@@ -136,17 +165,25 @@ impl Phase {
             Phase::Image => 3,
             Phase::Shading => 4,
             Phase::PathPrep => 5,
+            Phase::Cull => 6,
+            Phase::RectTest => 7,
+            Phase::ZeroScan => 8,
+            Phase::PathXform => 9,
         }
     }
 
     /// The phases in the order the arrays index them.
-    pub const ALL: [Phase; 6] = [
+    pub const ALL: [Phase; 10] = [
         Phase::Clip,
         Phase::Color,
         Phase::Glyphs,
         Phase::Image,
         Phase::Shading,
         Phase::PathPrep,
+        Phase::Cull,
+        Phase::RectTest,
+        Phase::ZeroScan,
+        Phase::PathXform,
     ];
 
     /// A short name for a report column.
@@ -159,6 +196,10 @@ impl Phase {
             Phase::Image => "image",
             Phase::Shading => "shading",
             Phase::PathPrep => "path prep",
+            Phase::Cull => "cull",
+            Phase::RectTest => "rect test",
+            Phase::ZeroScan => "zero scan",
+            Phase::PathXform => "path xform",
         }
     }
 }
@@ -176,11 +217,13 @@ impl Site {
             Site::CtxClone => 5,
             Site::ZeroAreaPoints => 6,
             Site::ZeroAreaVec => 7,
+            Site::PathGeometry => 8,
+            Site::RectPoints => 9,
         }
     }
 
     /// The sites in the order the arrays index them.
-    pub const ALL: [Site; 8] = [
+    pub const ALL: [Site; 10] = [
         Site::ClipVec,
         Site::ClipPath,
         Site::GlyphVec,
@@ -189,6 +232,8 @@ impl Site {
         Site::CtxClone,
         Site::ZeroAreaPoints,
         Site::ZeroAreaVec,
+        Site::PathGeometry,
+        Site::RectPoints,
     ];
 
     /// A short name for a report row.
@@ -203,6 +248,8 @@ impl Site {
             Site::CtxClone => "RenderCtx clone",
             Site::ZeroAreaPoints => "zero-area Vec<Point>",
             Site::ZeroAreaVec => "zero-area Vec<ZeroArea>",
+            Site::PathGeometry => "draw_path BezPath",
+            Site::RectPoints => "rect-test Vec<Point>",
         }
     }
 }
@@ -221,10 +268,10 @@ mod imp {
         /// form's objects are walked from inside the phase timing an enclosing
         /// object.
         static PROFILE: Cell<Profile> = const { Cell::new(Profile {
-            phase_time: [Duration::ZERO; 6],
-            phase_calls: [0; 6],
-            site_count: [0; 8],
-            site_bytes: [0; 8],
+            phase_time: [Duration::ZERO; 10],
+            phase_calls: [0; 10],
+            site_count: [0; 10],
+            site_bytes: [0; 10],
         }) };
     }
 
@@ -265,6 +312,32 @@ mod imp {
         PROFILE.set(p);
         out
     }
+
+    /// The moment a phase began, for a caller that cannot wrap its body in a
+    /// closure — [`crate::zero_area::scan_into`], whose result borrows the
+    /// scratch it was handed, so a closure would have to hand that borrow back
+    /// out of itself or run the scan twice.
+    #[derive(Debug, Clone, Copy)]
+    pub struct Started(std::time::Instant);
+
+    impl Started {
+        /// Charge the time since this was taken to `phase`.
+        pub fn end(self, phase: Phase) {
+            let elapsed = self.0.elapsed();
+            let mut p = PROFILE.get();
+            let i = phase.index();
+            if let (Some(t), Some(c)) = (p.phase_time.get_mut(i), p.phase_calls.get_mut(i)) {
+                *t = t.saturating_add(elapsed);
+                *c = c.saturating_add(1);
+            }
+            PROFILE.set(p);
+        }
+    }
+
+    /// Start a phase closed by [`Started::end`].
+    pub fn phase_start() -> Started {
+        Started(std::time::Instant::now())
+    }
 }
 
 #[cfg(not(feature = "walk-profile"))]
@@ -286,9 +359,25 @@ mod imp {
     pub fn phase<T>(_phase: Phase, body: impl FnOnce() -> T) -> T {
         body()
     }
+
+    /// A phase's start, which without the feature carries nothing.
+    #[derive(Debug, Clone, Copy)]
+    pub struct Started;
+
+    impl Started {
+        /// A no-op without the feature.
+        #[inline]
+        pub fn end(self, _phase: Phase) {}
+    }
+
+    /// A no-op without the feature.
+    #[inline]
+    pub fn phase_start() -> Started {
+        Started
+    }
 }
 
-pub use imp::{alloc, phase, take};
+pub use imp::{Started, alloc, phase, phase_start, take};
 
 /// Record one allocation whose size is the capacity of a slice-shaped value.
 ///

@@ -122,7 +122,9 @@ fn draw_path_inner<B: RasterBackend>(
     if paint.stroke.is_none()
         && !opts.rect_aa
         && let Some(fill) = paint.fill
-        && let Some(rect_f) = path_rect(path, to_device)
+        && let Some(rect_f) = crate::walkprofile::phase(crate::walkprofile::Phase::RectTest, || {
+            path_rect(path, to_device)
+        })
         && let Some(snapped) = snap_rect(rect_f)
     {
         if fill.is_invisible() {
@@ -229,8 +231,20 @@ fn draw_path_inner<B: RasterBackend>(
     if let Some(fill) = paint.fill
         && !fill.is_invisible()
     {
+        let geometry = crate::walkprofile::phase(crate::walkprofile::Phase::PathXform, || {
+            // Two buffers, counted as two: the transformed copy and the
+            // clamped copy of *that*, each the whole length of the path.
+            for _ in 0..2 {
+                crate::walkprofile::alloc_items(
+                    crate::walkprofile::Site::PathGeometry,
+                    path.elements().len(),
+                    core::mem::size_of::<PathEl>(),
+                );
+            }
+            hard_clip(&(to_device * path.clone()))
+        });
         device.fill_path(
-            &hard_clip(&(to_device * path.clone())),
+            &geometry,
             Affine::IDENTITY,
             &Brush::Solid(fill.to_peniko()),
             paint.rule,
@@ -247,11 +261,24 @@ fn draw_path_inner<B: RasterBackend>(
         // stroke width isotropic under an anisotropic CTM. `BuildAggPath` is
         // called with that same matrix1, so the degenerate-subpath nudge is
         // one pixel *there* — see `nudge_degenerate_subpaths`.
-        device.stroke_path(
-            &hard_clip(&crate::path::nudge_degenerate_subpaths(
+        let geometry = crate::walkprofile::phase(crate::walkprofile::Phase::PathXform, || {
+            // Four buffers on this arm: the transformed copy, the two element
+            // vectors `nudge_degenerate_subpaths` takes, its output, and the
+            // clamp. Counted as four because the question is allocator traffic.
+            for _ in 0..4 {
+                crate::walkprofile::alloc_items(
+                    crate::walkprofile::Site::PathGeometry,
+                    path.elements().len(),
+                    core::mem::size_of::<PathEl>(),
+                );
+            }
+            hard_clip(&crate::path::nudge_degenerate_subpaths(
                 &(matrices.pre * path.clone()),
                 path,
-            )),
+            ))
+        });
+        device.stroke_path(
+            &geometry,
             matrices.post,
             &Brush::Solid(color.to_peniko()),
             &stroke,

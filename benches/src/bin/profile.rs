@@ -341,6 +341,16 @@ fn report(
 /// Without the `walk-profile` feature every counter is zero and this prints the
 /// remedy instead of a table of zeroes, because a table of zeroes reads as a
 /// finding.
+/// Whether a phase's time is already inside another phase's, so that summing
+/// it into the named total would double-count.
+fn nested(phase: pdfrum_render::walkprofile::Phase) -> bool {
+    use pdfrum_render::walkprofile::Phase;
+    matches!(
+        phase,
+        Phase::PathPrep | Phase::RectTest | Phase::ZeroScan | Phase::PathXform
+    )
+}
+
 fn walk_report(iters: f64, engine: std::time::Duration) {
     use pdfrum_render::walkprofile::{Phase, Site};
 
@@ -375,8 +385,12 @@ fn walk_report(iters: f64, engine: std::time::Duration) {
         // decorator has already charged to RASTER. Adding it to `named` would
         // subtract raster time from the interpretation residue and make the
         // residue negative on a path-heavy document, so it is reported and
-        // excluded from the sum, with the note below saying so.
-        if phase != Phase::PathPrep {
+        // excluded from the sum, with the note below saying so. The three
+        // phases M12b P3 added inside it — the rect test, the zero-area scan
+        // and the geometry build — nest in `PathPrep` for the same reason and
+        // are excluded on the same grounds; `Cull` is disjoint from every
+        // other phase and does count.
+        if !nested(phase) {
             named += ms;
         }
         eprintln!(
@@ -388,10 +402,10 @@ fn walk_report(iters: f64, engine: std::time::Duration) {
                 0.0
             },
             calls_per_iter(*c, iters),
-            if phase == Phase::PathPrep {
-                "  (includes its own fill/stroke calls, counted in RASTER)"
-            } else {
-                ""
+            match phase {
+                Phase::PathPrep => "  (includes its own fill/stroke calls, counted in RASTER)",
+                Phase::RectTest | Phase::ZeroScan | Phase::PathXform => "  (nested in path prep)",
+                _ => "",
             },
         );
     }
@@ -438,7 +452,10 @@ fn walk_report(iters: f64, engine: std::time::Duration) {
         "`RenderOptions clone` and `RenderCtx clone` are stack moves, not heap\n\
          allocations — every field of both is Copy. Their byte column is the\n\
          value's size and is there for scale, not for allocator traffic; the\n\
-         count is what those two rows mean. An arena reaches the other four."
+         count is what those two rows mean; every other row is real allocator\n\
+         traffic. `draw_path BezPath` and `rect-test Vec<Point>` were added by\n\
+         M12b P3 and are in `paint.rs`/`path.rs` rather than in `walk.rs`,\n\
+         which is why P2's site list did not have them."
     );
 }
 

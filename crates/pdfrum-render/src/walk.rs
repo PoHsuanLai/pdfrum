@@ -342,7 +342,7 @@ pub fn render_object_list<B: RasterBackend>(
             continue;
         }
         if let Some(cull) = cull
-            && culled(object, cull)
+            && crate::walkprofile::phase(crate::walkprofile::Phase::Cull, || culled(object, cull))
         {
             continue;
         }
