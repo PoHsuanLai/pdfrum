@@ -719,3 +719,110 @@ Nothing else is needed: `merge_over` already carries hover, and
 `push_open_popup` does the rest. On the first commit that supplies it, the
 three rows above should move; the other fifteen `form-events` rows are
 untouched by hover and should not.
+
+---
+
+## 5. Cross-vendor review (Grok Build), and what it found
+
+Read-only review of `567f0b9^..6da06a3`, path-scoped to this crate. One
+blocker, two should-fix, three nits. Every C++ claim below was re-read before
+acting on it.
+
+| # | Finding | Disposition |
+|---|---|---|
+| 1 | **blocker** — `word_index_of_place` sends a wrapped line's header to index 0 | **Fixed**, `8c61ffe` |
+| 2 | should-fix — a selection recolours the whole `BT` run white | **Fixed but held back** — see below |
+| 3 | should-fix — `Place::default()` is `(0, 0, 0)` | **Fixed**, `8c61ffe` |
+| 4 | nit — caret is a filled `re f` where C++ strokes | **Declined**, reasoning below |
+| 5 | nit — `FocusBox` docs claim a read-only combo is `Inflated` | **Fixed**, `8c61ffe` |
+| 6 | nit — `field_body::generate` grew two required parameters | **No action**, reasoning below |
+
+Two further items from an earlier draft of the same review are recorded as
+**withdrawn in place**: its finding 2 asked for a `6da06a3` section in this
+document and a refreshed test count, both of which `ee4a53e` had already
+landed as §6 above; and its finding 4 (the out-of-range section break) is the
+second half of what `8c61ffe` fixes.
+
+### 1 — the blocker, and why the test suite did not catch it
+
+`word_index_of_place` never read `place.line`. A `word == -1` header folded to
+index 0 whatever line it sat on, and `place_at_point` returns exactly that
+place for a click left of a line's first midpoint — so clicking the start of a
+wrapped field's second visual line reported the start of the whole field.
+
+Upstream folds first. `WordPlaceToWordIndex`
+(`core/fpdfdoc/cpvt_variabletext.cpp:361-379`) runs `UpdateWordPlace`, whose
+`PrevLineHeaderPlace` (`:715-720`) rewrites `word < 0 && line > 0` to the
+previous line's end before anything is counted.
+
+The reason this survived is worth recording: `every_place_survives_the_index_round_trip`
+**skipped** `word < 0 && l > 0`, with a comment calling it "the same collapse
+upstream performs". The collapse is real — but its target is the line above's
+end, not zero, and skipping the case tested nothing. The test now computes and
+asserts the target. Two direct pins were added:
+`a_wrapped_lines_header_indexes_to_the_end_of_the_line_above` and
+`a_place_past_the_last_section_indexes_to_the_very_end`.
+
+### 2 — the selection colour, fixed and held back
+
+`wrap_text` painted the entire `BT` run `Color::Gray(1.0)` whenever any band
+existed. `CPWL_EditImpl::DrawEdit` (`fpdfsdk/pwl/cpwl_edit_impl.cpp:650-653`)
+whitens only words inside the selected range — `place > wrSelect.BeginPos &&
+place <= wrSelect.EndPos` — and leaves the rest in `crTextFill`. A partial
+selection of `ABCDEFGH` covering `CD` drew AB and EFGH white on the untinted
+field.
+
+The fix paints the run once in the field's colour and again in white clipped
+to the bands, which keeps `Highlight`'s rectangle-only API. It is written and
+tested (`a_partial_selection_leaves_the_unselected_run_in_the_fields_colour`,
+`no_selection_writes_one_text_pass_and_no_clip`) but **is not committed**,
+because it moves an existing row down:
+
+| row | before | after |
+|---|---|---|
+| `form_textfield_selected_ltr.in#form-events` | 0.968879 | 0.968892 |
+| `form_textfield_selected_rtl.in#form-events` | 0.939735 | **0.924054** |
+
+The LTR row confirms the fix: our band is x 51-100 and so is the oracle's, and
+the render becomes the oracle's — white `abc... def` on a full band. The RTL
+row drops because of two defects that are **not in this crate**, and the old
+all-white behaviour was masking the second of them: our RTL glyphs are Latin
+mojibake where the oracle draws Hebrew, and our RTL band is x 51-57 against
+the oracle's x 51-101 — about a seventh of it, and the band *rectangles* are
+supplied by `pdfrum-form`. Painting everything white made our wrong glyphs
+white across the whole field, which resembled the oracle's mostly-white
+selected text and scored better. The metric was rewarding the bug.
+
+The working version is at
+`scratchpad/field_body_with_f2.rs`, the measurement at
+`scratchpad/m14-rtl-selection-drop.md`. It should land with, or after, the RTL
+band fix.
+
+### 4 — the caret primitive, declined
+
+The review notes `CPWL_Caret::DrawThisAppearance` (`cpwl_caret.cpp:33-55`)
+*strokes* a 0.4-wide line at `left + width * 0.5` where we fill a 0.4-wide
+rectangle. With butt caps both cover `[x, x + 0.4]`, so the two agree except
+possibly on the cap pixels — and the review says as much. The filled rectangle
+is what brief OQ5 (`docs/design/pdfrum-form.md:3454`) specifies, and no
+focused-field golden currently shows a caret-column disagreement to justify
+diverging from the brief. Left as is, with the difference recorded here so the
+next reader of a one-pixel caret diff knows where to look.
+
+### 6 — the signature, no action
+
+`field_body::generate` did grow two required parameters. It is `pub` but the
+frozen caller SPEC §10 names is `widget::generate_with_text`, which is
+unchanged and forwards two `None`s; `field_body::generate`'s only in-tree
+caller is `widget.rs`. No out-of-crate caller exists. Adding wrapper overloads
+to preserve a signature nothing calls would be ceremony.
+
+### Gates
+
+`cargo fmt -p pdfrum-doc -- --check`; `cargo clippy -p pdfrum-doc
+--all-targets -- -D warnings`; `cargo nextest run -p pdfrum-doc` (402 pass —
+404 with the held-back §2 change); `cargo test --doc -p pdfrum-doc` (3 pass);
+`cargo build -p pdfrum-form -p pdfrum -p pdfrum-tool`; `cargo nextest run
+--workspace` (3508 pass, 1 skipped). Conformance `run --check-regressions`:
+**no regressions**, and a field-by-field board diff moves **0 rows**. The
+byte-identity golden is untouched.
