@@ -15,9 +15,11 @@
 #   2. `pdfrum-tool`'s default features likewise, because the CLI is what a
 #      headless or CI build actually runs.
 #   3. No crate in the workspace *except* pdfrum-raster-vello-gpu depends on
-#      `vello` or `wgpu`. This is the one that catches the accident the other
-#      two would eventually catch anyway — a new crate reaching for the GPU
-#      backend "just for a test" — at the point where it is one line to undo.
+#      `vello` or `wgpu` — every member, `conformance/` and `benches/`
+#      included, not just the ones under `crates/`. This is the one that
+#      catches the accident the other two would eventually catch anyway — a
+#      crate reaching for the GPU backend "just for a test" — at the point
+#      where it is one line to undo.
 #
 # Run standalone, or via scripts/ci.sh which calls it.
 set -euo pipefail
@@ -56,9 +58,27 @@ check_clean pdfrum-tool "pdfrum-tool (default features)"
 # Every workspace member but the GPU backend itself. `cargo metadata` would be
 # the tidy way to enumerate them; the directory listing is used instead so this
 # script needs no JSON parser and stays readable.
+#
+# `crates/*/` is not the whole workspace. `conformance/` and `benches/` are
+# members too, and they are the two most likely places for the accident this
+# check exists to catch — a harness reaching for the GPU backend "just to
+# compare against it" is exactly how a dev-dependency becomes a normal one.
+# They are also the members whose directory name is *not* their crate name
+# (`conformance` and `pdfrum-bench`), so the name is read from each manifest
+# rather than guessed from the path.
 echo "==> M12c isolation: no other workspace crate reaches the GPU stack"
-for dir in crates/*/; do
-    crate=$(basename "$dir")
+for manifest in crates/*/Cargo.toml conformance/Cargo.toml \
+                benches/Cargo.toml benches/corpus-list/Cargo.toml; do
+    [ -f "$manifest" ] || continue
+    # The first `name =` under `[package]`, which is the package's own; a
+    # dependency's `name =` would be under a `[dependencies.…]` table further
+    # down, and every manifest here declares `[package]` first.
+    crate=$(sed -n 's/^name[[:space:]]*=[[:space:]]*"\(.*\)"/\1/p' "$manifest" | head -1)
+    if [ -z "$crate" ]; then
+        echo "error: could not read a package name from $manifest" >&2
+        fail=1
+        continue
+    fi
     [ "$crate" = "$gpu_crate" ] && continue
     check_clean "$crate" "$crate"
 done
