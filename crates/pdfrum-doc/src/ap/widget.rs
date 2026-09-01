@@ -305,7 +305,7 @@ fn build<R: Resolve>(
     // how a checkbox keeps producing exactly the stream it did before.
     let body = catalog
         .zip(font)
-        .and_then(|(catalog, font)| crate::ap::field_body::generate(dict, catalog, font, r));
+        .and_then(|(catalog, font)| crate::ap::field_body::generate(dict, catalog, font, r, None));
     let fonts = body.as_ref().and_then(|body| body.font_resources.clone());
     if let Some(body) = &body {
         out.raw(&String::from_utf8_lossy(&body.stream));
