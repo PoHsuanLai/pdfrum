@@ -682,6 +682,34 @@ fn no_io_is_reachable_from_a_script() {
     );
 }
 
+/// A timer is **recorded and never fired**, and the object it returns is the
+/// opaque handle `constructor.in` asks about.
+///
+/// Not firing is the ruling rather than a gap: upstream's registry is a
+/// process-wide `map<int32_t, GlobalTimer*>` (`fxjs/global_timer.cpp:18-19`)
+/// which STYLE §1 forbids outright, a timer inside an alert never fires
+/// anyway (`cjs_app.cpp:433-441`), and a one-shot with `ms == 0` never runs
+/// its script at all (`:418-423`).
+#[test]
+fn a_timer_is_recorded_and_never_fired() {
+    let mut cascade = session();
+    assert!(cascade.run(
+        "var t = app.setTimeOut('app.alert(\"fired\")', 1000);\n\
+         app.alert(typeof t);",
+        "test"
+    ));
+    assert_eq!(
+        cascade.transcript_text(),
+        "Alert: object\n",
+        "the timer's own script must not have run"
+    );
+    assert_eq!(
+        cascade.timers(),
+        vec![("app.alert(\"fired\")".to_string(), 1000)],
+        "…but what the document wanted is recorded"
+    );
+}
+
 /// `app.launchURL` exists and does nothing, which is upstream's own body —
 /// so there is nothing to decline, and nothing happens.
 #[test]

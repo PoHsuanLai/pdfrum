@@ -269,6 +269,48 @@ fn declined(_this: &JsValue, _args: &[JsValue], _context: &mut Context) -> JsRes
     Err(unsupported())
 }
 
+/// `app.setTimeOut(cExpr, nMilliseconds)` and `app.setInterval`.
+///
+/// **The script and the interval are recorded; nothing ever fires them.**
+///
+/// Three facts make that the right answer rather than a shortfall. The
+/// machinery upstream is a **process-wide** `map<int32_t, GlobalTimer*>`
+/// (`fxjs/global_timer.cpp:18-19`), which STYLE §1 forbids outright ("No
+/// global state. None."). `RunJsScript` bails entirely while the runtime is
+/// blocking (`cjs_app.cpp:433-441`), so a timer inside an alert never fires
+/// anyway. And a one-shot with `ms == 0` **never runs its script at all**,
+/// because `TimerProc` gates on `!IsOneShot() || GetTimeOut() > 0`
+/// (`:418-423`).
+///
+/// No fixture calls `app.setInterval`, and the one that touches `setTimeOut`
+/// (`constructor.in`) only asks whether the returned object's constructor is
+/// callable. M14's D14 reserved `advance_time` as the step function where a
+/// later milestone fires these; the registry is per-session, never global.
+fn app_set_timer(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    if args.len() < 2 {
+        return Err(param_error());
+    }
+    let script = string_of(&args.get_or_undefined(0).clone(), context)?;
+    let interval = args.get_or_undefined(1).clone().to_i32(context)?;
+    let id = if let Some(host) = host(context) {
+        let mut state = host.borrow_mut();
+        state.timers.push((script, interval));
+        i32::try_from(state.timers.len()).unwrap_or(i32::MAX)
+    } else {
+        0
+    };
+    // `CJS_TimerObj` carries an integer id and **nothing else**: no
+    // properties, no methods (`fxjs/cjs_timerobj.cpp:20-23`).
+    let timer = ObjectInitializer::new(context)
+        .property(
+            boa_engine::js_string!("timeOut"),
+            JsValue::from(id),
+            Attribute::all(),
+        )
+        .build();
+    Ok(JsValue::from(timer))
+}
+
 // ---- console ----
 
 /// `console.println`. **Upstream discards its argument**
@@ -475,7 +517,17 @@ fn install_app(context: &mut Context) -> JsResult<()> {
         let mut init = ObjectInitializer::new(context);
         init.function(native(app_alert), boa_engine::js_string!("alert"), 4)
             .function(native(app_beep), boa_engine::js_string!("beep"), 1)
-            .function(native(app_response), boa_engine::js_string!("response"), 5);
+            .function(native(app_response), boa_engine::js_string!("response"), 5)
+            .function(
+                native(app_set_timer),
+                boa_engine::js_string!("setTimeOut"),
+                2,
+            )
+            .function(
+                native(app_set_timer),
+                boa_engine::js_string!("setInterval"),
+                2,
+            );
         // The eight that are no-ops returning success upstream. Reproducing
         // "does nothing, succeeds" is correct behaviour, not a shortcut — a
         // script calling `app.browseForDoc` must not throw.

@@ -16,6 +16,11 @@ use super::transcript::TranscriptLine;
 pub(crate) struct HostState {
     /// Every line a script has asked the host to print, in order.
     pub(crate) transcript: Vec<TranscriptLine>,
+    /// Timers a script asked for: the script source and its interval in
+    /// milliseconds. **Recorded and never fired** — see `app.setTimeOut`.
+    /// Per-session, because upstream's registry is process-wide and STYLE §1
+    /// forbids that outright.
+    pub(crate) timers: Vec<(String, i32)>,
 }
 
 /// The handle the context holds.
