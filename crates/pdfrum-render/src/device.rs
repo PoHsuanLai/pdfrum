@@ -129,6 +129,48 @@ pub trait RenderDevice {
     /// is where the two-tap kernel is the right one and `quality` chooses it.
     fn draw_image(&mut self, img: &RasterImage, t: Affine, quality: ImageQuality, alpha: f32);
 
+    /// Blit one glyph whose coverage is **three values per pixel**, one per LCD
+    /// stripe, each merged into its own destination channel.
+    ///
+    /// The oracle's `ClearType` text
+    /// (`DrawNormalTextHelper`'s `MergeGammaAdjustRgb` arm): for each pixel and
+    /// each channel `c`, `dest_c = (dest_c·(255 − a_c) + colour_c·a_c) / 255`
+    /// where `a_c = coverage_c · colour_alpha / 255`, and the destination is
+    /// left opaque. Three independent alphas is exactly what
+    /// [`RenderDevice::draw_image`] cannot express — one RGBA pixel carries one
+    /// — which is why this is its own primitive rather than a flag on that one.
+    ///
+    /// `origin` is the device position of the bitmap's top-left corner, in
+    /// whole pixels: both terms of it are integers by construction, so there is
+    /// nothing to resample and a backend blits texel for pixel.
+    ///
+    /// **Defaulted to grayscale.** The default averages each pixel's three
+    /// coverages and draws the result through [`RenderDevice::draw_image`], so
+    /// a backend that cannot address channels separately still renders the text
+    /// — in grey, without the colour fringes, which is what every *other* run
+    /// of text on the page looks like anyway. That is a visible difference from
+    /// the oracle on live-edit text and nothing worse: no glyph goes missing and
+    /// no geometry moves. A backend that owns its pixels should override it.
+    fn draw_glyph_lcd(
+        &mut self,
+        glyph: &crate::glyph::SubpixelBitmap,
+        origin: (f64, f64),
+        colour: peniko::Color,
+    ) {
+        let Some(gray) = crate::glyph::average_to_gray(glyph) else {
+            return;
+        };
+        let Some(pixels) = crate::glyph::recolour(&gray, colour) else {
+            return;
+        };
+        self.draw_image(
+            &pixels,
+            Affine::translate(origin),
+            ImageQuality::Nearest,
+            1.0,
+        );
+    }
+
     /// Intersect the clip with `path` (already in device space).
     fn push_clip(&mut self, path: &BezPath, rule: FillRule);
 

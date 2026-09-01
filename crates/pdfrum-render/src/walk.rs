@@ -1258,6 +1258,7 @@ fn render_text<B: RasterBackend>(
                 glyph,
                 placement,
                 fill,
+                ctx.opts.effective_text_aa(),
             );
             continue;
         }
@@ -1303,6 +1304,7 @@ fn draw_glyph_bitmap(
     glyph: &crate::text::PlacedGlyph,
     placement: crate::text::BitmapPlacement,
     fill: Argb,
+    text_aa: crate::options::TextAa,
 ) {
     if fill.is_invisible() {
         return;
@@ -1324,20 +1326,35 @@ fn draw_glyph_bitmap(
     }) else {
         return;
     };
+    // Both spellings place the bitmap the same way, so the corner is computed
+    // once: the snapped origin plus FreeType's box, both whole numbers, so
+    // there is nothing to resample either way.
+    let corner = |left: i32, top: i32| {
+        (
+            placement.origin.x + f64::from(left),
+            placement.origin.y + f64::from(top),
+        )
+    };
+    if matches!(text_aa, crate::options::TextAa::LcdSubpixel) {
+        // `normalize = false`: the triples stay apart and each becomes one
+        // destination channel's coverage. It needs its own device call because
+        // three alphas do not fit in one RGBA pixel.
+        let bitmap = lcd.to_subpixel(placement.phase);
+        if bitmap.is_empty() {
+            return;
+        }
+        device.draw_glyph_lcd(&bitmap, corner(bitmap.left, bitmap.top), fill.to_peniko());
+        return;
+    }
     let bitmap = lcd.to_gray(placement.phase);
     let Some(pixels) = crate::glyph::recolour(&bitmap, fill.to_peniko()) else {
         return;
     };
     // `draw_image` maps the image's own pixel grid, so a plain translation puts
-    // texel (0, 0) at the bitmap's top-left corner. Both terms are whole
-    // numbers: the snapped origin by construction, and the bitmap's corner
-    // because FreeType's box is computed in whole pixels.
+    // texel (0, 0) at the bitmap's top-left corner.
     device.draw_image(
         &pixels,
-        Affine::translate((
-            placement.origin.x + f64::from(bitmap.left),
-            placement.origin.y + f64::from(bitmap.top),
-        )),
+        Affine::translate(corner(bitmap.left, bitmap.top)),
         ImageQuality::Nearest,
         1.0,
     );

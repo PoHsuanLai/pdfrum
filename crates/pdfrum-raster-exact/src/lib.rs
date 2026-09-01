@@ -498,6 +498,44 @@ impl RenderDevice for ExactDevice {
         self.draw_image_sampled(img, t, quality, constant);
     }
 
+    fn draw_glyph_lcd(
+        &mut self,
+        glyph: &pdfrum_render::glyph::SubpixelBitmap,
+        origin: (f64, f64),
+        colour: peniko::Color,
+    ) {
+        let [red, green, blue, alpha] = colour.to_rgba8().to_u8_array();
+        if alpha == 0 || glyph.is_empty() {
+            return;
+        }
+        // The origin is whole by construction — a snapped glyph origin plus a
+        // box computed in whole pixels — so this is a blit, not a resample, and
+        // a non-integer origin would mean the caller broke that invariant
+        // rather than that this should interpolate.
+        let (Some(dx), Some(dy)) = (whole(origin.0), whole(origin.1)) else {
+            return;
+        };
+        let target = match self.layers.last_mut() {
+            Some(layer) => &mut layer.target,
+            None => &mut self.base,
+        };
+        for row in 0..glyph.height {
+            let Some(y) = row.checked_add(dy) else {
+                continue;
+            };
+            for col in 0..glyph.width {
+                let Some(x) = col.checked_add(dx) else {
+                    continue;
+                };
+                let coverage = glyph.at(col, row);
+                if coverage == [0; 3] {
+                    continue;
+                }
+                target.merge_lcd_pixel(x, y, [red, green, blue], alpha, coverage);
+            }
+        }
+    }
+
     fn push_clip(&mut self, path: &BezPath, rule: FillRule) {
         let mask = self.coverage_of(path, rule, AntiAlias::On);
         self.push_clip_mask(mask);
@@ -1153,5 +1191,91 @@ mod tests {
         );
         let slow = backend.finish(slow);
         assert_eq!(fast.data(), slow.data());
+    }
+
+    /// One glyph pixel per column, with the stripes ramping across.
+    fn lcd_strip(width: usize, stripes: &[[u8; 3]]) -> pdfrum_render::glyph::SubpixelBitmap {
+        let mut channels = Vec::with_capacity(width * 3);
+        for x in 0..width {
+            let px = stripes.get(x % stripes.len()).copied().unwrap_or([0; 3]);
+            channels.extend_from_slice(&px);
+        }
+        let width = i32::try_from(width).unwrap_or(0);
+        pdfrum_render::glyph::SubpixelBitmap {
+            left: 0,
+            top: 0,
+            width,
+            height: 1,
+            channels,
+        }
+    }
+
+    #[test]
+    fn a_clear_type_glyph_reaches_the_pixels_with_its_fringes_intact() {
+        // The whole of M14 OWED item 2's pixel claim, through the trait rather
+        // than through `Target`: a black glyph whose three stripes differ comes
+        // out a *coloured* pixel, which no single-alpha image draw can produce.
+        let backend = ExactBackend::new();
+        let mut device = backend.new_target(3, 1, peniko::Color::WHITE);
+        device.draw_glyph_lcd(
+            &lcd_strip(3, &[[255, 128, 0], [255, 255, 255], [0, 128, 255]]),
+            (0.0, 0.0),
+            peniko::Color::BLACK,
+        );
+        let out = backend.finish(device);
+        assert_eq!(out.pixel(0, 0), Some([0, 127, 255, 255]));
+        assert_eq!(out.pixel(1, 0), Some([0, 0, 0, 255]), "no stripe survives");
+        assert_eq!(out.pixel(2, 0), Some([255, 127, 0, 255]));
+    }
+
+    #[test]
+    fn a_clear_type_glyph_lands_where_its_origin_says() {
+        // The origin is the bitmap's top-left corner in whole device pixels,
+        // the same convention `draw_image` uses for a glyph's gray blit — so a
+        // run that switches between the two spellings must not shift.
+        let backend = ExactBackend::new();
+        let mut device = backend.new_target(4, 2, peniko::Color::WHITE);
+        device.draw_glyph_lcd(
+            &lcd_strip(2, &[[255, 255, 255]]),
+            (2.0, 1.0),
+            peniko::Color::BLACK,
+        );
+        let out = backend.finish(device);
+        assert_eq!(out.pixel(0, 0), Some([255, 255, 255, 255]));
+        assert_eq!(out.pixel(2, 1), Some([0, 0, 0, 255]));
+        assert_eq!(out.pixel(3, 1), Some([0, 0, 0, 255]));
+    }
+
+    #[test]
+    fn a_clear_type_glyph_is_clipped_like_any_other_primitive() {
+        let backend = ExactBackend::new();
+        let mut device = backend.new_target(4, 1, peniko::Color::WHITE);
+        device.push_clip_rect(Rect::new(0.0, 0.0, 2.0, 1.0));
+        device.draw_glyph_lcd(
+            &lcd_strip(4, &[[255, 255, 255]]),
+            (0.0, 0.0),
+            peniko::Color::BLACK,
+        );
+        device.pop();
+        let out = backend.finish(device);
+        assert_eq!(out.pixel(1, 0), Some([0, 0, 0, 255]), "inside the clip");
+        assert_eq!(
+            out.pixel(2, 0),
+            Some([255, 255, 255, 255]),
+            "outside the clip, untouched"
+        );
+    }
+
+    #[test]
+    fn an_invisible_clear_type_glyph_paints_nothing() {
+        let backend = ExactBackend::new();
+        let mut device = backend.new_target(2, 1, peniko::Color::WHITE);
+        device.draw_glyph_lcd(
+            &lcd_strip(2, &[[255, 255, 255]]),
+            (0.0, 0.0),
+            peniko::Color::TRANSPARENT,
+        );
+        let out = backend.finish(device);
+        assert_eq!(out.pixel(0, 0), Some([255, 255, 255, 255]));
     }
 }
