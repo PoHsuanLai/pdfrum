@@ -40,6 +40,53 @@ Section map:
 `AF*` library. It depends on nothing else in this document, and nothing else in
 this document may change it without a `[spec]` note here.** Read §1 and stop.
 
+> **`[spec]` 2026-09-02 — the library shipped as a crate, not a module, and its
+> vocabulary is named accordingly.** §1.2 called for
+> `crates/pdfrum-form/src/af/`; what landed is **`crates/pdfrum-script`**, a
+> workspace member depending on `thiserror` and nothing else. The full
+> reasoning is in `docs/reviews/claude-review-af-library.md`; in short, §1.2's
+> requirement is a *list of things the library must not reach*, and a separate
+> crate turns that list into a compile error rather than something a reviewer
+> has to check by reading `use` lines. The crate also carries `util.printf`,
+> `util.printd`, `util.printx` and `util.scand` — §1.5.3 had already observed
+> that `StringPrintx` is shared between `util.printx` and `AFSpecial_Format`,
+> and splitting one mask engine across two homes to honour a boundary drawn
+> around the `AF*` names alone would cost more than it bought. The crate is
+> named `-script` rather than `-af` for that wider scope.
+>
+> **The three data types of §1.3 landed with their shapes intact and their
+> names changed**, plus two additions:
+>
+> | §1.3 | as shipped | note |
+> |---|---|---|
+> | `AfEvent` | `Keystroke` | The same fields, less `rc` — which the outcome reports rather than the event carrying it mutated in place. Named for what it models rather than for the engine object it is a slice of. |
+> | `AfEffects` | `AfEffects` | Unchanged, and **adopted exactly as §1.3 specified**: alerts and text colour come back as data. Worth saying plainly, because the first implementation dropped the colour half entirely and documented the loss; §1.3 chose this shape precisely so it would not be lost, and the review restored it. |
+> | `AfError` | `Error` | §1.6's message table, verbatim, with `ParamCount`, `BadObject`, `NoEventHandler` and `DateKeystrokeArity` present. |
+> | — | `Thrown` | An `Error` together with the `AfEffects` a failing call still asked for. `AFNumber_Keystroke` on a bad commit both notifies **and** throws, and the transcript records both lines; an `Err` carrying only the message would lose half the answer. |
+> | — | `AfFormat`, `KeystrokeResult` | The outcome and its effects as one record, keeping §1.4's uniform return shape without a bare tuple. |
+>
+> **§1.4's signature rule is relaxed where it bought nothing.** `&mut AfEvent`
+> first was chosen so one function could write several event fields; in
+> practice each writes at most one, so the shipped signatures take
+> `&Keystroke` and return what changed. A caller applying that to a live event
+> does the same copy-back §1.4's consequence (1) describes, from a value rather
+> than through a reference — and gains that a function cannot corrupt an event
+> it then fails on. Argument structs were **not** adopted: with `curr_style`
+> correctly absent no function exceeds six arguments, and the positional form
+> is the one Adobe's own reference documents, which is what a reader checking
+> this code against the specification has in front of them.
+>
+> **§1.5's `SimpleOp` landed with its case rule inverted.** §1.5 asked for a
+> `matched_exact_case: bool` reproducing the oracle's asymmetry between a
+> case-insensitive match and a case-sensitive divide. The user ruled that
+> asymmetry a defect rather than behaviour, so `SimpleOp::parse` is
+> case-insensitive throughout. Five further oracle defects were corrected the
+> same way; `docs/status/M15.md` § "`AF*`: where we diverge from the oracle on
+> purpose" lists all six with citations, and the two golden assertions the
+> corrections cost.
+>
+> **§1.7 stands**: the crate takes no `Diagnostics`.
+
 ### 1.1 What the library is, in one sentence
 
 `AF*` is the Acrobat form-field format/keystroke/validate/calculate helper
