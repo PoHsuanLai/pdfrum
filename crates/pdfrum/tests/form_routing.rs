@@ -419,3 +419,61 @@ fn replacing_with_no_focus_refuses() {
     assert!(!session.replace_selection("Hello"));
     assert!(session.focused_text().is_none());
 }
+
+// --- Ported SelectAllText -------------------------------------------------
+
+/// `SelectAllText`: focus, insert, check there is no selection, select all,
+/// check there is.
+///
+/// The upstream row asserts **UTF-16 byte lengths** — 12 for `"Hello"`
+/// (5 x 2 plus a terminator) and 2 for the empty string. Those numbers are
+/// facts about a C string API rather than about forms, so they are restated
+/// here as the values they encode; what survives is the distinction the
+/// lengths were carrying, which is that an empty selection and no field at
+/// all are different answers.
+#[test]
+fn select_all_selects_the_whole_value() {
+    let doc = document();
+    let mut session = FormSession::new(&doc);
+
+    // `FORM_OnFocus` rather than a click: focus without a selection gesture.
+    session.on_focus_at(0, 115.0, 115.0, EventModifiers::NONE);
+    assert!(session.focused_annot().is_some());
+
+    assert!(session.replace_selection("Hello"));
+    assert_eq!(session.focused_text().as_deref(), Some("Hello"));
+
+    // Nothing selected yet — `Some("")`, which upstream spells as a length
+    // of 2 and cannot distinguish from an unfocused field.
+    assert_eq!(session.selected_text().as_deref(), Some(""));
+
+    session.on_key_down(VirtualKey::A, EventModifiers::CONTROL);
+    assert_eq!(session.selected_text().as_deref(), Some("Hello"));
+}
+
+/// The distinction the byte lengths could not express, asserted directly.
+#[test]
+fn an_unfocused_field_and_an_empty_selection_are_different_answers() {
+    let doc = document();
+    let mut session = FormSession::new(&doc);
+
+    // No field at all.
+    assert_eq!(session.selected_text(), None);
+
+    // A focused field with nothing selected.
+    session.on_focus_at(0, 115.0, 115.0, EventModifiers::NONE);
+    assert_eq!(session.selected_text().as_deref(), Some(""));
+}
+
+/// Select-all on an **empty** field selects the empty string rather than
+/// failing.
+#[test]
+fn select_all_on_an_empty_field_selects_nothing_and_succeeds() {
+    let doc = document();
+    let mut session = FormSession::new(&doc);
+    session.on_focus_at(0, 115.0, 115.0, EventModifiers::NONE);
+
+    session.on_key_down(VirtualKey::A, EventModifiers::CONTROL);
+    assert_eq!(session.selected_text().as_deref(), Some(""));
+    assert_eq!(session.focused_text().as_deref(), Some(""));
+}
