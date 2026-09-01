@@ -22,6 +22,24 @@
 # Output: a flat symbol profile on stdout, and — when the tooling is present —
 # `target/profile/<op>-<stem>.svg`, a flamegraph.
 #
+# THE TWO RENDER LOOPS, AND WHICH ONE A/Bs THE ENGINE
+#
+# `profile --op render` has two loops and they measure different things. The
+# plain one builds a fresh `RenderSession` per iteration and calls
+# `page.render_session()`, which **re-derives the page graph every iteration**;
+# on a content-heavy file that is mostly `pdfrum-page`. `--sample` builds the
+# graphs once outside the loop, reports the build separately, and reuses one
+# `RenderCaches` — its TOTAL is the render.
+#
+# The gap is not small. `vector_en_tem` reports 34 ms plain and 6.2 ms under
+# `--sample`; 82% of the plain figure is the rebuild. An A/B of an engine change
+# run on the plain loop is therefore mostly an A/B of the parser, and
+# docs/status/M12b-P3.md §4 records one that produced a reproducible +5%
+# "regression" which survived a bisection and did not exist.
+#
+# **A/B engine work on `--sample`.** Use the plain loop when the page build is
+# part of what you mean to measure.
+#
 # WHY A DEDICATED BINARY AND NOT `cargo bench`
 #
 # criterion's harness is itself several percent of a profile and, worse, it
