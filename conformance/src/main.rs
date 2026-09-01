@@ -421,22 +421,16 @@ fn run_corpus(args: &RunArgs) -> Result<ExitCode> {
 
     let store = args.corpus.store();
     let fixup = checkout.join("testing/tools/fixup_pdf_template.py");
-    let base = scratch_root("run")?;
-    let indexed: Vec<(usize, corpus::Entry)> = entries.into_iter().enumerate().collect();
-    let results: Vec<FileResult> = pool::map(&indexed, args.corpus.workers(), |(index, entry)| {
-        run::score_one(
-            entry,
-            &tool,
-            &state,
-            &store,
-            &thresholds,
-            &run::scratch(&base, *index),
-            &fixup,
-        )
-    });
-    std::fs::remove_dir_all(&base).ok();
-
-    let board = Scoreboard::new(now_utc(), results);
+    let per_file = score_entries(
+        entries,
+        &tool,
+        &state,
+        &store,
+        &thresholds,
+        &fixup,
+        args.corpus.workers(),
+    )?;
+    let board = Scoreboard::new(now_utc(), per_file);
     let out = args
         .out
         .clone()
@@ -481,6 +475,52 @@ fn run_corpus(args: &RunArgs) -> Result<ExitCode> {
         println!("no regressions against {}", previous_path.display());
     }
     Ok(ExitCode::SUCCESS)
+}
+
+/// Scores every listing entry, plus a `#form-events` row when a sibling
+/// `.evt` is present.
+fn score_entries(
+    entries: Vec<corpus::Entry>,
+    tool: &ToolPaths,
+    state: &ToolState,
+    store: &Store,
+    thresholds: &thresholds::Thresholds,
+    fixup: &Path,
+    workers: usize,
+) -> Result<Vec<FileResult>> {
+    let base = scratch_root("run")?;
+    let indexed: Vec<(usize, corpus::Entry)> = entries.into_iter().enumerate().collect();
+    let results: Vec<(FileResult, Option<FileResult>)> =
+        pool::map(&indexed, workers, |(index, entry)| {
+            let regular = run::score_one(
+                entry,
+                tool,
+                state,
+                store,
+                thresholds,
+                &run::scratch(&base, *index),
+                fixup,
+            );
+            let events = run::score_form_events(
+                entry,
+                tool,
+                state,
+                store,
+                thresholds,
+                &run::scratch_events(&base, *index),
+                fixup,
+            );
+            (regular, events)
+        });
+    std::fs::remove_dir_all(&base).ok();
+    let mut per_file = Vec::with_capacity(results.len() * 2);
+    for (regular, events) in results {
+        per_file.push(regular);
+        if let Some(events) = events {
+            per_file.push(events);
+        }
+    }
+    Ok(per_file)
 }
 
 /// The two text pass rates, or nothing when no text golden was compared.

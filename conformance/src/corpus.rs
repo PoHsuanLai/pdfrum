@@ -27,6 +27,18 @@ pub struct Entry {
     pub kind: EntryKind,
 }
 
+impl Entry {
+    /// The sibling `.evt` script, if one sits next to this PDF or template.
+    ///
+    /// `pdfium_test --send-events` looks for the same stem with `.evt` in
+    /// place of `.pdf`; templates use the same stem as their `.in`.
+    #[must_use]
+    pub fn sibling_evt(&self) -> Option<PathBuf> {
+        let evt = self.source.with_extension("evt");
+        evt.is_file().then_some(evt)
+    }
+}
+
 /// Whether an entry is already a PDF or must be expanded first.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum EntryKind {
@@ -222,6 +234,27 @@ mod tests {
         );
         assert_eq!(listing.entries[1].kind, EntryKind::Template);
         assert_eq!(listing.entries[2].kind, EntryKind::Pdf);
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn sibling_evt_is_the_same_stem_next_to_the_pdf_or_template() {
+        let root = temp_dir("evt");
+        touch(&root, "form.pdf");
+        touch(&root, "form.evt");
+        touch(&root, "plain.pdf");
+        let with_evt = Entry {
+            id: "resources/form.pdf".to_owned(),
+            source: root.join("form.pdf"),
+            kind: EntryKind::Pdf,
+        };
+        let without = Entry {
+            id: "resources/plain.pdf".to_owned(),
+            source: root.join("plain.pdf"),
+            kind: EntryKind::Pdf,
+        };
+        assert_eq!(with_evt.sibling_evt(), Some(root.join("form.evt")));
+        assert_eq!(without.sibling_evt(), None);
         std::fs::remove_dir_all(&root).ok();
     }
 
