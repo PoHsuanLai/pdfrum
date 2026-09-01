@@ -367,6 +367,74 @@ pub fn composite_premultiplied(
     ]
 }
 
+/// Composite a **straight** RGBA8 source pixel over a premultiplied
+/// destination pixel, blending with `mode` and scaling the source by
+/// `coverage`.
+///
+/// The same composite as [`composite_premultiplied`], entered one step
+/// earlier. That step is not free: premultiplying a straight colour and
+/// un-premultiplying it back **quantises it**, because a premultiplied byte
+/// at alpha `a` can only express `a + 1` of the 256 straight values. At the
+/// alpha the form-field highlight uses — 100/255 — the representable reds
+/// near `221` are `219`, `222`, `224`: `221` is not among them, so the round
+/// trip that stores it lands on `219` and the tint composites a count low
+/// wherever a solid colour is drawn below full alpha.
+///
+/// The oracle never takes that step at all. Its AGG render targets are
+/// `FXDIB_Format::kBgra` — **straight** alpha; `CFX_DIBitmap::PreMultiply`
+/// exists only behind `PDF_USE_SKIA`. So a solid fill's colour reaches
+/// `CFX_ScanlineCompositor` exactly as the content stream stated it, and this
+/// is the entry point that reproduces that: every caller with a straight
+/// colour in hand — which is every [`Brush::Solid`](crate::device::Brush) —
+/// must use it rather than premultiplying first.
+///
+/// A source that is *already* premultiplied (an image sample, a composited
+/// layer) has no straight colour to preserve and goes on using
+/// [`composite_premultiplied`].
+#[must_use]
+pub fn composite_solid(
+    dest: [u8; 4],
+    src_rgb: [u8; 3],
+    src_a: u8,
+    coverage: u8,
+    mode: BlendMode,
+) -> [u8; 4] {
+    let src_alpha = crate::pixmap::mul255(src_a, coverage);
+    if src_alpha == 0 {
+        return dest;
+    }
+    let (Some(&dr), Some(&dg), Some(&db), Some(&da)) =
+        (dest.first(), dest.get(1), dest.get(2), dest.get(3))
+    else {
+        return dest;
+    };
+    if matches!(mode, BlendMode::Normal | BlendMode::Compatible) && da == 255 {
+        // The same collapse `composite_premultiplied` documents, minus the
+        // un-premultiply it no longer has to undo.
+        let (Some(&sr), Some(&sg), Some(&sb)) = (src_rgb.first(), src_rgb.get(1), src_rgb.get(2))
+        else {
+            return dest;
+        };
+        return [
+            crate::pixmap::alpha_merge(dr, sr, src_alpha),
+            crate::pixmap::alpha_merge(dg, sg, src_alpha),
+            crate::pixmap::alpha_merge(db, sb, src_alpha),
+            255,
+        ];
+    }
+    let dest_rgb = crate::pixmap::unpremultiply_rgb(dr, dg, db, da);
+    let (rgb, alpha) = composite_straight((dest_rgb, da), (src_rgb, src_alpha), mode);
+    let (Some(&r), Some(&g), Some(&b)) = (rgb.first(), rgb.get(1), rgb.get(2)) else {
+        return dest;
+    };
+    [
+        premultiply_channel(r, alpha),
+        premultiply_channel(g, alpha),
+        premultiply_channel(b, alpha),
+        alpha,
+    ]
+}
+
 /// `c * a / 255`, **rounding** — premultiplication that survives the trip
 /// back.
 ///
@@ -654,6 +722,88 @@ mod tests {
         // alpha, and the product truncates the way the oracle's does.
         let out = composite_premultiplied([0, 0, 0, 0], [255, 0, 0, 255], 128, BlendMode::Normal);
         assert_eq!(out[3], 128, "coverage becomes the alpha");
+    }
+
+    #[test]
+    fn the_form_field_highlight_composites_to_the_goldens_tint() {
+        // `FPDF_SetFormFieldHighlightColor(.., 0xFFE4DD)` with the default
+        // alpha 100: `FX_COLORREF` is BGR, so the straight colour is
+        // (0xDD, 0xE4, 0xFF), and over the page's opaque white the oracle's
+        // truncating `AlphaMerge` gives (241, 244, 255) — the tint every form
+        // golden in the corpus carries over its fields.
+        let white = [255u8, 255, 255, 255];
+        assert_eq!(
+            composite_solid(white, [0xDD, 0xE4, 0xFF], 100, 255, BlendMode::Normal),
+            [241, 244, 255, 255]
+        );
+        // And the premultiplied entry point cannot reach it: 221 is not one
+        // of the 101 straight reds a premultiplied byte at alpha 100 can hold,
+        // so storing it quantises down to 219 and the merge lands at 240.
+        // That one count, over 2482 px, is M14 OWED item 3.
+        let stored = crate::pixmap::premultiply(peniko::Color::from_rgba8(0xDD, 0xE4, 0xFF, 100));
+        assert_eq!(
+            composite_premultiplied(white, stored, 255, BlendMode::Normal),
+            [240, 244, 255, 255],
+            "the round trip through premultiplied storage is what lost the count"
+        );
+    }
+
+    #[test]
+    fn a_solid_source_agrees_with_the_premultiplied_route_wherever_storage_is_lossless() {
+        // `composite_solid` is not a *different* composite, it is the same one
+        // entered before the lossy step. Where premultiplied storage happens
+        // to be exact — full alpha, and every straight value a lower alpha can
+        // represent — the two must return identical bytes, in every mode and
+        // at every coverage. Anything else would mean the new entry point had
+        // changed the arithmetic rather than skipped a quantisation.
+        let modes = [
+            BlendMode::Normal,
+            BlendMode::Multiply,
+            BlendMode::Screen,
+            BlendMode::Darken,
+            BlendMode::HardLight,
+            BlendMode::SoftLight,
+            BlendMode::Difference,
+            BlendMode::Luminosity,
+        ];
+        for mode in modes {
+            for sa in [1u8, 51, 85, 128, 170, 204, 255] {
+                for cov in [1u8, 64, 128, 255] {
+                    for rgb in [[0u8, 0, 0], [255, 255, 255], [51, 102, 153]] {
+                        let src = [
+                            crate::pixmap::mul255(rgb[0], sa),
+                            crate::pixmap::mul255(rgb[1], sa),
+                            crate::pixmap::mul255(rgb[2], sa),
+                            sa,
+                        ];
+                        // Only compare where storage really is lossless.
+                        if crate::pixmap::unpremultiply_rgb(src[0], src[1], src[2], sa) != rgb {
+                            continue;
+                        }
+                        for dest in [[255u8, 255, 255, 255], [0, 0, 0, 255], [40, 90, 20, 128]] {
+                            assert_eq!(
+                                composite_solid(dest, rgb, sa, cov, mode),
+                                composite_premultiplied(dest, src, cov, mode),
+                                "{mode:?} sa={sa} cov={cov} rgb={rgb:?} dest={dest:?}"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_solid_source_at_zero_alpha_or_coverage_leaves_the_destination_alone() {
+        let dest = [1u8, 2, 3, 255];
+        assert_eq!(
+            composite_solid(dest, [255, 255, 255], 0, 255, BlendMode::Normal),
+            dest
+        );
+        assert_eq!(
+            composite_solid(dest, [255, 255, 255], 255, 0, BlendMode::Normal),
+            dest
+        );
     }
 
     #[test]
