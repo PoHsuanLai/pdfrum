@@ -239,6 +239,19 @@ impl ScriptCascade {
         self.host.borrow().transcript.clone()
     }
 
+    /// Timers a script asked for, as `(script, interval_ms)`.
+    ///
+    /// **Recorded and never fired.** A later milestone fires them from
+    /// `advance_time`, which M14's D14 reserved as the step function; until
+    /// then this is the honest answer to "what did the document want", and it
+    /// is a *value the host reads* rather than a process-wide registry, which
+    /// STYLE §1 forbids and which is what upstream uses
+    /// (`fxjs/global_timer.cpp:18-19`).
+    #[must_use]
+    pub fn timers(&self) -> Vec<(String, i32)> {
+        self.host.borrow().timers.clone()
+    }
+
     /// The transcript, rendered the way `pdfium_test` writes stdout.
     #[must_use]
     pub fn transcript_text(&self) -> String {
