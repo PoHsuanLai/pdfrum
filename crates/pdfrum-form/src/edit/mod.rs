@@ -14,10 +14,12 @@
 //! 4. a scroll offset and the vertical-alignment padding it composes with;
 //! 5. the mutations themselves, and the rigid postlude they share.
 
+pub mod ops;
 pub mod place;
 pub mod select;
 pub mod undo;
 
+pub use ops::TextEdit;
 pub use place::{Place, PlaceExt, Range};
 pub use select::Selection;
 pub use undo::{UndoItem, UndoStack};
