@@ -46,6 +46,7 @@
 
 mod annot;
 mod content;
+mod dispatch;
 pub mod events;
 mod metadata;
 mod mutate;
