@@ -1,0 +1,135 @@
+=== tx_hello ===
+/Tx BMC
+q
+BT
+0 0 0 rg
+1 12.005999 Td
+/Helv 12 Tf
+(Hello) Tj
+ET
+Q
+EMC
+=== tx_comb ===
+/Tx BMC
+q
+BT
+0 0 0 rg
+13.997334 12.005999 Td
+/Helv 12 Tf
+(a) Tj
+32.666668 0 Td
+(b) Tj
+ET
+Q
+EMC
+=== ch_combo ===
+/Tx BMC
+q
+BT
+0 0 0 rg
+1 12.005999 Td
+/Helv 12 Tf
+(Banana) Tj
+ET
+Q
+EMC
+q
+0.862745 g
+86 1 13 28 re f
+Q
+q
+1 g
+87 2 m
+87 28 l
+98 28 l
+97 27 l
+88 27 l
+88 3 l f
+.5 g
+98 28 m
+98 2 l
+87 2 l
+88 3 l
+97 3 l
+97 27 l f
+0 g
+86 1 13 28 re
+87 2 11 26 re f*
+Q
+q
+0 g
+89.5 16.5 m
+95.5 16.5 l
+92.5 13.5 l
+89.5 16.5 l f
+0.862745 g
+Q
+=== ch_list_v ===
+/Tx BMC
+q
+1 1 98 28 re
+W
+n
+BT
+0 0 0 rg
+1 20.383999 Td
+/Helv 12 Tf
+(Dog) Tj
+ET
+q
+0 0.2 0.443137 rg
+1 6.512 98 11.244 re
+f
+Q
+BT
+1 g
+1 9.14 Td
+/Helv 12 Tf
+(Cat) Tj
+ET
+Q
+EMC
+=== ch_list_ti ===
+/Tx BMC
+q
+1 1 98 28 re
+W
+n
+BT
+0 0 0 rg
+1 20.383999 Td
+/Helv 12 Tf
+(c) Tj
+ET
+Q
+EMC
+=== ch_list_i ===
+/Tx BMC
+q
+1 1 98 28 re
+W
+n
+BT
+0 0 0 rg
+1 20.383999 Td
+/Helv 12 Tf
+(a) Tj
+ET
+BT
+0 0 0 rg
+1 9.14 Td
+/Helv 12 Tf
+(b) Tj
+ET
+BT
+0 0 0 rg
+1 -2.104 Td
+/Helv 12 Tf
+(c) Tj
+ET
+Q
+EMC
+=== tx_empty ===
+<none>
+=== btn ===
+<none>
