@@ -209,6 +209,20 @@ fn session_overlay(view: &SessionView<'_>) -> Option<pdfrum_doc::AnnotOverlay> {
         if let Some(appearance) = update.kind.appearance() {
             overlay.set(update.annot.index as usize, appearance.clone());
         }
+        // **The one place the oracle draws text with ClearType.**
+        // `CPWL_EditImpl::DrawTextString` (`cpwl_edit_impl.cpp:40-57`) builds
+        // a *local* `CPDF_RenderOptions` whose constructor sets
+        // `bClearType = true`, and the two public entry points that would
+        // clear it from `FPDF_LCD_TEXT` (`cpdfsdk_renderpage.cpp:37`,
+        // `fpdf_formfill.cpp:272`) are not on this path. So on a page whose
+        // every other run is grayscale, a live edit's glyphs are subpixel.
+        //
+        // Marked per annotation and folded in per subtree, never hoisted to
+        // the page's own options: the whole point of the oracle's *local*
+        // options is that the rest of the page keeps its own antialiasing.
+        if update.kind.is_live_edit() {
+            overlay.set_live_edit(update.annot.index as usize);
+        }
     }
     if let Some(focus) = view.focus {
         overlay.set_focus(focus);

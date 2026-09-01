@@ -2138,6 +2138,14 @@ fn generate<R: Resolve>(
         FieldState::Toggle(toggle) => toggle.state_for_control(widget.id),
         FieldState::Text(_) | FieldState::Choice(_) | FieldState::Button(_) => None,
     };
+    // `LiveInput` is **not** `#[non_exhaustive]`, so this literal has to name
+    // every field and a new one upstream is a compile error here rather than a
+    // silent default. That is a real cost paid once already — `6e87424`'s
+    // `appearance_state` broke this construction site and left `pdfrum-form`
+    // failing to build for a period — and the fix is not to spell the literal
+    // differently but to mark the struct: whoever adds a sixth field should
+    // put `#[non_exhaustive]` on it first, and give it a `Default` so callers
+    // outside `pdfrum-doc` can still build one.
     with_font(ctx, widget, |font, substitute| {
         ap::widget::generate_with_live_faces(
             &widget.dict,
