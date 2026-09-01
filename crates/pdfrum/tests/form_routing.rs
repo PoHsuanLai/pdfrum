@@ -303,3 +303,119 @@ fn a_double_click_selects_the_whole_line() {
     session.on_double_click(0, 130.0, FORM_Y, EventModifiers::NONE);
     assert_eq!(session.selected_text().as_deref(), Some("Hello World"));
 }
+
+// --- Ported insert-and-delete-by-selection assertions -----------------------
+//
+// The `InsertTextIn*` and `DeleteTextField*` families drive `ReplaceSelection`
+// against a selection the mouse made. They are the reason the facade has
+// `replace_selection` at all: this crate holds no clipboard, so a cut is a
+// caller reading `selected_text` and then replacing it with nothing.
+
+/// `InsertTextInPopulatedTextFieldLeft`: inserting at a click before the text.
+#[test]
+fn text_replaced_at_a_caret_is_inserted_there() {
+    let doc = document();
+    let mut session = FormSession::new(&doc);
+    type_run(&mut session, 8);
+    assert_eq!(session.focused_text().as_deref(), Some("ABCDEFGH"));
+
+    // A click with no drag leaves a caret and no selection.
+    drag(&mut session, FORM_BEGIN_X, FORM_BEGIN_X);
+    assert_eq!(session.selected_text().as_deref(), Some(""));
+
+    assert!(session.replace_selection("Hello"));
+    assert_eq!(session.focused_text().as_deref(), Some("HelloABCDEFGH"));
+}
+
+/// `InsertTextInPopulatedTextFieldRight`: the same at the far end.
+#[test]
+fn text_replaced_at_the_end_is_appended() {
+    let doc = document();
+    let mut session = FormSession::new(&doc);
+    type_run(&mut session, 8);
+
+    drag(&mut session, FORM_END_X, FORM_END_X);
+    assert!(session.replace_selection("Hello"));
+    assert_eq!(session.focused_text().as_deref(), Some("ABCDEFGHHello"));
+}
+
+/// `DeleteTextFieldEntireSelection`: replacing everything with nothing empties
+/// the field.
+#[test]
+fn deleting_the_whole_selection_empties_the_field() {
+    let doc = document();
+    let mut session = FormSession::new(&doc);
+    type_run(&mut session, 12);
+
+    drag(&mut session, FORM_END_X, FORM_BEGIN_X);
+    assert_eq!(session.selected_text().as_deref(), Some("ABCDEFGHIJKL"));
+
+    assert!(session.replace_selection(""));
+    assert_eq!(session.focused_text().as_deref(), Some(""));
+}
+
+/// `DeleteEmptyTextFieldSelection`: deleting an empty selection has no effect,
+/// and reports that it had none.
+#[test]
+fn deleting_an_empty_selection_does_nothing() {
+    let doc = document();
+    let mut session = FormSession::new(&doc);
+    type_run(&mut session, 12);
+    assert_eq!(session.selected_text().as_deref(), Some(""));
+
+    assert!(
+        !session.replace_selection(""),
+        "an empty replacement of an empty selection changes nothing"
+    );
+    assert_eq!(session.focused_text().as_deref(), Some("ABCDEFGHIJKL"));
+}
+
+/// `DeleteTextFieldSelectionMiddle`: a middle run removed leaves both ends.
+#[test]
+fn deleting_a_middle_selection_leaves_both_ends() {
+    let doc = document();
+    let mut session = FormSession::new(&doc);
+    type_run(&mut session, 12);
+
+    drag(&mut session, 170.0, 125.0);
+    let selected = session
+        .selected_text()
+        .expect("the drag selected something");
+    assert!(!selected.is_empty());
+
+    assert!(session.replace_selection(""));
+    let left = session.focused_text().expect("the field still has text");
+    assert_eq!(
+        left,
+        "ABCDEFGHIJKL".replace(&selected, ""),
+        "exactly the selected run is removed"
+    );
+}
+
+/// Replacing a selection is one undo step, not one per character.
+#[test]
+fn replacing_a_selection_undoes_as_one_step() {
+    let doc = document();
+    let mut session = FormSession::new(&doc);
+    type_run(&mut session, 8);
+
+    drag(&mut session, FORM_END_X, FORM_BEGIN_X);
+    session.replace_selection("xyz");
+    assert_eq!(session.focused_text().as_deref(), Some("xyz"));
+
+    session.on_key_down(VirtualKey::Z, EventModifiers::CONTROL);
+    assert_eq!(
+        session.focused_text().as_deref(),
+        Some("ABCDEFGH"),
+        "a replacement undoes as one step, not three"
+    );
+}
+
+/// A field with no focus refuses a replacement rather than inventing one.
+#[test]
+fn replacing_with_no_focus_refuses() {
+    let doc = document();
+    let mut session = FormSession::new(&doc);
+    assert!(!session.replace_selection("Hello"));
+    assert!(session.focused_text().is_none());
+}

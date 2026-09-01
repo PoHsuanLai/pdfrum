@@ -1128,6 +1128,39 @@ fn with_font<R: Resolve, T>(
     Some(body(&text_font))
 }
 
+/// Replaces a field's selection with `text`, or deletes it when `text` is
+/// empty.
+///
+/// The embedder's paste, and half of its cut. Answers whether the field
+/// changed — which an empty replacement of an empty selection does not, and
+/// a read-only field never does.
+pub fn replace_selection<R: Resolve>(
+    session: &mut FormSession,
+    ctx: &Context<'_, R>,
+    field: FieldId,
+    text: &str,
+) -> bool {
+    let max_len = match session.fields.get(&field) {
+        Some(FieldState::Text(state)) if !state.config.read_only => {
+            state.config.max_len.map(std::num::NonZeroU32::get)
+        }
+        // A read-only field refuses, and a non-text field has no selection to
+        // replace.
+        _ => return false,
+    };
+    let mut changed = false;
+    with_edit(session, ctx, field, |edit, config, metrics| {
+        if text.is_empty() && !edit.has_selection() {
+            return;
+        }
+        changed = ops::replace_selection(edit, config, metrics, text, max_len);
+    });
+    if changed {
+        session.dirty.insert(field);
+    }
+    changed
+}
+
 /// A page-space point in the widget's **appearance-stream** space.
 ///
 /// The two differ by the widget's own corner, and forgetting it is silent
