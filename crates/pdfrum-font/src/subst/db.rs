@@ -355,7 +355,7 @@ impl SystemFontDb {
             let Some(bytes) = face_bytes_of(&db, face) else {
                 continue;
             };
-            let Some(info) = describe(&face.families, face.index, &bytes) else {
+            let Some(info) = describe(face.index, &bytes) else {
                 continue;
             };
             faces.push(info);
@@ -475,18 +475,20 @@ fn face_styles(name: &str, style: &str) -> u32 {
 /// siblings one. A rule that splits a single family three ways is a rule
 /// scoring on something other than the family, and the 16-point serif term is
 /// the largest in the score.
-fn describe(
-    families: &[(String, fontdb::Language)],
-    index: u32,
-    bytes: &Arc<[u8]>,
-) -> Option<FaceInfo> {
+fn describe(index: u32, bytes: &Arc<[u8]>) -> Option<FaceInfo> {
     let font = skrifa::FontRef::from_index(bytes, index).ok()?;
 
-    let family = families.first().map(|(n, _)| n.clone()).or_else(|| {
-        font.localized_strings(skrifa::string::StringId::FAMILY_NAME)
-            .english_or_first()
-            .map(|s| s.chars().collect())
-    })?;
+    // Name IDs **1 and 2**, which is what the enumerator asks for
+    // (`GetNameFromTT(names, 1)` / `(names, 2)`), and not the typographic
+    // family of name ID 16. `fontdb` prefers ID 16 where a face has one, which
+    // is the better answer for a font picker and the wrong one here: the
+    // oracle's `Noto Sans CJK JP Regular` would arrive as `Noto Sans CJK JP`,
+    // and the name is what `find_family_name_match`, the exact-name lookup,
+    // `match_installed` and the score's 4-point length bonus all read.
+    let family: String = font
+        .localized_strings(skrifa::string::StringId::FAMILY_NAME)
+        .english_or_first()
+        .map(|s| s.chars().collect())?;
     let style: String = font
         .localized_strings(skrifa::string::StringId::SUBFAMILY_NAME)
         .english_or_first()
