@@ -774,8 +774,37 @@ pub fn highlight(
     }
 }
 
-/// One band per line the selection covers, since a selection spanning a line
-/// break is not one rectangle.
+/// The rectangles a selection paints behind its text: **one per selected
+/// word**, merged where they touch.
+///
+/// # Why per word, and not per line
+///
+/// The obvious implementation spans one rectangle from the caret at the
+/// selection's start to the caret at its end, per line. That is right for a
+/// left-to-right line and **wrong for every other kind**, because it assumes
+/// the carets advance monotonically with the word index. They do not: on a
+/// right-to-left line the layout places word 1 at the line's right edge and
+/// the last word at its left, so the two endpoint carets are the *interior*
+/// of the run rather than its extremes, and the band collapses to roughly one
+/// character. Measured on `form_textfield_selected_rtl`, whose ten Hebrew
+/// characters produced a six-unit band where the oracle paints fifty.
+///
+/// `CPWL_EditImpl::DrawEdit` (`cpwl_edit_impl.cpp:659-676`) has no such
+/// assumption: it walks the selected words and fills `GetWordRect(word, line)`
+/// — `[word.x, word.x + word.width]` at the line's ascent and descent — for
+/// each one. That is direction-agnostic by construction, which is why it needs
+/// no right-to-left case.
+///
+/// Reproduced here from the carets that bound each word, whose min and max are
+/// that word's own extent whichever way the line runs. Touching rectangles are
+/// merged so a contiguous run is still one fill rather than one per character.
+///
+/// A **section break** is skipped rather than filled. It occupies an index in
+/// the flat numbering — the tokenizer counted it, so undo and the caret both
+/// need it to — but it is not a word: `DrawEdit`'s loop fills only what
+/// `GetWord` returns, and a break returns nothing. Filling it would produce a
+/// rectangle spanning from the end of one line to the start of the next,
+/// which covers both lines whole.
 fn selection_bands(
     edit: &TextEdit,
     config: &vt::Config,
@@ -790,41 +819,73 @@ fn selection_bands(
         return Vec::new();
     }
 
+    let caret_at = |index: usize| {
+        vt::hit::caret_rect(
+            &edit.layout,
+            config.plate,
+            config,
+            metrics,
+            edit.offset,
+            vt::hit::place_of_word_index(&edit.layout, index),
+            0.0,
+        )
+    };
+
     let mut bands: Vec<kurbo::Rect> = Vec::new();
-    let mut index = from;
-    while index < to {
-        let place = vt::hit::place_of_word_index(&edit.layout, index);
-        let (_, line_end) = line_bounds(edit, place);
-        let line_end_index = vt::hit::word_index_of_place(&edit.layout, line_end);
-        let stop = to.min(line_end_index.max(index.saturating_add(1)));
-
-        let start_rect = vt::hit::caret_rect(
-            &edit.layout,
-            config.plate,
-            config,
-            metrics,
-            edit.offset,
-            place,
-            0.0,
-        );
-        let stop_place = vt::hit::place_of_word_index(&edit.layout, stop);
-        let stop_rect = vt::hit::caret_rect(
-            &edit.layout,
-            config.plate,
-            config,
-            metrics,
-            edit.offset,
-            stop_place,
-            0.0,
-        );
-
-        bands.push(kurbo::Rect::new(
-            start_rect.x0.min(stop_rect.x0),
-            start_rect.y0.min(stop_rect.y0),
-            start_rect.x1.max(stop_rect.x1),
-            start_rect.y1.max(stop_rect.y1),
-        ));
-        index = stop;
+    for index in from..to {
+        if is_section_break(edit, index) {
+            continue;
+        }
+        let word = word_band(index, &caret_at);
+        match bands.last_mut() {
+            // Merge into the run being built when the two rectangles share an
+            // edge and a line. `union` would also swallow a gap; touching is
+            // the condition, so a band never covers a word outside the
+            // selection.
+            Some(last) if touches(*last, word) => *last = last.union(word),
+            _ => bands.push(word),
+        }
     }
     bands
+}
+
+/// Whether a flat index names a **section break** rather than a character.
+///
+/// The break between two paragraphs counts as one index, so the place at
+/// `index` and the place at `index + 1` land on different lines. That is the
+/// signal, and it needs no access to the tokenizer's own bookkeeping.
+fn is_section_break(edit: &TextEdit, index: usize) -> bool {
+    let here = vt::hit::place_of_word_index(&edit.layout, index);
+    let next = vt::hit::place_of_word_index(&edit.layout, index + 1);
+    here.section != next.section || here.line != next.line
+}
+
+/// One selected word's rectangle: `GetWordRect`'s `[x, x + width]` at the
+/// line's ascent and descent (`cpwl_edit_impl.cpp:34-38`).
+///
+/// Built from the two carets that bound the word, whose min and max are its
+/// extent whichever way the line runs. That is the whole rule, and it needs no
+/// right-to-left case of its own — which is the point of taking it per word
+/// rather than per line.
+fn word_band(index: usize, caret_at: &impl Fn(usize) -> kurbo::Rect) -> kurbo::Rect {
+    let (before, after) = (caret_at(index), caret_at(index + 1));
+    kurbo::Rect::new(
+        before.x0.min(after.x0),
+        before.y0.min(after.y0),
+        before.x1.max(after.x1),
+        before.y1.max(after.y1),
+    )
+}
+
+/// Whether two word rectangles sit on one line and share a vertical edge.
+///
+/// Either order counts, because a right-to-left run's next word is to the
+/// *left* of the one before it. The tolerance is a thousandth of a unit:
+/// consecutive words' carets come from the same accumulated advance, so they
+/// agree exactly in principle and to within rounding in practice.
+fn touches(a: kurbo::Rect, b: kurbo::Rect) -> bool {
+    const EPSILON: f64 = 1e-3;
+    let same_line = (a.y0 - b.y0).abs() < EPSILON && (a.y1 - b.y1).abs() < EPSILON;
+    let adjacent = (a.x1 - b.x0).abs() < EPSILON || (b.x1 - a.x0).abs() < EPSILON;
+    same_line && adjacent
 }
