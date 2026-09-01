@@ -121,7 +121,10 @@ pub fn kill(session: &mut FormSession) -> FocusChange {
 /// generated appearance.
 #[must_use]
 pub fn miss_drops_focus(button: crate::event::Button) -> bool {
-    matches!(button, crate::event::Button::Left)
+    match button {
+        crate::event::Button::Left => true,
+        crate::event::Button::Right => false,
+    }
 }
 
 #[cfg(test)]

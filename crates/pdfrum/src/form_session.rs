@@ -72,7 +72,12 @@ pub struct FormSession<'a> {
 }
 
 impl<'a> FormSession<'a> {
-    /// Starts a session over a document, with the defaults for this platform.
+    /// Starts a session with the **non-Apple** defaults: Control accelerates,
+    /// and Control with `Y` redoes.
+    ///
+    /// Deliberately not a compile-time platform choice — the accelerator is
+    /// configuration so that both behaviours are reachable and testable from
+    /// one machine. Pass [`SessionConfig::apple`] for Apple keyboards.
     #[must_use]
     pub fn new(doc: &'a Document) -> FormSession<'a> {
         FormSession {
@@ -259,7 +264,12 @@ impl<'a> FormSession<'a> {
     pub fn can_undo(&self) -> bool {
         match self.inner.focused_state() {
             Some(pdfrum_form::field::FieldState::Text(text)) => text.undo.can_undo(),
-            _ => false,
+            Some(
+                pdfrum_form::field::FieldState::Choice(_)
+                | pdfrum_form::field::FieldState::Toggle(_)
+                | pdfrum_form::field::FieldState::Button(_),
+            )
+            | None => false,
         }
     }
 
@@ -268,7 +278,12 @@ impl<'a> FormSession<'a> {
     pub fn can_redo(&self) -> bool {
         match self.inner.focused_state() {
             Some(pdfrum_form::field::FieldState::Text(text)) => text.undo.can_redo(),
-            _ => false,
+            Some(
+                pdfrum_form::field::FieldState::Choice(_)
+                | pdfrum_form::field::FieldState::Toggle(_)
+                | pdfrum_form::field::FieldState::Button(_),
+            )
+            | None => false,
         }
     }
 
@@ -281,7 +296,10 @@ impl<'a> FormSession<'a> {
         match self.inner.focused_state()? {
             pdfrum_form::field::FieldState::Text(text) => Some(text.text.clone()),
             pdfrum_form::field::FieldState::Choice(choice) => Some(choice.focused_text()),
-            _ => None,
+            // Neither holds text: a toggle's value is a state name and a
+            // button has none at all.
+            pdfrum_form::field::FieldState::Toggle(_)
+            | pdfrum_form::field::FieldState::Button(_) => None,
         }
     }
 
@@ -292,7 +310,12 @@ impl<'a> FormSession<'a> {
             Some(pdfrum_form::field::FieldState::Choice(choice)) => {
                 pdfrum_form::field::choice::is_index_selected(choice, index)
             }
-            _ => false,
+            Some(
+                pdfrum_form::field::FieldState::Text(_)
+                | pdfrum_form::field::FieldState::Toggle(_)
+                | pdfrum_form::field::FieldState::Button(_),
+            )
+            | None => false,
         }
     }
 
@@ -306,7 +329,13 @@ impl<'a> FormSession<'a> {
             Some(pdfrum_form::field::FieldState::Choice(choice)) => {
                 pdfrum_form::field::choice::set_index_selected(choice, index, selected)
             }
-            _ => false,
+            // A text field has no rows, so every index is out of range.
+            Some(
+                pdfrum_form::field::FieldState::Text(_)
+                | pdfrum_form::field::FieldState::Toggle(_)
+                | pdfrum_form::field::FieldState::Button(_),
+            )
+            | None => false,
         }
     }
 
@@ -342,15 +371,19 @@ impl<'a> FormSession<'a> {
 mod tests {
     use super::*;
 
-    fn document() -> Option<Document> {
-        Document::open("tests/fixtures/text_form.pdf").ok()
+    /// The fixture, or a failed test. Returning an `Option` that every caller
+    /// silently skipped on turned a missing fixture into four green-and-empty
+    /// tests rather than four red ones.
+    fn document() -> Document {
+        match Document::open("tests/fixtures/text_form.pdf") {
+            Ok(doc) => doc,
+            Err(error) => panic!("the text_form fixture must open: {error}"),
+        }
     }
 
     #[test]
     fn a_fresh_session_has_no_focus() {
-        let Some(doc) = document() else {
-            return;
-        };
+        let doc = document();
         let session = FormSession::new(&doc);
         assert!(session.focused_annot().is_none());
         assert!(session.focused_text().is_none());
@@ -360,9 +393,7 @@ mod tests {
 
     #[test]
     fn the_default_configuration_is_this_platforms() {
-        let Some(doc) = document() else {
-            return;
-        };
+        let doc = document();
         let session = FormSession::new(&doc);
         assert_eq!(session.config().max_undo_items, 10_000);
         assert!(!session.config().focusable.is_empty());
@@ -371,9 +402,7 @@ mod tests {
     /// Killing focus when nothing holds it is harmless.
     #[test]
     fn killing_focus_from_nothing_is_harmless() {
-        let Some(doc) = document() else {
-            return;
-        };
+        let doc = document();
         let mut session = FormSession::new(&doc);
         let response = session.force_kill_focus();
         assert!(!response.consumed);
@@ -384,9 +413,7 @@ mod tests {
     /// than panicking.
     #[test]
     fn queries_without_focus_answer_rather_than_panic() {
-        let Some(doc) = document() else {
-            return;
-        };
+        let doc = document();
         let mut session = FormSession::new(&doc);
         assert!(!session.is_index_selected(0));
         assert!(!session.set_index_selected(0, true));

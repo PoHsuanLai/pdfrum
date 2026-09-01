@@ -257,8 +257,13 @@ impl UndoStack {
         self.pos = self.items.len();
     }
 
-    /// The items one `undo` would replay, oldest first, and moves the cursor
-    /// past them.
+    /// The items one `undo` would replay, **newest first**, and moves the
+    /// cursor past them.
+    ///
+    /// The order is the inverse-replay order and is deliberately the opposite
+    /// of [`UndoStack::redo`]'s: undoing a group has to unwind its members
+    /// from the last one backwards, while redoing one re-applies them from
+    /// the first forwards.
     ///
     /// Exactly one item when the top of the stack is an ordinary edit. When
     /// it is a group's closing boundary, the whole group: the walk continues
@@ -288,8 +293,9 @@ impl UndoStack {
         taken
     }
 
-    /// The items one `redo` would replay, oldest first, and moves the cursor
-    /// past them. The mirror of [`UndoStack::undo`].
+    /// The items one `redo` would replay, **oldest first**, and moves the
+    /// cursor past them. The mirror of [`UndoStack::undo`], including in the
+    /// order it hands them back.
     pub fn redo(&mut self) -> Vec<UndoItem> {
         let mut taken = Vec::new();
         let mut first = true;

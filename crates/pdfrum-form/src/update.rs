@@ -110,7 +110,9 @@ impl UpdateKind {
     pub fn appearance(&self) -> Option<&GeneratedAp> {
         match self {
             UpdateKind::Regenerated(ap) | UpdateKind::LiveEdit(ap) => Some(ap),
-            _ => None,
+            UpdateKind::RevertedToFileAppearance
+            | UpdateKind::ActionRequested { .. }
+            | UpdateKind::FocusChanged { .. } => None,
         }
     }
 
@@ -184,7 +186,10 @@ impl Response {
             UpdateKind::ActionRequested { action, modifiers } => {
                 Some((action.as_ref(), *modifiers))
             }
-            _ => None,
+            UpdateKind::Regenerated(_)
+            | UpdateKind::LiveEdit(_)
+            | UpdateKind::RevertedToFileAppearance
+            | UpdateKind::FocusChanged { .. } => None,
         })
     }
 }
