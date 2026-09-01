@@ -10,14 +10,16 @@
 //! `/DA (0 0 0 rg /F1 12 Tf)` over Helvetica. A click at (120, 115) lands
 //! inside it, and (10, 10) lands on bare page.
 
+// `clippy.toml`'s `allow-expect-in-tests` covers `#[test]` bodies but not the
+// helpers beside them, and a fixture that will not open is a failure signal
+// rather than a case to handle — the same bargain `facade.rs` makes.
+#![allow(clippy::expect_used)]
+
 use pdfrum::{Document, EventModifiers, FormSession, VirtualKey};
 
 /// The fixture, or a failed test rather than four green-and-empty ones.
 fn document() -> Document {
-    match Document::open("tests/fixtures/text_form.pdf") {
-        Ok(doc) => doc,
-        Err(error) => panic!("the text_form fixture must open: {error}"),
-    }
+    Document::open("tests/fixtures/text_form.pdf").expect("the text_form fixture must open")
 }
 
 /// A point inside the field, and one outside every annotation.
