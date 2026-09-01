@@ -120,10 +120,26 @@ pub fn process_file(
             .ok()
         })
         .flatten();
+    // One build context for the whole file, so its font, colorspace and image
+    // caches are shared across pages the way the oracle's document-wide caches
+    // are — and so that the session below and the page walk resolve
+    // `/Arial` to the *same* face.
+    //
+    // `--font-dir` and `--croscore-font-names` decide which face a
+    // non-embedded font draws with, and therefore the metrics every spacing
+    // threshold in text extraction is computed from, and every height a form
+    // session lays a caret out at. Set once per file, because the substitution
+    // must not vary between two pages of one document — nor between a page and
+    // the session editing it. A session built through `FormSession::new` would
+    // carry a *default* substitution and measure the same `/Arial` as the
+    // built-in base-14 Helvetica, putting its caret a device row off.
+    let mut ctx = BuildContext::with_substitution(substitution_options(options));
     // One session for the whole document, as the oracle holds one
     // `FPDF_FORMHANDLE` for the whole document: what page 0's script leaves
     // focused is what page 1's script starts from.
-    let mut session = facade.as_ref().map(pdfrum::FormSession::new);
+    let mut session = facade
+        .as_ref()
+        .map(|facade| pdfrum::FormSession::with_context(facade, &mut ctx));
 
     let counts = walk_pages(
         &doc,
@@ -131,6 +147,7 @@ pub fn process_file(
         options,
         &parsed_events,
         session.as_mut(),
+        &mut ctx,
         streams,
     )?;
 
@@ -282,24 +299,20 @@ fn substitution_options(options: &Options) -> pdfrum_font::SubstitutionOptions {
 /// against each page before anything is written for it, which is
 /// `PdfProcessor::ProcessPage` (`pdfium_test.cc:1474-1482`) — `SendPageEvents`
 /// is its first statement, ahead of every dump and every render.
+///
+/// `ctx` is the caller's, and is the *same* one the session was built from:
+/// two contexts over one document would substitute its non-embedded fonts two
+/// different ways.
 fn walk_pages(
     doc: &Document,
     name: &str,
     options: &Options,
     script: &[events::Event],
     mut session: Option<&mut pdfrum::FormSession<'_>>,
+    ctx: &mut BuildContext,
     streams: &mut Streams<'_>,
 ) -> std::io::Result<Counts> {
     let mut counts = Counts::default();
-    // One build context for the whole file, so its font, colorspace and
-    // image caches are shared across pages the way the oracle's document-wide
-    // caches are.
-    // `--font-dir` and `--croscore-font-names` decide which face a
-    // non-embedded font draws with, and therefore the metrics every spacing
-    // threshold in text extraction is computed from. Set once per file,
-    // because the substitution must not vary between two pages of one
-    // document.
-    let mut ctx = BuildContext::with_substitution(substitution_options(options));
     let catalog = doc.catalog().unwrap_or_default();
     let rtl = text::direction_is_r2l(&catalog, doc);
     for index in selected_pages(options.pages, doc.page_count()) {
@@ -357,7 +370,7 @@ fn walk_pages(
             &catalog,
             doc,
             rtl,
-            &mut ctx,
+            ctx,
         );
         write!(streams.out, "{extra}")?;
         counts.processed += 1;

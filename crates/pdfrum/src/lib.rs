@@ -208,9 +208,22 @@ pub use pdfrum_page::PageObject;
 /// Per-document caches — fonts, colour spaces, decoded images — that a caller
 /// threads through many pages to avoid decoding the same resource twice.
 ///
-/// Reached through [`Page::render_with`] and [`Page::text_with`]. See the
-/// crate docs on parallel rendering for why it is per-thread.
+/// Reached through [`Page::render_with`], [`Page::text_with`] and
+/// [`FormSession::with_context`]. See the crate docs on parallel rendering
+/// for why it is per-thread.
 pub use pdfrum_page::BuildContext;
+
+/// Which face a **non-embedded** font resolves to: the directories enumerated
+/// and whether the Croscore families stand in for Arial, Times and Courier.
+///
+/// Settled once, when a [`BuildContext`] is made with
+/// [`BuildContext::with_substitution`], because it must not vary across one
+/// document. A caller that renders through such a context must start its
+/// [`FormSession`] through [`FormSession::with_context`] with the same one:
+/// the session lays out carets and selection bands from the *substituted*
+/// face's ascent and descent, and a second substitution over one document
+/// puts them at heights the page is not drawn at.
+pub use pdfrum_font::SubstitutionOptions;
 
 /// One page's extracted text: the characters in reading order, plus search,
 /// selection and link queries over them.
