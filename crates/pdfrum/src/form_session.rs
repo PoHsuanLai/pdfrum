@@ -6,6 +6,7 @@ use pdfrum_form::{Button, Event, Key, Modifiers, Point, Response};
 pub use pdfrum_form::SessionConfig;
 
 use crate::Document;
+use pdfrum_page::BuildContext;
 
 pub use pdfrum_form::event::{Button as MouseButton, Key as VirtualKey};
 pub use pdfrum_form::update::{AppearanceUpdate, UpdateKind};
@@ -119,21 +120,69 @@ impl<'a> FormSession<'a> {
     /// one machine. Pass [`SessionConfig::apple`] for Apple keyboards.
     #[must_use]
     pub fn new(doc: &'a Document) -> FormSession<'a> {
-        FormSession::build(doc, Inner::new())
+        FormSession::build(doc, Inner::new(), &mut BuildContext::new())
     }
 
     /// Starts a session with explicit switches — the accelerator modifier,
     /// which annotation subtypes join the focus ring, and the undo bound.
     #[must_use]
     pub fn with_config(doc: &'a Document, config: SessionConfig) -> FormSession<'a> {
-        FormSession::build(doc, Inner::with_config(config))
+        FormSession::build(doc, Inner::with_config(config), &mut BuildContext::new())
+    }
+
+    /// Starts a session whose fonts are resolved through a caller-owned
+    /// [`BuildContext`], as [`Page::render_with`](crate::Page::render_with).
+    ///
+    /// # Use this whenever the caller renders with substitution options
+    ///
+    /// A session lays out the appearances it hands back — the glyph run, the
+    /// caret, the selection band — and it lays them out with the *metrics of
+    /// the face the `/DA` font resolves to*. [`FormSession::new`] resolves
+    /// that face through a default [`BuildContext`], which is right only when
+    /// the caller renders through a default one too.
+    ///
+    /// A caller that renders with [`BuildContext::with_substitution`] — an
+    /// explicit font directory, Croscore naming — and starts its session with
+    /// [`FormSession::new`] gets **two different substitutions over one
+    /// document**: the page's `/Arial` becomes Arimo (ascent 905, descent
+    /// −211) while the session's falls through to the built-in base-14
+    /// Helvetica (718, −219). Every height the session computes is then wrong
+    /// by the difference, which at 12pt is 2.148 units — enough to move a
+    /// caret a whole device row. Threading one context through both closes
+    /// it, and it is the same context that carries the font, colorspace and
+    /// image caches, so the fonts are also parsed once rather than twice.
+    ///
+    /// ```
+    /// use pdfrum::{BuildContext, Document, FormSession};
+    ///
+    /// let doc = Document::open("tests/fixtures/text_form.pdf")?;
+    /// // The context a caller would also render this document through.
+    /// let mut ctx = BuildContext::new();
+    /// let session = FormSession::with_context(&doc, &mut ctx);
+    /// assert!(session.focused_annot().is_none());
+    /// # Ok::<(), pdfrum::Error>(())
+    /// ```
+    #[must_use]
+    pub fn with_context(doc: &'a Document, ctx: &mut BuildContext) -> FormSession<'a> {
+        FormSession::build(doc, Inner::new(), ctx)
+    }
+
+    /// Starts a session with explicit switches *and* a caller-owned
+    /// [`BuildContext`] — [`FormSession::with_config`] and
+    /// [`FormSession::with_context`] together.
+    #[must_use]
+    pub fn with_config_in(
+        doc: &'a Document,
+        config: SessionConfig,
+        ctx: &mut BuildContext,
+    ) -> FormSession<'a> {
+        FormSession::build(doc, Inner::with_config(config), ctx)
     }
 
     /// The shared constructor: a session plus the fonts its appearances are
     /// laid out with.
-    fn build(doc: &'a Document, inner: Inner) -> FormSession<'a> {
-        let mut ctx = pdfrum_page::BuildContext::new();
-        let fonts = pdfrum_doc::ap::FormFonts::load(&doc.catalog(), doc.parser(), &mut ctx);
+    fn build(doc: &'a Document, inner: Inner, ctx: &mut BuildContext) -> FormSession<'a> {
+        let fonts = pdfrum_doc::ap::FormFonts::load(&doc.catalog(), doc.parser(), ctx);
         FormSession {
             doc,
             inner,
