@@ -512,6 +512,39 @@ the variant (it documents the PDF concept and gives us a place to implement
 `/EFF` later without a signature change) but `decrypt` matches `Stream |
 Embedded` in one arm. A doc comment records the reason.
 
+**Reversed 2026-09-02 (oracle-divergence audit, A26): `/EFF` is implemented,
+and the collapse was reproducing an oracle bug.** `grep '"EFF"' core/
+fpdfsdk/` over the oracle returns **zero hits**;
+`CPDF_SecurityHandler::LoadDict` (`cpdf_security_handler.cpp:303-311`) takes
+one filter name and builds one `CPDF_CryptoHandler`, so an embedded file
+stream decrypts with the *stream* filter whatever `/EFF` says — and a
+document whose `/EFF` names an AES filter while `/StmF` names an RC4 one
+silently produces garbage for every attachment. ISO 32000-1 §7.6.5 table 20
+defines `/EFF` as a distinct default for embedded file streams, independent
+of `/StmF`; pdf.js carries it separately, reading it with the `/StmF` default
+at `crypto.js:1120` (`eff = dict.get("EFF") || stmf`), consulting it at
+`:1206` and handing it to the cipher transform as `embeddedFilterName` at
+`:1336`. PLAN.md's oracle-bug rule (§212–229) therefore obliges the correct
+behaviour, and the D1 paragraph's own "place to implement `/EFF` later
+without a signature change" is exactly what was used.
+
+*What shipped:* `standard::embedded_cipher` resolves `/EFF` — the key's
+absence, a name equal to `/StmF`'s, and a `/CFM` resolving to the same cipher
+all mean "no override", which is table 20's default written three ways;
+`/Identity` gives `Cipher::None`; a name `/CF` does not carry falls back
+rather than refusing the document, since the streams still decrypt.
+`EncryptParams` and each `SecurityHandler` variant carry
+`embedded_cipher: Option<Cipher>`, and `decrypt`/`encrypt` route
+`CryptClass::Embedded` through it. Only the **cipher** can differ: §7.6.5
+gives every `/CF` entry the one file encryption key, so the override runs a
+different algorithm over the same key. `pdfrum-parser` passes
+`CryptClass::Embedded` for a stream whose `/Type` is `/EmbeddedFile`, read
+off the dictionary before the decrypt — safe, because a name is never
+enciphered. Blast radius **0 rows**: no corpus file carries an `/EFF` at all,
+so the six tests build their fixture on top of `encrypted.pdf`'s dictionary
+rather than taking one from the corpus. The site carries `// [oracle-bug]`
+with both citations.
+
 **D2 — decryption only; no encryption.** *(Half-lifted in M10, 2026-08-30.)*
 PDFium's `OnCreate`, `AES256_SetPassword`, `AES256_SetPerms` and
 `EncryptContent` exist to write encrypted files. This brief inventories the

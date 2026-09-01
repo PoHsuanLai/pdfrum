@@ -37,6 +37,20 @@ own tests.
   default, which PDFium does not implement. `/EFF` is unimplemented upstream, so
   `CryptClass::Embedded` decrypts exactly like `Stream` (D1); the variant is
   matched explicitly rather than through a `_` arm.
+
+  *Superseded 2026-09-02 (audit A26): `/EFF` is implemented; the collapse was
+  reproducing an oracle bug.* `grep '"EFF"' core/ fpdfsdk/` is empty and
+  `cpdf_security_handler.cpp:303-311` builds one crypto handler from one
+  filter name, so an attachment decrypts with the stream filter whatever
+  `/EFF` says — garbage, not degradation, when the two name different
+  methods. §7.6.5 table 20 makes `/EFF` a distinct default; pdf.js carries it
+  separately (`crypto.js:1120`, `:1206`, `:1336`). `EncryptParams` and each
+  handler variant now carry `embedded_cipher: Option<Cipher>` — `None` being
+  table 20's own "same as `/StmF`" default — and `pdfrum-parser` passes
+  `CryptClass::Embedded` for a `/Type /EmbeddedFile` stream. Only the cipher
+  differs; §7.6.5 gives every `/CF` entry the one file key. Blast radius
+  **0 rows**: no corpus file has an `/EFF`, so the six tests construct their
+  fixture. The site carries `// [oracle-bug]`.
 - **Revisions 2 to 4** (brief §1.4–§1.6): the 32-byte pad, Algorithm 2's MD5
   order with its 50-round `copy_len`-prefix loop, Algorithm 4/5's 20 RC4 rounds
   and 16-byte comparison, Algorithm 7's owner recovery with its 50-round

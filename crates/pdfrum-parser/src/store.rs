@@ -420,7 +420,18 @@ fn decrypt_node(
         Object::Dict(d) => Object::Dict(decrypt_dict(handler, obj, &d, deferred, in_sig, &[])),
         Object::Stream(s) => {
             let dict = decrypt_dict(handler, obj, &s.dict, deferred, in_sig, &[]);
-            let plain = handler.decrypt(obj, CryptClass::Stream, &s.data);
+            // An embedded file stream is its own crypt-filter class
+            // (ISO 32000-1 §7.6.5), and `/EFF` may name a different cipher
+            // from `/StmF`'s. The class is read off `/Type` before the
+            // decrypt, which is safe because a name is never enciphered.
+            // Where `/EFF` is absent or names the stream filter — every file
+            // in the corpus — the two classes are the same call.
+            let class = if s.dict.name(names::TYPE) == Some(names::EMBEDDED_FILE) {
+                CryptClass::Embedded
+            } else {
+                CryptClass::Stream
+            };
+            let plain = handler.decrypt(obj, class, &s.data);
             Object::Stream(Stream::new(dict, pdfrum_object::ByteSpan::from(plain)))
         }
         other => other,
