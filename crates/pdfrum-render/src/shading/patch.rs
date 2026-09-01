@@ -296,9 +296,17 @@ impl Points {
         (Self { grid: bottom }, Self { grid: top })
     }
 
-    /// The closed path of the twelve outer control points — the boundary,
-    /// never the interior ones.
-    fn boundary_path(&self) -> BezPath {
+    /// Write the closed path of the twelve outer control points — the
+    /// boundary, never the interior ones — into `into`, replacing whatever it
+    /// held.
+    ///
+    /// It takes a buffer rather than returning one because a single mesh
+    /// reaches this tens of thousands of times: `shading_axial_radial` fills
+    /// 28 368 cells, and a `BezPath` per cell is 28 368 allocate/free pairs
+    /// whose contents are six elements long and identical in shape every
+    /// time. `truncate(0)` keeps the capacity, so after the first cell the
+    /// path costs six pushes into memory that is already warm.
+    fn write_boundary_path(&self, into: &mut BezPath) {
         let g = |r: usize, c: usize| {
             self.grid
                 .get(r)
@@ -306,72 +314,141 @@ impl Points {
                 .copied()
                 .unwrap_or(Point::ZERO)
         };
+        into.truncate(0);
+        into.move_to(g(0, 0));
+        into.curve_to(g(0, 1), g(0, 2), g(0, 3));
+        into.curve_to(g(1, 3), g(2, 3), g(3, 3));
+        into.curve_to(g(3, 2), g(3, 1), g(3, 0));
+        into.curve_to(g(2, 0), g(1, 0), g(0, 0));
+        into.close_path();
+    }
+
+    /// The same path as its own value, for callers outside the subdivision
+    /// loop where one allocation is not worth threading a buffer for.
+    fn boundary_path(&self) -> BezPath {
         let mut p = BezPath::new();
-        p.move_to(g(0, 0));
-        p.curve_to(g(0, 1), g(0, 2), g(0, 3));
-        p.curve_to(g(1, 3), g(2, 3), g(3, 3));
-        p.curve_to(g(3, 2), g(3, 1), g(3, 0));
-        p.curve_to(g(2, 0), g(1, 0), g(0, 0));
-        p.close_path();
+        self.write_boundary_path(&mut p);
         p
     }
 }
 
-/// Subdivide one patch and fill its cells into `dest`.
+/// What the whole subdivision of one patch shares: the device it fills into,
+/// the patch's four corner colours, the ramp behind them, and the one path
+/// buffer every cell is written through.
 ///
-/// `dest` is the scratch device: every cell is drawn at **alpha 1.0** with
-/// antialiasing off, and the shading's alpha is applied by the caller when
-/// the scratch is blitted.
-#[expect(
-    clippy::too_many_arguments,
-    reason = "the eight after `dest` are the recursion's own state: the four \
-              corner colours plus the (left, bottom, x_scale, y_scale) \
-              lattice position each half inherits. Bundling them into a \
-              struct would add a construction at every one of the four \
-              recursive calls without removing a single value being threaded."
-)]
-#[expect(
-    clippy::too_many_lines,
-    reason = "the flatness test, the four-way split and the cell fill share \
-              the same subdivision state and each recursive call reads all of \
-              it; splitting them would turn locals into a parameter list as \
-              long as the body"
-)]
+/// These four are constant down the recursion, where the lattice position and
+/// the control points are what each level replaces. Separating them is what
+/// lets the path buffer exist at all — a value that must outlive every cell
+/// cannot be a parameter that each level re-derives.
+struct Cells<'a> {
+    dest: &'a mut dyn RenderDevice,
+    colors: &'a [IntColor; 4],
+    steps: Option<&'a ColorSteps>,
+    /// Reused by every cell; see [`Points::write_boundary_path`].
+    path: BezPath,
+}
+
+/// Where in the patch's colour lattice one cell sits.
+///
+/// `left`/`x_scale` walk the grid's first index (`c0 → c3`) and
+/// `bottom`/`y_scale` its second (`c0 → c1`); each split doubles the scale it
+/// halves and each half inherits the position that split assigns it. The four
+/// travel together because no operation here reads one without the other
+/// three.
+#[derive(Debug, Clone, Copy)]
+struct Lattice {
+    x_scale: i32,
+    y_scale: i32,
+    left: i32,
+    bottom: i32,
+}
+
+impl Lattice {
+    /// The lattice the whole patch starts from: one cell, at the origin.
+    const WHOLE: Self = Self {
+        x_scale: 1,
+        y_scale: 1,
+        left: 0,
+        bottom: 0,
+    };
+
+    /// The colour at this cell's own corner.
+    fn color_at(self, colors: &[IntColor; 4]) -> Option<IntColor> {
+        bilinear(colors, self.left, self.bottom, self.x_scale, self.y_scale)
+    }
+
+    /// The colour one lattice step away, `dx` cells right and `dy` up.
+    fn color_offset(self, colors: &[IntColor; 4], dx: i32, dy: i32) -> Option<IntColor> {
+        bilinear(
+            colors,
+            self.left.saturating_add(dx),
+            self.bottom.saturating_add(dy),
+            self.x_scale,
+            self.y_scale,
+        )
+    }
+
+    /// The two halves this lattice splits into along the `bottom` axis.
+    fn halve_vertically(self) -> (Self, Self) {
+        let ys = self.y_scale.saturating_mul(2);
+        let bb = self.bottom.saturating_mul(2);
+        (
+            Self {
+                y_scale: ys,
+                bottom: bb,
+                ..self
+            },
+            Self {
+                y_scale: ys,
+                bottom: bb.saturating_add(1),
+                ..self
+            },
+        )
+    }
+
+    /// The two halves this lattice splits into along the `left` axis.
+    fn halve_horizontally(self) -> (Self, Self) {
+        let xs = self.x_scale.saturating_mul(2);
+        let ll = self.left.saturating_mul(2);
+        (
+            Self {
+                x_scale: xs,
+                left: ll,
+                ..self
+            },
+            Self {
+                x_scale: xs,
+                left: ll.saturating_add(1),
+                ..self
+            },
+        )
+    }
+}
+
+/// Subdivide one patch and fill its cells into `cells.dest`.
+///
+/// The destination is the scratch device: every cell is drawn at **alpha 1.0**
+/// with antialiasing off, and the shading's alpha is applied by the caller
+/// when the scratch is blitted.
 #[expect(
     clippy::cast_sign_loss,
     reason = "every colour component is clamped to 0..=255 immediately before \
               its cast, so no negative value reaches one"
 )]
-fn subdivide(
-    dest: &mut dyn RenderDevice,
-    points: Points,
-    colors: &[IntColor; 4],
-    steps: Option<&ColorSteps>,
-    x_scale: i32,
-    y_scale: i32,
-    left: i32,
-    bottom: i32,
-    depth: u32,
-) {
+fn subdivide(cells: &mut Cells<'_>, points: Points, at: Lattice, depth: u32) {
     if !points.all_finite() {
         return; // Additive: a crafted mesh cannot spin the recursion forever.
     }
     let small = points.is_small();
-    let Some(c0) = bilinear(colors, left, bottom, x_scale, y_scale) else {
+    let Some(c0) = at.color_at(cells.colors) else {
         return;
     };
 
     let flat = small || depth >= MAX_DEPTH || {
         let (Some(c1), Some(c2), Some(c3)) = (
-            bilinear(colors, left, bottom.saturating_add(1), x_scale, y_scale),
-            bilinear(
-                colors,
-                left.saturating_add(1),
-                bottom.saturating_add(1),
-                x_scale,
-                y_scale,
-            ),
-            bilinear(colors, left.saturating_add(1), bottom, x_scale, y_scale),
+            at.color_offset(cells.colors, 0, 1),
+            at.color_offset(cells.colors, 1, 1),
+            at.color_offset(cells.colors, 1, 0),
         ) else {
             return;
         };
@@ -392,59 +469,25 @@ fn subdivide(
             let next = depth.saturating_add(1);
             if vertical_only {
                 let (b, t) = points.split_along_columns();
-                let ys = y_scale.saturating_mul(2);
-                let bb = bottom.saturating_mul(2);
-                subdivide(dest, b, colors, steps, x_scale, ys, left, bb, next);
-                subdivide(
-                    dest,
-                    t,
-                    colors,
-                    steps,
-                    x_scale,
-                    ys,
-                    left,
-                    bb.saturating_add(1),
-                    next,
-                );
+                let (lo, hi) = at.halve_vertically();
+                subdivide(cells, b, lo, next);
+                subdivide(cells, t, hi, next);
             } else if horizontal_only {
                 let (l, r) = points.split_along_rows();
-                let xs = x_scale.saturating_mul(2);
-                let ll = left.saturating_mul(2);
-                subdivide(dest, l, colors, steps, xs, y_scale, ll, bottom, next);
-                subdivide(
-                    dest,
-                    r,
-                    colors,
-                    steps,
-                    xs,
-                    y_scale,
-                    ll.saturating_add(1),
-                    bottom,
-                    next,
-                );
+                let (lo, hi) = at.halve_horizontally();
+                subdivide(cells, l, lo, next);
+                subdivide(cells, r, hi, next);
             } else {
                 // Both axes vary: halve along the columns, then halve each
                 // half along the rows, so the four cells inherit the lattice
                 // position each of their two splits assigns.
                 let (near, far) = points.split_along_columns();
-                let xs = x_scale.saturating_mul(2);
-                let ys = y_scale.saturating_mul(2);
-                let ll = left.saturating_mul(2);
-                let bb = bottom.saturating_mul(2);
-                for (half, by) in [(near, bb), (far, bb.saturating_add(1))] {
+                let (below, above) = at.halve_vertically();
+                for (half, band) in [(near, below), (far, above)] {
                     let (lo, hi) = half.split_along_rows();
-                    subdivide(dest, lo, colors, steps, xs, ys, ll, by, next);
-                    subdivide(
-                        dest,
-                        hi,
-                        colors,
-                        steps,
-                        xs,
-                        ys,
-                        ll.saturating_add(1),
-                        by,
-                        next,
-                    );
+                    let (l, r) = band.halve_horizontally();
+                    subdivide(cells, lo, l, next);
+                    subdivide(cells, hi, r, next);
                 }
             }
             return;
@@ -454,7 +497,7 @@ fn subdivide(
     if !flat {
         return;
     }
-    let color = match steps {
+    let color = match cells.steps {
         Some(ramp) => {
             let index = c0.first().copied().unwrap_or(0).clamp(0, 255) as usize;
             match ramp.entry(index) {
@@ -469,8 +512,9 @@ fn subdivide(
             b: c0.get(2).copied().unwrap_or(0).clamp(0, 255) as u8,
         },
     };
-    dest.fill_path(
-        &points.boundary_path(),
+    points.write_boundary_path(&mut cells.path);
+    cells.dest.fill_path(
+        &cells.path,
         Affine::IDENTITY,
         &Brush::Solid(color.to_peniko()),
         FillRule::Winding,
@@ -513,7 +557,13 @@ pub fn draw_patch(
     // it is also what says which of `to_int_color`'s two conversions applies.
     let range = steps.map(|_| component_range);
     let colors = patch.colors.map(|c| to_int_color(c, range));
-    subdivide(dest, points, &colors, steps, 1, 1, 0, 0, 0);
+    let mut cells = Cells {
+        dest,
+        colors: &colors,
+        steps,
+        path: BezPath::new(),
+    };
+    subdivide(&mut cells, points, Lattice::WHOLE, 0);
 }
 
 /// Whether a patch's device-space bbox lies wholly outside a target.
@@ -640,6 +690,50 @@ mod tests {
             rows_lo.grid[3][0], rows_hi.grid[0][0],
             "and so do the other axis's"
         );
+    }
+
+    /// The lattice halvings are the arithmetic the old parameter list wrote
+    /// inline, unchanged.
+    ///
+    /// `Points::split_along_columns` walks the grid's second index, which is
+    /// the axis `bottom`/`y_scale` tracks, so it must pair with
+    /// `halve_vertically`; `split_along_rows` walks the first and pairs with
+    /// `halve_horizontally`. `each_split_advances_the_lattice_axis_it_walks`
+    /// pins the geometry half of that relationship and this pins the
+    /// arithmetic half — together they are what stops the colour field being
+    /// reflected across the patch's anti-diagonal.
+    #[test]
+    fn halving_a_lattice_doubles_the_scale_and_indexes_the_half() {
+        let (lo, hi) = Lattice::WHOLE.halve_vertically();
+        assert_eq!((lo.y_scale, lo.bottom), (2, 0));
+        assert_eq!((hi.y_scale, hi.bottom), (2, 1));
+        assert_eq!(
+            (lo.x_scale, lo.left, hi.x_scale, hi.left),
+            (1, 0, 1, 0),
+            "the other axis is untouched"
+        );
+
+        let (lo, hi) = Lattice::WHOLE.halve_horizontally();
+        assert_eq!((lo.x_scale, lo.left), (2, 0));
+        assert_eq!((hi.x_scale, hi.left), (2, 1));
+        assert_eq!(
+            (lo.y_scale, lo.bottom, hi.y_scale, hi.bottom),
+            (1, 0, 1, 0),
+            "and so is this one"
+        );
+
+        // The four-way split is one halving of each, in that order, and the
+        // four cells it produces are the lattice's four quadrants.
+        let (below, above) = Lattice::WHOLE.halve_vertically();
+        let quadrants: Vec<(i32, i32)> = [below, above]
+            .into_iter()
+            .flat_map(|band| {
+                let (l, r) = band.halve_horizontally();
+                [(l.left, l.bottom), (r.left, r.bottom)]
+            })
+            .collect();
+        assert_eq!(quadrants, vec![(0, 0), (1, 0), (0, 1), (1, 1)]);
+        assert_eq!(above.y_scale, 2);
     }
 
     /// A Coons patch's four derived points land in the slots a tensor patch
