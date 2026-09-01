@@ -1,0 +1,526 @@
+//! Focus traversal order: which annotation Tab moves to next.
+//!
+//! This is **not** the order annotations are drawn or hit-tested in. Those
+//! sort by a layout band and put the focused annotation first or last; this
+//! one reads the page's own `/Tabs` entry and produces a ring that focus walks
+//! and never wraps.
+//!
+//! # Three orders, and only two of them sort anything
+//!
+//! - **Structure** — plain annotation order, with no sorting at all. This is
+//!   the default, and it is what *anything other than* `R` or `C` selects.
+//!   The `S` spelling the specification defines is not special-cased: it
+//!   falls through to the same branch that an absent entry does.
+//! - **Row** — reading order across the page: repeatedly take the topmost
+//!   remaining annotation, then take everything whose vertical centre falls
+//!   strictly inside its band, left to right.
+//! - **Column** — the same idea rotated: leftmost first, banding on
+//!   horizontal centres.
+//!
+//! # Why this terminates and the original does not
+//!
+//! The C++'s row and column loops both contain `if (index < 0) continue;`
+//! inside a `while (!list.empty())` that erases nothing on that path — so a
+//! page whose every remaining annotation has a non-positive top spins
+//! forever. It is not reachable from any file in the corpus, and no test
+//! asserts it, which is why it has survived.
+//!
+//! This banding is a fold that consumes its input: when no candidate is
+//! found, the remainder is appended in index order and the caller is told.
+//! **A library that can hang on input is a bug regardless of what the oracle
+//! does**, and this is the one place in the crate where the behaviour is
+//! deliberately better rather than identical.
+
+use crate::session::AnnotId;
+
+/// A rectangle in page space, as a focusable annotation's `/Rect`.
+///
+/// The raw rectangle, deliberately: the ring is built from `/Rect` and not
+/// from the inflated box a focused widget draws into.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Rect {
+    /// Left edge.
+    pub left: f32,
+    /// Bottom edge.
+    pub bottom: f32,
+    /// Right edge.
+    pub right: f32,
+    /// Top edge.
+    pub top: f32,
+}
+
+impl Rect {
+    /// A rectangle from its four edges.
+    #[must_use]
+    pub fn new(left: f32, bottom: f32, right: f32, top: f32) -> Rect {
+        Rect {
+            left,
+            bottom,
+            right,
+            top,
+        }
+    }
+
+    /// The vertical midpoint, which row banding tests.
+    #[must_use]
+    pub fn center_y(self) -> f32 {
+        (self.top + self.bottom) / 2.0
+    }
+
+    /// The horizontal midpoint, which column banding tests.
+    #[must_use]
+    pub fn center_x(self) -> f32 {
+        (self.left + self.right) / 2.0
+    }
+}
+
+/// Which traversal order a page asks for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum TabOrder {
+    /// Annotation order, unsorted. The default, and what any unrecognized
+    /// `/Tabs` value means.
+    #[default]
+    Structure,
+    /// Reading order across rows.
+    Row,
+    /// Reading order down columns.
+    Column,
+}
+
+impl TabOrder {
+    /// Reads the order from a page's `/Tabs` value.
+    ///
+    /// Only `R` and `C` are recognized. Everything else — including the `S`
+    /// the specification defines for structure order, and an absent entry —
+    /// is structure order, because that is the branch the oracle falls
+    /// through to.
+    #[must_use]
+    pub fn from_tabs(tabs: Option<&[u8]>) -> TabOrder {
+        match tabs {
+            Some(b"R") => TabOrder::Row,
+            Some(b"C") => TabOrder::Column,
+            _ => TabOrder::Structure,
+        }
+    }
+}
+
+/// One annotation eligible for focus.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Focusable {
+    /// Which annotation.
+    pub id: AnnotId,
+    /// Its rectangle.
+    pub rect: Rect,
+}
+
+/// The focus ring for one page, in traversal order.
+///
+/// `degenerate` reports that the banding could not make progress and the
+/// remainder was appended in index order — the recovery that replaces the
+/// oracle's hang.
+#[derive(Debug, Clone, PartialEq)]
+pub struct FocusRing {
+    /// The annotations, in traversal order.
+    pub order: Vec<AnnotId>,
+    /// Whether the banding degenerated.
+    pub degenerate: bool,
+}
+
+impl FocusRing {
+    /// Builds the ring for a page.
+    ///
+    /// `annots` arrives in annotation order and must already be filtered to
+    /// the focusable subtypes — signature widgets excluded, which the caller
+    /// does because only it knows which widgets are signatures.
+    #[must_use]
+    pub fn build(annots: &[Focusable], order: TabOrder) -> FocusRing {
+        match order {
+            TabOrder::Structure => FocusRing {
+                order: annots.iter().map(|a| a.id).collect(),
+                degenerate: false,
+            },
+            TabOrder::Row => band(annots, Axis::Row),
+            TabOrder::Column => band(annots, Axis::Column),
+        }
+    }
+
+    /// The annotation after `current`, or `None` at the end.
+    ///
+    /// Focus does not wrap: the last annotation has no next, which is what
+    /// makes a fifth Tab across four fields report the event unconsumed.
+    #[must_use]
+    pub fn next(&self, current: AnnotId) -> Option<AnnotId> {
+        let at = self.order.iter().position(|a| *a == current)?;
+        self.order.get(at + 1).copied()
+    }
+
+    /// The annotation before `current`, or `None` at the start.
+    #[must_use]
+    pub fn prev(&self, current: AnnotId) -> Option<AnnotId> {
+        let at = self.order.iter().position(|a| *a == current)?;
+        self.order.get(at.checked_sub(1)?).copied()
+    }
+
+    /// The first annotation, which a forward Tab from nothing lands on.
+    #[must_use]
+    pub fn first(&self) -> Option<AnnotId> {
+        self.order.first().copied()
+    }
+
+    /// The last annotation, which a backward Tab from nothing lands on.
+    ///
+    /// That the two differ is the whole reason both exist: with nothing
+    /// focused, forward and backward Tab land on *different* annotations,
+    /// because the cursor starts between the ends rather than before them.
+    #[must_use]
+    pub fn last(&self) -> Option<AnnotId> {
+        self.order.last().copied()
+    }
+
+    /// How many annotations are in the ring.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.order.len()
+    }
+
+    /// Whether nothing is focusable.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.order.is_empty()
+    }
+}
+
+/// Which axis a banding pass runs along.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Axis {
+    Row,
+    Column,
+}
+
+/// The banding fold, shared by the row and column orders.
+///
+/// Each pass picks a seed — the topmost remaining for rows, the leftmost for
+/// columns — emits it, then emits every remaining annotation whose centre on
+/// the cross axis lies **strictly** inside the seed's extent, in index order.
+/// The comparisons are strict at both ends, so an annotation exactly level
+/// with a band's edge starts a new band rather than joining that one.
+fn band(annots: &[Focusable], axis: Axis) -> FocusRing {
+    // Sort by the axis's primary key, keeping annotation order within ties.
+    let mut remaining: Vec<Focusable> = annots.to_vec();
+    match axis {
+        Axis::Row => remaining.sort_by(|a, b| {
+            a.rect
+                .left
+                .partial_cmp(&b.rect.left)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        }),
+        Axis::Column => remaining.sort_by(|a, b| {
+            b.rect
+                .top
+                .partial_cmp(&a.rect.top)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        }),
+    }
+
+    let mut order = Vec::with_capacity(remaining.len());
+    let mut degenerate = false;
+
+    while !remaining.is_empty() {
+        let Some(seed) = seed_index(&remaining, axis) else {
+            // No candidate: the oracle would spin here. Append what is left
+            // in index order and say so.
+            degenerate = true;
+            order.extend(remaining.iter().map(|a| a.id));
+            break;
+        };
+
+        let Some(head) = remaining.get(seed).copied() else {
+            degenerate = true;
+            order.extend(remaining.iter().map(|a| a.id));
+            break;
+        };
+        remaining.remove(seed);
+        order.push(head.id);
+
+        // Everything whose cross-axis centre is strictly inside the seed's
+        // extent joins this band, in index order.
+        let mut kept = Vec::with_capacity(remaining.len());
+        for annot in remaining.drain(..) {
+            let joins = match axis {
+                Axis::Row => {
+                    annot.rect.center_y() > head.rect.bottom
+                        && annot.rect.center_y() < head.rect.top
+                }
+                Axis::Column => {
+                    annot.rect.center_x() > head.rect.left
+                        && annot.rect.center_x() < head.rect.right
+                }
+            };
+            if joins {
+                order.push(annot.id);
+            } else {
+                kept.push(annot);
+            }
+        }
+        remaining = kept;
+    }
+
+    FocusRing { order, degenerate }
+}
+
+/// Picks the next band's seed, or `None` when nothing qualifies.
+///
+/// The scan runs **downward** with a strict comparison, so a tie resolves to
+/// the lowest index — which after the primary sort means the leftmost of the
+/// tied annotations for a row pass.
+fn seed_index(remaining: &[Focusable], axis: Axis) -> Option<usize> {
+    match axis {
+        Axis::Row => {
+            let mut best: Option<usize> = None;
+            let mut top = 0.0f32;
+            for (i, annot) in remaining.iter().enumerate().rev() {
+                if annot.rect.top > top {
+                    best = Some(i);
+                    top = annot.rect.top;
+                }
+            }
+            best
+        }
+        Axis::Column => {
+            // Two upstream quirks are reproduced here rather than tidied,
+            // because both are reachable and both change the order.
+            //
+            // The guard is `left < 0`, which reads as "nothing chosen yet"
+            // only while coordinates are positive. A page whose annotations
+            // sit at negative x re-enters it on later iterations, and each
+            // time it does it seeds **index zero** rather than the index it
+            // is looking at. Neither is what the row pass does, and the
+            // difference is why the two passes are not one function with a
+            // flipped axis.
+            let mut best: Option<usize> = None;
+            let mut left = -1.0f32;
+            for (i, annot) in remaining.iter().enumerate().rev() {
+                if left < 0.0 {
+                    best = Some(0);
+                    left = annot.rect.left;
+                } else if annot.rect.left < left {
+                    best = Some(i);
+                    left = annot.rect.left;
+                }
+            }
+            best
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn annot(index: u32, left: f32, bottom: f32, right: f32, top: f32) -> Focusable {
+        Focusable {
+            id: AnnotId::new(0, index),
+            rect: Rect::new(left, bottom, right, top),
+        }
+    }
+
+    fn ids(ring: &FocusRing) -> Vec<u32> {
+        ring.order.iter().map(|a| a.index).collect()
+    }
+
+    /// Only `R` and `C` are recognized; `S` is not special-cased and lands in
+    /// the same branch as an absent entry.
+    #[test]
+    fn the_tabs_entry_recognizes_exactly_two_spellings() {
+        assert_eq!(TabOrder::from_tabs(Some(b"R")), TabOrder::Row);
+        assert_eq!(TabOrder::from_tabs(Some(b"C")), TabOrder::Column);
+        assert_eq!(TabOrder::from_tabs(Some(b"S")), TabOrder::Structure);
+        assert_eq!(TabOrder::from_tabs(Some(b"r")), TabOrder::Structure);
+        assert_eq!(TabOrder::from_tabs(Some(b"")), TabOrder::Structure);
+        assert_eq!(TabOrder::from_tabs(None), TabOrder::Structure);
+    }
+
+    #[test]
+    fn structure_order_sorts_nothing() {
+        let annots = [
+            annot(0, 500.0, 500.0, 600.0, 600.0),
+            annot(1, 0.0, 0.0, 100.0, 100.0),
+            annot(2, 200.0, 700.0, 300.0, 800.0),
+        ];
+        let ring = FocusRing::build(&annots, TabOrder::Structure);
+        assert_eq!(ids(&ring), vec![0, 1, 2]);
+        assert!(!ring.degenerate);
+    }
+
+    /// Focus does not wrap in either direction.
+    #[test]
+    fn the_ring_has_two_ends_and_no_wrap() {
+        let annots = [
+            annot(0, 0.0, 0.0, 10.0, 10.0),
+            annot(1, 0.0, 20.0, 10.0, 30.0),
+            annot(2, 0.0, 40.0, 10.0, 50.0),
+        ];
+        let ring = FocusRing::build(&annots, TabOrder::Structure);
+
+        assert_eq!(ring.next(AnnotId::new(0, 0)), Some(AnnotId::new(0, 1)));
+        assert_eq!(ring.next(AnnotId::new(0, 2)), None);
+        assert_eq!(ring.prev(AnnotId::new(0, 2)), Some(AnnotId::new(0, 1)));
+        assert_eq!(ring.prev(AnnotId::new(0, 0)), None);
+    }
+
+    /// With nothing focused, forward and backward Tab land on different
+    /// annotations — the cursor starts between the ends, not before them.
+    #[test]
+    fn the_two_ends_are_different_annotations() {
+        let annots = [
+            annot(0, 0.0, 0.0, 10.0, 10.0),
+            annot(1, 0.0, 20.0, 10.0, 30.0),
+        ];
+        let ring = FocusRing::build(&annots, TabOrder::Structure);
+        assert_eq!(ring.first(), Some(AnnotId::new(0, 0)));
+        assert_eq!(ring.last(), Some(AnnotId::new(0, 1)));
+        assert_ne!(ring.first(), ring.last());
+    }
+
+    /// Row order reads across the page, one band at a time — but the band's
+    /// *seed* is the rightmost of the annotations tied for topmost, not the
+    /// leftmost, and the reading order that follows is relative to it.
+    ///
+    /// Two rows of two, indices deliberately not in reading order, gives
+    /// `3, 1, 0, 2` rather than the `1, 3, 2, 0` a reader expects. The seed
+    /// scan runs from the highest index down with a strict comparison, so an
+    /// annotation only displaces the running best by being *strictly* higher;
+    /// the tied one visited first — which after the left-ascending sort is
+    /// the rightmost — keeps the seat. This is the oracle's order and it is
+    /// what the goldens contain.
+    #[test]
+    fn row_order_seeds_each_band_with_the_rightmost_of_the_topmost() {
+        let annots = [
+            annot(0, 300.0, 100.0, 400.0, 150.0), // bottom row, right
+            annot(1, 100.0, 500.0, 200.0, 550.0), // top row, left
+            annot(2, 100.0, 100.0, 200.0, 150.0), // bottom row, left
+            annot(3, 300.0, 500.0, 400.0, 550.0), // top row, right
+        ];
+        let ring = FocusRing::build(&annots, TabOrder::Row);
+        assert_eq!(ids(&ring), vec![3, 1, 0, 2]);
+        assert!(!ring.degenerate);
+    }
+
+    /// With no tie the seed is simply the topmost, and the band that follows
+    /// it reads left to right.
+    #[test]
+    fn an_untied_row_band_reads_left_to_right() {
+        let annots = [
+            annot(0, 300.0, 500.0, 400.0, 540.0), // top row, right, lower top
+            annot(1, 100.0, 500.0, 200.0, 550.0), // top row, left, highest
+            annot(2, 100.0, 100.0, 200.0, 150.0), // bottom row
+        ];
+        let ring = FocusRing::build(&annots, TabOrder::Row);
+        assert_eq!(ids(&ring), vec![1, 0, 2]);
+    }
+
+    /// Column order bands on horizontal centres, and its seed rule is the
+    /// quirky one: the guard reads "nothing chosen yet" as `left < 0`, and
+    /// when it fires it seeds index **zero** rather than the index being
+    /// looked at. Both are reproduced, so this order is what the oracle
+    /// produces rather than what a rotated row pass would.
+    #[test]
+    fn column_order_reads_down_bands() {
+        let annots = [
+            annot(0, 300.0, 100.0, 400.0, 150.0), // right column, bottom
+            annot(1, 100.0, 500.0, 200.0, 550.0), // left column, top
+            annot(2, 100.0, 100.0, 200.0, 150.0), // left column, bottom
+            annot(3, 300.0, 500.0, 400.0, 550.0), // right column, top
+        ];
+        let ring = FocusRing::build(&annots, TabOrder::Column);
+        assert_eq!(ids(&ring), vec![1, 2, 3, 0]);
+        assert!(!ring.degenerate);
+    }
+
+    /// The banding comparison is strict at both ends, so an annotation whose
+    /// centre sits exactly on a band edge starts its own band.
+    #[test]
+    fn a_centre_exactly_on_a_band_edge_does_not_join_it() {
+        // The second annotation's centre y is exactly the first's bottom.
+        let annots = [
+            annot(0, 0.0, 100.0, 50.0, 200.0),
+            annot(1, 100.0, 50.0, 150.0, 150.0),
+        ];
+        let ring = FocusRing::build(&annots, TabOrder::Row);
+        assert_eq!(annots[1].rect.center_y(), annots[0].rect.bottom);
+        // Both are still emitted, but as two bands rather than one.
+        assert_eq!(ids(&ring), vec![0, 1]);
+    }
+
+    /// The case the oracle spins on: every annotation's top is non-positive,
+    /// so its downward scan never finds a candidate and its loop erases
+    /// nothing. Here the remainder is appended and the caller is told.
+    #[test]
+    fn banding_terminates_where_the_oracle_would_hang() {
+        let annots = [
+            annot(0, 10.0, -200.0, 20.0, -100.0),
+            annot(1, 30.0, -400.0, 40.0, -300.0),
+        ];
+        let ring = FocusRing::build(&annots, TabOrder::Row);
+
+        assert!(ring.degenerate, "the recovery should be reported");
+        assert_eq!(ring.len(), 2, "no annotation may be dropped");
+        assert_eq!(ids(&ring), vec![0, 1]);
+    }
+
+    /// A top of exactly zero is the boundary case, and it degenerates too:
+    /// the comparison is strict.
+    #[test]
+    fn a_zero_top_is_on_the_hanging_side_of_the_comparison() {
+        let annots = [annot(0, 0.0, -10.0, 10.0, 0.0)];
+        let ring = FocusRing::build(&annots, TabOrder::Row);
+        assert!(ring.degenerate);
+        assert_eq!(ids(&ring), vec![0]);
+    }
+
+    /// Whatever the geometry, every annotation comes out exactly once and the
+    /// pass returns. This is the property the oracle cannot state.
+    #[test]
+    fn banding_always_terminates_and_preserves_every_annotation() {
+        for seed in 0..200u32 {
+            let mut bits = seed.wrapping_mul(2_654_435_761);
+            let mut annots = Vec::new();
+            for i in 0..6u32 {
+                let mut next = || {
+                    bits = bits.wrapping_mul(1_103_515_245).wrapping_add(12_345);
+                    ((bits >> 16) % 1000) as f32 - 500.0
+                };
+                let (x, y) = (next(), next());
+                annots.push(annot(i, x, y, x + 20.0, y + 20.0));
+            }
+
+            for order in [TabOrder::Row, TabOrder::Column, TabOrder::Structure] {
+                let ring = FocusRing::build(&annots, order);
+                assert_eq!(ring.len(), 6, "annotation lost at seed {seed}");
+
+                let mut seen: Vec<u32> = ring.order.iter().map(|a| a.index).collect();
+                seen.sort_unstable();
+                assert_eq!(seen, vec![0, 1, 2, 3, 4, 5], "duplicate at seed {seed}");
+            }
+        }
+    }
+
+    #[test]
+    fn an_empty_page_has_an_empty_ring() {
+        let ring = FocusRing::build(&[], TabOrder::Row);
+        assert!(ring.is_empty());
+        assert_eq!(ring.first(), None);
+        assert_eq!(ring.last(), None);
+        assert!(!ring.degenerate);
+    }
+
+    /// An annotation the ring does not contain has neither a next nor a
+    /// previous, rather than defaulting to an end.
+    #[test]
+    fn an_unknown_annotation_has_no_neighbours() {
+        let annots = [annot(0, 0.0, 0.0, 10.0, 10.0)];
+        let ring = FocusRing::build(&annots, TabOrder::Structure);
+        assert_eq!(ring.next(AnnotId::new(0, 99)), None);
+        assert_eq!(ring.prev(AnnotId::new(0, 99)), None);
+    }
+}
