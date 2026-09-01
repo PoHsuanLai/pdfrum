@@ -189,8 +189,8 @@ pub use edit::{ImageBuilder, PageEdit, PathBuilder, TextBuilder};
 pub use error::{Error, Result};
 pub use form::{Field, FieldFlags, FieldKind, Form};
 pub use form_session::{
-    AppearanceUpdate, EventModifiers, EventResponse, FormSession, MouseButton, UpdateKind,
-    VirtualKey,
+    AppearanceUpdate, EventModifiers, EventResponse, FormSession, MouseButton, SessionConfig,
+    UpdateKind, VirtualKey,
 };
 pub use outline::{Bookmark, Outline};
 pub use page::{Page, Rotation};
