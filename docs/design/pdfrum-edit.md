@@ -266,6 +266,21 @@ null check, so a missing new object leaves no stale entry. New objects are
 **not** filtered through `objects_with_refs` — an unreferenced newly created
 object is still written.
 
+**Wired 2026-09-03.** `write::subset_fonts` is the hook and
+`write::write_override` the branch: with `subset_new_fonts` set,
+`font::overrides::build` produces the map and each new object is written
+through it, exactly as above. Two details are ours rather than the C++'s, both
+because our subsetter renumbers glyphs where HarfBuzz's `RETAIN_GIDS` does not
+(§5's D1):
+
+- the pass may **mint** an object — the `/CIDToGIDMap` that absorbs the
+  renumbering — so its numbers are appended to `new_obj_num_array_`'s
+  equivalent before the loop runs, taken from one past everything in play;
+- the map is keyed by object number and consulted with `get`, so an override
+  of an object the loop was already going to visit costs one lookup and one
+  branch. A save with the option off builds an empty map and does not walk
+  the page tree at all.
+
 ### 1.8 Stage 2c — the inline encrypt dictionary (`:326-340`)
 
 If the encrypt dict exists and `IsInline()` (it was written as a direct
@@ -1239,6 +1254,78 @@ about this.
 If the subset came back empty, the candidate is skipped entirely — the
 original font survives unmodified.
 
+**What we implement, against this inventory (2026-09-03).** The collection
+ladder is ported rung for rung, with the candidate keyed by the font-program
+object number and the used-glyph set accumulated across every page that draws
+with it. Four deliberate differences, each a consequence of §5's D1:
+
+1. **Candidates are narrower.** A candidate must be `/Type0` with a
+   `CIDFontType2` descendant. The C++ admits a *simple* font with
+   `/FontFile2` too; a subsetted simple font would render nothing here,
+   because the `subsetter` crate removes the `cmap` its codes reach glyphs
+   through. `/FontFile` (Type 1) is skipped by both.
+2. **An `OTTO` program is skipped rather than converted.** The C++ subsets it,
+   switches the descendant to `/CIDFontType0` and moves the stream to
+   `/FontFile3`. A `CIDFontType0` reaches glyphs with the CID *as* the glyph
+   index and never consults `/CIDToGIDMap` (`cpdf_cidfont.cpp:508-518`), so
+   the renumbering would have nowhere to go but the content streams.
+   `IsOpenTypeCFF` is still ported, as the test that recognises the case.
+3. **`/W` and `/ToUnicode` are carried through untouched**, so neither
+   `CreateWidthsArray` nor `LoadUnicode` is ported — the two modules that held
+   them are deleted. Both are keyed by CID, and the CID space does not move.
+   The C++'s rebuild of them is a *pruning* to the codes still drawn; a
+   correct reader cannot observe the difference, and R15's text-extraction
+   obligation is met trivially rather than by reconstruction.
+4. **One object is added**: the `/CIDToGIDMap` stream, a big-endian `u16` per
+   CID sized to the highest CID drawn (ISO 32000-1 §9.7.4.2). It is what makes
+   items 1 and 3 possible.
+
+5. **Every object in the chain must be new, not just the root font.** The
+   C++ tests `binary_search(new_obj_nums, root_font->GetObjNum())` and nothing
+   else (`:262-265`), which is safe *for it* because it only runs over fonts
+   PDFium itself created, where the whole chain is new by construction and the
+   1:1 mapping its header promises holds. We run over whatever a caller
+   imported, so an old `/Font` dictionary sharing the same `/FontFile2` would
+   be left pointing at a subset built for somebody else's glyph set. The
+   descendant, the descriptor and the program are all checked. Costs nothing:
+   the import path copies the whole chain into fresh numbers.
+
+A candidate whose subset is not *smaller* than the original is also skipped,
+which the C++ does not check — it costs five rewritten objects to find out,
+and the option exists to make files smaller.
+
+**What can produce a new embedded font today, audited 2026-09-03.** Exactly
+one path: **page import**. `import_pages` and `n_page_to_one` share
+`import/copy.rs`'s `copy_object`, which gives every object it follows a fresh
+destination number, and a `/FontFile2` inside a `/FontDescriptor` matches none
+of the pruning rules — so the whole `/Type0` → `/DescendantFonts` →
+`/FontDescriptor` → `/FontFile2` chain is copied new. That is what §3.7's
+divergence 5 relies on, and it is a real path with real files.
+
+Nothing else reaches this stage, and the audit is worth recording because the
+list is shorter than it looks:
+
+- **`pdfrum::edit`'s `TextBuilder` embeds nothing.** It takes an `ObjRef` to a
+  `/Font` the page's resources can already reach and sets `font_source`; the
+  only way a caller obtains one is `PageEdit::font_of`, reading it back off an
+  existing text object.
+- **Content regeneration mints no font.** `ResourceTable::realize` allocates a
+  *name* for an object that already exists; `realize_dict`, which can mint an
+  inline dictionary, is called only for `/ExtGState`.
+- **Appearance generation embeds no program.** `ap::font_map`'s
+  `substitute_font_dict` does build a `/FontDescriptor`, but only to carry the
+  non-symbolic flag — `/BaseFont` names a face the substitution machinery
+  resolves at render time, and there is no `/FontFile*` at all. Nothing to
+  subset.
+
+**There is no `FPDFText_LoadFont` equivalent anywhere in the workspace** — no
+public function takes font bytes from a caller and embeds them. `subset`
+takes bytes, but hands the result back rather than writing it into a
+document. Adding one is a separate scope question: it would be an
+`EditDoc`-level API constructing the same four-object chain `collect::admit`
+already recognises, and this stage would then subset its output with no
+change.
+
 `IsOpenTypeCFF` (`core/fxge/fx_font.cpp:225-231`) is a four-byte `OTTO` tag
 test on the **original** (filtered) font bytes.
 
@@ -1377,6 +1464,45 @@ This is a large enough behavioral delta that it is called out as an
 **escalation** (E4) as well as a divergence: an alternative is to write our own
 retain-GIDs subsetter, which DEPS.md's closed set forbids without a `[spec]`
 change.
+
+**Revised 2026-09-03, when the stage was wired. Items 3, 4 and 5 above
+describe a design that was not built, and item 1's parenthetical is the one
+that was.** The renumbering is absorbed in a rewritten **`/CIDToGIDMap`**, not
+by re-keying. ISO 32000-1 §9.7.4.2 already defines a per-CID glyph index for a
+`CIDFontType2`, so writing one that sends each CID to its *new* glyph leaves
+every other thing that named a glyph alone. What that changes about the four
+items:
+
+- **3 and 4 are wrong as written.** `/W` and `/ToUnicode` are keyed by CID,
+  the CID space does not move, and both are carried through **untouched**.
+  `font/widths.rs` and `font/tounicode.rs`, which implemented the re-keying,
+  are deleted.
+- **5 is wrong, and it was the expensive one.** No content stream is
+  regenerated and no char code changes, so subsetting is *not* coupled to
+  content regeneration and `SaveMode` gains no rule. That coupling was never
+  merely awkward: `crate::content`'s emitter drops character spacing, word
+  spacing, shadings, text clips and soft masks, so a page regenerated to save
+  a few kilobytes of font would have come back visibly changed. The wired
+  stage's proof is the opposite assertion — a subsetted save renders
+  **pixel-identically** to the same save without it
+  (`crates/pdfrum/tests/subset.rs`).
+- **2 stands, and narrows once more.** Only CID fonts are subsetted, and among
+  those only `CIDFontType2`: an OpenType-CFF program's descendant is a
+  `CIDFontType0`, where the CID *is* the glyph index and `/CIDToGIDMap` is
+  never read (`cpdf_cidfont.cpp:508-518`), so it is skipped rather than
+  converted. §3.7 lists all four differences against the C++ inventory.
+- **6 stands.** The measured numbers on `latin_extended.pdf`, whose page draws
+  most of Latin Extended through a 1294-glyph Roboto: the program goes from
+  35636 to 20424 bytes uncompressed, 13358 to 12970 compressed, and the
+  `/CIDToGIDMap` costs 410. That fixture is close to the worst case for the
+  ratio; the C++'s 2–3.5% figures are for a CJK face showing one character.
+
+**E4's escalation is therefore narrower than it was.** The `[spec]` widening
+of `subset(font_bytes, gids)` to return `Subsetted { bytes, gid_map }` is
+still needed — the map is what the `/CIDToGIDMap` is built from. The sentence
+recording that subsetting covers CID fonts only still stands. But the
+re-keying contract E4 proposed to add is not part of it, and no first-party
+retain-GIDs subsetter is needed to avoid regenerating content.
 
 **D2 — no pause/resume stage machine.** `CPDF_Creator::Stage` and `Continue()`
 exist for the public API's incremental-save-with-pause facility. `save` is one
@@ -1632,11 +1758,13 @@ crates/pdfrum-edit/src/
     viewer.rs     // §3.5 the viewer-preference filter
 
   font/
-    mod.rs        // subset_new_fonts(edit: &EditDoc, new_nums: &[u32]) -> Overrides
-    collect.rs    // §3.2 candidate collection from parsed pages
-    subset.rs     // the `subsetter` call + the GID remap consequences (D1)
-    widths.rs     // CreateWidthsArray, re-keyed (D1.3)
-    tounicode.rs  // LoadUnicode, re-keyed (D1.4)
+    mod.rs        // the `subsetter` call, the GID remap (D1), subset naming
+    collect.rs    // §3.7 candidate collection, over operators rather than
+                  // page objects
+    overrides.rs  // build(doc, new_nums, id_source, &mut next) -> Overrides,
+                  // incl. the `/CIDToGIDMap` that absorbs the remap (D1)
+    // `widths.rs` / `tounicode.rs` are gone: D1's revision carries `/W` and
+    // `/ToUnicode` through untouched, so neither array is ever rebuilt.
 
   error.rs        // Error (thiserror)
 ```
@@ -1740,9 +1868,12 @@ All small records:
 - `GraphicsKey { fill_alpha: f32, stroke_alpha: f32, blend: BlendMode }` and
   `FontKey { base_font: Name, subtype: Name }` — the dedup map keys
   (`cpdf_pageobjectholder.h:37-50`).
-- `SubsetCandidate { name: Vec<u8>, stream: ObjRef, root: ObjRef,
-  cid: Option<ObjRef>, descriptor: ObjRef, gids: BTreeSet<u16>,
-  widths: BTreeMap<u32, u32>, unicode: BTreeMap<u32, Vec<u32>> }`.
+- `font::collect::Candidate { root_font: ObjRef, cid_font: ObjRef,
+  descriptor: ObjRef, base_name: Vec<u8>, used_gids: BTreeSet<u16>,
+  cid_to_gid: BTreeMap<u16, u16> }` — keyed by the font-program object
+  number. No `widths` or `unicode` map, because D1's revision rebuilds
+  neither; `cid_to_gid` is what `/CIDToGIDMap` is built from, and `cid_font`
+  is not optional because a simple font is never a candidate.
 - `PageRange(Vec<RangeInclusive<u32>>)` with `PageRange::parse(&str)`.
 
 No trait beyond the `Resolve` impl on `EditDoc` (STYLE §2b's closed seam list —
@@ -1887,6 +2018,25 @@ From `fpdf_save_embeddertest.cpp`'s `FPDFSaveWithFontSubsetEmbedderTest`
 ports as "subsetting strictly reduces the output"; and `TestExtractedFont`'s
 char-by-char extraction of the saved document — that one ports **exactly** and
 is the strongest guarantee that our GID re-keying (D1) preserves text.
+
+**What was actually portable, 2026-09-03.** Every C++ case above builds its
+document by calling `FPDFText_LoadFont` with the bytes of a `.ttf` from
+`testing/resources`. **We have no such API** — §3.7's audit found page import
+to be the only path that produces a new embedded font at all — so no case that
+loads a font from bytes ports as written. `crates/pdfrum/tests/subset.rs`
+reaches the same assertions through an import of `latin_extended.pdf`, whose
+page already carries an embedded `Roboto-Regular`:
+
+| C++ case | Ported as |
+|---|---|
+| `NoNewText` | `a_save_with_no_new_fonts_is_unchanged_by_the_option` — byte-identical output with the option on and off |
+| `StandardFont` | the same test; `hello_world.pdf`'s fonts are stock Type 1 with no `/FontFile2` |
+| `TrueType`'s override shape | `base_font_and_font_name_carry_a_six_letter_tag` and `the_cid_font_gains_a_cid_to_gid_stream`. **Five overrides, not six**: `/W` is not one of ours, and the `/CIDToGIDMap` is |
+| `ReplaceExistingPrefix` | `font/mod.rs`'s `an_existing_prefix_is_replaced_not_stacked`, unchanged — it was always a unit test of the naming |
+| `OpenType` | **not portable, and deliberately so.** §3.7's divergence 2: an `OTTO` program is skipped rather than converted, so there is no `/CIDFontType0` shape to assert |
+| The size-ratio assertions | `the_embedded_program_is_smaller`, with the measured 35636 → 20424 recorded rather than a ratio |
+| `TestExtractedFont` | `a_subsetted_save_extracts_the_same_text`. It is **weaker than the C++'s and stronger than planned**: there is no re-keying left to check, because `/ToUnicode` is carried through byte for byte |
+| — | `a_subsetted_save_renders_identically`, which has no C++ counterpart. `pdfium_test --md5` agrees: the same digest for both pages of the subsetted and unsubsetted saves |
 
 ### 7.4 Ported assertions — page import and N-up
 

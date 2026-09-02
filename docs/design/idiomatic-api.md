@@ -891,6 +891,18 @@ to STYLE.md like anything else, but nothing in this amendment applies to them.
 >    SPEC §11 E4's re-keying contract, so it was kept rather than deleted.
 >    **This is a live gap in the crate, not an API-shape one**, and it needs
 >    its own decision: wire the stage, or drop the option.
+>
+>    ***Closed 2026-09-03.*** The stage is wired: `font/collect.rs` finds the
+>    new CID TrueType fonts a page draws with and `font/overrides.rs` builds
+>    the object-override map the writer's new-object loop consults, mirroring
+>    `CPDF_Creator::WriteNewObjs` (`cpdf_creator.cpp:203-226`). Two of the six
+>    items listed above did **not** survive: `to_unicode_cmap` and
+>    `widths_array` are deleted, because the wiring absorbs the subsetter's
+>    glyph renumbering in a rewritten `/CIDToGIDMap` rather than by re-keying
+>    `/W` and `/ToUnicode`, so both arrays are carried through untouched —
+>    which is also what the C++ effectively does. `docs/design/pdfrum-edit.md`
+>    §5's D1 carries the full argument. The other four are reachable from the
+>    override pass and their `allow(dead_code)` blocks are gone.
 > 5. **`dead_code` fires on test-only items the moment a module goes private**,
 >    because the library compiles once without `cfg(test)`. Twenty-three items
 >    across ten files in `pdfrum-edit`, every one pinned by a test beside it.

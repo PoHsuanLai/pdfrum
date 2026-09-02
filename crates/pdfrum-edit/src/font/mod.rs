@@ -1,30 +1,69 @@
-//! Font subsetting (ISO 32000-1 §9.9), and the re-keying it forces.
+//! Font subsetting (ISO 32000-1 §9.9), and where the renumbering it forces
+//! is absorbed.
 //!
-//! # The whole design follows from one fact about the subsetter
+//! This is the stage [`crate::SaveOptions::subset_new_fonts`] names. It runs
+//! over the objects a save is writing as *new*, produces replacement objects
+//! for the font ones among them, and never touches the document — the
+//! writer's new-object loop consults the map per object, exactly as
+//! `CPDF_Creator::WriteNewObjs` (`:203-226`) consults
+//! `CPDF_FontSubsetter::GenerateObjectOverrides`.
+//!
+//! # One fact about the subsetter decides the shape
 //!
 //! `HarfBuzz`, which PDFium uses, has a `RETAIN_GIDS` mode: glyph IDs survive
-//! subsetting unchanged, so `/Widths`, `/W`, the encoding CMap and
-//! `/ToUnicode` all stay valid without being touched. The `subsetter` crate
-//! has no such mode — it **always** produces a contiguous glyph space
-//! starting at 0 with `.notdef` first, and it removes `cmap` unconditionally
-//! ("CID fonts in PDF define their own cmaps").
+//! subsetting unchanged, so `/W`, the encoding CMap and `/ToUnicode` all stay
+//! valid without being touched. The `subsetter` crate has no such mode — it
+//! **always** produces a contiguous glyph space starting at 0 with `.notdef`
+//! first, and it removes `cmap` unconditionally ("CID fonts in PDF define
+//! their own cmaps").
 //!
-//! Everything else here is a consequence:
+//! The renumbering has to be absorbed somewhere. `/CIDToGIDMap` is that
+//! somewhere: ISO 32000-1 §9.7.4.2 already defines a per-CID glyph index for
+//! a `CIDFontType2`, so writing one that sends each CID to its *new* glyph
+//! leaves everything else that named a glyph alone. In particular:
 //!
-//! 1. **Only CID fonts are subsetted.** A simple TrueType font maps codes to
-//!    glyphs *through its own `cmap`*, which the subsetter removes — so a
-//!    subsetted simple font would render nothing. `/FontFile` (Type 1) and
-//!    `/FontFile3` are skipped as well, matching the C++.
-//! 2. **`/W` is re-keyed** from old CID to new GID.
-//! 3. **`/ToUnicode` is re-keyed** the same way, because under Identity-H the
-//!    code *is* the CID.
-//! 4. **Content-stream char codes change**, which makes subsetting
-//!    inseparable from regenerating the content of every page using a
-//!    subsetted font — a coupling the C++ does not have.
+//! - the **character codes on the page do not change**, so no content stream
+//!   is regenerated and none of [`crate::regenerate`]'s losses are incurred;
+//! - **`/W` is carried through untouched**, still keyed by CID, exactly as
+//!   the C++ leaves it. Its `CreateWidthsArray` rebuild is a *pruning* of
+//!   widths for glyphs the file no longer draws, which no correct reader can
+//!   observe.
+//! - **`/ToUnicode` is carried through untouched** for the same reason, so
+//!   text extraction over a subsetted save is unchanged — which is what
+//!   `fpdf_save_embeddertest.cpp:362-383` asserts of the C++ (round-trip
+//!   obligation R15).
 //!
-//! [`subset`] therefore returns the map alongside the bytes; SPEC.md §11's
-//! `subset(font_bytes, gids) -> Vec<u8>` is not enough once glyphs are
-//! renumbered, and that widening is the §11 ruling E4.
+//! *This replaced the plan in `docs/design/pdfrum-edit.md` §5's D1, which
+//! would re-key `/W`, `/ToUnicode` and the content streams instead. That plan
+//! is sound but strictly worse: it makes subsetting depend on an emitter that
+//! drops character spacing, shadings, text clips and soft masks
+//! ([`crate::content`]'s loss list), so a page would come back visibly
+//! changed to save bytes no reader can see. D1's own item 1 offered
+//! `/CIDToGIDMap` as the alternative; it is the one taken.*
+//!
+//! # What is subsetted, and what is left alone
+//!
+//! A candidate is a `/Type0` font, new in this save, whose descendant is a
+//! `CIDFontType2` with a `/FontFile2`, reached by a show operator on a page.
+//! Everything else is skipped:
+//!
+//! - **Type 1 (`/FontFile`)** — as in the C++, which notes `HarfBuzz` cannot
+//!   subset one either.
+//! - **A simple TrueType font**, even with `/FontFile2`. It maps codes to
+//!   glyphs *through the program's own `cmap`*, which the subsetter removes,
+//!   so a subsetted simple font would render nothing. The C++ subsets these;
+//!   this is a narrowing, and the widest one here.
+//! - **`OpenType`-CFF (`OTTO`)**. Its descendant is a `CIDFontType0`, where
+//!   the CID *is* the glyph index and `/CIDToGIDMap` is never consulted
+//!   (`cpdf_cidfont.cpp:508-518`), so the renumbering would have nowhere to
+//!   go but the content streams. The C++ subsets these and switches
+//!   `/Subtype` to `/CIDFontType0` with `/FontFile3`; ours declines. The
+//!   `OTTO` test that drives the switch ([`is_opentype_cff`]) stays, because
+//!   it is what recognises the case to decline.
+//!
+//! A candidate whose subset would not be *smaller* is also left alone: four
+//! rewritten objects and a new table are not worth paying for a program that
+//! did not shrink.
 //!
 //! # Subset names
 //!
@@ -33,19 +72,8 @@
 //! is added, so a font that has been subsetted twice still carries exactly
 //! one tag.
 
-#![allow(
-    dead_code,
-    reason = "the `/W`, `/ToUnicode` and subset-tag re-keying this module holds is the \
-              save-path stage `SaveOptions::subset_new_fonts` names, and nothing \
-              reads that option yet (`docs/design/pdfrum-edit.md` §6.2). Each item \
-              is implemented and pinned by a test below; they were reachable only \
-              because `pub mod font` was public, and privatising the module (§A.11 \
-              step 12) is what exposed the gap. Deleting them would discard \
-              SPEC §11 E4's re-keying contract"
-)]
-
-mod tounicode;
-mod widths;
+pub(crate) mod collect;
+pub(crate) mod overrides;
 
 use std::collections::BTreeMap;
 
