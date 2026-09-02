@@ -476,6 +476,34 @@ impl<'a> FormSession<'a> {
         &self.inner.config
     }
 
+    /// Routes a whole [`Event`], for a caller that already has one.
+    ///
+    /// This is the method every other event method on this type is a thin
+    /// spelling of, and the one to reach for when the events come from a
+    /// queue rather than from seven separate call sites: an embedder that
+    /// already models input as a value hands the value over instead of
+    /// destructuring it into arguments and letting a wrapper build it back.
+    ///
+    /// # Which page a mouse event lands on
+    ///
+    /// [`Event`] carries a point but not a page, because a page is the
+    /// *embedder's* fact rather than the event's — the same click is on a
+    /// different page depending on what is scrolled into view. So a mouse
+    /// event applied here goes to the page [`Self::page_in_view`] names, which
+    /// is what [`Self::set_page_in_view`] is for. The wrappers
+    /// ([`Self::on_mouse_move`] and friends) take the page explicitly instead,
+    /// and a caller mixing the two should keep the viewed page current.
+    ///
+    /// Keyboard events take no page either way: a key goes to the field
+    /// holding focus, and a Tab from nothing enters the ring on the viewed
+    /// page — see [`Self::set_page_in_view`].
+    pub fn apply(&mut self, event: Event) -> Response {
+        match event {
+            Event::KeyDown { .. } | Event::Char { .. } => self.dispatch_keyboard(event),
+            _ => self.dispatch(self.page_in_view, event),
+        }
+    }
+
     /// The pointer moved. Drives hover and extends a live drag.
     pub fn on_mouse_move(
         &mut self,
@@ -1218,6 +1246,48 @@ mod tests {
         let response = session.force_kill_focus();
         assert!(!response.consumed);
         assert!(response.updates.is_empty());
+    }
+
+    /// `apply` and the wrapper that spells it reach the same field.
+    ///
+    /// The pin on the sketch's central method: a click built as an [`Event`]
+    /// and applied against the viewed page must focus what the same click
+    /// spelled through [`FormSession::on_mouse_down`] focuses. Anything else
+    /// would make the wrappers a second implementation rather than a spelling.
+    #[test]
+    fn applying_an_event_routes_where_the_wrapper_does() {
+        let doc = document();
+        let mut through_event = FormSession::new(&doc);
+        // The text field's `/Rect` is `[100 100 200 130]`; (120, 115) is in it.
+        let inside = kurbo::Point::new(120.0, 115.0);
+        through_event.apply(Event::MouseDown {
+            button: Button::Left,
+            at: inside,
+            modifiers: Modifiers::NONE,
+        });
+
+        let mut through_wrapper = FormSession::new(&doc);
+        through_wrapper.on_mouse_down(0, 120.0, 115.0, Modifiers::NONE);
+
+        assert_eq!(
+            through_event.focused_annot(),
+            through_wrapper.focused_annot(),
+        );
+        assert!(through_event.focused_annot().is_some());
+    }
+
+    /// A keyboard event applied as a value needs no page, and Tab from
+    /// nothing still enters the ring.
+    #[test]
+    fn applying_a_key_needs_no_page() {
+        let doc = document();
+        let mut session = FormSession::new(&doc);
+        let response = session.apply(Event::KeyDown {
+            key: Key::Tab,
+            modifiers: Modifiers::NONE,
+        });
+        assert!(response.consumed);
+        assert!(session.focused_annot().is_some());
     }
 
     /// A query about a field that does not have focus answers falsely rather
