@@ -22,7 +22,7 @@
 //! facade cannot express that — `pdfrum::Backend` is a closed enum, and adding
 //! a GPU arm to it would put `wgpu` in the facade's dependency tree, which is
 //! the one thing M12c's isolation rule forbids. So both columns enter at
-//! `render_page_with_caches`, which is generic over the backend, with the same
+//! `render_page`, which is generic over the backend, with the same
 //! page, the same options and the same fresh caches. The comparison is
 //! *symmetric*, which is the property that matters here. It is deliberately
 //! **not** comparable to the oracle's column, and §7–§8 of the status doc

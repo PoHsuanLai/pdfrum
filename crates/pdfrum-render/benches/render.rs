@@ -61,7 +61,7 @@
 //!
 //! # Through the facade, not through this crate's own entry point
 //!
-//! `pdfrum::Page::render_session` and not `pdfrum_render::render_page_with_caches`,
+//! `pdfrum::Page::render_session` and not `pdfrum_render::render_page_with`,
 //! even though this bench lives in `pdfrum-render`. The facade's `paint` builds
 //! the page graph and overlays annotation appearances before it calls this
 //! crate; the oracle's `pdfium_test` does both too. A bench that entered at this

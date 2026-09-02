@@ -360,7 +360,7 @@ fn render_one(
 /// Render every page `iterations` times through a clocked backend, and print
 /// where the time went.
 ///
-/// This bypasses `Page::render_session` and calls `render_page_with_caches`
+/// This bypasses `Page::render_session` and calls `render_page_with`
 /// directly, because the decorator has to be substituted for the backend and
 /// the facade chooses one from `RenderOptions::backend`. The work is otherwise
 /// the same: same page graph, same caches, same options — the `page_graph`
