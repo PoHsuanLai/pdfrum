@@ -1,6 +1,5 @@
 //! One page: its geometry, its pixels, its text and its annotations.
 
-use kurbo::Affine;
 use pdfrum_common::{Diagnostics, PageIndex};
 use pdfrum_object::Name;
 use pdfrum_page::BuildContext;
@@ -578,7 +577,3 @@ impl Document {
             == Some(b"R2L".as_slice())
     }
 }
-
-/// The identity transform, spelled out for a reader who has not met `kurbo`.
-#[allow(dead_code)]
-const _: Affine = Affine::IDENTITY;

@@ -306,17 +306,6 @@ pub fn transform_distance(matrix: Affine, distance: f64) -> f64 {
     distance * (x_unit + y_unit) / 2.0
 }
 
-/// The length of the x-unit vector scaled by `distance`
-/// (`CFX_Matrix::TransformXDistance`).
-///
-/// Not [`transform_distance`], which averages both axes — the duplicate-
-/// suppression epsilon uses this one and the difference is observable.
-#[must_use]
-pub fn transform_x_distance(matrix: Affine, distance: f64) -> f64 {
-    let [a, b, ..] = matrix.as_coeffs();
-    (a * distance).hypot(b * distance)
-}
-
 #[cfg(test)]
 mod tests {
     // Test fixtures quote the oracle's own vectors, compare floats exactly
@@ -442,8 +431,6 @@ mod tests {
         // Anisotropic scaling averages: (3 + 1) / 2 = 2.
         let skewed = Affine::new([3.0, 0.0, 0.0, 1.0, 0.0, 0.0]);
         assert_eq!(transform_distance(skewed, 10.0), 20.0);
-        // The x-distance flavour takes only the x column, so it gives 30.
-        assert_eq!(transform_x_distance(skewed, 10.0), 30.0);
     }
 
     #[test]

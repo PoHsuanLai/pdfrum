@@ -23,7 +23,7 @@
 
 use crate::charinfo::{
     CharBox, CharType, LooseBoundsInput, ObjectIndex, inverse_or_zero, loose_bounds, matrix_angle,
-    transform_distance, transform_rect, transform_x_distance,
+    transform_distance, transform_rect,
 };
 use crate::line::{Line, Output};
 use crate::object::{Item, TextRun, ladder_char_width};
@@ -562,8 +562,24 @@ impl<'a, R: Resolve> Builder<'a, R> {
             }
 
             // `[oracle-bug]` No character-level duplicate suppression runs
-            // here; see `is_duplicate`, which is kept as the documented
-            // description of what the oracle does and is no longer consulted.
+            // here. `cpdf_textpage.cpp:1437-1458` sets `add_unicode = false`
+            // (`:1455`) when an entry within a **7-entry lookback** (`:1438`)
+            // shares the candidate's char code and font and sits within
+            // `0.07 x fontsize` on both axes — the epsilon being seven
+            // hundredths of the font size pushed through the matrix's *x*
+            // unit vector, not the averaged distance the rest of this crate
+            // uses. `bug_1769.in` draws one form `XObject` at 1000x and again
+            // at 1x; in the small instance the word collapses below the
+            // threshold, `r` and `l` fall inside the window, and the page
+            // extracts as `"wo d wo d"` (`crbug.com/42270780`).
+            //
+            // The spec has no notion of duplicate-glyph suppression — §8.2
+            // composites coincident glyphs, and drawing one twice is how
+            // faux-bold is done — and pdf.js has no dedup at all (the only
+            // "identical" test in `evaluator.js` is font-state caching,
+            // `:3246`). It duplicates where PDFium deletes; deletion is the
+            // unrecoverable direction. See `docs/design/pdfrum-text.md`
+            // §1.7a for the rule in full.
 
             for code in unicode {
                 let mut piece = info;
@@ -635,59 +651,6 @@ impl<'a, R: Resolve> Builder<'a, R> {
             font_size: run.font_size,
             angle: matrix_angle(matrix),
         }
-    }
-
-    /// Whether a character repeats one of the last seven staged characters at
-    /// effectively the same place (§1.7a).
-    ///
-    /// The epsilon is seven hundredths of the font size pushed through the
-    /// matrix's **x** unit vector — not the averaged distance the rest of the
-    /// crate uses, and the difference is observable. Fonts are compared by
-    /// identity, so this only fires when the page layer really did share one
-    /// font between the two objects.
-    ///
-    /// `[oracle-bug]` **No longer consulted.** `cpdf_textpage.cpp:1437-1458`
-    /// sets `add_unicode = false` (`:1455`) when an entry within a **7-entry
-    /// lookback** (`:1438`) shares the candidate's char code and font and sits
-    /// within `0.07 × fontsize` on both axes. `bug_1769.in` draws one form
-    /// `XObject` at 1000x and again at 1x; in the small instance the word
-    /// collapses below the threshold, `r` and `l` fall inside the window, and
-    /// the page extracts as `"wo d wo d"` (`crbug.com/42270780`). The spec has
-    /// no notion of duplicate-glyph suppression — §8.2 composites coincident
-    /// glyphs, and drawing one twice is how faux-bold is done — and pdf.js has
-    /// no dedup at all (the only "identical" test in `evaluator.js` is
-    /// font-state caching, `:3246`). It duplicates where PDFium deletes;
-    /// deletion is the unrecoverable direction. Kept as the executable
-    /// description of the oracle's rule, and as what a future option would
-    /// switch back on.
-    #[expect(
-        dead_code,
-        reason = "[oracle-bug] retained as the oracle's documented rule; see the note above"
-    )]
-    fn is_duplicate(&self, run: &TextRun, candidate: &CharBox) -> bool {
-        let threshold = transform_x_distance(candidate.matrix, f64::from(0.07 * run.font_size));
-        let staged = self.line.chars();
-        let start = staged.len().saturating_sub(7);
-        for earlier in staged.get(start..).unwrap_or_default().iter().rev() {
-            if earlier.code != candidate.code {
-                continue;
-            }
-            let Some(index) = earlier.object else {
-                continue;
-            };
-            let Some(other) = self.find_run(index) else {
-                continue;
-            };
-            if !std::sync::Arc::ptr_eq(&other.font, &run.font) {
-                continue;
-            }
-            let dx = earlier.origin.x - candidate.origin.x;
-            let dy = earlier.origin.y - candidate.origin.y;
-            if dx.abs() < threshold && dy.abs() < threshold {
-                return true;
-            }
-        }
-        false
     }
 
     fn find_run(&self, index: ObjectIndex) -> Option<&'a TextRun> {
