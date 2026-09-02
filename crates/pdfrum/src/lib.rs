@@ -233,8 +233,8 @@ pub use edit::{ImageBuilder, PageEdit, PathBuilder, TextBuilder};
 pub use error::{Error, Result};
 pub use form::{Field, FieldFlags, FieldKind, Form};
 pub use form_session::{
-    AppearanceUpdate, Cascade, EventModifiers, EventResponse, FieldRef, FieldWrites, FormSession,
-    Keystroke, KeystrokeOutcome, MouseButton, NoScripts, SessionConfig, UpdateKind, VirtualKey,
+    AppearanceUpdate, Button, Cascade, FieldRef, FieldWrites, FormSession, Key, Keystroke,
+    KeystrokeOutcome, Modifiers, NoScripts, Response, SessionConfig, UpdateKind,
 };
 // The viewer chrome a host draws for itself: an open combo dropdown and a
 // scrolled choice widget. Values, not a trait — see `FormSession::popup_for_page`
@@ -463,17 +463,17 @@ pub use pdfrum_doc::{Focus, FocusBox};
 /// A generated appearance stream and the dictionary edits it implies.
 ///
 /// The payload of [`UpdateKind::Regenerated`] and [`UpdateKind::LiveEdit`],
-/// which is to say the payload of the ordinary [`EventResponse`] every form
+/// which is to say the payload of the ordinary [`Response`] every form
 /// event returns. A caller that draws a form reads `stream`, `bbox` and
 /// `resources` off this on every keystroke.
 pub use pdfrum_doc::GeneratedAp;
 
 /// What a form event is, before [`FormSession`] routes it.
 ///
-/// The session's `on_*` methods each build one of these and apply it; this is
-/// the same vocabulary as a value, for a caller that has its own event queue
-/// and would rather hand over a whole event than call the method that matches
-/// it.
+/// [`FormSession::apply`] takes one of these, and every other event method on
+/// that type is a thin spelling of it — so this is the same vocabulary as a
+/// value, for a caller that has its own event queue and would rather hand over
+/// a whole event than call the method that matches it.
 pub use pdfrum_form::Event;
 
 /// An indirect-object reference — an object number and a generation.

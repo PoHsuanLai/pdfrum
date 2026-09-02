@@ -19,15 +19,15 @@
 // to handle.
 #![allow(clippy::expect_used)]
 
-use pdfrum::{Document, EventModifiers, FormSession, PageIndex, VirtualKey};
+use pdfrum::{Document, FormSession, Key, Modifiers, PageIndex, kurbo::Point};
 
 fn document() -> Document {
     Document::open("tests/fixtures/annotiter.pdf").expect("the annotiter fixture must open")
 }
 
 /// Sends a Tab, with modifiers.
-fn tab(session: &mut FormSession<'_>, modifiers: EventModifiers) -> bool {
-    session.on_key_down(VirtualKey::Tab, modifiers).consumed
+fn tab(session: &mut FormSession<'_>, modifiers: Modifiers) -> bool {
+    session.key_down(Key::Tab, modifiers).consumed
 }
 
 /// The raw `/Annots` index currently focused, if any.
@@ -36,10 +36,10 @@ fn focused(session: &FormSession<'_>) -> Option<u32> {
 }
 
 /// The walk one page produces, forward or backward, until the ring refuses.
-fn walk(page: u32, modifiers: EventModifiers) -> Vec<u32> {
+fn walk(page: u32, modifiers: Modifiers) -> Vec<u32> {
     let doc = document();
     let mut session = FormSession::new(&doc);
-    session.set_page_in_view(page);
+    session.set_viewed_page(page);
 
     let mut visited = Vec::new();
     while tab(&mut session, modifiers) {
@@ -59,7 +59,7 @@ fn a_first_tab_lands_on_annot_one() {
     let mut session = FormSession::new(&doc);
     assert!(session.focused_annot().is_none());
 
-    assert!(tab(&mut session, EventModifiers::NONE));
+    assert!(tab(&mut session, Modifiers::NONE));
     assert_eq!(focused(&session), Some(1));
 }
 
@@ -70,7 +70,7 @@ fn a_first_shift_tab_lands_on_annot_zero() {
     let doc = document();
     let mut session = FormSession::new(&doc);
 
-    assert!(tab(&mut session, EventModifiers::SHIFT));
+    assert!(tab(&mut session, Modifiers::SHIFT));
     assert_eq!(focused(&session), Some(0));
 }
 
@@ -78,13 +78,13 @@ fn a_first_shift_tab_lands_on_annot_zero() {
 /// refused — the ring does not wrap.
 #[test]
 fn four_tabs_visit_one_two_three_zero_and_the_fifth_is_refused() {
-    assert_eq!(walk(0, EventModifiers::NONE), vec![1, 2, 3, 0]);
+    assert_eq!(walk(0, Modifiers::NONE), vec![1, 2, 3, 0]);
 }
 
 /// `FormFillContinuousShiftTab`: the same backwards, **0, 3, 2, 1**.
 #[test]
 fn four_shift_tabs_visit_zero_three_two_one_and_the_fifth_is_refused() {
-    assert_eq!(walk(0, EventModifiers::SHIFT), vec![0, 3, 2, 1]);
+    assert_eq!(walk(0, Modifiers::SHIFT), vec![0, 3, 2, 1]);
 }
 
 /// The three pages ask for the three orders and get three different answers
@@ -97,9 +97,9 @@ fn four_shift_tabs_visit_zero_three_two_one_and_the_fifth_is_refused() {
 /// `CPDFSDK_AnnotIterator::GenerateResults`.
 #[test]
 fn each_pages_declared_order_produces_its_own_walk() {
-    assert_eq!(walk(0, EventModifiers::NONE), vec![1, 2, 3, 0], "/Tabs /R");
-    assert_eq!(walk(1, EventModifiers::NONE), vec![1, 3, 2, 0], "/Tabs /C");
-    assert_eq!(walk(2, EventModifiers::NONE), vec![0, 1, 2, 3], "/Tabs /S");
+    assert_eq!(walk(0, Modifiers::NONE), vec![1, 2, 3, 0], "/Tabs /R");
+    assert_eq!(walk(1, Modifiers::NONE), vec![1, 3, 2, 0], "/Tabs /C");
+    assert_eq!(walk(2, Modifiers::NONE), vec![0, 1, 2, 3], "/Tabs /S");
 }
 
 /// `TabWithModifiers`: every modifier but shift refuses the gesture — all six
@@ -108,12 +108,12 @@ fn each_pages_declared_order_produces_its_own_walk() {
 fn tab_with_any_modifier_but_shift_is_refused() {
     let doc = document();
     for modifiers in [
-        EventModifiers::CONTROL,
-        EventModifiers::ALT,
-        EventModifiers::META,
-        EventModifiers::CONTROL.union(EventModifiers::SHIFT),
-        EventModifiers::ALT.union(EventModifiers::SHIFT),
-        EventModifiers::META.union(EventModifiers::SHIFT),
+        Modifiers::CONTROL,
+        Modifiers::ALT,
+        Modifiers::META,
+        Modifiers::CONTROL.union(Modifiers::SHIFT),
+        Modifiers::ALT.union(Modifiers::SHIFT),
+        Modifiers::META.union(Modifiers::SHIFT),
     ] {
         let mut session = FormSession::new(&doc);
         assert!(
@@ -134,17 +134,17 @@ fn focus_is_document_wide_not_per_page() {
     assert_eq!(doc.page_count(), 3);
 
     // Focus something on page 0, then click a widget on page 1.
-    session.on_mouse_move(0, 210.0, 210.0, EventModifiers::NONE);
-    session.on_mouse_down(0, 210.0, 210.0, EventModifiers::NONE);
-    session.on_mouse_up(0, 210.0, 210.0, EventModifiers::NONE);
+    session.mouse_move(0, Point::new(210.0, 210.0), Modifiers::NONE);
+    session.mouse_down(0, Point::new(210.0, 210.0), Modifiers::NONE);
+    session.mouse_up(0, Point::new(210.0, 210.0), Modifiers::NONE);
     let first = session
         .focused_annot()
         .expect("page 0's widget takes focus");
     assert_eq!(first.page, PageIndex::new(0));
 
-    session.on_mouse_move(1, 411.0, 411.0, EventModifiers::NONE);
-    session.on_mouse_down(1, 411.0, 411.0, EventModifiers::NONE);
-    session.on_mouse_up(1, 411.0, 411.0, EventModifiers::NONE);
+    session.mouse_move(1, Point::new(411.0, 411.0), Modifiers::NONE);
+    session.mouse_down(1, Point::new(411.0, 411.0), Modifiers::NONE);
+    session.mouse_up(1, Point::new(411.0, 411.0), Modifiers::NONE);
     let second = session.focused_annot().expect("page 1's widget takes it");
 
     assert_eq!(
@@ -164,18 +164,18 @@ fn focus_is_document_wide_not_per_page() {
 fn keys_with_no_focused_annotation_are_refused() {
     let doc = document();
     for key in [
-        VirtualKey::Newline,
-        VirtualKey::Return,
-        VirtualKey::Space,
-        VirtualKey::Delete,
-        VirtualKey::from_virtual(0x30), // '0'
-        VirtualKey::from_virtual(0x39), // '9'
-        VirtualKey::A,
-        VirtualKey::Z,                  // 'Z'
-        VirtualKey::from_virtual(0x70), // F1
+        Key::Newline,
+        Key::Return,
+        Key::Space,
+        Key::Delete,
+        Key::from_virtual(0x30), // '0'
+        Key::from_virtual(0x39), // '9'
+        Key::A,
+        Key::Z,                  // 'Z'
+        Key::from_virtual(0x70), // F1
     ] {
         let mut session = FormSession::new(&doc);
-        let response = session.on_key_down(key, EventModifiers::NONE);
+        let response = session.key_down(key, Modifiers::NONE);
         assert!(!response.consumed, "{key:?} must not be handled");
         assert!(
             session.focused_annot().is_none(),
@@ -205,17 +205,17 @@ fn a_mouse_move_over_nothing_is_harmless() {
 
     assert!(
         !session
-            .on_mouse_move(0, 0.0, 0.0, EventModifiers::NONE)
+            .mouse_move(0, Point::new(0.0, 0.0), Modifiers::NONE)
             .consumed
     );
     assert!(
         !session
-            .on_mouse_move(0, -1000.0, -1000.0, EventModifiers::NONE)
+            .mouse_move(0, Point::new(-1000.0, -1000.0), Modifiers::NONE)
             .consumed
     );
     assert!(
         !session
-            .on_mouse_move(0, 1e9, 1e9, EventModifiers::NONE)
+            .mouse_move(0, Point::new(1e9, 1e9), Modifiers::NONE)
             .consumed
     );
     assert!(session.focused_annot().is_none());
@@ -228,20 +228,20 @@ fn a_mouse_move_over_nothing_is_harmless() {
 /// carry the same four annotations, so the *page* of the focused annotation is
 /// the only thing that moves.
 #[test]
-fn a_tab_from_nothing_enters_the_ring_on_the_page_in_view() {
+fn a_tab_from_nothing_enters_the_ring_on_the_viewed_page() {
     let doc = document();
 
     for page in 0..doc.page_count() {
         let mut session = FormSession::new(&doc);
-        session.set_page_in_view(page);
-        assert_eq!(session.page_in_view(), PageIndex::from(page));
+        session.set_viewed_page(page);
+        assert_eq!(session.viewed_page(), PageIndex::from(page));
 
-        assert!(tab(&mut session, EventModifiers::NONE));
+        assert!(tab(&mut session, Modifiers::NONE));
         let landed = session.focused_annot().expect("the Tab lands somewhere");
         assert_eq!(
             landed.page,
             PageIndex::from(page),
-            "a Tab from nothing must enter the ring on the page in view"
+            "a Tab from nothing must enter the ring on the viewed page"
         );
     }
 }
@@ -249,8 +249,8 @@ fn a_tab_from_nothing_enters_the_ring_on_the_page_in_view() {
 /// The default is page 0, which is right for a single-page document and for a
 /// viewer that has not scrolled.
 #[test]
-fn the_page_in_view_defaults_to_the_first() {
+fn the_viewed_page_defaults_to_the_first() {
     let doc = document();
     let session = FormSession::new(&doc);
-    assert_eq!(session.page_in_view(), PageIndex::FIRST);
+    assert_eq!(session.viewed_page(), PageIndex::FIRST);
 }

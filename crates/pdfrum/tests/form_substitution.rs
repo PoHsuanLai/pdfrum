@@ -24,7 +24,7 @@
 
 #![allow(clippy::expect_used)]
 
-use pdfrum::{BuildContext, Document, EventModifiers, FormSession, UpdateKind};
+use pdfrum::{BuildContext, Document, FormSession, Modifiers, UpdateKind, kurbo::Point};
 
 /// `form_textfield_focused_ltr.in` expanded: one `/Tx` widget,
 /// `/Rect [50 40 150 70]`, border 1, `/DA (/Arial 12 Tf 0 0 0 rg)` over a
@@ -37,7 +37,7 @@ fn document() -> Document {
 }
 
 /// A point inside the widget's `/Rect [50 40 150 70]`.
-const INSIDE: (f32, f32) = (100.0, 55.0);
+const INSIDE: Point = Point::new(100.0, 55.0);
 
 /// The oracle's hermetic font set: `third_party/test_fonts`, which carries
 /// Arimo, Tinos and Cousine in place of Arial, Times and Courier. PLAN.md §4
@@ -79,9 +79,9 @@ fn hermetic_font_dir() -> Option<std::path::PathBuf> {
 /// A click is three events, and the move is not decoration: it is what tells
 /// the widget the pointer is over it.
 fn live_stream(session: &mut FormSession<'_>) -> Vec<u8> {
-    session.on_mouse_move(0, INSIDE.0, INSIDE.1, EventModifiers::NONE);
-    session.on_mouse_down(0, INSIDE.0, INSIDE.1, EventModifiers::NONE);
-    let response = session.on_mouse_up(0, INSIDE.0, INSIDE.1, EventModifiers::NONE);
+    session.mouse_move(0, INSIDE, Modifiers::NONE);
+    session.mouse_down(0, INSIDE, Modifiers::NONE);
+    let response = session.mouse_up(0, INSIDE, Modifiers::NONE);
     response
         .updates
         .iter()
@@ -205,14 +205,14 @@ fn a_hebrew_live_edit_sets_its_text_in_the_second_face() {
     let doc = document();
     let mut session = FormSession::new(&doc);
 
-    session.on_mouse_move(0, INSIDE.0, INSIDE.1, EventModifiers::NONE);
-    session.on_mouse_down(0, INSIDE.0, INSIDE.1, EventModifiers::NONE);
-    session.on_mouse_up(0, INSIDE.0, INSIDE.1, EventModifiers::NONE);
+    session.mouse_move(0, INSIDE, Modifiers::NONE);
+    session.mouse_down(0, INSIDE, Modifiers::NONE);
+    session.mouse_up(0, INSIDE, Modifiers::NONE);
 
     // Typed, not stored: this is the path that used to forward no substitute.
     let mut last = None;
     for ch in "בחר".chars() {
-        let response = session.on_char(ch, EventModifiers::NONE);
+        let response = session.character(ch, Modifiers::NONE);
         if let Some(update) = response
             .updates
             .iter()

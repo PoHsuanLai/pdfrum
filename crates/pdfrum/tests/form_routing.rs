@@ -15,7 +15,7 @@
 // rather than a case to handle — the same bargain `facade.rs` makes.
 #![allow(clippy::expect_used)]
 
-use pdfrum::{Document, EventModifiers, FormSession, VirtualKey};
+use pdfrum::{Document, FormSession, Key, Modifiers, kurbo::Point};
 
 /// The fixture, or a failed test rather than four green-and-empty ones.
 fn document() -> Document {
@@ -23,19 +23,19 @@ fn document() -> Document {
 }
 
 /// A point inside the field, and one outside every annotation.
-const INSIDE: (f32, f32) = (120.0, 115.0);
-const OUTSIDE: (f32, f32) = (10.0, 10.0);
+const INSIDE: Point = Point::new(120.0, 115.0);
+const OUTSIDE: Point = Point::new(10.0, 10.0);
 
 /// Clicks at a point, the way a real event stream does: move, down, up.
-fn click(session: &mut FormSession<'_>, at: (f32, f32)) {
-    session.on_mouse_move(0, at.0, at.1, EventModifiers::NONE);
-    session.on_mouse_down(0, at.0, at.1, EventModifiers::NONE);
-    session.on_mouse_up(0, at.0, at.1, EventModifiers::NONE);
+fn click(session: &mut FormSession<'_>, at: Point) {
+    session.mouse_move(0, at, Modifiers::NONE);
+    session.mouse_down(0, at, Modifiers::NONE);
+    session.mouse_up(0, at, Modifiers::NONE);
 }
 
 fn type_text(session: &mut FormSession<'_>, text: &str) {
     for ch in text.chars() {
-        session.on_char(ch, EventModifiers::NONE);
+        session.character(ch, Modifiers::NONE);
     }
 }
 
@@ -79,7 +79,7 @@ fn typing_after_a_click_reaches_the_field() {
 fn typing_with_no_focus_changes_nothing() {
     let doc = document();
     let mut session = FormSession::new(&doc);
-    let response = session.on_char('x', EventModifiers::NONE);
+    let response = session.character('x', Modifiers::NONE);
 
     assert!(!response.consumed);
     assert!(response.updates.is_empty());
@@ -100,12 +100,12 @@ fn click_type_read_undo_is_one_round_trip() {
 
     // Three characters are three undo items, so one undo drops one of them.
     assert!(session.can_undo());
-    session.on_key_down(VirtualKey::Z, EventModifiers::CONTROL);
+    session.key_down(Key::Z, Modifiers::CONTROL);
     assert_eq!(session.focused_text().as_deref(), Some("ab"));
 
     // And redo puts it back.
     assert!(session.can_redo());
-    session.on_key_down(VirtualKey::Y, EventModifiers::CONTROL);
+    session.key_down(Key::Y, Modifiers::CONTROL);
     assert_eq!(session.focused_text().as_deref(), Some("abc"));
 }
 
@@ -134,7 +134,7 @@ fn dropping_focus_produces_an_appearance_for_the_field_that_lost_it() {
     click(&mut session, INSIDE);
     type_text(&mut session, "value");
 
-    let response = session.force_kill_focus();
+    let response = session.blur();
     assert!(session.focused_annot().is_none());
     assert!(
         !response.updates.is_empty(),
@@ -148,13 +148,13 @@ fn a_click_inside_a_widget_is_consumed_and_one_outside_is_not() {
     let doc = document();
     let mut session = FormSession::new(&doc);
 
-    let inside = session.on_mouse_down(0, INSIDE.0, INSIDE.1, EventModifiers::NONE);
+    let inside = session.mouse_down(0, INSIDE, Modifiers::NONE);
     assert!(inside.consumed);
 
     // A click on bare page with nothing focused has nothing to drop, so it
     // changes nothing — the honest answer is "not handled".
     let mut fresh = FormSession::new(&doc);
-    let outside = fresh.on_mouse_down(0, OUTSIDE.0, OUTSIDE.1, EventModifiers::NONE);
+    let outside = fresh.mouse_down(0, OUTSIDE, Modifiers::NONE);
     assert!(!outside.consumed);
 }
 
@@ -167,7 +167,7 @@ fn select_all_then_typing_replaces_the_value() {
     click(&mut session, INSIDE);
     type_text(&mut session, "old");
 
-    session.on_key_down(VirtualKey::A, EventModifiers::CONTROL);
+    session.key_down(Key::A, Modifiers::CONTROL);
     type_text(&mut session, "new");
     assert_eq!(session.focused_text().as_deref(), Some("new"));
 }
@@ -179,7 +179,7 @@ fn an_event_on_a_missing_page_answers_rather_than_panicking() {
     let doc = document();
     let mut session = FormSession::new(&doc);
 
-    let response = session.on_mouse_down(999, 10.0, 10.0, EventModifiers::NONE);
+    let response = session.mouse_down(999, Point::new(10.0, 10.0), Modifiers::NONE);
     assert!(!response.consumed);
     assert!(session.focused_annot().is_none());
 }
@@ -194,28 +194,28 @@ fn an_event_on_a_missing_page_answers_rather_than_panicking() {
 // `kFormEndX = 195`, `kRegularFormY = 115`.
 
 /// The upstream fixture constants.
-const FORM_BEGIN_X: f32 = 102.0;
-const FORM_END_X: f32 = 195.0;
-const FORM_Y: f32 = 115.0;
+const FORM_BEGIN_X: f64 = 102.0;
+const FORM_END_X: f64 = 195.0;
+const FORM_Y: f64 = 115.0;
 
 /// `SelectTextWithMouse`: press at `from`, move to `to`, release. The move
 /// while the button is down is what extends the selection — without it the
 /// drag is two clicks and selects nothing.
-fn drag(session: &mut FormSession<'_>, from: f32, to: f32) {
-    session.on_mouse_move(0, from, FORM_Y, EventModifiers::NONE);
-    session.on_mouse_down(0, from, FORM_Y, EventModifiers::NONE);
-    session.on_mouse_move(0, to, FORM_Y, EventModifiers::NONE);
-    session.on_mouse_up(0, to, FORM_Y, EventModifiers::NONE);
+fn drag(session: &mut FormSession<'_>, from: f64, to: f64) {
+    session.mouse_move(0, Point::new(from, FORM_Y), Modifiers::NONE);
+    session.mouse_down(0, Point::new(from, FORM_Y), Modifiers::NONE);
+    session.mouse_move(0, Point::new(to, FORM_Y), Modifiers::NONE);
+    session.mouse_up(0, Point::new(to, FORM_Y), Modifiers::NONE);
 }
 
 /// Types `count` characters starting at `'A'`, the upstream helper's run.
 fn type_run(session: &mut FormSession<'_>, count: u32) {
-    session.on_mouse_move(0, FORM_BEGIN_X, FORM_Y, EventModifiers::NONE);
-    session.on_mouse_down(0, FORM_BEGIN_X, FORM_Y, EventModifiers::NONE);
-    session.on_mouse_up(0, FORM_BEGIN_X, FORM_Y, EventModifiers::NONE);
+    session.mouse_move(0, Point::new(FORM_BEGIN_X, FORM_Y), Modifiers::NONE);
+    session.mouse_down(0, Point::new(FORM_BEGIN_X, FORM_Y), Modifiers::NONE);
+    session.mouse_up(0, Point::new(FORM_BEGIN_X, FORM_Y), Modifiers::NONE);
     for i in 0..count {
         let ch = char::from_u32(u32::from(b'A') + i).unwrap_or('?');
-        session.on_char(ch, EventModifiers::NONE);
+        session.character(ch, Modifiers::NONE);
     }
 }
 
@@ -297,10 +297,10 @@ fn a_double_click_selects_the_whole_line() {
     let mut session = FormSession::new(&doc);
     type_run(&mut session, 0);
     for ch in "Hello World".chars() {
-        session.on_char(ch, EventModifiers::NONE);
+        session.character(ch, Modifiers::NONE);
     }
 
-    session.on_double_click(0, 130.0, FORM_Y, EventModifiers::NONE);
+    session.double_click(0, Point::new(130.0, FORM_Y), Modifiers::NONE);
     assert_eq!(session.selected_text().as_deref(), Some("Hello World"));
 }
 
@@ -403,7 +403,7 @@ fn replacing_a_selection_undoes_as_one_step() {
     session.replace_selection("xyz");
     assert_eq!(session.focused_text().as_deref(), Some("xyz"));
 
-    session.on_key_down(VirtualKey::Z, EventModifiers::CONTROL);
+    session.key_down(Key::Z, Modifiers::CONTROL);
     assert_eq!(
         session.focused_text().as_deref(),
         Some("ABCDEFGH"),
@@ -437,7 +437,7 @@ fn select_all_selects_the_whole_value() {
     let mut session = FormSession::new(&doc);
 
     // `FORM_OnFocus` rather than a click: focus without a selection gesture.
-    session.on_focus_at(0, 115.0, 115.0, EventModifiers::NONE);
+    session.focus_at(0, Point::new(115.0, 115.0), Modifiers::NONE);
     assert!(session.focused_annot().is_some());
 
     assert!(session.replace_selection("Hello"));
@@ -447,7 +447,7 @@ fn select_all_selects_the_whole_value() {
     // of 2 and cannot distinguish from an unfocused field.
     assert_eq!(session.selected_text().as_deref(), Some(""));
 
-    session.on_key_down(VirtualKey::A, EventModifiers::CONTROL);
+    session.key_down(Key::A, Modifiers::CONTROL);
     assert_eq!(session.selected_text().as_deref(), Some("Hello"));
 }
 
@@ -461,7 +461,7 @@ fn an_unfocused_field_and_an_empty_selection_are_different_answers() {
     assert_eq!(session.selected_text(), None);
 
     // A focused field with nothing selected.
-    session.on_focus_at(0, 115.0, 115.0, EventModifiers::NONE);
+    session.focus_at(0, Point::new(115.0, 115.0), Modifiers::NONE);
     assert_eq!(session.selected_text().as_deref(), Some(""));
 }
 
@@ -471,9 +471,9 @@ fn an_unfocused_field_and_an_empty_selection_are_different_answers() {
 fn select_all_on_an_empty_field_selects_nothing_and_succeeds() {
     let doc = document();
     let mut session = FormSession::new(&doc);
-    session.on_focus_at(0, 115.0, 115.0, EventModifiers::NONE);
+    session.focus_at(0, Point::new(115.0, 115.0), Modifiers::NONE);
 
-    session.on_key_down(VirtualKey::A, EventModifiers::CONTROL);
+    session.key_down(Key::A, Modifiers::CONTROL);
     assert_eq!(session.selected_text().as_deref(), Some(""));
     assert_eq!(session.focused_text().as_deref(), Some(""));
 }
@@ -494,8 +494,8 @@ fn taking_focus_reports_the_change_in_the_updates() {
     let doc = document();
     let mut session = FormSession::new(&doc);
 
-    session.on_mouse_move(0, INSIDE.0, INSIDE.1, EventModifiers::NONE);
-    let response = session.on_mouse_down(0, INSIDE.0, INSIDE.1, EventModifiers::NONE);
+    session.mouse_move(0, INSIDE, Modifiers::NONE);
+    let response = session.mouse_down(0, INSIDE, Modifiers::NONE);
 
     let focus_changes = response
         .updates
@@ -516,7 +516,7 @@ fn re_clicking_the_focused_field_reports_no_focus_change() {
     let mut session = FormSession::new(&doc);
     click(&mut session, INSIDE);
 
-    let response = session.on_mouse_down(0, 130.0, 115.0, EventModifiers::NONE);
+    let response = session.mouse_down(0, Point::new(130.0, 115.0), Modifiers::NONE);
     let focus_changes = response
         .updates
         .iter()
