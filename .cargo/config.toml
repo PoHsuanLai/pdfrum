@@ -1,0 +1,18 @@
+# Build settings that are about disk and machine, not about the crate graph.
+# Anything that changes what the compiler *emits* belongs in Cargo.toml's
+# `[profile.*]`; this file is for how much of it we keep on disk.
+
+[build]
+# Incremental compilation is off everywhere, including dev.
+#
+# It exists to make an edit-rebuild loop cheap by caching per-CGU state under
+# `target/<profile>/incremental/`, and it pays for that in disk. This
+# workspace's loop is not that shape: the conformance runner and the agents
+# driving it rebuild from a cold or near-cold tree, across several target
+# directories at once, and the cache is written every time and read almost
+# never. Measured 2026-09-02: the accumulated target trees had reached
+# **400 GB**.
+#
+# Note this is a *default*, not a lock. `CARGO_INCREMENTAL=1 cargo build`
+# still turns it on for one invocation if a genuine edit loop wants it.
+incremental = false
