@@ -145,7 +145,13 @@ impl<'a, R: Resolve> Builder<'a, R> {
     /// of the reading-order machinery.
     pub fn offer(&mut self, index: usize, diags: &mut Diagnostics) {
         let Some(run) = self.run(index) else { return };
-        if run.rect.width().abs() < SIZE_EPSILON {
+        // `[oracle-bug]` Gate on the **advance**, not the glyph bounding box.
+        // `cpdf_textpage.cpp:881` tests `GetRect().Width()`, which
+        // `cpdf_textobject.cpp:305-331` builds from `GetCharBBox` — so an
+        // object made only of spaces, whose boxes are empty but whose `w0`
+        // per §9.4.3 is not, disappears before extraction. See
+        // [`TextRun::advance`](crate::object::TextRun::advance).
+        if run.advance < SIZE_EPSILON && run.rect.width().abs() < SIZE_EPSILON {
             diags.record(Severity::Recovered, DiagKind::TextObjectDegenerate, None);
             return;
         }
@@ -211,8 +217,9 @@ impl<'a, R: Resolve> Builder<'a, R> {
         for index in batch {
             let Some(run) = self.run(index) else { continue };
             // Re-checked, because the batch may hold an object whose box
-            // changed meaning since it was offered.
-            if run.rect.width().abs() < SIZE_EPSILON {
+            // changed meaning since it was offered. `[oracle-bug]`: the
+            // advance rescues a spaces-only object, as at `offer`.
+            if run.advance < SIZE_EPSILON && run.rect.width().abs() < SIZE_EPSILON {
                 continue;
             }
             let state = self.pre_marked_content(run, diags);

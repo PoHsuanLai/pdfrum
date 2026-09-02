@@ -229,14 +229,19 @@ fn an_unmappable_character_is_still_counted() {
     assert_eq!(page.all_text(), "\u{FFFE}");
 }
 
+/// Audit items **A40 + A43**. `WhitespaceCharCount` used to assert zero
+/// characters, reproducing the bug crbug.com/40643656 reports: the object gate
+/// at `cpdf_textpage.cpp:881` tests `GetRect().Width()`, built from the glyph
+/// bounding boxes, and a space's box is empty while its `w0` per §9.4.3 is
+/// not, so a spaces-only object vanishes. Gating on the advance keeps it, and
+/// this page yields the one character the bug asks for.
 #[test]
-fn a_whitespace_only_page_yields_no_characters_at_all() {
-    // `WhitespaceCharCount`, a pinned upstream bug: crbug.com/40643656 says
-    // this should be one character, and it is zero. The golden is a
-    // four-byte file holding only the byte-order mark.
+fn a_whitespace_only_page_yields_the_one_space_it_draws() {
     let page = fixture!("whitespace.pdf");
-    assert_eq!(page.chars.len(), 0);
-    assert_eq!(page.to_utf32le(), [0xFF, 0xFE, 0x00, 0x00]);
+    assert_eq!(page.chars.len(), 1);
+    assert_eq!(page.all_text(), " ");
+    // Byte-order mark plus one UTF-32LE code unit.
+    assert_eq!(page.to_utf32le(), [0xFF, 0xFE, 0x00, 0x00, 0x20, 0, 0, 0]);
 }
 
 #[test]
@@ -272,10 +277,12 @@ fn a_hyphen_sentinel_replaces_a_hard_hyphen_in_a_non_ascii_word() {
     // holds `U+0002` at the same place. The upstream assertion is on the
     // text, and the design brief's §5.2 quotes the character stream's value
     // for it -- both are right, about different outputs.
-    let slice: String = text[171..227].iter().collect();
-    assert_eq!(
-        slice,
-        "METADATA table. When the split has committed, it noti\u{FFFE}fi"
+    // Pinned by content rather than by offset: A40+A43 restores characters
+    // ahead of this run, so an absolute index would pin the bug's arithmetic.
+    let whole: String = text.iter().collect();
+    assert!(
+        whole.contains("METADATA table. When the split has committed, it noti\u{FFFE}fi"),
+        "the sentinel replaces the hard hyphen mid-word"
     );
     let sentinels: Vec<_> = page
         .chars
@@ -318,16 +325,23 @@ fn a_stream_length_past_the_end_of_the_file_still_extracts() {
 
 #[test]
 fn a_cyrillic_run_comes_out_in_order() {
-    // `Bug921`: 268 characters, of which a 24-character Cyrillic run is
-    // pinned exactly.
+    // `Bug921`. Audit items **A40 + A43**: the upstream count is 268, and it
+    // is 278 once the advance gate stops deleting the page's spaces-only
+    // objects — which on this page also carried real letters (the oracle
+    // loses an `И`, an `—`, a `в` and a `я`, verified against its own `--txt`).
     let page = fixture!("bug_921.pdf");
-    assert_eq!(page.chars.len(), 268);
-    assert_eq!(
-        units(&page)[238..262],
-        [
-            1095, 1077, 1083, 1086, 1074, 1077, 1095, 1077, 1089, 1082, 1086, 1077, 32, 1089, 1090,
-            1088, 1072, 1076, 1072, 1085, 1080, 1077, 46, 32
-        ]
+    assert_eq!(page.chars.len(), 278);
+    // The run is pinned by *content*, not by offset: A40+A43 restores
+    // characters ahead of it, so an absolute index would pin the bug's
+    // arithmetic rather than the ordering this test is about.
+    let run = [
+        1095_u32, 1077, 1083, 1086, 1074, 1077, 1095, 1077, 1089, 1082, 1086, 1077, 32, 1089, 1090,
+        1088, 1072, 1076, 1072, 1085, 1080, 1077, 46, 32,
+    ];
+    let units = units(&page);
+    assert!(
+        units.windows(run.len()).any(|w| w == run),
+        "the Cyrillic run comes out in order"
     );
 }
 
@@ -412,12 +426,16 @@ fn cropping_a_page_does_not_change_its_characters() {
     }
 }
 
+/// Audit items **A40 + A43**. `GetTextShouldNotGetInvisibleSpaces` used to
+/// assert the plain string, on the reasoning that three of the five text
+/// objects "show nothing at all". They do show something: each draws a space
+/// glyph with a real advance, and only the empty *bounding box* made them
+/// invisible to the gate. Keeping them is what §9.4.3 requires, so the spaces
+/// and the line breaks they carry are in the output.
 #[test]
-fn invisible_spaces_are_not_extracted_as_spaces() {
-    // `GetTextShouldNotGetInvisibleSpaces`: three of the five text objects
-    // show nothing at all, so the result is the plain string.
+fn invisible_spaces_are_extracted_as_the_spaces_they_draw() {
     let page = fixture!("hello_world_with_invisible_spaces.pdf");
-    assert_eq!(page.all_text(), HELLO);
+    assert_eq!(page.all_text(), format!(" \r\n \r\n {HELLO}"));
 }
 
 // ---------------------------------------------------------------------------
