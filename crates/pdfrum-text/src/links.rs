@@ -11,15 +11,25 @@
 //! - A trailing hyphen before a line break **joins** the two halves, so a URL
 //!   broken across lines is found whole. A trailing `?` or `/` before a break
 //!   does not, and the URL ends there.
-//! - The candidate is sliced out of the **text** by offsets counted over the
-//!   **character list**, and those two index spaces are not the same one. On a
-//!   page with control characters or normalized ligatures the slice is
-//!   misaligned. That is an upstream defect, it is observable through the
-//!   reported character range, and it is ported as-is (design brief D5) — with
-//!   a bounds-checked slice that yields an empty candidate where the C++'s
-//!   `Substr` yields an empty string.
+//! - `[oracle-bug]` The candidate is cut out of the **text** by offsets
+//!   counted over the **character list**, and those two index spaces are not
+//!   the same one. `cpdf_linkextract.cpp:123` and `:126` walk the char list
+//!   (`CountChars`, `GetCharInfo`) while `:148` cuts with
+//!   `page_text.Substr(start, nCount)`; they diverge wherever a character is
+//!   in one and not the other — `AddCharInfo` (`cpdf_textpage.cpp:783-786`)
+//!   pushes a non-normal char into `char_list_` without touching `text_buf_`,
+//!   and normalization at `:808-813` appends several text chars for one input.
+//!   PDFium **owns the converter it never calls**,
+//!   `CharIndexFromTextIndex` (`cpdf_textpage.cpp:409`), and the wrong offsets
+//!   flow on to `FPDFLink_GetTextRange` (`fpdf_text.cpp:599`), whose header
+//!   documents them as *char* indices. pdf.js's autolinker carries exactly the
+//!   reverse map PDFium skips (`autolinker.js:147`, `:176-180`). Here the
+//!   candidate is cut in **text** space, converted through
+//!   [`CharIndex`](crate::index::CharIndex), and the reported range is
+//!   converted back to char space.
 
 use crate::charinfo::{CharBox, CharType};
+use crate::index::CharIndex;
 use crate::unicode::{is_alnum, is_decimal_digit, lower_string};
 use std::ops::Range;
 
@@ -35,10 +45,10 @@ pub struct WebLink {
 
 /// Every address in a page's text.
 ///
-/// `chars` is the character list and `text` the search-facing text — the two
-/// different sequences whose index spaces this deliberately mixes.
+/// `chars` is the character list and `text` the search-facing text — two
+/// different sequences, bridged by `index` rather than conflated.
 #[must_use]
-pub fn extract(chars: &[CharBox], text: &[char]) -> Vec<WebLink> {
+pub fn extract(chars: &[CharBox], text: &[char], index: &CharIndex) -> Vec<WebLink> {
     let mut links = Vec::new();
     let mut start = 0usize;
     let mut pos = 0usize;
@@ -73,7 +83,18 @@ pub fn extract(chars: &[CharBox], text: &[char]) -> Vec<WebLink> {
             continue;
         }
 
-        let mut candidate: String = substr(text, start, count);
+        // `[oracle-bug]` Convert the char-list span into the text span before
+        // cutting. A candidate whose characters are all absent from the text
+        // has no text span at all, which is an empty candidate — the same
+        // answer `Substr` gives out of range, reached for the right reason.
+        let text_start = index.text_index_at_or_after(start);
+        let mut candidate: String = match text_start {
+            Some(first) if count > 0 => {
+                let last = index.text_index_end(start + count - 1);
+                substr(text, first, last.saturating_sub(first))
+            }
+            _ => String::new(),
+        };
         if line_break {
             candidate.retain(|ch| ch != '\n' && ch != '\r');
             line_break = false;
@@ -93,9 +114,17 @@ pub fn extract(chars: &[CharBox], text: &[char]) -> Vec<WebLink> {
             }
             if count > 5 {
                 if let Some(link) = check_web_link(&candidate) {
+                    // `[oracle-bug]` `link.range` is an offset into the
+                    // candidate, which was cut from the **text** at
+                    // `text_start`; convert it back to char space, which is
+                    // what `FPDFLink_GetTextRange` documents its output as.
+                    // `cpdf_linkextract.cpp:157` adds the candidate offset to
+                    // a char-list `start` instead, mixing the two spaces a
+                    // second time.
+                    let range = char_range(index, text_start, &link.range, start, count);
                     links.push(WebLink {
                         url: link.url,
-                        range: start + link.range.start..start + link.range.end,
+                        range,
                     });
                 } else if let Some(url) = check_mail_link(&candidate) {
                     links.push(WebLink {
@@ -109,6 +138,33 @@ pub fn extract(chars: &[CharBox], text: &[char]) -> Vec<WebLink> {
         start = pos;
     }
     links
+}
+
+/// `[oracle-bug]` A candidate-relative range, converted back into char space.
+///
+/// `found` counts from `text_start` in the **text**; the reported range is a
+/// **char** offset, which is what `FPDFLink_GetTextRange` (`fpdf_text.cpp:599`)
+/// documents its output as. Falls back to the whole char span when a bound has
+/// no char of its own — a text character the char list cannot name is a
+/// malformed page, not a reason to report a wrong offset.
+fn char_range(
+    index: &CharIndex,
+    text_start: Option<usize>,
+    found: &Range<usize>,
+    start: usize,
+    count: usize,
+) -> Range<usize> {
+    let whole = start..start + count;
+    let Some(first) = text_start else {
+        return whole;
+    };
+    let (Some(from), Some(to)) = (
+        index.char_index(first + found.start),
+        index.char_index(first + found.end.saturating_sub(1)),
+    ) else {
+        return whole;
+    };
+    from..to + 1
 }
 
 /// `count` characters from `first`, or **nothing** when the range runs past
@@ -402,6 +458,54 @@ mod tests {
     )]
 
     use super::*;
+
+    /// Audit item **A46**. The two index spaces diverge exactly where a
+    /// character is in the char list but not in the text — which is what
+    /// `AddCharInfo` (`cpdf_textpage.cpp:783-786`) produces for a non-normal
+    /// character. Cutting the text by char-list offsets then slices the wrong
+    /// bytes; `cpdf_linkextract.cpp:148` does exactly that.
+    #[test]
+    fn a_candidate_is_cut_in_text_space_and_reported_in_char_space() {
+        use crate::charinfo::CharType;
+        use kurbo::{Affine, Point, Rect};
+
+        fn boxed(char_type: CharType, ch: char) -> CharBox {
+            CharBox {
+                char_type,
+                unicode: u32::from(ch),
+                code: Some(pdfrum_font::CharCode(u32::from(ch))),
+                origin: Point::ZERO,
+                char_box: Rect::ZERO,
+                loose_char_box: Rect::ZERO,
+                matrix: Affine::IDENTITY,
+                object: None,
+                font_size: 1.0,
+                angle: 0.0,
+            }
+        }
+
+        // Two hidden characters ahead of the URL: they are in the char list
+        // and *not* in the text, so the two index spaces are offset by two.
+        let mut chars: Vec<CharBox> = vec![
+            boxed(CharType::NotUnicode, '\u{0002}'),
+            boxed(CharType::NotUnicode, '\u{0003}'),
+        ];
+        chars.extend(
+            "http://a.com "
+                .chars()
+                .map(|ch| boxed(CharType::Normal, ch)),
+        );
+        let text: Vec<char> = "http://a.com ".chars().collect();
+
+        let links = extract(&chars, &text, &crate::index::build(&chars));
+        assert_eq!(links.len(), 1, "the URL is found");
+        // Cut in text space: the whole URL, not the two-character-short
+        // prefix the char-list offsets would have taken.
+        assert_eq!(links[0].url, "http://a.com");
+        // Reported in char space: the URL starts at char 2, past the two
+        // hidden characters.
+        assert_eq!(links[0].range, 2..14);
+    }
 
     fn web(candidate: &str) -> Option<(String, usize, usize)> {
         check_web_link(candidate).map(|link| (link.url, link.range.start, link.range.len()))
