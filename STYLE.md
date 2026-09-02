@@ -159,6 +159,31 @@ flow.
   `shading`), never `util`, `helpers`, `common`, `misc`.
 - All public types are `Send + Sync` unless a documented reason exists.
   Rendering multiple pages in parallel with `rayon` must Just Work.
+- **Library code carries no `#[allow(dead_code)]`.** `#[expect(dead_code)]` is
+  the same deferral spelled differently and is not an escape either. When the
+  lint finds an item nothing calls, there are three honest answers and the
+  attribute is none of them:
+  - **Only tests call it** — put it under `#[cfg(test)]`, in the module's own
+    `mod tests` where only that module reads it, or on the item where a
+    sibling test module needs it. That says to the compiler what the `allow`
+    was asking it to overlook.
+  - **Nothing calls it** — delete it. If it recorded something worth keeping,
+    the record is one sentence in the module doc citing the oracle line, not a
+    function nobody runs. A `len`/`is_empty` pair with no production reader is
+    dead however complete it makes the type look; let the test count another
+    way.
+  - **It ports oracle behaviour we reach no other way** — then it is a *missed
+    wire*, not dead code. File it in `docs/status/unwired-oracle-ports.md`
+    with both citations and name that file in the attribute's `reason`. This
+    is the only shape of suppression the tree keeps, and
+    `scripts/check-no-dead-code.nu` enforces exactly that: an attribute whose
+    reason does not cite the registry is a decision not yet taken.
+
+  Deciding which of the three applies means reading the oracle, not the port's
+  own doc comment — a comment claiming a caller is not evidence one exists.
+  Test harnesses under `examples/` and `benches/`, where each binary uses a
+  different subset of a shared file, are outside the rule and outside the
+  check.
 
 ## 5. Dependencies
 
