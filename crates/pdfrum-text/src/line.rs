@@ -42,12 +42,6 @@ impl Line {
         self.chars.is_empty()
     }
 
-    /// The staged characters.
-    #[must_use]
-    pub fn chars(&self) -> &[CharBox] {
-        &self.chars
-    }
-
     /// The staged text units, which are **not** the staged characters'
     /// unicodes: a character-code-zero placeholder stages `U+FFFE` while its
     /// record keeps zero, and the hyphen path deliberately writes different
