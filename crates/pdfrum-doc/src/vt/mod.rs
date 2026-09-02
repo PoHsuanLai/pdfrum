@@ -21,7 +21,7 @@
 //! of scope per SPEC §10". There is no second implementation: what the widget
 //! path drives is a shell over this engine whose only observable addition is
 //! a vertical alignment offset, which the builders pass as
-//! [`edit_ap::generate`]'s `offset`.
+//! `edit_ap::generate`'s `offset`.
 
 mod autosize;
 mod bidi;

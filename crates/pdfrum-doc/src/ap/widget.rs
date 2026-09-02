@@ -15,10 +15,10 @@
 //! the selected option, or the option rows. This module builds the chrome;
 //! [`field_body`](crate::ap::field_body) builds the body over the same
 //! variable-text engine the free-text generator already uses, and
-//! [`generate_with_text`] is the entry point that has a font to build one
+//! `generate_with_text` is the entry point that has a font to build one
 //! with.
 //!
-//! [`generate`] is the font-less door and produces chrome alone. Both are
+//! `generate` is the font-less door and produces chrome alone. Both are
 //! kept because they answer different questions: a caller with no font in
 //! hand still needs a widget's background and border, and a widget with
 //! neither `/MK` colour nor a value produces an empty stream either way —
@@ -235,11 +235,11 @@ pub(crate) fn generate<R: Resolve>(dict: &Dict, r: &R) -> Option<GeneratedAp> {
 /// The same, with the field's own text set into it.
 ///
 /// A text field, a combo box or a list box gains its body; every other field
-/// type produces exactly what [`generate`] does, because only those three set
+/// type produces exactly what `generate` does, because only those three set
 /// text at all.
 ///
 /// The text is the one the **file** stores. A field being edited shows
-/// something else, and [`generate_with_live`] is the entry point for that.
+/// something else, and `generate_with_live` is the entry point for that.
 #[must_use]
 pub(crate) fn generate_with_text<R: Resolve>(
     dict: &Dict,
@@ -270,7 +270,7 @@ pub(crate) fn generate_with_text<R: Resolve>(
 /// answer can be added without moving anyone's call.
 ///
 /// [`Default`] is "a field with nothing live about it", which
-/// [`generate_with_live_faces`] renders exactly as [`generate_with_text`]
+/// [`generate_with_live_faces`] renders exactly as `generate_with_text`
 /// does with no substitute.
 /// Adding a field to this struct breaks every exhaustive literal outside
 /// this crate, and M14 did it twice mid-flight — `substitute` in
@@ -316,7 +316,7 @@ pub struct LiveInput<'a> {
     /// control's own on-state for the chosen one.
     ///
     /// Only the on/off question is overridden, not the state's *name*: what
-    /// the generator does with it is [`is_checked_with`]'s single comparison
+    /// the generator does with it is `is_checked_with`'s single comparison
     /// against `Off`, so any non-`Off` bytes draw the on-state shape.
     pub appearance_state: Option<&'a [u8]>,
 }
@@ -325,7 +325,7 @@ pub struct LiveInput<'a> {
 ///
 /// `caret_and_selection` is the focused-field overlay and `live` is what the
 /// session is showing in place of the stored `/V`, `/I` and `/TI`. Passing
-/// [`None`] for both is exactly [`generate_with_text`], byte for byte — the
+/// [`None`] for both is exactly `generate_with_text`, byte for byte — the
 /// two differ only in what this one is allowed to be handed.
 ///
 /// # Superseded by [`generate_with_live_faces`]
@@ -371,15 +371,15 @@ pub(crate) fn generate_with_live<R: Resolve>(
 
 /// The live entry point that can reach a **second face**.
 ///
-/// [`generate_with_live`] with the substitute carried in the same record as
+/// `generate_with_live` with the substitute carried in the same record as
 /// the overlay and the live text. A field being typed into asks the same
 /// charset question a stored value does — `CPDF_BAFontMap::GetWordFontIndex`
 /// (`core/fpdfdoc/cpdf_bafontmap.cpp:116-151`) is per character and knows
 /// nothing about where the characters came from — so the typed path needs the
 /// same answer the stored one gets from
-/// [`generate_with_text`]'s `substitute`.
+/// `generate_with_text`'s `substitute`.
 ///
-/// `LiveInput::default()` here is [`generate`]-with-a-font, byte for byte:
+/// `LiveInput::default()` here is `generate`-with-a-font, byte for byte:
 /// the three fields are each [`None`] and nothing downstream distinguishes
 /// them from the stored path's arguments.
 #[must_use]

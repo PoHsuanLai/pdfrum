@@ -60,7 +60,7 @@ impl Color {
     /// The RGB bytes the `--annot` dump prints.
     ///
     /// CMYK converts multiplicatively (`255·(1−c)·(1−k)`), which is **not**
-    /// the formula [`Color::mk_rgb_bytes`] uses for the same colour in a
+    /// the formula `Color::mk_rgb_bytes` uses for the same colour in a
     /// widget's `/MK` dictionary. Both exist upstream; keeping them named
     /// apart is the only defence against unifying them.
     ///
