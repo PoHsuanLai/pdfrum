@@ -169,6 +169,10 @@ pub(crate) fn union(a: Rect, b: Rect) -> Rect {
 
 /// Whether the point falls inside, **inclusive on all four edges**, after
 /// normalizing a copy of the rectangle.
+///
+/// Only the tests ask: `nav::link`'s hit test is the one that used to, and it
+/// is itself `#[cfg(test)]` now.
+#[cfg(test)]
 #[must_use]
 pub(crate) fn contains(r: Rect, p: Point) -> bool {
     let r = normalize(r);

@@ -182,10 +182,7 @@ fn visit<R: Resolve>(
 
 /// Finds the first item whose title matches, comparing case-insensitively.
 #[must_use]
-// Reached only by the tests beside it now that the module is private; the
-// library compiles once without `cfg(test)`, so `dead_code` fires. §WP8's
-// recurring cost — the item is pinned by a test, not unreachable.
-#[allow(dead_code)]
+#[cfg(test)]
 pub(crate) fn find<R: Resolve>(
     catalog: &Dict,
     title: &str,

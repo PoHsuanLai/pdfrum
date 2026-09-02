@@ -111,10 +111,7 @@ pub fn da_font_writes(font: &pdfrum_font::Font, da_charset: Charset, code: u32) 
 /// The 128 high codes are the charset's Unicode table; the 128 low ones are
 /// ASCII, which every one of these encodings shares with `WinAnsiEncoding`.
 #[must_use]
-// Reached only by the tests beside it now that the module is private; the
-// library compiles once without `cfg(test)`, so `dead_code` fires. §WP8's
-// recurring cost — the item is pinned by a test, not unreachable.
-#[allow(dead_code)]
+#[cfg(test)]
 pub(crate) fn charset_code(charset: Charset, code: u32) -> Option<u8> {
     if code < 0x80 {
         return u8::try_from(code).ok();
