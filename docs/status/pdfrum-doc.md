@@ -54,9 +54,18 @@ while the tree is empty, so it starts passing on its own when the objects do.
 
 ## What landed
 
+The table below is what each module **contains**, which is not what the crate
+**publishes**: `docs/status/api-baseline/pdfrum-doc.txt` is the second, and
+since §A.10 step 6's module curation landed the two differ sharply. Fifteen of
+the modules named here are private now, reached only through a root or `nav` /
+`annot` / `structure` / `form` re-export of the handful of items a caller
+actually names. The measured surface is **797 items across 18 `pub mod`**,
+down from 1312 / 48; §A.11's landed note records the seam and what the
+privatisation found.
+
 | module | contents |
 |---|---|
-| `geom` | the PDF rectangle vocabulary: normalize, inflate/deflate, union, intersect, contains, centre square, `match_rect`, and the epsilon comparisons |
+| `geom` | the PDF rectangle vocabulary: normalize, inflate/deflate, union, contains, centre square, `match_rect`, and the epsilon comparisons |
 | `color` | the colour-array reader and the **two different** CMYK-to-byte formulas, named apart |
 | `nav/outline` | the pre-order bookmark walk with its cycle guard, the title's control-character clamp, the colour's range test |
 | `nav/name_tree` | the linear leaf scan, the objnum cycle set with its array side effect, the two-rung named-destination ladder |
