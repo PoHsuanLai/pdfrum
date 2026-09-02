@@ -40,6 +40,21 @@
 //! the whole image — `bug_718762` and `bug_1646`, both 5000×5000 CMYK JPEGs.
 //! We therefore choose the output space from the header's channel count
 //! rather than taking the default.
+//!
+//! # A four-channel JPEG is two different images
+//!
+//! `Adobe_transform` splits them: `0` is plain CMYK and `2` is **YCCK**, whose
+//! CMY channels carry the YCbCr transform. libjpeg reads the byte at
+//! `jdapimin.c:185-198` and converts YCCK with `ycck_cmyk_convert`
+//! (`jdcolor.c:544-587`); pdf.js honours the same byte at `jpg.js:1292-1296`,
+//! and so does `zune-jpeg` at `headers.rs:496-508`. `zune-jpeg`'s *conversion*
+//! table is the gap: `worker.rs:63-82` implements `(YCCK, RGB)` and
+//! `(YCCK, RGBA)` and has no `(YCCK, CMYK)` arm, so pinning CMYK — which the
+//! plain-CMYK case needs — used to reject every YCCK image outright. Both are
+//! now asked for their own space, which takes the identity copy at
+//! `worker.rs:41-43`, and [`ycck_to_cmyk`] finishes the YCCK one here. The
+//! conversion has to be ours rather than the decoder's so that `/Decode` still
+//! sees CMYK — see that function.
 
 use crate::color::{ColorSpace, Family};
 use crate::error::Error;
@@ -141,8 +156,106 @@ pub fn component_mismatch_allowed(space: Option<&ColorSpace>, components: u8) ->
 /// count alone, and PDFium leaves that choice standing. Four channels stay
 /// four; anything else takes `zune-jpeg`'s default, which already matches
 /// (`JCS_GRAYSCALE` for one, `JCS_RGB` for three).
-fn output_space(channels: u8) -> Option<ZColorSpace> {
-    (channels == 4).then_some(ZColorSpace::CMYK)
+///
+/// `input` is the space the codestream declares, because a four-channel image
+/// splits: `Adobe_transform == 0` is plain CMYK and comes back unconverted,
+/// while `== 2` is YCCK and `zune-jpeg` has no `(YCCK, CMYK)` arm at all
+/// (`worker.rs:63-82` implements only `(YCCK, RGB)` and `(YCCK, RGBA)`).
+/// Asking for YCCK *itself* takes the four-component identity copy at
+/// `worker.rs:41-43`, which hands back the raw Y/Cb/Cr/K planes for
+/// [`ycck_to_cmyk`] to convert — see that function for why the conversion is
+/// ours rather than the decoder's.
+fn output_space(channels: u8, input: Option<ZColorSpace>) -> Option<ZColorSpace> {
+    if channels != 4 {
+        return None;
+    }
+    Some(match input {
+        Some(ZColorSpace::YCCK) => ZColorSpace::YCCK,
+        _ => ZColorSpace::CMYK,
+    })
+}
+
+/// libjpeg's `SCALEBITS`: the fixed-point fraction its YCbCr tables carry.
+const SCALEBITS: i32 = 16;
+
+/// `ONE_HALF`, the rounding term added before the right shift.
+const ONE_HALF: i32 = 1 << (SCALEBITS - 1);
+
+// The four coefficients `build_ycc_rgb_table` scales, as `FIX(x)` —
+// `(JLONG)(x * (1 << SCALEBITS) + 0.5)`, `jdcolor.c:82` — evaluated once.
+
+/// `FIX(1.40200)`, the Cr→R coefficient.
+const CR_R: i32 = 91_881;
+/// `FIX(1.77200)`, the Cb→B coefficient.
+const CB_B: i32 = 116_130;
+/// `FIX(0.71414)`, the Cr→G coefficient, applied negated.
+const CR_G: i32 = 46_802;
+/// `FIX(0.34414)`, the Cb→G coefficient, applied negated.
+const CB_G: i32 = 22_554;
+
+/// `MAXJSAMPLE`, the largest eight-bit sample.
+const MAX_SAMPLE: i32 = 255;
+
+/// `CENTERJSAMPLE`, the value a chroma channel is centred on.
+const CENTER_SAMPLE: i32 = 128;
+
+/// Convert YCCK samples to CMYK in place, as libjpeg's `ycck_cmyk_convert`.
+///
+/// A four-component JPEG whose Adobe marker says `transform == 2` stores
+/// **YCCK**: the CMY channels have been run through the same YCbCr transform a
+/// colour photograph gets, with K left alone. libjpeg undoes it at
+/// `third_party/libjpeg_turbo/src/jdcolor.c:544-587` — YCbCr→RGB per channel,
+/// then `MAXJSAMPLE -` each result, with `outptr[3] = inptr3[col]` passing K
+/// through untouched. The complement is what turns RGB back into CMY.
+///
+/// # Why the conversion is ours and not the decoder's
+///
+/// `zune-jpeg` will decode YCCK straight to RGB (`worker.rs:63-82`), and that
+/// is the wrong answer here for two reasons that are the same reason twice:
+/// its composite bakes in the Adobe inversion *and* collapses four channels to
+/// three, so the image would arrive with neither the components the image
+/// dictionary declares nor a value `/Decode` can still act on. §7.4.8 puts the
+/// CMYK inversion in `/Decode`, not in the codec — `cpdf_devicecs.cpp:104-136`
+/// on one side and `jpg.js:1275-1279` on the other — and this crate reproduces
+/// that in `image/mod.rs`. Producing raw CMYK here keeps that seam intact.
+///
+/// The arithmetic is libjpeg's exactly, tables and all: the per-value tables
+/// `build_ycc_rgb_table` (`jdcolor.c:215-254`) precomputes are the same four
+/// products evaluated inline, so the result is bit-identical rather than
+/// merely close.
+fn ycck_to_cmyk(samples: &mut [u8]) {
+    // A slice pattern rather than four indices: the chunk's length is the
+    // pattern's, so the K channel being untouched is visible in the binding.
+    for [c, m, y_channel, _k] in samples
+        .chunks_exact_mut(4)
+        .filter_map(|chunk| <&mut [u8; 4]>::try_from(chunk).ok())
+    {
+        let (y, cb, cr) = (
+            i32::from(*c),
+            i32::from(*m) - CENTER_SAMPLE,
+            i32::from(*y_channel) - CENTER_SAMPLE,
+        );
+        // `Cr_r_tab[cr]` and `Cb_b_tab[cb]`, rounded at the shift.
+        let red = y + ((CR_R * cr + ONE_HALF) >> SCALEBITS);
+        // `Cb_g_tab[cb] + Cr_g_tab[cr]` carries `ONE_HALF` in the Cb term, so
+        // the sum is shifted once — one rounding, not two.
+        let green = y + ((-CB_G * cb - CR_G * cr + ONE_HALF) >> SCALEBITS);
+        let blue = y + ((CB_B * cb + ONE_HALF) >> SCALEBITS);
+        // `range_limit[MAXJSAMPLE - v]`: the complement, clamped. libjpeg's
+        // range-limit table wraps rather than saturating for the far
+        // out-of-range values DCT noise cannot reach; a clamp is the same
+        // answer over every value a real codestream produces.
+        *c = clamp_sample(MAX_SAMPLE - red);
+        *m = clamp_sample(MAX_SAMPLE - green);
+        *y_channel = clamp_sample(MAX_SAMPLE - blue);
+        // K passes through unchanged (`jdcolor.c:579-580`).
+    }
+}
+
+/// `range_limit`: a sample clamped into `0..=255`.
+#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+fn clamp_sample(value: i32) -> u8 {
+    value.clamp(0, MAX_SAMPLE) as u8
 }
 
 /// The two byte offsets a known-bad SOF height is patched at.
@@ -243,20 +356,26 @@ pub fn decode_dct(data: &[u8], declared: (u32, u32)) -> Result<DctImage, Error> 
         .flatten();
     let data = patched.as_deref().unwrap_or(data);
     // The header pass first, so the output space can be pinned to the
-    // codestream's channel count before any samples are produced.
-    let channels = probe(data).map_or(0, |(_, _, c)| c);
-    let options = output_space(channels)
-        .map(|space| DecoderOptions::default().jpeg_set_out_colorspace(space));
+    // codestream's channel count — and, for four channels, to which of the two
+    // four-channel spaces it declares — before any samples are produced.
+    let (channels, input) = read_header(data).map_or((0, None), |(_, _, c, space)| (c, space));
+    let pinned = output_space(channels, input);
+    let options = pinned.map(|space| DecoderOptions::default().jpeg_set_out_colorspace(space));
     let mut decoder = match options {
         Some(options) => zune_jpeg::JpegDecoder::new_with_options(ZCursor::new(data), options),
         None => zune_jpeg::JpegDecoder::new(ZCursor::new(data)),
     };
-    let pixels = decoder
+    let mut pixels = decoder
         .decode()
         .map_err(|_| Error::CodecRejected { codec: "DCT" })?;
     let info = decoder
         .info()
         .ok_or(Error::CodecRejected { codec: "DCT" })?;
+    // The YCCK planes come back raw, which is the point: the transform is
+    // ours so that `/Decode` still sees CMYK. Nothing else is touched.
+    if pinned == Some(ZColorSpace::YCCK) {
+        ycck_to_cmyk(&mut pixels);
+    }
     let components = u8::try_from(
         pixels.len() / usize::from(info.width).max(1) / usize::from(info.height).max(1),
     )
@@ -273,13 +392,12 @@ pub fn decode_dct(data: &[u8], declared: (u32, u32)) -> Result<DctImage, Error> 
     })
 }
 
-/// The dimensions and component count a JPEG declares, without decoding it.
+/// The header facts a decode needs: dimensions, channel count, and the space
+/// the codestream declares.
 ///
-/// This is the probe PDFium runs when the full decode fails: the codestream's
-/// own dimensions then **overwrite** the dictionary's, which is why a JPEG
-/// disagreeing with its wrapper still renders at the codestream's size.
-#[must_use]
-pub fn probe(data: &[u8]) -> Option<(u32, u32, u8)> {
+/// The fourth is what [`probe`] does not carry and [`decode_dct`] cannot do
+/// without, since `Adobe_transform` splits the four-channel case in two.
+fn read_header(data: &[u8]) -> Option<(u32, u32, u8, Option<ZColorSpace>)> {
     let mut decoder = zune_jpeg::JpegDecoder::new(ZCursor::new(data));
     decoder.decode_headers().ok()?;
     let info = decoder.info()?;
@@ -287,7 +405,18 @@ pub fn probe(data: &[u8]) -> Option<(u32, u32, u8)> {
         u32::from(info.width),
         u32::from(info.height),
         info.components,
+        decoder.input_colorspace(),
     ))
+}
+
+/// The dimensions and component count a JPEG declares, without decoding it.
+///
+/// This is the probe PDFium runs when the full decode fails: the codestream's
+/// own dimensions then **overwrite** the dictionary's, which is why a JPEG
+/// disagreeing with its wrapper still renders at the codestream's size.
+#[must_use]
+pub fn probe(data: &[u8]) -> Option<(u32, u32, u8)> {
+    read_header(data).map(|(width, height, components, _)| (width, height, components))
 }
 
 #[cfg(test)]
@@ -307,6 +436,7 @@ mod tests {
     use super::{
         ADOBE_CMYK_DECODE, ZColorSpace, allows_reduced_resolution, component_mismatch_allowed,
         decode_dct, has_known_bad_height, output_space, probe, scale_denominator, scaled_size,
+        ycck_to_cmyk,
     };
     use crate::color::{ColorSpace, Indexed};
 
@@ -454,12 +584,126 @@ mod tests {
         // PDFium never overrides it, so the scanline keeps all four. Only
         // this count needs pinning: one and three already match `zune-jpeg`'s
         // own default, and asking for a conversion there would be the change.
-        assert_eq!(output_space(4), Some(ZColorSpace::CMYK));
-        assert_eq!(output_space(1), None);
-        assert_eq!(output_space(3), None);
+        assert_eq!(
+            output_space(4, Some(ZColorSpace::CMYK)),
+            Some(ZColorSpace::CMYK)
+        );
+        assert_eq!(output_space(1, Some(ZColorSpace::Luma)), None);
+        assert_eq!(output_space(3, Some(ZColorSpace::YCbCr)), None);
         // A count PDF does not allow is left alone too — the component gate
         // above rejects it, and pinning an output space would not save it.
-        assert_eq!(output_space(2), None);
-        assert_eq!(output_space(0), None);
+        assert_eq!(output_space(2, None), None);
+        assert_eq!(output_space(0, None), None);
+    }
+
+    #[test]
+    fn a_ycck_jpeg_is_asked_for_its_own_space_not_cmyk() {
+        // `zune-jpeg` has no `(YCCK, CMYK)` arm (`worker.rs:63-82`), so asking
+        // for CMYK here is the error that dropped every YCCK image. Asking for
+        // YCCK takes the four-component identity copy instead and leaves the
+        // conversion to `ycck_to_cmyk`.
+        assert_eq!(
+            output_space(4, Some(ZColorSpace::YCCK)),
+            Some(ZColorSpace::YCCK)
+        );
+        // A four-channel codestream whose space did not read still asks for
+        // CMYK, which is what the plain-CMYK files need.
+        assert_eq!(output_space(4, None), Some(ZColorSpace::CMYK));
+    }
+
+    #[test]
+    fn ycck_leaves_a_neutral_pixel_black_and_passes_k_through() {
+        // Chroma at the centre and full luma is white in RGB, so the
+        // complement is zero in CMY — and K is copied, not touched.
+        let mut samples = [255, 128, 128, 42];
+        ycck_to_cmyk(&mut samples);
+        assert_eq!(samples, [0, 0, 0, 42]);
+        // Zero luma is black in RGB, so the complement saturates all three.
+        let mut dark = [0, 128, 128, 7];
+        ycck_to_cmyk(&mut dark);
+        assert_eq!(dark, [255, 255, 255, 7]);
+    }
+
+    #[test]
+    fn ycck_matches_libjpegs_fixed_point_arithmetic_exactly() {
+        // The reference is `ycck_cmyk_convert` (`jdcolor.c:569-581`) driven by
+        // `build_ycc_rgb_table`'s tables (`:236-250`), evaluated here in the
+        // same order and at the same widths. A float transform would differ
+        // by a unit on many of these; this asserts it does not.
+        // Named for libjpeg's own tables: `red_from_cr`, `blue_from_cb`, and
+        // the two halves of the green sum.
+        let reference = |y: i32, cb: i32, cr: i32| -> [i32; 3] {
+            let (x_b, x_r) = (cb - 128, cr - 128);
+            let red_from_cr = (91881 * x_r + 32768) >> 16;
+            let blue_from_cb = (116130 * x_b + 32768) >> 16;
+            let green_chroma_red_term = -46802 * x_r;
+            let green_chroma_blue_term = -22554 * x_b + 32768;
+            [
+                255 - (y + red_from_cr),
+                255 - (y + ((green_chroma_blue_term + green_chroma_red_term) >> 16)),
+                255 - (y + blue_from_cb),
+            ]
+        };
+        for y in (0u8..=255).step_by(17) {
+            for cb in (0u8..=255).step_by(23) {
+                for cr in (0u8..=255).step_by(29) {
+                    let mut got = [y, cb, cr, 200];
+                    ycck_to_cmyk(&mut got);
+                    let want = reference(i32::from(y), i32::from(cb), i32::from(cr));
+                    for (channel, expected) in want.into_iter().enumerate() {
+                        assert_eq!(
+                            i32::from(got[channel]),
+                            expected.clamp(0, 255),
+                            "channel {channel} at y={y} cb={cb} cr={cr}"
+                        );
+                    }
+                    assert_eq!(got[3], 200, "K must pass through");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_ycck_codestream_decodes_to_four_channels_rather_than_being_dropped() {
+        // The image `corpus/fx/other/1.pdf` carries, whose APP14 transform
+        // byte is 2. Before this fix `decode_dct` returned `CodecRejected` for
+        // it and the image was silently dropped — SSIM 0.99491 with a
+        // `max_channel_diff` of 255. The corpus lives outside the repository,
+        // so this skips when it is absent, as the corpus tests do.
+        let Some(data) = ycck_codestream() else {
+            return;
+        };
+        let image = decode_dct(&data, (429, 542)).expect("a YCCK JPEG must decode");
+        assert_eq!((image.width, image.height), (429, 542));
+        assert_eq!(image.components, 4);
+        assert_eq!(image.data.len(), 429 * 542 * 4);
+        // The raw YCCK planes begin `242, 111, 130, 0`. Reaching CMYK means
+        // the transform ran: a copy would have left the first three alone.
+        let mut expected = [242, 111, 130, 0];
+        ycck_to_cmyk(&mut expected);
+        assert_eq!(&image.data[..4], &expected);
+        assert_ne!(&image.data[..3], &[242, 111, 130]);
+    }
+
+    /// The `/DCTDecode` codestream out of `corpus/fx/other/1.pdf`, or `None`
+    /// when the corpus is not present.
+    ///
+    /// The file stores it uncompressed and unencrypted, so the bytes between
+    /// the last `stream` keyword and its `endstream` are the JPEG itself.
+    fn ycck_codestream() -> Option<Vec<u8>> {
+        let pdf =
+            std::fs::read("/mnt/data2/pdfium/pdfium-c++/testing/corpus/fx/other/1.pdf").ok()?;
+        let start = pdf
+            .windows(2)
+            .enumerate()
+            .filter(|(_, pair)| *pair == b"\xff\xd8")
+            .map(|(at, _)| at)
+            .next_back()?;
+        let end = pdf
+            .windows(9)
+            .enumerate()
+            .find(|(at, window)| *at > start && *window == b"endstream")
+            .map(|(at, _)| at)?;
+        Some(pdf.get(start..end)?.to_vec())
     }
 }
