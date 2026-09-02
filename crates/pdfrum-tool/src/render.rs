@@ -28,7 +28,7 @@ use pdfrum_page::{BuildContext, OcContext, UsageType, page_visibility};
 use pdfrum_parser::PageDict;
 use pdfrum_raster_agg::AggBackend;
 use pdfrum_raster_tinyskia::TinySkiaBackend;
-use pdfrum_raster_vello::VelloBackend;
+use pdfrum_raster_vello_cpu::VelloCpuBackend;
 use pdfrum_render::{
     Pixmap, RenderCaches, RenderOptions, needs_alpha_background, render_page_with_visibility,
 };
@@ -90,24 +90,41 @@ pub enum Backend {
     /// `tiny-skia` — the determinism baseline and Tier C's gating partner.
     TinySkia,
     /// `vello_cpu`, at its pinned SIMD level and render mode.
-    Vello,
+    ///
+    /// Renamed 2026-09-02, was `Vello`: the crate behind it is
+    /// `pdfrum-raster-vello-cpu` and the bare name now belongs to the GPU
+    /// backend, which this tool has no renderer for.
+    VelloCpu,
 }
 
 impl Backend {
     /// The backend a name selects, or `None` when it names none of them.
     ///
-    /// `"exact"` is still accepted, spelling the same backend it always did
-    /// (renamed 2026-09-02): [`Backend::resolve`] falls back to the default
-    /// rather than erroring, so dropping the old spelling would have left an
-    /// existing script silently rendering with the default — which is this
-    /// same backend, so nothing would have moved, but the *reason* would have
-    /// been a swallowed typo rather than a name.
+    /// **Both pre-2026-09-02 spellings are still accepted**, and for the same
+    /// reason in each case: [`Backend::resolve`] falls back to the default
+    /// rather than erroring, so a name this function stops recognising does
+    /// not become an error a script's author can see — it becomes a silent
+    /// switch to whatever the default happens to be.
+    ///
+    /// - `"exact"` is `Agg` (crate renamed to `pdfrum-raster-agg`). Dropping
+    ///   it would have landed on the default, which *is* `Agg`, so nothing
+    ///   would have moved — but the reason would have been a swallowed typo
+    ///   rather than a name, and the next rename would move it for real.
+    /// - `"vello"` is `VelloCpu` (crate renamed to
+    ///   `pdfrum-raster-vello-cpu`; the bare name now belongs to the GPU
+    ///   backend, which this tool has no renderer for). **This one is not
+    ///   cosmetic:** dropping it would have sent every existing
+    ///   `--use-renderer=vello` and `PDFRUM_BACKEND=vello` run to the
+    ///   default — `Agg` — silently rendering with a different rasterizer
+    ///   than the script asked for, which is exactly the "a typo must not
+    ///   change what a conformance run means" hazard [`Backend::resolve`]
+    ///   documents.
     #[must_use]
     pub fn from_name(name: &str) -> Option<Self> {
         match name {
             "agg" | "exact" => Some(Self::Agg),
             "tiny-skia" | "tinyskia" => Some(Self::TinySkia),
-            "vello" | "vello_cpu" => Some(Self::Vello),
+            "vello-cpu" | "vello_cpu" | "vello" => Some(Self::VelloCpu),
             _ => None,
         }
     }
@@ -386,10 +403,10 @@ pub fn render<R: Resolve>(
             &mut diags,
         )
         .ok()?,
-        Backend::Vello => render_page_with_visibility(
+        Backend::VelloCpu => render_page_with_visibility(
             &page,
             &opts,
-            &VelloBackend::new(),
+            &VelloCpuBackend::new(),
             &visible,
             &mut caches,
             &mut diags,

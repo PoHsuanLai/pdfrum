@@ -771,10 +771,28 @@ Knockout ([spec] 2026-08-29, page brief Q4): the oracle never parses /K
 anywhere in core/ — v1 matches the oracle and does NOT implement knockout;
 the compositor's layer model keeps a documented (unused) slot for it as a
 post-M8 correctness option. Backends never know about group semantics either
-way. `pdfrum-raster-vello` (vello_cpu),
+way. `pdfrum-raster-vello-cpu` (vello_cpu),
 `pdfrum-raster-tinyskia` and `pdfrum-raster-agg` (renamed 2026-09-02, was
 `pdfrum-raster-exact`) implement the two traits; conformance Tier C diffs
 them.
+
+[spec] 2026-09-02 (naming sweep): the two vello crates take **vello's own
+names**. Ours were backwards: upstream ships `vello` (the GPU renderer on
+`wgpu`), `vello_cpu` and `vello_hybrid`, so a reader who knew vello read our
+`pdfrum-raster-vello` as the GPU one and it was the CPU one.
+
+| was | now | type |
+|---|---|---|
+| `pdfrum-raster-vello` (wraps `vello_cpu`) | `pdfrum-raster-vello-cpu` | `VelloCpuBackend`, `VelloCpuDevice` |
+| `pdfrum-raster-vello-gpu` (wraps `vello` on `wgpu`) | `pdfrum-raster-vello` | `VelloBackend<'a>`, `VelloDevice` |
+
+Nothing about the M12c isolation rule moves: the GPU crate is still outside
+the core ring, still `publish = false`, and `scripts/check-no-wgpu.sh` still
+names it. `pdfrum-tool`'s `Backend::Vello` becomes `VelloCpu` and
+`--use-renderer=` gains `vello-cpu`; the bare `vello` still resolves to the
+CPU backend there, because an unrecognised value falls back to the default
+(`agg`) and dropping the old spelling would silently have changed which
+rasterizer an existing script ran.
 
 [spec] 2026-09-02 (naming sweep): the analytic backend is
 **`pdfrum-raster-agg`**, type `AggBackend`, CLI value `--use-renderer=agg`.

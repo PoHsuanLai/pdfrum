@@ -77,7 +77,7 @@ tiny-skia has no such problem: `PixmapPaint::opacity`
 
 **Recommendation — engine-side workaround, no trait change.** Keep
 `draw_image`'s `alpha: f32` in the trait; it is the right vocabulary and
-tiny-skia implements it directly. `pdfrum-raster-vello` implements it as
+tiny-skia implements it directly. `pdfrum-raster-vello-cpu` implements it as
 `push_opacity_layer(alpha)` → draw the image with `sampler.alpha = 1.0` →
 `pop_layer()`. This is verified to work (see B4's combined-layer probe, which
 exercises `push_layer` with an opacity). Cost: one layer per non-opaque image
@@ -307,7 +307,7 @@ contract absorbs this without modification. But §6.1's third row demands
 `> tol(px)` on *interior* pixels — a flattening difference can move an edge and
 thus land on a pixel the trace-derived `edge_mask` did not dilate over. Two
 mitigations, both cheap:
-1. **Pin `RenderSettings::level` explicitly** in `pdfrum-raster-vello` (do not
+1. **Pin `RenderSettings::level` explicitly** in `pdfrum-raster-vello-cpu` (do not
    call `Level::try_detect()`), and expose it. For golden/snapshot tests, pin
    `Level::baseline()`. This makes our own output reproducible across
    developer machines and CI, which is the property that actually matters.

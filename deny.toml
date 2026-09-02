@@ -15,7 +15,7 @@ allow = [
     "Zlib",
     "Unicode-DFS-2016",
     "Unicode-3.0",
-    # M12c, both reached only through `pdfrum-raster-vello-gpu`. Neither is a
+    # M12c, both reached only through `pdfrum-raster-vello`. Neither is a
     # loosening of the policy's intent — both are permissive and
     # OSI/FSF-recognised — they were simply absent from a tree that had not
     # needed them before.
@@ -37,7 +37,7 @@ deny = [
     # M12c scopes ONE exception, and this is its whole extent. `pkg-config`
     # stays banned everywhere except as a build-dependency of the two crates
     # named below, both of which reach the tree only through
-    # `pdfrum-raster-vello-gpu` — the crate PLAN.md §M12c grants the exemption
+    # `pdfrum-raster-vello` — the crate PLAN.md §M12c grants the exemption
     # to, and which nothing in the core ring depends on
     # (scripts/check-no-wgpu.sh asserts that separately).
     #

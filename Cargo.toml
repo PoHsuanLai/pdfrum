@@ -14,14 +14,14 @@ members = [
     "crates/pdfrum-parser",
     "crates/pdfrum-page",
     "crates/pdfrum-render",
-    "crates/pdfrum-raster-vello",
+    "crates/pdfrum-raster-vello-cpu",
     "crates/pdfrum-raster-tinyskia",
     "crates/pdfrum-raster-agg",
     # M12c. A workspace member so it is built, tested and linted like anything
     # else — but nothing in the core ring depends on it, and
     # `scripts/check-no-wgpu.sh` asserts that the facade's default tree still
     # resolves without `wgpu`.
-    "crates/pdfrum-raster-vello-gpu",
+    "crates/pdfrum-raster-vello",
     "crates/pdfrum-text",
     "crates/pdfrum-doc",
     "crates/pdfrum-form",
@@ -72,13 +72,13 @@ pdfrum-font = { path = "crates/pdfrum-font", version = "=0.1.0" }
 pdfrum-parser = { path = "crates/pdfrum-parser", version = "=0.1.0" }
 pdfrum-page = { path = "crates/pdfrum-page", version = "=0.1.0" }
 pdfrum-render = { path = "crates/pdfrum-render", version = "=0.1.0" }
-pdfrum-raster-vello = { path = "crates/pdfrum-raster-vello", version = "=0.1.0" }
+pdfrum-raster-vello-cpu = { path = "crates/pdfrum-raster-vello-cpu", version = "=0.1.0" }
 pdfrum-raster-agg = { path = "crates/pdfrum-raster-agg", version = "=0.1.0" }
 pdfrum-raster-tinyskia = { path = "crates/pdfrum-raster-tinyskia", version = "=0.1.0" }
 # M12c's GPU backend. Deliberately **not** a dependency of the facade or the
 # tool: it is reachable by naming it, which is what keeps a headless build's
 # tree free of `wgpu` (DEPS.md's exemption and its blast radius).
-pdfrum-raster-vello-gpu = { path = "crates/pdfrum-raster-vello-gpu", version = "=0.1.0" }
+pdfrum-raster-vello = { path = "crates/pdfrum-raster-vello", version = "=0.1.0" }
 pdfrum-text = { path = "crates/pdfrum-text", version = "=0.1.0" }
 pdfrum-doc = { path = "crates/pdfrum-doc", version = "=0.1.0" }
 pdfrum-form = { path = "crates/pdfrum-form", version = "=0.1.0" }
@@ -95,7 +95,7 @@ kurbo = "=0.13.1"
 peniko = "=0.6.1"
 vello_cpu = { version = "=0.2.0", default-features = false, features = ["std", "f32_pipeline"] }
 tiny-skia = "=0.12.0"
-# M12c: GPU vello, used by exactly one crate (`pdfrum-raster-vello-gpu`) that
+# M12c: GPU vello, used by exactly one crate (`pdfrum-raster-vello`) that
 # nothing in the core ring depends on. `default-features` are left ON because
 # vello's `wgpu`/`wgpu_default` pair is what provides `Renderer` at all —
 # without them the crate is an encoder with no way to rasterize.

@@ -34,7 +34,7 @@
 //! ```text
 //! render-agg/<class>/<stem>   ->  render-cold-agg/<class>/<stem>
 //! render-tinyskia/...           ->  render-cold-tinyskia/...
-//! render-vello/...              ->  render-cold-vello/...
+//! render-vello-cpu/...              ->  render-cold-vello-cpu/...
 //! (new)                         ->  render-warm-{exact,tinyskia,vello}/...
 //! (new)                         ->  build/<class>/<stem>
 //! ```
@@ -550,7 +550,7 @@ fn default_bands() -> BTreeMap<String, f64> {
         ("build", 0.04),
         ("render-cold-agg", 0.03),
         ("render-cold-tinyskia", 0.03),
-        ("render-cold-vello", 0.04),
+        ("render-cold-vello-cpu", 0.04),
         // The warm groups run at 20 samples where the cold ones run at 50, and
         // they measure a quantity that is often an order of magnitude smaller —
         // so the *absolute* interval is tighter and the *fractional* one is
@@ -559,7 +559,7 @@ fn default_bands() -> BTreeMap<String, f64> {
         // ones, and docs/status/M12.md §2 carries the distribution.
         ("render-warm-agg", 0.04),
         ("render-warm-tinyskia", 0.04),
-        ("render-warm-vello", 0.05),
+        ("render-warm-vello-cpu", 0.05),
         ("text", 0.04),
         ("save", 0.05),
     ]
