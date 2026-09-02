@@ -46,7 +46,7 @@ pub use color::Color;
 pub use error::Error;
 pub use metadata::xmp;
 pub use nav::{
-    AActionType, Action, ActionKind, Bookmark, Dest, FileSpec, Link, NameTree, NumberTree, ZoomMode,
+    AActionType, Action, ActionKind, Bookmark, Dest, FileSpec, Link, NameTree, ZoomMode,
 };
 pub use page_label::page_label;
 pub use prefs::ViewerPrefs;
