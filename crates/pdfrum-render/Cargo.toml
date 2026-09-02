@@ -36,6 +36,10 @@ thiserror.workspace = true
 [dev-dependencies]
 pdfrum-raster-tinyskia.workspace = true
 pdfrum-raster-vello-cpu.workspace = true
+# The bench's third backend. It left the facade's normal tree on 2026-09-02
+# when `Page::render_on` took the backend as an argument, so the bench names it
+# directly like any other caller.
+pdfrum-raster-agg.workspace = true
 pdfrum-parser.workspace = true
 
 # M12 benches. This crate owns the six render groups: three backends x cold and warm,

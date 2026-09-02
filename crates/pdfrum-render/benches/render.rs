@@ -73,8 +73,10 @@ use std::hint::black_box;
 use std::time::Duration;
 
 use criterion::{Criterion, criterion_main};
-use pdfrum::{Backend, Document, RenderOptions, RenderSession};
+use pdfrum::{Document, RasterBackend, RenderOptions, RenderSession, VelloCpuBackend};
 use pdfrum_corpus::{CORPUS, bytes};
+use pdfrum_raster_agg::AggBackend;
+use pdfrum_raster_tinyskia::TinySkiaBackend;
 
 /// How many samples one document's render is worth, on the cold group.
 ///
@@ -123,12 +125,9 @@ fn warm_samples(stem: &str) -> usize {
 /// First-render latency: a fresh session inside the timed closure.
 ///
 /// The cache state a caller gets who opens a document, draws a page, and exits.
-fn cold(c: &mut Criterion, name: &str, backend: Backend) {
+fn cold<B: RasterBackend>(c: &mut Criterion, name: &str, backend: &B) {
     let mut group = c.benchmark_group(name);
-    let options = RenderOptions {
-        backend,
-        ..RenderOptions::default()
-    };
+    let options = RenderOptions::default();
     for doc in CORPUS {
         let Ok(opened) = Document::from_bytes(bytes(doc.stem)) else {
             continue;
@@ -144,7 +143,7 @@ fn cold(c: &mut Criterion, name: &str, backend: Backend) {
             b.iter(|| {
                 let mut session = RenderSession::new();
                 for page in opened.pages() {
-                    black_box(page.render_session(&options, &mut session).ok());
+                    black_box(page.render_session_on(backend, &options, &mut session).ok());
                 }
             });
         });
@@ -163,12 +162,9 @@ fn cold(c: &mut Criterion, name: &str, backend: Backend) {
 /// eventually: on `image_bug_718762` the cold render is fourteen times the warm
 /// one, and leaving it to chance means the number depends on how many warm-up
 /// iterations criterion happened to run.
-fn warm(c: &mut Criterion, name: &str, backend: Backend) {
+fn warm<B: RasterBackend>(c: &mut Criterion, name: &str, backend: &B) {
     let mut group = c.benchmark_group(name);
-    let options = RenderOptions {
-        backend,
-        ..RenderOptions::default()
-    };
+    let options = RenderOptions::default();
     for doc in CORPUS {
         let Ok(opened) = Document::from_bytes(bytes(doc.stem)) else {
             continue;
@@ -177,11 +173,11 @@ fn warm(c: &mut Criterion, name: &str, backend: Backend) {
         group.bench_function(format!("{}/{}", doc.class.name(), doc.stem), |b| {
             let mut session = RenderSession::new();
             for page in opened.pages() {
-                drop(page.render_session(&options, &mut session));
+                drop(page.render_session_on(backend, &options, &mut session));
             }
             b.iter(|| {
                 for page in opened.pages() {
-                    black_box(page.render_session(&options, &mut session).ok());
+                    black_box(page.render_session_on(backend, &options, &mut session).ok());
                 }
             });
         });
@@ -191,32 +187,32 @@ fn warm(c: &mut Criterion, name: &str, backend: Backend) {
 
 /// The analytic parity backend, cold.
 fn cold_agg(c: &mut Criterion) {
-    cold(c, "render-cold-agg", Backend::Agg);
+    cold(c, "render-cold-agg", &AggBackend::new());
 }
 
 /// The `tiny-skia` cross-check backend, cold.
 fn cold_tinyskia(c: &mut Criterion) {
-    cold(c, "render-cold-tinyskia", Backend::TinySkia);
+    cold(c, "render-cold-tinyskia", &TinySkiaBackend::new());
 }
 
 /// The `vello_cpu` default backend, cold.
 fn cold_vello_cpu(c: &mut Criterion) {
-    cold(c, "render-cold-vello-cpu", Backend::VelloCpu);
+    cold(c, "render-cold-vello-cpu", &VelloCpuBackend::new());
 }
 
 /// The analytic parity backend, warm.
 fn warm_agg(c: &mut Criterion) {
-    warm(c, "render-warm-agg", Backend::Agg);
+    warm(c, "render-warm-agg", &AggBackend::new());
 }
 
 /// The `tiny-skia` cross-check backend, warm.
 fn warm_tinyskia(c: &mut Criterion) {
-    warm(c, "render-warm-tinyskia", Backend::TinySkia);
+    warm(c, "render-warm-tinyskia", &TinySkiaBackend::new());
 }
 
 /// The `vello_cpu` default backend, warm.
 fn warm_vello_cpu(c: &mut Criterion) {
-    warm(c, "render-warm-vello-cpu", Backend::VelloCpu);
+    warm(c, "render-warm-vello-cpu", &VelloCpuBackend::new());
 }
 
 // `criterion_group!` generates a `pub fn` the `missing_docs` lint cannot see a
