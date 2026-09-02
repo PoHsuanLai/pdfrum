@@ -348,16 +348,31 @@ pub use pdfrum_common::PageIndex;
 /// [`Document::owner_permissions`].
 pub use pdfrum_crypt::Permissions;
 
-/// 2D geometry — `Rect`, `Point`, `Affine`, `BezPath`.
+/// 2D geometry: the five `kurbo` types this crate's signatures name.
 ///
-/// Re-exported so callers need not depend on `kurbo` themselves to name the
-/// types this crate's signatures use.
-pub use kurbo;
+/// [`Rect`] is every rectangle out — [`Page::crop_box`], [`Page::media_box`],
+/// [`Annotation::rect`]. [`Point`] is every point in — [`FormSession`]'s
+/// mouse methods, [`TextBuilder::position`]. [`Affine`] is every transform —
+/// [`RenderOptions::transform`], [`PageEdit::transform`],
+/// [`ImageBuilder::matrix`]. [`BezPath`] is [`PathBuilder::path`]. [`Size`] is
+/// the tolerance `TextPage::index_at` takes.
+///
+/// **Five names, not the whole crate.** `pub use kurbo;` published all of
+/// kurbo's public API under `pdfrum::kurbo::` — every curve type, every
+/// solver, `Shape` and its whole method set — as though this crate had an
+/// opinion about them. It has one about these five, because they are what its
+/// own signatures are written in; a caller who wants `kurbo::Shape` or
+/// `CubicBez` adds `kurbo` themselves, which is the ordinary Rust rule and
+/// what §A.7 asks for.
+pub use kurbo::{Affine, BezPath, Point, Rect, Size};
 
-/// Colour and brush vocabulary — `Color`, `BlendMode`.
+/// Colour: the one `peniko` type this crate's signatures name.
 ///
-/// Re-exported for the same reason as [`kurbo`].
-pub use peniko;
+/// [`RenderOptions::background`], [`PathBuilder::fill`],
+/// [`PathBuilder::stroke`] and [`TextBuilder::fill`]. `BlendMode` is *not*
+/// here: no signature in this crate names it, so re-exporting it would be
+/// this crate claiming a vocabulary it does not speak.
+pub use peniko::Color;
 
 // ---------------------------------------------------------------------------
 // Every type a signature in this crate names, nameable from this crate.

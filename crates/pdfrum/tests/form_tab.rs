@@ -19,7 +19,7 @@
 // to handle.
 #![allow(clippy::expect_used)]
 
-use pdfrum::{Document, FormSession, Key, Modifiers, PageIndex, kurbo::Point};
+use pdfrum::{Document, FormSession, Key, Modifiers, PageIndex, Point};
 
 fn document() -> Document {
     Document::open("tests/fixtures/annotiter.pdf").expect("the annotiter fixture must open")

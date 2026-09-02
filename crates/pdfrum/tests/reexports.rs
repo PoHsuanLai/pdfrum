@@ -90,11 +90,18 @@ fn every_type_in_a_public_signature_is_nameable_from_the_facade() {
     nameable::<Response>();
     nameable::<AppearanceUpdate>();
     nameable::<UpdateKind>();
-    // `FormRect` is gone: `PopupView`/`PopupGeometry` speak `kurbo::Rect`
-    // now, and the facade re-exports the whole of `kurbo` (§WP4) — and so do
-    // the event methods' points.
-    nameable::<kurbo::Rect>();
-    nameable::<kurbo::Point>();
+    // kurbo and peniko, the five-and-one this crate's signatures name. Not
+    // `pdfrum::kurbo::Rect` any more: §WP4 replaced `pub use kurbo;` with the
+    // types themselves, so these are the assertion that the narrowed set is
+    // still the *whole* set a signature can hand back. `FormRect` is gone —
+    // `PopupView`/`PopupGeometry` speak `Rect`, and the event methods' points
+    // are `Point`.
+    nameable::<Affine>();
+    nameable::<BezPath>();
+    nameable::<Point>();
+    nameable::<Rect>();
+    nameable::<Size>();
+    nameable::<Color>();
 
     // pdfrum-object
     nameable::<Dict>();

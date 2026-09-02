@@ -63,7 +63,7 @@ pub use pdfrum_render::{ColorMode, ColorScheme, Pixmap, TextAa};
 ///
 /// ```
 /// use pdfrum::RenderOptions;
-/// use pdfrum::kurbo::Affine;
+/// use pdfrum::Affine;
 ///
 /// // 150 DPI: PDF points are 1/72 inch, so the scale is 150/72.
 /// let opts = RenderOptions {

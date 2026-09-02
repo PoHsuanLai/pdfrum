@@ -128,7 +128,7 @@ impl<'a> Page<'a> {
     ///
     /// ```
     /// use pdfrum::{Document, RenderOptions};
-    /// use pdfrum::kurbo::Affine;
+    /// use pdfrum::Affine;
     ///
     /// let doc = Document::open("tests/fixtures/hello_world.pdf")?;
     /// let page = doc.page(0)?;

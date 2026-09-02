@@ -33,7 +33,7 @@ pub use pdfrum_form::{Cascade, FieldRef, FieldWrites, Keystroke, KeystrokeOutcom
 /// Every mouse method takes **page space** — PDF user space, y-up, with its
 /// origin at the page's crop box. That is the same space
 /// [`Page`](crate::Page) reports rectangles in, and no conversion happens on
-/// the way in. Points are [`kurbo::Point`] — `f64`, the vocabulary
+/// the way in. Points are [`Point`](kurbo::Point) — `f64`, the vocabulary
 /// [`Page::crop_box`](crate::Page::crop_box) already speaks; `pdfrum-form`
 /// narrows to its own `f32` at the routing entry, which is where the oracle
 /// narrows too.
@@ -46,7 +46,7 @@ pub use pdfrum_form::{Cascade, FieldRef, FieldWrites, Keystroke, KeystrokeOutcom
 /// must be able to express them — but it is spelled as a value:
 ///
 /// ```
-/// # use pdfrum::{Button, Document, Event, FormSession, Modifiers, kurbo::Point};
+/// # use pdfrum::{Button, Document, Event, FormSession, Modifiers, Point};
 /// # let doc = Document::open("tests/fixtures/text_form.pdf")?;
 /// # let mut session = FormSession::new(&doc);
 /// session.set_viewed_page(0);
@@ -91,7 +91,7 @@ pub use pdfrum_form::{Cascade, FieldRef, FieldWrites, Keystroke, KeystrokeOutcom
 /// value and moves a field from the first to the second.
 ///
 /// ```
-/// use pdfrum::{Document, FormSession, Key, Modifiers, kurbo::Point};
+/// use pdfrum::{Document, FormSession, Key, Modifiers, Point};
 ///
 /// let doc = Document::open("tests/fixtures/text_form.pdf")?;
 /// let mut session = FormSession::new(&doc);
@@ -280,8 +280,7 @@ impl<'a> FormSession<'a> {
     ///
     /// ```
     /// use pdfrum::{
-    ///     BuildContext, Document, FormSession, Key, Modifiers, SessionConfig,
-    ///     kurbo::Point,
+    ///     BuildContext, Document, FormSession, Key, Modifiers, Point, SessionConfig,
     /// };
     ///
     /// let doc = Document::open("tests/fixtures/text_form.pdf")?;
@@ -395,7 +394,7 @@ impl<'a> FormSession<'a> {
     /// // carries all four hooks. A click, then a character, reaches the
     /// // keystroke one — and what the script asked the host to do comes back
     /// // on the transcript rather than being performed here.
-    /// use pdfrum::{Modifiers as M, kurbo::Point};
+    /// use pdfrum::{Modifiers as M, Point};
     /// let at = Point::new(150.0, 175.0);
     /// session.mouse_move(0, at, M::NONE);
     /// session.mouse_down(0, at, M::NONE);

@@ -1224,7 +1224,7 @@ fn the_render_defaults_are_the_common_case() {
 // reopen, and read the fill back off the reloaded page object.
 #[test]
 fn a_path_fill_named_as_a_color_round_trips_through_a_save() {
-    use pdfrum::{PathBuilder, kurbo::Rect, peniko::Color};
+    use pdfrum::{Color, PathBuilder, Rect};
 
     let dir = temp_dir("wp10-color");
     let out = dir.join("filled.pdf");

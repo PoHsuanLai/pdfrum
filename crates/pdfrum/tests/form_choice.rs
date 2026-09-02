@@ -14,7 +14,7 @@
 // See `form_routing.rs`: the fixture helper is a failure signal.
 #![allow(clippy::expect_used)]
 
-use pdfrum::{Document, FormSession, Modifiers, kurbo::Point};
+use pdfrum::{Document, FormSession, Modifiers, Point};
 
 fn document() -> Document {
     Document::open("tests/fixtures/combobox_form.pdf").expect("the combobox fixture must open")
