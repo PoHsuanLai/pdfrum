@@ -11,8 +11,8 @@
 /// Note what is *not* here. Damage a document survives is not an error at
 /// all: a rebuilt cross-reference table, a page whose content stream ends
 /// mid-operator, a font that had to be substituted are all recorded as
-/// [`Diagnostic`](pdfrum_common::Diagnostic)s on the value that came back
-/// (STYLE.md §3). `Err` means the operation could not produce an answer.
+/// [`Diagnostic`](pdfrum_common::Diagnostic)s on the value that came back.
+/// `Err` means the operation could not produce an answer.
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum Error {
@@ -21,9 +21,8 @@ pub enum Error {
     /// The one variant worth matching on, because it is the one that means
     /// *ask the user again* rather than *give up*. It is here, rather than
     /// inside [`Error::Open`]'s payload, so that a caller who has never
-    /// depended on `pdfrum-parser` can write the match
-    /// (`docs/design/idiomatic-api.md` §WP1); everything else an open can go
-    /// wrong with is [`Error::Open`].
+    /// depended on `pdfrum-parser` can write the match; everything else an
+    /// open can go wrong with is [`Error::Open`].
     ///
     /// See [`Document::open_with_password`](crate::Document::open_with_password)
     /// for the worked example.

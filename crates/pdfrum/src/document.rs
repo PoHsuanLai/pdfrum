@@ -156,7 +156,7 @@ impl Document {
     /// A `u32` and not a [`PageIndex`]: a count is not an index. The valid
     /// indices of a three-page document are 0, 1 and 2, and giving the count
     /// and the index one type would let each be passed where the other is
-    /// meant (`docs/design/idiomatic-api.md` §WP1).
+    /// meant.
     #[must_use]
     pub fn page_count(&self) -> u32 {
         self.inner.page_count()
