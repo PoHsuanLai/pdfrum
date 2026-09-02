@@ -30,11 +30,12 @@
 //!
 //! # Three machines, one serializer
 //!
-//! - [`save`] and the [`mod@write`] module: object enumeration, cross-reference
-//!   emission, trailer construction, incremental append.
-//! - [`content`]: a page-object graph back into operator bytes.
-//! - [`import`]: cross-document deep copy with reference remapping, N-up
-//!   imposition, and the page-range grammar.
+//! - [`save`]: object enumeration, cross-reference emission, trailer
+//!   construction, incremental append.
+//! - [`regenerate`] and [`apply_rewrite`]: a page-object graph back into
+//!   operator bytes, and that result back into the document.
+//! - [`import_pages`] and [`n_page_to_one`]: cross-document deep copy with
+//!   reference remapping, N-up imposition, and the [`PageRange`] grammar.
 //!
 //! Font subsetting ([`subset`]) hangs off the first as an object-override
 //! pass.
@@ -49,11 +50,23 @@
 //!
 //! # What a regenerated page loses
 //!
-//! Regenerating a page's content is lossy. The losses are enumerated in
-//! [`content`]'s docs; the short version is that only `rg`/`RG` colours are
-//! written — though **every colour space converts to them** — patterns and
-//! shadings do not survive, and text keeps only `Tm`, `Tf`, `Tr` and `TJ`. A
-//! page whose objects were never touched is not regenerated at all, so none
+//! Regenerating a page's content is lossy, and a caller of [`regenerate`]
+//! should know in what way. The losses, in full:
+//!
+//! - **Colour.** Only `rg` and `RG` are ever written, but **every colour space
+//!   converts to them**. Only a *pattern* emits nothing and inherits the black
+//!   the per-stream prologue set, because a pattern paints through a resource
+//!   no `rg` can name.
+//! - **Shadings.** A shading page object emits nothing at all.
+//! - **Text.** Only `Tm`, `Tf`, `Tr` and `TJ`. All positioning collapses into
+//!   `Tm`, so character and word spacing are lost, and a Type 3 font drops its
+//!   whole text object.
+//! - **Graphics state.** Only `ca`, `CA` and `BM` reach an `/ExtGState`; the
+//!   miter limit and soft masks do not.
+//! - **Clips.** Path clips only: text clips, clip-path soft masks and shading
+//!   clips are never written.
+//!
+//! A page whose objects were never touched is not regenerated at all, so none
 //! of this applies to an ordinary save.
 //!
 //! *Corrected 2026-09-02 (A71).* This paragraph used to say the emitter
@@ -62,7 +75,8 @@
 //! regenerates." **There is no such comparison**: `pdfium_test` has no save
 //! flag, so the oracle cannot produce a regenerated page at all (SPEC §11
 //! ruling E7). The remaining losses are limits of this emitter, not a
-//! matching requirement — see [`content`] for the three lines that settle it.
+//! matching requirement — the crate's private `content` module holds the three
+//! lines that settle it.
 
 #![forbid(unsafe_code)]
 // Everything here is written *from* untrusted input: index with `get()`.

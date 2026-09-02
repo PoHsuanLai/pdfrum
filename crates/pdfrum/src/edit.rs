@@ -57,7 +57,7 @@ use crate::Page;
 /// ICC-based fill comes back black; patterns, shadings and Type 3 text are
 /// lost entirely; and text keeps only its matrix, font, render mode and
 /// strings, so character and word spacing go. The losses are listed in full in
-/// `pdfrum_edit::content`.
+/// [`pdfrum_edit`]'s crate documentation.
 ///
 /// Two consequences worth stating plainly. First, this applies **only to pages
 /// you edited** — every other page of the document is copied through
