@@ -427,7 +427,6 @@ impl<'a, R: Resolve> Builder<'a, R> {
         // record tens of thousands of entries and hide every other
         // diagnostic behind the sink's bound (design brief Q4).
         let mut unmapped = 0u32;
-        let mut deduplicated = 0u32;
 
         for index in 0..run.count() {
             let Some(item) = run.item(index) else {
@@ -503,17 +502,9 @@ impl<'a, R: Resolve> Builder<'a, R> {
                 continue;
             }
 
-            if self.is_duplicate(run, &info) {
-                deduplicated = deduplicated.saturating_add(1);
-                if index == 0 {
-                    // A suppressed *first* glyph also eats one preceding
-                    // generated space, and only one.
-                    if self.line.last_unit() == Some(u32::from(b' ')) {
-                        self.line.pop();
-                    }
-                }
-                continue;
-            }
+            // `[oracle-bug]` No character-level duplicate suppression runs
+            // here; see `is_duplicate`, which is kept as the documented
+            // description of what the oracle does and is no longer consulted.
 
             for code in unicode {
                 let mut piece = info;
@@ -529,13 +520,10 @@ impl<'a, R: Resolve> Builder<'a, R> {
                 None,
             );
         }
-        if deduplicated > 0 {
-            diags.record(
-                Severity::Recovered,
-                DiagKind::TextCharsDeduplicated(deduplicated),
-                None,
-            );
-        }
+        // `[oracle-bug]` A44: nothing is deduplicated any more, so
+        // `DiagKind::TextCharsDeduplicated` has no site. The variant is kept
+        // in `pdfrum-common` because it is a public enum member and a future
+        // opt-in to the oracle's rule would need it back.
 
         // A right-to-left object drawn under a mirroring matrix has already
         // been laid out backwards; the caller reverses what was staged.
@@ -597,6 +585,25 @@ impl<'a, R: Resolve> Builder<'a, R> {
     /// crate uses, and the difference is observable. Fonts are compared by
     /// identity, so this only fires when the page layer really did share one
     /// font between the two objects.
+    ///
+    /// `[oracle-bug]` **No longer consulted.** `cpdf_textpage.cpp:1437-1458`
+    /// sets `add_unicode = false` (`:1455`) when an entry within a **7-entry
+    /// lookback** (`:1438`) shares the candidate's char code and font and sits
+    /// within `0.07 × fontsize` on both axes. `bug_1769.in` draws one form
+    /// `XObject` at 1000x and again at 1x; in the small instance the word
+    /// collapses below the threshold, `r` and `l` fall inside the window, and
+    /// the page extracts as `"wo d wo d"` (`crbug.com/42270780`). The spec has
+    /// no notion of duplicate-glyph suppression — §8.2 composites coincident
+    /// glyphs, and drawing one twice is how faux-bold is done — and pdf.js has
+    /// no dedup at all (the only "identical" test in `evaluator.js` is
+    /// font-state caching, `:3246`). It duplicates where PDFium deletes;
+    /// deletion is the unrecoverable direction. Kept as the executable
+    /// description of the oracle's rule, and as what a future option would
+    /// switch back on.
+    #[expect(
+        dead_code,
+        reason = "[oracle-bug] retained as the oracle's documented rule; see the note above"
+    )]
     fn is_duplicate(&self, run: &TextRun, candidate: &CharBox) -> bool {
         let threshold = transform_x_distance(candidate.matrix, f64::from(0.07 * run.font_size));
         let staged = self.line.chars();

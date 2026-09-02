@@ -261,8 +261,13 @@ pub enum DiagKind {
     /// Character code zero appeared, which emits a NUL into the character
     /// stream and nothing into the text.
     TextCharcodeZero,
-    /// Characters in one text object repeated a character already drawn at
-    /// effectively the same place and were suppressed. Carries how many.
+    /// `[oracle-bug]` **Never recorded.** Characters in one text object
+    /// repeated a character already drawn at effectively the same place and
+    /// were suppressed; carries how many. Audit item A44 retired the
+    /// suppression — `cpdf_textpage.cpp:1437-1458` deletes real characters
+    /// (`crbug.com/42270780`) and §8.2 composites coincident glyphs rather
+    /// than dropping one. Kept as a public enum member, and as what a future
+    /// opt-in to the oracle's rule would need.
     TextCharsDeduplicated(u32),
     /// A marked-content `/ActualText` held no printable character, so the
     /// object it covered emitted nothing at all.
