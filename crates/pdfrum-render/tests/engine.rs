@@ -27,7 +27,18 @@ use pdfrum_page::{
 };
 use pdfrum_raster_tinyskia::TinySkiaBackend;
 use pdfrum_raster_vello_cpu::VelloCpuBackend;
-use pdfrum_render::{Pixmap, RenderOptions, render_page, render_page_with_visibility};
+use pdfrum_render::{Pixmap, RenderOptions, RenderSession, render_page, render_page_with};
+
+/// A session over caller-owned caches with an explicit visibility tree.
+fn session_for<'a>(
+    caches: &'a mut pdfrum_render::RenderCaches,
+    visible: &'a pdfrum_page::Visibility,
+) -> RenderSession<'a> {
+    RenderSession {
+        caches: Some(caches),
+        visible: Some(visible),
+    }
+}
 
 /// A page of the given device size with no rotation and no transparency.
 fn page(width: f64, height: f64, objects: Vec<PageObject>) -> Page {
@@ -1250,12 +1261,12 @@ fn a_hidden_object_is_not_drawn_and_its_clip_never_reaches_the_device() {
     let all = pdfrum_page::Visibility::all_visible();
     let mut diags = Diagnostics::default();
     let mut caches = pdfrum_render::RenderCaches::new();
-    let shown = render_page_with_visibility(
+    let session = session_for(&mut caches, &all);
+    let shown = render_page_with(
         &visible_page,
         &opts,
         &TinySkiaBackend::new(),
-        &all,
-        &mut caches,
+        session,
         &mut diags,
     )
     .expect("renders");
@@ -1319,12 +1330,12 @@ fn a_hidden_object_is_not_drawn_and_its_clip_never_reaches_the_device() {
 
     let mut diags = Diagnostics::default();
     let mut caches = pdfrum_render::RenderCaches::new();
-    let out = render_page_with_visibility(
+    let session = session_for(&mut caches, &visible);
+    let out = render_page_with(
         &hidden_page,
         &opts,
         &TinySkiaBackend::new(),
-        &visible,
-        &mut caches,
+        session,
         &mut diags,
     )
     .expect("renders");
@@ -1428,11 +1439,14 @@ fn the_glyph_buffer_comes_back_to_the_session_after_a_text_object() {
 
     let mut caches = pdfrum_render::RenderCaches::new();
     let mut diags = Diagnostics::default();
-    let pixmap = pdfrum_render::render_page_with_caches(
+    let pixmap = render_page_with(
         &page,
         &RenderOptions::default(),
         &TinySkiaBackend::new(),
-        &mut caches,
+        RenderSession {
+            caches: Some(&mut caches),
+            ..Default::default()
+        },
         &mut diags,
     )
     .expect("renders");
@@ -1444,7 +1458,7 @@ fn the_glyph_buffer_comes_back_to_the_session_after_a_text_object() {
     );
     // And the buffer is back, holding the capacity it grew to.
     assert!(
-        caches.placed_glyphs.capacity() > 0,
+        caches.glyph_buffer_capacity() > 0,
         "the placement buffer was not returned to the session"
     );
 }

@@ -1179,11 +1179,15 @@ fn a_positive_facade_flag_reaches_the_engine_as_the_inverted_one() {
         ..pdfrum_render::RenderOptions::default()
     };
     let mut diags = pdfrum::Diagnostics::default();
-    let via_engine = pdfrum_render::render_page_with_caches(
+    let mut caches = pdfrum::RenderCaches::new();
+    let via_engine = pdfrum_render::render_page_with(
         &graph,
         &engine_options,
         &pdfrum::VelloCpuBackend::new(),
-        &mut pdfrum::RenderCaches::new(),
+        pdfrum_render::RenderSession {
+            caches: Some(&mut caches),
+            ..Default::default()
+        },
         &mut diags,
     )
     .expect("render");

@@ -30,7 +30,7 @@ use pdfrum_raster_agg::AggBackend;
 use pdfrum_raster_tinyskia::TinySkiaBackend;
 use pdfrum_raster_vello_cpu::VelloCpuBackend;
 use pdfrum_render::{
-    Pixmap, RenderCaches, RenderOptions, needs_alpha_background, render_page_with_visibility,
+    Pixmap, RenderCaches, RenderOptions, RenderSession, needs_alpha_background, render_page_with,
 };
 
 /// The default rendering scale, in device pixels per PDF point.
@@ -384,34 +384,20 @@ pub fn render<R: Resolve>(
     // determinism: it integrates coverage the way the oracle does, which is
     // what makes a golden comparison measure the engine.
     let mut caches = RenderCaches::new();
+    let session = RenderSession {
+        caches: Some(&mut caches),
+        visible: Some(&visible),
+    };
     let pixmap = match backend {
-        Backend::Agg => render_page_with_visibility(
-            &page,
-            &opts,
-            &AggBackend::new(),
-            &visible,
-            &mut caches,
-            &mut diags,
-        )
-        .ok()?,
-        Backend::TinySkia => render_page_with_visibility(
-            &page,
-            &opts,
-            &TinySkiaBackend::new(),
-            &visible,
-            &mut caches,
-            &mut diags,
-        )
-        .ok()?,
-        Backend::VelloCpu => render_page_with_visibility(
-            &page,
-            &opts,
-            &VelloCpuBackend::new(),
-            &visible,
-            &mut caches,
-            &mut diags,
-        )
-        .ok()?,
+        Backend::Agg => {
+            render_page_with(&page, &opts, &AggBackend::new(), session, &mut diags).ok()?
+        }
+        Backend::TinySkia => {
+            render_page_with(&page, &opts, &TinySkiaBackend::new(), session, &mut diags).ok()?
+        }
+        Backend::VelloCpu => {
+            render_page_with(&page, &opts, &VelloCpuBackend::new(), session, &mut diags).ok()?
+        }
     };
     // `FPDFPage_HasTransparency` is not the page's `/Group`: it is set only
     // by a blend mode above Multiply. The engine exposes the same predicate
