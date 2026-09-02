@@ -9,9 +9,9 @@ pub fn pdfrum_render::blend::composite_solid([u8; 4], [u8; 3], u8, u8, pdfrum_pa
 pub fn pdfrum_render::blend::composite_straight(([u8; 3], u8), ([u8; 3], u8), pdfrum_page::state::general::BlendMode) -> ([u8; 3], u8)
 pub mod pdfrum_render::clip
 pub enum pdfrum_render::clip::Clip
+pub pdfrum_render::clip::Clip::Empty
 pub pdfrum_render::clip::Clip::Path(kurbo::bezpath::BezPath, pdfrum_render::device::FillRule)
 pub pdfrum_render::clip::Clip::Rect(kurbo::rect::Rect)
-pub const pdfrum_render::clip::EMPTY_CLIP_RECT: kurbo::rect::Rect
 pub fn pdfrum_render::clip::device_bounds(&[pdfrum_render::clip::Clip]) -> core::option::Option<kurbo::rect::Rect>
 pub fn pdfrum_render::clip::pop(&mut dyn pdfrum_render::device::RenderDevice, usize)
 pub fn pdfrum_render::clip::push(&mut dyn pdfrum_render::device::RenderDevice, &[pdfrum_render::clip::Clip]) -> usize

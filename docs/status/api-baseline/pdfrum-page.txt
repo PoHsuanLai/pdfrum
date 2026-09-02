@@ -401,7 +401,6 @@ pub fn pdfrum_page::inline_image::inline_filters(&pdfrum_object::dict::Dict) -> 
 pub fn pdfrum_page::inline_image::inline_predictor_params(&pdfrum_object::dict::Dict) -> pdfrum_filters::predictor::PredictorParams
 pub fn pdfrum_page::inline_image::with_colorspace(&pdfrum_object::dict::Dict, pdfrum_object::object::Object) -> pdfrum_object::dict::Dict
 pub mod pdfrum_page::mutate
-pub const pdfrum_page::mutate::NO_CONTENT_STREAM: i32
 pub mod pdfrum_page::optional
 pub enum pdfrum_page::optional::UsageType
 pub pdfrum_page::optional::UsageType::Design
@@ -1085,13 +1084,13 @@ pub fn pdfrum_page::PageObject::color(&self, bool) -> &pdfrum_page::ColorValue
 pub fn pdfrum_page::PageObject::marks(&self) -> &pdfrum_page::state::marks::ContentMarks
 pub fn pdfrum_page::PageObject::state(&self) -> &pdfrum_page::state::GraphicsState
 impl pdfrum_page::PageObject
-pub fn pdfrum_page::PageObject::content_stream(&self) -> i32
+pub fn pdfrum_page::PageObject::content_stream(&self) -> core::option::Option<usize>
 pub fn pdfrum_page::PageObject::is_active(&self) -> bool
 pub fn pdfrum_page::PageObject::is_dirty(&self) -> bool
 pub fn pdfrum_page::PageObject::mark_clean(&mut self)
 pub fn pdfrum_page::PageObject::mark_dirty(&mut self)
 pub fn pdfrum_page::PageObject::set_active(&mut self, bool)
-pub fn pdfrum_page::PageObject::set_content_stream(&mut self, i32)
+pub fn pdfrum_page::PageObject::set_content_stream(&mut self, core::option::Option<usize>)
 #[non_exhaustive] pub enum pdfrum_page::Pattern
 pub pdfrum_page::Pattern::Shading(alloc::boxed::Box<pdfrum_page::pattern::ShadingPattern>)
 pub pdfrum_page::Pattern::Tiling(alloc::boxed::Box<pdfrum_page::TilingPattern>)
@@ -1213,7 +1212,7 @@ impl core::default::Default for pdfrum_page::ColorValue
 pub fn pdfrum_page::ColorValue::default() -> Self
 pub struct pdfrum_page::Content<T>
 pub pdfrum_page::Content::active: bool
-pub pdfrum_page::Content::content_stream: i32
+pub pdfrum_page::Content::content_stream: core::option::Option<usize>
 pub pdfrum_page::Content::dirty: bool
 pub pdfrum_page::Content::marks: pdfrum_page::state::marks::ContentMarks
 pub pdfrum_page::Content::object: T
@@ -1287,18 +1286,18 @@ pub fn pdfrum_page::optional::OcContext::new(core::option::Option<pdfrum_object:
 pub fn pdfrum_page::optional::OcContext::permissive() -> Self
 pub struct pdfrum_page::Page
 pub pdfrum_page::Page::crop_box: kurbo::rect::Rect
-pub pdfrum_page::Page::dirty_streams: alloc::collections::btree::set::BTreeSet<i32>
+pub pdfrum_page::Page::dirty_streams: alloc::collections::btree::set::BTreeSet<core::option::Option<usize>>
 pub pdfrum_page::Page::media_box: kurbo::rect::Rect
 pub pdfrum_page::Page::objects: alloc::vec::Vec<pdfrum_page::PageObject>
 pub pdfrum_page::Page::resources: core::option::Option<pdfrum_object::dict::Dict>
 pub pdfrum_page::Page::rotate: pdfrum_page::Rotation
-pub pdfrum_page::Page::stream_ctms: alloc::collections::btree::map::BTreeMap<i32, kurbo::affine::Affine>
+pub pdfrum_page::Page::stream_ctms: alloc::collections::btree::map::BTreeMap<usize, kurbo::affine::Affine>
 pub pdfrum_page::Page::transparency: pdfrum_page::transparency::Transparency
 impl pdfrum_page::Page
 pub fn pdfrum_page::Page::active_objects(&self) -> impl core::iter::traits::iterator::Iterator<Item = &pdfrum_page::PageObject>
-pub fn pdfrum_page::Page::ctm_at_end_of_stream(&self, i32) -> kurbo::affine::Affine
-pub fn pdfrum_page::Page::ctm_at_start_of_stream(&self, i32) -> kurbo::affine::Affine
-pub fn pdfrum_page::Page::dirty_stream_set(&self) -> alloc::collections::btree::set::BTreeSet<i32>
+pub fn pdfrum_page::Page::ctm_at_end_of_stream(&self, usize) -> kurbo::affine::Affine
+pub fn pdfrum_page::Page::ctm_at_start_of_stream(&self, core::option::Option<usize>) -> kurbo::affine::Affine
+pub fn pdfrum_page::Page::dirty_stream_set(&self) -> alloc::collections::btree::set::BTreeSet<core::option::Option<usize>>
 pub fn pdfrum_page::Page::insert_object(&mut self, usize, pdfrum_page::PageObject) -> bool
 pub fn pdfrum_page::Page::is_dirty(&self) -> bool
 pub fn pdfrum_page::Page::mark_clean(&mut self)
@@ -1378,7 +1377,7 @@ pub fn pdfrum_page::StreamBounds::from_counts(impl core::iter::traits::collect::
 pub fn pdfrum_page::StreamBounds::from_joined(&[u8], usize, &[usize], &pdfrum_common::limits::Limits) -> Self
 pub fn pdfrum_page::StreamBounds::is_empty(&self) -> bool
 pub fn pdfrum_page::StreamBounds::len(&self) -> usize
-pub fn pdfrum_page::StreamBounds::stream_of(&self, usize) -> i32
+pub fn pdfrum_page::StreamBounds::stream_of(&self, usize) -> usize
 pub struct pdfrum_page::StrokeParams
 pub pdfrum_page::StrokeParams::cap: pdfrum_page::LineCap
 pub pdfrum_page::StrokeParams::dash: smallvec::SmallVec<[f32; 4]>
@@ -1456,7 +1455,6 @@ pub fn pdfrum_page::optional::Visibility::shows_everything(&self) -> bool
 pub fn pdfrum_page::optional::Visibility::visible(&self, usize) -> bool
 pub const pdfrum_page::DEFAULT_MEDIA_BOX: kurbo::rect::Rect
 pub const pdfrum_page::MAX_FORM_LEVEL: usize
-pub const pdfrum_page::NO_CONTENT_STREAM: i32
 pub fn pdfrum_page::apply_ext_gstate<R: pdfrum_object::resolve::Resolve>(&mut pdfrum_page::state::GraphicsState, &pdfrum_object::dict::Dict, impl core::ops::function::Fn(core::option::Option<&pdfrum_object::object::Object>) -> core::option::Option<alloc::sync::Arc<pdfrum_font::Font>>, &R, &mut pdfrum_page::function::FunctionCache, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics)
 pub fn pdfrum_page::build_form_object<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::stream::Stream, kurbo::affine::Affine, &pdfrum_page::Resources, &R, &mut pdfrum_page::BuildContext, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<pdfrum_page::PageObject>
 pub fn pdfrum_page::build_form_object_with<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::stream::Stream, kurbo::affine::Affine, &pdfrum_page::Resources, &R, &mut pdfrum_page::BuildContext, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics, bool) -> core::option::Option<pdfrum_page::PageObject>

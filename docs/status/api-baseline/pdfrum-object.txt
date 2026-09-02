@@ -363,7 +363,6 @@ pub struct pdfrum_object::ObjRef
 pub pdfrum_object::ObjRef::generation: u16
 pub pdfrum_object::ObjRef::num: u32
 impl pdfrum_object::ObjRef
-pub const pdfrum_object::ObjRef::INVALID_NUM: u32
 pub const fn pdfrum_object::ObjRef::is_invalid(self) -> bool
 pub const fn pdfrum_object::ObjRef::new(u32, u16) -> Self
 impl core::convert::From<pdfrum_object::ObjRef> for pdfrum_object::Object

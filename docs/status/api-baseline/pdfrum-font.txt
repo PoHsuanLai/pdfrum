@@ -105,6 +105,7 @@ pub pdfrum_font::subst::FaceInfo::name: alloc::string::String
 pub pdfrum_font::subst::FaceInfo::styles: u32
 impl pdfrum_font::subst::FaceInfo
 pub fn pdfrum_font::subst::FaceInfo::is_eligible(&self, pdfrum_font::subst::Charset) -> bool
+pub fn pdfrum_font::subst::FaceInfo::is_exact_match(&self, i32, bool, pdfrum_font::subst::PitchFamily, bool) -> bool
 pub fn pdfrum_font::subst::FaceInfo::similarity_score(&self, i32, bool, pdfrum_font::subst::PitchFamily, bool) -> i32
 pub struct pdfrum_font::subst::FontRequest
 pub pdfrum_font::subst::FontRequest::code_page: pdfrum_font::subst::CodePage
@@ -187,7 +188,6 @@ pub const pdfrum_font::subst::ALL_STANDARD_FONTS: [pdfrum_font::StandardFont; 14
 pub const pdfrum_font::subst::ALT_FONT_FAMILIES: [(&str, &str); 3]
 pub const pdfrum_font::subst::FONT_STYLES: [pdfrum_font::subst::FontStyle; 5]
 pub const pdfrum_font::subst::NARROW_FAMILY: &str
-pub const pdfrum_font::subst::SIMILARITY_SCORE_MAX: i32
 pub trait pdfrum_font::subst::FontDb
 pub fn pdfrum_font::subst::FontDb::face_bytes(&self, pdfrum_font::subst::FaceHandle) -> core::option::Option<(alloc::sync::Arc<[u8]>, u32)>
 pub fn pdfrum_font::subst::FontDb::faces(&self) -> &[pdfrum_font::subst::FaceInfo]
@@ -434,7 +434,6 @@ pub pdfrum_font::SimpleFont::descriptor: pdfrum_font::FontDescriptor
 pub pdfrum_font::SimpleFont::embedded: bool
 pub pdfrum_font::SimpleFont::encoding: [core::option::Option<pdfrum_font::GlyphName>; 256]
 pub pdfrum_font::SimpleFont::encoding_kind: pdfrum_font::encoding::FontEncoding
-pub pdfrum_font::SimpleFont::glyph_index: [u16; 256]
 pub pdfrum_font::SimpleFont::glyphs: pdfrum_font::GlyphSource
 pub pdfrum_font::SimpleFont::id: pdfrum_font::FontId
 pub pdfrum_font::SimpleFont::kind: pdfrum_font::SimpleKind

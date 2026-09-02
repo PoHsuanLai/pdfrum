@@ -160,8 +160,6 @@ pub pdfrum_common::Limits::max_string_len: usize
 pub pdfrum_common::Limits::max_word_len: usize
 pub pdfrum_common::Limits::max_xref_size: u32
 pub pdfrum_common::Limits::startxref_scan: u64
-impl pdfrum_common::Limits
-pub const pdfrum_common::Limits::INVALID_OBJ_NUM: u32
 impl core::default::Default for pdfrum_common::Limits
 pub fn pdfrum_common::Limits::default() -> Self
 pub type pdfrum_common::FxBuildHasher = core::hash::BuildHasherDefault<pdfrum_common::FxHasher>
