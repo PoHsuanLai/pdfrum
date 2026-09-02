@@ -1,9 +1,9 @@
-#!/usr/bin/env bash
+#!/usr/bin/env nu
 # The rayon multi-page scaling curve: how much faster does a document render
 # when its pages go to N workers instead of one?
 #
-# Usage: scripts/bench-scaling.sh [threads...]
-#        scripts/bench-scaling.sh 1 2 4 8 16 32
+# Usage: scripts/bench-scaling.nu [threads...]
+#        scripts/bench-scaling.nu 1 2 4 8 16 32
 #
 # Runs `benches`' `scaling` binary over every corpus document with eight pages
 # or more (`pdfrum_bench::corpus::multipage`), once per thread count, and prints
@@ -25,32 +25,31 @@
 # difference. Each measurement is the best of three runs: a wall-clock sample is
 # bounded below by the real cost and unbounded above by whatever else the
 # machine was doing, so the minimum is the least contaminated estimate — the
-# same argument `scripts/bench-oracle.sh` makes at more length.
-set -euo pipefail
-cd "$(dirname "$0")/.."
+# same argument `scripts/bench-oracle.nu` makes at more length.
 
-THREADS=("$@")
-if [ ${#THREADS[@]} -eq 0 ]; then
-    THREADS=(1 2 4 8 16)
-fi
+def main [...threads: int] {
+    cd ($env.FILE_PWD | path dirname)
 
-echo "==> building"
-cargo build --release -p pdfrum-bench --bin scaling >/dev/null
+    let threads = if ($threads | is-empty) { [1 2 4 8 16] } else { $threads }
 
-BIN=$(cargo metadata --format-version 1 --no-deps 2>/dev/null \
-    | tr ',' '\n' | grep -o '"target_directory":"[^"]*"' | head -1 \
-    | sed 's/.*:"//;s/"$//')
-BIN=${BIN:-target}/release/scaling
+    print "==> building"
+    ^cargo build --release -p pdfrum-bench --bin scaling | ignore
 
-if [ ! -x "$BIN" ]; then
-    echo "error: no scaling binary at $BIN" >&2
-    exit 1
-fi
+    let target = (do --ignore-errors {
+        ^cargo metadata --format-version 1 --no-deps | from json | get target_directory
+    })
+    let bin = ([($target | default 'target') release scaling] | path join)
 
-echo "machine: $(nproc) logical CPUs"
-echo
+    if not ($bin | path exists) {
+        print --stderr $"error: no scaling binary at ($bin)"
+        exit 1
+    }
 
-cd benches
-for n in "${THREADS[@]}"; do
-    "$BIN" --threads "$n" --rounds 3
-done
+    print $"machine: (sys cpu | length) logical CPUs"
+    print ""
+
+    cd benches
+    for n in $threads {
+        ^$bin --threads $n --rounds 3
+    }
+}
