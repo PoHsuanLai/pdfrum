@@ -970,12 +970,10 @@ impl<'a> FormSession<'a> {
 
     /// What the document permits, which gates every non-push-button click.
     ///
-    /// `pdfrum-form` asks only two of ISO 32000-1 table 22's eight questions,
-    /// and keeps its own two-field type for them — it does not depend on
-    /// `pdfrum-crypt` and has no reason to. This is where the two vocabularies
-    /// meet, and it is now a field-for-field rename rather than the
-    /// `bits & 0x100` / `bits & 0x20` this used to spell: the bit numbers live
-    /// beside the `/P` word they decode (`docs/design/idiomatic-api.md` §A.3).
+    /// `pdfrum-form` asks only two of ISO 32000-1 table 22's eight questions
+    /// and keeps its own two-field type for them, so this is where the two
+    /// vocabularies meet — a field-for-field rename, with the `/P` bit numbers
+    /// living beside the word they decode rather than here.
     fn permissions(&self) -> pdfrum_form::Permissions {
         if !self.doc.is_encrypted() {
             return pdfrum_form::Permissions::ALL;
