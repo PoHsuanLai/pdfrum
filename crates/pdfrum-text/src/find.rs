@@ -21,6 +21,10 @@ use std::ops::Range;
 /// A non-breaking space, which counts as a separator between sub-needles.
 const NON_BREAKING_SPACE: char = '\u{00A0}';
 
+/// The sentinel the text buffer carries where a word was hyphenated across a
+/// line break (`cpdf_textpage.cpp:1361`, `AppendChar(0xfffe)`).
+const HYPHEN_SENTINEL: char = '\u{FFFE}';
+
 /// How a search behaves.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct FindOptions {
@@ -202,8 +206,12 @@ pub fn is_whole_word(text: &[char], start: usize, end: usize) -> bool {
 /// brief D7).
 #[derive(Debug, Clone)]
 pub struct Search<'a> {
-    /// The haystack, case-folded when the search is insensitive.
+    /// The haystack, case-folded when the search is insensitive, with the
+    /// soft-hyphen sentinels removed — see [`search`].
     haystack: Vec<char>,
+    /// `[oracle-bug]` For each haystack index, the text index it came from.
+    /// Empty when nothing was removed, in which case the two spaces coincide.
+    origins: Vec<usize>,
     /// The sub-needles, case-folded the same way.
     needles: Vec<Vec<char>>,
     options: FindOptions,
@@ -213,6 +221,20 @@ pub struct Search<'a> {
 }
 
 /// Builds a search over `text`.
+///
+/// `[oracle-bug]` **A word split across a line break is searched joined.**
+/// `cpdf_textpage.cpp:1360-1361` writes `U+FFFE` into the text buffer at a
+/// soft hyphen, and `cpdf_textpagefind.cpp:209-211`/`:262` search that buffer
+/// with a plain `Find`, so `"note-\nbook"` can never match `"notebook"`
+/// (`crbug.com/431824298`). What makes it a bug rather than a trade-off is the
+/// **asymmetry**: `cpdf_linkextract.cpp:154-155` repairs the very same
+/// sentinel (`Replace(L"\xfffe", L"-")`) for link detection and find does not.
+/// pdf.js joins across the break and keeps a reversible index map so the
+/// caller still gets offsets into the original text
+/// (`pdf_find_controller.js:131`, `:290-307`, whose `p5.slice(0, -2)` drops
+/// the hyphen *and* the newline). The same shape is used here: the sentinel is
+/// dropped from the haystack and `origins` maps every haystack index back to
+/// its text index, so the yielded ranges are still text offsets.
 #[must_use]
 pub fn search<'a>(text: &str, needle: &str, options: FindOptions) -> Search<'a> {
     let fold = |value: &str| -> String {
@@ -222,7 +244,21 @@ pub fn search<'a>(text: &str, needle: &str, options: FindOptions) -> Search<'a> 
             lower_string(value)
         }
     };
-    let haystack: Vec<char> = fold(text).chars().collect();
+    let folded: Vec<char> = fold(text).chars().collect();
+    let mut haystack: Vec<char> = Vec::with_capacity(folded.len());
+    let mut origins: Vec<usize> = Vec::with_capacity(folded.len());
+    let mut dropped = false;
+    for (at, &ch) in folded.iter().enumerate() {
+        if ch == HYPHEN_SENTINEL {
+            dropped = true;
+            continue;
+        }
+        haystack.push(ch);
+        origins.push(at);
+    }
+    if !dropped {
+        origins.clear();
+    }
     let needles: Vec<Vec<char>> = split_needle(&fold(needle))
         .into_iter()
         .map(|word| word.chars().collect())
@@ -232,6 +268,7 @@ pub fn search<'a>(text: &str, needle: &str, options: FindOptions) -> Search<'a> 
         // both cursors unset.
         next_start: (!haystack.is_empty()).then_some(0),
         haystack,
+        origins,
         needles,
         options,
         marker: std::marker::PhantomData,
@@ -249,11 +286,22 @@ impl Iterator for Search<'_> {
         } else {
             result_end + 1
         });
-        Some(result_start..result_end + 1)
+        // `[oracle-bug]` Back into text offsets. The end is inclusive here, so
+        // the exclusive bound is its origin plus one — which is what keeps a
+        // match that *spans* a dropped sentinel covering it in the text.
+        Some(self.origin(result_start)..self.origin(result_end) + 1)
     }
 }
 
 impl Search<'_> {
+    /// The text offset a haystack index came from.
+    ///
+    /// The identity when nothing was dropped, which is every page without a
+    /// hyphenated line break.
+    fn origin(&self, index: usize) -> usize {
+        self.origins.get(index).copied().unwrap_or(index)
+    }
+
     /// One scan, from `from`, returning the inclusive `(start, end)` of a
     /// match (`FindNext`).
     ///
@@ -406,6 +454,37 @@ mod tests {
     }
 
     const HELLO: &str = "Hello, world!\r\nGoodbye, world!";
+
+    /// Audit item **A42**. `cpdf_textpage.cpp:1360-1361` writes `U+FFFE` into
+    /// the text buffer at a soft hyphen and `cpdf_textpagefind.cpp:262`
+    /// searches that buffer verbatim, so a word split across a line break can
+    /// never be found (crbug.com/431824298). We drop the sentinel from the
+    /// haystack and map back, so the word is found and the range is still a
+    /// text offset — which is the property the fix has to keep.
+    #[test]
+    fn a_word_split_across_a_line_break_is_found_joined() {
+        // "a note-\nbook here", as the pipeline writes it: the hyphen and the
+        // break collapse to the one sentinel.
+        let text = "a note\u{FFFE}book here";
+        let hits: Vec<_> = search(text, "notebook", FindOptions::default()).collect();
+        assert_eq!(hits.len(), 1, "the joined word is found");
+
+        // The range is a *text* offset, and it spans the sentinel, so slicing
+        // the original text by it recovers the split spelling.
+        let chars: Vec<char> = text.chars().collect();
+        let hit = hits[0].clone();
+        let slice: String = chars[hit.clone()].iter().collect();
+        assert_eq!(slice, "note\u{FFFE}book");
+        assert_eq!(hit, 2..11);
+
+        // And the sentinel is not itself a space: dropping it must not splice
+        // two words into a spelling the page does not contain.
+        assert_eq!(
+            search(text, "note book", FindOptions::default()).count(),
+            0,
+            "the sentinel is not a space"
+        );
+    }
 
     #[test]
     fn splitting_is_by_script_not_by_alphabet() {
