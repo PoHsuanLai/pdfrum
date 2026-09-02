@@ -850,6 +850,79 @@ Two crates are excluded because they are `publish = false` and therefore have
 no external audience: `pdfrum-raster-vello` and `pdfrum-script`. They are held
 to STYLE.md like anything else, but nothing in this amendment applies to them.
 
+> **Landed 2026-09-02 as §A.10 step 12**, in four commits — one per row that
+> had work. The board is byte-identical (1757 / 1512 / 245, every tag) and the
+> mutate-round-trip tier is unchanged, which is the check that matters for this
+> step because `pdfrum-edit` is the writer.
+>
+> | Crate | items | `pub mod` | |
+> |---|---|---|---|
+> | `pdfrum-edit` | **374 → 116** | **16 → 1** | −69% |
+> | `pdfrum-raster-agg` | **43 → 20** | **3 → 1** | now `tinyskia`'s shape |
+> | `pdfrum-cmap` | **68 → 67** | **2 → 1** | |
+> | `pdfrum-filters` / `-type1` / `-raster-tinyskia` / `-raster-vello-cpu` | unchanged | unchanged | confirmed clean |
+>
+> **Six things this row set got wrong or left unsaid, found on reaching the
+> code:**
+>
+> 1. **`pdfrum-edit` has 16 `pub mod`, not 5.** The row counted `lib.rs` only;
+>    `content` and `write` publish their own submodules, and the measured
+>    column three tables up already said 16. The prose column and the measured
+>    column disagreed and nobody reconciled them.
+> 2. **Two crates in this step's scope do not exist.** §A.10's step-12 line and
+>    the brief both name `pdfrum-jbig2` and `pdfrum-jpx`; there is no such
+>    workspace member, and the baseline has no file for either. JBIG2 and
+>    JPEG 2000 arrive through the `hayro-jbig2` / `hayro-jpeg2000`
+>    dependencies. **`pdfrum-crypt` was in scope and needed nothing**: §WP1
+>    step 4 already replaced its `permissions(owner: bool) -> u32` with two
+>    methods returning `Permissions`.
+> 3. **`clip_rule(even_odd: bool) -> FillRule` was the crate's *second*
+>    bool-as-enum argument** and the row named only `paint_operator`. It had
+>    no caller at all — nor did `emit_page_objects` or `fresh_state`. Three
+>    dead public functions, alive only because their module was public: the
+>    same finding §WP2's landed note records for `annot_dump`, and the second
+>    time this pass has turned up dead code by privatising a module rather
+>    than by looking for it.
+> 4. **`SaveOptions::subset_new_fonts` is a public option nothing reads.**
+>    `grep` finds exactly two hits — its declaration and its default. The
+>    `font/` machinery behind it (`subset_tag`, `subset_name`,
+>    `to_unicode_cmap`, `widths_array`, `is_opentype_cff`,
+>    `strip_subset_prefix`) is implemented, tested and unreachable, and it is
+>    SPEC §11 E4's re-keying contract, so it was kept rather than deleted.
+>    **This is a live gap in the crate, not an API-shape one**, and it needs
+>    its own decision: wire the stage, or drop the option.
+> 5. **`dead_code` fires on test-only items the moment a module goes private**,
+>    because the library compiles once without `cfg(test)`. Twenty-three items
+>    across ten files in `pdfrum-edit`, every one pinned by a test beside it.
+>    This is a cost of the same shape as §WP8's doctest finding and it is worth
+>    recording next to it: **privatising a module breaks its doctests (§WP8) and
+>    reddens its test-only helpers (here).** Both are one-time and mechanical;
+>    neither is in §A.11's estimates.
+> 6. **The last `i32` in this crate was §C.3 item 16's, not item 1's.**
+>    `apply_rewrite` and `ContentsShape::with_removed` returned
+>    `BTreeMap<i32, i32>` — a map between `/Contents` indices, signed purely by
+>    contagion from `NO_CONTENT_STREAM`, which step 9 had already deleted.
+>    Both are `BTreeMap<usize, usize>`, which also retires an `i32::try_from`
+>    that silently dropped any entry it could not narrow.
+>
+> **The `Gid` question is answered (c): two types, two index spaces, both
+> documented.** (a) is impossible — the DAG runs `font → type1`, so `type1`
+> cannot name `font`'s type. (b) fails §WP1's own rule, which is the rule this
+> row asked the decision to be made by: WP1 moved `PageIndex` to
+> `pdfrum-common` because two crates produce **the same value**, and these two
+> `Gid`s are `/CharStrings` declaration order and `skrifa`'s `GlyphId`
+> respectively — different spaces that coincide numerically only for a Type 1
+> face. Merging them would make an sfnt index assignable to a `/CharStrings`
+> slot unconverted, which is exactly the bug §WP8 found live in `pdfrum-text`.
+> The conversion stays in `pdfrum-font`'s `From` impls, at the one boundary
+> that owns both (§B.3). **No dependency edge moves, so DEPS.md is untouched.**
+>
+> **`pdfrum-filters` is confirmed clean**, with one item looked at and left:
+> `decode_lzw(&[u8], bool, …)`'s `early_change` is `/EarlyChange != 0` — a
+> named two-state parameter the file format defines, not a mode selector
+> hiding an enum. §C.1's rule for a format's own values applies to arguments
+> as well as to sentinels.
+
 **Where the work actually is.** Four crates — `pdfrum-page` (407),
 `pdfrum-doc` (398), `pdfrum-render` (317), `pdfrum-form` (317) — hold 1439 of
 the workspace's 2584 public items and 65 of its 83 `pub mod`s. Seven crates
