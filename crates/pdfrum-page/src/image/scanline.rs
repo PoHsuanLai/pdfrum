@@ -112,7 +112,7 @@ pub fn invert_line(line: &mut [u8]) {
 #[must_use]
 #[allow(
     dead_code,
-    reason = "the oracle behaviour it ports is pinned by this module's own tests; the curation removed its only caller outside the crate"
+    reason = "unwired — see docs/status/unwired-oracle-ports.md"
 )]
 pub fn palette_index(line: &[u8], pixel: usize, components: u32, bpc: u32) -> u32 {
     let mut index = 0u32;
@@ -131,7 +131,7 @@ pub fn palette_index(line: &[u8], pixel: usize, components: u32, bpc: u32) -> u3
 #[must_use]
 #[allow(
     dead_code,
-    reason = "the oracle behaviour it ports is pinned by this module's own tests; the curation removed its only caller outside the crate"
+    reason = "unwired — see docs/status/unwired-oracle-ports.md"
 )]
 pub fn scale_to_byte(v: u32, max: u32) -> u8 {
     if max == 0 {
@@ -148,7 +148,7 @@ pub fn scale_to_byte(v: u32, max: u32) -> u8 {
 /// Write three bytes at pixel `index`.
 #[allow(
     dead_code,
-    reason = "the oracle behaviour it ports is pinned by this module's own tests; the curation removed its only caller outside the crate"
+    reason = "unwired — see docs/status/unwired-oracle-ports.md"
 )]
 fn write(dest: &mut [u8], index: usize, bytes: [u8; 3]) {
     if let Some(px) = dest.get_mut(index * 3..index * 3 + 3) {
@@ -163,7 +163,7 @@ fn write(dest: &mut [u8], index: usize, bytes: [u8; 3]) {
 /// nothing" case.
 #[allow(
     dead_code,
-    reason = "the oracle behaviour it ports is pinned by this module's own tests; the curation removed its only caller outside the crate"
+    reason = "unwired — see docs/status/unwired-oracle-ports.md"
 )]
 pub fn rgb_line_to_bgr(
     dest: &mut [u8],

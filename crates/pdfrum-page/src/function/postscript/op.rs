@@ -154,15 +154,6 @@ impl PsOp {
             .and_then(|i| NAMES.get(i))
             .map(|(_, op)| *op)
     }
-
-    /// Every named operator, for tests and dumps.
-    #[allow(
-        dead_code,
-        reason = "the operator table's completeness is pinned by this module's own tests"
-    )]
-    pub fn all_named() -> impl Iterator<Item = (&'static [u8], Self)> {
-        NAMES.iter().copied()
-    }
 }
 
 #[cfg(test)]
@@ -194,7 +185,7 @@ mod tests {
 
     #[test]
     fn every_spelling_resolves_to_its_operator() {
-        for (name, op) in PsOp::all_named() {
+        for &(name, op) in &NAMES {
             assert_eq!(PsOp::from_name(name), Some(op), "for {name:?}");
         }
     }

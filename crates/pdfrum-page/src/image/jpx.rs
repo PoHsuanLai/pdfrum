@@ -17,7 +17,7 @@
 //! synthetic grayscale mask. Value 2, nominally "premultiplied", is *not*
 //! distinguished and takes the same drop-alpha path as 0.
 
-use crate::color::{ColorSpace, Family};
+use crate::color::ColorSpace;
 use crate::error::Error;
 use crate::image::RequestedSize;
 use pdfrum_common::Limits;
@@ -400,19 +400,6 @@ pub fn decode_jpx(
     })
 }
 
-/// Whether a colour space is one the JPX path treats as a stock device space.
-#[must_use]
-#[allow(
-    dead_code,
-    reason = "the oracle behaviour it ports is pinned by this module's own tests; the curation removed its only caller outside the crate"
-)]
-pub fn is_stock_device(space: &ColorSpace) -> bool {
-    matches!(
-        space.family(),
-        Family::DeviceGray | Family::DeviceRgb | Family::DeviceCmyk
-    )
-}
-
 #[cfg(test)]
 mod tests {
     // Test fixtures quote the oracle's own vectors, compare floats exactly
@@ -429,7 +416,7 @@ mod tests {
 
     use super::{
         JpxAction, JpxColorSpace, RequestedSize, SpaceOverride, components_agree,
-        conversion_action, decode_jpx, is_stock_device,
+        conversion_action, decode_jpx,
     };
     use crate::color::{ColorSpace, Indexed};
     use pdfrum_common::Limits;
@@ -605,12 +592,5 @@ mod tests {
         for data in [&b""[..], b"\x00\x00", b"not jpeg2000", &[0xFFu8; 32]] {
             assert!(decode_jpx(data, None, 0, RequestedSize::Full, &limits).is_err());
         }
-    }
-
-    #[test]
-    fn stock_device_spaces_are_recognised() {
-        assert!(is_stock_device(&ColorSpace::DeviceGray));
-        assert!(is_stock_device(&ColorSpace::DeviceCmyk));
-        assert!(!is_stock_device(&ColorSpace::Pattern(Box::default())));
     }
 }
