@@ -6,7 +6,9 @@
 One file per published library crate, each holding that crate's complete
 public API as `cargo public-api` prints it. `pdfrum.txt` is the facade — the
 surface a `cargo add pdfrum` caller sees — and the rest are the member crates
-it composes.
+it composes. One file is not a crate: `pdfrum+script.txt` is the facade again
+with its one cargo feature on (WP12), and the reason it exists is under "What
+else is not here" below.
 
 ---
 
@@ -51,7 +53,7 @@ cargo +nightly public-api -sss -p <crate>
 | rustc | 1.99.0-nightly (`ba28ff76f` 2026-08-13) |
 | cargo | 1.99.0-nightly (`eb98b54bc` 2026-08-11) |
 | workspace commit | `9b8f74b` |
-| features | default (see below) |
+| features | default, plus one recorded second surface (see below) |
 
 `cargo-public-api` is developer tooling and lives in `~/.cargo/bin`. It is
 **not** in `DEPS.md`, is not a workspace dependency, and must never appear in
@@ -85,10 +87,26 @@ for that property and a better one than a four-hundred-line diff nobody reads.
   files measure the *documented* surface. That is the right measure for
   WP11, whose rule 3 prescribes `#[doc(hidden)]` as the remedy for oracle
   dump formats: applying the remedy is supposed to shrink the number.
-- **Non-default features.** Two exist workspace-wide and neither is on:
-  `pdfrum-form/script` (the JavaScript engine, kept off by
-  `scripts/check-no-boa.nu`) and `pdfrum-render/walk-profile`. The default
-  surface is what `cargo add` gets, and so is what is recorded.
+- **Non-default features, with one exception.** The default surface is what
+  `cargo add` gets, and so is what these files record.
+
+  *Amended 2026-09-02 (WP12).* One feature earns a second file:
+  **`pdfrum+script.txt`** is `pdfrum --features script`, nine items more than
+  `pdfrum.txt` (`ScriptCascade`, `ScriptConfig`, `TranscriptLine`,
+  `ScriptBuildError`, `ScriptFailure`, `ScriptStop`, `FieldActions`,
+  `FormSession::with_scripts` and `FormSession::scripts`). The test for
+  earning one is whether the crate's own documentation tells an embedder to
+  turn the feature on: the facade's crate docs carry a `# Features` section
+  naming `script`, so its items are part of the product and a change to them
+  would otherwise be invisible to every gate here.
+
+  `pdfrum-render/walk-profile` does not qualify — it is a profiling switch,
+  not a surface offered to callers. Neither does `pdfrum-form/script`, whose
+  items are the same ones `pdfrum+script.txt` records one layer up; recording
+  both would make one API change diff in two files. `scripts/api-snapshot.nu`
+  names the list in a `FEATURED` constant rather than deriving it, so a
+  feature joining it is a decision someone makes rather than a consequence of
+  a manifest edit.
 
 ---
 

@@ -12,6 +12,23 @@ categories = ["parser-implementations", "graphics", "text-processing", "multimed
 [lints]
 workspace = true
 
+[features]
+# The document's own JavaScript, actually run — `pdfrum-form`'s `script`
+# feature, forwarded.
+#
+# What it brings: `boa_engine` and the ~116 crates behind it, pure Rust and
+# zero `-sys` (DEPS.md records the audit). Default-off, because an engine that
+# executes untrusted script out of a document is a different security
+# proposition from a renderer, and most PDF work does not need it —
+# `scripts/check-no-boa.nu` is the mechanical proof, asserting that a default
+# `pdfrum` resolves with no `boa_*` crate at all *and* that this feature does
+# still reach one, so neither half can pass vacuously.
+#
+# The facade forwards the flag and owns no engine: `boa_engine` is not a
+# dependency of this crate under any feature, and `ScriptCascade` lives in
+# `pdfrum-form`.
+script = ["pdfrum-form/script"]
+
 [dependencies]
 pdfrum-common.workspace = true
 pdfrum-object.workspace = true

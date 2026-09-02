@@ -19,6 +19,7 @@ pub use pdfrum::DocError
 pub use pdfrum::Event
 pub use pdfrum::EventModifiers
 pub use pdfrum::EventResponse
+pub use pdfrum::FieldActions
 pub use pdfrum::FieldFlags
 pub use pdfrum::FieldKind
 pub use pdfrum::FieldRef
@@ -51,6 +52,11 @@ pub use pdfrum::RenderDevice
 pub use pdfrum::RenderError
 pub use pdfrum::Resolve
 pub use pdfrum::SaveError
+pub use pdfrum::ScriptBuildError
+pub use pdfrum::ScriptCascade
+pub use pdfrum::ScriptConfig
+pub use pdfrum::ScriptFailure
+pub use pdfrum::ScriptStop
 pub use pdfrum::ScrollView
 pub use pdfrum::SessionConfig
 pub use pdfrum::Severity
@@ -60,6 +66,7 @@ pub use pdfrum::TextAa
 pub use pdfrum::TextError
 pub use pdfrum::TextPage
 pub use pdfrum::TextRenderMode
+pub use pdfrum::TranscriptLine
 pub use pdfrum::UpdateKind
 pub use pdfrum::VelloCpuBackend
 pub use pdfrum::VirtualKey
@@ -202,6 +209,7 @@ pub fn pdfrum::FormSession<'a>::on_mouse_wheel(&mut self, u32, f32, f32, i32, i3
 pub fn pdfrum::FormSession<'a>::page_in_view(&self) -> u32
 pub fn pdfrum::FormSession<'a>::popup_for_page(&mut self, u32) -> core::option::Option<pdfrum_form::popup::PopupView>
 pub fn pdfrum::FormSession<'a>::replace_selection(&mut self, &str) -> bool
+pub fn pdfrum::FormSession<'a>::scripts(&self) -> core::option::Option<&pdfrum_form::script::ScriptCascade>
 pub fn pdfrum::FormSession<'a>::scroll_view(&mut self, pdfrum_form::session::AnnotId) -> core::option::Option<pdfrum_form::popup::ScrollView>
 pub fn pdfrum::FormSession<'a>::selected_text(&self) -> core::option::Option<alloc::string::String>
 pub fn pdfrum::FormSession<'a>::set_index_selected(&mut self, usize, bool) -> bool
@@ -210,6 +218,7 @@ pub fn pdfrum::FormSession<'a>::with_cascade(&'a pdfrum::Document, impl pdfrum_f
 pub fn pdfrum::FormSession<'a>::with_config(&'a pdfrum::Document, pdfrum_form::session::SessionConfig) -> pdfrum::FormSession<'a>
 pub fn pdfrum::FormSession<'a>::with_config_in(&'a pdfrum::Document, pdfrum_form::session::SessionConfig, &mut pdfrum_page::build::BuildContext) -> pdfrum::FormSession<'a>
 pub fn pdfrum::FormSession<'a>::with_context(&'a pdfrum::Document, &mut pdfrum_page::build::BuildContext) -> pdfrum::FormSession<'a>
+pub fn pdfrum::FormSession<'a>::with_scripts(&'a pdfrum::Document, &pdfrum_form::script::ScriptConfig) -> core::result::Result<pdfrum::FormSession<'a>, pdfrum_form::script::BuildError>
 pub struct pdfrum::ImageBuilder
 pub pdfrum::ImageBuilder::matrix: kurbo::affine::Affine
 pub pdfrum::ImageBuilder::source: pdfrum_object::object::ObjRef

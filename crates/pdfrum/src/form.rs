@@ -12,14 +12,18 @@ pub use pdfrum_doc::form::{FieldFlags, FieldKind};
 /// Obtained from [`Document::form`](crate::Document::form), which returns
 /// `None` for a document that declares no `/AcroForm` at all.
 ///
-/// # No JavaScript, ever
+/// # This type never runs a script, whatever the features
 ///
 /// A PDF form may carry scripts — validation, calculation, formatting — in
-/// `/AA` action dictionaries. This crate reads them as data and **never runs
-/// them**, which is a scope decision, not a gap: see the crate docs. A field
-/// whose displayed value depends on a calculation script will read here as
-/// whatever the file last stored, not as what a scripting viewer would
-/// compute.
+/// `/AA` action dictionaries, and this is the *reading and filling* view of a
+/// form: it reads them as data. A field whose displayed value depends on a
+/// calculation script reads here as whatever the file last stored, not as
+/// what a scripting viewer would compute.
+///
+/// That holds with the `script` feature on too, and the reason is that
+/// scripts run on **events**: they are a live session's business, not a
+/// snapshot's. [`FormSession`](crate::FormSession) is where a document's own
+/// JavaScript runs — see the crate docs' `# Features` section.
 ///
 /// ```
 /// let doc = pdfrum::Document::open("tests/fixtures/text_form.pdf")?;
