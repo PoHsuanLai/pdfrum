@@ -84,6 +84,14 @@ def main [] {
     # build. This is the check that says whether one has.
     ^./scripts/check-no-boa.nu
 
+    # STYLE.md §4's dead-code rule. `cargo clippy -D warnings` above already
+    # fails on an uncalled item — this is the check that says the failure was
+    # *answered* rather than suppressed, which clippy cannot tell: an
+    # `#[allow(dead_code)]` makes the lint pass by definition. The one shape
+    # the tree keeps is a filed missed wire, and the check is that the reason
+    # says so.
+    ^./scripts/check-no-dead-code.nu
+
     # Note the check above passes *because* fuzz/ is its own workspace. It
     # brings in `libfuzzer-sys`, which links LLVM's C++ libFuzzer runtime and
     # pulls `cc` — both of which the filter above would reject. DEPS.md
