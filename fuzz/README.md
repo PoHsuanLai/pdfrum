@@ -77,8 +77,11 @@ to the four strictly-parser targets on a smaller machine.
 Sequential mode divides the budget instead, which is what you want for a
 quick pre-commit check.
 
-The gate is **not** in `scripts/ci.nu`. The fast gate is seconds; this is
-minutes to days.
+*Running* the gate is **not** part of `scripts/ci.nu`: that is seconds, this
+is minutes to days. *Compiling* the targets is, as
+`cargo check --manifest-path fuzz/Cargo.toml --all-targets` — the step that
+catches a target rotting against an API change, which is the failure mode a
+separate workspace invites.
 
 ## Targets
 
