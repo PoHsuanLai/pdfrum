@@ -1209,10 +1209,51 @@ sentinel is public in **`pdfrum-doc`**, which is precisely the class of leak §A
 exists to close. §A.3's second table and §A.11's `pdfrum-doc` row are
 **corrected in place** to move this row out of "behaviour".
 
-### C.5 The one case that is *not* decided here — `U+FFFE` at a line break
+### C.5 `U+FFFE` at a line break — **RULED and implemented**
 
-**This needs the user's ruling. It is enumerated, costed, and deliberately
-left open.**
+> **Ruling (user, 2026-09-02): repair it. Reading 1.** The buffer half of
+> audit A41 is inside §C, and it has landed. The section below is kept as
+> written — it is the argument the ruling was made on — with the outcome
+> recorded here and in `docs/status/oracle-divergence-audit.md` beside A41.
+>
+> **What changed.** `crates/pdfrum-text/src/pipeline.rs` writes `U+00AD`
+> (SOFT HYPHEN) where PDFium writes `U+FFFE`, and `U+FFFD` for the second
+> `U+FFFE` in the same buffer — `cpdf_textpage.cpp:1462`'s
+> `AppendChar(c ? c : 0xfffe)`, for a code whose `/ToUnicode` maps it to
+> `U+0000`. Both sites carry `[oracle-bug]` with the PDFium and pdf.js
+> citations. Measured cost **0 rows**, as predicted: board 1757 / 1512 / 245
+> before and after, zero per-file differences.
+>
+> **`U+00AD` over `U+002D`**, which is what pdf.js normalises *to*: it is the
+> character the document actually contains and that `IsHyphenCode`
+> (`:1149-1151`) recognises before discarding, it is `Default_Ignorable`, and
+> it keeps the buffer lossless — a caller may render it, strip it, or search
+> past it, none of which a noncharacter permits.
+>
+> **Not everything named below moved.** The `U+FFFE` staged for a *character
+> code* of zero (`:1433`) is untouched: that record is never `normal`, so the
+> placeholder is dropped when the line closes and never reaches a caller. It
+> is a private sentinel collapsed at the boundary — `mirror_char`'s shape, and
+> exactly what §C.1 permits. Four assertions moved, not three: the three named
+> below plus the `line.rs` unit test that stages the value directly.
+>
+> **Reading 2's objection was heard and rejected, and its consequence
+> recorded.** A41's char-list half stays declined at 12 rows, so the two
+> outputs now differ in a way that is *ours* rather than PDFium's — `0x2` in
+> the record against `U+00AD` in the buffer. That asymmetry is deliberate and
+> is written down beside A41 rather than left to be rediscovered. The reason
+> the halves are not comparable: the buffer half removes a Unicode
+> noncharacter from a public `String` at zero cost, while the char half would
+> pay 12 golden rows to change a code point that never leaves a stream whose
+> consumers have a working alternative API (`FPDFText_IsHyphen`). A
+> noncharacter reaching a caller is a defect at any price.
+>
+> The **third option** below — repair in `all_text()` and keep a raw escape
+> hatch — was not taken: it leaves the noncharacter in the public `text` field,
+> which is the surface §C is about, and buys a second method for it.
+
+The enumeration, costing and both readings, as they stood when the question
+was put:
 
 **What it is.** At a soft hyphen falling on a line break, PDFium writes
 `U+FFFE` into the text buffer (`cpdf_textpage.cpp:1360-1361`,
@@ -1299,11 +1340,11 @@ the *sentinel-free* reading the one the API offers by default — e.g.
 the raw buffer. That satisfies §C without moving what the crate *computes*,
 at the price of one more method and a decision about which one is the default.
 
-**What is being asked.** Not whether `U+FFFE` is a good public value — §C
-already says it is not. The question is whether *this* item is inside §C
+**What was being asked.** Not whether `U+FFFE` is a good public value — §C
+already says it is not. The question was whether *this* item is inside §C
 (naming) or inside §4's non-goal (behaviour), given that the measurement says
-the goldens do not move either way. **That is the user's call and this
-document does not make it.**
+the goldens do not move either way. **Answered above: inside §C. Ruled by the
+user 2026-09-02 and implemented; the goldens did not move.**
 
 ---
 
