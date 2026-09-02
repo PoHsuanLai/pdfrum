@@ -84,11 +84,34 @@ pub struct EncryptParams {
     /// Default `0xFFFF_FFFF`.
     pub permissions: u32,
     /// The cipher `/V`, `/CF` and `/CFM` resolve to.
+    ///
+    /// This is the **stream** class's cipher (`/StmF`). See [`string_cipher`].
+    ///
+    /// [`string_cipher`]: EncryptParams::string_cipher
     pub cipher: Cipher,
     /// The cipher `/EFF` resolves to when it differs from [`Self::cipher`]
     /// (ISO 32000-1 §7.6.5 table 20), and `None` when the embedded class uses
     /// the stream cipher — which table 20 makes the default.
     pub embedded_cipher: Option<Cipher>,
+    /// `[oracle-bug]` The cipher the **string** class (`/StrF`) resolves to,
+    /// independently of `/StmF`.
+    ///
+    /// §7.6.5 defines `/StmF` and `/StrF` as two independent entries, each
+    /// defaulting to `Identity`, and says nothing forbidding them from
+    /// differing. `cpdf_security_handler.cpp:305` and `:325` instead
+    /// `return false` on a raw **name** inequality, so `/StmF /StdCF /StrF
+    /// /StdCF2` is refused even when the two `/CF` entries are identical, and
+    /// because the comparison runs *before* the default is applied, a V≥4
+    /// document with **neither** entry present also fails to load. pdf.js
+    /// applies the defaults and consults the two independently, with no
+    /// equality check (`crypto.js:1116-1120`).
+    ///
+    /// Only the two values §7.6.5 makes observable at this seam are carried:
+    /// a class is either the file's cipher or `Identity`. A document naming
+    /// two *different non-Identity* filters would need two keys, which no
+    /// corpus file does and which this record deliberately does not model —
+    /// such a file resolves both classes to the stream filter's cipher.
+    pub string_cipher: Cipher,
     /// The file encryption key length in bytes, 0 to 32.
     pub key_len: usize,
     /// `/EncryptMetadata`. Default `true`.
@@ -110,10 +133,11 @@ pub struct EncryptParams {
 /// # Errors
 ///
 /// [`Error::UnsupportedHandler`] for a `/Filter` other than `/Standard`,
-/// [`Error::MismatchedCryptFilters`] when `/StmF` and `/StrF` name different
-/// filters, [`Error::MissingCryptFilter`] when the named filter is not in
-/// `/CF`, and [`Error::MalformedEncryptDict`] or [`Error::CipherKeyLength`]
-/// when the key length does not resolve.
+/// [`Error::MissingCryptFilter`] when a named filter is not in `/CF`, and
+/// [`Error::MalformedEncryptDict`] or [`Error::CipherKeyLength`] when the key
+/// length does not resolve. `[oracle-bug]` naming *different* filters in
+/// `/StmF` and `/StrF` is **not** an error — see
+/// [`EncryptParams::string_cipher`].
 pub fn parse_encrypt_dict(dict: &Dict, r: &impl Resolve) -> Result<EncryptParams, Error> {
     // The parser rejects a non-standard handler on the name-typed reading; a
     // string-typed /Filter reads as absent here and so is unsupported too.
@@ -128,7 +152,7 @@ pub fn parse_encrypt_dict(dict: &Dict, r: &impl Resolve) -> Result<EncryptParams
     let permissions = as_u32(dict.int(names::P, r).unwrap_or(-1));
     let encrypt_metadata = dict.bool(names::ENCRYPT_METADATA).unwrap_or(true);
 
-    let (cipher, key_len) = resolve_cipher(dict, version, r)?;
+    let (cipher, string_cipher, key_len) = resolve_cipher(dict, version, r)?;
     let embedded_cipher = embedded_cipher(dict, version, cipher, r)?;
 
     Ok(EncryptParams {
@@ -137,6 +161,7 @@ pub fn parse_encrypt_dict(dict: &Dict, r: &impl Resolve) -> Result<EncryptParams
         revision,
         permissions,
         cipher,
+        string_cipher,
         key_len,
         encrypt_metadata,
         o: byte_string(dict, names::O, r),
@@ -166,23 +191,39 @@ fn byte_string(dict: &Dict, key: &Name, r: &impl Resolve) -> Box<[u8]> {
     dict.byte_string(key, r).unwrap_or_default().into()
 }
 
-/// Resolve `/V`, `/Length`, `/CF` and `/CFM` into a cipher and key length.
+/// Resolve `/V`, `/Length`, `/CF` and `/CFM` into the two class ciphers and a
+/// key length.
 ///
 /// The version 4 branch carries two quirks that keep real files opening: a
 /// `/Length` under 40 is read as *bytes* and multiplied by 8 (so a file
 /// writing `/Length 16` for a 128-bit key works), and a `/CFM` PDFium does
 /// not recognise leaves the cipher as RC4 rather than failing.
-fn resolve_cipher(dict: &Dict, version: i64, r: &impl Resolve) -> Result<(Cipher, usize), Error> {
-    let (cipher, key_bits) = if version >= 4 {
-        // The class filters are compared before the dictionary is inspected,
-        // so a mismatch is reported even when /CF is missing too.
-        let name = crypt_filter_name(dict, r)?;
+///
+/// `[oracle-bug]` The stream and string classes are resolved **independently**
+/// and each defaults to `/Identity` — see [`EncryptParams::string_cipher`].
+fn resolve_cipher(
+    dict: &Dict,
+    version: i64,
+    r: &impl Resolve,
+) -> Result<(Cipher, Cipher, usize), Error> {
+    let (cipher, string_cipher, key_bits) = if version >= 4 {
+        let (stream_name, string_name) = crypt_filter_names(dict, r);
+        let stream_identity = is_identity(&stream_name);
+        let string_identity = is_identity(&string_name);
+        if stream_identity && string_identity {
+            return Ok((Cipher::None, Cipher::None, 0));
+        }
         let filters = dict.dict(names::CF, r).ok_or(Error::MalformedEncryptDict(
             "/CF is missing or not a dictionary",
         ))?;
-        if name.as_bytes() == names::IDENTITY.as_bytes() {
-            return Ok((Cipher::None, 0));
-        }
+        // The non-Identity class names the filter that supplies the cipher and
+        // key length; when both do and they differ, the stream's wins, which
+        // is the case this record deliberately does not model.
+        let name = if stream_identity {
+            string_name
+        } else {
+            stream_name
+        };
         let filter = filters
             .dict(&name, r)
             .ok_or_else(|| Error::MissingCryptFilter(name.as_bytes().into()))?;
@@ -203,28 +244,46 @@ fn resolve_cipher(dict: &Dict, version: i64, r: &impl Resolve) -> Result<(Cipher
         let bits = if bits < 40 { bits * 8 } else { bits };
 
         let method = filter.byte_string(names::CFM, r).unwrap_or_default();
-        let cipher = if method == b"AESV2" || method == b"AESV3" {
+        let resolved = if method == b"AESV2" || method == b"AESV3" {
             Cipher::Aes
         } else {
             Cipher::Rc4
         };
-        (cipher, bits)
+        let stream = if stream_identity {
+            Cipher::None
+        } else {
+            resolved
+        };
+        let string = if string_identity {
+            Cipher::None
+        } else {
+            resolved
+        };
+        (stream, string, bits)
     } else if version > 1 {
-        (Cipher::Rc4, dict.int(names::LENGTH, r).unwrap_or(40))
+        let bits = dict.int(names::LENGTH, r).unwrap_or(40);
+        (Cipher::Rc4, Cipher::Rc4, bits)
     } else {
         // Version 1 is 40-bit RC4 by definition; its /Length is ignored.
-        (Cipher::Rc4, 40)
+        (Cipher::Rc4, Cipher::Rc4, 40)
     };
 
     let key_len = usize::try_from(key_bits / 8)
         .map_err(|_| Error::MalformedEncryptDict("/Length is negative"))?;
-    if key_len > 32 || !cipher.accepts_key_len(key_len) {
+    // The key length is a property of the filter, so it is checked against
+    // whichever class is not Identity.
+    let effective = if cipher == Cipher::None {
+        string_cipher
+    } else {
+        cipher
+    };
+    if key_len > 32 || !effective.accepts_key_len(key_len) {
         return Err(Error::CipherKeyLength {
-            cipher: cipher.label(),
+            cipher: effective.label(),
             len: key_len,
         });
     }
-    Ok((cipher, key_len))
+    Ok((cipher, string_cipher, key_len))
 }
 
 /// The cipher an embedded-file stream is decrypted with — `/EFF`'s filter
@@ -291,19 +350,26 @@ fn embedded_cipher(
 }
 
 /// The crypt filter both `/StmF` and `/StrF` must name.
+/// `/StmF` and `/StrF`, each defaulting to `/Identity`.
 ///
-/// PDFium refuses a document whose two class filters differ rather than
-/// keeping a cipher per class, and it does not implement the specification's
-/// `/Identity` default: when both keys are absent the looked-up name is empty,
-/// which is not `/Identity` and is not a key in `/CF`, so the document is
-/// rejected. Both behaviors are reproduced.
-fn crypt_filter_name(dict: &Dict, r: &impl Resolve) -> Result<Name, Error> {
-    let stream = dict.byte_string(names::STM_F, r).unwrap_or_default();
-    let string = dict.byte_string(names::STR_F, r).unwrap_or_default();
-    if stream != string {
-        return Err(Error::MismatchedCryptFilters);
-    }
-    Ok(Name::from(string.as_slice()))
+/// `[oracle-bug]` §7.6.5 table 20 defines both as independent entries whose
+/// default is `Identity`. `cpdf_security_handler.cpp:305` and `:325` instead
+/// compare the two raw names and `return false` on inequality — and because
+/// the comparison runs *before* any default is applied, an absent entry reads
+/// as the empty name, which is neither `Identity` nor a key in `/CF`, so a
+/// V≥4 document with **neither** entry present is refused as well. pdf.js
+/// applies the defaults and consults the two independently (`crypto.js:1116-1120`).
+fn crypt_filter_names(dict: &Dict, r: &impl Resolve) -> (Name, Name) {
+    let named = |key| match dict.byte_string(key, r) {
+        Some(bytes) if !bytes.is_empty() => Name::from(bytes.as_slice()),
+        _ => names::IDENTITY.clone(),
+    };
+    (named(names::STM_F), named(names::STR_F))
+}
+
+/// Whether a resolved class filter is the `Identity` filter.
+fn is_identity(name: &Name) -> bool {
+    name.as_bytes() == names::IDENTITY.as_bytes()
 }
 
 /// Pad a password to the fixed 32 bytes every revision 2 to 4 algorithm
