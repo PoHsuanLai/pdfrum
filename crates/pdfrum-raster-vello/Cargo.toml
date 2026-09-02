@@ -33,7 +33,7 @@ vello.workspace = true
 # the CPU column describes, which is a page built the way the facade builds it.
 #
 # It does NOT put wgpu in the facade's tree: a dev-dependency is an edge from
-# this crate to the facade, not the reverse. `scripts/check-no-wgpu.sh` uses
+# this crate to the facade, not the reverse. `scripts/check-no-wgpu.nu` uses
 # `cargo tree -e normal` precisely so that this edge cannot make the isolation
 # check pass or fail dishonestly.
 pdfrum.workspace = true

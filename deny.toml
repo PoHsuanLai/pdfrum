@@ -1,5 +1,5 @@
 # cargo-deny configuration — mechanical enforcement of DEPS.md's pure-Rust
-# guarantee and license policy. `scripts/ci.sh` additionally rejects any
+# guarantee and license policy. `scripts/ci.nu` additionally rejects any
 # `*-sys` crate in the normal dependency tree via `cargo tree`.
 
 [graph]
@@ -39,7 +39,7 @@ deny = [
     # named below, both of which reach the tree only through
     # `pdfrum-raster-vello` — the crate PLAN.md §M12c grants the exemption
     # to, and which nothing in the core ring depends on
-    # (scripts/check-no-wgpu.sh asserts that separately).
+    # (scripts/check-no-wgpu.nu asserts that separately).
     #
     # The exception is narrow because the *reason* it is safe is narrow. In
     # both cases `wgpu-hal` selects a feature that turns the probe off, so

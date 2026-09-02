@@ -87,7 +87,7 @@ Workspace `pdfrum/`, crates under `crates/`. Name **pdfrum**: facade crate `pdfr
 | `pdfrum-render` | fpdfapi/render + fxge device half | `RenderDevice` trait (kurbo/peniko types); engine walking the page graph; layer compositor for isolated/knockout groups and soft masks; image resampling. |
 | `pdfrum-raster-vello-cpu` *(renamed 2026-09-02, was `pdfrum-raster-vello`)* | Skia backend | `vello_cpu` implementation of `RenderDevice`, type `VelloCpuBackend`. The facade's default — and since 2026-09-02 its **only** rasterizer dependency, the others being named at the call site through `Page::render_on`. |
 | `pdfrum-raster-tinyskia` | AGG backend | `tiny-skia` implementation. Cross-check + determinism baseline; Tier C's gating partner. |
-| `pdfrum-raster-vello` *(renamed 2026-09-02, was `pdfrum-raster-vello-gpu`)* | *(new capability)* | GPU `vello` on `wgpu`, M12c, type `VelloBackend<'a>`. **Outside the core ring by construction**: nothing depends on it, the facade cannot name it, and `scripts/check-no-wgpu.sh` asserts a headless tree resolves with zero `wgpu`. Takes a caller-supplied `wgpu::Device`. Tier C only — GPU rasterization is not bit-reproducible across drivers, so it never joins the scoreboard. `publish = false`. *2026-09-02: the facade no longer needs to name a backend to render on it — `Page::render_on` takes one — so a caller holding a `wgpu::Device` can use this crate through `pdfrum` without `wgpu` entering the facade's own tree.* |
+| `pdfrum-raster-vello` *(renamed 2026-09-02, was `pdfrum-raster-vello-gpu`)* | *(new capability)* | GPU `vello` on `wgpu`, M12c, type `VelloBackend<'a>`. **Outside the core ring by construction**: nothing depends on it, the facade cannot name it, and `scripts/check-no-wgpu.nu` asserts a headless tree resolves with zero `wgpu`. Takes a caller-supplied `wgpu::Device`. Tier C only — GPU rasterization is not bit-reproducible across drivers, so it never joins the scoreboard. `publish = false`. *2026-09-02: the facade no longer needs to name a backend to render on it — `Page::render_on` takes one — so a caller holding a `wgpu::Device` can use this crate through `pdfrum` without `wgpu` entering the facade's own tree.* |
 | `pdfrum-raster-agg` *(renamed 2026-09-02, was `pdfrum-raster-exact`)* | AGG parity | Analytic scanline rasterizer of our own, no rasterizer dependency. Reproduces AGG's coverage integral on AGG's own 256ths-of-a-pixel grid — AGG (`core/fxge/agg`) being PDFium's own scan converter; the conformance default, so a golden diff measures the engine rather than a sampling policy. Type `AggBackend`, CLI `--use-renderer=agg`. No SIMD. |
 | `pdfrum-text` | fpdftext | Text extraction, reading order/whitespace heuristics, search, link detection. Depends only on parser/font/page — parallelizable with render. |
 | `pdfrum-doc` | fpdfdoc | Bookmarks, named dests, links/actions, annotations + appearance-stream generation (variable text), AcroForm data model (fill/read, no JS), struct tree, metadata. |
@@ -319,7 +319,7 @@ Both lessons are written down where the next person will meet them.
   `save`), **split per crate** in P3 so `cargo bench -p pdfrum-render` is a
   command with a meaning; `benches/baseline.json` +
   `benches/src/bin/ratchet.rs` with empirically
-  measured per-group noise bands; `scripts/profile.sh`. **`perf` was
+  measured per-group noise bands; `scripts/profile.nu`. **`perf` was
   unavailable** (`perf_event_paranoid = 4`, no root): the harness detects it,
   prints the remedy, and falls back to exact instrumentation at the
   engine/rasterizer seam rather than to a sampler that could only report
@@ -341,7 +341,7 @@ Both lessons are written down where the next person will meet them.
   is built and is the largest single win in the milestone: **-90% on five
   image documents** (`image_bug_718762` 837 → 84 ms), keyed `(ObjRef,
   request)` per SPEC §7, with a **byte-identical** conformance scoreboard —
-  not merely regression-free. `scripts/bench-rss.sh` measures peak RSS against
+  not merely regression-free. `scripts/bench-rss.nu` measures peak RSS against
   the oracle: **geometric mean 1.20x** against the ≤1.5x target, met on 39 of
   44 files; the five that miss are image documents where the oracle scales its
   decode and we materialize, named rather than averaged away. On eviction the
@@ -371,7 +371,7 @@ Both lessons are written down where the next person will meet them.
   always taken in). Both re-baselined. The suite is also **split per crate**
   — `pdfrum-parser` owns `open`, `pdfrum-page` the new `build` group, and so
   on — with the corpus, the baseline and the ratchet staying in `benches/` as
-  the certificate suite, plus `scripts/bench-quick.sh` (18 files, criterion's
+  the certificate suite, plus `scripts/bench-quick.nu` (18 files, criterion's
   floor, ~3 min) as the dev loop. The two outliers §1.7 flagged are
   **diagnosed but not fixed** (§10), and both diagnoses cost two wrong
   hypotheses each: `mixed_formfield` is three genuine image decodes behind
@@ -436,7 +436,7 @@ milestone spends that residue list, in the order the *evidence* ranks it — not
 the order the classes appear in the bench table. Every rule from M12 still
 binds: **the perf-dep bar** (a dep is admitted only on a committed A/B showing
 >= 10% on one class or >= 5% geomean *against a tuned no-dep baseline*),
-**conformance is the regression gate** (`scripts/ci.sh` conformance cluster on
+**conformance is the regression gate** (`scripts/ci.nu` conformance cluster on
 every perf commit; the scoreboard's monotone rule holds), and the **bench
 ratchet** only tightens. A hypothesis that measures to zero is written down as
 a non-result, not deleted and not rounded up — §10 of M12.md is the model, and
@@ -580,7 +580,7 @@ changing the cold convention; it is documented and ratcheted deliberately.
 
   So the prerequisite is a real symbol-level profile. `perf` is installed on
   this machine but `kernel.perf_event_paranoid` is **4**, which blocks it;
-  `scripts/profile.sh` already detects this and degrades rather than failing.
+  `scripts/profile.nu` already detects this and degrades rather than failing.
   Two ways forward, and the agent takes whichever is available without
   blocking: (a) ask for `sudo sysctl kernel.perf_event_paranoid=1` — record it
   as a *request to the user in the status doc*, do not attempt privilege
@@ -752,7 +752,7 @@ changing the cold convention; it is documented and ratcheted deliberately.
   the **warm family — the convention M12's exit target is judged on — is 132
   entries, 32 improved, ZERO regressed.** A ratchet that declines to write a
   file is not a verdict on the engineering. Verified for the exit rather than
-  assumed: `scripts/ci.sh` green, `cargo nextest run` 3049/3049, and the
+  assumed: `scripts/ci.nu` green, `cargo nextest run` 3049/3049, and the
   conformance scoreboard per-file identical to the committed one.
 
 ## M12c — GPU backend: `vello` on `wgpu`  *(parallel with M12b; independent crate)*
@@ -881,7 +881,7 @@ an RTX 4090 with **zero Tier-C interior differences** and no page where one
 backend painted and the other did not; the edge residue is traced to a single
 engine call site (`shading/patch.rs:480`'s `FullCover`, which vello cannot
 express per-primitive) rather than averaged away. Isolation is
-`scripts/check-no-wgpu.sh`, run by `ci.sh` and **verified by negative control**.
+`scripts/check-no-wgpu.nu`, run by `ci.nu` and **verified by negative control**.
 `cargo-deny` needed no relaxation of `cc`/`cmake`/`bindgen` and one `wrappers`-
 scoped `pkg-config` exception whose safety rests on a measured feature
 resolution. The facade's default is unchanged — it cannot name this backend —
@@ -1009,7 +1009,7 @@ The items sort into two kinds, and the split is the plan.
   rule is that they are re-judged on a *fresh* run. `scripts/ratchet-decide.py`
   runs first, then `ratchet update`. The cold family will move enormously for
   **P1's** reasons — say so in the commit.
-- **M2 — the oracle side-by-side** (item 2). `scripts/bench-oracle.sh`, never
+- **M2 — the oracle side-by-side** (item 2). `scripts/bench-oracle.nu`, never
   run in M12b. Until it runs, every "versus PDFium" claim dates from M12.
   `forms` warm stands at 3.35x unmeasured. Run it in the same idle window as
   M1, and re-score M12b's `forms` target against the result.
@@ -1190,7 +1190,7 @@ allow a named mechanism to sit below.
   byte-identical, diffed field by field; the board was not re-committed
   because only its timestamp moved.
 - **No new dependency.** DEPS.md is untouched across the whole milestone,
-  verified mechanically by `scripts/ci.sh`'s dependency-tree gate.
+  verified mechanically by `scripts/ci.nu`'s dependency-tree gate.
 - **Cross-vendor rule held with one recorded gap**: Grok's account was
   exhausted (402) when the first `pdfrum-form` review was due, so a
   Claude/Opus reviewer did it. Grok reviewed block 2, the `pdfrum-doc` slice
@@ -1243,7 +1243,7 @@ the typing path — with the board **0 rows changed field-by-field across all
 means. E6's `/CO` walk landed as `Form::calculation_order`, E4's four
 `Limits` fields landed with `max_calculate_depth` at 1, and boa landed on a
 measured admission (116 crates, zero `-sys`, `cargo deny --all-features`
-clean, `scripts/check-no-boa.sh` asserting isolation both ways). One
+clean, `scripts/check-no-boa.nu` asserting isolation both ways). One
 correction to the brief: **§2.4's crate-versus-module argument reasoned from
 `AF*` being a module in `pdfrum-form`, and `AF*` shipped as the separate
 `pdfrum-script` crate** — re-run against what shipped, the recommendation

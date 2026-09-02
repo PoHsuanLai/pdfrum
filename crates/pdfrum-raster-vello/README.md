@@ -24,7 +24,7 @@ granted for one reason and bounded by two rules:
   holding a GPU device the whole time.
 - **Isolation.** Nothing in the core ring depends on this crate. The `pdfrum`
   facade and `pdfrum-tool` do not, so a headless build still resolves a tree
-  with zero `wgpu` — asserted by `scripts/check-no-wgpu.sh` in CI, not by this
+  with zero `wgpu` — asserted by `scripts/check-no-wgpu.nu` in CI, not by this
   paragraph.
 - **Device injection.** `VelloBackend::new` takes the caller's `Device` and
   `Queue` **by reference**. Opening a second device inside a PDF library is

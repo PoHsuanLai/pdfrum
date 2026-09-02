@@ -40,7 +40,7 @@ pub mod route;
 /// The `boa`-backed [`Cascade`] — a document's own scripts, run.
 ///
 /// Behind the default-off `script` feature; see the module documentation for
-/// why it is a feature and what `scripts/check-no-boa.sh` asserts about it.
+/// why it is a feature and what `scripts/check-no-boa.nu` asserts about it.
 #[cfg(feature = "script")]
 pub mod script;
 pub mod session;

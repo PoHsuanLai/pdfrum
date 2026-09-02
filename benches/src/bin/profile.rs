@@ -1,6 +1,6 @@
 //! One operation, one file, in a loop, with nothing else in the process.
 //!
-//! This is the binary `scripts/profile.sh` records. It exists because a
+//! This is the binary `scripts/profile.nu` records. It exists because a
 //! criterion run is the wrong thing to profile: criterion interleaves its own
 //! statistics, resampling and outlier analysis between iterations, so a
 //! symbol's share of a `perf report` taken over `cargo bench` is its share of
@@ -183,7 +183,7 @@ fn main() {
         eprintln!(
             "note: --sample splits engine from raster on `--op render` only;\n\
              for {}, the total above is all this fallback can attribute.\n\
-             A per-symbol profile needs `perf` — see scripts/profile.sh.",
+             A per-symbol profile needs `perf` — see scripts/profile.nu.",
             match args.op {
                 Op::Open => "open",
                 Op::Text => "text",
@@ -378,7 +378,7 @@ fn walk_report(iters: f64, engine: std::time::Duration) {
         eprintln!(
             "note: the walk's own phase split is off. Rebuild with it:\n\
              \x20 cargo build --release -p pdfrum-bench --bin profile --features walk-profile\n\
-             or run `scripts/profile.sh <op> <file> <iters> <backend> --walk`."
+             or run `scripts/profile.nu <op> <file> <iters> <backend> --walk`."
         );
         return;
     }
@@ -536,7 +536,7 @@ fn run(args: &Args, bytes: &Arc<[u8]>) -> u32 {
 /// Where a render's time goes, attributed at the engine/rasterizer seam.
 ///
 /// **This is instrumentation, not sampling, and the difference is the point.**
-/// `scripts/profile.sh` prefers `perf record`, which samples the hardware and
+/// `scripts/profile.nu` prefers `perf record`, which samples the hardware and
 /// unwinds DWARF; it is strictly better and this fallback does not pretend
 /// otherwise. But on a machine where `perf` is unavailable — no binary, or
 /// `kernel.perf_event_paranoid > 1`, which is the common case in a container

@@ -1,7 +1,7 @@
 //! The benchmark corpus: which documents, and what class each one is in.
 //!
 //! One list, shared by the five per-crate criterion suites, the `profile`
-//! binary, the ratchet checker and `scripts/bench-oracle.sh`, so that every
+//! binary, the ratchet checker and `scripts/bench-oracle.nu`, so that every
 //! number in `docs/status/M12.md` describes the same 44 files. The files
 //! themselves are in `benches/corpus/`, copied unmodified from the oracle
 //! checkout — see its `PROVENANCE.md` for where each one came from and why it

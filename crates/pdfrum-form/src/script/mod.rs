@@ -2,7 +2,7 @@
 //!
 //! Behind the default-off `script` feature. With the feature off `boa_engine`
 //! and the 116 crates it brings are not in the tree at all, which
-//! `scripts/check-no-boa.sh` asserts in both directions.
+//! `scripts/check-no-boa.nu` asserts in both directions.
 //!
 //! # This is `Cascade`'s second implementation, not a fourth seam
 //!

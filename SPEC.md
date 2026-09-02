@@ -816,7 +816,7 @@ names**. Ours were backwards: upstream ships `vello` (the GPU renderer on
 | `pdfrum-raster-vello-gpu` (wraps `vello` on `wgpu`) | `pdfrum-raster-vello` | `VelloBackend<'a>`, `VelloDevice` |
 
 Nothing about the M12c isolation rule moves: the GPU crate is still outside
-the core ring, still `publish = false`, and `scripts/check-no-wgpu.sh` still
+the core ring, still `publish = false`, and `scripts/check-no-wgpu.nu` still
 names it. `pdfrum-tool`'s `Backend::Vello` becomes `VelloCpu` and
 `--use-renderer=` gains `vello-cpu`; the bare `vello` still resolves to the
 CPU backend there, because an unrecognised value falls back to the default
