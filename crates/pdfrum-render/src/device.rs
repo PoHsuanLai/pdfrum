@@ -123,7 +123,7 @@ pub trait RenderDevice {
     /// pixel, which is silent and total.
     ///
     /// An image being *reduced* has already been box-filtered down to roughly
-    /// its device size by [`crate::stretch::prescale`], so `t` scales it by
+    /// its device size by `crate::stretch::prescale`, so `t` scales it by
     /// less than a pixel in each axis and the two-tap kernel below is running
     /// near 1:1. An image being *enlarged* arrives at its own resolution, which
     /// is where the two-tap kernel is the right one and `quality` chooses it.
@@ -246,29 +246,6 @@ impl From<pdfrum_page::FillRule> for FillRule {
     }
 }
 
-/// The `peniko` mix mode a PDF blend mode maps to.
-#[must_use]
-pub fn peniko_mix(mode: BlendMode) -> peniko::Mix {
-    match mode {
-        BlendMode::Normal | BlendMode::Compatible => peniko::Mix::Normal,
-        BlendMode::Multiply => peniko::Mix::Multiply,
-        BlendMode::Screen => peniko::Mix::Screen,
-        BlendMode::Overlay => peniko::Mix::Overlay,
-        BlendMode::Darken => peniko::Mix::Darken,
-        BlendMode::Lighten => peniko::Mix::Lighten,
-        BlendMode::ColorDodge => peniko::Mix::ColorDodge,
-        BlendMode::ColorBurn => peniko::Mix::ColorBurn,
-        BlendMode::HardLight => peniko::Mix::HardLight,
-        BlendMode::SoftLight => peniko::Mix::SoftLight,
-        BlendMode::Difference => peniko::Mix::Difference,
-        BlendMode::Exclusion => peniko::Mix::Exclusion,
-        BlendMode::Hue => peniko::Mix::Hue,
-        BlendMode::Saturation => peniko::Mix::Saturation,
-        BlendMode::Color => peniko::Mix::Color,
-        BlendMode::Luminosity => peniko::Mix::Luminosity,
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -288,13 +265,5 @@ mod tests {
             FillRule::from(pdfrum_page::FillRule::Winding),
             FillRule::Winding
         );
-    }
-
-    #[test]
-    fn every_blend_mode_has_a_mix() {
-        // Compatible is Normal; the other fifteen are distinct.
-        assert_eq!(peniko_mix(BlendMode::Compatible), peniko::Mix::Normal);
-        assert_eq!(peniko_mix(BlendMode::SoftLight), peniko::Mix::SoftLight);
-        assert_eq!(peniko_mix(BlendMode::Luminosity), peniko::Mix::Luminosity);
     }
 }

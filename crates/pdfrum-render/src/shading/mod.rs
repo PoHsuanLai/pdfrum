@@ -34,8 +34,6 @@ use crate::path::IntRect;
 use crate::pixmap::Pixmap;
 use steps::ColorSteps;
 
-pub use steps::{STEPS, component_to_shading_index};
-
 /// The `/Background` colour a shading clears its buffer to, if any.
 ///
 /// Only honoured for a shading *pattern*; a bare `sh` operator ignores it —

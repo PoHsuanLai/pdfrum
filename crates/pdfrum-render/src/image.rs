@@ -29,10 +29,6 @@ pub const HUGE_IMAGE_SIZE: u64 = 60_000_000;
 /// dimension or offset at or beyond this is rejected outright.
 pub const MAX_IMAGE_VALUE: i64 = 256 * 1024 * 1024;
 
-/// The shear threshold between a general transform and an axis-aligned
-/// stretch (`cpdf_imagerenderer.cpp:468-469`, `:558`).
-pub const SHEAR_THRESHOLD: f64 = 0.5;
-
 /// `UseInterpolateBilinear`, transcribed exactly.
 ///
 /// Both divisions are **integer and truncating**, and only the right-hand
@@ -191,6 +187,10 @@ pub fn overprint_blend(
 /// `a < 0` flips horizontally and `d > 0` — not `< 0` — flips vertically,
 /// which is correct given PDF's y-down device space.
 #[must_use]
+#[allow(
+    dead_code,
+    reason = "exercised only by this module's own tests; the library builds once without `cfg(test)`"
+)]
 pub fn destination_flips(m: Affine) -> (bool, bool) {
     let [a, _, _, d, _, _] = m.as_coeffs();
     (a < 0.0, d > 0.0)

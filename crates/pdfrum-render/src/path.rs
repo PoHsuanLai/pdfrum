@@ -13,7 +13,7 @@
 //! - a zero-area sub-path detector that redraws degenerate fills as
 //!   quarter-alpha hairlines.
 
-use kurbo::{Affine, BezPath, PathEl, Point, Rect, Shape};
+use kurbo::{Affine, BezPath, PathEl, Point, Rect};
 
 /// The per-axis coordinate clamp AGG applies before rasterizing
 /// (`HardClip`, `cfx_agg_devicedriver.cpp:53-58`).
@@ -530,15 +530,10 @@ pub fn snap_rect(rect_f: Rect) -> Option<IntRect> {
     Some(rect_i)
 }
 
-/// A path's device-space bounding box, as `kurbo` computes it.
-#[must_use]
-pub fn transformed_bbox(path: &BezPath, matrix: Affine) -> Rect {
-    (matrix * path.clone()).bounding_box()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use kurbo::Shape;
 
     fn rect_path(x0: f64, y0: f64, x1: f64, y1: f64) -> BezPath {
         let mut p = BezPath::new();
