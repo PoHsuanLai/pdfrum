@@ -1,4 +1,4 @@
-# pdfrum-raster-exact
+# pdfrum-raster-agg
 
 **An analytic scanline rasterizer implementing pdfrum-render's RenderDevice.**
 
@@ -47,9 +47,9 @@ resampling and the engine's own decisions are all upstream of this crate.
 ```rust
 use kurbo::Affine;
 use pdfrum_render::{AntiAlias, Brush, FillRule, RasterBackend, RenderDevice};
-use pdfrum_raster_exact::ExactBackend;
+use pdfrum_raster_agg::AggBackend;
 
-let backend = ExactBackend::new();
+let backend = AggBackend::new();
 let mut device = backend.new_target(4, 1, peniko::Color::TRANSPARENT);
 // ... fill a rectangle covering exactly half of column 0 ...
 let pixmap = backend.finish(device);
@@ -58,7 +58,7 @@ let pixmap = backend.finish(device);
 
 ## Part of pdfrum
 
-`pdfrum-raster-exact` is a backend for
+`pdfrum-raster-agg` is a backend for
 [pdfrum](https://crates.io/crates/pdfrum), a pure-Rust PDF engine. For a
 batteries-included API with a backend already wired up, use the `pdfrum`
 facade.

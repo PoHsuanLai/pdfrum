@@ -275,10 +275,10 @@ impl<'a> Page<'a> {
                 caches,
                 &mut diags,
             ),
-            Backend::Exact => pdfrum_render::render_page_with_caches(
+            Backend::Agg => pdfrum_render::render_page_with_caches(
                 &page,
                 &inner,
-                &pdfrum_raster_exact::ExactBackend::new(),
+                &pdfrum_raster_agg::AggBackend::new(),
                 caches,
                 &mut diags,
             ),

@@ -114,7 +114,7 @@ pub use vello::wgpu;
 ///
 /// `Area` — vello's analytic winding-number integration — rather than either
 /// multisampling mode, and pinned rather than configurable. It is the closest
-/// of the three to what the CPU backends compute (`pdfrum-raster-exact`
+/// of the three to what the CPU backends compute (`pdfrum-raster-agg`
 /// integrates the same quantity), which is what keeps the Tier C divergence
 /// budget in §7 of `docs/status/M12c.md` about *drivers* rather than about a
 /// sampling policy we chose differently on purpose. `AaSupport::area_only`

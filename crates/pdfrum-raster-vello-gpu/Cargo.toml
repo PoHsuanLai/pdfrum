@@ -39,7 +39,7 @@ vello.workspace = true
 pdfrum.workspace = true
 pdfrum-corpus.workspace = true
 pdfrum-parser.workspace = true
-pdfrum-raster-exact.workspace = true
+pdfrum-raster-agg.workspace = true
 pdfrum-raster-vello.workspace = true
 pdfrum-common.workspace = true
 

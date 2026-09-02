@@ -21,17 +21,19 @@ pub enum Backend {
     /// baseline. Kept as a cross-check: where the two disagree, the bug is in
     /// a backend rather than in the engine.
     TinySkia,
-    /// The analytic rasterizer — pick this when you want edges that match
-    /// PDFium's rather than the fastest render.
+    /// The analytic AGG-parity rasterizer — pick this when you want edges
+    /// that match PDFium's rather than the fastest render.
     ///
-    /// It integrates each pixel's covered area exactly, on PDFium's own
-    /// 256ths-of-a-pixel grid, where the other two sample or approximate: a
-    /// half-covered pixel comes out at exactly half, not at the nearest of
-    /// seventeen supersampled levels. That is what the project's conformance
-    /// runs use, and it is worth reaching for when you are diffing output
-    /// against another PDF renderer. It has no SIMD, so it is the slower
-    /// choice for bulk rendering.
-    Exact,
+    /// Renamed 2026-09-02, was `Exact`.
+    ///
+    /// It reproduces the coverage integral of AGG, the scan converter PDFium
+    /// itself draws with, on AGG's own 256ths-of-a-pixel grid — where the
+    /// other two sample or approximate: a half-covered pixel comes out at
+    /// exactly half, not at the nearest of seventeen supersampled levels.
+    /// That is what the project's conformance runs use, and it is worth
+    /// reaching for when you are diffing output against another PDF renderer.
+    /// It has no SIMD, so it is the slower choice for bulk rendering.
+    Agg,
 }
 
 /// Everything a render is parameterised by.

@@ -32,7 +32,7 @@
 //! The render group names changed and the ids therefore did too:
 //!
 //! ```text
-//! render-exact/<class>/<stem>   ->  render-cold-exact/<class>/<stem>
+//! render-agg/<class>/<stem>   ->  render-cold-agg/<class>/<stem>
 //! render-tinyskia/...           ->  render-cold-tinyskia/...
 //! render-vello/...              ->  render-cold-vello/...
 //! (new)                         ->  render-warm-{exact,tinyskia,vello}/...
@@ -548,7 +548,7 @@ fn default_bands() -> BTreeMap<String, f64> {
     [
         ("open", 0.08),
         ("build", 0.04),
-        ("render-cold-exact", 0.03),
+        ("render-cold-agg", 0.03),
         ("render-cold-tinyskia", 0.03),
         ("render-cold-vello", 0.04),
         // The warm groups run at 20 samples where the cold ones run at 50, and
@@ -557,7 +557,7 @@ fn default_bands() -> BTreeMap<String, f64> {
         // wider. Both effects are real and they do not cancel; the bands are
         // re-measured at the warm counts rather than inherited from the cold
         // ones, and docs/status/M12.md §2 carries the distribution.
-        ("render-warm-exact", 0.04),
+        ("render-warm-agg", 0.04),
         ("render-warm-tinyskia", 0.04),
         ("render-warm-vello", 0.05),
         ("text", 0.04),

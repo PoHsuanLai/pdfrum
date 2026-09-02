@@ -15,7 +15,7 @@
 //! sorts by it.
 //!
 //! The CPU column is `pdfrum-raster-vello` (`vello_cpu`), the facade's default
-//! and the backend an API user actually gets. `pdfrum-raster-exact` is the
+//! and the backend an API user actually gets. `pdfrum-raster-agg` is the
 //! conformance default but has no SIMD and does not try to be fast, so timing
 //! against it would flatter the GPU for a reason that has nothing to do with
 //! the GPU. §7's *correctness* column uses `exact` for the opposite reason.

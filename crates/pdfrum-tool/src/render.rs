@@ -26,7 +26,7 @@ use pdfrum_common::{Diagnostics, Limits};
 use pdfrum_object::{Name, Resolve};
 use pdfrum_page::{BuildContext, OcContext, UsageType, page_visibility};
 use pdfrum_parser::PageDict;
-use pdfrum_raster_exact::ExactBackend;
+use pdfrum_raster_agg::AggBackend;
 use pdfrum_raster_tinyskia::TinySkiaBackend;
 use pdfrum_raster_vello::VelloBackend;
 use pdfrum_render::{
@@ -72,18 +72,21 @@ pub const BACKEND_ENV: &str = "PDFRUM_BACKEND";
 
 /// Which rasterizer a render uses.
 ///
-/// Three, and the split between them is deliberate (SPEC §8). `Exact` is the
+/// Three, and the split between them is deliberate (SPEC §8). `Agg` is the
 /// conformance default: it integrates coverage analytically on the oracle's
-/// own subpixel grid, so a comparison against a golden measures the *engine*
-/// rather than a rasterizer's sampling policy. The two wrapped backends stay
-/// because Tier C's whole value is that a second implementation disagrees
-/// out loud, and because `vello_cpu` is the production rasterizer the facade
-/// hands an API user who wants speed rather than byte-comparability.
+/// own subpixel grid — AGG's, the scan converter PDFium itself uses — so a
+/// comparison against a golden measures the *engine* rather than a
+/// rasterizer's sampling policy. The two wrapped backends stay because Tier
+/// C's whole value is that a second implementation disagrees out loud, and
+/// because `vello_cpu` is the production rasterizer the facade hands an API
+/// user who wants speed rather than byte-comparability.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Backend {
-    /// The analytic rasterizer — the default for `--png`.
+    /// The analytic AGG-parity rasterizer — the default for `--png`.
+    ///
+    /// Renamed 2026-09-02, was `Exact`.
     #[default]
-    Exact,
+    Agg,
     /// `tiny-skia` — the determinism baseline and Tier C's gating partner.
     TinySkia,
     /// `vello_cpu`, at its pinned SIMD level and render mode.
@@ -92,10 +95,17 @@ pub enum Backend {
 
 impl Backend {
     /// The backend a name selects, or `None` when it names none of them.
+    ///
+    /// `"exact"` is still accepted, spelling the same backend it always did
+    /// (renamed 2026-09-02): [`Backend::resolve`] falls back to the default
+    /// rather than erroring, so dropping the old spelling would have left an
+    /// existing script silently rendering with the default — which is this
+    /// same backend, so nothing would have moved, but the *reason* would have
+    /// been a swallowed typo rather than a name.
     #[must_use]
     pub fn from_name(name: &str) -> Option<Self> {
         match name {
-            "exact" => Some(Self::Exact),
+            "agg" | "exact" => Some(Self::Agg),
             "tiny-skia" | "tinyskia" => Some(Self::TinySkia),
             "vello" | "vello_cpu" => Some(Self::Vello),
             _ => None,
@@ -350,7 +360,7 @@ pub fn render<R: Resolve>(
         UsageType::View,
     );
     let visible = page_visibility(&page, &mut oc, r, &mut build_diags);
-    // The analytic backend is the default. Every backend here is
+    // The analytic AGG-parity backend is the default. Every backend here is
     // reproducible — tiny-skia is deterministic by construction and
     // `vello_cpu` pins its SIMD level so its output does not move with the
     // host — so the default is chosen for *parity* rather than for
@@ -358,10 +368,10 @@ pub fn render<R: Resolve>(
     // what makes a golden comparison measure the engine.
     let mut caches = RenderCaches::new();
     let pixmap = match backend {
-        Backend::Exact => render_page_with_visibility(
+        Backend::Agg => render_page_with_visibility(
             &page,
             &opts,
-            &ExactBackend::new(),
+            &AggBackend::new(),
             &visible,
             &mut caches,
             &mut diags,

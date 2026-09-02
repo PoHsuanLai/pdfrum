@@ -22,10 +22,16 @@
 //! are — `vello_cpu` remains the facade's default for API users, who want a
 //! fast production rasterizer rather than a byte-comparable one.
 //!
-//! # What "exact" means here, and what it does not
+//! # What "AGG parity" means here, and what it does not
 //!
-//! Exact refers to the *coverage integral* and the arithmetic downstream of
-//! it: a pixel's alpha is `min(255, floor(coverage * 256))` of the true
+//! *Renamed 2026-09-02; this crate was `pdfrum-raster-exact` and this section
+//! read "What exact means here".* The content is unchanged, because the claim
+//! always was about AGG: **AGG** is Anti-Grain Geometry, the scan converter
+//! PDFium draws with (`core/fxge/agg`), and parity means this backend
+//! reproduces AGG's coverage integral on AGG's own 256ths-of-a-pixel grid.
+//!
+//! The parity is over the *coverage integral* and the arithmetic downstream
+//! of it: a pixel's alpha is `min(255, floor(coverage * 256))` of the true
 //! geometric coverage, every intermediate value is an integer, and no step
 //! samples. It does not mean the whole page matches the oracle byte for byte —
 //! glyph rendering, image resampling kernels and the engine's own decisions
@@ -49,9 +55,9 @@
 //! ```
 //! use kurbo::{Affine, Rect};
 //! use pdfrum_render::{AntiAlias, Brush, FillRule, RasterBackend, RenderDevice};
-//! use pdfrum_raster_exact::ExactBackend;
+//! use pdfrum_raster_agg::AggBackend;
 //!
-//! let backend = ExactBackend::new();
+//! let backend = AggBackend::new();
 //! let mut device = backend.new_target(4, 1, peniko::Color::TRANSPARENT);
 //!
 //! // A rectangle covering exactly half of column 0 and all of column 1.
@@ -113,9 +119,9 @@ const FLATTEN_TOLERANCE: f64 = 0.1;
 
 /// The analytic backend.
 #[derive(Debug, Clone, Copy, Default)]
-pub struct ExactBackend;
+pub struct AggBackend;
 
-impl ExactBackend {
+impl AggBackend {
     /// A backend handle. Stateless: every target is independent.
     #[must_use]
     pub fn new() -> Self {
@@ -146,7 +152,7 @@ enum Frame {
 /// is a coverage plane pushed onto a stack so `pop` restores the previous one
 /// rather than recomputing an intersection.
 #[derive(Debug)]
-pub struct ExactDevice {
+pub struct AggDevice {
     base: Target,
     layers: Vec<Layer>,
     /// The clip stack, innermost last. `None` is "everything visible".
@@ -157,7 +163,7 @@ pub struct ExactDevice {
     raster: Rasterizer,
 }
 
-impl ExactDevice {
+impl AggDevice {
     fn new(target: Target) -> Self {
         Self {
             base: target,
@@ -420,7 +426,7 @@ fn rect_path(rect: Rect) -> BezPath {
     rect.to_path(FLATTEN_TOLERANCE)
 }
 
-impl RenderDevice for ExactDevice {
+impl RenderDevice for AggDevice {
     fn fill_path(
         &mut self,
         path: &BezPath,
@@ -633,8 +639,8 @@ impl RenderDevice for ExactDevice {
     }
 }
 
-impl RasterBackend for ExactBackend {
-    type Device = ExactDevice;
+impl RasterBackend for AggBackend {
+    type Device = AggDevice;
 
     fn new_target(&self, w: u32, h: u32, clear: peniko::Color) -> Self::Device {
         // The bound is the trait's, and it exists because `vello_cpu` sizes
@@ -642,11 +648,11 @@ impl RasterBackend for ExactBackend {
         // compares the three and a target one backend cannot allocate is not
         // comparable.
         let (w, h) = (w.min(MAX_TARGET_DIMENSION), h.min(MAX_TARGET_DIMENSION));
-        ExactDevice::new(Target::new(w, h, clear))
+        AggDevice::new(Target::new(w, h, clear))
     }
 
     fn new_target_with_backdrop(&self, base: &Pixmap) -> Self::Device {
-        ExactDevice::new(Target::from_pixmap(base.clone()))
+        AggDevice::new(Target::from_pixmap(base.clone()))
     }
 
     fn snapshot(&self, d: &Self::Device) -> Pixmap {
@@ -684,7 +690,7 @@ mod tests {
 
     #[test]
     fn a_cleared_target_keeps_its_colour() {
-        let backend = ExactBackend::new();
+        let backend = AggBackend::new();
         let device = backend.new_target(4, 4, peniko::Color::WHITE);
         let out = backend.finish(device);
         assert_eq!(out.pixel(0, 0), Some([255, 255, 255, 255]));
@@ -692,7 +698,7 @@ mod tests {
 
     #[test]
     fn a_transparent_target_starts_empty() {
-        let backend = ExactBackend::new();
+        let backend = AggBackend::new();
         let device = backend.new_target(4, 4, peniko::Color::TRANSPARENT);
         let out = backend.finish(device);
         assert_eq!(out.pixel(0, 0), Some([0, 0, 0, 0]));
@@ -702,7 +708,7 @@ mod tests {
     fn a_half_covered_edge_is_exactly_half() {
         // The reason this crate exists: a supersampler quantises this to one
         // of seventeen levels, and the oracle writes 128.
-        let backend = ExactBackend::new();
+        let backend = AggBackend::new();
         let mut device = backend.new_target(4, 1, peniko::Color::TRANSPARENT);
         device.fill_path(
             &square(0.0, 0.0, 0.5, 1.0),
@@ -720,7 +726,7 @@ mod tests {
         // AGG writes 128 into both columns a unit-wide stroke on an integer x
         // half-covers. Expanding the outline and filling it is what keeps the
         // two sides symmetric.
-        let backend = ExactBackend::new();
+        let backend = AggBackend::new();
         let mut device = backend.new_target(8, 4, peniko::Color::TRANSPARENT);
         let mut line = BezPath::new();
         line.move_to((4.0, 0.0));
@@ -743,7 +749,7 @@ mod tests {
     fn a_mitred_corner_paints_its_outer_tip() {
         // The outer tip of a right-angle miter covers a quarter of its pixel,
         // which AGG paints at alpha 64.
-        let backend = ExactBackend::new();
+        let backend = AggBackend::new();
         let mut device = backend.new_target(16, 16, peniko::Color::TRANSPARENT);
         let mut corner = BezPath::new();
         corner.move_to((4.0, 12.0));
@@ -763,7 +769,7 @@ mod tests {
 
     #[test]
     fn a_hard_edged_rect_clip_has_no_soft_pixels() {
-        let backend = ExactBackend::new();
+        let backend = AggBackend::new();
         let mut device = backend.new_target(8, 1, peniko::Color::TRANSPARENT);
         device.push_clip_rect(Rect::new(0.5, 0.0, 4.5, 1.0));
         device.fill_path(
@@ -783,7 +789,7 @@ mod tests {
 
     #[test]
     fn clips_nest_and_unwind() {
-        let backend = ExactBackend::new();
+        let backend = AggBackend::new();
         let mut device = backend.new_target(8, 8, peniko::Color::TRANSPARENT);
         device.push_clip_rect(Rect::new(0.0, 0.0, 4.0, 8.0));
         device.push_clip_rect(Rect::new(2.0, 0.0, 8.0, 8.0));
@@ -805,7 +811,7 @@ mod tests {
 
     #[test]
     fn popping_a_clip_restores_the_previous_one() {
-        let backend = ExactBackend::new();
+        let backend = AggBackend::new();
         let mut device = backend.new_target(8, 1, peniko::Color::TRANSPARENT);
         device.push_clip_rect(Rect::new(0.0, 0.0, 4.0, 1.0));
         device.push_clip_rect(Rect::new(0.0, 0.0, 2.0, 1.0));
@@ -828,7 +834,7 @@ mod tests {
     fn an_antialiased_path_clip_keeps_partial_coverage() {
         // `push_clip` is the soft one, unlike `push_clip_rect`: a clip edge
         // at a half pixel leaves a half-covered column.
-        let backend = ExactBackend::new();
+        let backend = AggBackend::new();
         let mut device = backend.new_target(4, 1, peniko::Color::TRANSPARENT);
         device.push_clip(&square(0.0, 0.0, 1.5, 1.0), FillRule::Winding);
         device.fill_path(
@@ -847,7 +853,7 @@ mod tests {
 
     #[test]
     fn a_layer_composites_with_its_blend_and_alpha() {
-        let backend = ExactBackend::new();
+        let backend = AggBackend::new();
         let mut device = backend.new_target(2, 2, peniko::Color::from_rgba8(0, 255, 0, 255));
         device.push_layer(BlendMode::Normal, 0.5, None);
         device.fill_path(
@@ -866,7 +872,7 @@ mod tests {
 
     #[test]
     fn a_layer_mask_must_be_device_sized() {
-        let backend = ExactBackend::new();
+        let backend = AggBackend::new();
         let mut device = backend.new_target(4, 4, peniko::Color::TRANSPARENT);
         let mask = AlphaMask::filled(4, 4, 128);
         device.push_layer(BlendMode::Normal, 1.0, Some(&mask));
@@ -891,7 +897,7 @@ mod tests {
     fn a_layer_inherits_the_clip_and_does_not_apply_it_twice() {
         // Applying the clip on the way in *and* on the way out would square a
         // partial clip's coverage: a half clip would come back as a quarter.
-        let backend = ExactBackend::new();
+        let backend = AggBackend::new();
         let mut device = backend.new_target(2, 1, peniko::Color::TRANSPARENT);
         let mut half = AlphaMask::new(2, 1);
         half.data_mut().fill(128);
@@ -916,7 +922,7 @@ mod tests {
 
     #[test]
     fn snapshot_then_backdrop_round_trips() {
-        let backend = ExactBackend::new();
+        let backend = AggBackend::new();
         let device = backend.new_target(3, 3, peniko::Color::from_rgba8(1, 2, 3, 255));
         let snap = backend.snapshot(&device);
         let seeded = backend.new_target_with_backdrop(&snap);
@@ -929,7 +935,7 @@ mod tests {
         // `t` maps the image's pixel grid, so an identity transform is a
         // texel-for-pixel blit at the origin -- which is what every engine
         // call site relies on, all of them passing a plain translation.
-        let backend = ExactBackend::new();
+        let backend = AggBackend::new();
         let mut device = backend.new_target(4, 4, peniko::Color::TRANSPARENT);
         let img = Pixmap::filled(2, 2, RED);
         device.draw_image(&img, Affine::IDENTITY, ImageQuality::Nearest, 1.0);
@@ -945,7 +951,7 @@ mod tests {
 
     #[test]
     fn an_image_translates_by_whole_pixels() {
-        let backend = ExactBackend::new();
+        let backend = AggBackend::new();
         let mut device = backend.new_target(4, 4, peniko::Color::TRANSPARENT);
         let img = Pixmap::filled(2, 2, RED);
         device.draw_image(
@@ -962,7 +968,7 @@ mod tests {
 
     #[test]
     fn an_image_draw_with_alpha_does_not_panic() {
-        let backend = ExactBackend::new();
+        let backend = AggBackend::new();
         let mut device = backend.new_target(4, 4, peniko::Color::TRANSPARENT);
         let img = Pixmap::filled(4, 4, RED);
         device.draw_image(&img, Affine::IDENTITY, ImageQuality::Nearest, 0.5);
@@ -973,7 +979,7 @@ mod tests {
 
     #[test]
     fn an_image_is_clipped_like_any_other_primitive() {
-        let backend = ExactBackend::new();
+        let backend = AggBackend::new();
         let mut device = backend.new_target(4, 1, peniko::Color::TRANSPARENT);
         let img = Pixmap::filled(4, 1, RED);
         device.push_clip_rect(Rect::new(0.0, 0.0, 2.0, 1.0));
@@ -986,7 +992,7 @@ mod tests {
 
     #[test]
     fn finish_flattens_an_unpopped_layer() {
-        let backend = ExactBackend::new();
+        let backend = AggBackend::new();
         let mut device = backend.new_target(2, 2, peniko::Color::TRANSPARENT);
         device.push_layer(BlendMode::Normal, 1.0, None);
         device.fill_path(
@@ -1004,7 +1010,7 @@ mod tests {
     fn an_image_brush_on_a_fill_paints_nothing_rather_than_panicking() {
         // The engine routes image brushes through `draw_image`; a fill with
         // one is out of contract, and dropping it is the safe reading.
-        let backend = ExactBackend::new();
+        let backend = AggBackend::new();
         let img = Pixmap::filled(2, 2, RED);
         let mut device = backend.new_target(2, 2, peniko::Color::TRANSPARENT);
         device.fill_path(
@@ -1022,7 +1028,7 @@ mod tests {
     fn a_zero_sized_target_survives_every_operation() {
         // The engine reaches this with clipped-away geometry; nothing here may
         // panic or allocate unboundedly.
-        let backend = ExactBackend::new();
+        let backend = AggBackend::new();
         let mut device = backend.new_target(0, 0, peniko::Color::WHITE);
         device.push_clip_rect(Rect::new(0.0, 0.0, 1.0, 1.0));
         device.fill_path(
@@ -1039,7 +1045,7 @@ mod tests {
 
     #[test]
     fn a_transform_applies_to_a_filled_path() {
-        let backend = ExactBackend::new();
+        let backend = AggBackend::new();
         let mut device = backend.new_target(8, 8, peniko::Color::TRANSPARENT);
         device.fill_path(
             &square(0.0, 0.0, 2.0, 2.0),
@@ -1067,7 +1073,7 @@ mod tests {
         // a fill thinner than 1/4096 becomes a silent no-op there. An
         // analytic integrator has no such threshold — it paints the coverage
         // the geometry implies, however small.
-        let backend = ExactBackend::new();
+        let backend = AggBackend::new();
         let mut device = backend.new_target(4, 1, peniko::Color::TRANSPARENT);
         device.fill_path(
             &square(0.0, 0.0, 4.0, 0.02),
@@ -1119,7 +1125,7 @@ mod tests {
         // rather than by perturbing the transform, because a perturbed
         // transform would legitimately differ.
         let image = checkerboard(5, 4);
-        let backend = ExactBackend::new();
+        let backend = AggBackend::new();
 
         let mut fast = backend.new_target(12, 10, peniko::Color::WHITE);
         fast.draw_image(
@@ -1145,7 +1151,7 @@ mod tests {
     #[test]
     fn a_blit_respects_the_clip_and_the_edges_of_the_target() {
         let image = checkerboard(6, 6);
-        let backend = ExactBackend::new();
+        let backend = AggBackend::new();
         let mut device = backend.new_target(8, 8, peniko::Color::WHITE);
         device.push_clip_rect(Rect::new(2.0, 2.0, 5.0, 5.0));
         // Deliberately hangs off the left and top, to exercise the clamp.
@@ -1173,7 +1179,7 @@ mod tests {
     #[test]
     fn a_partial_alpha_blit_scales_the_source_as_the_general_path_does() {
         let image = checkerboard(4, 4);
-        let backend = ExactBackend::new();
+        let backend = AggBackend::new();
         let mut fast = backend.new_target(6, 6, peniko::Color::WHITE);
         fast.draw_image(
             &image,
@@ -1215,7 +1221,7 @@ mod tests {
         // The whole of M14 OWED item 2's pixel claim, through the trait rather
         // than through `Target`: a black glyph whose three stripes differ comes
         // out a *coloured* pixel, which no single-alpha image draw can produce.
-        let backend = ExactBackend::new();
+        let backend = AggBackend::new();
         let mut device = backend.new_target(3, 1, peniko::Color::WHITE);
         device.draw_glyph_lcd(
             &lcd_strip(3, &[[255, 128, 0], [255, 255, 255], [0, 128, 255]]),
@@ -1233,7 +1239,7 @@ mod tests {
         // The origin is the bitmap's top-left corner in whole device pixels,
         // the same convention `draw_image` uses for a glyph's gray blit — so a
         // run that switches between the two spellings must not shift.
-        let backend = ExactBackend::new();
+        let backend = AggBackend::new();
         let mut device = backend.new_target(4, 2, peniko::Color::WHITE);
         device.draw_glyph_lcd(
             &lcd_strip(2, &[[255, 255, 255]]),
@@ -1248,7 +1254,7 @@ mod tests {
 
     #[test]
     fn a_clear_type_glyph_is_clipped_like_any_other_primitive() {
-        let backend = ExactBackend::new();
+        let backend = AggBackend::new();
         let mut device = backend.new_target(4, 1, peniko::Color::WHITE);
         device.push_clip_rect(Rect::new(0.0, 0.0, 2.0, 1.0));
         device.draw_glyph_lcd(
@@ -1268,7 +1274,7 @@ mod tests {
 
     #[test]
     fn an_invisible_clear_type_glyph_paints_nothing() {
-        let backend = ExactBackend::new();
+        let backend = AggBackend::new();
         let mut device = backend.new_target(2, 1, peniko::Color::WHITE);
         device.draw_glyph_lcd(
             &lcd_strip(2, &[[255, 255, 255]]),

@@ -10,7 +10,7 @@
 //! The tier's whole value is that two *independent* implementations disagree
 //! out loud: neither wrapped rasterizer knows anything about PDF, so anything
 //! they agree on is the engine's decision and anything they differ on is a
-//! rasterizer's own business. `pdfrum-raster-exact` does not have that
+//! rasterizer's own business. `pdfrum-raster-agg` does not have that
 //! independence — it is ours, and it shares the engine's compositing
 //! arithmetic, one `blend::composite_premultiplied` serving the engine and all
 //! three backends. A disagreement between it and either wrapped backend
@@ -18,7 +18,7 @@
 //! because a shared bug cannot produce one.
 //!
 //! So it is measured and reported as a third column
-//! ([`crate::run::TierCOutcome::exact_edge_rate`]) and never gated. If it ever
+//! ([`crate::run::TierCOutcome::agg_edge_rate`]) and never gated. If it ever
 //! diverges widely from the pair, that is worth reading — but it is a
 //! question, not a verdict.
 //!
