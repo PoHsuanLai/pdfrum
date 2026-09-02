@@ -2185,6 +2185,24 @@ unpack it into a triple to draw a rectangle.
 a synonym only if a reader of ISO 32000 is expected to search for it —
 then `#[doc(alias = "DoNotScroll")]` on `scrolls` is enough.
 
+> **Landed 2026-09-02 as `cdf4c55` (facade half).** `smooth_paths` and
+> `interpolate_images`, default `true`; the inversion lives in the facade's
+> one `to_inner` entry point (§B), and the engine's seven-bool type is
+> untouched (§A.8). `PathBuilder.fill`/`stroke` and `TextBuilder.fill` take
+> `peniko::Color`; `stroke` was included because a builder with one colour
+> typed and the other a triple would be worse than either shape alone. No
+> deprecated synonyms — pre-1.0, and `#[deprecated]` cannot alias a field.
+> **This section was wrong about alpha.** It assumed a regenerated stream
+> writes only `rg`/`RG` and so alpha would be dropped; but constant alpha
+> lives in `/ExtGState` as `/ca`/`/CA`, and `pdfrum-edit`'s emitter already
+> writes both from `GraphicsState` — the builders simply never set them. So
+> alpha is honoured: alpha 0 is a transparent fill, and `None` is the only
+> spelling of "do not fill". Opaque colours are byte-identical to before
+> because no `/ExtGState` is emitted when both alphas are exactly 1.0. The
+> 0..=1 constraint is not load-bearing (`pdfrum-page` clamps on the way out),
+> so `Color` won over an `Rgb` newtype. `FieldFlags::do_not_scroll` moves to
+> WP2 with its type.
+
 ### WP11 — Member-crate surface hygiene
 
 STYLE.md §4: “Public API of every crate fits in one `lib.rs` re-export
