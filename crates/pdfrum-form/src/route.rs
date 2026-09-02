@@ -434,7 +434,7 @@ fn key_down<R: Resolve>(
     modifiers: Modifiers,
 ) -> Response {
     // Tab moves focus, and it does so whether or not anything holds it.
-    if key == Key::TAB {
+    if key == Key::Tab {
         return tab_to_next(session, ctx, cascade, modifiers);
     }
     let Some(target) = session.focus else {
@@ -453,7 +453,7 @@ fn key_down<R: Resolve>(
         Some(FieldState::Toggle(_)) => {
             // Return and Space activate; a read-only control consumes them
             // and does nothing, which is a different answer from ignoring.
-            if matches!(key, Key::RETURN | Key::SPACE) {
+            if matches!(key, Key::Return | Key::Space) {
                 Response::consumed()
             } else {
                 Response::ignored()
@@ -526,7 +526,7 @@ fn char_typed<R: Resolve>(
         // so a typed Return activates a focused push button exactly as the
         // key path does. See `key_down`.
         Some(FieldState::Button(_)) if ch == '\r' => {
-            annot_key(session, ctx, annot, Key::RETURN, modifiers)
+            annot_key(session, ctx, annot, Key::Return, modifiers)
         }
         Some(FieldState::Button(_)) | None => Response::ignored(),
     }
@@ -552,7 +552,7 @@ fn annot_key<R: Resolve>(
     modifiers: Modifiers,
 ) -> Response {
     let _ = session;
-    if key != Key::RETURN {
+    if key != Key::Return {
         return Response::ignored();
     }
     let Some(action) = action_of(ctx, annot) else {
@@ -844,9 +844,9 @@ fn choice_key<R: Resolve>(
                 modifiers.contains(Modifiers::CONTROL),
             );
             let moved = match key {
-                Key::UP => field::choice::move_caret_by(state, -1, shift, ctrl),
-                Key::DOWN => field::choice::move_caret_by(state, 1, shift, ctrl),
-                Key::RETURN | Key::SPACE => return Response::consumed(),
+                Key::Up => field::choice::move_caret_by(state, -1, shift, ctrl),
+                Key::Down => field::choice::move_caret_by(state, 1, shift, ctrl),
+                Key::Return | Key::Space => return Response::consumed(),
                 _ => return Response::ignored(),
             };
             // The view follows the caret only when it would otherwise leave

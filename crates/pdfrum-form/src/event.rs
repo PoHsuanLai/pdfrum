@@ -49,66 +49,153 @@ pub enum Button {
     Right,
 }
 
-/// A virtual key code.
+/// A key on a keyboard, as an event reports it.
 ///
-/// A newtype over the raw code rather than an enum, because the wire format
-/// admits any integer and the ported assertions deliberately send codes the
-/// form layer does not decide on — F1, digits, letters — to check that they
-/// are *not* consumed. An enum would have to carry an `Other(u16)` arm that
-/// every match would then have to handle anyway.
+/// The named variants are the keys the form layer *decides on* — navigation,
+/// editing, and the three accelerator letters — plus the two modifier keys a
+/// host reports as keys in their own right. Everything else is
+/// [`Key::Other`], which is not a fallback so much as the whole point: the
+/// ported assertions deliberately send F-keys, digits and the clipboard
+/// letters to check that they are **not** consumed, and `Other` is the arm
+/// that says "the form layer does not decide on this".
 ///
-/// The constants below are the codes the form layer actually branches on;
-/// everything else falls through as "not a navigation key".
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Key(pub u16);
+/// [`Key::from_virtual`] and [`Key::virtual_code`] are the boundary with the
+/// wire format, which is a bare integer. That integer stays where it belongs:
+/// in the `.evt` parser and in a host's own event queue, never in a
+/// signature here.
+///
+/// ```
+/// use pdfrum_form::Key;
+///
+/// assert_eq!(Key::from_virtual(0x09), Key::Tab);
+/// assert_eq!(Key::Tab.virtual_code(), 0x09);
+/// // A code the form layer does not branch on round-trips too.
+/// assert_eq!(Key::from_virtual(0x70), Key::Other(0x70));
+/// assert_eq!(Key::Other(0x70).virtual_code(), 0x70);
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum Key {
+    /// No key. Also what a selection-clearing delete is rewritten to, which
+    /// is why the text field branches on it rather than ignoring it.
+    Unknown,
+    /// Backspace.
+    Backspace,
+    /// Tab — focus traversal.
+    Tab,
+    /// Line feed. Distinct from [`Key::Return`], which is the carriage
+    /// return a host sends for the Enter key.
+    Newline,
+    /// Carriage return — activates a widget, or commits a single-line field.
+    Return,
+    /// Escape — discards an in-progress edit.
+    Escape,
+    /// Space — activates a widget.
+    Space,
+    /// Page up. Not handled by the edit control.
+    PageUp,
+    /// Page down. Not handled by the edit control.
+    PageDown,
+    /// End of line, or of the document with the accelerator held.
+    End,
+    /// Start of line, or of the document with the accelerator held.
+    Home,
+    /// Caret left.
+    Left,
+    /// Caret up.
+    Up,
+    /// Caret right.
+    Right,
+    /// Caret down.
+    Down,
+    /// Insert. Not handled.
+    Insert,
+    /// Forward delete.
+    Delete,
+    /// The letter A — select-all with the accelerator.
+    A,
+    /// The letter Y — redo with the accelerator, off Apple.
+    Y,
+    /// The letter Z — undo, or redo with shift.
+    Z,
+    /// The shift key reported as a key in its own right. Never consumed.
+    Shift,
+    /// The control key reported as a key in its own right. Never consumed.
+    Control,
+    /// Any other key, by the code a host reported it under.
+    ///
+    /// Never carries a code a named variant already names: [`Key::from_virtual`]
+    /// is the only way one is built from an integer, and it maps the named
+    /// codes first.
+    Other(u16),
+}
 
 impl Key {
-    /// No key. Also what a selection-clearing delete is rewritten to.
-    pub const UNKNOWN: Key = Key(0x00);
-    /// Backspace.
-    pub const BACK: Key = Key(0x08);
-    /// Tab — focus traversal.
-    pub const TAB: Key = Key(0x09);
-    /// Line feed.
-    pub const NEWLINE: Key = Key(0x0A);
-    /// Clear.
-    pub const CLEAR: Key = Key(0x0C);
-    /// Carriage return.
-    pub const RETURN: Key = Key(0x0D);
-    /// Escape — discards an in-progress edit.
-    pub const ESCAPE: Key = Key(0x1B);
-    /// Space.
-    pub const SPACE: Key = Key(0x20);
-    /// Page up. Not handled by the edit control.
-    pub const PRIOR: Key = Key(0x21);
-    /// Page down. Not handled by the edit control.
-    pub const NEXT: Key = Key(0x22);
-    /// End of line, or of the document with the accelerator held.
-    pub const END: Key = Key(0x23);
-    /// Start of line, or of the document with the accelerator held.
-    pub const HOME: Key = Key(0x24);
-    /// Caret left.
-    pub const LEFT: Key = Key(0x25);
-    /// Caret up.
-    pub const UP: Key = Key(0x26);
-    /// Caret right.
-    pub const RIGHT: Key = Key(0x27);
-    /// Caret down.
-    pub const DOWN: Key = Key(0x28);
-    /// Insert.
-    pub const INSERT: Key = Key(0x2D);
-    /// Forward delete.
-    pub const DELETE: Key = Key(0x2E);
-    /// The letter A — select-all with the accelerator.
-    pub const A: Key = Key(0x41);
-    /// The letter Y — redo with the accelerator, off Apple.
-    pub const Y: Key = Key(0x59);
-    /// The letter Z — undo, or redo with shift.
-    pub const Z: Key = Key(0x5A);
-    /// The shift key reported as a key in its own right. Never consumed.
-    pub const SHIFT: Key = Key(0x10);
-    /// The control key reported as a key in its own right. Never consumed.
-    pub const CONTROL: Key = Key(0x11);
+    /// The key a host's virtual-key code names.
+    ///
+    /// Total, and the inverse of [`Key::virtual_code`]: a code no variant
+    /// names becomes [`Key::Other`] carrying it unchanged.
+    #[must_use]
+    pub const fn from_virtual(code: u16) -> Key {
+        match code {
+            0x00 => Key::Unknown,
+            0x08 => Key::Backspace,
+            0x09 => Key::Tab,
+            0x0A => Key::Newline,
+            0x0D => Key::Return,
+            0x10 => Key::Shift,
+            0x11 => Key::Control,
+            0x1B => Key::Escape,
+            0x20 => Key::Space,
+            0x21 => Key::PageUp,
+            0x22 => Key::PageDown,
+            0x23 => Key::End,
+            0x24 => Key::Home,
+            0x25 => Key::Left,
+            0x26 => Key::Up,
+            0x27 => Key::Right,
+            0x28 => Key::Down,
+            0x2D => Key::Insert,
+            0x2E => Key::Delete,
+            0x41 => Key::A,
+            0x59 => Key::Y,
+            0x5A => Key::Z,
+            other => Key::Other(other),
+        }
+    }
+
+    /// The virtual-key code this key is reported under.
+    ///
+    /// The inverse of [`Key::from_virtual`] over every value that function
+    /// can produce.
+    #[must_use]
+    pub const fn virtual_code(self) -> u16 {
+        match self {
+            Key::Unknown => 0x00,
+            Key::Backspace => 0x08,
+            Key::Tab => 0x09,
+            Key::Newline => 0x0A,
+            Key::Return => 0x0D,
+            Key::Shift => 0x10,
+            Key::Control => 0x11,
+            Key::Escape => 0x1B,
+            Key::Space => 0x20,
+            Key::PageUp => 0x21,
+            Key::PageDown => 0x22,
+            Key::End => 0x23,
+            Key::Home => 0x24,
+            Key::Left => 0x25,
+            Key::Up => 0x26,
+            Key::Right => 0x27,
+            Key::Down => 0x28,
+            Key::Insert => 0x2D,
+            Key::Delete => 0x2E,
+            Key::A => 0x41,
+            Key::Y => 0x59,
+            Key::Z => 0x5A,
+            Key::Other(code) => code,
+        }
+    }
 }
 
 /// The modifier bits carried by an event (`FWL_EVENTFLAG`).
@@ -345,12 +432,67 @@ mod tests {
         assert!(!m.is_empty());
     }
 
+    /// The codes are a wire format — a host's virtual-key word and the
+    /// `.evt` grammar's integers both name them numerically — so the table
+    /// is pinned rather than merely round-tripped.
     #[test]
-    fn key_constants_are_the_virtual_key_codes() {
-        assert_eq!(Key::TAB.0, 0x09);
-        assert_eq!(Key::RETURN.0, 0x0D);
-        assert_eq!(Key::DELETE.0, 0x2E);
-        assert_eq!(Key::A.0, 0x41);
-        assert_eq!(Key::Z.0, 0x5A);
+    fn key_codes_are_the_virtual_key_codes() {
+        assert_eq!(Key::Tab.virtual_code(), 0x09);
+        assert_eq!(Key::Return.virtual_code(), 0x0D);
+        assert_eq!(Key::Delete.virtual_code(), 0x2E);
+        assert_eq!(Key::A.virtual_code(), 0x41);
+        assert_eq!(Key::Z.virtual_code(), 0x5A);
+    }
+
+    /// Every named variant survives the trip out to a code and back, and so
+    /// does an `Other` the table does not name. The list is written out
+    /// rather than iterated because a variant added without a table row is
+    /// exactly the mistake this catches.
+    #[test]
+    fn every_key_round_trips_through_its_virtual_code() {
+        let named = [
+            Key::Unknown,
+            Key::Backspace,
+            Key::Tab,
+            Key::Newline,
+            Key::Return,
+            Key::Escape,
+            Key::Space,
+            Key::PageUp,
+            Key::PageDown,
+            Key::End,
+            Key::Home,
+            Key::Left,
+            Key::Up,
+            Key::Right,
+            Key::Down,
+            Key::Insert,
+            Key::Delete,
+            Key::A,
+            Key::Y,
+            Key::Z,
+            Key::Shift,
+            Key::Control,
+        ];
+        for key in named {
+            assert_eq!(Key::from_virtual(key.virtual_code()), key, "{key:?}");
+        }
+        // Distinct codes stay distinct: a table that mapped two variants to
+        // one code would pass the loop above and fail here.
+        let mut codes: Vec<u16> = named.iter().map(|k| k.virtual_code()).collect();
+        codes.sort_unstable();
+        let count = codes.len();
+        codes.dedup();
+        assert_eq!(codes.len(), count, "two variants share a virtual code");
+    }
+
+    /// The `.evt` corpus sends F-keys, digits and the clipboard letters
+    /// precisely to check that nothing consumes them. They must arrive.
+    #[test]
+    fn undecided_codes_arrive_as_other_unchanged() {
+        for code in [0x70_u16, 0x30, 0x43, 0x56, 0x58, 0xFFFF] {
+            assert_eq!(Key::from_virtual(code), Key::Other(code));
+            assert_eq!(Key::Other(code).virtual_code(), code);
+        }
     }
 }

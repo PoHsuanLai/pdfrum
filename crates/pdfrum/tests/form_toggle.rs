@@ -79,7 +79,7 @@ fn a_read_only_check_box_consumes_a_keystroke_without_acting() {
     let mut reached = false;
     for _ in 0..8 {
         if !session
-            .on_key_down(VirtualKey::TAB, EventModifiers::NONE)
+            .on_key_down(VirtualKey::Tab, EventModifiers::NONE)
             .consumed
         {
             break;
@@ -97,7 +97,7 @@ fn a_read_only_check_box_consumes_a_keystroke_without_acting() {
         return;
     }
 
-    for key in [VirtualKey::RETURN, VirtualKey::SPACE] {
+    for key in [VirtualKey::Return, VirtualKey::Space] {
         let response = session.on_key_down(key, EventModifiers::NONE);
         assert!(
             response.consumed,

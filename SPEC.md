@@ -1841,9 +1841,17 @@ pub enum Event {
 
 pub struct Point { pub x: f32, pub y: f32 }   // page space (PDF user space), y-up
 pub enum Button { Left, Right }
-pub struct Key(pub u16);                      // FWL_VKEY, a newtype not an enum
-pub struct Modifiers(pub u32);                // FWL_EVENTFLAG bits, hand-rolled
+pub enum Key { Unknown, Tab, Return, .., A, Y, Z, Other(u16) }  // `Other` is FWL_VKEY's remainder
+pub struct Modifiers(u32);                    // FWL_EVENTFLAG bits, hand-rolled, private field
 ```
+
+`Key` is an enum and not a newtype over `FWL_VKEY`. The wire format admits any
+integer, and the ported assertions deliberately send codes the form layer does
+not decide on — F-keys, digits, the clipboard letters — so `Other(u16)` carries
+them through unchanged. That is the arm meaning "the form layer does not decide
+on this"; it is not a fallback. `Key::from_virtual` / `Key::virtual_code` are
+the boundary with the integer, and the `.evt` parser stays on the integer side
+of it.
 
 `Modifiers` is a hand-written bitflag newtype rather than the `bitflags` crate:
 DEPS.md is closed and this is nine constants (STYLE §5).

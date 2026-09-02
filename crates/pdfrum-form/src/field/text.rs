@@ -138,29 +138,29 @@ pub fn route_key(
     // A forward delete with a selection is rewritten to a plain
     // clear-selection before the table is consulted, which is why deleting a
     // selection and pressing an unrecognized key take the same branch.
-    if key == Key::DELETE && has_selection {
+    if key == Key::Delete && has_selection {
         return Disposition::Do(TextAction::ClearSelection);
     }
 
     match key {
-        Key::DELETE => Disposition::Do(TextAction::Delete),
-        Key::UP => Disposition::Do(TextAction::Move {
+        Key::Delete => Disposition::Do(TextAction::Delete),
+        Key::Up => Disposition::Do(TextAction::Move {
             motion: Motion::Up,
             extend: shift,
         }),
-        Key::DOWN => Disposition::Do(TextAction::Move {
+        Key::Down => Disposition::Do(TextAction::Move {
             motion: Motion::Down,
             extend: shift,
         }),
-        Key::LEFT => Disposition::Do(TextAction::Move {
+        Key::Left => Disposition::Do(TextAction::Move {
             motion: Motion::Left,
             extend: shift,
         }),
-        Key::RIGHT => Disposition::Do(TextAction::Move {
+        Key::Right => Disposition::Do(TextAction::Move {
             motion: Motion::Right,
             extend: shift,
         }),
-        Key::HOME => Disposition::Do(TextAction::Move {
+        Key::Home => Disposition::Do(TextAction::Move {
             motion: if document_wise {
                 Motion::DocStart
             } else {
@@ -168,7 +168,7 @@ pub fn route_key(
             },
             extend: shift,
         }),
-        Key::END => Disposition::Do(TextAction::Move {
+        Key::End => Disposition::Do(TextAction::Move {
             motion: if document_wise {
                 Motion::DocEnd
             } else {
@@ -189,7 +189,7 @@ pub fn route_key(
         }),
         // An unrecognized key clears the selection rather than being ignored,
         // which is the branch a rewritten delete arrives at.
-        Key::UNKNOWN => Disposition::Do(TextAction::ClearSelection),
+        Key::Unknown => Disposition::Do(TextAction::ClearSelection),
         _ => Disposition::Ignore,
     }
 }
@@ -337,7 +337,11 @@ mod tests {
     fn the_clipboard_shortcuts_are_not_ours() {
         for platform in [GENERAL, APPLE] {
             let (accel, _) = platform;
-            for letter in [Key(0x43), Key(0x56), Key(0x58)] {
+            for letter in [
+                Key::from_virtual(0x43),
+                Key::from_virtual(0x56),
+                Key::from_virtual(0x58),
+            ] {
                 assert_eq!(
                     key(letter, accel, platform),
                     Disposition::Ignore,
@@ -353,28 +357,28 @@ mod tests {
     fn navigation_keys_are_handled() {
         for platform in [GENERAL, APPLE] {
             assert_eq!(
-                key(Key::LEFT, Modifiers::NONE, platform),
+                key(Key::Left, Modifiers::NONE, platform),
                 Disposition::Do(TextAction::Move {
                     motion: Motion::Left,
                     extend: false
                 })
             );
             assert_eq!(
-                key(Key::HOME, Modifiers::NONE, platform),
+                key(Key::Home, Modifiers::NONE, platform),
                 Disposition::Do(TextAction::Move {
                     motion: Motion::LineStart,
                     extend: false
                 })
             );
             assert_eq!(
-                key(Key::HOME, Modifiers::CONTROL, platform),
+                key(Key::Home, Modifiers::CONTROL, platform),
                 Disposition::Do(TextAction::Move {
                     motion: Motion::DocStart,
                     extend: false
                 })
             );
             assert_eq!(
-                key(Key::UP, Modifiers::NONE, platform),
+                key(Key::Up, Modifiers::NONE, platform),
                 Disposition::Do(TextAction::Move {
                     motion: Motion::Up,
                     extend: false
@@ -387,12 +391,12 @@ mod tests {
     #[test]
     fn shift_extends_every_motion() {
         for k in [
-            Key::LEFT,
-            Key::RIGHT,
-            Key::UP,
-            Key::DOWN,
-            Key::HOME,
-            Key::END,
+            Key::Left,
+            Key::Right,
+            Key::Up,
+            Key::Down,
+            Key::Home,
+            Key::End,
         ] {
             let Disposition::Do(TextAction::Move { extend, .. }) =
                 key(k, Modifiers::SHIFT, GENERAL)
@@ -408,12 +412,12 @@ mod tests {
     #[test]
     fn delete_with_a_selection_clears_it() {
         assert_eq!(
-            route_key(Key::DELETE, Modifiers::NONE, Modifiers::CONTROL, true, true),
+            route_key(Key::Delete, Modifiers::NONE, Modifiers::CONTROL, true, true),
             Disposition::Do(TextAction::ClearSelection)
         );
         assert_eq!(
             route_key(
-                Key::DELETE,
+                Key::Delete,
                 Modifiers::NONE,
                 Modifiers::CONTROL,
                 true,
@@ -422,7 +426,7 @@ mod tests {
             Disposition::Do(TextAction::Delete)
         );
         assert_eq!(
-            key(Key::UNKNOWN, Modifiers::NONE, GENERAL),
+            key(Key::Unknown, Modifiers::NONE, GENERAL),
             Disposition::Do(TextAction::ClearSelection)
         );
     }
@@ -432,13 +436,13 @@ mod tests {
     #[test]
     fn undecided_keys_fall_through() {
         for k in [
-            Key::TAB,
-            Key::SPACE,
-            Key::PRIOR,
-            Key::NEXT,
-            Key::INSERT,
-            Key(0x70), // F1
-            Key(0x30), // '0'
+            Key::Tab,
+            Key::Space,
+            Key::PageUp,
+            Key::PageDown,
+            Key::Insert,
+            Key::from_virtual(0x70), // F1
+            Key::from_virtual(0x30), // '0'
         ] {
             assert_eq!(
                 key(k, Modifiers::NONE, GENERAL),
@@ -506,7 +510,7 @@ mod tests {
     fn document_wise_motion_is_control_on_every_platform() {
         for platform in [GENERAL, APPLE] {
             assert_eq!(
-                key(Key::HOME, Modifiers::CONTROL, platform),
+                key(Key::Home, Modifiers::CONTROL, platform),
                 Disposition::Do(TextAction::Move {
                     motion: Motion::DocStart,
                     extend: false
@@ -518,7 +522,7 @@ mod tests {
         // On an Apple configuration the accelerator is Meta, and it does
         // *not* widen the motion — reproduced, not improved.
         assert_eq!(
-            key(Key::HOME, Modifiers::META, APPLE),
+            key(Key::Home, Modifiers::META, APPLE),
             Disposition::Do(TextAction::Move {
                 motion: Motion::LineStart,
                 extend: false
