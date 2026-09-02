@@ -11,35 +11,35 @@
 // See `form_routing.rs`: the fixture helper is a failure signal.
 #![allow(clippy::expect_used)]
 
-use pdfrum::{Document, EventModifiers, FormSession};
+use pdfrum::{Document, FormSession, Modifiers, kurbo::Point};
 
 fn document() -> Document {
     Document::open("tests/fixtures/listbox_form.pdf").expect("the listbox fixture must open")
 }
 
 /// The upstream constant: every list box is clicked at this x.
-const X: f32 = 102.0;
+const X: f64 = 102.0;
 /// The **first visible row** of each field, from `:588-600`.
-const SINGLE_FIRST: f32 = 371.0;
+const SINGLE_FIRST: f64 = 371.0;
 /// And its **second** visible row, `kSingleFormYSecondVisibleOption`.
-const SINGLE_SECOND: f32 = 358.0;
-const MULTI_FIRST: f32 = 423.0;
-const INDICES_FIRST: f32 = 273.0;
-const VALUES_FIRST: f32 = 223.0;
-const MISMATCH_FIRST: f32 = 173.0;
-const READ_ONLY_Y: f32 = 510.0;
+const SINGLE_SECOND: f64 = 358.0;
+const MULTI_FIRST: f64 = 423.0;
+const INDICES_FIRST: f64 = 273.0;
+const VALUES_FIRST: f64 = 223.0;
+const MISMATCH_FIRST: f64 = 173.0;
+const READ_ONLY_Y: f64 = 510.0;
 
-fn click(session: &mut FormSession<'_>, y: f32) {
-    session.on_mouse_move(0, X, y, EventModifiers::NONE);
-    session.on_mouse_down(0, X, y, EventModifiers::NONE);
-    session.on_mouse_up(0, X, y, EventModifiers::NONE);
+fn click(session: &mut FormSession<'_>, y: f64) {
+    session.mouse_move(0, Point::new(X, y), Modifiers::NONE);
+    session.mouse_down(0, Point::new(X, y), Modifiers::NONE);
+    session.mouse_up(0, Point::new(X, y), Modifiers::NONE);
 }
 
 /// Focuses a field **without clicking it**, which is what the upstream rows
 /// do (`FORM_OnFocus`) and the only way to read the selection the *file*
 /// declares: a click is a selection gesture and replaces it.
-fn focus(session: &mut FormSession<'_>, y: f32) {
-    session.on_focus_at(0, X, y, EventModifiers::NONE);
+fn focus(session: &mut FormSession<'_>, y: f64) {
+    session.focus_at(0, Point::new(X, y), Modifiers::NONE);
 }
 
 /// Focuses a field without disturbing its selection, by clicking its first
@@ -162,7 +162,7 @@ fn a_row_is_the_laid_out_line_tall_not_the_font_size() {
     // Walk down the widget and record where the selected row changes.
     let mut boundaries = Vec::new();
     let mut previous: Option<Vec<usize>> = None;
-    let mut y = 379.0_f32;
+    let mut y = 379.0_f64;
     while y > 351.0 {
         let mut session = FormSession::new(&doc);
         click(&mut session, y);

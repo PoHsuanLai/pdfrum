@@ -1,7 +1,9 @@
 //! A live form-filling session: events in, appearance updates out.
 
+use pdfrum_form::Event;
 use pdfrum_form::FormSession as Inner;
-use pdfrum_form::{Button, Event, Key, Modifiers, Response};
+
+pub use pdfrum_form::{Button, Key, Modifiers, Response};
 
 pub use pdfrum_form::SessionConfig;
 
@@ -10,8 +12,6 @@ use pdfrum_common::PageIndex;
 use pdfrum_page::BuildContext;
 
 pub use pdfrum_form::{AppearanceUpdate, UpdateKind};
-pub use pdfrum_form::{Button as MouseButton, Key as VirtualKey};
-pub use pdfrum_form::{Modifiers as EventModifiers, Response as EventResponse};
 
 /// The four points where a field's `/AA` scripts can intervene.
 ///
@@ -33,7 +33,48 @@ pub use pdfrum_form::{Cascade, FieldRef, FieldWrites, Keystroke, KeystrokeOutcom
 /// Every mouse method takes **page space** — PDF user space, y-up, with its
 /// origin at the page's crop box. That is the same space
 /// [`Page`](crate::Page) reports rectangles in, and no conversion happens on
-/// the way in.
+/// the way in. Points are [`kurbo::Point`] — `f64`, the vocabulary
+/// [`Page::crop_box`](crate::Page::crop_box) already speaks; `pdfrum-form`
+/// narrows to its own `f32` at the routing entry, which is where the oracle
+/// narrows too.
+///
+/// # The primary button has methods; the other one has an [`Event`]
+///
+/// [`Self::mouse_down`] and [`Self::mouse_up`] are the left button, because
+/// that is what every widget interaction is made of. A right button is
+/// representable — the `.evt` corpus contains right-button lines and a bridge
+/// must be able to express them — but it is spelled as a value:
+///
+/// ```
+/// # use pdfrum::{Button, Document, Event, FormSession, Modifiers, kurbo::Point};
+/// # let doc = Document::open("tests/fixtures/text_form.pdf")?;
+/// # let mut session = FormSession::new(&doc);
+/// session.set_viewed_page(0);
+/// let response = session.apply(Event::MouseDown {
+///     button: Button::Right,
+///     at: Point::new(120.0, 115.0),
+///     modifiers: Modifiers::NONE,
+/// });
+/// // The correct behaviour for a right button is to consume nothing.
+/// assert!(!response.consumed);
+/// # Ok::<(), pdfrum::Error>(())
+/// ```
+///
+/// A boolean `down` parameter and a `button` argument on one method was the
+/// shape that made this a method; the enum was already there.
+///
+/// # No escape hatch, and why this type does not need one
+///
+/// Every other facade type has one — [`Document::parser`](crate::Document),
+/// [`Page::objects`](crate::Page), [`Annotation::dict`](crate::Annotation) —
+/// because each wraps something a caller may need to reach past it for.
+/// This one had `inner()`, returning a `pdfrum_form::FormSession` that shares
+/// its name and is a different type; it had **no caller anywhere in the
+/// workspace**, and it could not have a useful one, because the value it hands
+/// back is `&`-borrowed state with no document, no [`BuildContext`] and no way
+/// to route an event. A power user does not want a read-only view of this
+/// session's field: they want a session of their own, and `pdfrum-form` builds
+/// one directly. So the escape hatch is the member crate, not a method.
 ///
 /// # Two answers, not one
 ///
@@ -46,11 +87,11 @@ pub use pdfrum_form::{Cascade, FieldRef, FieldWrites, Keystroke, KeystrokeOutcom
 ///
 /// A field with focus renders from live editor state, caret and selection
 /// included; an unfocused one falls back to a generated appearance stream.
-/// Dropping focus with [`FormSession::force_kill_focus`] is what commits a
+/// Dropping focus with [`FormSession::blur`] is what commits a
 /// value and moves a field from the first to the second.
 ///
 /// ```
-/// use pdfrum::{Document, FormSession, EventModifiers, VirtualKey};
+/// use pdfrum::{Document, FormSession, Key, Modifiers, kurbo::Point};
 ///
 /// let doc = Document::open("tests/fixtures/text_form.pdf")?;
 /// let mut session = FormSession::new(&doc);
@@ -62,24 +103,24 @@ pub use pdfrum_form::{Cascade, FieldRef, FieldWrites, Keystroke, KeystrokeOutcom
 /// // A click is three events, and the move is not decoration: it is what
 /// // tells the widget the pointer is over it. The fixture's one text field
 /// // is `/Rect [100 100 200 130]`, so (120, 115) lands inside it.
-/// let at = (120.0, 115.0);
-/// session.on_mouse_move(0, at.0, at.1, EventModifiers::NONE);
-/// session.on_mouse_down(0, at.0, at.1, EventModifiers::NONE);
-/// session.on_mouse_up(0, at.0, at.1, EventModifiers::NONE);
+/// let at = Point::new(120.0, 115.0);
+/// session.mouse_move(0, at, Modifiers::NONE);
+/// session.mouse_down(0, at, Modifiers::NONE);
+/// session.mouse_up(0, at, Modifiers::NONE);
 /// assert!(session.focused_annot().is_some());
 ///
 /// // Typing sends characters. Navigation and shortcuts go through
-/// // `on_key_down` instead — the two paths never overlap, and a character
+/// // `key_down` instead — the two paths never overlap, and a character
 /// // carrying the accelerator is neither.
 /// for ch in "Hello".chars() {
-///     session.on_char(ch, EventModifiers::NONE);
+///     session.character(ch, Modifiers::NONE);
 /// }
 /// assert_eq!(session.focused_text().as_deref(), Some("Hello"));
 ///
 /// // Undo is one keystroke and one character: typing records an item per
 /// // character, so this leaves "Hell".
 /// assert!(session.can_undo());
-/// session.on_key_down(VirtualKey::Z, EventModifiers::CONTROL);
+/// session.key_down(Key::Z, Modifiers::CONTROL);
 /// assert_eq!(session.focused_text().as_deref(), Some("Hell"));
 ///
 /// // Dropping focus commits the value and moves the field from drawing its
@@ -88,7 +129,7 @@ pub use pdfrum_form::{Cascade, FieldRef, FieldWrites, Keystroke, KeystrokeOutcom
 /// // things, not one: the regenerated appearance, and the focus change
 /// // itself. A response carrying only the focus change would mean the field
 /// // was still drawing its caret.
-/// let committed = session.force_kill_focus();
+/// let committed = session.blur();
 /// assert!(session.focused_annot().is_none());
 ///
 /// let regenerated = committed
@@ -116,7 +157,7 @@ pub struct FormSession<'a> {
     /// focused**, which in practice means Tab entering the focus ring. Every
     /// other key goes to the page holding focus, and mouse events name their
     /// own page.
-    page_in_view: PageIndex,
+    viewed_page: PageIndex,
     /// The form's default-resource fonts, loaded once.
     fonts: std::sync::Arc<pdfrum_doc::ap::FormFonts>,
     /// The script hooks every commit passes through.
@@ -239,7 +280,8 @@ impl<'a> FormSession<'a> {
     ///
     /// ```
     /// use pdfrum::{
-    ///     BuildContext, Document, EventModifiers, FormSession, SessionConfig, VirtualKey,
+    ///     BuildContext, Document, FormSession, Key, Modifiers, SessionConfig,
+    ///     kurbo::Point,
     /// };
     ///
     /// let doc = Document::open("tests/fixtures/text_form.pdf")?;
@@ -249,15 +291,16 @@ impl<'a> FormSession<'a> {
     ///     FormSession::with_config_in(&doc, SessionConfig::apple(), &mut ctx);
     ///
     /// // The field is `/Rect [100 100 200 130]`, so (120, 115) is inside it.
-    /// session.on_mouse_move(0, 120.0, 115.0, EventModifiers::NONE);
-    /// session.on_mouse_down(0, 120.0, 115.0, EventModifiers::NONE);
-    /// session.on_mouse_up(0, 120.0, 115.0, EventModifiers::NONE);
+    /// let at = Point::new(120.0, 115.0);
+    /// session.mouse_move(0, at, Modifiers::NONE);
+    /// session.mouse_down(0, at, Modifiers::NONE);
+    /// session.mouse_up(0, at, Modifiers::NONE);
     /// assert!(session.focused_annot().is_some());
     ///
     /// // And the Apple switch is live: Command is the accelerator, so
     /// // Command+A selects all where Control+A types nothing.
-    /// session.on_char('x', EventModifiers::NONE);
-    /// session.on_key_down(VirtualKey::A, EventModifiers::META);
+    /// session.character('x', Modifiers::NONE);
+    /// session.key_down(Key::A, Modifiers::META);
     /// assert_eq!(session.selected_text().as_deref(), Some("x"));
     /// # Ok::<(), pdfrum::Error>(())
     /// ```
@@ -352,11 +395,12 @@ impl<'a> FormSession<'a> {
     /// // carries all four hooks. A click, then a character, reaches the
     /// // keystroke one — and what the script asked the host to do comes back
     /// // on the transcript rather than being performed here.
-    /// use pdfrum::EventModifiers as M;
-    /// session.on_mouse_move(0, 150.0, 175.0, M::NONE);
-    /// session.on_mouse_down(0, 150.0, 175.0, M::NONE);
-    /// session.on_mouse_up(0, 150.0, 175.0, M::NONE);
-    /// session.on_char('7', M::NONE);
+    /// use pdfrum::{Modifiers as M, kurbo::Point};
+    /// let at = Point::new(150.0, 175.0);
+    /// session.mouse_move(0, at, M::NONE);
+    /// session.mouse_down(0, at, M::NONE);
+    /// session.mouse_up(0, at, M::NONE);
+    /// session.character('7', M::NONE);
     ///
     /// let transcript = session.scripts().expect("a scripted session").transcript_text();
     /// assert!(transcript.starts_with("Alert: *** starting test 2 ***"));
@@ -442,7 +486,7 @@ impl<'a> FormSession<'a> {
             doc,
             inner,
             pages: std::collections::BTreeMap::new(),
-            page_in_view: PageIndex::FIRST,
+            viewed_page: PageIndex::FIRST,
             fonts,
             cascade,
         }
@@ -460,14 +504,14 @@ impl<'a> FormSession<'a> {
     /// Defaults to page 0, which is right for a single-page document and for
     /// a viewer that has not scrolled. A caller showing any other page should
     /// say so, or a Tab from nothing will enter the ring on the wrong one.
-    pub fn set_page_in_view(&mut self, page: impl Into<PageIndex>) {
-        self.page_in_view = page.into();
+    pub fn set_viewed_page(&mut self, page: impl Into<PageIndex>) {
+        self.viewed_page = page.into();
     }
 
     /// Which page the embedder last said it was showing.
     #[must_use]
-    pub fn page_in_view(&self) -> PageIndex {
-        self.page_in_view
+    pub fn viewed_page(&self) -> PageIndex {
+        self.viewed_page
     }
 
     /// The session's switches.
@@ -489,137 +533,91 @@ impl<'a> FormSession<'a> {
     /// [`Event`] carries a point but not a page, because a page is the
     /// *embedder's* fact rather than the event's — the same click is on a
     /// different page depending on what is scrolled into view. So a mouse
-    /// event applied here goes to the page [`Self::page_in_view`] names, which
-    /// is what [`Self::set_page_in_view`] is for. The wrappers
-    /// ([`Self::on_mouse_move`] and friends) take the page explicitly instead,
+    /// event applied here goes to the page [`Self::viewed_page`] names, which
+    /// is what [`Self::set_viewed_page`] is for. The wrappers
+    /// ([`Self::mouse_move`] and friends) take the page explicitly instead,
     /// and a caller mixing the two should keep the viewed page current.
     ///
     /// Keyboard events take no page either way: a key goes to the field
     /// holding focus, and a Tab from nothing enters the ring on the viewed
-    /// page — see [`Self::set_page_in_view`].
+    /// page — see [`Self::set_viewed_page`].
     pub fn apply(&mut self, event: Event) -> Response {
         match event {
             Event::KeyDown { .. } | Event::Char { .. } => self.dispatch_keyboard(event),
-            _ => self.dispatch(self.page_in_view, event),
+            _ => self.dispatch(self.viewed_page, event),
         }
     }
 
     /// The pointer moved. Drives hover and extends a live drag.
-    pub fn on_mouse_move(
+    pub fn mouse_move(
         &mut self,
         page: impl Into<PageIndex>,
-        x: f32,
-        y: f32,
+        at: kurbo::Point,
         modifiers: Modifiers,
     ) -> Response {
-        self.dispatch(
-            page,
-            Event::MouseMove {
-                at: at(x, y),
-                modifiers,
-            },
-        )
+        self.dispatch(page, Event::MouseMove { at, modifiers })
     }
 
     /// The primary button went down.
-    pub fn on_mouse_down(
+    ///
+    /// A non-primary button is an [`Event`] rather than a method — see
+    /// [`Self::apply`] and this type's own note on the right button.
+    pub fn mouse_down(
         &mut self,
         page: impl Into<PageIndex>,
-        x: f32,
-        y: f32,
+        at: kurbo::Point,
         modifiers: Modifiers,
     ) -> Response {
         self.dispatch(
             page,
             Event::MouseDown {
                 button: Button::Left,
-                at: at(x, y),
+                at,
                 modifiers,
             },
         )
     }
 
     /// The primary button came up.
-    pub fn on_mouse_up(
+    pub fn mouse_up(
         &mut self,
         page: impl Into<PageIndex>,
-        x: f32,
-        y: f32,
+        at: kurbo::Point,
         modifiers: Modifiers,
     ) -> Response {
         self.dispatch(
             page,
             Event::MouseUp {
                 button: Button::Left,
-                at: at(x, y),
+                at,
                 modifiers,
             },
         )
-    }
-
-    /// A button other than the primary one moved.
-    ///
-    /// Present because event scripts contain right-button lines and a bridge
-    /// must be able to express them. The correct behaviour for those lines is
-    /// to consume nothing, and that is what this does.
-    pub fn on_button(
-        &mut self,
-        page: impl Into<PageIndex>,
-        button: Button,
-        down: bool,
-        x: f32,
-        y: f32,
-        modifiers: Modifiers,
-    ) -> Response {
-        let at = at(x, y);
-        let event = if down {
-            Event::MouseDown {
-                button,
-                at,
-                modifiers,
-            }
-        } else {
-            Event::MouseUp {
-                button,
-                at,
-                modifiers,
-            }
-        };
-        self.dispatch(page, event)
     }
 
     /// A double click. Selects the whole line under the pointer.
-    pub fn on_double_click(
+    pub fn double_click(
         &mut self,
         page: impl Into<PageIndex>,
-        x: f32,
-        y: f32,
+        at: kurbo::Point,
         modifiers: Modifiers,
     ) -> Response {
-        self.dispatch(
-            page,
-            Event::DoubleClick {
-                at: at(x, y),
-                modifiers,
-            },
-        )
+        self.dispatch(page, Event::DoubleClick { at, modifiers })
     }
 
     /// The wheel turned. Deltas are notches, a negative `y` meaning down.
-    pub fn on_mouse_wheel(
+    pub fn mouse_wheel(
         &mut self,
         page: impl Into<PageIndex>,
-        x: f32,
-        y: f32,
-        delta_x: i32,
-        delta_y: i32,
+        at: kurbo::Point,
+        delta: (i32, i32),
         modifiers: Modifiers,
     ) -> Response {
         self.dispatch(
             page,
             Event::MouseWheel {
-                at: at(x, y),
-                delta: (delta_x, delta_y),
+                at,
+                delta,
                 modifiers,
             },
         )
@@ -629,20 +627,13 @@ impl<'a> FormSession<'a> {
     ///
     /// Consumes the event only when an annotation is there *and* it took
     /// focus.
-    pub fn on_focus_at(
+    pub fn focus_at(
         &mut self,
         page: impl Into<PageIndex>,
-        x: f32,
-        y: f32,
+        at: kurbo::Point,
         modifiers: Modifiers,
     ) -> Response {
-        self.dispatch(
-            page,
-            Event::Focus {
-                at: at(x, y),
-                modifiers,
-            },
-        )
+        self.dispatch(page, Event::Focus { at, modifiers })
     }
 
     /// A key went down.
@@ -651,7 +642,7 @@ impl<'a> FormSession<'a> {
     /// matching key-up method: the oracle's is documented as permanently
     /// unimplemented and always answers false, so modelling it would only
     /// invite callers to send a dead event.
-    pub fn on_key_down(&mut self, key: Key, modifiers: Modifiers) -> Response {
+    pub fn key_down(&mut self, key: Key, modifiers: Modifiers) -> Response {
         self.dispatch_keyboard(Event::KeyDown { key, modifiers })
     }
 
@@ -660,7 +651,7 @@ impl<'a> FormSession<'a> {
     /// Text arrives here and shortcuts do not. A character carrying the
     /// accelerator modifier is deliberately neither: it is refused, so an
     /// embedder's own handling sees it.
-    pub fn on_char(&mut self, ch: char, modifiers: Modifiers) -> Response {
+    pub fn character(&mut self, ch: char, modifiers: Modifiers) -> Response {
         self.dispatch_keyboard(Event::Char { ch, modifiers })
     }
 
@@ -672,7 +663,7 @@ impl<'a> FormSession<'a> {
     /// through the same `route::kill_focus` rather than reimplementing it.
     /// A version that only reported `FocusChanged` would leave the outgoing
     /// field's caret and live text on the page, which is what this did.
-    pub fn force_kill_focus(&mut self) -> Response {
+    pub fn blur(&mut self) -> Response {
         let Some(page) = self.focused_annot().map(|annot| annot.page) else {
             // Nothing held focus, so nothing moved.
             return Response::ignored();
@@ -754,7 +745,7 @@ impl<'a> FormSession<'a> {
     ///
     /// An `index` past the end of the options is ignored and the response is
     /// unconsumed, so a host cannot corrupt a field by miscounting.
-    pub fn choose(&mut self, annot: pdfrum_form::AnnotId, index: usize) -> EventResponse {
+    pub fn choose(&mut self, annot: pdfrum_form::AnnotId, index: usize) -> Response {
         self.with_page_scripted(annot.page, |inner, ctx, cascade| {
             pdfrum_form::route::choose(inner, ctx, cascade, annot, index)
         })
@@ -765,7 +756,7 @@ impl<'a> FormSession<'a> {
     /// The stored selection is left alone — a row the pointer merely rested
     /// on was never chosen. Safe to call on an annotation whose list is
     /// already shut, which answers an unconsumed response.
-    pub fn close_popup(&mut self, annot: pdfrum_form::AnnotId) -> EventResponse {
+    pub fn close_popup(&mut self, annot: pdfrum_form::AnnotId) -> Response {
         self.with_page(annot.page, |inner, ctx| {
             pdfrum_form::route::close_popup(inner, ctx, annot)
         })
@@ -956,21 +947,6 @@ impl<'a> FormSession<'a> {
         }
     }
 
-    /// **Escape hatch — requires `pdfrum-form`.** The session's own record,
-    /// for callers that need to read more than these methods expose.
-    ///
-    /// The return type is `pdfrum_form::FormSession`, which is *not* this
-    /// type: this one owns a borrowed [`Document`](crate::Document) and the
-    /// [`BuildContext`](crate::BuildContext) the appearances are generated
-    /// through, and that one is the state machine underneath. The local alias
-    /// exists so the two names do not collide inside this module; a caller
-    /// reaching here writes the member crate's name in full, which is the
-    /// point.
-    #[must_use]
-    pub fn inner(&self) -> &Inner {
-        &self.inner
-    }
-
     /// Routes an event that names a page.
     ///
     /// The page is read on first use and kept: a replay sends dozens of
@@ -1059,13 +1035,13 @@ impl<'a> FormSession<'a> {
         // "no focus, no keyboard": a Tab with nothing focused is what *takes*
         // focus, so refusing it here would make the ring unreachable from the
         // keyboard. It enters the ring on the page the embedder says it is
-        // showing — see `set_page_in_view`, which is how this crate spells
+        // showing — see `set_viewed_page`, which is how this crate spells
         // the page argument the oracle puts on `FORM_OnKeyDown` itself.
         //
         // Every other key really does need a focused field, and answers
         // unhandled without one.
         match event {
-            Event::KeyDown { key: Key::Tab, .. } => self.dispatch(self.page_in_view, event),
+            Event::KeyDown { key: Key::Tab, .. } => self.dispatch(self.viewed_page, event),
             _ => Response::ignored(),
         }
     }
@@ -1192,20 +1168,6 @@ impl<'a> FormSession<'a> {
     }
 }
 
-/// This facade's flattened `x, y` pair onto the event vocabulary's point.
-///
-/// [`Event`]'s points are [`kurbo::Point`] — `f64`, the vocabulary
-/// [`crate::Page::crop_box`] already speaks and the one the oracle's own entry
-/// points take. `pdfrum-form` narrows to its private `f32` in `route::apply`,
-/// so nothing is lost by widening here and the widening is exact.
-///
-/// The flattened pair itself is on its way out: §WP4's target shape is
-/// `mouse_move(page, at: kurbo::Point, modifiers)`, and that lands with the
-/// renames in the facade's own package rather than here.
-fn at(x: f32, y: f32) -> kurbo::Point {
-    kurbo::Point::new(f64::from(x), f64::from(y))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1243,7 +1205,7 @@ mod tests {
     fn killing_focus_from_nothing_is_harmless() {
         let doc = document();
         let mut session = FormSession::new(&doc);
-        let response = session.force_kill_focus();
+        let response = session.blur();
         assert!(!response.consumed);
         assert!(response.updates.is_empty());
     }
@@ -1252,7 +1214,7 @@ mod tests {
     ///
     /// The pin on the sketch's central method: a click built as an [`Event`]
     /// and applied against the viewed page must focus what the same click
-    /// spelled through [`FormSession::on_mouse_down`] focuses. Anything else
+    /// spelled through [`FormSession::mouse_down`] focuses. Anything else
     /// would make the wrappers a second implementation rather than a spelling.
     #[test]
     fn applying_an_event_routes_where_the_wrapper_does() {
@@ -1267,11 +1229,11 @@ mod tests {
         });
 
         let mut through_wrapper = FormSession::new(&doc);
-        through_wrapper.on_mouse_down(0, 120.0, 115.0, Modifiers::NONE);
+        through_wrapper.mouse_down(0, inside, Modifiers::NONE);
 
         assert_eq!(
             through_event.focused_annot(),
-            through_wrapper.focused_annot(),
+            through_wrapper.focused_annot()
         );
         assert!(through_event.focused_annot().is_some());
     }

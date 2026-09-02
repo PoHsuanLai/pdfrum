@@ -11,7 +11,7 @@
 // See `form_routing.rs`: the fixture helper is a failure signal.
 #![allow(clippy::expect_used)]
 
-use pdfrum::{Document, EventModifiers, FormSession, SessionConfig, Subtype, VirtualKey};
+use pdfrum::{Document, FormSession, Key, Modifiers, SessionConfig, Subtype};
 
 fn document() -> Document {
     Document::open("tests/fixtures/annots_action_handling.pdf")
@@ -43,13 +43,10 @@ fn a_focused_link_fires_its_action_on_return_with_the_modifiers_held() {
     // Tab until a link holds focus.
     let mut fired = Vec::new();
     for _ in 0..12 {
-        if !session
-            .on_key_down(VirtualKey::Tab, EventModifiers::NONE)
-            .consumed
-        {
+        if !session.key_down(Key::Tab, Modifiers::NONE).consumed {
             break;
         }
-        let response = session.on_key_down(VirtualKey::Return, EventModifiers::NONE);
+        let response = session.key_down(Key::Return, Modifiers::NONE);
         if response.actions().count() > 0 {
             fired.push(response);
             break;
@@ -63,12 +60,12 @@ fn a_focused_link_fires_its_action_on_return_with_the_modifiers_held() {
     // The modifiers ride along, in the raw bit values the contract names.
     let mut seen = Vec::new();
     for modifiers in [
-        EventModifiers::NONE,
-        EventModifiers::CONTROL,
-        EventModifiers::SHIFT,
-        EventModifiers::SHIFT.union(EventModifiers::CONTROL),
+        Modifiers::NONE,
+        Modifiers::CONTROL,
+        Modifiers::SHIFT,
+        Modifiers::SHIFT.union(Modifiers::CONTROL),
     ] {
-        let response = session.on_key_down(VirtualKey::Return, modifiers);
+        let response = session.key_down(Key::Return, modifiers);
         for (_, held) in response.actions() {
             seen.push(held.bits());
         }
@@ -91,14 +88,11 @@ fn no_key_but_return_fires_a_links_action() {
     // Reach a link.
     let mut reached = false;
     for _ in 0..12 {
-        if !session
-            .on_key_down(VirtualKey::Tab, EventModifiers::NONE)
-            .consumed
-        {
+        if !session.key_down(Key::Tab, Modifiers::NONE).consumed {
             break;
         }
         if session
-            .on_key_down(VirtualKey::Return, EventModifiers::NONE)
+            .key_down(Key::Return, Modifiers::NONE)
             .actions()
             .count()
             > 0
@@ -109,22 +103,16 @@ fn no_key_but_return_fires_a_links_action() {
     }
     assert!(reached, "a link must be reachable by tabbing");
 
-    for key in [
-        VirtualKey::Space,
-        VirtualKey::Tab,
-        VirtualKey::A,
-        VirtualKey::Left,
-        VirtualKey::Delete,
-    ] {
-        let response = session.on_key_down(key, EventModifiers::NONE);
+    for key in [Key::Space, Key::Tab, Key::A, Key::Left, Key::Delete] {
+        let response = session.key_down(key, Modifiers::NONE);
         assert_eq!(
             response.actions().count(),
             0,
             "{key:?} must not fire a link's action"
         );
         // Tab moves focus, so put it back on the link.
-        if key == VirtualKey::Tab {
-            session.on_key_down(VirtualKey::Tab, EventModifiers::SHIFT);
+        if key == Key::Tab {
+            session.key_down(Key::Tab, Modifiers::SHIFT);
         }
     }
 }
@@ -144,14 +132,11 @@ fn links_are_not_focusable_by_default() {
     fn reachable(session: &mut FormSession<'_>) -> usize {
         let mut fired = 0;
         for _ in 0..12 {
-            if !session
-                .on_key_down(VirtualKey::Tab, EventModifiers::NONE)
-                .consumed
-            {
+            if !session.key_down(Key::Tab, Modifiers::NONE).consumed {
                 break;
             }
             fired += session
-                .on_key_down(VirtualKey::Return, EventModifiers::NONE)
+                .key_down(Key::Return, Modifiers::NONE)
                 .actions()
                 .count();
         }
@@ -195,10 +180,10 @@ fn a_push_buttons_return_fires_its_action() {
     let mut session = FormSession::new(&doc);
 
     // The first widget is a text field; tab to it, then on to the button.
-    session.on_key_down(VirtualKey::Tab, EventModifiers::NONE);
-    session.on_key_down(VirtualKey::Tab, EventModifiers::NONE);
+    session.key_down(Key::Tab, Modifiers::NONE);
+    session.key_down(Key::Tab, Modifiers::NONE);
 
-    let response = session.on_char('\r', EventModifiers::NONE);
+    let response = session.character('\r', Modifiers::NONE);
     assert_eq!(
         response.actions().count(),
         1,
@@ -207,7 +192,7 @@ fn a_push_buttons_return_fires_its_action() {
 
     // The key path answers identically — `key_down` and `char_typed` route a
     // focused button's Return through the same `annot_key`.
-    let response = session.on_key_down(VirtualKey::Return, EventModifiers::NONE);
+    let response = session.key_down(Key::Return, Modifiers::NONE);
     assert_eq!(
         response.actions().count(),
         1,
@@ -222,13 +207,10 @@ fn an_annotation_with_no_action_fires_nothing() {
     let mut session = session_with_links(&doc);
 
     for _ in 0..12 {
-        if !session
-            .on_key_down(VirtualKey::Tab, EventModifiers::NONE)
-            .consumed
-        {
+        if !session.key_down(Key::Tab, Modifiers::NONE).consumed {
             break;
         }
         // Whatever this is, asking for its action must not panic.
-        let _ = session.on_key_down(VirtualKey::Return, EventModifiers::NONE);
+        let _ = session.key_down(Key::Return, Modifiers::NONE);
     }
 }

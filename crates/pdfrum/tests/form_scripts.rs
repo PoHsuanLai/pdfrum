@@ -25,7 +25,7 @@
 
 #![cfg(feature = "script")]
 
-use pdfrum::{Cascade, Document, EventModifiers, FieldRef, FormSession, ScriptConfig};
+use pdfrum::{Cascade, Document, FieldRef, FormSession, Modifiers, ScriptConfig, kurbo::Point};
 
 /// `testing/resources/javascript/public_methods.pdf`, verbatim.
 ///
@@ -37,14 +37,14 @@ use pdfrum::{Cascade, Document, EventModifiers, FieldRef, FormSession, ScriptCon
 const FIXTURE: &str = "tests/fixtures/public_methods.pdf";
 
 /// The field's `/Rect [100 160 200 190]`, so this point is inside it.
-const INSIDE: (f32, f32) = (150.0, 175.0);
+const INSIDE: Point = Point::new(150.0, 175.0);
 
 /// Clicking a widget is three events; the move is what tells it the pointer
 /// is over it.
 fn click(session: &mut FormSession<'_>) {
-    session.on_mouse_move(0, INSIDE.0, INSIDE.1, EventModifiers::NONE);
-    session.on_mouse_down(0, INSIDE.0, INSIDE.1, EventModifiers::NONE);
-    session.on_mouse_up(0, INSIDE.0, INSIDE.1, EventModifiers::NONE);
+    session.mouse_move(0, INSIDE, Modifiers::NONE);
+    session.mouse_down(0, INSIDE, Modifiers::NONE);
+    session.mouse_up(0, INSIDE, Modifiers::NONE);
 }
 
 /// **A keystroke runs the field's own `/AA /K` script.**
@@ -72,7 +72,7 @@ fn typing_runs_the_documents_own_keystroke_script() {
         "no event has reached a hook yet"
     );
 
-    session.on_char('7', EventModifiers::NONE);
+    session.character('7', Modifiers::NONE);
 
     let transcript = session
         .scripts()
@@ -96,14 +96,14 @@ fn committing_runs_the_rest_of_the_cascade() {
         .expect("boa builds a realm on any input");
 
     click(&mut session);
-    session.on_char('7', EventModifiers::NONE);
+    session.character('7', Modifiers::NONE);
     let after_typing = session
         .scripts()
         .expect("a scripted session")
         .transcript()
         .len();
 
-    let committed = session.force_kill_focus();
+    let committed = session.blur();
     assert!(committed.consumed);
 
     let after_commit = session.scripts().expect("a scripted session").transcript();
@@ -143,8 +143,8 @@ fn the_default_session_runs_no_script_on_the_same_fixture() {
     let mut session = FormSession::new(&doc);
 
     click(&mut session);
-    session.on_char('7', EventModifiers::NONE);
-    session.force_kill_focus();
+    session.character('7', Modifiers::NONE);
+    session.blur();
 
     assert!(
         session.scripts().is_none(),
@@ -180,14 +180,14 @@ fn a_callers_own_cascade_gates_the_commit() {
     );
 
     click(&mut session);
-    session.on_char('7', EventModifiers::NONE);
+    session.character('7', Modifiers::NONE);
     assert_eq!(session.focused_text().as_deref(), Some("7"));
 
     // The gate refused, so the field goes back to what the document holds —
     // which for this fixture is nothing — and **keeps focus**, which is what
     // a refused commit does: a user whose value was rejected is left in the
     // field to fix it rather than silently moved out of it.
-    session.force_kill_focus();
+    session.blur();
     assert_eq!(session.focused_text().as_deref(), Some(""));
     assert!(
         session.focused_annot().is_some(),

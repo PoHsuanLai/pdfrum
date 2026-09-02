@@ -77,9 +77,9 @@ fn every_type_in_a_public_signature_is_nameable_from_the_facade() {
     nameable::<SaveError>();
 
     // pdfrum-form
-    nameable::<MouseButton>();
-    nameable::<VirtualKey>();
-    nameable::<EventModifiers>();
+    nameable::<Button>();
+    nameable::<Key>();
+    nameable::<Modifiers>();
     nameable::<Event>();
     nameable::<PopupView>();
     nameable::<ScrollView>();
@@ -87,12 +87,14 @@ fn every_type_in_a_public_signature_is_nameable_from_the_facade() {
     nameable::<PopupGeometry>();
     nameable::<AnnotId>();
     nameable::<SessionConfig>();
-    nameable::<EventResponse>();
+    nameable::<Response>();
     nameable::<AppearanceUpdate>();
     nameable::<UpdateKind>();
     // `FormRect` is gone: `PopupView`/`PopupGeometry` speak `kurbo::Rect`
-    // now, and the facade re-exports the whole of `kurbo` (§WP4).
+    // now, and the facade re-exports the whole of `kurbo` (§WP4) — and so do
+    // the event methods' points.
     nameable::<kurbo::Rect>();
+    nameable::<kurbo::Point>();
 
     // pdfrum-object
     nameable::<Dict>();
@@ -315,7 +317,7 @@ fn an_update_payload_is_reachable() {
             }
             UpdateKind::ActionRequested { action, modifiers } => {
                 let _: &Action = action;
-                let _: EventModifiers = *modifiers;
+                let _: Modifiers = *modifiers;
                 "action"
             }
             UpdateKind::RevertedToFileAppearance => "reverted",

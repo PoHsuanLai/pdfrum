@@ -14,30 +14,30 @@
 // See `form_routing.rs`: the fixture helper is a failure signal.
 #![allow(clippy::expect_used)]
 
-use pdfrum::{Document, EventModifiers, FormSession};
+use pdfrum::{Document, FormSession, Modifiers, kurbo::Point};
 
 fn document() -> Document {
     Document::open("tests/fixtures/combobox_form.pdf").expect("the combobox fixture must open")
 }
 
 /// The upstream constants.
-const BEGIN_X: f32 = 102.0;
-const END_X: f32 = 183.0;
-const EDITABLE_Y: f32 = 360.0;
-const NON_EDITABLE_Y: f32 = 410.0;
-const READ_ONLY_Y: f32 = 510.0;
+const BEGIN_X: f64 = 102.0;
+const END_X: f64 = 183.0;
+const EDITABLE_Y: f64 = 360.0;
+const NON_EDITABLE_Y: f64 = 410.0;
+const READ_ONLY_Y: f64 = 510.0;
 /// A point on no form field at all.
-const OFF_FIELD: (f32, f32) = (1.0, 1.0);
+const OFF_FIELD: Point = Point::new(1.0, 1.0);
 
-fn click(session: &mut FormSession<'_>, x: f32, y: f32) {
-    session.on_mouse_move(0, x, y, EventModifiers::NONE);
-    session.on_mouse_down(0, x, y, EventModifiers::NONE);
-    session.on_mouse_up(0, x, y, EventModifiers::NONE);
+fn click(session: &mut FormSession<'_>, at: Point) {
+    session.mouse_move(0, at, Modifiers::NONE);
+    session.mouse_down(0, at, Modifiers::NONE);
+    session.mouse_up(0, at, Modifiers::NONE);
 }
 
 fn type_text(session: &mut FormSession<'_>, text: &str) {
     for ch in text.chars() {
-        session.on_char(ch, EventModifiers::NONE);
+        session.character(ch, Modifiers::NONE);
     }
 }
 
@@ -53,24 +53,24 @@ fn focus_moves_between_the_two_combo_boxes() {
     assert!(session.focused_text().is_none());
 
     // The gated box reports its /V's label.
-    click(&mut session, BEGIN_X, NON_EDITABLE_Y);
+    click(&mut session, Point::new(BEGIN_X, NON_EDITABLE_Y));
     assert_eq!(session.focused_text().as_deref(), Some("Banana"));
 
     // The editable one starts empty — its /V is absent, not "Banana".
-    click(&mut session, BEGIN_X, EDITABLE_Y);
+    click(&mut session, Point::new(BEGIN_X, EDITABLE_Y));
     assert_eq!(session.focused_text().as_deref(), Some(""));
 
     // Back to the gated box from its other end: same answer, so the answer is
     // the field's and not the click's.
-    click(&mut session, END_X, NON_EDITABLE_Y);
+    click(&mut session, Point::new(END_X, NON_EDITABLE_Y));
     assert_eq!(session.focused_text().as_deref(), Some("Banana"));
 
     // Clicking the same box again changes nothing.
-    click(&mut session, BEGIN_X, NON_EDITABLE_Y);
+    click(&mut session, Point::new(BEGIN_X, NON_EDITABLE_Y));
     assert_eq!(session.focused_text().as_deref(), Some("Banana"));
 
     // Dropping focus leaves no field at all.
-    session.force_kill_focus();
+    session.blur();
     assert!(session.focused_text().is_none());
 }
 
@@ -81,14 +81,14 @@ fn typing_into_an_editable_combo_inserts_and_persists() {
     let doc = document();
     let mut session = FormSession::new(&doc);
 
-    click(&mut session, BEGIN_X, EDITABLE_Y);
+    click(&mut session, Point::new(BEGIN_X, EDITABLE_Y));
     type_text(&mut session, "ABC");
     assert_eq!(session.focused_text().as_deref(), Some("ABC"));
 
     // Away and back: the typing survives.
-    click(&mut session, OFF_FIELD.0, OFF_FIELD.1);
+    click(&mut session, OFF_FIELD);
     assert!(session.focused_text().is_none());
-    click(&mut session, END_X, EDITABLE_Y);
+    click(&mut session, Point::new(END_X, EDITABLE_Y));
     assert_eq!(session.focused_text().as_deref(), Some("ABC"));
 
     type_text(&mut session, "ABC");
@@ -103,7 +103,7 @@ fn typing_into_a_gated_combo_selects_rather_than_inserts() {
     let doc = document();
     let mut session = FormSession::new(&doc);
 
-    click(&mut session, BEGIN_X, NON_EDITABLE_Y);
+    click(&mut session, Point::new(BEGIN_X, NON_EDITABLE_Y));
     assert_eq!(session.focused_text().as_deref(), Some("Banana"));
 
     type_text(&mut session, "A");
@@ -125,7 +125,7 @@ fn a_read_only_combo_never_takes_focus() {
     let doc = document();
     let mut session = FormSession::new(&doc);
 
-    click(&mut session, BEGIN_X, READ_ONLY_Y);
+    click(&mut session, Point::new(BEGIN_X, READ_ONLY_Y));
     assert!(
         session.focused_annot().is_none(),
         "a read-only widget is not clickable"
@@ -138,10 +138,10 @@ fn a_click_off_every_field_drops_focus() {
     let doc = document();
     let mut session = FormSession::new(&doc);
 
-    click(&mut session, BEGIN_X, NON_EDITABLE_Y);
+    click(&mut session, Point::new(BEGIN_X, NON_EDITABLE_Y));
     assert!(session.focused_annot().is_some());
 
-    click(&mut session, OFF_FIELD.0, OFF_FIELD.1);
+    click(&mut session, OFF_FIELD);
     assert!(session.focused_annot().is_none());
     assert!(session.focused_text().is_none());
 }
@@ -153,13 +153,13 @@ fn the_two_combo_boxes_keep_separate_state() {
     let doc = document();
     let mut session = FormSession::new(&doc);
 
-    click(&mut session, BEGIN_X, EDITABLE_Y);
+    click(&mut session, Point::new(BEGIN_X, EDITABLE_Y));
     type_text(&mut session, "typed");
 
-    click(&mut session, BEGIN_X, NON_EDITABLE_Y);
+    click(&mut session, Point::new(BEGIN_X, NON_EDITABLE_Y));
     assert_eq!(session.focused_text().as_deref(), Some("Banana"));
 
-    click(&mut session, BEGIN_X, EDITABLE_Y);
+    click(&mut session, Point::new(BEGIN_X, EDITABLE_Y));
     assert_eq!(
         session.focused_text().as_deref(),
         Some("typed"),

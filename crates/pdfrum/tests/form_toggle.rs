@@ -14,20 +14,20 @@
 // See `form_routing.rs`: the fixture helper is a failure signal.
 #![allow(clippy::expect_used)]
 
-use pdfrum::{Document, EventModifiers, FormSession, VirtualKey};
+use pdfrum::{Document, FormSession, Key, Modifiers, kurbo::Point};
 
 fn document() -> Document {
     Document::open("tests/fixtures/click_form.pdf").expect("the click_form fixture must open")
 }
 
 /// Centres of the two check boxes.
-const READ_ONLY_CHECKBOX: (f32, f32) = (145.0, 260.0);
-const CHECKBOX: (f32, f32) = (145.0, 220.0);
+const READ_ONLY_CHECKBOX: Point = Point::new(145.0, 260.0);
+const CHECKBOX: Point = Point::new(145.0, 220.0);
 
-fn click(session: &mut FormSession<'_>, at: (f32, f32)) {
-    session.on_mouse_move(0, at.0, at.1, EventModifiers::NONE);
-    session.on_mouse_down(0, at.0, at.1, EventModifiers::NONE);
-    session.on_mouse_up(0, at.0, at.1, EventModifiers::NONE);
+fn click(session: &mut FormSession<'_>, at: Point) {
+    session.mouse_move(0, at, Modifiers::NONE);
+    session.mouse_down(0, at, Modifiers::NONE);
+    session.mouse_up(0, at, Modifiers::NONE);
 }
 
 /// A read-only widget is **not clickable**, so it never takes focus. This is
@@ -57,12 +57,10 @@ fn an_ordinary_check_box_takes_a_click() {
 }
 
 /// Clicks and reports whether the release was consumed.
-fn click_and_report(session: &mut FormSession<'_>, at: (f32, f32)) -> bool {
-    session.on_mouse_move(0, at.0, at.1, EventModifiers::NONE);
-    session.on_mouse_down(0, at.0, at.1, EventModifiers::NONE);
-    session
-        .on_mouse_up(0, at.0, at.1, EventModifiers::NONE)
-        .consumed
+fn click_and_report(session: &mut FormSession<'_>, at: Point) -> bool {
+    session.mouse_move(0, at, Modifiers::NONE);
+    session.mouse_down(0, at, Modifiers::NONE);
+    session.mouse_up(0, at, Modifiers::NONE).consumed
 }
 
 /// `CheckReadOnlyInCheckbox`: Return and Space on a focused read-only check
@@ -78,10 +76,7 @@ fn a_read_only_check_box_consumes_a_keystroke_without_acting() {
     // Tab until the read-only check box holds focus, if the ring reaches it.
     let mut reached = false;
     for _ in 0..8 {
-        if !session
-            .on_key_down(VirtualKey::Tab, EventModifiers::NONE)
-            .consumed
-        {
+        if !session.key_down(Key::Tab, Modifiers::NONE).consumed {
             break;
         }
         if session.focused_annot().is_some_and(|a| a.index == 0) {
@@ -97,8 +92,8 @@ fn a_read_only_check_box_consumes_a_keystroke_without_acting() {
         return;
     }
 
-    for key in [VirtualKey::Return, VirtualKey::Space] {
-        let response = session.on_key_down(key, EventModifiers::NONE);
+    for key in [Key::Return, Key::Space] {
+        let response = session.key_down(key, Modifiers::NONE);
         assert!(
             response.consumed,
             "{key:?} on a read-only control is consumed"
@@ -119,9 +114,9 @@ fn a_check_box_toggles_on_each_return() {
     click(&mut session, CHECKBOX);
     assert!(session.focused_annot().is_some());
 
-    let first = session.on_char('\r', EventModifiers::NONE);
+    let first = session.character('\r', Modifiers::NONE);
     assert!(first.consumed);
-    let second = session.on_char('\r', EventModifiers::NONE);
+    let second = session.character('\r', Modifiers::NONE);
     assert!(second.consumed);
 }
 
@@ -149,7 +144,7 @@ fn a_toggle_has_nothing_to_undo() {
     let doc = document();
     let mut session = FormSession::new(&doc);
     click(&mut session, CHECKBOX);
-    session.on_char('\r', EventModifiers::NONE);
+    session.character('\r', Modifiers::NONE);
 
     assert!(!session.can_undo());
     assert!(!session.can_redo());

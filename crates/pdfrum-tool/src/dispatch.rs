@@ -6,8 +6,8 @@
 //! **grammar**: one variant per `.evt` verb, `i32` straight out of `atoi`, a
 //! `u32` modifier mask, and a `KeyCode` variant that is the down/up *pair* the
 //! verb emits. [`pdfrum::FormSession`]'s methods are the **semantics**: page
-//! space coordinates, a typed [`VirtualKey`], typed [`EventModifiers`], and
-//! no key-up at all. This module is the bridge, and it is the only place in the
+//! space coordinates as a [`kurbo::Point`], a typed [`Key`], typed
+//! [`Modifiers`], and no key-up at all. This module is the bridge, and it is the only place in the
 //! tool that knows both.
 //!
 //! Five of the harness reviewer's seven bridging facts
@@ -18,9 +18,10 @@
 //! 1. **Coordinates are page space, y-up, and no transform happens.** The
 //!    `.evt` integers are what `FORM_On*` receives, and
 //!    `public/fpdf_formfill.h` documents those as PDF user space. The widening
-//!    to `f32` is the *whole* conversion. (`FORM_OnLButtonUp`'s "in device"
-//!    comment is an upstream doc bug — its body is `OnLButtonDown`'s.)
-//! 2. **`keycode` is the down/up pair → one `on_key_down`.** `event.cc:46-58`
+//!    to `f64` is the *whole* conversion, and it is exact. (`FORM_OnLButtonUp`'s
+//!    "in device" comment is an upstream doc bug — its body is
+//!    `OnLButtonDown`'s.)
+//! 2. **`keycode` is the down/up pair → one `key_down`.** `event.cc:46-58`
 //!    fires `FORM_OnKeyDown` then `FORM_OnKeyUp` with identical arguments, and
 //!    `FORM_OnKeyUp` is documented as permanently unimplemented, always
 //!    answering false. The up edge is dropped rather than modelled: the facade
@@ -39,13 +40,17 @@
 //!    no pairing state whatsoever, so there is nothing here that *could*
 //!    synthesize the missing edge.
 //!
-//! The right button is not dropped either: `on_button` exists on the facade
-//! precisely because scripts contain right-button lines, and the correct
-//! behaviour for them is to consume nothing.
+//! The right button is not dropped either. It has no method on the facade —
+//! a `button` argument and a `down: bool` beside it was an enum spelled as
+//! arguments — so a right-button line becomes an [`Event::MouseDown`] or
+//! [`Event::MouseUp`] handed to [`pdfrum::FormSession::apply`], which is the
+//! shape the value already had. The correct behaviour for those lines is to
+//! consume nothing, and that is still what happens.
 
 use std::io::Write;
 
-use pdfrum::{EventModifiers, EventResponse, FormSession, MouseButton, VirtualKey};
+use kurbo::Point;
+use pdfrum::{Button, Event, FormSession, Key, Modifiers, Response};
 
 use crate::events::{self, MOD_ALT, MOD_CONTROL, MOD_SHIFT};
 
@@ -69,7 +74,7 @@ pub fn replay_page(
     // page at a time and passes it to every `FORM_On*` call. Without this a
     // Tab with nothing focused would enter the focus ring on page 0 whichever
     // page the script is being replayed against.
-    session.set_page_in_view(page);
+    session.set_viewed_page(page);
     let mut updates = Vec::new();
     for event in script {
         let Some(call) = to_call(event) else {
@@ -103,59 +108,34 @@ pub fn replay_page(
 /// a total match, so a variant cannot be added without a call being wired.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Call {
-    /// `on_mouse_move`.
-    MouseMove {
-        x: f32,
-        y: f32,
-        modifiers: EventModifiers,
-    },
-    /// `on_mouse_down` — the left button only.
-    MouseDown {
-        x: f32,
-        y: f32,
-        modifiers: EventModifiers,
-    },
-    /// `on_mouse_up` — the left button only.
-    MouseUp {
-        x: f32,
-        y: f32,
-        modifiers: EventModifiers,
-    },
-    /// `on_button`, which is where a non-primary button goes.
+    /// `mouse_move`.
+    MouseMove { at: Point, modifiers: Modifiers },
+    /// `mouse_down` — the left button only.
+    MouseDown { at: Point, modifiers: Modifiers },
+    /// `mouse_up` — the left button only.
+    MouseUp { at: Point, modifiers: Modifiers },
+    /// A non-primary button, applied as an [`Event`] because the facade has
+    /// no method for one.
     Button {
-        button: MouseButton,
+        button: Button,
         down: bool,
-        x: f32,
-        y: f32,
-        modifiers: EventModifiers,
+        at: Point,
+        modifiers: Modifiers,
     },
-    /// `on_double_click`.
-    DoubleClick {
-        x: f32,
-        y: f32,
-        modifiers: EventModifiers,
-    },
-    /// `on_mouse_wheel`.
+    /// `double_click`.
+    DoubleClick { at: Point, modifiers: Modifiers },
+    /// `mouse_wheel`.
     MouseWheel {
-        x: f32,
-        y: f32,
-        delta_x: i32,
-        delta_y: i32,
-        modifiers: EventModifiers,
+        at: Point,
+        delta: (i32, i32),
+        modifiers: Modifiers,
     },
-    /// `on_focus_at`.
-    FocusAt {
-        x: f32,
-        y: f32,
-        modifiers: EventModifiers,
-    },
-    /// `on_key_down`. There is no `KeyUp` variant, and that is fact 2.
-    KeyDown {
-        key: VirtualKey,
-        modifiers: EventModifiers,
-    },
-    /// `on_char`.
-    Char { ch: char, modifiers: EventModifiers },
+    /// `focus_at`.
+    FocusAt { at: Point, modifiers: Modifiers },
+    /// `key_down`. There is no `KeyUp` variant, and that is fact 2.
+    KeyDown { key: Key, modifiers: Modifiers },
+    /// `character`.
+    Char { ch: char, modifiers: Modifiers },
 }
 
 /// One grammar event onto the call it means, or `None` when it means none.
@@ -171,9 +151,8 @@ pub fn to_call(event: &events::Event) -> Option<Call> {
         // The grammar has no modifier field on `mousemove`, so this is a
         // hardcoded zero rather than a lost value.
         events::Event::MouseMove { x, y } => Some(Call::MouseMove {
-            x: at(x),
-            y: at(y),
-            modifiers: EventModifiers::NONE,
+            at: at(x, y),
+            modifiers: Modifiers::NONE,
         }),
         events::Event::MouseDown {
             button,
@@ -188,8 +167,7 @@ pub fn to_call(event: &events::Event) -> Option<Call> {
             modifiers,
         } => Some(button_call(button, false, x, y, modifiers)),
         events::Event::MouseDoubleClick { x, y, modifiers } => Some(Call::DoubleClick {
-            x: at(x),
-            y: at(y),
+            at: at(x, y),
             modifiers: to_modifiers(modifiers),
         }),
         events::Event::MouseWheel {
@@ -199,17 +177,14 @@ pub fn to_call(event: &events::Event) -> Option<Call> {
             delta_y,
             modifiers,
         } => Some(Call::MouseWheel {
-            x: at(x),
-            y: at(y),
-            delta_x,
-            delta_y,
+            at: at(x, y),
+            delta: (delta_x, delta_y),
             modifiers: to_modifiers(modifiers),
         }),
         // `focus,<x>,<y>` has no modifier field either.
         events::Event::Focus { x, y } => Some(Call::FocusAt {
-            x: at(x),
-            y: at(y),
-            modifiers: EventModifiers::NONE,
+            at: at(x, y),
+            modifiers: Modifiers::NONE,
         }),
         // Fact 2: the verb is the down/up pair, and the up edge is a no-op
         // the facade has no method for. One `KeyDown` is the whole meaning of
@@ -221,78 +196,81 @@ pub fn to_call(event: &events::Event) -> Option<Call> {
         // The grammar hardcodes no modifiers on `charcode`.
         events::Event::CharCode { code } => Some(Call::Char {
             ch: to_char(code)?,
-            modifiers: EventModifiers::NONE,
+            modifiers: Modifiers::NONE,
         }),
     }
 }
 
 /// Performs one decided call against the session.
-fn perform(session: &mut FormSession<'_>, page: u32, call: Call) -> EventResponse {
+///
+/// Every variant but `Button` has a method; `Button` is an [`Event`] applied
+/// against the page in view, which [`replay_page`] has already set to `page`.
+fn perform(session: &mut FormSession<'_>, page: u32, call: Call) -> Response {
     match call {
-        Call::MouseMove { x, y, modifiers } => session.on_mouse_move(page, x, y, modifiers),
-        Call::MouseDown { x, y, modifiers } => session.on_mouse_down(page, x, y, modifiers),
-        Call::MouseUp { x, y, modifiers } => session.on_mouse_up(page, x, y, modifiers),
+        Call::MouseMove { at, modifiers } => session.mouse_move(page, at, modifiers),
+        Call::MouseDown { at, modifiers } => session.mouse_down(page, at, modifiers),
+        Call::MouseUp { at, modifiers } => session.mouse_up(page, at, modifiers),
         Call::Button {
             button,
             down,
-            x,
-            y,
+            at,
             modifiers,
-        } => session.on_button(page, button, down, x, y, modifiers),
-        Call::DoubleClick { x, y, modifiers } => session.on_double_click(page, x, y, modifiers),
+        } => session.apply(if down {
+            Event::MouseDown {
+                button,
+                at,
+                modifiers,
+            }
+        } else {
+            Event::MouseUp {
+                button,
+                at,
+                modifiers,
+            }
+        }),
+        Call::DoubleClick { at, modifiers } => session.double_click(page, at, modifiers),
         Call::MouseWheel {
-            x,
-            y,
-            delta_x,
-            delta_y,
+            at,
+            delta,
             modifiers,
-        } => session.on_mouse_wheel(page, x, y, delta_x, delta_y, modifiers),
-        Call::FocusAt { x, y, modifiers } => session.on_focus_at(page, x, y, modifiers),
-        Call::KeyDown { key, modifiers } => session.on_key_down(key, modifiers),
-        Call::Char { ch, modifiers } => session.on_char(ch, modifiers),
+        } => session.mouse_wheel(page, at, delta, modifiers),
+        Call::FocusAt { at, modifiers } => session.focus_at(page, at, modifiers),
+        Call::KeyDown { key, modifiers } => session.key_down(key, modifiers),
+        Call::Char { ch, modifiers } => session.character(ch, modifiers),
     }
 }
 
 /// A `mousedown`/`mouseup` for either button.
 ///
-/// The left button goes through the dedicated methods and the right through
-/// `on_button`, which is the facade's own split: the left pair is what every
-/// ported assertion drives, and `on_button` exists so a script's right-button
-/// line has somewhere to go rather than being dropped.
+/// The left button goes through the dedicated methods and the right through a
+/// whole [`Event`], which is the facade's own split: the left pair is what
+/// every ported assertion drives, and the value form exists so a script's
+/// right-button line has somewhere to go rather than being dropped.
 fn button_call(button: events::MouseButton, down: bool, x: i32, y: i32, modifiers: u32) -> Call {
-    let (x, y, modifiers) = (at(x), at(y), to_modifiers(modifiers));
+    let (at, modifiers) = (at(x, y), to_modifiers(modifiers));
     match (button, down) {
-        (events::MouseButton::Left, true) => Call::MouseDown { x, y, modifiers },
-        (events::MouseButton::Left, false) => Call::MouseUp { x, y, modifiers },
+        (events::MouseButton::Left, true) => Call::MouseDown { at, modifiers },
+        (events::MouseButton::Left, false) => Call::MouseUp { at, modifiers },
         (events::MouseButton::Right, _) => Call::Button {
-            button: MouseButton::Right,
+            button: Button::Right,
             down,
-            x,
-            y,
+            at,
             modifiers,
         },
     }
 }
 
-/// Fact 1: a page-space integer widened, and nothing else.
+/// Fact 1: a page-space integer pair widened, and nothing else.
 ///
-/// `i32` to `f32` is lossless for every coordinate a `.evt` can hold — the
-/// corpus's largest is four digits, and `f32` is exact to 2^24 — and a value
-/// past that rounds rather than trapping, which is what a `double` in the C++
-/// would also do.
-///
-/// **This stays `f32` until the facade's own signatures move.** `pdfrum-form`
-/// now takes a [`kurbo::Point`] and narrows it in `route::apply`, but
-/// `FormSession`'s `on_*` methods still take the flattened `x: f32, y: f32`
-/// pair, so widening here would only add an `as f32` at the dispatch below.
-/// The `f64::from` §A.6 prices belongs with those signatures, in the facade's
-/// own package.
-#[expect(
-    clippy::cast_precision_loss,
-    reason = "page coordinates; exact below 2^24 and the C++ widens to double here too"
-)]
-fn at(value: i32) -> f32 {
-    value as f32
+/// `f64::from` is total and exact over the whole of `i32`, which is what the
+/// C++ does too — `FORM_On*` take `double page_x, page_y` and the harness
+/// hands them the `atoi` result. There is no lossy cast here and no `expect`
+/// attribute needed to permit one: the `as f32` this replaced was exact for
+/// every coordinate the corpus holds, but only because the corpus's largest
+/// is four digits. `pdfrum-form` narrows to its own `f32` in `route::apply`,
+/// which is where the oracle narrows as well.
+fn at(x: i32, y: i32) -> Point {
+    Point::new(f64::from(x), f64::from(y))
 }
 
 /// Fact 4: the grammar's three bits onto the semantic ones.
@@ -301,16 +279,16 @@ fn at(value: i32) -> f32 {
 /// are the only ones a script can name; the facade's set is larger because the
 /// ported assertions send more. Bits outside the three are unreachable from a
 /// script, so this is a total mapping rather than a lossy one.
-fn to_modifiers(mask: u32) -> EventModifiers {
-    let mut modifiers = EventModifiers::NONE;
+fn to_modifiers(mask: u32) -> Modifiers {
+    let mut modifiers = Modifiers::NONE;
     if mask & MOD_SHIFT != 0 {
-        modifiers = modifiers.union(EventModifiers::SHIFT);
+        modifiers = modifiers.union(Modifiers::SHIFT);
     }
     if mask & MOD_CONTROL != 0 {
-        modifiers = modifiers.union(EventModifiers::CONTROL);
+        modifiers = modifiers.union(Modifiers::CONTROL);
     }
     if mask & MOD_ALT != 0 {
-        modifiers = modifiers.union(EventModifiers::ALT);
+        modifiers = modifiers.union(Modifiers::ALT);
     }
     modifiers
 }
@@ -324,8 +302,8 @@ fn to_modifiers(mask: u32) -> EventModifiers {
 /// consumed; `from_virtual` carries those through as `Other`. A code outside
 /// `u16` cannot name a virtual key on any platform, so it becomes `Unknown` —
 /// which is a key the layer explicitly handles rather than a sentinel.
-fn to_key(code: i32) -> VirtualKey {
-    u16::try_from(code).map_or(VirtualKey::Unknown, VirtualKey::from_virtual)
+fn to_key(code: i32) -> Key {
+    u16::try_from(code).map_or(Key::Unknown, Key::from_virtual)
 }
 
 /// Fact 3: an `i32` code point onto a `char`, fallibly.
@@ -343,15 +321,15 @@ mod tests {
 
     #[test]
     fn the_three_grammar_modifiers_map_across_and_combine() {
-        assert_eq!(to_modifiers(0), EventModifiers::NONE);
-        assert_eq!(to_modifiers(MOD_SHIFT), EventModifiers::SHIFT);
-        assert_eq!(to_modifiers(MOD_CONTROL), EventModifiers::CONTROL);
-        assert_eq!(to_modifiers(MOD_ALT), EventModifiers::ALT);
+        assert_eq!(to_modifiers(0), Modifiers::NONE);
+        assert_eq!(to_modifiers(MOD_SHIFT), Modifiers::SHIFT);
+        assert_eq!(to_modifiers(MOD_CONTROL), Modifiers::CONTROL);
+        assert_eq!(to_modifiers(MOD_ALT), Modifiers::ALT);
         assert_eq!(
             to_modifiers(MOD_SHIFT | MOD_CONTROL | MOD_ALT),
-            EventModifiers::SHIFT
-                .union(EventModifiers::CONTROL)
-                .union(EventModifiers::ALT)
+            Modifiers::SHIFT
+                .union(Modifiers::CONTROL)
+                .union(Modifiers::ALT)
         );
     }
 
@@ -359,7 +337,7 @@ mod tests {
     fn a_bit_no_script_can_set_maps_to_nothing() {
         // The grammar's mask only ever holds the low three bits; anything
         // else is unreachable, and must not be forwarded as a guess.
-        assert_eq!(to_modifiers(1 << 9), EventModifiers::NONE);
+        assert_eq!(to_modifiers(1 << 9), Modifiers::NONE);
     }
 
     #[test]
@@ -389,13 +367,13 @@ mod tests {
 
     #[test]
     fn a_key_code_narrows_and_an_impossible_one_becomes_unknown() {
-        assert_eq!(to_key(9), VirtualKey::Tab);
-        assert_eq!(to_key(0x0D), VirtualKey::Return);
-        assert_eq!(to_key(0x41), VirtualKey::A);
-        assert_eq!(to_key(0), VirtualKey::Unknown);
+        assert_eq!(to_key(9), Key::Tab);
+        assert_eq!(to_key(0x0D), Key::Return);
+        assert_eq!(to_key(0x41), Key::A);
+        assert_eq!(to_key(0), Key::Unknown);
         // Outside u16, so it names no virtual key anywhere.
-        assert_eq!(to_key(-1), VirtualKey::Unknown);
-        assert_eq!(to_key(70_000), VirtualKey::Unknown);
+        assert_eq!(to_key(-1), Key::Unknown);
+        assert_eq!(to_key(70_000), Key::Unknown);
     }
 
     fn calls(script: &str) -> Vec<Call> {
@@ -411,8 +389,8 @@ mod tests {
         assert_eq!(
             calls("keycode,9"),
             [Call::KeyDown {
-                key: VirtualKey::Tab,
-                modifiers: EventModifiers::NONE
+                key: Key::Tab,
+                modifiers: Modifiers::NONE
             }]
         );
         // Fact 4 rides along on the same verb, which is the only one whose
@@ -420,8 +398,8 @@ mod tests {
         assert_eq!(
             calls("keycode,90,shiftcontrol"),
             [Call::KeyDown {
-                key: VirtualKey::Z,
-                modifiers: EventModifiers::SHIFT.union(EventModifiers::CONTROL),
+                key: Key::Z,
+                modifiers: Modifiers::SHIFT.union(Modifiers::CONTROL),
             }]
         );
         // Three lines are three key-downs, not three pairs.
@@ -437,11 +415,11 @@ mod tests {
             [
                 Call::Char {
                     ch: 'a',
-                    modifiers: EventModifiers::NONE
+                    modifiers: Modifiers::NONE
                 },
                 Call::Char {
                     ch: 'b',
-                    modifiers: EventModifiers::NONE
+                    modifiers: Modifiers::NONE
                 },
             ]
         );
@@ -459,14 +437,12 @@ mod tests {
             script,
             [
                 Call::MouseMove {
-                    x: 150.0,
-                    y: 415.0,
-                    modifiers: EventModifiers::NONE
+                    at: Point::new(150.0, 415.0),
+                    modifiers: Modifiers::NONE
                 },
                 Call::MouseDown {
-                    x: 150.0,
-                    y: 415.0,
-                    modifiers: EventModifiers::NONE
+                    at: Point::new(150.0, 415.0),
+                    modifiers: Modifiers::NONE
                 },
             ]
         );
@@ -480,31 +456,28 @@ mod tests {
         assert_eq!(
             calls("mouseup,left,10,20"),
             [Call::MouseUp {
-                x: 10.0,
-                y: 20.0,
-                modifiers: EventModifiers::NONE
+                at: Point::new(10.0, 20.0),
+                modifiers: Modifiers::NONE
             }]
         );
     }
 
     #[test]
-    fn a_right_button_line_reaches_on_button_rather_than_being_dropped() {
+    fn a_right_button_line_becomes_an_event_rather_than_being_dropped() {
         assert_eq!(
             calls("mousedown,right,1,2\nmouseup,right,1,2"),
             [
                 Call::Button {
-                    button: MouseButton::Right,
+                    button: Button::Right,
                     down: true,
-                    x: 1.0,
-                    y: 2.0,
-                    modifiers: EventModifiers::NONE
+                    at: Point::new(1.0, 2.0),
+                    modifiers: Modifiers::NONE
                 },
                 Call::Button {
-                    button: MouseButton::Right,
+                    button: Button::Right,
                     down: false,
-                    x: 1.0,
-                    y: 2.0,
-                    modifiers: EventModifiers::NONE
+                    at: Point::new(1.0, 2.0),
+                    modifiers: Modifiers::NONE
                 },
             ]
         );
@@ -528,22 +501,9 @@ mod tests {
         assert!(matches!(got[1], Call::MouseDown { .. }));
         assert!(matches!(got[2], Call::Char { ch: 'a', .. }));
         assert!(matches!(got[3], Call::MouseUp { .. }));
-        assert!(matches!(
-            got[4],
-            Call::KeyDown {
-                key: VirtualKey::Left,
-                ..
-            }
-        ));
+        assert!(matches!(got[4], Call::KeyDown { key: Key::Left, .. }));
         assert!(matches!(got[5], Call::DoubleClick { .. }));
-        assert!(matches!(
-            got[6],
-            Call::MouseWheel {
-                delta_x: 0,
-                delta_y: -1,
-                ..
-            }
-        ));
+        assert!(matches!(got[6], Call::MouseWheel { delta: (0, -1), .. }));
         assert!(matches!(got[7], Call::FocusAt { .. }));
     }
 
@@ -603,9 +563,12 @@ mod tests {
 
     #[test]
     fn a_coordinate_is_widened_and_not_transformed() {
-        // Fact 1: no y-flip, no page-height subtraction, no scale.
-        assert!((at(0) - 0.0).abs() < f32::EPSILON);
-        assert!((at(145) - 145.0).abs() < f32::EPSILON);
-        assert!((at(-3) - -3.0).abs() < f32::EPSILON);
+        // Fact 1: no y-flip, no page-height subtraction, no scale — and now
+        // an equality rather than an epsilon, because `f64::from` is exact
+        // over the whole of `i32` where the `as f32` it replaced was only
+        // exact below 2^24.
+        assert_eq!(at(0, 0), Point::new(0.0, 0.0));
+        assert_eq!(at(145, 415), Point::new(145.0, 415.0));
+        assert_eq!(at(-3, i32::MAX), Point::new(-3.0, 2_147_483_647.0));
     }
 }
