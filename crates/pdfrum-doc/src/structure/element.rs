@@ -81,7 +81,7 @@ impl StructElement {
     /// Reads an element's kids against a page.
     ///
     /// `page_obj_num` is the page being read; content kids that name a
-    /// different page become [`Kid::Invalid`], while element kids are never
+    /// different page become `Kid::Invalid`, while element kids are never
     /// page-tested at all — that asymmetry is what lets one element tree be
     /// reachable from every page it touches.
     pub fn load_kids<R: Resolve>(dict: &Dict, page_obj_num: u32, r: &R) -> Vec<Kid> {
@@ -193,9 +193,9 @@ impl StructElement {
     /// The `/MCID` a kid names, or `None` for a kid that is not content.
     ///
     /// This is the **page-filtered** reading: a content kid belonging to
-    /// another page came in as [`Kid::Invalid`] and answers `None` here. The
+    /// another page came in as `Kid::Invalid` and answers `None` here. The
     /// dump uses a different, unfiltered accessor
-    /// ([`marked_content_id_count`]).
+    /// (`marked_content_id_count`).
     ///
     /// Was `-> i64` with `-1` for absence. A real `/MCID` is non-negative
     /// (ISO 32000-1 §14.7.4.2) so `-1` could not *collide*, but the file

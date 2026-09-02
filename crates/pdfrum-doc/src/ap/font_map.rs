@@ -145,7 +145,7 @@ pub(crate) fn substitute_encode(font: &pdfrum_font::Font, code: u32) -> Vec<u8> 
 /// One code point's advance through a substitute font, in thousandths of an
 /// em.
 ///
-/// Measured under the code [`substitute_encode`] writes, for the same reason
+/// Measured under the code `substitute_encode` writes, for the same reason
 /// the `/DA` font's width is: the two have to name the same glyph or the
 /// layout advances past characters the stream still contains.
 #[must_use]

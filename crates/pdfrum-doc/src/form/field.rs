@@ -854,7 +854,7 @@ fn merge(base: &Dict, overlay: &Dict) -> Dict {
 ///   `GetValueOrSelectedIndicesObject` — **`/V` first**, `/I` only when there
 ///   is no `/V` — and then matches each entry's *text* against the option
 ///   values, so an integer index matches nothing. That is
-///   [`crate::ap::field_body::selected_indices`], and it is deliberately the
+///   `ap::field_body::selected_indices`, and it is deliberately the
 ///   other way round.
 ///
 /// So `listbox_form.pdf`'s `Listbox_MultiSelectMultipleIndices` — `/I [1 3]`

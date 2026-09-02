@@ -39,7 +39,7 @@
 //! off and none of the three builders enables it, so it stays at the
 //! `(plate.left, plate.top)` its setter seeded — and those two terms then
 //! cancel, leaving `-padding` on y and nothing on x. That is the whole
-//! difference, and it arrives as [`vt::edit_ap::generate`]'s `offset`
+//! difference, and it arrives as `vt::edit_ap::generate`'s `offset`
 //! argument, exactly as the free-text generator already passes one.
 //!
 //! # The `/I` fallback selects nothing, and that is not a bug here

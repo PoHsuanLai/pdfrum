@@ -26,7 +26,7 @@
 //! single-line field centres its one line in its plate, so the text is drawn
 //! lower than the layout placed it and a click must be lifted by the same
 //! amount before it is searched. Every query here therefore takes an
-//! `offset`, the same `(dx, dy)` [`crate::vt::edit_ap::generate`] is given
+//! `offset`, the same `(dx, dy)` `vt::edit_ap::generate` is given
 //! when the appearance is written. Passing `(0.0, 0.0)` is the top-aligned
 //! case. Getting this wrong is not a small error: a centred field's text
 //! sits *below* its layout box, so an unshifted click misses every line and
@@ -41,7 +41,7 @@
 //! upstream rather than merely resemble it:
 //!
 //! - The midpoint is half the character's **advance**, comb tail included —
-//!   the same [`crate::vt::word_width`] the layout used — not half its
+//!   the same `vt::word_width` the layout used — not half its
 //!   inked extent.
 //! - The comparison is a plain `>` on raw floats, with **no epsilon**, unlike
 //!   the vertical comparisons below, which are epsilon-tolerant. That
@@ -49,7 +49,7 @@
 //!   a boundary a click falls on, and softening it moves carets.
 //!
 //! The vertical searches — which section a point is in, then which line —
-//! use [`crate::geom::is_float_bigger`] and its sibling, so a point within
+//! use `geom::is_float_bigger` and its sibling, so a point within
 //! `0.0001` of a section or line edge counts as *inside* it.
 //!
 //! # A measured line's size is the layout's, not the caller's request
