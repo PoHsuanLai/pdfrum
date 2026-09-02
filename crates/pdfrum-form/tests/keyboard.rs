@@ -29,11 +29,11 @@ fn handled(d: Disposition) -> bool {
 #[test]
 fn navigation_keys_are_handled() {
     for platform in [GENERAL, APPLE] {
-        assert!(handled(on_key(Key::LEFT, Modifiers::NONE, platform)));
-        assert!(handled(on_key(Key::HOME, Modifiers::CONTROL, platform)));
-        assert!(handled(on_key(Key::HOME, Modifiers::NONE, platform)));
-        assert!(handled(on_key(Key::UP, Modifiers::NONE, platform)));
-        assert!(handled(on_key(Key::RIGHT, Modifiers::NONE, platform)));
+        assert!(handled(on_key(Key::Left, Modifiers::NONE, platform)));
+        assert!(handled(on_key(Key::Home, Modifiers::CONTROL, platform)));
+        assert!(handled(on_key(Key::Home, Modifiers::NONE, platform)));
+        assert!(handled(on_key(Key::Up, Modifiers::NONE, platform)));
+        assert!(handled(on_key(Key::Right, Modifiers::NONE, platform)));
     }
 }
 
@@ -41,9 +41,9 @@ fn navigation_keys_are_handled() {
 /// **not** handled, so an embedder's platform handlers receive it.
 #[test]
 fn the_clipboard_shortcuts_are_not_handled() {
-    const C: Key = Key(0x43);
-    const V: Key = Key(0x56);
-    const X: Key = Key(0x58);
+    const C: Key = Key::from_virtual(0x43);
+    const V: Key = Key::from_virtual(0x56);
+    const X: Key = Key::from_virtual(0x58);
 
     for platform in [GENERAL, APPLE] {
         let (accel, _) = platform;
@@ -167,20 +167,20 @@ fn the_accelerator_with_y_redoes_on_one_platform_only() {
 /// each falls through for the caller to dispose of.
 #[test]
 fn keys_the_field_does_not_decide_on_fall_through() {
-    const NEWLINE: Key = Key(0x0A);
-    const DIGIT_ZERO: Key = Key(0x30);
-    const DIGIT_NINE: Key = Key(0x39);
+    const NEWLINE: Key = Key::Newline;
+    const DIGIT_ZERO: Key = Key::from_virtual(0x30);
+    const DIGIT_NINE: Key = Key::from_virtual(0x39);
     const LETTER_Z_PLAIN: Key = Key::Z;
-    const F1: Key = Key(0x70);
+    const F1: Key = Key::from_virtual(0x70);
 
     for key in [
         NEWLINE,
-        Key::RETURN,
-        Key::SPACE,
+        Key::Return,
+        Key::Space,
         DIGIT_ZERO,
         DIGIT_NINE,
         F1,
-        Key::TAB,
+        Key::Tab,
     ] {
         assert_eq!(
             on_key(key, Modifiers::NONE, GENERAL),
@@ -201,7 +201,7 @@ fn keys_the_field_does_not_decide_on_fall_through() {
 /// their own right are never consumed.
 #[test]
 fn modifier_keys_reported_as_keys_are_not_consumed() {
-    for key in [Key::SHIFT, Key::CONTROL, Key::SPACE] {
+    for key in [Key::Shift, Key::Control, Key::Space] {
         assert_eq!(
             on_key(key, Modifiers::NONE, GENERAL),
             Disposition::Ignore,
@@ -247,12 +247,12 @@ fn the_delete_control_character_is_ignored() {
 #[test]
 fn delete_with_a_selection_removes_the_selection() {
     assert_eq!(
-        route_key(Key::DELETE, Modifiers::NONE, Modifiers::CONTROL, true, true),
+        route_key(Key::Delete, Modifiers::NONE, Modifiers::CONTROL, true, true),
         Disposition::Do(TextAction::ClearSelection)
     );
     assert_eq!(
         route_key(
-            Key::DELETE,
+            Key::Delete,
             Modifiers::NONE,
             Modifiers::CONTROL,
             true,
@@ -271,21 +271,21 @@ fn home_and_end_widen_with_the_accelerator_and_extend_with_shift() {
     // an open bug about it.
     for platform in [GENERAL, APPLE] {
         assert_eq!(
-            on_key(Key::HOME, Modifiers::NONE, platform),
+            on_key(Key::Home, Modifiers::NONE, platform),
             Disposition::Do(TextAction::Move {
                 motion: Motion::LineStart,
                 extend: false
             })
         );
         assert_eq!(
-            on_key(Key::HOME, Modifiers::CONTROL, platform),
+            on_key(Key::Home, Modifiers::CONTROL, platform),
             Disposition::Do(TextAction::Move {
                 motion: Motion::DocStart,
                 extend: false
             })
         );
         assert_eq!(
-            on_key(Key::END, Modifiers::CONTROL | Modifiers::SHIFT, platform),
+            on_key(Key::End, Modifiers::CONTROL | Modifiers::SHIFT, platform),
             Disposition::Do(TextAction::Move {
                 motion: Motion::DocEnd,
                 extend: true

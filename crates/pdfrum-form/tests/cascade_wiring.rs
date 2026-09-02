@@ -236,7 +236,7 @@ fn a_rewriting_keystroke_hook_decides_what_lands() {
         &ctx,
         &mut cascade,
         Event::KeyDown {
-            key: pdfrum_form::event::Key::END,
+            key: pdfrum_form::event::Key::End,
             modifiers: Modifiers::NONE,
         },
     );
@@ -287,7 +287,7 @@ fn a_refusing_validate_reverts_the_edit_and_keeps_the_field() {
         &ctx,
         &mut cascade,
         Event::KeyDown {
-            key: pdfrum_form::event::Key::END,
+            key: pdfrum_form::event::Key::End,
             modifiers: Modifiers::NONE,
         },
     );
@@ -340,7 +340,7 @@ fn a_refusing_commit_keystroke_gate_also_keeps_the_field() {
         &ctx,
         &mut cascade,
         Event::KeyDown {
-            key: pdfrum_form::event::Key::END,
+            key: pdfrum_form::event::Key::End,
             modifiers: Modifiers::NONE,
         },
     );
@@ -495,7 +495,7 @@ fn tabbing_away_from_a_refused_field_does_not_move_focus() {
         &ctx,
         &mut cascade,
         Event::KeyDown {
-            key: pdfrum_form::event::Key::TAB,
+            key: pdfrum_form::event::Key::Tab,
             modifiers: Modifiers::NONE,
         },
     );

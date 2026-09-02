@@ -344,31 +344,33 @@ pub pdfrum_form::event::Event::MouseWheel
 pub pdfrum_form::event::Event::MouseWheel::at: pdfrum_form::event::Point
 pub pdfrum_form::event::Event::MouseWheel::delta: (i32, i32)
 pub pdfrum_form::event::Event::MouseWheel::modifiers: pdfrum_form::event::Modifiers
-pub struct pdfrum_form::event::Key(pub u16)
+#[non_exhaustive] pub enum pdfrum_form::event::Key
+pub pdfrum_form::event::Key::A
+pub pdfrum_form::event::Key::Backspace
+pub pdfrum_form::event::Key::Control
+pub pdfrum_form::event::Key::Delete
+pub pdfrum_form::event::Key::Down
+pub pdfrum_form::event::Key::End
+pub pdfrum_form::event::Key::Escape
+pub pdfrum_form::event::Key::Home
+pub pdfrum_form::event::Key::Insert
+pub pdfrum_form::event::Key::Left
+pub pdfrum_form::event::Key::Newline
+pub pdfrum_form::event::Key::Other(u16)
+pub pdfrum_form::event::Key::PageDown
+pub pdfrum_form::event::Key::PageUp
+pub pdfrum_form::event::Key::Return
+pub pdfrum_form::event::Key::Right
+pub pdfrum_form::event::Key::Shift
+pub pdfrum_form::event::Key::Space
+pub pdfrum_form::event::Key::Tab
+pub pdfrum_form::event::Key::Unknown
+pub pdfrum_form::event::Key::Up
+pub pdfrum_form::event::Key::Y
+pub pdfrum_form::event::Key::Z
 impl pdfrum_form::event::Key
-pub const pdfrum_form::event::Key::A: pdfrum_form::event::Key
-pub const pdfrum_form::event::Key::BACK: pdfrum_form::event::Key
-pub const pdfrum_form::event::Key::CLEAR: pdfrum_form::event::Key
-pub const pdfrum_form::event::Key::CONTROL: pdfrum_form::event::Key
-pub const pdfrum_form::event::Key::DELETE: pdfrum_form::event::Key
-pub const pdfrum_form::event::Key::DOWN: pdfrum_form::event::Key
-pub const pdfrum_form::event::Key::END: pdfrum_form::event::Key
-pub const pdfrum_form::event::Key::ESCAPE: pdfrum_form::event::Key
-pub const pdfrum_form::event::Key::HOME: pdfrum_form::event::Key
-pub const pdfrum_form::event::Key::INSERT: pdfrum_form::event::Key
-pub const pdfrum_form::event::Key::LEFT: pdfrum_form::event::Key
-pub const pdfrum_form::event::Key::NEWLINE: pdfrum_form::event::Key
-pub const pdfrum_form::event::Key::NEXT: pdfrum_form::event::Key
-pub const pdfrum_form::event::Key::PRIOR: pdfrum_form::event::Key
-pub const pdfrum_form::event::Key::RETURN: pdfrum_form::event::Key
-pub const pdfrum_form::event::Key::RIGHT: pdfrum_form::event::Key
-pub const pdfrum_form::event::Key::SHIFT: pdfrum_form::event::Key
-pub const pdfrum_form::event::Key::SPACE: pdfrum_form::event::Key
-pub const pdfrum_form::event::Key::TAB: pdfrum_form::event::Key
-pub const pdfrum_form::event::Key::UNKNOWN: pdfrum_form::event::Key
-pub const pdfrum_form::event::Key::UP: pdfrum_form::event::Key
-pub const pdfrum_form::event::Key::Y: pdfrum_form::event::Key
-pub const pdfrum_form::event::Key::Z: pdfrum_form::event::Key
+pub const fn pdfrum_form::event::Key::from_virtual(u16) -> pdfrum_form::event::Key
+pub const fn pdfrum_form::event::Key::virtual_code(self) -> u16
 pub struct pdfrum_form::event::Modifiers(_)
 impl pdfrum_form::event::Modifiers
 pub const pdfrum_form::event::Modifiers::ALT: Self
@@ -822,6 +824,33 @@ pub pdfrum_form::FocusTarget::Widget(pdfrum_form::session::FieldId, pdfrum_form:
 impl pdfrum_form::session::FocusTarget
 pub fn pdfrum_form::session::FocusTarget::annot(self) -> pdfrum_form::session::AnnotId
 pub fn pdfrum_form::session::FocusTarget::field(self) -> core::option::Option<pdfrum_form::session::FieldId>
+#[non_exhaustive] pub enum pdfrum_form::Key
+pub pdfrum_form::Key::A
+pub pdfrum_form::Key::Backspace
+pub pdfrum_form::Key::Control
+pub pdfrum_form::Key::Delete
+pub pdfrum_form::Key::Down
+pub pdfrum_form::Key::End
+pub pdfrum_form::Key::Escape
+pub pdfrum_form::Key::Home
+pub pdfrum_form::Key::Insert
+pub pdfrum_form::Key::Left
+pub pdfrum_form::Key::Newline
+pub pdfrum_form::Key::Other(u16)
+pub pdfrum_form::Key::PageDown
+pub pdfrum_form::Key::PageUp
+pub pdfrum_form::Key::Return
+pub pdfrum_form::Key::Right
+pub pdfrum_form::Key::Shift
+pub pdfrum_form::Key::Space
+pub pdfrum_form::Key::Tab
+pub pdfrum_form::Key::Unknown
+pub pdfrum_form::Key::Up
+pub pdfrum_form::Key::Y
+pub pdfrum_form::Key::Z
+impl pdfrum_form::event::Key
+pub const fn pdfrum_form::event::Key::from_virtual(u16) -> pdfrum_form::event::Key
+pub const fn pdfrum_form::event::Key::virtual_code(self) -> u16
 pub enum pdfrum_form::KeystrokeOutcome
 pub pdfrum_form::KeystrokeOutcome::Accept(pdfrum_form::cascade::Keystroke)
 pub pdfrum_form::KeystrokeOutcome::Reject
@@ -999,31 +1028,6 @@ pub fn pdfrum_form::session::FormSession::focused_state_mut(&mut self) -> core::
 pub fn pdfrum_form::session::FormSession::is_accelerator(&self, pdfrum_form::event::Modifiers) -> bool
 pub fn pdfrum_form::session::FormSession::new() -> pdfrum_form::session::FormSession
 pub fn pdfrum_form::session::FormSession::with_config(pdfrum_form::session::SessionConfig) -> pdfrum_form::session::FormSession
-pub struct pdfrum_form::Key(pub u16)
-impl pdfrum_form::event::Key
-pub const pdfrum_form::event::Key::A: pdfrum_form::event::Key
-pub const pdfrum_form::event::Key::BACK: pdfrum_form::event::Key
-pub const pdfrum_form::event::Key::CLEAR: pdfrum_form::event::Key
-pub const pdfrum_form::event::Key::CONTROL: pdfrum_form::event::Key
-pub const pdfrum_form::event::Key::DELETE: pdfrum_form::event::Key
-pub const pdfrum_form::event::Key::DOWN: pdfrum_form::event::Key
-pub const pdfrum_form::event::Key::END: pdfrum_form::event::Key
-pub const pdfrum_form::event::Key::ESCAPE: pdfrum_form::event::Key
-pub const pdfrum_form::event::Key::HOME: pdfrum_form::event::Key
-pub const pdfrum_form::event::Key::INSERT: pdfrum_form::event::Key
-pub const pdfrum_form::event::Key::LEFT: pdfrum_form::event::Key
-pub const pdfrum_form::event::Key::NEWLINE: pdfrum_form::event::Key
-pub const pdfrum_form::event::Key::NEXT: pdfrum_form::event::Key
-pub const pdfrum_form::event::Key::PRIOR: pdfrum_form::event::Key
-pub const pdfrum_form::event::Key::RETURN: pdfrum_form::event::Key
-pub const pdfrum_form::event::Key::RIGHT: pdfrum_form::event::Key
-pub const pdfrum_form::event::Key::SHIFT: pdfrum_form::event::Key
-pub const pdfrum_form::event::Key::SPACE: pdfrum_form::event::Key
-pub const pdfrum_form::event::Key::TAB: pdfrum_form::event::Key
-pub const pdfrum_form::event::Key::UNKNOWN: pdfrum_form::event::Key
-pub const pdfrum_form::event::Key::UP: pdfrum_form::event::Key
-pub const pdfrum_form::event::Key::Y: pdfrum_form::event::Key
-pub const pdfrum_form::event::Key::Z: pdfrum_form::event::Key
 pub struct pdfrum_form::Keystroke
 pub pdfrum_form::Keystroke::change: alloc::string::String
 pub pdfrum_form::Keystroke::selection_end: i32

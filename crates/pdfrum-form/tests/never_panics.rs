@@ -344,7 +344,13 @@ fn keyboard_routing_is_total() {
             for accelerator in [Modifiers::CONTROL, Modifiers::META] {
                 for redo_y in [true, false] {
                     for selected in [true, false] {
-                        let _ = route_key(Key(code), modifiers, accelerator, redo_y, selected);
+                        let _ = route_key(
+                            Key::from_virtual(code),
+                            modifiers,
+                            accelerator,
+                            redo_y,
+                            selected,
+                        );
                     }
                 }
             }

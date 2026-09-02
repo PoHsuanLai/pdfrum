@@ -308,16 +308,17 @@ fn to_modifiers(mask: u32) -> EventModifiers {
     modifiers
 }
 
-/// A key code onto the facade's virtual-key newtype.
+/// A key code onto the library's key.
 ///
-/// `Key` is deliberately a newtype over the raw code rather than an enum, so
-/// this is a narrowing and not a lookup: a code the form layer does not branch
-/// on must still arrive, because the ported assertions send F1 and digits
-/// precisely to check they are *not* consumed. A code outside `u16` cannot
-/// name a virtual key on any platform, so it becomes `UNKNOWN` — which is a
-/// key the layer explicitly handles rather than a sentinel.
+/// The grammar speaks raw integers and the library speaks a key, so this is
+/// the boundary between them — `Key::from_virtual` — with one gate in front
+/// of it. A code the form layer does not branch on must still arrive, because
+/// the ported assertions send F1 and digits precisely to check they are *not*
+/// consumed; `from_virtual` carries those through as `Other`. A code outside
+/// `u16` cannot name a virtual key on any platform, so it becomes `Unknown` —
+/// which is a key the layer explicitly handles rather than a sentinel.
 fn to_key(code: i32) -> VirtualKey {
-    u16::try_from(code).map_or(VirtualKey::UNKNOWN, VirtualKey)
+    u16::try_from(code).map_or(VirtualKey::Unknown, VirtualKey::from_virtual)
 }
 
 /// Fact 3: an `i32` code point onto a `char`, fallibly.
@@ -381,13 +382,13 @@ mod tests {
 
     #[test]
     fn a_key_code_narrows_and_an_impossible_one_becomes_unknown() {
-        assert_eq!(to_key(9), VirtualKey::TAB);
-        assert_eq!(to_key(0x0D), VirtualKey::RETURN);
+        assert_eq!(to_key(9), VirtualKey::Tab);
+        assert_eq!(to_key(0x0D), VirtualKey::Return);
         assert_eq!(to_key(0x41), VirtualKey::A);
-        assert_eq!(to_key(0), VirtualKey::UNKNOWN);
+        assert_eq!(to_key(0), VirtualKey::Unknown);
         // Outside u16, so it names no virtual key anywhere.
-        assert_eq!(to_key(-1), VirtualKey::UNKNOWN);
-        assert_eq!(to_key(70_000), VirtualKey::UNKNOWN);
+        assert_eq!(to_key(-1), VirtualKey::Unknown);
+        assert_eq!(to_key(70_000), VirtualKey::Unknown);
     }
 
     fn calls(script: &str) -> Vec<Call> {
@@ -403,7 +404,7 @@ mod tests {
         assert_eq!(
             calls("keycode,9"),
             [Call::KeyDown {
-                key: VirtualKey::TAB,
+                key: VirtualKey::Tab,
                 modifiers: EventModifiers::NONE
             }]
         );
@@ -523,7 +524,7 @@ mod tests {
         assert!(matches!(
             got[4],
             Call::KeyDown {
-                key: VirtualKey::LEFT,
+                key: VirtualKey::Left,
                 ..
             }
         ));

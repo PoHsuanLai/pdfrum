@@ -44,12 +44,12 @@ fn a_focused_link_fires_its_action_on_return_with_the_modifiers_held() {
     let mut fired = Vec::new();
     for _ in 0..12 {
         if !session
-            .on_key_down(VirtualKey::TAB, EventModifiers::NONE)
+            .on_key_down(VirtualKey::Tab, EventModifiers::NONE)
             .consumed
         {
             break;
         }
-        let response = session.on_key_down(VirtualKey::RETURN, EventModifiers::NONE);
+        let response = session.on_key_down(VirtualKey::Return, EventModifiers::NONE);
         if response.actions().count() > 0 {
             fired.push(response);
             break;
@@ -68,7 +68,7 @@ fn a_focused_link_fires_its_action_on_return_with_the_modifiers_held() {
         EventModifiers::SHIFT,
         EventModifiers::SHIFT.union(EventModifiers::CONTROL),
     ] {
-        let response = session.on_key_down(VirtualKey::RETURN, modifiers);
+        let response = session.on_key_down(VirtualKey::Return, modifiers);
         for (_, held) in response.actions() {
             seen.push(held.bits());
         }
@@ -92,13 +92,13 @@ fn no_key_but_return_fires_a_links_action() {
     let mut reached = false;
     for _ in 0..12 {
         if !session
-            .on_key_down(VirtualKey::TAB, EventModifiers::NONE)
+            .on_key_down(VirtualKey::Tab, EventModifiers::NONE)
             .consumed
         {
             break;
         }
         if session
-            .on_key_down(VirtualKey::RETURN, EventModifiers::NONE)
+            .on_key_down(VirtualKey::Return, EventModifiers::NONE)
             .actions()
             .count()
             > 0
@@ -110,11 +110,11 @@ fn no_key_but_return_fires_a_links_action() {
     assert!(reached, "a link must be reachable by tabbing");
 
     for key in [
-        VirtualKey::SPACE,
-        VirtualKey::TAB,
+        VirtualKey::Space,
+        VirtualKey::Tab,
         VirtualKey::A,
-        VirtualKey::LEFT,
-        VirtualKey::DELETE,
+        VirtualKey::Left,
+        VirtualKey::Delete,
     ] {
         let response = session.on_key_down(key, EventModifiers::NONE);
         assert_eq!(
@@ -123,8 +123,8 @@ fn no_key_but_return_fires_a_links_action() {
             "{key:?} must not fire a link's action"
         );
         // Tab moves focus, so put it back on the link.
-        if key == VirtualKey::TAB {
-            session.on_key_down(VirtualKey::TAB, EventModifiers::SHIFT);
+        if key == VirtualKey::Tab {
+            session.on_key_down(VirtualKey::Tab, EventModifiers::SHIFT);
         }
     }
 }
@@ -145,13 +145,13 @@ fn links_are_not_focusable_by_default() {
         let mut fired = 0;
         for _ in 0..12 {
             if !session
-                .on_key_down(VirtualKey::TAB, EventModifiers::NONE)
+                .on_key_down(VirtualKey::Tab, EventModifiers::NONE)
                 .consumed
             {
                 break;
             }
             fired += session
-                .on_key_down(VirtualKey::RETURN, EventModifiers::NONE)
+                .on_key_down(VirtualKey::Return, EventModifiers::NONE)
                 .actions()
                 .count();
         }
@@ -195,8 +195,8 @@ fn a_push_buttons_return_fires_its_action() {
     let mut session = FormSession::new(&doc);
 
     // The first widget is a text field; tab to it, then on to the button.
-    session.on_key_down(VirtualKey::TAB, EventModifiers::NONE);
-    session.on_key_down(VirtualKey::TAB, EventModifiers::NONE);
+    session.on_key_down(VirtualKey::Tab, EventModifiers::NONE);
+    session.on_key_down(VirtualKey::Tab, EventModifiers::NONE);
 
     let response = session.on_char('\r', EventModifiers::NONE);
     assert_eq!(
@@ -207,7 +207,7 @@ fn a_push_buttons_return_fires_its_action() {
 
     // The key path answers identically — `key_down` and `char_typed` route a
     // focused button's Return through the same `annot_key`.
-    let response = session.on_key_down(VirtualKey::RETURN, EventModifiers::NONE);
+    let response = session.on_key_down(VirtualKey::Return, EventModifiers::NONE);
     assert_eq!(
         response.actions().count(),
         1,
@@ -223,12 +223,12 @@ fn an_annotation_with_no_action_fires_nothing() {
 
     for _ in 0..12 {
         if !session
-            .on_key_down(VirtualKey::TAB, EventModifiers::NONE)
+            .on_key_down(VirtualKey::Tab, EventModifiers::NONE)
             .consumed
         {
             break;
         }
         // Whatever this is, asking for its action must not panic.
-        let _ = session.on_key_down(VirtualKey::RETURN, EventModifiers::NONE);
+        let _ = session.on_key_down(VirtualKey::Return, EventModifiers::NONE);
     }
 }

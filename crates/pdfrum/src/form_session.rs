@@ -1042,9 +1042,7 @@ impl<'a> FormSession<'a> {
         // Every other key really does need a focused field, and answers
         // unhandled without one.
         match event {
-            Event::KeyDown { key, .. } if key == Key::TAB => {
-                self.dispatch(self.page_in_view, event)
-            }
+            Event::KeyDown { key: Key::Tab, .. } => self.dispatch(self.page_in_view, event),
             _ => Response::ignored(),
         }
     }

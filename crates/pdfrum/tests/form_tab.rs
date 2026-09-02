@@ -27,7 +27,7 @@ fn document() -> Document {
 
 /// Sends a Tab, with modifiers.
 fn tab(session: &mut FormSession<'_>, modifiers: EventModifiers) -> bool {
-    session.on_key_down(VirtualKey::TAB, modifiers).consumed
+    session.on_key_down(VirtualKey::Tab, modifiers).consumed
 }
 
 /// The raw `/Annots` index currently focused, if any.
@@ -164,15 +164,15 @@ fn focus_is_document_wide_not_per_page() {
 fn keys_with_no_focused_annotation_are_refused() {
     let doc = document();
     for key in [
-        VirtualKey::NEWLINE,
-        VirtualKey::RETURN,
-        VirtualKey::SPACE,
-        VirtualKey::DELETE,
-        VirtualKey(0x30), // '0'
-        VirtualKey(0x39), // '9'
+        VirtualKey::Newline,
+        VirtualKey::Return,
+        VirtualKey::Space,
+        VirtualKey::Delete,
+        VirtualKey::from_virtual(0x30), // '0'
+        VirtualKey::from_virtual(0x39), // '9'
         VirtualKey::A,
-        VirtualKey(0x5A), // 'Z'
-        VirtualKey(0x70), // F1
+        VirtualKey::Z,                  // 'Z'
+        VirtualKey::from_virtual(0x70), // F1
     ] {
         let mut session = FormSession::new(&doc);
         let response = session.on_key_down(key, EventModifiers::NONE);
