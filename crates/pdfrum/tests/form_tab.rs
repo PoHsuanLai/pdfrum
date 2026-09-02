@@ -19,7 +19,7 @@
 // to handle.
 #![allow(clippy::expect_used)]
 
-use pdfrum::{Document, EventModifiers, FormSession, VirtualKey};
+use pdfrum::{Document, EventModifiers, FormSession, PageIndex, VirtualKey};
 
 fn document() -> Document {
     Document::open("tests/fixtures/annotiter.pdf").expect("the annotiter fixture must open")
@@ -140,14 +140,18 @@ fn focus_is_document_wide_not_per_page() {
     let first = session
         .focused_annot()
         .expect("page 0's widget takes focus");
-    assert_eq!(first.page, 0);
+    assert_eq!(first.page, PageIndex::new(0));
 
     session.on_mouse_move(1, 411.0, 411.0, EventModifiers::NONE);
     session.on_mouse_down(1, 411.0, 411.0, EventModifiers::NONE);
     session.on_mouse_up(1, 411.0, 411.0, EventModifiers::NONE);
     let second = session.focused_annot().expect("page 1's widget takes it");
 
-    assert_eq!(second.page, 1, "focus moved to the other page");
+    assert_eq!(
+        second.page,
+        PageIndex::new(1),
+        "focus moved to the other page"
+    );
     assert_ne!(
         first, second,
         "one annotation holds the keyboard at a time, whichever page it is on"
@@ -230,12 +234,13 @@ fn a_tab_from_nothing_enters_the_ring_on_the_page_in_view() {
     for page in 0..doc.page_count() {
         let mut session = FormSession::new(&doc);
         session.set_page_in_view(page);
-        assert_eq!(session.page_in_view(), page);
+        assert_eq!(session.page_in_view(), PageIndex::from(page));
 
         assert!(tab(&mut session, EventModifiers::NONE));
         let landed = session.focused_annot().expect("the Tab lands somewhere");
         assert_eq!(
-            landed.page, page,
+            landed.page,
+            PageIndex::from(page),
             "a Tab from nothing must enter the ring on the page in view"
         );
     }
@@ -247,5 +252,5 @@ fn a_tab_from_nothing_enters_the_ring_on_the_page_in_view() {
 fn the_page_in_view_defaults_to_the_first() {
     let doc = document();
     let session = FormSession::new(&doc);
-    assert_eq!(session.page_in_view(), 0);
+    assert_eq!(session.page_in_view(), PageIndex::FIRST);
 }

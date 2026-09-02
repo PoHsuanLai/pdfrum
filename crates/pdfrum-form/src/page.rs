@@ -31,7 +31,7 @@
 //! name get the same id. A widget with no name at all is its own field, keyed
 //! by its raw index, because nothing else can distinguish it.
 
-use pdfrum_common::{Diagnostics, Limits};
+use pdfrum_common::{Diagnostics, Limits, PageIndex};
 use pdfrum_doc::form::{FieldFlags, FieldKind};
 use pdfrum_doc::{Subtype, ap};
 use pdfrum_object::{Dict, Name, Resolve, names as obj_names};
@@ -71,7 +71,7 @@ use crate::tab::{Focusable, Rect, TabOrder};
 #[derive(Debug, Clone, Default)]
 pub struct PageForm {
     /// Which page this describes.
-    pub page: u32,
+    pub page: PageIndex,
     /// Every annotation, in raw `/Annots` order, for the hit test.
     pub candidates: Vec<Candidate>,
     /// Every annotation as a focus-ring candidate, paired with its subtype
@@ -218,7 +218,13 @@ impl WidgetInfo {
 /// `/Fields` array is reached through it, which is what resolves a widget
 /// that is a second control of an earlier field.
 #[must_use]
-pub fn read<R: Resolve>(page: u32, page_dict: &Dict, catalog: &Dict, r: &R) -> PageForm {
+pub fn read<R: Resolve>(
+    page: impl Into<PageIndex>,
+    page_dict: &Dict,
+    catalog: &Dict,
+    r: &R,
+) -> PageForm {
+    let page = page.into();
     let mut form = PageForm {
         page,
         tab_order: TabOrder::from_tabs(page_dict.byte_string(TABS, r).as_deref()),

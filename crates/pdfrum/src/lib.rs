@@ -334,6 +334,14 @@ pub use pdfrum_common::{DiagKind, Diagnostic, Diagnostics, Limits, Severity};
 /// Named by [`Document::version`] and [`SaveOptions::version`].
 pub use pdfrum_common::PdfVersion;
 
+/// A page's zero-based position in the document.
+///
+/// Named by [`Document::page`], [`Page::index`], [`Bookmark::page_index`],
+/// every [`FormSession`] method that routes to a page, and
+/// [`Document::import_pages`]. `From<u32>` means `doc.page(0)` still reads as
+/// it always has.
+pub use pdfrum_common::PageIndex;
+
 /// What a document's security handler permits — eight questions, not a
 /// bitfield.
 ///

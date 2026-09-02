@@ -22,6 +22,7 @@
 
 use std::sync::Arc;
 
+use pdfrum_common::PageIndex;
 use pdfrum_edit::{
     EditDoc, IdSource, ImportOptions, NUpOptions, PageRange, SaveMode, SaveOptions, import_pages,
     n_page_to_one, save,
@@ -103,7 +104,7 @@ fn importing_appends_pages_in_the_order_named() {
         &src,
         &PageRange::all(3),
         &ImportOptions {
-            at: 1,
+            at: PageIndex::new(1),
             ..ImportOptions::default()
         },
     )
@@ -130,7 +131,7 @@ fn pages_land_at_the_index_named_and_shift_the_rest() {
         &src,
         &range,
         &ImportOptions {
-            at: 0,
+            at: PageIndex::FIRST,
             ..ImportOptions::default()
         },
     )
@@ -154,7 +155,7 @@ fn an_index_past_the_end_appends() {
         &src,
         &PageRange::all(1),
         &ImportOptions {
-            at: 999,
+            at: PageIndex::new(999),
             ..ImportOptions::default()
         },
     )
@@ -198,7 +199,7 @@ fn an_out_of_range_index_fails() {
             &PageRange::of([42]),
             &ImportOptions::default()
         ),
-        Err(pdfrum_edit::Error::PageIndexOutOfRange(42))
+        Err(pdfrum_edit::Error::PageIndexOutOfRange(index)) if index.get() == 42
     ));
 }
 
@@ -538,7 +539,7 @@ trailer\n<< /Root 1 0 R /Size 4 >>\n"
         &src,
         &PageRange::all(1),
         &ImportOptions {
-            at: 0,
+            at: PageIndex::FIRST,
             viewer_preferences: true,
         },
     )

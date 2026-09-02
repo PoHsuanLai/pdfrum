@@ -76,6 +76,7 @@ mod nup;
 mod range;
 mod viewer;
 
+use pdfrum_common::PageIndex;
 use pdfrum_object::{Array, Dict, Name, ObjRef, Object, Resolve, names};
 use pdfrum_parser::Document;
 
@@ -97,7 +98,7 @@ const LETTER: [i64; 4] = [0, 0, 612, 792];
 pub struct ImportOptions {
     /// Where in the destination's page list the imported pages go. Pages at
     /// and after this index shift up.
-    pub at: u32,
+    pub at: PageIndex,
     /// Also copy the source catalog's `/ViewerPreferences`.
     pub viewer_preferences: bool,
 }
@@ -228,7 +229,7 @@ pub fn import_pages(
     // Check the whole range before mutating anything: an import either
     // happens or it does not.
     for index in pages.indices() {
-        if *index >= src.page_count() {
+        if index.get() >= src.page_count() {
             return Err(Error::PageIndexOutOfRange(*index));
         }
     }
@@ -255,7 +256,7 @@ pub fn import_pages(
         created.push(dest_page);
     }
 
-    insert_into_tree(dest, pages_node, &created, opts.at);
+    insert_into_tree(dest, pages_node, &created, opts.at.get());
 
     if opts.viewer_preferences
         && let Ok(catalog) = src.catalog()
@@ -455,7 +456,7 @@ pub fn n_page_to_one(
         return Err(Error::BadNupParams);
     }
     for index in pages.indices() {
-        if *index >= src.page_count() {
+        if index.get() >= src.page_count() {
             return Err(Error::PageIndexOutOfRange(*index));
         }
     }
@@ -482,7 +483,7 @@ pub fn n_page_to_one(
             let page = src
                 .page(*index)
                 .map_err(|_| Error::PageIndexOutOfRange(*index))?;
-            let key = page.reference.map_or(u32::MAX - index, |r| r.num);
+            let key = page.reference.map_or(u32::MAX - index.get(), |r| r.num);
 
             let form = if let Some((_, existing)) = forms.iter().find(|(k, _)| *k == key) {
                 *existing

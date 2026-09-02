@@ -12,7 +12,7 @@
 //! zoom of exactly zero means "keep the current zoom", while an x or y of
 //! zero is a real coordinate.
 
-use pdfrum_common::{DiagKind, Diagnostics, Limits, Severity};
+use pdfrum_common::{DiagKind, Diagnostics, Limits, PageIndex, Severity};
 use pdfrum_object::{Array, Dict, Object, Resolve};
 
 use crate::nav::name_tree;
@@ -209,18 +209,21 @@ impl Dest {
     /// out-of-range page index is a `Some`, and only a genuine failure is
     /// `None`. Both used to arrive as the same `-1`.
     ///
-    /// The index is a `u32` pending WP1's `PageIndex` newtype, which is the
-    /// follow-up that types it.
+    /// `page_index_of` maps an **object number** — the indirect reference a
+    /// dictionary entry carries — to the page it is, and its `u32` argument is
+    /// therefore an object number and not an index. Only the answer is a
+    /// [`PageIndex`] (WP1 step 5; the design's §WP1 sketch reads as though
+    /// both halves of the callback were page numbers, and only the return is).
     #[must_use]
     pub fn page_index<R: Resolve>(
         &self,
         r: &R,
-        page_index_of: impl Fn(u32) -> Option<u32>,
+        page_index_of: impl Fn(u32) -> Option<PageIndex>,
         diags: &mut Diagnostics,
-    ) -> Option<u32> {
+    ) -> Option<PageIndex> {
         let entry = self.array.as_ref()?.get(0, r)?;
         if let Some(number) = entry.get().as_number() {
-            return u32::try_from(number.as_int()?).ok();
+            return u32::try_from(number.as_int()?).ok().map(PageIndex::from);
         }
         if entry.get().as_dict().is_none() {
             diags.record(Severity::Suspicious, DiagKind::DestPageUnresolved, None);
@@ -241,7 +244,7 @@ impl Dest {
 #[cfg(test)]
 mod tests {
     use super::{Dest, ZoomMode};
-    use pdfrum_common::Diagnostics;
+    use pdfrum_common::{Diagnostics, PageIndex};
     use pdfrum_object::{Array, Name, NoResolve, Object, PdfString};
 
     fn dest(values: Vec<Object>) -> Dest {
@@ -339,14 +342,17 @@ mod tests {
         // returned as it stands. `Some` now says "the file named a page",
         // which is a different question from "that page exists" -- the two
         // used to share one `-1` channel and could not be told apart.
-        assert_eq!(d.page_index(&NoResolve, |_| Some(0), &mut diags), Some(11));
+        assert_eq!(
+            d.page_index(&NoResolve, |_| Some(PageIndex::FIRST), &mut diags),
+            Some(PageIndex::new(11))
+        );
     }
 
     #[test]
     fn a_null_destination_answers_none() {
         let mut diags = Diagnostics::default();
         assert_eq!(
-            Dest::default().page_index(&NoResolve, |_| Some(3), &mut diags),
+            Dest::default().page_index(&NoResolve, |_| Some(PageIndex::new(3)), &mut diags),
             None
         );
     }

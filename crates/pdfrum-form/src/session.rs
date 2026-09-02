@@ -13,6 +13,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use pdfrum_common::PageIndex;
 use pdfrum_doc::Subtype;
 
 use crate::edit::Place;
@@ -49,7 +50,7 @@ pub struct FieldId(pub u32);
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct AnnotId {
     /// Which page.
-    pub page: u32,
+    pub page: PageIndex,
     /// Which entry of that page's `/Annots` array — the raw index, counting
     /// pop-ups.
     pub index: u32,
@@ -59,8 +60,11 @@ impl AnnotId {
     /// An annotation identifier, from a page index and a **raw** `/Annots`
     /// index.
     #[must_use]
-    pub fn new(page: u32, index: u32) -> AnnotId {
-        AnnotId { page, index }
+    pub fn new(page: impl Into<PageIndex>, index: u32) -> AnnotId {
+        AnnotId {
+            page: page.into(),
+            index,
+        }
     }
 }
 

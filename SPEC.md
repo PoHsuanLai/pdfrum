@@ -74,6 +74,34 @@ published; the packing survives as a private conversion inside
 in the workspace. `Ord` is on the pair rather than on the packed byte, which is
 what makes "at least 1.5" mean what it says.
 
+**[spec] 2026-09-02 (idiomatic-API pass, WP1 step 5): and `PageIndex`.**
+
+```rust
+pub struct PageIndex(u32);   // FIRST, new, get, From<u32>, From<PageIndex> for u32, Display, Ord
+```
+
+STYLE.md §2 has listed this newtype among the workspace's index types since
+before it existed. It is here for the same reason `PdfVersion` is: it appears
+in the public signatures of six crates — `pdfrum-parser`, `pdfrum-doc`,
+`pdfrum-form`, `pdfrum-edit`, `pdfrum-common` itself and the facade — and none
+of them is below the others. **21 public items** carry it where a bare `u32`
+was, and every method that *takes* one takes `impl Into<PageIndex>`, so
+`doc.page(0)` reads as it always has.
+
+`page_count` stays a `u32` and is not one-past-the-end. **A count is not an
+index**: a three-page document's valid indices are 0, 1 and 2, and giving the
+two one type would let each be passed where the other is meant, which is the
+whole reason for the newtype. The type carries no arithmetic — no `Add`, no
+`Step` — because a page index plus a page index is not a page index; `get()`
+is the escape hatch where real arithmetic is meant, which is where a caller
+prints a one-based "page 4".
+
+Two things this reaches that are **not** page indices, and stay `u32`: the
+object number `Dest::page_index`'s callback takes (§WP1's sketch reads as
+though both halves were page numbers; only the answer is), and
+`StructTree::load_page`'s `page_obj_num`. `pdfrum-page` reaches none of it —
+its many `u32`s are image dimensions.
+
 This crate has no fallible operation, so — uniquely — it ships no `Error` enum
 and no `thiserror` dependency. No string types, no stream traits, no "utils".
 If something feels like it belongs here, it probably belongs in the crate that

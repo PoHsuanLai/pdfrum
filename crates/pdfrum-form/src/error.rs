@@ -5,6 +5,8 @@
 //! `Err` is reserved for a caller mistake that leaves nothing sensible to
 //! return.
 
+use pdfrum_common::PageIndex;
+
 /// What went wrong.
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
 #[non_exhaustive]
@@ -13,7 +15,7 @@ pub enum Error {
     #[error("no such page in this form context: {page}")]
     NoSuchPage {
         /// The page index asked for.
-        page: u32,
+        page: PageIndex,
     },
     /// An event named a field the form does not have.
     #[error("no such field in this form: {field}")]

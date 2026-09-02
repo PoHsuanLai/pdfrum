@@ -51,11 +51,11 @@ fn run(input: &Path, out_dir: &Path, scale: f64) -> Result<usize, Box<dyn std::e
     let mut written = 0;
     for page in doc.pages() {
         let pixmap = page.render(&options)?;
-        let path = out_dir.join(format!("page-{:04}.png", page.index() + 1));
+        let path = out_dir.join(format!("page-{:04}.png", page.index().get() + 1));
         write_png(&path, &pixmap)?;
         println!(
             "page {:>4}  {}x{} -> {}",
-            page.index() + 1,
+            page.index().get() + 1,
             pixmap.width(),
             pixmap.height(),
             path.display()

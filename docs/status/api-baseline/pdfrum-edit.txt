@@ -130,7 +130,7 @@ pub fn pdfrum_edit::font::to_unicode_cmap(&alloc::collections::btree::map::BTree
 pub fn pdfrum_edit::font::widths_array(&alloc::collections::btree::map::BTreeMap<u32, f32>) -> pdfrum_object::array::Array
 pub mod pdfrum_edit::import
 pub struct pdfrum_edit::import::ImportOptions
-pub pdfrum_edit::import::ImportOptions::at: u32
+pub pdfrum_edit::import::ImportOptions::at: pdfrum_common::page_index::PageIndex
 pub pdfrum_edit::import::ImportOptions::viewer_preferences: bool
 pub struct pdfrum_edit::import::NUpOptions
 pub pdfrum_edit::import::NUpOptions::grid: (u32, u32)
@@ -164,10 +164,10 @@ pub fn pdfrum_edit::import::PageEdit::matrix(self) -> kurbo::affine::Affine
 pub struct pdfrum_edit::import::PageRange(_)
 impl pdfrum_edit::PageRange
 pub fn pdfrum_edit::PageRange::all(u32) -> Self
-pub fn pdfrum_edit::PageRange::indices(&self) -> &[u32]
+pub fn pdfrum_edit::PageRange::indices(&self) -> &[pdfrum_common::page_index::PageIndex]
 pub fn pdfrum_edit::PageRange::is_empty(&self) -> bool
 pub fn pdfrum_edit::PageRange::len(&self) -> usize
-pub fn pdfrum_edit::PageRange::of(impl core::iter::traits::collect::IntoIterator<Item = u32>) -> Self
+pub fn pdfrum_edit::PageRange::of(impl core::iter::traits::collect::IntoIterator<Item = impl core::convert::Into<pdfrum_common::page_index::PageIndex>>) -> Self
 pub fn pdfrum_edit::PageRange::parse(&str, u32) -> core::result::Result<Self, pdfrum_edit::Error>
 pub fn pdfrum_edit::import::array_is_flat(&pdfrum_object::array::Array) -> bool
 pub fn pdfrum_edit::import::copy_inheritable(&mut pdfrum_object::dict::Dict, &pdfrum_object::dict::Dict, &pdfrum_object::name::Name, &impl pdfrum_object::resolve::Resolve) -> bool
@@ -274,7 +274,7 @@ pub pdfrum_edit::Error::EncryptedSaveUnsupported
 pub pdfrum_edit::Error::Io(core::io::error::Error)
 pub pdfrum_edit::Error::NoDestinationCatalog
 pub pdfrum_edit::Error::Object(pdfrum_object::error::Error)
-pub pdfrum_edit::Error::PageIndexOutOfRange(u32)
+pub pdfrum_edit::Error::PageIndexOutOfRange(pdfrum_common::page_index::PageIndex)
 pub pdfrum_edit::Error::Subset(alloc::string::String)
 pub enum pdfrum_edit::IdSource
 pub pdfrum_edit::IdSource::Fixed([u8; 16])
@@ -314,7 +314,7 @@ pub fn pdfrum_edit::font::GidMap::is_empty(&self) -> bool
 pub fn pdfrum_edit::font::GidMap::len(&self) -> usize
 pub fn pdfrum_edit::font::GidMap::pairs(&self) -> impl core::iter::traits::iterator::Iterator<Item = (u16, u16)> + '_
 pub struct pdfrum_edit::ImportOptions
-pub pdfrum_edit::ImportOptions::at: u32
+pub pdfrum_edit::ImportOptions::at: pdfrum_common::page_index::PageIndex
 pub pdfrum_edit::ImportOptions::viewer_preferences: bool
 pub struct pdfrum_edit::IvSource
 impl pdfrum_edit::encrypt::IvSource
@@ -328,10 +328,10 @@ pub fn pdfrum_edit::import::NUpOptions::default() -> Self
 pub struct pdfrum_edit::PageRange(_)
 impl pdfrum_edit::PageRange
 pub fn pdfrum_edit::PageRange::all(u32) -> Self
-pub fn pdfrum_edit::PageRange::indices(&self) -> &[u32]
+pub fn pdfrum_edit::PageRange::indices(&self) -> &[pdfrum_common::page_index::PageIndex]
 pub fn pdfrum_edit::PageRange::is_empty(&self) -> bool
 pub fn pdfrum_edit::PageRange::len(&self) -> usize
-pub fn pdfrum_edit::PageRange::of(impl core::iter::traits::collect::IntoIterator<Item = u32>) -> Self
+pub fn pdfrum_edit::PageRange::of(impl core::iter::traits::collect::IntoIterator<Item = impl core::convert::Into<pdfrum_common::page_index::PageIndex>>) -> Self
 pub fn pdfrum_edit::PageRange::parse(&str, u32) -> core::result::Result<Self, pdfrum_edit::Error>
 pub struct pdfrum_edit::PageRewrite
 pub pdfrum_edit::PageRewrite::resources: pdfrum_object::dict::Dict

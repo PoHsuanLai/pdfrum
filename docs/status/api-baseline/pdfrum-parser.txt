@@ -28,7 +28,7 @@ pub pdfrum_parser::Entry::Offset(u64)
 pub pdfrum_parser::Error::Cycle(pdfrum_object::object::ObjRef)
 pub pdfrum_parser::Error::NoCatalog
 pub pdfrum_parser::Error::NoObject(u64)
-pub pdfrum_parser::Error::NoPage(u32)
+pub pdfrum_parser::Error::NoPage(pdfrum_common::page_index::PageIndex)
 pub pdfrum_parser::Error::TooDeep(u32)
 pub pdfrum_parser::Error::Unresolved(pdfrum_object::object::ObjRef)
 pub pdfrum_parser::Error::XrefBroken
@@ -65,7 +65,7 @@ pub fn pdfrum_parser::Document::last_xref_offset(&self) -> u64
 pub fn pdfrum_parser::Document::lazy_diagnostics(&self) -> pdfrum_common::diagnostics::Diagnostics
 pub fn pdfrum_parser::Document::main_xref_is_stream(&self) -> bool
 pub fn pdfrum_parser::Document::owner_permissions(&self) -> pdfrum_crypt::permissions::Permissions
-pub fn pdfrum_parser::Document::page(&self, u32) -> core::result::Result<pdfrum_parser::PageDict, pdfrum_parser::Error>
+pub fn pdfrum_parser::Document::page(&self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>) -> core::result::Result<pdfrum_parser::PageDict, pdfrum_parser::Error>
 pub fn pdfrum_parser::Document::page_count(&self) -> u32
 pub fn pdfrum_parser::Document::permissions(&self) -> pdfrum_crypt::permissions::Permissions
 pub fn pdfrum_parser::Document::security_handler(&self) -> &pdfrum_crypt::SecurityHandler

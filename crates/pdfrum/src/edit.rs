@@ -8,6 +8,7 @@
 //! [`PageEdit`], where a caller reading the rustdoc actually arrives.
 
 use kurbo::{Affine, BezPath, Rect};
+use pdfrum_common::PageIndex;
 use pdfrum_page::state::GraphicsState;
 use pdfrum_page::{ColorSpace, Content, FillRule, PageObject, PathObject, TextObject, TextSegment};
 
@@ -67,7 +68,7 @@ use crate::Page;
 /// would fail that comparison as surely as emitting less.
 #[derive(Debug, Clone)]
 pub struct PageEdit {
-    pub(crate) index: u32,
+    pub(crate) index: PageIndex,
     pub(crate) page: pdfrum_page::Page,
 }
 
@@ -87,7 +88,7 @@ impl PageEdit {
 
     /// The zero-based index of the page being edited.
     #[must_use]
-    pub fn index(&self) -> u32 {
+    pub fn index(&self) -> PageIndex {
         self.index
     }
 

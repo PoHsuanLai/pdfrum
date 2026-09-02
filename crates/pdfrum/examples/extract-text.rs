@@ -45,7 +45,7 @@ fn run(input: &Path, needle: Option<&str>) -> Result<(), pdfrum::Error> {
                 // rather than "4". Most documents have none.
                 let label = doc
                     .page_label(page.index())
-                    .unwrap_or_else(|| (page.index() + 1).to_string());
+                    .unwrap_or_else(|| (page.index().get() + 1).to_string());
                 println!("=== page {label} ({} chars) ===", text.char_count());
                 println!("{}", text.all_text());
             }
@@ -59,7 +59,7 @@ fn run(input: &Path, needle: Option<&str>) -> Result<(), pdfrum::Error> {
                     let rects = text.rects(range.start, Some(range.len()));
                     println!(
                         "page {} chars {}..{} in {} box(es)",
-                        page.index() + 1,
+                        page.index().get() + 1,
                         range.start,
                         range.end,
                         rects.len()

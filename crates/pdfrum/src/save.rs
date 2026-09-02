@@ -3,7 +3,7 @@
 use std::io::Write;
 use std::path::Path;
 
-use pdfrum_common::{Diagnostics, PdfVersion};
+use pdfrum_common::{Diagnostics, PageIndex, PdfVersion};
 use pdfrum_edit::{EditDoc, SaveMode};
 use pdfrum_object::Object;
 
@@ -315,7 +315,7 @@ impl Document {
     /// let extra = pdfrum::Document::open("tests/fixtures/bookmarks.pdf")?;
     ///
     /// // Append both of the other document's pages.
-    /// doc.import_pages(&out, &extra, &[0, 1], doc.page_count())?;
+    /// doc.import_pages(&out, &extra, [0, 1], doc.page_count())?;
     ///
     /// let merged = pdfrum::Document::open(&out)?;
     /// assert_eq!(merged.page_count(), 3);
@@ -326,16 +326,16 @@ impl Document {
         &self,
         path: impl AsRef<Path>,
         source: &Document,
-        pages: &[u32],
-        at: u32,
+        pages: impl IntoIterator<Item = impl Into<PageIndex>>,
+        at: impl Into<PageIndex>,
     ) -> Result<()> {
         let mut edit = EditDoc::new(&self.inner);
         pdfrum_edit::import_pages(
             &mut edit,
             &source.inner,
-            &pdfrum_edit::PageRange::of(pages.iter().copied()),
+            &pdfrum_edit::PageRange::of(pages),
             &pdfrum_edit::ImportOptions {
-                at,
+                at: at.into(),
                 viewer_preferences: false,
             },
         )?;

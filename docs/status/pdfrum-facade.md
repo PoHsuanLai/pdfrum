@@ -111,7 +111,8 @@ never needs a `&mut Document` and the document stays shareable.
 **Saving.** `save(path)`, `save_with(path, &SaveOptions)`,
 `save_incremental(path)`, `write_to(&mut impl Write, …)`,
 `save_form(path, &Form, …)`, `write_form_to(…)`,
-`import_pages(path, &source, &[u32], at)`.
+`import_pages(path, &source, pages, at)`, where `pages` and `at` both take
+anything that converts into a `PageIndex`.
 `SaveOptions { update: Update::{Rewrite, Incremental}, version }`.
 
 **Form interaction** (M14). `FormSession` is the facade's *own* type over

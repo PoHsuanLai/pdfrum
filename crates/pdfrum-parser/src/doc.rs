@@ -31,7 +31,7 @@
 
 use std::sync::{Arc, Mutex};
 
-use pdfrum_common::{DiagKind, Diagnostics, Limits, PdfVersion, Severity};
+use pdfrum_common::{DiagKind, Diagnostics, Limits, PageIndex, PdfVersion, Severity};
 use pdfrum_crypt::{Permissions, SecurityHandler};
 use pdfrum_object::{Dict, NoResolve, ObjRef, Object, Resolve, names};
 
@@ -139,14 +139,17 @@ pub struct Document {
     /// How many pages the catalog says there are.
     page_count: u32,
     /// Page dictionaries found so far, by index.
-    pages: Mutex<PageIndex>,
+    pages: Mutex<PageCache>,
     /// Everything repaired while opening the file.
     pub diags: Diagnostics,
 }
 
 /// The page lookup's memory.
+///
+/// Named `PageIndex` until WP1 gave that name to `pdfrum_common`'s newtype for
+/// a page's position. This is the cache, not the index.
 #[derive(Debug, Default)]
-struct PageIndex {
+struct PageCache {
     /// One slot per page, filled as pages are found.
     slots: Vec<Option<PageDict>>,
     /// Whether the tree turned out to be deeper than the cap, which stops
@@ -257,7 +260,7 @@ pub fn load(bytes: Arc<[u8]>, opts: &LoadOptions) -> Result<Document, LoadError>
         xref_shape,
         encrypt,
         page_count,
-        pages: Mutex::new(PageIndex {
+        pages: Mutex::new(PageCache {
             slots: vec![None; usize::try_from(page_count).unwrap_or(0)],
             poisoned: false,
         }),
@@ -534,6 +537,13 @@ fn node_kind(node: &Dict) -> NodeKind {
 
 impl Document {
     /// How many pages the document has.
+    ///
+    /// A `u32`, deliberately, and not a
+    /// [`PageIndex`](pdfrum_common::PageIndex): a count answers "how many"
+    /// and an index answers "which one", and the last valid index of a
+    /// three-page document is 2, not 3. Giving them one type would let each be
+    /// passed where the other is meant, which is what the newtype exists to
+    /// stop (`docs/design/idiomatic-api.md` §WP1).
     #[must_use]
     pub fn page_count(&self) -> u32 {
         self.page_count
@@ -546,21 +556,22 @@ impl Document {
     /// A kid that will not load as a dictionary still **consumes its slot**:
     /// a missing page leaves a hole rather than shifting every page after it.
     ///
+    /// Takes `impl Into<PageIndex>`, so `doc.page(0)` reads as it always has.
+    ///
     /// # Errors
     ///
     /// [`Error::NoPage`] for an index past the count, or one the walk could
     /// not reach.
-    pub fn page(&self, index: u32) -> Result<PageDict, Error> {
-        if index >= self.page_count {
+    pub fn page(&self, index: impl Into<PageIndex>) -> Result<PageDict, Error> {
+        let index = index.into();
+        let slot = usize::try_from(index.get()).unwrap_or(usize::MAX);
+        if index.get() >= self.page_count {
             return Err(Error::NoPage(index));
         }
         let Ok(mut pages) = self.pages.lock() else {
             return Err(Error::NoPage(index));
         };
-        if let Some(Some(found)) = pages
-            .slots
-            .get(usize::try_from(index).unwrap_or(usize::MAX))
-        {
+        if let Some(Some(found)) = pages.slots.get(slot) {
             return Ok(found.clone());
         }
         if pages.poisoned {
@@ -570,13 +581,13 @@ impl Document {
         self.walk_pages(&mut pages);
         pages
             .slots
-            .get(usize::try_from(index).unwrap_or(usize::MAX))
+            .get(slot)
             .and_then(Clone::clone)
             .ok_or(Error::NoPage(index))
     }
 
     /// Walk the whole tree once, filling every slot it can reach.
-    fn walk_pages(&self, pages: &mut PageIndex) {
+    fn walk_pages(&self, pages: &mut PageCache) {
         let Some(root) = self.trailer.dict.reference(names::ROOT) else {
             return;
         };
@@ -605,7 +616,7 @@ impl Document {
         &self,
         node: &Dict,
         reference: Option<ObjRef>,
-        pages: &mut PageIndex,
+        pages: &mut PageCache,
         next: &mut usize,
         depth: u32,
         ancestors: &mut Vec<Dict>,

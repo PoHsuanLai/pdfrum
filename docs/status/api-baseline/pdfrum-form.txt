@@ -311,7 +311,7 @@ pub mod pdfrum_form::error
 pub pdfrum_form::error::Error::NoSuchField
 pub pdfrum_form::error::Error::NoSuchField::field: u32
 pub pdfrum_form::error::Error::NoSuchPage
-pub pdfrum_form::error::Error::NoSuchPage::page: u32
+pub pdfrum_form::error::Error::NoSuchPage::page: pdfrum_common::page_index::PageIndex
 pub mod pdfrum_form::event
 pub enum pdfrum_form::event::Button
 pub pdfrum_form::event::Button::Left
@@ -600,7 +600,7 @@ pub struct pdfrum_form::page::PageForm
 pub pdfrum_form::page::PageForm::candidates: alloc::vec::Vec<pdfrum_form::hit::Candidate>
 pub pdfrum_form::page::PageForm::dicts: alloc::collections::btree::map::BTreeMap<u32, pdfrum_object::dict::Dict>
 pub pdfrum_form::page::PageForm::focusables: alloc::vec::Vec<(pdfrum_doc::annot::Subtype, pdfrum_form::tab::Focusable)>
-pub pdfrum_form::page::PageForm::page: u32
+pub pdfrum_form::page::PageForm::page: pdfrum_common::page_index::PageIndex
 pub pdfrum_form::page::PageForm::page_height: f32
 pub pdfrum_form::page::PageForm::tab_order: pdfrum_form::tab::TabOrder
 pub pdfrum_form::page::PageForm::widgets: alloc::vec::Vec<pdfrum_form::page::WidgetInfo>
@@ -621,7 +621,7 @@ pub fn pdfrum_form::page::WidgetInfo::selected<R: pdfrum_object::resolve::Resolv
 pub fn pdfrum_form::page::WidgetInfo::text_config<R: pdfrum_object::resolve::Resolve>(&self, &R) -> pdfrum_form::field::TextConfig
 pub fn pdfrum_form::page::WidgetInfo::top_index<R: pdfrum_object::resolve::Resolve>(&self, &R) -> usize
 pub fn pdfrum_form::page::WidgetInfo::value<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::string::String
-pub fn pdfrum_form::page::read<R: pdfrum_object::resolve::Resolve>(u32, &pdfrum_object::dict::Dict, &pdfrum_object::dict::Dict, &R) -> pdfrum_form::page::PageForm
+pub fn pdfrum_form::page::read<R: pdfrum_object::resolve::Resolve>(impl core::convert::Into<pdfrum_common::page_index::PageIndex>, &pdfrum_object::dict::Dict, &pdfrum_object::dict::Dict, &R) -> pdfrum_form::page::PageForm
 pub mod pdfrum_form::popup
 pub enum pdfrum_form::popup::Placement
 pub pdfrum_form::popup::Placement::Above
@@ -682,9 +682,9 @@ pub fn pdfrum_form::session::FocusTarget::annot(self) -> pdfrum_form::session::A
 pub fn pdfrum_form::session::FocusTarget::field(self) -> core::option::Option<pdfrum_form::session::FieldId>
 pub struct pdfrum_form::session::AnnotId
 pub pdfrum_form::session::AnnotId::index: u32
-pub pdfrum_form::session::AnnotId::page: u32
+pub pdfrum_form::session::AnnotId::page: pdfrum_common::page_index::PageIndex
 impl pdfrum_form::session::AnnotId
-pub fn pdfrum_form::session::AnnotId::new(u32, u32) -> pdfrum_form::session::AnnotId
+pub fn pdfrum_form::session::AnnotId::new(impl core::convert::Into<pdfrum_common::page_index::PageIndex>, u32) -> pdfrum_form::session::AnnotId
 pub struct pdfrum_form::session::DragAnchor
 pub pdfrum_form::session::DragAnchor::field: pdfrum_form::session::FieldId
 pub pdfrum_form::session::DragAnchor::start: pdfrum_doc::vt::hit::Place
@@ -779,7 +779,7 @@ pub pdfrum_form::Button::Right
 pub pdfrum_form::Error::NoSuchField
 pub pdfrum_form::Error::NoSuchField::field: u32
 pub pdfrum_form::Error::NoSuchPage
-pub pdfrum_form::Error::NoSuchPage::page: u32
+pub pdfrum_form::Error::NoSuchPage::page: pdfrum_common::page_index::PageIndex
 pub enum pdfrum_form::Event
 pub pdfrum_form::Event::Char
 pub pdfrum_form::Event::Char::ch: char
@@ -894,9 +894,9 @@ pub fn pdfrum_form::update::UpdateKind::appearance(&self) -> core::option::Optio
 pub fn pdfrum_form::update::UpdateKind::is_live_edit(&self) -> bool
 pub struct pdfrum_form::AnnotId
 pub pdfrum_form::AnnotId::index: u32
-pub pdfrum_form::AnnotId::page: u32
+pub pdfrum_form::AnnotId::page: pdfrum_common::page_index::PageIndex
 impl pdfrum_form::session::AnnotId
-pub fn pdfrum_form::session::AnnotId::new(u32, u32) -> pdfrum_form::session::AnnotId
+pub fn pdfrum_form::session::AnnotId::new(impl core::convert::Into<pdfrum_common::page_index::PageIndex>, u32) -> pdfrum_form::session::AnnotId
 pub struct pdfrum_form::AppearanceUpdate
 pub pdfrum_form::AppearanceUpdate::annot: pdfrum_form::session::AnnotId
 pub pdfrum_form::AppearanceUpdate::kind: pdfrum_form::update::UpdateKind
@@ -1059,7 +1059,7 @@ pub struct pdfrum_form::PageForm
 pub pdfrum_form::PageForm::candidates: alloc::vec::Vec<pdfrum_form::hit::Candidate>
 pub pdfrum_form::PageForm::dicts: alloc::collections::btree::map::BTreeMap<u32, pdfrum_object::dict::Dict>
 pub pdfrum_form::PageForm::focusables: alloc::vec::Vec<(pdfrum_doc::annot::Subtype, pdfrum_form::tab::Focusable)>
-pub pdfrum_form::PageForm::page: u32
+pub pdfrum_form::PageForm::page: pdfrum_common::page_index::PageIndex
 pub pdfrum_form::PageForm::page_height: f32
 pub pdfrum_form::PageForm::tab_order: pdfrum_form::tab::TabOrder
 pub pdfrum_form::PageForm::widgets: alloc::vec::Vec<pdfrum_form::page::WidgetInfo>
