@@ -24,7 +24,7 @@
 
 #![allow(clippy::expect_used)]
 
-use pdfrum::{BuildContext, Document, FormSession, Modifiers, UpdateKind, kurbo::Point};
+use pdfrum::{BuildContext, Document, FormSession, Modifiers, Point, UpdateKind};
 
 /// `form_textfield_focused_ltr.in` expanded: one `/Tx` widget,
 /// `/Rect [50 40 150 70]`, border 1, `/DA (/Arial 12 Tf 0 0 0 rg)` over a

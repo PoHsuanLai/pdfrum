@@ -19,7 +19,7 @@
 // fixtures' object counts are asserted a line above every index.
 #![allow(clippy::expect_used, clippy::indexing_slicing)]
 
-use pdfrum::{Document, PageEdit, PathBuilder, SaveOptions, Update, kurbo::Rect, peniko::Color};
+use pdfrum::{Color, Document, PageEdit, PathBuilder, Rect, SaveOptions, Update};
 
 const HELLO: &str = "tests/fixtures/hello_world.pdf";
 /// Nineteen objects across three `/Contents` elements: 15 in element 0, 3 in
@@ -465,7 +465,7 @@ fn transforming_an_object_dirties_it_and_the_move_survives_a_save() {
         pdfrum::PageObject::Path(p) => p.object.path.clone(),
         other => panic!("expected a path, got {other:?}"),
     };
-    assert!(page.transform(0, pdfrum::kurbo::Affine::translate((25.0, 0.0))));
+    assert!(page.transform(0, pdfrum::Affine::translate((25.0, 0.0))));
     assert!(page.is_modified());
 
     let saved = round_trip(&doc, &[page], "transform");
@@ -479,8 +479,13 @@ fn transforming_an_object_dirties_it_and_the_move_survives_a_save() {
         }
         other => panic!("expected a path, got {other:?}"),
     };
-    let moved = pdfrum::kurbo::Shape::bounding_box(&after);
-    let original = pdfrum::kurbo::Shape::bounding_box(&before);
+    // `kurbo::Shape` is named through `kurbo` and not through `pdfrum`,
+    // because §WP4 narrowed the facade's re-export to the five types its own
+    // signatures speak and `Shape` is not one of them. A caller wanting it
+    // adds `kurbo` — which is what this test's manifest already does, and
+    // what the ordinary Rust rule says.
+    let moved = kurbo::Shape::bounding_box(&after);
+    let original = kurbo::Shape::bounding_box(&before);
     assert!(
         (moved.x0 - original.x0 - 25.0).abs() < 0.5,
         "expected a 25pt shift: {original:?} -> {moved:?}"

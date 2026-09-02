@@ -14,7 +14,7 @@
 // See `form_routing.rs`: the fixture helper is a failure signal.
 #![allow(clippy::expect_used)]
 
-use pdfrum::{Document, FormSession, Key, Modifiers, kurbo::Point};
+use pdfrum::{Document, FormSession, Key, Modifiers, Point};
 
 fn document() -> Document {
     Document::open("tests/fixtures/click_form.pdf").expect("the click_form fixture must open")

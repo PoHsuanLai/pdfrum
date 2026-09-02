@@ -25,7 +25,7 @@
 
 #![cfg(feature = "script")]
 
-use pdfrum::{Cascade, Document, FieldRef, FormSession, Modifiers, ScriptConfig, kurbo::Point};
+use pdfrum::{Cascade, Document, FieldRef, FormSession, Modifiers, Point, ScriptConfig};
 
 /// `testing/resources/javascript/public_methods.pdf`, verbatim.
 ///

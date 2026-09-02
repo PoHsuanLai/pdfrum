@@ -15,7 +15,7 @@
 // rather than a case to handle — the same bargain `facade.rs` makes.
 #![allow(clippy::expect_used)]
 
-use pdfrum::{Document, FormSession, Key, Modifiers, kurbo::Point};
+use pdfrum::{Document, FormSession, Key, Modifiers, Point};
 
 /// The fixture, or a failed test rather than four green-and-empty ones.
 fn document() -> Document {

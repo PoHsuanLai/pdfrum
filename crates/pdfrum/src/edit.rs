@@ -253,7 +253,7 @@ fn rgba_of(color: peniko::Color) -> ([f32; 3], f32) {
 /// stream restates everything from the PDF defaults anyway.
 ///
 /// ```
-/// use pdfrum::{PathBuilder, kurbo::Rect, peniko::Color};
+/// use pdfrum::{Color, PathBuilder, Rect};
 ///
 /// let object = PathBuilder {
 ///     fill: Some(Color::from_rgb8(255, 0, 0)),
