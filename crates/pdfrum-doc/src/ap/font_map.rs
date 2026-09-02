@@ -111,7 +111,11 @@ pub fn da_font_writes(font: &pdfrum_font::Font, da_charset: Charset, code: u32) 
 /// The 128 high codes are the charset's Unicode table; the 128 low ones are
 /// ASCII, which every one of these encodings shares with `WinAnsiEncoding`.
 #[must_use]
-pub fn charset_code(charset: Charset, code: u32) -> Option<u8> {
+// Reached only by the tests beside it now that the module is private; the
+// library compiles once without `cfg(test)`, so `dead_code` fires. §WP8's
+// recurring cost — the item is pinned by a test, not unreachable.
+#[allow(dead_code)]
+pub(crate) fn charset_code(charset: Charset, code: u32) -> Option<u8> {
     if code < 0x80 {
         return u8::try_from(code).ok();
     }
@@ -129,7 +133,7 @@ pub fn charset_code(charset: Charset, code: u32) -> Option<u8> {
 /// `CPWL_EditImpl::GetPDFWordString`'s fallthrough leaves a character no font
 /// in the map could take.
 #[must_use]
-pub fn substitute_encode(font: &pdfrum_font::Font, code: u32) -> Vec<u8> {
+pub(crate) fn substitute_encode(font: &pdfrum_font::Font, code: u32) -> Vec<u8> {
     let mut out = Vec::new();
     let byte = char::from_u32(code)
         .and_then(|ch| font.char_code_from_unicode(ch))
@@ -170,7 +174,7 @@ pub fn substitute_width(font: &pdfrum_font::Font, code: u32) -> i32 {
 /// place than the one the layout measures with is how a run comes out the
 /// wrong length.
 #[must_use]
-pub fn substitute_font_dict(charset: Charset) -> Option<Dict> {
+pub(crate) fn substitute_font_dict(charset: Charset) -> Option<Dict> {
     let table = charset_unicodes(charset)?;
     let mut differences: Vec<Object> = Vec::with_capacity(table.len() + 1);
     differences.push(Object::Int(0x80));
@@ -252,7 +256,7 @@ const SUBSTITUTE_BASE_FONT: &str = "Times-Roman";
 /// for every charset here is the **empty** one — so the alias is the charset
 /// alone, and a field can carry both `Arial` and `_B1`.
 #[must_use]
-pub fn substitute_alias(charset: Charset) -> Vec<u8> {
+pub(crate) fn substitute_alias(charset: Charset) -> Vec<u8> {
     format!("_{:02X}", charset_byte(charset)).into_bytes()
 }
 

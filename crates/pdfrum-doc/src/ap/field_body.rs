@@ -72,7 +72,7 @@ use crate::vt;
 /// reach a different builder whose output is chrome alone, and a signature
 /// never reaches one.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Kind {
+pub(crate) enum Kind {
     /// `/FT /Tx` — one value, possibly over several lines or in comb cells.
     Text,
     /// `/FT /Ch` with the combo flag — one line beside a drop button.
@@ -298,7 +298,7 @@ pub fn client_rect<R: Resolve>(dict: &Dict, r: &R) -> Rect {
 /// colour sets **black**, so a body that sets any text always writes a colour
 /// operator before it.
 #[must_use]
-pub fn text_color<R: Resolve>(dict: &Dict, r: &R) -> Color {
+pub(crate) fn text_color<R: Resolve>(dict: &Dict, r: &R) -> Color {
     inherited(dict, names::DA, r)
         .map(|value| value.to_byte_string())
         .and_then(|string| da::color(&string))
@@ -325,7 +325,7 @@ pub fn alignment<R: Resolve>(dict: &Dict, r: &R) -> vt::Alignment {
 
 /// One generated field body: its content stream and the font it names.
 #[derive(Debug, Clone, PartialEq)]
-pub struct Body {
+pub(crate) struct Body {
     /// The content-stream bytes, to follow the chrome.
     pub stream: Vec<u8>,
     /// The one-entry `/Font` dictionary the stream's `Tf` resolves against.
@@ -345,7 +345,7 @@ pub struct Body {
 /// stream this function produced before either parameter existed.
 #[must_use]
 #[allow(clippy::too_many_arguments)]
-pub fn generate<R: Resolve>(
+pub(crate) fn generate<R: Resolve>(
     dict: &Dict,
     catalog: &Dict,
     font: &TextFont<'_>,
@@ -1118,7 +1118,7 @@ pub fn field_value<R: Resolve>(dict: &Dict, r: &R) -> String {
 /// selected. Making this function follow the interaction rule turns that
 /// fixture's row red; the two readers have to stay apart.
 #[must_use]
-pub fn selected_indices<R: Resolve>(dict: &Dict, options: &[Choice], r: &R) -> Vec<usize> {
+pub(crate) fn selected_indices<R: Resolve>(dict: &Dict, options: &[Choice], r: &R) -> Vec<usize> {
     let Some(value) = inherited(dict, names::V, r).or_else(|| inherited(dict, names::I, r)) else {
         return Vec::new();
     };

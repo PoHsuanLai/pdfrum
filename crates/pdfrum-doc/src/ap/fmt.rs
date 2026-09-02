@@ -9,16 +9,10 @@
 //! costs byte parity on every file that uses it, so both live here, named
 //! apart, and every emitter names the one it wants.
 //!
-//! ```
-//! use pdfrum_doc::ap::fmt::{shortest, g6};
-//!
-//! // The shortest writer drops the leading zero and never goes scientific.
-//! assert_eq!(shortest(0.5), ".5");
-//! assert_eq!(shortest(1e7), "10000000");
-//! // The ostream writer keeps the zero and switches to exponent form.
-//! assert_eq!(g6(0.5), "0.5");
-//! assert_eq!(g6(1e7), "1e+07");
-//! ```
+//! The two spellings side by side, which `the_two_writers_disagree_where_it
+//! _matters` below asserts: the shortest writer drops a leading zero and
+//! never goes scientific (`0.5` is `.5`, `1e7` is `10000000`); the ostream
+//! writer keeps the zero and switches to exponent form (`0.5`, `1e+07`).
 
 /// The buffer cap the shortest writer works within; a value whose decimal
 /// expansion would exceed it loses its tail.
@@ -257,5 +251,17 @@ mod tests {
                 "{text} did not round-trip"
             );
         }
+    }
+
+    /// Was the module doctest until `ap::fmt` went private with the rest of
+    /// `ap`'s internals (§WP8's recurring cost). It is the one assertion that
+    /// shows both writers on the same two inputs, so it is kept rather than
+    /// folded into the table-driven tests above.
+    #[test]
+    fn the_two_writers_disagree_where_it_matters() {
+        assert_eq!(shortest(0.5), ".5");
+        assert_eq!(shortest(1e7), "10000000");
+        assert_eq!(g6(0.5), "0.5");
+        assert_eq!(g6(1e7), "1e+07");
     }
 }
