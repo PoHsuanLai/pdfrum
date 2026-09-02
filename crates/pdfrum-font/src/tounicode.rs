@@ -22,7 +22,7 @@
 //! assert_eq!(map.reverse('a').0, 0x41);
 //! ```
 
-use pdfrum_cmap::{CharCode, CidSet, lexer::Words};
+use pdfrum_cmap::{CharCode, CidSet, Words};
 use pdfrum_common::{DiagKind, Diagnostics, Limits, Severity};
 use smallvec::SmallVec;
 use std::collections::BTreeMap;
