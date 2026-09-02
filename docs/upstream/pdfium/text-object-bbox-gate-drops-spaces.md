@@ -1,40 +1,23 @@
-# Upstream issue draft — PDFium text extraction (crbug.com/pdfium)
-
-One issue in PDFium's text extraction, in the Chromium issue tracker's
-template and ready to paste. Everything from the `## Issue` heading down is
-issue text; nothing above the rule is meant to be posted.
+# A text object whose glyph bounding box is empty is dropped, so spaces in their own text object are lost
 
 **Status:** drafted 2026-09-02, not yet filed.
 
-**How this was produced.** Both "what you see instead" blocks are observed
-output from `pdfium_test --txt` at commit `6f2272e1f3aa` (2026-08-28), run on
-copies of two files already in the PDFium tree. `--txt` writes UTF-32LE with a
-BOM; the byte dumps below are that file, decoded. Source line numbers are from
-the same commit. Host: Ubuntu 22.04.5 LTS, x86-64.
+**Confidence:** observed output.
 
-**Relationship to existing bugs.** This is the shared root cause behind
-`crbug.com/40643656` (whitespace-only page extracts nothing) and
-`crbug.com/444176962` (`local act` extracts as `localact`). Both are named in
-the tracker already; neither names the gate that causes them. File this as the
-root-cause bug and link the two, or add it as a comment to whichever is
-preferred — the repros here are the two files those bugs are about.
+**Repro files:** `whitespace.pdf, bug_444176962.pdf` in `../repro/`.
 
-**A second-order finding worth including.** Removing the gate exposes a
-disagreement about *which* space character the page contains: a producer that
-emits one `Tj` per glyph puts each space in its own text object, and where the
-font's space glyph maps to `U+00A0` the recovered character is a no-break
-space, not `U+0020`. PDFium's inter-object spacing heuristic currently masks
-this by regenerating plain `U+0020` for the objects it dropped. Mozilla's
-pdf.js NFKC-normalizes extracted text (`src/shared/util.js:1050-1065`, applied
-at `src/core/evaluator.js:2685-2689`), which maps `U+00A0` to `U+0020` — so
-both implementations agree on the emitted byte by different routes. A fix for
-the gate should keep that normalization, or the corpus's spaces change
-character. This is written into the issue below because a maintainer taking the
-fix will hit it immediately.
+**Source read at** PDFium commit `6f2272e1f3aa` (2026-08-28).
+**Host** for any observed output: Ubuntu 22.04.5 LTS, x86-64.
+**Tiebreaker**: Mozilla's pdf.js, an independent implementation of the same
+specification, cited at file:line where its answer differs.
+
+Everything from the `##` heading down is issue text, ready to paste
+into the Chromium tracker's template; nothing above it is meant to be
+posted.
 
 ---
 
-## Issue — a text object whose glyph bounding box is empty is dropped, so spaces in their own text object are lost
+## a text object whose glyph bounding box is empty is dropped, so spaces in their own text object are lost
 
 **What steps will reproduce the problem?**
 
