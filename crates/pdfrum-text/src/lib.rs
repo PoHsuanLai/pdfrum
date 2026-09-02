@@ -260,7 +260,7 @@ impl TextPage {
     /// returns.
     #[must_use]
     pub fn web_links(&self) -> Vec<WebLink> {
-        links::extract(&self.chars, &self.text)
+        links::extract(&self.chars, &self.text, &index::build(&self.chars))
     }
 
     /// The boxes covering a run of characters, one per run sharing a text
