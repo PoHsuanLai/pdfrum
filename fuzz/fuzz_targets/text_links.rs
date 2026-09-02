@@ -24,7 +24,7 @@ fuzz_target!(|data: &[u8]| {
         return;
     }
 
-    if let Some(link) = pdfrum_text::links::check_web_link(text) {
+    if let Some(link) = pdfrum_text::check_web_link(text) {
         let chars = text.chars().count();
         assert!(
             link.range.start <= link.range.end && link.range.end <= chars,
@@ -33,7 +33,7 @@ fuzz_target!(|data: &[u8]| {
         );
         assert!(!link.url.is_empty(), "an accepted web link needs a URL");
     }
-    if let Some(url) = pdfrum_text::links::check_mail_link(text) {
+    if let Some(url) = pdfrum_text::check_mail_link(text) {
         assert!(
             url.contains('@'),
             "an accepted mail link keeps its at sign: {url:?}"

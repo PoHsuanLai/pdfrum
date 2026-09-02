@@ -49,8 +49,8 @@ fuzz_target!(|data: &[u8]| {
     };
 
     let _ = doc.is_encrypted();
-    let _ = doc.permissions(false);
-    let _ = doc.permissions(true);
+    let _ = doc.permissions();
+    let _ = doc.owner_permissions();
 
     // Decryption happens lazily as objects are fetched, so a document that
     // merely opened has not yet exercised the cipher. Fetching the objects
