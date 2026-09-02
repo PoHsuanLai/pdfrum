@@ -58,13 +58,18 @@ use crate::cascade::{Cascade, FieldRef, FieldWrites, Keystroke, KeystrokeOutcome
 
 pub use transcript::TranscriptLine;
 
-/// PDFium's own test seed: `pdfium_test --time=1399672130`, in milliseconds.
+/// PDFium's own test seed, in **seconds**: the value the conformance harness
+/// passes as `pdfium_test --time=1399672130`.
 ///
-/// Not a default — a *constant a golden run passes in*. The frozen clock leaks
-/// into the expected bytes (`public_methods_expected.txt` pins
+/// Not a default and not something this crate applies on its own — a *constant
+/// a golden run passes in*, through [`ScriptConfig::frozen_at`]. The frozen
+/// clock leaks into the expected bytes (`public_methods_expected.txt` pins
 /// `AFParseDateEx(1, 2) = 1399672130000`), so a conformance run must set it
 /// and an ordinary embedder must not.
-pub const PDFIUM_TEST_CLOCK_MS: i64 = 1_399_672_130_000;
+///
+/// Exported for tests and for a harness that wants to name the seed; the tool
+/// reads its own `--time=` rather than reaching for this.
+pub const PDFIUM_TEST_CLOCK_SECS: u64 = 1_399_672_130;
 
 /// The timezone the **engine's `Date`** sees: `TZ=America/Los_Angeles` as V8
 /// resolves it for the fixtures' July dates, which is `GMT-0700`.
@@ -112,8 +117,12 @@ pub struct ScriptConfig {
     pub limits: Limits,
     /// The clock scripts see, in milliseconds since the epoch.
     ///
-    /// `None` reads the host clock. `Some` freezes it, which is what a golden
-    /// run needs — see [`PDFIUM_TEST_CLOCK_MS`].
+    /// `None` reads the **host clock**, which is the ordinary case and is the
+    /// oracle's too: `pdfium_test` installs its time hooks only when
+    /// `--time=` was given (`testing/pdfium_test/pdfium_test.cc:2129-2135`),
+    /// and without them `FXSYS_time` is libc's
+    /// (`core/fxcrt/fx_extension.cpp:110-116`). `Some` freezes it, which is
+    /// what a golden run needs — see [`ScriptConfig::frozen_at`].
     pub clock_ms: Option<i64>,
     /// The local timezone offset scripts see, in seconds east of UTC.
     ///
@@ -129,15 +138,49 @@ pub struct ScriptConfig {
 }
 
 impl ScriptConfig {
-    /// The configuration a golden run uses: PDFium's frozen clock and its
-    /// timezone.
+    /// The configuration for a run whose clock is frozen at `seconds` since
+    /// the epoch — `pdfium_test --time=<seconds>`.
+    ///
+    /// **The seed is the caller's**, which is the whole point: `--time=` is
+    /// the single source of the scripting clock, and this crate no longer
+    /// knows which instant a golden run wants. A conformance run passes
+    /// [`PDFIUM_TEST_CLOCK_SECS`].
+    ///
+    /// The two timezone offsets come with it rather than being separately
+    /// configurable, because upstream installs both hooks under the *same*
+    /// guard: `FSDK_SetTimeFunction` and `FSDK_SetLocaltimeFunction` are set
+    /// together inside `if (options.time > -1)`
+    /// (`testing/pdfium_test/pdfium_test.cc:2129-2135`), and the second one —
+    /// `localtime` replaced by `gmtime` — is what makes `util.printd`'s offset
+    /// differ from `Date`'s. Freezing the instant without freezing the zone
+    /// would reproduce neither.
+    ///
+    /// A `seconds` past `i64` milliseconds saturates rather than wrapping; no
+    /// `time_t` a command line can carry reaches that.
     #[must_use]
-    pub fn for_goldens() -> ScriptConfig {
+    pub fn frozen_at(seconds: u64) -> ScriptConfig {
+        let millis = i64::try_from(seconds)
+            .unwrap_or(i64::MAX)
+            .saturating_mul(1000);
         ScriptConfig {
             limits: Limits::default(),
-            clock_ms: Some(PDFIUM_TEST_CLOCK_MS),
+            clock_ms: Some(millis),
             timezone_offset_secs: PDFIUM_TEST_TZ_OFFSET_SECS,
             printd_offset_secs: PDFIUM_TEST_FX_LOCALTIME_OFFSET_SECS,
+        }
+    }
+
+    /// The configuration for a run with **no `--time=`**: the real wall
+    /// clock, and the host's own zone offsets left at whatever
+    /// [`Default`] gives them.
+    ///
+    /// This is the ordinary embedder's configuration and the one a tool
+    /// invoked without the flag builds.
+    #[must_use]
+    pub fn wall_clock() -> ScriptConfig {
+        ScriptConfig {
+            clock_ms: None,
+            ..ScriptConfig::default()
         }
     }
 }
@@ -233,14 +276,24 @@ impl ScriptCascade {
     ///
     /// Only if `boa` cannot build a context at all, which no input can cause.
     pub fn new(config: &ScriptConfig) -> Result<ScriptCascade, BuildError> {
-        let mut builder = Context::builder().host_hooks(Rc::new(host::FixedZone {
-            offset_secs: config.timezone_offset_secs,
-        }));
+        let mut builder = Context::builder();
+        // The instant and the zone are frozen **together or not at all**,
+        // which is upstream's single guard: `FSDK_SetTimeFunction` and
+        // `FSDK_SetLocaltimeFunction` are installed inside one
+        // `if (options.time > -1)` (`pdfium_test.cc:2129-2135`). Absent
+        // `--time=`, `Date` reads the machine's real clock through boa's
+        // default hooks and its real zone through boa's default
+        // `local_timezone_offset_seconds` — the answer an embedder wants,
+        // and the one a golden run must never see.
         if let Some(millis) = config.clock_ms {
             let millis = u64::try_from(millis).unwrap_or(0);
-            builder = builder.clock(Rc::new(boa_engine::context::time::FixedClock::from_millis(
-                millis,
-            )));
+            builder = builder
+                .host_hooks(Rc::new(host::FixedZone {
+                    offset_secs: config.timezone_offset_secs,
+                }))
+                .clock(Rc::new(boa_engine::context::time::FixedClock::from_millis(
+                    millis,
+                )));
         }
         let mut context = builder.build().map_err(|error| BuildError {
             message: error.to_string(),
