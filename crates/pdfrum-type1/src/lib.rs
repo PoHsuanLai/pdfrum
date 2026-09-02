@@ -101,6 +101,30 @@ use std::collections::HashMap;
 /// Type 1 has no glyph-index concept of its own — glyphs are named — so this
 /// is our numbering, fixed by the order the dictionary declared them, which is
 /// the same convention FreeType and `read-fonts` use.
+///
+/// # Not `pdfrum_font::Gid`
+///
+/// `pdfrum-font` defines a `Gid` of its own, and the two are **deliberately
+/// distinct types for two distinct index spaces** — kept apart rather than
+/// merged into one shared identifier, which is the decision
+/// `docs/design/idiomatic-api.md` §A.11 asked step 12 to make.
+///
+/// This one indexes *this* crate's `/CharStrings` order. `pdfrum-font`'s
+/// indexes whatever program a face was loaded from: for an sfnt or bare-CFF
+/// face that is `skrifa`'s `GlyphId`, a numbering this crate never produces
+/// and never sees. The two coincide numerically only for a face that *is* a
+/// Type 1 program, and only because `pdfrum-font` chose to carry the
+/// declaration order through unchanged.
+///
+/// The reason the shared identifier does not move down to `pdfrum-common`,
+/// where §WP1 put [`pdfrum_common::PageIndex`]: WP1's rule is "more than one
+/// crate produces the *same value*", and a page index parsed by
+/// `pdfrum-parser` and one consumed by `pdfrum-page` really are one number in
+/// one space. These are not — merging them would make an sfnt glyph index
+/// assignable to a `/CharStrings` slot with no conversion, which is the exact
+/// shape of the two-index-spaces bug §WP8 found in `pdfrum-text`. The
+/// conversion instead lives in `pdfrum-font`'s `From` impls, at the one
+/// boundary that owns both (§B.3).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Gid(pub u16);
 
