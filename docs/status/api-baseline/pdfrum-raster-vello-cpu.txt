@@ -1,0 +1,24 @@
+pub mod pdfrum_raster_vello_cpu
+pub struct pdfrum_raster_vello_cpu::VelloCpuBackend
+impl pdfrum_raster_vello_cpu::VelloCpuBackend
+pub fn pdfrum_raster_vello_cpu::VelloCpuBackend::new() -> Self
+impl pdfrum_render::device::RasterBackend for pdfrum_raster_vello_cpu::VelloCpuBackend
+pub type pdfrum_raster_vello_cpu::VelloCpuBackend::Device = pdfrum_raster_vello_cpu::VelloCpuDevice
+pub fn pdfrum_raster_vello_cpu::VelloCpuBackend::finish(&self, Self::Device) -> pdfrum_render::pixmap::Pixmap
+pub fn pdfrum_raster_vello_cpu::VelloCpuBackend::new_target(&self, u32, u32, peniko::Color) -> Self::Device
+pub fn pdfrum_raster_vello_cpu::VelloCpuBackend::new_target_with_backdrop(&self, &pdfrum_render::pixmap::Pixmap) -> Self::Device
+pub fn pdfrum_raster_vello_cpu::VelloCpuBackend::snapshot(&self, &Self::Device) -> pdfrum_render::pixmap::Pixmap
+pub struct pdfrum_raster_vello_cpu::VelloCpuDevice
+impl pdfrum_render::device::RenderDevice for pdfrum_raster_vello_cpu::VelloCpuDevice
+pub fn pdfrum_raster_vello_cpu::VelloCpuDevice::draw_image(&mut self, &pdfrum_render::device::RasterImage, kurbo::affine::Affine, pdfrum_render::device::ImageQuality, f32)
+pub fn pdfrum_raster_vello_cpu::VelloCpuDevice::fill_path(&mut self, &kurbo::bezpath::BezPath, kurbo::affine::Affine, &pdfrum_render::device::Brush<'_>, pdfrum_render::device::FillRule, pdfrum_render::device::AntiAlias)
+pub fn pdfrum_raster_vello_cpu::VelloCpuDevice::pop(&mut self)
+pub fn pdfrum_raster_vello_cpu::VelloCpuDevice::push_clip(&mut self, &kurbo::bezpath::BezPath, pdfrum_render::device::FillRule)
+pub fn pdfrum_raster_vello_cpu::VelloCpuDevice::push_clip_rect(&mut self, kurbo::rect::Rect)
+pub fn pdfrum_raster_vello_cpu::VelloCpuDevice::push_layer(&mut self, pdfrum_page::state::general::BlendMode, f32, core::option::Option<&pdfrum_render::pixmap::AlphaMask>)
+pub fn pdfrum_raster_vello_cpu::VelloCpuDevice::stroke_path(&mut self, &kurbo::bezpath::BezPath, kurbo::affine::Affine, &pdfrum_render::device::Brush<'_>, &kurbo::stroke::Stroke, pdfrum_render::device::AntiAlias)
+pub const pdfrum_raster_vello_cpu::PINNED_RENDER_MODE: vello_cpu::RenderMode
+pub fn pdfrum_raster_vello_cpu::is_transparent(peniko::Color) -> bool
+pub fn pdfrum_raster_vello_cpu::pinned_level() -> fearless_simd::Level
+pub fn pdfrum_raster_vello_cpu::to_blend_mode(pdfrum_page::state::general::BlendMode) -> peniko::blend::BlendMode
+pub fn pdfrum_raster_vello_cpu::to_mix(pdfrum_page::state::general::BlendMode) -> peniko::blend::Mix

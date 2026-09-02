@@ -1,0 +1,81 @@
+pub mod pdfrum_filters
+pub enum pdfrum_filters::DecodeOutput
+pub pdfrum_filters::DecodeOutput::Bytes(alloc::vec::Vec<u8>)
+pub pdfrum_filters::DecodeOutput::Image(pdfrum_filters::NeedsImageCodec)
+pub enum pdfrum_filters::Error
+pub pdfrum_filters::Error::BadCcittParams(&'static str)
+pub pdfrum_filters::Error::BadPredictorParams(&'static str)
+pub pdfrum_filters::Error::LzwMalformed(&'static str)
+pub pdfrum_filters::Error::OutputTooLarge
+pub pdfrum_filters::Error::OutputTooLarge::limit: usize
+pub pdfrum_filters::Error::RunLengthTooLarge
+pub pdfrum_filters::Error::RunLengthTooLarge::size: u64
+pub pdfrum_filters::Error::SizeOverflow
+pub enum pdfrum_filters::Filter
+pub pdfrum_filters::Filter::Ascii85
+pub pdfrum_filters::Filter::AsciiHex
+pub pdfrum_filters::Filter::CcittFax
+pub pdfrum_filters::Filter::Crypt
+pub pdfrum_filters::Filter::Dct
+pub pdfrum_filters::Filter::Flate
+pub pdfrum_filters::Filter::Jbig2
+pub pdfrum_filters::Filter::Jpx
+pub pdfrum_filters::Filter::Lzw
+pub pdfrum_filters::Filter::RunLength
+impl pdfrum_filters::Filter
+pub fn pdfrum_filters::Filter::canonical_name(self) -> &'static pdfrum_object::name::Name
+pub fn pdfrum_filters::Filter::from_name(&pdfrum_object::name::Name) -> core::option::Option<pdfrum_filters::Filter>
+pub fn pdfrum_filters::Filter::is_chainable(self) -> bool
+pub fn pdfrum_filters::Filter::is_image_codec(self) -> bool
+pub enum pdfrum_filters::PredictorKind
+pub pdfrum_filters::PredictorKind::None
+pub pdfrum_filters::PredictorKind::Png
+pub pdfrum_filters::PredictorKind::Tiff
+impl pdfrum_filters::PredictorKind
+pub fn pdfrum_filters::PredictorKind::from_predictor(i64) -> pdfrum_filters::PredictorKind
+pub struct pdfrum_filters::CcittImage
+pub pdfrum_filters::CcittImage::bits: alloc::vec::Vec<u8>
+pub pdfrum_filters::CcittImage::height: u32
+pub pdfrum_filters::CcittImage::row_bytes: usize
+pub pdfrum_filters::CcittImage::width: u32
+pub struct pdfrum_filters::CcittParams
+pub pdfrum_filters::CcittParams::black_is_1: bool
+pub pdfrum_filters::CcittParams::columns: i64
+pub pdfrum_filters::CcittParams::encoded_byte_align: bool
+pub pdfrum_filters::CcittParams::end_of_line: bool
+pub pdfrum_filters::CcittParams::k: i64
+pub pdfrum_filters::CcittParams::rows: i64
+impl pdfrum_filters::CcittParams
+pub fn pdfrum_filters::CcittParams::from_dict(&pdfrum_object::dict::Dict, &impl pdfrum_object::resolve::Resolve) -> Self
+pub fn pdfrum_filters::CcittParams::resolve_size(self, u32, u32) -> core::result::Result<(u32, u32), pdfrum_filters::Error>
+impl core::default::Default for pdfrum_filters::CcittParams
+pub fn pdfrum_filters::CcittParams::default() -> Self
+pub struct pdfrum_filters::DecodedStream
+pub pdfrum_filters::DecodedStream::data: alloc::vec::Vec<u8>
+pub pdfrum_filters::DecodedStream::image: core::option::Option<pdfrum_filters::NeedsImageCodec>
+pub struct pdfrum_filters::NeedsImageCodec
+pub pdfrum_filters::NeedsImageCodec::filter: core::option::Option<pdfrum_filters::Filter>
+pub pdfrum_filters::NeedsImageCodec::name: pdfrum_object::name::Name
+pub pdfrum_filters::NeedsImageCodec::params: pdfrum_object::dict::Dict
+pub struct pdfrum_filters::PredictorParams
+pub pdfrum_filters::PredictorParams::bits_per_component: u32
+pub pdfrum_filters::PredictorParams::colors: u32
+pub pdfrum_filters::PredictorParams::columns: u32
+pub pdfrum_filters::PredictorParams::kind: pdfrum_filters::PredictorKind
+impl pdfrum_filters::PredictorParams
+pub fn pdfrum_filters::PredictorParams::from_dict(&pdfrum_object::dict::Dict, &impl pdfrum_object::resolve::Resolve) -> core::result::Result<Self, pdfrum_filters::Error>
+impl core::default::Default for pdfrum_filters::PredictorParams
+pub fn pdfrum_filters::PredictorParams::default() -> Self
+pub const pdfrum_filters::RUN_LENGTH_MAX_OUTPUT: u64
+pub fn pdfrum_filters::decode(pdfrum_filters::Filter, &[u8], &pdfrum_object::dict::Dict, &impl pdfrum_object::resolve::Resolve, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::result::Result<pdfrum_filters::DecodeOutput, pdfrum_filters::Error>
+pub fn pdfrum_filters::decode_ascii85(&[u8]) -> core::result::Result<(alloc::vec::Vec<u8>, usize), pdfrum_filters::Error>
+pub fn pdfrum_filters::decode_ascii_hex(&[u8]) -> (alloc::vec::Vec<u8>, usize)
+pub fn pdfrum_filters::decode_ccitt(&[u8], pdfrum_filters::CcittParams, u32, u32, &mut pdfrum_common::diagnostics::Diagnostics) -> core::result::Result<pdfrum_filters::CcittImage, pdfrum_filters::Error>
+pub fn pdfrum_filters::decode_chain(&pdfrum_object::stream::Stream, usize, &impl pdfrum_object::resolve::Resolve, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_filters::DecodedStream
+pub fn pdfrum_filters::decode_flate(&[u8], usize, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::result::Result<alloc::vec::Vec<u8>, pdfrum_filters::Error>
+pub fn pdfrum_filters::decode_lzw(&[u8], bool, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::result::Result<alloc::vec::Vec<u8>, pdfrum_filters::Error>
+pub fn pdfrum_filters::decode_run_length(&[u8], &mut pdfrum_common::diagnostics::Diagnostics) -> core::result::Result<(alloc::vec::Vec<u8>, usize), pdfrum_filters::Error>
+pub fn pdfrum_filters::decoder_list(&pdfrum_object::dict::Dict, &impl pdfrum_object::resolve::Resolve) -> core::option::Option<alloc::vec::Vec<(pdfrum_object::name::Name, pdfrum_object::dict::Dict)>>
+pub fn pdfrum_filters::encode_flate(&[u8]) -> alloc::vec::Vec<u8>
+pub fn pdfrum_filters::predictor(alloc::vec::Vec<u8>, pdfrum_filters::PredictorParams) -> core::result::Result<alloc::vec::Vec<u8>, pdfrum_filters::Error>
+pub fn pdfrum_filters::validate_pipeline(&pdfrum_object::array::Array, &impl pdfrum_object::resolve::Resolve) -> bool

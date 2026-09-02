@@ -1,0 +1,707 @@
+pub mod pdfrum_render
+pub mod pdfrum_render::blend
+pub const pdfrum_render::blend::COLOR_SQRT: [u8; 256]
+pub fn pdfrum_render::blend::blend_channel(pdfrum_page::state::general::BlendMode, i32, i32) -> i32
+pub fn pdfrum_render::blend::blend_gray(pdfrum_page::state::general::BlendMode, u8, u8) -> u8
+pub fn pdfrum_render::blend::blend_rgb(pdfrum_page::state::general::BlendMode, [u8; 3], [u8; 3]) -> [u8; 3]
+pub fn pdfrum_render::blend::composite_premultiplied([u8; 4], [u8; 4], u8, pdfrum_page::state::general::BlendMode) -> [u8; 4]
+pub fn pdfrum_render::blend::composite_solid([u8; 4], [u8; 3], u8, u8, pdfrum_page::state::general::BlendMode) -> [u8; 4]
+pub fn pdfrum_render::blend::composite_straight(([u8; 3], u8), ([u8; 3], u8), pdfrum_page::state::general::BlendMode) -> ([u8; 3], u8)
+pub mod pdfrum_render::clip
+pub enum pdfrum_render::clip::Clip
+pub pdfrum_render::clip::Clip::Path(kurbo::bezpath::BezPath, pdfrum_render::device::FillRule)
+pub pdfrum_render::clip::Clip::Rect(kurbo::rect::Rect)
+pub const pdfrum_render::clip::EMPTY_CLIP_RECT: kurbo::rect::Rect
+pub fn pdfrum_render::clip::device_bounds(&[pdfrum_render::clip::Clip]) -> core::option::Option<kurbo::rect::Rect>
+pub fn pdfrum_render::clip::pop(&mut dyn pdfrum_render::device::RenderDevice, usize)
+pub fn pdfrum_render::clip::push(&mut dyn pdfrum_render::device::RenderDevice, &[pdfrum_render::clip::Clip]) -> usize
+pub fn pdfrum_render::clip::resolve(&pdfrum_page::state::clip::ClipStack, kurbo::affine::Affine, &mut pdfrum_font::glyphs::cache::GlyphCache, &pdfrum_render::options::RenderOptions) -> alloc::vec::Vec<pdfrum_render::clip::Clip>
+pub mod pdfrum_render::color
+pub enum pdfrum_render::color::ObjectKind
+pub pdfrum_render::color::ObjectKind::Other
+pub pdfrum_render::color::ObjectKind::Path
+pub pdfrum_render::color::ObjectKind::Text
+pub struct pdfrum_render::color::Argb
+pub pdfrum_render::color::Argb::a: u8
+pub pdfrum_render::color::Argb::b: u8
+pub pdfrum_render::color::Argb::g: u8
+pub pdfrum_render::color::Argb::r: u8
+impl pdfrum_render::color::Argb
+pub const pdfrum_render::color::Argb::BLACK: Self
+pub const pdfrum_render::color::Argb::TRANSPARENT: Self
+pub fn pdfrum_render::color::Argb::is_invisible(self) -> bool
+pub const fn pdfrum_render::color::Argb::opaque(u8, u8, u8) -> Self
+pub fn pdfrum_render::color::Argb::to_peniko(self) -> peniko::Color
+pub const fn pdfrum_render::color::Argb::with_alpha(self, u8) -> Self
+pub fn pdfrum_render::color::resolve_argb(&pdfrum_page::color::value::ColorValue, f32, core::option::Option<&pdfrum_render::transfer::TransferFunc<'_>>, core::option::Option<pdfrum_render::color::Argb>, &pdfrum_render::options::RenderOptions, pdfrum_render::color::ObjectKind, bool) -> pdfrum_render::color::Argb
+pub fn pdfrum_render::color::rgb_to_gray(u8, u8, u8) -> u8
+pub mod pdfrum_render::ctx
+pub struct pdfrum_render::ctx::RenderCaches
+pub pdfrum_render::ctx::RenderCaches::glyph_bitmaps: pdfrum_render::glyph::BitmapCache
+pub pdfrum_render::ctx::RenderCaches::glyphs: pdfrum_font::glyphs::cache::GlyphCache
+pub pdfrum_render::ctx::RenderCaches::images: pdfrum_render::imagecache::RenderedImageCache
+pub pdfrum_render::ctx::RenderCaches::placed_glyphs: alloc::vec::Vec<pdfrum_render::text::PlacedGlyph>
+pub pdfrum_render::ctx::RenderCaches::zero_area: pdfrum_render::zero_area::Scratch
+impl pdfrum_render::ctx::RenderCaches
+pub fn pdfrum_render::ctx::RenderCaches::new() -> Self
+pub struct pdfrum_render::ctx::RenderCtx<'a>
+pub pdfrum_render::ctx::RenderCtx::depth: u32
+pub pdfrum_render::ctx::RenderCtx::in_group: bool
+pub pdfrum_render::ctx::RenderCtx::initial_fill: core::option::Option<pdfrum_render::color::Argb>
+pub pdfrum_render::ctx::RenderCtx::initial_stroke: core::option::Option<pdfrum_render::color::Argb>
+pub pdfrum_render::ctx::RenderCtx::opts: pdfrum_render::options::RenderOptions
+pub pdfrum_render::ctx::RenderCtx::std_cs: bool
+pub pdfrum_render::ctx::RenderCtx::transparency: pdfrum_page::transparency::Transparency
+pub pdfrum_render::ctx::RenderCtx::type3: core::option::Option<pdfrum_render::ctx::Type3Frame>
+pub pdfrum_render::ctx::RenderCtx::type3_fonts: &'a [pdfrum_font::ids::FontId]
+impl pdfrum_render::ctx::RenderCtx<'_>
+pub fn pdfrum_render::ctx::RenderCtx<'_>::deeper(&self) -> Self
+pub fn pdfrum_render::ctx::RenderCtx<'_>::may_recurse(&self) -> bool
+pub fn pdfrum_render::ctx::RenderCtx<'_>::new(pdfrum_render::options::RenderOptions, pdfrum_page::transparency::Transparency) -> Self
+pub fn pdfrum_render::ctx::RenderCtx<'_>::type3_font_is_active(&self, pdfrum_font::ids::FontId) -> bool
+pub struct pdfrum_render::ctx::Type3Frame
+pub pdfrum_render::ctx::Type3Frame::colored: bool
+pub pdfrum_render::ctx::Type3Frame::fill: pdfrum_render::color::Argb
+pub const pdfrum_render::ctx::MAX_RECURSION_DEPTH: u32
+pub mod pdfrum_render::device
+pub enum pdfrum_render::device::AntiAlias
+pub pdfrum_render::device::AntiAlias::FullCover
+pub pdfrum_render::device::AntiAlias::Off
+pub pdfrum_render::device::AntiAlias::On
+pub enum pdfrum_render::device::Brush<'a>
+pub pdfrum_render::device::Brush::Image(&'a pdfrum_render::device::RasterImage)
+pub pdfrum_render::device::Brush::Solid(peniko::Color)
+pub enum pdfrum_render::device::FillRule
+pub pdfrum_render::device::FillRule::EvenOdd
+pub pdfrum_render::device::FillRule::Winding
+impl core::convert::From<pdfrum_page::ops::FillRule> for pdfrum_render::device::FillRule
+pub fn pdfrum_render::device::FillRule::from(pdfrum_page::ops::FillRule) -> Self
+pub enum pdfrum_render::device::ImageQuality
+pub pdfrum_render::device::ImageQuality::Bilinear
+pub pdfrum_render::device::ImageQuality::Nearest
+pub const pdfrum_render::device::MAX_TARGET_DIMENSION: u32
+pub trait pdfrum_render::device::RasterBackend
+pub type pdfrum_render::device::RasterBackend::Device: pdfrum_render::device::RenderDevice
+pub fn pdfrum_render::device::RasterBackend::finish(&self, Self::Device) -> pdfrum_render::pixmap::Pixmap
+pub fn pdfrum_render::device::RasterBackend::new_target(&self, u32, u32, peniko::Color) -> Self::Device
+pub fn pdfrum_render::device::RasterBackend::new_target_with_backdrop(&self, &pdfrum_render::pixmap::Pixmap) -> Self::Device
+pub fn pdfrum_render::device::RasterBackend::snapshot(&self, &Self::Device) -> pdfrum_render::pixmap::Pixmap
+pub trait pdfrum_render::device::RenderDevice
+pub fn pdfrum_render::device::RenderDevice::draw_glyph_lcd(&mut self, &pdfrum_render::glyph::SubpixelBitmap, (f64, f64), peniko::Color)
+pub fn pdfrum_render::device::RenderDevice::draw_image(&mut self, &pdfrum_render::device::RasterImage, kurbo::affine::Affine, pdfrum_render::device::ImageQuality, f32)
+pub fn pdfrum_render::device::RenderDevice::fill_path(&mut self, &kurbo::bezpath::BezPath, kurbo::affine::Affine, &pdfrum_render::device::Brush<'_>, pdfrum_render::device::FillRule, pdfrum_render::device::AntiAlias)
+pub fn pdfrum_render::device::RenderDevice::pop(&mut self)
+pub fn pdfrum_render::device::RenderDevice::push_clip(&mut self, &kurbo::bezpath::BezPath, pdfrum_render::device::FillRule)
+pub fn pdfrum_render::device::RenderDevice::push_clip_rect(&mut self, kurbo::rect::Rect)
+pub fn pdfrum_render::device::RenderDevice::push_layer(&mut self, pdfrum_page::state::general::BlendMode, f32, core::option::Option<&pdfrum_render::pixmap::AlphaMask>)
+pub fn pdfrum_render::device::RenderDevice::stroke_path(&mut self, &kurbo::bezpath::BezPath, kurbo::affine::Affine, &pdfrum_render::device::Brush<'_>, &kurbo::stroke::Stroke, pdfrum_render::device::AntiAlias)
+pub fn pdfrum_render::device::peniko_mix(pdfrum_page::state::general::BlendMode) -> peniko::blend::Mix
+pub type pdfrum_render::device::RasterImage = pdfrum_render::pixmap::Pixmap
+pub mod pdfrum_render::glyph
+pub enum pdfrum_render::glyph::Cached<'a>
+pub pdfrum_render::glyph::Cached::Hit(&'a pdfrum_render::glyph::LcdBitmap)
+pub pdfrum_render::glyph::Cached::Uncached(pdfrum_render::glyph::LcdBitmap)
+impl core::ops::deref::Deref for pdfrum_render::glyph::Cached<'_>
+pub type pdfrum_render::glyph::Cached<'_>::Target = pdfrum_render::glyph::LcdBitmap
+pub fn pdfrum_render::glyph::Cached<'_>::deref(&self) -> &pdfrum_render::glyph::LcdBitmap
+pub enum pdfrum_render::glyph::SubpixelPhase
+pub pdfrum_render::glyph::SubpixelPhase::One
+pub pdfrum_render::glyph::SubpixelPhase::Two
+pub pdfrum_render::glyph::SubpixelPhase::Zero
+impl pdfrum_render::glyph::SubpixelPhase
+pub fn pdfrum_render::glyph::SubpixelPhase::of(f64) -> Self
+pub fn pdfrum_render::glyph::SubpixelPhase::shift(self) -> usize
+pub struct pdfrum_render::glyph::BitmapCache
+impl pdfrum_render::glyph::BitmapCache
+pub fn pdfrum_render::glyph::BitmapCache::byte_size(&self) -> usize
+pub fn pdfrum_render::glyph::BitmapCache::clear(&mut self)
+pub fn pdfrum_render::glyph::BitmapCache::get_or_insert(&mut self, pdfrum_render::glyph::BitmapKey, impl core::ops::function::FnOnce() -> core::option::Option<pdfrum_render::glyph::LcdBitmap>) -> core::option::Option<pdfrum_render::glyph::Cached<'_>>
+pub fn pdfrum_render::glyph::BitmapCache::is_empty(&self) -> bool
+pub fn pdfrum_render::glyph::BitmapCache::len(&self) -> usize
+pub fn pdfrum_render::glyph::BitmapCache::new() -> Self
+pub struct pdfrum_render::glyph::BitmapKey
+pub pdfrum_render::glyph::BitmapKey::glyph: pdfrum_font::glyphs::cache::GlyphKey
+pub pdfrum_render::glyph::BitmapKey::matrix: [i32; 4]
+impl pdfrum_render::glyph::BitmapKey
+pub fn pdfrum_render::glyph::BitmapKey::new(pdfrum_font::glyphs::cache::GlyphKey, kurbo::affine::Affine) -> Self
+pub struct pdfrum_render::glyph::GlyphBitmap
+pub pdfrum_render::glyph::GlyphBitmap::coverage: alloc::vec::Vec<u8>
+pub pdfrum_render::glyph::GlyphBitmap::height: i32
+pub pdfrum_render::glyph::GlyphBitmap::left: i32
+pub pdfrum_render::glyph::GlyphBitmap::top: i32
+pub pdfrum_render::glyph::GlyphBitmap::width: i32
+impl pdfrum_render::glyph::GlyphBitmap
+pub fn pdfrum_render::glyph::GlyphBitmap::at(&self, i32, i32) -> u8
+pub fn pdfrum_render::glyph::GlyphBitmap::is_empty(&self) -> bool
+pub struct pdfrum_render::glyph::LcdBitmap
+pub pdfrum_render::glyph::LcdBitmap::height: i32
+pub pdfrum_render::glyph::LcdBitmap::left: i32
+pub pdfrum_render::glyph::LcdBitmap::subpixels: alloc::vec::Vec<u8>
+pub pdfrum_render::glyph::LcdBitmap::top: i32
+pub pdfrum_render::glyph::LcdBitmap::width: i32
+impl pdfrum_render::glyph::LcdBitmap
+pub fn pdfrum_render::glyph::LcdBitmap::byte_size(&self) -> usize
+impl pdfrum_render::glyph::LcdBitmap
+pub fn pdfrum_render::glyph::LcdBitmap::to_gray(&self, pdfrum_render::glyph::SubpixelPhase) -> pdfrum_render::glyph::GlyphBitmap
+pub fn pdfrum_render::glyph::LcdBitmap::to_subpixel(&self, pdfrum_render::glyph::SubpixelPhase) -> pdfrum_render::glyph::SubpixelBitmap
+pub struct pdfrum_render::glyph::SubpixelBitmap
+pub pdfrum_render::glyph::SubpixelBitmap::channels: alloc::vec::Vec<u8>
+pub pdfrum_render::glyph::SubpixelBitmap::height: i32
+pub pdfrum_render::glyph::SubpixelBitmap::left: i32
+pub pdfrum_render::glyph::SubpixelBitmap::top: i32
+pub pdfrum_render::glyph::SubpixelBitmap::width: i32
+impl pdfrum_render::glyph::SubpixelBitmap
+pub fn pdfrum_render::glyph::SubpixelBitmap::at(&self, i32, i32) -> [u8; 3]
+pub fn pdfrum_render::glyph::SubpixelBitmap::is_empty(&self) -> bool
+pub const pdfrum_render::glyph::BITMAP_CACHE_BUDGET: usize
+pub const pdfrum_render::glyph::LCD_FIR5: [i32; 5]
+pub const pdfrum_render::glyph::LCD_PADDING_26_6: i64
+pub const pdfrum_render::glyph::MAX_GLYPH_DIMENSION: i32
+pub const pdfrum_render::glyph::TEXT_GAMMA_ADJUST: [u8; 256]
+pub fn pdfrum_render::glyph::average_to_gray(&pdfrum_render::glyph::SubpixelBitmap) -> core::option::Option<pdfrum_render::glyph::GlyphBitmap>
+pub fn pdfrum_render::glyph::rasterize(&kurbo::bezpath::BezPath, pdfrum_render::glyph::SubpixelPhase) -> core::option::Option<pdfrum_render::glyph::GlyphBitmap>
+pub fn pdfrum_render::glyph::recolour(&pdfrum_render::glyph::GlyphBitmap, peniko::Color) -> core::option::Option<pdfrum_render::pixmap::Pixmap>
+pub fn pdfrum_render::glyph::render_lcd(&kurbo::bezpath::BezPath) -> core::option::Option<pdfrum_render::glyph::LcdBitmap>
+pub mod pdfrum_render::group
+pub struct pdfrum_render::group::GroupFinish
+pub pdfrum_render::group::GroupFinish::group_alpha: core::option::Option<f32>
+pub pdfrum_render::group::GroupFinish::initial_alpha: core::option::Option<f32>
+impl pdfrum_render::group::GroupFinish
+pub fn pdfrum_render::group::GroupFinish::apply(&self, &mut pdfrum_render::pixmap::Pixmap)
+pub fn pdfrum_render::group::GroupFinish::of(pdfrum_render::group::GroupInputs, pdfrum_page::transparency::Transparency, bool) -> Self
+pub struct pdfrum_render::group::GroupInputs
+pub pdfrum_render::group::GroupInputs::blend: pdfrum_page::state::general::BlendMode
+pub pdfrum_render::group::GroupInputs::group_alpha: f32
+pub pdfrum_render::group::GroupInputs::group_is_isolated: bool
+pub pdfrum_render::group::GroupInputs::has_soft_mask: bool
+pub pdfrum_render::group::GroupInputs::initial_alpha: f32
+impl pdfrum_render::group::GroupInputs
+pub fn pdfrum_render::group::GroupInputs::of(&pdfrum_page::page::PageObject, f32) -> Self
+pub fn pdfrum_render::group::composite_transparency(pdfrum_page::transparency::Transparency, bool) -> pdfrum_page::transparency::Transparency
+pub fn pdfrum_render::group::needs_backdrop(pdfrum_page::transparency::Transparency) -> bool
+pub fn pdfrum_render::group::needs_offscreen(pdfrum_render::group::GroupInputs) -> bool
+pub fn pdfrum_render::group::state_inside_group(&pdfrum_page::state::GraphicsState) -> pdfrum_page::state::GraphicsState
+pub mod pdfrum_render::image
+pub const pdfrum_render::image::HUGE_IMAGE_SIZE: u64
+pub const pdfrum_render::image::MAX_IMAGE_VALUE: i64
+pub const pdfrum_render::image::SHEAR_THRESHOLD: f64
+pub fn pdfrum_render::image::destination_flips(kurbo::affine::Affine) -> (bool, bool)
+pub fn pdfrum_render::image::effective_quality(pdfrum_render::device::ImageQuality, kurbo::affine::Affine) -> pdfrum_render::device::ImageQuality
+pub fn pdfrum_render::image::image_value_fits(f64) -> bool
+pub fn pdfrum_render::image::is_coregistered(&pdfrum_page::image::mask::ImageMask, &pdfrum_page::image::ImageData) -> bool
+pub fn pdfrum_render::image::is_integer_translation(kurbo::affine::Affine) -> bool
+pub fn pdfrum_render::image::mask_pixmap(&[u8], u32, u32) -> pdfrum_render::pixmap::Pixmap
+pub fn pdfrum_render::image::matte_source([u8; 3], u8, [u8; 3]) -> [u8; 3]
+pub fn pdfrum_render::image::overprint_blend(core::option::Option<&pdfrum_page::color::ColorSpace>, &pdfrum_page::state::general::GeneralState) -> pdfrum_page::state::general::BlendMode
+pub fn pdfrum_render::image::reduced_mask_pixmap(&[u8], u32, u32, kurbo::affine::Affine, f64, f64) -> (pdfrum_render::pixmap::Pixmap, kurbo::affine::Affine)
+pub fn pdfrum_render::image::resample_quality(&pdfrum_page::image::ImageData, &pdfrum_render::options::RenderOptions, u32, u32, i64, i64) -> pdfrum_render::device::ImageQuality
+pub fn pdfrum_render::image::separate_mask(&pdfrum_page::image::mask::ImageMask) -> core::option::Option<(pdfrum_page::image::ImageData, alloc::borrow::Cow<'_, [u8]>)>
+pub fn pdfrum_render::image::to_pixmap(&pdfrum_page::image::ImageData, pdfrum_render::color::Argb, core::option::Option<&pdfrum_render::transfer::TransferFunc<'_>>) -> pdfrum_render::pixmap::Pixmap
+pub fn pdfrum_render::image::use_interpolate_bilinear(bool, bool, u32, u32, i64, i64) -> bool
+pub mod pdfrum_render::imagecache
+pub enum pdfrum_render::imagecache::Rendered<'a>
+pub pdfrum_render::imagecache::Rendered::Hit(&'a pdfrum_render::pixmap::Pixmap)
+pub pdfrum_render::imagecache::Rendered::Uncached(pdfrum_render::pixmap::Pixmap)
+impl core::ops::deref::Deref for pdfrum_render::imagecache::Rendered<'_>
+pub type pdfrum_render::imagecache::Rendered<'_>::Target = pdfrum_render::pixmap::Pixmap
+pub fn pdfrum_render::imagecache::Rendered<'_>::deref(&self) -> &pdfrum_render::pixmap::Pixmap
+pub struct pdfrum_render::imagecache::PixmapRequest
+pub pdfrum_render::imagecache::PixmapRequest::height: u32
+pub pdfrum_render::imagecache::PixmapRequest::stencil_color: pdfrum_render::color::Argb
+pub pdfrum_render::imagecache::PixmapRequest::transfer: core::option::Option<u64>
+pub pdfrum_render::imagecache::PixmapRequest::width: u32
+impl pdfrum_render::imagecache::PixmapRequest
+pub fn pdfrum_render::imagecache::PixmapRequest::for_image(&pdfrum_page::image::ImageData, pdfrum_render::color::Argb, core::option::Option<&pdfrum_render::transfer::TransferFunc<'_>>, u32, u32) -> Self
+pub struct pdfrum_render::imagecache::RenderedImageCache
+impl pdfrum_render::imagecache::RenderedImageCache
+pub fn pdfrum_render::imagecache::RenderedImageCache::byte_size(&self) -> usize
+pub fn pdfrum_render::imagecache::RenderedImageCache::clear(&mut self)
+pub fn pdfrum_render::imagecache::RenderedImageCache::get_or_render(&mut self, core::option::Option<pdfrum_object::object::ObjRef>, pdfrum_render::imagecache::PixmapRequest, impl core::ops::function::FnOnce() -> pdfrum_render::pixmap::Pixmap) -> pdfrum_render::imagecache::Rendered<'_>
+pub fn pdfrum_render::imagecache::RenderedImageCache::is_empty(&self) -> bool
+pub fn pdfrum_render::imagecache::RenderedImageCache::len(&self) -> usize
+pub fn pdfrum_render::imagecache::RenderedImageCache::new() -> Self
+pub const pdfrum_render::imagecache::RENDERED_CACHE_BUDGET: usize
+pub mod pdfrum_render::options
+pub enum pdfrum_render::options::ColorMode
+pub pdfrum_render::options::ColorMode::Alpha
+pub pdfrum_render::options::ColorMode::Forced(pdfrum_render::options::ColorScheme)
+pub pdfrum_render::options::ColorMode::Gray
+pub pdfrum_render::options::ColorMode::Normal
+pub enum pdfrum_render::options::TextAa
+pub pdfrum_render::options::TextAa::Grayscale
+pub pdfrum_render::options::TextAa::LcdSubpixel
+pub pdfrum_render::options::TextAa::None
+pub struct pdfrum_render::options::ColorScheme
+pub pdfrum_render::options::ColorScheme::path_fill: pdfrum_render::color::Argb
+pub pdfrum_render::options::ColorScheme::path_stroke: pdfrum_render::color::Argb
+pub pdfrum_render::options::ColorScheme::text_fill: pdfrum_render::color::Argb
+pub pdfrum_render::options::ColorScheme::text_stroke: pdfrum_render::color::Argb
+pub struct pdfrum_render::options::RenderOptions
+pub pdfrum_render::options::RenderOptions::background: core::option::Option<peniko::Color>
+pub pdfrum_render::options::RenderOptions::color_mode: pdfrum_render::options::ColorMode
+pub pdfrum_render::options::RenderOptions::convert_fill_to_stroke: bool
+pub pdfrum_render::options::RenderOptions::force_halftone: bool
+pub pdfrum_render::options::RenderOptions::no_image_smooth: bool
+pub pdfrum_render::options::RenderOptions::no_path_smooth: bool
+pub pdfrum_render::options::RenderOptions::rect_aa: bool
+pub pdfrum_render::options::RenderOptions::subpixel_text_positioning: bool
+pub pdfrum_render::options::RenderOptions::text_aa: pdfrum_render::options::TextAa
+pub pdfrum_render::options::RenderOptions::text_aa_override: core::option::Option<pdfrum_render::options::TextAa>
+pub pdfrum_render::options::RenderOptions::transform: kurbo::affine::Affine
+impl pdfrum_render::options::RenderOptions
+pub fn pdfrum_render::options::RenderOptions::background_for(&self, bool) -> peniko::Color
+pub fn pdfrum_render::options::RenderOptions::effective_text_aa(&self) -> pdfrum_render::options::TextAa
+pub fn pdfrum_render::options::RenderOptions::for_text_run(&self, pdfrum_render::options::TextAa) -> Self
+pub fn pdfrum_render::options::RenderOptions::for_type3_char_proc(&self) -> Self
+pub fn pdfrum_render::options::RenderOptions::for_uncolored_tile(&self) -> Self
+pub fn pdfrum_render::options::RenderOptions::path_aa(&self) -> pdfrum_render::device::AntiAlias
+pub fn pdfrum_render::options::RenderOptions::text_antialias(&self) -> pdfrum_render::device::AntiAlias
+impl core::clone::Clone for pdfrum_render::options::RenderOptions
+pub fn pdfrum_render::options::RenderOptions::clone(&self) -> Self
+impl core::default::Default for pdfrum_render::options::RenderOptions
+pub fn pdfrum_render::options::RenderOptions::default() -> Self
+pub mod pdfrum_render::paint
+pub struct pdfrum_render::paint::PathPaint
+pub pdfrum_render::paint::PathPaint::fill: core::option::Option<pdfrum_render::color::Argb>
+pub pdfrum_render::paint::PathPaint::rule: pdfrum_render::device::FillRule
+pub pdfrum_render::paint::PathPaint::stroke: core::option::Option<pdfrum_render::color::Argb>
+pub pdfrum_render::paint::PathPaint::text_mode: bool
+pub fn pdfrum_render::paint::draw_path<B: pdfrum_render::device::RasterBackend>(&mut dyn pdfrum_render::device::RenderDevice, &B, &kurbo::bezpath::BezPath, kurbo::affine::Affine, pdfrum_render::paint::PathPaint, &pdfrum_page::state::graph::StrokeParams, &pdfrum_render::options::RenderOptions, &mut pdfrum_render::zero_area::Scratch) -> bool
+pub mod pdfrum_render::path
+pub struct pdfrum_render::path::IntRect
+pub pdfrum_render::path::IntRect::bottom: i32
+pub pdfrum_render::path::IntRect::left: i32
+pub pdfrum_render::path::IntRect::right: i32
+pub pdfrum_render::path::IntRect::top: i32
+impl pdfrum_render::path::IntRect
+pub fn pdfrum_render::path::IntRect::height(self) -> i32
+pub fn pdfrum_render::path::IntRect::intersect(self, Self) -> Self
+pub fn pdfrum_render::path::IntRect::is_valid(self) -> bool
+pub fn pdfrum_render::path::IntRect::to_rect(self) -> kurbo::rect::Rect
+pub fn pdfrum_render::path::IntRect::width(self) -> i32
+pub const pdfrum_render::path::MAX_POS: f64
+pub fn pdfrum_render::path::hard_clip(&kurbo::bezpath::BezPath) -> kurbo::bezpath::BezPath
+pub fn pdfrum_render::path::is_available_matrix(kurbo::affine::Affine) -> bool
+pub fn pdfrum_render::path::nudge_degenerate_subpaths(&kurbo::bezpath::BezPath, &kurbo::bezpath::BezPath) -> kurbo::bezpath::BezPath
+pub fn pdfrum_render::path::outer_rect(kurbo::rect::Rect) -> pdfrum_render::path::IntRect
+pub fn pdfrum_render::path::path_rect(&kurbo::bezpath::BezPath, kurbo::affine::Affine) -> core::option::Option<kurbo::rect::Rect>
+pub fn pdfrum_render::path::snap_rect(kurbo::rect::Rect) -> core::option::Option<pdfrum_render::path::IntRect>
+pub fn pdfrum_render::path::transform_hard_clip(kurbo::affine::Affine, &kurbo::bezpath::BezPath) -> kurbo::bezpath::BezPath
+pub fn pdfrum_render::path::transformed_bbox(&kurbo::bezpath::BezPath, kurbo::affine::Affine) -> kurbo::rect::Rect
+pub mod pdfrum_render::pattern
+pub enum pdfrum_render::pattern::PatternClip<'a>
+pub pdfrum_render::pattern::PatternClip::Path
+pub pdfrum_render::pattern::PatternClip::Path::path: &'a kurbo::bezpath::BezPath
+pub pdfrum_render::pattern::PatternClip::Path::rule: pdfrum_render::device::FillRule
+pub pdfrum_render::pattern::PatternClip::Path::stroke: &'a pdfrum_page::state::graph::StrokeParams
+pub pdfrum_render::pattern::PatternClip::Path::stroking: bool
+pub pdfrum_render::pattern::PatternClip::Path::to_device: kurbo::affine::Affine
+pub pdfrum_render::pattern::PatternClip::Rect(kurbo::rect::Rect)
+pub const pdfrum_render::pattern::ENLARGED_CELL: u32
+pub const pdfrum_render::pattern::MIN_CELL_AREA: i64
+pub fn pdfrum_render::pattern::draw<B: pdfrum_render::device::RasterBackend>(&pdfrum_render::ctx::RenderCtx<'_>, &mut <B as pdfrum_render::device::RasterBackend>::Device, &B, &mut pdfrum_render::ctx::RenderCaches, &pdfrum_page::pattern::Pattern, &pdfrum_render::pattern::PatternClip<'_>, kurbo::affine::Affine, kurbo::rect::Rect, f32, pdfrum_render::color::Argb, &mut pdfrum_common::diagnostics::Diagnostics)
+pub fn pdfrum_render::pattern::render_size(u32, u32) -> (u32, u32)
+pub mod pdfrum_render::pixmap
+pub struct pdfrum_render::pixmap::AlphaMask
+impl pdfrum_render::pixmap::AlphaMask
+pub fn pdfrum_render::pixmap::AlphaMask::apply_transfer(&mut self, &[u8; 256])
+pub fn pdfrum_render::pixmap::AlphaMask::data(&self) -> &[u8]
+pub fn pdfrum_render::pixmap::AlphaMask::data_mut(&mut self) -> &mut [u8]
+pub fn pdfrum_render::pixmap::AlphaMask::filled(u32, u32, u8) -> Self
+pub fn pdfrum_render::pixmap::AlphaMask::from_vec(u32, u32, alloc::vec::Vec<u8>) -> core::option::Option<Self>
+pub fn pdfrum_render::pixmap::AlphaMask::height(&self) -> u32
+pub fn pdfrum_render::pixmap::AlphaMask::intersect(&mut self, &Self)
+pub fn pdfrum_render::pixmap::AlphaMask::into_data(self) -> alloc::vec::Vec<u8>
+pub fn pdfrum_render::pixmap::AlphaMask::new(u32, u32) -> Self
+pub fn pdfrum_render::pixmap::AlphaMask::placed_in(&self, u32, u32, i32, i32) -> Self
+pub fn pdfrum_render::pixmap::AlphaMask::width(&self) -> u32
+pub struct pdfrum_render::pixmap::Pixmap
+impl pdfrum_render::pixmap::Pixmap
+pub fn pdfrum_render::pixmap::Pixmap::alpha_mask(&self) -> pdfrum_render::pixmap::AlphaMask
+pub fn pdfrum_render::pixmap::Pixmap::data(&self) -> &[u8]
+pub fn pdfrum_render::pixmap::Pixmap::data_mut(&mut self) -> &mut [u8]
+pub fn pdfrum_render::pixmap::Pixmap::fill(&mut self, peniko::Color)
+pub fn pdfrum_render::pixmap::Pixmap::filled(u32, u32, peniko::Color) -> Self
+pub fn pdfrum_render::pixmap::Pixmap::from_vec(u32, u32, alloc::vec::Vec<u8>) -> core::option::Option<Self>
+pub fn pdfrum_render::pixmap::Pixmap::height(&self) -> u32
+pub fn pdfrum_render::pixmap::Pixmap::into_data(self) -> alloc::vec::Vec<u8>
+pub fn pdfrum_render::pixmap::Pixmap::knockout_over(&mut self, &Self)
+pub fn pdfrum_render::pixmap::Pixmap::luminosity_mask(&self) -> pdfrum_render::pixmap::AlphaMask
+pub fn pdfrum_render::pixmap::Pixmap::multiply_alpha(&mut self, f32)
+pub fn pdfrum_render::pixmap::Pixmap::multiply_alpha_mask(&mut self, &pdfrum_render::pixmap::AlphaMask)
+pub fn pdfrum_render::pixmap::Pixmap::new(u32, u32) -> Self
+pub fn pdfrum_render::pixmap::Pixmap::pixel(&self, u32, u32) -> core::option::Option<[u8; 4]>
+pub fn pdfrum_render::pixmap::Pixmap::remove_backdrop(&mut self, &Self)
+pub fn pdfrum_render::pixmap::Pixmap::set_pixel(&mut self, u32, u32, [u8; 4])
+pub fn pdfrum_render::pixmap::Pixmap::to_straight_bgra(&self, bool) -> alloc::vec::Vec<u8>
+pub fn pdfrum_render::pixmap::Pixmap::to_straight_rgb(&self) -> alloc::vec::Vec<u8>
+pub fn pdfrum_render::pixmap::Pixmap::to_straight_rgba(&self) -> alloc::vec::Vec<u8>
+pub fn pdfrum_render::pixmap::Pixmap::width(&self) -> u32
+pub fn pdfrum_render::pixmap::alpha_byte_rounding(f32) -> u8
+pub fn pdfrum_render::pixmap::alpha_byte_truncating(f32) -> u8
+pub fn pdfrum_render::pixmap::alpha_merge(u8, u8, u8) -> u8
+pub fn pdfrum_render::pixmap::alpha_union(u8, u8) -> u8
+pub fn pdfrum_render::pixmap::mul255(u8, u8) -> u8
+pub fn pdfrum_render::pixmap::premultiply(peniko::Color) -> [u8; 4]
+pub fn pdfrum_render::pixmap::unpremultiply_rgb(u8, u8, u8, u8) -> [u8; 3]
+pub mod pdfrum_render::scanline
+pub enum pdfrum_render::scanline::Coverage
+pub pdfrum_render::scanline::Coverage::Exact
+pub pdfrum_render::scanline::Coverage::Full
+pub pdfrum_render::scanline::Coverage::Thresholded
+pub enum pdfrum_render::scanline::FillRule
+pub pdfrum_render::scanline::FillRule::EvenOdd
+pub pdfrum_render::scanline::FillRule::NonZero
+pub struct pdfrum_render::scanline::Cell
+pub pdfrum_render::scanline::Cell::area: i32
+pub pdfrum_render::scanline::Cell::cover: i32
+pub pdfrum_render::scanline::Cell::x: i32
+pub pdfrum_render::scanline::Cell::y: i32
+pub struct pdfrum_render::scanline::Rasterizer
+impl pdfrum_render::scanline::Rasterizer
+pub fn pdfrum_render::scanline::Rasterizer::add_path(&mut self, &kurbo::bezpath::BezPath, f64)
+pub fn pdfrum_render::scanline::Rasterizer::close_polygon(&mut self)
+pub fn pdfrum_render::scanline::Rasterizer::is_empty(&self) -> bool
+pub fn pdfrum_render::scanline::Rasterizer::line_to(&mut self, f64, f64)
+pub fn pdfrum_render::scanline::Rasterizer::move_to(&mut self, f64, f64)
+pub fn pdfrum_render::scanline::Rasterizer::new() -> Self
+pub fn pdfrum_render::scanline::Rasterizer::reset(&mut self)
+pub fn pdfrum_render::scanline::Rasterizer::sweep(&mut self, pdfrum_render::scanline::FillRule, pdfrum_render::scanline::Coverage, impl core::ops::function::FnMut(i32, i32, i32, u8))
+pub const pdfrum_render::scanline::SUBPIXEL_MASK: i32
+pub const pdfrum_render::scanline::SUBPIXEL_SCALE: i32
+pub const pdfrum_render::scanline::SUBPIXEL_SHIFT: u32
+pub fn pdfrum_render::scanline::coverage_to_alpha(i32, pdfrum_render::scanline::FillRule, pdfrum_render::scanline::Coverage) -> u8
+pub fn pdfrum_render::scanline::to_subpixel(f64) -> i32
+pub mod pdfrum_render::shading
+pub mod pdfrum_render::shading::axial
+pub fn pdfrum_render::shading::axial::draw(&mut pdfrum_render::pixmap::Pixmap, &pdfrum_page::shading::axial::Axial, &pdfrum_render::shading::steps::ColorSteps, kurbo::affine::Affine)
+pub mod pdfrum_render::shading::function
+pub fn pdfrum_render::shading::function::draw(&mut pdfrum_render::pixmap::Pixmap, &pdfrum_page::shading::Shading, &pdfrum_page::shading::function_based::FunctionBased, u8, kurbo::affine::Affine)
+pub mod pdfrum_render::shading::gouraud
+pub fn pdfrum_render::shading::gouraud::draw(&mut pdfrum_render::pixmap::Pixmap, &[pdfrum_page::shading::mesh::Triangle], core::option::Option<&pdfrum_render::shading::steps::ColorSteps>, [f32; 2], u8, kurbo::affine::Affine)
+pub fn pdfrum_render::shading::gouraud::draw_triangle(&mut pdfrum_render::pixmap::Pixmap, &pdfrum_page::shading::mesh::Triangle, core::option::Option<&pdfrum_render::shading::steps::ColorSteps>, u8, kurbo::affine::Affine)
+pub fn pdfrum_render::shading::gouraud::gray(f32) -> pdfrum_page::color::Rgb
+pub mod pdfrum_render::shading::patch
+pub const pdfrum_render::shading::patch::COLOR_THRESHOLD: i32
+pub const pdfrum_render::shading::patch::MAX_DEPTH: u32
+pub const pdfrum_render::shading::patch::SMALL_PATCH: f64
+pub fn pdfrum_render::shading::patch::draw_patch(&mut dyn pdfrum_render::device::RenderDevice, &pdfrum_page::shading::mesh::Patch, core::option::Option<&pdfrum_render::shading::steps::ColorSteps>, [f32; 2], kurbo::affine::Affine, bool)
+pub fn pdfrum_render::shading::patch::outline_area(&kurbo::bezpath::BezPath) -> f64
+pub fn pdfrum_render::shading::patch::patch_is_offscreen(&pdfrum_page::shading::mesh::Patch, kurbo::affine::Affine, u32, u32) -> bool
+pub fn pdfrum_render::shading::patch::patch_outline(&pdfrum_page::shading::mesh::Patch, kurbo::affine::Affine) -> kurbo::bezpath::BezPath
+pub fn pdfrum_render::shading::patch::patches_bbox(&[pdfrum_page::shading::mesh::Patch], kurbo::affine::Affine) -> core::option::Option<kurbo::rect::Rect>
+pub mod pdfrum_render::shading::radial
+pub fn pdfrum_render::shading::radial::draw(&mut pdfrum_render::pixmap::Pixmap, &pdfrum_page::shading::radial::Radial, &pdfrum_render::shading::steps::ColorSteps, kurbo::affine::Affine)
+pub fn pdfrum_render::shading::radial::is_decreasing(&pdfrum_page::shading::radial::Radial) -> bool
+pub fn pdfrum_render::shading::radial::position(&pdfrum_page::shading::radial::Radial, kurbo::point::Point, bool) -> core::option::Option<f64>
+pub mod pdfrum_render::shading::steps
+pub struct pdfrum_render::shading::steps::ColorSteps
+impl pdfrum_render::shading::steps::ColorSteps
+pub fn pdfrum_render::shading::steps::ColorSteps::entry(&self, usize) -> core::option::Option<pdfrum_render::color::Argb>
+pub fn pdfrum_render::shading::steps::ColorSteps::from_colors([pdfrum_page::color::Rgb; 256], u8) -> Self
+pub fn pdfrum_render::shading::steps::ColorSteps::lookup(&self, f32, bool, bool) -> core::option::Option<pdfrum_render::color::Argb>
+pub fn pdfrum_render::shading::steps::ColorSteps::sample(&pdfrum_page::shading::Shading, f32, f32, u8) -> core::option::Option<Self>
+pub const pdfrum_render::shading::steps::STEPS: usize
+pub fn pdfrum_render::shading::steps::component_to_shading_index(f32, f32, f32) -> f32
+pub const pdfrum_render::shading::STEPS: usize
+pub fn pdfrum_render::shading::background_color(&pdfrum_page::shading::Shading) -> core::option::Option<pdfrum_render::color::Argb>
+pub fn pdfrum_render::shading::component_to_shading_index(f32, f32, f32) -> f32
+pub fn pdfrum_render::shading::draw_patches(&mut dyn pdfrum_render::device::RenderDevice, &pdfrum_page::shading::Shading, pdfrum_render::path::IntRect, kurbo::affine::Affine, bool)
+pub fn pdfrum_render::shading::draw_to_pixmap(&pdfrum_page::shading::Shading, pdfrum_render::path::IntRect, kurbo::affine::Affine, u8, &pdfrum_render::options::RenderOptions) -> core::option::Option<pdfrum_render::pixmap::Pixmap>
+pub mod pdfrum_render::softmask
+pub fn pdfrum_render::softmask::backdrop(&pdfrum_page::transparency::SoftMask) -> peniko::Color
+pub fn pdfrum_render::softmask::readback(&pdfrum_page::transparency::SoftMask, &pdfrum_render::pixmap::Pixmap) -> pdfrum_render::pixmap::AlphaMask
+pub mod pdfrum_render::stretch
+pub fn pdfrum_render::stretch::prescale(&pdfrum_render::pixmap::Pixmap, kurbo::affine::Affine, f64, f64) -> core::option::Option<(pdfrum_render::pixmap::Pixmap, kurbo::affine::Affine)>
+pub fn pdfrum_render::stretch::reduce_gray_to(&[u8], u32, u32, u32, u32) -> alloc::vec::Vec<u8>
+pub fn pdfrum_render::stretch::reduce_to(&pdfrum_render::pixmap::Pixmap, u32, u32) -> pdfrum_render::pixmap::Pixmap
+pub fn pdfrum_render::stretch::reduction_for(u32, u32, f64, f64) -> core::option::Option<(u32, u32)>
+pub fn pdfrum_render::stretch::reduction_transform(kurbo::affine::Affine, u32, u32, u32, u32) -> kurbo::affine::Affine
+pub mod pdfrum_render::stroke
+pub struct pdfrum_render::stroke::StrokeMatrices
+pub pdfrum_render::stroke::StrokeMatrices::post: kurbo::affine::Affine
+pub pdfrum_render::stroke::StrokeMatrices::pre: kurbo::affine::Affine
+pub pdfrum_render::stroke::StrokeMatrices::scale: f64
+pub const pdfrum_render::stroke::DASH_ZERO_SUBSTITUTE: f64
+pub const pdfrum_render::stroke::MAX_DASHES: usize
+pub const pdfrum_render::stroke::MIN_DASH_CYCLE: f64
+pub fn pdfrum_render::stroke::device_width(f32, pdfrum_render::stroke::StrokeMatrices) -> f64
+pub fn pdfrum_render::stroke::hairline_matrices(kurbo::affine::Affine) -> pdfrum_render::stroke::StrokeMatrices
+pub fn pdfrum_render::stroke::normalize_dashes(&pdfrum_page::state::graph::StrokeParams, f64) -> core::option::Option<(kurbo::stroke::Dashes, f64)>
+pub fn pdfrum_render::stroke::outline(&kurbo::bezpath::BezPath, kurbo::affine::Affine, &pdfrum_page::state::graph::StrokeParams) -> kurbo::bezpath::BezPath
+pub fn pdfrum_render::stroke::resolve_stroke(&pdfrum_page::state::graph::StrokeParams, pdfrum_render::stroke::StrokeMatrices) -> kurbo::stroke::Stroke
+pub fn pdfrum_render::stroke::split_for_stroke(kurbo::affine::Affine) -> pdfrum_render::stroke::StrokeMatrices
+pub mod pdfrum_render::text
+pub struct pdfrum_render::text::BitmapPlacement
+pub pdfrum_render::text::BitmapPlacement::origin: kurbo::point::Point
+pub pdfrum_render::text::BitmapPlacement::phase: pdfrum_render::glyph::SubpixelPhase
+pub struct pdfrum_render::text::GlyphAdjust
+pub pdfrum_render::text::GlyphAdjust::matrix: kurbo::affine::Affine
+pub pdfrum_render::text::GlyphAdjust::origin: kurbo::vec2::Vec2
+impl pdfrum_render::text::GlyphAdjust
+pub const pdfrum_render::text::GlyphAdjust::NONE: Self
+impl core::default::Default for pdfrum_render::text::GlyphAdjust
+pub fn pdfrum_render::text::GlyphAdjust::default() -> Self
+pub struct pdfrum_render::text::PlacedGlyph
+pub pdfrum_render::text::PlacedGlyph::bitmap: core::option::Option<pdfrum_render::text::BitmapPlacement>
+pub pdfrum_render::text::PlacedGlyph::key: pdfrum_font::glyphs::cache::GlyphKey
+pub pdfrum_render::text::PlacedGlyph::matrix: kurbo::affine::Affine
+pub pdfrum_render::text::PlacedGlyph::outline: alloc::sync::Arc<kurbo::bezpath::BezPath>
+impl pdfrum_render::text::PlacedGlyph
+pub fn pdfrum_render::text::PlacedGlyph::device_path(&self) -> kurbo::bezpath::BezPath
+pub struct pdfrum_render::text::PlacedType3Char
+pub pdfrum_render::text::PlacedType3Char::code: u32
+pub pdfrum_render::text::PlacedType3Char::matrix: kurbo::affine::Affine
+pub struct pdfrum_render::text::TextPaintKinds
+pub pdfrum_render::text::TextPaintKinds::clip: bool
+pub pdfrum_render::text::TextPaintKinds::fill: bool
+pub pdfrum_render::text::TextPaintKinds::stroke: bool
+pub const pdfrum_render::text::BITMAP_PATH_MAX_EM: f64
+pub fn pdfrum_render::text::adjust_glyph_space(&mut [kurbo::point::Point], &[kurbo::point::Point])
+pub fn pdfrum_render::text::glyph_matrix(f32, kurbo::point::Point, kurbo::affine::Affine) -> kurbo::affine::Affine
+pub fn pdfrum_render::text::glyph_spacing_adjust(i32, i32, f32) -> pdfrum_render::text::GlyphAdjust
+pub fn pdfrum_render::text::has_face(&pdfrum_font::Font) -> bool
+pub fn pdfrum_render::text::japan1_adjust(&pdfrum_font::Font, &pdfrum_font::CharItem, f32) -> pdfrum_render::text::GlyphAdjust
+pub fn pdfrum_render::text::paint_kinds(pdfrum_page::ops::TextRenderMode, bool) -> core::option::Option<pdfrum_render::text::TextPaintKinds>
+pub fn pdfrum_render::text::place_glyphs(&pdfrum_page::page::TextObject, &pdfrum_page::state::GraphicsState, &mut pdfrum_font::glyphs::cache::GlyphCache, kurbo::affine::Affine, &pdfrum_render::options::RenderOptions, pdfrum_render::text::TextPaintKinds) -> alloc::vec::Vec<pdfrum_render::text::PlacedGlyph>
+pub fn pdfrum_render::text::place_glyphs_into(&mut alloc::vec::Vec<pdfrum_render::text::PlacedGlyph>, &pdfrum_page::page::TextObject, &pdfrum_page::state::GraphicsState, &mut pdfrum_font::glyphs::cache::GlyphCache, kurbo::affine::Affine, &pdfrum_render::options::RenderOptions, pdfrum_render::text::TextPaintKinds)
+pub fn pdfrum_render::text::place_type3_chars(&pdfrum_page::page::TextObject, &pdfrum_page::state::GraphicsState, kurbo::affine::Affine) -> alloc::vec::Vec<pdfrum_render::text::PlacedType3Char>
+pub fn pdfrum_render::text::run_rect(&pdfrum_page::page::TextObject, &pdfrum_page::state::GraphicsState) -> core::option::Option<kurbo::rect::Rect>
+pub fn pdfrum_render::text::snap_origin(kurbo::point::Point, pdfrum_render::options::TextAa) -> kurbo::point::Point
+pub fn pdfrum_render::text::snaps_origins(&pdfrum_render::options::RenderOptions, pdfrum_render::text::TextPaintKinds, f32, kurbo::affine::Affine) -> bool
+pub fn pdfrum_render::text::stroke_ctm_split(kurbo::affine::Affine, kurbo::affine::Affine, [f64; 4]) -> (kurbo::affine::Affine, kurbo::affine::Affine)
+pub fn pdfrum_render::text::takes_bitmap_path(f32, kurbo::affine::Affine) -> bool
+pub fn pdfrum_render::text::width_drives_the_design_space(&pdfrum_font::Font) -> bool
+pub mod pdfrum_render::transfer
+pub struct pdfrum_render::transfer::TransferFunc<'a>
+impl<'a> pdfrum_render::transfer::TransferFunc<'a>
+pub fn pdfrum_render::transfer::TransferFunc<'a>::is_identity(&self) -> bool
+pub fn pdfrum_render::transfer::TransferFunc<'a>::new(&'a pdfrum_page::transfer::TransferFunc) -> Self
+pub fn pdfrum_render::transfer::TransferFunc<'a>::samples(&self) -> &[[u8; 256]; 3]
+pub fn pdfrum_render::transfer::TransferFunc<'a>::translate(&self, pdfrum_render::color::Argb) -> pdfrum_render::color::Argb
+pub mod pdfrum_render::walk
+pub fn pdfrum_render::walk::default_transparency() -> pdfrum_page::transparency::Transparency
+pub fn pdfrum_render::walk::needs_alpha_background(&pdfrum_page::page::Page) -> bool
+pub fn pdfrum_render::walk::page_matrix(&pdfrum_page::page::Page, &pdfrum_render::options::RenderOptions) -> kurbo::affine::Affine
+pub fn pdfrum_render::walk::render_object<B: pdfrum_render::device::RasterBackend>(&pdfrum_render::ctx::RenderCtx<'_>, &mut <B as pdfrum_render::device::RasterBackend>::Device, &B, &mut pdfrum_render::ctx::RenderCaches, &pdfrum_page::page::PageObject, &pdfrum_page::optional::Visibility, kurbo::affine::Affine, kurbo::rect::Rect, &mut pdfrum_common::diagnostics::Diagnostics)
+pub fn pdfrum_render::walk::render_object_list<B: pdfrum_render::device::RasterBackend>(&pdfrum_render::ctx::RenderCtx<'_>, &mut <B as pdfrum_render::device::RasterBackend>::Device, &B, &mut pdfrum_render::ctx::RenderCaches, &[pdfrum_page::page::PageObject], &pdfrum_page::optional::Visibility, kurbo::affine::Affine, kurbo::rect::Rect, &mut pdfrum_common::diagnostics::Diagnostics)
+pub fn pdfrum_render::walk::render_page<B: pdfrum_render::device::RasterBackend>(&pdfrum_page::page::Page, &pdfrum_render::options::RenderOptions, &B, &mut pdfrum_common::diagnostics::Diagnostics) -> core::result::Result<pdfrum_render::pixmap::Pixmap, pdfrum_render::Error>
+pub fn pdfrum_render::walk::render_page_with_caches<B: pdfrum_render::device::RasterBackend>(&pdfrum_page::page::Page, &pdfrum_render::options::RenderOptions, &B, &mut pdfrum_render::ctx::RenderCaches, &mut pdfrum_common::diagnostics::Diagnostics) -> core::result::Result<pdfrum_render::pixmap::Pixmap, pdfrum_render::Error>
+pub fn pdfrum_render::walk::render_page_with_visibility<B: pdfrum_render::device::RasterBackend>(&pdfrum_page::page::Page, &pdfrum_render::options::RenderOptions, &B, &pdfrum_page::optional::Visibility, &mut pdfrum_render::ctx::RenderCaches, &mut pdfrum_common::diagnostics::Diagnostics) -> core::result::Result<pdfrum_render::pixmap::Pixmap, pdfrum_render::Error>
+pub fn pdfrum_render::walk::solid(pdfrum_render::color::Argb) -> pdfrum_render::device::Brush<'static>
+pub fn pdfrum_render::walk::target_size(&pdfrum_page::page::Page, &pdfrum_render::options::RenderOptions) -> core::result::Result<(u32, u32), pdfrum_render::Error>
+pub mod pdfrum_render::walkprofile
+pub enum pdfrum_render::walkprofile::Phase
+pub pdfrum_render::walkprofile::Phase::Clip
+pub pdfrum_render::walkprofile::Phase::Color
+pub pdfrum_render::walkprofile::Phase::Cull
+pub pdfrum_render::walkprofile::Phase::Glyphs
+pub pdfrum_render::walkprofile::Phase::Image
+pub pdfrum_render::walkprofile::Phase::Patches
+pub pdfrum_render::walkprofile::Phase::PathPrep
+pub pdfrum_render::walkprofile::Phase::PathXform
+pub pdfrum_render::walkprofile::Phase::RectTest
+pub pdfrum_render::walkprofile::Phase::Shading
+pub pdfrum_render::walkprofile::Phase::ZeroScan
+impl pdfrum_render::walkprofile::Phase
+pub const pdfrum_render::walkprofile::Phase::ALL: [pdfrum_render::walkprofile::Phase; 11]
+pub const fn pdfrum_render::walkprofile::Phase::index(self) -> usize
+pub const fn pdfrum_render::walkprofile::Phase::name(self) -> &'static str
+pub enum pdfrum_render::walkprofile::Site
+pub pdfrum_render::walkprofile::Site::ClipPath
+pub pdfrum_render::walkprofile::Site::ClipVec
+pub pdfrum_render::walkprofile::Site::CtxClone
+pub pdfrum_render::walkprofile::Site::GlyphOutline
+pub pdfrum_render::walkprofile::Site::GlyphVec
+pub pdfrum_render::walkprofile::Site::OptionsClone
+pub pdfrum_render::walkprofile::Site::PathGeometry
+pub pdfrum_render::walkprofile::Site::RectPoints
+pub pdfrum_render::walkprofile::Site::ZeroAreaPoints
+pub pdfrum_render::walkprofile::Site::ZeroAreaVec
+impl pdfrum_render::walkprofile::Site
+pub const pdfrum_render::walkprofile::Site::ALL: [pdfrum_render::walkprofile::Site; 10]
+pub const fn pdfrum_render::walkprofile::Site::index(self) -> usize
+pub const fn pdfrum_render::walkprofile::Site::name(self) -> &'static str
+pub struct pdfrum_render::walkprofile::Profile
+pub pdfrum_render::walkprofile::Profile::phase_calls: [u64; 11]
+pub pdfrum_render::walkprofile::Profile::phase_time: [core::time::Duration; 11]
+pub pdfrum_render::walkprofile::Profile::site_bytes: [u64; 10]
+pub pdfrum_render::walkprofile::Profile::site_count: [u64; 10]
+pub struct pdfrum_render::walkprofile::Started
+impl pdfrum_render::walkprofile::Started
+pub fn pdfrum_render::walkprofile::Started::end(self, pdfrum_render::walkprofile::Phase)
+pub fn pdfrum_render::walkprofile::alloc(pdfrum_render::walkprofile::Site, usize)
+pub fn pdfrum_render::walkprofile::alloc_items(pdfrum_render::walkprofile::Site, usize, usize)
+pub fn pdfrum_render::walkprofile::phase<T>(pdfrum_render::walkprofile::Phase, impl core::ops::function::FnOnce() -> T) -> T
+pub fn pdfrum_render::walkprofile::phase_start() -> pdfrum_render::walkprofile::Started
+pub fn pdfrum_render::walkprofile::take() -> pdfrum_render::walkprofile::Profile
+pub mod pdfrum_render::zero_area
+pub struct pdfrum_render::zero_area::Scratch
+impl pdfrum_render::zero_area::Scratch
+pub fn pdfrum_render::zero_area::Scratch::new() -> Self
+pub struct pdfrum_render::zero_area::ZeroArea
+pub pdfrum_render::zero_area::ZeroArea::identity: bool
+pub pdfrum_render::zero_area::ZeroArea::path: kurbo::bezpath::BezPath
+pub pdfrum_render::zero_area::ZeroArea::thin: bool
+pub fn pdfrum_render::zero_area::scan_into<'a>(&'a mut pdfrum_render::zero_area::Scratch, &kurbo::bezpath::BezPath, core::option::Option<kurbo::affine::Affine>, bool) -> &'a [pdfrum_render::zero_area::ZeroArea]
+pub fn pdfrum_render::zero_area::snap_to_pixel_center(f64) -> f64
+pub fn pdfrum_render::zero_area::thin_alpha(u8) -> u8
+pub fn pdfrum_render::zero_area::zero_area_path(&[kurbo::point::Point], bool, core::option::Option<kurbo::affine::Affine>, bool) -> core::option::Option<pdfrum_render::zero_area::ZeroArea>
+pub fn pdfrum_render::zero_area::zero_area_sub_paths(&kurbo::bezpath::BezPath, core::option::Option<kurbo::affine::Affine>, bool) -> alloc::vec::Vec<pdfrum_render::zero_area::ZeroArea>
+pub enum pdfrum_render::AntiAlias
+pub pdfrum_render::AntiAlias::FullCover
+pub pdfrum_render::AntiAlias::Off
+pub pdfrum_render::AntiAlias::On
+pub enum pdfrum_render::Brush<'a>
+pub pdfrum_render::Brush::Image(&'a pdfrum_render::device::RasterImage)
+pub pdfrum_render::Brush::Solid(peniko::Color)
+pub enum pdfrum_render::ColorMode
+pub pdfrum_render::ColorMode::Alpha
+pub pdfrum_render::ColorMode::Forced(pdfrum_render::options::ColorScheme)
+pub pdfrum_render::ColorMode::Gray
+pub pdfrum_render::ColorMode::Normal
+#[non_exhaustive] pub enum pdfrum_render::Error
+pub pdfrum_render::Error::TargetEmpty
+pub pdfrum_render::Error::TargetEmpty::height: u32
+pub pdfrum_render::Error::TargetEmpty::width: u32
+pub pdfrum_render::Error::TargetTooLarge
+pub pdfrum_render::Error::TargetTooLarge::height: u32
+pub pdfrum_render::Error::TargetTooLarge::limit: u32
+pub pdfrum_render::Error::TargetTooLarge::width: u32
+pub enum pdfrum_render::FillRule
+pub pdfrum_render::FillRule::EvenOdd
+pub pdfrum_render::FillRule::Winding
+impl core::convert::From<pdfrum_page::ops::FillRule> for pdfrum_render::device::FillRule
+pub fn pdfrum_render::device::FillRule::from(pdfrum_page::ops::FillRule) -> Self
+pub enum pdfrum_render::ImageQuality
+pub pdfrum_render::ImageQuality::Bilinear
+pub pdfrum_render::ImageQuality::Nearest
+pub enum pdfrum_render::ObjectKind
+pub pdfrum_render::ObjectKind::Other
+pub pdfrum_render::ObjectKind::Path
+pub pdfrum_render::ObjectKind::Text
+pub enum pdfrum_render::TextAa
+pub pdfrum_render::TextAa::Grayscale
+pub pdfrum_render::TextAa::LcdSubpixel
+pub pdfrum_render::TextAa::None
+pub struct pdfrum_render::AlphaMask
+impl pdfrum_render::pixmap::AlphaMask
+pub fn pdfrum_render::pixmap::AlphaMask::apply_transfer(&mut self, &[u8; 256])
+pub fn pdfrum_render::pixmap::AlphaMask::data(&self) -> &[u8]
+pub fn pdfrum_render::pixmap::AlphaMask::data_mut(&mut self) -> &mut [u8]
+pub fn pdfrum_render::pixmap::AlphaMask::filled(u32, u32, u8) -> Self
+pub fn pdfrum_render::pixmap::AlphaMask::from_vec(u32, u32, alloc::vec::Vec<u8>) -> core::option::Option<Self>
+pub fn pdfrum_render::pixmap::AlphaMask::height(&self) -> u32
+pub fn pdfrum_render::pixmap::AlphaMask::intersect(&mut self, &Self)
+pub fn pdfrum_render::pixmap::AlphaMask::into_data(self) -> alloc::vec::Vec<u8>
+pub fn pdfrum_render::pixmap::AlphaMask::new(u32, u32) -> Self
+pub fn pdfrum_render::pixmap::AlphaMask::placed_in(&self, u32, u32, i32, i32) -> Self
+pub fn pdfrum_render::pixmap::AlphaMask::width(&self) -> u32
+pub struct pdfrum_render::Argb
+pub pdfrum_render::Argb::a: u8
+pub pdfrum_render::Argb::b: u8
+pub pdfrum_render::Argb::g: u8
+pub pdfrum_render::Argb::r: u8
+impl pdfrum_render::color::Argb
+pub const pdfrum_render::color::Argb::BLACK: Self
+pub const pdfrum_render::color::Argb::TRANSPARENT: Self
+pub fn pdfrum_render::color::Argb::is_invisible(self) -> bool
+pub const fn pdfrum_render::color::Argb::opaque(u8, u8, u8) -> Self
+pub fn pdfrum_render::color::Argb::to_peniko(self) -> peniko::Color
+pub const fn pdfrum_render::color::Argb::with_alpha(self, u8) -> Self
+pub struct pdfrum_render::ColorScheme
+pub pdfrum_render::ColorScheme::path_fill: pdfrum_render::color::Argb
+pub pdfrum_render::ColorScheme::path_stroke: pdfrum_render::color::Argb
+pub pdfrum_render::ColorScheme::text_fill: pdfrum_render::color::Argb
+pub pdfrum_render::ColorScheme::text_stroke: pdfrum_render::color::Argb
+pub struct pdfrum_render::Pixmap
+impl pdfrum_render::pixmap::Pixmap
+pub fn pdfrum_render::pixmap::Pixmap::alpha_mask(&self) -> pdfrum_render::pixmap::AlphaMask
+pub fn pdfrum_render::pixmap::Pixmap::data(&self) -> &[u8]
+pub fn pdfrum_render::pixmap::Pixmap::data_mut(&mut self) -> &mut [u8]
+pub fn pdfrum_render::pixmap::Pixmap::fill(&mut self, peniko::Color)
+pub fn pdfrum_render::pixmap::Pixmap::filled(u32, u32, peniko::Color) -> Self
+pub fn pdfrum_render::pixmap::Pixmap::from_vec(u32, u32, alloc::vec::Vec<u8>) -> core::option::Option<Self>
+pub fn pdfrum_render::pixmap::Pixmap::height(&self) -> u32
+pub fn pdfrum_render::pixmap::Pixmap::into_data(self) -> alloc::vec::Vec<u8>
+pub fn pdfrum_render::pixmap::Pixmap::knockout_over(&mut self, &Self)
+pub fn pdfrum_render::pixmap::Pixmap::luminosity_mask(&self) -> pdfrum_render::pixmap::AlphaMask
+pub fn pdfrum_render::pixmap::Pixmap::multiply_alpha(&mut self, f32)
+pub fn pdfrum_render::pixmap::Pixmap::multiply_alpha_mask(&mut self, &pdfrum_render::pixmap::AlphaMask)
+pub fn pdfrum_render::pixmap::Pixmap::new(u32, u32) -> Self
+pub fn pdfrum_render::pixmap::Pixmap::pixel(&self, u32, u32) -> core::option::Option<[u8; 4]>
+pub fn pdfrum_render::pixmap::Pixmap::remove_backdrop(&mut self, &Self)
+pub fn pdfrum_render::pixmap::Pixmap::set_pixel(&mut self, u32, u32, [u8; 4])
+pub fn pdfrum_render::pixmap::Pixmap::to_straight_bgra(&self, bool) -> alloc::vec::Vec<u8>
+pub fn pdfrum_render::pixmap::Pixmap::to_straight_rgb(&self) -> alloc::vec::Vec<u8>
+pub fn pdfrum_render::pixmap::Pixmap::to_straight_rgba(&self) -> alloc::vec::Vec<u8>
+pub fn pdfrum_render::pixmap::Pixmap::width(&self) -> u32
+pub struct pdfrum_render::RenderCaches
+pub pdfrum_render::RenderCaches::glyph_bitmaps: pdfrum_render::glyph::BitmapCache
+pub pdfrum_render::RenderCaches::glyphs: pdfrum_font::glyphs::cache::GlyphCache
+pub pdfrum_render::RenderCaches::images: pdfrum_render::imagecache::RenderedImageCache
+pub pdfrum_render::RenderCaches::placed_glyphs: alloc::vec::Vec<pdfrum_render::text::PlacedGlyph>
+pub pdfrum_render::RenderCaches::zero_area: pdfrum_render::zero_area::Scratch
+impl pdfrum_render::ctx::RenderCaches
+pub fn pdfrum_render::ctx::RenderCaches::new() -> Self
+pub struct pdfrum_render::RenderCtx<'a>
+pub pdfrum_render::RenderCtx::depth: u32
+pub pdfrum_render::RenderCtx::in_group: bool
+pub pdfrum_render::RenderCtx::initial_fill: core::option::Option<pdfrum_render::color::Argb>
+pub pdfrum_render::RenderCtx::initial_stroke: core::option::Option<pdfrum_render::color::Argb>
+pub pdfrum_render::RenderCtx::opts: pdfrum_render::options::RenderOptions
+pub pdfrum_render::RenderCtx::std_cs: bool
+pub pdfrum_render::RenderCtx::transparency: pdfrum_page::transparency::Transparency
+pub pdfrum_render::RenderCtx::type3: core::option::Option<pdfrum_render::ctx::Type3Frame>
+pub pdfrum_render::RenderCtx::type3_fonts: &'a [pdfrum_font::ids::FontId]
+impl pdfrum_render::ctx::RenderCtx<'_>
+pub fn pdfrum_render::ctx::RenderCtx<'_>::deeper(&self) -> Self
+pub fn pdfrum_render::ctx::RenderCtx<'_>::may_recurse(&self) -> bool
+pub fn pdfrum_render::ctx::RenderCtx<'_>::new(pdfrum_render::options::RenderOptions, pdfrum_page::transparency::Transparency) -> Self
+pub fn pdfrum_render::ctx::RenderCtx<'_>::type3_font_is_active(&self, pdfrum_font::ids::FontId) -> bool
+pub struct pdfrum_render::RenderOptions
+pub pdfrum_render::RenderOptions::background: core::option::Option<peniko::Color>
+pub pdfrum_render::RenderOptions::color_mode: pdfrum_render::options::ColorMode
+pub pdfrum_render::RenderOptions::convert_fill_to_stroke: bool
+pub pdfrum_render::RenderOptions::force_halftone: bool
+pub pdfrum_render::RenderOptions::no_image_smooth: bool
+pub pdfrum_render::RenderOptions::no_path_smooth: bool
+pub pdfrum_render::RenderOptions::rect_aa: bool
+pub pdfrum_render::RenderOptions::subpixel_text_positioning: bool
+pub pdfrum_render::RenderOptions::text_aa: pdfrum_render::options::TextAa
+pub pdfrum_render::RenderOptions::text_aa_override: core::option::Option<pdfrum_render::options::TextAa>
+pub pdfrum_render::RenderOptions::transform: kurbo::affine::Affine
+impl pdfrum_render::options::RenderOptions
+pub fn pdfrum_render::options::RenderOptions::background_for(&self, bool) -> peniko::Color
+pub fn pdfrum_render::options::RenderOptions::effective_text_aa(&self) -> pdfrum_render::options::TextAa
+pub fn pdfrum_render::options::RenderOptions::for_text_run(&self, pdfrum_render::options::TextAa) -> Self
+pub fn pdfrum_render::options::RenderOptions::for_type3_char_proc(&self) -> Self
+pub fn pdfrum_render::options::RenderOptions::for_uncolored_tile(&self) -> Self
+pub fn pdfrum_render::options::RenderOptions::path_aa(&self) -> pdfrum_render::device::AntiAlias
+pub fn pdfrum_render::options::RenderOptions::text_antialias(&self) -> pdfrum_render::device::AntiAlias
+impl core::clone::Clone for pdfrum_render::options::RenderOptions
+pub fn pdfrum_render::options::RenderOptions::clone(&self) -> Self
+impl core::default::Default for pdfrum_render::options::RenderOptions
+pub fn pdfrum_render::options::RenderOptions::default() -> Self
+pub const pdfrum_render::MAX_TARGET_DIMENSION: u32
+pub trait pdfrum_render::RasterBackend
+pub type pdfrum_render::RasterBackend::Device: pdfrum_render::device::RenderDevice
+pub fn pdfrum_render::RasterBackend::finish(&self, Self::Device) -> pdfrum_render::pixmap::Pixmap
+pub fn pdfrum_render::RasterBackend::new_target(&self, u32, u32, peniko::Color) -> Self::Device
+pub fn pdfrum_render::RasterBackend::new_target_with_backdrop(&self, &pdfrum_render::pixmap::Pixmap) -> Self::Device
+pub fn pdfrum_render::RasterBackend::snapshot(&self, &Self::Device) -> pdfrum_render::pixmap::Pixmap
+pub trait pdfrum_render::RenderDevice
+pub fn pdfrum_render::RenderDevice::draw_glyph_lcd(&mut self, &pdfrum_render::glyph::SubpixelBitmap, (f64, f64), peniko::Color)
+pub fn pdfrum_render::RenderDevice::draw_image(&mut self, &pdfrum_render::device::RasterImage, kurbo::affine::Affine, pdfrum_render::device::ImageQuality, f32)
+pub fn pdfrum_render::RenderDevice::fill_path(&mut self, &kurbo::bezpath::BezPath, kurbo::affine::Affine, &pdfrum_render::device::Brush<'_>, pdfrum_render::device::FillRule, pdfrum_render::device::AntiAlias)
+pub fn pdfrum_render::RenderDevice::pop(&mut self)
+pub fn pdfrum_render::RenderDevice::push_clip(&mut self, &kurbo::bezpath::BezPath, pdfrum_render::device::FillRule)
+pub fn pdfrum_render::RenderDevice::push_clip_rect(&mut self, kurbo::rect::Rect)
+pub fn pdfrum_render::RenderDevice::push_layer(&mut self, pdfrum_page::state::general::BlendMode, f32, core::option::Option<&pdfrum_render::pixmap::AlphaMask>)
+pub fn pdfrum_render::RenderDevice::stroke_path(&mut self, &kurbo::bezpath::BezPath, kurbo::affine::Affine, &pdfrum_render::device::Brush<'_>, &kurbo::stroke::Stroke, pdfrum_render::device::AntiAlias)
+pub fn pdfrum_render::needs_alpha_background(&pdfrum_page::page::Page) -> bool
+pub fn pdfrum_render::render_page<B: pdfrum_render::device::RasterBackend>(&pdfrum_page::page::Page, &pdfrum_render::options::RenderOptions, &B, &mut pdfrum_common::diagnostics::Diagnostics) -> core::result::Result<pdfrum_render::pixmap::Pixmap, pdfrum_render::Error>
+pub fn pdfrum_render::render_page_with_caches<B: pdfrum_render::device::RasterBackend>(&pdfrum_page::page::Page, &pdfrum_render::options::RenderOptions, &B, &mut pdfrum_render::ctx::RenderCaches, &mut pdfrum_common::diagnostics::Diagnostics) -> core::result::Result<pdfrum_render::pixmap::Pixmap, pdfrum_render::Error>
+pub fn pdfrum_render::render_page_with_visibility<B: pdfrum_render::device::RasterBackend>(&pdfrum_page::page::Page, &pdfrum_render::options::RenderOptions, &B, &pdfrum_page::optional::Visibility, &mut pdfrum_render::ctx::RenderCaches, &mut pdfrum_common::diagnostics::Diagnostics) -> core::result::Result<pdfrum_render::pixmap::Pixmap, pdfrum_render::Error>
+pub fn pdfrum_render::target_size(&pdfrum_page::page::Page, &pdfrum_render::options::RenderOptions) -> core::result::Result<(u32, u32), pdfrum_render::Error>
+pub type pdfrum_render::RasterImage = pdfrum_render::pixmap::Pixmap

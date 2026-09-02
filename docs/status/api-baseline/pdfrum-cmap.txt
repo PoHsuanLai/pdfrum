@@ -1,0 +1,68 @@
+pub mod pdfrum_cmap
+pub mod pdfrum_cmap::lexer
+pub struct pdfrum_cmap::lexer::Words<'a>
+impl<'a> pdfrum_cmap::lexer::Words<'a>
+pub fn pdfrum_cmap::lexer::Words<'a>::new(&'a [u8]) -> Self
+impl<'a> core::iter::traits::iterator::Iterator for pdfrum_cmap::lexer::Words<'a>
+pub type pdfrum_cmap::lexer::Words<'a>::Item = &'a [u8]
+pub fn pdfrum_cmap::lexer::Words<'a>::next(&mut self) -> core::option::Option<Self::Item>
+#[repr(u8)] pub enum pdfrum_cmap::CidCoding
+pub pdfrum_cmap::CidCoding::Big5 = 2
+pub pdfrum_cmap::CidCoding::Cid = 6
+pub pdfrum_cmap::CidCoding::Gb = 1
+pub pdfrum_cmap::CidCoding::Jis = 3
+pub pdfrum_cmap::CidCoding::Korea = 4
+pub pdfrum_cmap::CidCoding::Ucs2 = 5
+pub pdfrum_cmap::CidCoding::Unknown = 0
+pub pdfrum_cmap::CidCoding::Utf16 = 7
+#[repr(u8)] pub enum pdfrum_cmap::CidSet
+pub pdfrum_cmap::CidSet::Cns1 = 2
+pub pdfrum_cmap::CidSet::Gb1 = 1
+pub pdfrum_cmap::CidSet::Japan1 = 3
+pub pdfrum_cmap::CidSet::Korea1 = 4
+pub pdfrum_cmap::CidSet::Unicode = 5
+pub pdfrum_cmap::CidSet::Unknown = 0
+impl pdfrum_cmap::CidSet
+pub fn pdfrum_cmap::CidSet::ordinal(self) -> u8
+pub enum pdfrum_cmap::CodingScheme
+pub pdfrum_cmap::CodingScheme::MixedFourBytes
+pub pdfrum_cmap::CodingScheme::MixedTwoBytes
+pub pdfrum_cmap::CodingScheme::OneByte
+pub pdfrum_cmap::CodingScheme::TwoBytes
+#[non_exhaustive] pub enum pdfrum_cmap::Error
+pub pdfrum_cmap::Error::UnknownPredefinedCMap
+pub pdfrum_cmap::Error::UnknownPredefinedCMap::name: alloc::vec::Vec<u8>
+pub struct pdfrum_cmap::CMap
+impl pdfrum_cmap::CMap
+pub fn pdfrum_cmap::CMap::append_char(&self, &mut alloc::vec::Vec<u8>, pdfrum_cmap::CharCode)
+pub fn pdfrum_cmap::CMap::char_size(&self, pdfrum_cmap::CharCode) -> u8
+pub fn pdfrum_cmap::CMap::charcode_from_cid(&self, pdfrum_cmap::Cid) -> pdfrum_cmap::CharCode
+pub fn pdfrum_cmap::CMap::charset(&self) -> pdfrum_cmap::CidSet
+pub fn pdfrum_cmap::CMap::cid(&self, pdfrum_cmap::CharCode) -> pdfrum_cmap::Cid
+pub fn pdfrum_cmap::CMap::coding(&self) -> pdfrum_cmap::CidCoding
+pub fn pdfrum_cmap::CMap::coding_scheme(&self) -> pdfrum_cmap::CodingScheme
+pub fn pdfrum_cmap::CMap::count_chars(&self, &[u8]) -> usize
+pub fn pdfrum_cmap::CMap::decode<'a>(&'a self, &'a [u8]) -> impl core::iter::traits::iterator::Iterator<Item = (pdfrum_cmap::CharCode, pdfrum_cmap::Cid)> + 'a
+pub fn pdfrum_cmap::CMap::has_no_direct_table(&self) -> bool
+pub fn pdfrum_cmap::CMap::has_static_map(&self) -> bool
+pub fn pdfrum_cmap::CMap::is_loaded(&self) -> bool
+pub fn pdfrum_cmap::CMap::is_vertical(&self) -> bool
+pub fn pdfrum_cmap::CMap::next_char(&self, &[u8], &mut usize) -> pdfrum_cmap::CharCode
+pub struct pdfrum_cmap::CharCode(pub u32)
+impl core::convert::From<pdfrum_cmap::CharCode> for u32
+pub fn u32::from(pdfrum_cmap::CharCode) -> Self
+impl core::convert::From<u32> for pdfrum_cmap::CharCode
+pub fn pdfrum_cmap::CharCode::from(u32) -> Self
+pub struct pdfrum_cmap::Cid(pub u16)
+impl core::convert::From<pdfrum_cmap::Cid> for u16
+pub fn u16::from(pdfrum_cmap::Cid) -> Self
+impl core::convert::From<u16> for pdfrum_cmap::Cid
+pub fn pdfrum_cmap::Cid::from(u16) -> Self
+pub fn pdfrum_cmap::charcode_from_unicode(&pdfrum_cmap::CMap, char) -> pdfrum_cmap::CharCode
+pub fn pdfrum_cmap::charset_from_ordering(&[u8]) -> pdfrum_cmap::CidSet
+pub fn pdfrum_cmap::from_encoding_name(&pdfrum_object::name::Name, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_cmap::CMap
+pub fn pdfrum_cmap::has_cid2unicode(pdfrum_cmap::CidSet) -> bool
+pub fn pdfrum_cmap::inherit_from(pdfrum_cmap::CMap, pdfrum_cmap::CMap, u32, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_cmap::CMap
+pub fn pdfrum_cmap::parse_embedded(&[u8], &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_cmap::CMap
+pub fn pdfrum_cmap::predefined(&pdfrum_object::name::Name) -> core::option::Option<pdfrum_cmap::CMap>
+pub fn pdfrum_cmap::unicode_from_cid(pdfrum_cmap::CidSet, pdfrum_cmap::Cid) -> core::option::Option<char>

@@ -1,0 +1,1255 @@
+pub mod pdfrum_form
+pub use pdfrum_form::Place
+pub mod pdfrum_form::cascade
+pub enum pdfrum_form::cascade::KeystrokeOutcome
+pub pdfrum_form::cascade::KeystrokeOutcome::Accept(pdfrum_form::cascade::Keystroke)
+pub pdfrum_form::cascade::KeystrokeOutcome::Reject
+pub struct pdfrum_form::cascade::FieldRef
+pub pdfrum_form::cascade::FieldRef::index: u32
+pub pdfrum_form::cascade::FieldRef::name: alloc::string::String
+pub struct pdfrum_form::cascade::FieldWrites
+impl pdfrum_form::cascade::FieldWrites
+pub fn pdfrum_form::cascade::FieldWrites::can_recurse(&self) -> bool
+pub fn pdfrum_form::cascade::FieldWrites::depth(&self) -> u32
+pub fn pdfrum_form::cascade::FieldWrites::enter(&mut self) -> bool
+pub fn pdfrum_form::cascade::FieldWrites::is_empty(&self) -> bool
+pub fn pdfrum_form::cascade::FieldWrites::leave(&mut self)
+pub fn pdfrum_form::cascade::FieldWrites::set(&mut self, u32, impl core::convert::Into<alloc::string::String>)
+pub fn pdfrum_form::cascade::FieldWrites::with_max_depth(u32) -> pdfrum_form::cascade::FieldWrites
+pub fn pdfrum_form::cascade::FieldWrites::writes(&self) -> impl core::iter::traits::iterator::Iterator<Item = (u32, &str)>
+pub struct pdfrum_form::cascade::Keystroke
+pub pdfrum_form::cascade::Keystroke::change: alloc::string::String
+pub pdfrum_form::cascade::Keystroke::selection_end: i32
+pub pdfrum_form::cascade::Keystroke::selection_start: i32
+pub pdfrum_form::cascade::Keystroke::value: alloc::string::String
+impl pdfrum_form::cascade::Keystroke
+pub fn pdfrum_form::cascade::Keystroke::applied(&self) -> alloc::string::String
+pub fn pdfrum_form::cascade::Keystroke::of(&pdfrum_form::edit::ops::TextEdit, impl core::convert::Into<alloc::string::String>) -> pdfrum_form::cascade::Keystroke
+pub struct pdfrum_form::cascade::NoScripts
+impl pdfrum_form::cascade::Cascade for pdfrum_form::cascade::NoScripts
+pub fn pdfrum_form::cascade::NoScripts::calculate(&mut self, &mut pdfrum_form::cascade::FieldWrites, &pdfrum_form::cascade::FieldRef)
+pub fn pdfrum_form::cascade::NoScripts::format(&mut self, &pdfrum_form::cascade::FieldRef, &str) -> core::option::Option<alloc::string::String>
+pub fn pdfrum_form::cascade::NoScripts::keystroke(&mut self, &pdfrum_form::cascade::FieldRef, pdfrum_form::cascade::Keystroke) -> pdfrum_form::cascade::KeystrokeOutcome
+pub fn pdfrum_form::cascade::NoScripts::keystroke_commit(&mut self, &pdfrum_form::cascade::FieldRef, &str) -> bool
+pub fn pdfrum_form::cascade::NoScripts::validate(&mut self, &pdfrum_form::cascade::FieldRef, &str) -> bool
+pub trait pdfrum_form::cascade::Cascade
+pub fn pdfrum_form::cascade::Cascade::calculate(&mut self, &mut pdfrum_form::cascade::FieldWrites, &pdfrum_form::cascade::FieldRef)
+pub fn pdfrum_form::cascade::Cascade::format(&mut self, &pdfrum_form::cascade::FieldRef, &str) -> core::option::Option<alloc::string::String>
+pub fn pdfrum_form::cascade::Cascade::keystroke(&mut self, &pdfrum_form::cascade::FieldRef, pdfrum_form::cascade::Keystroke) -> pdfrum_form::cascade::KeystrokeOutcome
+pub fn pdfrum_form::cascade::Cascade::keystroke_commit(&mut self, &pdfrum_form::cascade::FieldRef, &str) -> bool
+pub fn pdfrum_form::cascade::Cascade::validate(&mut self, &pdfrum_form::cascade::FieldRef, &str) -> bool
+impl pdfrum_form::cascade::Cascade for pdfrum_form::cascade::NoScripts
+pub fn pdfrum_form::cascade::NoScripts::calculate(&mut self, &mut pdfrum_form::cascade::FieldWrites, &pdfrum_form::cascade::FieldRef)
+pub fn pdfrum_form::cascade::NoScripts::format(&mut self, &pdfrum_form::cascade::FieldRef, &str) -> core::option::Option<alloc::string::String>
+pub fn pdfrum_form::cascade::NoScripts::keystroke(&mut self, &pdfrum_form::cascade::FieldRef, pdfrum_form::cascade::Keystroke) -> pdfrum_form::cascade::KeystrokeOutcome
+pub fn pdfrum_form::cascade::NoScripts::keystroke_commit(&mut self, &pdfrum_form::cascade::FieldRef, &str) -> bool
+pub fn pdfrum_form::cascade::NoScripts::validate(&mut self, &pdfrum_form::cascade::FieldRef, &str) -> bool
+pub mod pdfrum_form::commit
+pub struct pdfrum_form::commit::CommitOutcome
+pub pdfrum_form::commit::CommitOutcome::committed: bool
+pub pdfrum_form::commit::CommitOutcome::display: core::option::Option<alloc::string::String>
+pub pdfrum_form::commit::CommitOutcome::reverted: bool
+pub pdfrum_form::commit::CommitOutcome::stored: core::option::Option<alloc::string::String>
+pub pdfrum_form::commit::CommitOutcome::writes: alloc::vec::Vec<(u32, alloc::string::String)>
+impl pdfrum_form::commit::CommitOutcome
+pub fn pdfrum_form::commit::CommitOutcome::keeps_focus(&self) -> bool
+pub fn pdfrum_form::commit::CommitOutcome::unchanged() -> pdfrum_form::commit::CommitOutcome
+pub fn pdfrum_form::commit::run(&pdfrum_form::cascade::FieldRef, &str, &str, &mut dyn pdfrum_form::cascade::Cascade, u32) -> pdfrum_form::commit::CommitOutcome
+pub mod pdfrum_form::edit
+pub use pdfrum_form::edit::Place
+pub mod pdfrum_form::edit::ops
+pub struct pdfrum_form::edit::ops::TextEdit
+pub pdfrum_form::edit::ops::TextEdit::auto_scroll: bool
+pub pdfrum_form::edit::ops::TextEdit::caret: pdfrum_doc::vt::hit::Place
+pub pdfrum_form::edit::ops::TextEdit::centred: bool
+pub pdfrum_form::edit::ops::TextEdit::layout: pdfrum_doc::vt::Layout
+pub pdfrum_form::edit::ops::TextEdit::offset: (f32, f32)
+pub pdfrum_form::edit::ops::TextEdit::previous_caret: pdfrum_doc::vt::hit::Place
+pub pdfrum_form::edit::ops::TextEdit::scroll: (f32, f32)
+pub pdfrum_form::edit::ops::TextEdit::selection: pdfrum_form::edit::select::Selection
+pub pdfrum_form::edit::ops::TextEdit::sticky_x: f32
+pub pdfrum_form::edit::ops::TextEdit::text: alloc::string::String
+pub pdfrum_form::edit::ops::TextEdit::undo: pdfrum_form::edit::undo::UndoStack
+impl pdfrum_form::edit::ops::TextEdit
+pub fn pdfrum_form::edit::ops::TextEdit::caret_index(&self) -> usize
+pub fn pdfrum_form::edit::ops::TextEdit::has_selection(&self) -> bool
+pub fn pdfrum_form::edit::ops::TextEdit::len_chars(&self) -> usize
+pub fn pdfrum_form::edit::ops::TextEdit::move_caret_keeping_selection(&mut self, usize)
+pub fn pdfrum_form::edit::ops::TextEdit::new(impl core::convert::Into<alloc::string::String>, &pdfrum_doc::vt::Config, &pdfrum_doc::vt::Metrics<'_>, bool) -> pdfrum_form::edit::ops::TextEdit
+pub fn pdfrum_form::edit::ops::TextEdit::select_all(&mut self)
+pub fn pdfrum_form::edit::ops::TextEdit::select_none(&mut self)
+pub fn pdfrum_form::edit::ops::TextEdit::selected_text(&self) -> alloc::string::String
+pub fn pdfrum_form::edit::ops::TextEdit::selection_indices(&self) -> (usize, usize)
+pub fn pdfrum_form::edit::ops::TextEdit::set_caret_index(&mut self, usize)
+pub fn pdfrum_form::edit::ops::TextEdit::set_selection(&mut self, i32, i32)
+pub fn pdfrum_form::edit::ops::backspace(&mut pdfrum_form::edit::ops::TextEdit, &pdfrum_doc::vt::Config, &pdfrum_doc::vt::Metrics<'_>) -> bool
+pub fn pdfrum_form::edit::ops::caret_x(&pdfrum_form::edit::ops::TextEdit, &pdfrum_doc::vt::Config, &pdfrum_doc::vt::Metrics<'_>) -> f32
+pub fn pdfrum_form::edit::ops::click_at(&mut pdfrum_form::edit::ops::TextEdit, &pdfrum_doc::vt::Config, &pdfrum_doc::vt::Metrics<'_>, kurbo::point::Point)
+pub fn pdfrum_form::edit::ops::delete(&mut pdfrum_form::edit::ops::TextEdit, &pdfrum_doc::vt::Config, &pdfrum_doc::vt::Metrics<'_>) -> bool
+pub fn pdfrum_form::edit::ops::drag_to(&mut pdfrum_form::edit::ops::TextEdit, &pdfrum_doc::vt::Config, &pdfrum_doc::vt::Metrics<'_>, kurbo::point::Point)
+pub fn pdfrum_form::edit::ops::highlight(&pdfrum_form::edit::ops::TextEdit, &pdfrum_doc::vt::Config, &pdfrum_doc::vt::Metrics<'_>, f32) -> pdfrum_doc::ap::field_body::Highlight
+pub fn pdfrum_form::edit::ops::insert_char(&mut pdfrum_form::edit::ops::TextEdit, &pdfrum_doc::vt::Config, &pdfrum_doc::vt::Metrics<'_>, char, core::option::Option<u32>) -> bool
+pub fn pdfrum_form::edit::ops::is_text_overflow(&pdfrum_form::edit::ops::TextEdit, &pdfrum_doc::vt::Config) -> bool
+pub fn pdfrum_form::edit::ops::normalize_breaks(&str, bool) -> alloc::string::String
+pub fn pdfrum_form::edit::ops::place_at_point(&pdfrum_form::edit::ops::TextEdit, &pdfrum_doc::vt::Config, &pdfrum_doc::vt::Metrics<'_>, kurbo::point::Point) -> pdfrum_doc::vt::hit::Place
+pub fn pdfrum_form::edit::ops::redo(&mut pdfrum_form::edit::ops::TextEdit, &pdfrum_doc::vt::Config, &pdfrum_doc::vt::Metrics<'_>) -> bool
+pub fn pdfrum_form::edit::ops::replace_and_keep_selection(&mut pdfrum_form::edit::ops::TextEdit, &pdfrum_doc::vt::Config, &pdfrum_doc::vt::Metrics<'_>, &str, core::option::Option<u32>) -> bool
+pub fn pdfrum_form::edit::ops::replace_range(&mut pdfrum_form::edit::ops::TextEdit, &pdfrum_doc::vt::Config, &pdfrum_doc::vt::Metrics<'_>, usize, usize, &str, core::option::Option<u32>, bool) -> bool
+pub fn pdfrum_form::edit::ops::replace_selection(&mut pdfrum_form::edit::ops::TextEdit, &pdfrum_doc::vt::Config, &pdfrum_doc::vt::Metrics<'_>, &str, core::option::Option<u32>) -> bool
+pub fn pdfrum_form::edit::ops::room_for(&pdfrum_form::edit::ops::TextEdit, core::option::Option<u32>, usize) -> core::option::Option<usize>
+pub fn pdfrum_form::edit::ops::scroll_by(&mut pdfrum_form::edit::ops::TextEdit, &pdfrum_doc::vt::Config, i32) -> bool
+pub fn pdfrum_form::edit::ops::scroll_to_caret(&mut pdfrum_form::edit::ops::TextEdit, &pdfrum_doc::vt::Config, &pdfrum_doc::vt::Metrics<'_>)
+pub fn pdfrum_form::edit::ops::select_line_at(&mut pdfrum_form::edit::ops::TextEdit, &pdfrum_doc::vt::Config, &pdfrum_doc::vt::Metrics<'_>, kurbo::point::Point)
+pub fn pdfrum_form::edit::ops::undo(&mut pdfrum_form::edit::ops::TextEdit, &pdfrum_doc::vt::Config, &pdfrum_doc::vt::Metrics<'_>) -> bool
+pub fn pdfrum_form::edit::ops::vertical_offset(bool, &pdfrum_doc::vt::Config, &pdfrum_doc::vt::Layout) -> (f32, f32)
+pub mod pdfrum_form::edit::place
+pub use pdfrum_form::edit::place::Place
+pub struct pdfrum_form::edit::place::Range
+impl pdfrum_form::edit::place::Range
+pub fn pdfrum_form::edit::place::Range::begin(self) -> pdfrum_doc::vt::hit::Place
+pub fn pdfrum_form::edit::place::Range::empty_at(pdfrum_doc::vt::hit::Place) -> pdfrum_form::edit::place::Range
+pub fn pdfrum_form::edit::place::Range::end(self) -> pdfrum_doc::vt::hit::Place
+pub fn pdfrum_form::edit::place::Range::is_empty(self) -> bool
+pub fn pdfrum_form::edit::place::Range::new(pdfrum_doc::vt::hit::Place, pdfrum_doc::vt::hit::Place) -> pdfrum_form::edit::place::Range
+pub trait pdfrum_form::edit::place::PlaceExt
+pub fn pdfrum_form::edit::place::PlaceExt::at_line_start(self) -> bool
+pub fn pdfrum_form::edit::place::PlaceExt::same_line(self, pdfrum_doc::vt::hit::Place) -> bool
+pub fn pdfrum_form::edit::place::PlaceExt::start() -> pdfrum_doc::vt::hit::Place
+impl pdfrum_form::edit::place::PlaceExt for pdfrum_doc::vt::hit::Place
+pub fn pdfrum_doc::vt::hit::Place::at_line_start(self) -> bool
+pub fn pdfrum_doc::vt::hit::Place::same_line(self, pdfrum_doc::vt::hit::Place) -> bool
+pub fn pdfrum_doc::vt::hit::Place::start() -> pdfrum_doc::vt::hit::Place
+pub mod pdfrum_form::edit::select
+pub struct pdfrum_form::edit::select::Selection
+pub pdfrum_form::edit::select::Selection::begin: pdfrum_doc::vt::hit::Place
+pub pdfrum_form::edit::select::Selection::end: pdfrum_doc::vt::hit::Place
+impl pdfrum_form::edit::select::Selection
+pub fn pdfrum_form::edit::select::Selection::collapsed_at(pdfrum_doc::vt::hit::Place) -> pdfrum_form::edit::select::Selection
+pub fn pdfrum_form::edit::select::Selection::empty() -> pdfrum_form::edit::select::Selection
+pub fn pdfrum_form::edit::select::Selection::is_backwards(self) -> bool
+pub fn pdfrum_form::edit::select::Selection::is_empty(self) -> bool
+pub fn pdfrum_form::edit::select::Selection::is_reset(self) -> bool
+pub fn pdfrum_form::edit::select::Selection::new(pdfrum_doc::vt::hit::Place, pdfrum_doc::vt::hit::Place) -> pdfrum_form::edit::select::Selection
+pub fn pdfrum_form::edit::select::Selection::range(self) -> pdfrum_form::edit::place::Range
+pub fn pdfrum_form::edit::select::Selection::reset() -> pdfrum_form::edit::select::Selection
+pub fn pdfrum_form::edit::select::Selection::set_active(&mut self, pdfrum_doc::vt::hit::Place)
+impl core::default::Default for pdfrum_form::edit::select::Selection
+pub fn pdfrum_form::edit::select::Selection::default() -> pdfrum_form::edit::select::Selection
+pub mod pdfrum_form::edit::undo
+pub enum pdfrum_form::edit::undo::UndoItem
+pub pdfrum_form::edit::undo::UndoItem::Backspace
+pub pdfrum_form::edit::undo::UndoItem::Backspace::before: pdfrum_form::edit::select::Selection
+pub pdfrum_form::edit::undo::UndoItem::Backspace::ch: char
+pub pdfrum_form::edit::undo::UndoItem::Backspace::new: pdfrum_doc::vt::hit::Place
+pub pdfrum_form::edit::undo::UndoItem::Backspace::old: pdfrum_doc::vt::hit::Place
+pub pdfrum_form::edit::undo::UndoItem::Backspace::section_break: bool
+pub pdfrum_form::edit::undo::UndoItem::Clear
+pub pdfrum_form::edit::undo::UndoItem::Clear::before: pdfrum_form::edit::select::Selection
+pub pdfrum_form::edit::undo::UndoItem::Clear::range: pdfrum_form::edit::place::Range
+pub pdfrum_form::edit::undo::UndoItem::Clear::text: alloc::string::String
+pub pdfrum_form::edit::undo::UndoItem::Delete
+pub pdfrum_form::edit::undo::UndoItem::Delete::before: pdfrum_form::edit::select::Selection
+pub pdfrum_form::edit::undo::UndoItem::Delete::ch: char
+pub pdfrum_form::edit::undo::UndoItem::Delete::new: pdfrum_doc::vt::hit::Place
+pub pdfrum_form::edit::undo::UndoItem::Delete::old: pdfrum_doc::vt::hit::Place
+pub pdfrum_form::edit::undo::UndoItem::Delete::section_break: bool
+pub pdfrum_form::edit::undo::UndoItem::GroupBoundary
+pub pdfrum_form::edit::undo::UndoItem::InsertReturn
+pub pdfrum_form::edit::undo::UndoItem::InsertReturn::before: pdfrum_form::edit::select::Selection
+pub pdfrum_form::edit::undo::UndoItem::InsertReturn::new: pdfrum_doc::vt::hit::Place
+pub pdfrum_form::edit::undo::UndoItem::InsertReturn::old: pdfrum_doc::vt::hit::Place
+pub pdfrum_form::edit::undo::UndoItem::InsertText
+pub pdfrum_form::edit::undo::UndoItem::InsertText::before: pdfrum_form::edit::select::Selection
+pub pdfrum_form::edit::undo::UndoItem::InsertText::new: pdfrum_doc::vt::hit::Place
+pub pdfrum_form::edit::undo::UndoItem::InsertText::old: pdfrum_doc::vt::hit::Place
+pub pdfrum_form::edit::undo::UndoItem::InsertText::text: alloc::string::String
+pub pdfrum_form::edit::undo::UndoItem::InsertWord
+pub pdfrum_form::edit::undo::UndoItem::InsertWord::before: pdfrum_form::edit::select::Selection
+pub pdfrum_form::edit::undo::UndoItem::InsertWord::ch: char
+pub pdfrum_form::edit::undo::UndoItem::InsertWord::new: pdfrum_doc::vt::hit::Place
+pub pdfrum_form::edit::undo::UndoItem::InsertWord::old: pdfrum_doc::vt::hit::Place
+impl pdfrum_form::edit::undo::UndoItem
+pub fn pdfrum_form::edit::undo::UndoItem::before(&self) -> core::option::Option<pdfrum_form::edit::select::Selection>
+pub fn pdfrum_form::edit::undo::UndoItem::is_boundary(&self) -> bool
+pub struct pdfrum_form::edit::undo::UndoStack
+impl pdfrum_form::edit::undo::UndoStack
+pub const pdfrum_form::edit::undo::UndoStack::DEFAULT_MAX: u32
+pub const pdfrum_form::edit::undo::UndoStack::MIN_MAX: u32
+pub fn pdfrum_form::edit::undo::UndoStack::can_redo(&self) -> bool
+pub fn pdfrum_form::edit::undo::UndoStack::can_undo(&self) -> bool
+pub fn pdfrum_form::edit::undo::UndoStack::clear(&mut self)
+pub fn pdfrum_form::edit::undo::UndoStack::is_empty(&self) -> bool
+pub fn pdfrum_form::edit::undo::UndoStack::is_enabled(&self) -> bool
+pub fn pdfrum_form::edit::undo::UndoStack::items(&self) -> impl core::iter::traits::iterator::Iterator<Item = &pdfrum_form::edit::undo::UndoItem>
+pub fn pdfrum_form::edit::undo::UndoStack::len(&self) -> usize
+pub fn pdfrum_form::edit::undo::UndoStack::max(&self) -> usize
+pub fn pdfrum_form::edit::undo::UndoStack::position(&self) -> usize
+pub fn pdfrum_form::edit::undo::UndoStack::push(&mut self, pdfrum_form::edit::undo::UndoItem)
+pub fn pdfrum_form::edit::undo::UndoStack::redo(&mut self) -> alloc::vec::Vec<pdfrum_form::edit::undo::UndoItem>
+pub fn pdfrum_form::edit::undo::UndoStack::set_enabled(&mut self, bool)
+pub fn pdfrum_form::edit::undo::UndoStack::undo(&mut self) -> alloc::vec::Vec<pdfrum_form::edit::undo::UndoItem>
+pub fn pdfrum_form::edit::undo::UndoStack::with_max(u32) -> pdfrum_form::edit::undo::UndoStack
+impl core::cmp::Eq for pdfrum_form::edit::undo::UndoStack
+impl core::cmp::PartialEq for pdfrum_form::edit::undo::UndoStack
+pub fn pdfrum_form::edit::undo::UndoStack::eq(&self, &pdfrum_form::edit::undo::UndoStack) -> bool
+impl core::default::Default for pdfrum_form::edit::undo::UndoStack
+pub fn pdfrum_form::edit::undo::UndoStack::default() -> pdfrum_form::edit::undo::UndoStack
+pub enum pdfrum_form::edit::UndoItem
+pub pdfrum_form::edit::UndoItem::Backspace
+pub pdfrum_form::edit::UndoItem::Backspace::before: pdfrum_form::edit::select::Selection
+pub pdfrum_form::edit::UndoItem::Backspace::ch: char
+pub pdfrum_form::edit::UndoItem::Backspace::new: pdfrum_doc::vt::hit::Place
+pub pdfrum_form::edit::UndoItem::Backspace::old: pdfrum_doc::vt::hit::Place
+pub pdfrum_form::edit::UndoItem::Backspace::section_break: bool
+pub pdfrum_form::edit::UndoItem::Clear
+pub pdfrum_form::edit::UndoItem::Clear::before: pdfrum_form::edit::select::Selection
+pub pdfrum_form::edit::UndoItem::Clear::range: pdfrum_form::edit::place::Range
+pub pdfrum_form::edit::UndoItem::Clear::text: alloc::string::String
+pub pdfrum_form::edit::UndoItem::Delete
+pub pdfrum_form::edit::UndoItem::Delete::before: pdfrum_form::edit::select::Selection
+pub pdfrum_form::edit::UndoItem::Delete::ch: char
+pub pdfrum_form::edit::UndoItem::Delete::new: pdfrum_doc::vt::hit::Place
+pub pdfrum_form::edit::UndoItem::Delete::old: pdfrum_doc::vt::hit::Place
+pub pdfrum_form::edit::UndoItem::Delete::section_break: bool
+pub pdfrum_form::edit::UndoItem::GroupBoundary
+pub pdfrum_form::edit::UndoItem::InsertReturn
+pub pdfrum_form::edit::UndoItem::InsertReturn::before: pdfrum_form::edit::select::Selection
+pub pdfrum_form::edit::UndoItem::InsertReturn::new: pdfrum_doc::vt::hit::Place
+pub pdfrum_form::edit::UndoItem::InsertReturn::old: pdfrum_doc::vt::hit::Place
+pub pdfrum_form::edit::UndoItem::InsertText
+pub pdfrum_form::edit::UndoItem::InsertText::before: pdfrum_form::edit::select::Selection
+pub pdfrum_form::edit::UndoItem::InsertText::new: pdfrum_doc::vt::hit::Place
+pub pdfrum_form::edit::UndoItem::InsertText::old: pdfrum_doc::vt::hit::Place
+pub pdfrum_form::edit::UndoItem::InsertText::text: alloc::string::String
+pub pdfrum_form::edit::UndoItem::InsertWord
+pub pdfrum_form::edit::UndoItem::InsertWord::before: pdfrum_form::edit::select::Selection
+pub pdfrum_form::edit::UndoItem::InsertWord::ch: char
+pub pdfrum_form::edit::UndoItem::InsertWord::new: pdfrum_doc::vt::hit::Place
+pub pdfrum_form::edit::UndoItem::InsertWord::old: pdfrum_doc::vt::hit::Place
+impl pdfrum_form::edit::undo::UndoItem
+pub fn pdfrum_form::edit::undo::UndoItem::before(&self) -> core::option::Option<pdfrum_form::edit::select::Selection>
+pub fn pdfrum_form::edit::undo::UndoItem::is_boundary(&self) -> bool
+pub struct pdfrum_form::edit::Range
+impl pdfrum_form::edit::place::Range
+pub fn pdfrum_form::edit::place::Range::begin(self) -> pdfrum_doc::vt::hit::Place
+pub fn pdfrum_form::edit::place::Range::empty_at(pdfrum_doc::vt::hit::Place) -> pdfrum_form::edit::place::Range
+pub fn pdfrum_form::edit::place::Range::end(self) -> pdfrum_doc::vt::hit::Place
+pub fn pdfrum_form::edit::place::Range::is_empty(self) -> bool
+pub fn pdfrum_form::edit::place::Range::new(pdfrum_doc::vt::hit::Place, pdfrum_doc::vt::hit::Place) -> pdfrum_form::edit::place::Range
+pub struct pdfrum_form::edit::Selection
+pub pdfrum_form::edit::Selection::begin: pdfrum_doc::vt::hit::Place
+pub pdfrum_form::edit::Selection::end: pdfrum_doc::vt::hit::Place
+impl pdfrum_form::edit::select::Selection
+pub fn pdfrum_form::edit::select::Selection::collapsed_at(pdfrum_doc::vt::hit::Place) -> pdfrum_form::edit::select::Selection
+pub fn pdfrum_form::edit::select::Selection::empty() -> pdfrum_form::edit::select::Selection
+pub fn pdfrum_form::edit::select::Selection::is_backwards(self) -> bool
+pub fn pdfrum_form::edit::select::Selection::is_empty(self) -> bool
+pub fn pdfrum_form::edit::select::Selection::is_reset(self) -> bool
+pub fn pdfrum_form::edit::select::Selection::new(pdfrum_doc::vt::hit::Place, pdfrum_doc::vt::hit::Place) -> pdfrum_form::edit::select::Selection
+pub fn pdfrum_form::edit::select::Selection::range(self) -> pdfrum_form::edit::place::Range
+pub fn pdfrum_form::edit::select::Selection::reset() -> pdfrum_form::edit::select::Selection
+pub fn pdfrum_form::edit::select::Selection::set_active(&mut self, pdfrum_doc::vt::hit::Place)
+impl core::default::Default for pdfrum_form::edit::select::Selection
+pub fn pdfrum_form::edit::select::Selection::default() -> pdfrum_form::edit::select::Selection
+pub struct pdfrum_form::edit::TextEdit
+pub pdfrum_form::edit::TextEdit::auto_scroll: bool
+pub pdfrum_form::edit::TextEdit::caret: pdfrum_doc::vt::hit::Place
+pub pdfrum_form::edit::TextEdit::centred: bool
+pub pdfrum_form::edit::TextEdit::layout: pdfrum_doc::vt::Layout
+pub pdfrum_form::edit::TextEdit::offset: (f32, f32)
+pub pdfrum_form::edit::TextEdit::previous_caret: pdfrum_doc::vt::hit::Place
+pub pdfrum_form::edit::TextEdit::scroll: (f32, f32)
+pub pdfrum_form::edit::TextEdit::selection: pdfrum_form::edit::select::Selection
+pub pdfrum_form::edit::TextEdit::sticky_x: f32
+pub pdfrum_form::edit::TextEdit::text: alloc::string::String
+pub pdfrum_form::edit::TextEdit::undo: pdfrum_form::edit::undo::UndoStack
+impl pdfrum_form::edit::ops::TextEdit
+pub fn pdfrum_form::edit::ops::TextEdit::caret_index(&self) -> usize
+pub fn pdfrum_form::edit::ops::TextEdit::has_selection(&self) -> bool
+pub fn pdfrum_form::edit::ops::TextEdit::len_chars(&self) -> usize
+pub fn pdfrum_form::edit::ops::TextEdit::move_caret_keeping_selection(&mut self, usize)
+pub fn pdfrum_form::edit::ops::TextEdit::new(impl core::convert::Into<alloc::string::String>, &pdfrum_doc::vt::Config, &pdfrum_doc::vt::Metrics<'_>, bool) -> pdfrum_form::edit::ops::TextEdit
+pub fn pdfrum_form::edit::ops::TextEdit::select_all(&mut self)
+pub fn pdfrum_form::edit::ops::TextEdit::select_none(&mut self)
+pub fn pdfrum_form::edit::ops::TextEdit::selected_text(&self) -> alloc::string::String
+pub fn pdfrum_form::edit::ops::TextEdit::selection_indices(&self) -> (usize, usize)
+pub fn pdfrum_form::edit::ops::TextEdit::set_caret_index(&mut self, usize)
+pub fn pdfrum_form::edit::ops::TextEdit::set_selection(&mut self, i32, i32)
+pub struct pdfrum_form::edit::UndoStack
+impl pdfrum_form::edit::undo::UndoStack
+pub const pdfrum_form::edit::undo::UndoStack::DEFAULT_MAX: u32
+pub const pdfrum_form::edit::undo::UndoStack::MIN_MAX: u32
+pub fn pdfrum_form::edit::undo::UndoStack::can_redo(&self) -> bool
+pub fn pdfrum_form::edit::undo::UndoStack::can_undo(&self) -> bool
+pub fn pdfrum_form::edit::undo::UndoStack::clear(&mut self)
+pub fn pdfrum_form::edit::undo::UndoStack::is_empty(&self) -> bool
+pub fn pdfrum_form::edit::undo::UndoStack::is_enabled(&self) -> bool
+pub fn pdfrum_form::edit::undo::UndoStack::items(&self) -> impl core::iter::traits::iterator::Iterator<Item = &pdfrum_form::edit::undo::UndoItem>
+pub fn pdfrum_form::edit::undo::UndoStack::len(&self) -> usize
+pub fn pdfrum_form::edit::undo::UndoStack::max(&self) -> usize
+pub fn pdfrum_form::edit::undo::UndoStack::position(&self) -> usize
+pub fn pdfrum_form::edit::undo::UndoStack::push(&mut self, pdfrum_form::edit::undo::UndoItem)
+pub fn pdfrum_form::edit::undo::UndoStack::redo(&mut self) -> alloc::vec::Vec<pdfrum_form::edit::undo::UndoItem>
+pub fn pdfrum_form::edit::undo::UndoStack::set_enabled(&mut self, bool)
+pub fn pdfrum_form::edit::undo::UndoStack::undo(&mut self) -> alloc::vec::Vec<pdfrum_form::edit::undo::UndoItem>
+pub fn pdfrum_form::edit::undo::UndoStack::with_max(u32) -> pdfrum_form::edit::undo::UndoStack
+impl core::cmp::Eq for pdfrum_form::edit::undo::UndoStack
+impl core::cmp::PartialEq for pdfrum_form::edit::undo::UndoStack
+pub fn pdfrum_form::edit::undo::UndoStack::eq(&self, &pdfrum_form::edit::undo::UndoStack) -> bool
+impl core::default::Default for pdfrum_form::edit::undo::UndoStack
+pub fn pdfrum_form::edit::undo::UndoStack::default() -> pdfrum_form::edit::undo::UndoStack
+pub trait pdfrum_form::edit::PlaceExt
+pub fn pdfrum_form::edit::PlaceExt::at_line_start(self) -> bool
+pub fn pdfrum_form::edit::PlaceExt::same_line(self, pdfrum_doc::vt::hit::Place) -> bool
+pub fn pdfrum_form::edit::PlaceExt::start() -> pdfrum_doc::vt::hit::Place
+impl pdfrum_form::edit::place::PlaceExt for pdfrum_doc::vt::hit::Place
+pub fn pdfrum_doc::vt::hit::Place::at_line_start(self) -> bool
+pub fn pdfrum_doc::vt::hit::Place::same_line(self, pdfrum_doc::vt::hit::Place) -> bool
+pub fn pdfrum_doc::vt::hit::Place::start() -> pdfrum_doc::vt::hit::Place
+pub mod pdfrum_form::error
+#[non_exhaustive] pub enum pdfrum_form::error::Error
+pub pdfrum_form::error::Error::NoSuchField
+pub pdfrum_form::error::Error::NoSuchField::field: u32
+pub pdfrum_form::error::Error::NoSuchPage
+pub pdfrum_form::error::Error::NoSuchPage::page: u32
+pub mod pdfrum_form::event
+pub enum pdfrum_form::event::Button
+pub pdfrum_form::event::Button::Left
+pub pdfrum_form::event::Button::Right
+pub enum pdfrum_form::event::Event
+pub pdfrum_form::event::Event::Char
+pub pdfrum_form::event::Event::Char::ch: char
+pub pdfrum_form::event::Event::Char::modifiers: pdfrum_form::event::Modifiers
+pub pdfrum_form::event::Event::DoubleClick
+pub pdfrum_form::event::Event::DoubleClick::at: pdfrum_form::event::Point
+pub pdfrum_form::event::Event::DoubleClick::modifiers: pdfrum_form::event::Modifiers
+pub pdfrum_form::event::Event::Focus
+pub pdfrum_form::event::Event::Focus::at: pdfrum_form::event::Point
+pub pdfrum_form::event::Event::Focus::modifiers: pdfrum_form::event::Modifiers
+pub pdfrum_form::event::Event::KeyDown
+pub pdfrum_form::event::Event::KeyDown::key: pdfrum_form::event::Key
+pub pdfrum_form::event::Event::KeyDown::modifiers: pdfrum_form::event::Modifiers
+pub pdfrum_form::event::Event::MouseDown
+pub pdfrum_form::event::Event::MouseDown::at: pdfrum_form::event::Point
+pub pdfrum_form::event::Event::MouseDown::button: pdfrum_form::event::Button
+pub pdfrum_form::event::Event::MouseDown::modifiers: pdfrum_form::event::Modifiers
+pub pdfrum_form::event::Event::MouseMove
+pub pdfrum_form::event::Event::MouseMove::at: pdfrum_form::event::Point
+pub pdfrum_form::event::Event::MouseMove::modifiers: pdfrum_form::event::Modifiers
+pub pdfrum_form::event::Event::MouseUp
+pub pdfrum_form::event::Event::MouseUp::at: pdfrum_form::event::Point
+pub pdfrum_form::event::Event::MouseUp::button: pdfrum_form::event::Button
+pub pdfrum_form::event::Event::MouseUp::modifiers: pdfrum_form::event::Modifiers
+pub pdfrum_form::event::Event::MouseWheel
+pub pdfrum_form::event::Event::MouseWheel::at: pdfrum_form::event::Point
+pub pdfrum_form::event::Event::MouseWheel::delta: (i32, i32)
+pub pdfrum_form::event::Event::MouseWheel::modifiers: pdfrum_form::event::Modifiers
+pub struct pdfrum_form::event::Key(pub u16)
+impl pdfrum_form::event::Key
+pub const pdfrum_form::event::Key::A: pdfrum_form::event::Key
+pub const pdfrum_form::event::Key::BACK: pdfrum_form::event::Key
+pub const pdfrum_form::event::Key::CLEAR: pdfrum_form::event::Key
+pub const pdfrum_form::event::Key::CONTROL: pdfrum_form::event::Key
+pub const pdfrum_form::event::Key::DELETE: pdfrum_form::event::Key
+pub const pdfrum_form::event::Key::DOWN: pdfrum_form::event::Key
+pub const pdfrum_form::event::Key::END: pdfrum_form::event::Key
+pub const pdfrum_form::event::Key::ESCAPE: pdfrum_form::event::Key
+pub const pdfrum_form::event::Key::HOME: pdfrum_form::event::Key
+pub const pdfrum_form::event::Key::INSERT: pdfrum_form::event::Key
+pub const pdfrum_form::event::Key::LEFT: pdfrum_form::event::Key
+pub const pdfrum_form::event::Key::NEWLINE: pdfrum_form::event::Key
+pub const pdfrum_form::event::Key::NEXT: pdfrum_form::event::Key
+pub const pdfrum_form::event::Key::PRIOR: pdfrum_form::event::Key
+pub const pdfrum_form::event::Key::RETURN: pdfrum_form::event::Key
+pub const pdfrum_form::event::Key::RIGHT: pdfrum_form::event::Key
+pub const pdfrum_form::event::Key::SHIFT: pdfrum_form::event::Key
+pub const pdfrum_form::event::Key::SPACE: pdfrum_form::event::Key
+pub const pdfrum_form::event::Key::TAB: pdfrum_form::event::Key
+pub const pdfrum_form::event::Key::UNKNOWN: pdfrum_form::event::Key
+pub const pdfrum_form::event::Key::UP: pdfrum_form::event::Key
+pub const pdfrum_form::event::Key::Y: pdfrum_form::event::Key
+pub const pdfrum_form::event::Key::Z: pdfrum_form::event::Key
+pub struct pdfrum_form::event::Modifiers(pub u32)
+impl pdfrum_form::event::Modifiers
+pub const pdfrum_form::event::Modifiers::ALT: pdfrum_form::event::Modifiers
+pub const pdfrum_form::event::Modifiers::AUTO_REPEAT: pdfrum_form::event::Modifiers
+pub const pdfrum_form::event::Modifiers::CONTROL: pdfrum_form::event::Modifiers
+pub const pdfrum_form::event::Modifiers::KEYPAD: pdfrum_form::event::Modifiers
+pub const pdfrum_form::event::Modifiers::LEFT_BUTTON: pdfrum_form::event::Modifiers
+pub const pdfrum_form::event::Modifiers::META: pdfrum_form::event::Modifiers
+pub const pdfrum_form::event::Modifiers::MIDDLE_BUTTON: pdfrum_form::event::Modifiers
+pub const pdfrum_form::event::Modifiers::NONE: pdfrum_form::event::Modifiers
+pub const pdfrum_form::event::Modifiers::RIGHT_BUTTON: pdfrum_form::event::Modifiers
+pub const pdfrum_form::event::Modifiers::SHIFT: pdfrum_form::event::Modifiers
+pub fn pdfrum_form::event::Modifiers::contains(self, pdfrum_form::event::Modifiers) -> bool
+pub fn pdfrum_form::event::Modifiers::is_empty(self) -> bool
+pub fn pdfrum_form::event::Modifiers::union(self, pdfrum_form::event::Modifiers) -> pdfrum_form::event::Modifiers
+pub fn pdfrum_form::event::Modifiers::without(self, pdfrum_form::event::Modifiers) -> pdfrum_form::event::Modifiers
+impl core::ops::bit::BitOr for pdfrum_form::event::Modifiers
+pub type pdfrum_form::event::Modifiers::Output = pdfrum_form::event::Modifiers
+pub fn pdfrum_form::event::Modifiers::bitor(self, pdfrum_form::event::Modifiers) -> pdfrum_form::event::Modifiers
+pub struct pdfrum_form::event::Point
+pub pdfrum_form::event::Point::x: f32
+pub pdfrum_form::event::Point::y: f32
+impl pdfrum_form::event::Point
+pub fn pdfrum_form::event::Point::new(f32, f32) -> pdfrum_form::event::Point
+pub mod pdfrum_form::field
+pub mod pdfrum_form::field::button
+pub struct pdfrum_form::field::button::ButtonState
+pub pdfrum_form::field::button::ButtonState::pressed: bool
+impl pdfrum_form::field::button::ButtonState
+pub fn pdfrum_form::field::button::ButtonState::new() -> pdfrum_form::field::button::ButtonState
+pub mod pdfrum_form::field::choice
+pub fn pdfrum_form::field::choice::combo_text_config(bool, bool) -> pdfrum_form::field::TextConfig
+pub fn pdfrum_form::field::choice::find_next(&[alloc::string::String], usize, char) -> core::option::Option<usize>
+pub fn pdfrum_form::field::choice::in_range(&pdfrum_form::field::ChoiceState, usize) -> bool
+pub fn pdfrum_form::field::choice::initial_selection(&[alloc::string::String], &[alloc::string::String], &[usize]) -> alloc::collections::btree::set::BTreeSet<usize>
+pub fn pdfrum_form::field::choice::is_index_selected(&pdfrum_form::field::ChoiceState, usize) -> bool
+pub fn pdfrum_form::field::choice::move_caret_by(&mut pdfrum_form::field::ChoiceState, i32, bool, bool) -> bool
+pub fn pdfrum_form::field::choice::move_selection(&mut pdfrum_form::field::ChoiceState, i32) -> bool
+pub fn pdfrum_form::field::choice::scroll_into_view(&mut pdfrum_form::field::ChoiceState, usize, usize) -> bool
+pub fn pdfrum_form::field::choice::select_only(&mut pdfrum_form::field::ChoiceState, usize) -> bool
+pub fn pdfrum_form::field::choice::select_range_to(&mut pdfrum_form::field::ChoiceState, usize) -> bool
+pub fn pdfrum_form::field::choice::set_index_selected(&mut pdfrum_form::field::ChoiceState, usize, bool) -> bool
+pub fn pdfrum_form::field::choice::set_select_text(&mut pdfrum_form::field::ChoiceState, &pdfrum_doc::vt::Config, &pdfrum_doc::vt::Metrics<'_>) -> bool
+pub fn pdfrum_form::field::choice::toggle_index(&mut pdfrum_form::field::ChoiceState, usize) -> bool
+pub fn pdfrum_form::field::choice::top_visible_for(usize, usize, usize) -> usize
+pub fn pdfrum_form::field::choice::type_ahead(&mut pdfrum_form::field::ChoiceState, char) -> bool
+pub mod pdfrum_form::field::text
+pub enum pdfrum_form::field::text::Disposition
+pub pdfrum_form::field::text::Disposition::Consume
+pub pdfrum_form::field::text::Disposition::Do(pdfrum_form::field::text::TextAction)
+pub pdfrum_form::field::text::Disposition::Ignore
+pub enum pdfrum_form::field::text::Motion
+pub pdfrum_form::field::text::Motion::DocEnd
+pub pdfrum_form::field::text::Motion::DocStart
+pub pdfrum_form::field::text::Motion::Down
+pub pdfrum_form::field::text::Motion::Left
+pub pdfrum_form::field::text::Motion::LineEnd
+pub pdfrum_form::field::text::Motion::LineStart
+pub pdfrum_form::field::text::Motion::Right
+pub pdfrum_form::field::text::Motion::Up
+pub enum pdfrum_form::field::text::TextAction
+pub pdfrum_form::field::text::TextAction::Backspace
+pub pdfrum_form::field::text::TextAction::ClearSelection
+pub pdfrum_form::field::text::TextAction::Commit
+pub pdfrum_form::field::text::TextAction::Delete
+pub pdfrum_form::field::text::TextAction::Escape
+pub pdfrum_form::field::text::TextAction::Insert(char)
+pub pdfrum_form::field::text::TextAction::InsertReturn
+pub pdfrum_form::field::text::TextAction::Move
+pub pdfrum_form::field::text::TextAction::Move::extend: bool
+pub pdfrum_form::field::text::TextAction::Move::motion: pdfrum_form::field::text::Motion
+pub pdfrum_form::field::text::TextAction::Redo
+pub pdfrum_form::field::text::TextAction::SelectAll
+pub pdfrum_form::field::text::TextAction::Undo
+pub fn pdfrum_form::field::text::is_shortcut(pdfrum_form::event::Modifiers, pdfrum_form::event::Modifiers) -> bool
+pub fn pdfrum_form::field::text::route_char(char, pdfrum_form::event::Modifiers, pdfrum_form::event::Modifiers, bool, bool) -> pdfrum_form::field::text::Disposition
+pub fn pdfrum_form::field::text::route_key(pdfrum_form::event::Key, pdfrum_form::event::Modifiers, pdfrum_form::event::Modifiers, bool, bool) -> pdfrum_form::field::text::Disposition
+pub mod pdfrum_form::field::toggle
+pub enum pdfrum_form::field::toggle::ToggleKind
+pub pdfrum_form::field::toggle::ToggleKind::Check
+pub pdfrum_form::field::toggle::ToggleKind::Radio
+pub struct pdfrum_form::field::toggle::ToggleState
+pub pdfrum_form::field::toggle::ToggleState::checked_control: core::option::Option<pdfrum_form::session::AnnotId>
+pub pdfrum_form::field::toggle::ToggleState::on_state: alloc::string::String
+pub pdfrum_form::field::toggle::ToggleState::state: alloc::string::String
+impl pdfrum_form::field::toggle::ToggleState
+pub fn pdfrum_form::field::toggle::ToggleState::is_checked(&self) -> bool
+pub fn pdfrum_form::field::toggle::ToggleState::new(impl core::convert::Into<alloc::string::String>, impl core::convert::Into<alloc::string::String>) -> pdfrum_form::field::toggle::ToggleState
+pub fn pdfrum_form::field::toggle::ToggleState::set_checked(&mut self, bool)
+pub fn pdfrum_form::field::toggle::ToggleState::state_for_control(&self, pdfrum_form::session::AnnotId) -> core::option::Option<&str>
+pub fn pdfrum_form::field::toggle::ToggleState::toggle(&mut self)
+pub const pdfrum_form::field::toggle::OFF_STATE: &str
+pub fn pdfrum_form::field::toggle::activate(&mut pdfrum_form::field::toggle::ToggleState, pdfrum_form::field::toggle::ToggleKind, bool) -> bool
+pub enum pdfrum_form::field::Family
+pub pdfrum_form::field::Family::Button
+pub pdfrum_form::field::Family::Choice
+pub pdfrum_form::field::Family::Text
+pub pdfrum_form::field::Family::Toggle
+pub enum pdfrum_form::field::FieldState
+pub pdfrum_form::field::FieldState::Button(pdfrum_form::field::button::ButtonState)
+pub pdfrum_form::field::FieldState::Choice(pdfrum_form::field::ChoiceState)
+pub pdfrum_form::field::FieldState::Text(pdfrum_form::field::TextState)
+pub pdfrum_form::field::FieldState::Toggle(pdfrum_form::field::toggle::ToggleState)
+pub enum pdfrum_form::field::ToggleKind
+pub pdfrum_form::field::ToggleKind::Check
+pub pdfrum_form::field::ToggleKind::Radio
+pub struct pdfrum_form::field::ButtonState
+pub pdfrum_form::field::ButtonState::pressed: bool
+impl pdfrum_form::field::button::ButtonState
+pub fn pdfrum_form::field::button::ButtonState::new() -> pdfrum_form::field::button::ButtonState
+pub struct pdfrum_form::field::ChoiceConfig
+pub pdfrum_form::field::ChoiceConfig::combo: bool
+pub pdfrum_form::field::ChoiceConfig::editable: bool
+pub pdfrum_form::field::ChoiceConfig::multi_select: bool
+pub pdfrum_form::field::ChoiceConfig::read_only: bool
+impl pdfrum_form::field::ChoiceConfig
+pub fn pdfrum_form::field::ChoiceConfig::read(pdfrum_doc::form::field::FieldFlags) -> pdfrum_form::field::ChoiceConfig
+pub struct pdfrum_form::field::ChoiceOption
+pub pdfrum_form::field::ChoiceOption::label: alloc::string::String
+pub pdfrum_form::field::ChoiceOption::value: alloc::string::String
+pub struct pdfrum_form::field::ChoiceState
+pub pdfrum_form::field::ChoiceState::anchor: core::option::Option<usize>
+pub pdfrum_form::field::ChoiceState::caret_index: core::option::Option<usize>
+pub pdfrum_form::field::ChoiceState::config: pdfrum_form::field::ChoiceConfig
+pub pdfrum_form::field::ChoiceState::edit: core::option::Option<alloc::boxed::Box<pdfrum_form::edit::ops::TextEdit>>
+pub pdfrum_form::field::ChoiceState::edit_text: alloc::string::String
+pub pdfrum_form::field::ChoiceState::hovered: core::option::Option<usize>
+pub pdfrum_form::field::ChoiceState::options: alloc::vec::Vec<pdfrum_form::field::ChoiceOption>
+pub pdfrum_form::field::ChoiceState::popup_open: bool
+pub pdfrum_form::field::ChoiceState::selected: alloc::collections::btree::set::BTreeSet<usize>
+pub pdfrum_form::field::ChoiceState::top_visible: usize
+impl pdfrum_form::field::ChoiceState
+pub fn pdfrum_form::field::ChoiceState::focused_text(&self) -> alloc::string::String
+pub fn pdfrum_form::field::ChoiceState::new(alloc::vec::Vec<pdfrum_form::field::ChoiceOption>, pdfrum_form::field::ChoiceConfig) -> pdfrum_form::field::ChoiceState
+pub struct pdfrum_form::field::TextConfig
+pub pdfrum_form::field::TextConfig::auto_scroll: bool
+pub pdfrum_form::field::TextConfig::comb: bool
+pub pdfrum_form::field::TextConfig::max_len: core::option::Option<core::num::nonzero::NonZeroU32>
+pub pdfrum_form::field::TextConfig::multi_line: bool
+pub pdfrum_form::field::TextConfig::password: bool
+pub pdfrum_form::field::TextConfig::read_only: bool
+pub pdfrum_form::field::TextConfig::undo_enabled: bool
+impl pdfrum_form::field::TextConfig
+pub fn pdfrum_form::field::TextConfig::read(pdfrum_doc::form::field::FieldFlags, core::option::Option<u32>) -> pdfrum_form::field::TextConfig
+pub struct pdfrum_form::field::TextState
+pub pdfrum_form::field::TextState::config: pdfrum_form::field::TextConfig
+pub pdfrum_form::field::TextState::edit: pdfrum_form::edit::ops::TextEdit
+impl pdfrum_form::field::TextState
+pub fn pdfrum_form::field::TextState::text(&self) -> &str
+pub struct pdfrum_form::field::ToggleState
+pub pdfrum_form::field::ToggleState::checked_control: core::option::Option<pdfrum_form::session::AnnotId>
+pub pdfrum_form::field::ToggleState::on_state: alloc::string::String
+pub pdfrum_form::field::ToggleState::state: alloc::string::String
+impl pdfrum_form::field::toggle::ToggleState
+pub fn pdfrum_form::field::toggle::ToggleState::is_checked(&self) -> bool
+pub fn pdfrum_form::field::toggle::ToggleState::new(impl core::convert::Into<alloc::string::String>, impl core::convert::Into<alloc::string::String>) -> pdfrum_form::field::toggle::ToggleState
+pub fn pdfrum_form::field::toggle::ToggleState::set_checked(&mut self, bool)
+pub fn pdfrum_form::field::toggle::ToggleState::state_for_control(&self, pdfrum_form::session::AnnotId) -> core::option::Option<&str>
+pub fn pdfrum_form::field::toggle::ToggleState::toggle(&mut self)
+pub fn pdfrum_form::field::activate(&mut pdfrum_form::field::toggle::ToggleState, pdfrum_form::field::toggle::ToggleKind, bool) -> bool
+pub fn pdfrum_form::field::family_of(pdfrum_doc::form::field::FieldKind) -> core::option::Option<pdfrum_form::field::Family>
+pub mod pdfrum_form::focus
+pub struct pdfrum_form::focus::FocusChange
+pub pdfrum_form::focus::FocusChange::clear_undo: bool
+pub pdfrum_form::focus::FocusChange::commit_outgoing: bool
+pub pdfrum_form::focus::FocusChange::from: core::option::Option<pdfrum_form::session::FocusTarget>
+pub pdfrum_form::focus::FocusChange::to: core::option::Option<pdfrum_form::session::FocusTarget>
+impl pdfrum_form::focus::FocusChange
+pub fn pdfrum_form::focus::FocusChange::moved(self) -> bool
+pub fn pdfrum_form::focus::FocusChange::none(core::option::Option<pdfrum_form::session::FocusTarget>) -> pdfrum_form::focus::FocusChange
+pub fn pdfrum_form::focus::kill(&mut pdfrum_form::session::FormSession) -> pdfrum_form::focus::FocusChange
+pub fn pdfrum_form::focus::miss_drops_focus(pdfrum_form::event::Button) -> bool
+pub fn pdfrum_form::focus::set(&mut pdfrum_form::session::FormSession, pdfrum_form::session::FocusTarget) -> pdfrum_form::focus::FocusChange
+pub mod pdfrum_form::geom
+pub enum pdfrum_form::geom::Rotation
+pub pdfrum_form::geom::Rotation::Half
+pub pdfrum_form::geom::Rotation::None
+pub pdfrum_form::geom::Rotation::Quarter
+pub pdfrum_form::geom::Rotation::ThreeQuarter
+impl pdfrum_form::geom::Rotation
+pub fn pdfrum_form::geom::Rotation::degrees(self) -> i32
+pub fn pdfrum_form::geom::Rotation::from_degrees(i32) -> pdfrum_form::geom::Rotation
+pub fn pdfrum_form::geom::Rotation::swaps_axes(self) -> bool
+pub struct pdfrum_form::geom::Plate
+pub pdfrum_form::geom::Plate::rect: pdfrum_form::tab::Rect
+pub pdfrum_form::geom::Plate::rotation: pdfrum_form::geom::Rotation
+impl pdfrum_form::geom::Plate
+pub fn pdfrum_form::geom::Plate::height(self) -> f32
+pub fn pdfrum_form::geom::Plate::new(pdfrum_form::tab::Rect, pdfrum_form::geom::Rotation) -> pdfrum_form::geom::Plate
+pub fn pdfrum_form::geom::Plate::to_page(self, pdfrum_form::event::Point) -> pdfrum_form::event::Point
+pub fn pdfrum_form::geom::Plate::to_plate(self, pdfrum_form::event::Point) -> pdfrum_form::event::Point
+pub fn pdfrum_form::geom::Plate::to_widget(self, pdfrum_form::event::Point) -> pdfrum_form::event::Point
+pub fn pdfrum_form::geom::Plate::width(self) -> f32
+pub fn pdfrum_form::geom::normalize(pdfrum_form::tab::Rect) -> pdfrum_form::tab::Rect
+pub mod pdfrum_form::hit
+pub enum pdfrum_form::hit::LayoutBand
+pub pdfrum_form::hit::LayoutBand::Other = 5
+pub pdfrum_form::hit::LayoutBand::Popup = 1
+pub pdfrum_form::hit::LayoutBand::Widget = 2
+pub struct pdfrum_form::hit::Candidate
+pub pdfrum_form::hit::Candidate::band: pdfrum_form::hit::LayoutBand
+pub pdfrum_form::hit::Candidate::id: pdfrum_form::session::AnnotId
+pub pdfrum_form::hit::Candidate::rect: pdfrum_form::tab::Rect
+pub pdfrum_form::hit::Candidate::widget: core::option::Option<pdfrum_form::hit::WidgetHit>
+pub struct pdfrum_form::hit::Permissions
+pub pdfrum_form::hit::Permissions::fill_form: bool
+pub pdfrum_form::hit::Permissions::modify_annotation: bool
+impl pdfrum_form::hit::Permissions
+pub const pdfrum_form::hit::Permissions::ALL: pdfrum_form::hit::Permissions
+pub const pdfrum_form::hit::Permissions::NONE: pdfrum_form::hit::Permissions
+pub fn pdfrum_form::hit::Permissions::may_interact(self) -> bool
+pub struct pdfrum_form::hit::WidgetHit
+pub pdfrum_form::hit::WidgetHit::hidden: bool
+pub pdfrum_form::hit::WidgetHit::push_button: bool
+pub pdfrum_form::hit::WidgetHit::read_only: bool
+pub pdfrum_form::hit::WidgetHit::signature: bool
+impl pdfrum_form::hit::WidgetHit
+pub fn pdfrum_form::hit::WidgetHit::accepts_click(self, pdfrum_form::hit::Permissions) -> bool
+pub const pdfrum_form::hit::FOCUS_INFLATION: f32
+pub fn pdfrum_form::hit::annot_at_point(&[pdfrum_form::hit::Candidate], core::option::Option<pdfrum_form::session::AnnotId>, f32, f32) -> core::option::Option<pdfrum_form::session::AnnotId>
+pub fn pdfrum_form::hit::contains(pdfrum_form::tab::Rect, f32, f32) -> bool
+pub fn pdfrum_form::hit::draw_order(&[pdfrum_form::hit::Candidate], core::option::Option<pdfrum_form::session::AnnotId>) -> alloc::vec::Vec<pdfrum_form::hit::Candidate>
+pub fn pdfrum_form::hit::hit_order(&[pdfrum_form::hit::Candidate], core::option::Option<pdfrum_form::session::AnnotId>) -> alloc::vec::Vec<pdfrum_form::hit::Candidate>
+pub fn pdfrum_form::hit::inflate(pdfrum_form::tab::Rect, f32) -> pdfrum_form::tab::Rect
+pub fn pdfrum_form::hit::widget_at_point(&[pdfrum_form::hit::Candidate], core::option::Option<pdfrum_form::session::AnnotId>, pdfrum_form::hit::Permissions, f32, f32) -> core::option::Option<pdfrum_form::session::AnnotId>
+pub fn pdfrum_form::hit::widget_z_order_at_point(&[pdfrum_form::hit::Candidate], pdfrum_form::hit::Permissions, f32, f32) -> core::option::Option<usize>
+pub mod pdfrum_form::page
+pub struct pdfrum_form::page::PageForm
+pub pdfrum_form::page::PageForm::candidates: alloc::vec::Vec<pdfrum_form::hit::Candidate>
+pub pdfrum_form::page::PageForm::dicts: alloc::collections::btree::map::BTreeMap<u32, pdfrum_object::dict::Dict>
+pub pdfrum_form::page::PageForm::focusables: alloc::vec::Vec<(pdfrum_doc::annot::Subtype, pdfrum_form::tab::Focusable)>
+pub pdfrum_form::page::PageForm::page: u32
+pub pdfrum_form::page::PageForm::page_height: f32
+pub pdfrum_form::page::PageForm::tab_order: pdfrum_form::tab::TabOrder
+pub pdfrum_form::page::PageForm::widgets: alloc::vec::Vec<pdfrum_form::page::WidgetInfo>
+pub struct pdfrum_form::page::WidgetInfo
+pub pdfrum_form::page::WidgetInfo::dict: pdfrum_object::dict::Dict
+pub pdfrum_form::page::WidgetInfo::field: pdfrum_form::session::FieldId
+pub pdfrum_form::page::WidgetInfo::flags: pdfrum_doc::form::field::FieldFlags
+pub pdfrum_form::page::WidgetInfo::id: pdfrum_form::session::AnnotId
+pub pdfrum_form::page::WidgetInfo::kind: core::option::Option<pdfrum_doc::form::field::FieldKind>
+pub pdfrum_form::page::WidgetInfo::name: alloc::string::String
+pub pdfrum_form::page::WidgetInfo::rect: pdfrum_form::tab::Rect
+pub pdfrum_form::page::WidgetInfo::rotation: pdfrum_form::geom::Rotation
+pub pdfrum_form::page::WidgetInfo::valued: pdfrum_object::dict::Dict
+impl pdfrum_form::page::WidgetInfo
+pub fn pdfrum_form::page::WidgetInfo::choice_config(&self) -> pdfrum_form::field::ChoiceConfig
+pub fn pdfrum_form::page::WidgetInfo::options<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::vec::Vec<pdfrum_form::field::ChoiceOption>
+pub fn pdfrum_form::page::WidgetInfo::selected<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::vec::Vec<usize>
+pub fn pdfrum_form::page::WidgetInfo::text_config<R: pdfrum_object::resolve::Resolve>(&self, &R) -> pdfrum_form::field::TextConfig
+pub fn pdfrum_form::page::WidgetInfo::top_index<R: pdfrum_object::resolve::Resolve>(&self, &R) -> usize
+pub fn pdfrum_form::page::WidgetInfo::value<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::string::String
+pub fn pdfrum_form::page::read<R: pdfrum_object::resolve::Resolve>(u32, &pdfrum_object::dict::Dict, &pdfrum_object::dict::Dict, &R) -> pdfrum_form::page::PageForm
+pub mod pdfrum_form::popup
+pub enum pdfrum_form::popup::Placement
+pub pdfrum_form::popup::Placement::Above
+pub pdfrum_form::popup::Placement::Below
+pub struct pdfrum_form::popup::PopupGeometry
+pub pdfrum_form::popup::PopupGeometry::placement: pdfrum_form::popup::Placement
+pub pdfrum_form::popup::PopupGeometry::rect: pdfrum_form::tab::Rect
+pub pdfrum_form::popup::PopupGeometry::row_height: f32
+impl pdfrum_form::popup::PopupGeometry
+pub fn pdfrum_form::popup::PopupGeometry::plate(&self) -> pdfrum_form::tab::Rect
+pub fn pdfrum_form::popup::PopupGeometry::row_at(&self, f32, f32) -> core::option::Option<usize>
+pub fn pdfrum_form::popup::PopupGeometry::row_rect(&self, usize) -> pdfrum_form::tab::Rect
+pub fn pdfrum_form::popup::PopupGeometry::visible_rows(&self) -> usize
+pub struct pdfrum_form::popup::PopupView
+pub pdfrum_form::popup::PopupView::anchor: pdfrum_form::tab::Rect
+pub pdfrum_form::popup::PopupView::annot: pdfrum_form::session::AnnotId
+pub pdfrum_form::popup::PopupView::edit_text: core::option::Option<alloc::string::String>
+pub pdfrum_form::popup::PopupView::geometry: pdfrum_form::popup::PopupGeometry
+pub pdfrum_form::popup::PopupView::hovered: core::option::Option<usize>
+pub pdfrum_form::popup::PopupView::options: alloc::vec::Vec<alloc::string::String>
+pub pdfrum_form::popup::PopupView::selected: core::option::Option<usize>
+pub pdfrum_form::popup::PopupView::top_visible: usize
+impl pdfrum_form::popup::PopupView
+pub fn pdfrum_form::popup::PopupView::is_banded(&self, usize) -> bool
+pub fn pdfrum_form::popup::PopupView::label_at(&self, usize) -> core::option::Option<&str>
+pub struct pdfrum_form::popup::ScrollView
+pub pdfrum_form::popup::ScrollView::top_visible: usize
+pub pdfrum_form::popup::ScrollView::total: usize
+pub pdfrum_form::popup::ScrollView::visible_rows: usize
+impl pdfrum_form::popup::ScrollView
+pub fn pdfrum_form::popup::ScrollView::is_scrollable(&self) -> bool
+pub const pdfrum_form::popup::LIST_BORDER: f32
+pub const pdfrum_form::popup::MAX_LIST_HEIGHT: f32
+pub const pdfrum_form::popup::MIN_POPUP_ROWS: usize
+pub fn pdfrum_form::popup::option_at(&pdfrum_form::field::ChoiceState, usize) -> core::option::Option<usize>
+pub fn pdfrum_form::popup::place(pdfrum_form::tab::Rect, f32, usize, f32) -> core::option::Option<pdfrum_form::popup::PopupGeometry>
+pub mod pdfrum_form::route
+pub struct pdfrum_form::route::Context<'a, R: pdfrum_object::resolve::Resolve>
+pub pdfrum_form::route::Context::catalog: &'a pdfrum_object::dict::Dict
+pub pdfrum_form::route::Context::fonts: &'a pdfrum_doc::ap::FormFonts
+pub pdfrum_form::route::Context::page: &'a pdfrum_form::page::PageForm
+pub pdfrum_form::route::Context::permissions: pdfrum_form::hit::Permissions
+pub pdfrum_form::route::Context::resolve: &'a R
+pub fn pdfrum_form::route::apply<R: pdfrum_object::resolve::Resolve>(&mut pdfrum_form::session::FormSession, &pdfrum_form::route::Context<'_, R>, &mut dyn pdfrum_form::cascade::Cascade, pdfrum_form::event::Event) -> pdfrum_form::update::Response
+pub fn pdfrum_form::route::choose<R: pdfrum_object::resolve::Resolve>(&mut pdfrum_form::session::FormSession, &pdfrum_form::route::Context<'_, R>, &mut dyn pdfrum_form::cascade::Cascade, pdfrum_form::session::AnnotId, usize) -> pdfrum_form::update::Response
+pub fn pdfrum_form::route::close_popup<R: pdfrum_object::resolve::Resolve>(&mut pdfrum_form::session::FormSession, &pdfrum_form::route::Context<'_, R>, pdfrum_form::session::AnnotId) -> pdfrum_form::update::Response
+pub fn pdfrum_form::route::focus_of<R: pdfrum_object::resolve::Resolve>(&pdfrum_form::session::FormSession, &pdfrum_form::route::Context<'_, R>) -> core::option::Option<pdfrum_doc::ap::Focus>
+pub fn pdfrum_form::route::kill_focus<R: pdfrum_object::resolve::Resolve>(&mut pdfrum_form::session::FormSession, &pdfrum_form::route::Context<'_, R>, &mut dyn pdfrum_form::cascade::Cascade) -> pdfrum_form::update::Response
+pub fn pdfrum_form::route::popup_view<R: pdfrum_object::resolve::Resolve>(&pdfrum_form::session::FormSession, &pdfrum_form::route::Context<'_, R>) -> core::option::Option<pdfrum_form::popup::PopupView>
+pub fn pdfrum_form::route::replace_selection<R: pdfrum_object::resolve::Resolve>(&mut pdfrum_form::session::FormSession, &pdfrum_form::route::Context<'_, R>, pdfrum_form::session::FieldId, &str) -> bool
+pub fn pdfrum_form::route::scroll_view<R: pdfrum_object::resolve::Resolve>(&pdfrum_form::session::FormSession, &pdfrum_form::route::Context<'_, R>, pdfrum_form::session::AnnotId) -> core::option::Option<pdfrum_form::popup::ScrollView>
+pub mod pdfrum_form::session
+pub enum pdfrum_form::session::FocusTarget
+pub pdfrum_form::session::FocusTarget::Annot(pdfrum_form::session::AnnotId)
+pub pdfrum_form::session::FocusTarget::Widget(pdfrum_form::session::FieldId, pdfrum_form::session::AnnotId)
+impl pdfrum_form::session::FocusTarget
+pub fn pdfrum_form::session::FocusTarget::annot(self) -> pdfrum_form::session::AnnotId
+pub fn pdfrum_form::session::FocusTarget::field(self) -> core::option::Option<pdfrum_form::session::FieldId>
+pub struct pdfrum_form::session::AnnotId
+pub pdfrum_form::session::AnnotId::index: u32
+pub pdfrum_form::session::AnnotId::page: u32
+impl pdfrum_form::session::AnnotId
+pub fn pdfrum_form::session::AnnotId::new(u32, u32) -> pdfrum_form::session::AnnotId
+pub struct pdfrum_form::session::DragAnchor
+pub pdfrum_form::session::DragAnchor::field: pdfrum_form::session::FieldId
+pub pdfrum_form::session::DragAnchor::start: pdfrum_doc::vt::hit::Place
+pub struct pdfrum_form::session::FieldId(pub u32)
+pub struct pdfrum_form::session::FormSession
+pub pdfrum_form::session::FormSession::config: pdfrum_form::session::SessionConfig
+pub pdfrum_form::session::FormSession::dirty: alloc::collections::btree::set::BTreeSet<pdfrum_form::session::FieldId>
+pub pdfrum_form::session::FormSession::drag: core::option::Option<pdfrum_form::session::DragAnchor>
+pub pdfrum_form::session::FormSession::fields: alloc::collections::btree::map::BTreeMap<pdfrum_form::session::FieldId, pdfrum_form::field::FieldState>
+pub pdfrum_form::session::FormSession::focus: core::option::Option<pdfrum_form::session::FocusTarget>
+pub pdfrum_form::session::FormSession::hover: core::option::Option<pdfrum_form::session::AnnotId>
+impl pdfrum_form::session::FormSession
+pub fn pdfrum_form::session::FormSession::focused_field(&self) -> core::option::Option<pdfrum_form::session::FieldId>
+pub fn pdfrum_form::session::FormSession::focused_state(&self) -> core::option::Option<&pdfrum_form::field::FieldState>
+pub fn pdfrum_form::session::FormSession::focused_state_mut(&mut self) -> core::option::Option<&mut pdfrum_form::field::FieldState>
+pub fn pdfrum_form::session::FormSession::is_accelerator(&self, pdfrum_form::event::Modifiers) -> bool
+pub fn pdfrum_form::session::FormSession::new() -> pdfrum_form::session::FormSession
+pub fn pdfrum_form::session::FormSession::with_config(pdfrum_form::session::SessionConfig) -> pdfrum_form::session::FormSession
+pub struct pdfrum_form::session::SessionConfig
+pub pdfrum_form::session::SessionConfig::accelerator: pdfrum_form::event::Modifiers
+pub pdfrum_form::session::SessionConfig::focusable: alloc::vec::Vec<pdfrum_doc::annot::Subtype>
+pub pdfrum_form::session::SessionConfig::max_calculate_depth: u32
+pub pdfrum_form::session::SessionConfig::max_undo_items: u32
+pub pdfrum_form::session::SessionConfig::redo_on_ctrl_y: bool
+impl pdfrum_form::session::SessionConfig
+pub fn pdfrum_form::session::SessionConfig::apple() -> pdfrum_form::session::SessionConfig
+impl core::default::Default for pdfrum_form::session::SessionConfig
+pub fn pdfrum_form::session::SessionConfig::default() -> pdfrum_form::session::SessionConfig
+pub mod pdfrum_form::tab
+pub enum pdfrum_form::tab::TabOrder
+pub pdfrum_form::tab::TabOrder::Column
+pub pdfrum_form::tab::TabOrder::Row
+pub pdfrum_form::tab::TabOrder::Structure
+impl pdfrum_form::tab::TabOrder
+pub fn pdfrum_form::tab::TabOrder::from_tabs(core::option::Option<&[u8]>) -> pdfrum_form::tab::TabOrder
+pub struct pdfrum_form::tab::FocusRing
+pub pdfrum_form::tab::FocusRing::degenerate: bool
+pub pdfrum_form::tab::FocusRing::order: alloc::vec::Vec<pdfrum_form::session::AnnotId>
+impl pdfrum_form::tab::FocusRing
+pub fn pdfrum_form::tab::FocusRing::build(&[pdfrum_form::tab::Focusable], pdfrum_form::tab::TabOrder) -> pdfrum_form::tab::FocusRing
+pub fn pdfrum_form::tab::FocusRing::first(&self) -> core::option::Option<pdfrum_form::session::AnnotId>
+pub fn pdfrum_form::tab::FocusRing::is_empty(&self) -> bool
+pub fn pdfrum_form::tab::FocusRing::last(&self) -> core::option::Option<pdfrum_form::session::AnnotId>
+pub fn pdfrum_form::tab::FocusRing::len(&self) -> usize
+pub fn pdfrum_form::tab::FocusRing::next(&self, pdfrum_form::session::AnnotId) -> core::option::Option<pdfrum_form::session::AnnotId>
+pub fn pdfrum_form::tab::FocusRing::prev(&self, pdfrum_form::session::AnnotId) -> core::option::Option<pdfrum_form::session::AnnotId>
+pub struct pdfrum_form::tab::Focusable
+pub pdfrum_form::tab::Focusable::id: pdfrum_form::session::AnnotId
+pub pdfrum_form::tab::Focusable::rect: pdfrum_form::tab::Rect
+pub struct pdfrum_form::tab::Rect
+pub pdfrum_form::tab::Rect::bottom: f32
+pub pdfrum_form::tab::Rect::left: f32
+pub pdfrum_form::tab::Rect::right: f32
+pub pdfrum_form::tab::Rect::top: f32
+impl pdfrum_form::tab::Rect
+pub fn pdfrum_form::tab::Rect::center_x(self) -> f32
+pub fn pdfrum_form::tab::Rect::center_y(self) -> f32
+pub fn pdfrum_form::tab::Rect::new(f32, f32, f32, f32) -> pdfrum_form::tab::Rect
+pub mod pdfrum_form::update
+pub enum pdfrum_form::update::UpdateKind
+pub pdfrum_form::update::UpdateKind::ActionRequested
+pub pdfrum_form::update::UpdateKind::ActionRequested::action: alloc::boxed::Box<pdfrum_doc::nav::action::Action>
+pub pdfrum_form::update::UpdateKind::ActionRequested::modifiers: pdfrum_form::event::Modifiers
+pub pdfrum_form::update::UpdateKind::FocusChanged
+pub pdfrum_form::update::UpdateKind::FocusChanged::from: core::option::Option<pdfrum_form::session::AnnotId>
+pub pdfrum_form::update::UpdateKind::FocusChanged::to: core::option::Option<pdfrum_form::session::AnnotId>
+pub pdfrum_form::update::UpdateKind::LiveEdit(alloc::boxed::Box<pdfrum_doc::ap::GeneratedAp>)
+pub pdfrum_form::update::UpdateKind::Regenerated(alloc::boxed::Box<pdfrum_doc::ap::GeneratedAp>)
+pub pdfrum_form::update::UpdateKind::RevertedToFileAppearance
+impl pdfrum_form::update::UpdateKind
+pub fn pdfrum_form::update::UpdateKind::appearance(&self) -> core::option::Option<&pdfrum_doc::ap::GeneratedAp>
+pub fn pdfrum_form::update::UpdateKind::is_live_edit(&self) -> bool
+pub struct pdfrum_form::update::AppearanceUpdate
+pub pdfrum_form::update::AppearanceUpdate::annot: pdfrum_form::session::AnnotId
+pub pdfrum_form::update::AppearanceUpdate::kind: pdfrum_form::update::UpdateKind
+impl pdfrum_form::update::AppearanceUpdate
+pub fn pdfrum_form::update::AppearanceUpdate::new(pdfrum_form::session::AnnotId, pdfrum_form::update::UpdateKind) -> pdfrum_form::update::AppearanceUpdate
+pub struct pdfrum_form::update::Response
+pub pdfrum_form::update::Response::consumed: bool
+pub pdfrum_form::update::Response::updates: alloc::vec::Vec<pdfrum_form::update::AppearanceUpdate>
+impl pdfrum_form::update::Response
+pub fn pdfrum_form::update::Response::absorb(&mut self, pdfrum_form::update::Response)
+pub fn pdfrum_form::update::Response::actions(&self) -> impl core::iter::traits::iterator::Iterator<Item = (&pdfrum_doc::nav::action::Action, pdfrum_form::event::Modifiers)>
+pub fn pdfrum_form::update::Response::consumed() -> pdfrum_form::update::Response
+pub fn pdfrum_form::update::Response::ignored() -> pdfrum_form::update::Response
+pub fn pdfrum_form::update::Response::push(&mut self, pdfrum_form::update::AppearanceUpdate)
+pub fn pdfrum_form::update::Response::with(alloc::vec::Vec<pdfrum_form::update::AppearanceUpdate>) -> pdfrum_form::update::Response
+pub enum pdfrum_form::Button
+pub pdfrum_form::Button::Left
+pub pdfrum_form::Button::Right
+#[non_exhaustive] pub enum pdfrum_form::Error
+pub pdfrum_form::Error::NoSuchField
+pub pdfrum_form::Error::NoSuchField::field: u32
+pub pdfrum_form::Error::NoSuchPage
+pub pdfrum_form::Error::NoSuchPage::page: u32
+pub enum pdfrum_form::Event
+pub pdfrum_form::Event::Char
+pub pdfrum_form::Event::Char::ch: char
+pub pdfrum_form::Event::Char::modifiers: pdfrum_form::event::Modifiers
+pub pdfrum_form::Event::DoubleClick
+pub pdfrum_form::Event::DoubleClick::at: pdfrum_form::event::Point
+pub pdfrum_form::Event::DoubleClick::modifiers: pdfrum_form::event::Modifiers
+pub pdfrum_form::Event::Focus
+pub pdfrum_form::Event::Focus::at: pdfrum_form::event::Point
+pub pdfrum_form::Event::Focus::modifiers: pdfrum_form::event::Modifiers
+pub pdfrum_form::Event::KeyDown
+pub pdfrum_form::Event::KeyDown::key: pdfrum_form::event::Key
+pub pdfrum_form::Event::KeyDown::modifiers: pdfrum_form::event::Modifiers
+pub pdfrum_form::Event::MouseDown
+pub pdfrum_form::Event::MouseDown::at: pdfrum_form::event::Point
+pub pdfrum_form::Event::MouseDown::button: pdfrum_form::event::Button
+pub pdfrum_form::Event::MouseDown::modifiers: pdfrum_form::event::Modifiers
+pub pdfrum_form::Event::MouseMove
+pub pdfrum_form::Event::MouseMove::at: pdfrum_form::event::Point
+pub pdfrum_form::Event::MouseMove::modifiers: pdfrum_form::event::Modifiers
+pub pdfrum_form::Event::MouseUp
+pub pdfrum_form::Event::MouseUp::at: pdfrum_form::event::Point
+pub pdfrum_form::Event::MouseUp::button: pdfrum_form::event::Button
+pub pdfrum_form::Event::MouseUp::modifiers: pdfrum_form::event::Modifiers
+pub pdfrum_form::Event::MouseWheel
+pub pdfrum_form::Event::MouseWheel::at: pdfrum_form::event::Point
+pub pdfrum_form::Event::MouseWheel::delta: (i32, i32)
+pub pdfrum_form::Event::MouseWheel::modifiers: pdfrum_form::event::Modifiers
+pub enum pdfrum_form::FieldState
+pub pdfrum_form::FieldState::Button(pdfrum_form::field::button::ButtonState)
+pub pdfrum_form::FieldState::Choice(pdfrum_form::field::ChoiceState)
+pub pdfrum_form::FieldState::Text(pdfrum_form::field::TextState)
+pub pdfrum_form::FieldState::Toggle(pdfrum_form::field::toggle::ToggleState)
+pub enum pdfrum_form::FocusTarget
+pub pdfrum_form::FocusTarget::Annot(pdfrum_form::session::AnnotId)
+pub pdfrum_form::FocusTarget::Widget(pdfrum_form::session::FieldId, pdfrum_form::session::AnnotId)
+impl pdfrum_form::session::FocusTarget
+pub fn pdfrum_form::session::FocusTarget::annot(self) -> pdfrum_form::session::AnnotId
+pub fn pdfrum_form::session::FocusTarget::field(self) -> core::option::Option<pdfrum_form::session::FieldId>
+pub enum pdfrum_form::KeystrokeOutcome
+pub pdfrum_form::KeystrokeOutcome::Accept(pdfrum_form::cascade::Keystroke)
+pub pdfrum_form::KeystrokeOutcome::Reject
+pub enum pdfrum_form::LayoutBand
+pub pdfrum_form::LayoutBand::Other = 5
+pub pdfrum_form::LayoutBand::Popup = 1
+pub pdfrum_form::LayoutBand::Widget = 2
+pub enum pdfrum_form::Placement
+pub pdfrum_form::Placement::Above
+pub pdfrum_form::Placement::Below
+pub enum pdfrum_form::Rotation
+pub pdfrum_form::Rotation::Half
+pub pdfrum_form::Rotation::None
+pub pdfrum_form::Rotation::Quarter
+pub pdfrum_form::Rotation::ThreeQuarter
+impl pdfrum_form::geom::Rotation
+pub fn pdfrum_form::geom::Rotation::degrees(self) -> i32
+pub fn pdfrum_form::geom::Rotation::from_degrees(i32) -> pdfrum_form::geom::Rotation
+pub fn pdfrum_form::geom::Rotation::swaps_axes(self) -> bool
+pub enum pdfrum_form::TabOrder
+pub pdfrum_form::TabOrder::Column
+pub pdfrum_form::TabOrder::Row
+pub pdfrum_form::TabOrder::Structure
+impl pdfrum_form::tab::TabOrder
+pub fn pdfrum_form::tab::TabOrder::from_tabs(core::option::Option<&[u8]>) -> pdfrum_form::tab::TabOrder
+pub enum pdfrum_form::UndoItem
+pub pdfrum_form::UndoItem::Backspace
+pub pdfrum_form::UndoItem::Backspace::before: pdfrum_form::edit::select::Selection
+pub pdfrum_form::UndoItem::Backspace::ch: char
+pub pdfrum_form::UndoItem::Backspace::new: pdfrum_doc::vt::hit::Place
+pub pdfrum_form::UndoItem::Backspace::old: pdfrum_doc::vt::hit::Place
+pub pdfrum_form::UndoItem::Backspace::section_break: bool
+pub pdfrum_form::UndoItem::Clear
+pub pdfrum_form::UndoItem::Clear::before: pdfrum_form::edit::select::Selection
+pub pdfrum_form::UndoItem::Clear::range: pdfrum_form::edit::place::Range
+pub pdfrum_form::UndoItem::Clear::text: alloc::string::String
+pub pdfrum_form::UndoItem::Delete
+pub pdfrum_form::UndoItem::Delete::before: pdfrum_form::edit::select::Selection
+pub pdfrum_form::UndoItem::Delete::ch: char
+pub pdfrum_form::UndoItem::Delete::new: pdfrum_doc::vt::hit::Place
+pub pdfrum_form::UndoItem::Delete::old: pdfrum_doc::vt::hit::Place
+pub pdfrum_form::UndoItem::Delete::section_break: bool
+pub pdfrum_form::UndoItem::GroupBoundary
+pub pdfrum_form::UndoItem::InsertReturn
+pub pdfrum_form::UndoItem::InsertReturn::before: pdfrum_form::edit::select::Selection
+pub pdfrum_form::UndoItem::InsertReturn::new: pdfrum_doc::vt::hit::Place
+pub pdfrum_form::UndoItem::InsertReturn::old: pdfrum_doc::vt::hit::Place
+pub pdfrum_form::UndoItem::InsertText
+pub pdfrum_form::UndoItem::InsertText::before: pdfrum_form::edit::select::Selection
+pub pdfrum_form::UndoItem::InsertText::new: pdfrum_doc::vt::hit::Place
+pub pdfrum_form::UndoItem::InsertText::old: pdfrum_doc::vt::hit::Place
+pub pdfrum_form::UndoItem::InsertText::text: alloc::string::String
+pub pdfrum_form::UndoItem::InsertWord
+pub pdfrum_form::UndoItem::InsertWord::before: pdfrum_form::edit::select::Selection
+pub pdfrum_form::UndoItem::InsertWord::ch: char
+pub pdfrum_form::UndoItem::InsertWord::new: pdfrum_doc::vt::hit::Place
+pub pdfrum_form::UndoItem::InsertWord::old: pdfrum_doc::vt::hit::Place
+impl pdfrum_form::edit::undo::UndoItem
+pub fn pdfrum_form::edit::undo::UndoItem::before(&self) -> core::option::Option<pdfrum_form::edit::select::Selection>
+pub fn pdfrum_form::edit::undo::UndoItem::is_boundary(&self) -> bool
+pub enum pdfrum_form::UpdateKind
+pub pdfrum_form::UpdateKind::ActionRequested
+pub pdfrum_form::UpdateKind::ActionRequested::action: alloc::boxed::Box<pdfrum_doc::nav::action::Action>
+pub pdfrum_form::UpdateKind::ActionRequested::modifiers: pdfrum_form::event::Modifiers
+pub pdfrum_form::UpdateKind::FocusChanged
+pub pdfrum_form::UpdateKind::FocusChanged::from: core::option::Option<pdfrum_form::session::AnnotId>
+pub pdfrum_form::UpdateKind::FocusChanged::to: core::option::Option<pdfrum_form::session::AnnotId>
+pub pdfrum_form::UpdateKind::LiveEdit(alloc::boxed::Box<pdfrum_doc::ap::GeneratedAp>)
+pub pdfrum_form::UpdateKind::Regenerated(alloc::boxed::Box<pdfrum_doc::ap::GeneratedAp>)
+pub pdfrum_form::UpdateKind::RevertedToFileAppearance
+impl pdfrum_form::update::UpdateKind
+pub fn pdfrum_form::update::UpdateKind::appearance(&self) -> core::option::Option<&pdfrum_doc::ap::GeneratedAp>
+pub fn pdfrum_form::update::UpdateKind::is_live_edit(&self) -> bool
+pub struct pdfrum_form::AnnotId
+pub pdfrum_form::AnnotId::index: u32
+pub pdfrum_form::AnnotId::page: u32
+impl pdfrum_form::session::AnnotId
+pub fn pdfrum_form::session::AnnotId::new(u32, u32) -> pdfrum_form::session::AnnotId
+pub struct pdfrum_form::AppearanceUpdate
+pub pdfrum_form::AppearanceUpdate::annot: pdfrum_form::session::AnnotId
+pub pdfrum_form::AppearanceUpdate::kind: pdfrum_form::update::UpdateKind
+impl pdfrum_form::update::AppearanceUpdate
+pub fn pdfrum_form::update::AppearanceUpdate::new(pdfrum_form::session::AnnotId, pdfrum_form::update::UpdateKind) -> pdfrum_form::update::AppearanceUpdate
+pub struct pdfrum_form::Candidate
+pub pdfrum_form::Candidate::band: pdfrum_form::hit::LayoutBand
+pub pdfrum_form::Candidate::id: pdfrum_form::session::AnnotId
+pub pdfrum_form::Candidate::rect: pdfrum_form::tab::Rect
+pub pdfrum_form::Candidate::widget: core::option::Option<pdfrum_form::hit::WidgetHit>
+pub struct pdfrum_form::ChoiceConfig
+pub pdfrum_form::ChoiceConfig::combo: bool
+pub pdfrum_form::ChoiceConfig::editable: bool
+pub pdfrum_form::ChoiceConfig::multi_select: bool
+pub pdfrum_form::ChoiceConfig::read_only: bool
+impl pdfrum_form::field::ChoiceConfig
+pub fn pdfrum_form::field::ChoiceConfig::read(pdfrum_doc::form::field::FieldFlags) -> pdfrum_form::field::ChoiceConfig
+pub struct pdfrum_form::ChoiceState
+pub pdfrum_form::ChoiceState::anchor: core::option::Option<usize>
+pub pdfrum_form::ChoiceState::caret_index: core::option::Option<usize>
+pub pdfrum_form::ChoiceState::config: pdfrum_form::field::ChoiceConfig
+pub pdfrum_form::ChoiceState::edit: core::option::Option<alloc::boxed::Box<pdfrum_form::edit::ops::TextEdit>>
+pub pdfrum_form::ChoiceState::edit_text: alloc::string::String
+pub pdfrum_form::ChoiceState::hovered: core::option::Option<usize>
+pub pdfrum_form::ChoiceState::options: alloc::vec::Vec<pdfrum_form::field::ChoiceOption>
+pub pdfrum_form::ChoiceState::popup_open: bool
+pub pdfrum_form::ChoiceState::selected: alloc::collections::btree::set::BTreeSet<usize>
+pub pdfrum_form::ChoiceState::top_visible: usize
+impl pdfrum_form::field::ChoiceState
+pub fn pdfrum_form::field::ChoiceState::focused_text(&self) -> alloc::string::String
+pub fn pdfrum_form::field::ChoiceState::new(alloc::vec::Vec<pdfrum_form::field::ChoiceOption>, pdfrum_form::field::ChoiceConfig) -> pdfrum_form::field::ChoiceState
+pub struct pdfrum_form::CommitOutcome
+pub pdfrum_form::CommitOutcome::committed: bool
+pub pdfrum_form::CommitOutcome::display: core::option::Option<alloc::string::String>
+pub pdfrum_form::CommitOutcome::reverted: bool
+pub pdfrum_form::CommitOutcome::stored: core::option::Option<alloc::string::String>
+pub pdfrum_form::CommitOutcome::writes: alloc::vec::Vec<(u32, alloc::string::String)>
+impl pdfrum_form::commit::CommitOutcome
+pub fn pdfrum_form::commit::CommitOutcome::keeps_focus(&self) -> bool
+pub fn pdfrum_form::commit::CommitOutcome::unchanged() -> pdfrum_form::commit::CommitOutcome
+pub struct pdfrum_form::Context<'a, R: pdfrum_object::resolve::Resolve>
+pub pdfrum_form::Context::catalog: &'a pdfrum_object::dict::Dict
+pub pdfrum_form::Context::fonts: &'a pdfrum_doc::ap::FormFonts
+pub pdfrum_form::Context::page: &'a pdfrum_form::page::PageForm
+pub pdfrum_form::Context::permissions: pdfrum_form::hit::Permissions
+pub pdfrum_form::Context::resolve: &'a R
+pub struct pdfrum_form::DragAnchor
+pub pdfrum_form::DragAnchor::field: pdfrum_form::session::FieldId
+pub pdfrum_form::DragAnchor::start: pdfrum_doc::vt::hit::Place
+pub struct pdfrum_form::FieldId(pub u32)
+pub struct pdfrum_form::FieldRef
+pub pdfrum_form::FieldRef::index: u32
+pub pdfrum_form::FieldRef::name: alloc::string::String
+pub struct pdfrum_form::FieldWrites
+impl pdfrum_form::cascade::FieldWrites
+pub fn pdfrum_form::cascade::FieldWrites::can_recurse(&self) -> bool
+pub fn pdfrum_form::cascade::FieldWrites::depth(&self) -> u32
+pub fn pdfrum_form::cascade::FieldWrites::enter(&mut self) -> bool
+pub fn pdfrum_form::cascade::FieldWrites::is_empty(&self) -> bool
+pub fn pdfrum_form::cascade::FieldWrites::leave(&mut self)
+pub fn pdfrum_form::cascade::FieldWrites::set(&mut self, u32, impl core::convert::Into<alloc::string::String>)
+pub fn pdfrum_form::cascade::FieldWrites::with_max_depth(u32) -> pdfrum_form::cascade::FieldWrites
+pub fn pdfrum_form::cascade::FieldWrites::writes(&self) -> impl core::iter::traits::iterator::Iterator<Item = (u32, &str)>
+pub struct pdfrum_form::FocusChange
+pub pdfrum_form::FocusChange::clear_undo: bool
+pub pdfrum_form::FocusChange::commit_outgoing: bool
+pub pdfrum_form::FocusChange::from: core::option::Option<pdfrum_form::session::FocusTarget>
+pub pdfrum_form::FocusChange::to: core::option::Option<pdfrum_form::session::FocusTarget>
+impl pdfrum_form::focus::FocusChange
+pub fn pdfrum_form::focus::FocusChange::moved(self) -> bool
+pub fn pdfrum_form::focus::FocusChange::none(core::option::Option<pdfrum_form::session::FocusTarget>) -> pdfrum_form::focus::FocusChange
+pub struct pdfrum_form::FocusRing
+pub pdfrum_form::FocusRing::degenerate: bool
+pub pdfrum_form::FocusRing::order: alloc::vec::Vec<pdfrum_form::session::AnnotId>
+impl pdfrum_form::tab::FocusRing
+pub fn pdfrum_form::tab::FocusRing::build(&[pdfrum_form::tab::Focusable], pdfrum_form::tab::TabOrder) -> pdfrum_form::tab::FocusRing
+pub fn pdfrum_form::tab::FocusRing::first(&self) -> core::option::Option<pdfrum_form::session::AnnotId>
+pub fn pdfrum_form::tab::FocusRing::is_empty(&self) -> bool
+pub fn pdfrum_form::tab::FocusRing::last(&self) -> core::option::Option<pdfrum_form::session::AnnotId>
+pub fn pdfrum_form::tab::FocusRing::len(&self) -> usize
+pub fn pdfrum_form::tab::FocusRing::next(&self, pdfrum_form::session::AnnotId) -> core::option::Option<pdfrum_form::session::AnnotId>
+pub fn pdfrum_form::tab::FocusRing::prev(&self, pdfrum_form::session::AnnotId) -> core::option::Option<pdfrum_form::session::AnnotId>
+pub struct pdfrum_form::Focusable
+pub pdfrum_form::Focusable::id: pdfrum_form::session::AnnotId
+pub pdfrum_form::Focusable::rect: pdfrum_form::tab::Rect
+pub struct pdfrum_form::FormSession
+pub pdfrum_form::FormSession::config: pdfrum_form::session::SessionConfig
+pub pdfrum_form::FormSession::dirty: alloc::collections::btree::set::BTreeSet<pdfrum_form::session::FieldId>
+pub pdfrum_form::FormSession::drag: core::option::Option<pdfrum_form::session::DragAnchor>
+pub pdfrum_form::FormSession::fields: alloc::collections::btree::map::BTreeMap<pdfrum_form::session::FieldId, pdfrum_form::field::FieldState>
+pub pdfrum_form::FormSession::focus: core::option::Option<pdfrum_form::session::FocusTarget>
+pub pdfrum_form::FormSession::hover: core::option::Option<pdfrum_form::session::AnnotId>
+impl pdfrum_form::session::FormSession
+pub fn pdfrum_form::session::FormSession::focused_field(&self) -> core::option::Option<pdfrum_form::session::FieldId>
+pub fn pdfrum_form::session::FormSession::focused_state(&self) -> core::option::Option<&pdfrum_form::field::FieldState>
+pub fn pdfrum_form::session::FormSession::focused_state_mut(&mut self) -> core::option::Option<&mut pdfrum_form::field::FieldState>
+pub fn pdfrum_form::session::FormSession::is_accelerator(&self, pdfrum_form::event::Modifiers) -> bool
+pub fn pdfrum_form::session::FormSession::new() -> pdfrum_form::session::FormSession
+pub fn pdfrum_form::session::FormSession::with_config(pdfrum_form::session::SessionConfig) -> pdfrum_form::session::FormSession
+pub struct pdfrum_form::Key(pub u16)
+impl pdfrum_form::event::Key
+pub const pdfrum_form::event::Key::A: pdfrum_form::event::Key
+pub const pdfrum_form::event::Key::BACK: pdfrum_form::event::Key
+pub const pdfrum_form::event::Key::CLEAR: pdfrum_form::event::Key
+pub const pdfrum_form::event::Key::CONTROL: pdfrum_form::event::Key
+pub const pdfrum_form::event::Key::DELETE: pdfrum_form::event::Key
+pub const pdfrum_form::event::Key::DOWN: pdfrum_form::event::Key
+pub const pdfrum_form::event::Key::END: pdfrum_form::event::Key
+pub const pdfrum_form::event::Key::ESCAPE: pdfrum_form::event::Key
+pub const pdfrum_form::event::Key::HOME: pdfrum_form::event::Key
+pub const pdfrum_form::event::Key::INSERT: pdfrum_form::event::Key
+pub const pdfrum_form::event::Key::LEFT: pdfrum_form::event::Key
+pub const pdfrum_form::event::Key::NEWLINE: pdfrum_form::event::Key
+pub const pdfrum_form::event::Key::NEXT: pdfrum_form::event::Key
+pub const pdfrum_form::event::Key::PRIOR: pdfrum_form::event::Key
+pub const pdfrum_form::event::Key::RETURN: pdfrum_form::event::Key
+pub const pdfrum_form::event::Key::RIGHT: pdfrum_form::event::Key
+pub const pdfrum_form::event::Key::SHIFT: pdfrum_form::event::Key
+pub const pdfrum_form::event::Key::SPACE: pdfrum_form::event::Key
+pub const pdfrum_form::event::Key::TAB: pdfrum_form::event::Key
+pub const pdfrum_form::event::Key::UNKNOWN: pdfrum_form::event::Key
+pub const pdfrum_form::event::Key::UP: pdfrum_form::event::Key
+pub const pdfrum_form::event::Key::Y: pdfrum_form::event::Key
+pub const pdfrum_form::event::Key::Z: pdfrum_form::event::Key
+pub struct pdfrum_form::Keystroke
+pub pdfrum_form::Keystroke::change: alloc::string::String
+pub pdfrum_form::Keystroke::selection_end: i32
+pub pdfrum_form::Keystroke::selection_start: i32
+pub pdfrum_form::Keystroke::value: alloc::string::String
+impl pdfrum_form::cascade::Keystroke
+pub fn pdfrum_form::cascade::Keystroke::applied(&self) -> alloc::string::String
+pub fn pdfrum_form::cascade::Keystroke::of(&pdfrum_form::edit::ops::TextEdit, impl core::convert::Into<alloc::string::String>) -> pdfrum_form::cascade::Keystroke
+pub struct pdfrum_form::Modifiers(pub u32)
+impl pdfrum_form::event::Modifiers
+pub const pdfrum_form::event::Modifiers::ALT: pdfrum_form::event::Modifiers
+pub const pdfrum_form::event::Modifiers::AUTO_REPEAT: pdfrum_form::event::Modifiers
+pub const pdfrum_form::event::Modifiers::CONTROL: pdfrum_form::event::Modifiers
+pub const pdfrum_form::event::Modifiers::KEYPAD: pdfrum_form::event::Modifiers
+pub const pdfrum_form::event::Modifiers::LEFT_BUTTON: pdfrum_form::event::Modifiers
+pub const pdfrum_form::event::Modifiers::META: pdfrum_form::event::Modifiers
+pub const pdfrum_form::event::Modifiers::MIDDLE_BUTTON: pdfrum_form::event::Modifiers
+pub const pdfrum_form::event::Modifiers::NONE: pdfrum_form::event::Modifiers
+pub const pdfrum_form::event::Modifiers::RIGHT_BUTTON: pdfrum_form::event::Modifiers
+pub const pdfrum_form::event::Modifiers::SHIFT: pdfrum_form::event::Modifiers
+pub fn pdfrum_form::event::Modifiers::contains(self, pdfrum_form::event::Modifiers) -> bool
+pub fn pdfrum_form::event::Modifiers::is_empty(self) -> bool
+pub fn pdfrum_form::event::Modifiers::union(self, pdfrum_form::event::Modifiers) -> pdfrum_form::event::Modifiers
+pub fn pdfrum_form::event::Modifiers::without(self, pdfrum_form::event::Modifiers) -> pdfrum_form::event::Modifiers
+impl core::ops::bit::BitOr for pdfrum_form::event::Modifiers
+pub type pdfrum_form::event::Modifiers::Output = pdfrum_form::event::Modifiers
+pub fn pdfrum_form::event::Modifiers::bitor(self, pdfrum_form::event::Modifiers) -> pdfrum_form::event::Modifiers
+pub struct pdfrum_form::NoScripts
+impl pdfrum_form::cascade::Cascade for pdfrum_form::cascade::NoScripts
+pub fn pdfrum_form::cascade::NoScripts::calculate(&mut self, &mut pdfrum_form::cascade::FieldWrites, &pdfrum_form::cascade::FieldRef)
+pub fn pdfrum_form::cascade::NoScripts::format(&mut self, &pdfrum_form::cascade::FieldRef, &str) -> core::option::Option<alloc::string::String>
+pub fn pdfrum_form::cascade::NoScripts::keystroke(&mut self, &pdfrum_form::cascade::FieldRef, pdfrum_form::cascade::Keystroke) -> pdfrum_form::cascade::KeystrokeOutcome
+pub fn pdfrum_form::cascade::NoScripts::keystroke_commit(&mut self, &pdfrum_form::cascade::FieldRef, &str) -> bool
+pub fn pdfrum_form::cascade::NoScripts::validate(&mut self, &pdfrum_form::cascade::FieldRef, &str) -> bool
+pub struct pdfrum_form::PageForm
+pub pdfrum_form::PageForm::candidates: alloc::vec::Vec<pdfrum_form::hit::Candidate>
+pub pdfrum_form::PageForm::dicts: alloc::collections::btree::map::BTreeMap<u32, pdfrum_object::dict::Dict>
+pub pdfrum_form::PageForm::focusables: alloc::vec::Vec<(pdfrum_doc::annot::Subtype, pdfrum_form::tab::Focusable)>
+pub pdfrum_form::PageForm::page: u32
+pub pdfrum_form::PageForm::page_height: f32
+pub pdfrum_form::PageForm::tab_order: pdfrum_form::tab::TabOrder
+pub pdfrum_form::PageForm::widgets: alloc::vec::Vec<pdfrum_form::page::WidgetInfo>
+pub struct pdfrum_form::Permissions
+pub pdfrum_form::Permissions::fill_form: bool
+pub pdfrum_form::Permissions::modify_annotation: bool
+impl pdfrum_form::hit::Permissions
+pub const pdfrum_form::hit::Permissions::ALL: pdfrum_form::hit::Permissions
+pub const pdfrum_form::hit::Permissions::NONE: pdfrum_form::hit::Permissions
+pub fn pdfrum_form::hit::Permissions::may_interact(self) -> bool
+pub struct pdfrum_form::Plate
+pub pdfrum_form::Plate::rect: pdfrum_form::tab::Rect
+pub pdfrum_form::Plate::rotation: pdfrum_form::geom::Rotation
+impl pdfrum_form::geom::Plate
+pub fn pdfrum_form::geom::Plate::height(self) -> f32
+pub fn pdfrum_form::geom::Plate::new(pdfrum_form::tab::Rect, pdfrum_form::geom::Rotation) -> pdfrum_form::geom::Plate
+pub fn pdfrum_form::geom::Plate::to_page(self, pdfrum_form::event::Point) -> pdfrum_form::event::Point
+pub fn pdfrum_form::geom::Plate::to_plate(self, pdfrum_form::event::Point) -> pdfrum_form::event::Point
+pub fn pdfrum_form::geom::Plate::to_widget(self, pdfrum_form::event::Point) -> pdfrum_form::event::Point
+pub fn pdfrum_form::geom::Plate::width(self) -> f32
+pub struct pdfrum_form::Point
+pub pdfrum_form::Point::x: f32
+pub pdfrum_form::Point::y: f32
+impl pdfrum_form::event::Point
+pub fn pdfrum_form::event::Point::new(f32, f32) -> pdfrum_form::event::Point
+pub struct pdfrum_form::PopupGeometry
+pub pdfrum_form::PopupGeometry::placement: pdfrum_form::popup::Placement
+pub pdfrum_form::PopupGeometry::rect: pdfrum_form::tab::Rect
+pub pdfrum_form::PopupGeometry::row_height: f32
+impl pdfrum_form::popup::PopupGeometry
+pub fn pdfrum_form::popup::PopupGeometry::plate(&self) -> pdfrum_form::tab::Rect
+pub fn pdfrum_form::popup::PopupGeometry::row_at(&self, f32, f32) -> core::option::Option<usize>
+pub fn pdfrum_form::popup::PopupGeometry::row_rect(&self, usize) -> pdfrum_form::tab::Rect
+pub fn pdfrum_form::popup::PopupGeometry::visible_rows(&self) -> usize
+pub struct pdfrum_form::PopupView
+pub pdfrum_form::PopupView::anchor: pdfrum_form::tab::Rect
+pub pdfrum_form::PopupView::annot: pdfrum_form::session::AnnotId
+pub pdfrum_form::PopupView::edit_text: core::option::Option<alloc::string::String>
+pub pdfrum_form::PopupView::geometry: pdfrum_form::popup::PopupGeometry
+pub pdfrum_form::PopupView::hovered: core::option::Option<usize>
+pub pdfrum_form::PopupView::options: alloc::vec::Vec<alloc::string::String>
+pub pdfrum_form::PopupView::selected: core::option::Option<usize>
+pub pdfrum_form::PopupView::top_visible: usize
+impl pdfrum_form::popup::PopupView
+pub fn pdfrum_form::popup::PopupView::is_banded(&self, usize) -> bool
+pub fn pdfrum_form::popup::PopupView::label_at(&self, usize) -> core::option::Option<&str>
+pub struct pdfrum_form::Range
+impl pdfrum_form::edit::place::Range
+pub fn pdfrum_form::edit::place::Range::begin(self) -> pdfrum_doc::vt::hit::Place
+pub fn pdfrum_form::edit::place::Range::empty_at(pdfrum_doc::vt::hit::Place) -> pdfrum_form::edit::place::Range
+pub fn pdfrum_form::edit::place::Range::end(self) -> pdfrum_doc::vt::hit::Place
+pub fn pdfrum_form::edit::place::Range::is_empty(self) -> bool
+pub fn pdfrum_form::edit::place::Range::new(pdfrum_doc::vt::hit::Place, pdfrum_doc::vt::hit::Place) -> pdfrum_form::edit::place::Range
+pub struct pdfrum_form::Response
+pub pdfrum_form::Response::consumed: bool
+pub pdfrum_form::Response::updates: alloc::vec::Vec<pdfrum_form::update::AppearanceUpdate>
+impl pdfrum_form::update::Response
+pub fn pdfrum_form::update::Response::absorb(&mut self, pdfrum_form::update::Response)
+pub fn pdfrum_form::update::Response::actions(&self) -> impl core::iter::traits::iterator::Iterator<Item = (&pdfrum_doc::nav::action::Action, pdfrum_form::event::Modifiers)>
+pub fn pdfrum_form::update::Response::consumed() -> pdfrum_form::update::Response
+pub fn pdfrum_form::update::Response::ignored() -> pdfrum_form::update::Response
+pub fn pdfrum_form::update::Response::push(&mut self, pdfrum_form::update::AppearanceUpdate)
+pub fn pdfrum_form::update::Response::with(alloc::vec::Vec<pdfrum_form::update::AppearanceUpdate>) -> pdfrum_form::update::Response
+pub struct pdfrum_form::ScrollView
+pub pdfrum_form::ScrollView::top_visible: usize
+pub pdfrum_form::ScrollView::total: usize
+pub pdfrum_form::ScrollView::visible_rows: usize
+impl pdfrum_form::popup::ScrollView
+pub fn pdfrum_form::popup::ScrollView::is_scrollable(&self) -> bool
+pub struct pdfrum_form::Selection
+pub pdfrum_form::Selection::begin: pdfrum_doc::vt::hit::Place
+pub pdfrum_form::Selection::end: pdfrum_doc::vt::hit::Place
+impl pdfrum_form::edit::select::Selection
+pub fn pdfrum_form::edit::select::Selection::collapsed_at(pdfrum_doc::vt::hit::Place) -> pdfrum_form::edit::select::Selection
+pub fn pdfrum_form::edit::select::Selection::empty() -> pdfrum_form::edit::select::Selection
+pub fn pdfrum_form::edit::select::Selection::is_backwards(self) -> bool
+pub fn pdfrum_form::edit::select::Selection::is_empty(self) -> bool
+pub fn pdfrum_form::edit::select::Selection::is_reset(self) -> bool
+pub fn pdfrum_form::edit::select::Selection::new(pdfrum_doc::vt::hit::Place, pdfrum_doc::vt::hit::Place) -> pdfrum_form::edit::select::Selection
+pub fn pdfrum_form::edit::select::Selection::range(self) -> pdfrum_form::edit::place::Range
+pub fn pdfrum_form::edit::select::Selection::reset() -> pdfrum_form::edit::select::Selection
+pub fn pdfrum_form::edit::select::Selection::set_active(&mut self, pdfrum_doc::vt::hit::Place)
+impl core::default::Default for pdfrum_form::edit::select::Selection
+pub fn pdfrum_form::edit::select::Selection::default() -> pdfrum_form::edit::select::Selection
+pub struct pdfrum_form::SessionConfig
+pub pdfrum_form::SessionConfig::accelerator: pdfrum_form::event::Modifiers
+pub pdfrum_form::SessionConfig::focusable: alloc::vec::Vec<pdfrum_doc::annot::Subtype>
+pub pdfrum_form::SessionConfig::max_calculate_depth: u32
+pub pdfrum_form::SessionConfig::max_undo_items: u32
+pub pdfrum_form::SessionConfig::redo_on_ctrl_y: bool
+impl pdfrum_form::session::SessionConfig
+pub fn pdfrum_form::session::SessionConfig::apple() -> pdfrum_form::session::SessionConfig
+impl core::default::Default for pdfrum_form::session::SessionConfig
+pub fn pdfrum_form::session::SessionConfig::default() -> pdfrum_form::session::SessionConfig
+pub struct pdfrum_form::TextConfig
+pub pdfrum_form::TextConfig::auto_scroll: bool
+pub pdfrum_form::TextConfig::comb: bool
+pub pdfrum_form::TextConfig::max_len: core::option::Option<core::num::nonzero::NonZeroU32>
+pub pdfrum_form::TextConfig::multi_line: bool
+pub pdfrum_form::TextConfig::password: bool
+pub pdfrum_form::TextConfig::read_only: bool
+pub pdfrum_form::TextConfig::undo_enabled: bool
+impl pdfrum_form::field::TextConfig
+pub fn pdfrum_form::field::TextConfig::read(pdfrum_doc::form::field::FieldFlags, core::option::Option<u32>) -> pdfrum_form::field::TextConfig
+pub struct pdfrum_form::TextState
+pub pdfrum_form::TextState::config: pdfrum_form::field::TextConfig
+pub pdfrum_form::TextState::edit: pdfrum_form::edit::ops::TextEdit
+impl pdfrum_form::field::TextState
+pub fn pdfrum_form::field::TextState::text(&self) -> &str
+pub struct pdfrum_form::ToggleState
+pub pdfrum_form::ToggleState::checked_control: core::option::Option<pdfrum_form::session::AnnotId>
+pub pdfrum_form::ToggleState::on_state: alloc::string::String
+pub pdfrum_form::ToggleState::state: alloc::string::String
+impl pdfrum_form::field::toggle::ToggleState
+pub fn pdfrum_form::field::toggle::ToggleState::is_checked(&self) -> bool
+pub fn pdfrum_form::field::toggle::ToggleState::new(impl core::convert::Into<alloc::string::String>, impl core::convert::Into<alloc::string::String>) -> pdfrum_form::field::toggle::ToggleState
+pub fn pdfrum_form::field::toggle::ToggleState::set_checked(&mut self, bool)
+pub fn pdfrum_form::field::toggle::ToggleState::state_for_control(&self, pdfrum_form::session::AnnotId) -> core::option::Option<&str>
+pub fn pdfrum_form::field::toggle::ToggleState::toggle(&mut self)
+pub struct pdfrum_form::UndoStack
+impl pdfrum_form::edit::undo::UndoStack
+pub const pdfrum_form::edit::undo::UndoStack::DEFAULT_MAX: u32
+pub const pdfrum_form::edit::undo::UndoStack::MIN_MAX: u32
+pub fn pdfrum_form::edit::undo::UndoStack::can_redo(&self) -> bool
+pub fn pdfrum_form::edit::undo::UndoStack::can_undo(&self) -> bool
+pub fn pdfrum_form::edit::undo::UndoStack::clear(&mut self)
+pub fn pdfrum_form::edit::undo::UndoStack::is_empty(&self) -> bool
+pub fn pdfrum_form::edit::undo::UndoStack::is_enabled(&self) -> bool
+pub fn pdfrum_form::edit::undo::UndoStack::items(&self) -> impl core::iter::traits::iterator::Iterator<Item = &pdfrum_form::edit::undo::UndoItem>
+pub fn pdfrum_form::edit::undo::UndoStack::len(&self) -> usize
+pub fn pdfrum_form::edit::undo::UndoStack::max(&self) -> usize
+pub fn pdfrum_form::edit::undo::UndoStack::position(&self) -> usize
+pub fn pdfrum_form::edit::undo::UndoStack::push(&mut self, pdfrum_form::edit::undo::UndoItem)
+pub fn pdfrum_form::edit::undo::UndoStack::redo(&mut self) -> alloc::vec::Vec<pdfrum_form::edit::undo::UndoItem>
+pub fn pdfrum_form::edit::undo::UndoStack::set_enabled(&mut self, bool)
+pub fn pdfrum_form::edit::undo::UndoStack::undo(&mut self) -> alloc::vec::Vec<pdfrum_form::edit::undo::UndoItem>
+pub fn pdfrum_form::edit::undo::UndoStack::with_max(u32) -> pdfrum_form::edit::undo::UndoStack
+impl core::cmp::Eq for pdfrum_form::edit::undo::UndoStack
+impl core::cmp::PartialEq for pdfrum_form::edit::undo::UndoStack
+pub fn pdfrum_form::edit::undo::UndoStack::eq(&self, &pdfrum_form::edit::undo::UndoStack) -> bool
+impl core::default::Default for pdfrum_form::edit::undo::UndoStack
+pub fn pdfrum_form::edit::undo::UndoStack::default() -> pdfrum_form::edit::undo::UndoStack
+pub struct pdfrum_form::WidgetHit
+pub pdfrum_form::WidgetHit::hidden: bool
+pub pdfrum_form::WidgetHit::push_button: bool
+pub pdfrum_form::WidgetHit::read_only: bool
+pub pdfrum_form::WidgetHit::signature: bool
+impl pdfrum_form::hit::WidgetHit
+pub fn pdfrum_form::hit::WidgetHit::accepts_click(self, pdfrum_form::hit::Permissions) -> bool
+pub struct pdfrum_form::WidgetInfo
+pub pdfrum_form::WidgetInfo::dict: pdfrum_object::dict::Dict
+pub pdfrum_form::WidgetInfo::field: pdfrum_form::session::FieldId
+pub pdfrum_form::WidgetInfo::flags: pdfrum_doc::form::field::FieldFlags
+pub pdfrum_form::WidgetInfo::id: pdfrum_form::session::AnnotId
+pub pdfrum_form::WidgetInfo::kind: core::option::Option<pdfrum_doc::form::field::FieldKind>
+pub pdfrum_form::WidgetInfo::name: alloc::string::String
+pub pdfrum_form::WidgetInfo::rect: pdfrum_form::tab::Rect
+pub pdfrum_form::WidgetInfo::rotation: pdfrum_form::geom::Rotation
+pub pdfrum_form::WidgetInfo::valued: pdfrum_object::dict::Dict
+impl pdfrum_form::page::WidgetInfo
+pub fn pdfrum_form::page::WidgetInfo::choice_config(&self) -> pdfrum_form::field::ChoiceConfig
+pub fn pdfrum_form::page::WidgetInfo::options<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::vec::Vec<pdfrum_form::field::ChoiceOption>
+pub fn pdfrum_form::page::WidgetInfo::selected<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::vec::Vec<usize>
+pub fn pdfrum_form::page::WidgetInfo::text_config<R: pdfrum_object::resolve::Resolve>(&self, &R) -> pdfrum_form::field::TextConfig
+pub fn pdfrum_form::page::WidgetInfo::top_index<R: pdfrum_object::resolve::Resolve>(&self, &R) -> usize
+pub fn pdfrum_form::page::WidgetInfo::value<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::string::String
+pub trait pdfrum_form::Cascade
+pub fn pdfrum_form::Cascade::calculate(&mut self, &mut pdfrum_form::cascade::FieldWrites, &pdfrum_form::cascade::FieldRef)
+pub fn pdfrum_form::Cascade::format(&mut self, &pdfrum_form::cascade::FieldRef, &str) -> core::option::Option<alloc::string::String>
+pub fn pdfrum_form::Cascade::keystroke(&mut self, &pdfrum_form::cascade::FieldRef, pdfrum_form::cascade::Keystroke) -> pdfrum_form::cascade::KeystrokeOutcome
+pub fn pdfrum_form::Cascade::keystroke_commit(&mut self, &pdfrum_form::cascade::FieldRef, &str) -> bool
+pub fn pdfrum_form::Cascade::validate(&mut self, &pdfrum_form::cascade::FieldRef, &str) -> bool
+impl pdfrum_form::cascade::Cascade for pdfrum_form::cascade::NoScripts
+pub fn pdfrum_form::cascade::NoScripts::calculate(&mut self, &mut pdfrum_form::cascade::FieldWrites, &pdfrum_form::cascade::FieldRef)
+pub fn pdfrum_form::cascade::NoScripts::format(&mut self, &pdfrum_form::cascade::FieldRef, &str) -> core::option::Option<alloc::string::String>
+pub fn pdfrum_form::cascade::NoScripts::keystroke(&mut self, &pdfrum_form::cascade::FieldRef, pdfrum_form::cascade::Keystroke) -> pdfrum_form::cascade::KeystrokeOutcome
+pub fn pdfrum_form::cascade::NoScripts::keystroke_commit(&mut self, &pdfrum_form::cascade::FieldRef, &str) -> bool
+pub fn pdfrum_form::cascade::NoScripts::validate(&mut self, &pdfrum_form::cascade::FieldRef, &str) -> bool
+pub trait pdfrum_form::PlaceExt
+pub fn pdfrum_form::PlaceExt::at_line_start(self) -> bool
+pub fn pdfrum_form::PlaceExt::same_line(self, pdfrum_doc::vt::hit::Place) -> bool
+pub fn pdfrum_form::PlaceExt::start() -> pdfrum_doc::vt::hit::Place
+impl pdfrum_form::edit::place::PlaceExt for pdfrum_doc::vt::hit::Place
+pub fn pdfrum_doc::vt::hit::Place::at_line_start(self) -> bool
+pub fn pdfrum_doc::vt::hit::Place::same_line(self, pdfrum_doc::vt::hit::Place) -> bool
+pub fn pdfrum_doc::vt::hit::Place::start() -> pdfrum_doc::vt::hit::Place
+pub fn pdfrum_form::apply<R: pdfrum_object::resolve::Resolve>(&mut pdfrum_form::session::FormSession, &pdfrum_form::route::Context<'_, R>, &mut dyn pdfrum_form::cascade::Cascade, pdfrum_form::event::Event) -> pdfrum_form::update::Response
+pub fn pdfrum_form::choose<R: pdfrum_object::resolve::Resolve>(&mut pdfrum_form::session::FormSession, &pdfrum_form::route::Context<'_, R>, &mut dyn pdfrum_form::cascade::Cascade, pdfrum_form::session::AnnotId, usize) -> pdfrum_form::update::Response
+pub fn pdfrum_form::close_popup<R: pdfrum_object::resolve::Resolve>(&mut pdfrum_form::session::FormSession, &pdfrum_form::route::Context<'_, R>, pdfrum_form::session::AnnotId) -> pdfrum_form::update::Response
+pub fn pdfrum_form::focus_of<R: pdfrum_object::resolve::Resolve>(&pdfrum_form::session::FormSession, &pdfrum_form::route::Context<'_, R>) -> core::option::Option<pdfrum_doc::ap::Focus>
+pub fn pdfrum_form::kill_focus<R: pdfrum_object::resolve::Resolve>(&mut pdfrum_form::session::FormSession, &pdfrum_form::route::Context<'_, R>, &mut dyn pdfrum_form::cascade::Cascade) -> pdfrum_form::update::Response
+pub fn pdfrum_form::popup_view<R: pdfrum_object::resolve::Resolve>(&pdfrum_form::session::FormSession, &pdfrum_form::route::Context<'_, R>) -> core::option::Option<pdfrum_form::popup::PopupView>
+pub fn pdfrum_form::scroll_view<R: pdfrum_object::resolve::Resolve>(&pdfrum_form::session::FormSession, &pdfrum_form::route::Context<'_, R>, pdfrum_form::session::AnnotId) -> core::option::Option<pdfrum_form::popup::ScrollView>
