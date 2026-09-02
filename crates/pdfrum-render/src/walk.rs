@@ -320,7 +320,7 @@ pub fn page_matrix(page: &Page, opts: &RenderOptions) -> Affine {
 ///
 /// `visible` describes *this* list, one entry per object in order. It is the
 /// pre-pass's answer and the walk only reads it — see
-/// [`render_page_with_visibility`]. A tree that hides nothing is the common
+/// [`render_page_with`]. A tree that hides nothing is the common
 /// case and costs one `is_none_or` per object.
 #[expect(
     clippy::too_many_arguments,

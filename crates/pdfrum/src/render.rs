@@ -8,7 +8,7 @@
 //! `RenderOptions::backend` field, and [`Page::render`](crate::Page::render)
 //! dispatched on it through a three-arm match. That flattened a seam the
 //! engine below already had: `pdfrum_render::RasterBackend` is a trait with
-//! an associated `Device`, and `render_page_with_caches` is generic over it.
+//! an associated `Device`, and `render_page_with` is generic over it.
 //! The facade's enum could only ever name the rasterizers the *facade*
 //! depended on — so every caller of `cargo add pdfrum` compiled three of
 //! them, and no caller could ever pass a fourth.

@@ -1197,7 +1197,7 @@ in each list with a form's children nested. A page object has no id and its
 position is the only thing that names it, so position is what the tree keys on.
 An absent entry is **visible**, which is what lets an all-visible page collapse
 to an empty tree — so the common case costs one `is_none_or` per object and
-`render_page` is `render_page_with_visibility` with `Visibility::all_visible()`.
+`render_page` is `render_page_with` and a default `RenderSession`.
 
 Sub-graphs outside the page's own lists — pattern cells, soft-mask groups,
 type-3 char procs — take all-visible. The tree does not describe them, and the

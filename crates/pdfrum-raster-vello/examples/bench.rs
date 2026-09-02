@@ -3,7 +3,7 @@
 //! PLAN.md §M12c is explicit about the accounting: **include upload and
 //! readback**, because an embedder rendering a page to a texture pays them and
 //! a GPU number that excludes them is marketing rather than measurement. So
-//! the timed region is a whole `render_page_with_caches` call, which on the
+//! the timed region is a whole `render_page` call, which on the
 //! GPU column ends in `RasterBackend::finish` — texture allocation, vello
 //! dispatch, `copy_texture_to_buffer`, and the host stall waiting for
 //! `map_async`. Nothing is subtracted.

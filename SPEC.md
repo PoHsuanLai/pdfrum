@@ -724,8 +724,9 @@ from `max_size_required`, and `CPDF_ImageRenderer::StartLoadDIBBase`
 image's own footprint.** So the target is a property of the *render target*,
 which is why one value per build is the right granularity and why it can be
 computed before the first object is interpreted. `pdfrum::Page::paint` sets it
-from the device box `pdfrum_render::walk::target_size` would compute; every
-other caller leaves it `Full`.
+from the device box `pdfrum_render`'s own `target_size` would compute — private
+since §A.10 step 9, where it turned out to have no caller outside the module
+that defines it; every other caller leaves it `Full`.
 
 Three properties the contract carries, none of them optional:
 
@@ -819,8 +820,13 @@ pub fn render_page(page: &Page, opts: &RenderOptions, backend: &impl RasterBacke
 // not a render-time decision.
 //   pdfrum_page::page_visibility(&Page, &mut OcContext, &impl Resolve,
 //                                &mut Diagnostics) -> Visibility
-//   pdfrum_render::render_page_with_visibility(page, opts, backend,
-//                                &Visibility, &mut RenderCaches, diags)
+//   pdfrum_render::render_page_with(page, opts, backend, RenderSession, diags)
+// [spec] 2026-09-02 (idiomatic-API pass, §A.10 step 9): the three entry
+// points `render_page` / `_with_visibility` / `_with_caches` collapse to two.
+// `RenderSession { caches: Option<&mut RenderCaches>, visible:
+// Option<&Visibility> }` is a config struct with `Default`, per STYLE.md §4,
+// and `render_page` is it with both fields `None`. Nothing about the pre-pass
+// contract below changes; only how the answer is handed to the render.
 // PDFium hangs a CPDF_OCContext off CPDF_RenderOptions and asks it inside
 // RenderSingleObject (cpdf_renderstatus.cpp:247), on a form's /OC (:401) and
 // on an image's (cpdf_imagerenderer.cpp:197). We do not: deciding visibility
@@ -831,8 +837,8 @@ pub fn render_page(page: &Page, opts: &RenderOptions, backend: &impl RasterBacke
 // object in each list, a form's children nested — because a page object has
 // no id and its position is the only thing that names it. An absent entry is
 // visible, so an all-visible page collapses to an empty tree and `render_page`
-// is `render_page_with_visibility` with `Visibility::all_visible()`. Sub-graphs
-// outside the page's own lists — pattern cells, soft-mask groups, type-3 char
+// is `render_page_with` and a default session. Sub-graphs outside the page's
+// own lists — pattern cells, soft-mask groups, type-3 char
 // procs — take all-visible: the tree does not describe them, and the oracle
 // asks no OC question inside any of them either.
 // Two page-graph additions this needs: `FormObject::oc` and `ImageObject::oc`
