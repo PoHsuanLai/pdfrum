@@ -37,6 +37,7 @@ deletion.
 | [Text-object bbox gate drops standalone spaces](pdfium/text-object-bbox-gate-drops-spaces.md) | observed output | Root cause behind crbug.com/40643656 and crbug.com/444176962; link them |
 | [Shading ramp skew and radial truncation](pdfium/shading-ramp-and-radial-truncation.md) | code-level, contrived trigger | Real but low-salience: one part in 256 |
 | [`IsPunctuation` range typo](pdfium/ispunctuation-range-typo.md) | code-level, arguable scope | The `<=` is a typo; the cp1252-vs-Unicode question underneath is not |
+| [`EnableStdConversion` never reaches a pixel](pdfium/std-conversion-never-reaches-a-pixel.md) | code-level, null result over 1757 renders | Dead mechanism, not a defect; low priority |
 
 ## Other projects — drafted, not filed
 
