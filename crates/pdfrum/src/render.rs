@@ -47,6 +47,20 @@ pub use pdfrum_render::{ColorMode, ColorScheme, Pixmap, TextAa};
 /// field here — `RenderOptions::backend`, and the `Backend` enum it selected
 /// from, were withdrawn 2026-09-02.
 ///
+/// # This is not the engine's `RenderOptions`
+///
+/// `pdfrum_render::RenderOptions` is a **different type** with seven bools,
+/// each one of `CPDF_RenderOptions::Options`' bit flags under its upstream
+/// name, so that a reader diffing the port against `cpdf_renderoptions.h`
+/// can line them up. This type is the idiomatic one: its flags are positive
+/// and default to the common case, so `smooth_paths` here is the engine's
+/// `no_path_smooth` inverted. The two are joined at exactly one place —
+/// `RenderOptions::to_inner`, which is where every field is translated —
+/// and nothing else in the facade constructs the engine's copy. A method
+/// like [`Page::render_on`](crate::Page::render_on) that takes
+/// `&RenderOptions` while returning a `pdfrum_render::Pixmap` is taking
+/// *this* one.
+///
 /// ```
 /// use pdfrum::RenderOptions;
 /// use pdfrum::kurbo::Affine;
@@ -73,10 +87,17 @@ pub struct RenderOptions {
     pub color_mode: ColorMode,
     /// How glyphs are antialiased.
     pub text_aa: TextAa,
-    /// Hard-edge every path fill and stroke instead of antialiasing them.
-    pub no_path_smooth: bool,
-    /// Never interpolate an image when scaling it, whatever the file asks.
-    pub no_image_smooth: bool,
+    /// Antialias path fills and strokes.
+    ///
+    /// On by default. Turning it off hard-edges every path, which is the
+    /// engine's `no_path_smooth`.
+    pub smooth_paths: bool,
+    /// Interpolate an image when it is scaled, where the file asks for it.
+    ///
+    /// On by default. Turning it off uses the nearest sample whatever the
+    /// image dictionary's `/Interpolate` says, which is the engine's
+    /// `no_image_smooth`.
+    pub interpolate_images: bool,
     /// The page background.
     ///
     /// `None` — the default — follows the file: opaque white for a page
@@ -97,8 +118,8 @@ impl Default for RenderOptions {
             transform: Affine::IDENTITY,
             color_mode: ColorMode::default(),
             text_aa: TextAa::default(),
-            no_path_smooth: false,
-            no_image_smooth: false,
+            smooth_paths: true,
+            interpolate_images: true,
             background: None,
             annotations: true,
         }
@@ -149,8 +170,8 @@ impl RenderOptions {
             transform: self.transform,
             color_mode: self.color_mode,
             text_aa: self.text_aa,
-            no_path_smooth: self.no_path_smooth,
-            no_image_smooth: self.no_image_smooth,
+            no_path_smooth: !self.smooth_paths,
+            no_image_smooth: !self.interpolate_images,
             background: self.background,
             ..pdfrum_render::RenderOptions::default()
         }

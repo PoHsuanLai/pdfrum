@@ -19,7 +19,7 @@
 // fixtures' object counts are asserted a line above every index.
 #![allow(clippy::expect_used, clippy::indexing_slicing)]
 
-use pdfrum::{Document, PageEdit, PathBuilder, SaveOptions, Update, kurbo::Rect};
+use pdfrum::{Document, PageEdit, PathBuilder, SaveOptions, Update, kurbo::Rect, peniko::Color};
 
 const HELLO: &str = "tests/fixtures/hello_world.pdf";
 /// Nineteen objects across three `/Contents` elements: 15 in element 0, 3 in
@@ -284,7 +284,7 @@ fn inserting_places_objects_in_the_order_asked_for() {
     let mut page = doc.page(0).expect("page").edit();
     let red = || {
         PathBuilder {
-            fill: Some([1.0, 0.0, 0.0]),
+            fill: Some(Color::from_rgb8(255, 0, 0)),
             ..PathBuilder::rect(Rect::new(10.0, 10.0, 30.0, 30.0))
         }
         .build()
@@ -309,7 +309,7 @@ fn an_inserted_objects_place_in_the_painting_order_survives_a_save() {
     let mut page = doc.page(0).expect("page").edit();
     let rect = |x: f64| {
         PathBuilder {
-            fill: Some([0.0, 0.0, 1.0]),
+            fill: Some(Color::from_rgb8(0, 0, 255)),
             ..PathBuilder::rect(Rect::new(x, 10.0, x + 20.0, 30.0))
         }
         .build()
@@ -344,15 +344,15 @@ fn an_inserted_object_adopts_the_element_of_the_object_it_lands_before() {
     let mut page = doc.page(0).expect("page").edit();
     assert_eq!(streams_of(&page), vec![0, 0, 1]);
 
-    let rect = |rgb: [f32; 3]| {
+    let rect = |color: Color| {
         PathBuilder {
-            fill: Some(rgb),
+            fill: Some(color),
             ..PathBuilder::rect(Rect::new(10.0, 10.0, 30.0, 30.0))
         }
         .build()
     };
-    assert!(page.insert(0, rect([1.0, 0.0, 0.0])));
-    assert!(page.insert(3, rect([0.0, 1.0, 0.0])));
+    assert!(page.insert(0, rect(Color::from_rgb8(255, 0, 0))));
+    assert!(page.insert(3, rect(Color::from_rgb8(0, 255, 0))));
 
     assert_eq!(page.len(), 5);
     assert_eq!(streams_of(&page), vec![0, 0, 0, 1, 1]);
@@ -372,7 +372,7 @@ fn an_appended_object_becomes_a_new_content_element() {
     let mut page = doc.page(0).expect("page").edit();
     page.push(
         PathBuilder {
-            fill: Some([0.0, 0.5, 0.0]),
+            fill: Some(Color::new([0.0, 0.5, 0.0, 1.0])),
             ..PathBuilder::rect(Rect::new(20.0, 20.0, 80.0, 60.0))
         }
         .build(),
@@ -521,7 +521,7 @@ fn two_pages_edited_in_one_save_both_take_effect() {
     assert!(first.remove(0).is_some());
     second.push(
         PathBuilder {
-            fill: Some([1.0, 0.0, 0.0]),
+            fill: Some(Color::from_rgb8(255, 0, 0)),
             ..PathBuilder::rect(Rect::new(5.0, 5.0, 45.0, 25.0))
         }
         .build(),
@@ -543,7 +543,7 @@ fn a_saved_edit_can_be_reopened_and_edited_again() {
     let mut page = doc.page(0).expect("page").edit();
     page.push(
         PathBuilder {
-            fill: Some([0.0, 0.0, 1.0]),
+            fill: Some(Color::from_rgb8(0, 0, 255)),
             ..PathBuilder::rect(Rect::new(10.0, 10.0, 50.0, 30.0))
         }
         .build(),

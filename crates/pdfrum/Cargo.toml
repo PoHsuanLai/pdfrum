@@ -71,3 +71,11 @@ png.workspace = true
 # the test is also the worked example.
 pdfrum-raster-tinyskia.workspace = true
 pdfrum-raster-agg.workspace = true
+
+# The engine, named directly (WP10, 2026-09-02). It is already a normal
+# dependency, but an integration test is its own crate and can only `use` what
+# the manifest lists for it. `tests/facade.rs` drives
+# `pdfrum_render::RenderOptions` with the oracle's own `no_path_smooth` and
+# asserts the facade's positive `smooth_paths` renders byte-identically — the
+# only way to check that inversion from outside the crate.
+pdfrum-render.workspace = true

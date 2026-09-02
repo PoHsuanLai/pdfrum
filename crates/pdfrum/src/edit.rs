@@ -208,6 +208,42 @@ impl PageEdit {
     }
 }
 
+/// The RGB triple and the alpha `pdfrum-edit` writes, out of a
+/// [`peniko::Color`].
+///
+/// This is the §B entry point for colour: the facade takes the idiomatic
+/// type and narrows on the first line, so the writer's `[f32; 3]` never
+/// appears in a public signature. Two things happen here.
+///
+/// **The components are clamped to `0..=1`.** A PDF colour operand outside
+/// that range is out of gamut, and the engine clamps it on the way back out
+/// (`pdfrum_page`'s `rgb_to_rgb`), so clamping here changes no rendered
+/// pixel — it only means the value a caller reads back off the *saved file*
+/// is the value the writer actually used, rather than one the reader would
+/// clamp again.
+///
+/// **Alpha is kept, not dropped.** The colour itself goes out as `rg`/`RG`,
+/// which carries no alpha, but constant alpha has its own home in a PDF:
+/// `/ca` and `/CA` in an `/ExtGState`, which `pdfrum-edit`'s emitter already
+/// writes from [`GraphicsState`]'s `fill_alpha` / `stroke_alpha`. So a
+/// translucent [`peniko::Color`] produces a translucent object rather than
+/// silently losing its alpha at the door.
+///
+/// The one consequence worth stating: **alpha 0 is transparent, not "no
+/// fill".** `Color::from_rgba8(255, 0, 0, 0)` paints an invisible red fill —
+/// the object is still there, still in the painting order, still saved. "No
+/// fill" is spelled `None` on [`PathBuilder::fill`], and that `Option` is the
+/// only thing that means it; a zero alpha is not a second spelling of it.
+/// [`TextBuilder::fill`] has no `None` at all, so there alpha 0 is simply
+/// invisible text.
+fn rgba_of(color: peniko::Color) -> ([f32; 3], f32) {
+    let [r, g, b, alpha] = color.components;
+    (
+        [r.clamp(0.0, 1.0), g.clamp(0.0, 1.0), b.clamp(0.0, 1.0)],
+        alpha.clamp(0.0, 1.0),
+    )
+}
+
 /// A filled or stroked path, ready to [`PageEdit::push`].
 ///
 /// A plain config struct filled in with struct-update syntax, and
@@ -216,10 +252,10 @@ impl PageEdit {
 /// stream restates everything from the PDF defaults anyway.
 ///
 /// ```
-/// use pdfrum::{PathBuilder, kurbo::Rect};
+/// use pdfrum::{PathBuilder, kurbo::Rect, peniko::Color};
 ///
 /// let object = PathBuilder {
-///     fill: Some([1.0, 0.0, 0.0]),
+///     fill: Some(Color::from_rgb8(255, 0, 0)),
 ///     ..PathBuilder::rect(Rect::new(10.0, 10.0, 60.0, 40.0))
 /// }
 /// .build();
@@ -229,10 +265,17 @@ impl PageEdit {
 pub struct PathBuilder {
     /// The outline, in page space.
     pub path: BezPath,
-    /// The fill colour as RGB in 0..=1, or `None` for no fill.
-    pub fill: Option<[f32; 3]>,
-    /// The stroke colour as RGB in 0..=1, or `None` for no stroke.
-    pub stroke: Option<[f32; 3]>,
+    /// The fill colour, or `None` for no fill.
+    ///
+    /// The alpha is honoured — it goes out as an `/ExtGState` `/ca` — so a
+    /// translucent colour paints a translucent fill. Note that alpha 0 is
+    /// therefore *invisible*, not *absent*: `None` is the only spelling of
+    /// "do not fill".
+    pub fill: Option<peniko::Color>,
+    /// The stroke colour, or `None` for no stroke.
+    ///
+    /// The alpha is honoured as `/CA`, exactly as [`PathBuilder::fill`]'s is.
+    pub stroke: Option<peniko::Color>,
     /// The stroke width in page units.
     pub line_width: f32,
     /// Whether the fill uses the even-odd rule rather than the nonzero one.
@@ -245,7 +288,7 @@ impl Default for PathBuilder {
     fn default() -> Self {
         Self {
             path: BezPath::new(),
-            fill: Some([0.0, 0.0, 0.0]),
+            fill: Some(peniko::Color::BLACK),
             stroke: None,
             line_width: 1.0,
             even_odd: false,
@@ -274,11 +317,15 @@ impl PathBuilder {
     #[must_use]
     pub fn build(self) -> PageObject {
         let mut state = GraphicsState::default();
-        if let Some(rgb) = self.fill {
+        if let Some(fill) = self.fill {
+            let (rgb, alpha) = rgba_of(fill);
             state.fill.set_stock(ColorSpace::DeviceRgb, &rgb);
+            state.general.fill_alpha = alpha;
         }
-        if let Some(rgb) = self.stroke {
+        if let Some(stroke) = self.stroke {
+            let (rgb, alpha) = rgba_of(stroke);
             state.stroke.set_stock(ColorSpace::DeviceRgb, &rgb);
+            state.general.stroke_alpha = alpha;
         }
         state.stroke_params.width = self.line_width;
         let fill_rule = match (self.fill.is_some(), self.even_odd) {
@@ -317,8 +364,11 @@ pub struct TextBuilder {
     pub position: kurbo::Point,
     /// How the glyphs are painted.
     pub render_mode: pdfrum_page::TextRenderMode,
-    /// The fill colour as RGB in 0..=1.
-    pub fill: [f32; 3],
+    /// The fill colour.
+    ///
+    /// The alpha is honoured, as [`PathBuilder::fill`]'s is. There is no
+    /// `None` here, so alpha 0 paints invisible text rather than no text.
+    pub fill: peniko::Color,
 }
 
 impl TextBuilder {
@@ -332,7 +382,7 @@ impl TextBuilder {
             size,
             position: kurbo::Point::ZERO,
             render_mode: pdfrum_page::TextRenderMode::Fill,
-            fill: [0.0, 0.0, 0.0],
+            fill: peniko::Color::BLACK,
         }
     }
 
@@ -340,7 +390,9 @@ impl TextBuilder {
     #[must_use]
     pub fn build(self) -> PageObject {
         let mut state = GraphicsState::default();
-        state.fill.set_stock(ColorSpace::DeviceRgb, &self.fill);
+        let (rgb, alpha) = rgba_of(self.fill);
+        state.fill.set_stock(ColorSpace::DeviceRgb, &rgb);
+        state.general.fill_alpha = alpha;
         PageObject::Text(Box::new(Content::new(
             TextObject {
                 segments: Box::new([TextSegment {

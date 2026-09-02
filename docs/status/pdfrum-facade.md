@@ -73,10 +73,18 @@ same cipher because they are written the same way as the rest of the body.
 — a plain record of the two caches that live in different crates, added in M8
 so a run over many pages shares its *glyph outlines* as well as its fonts.
 
-**Rendering.** `RenderOptions { transform, color_mode, text_aa,
-no_path_smooth, no_image_smooth, background, annotations }` plus the two
-constructors callers otherwise write by hand: `RenderOptions::scaled(scale)`
-and `RenderOptions::fit(w, h, max_w, max_h)`.
+**Rendering.** `RenderOptions { transform, color_mode, text_aa, smooth_paths,
+interpolate_images, background, annotations }` plus the two constructors
+callers otherwise write by hand: `RenderOptions::scaled(scale)` and
+`RenderOptions::fit(w, h, max_w, max_h)`.
+
+*Corrected 2026-09-02 (WP10).* The two smoothing flags used to be
+`no_path_smooth` / `no_image_smooth`, PDFium's inverted flag-word names with
+`false` defaults. They are now positive and default to `true`, which is what a
+viewer does. The engine's `pdfrum_render::RenderOptions` is a **different
+type** and keeps all seven of `CPDF_RenderOptions::Options`' names, so the port
+stays reviewable against `cpdf_renderoptions.h`; the two are joined only at
+`RenderOptions::to_inner`, which is where the `!` lives (§A.8, §B).
 
 *Corrected 2026-09-02.* This paragraph used to list a `backend` field and a
 `Backend { Vello, TinySkia }` enum. **Both were withdrawn**: naming three
