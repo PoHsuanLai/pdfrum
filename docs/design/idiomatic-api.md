@@ -1634,6 +1634,34 @@ pub enum Error {
 `open_with_password` maps `LoadError::WrongPassword` here so a facade-only
 caller never names the parser crate.
 
+> **Landed 2026-09-02 as `c3d92af` (step 4) and `3786149` (step 5).**
+> `PdfVersion` and `PageIndex` live in **`pdfrum-common`** — more than one
+> crate produces each (the parser reads a version, the writer emits one;
+> `PageIndex` sits in six crates' signatures), and the bottom of the DAG is
+> the only place all of them can name. `Permissions` lives in
+> **`pdfrum-crypt`**; `pdfrum-form` keeps its two-field type and the
+> **facade** converts, because a `From` impl anywhere else is an orphan-rule
+> violation and a `pdfrum-form` → `pdfrum-crypt` edge would pull six cipher
+> crates into a widget-interaction crate for two booleans. One internal edge
+> did result, `pdfrum` → `pdfrum-crypt`, recorded in DEPS.md's new
+> "Workspace-internal edges" section. Twenty-one public items took
+> `PageIndex`; `page_count` stays `u32`, a count not an index.
+> `WrongPassword` is routed through a hand-written `From<LoadError>` so every
+> opening path reports it the same way.
+>
+> **Three things this section got wrong at the code:**
+> 1. `Dest::page_index`'s callback *argument* is an **object number**, not a
+>    page index — only the answer is a page. It stays `u32`; so does
+>    `StructTree::load_page`'s `page_obj_num`.
+> 2. `pdfrum-page` has **no page indices at all**. A naive grep over the
+>    snapshots shows 78 `page`+`u32` rows there; every one is an image
+>    dimension. The real count is 21, not ~100.
+> 3. **The packed `0` was doing sentinel duty**: it is both the parser's "no
+>    readable digits" answer and the writer's "fall back to 1.7" trigger, so
+>    `Document::version()` is `Option<PdfVersion>`, not a bare one. Folding
+>    it into a version `0.0` would have changed which documents get the
+>    fallback.
+
 ### WP2 — Flag newtypes, without the `bitflags` crate
 
 Covered in full in §6. Short version: do not add `bitflags`. Give
