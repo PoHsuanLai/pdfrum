@@ -2257,6 +2257,77 @@ The four constructors (`new`, `with_config`, `with_context`,
 `with_config_in`) stay. The pair taking a `BuildContext` is load-bearing
 (SPEC §15.8); do not collapse them.
 
+> **Landed 2026-09-03 as §A.10 step 8**, three commits: `apply` first, then
+> WP5's renames, then WP4's facade half. All 31 `.evt` fixtures replay
+> byte-for-byte against a binary built from `origin/main` — `--send-events
+> --md5 --png` stdout and stderr, `--js-transcript` stdout and stderr, and
+> per-page PNG md5 — and the board is unmoved.
+>
+> The 34-item correction did its job: nothing outside the sketch and the
+> rename table was touched. **Eleven items changed** (seven event methods
+> renamed and retyped, `force_kill_focus` → `blur`, the `set_page_in_view` /
+> `page_in_view` pair, and `apply` added), **two were removed** (`on_button`,
+> `inner`), and **the other twenty-one are byte-identical**.
+>
+> **Six things this section did not say, or said wrongly.**
+>
+> 1. **`apply(Event)` has to answer a question the sketch does not pose:
+>    *which page*.** `Event` carries a point and no page, and the sketch's
+>    `apply(&mut self, event: Event) -> Response` takes none either — so a
+>    mouse event applied as a value has no destination. The answer is
+>    `viewed_page`, which broadens that setter from "the page a Tab from
+>    nothing enters the ring on" to "the page the embedder is showing" — the
+>    job its name and its doc comment already claimed, and the reason the
+>    rename to `set_viewed_page` reads better than it did as tidying. The
+>    wrappers keep their explicit page. A test pins the two paths against each
+>    other: a click through `apply` focuses what the same click through
+>    `mouse_down` focuses.
+> 2. **`on_focus_at` → `focus_at`**, named after the `Event::Focus` variant it
+>    builds rather than after the FORM_ entry. It was in neither the sketch nor
+>    the rename table, which by this package's own rule would have left it
+>    `on_focus_at` beside seven prefix-less siblings — the one place the rule
+>    needed overriding rather than following.
+> 3. **`inner()` is deleted, not `#[doc(hidden)]`.** The section offers both.
+>    It has **no caller anywhere in the workspace** — `grep -rn '\.inner()'`
+>    returns exactly one line, `crates/pdfrum/src/save.rs:194`, and that is
+>    `Form::inner()`, a different type. It could not have a useful caller
+>    either: the value is `&`-borrowed state with no document, no
+>    `BuildContext` and no way to route an event. Hiding a method nobody calls
+>    keeps the maintenance and drops the discoverability; deleting it says the
+>    escape hatch is the member crate, which is what the section argues.
+> 4. **Measured: 265 type mentions and 124 method calls, across twelve files
+>    — and the two changes are one edit, not two.** Step 7 priced "69 call
+>    sites across eight files" for the signature change alone, and that was
+>    accurate for the seven `on_*` methods it meant. The renames land on the
+>    same lines, so nothing was saved by pricing them apart: `EventModifiers`
+>    173, `VirtualKey` 64, `MouseButton` 20 (excluding `pdfrum-tool`'s own
+>    grammar-level `events::MouseButton`, which is a different type and does
+>    not move), `EventResponse` 8; and per method, `on_key_down` 27,
+>    `on_mouse_down` 21, `on_mouse_move` 21, `on_char` 18, `on_mouse_up` 16,
+>    `force_kill_focus` 7, `on_focus_at` 5, `set_page_in_view` 3,
+>    `on_double_click` 2, `page_in_view` 2, `on_button` 1, `on_mouse_wheel` 1.
+>    The largest single file is `pdfrum-tool/src/dispatch.rs`, which is also
+>    where the fourteen `Call` coordinate fields collapse into seven `Point`s
+>    and one `(i32, i32)`.
+> 5. **§WP4's re-export set is five kurbo names and one peniko name, and the
+>    snapshot cannot tell you the fifth.** `pdfrum.txt` enumerates `pdfrum::`
+>    items only, so a method on a **re-exported** type is invisible to it:
+>    `TextPage::index_at(point, tolerance: kurbo::Size)` is reachable from the
+>    facade and takes a `Size` that appears nowhere in the file. The set is
+>    `{Affine, BezPath, Point, Rect, Size}` and `{Color}`. The sketch's `Vec2`
+>    and `BlendMode` have no signature at all and are **not** exported —
+>    re-exporting `BlendMode` would be the facade claiming a vocabulary it does
+>    not speak.
+> 6. **The narrowing cost exactly one caller, and it is the one §WP4
+>    predicts.** `tests/mutation.rs` reads a bounding box through
+>    `kurbo::Shape` — a trait, not in any signature — and now names `kurbo` to
+>    get it, which its manifest already lists. Everything else that looked like
+>    a cost was not: `crates/pdfrum/src/*` and all of `pdfrum-tool` already
+>    write bare `kurbo::`/`peniko::` because both are direct dependencies, and
+>    an integration test sees a crate's normal dependencies too. Only the four
+>    doctests and three integration-test files that spelled `pdfrum::kurbo::`
+>    on purpose had to move.
+
 ### WP6 — `Key` as an enum
 
 SPEC §15.5 defends `Key(pub u16)` because the wire format admits any integer
