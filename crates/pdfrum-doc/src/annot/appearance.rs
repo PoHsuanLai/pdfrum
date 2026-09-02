@@ -109,7 +109,7 @@ pub fn has_appearance<R: Resolve>(dict: &Dict, r: &R) -> bool {
 /// rotated page then counter-rotates about the rectangle's **top-left**
 /// corner, which is where the anchor comes from.
 #[must_use]
-pub fn annot_matrix(
+pub(crate) fn annot_matrix(
     annot: &Annotation,
     form_dict: &Dict,
     page_quarter_turns: u8,

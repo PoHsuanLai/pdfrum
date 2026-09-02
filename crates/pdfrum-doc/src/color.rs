@@ -57,23 +57,6 @@ impl Color {
     /// Component-wise equality within `1e-4`.
     ///
     /// Deliberately not `PartialEq`: the derived one stays exact so a test
-    /// that means "the same value" still says so.
-    #[must_use]
-    pub fn nearly_eq(self, other: Color) -> bool {
-        let near = |a: f32, b: f32| (a - b).abs() < 1e-4;
-        match (self, other) {
-            (Color::Transparent, Color::Transparent) => true,
-            (Color::Gray(a), Color::Gray(b)) => near(a, b),
-            (Color::Rgb(a1, a2, a3), Color::Rgb(b1, b2, b3)) => {
-                near(a1, b1) && near(a2, b2) && near(a3, b3)
-            }
-            (Color::Cmyk(a1, a2, a3, a4), Color::Cmyk(b1, b2, b3, b4)) => {
-                near(a1, b1) && near(a2, b2) && near(a3, b3) && near(a4, b4)
-            }
-            _ => false,
-        }
-    }
-
     /// The RGB bytes the `--annot` dump prints.
     ///
     /// CMYK converts multiplicatively (`255·(1−c)·(1−k)`), which is **not**
@@ -113,7 +96,11 @@ impl Color {
     /// channel rounds by adding a half before truncating. See
     /// [`Color::annot_rgb_bytes`] for the other formula.
     #[must_use]
-    pub fn mk_rgb_bytes(self) -> (u8, u8, u8) {
+    // Reached only by the test beside it now that the item is not public;
+    // the library compiles once without `cfg(test)`, so `dead_code` fires.
+    // §WP8's recurring cost — pinned by a test, not unreachable.
+    #[allow(dead_code)]
+    pub(crate) fn mk_rgb_bytes(self) -> (u8, u8, u8) {
         let byte = |v: f32| {
             let scaled = v * 255.0 + 0.5;
             if scaled <= 0.0 {
@@ -140,7 +127,11 @@ impl Color {
 /// Builds an RGB colour from 0–255 bytes, the way the hard-coded widget
 /// chrome colours are written upstream.
 #[must_use]
-pub fn rgb_bytes(r: u8, g: u8, b: u8) -> Color {
+// Reached only by the test beside it now that the item is not public;
+// the library compiles once without `cfg(test)`, so `dead_code` fires.
+// §WP8's recurring cost — pinned by a test, not unreachable.
+#[allow(dead_code)]
+pub(crate) fn rgb_bytes(r: u8, g: u8, b: u8) -> Color {
     Color::Rgb(
         f32::from(r) / 255.0,
         f32::from(g) / 255.0,

@@ -19,9 +19,10 @@
 //!   formed it is.
 
 pub mod dump;
-pub mod element;
+mod element;
 
-pub use element::{Kid, StructElement, marked_content_id_at, marked_content_id_count};
+pub(crate) use element::Kid;
+pub use element::StructElement;
 
 use pdfrum_common::{DiagKind, Diagnostics, Limits, Severity};
 use pdfrum_object::{Dict, Object, Resolve};

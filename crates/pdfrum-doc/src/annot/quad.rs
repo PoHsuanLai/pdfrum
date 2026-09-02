@@ -24,7 +24,7 @@ pub fn quad_point_count(array: Option<&Array>) -> usize {
 /// The rectangle for quadrilateral `index`, straight from the index
 /// arithmetic and **not** normalized.
 #[must_use]
-pub fn rect_from_quad_points_array(array: &Array, index: usize) -> Rect {
+pub(crate) fn rect_from_quad_points_array(array: &Array, index: usize) -> Rect {
     let base = index * 8;
     let at = |offset: usize| array.number_at_or_zero(base + offset);
     geom::rect(at(4), at(5), at(2), at(3))
@@ -44,7 +44,7 @@ pub fn rect_from_quad_points(array: Option<&Array>, index: usize) -> Rect {
 /// that quadrilateral's rectangle **unchanged** — including inverted, because
 /// no union runs. Two or more normalize, because the union does.
 #[must_use]
-pub fn bounding_rect_from_quad_points(array: Option<&Array>) -> Rect {
+pub(crate) fn bounding_rect_from_quad_points(array: Option<&Array>) -> Rect {
     let count = quad_point_count(array);
     let Some(array) = array.filter(|_| count > 0) else {
         return Rect::ZERO;

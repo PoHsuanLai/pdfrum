@@ -2,18 +2,15 @@
 //! the record every reader in this crate works from.
 
 pub mod appearance;
-pub mod list;
+mod list;
 pub mod quad;
 
-pub use appearance::{ApMode, annot_ap, annot_matrix};
-pub use list::{AnnotList, popup_appears_for};
-pub use quad::{
-    bounding_rect_from_quad_points, quad_point_count, rect_from_quad_points,
-    rect_from_quad_points_array,
-};
+pub use appearance::{ApMode, annot_ap};
+pub use list::AnnotList;
+pub use quad::{quad_point_count, rect_from_quad_points};
 
 use kurbo::Rect;
-use pdfrum_object::{Array, Dict, Name, Resolve};
+use pdfrum_object::{Array, Dict, Resolve};
 
 use crate::names;
 
@@ -410,14 +407,8 @@ impl Annotation {
 
 /// Whether a `/Subtype` value names a pop-up, read coercively.
 #[must_use]
-pub fn is_popup<R: Resolve>(dict: &Dict, r: &R) -> bool {
+pub(crate) fn is_popup<R: Resolve>(dict: &Dict, r: &R) -> bool {
     dict.byte_string(names::SUBTYPE, r).as_deref() == Some(b"Popup")
-}
-
-/// The `/Subtype` name value, for constructing dictionaries.
-#[must_use]
-pub fn subtype_name(subtype: Subtype) -> Name {
-    Name::new(subtype.as_bytes().to_vec())
 }
 
 #[cfg(test)]

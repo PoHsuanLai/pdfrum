@@ -294,7 +294,7 @@ fn load_kid<R: Resolve>(
 /// (`docs/design/idiomatic-api.md` §C, Tier 2 item 13). `None` says the same
 /// thing and the compiler enforces the check.
 #[must_use]
-pub fn marked_content_id_count<R: Resolve>(dict: &Dict, r: &R) -> Option<usize> {
+pub(crate) fn marked_content_id_count<R: Resolve>(dict: &Dict, r: &R) -> Option<usize> {
     match dict.get(names::K, r).map(|k| k.get().clone()) {
         Some(Object::Int(_) | Object::Real(_) | Object::Dict(_)) => Some(1),
         Some(Object::Array(array)) => Some(array.len()),
@@ -310,7 +310,7 @@ pub fn marked_content_id_count<R: Resolve>(dict: &Dict, r: &R) -> Option<usize> 
 /// contains it either; it was invented for absence
 /// (`docs/design/idiomatic-api.md` §C, Tier 2 item 14).
 #[must_use]
-pub fn marked_content_id_at<R: Resolve>(dict: &Dict, index: usize, r: &R) -> Option<i64> {
+pub(crate) fn marked_content_id_at<R: Resolve>(dict: &Dict, index: usize, r: &R) -> Option<i64> {
     match dict.get(names::K, r).map(|k| k.get().clone()) {
         Some(obj @ (Object::Int(_) | Object::Real(_))) => {
             if index == 0 {

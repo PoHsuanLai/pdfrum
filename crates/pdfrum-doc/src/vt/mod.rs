@@ -23,14 +23,14 @@
 //! a vertical alignment offset, which the builders pass as
 //! [`edit_ap::generate`]'s `offset`.
 
-pub mod autosize;
-pub mod bidi;
-pub mod classify;
-pub mod comb;
-pub mod edit_ap;
+mod autosize;
+mod bidi;
+mod classify;
+mod comb;
+pub(crate) mod edit_ap;
 pub mod hit;
-pub mod place;
-pub mod split;
+mod place;
+mod split;
 
 use kurbo::Rect;
 use std::ops::Range;
@@ -62,13 +62,13 @@ impl Alignment {
 }
 
 /// The font-space scale: widths and ascents arrive per thousand units.
-pub const FONT_SCALE: f32 = 0.001;
+pub(crate) const FONT_SCALE: f32 = 0.001;
 
 /// The sizes automatic sizing may choose from.
 ///
 /// A **multi-line** field only ever considers the first quarter of these —
 /// six entries, so it can never auto-size above 12.
-pub const FONT_SIZE_STEPS: [u8; 25] = [
+pub(crate) const FONT_SIZE_STEPS: [u8; 25] = [
     4, 6, 8, 9, 10, 12, 14, 18, 20, 25, 30, 35, 40, 45, 50, 55, 60, 70, 80, 90, 100, 110, 120, 130,
     144,
 ];
@@ -279,7 +279,7 @@ impl Layout {
 ///   so a five-character limit on `"ab\ncd"` admits `a`, `b`, the break, and
 ///   `c`, and stops there.
 #[must_use]
-pub fn split_sections(text: &str, config: &Config) -> Vec<Vec<u32>> {
+pub(crate) fn split_sections(text: &str, config: &Config) -> Vec<Vec<u32>> {
     let mut sections: Vec<Vec<u32>> = vec![Vec::new()];
     let mut count = 0usize;
     let chars: Vec<char> = text.chars().collect();
@@ -403,7 +403,12 @@ fn rearrange(sections: &mut [Section], config: &Config, metrics: &Metrics<'_>) -
 
 /// The width one character sets at a given size.
 #[must_use]
-pub fn word_width(word: &Word, config: &Config, metrics: &Metrics<'_>, font_size: f32) -> f32 {
+pub(crate) fn word_width(
+    word: &Word,
+    config: &Config,
+    metrics: &Metrics<'_>,
+    font_size: f32,
+) -> f32 {
     let shown = config.sub_word.map_or(word.ch, |sub| sub as u32);
     #[allow(clippy::cast_precision_loss)]
     let width = (metrics.width)(shown) as f32;
@@ -412,7 +417,7 @@ pub fn word_width(word: &Word, config: &Config, metrics: &Metrics<'_>, font_size
 
 /// The ascent one character contributes at a given size.
 #[must_use]
-pub fn font_ascent(metrics: &Metrics<'_>, font_size: f32) -> f32 {
+pub(crate) fn font_ascent(metrics: &Metrics<'_>, font_size: f32) -> f32 {
     #[allow(clippy::cast_precision_loss)]
     let ascent = metrics.ascent as f32;
     ascent * font_size * FONT_SCALE
@@ -420,7 +425,7 @@ pub fn font_ascent(metrics: &Metrics<'_>, font_size: f32) -> f32 {
 
 /// The descent one character contributes at a given size.
 #[must_use]
-pub fn font_descent(metrics: &Metrics<'_>, font_size: f32) -> f32 {
+pub(crate) fn font_descent(metrics: &Metrics<'_>, font_size: f32) -> f32 {
     #[allow(clippy::cast_precision_loss)]
     let descent = metrics.descent as f32;
     descent * font_size * FONT_SCALE
