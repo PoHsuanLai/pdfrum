@@ -211,8 +211,9 @@ Measured 2026-09-02, the first sweep found 33 trees and freed 519 GB.
 **Nushell is a hard dependency for contributors.** The gate and every bench
 and check script under `scripts/` is a `.nu` script, and there is no bash
 fallback, because maintaining two spellings of a gate is how the two stop
-agreeing. (`scripts/fuzz-gate.sh` is still bash, and the one-shot fixture
-generators are Python run under `uv`.) **Minimum version 0.110**;
+agreeing. (The one-shot fixture generators are Python run under `uv`, and
+`fuzz/seed-corpus.sh` is bash because it belongs to the fuzz workspace rather
+than to `scripts/`.) **Minimum version 0.110**;
 `cargo binstall nu` fetches a prebuilt binary, and `cargo install nu --locked`
 builds it from source when `binstall` is absent.
 Nothing pdfrum *ships* depends on it: this is a contributor tool, and the
@@ -233,7 +234,7 @@ not part of the default gate:
 ```bash
 cargo run -p conformance -- run          # score the corpus
 cargo run -p conformance -- run --triage # cluster the failures
-./scripts/fuzz-gate.sh 3600 parallel     # fuzz/ is its own workspace
+./scripts/fuzz-gate.nu 3600 parallel     # fuzz/ is its own workspace
 ```
 
 ## Parallelism

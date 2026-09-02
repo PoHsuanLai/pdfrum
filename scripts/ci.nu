@@ -93,8 +93,8 @@ def main [] {
     #
     # *Running* the fuzz ring is not part of this gate: it is minutes to days
     # of work where this script is seconds. Its own gate is
-    # scripts/fuzz-gate.sh, and PLAN.md §6 makes
-    # `scripts/fuzz-gate.sh 86400 parallel` an M1 exit criterion. See
+    # scripts/fuzz-gate.nu, and PLAN.md §6 makes
+    # `scripts/fuzz-gate.nu 86400 parallel` an M1 exit criterion. See
     # fuzz/README.md for how to run and reproduce.
     #
     # *Compiling* it is seconds, so it belongs here. The targets call library

@@ -59,19 +59,19 @@ under `fuzz/seeds/<target>/` so it is never lost.
 
 ## The M1 gate
 
-`scripts/fuzz-gate.sh` runs every parser-facing target and fails on the first
+`scripts/fuzz-gate.nu` runs every parser-facing target and fails on the first
 crash.
 
 ```sh
-scripts/fuzz-gate.sh                 # 10 minutes total — a smoke check
-scripts/fuzz-gate.sh 3600            # an hour, split between the targets
-scripts/fuzz-gate.sh 86400 parallel  # THE M1 GATE: 24h, one process per target
+scripts/fuzz-gate.nu                 # 10 minutes total — a smoke check
+scripts/fuzz-gate.nu 3600            # an hour, split between the targets
+scripts/fuzz-gate.nu 86400 parallel  # THE M1 GATE: 24h, one process per target
 ```
 
 `parallel` gives each target the full budget and runs them at once, so
 `86400 parallel` costs 24 hours of wall clock rather than 24 × 18. That is
 the command PLAN.md's exit criterion means. It wants 18 cores and about 8 GB;
-`FUZZ_TARGETS="parser_load parser_xref parser_object parser_lexer"` narrows it
+`--targets [parser_load parser_xref parser_object parser_lexer]` narrows it
 to the four strictly-parser targets on a smaller machine.
 
 Sequential mode divides the budget instead, which is what you want for a
