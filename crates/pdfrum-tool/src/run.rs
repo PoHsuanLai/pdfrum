@@ -93,7 +93,10 @@ pub fn process_file(
     // stdout against `<fixture>_expected.txt`, so one extra line is a diff.
     #[cfg(feature = "script")]
     if options.js_transcript {
-        crate::jstranscript::write_transcript(&doc, streams.out)?;
+        // `--time=` is the single source of the scripting clock; absent it the
+        // scripts see the real one, which is `pdfium_test`'s rule
+        // (`pdfium_test.cc:2129-2135`, hooks installed only inside the guard).
+        crate::jstranscript::write_transcript(&doc, options.time, streams.out)?;
         return Ok(Counts::default());
     }
 
@@ -302,8 +305,11 @@ fn save_document(
 /// (`testing/pdfium_test/pdfium_test.cc:2107-2112`) and `CFX_LinuxFontInfo`
 /// then scans `/usr/share/fonts` and three siblings
 /// (`core/fxge/linux/fx_linux_impl.cpp:173-176`). The library's own default is
-/// the other way round — see [`SubstitutionOptions::system_fonts`] — so this
+/// the other way round — see `SubstitutionOptions::system_fonts` — so this
 /// is the one place the oracle's default is re-asserted.
+//
+// Unlinked rather than linked: the item is `pdfrum_font`'s and is not in
+// this crate's doc scope, which is what `a222068` did for its two siblings.
 ///
 /// The flag itself is the oracle's, whose help text says it "overrides
 /// --font-dir" (`pdfium_test.cc:1946`); clearing the directory list here is
@@ -973,5 +979,73 @@ trailer<</Root 1 0 R/Size 5>>\n";
         let err = String::from_utf8_lossy(&err);
         assert!(err.contains("Sent 0 events."), "{err}");
         assert!(!err.contains("Using event file"), "{err}");
+    }
+
+    // ---- `--time=` is the scripting clock, end to end ----
+
+    /// A one-page document whose `/OpenAction` runs `script`.
+    #[cfg(feature = "script")]
+    fn with_open_action(script: &str) -> Vec<u8> {
+        format!(
+            "%PDF-1.7\n\
+             1 0 obj<</Type/Catalog/Pages 2 0 R/OpenAction 5 0 R>>endobj\n\
+             2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n\
+             3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 200 300]>>endobj\n\
+             5 0 obj<</Type/Action/S/JavaScript/JS({script})>>endobj\n\
+             trailer<</Root 1 0 R/Size 6>>\n"
+        )
+        .into_bytes()
+    }
+
+    /// **`--time=` is the single source of the scripting clock**, and it is
+    /// read end to end: the flag reaches `ScriptConfig` and `Date.now()`
+    /// answers with it.
+    ///
+    /// The seed here is deliberately *not* the harness's `1399672130`, so a
+    /// constant hard-coded anywhere below the flag could not pass this.
+    #[cfg(feature = "script")]
+    #[test]
+    fn the_time_flag_reaches_the_scripting_clock() {
+        let (out, _) = run(
+            &with_open_action("app.alert(Date.now());"),
+            &["--js-transcript", "--time=1700000000"],
+        );
+        assert_eq!(out, "Alert: 1700000000000\n");
+    }
+
+    /// Absent the flag the clock is the machine's, which is the oracle's rule
+    /// — its hooks are installed only inside `if (options.time > -1)`
+    /// (`pdfium_test.cc:2129-2135`). Asserted as "not 2014", which is the
+    /// claim, rather than as a stopwatch reading, which would flake.
+    #[cfg(feature = "script")]
+    #[test]
+    fn without_the_time_flag_the_clock_is_the_machines() {
+        let (out, _) = run(
+            &with_open_action("app.alert(new Date().getFullYear());"),
+            &["--js-transcript"],
+        );
+        let year: i32 = out
+            .trim()
+            .trim_start_matches("Alert: ")
+            .parse()
+            .unwrap_or_else(|_| panic!("a year, got {out:?}"));
+        assert!(
+            year >= 2025,
+            "the real clock, not the frozen 2014 seed: got {year}"
+        );
+    }
+
+    /// A malformed value does what `std::stringstream(s) >> time_t` does —
+    /// leaves the target at zero, which passes the `< 0` check and is the
+    /// epoch (`pdfium_test.cc:783-788`). Accepted, not refused, and the
+    /// scripts see 1970.
+    #[cfg(feature = "script")]
+    #[test]
+    fn a_malformed_time_freezes_the_clock_at_the_epoch() {
+        let (out, _) = run(
+            &with_open_action("app.alert(Date.now());"),
+            &["--js-transcript", "--time=not-a-number"],
+        );
+        assert_eq!(out, "Alert: 0\n");
     }
 }

@@ -111,8 +111,8 @@ pub struct Options {
     /// The oracle has this flag too — it picks between its AGG and Skia
     /// backends — so unlike `--save` this is not an asymmetry with the oracle's
     /// surface, and the harness can pass it to both. Our names are our own
-    /// (`exact`, `tiny-skia`, `vello`), and an unrecognised value falls back to
-    /// the default rather than failing, exactly as an unknown renderer name
+    /// (`agg`, `tiny-skia`, `vello-cpu`), and an unrecognised value falls back
+    /// to the default rather than failing, exactly as an unknown renderer name
     /// does upstream.
     pub use_renderer: Option<String>,
     /// Apply the sibling `.evt` script, from `--send-events`.
@@ -133,6 +133,22 @@ pub struct Options {
     /// `unsupported-tool` rather than an empty transcript that looks like an
     /// answer.
     pub js_transcript: bool,
+    /// The instant the scripting clock is frozen at, from `--time=`, in
+    /// **seconds** since the epoch.
+    ///
+    /// `None` is "no `--time` given", and it means the real wall clock —
+    /// which is the oracle's own rule: `options.time` is a `time_t`
+    /// initialised to `-1`, and the clock hooks are installed only inside
+    /// `if (options.time > -1)`
+    /// (`testing/pdfium_test/pdfium_test.cc:217,2129-2135`). Absent the flag,
+    /// `FXSYS_time`/`FXSYS_localtime` fall through to libc
+    /// (`core/fxcrt/fx_extension.cpp:110-125`).
+    ///
+    /// **This flag is the single source of the scripting clock.** A
+    /// conformance run passes `--time=1399672130`
+    /// (`conformance::oracle::determinism_args`) and every date in a golden
+    /// transcript is derived from it; nothing else in the tool freezes time.
+    pub time: Option<u64>,
     /// Flags recognized but not implemented, in the order they were given.
     pub unsupported: Vec<String>,
 }
@@ -180,13 +196,7 @@ const ACCEPTED_SWITCHES: &[&str] = &[
 ];
 
 /// Flags of the form `--key=value` that we accept without implementing.
-const ACCEPTED_VALUED: &[&str] = &[
-    "--scale=",
-    "--render-repeats=",
-    "--bin-dir=",
-    "--js-flags=",
-    "--time=",
-];
+const ACCEPTED_VALUED: &[&str] = &["--scale=", "--render-repeats=", "--bin-dir=", "--js-flags="];
 
 /// The output formats that mean "rasterize the page", with the extension each
 /// writes beside the input.
@@ -251,6 +261,17 @@ pub fn parse(args: &[String]) -> Result<Options, ParseError> {
             } else {
                 options.unsupported.push(arg.clone());
             }
+        } else if let Some(value) = arg.strip_prefix("--time=") {
+            if options.time.is_some() {
+                return Err(ParseError::Rejected("Duplicate --time argument".to_owned()));
+            }
+            let seconds = extract_time(value);
+            if seconds < 0 {
+                return Err(ParseError::Rejected(
+                    "Invalid --time argument, must be non-negative".to_owned(),
+                ));
+            }
+            options.time = Some(seconds.unsigned_abs());
         } else if arg == "--show-metadata" {
             options.show_metadata = true;
         } else if arg == "--md5" {
@@ -324,6 +345,40 @@ fn parse_page_range(text: &str) -> PageRange {
             last: extract_int(last),
         },
     }
+}
+
+/// `--time=`'s value, read the way `std::stringstream(s) >> time_t` reads it.
+///
+/// Not [`extract_int`]: `time_t` is signed and 64-bit, and the sign matters
+/// because the oracle's very next line is `if (options->time < 0)` →
+/// `"Invalid --time argument, must be non-negative"`
+/// (`testing/pdfium_test/pdfium_test.cc:783-788`). So a leading `-` has to
+/// survive extraction to be rejected, where `--pages=-3` merely yields zero.
+///
+/// The three failure shapes are C++11's, not ours:
+/// - text with no leading number (`--time=x`) fails extraction, which sets
+///   the target to **`0`** — the epoch, accepted, *not* an error;
+/// - a leading number followed by anything (`--time=99abc`) extracts `99`;
+/// - a value past `time_t`'s range saturates at the extreme and, for a
+///   positive overflow, is accepted as that extreme.
+fn extract_time(text: &str) -> i64 {
+    let body = text.trim_start();
+    let (negative, digits) = match body.strip_prefix('-') {
+        Some(rest) => (true, rest),
+        None => (false, body.strip_prefix('+').unwrap_or(body)),
+    };
+    let end = digits
+        .char_indices()
+        .find(|(_, c)| !c.is_ascii_digit())
+        .map_or(digits.len(), |(index, _)| index);
+    // No digits at all is extraction failure, which is `0` and not a sign.
+    let Some(number) = digits.get(..end).filter(|s| !s.is_empty()) else {
+        return 0;
+    };
+    // `>>` saturates on overflow and leaves the sign it read, so a huge
+    // negative is still negative and is still refused below.
+    let magnitude = number.parse::<i64>().unwrap_or(i64::MAX);
+    if negative { -magnitude } else { magnitude }
 }
 
 /// The leading integer of `text`, or zero — `operator>>(int&)` on failure.
@@ -439,9 +494,56 @@ mod tests {
 
     #[test]
     fn flags_we_do_not_implement_are_accepted_and_recorded() {
-        let options = parse_args(&["--scale=2", "--time=1399672130", "a.pdf"]).unwrap();
-        assert_eq!(options.unsupported, ["--scale=2", "--time=1399672130"]);
+        let options = parse_args(&["--scale=2", "--js-flags=--expose-gc", "a.pdf"]).unwrap();
+        assert_eq!(options.unsupported, ["--scale=2", "--js-flags=--expose-gc"]);
         assert_eq!(options.files, [PathBuf::from("a.pdf")]);
+    }
+
+    /// `--time=` is the scripting clock and is read, not recorded: the value
+    /// the conformance harness passes is the instant every golden transcript's
+    /// dates are derived from.
+    #[test]
+    fn time_is_read_rather_than_recorded_as_unsupported() {
+        let options = parse_args(&["--time=1399672130", "a.pdf"]).unwrap();
+        assert_eq!(options.time, Some(1_399_672_130));
+        assert!(options.unsupported.is_empty());
+    }
+
+    /// Absent the flag there is no frozen instant, which is the oracle's
+    /// `time_t time = -1` sentinel and means the real wall clock.
+    #[test]
+    fn no_time_flag_leaves_the_clock_alone() {
+        assert_eq!(parse_args(&["a.pdf"]).unwrap().time, None);
+    }
+
+    /// The three malformed shapes, each doing what `std::stringstream >>
+    /// time_t` followed by `if (time < 0)` does
+    /// (`pdfium_test.cc:783-788`).
+    #[test]
+    fn a_malformed_time_behaves_as_the_oracles_stream_extraction_does() {
+        // Extraction failure leaves the target at zero, which is a *valid*
+        // non-negative instant: the epoch, accepted without complaint.
+        assert_eq!(parse_args(&["--time=x"]).unwrap().time, Some(0));
+        assert_eq!(parse_args(&["--time="]).unwrap().time, Some(0));
+        // A leading number followed by junk extracts the number.
+        assert_eq!(parse_args(&["--time=99abc"]).unwrap().time, Some(99));
+        // A negative value survives extraction and is then refused.
+        assert_eq!(
+            parse_args(&["--time=-1"]),
+            Err(ParseError::Rejected(
+                "Invalid --time argument, must be non-negative".to_owned()
+            ))
+        );
+    }
+
+    /// A second `--time=` is refused rather than overwriting, unlike
+    /// `--use-renderer=` (`pdfium_test.cc:779-782`).
+    #[test]
+    fn a_duplicate_time_is_refused() {
+        assert_eq!(
+            parse_args(&["--time=1", "--time=2"]),
+            Err(ParseError::Rejected("Duplicate --time argument".to_owned()))
+        );
     }
 
     #[test]
