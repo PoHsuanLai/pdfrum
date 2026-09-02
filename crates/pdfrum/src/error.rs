@@ -16,15 +16,29 @@
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum Error {
-    /// The file could not be opened: it is not a PDF, its password is wrong,
-    /// its encryption is one this reader does not implement, or it is damaged
-    /// past what recovery could repair.
+    /// The password does not open the document.
     ///
-    /// [`LoadError::WrongPassword`](pdfrum_parser::LoadError::WrongPassword)
-    /// is the one worth matching on: it means *ask the user again* rather
-    /// than *give up*, which is why the parser keeps it distinct.
+    /// The one variant worth matching on, because it is the one that means
+    /// *ask the user again* rather than *give up*. It is here, rather than
+    /// inside [`Error::Open`]'s payload, so that a caller who has never
+    /// depended on `pdfrum-parser` can write the match
+    /// (`docs/design/idiomatic-api.md` §WP1); everything else an open can go
+    /// wrong with is [`Error::Open`].
+    ///
+    /// See [`Document::open_with_password`](crate::Document::open_with_password)
+    /// for the worked example.
+    #[error("wrong password")]
+    WrongPassword,
+
+    /// The file could not be opened: it is not a PDF, its encryption is one
+    /// this reader does not implement, or it is damaged past what recovery
+    /// could repair.
+    ///
+    /// A wrong password is [`Error::WrongPassword`] and never arrives here,
+    /// even though [`OpenError`](crate::OpenError) — this variant's payload —
+    /// still has a variant for it: the conversion routes that one case out.
     #[error("cannot open document: {0}")]
-    Open(#[from] pdfrum_parser::LoadError),
+    Open(#[source] pdfrum_parser::LoadError),
 
     /// The document opened, but something asked of it afterwards failed —
     /// a page index with no page behind it, an object the store cannot
@@ -61,3 +75,19 @@ pub enum Error {
 
 /// This crate's result type.
 pub type Result<T> = std::result::Result<T, Error>;
+
+/// Wrong passwords become [`Error::WrongPassword`]; everything else an open
+/// can fail with becomes [`Error::Open`].
+///
+/// Hand-written rather than `#[error(transparent)]`/`#[from]` because that is
+/// the whole content of the conversion: `?` on a `load` is what lifts the
+/// variant, so every path that opens a document reports the same way and not
+/// only [`Document::open_with_password`](crate::Document::open_with_password).
+impl From<pdfrum_parser::LoadError> for Error {
+    fn from(e: pdfrum_parser::LoadError) -> Self {
+        match e {
+            pdfrum_parser::LoadError::WrongPassword => Error::WrongPassword,
+            other => Error::Open(other),
+        }
+    }
+}

@@ -252,11 +252,11 @@ pub pdfrum_edit::write::SaveOptions::keep_original: bool
 pub pdfrum_edit::write::SaveOptions::mode: pdfrum_edit::write::SaveMode
 pub pdfrum_edit::write::SaveOptions::remove_security: bool
 pub pdfrum_edit::write::SaveOptions::subset_new_fonts: bool
-pub pdfrum_edit::write::SaveOptions::version: core::option::Option<u8>
+pub pdfrum_edit::write::SaveOptions::version: core::option::Option<pdfrum_common::version::PdfVersion>
 impl core::default::Default for pdfrum_edit::write::SaveOptions
 pub fn pdfrum_edit::write::SaveOptions::default() -> Self
 pub fn pdfrum_edit::write::save(&pdfrum_edit::EditDoc<'_>, &pdfrum_edit::write::SaveOptions, &mut impl core::io::write::Write) -> core::result::Result<(), pdfrum_edit::Error>
-pub fn pdfrum_edit::write::write_header(&mut alloc::vec::Vec<u8>, u8, u8)
+pub fn pdfrum_edit::write::write_header(&mut alloc::vec::Vec<u8>, core::option::Option<pdfrum_common::version::PdfVersion>, core::option::Option<pdfrum_common::version::PdfVersion>)
 pub enum pdfrum_edit::ContentsShape
 pub pdfrum_edit::ContentsShape::Absent
 pub pdfrum_edit::ContentsShape::Array(alloc::vec::Vec<pdfrum_object::object::ObjRef>)
@@ -354,7 +354,7 @@ pub pdfrum_edit::SaveOptions::keep_original: bool
 pub pdfrum_edit::SaveOptions::mode: pdfrum_edit::write::SaveMode
 pub pdfrum_edit::SaveOptions::remove_security: bool
 pub pdfrum_edit::SaveOptions::subset_new_fonts: bool
-pub pdfrum_edit::SaveOptions::version: core::option::Option<u8>
+pub pdfrum_edit::SaveOptions::version: core::option::Option<pdfrum_common::version::PdfVersion>
 impl core::default::Default for pdfrum_edit::write::SaveOptions
 pub fn pdfrum_edit::write::SaveOptions::default() -> Self
 pub struct pdfrum_edit::Subsetted

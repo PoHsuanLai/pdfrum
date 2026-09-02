@@ -40,6 +40,8 @@ pub use pdfrum::ObjectError
 pub use pdfrum::OpenError
 pub use pdfrum::PageObject
 pub use pdfrum::PageRotation
+pub use pdfrum::PdfVersion
+pub use pdfrum::Permissions
 pub use pdfrum::Pixmap
 pub use pdfrum::Placement
 pub use pdfrum::PopupGeometry
@@ -74,6 +76,9 @@ pub pdfrum::Error::Read(pdfrum_parser::error::Error)
 pub pdfrum::Error::Render(pdfrum_render::error::Error)
 pub pdfrum::Error::Save(pdfrum_edit::error::Error)
 pub pdfrum::Error::Text(pdfrum_text::error::Error)
+pub pdfrum::Error::WrongPassword
+impl core::convert::From<pdfrum_parser::doc::LoadError> for pdfrum::Error
+pub fn pdfrum::Error::from(pdfrum_parser::doc::LoadError) -> Self
 pub enum pdfrum::Rotation
 pub pdfrum::Rotation::Half
 pub pdfrum::Rotation::None
@@ -129,13 +134,14 @@ pub fn pdfrum::Document::open(impl core::convert::AsRef<std::path::Path>) -> pdf
 pub fn pdfrum::Document::open_with(impl core::convert::AsRef<std::path::Path>, &pdfrum::OpenOptions) -> pdfrum::Result<pdfrum::Document>
 pub fn pdfrum::Document::open_with_password(impl core::convert::AsRef<std::path::Path>, &[u8]) -> pdfrum::Result<pdfrum::Document>
 pub fn pdfrum::Document::outline(&self) -> pdfrum::Outline<'_>
+pub fn pdfrum::Document::owner_permissions(&self) -> pdfrum_crypt::permissions::Permissions
 pub fn pdfrum::Document::page(&self, u32) -> pdfrum::Result<pdfrum::Page<'_>>
 pub fn pdfrum::Document::page_count(&self) -> u32
 pub fn pdfrum::Document::page_label(&self, u32) -> core::option::Option<alloc::string::String>
 pub fn pdfrum::Document::pages(&self) -> impl core::iter::traits::iterator::Iterator<Item = pdfrum::Page<'_>> + '_
 pub fn pdfrum::Document::parser(&self) -> &pdfrum_parser::doc::Document
-pub fn pdfrum::Document::permissions(&self, bool) -> u32
-pub fn pdfrum::Document::version(&self) -> u8
+pub fn pdfrum::Document::permissions(&self) -> pdfrum_crypt::permissions::Permissions
+pub fn pdfrum::Document::version(&self) -> core::option::Option<pdfrum_common::version::PdfVersion>
 pub fn pdfrum::Document::xmp_metadata(&self) -> core::option::Option<alloc::vec::Vec<u8>>
 pub fn pdfrum::Document::xref_was_rebuilt(&self) -> bool
 impl pdfrum::Document
@@ -311,7 +317,7 @@ pub fn pdfrum::RenderSession::new() -> pdfrum::RenderSession
 pub struct pdfrum::SaveOptions
 pub pdfrum::SaveOptions::remove_security: bool
 pub pdfrum::SaveOptions::update: pdfrum::Update
-pub pdfrum::SaveOptions::version: core::option::Option<u8>
+pub pdfrum::SaveOptions::version: core::option::Option<pdfrum_common::version::PdfVersion>
 pub struct pdfrum::TextBuilder
 pub pdfrum::TextBuilder::codes: alloc::vec::Vec<u8>
 pub pdfrum::TextBuilder::fill: peniko::Color

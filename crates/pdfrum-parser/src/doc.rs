@@ -31,8 +31,8 @@
 
 use std::sync::{Arc, Mutex};
 
-use pdfrum_common::{DiagKind, Diagnostics, Limits, Severity};
-use pdfrum_crypt::SecurityHandler;
+use pdfrum_common::{DiagKind, Diagnostics, Limits, PdfVersion, Severity};
+use pdfrum_crypt::{Permissions, SecurityHandler};
 use pdfrum_object::{Dict, NoResolve, ObjRef, Object, Resolve, names};
 
 use crate::error::Error;
@@ -127,8 +127,8 @@ pub struct Document {
     trailer: Trailer,
     /// The object store.
     store: Arc<ObjectStore>,
-    /// The version the header declared, as major × 10 + minor.
-    version: u8,
+    /// The version the header declared, or `None` when it declared none.
+    version: Option<PdfVersion>,
     /// Where the header was found in the original file.
     header_offset: u64,
     /// The shape of the cross-reference the load used, for the writer.
@@ -272,17 +272,28 @@ fn find_header(bytes: &[u8], limits: &Limits) -> Option<usize> {
     (0..=last).find(|&i| bytes.get(i..i + 4) == Some(b"%PDF"))
 }
 
-/// Read the version digits out of `%PDF-M.N`, as major × 10 + minor.
+/// Read the version digits out of `%PDF-M.N`.
 ///
-/// Never validated: a header claiming version 9.9 opens like any other, and
-/// a non-digit contributes nothing.
-fn read_version(body: &[u8]) -> u8 {
+/// Never validated: a header claiming version 9.9 opens like any other, and a
+/// non-digit contributes nothing.
+///
+/// This is the one place in the workspace that knows the `major × 10 + minor`
+/// packing the old `Document::version() -> u8` published: the digits are read,
+/// packed, and immediately unpacked into a [`PdfVersion`]. The round trip is
+/// kept rather than removed because `0` — the answer when neither digit is
+/// readable — is what distinguishes "no version declared" from version 0.0,
+/// and collapsing the two would change which documents the writer gives its
+/// 1.7 fallback to.
+fn read_version(body: &[u8]) -> Option<PdfVersion> {
     let digit = |i: usize| -> u8 {
         body.get(i)
             .filter(|b| b.is_ascii_digit())
             .map_or(0, |b| b - b'0')
     };
-    digit(5).saturating_mul(10).saturating_add(digit(7))
+    match digit(5).saturating_mul(10).saturating_add(digit(7)) {
+        0 => None,
+        packed => Some(PdfVersion::new(packed / 10, packed % 10)),
+    }
 }
 
 /// Build the security handler the trailer's `/Encrypt` calls for.
@@ -689,10 +700,19 @@ impl Document {
             .ok_or(Error::NoCatalog)
     }
 
-    /// The version the header declared, as major × 10 + minor: `17` for
-    /// `%PDF-1.7`. Never validated.
+    /// The version the header declared: [`PdfVersion::PDF_1_7`] for
+    /// `%PDF-1.7`.
+    ///
+    /// Never validated — a header claiming 9.9 opens like any other and
+    /// reports 9.9. `None` means the header carried no readable digits at
+    /// all, which a file with no `%PDF` line and one with `%PDF-x.y` both
+    /// produce; the writer's fallback for that case is 1.7.
+    ///
+    /// Was `-> u8` in the `major × 10 + minor` packing (`17` for 1.7), which
+    /// `docs/design/idiomatic-api.md` §WP1 replaces with the type; the packing
+    /// survives only in this module's private `read_version`.
     #[must_use]
-    pub fn version(&self) -> u8 {
+    pub fn version(&self) -> Option<PdfVersion> {
         self.version
     }
 
@@ -789,13 +809,27 @@ impl Document {
         self.encrypt.as_ref().map(|(d, inline)| (d, *inline))
     }
 
-    /// What the document permits, as the permission word.
+    /// What the document permits, for the password that opened it.
     ///
-    /// `owner` asks for the owner's view, which is unrestricted when the
-    /// owner password opened the document.
+    /// The owner's own unrestricted view is
+    /// [`Document::owner_permissions`]. An unencrypted document permits
+    /// everything.
+    ///
+    /// Was `permissions(owner: bool) -> u32`; the boolean mode is now two
+    /// methods and the ISO table-22 decode is in `pdfrum-crypt`, next to the
+    /// `/P` word (`docs/design/idiomatic-api.md` §WP1, §A.3).
     #[must_use]
-    pub fn permissions(&self, owner: bool) -> u32 {
-        self.store.security().permissions(owner)
+    pub fn permissions(&self) -> Permissions {
+        self.store.security().permissions()
+    }
+
+    /// What the document permits under the owner's view.
+    ///
+    /// Every permission, for a document the owner password opened; otherwise
+    /// the same answer as [`Document::permissions`].
+    #[must_use]
+    pub fn owner_permissions(&self) -> Permissions {
+        self.store.security().owner_permissions()
     }
 
     /// Whether the document is encrypted.
@@ -848,7 +882,8 @@ impl Resolve for Document {
 #[cfg(test)]
 mod tests {
     use super::{LoadError, LoadOptions, find_header, load, read_version};
-    use pdfrum_common::{DiagKind, Limits};
+    use pdfrum_common::{DiagKind, Limits, PdfVersion};
+    use pdfrum_crypt::Permissions;
     use pdfrum_object::{Name, names};
     use std::sync::Arc;
 
@@ -911,9 +946,23 @@ mod tests {
 
     #[test]
     fn version_digits_are_read_not_validated() {
-        assert_eq!(read_version(b"%PDF-1.7\n"), 17);
-        assert_eq!(read_version(b"%PDF-2.0\n"), 20);
-        assert_eq!(read_version(b"%PDF-x.y\n"), 0);
+        assert_eq!(read_version(b"%PDF-1.7\n"), Some(PdfVersion::PDF_1_7));
+        assert_eq!(read_version(b"%PDF-2.0\n"), Some(PdfVersion::PDF_2_0));
+        assert_eq!(read_version(b"%PDF-x.y\n"), None);
+        // The private packing round-trips every digit pair the header can
+        // spell, and only `0.0` — which is unreachable, since a `0` packed
+        // value is reported as "no version" — is not a `Some`.
+        for major in 0..=9u8 {
+            for minor in 0..=9u8 {
+                let header = format!("%PDF-{major}.{minor}\n");
+                let expected = (major, minor) != (0, 0);
+                assert_eq!(
+                    read_version(header.as_bytes()),
+                    expected.then(|| PdfVersion::new(major, minor)),
+                    "header {header:?}"
+                );
+            }
+        }
     }
 
     #[test]
@@ -927,10 +976,10 @@ mod tests {
     fn opens_a_document_and_counts_its_pages() {
         let doc = open(&build(3)).expect("document");
         assert_eq!(doc.page_count(), 3);
-        assert_eq!(doc.version(), 17);
+        assert_eq!(doc.version(), Some(PdfVersion::PDF_1_7));
         assert!(!doc.xref_was_rebuilt());
         assert!(!doc.is_encrypted());
-        assert_eq!(doc.permissions(false), 0xFFFF_FFFF);
+        assert_eq!(doc.permissions(), Permissions::ALL);
     }
 
     #[test]

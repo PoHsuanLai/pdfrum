@@ -13,6 +13,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use pdfrum_crypt::Permissions;
 use pdfrum_parser::{Document, LoadError, LoadOptions, load};
 
 /// Where the oracle's test files live, when this checkout has them.
@@ -55,7 +56,7 @@ fn a_plain_document_opens_without_repairs() {
     assert!(!doc.xref_was_rebuilt());
     assert!(!doc.is_encrypted());
     assert!(doc.catalog().is_ok());
-    assert_eq!(doc.version(), 17);
+    assert_eq!(doc.version(), Some(pdfrum_common::PdfVersion::PDF_1_7));
 }
 
 #[test]
@@ -188,12 +189,21 @@ fn either_password_opens_an_encrypted_document() {
     let owner = owner.expect("the owner password opens encrypted.pdf");
     assert_eq!(owner.page_count(), 1);
     // The owner sees every permission granted; the same document read with
-    // the user password reports only what `/P` allows. Both spellings keep
-    // the reserved bits the standard handler forces.
-    assert_eq!(owner.permissions(true), 0xFFFF_FFFC);
-    assert_eq!(owner.permissions(false), 0xFFFF_F2C0);
-    assert_eq!(user.permissions(true), 0xFFFF_F2C0);
-    assert_eq!(user.permissions(false), 0xFFFF_F2C0);
+    // the user password reports only what `/P` allows. The raw words behind
+    // these — `0xFFFF_FFFC` and `0xFFFF_F2C0`, with the reserved bits the
+    // standard handler forces — are pinned in `pdfrum-crypt`'s own tests;
+    // here they are decoded, which is what the public API now hands out.
+    assert_eq!(owner.owner_permissions(), Permissions::ALL);
+    // `/P` here is `0xFFFF_F2C0`, which of table 22's eight named bits sets
+    // only bit 10 — accessibility extraction. Everything else, printing
+    // included, is denied.
+    let restricted = Permissions {
+        extract: true,
+        ..Permissions::NONE
+    };
+    assert_eq!(owner.permissions(), restricted);
+    assert_eq!(user.owner_permissions(), restricted);
+    assert_eq!(user.permissions(), restricted);
 }
 
 #[test]

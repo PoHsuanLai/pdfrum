@@ -9,7 +9,8 @@
 use std::sync::Arc;
 
 use pdfrum::{
-    Document, FieldKind, FindOptions, OpenOptions, RenderOptions, SaveOptions, Subtype, Update,
+    Document, FieldKind, FindOptions, OpenOptions, PdfVersion, Permissions, RenderOptions,
+    SaveOptions, Subtype, Update,
 };
 
 const HELLO: &str = "tests/fixtures/hello_world.pdf";
@@ -88,13 +89,14 @@ fn open_options_carry_the_password_and_the_limits() {
     .expect("open");
     assert_eq!(doc.page_count(), 1);
     // Everything is permitted on a file with no security handler.
-    assert_eq!(doc.permissions(false), doc.permissions(true));
+    assert_eq!(doc.permissions(), Permissions::ALL);
+    assert_eq!(doc.owner_permissions(), Permissions::ALL);
 }
 
 #[test]
 fn a_document_reports_its_version_and_its_bytes() {
     let doc = Document::open(HELLO).expect("open");
-    assert_eq!(doc.version(), 17, "%PDF-1.7");
+    assert_eq!(doc.version(), Some(PdfVersion::PDF_1_7), "%PDF-1.7");
     assert!(doc.bytes().starts_with(b"%PDF-"));
     // This file's cross-reference table is intact, so nothing had to be
     // rebuilt to open it.
@@ -717,13 +719,16 @@ fn the_declared_version_can_be_overridden_on_save() {
     doc.save_with(
         &out,
         &SaveOptions {
-            version: Some(14),
+            version: Some(PdfVersion::PDF_1_4),
             ..SaveOptions::default()
         },
     )
     .expect("save");
 
-    assert_eq!(Document::open(&out).expect("reopen").version(), 14);
+    assert_eq!(
+        Document::open(&out).expect("reopen").version(),
+        Some(PdfVersion::PDF_1_4)
+    );
     std::fs::remove_dir_all(&dir).ok();
 }
 

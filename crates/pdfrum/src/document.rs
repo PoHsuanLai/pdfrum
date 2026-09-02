@@ -3,7 +3,8 @@
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
-use pdfrum_common::{Diagnostics, Limits};
+use pdfrum_common::{Diagnostics, Limits, PdfVersion};
+use pdfrum_crypt::Permissions;
 use pdfrum_object::{Dict, Name, Object, Resolve};
 
 use crate::form::Form;
@@ -93,12 +94,29 @@ impl Document {
 
     /// Opens the file at `path`, trying `password`.
     ///
+    /// ```
+    /// use pdfrum::{Document, Error};
+    ///
+    /// const ENCRYPTED: &str = "tests/fixtures/encrypted.pdf";
+    ///
+    /// // The user password opens it.
+    /// let doc = Document::open_with_password(ENCRYPTED, b"1234")?;
+    /// assert_eq!(doc.page_count(), 1);
+    ///
+    /// // Anything else is the one error worth prompting again on.
+    /// match Document::open_with_password(ENCRYPTED, b"nope") {
+    ///     Err(Error::WrongPassword) => {} // ask the user again
+    ///     other => panic!("expected a wrong password, got {other:?}"),
+    /// }
+    /// # Ok::<(), pdfrum::Error>(())
+    /// ```
+    ///
     /// # Errors
     ///
-    /// [`Error::Open`](crate::Error::Open) wrapping
-    /// [`LoadError::WrongPassword`](pdfrum_parser::LoadError::WrongPassword)
-    /// when the password does not open the file — the variant to match on to
-    /// decide whether to prompt again.
+    /// [`Error::WrongPassword`](crate::Error::WrongPassword) when the password
+    /// does not open the file — the variant to match on to decide whether to
+    /// prompt again. Everything else an open can fail with is
+    /// [`Error::Open`](crate::Error::Open).
     pub fn open_with_password(path: impl AsRef<Path>, password: &[u8]) -> Result<Document> {
         Document::open_with(
             path,
@@ -388,10 +406,20 @@ impl Document {
         }
     }
 
-    /// The PDF version the header declares, as major × 10 + minor: `17` for
-    /// `%PDF-1.7`.
+    /// The PDF version the header declares: [`PdfVersion::PDF_1_7`] for
+    /// `%PDF-1.7`, and `None` for a file that declares none.
+    ///
+    /// Never validated — a header claiming 9.9 reports 9.9.
+    ///
+    /// ```
+    /// use pdfrum::PdfVersion;
+    ///
+    /// let doc = pdfrum::Document::open("tests/fixtures/bookmarks.pdf")?;
+    /// assert_eq!(doc.version(), Some(PdfVersion::PDF_1_7));
+    /// # Ok::<(), pdfrum::Error>(())
+    /// ```
     #[must_use]
-    pub fn version(&self) -> u8 {
+    pub fn version(&self) -> Option<PdfVersion> {
         self.inner.version()
     }
 
@@ -405,13 +433,29 @@ impl Document {
         self.inner.is_encrypted()
     }
 
-    /// The permission bits the security handler grants (ISO 32000-1 §7.6.4).
+    /// What the document permits, for the password that opened it
+    /// (ISO 32000-1 §7.6.4).
     ///
-    /// `owner` asks for the owner's permissions rather than the user's. An
-    /// unencrypted document grants everything.
+    /// An unencrypted document grants everything. The owner's own
+    /// unrestricted view is [`Document::owner_permissions`].
+    ///
+    /// ```
+    /// let doc = pdfrum::Document::open("tests/fixtures/hello_world.pdf")?;
+    /// assert!(doc.permissions().print);
+    /// # Ok::<(), pdfrum::Error>(())
+    /// ```
     #[must_use]
-    pub fn permissions(&self, owner: bool) -> u32 {
-        self.inner.permissions(owner)
+    pub fn permissions(&self) -> Permissions {
+        self.inner.permissions()
+    }
+
+    /// What the document permits under the owner's view.
+    ///
+    /// Every permission, for a document the owner password opened; otherwise
+    /// the same answer as [`Document::permissions`].
+    #[must_use]
+    pub fn owner_permissions(&self) -> Permissions {
+        self.inner.owner_permissions()
     }
 
     /// Whether the cross-reference table had to be rebuilt by scanning the

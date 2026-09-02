@@ -3,7 +3,7 @@
 use std::io::Write;
 use std::path::Path;
 
-use pdfrum_common::Diagnostics;
+use pdfrum_common::{Diagnostics, PdfVersion};
 use pdfrum_edit::{EditDoc, SaveMode};
 use pdfrum_object::Object;
 
@@ -24,9 +24,16 @@ use crate::{Document, Form, PageEdit, Result};
 pub struct SaveOptions {
     /// Whether to rewrite the file or append to it.
     pub update: Update,
-    /// The PDF version to declare in the header, as major × 10 + minor
-    /// (`17` for 1.7). `None` keeps the document's own.
-    pub version: Option<u8>,
+    /// The PDF version to declare in the header. 1.0 through 1.7 are
+    /// honoured; anything else, and `None`, keep the document's own.
+    ///
+    /// ```
+    /// use pdfrum::{PdfVersion, SaveOptions};
+    ///
+    /// let opts = SaveOptions { version: Some(PdfVersion::PDF_1_4), ..SaveOptions::default() };
+    /// assert_eq!(opts.version.map(|v| v.to_string()).as_deref(), Some("1.4"));
+    /// ```
+    pub version: Option<PdfVersion>,
     /// Write an encrypted document out in the clear, dropping `/Encrypt`.
     ///
     /// Off by default: an encrypted document saves encrypted under the handler

@@ -1118,16 +1118,21 @@ impl<'a> FormSession<'a> {
     }
 
     /// What the document permits, which gates every non-push-button click.
+    ///
+    /// `pdfrum-form` asks only two of ISO 32000-1 table 22's eight questions,
+    /// and keeps its own two-field type for them — it does not depend on
+    /// `pdfrum-crypt` and has no reason to. This is where the two vocabularies
+    /// meet, and it is now a field-for-field rename rather than the
+    /// `bits & 0x100` / `bits & 0x20` this used to spell: the bit numbers live
+    /// beside the `/P` word they decode (`docs/design/idiomatic-api.md` §A.3).
     fn permissions(&self) -> pdfrum_form::Permissions {
         if !self.doc.is_encrypted() {
             return pdfrum_form::Permissions::ALL;
         }
-        let bits = self.doc.permissions(false);
+        let granted = self.doc.permissions();
         pdfrum_form::Permissions {
-            // Bit 9 (value 256) is fill-in; bit 6 (value 32) is annotation
-            // modification. Either one suffices.
-            fill_form: bits & 0x100 != 0,
-            modify_annotation: bits & 0x20 != 0,
+            fill_form: granted.fill_form,
+            modify_annotation: granted.annotate,
         }
     }
 }

@@ -252,13 +252,16 @@ fn permissions_survive_the_save() {
         };
         let out = saved(&doc, &fixed(SaveMode::Full));
         let reopened = reload(&out, Some(password)).expect("reopens");
-        for owner in [false, true] {
-            assert_eq!(
-                reopened.permissions(owner),
-                doc.permissions(owner),
-                "{name} changed its permissions (owner = {owner})"
-            );
-        }
+        assert_eq!(
+            reopened.permissions(),
+            doc.permissions(),
+            "{name} changed its permissions"
+        );
+        assert_eq!(
+            reopened.owner_permissions(),
+            doc.owner_permissions(),
+            "{name} changed its owner permissions"
+        );
         // And the raw `/P` word itself, which is what another reader reads.
         let p = |d: &Document| d.encrypt_dict().and_then(|(e, _)| e.direct_int(names::P));
         assert_eq!(p(&reopened), p(&doc), "{name} rewrote /P");
