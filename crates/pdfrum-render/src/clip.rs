@@ -217,6 +217,10 @@ pub fn pop(device: &mut dyn RenderDevice, n: usize) {
 /// Used for the per-object cull test and to size a transparency group's
 /// offscreen buffer.
 #[must_use]
+#[allow(
+    dead_code,
+    reason = "exercised only by this module's own tests; the library builds once without `cfg(test)`"
+)]
 pub fn device_bounds(clips: &[Clip]) -> Option<Rect> {
     let mut acc: Option<Rect> = None;
     for clip in clips {

@@ -331,6 +331,10 @@ pub fn zero_area_path(
 /// (`docs/status/M12b-P2.md` §5). This stays as the convenient form for a caller
 /// asking the question once.
 #[must_use]
+#[allow(
+    dead_code,
+    reason = "exercised only by this module's own tests; the library builds once without `cfg(test)`"
+)]
 pub fn zero_area_sub_paths(
     path: &BezPath,
     transform: Option<kurbo::Affine>,

@@ -37,7 +37,7 @@ pub enum ObjectKind {
 /// A resolved draw colour: straight (non-premultiplied) RGB plus an alpha.
 ///
 /// `Hash` because a stencil's ink is part of a rendered image's cache key
-/// ([`crate::imagecache::PixmapRequest`]): four bytes with a derived `Eq`, so
+/// (`crate::imagecache::PixmapRequest`): four bytes with a derived `Eq`, so
 /// the derived hash agrees with it by construction.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Argb {

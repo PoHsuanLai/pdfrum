@@ -62,6 +62,20 @@ pub struct RenderCtx<'a> {
     pub in_group: bool,
     /// Whether colour conversion uses the standard (device) spaces, set for
     /// every offscreen sub-render.
+    ///
+    /// **Set in five places and read in none.** It mirrors the oracle's
+    /// `CPDF_RenderStatus::std_cs_` (`cpdf_renderstatus.h:62`), which
+    /// `CPDF_ImageRenderer` consults when it converts an image's samples;
+    /// this port sets the flag at every site the oracle sets it and has never
+    /// wired the consumer. Making the module private is what surfaced that —
+    /// a live gap in the port, not an API-shape one, and not this pass's to
+    /// close: deleting the field would erase the record of where the oracle
+    /// sets it, and reading it is a behaviour change that has to be measured
+    /// against the goldens on its own.
+    #[allow(
+        dead_code,
+        reason = "an oracle-mirrored flag whose consumer is not ported yet; see above"
+    )]
     pub std_cs: bool,
 }
 
@@ -128,7 +142,7 @@ pub struct RenderCaches {
     /// Feeds the *path* side of text: display type above the size threshold,
     /// a stroked or pattern-coloured run, and a caller who asked for fractional
     /// placement.
-    pub glyphs: GlyphCache,
+    pub(crate) glyphs: GlyphCache,
     /// Glyph bitmaps, keyed by the outline key plus the quantised device
     /// matrix ([`crate::glyph::BitmapKey`]).
     ///
@@ -137,11 +151,11 @@ pub struct RenderCaches {
     /// because the two are keyed differently — a bitmap depends on the size it
     /// is drawn at and an outline does not — and because the outline cache
     /// lives in `pdfrum-font`, which has no notion of a device.
-    pub glyph_bitmaps: crate::glyph::BitmapCache,
+    pub(crate) glyph_bitmaps: crate::glyph::BitmapCache,
     /// Rendered images: decoded samples converted to a premultiplied pixmap
     /// and box-reduced toward their device footprint, keyed by the `XObject`
     /// they came from and the shape of the request
-    /// ([`crate::imagecache::PixmapRequest`]).
+    /// (`crate::imagecache::PixmapRequest`).
     ///
     /// A third cache rather than a field on either of the others because it is
     /// keyed by neither's key and holds neither's kind of thing: the decoded
@@ -149,7 +163,7 @@ pub struct RenderCaches {
     /// what is cached here is the two pure functions *downstream* of those
     /// samples, which `docs/status/M12.md` §3.6 measured re-running on every
     /// render of an image that had not changed.
-    pub images: crate::imagecache::RenderedImageCache,
+    pub(crate) images: crate::imagecache::RenderedImageCache,
     /// The degenerate-sub-path scan's working buffers.
     ///
     /// Not a cache — nothing is remembered between paths, and it would be wrong
@@ -161,7 +175,7 @@ pub struct RenderCaches {
     /// (`docs/status/M12b-P2.md` §4). It sits here because this is where a
     /// render session's reusable memory lives and because the alternative —
     /// a fresh `Vec` per path — is what the measurement was about.
-    pub zero_area: crate::zero_area::Scratch,
+    pub(crate) zero_area: crate::zero_area::Scratch,
     /// One text object's placed glyphs, refilled per object.
     ///
     /// The same kind of thing as [`Self::zero_area`] and for the same reason:
@@ -169,7 +183,7 @@ pub struct RenderCaches {
     /// last per-object allocation left in the walk — one `Vec<PlacedGlyph>` per
     /// text object, 3654 of them on `text_tcpdf_055`. Nothing is remembered
     /// between objects; the memory is.
-    pub placed_glyphs: Vec<crate::text::PlacedGlyph>,
+    pub(crate) placed_glyphs: Vec<crate::text::PlacedGlyph>,
 }
 
 impl RenderCaches {
@@ -177,6 +191,19 @@ impl RenderCaches {
     #[must_use]
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// How much room [`Self::placed_glyphs`] is holding, for the integration
+    /// test that checks the walk hands the buffer back.
+    ///
+    /// Hidden rather than public: it is a fact about an internal buffer and
+    /// no caller has a use for it. It exists because the property it pins —
+    /// the walk `mem::take`s the buffer and must put it back — is invisible
+    /// to every pixel test, since output is byte-identical either way.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn glyph_buffer_capacity(&self) -> usize {
+        self.placed_glyphs.capacity()
     }
 }
 
