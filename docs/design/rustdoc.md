@@ -1,7 +1,9 @@
 # Production rustdoc — trim pass
 
 **Status:** scoped, not started. Not a `[spec]` change: no signatures move.
-**Date:** 2026-09-02.
+**Date:** 2026-09-02. **Updated 2026-09-03:** names and counts re-measured
+after the idiomatic-API pass landed (`docs/design/idiomatic-api.md`), which
+renamed or removed most of the methods the first draft cited.
 **Audience:** whoever edits `///` / `//!` in library crates. STYLE.md §6 stays
 in force; this file says what that section means for a caller reading
 `docs.rs/pdfrum`.
@@ -28,16 +30,19 @@ Trim, do not strip.
   const generics,” `foo.cpp:123` — those already have a home. They do not
   belong in `///`.
 
-Measured 2026-09-02, library crates, tests excluded:
+Measured 2026-09-03, library crates, `#[cfg(test)]` modules excluded:
 
 | Kind | Lines | In `cargo doc`? |
 |---|---|---|
-| `//!` module docs | 6.8k | yes |
-| `///` item docs | 25.6k | yes |
-| `//` implementation | 8.9k | no |
+| `//!` module docs | 7.3k | yes |
+| `///` item docs | 26.1k | yes |
+| `//` implementation | 6.0k | no |
 
-Rustdoc/code is **0.28** workspace-wide. The facade is **1.11**. That
-asymmetry is the problem: callers read `pdfrum`, not `pdfrum-page`.
+Rustdoc/code is **0.41** workspace-wide (81.7k code lines). The facade is
+**1.24** (2.5k rustdoc lines over 2.0k of code). That asymmetry is the
+problem: callers read `pdfrum`, not `pdfrum-page`. The ratios rose since the
+first draft (0.28 / 1.11) because the API pass deleted code and the docs
+stayed.
 
 ---
 
@@ -47,7 +52,7 @@ A host opens `docs.rs/pdfrum` and can, in one screen, see what the crate
 does, copy one example, and click through to `Document`, `Page`, `Form`,
 `FormSession`. A type page is a summary, a short invariant if one exists,
 `# Errors` if it returns `Result`, and at most one `# Examples` block.
-Sibling methods (`render` / `render_on` / `render_session`) do not each
+Sibling methods (`render` / `render_on`, `text` / `text_on`) do not each
 repeat the crop-box story.
 
 `cargo test --doc -p pdfrum` still passes. `missing_docs = warn` still
@@ -67,8 +72,9 @@ warns. No public item becomes undocumented.
   or `pdfrum-tool`.
 - Do not hide public items with `#[doc(hidden)]` just to shorten rustdoc.
   Hidden is for sibling-crate plumbing that was never a host API
-  (`debug_runs`, scan-conversion constants). That is a later, separate
-  hygiene pass (idiomatic-api.md WP11), not this one.
+  (`debug_runs`, the fuzz-only link checkers). The hygiene pass that decided
+  what is hidden (idiomatic-api.md WP11, landed 2026-09-03) is done; this
+  pass inherits its answers and adds none.
 
 ---
 
@@ -125,7 +131,7 @@ A “line” is a rustdoc source line (`/// …`), not a rendered paragraph.
 - One example that a copy-paste compiles:
   - crate root: open → render → text
   - `FormSession`: click, type, blur (this is the one that earns a long
-    example; it lives on the **type**, not on `on_mouse_down`)
+    example; it lives on the **type**, not on `mouse_down` or `apply`)
   - `Page::render`: default + scaled
   - `Document::from_bytes`: the `Arc<[u8]>` contract
 - ISO section citations (`ISO 32000-1 §12.7`).
@@ -139,7 +145,7 @@ A “line” is a rustdoc source line (`/// …`), not a rendered paragraph.
 | “Const generics were considered and rejected…” | `docs/design/` of that crate |
 | `cpdf_*.cpp:309`, `pdfium_test paints`, `FFLDraw` | `docs/design/pdfrum-*.md` (already there) |
 | STYLE.md section numbers in a public item | STYLE.md |
-| Three rayon doctests on the crate page | keep **one** (the `par_iter` + `RenderSession` form); drop `BuildContext` and the no-session variants |
+| The rayon doctest on the crate page and the one on `RenderSession` | keep **one** of the two (the `par_iter` + one-session-per-worker form); the crate page's `BuildContext` variant is already gone |
 | Essay on every `render_*` / `with_config*` twin | one sentence + `see Page::render` / `see FormSession::new` |
 | “This crate composes, it does not compute” plus the member-crate tour | README “The facade”; crate page keeps one sentence and the escape-hatch links |
 | M15 fixture counts, `this.getField` not built, PLAN.md §M15 | `docs/status/M15.md`; crate page: “`script` is off by default; the `Doc`/`Field` object model is incomplete” |
@@ -162,16 +168,19 @@ That is the whole doc. No second example that asserts `(200, 200)` again. No
 history of the `Backend` enum. The example lives on `render` (or on
 `RenderOptions`), once.
 
-Apply to: `render` / `render_on` / `render_with` / `render_with_on` /
-`render_session` / `render_session_on`; `text` / `text_with` / `text_session`;
-`FormSession::new` / `with_config` / `with_context` / `with_config_in` /
-`with_cascade` / `with_scripts`; `save` / `save_with` / `write_to` /
-`save_incremental`; `save_form` / `write_form_to`; `save_pages` /
-`write_pages_to`.
+Apply to: `render` / `render_on`; `text` / `text_on`; `FormSession::new` /
+`with_config` / `with_context` / `with_config_in` / `with_cascade` /
+`with_scripts`; `mouse_move` / `mouse_down` / `mouse_up` / `double_click` /
+`mouse_wheel` / `focus_at` / `key_down` / `character` (each is
+`apply(Event::…)` — one sentence and a link to [`FormSession::apply`]);
+`save` / `save_with` / `write_to` / `save_incremental`; `save_form` /
+`write_form_to`; `Document::save_pages` / `write_pages_to` and
+`DocEdit::save_pages` / `write_pages_to` / `save` / `write_to` (the
+`Document` forms delegate to `DocEdit`; say so in one sentence and link).
 
 ### Examples: one canonical site
 
-The facade currently has **52** doctest fences. After the pass, target
+The facade currently has **51** doctest blocks. After the pass, target
 **~20**, all still compiling.
 
 | Example | Lives on | Deleted from |
@@ -179,10 +188,11 @@ The facade currently has **52** doctest fences. After the pass, target
 | open + render + text | crate `//!` | — |
 | parallel render with `RenderSession` | crate `//!` *or* `RenderSession` (pick one) | the other, and `BuildContext` rayon snippet |
 | `from_bytes(Arc<[u8]>)` | `Document::from_bytes` | — |
-| `page.render` default and 2× | `Page::render` | `render_on`, `render_session`, `RenderOptions` if it only repeats size |
-| click / type / undo / blur | `FormSession` (the type) | `with_config_in`, `with_context` |
+| `page.render` default and 2× | `Page::render` | `render_on`, `RenderOptions` if it only repeats size |
+| click / type / undo / blur | `FormSession` (the type) | `with_config_in`, `with_context`, `apply`, the `mouse_*` wrappers |
 | `Form::set` then `save_form` | `Document::save_form` | `Form::set` keeps a three-line snippet *or* a link |
 | `Page::edit` + `remove` | `Page::edit` | `save_pages` can stay as “and then save” with no second walkthrough |
+| embed a font, write text in it, save | `DocEdit::embed_font` | `standard_font`, `TextBuilder` (link) |
 
 Doctests that exist only to re-assert `page_count() == 1` on
 `hello_world.pdf` go. The unit tests already own that.
@@ -193,7 +203,7 @@ Doctests that exist only to re-assert `page_count() == 1` on
 
 ### Crate root (`pdfrum/src/lib.rs`)
 
-Today: 214 lines. Target: ≤ 50.
+Today: 201 lines. Target: ≤ 50.
 
 Keep: one-paragraph identity, the open/render/text snippet, “Where to start”
 bullets, JS-off-by-default + `script` feature in five lines, damage in four
@@ -204,22 +214,9 @@ arithmetic.
 
 ### `Page::render_on`
 
-Today (abridged):
-
-```text
-Renders the page on a rasterizer you name.
-
-Page::render is this with VelloCpuBackend — … named here:
-tinyskia … agg … vello GPU …
-
-Added 2026-09-02, replacing RenderOptions::backend … Const generics
-were considered and rejected …
-
-# Errors
-As Page::render.
-
-``` example asserting 200×200 ```
-```
+Today: 60 lines — a catalogue of every rasterizer crate and which one
+`render` picks, the session-and-caches story restated from `RenderSession`,
+`# Errors`, and an example that repeats `render`'s size assertion.
 
 After:
 
@@ -243,7 +240,8 @@ snippet, or a two-line `assert!(doc.all_diagnostics().len() >= n)` on
 
 ### `FormSession` the type
 
-Today: 76 lines including the full tutorial.
+Today: 117 lines including the full tutorial and the `apply` / wrapper
+story that step 8 of the API pass added.
 
 After: three short sections — events in / values out; page-space
 coordinates; focus vs appearance — then **one** example (click, type,
@@ -273,15 +271,23 @@ Rewrite, in this order (current line counts of the worst offenders):
 
 | Item | File | Now |
 |---|---|---|
-| `FormSession` | `form_session.rs` | 76 |
+| `FormSession` | `form_session.rs` | 117 |
+| `Page::render_on` | `page.rs` | 60 |
+| `FormSession::with_scripts` | `form_session.rs` | 52 |
 | `PageEdit` | `edit.rs` | 52 |
-| `FormSession::with_scripts` | `form_session.rs` | 51 |
-| `RenderSession` | `session.rs` | 39 |
+| `RenderSession` | `session.rs` | 41 |
+| `Page::render` | `page.rs` | 38 |
 | `RenderOptions` | `render.rs` | 36 |
-| `Document::all_diagnostics` | `document.rs` | 35 |
-| `FormSession::with_cascade` / `with_config_in` / `with_context` | `form_session.rs` | 33 / 33 / 32 |
-| `Page::render` | `page.rs` | 32 |
-| `Document::save_pages` | `save.rs` | 31 |
+| `Document::save_pages` / `save_form` / `import_pages` / `save` | `save.rs` | 35 / 30 / 29 / 21 |
+| `Document::all_diagnostics` / `open_with_password` | `document.rs` | 35 / 25 |
+| the `Argb` and `LoadError` re-export comments | `lib.rs` | 35 / 23 |
+| `FormSession::with_config_in` / `with_cascade` / `with_context` / `popup_for_page` / `apply` | `form_session.rs` | 34 / 33 / 32 / 21 / 21 |
+| `DocEdit::embed_font` | `save.rs` | 29 |
+| `Form` / `Form::set` | `form.rs` | 28 / 26 |
+| `Outline` | `outline.rs` | 24 |
+
+(Measured 2026-09-03 as consecutive `///` lines above each `pub` item;
+everything over the 20-line cap is listed.)
 
 Apply the sibling rule while touching those files so `render_on` and
 friends shrink in the same diff as `render`.
@@ -327,12 +333,12 @@ Priority order (host-reachable first):
 4. `pdfrum-object` (`Resolve`, `Object`, `Dict` accessors) — the one-level story stays, shortened
 5. The rest (`pdfrum-page`, `pdfrum-doc`, `pdfrum-parser`, …) only if a type page is > 30 lines
 
-Known offenders already over the cap (for WP5, not WP2):
-`pdfrum-render/src/text.rs` `place_glyphs` (65),
-`pdfrum-form/src/edit/ops.rs` scroll-to-caret (56),
-`pdfrum-doc` widget/annot-render essays (47–52). Those should become
-`//` on the function body if the item is not part of the crate’s
-documented surface, or a 12-line `///` if it is.
+Known offenders from the first draft (`pdfrum-render/src/text.rs`
+`place_glyphs` at 65, `pdfrum-form/src/edit/ops.rs` scroll-to-caret at 56,
+`pdfrum-doc` widget/annot-render essays at 47–52) were mostly **privatised
+by the curation pass** since; a private item's essay becomes `//` on the
+function body, and only what a crate still re-exports gets a 12-line `///`.
+Re-measure per crate with the same script as WP2 before starting.
 
 ### WP6 — STYLE.md one paragraph
 
@@ -378,7 +384,7 @@ crates are a grind. Mixing them produces an unreviewable diff.
 - [ ] `cargo test --doc -p pdfrum` passes.
 - [ ] `cargo doc -p pdfrum --no-deps` builds with
       `rustdoc::broken-intra-doc-links` clean.
-- [ ] Facade doctest fence count is in the 15–25 range (52 today).
+- [ ] Facade doctest block count is in the 15–25 range (51 today).
 - [ ] STYLE.md §6 has the paragraph in WP6.
 - [ ] A human opened `target/doc/pdfrum/index.html` and the `FormSession`
       / `Page` / `Document` pages and could see the summary above the fold.
