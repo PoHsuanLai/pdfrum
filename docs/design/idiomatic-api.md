@@ -1037,6 +1037,33 @@ to STYLE.md like anything else, but nothing in this amendment applies to them.
 >    reasoned `allow(dead_code)` and a comment saying exactly that. Closing it
 >    is a behaviour change and has to be measured on its own.
 >
+>    **Resolved 2026-09-03, and the gap was not what this note assumed.** It
+>    was read as a missing consumer; it is an *inert flag in the oracle*.
+>    `CPDF_ImageRenderer` does carry it into `CPDF_DIB`, but the only consumer
+>    in the whole C++ tree is `CPDF_DeviceCS`'s `kDeviceCMYK` arm
+>    (`cpdf_devicecs.cpp:65`, `:119`), and `CPDF_DIB` opens the
+>    `EnableStdConversion` bracket *after* the image's own colour work:
+>    `StartLoadDIBBase` (`cpdf_dib.cpp:199`) runs `LoadPalette` (`:184`) and
+>    `CreateDecoder` before `ContinueToLoadMask` raises the counter at `:153`,
+>    and lowers it at `:244`. The image body is translated only in
+>    `CPDF_DIB::GetScanline` (`:1129`), a `const` accessor the rasterizer pulls
+>    during compositing — long after the counter is zero — so
+>    `cpdf_devicecs.cpp:119`'s `IsStdConversionEnabled()` is *always false*.
+>    The one conversion left inside the bracket is `/Matte`
+>    (`cpdf_dib.cpp:839`), so the flag can only move a `DeviceCMYK` image with
+>    an `/SMask` carrying `/Matte`, drawn offscreen — a conjunction no file in
+>    `testing/corpus` or `testing/resources` contains. Wiring it would mean
+>    threading a parameter across the page-build/render boundary and widening
+>    `pdfrum_page::ImageCache`'s key (decode is once per page in `build_page`,
+>    so one image drawn inside *and* outside a group would need two entries)
+>    to reproduce a switch that cannot fire. **The field stays, now typed
+>    `Conversion` and documented with the above; nothing was wired.** The board
+>    was run before and after: all 1757 per-file rows byte-identical.
+>
+>    The pass did land the row's own `pdfrum-page` item — `std_conversion:
+>    bool` to a two-variant `Conversion::{Managed, Standard}` across the eight
+>    signatures — which is the part of this note that was right.
+>
 > **`RenderCaches` had five public fields and no external reader**, which the
 > row does not mention and which the module curation forced anyway: their types
 > live in `imagecache`, `zero_area` and `text`, so a public field of a private

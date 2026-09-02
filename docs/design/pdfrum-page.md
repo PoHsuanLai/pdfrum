@@ -1177,9 +1177,21 @@ refcount** (`EnableStdConversion`, :663-669) that `CPDF_BasedCS` propagates to
 its base (cpdf_basedcs.cpp:13-18). Its **only** callers in the whole tree are
 in `cpdf_dib.cpp` (enable :154, disable :245/:323/:858) — i.e. std conversion
 is on **exclusively while decoding an image DIB whose caller asked for it**
-(`bStdCS`), never for vector fills. We thread it as a plain `bool std_cs`
-parameter into the conversion functions (D9); the refcount shape is a C++
-artifact of shared ownership.
+(`bStdCS`), never for vector fills. We thread it into the conversion
+functions as a two-variant `Conversion::{Managed, Standard}` (D9; a plain
+`bool` until 2026-09-03, when the eight signatures took the enum); the
+refcount shape is a C++ artifact of shared ownership.
+
+**And in practice the flag never fires**, which the C++ hides well. The
+bracket opens at `cpdf_dib.cpp:153` — *after* `LoadInternal`, and so after
+`LoadPalette` (:184) and `CreateDecoder` — and closes at :245 before
+`StartLoadDIBBase` returns. The image body is translated only in
+`CPDF_DIB::GetScanline` (:1129), a `const` accessor over `mutable` buffers
+that the rasterizer pulls during compositing, long after the counter is back
+to zero. So `cpdf_devicecs.cpp:119`'s `IsStdConversionEnabled()` is always
+false, and the only conversion inside the bracket is `/Matte` (:839). Keep
+both formulas ported — they are cheap and the oracle has both — but do not
+expect a golden to distinguish them.
 
 **`AdobeCmykToStandardRgbF`** (core/fxge/dib/cfx_cmyk_to_srgb.cpp:1740-1782):
 ```
