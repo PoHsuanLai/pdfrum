@@ -54,7 +54,7 @@ impl Op {
 /// Parse the `--backend` value.
 fn backend(s: &str) -> Option<Backend> {
     match s {
-        "exact" => Some(Backend::Exact),
+        "exact" => Some(Backend::Agg),
         "tinyskia" | "tiny-skia" => Some(Backend::TinySkia),
         "vello" | "vello_cpu" => Some(Backend::Vello),
         _ => None,
@@ -80,7 +80,7 @@ fn parse_args() -> Result<Args, String> {
     let mut op = Op::Render;
     let mut file = None;
     let mut iterations = 50u32;
-    let mut back = Backend::Exact;
+    let mut back = Backend::Agg;
     let mut sample = false;
 
     let argv: Vec<String> = std::env::args().skip(1).collect();
@@ -219,10 +219,10 @@ fn timed_render(args: &Args, bytes: &Arc<[u8]>) {
     for _ in 0..args.iterations {
         for graph in &graphs {
             let pixmap = match args.backend {
-                pdfrum::Backend::Exact => pdfrum_render::render_page_with_caches(
+                pdfrum::Backend::Agg => pdfrum_render::render_page_with_caches(
                     graph,
                     &inner,
-                    &timed::TimedBackend(pdfrum_raster_exact::ExactBackend::new()),
+                    &timed::TimedBackend(pdfrum_raster_agg::AggBackend::new()),
                     &mut caches,
                     &mut diags,
                 ),

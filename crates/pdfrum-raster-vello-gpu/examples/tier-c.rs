@@ -12,7 +12,7 @@
 //!   the CPU output is what the oracle validates. So this program only ever
 //!   *reports*; nothing it finds may become a reason to touch the engine.
 //!
-//! The reference column is `pdfrum-raster-exact`, deliberately. It is the
+//! The reference column is `pdfrum-raster-agg`, deliberately. It is the
 //! conformance default and the backend whose edge quantisation is closest to
 //! the oracle's own (SPEC §8 item 7), so a divergence measured against it is
 //! the most meaningful available. `vello_cpu` would have been the other
@@ -33,7 +33,7 @@
 #[path = "shared/harness.rs"]
 mod harness;
 
-use pdfrum_raster_exact::ExactBackend;
+use pdfrum_raster_agg::AggBackend;
 use pdfrum_raster_vello_gpu::try_real_gpu;
 use pdfrum_render::Pixmap;
 
@@ -56,11 +56,11 @@ fn main() {
     };
     let report = gpu.adapter_report();
     println!(
-        "# Tier C: pdfrum-raster-vello-gpu against pdfrum-raster-exact\n\
+        "# Tier C: pdfrum-raster-vello-gpu against pdfrum-raster-agg\n\
          # adapter: {}\n",
         report.map_or_else(|| "<unknown>".to_owned(), |r| r.to_string())
     );
-    let exact = ExactBackend::new();
+    let exact = AggBackend::new();
 
     println!(
         "{:<28} {:>9} {:>10} {:>10} {:>9} {:>7}",

@@ -16,7 +16,7 @@ members = [
     "crates/pdfrum-render",
     "crates/pdfrum-raster-vello",
     "crates/pdfrum-raster-tinyskia",
-    "crates/pdfrum-raster-exact",
+    "crates/pdfrum-raster-agg",
     # M12c. A workspace member so it is built, tested and linted like anything
     # else — but nothing in the core ring depends on it, and
     # `scripts/check-no-wgpu.sh` asserts that the facade's default tree still
@@ -73,7 +73,7 @@ pdfrum-parser = { path = "crates/pdfrum-parser", version = "=0.1.0" }
 pdfrum-page = { path = "crates/pdfrum-page", version = "=0.1.0" }
 pdfrum-render = { path = "crates/pdfrum-render", version = "=0.1.0" }
 pdfrum-raster-vello = { path = "crates/pdfrum-raster-vello", version = "=0.1.0" }
-pdfrum-raster-exact = { path = "crates/pdfrum-raster-exact", version = "=0.1.0" }
+pdfrum-raster-agg = { path = "crates/pdfrum-raster-agg", version = "=0.1.0" }
 pdfrum-raster-tinyskia = { path = "crates/pdfrum-raster-tinyskia", version = "=0.1.0" }
 # M12c's GPU backend. Deliberately **not** a dependency of the facade or the
 # tool: it is reachable by naming it, which is what keeps a headless build's

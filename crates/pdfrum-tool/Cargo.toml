@@ -37,7 +37,7 @@ pdfrum.workspace = true
 # `pdfrum_form::script::ScriptCascade`'s, and the facade does not re-export it
 # (it cannot — the facade's default features must not reach an engine).
 pdfrum-form = { workspace = true, optional = true }
-pdfrum-raster-exact.workspace = true
+pdfrum-raster-agg.workspace = true
 pdfrum-raster-tinyskia.workspace = true
 pdfrum-raster-vello.workspace = true
 pdfrum-render.workspace = true
