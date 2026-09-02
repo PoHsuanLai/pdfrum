@@ -86,7 +86,7 @@ mod program;
 
 pub use blend::{AxisKind, MmAxis};
 pub use charstring::Glyph;
-pub use container::Container;
+pub use container::{Container, font_file_lengths};
 pub use eexec::{CHARSTRING_SEED, DEFAULT_LEN_IV, EEXEC_SEED, EEXEC_SKIP, decrypt, encrypt};
 pub use encoding::{Encoding, standard_encoding_name, unicode_from_glyph_name};
 pub use error::Error;
@@ -330,6 +330,11 @@ impl Type1Font {
     #[must_use]
     pub fn unicode_to_gid(&self, ch: char) -> Option<Gid> {
         self.unicode_map.get(&ch).copied().map(Gid)
+    }
+
+    /// Every Unicode scalar the synthesized charmap maps, in arbitrary order.
+    pub fn unicode_pairs(&self) -> impl Iterator<Item = (char, Gid)> + '_ {
+        self.unicode_map.iter().map(|(&ch, &gid)| (ch, Gid(gid)))
     }
 
     /// Glyph name to glyph.

@@ -1318,13 +1318,57 @@ list is shorter than it looks:
   resolves at render time, and there is no `/FontFile*` at all. Nothing to
   subset.
 
-**There is no `FPDFText_LoadFont` equivalent anywhere in the workspace** — no
-public function takes font bytes from a caller and embeds them. `subset`
-takes bytes, but hands the result back rather than writing it into a
-document. Adding one is a separate scope question: it would be an
-`EditDoc`-level API constructing the same four-object chain `collect::admit`
-already recognises, and this stage would then subset its output with no
-change.
+**`EditDoc::embed_font` / `standard_font` is the `FPDFText_LoadFont` equivalent
+(landed 2026-09-03).** It constructs the same four-object chain
+`collect::admit` already recognises (`/Type0` → `/DescendantFonts` →
+`/FontDescriptor` → `/FontFile2`, or `/FontFile3` for `OTTO`). A font
+embedded this way and used by a show operator on a regenerated page is a
+subset candidate with **no collector change** — the audit's prediction that
+the stage would subset its output unchanged was correct.
+
+Three corrections against the oracle's writer (`fpdfsdk/fpdf_edittext.cpp`),
+each marked `// [oracle-bug]` at the site with both a PDFium citation and a
+pdf.js citation (PLAN.md oracle-bug rule). pdf.js is a reader, not a writer,
+so the pdf.js lines are the ones that *depend* on the value:
+
+- **OTTO** is `/FontFile3` `/Subtype /OpenType` and a `/CIDFontType0`
+  descendant, not `/FontFile2` (`LoadFontDesc` `:171-174`). This crate's
+  subsetter already treated OTTO that way (`is_opentype_cff`). pdf.js:
+  `isOpenTypeFile` sniffs `OTTO` (`src/core/fonts.js:319`) and
+  `getFontFileType` classifies it `"OpenType"` (`:357`); `checkAndRepair`
+  requires `fontFileN === "FontFile3"` for an OTTO CFF CID (`:2761-2763`).
+  `translateFont` walks FontFile/2/3 (`src/core/evaluator.js:4633`) and
+  reads the stream dict `/Subtype` (`:4668-4670`).
+- **Type 1 `/FontFile`** writes `/Length1` `/Length2` `/Length3` (ISO 32000-1
+  §9.9 table 127). The oracle leaves them off (`:166` TODO). pdf.js:
+  `translateFont` pulls the three lengths off the stream dict
+  (`src/core/evaluator.js:4672-4674`); `Type1Font.#parseType1` splits the
+  header and eexec blocks with `properties.length1` / `properties.length2`
+  (`src/core/type1_font.js:195-201`).
+- **`/CapHeight`** uses OS/2 `sCapHeight` when present, else the oracle's
+  ascent fallback (`:160-161`). pdf.js: `translateFont` reads
+  `descriptor.get("CapHeight")` (`src/core/evaluator.js:4731`); `Font`
+  stores `this.capHeight = properties.capHeight / PDF_GLYPH_SPACE_UNITS`
+  (`src/core/fonts.js:1123`).
+
+Unmappable `encode` codes are 0, matching `CharCodeFromUnicode`.
+
+The brief's claim that "`TextBuilder` embeds nothing" is now only half
+true: `TextBuilder` still takes an `ObjRef`, but `DocEdit::embed_font`
+is how a caller obtains one that did not already live on the page.
+`ImageBuilder` still has the same "must already exist" limitation.
+
+**Latent emitter bug.** `emit_text_body` used to return `false` whenever
+`text.font` was `None`, and whenever `font_subtype` was `None` (Type 3).
+That refusal made `TextBuilder` non-functional for new text: a constructed
+object names the dict through `font_source` and stores size only in the
+glyph matrix, so there is no `Font` to classify. Loading a Helvetica
+stand-in on `TextBuilder::build` just to pass the check was the wrong kind
+of fix — a text object whose `font_source` names an embedded Roboto must
+not carry a Helvetica `Font`. The emitter now takes the constructed path:
+skip the Type 3 refusal (the caller named the dict), write `Tf` with the
+matrix scale and `Tm` with the scale divided out (cleaner than `Tf 1`
+with the scale left in the matrix).
 
 `IsOpenTypeCFF` (`core/fxge/fx_font.cpp:225-231`) is a four-byte `OTTO` tag
 test on the **original** (filtered) font bytes.

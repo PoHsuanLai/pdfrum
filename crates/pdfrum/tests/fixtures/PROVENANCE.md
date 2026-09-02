@@ -73,4 +73,5 @@ one:
 
 | File | Size | What it exercises |
 |---|---:|---|
+| `roboto.ttf` | 35636 B | `testing/resources/fonts/roboto.ttf`, verbatim. The TrueType program `latin_extended.pdf` embeds; used here as the caller-supplied bytes for `DocEdit::embed_font`, so a test can write "Hello" in a font the page did not already have. |
 | `latin_extended.pdf` | 19213 B | `testing/resources/latin_extended.pdf`, verbatim. One 200x200 page drawing Latin Extended through a `/Type0` Identity-H font whose descendant is a `CIDFontType2` `Roboto-Regular` with a 35636-byte embedded `/FontFile2`, a `/W` array, a `/ToUnicode` CMap and `/CIDToGIDMap /Identity`. Every one of those is load-bearing: `/BaseFont` carries **no** subset tag, so a minted one is visible; `/W` and `/ToUnicode` are what the subsetting stage must leave untouched; and the `/Identity` map is what it replaces with the table that absorbs the subsetter's glyph renumbering. Its glyph coverage is also near the worst case for the saving — the page draws most of Roboto's Latin — which is what makes the recorded 35636 → 20424 a floor rather than a flattering number. |

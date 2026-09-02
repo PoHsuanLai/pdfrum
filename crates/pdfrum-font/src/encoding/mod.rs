@@ -114,14 +114,14 @@ impl FontEncoding {
 }
 
 /// The `fxge`-level encodings a font *face*'s charmap may declare, which are a
-/// different set from [`FontEncoding`] and are reverse-mapped through the raw
+/// different set from `FontEncoding` and are reverse-mapped through the raw
 /// tables (`CharCodeFromUnicodeForEncoding`, §1.7).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum FaceEncoding {
     /// The charmap is Unicode: a code *is* its character.
     Unicode,
-    /// Latin-1, read through the WinAnsi table.
-    #[cfg(test)]
+    /// Latin-1, read through the WinAnsi table. The standard-14 encoder in
+    /// `pdfrum-edit` (`EmbeddedFont::encode`) is its production caller.
     Latin1,
     /// Apple Roman, read through the MacRoman table.
     AppleRoman,
@@ -145,7 +145,6 @@ impl FaceEncoding {
         let table: &[u16; 256] = match self {
             // The identity arm: a Unicode charmap needs no table.
             Self::Unicode => return u32::from(unicode),
-            #[cfg(test)]
             Self::Latin1 => &tables::ADOBE_WIN_ANSI_ENCODING,
             Self::AppleRoman => &tables::MAC_ROMAN_ENCODING,
             Self::AdobeCustom => &tables::PDF_DOC_ENCODING,

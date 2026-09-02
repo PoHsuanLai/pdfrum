@@ -25,7 +25,8 @@ pub(crate) use db::{CroscoreDb, FaceHandle, FontDb, SystemFontDb, TestFontDb};
 #[cfg(test)]
 pub(crate) use standard::ALL_STANDARD_FONTS;
 pub use standard::StandardFont;
-pub(crate) use standard::{canonical_font_name, standard_font_data, standard_font_index};
+pub use standard::canonical_font_name;
+pub(crate) use standard::{standard_font_data, standard_font_index};
 pub(crate) use style::{
     NARROW_FAMILY, font_family, is_narrow_font_name, parse_styles, strip_subset_prefix, style_bits,
     style_type, subst_name, tt_normalize,

@@ -1411,7 +1411,21 @@ additive §5 changes landed with the M7 work (E1/E2). Font subsetting is
 `fn subset(font_bytes, gids) -> (Vec<u8>, GidMap)` — the `subsetter` crate
 renumbers GIDs and strips cmap (unlike HarfBuzz RETAIN_GIDS), so /W,
 ToUnicode, and Identity-H content streams are re-keyed through the returned
-map (E4). The four import-path bugs the brief identifies are FIXED, not
+map (E4).
+
+**[spec] 2026-09-03: `EditDoc` gains `embed_font` / `standard_font`.**
+The missing `FPDFText_LoadFont` / `FPDFText_LoadStandardFont` equivalent.
+`EditDoc::embed_font(program, FontEncoding) -> Result<EmbeddedFont, Error>`
+detects TrueType / OpenType-CFF / Type 1 from the bytes, writes the
+`/Type0` or simple `/Font` chain `collect::admit` already recognises, and
+returns an `EmbeddedFont` whose `object()` is the `/Font` dict and whose
+`encode(&str)` produces char codes (unmappable → 0).
+`EditDoc::standard_font(StandardFont)` writes a non-embedded `/Type1` with
+`/Encoding /WinAnsiEncoding`. The facade exposes the same pair on
+`DocEdit`, obtained from `Document::edit()`. `SaveOptions::subset_new_fonts`
+is forwarded from the facade. The subsetter needed **no** collector change:
+an embedded composite TrueType used by a show operator is already a
+candidate. The four import-path bugs the brief identifies are FIXED, not
 ported — each divergence pinned by its own test (E10). M7's "oracle reopens
 our files" exit is a two-step harness check: pdfrum saves, the oracle
 reopens + renders (E7; pdfium_test has no save flag). Round-trip property

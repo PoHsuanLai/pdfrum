@@ -21,6 +21,7 @@ pub use pdfrum::Diagnostic
 pub use pdfrum::Diagnostics
 pub use pdfrum::Dict
 pub use pdfrum::DocError
+pub use pdfrum::EmbeddedFont
 pub use pdfrum::Event
 pub use pdfrum::FieldActions
 pub use pdfrum::FieldFlags
@@ -30,6 +31,7 @@ pub use pdfrum::FieldWrites
 pub use pdfrum::FindOptions
 pub use pdfrum::Focus
 pub use pdfrum::FocusBox
+pub use pdfrum::FontEncoding
 pub use pdfrum::GeneratedAp
 pub use pdfrum::IndexMap
 pub use pdfrum::IndexOutOfRange
@@ -72,6 +74,7 @@ pub use pdfrum::ScrollView
 pub use pdfrum::SessionConfig
 pub use pdfrum::Severity
 pub use pdfrum::Size
+pub use pdfrum::StandardFont
 pub use pdfrum::SubstitutionOptions
 pub use pdfrum::Subtype
 pub use pdfrum::TextAa
@@ -134,6 +137,14 @@ pub fn pdfrum::Bookmark<'_>::depth(&self) -> usize
 pub fn pdfrum::Bookmark<'_>::is_open(&self) -> bool
 pub fn pdfrum::Bookmark<'_>::page_index(&self) -> core::option::Option<pdfrum_common::page_index::PageIndex>
 pub fn pdfrum::Bookmark<'_>::title(&self) -> alloc::string::String
+pub struct pdfrum::DocEdit<'a>
+impl pdfrum::DocEdit<'_>
+pub fn pdfrum::DocEdit<'_>::embed_font(&mut self, &[u8], pdfrum_edit::font::embed::FontEncoding) -> pdfrum::Result<pdfrum_edit::font::embed::EmbeddedFont>
+pub fn pdfrum::DocEdit<'_>::save(&self, impl core::convert::AsRef<std::path::Path>, &pdfrum::SaveOptions) -> pdfrum::Result<()>
+pub fn pdfrum::DocEdit<'_>::save_pages(&mut self, impl core::convert::AsRef<std::path::Path>, &[pdfrum::PageEdit], &pdfrum::SaveOptions) -> pdfrum::Result<()>
+pub fn pdfrum::DocEdit<'_>::standard_font(&mut self, pdfrum_font::subst::standard::StandardFont) -> pdfrum::Result<pdfrum_edit::font::embed::EmbeddedFont>
+pub fn pdfrum::DocEdit<'_>::write_pages_to(&mut self, &mut impl core::io::write::Write, &[pdfrum::PageEdit], &pdfrum::SaveOptions) -> pdfrum::Result<()>
+pub fn pdfrum::DocEdit<'_>::write_to(&self, &mut impl core::io::write::Write, &pdfrum::SaveOptions) -> pdfrum::Result<()>
 pub struct pdfrum::Document
 impl pdfrum::Document
 pub fn pdfrum::Document::all_diagnostics(&self) -> pdfrum_common::diagnostics::Diagnostics
@@ -160,6 +171,7 @@ pub fn pdfrum::Document::version(&self) -> core::option::Option<pdfrum_common::v
 pub fn pdfrum::Document::xmp_metadata(&self) -> core::option::Option<alloc::vec::Vec<u8>>
 pub fn pdfrum::Document::xref_was_rebuilt(&self) -> bool
 impl pdfrum::Document
+pub fn pdfrum::Document::edit(&self) -> pdfrum::DocEdit<'_>
 pub fn pdfrum::Document::import_pages(&self, impl core::convert::AsRef<std::path::Path>, &pdfrum::Document, impl core::iter::traits::collect::IntoIterator<Item = impl core::convert::Into<pdfrum_common::page_index::PageIndex>>, impl core::convert::Into<pdfrum_common::page_index::PageIndex>) -> pdfrum::Result<()>
 pub fn pdfrum::Document::save(&self, impl core::convert::AsRef<std::path::Path>) -> pdfrum::Result<()>
 pub fn pdfrum::Document::save_form(&self, impl core::convert::AsRef<std::path::Path>, &pdfrum::Form<'_>, &pdfrum::SaveOptions) -> pdfrum::Result<()>
@@ -334,6 +346,7 @@ impl pdfrum::RenderSession
 pub fn pdfrum::RenderSession::new() -> pdfrum::RenderSession
 pub struct pdfrum::SaveOptions
 pub pdfrum::SaveOptions::remove_security: bool
+pub pdfrum::SaveOptions::subset_new_fonts: bool
 pub pdfrum::SaveOptions::update: pdfrum::Update
 pub pdfrum::SaveOptions::version: core::option::Option<pdfrum_common::version::PdfVersion>
 pub struct pdfrum::TextBuilder

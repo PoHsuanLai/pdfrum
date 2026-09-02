@@ -25,6 +25,13 @@
 //! none of those, and the C++ answers by returning after `q ` and `BT ` are
 //! already written, leaving both unclosed. We build into a scratch buffer and
 //! discard it, so an unclassifiable font contributes nothing (divergence D6).
+//!
+//! A constructed object (`font: None`, `font_source: Some`) is the exception.
+//! The caller named the dict, so the Type 3 refusal does not apply; size
+//! lives in the glyph matrix (`Affine::scale(size)`). We write it as `Tf`
+//! and divide it out of `Tm`, matching the stream a parsed object of that
+//! size writes. The previous `font: None` refusal was the latent bug that
+//! made `TextBuilder` non-functional for new text.
 
 use pdfrum_common::kurbo::Affine;
 use pdfrum_font::Font;
@@ -62,17 +69,31 @@ pub(crate) fn emit_text_body(
     text: &TextObject,
     resource: &pdfrum_object::Name,
 ) -> bool {
-    let Some((font, size)) = text.font.as_ref() else {
-        return false;
+    // A parsed object has `font: Some`; a constructed one has `font: None`
+    // and `font_source: Some`, with size only in the matrix. Refusing the
+    // latter was the latent bug that made `TextBuilder` emit nothing for
+    // new text — loading a Helvetica stand-in just to pass the subtype
+    // check was the wrong kind of fix. Skip the Type 3 refusal here: the
+    // caller named the dict.
+    let (size, constructed) = match text.font.as_ref() {
+        Some((font, size)) => {
+            if font_subtype(font).is_none() {
+                return false;
+            }
+            (*size, false)
+        }
+        None if text.font_source.is_some() => (matrix_font_size(text.matrix), true),
+        None => return false,
     };
-    if font_subtype(font).is_none() {
-        return false;
-    }
 
     let mut body = String::new();
     body.push_str("BT ");
 
-    let matrix = text_matrix(text);
+    // Constructed objects store size in the matrix. Writing that scale as
+    // `Tf` and dividing it out of `Tm` matches the parsed-object spelling
+    // (`10 Tf` + identity `Tm`) and is cleaner than `Tf 1` with the scale
+    // left in the matrix.
+    let matrix = text_matrix(text, constructed.then_some(size));
     if matrix != Affine::IDENTITY {
         write_matrix(&mut body, matrix);
         body.push_str(" Tm ");
@@ -83,7 +104,7 @@ pub(crate) fn emit_text_body(
         resource.as_bytes(),
     )));
     body.push(' ');
-    write_float(&mut body, *size);
+    write_float(&mut body, size);
     body.push_str(" Tf ");
     body.push_str(&render_mode(text).to_string());
     body.push_str(" Tr ");
@@ -95,18 +116,41 @@ pub(crate) fn emit_text_body(
     true
 }
 
+/// Font size a constructed text object stores in its glyph matrix.
+///
+/// A constructed object writes `Affine::scale(size)`; the x-axis length of
+/// that linear part is the size. Zero if the matrix is degenerate.
+fn matrix_font_size(matrix: Affine) -> f32 {
+    let c = matrix.as_coeffs();
+    let sx = c.first().copied().unwrap_or(0.0);
+    let sy = c.get(1).copied().unwrap_or(0.0);
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "PDF numbers are f32 (SPEC §2); the geometry vocabulary is f64"
+    )]
+    {
+        sx.hypot(sy) as f32
+    }
+}
+
 /// The `Tm` operand list.
 ///
 /// `b` and `c` are transposed relative to the stored matrix, and the
 /// translation comes from the object's position rather than the matrix — the
-/// matrix carries orientation and scale only.
-fn text_matrix(text: &TextObject) -> Affine {
-    let c = text.matrix.as_coeffs();
+/// matrix carries orientation and scale only. `divide_out` is the font size
+/// to take out of the linear part for a constructed object, whose matrix
+/// *is* that size.
+fn text_matrix(text: &TextObject, divide_out: Option<f32>) -> Affine {
+    let coeffs = text.matrix.as_coeffs();
+    let scale = divide_out
+        .map(f64::from)
+        .filter(|factor| factor.abs() > f64::EPSILON);
+    let divide = |value: f64| scale.map_or(value, |factor| value / factor);
     Affine::new([
-        c.first().copied().unwrap_or(1.0),
-        c.get(2).copied().unwrap_or(0.0),
-        c.get(1).copied().unwrap_or(0.0),
-        c.get(3).copied().unwrap_or(1.0),
+        divide(coeffs.first().copied().unwrap_or(1.0)),
+        divide(coeffs.get(2).copied().unwrap_or(0.0)),
+        divide(coeffs.get(1).copied().unwrap_or(0.0)),
+        divide(coeffs.get(3).copied().unwrap_or(1.0)),
         text.position.x,
         text.position.y,
     ])
@@ -157,7 +201,7 @@ mod tests {
     use super::{emit_show_array, emit_text_body, font_subtype};
     use pdfrum_common::kurbo::{Affine, Point};
     use pdfrum_font::{Font, FontCache, StandardFont};
-    use pdfrum_object::Name;
+    use pdfrum_object::{Name, ObjRef};
     use pdfrum_page::{TextObject, TextRenderMode, TextSegment};
     use std::collections::BTreeMap;
     use std::sync::Arc;
@@ -258,6 +302,26 @@ mod tests {
         let t = text(None, Affine::IDENTITY, Point::ZERO);
         assert!(!emit_text_body(&mut out, &t, &Name::from("FXF1")));
         assert_eq!(out, "existing", "the buffer is left untouched");
+    }
+
+    // A constructed object stores size only in the matrix. Writing `Tf` with
+    // that size and `Tm` with the scale divided out renders at 24 units;
+    // leaving the scale in both, or emitting nothing, would not.
+    #[test]
+    fn a_constructed_object_emits_tf_tm_at_the_matrix_size() {
+        let t = TextObject {
+            segments: segments(&[(b"Hi", 0.0)]),
+            position: Point::new(20.0, 40.0),
+            matrix: Affine::scale(24.0),
+            font: None,
+            font_source: Some(ObjRef::new(1, 0)),
+            render_mode: TextRenderMode::Fill,
+            type3_metrics: BTreeMap::new(),
+        };
+        assert_eq!(
+            emit(&t).as_deref(),
+            Some("BT 1 0 0 1 20 40 Tm /FXF1 24 Tf 0 Tr [<4869>] TJ ET")
+        );
     }
 
     #[test]

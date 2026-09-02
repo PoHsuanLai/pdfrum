@@ -78,14 +78,26 @@ mod widths;
 
 pub use cid::{CidTransform, Type0Font, cid_transform_to_float};
 pub(crate) use descriptor::FontDescriptor;
+pub use encoding::FaceEncoding;
 pub use encoding::adobe_name_from_unicode;
 pub use error::Error;
-pub use glyphs::{Charmap, CharmapId, Face, GlyphCache, GlyphKey, GlyphSource};
+pub use glyphs::{Charmap, CharmapId, Face, GlyphCache, GlyphKey, GlyphSource, em_adjust};
 pub(crate) use ids::GlyphName;
 pub use ids::{CharCode, Cid, FontFlags, FontId, Gid};
 pub use simple::SimpleFont;
-pub use subst::{Charset, StandardFont, SubstFont, SubstitutionOptions, charset_from_unicode};
+pub use subst::{
+    Charset, StandardFont, SubstFont, SubstitutionOptions, canonical_font_name,
+    charset_from_unicode,
+};
 pub(crate) use tounicode::ToUnicode;
+
+/// ISO 32000-1 table 127 `/Length1` `/Length2` `/Length3` of a Type 1 program.
+///
+/// See [`pdfrum_type1::font_file_lengths`].
+#[must_use]
+pub fn type1_program_lengths(bytes: &[u8]) -> (u32, u32, u32) {
+    pdfrum_type1::font_file_lengths(bytes)
+}
 pub use type3::{MAX_TYPE3_DEPTH, Type3Font};
 
 use pdfrum_common::kurbo::{BezPath, Rect};

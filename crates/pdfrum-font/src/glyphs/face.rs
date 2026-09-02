@@ -648,6 +648,125 @@ impl Face {
             Some(format!("{family} {style}"))
         }
     }
+
+    /// The PostScript name (name ID 6), falling back to the family name.
+    #[must_use]
+    pub fn postscript_name(&self) -> Option<String> {
+        if let Some(cff) = self.cff() {
+            let meta = cff.metadata()?;
+            return meta
+                .name()
+                .or_else(|| meta.family_name())
+                .map(ToOwned::to_owned);
+        }
+        let font = skrifa::FontRef::from_index(&self.bytes, self.index).ok()?;
+        let ps: String = font
+            .localized_strings(skrifa::string::StringId::POSTSCRIPT_NAME)
+            .english_or_first()
+            .map(|s| s.chars().collect())
+            .unwrap_or_default();
+        if !ps.is_empty() {
+            return Some(ps);
+        }
+        self.display_name()
+    }
+
+    /// `post.isFixedPitch`, or false when the table is missing.
+    #[must_use]
+    pub fn is_fixed_pitch(&self) -> bool {
+        let Ok(font) = skrifa::FontRef::from_index(&self.bytes, self.index) else {
+            return false;
+        };
+        font.post().ok().is_some_and(|p| p.is_fixed_pitch() != 0)
+    }
+
+    /// Italic from OS/2 `fsSelection`, `head.macStyle`, or a non-zero `post.italicAngle`.
+    #[must_use]
+    pub fn is_italic(&self) -> bool {
+        let Ok(font) = skrifa::FontRef::from_index(&self.bytes, self.index) else {
+            return false;
+        };
+        if let Ok(os2) = font.os2() {
+            let sel = os2.fs_selection();
+            if sel.contains(read_fonts::tables::os2::SelectionFlags::ITALIC)
+                || sel.contains(read_fonts::tables::os2::SelectionFlags::OBLIQUE)
+            {
+                return true;
+            }
+        }
+        if font.head().ok().is_some_and(|h| {
+            h.mac_style()
+                .contains(read_fonts::tables::head::MacStyle::ITALIC)
+        }) {
+            return true;
+        }
+        font.post()
+            .ok()
+            .is_some_and(|p| p.italic_angle().to_f64() != 0.0)
+    }
+
+    /// Bold from OS/2 `fsSelection` / `usWeightClass >= 700`, or `head.macStyle`.
+    #[must_use]
+    pub fn is_bold(&self) -> bool {
+        let Ok(font) = skrifa::FontRef::from_index(&self.bytes, self.index) else {
+            return false;
+        };
+        if let Ok(os2) = font.os2() {
+            if os2
+                .fs_selection()
+                .contains(read_fonts::tables::os2::SelectionFlags::BOLD)
+            {
+                return true;
+            }
+            if os2.us_weight_class() >= 700 {
+                return true;
+            }
+        }
+        font.head().ok().is_some_and(|h| {
+            h.mac_style()
+                .contains(read_fonts::tables::head::MacStyle::BOLD)
+        })
+    }
+
+    /// OS/2 `sCapHeight` in font units, when the table is version 2 or later.
+    #[must_use]
+    pub fn cap_height(&self) -> Option<f32> {
+        let font = skrifa::FontRef::from_index(&self.bytes, self.index).ok()?;
+        font.os2().ok()?.s_cap_height().map(f32::from)
+    }
+
+    /// Unicode codepoint → glyph mappings of the Unicode cmap, with `code <= max`.
+    ///
+    /// Sorted by codepoint. Glyph 0 (`.notdef`) is omitted, matching
+    /// `FT_Get_Next_Char`'s `glyph_index == 0` stop.
+    #[must_use]
+    pub fn unicode_mappings(&self, max: u32) -> Vec<(u32, u16)> {
+        if self.backend == Backend::BareCff {
+            return (0..=max)
+                .filter_map(|cp| {
+                    let gid = self.char_index(Charmap::Unicode, cp);
+                    (gid != 0).then_some((cp, gid))
+                })
+                .collect();
+        }
+        let Ok(font) = skrifa::FontRef::from_index(&self.bytes, self.index) else {
+            return Vec::new();
+        };
+        let mut out: Vec<(u32, u16)> = font
+            .charmap()
+            .mappings()
+            .filter_map(|(cp, gid)| {
+                if cp > max {
+                    return None;
+                }
+                let g = u16::try_from(gid.to_u32()).ok()?;
+                (g != 0).then_some((cp, g))
+            })
+            .collect();
+        out.sort_unstable_by_key(|(cp, _)| *cp);
+        out.dedup_by_key(|(cp, _)| *cp);
+        out
+    }
 }
 
 fn platform_ordinal(p: PlatformId) -> u16 {

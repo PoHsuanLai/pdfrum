@@ -73,6 +73,7 @@
 //! one tag.
 
 pub(crate) mod collect;
+pub(crate) mod embed;
 pub(crate) mod overrides;
 
 use std::collections::BTreeMap;
