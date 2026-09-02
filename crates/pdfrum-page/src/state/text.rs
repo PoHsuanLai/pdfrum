@@ -46,6 +46,15 @@ pub struct TextState {
     pub rise: f32,
     /// `Tr`.
     pub render_mode: TextRenderMode,
+    /// The 2×2 linear part of the CTM at the `Tj`, stored as `[a, c, b, d]`.
+    ///
+    /// Set only when [`Self::render_mode`] strokes (modes 1, 2, 5, 6); a fill
+    /// keeps the identity `[1, 0, 0, 1]`. The transposition is the oracle's
+    /// four-float slot (`text_ctm[1] = ctm.c`, `text_ctm[2] = ctm.b`): a
+    /// stroke's width is measured in user space (ISO 32000-1 §8.4.3.2), so a
+    /// scaling CTM has to be folded into the device matrix rather than left
+    /// on the text matrix, and this is the matrix that split consumes.
+    pub stroke_ctm: [f32; 4],
 }
 
 impl PartialEq for TextState {
@@ -62,6 +71,7 @@ impl PartialEq for TextState {
             && self.leading == other.leading
             && self.rise == other.rise
             && self.render_mode == other.render_mode
+            && self.stroke_ctm == other.stroke_ctm
     }
 }
 
@@ -76,6 +86,7 @@ impl Default for TextState {
             leading: 0.0,
             rise: 0.0,
             render_mode: TextRenderMode::Fill,
+            stroke_ctm: [1.0, 0.0, 0.0, 1.0],
         }
     }
 }
@@ -194,7 +205,18 @@ mod tests {
         let s = TextState::default();
         assert!((s.horz_scale - 1.0).abs() < 1e-6);
         assert_eq!(s.render_mode, TextRenderMode::Fill);
+        assert_eq!(s.stroke_ctm, [1.0, 0.0, 0.0, 1.0]);
         assert!(s.font.is_none());
+    }
+
+    #[test]
+    fn two_states_that_differ_only_in_stroke_ctm_are_unequal() {
+        let a = TextState::default();
+        let b = TextState {
+            stroke_ctm: [2.0, 0.0, 0.0, 3.0],
+            ..TextState::default()
+        };
+        assert_ne!(a, b);
     }
 
     #[test]

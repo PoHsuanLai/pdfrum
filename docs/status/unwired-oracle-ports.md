@@ -1,6 +1,6 @@
 # Unwired oracle ports
 
-**Opened:** 2026-09-03 · **State:** open, six items
+**Opened:** 2026-09-03 · **State:** open, five items
 
 The no-dead-code pass (`chore/no-dead-code`) went through every
 `#[allow(dead_code)]` the idiomatic-API curation left behind. Most were test
@@ -8,7 +8,8 @@ helpers that had escaped into library scope, and they were gated under
 `#[cfg(test)]` or deleted. Six were not: they are ports of behaviour the
 oracle runs on a **production** path, and the port has no production caller
 because *the feature around it was never wired*. Deleting them would throw
-away a checked, tested spec for a gap that would then be invisible.
+away a checked, tested spec for a gap that would then be invisible. The
+stroked-text CTM split has since been wired; five remain.
 
 They stay in the tree with `#[allow(dead_code, reason = "unwired — see
 docs/status/unwired-oracle-ports.md")]` until each is either wired or
@@ -97,38 +98,6 @@ at full resolution and downsampled, which costs time and memory rather than
 correctness. Wiring it would change output only where libjpeg's reduced decode
 differs from a full decode plus our own scaler, which is exactly the
 divergence the oracle accepts.
-
-## 6. `text::stroke_ctm_split` — the text state has no CTM to split by
-
-| | |
-|---|---|
-| Item | `crates/pdfrum-render/src/text.rs` |
-| Oracle | `CPDF_RenderStatus::ProcessText`, `core/fpdfapi/render/cpdf_renderstatus.cpp:906-918` |
-| Oracle production? | **Yes** — the stroked/clipped text arm of `ProcessText`, reached from `:312` and `:581` |
-| pdfrum's live path | none — `TextState` has no CTM field |
-
-A stroke's width is measured in *text* space, so when the text state's CTM
-carries a non-unit x or y scale the oracle pre-divides the text matrix by it
-and folds the scale into the device matrix instead
-(`text_matrix *= ctm.GetInverse(); device_matrix = ctm * mtObj2Device;`).
-
-The CTM it divides by is stored per text object by the content parser, and
-**only for stroked text**: `cpdf_streamcontentparser.cpp:1342-1350` copies the
-current transformation matrix into the text state under
-`TextRenderingModeIsStrokeMode`, and stores it **transposed** —
-`text_ctm[1] = ctm.c` and `text_ctm[2] = ctm.b`, not `ctm.b`/`ctm.c`. That
-transposition is part of the contract and is why the port takes a `[f64; 4]`
-rather than an `Affine`.
-
-`pdfrum_page::TextState` carries no such field (`state/text.rs`: font,
-`char_space`, `word_space`, `horz_scale`, `leading`, `rise`, `render_mode`),
-so nothing can supply the argument. Wiring this means capturing the CTM on
-stroked text objects in `pdfrum-page`'s content builder first.
-
-**Blast radius:** stroked text under a scaling CTM strokes at the wrong width —
-scaled by the CTM rather than held in text space. Visible only where a
-document both strokes text and scales it, which the corpus does not appear to
-do (the board does not move).
 
 ## Checked and *not* a gap
 

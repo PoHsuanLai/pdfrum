@@ -456,12 +456,20 @@ pub fn adjust_glyph_space(origins: &mut [kurbo::Point], device: &[kurbo::Point])
     }
 }
 
-/// The stroked-text CTM un-transform (`cpdf_renderstatus.cpp:772-777`).
+/// The stroked-text CTM un-transform (`cpdf_renderstatus.cpp:906-918`).
 ///
-/// A stroke's width must be measured in *text* space, so when the text
-/// state's CTM carries a non-unit x or y scale the text matrix is pre-divided
-/// by it and the scale is folded into the device matrix instead. Returns the
-/// adjusted `(text_matrix, device_matrix)` pair.
+/// A stroke's width is measured in user space (ISO 32000-1 §8.4.3.2), so when
+/// the text state's CTM carries a non-unit x or y scale the text matrix is
+/// pre-divided by it and the scale is folded into the device matrix instead.
+/// Returns the adjusted `(text_matrix, device_matrix)` pair.
+///
+/// `ctm` is the four-float slot stored on the text state, already transposed
+/// as `[a, c, b, d]`. kurbo is column-vector, so the C++ row-vector
+/// `text_matrix *= ctm.GetInverse(); device = ctm * mtObj2Device` (leftmost
+/// applies first) is spelled `text = ctm.inverse() * text` and
+/// `device = mtObj2Device * ctm`. Writing it the other way round moves the
+/// page-matrix translation by the CTM scale and lands every glyph in the
+/// wrong place.
 #[must_use]
 #[expect(
     clippy::float_cmp,
@@ -469,10 +477,6 @@ pub fn adjust_glyph_space(origins: &mut [kurbo::Point], device: &[kurbo::Point])
               circuit; with a tolerance a slightly-off-unit CTM would skip \
               the split and stroke at the wrong width, which is the whole \
               point of the function"
-)]
-#[allow(
-    dead_code,
-    reason = "unwired — see docs/status/unwired-oracle-ports.md"
 )]
 pub fn stroke_ctm_split(text_matrix: Affine, to_device: Affine, ctm: [f64; 4]) -> (Affine, Affine) {
     let [a, b, c, d] = ctm;
@@ -484,7 +488,23 @@ pub fn stroke_ctm_split(text_matrix: Affine, to_device: Affine, ctm: [f64; 4]) -
     if det == 0.0 || !det.is_finite() {
         return (text_matrix, to_device);
     }
-    (text_matrix * scale.inverse(), scale * to_device)
+    (scale.inverse() * text_matrix, to_device * scale)
+}
+
+/// The `(text_matrix, device_matrix)` pair [`stroke_ctm_split`] produces for
+/// one object, using the CTM the content interpreter stored on the text state.
+#[must_use]
+pub(crate) fn stroke_text_matrices(
+    object: &TextObject,
+    state: &pdfrum_page::GraphicsState,
+    to_device: Affine,
+) -> (Affine, Affine) {
+    let [a, b, c, d] = state.text.stroke_ctm;
+    stroke_ctm_split(
+        object.matrix,
+        to_device,
+        [f64::from(a), f64::from(b), f64::from(c), f64::from(d)],
+    )
 }
 
 /// Lay out one text object's glyphs.
@@ -594,7 +614,17 @@ pub fn place_glyphs_into(
     let Some((font, size)) = &object.font else {
         return;
     };
-    let text_to_device = to_device * object.matrix;
+    // A stroke keeps the text matrix and the device matrix apart, the way
+    // `DrawTextPath` does: the outline is placed in the post-split text
+    // space and the CTM lives on the device matrix so line width is not
+    // scaled by the font-size/1000 that maps the outline into that space.
+    // A fill composes them, which is the same for coverage and is what the
+    // bitmap path wants.
+    let text_to_device = if kinds.stroke {
+        stroke_text_matrices(object, state, to_device).0
+    } else {
+        to_device * object.matrix
+    };
     // Pull the page-space start back into the text space the advances live
     // in. A singular text matrix has no text space to speak of, and the
     // object would not have been drawable anyway.
@@ -1170,7 +1200,9 @@ mod tests {
         // The product is unchanged — the split only moves where the scale
         // lives, so the glyph lands in the same place but the stroke width is
         // measured in text space.
-        let composed = t * d;
+        // kurbo composition is `device * text`, matching the walk's
+        // `to_device * object.matrix`.
+        let composed = d * t;
         for (a, b) in composed
             .as_coeffs()
             .iter()
@@ -1181,6 +1213,65 @@ mod tests {
         assert!(
             (d.as_coeffs()[0] - 2.0).abs() < 1e-9,
             "the x scale moved to the device matrix"
+        );
+    }
+
+    #[test]
+    fn stroke_ctm_split_preserves_the_composed_transform_under_a_page_flip() {
+        // A y-flip with a translation, the shape of `page_matrix`. The
+        // row-vector spelling of the split would scale that translation by
+        // the CTM and land the glyphs off the page.
+        let text = Affine::translate((10.0, 20.0));
+        let device = Affine::translate((0.0, 100.0)) * Affine::scale_non_uniform(1.0, -1.0);
+        let (t, d) = stroke_ctm_split(text, device, [2.0, 0.0, 0.0, 3.0]);
+        let original = device * text;
+        let split = d * t;
+        for (a, b) in original.as_coeffs().iter().zip(split.as_coeffs().iter()) {
+            assert!(
+                (a - b).abs() < 1e-9,
+                "original {original:?} vs split {split:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_stroked_run_under_a_scaled_ctm_measures_width_in_user_space() {
+        // object.matrix already carries the CTM, as `pdfrum-page` writes it.
+        // After the split the glyph matrix must not, or `draw_path` would
+        // scale the line width by font_size/1000 as well as by the CTM.
+        let mut object = run(b"I", 10.0, 10.0);
+        object.render_mode = TextRenderMode::Stroke;
+        object.matrix = Affine::scale_non_uniform(2.0, 3.0);
+        let state = pdfrum_page::GraphicsState {
+            text: pdfrum_page::TextState {
+                stroke_ctm: [2.0, 0.0, 0.0, 3.0],
+                render_mode: TextRenderMode::Stroke,
+                ..pdfrum_page::TextState::default()
+            },
+            ..pdfrum_page::GraphicsState::default()
+        };
+        let kinds = paint_kinds(TextRenderMode::Stroke, true).expect("stroke paints");
+        let mut cache = pdfrum_font::GlyphCache::default();
+        let glyphs = place_glyphs(
+            &object,
+            &state,
+            &mut cache,
+            Affine::IDENTITY,
+            &RenderOptions::default(),
+            kinds,
+        );
+        assert!(!glyphs.is_empty(), "Helvetica has an I");
+        let [a, ..] = glyphs[0].matrix.as_coeffs();
+        // Font size 20, 1000-unit outlines: the em scale is 0.02, not 0.04.
+        assert!(
+            (a.abs() - 20.0 / 1000.0).abs() < 1e-6,
+            "the CTM scale is not in the glyph matrix: a={a}"
+        );
+        let (_, device_m) = stroke_text_matrices(&object, &state, Affine::IDENTITY);
+        let width = crate::stroke::device_width(1.0, crate::stroke::split_for_stroke(device_m));
+        assert!(
+            (width - 2.0).abs() < 1e-6,
+            "1 user-space unit scaled by the CTM x, got {width}"
         );
     }
 

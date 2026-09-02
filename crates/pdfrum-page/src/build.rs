@@ -1269,7 +1269,15 @@ impl<R: Resolve> Interp<'_, R> {
                 word_space: self.state.text.word_space,
             });
         }
-        self.push(PageObject::Text(Box::new(self.content(object))));
+        // The CTM is snapshotted onto this object, not the live text state:
+        // a later fill-mode `Tj` must still carry identity, matching the
+        // oracle writing into the object's `ctm_` and leaving `cur_states_`
+        // untouched.
+        let mut content = self.content(object);
+        if render_mode.strokes() {
+            content.state.text.stroke_ctm = stroke_ctm_of(self.state.ctm);
+        }
+        self.push(PageObject::Text(Box::new(content)));
         self.cursor.advance(advance, vertical);
     }
 
@@ -1909,6 +1917,23 @@ impl<R: Resolve> Interp<'_, R> {
             bounds,
         };
         self.push(PageObject::Shading(Box::new(self.content(object))));
+    }
+}
+
+/// The 2×2 linear part of `ctm`, stored as `[a, c, b, d]`.
+///
+/// A stroking `Tj` records this on the object's text state; the renderer
+/// folds it from the text matrix into the device matrix so line width stays
+/// in user space (ISO 32000-1 §8.4.3.2). The transposition is the four-float
+/// slot the split consumes: `a, c, b, d`, not `a, b, c, d`.
+fn stroke_ctm_of(ctm: Affine) -> [f32; 4] {
+    let [a, b, c, d, _, _] = ctm.as_coeffs();
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "the stored slot is f32, matching the graphics state's other text scalars"
+    )]
+    {
+        [a as f32, c as f32, b as f32, d as f32]
     }
 }
 
@@ -2596,6 +2621,39 @@ mod tests {
             panic!("expected a path");
         };
         assert!((path.state.text.leading - 14.0).abs() < 1e-6);
+    }
+
+    fn first_text_state(page: &crate::page::Page) -> &crate::state::TextState {
+        let PageObject::Text(text) = &page.objects[0] else {
+            panic!("expected text, got {:?}", page.objects[0]);
+        };
+        &text.state.text
+    }
+
+    #[test]
+    fn a_stroked_tj_under_a_scaling_ctm_records_the_transposed_linear_part() {
+        // `2 0 0 3 0 0 cm` is PDF [a b c d] = [2, 0, 0, 3]. The stored slot is
+        // `[a, c, b, d]`, which for a diagonal is the same four numbers.
+        let (page, _) = build(b"2 0 0 3 0 0 cm BT /F1 24 Tf 1 Tr (x) Tj ET");
+        assert_eq!(first_text_state(&page).stroke_ctm, [2.0, 0.0, 0.0, 3.0]);
+        assert_eq!(
+            first_text_state(&page).render_mode,
+            crate::ops::TextRenderMode::Stroke
+        );
+
+        // Off-diagonal: `1 2 3 4 cm` stores `[a, c, b, d] = [1, 3, 2, 4]`.
+        let (page, _) = build(b"1 2 3 4 0 0 cm BT /F1 24 Tf 1 Tr (x) Tj ET");
+        assert_eq!(first_text_state(&page).stroke_ctm, [1.0, 3.0, 2.0, 4.0]);
+    }
+
+    #[test]
+    fn a_filled_tj_under_a_scaling_ctm_keeps_the_identity_stroke_ctm() {
+        let (page, _) = build(b"2 0 0 3 0 0 cm BT /F1 24 Tf 0 Tr (x) Tj ET");
+        assert_eq!(first_text_state(&page).stroke_ctm, [1.0, 0.0, 0.0, 1.0]);
+        assert_eq!(
+            first_text_state(&page).render_mode,
+            crate::ops::TextRenderMode::Fill
+        );
     }
 
     #[test]

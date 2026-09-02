@@ -1,14 +1,14 @@
 {
-  "generated_at": "2026-09-02T09:12:28Z",
+  "generated_at": "2026-09-02T19:29:05Z",
   "totals": {
     "files": 1757,
-    "pass": 1512,
-    "fail": 245,
+    "pass": 1514,
+    "fail": 243,
     "by_tag": {
       "form-events": 8,
       "js-transcript": 33,
       "page-count": 2,
-      "pixel-fail": 43,
+      "pixel-fail": 41,
       "tierA-mismatch": 170
     },
     "text": {
@@ -9017,10 +9017,8 @@
     },
     {
       "path": "corpus/fx/matrix/transformation.pdf",
-      "status": "fail",
-      "tags": [
-        "pixel-fail"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -9040,12 +9038,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.987480,
+        "ssim": 0.992605,
         "exact": false,
-        "max_channel_diff": 233,
+        "max_channel_diff": 128,
         "pages": 1
       },
-      "notes": "ssim 0.987480 below floor 0.990000"
+      "notes": ""
     },
     {
       "path": "corpus/fx/mulobj/1/1_10_watermark.pdf",
@@ -12596,12 +12594,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.962106,
+        "ssim": 0.962108,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
       },
-      "notes": "dumps differ: input.pdf.0.txt; ssim 0.962106 below floor 0.990000"
+      "notes": "dumps differ: input.pdf.0.txt; ssim 0.962108 below floor 0.990000"
     },
     {
       "path": "corpus/fx/other/8.1_viewer_preferences.pdf",
@@ -12768,9 +12766,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.992693,
+        "ssim": 0.999892,
         "exact": false,
-        "max_channel_diff": 255,
+        "max_channel_diff": 78,
         "pages": 3
       },
       "notes": ""
@@ -13178,10 +13176,8 @@
     },
     {
       "path": "corpus/fx/path/clipping_text.pdf",
-      "status": "fail",
-      "tags": [
-        "pixel-fail"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [
           "input.pdf.0.annot.txt",
@@ -13201,12 +13197,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.985468,
+        "ssim": 0.999923,
         "exact": false,
-        "max_channel_diff": 235,
+        "max_channel_diff": 33,
         "pages": 1
       },
-      "notes": "ssim 0.985468 below floor 0.990000"
+      "notes": ""
     },
     {
       "path": "corpus/fx/path/edit_getdash.pdf",
@@ -13633,12 +13629,12 @@
         }
       },
       "tierB": {
-        "ssim": 0.977931,
+        "ssim": 0.987884,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 2
       },
-      "notes": "ssim 0.977931 below floor 0.990000"
+      "notes": "ssim 0.987884 below floor 0.990000"
     },
     {
       "path": "corpus/fx/path/path_9.pdf",
@@ -14117,9 +14113,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.996333,
+        "ssim": 0.999981,
         "exact": false,
-        "max_channel_diff": 231,
+        "max_channel_diff": 51,
         "pages": 1
       },
       "notes": ""
@@ -40652,9 +40648,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.996995,
-        "exact": false,
-        "max_channel_diff": 186,
+        "ssim": 1,
+        "exact": true,
+        "max_channel_diff": 0,
         "pages": 1
       },
       "notes": ""
@@ -40682,9 +40678,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.996995,
-        "exact": false,
-        "max_channel_diff": 186,
+        "ssim": 1,
+        "exact": true,
+        "max_channel_diff": 0,
         "pages": 1
       },
       "notes": ""
@@ -45130,9 +45126,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999117,
+        "ssim": 0.999178,
         "exact": false,
-        "max_channel_diff": 135,
+        "max_channel_diff": 157,
         "pages": 1
       },
       "notes": ""
@@ -45160,9 +45156,9 @@
         }
       },
       "tierB": {
-        "ssim": 0.999117,
+        "ssim": 0.999178,
         "exact": false,
-        "max_channel_diff": 135,
+        "max_channel_diff": 157,
         "pages": 1
       },
       "notes": ""

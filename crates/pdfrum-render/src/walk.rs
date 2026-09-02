@@ -35,7 +35,7 @@ use crate::path::{IntRect, is_available_matrix, outer_rect};
 use crate::pattern::PatternClip;
 use crate::pixmap::{Pixmap, alpha_byte_rounding, alpha_byte_truncating};
 use crate::shading;
-use crate::text::{has_face, paint_kinds};
+use crate::text::{has_face, paint_kinds, stroke_text_matrices};
 use crate::transfer::TransferFunc;
 
 /// What one render call may reuse or restrict, beyond the page and the
@@ -1386,6 +1386,13 @@ fn render_text<B: RasterBackend>(
             kinds,
         );
     });
+    // `DrawTextPath` keeps the post-split text matrix on the path and the
+    // CTM on the device matrix. `place_glyphs` has already placed into that
+    // text space when stroking; this is the remaining transform, computed
+    // once for the run.
+    let stroke_device = kinds
+        .stroke
+        .then(|| stroke_text_matrices(object, state, to_device).1);
     for glyph in &glyphs {
         // The oracle's small-text path: an alpha bitmap, blitted whole, rather
         // than an outline filled where it lands. It is the majority of the
@@ -1417,16 +1424,33 @@ fn render_text<B: RasterBackend>(
             // hairline conversion.
             text_mode: true,
         };
-        draw_path(
-            device,
-            backend,
-            &glyph.outline,
-            glyph.matrix,
-            paint,
-            &state.stroke_params,
-            &ctx.opts,
-            &mut caches.zero_area,
-        );
+        if let Some(device_m) = stroke_device {
+            // The outline is already in the space line width is measured in;
+            // composing `device_m * glyph.matrix` back into one transform
+            // would put font-size/1000 into the stroke scale again.
+            let path = glyph.device_path();
+            draw_path(
+                device,
+                backend,
+                &path,
+                device_m,
+                paint,
+                &state.stroke_params,
+                &ctx.opts,
+                &mut caches.zero_area,
+            );
+        } else {
+            draw_path(
+                device,
+                backend,
+                &glyph.outline,
+                glyph.matrix,
+                paint,
+                &state.stroke_params,
+                &ctx.opts,
+                &mut caches.zero_area,
+            );
+        }
     }
     // Back to the session, with its capacity, for the next text object.
     caches.placed_glyphs = glyphs;

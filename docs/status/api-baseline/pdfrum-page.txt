@@ -688,6 +688,7 @@ pub pdfrum_page::TextState::horz_scale: f32
 pub pdfrum_page::TextState::leading: f32
 pub pdfrum_page::TextState::render_mode: pdfrum_page::TextRenderMode
 pub pdfrum_page::TextState::rise: f32
+pub pdfrum_page::TextState::stroke_ctm: [f32; 4]
 pub pdfrum_page::TextState::word_space: f32
 impl core::cmp::PartialEq for pdfrum_page::TextState
 pub fn pdfrum_page::TextState::eq(&self, &Self) -> bool
