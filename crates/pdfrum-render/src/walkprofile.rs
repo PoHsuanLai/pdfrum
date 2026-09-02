@@ -56,45 +56,45 @@ use core::time::Duration;
 /// are spread over more than one call site.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Phase {
-    /// [`crate::clip::resolve`]: a clip stack reduced to the device calls it
+    /// `crate::clip::resolve`: a clip stack reduced to the device calls it
     /// becomes, per object. Allocates a `Vec<Clip>` and, for a non-rectangular
     /// entry, a transformed `BezPath`.
     Clip,
-    /// [`crate::color::resolve_argb`] and the transfer function, per object.
+    /// `crate::color::resolve_argb` and the transfer function, per object.
     Color,
-    /// [`crate::text::place_glyphs`] and its type-3 sibling: the advance
+    /// `crate::text::place_glyphs` and its type-3 sibling: the advance
     /// arithmetic, the cache lookups, and the per-glyph `PlacedGlyph`.
     Glyphs,
     /// The image path's geometry, cache key and pixmap production — everything
-    /// [`crate::walk`]'s image arms do that is not a device call.
+    /// `crate::walk`'s image arms do that is not a device call.
     Image,
     /// The shading path's own evaluation, likewise.
     Shading,
-    /// [`crate::paint::draw_path`]'s decision tree: the two-point test, the
+    /// `crate::paint::draw_path`'s decision tree: the two-point test, the
     /// axis-aligned-rectangle test, the zero-area sub-path scan and the stroke
     /// split — everything a path object costs above the device call.
     PathPrep,
-    /// The per-object cull test in [`crate::walk::render_object_list`]:
-    /// [`crate::walk`]'s `object_bbox` and the four comparisons against the
+    /// The per-object cull test in `crate::walk::render_object_list`:
+    /// `crate::walk`'s `object_bbox` and the four comparisons against the
     /// list's object-space clip box. Added by M12b P3, which had to know
     /// whether an object rejected early is cheap because the *test* is cheap.
     Cull,
-    /// [`crate::path::path_rect`] and `snap_rect` — `draw_path`'s case 2, the
+    /// `crate::path::path_rect` and `snap_rect` — `draw_path`'s case 2, the
     /// axis-aligned-rectangle fast path, which runs on every fill-only path
     /// object whether or not it is a rectangle.
     RectTest,
-    /// [`crate::zero_area::scan_into`] — `draw_path`'s case 3, which runs on
+    /// `crate::zero_area::scan_into` — `draw_path`'s case 3, which runs on
     /// every fill-only non-glyph path object and on the corpus almost never
     /// finds anything.
     ZeroScan,
     /// The geometry `draw_path`'s ordinary case hands the device: the path
     /// transformed into device space and clamped by
-    /// [`crate::path::hard_clip`]. One reserved `BezPath` per fill, per
-    /// object — [`crate::path::transform_hard_clip`] fuses the transform and
+    /// `crate::path::hard_clip`. One reserved `BezPath` per fill, per
+    /// object — `crate::path::transform_hard_clip` fuses the transform and
     /// the clamp into a single pass, where until M12b P3 they were two builds
     /// with the intermediate thrown away.
     PathXform,
-    /// [`crate::shading::draw_patches`] — the Coons and tensor mesh half of a
+    /// `crate::shading::draw_patches` — the Coons and tensor mesh half of a
     /// shading, which rasterizes patch by patch through a scratch device
     /// rather than writing a buffer.
     ///
@@ -114,12 +114,12 @@ pub enum Phase {
 /// walk is deliberately absent, because an arena cannot help it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Site {
-    /// The `Vec<Clip>` [`crate::clip::resolve`] returns, once per object.
+    /// The `Vec<Clip>` `crate::clip::resolve` returns, once per object.
     ClipVec,
     /// A clip entry's transformed `BezPath`, for a clip that is not an
     /// axis-aligned rectangle.
     ClipPath,
-    /// The `Vec<PlacedGlyph>` [`crate::text::place_glyphs`] returns, once per
+    /// The `Vec<PlacedGlyph>` `crate::text::place_glyphs` returns, once per
     /// text object.
     GlyphVec,
     /// One glyph's outline, cloned out of the cache into its `PlacedGlyph`.
@@ -127,24 +127,24 @@ pub enum Site {
     /// A `RenderOptions` cloned into a nested context — a form, a char proc, a
     /// tile cell, a soft mask.
     OptionsClone,
-    /// A `RenderCtx` cloned by [`crate::RenderCtx::deeper`].
+    /// A `RenderCtx` cloned by `crate::ctx::RenderCtx::deeper`.
     CtxClone,
     /// The `Vec<SubPath>` and its per-sub-path `Vec<Point>` that
-    /// [`crate::zero_area::zero_area_sub_paths`] builds — once per fill-only
+    /// `crate::zero_area::zero_area_sub_paths` builds — once per fill-only
     /// path object, and discarded as soon as the scan is done.
     ZeroAreaPoints,
     /// The `Vec<ZeroArea>` that scan returns, which is empty for the
     /// overwhelming majority of paths and still costs the call.
     ZeroAreaVec,
-    /// The device-space `BezPath`s [`crate::paint::draw_path`]'s ordinary case
+    /// The device-space `BezPath`s `crate::paint::draw_path`'s ordinary case
     /// builds for a fill or a stroke: one per fill since M12b P3 fused the
-    /// transform and the clamp ([`crate::path::transform_hard_clip`]), three
+    /// transform and the clamp (`crate::path::transform_hard_clip`), three
     /// on the stroke arm, which still composes a nudge between them.
     ///
     /// **Not in P2's site list**, which is why P2's "allocation is 0.6%"
     /// covered less of the walk than it appeared to — see M12b-P3.md §3.
     PathGeometry,
-    /// The three `Vec<Point>`s [`crate::path::path_rect`] used to build — the
+    /// The three `Vec<Point>`s `crate::path::path_rect` used to build — the
     /// candidate points, their normalization, and their transform — on every
     /// fill-only path object, whether or not it turned out to be a rectangle.
     ///
@@ -336,7 +336,7 @@ mod imp {
     }
 
     /// The moment a phase began, for a caller that cannot wrap its body in a
-    /// closure — [`crate::zero_area::scan_into`], whose result borrows the
+    /// closure — `crate::zero_area::scan_into`, whose result borrows the
     /// scratch it was handed, so a closure would have to hand that borrow back
     /// out of itself or run the scan twice.
     #[derive(Debug, Clone, Copy)]

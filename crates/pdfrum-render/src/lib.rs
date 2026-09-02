@@ -62,34 +62,59 @@
 // `pdfrum-page`: index with `get()` and do arithmetic with `checked_*`.
 #![warn(clippy::indexing_slicing)]
 
-pub mod blend;
-pub mod clip;
-pub mod color;
-pub mod ctx;
-pub mod device;
+// The engine's own machinery. Private per STYLE.md §4 — the surface is the
+// `pub use` block below plus the four modules a *backend* implementing
+// `RasterBackend` has to reach into, which are declared separately under
+// "The backend seam".
+mod clip;
+mod color;
+mod ctx;
+mod device;
 mod error;
+mod group;
+mod image;
+mod imagecache;
+mod options;
+mod paint;
+mod path;
+mod pattern;
+mod shading;
+mod softmask;
+mod stretch;
+mod stroke;
+mod text;
+mod transfer;
+mod walk;
+mod zero_area;
+
+// # The backend seam
+//
+// Four modules stay public because a crate implementing [`RasterBackend`]
+// needs more than the trait's own signatures name: it rasterizes coverage,
+// composites it, blits an LCD glyph, and rounds alpha. Doing any of those in
+// the oracle's arithmetic means calling the engine's. `pdfrum-raster-agg` is
+// the in-tree proof — a backend written against exactly these four and
+// nothing else. Each module's own header says what a backend takes from it.
+//
+// A `///` on any of these lines would move the whole module's rustdoc into
+// this scope and break every intra-module link in it, so the prose lives
+// where the items do.
+pub mod blend;
 pub mod glyph;
-pub mod group;
-pub mod image;
-pub mod imagecache;
-pub mod options;
-pub mod paint;
-pub mod path;
-pub mod pattern;
 pub mod pixmap;
 pub mod scanline;
-pub mod shading;
-pub mod softmask;
-pub mod stretch;
-pub mod stroke;
-pub mod text;
-pub mod transfer;
-pub mod walk;
+
+// The walk's own phase timers and allocation counters, behind the default-off
+// `walk-profile` feature. Public, and unconditionally so, because
+// `benches/src/bin/profile.rs` reads it either way: with the feature on for
+// the numbers, and with it off to notice every counter is zero and print
+// which rebuild would fill them in. A module gated on the feature could not
+// answer the second question. Its docs make the STYLE.md §1 argument for the
+// thread-local, and it holds.
 pub mod walkprofile;
-pub mod zero_area;
 
 pub use color::{Argb, ObjectKind};
-pub use ctx::{RenderCaches, RenderCtx};
+pub use ctx::RenderCaches;
 pub use device::{
     AntiAlias, Brush, FillRule, ImageQuality, MAX_TARGET_DIMENSION, RasterBackend, RasterImage,
     RenderDevice,
@@ -97,7 +122,4 @@ pub use device::{
 pub use error::Error;
 pub use options::{ColorMode, ColorScheme, RenderOptions, TextAa};
 pub use pixmap::{AlphaMask, Pixmap};
-pub use walk::{
-    needs_alpha_background, render_page, render_page_with_caches, render_page_with_visibility,
-    target_size,
-};
+pub use walk::{RenderSession, needs_alpha_background, render_page, render_page_with};

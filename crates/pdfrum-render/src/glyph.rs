@@ -1,6 +1,10 @@
 //! Glyphs as alpha bitmaps, rendered the way the oracle's FreeType renders
 //! them (`CFX_Face::RenderGlyph` → `FT_Render_Glyph` → `DrawNormalTextHelper`).
 //!
+//! **Part of the backend seam.** [`SubpixelBitmap`] is the type
+//! [`RenderDevice::draw_glyph_lcd`](crate::RenderDevice::draw_glyph_lcd)
+//! hands a backend, and [`BitmapCache`] is the session-scoped store behind it.
+//!
 //! # What the oracle actually does to a small glyph
 //!
 //! Below `|char2device.a| + |char2device.b| > 50` the oracle does not fill a
@@ -53,9 +57,9 @@
 //!
 //! It is not a general glyph rasterizer, and it is deliberately not reachable
 //! for large text. Above the size threshold the oracle itself abandons bitmaps
-//! for `DrawTextPath`, and so does [`crate::text::takes_bitmap_path`]; a caller
+//! for `DrawTextPath`, and so does `crate::text::takes_bitmap_path`; a caller
 //! who wants true fractional placement at every size sets
-//! [`crate::options::RenderOptions::subpixel_text_positioning`].
+//! `crate::options::RenderOptions::subpixel_text_positioning`.
 
 use kurbo::{Affine, BezPath, Shape};
 
@@ -256,7 +260,7 @@ impl SubpixelPhase {
 /// subpixel phase.
 ///
 /// `outline` is in **device pixels**, already positioned so that the glyph's
-/// origin is at `(0, 0)`: the [`crate::text::snap_origin`] snap is applied by
+/// origin is at `(0, 0)`: the `crate::text::snap_origin` snap is applied by
 /// translating the *bitmap* rather than the outline, which is what lets one
 /// bitmap serve every glyph of the same shape wherever it lands.
 ///
@@ -740,7 +744,7 @@ impl BitmapCache {
 
 /// Collapse a subpixel bitmap's three channels back to one gray coverage.
 ///
-/// The fallback [`crate::device::RenderDevice::draw_glyph_lcd`]'s default takes
+/// The fallback `crate::device::RenderDevice::draw_glyph_lcd`'s default takes
 /// for a backend that cannot address channels separately. It is **not** the
 /// oracle's own gray path and must not be mistaken for it: `to_gray` averages
 /// the *raw* subpixels and gamma-adjusts the average once, where this averages
@@ -784,7 +788,7 @@ pub fn average_to_gray(bitmap: &SubpixelBitmap) -> Option<GlyphBitmap> {
 /// glyph's own alpha (`ApplyAlpha` → `AlphaMerge`). Premultiplying here and
 /// compositing source-over is the same arithmetic — `dest·(255−a)/255 +
 /// colour·a/255` either way — expressed in the vocabulary
-/// [`crate::device::RenderDevice::draw_image`] already speaks, which is what
+/// `crate::device::RenderDevice::draw_image` already speaks, which is what
 /// lets the glyph path use the existing device seam rather than growing a
 /// seventh primitive that every backend would have to reimplement.
 ///

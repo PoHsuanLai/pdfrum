@@ -2,6 +2,11 @@
 //! truncating, unclamped (ISO 32000-1 §11.3.5, `core/fxge/dib/blend.cpp` and
 //! `cfx_scanlinecompositor.cpp:41-121`).
 //!
+//! **Part of the backend seam.** A backend that writes its own pixels
+//! composites with [`composite_solid`] and [`composite_premultiplied`] rather
+//! than with its rasterizer library's, which rounds differently; that is what
+//! `pdfrum-raster-agg` does.
+//!
 //! These are the *engine's* blend functions, used where the engine composites
 //! its own offscreen buffers. On-device compositing goes through each
 //! rasterizer's native blend modes instead, which round differently by ±1 —
