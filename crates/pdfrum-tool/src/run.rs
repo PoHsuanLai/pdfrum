@@ -556,7 +556,7 @@ fn write_page_files<R: Resolve>(
                 return String::new();
             };
             let extracted = text::extract_page(page, r, rtl, ctx);
-            let _ = std::fs::write(path, extracted.to_utf32le());
+            let _ = std::fs::write(path, text::to_utf32le(&extracted));
             String::new()
         }
         OutputFormat::Render("png") => {

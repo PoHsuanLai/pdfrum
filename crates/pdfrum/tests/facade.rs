@@ -9,7 +9,7 @@
 use std::sync::Arc;
 
 use pdfrum::{
-    Document, FieldKind, FindOptions, OpenOptions, PageIndex, PdfVersion, Permissions,
+    CharIndex, Document, FieldKind, FindOptions, OpenOptions, PageIndex, PdfVersion, Permissions,
     RenderOptions, SaveOptions, Subtype, Update,
 };
 
@@ -115,7 +115,7 @@ fn a_stream_with_no_length_is_recovered_rather_than_refused() {
         doc.page(0)
             .expect("page")
             .text()
-            .all_text()
+            .to_string()
             .contains("Hello"),
         "the stream was read despite its missing length"
     );
@@ -306,7 +306,7 @@ fn a_shared_build_context_renders_the_same_pixels_as_a_fresh_one() {
 fn text_extraction_reads_the_pages_strings_in_order() {
     let doc = Document::open(HELLO).expect("open");
     let text = doc.page(0).expect("page").text();
-    let all = text.all_text();
+    let all = text.to_string();
     assert!(all.contains("Hello, world!"));
     assert!(all.contains("Goodbye, world!"));
     assert_eq!(text.char_count(), 30, "13 + 15 characters plus separators");
@@ -340,7 +340,12 @@ fn a_search_hit_maps_back_to_boxes_on_the_page() {
         .find("Hello", FindOptions::default())
         .next()
         .expect("a hit");
-    let rects = text.rects(hit.start, Some(hit.len()));
+    // `find` counts in the search text and `rects` counts in the character
+    // list; the page's own map is what bridges them, and after WP8 the types
+    // will not let a caller skip it.
+    let from = text.runs.char_index(hit.start).expect("a character");
+    let to = text.runs.char_index(hit.end).expect("a character");
+    let rects = text.rects(from..to);
     assert_eq!(rects.len(), 1, "one text object, one box");
     assert!(rects[0].width() > 0.0 && rects[0].height() > 0.0);
 }
@@ -349,10 +354,10 @@ fn a_search_hit_maps_back_to_boxes_on_the_page() {
 fn text_can_be_selected_by_rectangle_and_probed_by_point() {
     let doc = Document::open(HELLO).expect("open");
     let text = doc.page(0).expect("page").text();
-    let first = text.char_at(0).expect("a first character");
+    let first = text.char(CharIndex::new(0)).expect("a first character");
     // The point at a character's own origin finds that character.
     let found = text.index_at(first.origin, kurbo::Size::new(2.0, 2.0));
-    assert_eq!(found, Some(0));
+    assert_eq!(found, Some(CharIndex::new(0)));
     // A rectangle covering the whole page selects everything drawn on it.
     let all = text.text_in_rect(kurbo::Rect::new(0.0, 0.0, 200.0, 200.0));
     assert!(all.contains("Hello"));
@@ -364,7 +369,7 @@ fn a_page_with_no_text_extracts_nothing_rather_than_failing() {
     // This page *does* have text, so assert the shape rather than emptiness:
     // extraction is infallible, and an empty page is a valid answer.
     let text = doc.page(0).expect("page").text();
-    assert!(text.all_text().contains("Test Form"));
+    assert!(text.to_string().contains("Test Form"));
 }
 
 // ------------------------------------------------------- document features
@@ -981,7 +986,7 @@ fn a_session_serves_extraction_and_rendering_from_one_set_of_caches() {
         let pixmap = page
             .render_session(&RenderOptions::default(), &mut session)
             .expect("render");
-        let text = page.text_session(&mut session).all_text();
+        let text = page.text_session(&mut session).to_string();
         assert!(pixmap.width() > 0);
         assert!(text.contains("Page"));
     }
@@ -992,7 +997,7 @@ fn a_session_serves_extraction_and_rendering_from_one_set_of_caches() {
         .page(0)
         .expect("page")
         .text_with(&mut session.build)
-        .all_text();
+        .to_string();
     assert!(text.contains("Page1"));
 }
 
@@ -1084,7 +1089,7 @@ fn text_extracts_in_parallel_too() {
     let pages: Vec<_> = doc.pages().collect();
     let texts: Vec<String> = pages
         .par_iter()
-        .map(|page| page.text().all_text())
+        .map(|page| page.text().to_string())
         .collect();
     assert_eq!(texts.len(), 2);
     assert!(texts[0].contains("Page1"));

@@ -7,7 +7,28 @@
 //! search-facing text — they read the character list directly.
 
 use crate::charinfo::{CharBox, CharType, ObjectIndex};
+use crate::index::CharIndex;
 use kurbo::{Point, Rect, Size};
+use std::ops::{Bound, RangeBounds};
+
+/// Resolves a caller's range into the half-open `start..end` the scan wants,
+/// clamped to the character list.
+///
+/// An unbounded end is "to the end", which is what the C++ spells as a
+/// negative count.
+fn bounds(range: &impl RangeBounds<CharIndex>, total: usize) -> (usize, usize) {
+    let start = match range.start_bound() {
+        Bound::Included(at) => at.get(),
+        Bound::Excluded(at) => at.get().saturating_add(1),
+        Bound::Unbounded => 0,
+    };
+    let end = match range.end_bound() {
+        Bound::Included(at) => at.get().saturating_add(1),
+        Bound::Excluded(at) => at.get(),
+        Bound::Unbounded => total,
+    };
+    (start, end.min(total))
+}
 
 /// The boxes covering a run of characters (`GetRectArray`).
 ///
@@ -17,18 +38,16 @@ use kurbo::{Point, Rect, Size};
 /// so a run in which every character was skipped still yields one — an
 /// all-zero rectangle, which the upstream tests pin.
 #[must_use]
-pub fn rects(chars: &[CharBox], start: usize, count: Option<usize>) -> Vec<Rect> {
+pub fn rects(chars: &[CharBox], range: impl RangeBounds<CharIndex>) -> Vec<Rect> {
     let mut out = Vec::new();
     let total = chars.len();
+    let (start, end) = bounds(&range, total);
     if start >= total {
         return out;
     }
-    // `None` is the C++'s negative count: "to the end".
-    let count = match count {
-        Some(0) => return out,
-        Some(count) if start + count <= total => count,
-        _ => total - start,
-    };
+    // A range that runs past the end takes what is there, which is what the
+    // C++'s negative count means and what its overlong count falls back to.
+    let count = if end > start { end - start } else { return out };
 
     let mut object: Option<ObjectIndex> = None;
     let mut seen_any = false;
@@ -68,14 +87,14 @@ pub fn rects(chars: &[CharBox], start: usize, count: Option<usize>) -> Vec<Rect>
 /// whose box expanded by half the tolerance still contains the point, scored
 /// by the sum of the distances to the nearest edges.
 #[must_use]
-pub fn index_at(chars: &[CharBox], point: Point, tolerance: Size) -> Option<usize> {
+pub fn index_at(chars: &[CharBox], point: Point, tolerance: Size) -> Option<CharIndex> {
     let mut nearest = None;
     // The C++ starts the two running distances at 5000 apiece, so a character
     // only ever wins if its combined distance is under ten thousand.
     let mut best = 10000.0f64;
     for (index, info) in chars.iter().enumerate() {
         if contains(info.char_box, point) {
-            return Some(index);
+            return Some(CharIndex::new(index));
         }
         if tolerance.width <= 0.0 && tolerance.height <= 0.0 {
             continue;
@@ -94,7 +113,7 @@ pub fn index_at(chars: &[CharBox], point: Point, tolerance: Size) -> Option<usiz
         let dy = (point.y - rect.y0).abs().min((point.y - rect.y1).abs());
         if dx + dy < best {
             best = dx + dy;
-            nearest = Some(index);
+            nearest = Some(CharIndex::new(index));
         }
     }
     nearest
@@ -231,7 +250,7 @@ mod tests {
     #[test]
     fn one_rect_per_run_of_characters_sharing_an_object() {
         let chars = run();
-        let boxes = rects(&chars, 0, None);
+        let boxes = rects(&chars, ..);
         assert_eq!(boxes.len(), 2);
         assert_eq!(boxes[0], Rect::new(0.0, 0.0, 10.0, 10.0));
         assert_eq!(boxes[1], Rect::new(10.0, 0.0, 20.0, 10.0));
@@ -245,24 +264,36 @@ mod tests {
         for info in &mut chars {
             info.char_type = CharType::Generated;
         }
-        assert_eq!(rects(&chars, 0, None), [Rect::ZERO]);
+        assert_eq!(rects(&chars, ..), [Rect::ZERO]);
     }
 
     #[test]
-    fn a_zero_count_or_out_of_range_start_yields_nothing() {
+    fn an_empty_or_out_of_range_range_yields_nothing() {
         let chars = run();
-        assert!(rects(&chars, 0, Some(0)).is_empty());
-        assert!(rects(&chars, 99, None).is_empty());
-        assert!(rects(&[], 0, None).is_empty());
-        // A count past the end is clamped rather than refused.
-        assert_eq!(rects(&chars, 2, Some(500)).len(), 1);
+        let at = CharIndex::new;
+        assert!(rects(&chars, at(0)..at(0)).is_empty());
+        assert!(rects(&chars, at(99)..).is_empty());
+        assert!(rects(&[], ..).is_empty());
+        // A range past the end takes what is there rather than being refused.
+        assert_eq!(rects(&chars, at(2)..at(502)).len(), 1);
+        // The three spellings of "everything" agree.
+        assert_eq!(rects(&chars, ..), rects(&chars, at(0)..));
+        assert_eq!(rects(&chars, ..), rects(&chars, at(0)..at(chars.len())));
+        // An inclusive end covers its own character.
+        assert_eq!(rects(&chars, at(0)..=at(1)), rects(&chars, at(0)..at(2)));
     }
 
     #[test]
     fn exact_containment_wins_and_returns_the_first_match() {
         let chars = run();
-        assert_eq!(index_at(&chars, Point::new(2.0, 5.0), Size::ZERO), Some(0));
-        assert_eq!(index_at(&chars, Point::new(12.0, 5.0), Size::ZERO), Some(2));
+        assert_eq!(
+            index_at(&chars, Point::new(2.0, 5.0), Size::ZERO),
+            Some(CharIndex::new(0))
+        );
+        assert_eq!(
+            index_at(&chars, Point::new(12.0, 5.0), Size::ZERO),
+            Some(CharIndex::new(2))
+        );
         // With no tolerance, a point outside every box finds nothing.
         assert_eq!(index_at(&chars, Point::new(100.0, 100.0), Size::ZERO), None);
     }
@@ -272,7 +303,7 @@ mod tests {
         let chars = run();
         // Just left of the first box, within a generous tolerance.
         let found = index_at(&chars, Point::new(-1.0, 5.0), Size::new(10.0, 10.0));
-        assert_eq!(found, Some(0));
+        assert_eq!(found, Some(CharIndex::new(0)));
         // Far outside even the expanded boxes.
         assert_eq!(
             index_at(&chars, Point::new(-100.0, 5.0), Size::new(10.0, 10.0)),

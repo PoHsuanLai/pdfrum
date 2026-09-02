@@ -351,7 +351,7 @@ impl<'a> Page<'a> {
     /// ```
     /// let doc = pdfrum::Document::open("tests/fixtures/hello_world.pdf")?;
     /// let text = doc.page(0)?.text();
-    /// assert!(text.all_text().contains("Hello, world!"));
+    /// assert!(text.to_string().contains("Hello, world!"));
     /// # Ok::<(), pdfrum::Error>(())
     /// ```
     #[must_use]

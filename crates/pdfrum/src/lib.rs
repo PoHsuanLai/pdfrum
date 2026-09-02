@@ -7,7 +7,7 @@
 //! let doc = Document::open("tests/fixtures/hello_world.pdf")?;
 //! for page in doc.pages() {
 //!     let pixmap = page.render(&RenderOptions::default())?;
-//!     let text = page.text().all_text();
+//!     let text = page.text().to_string();
 //!     assert_eq!((pixmap.width(), pixmap.height()), (200, 200));
 //!     assert!(text.contains("Hello, world!"));
 //! }
@@ -317,7 +317,7 @@ pub use pdfrum_font::SubstitutionOptions;
 /// selection and link queries over them.
 ///
 /// Returned by [`Page::text`].
-pub use pdfrum_text::{CharBox, FindOptions, TextPage, WebLink};
+pub use pdfrum_text::{CharBox, CharIndex, FindOptions, IndexMap, TextIndex, TextPage, WebLink};
 
 /// A link annotation, and where it points.
 ///

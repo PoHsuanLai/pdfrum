@@ -28,7 +28,7 @@
 use pdfrum_common::{Diagnostics, Limits};
 use pdfrum_object::{Name, Object};
 use pdfrum_page::{BuildContext, Resources, build_page_from_dict, parse_content};
-use pdfrum_text::{CharType, ExtractOptions, TextPage};
+use pdfrum_text::{CharIndex, CharType, ExtractOptions, TextIndex, TextPage};
 
 /// Builds a one-page document around a content stream and extracts its text.
 ///
@@ -116,7 +116,7 @@ fn build_pdf(content: &str, font: &str) -> Vec<u8> {
 }
 
 fn text(page: &TextPage) -> String {
-    page.all_text()
+    page.to_string()
 }
 
 fn units(page: &TextPage) -> Vec<u32> {
@@ -303,8 +303,8 @@ fn character_code_zero_reaches_the_char_stream_and_not_the_text() {
     assert_eq!(page.chars.len(), 3, "{:?}", units(&page));
     assert!(units(&page).iter().all(|u| *u == 0));
     assert_eq!(text(&page), "");
-    // And the dump writes them out rather than skipping them.
-    assert_eq!(page.to_utf32le().len(), (3 + 1) * 4);
+    // And the stream a dump reads holds them rather than skipping them.
+    assert_eq!(units(&page).len(), 3);
 }
 
 // ---------------------------------------------------------------------------
@@ -368,21 +368,27 @@ fn a_search_whose_needle_can_never_match_terminates() {
 fn the_two_outputs_are_the_same_length_only_when_nothing_diverges() {
     // Plain text: the character stream and the text agree.
     let plain = extract("BT /F1 12 Tf 20 100 Td (hello) Tj ET");
-    assert_eq!(plain.chars.len(), plain.text.len());
+    assert_eq!(plain.chars.len(), plain.search_text.len());
     // A control character: the stream is longer.
     let control = extract("BT /F1 12 Tf 20 100 Td (he\\002llo) Tj ET");
-    assert_eq!(control.chars.len(), control.text.len() + 1);
-    assert_eq!(control.all_text(), "hello");
+    assert_eq!(control.chars.len(), control.search_text.len() + 1);
+    assert_eq!(control.to_string(), "hello");
 }
 
 #[test]
 fn the_index_map_bridges_the_two_outputs() {
     let page = extract("BT /F1 12 Tf 20 100 Td (he\\002llo) Tj ET");
     // Text offset 2 is the 'l', which is character index 3.
-    assert_eq!(page.runs.char_index(2), Some(3));
-    assert_eq!(page.runs.text_index(3), Some(2));
+    assert_eq!(
+        page.runs.char_index(TextIndex::new(2)),
+        Some(CharIndex::new(3))
+    );
+    assert_eq!(
+        page.runs.text_index(CharIndex::new(3)),
+        Some(TextIndex::new(2))
+    );
     // The control character is in no segment at all.
-    assert_eq!(page.runs.text_index(2), None);
+    assert_eq!(page.runs.text_index(CharIndex::new(2)), None);
 }
 
 #[test]
@@ -395,7 +401,7 @@ fn extraction_of_a_degenerate_page_yields_nothing_rather_than_failing() {
         "q Q Q Q BT",
     ] {
         let page = extract(content);
-        let _ = page.to_utf32le();
+        let _ = units(&page);
         let _ = page.web_links();
     }
 }

@@ -47,7 +47,7 @@ fn run(input: &Path, needle: Option<&str>) -> Result<(), pdfrum::Error> {
                     .page_label(page.index())
                     .unwrap_or_else(|| (page.index().get() + 1).to_string());
                 println!("=== page {label} ({} chars) ===", text.char_count());
-                println!("{}", text.all_text());
+                println!("{text}");
             }
             Some(needle) => {
                 for range in text.find(needle, FindOptions::default()) {
@@ -55,13 +55,19 @@ fn run(input: &Path, needle: Option<&str>) -> Result<(), pdfrum::Error> {
                     // not the same sequence as the character list — control
                     // characters and placeholders are stripped from one and
                     // not the other. `rects` takes character indices, so the
-                    // two are bridged through the page's own index.
-                    let rects = text.rects(range.start, Some(range.len()));
+                    // two are bridged through the page's own index map, which
+                    // the types now insist on: a `TextIndex` will not go where
+                    // a `CharIndex` belongs.
+                    let (Some(from), Some(to)) = (
+                        text.runs.char_index(range.start),
+                        text.runs.char_index(range.end),
+                    ) else {
+                        continue;
+                    };
+                    let rects = text.rects(from..to);
                     println!(
-                        "page {} chars {}..{} in {} box(es)",
+                        "page {} chars {from}..{to} in {} box(es)",
                         page.index().get() + 1,
-                        range.start,
-                        range.end,
                         rects.len()
                     );
                     for rect in rects {

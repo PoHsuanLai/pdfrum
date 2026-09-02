@@ -169,7 +169,7 @@ pub struct LooseBoundsInput<'a> {
 
 /// Whether a float is inside the C++'s float-zero band, `(-1e-4, 1e-4)`.
 #[must_use]
-pub fn is_float_zero(value: f32) -> bool {
+pub(crate) fn is_float_zero(value: f32) -> bool {
     value > -0.0001 && value < 0.0001
 }
 

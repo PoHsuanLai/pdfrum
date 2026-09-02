@@ -96,10 +96,16 @@ are dev-dependencies of this crate and a normal dependency of any caller who
 names one. `pdfrum-tool` still defaults to tiny-skia on purpose, because
 conformance wants the determinism baseline.
 
-**Text.** `TextPage` is re-exported from `pdfrum-text` unchanged — it was
-already the right shape, and wrapping it would only have hidden `all_text`,
-`find`, `rects`, `index_at`, `text_in_rect`, `web_links` and `char_at` behind
-delegating methods with nothing to add.
+**Text.** `TextPage` is re-exported from `pdfrum-text` unchanged — wrapping
+it would only have hidden `Display`, `slice`, `find`, `rects`, `index_at`,
+`text_in_rect`, `web_links` and `char` behind delegating methods with nothing
+to add. *Updated 2026-09-02 by WP8*, which changed those signatures in the
+crate rather than at the facade: `page_text(start, count)` became
+`slice(range)`, `rects(start, count)` became `rects(range)`, `all_text()`
+became `Display`, `char_at` became `char`, and the two index spaces became
+`CharIndex` and `TextIndex` — re-exported here alongside `IndexMap`, the table
+that converts between them. The verbatim re-export is why: with no facade
+layer to translate in, the crate's shape *is* the facade's shape.
 
 **Form.** `Form { fields(), field(name), field_count, need_appearances,
 set(name, value), set_checked(name, bool), edits() }` and `Field { name,

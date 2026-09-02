@@ -16,7 +16,7 @@ pub enum Error {
     #[error("character index {index} is past the end of a {len}-character page")]
     CharIndexOutOfRange {
         /// The index that was asked for.
-        index: usize,
+        index: crate::CharIndex,
         /// How many characters the page has.
         len: usize,
     },
