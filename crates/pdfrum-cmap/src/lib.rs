@@ -73,13 +73,14 @@ mod cid2unicode;
 mod decode;
 mod error;
 mod ids;
-pub mod lexer;
+mod lexer;
 mod parser;
 mod predefined;
 mod static_lookup;
 
 pub use error::Error;
 pub use ids::{CharCode, Cid, CidCoding, CidSet, CodingScheme};
+pub use lexer::Words;
 
 use decode::Decoder;
 use parser::{CidRange, DirectTable};

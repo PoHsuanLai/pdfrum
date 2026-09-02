@@ -8,16 +8,12 @@
 //! here rather than being shared with `pdfrum-parser`.
 //!
 //! `pdfrum-font`'s `ToUnicode` parser reads the same shape of program and
-//! re-uses [`Words`] directly; that is why this module is public.
+//! re-uses [`Words`] directly; that is why [`Words`] is re-exported from the
+//! crate root, as `pdfrum_cmap::Words`. The module itself is private — the
+//! root re-export block is the crate's surface.
 //!
-//! ```
-//! use pdfrum_cmap::lexer::Words;
-//!
-//! let words: Vec<&[u8]> = Words::new(b"begincidrange <20> <7e> 1 endcidrange").collect();
-//! assert_eq!(words[0], b"begincidrange");
-//! assert_eq!(words[1], b"<20>");   // the angle brackets are part of the word
-//! assert_eq!(words.len(), 5);
-//! ```
+//! The shape [`Words`] hands back is pinned by `a_cid_range_splits_into_five_words`
+//! below, which is the doctest this module doc used to carry.
 
 /// PDF whitespace. Note `0x80` and `0xFF`, which the PDF specification does
 /// not list: PDFium's character table classifies them as whitespace and real
@@ -281,5 +277,16 @@ mod tests {
                 assert!(total <= input.len(), "words overlap in {input:?}");
             }
         }
+    }
+    /// Was this module's doctest, kept as a unit test now that the module is
+    /// private: a `begincidrange` line is five words, and a hex string keeps
+    /// its angle brackets.
+    #[test]
+    fn a_cid_range_splits_into_five_words() {
+        let words: Vec<&[u8]> = Words::new(b"begincidrange <20> <7e> 1 endcidrange").collect();
+        assert_eq!(words.first().copied(), Some(&b"begincidrange"[..]));
+        // The angle brackets are part of the word.
+        assert_eq!(words.get(1).copied(), Some(&b"<20>"[..]));
+        assert_eq!(words.len(), 5);
     }
 }

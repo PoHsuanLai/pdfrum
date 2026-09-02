@@ -1,11 +1,4 @@
 pub mod pdfrum_cmap
-pub mod pdfrum_cmap::lexer
-pub struct pdfrum_cmap::lexer::Words<'a>
-impl<'a> pdfrum_cmap::lexer::Words<'a>
-pub fn pdfrum_cmap::lexer::Words<'a>::new(&'a [u8]) -> Self
-impl<'a> core::iter::traits::iterator::Iterator for pdfrum_cmap::lexer::Words<'a>
-pub type pdfrum_cmap::lexer::Words<'a>::Item = &'a [u8]
-pub fn pdfrum_cmap::lexer::Words<'a>::next(&mut self) -> core::option::Option<Self::Item>
 #[repr(u8)] pub enum pdfrum_cmap::CidCoding
 pub pdfrum_cmap::CidCoding::Big5 = 2
 pub pdfrum_cmap::CidCoding::Cid = 6
@@ -58,6 +51,12 @@ impl core::convert::From<pdfrum_cmap::Cid> for u16
 pub fn u16::from(pdfrum_cmap::Cid) -> Self
 impl core::convert::From<u16> for pdfrum_cmap::Cid
 pub fn pdfrum_cmap::Cid::from(u16) -> Self
+pub struct pdfrum_cmap::Words<'a>
+impl<'a> pdfrum_cmap::Words<'a>
+pub fn pdfrum_cmap::Words<'a>::new(&'a [u8]) -> Self
+impl<'a> core::iter::traits::iterator::Iterator for pdfrum_cmap::Words<'a>
+pub type pdfrum_cmap::Words<'a>::Item = &'a [u8]
+pub fn pdfrum_cmap::Words<'a>::next(&mut self) -> core::option::Option<Self::Item>
 pub fn pdfrum_cmap::charcode_from_unicode(&pdfrum_cmap::CMap, char) -> pdfrum_cmap::CharCode
 pub fn pdfrum_cmap::charset_from_ordering(&[u8]) -> pdfrum_cmap::CidSet
 pub fn pdfrum_cmap::from_encoding_name(&pdfrum_object::name::Name, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_cmap::CMap
