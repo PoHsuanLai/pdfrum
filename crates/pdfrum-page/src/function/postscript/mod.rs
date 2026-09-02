@@ -16,7 +16,7 @@ pub use op::PsOp;
 
 use super::Common;
 use crate::names;
-use eval::{Machine, STACK_SIZE};
+use eval::Machine;
 use pdfrum_common::{DiagKind, Diagnostics, Limits, Severity};
 use pdfrum_filters::decode_chain;
 use pdfrum_object::{Resolve, Stream};
@@ -235,17 +235,6 @@ pub fn parse_program(source: &[u8], domain: &[f32], range: &[f32]) -> Option<Pos
     })
 }
 
-/// The stack size the engine runs with, exposed for tests that probe the
-/// overflow behaviour.
-#[must_use]
-#[allow(
-    dead_code,
-    reason = "the PostScript stack depth is pinned by this module's own tests; nothing in the crate reads it, and the `function` module is no longer public"
-)]
-pub fn stack_size() -> usize {
-    STACK_SIZE
-}
-
 #[cfg(test)]
 mod tests {
     // Test fixtures quote the oracle's own vectors, compare floats exactly
@@ -260,7 +249,8 @@ mod tests {
         reason = "test fixtures quote oracle vectors verbatim and compare exactly"
     )]
 
-    use super::{MAX_NESTING, PostScript, PsOp, parse_program, stack_size};
+    use super::eval::STACK_SIZE;
+    use super::{MAX_NESTING, PostScript, PsOp, parse_program};
 
     fn run(program: &str, inputs: &[f32], outputs: usize) -> Vec<f32> {
         let range: Vec<f32> = (0..outputs).flat_map(|_| [-1e30, 1e30]).collect();
@@ -443,12 +433,12 @@ mod tests {
     #[test]
     fn stack_overflow_drops_pushes_silently() {
         let mut program = String::from("{");
-        for _ in 0..stack_size() + 5 {
+        for _ in 0..STACK_SIZE + 5 {
             program.push_str("1 ");
         }
         program.push('}');
         let f = parse_program(program.as_bytes(), &[], &[-1e30, 1e30]).expect("parses");
-        assert_eq!(f.stack_depth_after(&[]), stack_size());
+        assert_eq!(f.stack_depth_after(&[]), STACK_SIZE);
         let mut out = [0.0f32];
         assert!(f.eval(&[], &mut out));
     }
@@ -501,7 +491,7 @@ mod tests {
     #[test]
     fn diagnostics_report_what_the_silent_paths_swallowed() {
         let mut program = String::from("{");
-        for _ in 0..stack_size() + 5 {
+        for _ in 0..STACK_SIZE + 5 {
             program.push_str("1 ");
         }
         program.push('}');

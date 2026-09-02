@@ -425,20 +425,6 @@ fn scan_for_ei(lexer: &mut ContentLexer<'_>) -> EiScan {
     }
 }
 
-/// The filter names an inline image declares, expanded, in order.
-#[must_use]
-#[allow(
-    dead_code,
-    reason = "the oracle behaviour it ports is pinned by this module's own tests; the curation removed its only caller outside the crate"
-)]
-pub fn inline_filters(dict: &Dict) -> Vec<Name> {
-    match dict.raw(&Name::from("Filter")) {
-        Some(Object::Name(n)) => vec![n.clone()],
-        Some(Object::Array(a)) => a.iter().filter_map(Object::as_name).cloned().collect(),
-        _ => Vec::new(),
-    }
-}
-
 /// An inline image dictionary rebuilt as a standalone image `XObject`
 /// dictionary, so the image path never needs to know it came from `BI`.
 #[must_use]
@@ -631,9 +617,20 @@ mod tests {
         let Some(Op::InlineImage(img)) = ops.first() else {
             panic!("expected an inline image, got {ops:?}");
         };
-        let filters = super::inline_filters(&img.dict);
+        // The whole chain is read by `pdfrum_filters::decoder_list` off the
+        // rebuilt XObject dict; what this pins is that `/F` became `/Filter`
+        // and `/AHx` became its long spelling before it got there.
+        let Some(Object::Array(filters)) = img.dict.raw(&Name::from("Filter")) else {
+            panic!("expected a /Filter array, got {:?}", img.dict);
+        };
         assert_eq!(filters.len(), 1);
-        assert_eq!(filters[0].as_bytes(), b"ASCIIHexDecode");
+        assert_eq!(
+            filters
+                .raw_at(0)
+                .and_then(Object::as_name)
+                .map(Name::as_bytes),
+            Some(&b"ASCIIHexDecode"[..])
+        );
     }
 
     #[test]

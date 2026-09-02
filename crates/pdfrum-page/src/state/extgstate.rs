@@ -25,7 +25,6 @@ use crate::transparency::SoftMask;
 use pdfrum_common::{Diagnostics, Limits};
 use pdfrum_font::Font;
 use pdfrum_object::{Dict, Object, Resolve};
-use smallvec::SmallVec;
 use std::sync::Arc;
 
 /// Apply an `/ExtGState` dictionary to `state`.
@@ -204,25 +203,6 @@ pub fn apply_ext_gstate<R: Resolve>(
     }
 }
 
-/// The dash array an `/ExtGState` `/D` entry states, or `None` when the entry
-/// is not the nested-array shape the key requires.
-#[must_use]
-#[allow(
-    dead_code,
-    reason = "the oracle behaviour it ports is pinned by this module's own tests; the curation removed its only caller outside the crate"
-)]
-pub fn ext_gstate_dash(ext: &Dict, r: &impl Resolve) -> Option<(SmallVec<[f32; 4]>, f32)> {
-    let outer = ext.array(names::D, r)?;
-    // Element 0 **must itself be an array**, or the key is skipped.
-    let Some(Object::Array(lengths)) = outer.raw_at(0) else {
-        return None;
-    };
-    Some((
-        lengths.iter().map(|o| o.number().unwrap_or(0.0)).collect(),
-        outer.number_at_or_zero(1),
-    ))
-}
-
 #[cfg(test)]
 mod tests {
     // Test fixtures quote the oracle's own vectors, compare floats exactly
@@ -237,7 +217,7 @@ mod tests {
         reason = "test fixtures quote oracle vectors verbatim and compare exactly"
     )]
 
-    use super::{apply_ext_gstate, ext_gstate_dash};
+    use super::apply_ext_gstate;
     use crate::function::FunctionCache;
     use crate::state::{BlendMode, GraphicsState, RenderIntent};
     use pdfrum_common::{Diagnostics, Limits};
@@ -304,25 +284,28 @@ mod tests {
         assert!(!s.general.fill_overprint, "/op wins for the fill flag");
     }
 
+    /// `/D` takes a **nested** array, matching `CPDF_AllStates::ProcessExtGS`
+    /// (`cpdf_allstates.cpp:64-77`): the outer value must be an array *and*
+    /// its element 0 must itself be an array, or the key is skipped entirely.
     #[test]
     fn a_dash_entry_needs_a_nested_array() {
-        let good = Dict::from_pairs([(
+        let good = apply(vec![(
             Name::from("D"),
             Object::Array(Array::of([
                 Object::Array(Array::of([Object::Int(3), Object::Int(2)])),
                 Object::Int(1),
             ])),
         )]);
-        let (lengths, phase) = ext_gstate_dash(&good, &NoResolve).expect("a dash");
-        assert_eq!(&lengths[..], &[3.0, 2.0]);
-        assert!((phase - 1.0).abs() < 1e-6);
+        assert_eq!(&good.stroke_params.dash[..], &[3.0, 2.0]);
+        assert!((good.stroke_params.dash_phase - 1.0).abs() < 1e-6);
 
-        // Element 0 not an array: the key is skipped.
-        let flat = Dict::from_pairs([(
+        // Element 0 not an array: the key is skipped and the state is untouched.
+        let flat = apply(vec![(
             Name::from("D"),
             Object::Array(Array::of([Object::Int(3), Object::Int(2)])),
         )]);
-        assert!(ext_gstate_dash(&flat, &NoResolve).is_none());
+        assert!(flat.stroke_params.dash.is_empty());
+        assert!((flat.stroke_params.dash_phase - 0.0).abs() < 1e-6);
     }
 
     #[test]
