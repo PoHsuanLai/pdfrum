@@ -9,8 +9,24 @@ readme = "README.md"
 keywords = ["pdf", "render", "parse", "text", "graphics"]
 categories = ["parser-implementations", "graphics", "text-processing", "multimedia::images"]
 
-[lints]
-workspace = true
+# Copied from `[workspace.lints]` rather than `workspace = true`: Cargo
+# forbids mixing the inherit flag with extra keys, and WP13 adds one
+# clippy lint on this crate only. Keep the two tables in step.
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+pedantic = { level = "warn", priority = -1 }
+module_name_repetitions = "allow"
+must_use_candidate = "allow"
+# WP13: boolean parameters that mean "which mode" are enums on this crate's
+# surface. `struct_excessive_bools` stays allowed on engine option structs
+# that mirror oracle flag words (`pdfrum_render::RenderOptions`).
+fn_params_excessive_bools = "deny"
 
 [features]
 # The document's own JavaScript, actually run — `pdfrum-form`'s `script`

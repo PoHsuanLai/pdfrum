@@ -157,6 +157,18 @@ flow.
 - Public API of every crate fits in one `lib.rs` re-export block a reviewer
   can read in one screen. Internal modules named by domain (`xref`, `lexer`,
   `shading`), never `util`, `helpers`, `common`, `misc`.
+- The committed `docs/status/api-baseline/` snapshots **are** the public API.
+  A drift against them is the review: `./scripts/api-snapshot.nu check` is
+  the gate, and an intended change is `./scripts/api-snapshot.nu update`
+  run deliberately — a change to the baseline is a change to what
+  `cargo add pdfrum` sees.
+- Unexported types in public signatures are a build failure. rustdoc
+  `broken-intra-doc-links` is denied with the rest of `-D warnings`, and
+  `crates/pdfrum/tests/reexports.rs` plus the enum-constructibility test
+  require every named type — payload types included — to be reachable from
+  `pdfrum::*`.
+- A new public item in a member crate is a review question: facade-facing,
+  sibling-crate plumbing, or should it have been private?
 - All public types are `Send + Sync` unless a documented reason exists.
   Rendering multiple pages in parallel with `rayon` must Just Work.
 - **Library code carries no `#[allow(dead_code)]`.** `#[expect(dead_code)]` is

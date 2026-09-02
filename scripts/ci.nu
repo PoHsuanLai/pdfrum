@@ -32,6 +32,16 @@ def main [] {
         ^cargo doc --no-deps --workspace
     }
 
+    # WP13. The committed snapshots are the public API; a drift is a change
+    # to what `cargo add pdfrum` sees. The script's header used to forbid
+    # this line — that sentence became false when the surface settled.
+    ^./scripts/api-snapshot.nu check
+
+    # WP13. Value-agnostic: every `pub const` in those snapshots is opened
+    # at its defining source line, and a sentinel-shaped value fails unless
+    # it is a real limit/identity/table value listed with a reason.
+    ^./scripts/check-pub-consts.nu
+
     print "==> cargo deny check"
     # The one step that warns and continues rather than failing: the audit is
     # optional tooling, and a contributor without it still gets the rest of the

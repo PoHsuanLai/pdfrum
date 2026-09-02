@@ -3399,6 +3399,8 @@ Once the surface is the intended one, stop it drifting.
   `pdfrum_render::RenderOptions`).
 - **STYLE.md §4 gains three sentences**, see §8.
 
+> **Landed 2026-09-03 (WP13).** Snapshot drift is `scripts/api-snapshot.nu check`, wired into `scripts/ci.nu` after the doc step; the script's "deliberately NOT a gate" header is now the history of why it was held back until the surface settled. Enum constructibility is `crates/pdfrum/tests/construct_enums.rs`, derived from `docs/status/api-baseline/pdfrum.txt` and `pdfrum+script.txt`. The pub-const sweep is `scripts/check-pub-consts.nu` with allowlist `docs/status/pub-const-allowlist.md`. `fn_params_excessive_bools = deny` on the facade crate. STYLE.md §4 carries the three sentences (the snapshot is the review; unexported signature types are a build failure; a new public item in a member crate is a review question).
+
 ---
 
 ## 6. Flags: do not add `bitflags`
