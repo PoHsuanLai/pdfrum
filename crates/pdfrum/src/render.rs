@@ -1,35 +1,5 @@
 //! What a render is parameterised by. *Which* rasterizer performs it is an
 //! argument, not an option — see [`Page::render_on`](crate::Page::render_on).
-//!
-//! # Where `Backend` went
-//!
-//! *Withdrawn 2026-09-02.* This module used to own
-//! `pub enum Backend { VelloCpu, TinySkia, Agg }` and a
-//! `RenderOptions::backend` field, and [`Page::render`](crate::Page::render)
-//! dispatched on it through a three-arm match. That flattened a seam the
-//! engine below already had: `pdfrum_render::RasterBackend` is a trait with
-//! an associated `Device`, and `render_page_with` is generic over it.
-//! The facade's enum could only ever name the rasterizers the *facade*
-//! depended on — so every caller of `cargo add pdfrum` compiled three of
-//! them, and no caller could ever pass a fourth.
-//!
-//! The backend is now a **parameter**:
-//! [`Page::render_on`](crate::Page::render_on) takes
-//! `&B where B: RasterBackend`, and [`Page::render`](crate::Page::render)
-//! keeps its signature and means
-//! [`VelloCpuBackend`](crate::VelloCpuBackend), the facade's default and its
-//! one rasterizer dependency. `tiny-skia` and the AGG-parity backend are now
-//! the caller's own dependency, named directly.
-//!
-//! **Const generics were considered and rejected:** a `const` parameter
-//! cannot carry a `wgpu` device, so a const-selected backend could never
-//! name the GPU one — which is precisely the fourth backend the enum could
-//! not name either.
-//!
-//! [`RasterBackend`](crate::RasterBackend) and
-//! [`RenderDevice`](crate::RenderDevice) are re-exported from this crate, so
-//! a caller can write the bound without adding `pdfrum-render` to their
-//! manifest.
 
 use kurbo::Affine;
 
@@ -37,28 +7,16 @@ pub use pdfrum_render::{ColorMode, ColorScheme, Pixmap, TextAa};
 
 /// Everything a render is parameterised by.
 ///
-/// A plain config struct with [`Default`], filled in with struct-update
-/// syntax (STYLE.md §4). The defaults render a page at one pixel per PDF
-/// point, in colour, with antialiased text — what a viewer shows.
+/// A config struct with [`Default`], filled in with struct-update syntax. The
+/// defaults render a page at one pixel per PDF point, in colour, with
+/// antialiased text — what a viewer shows.
 ///
 /// It says nothing about *which* rasterizer draws the page: that is an
-/// argument to [`Page::render_on`](crate::Page::render_on) rather than a
-/// field here — `RenderOptions::backend`, and the `Backend` enum it selected
-/// from, were withdrawn 2026-09-02.
+/// argument to [`Page::render_on`](crate::Page::render_on).
 ///
-/// # This is not the engine's `RenderOptions`
-///
-/// `pdfrum_render::RenderOptions` is a **different type** with seven bools,
-/// each one of `CPDF_RenderOptions::Options`' bit flags under its upstream
-/// name, so that a reader diffing the port against `cpdf_renderoptions.h`
-/// can line them up. This type is the idiomatic one: its flags are positive
-/// and default to the common case, so `smooth_paths` here is the engine's
-/// `no_path_smooth` inverted. The two are joined at exactly one place —
-/// `RenderOptions::to_inner`, which is where every field is translated —
-/// and nothing else in the facade constructs the engine's copy. A method
-/// like [`Page::render_on`](crate::Page::render_on) that takes
-/// `&RenderOptions` while returning a `pdfrum_render::Pixmap` is taking
-/// *this* one.
+/// `pdfrum_render::RenderOptions` is a **different type**, and the engine's
+/// own. This one's flags are positive and default to the common case, so
+/// `smooth_paths` here is the engine's `no_path_smooth` inverted.
 ///
 /// ```
 /// use pdfrum::RenderOptions;

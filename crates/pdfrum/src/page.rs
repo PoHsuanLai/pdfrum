@@ -113,23 +113,21 @@ impl<'a> Page<'a> {
 
     /// Renders the page to a pixel buffer.
     ///
-    /// Use this when you have one page to draw. It rasterizes on
-    /// [`VelloCpuBackend`] — the facade's default, and the one rasterizer
-    /// `cargo add pdfrum` pulls in — with caches of its own that it throws
-    /// away afterwards. For a run over many pages, or on any other
+    /// Rasterizes on [`VelloCpuBackend`], with caches of its own that it
+    /// throws away afterwards. For a run over many pages, or on any other
     /// rasterizer, use [`Page::render_on`].
     ///
     /// The image is sized by [`RenderOptions::transform`]: the default
     /// identity transform gives one pixel per PDF point, and
-    /// `Affine::scale(2.0)` gives a 2x image. The page's own rotation and
-    /// crop are applied for you.
+    /// `Affine::scale(2.0)` gives a 2x image. The page's own crop box and
+    /// `/Rotate` are applied for you.
     ///
     /// # Errors
     ///
-    /// [`Error::Render`](crate::Error::Render) when the resulting target would be empty or larger
-    /// than the rasterizer's 65535-pixel limit. Content that will not draw is
-    /// *not* an error: it is recorded as a diagnostic and the rest of the
-    /// page still renders.
+    /// [`Error::Render`](crate::Error::Render) when the resulting target would
+    /// be empty or larger than the rasterizer's 65535-pixel limit. Content
+    /// that will not draw is *not* an error: it is recorded as a diagnostic
+    /// and the rest of the page still renders.
     ///
     /// ```
     /// use pdfrum::{Document, RenderOptions};
@@ -157,66 +155,17 @@ impl<'a> Page<'a> {
         )
     }
 
-    /// Renders the page on a rasterizer you name, reusing a caller-owned
+    /// [`Page::render`] on a rasterizer you name, reusing a caller-owned
     /// [`RenderSession`].
     ///
-    /// Use this for either half of what it offers, or both.
-    ///
-    /// **A rasterizer other than the default.** [`Page::render`] is this with
-    /// [`VelloCpuBackend`]; any other backend is a direct dependency of
-    /// yours, named here: `pdfrum-raster-tinyskia`'s `TinySkiaBackend` for a
-    /// determinism cross-check, `pdfrum-raster-agg`'s `AggBackend` when you
-    /// want edges that match PDFium's, `pdfrum-raster-vello`'s `VelloBackend`
-    /// for the GPU. Nothing about the page changes: a backend rasterizes
-    /// paths and images, it does not interpret PDF.
-    ///
-    /// **Caches that outlive the page.** The session carries both halves —
-    /// [`BuildContext`] for the fonts, colour spaces, functions and decoded
-    /// images a page is *built* from, and [`RenderCaches`](crate::RenderCaches)
-    /// for the flattened glyph outlines it is *drawn* with. A run over many
-    /// pages of one document should thread one through them all: decoding a
-    /// shared image or flattening a shared glyph once per document instead of
-    /// once per page is the difference between a fast walk and a slow one.
-    /// The session's glyph cache holds outlines that are the engine's own and
-    /// not a backend's, so one session serves a run that changes backend
-    /// between pages — the cross-check case.
-    ///
-    /// A session is `&mut` and not shareable, so under `rayon` each worker
-    /// keeps its own; see the crate docs. On the caveat about type-3 snapping
-    /// and a warm cache, see [`RenderSession`]. For a byte-identical per-page
-    /// baseline pass a fresh `RenderSession::new()`, which is exactly what
-    /// [`Page::render`] does.
-    ///
-    /// A caller that needs the *build* caches configured — substitution
-    /// options for non-embedded fonts, say — sets `session.build` and renders
-    /// through the same session, so the fonts a page is measured with are the
-    /// fonts it is drawn with.
-    ///
-    /// Added 2026-09-02, replacing `RenderOptions::backend` and the facade's
-    /// `Backend` enum. Const generics were considered and rejected for the
-    /// job: a `const` parameter cannot carry a `wgpu` device, so a
-    /// const-selected backend could never name the GPU one.
+    /// Any backend other than [`VelloCpuBackend`] is a direct dependency of
+    /// yours, named here; a backend rasterizes paths and images, it does not
+    /// interpret PDF. The session carries the caches a run over many pages of
+    /// one document should thread through all of them — see [`RenderSession`].
     ///
     /// # Errors
     ///
     /// As [`Page::render`].
-    ///
-    /// ```
-    /// use pdfrum::{Document, RenderOptions, RenderSession, VelloCpuBackend};
-    ///
-    /// let doc = Document::open("tests/fixtures/bookmarks.pdf")?;
-    /// let backend = VelloCpuBackend::new();
-    /// let mut session = RenderSession::new();
-    ///
-    /// // Both pages share one set of caches: the fonts are parsed once, and
-    /// // so are the glyph outlines drawn from them.
-    /// let rendered: Vec<_> = doc
-    ///     .pages()
-    ///     .map(|page| page.render_on(&backend, &RenderOptions::default(), &mut session))
-    ///     .collect::<Result<_, _>>()?;
-    /// assert_eq!(rendered.len(), 2);
-    /// # Ok::<(), pdfrum::Error>(())
-    /// ```
     pub fn render_on<B: RasterBackend>(
         &self,
         backend: &B,
@@ -226,17 +175,12 @@ impl<'a> Page<'a> {
         self.paint(backend, options, &mut session.build, &mut session.caches)
     }
 
-    /// The device box this page's images should be decoded against
-    /// (SPEC.md §7, `[spec]` 2026-08-31).
+    /// The device box this page's images should be decoded against.
     ///
-    /// The oracle's `max_size_required` is the **render device's own
-    /// dimensions** — `CPDF_ImageRenderer::StartLoadDIBBase` fills it from
-    /// `GetRenderDevice()->GetWidth()/GetHeight()`
-    /// (`cpdf_imagerenderer.cpp:74-77`) — not the rectangle an individual image
-    /// lands in. So this is a property of the render target, one value for the
-    /// whole page, and it can be computed before a single object is
-    /// interpreted: the display size is fixed by the crop box and `/Rotate`
-    /// alone.
+    /// The bound is the **render device's own dimensions**, not the rectangle
+    /// an individual image lands in — one value for the whole page, and one
+    /// that can be computed before a single object is interpreted, since the
+    /// display size is fixed by the crop box and `/Rotate` alone.
     ///
     /// The truncation, and the reason the box is the *page's* rather than any
     /// image's, are both in [`pdfrum_page::RequestedSize::for_device`].
@@ -298,13 +242,11 @@ impl<'a> Page<'a> {
 
     /// Extracts the page's text.
     ///
-    /// Use this when you have one page to read. It builds the page with
-    /// caches of its own and throws them away afterwards; for a run over many
-    /// pages, or when the text must be measured with the same fonts a render
-    /// uses, use [`Page::text_on`].
-    ///
-    /// The returned [`TextPage`] carries the characters in reading order and
-    /// answers search, selection and link queries over them.
+    /// The [`TextPage`] carries the characters in reading order and answers
+    /// search, selection and link queries over them. Built with caches of its
+    /// own that it throws away afterwards; for a run over many pages, or when
+    /// the text must be measured with the same fonts a render uses, use
+    /// [`Page::text_on`].
     ///
     /// ```
     /// let doc = pdfrum::Document::open("tests/fixtures/hello_world.pdf")?;
@@ -317,19 +259,14 @@ impl<'a> Page<'a> {
         self.text_on(&mut RenderSession::default())
     }
 
-    /// Extracts the page's text reusing a caller-owned [`RenderSession`].
+    /// [`Page::text`] reusing a caller-owned [`RenderSession`], so a run over
+    /// many pages parses each font once.
     ///
-    /// Use this for a run over many pages of one document, so each font and
-    /// colour space is parsed once rather than once per page, and so one
-    /// session serves a run that both renders and extracts — the same
-    /// [`BuildContext`] answers both. A caller whose build context carries
-    /// substitution options must extract through it for the same reason
-    /// [`Page::render_on`] gives: text measured against a different face than
-    /// the page is drawn with is text measured twice.
-    ///
-    /// Extraction never touches the session's glyph cache — it reads the
-    /// content stream's own text and never rasterizes — so only
-    /// `session.build` moves. [`Page::text`] is this with a fresh session.
+    /// One session serves a run that both renders and extracts, which is what
+    /// a caller whose [`BuildContext`] carries substitution options needs:
+    /// text measured against a different face than the page is drawn with is
+    /// text measured twice. Extraction never rasterizes, so only
+    /// `session.build` moves.
     #[must_use]
     pub fn text_on(&self, session: &mut RenderSession) -> TextPage {
         let page = self.build(&mut session.build);

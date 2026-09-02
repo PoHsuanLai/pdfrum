@@ -15,10 +15,7 @@ pub use pdfrum_form::{AppearanceUpdate, UpdateKind};
 
 /// The four points where a field's `/AA` scripts can intervene.
 ///
-/// Re-exported **unconditionally**, because it is named in
-/// [`FormSession::with_cascade`]'s signature and a caller who writes their own
-/// implementation must be able to name it from `pdfrum` alone (WP7's rule).
-/// The trait and [`NoScripts`] exist whether or not the `script` feature is
+/// [`Cascade`] and [`NoScripts`] exist whether or not the `script` feature is
 /// on; only `ScriptCascade` is behind it.
 pub use pdfrum_form::{Cascade, FieldRef, FieldWrites, Keystroke, KeystrokeOutcome, NoScripts};
 
@@ -30,65 +27,23 @@ pub use pdfrum_form::{Cascade, FieldRef, FieldWrites, Keystroke, KeystrokeOutcom
 ///
 /// # Coordinates
 ///
-/// Every mouse method takes **page space** — PDF user space, y-up, with its
-/// origin at the page's crop box. That is the same space
-/// [`Page`](crate::Page) reports rectangles in, and no conversion happens on
-/// the way in. Points are [`Point`](kurbo::Point) — `f64`, the vocabulary
-/// [`Page::crop_box`](crate::Page::crop_box) already speaks; `pdfrum-form`
-/// narrows to its own `f32` at the routing entry, which is where the oracle
-/// narrows too.
-///
-/// # The primary button has methods; the other one has an [`Event`]
-///
-/// [`Self::mouse_down`] and [`Self::mouse_up`] are the left button, because
-/// that is what every widget interaction is made of. A right button is
-/// representable — the `.evt` corpus contains right-button lines and a bridge
-/// must be able to express them — but it is spelled as a value:
-///
-/// ```
-/// # use pdfrum::{Button, Document, Event, FormSession, Modifiers, Point};
-/// # let doc = Document::open("tests/fixtures/text_form.pdf")?;
-/// # let mut session = FormSession::new(&doc);
-/// session.set_viewed_page(0);
-/// let response = session.apply(Event::MouseDown {
-///     button: Button::Right,
-///     at: Point::new(120.0, 115.0),
-///     modifiers: Modifiers::NONE,
-/// });
-/// // The correct behaviour for a right button is to consume nothing.
-/// assert!(!response.consumed);
-/// # Ok::<(), pdfrum::Error>(())
-/// ```
-///
-/// A boolean `down` parameter and a `button` argument on one method was the
-/// shape that made this a method; the enum was already there.
-///
-/// # No escape hatch, and why this type does not need one
-///
-/// Every other facade type has one — [`Document::parser`](crate::Document),
-/// [`Page::objects`](crate::Page), [`Annotation::dict`](crate::Annotation) —
-/// because each wraps something a caller may need to reach past it for.
-/// This one had `inner()`, returning a `pdfrum_form::FormSession` that shares
-/// its name and is a different type; it had **no caller anywhere in the
-/// workspace**, and it could not have a useful one, because the value it hands
-/// back is `&`-borrowed state with no document, no [`BuildContext`] and no way
-/// to route an event. A power user does not want a read-only view of this
-/// session's field: they want a session of their own, and `pdfrum-form` builds
-/// one directly. So the escape hatch is the member crate, not a method.
+/// Every mouse method takes **page space** — PDF user space, y-up, origin at
+/// the page's crop box. That is the space [`Page`](crate::Page) reports
+/// rectangles in, and no conversion happens on the way in.
 ///
 /// # Two answers, not one
 ///
-/// Each event method returns a [`Response`] with both halves of the answer.
-/// `consumed` says the event was handled, which is **not** the same as saying
-/// it changed anything — a read-only checkbox consumes a Return and stays
-/// unchecked — and `updates` says what changed.
+/// A [`Response`] carries both halves. `consumed` says the event was handled,
+/// which is **not** the same as saying it changed anything — a read-only
+/// checkbox consumes a Return and stays unchecked — and `updates` says what
+/// changed.
 ///
 /// # A focused field draws differently
 ///
 /// A field with focus renders from live editor state, caret and selection
 /// included; an unfocused one falls back to a generated appearance stream.
-/// Dropping focus with [`FormSession::blur`] is what commits a
-/// value and moves a field from the first to the second.
+/// [`FormSession::blur`] is what commits a value and moves a field from the
+/// first to the second.
 ///
 /// ```
 /// use pdfrum::{Document, FormSession, Key, Modifiers, Point};
@@ -98,7 +53,6 @@ pub use pdfrum_form::{Cascade, FieldRef, FieldWrites, Keystroke, KeystrokeOutcom
 ///
 /// // Nothing has the keyboard yet.
 /// assert!(session.focused_annot().is_none());
-/// assert!(session.focused_text().is_none());
 ///
 /// // A click is three events, and the move is not decoration: it is what
 /// // tells the widget the pointer is over it. The fixture's one text field
@@ -109,34 +63,22 @@ pub use pdfrum_form::{Cascade, FieldRef, FieldWrites, Keystroke, KeystrokeOutcom
 /// session.mouse_up(0, at, Modifiers::NONE);
 /// assert!(session.focused_annot().is_some());
 ///
-/// // Typing sends characters. Navigation and shortcuts go through
-/// // `key_down` instead — the two paths never overlap, and a character
-/// // carrying the accelerator is neither.
+/// // Typing sends characters; navigation and shortcuts go through `key_down`.
 /// for ch in "Hello".chars() {
 ///     session.character(ch, Modifiers::NONE);
 /// }
 /// assert_eq!(session.focused_text().as_deref(), Some("Hello"));
 ///
-/// // Undo is one keystroke and one character: typing records an item per
-/// // character, so this leaves "Hell".
-/// assert!(session.can_undo());
+/// // Typing records an undo item per character, so this leaves "Hell".
 /// session.key_down(Key::Z, Modifiers::CONTROL);
 /// assert_eq!(session.focused_text().as_deref(), Some("Hell"));
 ///
-/// // Dropping focus commits the value and moves the field from drawing its
-/// // live editor state to drawing a generated appearance stream. What comes
-/// // back is what changed, for a caller to re-render — and it is *two*
-/// // things, not one: the regenerated appearance, and the focus change
-/// // itself. A response carrying only the focus change would mean the field
-/// // was still drawing its caret.
+/// // Blur commits, and returns *two* things: the regenerated appearance and
+/// // the focus change. A response carrying only the focus change would mean
+/// // the field was still drawing its caret.
 /// let committed = session.blur();
 /// assert!(session.focused_annot().is_none());
-///
-/// let regenerated = committed
-///     .updates
-///     .iter()
-///     .any(|update| update.kind.appearance().is_some());
-/// assert!(regenerated, "the committed field is redrawn, not just unfocused");
+/// assert!(committed.updates.iter().any(|u| u.kind.appearance().is_some()));
 /// # Ok::<(), pdfrum::Error>(())
 /// ```
 #[derive(Debug)]
@@ -225,84 +167,32 @@ impl<'a> FormSession<'a> {
         FormSession::build(doc, Inner::new(), &mut BuildContext::new())
     }
 
-    /// Starts a session with explicit switches — the accelerator modifier,
-    /// which annotation subtypes join the focus ring, and the undo bound.
+    /// [`FormSession::new`] with explicit switches — the accelerator
+    /// modifier, which annotation subtypes join the focus ring, and the undo
+    /// bound.
     #[must_use]
     pub fn with_config(doc: &'a Document, config: SessionConfig) -> FormSession<'a> {
         FormSession::build(doc, Inner::with_config(config), &mut BuildContext::new())
     }
 
-    /// Starts a session whose fonts are resolved through a caller-owned
-    /// [`BuildContext`], as [`RenderSession::build`](crate::RenderSession).
+    /// [`FormSession::new`] with fonts resolved through a caller-owned
+    /// [`BuildContext`].
     ///
-    /// # Use this whenever the caller renders with substitution options
-    ///
-    /// A session lays out the appearances it hands back — the glyph run, the
-    /// caret, the selection band — and it lays them out with the *metrics of
-    /// the face the `/DA` font resolves to*. [`FormSession::new`] resolves
-    /// that face through a default [`BuildContext`], which is right only when
-    /// the caller renders through a default one too.
-    ///
-    /// A caller that renders with [`BuildContext::with_substitution`] — an
-    /// explicit font directory, Croscore naming — and starts its session with
-    /// [`FormSession::new`] gets **two different substitutions over one
-    /// document**: the page's `/Arial` becomes Arimo (ascent 905, descent
-    /// −211) while the session's falls through to the built-in base-14
-    /// Helvetica (718, −219). Every height the session computes is then wrong
-    /// by the difference, which at 12pt is 2.148 units — enough to move a
-    /// caret a whole device row. Threading one context through both closes
-    /// it, and it is the same context that carries the font, colorspace and
-    /// image caches, so the fonts are also parsed once rather than twice.
-    ///
-    /// ```
-    /// use pdfrum::{BuildContext, Document, FormSession};
-    ///
-    /// let doc = Document::open("tests/fixtures/text_form.pdf")?;
-    /// // The context a caller would also render this document through.
-    /// let mut ctx = BuildContext::new();
-    /// let session = FormSession::with_context(&doc, &mut ctx);
-    /// assert!(session.focused_annot().is_none());
-    /// # Ok::<(), pdfrum::Error>(())
-    /// ```
+    /// **Use this whenever the caller renders with
+    /// [`BuildContext::with_substitution`].** A session lays out its carets
+    /// and selection bands from the metrics of the face the `/DA` font
+    /// resolves to, so a second substitution over one document puts them at
+    /// heights the page is not drawn at.
     #[must_use]
     pub fn with_context(doc: &'a Document, ctx: &mut BuildContext) -> FormSession<'a> {
         FormSession::build(doc, Inner::new(), ctx)
     }
 
-    /// Starts a session with explicit switches *and* a caller-owned
-    /// [`BuildContext`] — [`FormSession::with_config`] and
-    /// [`FormSession::with_context`] together.
+    /// [`FormSession::with_config`] and [`FormSession::with_context`]
+    /// together: explicit switches *and* a caller-owned [`BuildContext`].
     ///
-    /// The pair exists because the two questions are independent: which
-    /// keyboard the accelerator is for, and which faces the document's fonts
-    /// resolve to. A caller that has both answers should not have to give up
-    /// one to state the other.
-    ///
-    /// ```
-    /// use pdfrum::{
-    ///     BuildContext, Document, FormSession, Key, Modifiers, Point, SessionConfig,
-    /// };
-    ///
-    /// let doc = Document::open("tests/fixtures/text_form.pdf")?;
-    /// let mut ctx = BuildContext::new();
-    /// // An Apple keyboard, resolved through the caller's own context.
-    /// let mut session =
-    ///     FormSession::with_config_in(&doc, SessionConfig::apple(), &mut ctx);
-    ///
-    /// // The field is `/Rect [100 100 200 130]`, so (120, 115) is inside it.
-    /// let at = Point::new(120.0, 115.0);
-    /// session.mouse_move(0, at, Modifiers::NONE);
-    /// session.mouse_down(0, at, Modifiers::NONE);
-    /// session.mouse_up(0, at, Modifiers::NONE);
-    /// assert!(session.focused_annot().is_some());
-    ///
-    /// // And the Apple switch is live: Command is the accelerator, so
-    /// // Command+A selects all where Control+A types nothing.
-    /// session.character('x', Modifiers::NONE);
-    /// session.key_down(Key::A, Modifiers::META);
-    /// assert_eq!(session.selected_text().as_deref(), Some("x"));
-    /// # Ok::<(), pdfrum::Error>(())
-    /// ```
+    /// The two questions are independent — which keyboard the accelerator is
+    /// for, and which faces the document's fonts resolve to.
     #[must_use]
     pub fn with_config_in(
         doc: &'a Document,
@@ -312,39 +202,16 @@ impl<'a> FormSession<'a> {
         FormSession::build(doc, Inner::with_config(config), ctx)
     }
 
-    /// Starts a session whose commits pass through `cascade` — the seam a
-    /// field's `/AA` scripts hang off.
+    /// [`FormSession::new`] with commits routed through your own
+    /// [`Cascade`] — a validator, an audit log, a policy that refuses a
+    /// keystroke.
     ///
     /// [`FormSession::new`] uses [`NoScripts`], whose behaviour *is* a
-    /// JavaScript-off viewer's rather than a stub of one. This is how a
-    /// caller substitutes something else, and the two implementations worth
-    /// naming are:
-    ///
-    /// - **`ScriptCascade`**, behind the `script` feature — but reach for
-    ///   `FormSession::with_scripts` instead, which builds one *and* installs
-    ///   the document's own `/AA` scripts into it. A `ScriptCascade` passed
-    ///   here runs nothing, because nothing has told it what any field's
-    ///   scripts are.
-    /// - **your own** implementation of [`Cascade`], for a host that gates
-    ///   commits on rules of its own — a validator, an audit log, a policy
-    ///   that refuses a keystroke.
-    ///
-    /// ```
-    /// use pdfrum::{Cascade, Document, FieldRef, FormSession};
-    ///
-    /// /// A cascade that refuses every commit.
-    /// struct ReadOnly;
-    /// impl Cascade for ReadOnly {
-    ///     fn validate(&mut self, _field: &FieldRef, _value: &str) -> bool {
-    ///         false
-    ///     }
-    /// }
-    ///
-    /// let doc = Document::open("tests/fixtures/text_form.pdf")?;
-    /// let session = FormSession::with_cascade(&doc, ReadOnly);
-    /// assert!(session.focused_annot().is_none());
-    /// # Ok::<(), pdfrum::Error>(())
-    /// ```
+    /// JavaScript-off viewer's rather than a stub of one. For the document's
+    /// own scripts use `FormSession::with_scripts` (the `script` feature),
+    /// which builds a cascade *and* installs the `/AA` entries into it; a bare
+    /// `ScriptCascade` passed here runs nothing, because nothing has told it
+    /// what any field's scripts are.
     #[must_use]
     pub fn with_cascade(doc: &'a Document, cascade: impl Cascade + 'static) -> FormSession<'a> {
         FormSession::build_with(
@@ -355,27 +222,18 @@ impl<'a> FormSession<'a> {
         )
     }
 
-    /// Starts a session that **runs the document's own JavaScript**: a
+    /// [`FormSession::new`] with the document's own JavaScript running: a
     /// `boa`-backed cascade with every field's `/AA` scripts installed into
     /// it.
     ///
-    /// This is the constructor to use for scripting. It does what
-    /// [`FormSession::with_cascade`] alone cannot: each page's `/AA /K`,
-    /// `/AA /V`, `/AA /C` and `/AA /F` entries are read as a page is read and
-    /// handed to the cascade, along with each field's fully qualified name,
-    /// its stored value and the form's `/AcroForm /CO` calculation order — a
-    /// [`ScriptCascade`](crate::ScriptCascade) holds no document and cannot
-    /// read any of that for itself.
+    /// This is the constructor to use for scripting: it does what
+    /// [`FormSession::with_cascade`] alone cannot, reading each page's `/AA`
+    /// entries as the page is read and handing them to the cascade with the
+    /// field's qualified name, its value and the `/AcroForm /CO` order.
     ///
-    /// # What a script can and cannot reach
-    ///
-    /// The `AF*` library (`AFNumber_Format`, `AFDate_*`, `AFSimple_Calculate`,
-    /// …), `util`, `app.alert` and the `event` object are bound and the four
-    /// field hooks run; the `Doc`/`Field` object model — `this.getField(…)`,
-    /// and everything a script does through it — **is not built yet**, so
-    /// 11 of the oracle's 47 JavaScript fixtures reproduce byte-exactly today.
-    /// See PLAN.md §M15 for the milestone and `docs/status/M15.md` for the
-    /// per-fixture accounting. Do not enable this expecting Acrobat.
+    /// The `AF*` library, `util`, `app.alert` and the `event` object are bound
+    /// and the four field hooks run; the `Doc`/`Field` object model is not.
+    /// Do not enable this expecting Acrobat.
     ///
     /// # Errors
     ///
@@ -426,27 +284,18 @@ impl<'a> FormSession<'a> {
     /// Installs the form's `/AcroForm /CO` order into a scripted cascade.
     ///
     /// **An empty order means no calculation runs at all**, however many
-    /// fields carry `/AA /C` — `cpdf_interactiveform.cpp:739-745`, and
-    /// `pdfrum_doc::form::Form::calculation_order` carries the reasoning.
+    /// fields carry `/AA /C`; `pdfrum_doc::form::Form::calculation_order`
+    /// carries the reasoning.
     ///
-    /// # A known index-space mismatch, inherited rather than introduced
+    /// # A known index-space mismatch
     ///
     /// `calculation_order` answers positions in
     /// [`Form::fields`](crate::Form::fields) — the document's whole field
     /// list — while everything else the cascade is keyed by is a **page-local
     /// `FieldId`**, allocated in first-seen order as one page's `/Annots` are
     /// walked. The two spaces agree for a single-page form whose widgets
-    /// appear in `/Fields` order, which is every `/CO`-bearing fixture in the
-    /// oracle's corpus, and disagree otherwise.
-    ///
-    /// This is not this method's defect to fix: `route::commit_field` already
-    /// spends a calculation's writes as `FieldId(index)` under a comment
-    /// asserting the two are the same thing, so the mismatch is a
-    /// `pdfrum-form` question about what `FieldRef::index` means, and fixing
-    /// it in one place and not the other would make them disagree in a new
-    /// way. Recorded in `docs/status/pdfrum-facade.md`; it belongs to M15
-    /// step 2, where the `Doc`/`Field` object model settles what a script's
-    /// field identity is.
+    /// appear in `/Fields` order, and disagree otherwise. Fixing it belongs to
+    /// `pdfrum-form`'s question of what `FieldRef::index` means, not here.
     #[cfg(feature = "script")]
     fn install_calculation_order(&mut self) {
         let Cascades::Scripted(cascade) = &mut self.cascade else {
@@ -493,19 +342,13 @@ impl<'a> FormSession<'a> {
 
     /// Tells the session which page the embedder is showing.
     ///
-    /// **Two things need it.** The first is the one it was named for: a
-    /// keyboard event that arrives with **nothing focused** has no field to
-    /// route to and no page of its own, and the one such event that must
-    /// still do something is **Tab** — it is what enters the focus ring in
-    /// the first place. The oracle spells the same fact as a page parameter
-    /// on `FORM_OnKeyDown`, which its callers fill in with the page in view.
-    /// The second is [`Self::apply`]: an [`Event`] carries a point and no
-    /// page, so a mouse event handed over as a value lands here.
+    /// Two things need it: a keyboard event arriving with **nothing focused**
+    /// — Tab, which is what enters the focus ring — and [`Self::apply`], since
+    /// an [`Event`] carries a point but no page.
     ///
-    /// Defaults to page 0, which is right for a single-page document and for
-    /// a viewer that has not scrolled. A caller showing any other page should
-    /// say so, or a Tab from nothing will enter the ring on the wrong one —
-    /// and so will every click sent through `apply`.
+    /// Defaults to page 0. A caller showing any other page should say so, or a
+    /// Tab from nothing will enter the ring on the wrong one, and so will
+    /// every click sent through `apply`.
     pub fn set_viewed_page(&mut self, page: impl Into<PageIndex>) {
         self.viewed_page = page.into();
     }
@@ -522,27 +365,15 @@ impl<'a> FormSession<'a> {
         &self.inner.config
     }
 
-    /// Routes a whole [`Event`], for a caller that already has one.
+    /// Routes a whole [`Event`], for a caller whose input is already a value.
     ///
-    /// This is the method every other event method on this type is a thin
-    /// spelling of, and the one to reach for when the events come from a
-    /// queue rather than from seven separate call sites: an embedder that
-    /// already models input as a value hands the value over instead of
-    /// destructuring it into arguments and letting a wrapper build it back.
+    /// Every other event method on this type is a thin spelling of this one.
     ///
-    /// # Which page a mouse event lands on
-    ///
-    /// [`Event`] carries a point but not a page, because a page is the
-    /// *embedder's* fact rather than the event's — the same click is on a
-    /// different page depending on what is scrolled into view. So a mouse
-    /// event applied here goes to the page [`Self::viewed_page`] names, which
-    /// is what [`Self::set_viewed_page`] is for. The wrappers
-    /// ([`Self::mouse_move`] and friends) take the page explicitly instead,
-    /// and a caller mixing the two should keep the viewed page current.
-    ///
-    /// Keyboard events take no page either way: a key goes to the field
-    /// holding focus, and a Tab from nothing enters the ring on the viewed
-    /// page — see [`Self::set_viewed_page`].
+    /// An [`Event`] carries a point but not a page, so a mouse event applied
+    /// here lands on the page [`Self::viewed_page`] names — the wrappers
+    /// ([`Self::mouse_move`] and friends) take the page explicitly instead, so
+    /// a caller mixing the two should keep the viewed page current. A keyboard
+    /// event takes no page either way.
     pub fn apply(&mut self, event: Event) -> Response {
         match event {
             Event::KeyDown { .. } | Event::Char { .. } => self.dispatch_keyboard(event),
@@ -695,24 +526,15 @@ impl<'a> FormSession<'a> {
     /// The open combo-box dropdown on `page`, if one is open — where it is,
     /// what is in it, and which row is selected or hovered.
     ///
-    /// **The library does not draw this and does not ask you to.** A dropdown
-    /// is one of the two pieces of PDFium's `fpdfsdk/pwl` chrome that live
-    /// *outside* a widget's `/Rect` (the other is a scroll bar,
-    /// [`Self::scroll_view`]), and drawing outside the rectangle means
-    /// creating a window — which is the host's job, not a PDF library's. So
-    /// this is a value you pull on your own schedule rather than a callback
-    /// you must implement: ask before you paint a page, draw the list if the
-    /// answer is `Some`, and report what the user does with it through
-    /// [`Self::choose`] and [`Self::close_popup`].
+    /// **The library does not draw this.** A dropdown is one of the two pieces
+    /// of viewer chrome that fall *outside* a widget's `/Rect` (the other is a
+    /// scroll bar, [`Self::scroll_view`]), so it is a value you pull before
+    /// painting a page: draw the list if the answer is `Some`, and report what
+    /// the user does through [`Self::choose`] and [`Self::close_popup`]. The
+    /// caret, selection band and focus rectangle fall inside the rectangle and
+    /// are already in the appearance stream.
     ///
-    /// The three pieces of chrome that live *inside* the rectangle — the
-    /// caret, the selection band and the focus rectangle — are already in the
-    /// appearance stream a session hands back, so nothing extra is needed for
-    /// them.
-    ///
-    /// Answers `None` for every page with no list open, which is every page
-    /// almost all of the time: only a click on a combo's drop button, a
-    /// `Return`, or a `Space` on a non-editable combo opens one.
+    /// `None` for every page with no list open.
     #[must_use]
     pub fn popup_for_page(&mut self, page: impl Into<PageIndex>) -> Option<pdfrum_form::PopupView> {
         self.with_page(page, |inner, ctx| pdfrum_form::popup_view(inner, ctx))
@@ -771,15 +593,11 @@ impl<'a> FormSession<'a> {
     /// resting on an annotation leaves the keyboard wherever it was, and the
     /// annotation under the pointer need not be focusable at all. A text
     /// highlight is the case that matters, because its note card is *only*
-    /// reachable this way — nothing a file can say opens one. Upstream the
-    /// path is `CPDFSDK_BAAnnot::OnMouseEnter`
-    /// (`cpdfsdk_baannot.cpp:309-312`) calling `SetPopupAnnotOpenState`
-    /// (`cpdf_annot.cpp:239-243`), which is why the six
-    /// `annotation_highlight_*` fixtures are bare `mousemove` scripts.
+    /// reachable this way — nothing a file can say opens one.
     ///
     /// The result is a **raw `/Annots` index**, the key space
-    /// [`pdfrum_doc::AnnotOverlay::set_hover`] wants. Answers `None` when the
-    /// pointer is over nothing, or over an annotation on another page.
+    /// [`pdfrum_doc::AnnotOverlay::set_hover`] wants. `None` when the pointer
+    /// is over nothing, or over an annotation on another page.
     #[must_use]
     pub fn hover_for_page(&self, page: impl Into<PageIndex>) -> Option<usize> {
         let page = page.into();
@@ -932,17 +750,14 @@ impl<'a> FormSession<'a> {
     /// The session's scripting engine, when it has one — what the
     /// document's JavaScript asked the host to do, and what stopped.
     ///
-    /// `Some` only for a session built by [`FormSession::with_scripts`]: a
-    /// default session runs no script and a caller who passed their own
-    /// [`Cascade`] to [`FormSession::with_cascade`] already holds the type
-    /// they wrote.
+    /// `Some` only for a session built by [`FormSession::with_scripts`].
     ///
-    /// This is where `app.alert`, `Doc.submitForm`, `app.launchURL` and every
-    /// other thing a script *asks for* comes back —
-    /// [`transcript`](pdfrum_form::ScriptCascade::transcript) as values the
-    /// host reads and decides about, never as I/O the library performs. See
-    /// [`stops`](pdfrum_form::ScriptCascade::stops) for scripts that threw:
-    /// they are reported and the next one still runs.
+    /// This is where `app.alert`, `Doc.submitForm` and every other thing a
+    /// script *asks for* comes back, on
+    /// [`transcript`](pdfrum_form::ScriptCascade::transcript), as values the
+    /// host decides about rather than I/O the library performs. A script that
+    /// threw is reported on [`stops`](pdfrum_form::ScriptCascade::stops), and
+    /// the next one still runs.
     #[cfg(feature = "script")]
     #[must_use]
     pub fn scripts(&self) -> Option<&pdfrum_form::ScriptCascade> {

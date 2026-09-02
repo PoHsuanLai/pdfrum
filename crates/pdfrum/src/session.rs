@@ -6,20 +6,15 @@ use pdfrum_render::RenderCaches;
 /// Everything a run of many pages can reuse between them: the resources a
 /// page is *built* from, and the glyph outlines it is *drawn* with.
 ///
-/// A plain record of two caches, both public, so a caller who wants only one
-/// of them can reach it (STYLE.md §1: data, not an object). It exists because
-/// the two halves belong to different crates and neither knows about the
-/// other — [`BuildContext`] caches fonts, colour spaces, functions and
-/// decoded images; [`RenderCaches`] caches the flattened glyph outlines the
-/// rasterizer draws. Threading only the first still re-flattens every glyph
-/// on every page, which is why the two travel together.
+/// Two caches, both public: [`BuildContext`] holds fonts, colour spaces,
+/// functions and decoded images; [`RenderCaches`] holds the flattened glyph
+/// outlines the rasterizer draws.
 ///
 /// Reached through [`Page::render_on`](crate::Page::render_on) and
-/// [`Page::text_on`](crate::Page::text_on) — extraction moves only the
-/// `build` half, so one session serves a run that does both.
-/// Like [`BuildContext`] it is used through `&mut`, so under `rayon` each
-/// worker keeps its own rather than sharing one behind a lock — see the crate
-/// docs on rendering in parallel.
+/// [`Page::text_on`](crate::Page::text_on); extraction moves only the `build`
+/// half, so one session serves a run that does both. It is used through
+/// `&mut`, so under `rayon` each worker keeps its own:
+/// `pages.par_iter().map_init(RenderSession::new, |session, page| …)`.
 ///
 /// ```
 /// use pdfrum::{Document, RenderOptions, RenderSession, VelloCpuBackend};
@@ -40,9 +35,8 @@ use pdfrum_render::RenderCaches;
 /// # When not to use it
 ///
 /// Type-3 glyph snapping is order-dependent by design, so a page drawn with a
-/// warm glyph cache can differ by a snapped pixel from the same page drawn
-/// with a cold one. Reuse across the pages of one document is the intended
-/// use. For a byte-identical per-page baseline, call
+/// warm cache can differ by a snapped pixel from the same page drawn cold.
+/// For a byte-identical per-page baseline call
 /// [`Page::render`](crate::Page::render), which gives every page fresh caches.
 #[derive(Debug, Default)]
 pub struct RenderSession {

@@ -22,16 +22,11 @@ pub struct UnknownField {
 ///
 /// # This type never runs a script, whatever the features
 ///
-/// A PDF form may carry scripts — validation, calculation, formatting — in
-/// `/AA` action dictionaries, and this is the *reading and filling* view of a
-/// form: it reads them as data. A field whose displayed value depends on a
-/// calculation script reads here as whatever the file last stored, not as
-/// what a scripting viewer would compute.
-///
-/// That holds with the `script` feature on too, and the reason is that
-/// scripts run on **events**: they are a live session's business, not a
-/// snapshot's. [`FormSession`](crate::FormSession) is where a document's own
-/// JavaScript runs — see the crate docs' `# Features` section.
+/// This is the *reading and filling* view of a form: a field's `/AA` scripts
+/// are read as data, so a value that depends on a calculation script reads
+/// here as whatever the file last stored. That holds with the `script`
+/// feature on too, because scripts run on **events** —
+/// [`FormSession`](crate::FormSession) is where they run.
 ///
 /// ```
 /// let doc = pdfrum::Document::open("tests/fixtures/text_form.pdf")?;
@@ -124,26 +119,15 @@ impl<'a> Form<'a> {
 
     /// Writes a value to the field with this fully-qualified name.
     ///
-    /// The write is buffered, not applied to the document: nothing in the
-    /// file changes until [`Document::save_form`](crate::Document::save_form)
-    /// writes it out. That is what lets a `Document` stay immutable and
-    /// shareable while a form is being filled.
+    /// The write is **buffered**: nothing in the file changes until
+    /// [`Document::save_form`](crate::Document::save_form) writes it out,
+    /// which is what lets a `Document` stay immutable and shareable while a
+    /// form is being filled.
     ///
     /// For a check box or radio button, `value` is the **state name** — the
     /// one its widget's appearance dictionary lists, or `Off` to clear it.
     /// [`Field::states`] enumerates them; [`Form::set_checked`] handles the
-    /// common two-state case for you.
-    ///
-    /// A name no field has is [`UnknownField`] — the write is not recorded.
-    ///
-    /// ```
-    /// let doc = pdfrum::Document::open("tests/fixtures/text_form.pdf")?;
-    /// let mut form = doc.form().expect("form");
-    ///
-    /// form.set("Text Box", "filled in").expect("field exists");
-    /// assert_eq!(form.field("Text Box").map(|f| f.value()), Some("filled in".into()));
-    /// # Ok::<(), pdfrum::Error>(())
-    /// ```
+    /// common two-state case.
     ///
     /// # Errors
     ///
