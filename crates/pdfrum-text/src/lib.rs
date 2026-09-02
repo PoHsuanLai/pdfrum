@@ -68,7 +68,7 @@ pub mod unicode;
 pub use charinfo::{CharBox, CharType, ObjectIndex};
 pub use error::Error;
 pub use find::FindOptions;
-pub use index::{CharIndex, CharSegment};
+pub use index::{CharSegment, IndexMap};
 pub use links::WebLink;
 pub use object::TextRun;
 pub use orientation::Orientation;
@@ -109,7 +109,7 @@ pub struct TextPage {
     /// placeholders, and with ligatures expanded.
     pub text: Vec<char>,
     /// The map between the two index spaces.
-    pub runs: CharIndex,
+    pub runs: IndexMap,
 }
 
 #[doc(hidden)]
@@ -425,6 +425,6 @@ mod tests {
         assert_send_sync::<CharBox>();
         assert_send_sync::<WebLink>();
         assert_send_sync::<Error>();
-        assert_send_sync::<CharIndex>();
+        assert_send_sync::<IndexMap>();
     }
 }

@@ -25,11 +25,11 @@
 //!   documents them as *char* indices. pdf.js's autolinker carries exactly the
 //!   reverse map PDFium skips (`autolinker.js:147`, `:176-180`). Here the
 //!   candidate is cut in **text** space, converted through
-//!   [`CharIndex`], and the reported range is
+//!   [`IndexMap`], and the reported range is
 //!   converted back to char space.
 
 use crate::charinfo::{CharBox, CharType};
-use crate::index::CharIndex;
+use crate::index::IndexMap;
 use crate::unicode::{is_alnum, is_decimal_digit, lower_string};
 use std::ops::Range;
 
@@ -48,7 +48,7 @@ pub struct WebLink {
 /// `chars` is the character list and `text` the search-facing text — two
 /// different sequences, bridged by `index` rather than conflated.
 #[must_use]
-pub fn extract(chars: &[CharBox], text: &[char], index: &CharIndex) -> Vec<WebLink> {
+pub fn extract(chars: &[CharBox], text: &[char], index: &IndexMap) -> Vec<WebLink> {
     let mut links = Vec::new();
     let mut start = 0usize;
     let mut pos = 0usize;
@@ -153,7 +153,7 @@ pub fn extract(chars: &[CharBox], text: &[char], index: &CharIndex) -> Vec<WebLi
 /// no char of its own — a text character the char list cannot name is a
 /// malformed page, not a reason to report a wrong offset.
 fn char_range(
-    index: &CharIndex,
+    index: &IndexMap,
     text_start: Option<usize>,
     found: &Range<usize>,
     start: usize,
