@@ -20,12 +20,12 @@
 
 use kurbo::{Affine, Rect, Shape};
 use pdfrum_common::Diagnostics;
-use pdfrum_page::{Page, PageObject, Transparency, Visibility};
+use pdfrum_page::{Page, PageObject, Visibility};
 
 use crate::clip;
 use crate::color::{Argb, ObjectKind, resolve_argb};
 use crate::ctx::{RenderCaches, RenderCtx};
-use crate::device::{Brush, ImageQuality, MAX_TARGET_DIMENSION, RasterBackend, RenderDevice};
+use crate::device::{ImageQuality, MAX_TARGET_DIMENSION, RasterBackend, RenderDevice};
 use crate::error::Error;
 use crate::group::{GroupFinish, GroupInputs, needs_backdrop, needs_offscreen};
 use crate::image::{effective_quality, overprint_blend, resample_quality, to_pixmap};
@@ -38,12 +38,57 @@ use crate::shading;
 use crate::text::{has_face, paint_kinds};
 use crate::transfer::TransferFunc;
 
+/// What one render call may reuse or restrict, beyond the page and the
+/// options.
+///
+/// A plain record with [`Default`], so a caller names only the parts it has:
+/// `RenderSession { caches: Some(&mut caches), ..Default::default() }`. Both
+/// fields are absent by default and both defaults are the conservative
+/// answer — fresh caches, nothing hidden — which is why [`render_page`] can
+/// be the whole API for a caller who wants neither.
+///
+/// It carries borrows rather than owning anything: the caches outlive the
+/// call by construction (that is what they are for), and the visibility tree
+/// belongs to the pre-pass that computed it.
+#[derive(Debug, Default)]
+pub struct RenderSession<'a> {
+    /// Caches to reuse across calls, instead of a fresh set per page.
+    ///
+    /// A caller rendering many pages of one document flattens each glyph
+    /// outline once for the run rather than once per page.
+    ///
+    /// # Determinism
+    ///
+    /// Type-3 blue-zone snapping is order-dependent by design (see
+    /// [`RenderCaches`]), so a page rendered with a *warm* cache can differ
+    /// by a snapped pixel from the same page rendered with a cold one. Reuse
+    /// across pages of one document is the intended use and is what the
+    /// oracle does; reusing one set of caches across *unrelated* documents
+    /// makes a page's output depend on what was rendered before it. For a
+    /// byte-identical baseline — the conformance harness's case — leave this
+    /// `None`, which gives every page fresh caches.
+    pub caches: Option<&'a mut RenderCaches>,
+    /// Which objects optional content leaves visible. `None` draws them all.
+    ///
+    /// It comes from [`pdfrum_page::page_visibility`], a **pre-pass** over
+    /// the same `page` with the document's `/OCProperties`. Splitting it out
+    /// is what keeps the render API free of a resolver: deciding visibility
+    /// needs indirect-object lookup and a mutable evaluation cache, and
+    /// consuming the answer needs neither — it is one index per object.
+    pub visible: Option<&'a Visibility>,
+}
+
 /// Render a page into a pixmap.
 ///
 /// The target size comes from the page's display box under
 /// `opts.transform`; the background follows the oracle — opaque white for a
 /// page without transparency, fully transparent for one with it — unless
 /// overridden, and that choice is load-bearing rather than cosmetic.
+///
+/// Every page gets its own caches and every object is drawn. A caller that
+/// wants either of those different — a run over many pages, or a document
+/// with optional content — calls [`render_page_with`] instead, which is this
+/// function with a [`RenderSession`] the caller fills in.
 ///
 /// # Errors
 ///
@@ -58,73 +103,36 @@ pub fn render_page<B: RasterBackend>(
     backend: &B,
     diags: &mut Diagnostics,
 ) -> Result<Pixmap, Error> {
-    render_page_with_caches(page, opts, backend, &mut RenderCaches::new(), diags)
+    render_page_with(page, opts, backend, RenderSession::default(), diags)
 }
 
-/// Render a page, drawing only what optional content leaves visible.
+/// Render a page, reusing caller-owned caches and honouring optional content.
 ///
-/// `visible` comes from [`pdfrum_page::page_visibility`], a **pre-pass** over
-/// the same `page` with the document's `/OCProperties`. Splitting it out is
-/// what keeps the render API free of a resolver: deciding visibility needs
-/// indirect-object lookup and a mutable evaluation cache, and consuming the
-/// answer needs neither — it is one index per object.
-///
-/// [`render_page`] is this with [`pdfrum_page::Visibility::all_visible`],
-/// which is the right call for a document with no optional content and for
-/// any caller that wants every layer drawn.
+/// The general entry point: [`render_page`] is this with a default
+/// [`RenderSession`], and is the right call when neither of the session's two
+/// parts applies.
 ///
 /// # Errors
 ///
 /// As [`render_page`].
-pub fn render_page_with_visibility<B: RasterBackend>(
+pub fn render_page_with<B: RasterBackend>(
     page: &Page,
     opts: &RenderOptions,
     backend: &B,
-    visible: &Visibility,
-    caches: &mut RenderCaches,
+    session: RenderSession<'_>,
     diags: &mut Diagnostics,
 ) -> Result<Pixmap, Error> {
+    let RenderSession { caches, visible } = session;
+    // The two `None` arms need somewhere to live that outlasts the call, so
+    // each default is bound here and borrowed rather than built inline.
+    let mut fresh_caches = RenderCaches::new();
+    let all_visible = Visibility::all_visible();
+    let visible = visible.unwrap_or(&all_visible);
+    let caches = caches.unwrap_or(&mut fresh_caches);
     render_page_inner(page, opts, backend, visible, caches, diags)
 }
 
-/// Render a page into a pixmap, reusing caller-owned [`RenderCaches`].
-///
-/// Identical to [`render_page`] except that the glyph cache outlives the
-/// call, so a caller rendering many pages of one document flattens each
-/// glyph outline once for the run rather than once per page.
-///
-/// # Determinism
-///
-/// Type-3 blue-zone snapping is order-dependent by design (see
-/// [`RenderCaches`]), so a page rendered with a *warm* cache can differ by a
-/// snapped pixel from the same page rendered with a cold one. Reuse across
-/// pages of one document is the intended use and is what the oracle does;
-/// reusing one set of caches across *unrelated* documents makes a page's
-/// output depend on what was rendered before it. For a byte-identical
-/// baseline — the conformance harness's case — call [`render_page`], which
-/// gives every page fresh caches.
-///
-/// # Errors
-///
-/// As [`render_page`].
-pub fn render_page_with_caches<B: RasterBackend>(
-    page: &Page,
-    opts: &RenderOptions,
-    backend: &B,
-    caches: &mut RenderCaches,
-    diags: &mut Diagnostics,
-) -> Result<Pixmap, Error> {
-    render_page_inner(
-        page,
-        opts,
-        backend,
-        &Visibility::all_visible(),
-        caches,
-        diags,
-    )
-}
-
-/// The body all three entry points share.
+/// The body both entry points share.
 fn render_page_inner<B: RasterBackend>(
     page: &Page,
     opts: &RenderOptions,
@@ -2258,18 +2266,6 @@ pub(crate) fn draw_shading_into<B: RasterBackend>(
             device.draw_image(&pixels, at, ImageQuality::Nearest, 1.0);
         }
     }
-}
-
-/// A solid brush, for callers that want one without reaching into `device`.
-#[must_use]
-pub fn solid(color: crate::color::Argb) -> Brush<'static> {
-    Brush::Solid(color.to_peniko())
-}
-
-/// The transparency a bare page carries when none is declared.
-#[must_use]
-pub fn default_transparency() -> Transparency {
-    Transparency::default()
 }
 
 #[cfg(test)]

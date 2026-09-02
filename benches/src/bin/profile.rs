@@ -399,26 +399,30 @@ fn timed_render(args: &Args, bytes: &Arc<[u8]>) {
     let started = Instant::now();
     for _ in 0..args.iterations {
         for graph in &graphs {
+            let session = pdfrum_render::RenderSession {
+                caches: Some(&mut caches),
+                ..Default::default()
+            };
             let pixmap = match args.backend {
-                Backend::Agg => pdfrum_render::render_page_with_caches(
+                Backend::Agg => pdfrum_render::render_page_with(
                     graph,
                     &inner,
                     &timed::TimedBackend(pdfrum_raster_agg::AggBackend::new()),
-                    &mut caches,
+                    session,
                     &mut diags,
                 ),
-                Backend::TinySkia => pdfrum_render::render_page_with_caches(
+                Backend::TinySkia => pdfrum_render::render_page_with(
                     graph,
                     &inner,
                     &timed::TimedBackend(pdfrum_raster_tinyskia::TinySkiaBackend::new()),
-                    &mut caches,
+                    session,
                     &mut diags,
                 ),
-                Backend::VelloCpu => pdfrum_render::render_page_with_caches(
+                Backend::VelloCpu => pdfrum_render::render_page_with(
                     graph,
                     &inner,
                     &timed::TimedBackend(pdfrum_raster_vello_cpu::VelloCpuBackend::new()),
-                    &mut caches,
+                    session,
                     &mut diags,
                 ),
             };

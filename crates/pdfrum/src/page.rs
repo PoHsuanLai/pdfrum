@@ -335,8 +335,11 @@ impl<'a> Page<'a> {
         let page = page;
         let inner = options.to_inner();
         let mut diags = Diagnostics::default();
-        let pixmap =
-            pdfrum_render::render_page_with_caches(&page, &inner, backend, caches, &mut diags);
+        let session = pdfrum_render::RenderSession {
+            caches: Some(caches),
+            ..Default::default()
+        };
+        let pixmap = pdfrum_render::render_page_with(&page, &inner, backend, session, &mut diags);
         // Recorded whether or not the render succeeded: a page too large to
         // rasterize may still have reported damage on the way there.
         self.doc.note(&diags);

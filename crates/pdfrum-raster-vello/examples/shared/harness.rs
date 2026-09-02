@@ -40,7 +40,7 @@ use std::path::Path;
 use std::time::{Duration, Instant};
 
 use pdfrum_page::Page as PageGraph;
-use pdfrum_render::{Pixmap, RasterBackend, RenderCaches, RenderOptions};
+use pdfrum_render::{Pixmap, RasterBackend, RenderOptions};
 
 /// A corpus document's page 0, built and ready to render repeatedly.
 pub struct Subject {
@@ -126,16 +126,8 @@ pub fn subject(path: &Path, stem: &str) -> Option<Subject> {
 
 /// Render a subject once through `backend`, from cold caches.
 pub fn render_once<B: RasterBackend>(subject: &Subject, backend: &B) -> Option<Pixmap> {
-    let mut caches = RenderCaches::default();
     let mut diags = pdfrum_common::Diagnostics::default();
-    pdfrum_render::render_page_with_caches(
-        &subject.page,
-        &subject.options,
-        backend,
-        &mut caches,
-        &mut diags,
-    )
-    .ok()
+    pdfrum_render::render_page(&subject.page, &subject.options, backend, &mut diags).ok()
 }
 
 /// Time `iterations` renders through `backend`, returning the median.
