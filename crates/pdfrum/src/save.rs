@@ -217,7 +217,7 @@ impl Document {
     /// Each [`PageEdit`] whose objects were changed has its content streams
     /// written again from its object graph; a page that was opened and not
     /// changed, and every page not listed at all, comes through untouched.
-    /// See [`edit`](crate::edit) for what regeneration loses.
+    /// See [`PageEdit`] for what regeneration loses.
     ///
     /// # Errors
     ///

@@ -653,8 +653,16 @@ impl<'a> FormSession<'a> {
         }
     }
 
-    /// The session's own record, for callers that need to read more than
-    /// these methods expose.
+    /// **Escape hatch — requires `pdfrum-form`.** The session's own record,
+    /// for callers that need to read more than these methods expose.
+    ///
+    /// The return type is `pdfrum_form::FormSession`, which is *not* this
+    /// type: this one owns a borrowed [`Document`](crate::Document) and the
+    /// [`BuildContext`](crate::BuildContext) the appearances are generated
+    /// through, and that one is the state machine underneath. The local alias
+    /// exists so the two names do not collide inside this module; a caller
+    /// reaching here writes the member crate's name in full, which is the
+    /// point.
     #[must_use]
     pub fn inner(&self) -> &Inner {
         &self.inner

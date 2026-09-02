@@ -434,12 +434,15 @@ impl Document {
         self.inner.catalog().unwrap_or_default()
     }
 
-    /// The parser document underneath, for a caller who needs the object
-    /// model this crate deliberately does not re-export.
+    /// **Escape hatch — requires `pdfrum-parser`.** The parser document
+    /// underneath, for a caller who needs the object model this crate
+    /// deliberately does not re-export.
     ///
-    /// The escape hatch, and it is meant to be one: everything below the
-    /// facade is a stable public API of its own, so reaching for a `/Dict`
-    /// key nothing here surfaces does not require forking anything.
+    /// It is meant to be one: everything below the facade is a stable public
+    /// API of its own, so reaching for a `/Dict` key nothing here surfaces
+    /// does not require forking anything. The return type stays namespaced so
+    /// the collision with this crate's own [`Document`] is visible at the call
+    /// site rather than a surprise at the type checker.
     #[must_use]
     pub fn parser(&self) -> &pdfrum_parser::Document {
         &self.inner

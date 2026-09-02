@@ -164,16 +164,22 @@
 //! crates, each of which is a public API in its own right and none of which
 //! this crate hides. When you need something this surface does not offer —
 //! a dictionary key, an intermediate representation, a knob — reach past it:
-//! [`Document::parser`], [`Page::objects`] and [`Annotation::dict`] are the
-//! documented escape hatches, and `pdfrum-parser`, `pdfrum-page`,
-//! `pdfrum-render`, `pdfrum-text`, `pdfrum-doc` and `pdfrum-edit` are all
-//! there to be used directly.
+//! [`Document::parser`], [`Page::objects`], [`PageEdit::graph`] and
+//! [`Annotation::dict`] are the documented escape hatches, and
+//! `pdfrum-parser`, `pdfrum-page`, `pdfrum-render`, `pdfrum-text`,
+//! `pdfrum-doc` and `pdfrum-edit` are all there to be used directly.
+//!
+//! Reaching past is the *only* thing that needs a second dependency. Every
+//! type this crate's own signatures name is re-exported here, errors and
+//! their payloads included, so a caller who stays on this surface never has
+//! to add a crate merely to write a type down. `tests/reexports.rs` holds
+//! that property to a compile test.
 
 #![forbid(unsafe_code)]
 
 mod annotation;
 mod document;
-pub mod edit;
+mod edit;
 mod error;
 mod form;
 mod form_session;
@@ -277,6 +283,170 @@ pub use kurbo;
 ///
 /// Re-exported for the same reason as [`kurbo`].
 pub use peniko;
+
+// ---------------------------------------------------------------------------
+// Every type a signature in this crate names, nameable from this crate.
+//
+// A `cargo add pdfrum` caller must be able to write a type annotation for
+// every value they receive. Nothing below is a new capability — each is a type
+// that already appeared in a public signature here and that only a second
+// dependency could spell. `tests/reexports.rs` compiles against this block the
+// way a caller would, from `pdfrum::*` and nothing else, and fails to compile
+// if a signature grows a type this block does not carry.
+//
+// Two resolutions exist and they are not mixed. A type a normal caller matches
+// on or stores is re-exported here. A type only an escape hatch returns keeps
+// its namespaced spelling at the call site — `Document::parser`,
+// `PageEdit::graph`, `PageEdit::graph_mut` — so the collision with this
+// crate's own `Document` and `Page` stays visible, and the method's first
+// rustdoc sentence says which crate to add.
+// ---------------------------------------------------------------------------
+
+/// The error behind [`Error::Doc`] — see [`OpenError`] for the naming.
+pub use pdfrum_doc::Error as DocError;
+/// The error behind [`Error::Save`] — see [`OpenError`] for the naming.
+pub use pdfrum_edit::Error as SaveError;
+/// The error [`Document::fetch`] returns — see [`OpenError`] for the naming.
+pub use pdfrum_object::Error as ObjectError;
+/// The error behind [`Error::Read`] — see [`OpenError`] for the naming.
+pub use pdfrum_parser::Error as ReadError;
+/// The seven errors [`Error`] wraps, each under the name of the *domain* its
+/// variant is called by.
+///
+/// The enum's shape was already right — one error, domain variants,
+/// `thiserror`, `#[non_exhaustive]` — but its payloads were not reachable: a
+/// caller could match `Error::Open(_)` and `Display` what was inside, and
+/// could not write the type to inspect it, which is the entire reason a
+/// variant carries a payload at all.
+///
+/// # Why they are renamed rather than re-exported under their own names
+///
+/// All seven member crates spell their error type `Error`, per STYLE.md §4's
+/// one-error-per-crate rule, so seven of them cannot share this crate's
+/// namespace and `pdfrum::Error` already occupies the name. The scheme is
+/// **the variant's own name plus `Error`** — [`Error::Open`] wraps
+/// [`OpenError`], [`Error::Read`] wraps [`ReadError`], and so on — chosen over
+/// the alternative of naming them after their crates (`ParserError`,
+/// `EditError`) because the variants deliberately name domains rather than
+/// crates, and a caller who reads `Error::Save(e)` should not have to learn
+/// that saving lives in `pdfrum-edit` to write `e`'s type. The one exception
+/// is [`ObjectError`], which is not a variant of [`Error`] at all: it is what
+/// [`Document::fetch`] returns, and it keeps its crate's noun because there is
+/// no domain word to borrow.
+pub use pdfrum_parser::LoadError as OpenError;
+/// The error behind [`Error::Render`] — see [`OpenError`] for the naming.
+pub use pdfrum_render::Error as RenderError;
+/// The error behind [`Error::Text`] — see [`OpenError`] for the naming.
+pub use pdfrum_text::Error as TextError;
+
+/// A straight (non-premultiplied) 32-bit draw colour: the type all four of
+/// [`ColorScheme`]'s fields are.
+///
+/// Without this, [`ColorMode::Forced`] was unconstructible from this crate —
+/// `ColorScheme` has no `Default` and no constructor, so there was no
+/// expression a caller could write that produced one. The variant was visible
+/// in the rustdoc and unreachable from the API.
+///
+/// ```
+/// use pdfrum::{Argb, ColorMode, ColorScheme, Document, RenderOptions};
+///
+/// // Black on white, forced over whatever the file's own colours are.
+/// let black = Argb { a: 255, r: 0, g: 0, b: 0 };
+/// let white = Argb { a: 255, r: 255, g: 255, b: 255 };
+///
+/// let options = RenderOptions {
+///     color_mode: ColorMode::Forced(ColorScheme {
+///         path_fill: black,
+///         path_stroke: black,
+///         text_fill: black,
+///         text_stroke: white,
+///     }),
+///     ..RenderOptions::default()
+/// };
+///
+/// let doc = Document::open("tests/fixtures/hello_world.pdf")?;
+/// let pixmap = doc.page(0)?.render(&options)?;
+/// assert!(pixmap.width() > 0);
+/// # Ok::<(), pdfrum::Error>(())
+/// ```
+///
+/// Note that [`peniko::Color`] is the vocabulary [`RenderOptions::background`]
+/// speaks; `Argb` is the engine's own resolved-colour byte quartet and is
+/// what a forced scheme substitutes. They are not interchangeable and this
+/// crate does not convert between them.
+pub use pdfrum_render::Argb;
+
+/// Which annotation on a page holds the keyboard focus, and what rectangle to
+/// stroke over it.
+///
+/// Returned by [`FormSession::focus_for_page`], which a renderer asks once per
+/// page per frame (SPEC §15.8) — so this is an ordinary answer a caller acts
+/// on, not an escape hatch. [`FocusBox`] is the second half and is useless
+/// without the first.
+pub use pdfrum_doc::{Focus, FocusBox};
+
+/// A generated appearance stream and the dictionary edits it implies.
+///
+/// The payload of [`UpdateKind::Regenerated`] and [`UpdateKind::LiveEdit`],
+/// which is to say the payload of the ordinary [`EventResponse`] every form
+/// event returns. A caller that draws a form reads `stream`, `bbox` and
+/// `resources` off this on every keystroke.
+pub use pdfrum_doc::GeneratedAp;
+
+/// What a form event is, before [`FormSession`] routes it.
+///
+/// The session's `on_*` methods each build one of these and apply it; this is
+/// the same vocabulary as a value, for a caller that has its own event queue
+/// and would rather hand over a whole event than call the method that matches
+/// it.
+pub use pdfrum_form::Event;
+
+/// An indirect-object reference — an object number and a generation.
+///
+/// The currency of the editing API: [`TextBuilder::font`] and
+/// [`ImageBuilder::source`] are each one, [`PageEdit::font_of`] and
+/// [`PageEdit::image_of`] each return one, and [`Document::fetch`] takes one.
+pub use pdfrum_object::ObjRef;
+
+/// A PDF object, and the dictionary type that is one of its variants.
+///
+/// `Object` is what [`Document::fetch`] hands back and `Dict` is what
+/// [`Annotation::dict`] and [`GeneratedAp::resources`] are. `Dict` is here
+/// rather than behind an escape hatch because `GeneratedAp` carries one and
+/// that is an ordinary payload.
+pub use pdfrum_object::{Dict, Object};
+
+/// Indirect-object lookup — the trait [`Document`] implements and
+/// [`Document::fetch`] comes from.
+///
+/// Re-exported so a caller can write the bound. Reaching for `fetch` is an
+/// escape hatch; being unable to *name* the trait it lives on would make it a
+/// dead end instead.
+pub use pdfrum_object::Resolve;
+
+/// Whether a text object is filled, stroked, clipped, both, or neither
+/// (ISO 32000-1 §9.3.6, the `Tr` operator).
+///
+/// The type of [`TextBuilder::render_mode`].
+pub use pdfrum_page::TextRenderMode;
+
+/// The page rotation `pdfrum-page` reports, which this crate converts from.
+///
+/// Renamed because this crate has its own [`Rotation`] and the `From` impl
+/// between them is public — so its *source* type had to be nameable or the
+/// conversion could be seen in the rustdoc and not written. A caller who has
+/// only this crate wants [`Rotation`]; this is here for one who reached
+/// through [`Page::objects`] and needs to come back.
+pub use pdfrum_page::Rotation as PageRotation;
+
+/// The flattened glyph outlines the rasterizer draws, cached across pages.
+///
+/// The type of [`RenderSession::caches`], which stays a public field: it is
+/// half of a two-field record whose whole purpose is that a caller can reach
+/// either half on its own (STYLE.md §1 — data, not an object), and hiding it
+/// behind an accessor would buy nothing while making the pair asymmetric with
+/// [`RenderSession::build`], whose type was already re-exported.
+pub use pdfrum_render::RenderCaches;
 
 #[cfg(test)]
 mod tests {

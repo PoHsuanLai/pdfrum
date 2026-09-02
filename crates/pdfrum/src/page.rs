@@ -430,11 +430,13 @@ impl<'a> Page<'a> {
             .collect()
     }
 
-    /// The interpreted page-object graph, for a caller who wants the drawing
-    /// operations themselves rather than pixels or text.
+    /// **Escape hatch — requires `pdfrum-page`.** The interpreted page-object
+    /// graph, for a caller who wants the drawing operations themselves rather
+    /// than pixels or text.
     ///
-    /// The escape hatch onto `pdfrum-page`, matching
-    /// [`Document::parser`](crate::Document::parser).
+    /// Matches [`Document::parser`](crate::Document::parser), and like it the
+    /// return type stays namespaced so the collision with this crate's own
+    /// [`Page`] is visible at the call site.
     #[must_use]
     pub fn objects(&self) -> pdfrum_page::Page {
         self.build(&mut BuildContext::new())
