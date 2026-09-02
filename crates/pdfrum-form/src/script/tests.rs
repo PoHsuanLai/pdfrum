@@ -21,7 +21,7 @@ fn field() -> FieldRef {
 
 /// A session with the golden run's frozen clock and timezone.
 fn session() -> ScriptCascade {
-    ScriptCascade::new(&ScriptConfig::for_goldens()).expect("a realm builds")
+    ScriptCascade::new(&ScriptConfig::frozen_at(PDFIUM_TEST_CLOCK_SECS)).expect("a realm builds")
 }
 
 /// A session whose limits are small enough that a runaway script stops in
@@ -29,7 +29,7 @@ fn session() -> ScriptCascade {
 fn bounded(limits: Limits) -> ScriptCascade {
     ScriptCascade::new(&ScriptConfig {
         limits,
-        ..ScriptConfig::for_goldens()
+        ..ScriptConfig::frozen_at(PDFIUM_TEST_CLOCK_SECS)
     })
     .expect("a realm builds")
 }
@@ -318,11 +318,57 @@ fn util_is_bound_to_the_library() {
 
 /// The frozen clock reaches `Date`, which is what makes a golden run
 /// reproducible on a machine in any timezone.
+///
+/// The seed is [`PDFIUM_TEST_CLOCK_SECS`] because that is what the harness
+/// passes as `--time=`; the assertion is still on the literal milliseconds,
+/// because those literal bytes are what `public_methods_expected.txt` pins.
 #[test]
 fn the_clock_is_frozen_at_pdfiums_own_seed() {
     let mut cascade = session();
     assert!(cascade.run("app.alert(Date.now());", "test"));
     assert_eq!(cascade.transcript_text(), "Alert: 1399672130000\n");
+}
+
+/// **The clock follows whatever seed it was given**, not one this crate
+/// knows — which is what makes `--time=` the single source of it. A seed the
+/// goldens never use, so a hard-coded constant could not answer this.
+#[test]
+fn the_clock_follows_the_configured_seed() {
+    let mut cascade =
+        ScriptCascade::new(&ScriptConfig::frozen_at(1_700_000_000)).expect("a realm builds");
+    assert!(cascade.run("app.alert(Date.now());", "test"));
+    assert_eq!(cascade.transcript_text(), "Alert: 1700000000000\n");
+}
+
+/// With **no** seed the clock is the machine's, which is the ordinary
+/// embedder's answer and the oracle's when `--time=` is absent
+/// (`pdfium_test.cc:2129`, the hooks installed only inside the guard).
+///
+/// The window is generous on purpose: this asserts "the real clock, not a
+/// frozen 2014", not a stopwatch reading, so a loaded machine cannot flake it.
+#[test]
+fn without_a_seed_the_clock_is_the_hosts_own() {
+    let now_ms = i64::try_from(
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("the host clock is after 1970")
+            .as_millis(),
+    )
+    .expect("a millisecond count this century fits an i64");
+
+    let mut cascade = ScriptCascade::new(&ScriptConfig::wall_clock()).expect("a realm builds");
+    assert!(cascade.run("app.alert(Date.now());", "test"));
+    let reported: i64 = cascade
+        .transcript_text()
+        .trim()
+        .trim_start_matches("Alert: ")
+        .parse()
+        .expect("Date.now() is a number");
+
+    assert!(
+        (reported - now_ms).abs() < 10_000,
+        "the wall clock reported {reported}, which is not within ten seconds of {now_ms}"
+    );
 }
 
 /// And so does the timezone, which every `util.printd` golden line depends

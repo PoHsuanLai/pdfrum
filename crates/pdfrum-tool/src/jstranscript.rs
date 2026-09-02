@@ -43,8 +43,26 @@ use pdfrum_parser::Document;
 ///
 /// A document that carries no script writes nothing at all, which is the
 /// answer `bug_1445426`'s missing `_expected.txt` asserts.
-pub fn write_transcript(doc: &Document, out: &mut dyn Write) -> std::io::Result<()> {
-    let Ok(cascade) = ScriptCascade::new(&ScriptConfig::for_goldens()) else {
+///
+/// `time` is `--time=`'s value in seconds, and it is the **single source of
+/// the scripting clock**: `Some` freezes `Date` and `util.printd` at that
+/// instant, `None` leaves them on the machine's real clock. Both are the
+/// oracle's, whose hooks are installed only when the flag was given
+/// (`testing/pdfium_test/pdfium_test.cc:2129-2135`).
+///
+/// # Errors
+///
+/// Only what `out` returns.
+pub fn write_transcript(
+    doc: &Document,
+    time: Option<u64>,
+    out: &mut dyn Write,
+) -> std::io::Result<()> {
+    let config = match time {
+        Some(seconds) => ScriptConfig::frozen_at(seconds),
+        None => ScriptConfig::wall_clock(),
+    };
+    let Ok(cascade) = ScriptCascade::new(&config) else {
         // `boa` cannot fail to build a context on any input; a failure here
         // is a broken build, and printing a partial transcript would be a
         // wrong answer rather than an absent one.
