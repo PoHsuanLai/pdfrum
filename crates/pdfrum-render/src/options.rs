@@ -159,7 +159,7 @@ pub struct RenderOptions {
     ///
     /// It has no effect on large text: above the `> 50` threshold the oracle
     /// takes `DrawTextPath` and places glyphs fractionally itself, so both
-    /// settings agree there. See [`crate::text::snap_origin`].
+    /// settings agree there. See `crate::text::snap_origin`.
     pub subpixel_text_positioning: bool,
     /// The page background. `None` follows the oracle: opaque white for a
     /// page without transparency, fully transparent for one with it.

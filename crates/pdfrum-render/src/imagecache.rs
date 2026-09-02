@@ -242,6 +242,10 @@ pub struct RenderedImageCache {
     bytes: usize,
 }
 
+#[allow(
+    dead_code,
+    reason = "the constructor and the four size questions are exercised only by this module's own tests; the walk reaches the cache through `RenderCaches`, which derives `Default`"
+)]
 impl RenderedImageCache {
     /// An empty cache.
     #[must_use]

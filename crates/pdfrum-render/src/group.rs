@@ -147,6 +147,10 @@ impl GroupFinish {
 /// page, which sets it unconditionally, so it is almost always true at the
 /// top level.
 #[must_use]
+#[allow(
+    dead_code,
+    reason = "exercised only by this module's own tests; the library builds once without `cfg(test)`"
+)]
 pub fn composite_transparency(enclosing: Transparency, is_form: bool) -> Transparency {
     Transparency {
         group: enclosing.group || is_form,
@@ -160,6 +164,10 @@ pub fn composite_transparency(enclosing: Transparency, is_form: bool) -> Transpa
 /// soft mask, because all four have already been consumed by the group's own
 /// compositing — applying them again inside would double-count.
 #[must_use]
+#[allow(
+    dead_code,
+    reason = "exercised only by this module's own tests; the library builds once without `cfg(test)`"
+)]
 pub fn state_inside_group(state: &GraphicsState) -> GraphicsState {
     let mut inner = state.clone();
     inner.general.enter_transparency_group();

@@ -470,6 +470,10 @@ pub fn adjust_glyph_space(origins: &mut [kurbo::Point], device: &[kurbo::Point])
               the split and stroke at the wrong width, which is the whole \
               point of the function"
 )]
+#[allow(
+    dead_code,
+    reason = "exercised only by this module's own tests; the library builds once without `cfg(test)`"
+)]
 pub fn stroke_ctm_split(text_matrix: Affine, to_device: Affine, ctm: [f64; 4]) -> (Affine, Affine) {
     let [a, b, c, d] = ctm;
     if a == 1.0 && d == 1.0 {
