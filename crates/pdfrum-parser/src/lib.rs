@@ -51,10 +51,10 @@ pub use decode::decoded_stream;
 pub use doc::{Document, LoadError, LoadOptions, PageDict, load};
 pub use error::Error;
 pub use lexer::{
-    CharClass, Delim, Lexer, Token, atoi64, atoui, class_of, find_word, is_delimiter,
+    CharClass, Delim, Lexer, Token, WordBoundary, atoi64, atoui, class_of, find_word, is_delimiter,
     is_line_ending, is_numeric, is_whitespace, is_whole_word,
 };
 pub use objstm::{ObjStm, ObjStmEntry};
 pub use store::ObjectStore;
-pub use syntax::{Strictness, parse_indirect_object, parse_object};
+pub use syntax::{Indirect, Strictness, parse_indirect_object, parse_object};
 pub use xref::{Entry, Trailer, Xref, read_xref};

@@ -590,7 +590,12 @@ impl<'a> Lexer<'a> {
         let mut candidate = (self.pos + 1).saturating_sub(word.len());
         loop {
             if self.bytes.get(candidate..candidate + word.len()) == Some(word)
-                && is_whole_word(self.bytes, candidate, word.len(), false)
+                && is_whole_word(
+                    self.bytes,
+                    candidate,
+                    word.len(),
+                    WordBoundary::WhitespaceOrDelimiter,
+                )
             {
                 self.pos = candidate;
                 return true;
@@ -633,22 +638,39 @@ fn hex_value(b: u8) -> Option<u8> {
     }
 }
 
-/// Whether the `len` bytes at `pos` stand alone as a word.
+/// Which bytes may neighbour a match for it to stand alone as a word.
 ///
-/// `keyword` selects the stricter test used when scanning for `endstream`:
-/// there, only whitespace may neighbour the match, so `>>endstream` does not
-/// count. The looser test — used for `startxref` — accepts a delimiter as a
-/// boundary too. Both differences come from real files and both change which
-/// bytes a damaged document yields.
-#[must_use]
-pub fn is_whole_word(bytes: &[u8], pos: usize, len: usize, keyword: bool) -> bool {
-    let boundary = |b: u8| {
-        if keyword {
-            is_whitespace(b)
-        } else {
-            !matches!(class_of(b), CharClass::Regular | CharClass::Numeric)
+/// The two rules come from real files and each changes which bytes a damaged
+/// document yields, so the choice is the caller's and is named at every call
+/// site.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WordBoundary {
+    /// Only whitespace. The stricter rule, used when scanning for
+    /// `endstream`: `>>endstream` does not count as a match.
+    WhitespaceOnly,
+    /// Whitespace or a delimiter — anything that is neither
+    /// [`CharClass::Regular`] nor [`CharClass::Numeric`]. The looser rule,
+    /// used for `startxref`, where the keyword may sit against `>>` or `]`.
+    WhitespaceOrDelimiter,
+}
+
+impl WordBoundary {
+    /// Whether `b` may sit beside a match under this rule.
+    #[must_use]
+    fn accepts(self, b: u8) -> bool {
+        match self {
+            Self::WhitespaceOnly => is_whitespace(b),
+            Self::WhitespaceOrDelimiter => {
+                !matches!(class_of(b), CharClass::Regular | CharClass::Numeric)
+            }
         }
-    };
+    }
+}
+
+/// Whether the `len` bytes at `pos` stand alone as a word under `rule`.
+#[must_use]
+pub fn is_whole_word(bytes: &[u8], pos: usize, len: usize, rule: WordBoundary) -> bool {
+    let boundary = |b: u8| rule.accepts(b);
     if pos > 0 && !bytes.get(pos - 1).copied().is_some_and(boundary) {
         return false;
     }
@@ -658,16 +680,16 @@ pub fn is_whole_word(bytes: &[u8], pos: usize, len: usize, keyword: bool) -> boo
     }
 }
 
-/// Find `word` at or after `from`, as a whole word by the `keyword` rule of
-/// [`is_whole_word`]. Returns the offset of its first byte.
+/// Find `word` at or after `from`, as a whole word under `rule` (see
+/// [`is_whole_word`]). Returns the offset of its first byte.
 #[must_use]
-pub fn find_word(bytes: &[u8], word: &[u8], from: usize, keyword: bool) -> Option<usize> {
+pub fn find_word(bytes: &[u8], word: &[u8], from: usize, rule: WordBoundary) -> Option<usize> {
     if word.is_empty() || from > bytes.len() {
         return None;
     }
     let last = bytes.len().checked_sub(word.len())?;
     (from..=last).find(|&i| {
-        bytes.get(i..i + word.len()) == Some(word) && is_whole_word(bytes, i, word.len(), keyword)
+        bytes.get(i..i + word.len()) == Some(word) && is_whole_word(bytes, i, word.len(), rule)
     })
 }
 
@@ -732,7 +754,8 @@ pub fn atoi64(word: &[u8]) -> i64 {
 #[cfg(test)]
 mod tests {
     use super::{
-        CharClass, Delim, Lexer, Token, atoi64, atoui, class_of, find_word, is_whole_word,
+        CharClass, Delim, Lexer, Token, WordBoundary, atoi64, atoui, class_of, find_word,
+        is_whole_word,
     };
     use pdfrum_common::Limits;
 
@@ -933,17 +956,31 @@ mod tests {
     fn whole_word_boundaries_differ_by_strictness() {
         let bytes = b">>endstream ";
         // Under the keyword rule a delimiter is not a boundary.
-        assert!(!is_whole_word(bytes, 2, 9, true));
+        assert!(!is_whole_word(bytes, 2, 9, WordBoundary::WhitespaceOnly));
         // Under the loose rule it is.
-        assert!(is_whole_word(bytes, 2, 9, false));
+        assert!(is_whole_word(
+            bytes,
+            2,
+            9,
+            WordBoundary::WhitespaceOrDelimiter
+        ));
     }
 
     #[test]
     fn find_word_respects_the_keyword_rule() {
         let bytes = b"x >>endstream y endstream z";
-        assert_eq!(find_word(bytes, b"endstream", 0, true), Some(16));
-        assert_eq!(find_word(bytes, b"endstream", 0, false), Some(4));
-        assert_eq!(find_word(bytes, b"nothere", 0, true), None);
+        assert_eq!(
+            find_word(bytes, b"endstream", 0, WordBoundary::WhitespaceOnly),
+            Some(16)
+        );
+        assert_eq!(
+            find_word(bytes, b"endstream", 0, WordBoundary::WhitespaceOrDelimiter),
+            Some(4)
+        );
+        assert_eq!(
+            find_word(bytes, b"nothere", 0, WordBoundary::WhitespaceOnly),
+            None
+        );
     }
 
     #[test]

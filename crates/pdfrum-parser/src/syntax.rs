@@ -33,7 +33,9 @@ use pdfrum_object::{
 };
 
 use crate::error::Error;
-use crate::lexer::{Delim, Lexer, Token, atoui, find_word, is_line_ending, is_whitespace};
+use crate::lexer::{
+    Delim, Lexer, Token, WordBoundary, atoui, find_word, is_line_ending, is_whitespace,
+};
 
 /// How much malformed syntax an object parse tolerates.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -503,8 +505,8 @@ fn declared_length<R: Resolve + ?Sized>(dict: &Dict, ctx: &mut Context<'_, R>) -
 /// bytes immediately before it belong to the file's formatting rather than to
 /// the stream, so they are given back.
 fn scan_for_end(bytes: &[u8], start: usize) -> Option<usize> {
-    let endstream = find_word(bytes, b"endstream", start, true);
-    let endobj = find_word(bytes, b"endobj", start, true);
+    let endstream = find_word(bytes, b"endstream", start, WordBoundary::WhitespaceOnly);
+    let endobj = find_word(bytes, b"endobj", start, WordBoundary::WhitespaceOnly);
     let keyword = match (endstream, endobj) {
         (Some(a), Some(b)) => a.min(b),
         (Some(a), None) => a,

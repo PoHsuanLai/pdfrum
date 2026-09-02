@@ -53,6 +53,9 @@ pub fn pdfrum_parser::Token<'a>::bytes(&self) -> &'a [u8]
 pub fn pdfrum_parser::Token<'a>::is_eof(&self) -> bool
 pub fn pdfrum_parser::Token<'a>::is_keyword(&self, &[u8]) -> bool
 pub fn pdfrum_parser::Token<'a>::is_number(&self) -> bool
+pub enum pdfrum_parser::WordBoundary
+pub pdfrum_parser::WordBoundary::WhitespaceOnly
+pub pdfrum_parser::WordBoundary::WhitespaceOrDelimiter
 pub struct pdfrum_parser::Document
 pub pdfrum_parser::Document::diags: pdfrum_common::diagnostics::Diagnostics
 impl pdfrum_parser::Document
@@ -77,6 +80,10 @@ pub fn pdfrum_parser::Document::xref(&self) -> &pdfrum_parser::Xref
 pub fn pdfrum_parser::Document::xref_was_rebuilt(&self) -> bool
 impl pdfrum_object::resolve::Resolve for pdfrum_parser::Document
 pub fn pdfrum_parser::Document::fetch(&self, pdfrum_object::object::ObjRef) -> core::result::Result<alloc::sync::Arc<pdfrum_object::object::Object>, pdfrum_object::error::Error>
+pub struct pdfrum_parser::Indirect
+pub pdfrum_parser::Indirect::generation: u16
+pub pdfrum_parser::Indirect::num: u32
+pub pdfrum_parser::Indirect::object: pdfrum_object::object::Object
 pub struct pdfrum_parser::Lexer<'a>
 impl<'a> pdfrum_parser::Lexer<'a>
 pub fn pdfrum_parser::Lexer<'a>::at(&'a [u8], usize) -> Self
@@ -131,13 +138,13 @@ pub fn pdfrum_parser::atoi64(&[u8]) -> i64
 pub fn pdfrum_parser::atoui(&[u8]) -> u32
 pub const fn pdfrum_parser::class_of(u8) -> pdfrum_parser::CharClass
 pub fn pdfrum_parser::decoded_stream(&pdfrum_object::stream::Stream, &impl pdfrum_object::resolve::Resolve, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> alloc::vec::Vec<u8>
-pub fn pdfrum_parser::find_word(&[u8], &[u8], usize, bool) -> core::option::Option<usize>
+pub fn pdfrum_parser::find_word(&[u8], &[u8], usize, pdfrum_parser::WordBoundary) -> core::option::Option<usize>
 pub fn pdfrum_parser::is_delimiter(u8) -> bool
 pub fn pdfrum_parser::is_line_ending(u8) -> bool
 pub fn pdfrum_parser::is_numeric(u8) -> bool
 pub fn pdfrum_parser::is_whitespace(u8) -> bool
-pub fn pdfrum_parser::is_whole_word(&[u8], usize, usize, bool) -> bool
+pub fn pdfrum_parser::is_whole_word(&[u8], usize, usize, pdfrum_parser::WordBoundary) -> bool
 pub fn pdfrum_parser::load(alloc::sync::Arc<[u8]>, &pdfrum_parser::LoadOptions) -> core::result::Result<pdfrum_parser::Document, pdfrum_parser::LoadError>
-pub fn pdfrum_parser::parse_indirect_object<R: pdfrum_object::resolve::Resolve + ?core::marker::Sized>(&mut pdfrum_parser::Lexer<'_>, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics, pdfrum_parser::Strictness, &R) -> core::result::Result<pdfrum_parser::syntax::Indirect, pdfrum_parser::Error>
+pub fn pdfrum_parser::parse_indirect_object<R: pdfrum_object::resolve::Resolve + ?core::marker::Sized>(&mut pdfrum_parser::Lexer<'_>, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics, pdfrum_parser::Strictness, &R) -> core::result::Result<pdfrum_parser::Indirect, pdfrum_parser::Error>
 pub fn pdfrum_parser::parse_object<R: pdfrum_object::resolve::Resolve + ?core::marker::Sized>(&mut pdfrum_parser::Lexer<'_>, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics, pdfrum_parser::Strictness, &R) -> core::result::Result<pdfrum_object::object::Object, pdfrum_parser::Error>
 pub fn pdfrum_parser::read_xref(&[u8], &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::result::Result<(pdfrum_parser::Xref, pdfrum_object::dict::Dict), pdfrum_parser::Error>
