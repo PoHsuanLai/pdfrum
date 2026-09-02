@@ -39,7 +39,7 @@ use crate::names;
 /// Type 3 is the absent case: its glyphs are content streams rather than a
 /// program, so it has no `/Subtype` a synthesized font resource could carry.
 #[must_use]
-pub fn font_subtype(font: &Font) -> Option<&'static pdfrum_object::Name> {
+pub(crate) fn font_subtype(font: &Font) -> Option<&'static pdfrum_object::Name> {
     match font {
         Font::Simple(simple) => {
             if simple.glyphs.is_truetype() {
@@ -57,7 +57,11 @@ pub fn font_subtype(font: &Font) -> Option<&'static pdfrum_object::Name> {
 ///
 /// `resource` is the name the font was realized under. Returns `false` when
 /// the object cannot be expressed, in which case `out` is untouched.
-pub fn emit_text_body(out: &mut String, text: &TextObject, resource: &pdfrum_object::Name) -> bool {
+pub(crate) fn emit_text_body(
+    out: &mut String,
+    text: &TextObject,
+    resource: &pdfrum_object::Name,
+) -> bool {
     let Some((font, size)) = text.font.as_ref() else {
         return false;
     };

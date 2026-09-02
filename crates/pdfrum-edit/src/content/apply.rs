@@ -49,7 +49,7 @@ pub fn apply_rewrite(
     page_dict: &Dict,
     rewrite: &PageRewrite,
     shared: &ShareCounts,
-) -> BTreeMap<i32, i32> {
+) -> BTreeMap<usize, usize> {
     let mut shape = ContentsShape::read(page_dict, edit);
     let mut removed: BTreeSet<usize> = BTreeSet::new();
     let mut contents_changed = false;

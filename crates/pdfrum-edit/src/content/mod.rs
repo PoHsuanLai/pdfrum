@@ -62,20 +62,18 @@
 //! closes the C++'s stray `q` anyway; the difference is that our output stays
 //! parseable.
 
-pub mod apply;
-pub mod emit;
-pub(crate) mod marks;
+mod apply;
+mod emit;
+mod marks;
 pub(crate) mod num;
 mod path;
-pub mod regen;
-pub mod resource;
+mod regen;
+mod resource;
 mod text;
 
+// What the crate root re-exports. Everything else this module holds is
+// `pub(crate)`: the emitter's internals are the writer's, not a caller's.
 pub use apply::{ShareCounts, apply_rewrite, shared_objects};
-pub use emit::{DEFAULT_GRAPHICS, GraphicsKey, emit_object, emit_page_objects};
-pub use marks::{PropertyNamer, emit_mark_diff, finish_marks};
 pub use num::{write_float, write_matrix, write_point, write_rect};
-pub use path::{emit_path_points, paint_operator};
 pub use regen::{ContentsShape, PageRewrite, Regenerated, regenerate};
 pub use resource::ResourceTable;
-pub use text::emit_text_body;

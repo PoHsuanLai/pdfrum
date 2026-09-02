@@ -58,15 +58,15 @@ use pdfrum_object::{Dict, Name, Object, Stream, names};
 
 /// A stream's payload and the dictionary that describes it, after the table
 /// above has run.
-pub struct Encoded {
+pub(crate) struct Encoded {
     /// The dictionary to write, `/Length` already correct.
-    pub dict: Dict,
+    pub(crate) dict: Dict,
     /// The bytes between `stream\r\n` and `\r\nendstream`.
-    pub data: Vec<u8>,
+    pub(crate) data: Vec<u8>,
 }
 
 /// Run the decision table over one stream.
-pub fn encode(s: &Stream, enc: Option<&Encryptor<'_>>) -> Encoded {
+pub(crate) fn encode(s: &Stream, enc: Option<&Encryptor<'_>>) -> Encoded {
     let metadata = is_metadata(&s.dict);
     let has_filter = s.dict.contains_key(names::FILTER);
     let want_flate = !metadata;

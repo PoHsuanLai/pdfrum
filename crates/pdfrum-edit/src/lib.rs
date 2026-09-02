@@ -68,14 +68,20 @@
 // Everything here is written *from* untrusted input: index with `get()`.
 #![warn(clippy::indexing_slicing)]
 
-pub mod content;
+// The crate's modules are private and the `pub use` block below is its whole
+// surface, so an item is reachable exactly one way and reading that block is
+// reading the API (`docs/design/idiomatic-api.md` §A.11 step 12). They are
+// `pub(crate)` rather than plain `mod` only because siblings reach across —
+// `write` names `encrypt`, `content` names `write` — which private-in-`lib.rs`
+// modules already allow, and the marker says the reach is deliberate.
+pub(crate) mod content;
 mod doc;
-pub mod encrypt;
+pub(crate) mod encrypt;
 mod error;
-pub mod font;
-pub mod import;
+pub(crate) mod font;
+pub(crate) mod import;
 mod names;
-pub mod write;
+pub(crate) mod write;
 
 pub use content::{
     ContentsShape, PageRewrite, Regenerated, ResourceTable, ShareCounts, apply_rewrite, regenerate,

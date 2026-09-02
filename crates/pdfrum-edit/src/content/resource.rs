@@ -37,7 +37,7 @@ use pdfrum_object::{Dict, Name, ObjRef, Object};
 ///
 /// In the order the C++ sweeps them, which is the order removals are recorded
 /// in and therefore the order a re-run reallocates in.
-pub const CATEGORIES: [&str; 3] = ["ExtGState", "Font", "XObject"];
+pub(crate) const CATEGORIES: [&str; 3] = ["ExtGState", "Font", "XObject"];
 
 /// The resource dictionaries of one page, while its streams are regenerated.
 ///

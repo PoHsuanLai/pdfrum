@@ -31,7 +31,7 @@ use pdfrum_object::{
 /// Whether the value being written is one the security handler must not
 /// touch (a signature's `/Contents`, a metadata stream's payload).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Exempt {
+pub(crate) enum Exempt {
     /// Encrypt normally.
     No,
     /// Write the bytes as they stand.
@@ -43,7 +43,7 @@ pub enum Exempt {
 /// `enc` is the encryptor for the *enclosing indirect object*; direct
 /// sub-objects share it, which is why it is threaded down rather than looked
 /// up per value.
-pub fn write_object(out: &mut Vec<u8>, obj: &Object, enc: Option<&Encryptor<'_>>) {
+pub(crate) fn write_object(out: &mut Vec<u8>, obj: &Object, enc: Option<&Encryptor<'_>>) {
     match obj {
         Object::Null => out.extend_from_slice(b" null"),
         Object::Bool(b) => {
@@ -75,7 +75,7 @@ pub fn write_object(out: &mut Vec<u8>, obj: &Object, enc: Option<&Encryptor<'_>>
 
 /// `/Name`, with `#xx` escapes. An encoding that comes out empty writes a
 /// bare `/`, which is a legal (if useless) name.
-pub fn write_name(out: &mut Vec<u8>, name: &Name) {
+pub(crate) fn write_name(out: &mut Vec<u8>, name: &Name) {
     out.push(b'/');
     out.extend_from_slice(&name_encode(name.as_bytes()));
 }
@@ -103,7 +103,7 @@ fn write_array(out: &mut Vec<u8>, a: &Array, enc: Option<&Encryptor<'_>>) {
 
 /// A dictionary, keys in **insertion order** (SPEC.md §2's permanent
 /// divergence from the C++'s sorted `std::map`).
-pub fn write_dict(out: &mut Vec<u8>, d: &Dict, enc: Option<&Encryptor<'_>>) {
+pub(crate) fn write_dict(out: &mut Vec<u8>, d: &Dict, enc: Option<&Encryptor<'_>>) {
     let signature = is_signature_dict(d);
     out.extend_from_slice(b"<<");
     for (key, value) in d.iter() {
@@ -152,7 +152,12 @@ fn write_stream(out: &mut Vec<u8>, s: &Stream, enc: Option<&Encryptor<'_>>) {
 /// xref entries say `00000` to match, and every reference written says
 /// `N 0 R`. Generations are read from a file and never written back — the
 /// single most important round-trip simplification (§1.9, invariant R9).
-pub fn write_indirect(out: &mut Vec<u8>, num: u32, obj: &Object, enc: Option<&Encryptor<'_>>) {
+pub(crate) fn write_indirect(
+    out: &mut Vec<u8>,
+    num: u32,
+    obj: &Object,
+    enc: Option<&Encryptor<'_>>,
+) {
     out.extend_from_slice(num.to_string().as_bytes());
     out.extend_from_slice(b" 0 obj\r\n");
     write_object(out, obj, enc);

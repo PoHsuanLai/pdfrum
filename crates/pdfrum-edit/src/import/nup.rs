@@ -18,25 +18,32 @@
 //! branch that adds nothing. There is **no clamping**: a source page smaller
 //! than its slot is scaled *up* to fill it.
 
+#![allow(
+    dead_code,
+    reason = "`NupGrid::sheet_count` is read by this module's own tests only; it \
+              became visible to the lint when `pub mod import` went private \
+              (§A.11 step 12)"
+)]
+
 use pdfrum_common::kurbo::Affine;
 
 use crate::content::num::write_matrix;
 
 /// Where one sub-page lands inside its sheet, and how much it is scaled.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct PageEdit {
+pub(crate) struct PageEdit {
     /// The bottom-left corner of the sub-page, in sheet coordinates.
-    pub start_x: f32,
+    pub(crate) start_x: f32,
     /// See [`PageEdit::start_x`].
-    pub start_y: f32,
+    pub(crate) start_y: f32,
     /// The uniform scale, which may be greater than 1.
-    pub scale: f32,
+    pub(crate) scale: f32,
 }
 
 impl PageEdit {
     /// The matrix a `cm` operator writes: scale, then translate.
     #[must_use]
-    pub fn matrix(self) -> Affine {
+    pub(crate) fn matrix(self) -> Affine {
         Affine::new([
             f64::from(self.scale),
             0.0,
@@ -50,21 +57,21 @@ impl PageEdit {
 
 /// A grid of sub-pages on a sheet of a fixed size.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct NupGrid {
+pub(crate) struct NupGrid {
     /// Sheet width in points.
-    pub sheet_width: f32,
+    pub(crate) sheet_width: f32,
     /// Sheet height in points.
-    pub sheet_height: f32,
+    pub(crate) sheet_height: f32,
     /// Columns.
-    pub x: u32,
+    pub(crate) x: u32,
     /// Rows.
-    pub y: u32,
+    pub(crate) y: u32,
 }
 
 impl NupGrid {
     /// The size of one slot.
     #[must_use]
-    pub fn slot_size(self) -> (f32, f32) {
+    pub(crate) fn slot_size(self) -> (f32, f32) {
         // A grid dimension past 2^24 would lose precision here, and would
         // also give every slot a sub-pixel width — the geometry is
         // meaningless long before the cast is.
@@ -76,13 +83,13 @@ impl NupGrid {
 
     /// How many sub-pages fit on one sheet.
     #[must_use]
-    pub fn per_sheet(self) -> u32 {
+    pub(crate) fn per_sheet(self) -> u32 {
         self.x.saturating_mul(self.y)
     }
 
     /// How many sheets `pages` source pages need; the last one is short.
     #[must_use]
-    pub fn sheet_count(self, pages: usize) -> usize {
+    pub(crate) fn sheet_count(self, pages: usize) -> usize {
         let per = self.per_sheet().max(1) as usize;
         pages.div_ceil(per)
     }
@@ -92,7 +99,7 @@ impl NupGrid {
     /// Reading order runs left to right, top to bottom; the row is flipped
     /// because PDF counts up from the bottom.
     #[must_use]
-    pub fn slot(self, index: u32) -> (u32, u32) {
+    pub(crate) fn slot(self, index: u32) -> (u32, u32) {
         let x = self.x.max(1);
         let column = index % x;
         let row_from_top = index / x;
@@ -102,7 +109,7 @@ impl NupGrid {
 
     /// Where a source page of `(width, height)` lands in slot `index`.
     #[must_use]
-    pub fn edit(self, index: u32, page_width: f32, page_height: f32) -> PageEdit {
+    pub(crate) fn edit(self, index: u32, page_width: f32, page_height: f32) -> PageEdit {
         let (slot_w, slot_h) = self.slot_size();
         let (column, row) = self.slot(index);
         let mut start_x = as_f32(column) * slot_w;
@@ -159,7 +166,7 @@ fn as_f32(value: u32) -> f32 {
 /// and that `Q` sits on the same line as `Do`. Fragments are concatenated
 /// with no separator; each one's trailing newline is the only delimiter.
 #[must_use]
-pub fn sub_page_fragment(name: &str, edit: PageEdit) -> String {
+pub(crate) fn sub_page_fragment(name: &str, edit: PageEdit) -> String {
     let mut out = String::from("q\n");
     write_matrix(&mut out, edit.matrix());
     out.push_str(" cm\n/");

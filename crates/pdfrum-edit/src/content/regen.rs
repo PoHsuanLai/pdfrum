@@ -58,7 +58,6 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use pdfrum_common::kurbo::Affine;
 use pdfrum_object::{Dict, Name, ObjRef, Object, Resolve};
-use pdfrum_page::state::GraphicsState;
 use pdfrum_page::{Page, PageObject};
 
 use crate::content::emit::{DEFAULT_GRAPHICS, GraphicsKey, ResourceNames, default_graphics};
@@ -322,17 +321,6 @@ fn record(
     Some(name)
 }
 
-/// A page-object graph's own view of a fresh graphics state, for a caller
-/// building objects to add.
-///
-/// Offered here rather than in `pdfrum-page` because it is a *writer's*
-/// default: the state a regenerated stream's prologue puts the stream into,
-/// which is what an object added to that stream will find itself under.
-#[must_use]
-pub fn fresh_state() -> GraphicsState {
-    GraphicsState::default()
-}
-
 /// Where a regenerated element lands in the page's `/Contents`.
 ///
 /// The `/Contents` entry is a stream, an array of streams, or absent, and
@@ -414,8 +402,13 @@ impl ContentsShape {
     /// That is the C++'s default-inserting map read literally, and it is
     /// deliberate: those objects were not written by this regeneration and
     /// their recorded index has to point somewhere.
+    ///
+    /// Both halves of the map are `usize`: a `/Contents` index is a position in
+    /// an array, and `NO_CONTENT_STREAM`'s `-1` — the reason this pair was once
+    /// signed — is gone (`docs/design/idiomatic-api.md` §C.3 item 1, and item
+    /// 16's "listed so the fix is not left half-done").
     #[must_use]
-    pub fn with_removed(&self, removed: &BTreeSet<usize>) -> (Self, BTreeMap<i32, i32>) {
+    pub fn with_removed(&self, removed: &BTreeSet<usize>) -> (Self, BTreeMap<usize, usize>) {
         match self {
             Self::Absent => (Self::Absent, BTreeMap::new()),
             Self::Single(_) => {
@@ -437,9 +430,7 @@ impl ContentsShape {
                     }
                     let new = kept.len();
                     kept.push(*element);
-                    if let (Ok(old), Ok(new)) = (i32::try_from(old), i32::try_from(new)) {
-                        mapping.insert(old, new);
-                    }
+                    mapping.insert(old, new);
                 }
                 // Still an array, whatever is left of it.
                 (Self::Array(kept), mapping)

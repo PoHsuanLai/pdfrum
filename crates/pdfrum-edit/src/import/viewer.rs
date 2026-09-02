@@ -18,6 +18,13 @@
 //! `/ViewerPreferences` is a legitimate outcome, distinct from the source
 //! having none at all.
 
+#![allow(
+    dead_code,
+    reason = "`array_is_flat` is read by this module's own tests only — the filter \
+              calls it through `is_copyable`. It became visible to the lint when \
+              `pub mod import` went private (§A.11 step 12)"
+)]
+
 use pdfrum_object::{Array, Dict, Object, Resolve, names};
 
 /// Whether a value may be copied into a viewer-preferences dictionary.
@@ -25,7 +32,7 @@ use pdfrum_object::{Array, Dict, Object, Resolve, names};
 /// Dictionaries, nulls, references and streams are refused outright; an array
 /// is refused when any element is one of those or is itself an array.
 #[must_use]
-pub fn is_copyable(value: &Object) -> bool {
+pub(crate) fn is_copyable(value: &Object) -> bool {
     match value {
         Object::Bool(_) | Object::Int(_) | Object::Real(_) | Object::Str(_) | Object::Name(_) => {
             true
@@ -51,7 +58,7 @@ fn is_flat_element(value: &Object) -> bool {
 /// A source whose `/ViewerPreferences` is not a dictionary — dangling, or a
 /// value of some other kind — reads as absent.
 #[must_use]
-pub fn filtered(src_catalog: &Dict, r: &impl Resolve) -> Option<Dict> {
+pub(crate) fn filtered(src_catalog: &Dict, r: &impl Resolve) -> Option<Dict> {
     let source = src_catalog.dict(names::VIEWER_PREFERENCES, r)?;
     let mut out = Dict::new();
     for (key, value) in source.iter() {
@@ -65,7 +72,7 @@ pub fn filtered(src_catalog: &Dict, r: &impl Resolve) -> Option<Dict> {
 /// Whether an array would survive the filter, for a caller inspecting one
 /// value rather than a whole dictionary.
 #[must_use]
-pub fn array_is_flat(a: &Array) -> bool {
+pub(crate) fn array_is_flat(a: &Array) -> bool {
     a.iter().all(is_flat_element)
 }
 

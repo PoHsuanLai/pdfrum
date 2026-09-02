@@ -19,6 +19,14 @@
 //! `/Size` counts two higher than a classic trailer's because the trailer
 //! object is itself an object the table must describe.
 
+#![allow(
+    dead_code,
+    reason = "`from_scratch` and `is_suppressed` are read by this module's own \
+              tests only — `build` applies the suppression list inline, and no \
+              save path yet writes a trailer with no source. They became visible \
+              to the lint when `pub mod write` went private (§A.11 step 12)"
+)]
+
 use pdfrum_object::{Array, Dict, Name, Object, names};
 
 use crate::write::object::{write_dict, write_name, write_object};
@@ -27,18 +35,18 @@ use crate::write::xref::{ObjectOffsets, stream_record};
 
 /// Everything the trailer needs to know.
 #[derive(Debug, Clone, Copy)]
-pub struct TrailerParts<'a> {
+pub(crate) struct TrailerParts<'a> {
     /// The input's trailer, whose keys are copied except the suppressed ones.
-    pub source: &'a Dict,
+    pub(crate) source: &'a Dict,
     /// The `/ID` array to declare.
-    pub id: &'a Array,
+    pub(crate) id: &'a Array,
     /// The highest object number written.
-    pub last_object_number: u32,
+    pub(crate) last_object_number: u32,
     /// The `/Prev` to declare, when this is an incremental save over a
     /// document that had a previous section.
-    pub prev: Option<u64>,
+    pub(crate) prev: Option<u64>,
     /// The object number of the `/Encrypt` dictionary, when one is written.
-    pub encrypt: Option<u32>,
+    pub(crate) encrypt: Option<u32>,
 }
 
 /// Assemble the trailer dictionary a classic save writes after `trailer`.
@@ -46,7 +54,7 @@ pub struct TrailerParts<'a> {
 /// Returned as a `Dict` rather than bytes so the xref-stream path can add its
 /// own keys to the same value — the two shapes differ in what they carry, not
 /// in how the shared keys are chosen.
-pub fn build(parts: TrailerParts<'_>) -> Dict {
+pub(crate) fn build(parts: TrailerParts<'_>) -> Dict {
     let mut out = Dict::new();
     for (key, value) in parts.source.iter() {
         if SUPPRESSED_TRAILER_KEYS.contains(&key) {
@@ -76,7 +84,7 @@ pub fn build(parts: TrailerParts<'_>) -> Dict {
 }
 
 /// Write a classic `trailer << … >>` section.
-pub fn write_classic(out: &mut Vec<u8>, trailer: &Dict) {
+pub(crate) fn write_classic(out: &mut Vec<u8>, trailer: &Dict) {
     out.extend_from_slice(b"trailer\r\n");
     // The trailer is not an indirect object, so its strings are never
     // encrypted — a reader must be able to read `/ID` without the key.
@@ -88,7 +96,7 @@ pub fn write_classic(out: &mut Vec<u8>, trailer: &Dict) {
 ///
 /// `/Size` counts one higher than the classic form because this object is
 /// itself in the table.
-pub fn write_stream(
+pub(crate) fn write_stream(
     out: &mut Vec<u8>,
     num: u32,
     trailer: &Dict,
@@ -134,7 +142,7 @@ pub fn write_stream(
 }
 
 /// The `startxref` tail every file ends with.
-pub fn write_tail(out: &mut Vec<u8>, xref_start: u64) {
+pub(crate) fn write_tail(out: &mut Vec<u8>, xref_start: u64) {
     out.extend_from_slice(b"\r\nstartxref\r\n");
     out.extend_from_slice(xref_start.to_string().as_bytes());
     out.extend_from_slice(b"\r\n%%EOF\r\n");
@@ -142,7 +150,7 @@ pub fn write_tail(out: &mut Vec<u8>, xref_start: u64) {
 
 /// A trailer for a document that never had one — a catalog reference, and an
 /// `/Info` when there is one to name.
-pub fn from_scratch(root: u32, info: Option<u32>) -> Dict {
+pub(crate) fn from_scratch(root: u32, info: Option<u32>) -> Dict {
     let mut out = Dict::new();
     out.push(
         names::ROOT.clone(),
@@ -159,7 +167,7 @@ pub fn from_scratch(root: u32, info: Option<u32>) -> Dict {
 
 /// Whether a key survives the trailer copy.
 #[must_use]
-pub fn is_suppressed(key: &Name) -> bool {
+pub(crate) fn is_suppressed(key: &Name) -> bool {
     SUPPRESSED_TRAILER_KEYS.contains(&key)
 }
 

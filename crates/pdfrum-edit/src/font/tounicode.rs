@@ -23,6 +23,13 @@
 //! Blocks are chunked at 100 entries, which is the limit the specification
 //! sets on a single `bfchar`/`bfrange` section.
 
+#![allow(
+    dead_code,
+    reason = "reached only from `font::to_unicode_cmap`, which the unwired \
+              `SaveOptions::subset_new_fonts` stage is the caller for; see \
+              `font/mod.rs`'s allowance for the whole argument"
+)]
+
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
 
@@ -54,7 +61,7 @@ end\n";
 /// Keys are the codes the content stream uses — for a subsetted Identity-H
 /// font, the **new** glyph IDs.
 #[must_use]
-pub fn to_unicode_cmap(map: &BTreeMap<u32, Vec<u32>>) -> Vec<u8> {
+pub(crate) fn to_unicode_cmap(map: &BTreeMap<u32, Vec<u32>>) -> Vec<u8> {
     let mut out = String::from(PROLOGUE);
 
     let entries: Vec<(u32, &Vec<u32>)> = map.iter().map(|(c, u)| (*c, u)).collect();

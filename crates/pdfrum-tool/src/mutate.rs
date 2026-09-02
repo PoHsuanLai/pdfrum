@@ -133,7 +133,7 @@ pub fn apply(
     };
     let streams = rewrite.streams.len();
     let shared = pdfrum_edit::shared_objects(edit);
-    let _: BTreeMap<i32, i32> =
+    let _: BTreeMap<usize, usize> =
         pdfrum_edit::apply_rewrite(edit, page_ref, &page_dict.dict, &rewrite, &shared);
     Applied::Rewritten { streams }
 }

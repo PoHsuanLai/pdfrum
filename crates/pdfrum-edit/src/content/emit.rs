@@ -35,10 +35,10 @@
 use pdfrum_common::kurbo::Affine;
 use pdfrum_object::{Dict, Name, Object};
 use pdfrum_page::state::{BlendMode, ClipEntry, GraphicsState};
-use pdfrum_page::{ColorValue, FillRule, LineCap, LineJoin, PageObject, Rgb};
+use pdfrum_page::{ColorValue, LineCap, LineJoin, PageObject, Rgb};
 
 use crate::content::num::{write_float, write_matrix};
-use crate::content::path::{emit_path_points, paint_operator};
+use crate::content::path::{Stroked, emit_path_points, paint_operator};
 use crate::content::text::emit_text_body;
 
 /// The graphics-state parameters the emitter can express, as a dedup key.
@@ -49,7 +49,7 @@ use crate::content::text::emit_text_body;
 /// which a damaged file can produce — must equal itself here or the cache
 /// grows without bound.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct GraphicsKey {
+pub(crate) struct GraphicsKey {
     fill_alpha: u32,
     stroke_alpha: u32,
     blend: BlendMode,
@@ -65,7 +65,7 @@ impl GraphicsKey {
                   that is 1.0 needs no resource and one a hair off does, \
                   because a reader will honour the difference"
     )]
-    pub fn of(state: &GraphicsState) -> Option<Self> {
+    pub(crate) fn of(state: &GraphicsState) -> Option<Self> {
         let g = &state.general;
         // `/Compatible` is Normal under another name, so a state carrying it
         // is still a default state and needs no resource.
@@ -82,7 +82,7 @@ impl GraphicsKey {
 
     /// The `/ExtGState` dictionary this key describes.
     #[must_use]
-    pub fn to_dict(self) -> Dict {
+    pub(crate) fn to_dict(self) -> Dict {
         Dict::from_pairs([
             (
                 crate::names::CA_LOWER.clone(),
@@ -106,7 +106,7 @@ impl GraphicsKey {
 /// to put the stream in a known state and "the default" is only knowable if
 /// it is stated.
 #[must_use]
-pub fn default_graphics() -> Dict {
+pub(crate) fn default_graphics() -> Dict {
     Dict::from_pairs([
         (crate::names::CA_LOWER.clone(), Object::Int(1)),
         (pdfrum_object::names::CA.clone(), Object::Int(1)),
@@ -124,7 +124,7 @@ pub fn default_graphics() -> Dict {
 /// It resets neither the dash array nor the miter limit nor any text state,
 /// which is a gap the C++ has and we keep: an object that needs a dash writes
 /// one, and one that does not is at whatever the previous stream left.
-pub const DEFAULT_GRAPHICS: &str = "0 0 0 RG 0 0 0 rg 1 w 0 J 0 j\n";
+pub(crate) const DEFAULT_GRAPHICS: &str = "0 0 0 RG 0 0 0 rg 1 w 0 J 0 j\n";
 
 /// Names for the blend modes an `/ExtGState` can carry (table 136).
 fn blend_name(blend: BlendMode) -> Name {
@@ -204,13 +204,13 @@ fn emit_colour(out: &mut String, colour: &ColorValue, stroking: bool) {
 /// Names the resources one object needs, so the caller can realize them
 /// before the object is written.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct ResourceNames {
+pub(crate) struct ResourceNames {
     /// The `/ExtGState` name, when the object needs one.
-    pub ext_gstate: Option<Name>,
+    pub(crate) ext_gstate: Option<Name>,
     /// The `/Font` name, for a text object.
-    pub font: Option<Name>,
+    pub(crate) font: Option<Name>,
     /// The `/XObject` name, for an image or a form.
-    pub xobject: Option<Name>,
+    pub(crate) xobject: Option<Name>,
 }
 
 /// Write one object's `q … Q`, or nothing when it cannot be expressed.
@@ -236,7 +236,7 @@ pub struct ResourceNames {
 // output stays parseable. This is the audit's A72, previously recorded as
 // design brief D6 — a divergence we chose, where the oracle-bug rule makes it
 // obligatory.
-pub fn emit_object(out: &mut String, object: &PageObject, names: &ResourceNames) -> bool {
+pub(crate) fn emit_object(out: &mut String, object: &PageObject, names: &ResourceNames) -> bool {
     let mut body = String::new();
     body.push_str("q ");
     emit_graphics(&mut body, object.state(), names.ext_gstate.as_ref());
@@ -245,7 +245,10 @@ pub fn emit_object(out: &mut String, object: &PageObject, names: &ResourceNames)
         PageObject::Path(p) => {
             emit_matrix(&mut body, p.object.matrix);
             emit_path_points(&mut body, &p.object.path);
-            body.push_str(paint_operator(p.object.fill_rule, p.object.stroke));
+            body.push_str(paint_operator(
+                p.object.fill_rule,
+                Stroked::of(p.object.stroke),
+            ));
             true
         }
         PageObject::Text(t) => {
@@ -396,34 +399,6 @@ fn join_int(join: LineJoin) -> u8 {
         LineJoin::Miter => 0,
         LineJoin::Round => 1,
         LineJoin::Bevel => 2,
-    }
-}
-
-/// Emit a run of objects, each into its own `q … Q`.
-///
-/// Returns whether anything was written — the C++'s `ProcessPageObjects`
-/// return value, which its caller uses to decide whether a stream is empty
-/// enough to delete.
-pub fn emit_page_objects(
-    out: &mut String,
-    objects: &[PageObject],
-    names: impl Fn(&PageObject) -> ResourceNames,
-) -> bool {
-    let mut any = false;
-    for object in objects {
-        let resources = names(object);
-        any |= emit_object(out, object, &resources);
-    }
-    any
-}
-
-/// The fill rule a clip entry uses, spelled for a test to read.
-#[must_use]
-pub fn clip_rule(even_odd: bool) -> FillRule {
-    if even_odd {
-        FillRule::EvenOdd
-    } else {
-        FillRule::Winding
     }
 }
 
