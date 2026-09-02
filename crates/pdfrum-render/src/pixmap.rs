@@ -227,6 +227,39 @@ impl Pixmap {
         }
     }
 
+    /// `[oracle-bug]` Lay `next` over this pixmap under **knockout**
+    /// composition (ISO 32000 §11.6.6): where `next` has any coverage it
+    /// *replaces* what is here, rather than blending over it.
+    ///
+    /// That is the whole of the knockout rule stated pixel-wise. Each object
+    /// in a knockout group composites against the group's initial backdrop,
+    /// so an earlier object's contribution at a pixel a later one also covers
+    /// never reaches the result; only the coverage-weighted mix at the edges
+    /// of the later object's own antialiasing keeps any of it.
+    ///
+    /// A mismatch in dimensions is a no-op, on the same invariant as
+    /// [`Self::multiply_alpha_mask`].
+    pub fn knockout_over(&mut self, next: &Self) {
+        if next.width != self.width || next.height != self.height {
+            return;
+        }
+        for (chunk, over) in self.data.chunks_exact_mut(4).zip(next.data.chunks_exact(4)) {
+            let Some(&a) = over.get(3) else { continue };
+            if a == 0 {
+                continue;
+            }
+            if a == u8::MAX {
+                chunk.copy_from_slice(over);
+                continue;
+            }
+            // Partial coverage at the new object's own edge: mix toward it by
+            // its alpha, which is `replace` weighted by coverage.
+            for (slot, &value) in chunk.iter_mut().zip(over.iter()) {
+                *slot = value.saturating_add(mul255(*slot, 255 - a));
+            }
+        }
+    }
+
     /// Multiply every channel by a coverage mask, PDFium's
     /// `MultiplyAlphaMask`. The mask must match the pixmap's dimensions
     /// exactly — an invariant, not a preference: a mismatched mask silently
@@ -574,6 +607,40 @@ pub fn unpremultiply_rgb(r: u8, g: u8, b: u8, a: u8) -> [u8; 3] {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Audit item **A13**. Knockout composition, stated pixel-wise: where a
+    /// later object has coverage it *replaces* the earlier one rather than
+    /// blending over it. That is the whole of §11.6.6's rule, and it is what
+    /// `RenderDeviceDriverIface::SetGroupKnockout` (an empty body at
+    /// `renderdevicedriver_iface.cpp:132` the AGG driver never overrides)
+    /// does not do.
+    #[test]
+    fn knockout_replaces_rather_than_blending() {
+        let red = peniko::Color::from_rgba8(255, 0, 0, 255);
+        let blue = peniko::Color::from_rgba8(0, 0, 255, 255);
+
+        // Full coverage replaces outright — under Normal compositing a
+        // translucent blue over red would mix; here an opaque one wins whole.
+        let mut base = Pixmap::filled(1, 1, red);
+        base.knockout_over(&Pixmap::filled(1, 1, blue));
+        assert_eq!(base.pixel(0, 0), Some([0, 0, 255, 255]));
+
+        // No coverage leaves the earlier object alone: knockout replaces
+        // where the later object *is*, not everywhere.
+        let mut base = Pixmap::filled(1, 1, red);
+        base.knockout_over(&Pixmap::new(1, 1));
+        assert_eq!(base.pixel(0, 0), Some([255, 0, 0, 255]));
+    }
+
+    /// Audit item **A13**. A mismatched overlay is a no-op, on the same
+    /// invariant `multiply_alpha_mask` keeps.
+    #[test]
+    fn a_mismatched_knockout_overlay_changes_nothing() {
+        let mut base = Pixmap::filled(2, 2, peniko::Color::from_rgba8(7, 8, 9, 255));
+        let before = base.clone();
+        base.knockout_over(&Pixmap::filled(3, 3, peniko::Color::BLACK));
+        assert_eq!(base, before);
+    }
 
     /// Audit item **A12**. The two properties the formula has to have, and
     /// which `cpdf_renderstatus.cpp` never gives it because it does not
