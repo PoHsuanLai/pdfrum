@@ -846,6 +846,102 @@ Only the counts move.
 | `pdfrum-edit` | 5 | 154 | 118 | `pub mod content`/`encrypt`/`font`/`import`/`write` → curated; today each is `pub mod` *and* selectively re-exported, so the same items are reachable two ways. One nice illustration of the vocabulary rule in a single signature: `paint_operator(fill: FillRule, stroke: bool)` (`content/path.rs:35`) — one argument is properly an enum, its neighbour is a bool. | medium |
 | `pdfrum` (facade) | 1 | 175 | 153 | Drop `pub mod edit` (§7 WP7). The rest is WP3/WP5/WP7/WP9/WP10 as written. | medium |
 
+> **`pdfrum-page`'s row landed 2026-09-03 as §A.10 step 9's second half**, in
+> three commits — the `Conversion` deletion, the bool→enum pass, then the
+> module curation. The board is byte-identical (1757 / 1512 / 245, every tag:
+> form-events 8, js-transcript 33, page-count 2, pixel-fail 43,
+> tierA-mismatch 170; text 86.3% / 75.5%) and **zero of the 1757 per-file rows
+> differ in any field, SSIM included** — the check that matters most for this
+> crate, because it builds the graph the renderer walks. Tier C is unchanged:
+> 1628 files, 3 hard failures, 434 over the edge budget, worst edge divergence
+> 66.6634%.
+>
+> | | before | after | |
+> |---|---:|---:|---|
+> | items | **1470** | **756** | −49% |
+> | `pub mod` (snapshot lines) | **19** | **1** | the crate root; **zero** published submodules |
+>
+> **The whole cross-crate seam is 33 items across eight modules**, enumerated
+> from the callers' `use` lines before anything was privatised — not from a
+> grep for the crate name, which over-reports because comments name modules
+> too. Every one either already was a root re-export or became one, so all
+> twelve top-level `pub mod`s and the six submodules the snapshot counted
+> (`image::dict`, `state::{clip, general, graph, marks, text}`) are private
+> and nothing outside the crate changed except a `use` line. `pdfrum.txt` and
+> `pdfrum+script.txt` are byte-identical; `pdfrum-page.txt` is the only
+> baseline file that moves.
+>
+> **Six things this row got wrong or left unsaid:**
+>
+> 1. **"Twelve `pub mod`s" is right about `lib.rs` and undercounts the
+>    surface by seven.** The row's list of twelve is exactly what `lib.rs`
+>    declares. The snapshot counts **nineteen**, because `state` publishes
+>    five submodules of its own (`clip`, `general`, `graph`, `marks`, `text`)
+>    and `image` publishes `dict` — the same shape §A.11's step-12 note found
+>    in `pdfrum-edit` and its step-7 note found in `pdfrum-form`. **Third
+>    time**, and it is now the rule rather than the surprise: a `pub mod`
+>    count read off `lib.rs` is a floor, and the snapshot is the measurement.
+> 2. **The row's three sentinel items were already done and are verified
+>    here.** `NO_CONTENT_STREAM` is gone, `content_stream()` returns
+>    `Option<usize>`, and §C.3 item 16's `stream_of` returns `usize` — the
+>    side-effect fix item 1 predicted. `image::scanline::get_bits` is now
+>    private, as asked: `pdfrum-render` names it only in a comment.
+> 3. **`Page::color(stroking: bool)` is `PageObject::color`, and it is
+>    dead.** The row asks for an enum or two methods and points at
+>    `page.rs:394`; the method is on `PageObject` at `:398` and has **no
+>    caller anywhere in the workspace**. The answer is neither remedy: it is
+>    deleted. There is no stroking-vs-filling enum in the crate to reuse —
+>    `GraphicsState` models it as the two public fields `fill` and `stroke`,
+>    and `GeneralState` does the same under an explicit
+>    `expect(struct_excessive_bools)` arguing the point — so honouring the row
+>    would have meant *inventing* a type for a method nothing calls.
+> 4. **`is_valid_page_dict`'s `strict` arm has no caller either**, so it is
+>    deleted rather than typed, along with `transfer::transfer_key(has_tr2:
+>    bool)`, which the row does not mention and which is the same shape.
+> 5. **Four `bool` parameters the row does not name are worse offenders than
+>    the two it does**, because each has a call site that destroys an existing
+>    enum to build the argument: `ClipStack::push_path`'s `even_odd`
+>    (`build.rs` wrote `clip_rule == FillRule::EvenOdd`),
+>    `MeshReader::read_patches`' `tensor` (`kind == ShadingKind::TensorMesh`),
+>    `MeshParams::new`'s `flags` (`kind != ShadingKind::LatticeMesh`), and
+>    `Shading::load`'s `is_shading_object`, whose two call sites each carried
+>    a two-line comment saying which way round they were passing it. They
+>    become `ClipRule`, `ShadingKind` (twice, taken directly) and
+>    `ShadingSource`. Six other public `bool` parameters are the *format's*
+>    own values and stay, per §C.1's `/EarlyChange` rule: `/Extend`, `/WMode`
+>    twice, `/PaintType`, an object's `active`, and `trans_mask`.
+> 6. **The `Conversion` enum this row asked for was correct, and is now
+>    deleted.** `244c16d` landed it across the eight `color/` signatures, and
+>    then proved in the oracle that PDFium's `std_cs_` cannot change a pixel
+>    (note 6 above, and `docs/design/pdfrum-page.md` §D9). Under the
+>    no-dead-code rule that made the whole switch dead — no production caller
+>    passed `Conversion::Standard`, and `RenderCtx::std_cs` was set at five
+>    sites and read at none — so the parameter, the enum, `to_rgb_with`
+>    (identical to `to_rgb` without it), the naive arm of `translate_cmyk_line`
+>    and the `pdfrum-render` field are all gone. The finding survives as a doc
+>    note on `cmyk_to_rgb` with the oracle citations and one unit test,
+>    `std_conversion_would_have_computed`, which recomputes the inert formula
+>    locally and is labelled as the record rather than as a test of this crate.
+>    **The highest-leverage rename in the crate turned out to be a deletion.**
+>
+> **Privatising found dead code for the sixth time in this pass**, and the
+> count is the largest yet: eight public functions with no reference anywhere
+> (`color::load_cached`, `shading::read_matrix`, `state::soft_mask_matrix`,
+> and `inline_image`'s `inline_predictor_params`, `inline_colorspace_name`,
+> `with_colorspace`, `inline_decode`), plus `PsOp::{Proc, Const}`, two variants
+> matched in `eval.rs` but never constructed. Fourteen further items are
+> reached only by their own module's tests and keep a reasoned
+> `allow(dead_code)` — §WP8's cost, recurring.
+>
+> **A lint fired because an item stopped being public, for the third time**
+> (§A.11's `pdfrum-render` note, item 5): `clippy::option_option` on
+> `JpxAction::space_override`, which exempts public items and not private ones.
+> The three states it distinguishes are real, so the fix is the enum the lint
+> asks for — `SpaceOverride::{Keep, Clear, Replace}` — not an `allow`. And one
+> doctest moved inside a private module but, unlike §WP8's, **survived as a
+> doctest**: `Function::eval`'s example names `FunctionCache`, which is a root
+> re-export, so it needed a shorter path rather than demotion to a unit test.
+
 Two crates are excluded because they are `publish = false` and therefore have
 no external audience: `pdfrum-raster-vello` and `pdfrum-script`. They are held
 to STYLE.md like anything else, but nothing in this amendment applies to them.
