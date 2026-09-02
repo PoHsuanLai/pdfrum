@@ -385,7 +385,38 @@ same bar for anyone who clicks through to a member crate. WP6 freezes it.
 > feature-gated re-export (`[`ScriptCascade`](crate::ScriptCascade)`)
 > breaks the default-feature doc build — spell it as a bare code span, and
 > run `RUSTDOCFLAGS="-D warnings" cargo doc` in **both** feature states.
-> WP5 and WP6 are open.
+> WP6 is open.
+
+> **WP5 `pdfrum-text` landed 2026-09-03.** Crate `//!` 48 → **18** (8 lines
+> of prose plus the one `no_run` open→extract fence); provenance hits in
+> `///` / `//!` 33 → **0**; doctest blocks 3 → **3**; no non-doc line
+> changed (the only non-comment additions are blank separators between a
+> `//!` and the `//` block beneath it); the API snapshot unmoved. Reading
+> recorded for §3's cap: the crate-root fence does **not** count toward the
+> prose cap — the cap wording is ambiguous, and §3 requires the root to
+> carry one snippet, so a root of ≤ 12 prose lines plus a single fence is
+> in bounds. The first pass at this WP failed review: it **deleted** the
+> module essays instead of moving them, so a doc-only diff that started
+> with zero items over the cap still removed ~470 lines of design
+> reasoning. Fourteen sites lost ≥ 10 doc lines and only 12 `//` lines were
+> added. Corrected here: every essay is back verbatim as a `//` block on the
+> body it explains (`pipeline` `SOFT_HYPHEN` / `UNMAPPABLE`, `unicode`
+> `normalize_space` and the RLE table, `dedup`'s five-object rule, and the
+> module essays of `links`, `object`, `pipeline`, `line`, `unicode`,
+> `find`, `index`, `orientation`), which is exactly what §4's Cut table
+> prescribes. Three contract sentences also had to be **re-derived from the
+> code** because the summarised versions stated the contract wrong:
+> `TextPage::slice` widens its bounds onto real text (`index.rs`
+> `text_index_at_or_after` / `text_index_end`) rather than "skipping
+> stripped characters" inside the range; `TextPage::rects` skips generated
+> and sub-`0.01` boxes and pushes a box **unconditionally at the end**
+> (`select.rs`), so an all-skipped run yields one all-zero rect rather than
+> being "clamped"; and `CharType::Hyphen` forces its `unicode` to `0x0002`
+> while `search_text` carries `U+00AD` (`pipeline.rs:889-894`) — the one
+> place the two outputs provably disagree. The lesson for the remaining
+> WP5 crates: a doc-only pass moves essays, it does not summarise them, and
+> a summary of a contract must be checked against the implementation before
+> it ships.
 
 Do not combine WP1 with WP5. The crate page is a writing task; the inner
 crates are a grind. Mixing them produces an unreviewable diff.

@@ -1,8 +1,10 @@
-//! Text extraction, search and link detection (SPEC.md §9).
+//! Text extraction, search, and link detection for PDF pages
+//! (ISO 32000-1 §14.8.2).
 //!
-//! Turns an interpreted [`Page`] into the characters a reader can select,
-//! search and copy — reading order, generated spaces, line breaks and all —
-//! without ever rendering anything.
+//! Start with [`extract`] to obtain a [`TextPage`], which carries two
+//! sequences that are *not* the same: the character stream
+//! ([`CharIndex`]) and the search-facing text ([`TextIndex`]). See
+//! [`TextPage`] for what each holds and which one a given method speaks.
 //!
 //! ```no_run
 //! use pdfrum_common::{Diagnostics, Limits};
@@ -14,38 +16,6 @@
 //! println!("{text}");
 //! # }
 //! ```
-//!
-//! # There are two texts, and they are not the same sequence
-//!
-//! [`TextPage`] carries both, deliberately as different types, because
-//! conflating them is the single easiest way to get this crate wrong:
-//!
-//! - [`TextPage::chars`] is the character stream — one entry per character
-//!   the page draws or the extractor invents, geometry attached. It holds
-//!   control characters, `\0` for an unmappable code, and a `U+0002` sentinel
-//!   where a word was hyphenated across a line. **This is what a `--txt` dump
-//!   emits**, unfiltered, in order.
-//! - [`TextPage::search_text`] is the text a search matches and a selection
-//!   copies. It drops the control characters and the placeholders, and it
-//!   *expands* ligatures that the character stream keeps whole.
-//!
-//! On `bug_781804.pdf` the two disagree at one position: the character stream
-//! holds `U+0002` where the text holds `U+00AD`. On `control_characters.pdf`
-//! the stream holds two characters the text does not. Neither is a bug —
-//! both are read, by different callers, and both are pinned by tests.
-//! [`TextPage::runs`] maps between the two index spaces, and the two are
-//! [`CharIndex`] and [`TextIndex`] in every signature that names one.
-//!
-//! # Everything else it does
-//!
-//! Reading order comes from sorting text objects by their transformed x
-//! within a batch and flushing the batch when the baseline jumps. Spaces are
-//! generated from geometry, never read from the content stream. Right-to-left
-//! runs are reversed into logical order, and brackets in them are mirrored.
-//! `/ActualText` marks replace the glyphs they cover. Web and mail addresses
-//! are recognized in the result. The heuristics and their constants are
-//! inventoried in `docs/design/pdfrum-text.md`; every one of them is
-//! byte-exact against the oracle, so none of them is adjustable.
 
 #![forbid(unsafe_code)]
 // Every number reaching this crate came from an untrusted file, by way of the
@@ -100,33 +70,37 @@ pub struct ExtractOptions {
     /// The document's `/Root /ViewerPreferences /Direction` is `R2L`.
     ///
     /// Forces every line's overall direction right-to-left, which reverses
-    /// the *order* of its direction runs. It is the only thing that flips a
-    /// line — the per-line heuristic that would otherwise guess is
-    /// deliberately not run. A caller reading this out of the catalog must
-    /// set it, or every document with that preference extracts in the wrong
-    /// order.
+    /// the *order* of its direction runs. A caller reading this out of the
+    /// catalog must set it, or every document with that preference extracts
+    /// in the wrong order.
     pub rtl: bool,
 }
 
-/// One page's extracted text.
+/// One page's extracted text (ISO 32000-1 §14.8.2).
 ///
-/// Cheap to clone and `Send + Sync`, so a document's pages can be extracted
-/// in parallel.
+/// Holds **two sequences that are not the same**, and conflating them is the
+/// easiest way to get this crate wrong:
+///
+/// - [`chars`](Self::chars), addressed by [`CharIndex`], is every character
+///   the page drew or the extractor invented, geometry attached. It keeps
+///   control characters, `\0` for an unmappable code, and `U+0002` where a
+///   word was hyphenated across a line.
+/// - [`search_text`](Self::search_text), addressed by [`TextIndex`], is what
+///   a search matches and a selection copies. It drops the control characters
+///   and the placeholders, expands ligatures the character stream keeps
+///   whole, and carries `U+00AD` at a hyphenated break and `U+FFFD` for an
+///   unmappable code, so it can disagree with `chars` position by position.
+///
+/// [`runs`](Self::runs) converts between the two spaces; every signature
+/// names which one it counts in. Cheap to clone and `Send + Sync`, so a
+/// document's pages can be extracted in parallel.
 #[derive(Debug, Clone, Default)]
 pub struct TextPage {
-    /// One entry per character, in reading order — **the `--txt` stream**.
-    ///
-    /// Unfiltered: control characters, `\0`, hyphen sentinels and raw
-    /// character codes that are not Unicode scalars at all are all here.
+    /// Characters in reading order addressed by [`CharIndex`].
     pub chars: Vec<CharBox>,
-    /// The search-facing text, which is a **different sequence** from
-    /// [`chars`](Self::chars): stripped of control characters and
-    /// placeholders, and with ligatures expanded.
-    ///
-    /// Indexed by [`TextIndex`], not [`CharIndex`] — the name says which of
-    /// the two spaces a number into it counts in.
+    /// Normalized search-facing text addressed by [`TextIndex`].
     pub search_text: Vec<char>,
-    /// The map between the two index spaces.
+    /// Map between [`CharIndex`] and [`TextIndex`].
     pub runs: IndexMap,
 }
 
@@ -136,11 +110,12 @@ pub fn debug_runs(page: &Page) -> Vec<TextRun> {
     object::walk(&page.objects)
 }
 
-/// Extracts one page's text (SPEC.md §9).
+/// Extracts text, layout, and reading order from an interpreted page
+/// (ISO 32000-1 §14.8.2).
 ///
-/// Infallible and never panicking: `core/fpdftext/` has no error channel at
-/// all, and every place it silently drops something this records a
-/// [`Diagnostic`](pdfrum_common::Diagnostic) and carries on.
+/// Infallible and never panicking: every place something is silently dropped
+/// records a [`Diagnostic`](pdfrum_common::Diagnostic) into `diags` and
+/// carries on.
 #[must_use]
 pub fn extract<R: Resolve>(
     page: &Page,
@@ -234,18 +209,18 @@ impl TextPage {
         self.chars.len()
     }
 
-    /// A run of the search-facing text, addressed in the **character list**
-    /// (`GetPageText`).
+    /// A run of the [`search_text`](Self::search_text), addressed in
+    /// [`CharIndex`].
     ///
-    /// The bounds are moved onto real text: a start that lands on a stripped
-    /// character scans forward, an end that lands on one scans back. So
-    /// asking for the fifteen characters from character 17 of
-    /// `control_characters.pdf` returns `"Goodbye, world!"` even though the
-    /// text itself has no character 17.
+    /// The bounds are **widened onto real text**, not filtered: a start on a
+    /// character the text does not hold scans forward to the next one it
+    /// does, and an end on one scans back. Characters inside the range are
+    /// never skipped. So on `control_characters.pdf`, asking for the fifteen
+    /// characters from character 17 returns `"Goodbye, world!"` even though
+    /// the text itself has no character 17.
     ///
-    /// This is the one place the two index spaces meet in a single call: the
-    /// bounds count characters and the answer is text, which is exactly why
-    /// [`runs`](Self::runs) exists.
+    /// This is the one call where the two spaces of [`TextPage`] meet: the
+    /// bounds count characters and the answer is text.
     #[must_use]
     pub fn slice(&self, range: impl RangeBounds<CharIndex>) -> String {
         let total = self.chars.len();
@@ -267,7 +242,13 @@ impl TextPage {
             .collect()
     }
 
-    /// Searches the page (SPEC.md §9). Match ranges are **text** offsets.
+    /// Searches the page.
+    ///
+    /// Match ranges are [`TextIndex`] offsets into
+    /// [`search_text`](Self::search_text) — **not** the [`CharIndex`] space
+    /// [`web_links`](Self::web_links) reports; see [`TextPage`].
+    ///
+    /// # Examples
     ///
     /// ```
     /// # use pdfrum_text::{FindOptions, TextIndex, TextPage};
@@ -290,27 +271,30 @@ impl TextPage {
         find::search(&self.to_string(), needle, options)
     }
 
-    /// Every web and mail address in the page's text (SPEC.md §9).
+    /// Every web and mail address in the page's text.
     ///
-    /// Ranges are **character-list** indices, which is the index space the
-    /// upstream API reports and is not the same one [`find`](Self::find)
-    /// returns.
+    /// Reported ranges are [`CharIndex`] spans into [`chars`](Self::chars) —
+    /// **not** the [`TextIndex`] space [`find`](Self::find) returns. The two
+    /// index spaces are different sequences; see [`TextPage`].
     #[must_use]
     pub fn web_links(&self) -> Vec<WebLink> {
         links::extract(&self.chars, &self.search_text, &index::build(&self.chars))
     }
 
-    /// The boxes covering a run of characters, one per run sharing a text
-    /// object.
+    /// The boxes covering a run of [`CharIndex`], one per run of consecutive
+    /// characters sharing a text object.
     ///
-    /// An unbounded end is "to the end of the page", and a range running past
-    /// the end takes what is there.
+    /// Generated characters and boxes under 0.01 in either dimension are
+    /// skipped, and a box is pushed **unconditionally at the end** — so a run
+    /// in which every character was skipped still yields one box, an all-zero
+    /// rectangle. An unbounded end is "to the end of the page", and a range
+    /// running past the end takes what is there.
     #[must_use]
     pub fn rects(&self, range: impl RangeBounds<CharIndex>) -> Vec<Rect> {
         select::rects(&self.chars, range)
     }
 
-    /// The character under a point, or the nearest within a tolerance.
+    /// The character under a point in page space, or the nearest within tolerance.
     #[must_use]
     pub fn index_at(&self, point: Point, tolerance: Size) -> Option<CharIndex> {
         select::index_at(&self.chars, point, tolerance)
@@ -323,17 +307,17 @@ impl TextPage {
         select::text_in_rect(&self.chars, rect)
     }
 
-    /// The text one text object drew.
+    /// The text drawn by a specific text object.
     #[must_use]
     pub fn text_of_object(&self, object: ObjectIndex) -> String {
         select::text_of_object(&self.chars, object)
     }
 
-    /// One character, or an error naming the bound it broke.
+    /// Returns the character box at the given [`CharIndex`].
     ///
     /// # Errors
     ///
-    /// [`Error::CharIndexOutOfRange`] when the page has no such character.
+    /// Returns [`Error::CharIndexOutOfRange`] when `index` is past the end of [`chars`](Self::chars).
     pub fn char(&self, index: CharIndex) -> Result<&CharBox, Error> {
         self.chars
             .get(index.get())
@@ -344,11 +328,9 @@ impl TextPage {
     }
 }
 
-/// The whole search-facing text.
-///
-/// This is [`search_text`](TextPage::search_text) — what a search matches and
-/// a selection copies — and **not** the character stream a `--txt` dump
-/// emits, which holds control characters and placeholders this drops.
+/// Formats the page as its [`search_text`](TextPage::search_text) — **not**
+/// the [`chars`](TextPage::chars) stream, which holds the control characters
+/// and placeholders this drops.
 impl std::fmt::Display for TextPage {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for ch in &self.search_text {

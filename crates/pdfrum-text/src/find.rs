@@ -1,19 +1,15 @@
-//! Searching a page's text (`docs/design/pdfrum-text.md` §1.14).
+//! Searching a page's text.
 //!
-//! Searches run over the **search-facing text**, not over the character
-//! stream `--txt` emits, so a match's offsets are text offsets and a caller
-//! wanting character indices goes through [`IndexMap`](crate::index::IndexMap).
+//! Searches run over search-facing text ([`TextIndex`](crate::TextIndex)), not
+//! the character stream ([`CharIndex`](crate::CharIndex)).
 //!
-//! # The needle is split, not matched whole
-//!
-//! A needle is first split into sub-needles at spaces *and* at every
-//! character that is a "standalone searchable unit" — which is every
+//! The needle is **split, not matched whole**: at spaces, and at every
 //! character outside Latin-1, the Arabic and Cyrillic blocks and General
-//! Punctuation, so every CJK ideograph and every Devanagari letter becomes
-//! its own sub-needle. The sub-needles must then appear in order, separated
-//! in the text only by line breaks, spaces or non-breaking spaces. This is
-//! what lets a search find text that reflowed across a line break, and what
-//! lets a CJK needle match without the spaces a Latin one would need.
+//! Punctuation — so every CJK ideograph and every Devanagari letter becomes
+//! its own sub-needle. The sub-needles must appear in order, separated in the
+//! text only by line breaks, spaces or non-breaking spaces. That is what
+//! finds text reflowed across a line break, and what lets a CJK needle match
+//! without the spaces a Latin one would need.
 
 use crate::index::TextIndex;
 use crate::unicode::{is_decimal_digit, lower_string};
@@ -22,22 +18,21 @@ use std::ops::Range;
 /// A non-breaking space, which counts as a separator between sub-needles.
 const NON_BREAKING_SPACE: char = '\u{00A0}';
 
-/// The soft hyphen the text buffer carries where a word was hyphenated across
-/// a line break.
-///
-/// `U+00AD`, not the `U+FFFE` noncharacter `cpdf_textpage.cpp:1361`
-/// (`AppendChar(0xfffe)`) writes: audit **A41**'s buffer half repairs it at
-/// the source, in `pipeline`'s `SOFT_HYPHEN`. Dropping it from the haystack is
-/// **A42**, and the two are independent — A42 would still be needed if the
-/// buffer carried a plain `-`, because a query for the un-hyphenated word has
-/// to match across the break either way.
+// The soft hyphen the text buffer carries where a word was hyphenated across
+// a line break.
+//
+// `U+00AD`, not the `U+FFFE` noncharacter `cpdf_textpage.cpp:1361`
+// (`AppendChar(0xfffe)`) writes: audit **A41**'s buffer half repairs it at
+// the source, in `pipeline`'s `SOFT_HYPHEN`. Dropping it from the haystack is
+// **A42**, and the two are independent — A42 would still be needed if the
+// buffer carried a plain `-`, because a query for the un-hyphenated word has
+// to match across the break either way.
 const HYPHEN_SENTINEL: char = '\u{00AD}';
 
 /// How a search behaves.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct FindOptions {
-    /// Compare case-sensitively. The default is **insensitive**, which is
-    /// the C++'s default too.
+    /// Compare case-sensitively. The default is `false` (case-insensitive).
     pub match_case: bool,
     /// Reject a match whose neighbours make it part of a longer word.
     pub match_whole_word: bool,
@@ -230,19 +225,21 @@ pub struct Search<'a> {
 
 /// Builds a search over `text`.
 ///
-/// `[oracle-bug]` **A word split across a line break is searched joined.**
-/// `cpdf_textpage.cpp:1360-1361` writes `U+FFFE` into the text buffer at a
-/// soft hyphen, and `cpdf_textpagefind.cpp:209-211`/`:262` search that buffer
-/// with a plain `Find`, so `"note-\nbook"` can never match `"notebook"`
-/// (`crbug.com/431824298`). What makes it a bug rather than a trade-off is the
-/// **asymmetry**: `cpdf_linkextract.cpp:154-155` repairs the very same
-/// sentinel (`Replace(L"\xfffe", L"-")`) for link detection and find does not.
-/// pdf.js joins across the break and keeps a reversible index map so the
-/// caller still gets offsets into the original text
-/// (`pdf_find_controller.js:131`, `:290-307`, whose `p5.slice(0, -2)` drops
-/// the hyphen *and* the newline). The same shape is used here: the sentinel is
-/// dropped from the haystack and `origins` maps every haystack index back to
-/// its text index, so the yielded ranges are still text offsets.
+/// A word split across a line break by a soft hyphen is matched joined, and
+/// the yielded ranges are still offsets into `text`.
+// `[oracle-bug]` **A word split across a line break is searched joined.**
+// `cpdf_textpage.cpp:1360-1361` writes `U+FFFE` into the text buffer at a
+// soft hyphen, and `cpdf_textpagefind.cpp:209-211`/`:262` search that buffer
+// with a plain `Find`, so `"note-\nbook"` can never match `"notebook"`
+// (`crbug.com/431824298`). What makes it a bug rather than a trade-off is the
+// **asymmetry**: `cpdf_linkextract.cpp:154-155` repairs the very same
+// sentinel (`Replace(L"\xfffe", L"-")`) for link detection and find does not.
+// pdf.js joins across the break and keeps a reversible index map so the
+// caller still gets offsets into the original text
+// (`pdf_find_controller.js:131`, `:290-307`, whose `p5.slice(0, -2)` drops
+// the hyphen *and* the newline). The same shape is used here: the sentinel is
+// dropped from the haystack and `origins` maps every haystack index back to
+// its text index, so the yielded ranges are still text offsets.
 #[must_use]
 pub fn search<'a>(text: &str, needle: &str, options: FindOptions) -> Search<'a> {
     let fold = |value: &str| -> String {
@@ -468,17 +465,17 @@ mod tests {
 
     const HELLO: &str = "Hello, world!\r\nGoodbye, world!";
 
-    /// Audit item **A42**. `cpdf_textpage.cpp:1360-1361` writes `U+FFFE` into
-    /// the text buffer at a soft hyphen and `cpdf_textpagefind.cpp:262`
-    /// searches that buffer verbatim, so a word split across a line break can
-    /// never be found (crbug.com/431824298). We drop the hyphen from the
-    /// haystack and map back, so the word is found and the range is still a
-    /// text offset — which is the property the fix has to keep.
-    ///
-    /// The character dropped is `U+00AD` rather than `U+FFFE` since audit
-    /// **A41**'s buffer half; A42 is unaffected by that, because what it
-    /// needs is that *something* stands between the two halves of the word
-    /// and is not itself part of either.
+    // Audit item **A42**. `cpdf_textpage.cpp:1360-1361` writes `U+FFFE` into
+    // the text buffer at a soft hyphen and `cpdf_textpagefind.cpp:262`
+    // searches that buffer verbatim, so a word split across a line break can
+    // never be found (crbug.com/431824298). We drop the hyphen from the
+    // haystack and map back, so the word is found and the range is still a
+    // text offset — which is the property the fix has to keep.
+    //
+    // The character dropped is `U+00AD` rather than `U+FFFE` since audit
+    // **A41**'s buffer half; A42 is unaffected by that, because what it
+    // needs is that *something* stands between the two halves of the word
+    // and is not itself part of either.
     #[test]
     fn a_word_split_across_a_line_break_is_found_joined() {
         // "a note-\nbook here", as the pipeline writes it: the hyphen and the

@@ -1,16 +1,19 @@
-//! Object-level duplicate suppression (`docs/design/pdfrum-text.md` §1.11).
+//! Duplicate text object suppression.
 //!
-//! Real files draw the same text twice — a fake-bold effect, a shadow, a
-//! badly-flattened layer — and the second copy must not double the extracted
-//! text. The test is deliberately loose: same character codes, overlapping
-//! boxes of comparable width, the same font size, and origins within a
-//! fraction of a character of each other.
-//!
-//! Two details of the search are easy to lose. It examines the **five nearest
-//! preceding text objects**, and a non-text object between them does not
-//! consume one of the five — so twenty images followed by five text objects
-//! still puts all five in range. And the object's own kind is what matters,
-//! not its distance.
+//! Detects and drops repeated text objects often used for drop shadows or
+//! simulated bolding.
+
+// Real files draw the same text twice — a fake-bold effect, a shadow, a
+// badly-flattened layer — and the second copy must not double the extracted
+// text. The test is deliberately loose: same character codes, overlapping
+// boxes of comparable width, the same font size, and origins within a
+// fraction of a character of each other.
+//
+// Two details of the search are easy to lose. It examines the **five nearest
+// preceding text objects**, and a non-text object between them does not
+// consume one of the five — so twenty images followed by five text objects
+// still puts all five in range. And the object's own kind is what matters,
+// not its distance. (`docs/design/pdfrum-text.md` §1.11.)
 
 use crate::charinfo::CharBox;
 use crate::object::{TextRun, ladder_char_width};

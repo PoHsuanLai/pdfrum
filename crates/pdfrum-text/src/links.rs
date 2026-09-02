@@ -1,32 +1,34 @@
-//! Finding web and mail addresses in extracted text
-//! (`docs/design/pdfrum-text.md` §1.15).
+//! Web and email address detection in extracted text.
 //!
-//! A PDF has no idea that `http://example.com` is a link — it is just glyphs.
-//! So the page's text is chopped into candidates at every generated character
-//! and every space, each candidate is trimmed of trailing punctuation, and
-//! what is left is tested for a scheme, a `www.` prefix, or an `@`.
-//!
-//! Two behaviours worth naming because they look wrong:
-//!
-//! - A trailing hyphen before a line break **joins** the two halves, so a URL
-//!   broken across lines is found whole. A trailing `?` or `/` before a break
-//!   does not, and the URL ends there.
-//! - `[oracle-bug]` The candidate is cut out of the **text** by offsets
-//!   counted over the **character list**, and those two index spaces are not
-//!   the same one. `cpdf_linkextract.cpp:123` and `:126` walk the char list
-//!   (`CountChars`, `GetCharInfo`) while `:148` cuts with
-//!   `page_text.Substr(start, nCount)`; they diverge wherever a character is
-//!   in one and not the other — `AddCharInfo` (`cpdf_textpage.cpp:783-786`)
-//!   pushes a non-normal char into `char_list_` without touching `text_buf_`,
-//!   and normalization at `:808-813` appends several text chars for one input.
-//!   PDFium **owns the converter it never calls**,
-//!   `CharIndexFromTextIndex` (`cpdf_textpage.cpp:409`), and the wrong offsets
-//!   flow on to `FPDFLink_GetTextRange` (`fpdf_text.cpp:599`), whose header
-//!   documents them as *char* indices. pdf.js's autolinker carries exactly the
-//!   reverse map PDFium skips (`autolinker.js:147`, `:176-180`). Here the
-//!   candidate is cut in **text** space, converted through
-//!   [`IndexMap`], and the reported range is
-//!   converted back to char space.
+//! Scans page text for URLs and email addresses, joining across line-break
+//! hyphens and reporting matches in character-list index space ([`CharIndex`]).
+
+// A PDF has no idea that `http://example.com` is a link — it is just glyphs.
+// So the page's text is chopped into candidates at every generated character
+// and every space, each candidate is trimmed of trailing punctuation, and
+// what is left is tested for a scheme, a `www.` prefix, or an `@`.
+// (`docs/design/pdfrum-text.md` §1.15.)
+//
+// Two behaviours worth naming because they look wrong:
+//
+// - A trailing hyphen before a line break **joins** the two halves, so a URL
+//   broken across lines is found whole. A trailing `?` or `/` before a break
+//   does not, and the URL ends there.
+// - `[oracle-bug]` The candidate is cut out of the **text** by offsets
+//   counted over the **character list**, and those two index spaces are not
+//   the same one. `cpdf_linkextract.cpp:123` and `:126` walk the char list
+//   (`CountChars`, `GetCharInfo`) while `:148` cuts with
+//   `page_text.Substr(start, nCount)`; they diverge wherever a character is
+//   in one and not the other — `AddCharInfo` (`cpdf_textpage.cpp:783-786`)
+//   pushes a non-normal char into `char_list_` without touching `text_buf_`,
+//   and normalization at `:808-813` appends several text chars for one input.
+//   PDFium **owns the converter it never calls**,
+//   `CharIndexFromTextIndex` (`cpdf_textpage.cpp:409`), and the wrong offsets
+//   flow on to `FPDFLink_GetTextRange` (`fpdf_text.cpp:599`), whose header
+//   documents them as *char* indices. pdf.js's autolinker carries exactly the
+//   reverse map PDFium skips (`autolinker.js:147`, `:176-180`). Here the
+//   candidate is cut in **text** space, converted through `IndexMap`, and the
+//   reported range is converted back to char space.
 
 use crate::charinfo::{CharBox, CharType};
 use crate::index::{CharIndex, IndexMap, TextIndex};
@@ -145,13 +147,13 @@ pub fn extract(chars: &[CharBox], text: &[char], index: &IndexMap) -> Vec<WebLin
     links
 }
 
-/// `[oracle-bug]` A candidate-relative range, converted back into char space.
-///
-/// `found` counts from `text_start` in the **text**; the reported range is a
-/// **char** offset, which is what `FPDFLink_GetTextRange` (`fpdf_text.cpp:599`)
-/// documents its output as. Falls back to the whole char span when a bound has
-/// no char of its own — a text character the char list cannot name is a
-/// malformed page, not a reason to report a wrong offset.
+// `[oracle-bug]` A candidate-relative range, converted back into char space.
+//
+// `found` counts from `text_start` in the **text**; the reported range is a
+// **char** offset, which is what `FPDFLink_GetTextRange` (`fpdf_text.cpp:599`)
+// documents its output as. Falls back to the whole char span when a bound has
+// no char of its own — a text character the char list cannot name is a
+// malformed page, not a reason to report a wrong offset.
 fn char_range(
     index: &IndexMap,
     text_start: Option<TextIndex>,
@@ -464,11 +466,11 @@ mod tests {
 
     use super::*;
 
-    /// Audit item **A46**. The two index spaces diverge exactly where a
-    /// character is in the char list but not in the text — which is what
-    /// `AddCharInfo` (`cpdf_textpage.cpp:783-786`) produces for a non-normal
-    /// character. Cutting the text by char-list offsets then slices the wrong
-    /// bytes; `cpdf_linkextract.cpp:148` does exactly that.
+    // Audit item **A46**. The two index spaces diverge exactly where a
+    // character is in the char list but not in the text — which is what
+    // `AddCharInfo` (`cpdf_textpage.cpp:783-786`) produces for a non-normal
+    // character. Cutting the text by char-list offsets then slices the wrong
+    // bytes; `cpdf_linkextract.cpp:148` does exactly that.
     #[test]
     fn a_candidate_is_cut_in_text_space_and_reported_in_char_space() {
         use crate::charinfo::CharType;

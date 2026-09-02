@@ -1,25 +1,29 @@
-//! The extraction pipeline: collection, reordering, emission, and the
-//! decisions between objects (`docs/design/pdfrum-text.md` §1.5–§1.9).
+//! Pipeline assembling extracted characters into reading-order lines.
 //!
-//! # It reorders; it does not stream
-//!
-//! Text objects are not emitted where they are found. They are collected into
-//! a batch, insertion-sorted by their transformed x, and flushed as a batch
-//! whenever the next object's y jumps far enough to be a new line. Only then
-//! are characters emitted, into a *staging* line, which a later stage
-//! bidi-segments and moves into the final output. A character can be
-//! reordered, merged, deleted, normalized into several, or dropped at four
-//! different stages, and getting the stage order wrong changes the output even
-//! when every individual threshold is right.
-//!
-//! # Spacing is geometry, not content
-//!
-//! Nothing here reads a space out of the content stream and treats it
-//! specially. Every generated space comes from comparing a gap against a
-//! threshold derived from the font's own space glyph — or, when that glyph is
-//! untrustworthy, from the current character's width bucketed into quarters,
-//! fifths and sixths. The thresholds are absolute numbers with no explanation
-//! in the source and no test upstream; they are transcribed and pinned here.
+//! Orders text objects, synthesizes word and line breaks from geometry,
+//! resolves bidirectional text runs, and builds character records.
+
+// # It reorders; it does not stream
+//
+// Text objects are not emitted where they are found. They are collected into
+// a batch, insertion-sorted by their transformed x, and flushed as a batch
+// whenever the next object's y jumps far enough to be a new line. Only then
+// are characters emitted, into a *staging* line, which a later stage
+// bidi-segments and moves into the final output. A character can be
+// reordered, merged, deleted, normalized into several, or dropped at four
+// different stages, and getting the stage order wrong changes the output even
+// when every individual threshold is right.
+//
+// # Spacing is geometry, not content
+//
+// Nothing here reads a space out of the content stream and treats it
+// specially. Every generated space comes from comparing a gap against a
+// threshold derived from the font's own space glyph — or, when that glyph is
+// untrustworthy, from the current character's width bucketed into quarters,
+// fifths and sixths. The thresholds are absolute numbers with no explanation
+// in the source and no test upstream; they are transcribed and pinned here.
+// The heuristics and their constants are inventoried in
+// `docs/design/pdfrum-text.md` §1.5–§1.9.
 
 use crate::charinfo::{
     CharBox, CharType, LooseBoundsInput, ObjectIndex, inverse_or_zero, loose_bounds, matrix_angle,
@@ -38,63 +42,60 @@ use pdfrum_object::{Name, Resolve};
 /// the height below which a character's box is rescued. In page space.
 const SIZE_EPSILON: f64 = 0.01;
 
-/// `U+00AD` SOFT HYPHEN — what the text buffer carries at a hyphenated line
-/// break.
-///
-/// `[oracle-bug]` **Audit A41, buffer half.** `cpdf_textpage.cpp:1360-1361`
-/// writes the Unicode **noncharacter** `U+FFFE` here (`AppendChar(0xfffe)`),
-/// having just recognised the document's real `U+00AD` on input
-/// (`IsHyphenCode`, `:1149-1151`) and discarded it. `U+FFFE` is permanently
-/// reserved and forbidden in interchange (Unicode §23.7), yet it crosses a
-/// public C ABI verbatim (`GetPageText`, `:590`; `FPDFText_GetText`,
-/// `fpdf_text.cpp:341-372`) — and reaches our own callers through
-/// [`TextPage`](crate::TextPage)'s [`Display`](std::fmt::Display),
-/// [`TextPage::slice`](crate::TextPage::slice) and the public
-/// [`TextPage::search_text`](crate::TextPage::search_text) field, where it
-/// silently breaks a substring search across a line break.
-///
-/// "Matches upstream" is not available as a defence, because **upstream does
-/// not match itself**: `cpdf_linkextract.cpp:154-155` repairs this very
-/// sentinel (`Replace(L"\xfffe", L"-")`, comment *"Replace the generated code
-/// with the hyphen char"*) for link detection while `cpdf_textpagefind.cpp:262`
-/// searches the same buffer with no repair. `crbug.com/431824298` is open.
-/// pdf.js emits no noncharacter at all — it keeps a real hyphen
-/// (`src/core/unicode.js:57-58`, mapping `U+00AD` to `U+002D`) and joins across
-/// the break at query time (`src/core/pdf_find_controller.js:131`, `:290-307`).
-///
-/// We carry `U+00AD` rather than `U+002D`: it is the character the document
-/// actually contains, it is `Default_Ignorable`, and it keeps the buffer
-/// lossless — a caller can render it, strip it, or search past it, none of
-/// which a noncharacter permits.
-///
-/// The **character record** at the same position keeps PDFium's `0x2`: A41's
-/// char-list half costs 12 golden rows and stays declined
-/// (`docs/status/reopened-declines.md` §2.9), so the two outputs now differ in
-/// a new, deliberate way. That asymmetry is recorded beside A41 in
-/// `docs/status/oracle-divergence-audit.md`.
+// `U+00AD` SOFT HYPHEN — what the text buffer carries at a hyphenated line
+// break.
+//
+// `[oracle-bug]` **Audit A41, buffer half.** `cpdf_textpage.cpp:1360-1361`
+// writes the Unicode **noncharacter** `U+FFFE` here (`AppendChar(0xfffe)`),
+// having just recognised the document's real `U+00AD` on input
+// (`IsHyphenCode`, `:1149-1151`) and discarded it. `U+FFFE` is permanently
+// reserved and forbidden in interchange (Unicode §23.7), yet it crosses a
+// public C ABI verbatim (`GetPageText`, `:590`; `FPDFText_GetText`,
+// `fpdf_text.cpp:341-372`) — and reaches our own callers through `TextPage`'s
+// `Display`, `TextPage::slice` and the public `TextPage::search_text` field,
+// where it silently breaks a substring search across a line break.
+//
+// "Matches upstream" is not available as a defence, because **upstream does
+// not match itself**: `cpdf_linkextract.cpp:154-155` repairs this very
+// sentinel (`Replace(L"\xfffe", L"-")`, comment *"Replace the generated code
+// with the hyphen char"*) for link detection while `cpdf_textpagefind.cpp:262`
+// searches the same buffer with no repair. `crbug.com/431824298` is open.
+// pdf.js emits no noncharacter at all — it keeps a real hyphen
+// (`src/core/unicode.js:57-58`, mapping `U+00AD` to `U+002D`) and joins across
+// the break at query time (`src/core/pdf_find_controller.js:131`, `:290-307`).
+//
+// We carry `U+00AD` rather than `U+002D`: it is the character the document
+// actually contains, it is `Default_Ignorable`, and it keeps the buffer
+// lossless — a caller can render it, strip it, or search past it, none of
+// which a noncharacter permits.
+//
+// The **character record** at the same position keeps PDFium's `0x2`: A41's
+// char-list half costs 12 golden rows and stays declined
+// (`docs/status/reopened-declines.md` §2.9), so the two outputs now differ in
+// a new, deliberate way. That asymmetry is recorded beside A41 in
+// `docs/status/oracle-divergence-audit.md`.
 pub(crate) const SOFT_HYPHEN: u32 = 0x00AD;
 
-/// `U+FFFD` REPLACEMENT CHARACTER — what the text buffer carries where a
-/// character code maps to `U+0000`.
-///
-/// `[oracle-bug]` The same A41 defect in its second guise, and the one the
-/// `bug_583.pdf` assertion pins. `cpdf_textpage.cpp:1462` writes
-/// `AppendChar(c ? c : 0xfffe)`, so a code whose `/ToUnicode` yields `U+0000`
-/// puts the noncharacter into the buffer and hands it to a caller — the same
-/// violation in the same public channel as [`SOFT_HYPHEN`], so the same
-/// ruling applies. `U+FFFD` is the Unicode-sanctioned stand-in for a
-/// character that cannot be represented, and it is already this workspace's
-/// answer for one: an unpaired surrogate becomes `U+FFFD` in
-/// `pdfrum_font::tounicode` (divergence D3, audit A54). pdf.js likewise
-/// refuses to emit anything in the Specials block
-/// (`src/core/unicode.js:51-62` maps `0xFFF0..=0xFFFF` to 0).
-///
-/// The character **record** is untouched: it keeps the `0` the oracle writes,
-/// so `--txt` stays byte-identical. `U+FFFE` staged for a *character code* of
-/// zero (the other arm, `:1433`) is not this: that record is never `normal`,
-/// so its placeholder is dropped before the buffer and never reaches a
-/// caller — a private sentinel collapsed at the boundary, which is
-/// [`mirror_char`](crate::unicode::mirror_char)'s shape and what §C.1 permits.
+// `U+FFFD` REPLACEMENT CHARACTER — what the text buffer carries where a
+// character code maps to `U+0000`.
+//
+// `[oracle-bug]` The same A41 defect in its second guise, and the one the
+// `bug_583.pdf` assertion pins. `cpdf_textpage.cpp:1462` writes
+// `AppendChar(c ? c : 0xfffe)`, so a code whose `/ToUnicode` yields `U+0000`
+// puts the noncharacter into the buffer and hands it to a caller — the same
+// violation in the same public channel as `SOFT_HYPHEN`, so the same ruling
+// applies. `U+FFFD` is the Unicode-sanctioned stand-in for a character that
+// cannot be represented, and it is already this workspace's answer for one:
+// an unpaired surrogate becomes `U+FFFD` in `pdfrum_font::tounicode`
+// (divergence D3, audit A54). pdf.js likewise refuses to emit anything in the
+// Specials block (`src/core/unicode.js:51-62` maps `0xFFF0..=0xFFFF` to 0).
+//
+// The character **record** is untouched: it keeps the `0` the oracle writes,
+// so `--txt` stays byte-identical. `U+FFFE` staged for a *character code* of
+// zero (the other arm, `:1433`) is not this: that record is never `normal`,
+// so its placeholder is dropped before the buffer and never reaches a
+// caller — a private sentinel collapsed at the boundary, which is
+// `unicode::mirror_char`'s shape and what §C.1 permits.
 pub(crate) const UNMAPPABLE: u32 = 0xFFFD;
 
 /// The font size a character with no text object reports.
