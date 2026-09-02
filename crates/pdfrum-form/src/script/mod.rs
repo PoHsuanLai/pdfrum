@@ -195,6 +195,90 @@ pub enum ScriptStop {
     Threw(String),
 }
 
+/// One script that stopped, named and explained.
+///
+/// # Why this exists rather than an error the caller could ignore
+///
+/// **An uncaught exception must never be swallowed**, and upstream swallows
+/// it: `CJS_EventContext::RunScript` returns
+/// `std::optional<IJS_Runtime::JS_Error>` carrying the message, the line and
+/// the column (`fxjs/cfxjs_engine.cpp:600-622`, `fxjs/ijs_runtime.h:26-32`),
+/// and `CPDFSDK_FormFillEnvironment::RunScript` — the funnel every document,
+/// page and field action goes through — drops it on the floor under a
+/// standing `// TODO(dsinclair): Return error if RunScript returns a
+/// IJS_Runtime::JS_Error.` (`fpdfsdk/cpdfsdk_formfillenvironment.cpp:
+/// 1280-1286`). Nothing prints it, nothing alerts it, and no
+/// `IPDF_JSPLATFORM` or `FFI_` callback is on the path, so `pdfium_test`
+/// emits **nothing at all** for a script that throws — which is how a
+/// fixture that crashes on its first line reads as an empty transcript
+/// (`testing/tools/test_runner.py`'s `_VerifyEmptyText` then scores that a
+/// pass). `[oracle-bug]`.
+///
+/// pdf.js is the counter-example and is what "correct" means here: every
+/// action's evaluation is individually wrapped, the error is serialized with
+/// its message *and* stack and sent out as a `{command: "error"}` message
+/// (`src/scripting_api/field.js:542-561`,
+/// `src/scripting_api/doc.js:192-206`, `src/scripting_api/app_utils.js:
+/// 24-27`), the viewer routes it to `console.error`
+/// (`web/pdf_scripting_manager.js:316-322`), and — because the `try` sits
+/// *inside* the `for (const action of actions)` loop — **the next action
+/// still runs**.
+///
+/// So pdfrum takes pdf.js's rule: report the error on the diagnostic channel
+/// and carry on with the next script. The *transcript* still matches PDFium
+/// byte for byte, because the transcript is the oracle's stdout and the
+/// oracle prints nothing; this is what the oracle should have written down.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ScriptFailure {
+    /// Which script — a field's fully-qualified name, a `/Names /JavaScript`
+    /// key, or the empty string for `/OpenAction`, which is the name upstream
+    /// passes too (`cpdfsdk_formfillenvironment.cpp:1000-1006`).
+    pub whence: String,
+    /// Why it stopped.
+    pub stop: ScriptStop,
+}
+
+impl ScriptFailure {
+    /// The failure as **one** diagnostic line: where, and what the engine
+    /// said.
+    ///
+    /// # The position rides in the message
+    ///
+    /// `boa` puts it there itself — a throw reads
+    /// `TypeError: not a callable function (unknown at :1:25)` and a parse
+    /// failure names its line and column the same way — so there is no
+    /// separate `line`/`column` pair to reassemble. That is the same
+    /// information upstream's `JS_Error` carries as two `int`s
+    /// (`fxjs/ijs_runtime.h:26-32`, filled from `GetLineAndColumnFromError`
+    /// at `fxjs/cfxjs_engine.cpp:610,617`) and then throws away.
+    ///
+    /// # And only the first line of it
+    ///
+    /// `boa` appends a stack — `\n    at <main> (…)` — after the message.
+    /// A diagnostic is a line, and a caller writing one per failure must not
+    /// have a multi-line one silently break its own format; the frames say
+    /// nothing a document's one-expression `/OpenAction` did not already say
+    /// in the position. [`ScriptStop::Threw`] keeps the whole string for a
+    /// caller that wants it.
+    #[must_use]
+    pub fn line(&self) -> String {
+        let whence = if self.whence.is_empty() {
+            "/OpenAction"
+        } else {
+            &self.whence
+        };
+        match &self.stop {
+            ScriptStop::LimitReached => {
+                format!("script {whence}: stopped by a sandbox limit")
+            }
+            ScriptStop::Threw(message) => {
+                let first = message.lines().next().unwrap_or("").trim_end();
+                format!("script {whence}: {first}")
+            }
+        }
+    }
+}
+
 /// The four `/AA` entries a field can carry, as their JavaScript source.
 ///
 /// `None` is the ordinary case and is not an absence to be filled in later:
@@ -242,7 +326,7 @@ pub struct ScriptCascade {
     /// fields carry `/AA /C` — see `Form::calculation_order`.
     order: Vec<u32>,
     /// What a script last did wrong, for the caller's diagnostics.
-    stops: Vec<(String, ScriptStop)>,
+    stops: Vec<ScriptFailure>,
     /// How deep a calculation may nest. One, upstream.
     max_calculate_depth: u32,
     /// `CJS_EventContext::busy_` — a script running inside a script is
@@ -355,7 +439,7 @@ impl ScriptCascade {
     /// What went wrong, and in which script — the diagnostics a caller reads
     /// after a run.
     #[must_use]
-    pub fn stops(&self) -> &[(String, ScriptStop)] {
+    pub fn stops(&self) -> &[ScriptFailure] {
         &self.stops
     }
 
@@ -373,10 +457,10 @@ impl ScriptCascade {
         if self.busy {
             // `CJS_EventContext::busy_` (`fxjs/cjs_event_context.cpp:32-38`):
             // a script provoked by a script is refused, not re-entered.
-            self.stops.push((
-                whence.to_string(),
-                ScriptStop::Threw("System is busy.".to_string()),
-            ));
+            self.stops.push(ScriptFailure {
+                whence: whence.to_string(),
+                stop: ScriptStop::Threw("System is busy.".to_string()),
+            });
             return false;
         }
         self.busy = true;
@@ -397,7 +481,10 @@ impl ScriptCascade {
                 } else {
                     ScriptStop::Threw(message)
                 };
-                self.stops.push((whence.to_string(), stop));
+                self.stops.push(ScriptFailure {
+                    whence: whence.to_string(),
+                    stop,
+                });
                 false
             }
         }
@@ -412,7 +499,7 @@ impl ScriptCascade {
     #[must_use]
     pub fn last_stop_was_a_limit(&self) -> bool {
         matches!(
-            self.stops.last().map(|(_, stop)| stop),
+            self.stops.last().map(|failure| &failure.stop),
             Some(ScriptStop::LimitReached)
         )
     }
@@ -510,22 +597,41 @@ impl ScriptCascade {
         self.max_calculate_depth
     }
 
-    /// Records this session's stops as diagnostics on the caller's sink.
+    /// Records this session's stops as diagnostics on the caller's sink, and
+    /// hands back what each of them said.
     ///
     /// Kept separate from [`ScriptCascade::run`] so a caller decides when
     /// diagnostics are drained, and so the cascade methods — whose signatures
     /// take no `Diagnostics` — can still be honest about what happened.
-    pub fn drain_diagnostics(&mut self, diags: &mut Diagnostics) {
-        for (_whence, stop) in self.stops.drain(..) {
+    ///
+    /// # Why it returns the failures rather than only recording them
+    ///
+    /// [`Diagnostic`](pdfrum_common::Diagnostic) is a *kind*, a severity and a
+    /// byte offset — deliberately, because it is a bounded sink a hostile file
+    /// must not be able to grow — so
+    /// [`DiagKind::ScriptFailed`](pdfrum_common::DiagKind::ScriptFailed) can
+    /// say **that** a script threw but not *which* one or *what it said*. Both
+    /// are what a reader needs, and losing them is the whole defect this
+    /// method exists to close: a name that was never bound produced an empty
+    /// transcript and no word anywhere about why. So the kind goes on the sink
+    /// and the detail comes back to the caller, which prints it — see
+    /// [`ScriptFailure`] for what PDFium and pdf.js each do with the same
+    /// error.
+    ///
+    /// The session is drained: a second call answers nothing.
+    pub fn drain_diagnostics(&mut self, diags: &mut Diagnostics) -> Vec<ScriptFailure> {
+        let failures: Vec<ScriptFailure> = self.stops.drain(..).collect();
+        for failure in &failures {
             diags.record(
                 pdfrum_common::Severity::Suspicious,
-                match stop {
+                match failure.stop {
                     ScriptStop::LimitReached => pdfrum_common::DiagKind::ScriptLimitReached,
                     ScriptStop::Threw(_) => pdfrum_common::DiagKind::ScriptFailed,
                 },
                 None,
             );
         }
+        failures
     }
 
     /// Reads `event.rc` back as JavaScript truthiness.

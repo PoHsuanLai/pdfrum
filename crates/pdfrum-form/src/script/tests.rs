@@ -134,7 +134,7 @@ fn an_array_message_is_joined_and_a_lone_object_is_not_a_message() {
 fn a_missing_message_throws_the_parameter_count_error() {
     let mut cascade = session();
     assert!(!cascade.run("app.alert();", "test"));
-    let stop = cascade.stops().first().map(|(_, stop)| stop.clone());
+    let stop = cascade.stops().first().map(|failure| failure.stop.clone());
     match stop {
         Some(ScriptStop::Threw(message)) => assert!(
             message.contains(bind_param_error()),
@@ -947,9 +947,179 @@ fn a_script_that_will_not_parse_is_recorded_rather_than_fatal() {
     let mut cascade = session();
     assert!(!cascade.run("this is not javascript {{{", "test"));
     assert!(matches!(
-        cascade.stops().first().map(|(_, stop)| stop),
+        cascade.stops().first().map(|failure| &failure.stop),
         Some(ScriptStop::Threw(_))
     ));
+}
+
+// ---- an uncaught throw is reported, and does not truncate the rest ----
+
+/// **The defect this closes.** `bug_421304870` calls `this.getAnnots()`,
+/// which is not bound; before this, the call threw and pdfrum printed nothing
+/// for the rest of that document with no word anywhere about why.
+///
+/// One diagnostic, carrying the *whence* and the engine's *message* — because
+/// `DiagKind::ScriptFailed` alone can say that a script threw but not which
+/// one or what it said, and both are the information a reader came for.
+#[test]
+fn an_uncaught_throw_yields_one_diagnostic_with_its_whence_and_message() {
+    let mut cascade = session();
+    assert!(!cascade.run("app.alert(this.getAnnots().length);", "/OpenAction"));
+
+    let mut diags = pdfrum_common::Diagnostics::default();
+    let failures = cascade.drain_diagnostics(&mut diags);
+
+    assert_eq!(failures.len(), 1, "one throw, one diagnostic");
+    let failure = failures.first().expect("one failure");
+    assert_eq!(failure.whence, "/OpenAction", "it says which script");
+    let ScriptStop::Threw(message) = &failure.stop else {
+        panic!("an unbound name is a throw, not a limit: {failure:?}");
+    };
+    // boa's own words. `this.getAnnots` is *undefined*, so this is a
+    // `TypeError` on the call rather than a `ReferenceError` on the name —
+    // which means the message carries the **position** but not the callee's
+    // name. That is what the engine said, and reporting it verbatim is the
+    // point; inventing a name it did not give would be worse than the
+    // position it did.
+    assert!(
+        message.starts_with("TypeError: not a callable function"),
+        "it says what the engine said: {message}"
+    );
+    assert!(
+        message.contains(":1:25"),
+        "and where, which is the line and column upstream's `JS_Error` \
+         carries and then discards: {message}"
+    );
+    // And the kind reached the sink, so a caller reading only the sink still
+    // learns a script failed.
+    assert!(diags.contains(&pdfrum_common::DiagKind::ScriptFailed));
+    assert_eq!(diags.len(), 1);
+
+    // The rendered line names both halves — this is what the tool prints.
+    let line = failure.line();
+    assert_eq!(
+        line, "script /OpenAction: TypeError: not a callable function (unknown at :1:25)",
+        "the reported line carries the whence, the message and the position"
+    );
+    assert!(
+        !line.contains('\n'),
+        "and it is one line: boa's stack frames are trimmed off"
+    );
+
+    // Draining is a drain: the session has nothing left to say.
+    let mut again = pdfrum_common::Diagnostics::default();
+    assert!(cascade.drain_diagnostics(&mut again).is_empty());
+}
+
+/// An unnamed script — `/OpenAction`'s, which upstream runs with an *empty*
+/// name (`cpdfsdk_formfillenvironment.cpp:1000-1006`) — still reads as
+/// something rather than as a blank.
+#[test]
+fn an_unnamed_script_is_reported_as_the_open_action() {
+    let mut cascade = session();
+    assert!(!cascade.run("throw 'boom';", ""));
+    let failures = cascade.drain_diagnostics(&mut pdfrum_common::Diagnostics::default());
+    // `throw 'boom'` throws the *string*, which boa renders quoted.
+    assert_eq!(
+        failures.first().map(ScriptFailure::line).as_deref(),
+        Some("script /OpenAction: \"boom\"")
+    );
+}
+
+/// **The cascade continues.** A throwing script does not stop the next one:
+/// the second `app.alert` still reaches the transcript, and both failures are
+/// recorded rather than only the first.
+///
+/// This is pdf.js's rule made ours — its `try` sits *inside* the
+/// `for (const action of actions)` loop (`src/scripting_api/field.js:542-561`,
+/// `src/scripting_api/doc.js:192-206`), so action N+1 runs — and it is also
+/// upstream's *control flow*, since `RunDocumentOpenJavaScript` is `void` and
+/// `ExecuteDocumentOpenAction` walks every `/Next` regardless
+/// (`cpdfsdk_formfillenvironment.cpp:1000-1018`). What upstream does not do is
+/// the reporting, which is the `[oracle-bug]`.
+#[test]
+fn a_throw_does_not_stop_the_scripts_after_it() {
+    let mut cascade = session();
+    assert!(cascade.run("app.alert('first');", "one"));
+    assert!(!cascade.run("this.getAnnots();", "two"));
+    assert!(cascade.run("app.alert('third');", "three"));
+    assert!(!cascade.run("throw 'boom';", "four"));
+    assert!(cascade.run("app.alert('fifth');", "five"));
+
+    assert_eq!(
+        cascade.transcript_text(),
+        "Alert: first\nAlert: third\nAlert: fifth\n",
+        "every script after a throw still ran and still spoke"
+    );
+
+    let failures = cascade.drain_diagnostics(&mut pdfrum_common::Diagnostics::default());
+    let whences: Vec<&str> = failures.iter().map(|f| f.whence.as_str()).collect();
+    assert_eq!(
+        whences,
+        ["two", "four"],
+        "both throws were written down, not only the first"
+    );
+}
+
+/// The same, one step down: a throwing hook inside an *event* leaves the
+/// session usable, so the next hook in the same cascade still runs.
+///
+/// `keystroke` takes its refusing answer for the throwing field — a script
+/// that threw did not say "accept" — and `validate` on the next field is
+/// unaffected, which is what "the event continues" means at this level.
+#[test]
+fn a_throwing_hook_leaves_the_session_usable_for_the_next_one() {
+    let mut cascade = session();
+    cascade.set_field(
+        0,
+        "Text Box",
+        "",
+        FieldActions {
+            keystroke: Some("this.getAnnots();".to_string()),
+            ..FieldActions::default()
+        },
+    );
+    cascade.set_field(
+        1,
+        "Other Box",
+        "",
+        FieldActions {
+            validate: Some("app.alert('validated'); event.rc = true;".to_string()),
+            ..FieldActions::default()
+        },
+    );
+
+    let outcome = cascade.keystroke(
+        &field(),
+        Keystroke {
+            change: "a".to_string(),
+            value: String::new(),
+            selection_start: 0,
+            selection_end: 0,
+        },
+    );
+    assert_eq!(
+        outcome,
+        KeystrokeOutcome::Reject,
+        "a script that threw did not say accept"
+    );
+
+    let other = FieldRef {
+        name: "Other Box".to_string(),
+        index: 1,
+    };
+    assert!(
+        cascade.validate(&other, "x"),
+        "the next hook in the cascade still runs, and still answers"
+    );
+    assert_eq!(cascade.transcript_text(), "Alert: validated\n");
+
+    let failures = cascade.drain_diagnostics(&mut pdfrum_common::Diagnostics::default());
+    assert_eq!(failures.len(), 1, "only the keystroke threw");
+    assert_eq!(
+        failures.first().map(|f| f.whence.as_str()),
+        Some("Text Box")
+    );
 }
 
 /// A field with no script at all takes the permissive answer, which is

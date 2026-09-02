@@ -30,6 +30,14 @@
 //!
 //! Field `/AA` actions are **not** part of this sequence: they run on events,
 //! which is `--send-events`' path, not this one.
+//!
+//! # A script that throws
+//!
+//! It is **reported and the next one still runs** — never swallowed, and
+//! never allowed to truncate the rest of the document's scripts. The report
+//! goes to **stderr**, because stdout is the byte-for-byte transcript;
+//! `pdfrum_form::script::ScriptFailure` carries the reasoning and the
+//! `[oracle-bug]` citation for why the oracle's own stdout stays empty.
 
 use std::io::Write;
 
@@ -52,11 +60,15 @@ use pdfrum_parser::Document;
 ///
 /// # Errors
 ///
-/// Only what `out` returns.
+/// Only what `out` returns. A script that throws is *not* an error here — it
+/// is recorded in `diags` and the next script still runs, per §"A script that
+/// throws" below.
 pub fn write_transcript(
     doc: &Document,
     time: Option<u64>,
+    diags: &mut Diagnostics,
     out: &mut dyn Write,
+    err: &mut dyn Write,
 ) -> std::io::Result<()> {
     let config = match time {
         Some(seconds) => ScriptConfig::frozen_at(seconds),
@@ -70,10 +82,38 @@ pub fn write_transcript(
     };
     let mut cascade = cascade;
     let catalog = doc.catalog().unwrap_or_default();
+    // **A script that throws does not stop the ones after it.** `run` records
+    // the failure and answers `false`; the loop does not read that answer,
+    // which is upstream's shape — `ProcJavascriptAction` walks the name tree
+    // `for (i = 0; i < count; ++i)` calling a `void` `DoActionJavaScript`
+    // (`cpdfsdk_formfillenvironment.cpp:697-701`), and
+    // `ExecuteDocumentOpenAction` runs every `/Next` sub-action
+    // unconditionally after the JS (`:1000-1018`). The difference from
+    // upstream is only that we write the failure down.
     for (whence, source) in document_scripts(&catalog, doc) {
         cascade.run(&source, &whence);
     }
-    write!(out, "{}", cascade.transcript_text())
+    write!(out, "{}", cascade.transcript_text())?;
+    report_failures(&mut cascade, diags, err)
+}
+
+/// Writes what each stopped script said to `err`, and records the kinds.
+///
+/// **`err`, never `out`.** The transcript is the oracle's stdout and
+/// `testing/tools/text_diff.py` diffs the whole of it, so one extra line
+/// there is a failed fixture; the oracle prints nothing for a script that
+/// threw (`[oracle-bug]` — see [`pdfrum_form::script::ScriptFailure`]), and
+/// matching it on stdout while saying so on stderr is how the transcript
+/// stays byte-exact and the error still stops being invisible.
+fn report_failures(
+    cascade: &mut ScriptCascade,
+    diags: &mut Diagnostics,
+    err: &mut dyn Write,
+) -> std::io::Result<()> {
+    for failure in cascade.drain_diagnostics(diags) {
+        writeln!(err, "{}", failure.line())?;
+    }
+    Ok(())
 }
 
 /// Every script the document runs on open, in the oracle's order.
