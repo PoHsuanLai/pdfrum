@@ -201,7 +201,26 @@ pub use page::{Page, Rotation};
 pub use pdfrum_form::session::AnnotId;
 pub use pdfrum_form::tab::Rect as FormRect;
 pub use pdfrum_form::{Placement, PopupGeometry, PopupView, ScrollView};
-pub use render::{Backend, ColorMode, ColorScheme, Pixmap, RenderOptions, TextAa};
+pub use render::{ColorMode, ColorScheme, Pixmap, RenderOptions, TextAa};
+
+/// The rasterizer seam, re-exported so a caller can write
+/// [`Page::render_on`]'s bound without adding `pdfrum-render` to their
+/// manifest.
+///
+/// `RasterBackend` makes targets and reads their pixels back;
+/// `RenderDevice` is the target itself, the six drawing calls the engine
+/// issues. A backend crate implements both, and this crate never needs to
+/// know which one you passed.
+pub use pdfrum_render::{RasterBackend, RenderDevice};
+
+/// The facade's default rasterizer, re-exported so a caller can name it
+/// without a second dependency.
+///
+/// [`Page::render`] is [`Page::render_on`] with this. It lives in
+/// `pdfrum-raster-vello-cpu`, which is the facade's one rasterizer
+/// dependency; `tiny-skia`, the AGG-parity backend and the GPU one are the
+/// caller's own, named directly at the call site.
+pub use pdfrum_raster_vello_cpu::VelloCpuBackend;
 pub use save::{SaveOptions, Update};
 pub use session::RenderSession;
 

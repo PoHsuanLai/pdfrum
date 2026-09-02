@@ -47,10 +47,33 @@ Two footnotes outside the library tree:
 |---|---|---|
 | `kurbo` **lib** | Paths, affines, rects — the geometry vocabulary of the whole workspace | Linebender; the ecosystem-standard 2D geometry crate; arcs/beziers/flattening done right |
 | `peniko` **lib** | Brushes, gradients, blend modes, color | Shared vocabulary between our engine and both backends |
-| `vello_cpu` **lib** | Primary rasterizer (`pdfrum-raster-vello-cpu`, renamed 2026-09-02, was `pdfrum-raster-vello`) | Modern sparse-strip CPU renderer; SIMD + multithreaded; native layers/masks/blends; "feature-rich, ready for production use cases" per Linebender, API still moving — pin exactly, wrap fully behind `RenderDevice` |
+| `vello_cpu` **lib** | Primary rasterizer (`pdfrum-raster-vello-cpu`, renamed 2026-09-02, was `pdfrum-raster-vello`). **Since 2026-09-02 the facade's only rasterizer dependency** — see the note below | Modern sparse-strip CPU renderer; SIMD + multithreaded; native layers/masks/blends; "feature-rich, ready for production use cases" per Linebender, API still moving — pin exactly, wrap fully behind `RenderDevice` |
 | `tiny-skia` **lib** | Cross-check rasterizer (`pdfrum-raster-tinyskia`) | Mature, deterministic Skia-CPU port (resvg's engine); Tier-C referee against vello_cpu |
 | *(none)* | Parity rasterizer (`pdfrum-raster-agg`, renamed 2026-09-02, was `pdfrum-raster-exact`) | **Adds no dependency.** The analytic backend is written against `kurbo` and `peniko` alone — both already in this table — because the thing it exists to control is precisely what a third-party rasterizer decides for itself: how a partially covered pixel is quantised. Wrapping a fourth crate would reintroduce the question |
 | `vello` **lib, scoped** | GPU backend (`pdfrum-raster-vello`, renamed 2026-09-02, was `pdfrum-raster-vello-gpu`) — M12c | Same peniko/kurbo types the engine already speaks. **The one exemption from the pure-Rust guarantee**; its blast radius and the checks that bound it are below. Pinned `=0.10.0`, which resolves `wgpu` **29** — see the version note |
+
+### One rasterizer in the facade's tree (2026-09-02)
+
+`cargo add pdfrum` used to compile **three** rasterizers whether or not the
+caller used them, because `pdfrum::Backend` was an enum naming all three and
+`Page::render` dispatched on it. That is now a trait bound rather than a
+match: `Page::render_on` takes `&B where B: RasterBackend`, and `render` is
+that call with `VelloCpuBackend`. `pdfrum-raster-tinyskia` and
+`pdfrum-raster-agg` left the facade's `[dependencies]` and are the caller's
+own — the same way `pdfrum-raster-vello` (GPU) always was.
+
+Measured, `cargo tree -p pdfrum -e normal | grep -c pdfrum-raster`:
+
+| | before | after |
+|---|---|---|
+| rasterizers in the facade's normal tree | **3** | **1** |
+
+Nothing else about the closed set moves: all three crates stay workspace
+members, stay built and tested, and the two that left the facade are its
+dev-dependencies so `tests/facade.rs` still asserts every backend renders the
+page the same size. The rule this obeys is the one this file already states —
+a dependency is admitted for what it does, and a rasterizer nobody named was
+doing nothing in an embedder's build.
 
 ### The GPU exemption: extent, and the checks that bound it
 
@@ -69,6 +92,13 @@ mechanical, not prose:
   three cannot pass vacuously. Verified by negative control: one edge added
   from a leaf backend was caught on four crates at once (docs/status/M12c.md
   §4.4). `cargo add pdfrum` puts no graphics driver in anyone's tree.
+  *2026-09-02: this bound is unchanged and is now the only reason the facade
+  cannot name this crate — `Page::render_on` means it does not have to. A
+  caller who holds a `wgpu::Device` passes `VelloBackend::new(&device,
+  &queue)?` straight to `render_on`, and the edge runs caller → GPU crate,
+  never facade → GPU crate, so the check stays green. Asserted by
+  `pdfrum-raster-vello`'s own `the_facade_renders_a_page_on_this_backend`
+  test, which lives there rather than in the facade for exactly that reason.*
 - **`cc` / `cmake` / `bindgen` are not relaxed at all** — none is in the tree,
   and no C is compiled. `pkg-config` stays banned except through two named
   `wrappers`, `wayland-sys` and `khronos-egl`, because `wgpu-hal` builds both
