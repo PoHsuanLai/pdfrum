@@ -189,16 +189,22 @@ cargo test --doc --workspace         # nextest silently SKIPS doctests
 
 `scripts/ci.nu` runs, in order: `cargo fmt --check`, `cargo clippy
 --workspace --all-targets -D warnings`, `cargo nextest run`, `cargo test
---doc`, `cargo doc --no-deps -D warnings`, `cargo deny check`, the pure-Rust
-dependency-tree check, and a `cargo check` of the `fuzz/` workspace — that
-last one because `fuzz/` is a separate workspace the other steps never reach,
-and its targets call library API deep enough to rot through an API change
-unnoticed. Running the fuzzers stays out (hours); compiling them is seconds.
-It is the definition of done for every change.
+--doc`, `cargo doc --no-deps -D warnings`, the public-API snapshot gate
+(`./scripts/api-snapshot.nu check` — a drift is a change to what
+`cargo add pdfrum` sees; update the baseline with
+`./scripts/api-snapshot.nu update` deliberately), the public-constant
+sentinel sweep, `cargo deny check`, the pure-Rust dependency-tree check, and
+a `cargo check` of the `fuzz/` workspace — that last one because `fuzz/` is
+a separate workspace the other steps never reach, and its targets call
+library API deep enough to rot through an API change unnoticed. Running the
+fuzzers stays out (hours); compiling them is seconds. It is the definition
+of done for every change.
 
 ```bash
 cargo binstall nu                      # required: the scripts are nushell
 cargo install cargo-nextest --locked   # required by the gate
+cargo install cargo-public-api --locked  # required by the snapshot gate
+rustup toolchain install nightly         # rustdoc JSON is nightly-only
 cargo install cargo-deny --locked      # optional; the gate skips it if absent
 ```
 

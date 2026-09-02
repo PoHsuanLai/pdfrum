@@ -1,31 +1,28 @@
 #!/usr/bin/env nu
-# The public-API baseline: regenerate docs/status/api-baseline/, or diff the
+# The public-API baseline: regenerate docs/status/api-baseline/, or gate the
 # working tree's surface against what is committed there.
 #
-# **This is deliberately NOT a gate, and must not be added to scripts/ci.nu.**
+# **This is a gate.** `scripts/ci.nu` runs `./scripts/api-snapshot.nu check`
+# after `cargo doc`. A drift is a red CI run. Review the printed diff and, if
+# the change is intended, run `./scripts/api-snapshot.nu update` deliberately
+# — a change to the baseline is a change to what `cargo add pdfrum` sees.
 #
-# docs/design/idiomatic-api.md plans thirteen work packages that break the
-# public surface *on purpose*, and its §7 sequence puts the `cargo public-api`
-# gate last, as WP13. That ordering is right for a gate and wrong for a
-# baseline: a drift check wired in today would turn every intentional WP break
-# into a red CI run, and the pass would spend its life re-blessing the file it
-# is supposed to be changing. So this script exists so the pass can *measure*
-# itself — run `diff` before and after a package and the output is that
-# package's actual blast radius — and WP13 is where the same command becomes a
-# `check` subcommand someone wires into ci.nu.
-#
-# The other half of the argument is why the baseline had to be taken *first*.
-# WP13 snapshots "the surface we meant to keep". That is the after picture. If
-# nobody records the before, each package's diff is against a surface that has
-# already moved under it and no one can say what a given package changed. The
-# committed files under docs/status/api-baseline/ are that before picture: the
-# surface as it stood at 9b8f74b, the commit that added the design document.
-# They are a measurement, not an aspiration — most of what they record is what
-# the thirteen packages exist to remove.
+# Why it was held back. The files under docs/status/api-baseline/ were taken
+# first, at 9b8f74b (the commit that added docs/design/idiomatic-api.md), so
+# each idiomatic-API work package could measure its own blast radius against a
+# surface that had not already moved under it. The script's original header
+# forbade wiring that measurement into ci.nu: a drift check during the pass
+# would have reddened every intentional break, and the pass would have spent
+# its life re-blessing the file it was supposed to be changing. WP13 is the
+# step that turns the same command into a gate, now that the surface is the
+# one we mean to keep. That happened 2026-09-03.
 #
 # Usage:
 #
-#   ./scripts/api-snapshot.nu            # diff working tree vs committed baseline
+#   ./scripts/api-snapshot.nu            # same as `diff`
+#   ./scripts/api-snapshot.nu diff       # print the delta; exit 1 on drift
+#   ./scripts/api-snapshot.nu check      # the CI gate: drift is a failure, and
+#                                        # the comparison is proven live
 #   ./scripts/api-snapshot.nu update     # regenerate the committed baseline
 #   ./scripts/api-snapshot.nu list       # print the per-crate item counts
 #
@@ -183,52 +180,65 @@ def "main update" [] {
     print "it is a change to what `cargo add pdfrum` sees."
 }
 
+# Set difference both ways. `cargo public-api` emits its items in a stable
+# sort, so a plain line-set comparison is exactly the API delta — no
+# reordering noise to filter out, which is why this can be structured data
+# rather than a shell out to `diff`.
+def line-delta [now: list<string>, then: list<string>]: nothing -> record {
+    {
+        added: ($now | where {|l| $l not-in $then })
+        removed: ($then | where {|l| $l not-in $now })
+    }
+}
+
+# One crate's committed snapshot vs the working tree, as structured data.
+def snapshot-delta [target: record]: nothing -> record {
+    let path = ($BASELINE | path join $"($target.file).txt")
+    let now = (surface $target.crate $target.features | lines)
+    let then = (if ($path | path exists) { open --raw $path | lines } else { [] })
+    (line-delta $now $then) | merge {
+        crate: $target.file
+        now: $now
+        then: $then
+        missing_baseline: (not ($path | path exists))
+    }
+}
+
+def snapshot-targets []: nothing -> list<record> {
+    (
+        (published-libs | each {|crate| {file: $crate, crate: $crate, features: ''} })
+        ++ $FEATURED
+    )
+}
+
+def print-delta [r: record] {
+    print ""
+    if $r.missing_baseline {
+        print $"($r.crate): no committed baseline — new crate?"
+    } else {
+        print $"($r.crate): +($r.added | length) -($r.removed | length)"
+    }
+    $r.removed | each {|l| print $"  - ($l)" } | ignore
+    $r.added   | each {|l| print $"  + ($l)" } | ignore
+}
+
 # Diff the working tree's surface against the committed baseline.
 #
-# Exits non-zero when they differ — so a caller who *wants* a gate can have one
-# — but nothing in scripts/ci.nu calls this, and per the header nothing should
-# until WP13.
+# Exits non-zero when they differ. `check` is the CI spelling of the same
+# comparison, with the failure message a developer acting on a red gate needs.
 def "main diff" [] {
     cd ($env.FILE_PWD | path dirname)
     require-tool
 
-    let targets = (
-        (published-libs | each {|crate| {file: $crate, crate: $crate, features: ''} })
-        ++ $FEATURED
-    )
+    let targets = (snapshot-targets)
     print $"==> diffing ($targets | length) surfaces against the committed baseline"
 
     # Collected rather than printed as they go, so the summary can lead with
     # the count and a reader knows how much scrolling is ahead of them.
-    let results = ($targets | each {|target|
-        let crate = $target.file
-        let path = ($BASELINE | path join $"($target.file).txt")
-        let now = (surface $target.crate $target.features | lines)
-        let then = (if ($path | path exists) { open --raw $path | lines } else { [] })
-        {
-            crate: $crate
-            missing_baseline: (not ($path | path exists))
-            # Set difference both ways. `cargo public-api` emits its items in a
-            # stable sort, so a plain line-set comparison is exactly the API
-            # delta — no reordering noise to filter out, which is why this can
-            # be structured data rather than a shell out to `diff`.
-            added: ($now | where {|l| $l not-in $then })
-            removed: ($then | where {|l| $l not-in $now })
-        }
-    })
-
+    let results = ($targets | each {|target| snapshot-delta $target })
     let changed = ($results | where {|r| ($r.added | is-not-empty) or ($r.removed | is-not-empty) })
 
-    for r in $changed {
-        print ""
-        if $r.missing_baseline {
-            print $"($r.crate): no committed baseline — new crate?"
-        } else {
-            print $"($r.crate): +($r.added | length) -($r.removed | length)"
-        }
-        $r.removed | each {|l| print $"  - ($l)" } | ignore
-        $r.added   | each {|l| print $"  + ($l)" } | ignore
-    }
+    for r in $changed { print-delta $r }
 
     print ""
     if ($changed | is-empty) {
@@ -236,10 +246,56 @@ def "main diff" [] {
         return
     }
     print $"($changed | length) of ($targets | length) surfaces differ from the baseline."
-    print "If this is an intended idiomatic-API work package, re-record it with"
+    print "Review the diff. A change to the baseline is a change to what"
+    print "`cargo add pdfrum` sees. If this is intended, re-record it with"
     print "  ./scripts/api-snapshot.nu update"
-    print "and say in the commit message which WP the diff is."
+    print "deliberately, and say in the commit message why the surface moved."
     exit 1
+}
+
+# The CI gate. Same comparison as `diff`, then a non-vacuity proof that the
+# set-difference still reports a planted extra item — so a comparison that
+# stopped looking cannot pass by matching an empty delta.
+def "main check" [] {
+    cd ($env.FILE_PWD | path dirname)
+    require-tool
+
+    let targets = (snapshot-targets)
+    print $"==> public-API snapshot: ($targets | length) surfaces must match the baseline"
+
+    let results = ($targets | each {|target| snapshot-delta $target })
+    let changed = ($results | where {|r| ($r.added | is-not-empty) or ($r.removed | is-not-empty) })
+
+    for r in $changed { print-delta $r }
+
+    if not ($changed | is-empty) {
+        print ""
+        print --stderr $"error: ($changed | length) of ($targets | length) surfaces differ from the committed baseline."
+        print --stderr "       Review the diff above. A change to docs/status/api-baseline/"
+        print --stderr "       is a change to what `cargo add pdfrum` sees. If this is"
+        print --stderr "       intended, re-record it deliberately with"
+        print --stderr "         ./scripts/api-snapshot.nu update"
+        exit 1
+    }
+    print "ok: the public API matches the committed baseline"
+
+    # The converse, so the check cannot pass by having stopped looking.
+    # A phantom item in the committed set must show up as a removal against
+    # the working tree we just measured — one cargo-public-api run, not two.
+    print "==> the snapshot comparison does still see a planted item"
+    let probe = 'pub fn pdfrum::planted_wp13_probe()'
+    let planted = ($results | each {|r|
+        (line-delta $r.now ($r.then | append $probe)).removed
+    } | flatten)
+    if $probe not-in $planted {
+        print --stderr "error: a planted public item was not reported as drift —"
+        print --stderr "       the comparison above is measuring nothing."
+        exit 1
+    }
+    print "ok: a planted public item is reported as drift"
+
+    print ""
+    print "public-API snapshot: green."
 }
 
 # The per-crate item counts, as a table.

@@ -1,7 +1,9 @@
 # The public-API baseline
 
-**Status:** a measurement, taken 2026-09-02 at commit `9b8f74b`.
-**These files are a "before" picture, not an aspiration.**
+**Status:** the public-API gate, as of WP13 (2026-09-03).
+`./scripts/api-snapshot.nu check` is wired into `scripts/ci.nu`. A drift is a
+red run. These files began as a "before" picture, taken 2026-09-02 at commit
+`9b8f74b`; they are now the surface `cargo add` is held to.
 
 One file per published library crate, each holding that crate's complete
 public API as `cargo public-api` prints it. `pdfrum.txt` is the facade — the
@@ -12,33 +14,24 @@ else is not here" below.
 
 ---
 
-## Why this exists, and why it is not a gate
+## Why this exists, and why it is now a gate
 
-[`docs/design/idiomatic-api.md`](../../design/idiomatic-api.md) plans thirteen
-work packages that break the public surface **on purpose**: newtypes for
-indices and versions, an `Event` enum instead of Win32-shaped mouse methods,
-one geometry vocabulary, six render methods collapsed into two. Its §7
-sequence puts `cargo public-api` snapshotting last, as WP13, and calls it a
-drift gate.
+[`docs/design/idiomatic-api.md`](../../design/idiomatic-api.md) planned
+thirteen work packages that break the public surface **on purpose**. Its
+sequence put `cargo public-api` snapshotting last, as WP13, and called it a
+drift gate — and held the check *out* of `scripts/ci.nu` for the length of
+the pass, because a drift check during those packages would have reddened
+every intentional break.
 
-That ordering is right for a *gate* and wrong for a *baseline*. WP13
-snapshots "the surface we meant to keep" — the after picture. If nobody
-records the before, then each package's diff is measured against a surface
-that has already moved under it, and no one can say what a given package
-actually changed. So the baseline is taken first, and these files are it.
+The files were taken first, at `9b8f74b`, so each package could measure
+itself against a surface that had not already moved. That measurement is
+done. WP13 (2026-09-03) turned the same command into the gate: `scripts/ci.nu`
+runs `./scripts/api-snapshot.nu check` after `cargo doc`. A change to these
+files is a change to what `cargo add pdfrum` sees.
 
-Most of what they record is what the thirteen packages exist to remove. A
-line here is not an endorsement. `RenderOptions::no_path_smooth`,
-`Document::version() -> u8`, and the seven `pdfrum::Error` variants wrapping
-unnameable foreign error types are all in these files, and all of them are
-targets. `FormSession::on_button(…, down: bool, …)` was the fourth example
-until §A.10 step 8 deleted it, which is what a target looks like once it is
-hit: the line is simply gone from `pdfrum.txt`.
-
-`scripts/api-snapshot.nu` regenerates and diffs them. It is **deliberately not
-wired into `scripts/ci.nu`** — a drift check today would turn every intentional
-work-package break into a red CI run. WP13 is where the same command becomes a
-gate.
+A line here is not an endorsement of the original surface. Targets the pass
+hit are simply gone — `FormSession::on_button(…, down: bool, …)` is what
+that looks like once it is deleted from `pdfrum.txt`.
 
 ---
 
@@ -138,19 +131,20 @@ remembering to edit a list.
 ## Regenerating and diffing
 
 ```
-./scripts/api-snapshot.nu            # diff the working tree against these files
+./scripts/api-snapshot.nu            # same as `diff`
+./scripts/api-snapshot.nu diff       # print the delta; exit 1 on drift
+./scripts/api-snapshot.nu check      # the CI gate (drift is a failure)
 ./scripts/api-snapshot.nu update     # rewrite these files from the working tree
 ./scripts/api-snapshot.nu list       # the per-crate item counts, as a table
 ```
 
-`diff` exits non-zero when the surface has moved, and prints the added and
-removed items per crate. That output is the review: run it after a work
-package lands and it is that package's blast radius, item by item.
+`diff` and `check` exit non-zero when the surface has moved, and print the
+added and removed items per crate. That output is the review.
 
 `update` rewrites every file. Read its `git diff` before committing — a change
-here is a change to what `cargo add pdfrum` sees — and name the work package
-in the commit message, so the history says which of the thirteen a given
-surface change was.
+here is a change to what `cargo add pdfrum` sees — and say in the commit
+message why the surface moved. Do not bless a drift because CI is red; bless
+it because the new item is the API.
 
 ---
 
