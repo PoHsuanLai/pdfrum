@@ -215,18 +215,6 @@ fn saturate_to_byte(value: f32) -> u8 {
     saturated
 }
 
-/// Which of `/TR` and `/TR2` a dictionary's transfer function comes from.
-///
-/// `/TR2` wins outright: when it is present, `/TR` is never read.
-#[must_use]
-pub fn transfer_key(has_tr2: bool) -> &'static pdfrum_object::Name {
-    if has_tr2 {
-        crate::names::TR2
-    } else {
-        crate::names::TR
-    }
-}
-
 #[cfg(test)]
 mod tests {
     // Test fixtures quote the oracle's own vectors, compare floats exactly
@@ -241,7 +229,7 @@ mod tests {
         reason = "test fixtures quote oracle vectors verbatim and compare exactly"
     )]
 
-    use super::{CHANNEL_SAMPLES, TransferFunc, transfer_key};
+    use super::{CHANNEL_SAMPLES, TransferFunc};
     use crate::function::FunctionCache;
     use pdfrum_common::{Diagnostics, Limits};
     use pdfrum_object::{Array, Dict, Name, NoResolve, Object};
@@ -284,12 +272,6 @@ mod tests {
                 "/{name} should disable the transfer function"
             );
         }
-    }
-
-    #[test]
-    fn tr2_wins_over_tr_outright() {
-        assert_eq!(transfer_key(true).as_bytes(), b"TR2");
-        assert_eq!(transfer_key(false).as_bytes(), b"TR");
     }
 
     #[test]

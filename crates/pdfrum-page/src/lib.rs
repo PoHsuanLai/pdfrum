@@ -84,13 +84,13 @@ pub use optional::{OcContext, UsageType, Visibility, page_visibility};
 pub use page::{
     Content, DEFAULT_MEDIA_BOX, FormObject, ImageObject, Page, PageObject, PathObject, Rotation,
     ShadingObject, TextObject, TextSegment, derive_boxes, display_size_from_dict,
-    is_valid_page_dict,
 };
 pub use pattern::{Pattern, ShadingPattern, TilingPattern};
 pub use resources::Resources;
 pub use shading::{Mesh, Shading, ShadingKind};
 pub use state::{
-    BlendMode, ClipStack, GraphicsState, StateStack, StrokeParams, TextState, apply_ext_gstate,
+    BlendMode, ClipRule, ClipStack, GraphicsState, StateStack, StrokeParams, TextState,
+    apply_ext_gstate,
 };
 pub use transfer::TransferFunc;
 pub use transparency::{SoftMask, SoftMaskKind, Transparency};

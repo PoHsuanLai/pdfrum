@@ -20,7 +20,7 @@ use std::collections::BTreeMap;
 
 use kurbo::{Affine, BezPath, Point, Rect};
 use pdfrum_common::Diagnostics;
-use pdfrum_page::state::ContentMarks;
+use pdfrum_page::state::{ClipRule, ContentMarks};
 use pdfrum_page::{
     ColorSpace, Content, FillRule, GraphicsState, Page, PageObject, PathObject, Rotation,
     ShadingObject, TextRenderMode, Transparency,
@@ -337,7 +337,9 @@ fn a_clipped_fill_stops_at_the_clip() {
     state
         .fill
         .set_stock(ColorSpace::DeviceRgb, &[1.0, 0.0, 0.0]);
-    state.clip.push_path(rect_path(0.0, 0.0, 6.0, 12.0), false);
+    state
+        .clip
+        .push_path(rect_path(0.0, 0.0, 6.0, 12.0), ClipRule::Winding);
     let objects = vec![PageObject::Path(Box::new(Content {
         object: PathObject {
             path: rect_path(0.0, 0.0, 12.0, 12.0),
@@ -1245,7 +1247,9 @@ fn a_hidden_object_is_not_drawn_and_its_clip_never_reaches_the_device() {
     // second assertion checks by drawing a *third* object the hidden one's
     // clip would have cut away if it had been pushed.
     let mut clipped = GraphicsState::default();
-    clipped.clip.push_path(rect_path(0.0, 0.0, 1.0, 1.0), false);
+    clipped
+        .clip
+        .push_path(rect_path(0.0, 0.0, 1.0, 1.0), ClipRule::Winding);
 
     let visible_page = page(
         8.0,
