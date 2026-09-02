@@ -2187,6 +2187,50 @@ not objects — but `text: Vec<char>` should not collide with a method named
 > there is no facade layer to translate in — has a corollary this is the first
 > instance of: **there is also no facade layer to review in.**
 
+> **Landed 2026-09-02**, in two commits: the `IndexMap` rename alone, then the
+> package. The board is byte-identical — 1757/1512/245, every tag, text
+> 86.3%/75.5% — and `pdfrum-text` went from **167 public items to 112**.
+>
+> **The table is `IndexMap`**, as the resolution table's first choice.
+> `indexmap` is not a workspace dependency and is not in DEPS.md, so nothing
+> else in scope answers to the name.
+>
+> **What the sketch above got wrong, found on reaching the code:**
+>
+> - **`as_str` cannot be the name.** The method returns a `String`, not a
+>   `&str`, and `as_*` in Rust means a borrow. The sketch's own alternative —
+>   `Display` — is what landed: it is the vocabulary impl STYLE.md §2b asks
+>   for, it yields `to_string()`, and unlike a `text()` method it never has to
+>   pick between the two sequences. The field is `search_text`, which names
+>   the space it indexes.
+> - **`char_at` also renamed.** §A.11's row noted it "already returns
+>   `Result`, not a sentinel" and left it there, but once it takes a
+>   `CharIndex` the `_at` is carrying the type's job. It is `char`.
+> - **The newtypes found a live bug, which is the strongest evidence for the
+>   package.** `crates/pdfrum/examples/extract-text.rs` and
+>   `crates/pdfrum/tests/facade.rs` both fed a `find` result — a **text**
+>   range — straight into `rects`, which counts **characters**. The example's
+>   own comment said the two "are bridged through the page's own index" and
+>   then did not bridge them. Both compiled, both passed, because the fixture
+>   is `hello_world.pdf`, where the two spaces coincide. §A.5's first test
+>   asks whether a caller can use the type without reading a comment; this is
+>   the case where the comment was *there*, was *correct*, and was not enough.
+> - **`pub fn is_float_zero` was one of two.** §A.3's table already recorded
+>   it as defined publicly in two crates; the `pdfrum-text` half is now
+>   private, and `pdfrum-doc`'s waits for step 6.
+> - **Eight doctests lived inside the modules being made private.** A doctest
+>   compiles from *outside* the crate, so making `unicode` and `bidi` private
+>   breaks every one. They pin real Unicode table values and were worth
+>   keeping, so they became unit tests. Any later `pub mod` curation in a
+>   crate that documents internals with doctests will hit the same wall — it
+>   is a cost §A.11's estimates do not carry.
+> - **The link scanners are a genuine escape hatch.** `check_web_link` /
+>   `check_mail_link` / `FoundLink` are driven directly by
+>   `fuzz/fuzz_targets/text_links.rs`, and the crate already documented why.
+>   They stay reachable as `#[doc(hidden)]` root re-exports rather than
+>   keeping `pub mod links` alive for three items — which is also why the
+>   snapshot shows 112 rather than 115.
+
 ### WP9 — Mutation returns `Option` / `Result`, not `bool`
 
 C APIs return `FPDF_BOOL`. These methods still do:
