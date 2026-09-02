@@ -1040,14 +1040,14 @@ pub fn select_line_at(
 
 /// The first and last places of the line a place sits on.
 fn line_bounds(edit: &TextEdit, place: Place) -> (Place, Place) {
-    let begin = Place::new(place.section, place.line, -1);
+    let begin = Place::new(place.section, place.line, None);
     let end = edit
         .layout
         .sections
         .get(place.section as usize)
         .and_then(|section| section.lines.get(place.line as usize))
         .map_or(begin, |line| {
-            Place::new(place.section, place.line, line.end)
+            Place::new(place.section, place.line, line.last_word())
         });
     (begin, end)
 }

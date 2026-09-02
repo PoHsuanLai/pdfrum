@@ -190,19 +190,25 @@ impl StructElement {
             .map(|s| s.bytes.to_vec())
     }
 
-    /// The `/MCID` a kid names, or `-1` for a kid that is not content.
+    /// The `/MCID` a kid names, or `None` for a kid that is not content.
     ///
     /// This is the **page-filtered** reading: a content kid belonging to
-    /// another page came in as [`Kid::Invalid`] and answers `-1` here. The
+    /// another page came in as [`Kid::Invalid`] and answers `None` here. The
     /// dump uses a different, unfiltered accessor
     /// ([`marked_content_id_count`]).
+    ///
+    /// Was `-> i64` with `-1` for absence. A real `/MCID` is non-negative
+    /// (ISO 32000-1 §14.7.4.2) so `-1` could not *collide*, but the file
+    /// never contains it either — it was invented to mean "none", which is
+    /// what `Option` is for (`docs/design/idiomatic-api.md` §C, Tier 2
+    /// item 15).
     #[must_use]
-    pub fn kid_content_id(&self, index: usize) -> i64 {
+    pub fn kid_content_id(&self, index: usize) -> Option<i64> {
         match self.kids.get(index) {
             Some(Kid::PageContent { content_id } | Kid::StreamContent { content_id, .. }) => {
-                *content_id
+                Some(*content_id)
             }
-            _ => -1,
+            _ => None,
         }
     }
 }
@@ -280,49 +286,58 @@ fn load_kid<R: Resolve>(
 ///
 /// Deliberately different from [`StructElement::kid_content_id`]: it ignores
 /// the page entirely, counts a bare number or dictionary as one, and answers
-/// `-1` for an absent `/K` so the caller's `0..count` loop never runs.
+/// `None` for an absent or unusable `/K`.
+///
+/// Was `-> i64` answering `-1`, documented as being `-1` "so the caller's
+/// `0..count` loop never runs" — a count that relies on `0..-1` being empty
+/// after a cast is a sentinel wearing a count's type
+/// (`docs/design/idiomatic-api.md` §C, Tier 2 item 13). `None` says the same
+/// thing and the compiler enforces the check.
 #[must_use]
-pub fn marked_content_id_count<R: Resolve>(dict: &Dict, r: &R) -> i64 {
+pub fn marked_content_id_count<R: Resolve>(dict: &Dict, r: &R) -> Option<usize> {
     match dict.get(names::K, r).map(|k| k.get().clone()) {
-        Some(Object::Int(_) | Object::Real(_) | Object::Dict(_)) => 1,
-        Some(Object::Array(array)) => i64::try_from(array.len()).unwrap_or(i64::MAX),
-        // An absent `/K` and an unusable one answer the same `-1`, and the
-        // caller's `0..count` loop then never runs.
-        None | Some(_) => -1,
+        Some(Object::Int(_) | Object::Real(_) | Object::Dict(_)) => Some(1),
+        Some(Object::Array(array)) => Some(array.len()),
+        // An absent `/K` and an unusable one both mean "no marked content".
+        None | Some(_) => None,
     }
 }
 
-/// The **unfiltered** marked-content identifier at one index.
+/// The **unfiltered** marked-content identifier at one index, or `None`.
+///
+/// Was `-> i64` with six `-1` exits. A real `/MCID` is non-negative
+/// (ISO 32000-1 §14.7.4.2), so `-1` could not collide — but the file never
+/// contains it either; it was invented for absence
+/// (`docs/design/idiomatic-api.md` §C, Tier 2 item 14).
 #[must_use]
-pub fn marked_content_id_at<R: Resolve>(dict: &Dict, index: usize, r: &R) -> i64 {
+pub fn marked_content_id_at<R: Resolve>(dict: &Dict, index: usize, r: &R) -> Option<i64> {
     match dict.get(names::K, r).map(|k| k.get().clone()) {
         Some(obj @ (Object::Int(_) | Object::Real(_))) => {
             if index == 0 {
-                obj.as_int().unwrap_or(-1)
+                obj.as_int()
             } else {
-                -1
+                None
             }
         }
         // A dictionary answers the same identifier at every index.
         Some(Object::Dict(dict)) => mcid_from_dict(&dict, r),
         Some(Object::Array(array)) => match array.get(index, r).map(|e| e.get().clone()) {
-            Some(obj @ (Object::Int(_) | Object::Real(_))) => obj.as_int().unwrap_or(-1),
+            Some(obj @ (Object::Int(_) | Object::Real(_))) => obj.as_int(),
             Some(Object::Dict(dict)) => mcid_from_dict(&dict, r),
-            _ => -1,
+            _ => None,
         },
-        _ => -1,
+        _ => None,
     }
 }
 
 /// A marked-content reference's identifier: `/Type` must be the **name**
 /// `MCR` and `/MCID` must be a number.
-fn mcid_from_dict<R: Resolve>(dict: &Dict, r: &R) -> i64 {
+fn mcid_from_dict<R: Resolve>(dict: &Dict, r: &R) -> Option<i64> {
     if dict.name(names::TYPE) != Some(names::MCR) {
-        return -1;
+        return None;
     }
     dict.get(names::MCID, r)
         .and_then(|v| v.get().as_number().and_then(Object::as_int))
-        .unwrap_or(-1)
 }
 
 /// Applies the tree's `/RoleMap` to a structure type, once.
@@ -412,11 +427,11 @@ mod tests {
     }
 
     #[test]
-    fn the_unfiltered_count_ignores_the_page_and_answers_minus_one_when_absent() {
-        assert_eq!(marked_content_id_count(&Dict::new(), &NoResolve), -1);
+    fn the_unfiltered_count_ignores_the_page_and_answers_none_when_absent() {
+        assert_eq!(marked_content_id_count(&Dict::new(), &NoResolve), None);
         assert_eq!(
             marked_content_id_count(&dict(&[("K", Object::Int(0))]), &NoResolve),
-            1
+            Some(1)
         );
         assert_eq!(
             marked_content_id_count(
@@ -426,14 +441,14 @@ mod tests {
                 )]),
                 &NoResolve
             ),
-            2
+            Some(2)
         );
         assert_eq!(
             marked_content_id_count(
                 &dict(&[("K", Object::Str(PdfString::literal(b"nope")))]),
                 &NoResolve
             ),
-            -1
+            None
         );
     }
 
@@ -446,9 +461,9 @@ mod tests {
                 ("MCID", Object::Int(5)),
             ])),
         )]);
-        assert_eq!(marked_content_id_at(&good, 0, &NoResolve), 5);
+        assert_eq!(marked_content_id_at(&good, 0, &NoResolve), Some(5));
         // A dictionary answers at every index, not only zero.
-        assert_eq!(marked_content_id_at(&good, 9, &NoResolve), 5);
+        assert_eq!(marked_content_id_at(&good, 9, &NoResolve), Some(5));
 
         let wrong_type = dict(&[(
             "K",
@@ -457,7 +472,7 @@ mod tests {
                 ("MCID", Object::Int(5)),
             ])),
         )]);
-        assert_eq!(marked_content_id_at(&wrong_type, 0, &NoResolve), -1);
+        assert_eq!(marked_content_id_at(&wrong_type, 0, &NoResolve), None);
     }
 
     #[test]

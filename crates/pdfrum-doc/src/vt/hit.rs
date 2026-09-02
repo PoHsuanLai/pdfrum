@@ -123,7 +123,7 @@ use crate::vt::{Config, Layout, Metrics, Section, word_width};
 /// A caret position: after character `word` of line `line` of section
 /// `section`.
 ///
-/// `word == -1` is the line header — the position before the line's first
+/// `word == None` is the line header — the position before the line's first
 /// character. Every other value names the character the caret sits after.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Place {
@@ -131,14 +131,19 @@ pub struct Place {
     pub section: u32,
     /// Which line of that paragraph.
     pub line: u32,
-    /// The character the caret follows, or `-1` for the line header.
-    pub word: i32,
+    /// The character the caret follows, or `None` for the line header.
+    ///
+    /// Was `i32` with `-1` for the header
+    /// (`docs/design/idiomatic-api.md` §C, Tier 2 items 8-10). `None` orders
+    /// before every `Some`, which is what the negative bought, and the
+    /// compiler now makes the header case impossible to forget.
+    pub word: Option<u32>,
 }
 
 impl Place {
     /// A place, from the three indices.
     #[must_use]
-    pub fn new(section: u32, line: u32, word: i32) -> Place {
+    pub fn new(section: u32, line: u32, word: Option<u32>) -> Place {
         Place {
             section,
             line,
@@ -149,13 +154,18 @@ impl Place {
     /// The place every layout begins at: the header of its first line.
     ///
     /// A constant rather than a query, because it does not depend on the
-    /// layout — the first caret position is `(0, 0, -1)` whatever the text
-    /// is, including no text at all. [`begin_place`] is the same value,
-    /// spelled for symmetry with [`end_place`], which does need the layout.
+    /// layout — the first caret position is the first line's header whatever
+    /// the text is, including no text at all. [`begin_place`] is the same
+    /// value, spelled for symmetry with [`end_place`], which does need the
+    /// layout.
+    ///
+    /// This constant used to bake `word: -1` into a public surface, which is
+    /// the purest form of what §C forbids; it now spells the header as the
+    /// `None` it always meant.
     pub const START: Place = Place {
         section: 0,
         line: 0,
-        word: -1,
+        word: None,
     };
 
     /// [`Place::START`], as a function.
@@ -194,10 +204,10 @@ pub fn begin_place(layout: &Layout) -> Place {
 #[must_use]
 pub fn end_place(layout: &Layout) -> Place {
     let Some(section) = layout.sections.len().checked_sub(1) else {
-        return Place::new(0, 0, -1);
+        return Place::new(0, 0, None);
     };
     let Some(last) = layout.sections.get(section) else {
-        return Place::new(0, 0, -1);
+        return Place::new(0, 0, None);
     };
     end_of_section(last, section)
 }
@@ -205,12 +215,12 @@ pub fn end_place(layout: &Layout) -> Place {
 /// The last place of one section.
 fn end_of_section(section: &Section, index: usize) -> Place {
     let Some(line_index) = section.lines.len().checked_sub(1) else {
-        return Place::new(clamp_index(index), 0, -1);
+        return Place::new(clamp_index(index), 0, None);
     };
     let word = section
         .lines
         .get(line_index)
-        .map_or(-1, |line| if line.begin < 0 { -1 } else { line.end });
+        .and_then(crate::vt::Line::last_word);
     Place::new(clamp_index(index), clamp_index(line_index), word)
 }
 
@@ -317,7 +327,7 @@ fn place_in_section(
         // inside. Falling to the section's own ends keeps the answer a valid
         // place; an empty section has only its header.
         return if section.lines.is_empty() {
-            Place::new(0, 0, -1)
+            Place::new(0, 0, None)
         } else {
             end_of_section(section, 0)
         };
@@ -334,8 +344,8 @@ fn place_in_section(
 /// A y above the first line answers the first line, and one below the last
 /// answers the last — clicking in a field's top or bottom margin puts the
 /// caret on the nearest line rather than nowhere.
-fn find_line(section: &Section, y: f32) -> Option<(usize, crate::vt::Line)> {
-    let mut last: Option<(usize, crate::vt::Line)> = None;
+fn find_line(section: &Section, y: f32) -> Option<(usize, &crate::vt::Line)> {
+    let mut last: Option<(usize, &crate::vt::Line)> = None;
     for (index, line) in section.lines.iter().enumerate() {
         // A line's box runs from its baseline less its ascent to its baseline
         // less its descent — descent being negative, so the bottom is below.
@@ -345,33 +355,33 @@ fn find_line(section: &Section, y: f32) -> Option<(usize, crate::vt::Line)> {
             // Above this line. The first line claims a point above the whole
             // section; otherwise the point sits in the gap above this one and
             // the line before it is the nearer.
-            return Some(last.unwrap_or((index, *line)));
+            return Some(last.unwrap_or((index, line)));
         }
         if geom::is_float_bigger(y, bottom) {
-            last = Some((index, *line));
+            last = Some((index, line));
             continue;
         }
-        return Some((index, *line));
+        return Some((index, line));
     }
     last
 }
 
 /// The half-open range of word indices one line covers.
 ///
-/// A line with `begin < 0` is the single line of an empty section and covers
-/// nothing.
-fn line_range(line: crate::vt::Line) -> std::ops::Range<usize> {
-    if line.begin < 0 || line.end < line.begin {
+/// A line whose `words` is `None` is the single line of an empty section and
+/// covers nothing.
+fn line_range(line: &crate::vt::Line) -> std::ops::Range<usize> {
+    let Some(words) = line.words.clone() else {
         return 0..0;
-    }
-    let begin = usize::try_from(line.begin).unwrap_or(0);
-    let end = usize::try_from(line.end).unwrap_or(0);
-    begin..end.saturating_add(1)
+    };
+    let begin = usize::try_from(words.start).unwrap_or(usize::MAX);
+    let end = usize::try_from(words.end).unwrap_or(usize::MAX);
+    begin..end.max(begin)
 }
 
 /// Which character of a line's range a layout-space x lands after.
 ///
-/// Returns `-1` for the line header. This is the tie-break the module docs
+/// Returns `None` for the line header. This is the tie-break the module docs
 /// describe: strictly past a character's midpoint puts the caret after it.
 ///
 /// # Why this bisects rather than scans
@@ -400,7 +410,7 @@ fn word_at_x(
     metrics: &Metrics<'_>,
     font_size: f32,
     x: f32,
-) -> i32 {
+) -> Option<u32> {
     // Raw `>`, no epsilon: the boundary belongs to the character's left half,
     // so a click exactly on a midpoint lands before that character.
     //
@@ -417,7 +427,7 @@ fn word_at_x(
     };
 
     if range.is_empty() {
-        return -1;
+        return None;
     }
     let (mut left, mut right) = (range.start, range.end);
     let mut mid = left.saturating_add(right) / 2;
@@ -440,9 +450,13 @@ fn word_at_x(
         mid = left.saturating_add(right) / 2;
     }
     if past_midpoint(mid) {
-        return i32::try_from(mid).unwrap_or(-1);
+        // A `mid` too large to be a `u32` cannot be produced by this crate,
+        // and saturating keeps the query total. Note this used to share the
+        // `-1` channel with "before the first character", so an unrepresentable
+        // index answered the header; `Option` keeps the two apart.
+        return Some(u32::try_from(mid).unwrap_or(u32::MAX));
     }
-    -1
+    None
 }
 
 /// Where a caret at `place` is drawn, in PDF user space.
@@ -506,12 +520,12 @@ fn caret_position(
         return (0.0, 0.0);
     };
     let top = line.y - line.ascent;
-    if place.word < 0 {
-        return (line_caret_x(section, *line), top);
-    }
-    let index = usize::try_from(place.word).unwrap_or(0);
+    let Some(word_index) = place.word else {
+        return (line_caret_x(section, line), top);
+    };
+    let index = usize::try_from(word_index).unwrap_or(usize::MAX);
     let Some(word) = section.words.get(index) else {
-        return (line_caret_x(section, *line), top);
+        return (line_caret_x(section, line), top);
     };
     (caret_x(word, config, metrics, layout.font_size), top)
 }
@@ -552,18 +566,18 @@ fn caret_x(word: &crate::vt::Word, config: &Config, metrics: &Metrics<'_>, font_
 /// The direction comes from the **first word alone**, not from the line's
 /// dominant direction: a line whose first run is right-to-left and whose
 /// second is not still answers its right edge.
-fn line_caret_x(section: &Section, line: crate::vt::Line) -> f32 {
-    if line.begin < 0 {
+fn line_caret_x(section: &Section, line: &crate::vt::Line) -> f32 {
+    let Some(words) = line.words.clone() else {
         return line.x;
-    }
-    let first = usize::try_from(line.begin).ok().and_then(|index| {
-        // Only a word this line actually owns decides: a `begin` past the
-        // section's words is a layout that shrank under an edit, and it
-        // answers the left edge rather than reading a neighbour's direction.
-        (line.begin <= line.end)
-            .then(|| section.words.get(index))
-            .flatten()
-    });
+    };
+    // Only a word this line actually owns decides: a `start` past the
+    // section's words is a layout that shrank under an edit, and it answers
+    // the left edge rather than reading a neighbour's direction. An empty
+    // range owns nothing.
+    let first = (words.start < words.end)
+        .then(|| usize::try_from(words.start).ok())
+        .flatten()
+        .and_then(|index| section.words.get(index));
     if first.is_some_and(|word| word.is_rtl) {
         line.x + line.width
     } else {
@@ -639,12 +653,20 @@ fn line_extent(layout: &Layout, config: &Config, metrics: &Metrics<'_>, place: P
 pub fn word_index_of_place(layout: &Layout, place: Place) -> usize {
     // The fold, before anything is counted. A header on the first line has no
     // line above it and stays where it is.
-    if place.word < 0 && place.line > 0 {
+    if place.word.is_none() && place.line > 0 {
+        // The character before this line's first is the last of the line
+        // above -- which is where a header on any line but the first folds to.
         let previous = layout
             .sections
             .get(place.section as usize)
             .and_then(|section| section.lines.get(place.line as usize))
-            .map(|line| Place::new(place.section, place.line - 1, line.begin - 1));
+            .map(|line| {
+                let before = line
+                    .words
+                    .as_ref()
+                    .and_then(|words| words.start.checked_sub(1));
+                Place::new(place.section, place.line - 1, before)
+            });
         if let Some(previous) = previous {
             return word_index_of_place(layout, previous);
         }
@@ -668,7 +690,13 @@ pub fn word_index_of_place(layout: &Layout, place: Place) -> usize {
     let Some(section) = layout.sections.get(target) else {
         return index;
     };
-    let after = usize::try_from(place.word.saturating_add(1)).unwrap_or(0);
+    // The header is "before character 0", so it consumes none of this
+    // section; character `w` consumes `w + 1`.
+    let after = place.word.map_or(0, |word| {
+        usize::try_from(word)
+            .unwrap_or(usize::MAX)
+            .saturating_add(1)
+    });
     index.saturating_add(after.min(section.words.len()))
 }
 
@@ -693,7 +721,11 @@ pub fn place_of_word_index(layout: &Layout, index: usize) -> Place {
         let end = consumed.saturating_add(section.words.len());
         if index <= end {
             let within = index.saturating_sub(consumed);
-            let word = i32::try_from(within).unwrap_or(i32::MAX).saturating_sub(1);
+            // Index 0 within a section is its header; index `n` is character
+            // `n - 1`.
+            let word = within
+                .checked_sub(1)
+                .map(|w| u32::try_from(w).unwrap_or(u32::MAX));
             return place_of_word(section, position, word);
         }
         consumed = end.saturating_add(SECTION_BREAK_LENGTH);
@@ -703,24 +735,25 @@ pub fn place_of_word_index(layout: &Layout, index: usize) -> Place {
 
 /// The place naming character `word` of a section, with the line it falls on
 /// resolved.
-fn place_of_word(section: &Section, index: usize, word: i32) -> Place {
+fn place_of_word(section: &Section, index: usize, word: Option<u32>) -> Place {
     let line = line_of_word(section, word);
     Place::new(clamp_index(index), line, word)
 }
 
 /// Which line of a section a character index falls on.
 ///
-/// A `-1` word is the first line's header. A character past the section's
+/// A `None` word is the first line's header. A character past the section's
 /// last line answers that last line, which keeps the place valid.
-fn line_of_word(section: &Section, word: i32) -> u32 {
-    if word < 0 {
+fn line_of_word(section: &Section, word: Option<u32>) -> u32 {
+    let Some(word) = word else {
         return 0;
-    }
+    };
     for (index, line) in section.lines.iter().enumerate() {
-        if line.begin < 0 {
-            continue;
-        }
-        if word >= line.begin && word <= line.end {
+        if line
+            .words
+            .as_ref()
+            .is_some_and(|words| words.contains(&word))
+        {
             return clamp_index(index);
         }
     }
@@ -733,6 +766,12 @@ mod tests {
         Place, begin_place, caret_rect, end_place, place_at_point, place_of_word_index,
         point_at_place, word_index_of_place,
     };
+
+    /// The caret positions of a line holding `n` characters: the header
+    /// first, then each character. Spells what `-1..n` used to.
+    fn carets(n: u32) -> impl Iterator<Item = Option<u32>> {
+        std::iter::once(None).chain((0..n).map(Some))
+    }
     use crate::geom;
     use crate::vt::{self, Config, Metrics};
     use kurbo::Point;
@@ -838,7 +877,7 @@ mod tests {
             centred(&layout, &config),
             Point::new(134.0, 115.0),
         );
-        assert_eq!(place.word, 3, "the caret sits after D");
+        assert_eq!(place.word, Some(3), "the caret sits after D");
         assert_eq!(
             word_index_of_place(&layout, place),
             4,
@@ -863,7 +902,7 @@ mod tests {
             offset,
             Point::new(102.0, 115.0),
         );
-        assert_eq!(begin.word, -1, "before the first character");
+        assert_eq!(begin.word, None, "before the first character");
         assert_eq!(word_index_of_place(&layout, begin), 0);
 
         let end = place_at_point(
@@ -874,7 +913,7 @@ mod tests {
             offset,
             Point::new(166.0, 115.0),
         );
-        assert_eq!(end.word, 7, "after the last character");
+        assert_eq!(end.word, Some(7), "after the last character");
         assert_eq!(word_index_of_place(&layout, end), 8);
     }
 
@@ -892,14 +931,14 @@ mod tests {
             ..config
         };
         // Each character is now ten units wide: 101..111, 111..121, ...
-        assert_eq!(at(&config, &metrics, "abc", 106.0, 115.0).word, -1);
+        assert_eq!(at(&config, &metrics, "abc", 106.0, 115.0).word, None);
         // A hair past it, and the caret moves after the character.
-        assert_eq!(at(&config, &metrics, "abc", 106.001, 115.0).word, 0);
+        assert_eq!(at(&config, &metrics, "abc", 106.001, 115.0).word, Some(0));
         // A hair before, and it does not.
-        assert_eq!(at(&config, &metrics, "abc", 105.999, 115.0).word, -1);
+        assert_eq!(at(&config, &metrics, "abc", 105.999, 115.0).word, None);
         // The second character's midpoint, 116, behaves the same way.
-        assert_eq!(at(&config, &metrics, "abc", 116.0, 115.0).word, 0);
-        assert_eq!(at(&config, &metrics, "abc", 116.001, 115.0).word, 1);
+        assert_eq!(at(&config, &metrics, "abc", 116.0, 115.0).word, Some(0));
+        assert_eq!(at(&config, &metrics, "abc", 116.001, 115.0).word, Some(1));
     }
 
     /// Left of, right of, above and below the text. None of these fail, and
@@ -921,9 +960,9 @@ mod tests {
             )
         };
         // Far left of the first character, on the line.
-        assert_eq!(ask(-1000.0, 115.0).word, -1);
+        assert_eq!(ask(-1000.0, 115.0).word, None);
         // Far right of the last, on the line.
-        assert_eq!(ask(1000.0, 115.0).word, 7);
+        assert_eq!(ask(1000.0, 115.0).word, Some(7));
         // Above everything: the layout's first place.
         assert_eq!(ask(134.0, 10_000.0), begin_place(&layout));
         // Below everything: its last.
@@ -951,7 +990,7 @@ mod tests {
                 centred(&layout, &config),
                 Point::new(x, y),
             );
-            assert_eq!(place.word, -1, "at ({x}, {y})");
+            assert_eq!(place.word, None, "at ({x}, {y})");
             assert_eq!(word_index_of_place(&layout, place), 0);
         }
     }
@@ -975,7 +1014,7 @@ mod tests {
         );
         // The empty paragraph's only place, reached through the index pair.
         let blank = place_of_word_index(&layout, 3);
-        assert_eq!(blank, Place::new(1, 0, -1));
+        assert_eq!(blank, Place::new(1, 0, None));
         assert_eq!(word_index_of_place(&layout, blank), 3);
     }
 
@@ -985,7 +1024,7 @@ mod tests {
     fn a_default_place_is_the_start_and_not_a_zero_word() {
         assert_eq!(Place::default(), Place::START);
         assert_eq!(Place::default(), Place::start());
-        assert_eq!(Place::START.word, -1, "a zero word is after character 0");
+        assert_eq!(Place::START.word, None, "a zero word is after character 0");
     }
 
     /// A wrapped line's header is the previous line's end, and it is a
@@ -1011,11 +1050,11 @@ mod tests {
         let layout = vt::layout("abcdefgh", &config, &tens());
         let section = layout.sections.first().expect("one section");
         assert!(section.lines.len() >= 2, "the text must wrap: {section:?}");
-        let first_line_end = section.lines.first().expect("a first line").end;
+        let first_line_end = section.lines.first().expect("a first line").last_word();
 
         // The second line's header, which is what a click left of its first
         // midpoint produces.
-        let header = Place::new(0, 1, -1);
+        let header = Place::new(0, 1, None);
         assert_eq!(
             word_index_of_place(&layout, header),
             word_index_of_place(&layout, Place::new(0, 0, first_line_end)),
@@ -1041,7 +1080,7 @@ mod tests {
         for text in ["abc", "ab\ncd", "a\nb\nc"] {
             let layout = vt::layout(text, &config, &tens());
             assert_eq!(
-                word_index_of_place(&layout, Place::new(9, 0, 0)),
+                word_index_of_place(&layout, Place::new(9, 0, Some(0))),
                 word_index_of_place(&layout, end_place(&layout)),
                 "{text:?}"
             );
@@ -1063,8 +1102,10 @@ mod tests {
             let layout = vt::layout(text, &config, &metrics);
             for (s, section) in layout.sections.iter().enumerate() {
                 for (l, line) in section.lines.iter().enumerate() {
-                    let last = if line.begin < 0 { -1 } else { line.end };
-                    for word in -1..=last {
+                    // The header, then every character the line covers.
+                    let words = std::iter::once(None)
+                        .chain(line.words.clone().into_iter().flatten().map(Some));
+                    for word in words {
                         let place = Place::new(
                             u32::try_from(s).unwrap_or(0),
                             u32::try_from(l).unwrap_or(0),
@@ -1076,7 +1117,7 @@ mod tests {
                         // which is where the round trip lands. Asserting the
                         // collapse *target* is the point — skipping the case
                         // is what let it collapse to zero unnoticed.
-                        let expected = if word < 0 && l > 0 {
+                        let expected = if word.is_none() && l > 0 {
                             let previous = section.lines.get(l - 1).expect("a line above");
                             place_of_word_index(
                                 &layout,
@@ -1085,7 +1126,7 @@ mod tests {
                                     Place::new(
                                         u32::try_from(s).unwrap_or(0),
                                         u32::try_from(l - 1).unwrap_or(0),
-                                        previous.end,
+                                        previous.last_word(),
                                     ),
                                 ),
                             )
@@ -1121,7 +1162,7 @@ mod tests {
         let metrics = metrics();
         let layout = vt::layout("ABCDEFGH", &config, &metrics);
         let offset = centred(&layout, &config);
-        for word in -1..8 {
+        for word in carets(8) {
             let place = Place::new(0, 0, word);
             let point = point_at_place(&layout, config.plate, &config, &metrics, offset, place);
             // A click *at* the caret is exactly on a character boundary,
@@ -1135,7 +1176,7 @@ mod tests {
                 offset,
                 Point::new(point.x, point.y - 1.0),
             );
-            assert_eq!(back, place, "caret at {word} moved");
+            assert_eq!(back, place, "caret at {word:?} moved");
         }
     }
 
@@ -1152,7 +1193,7 @@ mod tests {
             &config,
             &metrics,
             (0.0, 0.0),
-            Place::new(0, 0, 3),
+            Place::new(0, 0, Some(3)),
             0.4,
         );
         // After D, whose advance ends at 134.336.
@@ -1180,10 +1221,10 @@ mod tests {
         let metrics = metrics();
         let layout = vt::layout("AB", &config, &metrics);
         for place in [
-            Place::new(9, 0, 0),
-            Place::new(0, 9, 0),
-            Place::new(0, 0, 99),
-            Place::new(u32::MAX, u32::MAX, i32::MAX),
+            Place::new(9, 0, Some(0)),
+            Place::new(0, 9, Some(0)),
+            Place::new(0, 0, Some(99)),
+            Place::new(u32::MAX, u32::MAX, Some(u32::MAX)),
         ] {
             let point = point_at_place(&layout, config.plate, &config, &metrics, (0.0, 0.0), place);
             assert!(point.x.is_finite() && point.y.is_finite(), "{place:?}");
@@ -1240,8 +1281,8 @@ mod tests {
             (0.0, 0.0),
             Point::new(f64::from(mid) + 0.01, 10.0),
         );
-        assert_eq!(before.word, -1);
-        assert_eq!(after.word, 0);
+        assert_eq!(before.word, None);
+        assert_eq!(after.word, Some(0));
     }
 
     /// Every character five hundred per mille, so a twelve-point run steps in
@@ -1293,7 +1334,7 @@ mod tests {
     #[test]
     fn a_right_to_left_words_carets_walk_leftward_from_its_right_edge() {
         let (config, metrics, layout) = rtl_run();
-        let got: Vec<f64> = (-1..3)
+        let got: Vec<f64> = carets(3)
             .map(|word| {
                 point_at_place(
                     &layout,
@@ -1322,7 +1363,7 @@ mod tests {
     #[test]
     fn the_drawn_caret_rectangle_follows_the_same_right_to_left_walk() {
         let (config, metrics, layout) = rtl_run();
-        for (word, want) in (-1..3).zip([19.0_f64, 13.0, 7.0, 1.0]) {
+        for (word, want) in carets(3).zip([19.0_f64, 13.0, 7.0, 1.0]) {
             let rect = caret_rect(
                 &layout,
                 config.plate,
@@ -1334,7 +1375,7 @@ mod tests {
             );
             assert!(
                 (rect.x0 - want).abs() < 1e-4,
-                "caret after {word} starts at {}, want {want}",
+                "caret after {word:?} starts at {}, want {want}",
                 rect.x0
             );
             assert!((rect.x1 - rect.x0 - 0.4).abs() < 1e-4, "{rect:?}");
@@ -1353,7 +1394,7 @@ mod tests {
         };
         let metrics = halves();
         let layout = vt::layout("abc", &config, &metrics);
-        let got: Vec<f64> = (-1..3)
+        let got: Vec<f64> = carets(3)
             .map(|word| {
                 point_at_place(
                     &layout,
@@ -1423,11 +1464,11 @@ mod tests {
         };
         // The run occupies PDF x 1..19. The middle character is drawn over
         // 7..13, so its midpoint is at 10 — the one probe that decides.
-        assert_eq!(at(2.0), -1, "left of the middle midpoint: the header");
-        assert_eq!(at(9.9), -1);
-        assert_eq!(at(10.0), -1, "exactly on the midpoint is not past it");
-        assert_eq!(at(10.1), 2, "past it: the run's last character");
-        assert_eq!(at(18.0), 2);
+        assert_eq!(at(2.0), None, "left of the middle midpoint: the header");
+        assert_eq!(at(9.9), None);
+        assert_eq!(at(10.0), None, "exactly on the midpoint is not past it");
+        assert_eq!(at(10.1), Some(2), "past it: the run's last character");
+        assert_eq!(at(18.0), Some(2));
 
         // The two places are the run's logical ends, drawn at its right and
         // left edges: the caret crosses the run rather than stepping across
@@ -1569,11 +1610,11 @@ mod tests {
             "the config still holds the request, which is the whole point"
         );
         // The limit keeps five characters of the nine typed.
-        assert_eq!(end_place(&layout), Place::new(0, 0, 4));
+        assert_eq!(end_place(&layout), Place::new(0, 0, Some(4)));
 
         let advance = 389.0 * 25.0 / 1000.0;
         let first = 150.375_f32;
-        for word in -1..5 {
+        for word in carets(5) {
             let got = point_at_place(
                 &layout,
                 config.plate,
@@ -1583,11 +1624,14 @@ mod tests {
                 Place::new(0, 0, word),
             )
             .x;
+            // The header sits at the line's left edge; character `w` sits
+            // one advance further along than character `w - 1`.
             #[allow(clippy::cast_precision_loss)]
-            let want = f64::from(first + advance * (word + 1) as f32);
+            let steps = word.map_or(0, |w| w.saturating_add(1)) as f32;
+            let want = f64::from(first + advance * steps);
             assert!(
                 (got - want).abs() < 1e-3,
-                "caret after {word} is {got}, want {want}"
+                "caret after {word:?} is {got}, want {want}"
             );
         }
     }
@@ -1627,7 +1671,7 @@ mod tests {
             &config,
             &metrics,
             (0.0, 0.0),
-            Place::new(0, 7, 0),
+            Place::new(0, 7, Some(0)),
             0.4,
         );
         assert!((missing.y1 - missing.y0).abs() < 1e-6, "{missing:?}");
@@ -1656,7 +1700,7 @@ mod tests {
                 (0.0, 0.0),
                 Point::new(x, 175.0),
             );
-            assert_eq!(place.word, index, "click at {x} landed at {place:?}");
+            assert_eq!(place.word, Some(index), "click at {x} landed at {place:?}");
         }
         // Left of the first character's midpoint is the line header.
         let header = place_at_point(
@@ -1667,7 +1711,7 @@ mod tests {
             (0.0, 0.0),
             Point::new(first + advance * 0.5 - 0.01, 175.0),
         );
-        assert_eq!(header.word, -1, "{header:?}");
+        assert_eq!(header.word, None, "{header:?}");
     }
 
     /// A field that asks for an explicit size is untouched, which is why
@@ -1688,7 +1732,7 @@ mod tests {
             &config,
             &metrics,
             (0.0, 0.0),
-            Place::new(0, 0, 0),
+            Place::new(0, 0, Some(0)),
         )
         .x;
         // 'A' is 667/1000 at twelve points, from the plate's left edge.

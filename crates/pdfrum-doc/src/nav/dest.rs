@@ -189,35 +189,49 @@ impl Dest {
         })
     }
 
-    /// The page index this destination names, or `-1`.
+    /// The page index this destination names, or `None` when it names none.
     ///
     /// A **number** at index 0 is returned verbatim, with no bounds check
     /// against the document's page count — a file naming page 11 of a
     /// three-page document reports 11. A **dictionary** needs its object
     /// number looked up in the page tree, so an inline page dictionary, which
     /// has no number, cannot be found.
+    ///
+    /// Was `-> i32` with `-1` for unresolvable, and an
+    /// `impl Fn(u32) -> i32` callback that imposed the same sentinel on the
+    /// *caller's* code (`docs/design/idiomatic-api.md` §C, Tier 2 item 7, and
+    /// §C.4, which resolves this in favour of `Option` against §A.3's earlier
+    /// reading). The resolution logic — which entry is consulted, that a
+    /// number is returned verbatim, that four distinct failures answer alike
+    /// — is unchanged; only the channel is.
+    ///
+    /// Note what the sentinel concealed and `Option` separates: an
+    /// out-of-range page index is a `Some`, and only a genuine failure is
+    /// `None`. Both used to arrive as the same `-1`.
+    ///
+    /// The index is a `u32` pending WP1's `PageIndex` newtype, which is the
+    /// follow-up that types it.
     #[must_use]
     pub fn page_index<R: Resolve>(
         &self,
         r: &R,
-        page_index_of: impl Fn(u32) -> i32,
+        page_index_of: impl Fn(u32) -> Option<u32>,
         diags: &mut Diagnostics,
-    ) -> i32 {
-        let Some(array) = &self.array else {
-            return -1;
-        };
-        let Some(entry) = array.get(0, r) else {
-            return -1;
-        };
+    ) -> Option<u32> {
+        let entry = self.array.as_ref()?.get(0, r)?;
         if let Some(number) = entry.get().as_number() {
-            return i32::try_from(number.as_int().unwrap_or(-1)).unwrap_or(-1);
+            return u32::try_from(number.as_int()?).ok();
         }
         if entry.get().as_dict().is_none() {
             diags.record(Severity::Suspicious, DiagKind::DestPageUnresolved, None);
-            return -1;
+            return None;
         }
-        let index = array.reference_at(0).map_or(-1, |r| page_index_of(r.num));
-        if index < 0 {
+        let index = self
+            .array
+            .as_ref()
+            .and_then(|array| array.reference_at(0))
+            .and_then(|r| page_index_of(r.num));
+        if index.is_none() {
             diags.record(Severity::Suspicious, DiagKind::DestPageUnresolved, None);
         }
         index
@@ -321,15 +335,19 @@ mod tests {
     fn a_page_number_is_returned_verbatim_with_no_bounds_check() {
         let d = dest(vec![Object::Int(11), Object::Name(Name::from("Fit"))]);
         let mut diags = Diagnostics::default();
-        assert_eq!(d.page_index(&NoResolve, |_| 0, &mut diags), 11);
+        // Page 11 of a document that may have three pages: the number is
+        // returned as it stands. `Some` now says "the file named a page",
+        // which is a different question from "that page exists" -- the two
+        // used to share one `-1` channel and could not be told apart.
+        assert_eq!(d.page_index(&NoResolve, |_| Some(0), &mut diags), Some(11));
     }
 
     #[test]
-    fn a_null_destination_answers_minus_one() {
+    fn a_null_destination_answers_none() {
         let mut diags = Diagnostics::default();
         assert_eq!(
-            Dest::default().page_index(&NoResolve, |_| 3, &mut diags),
-            -1
+            Dest::default().page_index(&NoResolve, |_| Some(3), &mut diags),
+            None
         );
     }
 }

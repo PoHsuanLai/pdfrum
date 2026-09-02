@@ -124,7 +124,7 @@ impl Bookmark<'_> {
             &mut diags,
         );
         self.doc.note(&diags);
-        u32::try_from(index).ok()
+        index
     }
 
     /// The action the entry fires, when it has one rather than a plain
@@ -147,16 +147,13 @@ impl Document {
     /// Linear rather than indexed: an outline is walked once and destinations
     /// are resolved on demand, so the map would cost more to build than the
     /// scans it saves on every document with a short outline.
-    pub(crate) fn page_index_of(&self, obj_num: u32) -> i32 {
-        (0..self.page_count())
-            .find(|index| {
-                self.inner
-                    .page(*index)
-                    .ok()
-                    .and_then(|page| page.reference)
-                    .is_some_and(|reference| reference.num == obj_num)
-            })
-            .and_then(|index| i32::try_from(index).ok())
-            .unwrap_or(-1)
+    pub(crate) fn page_index_of(&self, obj_num: u32) -> Option<u32> {
+        (0..self.page_count()).find(|index| {
+            self.inner
+                .page(*index)
+                .ok()
+                .and_then(|page| page.reference)
+                .is_some_and(|reference| reference.num == obj_num)
+        })
     }
 }
