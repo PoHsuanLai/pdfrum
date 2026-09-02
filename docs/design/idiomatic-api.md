@@ -842,6 +842,151 @@ Only the counts move.
 | `pdfrum-raster-agg` | 2 | 20 | 15 | `pub mod image` / `target` → curated; its two sibling backends have zero `pub mod`, so bring it in line and it is trivial. | trivial |
 | `pdfrum-text` | 4 | 122 | 97 | **The headline crate** — smallest of the six noisy ones, and the one with the least excuse, since no facade stands between it and its callers. `page_text(start, count)` and `rects(start, count)` → ranges (`lib.rs:214,269`, `select.rs:20`); two unnamed index spaces → newtypes, renaming around the existing `CharIndex` table (§A.6); `all_text` → `as_str`/`Display`; `to_utf32le` → `pdfrum-tool` (`lib.rs:318`); `text: Vec<char>` field renamed off the `text` method; `pub fn is_float_zero` (`charinfo.rs:168`) private; `pub mod bidi`/`index`/`links`/`unicode` curated. Two of WP11's claims about this crate are **stale and withdrawn**: `debug_runs` is already `#[doc(hidden)]` (`lib.rs:116`), and `pipeline` is already a private `mod` (`lib.rs:64`) — only the `pub fn`s inside it need demoting. `find` already returns a `Range` and `char_at` already returns `Result`, not a sentinel. | medium |
 | `pdfrum-doc` | 13 | 398 | 322 | Second-largest, and 322 public fns is the most in the workspace. `AnnotFlags(pub i64)` and `FieldFlags(pub i64)` → private fields (`annot/mod.rs:169`, `form/field.rs:102`); `pub mod annot_dump` — the `--annot` output format, used only by `pdfrum-tool` (`crates/pdfrum-tool/src/annot.rs:13,60`) — evicted or `#[doc(hidden)]`, along with its `three_places` / `six_places` float formatters (`annot_dump.rs:276,282`); `pub mod geom` reduced to the epsilon comparisons (§A.4) with the kurbo-duplicating half deleted; thirteen `pub mod`s curated. **`pub mod ap` alone carries ~139 public items** — the whole of appearance generation's internals, where the interface is `generate_appearances`. ~~`page_index_of`'s `-1` stays: behaviour.~~ **Withdrawn 2026-09-02 — `Dest::page_index` (`nav/dest.rs:200-205`, snapshot `pdfrum-doc.txt:604`) becomes `Option<u32>` in both its return type and its callback parameter; §C.4 has the reasoning.** Measured, this crate has **49 `pub mod`s, the worst in the workspace**, and 1267 items; and it holds the densest sentinel cluster in the workspace — six public surfaces in `vt` (§C.3 items 8–12). | large |
+
+> **`pdfrum-doc`'s row completed 2026-09-03 as the remainder of §A.10 step
+> 6**, in five commits — `geom`, `ap`, `nav`, the four remaining module
+> groups, then the leaf collapse — plus a sixth for the rustdoc gate. WP2 and
+> the sentinel pass had already done the crate's *named* items; this is the
+> module surface, which is what the row and §A.10 both said was the real
+> scope. **The board is byte-identical (1757 / 1512 / 245, every tag:
+> form-events 8, js-transcript 33, page-count 2, pixel-fail 43,
+> tierA-mismatch 170; text 86.3% / 75.5%) and zero of the 1757 per-file rows
+> differ in any field — SSIM, `max_channel_diff`, the `--annot` and text dump
+> comparisons and the per-tag notes included.** That is the check that
+> mattered most here, because this crate owns appearance generation and
+> annotations: a moved pixel or a moved dump line would have meant behaviour
+> moved.
+>
+> | | before | after | |
+> |---|---:|---:|---|
+> | items | **1312** | **797** | −39% |
+> | `pub mod` (snapshot lines) | **48** | **18** | |
+>
+> Per module group, measured from the snapshot at each commit:
+>
+> | group | items before | after | |
+> |---|---:|---:|---|
+> | `nav` | **326** | **82** | −75% |
+> | `ap` | **259** | **121** | −53% |
+> | `annot` | **159** | **132** | −17%, and see below |
+> | `form` | **144** | **64** | −56% |
+> | `vt` | **131** | **78** | −40% |
+> | `structure` | **90** | **17** | −81% |
+> | `geom` | **22** | **10** | −55% |
+>
+> `annot` is the one row that does not read as a cut, and the reason is
+> worth recording because it recurs: its submodules were **collapsed** into
+> it rather than trimmed, so items that used to be counted under
+> `annot::appearance::` and `annot::quad::` are now counted under `annot::`.
+> The paths a caller can spell went from three to one; the names went from
+> 159 to 132. Counting by prefix measures reachable paths, not names — §A.0's
+> point, seen from the other side.
+>
+> **The whole cross-crate seam is 92 paths**, enumerated from every
+> dependent's `use` lines *and their call sites* before anything was
+> privatised. `pdfrum-form` names `vt::hit`'s seven placement functions plus
+> `Config`/`Metrics`/`Layout`, four `ap::font_map` items, `ap::field_body`'s
+> five readers, `ap::widget`'s three, `geom`'s ten, and `FieldFlags` /
+> `FieldKind` / `AnnotFlags` / `Subtype` / `GeneratedAp`; `pdfrum-tool` names
+> `structure::{StructTree, dump_tree}`, `annot`'s appearance and quadpoint
+> readers, `nav::{Action, ActionKind, NameTree, Hidden}` and `ap`'s
+> generation entry points; the facade names `Focus`, `FocusBox`,
+> `GeneratedAp`, `Error`, `Action`, `ActionKind`, `Dest`, `Link`,
+> `AnnotFlags`, `Subtype`, `FieldFlags`, `FieldKind` and eight functions.
+> Every one either already was a root re-export or became one.
+>
+> **Seven things this row got wrong or left unsaid:**
+>
+> 1. **`geom` is not duplicating `kurbo`, and the row has the two halves
+>    exactly backwards.** It asks for "`pub mod geom` reduced to the epsilon
+>    comparisons (§A.4) with the kurbo-duplicating half deleted". Checked
+>    function by function against the pinned `kurbo` 0.13.1: `width`/`height`
+>    narrow to `f32` and that narrowing is what keeps a `re` operator's
+>    operands identical to the file's own decimals; `contains` is inclusive
+>    on all four edges after normalizing where `Rect::contains` is half-open
+>    and never normalizes; `union`/`intersect`/`inflate` normalize first
+>    where kurbo's are documented valid only for non-negative extents; and
+>    `is_empty` (`x0 >= x1 || y0 >= y1`) is not `Rect::is_zero_area`
+>    (`area() == 0.0`), which gives the **opposite** answer on both an
+>    inverted rectangle with area and a well-formed zero-height one. So
+>    nothing was deleted for duplicating kurbo. What went private is the
+>    *epsilon comparisons* — the half §A.4 wanted kept public — because
+>    `pdfrum-form` has its own private copies and calls none of them, while
+>    the rectangle arithmetic is the half with 32 external call sites.
+> 2. **A crate-name grep over-reports through comments, and this crate is the
+>    proof.** The brief asked whether `ap::widget::rotated_rect` is on the
+>    seam. It is named four times outside `pdfrum-doc` — twice in
+>    `pdfrum-form/src/page.rs`, once in `route.rs`, once in
+>    `pdfrum-tool/src/chrome.rs` — and **every one is a comment** saying some
+>    local `% 360` matches it. No code calls it. `ap::field_body::
+>    selected_indices` is the same, named in four comments across both
+>    crates, each explaining what the local reader does *differently*.
+>    Stripping `//` before matching is what separated those two from the
+>    seventy-nine real names.
+> 3. **`nav` is the largest module in the crate and the row does not mention
+>    it.** The row names `ap`, `annot_dump`, `geom` and the `vt` sentinels.
+>    Measured, `nav` was **327 items**, larger than `ap`'s 259 and more than
+>    a quarter of the crate. Its five type-holding submodules — `action`
+>    (103), `dest` (49), `filespec` (19), `name_tree` (18), `number_tree`
+>    (5) — had no external caller at all; every type the seam wants was
+>    already a re-export.
+> 4. **"`pub mod ap` alone carries ~139 public items" is low by 87%.** `ap`
+>    measured **259**. The row's own hedge ("~") is fair, but the direction
+>    matters: it is the same undercount §A.0 explains, and the same one
+>    "thirteen `pub mod`s" makes — the snapshot counted **48**, because
+>    `ap` publishes eleven submodules, `nav` eight, `vt` eight, `annot` and
+>    `structure` two each and `form` two. **Fifth time** a prose `pub mod`
+>    count read off `lib.rs` has proved to be a floor.
+> 5. **Privatising found dead public code for the seventh through tenth
+>    time**, and one of them is the largest single item this pass has
+>    deleted. `NumberTree` is a unit struct whose two associated functions
+>    forward argument-for-argument to `nav::number_tree::find` and
+>    `lower_bound`; its own doc says it exists "so
+>    `pdfrum_doc::NumberTree::find` reads the way the name tree does at the
+>    call site", and **no call site ever appeared** — the struct, its `impl`
+>    and the `lib.rs:49` re-export are the only references in the workspace.
+>    It came with `pub mod number_tree_alias`, a module whose entire body
+>    re-exports the same two functions a second way, which is §A.0's
+>    "same item under several paths" inflation in its purest form. Also dead:
+>    `geom::intersect`, `annot::subtype_name` (the compiler confirmed it —
+>    deleting it left `annot/mod.rs`'s `Name` import unused),
+>    `Color::nearly_eq`, and `nav::link::enumerate_links`. Sixteen further
+>    items are reached only by their own tests and keep a reasoned
+>    `allow(dead_code)`.
+> 6. **A lint fired on an item that stopped being public, for the fourth
+>    time in this pass, and it was a real defect.**
+>    `clippy::struct_field_names` on `ap::border::Dash::dash`, which exempts
+>    public items and not private ones. `Dash` models PDF's `/D` array,
+>    `[on off phase]`, and its other two fields are already `gap` and
+>    `phase` — so the fix is `Dash::on`, the accurate name, not an `allow`.
+> 7. **Privatising also breaks the rustdoc link gate, which no landed note
+>    records.** Eighteen `[`link`]`s across seven files pointed at items this
+>    step made private, and `RUSTDOCFLAGS="-D warnings" cargo doc` is a gate.
+>    Unlike the four costs already on record — broken doctests (§WP8), red
+>    test-only helpers (`pdfrum-edit`'s item 5), public-exempt lints, and
+>    dead code — **this one surfaces in neither `clippy` nor `nextest`**, so
+>    a pass that ran only those two would land red.
+>
+> Two renames at the seam, both forced by collapsing a leaf module and both
+> in the direction §A.11 asks for: `nav::outline::walk` reads as a verb with
+> no object once `outline` stops qualifying it, so it is
+> `nav::outline_bookmarks`; `structure::dump::render` is ambiguous in a crate
+> that also generates appearance streams, so it is `structure::dump_tree`.
+> No `CPDF_`/`Get…`/`…Ptr`/`bStd…` calque survived anywhere to rename — the
+> scan found none.
+>
+> **Four modules stay `pub mod` on `pdfrum-render`'s precedent**, where
+> `blend`/`glyph`/`pixmap`/`scanline` survived the same pass because the
+> module *is* the namespace. `vt::hit` is the clearest: **50+ call sites**
+> across `pdfrum-form`'s `route.rs`, `edit/ops.rs` and six of its test files,
+> and its seven functions are a coherent placement vocabulary that would be
+> noise at the crate root. `ap::field_body`, `ap::font_map` and `ap::widget`
+> are the same shape smaller. `geom` stays for a second reason besides:
+> `pdfrum-form` has a `geom` module of its own (`crate::geom::Plate`), so its
+> callers' fully-qualified `pdfrum_doc::geom::` spelling is deliberate
+> disambiguation rather than verbosity, and root re-exports of `left`,
+> `rect` and `width` would collide with it.
+
 | `pdfrum-form` | 16 | 317 | 205 | `Key(pub u16)` → enum, and note the Win32 names are in the *constants*, not just the type: `PRIOR` and `NEXT` are `VK_PRIOR`/`VK_NEXT` for PageUp/PageDown (`event.rs:63ff`). `Modifiers(pub u32)` → private field (`event.rs:119`) — `contains`/`union`/`without` already exist, so the field need never have been public. `event::Point` → `kurbo::Point` in, narrow at entry; `tab::Rect` private (10 public-signature appearances inside the crate, 2 callers outside, both in `pdfrum-tool`); `PopupView`/`PopupGeometry` return `kurbo::Rect`; `Rotation::degrees() -> i32` / `from_degrees` re-open a four-variant enum (`geom.rs:69`); the three `PDFIUM_TEST_*` constants renamed (`script/mod.rs:72,80,111`). Sixteen `pub mod`s and **zero private ones** curated — it already has a good `pub use` block, it just also exports everything a second way. The midpoint, the strict comparisons and the `f32` hit tests all stay. | medium–large |
 | `pdfrum-edit` | 5 | 154 | 118 | `pub mod content`/`encrypt`/`font`/`import`/`write` → curated; today each is `pub mod` *and* selectively re-exported, so the same items are reachable two ways. One nice illustration of the vocabulary rule in a single signature: `paint_operator(fill: FillRule, stroke: bool)` (`content/path.rs:35`) — one argument is properly an enum, its neighbour is a bool. | medium |
 | `pdfrum` (facade) | 1 | 175 | 153 | Drop `pub mod edit` (§7 WP7). The rest is WP3/WP5/WP7/WP9/WP10 as written. | medium |
