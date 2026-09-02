@@ -1,6 +1,6 @@
 //! Asking `wgpu` for hardware, for a process that has none to lend us.
 //!
-//! [`crate::VelloGpuBackend::new`] is the primary constructor and it borrows
+//! [`crate::VelloBackend::new`] is the primary constructor and it borrows
 //! the embedder's device, which is what this milestone exists to deliver. But
 //! a benchmark, a test or a command-line thumbnailer has no device to borrow,
 //! so it has to walk `wgpu`'s own chain — instance, adapter, device — itself.
@@ -9,7 +9,7 @@
 //!
 //! # Why the device is leaked
 //!
-//! [`crate::VelloGpuBackend`] borrows its device. A constructor that creates
+//! [`crate::VelloBackend`] borrows its device. A constructor that creates
 //! one therefore has to produce a `&'static wgpu::Device` from a device it
 //! just made, and the safe way to do that is [`Box::leak`] — the crate is
 //! `forbid(unsafe_code)`, so a self-referential struct is not on the table.
@@ -37,7 +37,7 @@ use crate::block::block_on;
 use crate::error::Error;
 use crate::readback::AdapterReport;
 use crate::wgpu;
-use crate::{Limits, VelloGpuBackend};
+use crate::{Limits, VelloBackend};
 
 /// A device this backend requested itself, kept so its adapter can be
 /// reported.
@@ -55,7 +55,7 @@ pub struct OwnedDevice {
 /// STYLE §2 permits for interior mutability, and the *why* is the fourteen GPU
 /// tests in `tests/gpu.rs` — under `cargo test` they share one process, and
 /// one leaked device between them is the difference between a bounded cost and
-/// a per-test one. `VelloGpuBackend` itself cannot live here: its `RefCell`
+/// a per-test one. `VelloBackend` itself cannot live here: its `RefCell`
 /// makes it `!Sync`, and a `Renderer` is cheap enough beside a whole device
 /// that the device is where the saving is.
 static SHARED: OnceLock<Result<Opened, Error>> = OnceLock::new();
@@ -73,7 +73,7 @@ struct Opened {
 /// Mirrors `wgpu::Instance::request_adapter`, which is the operation it
 /// actually performs: it enumerates hardware and takes the highest-performance
 /// adapter, then opens a device on it. Contrast
-/// [`VelloGpuBackend::new`][crate::VelloGpuBackend::new], which takes a device
+/// [`VelloBackend::new`][crate::VelloBackend::new], which takes a device
 /// the caller already has.
 ///
 /// **This leaks one device and one queue, once per process** — see the module
@@ -91,7 +91,7 @@ struct Opened {
 /// in a container or on CI, and the caller is expected to skip rather than
 /// fail. [`Error::Device`] and [`Error::Renderer`] for a device or pipeline
 /// that could not be built.
-pub fn request_adapter() -> Result<VelloGpuBackend<'static>, Error> {
+pub fn request_adapter() -> Result<VelloBackend<'static>, Error> {
     let opened = SHARED.get_or_init(open_shared_device).as_ref().map_err(
         // `Error` is not `Clone` — it carries driver strings — and the cached
         // failure is a fact about this machine rather than a value to hand
@@ -103,7 +103,7 @@ pub fn request_adapter() -> Result<VelloGpuBackend<'static>, Error> {
         },
     )?;
 
-    let mut backend = VelloGpuBackend::new(opened.device, opened.queue)?;
+    let mut backend = VelloBackend::new(opened.device, opened.queue)?;
     backend.limits = Limits {
         max_dimension: opened.report.max_dimension,
     };
@@ -148,7 +148,7 @@ fn open_shared_device() -> Result<Opened, Error> {
     }
 
     let (device, queue) = block_on(adapter.request_device(&wgpu::DeviceDescriptor {
-        label: Some("pdfrum-raster-vello-gpu"),
+        label: Some("pdfrum-raster-vello"),
         required_features: wgpu::Features::empty(),
         // The adapter's own limits rather than the defaults: the default
         // `max_texture_dimension_2d` is 8192, and a page at 2x scale can pass
@@ -162,7 +162,7 @@ fn open_shared_device() -> Result<Opened, Error> {
     .ok_or_else(|| Error::Device("the request timed out".to_owned()))?
     .map_err(|e| Error::Device(e.to_string()))?;
 
-    // See the module doc: `VelloGpuBackend` borrows, so a constructor that
+    // See the module doc: `VelloBackend` borrows, so a constructor that
     // creates a device must produce `'static` references, and leaking is the
     // safe way to do it. This is the only place in the crate that leaks, and
     // `SHARED` is what keeps it to one.
@@ -186,6 +186,6 @@ fn open_shared_device() -> Result<Opened, Error> {
 /// *before* opening a device, so the skip path allocates no device and leaks
 /// nothing.
 #[must_use]
-pub fn try_real_gpu() -> Option<VelloGpuBackend<'static>> {
+pub fn try_real_gpu() -> Option<VelloBackend<'static>> {
     request_adapter().ok()
 }

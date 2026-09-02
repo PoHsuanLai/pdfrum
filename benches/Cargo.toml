@@ -52,7 +52,7 @@ pdfrum-render.workspace = true
 pdfrum-page.workspace = true
 pdfrum-raster-agg.workspace = true
 pdfrum-raster-tinyskia.workspace = true
-pdfrum-raster-vello.workspace = true
+pdfrum-raster-vello-cpu.workspace = true
 pdfrum-common.workspace = true
 kurbo.workspace = true
 # The `scaling` binary measures the facade's rayon multi-page path, which is

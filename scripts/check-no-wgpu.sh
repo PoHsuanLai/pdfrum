@@ -14,7 +14,7 @@
 #      pdfrum` must not put a graphics driver in their tree.
 #   2. `pdfrum-tool`'s default features likewise, because the CLI is what a
 #      headless or CI build actually runs.
-#   3. No crate in the workspace *except* pdfrum-raster-vello-gpu depends on
+#   3. No crate in the workspace *except* pdfrum-raster-vello depends on
 #      `vello` or `wgpu` — every member, `conformance/` and `benches/`
 #      included, not just the ones under `crates/`. This is the one that
 #      catches the accident the other two would eventually catch anyway — a
@@ -28,7 +28,7 @@ cd "$(dirname "$0")/.."
 fail=0
 
 # The crate the exemption is scoped to. Everything else must be clean.
-gpu_crate="pdfrum-raster-vello-gpu"
+gpu_crate="pdfrum-raster-vello"
 
 check_clean() {
     local crate="$1" label="$2"

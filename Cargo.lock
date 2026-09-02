@@ -1761,7 +1761,7 @@ dependencies = [
  "pdfrum-parser",
  "pdfrum-raster-agg",
  "pdfrum-raster-tinyskia",
- "pdfrum-raster-vello",
+ "pdfrum-raster-vello-cpu",
  "pdfrum-render",
  "pdfrum-text",
  "peniko",
@@ -1781,7 +1781,7 @@ dependencies = [
  "pdfrum-page",
  "pdfrum-raster-agg",
  "pdfrum-raster-tinyskia",
- "pdfrum-raster-vello",
+ "pdfrum-raster-vello-cpu",
  "pdfrum-render",
  "peniko",
  "rayon",
@@ -1973,28 +1973,28 @@ name = "pdfrum-raster-vello"
 version = "0.1.0"
 dependencies = [
  "kurbo",
- "pdfrum-page",
- "pdfrum-render",
- "peniko",
- "vello_cpu",
-]
-
-[[package]]
-name = "pdfrum-raster-vello-gpu"
-version = "0.1.0"
-dependencies = [
- "kurbo",
  "pdfrum",
  "pdfrum-common",
  "pdfrum-corpus",
  "pdfrum-page",
  "pdfrum-parser",
  "pdfrum-raster-agg",
- "pdfrum-raster-vello",
+ "pdfrum-raster-vello-cpu",
  "pdfrum-render",
  "peniko",
  "thiserror",
  "vello",
+]
+
+[[package]]
+name = "pdfrum-raster-vello-cpu"
+version = "0.1.0"
+dependencies = [
+ "kurbo",
+ "pdfrum-page",
+ "pdfrum-render",
+ "peniko",
+ "vello_cpu",
 ]
 
 [[package]]
@@ -2011,7 +2011,7 @@ dependencies = [
  "pdfrum-page",
  "pdfrum-parser",
  "pdfrum-raster-tinyskia",
- "pdfrum-raster-vello",
+ "pdfrum-raster-vello-cpu",
  "peniko",
  "smallvec",
  "thiserror",
@@ -2061,7 +2061,7 @@ dependencies = [
  "pdfrum-parser",
  "pdfrum-raster-agg",
  "pdfrum-raster-tinyskia",
- "pdfrum-raster-vello",
+ "pdfrum-raster-vello-cpu",
  "pdfrum-render",
  "pdfrum-text",
  "peniko",

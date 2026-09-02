@@ -85,9 +85,9 @@ Workspace `pdfrum/`, crates under `crates/`. Name **pdfrum**: facade crate `pdfr
 | `pdfrum-font` | fpdfapi/font + fxge font half | Font dicts (Type1/TrueType/Type0/Type3/CID), encodings, ToUnicode, glyph mapping; outlines via `skrifa`; `pdfrum-type1` sub-crate (PFA/PFB/charstrings); substitution/fallback via `fontdb` + embedded Foxit fallback fonts (`core/fxge/fontdata`, PDFium BSD license); glyph cache. |
 | `pdfrum-page` | fpdfapi/page | Content-stream interpreter → typed page-object graph; graphics state; colorspaces (device/ICC via `moxcms`/Indexed/Separation/Lab); PDF functions (types 0/2/3/4 incl. PostScript calc); patterns & shadings (types 1–7); transparency model (groups, soft masks, blend modes). |
 | `pdfrum-render` | fpdfapi/render + fxge device half | `RenderDevice` trait (kurbo/peniko types); engine walking the page graph; layer compositor for isolated/knockout groups and soft masks; image resampling. |
-| `pdfrum-raster-vello` | Skia backend | `vello_cpu` implementation of `RenderDevice`. The facade's default, for API users who want a production rasterizer. |
+| `pdfrum-raster-vello-cpu` *(renamed 2026-09-02, was `pdfrum-raster-vello`)* | Skia backend | `vello_cpu` implementation of `RenderDevice`, type `VelloCpuBackend`. The facade's default, for API users who want a production rasterizer. |
 | `pdfrum-raster-tinyskia` | AGG backend | `tiny-skia` implementation. Cross-check + determinism baseline; Tier C's gating partner. |
-| `pdfrum-raster-vello-gpu` | *(new capability)* | GPU `vello` on `wgpu`, M12c. **Outside the core ring by construction**: nothing depends on it, the facade cannot name it, and `scripts/check-no-wgpu.sh` asserts a headless tree resolves with zero `wgpu`. Takes a caller-supplied `wgpu::Device`. Tier C only — GPU rasterization is not bit-reproducible across drivers, so it never joins the scoreboard. `publish = false`. |
+| `pdfrum-raster-vello` *(renamed 2026-09-02, was `pdfrum-raster-vello-gpu`)* | *(new capability)* | GPU `vello` on `wgpu`, M12c, type `VelloBackend<'a>`. **Outside the core ring by construction**: nothing depends on it, the facade cannot name it, and `scripts/check-no-wgpu.sh` asserts a headless tree resolves with zero `wgpu`. Takes a caller-supplied `wgpu::Device`. Tier C only — GPU rasterization is not bit-reproducible across drivers, so it never joins the scoreboard. `publish = false`. |
 | `pdfrum-raster-agg` *(renamed 2026-09-02, was `pdfrum-raster-exact`)* | AGG parity | Analytic scanline rasterizer of our own, no rasterizer dependency. Reproduces AGG's coverage integral on AGG's own 256ths-of-a-pixel grid — AGG (`core/fxge/agg`) being PDFium's own scan converter; the conformance default, so a golden diff measures the engine rather than a sampling policy. Type `AggBackend`, CLI `--use-renderer=agg`. No SIMD. |
 | `pdfrum-text` | fpdftext | Text extraction, reading order/whitespace heuristics, search, link detection. Depends only on parser/font/page — parallelizable with render. |
 | `pdfrum-doc` | fpdfdoc | Bookmarks, named dests, links/actions, annotations + appearance-stream generation (variable text), AcroForm data model (fill/read, no JS), struct tree, metadata. |
@@ -774,7 +774,7 @@ capability and costs a guarantee that, for that consumer, was already spent.
 Two constraints keep this from relaxing the guarantee for everyone else, and
 they are not negotiable:
 
-- **Isolation.** The backend lives in its own crate, `pdfrum-raster-vello-gpu`,
+- **Isolation.** The backend lives in its own crate, `pdfrum-raster-vello`,
   that **nothing in the core ring depends on** — not the `pdfrum` facade's
   default, not `pdfrum-tool`'s default features. A headless or embedded build
   must still resolve a tree with **zero `wgpu`**, and `cargo-deny`'s bans on
@@ -876,7 +876,7 @@ hand us from the docs rather than from a type error.
   publish set unless it is genuinely ready.
 
 **MET 2026-08-31, with one target missed and named** (docs/status/M12c.md §10
-is the scorecard). `pdfrum-raster-vello-gpu` renders all 44 bench documents on
+is the scorecard). `pdfrum-raster-vello` renders all 44 bench documents on
 an RTX 4090 with **zero Tier-C interior differences** and no page where one
 backend painted and the other did not; the edge residue is traced to a single
 engine call site (`shading/patch.rs:480`'s `FullCover`, which vello cannot

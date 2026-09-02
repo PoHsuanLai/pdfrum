@@ -26,7 +26,7 @@ assert_eq!((pixmap.width(), pixmap.height()), (612, 792));
 The engine never learns which rasterizer it has. A backend implements the two
 traits — fill, stroke, image, clip, layer push and pop — and everything above
 is written once. Two implementations ship separately:
-[`pdfrum-raster-vello`](https://crates.io/crates/pdfrum-raster-vello) over
+[`pdfrum-raster-vello-cpu`](https://crates.io/crates/pdfrum-raster-vello-cpu) over
 `vello_cpu` and
 [`pdfrum-raster-tinyskia`](https://crates.io/crates/pdfrum-raster-tinyskia)
 over `tiny-skia`; anything else that can fill a path can be dropped in.

@@ -210,7 +210,7 @@ fn every_backend_renders_the_same_page_at_the_same_size() {
         })
         .expect("render")
     };
-    let vello = render(Backend::Vello);
+    let vello = render(Backend::VelloCpu);
     let tiny = render(Backend::TinySkia);
     let exact = render(Backend::Agg);
     // The size is an *engine* decision, so it cannot depend on the backend.

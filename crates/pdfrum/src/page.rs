@@ -261,10 +261,10 @@ impl<'a> Page<'a> {
         let inner = options.to_inner();
         let mut diags = Diagnostics::default();
         let pixmap = match options.backend {
-            Backend::Vello => pdfrum_render::render_page_with_caches(
+            Backend::VelloCpu => pdfrum_render::render_page_with_caches(
                 &page,
                 &inner,
-                &pdfrum_raster_vello::VelloBackend::new(),
+                &pdfrum_raster_vello_cpu::VelloCpuBackend::new(),
                 caches,
                 &mut diags,
             ),
