@@ -11,8 +11,7 @@ mod type1;
 use crate::encoding::{FontEncoding, adobe_char_name, load_differences};
 use crate::glyphs::{Charmap, Face, GlyphParams, GlyphSource};
 use crate::subst::{
-    self, CodePage, FontRequest, StandardFont, SubstFont, SubstitutionOptions, SystemFontDb,
-    TestFontDb, strip_subset_prefix,
+    self, CodePage, FontRequest, StandardFont, SubstFont, SubstitutionOptions, strip_subset_prefix,
 };
 use crate::widths::{SimpleWidths, WIDTH_UNSET};
 use crate::{
@@ -527,14 +526,7 @@ fn substitute(
     opts: &SubstitutionOptions,
     diags: &mut Diagnostics,
 ) -> subst::Substitution {
-    // Scanning the system's fonts is expensive and most callers do not want
-    // it, so an empty `font_dirs` with no system scan requested means "the
-    // built-in faces only" — which is what makes tests hermetic by default.
-    if opts.font_dirs.is_empty() {
-        return subst::resolve(request, &TestFontDb::new(), opts, diags);
-    }
-    let db = SystemFontDb::scan(&opts.font_dirs);
-    subst::resolve(request, &db, opts, diags)
+    subst::resolve_with_options(request, opts, diags)
 }
 
 /// `/Encoding` resolution (`LoadPDFEncoding`).

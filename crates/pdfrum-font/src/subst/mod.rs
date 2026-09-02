@@ -104,6 +104,27 @@ pub struct SubstitutionOptions {
     /// **not** at the top of the ladder: the whole name/style/base-14 analysis
     /// runs on the document's own spelling first.
     pub croscore_font_names: bool,
+    /// Whether an empty [`font_dirs`](Self::font_dirs) means *the system's own
+    /// font directories* rather than *no directories at all*.
+    ///
+    /// The oracle's Linux build always enumerates the system's fonts:
+    /// `pdfium_test` leaves `config.m_pUserFontPaths` null unless `--font-dir`
+    /// was given (`testing/pdfium_test/pdfium_test.cc:2107-2112`), and a null
+    /// path list makes `CFX_LinuxFontInfo` add `/usr/share/fonts`,
+    /// `/usr/share/X11/fonts/Type1`, `/usr/share/X11/fonts/TTF` and
+    /// `/usr/local/share/fonts` (`core/fxge/linux/fx_linux_impl.cpp:173-176`).
+    /// So `--font-dir` *replaces* the search path; it does not *enable* it.
+    ///
+    /// The default is **`false`**, because a library whose output depends on
+    /// which fonts happen to be installed is not testable and every unit test
+    /// in the tree is written against the built-in faces. A host that wants
+    /// the oracle's behaviour — `pdfrum-tool` invoked without `--font-dir`
+    /// does — sets it to `true`.
+    ///
+    /// It has no effect when `font_dirs` is non-empty: those directories are
+    /// then the whole search path either way, which is why every conformance
+    /// invocation (which always passes `--font-dir`) is unaffected by it.
+    pub system_fonts: bool,
 }
 
 /// Rewrite a family name to its Croscore equivalent.
@@ -167,6 +188,37 @@ pub fn resolve(
         return resolve_inner(req, &CroscoreDb::new(db), opts, diags, false);
     }
     resolve_inner(req, db, opts, diags, false)
+}
+
+/// Run the ladder against whichever database `opts` selects.
+///
+/// Three databases are reachable and the choice is entirely
+/// [`SubstitutionOptions`]'s:
+///
+/// - **named directories** ([`font_dirs`](SubstitutionOptions::font_dirs) is
+///   non-empty) — those directories and nothing else, which is what
+///   `--font-dir` asks for and what every conformance run uses;
+/// - **the system's directories** (`font_dirs` empty and
+///   [`system_fonts`](SubstitutionOptions::system_fonts) set) — the oracle's
+///   own default on Linux, where `--font-dir` merely *replaces* a search path
+///   that is otherwise `/usr/share/fonts` and friends;
+/// - **the built-in faces alone** (both unset) — the hermetic default, so a
+///   unit test's answer does not depend on what is installed on the machine.
+///
+/// The scan is not cached: it happens once per substituted font, exactly as
+/// `CFX_FolderFontInfo::EnumFontList` is re-entered per lookup. Measure before
+/// changing that — a document whose fonts are all embedded never reaches here.
+#[must_use]
+pub fn resolve_with_options(
+    req: &FontRequest,
+    opts: &SubstitutionOptions,
+    diags: &mut Diagnostics,
+) -> Substitution {
+    if opts.font_dirs.is_empty() && !opts.system_fonts {
+        return resolve(req, &TestFontDb::new(), opts, diags);
+    }
+    let db = SystemFontDb::scan(&opts.font_dirs);
+    resolve(req, &db, opts, diags)
 }
 
 // The ladder is one ordered sequence: every step reads state the steps above
