@@ -48,6 +48,7 @@ use kurbo::{Affine, BezPath, Point, Rect};
 use pdfrum_common::{DiagKind, Diagnostics, Limits, Severity};
 use pdfrum_font::{Font, FontCache};
 use pdfrum_object::{Dict, Name, Object, Resolve};
+use std::any::Any;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::sync::Arc;
 
@@ -104,6 +105,48 @@ pub struct BuildContext {
     /// would silently stop it firing and let a redrawn line be extracted
     /// twice.
     font_instances: HashMap<pdfrum_object::ObjRef, Option<Arc<Font>>>,
+    /// The interactive form's default-resource faces, keyed on the object
+    /// that declares them.
+    ///
+    /// # Why the value is erased
+    ///
+    /// The faces are `pdfrum_doc::ap::FormFonts`, and this crate is *below*
+    /// `pdfrum-doc` — it cannot name the type. The alternative was to thread
+    /// a second per-document cache through `annot_render::overlay_with`,
+    /// which already carries eight arguments, and onward through the facade's
+    /// render path, `RenderSession` and `FormSession`: a public API change
+    /// across four crates to pass state that is *already* being threaded
+    /// here, beside the font, colour-space, function and image caches this
+    /// exists to hold.
+    ///
+    /// So the slot is erased and the layer above supplies the type through
+    /// [`Self::form_fonts`]. This is storage erasure, not a polymorphism
+    /// seam: nothing is ever *dispatched* through the `Any`, it is
+    /// downcast straight back to the one type that put it there, so the trait
+    /// list STYLE.md §2b closes at three is untouched.
+    ///
+    /// # Why it is memoized at all
+    ///
+    /// Building it walks the AcroForm `/DR /Font` dictionary and fully
+    /// constructs every font in it — encoding tables, `/Differences`, the
+    /// substitution ladder — then loads a fallback and the second faces a
+    /// charset outside the `/DA` font needs. That is a pure function of the
+    /// `/AcroForm` dictionary, which does not change between renders of one
+    /// document, and the annotation overlay ran it **once per page per
+    /// render**. On a form document whose `/DR` fonts are embedded it was
+    /// measured at 78 ms against an appearance generation of under 1 ms, and
+    /// it was paid by every document carrying any annotation, not only by
+    /// forms (`docs/status/M13-perf-baseline.md` §4-5).
+    ///
+    /// # Why it is keyed
+    ///
+    /// On the `/AcroForm` reference, for the same reason
+    /// [`font_instances`](Self::font_instances) is keyed on the reference
+    /// that named a font: one context may legitimately be threaded through
+    /// two documents, and a slot keyed on nothing would hand the second
+    /// document the first one's faces. [`FormFontsKey`] says which of the
+    /// three cases a catalog is in, and only the first two are cached.
+    form_fonts: HashMap<FormFontsKey, Arc<dyn Any + Send + Sync>>,
     /// The content buffers currently being parsed, which is the form guard.
     in_flight: HashSet<BufferId>,
     /// How many Type 3 glyph procedures are being interpreted above the
@@ -115,6 +158,32 @@ pub struct BuildContext {
     /// other through two distinct streams, which is what
     /// [`MAX_TYPE3_DEPTH`](pdfrum_font::MAX_TYPE3_DEPTH) bounds.
     type3_depth: u32,
+}
+
+/// Which interactive form a set of cached form faces belongs to.
+///
+/// The catalog's `/AcroForm` entry is one of exactly three things, and they
+/// have three different cache lifetimes:
+///
+/// - **an indirect reference**, which is what a real form is written as. The
+///   reference is the document-scoped identity every other cache on
+///   [`BuildContext`] keys on, so the faces are cached under it.
+/// - **absent**, which is most documents — including every document that
+///   carries an annotation but no form at all, which is the case the
+///   annotation overlay made expensive. The faces then depend on *nothing*
+///   from the document: they are the fallback face and the second faces the
+///   font map can add, both built from constant dictionaries. One slot serves
+///   every such document a context is threaded through.
+/// - **a direct dictionary**, which is legal and rare. It has no reference to
+///   key on and its content *is* document-specific, so it is not cached.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum FormFontsKey {
+    /// The `/AcroForm` the given object holds.
+    Form(pdfrum_object::ObjRef),
+    /// No `/AcroForm` at all.
+    None,
+    /// An `/AcroForm` written as a direct dictionary.
+    Direct,
 }
 
 /// A content buffer's identity: the object that holds it, and its extent.
@@ -162,6 +231,40 @@ impl BuildContext {
             substitution: options,
             ..Self::default()
         }
+    }
+
+    /// The interactive form's faces for `key`, built by `load` on the first
+    /// ask and handed back from the cache on every later one.
+    ///
+    /// `load` is a closure rather than a value because the whole point is not
+    /// to build the faces on a hit — see [`form_fonts`](Self::form_fonts) for
+    /// what building them costs and why the result is safe to reuse.
+    ///
+    /// [`FormFontsKey::Direct`] is not cached and always calls `load`: a
+    /// direct `/AcroForm` dictionary has no identity to key on, and reusing
+    /// one document's faces for another's would be wrong. That case
+    /// re-derives, which is correct if slower.
+    ///
+    /// Erased in storage and downcast back on the way out. A cached value
+    /// whose type does not match — which cannot happen, since one caller owns
+    /// the type — is treated as a miss and rebuilt rather than reported.
+    pub fn form_fonts<T: Any + Send + Sync>(
+        &mut self,
+        key: FormFontsKey,
+        load: impl FnOnce(&mut Self) -> T,
+    ) -> Arc<T> {
+        if key == FormFontsKey::Direct {
+            return Arc::new(load(self));
+        }
+        if let Some(cached) = self.form_fonts.get(&key)
+            && let Ok(hit) = Arc::clone(cached).downcast::<T>()
+        {
+            return hit;
+        }
+        let built = Arc::new(load(self));
+        self.form_fonts
+            .insert(key, Arc::clone(&built) as Arc<dyn Any + Send + Sync>);
+        built
     }
 
     /// How many form parses are in flight.

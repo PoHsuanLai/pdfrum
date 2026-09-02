@@ -108,7 +108,7 @@ pub struct FormSession<'a> {
     /// own page.
     page_in_view: u32,
     /// The form's default-resource fonts, loaded once.
-    fonts: pdfrum_doc::ap::FormFonts,
+    fonts: std::sync::Arc<pdfrum_doc::ap::FormFonts>,
 }
 
 impl<'a> FormSession<'a> {

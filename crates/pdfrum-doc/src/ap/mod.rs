@@ -525,12 +525,43 @@ impl FormFonts {
     /// so a `/DA` naming nothing — or naming a font the resources lack — still
     /// has a face to measure with. That is the same substitution a viewer
     /// performs; it is only the *metric source* that this fixes.
+    ///
+    /// # Memoized on the context
+    ///
+    /// The faces are a pure function of the catalog's `/AcroForm`, and
+    /// building them is expensive — the `/DR` walk constructs every font the
+    /// form declares, encoding tables and substitution ladder included. The
+    /// annotation overlay asks for them **once per page per render**, so the
+    /// result is cached in the [`BuildContext`](pdfrum_page::BuildContext)
+    /// beside the rest of the per-document font state, keyed on the
+    /// `/AcroForm` reference. A caller threading one context through many
+    /// renders of one document pays for this once;
+    /// `docs/status/M13-perf-baseline.md` §5 measures what it used to cost.
+    ///
+    /// Nothing about *what* is built changed when the cache was added, which
+    /// is what makes the appearance streams identical: the fallback still
+    /// goes through the same loader, and the second faces are still loaded
+    /// here rather than where a field discovers it needs one. Only the number
+    /// of times moved.
     #[must_use]
     pub fn load<R: Resolve>(
         catalog: &Dict,
         r: &R,
         ctx: &mut pdfrum_page::BuildContext,
-    ) -> FormFonts {
+    ) -> std::sync::Arc<FormFonts> {
+        let key = match catalog.raw(names::ACRO_FORM) {
+            Some(pdfrum_object::Object::Ref(reference)) => {
+                pdfrum_page::FormFontsKey::Form(*reference)
+            }
+            Some(_) => pdfrum_page::FormFontsKey::Direct,
+            None => pdfrum_page::FormFontsKey::None,
+        };
+        ctx.form_fonts(key, |ctx| FormFonts::build(catalog, r, ctx))
+    }
+
+    /// [`Self::load`] without the cache: the faces, built now.
+    #[must_use]
+    fn build<R: Resolve>(catalog: &Dict, r: &R, ctx: &mut pdfrum_page::BuildContext) -> FormFonts {
         let (limits, mut diags) = (
             pdfrum_common::Limits::default(),
             pdfrum_common::Diagnostics::default(),
@@ -1250,6 +1281,70 @@ mod tests {
         let untouched = AnnotOverlay::with_capacity(2);
         base.merge_over(&untouched);
         assert!(base.is_live_edit(1));
+    }
+
+    #[test]
+    fn the_form_faces_are_built_once_per_document_and_shared() {
+        // The regression this pins: `FormFonts::load` used to rebuild every
+        // `/DR` font, the fallback, and the synthesized second faces on every
+        // call, and the annotation overlay calls it once per page per render.
+        // See docs/status/M13-perf-baseline.md §4-5.
+        let catalog = dict(&[("AcroForm", Object::Ref(pdfrum_object::ObjRef::new(7, 0)))]);
+        let mut ctx = pdfrum_page::BuildContext::new();
+        let first = super::FormFonts::load(&catalog, &NoResolve, &mut ctx);
+        let second = super::FormFonts::load(&catalog, &NoResolve, &mut ctx);
+        assert!(
+            std::sync::Arc::ptr_eq(&first, &second),
+            "a second load of one document's form must hit the cache"
+        );
+    }
+
+    #[test]
+    fn a_catalog_with_no_form_shares_one_set_of_faces() {
+        // The case that made this a whole-corpus regression rather than a
+        // forms one: a document with an annotation but no `/AcroForm` paid
+        // the fallback load and the substitute synthesis on every render.
+        // With no form there is nothing document-specific to build, so one
+        // slot serves every such document a context is threaded through.
+        let mut ctx = pdfrum_page::BuildContext::new();
+        let first = super::FormFonts::load(&dict(&[]), &NoResolve, &mut ctx);
+        let second = super::FormFonts::load(
+            &dict(&[("Type", Object::Name(Name::from("Catalog")))]),
+            &NoResolve,
+            &mut ctx,
+        );
+        assert!(std::sync::Arc::ptr_eq(&first, &second));
+    }
+
+    #[test]
+    fn two_documents_do_not_share_one_contexts_form_faces() {
+        // A `BuildContext` may legitimately be threaded through two
+        // documents, so the cache keys on the `/AcroForm` reference the way
+        // every other cache on it keys on the reference that named its value.
+        let mut ctx = pdfrum_page::BuildContext::new();
+        let one = super::FormFonts::load(
+            &dict(&[("AcroForm", Object::Ref(pdfrum_object::ObjRef::new(7, 0)))]),
+            &NoResolve,
+            &mut ctx,
+        );
+        let two = super::FormFonts::load(
+            &dict(&[("AcroForm", Object::Ref(pdfrum_object::ObjRef::new(8, 0)))]),
+            &NoResolve,
+            &mut ctx,
+        );
+        assert!(!std::sync::Arc::ptr_eq(&one, &two));
+    }
+
+    #[test]
+    fn a_direct_form_dictionary_is_not_cached() {
+        // It has no reference to key on, and its content is
+        // document-specific, so it re-derives rather than risking one
+        // document's faces standing in for another's.
+        let catalog = dict(&[("AcroForm", Object::Dict(dict(&[])))]);
+        let mut ctx = pdfrum_page::BuildContext::new();
+        let first = super::FormFonts::load(&catalog, &NoResolve, &mut ctx);
+        let second = super::FormFonts::load(&catalog, &NoResolve, &mut ctx);
+        assert!(!std::sync::Arc::ptr_eq(&first, &second));
     }
 
     #[test]
