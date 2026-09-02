@@ -135,6 +135,98 @@ impl Pixmap {
         }
     }
 
+    /// `[oracle-bug]` Remove a non-isolated group's initial backdrop from its
+    /// finished pixels (ISO 32000 §11.4.6, and §11.6.6's "Group Composition
+    /// Function").
+    ///
+    /// A non-isolated group's buffer starts as a copy of the page beneath it,
+    /// so that copy is present in the result and would be counted a **second**
+    /// time when the group is composited back over the same pixels.
+    /// `cpdf_renderstatus.cpp:673-679` makes exactly that copy via `GetDIBits`,
+    /// `:680-683` hands it to `CreateForNewBitmapWithBackdrop`, and
+    /// `:740-751` composites it back with **no removal step anywhere between**
+    /// — a grep of `core/` finds no implementation of the formula at all. The
+    /// error is invisible at group alpha 1 under Normal blending and grows with
+    /// both. pdf.js sidesteps it by drawing a non-isolated group directly onto
+    /// the parent canvas (`canvas.js:3205-3237`), which is the same arithmetic
+    /// reached a different way.
+    ///
+    /// The spec's formula, per channel and premultiplied here:
+    ///
+    /// ```text
+    /// C = Cn + (Cn - C0) * (a0 / agn - a0)
+    /// ```
+    ///
+    /// where `C0`/`a0` are the backdrop's and `Cn`/`agn` the group's. With
+    /// `agn == a0` — nothing was drawn over that pixel — this is the backdrop
+    /// unchanged, and the removal below returns a transparent pixel there,
+    /// which is the same image once composited back.
+    ///
+    /// `backdrop` must match this pixmap's dimensions; a mismatch is a no-op,
+    /// on the same invariant as [`Self::multiply_alpha_mask`].
+    pub fn remove_backdrop(&mut self, backdrop: &Self) {
+        if backdrop.width != self.width || backdrop.height != self.height {
+            return;
+        }
+        for (chunk, base) in self
+            .data
+            .chunks_exact_mut(4)
+            .zip(backdrop.data.chunks_exact(4))
+        {
+            let (Some(&agn), Some(&a0)) = (chunk.get(3), base.get(3)) else {
+                continue;
+            };
+            // Nothing was added over this pixel: it is pure backdrop, and the
+            // group contributes nothing there.
+            if agn <= a0 {
+                for b in chunk.iter_mut() {
+                    *b = 0;
+                }
+                continue;
+            }
+            // Un-premultiply, apply the formula, re-premultiply. The result's
+            // alpha is the group's own contribution, `(agn - a0) / (1 - a0)`.
+            let (fa0, fagn) = (f32::from(a0) / 255.0, f32::from(agn) / 255.0);
+            let out_alpha = if fa0 >= 1.0 {
+                0.0
+            } else {
+                ((fagn - fa0) / (1.0 - fa0)).clamp(0.0, 1.0)
+            };
+            for index in 0..3 {
+                let (Some(&cn), Some(&c0)) = (chunk.get(index), base.get(index)) else {
+                    continue;
+                };
+                let un = |v: u8, a: f32| {
+                    if a > 0.0 {
+                        f32::from(v) / 255.0 / a
+                    } else {
+                        0.0
+                    }
+                };
+                let (ucn, uc0) = (un(cn, fagn), un(c0, fa0));
+                let colour = uc0.mul_add(-(fa0 / fagn - fa0), ucn.mul_add(fa0 / fagn - fa0, ucn));
+                #[expect(
+                    clippy::cast_possible_truncation,
+                    clippy::cast_sign_loss,
+                    reason = "the clamp bounds the value to 0.0..=255.0"
+                )]
+                let byte = (colour.clamp(0.0, 1.0) * out_alpha * 255.0).round() as u8;
+                if let Some(slot) = chunk.get_mut(index) {
+                    *slot = byte;
+                }
+            }
+            #[expect(
+                clippy::cast_possible_truncation,
+                clippy::cast_sign_loss,
+                reason = "the clamp bounds the value to 0.0..=255.0"
+            )]
+            let alpha_byte = (out_alpha * 255.0).round() as u8;
+            if let Some(slot) = chunk.get_mut(3) {
+                *slot = alpha_byte;
+            }
+        }
+    }
+
     /// Multiply every channel by a coverage mask, PDFium's
     /// `MultiplyAlphaMask`. The mask must match the pixmap's dimensions
     /// exactly — an invariant, not a preference: a mismatched mask silently
@@ -482,6 +574,54 @@ pub fn unpremultiply_rgb(r: u8, g: u8, b: u8, a: u8) -> [u8; 3] {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Audit item **A12**. The two properties the formula has to have, and
+    /// which `cpdf_renderstatus.cpp` never gives it because it does not
+    /// implement removal at all.
+    #[test]
+    fn removing_the_backdrop_leaves_only_the_groups_own_contribution() {
+        // 1. A pixel nothing was drawn over is pure backdrop, so the group
+        //    contributes nothing there and must come back transparent —
+        //    otherwise compositing draws the page over itself.
+        let backdrop = Pixmap::filled(1, 1, peniko::Color::from_rgba8(90, 120, 150, 255));
+        let mut group = backdrop.clone();
+        group.remove_backdrop(&backdrop);
+        assert_eq!(group.pixel(0, 0), Some([0, 0, 0, 0]));
+
+        // 2. Over a *translucent* backdrop the group's own contribution is
+        //    recoverable, and comes back at the alpha the group added. Here
+        //    the backdrop is half-opaque and the group finished opaque, so
+        //    the group's own alpha is `(1 - 0.5) / (1 - 0.5) = 1`.
+        let half = Pixmap::filled(1, 1, peniko::Color::from_rgba8(45, 60, 75, 128));
+        let mut group = Pixmap::filled(1, 1, peniko::Color::from_rgba8(200, 40, 10, 255));
+        group.remove_backdrop(&half);
+        let after = group.pixel(0, 0).expect("one pixel");
+        assert_eq!(after[3], 255, "the group finished opaque over the backdrop");
+        // And it is not the backdrop: the removal changed the colour.
+        assert_ne!(after, [45, 60, 75, 128]);
+
+        // 3. `[oracle-bug]` note, recorded rather than hidden: over a fully
+        //    **opaque** backdrop a non-isolated group's alpha cannot rise
+        //    above 255, so the alpha channel carries no record of what the
+        //    group painted and the removal yields a transparent pixel. That
+        //    is the correct composite — the page beneath is already those
+        //    pixels — but it means this formula recovers nothing extra there,
+        //    which is why the two rows it turns byte-exact are the evidence
+        //    that matters and not this unit test.
+        let mut group = Pixmap::filled(1, 1, peniko::Color::from_rgba8(200, 40, 10, 255));
+        group.remove_backdrop(&backdrop);
+        assert_eq!(group.pixel(0, 0), Some([0, 0, 0, 0]));
+    }
+
+    /// Audit item **A12**. A mismatched backdrop is a no-op, on the same
+    /// invariant `multiply_alpha_mask` keeps.
+    #[test]
+    fn removing_a_mismatched_backdrop_changes_nothing() {
+        let mut group = Pixmap::filled(2, 2, peniko::Color::from_rgba8(1, 2, 3, 200));
+        let before = group.clone();
+        group.remove_backdrop(&Pixmap::filled(3, 3, peniko::Color::BLACK));
+        assert_eq!(group, before);
+    }
 
     #[test]
     fn multiply_alpha_truncates() {
