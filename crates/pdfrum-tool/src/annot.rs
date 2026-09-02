@@ -8,9 +8,9 @@
 
 use std::path::{Path, PathBuf};
 
+use crate::annot_dump::{self, ObjectKind};
 use pdfrum_common::{Diagnostics, Limits};
 use pdfrum_doc::annot::appearance::{ApMode, annot_ap};
-use pdfrum_doc::annot_dump::{self, ObjectKind};
 use pdfrum_doc::ap;
 use pdfrum_object::{Dict, Resolve};
 use pdfrum_page::{BuildContext, PageObject, Resources};

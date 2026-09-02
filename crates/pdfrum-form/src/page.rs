@@ -339,25 +339,22 @@ struct WidgetRead {
 
 /// Reads the four hit-test gates and the field classification.
 fn read_widget<R: Resolve>(dict: &Dict, r: &R) -> (WidgetHit, WidgetRead) {
-    let flags = FieldFlags(inherited_int(dict, obj_names::FF, r).unwrap_or(0));
+    let flags = FieldFlags::from_bits(inherited_int(dict, obj_names::FF, r).unwrap_or(0));
     let field_type = inherited_name(dict, obj_names::FT, r).unwrap_or_default();
     let kind = FieldKind::classify(&field_type, flags);
-    let annot_flags = pdfrum_doc::AnnotFlags(dict.int(obj_names::F, r).unwrap_or(0));
+    let annot_flags = pdfrum_doc::AnnotFlags::from_bits(dict.int(obj_names::F, r).unwrap_or(0));
 
     let hit = WidgetHit {
         signature: kind == Some(FieldKind::Signature),
         // Any of the three "do not show this" bits, which is the oracle's own
         // disjunction rather than the hidden bit alone.
-        hidden: annot_flags.is_hidden() || annot_flags.no_view() || is_invisible(annot_flags),
+        hidden: annot_flags.is_hidden()
+            || annot_flags.no_view()
+            || annot_flags.contains(pdfrum_doc::AnnotFlags::INVISIBLE),
         read_only: flags.is_read_only(),
         push_button: kind == Some(FieldKind::Button),
     };
     (hit, WidgetRead { kind, flags })
-}
-
-/// The invisible bit, which is bit 1 of `/F`.
-fn is_invisible(flags: pdfrum_doc::AnnotFlags) -> bool {
-    flags.0 & 1 != 0
 }
 
 /// Which band a subtype sorts into.

@@ -18,16 +18,28 @@
 
 use std::fmt::Write as _;
 
-use kurbo::Rect;
 use pdfrum_common::{DiagKind, Diagnostics, Severity};
-use pdfrum_object::{Array, Dict, Object, Resolve, decode_text, names as obj_names};
+use pdfrum_object::{Array, Dict, Resolve, decode_text, names as obj_names};
 
-use crate::annot::{Subtype, appearance, quad};
-use crate::ap::AnnotOverlay;
-use crate::color::Color;
-use crate::geom;
-use crate::names;
-use crate::nav::open_action::Hidden;
+use pdfrum_doc::annot::{Subtype, appearance, quad};
+use pdfrum_doc::ap::AnnotOverlay;
+use pdfrum_doc::color::Color;
+use pdfrum_doc::geom;
+use pdfrum_doc::nav::open_action::Hidden;
+
+/// The two `/F`-adjacent keys this format reads that `pdfrum_object::names`
+/// does not declare. `pdfrum-doc`'s own table is private, and the emitter no
+/// longer lives there.
+mod names {
+    pub(super) use pdfrum_object::names::{C, CA};
+
+    pdfrum_object::names! {
+        /// An annotation's interior colour (`/IC`).
+        IC = "IC";
+        /// A text-markup annotation's quadrilaterals (`/QuadPoints`).
+        QUAD_POINTS = "QuadPoints";
+    }
+}
 
 /// What kind of page object an appearance stream drew, as the dump names it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -273,13 +285,17 @@ fn alpha_byte(alpha: f32) -> u32 {
 /// lands exactly on a half-milli boundary, "almost never" is not a property
 /// a byte-exact contract can rest on.
 #[must_use]
-pub fn three_places(value: f32) -> String {
+fn three_places(value: f32) -> String {
     round_half_even(f64::from(value), 3)
 }
 
 /// A number with six decimals, rounding halves to even.
-#[must_use]
-pub fn six_places(value: f32) -> String {
+///
+/// The format's other fixed-point width. No line in the current dump uses it,
+/// but it and [`three_places`] are one rule with two precisions, and the
+/// tie-breaking test covers both.
+#[cfg(test)]
+fn six_places(value: f32) -> String {
     round_half_even(f64::from(value), 6)
 }
 
@@ -342,24 +358,6 @@ fn wide(text: &str) -> String {
         Some(at) => text.get(..at).unwrap_or_default().to_owned(),
         None => text.to_owned(),
     }
-}
-
-/// The rectangle an annotation reports, overlay applied.
-#[must_use]
-pub fn reported_rect<R: Resolve>(
-    dict: &Dict,
-    index: usize,
-    overlay: Option<&AnnotOverlay>,
-    r: &R,
-) -> Rect {
-    let raw = dict.rect(obj_names::RECT, r);
-    overlay.map_or(raw, |overlay| overlay.rect(index, raw))
-}
-
-/// Whether an object is a dictionary the dump would accept as an annotation.
-#[must_use]
-pub fn is_annotation(object: &Object) -> bool {
-    object.as_dict().is_some()
 }
 
 #[cfg(test)]

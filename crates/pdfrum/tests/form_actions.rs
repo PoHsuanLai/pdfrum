@@ -70,7 +70,7 @@ fn a_focused_link_fires_its_action_on_return_with_the_modifiers_held() {
     ] {
         let response = session.on_key_down(VirtualKey::RETURN, modifiers);
         for (_, held) in response.actions() {
-            seen.push(held.0);
+            seen.push(held.bits());
         }
     }
     assert_eq!(

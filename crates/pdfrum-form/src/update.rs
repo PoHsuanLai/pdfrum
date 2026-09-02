@@ -283,7 +283,7 @@ mod tests {
             ));
         }
 
-        let seen: Vec<u32> = response.actions().map(|(_, m)| m.0).collect();
+        let seen: Vec<u32> = response.actions().map(|(_, m)| m.bits()).collect();
         // The raw bit values are part of the contract, not an internal choice.
         assert_eq!(seen, vec![0, 2, 1, 3]);
     }

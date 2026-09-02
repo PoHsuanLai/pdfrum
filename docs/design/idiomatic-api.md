@@ -1669,6 +1669,44 @@ Covered in full in §6. Short version: do not add `bitflags`. Give
 + `contains` algebra. Leave `FieldFlags` as predicates. Replace the
 permissions `u32` with WP1’s struct.
 
+> **Landed 2026-09-02 as §A.10 step 6, together with the `annot_dump`
+> eviction.** All four inner fields are private; the three set-shaped types
+> share one method list (`bits` / `from_bits` / `contains` / `union` / `with`
+> / `without` / `is_empty` / `BitOr`, every one `const`), and `FieldFlags`
+> takes `bits` / `from_bits` and no algebra, as ruled. §6's sketch was
+> accurate at the code; four things it did not say:
+>
+> 1. **`FontFlags` was contained.** `grep -rn "FontFlags(" crates/` returns 36
+>    lines, one of which is the struct definition: **35 constructor sites, all
+>    inside `pdfrum-font`.** 32 wrapped a constant expression and became the
+>    expression itself (`FontFlags(FontFlags::SERIF | FontFlags::ITALIC)` →
+>    `FontFlags::SERIF | FontFlags::ITALIC`); 1 was `FontFlags(0)`, now
+>    `FontFlags::NONE`; 2 were dynamic — a test loop and a test helper, both
+>    of which now take `FontFlags` instead of `u32`. **The one real parse site
+>    the grep misses is `descriptor.rs:101`**, which passed the tuple
+>    constructor as a function (`.map_or(FontFlags::DEFAULT, FontFlags)`); it
+>    is now `FontFlags::from_bits`, and is exactly the unknown-bit round trip
+>    §6 asks for. Nothing outside the crate constructs one, so §A.10's "many
+>    tests construct them" was true and its risk was not: no other crate
+>    moved, and the facade never named the type at all.
+> 2. **`Modifiers` was closer than "already close".** It had `contains`,
+>    `union`, `without`, `is_empty`, `BitOr`, `Default` and `Hash` already.
+>    It was missing `bits`, `from_bits`, `with`, and `const` on all of them.
+> 3. **Three bits were being read through the `pub` inner field rather than
+>    through any predicate**, which is what made those fields load-bearing:
+>    `annot_render.rs`'s and `pdfrum-form`'s hand-rolled `/F` invisible-bit
+>    tests (`flags.0 & 1`, spelled twice with a private helper in one crate),
+>    and `pdfrum-form`'s `/Ff` comb bit (`flags.0 & (1 << 24)`). Making the
+>    field private forced each into a named accessor —
+>    `AnnotFlags::INVISIBLE` through `contains`, and `FieldFlags::is_comb` —
+>    so the eviction paid for itself rather than costing anything.
+> 4. **`annot_dump` carried two dead public functions.** `reported_rect` and
+>    `is_annotation` had no caller anywhere in the workspace; they existed
+>    only because the module was public. Moving the module deleted them.
+>    `docs/design/pdfrum-doc.md` justified keeping the emitter in `pdfrum-doc`
+>    with "same reasoning as `structure/dump.rs`"; that reasoning does not
+>    carry, and the file now says why.
+
 ### WP3 — Collapse the render / text method grid
 
 Six methods for “which rasterizer × which cache”:
@@ -2424,6 +2462,16 @@ FieldFlags(pub i64)                              // predicates only
 AnnotFlags(pub i64)                              // a few predicates, no constants
 doc.permissions(false) -> u32                    // not a type
 ```
+
+> **Closed.** The permissions row landed in step 4 (`c3d92af`); the other four
+> in step 6. What the four read now:
+>
+> ```rust
+> Modifiers::SHIFT | Modifiers::CONTROL           // unchanged, plus bits/from_bits/with
+> FontFlags::SERIF | FontFlags::ITALIC            // constants are Self
+> FieldFlags::from_bits(word)                     // predicates only, by ruling
+> AnnotFlags::PRINT | AnnotFlags::NO_ZOOM         // ten named constants + the fixed dump order
+> ```
 
 ### One hand-rolled pattern, used where the bits are actually a set
 

@@ -66,7 +66,6 @@ while the tree is empty, so it starts passing on its own when the objects do.
 | `nav/filespec` | the five-key precedence, the two different decodings, the embedded-file stream |
 | `nav/link` | the null-preserving per-page list and the backward hit test |
 | `annot` | the subtype table, the flag word, quadpoint arithmetic, the `/AP` + `/AS` ladder, the annotation list with pop-up synthesis |
-| `annot_dump` | the `--annot` emitter, including round-half-to-even fixed-point formatting |
 | `ap/fmt` | both float writers, pinned against a shared reference table |
 | `ap/emit` | the content sink that makes the writer choice explicit at every call site |
 | `ap/border` | the five border styles and the two different width lookups |
@@ -153,7 +152,9 @@ comparing against it — a golden written by an aborting process is not an
 answer, and pinning it would make the crash the contract.
 
 **E4 — `%.3f` tie-breaking does matter, and is implemented.** `annot_dump`
-carries a round-half-to-even fixed-point formatter rather than relying on
+— which lives in `pdfrum-tool` since WP2, because the `--annot` format is the
+CLI's, not a document-model surface — carries a round-half-to-even
+fixed-point formatter rather than relying on
 Rust's round-half-away-from-zero, so a value landing exactly on a half-milli
 boundary agrees with the C library.
 

@@ -45,6 +45,7 @@
 #![forbid(unsafe_code)]
 
 mod annot;
+mod annot_dump;
 mod chrome;
 mod content;
 mod dispatch;

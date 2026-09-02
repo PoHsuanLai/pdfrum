@@ -431,7 +431,7 @@ mod tests {
                 &glyphs,
                 FontEncoding::MacRoman,
                 &NO_DIFFS,
-                FontFlags(FontFlags::NON_SYMBOLIC),
+                FontFlags::NON_SYMBOLIC,
                 true,
                 0,
             );
@@ -522,7 +522,7 @@ mod tests {
             &glyphs,
             FontEncoding::WinAnsi,
             &NO_DIFFS,
-            FontFlags(FontFlags::SYMBOLIC),
+            FontFlags::SYMBOLIC,
             true,
             0,
         );
@@ -533,7 +533,7 @@ mod tests {
             &glyphs,
             FontEncoding::WinAnsi,
             &NO_DIFFS,
-            FontFlags(FontFlags::SYMBOLIC),
+            FontFlags::SYMBOLIC,
             false,
             0,
         );
@@ -544,7 +544,7 @@ mod tests {
             &glyphs,
             FontEncoding::WinAnsi,
             &NO_DIFFS,
-            FontFlags(FontFlags::NON_SYMBOLIC),
+            FontFlags::NON_SYMBOLIC,
             true,
             0,
         );
@@ -555,7 +555,7 @@ mod tests {
             &glyphs,
             FontEncoding::Standard,
             &NO_DIFFS,
-            FontFlags(FontFlags::SYMBOLIC),
+            FontFlags::SYMBOLIC,
             true,
             0,
         );
@@ -570,7 +570,7 @@ mod tests {
             &glyphs,
             FontEncoding::WinAnsi,
             &NO_DIFFS,
-            FontFlags(FontFlags::SYMBOLIC),
+            FontFlags::SYMBOLIC,
             true,
             0,
         );
@@ -585,7 +585,7 @@ mod tests {
             &glyphs,
             FontEncoding::Builtin,
             &NO_DIFFS,
-            FontFlags(FontFlags::SYMBOLIC),
+            FontFlags::SYMBOLIC,
             true,
             0,
         );
@@ -598,7 +598,7 @@ mod tests {
             &glyphs,
             FontEncoding::Builtin,
             &NO_DIFFS,
-            FontFlags(FontFlags::NON_SYMBOLIC),
+            FontFlags::NON_SYMBOLIC,
             true,
             0,
         );
@@ -617,7 +617,7 @@ mod tests {
             &glyphs,
             FontEncoding::Builtin,
             &NO_DIFFS,
-            FontFlags(FontFlags::SYMBOLIC),
+            FontFlags::SYMBOLIC,
             true,
             0,
         );
@@ -635,7 +635,7 @@ mod tests {
             &glyphs,
             FontEncoding::Builtin,
             &NO_DIFFS,
-            FontFlags(FontFlags::SYMBOLIC),
+            FontFlags::SYMBOLIC,
             true,
             0,
         );
@@ -654,7 +654,7 @@ mod tests {
             &glyphs,
             FontEncoding::Builtin,
             &NO_DIFFS,
-            FontFlags(FontFlags::SYMBOLIC),
+            FontFlags::SYMBOLIC,
             true,
             0,
         );

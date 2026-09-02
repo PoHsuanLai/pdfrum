@@ -111,34 +111,58 @@ impl Key {
     pub const CONTROL: Key = Key(0x11);
 }
 
-/// The modifier bits carried by an event.
+/// The modifier bits carried by an event (`FWL_EVENTFLAG`).
 ///
 /// A hand-written bitflag newtype rather than a dependency: the dependency
-/// manifest is closed and this is nine constants and two operations.
+/// manifest is closed and this is nine constants and a handful of operations
+/// (STYLE.md §5, SPEC.md §15.5). It shares the algebra of
+/// `pdfrum_font::FontFlags` and `pdfrum_doc::AnnotFlags`, unknown-bit
+/// retention included.
+///
+/// ```
+/// use pdfrum_form::Modifiers;
+///
+/// let m = Modifiers::SHIFT | Modifiers::CONTROL;
+/// assert!(m.contains(Modifiers::SHIFT));
+/// assert!(!m.without(Modifiers::SHIFT).contains(Modifiers::SHIFT));
+/// assert_eq!(Modifiers::from_bits(1 << 30).bits(), 1 << 30);
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
-pub struct Modifiers(pub u32);
+pub struct Modifiers(u32);
 
 impl Modifiers {
     /// No modifiers held.
-    pub const NONE: Modifiers = Modifiers(0);
+    pub const NONE: Self = Self(0);
     /// Shift.
-    pub const SHIFT: Modifiers = Modifiers(1 << 0);
+    pub const SHIFT: Self = Self(1 << 0);
     /// Control.
-    pub const CONTROL: Modifiers = Modifiers(1 << 1);
+    pub const CONTROL: Self = Self(1 << 1);
     /// Alt.
-    pub const ALT: Modifiers = Modifiers(1 << 2);
+    pub const ALT: Self = Self(1 << 2);
     /// Meta — Command on Apple keyboards.
-    pub const META: Modifiers = Modifiers(1 << 3);
+    pub const META: Self = Self(1 << 3);
     /// The key came from the numeric keypad.
-    pub const KEYPAD: Modifiers = Modifiers(1 << 4);
+    pub const KEYPAD: Self = Self(1 << 4);
     /// The key is repeating because it is held down.
-    pub const AUTO_REPEAT: Modifiers = Modifiers(1 << 5);
+    pub const AUTO_REPEAT: Self = Self(1 << 5);
     /// The left mouse button is down.
-    pub const LEFT_BUTTON: Modifiers = Modifiers(1 << 6);
+    pub const LEFT_BUTTON: Self = Self(1 << 6);
     /// The middle mouse button is down.
-    pub const MIDDLE_BUTTON: Modifiers = Modifiers(1 << 7);
+    pub const MIDDLE_BUTTON: Self = Self(1 << 7);
     /// The right mouse button is down.
-    pub const RIGHT_BUTTON: Modifiers = Modifiers(1 << 8);
+    pub const RIGHT_BUTTON: Self = Self(1 << 8);
+
+    /// The raw modifier word, including any bit this type does not name.
+    #[must_use]
+    pub const fn bits(self) -> u32 {
+        self.0
+    }
+
+    /// The word as a host reported it. **Unknown bits are retained.**
+    #[must_use]
+    pub const fn from_bits(bits: u32) -> Self {
+        Self(bits)
+    }
 
     /// Whether every bit of `other` is set here.
     ///
@@ -146,33 +170,39 @@ impl Modifiers {
     /// `contains` the wrong question to ask about "no modifiers held" — use
     /// `== Modifiers::NONE` for that.
     #[must_use]
-    pub fn contains(self, other: Modifiers) -> bool {
+    pub const fn contains(self, other: Self) -> bool {
         self.0 & other.0 == other.0
     }
 
     /// Both sets of bits.
     #[must_use]
-    pub fn union(self, other: Modifiers) -> Modifiers {
-        Modifiers(self.0 | other.0)
+    pub const fn union(self, other: Self) -> Self {
+        Self(self.0 | other.0)
+    }
+
+    /// A copy with `other`'s bits set. An alias for [`Modifiers::union`].
+    #[must_use]
+    pub const fn with(self, other: Self) -> Self {
+        self.union(other)
     }
 
     /// The bits of `self` that are not in `other`.
     #[must_use]
-    pub fn without(self, other: Modifiers) -> Modifiers {
-        Modifiers(self.0 & !other.0)
+    pub const fn without(self, other: Self) -> Self {
+        Self(self.0 & !other.0)
     }
 
     /// Whether no bit at all is set.
     #[must_use]
-    pub fn is_empty(self) -> bool {
+    pub const fn is_empty(self) -> bool {
         self.0 == 0
     }
 }
 
 impl std::ops::BitOr for Modifiers {
-    type Output = Modifiers;
+    type Output = Self;
 
-    fn bitor(self, rhs: Modifiers) -> Modifiers {
+    fn bitor(self, rhs: Self) -> Self {
         self.union(rhs)
     }
 }
@@ -285,11 +315,34 @@ mod tests {
     /// name them numerically.
     #[test]
     fn modifier_bits_are_the_documented_wire_values() {
-        assert_eq!(Modifiers::SHIFT.0, 1);
-        assert_eq!(Modifiers::CONTROL.0, 2);
-        assert_eq!((Modifiers::SHIFT | Modifiers::CONTROL).0, 3);
-        assert_eq!(Modifiers::ALT.0, 4);
-        assert_eq!(Modifiers::META.0, 8);
+        assert_eq!(Modifiers::SHIFT.bits(), 1);
+        assert_eq!(Modifiers::CONTROL.bits(), 2);
+        assert_eq!((Modifiers::SHIFT | Modifiers::CONTROL).bits(), 3);
+        assert_eq!(Modifiers::ALT.bits(), 4);
+        assert_eq!(Modifiers::META.bits(), 8);
+    }
+
+    #[test]
+    fn unknown_modifier_bits_round_trip() {
+        let f = Modifiers::from_bits((1 << 30) | Modifiers::SHIFT.bits());
+        assert_eq!(f.bits(), (1 << 30) | 1);
+        assert!(f.contains(Modifiers::SHIFT));
+        assert!(!f.contains(Modifiers::CONTROL));
+    }
+
+    #[test]
+    fn modifier_set_algebra() {
+        let m = Modifiers::SHIFT | Modifiers::CONTROL | Modifiers::ALT;
+        assert!(m.contains(Modifiers::SHIFT | Modifiers::ALT));
+        assert!(m.contains(Modifiers::NONE));
+        assert!(!m.contains(Modifiers::SHIFT | Modifiers::META));
+        assert_eq!(
+            m.without(Modifiers::CONTROL),
+            Modifiers::SHIFT | Modifiers::ALT
+        );
+        assert_eq!(Modifiers::NONE.with(Modifiers::META), Modifiers::META);
+        assert!(Modifiers::NONE.is_empty());
+        assert!(!m.is_empty());
     }
 
     #[test]

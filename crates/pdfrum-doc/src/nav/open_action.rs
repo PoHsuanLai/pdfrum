@@ -54,10 +54,7 @@ use crate::nav::{Action, ActionKind};
 
 /// The `Invisible` and `NoView` bits, which a `/Hide` action clears whichever
 /// way it is going.
-const CLEARED_BY_HIDE: i64 = 1 | 32;
-
-/// The `Hidden` bit.
-const HIDDEN: i64 = 2;
+const CLEARED_BY_HIDE: AnnotFlags = AnnotFlags::INVISIBLE.with(AnnotFlags::NO_VIEW);
 
 /// Which of a document's annotations its open action left hidden or shown.
 ///
@@ -90,7 +87,7 @@ impl Hidden {
             .iter()
             .find(|(touched, _)| touched == dict)
             .map_or_else(
-                || AnnotFlags(dict.int(names::F, r).unwrap_or(0)),
+                || AnnotFlags::from_bits(dict.int(names::F, r).unwrap_or(0)),
                 |(_, f)| *f,
             )
     }
@@ -147,13 +144,13 @@ fn apply_hide<R: Resolve>(action: &Action, form: &Form, hidden: &mut Hidden, r: 
             continue;
         };
         for widget in &field.widgets {
-            let flags = hidden.flags(&widget.dict, r).0 & !CLEARED_BY_HIDE;
+            let flags = hidden.flags(&widget.dict, r).without(CLEARED_BY_HIDE);
             let flags = if hide {
-                flags | HIDDEN
+                flags.with(AnnotFlags::HIDDEN)
             } else {
-                flags & !HIDDEN
+                flags.without(AnnotFlags::HIDDEN)
             };
-            set(hidden, &widget.dict, AnnotFlags(flags));
+            set(hidden, &widget.dict, flags);
         }
     }
 }
@@ -242,7 +239,7 @@ mod tests {
         let hidden = run(&cat);
         assert!(hidden.is_empty());
         // And an untouched annotation still reads its own `/F`.
-        assert_eq!(hidden.flags(&widget, &NoResolve), AnnotFlags(4));
+        assert_eq!(hidden.flags(&widget, &NoResolve), AnnotFlags::from_bits(4));
     }
 
     #[test]
@@ -251,7 +248,10 @@ mod tests {
         // relies on: it names no `/H` at all.
         let (cat, widget) = catalog(field_widget(4), Some(hide_action(&["f"], None)));
         let hidden = run(&cat);
-        assert_eq!(hidden.flags(&widget, &NoResolve), AnnotFlags(4 | 2));
+        assert_eq!(
+            hidden.flags(&widget, &NoResolve),
+            AnnotFlags::from_bits(4 | 2)
+        );
     }
 
     #[test]
@@ -263,7 +263,7 @@ mod tests {
             Some(hide_action(&["f"], Some(false))),
         );
         let hidden = run(&cat);
-        assert_eq!(hidden.flags(&widget, &NoResolve), AnnotFlags(0));
+        assert_eq!(hidden.flags(&widget, &NoResolve), AnnotFlags::from_bits(0));
     }
 
     #[test]
@@ -273,7 +273,10 @@ mod tests {
             Some(hide_action(&["f"], Some(true))),
         );
         let hidden = run(&cat);
-        assert_eq!(hidden.flags(&widget, &NoResolve), AnnotFlags(4 | 2));
+        assert_eq!(
+            hidden.flags(&widget, &NoResolve),
+            AnnotFlags::from_bits(4 | 2)
+        );
     }
 
     #[test]
@@ -318,7 +321,10 @@ mod tests {
             ("Next", hide_action(&["f"], None)),
         ]));
         let (cat, widget) = catalog(field_widget(0), Some(goto));
-        assert_eq!(run(&cat).flags(&widget, &NoResolve), AnnotFlags(2));
+        assert_eq!(
+            run(&cat).flags(&widget, &NoResolve),
+            AnnotFlags::from_bits(2)
+        );
     }
 
     #[test]

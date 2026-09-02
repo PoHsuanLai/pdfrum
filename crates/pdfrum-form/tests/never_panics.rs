@@ -340,7 +340,7 @@ fn the_scroll_clamp_stays_in_range() {
 fn keyboard_routing_is_total() {
     for code in (0u16..=0xFF).chain([0x1000, 0xFFFF]) {
         for bits in 0u32..16 {
-            let modifiers = Modifiers(bits);
+            let modifiers = Modifiers::from_bits(bits);
             for accelerator in [Modifiers::CONTROL, Modifiers::META] {
                 for redo_y in [true, false] {
                     for selected in [true, false] {
@@ -354,7 +354,7 @@ fn keyboard_routing_is_total() {
     let mut rng = Gen(71);
     for _ in 0..2000 {
         let ch = char::from_u32(rng.below(0x11_0000)).unwrap_or('\u{FFFD}');
-        let modifiers = Modifiers(rng.below(512));
+        let modifiers = Modifiers::from_bits(rng.below(512));
         for read_only in [true, false] {
             for multi_line in [true, false] {
                 let _ = route_char(ch, modifiers, Modifiers::CONTROL, read_only, multi_line);

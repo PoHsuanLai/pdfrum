@@ -273,7 +273,7 @@ mod tests {
             &glyphs,
             FontEncoding::Standard,
             &NO_DIFFS,
-            crate::FontFlags(crate::FontFlags::NON_SYMBOLIC),
+            crate::FontFlags::NON_SYMBOLIC,
             true,
         );
         let mut unicodes = [0u16; 256];
@@ -297,7 +297,7 @@ mod tests {
             &glyphs,
             FontEncoding::Standard,
             &diffs,
-            crate::FontFlags(crate::FontFlags::NON_SYMBOLIC),
+            crate::FontFlags::NON_SYMBOLIC,
             true,
         );
         let mut unicodes = [0u16; 256];
@@ -321,7 +321,7 @@ mod tests {
             &glyphs,
             FontEncoding::Builtin,
             &NO_DIFFS,
-            crate::FontFlags(crate::FontFlags::SYMBOLIC),
+            crate::FontFlags::SYMBOLIC,
             true,
         );
         assert!(ctx.char_name(65).is_none());
@@ -374,7 +374,7 @@ mod tests {
             &glyphs,
             FontEncoding::Standard,
             &diffs,
-            crate::FontFlags(crate::FontFlags::NON_SYMBOLIC),
+            crate::FontFlags::NON_SYMBOLIC,
             true,
         );
         let mut unicodes = [0u16; 256];
