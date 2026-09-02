@@ -25,7 +25,7 @@
 //!   documents them as *char* indices. pdf.js's autolinker carries exactly the
 //!   reverse map PDFium skips (`autolinker.js:147`, `:176-180`). Here the
 //!   candidate is cut in **text** space, converted through
-//!   [`CharIndex`](crate::index::CharIndex), and the reported range is
+//!   [`CharIndex`], and the reported range is
 //!   converted back to char space.
 
 use crate::charinfo::{CharBox, CharType};
