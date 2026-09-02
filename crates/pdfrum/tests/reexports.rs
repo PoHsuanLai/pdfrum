@@ -418,3 +418,86 @@ fn the_script_types_are_nameable_from_the_facade() {
     let stops: &[ScriptFailure] = session.scripts().expect("a scripted session").stops();
     assert!(stops.is_empty());
 }
+
+/// Every form-session entry point is *writable* from `pdfrum::*` alone.
+///
+/// The `nameable::<T>()` lines above prove a type can be named. This proves
+/// the methods can be **called** — that `apply`'s only argument is
+/// constructible, that every wrapper's point is a `pdfrum::Point` a caller can
+/// build, and that no signature reaches for a name the facade does not carry.
+/// It is the gate §WP5's central method needed and did not have: before WP7's
+/// re-export, `apply` was a method whose argument type a `cargo add pdfrum`
+/// caller could not write.
+///
+/// The assertions are the compiler's. The one runtime claim is the last, and
+/// it is the behaviour a right button must have: consume nothing.
+#[test]
+fn every_form_session_entry_point_is_writable_from_the_facade() {
+    let doc = Document::open("tests/fixtures/text_form.pdf").expect("fixture opens");
+    let mut session = FormSession::new(&doc);
+
+    // The field is `/Rect [100 100 200 130]`, so this is inside it.
+    let at = Point::new(120.0, 115.0);
+    let none = Modifiers::NONE;
+
+    // `apply`, once per `Event` variant, so a variant that grows a field the
+    // facade cannot name stops this compiling.
+    let _: Response = session.apply(Event::MouseMove {
+        at,
+        modifiers: none,
+    });
+    let _: Response = session.apply(Event::MouseDown {
+        button: Button::Left,
+        at,
+        modifiers: none,
+    });
+    let _: Response = session.apply(Event::MouseUp {
+        button: Button::Left,
+        at,
+        modifiers: none,
+    });
+    let _: Response = session.apply(Event::DoubleClick {
+        at,
+        modifiers: none,
+    });
+    let _: Response = session.apply(Event::MouseWheel {
+        at,
+        delta: (0, -1),
+        modifiers: none,
+    });
+    let _: Response = session.apply(Event::Focus {
+        at,
+        modifiers: none,
+    });
+    let _: Response = session.apply(Event::KeyDown {
+        key: Key::Tab,
+        modifiers: none,
+    });
+    let _: Response = session.apply(Event::Char {
+        ch: 'a',
+        modifiers: none,
+    });
+
+    // And every thin wrapper over it, page-taking or not.
+    let _: Response = session.mouse_move(0, at, none);
+    let _: Response = session.mouse_down(0, at, none);
+    let _: Response = session.mouse_up(0, at, none);
+    let _: Response = session.double_click(0, at, none);
+    let _: Response = session.mouse_wheel(0, at, (0, -1), none);
+    let _: Response = session.focus_at(0, at, none);
+    let _: Response = session.key_down(Key::Return, none);
+    let _: Response = session.character('a', none);
+    let _: Response = session.blur();
+
+    session.set_viewed_page(0);
+    let _: PageIndex = session.viewed_page();
+
+    // The right button has no method and does not need one: it is the value
+    // form, and the correct behaviour for it is to consume nothing.
+    let right = session.apply(Event::MouseDown {
+        button: Button::Right,
+        at,
+        modifiers: none,
+    });
+    assert!(!right.consumed);
+}
