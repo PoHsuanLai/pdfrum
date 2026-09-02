@@ -119,10 +119,15 @@ impl Annotation<'_> {
             .collect()
     }
 
-    /// The annotation's own dictionary, for the long tail of per-subtype keys
-    /// this type does not surface.
+    /// **Escape hatch — requires no second dependency.** The annotation's own
+    /// dictionary, for the long tail of per-subtype keys this type does not
+    /// surface.
     ///
-    /// The escape hatch, matching [`Document::parser`](crate::Document::parser).
+    /// Matches [`Document::parser`](crate::Document::parser) in intent, and
+    /// differs from it in one way worth knowing: [`Dict`](crate::Dict) *is*
+    /// re-exported by this crate, because [`GeneratedAp`](crate::GeneratedAp)
+    /// carries one as an ordinary payload. So this hatch is spellable without
+    /// adding `pdfrum-object`; the others are not.
     #[must_use]
     pub fn dict(&self) -> &pdfrum_object::Dict {
         &self.inner.dict

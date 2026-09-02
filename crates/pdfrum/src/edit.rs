@@ -1,43 +1,11 @@
 //! Changing what a page draws, and writing the result out.
 //!
-//! # Nothing is mutated until you save
-//!
-//! [`Document`](crate::Document) is a shared, `Sync`, lazily-caching reader, and every other
-//! crate borrows from that shape. So editing follows the same pattern form
-//! filling does: [`Page::edit`] hands back an owned [`PageEdit`] holding this
-//! page's object graph, you change *that*, and
-//! [`Document::save_pages`](crate::Document::save_pages) turns the changes into replacement objects on the
-//! way out. The document itself is never touched, which is why editing a page
-//! does not need a `&mut Document` and why two threads can edit two pages at
-//! once.
-//!
-//! ```no_run
-//! use pdfrum::{Document, SaveOptions};
-//!
-//! let doc = Document::open("in.pdf")?;
-//! let mut page = doc.page(0)?.edit();
-//! page.remove(0);
-//! doc.save_pages("out.pdf", &[page], &SaveOptions::default())?;
-//! # Ok::<(), pdfrum::Error>(())
-//! ```
-//!
-//! # Saving an edited page rewrites it, and rewriting loses things
-//!
-//! A page whose objects you changed is written again **from the object
-//! graph**, not patched. That regeneration reproduces what PDFium's does,
-//! including what PDFium's drops: only `rg`/`RG` colours survive, so a CMYK or
-//! ICC-based fill comes back black; patterns, shadings and Type 3 text are
-//! lost entirely; and text keeps only its matrix, font, render mode and
-//! strings, so character and word spacing go. The losses are listed in full in
-//! `pdfrum_edit::content`.
-//!
-//! Two consequences worth stating plainly. First, this applies **only to pages
-//! you edited** — every other page of the document is copied through
-//! byte-for-byte, and a document you edit nothing in saves exactly as it would
-//! have without this module. Second, the losses are matched to the oracle
-//! deliberately rather than tolerated: a regenerated page of ours is compared
-//! against a regenerated page of PDFium's, and emitting *more* than it does
-//! would fail that comparison as surely as emitting less.
+//! Private since WP7 (`docs/design/idiomatic-api.md`): [`PageEdit`],
+//! [`PathBuilder`], [`TextBuilder`] and [`ImageBuilder`] are re-exported at
+//! the crate root and that is the only path to them, so two spellings for one
+//! type stopped being offered. The prose that used to live here — what
+//! regeneration loses, and why nothing is mutated until you save — moved onto
+//! [`PageEdit`], where a caller reading the rustdoc actually arrives.
 
 use kurbo::{Affine, BezPath, Rect};
 use pdfrum_page::state::GraphicsState;
@@ -58,6 +26,45 @@ use crate::Page;
 /// assert!(!page.is_modified());
 /// # Ok::<(), pdfrum::Error>(())
 /// ```
+///
+/// # Nothing is mutated until you save
+///
+/// [`Document`](crate::Document) is a shared, `Sync`, lazily-caching reader,
+/// and every other crate borrows from that shape. So editing follows the same
+/// pattern form filling does: [`Page::edit`] hands back an owned `PageEdit`
+/// holding this page's object graph, you change *that*, and
+/// [`Document::save_pages`](crate::Document::save_pages) turns the changes
+/// into replacement objects on the way out. The document itself is never
+/// touched, which is why editing a page does not need a `&mut Document` and
+/// why two threads can edit two pages at once.
+///
+/// ```no_run
+/// use pdfrum::{Document, SaveOptions};
+///
+/// let doc = Document::open("in.pdf")?;
+/// let mut page = doc.page(0)?.edit();
+/// page.remove(0);
+/// doc.save_pages("out.pdf", &[page], &SaveOptions::default())?;
+/// # Ok::<(), pdfrum::Error>(())
+/// ```
+///
+/// # Saving an edited page rewrites it, and rewriting loses things
+///
+/// A page whose objects you changed is written again **from the object
+/// graph**, not patched. That regeneration reproduces what PDFium's does,
+/// including what PDFium's drops: only `rg`/`RG` colours survive, so a CMYK or
+/// ICC-based fill comes back black; patterns, shadings and Type 3 text are
+/// lost entirely; and text keeps only its matrix, font, render mode and
+/// strings, so character and word spacing go. The losses are listed in full in
+/// `pdfrum_edit::content`.
+///
+/// Two consequences worth stating plainly. First, this applies **only to pages
+/// you edited** — every other page of the document is copied through
+/// byte-for-byte, and a document you edit nothing in saves exactly as it would
+/// have without this type. Second, the losses are matched to the oracle
+/// deliberately rather than tolerated: a regenerated page of ours is compared
+/// against a regenerated page of PDFium's, and emitting *more* than it does
+/// would fail that comparison as surely as emitting less.
 #[derive(Debug, Clone)]
 pub struct PageEdit {
     pub(crate) index: u32,
@@ -166,15 +173,20 @@ impl PageEdit {
         self.page.is_dirty()
     }
 
-    /// The object graph underneath, for a caller reaching past this surface
-    /// into `pdfrum-page`.
+    /// **Escape hatch — requires `pdfrum-page`.** The object graph
+    /// underneath, for a caller reaching past this surface.
+    ///
+    /// Matches [`Page::objects`](crate::Page::objects) and
+    /// [`Document::parser`](crate::Document::parser).
     #[must_use]
     pub fn graph(&self) -> &pdfrum_page::Page {
         &self.page
     }
 
-    /// The graph, mutably. Marks nothing: a caller reaching here is
-    /// responsible for saying what it changed.
+    /// **Escape hatch — requires `pdfrum-page`.** The graph, mutably.
+    ///
+    /// Marks nothing: a caller reaching here is responsible for saying what it
+    /// changed.
     pub fn graph_mut(&mut self) -> &mut pdfrum_page::Page {
         &mut self.page
     }
@@ -439,7 +451,7 @@ impl Page<'_> {
     /// Open this page's object graph for editing.
     ///
     /// Interpreting the content stream is the expensive part and it happens
-    /// here, once. See the [module docs](self) for what a save then does with
+    /// here, once. See [`PageEdit`] for what a save then does with
     /// the result.
     ///
     /// ```
