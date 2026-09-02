@@ -29,9 +29,11 @@ actually changed. So the baseline is taken first, and these files are it.
 
 Most of what they record is what the thirteen packages exist to remove. A
 line here is not an endorsement. `RenderOptions::no_path_smooth`,
-`FormSession::on_button(…, down: bool, …)`, `Document::version() -> u8`, and
-the seven `pdfrum::Error` variants wrapping unnameable foreign error types are
-all in these files, and all of them are targets.
+`Document::version() -> u8`, and the seven `pdfrum::Error` variants wrapping
+unnameable foreign error types are all in these files, and all of them are
+targets. `FormSession::on_button(…, down: bool, …)` was the fourth example
+until §A.10 step 8 deleted it, which is what a target looks like once it is
+hit: the line is simply gone from `pdfrum.txt`.
 
 `scripts/api-snapshot.nu` regenerates and diffs them. It is **deliberately not
 wired into `scripts/ci.nu`** — a drift check today would turn every intentional

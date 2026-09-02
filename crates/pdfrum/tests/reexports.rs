@@ -310,7 +310,7 @@ fn a_forced_colour_scheme_is_constructible_from_the_facade() {
 /// An `UpdateKind` payload can be reached without a second dependency.
 ///
 /// `Regenerated` and `LiveEdit` box a `GeneratedAp`; `ActionRequested` carries
-/// a boxed `Action` and an `EventModifiers`. All three are the payload of an
+/// a boxed `Action` and a `Modifiers`. All three are the payload of an
 /// ordinary `Response` a caller matches on every event, so WP7 rules them
 /// re-exports rather than escape hatches.
 #[test]
