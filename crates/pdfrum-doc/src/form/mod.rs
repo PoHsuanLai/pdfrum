@@ -5,11 +5,10 @@
 //! hand you ([`Action::javascript`](crate::Action::javascript)); executing it
 //! is out of scope permanently, which is what "fill, no JS" means.
 
-pub mod attr;
-pub mod field;
+pub(crate) mod attr;
+mod field;
 
 pub use attr::{field_attr, full_name};
 pub use field::{
-    Field, FieldEdit, FieldFlags, FieldKind, FieldValues, Form, Widget, apply,
-    selected_indices_for_interaction,
+    Field, FieldFlags, FieldKind, FieldValues, Form, apply, selected_indices_for_interaction,
 };
