@@ -6,6 +6,7 @@ use pdfrum_form::{Button, Event, Key, Modifiers, Point, Response};
 pub use pdfrum_form::SessionConfig;
 
 use crate::Document;
+use pdfrum_common::PageIndex;
 use pdfrum_page::BuildContext;
 
 pub use pdfrum_form::event::{Button as MouseButton, Key as VirtualKey};
@@ -108,14 +109,14 @@ pub struct FormSession<'a> {
     /// A page's annotation geometry does not change under a session — the
     /// session changes *appearances*, which are produced on the way out and
     /// never written back here.
-    pages: std::collections::BTreeMap<u32, pdfrum_form::PageForm>,
+    pages: std::collections::BTreeMap<PageIndex, pdfrum_form::PageForm>,
     /// Which page the embedder is showing.
     ///
     /// Only ever consulted for a keyboard event that arrives with **nothing
     /// focused**, which in practice means Tab entering the focus ring. Every
     /// other key goes to the page holding focus, and mouse events name their
     /// own page.
-    page_in_view: u32,
+    page_in_view: PageIndex,
     /// The form's default-resource fonts, loaded once.
     fonts: std::sync::Arc<pdfrum_doc::ap::FormFonts>,
     /// The script hooks every commit passes through.
@@ -441,7 +442,7 @@ impl<'a> FormSession<'a> {
             doc,
             inner,
             pages: std::collections::BTreeMap::new(),
-            page_in_view: 0,
+            page_in_view: PageIndex::FIRST,
             fonts,
             cascade,
         }
@@ -459,13 +460,13 @@ impl<'a> FormSession<'a> {
     /// Defaults to page 0, which is right for a single-page document and for
     /// a viewer that has not scrolled. A caller showing any other page should
     /// say so, or a Tab from nothing will enter the ring on the wrong one.
-    pub fn set_page_in_view(&mut self, page: u32) {
-        self.page_in_view = page;
+    pub fn set_page_in_view(&mut self, page: impl Into<PageIndex>) {
+        self.page_in_view = page.into();
     }
 
     /// Which page the embedder last said it was showing.
     #[must_use]
-    pub fn page_in_view(&self) -> u32 {
+    pub fn page_in_view(&self) -> PageIndex {
         self.page_in_view
     }
 
@@ -476,7 +477,13 @@ impl<'a> FormSession<'a> {
     }
 
     /// The pointer moved. Drives hover and extends a live drag.
-    pub fn on_mouse_move(&mut self, page: u32, x: f32, y: f32, modifiers: Modifiers) -> Response {
+    pub fn on_mouse_move(
+        &mut self,
+        page: impl Into<PageIndex>,
+        x: f32,
+        y: f32,
+        modifiers: Modifiers,
+    ) -> Response {
         self.dispatch(
             page,
             Event::MouseMove {
@@ -487,7 +494,13 @@ impl<'a> FormSession<'a> {
     }
 
     /// The primary button went down.
-    pub fn on_mouse_down(&mut self, page: u32, x: f32, y: f32, modifiers: Modifiers) -> Response {
+    pub fn on_mouse_down(
+        &mut self,
+        page: impl Into<PageIndex>,
+        x: f32,
+        y: f32,
+        modifiers: Modifiers,
+    ) -> Response {
         self.dispatch(
             page,
             Event::MouseDown {
@@ -499,7 +512,13 @@ impl<'a> FormSession<'a> {
     }
 
     /// The primary button came up.
-    pub fn on_mouse_up(&mut self, page: u32, x: f32, y: f32, modifiers: Modifiers) -> Response {
+    pub fn on_mouse_up(
+        &mut self,
+        page: impl Into<PageIndex>,
+        x: f32,
+        y: f32,
+        modifiers: Modifiers,
+    ) -> Response {
         self.dispatch(
             page,
             Event::MouseUp {
@@ -517,7 +536,7 @@ impl<'a> FormSession<'a> {
     /// to consume nothing, and that is what this does.
     pub fn on_button(
         &mut self,
-        page: u32,
+        page: impl Into<PageIndex>,
         button: Button,
         down: bool,
         x: f32,
@@ -542,7 +561,13 @@ impl<'a> FormSession<'a> {
     }
 
     /// A double click. Selects the whole line under the pointer.
-    pub fn on_double_click(&mut self, page: u32, x: f32, y: f32, modifiers: Modifiers) -> Response {
+    pub fn on_double_click(
+        &mut self,
+        page: impl Into<PageIndex>,
+        x: f32,
+        y: f32,
+        modifiers: Modifiers,
+    ) -> Response {
         self.dispatch(
             page,
             Event::DoubleClick {
@@ -555,7 +580,7 @@ impl<'a> FormSession<'a> {
     /// The wheel turned. Deltas are notches, a negative `y` meaning down.
     pub fn on_mouse_wheel(
         &mut self,
-        page: u32,
+        page: impl Into<PageIndex>,
         x: f32,
         y: f32,
         delta_x: i32,
@@ -576,7 +601,13 @@ impl<'a> FormSession<'a> {
     ///
     /// Consumes the event only when an annotation is there *and* it took
     /// focus.
-    pub fn on_focus_at(&mut self, page: u32, x: f32, y: f32, modifiers: Modifiers) -> Response {
+    pub fn on_focus_at(
+        &mut self,
+        page: impl Into<PageIndex>,
+        x: f32,
+        y: f32,
+        modifiers: Modifiers,
+    ) -> Response {
         self.dispatch(
             page,
             Event::Focus {
@@ -638,7 +669,7 @@ impl<'a> FormSession<'a> {
     /// white. Answers `None` when nothing on that page holds focus, which is
     /// the ordinary case for every page but one.
     #[must_use]
-    pub fn focus_for_page(&mut self, page: u32) -> Option<pdfrum_doc::ap::Focus> {
+    pub fn focus_for_page(&mut self, page: impl Into<PageIndex>) -> Option<pdfrum_doc::ap::Focus> {
         self.with_page(page, |inner, ctx| pdfrum_form::focus_of(inner, ctx))
     }
 
@@ -664,7 +695,7 @@ impl<'a> FormSession<'a> {
     /// almost all of the time: only a click on a combo's drop button, a
     /// `Return`, or a `Space` on a non-editable combo opens one.
     #[must_use]
-    pub fn popup_for_page(&mut self, page: u32) -> Option<pdfrum_form::PopupView> {
+    pub fn popup_for_page(&mut self, page: impl Into<PageIndex>) -> Option<pdfrum_form::PopupView> {
         self.with_page(page, |inner, ctx| pdfrum_form::popup_view(inner, ctx))
     }
 
@@ -734,7 +765,8 @@ impl<'a> FormSession<'a> {
     /// [`pdfrum_doc::AnnotOverlay::set_hover`] wants. Answers `None` when the
     /// pointer is over nothing, or over an annotation on another page.
     #[must_use]
-    pub fn hover_for_page(&self, page: u32) -> Option<usize> {
+    pub fn hover_for_page(&self, page: impl Into<PageIndex>) -> Option<usize> {
+        let page = page.into();
         let hover = self.inner.hover?;
         (hover.page == page).then_some(hover.index as usize)
     }
@@ -920,7 +952,7 @@ impl<'a> FormSession<'a> {
     ///
     /// The page is read on first use and kept: a replay sends dozens of
     /// events at one page, and the `/Annots` walk is the expensive half.
-    fn dispatch(&mut self, page: u32, event: Event) -> Response {
+    fn dispatch(&mut self, page: impl Into<PageIndex>, event: Event) -> Response {
         self.with_page_scripted(page, |inner, ctx, cascade| {
             pdfrum_form::apply(inner, ctx, cascade, event)
         })
@@ -933,12 +965,13 @@ impl<'a> FormSession<'a> {
     /// same page cache and the same borrow of the catalog.
     fn with_page<T: Default>(
         &mut self,
-        page: u32,
+        page: impl Into<PageIndex>,
         body: impl FnOnce(
             &mut pdfrum_form::FormSession,
             &pdfrum_form::Context<'_, pdfrum_parser::Document>,
         ) -> T,
     ) -> T {
+        let page = page.into();
         self.ensure_page(page);
         let Some(form) = self.pages.get(&page) else {
             return T::default();
@@ -971,13 +1004,14 @@ impl<'a> FormSession<'a> {
     /// session that has none.
     fn with_page_scripted<T: Default>(
         &mut self,
-        page: u32,
+        page: impl Into<PageIndex>,
         body: impl FnOnce(
             &mut pdfrum_form::FormSession,
             &pdfrum_form::Context<'_, pdfrum_parser::Document>,
             &mut dyn Cascade,
         ) -> T,
     ) -> T {
+        let page = page.into();
         // The page is read — and its scripts installed — **before** the
         // cascade leaves `self`, because the install needs both.
         self.ensure_page(page);
@@ -1023,7 +1057,7 @@ impl<'a> FormSession<'a> {
     /// cascade out of `self` — a cascade that has left cannot be installed
     /// into, and the page a commit is about is exactly the page whose scripts
     /// the commit runs.
-    fn ensure_page(&mut self, page: u32) {
+    fn ensure_page(&mut self, page: PageIndex) {
         if self.pages.contains_key(&page) {
             return;
         }
@@ -1053,7 +1087,7 @@ impl<'a> FormSession<'a> {
     /// Compiled away entirely without the `script` feature: with no scripted
     /// variant to match, there is nothing to install.
     #[cfg(feature = "script")]
-    fn install_page_scripts(&mut self, page: u32) {
+    fn install_page_scripts(&mut self, page: PageIndex) {
         use pdfrum_doc::nav::AActionType;
 
         let Cascades::Scripted(cascade) = &mut self.cascade else {
@@ -1104,10 +1138,10 @@ impl<'a> FormSession<'a> {
         clippy::unused_self,
         reason = "the feature-on twin takes `&mut self`; one signature, two bodies"
     )]
-    fn install_page_scripts(&mut self, _page: u32) {}
+    fn install_page_scripts(&mut self, _page: PageIndex) {}
 
     /// Reads one page's annotations, or `None` when the page will not load.
-    fn read_page(&self, page: u32) -> Option<pdfrum_form::PageForm> {
+    fn read_page(&self, page: PageIndex) -> Option<pdfrum_form::PageForm> {
         let loaded = self.doc.page(page).ok()?;
         Some(pdfrum_form::page::read(
             page,

@@ -3,7 +3,7 @@
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
-use pdfrum_common::{Diagnostics, Limits, PdfVersion};
+use pdfrum_common::{Diagnostics, Limits, PageIndex, PdfVersion};
 use pdfrum_crypt::Permissions;
 use pdfrum_object::{Dict, Name, Object, Resolve};
 
@@ -178,6 +178,11 @@ impl Document {
     }
 
     /// How many pages the document has.
+    ///
+    /// A `u32` and not a [`PageIndex`]: a count is not an index. The valid
+    /// indices of a three-page document are 0, 1 and 2, and giving the count
+    /// and the index one type would let each be passed where the other is
+    /// meant (`docs/design/idiomatic-api.md` §WP1).
     #[must_use]
     pub fn page_count(&self) -> u32 {
         self.inner.page_count()
@@ -197,8 +202,8 @@ impl Document {
     /// assert!(doc.page(1).is_err(), "there is only one page");
     /// # Ok::<(), pdfrum::Error>(())
     /// ```
-    pub fn page(&self, index: u32) -> Result<Page<'_>> {
-        Page::load(self, index)
+    pub fn page(&self, index: impl Into<PageIndex>) -> Result<Page<'_>> {
+        Page::load(self, index.into())
     }
 
     /// Every page in order, interpreted lazily as the iterator advances.
@@ -222,12 +227,12 @@ impl Document {
     ///
     /// `None` when the document numbers its pages plainly, which most do.
     #[must_use]
-    pub fn page_label(&self, index: u32) -> Option<String> {
+    pub fn page_label(&self, index: impl Into<PageIndex>) -> Option<String> {
         let catalog = self.catalog();
         let mut diags = Diagnostics::default();
         let label = pdfrum_doc::page_label(
             &catalog,
-            i64::from(index),
+            index.into(),
             self.page_count(),
             &self.inner,
             &self.limits,

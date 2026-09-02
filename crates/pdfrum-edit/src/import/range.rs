@@ -17,24 +17,26 @@
 //! select eight pages with two repeats, and `"2,1"` selects page 2 before
 //! page 1. The result is a *sequence*, not a set.
 
+use pdfrum_common::PageIndex;
+
 use crate::error::Error;
 
 /// A parsed page range: zero-based page indices, in the order named, with
 /// duplicates kept.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct PageRange(Vec<u32>);
+pub struct PageRange(Vec<PageIndex>);
 
 impl PageRange {
     /// Every page of a document of `count` pages, in order.
     #[must_use]
     pub fn all(count: u32) -> Self {
-        Self((0..count).collect())
+        Self((0..count).map(PageIndex::from).collect())
     }
 
     /// A range naming exactly these zero-based indices.
     #[must_use]
-    pub fn of(indices: impl IntoIterator<Item = u32>) -> Self {
-        Self(indices.into_iter().collect())
+    pub fn of(indices: impl IntoIterator<Item = impl Into<PageIndex>>) -> Self {
+        Self(indices.into_iter().map(Into::into).collect())
     }
 
     /// Parse `"1,3-5"` against a document of `count` pages.
@@ -52,9 +54,11 @@ impl PageRange {
     /// ```
     /// use pdfrum_edit::PageRange;
     ///
-    /// assert_eq!(PageRange::parse("1,3-5", 10)?.indices(), &[0, 2, 3, 4]);
+    /// let range = PageRange::parse("1,3-5", 10)?;
+    /// assert_eq!(range.indices().iter().map(|p| p.get()).collect::<Vec<_>>(), [0, 2, 3, 4]);
     /// // Order is preserved and duplicates are kept.
-    /// assert_eq!(PageRange::parse("2,1,1", 10)?.indices(), &[1, 0, 0]);
+    /// let dupes = PageRange::parse("2,1,1", 10)?;
+    /// assert_eq!(dupes.indices().iter().map(|p| p.get()).collect::<Vec<_>>(), [1, 0, 0]);
     /// // One bad entry discards everything.
     /// assert!(PageRange::parse("1,clams", 10).is_err());
     /// # Ok::<(), pdfrum_edit::Error>(())
@@ -93,7 +97,7 @@ impl PageRange {
                     if n == 0 || n > count {
                         return Err(Error::BadPageRange);
                     }
-                    out.push(n - 1);
+                    out.push(PageIndex::new(n - 1));
                 }
                 Some(second) => {
                     let (a, b) = (number(first), number(second));
@@ -102,7 +106,7 @@ impl PageRange {
                     if a == 0 || b == 0 || a > b || b > count {
                         return Err(Error::BadPageRange);
                     }
-                    out.extend((a - 1)..b);
+                    out.extend(((a - 1)..b).map(PageIndex::from));
                 }
             }
         }
@@ -111,7 +115,7 @@ impl PageRange {
 
     /// The zero-based indices, in the order named.
     #[must_use]
-    pub fn indices(&self) -> &[u32] {
+    pub fn indices(&self) -> &[PageIndex] {
         &self.0
     }
 
@@ -143,12 +147,14 @@ fn number(text: &str) -> u32 {
 
 #[cfg(test)]
 mod tests {
+    use pdfrum_common::PageIndex;
+
     use super::PageRange;
 
     fn parse(text: &str, count: u32) -> Option<Vec<u32>> {
         PageRange::parse(text, count)
             .ok()
-            .map(|r| r.indices().to_vec())
+            .map(|r| r.indices().iter().map(|p| p.get()).collect())
     }
 
     // cpdfsdk_helpers_unittest.cpp:51-93, the succeeding cases.
@@ -229,7 +235,10 @@ mod tests {
 
     #[test]
     fn all_names_every_page_in_order() {
-        assert_eq!(PageRange::all(3).indices(), &[0, 1, 2]);
+        assert_eq!(
+            PageRange::all(3).indices(),
+            &[PageIndex::new(0), PageIndex::new(1), PageIndex::new(2)]
+        );
         assert!(PageRange::all(0).is_empty());
     }
 

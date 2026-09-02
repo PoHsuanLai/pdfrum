@@ -13,6 +13,7 @@
 
 use std::fmt::Write as _;
 
+use pdfrum_common::PageIndex;
 use pdfrum_object::{Dict, Object, Resolve};
 
 use crate::names;
@@ -25,7 +26,12 @@ use crate::structure::{StructTree, element};
 /// files. A tree that loaded but reached no elements still prints its header
 /// and the two trailing blank lines.
 #[must_use]
-pub fn render<R: Resolve>(tree: Option<&StructTree>, page_index: u32, r: &R) -> String {
+pub fn render<R: Resolve>(
+    tree: Option<&StructTree>,
+    page_index: impl Into<PageIndex>,
+    r: &R,
+) -> String {
+    let page_index = page_index.into();
     let Some(tree) = tree else {
         return String::new();
     };

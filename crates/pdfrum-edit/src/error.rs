@@ -2,6 +2,8 @@
 
 use std::io;
 
+use pdfrum_common::PageIndex;
+
 /// A failure that stops the editor producing output.
 ///
 /// Damage in the *input* is not an error here: a broken object silently
@@ -27,7 +29,7 @@ pub enum Error {
 
     /// A page index named by an import is outside the source document.
     #[error("page index {0} is outside the source document")]
-    PageIndexOutOfRange(u32),
+    PageIndexOutOfRange(PageIndex),
 
     /// A page-range string the grammar of ISO 32000 viewers accepts could not
     /// be parsed; the C++ treats one bad entry as discarding everything.

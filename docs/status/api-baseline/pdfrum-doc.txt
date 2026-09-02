@@ -601,7 +601,7 @@ pub pdfrum_doc::nav::dest::Dest::array: core::option::Option<pdfrum_object::arra
 impl pdfrum_doc::nav::dest::Dest
 pub fn pdfrum_doc::nav::dest::Dest::create<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, core::option::Option<&pdfrum_object::object::Object>, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_doc::nav::dest::Dest
 pub fn pdfrum_doc::nav::dest::Dest::num_params<R: pdfrum_object::resolve::Resolve>(&self, &R) -> usize
-pub fn pdfrum_doc::nav::dest::Dest::page_index<R: pdfrum_object::resolve::Resolve>(&self, &R, impl core::ops::function::Fn(u32) -> core::option::Option<u32>, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<u32>
+pub fn pdfrum_doc::nav::dest::Dest::page_index<R: pdfrum_object::resolve::Resolve>(&self, &R, impl core::ops::function::Fn(u32) -> core::option::Option<pdfrum_common::page_index::PageIndex>, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<pdfrum_common::page_index::PageIndex>
 pub fn pdfrum_doc::nav::dest::Dest::param(&self, usize) -> f32
 pub fn pdfrum_doc::nav::dest::Dest::params_all(&self) -> alloc::vec::Vec<f32>
 pub fn pdfrum_doc::nav::dest::Dest::xyz<R: pdfrum_object::resolve::Resolve>(&self, &R) -> core::option::Option<pdfrum_doc::nav::dest::Xyz>
@@ -752,7 +752,7 @@ pub pdfrum_doc::nav::Dest::array: core::option::Option<pdfrum_object::array::Arr
 impl pdfrum_doc::nav::dest::Dest
 pub fn pdfrum_doc::nav::dest::Dest::create<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, core::option::Option<&pdfrum_object::object::Object>, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_doc::nav::dest::Dest
 pub fn pdfrum_doc::nav::dest::Dest::num_params<R: pdfrum_object::resolve::Resolve>(&self, &R) -> usize
-pub fn pdfrum_doc::nav::dest::Dest::page_index<R: pdfrum_object::resolve::Resolve>(&self, &R, impl core::ops::function::Fn(u32) -> core::option::Option<u32>, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<u32>
+pub fn pdfrum_doc::nav::dest::Dest::page_index<R: pdfrum_object::resolve::Resolve>(&self, &R, impl core::ops::function::Fn(u32) -> core::option::Option<pdfrum_common::page_index::PageIndex>, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<pdfrum_common::page_index::PageIndex>
 pub fn pdfrum_doc::nav::dest::Dest::param(&self, usize) -> f32
 pub fn pdfrum_doc::nav::dest::Dest::params_all(&self) -> alloc::vec::Vec<f32>
 pub fn pdfrum_doc::nav::dest::Dest::xyz<R: pdfrum_object::resolve::Resolve>(&self, &R) -> core::option::Option<pdfrum_doc::nav::dest::Xyz>
@@ -799,7 +799,7 @@ pub fn pdfrum_doc::nav::link_at_point<R: pdfrum_object::resolve::Resolve>(&[core
 pub fn pdfrum_doc::nav::lookup_named_dest<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &[u8], &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<pdfrum_object::array::Array>
 pub fn pdfrum_doc::nav::page_links<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> alloc::vec::Vec<core::option::Option<pdfrum_doc::nav::link::Link>>
 pub mod pdfrum_doc::page_label
-pub fn pdfrum_doc::page_label::page_label<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, i64, u32, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<alloc::string::String>
+pub fn pdfrum_doc::page_label::page_label<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, u32, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<alloc::string::String>
 pub mod pdfrum_doc::prefs
 pub struct pdfrum_doc::prefs::ViewerPrefs
 pub pdfrum_doc::prefs::ViewerPrefs::dict: core::option::Option<pdfrum_object::dict::Dict>
@@ -813,7 +813,7 @@ pub fn pdfrum_doc::prefs::ViewerPrefs::print_scaling<R: pdfrum_object::resolve::
 pub fn pdfrum_doc::prefs::ViewerPrefs::read<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> pdfrum_doc::prefs::ViewerPrefs
 pub mod pdfrum_doc::structure
 pub mod pdfrum_doc::structure::dump
-pub fn pdfrum_doc::structure::dump::render<R: pdfrum_object::resolve::Resolve>(core::option::Option<&pdfrum_doc::structure::StructTree>, u32, &R) -> alloc::string::String
+pub fn pdfrum_doc::structure::dump::render<R: pdfrum_object::resolve::Resolve>(core::option::Option<&pdfrum_doc::structure::StructTree>, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, &R) -> alloc::string::String
 pub mod pdfrum_doc::structure::element
 pub enum pdfrum_doc::structure::element::Kid
 pub pdfrum_doc::structure::element::Kid::Element
@@ -1186,7 +1186,7 @@ pub pdfrum_doc::Dest::array: core::option::Option<pdfrum_object::array::Array>
 impl pdfrum_doc::nav::dest::Dest
 pub fn pdfrum_doc::nav::dest::Dest::create<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, core::option::Option<&pdfrum_object::object::Object>, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_doc::nav::dest::Dest
 pub fn pdfrum_doc::nav::dest::Dest::num_params<R: pdfrum_object::resolve::Resolve>(&self, &R) -> usize
-pub fn pdfrum_doc::nav::dest::Dest::page_index<R: pdfrum_object::resolve::Resolve>(&self, &R, impl core::ops::function::Fn(u32) -> core::option::Option<u32>, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<u32>
+pub fn pdfrum_doc::nav::dest::Dest::page_index<R: pdfrum_object::resolve::Resolve>(&self, &R, impl core::ops::function::Fn(u32) -> core::option::Option<pdfrum_common::page_index::PageIndex>, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<pdfrum_common::page_index::PageIndex>
 pub fn pdfrum_doc::nav::dest::Dest::param(&self, usize) -> f32
 pub fn pdfrum_doc::nav::dest::Dest::params_all(&self) -> alloc::vec::Vec<f32>
 pub fn pdfrum_doc::nav::dest::Dest::xyz<R: pdfrum_object::resolve::Resolve>(&self, &R) -> core::option::Option<pdfrum_doc::nav::dest::Xyz>
@@ -1264,5 +1264,5 @@ pub fn pdfrum_doc::prefs::ViewerPrefs::num_copies<R: pdfrum_object::resolve::Res
 pub fn pdfrum_doc::prefs::ViewerPrefs::print_page_range<R: pdfrum_object::resolve::Resolve>(&self, &R) -> core::option::Option<pdfrum_object::array::Array>
 pub fn pdfrum_doc::prefs::ViewerPrefs::print_scaling<R: pdfrum_object::resolve::Resolve>(&self, &R) -> bool
 pub fn pdfrum_doc::prefs::ViewerPrefs::read<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> pdfrum_doc::prefs::ViewerPrefs
-pub fn pdfrum_doc::page_label<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, i64, u32, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<alloc::string::String>
+pub fn pdfrum_doc::page_label<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, u32, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<alloc::string::String>
 pub fn pdfrum_doc::xmp<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<alloc::vec::Vec<u8>>

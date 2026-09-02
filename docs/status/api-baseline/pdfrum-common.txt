@@ -162,6 +162,17 @@ pub pdfrum_common::Limits::max_xref_size: u32
 pub pdfrum_common::Limits::startxref_scan: u64
 impl core::default::Default for pdfrum_common::Limits
 pub fn pdfrum_common::Limits::default() -> Self
+pub struct pdfrum_common::PageIndex(_)
+impl pdfrum_common::PageIndex
+pub const pdfrum_common::PageIndex::FIRST: Self
+pub const fn pdfrum_common::PageIndex::get(self) -> u32
+pub const fn pdfrum_common::PageIndex::new(u32) -> Self
+impl core::convert::From<pdfrum_common::PageIndex> for u32
+pub fn u32::from(pdfrum_common::PageIndex) -> Self
+impl core::convert::From<u32> for pdfrum_common::PageIndex
+pub fn pdfrum_common::PageIndex::from(u32) -> Self
+impl core::fmt::Display for pdfrum_common::PageIndex
+pub fn pdfrum_common::PageIndex::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub struct pdfrum_common::PdfVersion
 pub pdfrum_common::PdfVersion::major: u8
 pub pdfrum_common::PdfVersion::minor: u8

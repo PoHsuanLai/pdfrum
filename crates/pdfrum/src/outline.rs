@@ -1,6 +1,6 @@
 //! The document outline — what a reader shows as its bookmarks panel.
 
-use pdfrum_common::Diagnostics;
+use pdfrum_common::{Diagnostics, PageIndex};
 
 use crate::Document;
 
@@ -112,7 +112,7 @@ impl Bookmark<'_> {
     /// no page, or when the page it names is not in this document — an
     /// outline entry may point into another file.
     #[must_use]
-    pub fn page_index(&self) -> Option<u32> {
+    pub fn page_index(&self) -> Option<PageIndex> {
         let mut diags = Diagnostics::default();
         let catalog = self.doc.catalog();
         let dest = self
@@ -147,8 +147,8 @@ impl Document {
     /// Linear rather than indexed: an outline is walked once and destinations
     /// are resolved on demand, so the map would cost more to build than the
     /// scans it saves on every document with a short outline.
-    pub(crate) fn page_index_of(&self, obj_num: u32) -> Option<u32> {
-        (0..self.page_count()).find(|index| {
+    pub(crate) fn page_index_of(&self, obj_num: u32) -> Option<PageIndex> {
+        (0..self.page_count()).map(PageIndex::from).find(|index| {
             self.inner
                 .page(*index)
                 .ok()

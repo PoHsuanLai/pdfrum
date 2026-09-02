@@ -38,6 +38,7 @@ pub use pdfrum::ObjRef
 pub use pdfrum::Object
 pub use pdfrum::ObjectError
 pub use pdfrum::OpenError
+pub use pdfrum::PageIndex
 pub use pdfrum::PageObject
 pub use pdfrum::PageRotation
 pub use pdfrum::PdfVersion
@@ -117,7 +118,7 @@ pub fn pdfrum::Bookmark<'_>::action(&self) -> core::option::Option<pdfrum_doc::n
 pub fn pdfrum::Bookmark<'_>::color(&self) -> core::option::Option<(f32, f32, f32)>
 pub fn pdfrum::Bookmark<'_>::depth(&self) -> usize
 pub fn pdfrum::Bookmark<'_>::is_open(&self) -> bool
-pub fn pdfrum::Bookmark<'_>::page_index(&self) -> core::option::Option<u32>
+pub fn pdfrum::Bookmark<'_>::page_index(&self) -> core::option::Option<pdfrum_common::page_index::PageIndex>
 pub fn pdfrum::Bookmark<'_>::title(&self) -> alloc::string::String
 pub struct pdfrum::Document
 impl pdfrum::Document
@@ -135,9 +136,9 @@ pub fn pdfrum::Document::open_with(impl core::convert::AsRef<std::path::Path>, &
 pub fn pdfrum::Document::open_with_password(impl core::convert::AsRef<std::path::Path>, &[u8]) -> pdfrum::Result<pdfrum::Document>
 pub fn pdfrum::Document::outline(&self) -> pdfrum::Outline<'_>
 pub fn pdfrum::Document::owner_permissions(&self) -> pdfrum_crypt::permissions::Permissions
-pub fn pdfrum::Document::page(&self, u32) -> pdfrum::Result<pdfrum::Page<'_>>
+pub fn pdfrum::Document::page(&self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>) -> pdfrum::Result<pdfrum::Page<'_>>
 pub fn pdfrum::Document::page_count(&self) -> u32
-pub fn pdfrum::Document::page_label(&self, u32) -> core::option::Option<alloc::string::String>
+pub fn pdfrum::Document::page_label(&self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>) -> core::option::Option<alloc::string::String>
 pub fn pdfrum::Document::pages(&self) -> impl core::iter::traits::iterator::Iterator<Item = pdfrum::Page<'_>> + '_
 pub fn pdfrum::Document::parser(&self) -> &pdfrum_parser::doc::Document
 pub fn pdfrum::Document::permissions(&self) -> pdfrum_crypt::permissions::Permissions
@@ -145,7 +146,7 @@ pub fn pdfrum::Document::version(&self) -> core::option::Option<pdfrum_common::v
 pub fn pdfrum::Document::xmp_metadata(&self) -> core::option::Option<alloc::vec::Vec<u8>>
 pub fn pdfrum::Document::xref_was_rebuilt(&self) -> bool
 impl pdfrum::Document
-pub fn pdfrum::Document::import_pages(&self, impl core::convert::AsRef<std::path::Path>, &pdfrum::Document, &[u32], u32) -> pdfrum::Result<()>
+pub fn pdfrum::Document::import_pages(&self, impl core::convert::AsRef<std::path::Path>, &pdfrum::Document, impl core::iter::traits::collect::IntoIterator<Item = impl core::convert::Into<pdfrum_common::page_index::PageIndex>>, impl core::convert::Into<pdfrum_common::page_index::PageIndex>) -> pdfrum::Result<()>
 pub fn pdfrum::Document::save(&self, impl core::convert::AsRef<std::path::Path>) -> pdfrum::Result<()>
 pub fn pdfrum::Document::save_form(&self, impl core::convert::AsRef<std::path::Path>, &pdfrum::Form<'_>, &pdfrum::SaveOptions) -> pdfrum::Result<()>
 pub fn pdfrum::Document::save_incremental(&self, impl core::convert::AsRef<std::path::Path>) -> pdfrum::Result<()>
@@ -188,30 +189,30 @@ pub fn pdfrum::FormSession<'a>::can_undo(&self) -> bool
 pub fn pdfrum::FormSession<'a>::choose(&mut self, pdfrum_form::session::AnnotId, usize) -> pdfrum_form::update::Response
 pub fn pdfrum::FormSession<'a>::close_popup(&mut self, pdfrum_form::session::AnnotId) -> pdfrum_form::update::Response
 pub fn pdfrum::FormSession<'a>::config(&self) -> &pdfrum_form::session::SessionConfig
-pub fn pdfrum::FormSession<'a>::focus_for_page(&mut self, u32) -> core::option::Option<pdfrum_doc::ap::Focus>
+pub fn pdfrum::FormSession<'a>::focus_for_page(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>) -> core::option::Option<pdfrum_doc::ap::Focus>
 pub fn pdfrum::FormSession<'a>::focused_annot(&self) -> core::option::Option<pdfrum_form::session::AnnotId>
 pub fn pdfrum::FormSession<'a>::focused_text(&self) -> core::option::Option<alloc::string::String>
 pub fn pdfrum::FormSession<'a>::force_kill_focus(&mut self) -> pdfrum_form::update::Response
-pub fn pdfrum::FormSession<'a>::hover_for_page(&self, u32) -> core::option::Option<usize>
+pub fn pdfrum::FormSession<'a>::hover_for_page(&self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>) -> core::option::Option<usize>
 pub fn pdfrum::FormSession<'a>::inner(&self) -> &pdfrum_form::session::FormSession
 pub fn pdfrum::FormSession<'a>::is_index_selected(&self, usize) -> bool
 pub fn pdfrum::FormSession<'a>::new(&'a pdfrum::Document) -> pdfrum::FormSession<'a>
-pub fn pdfrum::FormSession<'a>::on_button(&mut self, u32, pdfrum_form::event::Button, bool, f32, f32, pdfrum_form::event::Modifiers) -> pdfrum_form::update::Response
+pub fn pdfrum::FormSession<'a>::on_button(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, pdfrum_form::event::Button, bool, f32, f32, pdfrum_form::event::Modifiers) -> pdfrum_form::update::Response
 pub fn pdfrum::FormSession<'a>::on_char(&mut self, char, pdfrum_form::event::Modifiers) -> pdfrum_form::update::Response
-pub fn pdfrum::FormSession<'a>::on_double_click(&mut self, u32, f32, f32, pdfrum_form::event::Modifiers) -> pdfrum_form::update::Response
-pub fn pdfrum::FormSession<'a>::on_focus_at(&mut self, u32, f32, f32, pdfrum_form::event::Modifiers) -> pdfrum_form::update::Response
+pub fn pdfrum::FormSession<'a>::on_double_click(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, f32, f32, pdfrum_form::event::Modifiers) -> pdfrum_form::update::Response
+pub fn pdfrum::FormSession<'a>::on_focus_at(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, f32, f32, pdfrum_form::event::Modifiers) -> pdfrum_form::update::Response
 pub fn pdfrum::FormSession<'a>::on_key_down(&mut self, pdfrum_form::event::Key, pdfrum_form::event::Modifiers) -> pdfrum_form::update::Response
-pub fn pdfrum::FormSession<'a>::on_mouse_down(&mut self, u32, f32, f32, pdfrum_form::event::Modifiers) -> pdfrum_form::update::Response
-pub fn pdfrum::FormSession<'a>::on_mouse_move(&mut self, u32, f32, f32, pdfrum_form::event::Modifiers) -> pdfrum_form::update::Response
-pub fn pdfrum::FormSession<'a>::on_mouse_up(&mut self, u32, f32, f32, pdfrum_form::event::Modifiers) -> pdfrum_form::update::Response
-pub fn pdfrum::FormSession<'a>::on_mouse_wheel(&mut self, u32, f32, f32, i32, i32, pdfrum_form::event::Modifiers) -> pdfrum_form::update::Response
-pub fn pdfrum::FormSession<'a>::page_in_view(&self) -> u32
-pub fn pdfrum::FormSession<'a>::popup_for_page(&mut self, u32) -> core::option::Option<pdfrum_form::popup::PopupView>
+pub fn pdfrum::FormSession<'a>::on_mouse_down(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, f32, f32, pdfrum_form::event::Modifiers) -> pdfrum_form::update::Response
+pub fn pdfrum::FormSession<'a>::on_mouse_move(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, f32, f32, pdfrum_form::event::Modifiers) -> pdfrum_form::update::Response
+pub fn pdfrum::FormSession<'a>::on_mouse_up(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, f32, f32, pdfrum_form::event::Modifiers) -> pdfrum_form::update::Response
+pub fn pdfrum::FormSession<'a>::on_mouse_wheel(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, f32, f32, i32, i32, pdfrum_form::event::Modifiers) -> pdfrum_form::update::Response
+pub fn pdfrum::FormSession<'a>::page_in_view(&self) -> pdfrum_common::page_index::PageIndex
+pub fn pdfrum::FormSession<'a>::popup_for_page(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>) -> core::option::Option<pdfrum_form::popup::PopupView>
 pub fn pdfrum::FormSession<'a>::replace_selection(&mut self, &str) -> bool
 pub fn pdfrum::FormSession<'a>::scroll_view(&mut self, pdfrum_form::session::AnnotId) -> core::option::Option<pdfrum_form::popup::ScrollView>
 pub fn pdfrum::FormSession<'a>::selected_text(&self) -> core::option::Option<alloc::string::String>
 pub fn pdfrum::FormSession<'a>::set_index_selected(&mut self, usize, bool) -> bool
-pub fn pdfrum::FormSession<'a>::set_page_in_view(&mut self, u32)
+pub fn pdfrum::FormSession<'a>::set_page_in_view(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>)
 pub fn pdfrum::FormSession<'a>::with_cascade(&'a pdfrum::Document, impl pdfrum_form::cascade::Cascade + 'static) -> pdfrum::FormSession<'a>
 pub fn pdfrum::FormSession<'a>::with_config(&'a pdfrum::Document, pdfrum_form::session::SessionConfig) -> pdfrum::FormSession<'a>
 pub fn pdfrum::FormSession<'a>::with_config_in(&'a pdfrum::Document, pdfrum_form::session::SessionConfig, &mut pdfrum_page::build::BuildContext) -> pdfrum::FormSession<'a>
@@ -250,7 +251,7 @@ impl<'a> pdfrum::Page<'a>
 pub fn pdfrum::Page<'a>::annotations(&self) -> alloc::vec::Vec<pdfrum::Annotation<'a>>
 pub fn pdfrum::Page<'a>::crop_box(&self) -> kurbo::rect::Rect
 pub fn pdfrum::Page<'a>::height(&self) -> f64
-pub fn pdfrum::Page<'a>::index(&self) -> u32
+pub fn pdfrum::Page<'a>::index(&self) -> pdfrum_common::page_index::PageIndex
 pub fn pdfrum::Page<'a>::links(&self) -> alloc::vec::Vec<pdfrum_doc::nav::link::Link>
 pub fn pdfrum::Page<'a>::media_box(&self) -> kurbo::rect::Rect
 pub fn pdfrum::Page<'a>::objects(&self) -> pdfrum_page::page::Page
@@ -272,7 +273,7 @@ pub fn pdfrum::PageEdit::image_of(&self, usize) -> core::option::Option<pdfrum_o
 impl pdfrum::PageEdit
 pub fn pdfrum::PageEdit::graph(&self) -> &pdfrum_page::page::Page
 pub fn pdfrum::PageEdit::graph_mut(&mut self) -> &mut pdfrum_page::page::Page
-pub fn pdfrum::PageEdit::index(&self) -> u32
+pub fn pdfrum::PageEdit::index(&self) -> pdfrum_common::page_index::PageIndex
 pub fn pdfrum::PageEdit::insert(&mut self, usize, pdfrum_page::page::PageObject) -> bool
 pub fn pdfrum::PageEdit::is_empty(&self) -> bool
 pub fn pdfrum::PageEdit::is_modified(&self) -> bool

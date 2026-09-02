@@ -10,7 +10,7 @@
 //! matching tree entry gets its **one-based index as a decimal**, which is
 //! also what happens when the entry exists but is not a dictionary.
 
-use pdfrum_common::{DiagKind, Diagnostics, Limits, Severity};
+use pdfrum_common::{DiagKind, Diagnostics, Limits, PageIndex, Severity};
 use pdfrum_object::{Dict, Object, Resolve};
 
 use crate::names;
@@ -20,15 +20,21 @@ use crate::nav::number_tree;
 #[must_use]
 pub fn page_label<R: Resolve>(
     catalog: &Dict,
-    page_index: i64,
+    page: impl Into<PageIndex>,
     page_count: u32,
     r: &R,
     limits: &Limits,
     diags: &mut Diagnostics,
 ) -> Option<String> {
-    if page_index < 0 || page_index >= i64::from(page_count) {
+    let page = page.into();
+    if page.get() >= page_count {
         return None;
     }
+    // The number tree's keys are `/Nums` integers, so the comparison and the
+    // `/St` arithmetic below happen in `i64`. That widening is private: a page
+    // index cannot be negative, which is why the old `page_index < 0` guard is
+    // gone rather than rewritten (WP1 step 5).
+    let page_index = i64::from(page.get());
     let labels = catalog.dict(names::PAGE_LABELS, r)?;
     let (key, value) = number_tree::lower_bound(&labels, page_index, r, limits, diags)?;
 
@@ -159,7 +165,7 @@ mod tests {
         )])
     }
 
-    fn label(catalog: &Dict, index: i64, count: u32) -> Option<String> {
+    fn label(catalog: &Dict, index: u32, count: u32) -> Option<String> {
         let (l, mut d) = (Limits::default(), Diagnostics::default());
         page_label(catalog, index, count, &NoResolve, &l, &mut d)
     }
@@ -193,7 +199,8 @@ mod tests {
     #[test]
     fn an_index_outside_the_document_has_no_label_while_one_inside_falls_back() {
         let empty = dict(&[("PageLabels", Object::Dict(Dict::new()))]);
-        assert_eq!(label(&empty, -1, 7), None);
+        // A negative index is no longer expressible: `PageIndex` is unsigned,
+        // so the only out-of-range case left is one past the count.
         assert_eq!(label(&empty, 7, 7), None);
         // In range with no tree entry: the one-based index, as a decimal.
         assert_eq!(label(&empty, 3, 7), None);

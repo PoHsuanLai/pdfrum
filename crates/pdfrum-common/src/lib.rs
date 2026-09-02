@@ -1,15 +1,17 @@
 //! Shared foundation of the pdfrum workspace: the diagnostics channel for
 //! damage-tolerant parsing, hard resource limits mirroring PDFium's, the
-//! version a file declares ([`PdfVersion`]), and a re-export of [`kurbo`] as
-//! the workspace-wide geometry vocabulary (`Affine`, `BezPath`, `Rect`,
-//! `Point`). Deliberately tiny — anything that
+//! two vocabulary newtypes every layer speaks in ([`PdfVersion`],
+//! [`PageIndex`]), and a re-export of [`kurbo`] as the workspace-wide geometry
+//! vocabulary (`Affine`, `BezPath`, `Rect`, `Point`). Deliberately tiny — anything that
 //! feels like a "util" belongs in the crate that uses it (SPEC.md §1).
 //!
-//! `PdfVersion` is here rather than in the crate that produces it because more
-//! than one crate does: `pdfrum-parser` reads it out of the header and
-//! `pdfrum-edit` writes one back, and neither should depend on the other for a
-//! two-digit value type. This is the bottom of the graph, so it is the only
-//! place both can name (`docs/design/idiomatic-api.md` §WP1).
+//! Both newtypes are here rather than in the crate that produces them, because
+//! more than one crate does. `PdfVersion` is read out of the header by
+//! `pdfrum-parser` and written back by `pdfrum-edit`, neither of which should
+//! depend on the other for a two-digit value type; `PageIndex` appears in the
+//! public signatures of six crates. This is the bottom of the graph, so it is
+//! the only place all of them can name
+//! (`docs/design/idiomatic-api.md` §WP1).
 //!
 //! ```
 //! use pdfrum_common::{DiagKind, Diagnostics, Limits, Severity};
@@ -27,12 +29,14 @@
 mod diagnostics;
 mod fasthash;
 mod limits;
+mod page_index;
 mod version;
 
 pub use diagnostics::{DiagKind, Diagnostic, Diagnostics, Severity};
 pub use fasthash::{FxBuildHasher, FxHasher};
 pub use kurbo;
 pub use limits::Limits;
+pub use page_index::PageIndex;
 pub use version::PdfVersion;
 
 #[cfg(test)]

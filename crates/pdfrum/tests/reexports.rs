@@ -54,6 +54,7 @@ fn every_type_in_a_public_signature_is_nameable_from_the_facade() {
     nameable::<Limits>();
     nameable::<Severity>();
     nameable::<PdfVersion>();
+    nameable::<PageIndex>();
 
     // pdfrum-crypt
     nameable::<Permissions>();

@@ -1,7 +1,7 @@
 //! One page: its geometry, its pixels, its text and its annotations.
 
 use kurbo::Affine;
-use pdfrum_common::Diagnostics;
+use pdfrum_common::{Diagnostics, PageIndex};
 use pdfrum_object::Name;
 use pdfrum_page::BuildContext;
 use pdfrum_parser::PageDict;
@@ -30,14 +30,14 @@ use crate::{
 pub struct Page<'a> {
     pub(crate) doc: &'a Document,
     pub(crate) dict: PageDict,
-    pub(crate) index: u32,
+    pub(crate) index: PageIndex,
     media_box: kurbo::Rect,
     crop_box: kurbo::Rect,
     rotation: Rotation,
 }
 
 impl<'a> Page<'a> {
-    pub(crate) fn load(doc: &'a Document, index: u32) -> Result<Page<'a>> {
+    pub(crate) fn load(doc: &'a Document, index: PageIndex) -> Result<Page<'a>> {
         let dict = doc.inner.page(index)?;
         let mut diags = Diagnostics::default();
         let (media_box, crop_box) = pdfrum_page::derive_boxes(
@@ -65,7 +65,7 @@ impl<'a> Page<'a> {
 
     /// The page's zero-based index in the document.
     #[must_use]
-    pub fn index(&self) -> u32 {
+    pub fn index(&self) -> PageIndex {
         self.index
     }
 

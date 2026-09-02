@@ -49,7 +49,7 @@ fn a_click_focuses_the_field_under_it() {
     click(&mut session, INSIDE);
 
     let focused = session.focused_annot().expect("the click must focus");
-    assert_eq!(focused.page, 0);
+    assert_eq!(focused.page, pdfrum::PageIndex::FIRST);
     // The field is the page's only annotation, at raw /Annots index 0.
     assert_eq!(focused.index, 0);
 }

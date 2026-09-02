@@ -9,8 +9,8 @@
 use std::sync::Arc;
 
 use pdfrum::{
-    Document, FieldKind, FindOptions, OpenOptions, PdfVersion, Permissions, RenderOptions,
-    SaveOptions, Subtype, Update,
+    Document, FieldKind, FindOptions, OpenOptions, PageIndex, PdfVersion, Permissions,
+    RenderOptions, SaveOptions, Subtype, Update,
 };
 
 const HELLO: &str = "tests/fixtures/hello_world.pdf";
@@ -128,12 +128,12 @@ fn pages_are_reachable_by_index_and_by_iteration_and_agree() {
     let doc = Document::open(BOOKMARKS).expect("open");
     assert_eq!(doc.page_count(), 2);
 
-    let by_iter: Vec<u32> = doc.pages().map(|page| page.index()).collect();
-    assert_eq!(by_iter, [0, 1]);
+    let by_iter: Vec<PageIndex> = doc.pages().map(|page| page.index()).collect();
+    assert_eq!(by_iter, [PageIndex::new(0), PageIndex::new(1)]);
 
     for index in 0..doc.page_count() {
         let page = doc.page(index).expect("page");
-        assert_eq!(page.index(), index);
+        assert_eq!(page.index(), PageIndex::from(index));
     }
     assert!(doc.page(2).is_err(), "past the end");
 }
@@ -405,7 +405,7 @@ fn an_outline_entry_resolves_the_page_its_destination_names() {
         .iter()
         .find(|b| b.title() == "Open Middle Descendant")
         .expect("the entry with an explicit destination");
-    assert_eq!(entry.page_index(), Some(0));
+    assert_eq!(entry.page_index(), Some(PageIndex::FIRST));
 }
 
 #[test]
@@ -741,7 +741,7 @@ fn pages_import_from_another_document() {
 
     let doc = Document::open(HELLO).expect("open");
     let source = Document::open(BOOKMARKS).expect("open");
-    doc.import_pages(&out, &source, &[0, 1], doc.page_count())
+    doc.import_pages(&out, &source, [0, 1], doc.page_count())
         .expect("import");
 
     let merged = Document::open(&out).expect("reopen");
@@ -762,7 +762,7 @@ fn importing_at_the_front_shifts_the_existing_pages_up() {
 
     let doc = Document::open(HELLO).expect("open");
     let source = Document::open(BOOKMARKS).expect("open");
-    doc.import_pages(&out, &source, &[0], 0).expect("import");
+    doc.import_pages(&out, &source, [0], 0).expect("import");
 
     let merged = Document::open(&out).expect("reopen");
     assert_eq!(merged.page_count(), 2);
@@ -781,7 +781,7 @@ fn importing_a_page_the_source_does_not_have_fails_without_writing() {
     let doc = Document::open(HELLO).expect("open");
     let source = Document::open(BOOKMARKS).expect("open");
     let err = doc
-        .import_pages(&out, &source, &[0, 99], 0)
+        .import_pages(&out, &source, [0, 99], 0)
         .expect_err("page 99 does not exist");
     assert!(matches!(err, pdfrum::Error::Save(_)), "got {err:?}");
     assert!(!out.exists(), "nothing is written when the import fails");
