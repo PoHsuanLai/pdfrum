@@ -601,7 +601,7 @@ pub pdfrum_doc::nav::dest::Dest::array: core::option::Option<pdfrum_object::arra
 impl pdfrum_doc::nav::dest::Dest
 pub fn pdfrum_doc::nav::dest::Dest::create<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, core::option::Option<&pdfrum_object::object::Object>, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_doc::nav::dest::Dest
 pub fn pdfrum_doc::nav::dest::Dest::num_params<R: pdfrum_object::resolve::Resolve>(&self, &R) -> usize
-pub fn pdfrum_doc::nav::dest::Dest::page_index<R: pdfrum_object::resolve::Resolve>(&self, &R, impl core::ops::function::Fn(u32) -> i32, &mut pdfrum_common::diagnostics::Diagnostics) -> i32
+pub fn pdfrum_doc::nav::dest::Dest::page_index<R: pdfrum_object::resolve::Resolve>(&self, &R, impl core::ops::function::Fn(u32) -> core::option::Option<u32>, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<u32>
 pub fn pdfrum_doc::nav::dest::Dest::param(&self, usize) -> f32
 pub fn pdfrum_doc::nav::dest::Dest::params_all(&self) -> alloc::vec::Vec<f32>
 pub fn pdfrum_doc::nav::dest::Dest::xyz<R: pdfrum_object::resolve::Resolve>(&self, &R) -> core::option::Option<pdfrum_doc::nav::dest::Xyz>
@@ -752,7 +752,7 @@ pub pdfrum_doc::nav::Dest::array: core::option::Option<pdfrum_object::array::Arr
 impl pdfrum_doc::nav::dest::Dest
 pub fn pdfrum_doc::nav::dest::Dest::create<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, core::option::Option<&pdfrum_object::object::Object>, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_doc::nav::dest::Dest
 pub fn pdfrum_doc::nav::dest::Dest::num_params<R: pdfrum_object::resolve::Resolve>(&self, &R) -> usize
-pub fn pdfrum_doc::nav::dest::Dest::page_index<R: pdfrum_object::resolve::Resolve>(&self, &R, impl core::ops::function::Fn(u32) -> i32, &mut pdfrum_common::diagnostics::Diagnostics) -> i32
+pub fn pdfrum_doc::nav::dest::Dest::page_index<R: pdfrum_object::resolve::Resolve>(&self, &R, impl core::ops::function::Fn(u32) -> core::option::Option<u32>, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<u32>
 pub fn pdfrum_doc::nav::dest::Dest::param(&self, usize) -> f32
 pub fn pdfrum_doc::nav::dest::Dest::params_all(&self) -> alloc::vec::Vec<f32>
 pub fn pdfrum_doc::nav::dest::Dest::xyz<R: pdfrum_object::resolve::Resolve>(&self, &R) -> core::option::Option<pdfrum_doc::nav::dest::Xyz>
@@ -840,15 +840,15 @@ pub fn pdfrum_doc::structure::element::StructElement::actual_text<R: pdfrum_obje
 pub fn pdfrum_doc::structure::element::StructElement::alt_text<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::string::String
 pub fn pdfrum_doc::structure::element::StructElement::expansion<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::string::String
 pub fn pdfrum_doc::structure::element::StructElement::id(&self) -> core::option::Option<alloc::vec::Vec<u8>>
-pub fn pdfrum_doc::structure::element::StructElement::kid_content_id(&self, usize) -> i64
+pub fn pdfrum_doc::structure::element::StructElement::kid_content_id(&self, usize) -> core::option::Option<i64>
 pub fn pdfrum_doc::structure::element::StructElement::lang(&self) -> core::option::Option<alloc::vec::Vec<u8>>
 pub fn pdfrum_doc::structure::element::StructElement::link_kid(&mut self, &pdfrum_object::dict::Dict, core::option::Option<pdfrum_object::object::ObjRef>, usize) -> bool
 pub fn pdfrum_doc::structure::element::StructElement::load_kids<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, u32, &R) -> alloc::vec::Vec<pdfrum_doc::structure::element::Kid>
 pub fn pdfrum_doc::structure::element::StructElement::obj_type<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::vec::Vec<u8>
 pub fn pdfrum_doc::structure::element::StructElement::title<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::string::String
 pub fn pdfrum_doc::structure::element::map_role(core::option::Option<&pdfrum_object::dict::Dict>, &[u8]) -> alloc::vec::Vec<u8>
-pub fn pdfrum_doc::structure::element::marked_content_id_at<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, usize, &R) -> i64
-pub fn pdfrum_doc::structure::element::marked_content_id_count<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> i64
+pub fn pdfrum_doc::structure::element::marked_content_id_at<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, usize, &R) -> core::option::Option<i64>
+pub fn pdfrum_doc::structure::element::marked_content_id_count<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> core::option::Option<usize>
 pub enum pdfrum_doc::structure::Kid
 pub pdfrum_doc::structure::Kid::Element
 pub pdfrum_doc::structure::Kid::Element::dict: pdfrum_object::dict::Dict
@@ -874,7 +874,7 @@ pub fn pdfrum_doc::structure::element::StructElement::actual_text<R: pdfrum_obje
 pub fn pdfrum_doc::structure::element::StructElement::alt_text<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::string::String
 pub fn pdfrum_doc::structure::element::StructElement::expansion<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::string::String
 pub fn pdfrum_doc::structure::element::StructElement::id(&self) -> core::option::Option<alloc::vec::Vec<u8>>
-pub fn pdfrum_doc::structure::element::StructElement::kid_content_id(&self, usize) -> i64
+pub fn pdfrum_doc::structure::element::StructElement::kid_content_id(&self, usize) -> core::option::Option<i64>
 pub fn pdfrum_doc::structure::element::StructElement::lang(&self) -> core::option::Option<alloc::vec::Vec<u8>>
 pub fn pdfrum_doc::structure::element::StructElement::link_kid(&mut self, &pdfrum_object::dict::Dict, core::option::Option<pdfrum_object::object::ObjRef>, usize) -> bool
 pub fn pdfrum_doc::structure::element::StructElement::load_kids<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, u32, &R) -> alloc::vec::Vec<pdfrum_doc::structure::element::Kid>
@@ -885,8 +885,8 @@ pub pdfrum_doc::structure::StructTree::elements: alloc::vec::Vec<pdfrum_doc::str
 pub pdfrum_doc::structure::StructTree::top: alloc::vec::Vec<core::option::Option<usize>>
 impl pdfrum_doc::structure::StructTree
 pub fn pdfrum_doc::structure::StructTree::load_page<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &pdfrum_object::dict::Dict, u32, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<pdfrum_doc::structure::StructTree>
-pub fn pdfrum_doc::structure::marked_content_id_at<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, usize, &R) -> i64
-pub fn pdfrum_doc::structure::marked_content_id_count<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> i64
+pub fn pdfrum_doc::structure::marked_content_id_at<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, usize, &R) -> core::option::Option<i64>
+pub fn pdfrum_doc::structure::marked_content_id_count<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> core::option::Option<usize>
 pub mod pdfrum_doc::vt
 pub mod pdfrum_doc::vt::autosize
 pub fn pdfrum_doc::vt::autosize::auto_font_size(&[pdfrum_doc::vt::Section], &pdfrum_doc::vt::Config, &pdfrum_doc::vt::Metrics<'_>) -> f32
@@ -932,10 +932,10 @@ pub mod pdfrum_doc::vt::hit
 pub struct pdfrum_doc::vt::hit::Place
 pub pdfrum_doc::vt::hit::Place::line: u32
 pub pdfrum_doc::vt::hit::Place::section: u32
-pub pdfrum_doc::vt::hit::Place::word: i32
+pub pdfrum_doc::vt::hit::Place::word: core::option::Option<u32>
 impl pdfrum_doc::vt::hit::Place
 pub const pdfrum_doc::vt::hit::Place::START: pdfrum_doc::vt::hit::Place
-pub fn pdfrum_doc::vt::hit::Place::new(u32, u32, i32) -> pdfrum_doc::vt::hit::Place
+pub fn pdfrum_doc::vt::hit::Place::new(u32, u32, core::option::Option<u32>) -> pdfrum_doc::vt::hit::Place
 pub fn pdfrum_doc::vt::hit::Place::start() -> pdfrum_doc::vt::hit::Place
 impl core::default::Default for pdfrum_doc::vt::hit::Place
 pub fn pdfrum_doc::vt::hit::Place::default() -> pdfrum_doc::vt::hit::Place
@@ -983,12 +983,14 @@ pub fn pdfrum_doc::vt::Layout::to_pdf(kurbo::rect::Rect, f32, f32) -> (f32, f32)
 pub fn pdfrum_doc::vt::Layout::words(&self) -> impl core::iter::traits::iterator::Iterator<Item = (usize, usize, &pdfrum_doc::vt::Word)>
 pub struct pdfrum_doc::vt::Line
 pub pdfrum_doc::vt::Line::ascent: f32
-pub pdfrum_doc::vt::Line::begin: i32
 pub pdfrum_doc::vt::Line::descent: f32
-pub pdfrum_doc::vt::Line::end: i32
 pub pdfrum_doc::vt::Line::width: f32
+pub pdfrum_doc::vt::Line::words: core::option::Option<core::ops::range::Range<u32>>
 pub pdfrum_doc::vt::Line::x: f32
 pub pdfrum_doc::vt::Line::y: f32
+impl pdfrum_doc::vt::Line
+pub fn pdfrum_doc::vt::Line::last_word(&self) -> core::option::Option<u32>
+pub fn pdfrum_doc::vt::Line::word_range(&self, usize) -> core::ops::range::Range<usize>
 pub struct pdfrum_doc::vt::Metrics<'a>
 pub pdfrum_doc::vt::Metrics::ascent: i32
 pub pdfrum_doc::vt::Metrics::descent: i32
@@ -1001,7 +1003,6 @@ pub pdfrum_doc::vt::Section::rect: kurbo::rect::Rect
 pub pdfrum_doc::vt::Section::words: alloc::vec::Vec<pdfrum_doc::vt::Word>
 pub struct pdfrum_doc::vt::Word
 pub pdfrum_doc::vt::Word::ch: u32
-pub pdfrum_doc::vt::Word::font_index: i32
 pub pdfrum_doc::vt::Word::is_rtl: bool
 pub pdfrum_doc::vt::Word::tail: f32
 pub pdfrum_doc::vt::Word::x: f32
@@ -1185,7 +1186,7 @@ pub pdfrum_doc::Dest::array: core::option::Option<pdfrum_object::array::Array>
 impl pdfrum_doc::nav::dest::Dest
 pub fn pdfrum_doc::nav::dest::Dest::create<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, core::option::Option<&pdfrum_object::object::Object>, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_doc::nav::dest::Dest
 pub fn pdfrum_doc::nav::dest::Dest::num_params<R: pdfrum_object::resolve::Resolve>(&self, &R) -> usize
-pub fn pdfrum_doc::nav::dest::Dest::page_index<R: pdfrum_object::resolve::Resolve>(&self, &R, impl core::ops::function::Fn(u32) -> i32, &mut pdfrum_common::diagnostics::Diagnostics) -> i32
+pub fn pdfrum_doc::nav::dest::Dest::page_index<R: pdfrum_object::resolve::Resolve>(&self, &R, impl core::ops::function::Fn(u32) -> core::option::Option<u32>, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<u32>
 pub fn pdfrum_doc::nav::dest::Dest::param(&self, usize) -> f32
 pub fn pdfrum_doc::nav::dest::Dest::params_all(&self) -> alloc::vec::Vec<f32>
 pub fn pdfrum_doc::nav::dest::Dest::xyz<R: pdfrum_object::resolve::Resolve>(&self, &R) -> core::option::Option<pdfrum_doc::nav::dest::Xyz>
@@ -1242,7 +1243,7 @@ pub fn pdfrum_doc::structure::element::StructElement::actual_text<R: pdfrum_obje
 pub fn pdfrum_doc::structure::element::StructElement::alt_text<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::string::String
 pub fn pdfrum_doc::structure::element::StructElement::expansion<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::string::String
 pub fn pdfrum_doc::structure::element::StructElement::id(&self) -> core::option::Option<alloc::vec::Vec<u8>>
-pub fn pdfrum_doc::structure::element::StructElement::kid_content_id(&self, usize) -> i64
+pub fn pdfrum_doc::structure::element::StructElement::kid_content_id(&self, usize) -> core::option::Option<i64>
 pub fn pdfrum_doc::structure::element::StructElement::lang(&self) -> core::option::Option<alloc::vec::Vec<u8>>
 pub fn pdfrum_doc::structure::element::StructElement::link_kid(&mut self, &pdfrum_object::dict::Dict, core::option::Option<pdfrum_object::object::ObjRef>, usize) -> bool
 pub fn pdfrum_doc::structure::element::StructElement::load_kids<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, u32, &R) -> alloc::vec::Vec<pdfrum_doc::structure::element::Kid>

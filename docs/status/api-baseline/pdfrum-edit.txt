@@ -34,7 +34,7 @@ pub pdfrum_edit::content::regen::PageRewrite::resources: pdfrum_object::dict::Di
 pub pdfrum_edit::content::regen::PageRewrite::streams: alloc::vec::Vec<pdfrum_edit::content::regen::Regenerated>
 pub struct pdfrum_edit::content::regen::Regenerated
 pub pdfrum_edit::content::regen::Regenerated::bytes: alloc::string::String
-pub pdfrum_edit::content::regen::Regenerated::stream: i32
+pub pdfrum_edit::content::regen::Regenerated::stream: core::option::Option<usize>
 pub fn pdfrum_edit::content::regen::fresh_state() -> pdfrum_page::state::GraphicsState
 pub fn pdfrum_edit::content::regen::regenerate(&pdfrum_page::page::Page, &pdfrum_object::dict::Dict, &impl pdfrum_object::resolve::Resolve) -> core::option::Option<pdfrum_edit::content::regen::PageRewrite>
 pub mod pdfrum_edit::content::resource
@@ -67,7 +67,7 @@ pub pdfrum_edit::content::PageRewrite::resources: pdfrum_object::dict::Dict
 pub pdfrum_edit::content::PageRewrite::streams: alloc::vec::Vec<pdfrum_edit::content::regen::Regenerated>
 pub struct pdfrum_edit::content::Regenerated
 pub pdfrum_edit::content::Regenerated::bytes: alloc::string::String
-pub pdfrum_edit::content::Regenerated::stream: i32
+pub pdfrum_edit::content::Regenerated::stream: core::option::Option<usize>
 pub struct pdfrum_edit::content::ResourceTable
 impl pdfrum_edit::content::resource::ResourceTable
 pub fn pdfrum_edit::content::resource::ResourceTable::load(&pdfrum_object::dict::Dict, &impl pdfrum_object::resolve::Resolve) -> Self
@@ -338,7 +338,7 @@ pub pdfrum_edit::PageRewrite::resources: pdfrum_object::dict::Dict
 pub pdfrum_edit::PageRewrite::streams: alloc::vec::Vec<pdfrum_edit::content::regen::Regenerated>
 pub struct pdfrum_edit::Regenerated
 pub pdfrum_edit::Regenerated::bytes: alloc::string::String
-pub pdfrum_edit::Regenerated::stream: i32
+pub pdfrum_edit::Regenerated::stream: core::option::Option<usize>
 pub struct pdfrum_edit::ResourceTable
 impl pdfrum_edit::content::resource::ResourceTable
 pub fn pdfrum_edit::content::resource::ResourceTable::load(&pdfrum_object::dict::Dict, &impl pdfrum_object::resolve::Resolve) -> Self
