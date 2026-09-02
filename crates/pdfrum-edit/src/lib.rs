@@ -49,14 +49,20 @@
 //!
 //! # What a regenerated page loses
 //!
-//! Regenerating a page's content is lossy, and deliberately so — it
-//! reproduces the C++'s emitter exactly, because a conformance comparison
+//! Regenerating a page's content is lossy. The losses are enumerated in
+//! [`content`]'s docs; the short version is that only `rg`/`RG` colours are
+//! written — though **every colour space converts to them** — patterns and
+//! shadings do not survive, and text keeps only `Tm`, `Tf`, `Tr` and `TJ`. A
+//! page whose objects were never touched is not regenerated at all, so none
+//! of this applies to an ordinary save.
+//!
+//! *Corrected 2026-09-02 (A71).* This paragraph used to say the emitter
+//! "reproduces the C++'s emitter exactly, because a conformance comparison
 //! against the oracle's regenerated page requires matching what the oracle
-//! regenerates. The losses are enumerated in [`content`]'s docs; the short
-//! version is that only `rg`/`RG` colours survive, patterns and shadings do
-//! not, and text keeps only `Tm`, `Tf`, `Tr` and `TJ`. A page whose objects
-//! were never touched is not regenerated at all, so none of this applies to
-//! an ordinary save.
+//! regenerates." **There is no such comparison**: `pdfium_test` has no save
+//! flag, so the oracle cannot produce a regenerated page at all (SPEC §11
+//! ruling E7). The remaining losses are limits of this emitter, not a
+//! matching requirement — see [`content`] for the three lines that settle it.
 
 #![forbid(unsafe_code)]
 // Everything here is written *from* untrusted input: index with `get()`.
