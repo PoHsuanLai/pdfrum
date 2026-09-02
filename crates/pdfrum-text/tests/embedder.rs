@@ -256,13 +256,30 @@ fn twenty_two_charcode_zeroes_precede_the_text() {
 
 #[test]
 fn a_hyphen_sentinel_can_land_mid_string() {
-    // `Bug431824298`: eighteen characters with the sentinel at index 15, and
-    // a search for the word it split finds nothing — a pinned upstream bug
-    // (crbug.com/431824298).
+    // `Bug431824298`: eighteen characters with the sentinel at index 15.
+    //
+    // The comment here used to call the zero result below "a pinned upstream
+    // bug (crbug.com/431824298)". Since A42 that reading is wrong, and the
+    // zero is now correct for a different reason: `find` drops the sentinel
+    // from its haystack, so the text it searches has no literal hyphen for
+    // this needle's leading and trailing `-` to match. The upstream bug — a
+    // word unfindable because it fell at a line break — is fixed, and pinned
+    // just below on this same fixture: the text is `-hello-\r\n-world<S>\u{501f}\u{6b3e}`,
+    // and the word the sentinel splits is now found joined.
     let page = fixture!("bug_431824298.pdf");
     assert_eq!(page.chars.len(), 18);
     assert_eq!(page.chars[15].unicode, 0x02);
     assert_eq!(page.find("-world-", FindOptions::default()).count(), 0);
+    // `[oracle-bug]` A42: the sentinel is dropped from the search corpus, so
+    // the halves it separates match as one word. Upstream finds nothing here
+    // (`cpdf_textpagefind.cpp:262` searches the buffer with a plain `Find`),
+    // while repairing the very same sentinel for links at
+    // `cpdf_linkextract.cpp:154-155`.
+    assert_eq!(
+        page.find("world\u{501f}", FindOptions::default()).count(),
+        1,
+        "the word the line break split is found joined"
+    );
 }
 
 #[test]

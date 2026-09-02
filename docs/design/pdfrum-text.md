@@ -1529,6 +1529,32 @@ Operates entirely on `GetAllPageText()` = `GetPageText(0, CountChars())`, i.e.
 on `text_buf_` filtered through `char_indices_`. **Not** on the `--txt`
 stream. Options: `bMatchCase`, `bMatchWholeWord`, `bConsecutive`.
 
+> **`[oracle-bug]` — one deliberate divergence (A42, 2026-09-02).** Everything
+> below describes the C++ faithfully and is still accurate as a description of
+> it. We diverge in exactly one place: the `U+FFFE` soft-hyphen sentinel is
+> **dropped from the haystack** before matching, so a word split across a line
+> break is found by a query without the hyphen.
+>
+> What makes it a bug rather than a trade-off is that **upstream does not match
+> itself**: `cpdf_linkextract.cpp:154-155` repairs the very same sentinel
+> (`Replace(L"\xfffe", L"-")`, comment "Replace the generated code with the
+> hyphen char") for link detection, and `cpdf_textpagefind.cpp:209-211`/`:262`
+> does a plain `Find` over the same buffer with no repair — and `U+FFFE` is not
+> in its separator set (`:250`, `:284`). There is no coherent upstream
+> behaviour to be faithful to. `crbug.com/431824298` is open. pdf.js joins
+> across the break at query time with a reversible index map
+> (`pdf_find_controller.js:131`, `:290-307`).
+>
+> The shape is pdf.js's: `find::search` builds the haystack without the
+> sentinel and carries an `origins` map from haystack index back to text index,
+> so **yielded ranges are still text offsets** and a match spanning a dropped
+> sentinel still covers it. Measured cost: 0 rows — no board pass calls find.
+>
+> **Scope.** Only the search corpus changes. The `U+0002`/`U+FFFE`
+> representation in the char list and the text buffer is untouched — that is
+> A41, declined at 12 rows (see `docs/status/reopened-declines.md` §2.9), and
+> the tables in §5.2 below still pin it exactly.
+
 **Construction** (:191-217): the needle is lowercased (if not match-case) and
 split by `ExtractFindWhat`; the haystack is `GetAllPageText()` lowercased the
 same way. `find_next_start_ = startPos`; `find_pre_start_ =
@@ -2510,7 +2536,7 @@ text at four rotations with quadrant first-char indices **0, 7, 16, 25** and
 | `ToUnicode` | `bug_583.pdf` | 1 char, `unicode == 0` — an unmappable char is still counted (§1.7 (f)) |
 | `WhitespaceCharCount` | `whitespace.pdf` | `chars.len() == 0` for a whitespace-only page. Pinned upstream **bug** (`crbug.com/40643656` wants 1); verified: the golden is a 4-byte BOM-only file |
 | `Bug425244539` | `bug_425244539.pdf` | `text == "hello"` (5) while `chars.len() == 27` (22 charcode-0 NULs + `hello`) — verified against the oracle. Also: `find("hello")` reports result index **22**, not 0, **before** the first step, and count 5 after |
-| `Bug431824298` | `bug_431824298.pdf` | `text` = `- h e l l o - \r \n - w o r l d 0xFFFE 0x501F 0x6B3E` (18 + NUL); `chars[15].unicode == 0x02`. `find("-world-")` finds **nothing** (a pinned upstream bug, `crbug.com/431824298`) |
+| `Bug431824298` | `bug_431824298.pdf` | `text` = `- h e l l o - \r \n - w o r l d 0xFFFE 0x501F 0x6B3E` (18 + NUL); `chars[15].unicode == 0x02`. `find("-world-")` finds **nothing** — *corrected 2026-09-02 (A42)*: this used to be annotated "a pinned upstream bug, `crbug.com/431824298`", which is no longer why. The bug is fixed; the zero here is now correct, because `find` drops the sentinel and the joined text holds no literal hyphen for this needle's `-` to match. `find("world\u{501F}")` finds **one** — the word the break split, joined |
 | `Bug1029` | `bug_1029.pdf` | `0x0002` replaces a **hard** hyphen when the word has non-ASCII chars. `text[171..227]` == `"METADATA table. When the split has committed, it noti\u{2}fi"` |
 | `SmallType3Glyph` | `bug_1591.pdf` | 5 chars `'1' ' ' '2' ' ' '1'` — **two generated spaces**. Exact boxes: `chars[1]` and `chars[3]` are **zero-area** (`left==right`, `top==bottom==50`); `chars[2]` (the small Type3 glyph) is `{86.0, 50.240001678466797, 88.400001525878906, 50.0}` |
 | `Bug444176962` | `bug_444176962.pdf` | `text == "localact"` — a space that **should** be generated is not (pinned bug `crbug.com/444176962`) |
@@ -2556,7 +2582,7 @@ All on `hello_world.pdf` unless noted. Ranges are `text` offsets.
 | `TextSearchSpaceInSearchTerm` | `"ld! G"` (5 chars) | `10..16` — **count 6**: a single space in the needle consumed the two-char `\r\n` run (§1.14's space tolerance) |
 | `TextSearchLatinExtended` | `latin_extended.pdf`, `"Ă"` (U+0102) and `"ă"` (U+0103) | Both give `2..3` then `3..4` — case-insensitive matching across the Latin Extended-A pair. **`DISABLED_` on Windows** (`crbug.com/42270374`); we have no platform variance, so we run it |
 | `Bug425244539` | `"hello"` | result index **22** *before* the first step (not 0), count 0; after stepping, index 22 count 5 |
-| `Bug431824298` | `"-world-"` | no match (pinned bug) |
+| `Bug431824298` | `"-world-"` | no match — *corrected 2026-09-02 (A42)*: not a pinned bug any more. The needle's literal hyphens are absent from the joined haystack. The bug this row used to pin is now covered by `find::tests::a_word_split_across_a_line_break_is_found_joined` and by `"world\u{501F}"` on this fixture, which matches |
 
 #### Web links — §1.15
 
