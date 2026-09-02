@@ -254,6 +254,41 @@ fn a_predefined_cmap_reaches_unicode_through_its_collection() {
     assert_eq!(charcode_from_unicode(&gb, ' '), CharCode(0x20));
 }
 
+/// `fx/text/test_m.pdf`'s one character, end to end through the predefined
+/// tables: a `/Type0` font with `/Encoding /90ms-RKSJ-V`, no `/ToUnicode` and
+/// an Adobe-Japan1 descendant draws the two bytes `82 51`, and the oracle and
+/// pdf.js both extract U+FF12 (fullwidth digit two) from it.
+///
+/// Every hop is asserted separately because each was a candidate cause when
+/// the character went missing from `--txt`, and none of them was: the decoder
+/// splits the pair as one two-byte code, the `-V` name finds the `90ms-RKSJ`
+/// decoder row, the *full* name finds the `90ms-RKSJ-V` static table, and the
+/// Japan1 CID→Unicode table answers the CID. The real cause was downstream of
+/// this crate — an empty font database, which left the glyph box degenerate
+/// and the whole text object dropped as zero-width.
+#[test]
+fn shift_jis_fullwidth_two_reaches_unicode_without_a_tounicode() {
+    for name in ["90ms-RKSJ-V", "90ms-RKSJ-H"] {
+        let (cmap, diags) = resolve(name);
+        assert!(cmap.is_loaded(), "{name}");
+        assert!(cmap.has_static_map(), "{name}");
+        assert_eq!(cmap.charset(), CidSet::Japan1, "{name}");
+        assert_eq!(cmap.coding_scheme(), CodingScheme::MixedTwoBytes, "{name}");
+        assert_eq!(diags.len(), 0, "{name}");
+
+        // 0x82 is a lead byte, so the pair is one code — not two.
+        let codes: Vec<(CharCode, Cid)> = cmap.decode(&[0x82, 0x51]).collect();
+        let [(code, cid)] = codes.as_slice() else {
+            panic!("{name}: expected one code, got {codes:?}");
+        };
+        assert_eq!(*code, CharCode(0x8251), "{name}");
+        // Both directions share the horizontal table for this code, so the
+        // CID is the same either way.
+        assert_eq!(*cid, Cid(782), "{name}");
+        assert_eq!(unicode_from_cid(cmap.charset(), *cid), Some('\u{FF12}'));
+    }
+}
+
 /// A CMap with no collection cannot reverse a Unicode scalar at all.
 #[test]
 fn charcode_from_unicode_needs_a_collection() {

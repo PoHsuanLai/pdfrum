@@ -77,6 +77,12 @@ pub struct Options {
     /// Whether to rename requested faces to their Croscore equivalents, from
     /// `--croscore-font-names`.
     pub croscore_font_names: bool,
+    /// Suppress the system font path entirely, from `--no-system-fonts`.
+    ///
+    /// Overrides `--font-dir`, exactly as the oracle's own help text says it
+    /// does (`pdfium_test.cc:1946`), leaving the built-in faces as the whole
+    /// font set.
+    pub no_system_fonts: bool,
     /// Drop the security handler when saving, from `--save-decrypted`.
     ///
     /// Without it an encrypted document saves encrypted under its own
@@ -115,6 +121,18 @@ pub struct Options {
     /// the other M14 slice, so this flag currently records the parsed count
     /// and leaves the page pixels unchanged.
     pub send_events: bool,
+    /// Run the document's JavaScript and print the transcript, from
+    /// `--js-transcript`.
+    ///
+    /// Not an oracle flag: `pdfium_test` prints the transcript as a side
+    /// effect of running with V8 compiled in, and there is no switch that
+    /// asks for it alone. Ours is a switch because the engine is behind a
+    /// default-off cargo feature, so the transcript has to be asked for
+    /// rather than assumed. With the feature off this is recorded in
+    /// [`Options::unsupported`] instead, so the harness reads
+    /// `unsupported-tool` rather than an empty transcript that looks like an
+    /// answer.
+    pub js_transcript: bool,
     /// Flags recognized but not implemented, in the order they were given.
     pub unsupported: Vec<String>,
 }
@@ -156,7 +174,6 @@ const ACCEPTED_SWITCHES: &[&str] = &[
     "--save-thumbs-dec",
     "--save-thumbs-raw",
     "--fontations",
-    "--no-system-fonts",
     "--reverse-byte-order-uses-bgra",
     "--callgrind-delim",
     "--enable-brotli",
@@ -219,8 +236,21 @@ pub fn parse(args: &[String]) -> Result<Options, ParseError> {
             options.font_dirs.push(PathBuf::from(value));
         } else if arg == "--croscore-font-names" {
             options.croscore_font_names = true;
+        } else if arg == "--no-system-fonts" {
+            options.no_system_fonts = true;
         } else if arg == "--send-events" {
             options.send_events = true;
+        } else if arg == "--js-transcript" {
+            // Read only when the engine is compiled in. Without the feature
+            // the flag is recorded as unsupported rather than rejected: a
+            // rejection would lose the whole invocation, and answering with
+            // an empty transcript would be a wrong answer rather than an
+            // absent one.
+            if cfg!(feature = "script") {
+                options.js_transcript = true;
+            } else {
+                options.unsupported.push(arg.clone());
+            }
         } else if arg == "--show-metadata" {
             options.show_metadata = true;
         } else if arg == "--md5" {
@@ -422,6 +452,21 @@ mod tests {
     }
 
     #[test]
+    fn js_transcript_is_read_with_the_engine_and_recorded_without_it() {
+        let options = parse_args(&["--js-transcript", "a.pdf"]).unwrap();
+        assert_eq!(options.files, [PathBuf::from("a.pdf")]);
+        if cfg!(feature = "script") {
+            assert!(options.js_transcript);
+            assert!(options.unsupported.is_empty());
+        } else {
+            // Recorded, not rejected: the harness needs the invocation to
+            // survive so the row reads `unsupported-tool`.
+            assert!(!options.js_transcript);
+            assert_eq!(options.unsupported, ["--js-transcript"]);
+        }
+    }
+
+    #[test]
     fn the_two_font_flags_are_read_rather_than_recorded() {
         // Both were accepted-and-ignored while substitution had no font
         // database to enumerate. They now decide which face a non-embedded
@@ -438,6 +483,20 @@ mod tests {
             options.font_dirs,
             [PathBuf::from("/fonts"), PathBuf::from("/more")]
         );
+        assert!(options.unsupported.is_empty());
+        // Absent the flag, the system path stays on — `--font-dir` replaces
+        // it rather than enabling it.
+        assert!(!options.no_system_fonts);
+    }
+
+    /// `--no-system-fonts` was accepted-and-ignored while substitution had no
+    /// system database to turn off. It is now read, and it means the oracle's
+    /// "overrides --font-dir" (`pdfium_test.cc:1946`) — see
+    /// `run::substitution_options`, which clears the directory list for it.
+    #[test]
+    fn no_system_fonts_is_read_rather_than_recorded() {
+        let options = parse_args(&["--no-system-fonts", "a.pdf"]).unwrap();
+        assert!(options.no_system_fonts);
         assert!(options.unsupported.is_empty());
     }
 
