@@ -274,12 +274,16 @@ pub struct Content<T> {
     pub state: GraphicsState,
     /// The marked-content sequence enclosing it.
     pub marks: ContentMarks,
-    /// Which `/Contents` element it came from, for the editor.
-    /// [`NO_CONTENT_STREAM`] for an object that was created rather than
-    /// parsed.
+    /// Which `/Contents` element it came from, for the editor, or `None` for
+    /// an object that was created rather than parsed.
     ///
-    /// [`NO_CONTENT_STREAM`]: crate::mutate::NO_CONTENT_STREAM
-    pub content_stream: i32,
+    /// `None` sorts before `Some(0)`, which is what gives a brand-new object
+    /// the lowest free `/Contents` index in the regenerator's ordered walk
+    /// rather than one past the end. That ordering used to be bought with a
+    /// `-1` sentinel; `Option`'s own `Ord` gives it for free and makes the
+    /// check something the compiler enforces
+    /// (`docs/design/idiomatic-api.md` §C, Tier 1 item 1).
+    pub content_stream: Option<usize>,
     /// Whether the object has been changed since it was parsed, so its
     /// content stream must be written again on save
     /// (see [`mutate`](crate::mutate)).
@@ -296,14 +300,14 @@ pub struct Content<T> {
 /// bookkeeping reaches it without matching five times.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct Common {
-    pub(crate) content_stream: i32,
+    pub(crate) content_stream: Option<usize>,
     pub(crate) dirty: bool,
     pub(crate) active: bool,
 }
 
 /// A mutable view of the same, so a mutation writes through one match.
 pub(crate) struct CommonMut<'a> {
-    pub(crate) content_stream: &'a mut i32,
+    pub(crate) content_stream: &'a mut Option<usize>,
     pub(crate) dirty: &'a mut bool,
     pub(crate) active: &'a mut bool,
 }
@@ -321,7 +325,7 @@ impl<T> Content<T> {
             object,
             state,
             marks: ContentMarks::new(),
-            content_stream: crate::mutate::NO_CONTENT_STREAM,
+            content_stream: None,
             dirty: true,
             active: true,
         }
@@ -420,7 +424,7 @@ pub struct Page {
     /// Only removals need recording here: a modified or hidden object still
     /// carries its own [`Content::dirty`], but a removed one leaves nothing
     /// behind to say its stream lost something.
-    pub dirty_streams: BTreeSet<i32>,
+    pub dirty_streams: BTreeSet<Option<usize>>,
     /// The transform each `/Contents` element leaves in force at its end,
     /// keyed by element index.
     ///
@@ -429,7 +433,7 @@ pub struct Page {
     /// its own must first undo what it inherited and then restate what it
     /// passes on. Only streams that actually changed the transform have an
     /// entry.
-    pub stream_ctms: BTreeMap<i32, Affine>,
+    pub stream_ctms: BTreeMap<usize, Affine>,
 }
 
 impl Page {

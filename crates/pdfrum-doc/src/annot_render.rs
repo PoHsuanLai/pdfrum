@@ -452,7 +452,7 @@ fn focus_rect(annot: &Annotation, box_: ap::FocusBox) -> Option<pdfrum_page::Pag
             },
             state,
             marks: pdfrum_page::state::ContentMarks::default(),
-            content_stream: pdfrum_page::NO_CONTENT_STREAM,
+            content_stream: None,
             // Annotation chrome is drawn into the page graph but is not page
             // content: it belongs to no `/Contents` element and must never
             // make an ordinary render count as a mutation.
@@ -560,7 +560,7 @@ fn invalid_outline<R: Resolve>(annot: &Annotation, r: &R) -> Option<pdfrum_page:
             },
             state,
             marks: pdfrum_page::state::ContentMarks::default(),
-            content_stream: pdfrum_page::NO_CONTENT_STREAM,
+            content_stream: None,
             // Annotation chrome is drawn into the page graph but is not page
             // content: it belongs to no `/Contents` element and must never
             // make an ordinary render count as a mutation.
@@ -677,7 +677,7 @@ fn highlight<R: Resolve>(
             },
             state: highlight_state(),
             marks: pdfrum_page::state::ContentMarks::default(),
-            content_stream: pdfrum_page::NO_CONTENT_STREAM,
+            content_stream: None,
             // Annotation chrome is drawn into the page graph but is not page
             // content: it belongs to no `/Contents` element and must never
             // make an ordinary render count as a mutation.

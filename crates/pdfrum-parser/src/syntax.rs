@@ -172,13 +172,14 @@ fn number_or_reference<R: Resolve + ?Sized>(
         let generation = second.bytes();
         if lx.next_word(ctx.limits).is_keyword(b"R") {
             let num = atoui(word);
+            let generation = u16::try_from(atoui(generation)).unwrap_or(u16::MAX);
+            let reference = ObjRef::new(num, generation);
             // The all-ones object number is the "no object" marker, so a
             // reference spelling it is not an object at all.
-            if num == ObjRef::INVALID_NUM {
+            if reference.is_invalid() {
                 return Err(Error::NoObject(after_number as u64));
             }
-            let generation = u16::try_from(atoui(generation)).unwrap_or(u16::MAX);
-            return Ok(Object::Ref(ObjRef::new(num, generation)));
+            return Ok(Object::Ref(reference));
         }
     }
     // Not a reference after all: give back everything but the first number.

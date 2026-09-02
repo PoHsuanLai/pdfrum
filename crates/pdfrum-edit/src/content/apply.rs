@@ -58,16 +58,15 @@ pub fn apply_rewrite(
         let index = regenerated.stream;
         if regenerated.bytes.is_empty() {
             // An empty buffer is the deletion signal, not an empty stream.
-            if let Ok(index) = usize::try_from(index) {
+            // A streamless element has nothing to delete.
+            if let Some(index) = index {
                 removed.insert(index);
                 contents_changed = true;
             }
             continue;
         }
         let stream = content_stream(regenerated.bytes.as_bytes());
-        let existing = usize::try_from(index)
-            .ok()
-            .and_then(|i| shape.elements().get(i).copied());
+        let existing = index.and_then(|i| shape.elements().get(i).copied());
         match existing {
             // The element exists: rewrite it, or copy it if it is shared.
             Some(reference) if !shared.contains(&reference.num) => {
@@ -75,7 +74,7 @@ pub fn apply_rewrite(
             }
             Some(_) => {
                 let fresh = edit.add(Object::Stream(stream));
-                if let Ok(index) = usize::try_from(index) {
+                if let Some(index) = index {
                     shape = replace_element(&shape, index, fresh);
                     contents_changed = true;
                 }
@@ -307,7 +306,7 @@ trailer\n<< /Root 1 0 R /Size 6 >>\n";
         load(Arc::from(&file[..]), &LoadOptions::default()).expect("opens")
     }
 
-    fn rewrite(streams: &[(i32, &str)]) -> PageRewrite {
+    fn rewrite(streams: &[(Option<usize>, &str)]) -> PageRewrite {
         PageRewrite {
             streams: streams
                 .iter()
@@ -339,7 +338,7 @@ trailer\n<< /Root 1 0 R /Size 6 >>\n";
             &mut edit,
             page,
             &dict,
-            &rewrite(&[(0, "q\nQ\n")]),
+            &rewrite(&[(Some(0), "q\nQ\n")]),
             &BTreeSet::new(),
         );
         assert_eq!(contents_of(&edit, page), Object::Ref(ObjRef::new(4, 0)));
@@ -361,7 +360,7 @@ trailer\n<< /Root 1 0 R /Size 6 >>\n";
             &mut edit,
             ObjRef::new(3, 0),
             &dict,
-            &rewrite(&[(0, "q\nQ\n")]),
+            &rewrite(&[(Some(0), "q\nQ\n")]),
             &BTreeSet::new(),
         );
         let stream = edit.fetch(ObjRef::new(4, 0)).expect("stream");
@@ -382,7 +381,13 @@ trailer\n<< /Root 1 0 R /Size 6 >>\n";
         let page = ObjRef::new(3, 0);
         let dict = base.page(0).expect("page").dict;
         let shared: BTreeSet<u32> = [4].into_iter().collect();
-        apply_rewrite(&mut edit, page, &dict, &rewrite(&[(0, "q\nQ\n")]), &shared);
+        apply_rewrite(
+            &mut edit,
+            page,
+            &dict,
+            &rewrite(&[(Some(0), "q\nQ\n")]),
+            &shared,
+        );
 
         // The page now names a different object.
         let Object::Ref(now) = contents_of(&edit, page) else {
@@ -409,7 +414,7 @@ trailer\n<< /Root 1 0 R /Size 6 >>\n";
             &mut edit,
             page,
             &dict,
-            &rewrite(&[(pdfrum_page::NO_CONTENT_STREAM, "q\nQ\n")]),
+            &rewrite(&[(None, "q\nQ\n")]),
             &BTreeSet::new(),
         );
         let Object::Ref(array_ref) = contents_of(&edit, page) else {
@@ -433,7 +438,7 @@ trailer\n<< /Root 1 0 R /Size 6 >>\n";
             &mut edit,
             page,
             &dict,
-            &rewrite(&[(0, "")]),
+            &rewrite(&[(Some(0), "")]),
             &BTreeSet::new(),
         );
         assert_eq!(contents_of(&edit, page), Object::Null);
@@ -451,7 +456,7 @@ trailer\n<< /Root 1 0 R /Size 6 >>\n";
             &mut edit,
             page,
             &dict,
-            &rewrite(&[(0, "")]),
+            &rewrite(&[(Some(0), "")]),
             &BTreeSet::new(),
         );
         assert_eq!(mapping, [(1, 0)].into_iter().collect());
@@ -471,7 +476,7 @@ trailer\n<< /Root 1 0 R /Size 6 >>\n";
         let mut edit = EditDoc::new(&base);
         let page = ObjRef::new(3, 0);
         let dict = base.page(0).expect("page").dict;
-        let mut rewrite = rewrite(&[(0, "q\nQ\n")]);
+        let mut rewrite = rewrite(&[(Some(0), "q\nQ\n")]);
         rewrite.resources = Dict::from_pairs([(Name::from("ExtGState"), Object::Int(1))]);
         apply_rewrite(&mut edit, page, &dict, &rewrite, &BTreeSet::new());
         let page_dict = edit.fetch(page).expect("page");

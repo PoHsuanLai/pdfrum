@@ -479,7 +479,7 @@ mod tests {
             },
             state,
             marks: pdfrum_page::state::ContentMarks::new(),
-            content_stream: 0,
+            content_stream: Some(0),
             dirty: false,
             active: true,
         }))
@@ -744,7 +744,7 @@ mod tests {
             },
             state: GraphicsState::default(),
             marks: pdfrum_page::state::ContentMarks::new(),
-            content_stream: 0,
+            content_stream: Some(0),
             dirty: false,
             active: true,
         }));

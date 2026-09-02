@@ -114,12 +114,6 @@ pub struct Limits {
     pub max_calculate_depth: u32,
 }
 
-impl Limits {
-    /// The object number that means "no object" in a cross-reference table.
-    /// PDFium: `kInvalidObjNum` (`cpdf_object.h`).
-    pub const INVALID_OBJ_NUM: u32 = 0xFFFF_FFFF;
-}
-
 impl Default for Limits {
     fn default() -> Self {
         Self {
@@ -165,7 +159,6 @@ mod tests {
         assert_eq!(l.max_name_tree_depth, 32);
         assert_eq!(l.max_string_len, usize::MAX);
         assert_eq!(l.max_array_len, usize::MAX);
-        assert_eq!(Limits::INVALID_OBJ_NUM, 0xFFFF_FFFF);
     }
 
     #[test]

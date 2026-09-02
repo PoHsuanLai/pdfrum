@@ -77,7 +77,6 @@ pub use image::{
     BitImage, ImageCache, ImageData, ImageMask, JpxImage, Pixels, RequestedSize, decode_image,
     decode_jbig2, decode_jpx,
 };
-pub use mutate::NO_CONTENT_STREAM;
 pub use ops::{
     FillRule, InlineImage, LineCap, LineJoin, MarkProperties, Op, TextItem, TextRenderMode,
 };

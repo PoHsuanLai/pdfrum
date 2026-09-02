@@ -407,7 +407,10 @@ mod tests {
     fn reference_identity_is_by_number_and_generation() {
         assert_eq!(ObjRef::new(1, 0), ObjRef::new(1, 0));
         assert_ne!(ObjRef::new(1, 0), ObjRef::new(1, 1));
-        assert!(ObjRef::new(ObjRef::INVALID_NUM, 0).is_invalid());
+        // The sentinel is private, so the test names the value the *file*
+        // would contain rather than importing a constant to compare against —
+        // which is the whole point of `docs/design/idiomatic-api.md` §C.
+        assert!(ObjRef::new(0xFFFF_FFFF, 0).is_invalid());
         assert!(!ObjRef::new(1, 0).is_invalid());
     }
 

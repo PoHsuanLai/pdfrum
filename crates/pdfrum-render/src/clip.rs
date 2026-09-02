@@ -25,7 +25,15 @@ use crate::path::{outer_rect, path_rect};
 
 /// The rectangle an empty clip path becomes: one pixel entirely off the top
 /// left of any device, i.e. "clip everything out".
-pub const EMPTY_CLIP_RECT: Rect = Rect::new(-1.0, -1.0, 0.0, 0.0);
+///
+/// **Private on purpose** (`docs/design/idiomatic-api.md` §C, Tier 1 item 5).
+/// It was public as `EMPTY_CLIP_RECT`, an inverted off-device rectangle
+/// standing for "nothing" — a magic value a caller had to recognise, and one
+/// whose own test had to assert that a rect meaning *empty* measures one unit
+/// wide. [`Clip::Empty`] says it in the type instead. The rectangle itself is
+/// unchanged and still what reaches the device, because it interacts with the
+/// outer-rect rounding of the rect fast path downstream.
+const EMPTY_CLIP_RECT: Rect = Rect::new(-1.0, -1.0, 0.0, 0.0);
 
 /// One clip the engine will push, already reduced to what the device takes.
 #[derive(Debug, Clone, PartialEq)]
@@ -34,11 +42,18 @@ pub enum Clip {
     Rect(Rect),
     /// An antialiased path.
     Path(BezPath, FillRule),
+    /// A clip that lets **nothing** through.
+    ///
+    /// Distinct from `Rect` of a zero-extent rectangle: this reaches the
+    /// device as a deliberately off-canvas rectangle rather than as an empty
+    /// region, because `tiny-skia` *drops* a fill or clip thinner than
+    /// `1/4096` and would turn an empty clip into a no-op one.
+    Empty,
 }
 
 /// Whether a path encloses nothing at all, in either axis.
 ///
-/// A clip that lets nothing through must become [`EMPTY_CLIP_RECT`] rather
+/// A clip that lets nothing through must become [`Clip::Empty`] rather
 /// than reaching a rasterizer: `tiny-skia` *drops* a fill or clip thinner
 /// than `1/4096`, which turns an empty clip into a no-op clip — a
 /// correctness inversion, and one this guard is what prevents.
@@ -128,7 +143,7 @@ pub fn resolve(
                     // `pdfrum-page` spells an empty clip as a zero-extent
                     // path rather than as no path at all, so both shapes
                     // land here.
-                    out.push(Clip::Rect(EMPTY_CLIP_RECT));
+                    out.push(Clip::Empty);
                     continue;
                 }
                 let rule = if *even_odd {
@@ -166,7 +181,7 @@ pub fn resolve(
                 if union.elements().is_empty() {
                     // A text clip that produced no outlines still clips: an
                     // empty text-clipping path paints nothing through.
-                    out.push(Clip::Rect(EMPTY_CLIP_RECT));
+                    out.push(Clip::Empty);
                 } else {
                     out.push(Clip::Path(union, FillRule::Winding));
                 }
@@ -183,6 +198,7 @@ pub fn push(device: &mut dyn RenderDevice, clips: &[Clip]) -> usize {
         match clip {
             Clip::Rect(r) => device.push_clip_rect(*r),
             Clip::Path(p, rule) => device.push_clip(p, *rule),
+            Clip::Empty => device.push_clip_rect(EMPTY_CLIP_RECT),
         }
     }
     clips.len()
@@ -207,6 +223,7 @@ pub fn device_bounds(clips: &[Clip]) -> Option<Rect> {
         let r = match clip {
             Clip::Rect(r) => *r,
             Clip::Path(p, _) => p.bounding_box(),
+            Clip::Empty => EMPTY_CLIP_RECT,
         };
         acc = Some(match acc {
             Some(a) => a.intersect(r),
@@ -231,12 +248,16 @@ mod tests {
     }
 
     #[test]
-    fn empty_path_is_the_offscreen_rect() {
+    fn empty_path_is_the_empty_clip() {
         let mut stack = ClipStack::new();
         stack.push_empty();
         let clips = resolve_bare(&stack);
-        assert_eq!(clips.as_slice(), &[Clip::Rect(EMPTY_CLIP_RECT)]);
-        // It is a real 1x1 rectangle off the top left, not an empty one.
+        assert_eq!(clips.as_slice(), &[Clip::Empty]);
+        // What it means is now the variant, not the rectangle's coordinates.
+        // The rectangle survives as the private shape the device is handed,
+        // and it is still a real 1x1 off the top left rather than an empty
+        // one -- which is the awkwardness that made the constant a poor
+        // public surface, and is now nobody's business but this module's.
         #[expect(
             clippy::float_cmp,
             reason = "the rect is a literal const; an exact width is what is being pinned"
@@ -333,7 +354,7 @@ mod tests {
         let mut stack = ClipStack::new();
         assert!(stack.push_text(vec![text_run(b"", 0.0)]));
         let clips = resolve_bare(&stack);
-        assert_eq!(clips.as_slice(), &[Clip::Rect(EMPTY_CLIP_RECT)]);
+        assert_eq!(clips.as_slice(), &[Clip::Empty]);
     }
 
     #[test]

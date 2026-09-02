@@ -49,10 +49,16 @@ fn round_trip(doc: &Document, edits: &[PageEdit], name: &str) -> Document {
 }
 
 /// Which `/Contents` element each of a page's objects belongs to.
-fn streams_of(page: &PageEdit) -> Vec<i32> {
+///
+/// Every object on these fixtures was parsed out of a real stream, so each
+/// answer is `Some`. A `None` — a created, streamless object — is reported as
+/// `usize::MAX` so it is loud in a failure message rather than silently equal
+/// to an index; no assertion below expects one.
+fn streams_of(page: &PageEdit) -> Vec<usize> {
     page.objects()
         .iter()
         .map(pdfrum::PageObject::content_stream)
+        .map(|stream| stream.unwrap_or(usize::MAX))
         .collect()
 }
 
@@ -154,7 +160,7 @@ fn emptying_one_content_stream_collapses_the_indices_after_it() {
             .objects()
             .get(index)
             .map(pdfrum::PageObject::content_stream)
-            == Some(1)
+            == Some(Some(1))
         {
             assert!(page.remove(index).is_some());
         }

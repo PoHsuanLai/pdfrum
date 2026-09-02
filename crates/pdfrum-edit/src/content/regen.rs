@@ -59,7 +59,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use pdfrum_common::kurbo::Affine;
 use pdfrum_object::{Dict, Name, ObjRef, Object, Resolve};
 use pdfrum_page::state::GraphicsState;
-use pdfrum_page::{NO_CONTENT_STREAM, Page, PageObject};
+use pdfrum_page::{Page, PageObject};
 
 use crate::content::emit::{DEFAULT_GRAPHICS, GraphicsKey, ResourceNames, default_graphics};
 use crate::content::marks::{emit_mark_diff, finish_marks};
@@ -69,9 +69,12 @@ use crate::content::resource::ResourceTable;
 /// One regenerated `/Contents` element.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Regenerated {
-    /// Which element this is, or [`NO_CONTENT_STREAM`] for one that did not
-    /// exist before.
-    pub stream: i32,
+    /// Which element this is, or `None` for one that did not exist before.
+    ///
+    /// Was `i32` documented as "or `NO_CONTENT_STREAM`", which is the same
+    /// sentinel one crate over (`docs/design/idiomatic-api.md` §C, Tier 1
+    /// item 1, whose fix names this cross-crate leak).
+    pub stream: Option<usize>,
     /// The bytes. **Empty means delete this element**, not "write an empty
     /// stream".
     pub bytes: String,
@@ -105,7 +108,7 @@ pub fn regenerate(page: &Page, resources: &Dict, r: &impl Resolve) -> Option<Pag
     // takes the lowest free name and is never swept away.
     let default_gs = table.realize_dict("ExtGState", &default_graphics());
 
-    let mut buffers: BTreeMap<i32, StreamBuffer> = dirty
+    let mut buffers: BTreeMap<Option<usize>, StreamBuffer> = dirty
         .iter()
         .map(|stream| {
             let mut buffer = StreamBuffer::default();
@@ -195,7 +198,7 @@ fn open_frame(out: &mut String, inherited: Affine, default_gs: &Name) {
 }
 
 /// The per-stream epilogue, and the decision whether the element survives.
-fn close_frame(page: &Page, stream: i32, mut buffer: StreamBuffer) -> Regenerated {
+fn close_frame(page: &Page, stream: Option<usize>, mut buffer: StreamBuffer) -> Regenerated {
     let affects_ctm = stream_affects_ctm(page, stream);
 
     // A stream that drew nothing and passes nothing on is deleted. One that
@@ -213,9 +216,11 @@ fn close_frame(page: &Page, stream: i32, mut buffer: StreamBuffer) -> Regenerate
     }
     buffer.bytes.push_str("Q\n");
 
-    if affects_ctm {
-        let previous = previous_ctm(page, stream);
-        let difference = previous.inverse() * page.ctm_at_end_of_stream(stream);
+    // `affects_ctm` is false for a streamless element, so this only runs
+    // where `stream` is a real index.
+    if let Some(index) = stream.filter(|_| affects_ctm) {
+        let previous = previous_ctm(page, index);
+        let difference = previous.inverse() * page.ctm_at_end_of_stream(index);
         if difference != Affine::IDENTITY {
             write_matrix(&mut buffer.bytes, difference);
             buffer.bytes.push_str(" cm\n");
@@ -229,8 +234,8 @@ fn close_frame(page: &Page, stream: i32, mut buffer: StreamBuffer) -> Regenerate
 }
 
 /// The transform in force where `stream` began, as the epilogue reckons it.
-fn previous_ctm(page: &Page, stream: i32) -> Affine {
-    if stream <= 0 {
+fn previous_ctm(page: &Page, stream: usize) -> Affine {
+    if stream == 0 {
         Affine::IDENTITY
     } else {
         page.ctm_at_end_of_stream(stream.saturating_sub(1))
@@ -241,10 +246,10 @@ fn previous_ctm(page: &Page, stream: i32) -> Affine {
 ///
 /// A streamless element is appended after everything, so nothing follows it
 /// and it can never affect anything.
-fn stream_affects_ctm(page: &Page, stream: i32) -> bool {
-    if stream == NO_CONTENT_STREAM {
+fn stream_affects_ctm(page: &Page, stream: Option<usize>) -> bool {
+    let Some(stream) = stream else {
         return false;
-    }
+    };
     previous_ctm(page, stream) != page.ctm_at_end_of_stream(stream)
 }
 
@@ -489,7 +494,7 @@ mod tests {
     use pdfrum_page::{Content, FillRule, Page, PageObject, PathObject};
     use std::collections::{BTreeMap, BTreeSet};
 
-    fn path(stream: i32, dirty: bool) -> PageObject {
+    fn path(stream: usize, dirty: bool) -> PageObject {
         let mut p = BezPath::new();
         p.move_to((0.0, 0.0));
         p.line_to((1.0, 0.0));
@@ -504,7 +509,7 @@ mod tests {
             },
             state: GraphicsState::default(),
             marks: ContentMarks::new(),
-            content_stream: stream,
+            content_stream: Some(stream),
             dirty,
             active: true,
         }))
@@ -551,7 +556,7 @@ mod tests {
         let page = page_of(vec![path(0, false), path(1, true)]);
         let rewrite = regenerate(&page, &Dict::new(), &NoResolve).expect("dirty");
         assert_eq!(rewrite.streams.len(), 1);
-        assert_eq!(rewrite.streams[0].stream, 1);
+        assert_eq!(rewrite.streams[0].stream, Some(1));
     }
 
     // An object in a dirty stream is written even though it is itself clean —
@@ -586,7 +591,7 @@ mod tests {
         assert_eq!(
             rewrite.streams,
             vec![Regenerated {
-                stream: 0,
+                stream: Some(0),
                 bytes: String::new()
             }]
         );
@@ -600,7 +605,7 @@ mod tests {
         assert!(page.remove_object(1).is_some());
         let rewrite = regenerate(&page, &Dict::new(), &NoResolve).expect("dirty");
         assert_eq!(rewrite.streams.len(), 1);
-        assert_eq!(rewrite.streams[0].stream, 1);
+        assert_eq!(rewrite.streams[0].stream, Some(1));
         assert!(rewrite.streams[0].bytes.is_empty());
     }
 
@@ -637,13 +642,13 @@ mod tests {
     #[test]
     fn an_empty_stream_that_moves_the_transform_survives() {
         let mut page = page_of(vec![path(1, true)]);
-        page.dirty_streams.insert(0);
+        page.dirty_streams.insert(Some(0));
         page.stream_ctms.insert(0, Affine::scale(2.0));
         let rewrite = regenerate(&page, &Dict::new(), &NoResolve).expect("dirty");
         let zero = rewrite
             .streams
             .iter()
-            .find(|s| s.stream == 0)
+            .find(|s| s.stream == Some(0))
             .expect("stream 0");
         assert!(!zero.bytes.is_empty(), "it moves the transform");
         assert!(
@@ -653,15 +658,15 @@ mod tests {
         );
     }
 
-    // The streamless sentinel sorts first, so a brand-new object is written
-    // before any existing stream is rewritten.
+    // A streamless object sorts first (`None < Some(0)`), so a brand-new
+    // object is written before any existing stream is rewritten.
     #[test]
     fn a_streamless_object_is_written_first() {
         let mut page = page_of(vec![path(0, true)]);
         page.push_object(path(0, false));
         let rewrite = regenerate(&page, &Dict::new(), &NoResolve).expect("dirty");
-        let order: Vec<i32> = rewrite.streams.iter().map(|s| s.stream).collect();
-        assert_eq!(order, vec![pdfrum_page::NO_CONTENT_STREAM, 0]);
+        let order: Vec<Option<usize>> = rewrite.streams.iter().map(|s| s.stream).collect();
+        assert_eq!(order, vec![None, Some(0)]);
     }
 
     // ---- `/Contents` shape transitions (cpdf_pagecontentmanager.cpp) ----
