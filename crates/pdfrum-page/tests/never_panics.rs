@@ -9,7 +9,6 @@
 
 use pdfrum_common::{Diagnostics, Limits};
 use pdfrum_object::{Array, ByteSpan, Dict, Name, NoResolve, Object, PdfString, Stream};
-use pdfrum_page::Conversion;
 use pdfrum_page::function::FunctionCache;
 use pdfrum_page::image::RequestedSize;
 use pdfrum_page::{
@@ -453,15 +452,15 @@ fn colorspace_loading_survives_random_arrays() {
                 &[f32::INFINITY, -1e30, 0.5, 2.0],
             ] {
                 let _ = space.to_rgb(comps);
-                let _ = space.try_to_rgb(comps, Conversion::Standard);
+                let _ = space.try_to_rgb(comps);
             }
             // And so must the bulk path, at every sample count.
             let mut dest = vec![0u8; 3 * 8];
             let samples = [0u8; 64];
-            space.translate_image_line(&mut dest, &samples, 8, false, Conversion::Managed);
-            space.translate_image_line(&mut dest, &samples, 8, true, Conversion::Standard);
+            space.translate_image_line(&mut dest, &samples, 8, false);
+            space.translate_image_line(&mut dest, &samples, 8, true);
             // Including a destination too short to hold the pixels.
-            space.translate_image_line(&mut [], &samples, 8, false, Conversion::Managed);
+            space.translate_image_line(&mut [], &samples, 8, false);
         }
     }
 }

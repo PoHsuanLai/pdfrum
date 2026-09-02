@@ -16,7 +16,7 @@
 //! the C++ — so it loads as an ordinary named colorant, diverging from
 //! ISO 32000-1 on purpose.
 
-use super::{ColorSpace, Conversion, Rgb};
+use super::{ColorSpace, Rgb};
 use crate::function::Function;
 use std::sync::Arc;
 
@@ -43,7 +43,7 @@ pub struct Separation {
 impl Separation {
     /// Convert one tint value.
     #[must_use]
-    pub fn to_rgb(&self, comps: &[f32], conversion: Conversion) -> Option<Rgb> {
+    pub fn to_rgb(&self, comps: &[f32]) -> Option<Rgb> {
         if self.none {
             return None;
         }
@@ -53,14 +53,14 @@ impl Separation {
             // With no transform the single tint is broadcast into every
             // alternate component — a crude but deliberate fallback.
             let broadcast = vec![tint; alternate.n_components()];
-            return Some(alternate.to_rgb_with(&broadcast, conversion));
+            return Some(alternate.to_rgb(&broadcast));
         };
         let mut results = vec![0.0f32; func.output_count().max(SCRATCH_FLOOR)];
         let produced = func.eval_into(&[tint], &mut results);
         if produced == 0 {
             return None;
         }
-        Some(alternate.to_rgb_with(&results, conversion))
+        Some(alternate.to_rgb(&results))
     }
 }
 
@@ -78,7 +78,7 @@ pub struct DeviceN {
 impl DeviceN {
     /// Convert a colorant vector.
     #[must_use]
-    pub fn to_rgb(&self, comps: &[f32], conversion: Conversion) -> Option<Rgb> {
+    pub fn to_rgb(&self, comps: &[f32]) -> Option<Rgb> {
         let n = self.names.len();
         let inputs: Vec<f32> = (0..n)
             .map(|i| comps.get(i).copied().unwrap_or(0.0))
@@ -88,7 +88,7 @@ impl DeviceN {
         if produced == 0 {
             return None;
         }
-        Some(self.alternate.to_rgb_with(&results, conversion))
+        Some(self.alternate.to_rgb(&results))
     }
 }
 
@@ -117,9 +117,9 @@ impl PatternSpace {
     /// The base sees the **whole** operand array regardless of its own
     /// component count, matching `GetPatternRGB`.
     #[must_use]
-    pub fn to_rgb(&self, comps: &[f32], conversion: Conversion) -> Option<Rgb> {
+    pub fn to_rgb(&self, comps: &[f32]) -> Option<Rgb> {
         let base = self.base.as_ref()?;
-        Some(base.to_rgb_with(comps, conversion))
+        Some(base.to_rgb(comps))
     }
 }
 
@@ -137,7 +137,6 @@ mod tests {
         reason = "test fixtures quote oracle vectors verbatim and compare exactly"
     )]
 
-    use super::Conversion;
     use super::{DeviceN, PatternSpace, Separation};
     use crate::color::ColorSpace;
     use crate::function::{Exponential, Function};
@@ -163,7 +162,7 @@ mod tests {
             alternate: None,
             tint: None,
         };
-        assert!(sep.to_rgb(&[1.0], Conversion::Managed).is_none());
+        assert!(sep.to_rgb(&[1.0]).is_none());
     }
 
     #[test]
@@ -173,7 +172,7 @@ mod tests {
             alternate: Some(Box::new(ColorSpace::DeviceRgb)),
             tint: None,
         };
-        let rgb = sep.to_rgb(&[0.25], Conversion::Managed).expect("colour");
+        let rgb = sep.to_rgb(&[0.25]).expect("colour");
         assert!((rgb.r - 0.25).abs() < 1e-6);
         assert!((rgb.g - 0.25).abs() < 1e-6);
         assert!((rgb.b - 0.25).abs() < 1e-6);
@@ -186,7 +185,7 @@ mod tests {
             alternate: Some(Box::new(ColorSpace::DeviceRgb)),
             tint: Some(ramp3()),
         };
-        let rgb = sep.to_rgb(&[0.5], Conversion::Managed).expect("colour");
+        let rgb = sep.to_rgb(&[0.5]).expect("colour");
         assert!((rgb.r - 0.5).abs() < 1e-5);
     }
 
@@ -199,10 +198,8 @@ mod tests {
         };
         assert_eq!(cs.names.len(), 1);
         // Surplus operands are ignored, missing ones read as zero.
-        let a = cs
-            .to_rgb(&[0.5, 9.0, 9.0], Conversion::Managed)
-            .expect("colour");
-        let b = cs.to_rgb(&[0.5], Conversion::Managed).expect("colour");
+        let a = cs.to_rgb(&[0.5, 9.0, 9.0]).expect("colour");
+        let b = cs.to_rgb(&[0.5]).expect("colour");
         assert!((a.r - b.r).abs() < 1e-6);
     }
 
@@ -210,7 +207,7 @@ mod tests {
     fn a_pattern_space_without_a_base_has_one_component_and_no_colour() {
         let cs = PatternSpace::default();
         assert_eq!(cs.n_components(), 1);
-        assert!(cs.to_rgb(&[0.5], Conversion::Managed).is_none());
+        assert!(cs.to_rgb(&[0.5]).is_none());
     }
 
     #[test]
@@ -219,9 +216,6 @@ mod tests {
             base: Some(Box::new(ColorSpace::DeviceCmyk)),
         };
         assert_eq!(cs.n_components(), 5);
-        assert!(
-            cs.to_rgb(&[0.0, 0.0, 0.0, 0.0], Conversion::Managed)
-                .is_some()
-        );
+        assert!(cs.to_rgb(&[0.0, 0.0, 0.0, 0.0]).is_some());
     }
 }

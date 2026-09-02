@@ -69,7 +69,7 @@ pub use build::{
     build_form_object_with, build_page, build_page_from_dict, build_page_streams,
     eliminate_redundant_clips, load_pattern,
 };
-pub use color::{ColorSpace, ColorValue, Conversion, PatternValue, Rgb};
+pub use color::{ColorSpace, ColorValue, PatternValue, Rgb};
 pub use content::parse_content;
 pub use error::Error;
 pub use function::Function;

@@ -301,10 +301,7 @@ impl<'a> MeshReader<'a> {
         if self.functions.is_empty() {
             return self
                 .space
-                .try_to_rgb(
-                    comps.get(..self.params.components).unwrap_or(&[]),
-                    crate::color::Conversion::Managed,
-                )
+                .try_to_rgb(comps.get(..self.params.components).unwrap_or(&[]))
                 .unwrap_or(Rgb::BLACK);
         }
         Rgb {
