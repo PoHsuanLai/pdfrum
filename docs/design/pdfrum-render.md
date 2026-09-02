@@ -2030,7 +2030,7 @@ pub(crate) struct RenderCtx<'a, B: RasterBackend> {
     pub type3_fonts: SmallVec<[FontId; 4]>, // the recursion SET, not a depth
     pub transparency: Transparency,       // group/isolated flags of the enclosing holder
     pub in_group: bool,
-    pub std_cs: bool,
+    pub std_cs: Conversion,  // typed 2026-09-03; provably inert, see pdfrum-page.md
     pub load_mask: bool,
     pub group_family: Option<ColorSpaceFamily>,
     pub caches: &'a RenderCaches,
