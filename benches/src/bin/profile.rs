@@ -54,6 +54,9 @@ enum Op {
     Text,
     /// A full rewrite to an in-memory sink.
     Save,
+    /// The annotation/widget appearance overlay, isolated by an A/B against
+    /// the same render with `RenderOptions::annotations` off.
+    Forms,
 }
 
 impl Op {
@@ -64,6 +67,7 @@ impl Op {
             "render" => Some(Op::Render),
             "text" => Some(Op::Text),
             "save" => Some(Op::Save),
+            "forms" => Some(Op::Forms),
             _ => None,
         }
     }
@@ -91,6 +95,9 @@ struct Args {
     backend: Backend,
     /// Print the in-process sampler's flat profile at the end.
     sample: bool,
+    /// Hold one `RenderSession` across every iteration instead of building a
+    /// fresh one per iteration.
+    warm: bool,
 }
 
 /// Read the command line, or explain what was wrong with it.
@@ -100,6 +107,7 @@ fn parse_args() -> Result<Args, String> {
     let mut iterations = 50u32;
     let mut back = Backend::Agg;
     let mut sample = false;
+    let mut warm = false;
 
     let argv: Vec<String> = std::env::args().skip(1).collect();
     let mut i = 0;
@@ -120,6 +128,7 @@ fn parse_args() -> Result<Args, String> {
             }
             "--backend" => back = backend(&value(&mut i)?).ok_or("unknown --backend")?,
             "--sample" => sample = true,
+            "--warm" => warm = true,
             "--help" | "-h" => return Err(usage()),
             other => return Err(format!("unexpected argument {other}\n\n{}", usage())),
         }
@@ -132,13 +141,14 @@ fn parse_args() -> Result<Args, String> {
         iterations,
         backend: back,
         sample,
+        warm,
     })
 }
 
 /// The `--help` text.
 fn usage() -> String {
-    "profile --op <open|render|text|save> --file <pdf> \
-     [--iterations N] [--backend exact|tinyskia|vello] [--sample]"
+    "profile --op <open|render|text|save|forms> --file <pdf> \
+     [--iterations N] [--backend agg|tinyskia|vello-cpu] [--sample] [--warm]"
         .to_owned()
 }
 
@@ -163,13 +173,15 @@ fn main() {
     // through a decorated backend and splits the time at the engine/rasterizer
     // seam. On any other operation there is no seam to split at, so it just
     // reports the total.
+    if args.op == Op::Forms {
+        return forms_split(&args, &bytes);
+    }
+
     if args.sample && args.op == Op::Render {
         return timed_render(&args, &bytes);
     }
 
-    let started = Instant::now();
-    let done = run(&args, &bytes);
-    let elapsed = started.elapsed();
+    let (done, elapsed) = run(&args, &bytes);
 
     eprintln!(
         "{} iterations in {:.3} s = {:.3} ms/iteration",
@@ -189,8 +201,159 @@ fn main() {
                 Op::Text => "text",
                 Op::Save => "save",
                 Op::Render => "render",
+                Op::Forms => "forms",
             }
         );
+    }
+}
+
+/// How many alternating rounds `--op forms` takes per arm.
+///
+/// Five, which is `scripts/bench-oracle.nu`'s round count, chosen the same way:
+/// enough that one descheduled round cannot be the minimum, few enough that a
+/// 68 ms document still finishes.
+const ROUNDS: u32 = 5;
+
+/// What the annotation/widget appearance overlay costs, isolated by an A/B in
+/// one process.
+///
+/// # Why this is the `forms` operation and not something in `pdfrum-form`
+///
+/// `docs/status/M12.md` §11 names `forms` at 3.35x warm as the milestone's
+/// largest residue, and that figure is a **render** ratio: the `render-warm-*`
+/// criterion groups over `benches/corpus/forms_*.pdf` against
+/// `pdfium_test --render-repeats` on the same files. Neither side of it runs a
+/// single interaction event. `pdfrum-form`'s session, its event cascade and its
+/// commit path are not on that path at all — `pdfium_test` never types into a
+/// field — so a loop over `pdfrum_form::apply` would profile a code path that
+/// contributes nothing to the number this op exists to explain, which is
+/// exactly the failure the module docs above forbid ("a profile that attributes
+/// cost to a function the benchmark never calls is worse than no profile").
+///
+/// What *is* on that path, and what makes a forms document different from any
+/// other document, is one thing: the appearance overlay. `pdfium_test --png`
+/// seeds `FPDF_ANNOT` and then calls `FPDF_FFLDraw` after every bitmap render
+/// (`pdfium_test.cc`), so a widget's appearance stream is generated, placed by
+/// `CFX_Matrix::MatchRect` and drawn on every pass. We do the same in
+/// `pdfrum_doc::annot_render::overlay`, called from the facade's `paint`
+/// (`crates/pdfrum/src/page.rs`) under `RenderOptions::annotations`. That is
+/// the whole of what the `forms` class measures over the `vector` class.
+///
+/// # The A/B, and why it is a difference rather than a direct timing
+///
+/// `overlay` is `pdfrum-doc`'s and the facade does not expose it; wiring a
+/// benchmark straight into it would mean widening a published signature for a
+/// profiler's convenience, and it would also measure the overlay *without* the
+/// page graph it appends into, which is not what a render pays.
+///
+/// So this op times the same warm render twice — `annotations: true` and
+/// `annotations: false` — **interleaved, in one process, on one document**, and
+/// reports the difference. Both arms run identical code up to one `if`. The
+/// difference is the overlay, measured rather than estimated, and it is
+/// reported as a share of the whole render so that a reader can see at once
+/// whether the forms class's gap lives in the overlay or in the page under it.
+///
+/// Interleaved and best-of-N rather than one run each: the machine these are
+/// taken on is shared (M12.md §0), and two consecutive blocks would let a
+/// scheduling event land entirely inside one arm. Alternating rounds and taking
+/// each arm's minimum is what `scripts/bench-oracle.nu` does, for the same
+/// reason and with the same justification — a timing sample is bounded below by
+/// the real cost and unbounded above.
+///
+/// Warm on both arms, because the number it explains is a warm one: one
+/// `RenderSession` per arm, hoisted out of the loop and primed with one untimed
+/// render, exactly as `crates/pdfrum-render/benches/render.rs`'s `warm` group
+/// does it.
+fn forms_split(args: &Args, bytes: &Arc<[u8]>) {
+    let Ok(doc) = Document::from_bytes(Arc::clone(bytes)) else {
+        eprintln!("cannot open the document");
+        std::process::exit(1);
+    };
+
+    let with = RenderOptions::default();
+    let without = RenderOptions {
+        annotations: false,
+        ..RenderOptions::default()
+    };
+
+    let mut best_with = f64::INFINITY;
+    let mut best_without = f64::INFINITY;
+    for _ in 0..ROUNDS {
+        best_with = best_with.min(warm_pass(args, &doc, &with));
+        best_without = best_without.min(warm_pass(args, &doc, &without));
+    }
+
+    let overlay = best_with - best_without;
+    let share = if best_with > 0.0 {
+        overlay * 100.0 / best_with
+    } else {
+        0.0
+    };
+
+    eprintln!();
+    eprintln!(
+        "{} pages x {} iterations x {ROUNDS} rounds, backend={:?}, warm session per arm",
+        doc.page_count(),
+        args.iterations,
+        args.backend,
+    );
+    eprintln!();
+    eprintln!("{:<28} {:>12} {:>10}", "arm", "ms/iter", "share");
+    eprintln!("{:-<28} {:->12} {:->10}", "", "", "");
+    eprintln!(
+        "{:<28} {best_without:>12.3} {:>9.1}%",
+        "page content alone",
+        100.0 - share
+    );
+    eprintln!("{:<28} {overlay:>12.3} {share:>9.1}%", "annotation overlay");
+    eprintln!("{:-<28} {:->12} {:->10}", "", "", "");
+    eprintln!(
+        "{:<28} {best_with:>12.3} {:>9.1}%",
+        "TOTAL (render, warm)", 100.0
+    );
+    eprintln!();
+    eprintln!(
+        "The overlay row is a difference of two minima, so it inherits both arms'\n\
+         noise rather than one arm's. On a document where it is a small share of\n\
+         a large render, read it as an upper bound and take the symbol profile\n\
+         (`scripts/profile.nu forms <file>`) as the authority on where the time is."
+    );
+}
+
+/// One warm arm: prime a session, then time `iterations` whole-document
+/// renders through it. Milliseconds per iteration.
+fn warm_pass(args: &Args, doc: &Document, options: &RenderOptions) -> f64 {
+    let mut session = RenderSession::new();
+    for page in doc.pages() {
+        drop(render_one(args, &page, options, &mut session));
+    }
+
+    let started = Instant::now();
+    for _ in 0..args.iterations {
+        for page in doc.pages() {
+            black_box(render_one(args, &page, options, &mut session).ok());
+        }
+    }
+    let elapsed = started.elapsed();
+    elapsed.as_secs_f64() * 1000.0 / f64::from(args.iterations.max(1))
+}
+
+/// One page rendered on the backend `--backend` named.
+///
+/// The three-arm match is the same one `run` makes; it is here rather than
+/// inlined at both call sites because `forms_split` needs it twice per round
+/// and `run` needs it once, and a fourth copy of a three-arm match is worse
+/// than a function.
+fn render_one(
+    args: &Args,
+    page: &pdfrum::Page<'_>,
+    options: &RenderOptions,
+    session: &mut RenderSession,
+) -> pdfrum::Result<pdfrum::Pixmap> {
+    match args.backend {
+        Backend::Agg => page.render_session_on(&AggBackend::new(), options, session),
+        Backend::TinySkia => page.render_session_on(&TinySkiaBackend::new(), options, session),
+        Backend::VelloCpu => page.render_session_on(&VelloCpuBackend::new(), options, session),
     }
 }
 
@@ -478,18 +641,29 @@ fn walk_report(iters: f64, engine: std::time::Duration) {
     );
 }
 
-/// Run the operation `iterations` times, returning how many actually ran.
-fn run(args: &Args, bytes: &Arc<[u8]>) -> u32 {
+/// Run the operation `iterations` times, returning how many ran and how long
+/// the measured loop took.
+///
+/// The clock starts **after** the document is parsed and, under `--warm`, after
+/// the priming render — neither is what this figure is of. Timing them was a
+/// real defect: on `image_bug_718762` the priming render is ~1.2 s against a
+/// warm render of well under a millisecond, so at eight iterations the reported
+/// per-iteration cost was ~99% priming, and every `--warm` figure the harness
+/// produced scaled with the iteration count instead of converging. `Op::Open`
+/// is the exception — re-parsing *is* its operation — and it starts its own
+/// clock below.
+fn run(args: &Args, bytes: &Arc<[u8]>) -> (u32, std::time::Duration) {
     let options = RenderOptions::default();
 
     // `open` re-parses every iteration by definition; the other three parse
     // once, because a profile of rendering must not be three-quarters parser.
     if args.op == Op::Open {
+        let started = Instant::now();
         for _ in 0..args.iterations {
             let doc = Document::from_bytes(Arc::clone(bytes));
             black_box(doc.map(|doc| doc.page_count()).ok());
         }
-        return args.iterations;
+        return (args.iterations, started.elapsed());
     }
 
     let Ok(doc) = Document::from_bytes(Arc::clone(bytes)) else {
@@ -497,24 +671,43 @@ fn run(args: &Args, bytes: &Arc<[u8]>) -> u32 {
         std::process::exit(1);
     };
 
+    // Held across every iteration under `--warm`, primed with one untimed
+    // render so the first measured iteration is warm by construction rather
+    // than by luck — `render.rs`'s `warm` group primes for the same reason.
+    // `None` is the cold convention: `Op::Render` builds a fresh session per
+    // iteration below, which is what `render-cold-*` does.
+    let mut held = args.warm.then(|| {
+        let mut session = RenderSession::new();
+        for page in doc.pages() {
+            drop(render_one(args, &page, &options, &mut session));
+        }
+        session
+    });
+
+    let started = Instant::now();
     for _ in 0..args.iterations {
         match args.op {
-            Op::Open => {}
+            // `Open` returned above; `Forms` has its own loop in
+            // `forms_split` and never reaches `run`.
+            Op::Open | Op::Forms => {}
             Op::Render => {
-                let mut session = RenderSession::new();
+                // `--warm` holds one session across iterations; without it a
+                // fresh one is built here, inside the loop. That is not a
+                // convenience flag: it is the difference between the
+                // `render-cold-*` and `render-warm-*` criterion groups
+                // (`crates/pdfrum-render/benches/render.rs`), and only the
+                // second is comparable with `pdfium_test --render-repeats`.
+                // See the header of `scripts/profile.nu`.
+                // `get_or_insert_with` rather than a match: on the cold
+                // convention it replaces the session every iteration, which is
+                // exactly `render-cold-*`'s fresh-session-inside-the-closure.
+                let session = if args.warm {
+                    held.get_or_insert_with(RenderSession::new)
+                } else {
+                    held.insert(RenderSession::new())
+                };
                 for page in doc.pages() {
-                    let out = match args.backend {
-                        Backend::Agg => {
-                            page.render_session_on(&AggBackend::new(), &options, &mut session)
-                        }
-                        Backend::TinySkia => {
-                            page.render_session_on(&TinySkiaBackend::new(), &options, &mut session)
-                        }
-                        Backend::VelloCpu => {
-                            page.render_session_on(&VelloCpuBackend::new(), &options, &mut session)
-                        }
-                    };
-                    black_box(out.ok());
+                    black_box(render_one(args, &page, &options, session).ok());
                 }
             }
             Op::Text => {
@@ -530,7 +723,7 @@ fn run(args: &Args, bytes: &Arc<[u8]>) -> u32 {
             }
         }
     }
-    args.iterations
+    (args.iterations, started.elapsed())
 }
 
 /// Where a render's time goes, attributed at the engine/rasterizer seam.
