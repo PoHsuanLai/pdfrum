@@ -1,29 +1,32 @@
-//! A text object seen the way extraction needs to see it
-//! (`docs/design/pdfrum-text.md` §4.2).
+//! Typeset representation of a page text object.
 //!
-//! `pdfrum-page` hands over a [`TextObject`](pdfrum_page::TextObject) holding
-//! the *content stream's* view: byte strings with the adjustments between
-//! them, one position, one matrix. The extraction heuristics want the
-//! *typeset* view: one character code per glyph, the text-space x each one
-//! sits at, the adjustment that followed it, and the object's bounding box.
-//!
-//! Deriving that here rather than storing it in the page crate is the Q2
-//! resolution: it is a pure function of data the page crate already publishes,
-//! it is only ever wanted by this crate, and the page object stays a small
-//! record (STYLE.md §1). The derivation is one pass with a running pen —
-//! the same accumulation the renderer performs when it draws the run, and
-//! the same one `CPDF_TextObject::CalcPositionDataInternal` performs to fill
-//! its own arrays.
-//!
-//! # Form objects and the composed matrix
-//!
-//! The C++ threads a separate `form_matrix` through the whole pipeline
-//! because its text objects carry positions in the *form's* space. Ours do
-//! not: `pdfrum-page` composes a form's `/Matrix` into the CTM before
-//! interpreting its content, so a text object inside a form already reports
-//! page-space geometry. The form matrix is therefore the identity everywhere
-//! in this crate — which is exactly what makes a generated character's matrix
-//! come out as the identity, as the oracle's `GetMatrix` assertions require.
+//! Derives glyph positions, advances, and bounding boxes from a
+//! [`pdfrum_page::TextObject`] for extraction heuristics.
+
+// `pdfrum-page` hands over a `TextObject` holding the *content stream's*
+// view: byte strings with the adjustments between them, one position, one
+// matrix. The extraction heuristics want the *typeset* view: one character
+// code per glyph, the text-space x each one sits at, the adjustment that
+// followed it, and the object's bounding box.
+// (`docs/design/pdfrum-text.md` §4.2.)
+//
+// Deriving that here rather than storing it in the page crate is the Q2
+// resolution: it is a pure function of data the page crate already publishes,
+// it is only ever wanted by this crate, and the page object stays a small
+// record (STYLE.md §1). The derivation is one pass with a running pen —
+// the same accumulation the renderer performs when it draws the run, and
+// the same one `CPDF_TextObject::CalcPositionDataInternal` performs to fill
+// its own arrays.
+//
+// # Form objects and the composed matrix
+//
+// The C++ threads a separate `form_matrix` through the whole pipeline
+// because its text objects carry positions in the *form's* space. Ours do
+// not: `pdfrum-page` composes a form's `/Matrix` into the CTM before
+// interpreting its content, so a text object inside a form already reports
+// page-space geometry. The form matrix is therefore the identity everywhere
+// in this crate — which is exactly what makes a generated character's matrix
+// come out as the identity, as the oracle's `GetMatrix` assertions require.
 
 use crate::charinfo::{ObjectIndex, transform_rect};
 use kurbo::{Affine, Point, Rect};
@@ -78,19 +81,22 @@ pub struct TextRun {
     pub rect: Rect,
     /// The bounding box in the object's own text space, before the matrix.
     pub original_rect: Rect,
-    /// `[oracle-bug]` The object's total **advance** width in page space —
-    /// `w0` summed over its glyphs, per §9.4.3, then measured through the
-    /// text matrix.
+    /// Total advance width in page space: `w0` summed over the object's
+    /// glyphs (ISO 32000-1 §9.4.3), measured through the text matrix.
     ///
-    /// PDFium has no such field: `cpdf_textpage.cpp:881` and `:1076` decide
-    /// whether a text object exists at all from `GetRect().Width()`, which
-    /// `cpdf_textobject.cpp:305-331` builds from the glyph **bounding
-    /// boxes**. §9.2.2 keeps displacement and bounding box distinct, and a
-    /// space's box is empty while its `w0` is not, so any object made only of
-    /// spaces vanishes before extraction (`crbug.com/40643656`,
-    /// `crbug.com/444176962`). pdf.js keeps such a character two independent
-    /// ways (`evaluator.js:3079-3084`, `:2924-2939`) and makes its whitespace
-    /// drop an **opt-out** (`keepWhiteSpace: true`), not a loss.
+    /// Distinct from the bounding box (§9.2.2): a space has an empty box and
+    /// a non-zero `w0`, so an object made only of spaces still has an
+    /// advance.
+    // `[oracle-bug]` PDFium has no such field: `cpdf_textpage.cpp:881` and
+    // `:1076` decide whether a text object exists at all from
+    // `GetRect().Width()`, which `cpdf_textobject.cpp:305-331` builds from the
+    // glyph **bounding boxes**. §9.2.2 keeps displacement and bounding box
+    // distinct, and a space's box is empty while its `w0` is not, so any
+    // object made only of spaces vanishes before extraction
+    // (`crbug.com/40643656`, `crbug.com/444176962`). pdf.js keeps such a
+    // character two independent ways (`evaluator.js:3079-3084`,
+    // `:2924-2939`) and makes its whitespace drop an **opt-out**
+    // (`keepWhiteSpace: true`), not a loss.
     pub advance: f64,
     /// The marks enclosing the object.
     pub marks: pdfrum_page::ContentMarks,
@@ -120,9 +126,10 @@ impl TextRun {
         self.kernings.get(index).copied().unwrap_or(0.0)
     }
 
-    /// The advance width of one character code, **already scaled** by
-    /// `font_size / 1000` — a vertical CID font reporting its (negative)
-    /// vertical advance instead (`CPDF_TextObject::GetCharWidth`).
+    /// The advance width of one character code, already scaled by
+    /// `font_size / 1000`.
+    ///
+    /// A vertical CID font reports its (negative) vertical advance instead.
     #[must_use]
     pub fn scaled_char_width(&self, code: CharCode) -> f32 {
         let scale = self.font_size / 1000.0;

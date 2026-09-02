@@ -1,21 +1,23 @@
 //! Character properties, read from the committed table blob.
 //!
-//! Six lookups, each one a place `core/fpdftext/` reaches into ICU or into a
-//! static table, and each one Tier-A load-bearing:
-//!
-//! | Lookup | Used by |
-//! |---|---|
-//! | [`bidi_class`] | the four-way segmenter ([`crate::bidi`]) |
-//! | [`mirror_char`] | RTL normalization in `AddCharInfo` |
-//! | [`normalize`] | the same, plus the `U+FB00..=U+FB06` ligature band |
-//! | [`is_alpha`] / [`is_alnum`] | hyphen look-back and mail-link scanning |
-//! | [`to_lower`] | case-insensitive search and web-link scanning |
-//!
-//! The blob's provenance — and why this is not a Unicode crate — is
-//! `tables/PROVENANCE.md`. Above `U+FFFF` the two BMP-indexed tables (bidi
-//! class and normalization) return their defaults, exactly as the C++'s
-//! bounds check and `wch & 0xFFFF` mask do; the three ICU predicates cover
-//! the whole code space, because the C++ hands ICU a 32-bit `wchar_t`.
+//! Provides Bidi classes, character mirroring, and Unicode normalization.
+
+// Six lookups, each one a place `core/fpdftext/` reaches into ICU or into a
+// static table, and each one Tier-A load-bearing:
+//
+// | Lookup | Used by |
+// |---|---|
+// | `bidi_class` | the four-way segmenter (`crate::bidi`) |
+// | `mirror_char` | RTL normalization in `AddCharInfo` |
+// | `normalize` | the same, plus the `U+FB00..=U+FB06` ligature band |
+// | `is_alpha` / `is_alnum` | hyphen look-back and mail-link scanning |
+// | `to_lower` | case-insensitive search and web-link scanning |
+//
+// The blob's provenance — and why this is not a Unicode crate — is
+// `tables/PROVENANCE.md`. Above `U+FFFF` the two BMP-indexed tables (bidi
+// class and normalization) return their defaults, exactly as the C++'s
+// bounds check and `wch & 0xFFFF` mask do; the three ICU predicates cover
+// the whole code space, because the C++ hands ICU a 32-bit `wchar_t`.
 
 /// The committed blob. See `tables/PROVENANCE.md`.
 static BLOB: &[u8] = include_bytes!("../tables/unicode.bin");
@@ -127,14 +129,14 @@ fn section(tag: [u8; 4]) -> &'static [u8] {
     &[]
 }
 
-/// A run-length-encoded 65 536-entry `u16` table, expanded once on first use.
-///
-/// Expansion costs 128 KiB of heap per table and turns every lookup into one
-/// indexed read. Walking the runs instead would put a binary search — and its
-/// cumulative-length arithmetic — on the path of every character of every
-/// page, which on a CJK document is millions of probes. The two tables are
-/// immutable, code-point-indexed and read constantly: this is exactly the
-/// lazy cache STYLE.md §2 sanctions.
+// A run-length-encoded 65 536-entry `u16` table, expanded once on first use.
+//
+// Expansion costs 128 KiB of heap per table and turns every lookup into one
+// indexed read. Walking the runs instead would put a binary search — and its
+// cumulative-length arithmetic — on the path of every character of every
+// page, which on a CJK document is millions of probes. The two tables are
+// immutable, code-point-indexed and read constantly: this is exactly the
+// lazy cache STYLE.md §2 sanctions.
 struct RleTable {
     payload: &'static [u8],
     expanded: std::sync::OnceLock<Box<[u16]>>,
@@ -231,52 +233,52 @@ pub fn mirror_char(code: u32) -> u32 {
         .map_or(code, |b| u32::from(u16::from_le_bytes(b)))
 }
 
-/// `[oracle-bug]` The NFKC space normalization, applied to **every** extracted
-/// character rather than only inside a right-to-left run.
-///
-/// # Why this exists
-///
-/// `AddCharInfo` (`cpdf_textpage.cpp:793-795`) consults
-/// `GetUnicodeNormalization` only when `is_rtl || (wc >= 0xFB00 && wc <=
-/// 0xFB06)`. That table maps `U+00A0` to `U+0020` (entry `0x00A0` of
-/// `kUnicodeDataNormalization`), so a NO-BREAK SPACE inside a Hebrew run comes
-/// out as a plain space and the identical character in a Latin run does not —
-/// the same page, two answers, decided by its neighbours. Extracted text is
-/// what a reader searches and copies, and a space that is invisibly not a
-/// space defeats both.
-///
-/// PDFium hides this from its own goldens because the object gate (audit items
-/// A40/A43) deletes the spaces-only text objects that carry these characters
-/// before extraction sees them, then regenerates plain `U+0020` from the
-/// inter-object spacing heuristic. Removing the gate exposes the disagreement,
-/// and pdf.js settles which answer is right: `normalizeUnicode`
-/// (`src/shared/util.js:1050-1065`) puts ` ` first in `NormalizeRegex`
-/// and applies `.normalize("NFKC")`, and it runs on every extracted chunk in
-/// `runBidiTransform` (`src/core/evaluator.js:2685-2689`), gated only by the
-/// caller's `disableNormalization`, which defaults to `false`
-/// (`src/core/evaluator.js:2403`). So both implementations emit `U+0020`; only
-/// the route differs.
-///
-/// # Why only the spaces
-///
-/// This deliberately does **not** reuse [`normalize`]. That table is PDFium's
-/// own, and it is not NFKC: it strips accents (`U+00C0 À` → `U+0041 A`),
-/// expands `U+00BD ½` to `1/2` and folds `U+00AE ®` to `R` — 6715 of the
-/// 65536 BMP code points differ from the identity. Applying it to Latin text
-/// would destroy every accented character on the page. Of pdf.js's own
-/// 513-code-point `NormalizeRegex` set, exactly **thirteen** normalise to
-/// `U+0020` under NFKC — `U+00A0`, the `U+2000..=U+200A` space band and
-/// `U+202F` — and those thirteen are the whole of what this seam needs. The
-/// rest of pdf.js's set is ligatures and Arabic presentation forms, which
-/// `AddCharInfo` already routes through [`normalize`] for the `U+FB00..=U+FB06`
-/// band; widening past the spaces would be a second, unmeasured change wearing
-/// this one's justification.
-///
-/// Two further BMP code points — `U+205F` MEDIUM MATHEMATICAL SPACE and
-/// `U+3000` IDEOGRAPHIC SPACE — also NFKC-normalise to `U+0020` and are
-/// **not** in pdf.js's set, so they are not here either. Following the
-/// independent implementation exactly is the point of citing it; adding them
-/// would be our own widening, and neither appears in the corpus.
+// The NFKC space normalization, applied to **every** extracted character
+// rather than only inside a right-to-left run.
+//
+// # Why this exists
+//
+// `[oracle-bug]` `AddCharInfo` (`cpdf_textpage.cpp:793-795`) consults
+// `GetUnicodeNormalization` only when `is_rtl || (wc >= 0xFB00 && wc <=
+// 0xFB06)`. That table maps `U+00A0` to `U+0020` (entry `0x00A0` of
+// `kUnicodeDataNormalization`), so a NO-BREAK SPACE inside a Hebrew run comes
+// out as a plain space and the identical character in a Latin run does not —
+// the same page, two answers, decided by its neighbours. Extracted text is
+// what a reader searches and copies, and a space that is invisibly not a
+// space defeats both.
+//
+// PDFium hides this from its own goldens because the object gate (audit items
+// A40/A43) deletes the spaces-only text objects that carry these characters
+// before extraction sees them, then regenerates plain `U+0020` from the
+// inter-object spacing heuristic. Removing the gate exposes the disagreement,
+// and pdf.js settles which answer is right: `normalizeUnicode`
+// (`src/shared/util.js:1050-1065`) puts ` ` first in `NormalizeRegex`
+// and applies `.normalize("NFKC")`, and it runs on every extracted chunk in
+// `runBidiTransform` (`src/core/evaluator.js:2685-2689`), gated only by the
+// caller's `disableNormalization`, which defaults to `false`
+// (`src/core/evaluator.js:2403`). So both implementations emit `U+0020`; only
+// the route differs.
+//
+// # Why only the spaces
+//
+// This deliberately does **not** reuse `normalize`. That table is PDFium's
+// own, and it is not NFKC: it strips accents (`U+00C0 À` → `U+0041 A`),
+// expands `U+00BD ½` to `1/2` and folds `U+00AE ®` to `R` — 6715 of the
+// 65536 BMP code points differ from the identity. Applying it to Latin text
+// would destroy every accented character on the page. Of pdf.js's own
+// 513-code-point `NormalizeRegex` set, exactly **thirteen** normalise to
+// `U+0020` under NFKC — `U+00A0`, the `U+2000..=U+200A` space band and
+// `U+202F` — and those thirteen are the whole of what this seam needs. The
+// rest of pdf.js's set is ligatures and Arabic presentation forms, which
+// `AddCharInfo` already routes through `normalize` for the `U+FB00..=U+FB06`
+// band; widening past the spaces would be a second, unmeasured change wearing
+// this one's justification.
+//
+// Two further BMP code points — `U+205F` MEDIUM MATHEMATICAL SPACE and
+// `U+3000` IDEOGRAPHIC SPACE — also NFKC-normalise to `U+0020` and are
+// **not** in pdf.js's set, so they are not here either. Following the
+// independent implementation exactly is the point of citing it; adding them
+// would be our own widening, and neither appears in the corpus.
 #[must_use]
 pub const fn normalize_space(code: u32) -> u32 {
     match code {

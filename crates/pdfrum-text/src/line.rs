@@ -1,22 +1,24 @@
-//! The per-line staging buffers, and how a line becomes final output
-//! (`docs/design/pdfrum-text.md` §1.10, §1.10b).
+//! Line buffer accumulating characters before flushing to output.
 //!
-//! # Why a paired buffer is a type
-//!
-//! Extraction keeps two parallel outputs — a character list and a text
-//! buffer — and they hold **different characters**. Within a line they stay
-//! in lockstep, one text unit per character record; it is only at the moment
-//! a line closes that they diverge, because a character the text buffer drops
-//! is still pushed to the character list. In the C++ that lockstep is a
-//! convention: three sites push to both containers, two pop both, one
-//! reverses both. [`Line`] makes it an invariant instead, so the two cannot
-//! drift apart by accident.
-//!
-//! The staging text is `Vec<u32>`, not a `String`: it legitimately holds the
-//! `0xFFFE` charcode-zero placeholder and lone zeroes that the final string
-//! will not contain. That placeholder is private and dies here — its record is
-//! never `normal`, so it is dropped before the buffer a caller reads, which is
-//! the shape §C.1 of `docs/design/idiomatic-api.md` permits a sentinel to keep.
+//! Handles space collapsing, right-to-left segment reversal, and character
+//! normalization.
+
+// # Why a paired buffer is a type
+//
+// Extraction keeps two parallel outputs — a character list and a text
+// buffer — and they hold **different characters**. Within a line they stay
+// in lockstep, one text unit per character record; it is only at the moment
+// a line closes that they diverge, because a character the text buffer drops
+// is still pushed to the character list. In the C++ that lockstep is a
+// convention: three sites push to both containers, two pop both, one
+// reverses both. `Line` makes it an invariant instead, so the two cannot
+// drift apart by accident. (`docs/design/pdfrum-text.md` §1.10, §1.10b.)
+//
+// The staging text is `Vec<u32>`, not a `String`: it legitimately holds the
+// `0xFFFE` charcode-zero placeholder and lone zeroes that the final string
+// will not contain. That placeholder is private and dies here — its record is
+// never `normal`, so it is dropped before the buffer a caller reads, which is
+// the shape §C.1 of `docs/design/idiomatic-api.md` permits a sentinel to keep.
 
 use crate::bidi::{self, Direction};
 use crate::charinfo::{CharBox, CharType};
@@ -465,12 +467,12 @@ mod tests {
         assert_eq!(out.chars[2].char_type, CharType::Piece);
     }
 
-    /// Audit item **A40b**. This asserted `"a\u{00A0}b"`, reproducing
-    /// `cpdf_textpage.cpp:793-795`'s gate: `GetUnicodeNormalization` maps
-    /// `U+00A0` to `U+0020` but is consulted only inside a right-to-left run,
-    /// so the same character came out two ways on the same page. pdf.js
-    /// NFKC-normalises every chunk, so the space is a space in either
-    /// direction now.
+    // Audit item **A40b**. This asserted `"a\u{00A0}b"`, reproducing
+    // `cpdf_textpage.cpp:793-795`'s gate: `GetUnicodeNormalization` maps
+    // `U+00A0` to `U+0020` but is consulted only inside a right-to-left run,
+    // so the same character came out two ways on the same page. pdf.js
+    // NFKC-normalises every chunk, so the space is a space in either
+    // direction now.
     #[test]
     fn a_no_break_space_normalizes_in_either_direction() {
         let mut out = Output::default();

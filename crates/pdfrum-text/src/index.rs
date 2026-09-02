@@ -1,34 +1,40 @@
-//! The map between the two outputs (`docs/design/pdfrum-text.md` §1.13).
+//! Mapping between character-list and search-facing text index spaces.
 //!
-//! The character list and the text string are different sequences: a control
-//! character, a character-code-zero placeholder or an unmapped code is in the
-//! first and not the second, while normalization puts several entries in the
-//! second for one in the first. So a caller holding a character index cannot
-//! use it as a text offset, and vice versa.
+//! Bridges [`CharIndex`] (positions in [`TextPage::chars`]) and [`TextIndex`]
+//! (positions in [`TextPage::search_text`]).
 //!
-//! The bridge is a table of segments, each saying "text runs on from here for
-//! this many characters". Building it is one pass; reading it is a walk.
-//! **`--txt` uses none of this** — it reads the character list straight
-//! through.
+//! [`TextPage::chars`]: crate::TextPage::chars
+//! [`TextPage::search_text`]: crate::TextPage::search_text
+
+// The character list and the text string are different sequences: a control
+// character, a character-code-zero placeholder or an unmapped code is in the
+// first and not the second, while normalization puts several entries in the
+// second for one in the first. So a caller holding a character index cannot
+// use it as a text offset, and vice versa.
+// (`docs/design/pdfrum-text.md` §1.13.)
+//
+// The bridge is a table of segments, each saying "text runs on from here for
+// this many characters". Building it is one pass; reading it is a walk.
+// **`--txt` uses none of this** — it reads the character list straight
+// through.
 
 use crate::charinfo::{CharBox, CharType};
 use std::fmt;
 
-/// A position in the **character list** — [`TextPage::chars`], the sequence a
+/// A position in the character list ([`TextPage::chars`]) — the sequence a
 /// `--txt` dump emits.
 ///
-/// Distinct from [`TextIndex`] on purpose. The two sequences disagree: a
+/// Distinct from [`TextIndex`] on purpose: the two sequences disagree. A
 /// control character or an unmapped code is in this one and not the other,
-/// and one character here can become several there. Handing one where the
-/// other is wanted is the single easiest way to get this crate wrong, so the
-/// compiler is asked to notice instead of the caller.
+/// and one character here can become several there. The compiler is asked to
+/// notice instead of the caller.
 ///
 /// [`TextPage::chars`]: crate::TextPage::chars
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct CharIndex(usize);
 
-/// A position in the **search-facing text** — [`TextPage::search_text`], what
-/// a search matches and a selection copies.
+/// A position in the search-facing text ([`TextPage::search_text`]) — what a
+/// search matches and a selection copies.
 ///
 /// Distinct from [`CharIndex`]; see there for why.
 ///
@@ -84,11 +90,12 @@ pub struct CharSegment {
     pub count: u32,
 }
 
-/// The map between the two index spaces.
+/// The map between the two index spaces of
+/// [`TextPage`](crate::TextPage).
 ///
 /// A table of segments, not an index: it converts a character index into a
-/// text offset and back, and it is the reason a caller never has to guess
-/// which of the two sequences a number counts in.
+/// text offset and back, so a caller never has to guess which of the two
+/// sequences a number counts in.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct IndexMap {
     segments: Vec<CharSegment>,
@@ -189,9 +196,8 @@ impl IndexMap {
     /// The text offset a character index names, rounded **forward** to the
     /// next character the text does hold.
     ///
-    /// What `GetPageText`'s start bound wants: a request that begins on a
-    /// stripped character should begin at the next real one rather than
-    /// failing.
+    /// What a start bound wants: a request that begins on a stripped
+    /// character should begin at the next real one rather than failing.
     #[must_use]
     pub fn text_index_at_or_after(&self, char_index: CharIndex) -> Option<TextIndex> {
         let char_index = char_index.get();

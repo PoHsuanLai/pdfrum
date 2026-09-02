@@ -3,14 +3,13 @@
 use kurbo::{Affine, Point, Rect};
 
 /// Where a character came from, which decides how the rest of the pipeline
-/// treats it (`docs/design/pdfrum-text.md` §1.2).
+/// treats it.
 ///
 /// The distinction that matters most: a space **written in the content
-/// stream** is [`Normal`](CharType::Normal), not
-/// [`Generated`](CharType::Generated). "Generated" means the extractor
-/// invented the character because the geometry implied one — an inter-word
-/// gap, an inter-object gap, or a line break's `\r\n`. Link extraction tests
-/// the two conditions separately and would break if they were conflated.
+/// stream** is [`Normal`](Self::Normal), not [`Generated`](Self::Generated).
+/// "Generated" means the extractor invented the character because the
+/// geometry implied one — an inter-word gap, an inter-object gap, or a line
+/// break's `\r\n`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum CharType {
     /// A character the font decoded from the content stream.
@@ -20,13 +19,12 @@ pub enum CharType {
     /// A character code the font could not map to Unicode; its `unicode` is
     /// the raw character code.
     NotUnicode,
-    /// The soft hyphen at a line break. Its `unicode` is forced to `0x0002`,
-    /// which is what `--txt` emits at that position — the search-facing text
-    /// gets `U+00AD` instead. The two outputs genuinely differ here, and
-    /// since audit **A41**'s buffer half they differ in a way that is
-    /// deliberately ours: the record keeps PDFium's `0x2` (the char-list half
-    /// stays declined at 12 golden rows) while the buffer carries the real
-    /// soft hyphen instead of the `U+FFFE` noncharacter.
+    /// The soft hyphen at a line break.
+    ///
+    /// Its `unicode` is forced to `0x0002`, while
+    /// [`TextPage::search_text`](crate::TextPage::search_text) carries
+    /// `U+00AD` at the same position — the one place the character stream and
+    /// the search-facing text provably disagree.
     Hyphen,
     /// One piece of a character that normalization split into several.
     Piece,
@@ -35,13 +33,11 @@ pub enum CharType {
     ActualText,
 }
 
-/// One extracted character.
+/// One extracted character, with its metrics and page geometry.
 ///
 /// `unicode` is a `u32`, not a `char`: the character-code passthrough
 /// ([`CharType::NotUnicode`]) emits raw codes that need not be Unicode scalar
-/// values, `0` is a legal and observed value, and `--txt` must be able to
-/// write the oracle's exact UTF-32LE code units (SPEC.md §9's 2026-08-29
-/// ruling, design brief §1.13).
+/// values, and `0` is a legal and observed value.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct CharBox {
     /// Where this character came from.
@@ -76,23 +72,23 @@ pub struct CharBox {
 
 /// A text object's position in the page's flattened object walk.
 ///
-/// An index rather than a pointer, per STYLE.md §2: the cross-reference from
-/// a character back to the object that drew it is data, not a back-edge, and
-/// two characters share an object exactly when their indices are equal.
+/// Two characters share a text object exactly when their indices are equal.
 /// Objects inside form `XObject`s are numbered in the order the walk reaches
 /// them, so the index is unique across the whole page.
+// An index rather than a pointer, per STYLE.md §2: the cross-reference from
+// a character back to the object that drew it is data, not a back-edge.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ObjectIndex(pub u32);
 
 impl CharBox {
-    /// Whether this character is one the search-facing text keeps
-    /// (`IsNormalCharacter`).
+    /// Whether this character is one
+    /// [`search_text`](crate::TextPage::search_text) keeps.
     ///
     /// A character with a unicode is normal unless it is one of the eight
     /// control code points; a character *without* one is normal exactly when
     /// its character code is non-zero. So the charcode-0 passthrough — which
-    /// carries `unicode == 0` — is **not** normal, lands in `chars` as a NUL
-    /// and never reaches the text string.
+    /// carries `unicode == 0` — is **not** normal: it lands in
+    /// [`chars`](crate::TextPage::chars) as a NUL and never reaches the text.
     #[must_use]
     pub fn is_normal(&self) -> bool {
         if self.unicode == 0 {
@@ -101,13 +97,13 @@ impl CharBox {
         !self.is_control()
     }
 
-    /// Whether this is one of the control code points the search-facing text
-    /// drops (`IsControlChar`).
+    /// Whether this is one of the control code points
+    /// [`search_text`](crate::TextPage::search_text) drops.
     ///
-    /// The `0x93..=0x98` band is the Windows-1252 smart-quote and dash range
-    /// read as raw code points — a historical artifact, kept verbatim. A
-    /// [`CharType::Hyphen`] is **exempt**, which is why its `0x0002` survives
-    /// into the character list.
+    /// A [`CharType::Hyphen`] is **exempt**, which is why its `0x0002`
+    /// survives into [`chars`](crate::TextPage::chars).
+    // The `0x93..=0x98` band is the Windows-1252 smart-quote and dash range
+    // read as raw code points — a historical artifact, kept verbatim.
     #[must_use]
     pub fn is_control(&self) -> bool {
         matches!(
@@ -162,8 +158,7 @@ pub struct LooseBoundsInput<'a> {
     pub font: Option<&'a pdfrum_font::Font>,
     /// The font size in force.
     pub font_size: f32,
-    /// The advance width already scaled by `font_size / 1000`, which is what
-    /// `CPDF_TextObject::GetCharWidth` returns.
+    /// The advance width already scaled by `font_size / 1000`.
     pub scaled_width: f32,
 }
 
