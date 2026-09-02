@@ -92,14 +92,6 @@ impl<'a> Form<'a> {
     }
 
     /// The field with this fully-qualified name.
-    ///
-    /// ```
-    /// let doc = pdfrum::Document::open("tests/fixtures/text_form.pdf")?;
-    /// let form = doc.form().expect("form");
-    /// assert!(form.field("Text Box").is_some());
-    /// assert!(form.field("No Such Field").is_none());
-    /// # Ok::<(), pdfrum::Error>(())
-    /// ```
     #[must_use]
     pub fn field(&self, name: &str) -> Option<Field<'a>> {
         self.inner

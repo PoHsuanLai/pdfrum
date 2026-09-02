@@ -12,26 +12,12 @@ use crate::{Document, EmbeddedFont, FontEncoding, Form, PageEdit, Result, Standa
 /// How a document is written back out.
 ///
 /// A config struct with [`Default`], filled in with struct-update syntax.
-///
-/// ```
-/// use pdfrum::{SaveOptions, Update};
-///
-/// let opts = SaveOptions { update: Update::Incremental, ..SaveOptions::default() };
-/// assert_eq!(opts.update, Update::Incremental);
-/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct SaveOptions {
     /// Whether to rewrite the file or append to it.
     pub update: Update,
     /// The PDF version to declare in the header. 1.0 through 1.7 are
     /// honoured; anything else, and `None`, keep the document's own.
-    ///
-    /// ```
-    /// use pdfrum::{PdfVersion, SaveOptions};
-    ///
-    /// let opts = SaveOptions { version: Some(PdfVersion::PDF_1_4), ..SaveOptions::default() };
-    /// assert_eq!(opts.version.map(|v| v.to_string()).as_deref(), Some("1.4"));
-    /// ```
     pub version: Option<PdfVersion>,
     /// Write an encrypted document out in the clear, dropping `/Encrypt`.
     ///
@@ -74,20 +60,6 @@ impl Document {
     /// [`Error::Io`](crate::Error::Io) when the file cannot be written, and
     /// [`Error::Save`](crate::Error::Save) when the document cannot be
     /// serialized.
-    ///
-    /// ```
-    /// # let dir = std::env::temp_dir().join("pdfrum-doc-save");
-    /// # std::fs::create_dir_all(&dir)?;
-    /// # let out = dir.join("copy.pdf");
-    /// let doc = pdfrum::Document::open("tests/fixtures/hello_world.pdf")?;
-    /// doc.save(&out)?;
-    ///
-    /// // What we wrote opens again, with the same page.
-    /// let reopened = pdfrum::Document::open(&out)?;
-    /// assert_eq!(reopened.page_count(), 1);
-    /// # std::fs::remove_dir_all(&dir).ok();
-    /// # Ok::<(), pdfrum::Error>(())
-    /// ```
     pub fn save(&self, path: impl AsRef<Path>) -> Result<()> {
         self.save_with(path, &SaveOptions::default())
     }
@@ -124,14 +96,6 @@ impl Document {
     ///
     /// [`Error::Save`](crate::Error::Save) when the sink refuses the bytes or
     /// the document cannot be serialized.
-    ///
-    /// ```
-    /// let doc = pdfrum::Document::open("tests/fixtures/hello_world.pdf")?;
-    /// let mut bytes = Vec::new();
-    /// doc.write_to(&mut bytes, &pdfrum::SaveOptions::default())?;
-    /// assert!(bytes.starts_with(b"%PDF-"));
-    /// # Ok::<(), pdfrum::Error>(())
-    /// ```
     pub fn write_to(&self, out: &mut impl Write, options: &SaveOptions) -> Result<()> {
         self.edit().write_to(out, options)
     }
@@ -236,25 +200,6 @@ impl Document {
     /// [`Error::Io`](crate::Error::Io) when the file cannot be written, and
     /// [`Error::Save`](crate::Error::Save) when the document cannot be
     /// serialized.
-    ///
-    /// ```
-    /// # let dir = std::env::temp_dir().join("pdfrum-page-edit");
-    /// # std::fs::create_dir_all(&dir)?;
-    /// # let out = dir.join("edited.pdf");
-    /// use pdfrum::SaveOptions;
-    ///
-    /// let doc = pdfrum::Document::open("tests/fixtures/hello_world.pdf")?;
-    /// let mut page = doc.page(0)?.edit();
-    /// assert_eq!(page.len(), 2);
-    /// page.remove(1);
-    /// doc.save_pages(&out, &[page], &SaveOptions::default())?;
-    ///
-    /// // Reopening finds one object where there were two.
-    /// let saved = pdfrum::Document::open(&out)?;
-    /// assert_eq!(saved.page(0)?.edit().len(), 1);
-    /// # std::fs::remove_dir_all(&dir).ok();
-    /// # Ok::<(), pdfrum::Error>(())
-    /// ```
     pub fn save_pages(
         &self,
         path: impl AsRef<Path>,

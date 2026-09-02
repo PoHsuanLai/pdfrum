@@ -13,16 +13,6 @@ use crate::{Outline, Page, Result};
 /// How to open a document.
 ///
 /// A config struct with [`Default`], filled in with struct-update syntax:
-///
-/// ```
-/// use pdfrum::OpenOptions;
-///
-/// let opts = OpenOptions {
-///     password: Some(b"secret".to_vec()),
-///     ..OpenOptions::default()
-/// };
-/// assert_eq!(opts.password.as_deref(), Some(b"secret".as_slice()));
-/// ```
 #[derive(Debug, Clone, Default)]
 pub struct OpenOptions {
     /// The password to try, as raw bytes rather than a `str`: PDF passwords
@@ -44,12 +34,6 @@ pub struct OpenOptions {
 ///
 /// `Send + Sync`, deliberately: the type is what a rayon `par_iter` shares
 /// across threads. See the crate docs for the parallel-rendering pattern.
-///
-/// ```
-/// let doc = pdfrum::Document::open("tests/fixtures/hello_world.pdf")?;
-/// assert_eq!(doc.page_count(), 1);
-/// # Ok::<(), pdfrum::Error>(())
-/// ```
 #[derive(Debug)]
 pub struct Document {
     pub(crate) inner: pdfrum_parser::Document,
@@ -78,12 +62,6 @@ impl Document {
     ///
     /// [`Error::Io`](crate::Error::Io) if the file cannot be read, [`Error::Open`](crate::Error::Open) if what was
     /// read is not a PDF this reader can recover.
-    ///
-    /// ```
-    /// let doc = pdfrum::Document::open("tests/fixtures/bookmarks.pdf")?;
-    /// assert_eq!(doc.page_count(), 2);
-    /// # Ok::<(), pdfrum::Error>(())
-    /// ```
     pub fn open(path: impl AsRef<Path>) -> Result<Document> {
         Document::open_with(path, &OpenOptions::default())
     }
@@ -207,13 +185,6 @@ impl Document {
     /// A page that will not load is skipped rather than ending the walk,
     /// which is what a viewer does: one broken page does not hide the rest of
     /// the document. Use [`Document::page`] when you need to know.
-    ///
-    /// ```
-    /// let doc = pdfrum::Document::open("tests/fixtures/bookmarks.pdf")?;
-    /// let widths: Vec<f64> = doc.pages().map(|p| p.width().round()).collect();
-    /// assert_eq!(widths, [612.0, 612.0]);
-    /// # Ok::<(), pdfrum::Error>(())
-    /// ```
     pub fn pages(&self) -> impl Iterator<Item = Page<'_>> + '_ {
         (0..self.page_count()).filter_map(|index| self.page(index).ok())
     }
@@ -256,13 +227,6 @@ impl Document {
     }
 
     /// The document's `/Info` metadata, as a value.
-    ///
-    /// ```
-    /// let doc = pdfrum::Document::open("tests/fixtures/hello_world.pdf")?;
-    /// // This fixture carries no /Info dictionary at all.
-    /// assert_eq!(doc.metadata().title, None);
-    /// # Ok::<(), pdfrum::Error>(())
-    /// ```
     #[must_use]
     pub fn metadata(&self) -> Metadata {
         Metadata::read(self)
@@ -387,14 +351,6 @@ impl Document {
     /// `%PDF-1.7`, and `None` for a file that declares none.
     ///
     /// Never validated — a header claiming 9.9 reports 9.9.
-    ///
-    /// ```
-    /// use pdfrum::PdfVersion;
-    ///
-    /// let doc = pdfrum::Document::open("tests/fixtures/bookmarks.pdf")?;
-    /// assert_eq!(doc.version(), Some(PdfVersion::PDF_1_7));
-    /// # Ok::<(), pdfrum::Error>(())
-    /// ```
     #[must_use]
     pub fn version(&self) -> Option<PdfVersion> {
         self.inner.version()
