@@ -16,6 +16,12 @@ The last two are the only ones that need **both** binaries, because
 `pdfium_test` cannot write a document at all: the check is a sequence rather
 than a flag diff.
 
+`pdfrum-tool` has its **own** `script` feature. Build it with
+`cargo build -p pdfrum-tool --release --features script`; passing
+`--features pdfrum/script` instead compiles cleanly and silently loses nine
+`js-transcript` rows (42 failing instead of 33), because the tool's transcript
+path is behind the tool's feature, not the facade's.
+
 `--tool` names the `pdfrum-tool` binary and defaults to
 `target/release/pdfrum-tool` **under the repository root**, which is not where
 a workspace with a redirected `CARGO_TARGET_DIR` puts it. When `tier-c`
