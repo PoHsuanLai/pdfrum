@@ -198,6 +198,12 @@ cargo install cargo-nextest --locked   # required by the gate
 cargo install cargo-deny --locked      # optional; the gate skips it if absent
 ```
 
+Rust build trees are large and nothing removes them for you. Incremental
+compilation is off workspace-wide (`.cargo/config.toml` says why), and
+`scripts/clean-targets.nu` removes every `cargo-target/<name>` tree no running
+process is using — `--dry-run` to see the plan, `--keep [name]` to spare one.
+Measured 2026-09-02, the first sweep found 33 trees and freed 519 GB.
+
 **Nushell is a hard dependency for contributors.** The gate and every bench
 and check script under `scripts/` is a `.nu` script, and there is no bash
 fallback, because maintaining two spellings of a gate is how the two stop
