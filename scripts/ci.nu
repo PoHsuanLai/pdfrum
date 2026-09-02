@@ -91,10 +91,21 @@ def main [] {
     # reaches fuzz/ because it is not a member. Do not add it to the root
     # Cargo.toml's `members`.
     #
-    # The fuzz ring is not part of this gate: it is minutes to days of work
-    # where this script is seconds. Its own gate is scripts/fuzz-gate.sh, and
-    # PLAN.md §6 makes `scripts/fuzz-gate.sh 86400 parallel` an M1 exit
-    # criterion. See fuzz/README.md for how to run and reproduce.
+    # *Running* the fuzz ring is not part of this gate: it is minutes to days
+    # of work where this script is seconds. Its own gate is
+    # scripts/fuzz-gate.sh, and PLAN.md §6 makes
+    # `scripts/fuzz-gate.sh 86400 parallel` an M1 exit criterion. See
+    # fuzz/README.md for how to run and reproduce.
+    #
+    # *Compiling* it is seconds, so it belongs here. The targets call library
+    # API directly — deeper than any caller-facing surface — and being outside
+    # every gate is how they silently rotted through an API change: nothing
+    # built them until someone reached for the fuzzer. A stable `cargo check`
+    # is the whole gate, because a target that does not typecheck is a target
+    # `cargo +nightly fuzz build` cannot build either. `--all-targets` so the
+    # `fuzz_target!` bodies get checked in their `test` cfg too.
+    print "==> cargo check (fuzz workspace)"
+    ^cargo check --manifest-path fuzz/Cargo.toml --all-targets
 
     print ""
     print "CI green."
