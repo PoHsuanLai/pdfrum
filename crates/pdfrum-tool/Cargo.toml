@@ -14,7 +14,7 @@ workspace = true
 
 [features]
 # M15's JavaScript transcript flag. Default-off, and it must stay that way:
-# `scripts/check-no-boa.sh` asserts that no workspace member's DEFAULT
+# `scripts/check-no-boa.nu` asserts that no workspace member's DEFAULT
 # features reach `boa_engine`, and this crate is the second thing it checks
 # by name because the CLI is what a headless or CI build actually runs.
 script = ["dep:pdfrum-form", "pdfrum-form/script"]

@@ -20,8 +20,8 @@ everything.
 | `corpus-list/` | The `pdfrum-corpus` crate: the one list of documents and classes. A **leaf** — it depends on nothing, which is what lets five library crates share it without depending on the facade that depends on them. |
 | `fixtures/` | The seven M8 documents, kept so `docs/status/M8.md`'s tables stay reproducible. Not the M12 measurement set. |
 | `src/bin/ratchet.rs` | Compares a run against `baseline.json`; fails on a regression outside the noise band. |
-| `src/bin/profile.rs` | One operation in a loop with nothing else in the process, for `scripts/profile.sh`. |
-| `src/bin/scaling.rs` | One rayon thread count per process, for `scripts/bench-scaling.sh`. |
+| `src/bin/profile.rs` | One operation in a loop with nothing else in the process, for `scripts/profile.nu`. |
+| `src/bin/scaling.rs` | One rayon thread count per process, for `scripts/bench-scaling.nu`. |
 | `baseline.json` | The committed medians, and the per-group noise bands they are judged with. |
 
 The eleven criterion groups and who owns them:
@@ -55,8 +55,8 @@ speed ratio.
 
 ```sh
 # The dev loop: 18 documents, criterion's floor, ~3 minutes. Not a ratchet run.
-scripts/bench-quick.sh
-scripts/bench-quick.sh render-warm      # or one group
+scripts/bench-quick.nu
+scripts/bench-quick.nu render-warm      # or one group
 
 # The full suite. ~1 hour: 44 documents x 11 groups.
 cargo bench --workspace
@@ -71,13 +71,13 @@ cargo run --release -p pdfrum-bench --bin ratchet -- check
 cargo run --release -p pdfrum-bench --bin ratchet -- update
 
 # Where does one document's time go?
-scripts/profile.sh render benches/corpus/text_foxittext.pdf 50 exact
+scripts/profile.nu render benches/corpus/text_foxittext.pdf 50 exact
 
 # How does it scale across cores?
-scripts/bench-scaling.sh 1 2 4 8 16 32
+scripts/bench-scaling.nu 1 2 4 8 16 32
 
 # What does the oracle take on the same files?
-scripts/bench-oracle.sh
+scripts/bench-oracle.nu
 ```
 
 A filtered run is fine for iterating —
@@ -96,7 +96,7 @@ binary reaches 5% on the heavier documents. The ratchet's per-group bands (in
 result*. Close the browser before taking a number you intend to commit.
 
 **`perf` may not be available, and the harness will say so.** It needs
-`kernel.perf_event_paranoid <= 1`; `scripts/profile.sh` checks, prints the
+`kernel.perf_event_paranoid <= 1`; `scripts/profile.nu` checks, prints the
 `sysctl` that fixes it, and otherwise falls back to exact instrumentation at the
 engine/rasterizer seam. That fallback is not a sampler and does not pretend to
 be one — it cannot name a symbol, only a phase.

@@ -19,7 +19,7 @@ members = [
     "crates/pdfrum-raster-agg",
     # M12c. A workspace member so it is built, tested and linted like anything
     # else — but nothing in the core ring depends on it, and
-    # `scripts/check-no-wgpu.sh` asserts that the facade's default tree still
+    # `scripts/check-no-wgpu.nu` asserts that the facade's default tree still
     # resolves without `wgpu`.
     "crates/pdfrum-raster-vello",
     "crates/pdfrum-text",
@@ -143,7 +143,7 @@ thiserror = "=2.0.20"
 rayon = "=1.12.0"
 
 # JavaScript engine — M15. Reachable ONLY through `pdfrum-form`'s default-off
-# `script` feature, which `scripts/check-no-boa.sh` asserts mechanically in
+# `script` feature, which `scripts/check-no-boa.nu` asserts mechanically in
 # both directions (absent by default; present with the feature, so the first
 # check cannot pass vacuously).
 #
@@ -165,13 +165,13 @@ png = "=0.18.1"
 # Pinned to 0.5, not the current 0.8: since 0.6 criterion depends
 # unconditionally on `alloca`, which has a `cc` build-dependency and compiles
 # C. DEPS.md's pure-Rust guarantee is enforced by `cargo-deny`, which bans `cc`
-# outright, and `scripts/ci.sh` walks the whole workspace — so 0.8 fails the
+# outright, and `scripts/ci.nu` walks the whole workspace — so 0.8 fails the
 # gate. There is no feature flag that avoids it (`alloca` is not optional). 0.5
 # predates that dependency and is pure Rust; nothing in any bench uses an API
 # newer than it. It appears in no library crate's normal dependency tree.
 criterion = { version = "=0.5.1", default-features = false, features = ["cargo_bench_support"] }
 
-# M12: a release build carries line tables so `scripts/profile.sh` names
+# M12: a release build carries line tables so `scripts/profile.nu` names
 # functions instead of addresses. `debug = 1` is line-tables-plus-frame-info,
 # not full DWARF locals — it changes no code the optimizer emits, costs only
 # binary size and link time, and without it every profile in docs/status/M12.md
