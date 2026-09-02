@@ -478,7 +478,11 @@ fn run_corpus(args: &RunArgs) -> Result<ExitCode> {
 }
 
 /// Scores every listing entry, plus a `#form-events` row when a sibling
-/// `.evt` is present.
+/// `.evt` is present and a `#js-transcript` row for each javascript fixture.
+///
+/// Each optional slot emits no row when it answers `None`, which is what
+/// keeps a non-`.evt` file out of the events family and every non-javascript
+/// file out of the transcript family.
 fn score_entries(
     entries: Vec<corpus::Entry>,
     tool: &ToolPaths,
@@ -490,7 +494,7 @@ fn score_entries(
 ) -> Result<Vec<FileResult>> {
     let base = scratch_root("run")?;
     let indexed: Vec<(usize, corpus::Entry)> = entries.into_iter().enumerate().collect();
-    let results: Vec<(FileResult, Option<FileResult>)> =
+    let results: Vec<(FileResult, Option<FileResult>, Option<FileResult>)> =
         pool::map(&indexed, workers, |(index, entry)| {
             let regular = run::score_one(
                 entry,
@@ -510,14 +514,24 @@ fn score_entries(
                 &run::scratch_events(&base, *index),
                 fixup,
             );
-            (regular, events)
+            let js = run::score_js_transcript(
+                entry,
+                tool,
+                state,
+                &run::scratch_js(&base, *index),
+                fixup,
+            );
+            (regular, events, js)
         });
     std::fs::remove_dir_all(&base).ok();
     let mut per_file = Vec::with_capacity(results.len() * 2);
-    for (regular, events) in results {
+    for (regular, events, js) in results {
         per_file.push(regular);
         if let Some(events) = events {
             per_file.push(events);
+        }
+        if let Some(js) = js {
+            per_file.push(js);
         }
     }
     Ok(per_file)

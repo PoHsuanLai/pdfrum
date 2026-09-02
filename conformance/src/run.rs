@@ -488,30 +488,10 @@ pub fn scratch_events(base: &Path, index: usize) -> PathBuf {
     base.join(format!("job-evt-{index:06}"))
 }
 
-/// `.evt` fixtures whose events only do something with a JavaScript engine,
-/// and the milestone that will enable them.
-///
-/// These four scripts drive fields whose behaviour is entirely in a field
-/// script (`testing/resources/javascript/`), so a JS-free renderer cannot
-/// reproduce the oracle's event render no matter how complete the form layer
-/// is. They are deferred rather than deleted, and the milestone is named here
-/// so the row is retired instead of forgotten (PLAN.md §M14 rulings, brief
-/// §4.6). The names are the corpus stem, matching both the `.in` template and
-/// the checked-in `.pdf` that expands to the same bytes.
-const DEFERRED_FORM_EVENTS: &[(&str, &str)] = &[
-    ("resources/javascript/bug_1445426", "M15"),
-    ("resources/javascript/bug_1447268", "M15"),
-    ("resources/javascript/mouse_events", "M15"),
-    ("resources/javascript/public_methods", "M15"),
-];
-
-/// The milestone a corpus id's `#form-events` row is deferred to, if any.
-#[must_use]
-pub fn form_events_deferred_to(id: &str) -> Option<&'static str> {
-    let stem = id.strip_suffix(".pdf").or_else(|| id.strip_suffix(".in"))?;
-    DEFERRED_FORM_EVENTS
-        .iter()
-        .find_map(|(name, milestone)| (*name == stem).then_some(*milestone))
+/// Scratch directory for a `--js-transcript` scoring pass, distinct from the
+/// other two so no pass can harvest another's materialized PDF.
+pub fn scratch_js(base: &Path, index: usize) -> PathBuf {
+    base.join(format!("job-js-{index:06}"))
 }
 
 /// Scoreboard path for a `--send-events` comparison.
@@ -538,11 +518,6 @@ pub fn score_form_events(
 ) -> Option<FileResult> {
     let _script = entry.sibling_evt()?;
     if !matches!(state, ToolState::Ready) {
-        return None;
-    }
-    // A JS-only fixture scores no row at all until its milestone lands: a
-    // permanently-failing row would read as work this milestone owes.
-    if form_events_deferred_to(&entry.id).is_some() {
         return None;
     }
     let result = match score_form_events_inner(entry, tool, store, thresholds, scratch, fixup) {
@@ -640,6 +615,237 @@ fn score_form_events_inner(
         tier_b,
         notes: notes.join("; "),
     })
+}
+
+/// Scoreboard path for a `--js-transcript` comparison.
+///
+/// Singular, matching `form-events`: the cluster is `js-transcripts`, the row
+/// family is `#js-transcript` (docs/design/pdfrum-script.md §6.2).
+#[must_use]
+pub fn js_transcript_path(id: &str) -> String {
+    format!("{id}#js-transcript")
+}
+
+/// Whether an entry is one of the 47 `testing/resources/javascript/*.in`
+/// fixtures the `js-transcripts` cluster covers.
+///
+/// Exactly those, and nothing else in the corpus: the cluster's contract is
+/// `<stem>_expected.txt` sitting beside the template, which only that
+/// directory has.
+#[must_use]
+fn is_js_fixture(id: &str) -> bool {
+    // `Path::extension` rather than `ends_with`, so a file merely *named*
+    // `...in` without a dot is not swept in. The match is case-sensitive on
+    // purpose: the id is the checkout's own path, and the directory holds
+    // exactly `.in`.
+    id.starts_with("resources/javascript/")
+        && Path::new(id).extension().is_some_and(|ext| ext == "in")
+}
+
+/// Scores one javascript fixture's `--js-transcript` stdout against the
+/// oracle's `<stem>_expected.txt`.
+///
+/// Returns `None` for every entry outside `testing/resources/javascript/`,
+/// and when the tool cannot be asked — those files already carry an
+/// `unsupported-tool` row from the plain pass, and a second one would double
+/// the same fact.
+pub fn score_js_transcript(
+    entry: &Entry,
+    tool: &ToolPaths,
+    state: &ToolState,
+    scratch: &Path,
+    fixup: &Path,
+) -> Option<FileResult> {
+    if !is_js_fixture(&entry.id) {
+        return None;
+    }
+    if !matches!(state, ToolState::Ready) {
+        return None;
+    }
+    let result = match score_js_transcript_inner(entry, tool, scratch, fixup) {
+        Ok(result) => result,
+        Err(err) => FileResult {
+            path: js_transcript_path(&entry.id),
+            status: Status::Fail,
+            tags: vec![tag::JS_TRANSCRIPT.to_owned()],
+            tier_a: TierA::default(),
+            tier_b: None,
+            notes: format!("{err:#}"),
+        },
+    };
+    std::fs::remove_dir_all(scratch).ok();
+    Some(result)
+}
+
+fn score_js_transcript_inner(
+    entry: &Entry,
+    tool: &ToolPaths,
+    scratch: &Path,
+    fixup: &Path,
+) -> Result<FileResult> {
+    std::fs::create_dir_all(scratch)?;
+    // The python expander, not a Rust one. docs/design/pdfrum-script.md §6.2
+    // proposes reimplementing `fixup_pdf_template.py` in Rust; that is a
+    // choice rather than a necessity, and every other cluster in this harness
+    // already goes through the subprocess. Sharing one expander means the
+    // javascript fixtures cannot disagree with the rest of the corpus about
+    // what their own bytes are.
+    let pdf_bytes = crate::generate::materialize_for_run(entry, scratch, fixup)?;
+    let path = js_transcript_path(&entry.id);
+    let input = scratch.join("input.pdf");
+    std::fs::write(&input, &pdf_bytes)?;
+
+    let output = Command::new(&tool.binary)
+        .args(crate::oracle::determinism_args(&tool.font_dir))
+        .arg("--js-transcript")
+        .arg(&input)
+        .output()
+        .context("invoking pdfrum-tool --js-transcript")?;
+    if output.status.code().is_none() {
+        return Ok(FileResult {
+            path,
+            status: Status::Fail,
+            tags: vec![tag::CRASH.to_owned()],
+            tier_a: TierA::default(),
+            tier_b: None,
+            notes: "died by signal on --js-transcript".to_owned(),
+        });
+    }
+    // stdout only. `testing/tools/test_runner.py` captures and compares
+    // stdout; stderr carries `pdfium_test`'s own chatter and is never diffed.
+    let produced = output.stdout;
+
+    // The three branches of `test_runner.py`, in its order. The first keys on
+    // the file being **absent**, not on its content being empty: an
+    // `_expected.txt` that exists and is zero bytes takes the *diff* branch
+    // (`bug_959274_1`), and an absent one takes `_VerifyEmptyText`
+    // (`bug_1445426`). Keying either on the other gets one of the two wrong.
+    let expected_path = expected_text_path(entry);
+    let Ok(expected) = std::fs::read(&expected_path) else {
+        return Ok(if produced.is_empty() {
+            pass(path)
+        } else {
+            FileResult {
+                path,
+                status: Status::Fail,
+                tags: vec![tag::JS_TRANSCRIPT.to_owned()],
+                tier_a: TierA::default(),
+                tier_b: None,
+                notes: format!(
+                    "no {} , so stdout must be empty; got {} bytes: {}",
+                    expected_path.display(),
+                    produced.len(),
+                    truncate(&String::from_utf8_lossy(&produced))
+                ),
+            }
+        });
+    };
+
+    match first_divergence(&expected, &produced) {
+        None => Ok(pass(path)),
+        Some((line, want, got)) => Ok(FileResult {
+            path,
+            status: Status::Fail,
+            tags: vec![tag::JS_TRANSCRIPT.to_owned()],
+            tier_a: TierA::default(),
+            tier_b: None,
+            notes: format!(
+                "line {line}: expected {}, got {}",
+                describe(want.as_deref()),
+                describe(got.as_deref())
+            ),
+        }),
+    }
+}
+
+/// A `js-transcript` row that matched. No tags, and no threshold: this is a
+/// text tier and there is nothing to tune.
+fn pass(path: String) -> FileResult {
+    FileResult {
+        path,
+        status: Status::Pass,
+        tags: Vec::new(),
+        tier_a: TierA::default(),
+        tier_b: None,
+        notes: String::new(),
+    }
+}
+
+/// The oracle's expected transcript, beside the template it came from.
+fn expected_text_path(entry: &Entry) -> PathBuf {
+    let stem = entry
+        .source
+        .file_stem()
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    entry.source.with_file_name(format!("{stem}_expected.txt"))
+}
+
+/// The first line the two sides disagree on, 1-based, with both sides.
+///
+/// `testing/tools/text_diff.py` opens both files in **text mode** and diffs
+/// `readlines()`. Python's universal newlines turn `\r\n` *and a lone `\r`*
+/// into `\n` on both sides before anything is compared; nothing else is
+/// normalised, so leading and trailing whitespace, a blank line, and a
+/// missing final newline are all significant and all diff.
+fn first_divergence(
+    expected: &[u8],
+    produced: &[u8],
+) -> Option<(usize, Option<String>, Option<String>)> {
+    let want = text_lines(expected);
+    let got = text_lines(produced);
+    for index in 0..want.len().max(got.len()) {
+        let a = want.get(index);
+        let b = got.get(index);
+        if a != b {
+            return Some((index + 1, a.cloned(), b.cloned()));
+        }
+    }
+    None
+}
+
+/// `readlines()` over a universal-newlines text read.
+///
+/// Each element keeps its terminator, exactly as `readlines()` does, so a
+/// final line without one is not equal to the same line with one — which is
+/// the difference `difflib` reports as `\ No newline at end of file`.
+fn text_lines(bytes: &[u8]) -> Vec<String> {
+    let text = String::from_utf8_lossy(bytes);
+    // Universal newlines: CRLF first so the CR of a CRLF is not turned into
+    // its own line break.
+    let text = text.replace("\r\n", "\n").replace('\r', "\n");
+    let mut lines = Vec::new();
+    let mut current = String::new();
+    for ch in text.chars() {
+        current.push(ch);
+        if ch == '\n' {
+            lines.push(std::mem::take(&mut current));
+        }
+    }
+    if !current.is_empty() {
+        lines.push(current);
+    }
+    lines
+}
+
+/// One side of a divergence, readable in a scoreboard note.
+fn describe(line: Option<&str>) -> String {
+    match line {
+        None => "end of output".to_owned(),
+        Some(text) => format!("{:?}", truncate(text)),
+    }
+}
+
+/// Enough of a line to identify it, and no more: a note goes in a JSON board
+/// a person reads.
+fn truncate(text: &str) -> String {
+    const LIMIT: usize = 120;
+    let trimmed = text.trim_end_matches(['\r', '\n']);
+    if trimmed.chars().count() <= LIMIT {
+        return trimmed.to_owned();
+    }
+    let head: String = trimmed.chars().take(LIMIT).collect();
+    format!("{head}…")
 }
 
 /// `--png --md5 --send-events`, harvesting PNGs under the events name.
@@ -1184,30 +1390,71 @@ mod tests {
     }
 
     #[test]
-    fn javascript_only_fixtures_are_deferred_to_m15_by_name() {
-        // Both the template and the .pdf that expands to the same bytes.
+    fn the_javascript_deferral_is_retired() {
+        // M14 deferred four JavaScript `.evt` fixtures to M15 by name, so the
+        // row would be retired rather than forgotten. M15 landed the
+        // `js-transcript` cluster; the deferral is gone, and these four score
+        // a `#form-events` row like every other `.evt` fixture. This test is
+        // what stops it coming back by accident.
+        for stem in [
+            "resources/javascript/bug_1445426",
+            "resources/javascript/bug_1447268",
+            "resources/javascript/mouse_events",
+            "resources/javascript/public_methods",
+        ] {
+            assert_eq!(
+                form_events_path(&format!("{stem}.in")),
+                format!("{stem}.in#form-events")
+            );
+        }
+    }
+
+    #[test]
+    fn the_js_transcript_cluster_is_exactly_the_javascript_templates() {
+        assert!(is_js_fixture("resources/javascript/consts.in"));
+        // The checked-in `.pdf` beside a template is not a second row: the
+        // cluster is the 47 `.in` fixtures, and scoring both would double
+        // every one of them.
+        assert!(!is_js_fixture("resources/javascript/consts.pdf"));
+        assert!(!is_js_fixture("resources/pixel/checkbox_radiobutton.in"));
+        assert!(!is_js_fixture(
+            "corpus/pdfium/annots/annotation_highlight_no_content.pdf"
+        ));
+    }
+
+    #[test]
+    fn js_transcript_path_does_not_collide_with_the_other_two_families() {
+        let id = "resources/javascript/consts.in";
         assert_eq!(
-            form_events_deferred_to("resources/javascript/mouse_events.in"),
-            Some("M15")
+            js_transcript_path(id),
+            "resources/javascript/consts.in#js-transcript"
         );
-        assert_eq!(
-            form_events_deferred_to("resources/javascript/mouse_events.pdf"),
-            Some("M15")
-        );
-        assert_eq!(
-            form_events_deferred_to("resources/javascript/public_methods.pdf"),
-            Some("M15")
-        );
-        // M14's own fixtures are not deferred.
-        assert_eq!(
-            form_events_deferred_to("resources/pixel/checkbox_radiobutton.in"),
-            None
-        );
-        assert_eq!(
-            form_events_deferred_to("corpus/pdfium/annots/annotation_highlight_no_content.pdf"),
-            None
-        );
-        assert_eq!(DEFERRED_FORM_EVENTS.len(), 4, "the brief counts 4 JS .evt");
+        assert_ne!(js_transcript_path(id), form_events_path(id));
+        assert_ne!(js_transcript_path(id), id);
+    }
+
+    #[test]
+    fn the_transcript_diff_normalises_line_endings_and_nothing_else() {
+        // Universal newlines: both spellings of a break compare equal, on
+        // either side, which is what opening in text mode buys.
+        assert_eq!(first_divergence(b"a\r\nb\n", b"a\nb\n"), None);
+        assert_eq!(first_divergence(b"a\rb\n", b"a\nb\n"), None);
+        // Everything else is significant.
+        let (line, want, got) = first_divergence(b"Alert: x\n", b"Alert: x \n").unwrap();
+        assert_eq!(line, 1);
+        assert_eq!(want.unwrap(), "Alert: x\n");
+        assert_eq!(got.unwrap(), "Alert: x \n");
+        // A missing final newline is a divergence, as `difflib` reports it.
+        assert!(first_divergence(b"a\n", b"a").is_some());
+        // A blank line is a line.
+        assert_eq!(first_divergence(b"a\n\nb\n", b"a\nb\n").unwrap().0, 2);
+        // A short side diverges at the first line the other still has.
+        let (line, want, got) = first_divergence(b"a\nb\n", b"a\n").unwrap();
+        assert_eq!((line, got), (2, None));
+        assert_eq!(want.unwrap(), "b\n");
+        // Two empty sides agree, which is the `_VerifyEmptyText` case's
+        // neighbour: a zero-byte `_expected.txt` against empty stdout.
+        assert_eq!(first_divergence(b"", b""), None);
     }
 
     #[test]

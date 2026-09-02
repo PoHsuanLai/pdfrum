@@ -65,6 +65,10 @@ pub mod tag {
     /// golden. A separate scoreboard row (`{path}#form-events`), so the
     /// plain-render entry is not moved.
     pub const FORM_EVENTS: &str = "form-events";
+    /// A `--js-transcript` run differed from the oracle's
+    /// `<fixture>_expected.txt`. A separate scoreboard row
+    /// (`{path}#js-transcript`), so the plain-render entry is not moved.
+    pub const JS_TRANSCRIPT: &str = "js-transcript";
 }
 
 /// How one file's text dumps scored, counted two ways.
