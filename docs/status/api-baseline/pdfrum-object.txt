@@ -1,0 +1,410 @@
+pub mod pdfrum_object
+pub mod pdfrum_object::names
+pub const pdfrum_object::names::A85: &pdfrum_object::Name
+pub const pdfrum_object::names::AA: &pdfrum_object::Name
+pub const pdfrum_object::names::AC: &pdfrum_object::Name
+pub const pdfrum_object::names::ACRO_FORM: &pdfrum_object::Name
+pub const pdfrum_object::names::AHX: &pdfrum_object::Name
+pub const pdfrum_object::names::ALPHA: &pdfrum_object::Name
+pub const pdfrum_object::names::ANNOTS: &pdfrum_object::Name
+pub const pdfrum_object::names::AP: &pdfrum_object::Name
+pub const pdfrum_object::names::ART_BOX: &pdfrum_object::Name
+pub const pdfrum_object::names::AS: &pdfrum_object::Name
+pub const pdfrum_object::names::ASCII85_DECODE: &pdfrum_object::Name
+pub const pdfrum_object::names::ASCII_HEX_DECODE: &pdfrum_object::Name
+pub const pdfrum_object::names::AUTHOR: &pdfrum_object::Name
+pub const pdfrum_object::names::AUTH_EVENT: &pdfrum_object::Name
+pub const pdfrum_object::names::BC: &pdfrum_object::Name
+pub const pdfrum_object::names::BG: &pdfrum_object::Name
+pub const pdfrum_object::names::BITS_PER_COMPONENT: &pdfrum_object::Name
+pub const pdfrum_object::names::BLACK_IS_1: &pdfrum_object::Name
+pub const pdfrum_object::names::BLEED_BOX: &pdfrum_object::Name
+pub const pdfrum_object::names::BORDER: &pdfrum_object::Name
+pub const pdfrum_object::names::BTN: &pdfrum_object::Name
+pub const pdfrum_object::names::C: &pdfrum_object::Name
+pub const pdfrum_object::names::CA: &pdfrum_object::Name
+pub const pdfrum_object::names::CCF: &pdfrum_object::Name
+pub const pdfrum_object::names::CCITT_FAX_DECODE: &pdfrum_object::Name
+pub const pdfrum_object::names::CF: &pdfrum_object::Name
+pub const pdfrum_object::names::CFM: &pdfrum_object::Name
+pub const pdfrum_object::names::CH: &pdfrum_object::Name
+pub const pdfrum_object::names::COLLECTION: &pdfrum_object::Name
+pub const pdfrum_object::names::COLOR: &pdfrum_object::Name
+pub const pdfrum_object::names::COLORS: &pdfrum_object::Name
+pub const pdfrum_object::names::COLOR_BURN: &pdfrum_object::Name
+pub const pdfrum_object::names::COLOR_DODGE: &pdfrum_object::Name
+pub const pdfrum_object::names::COLUMNS: &pdfrum_object::Name
+pub const pdfrum_object::names::CONTENTS: &pdfrum_object::Name
+pub const pdfrum_object::names::COUNT: &pdfrum_object::Name
+pub const pdfrum_object::names::CREATION_DATE: &pdfrum_object::Name
+pub const pdfrum_object::names::CREATOR: &pdfrum_object::Name
+pub const pdfrum_object::names::CROP_BOX: &pdfrum_object::Name
+pub const pdfrum_object::names::CRYPT: &pdfrum_object::Name
+pub const pdfrum_object::names::CS: &pdfrum_object::Name
+pub const pdfrum_object::names::DA: &pdfrum_object::Name
+pub const pdfrum_object::names::DARKEN: &pdfrum_object::Name
+pub const pdfrum_object::names::DCT: &pdfrum_object::Name
+pub const pdfrum_object::names::DCT_DECODE: &pdfrum_object::Name
+pub const pdfrum_object::names::DECODE_PARMS: &pdfrum_object::Name
+pub const pdfrum_object::names::DESTS: &pdfrum_object::Name
+pub const pdfrum_object::names::DIFFERENCE: &pdfrum_object::Name
+pub const pdfrum_object::names::DL: &pdfrum_object::Name
+pub const pdfrum_object::names::DS: &pdfrum_object::Name
+pub const pdfrum_object::names::DV: &pdfrum_object::Name
+pub const pdfrum_object::names::E: &pdfrum_object::Name
+pub const pdfrum_object::names::EARLY_CHANGE: &pdfrum_object::Name
+pub const pdfrum_object::names::EFF: &pdfrum_object::Name
+pub const pdfrum_object::names::EMBEDDED_FILE: &pdfrum_object::Name
+pub const pdfrum_object::names::EMBEDDED_FILES: &pdfrum_object::Name
+pub const pdfrum_object::names::ENCODED_BYTE_ALIGN: &pdfrum_object::Name
+pub const pdfrum_object::names::ENCRYPT: &pdfrum_object::Name
+pub const pdfrum_object::names::ENCRYPT_METADATA: &pdfrum_object::Name
+pub const pdfrum_object::names::END_OF_BLOCK: &pdfrum_object::Name
+pub const pdfrum_object::names::END_OF_LINE: &pdfrum_object::Name
+pub const pdfrum_object::names::EXCLUSION: &pdfrum_object::Name
+pub const pdfrum_object::names::F: &pdfrum_object::Name
+pub const pdfrum_object::names::FF: &pdfrum_object::Name
+pub const pdfrum_object::names::FILTER: &pdfrum_object::Name
+pub const pdfrum_object::names::FIRST: &pdfrum_object::Name
+pub const pdfrum_object::names::FL: &pdfrum_object::Name
+pub const pdfrum_object::names::FLATE_DECODE: &pdfrum_object::Name
+pub const pdfrum_object::names::FT: &pdfrum_object::Name
+pub const pdfrum_object::names::G: &pdfrum_object::Name
+pub const pdfrum_object::names::H: &pdfrum_object::Name
+pub const pdfrum_object::names::HARD_LIGHT: &pdfrum_object::Name
+pub const pdfrum_object::names::HUE: &pdfrum_object::Name
+pub const pdfrum_object::names::I: &pdfrum_object::Name
+pub const pdfrum_object::names::ID: &pdfrum_object::Name
+pub const pdfrum_object::names::IDENTITY: &pdfrum_object::Name
+pub const pdfrum_object::names::INDEX: &pdfrum_object::Name
+pub const pdfrum_object::names::INFO: &pdfrum_object::Name
+pub const pdfrum_object::names::INK_LIST: &pdfrum_object::Name
+pub const pdfrum_object::names::IT: &pdfrum_object::Name
+pub const pdfrum_object::names::IX: &pdfrum_object::Name
+pub const pdfrum_object::names::JAVA_SCRIPT: &pdfrum_object::Name
+pub const pdfrum_object::names::JBIG2_DECODE: &pdfrum_object::Name
+pub const pdfrum_object::names::JPX_DECODE: &pdfrum_object::Name
+pub const pdfrum_object::names::K: &pdfrum_object::Name
+pub const pdfrum_object::names::KEYWORDS: &pdfrum_object::Name
+pub const pdfrum_object::names::KIDS: &pdfrum_object::Name
+pub const pdfrum_object::names::L: &pdfrum_object::Name
+pub const pdfrum_object::names::LENGTH: &pdfrum_object::Name
+pub const pdfrum_object::names::LIGHTEN: &pdfrum_object::Name
+pub const pdfrum_object::names::LINEARIZED: &pdfrum_object::Name
+pub const pdfrum_object::names::LUMINOSITY: &pdfrum_object::Name
+pub const pdfrum_object::names::LZW: &pdfrum_object::Name
+pub const pdfrum_object::names::LZW_DECODE: &pdfrum_object::Name
+pub const pdfrum_object::names::M: &pdfrum_object::Name
+pub const pdfrum_object::names::MAC_EXPERT_ENCODING: &pdfrum_object::Name
+pub const pdfrum_object::names::MAC_ROMAN_ENCODING: &pdfrum_object::Name
+pub const pdfrum_object::names::MEDIA_BOX: &pdfrum_object::Name
+pub const pdfrum_object::names::METADATA: &pdfrum_object::Name
+pub const pdfrum_object::names::MOD_DATE: &pdfrum_object::Name
+pub const pdfrum_object::names::MULTIPLY: &pdfrum_object::Name
+pub const pdfrum_object::names::N: &pdfrum_object::Name
+pub const pdfrum_object::names::NAMES: &pdfrum_object::Name
+pub const pdfrum_object::names::NM: &pdfrum_object::Name
+pub const pdfrum_object::names::NORMAL: &pdfrum_object::Name
+pub const pdfrum_object::names::O: &pdfrum_object::Name
+pub const pdfrum_object::names::OBJ_STM: &pdfrum_object::Name
+pub const pdfrum_object::names::OC: &pdfrum_object::Name
+pub const pdfrum_object::names::OE: &pdfrum_object::Name
+pub const pdfrum_object::names::OUTLINES: &pdfrum_object::Name
+pub const pdfrum_object::names::OVERLAY: &pdfrum_object::Name
+pub const pdfrum_object::names::P: &pdfrum_object::Name
+pub const pdfrum_object::names::PAGE: &pdfrum_object::Name
+pub const pdfrum_object::names::PAGES: &pdfrum_object::Name
+pub const pdfrum_object::names::PAGE_LABELS: &pdfrum_object::Name
+pub const pdfrum_object::names::PARENT: &pdfrum_object::Name
+pub const pdfrum_object::names::PDF_DOC_ENCODING: &pdfrum_object::Name
+pub const pdfrum_object::names::PERMS: &pdfrum_object::Name
+pub const pdfrum_object::names::PREDICTOR: &pdfrum_object::Name
+pub const pdfrum_object::names::PREV: &pdfrum_object::Name
+pub const pdfrum_object::names::PRODUCER: &pdfrum_object::Name
+pub const pdfrum_object::names::Q: &pdfrum_object::Name
+pub const pdfrum_object::names::R: &pdfrum_object::Name
+pub const pdfrum_object::names::RC: &pdfrum_object::Name
+pub const pdfrum_object::names::RECT: &pdfrum_object::Name
+pub const pdfrum_object::names::RESOURCES: &pdfrum_object::Name
+pub const pdfrum_object::names::RI: &pdfrum_object::Name
+pub const pdfrum_object::names::RL: &pdfrum_object::Name
+pub const pdfrum_object::names::ROOT: &pdfrum_object::Name
+pub const pdfrum_object::names::ROTATE: &pdfrum_object::Name
+pub const pdfrum_object::names::ROWS: &pdfrum_object::Name
+pub const pdfrum_object::names::RUN_LENGTH_DECODE: &pdfrum_object::Name
+pub const pdfrum_object::names::RV: &pdfrum_object::Name
+pub const pdfrum_object::names::S: &pdfrum_object::Name
+pub const pdfrum_object::names::SATURATION: &pdfrum_object::Name
+pub const pdfrum_object::names::SCREEN: &pdfrum_object::Name
+pub const pdfrum_object::names::SIG: &pdfrum_object::Name
+pub const pdfrum_object::names::SIZE: &pdfrum_object::Name
+pub const pdfrum_object::names::SOFT_LIGHT: &pdfrum_object::Name
+pub const pdfrum_object::names::STANDARD: &pdfrum_object::Name
+pub const pdfrum_object::names::STM_F: &pdfrum_object::Name
+pub const pdfrum_object::names::STRUCT_PARENT: &pdfrum_object::Name
+pub const pdfrum_object::names::STR_F: &pdfrum_object::Name
+pub const pdfrum_object::names::SUBJECT: &pdfrum_object::Name
+pub const pdfrum_object::names::SUBTYPE: &pdfrum_object::Name
+pub const pdfrum_object::names::T: &pdfrum_object::Name
+pub const pdfrum_object::names::TITLE: &pdfrum_object::Name
+pub const pdfrum_object::names::TM: &pdfrum_object::Name
+pub const pdfrum_object::names::TR: &pdfrum_object::Name
+pub const pdfrum_object::names::TRANSPARENCY: &pdfrum_object::Name
+pub const pdfrum_object::names::TRIM_BOX: &pdfrum_object::Name
+pub const pdfrum_object::names::TU: &pdfrum_object::Name
+pub const pdfrum_object::names::TX: &pdfrum_object::Name
+pub const pdfrum_object::names::TYPE: &pdfrum_object::Name
+pub const pdfrum_object::names::U: &pdfrum_object::Name
+pub const pdfrum_object::names::UE: &pdfrum_object::Name
+pub const pdfrum_object::names::V: &pdfrum_object::Name
+pub const pdfrum_object::names::VERSION: &pdfrum_object::Name
+pub const pdfrum_object::names::VERTICES: &pdfrum_object::Name
+pub const pdfrum_object::names::VIEWER_PREFERENCES: &pdfrum_object::Name
+pub const pdfrum_object::names::W: &pdfrum_object::Name
+pub const pdfrum_object::names::WIN_ANSI_ENCODING: &pdfrum_object::Name
+pub const pdfrum_object::names::XFA: &pdfrum_object::Name
+pub const pdfrum_object::names::XML: &pdfrum_object::Name
+pub const pdfrum_object::names::XREF: &pdfrum_object::Name
+pub const pdfrum_object::names::XREF_STM: &pdfrum_object::Name
+pub mod pdfrum_object::number
+pub const pdfrum_object::number::INT_RANGE: core::ops::range::RangeInclusive<i64>
+pub fn pdfrum_object::number::as_c_float(i64) -> f32
+pub fn pdfrum_object::number::as_c_int(i64) -> i64
+pub fn pdfrum_object::number::fmt_int(i64) -> alloc::string::String
+pub fn pdfrum_object::number::fmt_number(f32) -> alloc::string::String
+pub fn pdfrum_object::number::real_as_c_int(f32) -> i64
+pub macro pdfrum_object::names!
+#[non_exhaustive] pub enum pdfrum_object::Error
+pub pdfrum_object::Error::RefLoop(pdfrum_object::ObjRef)
+pub pdfrum_object::Error::SpanOutOfBounds
+pub pdfrum_object::Error::SpanOutOfBounds::end: usize
+pub pdfrum_object::Error::SpanOutOfBounds::len: usize
+pub pdfrum_object::Error::SpanOutOfBounds::start: usize
+pub pdfrum_object::Error::UnresolvedRef(pdfrum_object::ObjRef)
+pub enum pdfrum_object::Object
+pub pdfrum_object::Object::Array(pdfrum_object::Array)
+pub pdfrum_object::Object::Bool(bool)
+pub pdfrum_object::Object::Dict(pdfrum_object::Dict)
+pub pdfrum_object::Object::Int(i64)
+pub pdfrum_object::Object::Name(pdfrum_object::Name)
+pub pdfrum_object::Object::Null
+pub pdfrum_object::Object::Real(f32)
+pub pdfrum_object::Object::Ref(pdfrum_object::ObjRef)
+pub pdfrum_object::Object::Str(pdfrum_object::PdfString)
+pub pdfrum_object::Object::Stream(pdfrum_object::Stream)
+impl pdfrum_object::Object
+pub fn pdfrum_object::Object::as_array(&self) -> core::option::Option<&pdfrum_object::Array>
+pub fn pdfrum_object::Object::as_bool(&self) -> core::option::Option<bool>
+pub fn pdfrum_object::Object::as_dict(&self) -> core::option::Option<&pdfrum_object::Dict>
+pub fn pdfrum_object::Object::as_int(&self) -> core::option::Option<i64>
+pub fn pdfrum_object::Object::as_name(&self) -> core::option::Option<&pdfrum_object::Name>
+pub fn pdfrum_object::Object::as_number(&self) -> core::option::Option<&Self>
+pub fn pdfrum_object::Object::as_ref_id(&self) -> core::option::Option<pdfrum_object::ObjRef>
+pub fn pdfrum_object::Object::as_stream(&self) -> core::option::Option<&pdfrum_object::Stream>
+pub fn pdfrum_object::Object::as_string(&self) -> core::option::Option<&pdfrum_object::PdfString>
+pub fn pdfrum_object::Object::clone_direct(&self, &impl pdfrum_object::Resolve) -> Self
+pub fn pdfrum_object::Object::is_null(&self) -> bool
+pub fn pdfrum_object::Object::number(&self) -> core::option::Option<f32>
+pub fn pdfrum_object::Object::resolve<'a>(&'a self, &impl pdfrum_object::Resolve) -> core::result::Result<pdfrum_object::Resolved<'a>, pdfrum_object::Error>
+pub fn pdfrum_object::Object::to_byte_string(&self) -> alloc::vec::Vec<u8>
+pub fn pdfrum_object::Object::to_text(&self) -> alloc::string::String
+impl core::convert::From<bool> for pdfrum_object::Object
+pub fn pdfrum_object::Object::from(bool) -> Self
+impl core::convert::From<f32> for pdfrum_object::Object
+pub fn pdfrum_object::Object::from(f32) -> Self
+impl core::convert::From<i32> for pdfrum_object::Object
+pub fn pdfrum_object::Object::from(i32) -> Self
+impl core::convert::From<i64> for pdfrum_object::Object
+pub fn pdfrum_object::Object::from(i64) -> Self
+impl core::convert::From<pdfrum_object::Array> for pdfrum_object::Object
+pub fn pdfrum_object::Object::from(pdfrum_object::Array) -> Self
+impl core::convert::From<pdfrum_object::Dict> for pdfrum_object::Object
+pub fn pdfrum_object::Object::from(pdfrum_object::Dict) -> Self
+impl core::convert::From<pdfrum_object::Name> for pdfrum_object::Object
+pub fn pdfrum_object::Object::from(pdfrum_object::Name) -> Self
+impl core::convert::From<pdfrum_object::ObjRef> for pdfrum_object::Object
+pub fn pdfrum_object::Object::from(pdfrum_object::ObjRef) -> Self
+impl core::convert::From<pdfrum_object::PdfString> for pdfrum_object::Object
+pub fn pdfrum_object::Object::from(pdfrum_object::PdfString) -> Self
+impl core::convert::From<pdfrum_object::Stream> for pdfrum_object::Object
+pub fn pdfrum_object::Object::from(pdfrum_object::Stream) -> Self
+impl core::iter::traits::collect::FromIterator<pdfrum_object::Object> for pdfrum_object::Array
+pub fn pdfrum_object::Array::from_iter<I: core::iter::traits::collect::IntoIterator<Item = pdfrum_object::Object>>(I) -> Self
+pub enum pdfrum_object::Resolved<'a>
+pub pdfrum_object::Resolved::Direct(&'a pdfrum_object::Object)
+pub pdfrum_object::Resolved::Indirect(alloc::sync::Arc<pdfrum_object::Object>)
+impl pdfrum_object::Resolved<'_>
+pub fn pdfrum_object::Resolved<'_>::as_direct(&self) -> core::option::Option<&pdfrum_object::Object>
+pub fn pdfrum_object::Resolved<'_>::get(&self) -> &pdfrum_object::Object
+pub fn pdfrum_object::Resolved<'_>::into_owned(self) -> pdfrum_object::Object
+impl core::cmp::PartialEq for pdfrum_object::Resolved<'_>
+pub fn pdfrum_object::Resolved<'_>::eq(&self, &Self) -> bool
+impl core::ops::deref::Deref for pdfrum_object::Resolved<'_>
+pub type pdfrum_object::Resolved<'_>::Target = pdfrum_object::Object
+pub fn pdfrum_object::Resolved<'_>::deref(&self) -> &pdfrum_object::Object
+pub enum pdfrum_object::StringSyntax
+pub pdfrum_object::StringSyntax::Hex
+pub pdfrum_object::StringSyntax::Literal
+pub struct pdfrum_object::Array(_)
+impl pdfrum_object::Array
+pub fn pdfrum_object::Array::array_at(&self, usize, &impl pdfrum_object::Resolve) -> core::option::Option<pdfrum_object::Array>
+pub fn pdfrum_object::Array::as_matrix(&self) -> kurbo::affine::Affine
+pub fn pdfrum_object::Array::as_rect(&self) -> kurbo::rect::Rect
+pub fn pdfrum_object::Array::as_slice(&self) -> &[pdfrum_object::Object]
+pub fn pdfrum_object::Array::bool_at(&self, usize) -> core::option::Option<bool>
+pub fn pdfrum_object::Array::byte_string_at(&self, usize) -> core::option::Option<alloc::vec::Vec<u8>>
+pub fn pdfrum_object::Array::dict_at(&self, usize, &impl pdfrum_object::Resolve) -> core::option::Option<pdfrum_object::Dict>
+pub fn pdfrum_object::Array::get<'a>(&'a self, usize, &impl pdfrum_object::Resolve) -> core::option::Option<pdfrum_object::Resolved<'a>>
+pub fn pdfrum_object::Array::int_at(&self, usize) -> core::option::Option<i64>
+pub fn pdfrum_object::Array::is_empty(&self) -> bool
+pub fn pdfrum_object::Array::iter(&self) -> impl core::iter::traits::iterator::Iterator<Item = &pdfrum_object::Object>
+pub fn pdfrum_object::Array::len(&self) -> usize
+pub fn pdfrum_object::Array::name_at(&self, usize) -> core::option::Option<&pdfrum_object::Name>
+pub fn pdfrum_object::Array::new() -> Self
+pub fn pdfrum_object::Array::number_at(&self, usize) -> core::option::Option<f32>
+pub fn pdfrum_object::Array::number_at_or_zero(&self, usize) -> f32
+pub fn pdfrum_object::Array::number_obj_at(&self, usize) -> core::option::Option<&pdfrum_object::Object>
+pub fn pdfrum_object::Array::of(impl core::iter::traits::collect::IntoIterator<Item = pdfrum_object::Object>) -> Self
+pub fn pdfrum_object::Array::push(&mut self, pdfrum_object::Object)
+pub fn pdfrum_object::Array::raw_at(&self, usize) -> core::option::Option<&pdfrum_object::Object>
+pub fn pdfrum_object::Array::reference_at(&self, usize) -> core::option::Option<pdfrum_object::ObjRef>
+pub fn pdfrum_object::Array::stream_at(&self, usize, &impl pdfrum_object::Resolve) -> core::option::Option<pdfrum_object::Stream>
+pub fn pdfrum_object::Array::string_at(&self, usize) -> core::option::Option<&pdfrum_object::PdfString>
+pub fn pdfrum_object::Array::text_at(&self, usize) -> core::option::Option<alloc::string::String>
+pub fn pdfrum_object::Array::to_numbers(&self) -> alloc::vec::Vec<f32>
+impl core::convert::From<pdfrum_object::Array> for pdfrum_object::Object
+pub fn pdfrum_object::Object::from(pdfrum_object::Array) -> Self
+impl core::iter::traits::collect::FromIterator<pdfrum_object::Object> for pdfrum_object::Array
+pub fn pdfrum_object::Array::from_iter<I: core::iter::traits::collect::IntoIterator<Item = pdfrum_object::Object>>(I) -> Self
+impl<'a> core::iter::traits::collect::IntoIterator for &'a pdfrum_object::Array
+pub type &'a pdfrum_object::Array::IntoIter = core::slice::iter::Iter<'a, pdfrum_object::Object>
+pub type &'a pdfrum_object::Array::Item = &'a pdfrum_object::Object
+pub fn &'a pdfrum_object::Array::into_iter(self) -> Self::IntoIter
+pub struct pdfrum_object::ByteSpan
+impl pdfrum_object::ByteSpan
+pub fn pdfrum_object::ByteSpan::as_bytes(&self) -> &[u8]
+pub fn pdfrum_object::ByteSpan::empty() -> Self
+pub fn pdfrum_object::ByteSpan::is_empty(&self) -> bool
+pub fn pdfrum_object::ByteSpan::len(&self) -> usize
+pub fn pdfrum_object::ByteSpan::new(alloc::sync::Arc<[u8]>, core::ops::range::Range<usize>) -> core::result::Result<Self, pdfrum_object::Error>
+pub fn pdfrum_object::ByteSpan::range(&self) -> core::ops::range::Range<usize>
+pub fn pdfrum_object::ByteSpan::subspan(&self, core::ops::range::Range<usize>) -> core::result::Result<Self, pdfrum_object::Error>
+pub fn pdfrum_object::ByteSpan::whole(alloc::sync::Arc<[u8]>) -> Self
+impl core::cmp::Eq for pdfrum_object::ByteSpan
+impl core::cmp::PartialEq for pdfrum_object::ByteSpan
+pub fn pdfrum_object::ByteSpan::eq(&self, &Self) -> bool
+impl core::convert::AsRef<[u8]> for pdfrum_object::ByteSpan
+pub fn pdfrum_object::ByteSpan::as_ref(&self) -> &[u8]
+impl core::convert::From<alloc::vec::Vec<u8>> for pdfrum_object::ByteSpan
+pub fn pdfrum_object::ByteSpan::from(alloc::vec::Vec<u8>) -> Self
+impl core::fmt::Debug for pdfrum_object::ByteSpan
+pub fn pdfrum_object::ByteSpan::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::ops::deref::Deref for pdfrum_object::ByteSpan
+pub type pdfrum_object::ByteSpan::Target = [u8]
+pub fn pdfrum_object::ByteSpan::deref(&self) -> &[u8]
+pub struct pdfrum_object::Dict(_)
+impl pdfrum_object::Dict
+pub fn pdfrum_object::Dict::array(&self, &pdfrum_object::Name, &impl pdfrum_object::Resolve) -> core::option::Option<pdfrum_object::Array>
+pub fn pdfrum_object::Dict::bool(&self, &pdfrum_object::Name) -> core::option::Option<bool>
+pub fn pdfrum_object::Dict::byte_string(&self, &pdfrum_object::Name, &impl pdfrum_object::Resolve) -> core::option::Option<alloc::vec::Vec<u8>>
+pub fn pdfrum_object::Dict::contains_key(&self, &pdfrum_object::Name) -> bool
+pub fn pdfrum_object::Dict::dict(&self, &pdfrum_object::Name, &impl pdfrum_object::Resolve) -> core::option::Option<pdfrum_object::Dict>
+pub fn pdfrum_object::Dict::direct_int(&self, &pdfrum_object::Name) -> core::option::Option<i64>
+pub fn pdfrum_object::Dict::from_pairs(impl core::iter::traits::collect::IntoIterator<Item = (pdfrum_object::Name, pdfrum_object::Object)>) -> Self
+pub fn pdfrum_object::Dict::get<'a>(&'a self, &pdfrum_object::Name, &impl pdfrum_object::Resolve) -> core::option::Option<pdfrum_object::Resolved<'a>>
+pub fn pdfrum_object::Dict::int(&self, &pdfrum_object::Name, &impl pdfrum_object::Resolve) -> core::option::Option<i64>
+pub fn pdfrum_object::Dict::is_empty(&self) -> bool
+pub fn pdfrum_object::Dict::iter(&self) -> impl core::iter::traits::iterator::Iterator<Item = &(pdfrum_object::Name, pdfrum_object::Object)>
+pub fn pdfrum_object::Dict::keys(&self) -> impl core::iter::traits::iterator::Iterator<Item = &pdfrum_object::Name>
+pub fn pdfrum_object::Dict::len(&self) -> usize
+pub fn pdfrum_object::Dict::matrix(&self, &pdfrum_object::Name, &impl pdfrum_object::Resolve) -> kurbo::affine::Affine
+pub fn pdfrum_object::Dict::name(&self, &pdfrum_object::Name) -> core::option::Option<&pdfrum_object::Name>
+pub fn pdfrum_object::Dict::new() -> Self
+pub fn pdfrum_object::Dict::number(&self, &pdfrum_object::Name, &impl pdfrum_object::Resolve) -> core::option::Option<f32>
+pub fn pdfrum_object::Dict::number_obj(&self, &pdfrum_object::Name) -> core::option::Option<&pdfrum_object::Object>
+pub fn pdfrum_object::Dict::push(&mut self, pdfrum_object::Name, pdfrum_object::Object)
+pub fn pdfrum_object::Dict::raw(&self, &pdfrum_object::Name) -> core::option::Option<&pdfrum_object::Object>
+pub fn pdfrum_object::Dict::rect(&self, &pdfrum_object::Name, &impl pdfrum_object::Resolve) -> kurbo::rect::Rect
+pub fn pdfrum_object::Dict::reference(&self, &pdfrum_object::Name) -> core::option::Option<pdfrum_object::ObjRef>
+pub fn pdfrum_object::Dict::stream(&self, &pdfrum_object::Name, &impl pdfrum_object::Resolve) -> core::option::Option<pdfrum_object::Stream>
+pub fn pdfrum_object::Dict::string(&self, &pdfrum_object::Name) -> core::option::Option<&pdfrum_object::PdfString>
+pub fn pdfrum_object::Dict::text(&self, &pdfrum_object::Name, &impl pdfrum_object::Resolve) -> core::option::Option<alloc::string::String>
+impl core::convert::From<pdfrum_object::Dict> for pdfrum_object::Object
+pub fn pdfrum_object::Object::from(pdfrum_object::Dict) -> Self
+impl core::iter::traits::collect::FromIterator<(pdfrum_object::Name, pdfrum_object::Object)> for pdfrum_object::Dict
+pub fn pdfrum_object::Dict::from_iter<I: core::iter::traits::collect::IntoIterator<Item = (pdfrum_object::Name, pdfrum_object::Object)>>(I) -> Self
+impl<'a> core::iter::traits::collect::IntoIterator for &'a pdfrum_object::Dict
+pub type &'a pdfrum_object::Dict::IntoIter = core::slice::iter::Iter<'a, (pdfrum_object::Name, pdfrum_object::Object)>
+pub type &'a pdfrum_object::Dict::Item = &'a (pdfrum_object::Name, pdfrum_object::Object)
+pub fn &'a pdfrum_object::Dict::into_iter(self) -> Self::IntoIter
+pub struct pdfrum_object::Name(_)
+impl pdfrum_object::Name
+pub fn pdfrum_object::Name::as_bytes(&self) -> &[u8]
+pub fn pdfrum_object::Name::as_str(&self) -> core::option::Option<&str>
+pub fn pdfrum_object::Name::as_text(&self) -> alloc::borrow::Cow<'_, str>
+pub fn pdfrum_object::Name::decode(&[u8]) -> Self
+pub fn pdfrum_object::Name::encode(&self) -> alloc::vec::Vec<u8>
+pub const fn pdfrum_object::Name::from_static(&'static [u8]) -> Self
+pub fn pdfrum_object::Name::new(impl core::convert::Into<alloc::vec::Vec<u8>>) -> Self
+impl core::convert::AsRef<[u8]> for pdfrum_object::Name
+pub fn pdfrum_object::Name::as_ref(&self) -> &[u8]
+impl core::convert::From<&[u8]> for pdfrum_object::Name
+pub fn pdfrum_object::Name::from(&[u8]) -> Self
+impl core::convert::From<&str> for pdfrum_object::Name
+pub fn pdfrum_object::Name::from(&str) -> Self
+impl core::convert::From<pdfrum_object::Name> for pdfrum_object::Object
+pub fn pdfrum_object::Object::from(pdfrum_object::Name) -> Self
+impl core::fmt::Debug for pdfrum_object::Name
+pub fn pdfrum_object::Name::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub struct pdfrum_object::NoResolve
+impl pdfrum_object::Resolve for pdfrum_object::NoResolve
+pub fn pdfrum_object::NoResolve::fetch(&self, pdfrum_object::ObjRef) -> core::result::Result<alloc::sync::Arc<pdfrum_object::Object>, pdfrum_object::Error>
+pub struct pdfrum_object::ObjRef
+pub pdfrum_object::ObjRef::generation: u16
+pub pdfrum_object::ObjRef::num: u32
+impl pdfrum_object::ObjRef
+pub const pdfrum_object::ObjRef::INVALID_NUM: u32
+pub const fn pdfrum_object::ObjRef::is_invalid(self) -> bool
+pub const fn pdfrum_object::ObjRef::new(u32, u16) -> Self
+impl core::convert::From<pdfrum_object::ObjRef> for pdfrum_object::Object
+pub fn pdfrum_object::Object::from(pdfrum_object::ObjRef) -> Self
+pub struct pdfrum_object::PdfString
+pub pdfrum_object::PdfString::bytes: alloc::boxed::Box<[u8]>
+pub pdfrum_object::PdfString::hex: bool
+impl pdfrum_object::PdfString
+pub fn pdfrum_object::PdfString::as_text(&self) -> alloc::borrow::Cow<'_, str>
+pub fn pdfrum_object::PdfString::encode(&self) -> alloc::vec::Vec<u8>
+pub fn pdfrum_object::PdfString::hex(impl core::convert::AsRef<[u8]>) -> Self
+pub fn pdfrum_object::PdfString::literal(impl core::convert::AsRef<[u8]>) -> Self
+pub fn pdfrum_object::PdfString::new(impl core::convert::AsRef<[u8]>, pdfrum_object::StringSyntax) -> Self
+impl core::convert::From<pdfrum_object::PdfString> for pdfrum_object::Object
+pub fn pdfrum_object::Object::from(pdfrum_object::PdfString) -> Self
+impl core::fmt::Debug for pdfrum_object::PdfString
+pub fn pdfrum_object::PdfString::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub struct pdfrum_object::Stream
+pub pdfrum_object::Stream::data: pdfrum_object::ByteSpan
+pub pdfrum_object::Stream::dict: pdfrum_object::Dict
+impl pdfrum_object::Stream
+pub fn pdfrum_object::Stream::new(pdfrum_object::Dict, pdfrum_object::ByteSpan) -> Self
+impl core::convert::From<pdfrum_object::Stream> for pdfrum_object::Object
+pub fn pdfrum_object::Object::from(pdfrum_object::Stream) -> Self
+pub const pdfrum_object::INT_RANGE: core::ops::range::RangeInclusive<i64>
+pub const pdfrum_object::PDF_DOC_ENCODING: [u16; 256]
+pub trait pdfrum_object::Resolve
+pub fn pdfrum_object::Resolve::fetch(&self, pdfrum_object::ObjRef) -> core::result::Result<alloc::sync::Arc<pdfrum_object::Object>, pdfrum_object::Error>
+impl pdfrum_object::Resolve for pdfrum_object::NoResolve
+pub fn pdfrum_object::NoResolve::fetch(&self, pdfrum_object::ObjRef) -> core::result::Result<alloc::sync::Arc<pdfrum_object::Object>, pdfrum_object::Error>
+impl<T: pdfrum_object::Resolve + ?core::marker::Sized> pdfrum_object::Resolve for &T
+pub fn &T::fetch(&self, pdfrum_object::ObjRef) -> core::result::Result<alloc::sync::Arc<pdfrum_object::Object>, pdfrum_object::Error>
+pub fn pdfrum_object::as_c_float(i64) -> f32
+pub fn pdfrum_object::as_c_int(i64) -> i64
+pub fn pdfrum_object::decode_text(&[u8]) -> alloc::borrow::Cow<'_, str>
+pub fn pdfrum_object::encode_string_hex(&[u8]) -> alloc::vec::Vec<u8>
+pub fn pdfrum_object::encode_string_literal(&[u8]) -> alloc::vec::Vec<u8>
+pub fn pdfrum_object::encode_text(&str) -> alloc::vec::Vec<u8>
+pub fn pdfrum_object::fmt_int(i64) -> alloc::string::String
+pub fn pdfrum_object::fmt_number(f32) -> alloc::string::String
+pub fn pdfrum_object::name_decode(&[u8]) -> alloc::vec::Vec<u8>
+pub fn pdfrum_object::name_encode(&[u8]) -> alloc::vec::Vec<u8>
+pub fn pdfrum_object::real_as_c_int(f32) -> i64
+pub type pdfrum_object::SharedObject = alloc::sync::Arc<pdfrum_object::Object>

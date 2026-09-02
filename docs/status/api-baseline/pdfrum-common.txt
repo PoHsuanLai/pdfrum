@@ -1,0 +1,167 @@
+pub mod pdfrum_common
+pub use pdfrum_common::kurbo
+#[non_exhaustive] pub enum pdfrum_common::DiagKind
+pub pdfrum_common::DiagKind::AnnotSubtypeUnknown
+pub pdfrum_common::DiagKind::AppearanceGenerated
+pub pdfrum_common::DiagKind::AutoFontSizeZero
+pub pdfrum_common::DiagKind::BadStartXref
+pub pdfrum_common::DiagKind::BadTextRenderMode
+pub pdfrum_common::DiagKind::CMapCodespaceDropped
+pub pdfrum_common::DiagKind::CMapNameUnknown
+pub pdfrum_common::DiagKind::CMapOperandOverflow
+pub pdfrum_common::DiagKind::CMapRangeLimit
+pub pdfrum_common::DiagKind::CMapReversedRange
+pub pdfrum_common::DiagKind::CMapTableMissing
+pub pdfrum_common::DiagKind::CMapTruncatedCodespace
+pub pdfrum_common::DiagKind::CMapUsecmapDepth
+pub pdfrum_common::DiagKind::CMapUsecmapUnknown
+pub pdfrum_common::DiagKind::CMapWideMappingsDropped
+pub pdfrum_common::DiagKind::ChoiceIndicesIgnored
+pub pdfrum_common::DiagKind::CidToGidStreamShort
+pub pdfrum_common::DiagKind::ColorKeyArrayShort
+pub pdfrum_common::DiagKind::ColorSpaceUnsupported
+pub pdfrum_common::DiagKind::DashElementClamped
+pub pdfrum_common::DiagKind::DashPatternDropped
+pub pdfrum_common::DiagKind::DefaultAppearanceMalformed
+pub pdfrum_common::DiagKind::DestPageUnresolved
+pub pdfrum_common::DiagKind::FieldKidsMalformed
+pub pdfrum_common::DiagKind::FieldNameNormalized
+pub pdfrum_common::DiagKind::FieldSkippedNoName
+pub pdfrum_common::DiagKind::FieldSkippedNoType
+pub pdfrum_common::DiagKind::FontProgramUnreadable
+pub pdfrum_common::DiagKind::FontSubstitutionFailed
+pub pdfrum_common::DiagKind::FontWidthsTruncated
+pub pdfrum_common::DiagKind::FormRecursionRefused
+pub pdfrum_common::DiagKind::FormResourcesInvalid
+pub pdfrum_common::DiagKind::FunctionUnsupported
+pub pdfrum_common::DiagKind::GsubUnreadable
+pub pdfrum_common::DiagKind::HeaderOffset
+pub pdfrum_common::DiagKind::IccAlternateMismatch
+pub pdfrum_common::DiagKind::IccAlternateUsed
+pub pdfrum_common::DiagKind::IccStockFallback
+pub pdfrum_common::DiagKind::ImageBadBitDepth
+pub pdfrum_common::DiagKind::ImageBadDimensions
+pub pdfrum_common::DiagKind::ImageDecodeFailed
+pub pdfrum_common::DiagKind::ImageDimensionsFromCodec
+pub pdfrum_common::DiagKind::ImageStreamTruncated
+pub pdfrum_common::DiagKind::IndexedHivalClamped
+pub pdfrum_common::DiagKind::InkPathDropped
+pub pdfrum_common::DiagKind::InlineImageAbandoned
+pub pdfrum_common::DiagKind::InlineImageResync
+pub pdfrum_common::DiagKind::InlineImageUnsupported
+pub pdfrum_common::DiagKind::JpxColorSpaceOverride
+pub pdfrum_common::DiagKind::KeywordResync
+pub pdfrum_common::DiagKind::LegacyNamedDest
+pub pdfrum_common::DiagKind::LengthMismatch
+pub pdfrum_common::DiagKind::MalformedArray
+pub pdfrum_common::DiagKind::MalformedDict
+pub pdfrum_common::DiagKind::MaskDropped
+pub pdfrum_common::DiagKind::MediaBoxDefaulted
+pub pdfrum_common::DiagKind::MeshDecodeMalformed
+pub pdfrum_common::DiagKind::MeshTruncated
+pub pdfrum_common::DiagKind::NameTreeLimitsRepaired
+pub pdfrum_common::DiagKind::NameTreeMalformed
+pub pdfrum_common::DiagKind::NavigationCycle
+pub pdfrum_common::DiagKind::ObjNumMismatch
+pub pdfrum_common::DiagKind::ObjStmEntryDropped
+pub pdfrum_common::DiagKind::OperandCountMismatch
+pub pdfrum_common::DiagKind::OperandsDropped
+pub pdfrum_common::DiagKind::OptionalContentPolicyUnknown
+pub pdfrum_common::DiagKind::PageLabelStyleUnknown
+pub pdfrum_common::DiagKind::PageTreeDepthExceeded
+pub pdfrum_common::DiagKind::PageTreeRepaired
+pub pdfrum_common::DiagKind::PasswordReencoded
+pub pdfrum_common::DiagKind::PostScriptMalformedProc
+pub pdfrum_common::DiagKind::PostScriptStackAbuse
+pub pdfrum_common::DiagKind::QuadPointsTruncated
+pub pdfrum_common::DiagKind::RootRecovered
+pub pdfrum_common::DiagKind::ScriptFailed
+pub pdfrum_common::DiagKind::ScriptLimitReached
+pub pdfrum_common::DiagKind::ShadingUnsupported
+pub pdfrum_common::DiagKind::StreamInCompositeDropped
+pub pdfrum_common::DiagKind::StructElementDropped
+pub pdfrum_common::DiagKind::StructKidUnresolved
+pub pdfrum_common::DiagKind::TextActualTextCharDropped
+pub pdfrum_common::DiagKind::TextActualTextUnprintable
+pub pdfrum_common::DiagKind::TextCharcodeZero
+pub pdfrum_common::DiagKind::TextCharcodesUnmapped(u32)
+pub pdfrum_common::DiagKind::TextCharsDeduplicated(u32)
+pub pdfrum_common::DiagKind::TextHyphenNoPrevChar
+pub pdfrum_common::DiagKind::TextObjectDegenerate
+pub pdfrum_common::DiagKind::TextObjectDropped
+pub pdfrum_common::DiagKind::TextObjectDuplicate
+pub pdfrum_common::DiagKind::TextTruncatedAtSurrogate
+pub pdfrum_common::DiagKind::TilingRangeOverflow
+pub pdfrum_common::DiagKind::TilingStepInvalid
+pub pdfrum_common::DiagKind::TintTransformDropped
+pub pdfrum_common::DiagKind::ToUnicodeBlockRejected
+pub pdfrum_common::DiagKind::ToUnicodeLoneSurrogate
+pub pdfrum_common::DiagKind::TreeDepthExceeded
+pub pdfrum_common::DiagKind::Type1BlendInconsistent
+pub pdfrum_common::DiagKind::Type1CharstringAborted
+pub pdfrum_common::DiagKind::Type1EncodingGlyphMissing
+pub pdfrum_common::DiagKind::Type1HexTruncated
+pub pdfrum_common::DiagKind::Type1PfbTruncated
+pub pdfrum_common::DiagKind::UnbalancedMarkedContent
+pub pdfrum_common::DiagKind::UnbalancedRestore
+pub pdfrum_common::DiagKind::UndecodableStream
+pub pdfrum_common::DiagKind::UnknownOperator
+pub pdfrum_common::DiagKind::WidgetRotationInvalid
+pub pdfrum_common::DiagKind::XrefEntriesShifted
+pub pdfrum_common::DiagKind::XrefPrevLoop
+pub pdfrum_common::DiagKind::XrefRebuilt
+pub pdfrum_common::DiagKind::XrefStreamEntryDropped
+pub enum pdfrum_common::Severity
+pub pdfrum_common::Severity::Recovered
+pub pdfrum_common::Severity::Suspicious
+pub struct pdfrum_common::Diagnostic
+pub pdfrum_common::Diagnostic::at: core::option::Option<u64>
+pub pdfrum_common::Diagnostic::severity: pdfrum_common::Severity
+pub pdfrum_common::Diagnostic::what: pdfrum_common::DiagKind
+pub struct pdfrum_common::Diagnostics
+impl pdfrum_common::Diagnostics
+pub const pdfrum_common::Diagnostics::DEFAULT_LIMIT: usize
+pub fn pdfrum_common::Diagnostics::contains(&self, &pdfrum_common::DiagKind) -> bool
+pub fn pdfrum_common::Diagnostics::dropped(&self) -> usize
+pub fn pdfrum_common::Diagnostics::entries(&self) -> &[pdfrum_common::Diagnostic]
+pub fn pdfrum_common::Diagnostics::extend(&mut self, &pdfrum_common::Diagnostics)
+pub fn pdfrum_common::Diagnostics::is_empty(&self) -> bool
+pub fn pdfrum_common::Diagnostics::len(&self) -> usize
+pub fn pdfrum_common::Diagnostics::record(&mut self, pdfrum_common::Severity, pdfrum_common::DiagKind, core::option::Option<u64>)
+pub fn pdfrum_common::Diagnostics::recorded(&self) -> usize
+pub fn pdfrum_common::Diagnostics::with_limit(usize) -> Self
+impl core::default::Default for pdfrum_common::Diagnostics
+pub fn pdfrum_common::Diagnostics::default() -> Self
+pub struct pdfrum_common::FxHasher
+impl core::hash::Hasher for pdfrum_common::FxHasher
+pub fn pdfrum_common::FxHasher::finish(&self) -> u64
+pub fn pdfrum_common::FxHasher::write(&mut self, &[u8])
+pub fn pdfrum_common::FxHasher::write_i32(&mut self, i32)
+pub fn pdfrum_common::FxHasher::write_u16(&mut self, u16)
+pub fn pdfrum_common::FxHasher::write_u32(&mut self, u32)
+pub fn pdfrum_common::FxHasher::write_u64(&mut self, u64)
+pub fn pdfrum_common::FxHasher::write_u8(&mut self, u8)
+pub fn pdfrum_common::FxHasher::write_usize(&mut self, usize)
+pub struct pdfrum_common::Limits
+pub pdfrum_common::Limits::header_scan: u64
+pub pdfrum_common::Limits::max_array_len: usize
+pub pdfrum_common::Limits::max_calculate_depth: u32
+pub pdfrum_common::Limits::max_cmap_ranges: usize
+pub pdfrum_common::Limits::max_decoded_stream_len: usize
+pub pdfrum_common::Limits::max_name_tree_depth: u32
+pub pdfrum_common::Limits::max_object_nesting: u32
+pub pdfrum_common::Limits::max_object_number: u32
+pub pdfrum_common::Limits::max_page_count: u32
+pub pdfrum_common::Limits::max_page_tree_depth: u32
+pub pdfrum_common::Limits::max_script_loop_iterations: u64
+pub pdfrum_common::Limits::max_script_recursion: usize
+pub pdfrum_common::Limits::max_script_stack: usize
+pub pdfrum_common::Limits::max_string_len: usize
+pub pdfrum_common::Limits::max_word_len: usize
+pub pdfrum_common::Limits::max_xref_size: u32
+pub pdfrum_common::Limits::startxref_scan: u64
+impl pdfrum_common::Limits
+pub const pdfrum_common::Limits::INVALID_OBJ_NUM: u32
+impl core::default::Default for pdfrum_common::Limits
+pub fn pdfrum_common::Limits::default() -> Self
+pub type pdfrum_common::FxBuildHasher = core::hash::BuildHasherDefault<pdfrum_common::FxHasher>

@@ -1,0 +1,167 @@
+pub mod pdfrum_text
+pub mod pdfrum_text::bidi
+pub enum pdfrum_text::bidi::Direction
+pub pdfrum_text::bidi::Direction::Left
+pub pdfrum_text::bidi::Direction::LeftWeak
+pub pdfrum_text::bidi::Direction::Neutral
+pub pdfrum_text::bidi::Direction::Right
+impl pdfrum_text::bidi::Direction
+pub fn pdfrum_text::bidi::Direction::of(u32) -> Self
+pub struct pdfrum_text::bidi::BidiLine
+impl pdfrum_text::bidi::BidiLine
+pub fn pdfrum_text::bidi::BidiLine::overall(&self) -> pdfrum_text::bidi::Direction
+pub fn pdfrum_text::bidi::BidiLine::segments(&self) -> &[pdfrum_text::bidi::Segment]
+pub fn pdfrum_text::bidi::BidiLine::set_right(&mut self)
+pub struct pdfrum_text::bidi::Segment
+pub pdfrum_text::bidi::Segment::count: usize
+pub pdfrum_text::bidi::Segment::direction: pdfrum_text::bidi::Direction
+pub pdfrum_text::bidi::Segment::start: usize
+pub fn pdfrum_text::bidi::is_right_to_left(&[u32]) -> bool
+pub fn pdfrum_text::bidi::segments(&[u32], bool) -> pdfrum_text::bidi::BidiLine
+pub mod pdfrum_text::index
+pub struct pdfrum_text::index::CharIndex
+impl pdfrum_text::index::CharIndex
+pub fn pdfrum_text::index::CharIndex::char_index(&self, usize) -> core::option::Option<usize>
+pub fn pdfrum_text::index::CharIndex::segments(&self) -> &[pdfrum_text::index::CharSegment]
+pub fn pdfrum_text::index::CharIndex::text_index(&self, usize) -> core::option::Option<usize>
+pub fn pdfrum_text::index::CharIndex::text_index_at_or_after(&self, usize) -> core::option::Option<usize>
+pub fn pdfrum_text::index::CharIndex::text_index_end(&self, usize) -> usize
+pub fn pdfrum_text::index::CharIndex::text_len(&self) -> usize
+pub struct pdfrum_text::index::CharSegment
+pub pdfrum_text::index::CharSegment::count: u32
+pub pdfrum_text::index::CharSegment::index: u32
+pub fn pdfrum_text::index::build(&[pdfrum_text::CharBox]) -> pdfrum_text::index::CharIndex
+pub mod pdfrum_text::links
+pub struct pdfrum_text::links::FoundLink
+pub pdfrum_text::links::FoundLink::range: core::ops::range::Range<usize>
+pub pdfrum_text::links::FoundLink::url: alloc::string::String
+pub struct pdfrum_text::links::WebLink
+pub pdfrum_text::links::WebLink::range: core::ops::range::Range<usize>
+pub pdfrum_text::links::WebLink::url: alloc::string::String
+pub fn pdfrum_text::links::check_mail_link(&str) -> core::option::Option<alloc::string::String>
+pub fn pdfrum_text::links::check_web_link(&str) -> core::option::Option<pdfrum_text::links::FoundLink>
+pub fn pdfrum_text::links::extract(&[pdfrum_text::CharBox], &[char], &pdfrum_text::index::CharIndex) -> alloc::vec::Vec<pdfrum_text::links::WebLink>
+pub fn pdfrum_text::links::find_web_link_ending(&[char], usize, usize) -> usize
+pub fn pdfrum_text::links::trim_external_brackets(&[char], usize, usize) -> usize
+pub mod pdfrum_text::unicode
+pub enum pdfrum_text::unicode::BidiClass
+pub pdfrum_text::unicode::BidiClass::Al
+pub pdfrum_text::unicode::BidiClass::An
+pub pdfrum_text::unicode::BidiClass::B
+pub pdfrum_text::unicode::BidiClass::Bn
+pub pdfrum_text::unicode::BidiClass::Cs
+pub pdfrum_text::unicode::BidiClass::En
+pub pdfrum_text::unicode::BidiClass::Es
+pub pdfrum_text::unicode::BidiClass::Et
+pub pdfrum_text::unicode::BidiClass::L
+pub pdfrum_text::unicode::BidiClass::Lre
+pub pdfrum_text::unicode::BidiClass::Lro
+pub pdfrum_text::unicode::BidiClass::Nsm
+pub pdfrum_text::unicode::BidiClass::On
+pub pdfrum_text::unicode::BidiClass::Pdf
+pub pdfrum_text::unicode::BidiClass::R
+pub pdfrum_text::unicode::BidiClass::Rle
+pub pdfrum_text::unicode::BidiClass::Rlo
+pub pdfrum_text::unicode::BidiClass::S
+pub pdfrum_text::unicode::BidiClass::Ws
+pub fn pdfrum_text::unicode::bidi_class(u32) -> pdfrum_text::unicode::BidiClass
+pub fn pdfrum_text::unicode::is_alnum(u32) -> bool
+pub fn pdfrum_text::unicode::is_alpha(u32) -> bool
+pub fn pdfrum_text::unicode::is_decimal_digit(u32) -> bool
+pub fn pdfrum_text::unicode::is_print(u32) -> bool
+pub fn pdfrum_text::unicode::lower_string(&str) -> alloc::string::String
+pub fn pdfrum_text::unicode::mirror_char(u32) -> u32
+pub fn pdfrum_text::unicode::normalize(u32) -> alloc::vec::Vec<u32>
+pub const fn pdfrum_text::unicode::normalize_space(u32) -> u32
+pub fn pdfrum_text::unicode::to_lower(u32) -> u32
+pub enum pdfrum_text::CharType
+pub pdfrum_text::CharType::ActualText
+pub pdfrum_text::CharType::Generated
+pub pdfrum_text::CharType::Hyphen
+pub pdfrum_text::CharType::Normal
+pub pdfrum_text::CharType::NotUnicode
+pub pdfrum_text::CharType::Piece
+#[non_exhaustive] pub enum pdfrum_text::Error
+pub pdfrum_text::Error::CharIndexOutOfRange
+pub pdfrum_text::Error::CharIndexOutOfRange::index: usize
+pub pdfrum_text::Error::CharIndexOutOfRange::len: usize
+pub enum pdfrum_text::Orientation
+pub pdfrum_text::Orientation::Horizontal
+pub pdfrum_text::Orientation::Unknown
+pub pdfrum_text::Orientation::Vertical
+pub struct pdfrum_text::CharBox
+pub pdfrum_text::CharBox::angle: f32
+pub pdfrum_text::CharBox::char_box: kurbo::rect::Rect
+pub pdfrum_text::CharBox::char_type: pdfrum_text::CharType
+pub pdfrum_text::CharBox::code: core::option::Option<pdfrum_cmap::ids::CharCode>
+pub pdfrum_text::CharBox::font_size: f32
+pub pdfrum_text::CharBox::loose_char_box: kurbo::rect::Rect
+pub pdfrum_text::CharBox::matrix: kurbo::affine::Affine
+pub pdfrum_text::CharBox::object: core::option::Option<pdfrum_text::ObjectIndex>
+pub pdfrum_text::CharBox::origin: kurbo::point::Point
+pub pdfrum_text::CharBox::unicode: u32
+impl pdfrum_text::CharBox
+pub fn pdfrum_text::CharBox::is_control(&self) -> bool
+pub fn pdfrum_text::CharBox::is_generated(&self) -> bool
+pub fn pdfrum_text::CharBox::is_normal(&self) -> bool
+pub struct pdfrum_text::CharIndex
+impl pdfrum_text::index::CharIndex
+pub fn pdfrum_text::index::CharIndex::char_index(&self, usize) -> core::option::Option<usize>
+pub fn pdfrum_text::index::CharIndex::segments(&self) -> &[pdfrum_text::index::CharSegment]
+pub fn pdfrum_text::index::CharIndex::text_index(&self, usize) -> core::option::Option<usize>
+pub fn pdfrum_text::index::CharIndex::text_index_at_or_after(&self, usize) -> core::option::Option<usize>
+pub fn pdfrum_text::index::CharIndex::text_index_end(&self, usize) -> usize
+pub fn pdfrum_text::index::CharIndex::text_len(&self) -> usize
+pub struct pdfrum_text::CharSegment
+pub pdfrum_text::CharSegment::count: u32
+pub pdfrum_text::CharSegment::index: u32
+pub struct pdfrum_text::ExtractOptions
+pub pdfrum_text::ExtractOptions::rtl: bool
+pub struct pdfrum_text::FindOptions
+pub pdfrum_text::FindOptions::consecutive: bool
+pub pdfrum_text::FindOptions::match_case: bool
+pub pdfrum_text::FindOptions::match_whole_word: bool
+pub struct pdfrum_text::ObjectIndex(pub u32)
+pub struct pdfrum_text::TextPage
+pub pdfrum_text::TextPage::chars: alloc::vec::Vec<pdfrum_text::CharBox>
+pub pdfrum_text::TextPage::runs: pdfrum_text::index::CharIndex
+pub pdfrum_text::TextPage::text: alloc::vec::Vec<char>
+impl pdfrum_text::TextPage
+pub fn pdfrum_text::TextPage::all_text(&self) -> alloc::string::String
+pub fn pdfrum_text::TextPage::char_at(&self, usize) -> core::result::Result<&pdfrum_text::CharBox, pdfrum_text::Error>
+pub fn pdfrum_text::TextPage::char_count(&self) -> usize
+pub fn pdfrum_text::TextPage::find<'a>(&'a self, &str, pdfrum_text::FindOptions) -> impl core::iter::traits::iterator::Iterator<Item = core::ops::range::Range<usize>> + 'a
+pub fn pdfrum_text::TextPage::index_at(&self, kurbo::point::Point, kurbo::size::Size) -> core::option::Option<usize>
+pub fn pdfrum_text::TextPage::page_text(&self, usize, usize) -> alloc::string::String
+pub fn pdfrum_text::TextPage::rects(&self, usize, core::option::Option<usize>) -> alloc::vec::Vec<kurbo::rect::Rect>
+pub fn pdfrum_text::TextPage::text_in_rect(&self, kurbo::rect::Rect) -> alloc::string::String
+pub fn pdfrum_text::TextPage::text_of_object(&self, pdfrum_text::ObjectIndex) -> alloc::string::String
+pub fn pdfrum_text::TextPage::to_utf32le(&self) -> alloc::vec::Vec<u8>
+pub fn pdfrum_text::TextPage::web_links(&self) -> alloc::vec::Vec<pdfrum_text::links::WebLink>
+pub struct pdfrum_text::TextRun
+pub pdfrum_text::TextRun::advance: f64
+pub pdfrum_text::TextRun::char_space: f32
+pub pdfrum_text::TextRun::font: alloc::sync::Arc<pdfrum_font::Font>
+pub pdfrum_text::TextRun::font_size: f32
+pub pdfrum_text::TextRun::font_size_h: f32
+pub pdfrum_text::TextRun::index: pdfrum_text::ObjectIndex
+pub pdfrum_text::TextRun::items: alloc::vec::Vec<pdfrum_text::object::Item>
+pub pdfrum_text::TextRun::kernings: alloc::vec::Vec<f32>
+pub pdfrum_text::TextRun::marks: pdfrum_page::state::marks::ContentMarks
+pub pdfrum_text::TextRun::original_rect: kurbo::rect::Rect
+pub pdfrum_text::TextRun::position: kurbo::point::Point
+pub pdfrum_text::TextRun::rect: kurbo::rect::Rect
+pub pdfrum_text::TextRun::text_matrix: kurbo::affine::Affine
+pub pdfrum_text::TextRun::type3: alloc::collections::btree::map::BTreeMap<u32, pdfrum_page::type3::Type3Metrics>
+pub pdfrum_text::TextRun::word_space: f32
+impl pdfrum_text::TextRun
+pub fn pdfrum_text::TextRun::count(&self) -> usize
+pub fn pdfrum_text::TextRun::glyph_bbox(&self, pdfrum_cmap::ids::CharCode) -> kurbo::rect::Rect
+pub fn pdfrum_text::TextRun::glyph_width(&self, pdfrum_cmap::ids::CharCode) -> f32
+pub fn pdfrum_text::TextRun::item(&self, usize) -> core::option::Option<pdfrum_text::object::Item>
+pub fn pdfrum_text::TextRun::kerning(&self, usize) -> f32
+pub fn pdfrum_text::TextRun::scaled_char_width(&self, pdfrum_cmap::ids::CharCode) -> f32
+pub struct pdfrum_text::WebLink
+pub pdfrum_text::WebLink::range: core::ops::range::Range<usize>
+pub pdfrum_text::WebLink::url: alloc::string::String
+pub fn pdfrum_text::extract<R: pdfrum_object::resolve::Resolve>(&pdfrum_page::page::Page, &R, &pdfrum_text::ExtractOptions, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_text::TextPage

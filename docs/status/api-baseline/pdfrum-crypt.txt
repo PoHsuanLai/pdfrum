@@ -1,0 +1,93 @@
+pub mod pdfrum_crypt
+pub enum pdfrum_crypt::Cipher
+pub pdfrum_crypt::Cipher::Aes
+pub pdfrum_crypt::Cipher::None
+pub pdfrum_crypt::Cipher::Rc4
+pub enum pdfrum_crypt::CryptClass
+pub pdfrum_crypt::CryptClass::Embedded
+pub pdfrum_crypt::CryptClass::Stream
+pub pdfrum_crypt::CryptClass::String
+pub enum pdfrum_crypt::Error
+pub pdfrum_crypt::Error::CipherKeyLength
+pub pdfrum_crypt::Error::CipherKeyLength::cipher: &'static str
+pub pdfrum_crypt::Error::CipherKeyLength::len: usize
+pub pdfrum_crypt::Error::MalformedEncryptDict(&'static str)
+pub pdfrum_crypt::Error::MismatchedCryptFilters
+pub pdfrum_crypt::Error::MissingCryptFilter(alloc::boxed::Box<[u8]>)
+pub pdfrum_crypt::Error::UnsupportedHandler(alloc::boxed::Box<[u8]>)
+pub pdfrum_crypt::Error::WrongPassword
+pub enum pdfrum_crypt::PasswordEncoding
+pub pdfrum_crypt::PasswordEncoding::AsGiven
+pub pdfrum_crypt::PasswordEncoding::Latin1ToUtf8
+pub pdfrum_crypt::PasswordEncoding::SaslPrepped
+pub pdfrum_crypt::PasswordEncoding::Utf8ToLatin1
+pub enum pdfrum_crypt::SecurityHandler
+pub pdfrum_crypt::SecurityHandler::AesV4
+pub pdfrum_crypt::SecurityHandler::AesV4::embedded_cipher: core::option::Option<pdfrum_crypt::Cipher>
+pub pdfrum_crypt::SecurityHandler::AesV4::encoding: pdfrum_crypt::PasswordEncoding
+pub pdfrum_crypt::SecurityHandler::AesV4::encrypt_metadata: bool
+pub pdfrum_crypt::SecurityHandler::AesV4::key: pdfrum_crypt::SmallKey
+pub pdfrum_crypt::SecurityHandler::AesV4::owner_unlocked: bool
+pub pdfrum_crypt::SecurityHandler::AesV4::permissions: u32
+pub pdfrum_crypt::SecurityHandler::AesV4::revision: u8
+pub pdfrum_crypt::SecurityHandler::AesV4::strings_identity: bool
+pub pdfrum_crypt::SecurityHandler::AesV5
+pub pdfrum_crypt::SecurityHandler::AesV5::embedded_cipher: core::option::Option<pdfrum_crypt::Cipher>
+pub pdfrum_crypt::SecurityHandler::AesV5::encoding: pdfrum_crypt::PasswordEncoding
+pub pdfrum_crypt::SecurityHandler::AesV5::encrypt_metadata: bool
+pub pdfrum_crypt::SecurityHandler::AesV5::key: alloc::boxed::Box<[u8; 32]>
+pub pdfrum_crypt::SecurityHandler::AesV5::owner_unlocked: bool
+pub pdfrum_crypt::SecurityHandler::AesV5::permissions: u32
+pub pdfrum_crypt::SecurityHandler::AesV5::revision: u8
+pub pdfrum_crypt::SecurityHandler::AesV5::strings_identity: bool
+pub pdfrum_crypt::SecurityHandler::Identity
+pub pdfrum_crypt::SecurityHandler::Rc4V2
+pub pdfrum_crypt::SecurityHandler::Rc4V2::embedded_cipher: core::option::Option<pdfrum_crypt::Cipher>
+pub pdfrum_crypt::SecurityHandler::Rc4V2::encoding: pdfrum_crypt::PasswordEncoding
+pub pdfrum_crypt::SecurityHandler::Rc4V2::encrypt_metadata: bool
+pub pdfrum_crypt::SecurityHandler::Rc4V2::key: pdfrum_crypt::SmallKey
+pub pdfrum_crypt::SecurityHandler::Rc4V2::owner_unlocked: bool
+pub pdfrum_crypt::SecurityHandler::Rc4V2::permissions: u32
+pub pdfrum_crypt::SecurityHandler::Rc4V2::revision: u8
+pub pdfrum_crypt::SecurityHandler::Rc4V2::strings_identity: bool
+impl pdfrum_crypt::SecurityHandler
+pub fn pdfrum_crypt::SecurityHandler::decrypt(&self, pdfrum_object::object::ObjRef, pdfrum_crypt::CryptClass, &[u8]) -> alloc::vec::Vec<u8>
+pub fn pdfrum_crypt::SecurityHandler::embedded_cipher(&self) -> core::option::Option<pdfrum_crypt::Cipher>
+pub fn pdfrum_crypt::SecurityHandler::encrypt(&self, pdfrum_object::object::ObjRef, pdfrum_crypt::CryptClass, pdfrum_crypt::Iv, &[u8]) -> alloc::vec::Vec<u8>
+pub fn pdfrum_crypt::SecurityHandler::encrypt_metadata(&self) -> bool
+pub fn pdfrum_crypt::SecurityHandler::from_encrypt_dict(&pdfrum_object::dict::Dict, &[u8], &[u8], &impl pdfrum_object::resolve::Resolve) -> core::result::Result<Self, pdfrum_crypt::Error>
+pub fn pdfrum_crypt::SecurityHandler::owner_unlocked(&self) -> bool
+pub fn pdfrum_crypt::SecurityHandler::password_encoding(&self) -> pdfrum_crypt::PasswordEncoding
+pub fn pdfrum_crypt::SecurityHandler::permissions(&self, bool) -> u32
+pub fn pdfrum_crypt::SecurityHandler::revision(&self) -> u8
+pub const fn pdfrum_crypt::SecurityHandler::strings_identity(&self) -> bool
+pub struct pdfrum_crypt::EncryptParams
+pub pdfrum_crypt::EncryptParams::cipher: pdfrum_crypt::Cipher
+pub pdfrum_crypt::EncryptParams::embedded_cipher: core::option::Option<pdfrum_crypt::Cipher>
+pub pdfrum_crypt::EncryptParams::encrypt_metadata: bool
+pub pdfrum_crypt::EncryptParams::key_len: usize
+pub pdfrum_crypt::EncryptParams::o: alloc::boxed::Box<[u8]>
+pub pdfrum_crypt::EncryptParams::oe: alloc::boxed::Box<[u8]>
+pub pdfrum_crypt::EncryptParams::permissions: u32
+pub pdfrum_crypt::EncryptParams::perms: alloc::boxed::Box<[u8]>
+pub pdfrum_crypt::EncryptParams::revision: i64
+pub pdfrum_crypt::EncryptParams::string_cipher: pdfrum_crypt::Cipher
+pub pdfrum_crypt::EncryptParams::u: alloc::boxed::Box<[u8]>
+pub pdfrum_crypt::EncryptParams::ue: alloc::boxed::Box<[u8]>
+pub pdfrum_crypt::EncryptParams::version: i64
+pub struct pdfrum_crypt::Iv(pub [u8; 16])
+impl pdfrum_crypt::Iv
+pub const fn pdfrum_crypt::Iv::bytes(&self) -> &[u8; 16]
+pub struct pdfrum_crypt::SmallKey
+impl pdfrum_crypt::SmallKey
+pub const pdfrum_crypt::SmallKey::MAX_LEN: usize
+pub fn pdfrum_crypt::SmallKey::bytes(&self) -> &[u8]
+pub fn pdfrum_crypt::SmallKey::is_empty(&self) -> bool
+pub fn pdfrum_crypt::SmallKey::len(&self) -> usize
+impl core::fmt::Debug for pdfrum_crypt::SmallKey
+pub fn pdfrum_crypt::SmallKey::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub const pdfrum_crypt::PAD: [u8; 32]
+pub fn pdfrum_crypt::is_signature_dict(&pdfrum_object::dict::Dict) -> bool
+pub fn pdfrum_crypt::parse_encrypt_dict(&pdfrum_object::dict::Dict, &impl pdfrum_object::resolve::Resolve) -> core::result::Result<pdfrum_crypt::EncryptParams, pdfrum_crypt::Error>
+pub fn pdfrum_crypt::rc4(&[u8], &[u8]) -> alloc::vec::Vec<u8>
+pub fn pdfrum_crypt::sha1(&[u8]) -> [u8; 20]

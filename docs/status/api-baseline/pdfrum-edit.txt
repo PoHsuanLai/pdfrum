@@ -1,0 +1,374 @@
+pub mod pdfrum_edit
+pub mod pdfrum_edit::content
+pub mod pdfrum_edit::content::apply
+pub fn pdfrum_edit::content::apply::apply_rewrite(&mut pdfrum_edit::EditDoc<'_>, pdfrum_object::object::ObjRef, &pdfrum_object::dict::Dict, &pdfrum_edit::content::regen::PageRewrite, &pdfrum_edit::content::apply::ShareCounts) -> alloc::collections::btree::map::BTreeMap<i32, i32>
+pub fn pdfrum_edit::content::apply::shared_objects(&pdfrum_edit::EditDoc<'_>) -> pdfrum_edit::content::apply::ShareCounts
+pub type pdfrum_edit::content::apply::ShareCounts = alloc::collections::btree::set::BTreeSet<u32>
+pub mod pdfrum_edit::content::emit
+pub struct pdfrum_edit::content::emit::GraphicsKey
+impl pdfrum_edit::content::emit::GraphicsKey
+pub fn pdfrum_edit::content::emit::GraphicsKey::of(&pdfrum_page::state::GraphicsState) -> core::option::Option<Self>
+pub fn pdfrum_edit::content::emit::GraphicsKey::to_dict(self) -> pdfrum_object::dict::Dict
+pub struct pdfrum_edit::content::emit::ResourceNames
+pub pdfrum_edit::content::emit::ResourceNames::ext_gstate: core::option::Option<pdfrum_object::name::Name>
+pub pdfrum_edit::content::emit::ResourceNames::font: core::option::Option<pdfrum_object::name::Name>
+pub pdfrum_edit::content::emit::ResourceNames::xobject: core::option::Option<pdfrum_object::name::Name>
+pub const pdfrum_edit::content::emit::DEFAULT_GRAPHICS: &str
+pub fn pdfrum_edit::content::emit::clip_rule(bool) -> pdfrum_page::ops::FillRule
+pub fn pdfrum_edit::content::emit::default_graphics() -> pdfrum_object::dict::Dict
+pub fn pdfrum_edit::content::emit::emit_object(&mut alloc::string::String, &pdfrum_page::page::PageObject, &pdfrum_edit::content::emit::ResourceNames) -> bool
+pub fn pdfrum_edit::content::emit::emit_page_objects(&mut alloc::string::String, &[pdfrum_page::page::PageObject], impl core::ops::function::Fn(&pdfrum_page::page::PageObject) -> pdfrum_edit::content::emit::ResourceNames) -> bool
+pub mod pdfrum_edit::content::regen
+pub enum pdfrum_edit::content::regen::ContentsShape
+pub pdfrum_edit::content::regen::ContentsShape::Absent
+pub pdfrum_edit::content::regen::ContentsShape::Array(alloc::vec::Vec<pdfrum_object::object::ObjRef>)
+pub pdfrum_edit::content::regen::ContentsShape::Single(pdfrum_object::object::ObjRef)
+impl pdfrum_edit::content::regen::ContentsShape
+pub fn pdfrum_edit::content::regen::ContentsShape::elements(&self) -> alloc::vec::Vec<pdfrum_object::object::ObjRef>
+pub fn pdfrum_edit::content::regen::ContentsShape::read(&pdfrum_object::dict::Dict, &impl pdfrum_object::resolve::Resolve) -> Self
+pub fn pdfrum_edit::content::regen::ContentsShape::to_object(&self, core::option::Option<pdfrum_object::object::ObjRef>) -> core::option::Option<pdfrum_object::object::Object>
+pub fn pdfrum_edit::content::regen::ContentsShape::with_added(&self, pdfrum_object::object::ObjRef) -> (usize, Self)
+pub fn pdfrum_edit::content::regen::ContentsShape::with_removed(&self, &alloc::collections::btree::set::BTreeSet<usize>) -> (Self, alloc::collections::btree::map::BTreeMap<i32, i32>)
+pub struct pdfrum_edit::content::regen::PageRewrite
+pub pdfrum_edit::content::regen::PageRewrite::resources: pdfrum_object::dict::Dict
+pub pdfrum_edit::content::regen::PageRewrite::streams: alloc::vec::Vec<pdfrum_edit::content::regen::Regenerated>
+pub struct pdfrum_edit::content::regen::Regenerated
+pub pdfrum_edit::content::regen::Regenerated::bytes: alloc::string::String
+pub pdfrum_edit::content::regen::Regenerated::stream: i32
+pub fn pdfrum_edit::content::regen::fresh_state() -> pdfrum_page::state::GraphicsState
+pub fn pdfrum_edit::content::regen::regenerate(&pdfrum_page::page::Page, &pdfrum_object::dict::Dict, &impl pdfrum_object::resolve::Resolve) -> core::option::Option<pdfrum_edit::content::regen::PageRewrite>
+pub mod pdfrum_edit::content::resource
+pub struct pdfrum_edit::content::resource::ResourceTable
+impl pdfrum_edit::content::resource::ResourceTable
+pub fn pdfrum_edit::content::resource::ResourceTable::load(&pdfrum_object::dict::Dict, &impl pdfrum_object::resolve::Resolve) -> Self
+pub fn pdfrum_edit::content::resource::ResourceTable::name_of(&self, &str, pdfrum_object::object::ObjRef) -> core::option::Option<pdfrum_object::name::Name>
+pub fn pdfrum_edit::content::resource::ResourceTable::name_of_dict(&self, &str, &pdfrum_object::dict::Dict) -> core::option::Option<pdfrum_object::name::Name>
+pub fn pdfrum_edit::content::resource::ResourceTable::realize(&mut self, &str, pdfrum_object::object::ObjRef) -> pdfrum_object::name::Name
+pub fn pdfrum_edit::content::resource::ResourceTable::realize_dict(&mut self, &str, &pdfrum_object::dict::Dict) -> pdfrum_object::name::Name
+pub fn pdfrum_edit::content::resource::ResourceTable::sweep(&mut self, &alloc::collections::btree::map::BTreeMap<alloc::string::String, alloc::collections::btree::set::BTreeSet<pdfrum_object::name::Name>>)
+pub fn pdfrum_edit::content::resource::ResourceTable::to_dict(&self, &pdfrum_object::dict::Dict) -> pdfrum_object::dict::Dict
+pub const pdfrum_edit::content::resource::CATEGORIES: [&str; 3]
+pub enum pdfrum_edit::content::ContentsShape
+pub pdfrum_edit::content::ContentsShape::Absent
+pub pdfrum_edit::content::ContentsShape::Array(alloc::vec::Vec<pdfrum_object::object::ObjRef>)
+pub pdfrum_edit::content::ContentsShape::Single(pdfrum_object::object::ObjRef)
+impl pdfrum_edit::content::regen::ContentsShape
+pub fn pdfrum_edit::content::regen::ContentsShape::elements(&self) -> alloc::vec::Vec<pdfrum_object::object::ObjRef>
+pub fn pdfrum_edit::content::regen::ContentsShape::read(&pdfrum_object::dict::Dict, &impl pdfrum_object::resolve::Resolve) -> Self
+pub fn pdfrum_edit::content::regen::ContentsShape::to_object(&self, core::option::Option<pdfrum_object::object::ObjRef>) -> core::option::Option<pdfrum_object::object::Object>
+pub fn pdfrum_edit::content::regen::ContentsShape::with_added(&self, pdfrum_object::object::ObjRef) -> (usize, Self)
+pub fn pdfrum_edit::content::regen::ContentsShape::with_removed(&self, &alloc::collections::btree::set::BTreeSet<usize>) -> (Self, alloc::collections::btree::map::BTreeMap<i32, i32>)
+pub struct pdfrum_edit::content::GraphicsKey
+impl pdfrum_edit::content::emit::GraphicsKey
+pub fn pdfrum_edit::content::emit::GraphicsKey::of(&pdfrum_page::state::GraphicsState) -> core::option::Option<Self>
+pub fn pdfrum_edit::content::emit::GraphicsKey::to_dict(self) -> pdfrum_object::dict::Dict
+pub struct pdfrum_edit::content::PageRewrite
+pub pdfrum_edit::content::PageRewrite::resources: pdfrum_object::dict::Dict
+pub pdfrum_edit::content::PageRewrite::streams: alloc::vec::Vec<pdfrum_edit::content::regen::Regenerated>
+pub struct pdfrum_edit::content::Regenerated
+pub pdfrum_edit::content::Regenerated::bytes: alloc::string::String
+pub pdfrum_edit::content::Regenerated::stream: i32
+pub struct pdfrum_edit::content::ResourceTable
+impl pdfrum_edit::content::resource::ResourceTable
+pub fn pdfrum_edit::content::resource::ResourceTable::load(&pdfrum_object::dict::Dict, &impl pdfrum_object::resolve::Resolve) -> Self
+pub fn pdfrum_edit::content::resource::ResourceTable::name_of(&self, &str, pdfrum_object::object::ObjRef) -> core::option::Option<pdfrum_object::name::Name>
+pub fn pdfrum_edit::content::resource::ResourceTable::name_of_dict(&self, &str, &pdfrum_object::dict::Dict) -> core::option::Option<pdfrum_object::name::Name>
+pub fn pdfrum_edit::content::resource::ResourceTable::realize(&mut self, &str, pdfrum_object::object::ObjRef) -> pdfrum_object::name::Name
+pub fn pdfrum_edit::content::resource::ResourceTable::realize_dict(&mut self, &str, &pdfrum_object::dict::Dict) -> pdfrum_object::name::Name
+pub fn pdfrum_edit::content::resource::ResourceTable::sweep(&mut self, &alloc::collections::btree::map::BTreeMap<alloc::string::String, alloc::collections::btree::set::BTreeSet<pdfrum_object::name::Name>>)
+pub fn pdfrum_edit::content::resource::ResourceTable::to_dict(&self, &pdfrum_object::dict::Dict) -> pdfrum_object::dict::Dict
+pub const pdfrum_edit::content::DEFAULT_GRAPHICS: &str
+pub fn pdfrum_edit::content::apply_rewrite(&mut pdfrum_edit::EditDoc<'_>, pdfrum_object::object::ObjRef, &pdfrum_object::dict::Dict, &pdfrum_edit::content::regen::PageRewrite, &pdfrum_edit::content::apply::ShareCounts) -> alloc::collections::btree::map::BTreeMap<i32, i32>
+pub fn pdfrum_edit::content::emit_mark_diff(&mut alloc::string::String, &pdfrum_page::state::marks::ContentMarks, &pdfrum_page::state::marks::ContentMarks, pdfrum_edit::content::PropertyNamer<'_>) -> usize
+pub fn pdfrum_edit::content::emit_object(&mut alloc::string::String, &pdfrum_page::page::PageObject, &pdfrum_edit::content::emit::ResourceNames) -> bool
+pub fn pdfrum_edit::content::emit_page_objects(&mut alloc::string::String, &[pdfrum_page::page::PageObject], impl core::ops::function::Fn(&pdfrum_page::page::PageObject) -> pdfrum_edit::content::emit::ResourceNames) -> bool
+pub fn pdfrum_edit::content::emit_path_points(&mut alloc::string::String, &kurbo::bezpath::BezPath)
+pub fn pdfrum_edit::content::emit_text_body(&mut alloc::string::String, &pdfrum_page::page::TextObject, &pdfrum_object::name::Name) -> bool
+pub fn pdfrum_edit::content::finish_marks(&mut alloc::string::String, usize)
+pub fn pdfrum_edit::content::paint_operator(pdfrum_page::ops::FillRule, bool) -> &'static str
+pub fn pdfrum_edit::content::regenerate(&pdfrum_page::page::Page, &pdfrum_object::dict::Dict, &impl pdfrum_object::resolve::Resolve) -> core::option::Option<pdfrum_edit::content::regen::PageRewrite>
+pub fn pdfrum_edit::content::shared_objects(&pdfrum_edit::EditDoc<'_>) -> pdfrum_edit::content::apply::ShareCounts
+pub fn pdfrum_edit::content::write_float(&mut alloc::string::String, f32)
+pub fn pdfrum_edit::content::write_matrix(&mut alloc::string::String, kurbo::affine::Affine)
+pub fn pdfrum_edit::content::write_point(&mut alloc::string::String, kurbo::point::Point)
+pub fn pdfrum_edit::content::write_rect(&mut alloc::string::String, kurbo::rect::Rect)
+pub type pdfrum_edit::content::PropertyNamer<'a> = &'a dyn core::ops::function::Fn(&pdfrum_page::state::marks::Mark) -> core::option::Option<pdfrum_object::name::Name>
+pub type pdfrum_edit::content::ShareCounts = alloc::collections::btree::set::BTreeSet<u32>
+pub mod pdfrum_edit::encrypt
+pub struct pdfrum_edit::encrypt::Encryptor<'a>
+impl<'a> pdfrum_edit::encrypt::Encryptor<'a>
+pub fn pdfrum_edit::encrypt::Encryptor<'a>::encrypt(&self, pdfrum_crypt::object::CryptClass, &[u8]) -> alloc::vec::Vec<u8>
+pub fn pdfrum_edit::encrypt::Encryptor<'a>::encrypts_metadata(&self) -> bool
+pub const fn pdfrum_edit::encrypt::Encryptor<'a>::new(&'a pdfrum_crypt::SecurityHandler, &'a pdfrum_edit::encrypt::IvSource, u32) -> Self
+pub struct pdfrum_edit::encrypt::IvSource
+impl pdfrum_edit::encrypt::IvSource
+pub fn pdfrum_edit::encrypt::IvSource::from_document(&[u8]) -> Self
+pub const fn pdfrum_edit::encrypt::IvSource::from_seed(u64) -> Self
+pub struct pdfrum_edit::encrypt::Security<'a>
+pub pdfrum_edit::encrypt::Security::encrypt_object: core::option::Option<u32>
+pub pdfrum_edit::encrypt::Security::handler: &'a pdfrum_crypt::SecurityHandler
+pub pdfrum_edit::encrypt::Security::ivs: pdfrum_edit::encrypt::IvSource
+impl pdfrum_edit::encrypt::Security<'_>
+pub fn pdfrum_edit::encrypt::Security<'_>::for_object(&self, u32) -> core::option::Option<pdfrum_edit::encrypt::Encryptor<'_>>
+pub mod pdfrum_edit::font
+pub struct pdfrum_edit::font::GidMap
+impl pdfrum_edit::font::GidMap
+pub fn pdfrum_edit::font::GidMap::from_pairs(impl core::iter::traits::collect::IntoIterator<Item = (u16, u16)>) -> Self
+pub fn pdfrum_edit::font::GidMap::get(&self, u16) -> core::option::Option<u16>
+pub fn pdfrum_edit::font::GidMap::is_empty(&self) -> bool
+pub fn pdfrum_edit::font::GidMap::len(&self) -> usize
+pub fn pdfrum_edit::font::GidMap::pairs(&self) -> impl core::iter::traits::iterator::Iterator<Item = (u16, u16)> + '_
+pub struct pdfrum_edit::font::Subsetted
+pub pdfrum_edit::font::Subsetted::bytes: alloc::vec::Vec<u8>
+pub pdfrum_edit::font::Subsetted::gid_map: pdfrum_edit::font::GidMap
+pub fn pdfrum_edit::font::is_opentype_cff(&[u8]) -> bool
+pub fn pdfrum_edit::font::strip_subset_prefix(&[u8]) -> &[u8]
+pub fn pdfrum_edit::font::subset(&[u8], &[u16]) -> core::result::Result<pdfrum_edit::font::Subsetted, pdfrum_edit::Error>
+pub fn pdfrum_edit::font::subset_name(&[u8], [u8; 6]) -> alloc::vec::Vec<u8>
+pub fn pdfrum_edit::font::subset_tag(pdfrum_edit::write::id::IdSource) -> [u8; 6]
+pub fn pdfrum_edit::font::to_unicode_cmap(&alloc::collections::btree::map::BTreeMap<u32, alloc::vec::Vec<u32>>) -> alloc::vec::Vec<u8>
+pub fn pdfrum_edit::font::widths_array(&alloc::collections::btree::map::BTreeMap<u32, f32>) -> pdfrum_object::array::Array
+pub mod pdfrum_edit::import
+pub struct pdfrum_edit::import::ImportOptions
+pub pdfrum_edit::import::ImportOptions::at: u32
+pub pdfrum_edit::import::ImportOptions::viewer_preferences: bool
+pub struct pdfrum_edit::import::NUpOptions
+pub pdfrum_edit::import::NUpOptions::grid: (u32, u32)
+pub pdfrum_edit::import::NUpOptions::sheet: (f32, f32)
+impl core::default::Default for pdfrum_edit::import::NUpOptions
+pub fn pdfrum_edit::import::NUpOptions::default() -> Self
+pub struct pdfrum_edit::import::NupGrid
+pub pdfrum_edit::import::NupGrid::sheet_height: f32
+pub pdfrum_edit::import::NupGrid::sheet_width: f32
+pub pdfrum_edit::import::NupGrid::x: u32
+pub pdfrum_edit::import::NupGrid::y: u32
+impl pdfrum_edit::import::NupGrid
+pub fn pdfrum_edit::import::NupGrid::edit(self, u32, f32, f32) -> pdfrum_edit::import::PageEdit
+pub fn pdfrum_edit::import::NupGrid::per_sheet(self) -> u32
+pub fn pdfrum_edit::import::NupGrid::sheet_count(self, usize) -> usize
+pub fn pdfrum_edit::import::NupGrid::slot(self, u32) -> (u32, u32)
+pub fn pdfrum_edit::import::NupGrid::slot_size(self) -> (f32, f32)
+pub struct pdfrum_edit::import::ObjectMap
+impl pdfrum_edit::import::ObjectMap
+pub fn pdfrum_edit::import::ObjectMap::get(&self, u32) -> core::option::Option<u32>
+pub fn pdfrum_edit::import::ObjectMap::is_empty(&self) -> bool
+pub fn pdfrum_edit::import::ObjectMap::len(&self) -> usize
+pub fn pdfrum_edit::import::ObjectMap::new() -> Self
+pub fn pdfrum_edit::import::ObjectMap::record(&mut self, u32, u32)
+pub struct pdfrum_edit::import::PageEdit
+pub pdfrum_edit::import::PageEdit::scale: f32
+pub pdfrum_edit::import::PageEdit::start_x: f32
+pub pdfrum_edit::import::PageEdit::start_y: f32
+impl pdfrum_edit::import::PageEdit
+pub fn pdfrum_edit::import::PageEdit::matrix(self) -> kurbo::affine::Affine
+pub struct pdfrum_edit::import::PageRange(_)
+impl pdfrum_edit::PageRange
+pub fn pdfrum_edit::PageRange::all(u32) -> Self
+pub fn pdfrum_edit::PageRange::indices(&self) -> &[u32]
+pub fn pdfrum_edit::PageRange::is_empty(&self) -> bool
+pub fn pdfrum_edit::PageRange::len(&self) -> usize
+pub fn pdfrum_edit::PageRange::of(impl core::iter::traits::collect::IntoIterator<Item = u32>) -> Self
+pub fn pdfrum_edit::PageRange::parse(&str, u32) -> core::result::Result<Self, pdfrum_edit::Error>
+pub fn pdfrum_edit::import::array_is_flat(&pdfrum_object::array::Array) -> bool
+pub fn pdfrum_edit::import::copy_inheritable(&mut pdfrum_object::dict::Dict, &pdfrum_object::dict::Dict, &pdfrum_object::name::Name, &impl pdfrum_object::resolve::Resolve) -> bool
+pub fn pdfrum_edit::import::filtered_viewer_preferences(&pdfrum_object::dict::Dict, &impl pdfrum_object::resolve::Resolve) -> core::option::Option<pdfrum_object::dict::Dict>
+pub fn pdfrum_edit::import::import_pages(&mut pdfrum_edit::EditDoc<'_>, &pdfrum_parser::doc::Document, &pdfrum_edit::PageRange, &pdfrum_edit::import::ImportOptions) -> core::result::Result<(), pdfrum_edit::Error>
+pub fn pdfrum_edit::import::inheritable(&pdfrum_object::dict::Dict, &pdfrum_object::name::Name, &impl pdfrum_object::resolve::Resolve) -> core::option::Option<pdfrum_object::object::Object>
+pub fn pdfrum_edit::import::init_dest(&mut pdfrum_edit::EditDoc<'_>) -> core::result::Result<u32, pdfrum_edit::Error>
+pub fn pdfrum_edit::import::is_copyable(&pdfrum_object::object::Object) -> bool
+pub fn pdfrum_edit::import::n_page_to_one(&mut pdfrum_edit::EditDoc<'_>, &pdfrum_parser::doc::Document, &pdfrum_edit::PageRange, &pdfrum_edit::import::NUpOptions) -> core::result::Result<(), pdfrum_edit::Error>
+pub fn pdfrum_edit::import::sub_page_fragment(&str, pdfrum_edit::import::PageEdit) -> alloc::string::String
+pub mod pdfrum_edit::write
+pub mod pdfrum_edit::write::id
+pub enum pdfrum_edit::write::id::IdSource
+pub pdfrum_edit::write::id::IdSource::Fixed([u8; 16])
+pub pdfrum_edit::write::id::IdSource::Random
+impl pdfrum_edit::write::id::IdSource
+pub fn pdfrum_edit::write::id::IdSource::tag_byte(self, u64) -> u8
+pub struct pdfrum_edit::write::id::FileId
+pub pdfrum_edit::write::id::FileId::array: pdfrum_object::array::Array
+pub pdfrum_edit::write::id::FileId::rekeyed: bool
+pub struct pdfrum_edit::write::id::IdContext<'a>
+pub pdfrum_edit::write::id::IdContext::encrypt: core::option::Option<&'a pdfrum_object::dict::Dict>
+pub pdfrum_edit::write::id::IdContext::incremental: bool
+pub pdfrum_edit::write::id::IdContext::old: core::option::Option<&'a pdfrum_object::array::Array>
+pub fn pdfrum_edit::write::id::build(pdfrum_edit::write::id::IdContext<'_>, pdfrum_edit::write::id::IdSource) -> pdfrum_edit::write::id::FileId
+pub mod pdfrum_edit::write::object
+pub enum pdfrum_edit::write::object::Exempt
+pub pdfrum_edit::write::object::Exempt::No
+pub pdfrum_edit::write::object::Exempt::Yes
+pub fn pdfrum_edit::write::object::write_dict(&mut alloc::vec::Vec<u8>, &pdfrum_object::dict::Dict, core::option::Option<&pdfrum_edit::encrypt::Encryptor<'_>>)
+pub fn pdfrum_edit::write::object::write_indirect(&mut alloc::vec::Vec<u8>, u32, &pdfrum_object::object::Object, core::option::Option<&pdfrum_edit::encrypt::Encryptor<'_>>)
+pub fn pdfrum_edit::write::object::write_name(&mut alloc::vec::Vec<u8>, &pdfrum_object::name::Name)
+pub fn pdfrum_edit::write::object::write_object(&mut alloc::vec::Vec<u8>, &pdfrum_object::object::Object, core::option::Option<&pdfrum_edit::encrypt::Encryptor<'_>>)
+pub mod pdfrum_edit::write::reach
+pub struct pdfrum_edit::write::reach::ReachCounts
+impl pdfrum_edit::write::reach::ReachCounts
+pub fn pdfrum_edit::write::reach::ReachCounts::is_reachable(&self, u32) -> bool
+pub fn pdfrum_edit::write::reach::ReachCounts::is_shared(&self, u32) -> bool
+pub fn pdfrum_edit::write::reach::ReachCounts::multiply_referenced(&self) -> alloc::collections::btree::set::BTreeSet<u32>
+pub fn pdfrum_edit::write::reach::ReachCounts::reachable(&self) -> alloc::collections::btree::set::BTreeSet<u32>
+pub const pdfrum_edit::write::reach::SUPPRESSED_TRAILER_KEYS: [&pdfrum_object::name::Name; 11]
+pub fn pdfrum_edit::write::reach::walk(&pdfrum_object::dict::Dict, u32, &impl pdfrum_object::resolve::Resolve) -> pdfrum_edit::write::reach::ReachCounts
+pub mod pdfrum_edit::write::stream
+pub struct pdfrum_edit::write::stream::Encoded
+pub pdfrum_edit::write::stream::Encoded::data: alloc::vec::Vec<u8>
+pub pdfrum_edit::write::stream::Encoded::dict: pdfrum_object::dict::Dict
+pub fn pdfrum_edit::write::stream::encode(&pdfrum_object::stream::Stream, core::option::Option<&pdfrum_edit::encrypt::Encryptor<'_>>) -> pdfrum_edit::write::stream::Encoded
+pub mod pdfrum_edit::write::trailer
+pub struct pdfrum_edit::write::trailer::TrailerParts<'a>
+pub pdfrum_edit::write::trailer::TrailerParts::encrypt: core::option::Option<u32>
+pub pdfrum_edit::write::trailer::TrailerParts::id: &'a pdfrum_object::array::Array
+pub pdfrum_edit::write::trailer::TrailerParts::last_object_number: u32
+pub pdfrum_edit::write::trailer::TrailerParts::prev: core::option::Option<u64>
+pub pdfrum_edit::write::trailer::TrailerParts::source: &'a pdfrum_object::dict::Dict
+pub fn pdfrum_edit::write::trailer::build(pdfrum_edit::write::trailer::TrailerParts<'_>) -> pdfrum_object::dict::Dict
+pub fn pdfrum_edit::write::trailer::from_scratch(u32, core::option::Option<u32>) -> pdfrum_object::dict::Dict
+pub fn pdfrum_edit::write::trailer::is_suppressed(&pdfrum_object::name::Name) -> bool
+pub fn pdfrum_edit::write::trailer::write_classic(&mut alloc::vec::Vec<u8>, &pdfrum_object::dict::Dict)
+pub fn pdfrum_edit::write::trailer::write_stream(&mut alloc::vec::Vec<u8>, u32, &pdfrum_object::dict::Dict, &pdfrum_edit::write::xref::ObjectOffsets, &[u32])
+pub fn pdfrum_edit::write::trailer::write_tail(&mut alloc::vec::Vec<u8>, u64)
+pub mod pdfrum_edit::write::xref
+pub struct pdfrum_edit::write::xref::ObjectOffsets(_)
+impl pdfrum_edit::write::xref::ObjectOffsets
+pub fn pdfrum_edit::write::xref::ObjectOffsets::contains(&self, u32) -> bool
+pub fn pdfrum_edit::write::xref::ObjectOffsets::erase(&mut self, u32)
+pub fn pdfrum_edit::write::xref::ObjectOffsets::get(&self, u32) -> core::option::Option<u64>
+pub fn pdfrum_edit::write::xref::ObjectOffsets::is_empty(&self) -> bool
+pub fn pdfrum_edit::write::xref::ObjectOffsets::last(&self) -> u32
+pub fn pdfrum_edit::write::xref::ObjectOffsets::len(&self) -> usize
+pub fn pdfrum_edit::write::xref::ObjectOffsets::new() -> Self
+pub fn pdfrum_edit::write::xref::ObjectOffsets::numbers(&self) -> impl core::iter::traits::iterator::Iterator<Item = u32> + '_
+pub fn pdfrum_edit::write::xref::ObjectOffsets::set(&mut self, u32, u64)
+pub fn pdfrum_edit::write::xref::classic_delta(&mut alloc::vec::Vec<u8>, &pdfrum_edit::write::xref::ObjectOffsets, &[u32])
+pub fn pdfrum_edit::write::xref::classic_full(&mut alloc::vec::Vec<u8>, &pdfrum_edit::write::xref::ObjectOffsets, u32)
+pub fn pdfrum_edit::write::xref::stream_record(&mut alloc::vec::Vec<u8>, u64)
+pub enum pdfrum_edit::write::SaveMode
+pub pdfrum_edit::write::SaveMode::Full
+pub pdfrum_edit::write::SaveMode::Incremental
+pub struct pdfrum_edit::write::SaveOptions
+pub pdfrum_edit::write::SaveOptions::id_source: pdfrum_edit::write::id::IdSource
+pub pdfrum_edit::write::SaveOptions::keep_original: bool
+pub pdfrum_edit::write::SaveOptions::mode: pdfrum_edit::write::SaveMode
+pub pdfrum_edit::write::SaveOptions::remove_security: bool
+pub pdfrum_edit::write::SaveOptions::subset_new_fonts: bool
+pub pdfrum_edit::write::SaveOptions::version: core::option::Option<u8>
+impl core::default::Default for pdfrum_edit::write::SaveOptions
+pub fn pdfrum_edit::write::SaveOptions::default() -> Self
+pub fn pdfrum_edit::write::save(&pdfrum_edit::EditDoc<'_>, &pdfrum_edit::write::SaveOptions, &mut impl core::io::write::Write) -> core::result::Result<(), pdfrum_edit::Error>
+pub fn pdfrum_edit::write::write_header(&mut alloc::vec::Vec<u8>, u8, u8)
+pub enum pdfrum_edit::ContentsShape
+pub pdfrum_edit::ContentsShape::Absent
+pub pdfrum_edit::ContentsShape::Array(alloc::vec::Vec<pdfrum_object::object::ObjRef>)
+pub pdfrum_edit::ContentsShape::Single(pdfrum_object::object::ObjRef)
+impl pdfrum_edit::content::regen::ContentsShape
+pub fn pdfrum_edit::content::regen::ContentsShape::elements(&self) -> alloc::vec::Vec<pdfrum_object::object::ObjRef>
+pub fn pdfrum_edit::content::regen::ContentsShape::read(&pdfrum_object::dict::Dict, &impl pdfrum_object::resolve::Resolve) -> Self
+pub fn pdfrum_edit::content::regen::ContentsShape::to_object(&self, core::option::Option<pdfrum_object::object::ObjRef>) -> core::option::Option<pdfrum_object::object::Object>
+pub fn pdfrum_edit::content::regen::ContentsShape::with_added(&self, pdfrum_object::object::ObjRef) -> (usize, Self)
+pub fn pdfrum_edit::content::regen::ContentsShape::with_removed(&self, &alloc::collections::btree::set::BTreeSet<usize>) -> (Self, alloc::collections::btree::map::BTreeMap<i32, i32>)
+pub enum pdfrum_edit::Error
+pub pdfrum_edit::Error::BadNupParams
+pub pdfrum_edit::Error::BadPageRange
+pub pdfrum_edit::Error::EncryptedSaveUnsupported
+pub pdfrum_edit::Error::Io(core::io::error::Error)
+pub pdfrum_edit::Error::NoDestinationCatalog
+pub pdfrum_edit::Error::Object(pdfrum_object::error::Error)
+pub pdfrum_edit::Error::PageIndexOutOfRange(u32)
+pub pdfrum_edit::Error::Subset(alloc::string::String)
+pub enum pdfrum_edit::IdSource
+pub pdfrum_edit::IdSource::Fixed([u8; 16])
+pub pdfrum_edit::IdSource::Random
+impl pdfrum_edit::write::id::IdSource
+pub fn pdfrum_edit::write::id::IdSource::tag_byte(self, u64) -> u8
+pub enum pdfrum_edit::SaveMode
+pub pdfrum_edit::SaveMode::Full
+pub pdfrum_edit::SaveMode::Incremental
+pub struct pdfrum_edit::EditDoc<'a>
+impl<'a> pdfrum_edit::EditDoc<'a>
+pub fn pdfrum_edit::EditDoc<'a>::add(&mut self, pdfrum_object::object::Object) -> pdfrum_object::object::ObjRef
+pub fn pdfrum_edit::EditDoc<'a>::base(&self) -> &'a pdfrum_parser::doc::Document
+pub fn pdfrum_edit::EditDoc<'a>::edited(&self) -> impl core::iter::traits::iterator::Iterator<Item = (u32, &alloc::sync::Arc<pdfrum_object::object::Object>)>
+pub fn pdfrum_edit::EditDoc<'a>::is_edited(&self, u32) -> bool
+pub fn pdfrum_edit::EditDoc<'a>::is_removed(&self, u32) -> bool
+pub fn pdfrum_edit::EditDoc<'a>::last_object_number(&self) -> u32
+pub fn pdfrum_edit::EditDoc<'a>::new(&'a pdfrum_parser::doc::Document) -> Self
+pub fn pdfrum_edit::EditDoc<'a>::next_object_number(&self) -> u32
+pub fn pdfrum_edit::EditDoc<'a>::remove(&mut self, pdfrum_object::object::ObjRef)
+pub fn pdfrum_edit::EditDoc<'a>::replace(&mut self, pdfrum_object::object::ObjRef, pdfrum_object::object::Object)
+impl pdfrum_object::resolve::Resolve for pdfrum_edit::EditDoc<'_>
+pub fn pdfrum_edit::EditDoc<'_>::fetch(&self, pdfrum_object::object::ObjRef) -> core::result::Result<alloc::sync::Arc<pdfrum_object::object::Object>, pdfrum_object::error::Error>
+pub struct pdfrum_edit::Encryptor<'a>
+impl<'a> pdfrum_edit::encrypt::Encryptor<'a>
+pub fn pdfrum_edit::encrypt::Encryptor<'a>::encrypt(&self, pdfrum_crypt::object::CryptClass, &[u8]) -> alloc::vec::Vec<u8>
+pub fn pdfrum_edit::encrypt::Encryptor<'a>::encrypts_metadata(&self) -> bool
+pub const fn pdfrum_edit::encrypt::Encryptor<'a>::new(&'a pdfrum_crypt::SecurityHandler, &'a pdfrum_edit::encrypt::IvSource, u32) -> Self
+pub struct pdfrum_edit::FileId
+pub pdfrum_edit::FileId::array: pdfrum_object::array::Array
+pub pdfrum_edit::FileId::rekeyed: bool
+pub struct pdfrum_edit::GidMap
+impl pdfrum_edit::font::GidMap
+pub fn pdfrum_edit::font::GidMap::from_pairs(impl core::iter::traits::collect::IntoIterator<Item = (u16, u16)>) -> Self
+pub fn pdfrum_edit::font::GidMap::get(&self, u16) -> core::option::Option<u16>
+pub fn pdfrum_edit::font::GidMap::is_empty(&self) -> bool
+pub fn pdfrum_edit::font::GidMap::len(&self) -> usize
+pub fn pdfrum_edit::font::GidMap::pairs(&self) -> impl core::iter::traits::iterator::Iterator<Item = (u16, u16)> + '_
+pub struct pdfrum_edit::ImportOptions
+pub pdfrum_edit::ImportOptions::at: u32
+pub pdfrum_edit::ImportOptions::viewer_preferences: bool
+pub struct pdfrum_edit::IvSource
+impl pdfrum_edit::encrypt::IvSource
+pub fn pdfrum_edit::encrypt::IvSource::from_document(&[u8]) -> Self
+pub const fn pdfrum_edit::encrypt::IvSource::from_seed(u64) -> Self
+pub struct pdfrum_edit::NUpOptions
+pub pdfrum_edit::NUpOptions::grid: (u32, u32)
+pub pdfrum_edit::NUpOptions::sheet: (f32, f32)
+impl core::default::Default for pdfrum_edit::import::NUpOptions
+pub fn pdfrum_edit::import::NUpOptions::default() -> Self
+pub struct pdfrum_edit::PageRange(_)
+impl pdfrum_edit::PageRange
+pub fn pdfrum_edit::PageRange::all(u32) -> Self
+pub fn pdfrum_edit::PageRange::indices(&self) -> &[u32]
+pub fn pdfrum_edit::PageRange::is_empty(&self) -> bool
+pub fn pdfrum_edit::PageRange::len(&self) -> usize
+pub fn pdfrum_edit::PageRange::of(impl core::iter::traits::collect::IntoIterator<Item = u32>) -> Self
+pub fn pdfrum_edit::PageRange::parse(&str, u32) -> core::result::Result<Self, pdfrum_edit::Error>
+pub struct pdfrum_edit::PageRewrite
+pub pdfrum_edit::PageRewrite::resources: pdfrum_object::dict::Dict
+pub pdfrum_edit::PageRewrite::streams: alloc::vec::Vec<pdfrum_edit::content::regen::Regenerated>
+pub struct pdfrum_edit::Regenerated
+pub pdfrum_edit::Regenerated::bytes: alloc::string::String
+pub pdfrum_edit::Regenerated::stream: i32
+pub struct pdfrum_edit::ResourceTable
+impl pdfrum_edit::content::resource::ResourceTable
+pub fn pdfrum_edit::content::resource::ResourceTable::load(&pdfrum_object::dict::Dict, &impl pdfrum_object::resolve::Resolve) -> Self
+pub fn pdfrum_edit::content::resource::ResourceTable::name_of(&self, &str, pdfrum_object::object::ObjRef) -> core::option::Option<pdfrum_object::name::Name>
+pub fn pdfrum_edit::content::resource::ResourceTable::name_of_dict(&self, &str, &pdfrum_object::dict::Dict) -> core::option::Option<pdfrum_object::name::Name>
+pub fn pdfrum_edit::content::resource::ResourceTable::realize(&mut self, &str, pdfrum_object::object::ObjRef) -> pdfrum_object::name::Name
+pub fn pdfrum_edit::content::resource::ResourceTable::realize_dict(&mut self, &str, &pdfrum_object::dict::Dict) -> pdfrum_object::name::Name
+pub fn pdfrum_edit::content::resource::ResourceTable::sweep(&mut self, &alloc::collections::btree::map::BTreeMap<alloc::string::String, alloc::collections::btree::set::BTreeSet<pdfrum_object::name::Name>>)
+pub fn pdfrum_edit::content::resource::ResourceTable::to_dict(&self, &pdfrum_object::dict::Dict) -> pdfrum_object::dict::Dict
+pub struct pdfrum_edit::SaveOptions
+pub pdfrum_edit::SaveOptions::id_source: pdfrum_edit::write::id::IdSource
+pub pdfrum_edit::SaveOptions::keep_original: bool
+pub pdfrum_edit::SaveOptions::mode: pdfrum_edit::write::SaveMode
+pub pdfrum_edit::SaveOptions::remove_security: bool
+pub pdfrum_edit::SaveOptions::subset_new_fonts: bool
+pub pdfrum_edit::SaveOptions::version: core::option::Option<u8>
+impl core::default::Default for pdfrum_edit::write::SaveOptions
+pub fn pdfrum_edit::write::SaveOptions::default() -> Self
+pub struct pdfrum_edit::Subsetted
+pub pdfrum_edit::Subsetted::bytes: alloc::vec::Vec<u8>
+pub pdfrum_edit::Subsetted::gid_map: pdfrum_edit::font::GidMap
+pub fn pdfrum_edit::apply_rewrite(&mut pdfrum_edit::EditDoc<'_>, pdfrum_object::object::ObjRef, &pdfrum_object::dict::Dict, &pdfrum_edit::content::regen::PageRewrite, &pdfrum_edit::content::apply::ShareCounts) -> alloc::collections::btree::map::BTreeMap<i32, i32>
+pub fn pdfrum_edit::import_pages(&mut pdfrum_edit::EditDoc<'_>, &pdfrum_parser::doc::Document, &pdfrum_edit::PageRange, &pdfrum_edit::import::ImportOptions) -> core::result::Result<(), pdfrum_edit::Error>
+pub fn pdfrum_edit::n_page_to_one(&mut pdfrum_edit::EditDoc<'_>, &pdfrum_parser::doc::Document, &pdfrum_edit::PageRange, &pdfrum_edit::import::NUpOptions) -> core::result::Result<(), pdfrum_edit::Error>
+pub fn pdfrum_edit::regenerate(&pdfrum_page::page::Page, &pdfrum_object::dict::Dict, &impl pdfrum_object::resolve::Resolve) -> core::option::Option<pdfrum_edit::content::regen::PageRewrite>
+pub fn pdfrum_edit::save(&pdfrum_edit::EditDoc<'_>, &pdfrum_edit::write::SaveOptions, &mut impl core::io::write::Write) -> core::result::Result<(), pdfrum_edit::Error>
+pub fn pdfrum_edit::shared_objects(&pdfrum_edit::EditDoc<'_>) -> pdfrum_edit::content::apply::ShareCounts
+pub fn pdfrum_edit::subset(&[u8], &[u16]) -> core::result::Result<pdfrum_edit::font::Subsetted, pdfrum_edit::Error>
+pub fn pdfrum_edit::write_float(&mut alloc::string::String, f32)
+pub fn pdfrum_edit::write_matrix(&mut alloc::string::String, kurbo::affine::Affine)
+pub fn pdfrum_edit::write_point(&mut alloc::string::String, kurbo::point::Point)
+pub fn pdfrum_edit::write_rect(&mut alloc::string::String, kurbo::rect::Rect)
+pub type pdfrum_edit::ShareCounts = alloc::collections::btree::set::BTreeSet<u32>

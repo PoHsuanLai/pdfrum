@@ -1,0 +1,1267 @@
+pub mod pdfrum_doc
+pub mod pdfrum_doc::annot
+pub mod pdfrum_doc::annot::appearance
+pub enum pdfrum_doc::annot::appearance::ApMode
+pub pdfrum_doc::annot::appearance::ApMode::Down
+pub pdfrum_doc::annot::appearance::ApMode::Normal
+pub pdfrum_doc::annot::appearance::ApMode::Rollover
+pub fn pdfrum_doc::annot::appearance::annot_ap<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, pdfrum_doc::annot::appearance::ApMode, bool, &R) -> core::option::Option<pdfrum_object::stream::Stream>
+pub fn pdfrum_doc::annot::appearance::annot_matrix(&pdfrum_doc::annot::Annotation, &pdfrum_object::dict::Dict, u8, kurbo::affine::Affine, &impl pdfrum_object::resolve::Resolve) -> kurbo::affine::Affine
+pub fn pdfrum_doc::annot::appearance::has_appearance<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> bool
+pub mod pdfrum_doc::annot::list
+pub struct pdfrum_doc::annot::list::AnnotList
+pub pdfrum_doc::annot::list::AnnotList::annots: alloc::vec::Vec<pdfrum_doc::annot::Annotation>
+pub pdfrum_doc::annot::list::AnnotList::popups: alloc::vec::Vec<(usize, pdfrum_doc::annot::Annotation)>
+pub pdfrum_doc::annot::list::AnnotList::source_indices: alloc::vec::Vec<usize>
+impl pdfrum_doc::annot::list::AnnotList
+pub fn pdfrum_doc::annot::list::AnnotList::load<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, f32, &R) -> pdfrum_doc::annot::list::AnnotList
+pub fn pdfrum_doc::annot::list::popup_appears_for(pdfrum_doc::annot::Subtype) -> bool
+pub mod pdfrum_doc::annot::quad
+pub fn pdfrum_doc::annot::quad::bounding_rect_from_quad_points(core::option::Option<&pdfrum_object::array::Array>) -> kurbo::rect::Rect
+pub fn pdfrum_doc::annot::quad::quad_point_count(core::option::Option<&pdfrum_object::array::Array>) -> usize
+pub fn pdfrum_doc::annot::quad::rect_from_quad_points(core::option::Option<&pdfrum_object::array::Array>, usize) -> kurbo::rect::Rect
+pub fn pdfrum_doc::annot::quad::rect_from_quad_points_array(&pdfrum_object::array::Array, usize) -> kurbo::rect::Rect
+pub enum pdfrum_doc::annot::ApMode
+pub pdfrum_doc::annot::ApMode::Down
+pub pdfrum_doc::annot::ApMode::Normal
+pub pdfrum_doc::annot::ApMode::Rollover
+pub enum pdfrum_doc::annot::Subtype
+pub pdfrum_doc::annot::Subtype::Caret
+pub pdfrum_doc::annot::Subtype::Circle
+pub pdfrum_doc::annot::Subtype::FileAttachment
+pub pdfrum_doc::annot::Subtype::FreeText
+pub pdfrum_doc::annot::Subtype::Highlight
+pub pdfrum_doc::annot::Subtype::Ink
+pub pdfrum_doc::annot::Subtype::Line
+pub pdfrum_doc::annot::Subtype::Link
+pub pdfrum_doc::annot::Subtype::Movie
+pub pdfrum_doc::annot::Subtype::PolyLine
+pub pdfrum_doc::annot::Subtype::Polygon
+pub pdfrum_doc::annot::Subtype::Popup
+pub pdfrum_doc::annot::Subtype::PrinterMark
+pub pdfrum_doc::annot::Subtype::Redact
+pub pdfrum_doc::annot::Subtype::RichMedia
+pub pdfrum_doc::annot::Subtype::Screen
+pub pdfrum_doc::annot::Subtype::Sound
+pub pdfrum_doc::annot::Subtype::Square
+pub pdfrum_doc::annot::Subtype::Squiggly
+pub pdfrum_doc::annot::Subtype::Stamp
+pub pdfrum_doc::annot::Subtype::StrikeOut
+pub pdfrum_doc::annot::Subtype::Text
+pub pdfrum_doc::annot::Subtype::ThreeD
+pub pdfrum_doc::annot::Subtype::TrapNet
+pub pdfrum_doc::annot::Subtype::Underline
+pub pdfrum_doc::annot::Subtype::Unknown
+pub pdfrum_doc::annot::Subtype::Watermark
+pub pdfrum_doc::annot::Subtype::Widget
+pub pdfrum_doc::annot::Subtype::XfaWidget
+impl pdfrum_doc::annot::Subtype
+pub fn pdfrum_doc::annot::Subtype::as_bytes(self) -> &'static [u8]
+pub fn pdfrum_doc::annot::Subtype::from_bytes(&[u8]) -> pdfrum_doc::annot::Subtype
+pub fn pdfrum_doc::annot::Subtype::has_attachment_points(self) -> bool
+pub fn pdfrum_doc::annot::Subtype::is_text_markup(self) -> bool
+pub struct pdfrum_doc::annot::AnnotFlags(pub i64)
+impl pdfrum_doc::annot::AnnotFlags
+pub fn pdfrum_doc::annot::AnnotFlags::is_hidden(self) -> bool
+pub fn pdfrum_doc::annot::AnnotFlags::names(self) -> alloc::vec::Vec<&'static str>
+pub fn pdfrum_doc::annot::AnnotFlags::no_rotate(self) -> bool
+pub fn pdfrum_doc::annot::AnnotFlags::no_view(self) -> bool
+pub fn pdfrum_doc::annot::AnnotFlags::prints(self) -> bool
+pub struct pdfrum_doc::annot::AnnotList
+pub pdfrum_doc::annot::AnnotList::annots: alloc::vec::Vec<pdfrum_doc::annot::Annotation>
+pub pdfrum_doc::annot::AnnotList::popups: alloc::vec::Vec<(usize, pdfrum_doc::annot::Annotation)>
+pub pdfrum_doc::annot::AnnotList::source_indices: alloc::vec::Vec<usize>
+impl pdfrum_doc::annot::list::AnnotList
+pub fn pdfrum_doc::annot::list::AnnotList::load<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, f32, &R) -> pdfrum_doc::annot::list::AnnotList
+pub struct pdfrum_doc::annot::Annotation
+pub pdfrum_doc::annot::Annotation::dict: pdfrum_object::dict::Dict
+pub pdfrum_doc::annot::Annotation::flags: pdfrum_doc::annot::AnnotFlags
+pub pdfrum_doc::annot::Annotation::quad_points: core::option::Option<pdfrum_object::array::Array>
+pub pdfrum_doc::annot::Annotation::rect: kurbo::rect::Rect
+pub pdfrum_doc::annot::Annotation::subtype: pdfrum_doc::annot::Subtype
+impl pdfrum_doc::annot::Annotation
+pub fn pdfrum_doc::annot::Annotation::read<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> pdfrum_doc::annot::Annotation
+pub fn pdfrum_doc::annot::Annotation::rect_for_drawing(&self, bool) -> kurbo::rect::Rect
+pub fn pdfrum_doc::annot::annot_ap<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, pdfrum_doc::annot::appearance::ApMode, bool, &R) -> core::option::Option<pdfrum_object::stream::Stream>
+pub fn pdfrum_doc::annot::annot_matrix(&pdfrum_doc::annot::Annotation, &pdfrum_object::dict::Dict, u8, kurbo::affine::Affine, &impl pdfrum_object::resolve::Resolve) -> kurbo::affine::Affine
+pub fn pdfrum_doc::annot::bounding_rect_from_quad_points(core::option::Option<&pdfrum_object::array::Array>) -> kurbo::rect::Rect
+pub fn pdfrum_doc::annot::is_popup<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> bool
+pub fn pdfrum_doc::annot::popup_appears_for(pdfrum_doc::annot::Subtype) -> bool
+pub fn pdfrum_doc::annot::quad_point_count(core::option::Option<&pdfrum_object::array::Array>) -> usize
+pub fn pdfrum_doc::annot::rect_from_quad_points(core::option::Option<&pdfrum_object::array::Array>, usize) -> kurbo::rect::Rect
+pub fn pdfrum_doc::annot::rect_from_quad_points_array(&pdfrum_object::array::Array, usize) -> kurbo::rect::Rect
+pub fn pdfrum_doc::annot::subtype_name(pdfrum_doc::annot::Subtype) -> pdfrum_object::name::Name
+pub mod pdfrum_doc::annot_dump
+pub enum pdfrum_doc::annot_dump::ObjectKind
+pub pdfrum_doc::annot_dump::ObjectKind::Form
+pub pdfrum_doc::annot_dump::ObjectKind::Image
+pub pdfrum_doc::annot_dump::ObjectKind::Path
+pub pdfrum_doc::annot_dump::ObjectKind::Shading
+pub pdfrum_doc::annot_dump::ObjectKind::Text
+impl pdfrum_doc::annot_dump::ObjectKind
+pub fn pdfrum_doc::annot_dump::ObjectKind::as_str(self) -> &'static str
+pub fn pdfrum_doc::annot_dump::is_annotation(&pdfrum_object::object::Object) -> bool
+pub fn pdfrum_doc::annot_dump::render<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, core::option::Option<&pdfrum_doc::ap::AnnotOverlay>, &pdfrum_doc::nav::open_action::Hidden, impl core::ops::function::FnMut(usize, &pdfrum_object::dict::Dict) -> alloc::vec::Vec<pdfrum_doc::annot_dump::ObjectKind>, &R, &mut pdfrum_common::diagnostics::Diagnostics) -> alloc::string::String
+pub fn pdfrum_doc::annot_dump::reported_rect<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, usize, core::option::Option<&pdfrum_doc::ap::AnnotOverlay>, &R) -> kurbo::rect::Rect
+pub fn pdfrum_doc::annot_dump::six_places(f32) -> alloc::string::String
+pub fn pdfrum_doc::annot_dump::three_places(f32) -> alloc::string::String
+pub mod pdfrum_doc::annot_render
+pub fn pdfrum_doc::annot_render::overlay<R: pdfrum_object::resolve::Resolve>(&mut pdfrum_page::page::Page, &pdfrum_object::dict::Dict, &pdfrum_object::dict::Dict, &R, &mut pdfrum_page::build::BuildContext, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics)
+pub fn pdfrum_doc::annot_render::overlay_with<R: pdfrum_object::resolve::Resolve>(&mut pdfrum_page::page::Page, &pdfrum_object::dict::Dict, &pdfrum_object::dict::Dict, &R, &mut pdfrum_page::build::BuildContext, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics, core::option::Option<&pdfrum_doc::ap::AnnotOverlay>)
+pub mod pdfrum_doc::ap
+pub mod pdfrum_doc::ap::border
+pub enum pdfrum_doc::ap::border::BorderStyle
+pub pdfrum_doc::ap::border::BorderStyle::Beveled
+pub pdfrum_doc::ap::border::BorderStyle::Dash
+pub pdfrum_doc::ap::border::BorderStyle::Inset
+pub pdfrum_doc::ap::border::BorderStyle::Solid
+pub pdfrum_doc::ap::border::BorderStyle::Underline
+pub struct pdfrum_doc::ap::border::BorderStyleInfo
+pub pdfrum_doc::ap::border::BorderStyleInfo::dash: pdfrum_doc::ap::border::Dash
+pub pdfrum_doc::ap::border::BorderStyleInfo::style: pdfrum_doc::ap::border::BorderStyle
+pub pdfrum_doc::ap::border::BorderStyleInfo::width: f32
+impl core::default::Default for pdfrum_doc::ap::border::BorderStyleInfo
+pub fn pdfrum_doc::ap::border::BorderStyleInfo::default() -> Self
+pub struct pdfrum_doc::ap::border::Dash
+pub pdfrum_doc::ap::border::Dash::dash: i64
+pub pdfrum_doc::ap::border::Dash::gap: i64
+pub pdfrum_doc::ap::border::Dash::phase: i64
+impl core::default::Default for pdfrum_doc::ap::border::Dash
+pub fn pdfrum_doc::ap::border::Dash::default() -> Self
+pub fn pdfrum_doc::ap::border::border_path(kurbo::rect::Rect, pdfrum_doc::ap::border::BorderStyleInfo, pdfrum_doc::color::Color) -> alloc::string::String
+pub fn pdfrum_doc::ap::border::border_style_info<R: pdfrum_object::resolve::Resolve>(core::option::Option<&pdfrum_object::dict::Dict>, &R) -> pdfrum_doc::ap::border::BorderStyleInfo
+pub fn pdfrum_doc::ap::border::border_width<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> f32
+pub fn pdfrum_doc::ap::border::dash_array<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> core::option::Option<pdfrum_object::array::Array>
+pub fn pdfrum_doc::ap::border::dash_pattern_string<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> alloc::string::String
+pub mod pdfrum_doc::ap::da
+pub struct pdfrum_doc::ap::da::FontNameAndSize
+pub pdfrum_doc::ap::da::FontNameAndSize::name: alloc::vec::Vec<u8>
+pub pdfrum_doc::ap::da::FontNameAndSize::size: f32
+pub struct pdfrum_doc::ap::da::Parser<'a>
+impl<'a> pdfrum_doc::ap::da::Parser<'a>
+pub fn pdfrum_doc::ap::da::Parser<'a>::new(&'a [u8]) -> pdfrum_doc::ap::da::Parser<'a>
+pub fn pdfrum_doc::ap::da::Parser<'a>::next_word(&mut self) -> &'a [u8]
+pub fn pdfrum_doc::ap::da::Parser<'a>::position(&self) -> usize
+pub fn pdfrum_doc::ap::da::Parser<'a>::seek(&mut self, usize)
+pub fn pdfrum_doc::ap::da::color(&[u8]) -> core::option::Option<pdfrum_doc::color::Color>
+pub fn pdfrum_doc::ap::da::find_tag_param_from_start(&mut pdfrum_doc::ap::da::Parser<'_>, &[u8], usize) -> bool
+pub fn pdfrum_doc::ap::da::font(&[u8]) -> core::option::Option<pdfrum_doc::ap::da::FontNameAndSize>
+pub mod pdfrum_doc::ap::emit
+pub enum pdfrum_doc::ap::emit::Float
+pub pdfrum_doc::ap::emit::Float::G6
+pub pdfrum_doc::ap::emit::Float::Shortest
+impl pdfrum_doc::ap::emit::Float
+pub fn pdfrum_doc::ap::emit::Float::write(self, f32) -> alloc::string::String
+pub enum pdfrum_doc::ap::emit::PaintOp
+pub pdfrum_doc::ap::emit::PaintOp::Fill
+pub pdfrum_doc::ap::emit::PaintOp::Stroke
+pub struct pdfrum_doc::ap::emit::Content
+impl pdfrum_doc::ap::emit::Content
+pub fn pdfrum_doc::ap::emit::Content::as_str(&self) -> &str
+pub fn pdfrum_doc::ap::emit::Content::into_bytes(self) -> alloc::vec::Vec<u8>
+pub fn pdfrum_doc::ap::emit::Content::is_empty(&self) -> bool
+pub fn pdfrum_doc::ap::emit::Content::new() -> pdfrum_doc::ap::emit::Content
+pub fn pdfrum_doc::ap::emit::Content::num(&mut self, f32, pdfrum_doc::ap::emit::Float)
+pub fn pdfrum_doc::ap::emit::Content::point(&mut self, f32, f32, pdfrum_doc::ap::emit::Float)
+pub fn pdfrum_doc::ap::emit::Content::raw(&mut self, &str)
+pub fn pdfrum_doc::ap::emit::Content::rect(&mut self, kurbo::rect::Rect, pdfrum_doc::ap::emit::Float)
+pub fn pdfrum_doc::ap::emit::color_op(pdfrum_doc::color::Color, pdfrum_doc::ap::emit::PaintOp) -> alloc::string::String
+pub fn pdfrum_doc::ap::emit::color_op_via(pdfrum_doc::color::Color, pdfrum_doc::ap::emit::PaintOp, pdfrum_doc::ap::emit::Float) -> alloc::string::String
+pub fn pdfrum_doc::ap::emit::color_with_default(core::option::Option<&pdfrum_object::array::Array>, pdfrum_doc::color::Color, pdfrum_doc::ap::emit::PaintOp) -> alloc::string::String
+pub fn pdfrum_doc::ap::emit::paint_operator(bool, bool) -> &'static str
+pub mod pdfrum_doc::ap::field_body
+pub enum pdfrum_doc::ap::field_body::Kind
+pub pdfrum_doc::ap::field_body::Kind::Button
+pub pdfrum_doc::ap::field_body::Kind::Combo
+pub pdfrum_doc::ap::field_body::Kind::List
+pub pdfrum_doc::ap::field_body::Kind::Text
+impl pdfrum_doc::ap::field_body::Kind
+pub fn pdfrum_doc::ap::field_body::Kind::of<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> core::option::Option<pdfrum_doc::ap::field_body::Kind>
+pub struct pdfrum_doc::ap::field_body::Body
+pub pdfrum_doc::ap::field_body::Body::font_resources: core::option::Option<pdfrum_object::dict::Dict>
+pub pdfrum_doc::ap::field_body::Body::stream: alloc::vec::Vec<u8>
+pub struct pdfrum_doc::ap::field_body::Choice
+pub pdfrum_doc::ap::field_body::Choice::label: alloc::string::String
+pub pdfrum_doc::ap::field_body::Choice::value: alloc::string::String
+pub struct pdfrum_doc::ap::field_body::Highlight
+pub pdfrum_doc::ap::field_body::Highlight::caret: core::option::Option<kurbo::rect::Rect>
+pub pdfrum_doc::ap::field_body::Highlight::selection: alloc::vec::Vec<kurbo::rect::Rect>
+pub struct pdfrum_doc::ap::field_body::LiveState<'a>
+pub pdfrum_doc::ap::field_body::LiveState::scroll: (f32, f32)
+pub pdfrum_doc::ap::field_body::LiveState::selected: &'a [usize]
+pub pdfrum_doc::ap::field_body::LiveState::text: &'a str
+pub pdfrum_doc::ap::field_body::LiveState::top_visible: usize
+impl core::default::Default for pdfrum_doc::ap::field_body::LiveState<'_>
+pub fn pdfrum_doc::ap::field_body::LiveState<'_>::default() -> Self
+pub const pdfrum_doc::ap::field_body::CARET_WIDTH: f32
+pub fn pdfrum_doc::ap::field_body::alignment<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> pdfrum_doc::vt::Alignment
+pub fn pdfrum_doc::ap::field_body::client_rect<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> kurbo::rect::Rect
+pub fn pdfrum_doc::ap::field_body::field_value<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> alloc::string::String
+pub fn pdfrum_doc::ap::field_body::generate<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &pdfrum_object::dict::Dict, &pdfrum_doc::ap::TextFont<'_>, core::option::Option<pdfrum_doc::ap::Substitute<'_>>, &R, core::option::Option<&pdfrum_doc::ap::field_body::Highlight>, core::option::Option<&pdfrum_doc::ap::field_body::LiveState<'_>>) -> core::option::Option<pdfrum_doc::ap::field_body::Body>
+pub fn pdfrum_doc::ap::field_body::options<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> alloc::vec::Vec<pdfrum_doc::ap::field_body::Choice>
+pub fn pdfrum_doc::ap::field_body::selected_indices<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &[pdfrum_doc::ap::field_body::Choice], &R) -> alloc::vec::Vec<usize>
+pub fn pdfrum_doc::ap::field_body::text_color<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> pdfrum_doc::color::Color
+pub mod pdfrum_doc::ap::fmt
+pub fn pdfrum_doc::ap::fmt::g6(f32) -> alloc::string::String
+pub fn pdfrum_doc::ap::fmt::shortest(f32) -> alloc::string::String
+pub mod pdfrum_doc::ap::font_map
+pub const pdfrum_doc::ap::font_map::SUBSTITUTABLE_CHARSETS: &[pdfrum_font::subst::charset::Charset]
+pub fn pdfrum_doc::ap::font_map::charset_code(pdfrum_font::subst::charset::Charset, u32) -> core::option::Option<u8>
+pub fn pdfrum_doc::ap::font_map::da_font_writes(&pdfrum_font::Font, pdfrum_font::subst::charset::Charset, u32) -> bool
+pub fn pdfrum_doc::ap::font_map::font_charset(&pdfrum_font::Font) -> pdfrum_font::subst::charset::Charset
+pub fn pdfrum_doc::ap::font_map::substitute_alias(pdfrum_font::subst::charset::Charset) -> alloc::vec::Vec<u8>
+pub fn pdfrum_doc::ap::font_map::substitute_encode(&pdfrum_font::Font, u32) -> alloc::vec::Vec<u8>
+pub fn pdfrum_doc::ap::font_map::substitute_font_dict(pdfrum_font::subst::charset::Charset) -> core::option::Option<pdfrum_object::dict::Dict>
+pub fn pdfrum_doc::ap::font_map::substitute_width(&pdfrum_font::Font, u32) -> i32
+pub mod pdfrum_doc::ap::freetext
+pub struct pdfrum_doc::ap::freetext::Appearance
+pub pdfrum_doc::ap::freetext::Appearance::color: pdfrum_doc::color::Color
+pub pdfrum_doc::ap::freetext::Appearance::font_name: alloc::vec::Vec<u8>
+pub pdfrum_doc::ap::freetext::Appearance::size: f32
+pub fn pdfrum_doc::ap::freetext::default_appearance<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &pdfrum_object::dict::Dict, &R) -> core::option::Option<pdfrum_doc::ap::freetext::Appearance>
+pub fn pdfrum_doc::ap::freetext::default_appearance_string(&pdfrum_doc::ap::freetext::Appearance) -> alloc::vec::Vec<u8>
+pub fn pdfrum_doc::ap::freetext::fallback_font() -> pdfrum_object::dict::Dict
+pub fn pdfrum_doc::ap::freetext::font_resource_alias(&[u8]) -> alloc::vec::Vec<u8>
+pub fn pdfrum_doc::ap::freetext::free_text<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &pdfrum_object::dict::Dict, &R, &pdfrum_doc::vt::Metrics<'_>, &dyn core::ops::function::Fn(u32) -> alloc::vec::Vec<u8>) -> core::option::Option<pdfrum_doc::ap::markup::Generated>
+pub fn pdfrum_doc::ap::freetext::resolved_size(f32) -> core::option::Option<f32>
+pub fn pdfrum_doc::ap::freetext::synthesized_form() -> pdfrum_object::dict::Dict
+pub fn pdfrum_doc::ap::freetext::valid_font_resources<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> bool
+pub mod pdfrum_doc::ap::markup
+pub struct pdfrum_doc::ap::markup::Generated
+pub pdfrum_doc::ap::markup::Generated::blend_multiply: bool
+pub pdfrum_doc::ap::markup::Generated::font_resources: core::option::Option<pdfrum_object::dict::Dict>
+pub pdfrum_doc::ap::markup::Generated::is_text_markup: bool
+pub pdfrum_doc::ap::markup::Generated::rect_override: core::option::Option<kurbo::rect::Rect>
+pub pdfrum_doc::ap::markup::Generated::stream: alloc::vec::Vec<u8>
+pub fn pdfrum_doc::ap::markup::circle<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> pdfrum_doc::ap::markup::Generated
+pub fn pdfrum_doc::ap::markup::highlight<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> pdfrum_doc::ap::markup::Generated
+pub fn pdfrum_doc::ap::markup::ink<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> core::option::Option<pdfrum_doc::ap::markup::Generated>
+pub fn pdfrum_doc::ap::markup::square<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> pdfrum_doc::ap::markup::Generated
+pub fn pdfrum_doc::ap::markup::squiggly<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> pdfrum_doc::ap::markup::Generated
+pub fn pdfrum_doc::ap::markup::strike_out<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> pdfrum_doc::ap::markup::Generated
+pub fn pdfrum_doc::ap::markup::text<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> pdfrum_doc::ap::markup::Generated
+pub fn pdfrum_doc::ap::markup::text_symbol(kurbo::rect::Rect) -> alloc::string::String
+pub fn pdfrum_doc::ap::markup::underline<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> pdfrum_doc::ap::markup::Generated
+pub mod pdfrum_doc::ap::popup
+pub fn pdfrum_doc::ap::popup::popup<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &pdfrum_doc::vt::Metrics<'_>, &dyn core::ops::function::Fn(u32) -> alloc::vec::Vec<u8>, &R) -> core::option::Option<pdfrum_doc::ap::markup::Generated>
+pub mod pdfrum_doc::ap::shapes
+pub enum pdfrum_doc::ap::shapes::CheckStyle
+pub pdfrum_doc::ap::shapes::CheckStyle::Check
+pub pdfrum_doc::ap::shapes::CheckStyle::Circle
+pub pdfrum_doc::ap::shapes::CheckStyle::Cross
+pub pdfrum_doc::ap::shapes::CheckStyle::Diamond
+pub pdfrum_doc::ap::shapes::CheckStyle::Square
+pub pdfrum_doc::ap::shapes::CheckStyle::Star
+pub fn pdfrum_doc::ap::shapes::check_box(kurbo::rect::Rect, pdfrum_doc::ap::shapes::CheckStyle, pdfrum_doc::color::Color) -> alloc::string::String
+pub fn pdfrum_doc::ap::shapes::drop_button(kurbo::rect::Rect) -> alloc::string::String
+pub fn pdfrum_doc::ap::shapes::path(kurbo::rect::Rect, pdfrum_doc::ap::shapes::CheckStyle) -> alloc::string::String
+pub fn pdfrum_doc::ap::shapes::radio_button(kurbo::rect::Rect, pdfrum_doc::ap::shapes::CheckStyle, pdfrum_doc::color::Color) -> alloc::string::String
+pub fn pdfrum_doc::ap::shapes::style_from_caption(&str) -> core::option::Option<pdfrum_doc::ap::shapes::CheckStyle>
+pub mod pdfrum_doc::ap::widget
+pub struct pdfrum_doc::ap::widget::LiveInput<'a>
+pub pdfrum_doc::ap::widget::LiveInput::appearance_state: core::option::Option<&'a [u8]>
+pub pdfrum_doc::ap::widget::LiveInput::caret_and_selection: core::option::Option<&'a pdfrum_doc::ap::field_body::Highlight>
+pub pdfrum_doc::ap::widget::LiveInput::live: core::option::Option<&'a pdfrum_doc::ap::field_body::LiveState<'a>>
+pub pdfrum_doc::ap::widget::LiveInput::substitute: core::option::Option<pdfrum_doc::ap::Substitute<'a>>
+pub fn pdfrum_doc::ap::widget::check_style<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> core::option::Option<pdfrum_doc::ap::shapes::CheckStyle>
+pub fn pdfrum_doc::ap::widget::checked_ap_state<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> alloc::vec::Vec<u8>
+pub fn pdfrum_doc::ap::widget::generate<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> core::option::Option<pdfrum_doc::ap::GeneratedAp>
+pub fn pdfrum_doc::ap::widget::generate_with_live<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &pdfrum_object::dict::Dict, &pdfrum_doc::ap::TextFont<'_>, &R, core::option::Option<&pdfrum_doc::ap::field_body::Highlight>, core::option::Option<&pdfrum_doc::ap::field_body::LiveState<'_>>) -> core::option::Option<pdfrum_doc::ap::GeneratedAp>
+pub fn pdfrum_doc::ap::widget::generate_with_live_faces<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &pdfrum_object::dict::Dict, &pdfrum_doc::ap::TextFont<'_>, &R, pdfrum_doc::ap::widget::LiveInput<'_>) -> core::option::Option<pdfrum_doc::ap::GeneratedAp>
+pub fn pdfrum_doc::ap::widget::generate_with_text<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &pdfrum_object::dict::Dict, &pdfrum_doc::ap::TextFont<'_>, core::option::Option<pdfrum_doc::ap::Substitute<'_>>, &R) -> core::option::Option<pdfrum_doc::ap::GeneratedAp>
+pub fn pdfrum_doc::ap::widget::has_known_field_type<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> bool
+pub fn pdfrum_doc::ap::widget::is_button<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> bool
+pub fn pdfrum_doc::ap::widget::is_checked<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> bool
+pub fn pdfrum_doc::ap::widget::is_checked_with<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R, core::option::Option<&[u8]>) -> bool
+pub fn pdfrum_doc::ap::widget::is_radio<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> bool
+pub fn pdfrum_doc::ap::widget::needs_appearance<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> bool
+pub fn pdfrum_doc::ap::widget::needs_appearance_in<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, core::option::Option<&pdfrum_object::dict::Dict>, &R) -> bool
+pub fn pdfrum_doc::ap::widget::rotated_rect<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> kurbo::rect::Rect
+pub fn pdfrum_doc::ap::widget::text_color<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> pdfrum_doc::color::Color
+pub fn pdfrum_doc::ap::widget::widget_border<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> pdfrum_doc::ap::border::BorderStyleInfo
+pub enum pdfrum_doc::ap::Appearance
+pub pdfrum_doc::ap::Appearance::Generated(pdfrum_doc::ap::GeneratedAp)
+pub pdfrum_doc::ap::Appearance::Suppressed
+pub pdfrum_doc::ap::Appearance::Untouched
+pub enum pdfrum_doc::ap::FocusBox
+pub pdfrum_doc::ap::FocusBox::Inflated
+pub pdfrum_doc::ap::FocusBox::None
+pub pdfrum_doc::ap::FocusBox::Rect(kurbo::rect::Rect)
+pub struct pdfrum_doc::ap::AnnotOverlay
+impl pdfrum_doc::ap::AnnotOverlay
+pub fn pdfrum_doc::ap::AnnotOverlay::appearance(&self, usize) -> &pdfrum_doc::ap::Appearance
+pub fn pdfrum_doc::ap::AnnotOverlay::focus(&self) -> core::option::Option<pdfrum_doc::ap::Focus>
+pub fn pdfrum_doc::ap::AnnotOverlay::get(&self, usize) -> core::option::Option<&pdfrum_doc::ap::GeneratedAp>
+pub fn pdfrum_doc::ap::AnnotOverlay::hover(&self) -> core::option::Option<usize>
+pub fn pdfrum_doc::ap::AnnotOverlay::is_empty(&self) -> bool
+pub fn pdfrum_doc::ap::AnnotOverlay::is_live_edit(&self, usize) -> bool
+pub fn pdfrum_doc::ap::AnnotOverlay::len(&self) -> usize
+pub fn pdfrum_doc::ap::AnnotOverlay::live_edit(&self) -> core::option::Option<usize>
+pub fn pdfrum_doc::ap::AnnotOverlay::merge_over(&mut self, &pdfrum_doc::ap::AnnotOverlay)
+pub fn pdfrum_doc::ap::AnnotOverlay::rect(&self, usize, kurbo::rect::Rect) -> kurbo::rect::Rect
+pub fn pdfrum_doc::ap::AnnotOverlay::set(&mut self, usize, pdfrum_doc::ap::GeneratedAp)
+pub fn pdfrum_doc::ap::AnnotOverlay::set_appearance(&mut self, usize, pdfrum_doc::ap::Appearance)
+pub fn pdfrum_doc::ap::AnnotOverlay::set_focus(&mut self, pdfrum_doc::ap::Focus)
+pub fn pdfrum_doc::ap::AnnotOverlay::set_hover(&mut self, usize)
+pub fn pdfrum_doc::ap::AnnotOverlay::set_live_edit(&mut self, usize)
+pub fn pdfrum_doc::ap::AnnotOverlay::with_capacity(usize) -> pdfrum_doc::ap::AnnotOverlay
+pub struct pdfrum_doc::ap::Focus
+pub pdfrum_doc::ap::Focus::annot: usize
+pub pdfrum_doc::ap::Focus::box_: pdfrum_doc::ap::FocusBox
+impl pdfrum_doc::ap::Focus
+pub fn pdfrum_doc::ap::Focus::at(usize) -> pdfrum_doc::ap::Focus
+pub struct pdfrum_doc::ap::FormFonts
+impl pdfrum_doc::ap::FormFonts
+pub fn pdfrum_doc::ap::FormFonts::face(&self, &[u8]) -> core::option::Option<&pdfrum_font::Font>
+pub fn pdfrum_doc::ap::FormFonts::load<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R, &mut pdfrum_page::build::BuildContext) -> pdfrum_doc::ap::FormFonts
+pub fn pdfrum_doc::ap::FormFonts::substitute(&self, pdfrum_font::subst::charset::Charset) -> core::option::Option<pdfrum_doc::ap::Substitute<'_>>
+pub fn pdfrum_doc::ap::FormFonts::text_font<'a>(&'a self, &[u8], &'a dyn core::ops::function::Fn(u32) -> i32) -> core::option::Option<pdfrum_doc::ap::TextFont<'a>>
+impl core::fmt::Debug for pdfrum_doc::ap::FormFonts
+pub fn pdfrum_doc::ap::FormFonts::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub struct pdfrum_doc::ap::GeneratedAp
+pub pdfrum_doc::ap::GeneratedAp::as_override: core::option::Option<pdfrum_object::name::Name>
+pub pdfrum_doc::ap::GeneratedAp::bbox: kurbo::rect::Rect
+pub pdfrum_doc::ap::GeneratedAp::matrix: kurbo::affine::Affine
+pub pdfrum_doc::ap::GeneratedAp::rect_override: core::option::Option<kurbo::rect::Rect>
+pub pdfrum_doc::ap::GeneratedAp::resources: pdfrum_object::dict::Dict
+pub pdfrum_doc::ap::GeneratedAp::stream: alloc::vec::Vec<u8>
+pub struct pdfrum_doc::ap::Substitute<'a>
+pub pdfrum_doc::ap::Substitute::alias: &'a pdfrum_object::name::Name
+pub pdfrum_doc::ap::Substitute::dict: &'a pdfrum_object::dict::Dict
+pub pdfrum_doc::ap::Substitute::font: &'a pdfrum_font::Font
+pub struct pdfrum_doc::ap::TextFont<'a>
+pub pdfrum_doc::ap::TextFont::font: &'a pdfrum_font::Font
+pub pdfrum_doc::ap::TextFont::metrics: pdfrum_doc::vt::Metrics<'a>
+impl pdfrum_doc::ap::TextFont<'_>
+pub fn pdfrum_doc::ap::TextFont<'_>::char_width(&pdfrum_font::Font, u32) -> i32
+pub fn pdfrum_doc::ap::TextFont<'_>::encode(&self, u32) -> alloc::vec::Vec<u8>
+pub fn pdfrum_doc::ap::TextFont<'_>::metrics_of<'a>(&'a pdfrum_font::Font, &'a dyn core::ops::function::Fn(u32) -> i32) -> pdfrum_doc::vt::Metrics<'a>
+impl core::fmt::Debug for pdfrum_doc::ap::TextFont<'_>
+pub fn pdfrum_doc::ap::TextFont<'_>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub fn pdfrum_doc::ap::ext_gstate_dict<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, bool, &R) -> pdfrum_object::dict::Dict
+pub fn pdfrum_doc::ap::generate_appearances<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_doc::ap::AnnotOverlay
+pub fn pdfrum_doc::ap::generate_appearances_with_text<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &pdfrum_object::dict::Dict, core::option::Option<&pdfrum_doc::ap::FormFonts>, &R, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_doc::ap::AnnotOverlay
+pub fn pdfrum_doc::ap::generate_one<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<pdfrum_doc::ap::GeneratedAp>
+pub fn pdfrum_doc::ap::resources_dict(pdfrum_object::dict::Dict, core::option::Option<pdfrum_object::dict::Dict>) -> pdfrum_object::dict::Dict
+pub fn pdfrum_doc::ap::should_generate<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> bool
+pub fn pdfrum_doc::ap::stream_dict(&pdfrum_doc::ap::GeneratedAp) -> pdfrum_object::dict::Dict
+pub mod pdfrum_doc::color
+pub enum pdfrum_doc::color::Color
+pub pdfrum_doc::color::Color::Cmyk(f32, f32, f32, f32)
+pub pdfrum_doc::color::Color::Gray(f32)
+pub pdfrum_doc::color::Color::Rgb(f32, f32, f32)
+pub pdfrum_doc::color::Color::Transparent
+impl pdfrum_doc::color::Color
+pub fn pdfrum_doc::color::Color::annot_rgb_bytes(self) -> (u32, u32, u32)
+pub fn pdfrum_doc::color::Color::from_array(&pdfrum_object::array::Array) -> pdfrum_doc::color::Color
+pub fn pdfrum_doc::color::Color::mk_rgb_bytes(self) -> (u8, u8, u8)
+pub fn pdfrum_doc::color::Color::nearly_eq(self, pdfrum_doc::color::Color) -> bool
+pub fn pdfrum_doc::color::rgb_bytes(u8, u8, u8) -> pdfrum_doc::color::Color
+pub mod pdfrum_doc::error
+#[non_exhaustive] pub enum pdfrum_doc::error::Error
+pub pdfrum_doc::error::Error::NoCatalog
+pub pdfrum_doc::error::Error::Unresolved(pdfrum_object::object::ObjRef)
+pub mod pdfrum_doc::form
+pub mod pdfrum_doc::form::attr
+pub fn pdfrum_doc::form::attr::field_attr<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &pdfrum_object::name::Name, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<pdfrum_object::object::Object>
+pub fn pdfrum_doc::form::attr::full_name<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> alloc::string::String
+pub mod pdfrum_doc::form::field
+pub enum pdfrum_doc::form::field::FieldKind
+pub pdfrum_doc::form::field::FieldKind::Button
+pub pdfrum_doc::form::field::FieldKind::Check
+pub pdfrum_doc::form::field::FieldKind::Combo
+pub pdfrum_doc::form::field::FieldKind::List
+pub pdfrum_doc::form::field::FieldKind::Radio
+pub pdfrum_doc::form::field::FieldKind::Signature
+pub pdfrum_doc::form::field::FieldKind::Text
+impl pdfrum_doc::form::field::FieldKind
+pub fn pdfrum_doc::form::field::FieldKind::classify(&[u8], pdfrum_doc::form::field::FieldFlags) -> core::option::Option<pdfrum_doc::form::field::FieldKind>
+pub fn pdfrum_doc::form::field::FieldKind::is_toggle(self) -> bool
+pub fn pdfrum_doc::form::field::FieldKind::is_writable(self) -> bool
+pub struct pdfrum_doc::form::field::Field
+pub pdfrum_doc::form::field::Field::dict: pdfrum_object::dict::Dict
+pub pdfrum_doc::form::field::Field::flags: pdfrum_doc::form::field::FieldFlags
+pub pdfrum_doc::form::field::Field::kind: pdfrum_doc::form::field::FieldKind
+pub pdfrum_doc::form::field::Field::name: alloc::string::String
+pub pdfrum_doc::form::field::Field::reference: core::option::Option<pdfrum_object::object::ObjRef>
+pub pdfrum_doc::form::field::Field::widgets: alloc::vec::Vec<pdfrum_doc::form::field::Widget>
+impl pdfrum_doc::form::field::Field
+pub fn pdfrum_doc::form::field::Field::default_value<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::string::String
+pub fn pdfrum_doc::form::field::Field::is_checked<R: pdfrum_object::resolve::Resolve>(&self, core::option::Option<&pdfrum_doc::form::field::FieldValues>, &R) -> bool
+pub fn pdfrum_doc::form::field::Field::options<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::vec::Vec<alloc::string::String>
+pub fn pdfrum_doc::form::field::Field::states<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::vec::Vec<alloc::string::String>
+pub fn pdfrum_doc::form::field::Field::stored_value<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::string::String
+pub fn pdfrum_doc::form::field::Field::tooltip<R: pdfrum_object::resolve::Resolve>(&self, &R) -> core::option::Option<alloc::string::String>
+pub fn pdfrum_doc::form::field::Field::value<R: pdfrum_object::resolve::Resolve>(&self, core::option::Option<&pdfrum_doc::form::field::FieldValues>, &R) -> alloc::string::String
+pub struct pdfrum_doc::form::field::FieldEdit
+pub pdfrum_doc::form::field::FieldEdit::dict: pdfrum_object::dict::Dict
+pub pdfrum_doc::form::field::FieldEdit::reference: pdfrum_object::object::ObjRef
+pub pdfrum_doc::form::field::FieldEdit::widgets: alloc::vec::Vec<(pdfrum_object::object::ObjRef, pdfrum_object::dict::Dict, pdfrum_doc::ap::GeneratedAp)>
+pub struct pdfrum_doc::form::field::FieldFlags(pub i64)
+impl pdfrum_doc::form::field::FieldFlags
+pub fn pdfrum_doc::form::field::FieldFlags::do_not_scroll(self) -> bool
+pub fn pdfrum_doc::form::field::FieldFlags::is_combo(self) -> bool
+pub fn pdfrum_doc::form::field::FieldFlags::is_editable_combo(self) -> bool
+pub fn pdfrum_doc::form::field::FieldFlags::is_multi_select(self) -> bool
+pub fn pdfrum_doc::form::field::FieldFlags::is_multiline(self) -> bool
+pub fn pdfrum_doc::form::field::FieldFlags::is_password(self) -> bool
+pub fn pdfrum_doc::form::field::FieldFlags::is_push_button(self) -> bool
+pub fn pdfrum_doc::form::field::FieldFlags::is_radio(self) -> bool
+pub fn pdfrum_doc::form::field::FieldFlags::is_read_only(self) -> bool
+pub fn pdfrum_doc::form::field::FieldFlags::is_required(self) -> bool
+pub struct pdfrum_doc::form::field::FieldValues
+impl pdfrum_doc::form::field::FieldValues
+pub fn pdfrum_doc::form::field::FieldValues::get(&self, &str) -> core::option::Option<&str>
+pub fn pdfrum_doc::form::field::FieldValues::is_empty(&self) -> bool
+pub fn pdfrum_doc::form::field::FieldValues::iter(&self) -> impl core::iter::traits::iterator::Iterator<Item = (&str, &str)>
+pub fn pdfrum_doc::form::field::FieldValues::len(&self) -> usize
+pub fn pdfrum_doc::form::field::FieldValues::new() -> pdfrum_doc::form::field::FieldValues
+pub fn pdfrum_doc::form::field::FieldValues::set(&mut self, impl core::convert::Into<alloc::string::String>, impl core::convert::Into<alloc::string::String>)
+pub struct pdfrum_doc::form::field::Form
+pub pdfrum_doc::form::field::Form::fields: alloc::vec::Vec<pdfrum_doc::form::field::Field>
+pub pdfrum_doc::form::field::Form::need_appearances: bool
+impl pdfrum_doc::form::field::Form
+pub fn pdfrum_doc::form::field::Form::calculation_order<R: pdfrum_object::resolve::Resolve>(&self, &pdfrum_object::dict::Dict, &R) -> alloc::vec::Vec<usize>
+pub fn pdfrum_doc::form::field::Form::field(&self, &str) -> core::option::Option<&pdfrum_doc::form::field::Field>
+pub fn pdfrum_doc::form::field::Form::is_empty(&self) -> bool
+pub fn pdfrum_doc::form::field::Form::len(&self) -> usize
+pub fn pdfrum_doc::form::field::Form::load<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<pdfrum_doc::form::field::Form>
+pub struct pdfrum_doc::form::field::Widget
+pub pdfrum_doc::form::field::Widget::dict: pdfrum_object::dict::Dict
+pub pdfrum_doc::form::field::Widget::reference: core::option::Option<pdfrum_object::object::ObjRef>
+pub fn pdfrum_doc::form::field::apply<R: pdfrum_object::resolve::Resolve>(&pdfrum_doc::form::field::Form, &pdfrum_doc::form::field::FieldValues, &R, &mut pdfrum_common::diagnostics::Diagnostics) -> alloc::vec::Vec<pdfrum_doc::form::field::FieldEdit>
+pub fn pdfrum_doc::form::field::selected_indices_for_interaction<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &[alloc::string::String], &R) -> alloc::vec::Vec<usize>
+pub enum pdfrum_doc::form::FieldKind
+pub pdfrum_doc::form::FieldKind::Button
+pub pdfrum_doc::form::FieldKind::Check
+pub pdfrum_doc::form::FieldKind::Combo
+pub pdfrum_doc::form::FieldKind::List
+pub pdfrum_doc::form::FieldKind::Radio
+pub pdfrum_doc::form::FieldKind::Signature
+pub pdfrum_doc::form::FieldKind::Text
+impl pdfrum_doc::form::field::FieldKind
+pub fn pdfrum_doc::form::field::FieldKind::classify(&[u8], pdfrum_doc::form::field::FieldFlags) -> core::option::Option<pdfrum_doc::form::field::FieldKind>
+pub fn pdfrum_doc::form::field::FieldKind::is_toggle(self) -> bool
+pub fn pdfrum_doc::form::field::FieldKind::is_writable(self) -> bool
+pub struct pdfrum_doc::form::Field
+pub pdfrum_doc::form::Field::dict: pdfrum_object::dict::Dict
+pub pdfrum_doc::form::Field::flags: pdfrum_doc::form::field::FieldFlags
+pub pdfrum_doc::form::Field::kind: pdfrum_doc::form::field::FieldKind
+pub pdfrum_doc::form::Field::name: alloc::string::String
+pub pdfrum_doc::form::Field::reference: core::option::Option<pdfrum_object::object::ObjRef>
+pub pdfrum_doc::form::Field::widgets: alloc::vec::Vec<pdfrum_doc::form::field::Widget>
+impl pdfrum_doc::form::field::Field
+pub fn pdfrum_doc::form::field::Field::default_value<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::string::String
+pub fn pdfrum_doc::form::field::Field::is_checked<R: pdfrum_object::resolve::Resolve>(&self, core::option::Option<&pdfrum_doc::form::field::FieldValues>, &R) -> bool
+pub fn pdfrum_doc::form::field::Field::options<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::vec::Vec<alloc::string::String>
+pub fn pdfrum_doc::form::field::Field::states<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::vec::Vec<alloc::string::String>
+pub fn pdfrum_doc::form::field::Field::stored_value<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::string::String
+pub fn pdfrum_doc::form::field::Field::tooltip<R: pdfrum_object::resolve::Resolve>(&self, &R) -> core::option::Option<alloc::string::String>
+pub fn pdfrum_doc::form::field::Field::value<R: pdfrum_object::resolve::Resolve>(&self, core::option::Option<&pdfrum_doc::form::field::FieldValues>, &R) -> alloc::string::String
+pub struct pdfrum_doc::form::FieldEdit
+pub pdfrum_doc::form::FieldEdit::dict: pdfrum_object::dict::Dict
+pub pdfrum_doc::form::FieldEdit::reference: pdfrum_object::object::ObjRef
+pub pdfrum_doc::form::FieldEdit::widgets: alloc::vec::Vec<(pdfrum_object::object::ObjRef, pdfrum_object::dict::Dict, pdfrum_doc::ap::GeneratedAp)>
+pub struct pdfrum_doc::form::FieldFlags(pub i64)
+impl pdfrum_doc::form::field::FieldFlags
+pub fn pdfrum_doc::form::field::FieldFlags::do_not_scroll(self) -> bool
+pub fn pdfrum_doc::form::field::FieldFlags::is_combo(self) -> bool
+pub fn pdfrum_doc::form::field::FieldFlags::is_editable_combo(self) -> bool
+pub fn pdfrum_doc::form::field::FieldFlags::is_multi_select(self) -> bool
+pub fn pdfrum_doc::form::field::FieldFlags::is_multiline(self) -> bool
+pub fn pdfrum_doc::form::field::FieldFlags::is_password(self) -> bool
+pub fn pdfrum_doc::form::field::FieldFlags::is_push_button(self) -> bool
+pub fn pdfrum_doc::form::field::FieldFlags::is_radio(self) -> bool
+pub fn pdfrum_doc::form::field::FieldFlags::is_read_only(self) -> bool
+pub fn pdfrum_doc::form::field::FieldFlags::is_required(self) -> bool
+pub struct pdfrum_doc::form::FieldValues
+impl pdfrum_doc::form::field::FieldValues
+pub fn pdfrum_doc::form::field::FieldValues::get(&self, &str) -> core::option::Option<&str>
+pub fn pdfrum_doc::form::field::FieldValues::is_empty(&self) -> bool
+pub fn pdfrum_doc::form::field::FieldValues::iter(&self) -> impl core::iter::traits::iterator::Iterator<Item = (&str, &str)>
+pub fn pdfrum_doc::form::field::FieldValues::len(&self) -> usize
+pub fn pdfrum_doc::form::field::FieldValues::new() -> pdfrum_doc::form::field::FieldValues
+pub fn pdfrum_doc::form::field::FieldValues::set(&mut self, impl core::convert::Into<alloc::string::String>, impl core::convert::Into<alloc::string::String>)
+pub struct pdfrum_doc::form::Form
+pub pdfrum_doc::form::Form::fields: alloc::vec::Vec<pdfrum_doc::form::field::Field>
+pub pdfrum_doc::form::Form::need_appearances: bool
+impl pdfrum_doc::form::field::Form
+pub fn pdfrum_doc::form::field::Form::calculation_order<R: pdfrum_object::resolve::Resolve>(&self, &pdfrum_object::dict::Dict, &R) -> alloc::vec::Vec<usize>
+pub fn pdfrum_doc::form::field::Form::field(&self, &str) -> core::option::Option<&pdfrum_doc::form::field::Field>
+pub fn pdfrum_doc::form::field::Form::is_empty(&self) -> bool
+pub fn pdfrum_doc::form::field::Form::len(&self) -> usize
+pub fn pdfrum_doc::form::field::Form::load<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<pdfrum_doc::form::field::Form>
+pub struct pdfrum_doc::form::Widget
+pub pdfrum_doc::form::Widget::dict: pdfrum_object::dict::Dict
+pub pdfrum_doc::form::Widget::reference: core::option::Option<pdfrum_object::object::ObjRef>
+pub fn pdfrum_doc::form::apply<R: pdfrum_object::resolve::Resolve>(&pdfrum_doc::form::field::Form, &pdfrum_doc::form::field::FieldValues, &R, &mut pdfrum_common::diagnostics::Diagnostics) -> alloc::vec::Vec<pdfrum_doc::form::field::FieldEdit>
+pub fn pdfrum_doc::form::field_attr<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &pdfrum_object::name::Name, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<pdfrum_object::object::Object>
+pub fn pdfrum_doc::form::full_name<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> alloc::string::String
+pub fn pdfrum_doc::form::selected_indices_for_interaction<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &[alloc::string::String], &R) -> alloc::vec::Vec<usize>
+pub mod pdfrum_doc::geom
+pub fn pdfrum_doc::geom::bottom(kurbo::rect::Rect) -> f32
+pub fn pdfrum_doc::geom::center_square(kurbo::rect::Rect) -> kurbo::rect::Rect
+pub fn pdfrum_doc::geom::contains(kurbo::rect::Rect, kurbo::point::Point) -> bool
+pub fn pdfrum_doc::geom::deflate(kurbo::rect::Rect, f32, f32) -> kurbo::rect::Rect
+pub fn pdfrum_doc::geom::height(kurbo::rect::Rect) -> f32
+pub fn pdfrum_doc::geom::inflate(kurbo::rect::Rect, f32, f32) -> kurbo::rect::Rect
+pub fn pdfrum_doc::geom::intersect(kurbo::rect::Rect, kurbo::rect::Rect) -> kurbo::rect::Rect
+pub fn pdfrum_doc::geom::is_empty(kurbo::rect::Rect) -> bool
+pub fn pdfrum_doc::geom::is_float_bigger(f32, f32) -> bool
+pub fn pdfrum_doc::geom::is_float_smaller(f32, f32) -> bool
+pub fn pdfrum_doc::geom::is_float_zero(f32) -> bool
+pub fn pdfrum_doc::geom::left(kurbo::rect::Rect) -> f32
+pub fn pdfrum_doc::geom::match_rect(kurbo::rect::Rect, kurbo::rect::Rect) -> kurbo::affine::Affine
+pub fn pdfrum_doc::geom::normalize(kurbo::rect::Rect) -> kurbo::rect::Rect
+pub fn pdfrum_doc::geom::rect(f32, f32, f32, f32) -> kurbo::rect::Rect
+pub fn pdfrum_doc::geom::right(kurbo::rect::Rect) -> f32
+pub fn pdfrum_doc::geom::scale_from_center(kurbo::rect::Rect, f32) -> kurbo::rect::Rect
+pub fn pdfrum_doc::geom::top(kurbo::rect::Rect) -> f32
+pub fn pdfrum_doc::geom::transform_rect(kurbo::affine::Affine, kurbo::rect::Rect) -> kurbo::rect::Rect
+pub fn pdfrum_doc::geom::translate(kurbo::rect::Rect, f32, f32) -> kurbo::rect::Rect
+pub fn pdfrum_doc::geom::union(kurbo::rect::Rect, kurbo::rect::Rect) -> kurbo::rect::Rect
+pub fn pdfrum_doc::geom::width(kurbo::rect::Rect) -> f32
+pub mod pdfrum_doc::nav
+pub mod pdfrum_doc::nav::action
+pub enum pdfrum_doc::nav::action::AActionType
+pub pdfrum_doc::nav::action::AActionType::ButtonDown
+pub pdfrum_doc::nav::action::AActionType::ButtonUp
+pub pdfrum_doc::nav::action::AActionType::Calculate
+pub pdfrum_doc::nav::action::AActionType::CloseDocument
+pub pdfrum_doc::nav::action::AActionType::ClosePage
+pub pdfrum_doc::nav::action::AActionType::CursorEnter
+pub pdfrum_doc::nav::action::AActionType::CursorExit
+pub pdfrum_doc::nav::action::AActionType::DocumentPrinted
+pub pdfrum_doc::nav::action::AActionType::DocumentSaved
+pub pdfrum_doc::nav::action::AActionType::Format
+pub pdfrum_doc::nav::action::AActionType::GetFocus
+pub pdfrum_doc::nav::action::AActionType::KeyStroke
+pub pdfrum_doc::nav::action::AActionType::LoseFocus
+pub pdfrum_doc::nav::action::AActionType::OpenPage
+pub pdfrum_doc::nav::action::AActionType::PageClose
+pub pdfrum_doc::nav::action::AActionType::PageInvisible
+pub pdfrum_doc::nav::action::AActionType::PageOpen
+pub pdfrum_doc::nav::action::AActionType::PageVisible
+pub pdfrum_doc::nav::action::AActionType::PrintDocument
+pub pdfrum_doc::nav::action::AActionType::SaveDocument
+pub pdfrum_doc::nav::action::AActionType::Validate
+impl pdfrum_doc::nav::action::AActionType
+pub fn pdfrum_doc::nav::action::AActionType::is_user_input(self) -> bool
+pub fn pdfrum_doc::nav::action::AActionType::key(self) -> &'static [u8]
+pub enum pdfrum_doc::nav::action::ActionKind
+pub pdfrum_doc::nav::action::ActionKind::GoTo
+pub pdfrum_doc::nav::action::ActionKind::GoTo3DView
+pub pdfrum_doc::nav::action::ActionKind::GoToE
+pub pdfrum_doc::nav::action::ActionKind::GoToR
+pub pdfrum_doc::nav::action::ActionKind::Hide
+pub pdfrum_doc::nav::action::ActionKind::ImportData
+pub pdfrum_doc::nav::action::ActionKind::JavaScript
+pub pdfrum_doc::nav::action::ActionKind::Launch
+pub pdfrum_doc::nav::action::ActionKind::Movie
+pub pdfrum_doc::nav::action::ActionKind::Named
+pub pdfrum_doc::nav::action::ActionKind::Rendition
+pub pdfrum_doc::nav::action::ActionKind::ResetForm
+pub pdfrum_doc::nav::action::ActionKind::SetOcgState
+pub pdfrum_doc::nav::action::ActionKind::Sound
+pub pdfrum_doc::nav::action::ActionKind::SubmitForm
+pub pdfrum_doc::nav::action::ActionKind::Thread
+pub pdfrum_doc::nav::action::ActionKind::Trans
+pub pdfrum_doc::nav::action::ActionKind::Unknown
+pub pdfrum_doc::nav::action::ActionKind::Uri
+pub struct pdfrum_doc::nav::action::Action
+pub pdfrum_doc::nav::action::Action::dict: pdfrum_object::dict::Dict
+impl pdfrum_doc::nav::action::Action
+pub fn pdfrum_doc::nav::action::Action::chain<R: pdfrum_object::resolve::Resolve>(&self, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> alloc::vec::Vec<pdfrum_doc::nav::action::Action>
+pub fn pdfrum_doc::nav::action::Action::dest<R: pdfrum_object::resolve::Resolve>(&self, &pdfrum_object::dict::Dict, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_doc::nav::dest::Dest
+pub fn pdfrum_doc::nav::action::Action::fields<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::vec::Vec<pdfrum_object::object::Object>
+pub fn pdfrum_doc::nav::action::Action::file_path<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::string::String
+pub fn pdfrum_doc::nav::action::Action::flags<R: pdfrum_object::resolve::Resolve>(&self, &R) -> i64
+pub fn pdfrum_doc::nav::action::Action::hide_status(&self) -> bool
+pub fn pdfrum_doc::nav::action::Action::javascript<R: pdfrum_object::resolve::Resolve>(&self, &R) -> core::option::Option<alloc::string::String>
+pub fn pdfrum_doc::nav::action::Action::kind(&self) -> pdfrum_doc::nav::action::ActionKind
+pub fn pdfrum_doc::nav::action::Action::named_action<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::vec::Vec<u8>
+pub fn pdfrum_doc::nav::action::Action::new(pdfrum_object::dict::Dict) -> pdfrum_doc::nav::action::Action
+pub fn pdfrum_doc::nav::action::Action::next<R: pdfrum_object::resolve::Resolve>(&self, usize, &R) -> core::option::Option<pdfrum_doc::nav::action::Action>
+pub fn pdfrum_doc::nav::action::Action::next_count<R: pdfrum_object::resolve::Resolve>(&self, &R) -> usize
+pub fn pdfrum_doc::nav::action::Action::uri<R: pdfrum_object::resolve::Resolve>(&self, &pdfrum_object::dict::Dict, &R) -> alloc::vec::Vec<u8>
+pub fn pdfrum_doc::nav::action::additional_action<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, pdfrum_doc::nav::action::AActionType, &R) -> core::option::Option<pdfrum_doc::nav::action::Action>
+pub mod pdfrum_doc::nav::dest
+pub enum pdfrum_doc::nav::dest::ZoomMode
+pub pdfrum_doc::nav::dest::ZoomMode::Fit
+pub pdfrum_doc::nav::dest::ZoomMode::FitB
+pub pdfrum_doc::nav::dest::ZoomMode::FitBH
+pub pdfrum_doc::nav::dest::ZoomMode::FitBV
+pub pdfrum_doc::nav::dest::ZoomMode::FitH
+pub pdfrum_doc::nav::dest::ZoomMode::FitR
+pub pdfrum_doc::nav::dest::ZoomMode::FitV
+pub pdfrum_doc::nav::dest::ZoomMode::Unknown
+pub pdfrum_doc::nav::dest::ZoomMode::Xyz
+pub struct pdfrum_doc::nav::dest::Dest
+pub pdfrum_doc::nav::dest::Dest::array: core::option::Option<pdfrum_object::array::Array>
+impl pdfrum_doc::nav::dest::Dest
+pub fn pdfrum_doc::nav::dest::Dest::create<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, core::option::Option<&pdfrum_object::object::Object>, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_doc::nav::dest::Dest
+pub fn pdfrum_doc::nav::dest::Dest::num_params<R: pdfrum_object::resolve::Resolve>(&self, &R) -> usize
+pub fn pdfrum_doc::nav::dest::Dest::page_index<R: pdfrum_object::resolve::Resolve>(&self, &R, impl core::ops::function::Fn(u32) -> i32, &mut pdfrum_common::diagnostics::Diagnostics) -> i32
+pub fn pdfrum_doc::nav::dest::Dest::param(&self, usize) -> f32
+pub fn pdfrum_doc::nav::dest::Dest::params_all(&self) -> alloc::vec::Vec<f32>
+pub fn pdfrum_doc::nav::dest::Dest::xyz<R: pdfrum_object::resolve::Resolve>(&self, &R) -> core::option::Option<pdfrum_doc::nav::dest::Xyz>
+pub fn pdfrum_doc::nav::dest::Dest::zoom_mode<R: pdfrum_object::resolve::Resolve>(&self, &R) -> pdfrum_doc::nav::dest::ZoomMode
+pub struct pdfrum_doc::nav::dest::Xyz
+pub pdfrum_doc::nav::dest::Xyz::x: core::option::Option<f32>
+pub pdfrum_doc::nav::dest::Xyz::y: core::option::Option<f32>
+pub pdfrum_doc::nav::dest::Xyz::zoom: core::option::Option<f32>
+pub mod pdfrum_doc::nav::filespec
+pub struct pdfrum_doc::nav::filespec::FileSpec
+pub pdfrum_doc::nav::filespec::FileSpec::object: pdfrum_object::object::Object
+impl pdfrum_doc::nav::filespec::FileSpec
+pub fn pdfrum_doc::nav::filespec::FileSpec::file_name<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::string::String
+pub fn pdfrum_doc::nav::filespec::FileSpec::file_stream<R: pdfrum_object::resolve::Resolve>(&self, &R) -> core::option::Option<pdfrum_object::stream::Stream>
+pub fn pdfrum_doc::nav::filespec::FileSpec::new(pdfrum_object::object::Object) -> pdfrum_doc::nav::filespec::FileSpec
+pub fn pdfrum_doc::nav::filespec::FileSpec::params<R: pdfrum_object::resolve::Resolve>(&self, &R) -> core::option::Option<pdfrum_object::dict::Dict>
+pub fn pdfrum_doc::nav::filespec::decode_file_name(&str) -> alloc::string::String
+pub fn pdfrum_doc::nav::filespec::encode_file_name(&str) -> alloc::string::String
+pub mod pdfrum_doc::nav::link
+pub struct pdfrum_doc::nav::link::Link
+pub pdfrum_doc::nav::link::Link::dict: pdfrum_object::dict::Dict
+impl pdfrum_doc::nav::link::Link
+pub fn pdfrum_doc::nav::link::Link::action<R: pdfrum_object::resolve::Resolve>(&self, &R) -> core::option::Option<pdfrum_doc::nav::action::Action>
+pub fn pdfrum_doc::nav::link::Link::dest<R: pdfrum_object::resolve::Resolve>(&self, &pdfrum_object::dict::Dict, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_doc::nav::dest::Dest
+pub fn pdfrum_doc::nav::link::Link::new(pdfrum_object::dict::Dict) -> pdfrum_doc::nav::link::Link
+pub fn pdfrum_doc::nav::link::Link::rect<R: pdfrum_object::resolve::Resolve>(&self, &R) -> kurbo::rect::Rect
+pub fn pdfrum_doc::nav::link::enumerate_links<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, usize, &R) -> core::option::Option<(usize, pdfrum_doc::nav::link::Link)>
+pub fn pdfrum_doc::nav::link::link_at_point<R: pdfrum_object::resolve::Resolve>(&[core::option::Option<pdfrum_doc::nav::link::Link>], kurbo::point::Point, &R) -> core::option::Option<(usize, pdfrum_doc::nav::link::Link)>
+pub fn pdfrum_doc::nav::link::page_links<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> alloc::vec::Vec<core::option::Option<pdfrum_doc::nav::link::Link>>
+pub mod pdfrum_doc::nav::name_tree
+pub struct pdfrum_doc::nav::name_tree::NameTree
+pub pdfrum_doc::nav::name_tree::NameTree::root: pdfrum_object::dict::Dict
+impl pdfrum_doc::nav::name_tree::NameTree
+pub fn pdfrum_doc::nav::name_tree::NameTree::count<R: pdfrum_object::resolve::Resolve>(&self, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> usize
+pub fn pdfrum_doc::nav::name_tree::NameTree::lookup<R: pdfrum_object::resolve::Resolve>(&self, &str, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<pdfrum_object::object::Object>
+pub fn pdfrum_doc::nav::name_tree::NameTree::lookup_by_index<R: pdfrum_object::resolve::Resolve>(&self, usize, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<(alloc::string::String, pdfrum_object::object::Object)>
+pub fn pdfrum_doc::nav::name_tree::NameTree::open<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &pdfrum_object::name::Name, &R) -> core::option::Option<pdfrum_doc::nav::name_tree::NameTree>
+pub fn pdfrum_doc::nav::name_tree::lookup_named_dest<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &[u8], &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<pdfrum_object::array::Array>
+pub mod pdfrum_doc::nav::number_tree
+pub fn pdfrum_doc::nav::number_tree::find<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, i64, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<pdfrum_doc::nav::number_tree::Found>
+pub fn pdfrum_doc::nav::number_tree::lower_bound<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, i64, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<(i64, core::option::Option<pdfrum_doc::nav::number_tree::Found>)>
+pub type pdfrum_doc::nav::number_tree::Found = pdfrum_object::object::Object
+pub mod pdfrum_doc::nav::number_tree_alias
+pub fn pdfrum_doc::nav::number_tree_alias::find<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, i64, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<pdfrum_doc::nav::number_tree::Found>
+pub fn pdfrum_doc::nav::number_tree_alias::lower_bound<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, i64, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<(i64, core::option::Option<pdfrum_doc::nav::number_tree::Found>)>
+pub mod pdfrum_doc::nav::open_action
+pub struct pdfrum_doc::nav::open_action::Hidden
+impl pdfrum_doc::nav::open_action::Hidden
+pub fn pdfrum_doc::nav::open_action::Hidden::flags<R: pdfrum_object::resolve::Resolve>(&self, &pdfrum_object::dict::Dict, &R) -> pdfrum_doc::annot::AnnotFlags
+pub fn pdfrum_doc::nav::open_action::Hidden::is_empty(&self) -> bool
+pub fn pdfrum_doc::nav::open_action::hidden_by_open_action<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_doc::nav::open_action::Hidden
+pub mod pdfrum_doc::nav::outline
+pub struct pdfrum_doc::nav::outline::Bookmark
+pub pdfrum_doc::nav::outline::Bookmark::depth: usize
+pub pdfrum_doc::nav::outline::Bookmark::dict: pdfrum_object::dict::Dict
+impl pdfrum_doc::nav::outline::Bookmark
+pub fn pdfrum_doc::nav::outline::Bookmark::action<R: pdfrum_object::resolve::Resolve>(&self, &R) -> core::option::Option<pdfrum_doc::nav::action::Action>
+pub fn pdfrum_doc::nav::outline::Bookmark::color<R: pdfrum_object::resolve::Resolve>(&self, &R) -> core::option::Option<(f32, f32, f32)>
+pub fn pdfrum_doc::nav::outline::Bookmark::count<R: pdfrum_object::resolve::Resolve>(&self, &R) -> i64
+pub fn pdfrum_doc::nav::outline::Bookmark::dest<R: pdfrum_object::resolve::Resolve>(&self, &pdfrum_object::dict::Dict, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_doc::nav::dest::Dest
+pub fn pdfrum_doc::nav::outline::Bookmark::style<R: pdfrum_object::resolve::Resolve>(&self, &R) -> i64
+pub fn pdfrum_doc::nav::outline::Bookmark::title<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::string::String
+pub fn pdfrum_doc::nav::outline::find<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &str, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<pdfrum_doc::nav::outline::Bookmark>
+pub fn pdfrum_doc::nav::outline::walk<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> alloc::vec::Vec<pdfrum_doc::nav::outline::Bookmark>
+pub enum pdfrum_doc::nav::AActionType
+pub pdfrum_doc::nav::AActionType::ButtonDown
+pub pdfrum_doc::nav::AActionType::ButtonUp
+pub pdfrum_doc::nav::AActionType::Calculate
+pub pdfrum_doc::nav::AActionType::CloseDocument
+pub pdfrum_doc::nav::AActionType::ClosePage
+pub pdfrum_doc::nav::AActionType::CursorEnter
+pub pdfrum_doc::nav::AActionType::CursorExit
+pub pdfrum_doc::nav::AActionType::DocumentPrinted
+pub pdfrum_doc::nav::AActionType::DocumentSaved
+pub pdfrum_doc::nav::AActionType::Format
+pub pdfrum_doc::nav::AActionType::GetFocus
+pub pdfrum_doc::nav::AActionType::KeyStroke
+pub pdfrum_doc::nav::AActionType::LoseFocus
+pub pdfrum_doc::nav::AActionType::OpenPage
+pub pdfrum_doc::nav::AActionType::PageClose
+pub pdfrum_doc::nav::AActionType::PageInvisible
+pub pdfrum_doc::nav::AActionType::PageOpen
+pub pdfrum_doc::nav::AActionType::PageVisible
+pub pdfrum_doc::nav::AActionType::PrintDocument
+pub pdfrum_doc::nav::AActionType::SaveDocument
+pub pdfrum_doc::nav::AActionType::Validate
+impl pdfrum_doc::nav::action::AActionType
+pub fn pdfrum_doc::nav::action::AActionType::is_user_input(self) -> bool
+pub fn pdfrum_doc::nav::action::AActionType::key(self) -> &'static [u8]
+pub enum pdfrum_doc::nav::ActionKind
+pub pdfrum_doc::nav::ActionKind::GoTo
+pub pdfrum_doc::nav::ActionKind::GoTo3DView
+pub pdfrum_doc::nav::ActionKind::GoToE
+pub pdfrum_doc::nav::ActionKind::GoToR
+pub pdfrum_doc::nav::ActionKind::Hide
+pub pdfrum_doc::nav::ActionKind::ImportData
+pub pdfrum_doc::nav::ActionKind::JavaScript
+pub pdfrum_doc::nav::ActionKind::Launch
+pub pdfrum_doc::nav::ActionKind::Movie
+pub pdfrum_doc::nav::ActionKind::Named
+pub pdfrum_doc::nav::ActionKind::Rendition
+pub pdfrum_doc::nav::ActionKind::ResetForm
+pub pdfrum_doc::nav::ActionKind::SetOcgState
+pub pdfrum_doc::nav::ActionKind::Sound
+pub pdfrum_doc::nav::ActionKind::SubmitForm
+pub pdfrum_doc::nav::ActionKind::Thread
+pub pdfrum_doc::nav::ActionKind::Trans
+pub pdfrum_doc::nav::ActionKind::Unknown
+pub pdfrum_doc::nav::ActionKind::Uri
+pub enum pdfrum_doc::nav::ZoomMode
+pub pdfrum_doc::nav::ZoomMode::Fit
+pub pdfrum_doc::nav::ZoomMode::FitB
+pub pdfrum_doc::nav::ZoomMode::FitBH
+pub pdfrum_doc::nav::ZoomMode::FitBV
+pub pdfrum_doc::nav::ZoomMode::FitH
+pub pdfrum_doc::nav::ZoomMode::FitR
+pub pdfrum_doc::nav::ZoomMode::FitV
+pub pdfrum_doc::nav::ZoomMode::Unknown
+pub pdfrum_doc::nav::ZoomMode::Xyz
+pub struct pdfrum_doc::nav::Action
+pub pdfrum_doc::nav::Action::dict: pdfrum_object::dict::Dict
+impl pdfrum_doc::nav::action::Action
+pub fn pdfrum_doc::nav::action::Action::chain<R: pdfrum_object::resolve::Resolve>(&self, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> alloc::vec::Vec<pdfrum_doc::nav::action::Action>
+pub fn pdfrum_doc::nav::action::Action::dest<R: pdfrum_object::resolve::Resolve>(&self, &pdfrum_object::dict::Dict, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_doc::nav::dest::Dest
+pub fn pdfrum_doc::nav::action::Action::fields<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::vec::Vec<pdfrum_object::object::Object>
+pub fn pdfrum_doc::nav::action::Action::file_path<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::string::String
+pub fn pdfrum_doc::nav::action::Action::flags<R: pdfrum_object::resolve::Resolve>(&self, &R) -> i64
+pub fn pdfrum_doc::nav::action::Action::hide_status(&self) -> bool
+pub fn pdfrum_doc::nav::action::Action::javascript<R: pdfrum_object::resolve::Resolve>(&self, &R) -> core::option::Option<alloc::string::String>
+pub fn pdfrum_doc::nav::action::Action::kind(&self) -> pdfrum_doc::nav::action::ActionKind
+pub fn pdfrum_doc::nav::action::Action::named_action<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::vec::Vec<u8>
+pub fn pdfrum_doc::nav::action::Action::new(pdfrum_object::dict::Dict) -> pdfrum_doc::nav::action::Action
+pub fn pdfrum_doc::nav::action::Action::next<R: pdfrum_object::resolve::Resolve>(&self, usize, &R) -> core::option::Option<pdfrum_doc::nav::action::Action>
+pub fn pdfrum_doc::nav::action::Action::next_count<R: pdfrum_object::resolve::Resolve>(&self, &R) -> usize
+pub fn pdfrum_doc::nav::action::Action::uri<R: pdfrum_object::resolve::Resolve>(&self, &pdfrum_object::dict::Dict, &R) -> alloc::vec::Vec<u8>
+pub struct pdfrum_doc::nav::Bookmark
+pub pdfrum_doc::nav::Bookmark::depth: usize
+pub pdfrum_doc::nav::Bookmark::dict: pdfrum_object::dict::Dict
+impl pdfrum_doc::nav::outline::Bookmark
+pub fn pdfrum_doc::nav::outline::Bookmark::action<R: pdfrum_object::resolve::Resolve>(&self, &R) -> core::option::Option<pdfrum_doc::nav::action::Action>
+pub fn pdfrum_doc::nav::outline::Bookmark::color<R: pdfrum_object::resolve::Resolve>(&self, &R) -> core::option::Option<(f32, f32, f32)>
+pub fn pdfrum_doc::nav::outline::Bookmark::count<R: pdfrum_object::resolve::Resolve>(&self, &R) -> i64
+pub fn pdfrum_doc::nav::outline::Bookmark::dest<R: pdfrum_object::resolve::Resolve>(&self, &pdfrum_object::dict::Dict, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_doc::nav::dest::Dest
+pub fn pdfrum_doc::nav::outline::Bookmark::style<R: pdfrum_object::resolve::Resolve>(&self, &R) -> i64
+pub fn pdfrum_doc::nav::outline::Bookmark::title<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::string::String
+pub struct pdfrum_doc::nav::Dest
+pub pdfrum_doc::nav::Dest::array: core::option::Option<pdfrum_object::array::Array>
+impl pdfrum_doc::nav::dest::Dest
+pub fn pdfrum_doc::nav::dest::Dest::create<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, core::option::Option<&pdfrum_object::object::Object>, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_doc::nav::dest::Dest
+pub fn pdfrum_doc::nav::dest::Dest::num_params<R: pdfrum_object::resolve::Resolve>(&self, &R) -> usize
+pub fn pdfrum_doc::nav::dest::Dest::page_index<R: pdfrum_object::resolve::Resolve>(&self, &R, impl core::ops::function::Fn(u32) -> i32, &mut pdfrum_common::diagnostics::Diagnostics) -> i32
+pub fn pdfrum_doc::nav::dest::Dest::param(&self, usize) -> f32
+pub fn pdfrum_doc::nav::dest::Dest::params_all(&self) -> alloc::vec::Vec<f32>
+pub fn pdfrum_doc::nav::dest::Dest::xyz<R: pdfrum_object::resolve::Resolve>(&self, &R) -> core::option::Option<pdfrum_doc::nav::dest::Xyz>
+pub fn pdfrum_doc::nav::dest::Dest::zoom_mode<R: pdfrum_object::resolve::Resolve>(&self, &R) -> pdfrum_doc::nav::dest::ZoomMode
+pub struct pdfrum_doc::nav::FileSpec
+pub pdfrum_doc::nav::FileSpec::object: pdfrum_object::object::Object
+impl pdfrum_doc::nav::filespec::FileSpec
+pub fn pdfrum_doc::nav::filespec::FileSpec::file_name<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::string::String
+pub fn pdfrum_doc::nav::filespec::FileSpec::file_stream<R: pdfrum_object::resolve::Resolve>(&self, &R) -> core::option::Option<pdfrum_object::stream::Stream>
+pub fn pdfrum_doc::nav::filespec::FileSpec::new(pdfrum_object::object::Object) -> pdfrum_doc::nav::filespec::FileSpec
+pub fn pdfrum_doc::nav::filespec::FileSpec::params<R: pdfrum_object::resolve::Resolve>(&self, &R) -> core::option::Option<pdfrum_object::dict::Dict>
+pub struct pdfrum_doc::nav::Hidden
+impl pdfrum_doc::nav::open_action::Hidden
+pub fn pdfrum_doc::nav::open_action::Hidden::flags<R: pdfrum_object::resolve::Resolve>(&self, &pdfrum_object::dict::Dict, &R) -> pdfrum_doc::annot::AnnotFlags
+pub fn pdfrum_doc::nav::open_action::Hidden::is_empty(&self) -> bool
+pub struct pdfrum_doc::nav::Link
+pub pdfrum_doc::nav::Link::dict: pdfrum_object::dict::Dict
+impl pdfrum_doc::nav::link::Link
+pub fn pdfrum_doc::nav::link::Link::action<R: pdfrum_object::resolve::Resolve>(&self, &R) -> core::option::Option<pdfrum_doc::nav::action::Action>
+pub fn pdfrum_doc::nav::link::Link::dest<R: pdfrum_object::resolve::Resolve>(&self, &pdfrum_object::dict::Dict, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_doc::nav::dest::Dest
+pub fn pdfrum_doc::nav::link::Link::new(pdfrum_object::dict::Dict) -> pdfrum_doc::nav::link::Link
+pub fn pdfrum_doc::nav::link::Link::rect<R: pdfrum_object::resolve::Resolve>(&self, &R) -> kurbo::rect::Rect
+pub struct pdfrum_doc::nav::NameTree
+pub pdfrum_doc::nav::NameTree::root: pdfrum_object::dict::Dict
+impl pdfrum_doc::nav::name_tree::NameTree
+pub fn pdfrum_doc::nav::name_tree::NameTree::count<R: pdfrum_object::resolve::Resolve>(&self, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> usize
+pub fn pdfrum_doc::nav::name_tree::NameTree::lookup<R: pdfrum_object::resolve::Resolve>(&self, &str, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<pdfrum_object::object::Object>
+pub fn pdfrum_doc::nav::name_tree::NameTree::lookup_by_index<R: pdfrum_object::resolve::Resolve>(&self, usize, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<(alloc::string::String, pdfrum_object::object::Object)>
+pub fn pdfrum_doc::nav::name_tree::NameTree::open<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &pdfrum_object::name::Name, &R) -> core::option::Option<pdfrum_doc::nav::name_tree::NameTree>
+pub struct pdfrum_doc::nav::NumberTree
+impl pdfrum_doc::nav::NumberTree
+pub fn pdfrum_doc::nav::NumberTree::find<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, i64, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<pdfrum_object::object::Object>
+pub fn pdfrum_doc::nav::NumberTree::lower_bound<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, i64, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<(i64, core::option::Option<pdfrum_object::object::Object>)>
+pub struct pdfrum_doc::nav::Xyz
+pub pdfrum_doc::nav::Xyz::x: core::option::Option<f32>
+pub pdfrum_doc::nav::Xyz::y: core::option::Option<f32>
+pub pdfrum_doc::nav::Xyz::zoom: core::option::Option<f32>
+pub fn pdfrum_doc::nav::additional_action<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, pdfrum_doc::nav::action::AActionType, &R) -> core::option::Option<pdfrum_doc::nav::action::Action>
+pub fn pdfrum_doc::nav::decode_file_name(&str) -> alloc::string::String
+pub fn pdfrum_doc::nav::encode_file_name(&str) -> alloc::string::String
+pub fn pdfrum_doc::nav::enumerate_links<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, usize, &R) -> core::option::Option<(usize, pdfrum_doc::nav::link::Link)>
+pub fn pdfrum_doc::nav::hidden_by_open_action<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_doc::nav::open_action::Hidden
+pub fn pdfrum_doc::nav::link_at_point<R: pdfrum_object::resolve::Resolve>(&[core::option::Option<pdfrum_doc::nav::link::Link>], kurbo::point::Point, &R) -> core::option::Option<(usize, pdfrum_doc::nav::link::Link)>
+pub fn pdfrum_doc::nav::lookup_named_dest<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &[u8], &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<pdfrum_object::array::Array>
+pub fn pdfrum_doc::nav::page_links<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> alloc::vec::Vec<core::option::Option<pdfrum_doc::nav::link::Link>>
+pub mod pdfrum_doc::page_label
+pub fn pdfrum_doc::page_label::page_label<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, i64, u32, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<alloc::string::String>
+pub mod pdfrum_doc::prefs
+pub struct pdfrum_doc::prefs::ViewerPrefs
+pub pdfrum_doc::prefs::ViewerPrefs::dict: core::option::Option<pdfrum_object::dict::Dict>
+impl pdfrum_doc::prefs::ViewerPrefs
+pub fn pdfrum_doc::prefs::ViewerPrefs::duplex<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::vec::Vec<u8>
+pub fn pdfrum_doc::prefs::ViewerPrefs::generic_name(&self, &pdfrum_object::name::Name) -> core::option::Option<alloc::vec::Vec<u8>>
+pub fn pdfrum_doc::prefs::ViewerPrefs::is_direction_r2l<R: pdfrum_object::resolve::Resolve>(&self, &R) -> bool
+pub fn pdfrum_doc::prefs::ViewerPrefs::num_copies<R: pdfrum_object::resolve::Resolve>(&self, &R) -> i64
+pub fn pdfrum_doc::prefs::ViewerPrefs::print_page_range<R: pdfrum_object::resolve::Resolve>(&self, &R) -> core::option::Option<pdfrum_object::array::Array>
+pub fn pdfrum_doc::prefs::ViewerPrefs::print_scaling<R: pdfrum_object::resolve::Resolve>(&self, &R) -> bool
+pub fn pdfrum_doc::prefs::ViewerPrefs::read<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> pdfrum_doc::prefs::ViewerPrefs
+pub mod pdfrum_doc::structure
+pub mod pdfrum_doc::structure::dump
+pub fn pdfrum_doc::structure::dump::render<R: pdfrum_object::resolve::Resolve>(core::option::Option<&pdfrum_doc::structure::StructTree>, u32, &R) -> alloc::string::String
+pub mod pdfrum_doc::structure::element
+pub enum pdfrum_doc::structure::element::Kid
+pub pdfrum_doc::structure::element::Kid::Element
+pub pdfrum_doc::structure::element::Kid::Element::dict: pdfrum_object::dict::Dict
+pub pdfrum_doc::structure::element::Kid::Element::linked: core::option::Option<usize>
+pub pdfrum_doc::structure::element::Kid::Element::reference: core::option::Option<pdfrum_object::object::ObjRef>
+pub pdfrum_doc::structure::element::Kid::Element::slot: usize
+pub pdfrum_doc::structure::element::Kid::Invalid
+pub pdfrum_doc::structure::element::Kid::Object
+pub pdfrum_doc::structure::element::Kid::Object::obj_num: u32
+pub pdfrum_doc::structure::element::Kid::PageContent
+pub pdfrum_doc::structure::element::Kid::PageContent::content_id: i64
+pub pdfrum_doc::structure::element::Kid::StreamContent
+pub pdfrum_doc::structure::element::Kid::StreamContent::content_id: i64
+pub pdfrum_doc::structure::element::Kid::StreamContent::stream_obj_num: u32
+pub struct pdfrum_doc::structure::element::StructElement
+pub pdfrum_doc::structure::element::StructElement::dict: pdfrum_object::dict::Dict
+pub pdfrum_doc::structure::element::StructElement::kids: alloc::vec::Vec<pdfrum_doc::structure::element::Kid>
+pub pdfrum_doc::structure::element::StructElement::kind: alloc::vec::Vec<u8>
+pub pdfrum_doc::structure::element::StructElement::parent: core::option::Option<usize>
+pub pdfrum_doc::structure::element::StructElement::reference: core::option::Option<pdfrum_object::object::ObjRef>
+impl pdfrum_doc::structure::element::StructElement
+pub fn pdfrum_doc::structure::element::StructElement::actual_text<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::string::String
+pub fn pdfrum_doc::structure::element::StructElement::alt_text<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::string::String
+pub fn pdfrum_doc::structure::element::StructElement::expansion<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::string::String
+pub fn pdfrum_doc::structure::element::StructElement::id(&self) -> core::option::Option<alloc::vec::Vec<u8>>
+pub fn pdfrum_doc::structure::element::StructElement::kid_content_id(&self, usize) -> i64
+pub fn pdfrum_doc::structure::element::StructElement::lang(&self) -> core::option::Option<alloc::vec::Vec<u8>>
+pub fn pdfrum_doc::structure::element::StructElement::link_kid(&mut self, &pdfrum_object::dict::Dict, core::option::Option<pdfrum_object::object::ObjRef>, usize) -> bool
+pub fn pdfrum_doc::structure::element::StructElement::load_kids<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, u32, &R) -> alloc::vec::Vec<pdfrum_doc::structure::element::Kid>
+pub fn pdfrum_doc::structure::element::StructElement::obj_type<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::vec::Vec<u8>
+pub fn pdfrum_doc::structure::element::StructElement::title<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::string::String
+pub fn pdfrum_doc::structure::element::map_role(core::option::Option<&pdfrum_object::dict::Dict>, &[u8]) -> alloc::vec::Vec<u8>
+pub fn pdfrum_doc::structure::element::marked_content_id_at<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, usize, &R) -> i64
+pub fn pdfrum_doc::structure::element::marked_content_id_count<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> i64
+pub enum pdfrum_doc::structure::Kid
+pub pdfrum_doc::structure::Kid::Element
+pub pdfrum_doc::structure::Kid::Element::dict: pdfrum_object::dict::Dict
+pub pdfrum_doc::structure::Kid::Element::linked: core::option::Option<usize>
+pub pdfrum_doc::structure::Kid::Element::reference: core::option::Option<pdfrum_object::object::ObjRef>
+pub pdfrum_doc::structure::Kid::Element::slot: usize
+pub pdfrum_doc::structure::Kid::Invalid
+pub pdfrum_doc::structure::Kid::Object
+pub pdfrum_doc::structure::Kid::Object::obj_num: u32
+pub pdfrum_doc::structure::Kid::PageContent
+pub pdfrum_doc::structure::Kid::PageContent::content_id: i64
+pub pdfrum_doc::structure::Kid::StreamContent
+pub pdfrum_doc::structure::Kid::StreamContent::content_id: i64
+pub pdfrum_doc::structure::Kid::StreamContent::stream_obj_num: u32
+pub struct pdfrum_doc::structure::StructElement
+pub pdfrum_doc::structure::StructElement::dict: pdfrum_object::dict::Dict
+pub pdfrum_doc::structure::StructElement::kids: alloc::vec::Vec<pdfrum_doc::structure::element::Kid>
+pub pdfrum_doc::structure::StructElement::kind: alloc::vec::Vec<u8>
+pub pdfrum_doc::structure::StructElement::parent: core::option::Option<usize>
+pub pdfrum_doc::structure::StructElement::reference: core::option::Option<pdfrum_object::object::ObjRef>
+impl pdfrum_doc::structure::element::StructElement
+pub fn pdfrum_doc::structure::element::StructElement::actual_text<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::string::String
+pub fn pdfrum_doc::structure::element::StructElement::alt_text<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::string::String
+pub fn pdfrum_doc::structure::element::StructElement::expansion<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::string::String
+pub fn pdfrum_doc::structure::element::StructElement::id(&self) -> core::option::Option<alloc::vec::Vec<u8>>
+pub fn pdfrum_doc::structure::element::StructElement::kid_content_id(&self, usize) -> i64
+pub fn pdfrum_doc::structure::element::StructElement::lang(&self) -> core::option::Option<alloc::vec::Vec<u8>>
+pub fn pdfrum_doc::structure::element::StructElement::link_kid(&mut self, &pdfrum_object::dict::Dict, core::option::Option<pdfrum_object::object::ObjRef>, usize) -> bool
+pub fn pdfrum_doc::structure::element::StructElement::load_kids<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, u32, &R) -> alloc::vec::Vec<pdfrum_doc::structure::element::Kid>
+pub fn pdfrum_doc::structure::element::StructElement::obj_type<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::vec::Vec<u8>
+pub fn pdfrum_doc::structure::element::StructElement::title<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::string::String
+pub struct pdfrum_doc::structure::StructTree
+pub pdfrum_doc::structure::StructTree::elements: alloc::vec::Vec<pdfrum_doc::structure::element::StructElement>
+pub pdfrum_doc::structure::StructTree::top: alloc::vec::Vec<core::option::Option<usize>>
+impl pdfrum_doc::structure::StructTree
+pub fn pdfrum_doc::structure::StructTree::load_page<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &pdfrum_object::dict::Dict, u32, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<pdfrum_doc::structure::StructTree>
+pub fn pdfrum_doc::structure::marked_content_id_at<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, usize, &R) -> i64
+pub fn pdfrum_doc::structure::marked_content_id_count<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> i64
+pub mod pdfrum_doc::vt
+pub mod pdfrum_doc::vt::autosize
+pub fn pdfrum_doc::vt::autosize::auto_font_size(&[pdfrum_doc::vt::Section], &pdfrum_doc::vt::Config, &pdfrum_doc::vt::Metrics<'_>) -> f32
+pub fn pdfrum_doc::vt::autosize::is_bigger(&[pdfrum_doc::vt::Section], &pdfrum_doc::vt::Config, &pdfrum_doc::vt::Metrics<'_>, f32) -> bool
+pub mod pdfrum_doc::vt::bidi
+pub enum pdfrum_doc::vt::bidi::Direction
+pub pdfrum_doc::vt::bidi::Direction::Auto
+pub pdfrum_doc::vt::bidi::Direction::Ltr
+pub pdfrum_doc::vt::bidi::Direction::Rtl
+pub struct pdfrum_doc::vt::bidi::Resolver
+impl pdfrum_doc::vt::bidi::Resolver
+pub fn pdfrum_doc::vt::bidi::Resolver::new(&[u32], pdfrum_doc::vt::bidi::Direction) -> pdfrum_doc::vt::bidi::Resolver
+pub fn pdfrum_doc::vt::bidi::Resolver::visual_runs(&self, usize, usize) -> alloc::vec::Vec<pdfrum_doc::vt::bidi::Run>
+pub struct pdfrum_doc::vt::bidi::Run
+pub pdfrum_doc::vt::bidi::Run::is_rtl: bool
+pub pdfrum_doc::vt::bidi::Run::length: usize
+pub pdfrum_doc::vt::bidi::Run::start: usize
+pub mod pdfrum_doc::vt::classify
+pub fn pdfrum_doc::vt::classify::is_cjk(u32) -> bool
+pub fn pdfrum_doc::vt::classify::is_connective_symbol(u32) -> bool
+pub fn pdfrum_doc::vt::classify::is_currency_symbol(u32) -> bool
+pub fn pdfrum_doc::vt::classify::is_digit(u32) -> bool
+pub fn pdfrum_doc::vt::classify::is_latin(u32) -> bool
+pub fn pdfrum_doc::vt::classify::is_open_style_punctuation(u32) -> bool
+pub fn pdfrum_doc::vt::classify::is_prefix_symbol(u32) -> bool
+pub fn pdfrum_doc::vt::classify::is_punctuation(u32) -> bool
+pub fn pdfrum_doc::vt::classify::is_space(u32) -> bool
+pub fn pdfrum_doc::vt::classify::need_division(u32, u32) -> bool
+pub mod pdfrum_doc::vt::comb
+pub fn pdfrum_doc::vt::comb::rearrange_char_array(&mut pdfrum_doc::vt::Section, &pdfrum_doc::vt::Config, &pdfrum_doc::vt::Metrics<'_>) -> kurbo::rect::Rect
+pub mod pdfrum_doc::vt::edit_ap
+pub enum pdfrum_doc::vt::edit_ap::Grouping
+pub pdfrum_doc::vt::edit_ap::Grouping::Continuous
+pub pdfrum_doc::vt::edit_ap::Grouping::PerCharacter
+pub struct pdfrum_doc::vt::edit_ap::Face
+pub pdfrum_doc::vt::edit_ap::Face::alias: alloc::vec::Vec<u8>
+pub pdfrum_doc::vt::edit_ap::Face::bytes: alloc::vec::Vec<u8>
+pub pdfrum_doc::vt::edit_ap::Face::index: i32
+impl pdfrum_doc::vt::edit_ap::Face
+pub fn pdfrum_doc::vt::edit_ap::Face::single(&[u8], alloc::vec::Vec<u8>) -> pdfrum_doc::vt::edit_ap::Face
+pub fn pdfrum_doc::vt::edit_ap::generate<F>(&pdfrum_doc::vt::Layout, &pdfrum_doc::vt::Config, &pdfrum_doc::vt::Metrics<'_>, (f32, f32), pdfrum_doc::vt::edit_ap::Grouping, F) -> alloc::string::String where F: core::ops::function::Fn(u32) -> pdfrum_doc::vt::edit_ap::Face
+pub mod pdfrum_doc::vt::hit
+pub struct pdfrum_doc::vt::hit::Place
+pub pdfrum_doc::vt::hit::Place::line: u32
+pub pdfrum_doc::vt::hit::Place::section: u32
+pub pdfrum_doc::vt::hit::Place::word: i32
+impl pdfrum_doc::vt::hit::Place
+pub const pdfrum_doc::vt::hit::Place::START: pdfrum_doc::vt::hit::Place
+pub fn pdfrum_doc::vt::hit::Place::new(u32, u32, i32) -> pdfrum_doc::vt::hit::Place
+pub fn pdfrum_doc::vt::hit::Place::start() -> pdfrum_doc::vt::hit::Place
+impl core::default::Default for pdfrum_doc::vt::hit::Place
+pub fn pdfrum_doc::vt::hit::Place::default() -> pdfrum_doc::vt::hit::Place
+pub fn pdfrum_doc::vt::hit::begin_place(&pdfrum_doc::vt::Layout) -> pdfrum_doc::vt::hit::Place
+pub fn pdfrum_doc::vt::hit::caret_rect(&pdfrum_doc::vt::Layout, kurbo::rect::Rect, &pdfrum_doc::vt::Config, &pdfrum_doc::vt::Metrics<'_>, (f32, f32), pdfrum_doc::vt::hit::Place, f32) -> kurbo::rect::Rect
+pub fn pdfrum_doc::vt::hit::end_place(&pdfrum_doc::vt::Layout) -> pdfrum_doc::vt::hit::Place
+pub fn pdfrum_doc::vt::hit::place_at_point(&pdfrum_doc::vt::Layout, kurbo::rect::Rect, &pdfrum_doc::vt::Config, &pdfrum_doc::vt::Metrics<'_>, (f32, f32), kurbo::point::Point) -> pdfrum_doc::vt::hit::Place
+pub fn pdfrum_doc::vt::hit::place_of_word_index(&pdfrum_doc::vt::Layout, usize) -> pdfrum_doc::vt::hit::Place
+pub fn pdfrum_doc::vt::hit::point_at_place(&pdfrum_doc::vt::Layout, kurbo::rect::Rect, &pdfrum_doc::vt::Config, &pdfrum_doc::vt::Metrics<'_>, (f32, f32), pdfrum_doc::vt::hit::Place) -> kurbo::point::Point
+pub fn pdfrum_doc::vt::hit::word_index_of_place(&pdfrum_doc::vt::Layout, pdfrum_doc::vt::hit::Place) -> usize
+pub mod pdfrum_doc::vt::place
+pub fn pdfrum_doc::vt::place::output_lines(&mut pdfrum_doc::vt::Section, &pdfrum_doc::vt::Config, &pdfrum_doc::vt::Metrics<'_>, kurbo::rect::Rect) -> kurbo::rect::Rect
+pub mod pdfrum_doc::vt::split
+pub fn pdfrum_doc::vt::split::split_at_size(&mut pdfrum_doc::vt::Section, &pdfrum_doc::vt::Config, &pdfrum_doc::vt::Metrics<'_>, bool, f32) -> kurbo::rect::Rect
+pub fn pdfrum_doc::vt::split::split_lines(&mut pdfrum_doc::vt::Section, &pdfrum_doc::vt::Config, &pdfrum_doc::vt::Metrics<'_>, bool) -> kurbo::rect::Rect
+pub enum pdfrum_doc::vt::Alignment
+pub pdfrum_doc::vt::Alignment::Center
+pub pdfrum_doc::vt::Alignment::Left
+pub pdfrum_doc::vt::Alignment::Right
+impl pdfrum_doc::vt::Alignment
+pub fn pdfrum_doc::vt::Alignment::from_quadding(i64) -> pdfrum_doc::vt::Alignment
+pub enum pdfrum_doc::vt::Direction
+pub pdfrum_doc::vt::Direction::Auto
+pub pdfrum_doc::vt::Direction::Ltr
+pub pdfrum_doc::vt::Direction::Rtl
+pub struct pdfrum_doc::vt::Config
+pub pdfrum_doc::vt::Config::alignment: pdfrum_doc::vt::Alignment
+pub pdfrum_doc::vt::Config::auto_return: bool
+pub pdfrum_doc::vt::Config::char_array: usize
+pub pdfrum_doc::vt::Config::direction: pdfrum_doc::vt::bidi::Direction
+pub pdfrum_doc::vt::Config::font_size: f32
+pub pdfrum_doc::vt::Config::limit_char: usize
+pub pdfrum_doc::vt::Config::multi_line: bool
+pub pdfrum_doc::vt::Config::plate: kurbo::rect::Rect
+pub pdfrum_doc::vt::Config::sub_word: core::option::Option<char>
+impl core::default::Default for pdfrum_doc::vt::Config
+pub fn pdfrum_doc::vt::Config::default() -> Self
+pub struct pdfrum_doc::vt::Layout
+pub pdfrum_doc::vt::Layout::content_rect: kurbo::rect::Rect
+pub pdfrum_doc::vt::Layout::font_size: f32
+pub pdfrum_doc::vt::Layout::sections: alloc::vec::Vec<pdfrum_doc::vt::Section>
+impl pdfrum_doc::vt::Layout
+pub fn pdfrum_doc::vt::Layout::content_rect_pdf(&self, kurbo::rect::Rect) -> kurbo::rect::Rect
+pub fn pdfrum_doc::vt::Layout::to_pdf(kurbo::rect::Rect, f32, f32) -> (f32, f32)
+pub fn pdfrum_doc::vt::Layout::words(&self) -> impl core::iter::traits::iterator::Iterator<Item = (usize, usize, &pdfrum_doc::vt::Word)>
+pub struct pdfrum_doc::vt::Line
+pub pdfrum_doc::vt::Line::ascent: f32
+pub pdfrum_doc::vt::Line::begin: i32
+pub pdfrum_doc::vt::Line::descent: f32
+pub pdfrum_doc::vt::Line::end: i32
+pub pdfrum_doc::vt::Line::width: f32
+pub pdfrum_doc::vt::Line::x: f32
+pub pdfrum_doc::vt::Line::y: f32
+pub struct pdfrum_doc::vt::Metrics<'a>
+pub pdfrum_doc::vt::Metrics::ascent: i32
+pub pdfrum_doc::vt::Metrics::descent: i32
+pub pdfrum_doc::vt::Metrics::width: &'a dyn core::ops::function::Fn(u32) -> i32
+impl core::fmt::Debug for pdfrum_doc::vt::Metrics<'_>
+pub fn pdfrum_doc::vt::Metrics<'_>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub struct pdfrum_doc::vt::Section
+pub pdfrum_doc::vt::Section::lines: alloc::vec::Vec<pdfrum_doc::vt::Line>
+pub pdfrum_doc::vt::Section::rect: kurbo::rect::Rect
+pub pdfrum_doc::vt::Section::words: alloc::vec::Vec<pdfrum_doc::vt::Word>
+pub struct pdfrum_doc::vt::Word
+pub pdfrum_doc::vt::Word::ch: u32
+pub pdfrum_doc::vt::Word::font_index: i32
+pub pdfrum_doc::vt::Word::is_rtl: bool
+pub pdfrum_doc::vt::Word::tail: f32
+pub pdfrum_doc::vt::Word::x: f32
+pub pdfrum_doc::vt::Word::y: f32
+pub const pdfrum_doc::vt::FONT_SCALE: f32
+pub const pdfrum_doc::vt::FONT_SIZE_STEPS: [u8; 25]
+pub fn pdfrum_doc::vt::font_ascent(&pdfrum_doc::vt::Metrics<'_>, f32) -> f32
+pub fn pdfrum_doc::vt::font_descent(&pdfrum_doc::vt::Metrics<'_>, f32) -> f32
+pub fn pdfrum_doc::vt::layout(&str, &pdfrum_doc::vt::Config, &pdfrum_doc::vt::Metrics<'_>) -> pdfrum_doc::vt::Layout
+pub fn pdfrum_doc::vt::split_sections(&str, &pdfrum_doc::vt::Config) -> alloc::vec::Vec<alloc::vec::Vec<u32>>
+pub fn pdfrum_doc::vt::word_width(&pdfrum_doc::vt::Word, &pdfrum_doc::vt::Config, &pdfrum_doc::vt::Metrics<'_>, f32) -> f32
+pub enum pdfrum_doc::AActionType
+pub pdfrum_doc::AActionType::ButtonDown
+pub pdfrum_doc::AActionType::ButtonUp
+pub pdfrum_doc::AActionType::Calculate
+pub pdfrum_doc::AActionType::CloseDocument
+pub pdfrum_doc::AActionType::ClosePage
+pub pdfrum_doc::AActionType::CursorEnter
+pub pdfrum_doc::AActionType::CursorExit
+pub pdfrum_doc::AActionType::DocumentPrinted
+pub pdfrum_doc::AActionType::DocumentSaved
+pub pdfrum_doc::AActionType::Format
+pub pdfrum_doc::AActionType::GetFocus
+pub pdfrum_doc::AActionType::KeyStroke
+pub pdfrum_doc::AActionType::LoseFocus
+pub pdfrum_doc::AActionType::OpenPage
+pub pdfrum_doc::AActionType::PageClose
+pub pdfrum_doc::AActionType::PageInvisible
+pub pdfrum_doc::AActionType::PageOpen
+pub pdfrum_doc::AActionType::PageVisible
+pub pdfrum_doc::AActionType::PrintDocument
+pub pdfrum_doc::AActionType::SaveDocument
+pub pdfrum_doc::AActionType::Validate
+impl pdfrum_doc::nav::action::AActionType
+pub fn pdfrum_doc::nav::action::AActionType::is_user_input(self) -> bool
+pub fn pdfrum_doc::nav::action::AActionType::key(self) -> &'static [u8]
+pub enum pdfrum_doc::ActionKind
+pub pdfrum_doc::ActionKind::GoTo
+pub pdfrum_doc::ActionKind::GoTo3DView
+pub pdfrum_doc::ActionKind::GoToE
+pub pdfrum_doc::ActionKind::GoToR
+pub pdfrum_doc::ActionKind::Hide
+pub pdfrum_doc::ActionKind::ImportData
+pub pdfrum_doc::ActionKind::JavaScript
+pub pdfrum_doc::ActionKind::Launch
+pub pdfrum_doc::ActionKind::Movie
+pub pdfrum_doc::ActionKind::Named
+pub pdfrum_doc::ActionKind::Rendition
+pub pdfrum_doc::ActionKind::ResetForm
+pub pdfrum_doc::ActionKind::SetOcgState
+pub pdfrum_doc::ActionKind::Sound
+pub pdfrum_doc::ActionKind::SubmitForm
+pub pdfrum_doc::ActionKind::Thread
+pub pdfrum_doc::ActionKind::Trans
+pub pdfrum_doc::ActionKind::Unknown
+pub pdfrum_doc::ActionKind::Uri
+pub enum pdfrum_doc::Color
+pub pdfrum_doc::Color::Cmyk(f32, f32, f32, f32)
+pub pdfrum_doc::Color::Gray(f32)
+pub pdfrum_doc::Color::Rgb(f32, f32, f32)
+pub pdfrum_doc::Color::Transparent
+impl pdfrum_doc::color::Color
+pub fn pdfrum_doc::color::Color::annot_rgb_bytes(self) -> (u32, u32, u32)
+pub fn pdfrum_doc::color::Color::from_array(&pdfrum_object::array::Array) -> pdfrum_doc::color::Color
+pub fn pdfrum_doc::color::Color::mk_rgb_bytes(self) -> (u8, u8, u8)
+pub fn pdfrum_doc::color::Color::nearly_eq(self, pdfrum_doc::color::Color) -> bool
+#[non_exhaustive] pub enum pdfrum_doc::Error
+pub pdfrum_doc::Error::NoCatalog
+pub pdfrum_doc::Error::Unresolved(pdfrum_object::object::ObjRef)
+pub enum pdfrum_doc::FocusBox
+pub pdfrum_doc::FocusBox::Inflated
+pub pdfrum_doc::FocusBox::None
+pub pdfrum_doc::FocusBox::Rect(kurbo::rect::Rect)
+pub enum pdfrum_doc::Subtype
+pub pdfrum_doc::Subtype::Caret
+pub pdfrum_doc::Subtype::Circle
+pub pdfrum_doc::Subtype::FileAttachment
+pub pdfrum_doc::Subtype::FreeText
+pub pdfrum_doc::Subtype::Highlight
+pub pdfrum_doc::Subtype::Ink
+pub pdfrum_doc::Subtype::Line
+pub pdfrum_doc::Subtype::Link
+pub pdfrum_doc::Subtype::Movie
+pub pdfrum_doc::Subtype::PolyLine
+pub pdfrum_doc::Subtype::Polygon
+pub pdfrum_doc::Subtype::Popup
+pub pdfrum_doc::Subtype::PrinterMark
+pub pdfrum_doc::Subtype::Redact
+pub pdfrum_doc::Subtype::RichMedia
+pub pdfrum_doc::Subtype::Screen
+pub pdfrum_doc::Subtype::Sound
+pub pdfrum_doc::Subtype::Square
+pub pdfrum_doc::Subtype::Squiggly
+pub pdfrum_doc::Subtype::Stamp
+pub pdfrum_doc::Subtype::StrikeOut
+pub pdfrum_doc::Subtype::Text
+pub pdfrum_doc::Subtype::ThreeD
+pub pdfrum_doc::Subtype::TrapNet
+pub pdfrum_doc::Subtype::Underline
+pub pdfrum_doc::Subtype::Unknown
+pub pdfrum_doc::Subtype::Watermark
+pub pdfrum_doc::Subtype::Widget
+pub pdfrum_doc::Subtype::XfaWidget
+impl pdfrum_doc::annot::Subtype
+pub fn pdfrum_doc::annot::Subtype::as_bytes(self) -> &'static [u8]
+pub fn pdfrum_doc::annot::Subtype::from_bytes(&[u8]) -> pdfrum_doc::annot::Subtype
+pub fn pdfrum_doc::annot::Subtype::has_attachment_points(self) -> bool
+pub fn pdfrum_doc::annot::Subtype::is_text_markup(self) -> bool
+pub enum pdfrum_doc::ZoomMode
+pub pdfrum_doc::ZoomMode::Fit
+pub pdfrum_doc::ZoomMode::FitB
+pub pdfrum_doc::ZoomMode::FitBH
+pub pdfrum_doc::ZoomMode::FitBV
+pub pdfrum_doc::ZoomMode::FitH
+pub pdfrum_doc::ZoomMode::FitR
+pub pdfrum_doc::ZoomMode::FitV
+pub pdfrum_doc::ZoomMode::Unknown
+pub pdfrum_doc::ZoomMode::Xyz
+pub struct pdfrum_doc::Action
+pub pdfrum_doc::Action::dict: pdfrum_object::dict::Dict
+impl pdfrum_doc::nav::action::Action
+pub fn pdfrum_doc::nav::action::Action::chain<R: pdfrum_object::resolve::Resolve>(&self, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> alloc::vec::Vec<pdfrum_doc::nav::action::Action>
+pub fn pdfrum_doc::nav::action::Action::dest<R: pdfrum_object::resolve::Resolve>(&self, &pdfrum_object::dict::Dict, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_doc::nav::dest::Dest
+pub fn pdfrum_doc::nav::action::Action::fields<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::vec::Vec<pdfrum_object::object::Object>
+pub fn pdfrum_doc::nav::action::Action::file_path<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::string::String
+pub fn pdfrum_doc::nav::action::Action::flags<R: pdfrum_object::resolve::Resolve>(&self, &R) -> i64
+pub fn pdfrum_doc::nav::action::Action::hide_status(&self) -> bool
+pub fn pdfrum_doc::nav::action::Action::javascript<R: pdfrum_object::resolve::Resolve>(&self, &R) -> core::option::Option<alloc::string::String>
+pub fn pdfrum_doc::nav::action::Action::kind(&self) -> pdfrum_doc::nav::action::ActionKind
+pub fn pdfrum_doc::nav::action::Action::named_action<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::vec::Vec<u8>
+pub fn pdfrum_doc::nav::action::Action::new(pdfrum_object::dict::Dict) -> pdfrum_doc::nav::action::Action
+pub fn pdfrum_doc::nav::action::Action::next<R: pdfrum_object::resolve::Resolve>(&self, usize, &R) -> core::option::Option<pdfrum_doc::nav::action::Action>
+pub fn pdfrum_doc::nav::action::Action::next_count<R: pdfrum_object::resolve::Resolve>(&self, &R) -> usize
+pub fn pdfrum_doc::nav::action::Action::uri<R: pdfrum_object::resolve::Resolve>(&self, &pdfrum_object::dict::Dict, &R) -> alloc::vec::Vec<u8>
+pub struct pdfrum_doc::AnnotFlags(pub i64)
+impl pdfrum_doc::annot::AnnotFlags
+pub fn pdfrum_doc::annot::AnnotFlags::is_hidden(self) -> bool
+pub fn pdfrum_doc::annot::AnnotFlags::names(self) -> alloc::vec::Vec<&'static str>
+pub fn pdfrum_doc::annot::AnnotFlags::no_rotate(self) -> bool
+pub fn pdfrum_doc::annot::AnnotFlags::no_view(self) -> bool
+pub fn pdfrum_doc::annot::AnnotFlags::prints(self) -> bool
+pub struct pdfrum_doc::AnnotOverlay
+impl pdfrum_doc::ap::AnnotOverlay
+pub fn pdfrum_doc::ap::AnnotOverlay::appearance(&self, usize) -> &pdfrum_doc::ap::Appearance
+pub fn pdfrum_doc::ap::AnnotOverlay::focus(&self) -> core::option::Option<pdfrum_doc::ap::Focus>
+pub fn pdfrum_doc::ap::AnnotOverlay::get(&self, usize) -> core::option::Option<&pdfrum_doc::ap::GeneratedAp>
+pub fn pdfrum_doc::ap::AnnotOverlay::hover(&self) -> core::option::Option<usize>
+pub fn pdfrum_doc::ap::AnnotOverlay::is_empty(&self) -> bool
+pub fn pdfrum_doc::ap::AnnotOverlay::is_live_edit(&self, usize) -> bool
+pub fn pdfrum_doc::ap::AnnotOverlay::len(&self) -> usize
+pub fn pdfrum_doc::ap::AnnotOverlay::live_edit(&self) -> core::option::Option<usize>
+pub fn pdfrum_doc::ap::AnnotOverlay::merge_over(&mut self, &pdfrum_doc::ap::AnnotOverlay)
+pub fn pdfrum_doc::ap::AnnotOverlay::rect(&self, usize, kurbo::rect::Rect) -> kurbo::rect::Rect
+pub fn pdfrum_doc::ap::AnnotOverlay::set(&mut self, usize, pdfrum_doc::ap::GeneratedAp)
+pub fn pdfrum_doc::ap::AnnotOverlay::set_appearance(&mut self, usize, pdfrum_doc::ap::Appearance)
+pub fn pdfrum_doc::ap::AnnotOverlay::set_focus(&mut self, pdfrum_doc::ap::Focus)
+pub fn pdfrum_doc::ap::AnnotOverlay::set_hover(&mut self, usize)
+pub fn pdfrum_doc::ap::AnnotOverlay::set_live_edit(&mut self, usize)
+pub fn pdfrum_doc::ap::AnnotOverlay::with_capacity(usize) -> pdfrum_doc::ap::AnnotOverlay
+pub struct pdfrum_doc::Annotation
+pub pdfrum_doc::Annotation::dict: pdfrum_object::dict::Dict
+pub pdfrum_doc::Annotation::flags: pdfrum_doc::annot::AnnotFlags
+pub pdfrum_doc::Annotation::quad_points: core::option::Option<pdfrum_object::array::Array>
+pub pdfrum_doc::Annotation::rect: kurbo::rect::Rect
+pub pdfrum_doc::Annotation::subtype: pdfrum_doc::annot::Subtype
+impl pdfrum_doc::annot::Annotation
+pub fn pdfrum_doc::annot::Annotation::read<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> pdfrum_doc::annot::Annotation
+pub fn pdfrum_doc::annot::Annotation::rect_for_drawing(&self, bool) -> kurbo::rect::Rect
+pub struct pdfrum_doc::Bookmark
+pub pdfrum_doc::Bookmark::depth: usize
+pub pdfrum_doc::Bookmark::dict: pdfrum_object::dict::Dict
+impl pdfrum_doc::nav::outline::Bookmark
+pub fn pdfrum_doc::nav::outline::Bookmark::action<R: pdfrum_object::resolve::Resolve>(&self, &R) -> core::option::Option<pdfrum_doc::nav::action::Action>
+pub fn pdfrum_doc::nav::outline::Bookmark::color<R: pdfrum_object::resolve::Resolve>(&self, &R) -> core::option::Option<(f32, f32, f32)>
+pub fn pdfrum_doc::nav::outline::Bookmark::count<R: pdfrum_object::resolve::Resolve>(&self, &R) -> i64
+pub fn pdfrum_doc::nav::outline::Bookmark::dest<R: pdfrum_object::resolve::Resolve>(&self, &pdfrum_object::dict::Dict, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_doc::nav::dest::Dest
+pub fn pdfrum_doc::nav::outline::Bookmark::style<R: pdfrum_object::resolve::Resolve>(&self, &R) -> i64
+pub fn pdfrum_doc::nav::outline::Bookmark::title<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::string::String
+pub struct pdfrum_doc::Dest
+pub pdfrum_doc::Dest::array: core::option::Option<pdfrum_object::array::Array>
+impl pdfrum_doc::nav::dest::Dest
+pub fn pdfrum_doc::nav::dest::Dest::create<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, core::option::Option<&pdfrum_object::object::Object>, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_doc::nav::dest::Dest
+pub fn pdfrum_doc::nav::dest::Dest::num_params<R: pdfrum_object::resolve::Resolve>(&self, &R) -> usize
+pub fn pdfrum_doc::nav::dest::Dest::page_index<R: pdfrum_object::resolve::Resolve>(&self, &R, impl core::ops::function::Fn(u32) -> i32, &mut pdfrum_common::diagnostics::Diagnostics) -> i32
+pub fn pdfrum_doc::nav::dest::Dest::param(&self, usize) -> f32
+pub fn pdfrum_doc::nav::dest::Dest::params_all(&self) -> alloc::vec::Vec<f32>
+pub fn pdfrum_doc::nav::dest::Dest::xyz<R: pdfrum_object::resolve::Resolve>(&self, &R) -> core::option::Option<pdfrum_doc::nav::dest::Xyz>
+pub fn pdfrum_doc::nav::dest::Dest::zoom_mode<R: pdfrum_object::resolve::Resolve>(&self, &R) -> pdfrum_doc::nav::dest::ZoomMode
+pub struct pdfrum_doc::DocOptions
+pub pdfrum_doc::DocOptions::generate_widget_ap: bool
+pub pdfrum_doc::DocOptions::generate_widget_shapes: bool
+pub pdfrum_doc::DocOptions::limits: pdfrum_common::limits::Limits
+pub struct pdfrum_doc::FileSpec
+pub pdfrum_doc::FileSpec::object: pdfrum_object::object::Object
+impl pdfrum_doc::nav::filespec::FileSpec
+pub fn pdfrum_doc::nav::filespec::FileSpec::file_name<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::string::String
+pub fn pdfrum_doc::nav::filespec::FileSpec::file_stream<R: pdfrum_object::resolve::Resolve>(&self, &R) -> core::option::Option<pdfrum_object::stream::Stream>
+pub fn pdfrum_doc::nav::filespec::FileSpec::new(pdfrum_object::object::Object) -> pdfrum_doc::nav::filespec::FileSpec
+pub fn pdfrum_doc::nav::filespec::FileSpec::params<R: pdfrum_object::resolve::Resolve>(&self, &R) -> core::option::Option<pdfrum_object::dict::Dict>
+pub struct pdfrum_doc::Focus
+pub pdfrum_doc::Focus::annot: usize
+pub pdfrum_doc::Focus::box_: pdfrum_doc::ap::FocusBox
+impl pdfrum_doc::ap::Focus
+pub fn pdfrum_doc::ap::Focus::at(usize) -> pdfrum_doc::ap::Focus
+pub struct pdfrum_doc::GeneratedAp
+pub pdfrum_doc::GeneratedAp::as_override: core::option::Option<pdfrum_object::name::Name>
+pub pdfrum_doc::GeneratedAp::bbox: kurbo::rect::Rect
+pub pdfrum_doc::GeneratedAp::matrix: kurbo::affine::Affine
+pub pdfrum_doc::GeneratedAp::rect_override: core::option::Option<kurbo::rect::Rect>
+pub pdfrum_doc::GeneratedAp::resources: pdfrum_object::dict::Dict
+pub pdfrum_doc::GeneratedAp::stream: alloc::vec::Vec<u8>
+pub struct pdfrum_doc::Link
+pub pdfrum_doc::Link::dict: pdfrum_object::dict::Dict
+impl pdfrum_doc::nav::link::Link
+pub fn pdfrum_doc::nav::link::Link::action<R: pdfrum_object::resolve::Resolve>(&self, &R) -> core::option::Option<pdfrum_doc::nav::action::Action>
+pub fn pdfrum_doc::nav::link::Link::dest<R: pdfrum_object::resolve::Resolve>(&self, &pdfrum_object::dict::Dict, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_doc::nav::dest::Dest
+pub fn pdfrum_doc::nav::link::Link::new(pdfrum_object::dict::Dict) -> pdfrum_doc::nav::link::Link
+pub fn pdfrum_doc::nav::link::Link::rect<R: pdfrum_object::resolve::Resolve>(&self, &R) -> kurbo::rect::Rect
+pub struct pdfrum_doc::NameTree
+pub pdfrum_doc::NameTree::root: pdfrum_object::dict::Dict
+impl pdfrum_doc::nav::name_tree::NameTree
+pub fn pdfrum_doc::nav::name_tree::NameTree::count<R: pdfrum_object::resolve::Resolve>(&self, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> usize
+pub fn pdfrum_doc::nav::name_tree::NameTree::lookup<R: pdfrum_object::resolve::Resolve>(&self, &str, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<pdfrum_object::object::Object>
+pub fn pdfrum_doc::nav::name_tree::NameTree::lookup_by_index<R: pdfrum_object::resolve::Resolve>(&self, usize, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<(alloc::string::String, pdfrum_object::object::Object)>
+pub fn pdfrum_doc::nav::name_tree::NameTree::open<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &pdfrum_object::name::Name, &R) -> core::option::Option<pdfrum_doc::nav::name_tree::NameTree>
+pub struct pdfrum_doc::NumberTree
+impl pdfrum_doc::nav::NumberTree
+pub fn pdfrum_doc::nav::NumberTree::find<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, i64, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<pdfrum_object::object::Object>
+pub fn pdfrum_doc::nav::NumberTree::lower_bound<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, i64, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<(i64, core::option::Option<pdfrum_object::object::Object>)>
+pub struct pdfrum_doc::StructElement
+pub pdfrum_doc::StructElement::dict: pdfrum_object::dict::Dict
+pub pdfrum_doc::StructElement::kids: alloc::vec::Vec<pdfrum_doc::structure::element::Kid>
+pub pdfrum_doc::StructElement::kind: alloc::vec::Vec<u8>
+pub pdfrum_doc::StructElement::parent: core::option::Option<usize>
+pub pdfrum_doc::StructElement::reference: core::option::Option<pdfrum_object::object::ObjRef>
+impl pdfrum_doc::structure::element::StructElement
+pub fn pdfrum_doc::structure::element::StructElement::actual_text<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::string::String
+pub fn pdfrum_doc::structure::element::StructElement::alt_text<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::string::String
+pub fn pdfrum_doc::structure::element::StructElement::expansion<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::string::String
+pub fn pdfrum_doc::structure::element::StructElement::id(&self) -> core::option::Option<alloc::vec::Vec<u8>>
+pub fn pdfrum_doc::structure::element::StructElement::kid_content_id(&self, usize) -> i64
+pub fn pdfrum_doc::structure::element::StructElement::lang(&self) -> core::option::Option<alloc::vec::Vec<u8>>
+pub fn pdfrum_doc::structure::element::StructElement::link_kid(&mut self, &pdfrum_object::dict::Dict, core::option::Option<pdfrum_object::object::ObjRef>, usize) -> bool
+pub fn pdfrum_doc::structure::element::StructElement::load_kids<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, u32, &R) -> alloc::vec::Vec<pdfrum_doc::structure::element::Kid>
+pub fn pdfrum_doc::structure::element::StructElement::obj_type<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::vec::Vec<u8>
+pub fn pdfrum_doc::structure::element::StructElement::title<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::string::String
+pub struct pdfrum_doc::StructTree
+pub pdfrum_doc::StructTree::elements: alloc::vec::Vec<pdfrum_doc::structure::element::StructElement>
+pub pdfrum_doc::StructTree::top: alloc::vec::Vec<core::option::Option<usize>>
+impl pdfrum_doc::structure::StructTree
+pub fn pdfrum_doc::structure::StructTree::load_page<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &pdfrum_object::dict::Dict, u32, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<pdfrum_doc::structure::StructTree>
+pub struct pdfrum_doc::ViewerPrefs
+pub pdfrum_doc::ViewerPrefs::dict: core::option::Option<pdfrum_object::dict::Dict>
+impl pdfrum_doc::prefs::ViewerPrefs
+pub fn pdfrum_doc::prefs::ViewerPrefs::duplex<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::vec::Vec<u8>
+pub fn pdfrum_doc::prefs::ViewerPrefs::generic_name(&self, &pdfrum_object::name::Name) -> core::option::Option<alloc::vec::Vec<u8>>
+pub fn pdfrum_doc::prefs::ViewerPrefs::is_direction_r2l<R: pdfrum_object::resolve::Resolve>(&self, &R) -> bool
+pub fn pdfrum_doc::prefs::ViewerPrefs::num_copies<R: pdfrum_object::resolve::Resolve>(&self, &R) -> i64
+pub fn pdfrum_doc::prefs::ViewerPrefs::print_page_range<R: pdfrum_object::resolve::Resolve>(&self, &R) -> core::option::Option<pdfrum_object::array::Array>
+pub fn pdfrum_doc::prefs::ViewerPrefs::print_scaling<R: pdfrum_object::resolve::Resolve>(&self, &R) -> bool
+pub fn pdfrum_doc::prefs::ViewerPrefs::read<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> pdfrum_doc::prefs::ViewerPrefs
+pub fn pdfrum_doc::page_label<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, i64, u32, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<alloc::string::String>
+pub fn pdfrum_doc::xmp<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<alloc::vec::Vec<u8>>

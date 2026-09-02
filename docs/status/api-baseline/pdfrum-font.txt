@@ -1,0 +1,549 @@
+pub mod pdfrum_font
+pub use pdfrum_font::CharCode
+pub use pdfrum_font::Cid
+pub mod pdfrum_font::encoding
+pub enum pdfrum_font::encoding::FaceEncoding
+pub pdfrum_font::encoding::FaceEncoding::AdobeCustom
+pub pdfrum_font::encoding::FaceEncoding::AdobeExpert
+pub pdfrum_font::encoding::FaceEncoding::AdobeStandard
+pub pdfrum_font::encoding::FaceEncoding::AppleRoman
+pub pdfrum_font::encoding::FaceEncoding::Latin1
+pub pdfrum_font::encoding::FaceEncoding::Other
+pub pdfrum_font::encoding::FaceEncoding::Symbol
+pub pdfrum_font::encoding::FaceEncoding::Unicode
+impl pdfrum_font::encoding::FaceEncoding
+pub fn pdfrum_font::encoding::FaceEncoding::charcode_from_unicode(self, u16) -> u32
+pub enum pdfrum_font::encoding::FontEncoding
+pub pdfrum_font::encoding::FontEncoding::AdobeSymbol
+pub pdfrum_font::encoding::FontEncoding::Builtin
+pub pdfrum_font::encoding::FontEncoding::MacExpert
+pub pdfrum_font::encoding::FontEncoding::MacRoman
+pub pdfrum_font::encoding::FontEncoding::MsSymbol
+pub pdfrum_font::encoding::FontEncoding::PdfDoc
+pub pdfrum_font::encoding::FontEncoding::Standard
+pub pdfrum_font::encoding::FontEncoding::WinAnsi
+pub pdfrum_font::encoding::FontEncoding::ZapfDingbats
+impl pdfrum_font::encoding::FontEncoding
+pub fn pdfrum_font::encoding::FontEncoding::char_name(self, u8) -> core::option::Option<&'static str>
+pub fn pdfrum_font::encoding::FontEncoding::from_pdf_name(&[u8]) -> core::option::Option<Self>
+pub fn pdfrum_font::encoding::FontEncoding::unicodes(self) -> core::option::Option<&'static [u16; 256]>
+pub fn pdfrum_font::encoding::adobe_char_name(pdfrum_font::encoding::FontEncoding, &[core::option::Option<pdfrum_font::GlyphName>; 256], u32) -> core::option::Option<&[u8]>
+pub fn pdfrum_font::encoding::adobe_name_from_unicode(u16) -> core::option::Option<alloc::string::String>
+pub fn pdfrum_font::encoding::load_differences(&pdfrum_object::array::Array, &impl pdfrum_object::resolve::Resolve, &mut [core::option::Option<pdfrum_font::GlyphName>; 256]) -> bool
+pub fn pdfrum_font::encoding::unicode_from_adobe_name(&[u8]) -> u16
+pub fn pdfrum_font::encoding::unicode_from_apple_roman(u8) -> u16
+pub mod pdfrum_font::subst
+pub mod pdfrum_font::subst::style_bits
+pub const pdfrum_font::subst::style_bits::FORCE_BOLD: u32
+pub const pdfrum_font::subst::style_bits::ITALIC: u32
+pub const pdfrum_font::subst::style_bits::NORMAL: u32
+pub enum pdfrum_font::subst::Charset
+pub pdfrum_font::subst::Charset::Ansi
+pub pdfrum_font::subst::Charset::Arabic
+pub pdfrum_font::subst::Charset::Baltic
+pub pdfrum_font::subst::Charset::ChineseSimplified
+pub pdfrum_font::subst::Charset::ChineseTraditional
+pub pdfrum_font::subst::Charset::Cyrillic
+pub pdfrum_font::subst::Charset::Default
+pub pdfrum_font::subst::Charset::EasternEuropean
+pub pdfrum_font::subst::Charset::Greek
+pub pdfrum_font::subst::Charset::Hangul
+pub pdfrum_font::subst::Charset::Hebrew
+pub pdfrum_font::subst::Charset::Johab
+pub pdfrum_font::subst::Charset::Oem
+pub pdfrum_font::subst::Charset::ShiftJis
+pub pdfrum_font::subst::Charset::Symbol
+pub pdfrum_font::subst::Charset::Thai
+pub pdfrum_font::subst::Charset::Turkish
+pub pdfrum_font::subst::Charset::Vietnamese
+impl pdfrum_font::subst::Charset
+pub fn pdfrum_font::subst::Charset::from_code_page(pdfrum_font::subst::CodePage) -> Self
+pub fn pdfrum_font::subst::Charset::is_cjk(self) -> bool
+pub enum pdfrum_font::subst::CodePage
+pub pdfrum_font::subst::CodePage::ChineseSimplified
+pub pdfrum_font::subst::CodePage::ChineseTraditional
+pub pdfrum_font::subst::CodePage::DefAnsi
+pub pdfrum_font::subst::CodePage::Hangul
+pub pdfrum_font::subst::CodePage::ShiftJis
+pub pdfrum_font::subst::CodePage::Utf16Le
+impl pdfrum_font::subst::CodePage
+pub fn pdfrum_font::subst::CodePage::for_cid_set(pdfrum_cmap::ids::CidSet) -> Self
+#[repr(u8)] pub enum pdfrum_font::subst::StandardFont
+pub pdfrum_font::subst::StandardFont::Courier = 0
+pub pdfrum_font::subst::StandardFont::CourierBold = 1
+pub pdfrum_font::subst::StandardFont::CourierBoldOblique = 2
+pub pdfrum_font::subst::StandardFont::CourierOblique = 3
+pub pdfrum_font::subst::StandardFont::Dingbats = 13
+pub pdfrum_font::subst::StandardFont::Helvetica = 4
+pub pdfrum_font::subst::StandardFont::HelveticaBold = 5
+pub pdfrum_font::subst::StandardFont::HelveticaBoldOblique = 6
+pub pdfrum_font::subst::StandardFont::HelveticaOblique = 7
+pub pdfrum_font::subst::StandardFont::Symbol = 12
+pub pdfrum_font::subst::StandardFont::Times = 8
+pub pdfrum_font::subst::StandardFont::TimesBold = 9
+pub pdfrum_font::subst::StandardFont::TimesBoldOblique = 10
+pub pdfrum_font::subst::StandardFont::TimesOblique = 11
+impl pdfrum_font::StandardFont
+pub fn pdfrum_font::StandardFont::from_index(usize) -> core::option::Option<Self>
+pub fn pdfrum_font::StandardFont::index(self) -> usize
+pub fn pdfrum_font::StandardFont::is_fixed(self) -> bool
+pub fn pdfrum_font::StandardFont::is_stylable(self) -> bool
+pub fn pdfrum_font::StandardFont::is_symbolic(self) -> bool
+pub struct pdfrum_font::subst::CroscoreDb<'a, D>
+impl<'a, D: pdfrum_font::subst::FontDb> pdfrum_font::subst::CroscoreDb<'a, D>
+pub fn pdfrum_font::subst::CroscoreDb<'a, D>::new(&'a D) -> Self
+impl<D: pdfrum_font::subst::FontDb> pdfrum_font::subst::FontDb for pdfrum_font::subst::CroscoreDb<'_, D>
+pub fn pdfrum_font::subst::CroscoreDb<'_, D>::face_bytes(&self, pdfrum_font::subst::FaceHandle) -> core::option::Option<(alloc::sync::Arc<[u8]>, u32)>
+pub fn pdfrum_font::subst::CroscoreDb<'_, D>::faces(&self) -> &[pdfrum_font::subst::FaceInfo]
+pub fn pdfrum_font::subst::CroscoreDb<'_, D>::find_font(&self, i32, bool, pdfrum_font::subst::Charset, pdfrum_font::subst::PitchFamily, &str, bool) -> core::option::Option<pdfrum_font::subst::FaceHandle>
+pub fn pdfrum_font::subst::CroscoreDb<'_, D>::font_by_name(&self, &str) -> core::option::Option<pdfrum_font::subst::FaceHandle>
+pub fn pdfrum_font::subst::CroscoreDb<'_, D>::match_installed(&self, &str) -> core::option::Option<alloc::string::String>
+pub struct pdfrum_font::subst::FaceHandle(pub usize)
+pub struct pdfrum_font::subst::FaceInfo
+pub pdfrum_font::subst::FaceInfo::charsets: alloc::vec::Vec<pdfrum_font::subst::Charset>
+pub pdfrum_font::subst::FaceInfo::name: alloc::string::String
+pub pdfrum_font::subst::FaceInfo::styles: u32
+impl pdfrum_font::subst::FaceInfo
+pub fn pdfrum_font::subst::FaceInfo::is_eligible(&self, pdfrum_font::subst::Charset) -> bool
+pub fn pdfrum_font::subst::FaceInfo::similarity_score(&self, i32, bool, pdfrum_font::subst::PitchFamily, bool) -> i32
+pub struct pdfrum_font::subst::FontRequest
+pub pdfrum_font::subst::FontRequest::code_page: pdfrum_font::subst::CodePage
+pub pdfrum_font::subst::FontRequest::flags: pdfrum_font::FontFlags
+pub pdfrum_font::subst::FontRequest::is_truetype: bool
+pub pdfrum_font::subst::FontRequest::italic_angle: i32
+pub pdfrum_font::subst::FontRequest::name: alloc::vec::Vec<u8>
+pub pdfrum_font::subst::FontRequest::vertical: bool
+pub pdfrum_font::subst::FontRequest::weight: i32
+impl core::default::Default for pdfrum_font::subst::FontRequest
+pub fn pdfrum_font::subst::FontRequest::default() -> Self
+pub struct pdfrum_font::subst::FontStyle
+pub pdfrum_font::subst::FontStyle::name: &'static str
+pub pdfrum_font::subst::FontStyle::style: u32
+pub struct pdfrum_font::subst::GlyphSpacingGate<'a>
+pub pdfrum_font::subst::GlyphSpacingGate::base_font_name: &'a [u8]
+pub pdfrum_font::subst::GlyphSpacingGate::declared_widths: bool
+pub pdfrum_font::subst::GlyphSpacingGate::embedded: bool
+pub pdfrum_font::subst::GlyphSpacingGate::subst: core::option::Option<&'a pdfrum_font::SubstFont>
+pub pdfrum_font::subst::GlyphSpacingGate::vertical: bool
+pub struct pdfrum_font::subst::PitchFamily(pub u32)
+impl pdfrum_font::subst::PitchFamily
+pub const pdfrum_font::subst::PitchFamily::FIXED: u32
+pub const pdfrum_font::subst::PitchFamily::ROMAN: u32
+pub const pdfrum_font::subst::PitchFamily::SCRIPT: u32
+pub fn pdfrum_font::subst::PitchFamily::from_flags(pdfrum_font::FontFlags) -> Self
+pub fn pdfrum_font::subst::PitchFamily::from_standard_font(pdfrum_font::StandardFont) -> Self
+pub const fn pdfrum_font::subst::PitchFamily::has(self, u32) -> bool
+pub struct pdfrum_font::subst::SubstFont
+pub pdfrum_font::subst::SubstFont::charset: pdfrum_font::subst::Charset
+pub pdfrum_font::subst::SubstFont::family: alloc::string::String
+pub pdfrum_font::subst::SubstFont::is_builtin_generic: bool
+pub pdfrum_font::subst::SubstFont::italic_angle: i32
+pub pdfrum_font::subst::SubstFont::italic_cjk: bool
+pub pdfrum_font::subst::SubstFont::subst_cjk: bool
+pub pdfrum_font::subst::SubstFont::weight: core::option::Option<i32>
+pub pdfrum_font::subst::SubstFont::weight_cjk: core::option::Option<i32>
+impl pdfrum_font::SubstFont
+pub fn pdfrum_font::SubstFont::configure_external(&mut self, alloc::string::String, pdfrum_font::subst::Charset, i32, bool, i32, bool, bool)
+pub fn pdfrum_font::SubstFont::effective_skew(&self, bool) -> i32
+pub fn pdfrum_font::SubstFont::effective_weight(&self, bool) -> i32
+pub fn pdfrum_font::SubstFont::embolden_level_for_load(&self) -> i32
+pub fn pdfrum_font::SubstFont::embolden_level_for_render(&self, bool, i32, i32) -> core::option::Option<i32>
+pub fn pdfrum_font::SubstFont::estimated_stem_v(&self) -> i32
+pub fn pdfrum_font::SubstFont::is_actual_font_loaded(&self, &[u8]) -> bool
+pub fn pdfrum_font::SubstFont::raw_weight(&self) -> i32
+pub fn pdfrum_font::SubstFont::skew(&self) -> i32
+pub fn pdfrum_font::SubstFont::skew_cjk(&self) -> i32
+pub fn pdfrum_font::SubstFont::use_chrome_serif(&mut self)
+pub struct pdfrum_font::subst::Substitution
+pub pdfrum_font::subst::Substitution::glyphs: pdfrum_font::GlyphSource
+pub pdfrum_font::subst::Substitution::standard: core::option::Option<pdfrum_font::StandardFont>
+pub pdfrum_font::subst::Substitution::subst: pdfrum_font::SubstFont
+pub struct pdfrum_font::subst::SubstitutionOptions
+pub pdfrum_font::subst::SubstitutionOptions::croscore_font_names: bool
+pub pdfrum_font::subst::SubstitutionOptions::font_dirs: alloc::vec::Vec<std::path::PathBuf>
+pub pdfrum_font::subst::SubstitutionOptions::skip_font_enumeration: bool
+pub pdfrum_font::subst::SubstitutionOptions::system_fonts: bool
+pub struct pdfrum_font::subst::SystemFontDb
+impl pdfrum_font::subst::SystemFontDb
+pub fn pdfrum_font::subst::SystemFontDb::scan(&[std::path::PathBuf]) -> Self
+impl pdfrum_font::subst::FontDb for pdfrum_font::subst::SystemFontDb
+pub fn pdfrum_font::subst::SystemFontDb::face_bytes(&self, pdfrum_font::subst::FaceHandle) -> core::option::Option<(alloc::sync::Arc<[u8]>, u32)>
+pub fn pdfrum_font::subst::SystemFontDb::faces(&self) -> &[pdfrum_font::subst::FaceInfo]
+pub fn pdfrum_font::subst::SystemFontDb::find_font(&self, i32, bool, pdfrum_font::subst::Charset, pdfrum_font::subst::PitchFamily, &str, bool) -> core::option::Option<pdfrum_font::subst::FaceHandle>
+pub fn pdfrum_font::subst::SystemFontDb::font_by_name(&self, &str) -> core::option::Option<pdfrum_font::subst::FaceHandle>
+pub fn pdfrum_font::subst::SystemFontDb::match_installed(&self, &str) -> core::option::Option<alloc::string::String>
+pub struct pdfrum_font::subst::TestFontDb
+impl pdfrum_font::subst::TestFontDb
+pub fn pdfrum_font::subst::TestFontDb::new() -> Self
+pub fn pdfrum_font::subst::TestFontDb::push(&mut self, &str, u32, alloc::vec::Vec<pdfrum_font::subst::Charset>)
+pub fn pdfrum_font::subst::TestFontDb::push_with_bytes(&mut self, &str, u32, alloc::vec::Vec<pdfrum_font::subst::Charset>, alloc::sync::Arc<[u8]>)
+impl pdfrum_font::subst::FontDb for pdfrum_font::subst::TestFontDb
+pub fn pdfrum_font::subst::TestFontDb::face_bytes(&self, pdfrum_font::subst::FaceHandle) -> core::option::Option<(alloc::sync::Arc<[u8]>, u32)>
+pub fn pdfrum_font::subst::TestFontDb::faces(&self) -> &[pdfrum_font::subst::FaceInfo]
+pub fn pdfrum_font::subst::TestFontDb::find_font(&self, i32, bool, pdfrum_font::subst::Charset, pdfrum_font::subst::PitchFamily, &str, bool) -> core::option::Option<pdfrum_font::subst::FaceHandle>
+pub fn pdfrum_font::subst::TestFontDb::font_by_name(&self, &str) -> core::option::Option<pdfrum_font::subst::FaceHandle>
+pub fn pdfrum_font::subst::TestFontDb::match_installed(&self, &str) -> core::option::Option<alloc::string::String>
+pub const pdfrum_font::subst::ALL_STANDARD_FONTS: [pdfrum_font::StandardFont; 14]
+pub const pdfrum_font::subst::ALT_FONT_FAMILIES: [(&str, &str); 3]
+pub const pdfrum_font::subst::FONT_STYLES: [pdfrum_font::subst::FontStyle; 5]
+pub const pdfrum_font::subst::NARROW_FAMILY: &str
+pub const pdfrum_font::subst::SIMILARITY_SCORE_MAX: i32
+pub trait pdfrum_font::subst::FontDb
+pub fn pdfrum_font::subst::FontDb::face_bytes(&self, pdfrum_font::subst::FaceHandle) -> core::option::Option<(alloc::sync::Arc<[u8]>, u32)>
+pub fn pdfrum_font::subst::FontDb::faces(&self) -> &[pdfrum_font::subst::FaceInfo]
+pub fn pdfrum_font::subst::FontDb::find_font(&self, i32, bool, pdfrum_font::subst::Charset, pdfrum_font::subst::PitchFamily, &str, bool) -> core::option::Option<pdfrum_font::subst::FaceHandle>
+pub fn pdfrum_font::subst::FontDb::font_by_name(&self, &str) -> core::option::Option<pdfrum_font::subst::FaceHandle>
+pub fn pdfrum_font::subst::FontDb::match_installed(&self, &str) -> core::option::Option<alloc::string::String>
+impl pdfrum_font::subst::FontDb for pdfrum_font::subst::SystemFontDb
+pub fn pdfrum_font::subst::SystemFontDb::face_bytes(&self, pdfrum_font::subst::FaceHandle) -> core::option::Option<(alloc::sync::Arc<[u8]>, u32)>
+pub fn pdfrum_font::subst::SystemFontDb::faces(&self) -> &[pdfrum_font::subst::FaceInfo]
+pub fn pdfrum_font::subst::SystemFontDb::find_font(&self, i32, bool, pdfrum_font::subst::Charset, pdfrum_font::subst::PitchFamily, &str, bool) -> core::option::Option<pdfrum_font::subst::FaceHandle>
+pub fn pdfrum_font::subst::SystemFontDb::font_by_name(&self, &str) -> core::option::Option<pdfrum_font::subst::FaceHandle>
+pub fn pdfrum_font::subst::SystemFontDb::match_installed(&self, &str) -> core::option::Option<alloc::string::String>
+impl pdfrum_font::subst::FontDb for pdfrum_font::subst::TestFontDb
+pub fn pdfrum_font::subst::TestFontDb::face_bytes(&self, pdfrum_font::subst::FaceHandle) -> core::option::Option<(alloc::sync::Arc<[u8]>, u32)>
+pub fn pdfrum_font::subst::TestFontDb::faces(&self) -> &[pdfrum_font::subst::FaceInfo]
+pub fn pdfrum_font::subst::TestFontDb::find_font(&self, i32, bool, pdfrum_font::subst::Charset, pdfrum_font::subst::PitchFamily, &str, bool) -> core::option::Option<pdfrum_font::subst::FaceHandle>
+pub fn pdfrum_font::subst::TestFontDb::font_by_name(&self, &str) -> core::option::Option<pdfrum_font::subst::FaceHandle>
+pub fn pdfrum_font::subst::TestFontDb::match_installed(&self, &str) -> core::option::Option<alloc::string::String>
+impl<D: pdfrum_font::subst::FontDb> pdfrum_font::subst::FontDb for pdfrum_font::subst::CroscoreDb<'_, D>
+pub fn pdfrum_font::subst::CroscoreDb<'_, D>::face_bytes(&self, pdfrum_font::subst::FaceHandle) -> core::option::Option<(alloc::sync::Arc<[u8]>, u32)>
+pub fn pdfrum_font::subst::CroscoreDb<'_, D>::faces(&self) -> &[pdfrum_font::subst::FaceInfo]
+pub fn pdfrum_font::subst::CroscoreDb<'_, D>::find_font(&self, i32, bool, pdfrum_font::subst::Charset, pdfrum_font::subst::PitchFamily, &str, bool) -> core::option::Option<pdfrum_font::subst::FaceHandle>
+pub fn pdfrum_font::subst::CroscoreDb<'_, D>::font_by_name(&self, &str) -> core::option::Option<pdfrum_font::subst::FaceHandle>
+pub fn pdfrum_font::subst::CroscoreDb<'_, D>::match_installed(&self, &str) -> core::option::Option<alloc::string::String>
+pub fn pdfrum_font::subst::adjust_base_font_for_style(pdfrum_font::StandardFont, u32) -> pdfrum_font::StandardFont
+pub fn pdfrum_font::subst::applies_glyph_spacing(&pdfrum_font::subst::GlyphSpacingGate<'_>) -> bool
+pub fn pdfrum_font::subst::builtin_generic(bool) -> (pdfrum_font::GlyphSource, &'static str)
+pub fn pdfrum_font::subst::canonical_font_name(pdfrum_font::StandardFont) -> &'static str
+pub fn pdfrum_font::subst::charset_from_unicode(u32) -> pdfrum_font::subst::Charset
+pub fn pdfrum_font::subst::croscore_name(&str) -> alloc::string::String
+pub fn pdfrum_font::subst::default_face_name(pdfrum_font::subst::Charset) -> &'static str
+pub fn pdfrum_font::subst::fallback_glyph(&pdfrum_font::GlyphSource, &pdfrum_font::GlyphName) -> u16
+pub fn pdfrum_font::subst::find_family_name_match(&str, &str) -> bool
+pub fn pdfrum_font::subst::font_family(u32, &str) -> core::option::Option<&'static str>
+pub fn pdfrum_font::subst::is_narrow_font_name(&str) -> bool
+pub fn pdfrum_font::subst::is_standard_font_name(&[u8]) -> bool
+pub fn pdfrum_font::subst::parse_styles(&[u8], i32, u32) -> pdfrum_font::subst::style::ParsedStyles
+pub fn pdfrum_font::subst::resolve(&pdfrum_font::subst::FontRequest, &impl pdfrum_font::subst::FontDb, &pdfrum_font::subst::SubstitutionOptions, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_font::subst::Substitution
+pub fn pdfrum_font::subst::resolve_with_options(&pdfrum_font::subst::FontRequest, &pdfrum_font::subst::SubstitutionOptions, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_font::subst::Substitution
+pub fn pdfrum_font::subst::skew_from_angle(i32) -> i32
+pub fn pdfrum_font::subst::standard_font_data(pdfrum_font::StandardFont) -> &'static [u8]
+pub fn pdfrum_font::subst::standard_font_index(&[u8]) -> core::option::Option<pdfrum_font::StandardFont>
+pub fn pdfrum_font::subst::strip_subset_prefix(&[u8]) -> &[u8]
+pub fn pdfrum_font::subst::style_from_standard_font(pdfrum_font::StandardFont) -> u32
+pub fn pdfrum_font::subst::style_type(&str, bool) -> core::option::Option<pdfrum_font::subst::FontStyle>
+pub fn pdfrum_font::subst::subst_name(&[u8], bool) -> alloc::vec::Vec<u8>
+pub fn pdfrum_font::subst::tt_normalize(&str) -> alloc::string::String
+pub mod pdfrum_font::tounicode
+pub struct pdfrum_font::tounicode::ToUnicode
+impl pdfrum_font::tounicode::ToUnicode
+pub fn pdfrum_font::tounicode::ToUnicode::base_set(&self) -> pdfrum_cmap::ids::CidSet
+pub fn pdfrum_font::tounicode::ToUnicode::is_empty(&self) -> bool
+pub fn pdfrum_font::tounicode::ToUnicode::len(&self) -> usize
+pub fn pdfrum_font::tounicode::ToUnicode::lookup(&self, pdfrum_cmap::ids::CharCode) -> smallvec::SmallVec<[char; 2]>
+pub fn pdfrum_font::tounicode::ToUnicode::reverse(&self, char) -> pdfrum_cmap::ids::CharCode
+pub fn pdfrum_font::tounicode::parse(&[u8], &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_font::tounicode::ToUnicode
+pub enum pdfrum_font::CidToGid
+pub pdfrum_font::CidToGid::Identity
+pub pdfrum_font::CidToGid::Stream(alloc::boxed::Box<[u8]>)
+pub pdfrum_font::CidToGid::ViaCharmap
+#[non_exhaustive] pub enum pdfrum_font::Error
+pub pdfrum_font::Error::BadCidEncoding
+pub pdfrum_font::Error::BadDescendantFonts
+pub pdfrum_font::Error::UnreadableFontProgram
+pub enum pdfrum_font::Font
+pub pdfrum_font::Font::Simple(alloc::boxed::Box<pdfrum_font::SimpleFont>)
+pub pdfrum_font::Font::Type0(alloc::boxed::Box<pdfrum_font::Type0Font>)
+pub pdfrum_font::Font::Type3(alloc::boxed::Box<pdfrum_font::Type3Font>)
+impl pdfrum_font::Font
+pub fn pdfrum_font::Font::append_char(&self, &mut alloc::vec::Vec<u8>, pdfrum_cmap::ids::CharCode)
+pub fn pdfrum_font::Font::applies_glyph_spacing(&self) -> bool
+pub fn pdfrum_font::Font::ascent(&self) -> f32
+pub fn pdfrum_font::Font::base_font_name(&self) -> &[u8]
+pub fn pdfrum_font::Font::char_bbox(&self, pdfrum_cmap::ids::CharCode) -> kurbo::rect::Rect
+pub fn pdfrum_font::Font::char_code_from_unicode(&self, char) -> core::option::Option<pdfrum_cmap::ids::CharCode>
+pub fn pdfrum_font::Font::char_width(&self, pdfrum_cmap::ids::CharCode) -> f32
+pub fn pdfrum_font::Font::cid_from_charcode(&self, pdfrum_cmap::ids::CharCode) -> core::option::Option<pdfrum_cmap::ids::Cid>
+pub fn pdfrum_font::Font::decode<'a>(&'a self, &'a [u8]) -> impl core::iter::traits::iterator::Iterator<Item = pdfrum_font::CharItem> + 'a
+pub fn pdfrum_font::Font::descent(&self) -> f32
+pub fn pdfrum_font::Font::font_bbox(&self) -> kurbo::rect::Rect
+pub fn pdfrum_font::Font::glyph_advance(&self, pdfrum_font::Gid) -> i32
+pub fn pdfrum_font::Font::glyph_path(&self, pdfrum_font::Gid) -> core::option::Option<kurbo::bezpath::BezPath>
+pub fn pdfrum_font::Font::has_declared_widths(&self) -> bool
+pub fn pdfrum_font::Font::hinted_glyph_path(&self, pdfrum_font::Gid) -> core::option::Option<kurbo::bezpath::BezPath>
+pub fn pdfrum_font::Font::id(&self) -> pdfrum_font::FontId
+pub fn pdfrum_font::Font::is_embedded(&self) -> bool
+pub fn pdfrum_font::Font::is_unicode_compatible(&self) -> bool
+pub fn pdfrum_font::Font::is_vertical(&self) -> bool
+pub fn pdfrum_font::Font::japan1_transform(&self, pdfrum_cmap::ids::CharCode) -> core::option::Option<pdfrum_font::CidTransform>
+pub fn pdfrum_font::Font::load_standard(pdfrum_font::StandardFont, &pdfrum_font::FontCache) -> Self
+pub fn pdfrum_font::Font::string_width(&self, &[u8]) -> f32
+pub fn pdfrum_font::Font::subst(&self) -> core::option::Option<&pdfrum_font::SubstFont>
+pub fn pdfrum_font::Font::type3(&self) -> core::option::Option<&pdfrum_font::Type3Font>
+pub fn pdfrum_font::Font::type_ascent(&self) -> i32
+pub fn pdfrum_font::Font::type_descent(&self) -> i32
+pub fn pdfrum_font::Font::unicode_from_charcode(&self, pdfrum_cmap::ids::CharCode) -> smallvec::SmallVec<[char; 2]>
+pub fn pdfrum_font::Font::vert_origin(&self, pdfrum_cmap::ids::CharCode) -> core::option::Option<(f32, f32)>
+pub fn pdfrum_font::Font::vert_width(&self, pdfrum_cmap::ids::CharCode) -> core::option::Option<f32>
+pub enum pdfrum_font::GlyphSource
+pub pdfrum_font::GlyphSource::Fontations(pdfrum_font::glyphs::face::Face)
+pub pdfrum_font::GlyphSource::None
+pub pdfrum_font::GlyphSource::Type1(alloc::sync::Arc<pdfrum_type1::Type1Font>)
+impl pdfrum_font::GlyphSource
+pub fn pdfrum_font::GlyphSource::advance(&self, pdfrum_font::Gid, &pdfrum_font::glyphs::GlyphParams) -> i32
+pub fn pdfrum_font::GlyphSource::advance_tt(&self, pdfrum_font::Gid) -> i32
+pub fn pdfrum_font::GlyphSource::char_index(&self, pdfrum_font::glyphs::face::Charmap, u32) -> u16
+pub fn pdfrum_font::GlyphSource::charmaps(&self) -> alloc::vec::Vec<pdfrum_font::glyphs::face::CharmapId>
+pub fn pdfrum_font::GlyphSource::glyph_bbox(&self, pdfrum_font::Gid) -> core::option::Option<kurbo::rect::Rect>
+pub fn pdfrum_font::GlyphSource::glyph_name(&self, pdfrum_font::Gid) -> core::option::Option<pdfrum_font::GlyphName>
+pub fn pdfrum_font::GlyphSource::has_glyph_names(&self) -> bool
+pub fn pdfrum_font::GlyphSource::hinted_outline(&self, pdfrum_font::Gid) -> core::option::Option<kurbo::bezpath::BezPath>
+pub fn pdfrum_font::GlyphSource::is_some(&self) -> bool
+pub fn pdfrum_font::GlyphSource::is_truetype(&self) -> bool
+pub fn pdfrum_font::GlyphSource::name_index(&self, &[u8]) -> u16
+pub fn pdfrum_font::GlyphSource::num_glyphs(&self) -> u32
+pub fn pdfrum_font::GlyphSource::outline(&self, pdfrum_font::Gid, &pdfrum_font::glyphs::GlyphParams) -> core::option::Option<kurbo::bezpath::BezPath>
+pub fn pdfrum_font::GlyphSource::units_per_em(&self) -> u16
+pub enum pdfrum_font::SimpleKind
+pub pdfrum_font::SimpleKind::TrueType
+pub pdfrum_font::SimpleKind::Type1
+pub pdfrum_font::SimpleKind::Type1::base14: core::option::Option<pdfrum_font::StandardFont>
+#[repr(u8)] pub enum pdfrum_font::StandardFont
+pub pdfrum_font::StandardFont::Courier = 0
+pub pdfrum_font::StandardFont::CourierBold = 1
+pub pdfrum_font::StandardFont::CourierBoldOblique = 2
+pub pdfrum_font::StandardFont::CourierOblique = 3
+pub pdfrum_font::StandardFont::Dingbats = 13
+pub pdfrum_font::StandardFont::Helvetica = 4
+pub pdfrum_font::StandardFont::HelveticaBold = 5
+pub pdfrum_font::StandardFont::HelveticaBoldOblique = 6
+pub pdfrum_font::StandardFont::HelveticaOblique = 7
+pub pdfrum_font::StandardFont::Symbol = 12
+pub pdfrum_font::StandardFont::Times = 8
+pub pdfrum_font::StandardFont::TimesBold = 9
+pub pdfrum_font::StandardFont::TimesBoldOblique = 10
+pub pdfrum_font::StandardFont::TimesOblique = 11
+impl pdfrum_font::StandardFont
+pub fn pdfrum_font::StandardFont::from_index(usize) -> core::option::Option<Self>
+pub fn pdfrum_font::StandardFont::index(self) -> usize
+pub fn pdfrum_font::StandardFont::is_fixed(self) -> bool
+pub fn pdfrum_font::StandardFont::is_stylable(self) -> bool
+pub fn pdfrum_font::StandardFont::is_symbolic(self) -> bool
+pub struct pdfrum_font::CharItem
+pub pdfrum_font::CharItem::cid: core::option::Option<pdfrum_cmap::ids::Cid>
+pub pdfrum_font::CharItem::code: pdfrum_cmap::ids::CharCode
+pub pdfrum_font::CharItem::gid: pdfrum_font::Gid
+pub pdfrum_font::CharItem::has_glyph: bool
+pub pdfrum_font::CharItem::unicode: smallvec::SmallVec<[char; 2]>
+pub pdfrum_font::CharItem::vertical_glyph: bool
+pub pdfrum_font::CharItem::width: f32
+impl pdfrum_font::CharItem
+pub fn pdfrum_font::CharItem::glyph(&self) -> core::option::Option<pdfrum_font::Gid>
+pub struct pdfrum_font::CidTransform
+pub pdfrum_font::CidTransform::a: u8
+pub pdfrum_font::CidTransform::b: u8
+pub pdfrum_font::CidTransform::c: u8
+pub pdfrum_font::CidTransform::cid: u16
+pub pdfrum_font::CidTransform::d: u8
+pub pdfrum_font::CidTransform::e: u8
+pub pdfrum_font::CidTransform::f: u8
+pub struct pdfrum_font::CidWidths
+impl pdfrum_font::CidWidths
+pub fn pdfrum_font::CidWidths::default_width(&self) -> f32
+pub fn pdfrum_font::CidWidths::is_empty(&self) -> bool
+pub fn pdfrum_font::CidWidths::len(&self) -> usize
+pub fn pdfrum_font::CidWidths::load(&pdfrum_object::dict::Dict, &impl pdfrum_object::resolve::Resolve, &mut pdfrum_common::diagnostics::Diagnostics) -> Self
+pub fn pdfrum_font::CidWidths::set_ansi_widths_fixed(&mut self)
+pub fn pdfrum_font::CidWidths::width(&self, pdfrum_cmap::ids::CharCode, pdfrum_cmap::ids::Cid) -> f32
+impl core::default::Default for pdfrum_font::CidWidths
+pub fn pdfrum_font::CidWidths::default() -> Self
+pub struct pdfrum_font::FontCache
+impl pdfrum_font::FontCache
+pub fn pdfrum_font::FontCache::new() -> Self
+pub struct pdfrum_font::FontDescriptor
+pub pdfrum_font::FontDescriptor::ascent: f32
+pub pdfrum_font::FontDescriptor::descent: f32
+pub pdfrum_font::FontDescriptor::flags: pdfrum_font::FontFlags
+pub pdfrum_font::FontDescriptor::font_bbox: kurbo::rect::Rect
+pub pdfrum_font::FontDescriptor::font_weight: core::option::Option<i32>
+pub pdfrum_font::FontDescriptor::italic_angle: i32
+pub pdfrum_font::FontDescriptor::stem_v: i32
+impl pdfrum_font::FontDescriptor
+pub fn pdfrum_font::FontDescriptor::subst_weight(&self) -> i32
+pub fn pdfrum_font::FontDescriptor::weight(&self) -> core::option::Option<i32>
+impl core::default::Default for pdfrum_font::FontDescriptor
+pub fn pdfrum_font::FontDescriptor::default() -> Self
+pub struct pdfrum_font::FontFlags(pub u32)
+impl pdfrum_font::FontFlags
+pub const pdfrum_font::FontFlags::ALL_CAP: u32
+pub const pdfrum_font::FontFlags::DEFAULT: Self
+pub const pdfrum_font::FontFlags::FIXED_PITCH: u32
+pub const pdfrum_font::FontFlags::FORCE_BOLD: u32
+pub const pdfrum_font::FontFlags::ITALIC: u32
+pub const pdfrum_font::FontFlags::NON_SYMBOLIC: u32
+pub const pdfrum_font::FontFlags::SCRIPT: u32
+pub const pdfrum_font::FontFlags::SERIF: u32
+pub const pdfrum_font::FontFlags::SMALL_CAP: u32
+pub const pdfrum_font::FontFlags::SYMBOLIC: u32
+pub const pdfrum_font::FontFlags::USE_EXTERN_ATTR: u32
+pub const fn pdfrum_font::FontFlags::has(self, u32) -> bool
+pub const fn pdfrum_font::FontFlags::is_all_cap(self) -> bool
+pub const fn pdfrum_font::FontFlags::is_fixed_pitch(self) -> bool
+pub const fn pdfrum_font::FontFlags::is_italic(self) -> bool
+pub const fn pdfrum_font::FontFlags::is_non_symbolic(self) -> bool
+pub const fn pdfrum_font::FontFlags::is_symbolic(self) -> bool
+pub const fn pdfrum_font::FontFlags::uses_extern_attr(self) -> bool
+pub const fn pdfrum_font::FontFlags::with(self, u32) -> Self
+pub const fn pdfrum_font::FontFlags::without(self, u32) -> Self
+pub struct pdfrum_font::FontId(pub u64)
+pub struct pdfrum_font::Gid(pub u16)
+impl core::convert::From<pdfrum_font::Gid> for pdfrum_type1::Gid
+pub fn pdfrum_type1::Gid::from(pdfrum_font::Gid) -> Self
+impl core::convert::From<pdfrum_type1::Gid> for pdfrum_font::Gid
+pub fn pdfrum_font::Gid::from(pdfrum_type1::Gid) -> Self
+pub struct pdfrum_font::GlyphCache
+impl pdfrum_font::GlyphCache
+pub fn pdfrum_font::GlyphCache::clear(&mut self)
+pub fn pdfrum_font::GlyphCache::is_empty(&self) -> bool
+pub fn pdfrum_font::GlyphCache::len(&self) -> usize
+pub fn pdfrum_font::GlyphCache::new() -> Self
+pub fn pdfrum_font::GlyphCache::path(&mut self, &pdfrum_font::Font, pdfrum_font::GlyphKey) -> core::option::Option<&kurbo::bezpath::BezPath>
+pub fn pdfrum_font::GlyphCache::shared(&mut self, &pdfrum_font::Font, pdfrum_font::GlyphKey) -> core::option::Option<alloc::sync::Arc<kurbo::bezpath::BezPath>>
+pub struct pdfrum_font::GlyphKey
+pub pdfrum_font::GlyphKey::dest_width: i32
+pub pdfrum_font::GlyphKey::font: pdfrum_font::FontId
+pub pdfrum_font::GlyphKey::gid: pdfrum_font::Gid
+pub pdfrum_font::GlyphKey::italic_angle: i32
+pub pdfrum_font::GlyphKey::vertical: bool
+pub pdfrum_font::GlyphKey::weight: i32
+impl pdfrum_font::GlyphKey
+pub fn pdfrum_font::GlyphKey::plain(pdfrum_font::FontId, pdfrum_font::Gid) -> Self
+pub struct pdfrum_font::GlyphName(_)
+impl pdfrum_font::GlyphName
+pub fn pdfrum_font::GlyphName::as_bytes(&self) -> &[u8]
+pub fn pdfrum_font::GlyphName::as_str(&self) -> core::option::Option<&str>
+pub fn pdfrum_font::GlyphName::new(impl core::convert::Into<alloc::boxed::Box<[u8]>>) -> Self
+impl core::convert::From<&str> for pdfrum_font::GlyphName
+pub fn pdfrum_font::GlyphName::from(&str) -> Self
+impl core::fmt::Debug for pdfrum_font::GlyphName
+pub fn pdfrum_font::GlyphName::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub struct pdfrum_font::SimpleFont
+pub pdfrum_font::SimpleFont::base_font_name: alloc::vec::Vec<u8>
+pub pdfrum_font::SimpleFont::descriptor: pdfrum_font::FontDescriptor
+pub pdfrum_font::SimpleFont::embedded: bool
+pub pdfrum_font::SimpleFont::encoding: [core::option::Option<pdfrum_font::GlyphName>; 256]
+pub pdfrum_font::SimpleFont::encoding_kind: pdfrum_font::encoding::FontEncoding
+pub pdfrum_font::SimpleFont::glyph_index: [u16; 256]
+pub pdfrum_font::SimpleFont::glyphs: pdfrum_font::GlyphSource
+pub pdfrum_font::SimpleFont::id: pdfrum_font::FontId
+pub pdfrum_font::SimpleFont::kind: pdfrum_font::SimpleKind
+pub pdfrum_font::SimpleFont::subst: core::option::Option<pdfrum_font::SubstFont>
+pub pdfrum_font::SimpleFont::to_unicode: core::option::Option<pdfrum_font::tounicode::ToUnicode>
+pub pdfrum_font::SimpleFont::unicodes: [u16; 256]
+pub pdfrum_font::SimpleFont::widths: pdfrum_font::widths::SimpleWidths
+impl pdfrum_font::SimpleFont
+pub fn pdfrum_font::SimpleFont::char_bbox(&self, pdfrum_cmap::ids::CharCode) -> kurbo::rect::Rect
+pub fn pdfrum_font::SimpleFont::char_code_from_unicode(&self, char) -> core::option::Option<pdfrum_cmap::ids::CharCode>
+pub fn pdfrum_font::SimpleFont::char_width(&self, pdfrum_cmap::ids::CharCode) -> f32
+pub fn pdfrum_font::SimpleFont::glyph_from_charcode(&self, pdfrum_cmap::ids::CharCode) -> core::option::Option<pdfrum_font::Gid>
+pub fn pdfrum_font::SimpleFont::has_font_widths(&self) -> bool
+pub fn pdfrum_font::SimpleFont::is_standard_font(&self) -> bool
+pub fn pdfrum_font::SimpleFont::unicode_from_charcode(&self, pdfrum_cmap::ids::CharCode) -> smallvec::SmallVec<[char; 2]>
+impl pdfrum_font::SimpleFont
+pub fn pdfrum_font::SimpleFont::glyph_path(&self, pdfrum_font::Gid) -> core::option::Option<kurbo::bezpath::BezPath>
+pub struct pdfrum_font::SubstFont
+pub pdfrum_font::SubstFont::charset: pdfrum_font::subst::Charset
+pub pdfrum_font::SubstFont::family: alloc::string::String
+pub pdfrum_font::SubstFont::is_builtin_generic: bool
+pub pdfrum_font::SubstFont::italic_angle: i32
+pub pdfrum_font::SubstFont::italic_cjk: bool
+pub pdfrum_font::SubstFont::subst_cjk: bool
+pub pdfrum_font::SubstFont::weight: core::option::Option<i32>
+pub pdfrum_font::SubstFont::weight_cjk: core::option::Option<i32>
+impl pdfrum_font::SubstFont
+pub fn pdfrum_font::SubstFont::configure_external(&mut self, alloc::string::String, pdfrum_font::subst::Charset, i32, bool, i32, bool, bool)
+pub fn pdfrum_font::SubstFont::effective_skew(&self, bool) -> i32
+pub fn pdfrum_font::SubstFont::effective_weight(&self, bool) -> i32
+pub fn pdfrum_font::SubstFont::embolden_level_for_load(&self) -> i32
+pub fn pdfrum_font::SubstFont::embolden_level_for_render(&self, bool, i32, i32) -> core::option::Option<i32>
+pub fn pdfrum_font::SubstFont::estimated_stem_v(&self) -> i32
+pub fn pdfrum_font::SubstFont::is_actual_font_loaded(&self, &[u8]) -> bool
+pub fn pdfrum_font::SubstFont::raw_weight(&self) -> i32
+pub fn pdfrum_font::SubstFont::skew(&self) -> i32
+pub fn pdfrum_font::SubstFont::skew_cjk(&self) -> i32
+pub fn pdfrum_font::SubstFont::use_chrome_serif(&mut self)
+pub struct pdfrum_font::SubstitutionOptions
+pub pdfrum_font::SubstitutionOptions::croscore_font_names: bool
+pub pdfrum_font::SubstitutionOptions::font_dirs: alloc::vec::Vec<std::path::PathBuf>
+pub pdfrum_font::SubstitutionOptions::skip_font_enumeration: bool
+pub pdfrum_font::SubstitutionOptions::system_fonts: bool
+pub struct pdfrum_font::ToUnicode
+impl pdfrum_font::tounicode::ToUnicode
+pub fn pdfrum_font::tounicode::ToUnicode::base_set(&self) -> pdfrum_cmap::ids::CidSet
+pub fn pdfrum_font::tounicode::ToUnicode::is_empty(&self) -> bool
+pub fn pdfrum_font::tounicode::ToUnicode::len(&self) -> usize
+pub fn pdfrum_font::tounicode::ToUnicode::lookup(&self, pdfrum_cmap::ids::CharCode) -> smallvec::SmallVec<[char; 2]>
+pub fn pdfrum_font::tounicode::ToUnicode::reverse(&self, char) -> pdfrum_cmap::ids::CharCode
+pub struct pdfrum_font::Type0Font
+pub pdfrum_font::Type0Font::adobe_courier_std: bool
+pub pdfrum_font::Type0Font::ansi_widths_fixed: bool
+pub pdfrum_font::Type0Font::base_font_name: alloc::vec::Vec<u8>
+pub pdfrum_font::Type0Font::charset: pdfrum_cmap::ids::CidSet
+pub pdfrum_font::Type0Font::cid_to_gid: pdfrum_font::CidToGid
+pub pdfrum_font::Type0Font::cmap: pdfrum_cmap::CMap
+pub pdfrum_font::Type0Font::descriptor: pdfrum_font::FontDescriptor
+pub pdfrum_font::Type0Font::embedded: bool
+pub pdfrum_font::Type0Font::glyphs: pdfrum_font::GlyphSource
+pub pdfrum_font::Type0Font::id: pdfrum_font::FontId
+pub pdfrum_font::Type0Font::kind: pdfrum_font::cid::CidFontKind
+pub pdfrum_font::Type0Font::subst: core::option::Option<pdfrum_font::SubstFont>
+pub pdfrum_font::Type0Font::to_unicode: core::option::Option<pdfrum_font::tounicode::ToUnicode>
+pub pdfrum_font::Type0Font::vertical: core::option::Option<pdfrum_font::VerticalMetrics>
+pub pdfrum_font::Type0Font::widths: pdfrum_font::CidWidths
+impl pdfrum_font::Type0Font
+pub fn pdfrum_font::Type0Font::char_bbox(&self, pdfrum_cmap::ids::CharCode) -> kurbo::rect::Rect
+pub fn pdfrum_font::Type0Font::char_width(&self, pdfrum_cmap::ids::CharCode) -> f32
+pub fn pdfrum_font::Type0Font::charcode_from_unicode(&self, char) -> pdfrum_cmap::ids::CharCode
+pub fn pdfrum_font::Type0Font::cid_from_charcode(&self, pdfrum_cmap::ids::CharCode) -> pdfrum_cmap::ids::Cid
+pub fn pdfrum_font::Type0Font::glyph_from_charcode(&self, pdfrum_cmap::ids::CharCode) -> (core::option::Option<pdfrum_font::Gid>, bool)
+pub fn pdfrum_font::Type0Font::is_unicode_compatible(&self) -> bool
+pub fn pdfrum_font::Type0Font::is_vertical(&self) -> bool
+pub fn pdfrum_font::Type0Font::japan1_transform(&self, pdfrum_cmap::ids::CharCode) -> core::option::Option<pdfrum_font::CidTransform>
+pub fn pdfrum_font::Type0Font::scalar_unicode(&self, pdfrum_cmap::ids::CharCode) -> u16
+pub fn pdfrum_font::Type0Font::unicode_from_charcode(&self, pdfrum_cmap::ids::CharCode) -> smallvec::SmallVec<[char; 2]>
+pub fn pdfrum_font::Type0Font::vert_origin(&self, pdfrum_cmap::ids::CharCode) -> (f32, f32)
+pub fn pdfrum_font::Type0Font::vert_width(&self, pdfrum_cmap::ids::CharCode) -> f32
+pub struct pdfrum_font::Type3Font
+pub pdfrum_font::Type3Font::char_procs: pdfrum_object::dict::Dict
+pub pdfrum_font::Type3Font::encoding: [core::option::Option<pdfrum_font::GlyphName>; 256]
+pub pdfrum_font::Type3Font::encoding_kind: pdfrum_font::encoding::FontEncoding
+pub pdfrum_font::Type3Font::font_bbox: kurbo::rect::Rect
+pub pdfrum_font::Type3Font::font_matrix: kurbo::affine::Affine
+pub pdfrum_font::Type3Font::id: pdfrum_font::FontId
+pub pdfrum_font::Type3Font::resources: core::option::Option<pdfrum_object::dict::Dict>
+pub pdfrum_font::Type3Font::to_unicode: core::option::Option<pdfrum_font::tounicode::ToUnicode>
+pub pdfrum_font::Type3Font::widths: [i32; 256]
+impl pdfrum_font::Type3Font
+pub fn pdfrum_font::Type3Font::char_code_from_unicode(&self, char) -> core::option::Option<pdfrum_cmap::ids::CharCode>
+pub fn pdfrum_font::Type3Font::char_proc(&self, pdfrum_cmap::ids::CharCode, &impl pdfrum_object::resolve::Resolve) -> core::option::Option<pdfrum_object::stream::Stream>
+pub fn pdfrum_font::Type3Font::char_proc_name(&self, pdfrum_cmap::ids::CharCode) -> core::option::Option<&[u8]>
+pub fn pdfrum_font::Type3Font::char_width(&self, pdfrum_cmap::ids::CharCode) -> f32
+pub fn pdfrum_font::Type3Font::unicode_from_charcode(&self, pdfrum_cmap::ids::CharCode) -> smallvec::SmallVec<[char; 2]>
+pub struct pdfrum_font::VerticalMetrics
+impl pdfrum_font::VerticalMetrics
+pub fn pdfrum_font::VerticalMetrics::default_advance(&self) -> f32
+pub fn pdfrum_font::VerticalMetrics::default_origin_y(&self) -> f32
+pub fn pdfrum_font::VerticalMetrics::is_empty(&self) -> bool
+pub fn pdfrum_font::VerticalMetrics::len(&self) -> usize
+pub fn pdfrum_font::VerticalMetrics::load(&pdfrum_object::dict::Dict, &impl pdfrum_object::resolve::Resolve, &mut pdfrum_common::diagnostics::Diagnostics) -> Self
+pub fn pdfrum_font::VerticalMetrics::origin(&self, pdfrum_cmap::ids::Cid, &pdfrum_font::CidWidths) -> (f32, f32)
+pub fn pdfrum_font::VerticalMetrics::width(&self, pdfrum_cmap::ids::Cid) -> f32
+impl core::default::Default for pdfrum_font::VerticalMetrics
+pub fn pdfrum_font::VerticalMetrics::default() -> Self
+pub const pdfrum_font::MAX_TYPE3_DEPTH: u32
+pub fn pdfrum_font::cid_transform_to_float(u8) -> f32
+pub fn pdfrum_font::em_adjust(i32, u16) -> i32
+pub fn pdfrum_font::load(&pdfrum_object::dict::Dict, &impl pdfrum_object::resolve::Resolve, &pdfrum_font::FontCache, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<pdfrum_font::Font>
+pub fn pdfrum_font::load_with_options(&pdfrum_object::dict::Dict, &impl pdfrum_object::resolve::Resolve, &pdfrum_font::FontCache, &pdfrum_font::subst::SubstitutionOptions, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<pdfrum_font::Font>
+pub fn pdfrum_font::normalize_font_metric(i64, u16) -> i32

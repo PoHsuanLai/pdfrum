@@ -1,0 +1,74 @@
+pub mod pdfrum_type1
+pub enum pdfrum_type1::AxisKind
+pub pdfrum_type1::AxisKind::Other(alloc::boxed::Box<str>)
+pub pdfrum_type1::AxisKind::Weight
+pub pdfrum_type1::AxisKind::Width
+pub enum pdfrum_type1::Container
+pub pdfrum_type1::Container::Bare
+pub pdfrum_type1::Container::Pfa
+pub pdfrum_type1::Container::Pfb
+pub enum pdfrum_type1::Encoding
+pub pdfrum_type1::Encoding::Custom(alloc::boxed::Box<[core::option::Option<alloc::boxed::Box<str>>; 256]>)
+pub pdfrum_type1::Encoding::Expert
+pub pdfrum_type1::Encoding::IsoLatin1
+pub pdfrum_type1::Encoding::Standard
+impl pdfrum_type1::Encoding
+pub fn pdfrum_type1::Encoding::glyph_name(&self, u8) -> core::option::Option<&str>
+pub fn pdfrum_type1::Encoding::predefined(&self) -> core::option::Option<read_fonts::ps::encoding::PredefinedEncoding>
+#[non_exhaustive] pub enum pdfrum_type1::Error
+pub pdfrum_type1::Error::EexecGarbage
+pub pdfrum_type1::Error::Empty
+pub pdfrum_type1::Error::NoCharStrings
+pub pdfrum_type1::Error::NoEexec
+pub pdfrum_type1::Error::PfbSegment
+pub pdfrum_type1::Error::PfbSegment::at: usize
+pub struct pdfrum_type1::Gid(pub u16)
+pub struct pdfrum_type1::Glyph
+pub pdfrum_type1::Glyph::advance: f32
+pub pdfrum_type1::Glyph::left_side_bearing: f32
+pub pdfrum_type1::Glyph::path: kurbo::bezpath::BezPath
+pub struct pdfrum_type1::MmAxis
+pub pdfrum_type1::MmAxis::default: f32
+pub pdfrum_type1::MmAxis::kind: pdfrum_type1::AxisKind
+pub pdfrum_type1::MmAxis::max: f32
+pub pdfrum_type1::MmAxis::min: f32
+pub struct pdfrum_type1::Type1Font
+impl pdfrum_type1::Type1Font
+pub fn pdfrum_type1::Type1Font::bbox(&self) -> kurbo::rect::Rect
+pub fn pdfrum_type1::Type1Font::code_to_gid(&self, u8) -> core::option::Option<pdfrum_type1::Gid>
+pub fn pdfrum_type1::Type1Font::container(&self) -> pdfrum_type1::Container
+pub fn pdfrum_type1::Type1Font::default_weight_vector(&self) -> &[f32]
+pub fn pdfrum_type1::Type1Font::encoding(&self) -> &pdfrum_type1::Encoding
+pub fn pdfrum_type1::Type1Font::family_name(&self) -> core::option::Option<&str>
+pub fn pdfrum_type1::Type1Font::font_matrix(&self) -> kurbo::affine::Affine
+pub fn pdfrum_type1::Type1Font::full_name(&self) -> core::option::Option<&str>
+pub fn pdfrum_type1::Type1Font::glyph_bounds(&self, pdfrum_type1::Gid) -> core::option::Option<kurbo::rect::Rect>
+pub fn pdfrum_type1::Type1Font::glyph_name(&self, pdfrum_type1::Gid) -> core::option::Option<&str>
+pub fn pdfrum_type1::Type1Font::glyph_names(&self) -> impl core::iter::traits::iterator::Iterator<Item = (pdfrum_type1::Gid, &str)>
+pub fn pdfrum_type1::Type1Font::has_glyph_names(&self) -> bool
+pub fn pdfrum_type1::Type1Font::instantiate(&self, &[f32]) -> core::option::Option<pdfrum_type1::Type1Instance<'_>>
+pub fn pdfrum_type1::Type1Font::is_fixed_pitch(&self) -> bool
+pub fn pdfrum_type1::Type1Font::italic_angle(&self) -> f32
+pub fn pdfrum_type1::Type1Font::mm_axes(&self) -> core::option::Option<&[pdfrum_type1::MmAxis]>
+pub fn pdfrum_type1::Type1Font::name_to_gid(&self, &str) -> core::option::Option<pdfrum_type1::Gid>
+pub fn pdfrum_type1::Type1Font::num_glyphs(&self) -> u32
+pub fn pdfrum_type1::Type1Font::outline(&self, pdfrum_type1::Gid) -> core::option::Option<(kurbo::bezpath::BezPath, f32)>
+pub fn pdfrum_type1::Type1Font::outline_with_diagnostics(&self, pdfrum_type1::Gid, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<(kurbo::bezpath::BezPath, f32)>
+pub fn pdfrum_type1::Type1Font::parse(&[u8], &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::result::Result<Self, pdfrum_type1::Error>
+pub fn pdfrum_type1::Type1Font::postscript_name(&self) -> core::option::Option<&str>
+pub fn pdfrum_type1::Type1Font::unicode_to_gid(&self, char) -> core::option::Option<pdfrum_type1::Gid>
+pub fn pdfrum_type1::Type1Font::units_per_em(&self) -> u16
+pub struct pdfrum_type1::Type1Instance<'a>
+impl pdfrum_type1::Type1Instance<'_>
+pub fn pdfrum_type1::Type1Instance<'_>::advance(&self, pdfrum_type1::Gid) -> core::option::Option<f32>
+pub fn pdfrum_type1::Type1Instance<'_>::font(&self) -> &pdfrum_type1::Type1Font
+pub fn pdfrum_type1::Type1Instance<'_>::outline(&self, pdfrum_type1::Gid) -> core::option::Option<(kurbo::bezpath::BezPath, f32)>
+pub fn pdfrum_type1::Type1Instance<'_>::weight_vector(&self) -> &[f32]
+pub const pdfrum_type1::CHARSTRING_SEED: u16
+pub const pdfrum_type1::DEFAULT_LEN_IV: i32
+pub const pdfrum_type1::EEXEC_SEED: u16
+pub const pdfrum_type1::EEXEC_SKIP: usize
+pub fn pdfrum_type1::decrypt(&[u8], u16, usize) -> alloc::vec::Vec<u8>
+pub fn pdfrum_type1::encrypt(&[u8], u16) -> alloc::vec::Vec<u8>
+pub fn pdfrum_type1::standard_encoding_name(u8) -> core::option::Option<&'static str>
+pub fn pdfrum_type1::unicode_from_glyph_name(&str) -> core::option::Option<char>
