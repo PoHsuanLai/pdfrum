@@ -18,9 +18,10 @@
 //!   dictionary written straight into `/K` is never linked, however well
 //!   formed it is.
 
-pub mod dump;
+mod dump;
 mod element;
 
+pub use dump::render as dump_tree;
 pub(crate) use element::Kid;
 pub use element::StructElement;
 

@@ -38,7 +38,7 @@ impl<'a> Outline<'a> {
     pub(crate) fn load(doc: &'a Document) -> Outline<'a> {
         let mut diags = Diagnostics::default();
         let entries =
-            pdfrum_doc::nav::outline::walk(&doc.catalog(), &doc.inner, &doc.limits, &mut diags);
+            pdfrum_doc::nav::outline_bookmarks(&doc.catalog(), &doc.inner, &doc.limits, &mut diags);
         doc.note(&diags);
         Outline { doc, entries }
     }

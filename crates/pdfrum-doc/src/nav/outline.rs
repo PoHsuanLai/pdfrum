@@ -114,7 +114,7 @@ impl Bookmark {
 /// Walks the whole outline pre-order: each item, then its subtree, then its
 /// next sibling.
 #[must_use]
-pub fn walk<R: Resolve>(
+pub fn outline_bookmarks<R: Resolve>(
     catalog: &Dict,
     r: &R,
     limits: &Limits,
@@ -194,14 +194,14 @@ pub(crate) fn find<R: Resolve>(
     diags: &mut Diagnostics,
 ) -> Option<Bookmark> {
     let wanted = title.to_lowercase();
-    walk(catalog, r, limits, diags)
+    outline_bookmarks(catalog, r, limits, diags)
         .into_iter()
         .find(|bookmark| bookmark.title(r).to_lowercase() == wanted)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{Bookmark, find, walk};
+    use super::{Bookmark, find, outline_bookmarks};
     use pdfrum_common::{Diagnostics, Limits};
     use pdfrum_object::{Array, Dict, Name, NoResolve, Object, PdfString};
 
@@ -297,7 +297,7 @@ mod tests {
             Object::Dict(dict(&[("First", Object::Dict(root))])),
         )]);
         let (l, mut d) = (Limits::default(), Diagnostics::default());
-        let items = walk(&catalog, &NoResolve, &l, &mut d);
+        let items = outline_bookmarks(&catalog, &NoResolve, &l, &mut d);
         let seen: Vec<_> = items
             .iter()
             .map(|b| (b.title(&NoResolve), b.depth))
@@ -331,8 +331,8 @@ mod tests {
     #[test]
     fn an_outline_with_no_entries_walks_to_nothing() {
         let (l, mut d) = (Limits::default(), Diagnostics::default());
-        assert!(walk(&Dict::new(), &NoResolve, &l, &mut d).is_empty());
+        assert!(outline_bookmarks(&Dict::new(), &NoResolve, &l, &mut d).is_empty());
         let empty = dict(&[("Outlines", Object::Dict(Dict::new()))]);
-        assert!(walk(&empty, &NoResolve, &l, &mut d).is_empty());
+        assert!(outline_bookmarks(&empty, &NoResolve, &l, &mut d).is_empty());
     }
 }

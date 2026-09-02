@@ -103,7 +103,7 @@ impl Annotation<'_> {
     /// most readers, and this engine, draw nothing.
     #[must_use]
     pub fn has_appearance(&self) -> bool {
-        pdfrum_doc::annot::appearance::has_appearance(&self.inner.dict, self.doc.parser())
+        pdfrum_doc::annot::has_appearance(&self.inner.dict, self.doc.parser())
     }
 
     /// The quadrilaterals a text-markup annotation covers (`/QuadPoints`) —
@@ -113,9 +113,9 @@ impl Annotation<'_> {
     #[must_use]
     pub fn quad_points(&self) -> Vec<kurbo::Rect> {
         let array = self.inner.quad_points.as_ref();
-        let count = pdfrum_doc::annot::quad::quad_point_count(array);
+        let count = pdfrum_doc::annot::quad_point_count(array);
         (0..count)
-            .map(|index| pdfrum_doc::annot::quad::rect_from_quad_points(array, index))
+            .map(|index| pdfrum_doc::annot::rect_from_quad_points(array, index))
             .collect()
     }
 

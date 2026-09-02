@@ -8,7 +8,7 @@
 use std::path::PathBuf;
 
 use pdfrum_common::{Diagnostics, Limits};
-use pdfrum_doc::structure::{StructTree, dump};
+use pdfrum_doc::structure::{StructTree, dump_tree};
 
 /// The oracle checkout's fixture directory. Tests skip when it is absent, so
 /// the suite still runs on a machine that has only this repository.
@@ -26,7 +26,7 @@ fn dump_page(name: &str, index: u32) -> Option<String> {
     let obj_num = page.reference.map_or(0, |r| r.num);
     let (limits, mut diags) = (Limits::default(), Diagnostics::default());
     let tree = StructTree::load_page(&catalog, &page.dict, obj_num, &doc, &limits, &mut diags);
-    Some(dump::render(tree.as_ref(), index, &doc))
+    Some(dump_tree(tree.as_ref(), index, &doc))
 }
 
 #[test]
