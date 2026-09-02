@@ -4,11 +4,9 @@
 //! it. Everything here is a pure function of one code point; there is no
 //! state and no locale.
 //!
-//! **One of these predicates carries a transcribed bug.** In
-//! [`is_punctuation`]'s Latin-1 arm every term is an equality test except one,
-//! which is written `<=` — so every code point from `0x80` to `0x94`
-//! inclusive is punctuation. That changes where lines may break in Latin-1
-//! text, it is visible in rendered output, and it is ported as written.
+//! **One of these predicates diverges from the oracle under the oracle-bug
+//! rule.** In [`is_punctuation`]'s Latin-1 arm every term in the C++ is an
+//! equality test except one, which is written `<=` — see the note there.
 
 /// Bit flags in the ASCII table.
 const LATIN: u8 = 0x01;
@@ -111,18 +109,25 @@ pub fn is_cjk(word: u32) -> bool {
 
 /// Punctuation, for line-breaking purposes.
 ///
-/// The Latin-1 arm's `word <= 0x0094` term is transcribed as written: it
-/// makes every code point from `0x80` through `0x94` punctuation, where every
-/// neighbouring term is an equality test. Reproducing it is the point.
+/// `[oracle-bug]` `cpvt_section.cpp:84` writes `word <= 0x0094` inside a chain
+/// of `==` tests, so every code point from `0x80` through `0x94` is
+/// punctuation and the six preceding equality tests are dead. The `<=` is a
+/// typo for `==`: the equality set the author wrote — `0x82 0x84 0x85 0x91
+/// 0x92 0x93 0x94 0x96 0xB4 0xB8` — is exactly the cp1252 quotation and dash
+/// marks, all genuine punctuation, while `0x80..0x94` sweeps in the C1
+/// controls, which UAX #14 classifies `CM`/`AL`, not punctuation (pdf.js
+/// breaks only at `U+0020`, `annotation.js:3107-3134`, so it never treats a
+/// C1 control as a break opportunity either). We test the intended set.
 #[must_use]
 pub fn is_punctuation(word: u32) -> bool {
     if word <= 0x7F {
         return ascii_flag(word, PUNCT);
     }
     if (0x0080..=0x00FF).contains(&word) {
-        // The `<= 0x0094` term subsumes the four equality tests written
-        // before it and sweeps in everything from 0x80 up. Transcribed.
-        return word <= 0x0094 || matches!(word, 0x0096 | 0x00B4 | 0x00B8);
+        return matches!(
+            word,
+            0x0082 | 0x0084 | 0x0085 | 0x0091 | 0x0092 | 0x0093 | 0x0094 | 0x0096 | 0x00B4 | 0x00B8
+        );
     }
     if (0x2000..=0x206F).contains(&word) {
         return matches!(
@@ -249,16 +254,24 @@ mod tests {
         is_open_style_punctuation, is_prefix_symbol, is_punctuation, is_space, need_division,
     };
 
+    /// Audit item **A55**. This pinned the oracle's `<= 0x0094` typo, which
+    /// made every code point from `0x80` through `0x94` punctuation. Under
+    /// the oracle-bug rule the Latin-1 arm now tests the equality set the
+    /// author wrote, so the C1 controls in that range are not punctuation.
     #[test]
-    fn every_latin_one_code_point_from_eighty_to_ninety_four_is_punctuation() {
-        // The transcribed `<=` term, reproduced deliberately.
-        for word in 0x80..=0x94_u32 {
+    fn the_latin_one_arm_tests_the_cp1252_marks_and_not_the_c1_controls() {
+        // The intended set: the cp1252 quotation and dash marks.
+        for word in [
+            0x82_u32, 0x84, 0x85, 0x91, 0x92, 0x93, 0x94, 0x96, 0x00B4, 0x00B8,
+        ] {
             assert!(is_punctuation(word), "{word:#04X}");
         }
-        // Just past it the equality tests take over, and they are sparse.
+        // The C1 controls the `<=` swept in are not punctuation.
+        for word in [0x80_u32, 0x81, 0x83, 0x86, 0x8F, 0x90] {
+            assert!(!is_punctuation(word), "{word:#04X}");
+        }
+        // Just past the range the neighbouring tests are sparse either way.
         assert!(!is_punctuation(0x95));
-        assert!(is_punctuation(0x96));
-        assert!(is_punctuation(0x00B4));
         assert!(!is_punctuation(0x00A1));
     }
 
