@@ -21,7 +21,7 @@ fn field() -> FieldRef {
 
 /// A session with the golden run's frozen clock and timezone.
 fn session() -> ScriptCascade {
-    ScriptCascade::new(&ScriptConfig::frozen_at(PDFIUM_TEST_CLOCK_SECS)).expect("a realm builds")
+    ScriptCascade::new(&ScriptConfig::frozen_at(GOLDEN_CLOCK_SECS)).expect("a realm builds")
 }
 
 /// A session whose limits are small enough that a runaway script stops in
@@ -29,7 +29,7 @@ fn session() -> ScriptCascade {
 fn bounded(limits: Limits) -> ScriptCascade {
     ScriptCascade::new(&ScriptConfig {
         limits,
-        ..ScriptConfig::frozen_at(PDFIUM_TEST_CLOCK_SECS)
+        ..ScriptConfig::frozen_at(GOLDEN_CLOCK_SECS)
     })
     .expect("a realm builds")
 }
@@ -319,7 +319,7 @@ fn util_is_bound_to_the_library() {
 /// The frozen clock reaches `Date`, which is what makes a golden run
 /// reproducible on a machine in any timezone.
 ///
-/// The seed is [`PDFIUM_TEST_CLOCK_SECS`] because that is what the harness
+/// The seed is [`GOLDEN_CLOCK_SECS`] because that is what the harness
 /// passes as `--time=`; the assertion is still on the literal milliseconds,
 /// because those literal bytes are what `public_methods_expected.txt` pins.
 #[test]

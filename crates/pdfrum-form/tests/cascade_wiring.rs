@@ -18,12 +18,12 @@
 
 use kurbo::Point;
 use pdfrum_doc::ap;
-use pdfrum_form::cascade::{Cascade, FieldRef, FieldWrites, Keystroke, KeystrokeOutcome};
-use pdfrum_form::event::{Button, Event, Modifiers};
+use pdfrum_form::FormSession;
+use pdfrum_form::Permissions;
 use pdfrum_form::field::FieldState;
-use pdfrum_form::hit::Permissions;
 use pdfrum_form::route::{self, Context};
-use pdfrum_form::session::FormSession;
+use pdfrum_form::{Button, Event, Modifiers};
+use pdfrum_form::{Cascade, FieldRef, FieldWrites, Keystroke, KeystrokeOutcome};
 use pdfrum_object::{Dict, Name, NoResolve, Object, PdfString};
 
 // ---- the fixture: one text field on one page ----
@@ -114,7 +114,7 @@ impl Fixture {
     fn new() -> Fixture {
         let catalog = catalog();
         let resolve = NoResolve;
-        let page = pdfrum_form::page::read(0, &two_text_fields(), &catalog, &resolve);
+        let page = pdfrum_form::read_page(0, &two_text_fields(), &catalog, &resolve);
         let mut build = pdfrum_page::BuildContext::new();
         let fonts = ap::FormFonts::load(&catalog, &resolve, &mut build);
         Fixture {
@@ -164,7 +164,7 @@ fn click(
 }
 
 fn text_of(session: &FormSession, index: u32) -> Option<String> {
-    match session.fields.get(&pdfrum_form::session::FieldId(index))? {
+    match session.fields.get(&pdfrum_form::FieldId(index))? {
         FieldState::Text(state) => Some(state.edit.text.clone()),
         _ => None,
     }
@@ -237,7 +237,7 @@ fn a_rewriting_keystroke_hook_decides_what_lands() {
         &ctx,
         &mut cascade,
         Event::KeyDown {
-            key: pdfrum_form::event::Key::End,
+            key: pdfrum_form::Key::End,
             modifiers: Modifiers::NONE,
         },
     );
@@ -288,7 +288,7 @@ fn a_refusing_validate_reverts_the_edit_and_keeps_the_field() {
         &ctx,
         &mut cascade,
         Event::KeyDown {
-            key: pdfrum_form::event::Key::End,
+            key: pdfrum_form::Key::End,
             modifiers: Modifiers::NONE,
         },
     );
@@ -341,7 +341,7 @@ fn a_refusing_commit_keystroke_gate_also_keeps_the_field() {
         &ctx,
         &mut cascade,
         Event::KeyDown {
-            key: pdfrum_form::event::Key::End,
+            key: pdfrum_form::Key::End,
             modifiers: Modifiers::NONE,
         },
     );
@@ -496,7 +496,7 @@ fn tabbing_away_from_a_refused_field_does_not_move_focus() {
         &ctx,
         &mut cascade,
         Event::KeyDown {
-            key: pdfrum_form::event::Key::Tab,
+            key: pdfrum_form::Key::Tab,
             modifiers: Modifiers::NONE,
         },
     );

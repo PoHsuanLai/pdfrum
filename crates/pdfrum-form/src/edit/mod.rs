@@ -14,10 +14,14 @@
 //! 4. a scroll offset and the vertical-alignment padding it composes with;
 //! 5. the mutations themselves, and the rigid postlude they share.
 
+// `ops` and `place` stay `pub`: `ops` is the mutation surface a caller drives
+// without a session, and `place` carries the `PlaceExt` trait, whose methods a
+// caller brings into scope by naming where it lives. `select` and `undo` are
+// namespaces — everything in them is re-exported here and at the root.
 pub mod ops;
 pub mod place;
-pub mod select;
-pub mod undo;
+mod select;
+mod undo;
 
 pub use ops::TextEdit;
 pub use place::{Place, PlaceExt, Range};

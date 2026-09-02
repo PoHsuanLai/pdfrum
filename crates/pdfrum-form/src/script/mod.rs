@@ -58,8 +58,8 @@ use crate::cascade::{Cascade, FieldRef, FieldWrites, Keystroke, KeystrokeOutcome
 
 pub use transcript::TranscriptLine;
 
-/// PDFium's own test seed, in **seconds**: the value the conformance harness
-/// passes as `pdfium_test --time=1399672130`.
+/// The instant the **goldens were recorded at**, in seconds since the epoch:
+/// what a conformance run must freeze its clock to.
 ///
 /// Not a default and not something this crate applies on its own — a *constant
 /// a golden run passes in*, through [`ScriptConfig::frozen_at`]. The frozen
@@ -69,18 +69,24 @@ pub use transcript::TranscriptLine;
 ///
 /// Exported for tests and for a harness that wants to name the seed; the tool
 /// reads its own `--time=` rather than reaching for this.
-pub const PDFIUM_TEST_CLOCK_SECS: u64 = 1_399_672_130;
+///
+/// The oracle spells it `pdfium_test --time=1399672130`.
+pub const GOLDEN_CLOCK_SECS: u64 = 1_399_672_130;
 
-/// The timezone the **engine's `Date`** sees: `TZ=America/Los_Angeles` as V8
-/// resolves it for the fixtures' July dates, which is `GMT-0700`.
+/// The timezone the **engine's `Date`** saw when the goldens were recorded:
+/// `TZ=America/Los_Angeles` as V8 resolves it for the fixtures' July dates,
+/// which is `GMT-0700`.
 ///
 /// This is `Date`'s offset only. `util.printd` uses a *different* one — see
-/// [`PDFIUM_TEST_FX_LOCALTIME_OFFSET_SECS`], and read that doc before
-/// assuming the two should agree.
-pub const PDFIUM_TEST_TZ_OFFSET_SECS: i32 = -7 * 3600;
+/// [`GOLDEN_PRINTD_OFFSET_SECS`], and read that doc before assuming the two
+/// should agree.
+pub const GOLDEN_TIMEZONE_OFFSET_SECS: i32 = -7 * 3600;
 
-/// The offset **`FX_LocalTime` applies**, which is not the one `Date` uses:
-/// a flat `GMT-0800`, with no daylight saving, whatever the date.
+/// The offset **`util.printd` applies** when the goldens were recorded, which
+/// is not the one `Date` uses: a flat `GMT-0800`, with no daylight saving,
+/// whatever the date.
+///
+/// The oracle's own name for the function that applies it is `FX_LocalTime`.
 ///
 /// # Why the two differ, which is not a bug in either
 ///
@@ -108,7 +114,7 @@ pub const PDFIUM_TEST_TZ_OFFSET_SECS: i32 = -7 * 3600;
 /// `new Date(2014, 6, 4, 15, 59, 58)` places at `22:59:58Z` — −8, not −7 —
 /// while `util_scand`'s every line round-trips to the UTC string it was
 /// given, which only holds if `Date` and the parser agree on −7.
-pub const PDFIUM_TEST_FX_LOCALTIME_OFFSET_SECS: i32 = -8 * 3600;
+pub const GOLDEN_PRINTD_OFFSET_SECS: i32 = -8 * 3600;
 
 /// What a scripting session is allowed to do, and what it sees.
 #[derive(Debug, Clone, Default)]
@@ -133,7 +139,7 @@ pub struct ScriptConfig {
     pub timezone_offset_secs: i32,
     /// The offset `util.printd` applies before reading a date's components —
     /// `FX_LocalTime`'s, which is **not** the one `Date` uses. See
-    /// [`PDFIUM_TEST_FX_LOCALTIME_OFFSET_SECS`] for why they differ.
+    /// [`GOLDEN_PRINTD_OFFSET_SECS`] for why they differ.
     pub printd_offset_secs: i32,
 }
 
@@ -144,7 +150,7 @@ impl ScriptConfig {
     /// **The seed is the caller's**, which is the whole point: `--time=` is
     /// the single source of the scripting clock, and this crate no longer
     /// knows which instant a golden run wants. A conformance run passes
-    /// [`PDFIUM_TEST_CLOCK_SECS`].
+    /// [`GOLDEN_CLOCK_SECS`].
     ///
     /// The two timezone offsets come with it rather than being separately
     /// configurable, because upstream installs both hooks under the *same*
@@ -165,8 +171,8 @@ impl ScriptConfig {
         ScriptConfig {
             limits: Limits::default(),
             clock_ms: Some(millis),
-            timezone_offset_secs: PDFIUM_TEST_TZ_OFFSET_SECS,
-            printd_offset_secs: PDFIUM_TEST_FX_LOCALTIME_OFFSET_SECS,
+            timezone_offset_secs: GOLDEN_TIMEZONE_OFFSET_SECS,
+            printd_offset_secs: GOLDEN_PRINTD_OFFSET_SECS,
         }
     }
 

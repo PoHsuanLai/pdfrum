@@ -16,7 +16,10 @@
 //! separate types, so the overloading has nowhere to happen, and each switch
 //! is a named field read once when the field is first touched.
 
-pub mod button;
+mod button;
+// The three below stay `pub`: their *contents* are the surface — the pure
+// per-kind operations a caller drives without a session, which is how every
+// ported assertion in `tests/` is written.
 pub mod choice;
 pub mod text;
 pub mod toggle;

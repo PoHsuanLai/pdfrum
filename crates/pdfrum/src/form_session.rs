@@ -1,6 +1,6 @@
 //! A live form-filling session: events in, appearance updates out.
 
-use pdfrum_form::session::FormSession as Inner;
+use pdfrum_form::FormSession as Inner;
 use pdfrum_form::{Button, Event, Key, Modifiers, Response};
 
 pub use pdfrum_form::SessionConfig;
@@ -9,8 +9,8 @@ use crate::Document;
 use pdfrum_common::PageIndex;
 use pdfrum_page::BuildContext;
 
-pub use pdfrum_form::event::{Button as MouseButton, Key as VirtualKey};
-pub use pdfrum_form::update::{AppearanceUpdate, UpdateKind};
+pub use pdfrum_form::{AppearanceUpdate, UpdateKind};
+pub use pdfrum_form::{Button as MouseButton, Key as VirtualKey};
 pub use pdfrum_form::{Modifiers as EventModifiers, Response as EventResponse};
 
 /// The four points where a field's `/AA` scripts can intervene.
@@ -654,10 +654,8 @@ impl<'a> FormSession<'a> {
 
     /// Which annotation currently has the keyboard, if any.
     #[must_use]
-    pub fn focused_annot(&self) -> Option<pdfrum_form::session::AnnotId> {
-        self.inner
-            .focus
-            .map(pdfrum_form::session::FocusTarget::annot)
+    pub fn focused_annot(&self) -> Option<pdfrum_form::AnnotId> {
+        self.inner.focus.map(pdfrum_form::FocusTarget::annot)
     }
 
     /// Which annotation on `page` holds focus, and what its focus rectangle
@@ -712,10 +710,7 @@ impl<'a> FormSession<'a> {
     /// this session has never built state for — which is any field no event
     /// has reached.
     #[must_use]
-    pub fn scroll_view(
-        &mut self,
-        annot: pdfrum_form::session::AnnotId,
-    ) -> Option<pdfrum_form::ScrollView> {
+    pub fn scroll_view(&mut self, annot: pdfrum_form::AnnotId) -> Option<pdfrum_form::ScrollView> {
         self.with_page(annot.page, |inner, ctx| {
             pdfrum_form::scroll_view(inner, ctx, annot)
         })
@@ -731,7 +726,7 @@ impl<'a> FormSession<'a> {
     ///
     /// An `index` past the end of the options is ignored and the response is
     /// unconsumed, so a host cannot corrupt a field by miscounting.
-    pub fn choose(&mut self, annot: pdfrum_form::session::AnnotId, index: usize) -> EventResponse {
+    pub fn choose(&mut self, annot: pdfrum_form::AnnotId, index: usize) -> EventResponse {
         self.with_page_scripted(annot.page, |inner, ctx, cascade| {
             pdfrum_form::route::choose(inner, ctx, cascade, annot, index)
         })
@@ -742,7 +737,7 @@ impl<'a> FormSession<'a> {
     /// The stored selection is left alone — a row the pointer merely rested
     /// on was never chosen. Safe to call on an annotation whose list is
     /// already shut, which answers an unconsumed response.
-    pub fn close_popup(&mut self, annot: pdfrum_form::session::AnnotId) -> EventResponse {
+    pub fn close_popup(&mut self, annot: pdfrum_form::AnnotId) -> EventResponse {
         self.with_page(annot.page, |inner, ctx| {
             pdfrum_form::route::close_popup(inner, ctx, annot)
         })
@@ -1029,7 +1024,7 @@ impl<'a> FormSession<'a> {
     /// nothing before one.
     fn dispatch_keyboard(&mut self, event: Event) -> Response {
         if let Some(target) = self.inner.focus {
-            let page = pdfrum_form::session::FocusTarget::annot(target).page;
+            let page = pdfrum_form::FocusTarget::annot(target).page;
             return self.dispatch(page, event);
         }
         // **Tab is the exception**, and it is the reason this is not simply
@@ -1072,7 +1067,7 @@ impl<'a> FormSession<'a> {
     ///
     /// A [`FieldRef`]'s index is a **page-local** field id, allocated in
     /// first-seen order as that page's `/Annots` are walked
-    /// (`pdfrum_form::page::read`). It is not a position in
+    /// (`pdfrum_form::read`). It is not a position in
     /// [`Form::fields`](crate::Form::fields), and it does not exist until the
     /// page has been read — so the install cannot happen at construction, and
     /// happens at exactly the moment the ids come into being.
@@ -1141,7 +1136,7 @@ impl<'a> FormSession<'a> {
     /// Reads one page's annotations, or `None` when the page will not load.
     fn read_page(&self, page: PageIndex) -> Option<pdfrum_form::PageForm> {
         let loaded = self.doc.page(page).ok()?;
-        Some(pdfrum_form::page::read(
+        Some(pdfrum_form::read_page(
             page,
             &loaded.dict.dict,
             &self.doc.catalog(),

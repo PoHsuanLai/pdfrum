@@ -12,9 +12,9 @@
 //! script seeing a change where none was offered.
 
 use pdfrum_doc::vt::{Config, Metrics};
-use pdfrum_form::cascade::FieldRef;
-use pdfrum_form::cascade::{Cascade, Keystroke, KeystrokeOutcome, NoScripts};
+use pdfrum_form::FieldRef;
 use pdfrum_form::edit::ops::{self, TextEdit};
+use pdfrum_form::{Cascade, Keystroke, KeystrokeOutcome, NoScripts};
 
 fn metrics() -> Metrics<'static> {
     Metrics {

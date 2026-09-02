@@ -242,7 +242,7 @@ pub use form_session::{
 // rather than a seam the library calls back through.
 pub use outline::{Bookmark, Outline};
 pub use page::{Page, Rotation};
-pub use pdfrum_form::session::AnnotId;
+pub use pdfrum_form::AnnotId;
 pub use pdfrum_form::{Placement, PopupGeometry, PopupView, ScrollView};
 
 /// The `boa`-backed [`Cascade`] and what a caller needs to build and read one

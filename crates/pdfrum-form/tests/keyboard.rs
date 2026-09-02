@@ -10,8 +10,8 @@
 //! original cannot do: upstream picks its accelerator with a build flag, so
 //! half of each of these tests is unreachable on any one machine.
 
-use pdfrum_form::event::{Key, Modifiers};
 use pdfrum_form::field::text::{Disposition, Motion, TextAction, route_char, route_key};
+use pdfrum_form::{Key, Modifiers};
 
 /// The accelerator and the redo-on-Y switch, per platform.
 const GENERAL: (Modifiers, bool) = (Modifiers::CONTROL, true);

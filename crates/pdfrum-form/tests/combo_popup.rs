@@ -18,12 +18,12 @@
 
 use kurbo::Point;
 use pdfrum_doc::ap;
+use pdfrum_form::FormSession;
 use pdfrum_form::NoScripts;
-use pdfrum_form::event::{Button, Event, Modifiers};
+use pdfrum_form::Permissions;
 use pdfrum_form::field::FieldState;
-use pdfrum_form::hit::Permissions;
 use pdfrum_form::route::{self, Context};
-use pdfrum_form::session::FormSession;
+use pdfrum_form::{Button, Event, Modifiers};
 use pdfrum_object::{Dict, Name, NoResolve, Object, PdfString};
 
 /// A dictionary from `(name, object)` pairs, spelled once.
@@ -160,7 +160,7 @@ impl Fixture {
     fn new(page_dict: &Dict) -> Fixture {
         let catalog = catalog();
         let resolve = NoResolve;
-        let page = pdfrum_form::page::read(0, page_dict, &catalog, &resolve);
+        let page = pdfrum_form::read_page(0, page_dict, &catalog, &resolve);
         let mut build = pdfrum_page::BuildContext::new();
         let fonts = ap::FormFonts::load(&catalog, &resolve, &mut build);
         Fixture {
