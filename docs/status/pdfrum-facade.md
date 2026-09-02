@@ -29,10 +29,20 @@ facade's own types.
 
 **Page.** `index`, `width`/`height` (rotation applied), `media_box`,
 `crop_box`, `rotation() -> Rotation`, `render(&RenderOptions) -> Pixmap`,
-`render_with(…, &mut BuildContext)`, `render_session(…, &mut RenderSession)`,
-`text() -> TextPage`, `text_with(…)`, `text_session(…)`,
-`annotations() -> Vec<Annotation>`, `links()`, `edit() -> PageEdit`, and the
-escape hatch `objects()`.
+`render_on(&B, &RenderOptions, &mut RenderSession)`, `text() -> TextPage`,
+`text_on(&mut RenderSession)`, `annotations() -> Vec<Annotation>`, `links()`,
+`edit() -> PageEdit`, and the escape hatch `objects()`.
+
+*Collapsed 2026-09-03 (§A.10 step 10, WP3).* This list used to hold nine
+methods: `render` / `render_on` / `render_with` / `render_with_on` /
+`render_session` / `render_session_on` and `text` / `text_with` /
+`text_session` — a grid of "which rasterizer x which caches" with one real
+body underneath. `RenderSession` already carries both caches and its `build`
+field *is* a `BuildContext`, so every `_with` form was `_session` with one
+half of a session and every backend-less form was the default backend. Four
+methods now: `render` and `text` for the one-page case, `render_on` and
+`text_on` for a run. `FormSession::with_context` still takes a `BuildContext`
+directly, because a session that will never render still needs fonts.
 
 **Editing** (M11). `Page::edit()` hands back an owned `PageEdit` over that
 page's object graph; `Document::save_pages(path, &[PageEdit], &SaveOptions)`
@@ -89,8 +99,8 @@ stays reviewable against `cpdf_renderoptions.h`; the two are joined only at
 *Corrected 2026-09-02.* This paragraph used to list a `backend` field and a
 `Backend { Vello, TinySkia }` enum. **Both were withdrawn**: naming three
 rasterizers in one enum meant `cargo add pdfrum` compiled all three whatever
-the caller used, so the backend became an *argument* — `Page::render_on` and
-`Page::render_with_on` take an `impl RasterBackend` — and the facade carries
+the caller used, so the backend became an *argument* — `Page::render_on` takes
+an `impl RasterBackend` — and the facade carries
 one rasterizer, `vello_cpu`, per DEPS.md's "primary rasterizer". The other two
 are dev-dependencies of this crate and a normal dependency of any caller who
 names one. `pdfrum-tool` still defaults to tiny-skia on purpose, because
@@ -246,10 +256,11 @@ sharp edge a caller would eventually hit.
    (M8).** `pdfrum_render::render_page_with_caches` takes the caches,
    `render_page` delegates to it with a fresh set, and `target_size` is now
    public. The facade pairs the two caches in `RenderSession`, reached through
-   `Page::render_session` / `Page::text_session`. Measured at 2.1x on a
-   two-page document and 3.1x on a four-page one; see `docs/status/M8.md` §1,
-   including the type-3 snapping caveat that keeps `render_page` the
-   byte-identical baseline.
+   `Page::render_on` / `Page::text_on` (WP3, 2026-09-03; they were
+   `render_session` / `text_session` when this was written). Measured at 2.1x
+   on a two-page document and 3.1x on a four-page one; see
+   `docs/status/M8.md` §1, including the type-3 snapping caveat that keeps
+   `render_page` the byte-identical baseline.
 
 2. **Two `Resolve` calling conventions coexist.** `pdfrum-object` and
    `pdfrum-parser` take `r: &impl Resolve`; `pdfrum-doc` takes

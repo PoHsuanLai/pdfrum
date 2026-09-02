@@ -14,7 +14,7 @@
 use std::hint::black_box;
 use std::time::{Duration, Instant};
 
-use pdfrum::{Document, Pixmap, RenderOptions, RenderSession};
+use pdfrum::{Document, Pixmap, RenderOptions, RenderSession, VelloCpuBackend};
 use pdfrum_bench::corpus::{bytes, multipage};
 use rayon::prelude::*;
 
@@ -59,6 +59,10 @@ fn main() {
     );
     println!("{:-<26} {:->6} {:->12} {:->12}", "", "", "", "");
 
+    // One backend for every worker and every document: it is `Sync` and holds
+    // no state, so only the session is per-thread.
+    let backend = VelloCpuBackend::new();
+
     let mut total = Duration::ZERO;
     for doc in multipage() {
         let Ok(opened) = Document::from_bytes(bytes(doc.stem)) else {
@@ -75,7 +79,7 @@ fn main() {
         let warm: Vec<Pixmap> = pages
             .par_iter()
             .map_init(RenderSession::new, |session, page| {
-                page.render_session(&options, session).ok()
+                page.render_on(&backend, &options, session).ok()
             })
             .flatten()
             .collect();
@@ -87,7 +91,7 @@ fn main() {
             let out: Vec<Pixmap> = pages
                 .par_iter()
                 .map_init(RenderSession::new, |session, page| {
-                    page.render_session(&options, session).ok()
+                    page.render_on(&backend, &options, session).ok()
                 })
                 .flatten()
                 .collect();

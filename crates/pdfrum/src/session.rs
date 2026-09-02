@@ -11,25 +11,27 @@ use pdfrum_render::RenderCaches;
 /// the two halves belong to different crates and neither knows about the
 /// other — [`BuildContext`] caches fonts, colour spaces, functions and
 /// decoded images; [`RenderCaches`] caches the flattened glyph outlines the
-/// rasterizer draws. Threading only the first, which is what
-/// [`Page::render_with`](crate::Page::render_with) does, still re-flattens
-/// every glyph on every page.
+/// rasterizer draws. Threading only the first still re-flattens every glyph
+/// on every page, which is why the two travel together.
 ///
-/// Reached through [`Page::render_session`](crate::Page::render_session).
+/// Reached through [`Page::render_on`](crate::Page::render_on) and
+/// [`Page::text_on`](crate::Page::text_on) — extraction moves only the
+/// `build` half, so one session serves a run that does both.
 /// Like [`BuildContext`] it is used through `&mut`, so under `rayon` each
 /// worker keeps its own rather than sharing one behind a lock — see the crate
 /// docs on rendering in parallel.
 ///
 /// ```
-/// use pdfrum::{Document, RenderOptions, RenderSession};
+/// use pdfrum::{Document, RenderOptions, RenderSession, VelloCpuBackend};
 ///
 /// let doc = Document::open("tests/fixtures/bookmarks.pdf")?;
+/// let backend = VelloCpuBackend::new();
 /// let mut session = RenderSession::new();
 ///
 /// // Both pages share one set of caches: the fonts are parsed once, and so
 /// // are the glyph outlines drawn from them.
 /// for page in doc.pages() {
-///     let pixmap = page.render_session(&RenderOptions::default(), &mut session)?;
+///     let pixmap = page.render_on(&backend, &RenderOptions::default(), &mut session)?;
 ///     assert!(pixmap.width() > 0);
 /// }
 /// # Ok::<(), pdfrum::Error>(())

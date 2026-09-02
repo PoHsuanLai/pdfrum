@@ -40,7 +40,7 @@ fn text(c: &mut Criterion) {
             b.iter(|| {
                 let mut session = RenderSession::new();
                 for page in opened.pages() {
-                    black_box(page.text_session(&mut session).to_string().len());
+                    black_box(page.text_on(&mut session).to_string().len());
                 }
             });
         });

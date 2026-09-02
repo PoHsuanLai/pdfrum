@@ -868,16 +868,20 @@ them.
 
 [spec] 2026-09-02: **the facade takes the backend as an argument.**
 `pdfrum::Backend` (the three-variant enum) and `RenderOptions::backend` are
-**withdrawn**. `Page::render_on`, `render_with_on` and `render_session_on` are
-generic over `RasterBackend` — the seam the engine already had — and
-`Page::render`, `render_with` and `render_session` keep their signatures,
-meaning `VelloCpuBackend`:
+**withdrawn**. `Page::render_on` and its two siblings are generic over
+`RasterBackend` — the seam the engine already had — and `Page::render` and
+*its* two siblings keep their signatures, meaning `VelloCpuBackend`:
 
 ```rust
 pub fn render_on<B: RasterBackend>(&self, backend: &B, options: &RenderOptions) -> Result<Pixmap>;
 pub fn render_with_on<B: RasterBackend>(&self, backend: &B, options: &RenderOptions, ctx: &mut BuildContext) -> Result<Pixmap>;
 pub fn render_session_on<B: RasterBackend>(&self, backend: &B, options: &RenderOptions, session: &mut RenderSession) -> Result<Pixmap>;
 ```
+
+[spec] 2026-09-03 (§A.10 step 10, WP3): **the six collapse to two**, and the
+three text methods to two. The signatures above are superseded by §15.8's
+`render` / `render_on` / `text` / `text_on`; the backend-as-argument ruling
+this passage makes is unchanged, only its method count is.
 
 The enum could only ever name the rasterizers the *facade* depended on, so
 `cargo add pdfrum` compiled three of them and no caller could pass a fourth —
@@ -2001,6 +2005,27 @@ to the built-in base-14 Helvetica at 718/-219, which at 12pt puts the caret a
 whole device row off. `pdfrum-tool` therefore makes one context per file and
 hands it to both. `SubstitutionOptions` is re-exported from the facade so a
 caller can build one without reaching for `pdfrum-font`.
+
+[spec] 2026-09-03 (§A.10 step 10, WP3): **`with_context` keeps taking a
+`BuildContext` while `Page`'s render and text methods stop taking one.**
+`Page` collapsed from nine methods to four — `render(&RenderOptions)` and
+`render_on(&B, &RenderOptions, &mut RenderSession)`, `text()` and
+`text_on(&mut RenderSession)` — because `RenderSession` already carries both
+caches and its `build` field *is* a `BuildContext`, so `render_with` was
+`render_on` with half a session and `render_with_on` was it with the other
+half empty. `render_session`/`render_session_on` and `text_with`/
+`text_session` fold the same way. The four that remain are the two axes a
+caller actually varies: whether they name a rasterizer other than the default,
+and whether they hold caches across pages. Both are answered by the same
+argument list, and `render` / `text` are that list with fresh defaults.
+
+`FormSession` does **not** follow, because it does not render. Its context is
+needed for the ascents, descents and advances a caret and selection band are
+laid out from, and a session that never rasterizes has no use for the glyph
+cache half. Asking one for a `RenderSession` would make a caller build a cache
+it will not fill; the paragraph above's requirement — that a caller rendering
+through a substituted context start its session with the *same* context — is
+met by handing `session.build` to `with_context`, which is a field access.
 
 **`apply(Event) -> Response` is the central method**, and every event method
 beside it is a thin spelling of it. `Event` carries a point and no page,

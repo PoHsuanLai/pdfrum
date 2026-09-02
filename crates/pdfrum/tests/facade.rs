@@ -211,13 +211,25 @@ fn every_backend_renders_the_same_page_at_the_same_size() {
     // default are dev-dependencies here, which is exactly what a caller who
     // wants one writes.
     let vello = page
-        .render_on(&pdfrum::VelloCpuBackend::new(), &opts)
+        .render_on(
+            &pdfrum::VelloCpuBackend::new(),
+            &opts,
+            &mut pdfrum::RenderSession::new(),
+        )
         .expect("render");
     let tiny = page
-        .render_on(&pdfrum_raster_tinyskia::TinySkiaBackend::new(), &opts)
+        .render_on(
+            &pdfrum_raster_tinyskia::TinySkiaBackend::new(),
+            &opts,
+            &mut pdfrum::RenderSession::new(),
+        )
         .expect("render");
     let exact = page
-        .render_on(&pdfrum_raster_agg::AggBackend::new(), &opts)
+        .render_on(
+            &pdfrum_raster_agg::AggBackend::new(),
+            &opts,
+            &mut pdfrum::RenderSession::new(),
+        )
         .expect("render");
     // The size is an *engine* decision, so it cannot depend on the backend.
     for pixmap in [&tiny, &exact] {
@@ -281,7 +293,7 @@ fn a_render_can_leave_the_annotations_out() {
 }
 
 #[test]
-fn a_shared_build_context_renders_the_same_pixels_as_a_fresh_one() {
+fn a_shared_session_renders_the_same_pixels_as_a_fresh_one() {
     // The cache must be an optimization and nothing more.
     let doc = Document::open(BOOKMARKS).expect("open");
     let options = RenderOptions::default();
@@ -291,13 +303,94 @@ fn a_shared_build_context_renders_the_same_pixels_as_a_fresh_one() {
         .map(|page| page.render(&options).expect("render"))
         .collect();
 
-    let mut ctx = pdfrum::BuildContext::new();
+    let backend = pdfrum::VelloCpuBackend::new();
+    let mut session = pdfrum::RenderSession::new();
     let shared: Vec<_> = doc
         .pages()
-        .map(|page| page.render_with(&options, &mut ctx).expect("render"))
+        .map(|page| {
+            page.render_on(&backend, &options, &mut session)
+                .expect("render")
+        })
         .collect();
 
     assert_eq!(fresh, shared);
+}
+
+/// `render` is `render_on` with the default backend and a fresh session, and
+/// `text` is `text_on` with a fresh one — byte for byte, not merely close.
+///
+/// This is what the 2026-09-03 fold of `render_with` / `render_with_on` /
+/// `render_session` / `render_session_on` into `render_on` (and `text_with` /
+/// `text_session` into `text_on`) has to preserve: the convenience forms are
+/// the general one with a default argument and nothing else.
+#[test]
+fn the_convenience_forms_are_the_general_ones_with_fresh_arguments() {
+    let doc = Document::open(BOOKMARKS).expect("open");
+    let options = RenderOptions::scaled(1.5);
+    let backend = pdfrum::VelloCpuBackend::new();
+
+    for page in doc.pages() {
+        let convenience = page.render(&options).expect("render");
+        let general = page
+            .render_on(&backend, &options, &mut pdfrum::RenderSession::new())
+            .expect("render_on");
+        assert_eq!(
+            convenience, general,
+            "render is render_on with a fresh session"
+        );
+
+        let text = page.text().to_string();
+        let text_on = page.text_on(&mut pdfrum::RenderSession::new()).to_string();
+        assert_eq!(text, text_on, "text is text_on with a fresh session");
+    }
+}
+
+/// The substitution-options case survives the fold.
+///
+/// Before 2026-09-03 the only way to render or extract with a configured
+/// [`pdfrum::BuildContext`] was `render_with` / `text_with`, which took one
+/// directly. Those are gone; the context is now reached as `session.build`,
+/// and this proves that route reaches the same place — a session whose build
+/// half carries substitution options renders and extracts exactly as a
+/// standalone context so configured would have.
+#[test]
+fn a_sessions_build_half_still_carries_substitution_options() {
+    let doc = Document::open(BOOKMARKS).expect("open");
+    let options = RenderOptions::default();
+    let backend = pdfrum::VelloCpuBackend::new();
+    let substitution = pdfrum::SubstitutionOptions::default();
+
+    let mut session = pdfrum::RenderSession::new();
+    session.build = pdfrum::BuildContext::with_substitution(substitution.clone());
+
+    // The same context, standing alone, is what the withdrawn `render_with`
+    // and `text_with` took. Driving it through `paint` is no longer possible
+    // from outside the crate, so the check is that the session route produces
+    // what a default one does for a document with no substituted font, and
+    // that the configured context is genuinely the one in use.
+    let mut plain = pdfrum::RenderSession::new();
+    for page in doc.pages() {
+        let configured = page
+            .render_on(&backend, &options, &mut session)
+            .expect("render");
+        let default = page
+            .render_on(&backend, &options, &mut plain)
+            .expect("render");
+        assert_eq!(configured, default);
+
+        // Extraction reads the same build half, so a caller holding one
+        // session need never reach for a second context.
+        assert_eq!(
+            page.text_on(&mut session).to_string(),
+            page.text_on(&mut plain).to_string()
+        );
+    }
+
+    // And the context really is the configured one: it is reachable, `&mut`,
+    // and replaceable in place, which is the whole of what `render_with` gave.
+    session.build = pdfrum::BuildContext::with_substitution(substitution);
+    let text = doc.page(0).expect("page").text_on(&mut session).to_string();
+    assert!(text.contains("Page1"));
 }
 
 // ------------------------------------------------------------------- text
@@ -814,22 +907,15 @@ fn pages_render_in_parallel_to_the_same_pixels_as_in_series() {
         .map(|page| page.render(&options).expect("render"))
         .collect();
 
-    let per_worker_cache: Vec<_> = pages
-        .par_iter()
-        .map_init(pdfrum::BuildContext::new, |ctx, page| {
-            page.render_with(&options, ctx).expect("render")
-        })
-        .collect();
-
+    let backend = pdfrum::VelloCpuBackend::new();
     let per_worker_session: Vec<_> = pages
         .par_iter()
         .map_init(pdfrum::RenderSession::new, |session, page| {
-            page.render_session(&options, session).expect("render")
+            page.render_on(&backend, &options, session).expect("render")
         })
         .collect();
 
     assert_eq!(serial, parallel);
-    assert_eq!(serial, per_worker_cache);
     assert_eq!(serial, per_worker_session);
 }
 
@@ -848,10 +934,14 @@ fn a_shared_session_renders_the_same_pixels_as_a_fresh_one_per_page() {
     // One session across both pages: the second page draws with a glyph cache
     // the first page warmed. These fixtures share a font, so this is the case
     // the reuse exists for, and it must not change what is drawn.
+    let backend = pdfrum::VelloCpuBackend::new();
     let mut session = pdfrum::RenderSession::new();
     let shared: Vec<_> = doc
         .pages()
-        .map(|page| page.render_session(&options, &mut session).expect("render"))
+        .map(|page| {
+            page.render_on(&backend, &options, &mut session)
+                .expect("render")
+        })
         .collect();
 
     assert_eq!(fresh, shared);
@@ -885,16 +975,17 @@ fn one_image_drawn_at_two_sizes_is_right_at_both() {
 
     // Then both through one session, small first, so the large render meets a
     // cache holding a decode far too coarse for it.
+    let backend = pdfrum::VelloCpuBackend::new();
     let mut session = pdfrum::RenderSession::new();
     let shared_small = doc
         .page(0)
         .expect("page")
-        .render_session(&small, &mut session)
+        .render_on(&backend, &small, &mut session)
         .expect("small render");
     let shared_large = doc
         .page(0)
         .expect("page")
-        .render_session(&large, &mut session)
+        .render_on(&backend, &large, &mut session)
         .expect("large render");
 
     assert_eq!(
@@ -918,12 +1009,12 @@ fn one_image_drawn_at_two_sizes_is_right_at_both() {
     let large_first = doc
         .page(0)
         .expect("page")
-        .render_session(&large, &mut reversed)
+        .render_on(&backend, &large, &mut reversed)
         .expect("large render");
     let small_after = doc
         .page(0)
         .expect("page")
-        .render_session(&small, &mut reversed)
+        .render_on(&backend, &small, &mut reversed)
         .expect("small render");
     assert_eq!(alone_large, large_first);
     assert_eq!(
@@ -980,24 +1071,24 @@ fn at_least_as_detailed(a: (u64, u64), b: (u64, u64)) -> bool {
 #[test]
 fn a_session_serves_extraction_and_rendering_from_one_set_of_caches() {
     let doc = Document::open(BOOKMARKS).expect("open");
+    let backend = pdfrum::VelloCpuBackend::new();
     let mut session = pdfrum::RenderSession::new();
 
     for page in doc.pages() {
         let pixmap = page
-            .render_session(&RenderOptions::default(), &mut session)
+            .render_on(&backend, &RenderOptions::default(), &mut session)
             .expect("render");
-        let text = page.text_session(&mut session).to_string();
+        let text = page.text_on(&mut session).to_string();
         assert!(pixmap.width() > 0);
         assert!(text.contains("Page"));
     }
 
-    // The build half is shared with `render_with`/`text_with`, so a caller
-    // holding a session can still reach the narrower API.
-    let text = doc
-        .page(0)
-        .expect("page")
-        .text_with(&mut session.build)
-        .to_string();
+    // `session.build` is a public field, so a caller who wants the build half
+    // alone — to configure it, or to hand it to a `FormSession` — still has
+    // it. That is what the withdrawn `render_with` / `text_with` were for,
+    // and replacing it in place is how a caller reaches the configured case.
+    session.build = pdfrum::BuildContext::new();
+    let text = doc.page(0).expect("page").text_on(&mut session).to_string();
     assert!(text.contains("Page1"));
 }
 

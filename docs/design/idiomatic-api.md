@@ -2394,6 +2394,51 @@ type is **not** re-exported. Either re-export it, or make the field private
 and offer `session.build_mut()`. Public fields of unexported types are how
 the “you must depend on a second crate” leak starts.
 
+> **Landed 2026-09-03 as §A.10 step 10.** Nine methods became four, exactly
+> as sketched: `render(&RenderOptions)`,
+> `render_on(&B, &RenderOptions, &mut RenderSession)`, `text()` and
+> `text_on(&mut RenderSession)`. The snapshot diff is seven deletions and two
+> additions and touches nothing else — `docs/status/api-baseline/pdfrum.txt`
+> loses the two-argument `render_on`, `render_with`, `render_with_on`,
+> `render_session`, `render_session_on`, `text_with` and `text_session`, and
+> gains the three-argument `render_on` and `text_on`. Four things this
+> section did not say:
+>
+> 1. **The `RenderCaches` question was already answered.** §A.10 step 1
+>    re-exported it (`crates/pdfrum/src/lib.rs:539`), so `RenderSession.caches`
+>    stays public and nameable and no `build_mut()` was needed. The choice
+>    this section leaves open had been made three steps earlier.
+> 2. **The parameter order is `(backend, options, session)`, as sketched — and
+>    the "the thing that varies least comes last" rule does not pick it; the
+>    rule picks the opposite.** Measured over the real call sites, the backend
+>    is the argument that varies *least*: it is bound once per program and
+>    shared by every rayon worker, because a backend is `Sync` and holds no
+>    per-page state, while the session is rebuilt per thread and the options
+>    change per page in the thumbnail and two-decode-size cases. Ordered
+>    strictly by variance the signature would be `(session, options, backend)`.
+>    It is not, for two reasons that outrank variance: the `&mut` accumulator
+>    goes last by Rust convention — `map_init`'s closure receives
+>    `(session, page)` and reads far better calling
+>    `page.render_on(&backend, &options, session)` than threading a `&mut`
+>    into the middle — and the method is *named* `render_on`, so the thing it
+>    is "on" belongs where the reader looks for it, beside the name. "Varies
+>    least comes last" is a tiebreak between arguments of equal syntactic
+>    weight, and a `&mut` accumulator and a name-bound generic are not that.
+> 3. **`Page::render_on` existed already, with two arguments, and gaining a
+>    third broke call sites outside the files this step names** — the
+>    three-backend test in `crates/pdfrum/tests/facade.rs`, and
+>    `crates/pdfrum-raster-vello/tests/gpu.rs:432`, the assertion that the GPU
+>    backend satisfies the bound. The second is in a crate the step's file
+>    list does not mention and cannot be left alone: this fold changes an
+>    existing method's arity, not only the set of names.
+> 4. **`pdfrum-tool` never called a folded method, so the conformance board
+>    could not move.** The tool reaches `pdfrum_render::render_page_with` and
+>    builds `pdfrum_render`'s own `RenderSession` directly
+>    (`crates/pdfrum-tool/src/render.rs:387`); it depends on the facade only
+>    for `pdfrum::FormSession`. The step's premise — "the tool is the board's
+>    renderer, so if it called a folded method the fold must be a no-op" — is
+>    true of the *engine* entry point, not of `Page`.
+
 ### WP4 — One geometry vocabulary on the facade
 
 The facade currently speaks three rectangles and two points:

@@ -146,55 +146,41 @@
 //! ```
 //!
 //! The document is shared by reference and each page renders independently.
-//! For a long document, give each worker its own [`BuildContext`] with
-//! [`Page::render_with`] so fonts and images are decoded once per *thread*
-//! rather than once per page — `rayon`'s `map_init` does exactly this:
+//! For a long document, give each worker its own [`RenderSession`] with
+//! [`Page::render_on`] so fonts, images and glyph outlines are decoded once
+//! per *thread* rather than once per page — `rayon`'s `map_init` does exactly
+//! this:
 //!
 //! ```
 //! use rayon::prelude::*;
-//! use pdfrum::{BuildContext, Document, RenderOptions};
+//! use pdfrum::{Document, RenderOptions, RenderSession, VelloCpuBackend};
 //!
 //! let doc = Document::open("tests/fixtures/bookmarks.pdf")?;
 //! let pages: Vec<_> = doc.pages().collect();
-//!
-//! let rendered: Vec<_> = pages
-//!     .par_iter()
-//!     .map_init(BuildContext::new, |ctx, page| {
-//!         page.render_with(&RenderOptions::default(), ctx)
-//!     })
-//!     .collect::<Result<_, _>>()?;
-//!
-//! assert_eq!(rendered.len(), 2);
-//! # Ok::<(), pdfrum::Error>(())
-//! ```
-//!
-//! The cache is per-thread rather than shared because it is reached through
-//! `&mut` — sharing one behind a lock would serialize the very work the
-//! parallelism is for.
-//!
-//! [`BuildContext`] caches what a page is *built* from. A page is also
-//! *drawn*, and the rasterizer's flattened glyph outlines are a second cache
-//! that a per-page render throws away. [`RenderSession`] carries both; use it
-//! with [`Page::render_session`] wherever you would have used
-//! `BuildContext`:
-//!
-//! ```
-//! use rayon::prelude::*;
-//! use pdfrum::{Document, RenderOptions, RenderSession};
-//!
-//! let doc = Document::open("tests/fixtures/bookmarks.pdf")?;
-//! let pages: Vec<_> = doc.pages().collect();
+//! let backend = VelloCpuBackend::new();
 //!
 //! let rendered: Vec<_> = pages
 //!     .par_iter()
 //!     .map_init(RenderSession::new, |session, page| {
-//!         page.render_session(&RenderOptions::default(), session)
+//!         page.render_on(&backend, &RenderOptions::default(), session)
 //!     })
 //!     .collect::<Result<_, _>>()?;
 //!
 //! assert_eq!(rendered.len(), 2);
 //! # Ok::<(), pdfrum::Error>(())
 //! ```
+//!
+//! The session is per-thread rather than shared because it is reached through
+//! `&mut` — sharing one behind a lock would serialize the very work the
+//! parallelism is for. A backend, by contrast, is `Sync` and one is enough
+//! for every worker.
+//!
+//! [`RenderSession`] carries both caches a run can reuse: its
+//! [`BuildContext`] half holds what a page is *built* from — fonts, colour
+//! spaces, functions, decoded images — and its [`RenderCaches`] half holds
+//! the flattened glyph outlines it is *drawn* with, which a per-page render
+//! throws away. [`Page::text_on`] takes the same session, so one run that
+//! both renders and extracts parses each font once.
 //!
 //! # This crate composes, it does not compute
 //!
@@ -295,7 +281,7 @@ pub use pdfrum_page::PageObject;
 /// Per-document caches — fonts, colour spaces, decoded images — that a caller
 /// threads through many pages to avoid decoding the same resource twice.
 ///
-/// Reached through [`Page::render_with`], [`Page::text_with`] and
+/// Reached through [`RenderSession::build`], and directly through
 /// [`FormSession::with_context`]. See the crate docs on parallel rendering
 /// for why it is per-thread.
 pub use pdfrum_page::BuildContext;

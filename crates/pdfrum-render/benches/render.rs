@@ -61,7 +61,7 @@
 //!
 //! # Through the facade, not through this crate's own entry point
 //!
-//! `pdfrum::Page::render_session` and not `pdfrum_render::render_page_with`,
+//! `pdfrum::Page::render_on` and not `pdfrum_render::render_page_with`,
 //! even though this bench lives in `pdfrum-render`. The facade's `paint` builds
 //! the page graph and overlays annotation appearances before it calls this
 //! crate; the oracle's `pdfium_test` does both too. A bench that entered at this
@@ -143,7 +143,7 @@ fn cold<B: RasterBackend>(c: &mut Criterion, name: &str, backend: &B) {
             b.iter(|| {
                 let mut session = RenderSession::new();
                 for page in opened.pages() {
-                    black_box(page.render_session_on(backend, &options, &mut session).ok());
+                    black_box(page.render_on(backend, &options, &mut session).ok());
                 }
             });
         });
@@ -173,11 +173,11 @@ fn warm<B: RasterBackend>(c: &mut Criterion, name: &str, backend: &B) {
         group.bench_function(format!("{}/{}", doc.class.name(), doc.stem), |b| {
             let mut session = RenderSession::new();
             for page in opened.pages() {
-                drop(page.render_session_on(backend, &options, &mut session));
+                drop(page.render_on(backend, &options, &mut session));
             }
             b.iter(|| {
                 for page in opened.pages() {
-                    black_box(page.render_session_on(backend, &options, &mut session).ok());
+                    black_box(page.render_on(backend, &options, &mut session).ok());
                 }
             });
         });
