@@ -75,3 +75,18 @@ one:
 |---|---:|---|
 | `roboto.ttf` | 35636 B | `testing/resources/fonts/roboto.ttf`, verbatim. The TrueType program `latin_extended.pdf` embeds; used here as the caller-supplied bytes for `DocEdit::embed_font`, so a test can write "Hello" in a font the page did not already have. |
 | `latin_extended.pdf` | 19213 B | `testing/resources/latin_extended.pdf`, verbatim. One 200x200 page drawing Latin Extended through a `/Type0` Identity-H font whose descendant is a `CIDFontType2` `Roboto-Regular` with a 35636-byte embedded `/FontFile2`, a `/W` array, a `/ToUnicode` CMap and `/CIDToGIDMap /Identity`. Every one of those is load-bearing: `/BaseFont` carries **no** subset tag, so a minted one is visible; `/W` and `/ToUnicode` are what the subsetting stage must leave untouched; and the `/Identity` map is what it replaces with the table that absorbs the subsetter's glyph renumbering. Its glyph coverage is also near the worst case for the saving — the page draws most of Roboto's Latin — which is what makes the recorded 35636 → 20424 a floor rather than a flattering number. |
+
+Two arrived with the `FPDFText_LoadFont` embedder-test port
+(`crates/pdfrum/tests/load_font.rs`). Both are the regression fonts of the
+PDFium bugs they are named for, so the assertion here and the assertion there
+are about the same bytes:
+
+| File | Size | What it exercises |
+|---|---:|---|
+| `bug_2094.ttf` | 1288 B | `testing/resources/fonts/bug_2094.ttf`, verbatim. The smallest font in the corpus that is **degenerate in every direction at once**: it names itself `Test`, its cmap maps nothing, and it declares four glyphs. That combination is the bug — `FPDFEditEmbedderTest.Bug2094` crashed building a CID font from it — and it is why no other fixture substitutes. Because every character encodes to `.notdef`, it is also the only fixture that pins `char_maps`'s empty-cmap fallback and the single-run `/W` (`[0 [1000 0 1000 1000]]`) that follows from it. |
+| `bug_377948405.ttf` | 2084 B | `testing/resources/fonts/bug_377948405.ttf`, verbatim. A `NotoSans-Regular` cut whose cmap covers exactly six characters — `A À Ä Å Æ È` — laid out so their advances are `639`, then `639 639 639`, then `881 556`. That run of three equal widths is the fixture's whole point: it is the shortest input on which `create_widths_array`'s run-length form (`5 7 639`) differs from the naive one, which is what `FPDFEditEmbedderTest.Bug377948405` regressed on. The narrow coverage also makes it the second, genuinely *different* face in the two-font subsetting test, where Roboto's near-complete Latin would not distinguish one subset from another. |
+
+Neither is duplicated for the Type 1 cases: `load_font.rs` reaches across to
+`crates/pdfrum-type1/tests/fixtures/FoxitSerifMM.pfb` rather than copy a
+113 KB program into this directory. Its provenance is recorded beside it.
+

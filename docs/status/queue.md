@@ -19,6 +19,21 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
   a format script's output is computed and dropped (`CommitOutcome::display`
   has no reader; `UpdateKind` cannot carry it), and `FieldRef::index`
   conflates a page-local id with a `/Fields` position.
+- **No caller-supplied `/ToUnicode` CMap or `/CIDToGIDMap` on font load.**
+  `DocEdit::embed_font(bytes, FontEncoding::Composite)` always generates both
+  from the program's own cmap, so the oracle's `FPDFText_LoadCidType2Font`
+  (`fpdfsdk/fpdf_edittext.cpp`) — which takes `to_unicode_cmap` and
+  `cid_to_gid_map` spans alongside the program — has no counterpart.
+  `crates/pdfrum/tests/load_font.rs::load_cid_type2_font_custom` is the
+  `#[ignore]`d port waiting on it.
+- **`/FontFile` stores the PFB wrapper but `/Length1-3` describe the unwrapped
+  program.** `embed_program` (`crates/pdfrum-edit/src/font/embed.rs:451-485`)
+  writes the caller's Type 1 bytes verbatim while
+  `pdfrum_font::type1_program_lengths` returns segment-payload lengths, so the
+  three disagree with the stream by the 20 bytes of PFB framing (113417 vs
+  113397 on `FoxitSerifMM.pfb`) and do not partition it as ISO 32000-1 §9.9
+  Table 127 requires. Pinned by the `#[ignore]`d
+  `load_font.rs::type1_font_file_lengths_partition_the_stream`.
 - **Coloured tiling pattern paints grey where the oracle paints teal** on
   `corpus/fx/other/1.pdf` — the pattern sentinel carried forward from the
   render audit; not yet isolated.
