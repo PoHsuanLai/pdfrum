@@ -519,26 +519,14 @@ pub fn pdfrum_doc::form::full_name<R: pdfrum_object::resolve::Resolve>(&pdfrum_o
 pub fn pdfrum_doc::form::selected_indices_for_interaction<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &[alloc::string::String], &R) -> alloc::vec::Vec<usize>
 pub mod pdfrum_doc::geom
 pub fn pdfrum_doc::geom::bottom(kurbo::rect::Rect) -> f32
-pub fn pdfrum_doc::geom::center_square(kurbo::rect::Rect) -> kurbo::rect::Rect
-pub fn pdfrum_doc::geom::contains(kurbo::rect::Rect, kurbo::point::Point) -> bool
-pub fn pdfrum_doc::geom::deflate(kurbo::rect::Rect, f32, f32) -> kurbo::rect::Rect
 pub fn pdfrum_doc::geom::height(kurbo::rect::Rect) -> f32
-pub fn pdfrum_doc::geom::inflate(kurbo::rect::Rect, f32, f32) -> kurbo::rect::Rect
-pub fn pdfrum_doc::geom::intersect(kurbo::rect::Rect, kurbo::rect::Rect) -> kurbo::rect::Rect
-pub fn pdfrum_doc::geom::is_empty(kurbo::rect::Rect) -> bool
-pub fn pdfrum_doc::geom::is_float_bigger(f32, f32) -> bool
-pub fn pdfrum_doc::geom::is_float_smaller(f32, f32) -> bool
-pub fn pdfrum_doc::geom::is_float_zero(f32) -> bool
 pub fn pdfrum_doc::geom::left(kurbo::rect::Rect) -> f32
 pub fn pdfrum_doc::geom::match_rect(kurbo::rect::Rect, kurbo::rect::Rect) -> kurbo::affine::Affine
 pub fn pdfrum_doc::geom::normalize(kurbo::rect::Rect) -> kurbo::rect::Rect
 pub fn pdfrum_doc::geom::rect(f32, f32, f32, f32) -> kurbo::rect::Rect
 pub fn pdfrum_doc::geom::right(kurbo::rect::Rect) -> f32
-pub fn pdfrum_doc::geom::scale_from_center(kurbo::rect::Rect, f32) -> kurbo::rect::Rect
 pub fn pdfrum_doc::geom::top(kurbo::rect::Rect) -> f32
 pub fn pdfrum_doc::geom::transform_rect(kurbo::affine::Affine, kurbo::rect::Rect) -> kurbo::rect::Rect
-pub fn pdfrum_doc::geom::translate(kurbo::rect::Rect, f32, f32) -> kurbo::rect::Rect
-pub fn pdfrum_doc::geom::union(kurbo::rect::Rect, kurbo::rect::Rect) -> kurbo::rect::Rect
 pub fn pdfrum_doc::geom::width(kurbo::rect::Rect) -> f32
 pub mod pdfrum_doc::nav
 pub mod pdfrum_doc::nav::action
