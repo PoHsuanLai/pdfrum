@@ -31,6 +31,24 @@ fn goldens_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../conformance/goldens")
 }
 
+/// Whether the golden store has been generated here.
+///
+/// `conformance/goldens/` is 68 MB of the oracle's own output and is
+/// `.gitignore`d, so it exists only where `conformance generate-goldens` has
+/// been run — the primary checkout, and not a fresh worktree. These tests skip
+/// on its absence for the same reason they skip on the oracle's: an
+/// environment that cannot answer the question is not a failing answer. The
+/// distinction that matters is *absent* versus *present but resolving to
+/// nothing*; the second is a real defect and still asserts below.
+fn goldens_generated() -> bool {
+    goldens_root().is_dir()
+}
+
+/// What to do about it, printed where a reader will meet it.
+const HOW_TO_GENERATE: &str = "skipping: conformance/goldens/ is absent \
+    (it is .gitignore'd; generate it with `cargo run -p conformance --release \
+    -- generate-goldens`)";
+
 /// One corpus file with a known text extraction.
 struct Golden {
     /// The PDF, resolved against the oracle checkout.
@@ -139,6 +157,10 @@ fn every_extracted_character_is_reachable_through_some_page_font() {
         eprintln!("skipping: the oracle checkout is absent");
         return;
     };
+    if !goldens_generated() {
+        eprintln!("{HOW_TO_GENERATE}");
+        return;
+    }
     let goldens = goldens(&LATIN_GOLDENS);
     // With the checkout present the goldens must resolve; a silent skip here
     // would let a mapping regression through unnoticed.
@@ -200,6 +222,10 @@ fn decoding_a_corpus_page_never_panics_and_widths_are_finite() {
         eprintln!("skipping: the oracle checkout is absent");
         return;
     };
+    if !goldens_generated() {
+        eprintln!("{HOW_TO_GENERATE}");
+        return;
+    }
     let goldens = goldens(&LATIN_GOLDENS);
     assert!(!goldens.is_empty(), "no golden resolved to a corpus file");
     for golden in &goldens {
