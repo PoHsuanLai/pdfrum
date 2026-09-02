@@ -63,16 +63,16 @@ pub enum LayoutBand {
 /// keyed by the raw index, so every widget after a pop-up would be off by
 /// one.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Candidate {
+pub(crate) struct Candidate {
     /// Which annotation, by its raw `/Annots` index.
-    pub id: AnnotId,
+    pub(crate) id: AnnotId,
     /// Its rectangle, as the file wrote it. Need not be normalized:
     /// [`contains`] normalizes before comparing.
-    pub rect: Rect,
+    pub(crate) rect: Rect,
     /// Which band it sorts into.
-    pub band: LayoutBand,
+    pub(crate) band: LayoutBand,
     /// Whether it is a widget the click test may accept.
-    pub widget: Option<WidgetHit>,
+    pub(crate) widget: Option<WidgetHit>,
 }
 
 /// The widget-only half of a candidate.
@@ -153,15 +153,13 @@ impl Permissions {
 /// copying and normalizing before it compares. Leaving this as a
 /// precondition on the caller would make an inverted `/Rect` silently
 /// unclickable, and real files contain them.
-#[must_use]
-pub fn contains(rect: Rect, x: f32, y: f32) -> bool {
+pub(crate) fn contains(rect: Rect, x: f32, y: f32) -> bool {
     let rect = crate::geom::normalize(rect);
     x >= rect.left && x <= rect.right && y >= rect.bottom && y <= rect.top
 }
 
 /// Grows a rectangle by one unit on every side.
-#[must_use]
-pub fn inflate(rect: Rect, by: f32) -> Rect {
+pub(crate) fn inflate(rect: Rect, by: f32) -> Rect {
     Rect::new(
         rect.left - by,
         rect.bottom - by,
@@ -172,8 +170,7 @@ pub fn inflate(rect: Rect, by: f32) -> Rect {
 
 /// Orders candidates for hit testing: by band, then file order, with the
 /// focused annotation moved to the front so it wins an overlap tie.
-#[must_use]
-pub fn hit_order(candidates: &[Candidate], focused: Option<AnnotId>) -> Vec<Candidate> {
+pub(crate) fn hit_order(candidates: &[Candidate], focused: Option<AnnotId>) -> Vec<Candidate> {
     let mut ordered = band_sorted(candidates);
     if let Some(focused) = focused
         && let Some(at) = ordered.iter().position(|c| c.id == focused)
@@ -186,8 +183,17 @@ pub fn hit_order(candidates: &[Candidate], focused: Option<AnnotId>) -> Vec<Cand
 
 /// Orders candidates for drawing: the same band sort, with the focused
 /// annotation moved to the **end** so it paints on top.
-#[must_use]
-pub fn draw_order(candidates: &[Candidate], focused: Option<AnnotId>) -> Vec<Candidate> {
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "the painting half of the band sort — `hit_order` is the hit-testing half. \\
+              Both were `pub` before this package and only the crate's own tests called \\
+              this one; kept because the pair is the invariant, and dropping one leaves \\
+              the other undocumented — see the Landed note under §WP4."
+    )
+)]
+pub(crate) fn draw_order(candidates: &[Candidate], focused: Option<AnnotId>) -> Vec<Candidate> {
     let mut ordered = band_sorted(candidates);
     if let Some(focused) = focused
         && let Some(at) = ordered.iter().position(|c| c.id == focused)
@@ -210,8 +216,7 @@ fn band_sorted(candidates: &[Candidate]) -> Vec<Candidate> {
 /// Rectangle containment over every subtype but pop-ups. This is what raises
 /// a highlight annotation's pop-up on a bare pointer move, and it is
 /// deliberately more permissive than [`widget_at_point`].
-#[must_use]
-pub fn annot_at_point(
+pub(crate) fn annot_at_point(
     candidates: &[Candidate],
     focused: Option<AnnotId>,
     x: f32,
@@ -228,8 +233,7 @@ pub fn annot_at_point(
 /// Every gate of [`WidgetHit::accepts_click`] applies, and the box tested is
 /// grown by [`FOCUS_INFLATION`] for the focused widget, which therefore has a
 /// slightly larger target than its neighbours.
-#[must_use]
-pub fn widget_at_point(
+pub(crate) fn widget_at_point(
     candidates: &[Candidate],
     focused: Option<AnnotId>,
     permissions: Permissions,
@@ -259,8 +263,15 @@ pub fn widget_at_point(
 /// none.
 ///
 /// The index is into the band-sorted list, which is what the oracle reports.
-#[must_use]
-pub fn widget_z_order_at_point(
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "the z-ordered form of `widget_at_point`, kept for the same reason as \\
+              `draw_order` — see the Landed note under §WP4."
+    )
+)]
+pub(crate) fn widget_z_order_at_point(
     candidates: &[Candidate],
     permissions: Permissions,
     x: f32,

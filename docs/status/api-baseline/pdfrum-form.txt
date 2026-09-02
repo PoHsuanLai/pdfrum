@@ -321,27 +321,27 @@ pub pdfrum_form::event::Event::Char
 pub pdfrum_form::event::Event::Char::ch: char
 pub pdfrum_form::event::Event::Char::modifiers: pdfrum_form::event::Modifiers
 pub pdfrum_form::event::Event::DoubleClick
-pub pdfrum_form::event::Event::DoubleClick::at: pdfrum_form::event::Point
+pub pdfrum_form::event::Event::DoubleClick::at: kurbo::point::Point
 pub pdfrum_form::event::Event::DoubleClick::modifiers: pdfrum_form::event::Modifiers
 pub pdfrum_form::event::Event::Focus
-pub pdfrum_form::event::Event::Focus::at: pdfrum_form::event::Point
+pub pdfrum_form::event::Event::Focus::at: kurbo::point::Point
 pub pdfrum_form::event::Event::Focus::modifiers: pdfrum_form::event::Modifiers
 pub pdfrum_form::event::Event::KeyDown
 pub pdfrum_form::event::Event::KeyDown::key: pdfrum_form::event::Key
 pub pdfrum_form::event::Event::KeyDown::modifiers: pdfrum_form::event::Modifiers
 pub pdfrum_form::event::Event::MouseDown
-pub pdfrum_form::event::Event::MouseDown::at: pdfrum_form::event::Point
+pub pdfrum_form::event::Event::MouseDown::at: kurbo::point::Point
 pub pdfrum_form::event::Event::MouseDown::button: pdfrum_form::event::Button
 pub pdfrum_form::event::Event::MouseDown::modifiers: pdfrum_form::event::Modifiers
 pub pdfrum_form::event::Event::MouseMove
-pub pdfrum_form::event::Event::MouseMove::at: pdfrum_form::event::Point
+pub pdfrum_form::event::Event::MouseMove::at: kurbo::point::Point
 pub pdfrum_form::event::Event::MouseMove::modifiers: pdfrum_form::event::Modifiers
 pub pdfrum_form::event::Event::MouseUp
-pub pdfrum_form::event::Event::MouseUp::at: pdfrum_form::event::Point
+pub pdfrum_form::event::Event::MouseUp::at: kurbo::point::Point
 pub pdfrum_form::event::Event::MouseUp::button: pdfrum_form::event::Button
 pub pdfrum_form::event::Event::MouseUp::modifiers: pdfrum_form::event::Modifiers
 pub pdfrum_form::event::Event::MouseWheel
-pub pdfrum_form::event::Event::MouseWheel::at: pdfrum_form::event::Point
+pub pdfrum_form::event::Event::MouseWheel::at: kurbo::point::Point
 pub pdfrum_form::event::Event::MouseWheel::delta: (i32, i32)
 pub pdfrum_form::event::Event::MouseWheel::modifiers: pdfrum_form::event::Modifiers
 #[non_exhaustive] pub enum pdfrum_form::event::Key
@@ -393,11 +393,6 @@ pub const fn pdfrum_form::event::Modifiers::without(self, Self) -> Self
 impl core::ops::bit::BitOr for pdfrum_form::event::Modifiers
 pub type pdfrum_form::event::Modifiers::Output = pdfrum_form::event::Modifiers
 pub fn pdfrum_form::event::Modifiers::bitor(self, Self) -> Self
-pub struct pdfrum_form::event::Point
-pub pdfrum_form::event::Point::x: f32
-pub pdfrum_form::event::Point::y: f32
-impl pdfrum_form::event::Point
-pub fn pdfrum_form::event::Point::new(f32, f32) -> pdfrum_form::event::Point
 pub mod pdfrum_form::field
 pub mod pdfrum_form::field::button
 pub struct pdfrum_form::field::button::ButtonState
@@ -554,30 +549,12 @@ pub pdfrum_form::geom::Rotation::None
 pub pdfrum_form::geom::Rotation::Quarter
 pub pdfrum_form::geom::Rotation::ThreeQuarter
 impl pdfrum_form::geom::Rotation
-pub fn pdfrum_form::geom::Rotation::degrees(self) -> i32
-pub fn pdfrum_form::geom::Rotation::from_degrees(i32) -> pdfrum_form::geom::Rotation
 pub fn pdfrum_form::geom::Rotation::swaps_axes(self) -> bool
-pub struct pdfrum_form::geom::Plate
-pub pdfrum_form::geom::Plate::rect: pdfrum_form::tab::Rect
-pub pdfrum_form::geom::Plate::rotation: pdfrum_form::geom::Rotation
-impl pdfrum_form::geom::Plate
-pub fn pdfrum_form::geom::Plate::height(self) -> f32
-pub fn pdfrum_form::geom::Plate::new(pdfrum_form::tab::Rect, pdfrum_form::geom::Rotation) -> pdfrum_form::geom::Plate
-pub fn pdfrum_form::geom::Plate::to_page(self, pdfrum_form::event::Point) -> pdfrum_form::event::Point
-pub fn pdfrum_form::geom::Plate::to_plate(self, pdfrum_form::event::Point) -> pdfrum_form::event::Point
-pub fn pdfrum_form::geom::Plate::to_widget(self, pdfrum_form::event::Point) -> pdfrum_form::event::Point
-pub fn pdfrum_form::geom::Plate::width(self) -> f32
-pub fn pdfrum_form::geom::normalize(pdfrum_form::tab::Rect) -> pdfrum_form::tab::Rect
 pub mod pdfrum_form::hit
 pub enum pdfrum_form::hit::LayoutBand
 pub pdfrum_form::hit::LayoutBand::Other = 5
 pub pdfrum_form::hit::LayoutBand::Popup = 1
 pub pdfrum_form::hit::LayoutBand::Widget = 2
-pub struct pdfrum_form::hit::Candidate
-pub pdfrum_form::hit::Candidate::band: pdfrum_form::hit::LayoutBand
-pub pdfrum_form::hit::Candidate::id: pdfrum_form::session::AnnotId
-pub pdfrum_form::hit::Candidate::rect: pdfrum_form::tab::Rect
-pub pdfrum_form::hit::Candidate::widget: core::option::Option<pdfrum_form::hit::WidgetHit>
 pub struct pdfrum_form::hit::Permissions
 pub pdfrum_form::hit::Permissions::fill_form: bool
 pub pdfrum_form::hit::Permissions::modify_annotation: bool
@@ -593,18 +570,9 @@ pub pdfrum_form::hit::WidgetHit::signature: bool
 impl pdfrum_form::hit::WidgetHit
 pub fn pdfrum_form::hit::WidgetHit::accepts_click(self, pdfrum_form::hit::Permissions) -> bool
 pub const pdfrum_form::hit::FOCUS_INFLATION: f32
-pub fn pdfrum_form::hit::annot_at_point(&[pdfrum_form::hit::Candidate], core::option::Option<pdfrum_form::session::AnnotId>, f32, f32) -> core::option::Option<pdfrum_form::session::AnnotId>
-pub fn pdfrum_form::hit::contains(pdfrum_form::tab::Rect, f32, f32) -> bool
-pub fn pdfrum_form::hit::draw_order(&[pdfrum_form::hit::Candidate], core::option::Option<pdfrum_form::session::AnnotId>) -> alloc::vec::Vec<pdfrum_form::hit::Candidate>
-pub fn pdfrum_form::hit::hit_order(&[pdfrum_form::hit::Candidate], core::option::Option<pdfrum_form::session::AnnotId>) -> alloc::vec::Vec<pdfrum_form::hit::Candidate>
-pub fn pdfrum_form::hit::inflate(pdfrum_form::tab::Rect, f32) -> pdfrum_form::tab::Rect
-pub fn pdfrum_form::hit::widget_at_point(&[pdfrum_form::hit::Candidate], core::option::Option<pdfrum_form::session::AnnotId>, pdfrum_form::hit::Permissions, f32, f32) -> core::option::Option<pdfrum_form::session::AnnotId>
-pub fn pdfrum_form::hit::widget_z_order_at_point(&[pdfrum_form::hit::Candidate], pdfrum_form::hit::Permissions, f32, f32) -> core::option::Option<usize>
 pub mod pdfrum_form::page
 pub struct pdfrum_form::page::PageForm
-pub pdfrum_form::page::PageForm::candidates: alloc::vec::Vec<pdfrum_form::hit::Candidate>
 pub pdfrum_form::page::PageForm::dicts: alloc::collections::btree::map::BTreeMap<u32, pdfrum_object::dict::Dict>
-pub pdfrum_form::page::PageForm::focusables: alloc::vec::Vec<(pdfrum_doc::annot::Subtype, pdfrum_form::tab::Focusable)>
 pub pdfrum_form::page::PageForm::page: pdfrum_common::page_index::PageIndex
 pub pdfrum_form::page::PageForm::page_height: f32
 pub pdfrum_form::page::PageForm::tab_order: pdfrum_form::tab::TabOrder
@@ -616,7 +584,6 @@ pub pdfrum_form::page::WidgetInfo::flags: pdfrum_doc::form::field::FieldFlags
 pub pdfrum_form::page::WidgetInfo::id: pdfrum_form::session::AnnotId
 pub pdfrum_form::page::WidgetInfo::kind: core::option::Option<pdfrum_doc::form::field::FieldKind>
 pub pdfrum_form::page::WidgetInfo::name: alloc::string::String
-pub pdfrum_form::page::WidgetInfo::rect: pdfrum_form::tab::Rect
 pub pdfrum_form::page::WidgetInfo::rotation: pdfrum_form::geom::Rotation
 pub pdfrum_form::page::WidgetInfo::valued: pdfrum_object::dict::Dict
 impl pdfrum_form::page::WidgetInfo
@@ -633,15 +600,14 @@ pub pdfrum_form::popup::Placement::Above
 pub pdfrum_form::popup::Placement::Below
 pub struct pdfrum_form::popup::PopupGeometry
 pub pdfrum_form::popup::PopupGeometry::placement: pdfrum_form::popup::Placement
-pub pdfrum_form::popup::PopupGeometry::rect: pdfrum_form::tab::Rect
+pub pdfrum_form::popup::PopupGeometry::rect: kurbo::rect::Rect
 pub pdfrum_form::popup::PopupGeometry::row_height: f32
 impl pdfrum_form::popup::PopupGeometry
-pub fn pdfrum_form::popup::PopupGeometry::plate(&self) -> pdfrum_form::tab::Rect
-pub fn pdfrum_form::popup::PopupGeometry::row_at(&self, f32, f32) -> core::option::Option<usize>
-pub fn pdfrum_form::popup::PopupGeometry::row_rect(&self, usize) -> pdfrum_form::tab::Rect
+pub fn pdfrum_form::popup::PopupGeometry::plate(&self) -> kurbo::rect::Rect
+pub fn pdfrum_form::popup::PopupGeometry::row_rect(&self, usize) -> kurbo::rect::Rect
 pub fn pdfrum_form::popup::PopupGeometry::visible_rows(&self) -> usize
 pub struct pdfrum_form::popup::PopupView
-pub pdfrum_form::popup::PopupView::anchor: pdfrum_form::tab::Rect
+pub pdfrum_form::popup::PopupView::anchor: kurbo::rect::Rect
 pub pdfrum_form::popup::PopupView::annot: pdfrum_form::session::AnnotId
 pub pdfrum_form::popup::PopupView::edit_text: core::option::Option<alloc::string::String>
 pub pdfrum_form::popup::PopupView::geometry: pdfrum_form::popup::PopupGeometry
@@ -662,7 +628,6 @@ pub const pdfrum_form::popup::LIST_BORDER: f32
 pub const pdfrum_form::popup::MAX_LIST_HEIGHT: f32
 pub const pdfrum_form::popup::MIN_POPUP_ROWS: usize
 pub fn pdfrum_form::popup::option_at(&pdfrum_form::field::ChoiceState, usize) -> core::option::Option<usize>
-pub fn pdfrum_form::popup::place(pdfrum_form::tab::Rect, f32, usize, f32) -> core::option::Option<pdfrum_form::popup::PopupGeometry>
 pub mod pdfrum_form::route
 pub struct pdfrum_form::route::Context<'a, R: pdfrum_object::resolve::Resolve>
 pub pdfrum_form::route::Context::catalog: &'a pdfrum_object::dict::Dict
@@ -729,25 +694,12 @@ pub struct pdfrum_form::tab::FocusRing
 pub pdfrum_form::tab::FocusRing::degenerate: bool
 pub pdfrum_form::tab::FocusRing::order: alloc::vec::Vec<pdfrum_form::session::AnnotId>
 impl pdfrum_form::tab::FocusRing
-pub fn pdfrum_form::tab::FocusRing::build(&[pdfrum_form::tab::Focusable], pdfrum_form::tab::TabOrder) -> pdfrum_form::tab::FocusRing
 pub fn pdfrum_form::tab::FocusRing::first(&self) -> core::option::Option<pdfrum_form::session::AnnotId>
 pub fn pdfrum_form::tab::FocusRing::is_empty(&self) -> bool
 pub fn pdfrum_form::tab::FocusRing::last(&self) -> core::option::Option<pdfrum_form::session::AnnotId>
 pub fn pdfrum_form::tab::FocusRing::len(&self) -> usize
 pub fn pdfrum_form::tab::FocusRing::next(&self, pdfrum_form::session::AnnotId) -> core::option::Option<pdfrum_form::session::AnnotId>
 pub fn pdfrum_form::tab::FocusRing::prev(&self, pdfrum_form::session::AnnotId) -> core::option::Option<pdfrum_form::session::AnnotId>
-pub struct pdfrum_form::tab::Focusable
-pub pdfrum_form::tab::Focusable::id: pdfrum_form::session::AnnotId
-pub pdfrum_form::tab::Focusable::rect: pdfrum_form::tab::Rect
-pub struct pdfrum_form::tab::Rect
-pub pdfrum_form::tab::Rect::bottom: f32
-pub pdfrum_form::tab::Rect::left: f32
-pub pdfrum_form::tab::Rect::right: f32
-pub pdfrum_form::tab::Rect::top: f32
-impl pdfrum_form::tab::Rect
-pub fn pdfrum_form::tab::Rect::center_x(self) -> f32
-pub fn pdfrum_form::tab::Rect::center_y(self) -> f32
-pub fn pdfrum_form::tab::Rect::new(f32, f32, f32, f32) -> pdfrum_form::tab::Rect
 pub mod pdfrum_form::update
 pub enum pdfrum_form::update::UpdateKind
 pub pdfrum_form::update::UpdateKind::ActionRequested
@@ -790,27 +742,27 @@ pub pdfrum_form::Event::Char
 pub pdfrum_form::Event::Char::ch: char
 pub pdfrum_form::Event::Char::modifiers: pdfrum_form::event::Modifiers
 pub pdfrum_form::Event::DoubleClick
-pub pdfrum_form::Event::DoubleClick::at: pdfrum_form::event::Point
+pub pdfrum_form::Event::DoubleClick::at: kurbo::point::Point
 pub pdfrum_form::Event::DoubleClick::modifiers: pdfrum_form::event::Modifiers
 pub pdfrum_form::Event::Focus
-pub pdfrum_form::Event::Focus::at: pdfrum_form::event::Point
+pub pdfrum_form::Event::Focus::at: kurbo::point::Point
 pub pdfrum_form::Event::Focus::modifiers: pdfrum_form::event::Modifiers
 pub pdfrum_form::Event::KeyDown
 pub pdfrum_form::Event::KeyDown::key: pdfrum_form::event::Key
 pub pdfrum_form::Event::KeyDown::modifiers: pdfrum_form::event::Modifiers
 pub pdfrum_form::Event::MouseDown
-pub pdfrum_form::Event::MouseDown::at: pdfrum_form::event::Point
+pub pdfrum_form::Event::MouseDown::at: kurbo::point::Point
 pub pdfrum_form::Event::MouseDown::button: pdfrum_form::event::Button
 pub pdfrum_form::Event::MouseDown::modifiers: pdfrum_form::event::Modifiers
 pub pdfrum_form::Event::MouseMove
-pub pdfrum_form::Event::MouseMove::at: pdfrum_form::event::Point
+pub pdfrum_form::Event::MouseMove::at: kurbo::point::Point
 pub pdfrum_form::Event::MouseMove::modifiers: pdfrum_form::event::Modifiers
 pub pdfrum_form::Event::MouseUp
-pub pdfrum_form::Event::MouseUp::at: pdfrum_form::event::Point
+pub pdfrum_form::Event::MouseUp::at: kurbo::point::Point
 pub pdfrum_form::Event::MouseUp::button: pdfrum_form::event::Button
 pub pdfrum_form::Event::MouseUp::modifiers: pdfrum_form::event::Modifiers
 pub pdfrum_form::Event::MouseWheel
-pub pdfrum_form::Event::MouseWheel::at: pdfrum_form::event::Point
+pub pdfrum_form::Event::MouseWheel::at: kurbo::point::Point
 pub pdfrum_form::Event::MouseWheel::delta: (i32, i32)
 pub pdfrum_form::Event::MouseWheel::modifiers: pdfrum_form::event::Modifiers
 pub enum pdfrum_form::FieldState
@@ -854,10 +806,6 @@ pub const fn pdfrum_form::event::Key::virtual_code(self) -> u16
 pub enum pdfrum_form::KeystrokeOutcome
 pub pdfrum_form::KeystrokeOutcome::Accept(pdfrum_form::cascade::Keystroke)
 pub pdfrum_form::KeystrokeOutcome::Reject
-pub enum pdfrum_form::LayoutBand
-pub pdfrum_form::LayoutBand::Other = 5
-pub pdfrum_form::LayoutBand::Popup = 1
-pub pdfrum_form::LayoutBand::Widget = 2
 pub enum pdfrum_form::Placement
 pub pdfrum_form::Placement::Above
 pub pdfrum_form::Placement::Below
@@ -867,8 +815,6 @@ pub pdfrum_form::Rotation::None
 pub pdfrum_form::Rotation::Quarter
 pub pdfrum_form::Rotation::ThreeQuarter
 impl pdfrum_form::geom::Rotation
-pub fn pdfrum_form::geom::Rotation::degrees(self) -> i32
-pub fn pdfrum_form::geom::Rotation::from_degrees(i32) -> pdfrum_form::geom::Rotation
 pub fn pdfrum_form::geom::Rotation::swaps_axes(self) -> bool
 pub enum pdfrum_form::TabOrder
 pub pdfrum_form::TabOrder::Column
@@ -934,11 +880,6 @@ pub pdfrum_form::AppearanceUpdate::annot: pdfrum_form::session::AnnotId
 pub pdfrum_form::AppearanceUpdate::kind: pdfrum_form::update::UpdateKind
 impl pdfrum_form::update::AppearanceUpdate
 pub fn pdfrum_form::update::AppearanceUpdate::new(pdfrum_form::session::AnnotId, pdfrum_form::update::UpdateKind) -> pdfrum_form::update::AppearanceUpdate
-pub struct pdfrum_form::Candidate
-pub pdfrum_form::Candidate::band: pdfrum_form::hit::LayoutBand
-pub pdfrum_form::Candidate::id: pdfrum_form::session::AnnotId
-pub pdfrum_form::Candidate::rect: pdfrum_form::tab::Rect
-pub pdfrum_form::Candidate::widget: core::option::Option<pdfrum_form::hit::WidgetHit>
 pub struct pdfrum_form::ChoiceConfig
 pub pdfrum_form::ChoiceConfig::combo: bool
 pub pdfrum_form::ChoiceConfig::editable: bool
@@ -1004,16 +945,12 @@ pub struct pdfrum_form::FocusRing
 pub pdfrum_form::FocusRing::degenerate: bool
 pub pdfrum_form::FocusRing::order: alloc::vec::Vec<pdfrum_form::session::AnnotId>
 impl pdfrum_form::tab::FocusRing
-pub fn pdfrum_form::tab::FocusRing::build(&[pdfrum_form::tab::Focusable], pdfrum_form::tab::TabOrder) -> pdfrum_form::tab::FocusRing
 pub fn pdfrum_form::tab::FocusRing::first(&self) -> core::option::Option<pdfrum_form::session::AnnotId>
 pub fn pdfrum_form::tab::FocusRing::is_empty(&self) -> bool
 pub fn pdfrum_form::tab::FocusRing::last(&self) -> core::option::Option<pdfrum_form::session::AnnotId>
 pub fn pdfrum_form::tab::FocusRing::len(&self) -> usize
 pub fn pdfrum_form::tab::FocusRing::next(&self, pdfrum_form::session::AnnotId) -> core::option::Option<pdfrum_form::session::AnnotId>
 pub fn pdfrum_form::tab::FocusRing::prev(&self, pdfrum_form::session::AnnotId) -> core::option::Option<pdfrum_form::session::AnnotId>
-pub struct pdfrum_form::Focusable
-pub pdfrum_form::Focusable::id: pdfrum_form::session::AnnotId
-pub pdfrum_form::Focusable::rect: pdfrum_form::tab::Rect
 pub struct pdfrum_form::FormSession
 pub pdfrum_form::FormSession::config: pdfrum_form::session::SessionConfig
 pub pdfrum_form::FormSession::dirty: alloc::collections::btree::set::BTreeSet<pdfrum_form::session::FieldId>
@@ -1066,9 +1003,7 @@ pub fn pdfrum_form::cascade::NoScripts::keystroke(&mut self, &pdfrum_form::casca
 pub fn pdfrum_form::cascade::NoScripts::keystroke_commit(&mut self, &pdfrum_form::cascade::FieldRef, &str) -> bool
 pub fn pdfrum_form::cascade::NoScripts::validate(&mut self, &pdfrum_form::cascade::FieldRef, &str) -> bool
 pub struct pdfrum_form::PageForm
-pub pdfrum_form::PageForm::candidates: alloc::vec::Vec<pdfrum_form::hit::Candidate>
 pub pdfrum_form::PageForm::dicts: alloc::collections::btree::map::BTreeMap<u32, pdfrum_object::dict::Dict>
-pub pdfrum_form::PageForm::focusables: alloc::vec::Vec<(pdfrum_doc::annot::Subtype, pdfrum_form::tab::Focusable)>
 pub pdfrum_form::PageForm::page: pdfrum_common::page_index::PageIndex
 pub pdfrum_form::PageForm::page_height: f32
 pub pdfrum_form::PageForm::tab_order: pdfrum_form::tab::TabOrder
@@ -1080,32 +1015,16 @@ impl pdfrum_form::hit::Permissions
 pub const pdfrum_form::hit::Permissions::ALL: pdfrum_form::hit::Permissions
 pub const pdfrum_form::hit::Permissions::NONE: pdfrum_form::hit::Permissions
 pub fn pdfrum_form::hit::Permissions::may_interact(self) -> bool
-pub struct pdfrum_form::Plate
-pub pdfrum_form::Plate::rect: pdfrum_form::tab::Rect
-pub pdfrum_form::Plate::rotation: pdfrum_form::geom::Rotation
-impl pdfrum_form::geom::Plate
-pub fn pdfrum_form::geom::Plate::height(self) -> f32
-pub fn pdfrum_form::geom::Plate::new(pdfrum_form::tab::Rect, pdfrum_form::geom::Rotation) -> pdfrum_form::geom::Plate
-pub fn pdfrum_form::geom::Plate::to_page(self, pdfrum_form::event::Point) -> pdfrum_form::event::Point
-pub fn pdfrum_form::geom::Plate::to_plate(self, pdfrum_form::event::Point) -> pdfrum_form::event::Point
-pub fn pdfrum_form::geom::Plate::to_widget(self, pdfrum_form::event::Point) -> pdfrum_form::event::Point
-pub fn pdfrum_form::geom::Plate::width(self) -> f32
-pub struct pdfrum_form::Point
-pub pdfrum_form::Point::x: f32
-pub pdfrum_form::Point::y: f32
-impl pdfrum_form::event::Point
-pub fn pdfrum_form::event::Point::new(f32, f32) -> pdfrum_form::event::Point
 pub struct pdfrum_form::PopupGeometry
 pub pdfrum_form::PopupGeometry::placement: pdfrum_form::popup::Placement
-pub pdfrum_form::PopupGeometry::rect: pdfrum_form::tab::Rect
+pub pdfrum_form::PopupGeometry::rect: kurbo::rect::Rect
 pub pdfrum_form::PopupGeometry::row_height: f32
 impl pdfrum_form::popup::PopupGeometry
-pub fn pdfrum_form::popup::PopupGeometry::plate(&self) -> pdfrum_form::tab::Rect
-pub fn pdfrum_form::popup::PopupGeometry::row_at(&self, f32, f32) -> core::option::Option<usize>
-pub fn pdfrum_form::popup::PopupGeometry::row_rect(&self, usize) -> pdfrum_form::tab::Rect
+pub fn pdfrum_form::popup::PopupGeometry::plate(&self) -> kurbo::rect::Rect
+pub fn pdfrum_form::popup::PopupGeometry::row_rect(&self, usize) -> kurbo::rect::Rect
 pub fn pdfrum_form::popup::PopupGeometry::visible_rows(&self) -> usize
 pub struct pdfrum_form::PopupView
-pub pdfrum_form::PopupView::anchor: pdfrum_form::tab::Rect
+pub pdfrum_form::PopupView::anchor: kurbo::rect::Rect
 pub pdfrum_form::PopupView::annot: pdfrum_form::session::AnnotId
 pub pdfrum_form::PopupView::edit_text: core::option::Option<alloc::string::String>
 pub pdfrum_form::PopupView::geometry: pdfrum_form::popup::PopupGeometry
@@ -1212,13 +1131,6 @@ impl core::cmp::PartialEq for pdfrum_form::edit::undo::UndoStack
 pub fn pdfrum_form::edit::undo::UndoStack::eq(&self, &pdfrum_form::edit::undo::UndoStack) -> bool
 impl core::default::Default for pdfrum_form::edit::undo::UndoStack
 pub fn pdfrum_form::edit::undo::UndoStack::default() -> pdfrum_form::edit::undo::UndoStack
-pub struct pdfrum_form::WidgetHit
-pub pdfrum_form::WidgetHit::hidden: bool
-pub pdfrum_form::WidgetHit::push_button: bool
-pub pdfrum_form::WidgetHit::read_only: bool
-pub pdfrum_form::WidgetHit::signature: bool
-impl pdfrum_form::hit::WidgetHit
-pub fn pdfrum_form::hit::WidgetHit::accepts_click(self, pdfrum_form::hit::Permissions) -> bool
 pub struct pdfrum_form::WidgetInfo
 pub pdfrum_form::WidgetInfo::dict: pdfrum_object::dict::Dict
 pub pdfrum_form::WidgetInfo::field: pdfrum_form::session::FieldId
@@ -1226,7 +1138,6 @@ pub pdfrum_form::WidgetInfo::flags: pdfrum_doc::form::field::FieldFlags
 pub pdfrum_form::WidgetInfo::id: pdfrum_form::session::AnnotId
 pub pdfrum_form::WidgetInfo::kind: core::option::Option<pdfrum_doc::form::field::FieldKind>
 pub pdfrum_form::WidgetInfo::name: alloc::string::String
-pub pdfrum_form::WidgetInfo::rect: pdfrum_form::tab::Rect
 pub pdfrum_form::WidgetInfo::rotation: pdfrum_form::geom::Rotation
 pub pdfrum_form::WidgetInfo::valued: pdfrum_object::dict::Dict
 impl pdfrum_form::page::WidgetInfo

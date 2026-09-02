@@ -5,7 +5,7 @@
 //! Every other module in this crate is a pure function over values, and stays
 //! that way because *something* has to turn a document into those values.
 //! This is that something: it walks a page's `/Annots` array once and answers
-//! with [`Candidate`]s for the hit test, [`Focusable`]s for the tab ring, and
+//! with `Candidate`s for the hit test, `Focusable`s for the tab ring, and
 //! enough per-widget configuration to build a field's interaction state the
 //! first time one is touched.
 //!
@@ -73,10 +73,10 @@ pub struct PageForm {
     /// Which page this describes.
     pub page: PageIndex,
     /// Every annotation, in raw `/Annots` order, for the hit test.
-    pub candidates: Vec<Candidate>,
+    pub(crate) candidates: Vec<Candidate>,
     /// Every annotation as a focus-ring candidate, paired with its subtype
     /// so the caller's `focusable` list can filter them.
-    pub focusables: Vec<(Subtype, Focusable)>,
+    pub(crate) focusables: Vec<(Subtype, Focusable)>,
     /// The traversal order this page's `/Tabs` asks for.
     ///
     /// A property of the **page**, not of the session: `annotiter.pdf` is
@@ -121,17 +121,18 @@ pub struct WidgetInfo {
     pub kind: Option<FieldKind>,
     /// The inherited `/Ff`.
     pub flags: FieldFlags,
-    /// The widget's `/Rect` as written.
-    pub rect: Rect,
+    /// The widget's `/Rect` as written, in this crate's private `f32`.
+    pub(crate) rect: Rect,
     /// The widget's `/MK /R`, as the quadrant the appearance stream is set
     /// into.
     ///
     /// Read the way `ap::widget::rotated_rect` reads it — `% 360`, and
-    /// anything that is not `0`, `90`, `180` or `270` after that is upright —
-    /// rather than the way [`Rotation::from_degrees`] normalizes, because
-    /// routing and the generator must agree about which box a click lands in.
-    /// `CPDFSDK_Widget::GetRotate` (`cpdfsdk_widget.cpp:458-461`) takes the
-    /// same truncating modulo, so a `/R -90` is upright to both.
+    /// anything that is not `0`, `90`, `180` or `270` after that is upright.
+    /// A rounding normalization that folded `37` down to upright would be
+    /// wrong here, because routing and the generator must agree about which
+    /// box a click lands in. `CPDFSDK_Widget::GetRotate`
+    /// (`cpdfsdk_widget.cpp:458-461`) takes the same truncating modulo, so a
+    /// `/R -90` is upright to both.
     pub rotation: Rotation,
     /// The widget's dictionary, for the readers that want the long tail.
     pub dict: Dict,
@@ -414,8 +415,8 @@ fn inherited_name<R: Resolve>(dict: &Dict, key: &pdfrum_object::Name, r: &R) -> 
     Some(pdfrum_doc::form::field_attr(dict, key, r, &limits, &mut diags)?.to_byte_string())
 }
 
-/// A `kurbo` rectangle onto this crate's.
-fn to_rect(rect: kurbo::Rect) -> Rect {
+/// A `kurbo` rectangle onto this crate's. The rect half of `Point::narrow`.
+pub(crate) fn to_rect(rect: kurbo::Rect) -> Rect {
     #[expect(
         clippy::cast_possible_truncation,
         reason = "page coordinates beyond f32 have already lost meaning, and every \

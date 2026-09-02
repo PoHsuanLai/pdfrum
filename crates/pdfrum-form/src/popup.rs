@@ -75,8 +75,13 @@ pub enum Placement {
 /// a transform.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct PopupGeometry {
-    /// The whole list window, border included.
-    pub rect: Rect,
+    /// The whole list window, border included, in page space.
+    ///
+    /// A [`kurbo::Rect`] on the way *out*: this is geometry a host paints and
+    /// hit-tests against, in the same vocabulary `Page::crop_box` speaks. The
+    /// values inside are the crate's `f32` widened losslessly — the placement
+    /// arithmetic below is `f32` throughout, and stays that way.
+    pub rect: kurbo::Rect,
     /// Which side of the widget it opened on.
     pub placement: Placement,
     /// The height of one row, which is the **laid-out** line height and not
@@ -84,7 +89,34 @@ pub struct PopupGeometry {
     pub row_height: f32,
 }
 
+/// This crate's `f32` rectangle widened for a caller. Lossless.
+pub(crate) fn widen(rect: Rect) -> kurbo::Rect {
+    kurbo::Rect::new(
+        f64::from(rect.left),
+        f64::from(rect.bottom),
+        f64::from(rect.right),
+        f64::from(rect.top),
+    )
+}
+
 impl PopupGeometry {
+    /// The window as this crate's `f32` rectangle.
+    ///
+    /// The inverse of [`widen`] over every value [`PopupGeometry::rect`] can
+    /// hold, because every one of them was widened from an `f32` here.
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "every value in `rect` was widened from an f32 by `widen`"
+    )]
+    fn narrow(&self) -> Rect {
+        Rect::new(
+            self.rect.x0 as f32,
+            self.rect.y0 as f32,
+            self.rect.x1 as f32,
+            self.rect.y1 as f32,
+        )
+    }
+
     /// The area the rows are drawn in: the window deflated by its border.
     ///
     /// `CPWL_ListBox::GetListRect` (`cpwl_list_box.cpp:352-355`), which is
@@ -93,9 +125,15 @@ impl PopupGeometry {
     /// `GetClientRect`: that one also subtracts a visible scroll bar's width,
     /// and the rows keep their full width behind one.
     #[must_use]
-    pub fn plate(&self) -> Rect {
+    pub fn plate(&self) -> kurbo::Rect {
+        widen(self.plate_f32())
+    }
+
+    /// [`PopupGeometry::plate`] in the crate's own `f32`, which is what the
+    /// row arithmetic below measures against.
+    pub(crate) fn plate_f32(&self) -> Rect {
         let border = LIST_BORDER;
-        let rect = self.rect;
+        let rect = self.narrow();
         // `GetDeflated` on a rectangle narrower than twice its border would
         // turn it inside out. Upstream's `CPWL_Wnd::GetClientRect` guards the
         // same case with `rcWindow.Contains(rcClient)`, answering an empty
@@ -119,8 +157,8 @@ impl PopupGeometry {
     /// so this is that stack read back out. A row past the bottom of the
     /// plate still has a rectangle — the caller clips.
     #[must_use]
-    pub fn row_rect(&self, offset: usize) -> Rect {
-        let plate = self.plate();
+    pub fn row_rect(&self, offset: usize) -> kurbo::Rect {
+        let plate = self.plate_f32();
         // The product is computed in `f64` and narrowed once, so an absurd
         // offset saturates to an off-plate rectangle rather than wrapping.
         #[expect(
@@ -133,7 +171,12 @@ impl PopupGeometry {
             reason = "narrowed once, after the multiply, so the clamp is the f32 range"
         )]
         let top = plate.top - down as f32;
-        Rect::new(plate.left, top - self.row_height, plate.right, top)
+        widen(Rect::new(
+            plate.left,
+            top - self.row_height,
+            plate.right,
+            top,
+        ))
     }
 
     /// Which visible row a page-space point falls on, or [`None`] when the
@@ -141,9 +184,8 @@ impl PopupGeometry {
     ///
     /// The offset is from the first visible row, so a caller adds
     /// [`ChoiceState::top_visible`] to get an option index.
-    #[must_use]
-    pub fn row_at(&self, x: f32, y: f32) -> Option<usize> {
-        let plate = self.plate();
+    pub(crate) fn row_at(&self, x: f32, y: f32) -> Option<usize> {
+        let plate = self.plate_f32();
         if x < plate.left || x > plate.right || y < plate.bottom || y > plate.top {
             return None;
         }
@@ -175,7 +217,7 @@ impl PopupGeometry {
         if self.row_height <= 0.0 {
             return 0;
         }
-        let plate = self.plate();
+        let plate = self.plate_f32();
         let rows = ((plate.top - plate.bottom) / self.row_height).ceil();
         if !rows.is_finite() || rows <= 0.0 {
             return 0;
@@ -219,7 +261,7 @@ pub struct PopupView {
     /// same key space appearance updates and the annotation overlay use.
     pub annot: AnnotId,
     /// The widget's own `/Rect`, page space: the anchor the list hangs from.
-    pub anchor: Rect,
+    pub anchor: kurbo::Rect,
     /// Where the list is and how tall its rows are.
     pub geometry: PopupGeometry,
     /// The rows' labels, in option order.
@@ -331,8 +373,7 @@ impl ScrollView {
 /// and a `fPopupRet` that comes back non-positive. Both are **refusals to
 /// open**, and `SetPopup` reporting `true` for them is why a combo whose list
 /// cannot fit stays closed while the click is still consumed.
-#[must_use]
-pub fn place(
+pub(crate) fn place(
     anchor: Rect,
     page_height: f32,
     rows: usize,
@@ -397,7 +438,7 @@ pub fn place(
         Placement::Above => Rect::new(anchor.left, anchor.top, anchor.right, anchor.top + height),
     };
     Some(PopupGeometry {
-        rect,
+        rect: widen(rect),
         placement,
         row_height,
     })
@@ -425,14 +466,14 @@ mod tests {
         let anchor = Rect::new(165.7, 315.9, 315.7, 330.1);
         let popup = place(anchor, 342.0, 2, 13.392).expect("a two-row list fits");
         assert_eq!(popup.placement, Placement::Below);
-        assert!((popup.rect.top - 315.9).abs() < 1e-4, "{:?}", popup.rect);
+        assert!((popup.rect.y1 - 315.9).abs() < 1e-4, "{:?}", popup.rect);
         assert!(
-            ((popup.rect.top - popup.rect.bottom) - 28.784).abs() < 1e-3,
+            ((popup.rect.y1 - popup.rect.y0) - 28.784).abs() < 1e-3,
             "{:?}",
             popup.rect
         );
-        assert!((popup.rect.left - 165.7).abs() < 1e-4);
-        assert!((popup.rect.right - 315.7).abs() < 1e-4);
+        assert!((popup.rect.x0 - 165.7).abs() < 1e-4);
+        assert!((popup.rect.x1 - 315.7).abs() < 1e-4);
     }
 
     /// `bug_1372651`: three options at `/Rect [70 135 150 155]` on a
@@ -444,11 +485,11 @@ mod tests {
         let popup = place(anchor, 200.0, 3, 13.392).expect("a three-row list fits");
         assert_eq!(popup.placement, Placement::Below);
         assert!(
-            ((popup.rect.top - popup.rect.bottom) - 42.176).abs() < 1e-3,
+            ((popup.rect.y1 - popup.rect.y0) - 42.176).abs() < 1e-3,
             "{:?}",
             popup.rect
         );
-        assert!((popup.rect.top - 135.0).abs() < 1e-4);
+        assert!((popup.rect.y1 - 135.0).abs() < 1e-4);
     }
 
     /// A widget near the **bottom** of the page has no room under it, so the
@@ -458,8 +499,8 @@ mod tests {
         let anchor = Rect::new(10.0, 4.0, 100.0, 24.0);
         let popup = place(anchor, 200.0, 2, 13.392).expect("there is room above");
         assert_eq!(popup.placement, Placement::Above);
-        assert!((popup.rect.bottom - 24.0).abs() < 1e-4, "{:?}", popup.rect);
-        assert!(((popup.rect.top - popup.rect.bottom) - 28.784).abs() < 1e-3);
+        assert!((popup.rect.y0 - 24.0).abs() < 1e-4, "{:?}", popup.rect);
+        assert!(((popup.rect.y1 - popup.rect.y0) - 28.784).abs() < 1e-3);
     }
 
     /// Squeezed on both sides, the list takes the larger side's room rather
@@ -471,7 +512,7 @@ mod tests {
         let popup = place(anchor, 36.0, 2, 13.392).expect("ten units is still a popup");
         assert_eq!(popup.placement, Placement::Above);
         assert!(
-            ((popup.rect.top - popup.rect.bottom) - 10.0).abs() < 1e-4,
+            ((popup.rect.y1 - popup.rect.y0) - 10.0).abs() < 1e-4,
             "{:?}",
             popup.rect
         );
@@ -484,7 +525,7 @@ mod tests {
         let anchor = Rect::new(0.0, 400.0, 100.0, 420.0);
         let popup = place(anchor, 800.0, 40, 13.392).expect("a forty-row list opens");
         assert!(
-            ((popup.rect.top - popup.rect.bottom) - 140.0).abs() < 1e-4,
+            ((popup.rect.y1 - popup.rect.y0) - 140.0).abs() < 1e-4,
             "{:?}",
             popup.rect
         );
@@ -499,7 +540,7 @@ mod tests {
         // Four rows of 60 units: the floor is 182, above the 140 cap.
         let popup = place(anchor, 800.0, 4, 60.0).expect("a four-row list opens");
         assert!(
-            ((popup.rect.top - popup.rect.bottom) - 182.0).abs() < 1e-4,
+            ((popup.rect.y1 - popup.rect.y0) - 182.0).abs() < 1e-4,
             "{:?}",
             popup.rect
         );
@@ -512,7 +553,7 @@ mod tests {
         let anchor = Rect::new(0.0, 400.0, 100.0, 420.0);
         let popup = place(anchor, 800.0, 3, 60.0).expect("a three-row list opens");
         assert!(
-            ((popup.rect.top - popup.rect.bottom) - 140.0).abs() < 1e-4,
+            ((popup.rect.y1 - popup.rect.y0) - 140.0).abs() < 1e-4,
             "{:?}",
             popup.rect
         );
@@ -541,14 +582,14 @@ mod tests {
     fn rows_stack_downward_from_the_plate() {
         let anchor = Rect::new(165.7, 315.9, 315.7, 330.1);
         let popup = place(anchor, 342.0, 2, 13.392).expect("a two-row list fits");
-        let plate = popup.plate();
+        let plate = popup.plate_f32();
         assert!((plate.top - 314.9).abs() < 1e-4, "{plate:?}");
         assert!((plate.left - 166.7).abs() < 1e-4);
         let first = popup.row_rect(0);
-        assert!((first.top - 314.9).abs() < 1e-4, "{first:?}");
-        assert!((first.bottom - (314.9 - 13.392)).abs() < 1e-3);
+        assert!((first.y1 - 314.9).abs() < 1e-4, "{first:?}");
+        assert!((first.y0 - (314.9 - 13.392)).abs() < 1e-3);
         let second = popup.row_rect(1);
-        assert!((second.top - first.bottom).abs() < 1e-6);
+        assert!((second.y1 - first.y0).abs() < 1e-6);
     }
 
     /// A click inside the plate answers its row; one outside answers none.

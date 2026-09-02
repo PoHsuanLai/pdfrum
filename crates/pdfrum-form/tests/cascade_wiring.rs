@@ -16,9 +16,10 @@
 //! here it is "with a script that *does* something, behaviour changes" — and
 //! each one fails if the hook it names loses its caller again.
 
+use kurbo::Point;
 use pdfrum_doc::ap;
 use pdfrum_form::cascade::{Cascade, FieldRef, FieldWrites, Keystroke, KeystrokeOutcome};
-use pdfrum_form::event::{Button, Event, Modifiers, Point};
+use pdfrum_form::event::{Button, Event, Modifiers};
 use pdfrum_form::field::FieldState;
 use pdfrum_form::hit::Permissions;
 use pdfrum_form::route::{self, Context};

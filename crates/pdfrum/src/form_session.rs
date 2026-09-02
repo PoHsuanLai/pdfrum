@@ -1,7 +1,7 @@
 //! A live form-filling session: events in, appearance updates out.
 
 use pdfrum_form::session::FormSession as Inner;
-use pdfrum_form::{Button, Event, Key, Modifiers, Point, Response};
+use pdfrum_form::{Button, Event, Key, Modifiers, Response};
 
 pub use pdfrum_form::SessionConfig;
 
@@ -487,7 +487,7 @@ impl<'a> FormSession<'a> {
         self.dispatch(
             page,
             Event::MouseMove {
-                at: Point::new(x, y),
+                at: at(x, y),
                 modifiers,
             },
         )
@@ -505,7 +505,7 @@ impl<'a> FormSession<'a> {
             page,
             Event::MouseDown {
                 button: Button::Left,
-                at: Point::new(x, y),
+                at: at(x, y),
                 modifiers,
             },
         )
@@ -523,7 +523,7 @@ impl<'a> FormSession<'a> {
             page,
             Event::MouseUp {
                 button: Button::Left,
-                at: Point::new(x, y),
+                at: at(x, y),
                 modifiers,
             },
         )
@@ -543,7 +543,7 @@ impl<'a> FormSession<'a> {
         y: f32,
         modifiers: Modifiers,
     ) -> Response {
-        let at = Point::new(x, y);
+        let at = at(x, y);
         let event = if down {
             Event::MouseDown {
                 button,
@@ -571,7 +571,7 @@ impl<'a> FormSession<'a> {
         self.dispatch(
             page,
             Event::DoubleClick {
-                at: Point::new(x, y),
+                at: at(x, y),
                 modifiers,
             },
         )
@@ -590,7 +590,7 @@ impl<'a> FormSession<'a> {
         self.dispatch(
             page,
             Event::MouseWheel {
-                at: Point::new(x, y),
+                at: at(x, y),
                 delta: (delta_x, delta_y),
                 modifiers,
             },
@@ -611,7 +611,7 @@ impl<'a> FormSession<'a> {
         self.dispatch(
             page,
             Event::Focus {
-                at: Point::new(x, y),
+                at: at(x, y),
                 modifiers,
             },
         )
@@ -1167,6 +1167,20 @@ impl<'a> FormSession<'a> {
             modify_annotation: granted.annotate,
         }
     }
+}
+
+/// This facade's flattened `x, y` pair onto the event vocabulary's point.
+///
+/// [`Event`]'s points are [`kurbo::Point`] — `f64`, the vocabulary
+/// [`crate::Page::crop_box`] already speaks and the one the oracle's own entry
+/// points take. `pdfrum-form` narrows to its private `f32` in `route::apply`,
+/// so nothing is lost by widening here and the widening is exact.
+///
+/// The flattened pair itself is on its way out: §WP4's target shape is
+/// `mouse_move(page, at: kurbo::Point, modifiers)`, and that lands with the
+/// renames in the facade's own package rather than here.
+fn at(x: f32, y: f32) -> kurbo::Point {
+    kurbo::Point::new(f64::from(x), f64::from(y))
 }
 
 #[cfg(test)]

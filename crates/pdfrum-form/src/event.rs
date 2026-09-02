@@ -1,6 +1,7 @@
 //! The input vocabulary: what a caller hands the engine (SPEC §15.5).
 //!
-//! These are *semantic* events, in page space, with typed keys and modifiers.
+//! These are *semantic* events, in page space, with typed keys, typed
+//! modifiers and `kurbo` points.
 //! They are deliberately not the `.evt` grammar's own types: that file format
 //! parses integers with `atoi` and emits one verb for a key-down/key-up pair,
 //! which is a faithful description of a text file and a poor description of
@@ -15,24 +16,43 @@
 //! the host's message loop, and nothing in a script-free build observes one.
 
 /// A position in page space — PDF user space, y-**up**, origin at the page's
-/// crop box.
+/// crop box — in this crate's own `f32`.
 ///
-/// Coordinates are `f32` even though an event script can only write integers,
-/// because the entry points take doubles and the ported assertions click at
-/// fractional positions.
+/// **Private, deliberately.** The public vocabulary is [`kurbo::Point`], and
+/// this is what [`crate::route::apply`] narrows it to on the way in, exactly
+/// where `fpdf_formfill.cpp:443` narrows a `double` pair to `CFX_PointF`.
+/// Every geometric comparison in this crate is `f32` against widget edges
+/// that `page::to_rect` already rounded to `f32`: an `f64` point meeting one
+/// of those changes inclusive-edge behaviour and can move a caret across a
+/// glyph boundary, which is why the narrowing is at the entry function and
+/// not one layer further in.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Point {
+pub(crate) struct Point {
     /// Distance right of the crop box's left edge.
-    pub x: f32,
+    pub(crate) x: f32,
     /// Distance **up** from the crop box's bottom edge.
-    pub y: f32,
+    pub(crate) y: f32,
 }
 
 impl Point {
     /// A point at the given page-space coordinates.
-    #[must_use]
-    pub fn new(x: f32, y: f32) -> Point {
+    pub(crate) fn new(x: f32, y: f32) -> Point {
         Point { x, y }
+    }
+
+    /// The narrowing: a caller's `f64` page-space point onto this crate's.
+    ///
+    /// The whole of the `f64`/`f32` boundary, in one function, called from
+    /// one place. A page coordinate past `f32`'s exact range has already lost
+    /// its meaning, and rounding is what the oracle's own `CFX_PointF` does
+    /// with the same value.
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "page coordinates beyond f32 have already lost meaning, and every \
+                  geometric query in this crate is f32 — see the type's own docs"
+    )]
+    pub(crate) fn narrow(at: kurbo::Point) -> Point {
+        Point::new(at.x as f32, at.y as f32)
     }
 }
 
@@ -295,12 +315,18 @@ impl std::ops::BitOr for Modifiers {
 }
 
 /// One input event.
+///
+/// Points are [`kurbo::Point`] — page space, PDF user space, y-**up**, origin
+/// at the crop box, and `f64`. That is the same vocabulary `Page::crop_box`
+/// speaks and the same one the oracle's own entry points take
+/// (`FORM_OnMouseMove(.., double page_x, double page_y)`); the crate narrows
+/// to its private `f32` point in [`crate::route::apply`] and nowhere else.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Event {
     /// The pointer moved. Drives hover enter/exit and extends a live drag.
     MouseMove {
         /// Where, in page space.
-        at: Point,
+        at: kurbo::Point,
         /// Which modifiers were held.
         modifiers: Modifiers,
     },
@@ -309,7 +335,7 @@ pub enum Event {
         /// Which button.
         button: Button,
         /// Where, in page space.
-        at: Point,
+        at: kurbo::Point,
         /// Which modifiers were held.
         modifiers: Modifiers,
     },
@@ -318,7 +344,7 @@ pub enum Event {
         /// Which button.
         button: Button,
         /// Where, in page space.
-        at: Point,
+        at: kurbo::Point,
         /// Which modifiers were held.
         modifiers: Modifiers,
     },
@@ -326,14 +352,14 @@ pub enum Event {
     /// button but the left one.
     DoubleClick {
         /// Where, in page space.
-        at: Point,
+        at: kurbo::Point,
         /// Which modifiers were held.
         modifiers: Modifiers,
     },
     /// The wheel turned. Deltas are notches, negative `y` meaning down.
     MouseWheel {
         /// Where the pointer was, in page space.
-        at: Point,
+        at: kurbo::Point,
         /// Horizontal and vertical notches.
         delta: (i32, i32),
         /// Which modifiers were held.
@@ -342,7 +368,7 @@ pub enum Event {
     /// Focus was requested at a point, without a click.
     Focus {
         /// Where, in page space.
-        at: Point,
+        at: kurbo::Point,
         /// Which modifiers were held.
         modifiers: Modifiers,
     },
@@ -370,6 +396,61 @@ pub enum Event {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// §B.5's hazard, pinned at the boundary that answers it.
+    ///
+    /// [`crate::route::apply`] narrows an [`Event`]'s `f64` point to this
+    /// `f32` one before any comparison. The interior then compares against
+    /// widget edges `page::to_rect` already rounded the same way, so an
+    /// on-the-edge click stays on the edge. If the narrowing ever moved
+    /// deeper — an `f64` reaching `hit::contains` or `Plate::to_widget` —
+    /// the value it met would be a *different* number from the one this
+    /// pins, and `hit.rs`'s `containment_includes_every_edge` would start
+    /// disagreeing with a caller who clicked exactly on a boundary.
+    #[expect(
+        clippy::float_cmp,
+        reason = "bit-exactness is the assertion: a tolerance would pass under \
+                  precisely the half-migration this test exists to forbid"
+    )]
+    #[test]
+    fn a_fractional_coordinate_is_narrowed_before_any_comparison() {
+        // A value with a fractional part that `f32` cannot hold exactly.
+        let at = kurbo::Point::new(10.1, 713.7);
+        let narrowed = Point::narrow(at);
+
+        // What the interior sees is the `f32` nearest the caller's `f64` —
+        // and it is *not* the caller's value, which is the whole point.
+        assert_eq!(narrowed.x, 10.1_f32);
+        assert_eq!(narrowed.y, 713.7_f32);
+        assert!(f64::from(narrowed.x) != at.x, "10.1 is not exact in f32");
+
+        // And it is exactly what `page::to_rect` produces for the same
+        // number, so an edge written `10.1` in the file and a click at
+        // `10.1` from the host meet as equals.
+        let edge = crate::page::to_rect(kurbo::Rect::new(10.1, 713.7, 20.0, 800.0));
+        assert_eq!(narrowed.x, edge.left);
+        assert_eq!(narrowed.y, edge.bottom);
+        assert!(
+            crate::hit::contains(edge, narrowed.x, narrowed.y),
+            "a click exactly on a fractional edge is inside it"
+        );
+    }
+
+    /// An integer coordinate — which is all an `.evt` script can write, since
+    /// its parser is a hand-rolled `atoi` — survives the widening and the
+    /// narrowing unchanged. This is why no golden moved.
+    #[expect(
+        clippy::float_cmp,
+        reason = "exactness is the assertion — this is why no golden moved"
+    )]
+    #[test]
+    fn an_integer_coordinate_round_trips_exactly() {
+        for value in [0.0_f64, 1.0, 312.0, -450.0, 9999.0] {
+            let narrowed = Point::narrow(kurbo::Point::new(value, value));
+            assert_eq!(f64::from(narrowed.x), value);
+            assert_eq!(f64::from(narrowed.y), value);
+        }
+    }
 
     #[test]
     fn modifiers_contains_is_subset_not_equality() {

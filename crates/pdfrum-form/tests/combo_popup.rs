@@ -16,9 +16,10 @@
 //! line of the matching `.evt`. So these assert the *state* the goldens
 //! depict, without a rasterizer in the way.
 
+use kurbo::Point;
 use pdfrum_doc::ap;
 use pdfrum_form::NoScripts;
-use pdfrum_form::event::{Button, Event, Modifiers, Point};
+use pdfrum_form::event::{Button, Event, Modifiers};
 use pdfrum_form::field::FieldState;
 use pdfrum_form::hit::Permissions;
 use pdfrum_form::route::{self, Context};
@@ -183,7 +184,7 @@ impl Fixture {
 
 /// The three lines of `bug_736695_2.evt` / the first three of `_3.evt`: move
 /// onto the drop button, press, release.
-fn open_the_dropdown(session: &mut FormSession, ctx: &Context<'_, NoResolve>, x: f32, y: f32) {
+fn open_the_dropdown(session: &mut FormSession, ctx: &Context<'_, NoResolve>, x: f64, y: f64) {
     let at = Point { x, y };
     route::apply(
         session,
@@ -269,13 +270,13 @@ fn a_click_on_the_drop_button_opens_the_list_below() {
     // give 11.244 and 24.488. The **relationship** is the assertion; the
     // absolute number belongs to the conformance board.
     assert!(
-        (view.geometry.rect.top - 315.9).abs() < 1e-3,
+        (view.geometry.rect.y1 - 315.9).abs() < 1e-3,
         "{:?}",
         view.geometry.rect
     );
-    let height = view.geometry.rect.top - view.geometry.rect.bottom;
+    let height = view.geometry.rect.y1 - view.geometry.rect.y0;
     assert!(
-        (height - (2.0 * view.geometry.row_height + 2.0)).abs() < 1e-3,
+        (height - (2.0 * f64::from(view.geometry.row_height) + 2.0)).abs() < 1e-3,
         "height {height} against two rows of {}",
         view.geometry.row_height
     );
@@ -405,13 +406,13 @@ fn the_three_item_dropdown_opens_with_its_stored_row_selected() {
         view.edit_text, None,
         "a gated combo has no text half to report"
     );
-    let height = view.geometry.rect.top - view.geometry.rect.bottom;
+    let height = view.geometry.rect.y1 - view.geometry.rect.y0;
     assert!(
-        (height - (3.0 * view.geometry.row_height + 2.0)).abs() < 1e-3,
+        (height - (3.0 * f64::from(view.geometry.row_height) + 2.0)).abs() < 1e-3,
         "height {height} against three rows of {}",
         view.geometry.row_height
     );
-    assert!((view.geometry.rect.top - 135.0).abs() < 1e-3);
+    assert!((view.geometry.rect.y1 - 135.0).abs() < 1e-3);
 }
 
 /// The three-item list's rows are where the golden draws them: `Item1` at the
@@ -426,16 +427,16 @@ fn the_rows_stack_from_the_top_of_the_plate() {
     open_the_dropdown(&mut session, &ctx, 140.0, 145.0);
     let view = route::popup_view(&session, &ctx).expect("an open list has a view");
 
-    let row = view.geometry.row_height;
+    let row = f64::from(view.geometry.row_height);
     let first = view.geometry.row_rect(0);
-    assert!((first.top - 134.0).abs() < 1e-3, "{first:?}");
-    assert!((first.bottom - (134.0 - row)).abs() < 1e-3, "{first:?}");
+    assert!((first.y1 - 134.0).abs() < 1e-3, "{first:?}");
+    assert!((first.y0 - (134.0 - row)).abs() < 1e-3, "{first:?}");
     // The golden's navy band for `Item3` sits at the bottom of the plate,
     // which is the third row's box: the stack is exact, not merely ordered.
     let third = view.geometry.row_rect(2);
-    assert!((third.top - (134.0 - 2.0 * row)).abs() < 1e-3, "{third:?}");
+    assert!((third.y1 - (134.0 - 2.0 * row)).abs() < 1e-3, "{third:?}");
     assert!(
-        (third.bottom - view.geometry.plate().bottom).abs() < 1e-3,
+        (third.y0 - view.geometry.plate().y0).abs() < 1e-3,
         "the last of three rows ends exactly at the plate's floor: {third:?}"
     );
 }
@@ -460,7 +461,7 @@ fn choosing_the_second_row_selects_it() {
         &mut session,
         &ctx,
         100.0,
-        f32::midpoint(second.top, second.bottom),
+        f64::midpoint(second.y1, second.y0),
     );
 
     let choice = choice(&session);
