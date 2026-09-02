@@ -755,3 +755,237 @@ about the size, because it costed the excision rather than the cache.
 **Nothing here contradicts §1's arithmetic, §3's machine analysis, or §9's
 per-fixture spread.** They were measured under load and they say so; §10.4 finds
 the same box under the same tenants and does not claim otherwise.
+
+---
+
+## 11. The third cost: a clip push, and the two device-sized passes it took
+
+**Taken 2026-09-03, on the same box, at load 29–49.** §10.6 closed by naming
+`forms_combo_box` as the corpus's worst row at **8.16x**, observing that its
+1.86x speedup was the lowest in its class against a class geomean of 3.36x —
+"which says the cost left in it is **not** the one this fix removed" — and
+instructing that "its `--op forms` split is the next thing to take, not another
+cache". This section is that split, and it found the third thing §10.6 said
+neither §5 nor §10 had isolated.
+
+**It is not in `pdfrum-doc` at all. It is in the rasterizer, and it is a clip.**
+
+### 11.1 Where the split actually landed
+
+`--op forms` puts **87.9%** of a warm `forms_combo_box` render in the overlay
+(15.79 ms of 17.97). That is where §10.6 pointed and it is correct. What it does
+not say is which half of the overlay, and the answer is neither of the two §5
+ruled out nor the one §7 item 2 already fixed:
+
+| overlay phase | `forms_combo_box`, per warm render |
+|---|---:|
+| `AnnotList::load` | 0.10 ms |
+| `ap::FormFonts::load` (post-`e084fbd`) | **0.002 ms** |
+| `ap::generate_appearances_with_text` | 0.20 ms |
+| `nav::hidden_by_open_action` | 0.000 ms |
+| the per-annotation `build_form_object_with` loop | 0.84 ms |
+| **the page graph, rasterized** | **6–12 ms per page** |
+
+The overlay's *build* is about a millisecond for both pages together, and
+`FormFonts::load` is two microseconds — §7 item 2's cache doing exactly what
+§10.1 said it would. **The residue is in drawing what the build produced**, and
+the overlay's contribution to the drawing is 37 objects on page 1 and 25 on
+page 2 against a page graph of 155 that the document's own content costs
+**1.7 ms** to draw.
+
+### 11.2 What named it, and what could not
+
+`perf` was unavailable (`perf_event_paranoid` is 4 on this box and there is no
+`sudo`), so the naming was done with the gated instrument the repository
+already has.
+
+**`--sample` cannot see this cost, and that is a property of the op rather than
+a defect.** `timed_render` hoists the page graph with `page.objects()`, which is
+the page's *content* — `Page::render_with` is the only path that runs
+`annot_render::overlay`, so a `--sample` run reports `forms_combo_box` at 1.7 ms
+and attributes nothing to the overlay. The figure is right about what it
+measures and is not the render the oracle is divided into. `scripts/profile.nu`'s
+header already warns that `--sample` and `--warm` are not interchangeable
+hoists; this is a third case of it, and the one that would have hidden the
+finding entirely.
+
+**`--walk` on the warm loop is what named it**, by elimination:
+
+| phase | ms/iter | of ENGINE | calls/iter |
+|---|---:|---:|---:|
+| glyphs | 1.59 | 8.7% | 205 |
+| path prep | 1.57 | 8.6% | 225 |
+| clip | 0.10 | 0.6% | 468 |
+| cull | 0.07 | 0.4% | 468 |
+| color | 0.05 | 0.3% | 429 |
+| **INTERPRETATION** | **16.52** | **90.1%** | dispatch, state, recursion |
+| ENGINE | 18.33 | 100.0% | |
+
+Every phase the instrument names is under 1.6 ms, and 90% of the render is in
+the bucket that is defined as *what is left*. That is the shape a cost has when
+it sits **below** the walk rather than inside it: `Phase::Clip` times
+`clip::resolve`, which decides what to push, and stops at the device call that
+pushes it. Timing that call directly put **8.2 ms** in
+`AggDevice::push_clip_mask` and a further **2.0 ms** in the `coverage_of` that
+feeds it — together **56%** of the render, on 250 clip pushes per iteration.
+
+The 250 are not an accident of this file. An annotation appearance is a form
+XObject, `pdfrum_page::build_form_object_with` pushes its `/BBox` as a clip
+(the comment there says why: "an appearance reached from an annotation has no
+enclosing anything, so nothing else would ever apply it"), and every widget on
+the page contributes one — plus whatever the appearance's own content pushes
+inside it.
+
+### 11.3 The cost, and why it is a defect rather than the price of a clip
+
+`AggDevice`'s clip is a coverage plane the size of the **device** — 595 × 841 on
+this document, half a megabyte — because `Target` indexes it by absolute device
+row and column. That is correct and is not what this changes. What each push did
+with it was:
+
+1. `coverage_of` allocated a fresh device-sized plane and swept the path into it.
+2. `push_clip_mask` called `AlphaMask::intersect`, a pass over **all** 500 000
+   bytes, to fold in the plane below.
+3. `sync_clip` **cloned** the finished plane into the target — a half-megabyte
+   `memcpy` — and did the same again on every `pop`.
+
+For a combo box's `/BBox`, which is about thirty rows tall, steps 2 and 3 are
+roughly 1.5 MB of memory traffic to compute and install thirty rows of answer,
+two hundred and fifty times per render. That is the pathology the brief
+predicted in kind — "a clip/transparency group allocated per widget" — though
+not in place: the transparency-group path is never reached on this document
+(`render_grouped` is not entered once), and the per-widget allocation is the
+clip's.
+
+### 11.4 The fix, and the invariant each half preserves
+
+Both halves are inside `pdfrum-raster-agg`. **Neither changes the arithmetic**,
+which is the point: `CFX_AggClipRgn::IntersectMask`'s truncating `a * b / 255`
+is what makes a clipped edge land where the oracle's does, and it is untouched.
+
+**The band.** `coverage_of` now reports the half-open range of rows its sweep
+actually wrote, and `push_clip_mask` intersects over that range alone. The
+equivalence is exact rather than approximate: the plane is allocated zero, the
+sweep touches only the band, and `mul255(0, b) == 0` for every `b` — so every
+byte outside the band is *already* the product a whole-buffer pass would have
+written. The band is folded from the writes rather than read off the first and
+last callback, because a span whose columns all fall outside the buffer writes
+nothing and would otherwise widen it.
+
+**The share.** The clip stack and the target now hold the same plane behind an
+`Arc`. Nothing mutates a clip once it is on the stack — an intersection builds a
+*new* plane from the incoming coverage — so the share is of an immutable value
+and `sync_clip` becomes a refcount bump. This is the half that pays on `pop` as
+well as on `push`, which the band cannot help with because a pop computes
+nothing.
+
+Three tests pin what the change trades on, and each targets one way it could be
+wrong: `a_clip_outside_the_previous_ones_rows_paints_nothing` (two clips whose
+row bands are disjoint, so the answer is entirely outside the inner band),
+`a_banded_intersection_still_carries_the_outer_clips_columns` (the outer clip's
+*columns* must reach the inner plane's rows — a band that dropped them would
+leave a whole stripe visible), and
+`each_pop_hands_the_target_the_plane_one_level_out` (a four-deep stack checked
+at every level on the way out, because a share that lagged by one would still
+pass a single pop).
+
+**Nothing public moves.** `Target` lives behind a private `mod` and `AggDevice`'s
+`clips` is a private field, so the `Arc` is invisible outside the crate;
+`scripts/api-snapshot.nu` reports the surface matching the committed baseline.
+`AlphaMask::intersect` in `pdfrum-render` is unchanged and still public — the
+banded spelling is a private function in `pdfrum-raster-agg`, so no API grew to
+serve one caller.
+
+**Only the AGG backend is changed.** `pdfrum-raster-tinyskia` has a clone of the
+same shape in its own `push_clip`/`push_clip_rect`, but it has no `sync_clip`
+— it reads the stack top directly — so it pays one copy where AGG paid three
+passes, and `intersect_path` is `tiny-skia`'s rather than ours. AGG is the
+backend every figure in this document is taken on, and widening the change to a
+backend the corpus is not measured on would be an unmeasured edit; it is left as
+a noted, smaller instance of the same shape.
+
+### 11.5 The machine
+
+**Load 29–49 on 32 cores**, sampled per fixture and reported in the table's last
+column. §10.4's tenants are still there and §3's warning still applies to every
+absolute millisecond below: they are upper bounds and the asymmetry §3 measured
+(~1.18x on the oracle's side, ~1.5–2x on ours) has not been re-measured.
+
+**What does not depend on the machine is the before/after column.** It is an
+interleaved A/B in §10.4's discipline and for §10.4's reason — the pre-fix
+binary, the post-fix binary and the oracle, round by round on one document in
+one stretch of minutes, each arm's minimum kept, so a load excursion lands on
+all three arms rather than one. `n = 21`, best of five, `--op render --warm`,
+the oracle by `bench-oracle.nu`'s `(t[n] − t[1]) / (n − 1)` marginal-pass
+formula against the same `--md5 --render-repeats` invocation, with the PDFs
+copied to scratch first because `pdfium_test` writes beside its input and the
+oracle tree is read-only.
+
+### 11.6 The table
+
+Whole document, milliseconds, AGG, **lower is better**; the ratio is ours over
+the oracle's, so **> 1 is pdfrum being slower**. `before` is `5407319`'s parent,
+`after` is `5407319`.
+
+| fixture | before (ms) | **after (ms)** | speedup | oracle (ms) | ratio before | **ratio after** | load |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| `forms_combo_box` | 16.46 | **6.72** | **2.45x** | 4.38 | 3.76x | **1.54x** | 30.0 |
+| `forms_list_box` | 26.39 | **13.04** | 2.02x | 5.58 | 4.73x | **2.34x** | 29.1 |
+| `forms_number` | 2.16 | **1.73** | 1.25x | 0.89 | 2.42x | **1.94x** | 35.0 |
+| `forms_push_button` | 10.62 | **6.24** | 1.70x | 67.47 | 0.16x | **0.09x** | 41.0 |
+| `forms_signature` | 6.12 | **2.24** | 2.73x | 1.65 | 3.71x | **1.36x** | 35.0 |
+| `forms_text_field` | 13.59 | **8.05** | 1.69x | 2.59 | 5.24x | **3.10x** | 41.2 |
+| `forms_widgets_407` | 20.51 | **9.14** | 2.24x | 8.10 | 2.53x | **1.13x** | 45.9 |
+| **`forms` geomean** | | | | | **2.29x** | **1.17x** | |
+| | | | | | | | |
+| `vector_paths_1751` | 13.35 | 14.14 | 0.94x | 24.39 | 0.55x | 0.58x | 46.8 |
+| `image_bug_583804` | 179.94 | 181.84 | 0.99x | 181.49 | 0.99x | 1.00x | 36.3 |
+| `shading_axial_radial` | 37.27 | 36.40 | 1.02x | 48.95 | 0.76x | 0.74x | 48.8 |
+
+**The three controls are flat — 0.94x, 0.99x, 1.02x, which is this box's noise
+floor and not a measurement of anything.** That is the shape this fix should
+have: a page whose clip stack is shallow pushes few clips, and a push that was
+never the cost cannot become cheaper. It is the opposite of §10.6's pattern,
+where the removed cost was *fixed per render* and so helped the cheap documents
+most; this one is per clip push, and it helps in proportion to how many a
+document makes.
+
+**Every forms row improves, and `forms_combo_box` improves most.** It goes from
+the worst row in its class to the fourth of seven, and its 2.45x speedup is the
+class's largest — which is the confirmation that the cost §10.6 could not
+account for is the one this removes. The class geomean against the oracle goes
+**2.29x → 1.17x**.
+
+The mechanism is visible in `--op forms` on the other two documents with many
+widgets, where the overlay's *share* falls while the page content underneath it
+does not move at all — which is what a fix to the overlay's drawing looks like
+and what a fix to the page's own content would not:
+
+| fixture | overlay share, before | overlay share, after | page content, before | page content, after |
+|---|---:|---:|---:|---:|
+| `forms_list_box` | 92.9% | 83.7% | 1.94 ms | 2.00 ms |
+| `forms_widgets_407` | 98.4% | 96.8% | 0.24 ms | 0.25 ms |
+
+*On comparing this with §10.5's 2.16x:* these are not the same measurement and
+should not be subtracted. §10.5 is `bench-oracle.nu` over 30 files with the
+three backends' best; this is one backend over the class's seven, on a different
+day at a different load, with a `before` column that is this branch's parent
+rather than M12's. The **before** column is the honest comparand for the
+**after** one, and the pair is the claim.
+
+### 11.7 What this does not claim
+
+- **Not an idle box.** §3's instruction is still undischarged, for the fourth
+  time in this document, and for the same reason: the tenants are not this
+  session's to stop.
+- **`forms_text_field` at 3.10x is now the class's worst row** and is not
+  explained here. Its speedup, 1.69x, is among the class's lowest, so whatever
+  is left in it is — by §10.6's own argument — a *fourth* cost rather than this
+  one. Its `--op forms` split is the next thing to take.
+- **The other three classes were not re-measured**, only spot-checked by the
+  three controls. A document with a deep clip stack outside the forms class
+  would gain here, and none was looked for.
+- **`tiny-skia` and `vello_cpu` are unchanged** (§11.4), so a figure taken on
+  either still carries the old cost and must not be compared with a row above.
+- **The ratchet is still not re-baselined.** §8's third bullet stands, and
+  `benches/baseline.json` is untouched.
