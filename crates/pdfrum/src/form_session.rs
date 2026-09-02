@@ -493,16 +493,19 @@ impl<'a> FormSession<'a> {
 
     /// Tells the session which page the embedder is showing.
     ///
-    /// This exists for exactly one case, and naming it is the point: a
+    /// **Two things need it.** The first is the one it was named for: a
     /// keyboard event that arrives with **nothing focused** has no field to
     /// route to and no page of its own, and the one such event that must
     /// still do something is **Tab** — it is what enters the focus ring in
     /// the first place. The oracle spells the same fact as a page parameter
     /// on `FORM_OnKeyDown`, which its callers fill in with the page in view.
+    /// The second is [`Self::apply`]: an [`Event`] carries a point and no
+    /// page, so a mouse event handed over as a value lands here.
     ///
     /// Defaults to page 0, which is right for a single-page document and for
     /// a viewer that has not scrolled. A caller showing any other page should
-    /// say so, or a Tab from nothing will enter the ring on the wrong one.
+    /// say so, or a Tab from nothing will enter the ring on the wrong one —
+    /// and so will every click sent through `apply`.
     pub fn set_viewed_page(&mut self, page: impl Into<PageIndex>) {
         self.viewed_page = page.into();
     }
