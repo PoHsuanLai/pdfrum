@@ -76,7 +76,8 @@
 //! - [`Form`] — enumerate fields, read them, fill them, and save the result.
 //! - [`Document::save`] and friends — write a document back out, whole or as
 //!   an incremental update, and [copy pages](Document::import_pages) between
-//!   documents.
+//!   documents. [`Document::edit`] embeds a font program (or a standard-14
+//!   face) so [`TextBuilder`] can write text the page did not already have.
 //!
 //! # Features
 //!
@@ -260,6 +261,10 @@ pub use render::{ColorMode, ColorScheme, Pixmap, RenderOptions, TextAa};
 /// know which one you passed.
 pub use pdfrum_render::{RasterBackend, RenderDevice};
 
+/// A font this save is adding: [`EmbeddedFont`] from [`DocEdit::embed_font`],
+/// [`FontEncoding`] choosing simple vs composite, and [`StandardFont`] for
+/// [`DocEdit::standard_font`].
+pub use pdfrum_edit::{EmbeddedFont, FontEncoding, StandardFont};
 /// The facade's default rasterizer, re-exported so a caller can name it
 /// without a second dependency.
 ///
@@ -268,7 +273,7 @@ pub use pdfrum_render::{RasterBackend, RenderDevice};
 /// dependency; `tiny-skia`, the AGG-parity backend and the GPU one are the
 /// caller's own, named directly at the call site.
 pub use pdfrum_raster_vello_cpu::VelloCpuBackend;
-pub use save::{SaveOptions, Update};
+pub use save::{DocEdit, SaveOptions, Update};
 pub use session::RenderSession;
 
 /// The things a page draws, as the interpreter produced them.

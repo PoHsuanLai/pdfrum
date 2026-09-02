@@ -50,6 +50,79 @@ const PFB_TEXT: u8 = 1;
 const PFB_BINARY: u8 = 2;
 const PFB_EOF: u8 = 3;
 
+/// ISO 32000-1 table 127 `/Length1` `/Length2` `/Length3` for a Type 1
+/// `/FontFile` stream.
+///
+/// For a PFB these are the concatenated bodies of the leading text segment,
+/// the binary `eexec` segments, and the trailing text (`cleartomark`)
+/// segment. For a PFA or a bare program, `/Length1` is the clear preamble,
+/// `/Length2` the decoded ciphertext, and `/Length3` is 0 when no trailer
+/// can be split out.
+///
+/// The oracle's `LoadFontDesc` (`fpdfsdk/fpdf_edittext.cpp:166-170`) never
+/// writes these three keys — a TODO, and a file that ISO 32000-1 §9.9
+/// table 127 will not accept as a Type 1 program. Callers that embed a
+/// Type 1 program should use this instead.
+#[must_use]
+pub fn font_file_lengths(bytes: &[u8]) -> (u32, u32, u32) {
+    if bytes.first() == Some(&PFB_MARKER) {
+        return pfb_lengths(bytes);
+    }
+    let mut diags = Diagnostics::default();
+    match split(bytes, &mut diags) {
+        Ok(s) => (len_u32(s.clear.len()), len_u32(s.cipher.len()), 0),
+        Err(_) => (len_u32(bytes.len()), 0, 0),
+    }
+}
+
+fn len_u32(n: usize) -> u32 {
+    u32::try_from(n).unwrap_or(u32::MAX)
+}
+
+/// Walk PFB records for the three table-127 lengths, counting truncated
+/// bodies the same way [`split_pfb`] keeps them.
+fn pfb_lengths(bytes: &[u8]) -> (u32, u32, u32) {
+    let mut length1 = 0u32;
+    let mut length2 = 0u32;
+    let mut length3 = 0u32;
+    let mut seen_binary = false;
+    let mut at = 0usize;
+    while at < bytes.len() {
+        let Some(header) = bytes.get(at..at.saturating_add(6)) else {
+            break;
+        };
+        if header.first().copied() != Some(PFB_MARKER) {
+            break;
+        }
+        match header.get(1).copied() {
+            Some(k @ (PFB_TEXT | PFB_BINARY)) => {
+                let declared = le_u32(header.get(2..6).unwrap_or_default()) as usize;
+                let body_at = at.saturating_add(6);
+                let body = bytes
+                    .get(body_at..body_at.saturating_add(declared))
+                    .unwrap_or_else(|| bytes.get(body_at..).unwrap_or_default());
+                let n = len_u32(body.len());
+                if k == PFB_TEXT {
+                    if seen_binary {
+                        length3 = length3.saturating_add(n);
+                    } else {
+                        length1 = length1.saturating_add(n);
+                    }
+                } else {
+                    seen_binary = true;
+                    length2 = length2.saturating_add(n);
+                }
+                at = body_at.saturating_add(body.len());
+                if body.len() < declared {
+                    break;
+                }
+            }
+            _ => break,
+        }
+    }
+    (length1, length2, length3)
+}
+
 /// Sniff the container and split the program.
 ///
 /// Damage tolerance mirrors what a Type 1 rasterizer has to survive in the

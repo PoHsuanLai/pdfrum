@@ -7,7 +7,7 @@ use pdfrum_common::{Diagnostics, PageIndex, PdfVersion};
 use pdfrum_edit::{EditDoc, SaveMode};
 use pdfrum_object::Object;
 
-use crate::{Document, Form, PageEdit, Result};
+use crate::{Document, EmbeddedFont, FontEncoding, Form, PageEdit, Result, StandardFont};
 
 /// How a document is written back out.
 ///
@@ -42,6 +42,12 @@ pub struct SaveOptions {
     /// forces a full rewrite — an incremental append cannot decrypt the bytes
     /// already in the file.
     pub remove_security: bool,
+    /// Subset fonts this save writes as new, dropping glyphs no page shows.
+    ///
+    /// Off by default. When set, a `/Type0` `CIDFontType2` with `/FontFile2`
+    /// that a show operator draws with is replaced by a subset named
+    /// `ABCDEF+Original`. See [`pdfrum_edit::SaveOptions::subset_new_fonts`].
+    pub subset_new_fonts: bool,
 }
 
 /// Whether a save rewrites the whole file or appends to it.
@@ -93,10 +99,7 @@ impl Document {
     ///
     /// As [`Document::save`].
     pub fn save_with(&self, path: impl AsRef<Path>, options: &SaveOptions) -> Result<()> {
-        let mut bytes = Vec::new();
-        self.write_to(&mut bytes, options)?;
-        std::fs::write(path.as_ref(), &bytes)?;
-        Ok(())
+        self.edit().save(path, options)
     }
 
     /// Appends the document's changes after its original bytes.
@@ -131,8 +134,7 @@ impl Document {
     /// # Ok::<(), pdfrum::Error>(())
     /// ```
     pub fn write_to(&self, out: &mut impl Write, options: &SaveOptions) -> Result<()> {
-        let edit = EditDoc::new(&self.inner);
-        write_edit(&edit, *options, out)
+        self.edit().write_to(out, options)
     }
 
     /// Writes the document with a form's filled-in values applied.
@@ -226,6 +228,10 @@ impl Document {
     /// changed, and every page not listed at all, comes through untouched.
     /// See [`PageEdit`] for what regeneration loses.
     ///
+    /// This is the no-new-objects convenience: it opens a [`DocEdit`] with
+    /// nothing added and delegates. Adding a font (or any other new object)
+    /// needs [`Document::edit`] and [`DocEdit::save_pages`].
+    ///
     /// # Errors
     ///
     /// [`Error::Io`](crate::Error::Io) when the file cannot be written, and
@@ -256,10 +262,7 @@ impl Document {
         pages: &[PageEdit],
         options: &SaveOptions,
     ) -> Result<()> {
-        let mut bytes = Vec::new();
-        self.write_pages_to(&mut bytes, pages, options)?;
-        std::fs::write(path.as_ref(), &bytes)?;
-        Ok(())
+        self.edit().save_pages(path, pages, options)
     }
 
     /// Writes the document with edited pages applied, to any [`Write`] sink.
@@ -273,24 +276,7 @@ impl Document {
         pages: &[PageEdit],
         options: &SaveOptions,
     ) -> Result<()> {
-        let mut edit = EditDoc::new(&self.inner);
-        let shared = pdfrum_edit::shared_objects(&edit);
-        for page in pages {
-            let Some(rewrite) =
-                pdfrum_edit::regenerate(page.graph(), &page.resources(self), &self.inner)
-            else {
-                continue;
-            };
-            let Some(reference) = self.inner.page(page.index())?.reference else {
-                // A page written inline in its parent's `/Kids` has no object
-                // to replace, so its content cannot be rewritten. Rather than
-                // half-apply the change, leave the page as it was.
-                continue;
-            };
-            let dict = self.inner.page(page.index())?.dict;
-            pdfrum_edit::apply_rewrite(&mut edit, reference, &dict, &rewrite, &shared);
-        }
-        write_edit(&edit, *options, out)
+        self.edit().write_pages_to(out, pages, options)
     }
 
     /// Copies pages from another document into this one, writing the result
@@ -344,6 +330,145 @@ impl Document {
         std::fs::write(path.as_ref(), &bytes)?;
         Ok(())
     }
+
+    /// A session for adding objects this document does not yet have — fonts
+    /// first — and saving them together with page edits.
+    ///
+    /// [`Document`] itself is never mutated. New objects live on this handle
+    /// until [`DocEdit::save_pages`] / [`DocEdit::write_pages_to`] writes them.
+    #[must_use]
+    pub fn edit(&self) -> DocEdit<'_> {
+        DocEdit {
+            doc: self,
+            inner: EditDoc::new(&self.inner),
+        }
+    }
+}
+
+/// Document-level edits: embedded fonts, then a save that writes them.
+///
+/// Page content is still edited through [`PageEdit`]; this handle is the
+/// place new *objects* are allocated so a [`crate::TextBuilder`] can name
+/// them.
+#[derive(Debug)]
+pub struct DocEdit<'a> {
+    doc: &'a Document,
+    inner: EditDoc<'a>,
+}
+
+impl DocEdit<'_> {
+    /// Embed `program` as a new `/Font`.
+    ///
+    /// ```
+    /// use pdfrum::{Document, FontEncoding, SaveOptions, TextBuilder};
+    ///
+    /// let doc = Document::open("tests/fixtures/hello_world.pdf")?;
+    /// let mut edit = doc.edit();
+    /// let font = edit.embed_font(
+    ///     include_bytes!("../../pdfrum-edit/tests/files/tiny.ttf"),
+    ///     FontEncoding::Composite,
+    /// )?;
+    /// let mut page = doc.page(0)?.edit();
+    /// page.push(
+    ///     TextBuilder {
+    ///         position: pdfrum::Point::new(20.0, 80.0),
+    ///         ..TextBuilder::new(font.encode("Hi"), font.object(), 24.0)
+    ///     }
+    ///     .build(),
+    /// );
+    /// let mut bytes = Vec::new();
+    /// edit.write_pages_to(&mut bytes, &[page], &SaveOptions::default())?;
+    /// assert!(bytes.starts_with(b"%PDF-"));
+    /// # Ok::<(), pdfrum::Error>(())
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// [`Error::Save`](crate::Error::Save) when the bytes are not a font
+    /// program, or the face has no glyphs.
+    pub fn embed_font(&mut self, program: &[u8], encoding: FontEncoding) -> Result<EmbeddedFont> {
+        Ok(self.inner.embed_font(program, encoding)?)
+    }
+
+    /// Add a non-embedded standard-14 Type 1 font.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::Save`](crate::Error::Save) if the editor cannot allocate the
+    /// dictionary.
+    pub fn standard_font(&mut self, which: StandardFont) -> Result<EmbeddedFont> {
+        Ok(self.inner.standard_font(which)?)
+    }
+
+    /// Write the document with this session's new objects and `pages` applied.
+    ///
+    /// # Errors
+    ///
+    /// As [`Document::save_pages`].
+    pub fn save_pages(
+        &mut self,
+        path: impl AsRef<std::path::Path>,
+        pages: &[PageEdit],
+        options: &SaveOptions,
+    ) -> Result<()> {
+        let mut bytes = Vec::new();
+        self.write_pages_to(&mut bytes, pages, options)?;
+        std::fs::write(path.as_ref(), &bytes)?;
+        Ok(())
+    }
+
+    /// Write the document with this session's new objects and `pages` applied,
+    /// to any [`Write`] sink.
+    ///
+    /// # Errors
+    ///
+    /// As [`Document::save_pages`].
+    pub fn write_pages_to(
+        &mut self,
+        out: &mut impl Write,
+        pages: &[PageEdit],
+        options: &SaveOptions,
+    ) -> Result<()> {
+        let shared = pdfrum_edit::shared_objects(&self.inner);
+        for page in pages {
+            let Some(rewrite) =
+                pdfrum_edit::regenerate(page.graph(), &page.resources(self.doc), &self.doc.inner)
+            else {
+                continue;
+            };
+            let Some(reference) = self.doc.inner.page(page.index())?.reference else {
+                // A page written inline in its parent's `/Kids` has no object
+                // to replace, so its content cannot be rewritten. Rather than
+                // half-apply the change, leave the page as it was.
+                continue;
+            };
+            let dict = self.doc.inner.page(page.index())?.dict;
+            pdfrum_edit::apply_rewrite(&mut self.inner, reference, &dict, &rewrite, &shared);
+        }
+        write_edit(&self.inner, *options, out)
+    }
+
+    /// Write the document with this session's new objects and no page edits.
+    ///
+    /// # Errors
+    ///
+    /// As [`Document::save`].
+    pub fn save(&self, path: impl AsRef<std::path::Path>, options: &SaveOptions) -> Result<()> {
+        let mut bytes = Vec::new();
+        self.write_to(&mut bytes, options)?;
+        std::fs::write(path.as_ref(), &bytes)?;
+        Ok(())
+    }
+
+    /// Write the document with this session's new objects, to any [`Write`]
+    /// sink.
+    ///
+    /// # Errors
+    ///
+    /// As [`Document::save`].
+    pub fn write_to(&self, out: &mut impl Write, options: &SaveOptions) -> Result<()> {
+        write_edit(&self.inner, *options, out)
+    }
 }
 
 /// The one place a [`SaveOptions`] becomes the writer's own options.
@@ -359,6 +484,7 @@ fn write_edit(edit: &EditDoc<'_>, options: SaveOptions, out: &mut impl Write) ->
         // regenerated content streams of an edited page go through the same
         // cipher as everything else, because they are written the same way.
         remove_security: options.remove_security,
+        subset_new_fonts: options.subset_new_fonts,
         ..pdfrum_edit::SaveOptions::default()
     };
     pdfrum_edit::save(edit, &opts, out)?;

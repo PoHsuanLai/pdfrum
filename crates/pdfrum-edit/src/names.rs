@@ -7,8 +7,8 @@
 pub(crate) use pdfrum_object::names::{
     ART_BOX, BLEED_BOX, CONTENTS, COUNT, CROP_BOX, DECODE_PARMS, ENCRYPT, FILTER, FIRST,
     FLATE_DECODE, ID, INDEX, INFO, KIDS, LENGTH, MEDIA_BOX, METADATA, PAGE, PAGES, PARENT, PREV,
-    RESOURCES, ROOT, ROTATE, SIZE, SUBTYPE, TRIM_BOX, TYPE, VIEWER_PREFERENCES, W, XML, XREF,
-    XREF_STM,
+    RESOURCES, ROOT, ROTATE, SIZE, SUBTYPE, TRIM_BOX, TYPE, VIEWER_PREFERENCES, W,
+    WIN_ANSI_ENCODING, XML, XREF, XREF_STM,
 };
 
 pdfrum_object::names! {
@@ -92,4 +92,34 @@ pdfrum_object::names! {
     CID_TO_GID_MAP = "CIDToGIDMap";
     /// The CMap's own type, always 2 for a ToUnicode map (`/CMapType`).
     CMAP_TYPE = "CMapType";
+    /// First code a simple font's `/Widths` covers (`/FirstChar`).
+    FIRST_CHAR = "FirstChar";
+    /// Last code a simple font's `/Widths` covers (`/LastChar`).
+    LAST_CHAR = "LastChar";
+    /// Per-code advances of a simple font (`/Widths`).
+    WIDTHS = "Widths";
+    /// Glyph extents (`/FontBBox`).
+    FONT_BBOX = "FontBBox";
+    /// Degrees clockwise from vertical (`/ItalicAngle`).
+    ITALIC_ANGLE = "ItalicAngle";
+    /// Maximum height above the baseline (`/Ascent`).
+    ASCENT = "Ascent";
+    /// Maximum depth below the baseline (`/Descent`).
+    DESCENT = "Descent";
+    /// Height of a capital letter (`/CapHeight`).
+    CAP_HEIGHT = "CapHeight";
+    /// Vertical stem thickness (`/StemV`).
+    STEM_V = "StemV";
+    /// The CID collection (`/CIDSystemInfo`).
+    CID_SYSTEM_INFO = "CIDSystemInfo";
+    /// Registry name inside `/CIDSystemInfo` (`/Registry`).
+    REGISTRY = "Registry";
+    /// Ordering name inside `/CIDSystemInfo` (`/Ordering`).
+    ORDERING = "Ordering";
+    /// Supplement number inside `/CIDSystemInfo` (`/Supplement`).
+    SUPPLEMENT = "Supplement";
+    /// Encrypted portion of a Type 1 program (`/Length2`).
+    LENGTH2 = "Length2";
+    /// Trailer portion of a Type 1 program (`/Length3`).
+    LENGTH3 = "Length3";
 }

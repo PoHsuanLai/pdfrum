@@ -44,6 +44,14 @@ pub enum Error {
     #[error("font subsetting failed: {0}")]
     Subset(String),
 
+    /// The bytes are not a TrueType, OpenType, or Type 1 font program.
+    #[error("unrecognised font program")]
+    UnrecognisedFontProgram,
+
+    /// The program parsed but declares no glyphs.
+    #[error("font program has no glyphs")]
+    EmptyFontProgram,
+
     /// An object the writer needed could not be fetched or made sense of.
     #[error("object model: {0}")]
     Object(#[from] pdfrum_object::Error),

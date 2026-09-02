@@ -12,10 +12,12 @@ mod face;
 pub use cache::{GlyphCache, GlyphKey};
 pub use face::{Charmap, CharmapId, Face};
 
-pub(crate) use crate::descriptor::{em_adjust, normalize_font_metric};
+pub use crate::descriptor::em_adjust;
+pub(crate) use crate::descriptor::normalize_font_metric;
 
 use crate::{Gid, GlyphName};
 use pdfrum_common::kurbo::{Affine, BezPath, Rect};
+use pdfrum_common::{Diagnostics, Limits};
 use std::sync::Arc;
 
 /// Where glyphs come from.
@@ -49,6 +51,21 @@ pub(crate) struct GlyphParams {
 }
 
 impl GlyphSource {
+    /// Open a TrueType, OpenType, bare-CFF, or Type 1 program from its bytes.
+    ///
+    /// `None` when no backend recognises the blob.
+    #[must_use]
+    pub fn from_bytes(bytes: impl Into<Arc<[u8]>>) -> Option<Self> {
+        let bytes = bytes.into();
+        if let Some(face) = Face::new(Arc::clone(&bytes), 0) {
+            return Some(Self::Fontations(face));
+        }
+        let mut diags = Diagnostics::default();
+        pdfrum_type1::Type1Font::parse(&bytes, &Limits::default(), &mut diags)
+            .ok()
+            .map(|font| Self::Type1(Arc::new(font)))
+    }
+
     /// Is there a face at all?
     #[must_use]
     pub(crate) fn is_some(&self) -> bool {
@@ -67,7 +84,7 @@ impl GlyphSource {
 
     /// How many glyphs the face declares.
     #[must_use]
-    pub(crate) fn num_glyphs(&self) -> u32 {
+    pub fn num_glyphs(&self) -> u32 {
         match self {
             Self::Fontations(f) => f.num_glyphs(),
             Self::Type1(f) => f.num_glyphs(),
@@ -217,6 +234,12 @@ impl GlyphSource {
         Some(Affine::scale(1000.0 / f64::from(Face::HINT_PPEM)) * trimmed)
     }
 
+    /// Advance in 1000/em units at the face's default location.
+    #[must_use]
+    pub fn default_advance(&self, gid: Gid) -> i32 {
+        self.advance(gid, GlyphParams::default())
+    }
+
     /// A glyph's advance width in 1000/em units.
     ///
     /// Uses the **truncating** normalizer, which is the one
@@ -315,6 +338,128 @@ impl GlyphSource {
         }
         let t = (params.dest_width - min_w) as f32 / (max_w - min_w) as f32;
         font.instantiate(&[weight, (hi - lo).mul_add(t, lo)])
+    }
+
+    /// PostScript name, or a family/style display name, when the face has one.
+    #[must_use]
+    pub fn postscript_name(&self) -> Option<String> {
+        match self {
+            Self::Fontations(f) => f.postscript_name(),
+            Self::Type1(f) => f
+                .postscript_name()
+                .map(ToOwned::to_owned)
+                .or_else(|| f.family_name().map(ToOwned::to_owned)),
+            Self::None => None,
+        }
+    }
+
+    /// Fixed pitch: `post.isFixedPitch`, or Type 1 `/isFixedPitch`.
+    #[must_use]
+    pub fn is_fixed_pitch(&self) -> bool {
+        match self {
+            Self::Fontations(f) => f.is_fixed_pitch(),
+            Self::Type1(f) => f.is_fixed_pitch(),
+            Self::None => false,
+        }
+    }
+
+    /// Italic: OS/2 / `macStyle` / `post.italicAngle`, or a Type 1 `/ItalicAngle`.
+    #[must_use]
+    pub fn is_italic(&self) -> bool {
+        match self {
+            Self::Fontations(f) => f.is_italic(),
+            Self::Type1(f) => f.italic_angle() != 0.0,
+            Self::None => false,
+        }
+    }
+
+    /// Bold: OS/2 / `macStyle`, or a Type 1 name containing `Bold` / `Black`.
+    #[must_use]
+    pub fn is_bold(&self) -> bool {
+        match self {
+            Self::Fontations(f) => f.is_bold(),
+            Self::Type1(f) => {
+                let name = f.postscript_name().or_else(|| f.full_name()).unwrap_or("");
+                name.contains("Bold") || name.contains("Black")
+            }
+            Self::None => false,
+        }
+    }
+
+    /// OS/2 `sCapHeight` in font units, when present.
+    #[must_use]
+    pub fn cap_height_unscaled(&self) -> Option<f32> {
+        match self {
+            Self::Fontations(f) => f.cap_height(),
+            Self::Type1(_) | Self::None => None,
+        }
+    }
+
+    /// Ascender in font units (`hhea`, or the Type 1 bbox top).
+    #[must_use]
+    pub fn unscaled_ascent(&self) -> Option<i32> {
+        match self {
+            Self::Fontations(f) => f.metrics().and_then(|m| i32::try_from(m.ascender).ok()),
+            Self::Type1(f) => Some(f.bbox().y1 as i32),
+            Self::None => None,
+        }
+    }
+
+    /// Descender in font units (`hhea`, or the Type 1 bbox bottom).
+    #[must_use]
+    pub fn unscaled_descent(&self) -> Option<i32> {
+        match self {
+            Self::Fontations(f) => f.metrics().and_then(|m| i32::try_from(m.descender).ok()),
+            Self::Type1(f) => Some(f.bbox().y0 as i32),
+            Self::None => None,
+        }
+    }
+
+    /// Font bounding box in font units, `(left, bottom, right, top)`.
+    #[must_use]
+    pub fn unscaled_bbox(&self) -> Option<(i32, i32, i32, i32)> {
+        match self {
+            Self::Fontations(f) => {
+                let m = f.metrics()?;
+                Some((
+                    i32::try_from(m.bbox_left).ok()?,
+                    i32::try_from(m.bbox_bottom).ok()?,
+                    i32::try_from(m.bbox_right).ok()?,
+                    i32::try_from(m.bbox_top).ok()?,
+                ))
+            }
+            Self::Type1(f) => {
+                let b = f.bbox();
+                Some((b.x0 as i32, b.y0 as i32, b.x1 as i32, b.y1 as i32))
+            }
+            Self::None => None,
+        }
+    }
+
+    /// Unicode → glyph mappings with `code <= max`, sorted by codepoint.
+    ///
+    /// A miss is omitted rather than recorded as glyph 0.
+    #[must_use]
+    pub fn unicode_mappings(&self, max: u32) -> Vec<(u32, u16)> {
+        match self {
+            Self::Fontations(f) => f.unicode_mappings(max),
+            Self::Type1(f) => {
+                let mut out: Vec<(u32, u16)> = f
+                    .unicode_pairs()
+                    .filter(|(ch, gid)| u32::from(*ch) <= max && gid.0 != 0)
+                    .map(|(ch, gid)| (u32::from(ch), gid.0))
+                    .collect();
+                out.sort_unstable_by_key(|(cp, _)| *cp);
+                out
+            }
+            Self::None => Vec::new(),
+        }
+    }
+
+    /// Glyph for a Unicode codepoint through the Unicode cmap. Zero on a miss.
+    #[must_use]
+    pub fn gid_for_unicode(&self, code: u32) -> u16 {
+        self.char_index(Charmap::Unicode, code)
     }
 }
 

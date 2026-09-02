@@ -38,7 +38,9 @@
 //!   reference remapping, N-up imposition, and the [`PageRange`] grammar.
 //!
 //! Font subsetting ([`subset`]) hangs off the first as an object-override
-//! pass.
+//! pass. Embedding a caller-supplied program ([`EditDoc::embed_font`]) or
+//! one of the standard 14 ([`EditDoc::standard_font`]) is how a new `/Font`
+//! reaches that pass.
 //!
 //! # Determinism is a parameter
 //!
@@ -104,7 +106,9 @@ pub use content::{
 pub use doc::EditDoc;
 pub use encrypt::{Encryptor, IvSource};
 pub use error::Error;
+pub use font::embed::{EmbeddedFont, FontEncoding};
 pub use font::{GidMap, Subsetted, subset};
 pub use import::{ImportOptions, NUpOptions, PageRange, import_pages, n_page_to_one};
+pub use pdfrum_font::StandardFont;
 pub use write::id::{FileId, IdSource};
 pub use write::{SaveMode, SaveOptions, save};

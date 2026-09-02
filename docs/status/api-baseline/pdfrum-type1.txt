@@ -56,6 +56,7 @@ pub fn pdfrum_type1::Type1Font::outline(&self, pdfrum_type1::Gid) -> core::optio
 pub fn pdfrum_type1::Type1Font::outline_with_diagnostics(&self, pdfrum_type1::Gid, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<(kurbo::bezpath::BezPath, f32)>
 pub fn pdfrum_type1::Type1Font::parse(&[u8], &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::result::Result<Self, pdfrum_type1::Error>
 pub fn pdfrum_type1::Type1Font::postscript_name(&self) -> core::option::Option<&str>
+pub fn pdfrum_type1::Type1Font::unicode_pairs(&self) -> impl core::iter::traits::iterator::Iterator<Item = (char, pdfrum_type1::Gid)> + '_
 pub fn pdfrum_type1::Type1Font::unicode_to_gid(&self, char) -> core::option::Option<pdfrum_type1::Gid>
 pub fn pdfrum_type1::Type1Font::units_per_em(&self) -> u16
 pub struct pdfrum_type1::Type1Instance<'a>
@@ -70,5 +71,6 @@ pub const pdfrum_type1::EEXEC_SEED: u16
 pub const pdfrum_type1::EEXEC_SKIP: usize
 pub fn pdfrum_type1::decrypt(&[u8], u16, usize) -> alloc::vec::Vec<u8>
 pub fn pdfrum_type1::encrypt(&[u8], u16) -> alloc::vec::Vec<u8>
+pub fn pdfrum_type1::font_file_lengths(&[u8]) -> (u32, u32, u32)
 pub fn pdfrum_type1::standard_encoding_name(u8) -> core::option::Option<&'static str>
 pub fn pdfrum_type1::unicode_from_glyph_name(&str) -> core::option::Option<char>

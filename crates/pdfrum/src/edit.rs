@@ -379,11 +379,15 @@ impl PathBuilder {
 
 /// A run of text, ready to [`PageEdit::push`].
 ///
-/// The font is named by the `/Font` resource entry it already has on the page:
-/// a regenerated stream writes `/Name Tf`, so the font must be something the
-/// page's resources can reach. [`PageEdit::font_of`] finds one from an
-/// existing text object, which is the reliable way to get a reference that
-/// resolves.
+/// The font is named by an indirect `/Font` dictionary: a regenerated stream
+/// writes `/Name Tf` and [`pdfrum_edit::ResourceTable::realize`] allocates
+/// that name for [`TextBuilder::font`]. Obtain the reference from
+/// [`PageEdit::font_of`] (a font the page already has) or from
+/// [`crate::DocEdit::embed_font`] / [`crate::DocEdit::standard_font`] (a font
+/// this save is adding).
+///
+/// [`crate::ImageBuilder`] has the same "the object must already exist"
+/// limitation for `/XObject` and is **not** paired with an embed API yet.
 #[derive(Debug, Clone, PartialEq)]
 pub struct TextBuilder {
     /// The character codes, in the font's own encoding.
@@ -432,9 +436,13 @@ impl TextBuilder {
                     kerning: 0.0,
                 }]),
                 position: self.position,
-                // The glyph matrix carries the size, as the interpreter builds
-                // it: the emitter writes `Tf` and `Tm` separately and the
-                // matrix it writes is this one with the translation dropped.
+                // Size lives only in the matrix. The emitter writes `Tf` from
+                // this scale and `Tm` with it divided out; putting the size
+                // in `font.1` as well would scale the saved run twice. `font`
+                // stays `None`: a constructed object names the dict through
+                // `font_source`, and loading an unrelated face just to pass
+                // the emitter's old `font: None` refusal was the wrong kind
+                // of fix.
                 matrix: Affine::scale(f64::from(self.size)),
                 font: None,
                 font_source: Some(self.font),
