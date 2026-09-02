@@ -6,10 +6,12 @@
 //! hit straight back into an annotation index. Losing the placeholders would
 //! renumber every link after the first non-link.
 
+#[cfg(test)]
 use kurbo::Point;
 use pdfrum_common::{Diagnostics, Limits};
 use pdfrum_object::{Dict, Resolve, names as obj_names};
 
+#[cfg(test)]
 use crate::geom;
 use crate::names;
 use crate::nav::action::Action;
@@ -85,10 +87,7 @@ pub fn page_links<R: Resolve>(page: &Dict, r: &R) -> Vec<Option<Link>> {
 /// The scan runs **backwards**, so the last annotation in painting order —
 /// the one on top — wins a tie. Containment is inclusive on all four edges.
 #[must_use]
-// Reached only by the tests beside it now that the module is private; the
-// library compiles once without `cfg(test)`, so `dead_code` fires. §WP8's
-// recurring cost — the item is pinned by a test, not unreachable.
-#[allow(dead_code)]
+#[cfg(test)]
 pub(crate) fn link_at_point<R: Resolve>(
     links: &[Option<Link>],
     point: Point,

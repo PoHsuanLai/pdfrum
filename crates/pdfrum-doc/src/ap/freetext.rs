@@ -12,9 +12,11 @@
 use pdfrum_object::{Dict, Object, PdfString, Resolve, names as obj_names};
 
 use crate::ap::border;
+use crate::ap::da;
 use crate::ap::emit::{Content, Float, PaintOp, color_op};
+#[cfg(test)]
+use crate::ap::fmt;
 use crate::ap::markup::Generated;
-use crate::ap::{da, fmt};
 use crate::color::Color;
 use crate::geom;
 use crate::names;
@@ -262,20 +264,14 @@ pub(crate) fn fallback_font() -> Dict {
 /// used as written — and the font operator's own `size > 0` gate then
 /// suppresses the `Tf`, leaving the text at whatever the enclosing stream set.
 #[must_use]
-// Reached only by the tests beside it now that the module is private; the
-// library compiles once without `cfg(test)`, so `dead_code` fires. §WP8's
-// recurring cost — the item is pinned by a test, not unreachable.
-#[allow(dead_code)]
+#[cfg(test)]
 pub(crate) fn resolved_size(size: f32) -> Option<f32> {
     (!crate::geom::is_float_zero(size)).then_some(size)
 }
 
 /// The `/DA` a colour change rewrites, for the facade's benefit.
 #[must_use]
-// Reached only by the tests beside it now that the module is private; the
-// library compiles once without `cfg(test)`, so `dead_code` fires. §WP8's
-// recurring cost — the item is pinned by a test, not unreachable.
-#[allow(dead_code)]
+#[cfg(test)]
 pub(crate) fn default_appearance_string(appearance: &Appearance) -> Vec<u8> {
     let mut out = Vec::new();
     if !appearance.font_name.is_empty() && appearance.size > 0.0 {

@@ -90,10 +90,7 @@ use crate::names;
 /// Measured with gdb on the oracle: both files reach `ResetAppearance`, and
 /// only one of them shows it.
 #[must_use]
-// Reached only by the tests beside it now that the module is private; the
-// library compiles once without `cfg(test)`, so `dead_code` fires. §WP8's
-// recurring cost — the item is pinned by a test, not unreachable.
-#[allow(dead_code)]
+#[cfg(test)]
 pub(crate) fn needs_appearance<R: Resolve>(dict: &Dict, r: &R) -> bool {
     needs_appearance_in(dict, None, r)
 }
@@ -332,16 +329,14 @@ pub struct LiveInput<'a> {
 ///
 /// This one forwards no substitute, so a live edit whose text needs a second
 /// face writes the `/DA` font's low bytes for it — Latin glyphs where the
-/// value is Hebrew. **`pdfrum-form`'s `route.rs` should migrate to
-/// [`generate_with_live_faces`]**, which takes the same two answers plus that
-/// face in one [`LiveInput`]; this signature is kept only so the migration
-/// need not be simultaneous, and it delegates there with
-/// [`LiveInput::substitute`] unset.
+/// value is Hebrew. `pdfrum-form`'s `route.rs` has since migrated to
+/// [`generate_with_live_faces`], which takes the same two answers plus that
+/// face in one [`LiveInput`], so nothing in the library calls this any more.
+/// It stays under `#[cfg(test)]` because the tests beside it are what pin
+/// that the no-substitute spelling still agrees with `generate_with_text`
+/// byte for byte.
 #[must_use]
-// Reached only by the tests beside it now that the module is private; the
-// library compiles once without `cfg(test)`, so `dead_code` fires. §WP8's
-// recurring cost — the item is pinned by a test, not unreachable.
-#[allow(dead_code)]
+#[cfg(test)]
 pub(crate) fn generate_with_live<R: Resolve>(
     dict: &Dict,
     catalog: &Dict,
@@ -505,10 +500,7 @@ pub(crate) fn has_known_field_type<R: Resolve>(dict: &Dict, r: &R) -> bool {
 /// with no `/AS` at all is off, because that is what the generator writes
 /// when it finds none.
 #[must_use]
-// Reached only by the tests beside it now that the module is private; the
-// library compiles once without `cfg(test)`, so `dead_code` fires. §WP8's
-// recurring cost — the item is pinned by a test, not unreachable.
-#[allow(dead_code)]
+#[cfg(test)]
 pub(crate) fn is_checked<R: Resolve>(dict: &Dict, r: &R) -> bool {
     is_checked_with(dict, r, None)
 }

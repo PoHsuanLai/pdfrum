@@ -96,10 +96,7 @@ impl Color {
     /// channel rounds by adding a half before truncating. See
     /// [`Color::annot_rgb_bytes`] for the other formula.
     #[must_use]
-    // Reached only by the test beside it now that the item is not public;
-    // the library compiles once without `cfg(test)`, so `dead_code` fires.
-    // §WP8's recurring cost — pinned by a test, not unreachable.
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub(crate) fn mk_rgb_bytes(self) -> (u8, u8, u8) {
         let byte = |v: f32| {
             let scaled = v * 255.0 + 0.5;
@@ -127,10 +124,7 @@ impl Color {
 /// Builds an RGB colour from 0–255 bytes, the way the hard-coded widget
 /// chrome colours are written upstream.
 #[must_use]
-// Reached only by the test beside it now that the item is not public;
-// the library compiles once without `cfg(test)`, so `dead_code` fires.
-// §WP8's recurring cost — pinned by a test, not unreachable.
-#[allow(dead_code)]
+#[cfg(test)]
 pub(crate) fn rgb_bytes(r: u8, g: u8, b: u8) -> Color {
     Color::Rgb(
         f32::from(r) / 255.0,
