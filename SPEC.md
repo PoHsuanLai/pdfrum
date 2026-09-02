@@ -772,8 +772,19 @@ anywhere in core/ — v1 matches the oracle and does NOT implement knockout;
 the compositor's layer model keeps a documented (unused) slot for it as a
 post-M8 correctness option. Backends never know about group semantics either
 way. `pdfrum-raster-vello` (vello_cpu),
-`pdfrum-raster-tinyskia` and `pdfrum-raster-exact` implement the two traits;
-conformance Tier C diffs them.
+`pdfrum-raster-tinyskia` and `pdfrum-raster-agg` (renamed 2026-09-02, was
+`pdfrum-raster-exact`) implement the two traits; conformance Tier C diffs
+them.
+
+[spec] 2026-09-02 (naming sweep): the analytic backend is
+**`pdfrum-raster-agg`**, type `AggBackend`, CLI value `--use-renderer=agg`.
+The old spelling said what it was not (it is not byte-exact against the
+oracle) rather than what it is: it reproduces the coverage integral of **AGG**
+— Anti-Grain Geometry, `core/fxge/agg`, the scan converter PDFium itself draws
+with — on AGG's own 256ths-of-a-pixel grid. PLAN.md §3 already labelled the row
+"AGG parity". `--use-renderer=exact` still resolves to the same backend,
+because an unrecognised value falls back to the default rather than erroring
+and the old spelling would otherwise have become a swallowed typo.
 
 **([spec] 2026-08-29, `pdfrum-render` implementation.)** The trait surface
 above — the six `RenderDevice` methods plus `push_clip_rect`, and the four
@@ -837,7 +848,8 @@ as the code:
    goes through the existing `draw_image` seam at a whole-pixel translation,
    so no trait grows a seventh method.
 
-   `pdfrum-raster-exact`'s `cell` module **moves into the engine** as
+   `pdfrum-raster-agg`'s (then `pdfrum-raster-exact`'s) `cell` module
+   **moves into the engine** as
    `pdfrum_render::scanline`, unchanged. A glyph bitmap must be identical
    under every backend — the oracle's comes from FreeType, not from whatever
    draws the page's paths — and one integrator in the engine is how that holds
@@ -890,15 +902,17 @@ as the code:
    hold; the spelling is still ported verbatim.
 
 **([spec] 2026-08-29, wave 6: a third backend, and the default splits in
-two.)** `pdfrum-raster-exact` is an analytic scanline rasterizer of our own,
+two.)** `pdfrum-raster-agg` (renamed 2026-09-02, was `pdfrum-raster-exact`)
+is an analytic scanline rasterizer of our own,
 implementing the trait surface above **unchanged** and adding **no external
 dependency** — it is written against `kurbo` and `peniko` alone, both already
 in the closed set.
 
 7. **The conformance default and the facade default are now different
-   backends, deliberately.** `pdfrum-tool --use-renderer=` gains `exact`,
-   `tiny-skia` and `vello`, and `exact` is what `--png` uses when nothing asks
-   otherwise; the `pdfrum` facade keeps `vello_cpu`. The two defaults answer
+   backends, deliberately.** `pdfrum-tool --use-renderer=` gains `agg`
+   (renamed 2026-09-02, was `exact`), `tiny-skia` and `vello-cpu`, and `agg`
+   is what `--png` uses when nothing asks otherwise; the `pdfrum` facade keeps
+   `vello_cpu`. The two defaults answer
    different questions and had been sharing one answer.
 
    A *conformance* run asks whether the engine decided a page's pixels. Any

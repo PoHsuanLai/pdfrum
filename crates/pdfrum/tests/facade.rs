@@ -212,7 +212,7 @@ fn every_backend_renders_the_same_page_at_the_same_size() {
     };
     let vello = render(Backend::Vello);
     let tiny = render(Backend::TinySkia);
-    let exact = render(Backend::Exact);
+    let exact = render(Backend::Agg);
     // The size is an *engine* decision, so it cannot depend on the backend.
     for pixmap in [&tiny, &exact] {
         assert_eq!(

@@ -42,7 +42,7 @@
 //!
 //! # Why it lives in the engine rather than in a backend
 //!
-//! It began as `pdfrum-raster-exact`'s private integrator, and the analytic
+//! It began as `pdfrum-raster-agg`'s private integrator, and the analytic
 //! backend is still its largest consumer. It moved here when a *second*
 //! consumer appeared that is not a backend at all: [`crate::glyph`] rasterizes
 //! every small glyph into an alpha bitmap, and that bitmap must be identical

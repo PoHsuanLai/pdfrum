@@ -1,5 +1,5 @@
 [package]
-name = "pdfrum-raster-exact"
+name = "pdfrum-raster-agg"
 description = "Analytic scanline rasterizer implementing pdfrum-render's RenderDevice"
 version.workspace = true
 edition.workspace = true

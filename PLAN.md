@@ -20,7 +20,7 @@ progress in `docs/status/`, conformance results in
 |---|---|
 | Scope | Core PDF: parse, render, text extraction, doc features (annots/forms data + appearances), edit/save. **No V8/JS, no XFA** (only `fpdfsdk` referenced them; `core/` is clean of both). JS-in-PDF = AcroForm script actions; executing them is optional forever, and the future slot is a pure-Rust engine (`boa`) behind a trait, never V8. |
 | API | **Pure idiomatic Rust.** No C ABI. C++ is used only as the differential-test oracle. |
-| Rendering | Linebender stack: `kurbo` + `peniko` vocabulary types; `RenderDevice` trait with **`vello_cpu` (facade default)**, **`tiny-skia` (cross-check)** and **`raster-exact` (conformance default)**. GPU `vello` landed in M12c as a fourth, deliberately isolated backend — Tier C only, never the facade's default, and nothing in the core ring depends on it. |
+| Rendering | Linebender stack: `kurbo` + `peniko` vocabulary types; `RenderDevice` trait with **`vello_cpu` (facade default)**, **`tiny-skia` (cross-check)** and **`raster-agg` (conformance default; renamed 2026-09-02, was `raster-exact`)**. GPU `vello` landed in M12c as a fourth, deliberately isolated backend — Tier C only, never the facade's default, and nothing in the core ring depends on it. |
 | Fonts | **Fontations** (`skrifa` + `read-fonts`) for outlines/metrics/charmaps — no FreeType. Upstream PDFium already ships a `cxx`-bridged skrifa backend (`core/fxge/skrifa/`), validating coverage. Type1 needs our own small parser (Fontations doesn't read PFA/PFB). |
 | Fidelity | **Tiered.** Byte-exact where cheap (text extraction, metadata/structure/annot dumps, decoded image bytes); perceptual pixel diff (per-test thresholds, tightened over time) for rendering. |
 | Toolchain | Stable Rust, Cargo workspace, `cargo nextest` for tests, clippy `-D warnings`, rustfmt. `unsafe_code = "forbid"` everywhere except (if ever needed) an isolated SIMD/interop crate. |
@@ -88,7 +88,7 @@ Workspace `pdfrum/`, crates under `crates/`. Name **pdfrum**: facade crate `pdfr
 | `pdfrum-raster-vello` | Skia backend | `vello_cpu` implementation of `RenderDevice`. The facade's default, for API users who want a production rasterizer. |
 | `pdfrum-raster-tinyskia` | AGG backend | `tiny-skia` implementation. Cross-check + determinism baseline; Tier C's gating partner. |
 | `pdfrum-raster-vello-gpu` | *(new capability)* | GPU `vello` on `wgpu`, M12c. **Outside the core ring by construction**: nothing depends on it, the facade cannot name it, and `scripts/check-no-wgpu.sh` asserts a headless tree resolves with zero `wgpu`. Takes a caller-supplied `wgpu::Device`. Tier C only — GPU rasterization is not bit-reproducible across drivers, so it never joins the scoreboard. `publish = false`. |
-| `pdfrum-raster-exact` | AGG parity | Analytic scanline rasterizer of our own, no rasterizer dependency. Integrates coverage exactly on the oracle's subpixel grid; the conformance default, so a golden diff measures the engine rather than a sampling policy. Reachable from the facade as `Backend::Exact`, but not its default — no SIMD. |
+| `pdfrum-raster-agg` *(renamed 2026-09-02, was `pdfrum-raster-exact`)* | AGG parity | Analytic scanline rasterizer of our own, no rasterizer dependency. Reproduces AGG's coverage integral on AGG's own 256ths-of-a-pixel grid — AGG (`core/fxge/agg`) being PDFium's own scan converter; the conformance default, so a golden diff measures the engine rather than a sampling policy. Type `AggBackend`, CLI `--use-renderer=agg`. No SIMD. |
 | `pdfrum-text` | fpdftext | Text extraction, reading order/whitespace heuristics, search, link detection. Depends only on parser/font/page — parallelizable with render. |
 | `pdfrum-doc` | fpdfdoc | Bookmarks, named dests, links/actions, annotations + appearance-stream generation (variable text), AcroForm data model (fill/read, no JS), struct tree, metadata. |
 | `pdfrum-edit` | fpdfapi/edit | Serializer, incremental update writer, page import/reorganize, font subsetting (`subsetter`), content-stream generation (`ryu` floats). |
@@ -862,7 +862,7 @@ hand us from the docs rather than from a type error.
 
 - **Targets (adjustable).** Correctness before speed: every corpus document
   renders without panic or device loss, and Tier-C divergence against
-  `raster-exact` is inside a stated, justified budget on all 44 bench documents.
+  `raster-agg` is inside a stated, justified budget on all 44 bench documents.
   Then: a measured speedup on at least the `vector` and `shading` classes at
   a stated resolution, upload and readback included, with the CPU-wins
   crossover documented. **The facade's default backend does not change**, and
