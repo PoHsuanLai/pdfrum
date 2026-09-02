@@ -1,9 +1,11 @@
 //! Glyphs as alpha bitmaps, rendered the way the oracle's FreeType renders
 //! them (`CFX_Face::RenderGlyph` → `FT_Render_Glyph` → `DrawNormalTextHelper`).
 //!
-//! **Part of the backend seam.** [`SubpixelBitmap`] is the type
-//! [`RenderDevice::draw_glyph_lcd`](crate::RenderDevice::draw_glyph_lcd)
-//! hands a backend, and [`BitmapCache`] is the session-scoped store behind it.
+//! **Part of the backend seam,** for exactly one type: [`SubpixelBitmap`] is
+//! what [`RenderDevice::draw_glyph_lcd`](crate::RenderDevice::draw_glyph_lcd)
+//! hands a backend, so the trait cannot be implemented without naming it.
+//! Everything else here — the gray rasterizer, the LCD filter, the session's
+//! bitmap cache — is the engine's own and is private.
 //!
 //! # What the oracle actually does to a small glyph
 //!
@@ -70,7 +72,7 @@ use crate::scanline::{Coverage, FillRule, Rasterizer};
 ///
 /// They sum to exactly 256, which is what lets the filter be applied as a
 /// shift and what bounds the accumulated result at a byte.
-pub const LCD_FIR5: [i32; 5] = [0x08, 0x4d, 0x56, 0x4d, 0x08];
+pub(crate) const LCD_FIR5: [i32; 5] = [0x08, 0x4d, 0x56, 0x4d, 0x08];
 
 /// The horizontal padding `ft_lcd_padding` adds to an LCD glyph's control box,
 /// in 26.6 units — "2/3 of a pixel", as its comment says.
@@ -78,7 +80,7 @@ pub const LCD_FIR5: [i32; 5] = [0x08, 0x4d, 0x56, 0x4d, 0x08];
 /// It is what gives the FIR5 filter's outer taps somewhere to write, and
 /// omitting it clips the two columns of ink that are the whole reason the LCD
 /// path differs from an outline fill.
-pub const LCD_PADDING_26_6: i64 = 43;
+pub(crate) const LCD_PADDING_26_6: i64 = 43;
 
 /// `kTextGammaAdjust` (`cfx_renderdevice.cpp:98-121`), verbatim.
 ///
@@ -89,7 +91,7 @@ pub const LCD_PADDING_26_6: i64 = 43;
 /// The table is not a power curve: it is close to `x^(1/1.05)` in the middle
 /// and pinned at both ends, with 24 repeated values. The transcription is the
 /// authority.
-pub const TEXT_GAMMA_ADJUST: [u8; 256] = [
+pub(crate) const TEXT_GAMMA_ADJUST: [u8; 256] = [
     0, 2, 3, 4, 6, 7, 8, 10, 11, 12, 13, 15, 16, 17, 18, 19, 21, 22, 23, 24, 25, 26, 27, 29, 30,
     31, 32, 33, 34, 35, 36, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 51, 52, 53, 54, 55, 56,
     57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81,
@@ -111,11 +113,11 @@ pub const TEXT_GAMMA_ADJUST: [u8; 256] = [
 /// A glyph past it renders as nothing at all rather than as a huge allocation,
 /// which is upstream's answer and not a clamp: `RenderGlyph` returns `nullptr`
 /// and `DrawNormalText` skips the glyph.
-pub const MAX_GLYPH_DIMENSION: i32 = 2048;
+pub(crate) const MAX_GLYPH_DIMENSION: i32 = 2048;
 
 /// One glyph rasterized to **three** coverages per pixel — one per LCD stripe.
 ///
-/// The same bitmap [`GlyphBitmap`] holds, with the 3× subpixel triples kept
+/// The same bitmap `GlyphBitmap` holds, with the 3× subpixel triples kept
 /// apart instead of averaged. It is what the oracle produces when `normalize`
 /// is false (`DrawNormalTextHelper`'s `MergeGammaAdjustRgb` arm), which happens
 /// for exactly one kind of text on a page: a live edit's, whose `DrawTextString`
@@ -169,7 +171,7 @@ impl SubpixelBitmap {
 /// not premultiplied and carry no colour of their own, exactly like the
 /// oracle's `k8bppMask`.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct GlyphBitmap {
+pub(crate) struct GlyphBitmap {
     /// The device x of column 0, relative to the glyph's snapped origin.
     pub left: i32,
     /// The device y of row 0, relative to the glyph's snapped origin.
@@ -213,7 +215,7 @@ impl GlyphBitmap {
 /// thirds therefore get *different gray*, which is why the phase is part of the
 /// bitmap cache's key rather than something the blit can apply afterwards.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub enum SubpixelPhase {
+pub(crate) enum SubpixelPhase {
     /// The origin is on the pixel boundary: the window is aligned.
     Zero,
     /// One third of a pixel in.
@@ -272,7 +274,11 @@ impl SubpixelPhase {
 /// Returns `None` when the glyph would exceed [`MAX_GLYPH_DIMENSION`], which is
 /// what `RenderGlyph` does, or when it has no area at all.
 #[must_use]
-pub fn rasterize(outline: &BezPath, phase: SubpixelPhase) -> Option<GlyphBitmap> {
+#[allow(
+    dead_code,
+    reason = "exercised only by this module's own tests; the library builds once without `cfg(test)`"
+)]
+pub(crate) fn rasterize(outline: &BezPath, phase: SubpixelPhase) -> Option<GlyphBitmap> {
     Some(render_lcd(outline)?.to_gray(phase))
 }
 
@@ -283,7 +289,7 @@ pub fn rasterize(outline: &BezPath, phase: SubpixelPhase) -> Option<GlyphBitmap>
 /// phase is a *window shift into this buffer*, applied by the blit loop, so one
 /// bitmap serves all three thirds of a pixel.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LcdBitmap {
+pub(crate) struct LcdBitmap {
     /// The device x of column 0, relative to the glyph's snapped origin.
     pub left: i32,
     /// The device y of row 0, relative to the glyph's snapped origin.
@@ -309,7 +315,7 @@ impl LcdBitmap {
 /// Independent of where the glyph lands and of the colour it will be drawn in,
 /// which is exactly the part worth caching.
 #[must_use]
-pub fn render_lcd(outline: &BezPath) -> Option<LcdBitmap> {
+pub(crate) fn render_lcd(outline: &BezPath) -> Option<LcdBitmap> {
     let bbox = outline.bounding_box();
     if !bbox.x0.is_finite() || !bbox.y0.is_finite() || !bbox.x1.is_finite() || !bbox.y1.is_finite()
     {
@@ -586,7 +592,7 @@ fn div_ceil(a: i64, b: i64) -> i64 {
 /// that [`LcdBitmap::to_gray`] applies at blit time. Keying on the phase would
 /// store the same rasterization three times.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct BitmapKey {
+pub(crate) struct BitmapKey {
     /// Which glyph, and at which substitution parameters.
     pub glyph: pdfrum_font::GlyphKey,
     /// `(int)(a · 10000)`, and likewise `b`, `c`, `d`.
@@ -626,7 +632,7 @@ impl BitmapKey {
 /// display type just under the outline threshold. Sixteen megabytes holds every
 /// glyph of every font on any page in the corpus several times over, and bounds
 /// what a hostile file can make a session allocate.
-pub const BITMAP_CACHE_BUDGET: usize = 16 * 1024 * 1024;
+pub(crate) const BITMAP_CACHE_BUDGET: usize = 16 * 1024 * 1024;
 
 /// Memoized glyph bitmaps for one render session.
 ///
@@ -645,7 +651,7 @@ pub const BITMAP_CACHE_BUDGET: usize = 16 * 1024 * 1024;
 /// are the ones about to be wanted again. Refusing to grow keeps the bound with
 /// no policy.
 #[derive(Debug, Default)]
-pub struct BitmapCache {
+pub(crate) struct BitmapCache {
     /// Keyed with [`pdfrum_common::FxBuildHasher`], not `std`'s `SipHash`.
     ///
     /// [`BitmapKey`] is a glyph id and four `i32` matrix coefficients — sixteen
@@ -666,7 +672,7 @@ pub struct BitmapCache {
 /// borrow of a cached entry and the ownership of an uncached one can share one
 /// return type without cloning the cached case, which is the case that matters.
 #[derive(Debug)]
-pub enum Cached<'a> {
+pub(crate) enum Cached<'a> {
     /// Held by the cache, borrowed for this draw.
     Hit(&'a LcdBitmap),
     /// Rendered past the budget and dropped after this draw.
@@ -684,6 +690,10 @@ impl std::ops::Deref for Cached<'_> {
     }
 }
 
+#[allow(
+    dead_code,
+    reason = "the constructor and the four size questions are exercised only by this module's own tests; the walk reaches the cache through `RenderCaches`, which derives `Default`"
+)]
 impl BitmapCache {
     /// An empty cache.
     #[must_use]
@@ -758,7 +768,7 @@ impl BitmapCache {
 ///
 /// Returns `None` for a bitmap with no pixels.
 #[must_use]
-pub fn average_to_gray(bitmap: &SubpixelBitmap) -> Option<GlyphBitmap> {
+pub(crate) fn average_to_gray(bitmap: &SubpixelBitmap) -> Option<GlyphBitmap> {
     if bitmap.is_empty() {
         return None;
     }
@@ -799,7 +809,7 @@ pub fn average_to_gray(bitmap: &SubpixelBitmap) -> Option<GlyphBitmap> {
 /// Returns `None` for a bitmap with no pixels, and for a colour that is fully
 /// transparent — both of which draw nothing.
 #[must_use]
-pub fn recolour(bitmap: &GlyphBitmap, colour: peniko::Color) -> Option<crate::Pixmap> {
+pub(crate) fn recolour(bitmap: &GlyphBitmap, colour: peniko::Color) -> Option<crate::Pixmap> {
     if bitmap.is_empty() {
         return None;
     }

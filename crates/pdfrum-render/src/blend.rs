@@ -30,7 +30,7 @@ use pdfrum_page::BlendMode;
 /// the low branch is a cubic, not a root: entry `1` is `3` where a plain
 /// `round(255 * sqrt(1/255))` would give `16`. A rewrite that "simplifies"
 /// this to a square root is wrong by 17 counts, not by rounding.
-pub const COLOR_SQRT: [u8; 256] = [
+pub(crate) const COLOR_SQRT: [u8; 256] = [
     0x00, 0x03, 0x07, 0x0B, 0x0F, 0x12, 0x16, 0x19, 0x1D, 0x20, 0x23, 0x26, 0x29, 0x2C, 0x2F, 0x32,
     0x35, 0x37, 0x3A, 0x3C, 0x3F, 0x41, 0x43, 0x46, 0x48, 0x4A, 0x4C, 0x4E, 0x50, 0x52, 0x54, 0x56,
     0x57, 0x59, 0x5B, 0x5C, 0x5E, 0x60, 0x61, 0x63, 0x64, 0x65, 0x67, 0x68, 0x69, 0x6B, 0x6C, 0x6D,
@@ -62,7 +62,7 @@ pub const COLOR_SQRT: [u8; 256] = [
               (upstream NOTREACHED()s). Merging them would erase that \
               distinction and hide the day one of the two changes."
 )]
-pub fn blend_channel(mode: BlendMode, back: i32, src: i32) -> i32 {
+pub(crate) fn blend_channel(mode: BlendMode, back: i32, src: i32) -> i32 {
     match mode {
         BlendMode::Normal | BlendMode::Compatible => src,
         BlendMode::Multiply => src * back / 255,
@@ -180,7 +180,7 @@ fn set_sat(mut c: [i32; 3], s: i32) -> [i32; 3] {
 /// Inputs are `0..=255`; the result is clamped on the way out because a
 /// caller is storing bytes, while upstream's own intermediate values are not.
 #[must_use]
-pub fn blend_rgb(mode: BlendMode, back: [u8; 3], src: [u8; 3]) -> [u8; 3] {
+pub(crate) fn blend_rgb(mode: BlendMode, back: [u8; 3], src: [u8; 3]) -> [u8; 3] {
     let b = back.map(i32::from);
     let s = src.map(i32::from);
     let out = match mode {
@@ -208,7 +208,11 @@ pub fn blend_rgb(mode: BlendMode, back: [u8; 3], src: [u8; 3]) -> [u8; 3] {
 /// (`GetGrayWithBlend`, `cfx_scanlinecompositor.cpp:226-235`): `Luminosity`
 /// takes the source, the other three keep the backdrop unchanged.
 #[must_use]
-pub fn blend_gray(mode: BlendMode, back: u8, src: u8) -> u8 {
+#[allow(
+    dead_code,
+    reason = "exercised only by this module's own tests; the library builds once without `cfg(test)`"
+)]
+pub(crate) fn blend_gray(mode: BlendMode, back: u8, src: u8) -> u8 {
     match mode {
         BlendMode::Luminosity => src,
         BlendMode::Hue | BlendMode::Saturation | BlendMode::Color => back,
@@ -233,7 +237,7 @@ pub fn blend_gray(mode: BlendMode, back: u8, src: u8) -> u8 {
 /// source is copied verbatim and **no blending happens at all** — which is
 /// also what ISO 32000 §11.3.6 requires, reached by another route.
 #[must_use]
-pub fn composite_straight(
+pub(crate) fn composite_straight(
     dest: ([u8; 3], u8),
     src: ([u8; 3], u8),
     mode: BlendMode,
@@ -280,7 +284,7 @@ pub fn composite_straight(
 /// destination pixel, blending with `mode` and scaling the source by
 /// `coverage`.
 ///
-/// This is [`composite_straight`] wearing the buffer layout both rasterizer
+/// This is `composite_straight` wearing the buffer layout both rasterizer
 /// backends and every offscreen target in this crate actually use, and it
 /// exists so there is exactly one place the blend arithmetic lives. It
 /// un-premultiplies, delegates, and premultiplies back rather than deriving a
@@ -300,10 +304,10 @@ pub fn composite_straight(
 /// result back. For **`BlendMode::Normal` over an opaque destination** the
 /// whole of that collapses, algebraically and exactly, to one
 /// [`alpha_merge`](crate::pixmap::alpha_merge) per channel. Substituting
-/// `dest_a = 255` and `mode = Normal` into [`composite_straight`]:
+/// `dest_a = 255` and `mode = Normal` into `composite_straight`:
 ///
 /// - `blend_rgb(Normal, ..)` is the identity on the source
-///   ([`blend_channel`]'s first arm), so `blended == src_rgb`;
+///   (`blend_channel`'s first arm), so `blended == src_rgb`;
 /// - `out_a = 255 + sa - 255*sa/255 = 255`, so the result is opaque and the
 ///   premultiply-back is the identity;
 /// - `ratio = sa * 255 / 255 = sa`;

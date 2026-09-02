@@ -25,11 +25,11 @@
 //!
 //! # The representation
 //!
-//! Each pixel the polygon's boundary crosses gets a [`Cell`] carrying two
+//! Each pixel the polygon's boundary crosses gets a `Cell` carrying two
 //! integers:
 //!
 //! - **`cover`** — the net signed vertical distance the boundary travelled
-//!   through this pixel, in [`SUBPIXEL_SCALE`]ths of a pixel. Summing `cover`
+//!   through this pixel, in `SUBPIXEL_SCALE`ths of a pixel. Summing `cover`
 //!   left to right along a scanline gives the winding number, scaled, at every
 //!   point to the right of the cell.
 //! - **`area`** — twice the signed area the boundary swept *inside* this
@@ -71,13 +71,13 @@ mod store;
 /// and it is load-bearing rather than a tunable: [`coverage_to_alpha`]'s
 /// mapping is derived from this scale, and changing it would change every
 /// antialiased edge byte in the corpus.
-pub const SUBPIXEL_SCALE: i32 = 256;
+pub(crate) const SUBPIXEL_SCALE: i32 = 256;
 
 /// `log2(SUBPIXEL_SCALE)`, the shift the coordinate conversion uses.
-pub const SUBPIXEL_SHIFT: u32 = 8;
+pub(crate) const SUBPIXEL_SHIFT: u32 = 8;
 
 /// The low bits of a subpixel coordinate: its position within its pixel.
-pub const SUBPIXEL_MASK: i32 = SUBPIXEL_SCALE - 1;
+pub(crate) const SUBPIXEL_MASK: i32 = SUBPIXEL_SCALE - 1;
 
 /// One pixel's accumulated boundary contribution.
 ///
@@ -85,7 +85,7 @@ pub const SUBPIXEL_MASK: i32 = SUBPIXEL_SCALE - 1;
 /// contributes the negative of one crossing upward, which is what makes the
 /// winding number fall out of a running sum.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub struct Cell {
+pub(crate) struct Cell {
     /// Pixel column.
     pub x: i32,
     /// Pixel row.
@@ -155,7 +155,7 @@ const COORDINATE_LIMIT: f64 = (1i32 << 22) as f64;
 /// overflowing the multiply; it can only be reached by a non-finite value,
 /// which becomes zero.
 #[must_use]
-pub fn to_subpixel(v: f64) -> i32 {
+pub(crate) fn to_subpixel(v: f64) -> i32 {
     if !v.is_finite() {
         return 0;
     }
@@ -606,7 +606,7 @@ fn sweep_row(
 /// of covered pixels and discards the value: every pixel this integrator
 /// reaches at all is written opaque.
 #[must_use]
-pub fn coverage_to_alpha(area: i32, rule: FillRule, coverage: Coverage) -> u8 {
+pub(crate) fn coverage_to_alpha(area: i32, rule: FillRule, coverage: Coverage) -> u8 {
     /// The renormalised coverage's full-cover value, 256.
     const COVER_FULL: i32 = 1 << 8;
     /// The largest alpha byte, 255 — the clamp that keeps 256 out.

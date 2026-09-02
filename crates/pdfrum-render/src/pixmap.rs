@@ -534,7 +534,7 @@ pub fn alpha_byte_truncating(alpha: f32) -> u8 {
 /// (`cpdf_renderstatus.cpp:887`). Half-away-from-zero, unlike the truncating
 /// spelling above; the two differ on a large fraction of real `ca` values.
 #[must_use]
-pub fn alpha_byte_rounding(alpha: f32) -> u8 {
+pub(crate) fn alpha_byte_rounding(alpha: f32) -> u8 {
     if alpha.is_nan() {
         return 0;
     }
@@ -578,7 +578,7 @@ pub fn alpha_merge(dest: u8, src: u8, alpha: u8) -> u8 {
 /// composite would give, and it never quite reaches 255 from two partial
 /// alphas — `AlphaUnion(128, 128) == 192`, where the float form gives 191.75.
 #[must_use]
-pub fn alpha_union(dest: u8, src: u8) -> u8 {
+pub(crate) fn alpha_union(dest: u8, src: u8) -> u8 {
     let merged = u32::from(dest) + u32::from(src) - (u32::from(dest) * u32::from(src)) / 255;
     // Bounded by 255 for every byte pair, but the C++'s `uint8_t` return would
     // wrap rather than saturate if it were not, so say so rather than cast.
@@ -587,7 +587,7 @@ pub fn alpha_union(dest: u8, src: u8) -> u8 {
 
 /// A `peniko::Color` as premultiplied RGBA8.
 #[must_use]
-pub fn premultiply(color: peniko::Color) -> [u8; 4] {
+pub(crate) fn premultiply(color: peniko::Color) -> [u8; 4] {
     let [r, g, b, a] = color.to_rgba8().to_u8_array();
     [mul255(r, a), mul255(g, a), mul255(b, a), a]
 }
@@ -598,7 +598,7 @@ pub fn premultiply(color: peniko::Color) -> [u8; 4] {
 /// `CFX_DIBitmap::UnPreMultiply`'s `+ alpha / 2` and keeping the round trip
 /// through [`premultiply`] stable for opaque pixels.
 #[must_use]
-pub fn unpremultiply_rgb(r: u8, g: u8, b: u8, a: u8) -> [u8; 3] {
+pub(crate) fn unpremultiply_rgb(r: u8, g: u8, b: u8, a: u8) -> [u8; 3] {
     if a == 0 {
         return [0, 0, 0];
     }
