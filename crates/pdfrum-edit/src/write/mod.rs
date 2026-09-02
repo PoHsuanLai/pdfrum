@@ -67,6 +67,7 @@ use pdfrum_object::{ObjRef, Object, Resolve, names};
 use crate::doc::EditDoc;
 use crate::encrypt;
 use crate::error::Error;
+use crate::font;
 use crate::write::header::write_header;
 use crate::write::id::{IdContext, IdSource};
 use crate::write::xref::ObjectOffsets;
@@ -103,7 +104,28 @@ pub struct SaveOptions {
     ///
     /// Has no effect on an unencrypted document.
     pub remove_security: bool,
-    /// Subset newly embedded fonts.
+    /// Subset newly embedded fonts, dropping the glyphs no page shows.
+    ///
+    /// Off by default. When set, every font this save writes as a **new**
+    /// object and that a show operator on some page draws with is replaced by
+    /// a subset carrying only the glyphs still used, named `ABCDEF+Original`
+    /// after ISO 32000-1 §9.6.4.
+    ///
+    /// **What it subsets**: a `/Type0` font whose descendant is a
+    /// `CIDFontType2` with an embedded `/FontFile2`. Nothing else — a Type 1
+    /// (`/FontFile`) or `OpenType`-CFF (`/FontFile3`, or an `OTTO` program)
+    /// font is left alone, and so is a *simple* TrueType font, whose codes
+    /// reach glyphs through a `cmap` the subsetter removes.
+    ///
+    /// **What it does not disturb**: the character codes on the page, the
+    /// CIDs they map to, `/W`, and `/ToUnicode`. The subsetter renumbers
+    /// glyphs, and a rewritten `/CIDToGIDMap` absorbs that renumbering at the
+    /// one place ISO 32000-1 §9.7.4.2 already provides for it — so **no
+    /// content stream is regenerated**, and text extraction over the saved
+    /// file is unchanged.
+    ///
+    /// A font whose program will not subset, or whose subset would not be
+    /// smaller, is written unchanged.
     pub subset_new_fonts: bool,
     /// The version to declare in the header. 1.0 through 1.7 are honoured;
     /// anything outside that range, and `None`, keep the document's own.
@@ -244,7 +266,15 @@ pub fn save(doc: &EditDoc<'_>, opts: &SaveOptions, out: &mut impl Write) -> Resu
     }
 
     // ---- new objects, written whether or not anything points at them ----
+    //
+    // The font subsetter is a lookup in this loop and nothing more, which is
+    // the shape `WriteNewObjs` (`:203-226`) has: it produces replacement
+    // objects for the font ones among the new numbers, and each object is
+    // written through the map. It may also mint the `/CIDToGIDMap` that
+    // absorbs the glyph renumbering, so the numbers it added are appended to
+    // this loop's list before it runs.
     let mut new_nums = new_nums;
+    let overrides = subset_fonts(doc, opts, encrypt_number, &mut new_nums);
     for num in new_nums.iter().copied() {
         // A newly added object is written even when nothing references it:
         // the caller added it on purpose, and the sweep above cannot see an
@@ -252,7 +282,10 @@ pub fn save(doc: &EditDoc<'_>, opts: &SaveOptions, out: &mut impl Write) -> Resu
         if encrypt_number == Some(num) {
             continue;
         }
-        write_one(&mut sink, &mut offsets, doc, num, security.as_ref())?;
+        match overrides.get(&num) {
+            Some(object) => write_override(&mut sink, &mut offsets, num, object, security.as_ref()),
+            None => write_one(&mut sink, &mut offsets, doc, num, security.as_ref()),
+        }?;
     }
 
     // ---- the encrypt dictionary ----
@@ -289,14 +322,14 @@ pub fn save(doc: &EditDoc<'_>, opts: &SaveOptions, out: &mut impl Write) -> Resu
     // ---- cross-reference ----
     let xref_start = sink.offset();
     let as_stream = incremental && base.main_xref_is_stream();
+    let written: Vec<u32> = new_nums
+        .iter()
+        .copied()
+        .filter(|n| offsets.contains(*n))
+        .collect();
     if !as_stream {
         let mut table = Vec::new();
         if incremental {
-            let written: Vec<u32> = new_nums
-                .iter()
-                .copied()
-                .filter(|n| offsets.contains(*n))
-                .collect();
             xref::classic_delta(&mut table, &offsets, &written);
         } else {
             xref::classic_full(&mut table, &offsets, last_written);
@@ -315,11 +348,6 @@ pub fn save(doc: &EditDoc<'_>, opts: &SaveOptions, out: &mut impl Write) -> Resu
 
     let mut tail = Vec::new();
     if as_stream {
-        let written: Vec<u32> = new_nums
-            .iter()
-            .copied()
-            .filter(|n| offsets.contains(*n))
-            .collect();
         // The trailer object's own number comes from the document, not from
         // the highest object written, so it can sit above `/Size − 2`.
         let num = doc.last_object_number().saturating_add(1);
@@ -410,6 +438,58 @@ fn encrypt_slot(doc: &EditDoc<'_>, base: &pdfrum_parser::Document) -> Option<Enc
         number,
         dict: dict.clone(),
     })
+}
+
+/// Run the font subsetter, if this save asked for it, and make room in the
+/// new-object list for anything it minted.
+///
+/// The map it returns is the one `WriteNewObjs` (`:203-226`) consults per
+/// object. An unset option, or a save with nothing new in it, gives an empty
+/// map and leaves `new_nums` alone.
+fn subset_fonts(
+    doc: &EditDoc<'_>,
+    opts: &SaveOptions,
+    encrypt_number: Option<u32>,
+    new_nums: &mut Vec<u32>,
+) -> font::overrides::Overrides {
+    if !opts.subset_new_fonts {
+        return font::overrides::Overrides::new();
+    }
+    // Where a `/CIDToGIDMap` the subsetter mints gets its number: one past
+    // everything in play, and past the `/Encrypt` slot too when this save is
+    // promoting an inline dictionary into a fresh number of its own.
+    let mut next = doc.last_object_number().saturating_add(1);
+    if let Some(number) = encrypt_number {
+        next = next.max(number.saturating_add(1));
+    }
+
+    let overrides = font::overrides::build(doc, new_nums, opts.id_source, &mut next);
+    // An override of an object already listed changes what is written there;
+    // one of a *minted* object adds a number the loop had not been going to
+    // visit, so the list grows and is re-sorted.
+    new_nums.extend(overrides.keys().copied());
+    new_nums.sort_unstable();
+    new_nums.dedup();
+    overrides
+}
+
+/// Write an object the subsetter produced in place of the document's own.
+///
+/// Separate from [`write_one`] because there is nothing to fetch and nothing
+/// that can fail: the object is already in hand, which is also why no offset
+/// ever has to be erased here.
+fn write_override<W: Write>(
+    sink: &mut Counting<W>,
+    offsets: &mut ObjectOffsets,
+    num: u32,
+    object: &Object,
+    security: Option<&encrypt::Security<'_>>,
+) -> Result<(), Error> {
+    offsets.set(num, sink.offset());
+    let enc = security.and_then(|s| s.for_object(num));
+    let mut bytes = Vec::new();
+    object::write_indirect(&mut bytes, num, object, enc.as_ref());
+    sink.write(&bytes)
 }
 
 /// Write one indirect object, recording where it landed.
