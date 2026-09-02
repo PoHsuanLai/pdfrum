@@ -2331,6 +2331,23 @@ oracle does** — this is the one place in the brief where pdfrum's behavior is
 deliberately *better* rather than identical, and it is the same reasoning
 PLAN.md §M15 applies to boa's runtime limits.
 
+**Correction 2026-09-02 (oracle-divergence audit, A64):** the paragraph above
+is right about the code and wrong about the category. Under the oracle-bug
+rule (PLAN.md §212–229, `81ba24d`) this is not a "divergence kept" at pdfrum's
+discretion — it is an **oracle bug**, and the rule makes implementing the
+correct behaviour mandatory rather than optional. Verified at the line for the
+audit: `cpdfsdk_annotiterator.cpp:137` seeds `float fTop = 0.0f;`, `:140`
+tests `rcAnnot.top > fTop`, and `:145-147` `continue`s inside
+`while (!sa.empty())` (`:135`) without erasing, so with every remaining top
+non-positive the loop state is bit-identical on re-entry and the pass never
+returns. §12.5.5 puts `/Tabs R` order in the page's own coordinate space,
+where a `/MediaBox` with a zero or negative origin makes a non-positive top
+ordinary rather than hostile. pdf.js is silent on `/Tabs` — every widget gets
+`tabIndex = 0` (`annotation_layer.js:412`) and the DOM orders them — so it
+cannot hang here either. The site now carries `// [oracle-bug]` in `tab.rs`
+with both citations. PLAN.md §226 names this ruling as the precedent the
+oracle-bug rule generalises, which is why it is the first site to be labelled.
+
 ### D11 — The commit cascade is explicit, and notification is not a side channel.
 
 Upstream's four value setters use `kDoNotNotify` and the form-filler drives
