@@ -7,6 +7,8 @@
 //! because it lets the clip apply as one multiply per pixel rather than as a
 //! second rasterization pass.
 
+use std::sync::Arc;
+
 use pdfrum_page::BlendMode;
 use pdfrum_render::{AlphaMask, Pixmap, blend, pixmap};
 
@@ -19,7 +21,17 @@ pub struct Target {
     /// A clip is a coverage plane the size of the target, and intersecting two
     /// is `a * b / 255` — the same truncating product `CFX_AggClipRgn` uses,
     /// which is what makes a clipped edge here land where the oracle's does.
-    clip: Option<AlphaMask>,
+    ///
+    /// **Shared, not owned.** The plane is device-sized — half a megabyte on a
+    /// letter page — and the clip stack and the target hold the *same* one:
+    /// `push_clip_mask` computes the intersection once and `sync_clip` points
+    /// the target at it, on every push and again on every pop. Owning it made
+    /// that pointing a half-megabyte `memcpy` twice per clip level, which on a
+    /// page of annotation appearances is two hundred and fifty of them per
+    /// render. Nothing mutates a clip once it is on the stack — an
+    /// intersection builds a *new* plane from the incoming coverage — so the
+    /// share is of an immutable value and `sync_clip` becomes a refcount bump.
+    clip: Option<Arc<AlphaMask>>,
 }
 
 impl Target {
@@ -71,12 +83,12 @@ impl Target {
 
     /// The clip in force.
     #[must_use]
-    pub fn clip(&self) -> Option<&AlphaMask> {
+    pub fn clip(&self) -> Option<&Arc<AlphaMask>> {
         self.clip.as_ref()
     }
 
     /// Replace the clip.
-    pub fn set_clip(&mut self, clip: Option<AlphaMask>) {
+    pub fn set_clip(&mut self, clip: Option<Arc<AlphaMask>>) {
         self.clip = clip;
     }
 
@@ -135,7 +147,7 @@ impl Target {
         // clip is read while the pixels are written, and only a field-wise
         // split lets the borrow checker see that those are different objects.
         let Self { pixels, clip } = self;
-        let clip = clip_span(clip.as_ref(), x0, x1, row);
+        let clip = clip_span(clip.as_deref(), x0, x1, row);
         let width = pixels.width() as usize;
         let Some(start) = (row as usize).checked_mul(width) else {
             return;
@@ -188,7 +200,7 @@ impl Target {
         // clip is read while the pixels are written, and only a field-wise
         // split lets the borrow checker see that those are different objects.
         let Self { pixels, clip } = self;
-        let clip = clip_span(clip.as_ref(), x0, x1, row);
+        let clip = clip_span(clip.as_deref(), x0, x1, row);
         let width = pixels.width() as usize;
         let Some(start) = (row as usize).checked_mul(width) else {
             return;
@@ -443,11 +455,11 @@ mod tests {
         // about the indexing, this walks it: for a target with a clip, every
         // row and every span within it, the two must agree.
         let mut target = Target::new(7, 5, peniko::Color::TRANSPARENT);
-        target.set_clip(Some(awkward_mask(7, 5)));
+        target.set_clip(Some(Arc::new(awkward_mask(7, 5))));
         for row in 0..5 {
             for x0 in 0..7 {
                 for x1 in (x0 + 1)..=7 {
-                    let span = clip_span(target.clip(), x0, x1, row)
+                    let span = clip_span(target.clip().map(Arc::as_ref), x0, x1, row)
                         .expect("a clip is set, so this is Some");
                     for (i, &byte) in span.iter().enumerate() {
                         #[expect(clippy::cast_possible_truncation, reason = "i < 7")]
@@ -487,9 +499,9 @@ mod tests {
         // change that relaxes the sizing rule must fail this test rather than
         // silently reintroduce the read.
         let mut target = Target::new(8, 3, peniko::Color::TRANSPARENT);
-        target.set_clip(Some(awkward_mask(4, 3)));
+        target.set_clip(Some(Arc::new(awkward_mask(4, 3))));
 
-        let span = clip_span(target.clip(), 0, 8, 0).expect("a clip is set");
+        let span = clip_span(target.clip().map(Arc::as_ref), 0, 8, 0).expect("a clip is set");
         assert_eq!(span.len(), 8);
         assert!(span.iter().all(|&b| b == 0), "{span:?}");
 
@@ -519,7 +531,7 @@ mod tests {
         // it into full coverage. Confusing it with "clipped to nothing" would
         // make every unclipped draw a no-op, so it is worth one assertion.
         let target = Target::new(4, 1, peniko::Color::TRANSPARENT);
-        assert!(clip_span(target.clip(), 0, 4, 0).is_none());
+        assert!(clip_span(target.clip().map(Arc::as_ref), 0, 4, 0).is_none());
     }
 
     #[test]
@@ -560,7 +572,7 @@ mod tests {
         // `CFX_AggClipRgn::IntersectMask` is `a * b / 255`: a half clip over a
         // half coverage is 64, not 63 or 65.
         let mut t = Target::new(1, 1, peniko::Color::TRANSPARENT);
-        t.set_clip(Some(AlphaMask::filled(1, 1, 128)));
+        t.set_clip(Some(Arc::new(AlphaMask::filled(1, 1, 128))));
         t.blend_span(0, 1, 0, 128, opaque(255, 255, 255), BlendMode::Normal);
         assert_eq!(t.pixels().pixel(0, 0).map(|p| p[3]), Some(64));
     }
@@ -569,7 +581,7 @@ mod tests {
     fn a_zero_clip_paints_nothing() {
         let mut t = Target::new(2, 2, peniko::Color::WHITE);
         let before = t.pixels().clone();
-        t.set_clip(Some(AlphaMask::new(2, 2)));
+        t.set_clip(Some(Arc::new(AlphaMask::new(2, 2))));
         t.blend_span(0, 2, 0, 255, opaque(255, 0, 0), BlendMode::Normal);
         assert_eq!(t.pixels(), &before);
     }
@@ -615,13 +627,13 @@ mod tests {
         // is `255*127/255 = 127` — the destination keeps rather than loses the
         // odd count, which is the truncating merge's own asymmetry.
         let mut t = Target::new(1, 1, peniko::Color::WHITE);
-        t.set_clip(Some(AlphaMask::filled(1, 1, 128)));
+        t.set_clip(Some(Arc::new(AlphaMask::filled(1, 1, 128))));
         t.merge_lcd_pixel(0, 0, [0, 0, 0], 255, [255, 255, 255]);
         let px = t.pixels().pixel(0, 0).expect("a pixel");
         assert_eq!([px[0], px[1], px[2]], [127, 127, 127]);
         // A fully clipped-out pixel is untouched, alpha included.
         let mut t = Target::new(1, 1, peniko::Color::WHITE);
-        t.set_clip(Some(AlphaMask::filled(1, 1, 0)));
+        t.set_clip(Some(Arc::new(AlphaMask::filled(1, 1, 0))));
         t.merge_lcd_pixel(0, 0, [0, 0, 0], 255, [255, 255, 255]);
         assert_eq!(t.pixels().pixel(0, 0), Some([255, 255, 255, 255]));
     }
