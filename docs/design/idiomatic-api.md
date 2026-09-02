@@ -930,6 +930,57 @@ need essentially nothing. That distribution is why §A.10 sequences by
 crate rather than by work package: the packages were a poor unit because they
 cut across a distribution this lopsided.
 
+> **`pdfrum-form`'s row landed 2026-09-02 as §A.10 step 7**, in three commits
+> — `Key`, then the geometry, then this row's curation. The board is
+> byte-identical (1757 / 1512 / 245, every tag, zero per-file rows differing)
+> and all 31 `.evt` fixtures replay byte-for-byte against a binary built from
+> `origin/main`, which is the proof that matters for this crate.
+>
+> | | before | after | |
+> |---|---|---|---|
+> | items | **1255** | **771** | −39% |
+> | `pub mod` (source, top level) | **16** | **4** | `edit`, `field`, `route`, `script` |
+> | `pub mod` (snapshot lines) | **24** | **9** | |
+>
+> The four that survive do so under the row's own rule — a caller needs to
+> name something inside that the root does not re-export — and each is a
+> *surface* rather than a namespace: `edit::ops` and `field::{choice, text,
+> toggle}` are the pure per-kind operations every ported assertion is written
+> against, `edit::place` carries the `PlaceExt` **trait**, and `route` is where
+> `apply`'s documentation lives. `edit::select`, `edit::undo` and
+> `field::button` were namespaces and are private; so are the other twelve
+> top-level modules. Two items reached only through a module path moved to the
+> root: `page::read` as **`read_page`**, and `route::replace_selection` beside
+> its siblings.
+>
+> **Four things this row got wrong or left unsaid:**
+>
+> 1. **The three `PDFIUM_TEST_*` constants are not in any snapshot**, so the
+>    claim that they are "the only `PDFIUM`/`FX_` strings in any public
+>    identifier in the workspace" had to be checked against the *source*. It
+>    holds there. They live behind `--features script`, and the facade does not
+>    re-export them, so no baseline file records them and a grep over
+>    `docs/status/api-baseline/` would have said the work was already done.
+>    Renamed to `GOLDEN_CLOCK_SECS`, `GOLDEN_TIMEZONE_OFFSET_SECS` and
+>    `GOLDEN_PRINTD_OFFSET_SECS` — which say what they are and pair with the
+>    `ScriptConfig` fields they fill — with the oracle's own spelling
+>    (`pdfium_test --time=`, `FX_LocalTime`) kept in the doc comments, where
+>    the hour-apart argument between the last two lives.
+> 2. **"Sixteen `pub mod`s and zero private ones" undercounts by eight.** The
+>    snapshot shows 24 `pub mod` lines because `edit` and `field` publish their
+>    own submodules — the same shape §A.11's step-12 note found in
+>    `pdfrum-edit`, and for the same reason.
+> 3. **`Rotation::degrees` / `from_degrees` had no callers**, so the row's
+>    "decide" is moot; §WP4's Landed note has the reasoning.
+> 4. **Making `tab::Rect` private costs two integration test files**, which the
+>    row's "10 public-signature appearances inside the crate, 2 callers
+>    outside" does not count. §WP4's note has that too, along with the six
+>    items curation showed had no caller outside the crate's own tests.
+>
+> The row's four keep-them predictions — the midpoint, the strict comparisons,
+> the `f32` hit tests, and `Modifiers`' already-existing algebra (done in WP2)
+> — all held exactly.
+
 ---
 
 ## B. The idiomatic/oracle boundary: conversion at the entry point, not in a layer
@@ -1872,6 +1923,64 @@ pub use peniko::{BlendMode, Color};
 caller who wants a specialised kurbo type adds `kurbo` themselves. That is
 the ordinary Rust rule.
 
+> **Crate half landed 2026-09-02** as §A.10 step 7's second commit. §A.6
+> diagnosed the hazard exactly and §B.5's prescription is followed literally:
+> **`route::apply` is the one place an `f64` point becomes the crate's `f32`
+> one**, which is where `fpdf_formfill.cpp:435-444` narrows its own `double
+> page_x, page_y` to a `CFX_PointF` — before any comparison. `hit.rs:157`,
+> `route.rs`'s `to_plate` and its six callers are byte-for-byte unchanged, no
+> golden moved, and every `.evt` fixture replays identically. The prediction
+> held; four of the surrounding claims did not.
+>
+> 1. **`Rotation::from_degrees` and `Rotation::degrees` have no callers at
+>    all** — not one in the workspace, outside their own two tests. §A.11 asks
+>    for a decision between `Option<Rotation>` and dropping them, and there was
+>    never a caller to decide for, so **both are dropped**. The production path
+>    (`page::widget_rotation`) matches `/MK /R % 360` directly and always did,
+>    because it must agree with `ap::widget::rotated_rect` rather than round
+>    `37` down to upright — which is the *opposite* of what `from_degrees`
+>    does, and is why nothing ever called it. `swaps_axes` stays; the plate
+>    uses it.
+> 2. **§A.6's "that is the entire cost to `pdfrum-tool`" is right about the
+>    shape and wrong about the step.** `at()` cannot become `f64::from` in the
+>    crate half: `FormSession`'s `on_*` still take the flattened `x: f32, y:
+>    f32`, so widening the mirror `Call` would only add an `as f32` at the
+>    dispatch — a strictly worse shape than what is there. That change belongs
+>    with the facade's signatures, in step 8, and `dispatch.rs` now says so.
+>    The crate half's actual cost to the tool is `chrome.rs` alone, where it is
+>    a **net deletion**: four `f64::from` calls building a `kurbo::Rect` by
+>    hand disappear, because `PopupGeometry::rect` already is one. §A.6 also
+>    says the `Call` enum's "two field types"; there are **fourteen**, seven
+>    variants' worth.
+> 3. **`FormRect` had three callers, not two.** §A.6 item 2 names
+>    `chrome.rs:322,324` and both are real; it misses
+>    `crates/pdfrum/tests/reexports.rs:93`, which asserts the *name* is
+>    nameable and now asserts `kurbo::Rect` is.
+> 4. **Making `tab::Rect` private costs two integration test files, which
+>    nothing priced.** `tests/tab_order.rs` entire, and three properties of
+>    `tests/never_panics.rs`, build `Focusable`s, `Candidate`s and `Plate`s out
+>    of `f32` rects — the crate's own geometry, not a caller's — so both move
+>    into `src/tab.rs` unchanged. The same curation surfaced six items that
+>    were `pub` and had **no caller outside those tests either**:
+>    `Plate::{width, height, to_plate, to_page}` and `hit::{draw_order,
+>    widget_z_order_at_point}`. Kept, private, with the reason on the
+>    attribute.
+>
+> §A.6's category correction about the midpoint is confirmed at the code:
+> `tab::Rect::center_y` is fed only by `Focusable::rect`, it stays `f32`, and
+> it never sees an event point. `PopupGeometry`/`PopupView` widen to
+> `kurbo::Rect` on the way out, with `plate_f32` as the narrowing counterpart.
+> The pin §B.5 asks for is two tests in `event.rs`: a fractional coordinate
+> narrows to the same `f32` `page::to_rect` produces for that edge, so a click
+> exactly on a fractional boundary is still inside it; and an integer
+> coordinate — all an `.evt` script can write — round-trips exactly, which is
+> why no golden moved.
+>
+> The **facade half stays for step 8**, as §A.10 orders. Its `x: f32, y: f32`
+> pairs feed one four-line `at(x, y)` helper; changing the seven signatures
+> instead would have moved 69 call sites across eight files, against seven
+> glue lines, and would have collided with WP5's renames.
+
 ### WP5 — Form session: `Event` in, Rust names
 
 `pdfrum-form` already has a decent `Event` enum. The facade unwraps it into
@@ -2032,6 +2141,35 @@ form layer does not decide on this”. Win32 names (`PRIOR`, `NEXT`, `BACK`,
 `VirtualKey`) do not appear in rustdoc.
 
 The `.evt` parser keeps talking `u16` and converts at the boundary.
+
+> **Landed 2026-09-02** as §A.10 step 7's first commit. `Key` is the enum
+> above with `from_virtual` / `virtual_code` as the inverse pair, and
+> `pdfrum-tool`'s `to_key` is the boundary's only caller. Three things the
+> sketch got wrong, all found by enumerating what the code branches on:
+>
+> 1. **The sketch omits `Unknown`, and it is not `Other(0)`.**
+>    `field/text.rs:192` branches on it — a forward delete *with a selection*
+>    is rewritten to it before the table is consulted, which is why deleting a
+>    selection and pressing an unrecognized key take the same branch — and
+>    `pdfrum-tool`'s `to_key` answers it for a code outside `u16`. A variant
+>    the crate dispatches on cannot live in the arm meaning "not ours".
+> 2. **`Newline` (`0x0A`) is missing, and the sketch's own `Return` comment
+>    asks for it** ("keep distinct from Newline"). `crates/pdfrum/tests/form_tab.rs`
+>    sends it.
+> 3. **`Clear` (`VK_CLEAR`, `0x0C`) existed and is dropped.** Nothing in the
+>    workspace names it and no fixture sends it; `Other(0x0C)` says the same
+>    thing more honestly. It is the one constant the old newtype had that no
+>    variant replaces.
+>
+> Four the sketch names that nothing branches on — `Backspace`, `Escape`,
+> `Shift`, `Control` — are **kept**: a host reports all four, `keyboard.rs`
+> asserts the last two are *not* consumed, and a viewer spelling
+> `Key::Other(0x10)` for shift would be the worse for it.
+>
+> The change paid for itself immediately: `form_session.rs:1045`'s
+> `if key == Key::Tab` guard became the pattern `Event::KeyDown { key:
+> Key::Tab, .. }`, which clippy flagged as a redundant guard and which a
+> newtype could not have expressed. SPEC §15.5 is amended in the same commit.
 
 ### WP7 — Facade signatures only name re-exported types
 
