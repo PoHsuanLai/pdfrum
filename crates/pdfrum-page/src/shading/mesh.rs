@@ -17,6 +17,7 @@
 //!   `old[(flag * 3 + i) % 12]`** — modulo 12 even in the sixteen-point
 //!   tensor case, so the four interior points are never reused.
 
+use super::ShadingKind;
 use crate::color::{ColorSpace, Rgb};
 use crate::function::{BitReader, Function};
 use kurbo::Point;
@@ -132,8 +133,8 @@ pub struct MeshParams {
 impl MeshParams {
     /// Validate the widths and the `/Decode` length.
     ///
-    /// `flags` says whether this type reads edge flags at all — the lattice
-    /// type does not, and its `/BitsPerFlag` is therefore never checked.
+    /// `kind` decides whether `/BitsPerFlag` is validated at all: the lattice
+    /// type reads no edge flags, so its value is never checked.
     #[must_use]
     pub fn new(
         coord_bits: u32,
@@ -141,11 +142,11 @@ impl MeshParams {
         flag_bits: u32,
         components: usize,
         decode: &[f32],
-        flags: bool,
+        kind: ShadingKind,
     ) -> Option<Self> {
         if !VALID_COORD_BITS.contains(&coord_bits)
             || !VALID_COMPONENT_BITS.contains(&component_bits)
-            || (flags && !VALID_FLAG_BITS.contains(&flag_bits))
+            || (kind.reads_edge_flags() && !VALID_FLAG_BITS.contains(&flag_bits))
             || components > MAX_COMPONENTS
         {
             return None;
@@ -448,8 +449,13 @@ impl<'a> MeshReader<'a> {
     // previously recorded as design brief D18 — "declined", where the
     // oracle-bug rule makes it obligatory.
     #[must_use]
-    pub fn read_patches(&mut self, tensor: bool) -> Vec<Patch> {
-        let point_count = if tensor { 16 } else { 12 };
+    pub fn read_patches(&mut self, kind: ShadingKind) -> Vec<Patch> {
+        // A tensor patch carries four extra interior points.
+        let point_count = if kind == ShadingKind::TensorMesh {
+            16
+        } else {
+            12
+        };
         let mut out: Vec<Patch> = Vec::new();
         let mut coords = vec![Point::ZERO; point_count];
         let mut colors = [Rgb::BLACK; 4];
@@ -561,28 +567,28 @@ mod tests {
         reason = "test fixtures quote oracle vectors verbatim and compare exactly"
     )]
 
-    use super::{MAX_COMPONENTS, MeshParams, MeshReader};
+    use super::{MAX_COMPONENTS, MeshParams, MeshReader, ShadingKind};
     use crate::color::ColorSpace;
 
     fn params(components: usize, decode: &[f32]) -> Option<MeshParams> {
-        MeshParams::new(8, 8, 8, components, decode, true)
+        MeshParams::new(8, 8, 8, components, decode, ShadingKind::FreeFormMesh)
     }
 
     #[test]
     fn bit_widths_are_validated_per_field() {
         // Coordinates allow 24 and 32; components do not.
-        assert!(MeshParams::new(24, 8, 8, 1, &[0.0; 6], true).is_some());
-        assert!(MeshParams::new(32, 8, 8, 1, &[0.0; 6], true).is_some());
-        assert!(MeshParams::new(8, 24, 8, 1, &[0.0; 6], true).is_none());
-        assert!(MeshParams::new(8, 32, 8, 1, &[0.0; 6], true).is_none());
+        assert!(MeshParams::new(24, 8, 8, 1, &[0.0; 6], ShadingKind::FreeFormMesh).is_some());
+        assert!(MeshParams::new(32, 8, 8, 1, &[0.0; 6], ShadingKind::FreeFormMesh).is_some());
+        assert!(MeshParams::new(8, 24, 8, 1, &[0.0; 6], ShadingKind::FreeFormMesh).is_none());
+        assert!(MeshParams::new(8, 32, 8, 1, &[0.0; 6], ShadingKind::FreeFormMesh).is_none());
         // Three is legal for neither.
-        assert!(MeshParams::new(3, 8, 8, 1, &[0.0; 6], true).is_none());
-        assert!(MeshParams::new(8, 3, 8, 1, &[0.0; 6], true).is_none());
+        assert!(MeshParams::new(3, 8, 8, 1, &[0.0; 6], ShadingKind::FreeFormMesh).is_none());
+        assert!(MeshParams::new(8, 3, 8, 1, &[0.0; 6], ShadingKind::FreeFormMesh).is_none());
         // Flags allow only 2, 4 and 8.
-        assert!(MeshParams::new(8, 8, 3, 1, &[0.0; 6], true).is_none());
-        assert!(MeshParams::new(8, 8, 2, 1, &[0.0; 6], true).is_some());
+        assert!(MeshParams::new(8, 8, 3, 1, &[0.0; 6], ShadingKind::FreeFormMesh).is_none());
+        assert!(MeshParams::new(8, 8, 2, 1, &[0.0; 6], ShadingKind::FreeFormMesh).is_some());
         // …and a type with no flags never checks them.
-        assert!(MeshParams::new(8, 8, 3, 1, &[0.0; 6], false).is_some());
+        assert!(MeshParams::new(8, 8, 3, 1, &[0.0; 6], ShadingKind::LatticeMesh).is_some());
     }
 
     #[test]
@@ -604,7 +610,7 @@ mod tests {
 
     #[test]
     fn flags_are_masked_to_two_bits() {
-        let p = MeshParams::new(8, 8, 8, 1, &[0.0; 6], true).expect("params");
+        let p = MeshParams::new(8, 8, 8, 1, &[0.0; 6], ShadingKind::FreeFormMesh).expect("params");
         // A flag byte of 0xFF masks down to 3, which is a reachable value.
         let data = [0xFFu8; 8];
         let space = ColorSpace::DeviceGray;
@@ -614,8 +620,15 @@ mod tests {
 
     #[test]
     fn a_lattice_row_shorter_than_two_yields_nothing() {
-        let p =
-            MeshParams::new(8, 8, 8, 1, &[0.0f32, 1.0, 0.0, 1.0, 0.0, 1.0], false).expect("params");
+        let p = MeshParams::new(
+            8,
+            8,
+            8,
+            1,
+            &[0.0f32, 1.0, 0.0, 1.0, 0.0, 1.0],
+            ShadingKind::LatticeMesh,
+        )
+        .expect("params");
         let data = [0u8; 64];
         let space = ColorSpace::DeviceGray;
         let mut reader = MeshReader::new(&data, &p, &space, &[]);
@@ -625,8 +638,15 @@ mod tests {
 
     #[test]
     fn free_form_flag_three_behaves_as_flag_two() {
-        let p = MeshParams::new(8, 8, 8, 1, &[0.0f32, 255.0, 0.0, 255.0, 0.0, 1.0], true)
-            .expect("params");
+        let p = MeshParams::new(
+            8,
+            8,
+            8,
+            1,
+            &[0.0f32, 255.0, 0.0, 255.0, 0.0, 1.0],
+            ShadingKind::FreeFormMesh,
+        )
+        .expect("params");
         let space = ColorSpace::DeviceGray;
         // Three flag-0 vertices, then one flag-2 and one flag-3 vertex.
         let mut data = Vec::new();
@@ -650,8 +670,15 @@ mod tests {
 
     #[test]
     fn a_truncated_stream_stops_rather_than_reading_past_the_end() {
-        let p = MeshParams::new(8, 8, 8, 1, &[0.0f32, 255.0, 0.0, 255.0, 0.0, 1.0], true)
-            .expect("params");
+        let p = MeshParams::new(
+            8,
+            8,
+            8,
+            1,
+            &[0.0f32, 255.0, 0.0, 255.0, 0.0, 1.0],
+            ShadingKind::FreeFormMesh,
+        )
+        .expect("params");
         let space = ColorSpace::DeviceGray;
         // A flag and one coordinate, then nothing.
         let data = [0u8, 5];

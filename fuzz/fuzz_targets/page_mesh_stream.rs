@@ -13,7 +13,7 @@
 
 use libfuzzer_sys::fuzz_target;
 use pdfrum_page::color::ColorSpace;
-use pdfrum_page::shading::{MeshParams, MeshReader};
+use pdfrum_page::shading::{MeshParams, MeshReader, ShadingKind};
 
 fuzz_target!(|data: &[u8]| {
     const WIDTHS: [u32; 9] = [0, 1, 2, 3, 4, 8, 12, 16, 32];
@@ -33,14 +33,16 @@ fuzz_target!(|data: &[u8]| {
         .collect();
     let space = ColorSpace::DeviceRgb;
 
-    for flags in [true, false] {
+    // The lattice type is the one that reads no edge flags, so both branches
+    // of `MeshParams`' flag-width validation are exercised.
+    for params_kind in [ShadingKind::FreeFormMesh, ShadingKind::LatticeMesh] {
         let Some(params) = MeshParams::new(
             coord_bits,
             component_bits,
             flag_bits,
             components,
             &decode,
-            flags,
+            params_kind,
         ) else {
             continue;
         };
@@ -53,10 +55,10 @@ fuzz_target!(|data: &[u8]| {
                 let _ = reader.read_lattice(per_row);
             }
             2 => {
-                let _ = reader.read_patches(false);
+                let _ = reader.read_patches(ShadingKind::CoonsMesh);
             }
             _ => {
-                let _ = reader.read_patches(true);
+                let _ = reader.read_patches(ShadingKind::TensorMesh);
             }
         }
     }

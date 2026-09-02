@@ -18,7 +18,6 @@
 //! - **`/Rotate` is `((n / 90) % 4 + 4) % 4`**, so `45` is no rotation at
 //!   all, `-90` is three quarter-turns, and `450` is one.
 
-use crate::color::ColorValue;
 use crate::image::ImageData;
 use crate::names;
 use crate::shading::Shading;
@@ -392,13 +391,6 @@ impl PageObject {
             Self::Form(c) => &c.marks,
         }
     }
-
-    /// The colour the object paints with, stroking or filling.
-    #[must_use]
-    pub fn color(&self, stroking: bool) -> &ColorValue {
-        let state = self.state();
-        if stroking { &state.stroke } else { &state.fill }
-    }
 }
 
 /// An interpreted page.
@@ -543,29 +535,6 @@ fn normalize(rect: Rect) -> Rect {
     )
 }
 
-/// Whether a dictionary is loosely valid as a page.
-///
-/// The loose form tolerates a **missing** `/Type`; the strict form requires
-/// it. Either way a `/Type` that is present must resolve to the name `Page` —
-/// a string `"Page"` does not count.
-#[must_use]
-pub fn is_valid_page_dict<R: Resolve>(dict: Option<&Dict>, strict: bool, r: &R) -> bool {
-    let Some(dict) = dict else {
-        return false;
-    };
-    let Some(kind) = dict.raw(names::TYPE) else {
-        // A missing `/Type` is tolerated only by the loose form.
-        return !strict;
-    };
-    // A reference to the name `Page` counts; a string does not.
-    kind.resolve(r)
-        .ok()
-        .and_then(|o| o.as_name().cloned())
-        .as_ref()
-        .map(pdfrum_object::Name::as_bytes)
-        == Some(b"Page".as_slice())
-}
-
 #[cfg(test)]
 mod tests {
     // Test fixtures quote the oracle's own vectors, compare floats exactly
@@ -580,9 +549,9 @@ mod tests {
         reason = "test fixtures quote oracle vectors verbatim and compare exactly"
     )]
 
-    use super::{DEFAULT_MEDIA_BOX, Page, Rotation, derive_boxes, is_valid_page_dict};
+    use super::{DEFAULT_MEDIA_BOX, Page, Rotation, derive_boxes};
     use pdfrum_common::{DiagKind, Diagnostics};
-    use pdfrum_object::{Array, Dict, Name, NoResolve, Object, PdfString};
+    use pdfrum_object::{Array, Dict, Name, NoResolve, Object};
 
     fn boxes(pairs: Vec<(Name, Object)>) -> (kurbo::Rect, kurbo::Rect, Diagnostics) {
         let mut diags = Diagnostics::default();
@@ -663,36 +632,6 @@ mod tests {
     fn a_missing_crop_box_is_the_media_box() {
         let (media, crop, _) = boxes(vec![(Name::from("MediaBox"), rect(0.0, 0.0, 200.0, 300.0))]);
         assert_eq!(media, crop);
-    }
-
-    #[test]
-    fn page_dict_validation_is_loose_about_a_missing_type() {
-        // Null fails both.
-        assert!(!is_valid_page_dict(None, false, &NoResolve));
-        assert!(!is_valid_page_dict(None, true, &NoResolve));
-
-        // A missing `/Type` is loose-valid and strict-invalid.
-        let no_type = Dict::new();
-        assert!(is_valid_page_dict(Some(&no_type), false, &NoResolve));
-        assert!(!is_valid_page_dict(Some(&no_type), true, &NoResolve));
-
-        // A wrong `/Type` fails both.
-        let font = Dict::from_pairs([(Name::from("Type"), Object::Name(Name::from("Font")))]);
-        assert!(!is_valid_page_dict(Some(&font), false, &NoResolve));
-
-        // `/Type` as a *string* is not a name.
-        let string =
-            Dict::from_pairs([(Name::from("Type"), Object::Str(PdfString::literal(b"Page")))]);
-        assert!(!is_valid_page_dict(Some(&string), false, &NoResolve));
-
-        // A null `/Type` fails.
-        let null = Dict::from_pairs([(Name::from("Type"), Object::Null)]);
-        assert!(!is_valid_page_dict(Some(&null), false, &NoResolve));
-
-        // The right one passes.
-        let page = Dict::from_pairs([(Name::from("Type"), Object::Name(Name::from("Page")))]);
-        assert!(is_valid_page_dict(Some(&page), false, &NoResolve));
-        assert!(is_valid_page_dict(Some(&page), true, &NoResolve));
     }
 
     #[test]

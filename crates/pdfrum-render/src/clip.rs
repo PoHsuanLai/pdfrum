@@ -16,7 +16,7 @@
 use kurbo::{Affine, BezPath, Rect, Shape};
 use pdfrum_font::GlyphCache;
 use pdfrum_page::ClipStack;
-use pdfrum_page::state::{ClipEntry, TextClipRun};
+use pdfrum_page::state::{ClipEntry, ClipRule, TextClipRun};
 
 use crate::options::RenderOptions;
 
@@ -134,7 +134,10 @@ pub fn resolve(
     }
     for entry in clip.entries() {
         match entry {
-            ClipEntry::Path { path, even_odd } => {
+            ClipEntry::Path {
+                path,
+                rule: clip_rule,
+            } => {
                 if path.elements().is_empty() || is_degenerate(path) {
                     // The empty-path case: an off-canvas rect, not an empty
                     // region. Reproduced literally, because that rectangle
@@ -146,10 +149,9 @@ pub fn resolve(
                     out.push(Clip::Empty);
                     continue;
                 }
-                let rule = if *even_odd {
-                    FillRule::EvenOdd
-                } else {
-                    FillRule::Winding
+                let rule = match clip_rule {
+                    ClipRule::EvenOdd => FillRule::EvenOdd,
+                    ClipRule::Winding => FillRule::Winding,
                 };
                 // The rect fast path: snapped outward to whole pixels and
                 // applied with no antialiasing at all. Everything else keeps
@@ -276,7 +278,7 @@ mod tests {
     #[test]
     fn an_axis_aligned_rect_clips_hard_edged_and_snapped() {
         let mut stack = ClipStack::new();
-        stack.push_path(rect_path(1.2, 2.7, 5.4, 8.1), false);
+        stack.push_path(rect_path(1.2, 2.7, 5.4, 8.1), ClipRule::Winding);
         let clips = resolve_bare(&stack);
         // Snapped to the *outer* integer rect, and a Rect rather than a Path
         // so the device takes its hard-edged method.
@@ -293,7 +295,7 @@ mod tests {
         curved.curve_to((5.0, 0.0), (5.0, 5.0), (0.0, 5.0));
         curved.close_path();
         let mut stack = ClipStack::new();
-        stack.push_path(curved, true);
+        stack.push_path(curved, ClipRule::EvenOdd);
         let clips = resolve_bare(&stack);
         assert!(matches!(
             clips.first(),
@@ -364,8 +366,8 @@ mod tests {
     #[test]
     fn clips_intersect_for_the_cull_bounds() {
         let mut stack = ClipStack::new();
-        stack.push_path(rect_path(0.0, 0.0, 10.0, 10.0), false);
-        stack.push_path(rect_path(5.0, 5.0, 20.0, 20.0), false);
+        stack.push_path(rect_path(0.0, 0.0, 10.0, 10.0), ClipRule::Winding);
+        stack.push_path(rect_path(5.0, 5.0, 20.0, 20.0), ClipRule::Winding);
         let clips = resolve_bare(&stack);
         let b = device_bounds(&clips).expect("bounded");
         assert_eq!((b.x0, b.y0, b.x1, b.y1), (5.0, 5.0, 10.0, 10.0));
@@ -379,7 +381,7 @@ mod tests {
     #[test]
     fn the_transform_is_applied_before_the_rect_test() {
         let mut stack = ClipStack::new();
-        stack.push_path(rect_path(0.0, 0.0, 4.0, 2.0), false);
+        stack.push_path(rect_path(0.0, 0.0, 4.0, 2.0), ClipRule::Winding);
         // A 90-degree turn keeps it axis-aligned, so it stays a rect clip.
         let quarter = Affine::new([0.0, 1.0, -1.0, 0.0, 0.0, 0.0]);
         assert!(matches!(

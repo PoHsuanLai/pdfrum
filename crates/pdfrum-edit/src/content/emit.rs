@@ -34,7 +34,7 @@
 
 use pdfrum_common::kurbo::Affine;
 use pdfrum_object::{Dict, Name, Object};
-use pdfrum_page::state::{BlendMode, ClipEntry, GraphicsState};
+use pdfrum_page::state::{BlendMode, ClipEntry, ClipRule, GraphicsState};
 use pdfrum_page::{ColorValue, LineCap, LineJoin, PageObject, Rgb};
 
 use crate::content::num::{write_float, write_matrix};
@@ -377,11 +377,14 @@ fn emit_graphics(out: &mut String, state: &GraphicsState, ext_gstate: Option<&Na
 /// shading clip have no operator sequence here and are dropped.
 fn emit_clip(out: &mut String, state: &GraphicsState) {
     for entry in state.clip.entries() {
-        let ClipEntry::Path { path, even_odd } = entry else {
+        let ClipEntry::Path { path, rule } = entry else {
             continue;
         };
         emit_path_points(out, path);
-        out.push_str(if *even_odd { " W* " } else { " W " });
+        out.push_str(match rule {
+            ClipRule::EvenOdd => " W* ",
+            ClipRule::Winding => " W ",
+        });
         out.push_str("n ");
     }
 }
@@ -407,7 +410,7 @@ mod tests {
     use super::{DEFAULT_GRAPHICS, GraphicsKey, ResourceNames, default_graphics, emit_object};
     use pdfrum_common::kurbo::{Affine, BezPath, Point};
     use pdfrum_object::{Name, names};
-    use pdfrum_page::state::{BlendMode, ClipStack, GraphicsState};
+    use pdfrum_page::state::{BlendMode, ClipRule, ClipStack, GraphicsState};
     use pdfrum_page::{
         ColorSpace, ColorValue, Content, FillRule, LineCap, LineJoin, PageObject, PathObject, Rgb,
     };
@@ -658,7 +661,7 @@ mod tests {
         clip.line_to((0.0, 4.0));
         clip.close_path();
         let mut stack = ClipStack::new();
-        stack.push_path(clip, true);
+        stack.push_path(clip, ClipRule::EvenOdd);
         let state = GraphicsState {
             clip: stack,
             ..GraphicsState::default()
@@ -674,7 +677,7 @@ mod tests {
     #[test]
     fn a_winding_clip_writes_a_bare_w() {
         let mut stack = ClipStack::new();
-        stack.push_path(triangle(), false);
+        stack.push_path(triangle(), ClipRule::Winding);
         let state = GraphicsState {
             clip: stack,
             ..GraphicsState::default()

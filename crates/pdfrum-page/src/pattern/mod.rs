@@ -23,7 +23,7 @@ pub use tiling::{TileRange, TilingPattern};
 use crate::color::ColorSpace;
 use crate::function::FunctionCache;
 use crate::names;
-use crate::shading::Shading;
+use crate::shading::{Shading, ShadingSource};
 use kurbo::Affine;
 use pdfrum_common::{Diagnostics, Limits};
 use pdfrum_object::{Dict, Object, Resolve};
@@ -122,9 +122,7 @@ impl Pattern {
                 let shading = Shading::load(
                     shading_obj,
                     resources,
-                    // A pattern is not a shading object, so `/Background`
-                    // *is* honoured here.
-                    false,
+                    ShadingSource::Pattern,
                     r,
                     functions,
                     limits,

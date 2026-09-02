@@ -15,6 +15,20 @@ use kurbo::{BezPath, Rect, Shape};
 /// The most text objects a clipping path may accumulate.
 pub const MAX_TEXT_OBJECTS: usize = 1024;
 
+/// Which rule decides a clipping path's interior (ISO 32000-1 §8.5.4).
+///
+/// Distinct from [`FillRule`](crate::FillRule), which has a third state for
+/// "does not fill at all": a clip always has an interior, so `W` and `W*` are
+/// the only two answers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
+pub enum ClipRule {
+    /// Nonzero winding number rule (`W`).
+    #[default]
+    Winding,
+    /// Even-odd rule (`W*`).
+    EvenOdd,
+}
+
 /// One clipping contribution.
 #[derive(Debug, Clone, PartialEq)]
 pub enum ClipEntry {
@@ -22,8 +36,8 @@ pub enum ClipEntry {
     Path {
         /// The path in device-ish space; the drawn path keeps its own matrix.
         path: BezPath,
-        /// Whether the even-odd rule applies.
-        even_odd: bool,
+        /// The rule deciding the path's interior.
+        rule: ClipRule,
     },
     /// One batch of text objects shown in a clipping render mode, between a
     /// `BT` and the `ET` that closed it.
@@ -97,18 +111,18 @@ impl ClipStack {
     ///
     /// The merge is what keeps a `re W n` inside a larger `re W n` from
     /// producing two entries.
-    pub fn push_path(&mut self, path: BezPath, even_odd: bool) {
+    pub fn push_path(&mut self, path: BezPath, rule: ClipRule) {
         let incoming = path.bounding_box();
         if let Some(ClipEntry::Path {
             path: previous,
-            even_odd: _,
+            rule: _,
         }) = self.entries.last()
             && let Some(rect) = as_rectangle(previous)
             && contains_rect(rect, incoming)
         {
             self.entries.pop();
         }
-        self.entries.push(ClipEntry::Path { path, even_odd });
+        self.entries.push(ClipEntry::Path { path, rule });
     }
 
     /// Add a batch of clipping text runs.
@@ -134,7 +148,7 @@ impl ClipStack {
     pub fn push_empty(&mut self) {
         self.entries.push(ClipEntry::Path {
             path: Rect::ZERO.to_path(0.1),
-            even_odd: false,
+            rule: ClipRule::Winding,
         });
     }
 
@@ -222,7 +236,7 @@ mod tests {
         reason = "test fixtures quote oracle vectors verbatim and compare exactly"
     )]
 
-    use super::{ClipStack, MAX_TEXT_OBJECTS, TextClipRun};
+    use super::{ClipRule, ClipStack, MAX_TEXT_OBJECTS, TextClipRun};
     use kurbo::{BezPath, Rect, Shape};
 
     fn rect_path(x0: f64, y0: f64, x1: f64, y1: f64) -> BezPath {
@@ -252,10 +266,10 @@ mod tests {
     #[test]
     fn a_contained_rectangle_replaces_its_container() {
         let mut stack = ClipStack::new();
-        stack.push_path(rect_path(0.0, 0.0, 100.0, 100.0), false);
+        stack.push_path(rect_path(0.0, 0.0, 100.0, 100.0), ClipRule::Winding);
         assert_eq!(stack.len(), 1);
         // A smaller rectangle inside the first merges rather than stacking.
-        stack.push_path(rect_path(10.0, 10.0, 50.0, 50.0), false);
+        stack.push_path(rect_path(10.0, 10.0, 50.0, 50.0), ClipRule::Winding);
         assert_eq!(stack.len(), 1);
         let bounds = stack.bounds().expect("bounds");
         assert!((bounds.width() - 40.0).abs() < 1.0);
@@ -264,9 +278,9 @@ mod tests {
     #[test]
     fn an_overlapping_rectangle_does_not_merge() {
         let mut stack = ClipStack::new();
-        stack.push_path(rect_path(0.0, 0.0, 100.0, 100.0), false);
+        stack.push_path(rect_path(0.0, 0.0, 100.0, 100.0), ClipRule::Winding);
         // Sticking out to the right: not contained, so both stay.
-        stack.push_path(rect_path(50.0, 50.0, 150.0, 150.0), false);
+        stack.push_path(rect_path(50.0, 50.0, 150.0, 150.0), ClipRule::Winding);
         assert_eq!(stack.len(), 2);
     }
 
@@ -299,7 +313,7 @@ mod tests {
     #[test]
     fn an_empty_clip_blanks_everything() {
         let mut stack = ClipStack::new();
-        stack.push_path(rect_path(0.0, 0.0, 100.0, 100.0), false);
+        stack.push_path(rect_path(0.0, 0.0, 100.0, 100.0), ClipRule::Winding);
         stack.push_empty();
         let bounds = stack.bounds().expect("bounds");
         assert!(bounds.area() < 1e-6, "got {bounds:?}");

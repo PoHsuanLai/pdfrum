@@ -68,7 +68,32 @@ pub enum ShadingKind {
     TensorMesh = 7,
 }
 
+/// Which entry point reached a shading, which decides whether `/Background`
+/// is honoured.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ShadingSource {
+    /// The `sh` operator, naming a `/Shading` resource directly.
+    ///
+    /// `/Background` is **ignored**: `sh` paints only the shading's own
+    /// geometry.
+    ShadingOperator,
+    /// A `/PatternType 2` pattern wrapping the shading.
+    ///
+    /// `/Background` **is** honoured, filling the pattern cell outside the
+    /// geometry.
+    Pattern,
+}
+
 impl ShadingKind {
+    /// Whether a mesh of this kind carries a per-vertex edge flag.
+    ///
+    /// Only the lattice type does not: its topology is the row length, so
+    /// its `/BitsPerFlag` is never read and never validated.
+    #[must_use]
+    pub fn reads_edge_flags(self) -> bool {
+        self != Self::LatticeMesh
+    }
+
     /// The kind `n` names, or `None` for anything outside 1..=7.
     #[must_use]
     pub fn from_int(n: i64) -> Option<Self> {
@@ -144,18 +169,13 @@ impl Shading {
 
     /// Load and validate a shading.
     ///
-    /// `is_shading_object` distinguishes the two entry points: the `sh`
-    /// operator names a `/Shading` resource directly, while a
-    /// `/PatternType 2` pattern wraps one. Only the pattern honours
-    /// `/Background`.
-    ///
     /// Returns `None` for every condition PDFium treats as "unsupported
     /// shading", which paints nothing.
     #[must_use]
     pub fn load<R: Resolve>(
         obj: &Object,
         resources: Option<&Dict>,
-        is_shading_object: bool,
+        source: ShadingSource,
         r: &R,
         functions_cache: &mut FunctionCache,
         limits: &Limits,
@@ -211,7 +231,7 @@ impl Shading {
 
         // `/Background` is honoured **only** for a pattern, never for `sh`,
         // and only when the array is at least as long as the space needs.
-        let background = (!is_shading_object)
+        let background = (source == ShadingSource::Pattern)
             .then(|| dict.array(names::BACKGROUND, r))
             .flatten()
             .filter(|a| a.len() >= space.n_components())
@@ -389,9 +409,7 @@ fn load_mesh<R: Resolve>(
         flag_bits,
         components,
         &decode,
-        // The lattice type reads no flags, so its `/BitsPerFlag` is never
-        // checked.
-        kind != ShadingKind::LatticeMesh,
+        kind,
     ) else {
         diags.record(Severity::Suspicious, DiagKind::MeshDecodeMalformed, None);
         return None;
@@ -419,7 +437,7 @@ fn load_mesh<R: Resolve>(
         }
         ShadingKind::CoonsMesh | ShadingKind::TensorMesh => Mesh {
             triangles: Vec::new(),
-            patches: reader.read_patches(kind == ShadingKind::TensorMesh),
+            patches: reader.read_patches(kind),
             component_range,
         },
         _ => return None,

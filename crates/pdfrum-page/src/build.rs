@@ -38,9 +38,9 @@ use crate::page::{
 };
 use crate::pattern::{Pattern, TilingPattern};
 use crate::resources::Resources;
-use crate::shading::Shading;
+use crate::shading::{Shading, ShadingSource};
 use crate::state::{
-    ContentMarks, GraphicsState, StateStack, TextClipRun, TextCursor, apply_ext_gstate,
+    ClipRule, ContentMarks, GraphicsState, StateStack, TextClipRun, TextCursor, apply_ext_gstate,
     glyph_matrix, kerning_shift,
 };
 use crate::transparency::Transparency;
@@ -613,7 +613,7 @@ pub fn build_form_object_with<R: Resolve>(
         path.line_to((rect.x1, rect.y1));
         path.line_to((rect.x0, rect.y1));
         path.close_path();
-        state.clip.push_path(placed * path, false);
+        state.clip.push_path(placed * path, ClipRule::Winding);
     }
 
     let inner = Resources::choose(
@@ -1160,9 +1160,13 @@ impl<R: Resolve> Interp<'_, R> {
             } else {
                 matrix * path
             };
-            self.state
-                .clip
-                .push_path(clipped, clip_rule == FillRule::EvenOdd);
+            self.state.clip.push_path(
+                clipped,
+                match clip_rule {
+                    FillRule::EvenOdd => ClipRule::EvenOdd,
+                    _ => ClipRule::Winding,
+                },
+            );
         }
     }
 
@@ -1879,9 +1883,7 @@ impl<R: Resolve> Interp<'_, R> {
         let Some(shading) = Shading::load(
             &object,
             colorspaces.as_ref(),
-            // Reached through `/Shading`, so `/Background` is **not**
-            // honoured.
-            true,
+            ShadingSource::ShadingOperator,
             self.resolver,
             &mut ctx.functions,
             limits,
@@ -2087,7 +2089,7 @@ fn expand_tiling_cell<R: Resolve>(
     if tiling.bbox.width() > 0.0 && tiling.bbox.height() > 0.0 {
         initial.clip.push_path(
             tiling.matrix * kurbo::Shape::to_path(&tiling.bbox, 0.1),
-            false,
+            ClipRule::Winding,
         );
     }
     let resources = Resources::choose(
