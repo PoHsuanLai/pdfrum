@@ -37,9 +37,12 @@ What is implemented, against the brief's inventory:
   `hex` source-syntax flag), `Name`, `Array`, `Dict`, `Stream`, `ByteSpan`.
   All `Send + Sync`; equality structural.
 - **Integer tri-state** (brief §1.2). `Int(i64)` stores the mathematical
-  value; `as_c_int` reproduces PDFium's `GetSigned` (wrapping through `u32`),
-  `as_c_float` its `GetFloat` (widening), `real_as_c_int` its saturating
-  float cast. `INT_RANGE` documents and debug-asserts the reachable range.
+  value; `narrow_to_signed32` reproduces PDFium's `GetSigned` (wrapping
+  through `u32`), `widen_to_f32` its `GetFloat` (widening),
+  `truncate_to_signed32` its saturating float cast. `INT_RANGE` documents and
+  debug-asserts the reachable range. (Named `as_c_int` / `as_c_float` /
+  `real_as_c_int` until `docs/design/idiomatic-api.md` §A.10 step 2, which
+  also made the `number` module private — the five items are root re-exports.)
 - **Float spelling.** `fmt_number` ports `FloatToDecimal` over `ryu`'s
   shortest digits — all 18 goldens from
   `cpdf_contentstream_write_utils_unittest.cpp` and `cpdf_number_unittest.cpp`

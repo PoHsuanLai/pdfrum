@@ -2,7 +2,6 @@ pub mod pdfrum_object
 pub mod pdfrum_object::names
 pub const pdfrum_object::names::A85: &pdfrum_object::Name
 pub const pdfrum_object::names::AA: &pdfrum_object::Name
-pub const pdfrum_object::names::AC: &pdfrum_object::Name
 pub const pdfrum_object::names::ACRO_FORM: &pdfrum_object::Name
 pub const pdfrum_object::names::AHX: &pdfrum_object::Name
 pub const pdfrum_object::names::ALPHA: &pdfrum_object::Name
@@ -20,14 +19,12 @@ pub const pdfrum_object::names::BITS_PER_COMPONENT: &pdfrum_object::Name
 pub const pdfrum_object::names::BLACK_IS_1: &pdfrum_object::Name
 pub const pdfrum_object::names::BLEED_BOX: &pdfrum_object::Name
 pub const pdfrum_object::names::BORDER: &pdfrum_object::Name
-pub const pdfrum_object::names::BTN: &pdfrum_object::Name
 pub const pdfrum_object::names::C: &pdfrum_object::Name
 pub const pdfrum_object::names::CA: &pdfrum_object::Name
 pub const pdfrum_object::names::CCF: &pdfrum_object::Name
 pub const pdfrum_object::names::CCITT_FAX_DECODE: &pdfrum_object::Name
 pub const pdfrum_object::names::CF: &pdfrum_object::Name
 pub const pdfrum_object::names::CFM: &pdfrum_object::Name
-pub const pdfrum_object::names::CH: &pdfrum_object::Name
 pub const pdfrum_object::names::COLLECTION: &pdfrum_object::Name
 pub const pdfrum_object::names::COLOR: &pdfrum_object::Name
 pub const pdfrum_object::names::COLORS: &pdfrum_object::Name
@@ -48,7 +45,6 @@ pub const pdfrum_object::names::DCT_DECODE: &pdfrum_object::Name
 pub const pdfrum_object::names::DECODE_PARMS: &pdfrum_object::Name
 pub const pdfrum_object::names::DESTS: &pdfrum_object::Name
 pub const pdfrum_object::names::DIFFERENCE: &pdfrum_object::Name
-pub const pdfrum_object::names::DL: &pdfrum_object::Name
 pub const pdfrum_object::names::DS: &pdfrum_object::Name
 pub const pdfrum_object::names::DV: &pdfrum_object::Name
 pub const pdfrum_object::names::E: &pdfrum_object::Name
@@ -59,7 +55,6 @@ pub const pdfrum_object::names::EMBEDDED_FILES: &pdfrum_object::Name
 pub const pdfrum_object::names::ENCODED_BYTE_ALIGN: &pdfrum_object::Name
 pub const pdfrum_object::names::ENCRYPT: &pdfrum_object::Name
 pub const pdfrum_object::names::ENCRYPT_METADATA: &pdfrum_object::Name
-pub const pdfrum_object::names::END_OF_BLOCK: &pdfrum_object::Name
 pub const pdfrum_object::names::END_OF_LINE: &pdfrum_object::Name
 pub const pdfrum_object::names::EXCLUSION: &pdfrum_object::Name
 pub const pdfrum_object::names::F: &pdfrum_object::Name
@@ -90,7 +85,6 @@ pub const pdfrum_object::names::KIDS: &pdfrum_object::Name
 pub const pdfrum_object::names::L: &pdfrum_object::Name
 pub const pdfrum_object::names::LENGTH: &pdfrum_object::Name
 pub const pdfrum_object::names::LIGHTEN: &pdfrum_object::Name
-pub const pdfrum_object::names::LINEARIZED: &pdfrum_object::Name
 pub const pdfrum_object::names::LUMINOSITY: &pdfrum_object::Name
 pub const pdfrum_object::names::LZW: &pdfrum_object::Name
 pub const pdfrum_object::names::LZW_DECODE: &pdfrum_object::Name
@@ -123,7 +117,6 @@ pub const pdfrum_object::names::PREV: &pdfrum_object::Name
 pub const pdfrum_object::names::PRODUCER: &pdfrum_object::Name
 pub const pdfrum_object::names::Q: &pdfrum_object::Name
 pub const pdfrum_object::names::R: &pdfrum_object::Name
-pub const pdfrum_object::names::RC: &pdfrum_object::Name
 pub const pdfrum_object::names::RECT: &pdfrum_object::Name
 pub const pdfrum_object::names::RESOURCES: &pdfrum_object::Name
 pub const pdfrum_object::names::RI: &pdfrum_object::Name
@@ -132,7 +125,6 @@ pub const pdfrum_object::names::ROOT: &pdfrum_object::Name
 pub const pdfrum_object::names::ROTATE: &pdfrum_object::Name
 pub const pdfrum_object::names::ROWS: &pdfrum_object::Name
 pub const pdfrum_object::names::RUN_LENGTH_DECODE: &pdfrum_object::Name
-pub const pdfrum_object::names::RV: &pdfrum_object::Name
 pub const pdfrum_object::names::S: &pdfrum_object::Name
 pub const pdfrum_object::names::SATURATION: &pdfrum_object::Name
 pub const pdfrum_object::names::SCREEN: &pdfrum_object::Name
@@ -141,24 +133,18 @@ pub const pdfrum_object::names::SIZE: &pdfrum_object::Name
 pub const pdfrum_object::names::SOFT_LIGHT: &pdfrum_object::Name
 pub const pdfrum_object::names::STANDARD: &pdfrum_object::Name
 pub const pdfrum_object::names::STM_F: &pdfrum_object::Name
-pub const pdfrum_object::names::STRUCT_PARENT: &pdfrum_object::Name
 pub const pdfrum_object::names::STR_F: &pdfrum_object::Name
 pub const pdfrum_object::names::SUBJECT: &pdfrum_object::Name
 pub const pdfrum_object::names::SUBTYPE: &pdfrum_object::Name
 pub const pdfrum_object::names::T: &pdfrum_object::Name
 pub const pdfrum_object::names::TITLE: &pdfrum_object::Name
-pub const pdfrum_object::names::TM: &pdfrum_object::Name
 pub const pdfrum_object::names::TR: &pdfrum_object::Name
-pub const pdfrum_object::names::TRANSPARENCY: &pdfrum_object::Name
 pub const pdfrum_object::names::TRIM_BOX: &pdfrum_object::Name
 pub const pdfrum_object::names::TU: &pdfrum_object::Name
-pub const pdfrum_object::names::TX: &pdfrum_object::Name
 pub const pdfrum_object::names::TYPE: &pdfrum_object::Name
 pub const pdfrum_object::names::U: &pdfrum_object::Name
 pub const pdfrum_object::names::UE: &pdfrum_object::Name
 pub const pdfrum_object::names::V: &pdfrum_object::Name
-pub const pdfrum_object::names::VERSION: &pdfrum_object::Name
-pub const pdfrum_object::names::VERTICES: &pdfrum_object::Name
 pub const pdfrum_object::names::VIEWER_PREFERENCES: &pdfrum_object::Name
 pub const pdfrum_object::names::W: &pdfrum_object::Name
 pub const pdfrum_object::names::WIN_ANSI_ENCODING: &pdfrum_object::Name
@@ -166,13 +152,6 @@ pub const pdfrum_object::names::XFA: &pdfrum_object::Name
 pub const pdfrum_object::names::XML: &pdfrum_object::Name
 pub const pdfrum_object::names::XREF: &pdfrum_object::Name
 pub const pdfrum_object::names::XREF_STM: &pdfrum_object::Name
-pub mod pdfrum_object::number
-pub const pdfrum_object::number::INT_RANGE: core::ops::range::RangeInclusive<i64>
-pub fn pdfrum_object::number::as_c_float(i64) -> f32
-pub fn pdfrum_object::number::as_c_int(i64) -> i64
-pub fn pdfrum_object::number::fmt_int(i64) -> alloc::string::String
-pub fn pdfrum_object::number::fmt_number(f32) -> alloc::string::String
-pub fn pdfrum_object::number::real_as_c_int(f32) -> i64
 pub macro pdfrum_object::names!
 #[non_exhaustive] pub enum pdfrum_object::Error
 pub pdfrum_object::Error::RefLoop(pdfrum_object::ObjRef)
@@ -395,8 +374,6 @@ impl pdfrum_object::Resolve for pdfrum_object::NoResolve
 pub fn pdfrum_object::NoResolve::fetch(&self, pdfrum_object::ObjRef) -> core::result::Result<alloc::sync::Arc<pdfrum_object::Object>, pdfrum_object::Error>
 impl<T: pdfrum_object::Resolve + ?core::marker::Sized> pdfrum_object::Resolve for &T
 pub fn &T::fetch(&self, pdfrum_object::ObjRef) -> core::result::Result<alloc::sync::Arc<pdfrum_object::Object>, pdfrum_object::Error>
-pub fn pdfrum_object::as_c_float(i64) -> f32
-pub fn pdfrum_object::as_c_int(i64) -> i64
 pub fn pdfrum_object::decode_text(&[u8]) -> alloc::borrow::Cow<'_, str>
 pub fn pdfrum_object::encode_string_hex(&[u8]) -> alloc::vec::Vec<u8>
 pub fn pdfrum_object::encode_string_literal(&[u8]) -> alloc::vec::Vec<u8>
@@ -405,5 +382,6 @@ pub fn pdfrum_object::fmt_int(i64) -> alloc::string::String
 pub fn pdfrum_object::fmt_number(f32) -> alloc::string::String
 pub fn pdfrum_object::name_decode(&[u8]) -> alloc::vec::Vec<u8>
 pub fn pdfrum_object::name_encode(&[u8]) -> alloc::vec::Vec<u8>
-pub fn pdfrum_object::real_as_c_int(f32) -> i64
-pub type pdfrum_object::SharedObject = alloc::sync::Arc<pdfrum_object::Object>
+pub fn pdfrum_object::narrow_to_signed32(i64) -> i64
+pub fn pdfrum_object::truncate_to_signed32(f32) -> i64
+pub fn pdfrum_object::widen_to_f32(i64) -> f32
