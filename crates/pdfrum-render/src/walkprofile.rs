@@ -46,6 +46,24 @@
 //! the one thing an instrument must not do. The accumulator is per-thread, so a
 //! rayon render reports per-thread totals rather than a contended one, and
 //! [`take`] resets it.
+//!
+//! # Why the whole module carries `allow(dead_code, unused_imports)`
+//!
+//! With `walk-profile` off this module is private and its *reporting* half —
+//! [`Profile`], [`take`], and [`Phase`]/[`Site`]'s `index`/`name`/`ALL` —
+//! has no reader, because the recording half compiles to empty inline
+//! functions and nothing ever produces a `Profile` to report. The library
+//! builds once without `cfg(test)`, so every one of those items reddens in
+//! the default build even though each is exercised with the feature on and by
+//! this module's own tests. One suppression at the module that owns the
+//! feature is more honest than nine scattered attributes; the same reasoning
+//! `pdfrum-edit` recorded for its twenty-three, one layer up.
+
+#![allow(
+    dead_code,
+    unused_imports,
+    reason = "the reporting half of the instrument has no reader with `walk-profile` off; see the module docs"
+)]
 
 use core::time::Duration;
 
@@ -389,6 +407,10 @@ mod imp {
     impl Started {
         /// A no-op without the feature.
         #[inline]
+        #[expect(
+            clippy::unused_self,
+            reason = "the feature-on twin takes `self` — the `Instant` it holds — and the two must have one signature"
+        )]
         pub fn end(self, _phase: Phase) {}
     }
 

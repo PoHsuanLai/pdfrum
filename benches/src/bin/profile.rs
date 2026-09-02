@@ -392,6 +392,7 @@ fn timed_render(args: &Args, bytes: &Arc<[u8]>) {
     timed::reset();
     // The page-graph build above walks nothing, but `take` is what clears the
     // walk's accumulator and the loop below must start from zero either way.
+    #[cfg(feature = "walk-profile")]
     let _ = pdfrum_render::walkprofile::take();
     let mut caches = pdfrum_render::RenderCaches::default();
     let mut diags = pdfrum_common::Diagnostics::default();
@@ -521,13 +522,25 @@ fn report(
     walk_report(iters, engine);
 }
 
-/// Split the ENGINE half further, when the walk's own instrumentation is on.
+/// The note that stands in for the phase split when the instrument is off.
 ///
-/// Without the `walk-profile` feature every counter is zero and this prints the
-/// remedy instead of a table of zeroes, because a table of zeroes reads as a
-/// finding.
+/// A table of zeroes reads as a finding, so the remedy is printed instead.
+/// This is the whole of `walk_report` without the feature, and it names no
+/// `walkprofile` item — the module's surface is part of the feature, not of
+/// the crate a `cargo add` reaches.
+#[cfg(not(feature = "walk-profile"))]
+fn walk_report(_iters: f64, _engine: std::time::Duration) {
+    eprintln!();
+    eprintln!(
+        "note: the walk's own phase split is off. Rebuild with it:\n\
+         \x20 cargo build --release -p pdfrum-bench --bin profile --features walk-profile\n\
+         or run `scripts/profile.nu <op> <file> <iters> <backend> --walk`."
+    );
+}
+
 /// Whether a phase's time is already inside another phase's, so that summing
 /// it into the named total would double-count.
+#[cfg(feature = "walk-profile")]
 fn nested(phase: pdfrum_render::walkprofile::Phase) -> bool {
     use pdfrum_render::walkprofile::Phase;
     matches!(
@@ -536,17 +549,15 @@ fn nested(phase: pdfrum_render::walkprofile::Phase) -> bool {
     )
 }
 
+/// Split the ENGINE half further, from the walk's own instrumentation.
+#[cfg(feature = "walk-profile")]
 fn walk_report(iters: f64, engine: std::time::Duration) {
     use pdfrum_render::walkprofile::{Phase, Site};
 
     let p = pdfrum_render::walkprofile::take();
     if p.phase_calls.iter().all(|c| *c == 0) && p.site_count.iter().all(|c| *c == 0) {
         eprintln!();
-        eprintln!(
-            "note: the walk's own phase split is off. Rebuild with it:\n\
-             \x20 cargo build --release -p pdfrum-bench --bin profile --features walk-profile\n\
-             or run `scripts/profile.nu <op> <file> <iters> <backend> --walk`."
-        );
+        eprintln!("note: the walk ran but recorded nothing, which should not happen.");
         return;
     }
 
