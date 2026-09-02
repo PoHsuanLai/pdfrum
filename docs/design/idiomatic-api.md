@@ -3172,6 +3172,37 @@ pattern.
 that. Implement it over the existing iterator, or drop `IntoIterator` and
 keep `iter()`. Do not allocate to satisfy a trait.
 
+> **Landed 2026-09-03 as §A.10 step 11.** Per-method table, as coded:
+>
+> | Method | was | now | why |
+> |---|---|---|---|
+> | `PageEdit::insert` | `-> bool` (`false` = index past the end) | `Result<(), IndexOutOfRange>` | refused because of an argument; forwards `Page::insert_object` |
+> | `PageEdit::transform` | `-> bool` (`false` = no such object) | `Result<(), IndexOutOfRange>` | same |
+> | `PageEdit::set_visible` | `(index, visible: bool) -> bool` | split into `show(index)` / `hide(index)`, both `Result<(), IndexOutOfRange>` | boolean mode argument *and* silent miss |
+> | `Form::set` | `()`; unknown name silently ignored | `Result<(), UnknownField>` | silent ignore was the C move |
+> | `Form::set_checked` | `()`; unknown name silently ignored | `Result<(), UnknownField>` (`checked: bool` kept) | same unknown-name result; the value *is* a bool |
+> | `FormSession::replace_selection` | `-> bool` | **kept** `bool` | the bool *is* the answer ("did it change") |
+> | `FormSession::set_index_selected` | `-> bool` | **kept** `bool` | the bool *is* the answer ("accepted") |
+> | `Page::insert_object` | `-> bool` | `Result<(), IndexOutOfRange>` | twin of `PageEdit::insert`; facade forwards |
+> | `ColorValue::set_components` | `-> bool` | `Result<(), SetComponentsError>` | refused because of an argument (`TooFew` / `PatternSpace`) |
+> | `ClipStack::push_text` | `-> bool` | `Result<(), TextClipLimit>` | refused because the batch would exceed the cap |
+> | `ContentMarks::pop` | `-> bool` | **kept** `bool` | "was there something to pop" |
+> | `StateStack::pop` | `-> bool` | **kept** `bool` | "was there something to restore"; empty is a no-op |
+> | `StructElement::link_kid` | `-> bool` | **kept** `bool` | "did any slot match" — a question |
+> | `FieldWrites::enter` | `-> bool` | **kept** `bool` | recursion-budget question, not a failed mutation |
+> | `ScriptCascade::run` | `-> bool` | **kept** `bool` | "did the script succeed"; failure recorded on `stops` |
+>
+> **Error types.** `IndexOutOfRange { index, len }` lives in `pdfrum-page` (the crate that owns the object list) and is re-exported from the facade. `UnknownField { name }` lives in the facade next to `Form`. `SetComponentsError` and `TextClipLimit` are crate-local to `pdfrum-page`. None of these became variants of `pdfrum::Error`: a caller matching `insert` should not have to handle `Open` / `Render` / `Save`.
+>
+> **What this section got wrong at the code.**
+>
+> 1. **`pdfrum-doc`'s `Form::set` twin is not a mutator that can refuse a name.** `FieldValues::set` is a write buffer: it does not know the field list, so the unknown-name `Result` is produced at the facade entry point, which does. The buffer still records whatever it is given.
+> 2. **`set_checked` was missing from the table** and had the same silent-ignore hole as `set`. It now returns `UnknownField` too; `checked: bool` stays, as the section already said of the value.
+> 3. **C.3's extra rows are not all `&mut self` methods.** `push_with_properties` takes a resolver callback (the grep missed it because of nested parentheses); `edit::ops::delete` / `insert_char` and the `choice::` functions are free functions whose `bool` is already the answer. They were left. `search_back` on the lexer is a search, not a mutation.
+> 4. **`Outline::IntoIterator` allocated a `Vec`.** Implemented over a named `OutlineIter` wrapping the slice iterator; `iter()` and `into_iter()` are the same walk.
+>
+> `PageEdit::remove` already returned `Option<PageObject>` and was the pattern, as the section said.
+
 ### WP10 — Options and colour: drop inverted flags, use peniko
 
 `RenderOptions { no_path_smooth, no_image_smooth }` are PDFium flag names

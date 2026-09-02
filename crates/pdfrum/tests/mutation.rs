@@ -290,14 +290,17 @@ fn inserting_places_objects_in_the_order_asked_for() {
         .build()
     };
 
-    assert!(page.insert(0, red()));
+    assert!(page.insert(0, red()).is_ok());
     assert_eq!(page.len(), 3);
     assert!(matches!(page.objects()[0], pdfrum::PageObject::Path(_)));
 
     // One past the end is refused; the length itself appends.
-    assert!(!page.insert(page.len() + 1, red()));
+    let past = page.len() + 1;
+    let err = page.insert(past, red()).expect_err("index past the end");
+    assert_eq!(err.index, past);
+    assert_eq!(err.len, 3);
     assert_eq!(page.len(), 3);
-    assert!(page.insert(3, red()));
+    assert!(page.insert(3, red()).is_ok());
     assert_eq!(page.len(), 4);
     assert!(matches!(page.objects()[3], pdfrum::PageObject::Path(_)));
 }
@@ -314,8 +317,8 @@ fn an_inserted_objects_place_in_the_painting_order_survives_a_save() {
         }
         .build()
     };
-    assert!(page.insert(0, rect(10.0)));
-    assert!(page.insert(2, rect(50.0)));
+    assert!(page.insert(0, rect(10.0)).is_ok());
+    assert!(page.insert(2, rect(50.0)).is_ok());
 
     let kinds = |page: &PageEdit| -> Vec<&'static str> {
         page.objects()
@@ -351,8 +354,8 @@ fn an_inserted_object_adopts_the_element_of_the_object_it_lands_before() {
         }
         .build()
     };
-    assert!(page.insert(0, rect(Color::from_rgb8(255, 0, 0))));
-    assert!(page.insert(3, rect(Color::from_rgb8(0, 255, 0))));
+    assert!(page.insert(0, rect(Color::from_rgb8(255, 0, 0))).is_ok());
+    assert!(page.insert(3, rect(Color::from_rgb8(0, 255, 0))).is_ok());
 
     assert_eq!(page.len(), 5);
     assert_eq!(streams_of(&page), vec![0, 0, 0, 1, 1]);
@@ -396,7 +399,7 @@ fn a_hidden_object_stays_in_memory_and_vanishes_from_the_saved_file() {
     let mut page = doc.page(0).expect("page").edit();
     assert_eq!(page.len(), 8);
 
-    assert!(page.set_visible(4, false));
+    assert!(page.hide(4).is_ok());
     assert_eq!(page.is_visible(4), Some(false));
     assert_eq!(page.len(), 8, "still eight in memory");
     assert!(page.is_modified());
@@ -425,14 +428,14 @@ fn hiding_the_only_object_empties_the_page_and_showing_it_restores_it() {
 
     // Hide it: nothing is left on disk.
     let mut page = one_object.page(0).expect("page").edit();
-    assert!(page.set_visible(0, false));
+    assert!(page.hide(0).is_ok());
     let hidden = round_trip(&one_object, &[page], "cycle-b");
     assert_eq!(hidden.page(0).expect("page").edit().len(), 0);
 
     // The document that still has the object can show it again.
     let mut page = one_object.page(0).expect("page").edit();
-    assert!(page.set_visible(0, false));
-    assert!(page.set_visible(0, true));
+    assert!(page.hide(0).is_ok());
+    assert!(page.show(0).is_ok());
     // Two flips leave it visible; the second dirties it again.
     assert!(page.is_modified());
     let shown = round_trip(&one_object, &[page], "cycle-c");
@@ -445,7 +448,7 @@ fn hiding_the_only_object_empties_the_page_and_showing_it_restores_it() {
 fn setting_visibility_to_its_current_value_does_not_dirty_the_page() {
     let doc = Document::open(RECTANGLES).expect("open");
     let mut page = doc.page(0).expect("page").edit();
-    assert!(page.set_visible(0, true));
+    assert!(page.show(0).is_ok());
     assert!(!page.is_modified());
 }
 
@@ -465,7 +468,10 @@ fn transforming_an_object_dirties_it_and_the_move_survives_a_save() {
         pdfrum::PageObject::Path(p) => p.object.path.clone(),
         other => panic!("expected a path, got {other:?}"),
     };
-    assert!(page.transform(0, pdfrum::Affine::translate((25.0, 0.0))));
+    assert!(
+        page.transform(0, pdfrum::Affine::translate((25.0, 0.0)))
+            .is_ok()
+    );
     assert!(page.is_modified());
 
     let saved = round_trip(&doc, &[page], "transform");
@@ -490,6 +496,32 @@ fn transforming_an_object_dirties_it_and_the_move_survives_a_save() {
         (moved.x0 - original.x0 - 25.0).abs() < 0.5,
         "expected a 25pt shift: {original:?} -> {moved:?}"
     );
+}
+
+// An index that names no object is an error, not a silent no-op and not a
+// panic: the page is left as it was.
+#[test]
+fn show_hide_and_transform_refuse_an_index_that_is_not_on_the_page() {
+    let doc = Document::open(RECTANGLES).expect("open");
+    let mut page = doc.page(0).expect("page").edit();
+    let len = page.len();
+    assert_eq!(len, 8);
+
+    let missing = len;
+    let show = page.show(missing).expect_err("no such object");
+    assert_eq!(show.index, missing);
+    assert_eq!(show.len, len);
+    let hide = page.hide(missing).expect_err("no such object");
+    assert_eq!(hide.index, missing);
+    assert_eq!(hide.len, len);
+    let transform = page
+        .transform(missing, pdfrum::Affine::translate((1.0, 0.0)))
+        .expect_err("no such object");
+    assert_eq!(transform.index, missing);
+    assert_eq!(transform.len, len);
+
+    assert_eq!(page.len(), 8);
+    assert!(!page.is_modified());
 }
 
 // -------------------------------------------------- sharing

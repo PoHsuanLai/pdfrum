@@ -31,6 +31,7 @@ pub use pdfrum::Focus
 pub use pdfrum::FocusBox
 pub use pdfrum::GeneratedAp
 pub use pdfrum::IndexMap
+pub use pdfrum::IndexOutOfRange
 pub use pdfrum::Key
 pub use pdfrum::Keystroke
 pub use pdfrum::KeystrokeOutcome
@@ -186,8 +187,8 @@ pub fn pdfrum::Form<'a>::field(&self, &str) -> core::option::Option<pdfrum::Fiel
 pub fn pdfrum::Form<'a>::field_count(&self) -> usize
 pub fn pdfrum::Form<'a>::fields(&self) -> alloc::vec::Vec<pdfrum::Field<'a>>
 pub fn pdfrum::Form<'a>::need_appearances(&self) -> bool
-pub fn pdfrum::Form<'a>::set(&mut self, &str, impl core::convert::Into<alloc::string::String>)
-pub fn pdfrum::Form<'a>::set_checked(&mut self, &str, bool)
+pub fn pdfrum::Form<'a>::set(&mut self, &str, impl core::convert::Into<alloc::string::String>) -> core::result::Result<(), pdfrum::UnknownField>
+pub fn pdfrum::Form<'a>::set_checked(&mut self, &str, bool) -> core::result::Result<(), pdfrum::UnknownField>
 pub struct pdfrum::FormSession<'a>
 impl<'a> pdfrum::FormSession<'a>
 pub fn pdfrum::FormSession<'a>::apply(&mut self, pdfrum_form::event::Event) -> pdfrum_form::update::Response
@@ -243,12 +244,18 @@ pub pdfrum::OpenOptions::password: core::option::Option<alloc::vec::Vec<u8>>
 pub struct pdfrum::Outline<'a>
 impl<'a> pdfrum::Outline<'a>
 pub fn pdfrum::Outline<'a>::is_empty(&self) -> bool
-pub fn pdfrum::Outline<'a>::iter(&self) -> impl core::iter::traits::iterator::Iterator<Item = pdfrum::Bookmark<'a>> + '_
+pub fn pdfrum::Outline<'a>::iter(&self) -> pdfrum::OutlineIter<'_, 'a>
 pub fn pdfrum::Outline<'a>::len(&self) -> usize
-impl<'a> core::iter::traits::collect::IntoIterator for &'a pdfrum::Outline<'a>
-pub type &'a pdfrum::Outline<'a>::IntoIter = alloc::vec::into_iter::IntoIter<pdfrum::Bookmark<'a>>
-pub type &'a pdfrum::Outline<'a>::Item = pdfrum::Bookmark<'a>
-pub fn &'a pdfrum::Outline<'a>::into_iter(self) -> Self::IntoIter
+impl<'outline, 'doc: 'outline> core::iter::traits::collect::IntoIterator for &'outline pdfrum::Outline<'doc>
+pub type &'outline pdfrum::Outline<'doc>::IntoIter = pdfrum::OutlineIter<'outline, 'doc>
+pub type &'outline pdfrum::Outline<'doc>::Item = pdfrum::Bookmark<'doc>
+pub fn &'outline pdfrum::Outline<'doc>::into_iter(self) -> Self::IntoIter
+pub struct pdfrum::OutlineIter<'outline, 'doc: 'outline>
+impl core::iter::traits::exact_size::ExactSizeIterator for pdfrum::OutlineIter<'_, '_>
+impl<'outline, 'doc: 'outline> core::iter::traits::iterator::Iterator for pdfrum::OutlineIter<'outline, 'doc>
+pub type pdfrum::OutlineIter<'outline, 'doc>::Item = pdfrum::Bookmark<'doc>
+pub fn pdfrum::OutlineIter<'outline, 'doc>::next(&mut self) -> core::option::Option<Self::Item>
+pub fn pdfrum::OutlineIter<'outline, 'doc>::size_hint(&self) -> (usize, core::option::Option<usize>)
 pub struct pdfrum::Page<'a>
 impl pdfrum::Page<'_>
 pub fn pdfrum::Page<'_>::edit(&self) -> pdfrum::PageEdit
@@ -273,8 +280,9 @@ pub fn pdfrum::PageEdit::image_of(&self, usize) -> core::option::Option<pdfrum_o
 impl pdfrum::PageEdit
 pub fn pdfrum::PageEdit::graph(&self) -> &pdfrum_page::page::Page
 pub fn pdfrum::PageEdit::graph_mut(&mut self) -> &mut pdfrum_page::page::Page
+pub fn pdfrum::PageEdit::hide(&mut self, usize) -> core::result::Result<(), pdfrum_page::mutate::IndexOutOfRange>
 pub fn pdfrum::PageEdit::index(&self) -> pdfrum_common::page_index::PageIndex
-pub fn pdfrum::PageEdit::insert(&mut self, usize, pdfrum_page::page::PageObject) -> bool
+pub fn pdfrum::PageEdit::insert(&mut self, usize, pdfrum_page::page::PageObject) -> core::result::Result<(), pdfrum_page::mutate::IndexOutOfRange>
 pub fn pdfrum::PageEdit::is_empty(&self) -> bool
 pub fn pdfrum::PageEdit::is_modified(&self) -> bool
 pub fn pdfrum::PageEdit::is_visible(&self, usize) -> core::option::Option<bool>
@@ -283,8 +291,8 @@ pub fn pdfrum::PageEdit::object_mut(&mut self, usize) -> core::option::Option<&m
 pub fn pdfrum::PageEdit::objects(&self) -> &[pdfrum_page::page::PageObject]
 pub fn pdfrum::PageEdit::push(&mut self, pdfrum_page::page::PageObject)
 pub fn pdfrum::PageEdit::remove(&mut self, usize) -> core::option::Option<pdfrum_page::page::PageObject>
-pub fn pdfrum::PageEdit::set_visible(&mut self, usize, bool) -> bool
-pub fn pdfrum::PageEdit::transform(&mut self, usize, kurbo::affine::Affine) -> bool
+pub fn pdfrum::PageEdit::show(&mut self, usize) -> core::result::Result<(), pdfrum_page::mutate::IndexOutOfRange>
+pub fn pdfrum::PageEdit::transform(&mut self, usize, kurbo::affine::Affine) -> core::result::Result<(), pdfrum_page::mutate::IndexOutOfRange>
 pub struct pdfrum::PathBuilder
 pub pdfrum::PathBuilder::even_odd: bool
 pub pdfrum::PathBuilder::fill: core::option::Option<peniko::Color>
@@ -329,4 +337,6 @@ pub pdfrum::TextBuilder::size: f32
 impl pdfrum::TextBuilder
 pub fn pdfrum::TextBuilder::build(self) -> pdfrum_page::page::PageObject
 pub fn pdfrum::TextBuilder::new(impl core::convert::Into<alloc::vec::Vec<u8>>, pdfrum_object::object::ObjRef, f32) -> Self
+pub struct pdfrum::UnknownField
+pub pdfrum::UnknownField::name: alloc::string::String
 pub type pdfrum::Result<T> = core::result::Result<T, pdfrum::Error>

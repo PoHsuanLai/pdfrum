@@ -115,6 +115,7 @@ fn every_type_in_a_public_signature_is_nameable_from_the_facade() {
     nameable::<TextRenderMode>();
     nameable::<PageObject>();
     nameable::<PageRotation>();
+    nameable::<IndexOutOfRange>();
 
     // pdfrum-parser
     nameable::<OpenError>();
@@ -158,6 +159,8 @@ fn every_type_in_a_public_signature_is_nameable_from_the_facade() {
     nameable::<PageEdit>();
     nameable::<PathBuilder>();
     nameable::<TextBuilder>();
+    nameable::<UnknownField>();
+    nameable::<OutlineIter<'_, '_>>();
     nameable::<SubstitutionOptions>();
     nameable::<dyn RasterBackend<Device = <VelloCpuBackend as RasterBackend>::Device>>();
     nameable::<dyn RenderDevice>();

@@ -107,9 +107,9 @@ impl StructElement {
         }
     }
 
-    /// Points a kid slot at an element the walk has now built, reporting
-    /// whether any slot matched.
+    /// Points a kid slot at an element the walk has now built.
     ///
+    /// Answers whether any slot matched — a question, not a refused mutation.
     /// Matching is by object reference when both sides have one, and by
     /// dictionary equality otherwise, which is how an inline kid dictionary —
     /// having no object number to compare — still finds its slot.

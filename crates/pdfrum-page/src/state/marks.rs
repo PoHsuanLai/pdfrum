@@ -107,8 +107,8 @@ impl ContentMarks {
 
     /// `EMC`: pop one mark, never past the sentinel.
     ///
-    /// Returns whether anything was popped, so a caller can record the
-    /// imbalance.
+    /// Answers whether anything was popped — a question, not a failed
+    /// mutation — so a caller can record the imbalance.
     pub fn pop(&mut self) -> bool {
         self.marks.pop().is_some()
     }

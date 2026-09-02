@@ -452,12 +452,14 @@ impl ScriptCascade {
     /// Runs one script, recording anything it asked for and anything that
     /// stopped it.
     ///
-    /// **Never panics and never propagates an engine error to the caller.** A
-    /// script is untrusted input: a parse failure, a thrown exception and an
-    /// exhausted limit are the three ordinary outcomes, and all three answer
-    /// `false` here with a recorded reason.
+    /// The `bool` is the answer, not a failed mutation: `true` means the
+    /// script completed, `false` means a reason was recorded on
+    /// [`stops`](Self::stops). **Never panics and never propagates an engine
+    /// error to the caller.** A script is untrusted input: a parse failure, a
+    /// thrown exception and an exhausted limit are the three ordinary
+    /// outcomes, and all three answer `false` here with a recorded reason.
     ///
-    /// `where` names the script for the diagnostic — a field name, or
+    /// `whence` names the script for the diagnostic — a field name, or
     /// `"/OpenAction"`.
     pub fn run(&mut self, source: &str, whence: &str) -> bool {
         if self.busy {

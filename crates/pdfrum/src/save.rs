@@ -155,7 +155,7 @@ impl Document {
     /// # let out = dir.join("filled.pdf");
     /// let doc = pdfrum::Document::open("tests/fixtures/text_form.pdf")?;
     /// let mut form = doc.form().expect("form");
-    /// form.set("Text Box", "Hello");
+    /// form.set("Text Box", "Hello").expect("field exists");
     /// doc.save_form(&out, &form, &pdfrum::SaveOptions::default())?;
     ///
     /// // Reopening shows the value the file now holds.

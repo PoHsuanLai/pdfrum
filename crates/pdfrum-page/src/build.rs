@@ -893,7 +893,7 @@ impl<R: Resolve> Interp<'_, R> {
                 // the next text object.
                 let runs = std::mem::take(&mut self.text_clip);
                 if !runs.is_empty() && self.state.text.render_mode.clips() {
-                    self.state.clip.push_text(runs);
+                    let _ = self.state.clip.push_text(runs);
                 }
             }
             Op::TextMove(tx, ty) => {
@@ -961,10 +961,10 @@ impl<R: Resolve> Interp<'_, R> {
                 self.set_color_space(name, false, ctx, limits, diags);
             }
             Op::SetStrokeColor(c) => {
-                self.state.stroke.set_components(&c.0);
+                let _ = self.state.stroke.set_components(&c.0);
             }
             Op::SetFillColor(c) => {
-                self.state.fill.set_components(&c.0);
+                let _ = self.state.fill.set_components(&c.0);
             }
             Op::SetStrokeColorN(c) => self.set_color_n(c, true, ctx, limits, diags),
             Op::SetFillColorN(c) => self.set_color_n(c, false, ctx, limits, diags),
@@ -1530,7 +1530,7 @@ impl<R: Resolve> Interp<'_, R> {
         } else {
             &mut self.state.fill
         };
-        target.set_components(&c.values);
+        let _ = target.set_components(&c.values);
     }
 
     /// `gs`.

@@ -57,20 +57,48 @@ impl<'a> Outline<'a> {
 
     /// The entries, in pre-order: each item, then its subtree, then its next
     /// sibling.
-    pub fn iter(&self) -> impl Iterator<Item = Bookmark<'a>> + '_ {
-        self.entries.iter().map(|inner| Bookmark {
+    pub fn iter(&self) -> OutlineIter<'_, 'a> {
+        OutlineIter {
+            doc: self.doc,
+            inner: self.entries.iter(),
+        }
+    }
+}
+
+/// A pre-order walk of an [`Outline`].
+///
+/// Produced by [`Outline::iter`] and by iterating `&Outline`. Does not
+/// allocate; each item clones the underlying bookmark record. The item's
+/// lifetime is the document's, so a [`Bookmark`] can outlive this iterator.
+#[derive(Debug, Clone)]
+pub struct OutlineIter<'outline, 'doc: 'outline> {
+    doc: &'doc Document,
+    inner: std::slice::Iter<'outline, pdfrum_doc::Bookmark>,
+}
+
+impl<'outline, 'doc: 'outline> Iterator for OutlineIter<'outline, 'doc> {
+    type Item = Bookmark<'doc>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.inner.next().map(|inner| Bookmark {
             doc: self.doc,
             inner: inner.clone(),
         })
     }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.inner.size_hint()
+    }
 }
 
-impl<'a> IntoIterator for &'a Outline<'a> {
-    type Item = Bookmark<'a>;
-    type IntoIter = std::vec::IntoIter<Bookmark<'a>>;
+impl ExactSizeIterator for OutlineIter<'_, '_> {}
+
+impl<'outline, 'doc: 'outline> IntoIterator for &'outline Outline<'doc> {
+    type Item = Bookmark<'doc>;
+    type IntoIter = OutlineIter<'outline, 'doc>;
 
     fn into_iter(self) -> Self::IntoIter {
-        self.iter().collect::<Vec<_>>().into_iter()
+        self.iter()
     }
 }
 

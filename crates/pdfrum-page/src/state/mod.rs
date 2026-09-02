@@ -15,7 +15,7 @@ mod graph;
 mod marks;
 mod text;
 
-pub use clip::{ClipEntry, ClipRule, ClipStack, MAX_TEXT_OBJECTS, TextClipRun};
+pub use clip::{ClipEntry, ClipRule, ClipStack, MAX_TEXT_OBJECTS, TextClipLimit, TextClipRun};
 pub use extgstate::apply_ext_gstate;
 pub(crate) use general::RenderIntent;
 pub use general::{BlendMode, GeneralState};
@@ -100,8 +100,9 @@ impl StateStack {
 
     /// `Q`: restore into `state`.
     ///
-    /// Returns whether anything was restored. An empty stack is a **no-op**,
-    /// which is what keeps an unbalanced stream rendering.
+    /// Answers whether anything was restored — a question, not a failed
+    /// mutation. An empty stack is a **no-op**, which is what keeps an
+    /// unbalanced stream rendering.
     pub fn pop(&mut self, state: &mut GraphicsState) -> bool {
         match self.saved.pop() {
             Some(saved) => {

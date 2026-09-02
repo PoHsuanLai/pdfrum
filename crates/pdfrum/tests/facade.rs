@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use pdfrum::{
     CharIndex, Document, FieldKind, FindOptions, OpenOptions, PageIndex, PdfVersion, Permissions,
-    RenderOptions, SaveOptions, Subtype, Update,
+    RenderOptions, SaveOptions, Subtype, UnknownField, Update,
 };
 
 const HELLO: &str = "tests/fixtures/hello_world.pdf";
@@ -593,7 +593,7 @@ fn a_document_without_a_form_reports_none() {
 fn a_written_value_reads_back_before_it_is_saved() {
     let doc = Document::open(FORM).expect("open");
     let mut form = doc.form().expect("form");
-    form.set("Text Box", "typed");
+    form.set("Text Box", "typed").expect("field exists");
 
     let field = form.field("Text Box").expect("field");
     assert_eq!(field.value(), "typed", "the edit wins");
@@ -605,8 +605,8 @@ fn a_written_value_reads_back_before_it_is_saved() {
 fn writing_a_field_twice_keeps_the_last_value() {
     let doc = Document::open(FORM).expect("open");
     let mut form = doc.form().expect("form");
-    form.set("Text Box", "first");
-    form.set("Text Box", "second");
+    form.set("Text Box", "first").expect("field exists");
+    form.set("Text Box", "second").expect("field exists");
     assert_eq!(form.edits().count(), 1);
     assert_eq!(form.field("Text Box").expect("field").value(), "second");
 }
@@ -618,7 +618,7 @@ fn a_filled_form_round_trips_through_save_and_reopen() {
 
     let doc = Document::open(FORM).expect("open");
     let mut form = doc.form().expect("form");
-    form.set("Text Box", "round trip");
+    form.set("Text Box", "round trip").expect("field exists");
     doc.save_form(&out, &form, &SaveOptions::default())
         .expect("save");
 
@@ -655,7 +655,7 @@ fn a_filled_widget_gets_the_chrome_the_engine_draws_and_no_text_body() {
     assert!(!doc.page(0).expect("page").annotations()[0].has_appearance());
 
     let mut form = doc.form().expect("form");
-    form.set("Text Box", "drawn");
+    form.set("Text Box", "drawn").expect("field exists");
     doc.save_form(&out, &form, &SaveOptions::default())
         .expect("save");
 
@@ -683,18 +683,70 @@ fn a_filled_widget_gets_the_chrome_the_engine_draws_and_no_text_body() {
 }
 
 #[test]
-fn a_write_to_a_field_that_does_not_exist_is_ignored_rather_than_fatal() {
-    let dir = temp_dir("form-unknown-field");
-    let out = dir.join("out.pdf");
-
+fn a_write_to_a_field_that_does_not_exist_returns_unknown_field() {
     let doc = Document::open(FORM).expect("open");
     let mut form = doc.form().expect("form");
-    form.set("No Such Field", "value");
-    doc.save_form(&out, &form, &SaveOptions::default())
-        .expect("save succeeds anyway");
+    let err = form
+        .set("No Such Field", "value")
+        .expect_err("unknown name");
+    assert_eq!(
+        err,
+        UnknownField {
+            name: "No Such Field".into()
+        }
+    );
+    assert!(form.edits().next().is_none(), "the write is not recorded");
+}
 
-    assert_eq!(Document::open(&out).expect("reopen").page_count(), 1);
-    std::fs::remove_dir_all(&dir).ok();
+#[test]
+fn set_checked_on_a_known_field_takes_effect_and_an_unknown_name_errors() {
+    let doc = Document::open("tests/fixtures/click_form.pdf").expect("open");
+    let mut form = doc.form().expect("form");
+    let name = form
+        .fields()
+        .into_iter()
+        .find(|f| f.kind() == FieldKind::Check && !f.is_read_only())
+        .expect("an ordinary checkbox")
+        .name()
+        .to_owned();
+
+    assert!(
+        !form.field(&name).expect("field").is_checked(),
+        "the ordinary box starts clear"
+    );
+    form.set_checked(&name, true).expect("field exists");
+    assert!(form.field(&name).expect("field").is_checked());
+
+    let err = form
+        .set_checked("No Such Field", true)
+        .expect_err("unknown name");
+    assert_eq!(
+        err,
+        UnknownField {
+            name: "No Such Field".into()
+        }
+    );
+}
+
+#[test]
+fn outline_into_iter_agrees_with_iter_and_is_not_a_vec() {
+    let doc = Document::open(BOOKMARKS).expect("open");
+    let outline = doc.outline();
+    let via_iter: Vec<_> = outline.iter().map(|b| (b.depth(), b.title())).collect();
+    let via_into: Vec<_> = (&outline)
+        .into_iter()
+        .map(|b| (b.depth(), b.title()))
+        .collect();
+    assert_eq!(via_iter, via_into);
+
+    let named: pdfrum::OutlineIter<'_, '_> = outline.iter();
+    let from_into: pdfrum::OutlineIter<'_, '_> = (&outline).into_iter();
+    let name = std::any::type_name_of_val(&named);
+    assert_eq!(name, std::any::type_name_of_val(&from_into));
+    assert!(
+        !name.contains("vec::IntoIter"),
+        "IntoIterator must not collect into a Vec: {name}"
+    );
 }
 
 // ------------------------------------------------------------------- save

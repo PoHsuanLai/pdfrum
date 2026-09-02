@@ -82,10 +82,9 @@ fn run(input: &Path, fill: Option<(&str, &str, &str)>) -> Result<(), pdfrum::Err
         return Ok(());
     };
 
-    if form.field(name).is_none() {
-        eprintln!("warning: no field named {name:?}; saving anyway");
+    if let Err(err) = form.set(name, value) {
+        eprintln!("warning: {err}; saving anyway");
     }
-    form.set(name, value);
 
     // The value reads back before anything is written, because the form
     // consults its own edit buffer.

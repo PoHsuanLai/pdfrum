@@ -861,7 +861,8 @@ impl<'a> FormSession<'a> {
     /// with an empty string. With no selection the text is inserted at the
     /// caret, and an empty string then does nothing at all.
     ///
-    /// Answers whether the field changed.
+    /// The `bool` is the answer, not a failed mutation: `true` when the field
+    /// changed, `false` when nothing was focused or the text was unchanged.
     pub fn replace_selection(&mut self, text: &str) -> bool {
         let Some(target) = self.inner.focus else {
             return false;
@@ -908,9 +909,11 @@ impl<'a> FormSession<'a> {
 
     /// Selects or clears a row of the focused choice field.
     ///
-    /// Answers whether the call was accepted, which is not the same as
-    /// whether anything changed: a list box accepts a redundant clear and
-    /// still moves its caret, while a combo box refuses every clear.
+    /// The `bool` is the answer, not a failed mutation: whether the call was
+    /// **accepted**, which is not the same as whether anything changed. A list
+    /// box accepts a redundant clear and still moves its caret; a combo box
+    /// refuses every clear; a missing row, a text field, and nothing focused
+    /// all answer `false` rather than panicking.
     pub fn set_index_selected(&mut self, index: usize, selected: bool) -> bool {
         match self.inner.focused_state_mut() {
             Some(pdfrum_form::field::FieldState::Choice(choice)) => {

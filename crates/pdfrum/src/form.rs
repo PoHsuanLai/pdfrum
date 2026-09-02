@@ -7,6 +7,14 @@ use crate::Document;
 
 pub use pdfrum_doc::form::{FieldFlags, FieldKind};
 
+/// A form field name the document does not have.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("no form field named {name:?}")]
+pub struct UnknownField {
+    /// The name that was asked for.
+    pub name: String,
+}
+
 /// A document's interactive form (ISO 32000-1 §12.7).
 ///
 /// Obtained from [`Document::form`](crate::Document::form), which returns
@@ -126,35 +134,57 @@ impl<'a> Form<'a> {
     /// [`Field::states`] enumerates them; [`Form::set_checked`] handles the
     /// common two-state case for you.
     ///
-    /// A name no field has is ignored; the write is still recorded, and
-    /// saving simply skips it.
+    /// A name no field has is [`UnknownField`] — the write is not recorded.
     ///
     /// ```
     /// let doc = pdfrum::Document::open("tests/fixtures/text_form.pdf")?;
     /// let mut form = doc.form().expect("form");
     ///
-    /// form.set("Text Box", "filled in");
+    /// form.set("Text Box", "filled in").expect("field exists");
     /// assert_eq!(form.field("Text Box").map(|f| f.value()), Some("filled in".into()));
     /// # Ok::<(), pdfrum::Error>(())
     /// ```
-    pub fn set(&mut self, name: &str, value: impl Into<String>) {
+    ///
+    /// # Errors
+    ///
+    /// [`UnknownField`] when no field has this fully-qualified name.
+    pub fn set(&mut self, name: &str, value: impl Into<String>) -> Result<(), UnknownField> {
+        if self.field(name).is_none() {
+            return Err(UnknownField {
+                name: name.to_owned(),
+            });
+        }
         self.values.set(name, value);
+        Ok(())
     }
 
     /// Checks or clears a check box or radio button.
     ///
     /// `true` selects the field's first non-`Off` state, which for a check
     /// box is the only one it has. Use [`Form::set`] with an explicit state
-    /// name to pick a particular button of a radio group.
-    pub fn set_checked(&mut self, name: &str, checked: bool) {
+    /// name to pick a particular button of a radio group. `checked` itself
+    /// stays a `bool` — the value *is* a bool.
+    ///
+    /// # Errors
+    ///
+    /// [`UnknownField`] when no field has this fully-qualified name.
+    pub fn set_checked(&mut self, name: &str, checked: bool) -> Result<(), UnknownField> {
+        let Some(field) = self.field(name) else {
+            return Err(UnknownField {
+                name: name.to_owned(),
+            });
+        };
         let state = if checked {
-            self.field(name)
-                .and_then(|field| field.states().into_iter().find(|state| state != "Off"))
+            field
+                .states()
+                .into_iter()
+                .find(|state| state != "Off")
                 .unwrap_or_else(|| "Yes".to_owned())
         } else {
             "Off".to_owned()
         };
         self.values.set(name, state);
+        Ok(())
     }
 
     /// Every value written through [`Form::set`], in the order first written.

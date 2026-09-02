@@ -1545,14 +1545,22 @@ The document is never mutated, which is the same shape form filling already
 had and is what keeps `Document` `Sync` and editing two pages concurrent.
 
 `PageEdit` offers `objects`/`object_mut`/`push`/`insert`/`remove`/
-`set_visible`/`transform`/`is_modified`, plus `graph`/`graph_mut` as the
-documented escape hatch onto `pdfrum-page`. Taking `object_mut` *is* the edit
+`show`/`hide`/`transform`/`is_modified`, plus `graph`/`graph_mut` as the
+documented escape hatch onto `pdfrum-page`. `insert` / `show` / `hide` /
+`transform` return `Result<(), IndexOutOfRange>` rather than a `bool`
+([spec] 2026-09-03, §A.10 step 11, WP9); `remove` already returned
+`Option<PageObject>`. Taking `object_mut` *is* the edit
 — the object is marked dirty on the way out rather than leaving the caller to
 remember — so a caller that only reads uses `objects`. Three plain config
 structs build objects to add: `PathBuilder` (with a `rect` constructor),
 `TextBuilder` and `ImageBuilder`, each with a `build() -> PageObject`, per
 STYLE §4's preference for struct-update syntax over builder ladders.
 `PageObject` is re-exported, being the currency of the whole surface.
+
+[spec] 2026-09-03 (WP9): `Form::set` and `Form::set_checked` return
+`Result<(), UnknownField>` — an unknown field name is no longer a silent
+ignore. `FormSession::replace_selection` and `set_index_selected` keep
+`bool`, because the bool *is* the answer ("did it change" / "accepted").
 
 `SaveOptions` gains `remove_security: bool`, defaulting **false** — the M10
 ruling reached the facade, which had been forcing it true. An encrypted
@@ -2038,6 +2046,11 @@ take the page explicitly.
 `focused_annot`, `selected_text`, `replace_selection`, `focus_for_page`,
 `hover_for_page`, `set_viewed_page`, `viewed_page`, `can_undo`, `can_redo`,
 `is_index_selected`, `set_index_selected`, `config`.
+
+[spec] 2026-09-03 (WP9): `replace_selection` and `set_index_selected` keep
+returning `bool`. The bool *is* the answer — "did the field change" and
+"was the call accepted" — not a discarded failure. An unknown field name
+on `Form::set` / `Form::set_checked` is `UnknownField`, recorded in §13.
 
 Every mouse method takes one `kurbo::Point` in page space, not a flattened
 `x, y` pair — §15.5's vocabulary, unchanged all the way in.
