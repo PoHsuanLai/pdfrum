@@ -120,77 +120,7 @@ pub mod pdfrum_doc::annot_render
 pub fn pdfrum_doc::annot_render::overlay<R: pdfrum_object::resolve::Resolve>(&mut pdfrum_page::page::Page, &pdfrum_object::dict::Dict, &pdfrum_object::dict::Dict, &R, &mut pdfrum_page::build::BuildContext, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics)
 pub fn pdfrum_doc::annot_render::overlay_with<R: pdfrum_object::resolve::Resolve>(&mut pdfrum_page::page::Page, &pdfrum_object::dict::Dict, &pdfrum_object::dict::Dict, &R, &mut pdfrum_page::build::BuildContext, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics, core::option::Option<&pdfrum_doc::ap::AnnotOverlay>)
 pub mod pdfrum_doc::ap
-pub mod pdfrum_doc::ap::border
-pub enum pdfrum_doc::ap::border::BorderStyle
-pub pdfrum_doc::ap::border::BorderStyle::Beveled
-pub pdfrum_doc::ap::border::BorderStyle::Dash
-pub pdfrum_doc::ap::border::BorderStyle::Inset
-pub pdfrum_doc::ap::border::BorderStyle::Solid
-pub pdfrum_doc::ap::border::BorderStyle::Underline
-pub struct pdfrum_doc::ap::border::BorderStyleInfo
-pub pdfrum_doc::ap::border::BorderStyleInfo::dash: pdfrum_doc::ap::border::Dash
-pub pdfrum_doc::ap::border::BorderStyleInfo::style: pdfrum_doc::ap::border::BorderStyle
-pub pdfrum_doc::ap::border::BorderStyleInfo::width: f32
-impl core::default::Default for pdfrum_doc::ap::border::BorderStyleInfo
-pub fn pdfrum_doc::ap::border::BorderStyleInfo::default() -> Self
-pub struct pdfrum_doc::ap::border::Dash
-pub pdfrum_doc::ap::border::Dash::dash: i64
-pub pdfrum_doc::ap::border::Dash::gap: i64
-pub pdfrum_doc::ap::border::Dash::phase: i64
-impl core::default::Default for pdfrum_doc::ap::border::Dash
-pub fn pdfrum_doc::ap::border::Dash::default() -> Self
-pub fn pdfrum_doc::ap::border::border_path(kurbo::rect::Rect, pdfrum_doc::ap::border::BorderStyleInfo, pdfrum_doc::color::Color) -> alloc::string::String
-pub fn pdfrum_doc::ap::border::border_style_info<R: pdfrum_object::resolve::Resolve>(core::option::Option<&pdfrum_object::dict::Dict>, &R) -> pdfrum_doc::ap::border::BorderStyleInfo
-pub fn pdfrum_doc::ap::border::border_width<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> f32
-pub fn pdfrum_doc::ap::border::dash_array<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> core::option::Option<pdfrum_object::array::Array>
-pub fn pdfrum_doc::ap::border::dash_pattern_string<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> alloc::string::String
-pub mod pdfrum_doc::ap::da
-pub struct pdfrum_doc::ap::da::FontNameAndSize
-pub pdfrum_doc::ap::da::FontNameAndSize::name: alloc::vec::Vec<u8>
-pub pdfrum_doc::ap::da::FontNameAndSize::size: f32
-pub struct pdfrum_doc::ap::da::Parser<'a>
-impl<'a> pdfrum_doc::ap::da::Parser<'a>
-pub fn pdfrum_doc::ap::da::Parser<'a>::new(&'a [u8]) -> pdfrum_doc::ap::da::Parser<'a>
-pub fn pdfrum_doc::ap::da::Parser<'a>::next_word(&mut self) -> &'a [u8]
-pub fn pdfrum_doc::ap::da::Parser<'a>::position(&self) -> usize
-pub fn pdfrum_doc::ap::da::Parser<'a>::seek(&mut self, usize)
-pub fn pdfrum_doc::ap::da::color(&[u8]) -> core::option::Option<pdfrum_doc::color::Color>
-pub fn pdfrum_doc::ap::da::find_tag_param_from_start(&mut pdfrum_doc::ap::da::Parser<'_>, &[u8], usize) -> bool
-pub fn pdfrum_doc::ap::da::font(&[u8]) -> core::option::Option<pdfrum_doc::ap::da::FontNameAndSize>
-pub mod pdfrum_doc::ap::emit
-pub enum pdfrum_doc::ap::emit::Float
-pub pdfrum_doc::ap::emit::Float::G6
-pub pdfrum_doc::ap::emit::Float::Shortest
-impl pdfrum_doc::ap::emit::Float
-pub fn pdfrum_doc::ap::emit::Float::write(self, f32) -> alloc::string::String
-pub enum pdfrum_doc::ap::emit::PaintOp
-pub pdfrum_doc::ap::emit::PaintOp::Fill
-pub pdfrum_doc::ap::emit::PaintOp::Stroke
-pub struct pdfrum_doc::ap::emit::Content
-impl pdfrum_doc::ap::emit::Content
-pub fn pdfrum_doc::ap::emit::Content::as_str(&self) -> &str
-pub fn pdfrum_doc::ap::emit::Content::into_bytes(self) -> alloc::vec::Vec<u8>
-pub fn pdfrum_doc::ap::emit::Content::is_empty(&self) -> bool
-pub fn pdfrum_doc::ap::emit::Content::new() -> pdfrum_doc::ap::emit::Content
-pub fn pdfrum_doc::ap::emit::Content::num(&mut self, f32, pdfrum_doc::ap::emit::Float)
-pub fn pdfrum_doc::ap::emit::Content::point(&mut self, f32, f32, pdfrum_doc::ap::emit::Float)
-pub fn pdfrum_doc::ap::emit::Content::raw(&mut self, &str)
-pub fn pdfrum_doc::ap::emit::Content::rect(&mut self, kurbo::rect::Rect, pdfrum_doc::ap::emit::Float)
-pub fn pdfrum_doc::ap::emit::color_op(pdfrum_doc::color::Color, pdfrum_doc::ap::emit::PaintOp) -> alloc::string::String
-pub fn pdfrum_doc::ap::emit::color_op_via(pdfrum_doc::color::Color, pdfrum_doc::ap::emit::PaintOp, pdfrum_doc::ap::emit::Float) -> alloc::string::String
-pub fn pdfrum_doc::ap::emit::color_with_default(core::option::Option<&pdfrum_object::array::Array>, pdfrum_doc::color::Color, pdfrum_doc::ap::emit::PaintOp) -> alloc::string::String
-pub fn pdfrum_doc::ap::emit::paint_operator(bool, bool) -> &'static str
 pub mod pdfrum_doc::ap::field_body
-pub enum pdfrum_doc::ap::field_body::Kind
-pub pdfrum_doc::ap::field_body::Kind::Button
-pub pdfrum_doc::ap::field_body::Kind::Combo
-pub pdfrum_doc::ap::field_body::Kind::List
-pub pdfrum_doc::ap::field_body::Kind::Text
-impl pdfrum_doc::ap::field_body::Kind
-pub fn pdfrum_doc::ap::field_body::Kind::of<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> core::option::Option<pdfrum_doc::ap::field_body::Kind>
-pub struct pdfrum_doc::ap::field_body::Body
-pub pdfrum_doc::ap::field_body::Body::font_resources: core::option::Option<pdfrum_object::dict::Dict>
-pub pdfrum_doc::ap::field_body::Body::stream: alloc::vec::Vec<u8>
 pub struct pdfrum_doc::ap::field_body::Choice
 pub pdfrum_doc::ap::field_body::Choice::label: alloc::string::String
 pub pdfrum_doc::ap::field_body::Choice::value: alloc::string::String
@@ -208,21 +138,11 @@ pub const pdfrum_doc::ap::field_body::CARET_WIDTH: f32
 pub fn pdfrum_doc::ap::field_body::alignment<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> pdfrum_doc::vt::Alignment
 pub fn pdfrum_doc::ap::field_body::client_rect<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> kurbo::rect::Rect
 pub fn pdfrum_doc::ap::field_body::field_value<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> alloc::string::String
-pub fn pdfrum_doc::ap::field_body::generate<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &pdfrum_object::dict::Dict, &pdfrum_doc::ap::TextFont<'_>, core::option::Option<pdfrum_doc::ap::Substitute<'_>>, &R, core::option::Option<&pdfrum_doc::ap::field_body::Highlight>, core::option::Option<&pdfrum_doc::ap::field_body::LiveState<'_>>) -> core::option::Option<pdfrum_doc::ap::field_body::Body>
 pub fn pdfrum_doc::ap::field_body::options<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> alloc::vec::Vec<pdfrum_doc::ap::field_body::Choice>
-pub fn pdfrum_doc::ap::field_body::selected_indices<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &[pdfrum_doc::ap::field_body::Choice], &R) -> alloc::vec::Vec<usize>
-pub fn pdfrum_doc::ap::field_body::text_color<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> pdfrum_doc::color::Color
-pub mod pdfrum_doc::ap::fmt
-pub fn pdfrum_doc::ap::fmt::g6(f32) -> alloc::string::String
-pub fn pdfrum_doc::ap::fmt::shortest(f32) -> alloc::string::String
 pub mod pdfrum_doc::ap::font_map
 pub const pdfrum_doc::ap::font_map::SUBSTITUTABLE_CHARSETS: &[pdfrum_font::subst::charset::Charset]
-pub fn pdfrum_doc::ap::font_map::charset_code(pdfrum_font::subst::charset::Charset, u32) -> core::option::Option<u8>
 pub fn pdfrum_doc::ap::font_map::da_font_writes(&pdfrum_font::Font, pdfrum_font::subst::charset::Charset, u32) -> bool
 pub fn pdfrum_doc::ap::font_map::font_charset(&pdfrum_font::Font) -> pdfrum_font::subst::charset::Charset
-pub fn pdfrum_doc::ap::font_map::substitute_alias(pdfrum_font::subst::charset::Charset) -> alloc::vec::Vec<u8>
-pub fn pdfrum_doc::ap::font_map::substitute_encode(&pdfrum_font::Font, u32) -> alloc::vec::Vec<u8>
-pub fn pdfrum_doc::ap::font_map::substitute_font_dict(pdfrum_font::subst::charset::Charset) -> core::option::Option<pdfrum_object::dict::Dict>
 pub fn pdfrum_doc::ap::font_map::substitute_width(&pdfrum_font::Font, u32) -> i32
 pub mod pdfrum_doc::ap::freetext
 pub struct pdfrum_doc::ap::freetext::Appearance
@@ -230,65 +150,13 @@ pub pdfrum_doc::ap::freetext::Appearance::color: pdfrum_doc::color::Color
 pub pdfrum_doc::ap::freetext::Appearance::font_name: alloc::vec::Vec<u8>
 pub pdfrum_doc::ap::freetext::Appearance::size: f32
 pub fn pdfrum_doc::ap::freetext::default_appearance<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &pdfrum_object::dict::Dict, &R) -> core::option::Option<pdfrum_doc::ap::freetext::Appearance>
-pub fn pdfrum_doc::ap::freetext::default_appearance_string(&pdfrum_doc::ap::freetext::Appearance) -> alloc::vec::Vec<u8>
-pub fn pdfrum_doc::ap::freetext::fallback_font() -> pdfrum_object::dict::Dict
-pub fn pdfrum_doc::ap::freetext::font_resource_alias(&[u8]) -> alloc::vec::Vec<u8>
-pub fn pdfrum_doc::ap::freetext::free_text<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &pdfrum_object::dict::Dict, &R, &pdfrum_doc::vt::Metrics<'_>, &dyn core::ops::function::Fn(u32) -> alloc::vec::Vec<u8>) -> core::option::Option<pdfrum_doc::ap::markup::Generated>
-pub fn pdfrum_doc::ap::freetext::resolved_size(f32) -> core::option::Option<f32>
-pub fn pdfrum_doc::ap::freetext::synthesized_form() -> pdfrum_object::dict::Dict
-pub fn pdfrum_doc::ap::freetext::valid_font_resources<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> bool
-pub mod pdfrum_doc::ap::markup
-pub struct pdfrum_doc::ap::markup::Generated
-pub pdfrum_doc::ap::markup::Generated::blend_multiply: bool
-pub pdfrum_doc::ap::markup::Generated::font_resources: core::option::Option<pdfrum_object::dict::Dict>
-pub pdfrum_doc::ap::markup::Generated::is_text_markup: bool
-pub pdfrum_doc::ap::markup::Generated::rect_override: core::option::Option<kurbo::rect::Rect>
-pub pdfrum_doc::ap::markup::Generated::stream: alloc::vec::Vec<u8>
-pub fn pdfrum_doc::ap::markup::circle<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> pdfrum_doc::ap::markup::Generated
-pub fn pdfrum_doc::ap::markup::highlight<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> pdfrum_doc::ap::markup::Generated
-pub fn pdfrum_doc::ap::markup::ink<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> core::option::Option<pdfrum_doc::ap::markup::Generated>
-pub fn pdfrum_doc::ap::markup::square<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> pdfrum_doc::ap::markup::Generated
-pub fn pdfrum_doc::ap::markup::squiggly<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> pdfrum_doc::ap::markup::Generated
-pub fn pdfrum_doc::ap::markup::strike_out<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> pdfrum_doc::ap::markup::Generated
-pub fn pdfrum_doc::ap::markup::text<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> pdfrum_doc::ap::markup::Generated
-pub fn pdfrum_doc::ap::markup::text_symbol(kurbo::rect::Rect) -> alloc::string::String
-pub fn pdfrum_doc::ap::markup::underline<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> pdfrum_doc::ap::markup::Generated
-pub mod pdfrum_doc::ap::popup
-pub fn pdfrum_doc::ap::popup::popup<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &pdfrum_doc::vt::Metrics<'_>, &dyn core::ops::function::Fn(u32) -> alloc::vec::Vec<u8>, &R) -> core::option::Option<pdfrum_doc::ap::markup::Generated>
-pub mod pdfrum_doc::ap::shapes
-pub enum pdfrum_doc::ap::shapes::CheckStyle
-pub pdfrum_doc::ap::shapes::CheckStyle::Check
-pub pdfrum_doc::ap::shapes::CheckStyle::Circle
-pub pdfrum_doc::ap::shapes::CheckStyle::Cross
-pub pdfrum_doc::ap::shapes::CheckStyle::Diamond
-pub pdfrum_doc::ap::shapes::CheckStyle::Square
-pub pdfrum_doc::ap::shapes::CheckStyle::Star
-pub fn pdfrum_doc::ap::shapes::check_box(kurbo::rect::Rect, pdfrum_doc::ap::shapes::CheckStyle, pdfrum_doc::color::Color) -> alloc::string::String
-pub fn pdfrum_doc::ap::shapes::drop_button(kurbo::rect::Rect) -> alloc::string::String
-pub fn pdfrum_doc::ap::shapes::path(kurbo::rect::Rect, pdfrum_doc::ap::shapes::CheckStyle) -> alloc::string::String
-pub fn pdfrum_doc::ap::shapes::radio_button(kurbo::rect::Rect, pdfrum_doc::ap::shapes::CheckStyle, pdfrum_doc::color::Color) -> alloc::string::String
-pub fn pdfrum_doc::ap::shapes::style_from_caption(&str) -> core::option::Option<pdfrum_doc::ap::shapes::CheckStyle>
 pub mod pdfrum_doc::ap::widget
 pub struct pdfrum_doc::ap::widget::LiveInput<'a>
 pub pdfrum_doc::ap::widget::LiveInput::appearance_state: core::option::Option<&'a [u8]>
 pub pdfrum_doc::ap::widget::LiveInput::caret_and_selection: core::option::Option<&'a pdfrum_doc::ap::field_body::Highlight>
 pub pdfrum_doc::ap::widget::LiveInput::live: core::option::Option<&'a pdfrum_doc::ap::field_body::LiveState<'a>>
 pub pdfrum_doc::ap::widget::LiveInput::substitute: core::option::Option<pdfrum_doc::ap::Substitute<'a>>
-pub fn pdfrum_doc::ap::widget::check_style<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> core::option::Option<pdfrum_doc::ap::shapes::CheckStyle>
-pub fn pdfrum_doc::ap::widget::checked_ap_state<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> alloc::vec::Vec<u8>
-pub fn pdfrum_doc::ap::widget::generate<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> core::option::Option<pdfrum_doc::ap::GeneratedAp>
-pub fn pdfrum_doc::ap::widget::generate_with_live<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &pdfrum_object::dict::Dict, &pdfrum_doc::ap::TextFont<'_>, &R, core::option::Option<&pdfrum_doc::ap::field_body::Highlight>, core::option::Option<&pdfrum_doc::ap::field_body::LiveState<'_>>) -> core::option::Option<pdfrum_doc::ap::GeneratedAp>
 pub fn pdfrum_doc::ap::widget::generate_with_live_faces<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &pdfrum_object::dict::Dict, &pdfrum_doc::ap::TextFont<'_>, &R, pdfrum_doc::ap::widget::LiveInput<'_>) -> core::option::Option<pdfrum_doc::ap::GeneratedAp>
-pub fn pdfrum_doc::ap::widget::generate_with_text<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &pdfrum_object::dict::Dict, &pdfrum_doc::ap::TextFont<'_>, core::option::Option<pdfrum_doc::ap::Substitute<'_>>, &R) -> core::option::Option<pdfrum_doc::ap::GeneratedAp>
-pub fn pdfrum_doc::ap::widget::has_known_field_type<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> bool
-pub fn pdfrum_doc::ap::widget::is_button<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> bool
-pub fn pdfrum_doc::ap::widget::is_checked<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> bool
-pub fn pdfrum_doc::ap::widget::is_checked_with<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R, core::option::Option<&[u8]>) -> bool
-pub fn pdfrum_doc::ap::widget::is_radio<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> bool
-pub fn pdfrum_doc::ap::widget::needs_appearance<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> bool
-pub fn pdfrum_doc::ap::widget::needs_appearance_in<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, core::option::Option<&pdfrum_object::dict::Dict>, &R) -> bool
-pub fn pdfrum_doc::ap::widget::rotated_rect<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> kurbo::rect::Rect
-pub fn pdfrum_doc::ap::widget::text_color<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> pdfrum_doc::color::Color
 pub fn pdfrum_doc::ap::widget::widget_border<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> pdfrum_doc::ap::border::BorderStyleInfo
 pub enum pdfrum_doc::ap::Appearance
 pub pdfrum_doc::ap::Appearance::Generated(pdfrum_doc::ap::GeneratedAp)
@@ -349,12 +217,8 @@ pub fn pdfrum_doc::ap::TextFont<'_>::encode(&self, u32) -> alloc::vec::Vec<u8>
 pub fn pdfrum_doc::ap::TextFont<'_>::metrics_of<'a>(&'a pdfrum_font::Font, &'a dyn core::ops::function::Fn(u32) -> i32) -> pdfrum_doc::vt::Metrics<'a>
 impl core::fmt::Debug for pdfrum_doc::ap::TextFont<'_>
 pub fn pdfrum_doc::ap::TextFont<'_>::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-pub fn pdfrum_doc::ap::ext_gstate_dict<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, bool, &R) -> pdfrum_object::dict::Dict
 pub fn pdfrum_doc::ap::generate_appearances<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_doc::ap::AnnotOverlay
 pub fn pdfrum_doc::ap::generate_appearances_with_text<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &pdfrum_object::dict::Dict, core::option::Option<&pdfrum_doc::ap::FormFonts>, &R, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_doc::ap::AnnotOverlay
-pub fn pdfrum_doc::ap::generate_one<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<pdfrum_doc::ap::GeneratedAp>
-pub fn pdfrum_doc::ap::resources_dict(pdfrum_object::dict::Dict, core::option::Option<pdfrum_object::dict::Dict>) -> pdfrum_object::dict::Dict
-pub fn pdfrum_doc::ap::should_generate<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> bool
 pub fn pdfrum_doc::ap::stream_dict(&pdfrum_doc::ap::GeneratedAp) -> pdfrum_object::dict::Dict
 pub mod pdfrum_doc::color
 pub enum pdfrum_doc::color::Color

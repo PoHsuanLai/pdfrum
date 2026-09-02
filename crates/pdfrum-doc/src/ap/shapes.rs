@@ -98,7 +98,7 @@ const DROP_BUTTON_BORDER: crate::ap::border::BorderStyleInfo = crate::ap::border
     width: 2.0,
     style: crate::ap::border::BorderStyle::Beveled,
     dash: crate::ap::border::Dash {
-        dash: 3,
+        on: 3,
         gap: 0,
         phase: 0,
     },

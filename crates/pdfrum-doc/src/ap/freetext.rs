@@ -26,7 +26,7 @@ use crate::vt;
 /// returning an empty appearance: nothing means the annotation keeps having
 /// none at all.
 #[must_use]
-pub fn free_text<R: Resolve>(
+pub(crate) fn free_text<R: Resolve>(
     dict: &Dict,
     catalog: &Dict,
     r: &R,
@@ -176,7 +176,7 @@ pub fn default_appearance<R: Resolve>(dict: &Dict, form: &Dict, r: &R) -> Option
 /// `/Type /Font` dictionary fails. The name is checked as a name, so a string
 /// `/Type (Font)` is rejected.
 #[must_use]
-pub fn valid_font_resources<R: Resolve>(fonts: &Dict, r: &R) -> bool {
+pub(crate) fn valid_font_resources<R: Resolve>(fonts: &Dict, r: &R) -> bool {
     fonts.keys().all(|key| {
         fonts
             .dict(key, r)
@@ -190,7 +190,7 @@ pub fn valid_font_resources<R: Resolve>(fonts: &Dict, r: &R) -> bool {
 /// generator takes the first four characters of the base font name — and a
 /// default appearance naming it at size 12 in black.
 #[must_use]
-pub fn synthesized_form() -> Dict {
+pub(crate) fn synthesized_form() -> Dict {
     let alias = pdfrum_object::Name::new(font_resource_alias(b"Helvetica"));
     let mut da = Vec::from(b"/".as_slice());
     da.extend_from_slice(alias.as_bytes());
@@ -213,7 +213,7 @@ pub fn synthesized_form() -> Dict {
 /// when it is shorter, and spaces removed. A nameless font takes the fixed
 /// placeholder.
 #[must_use]
-pub fn font_resource_alias(base_font_name: &[u8]) -> Vec<u8> {
+pub(crate) fn font_resource_alias(base_font_name: &[u8]) -> Vec<u8> {
     const PLACEHOLDER: &[u8] = b"ZiTi";
     const WIDTH: usize = 4;
 
@@ -238,7 +238,7 @@ pub fn font_resource_alias(base_font_name: &[u8]) -> Vec<u8> {
 
 /// A fallback font dictionary, for a `/DR /Font` that names none.
 #[must_use]
-pub fn fallback_font() -> Dict {
+pub(crate) fn fallback_font() -> Dict {
     Dict::from_pairs([
         (obj_names::TYPE.clone(), Object::Name(names::FONT.clone())),
         (
@@ -262,13 +262,21 @@ pub fn fallback_font() -> Dict {
 /// used as written — and the font operator's own `size > 0` gate then
 /// suppresses the `Tf`, leaving the text at whatever the enclosing stream set.
 #[must_use]
-pub fn resolved_size(size: f32) -> Option<f32> {
+// Reached only by the tests beside it now that the module is private; the
+// library compiles once without `cfg(test)`, so `dead_code` fires. §WP8's
+// recurring cost — the item is pinned by a test, not unreachable.
+#[allow(dead_code)]
+pub(crate) fn resolved_size(size: f32) -> Option<f32> {
     (!crate::geom::is_float_zero(size)).then_some(size)
 }
 
 /// The `/DA` a colour change rewrites, for the facade's benefit.
 #[must_use]
-pub fn default_appearance_string(appearance: &Appearance) -> Vec<u8> {
+// Reached only by the tests beside it now that the module is private; the
+// library compiles once without `cfg(test)`, so `dead_code` fires. §WP8's
+// recurring cost — the item is pinned by a test, not unreachable.
+#[allow(dead_code)]
+pub(crate) fn default_appearance_string(appearance: &Appearance) -> Vec<u8> {
     let mut out = Vec::new();
     if !appearance.font_name.is_empty() && appearance.size > 0.0 {
         out.push(b'/');

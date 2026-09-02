@@ -33,7 +33,7 @@ pub enum BorderStyle {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Dash {
     /// On length.
-    pub dash: i64,
+    pub on: i64,
     /// Off length.
     pub gap: i64,
     /// Phase offset.
@@ -43,7 +43,7 @@ pub struct Dash {
 impl Default for Dash {
     fn default() -> Self {
         Dash {
-            dash: 3,
+            on: 3,
             gap: 0,
             phase: 0,
         }
@@ -104,7 +104,7 @@ pub fn border_style_info<R: Resolve>(bs: Option<&Dict>, r: &R) -> BorderStyleInf
     }
     if let Some(pattern) = bs.array(names::D, r) {
         info.dash = Dash {
-            dash: pattern.int_at(0).unwrap_or(0),
+            on: pattern.int_at(0).unwrap_or(0),
             gap: pattern.int_at(1).unwrap_or(0),
             phase: pattern.int_at(2).unwrap_or(0),
         };
@@ -155,7 +155,7 @@ pub fn border_path(rect: Rect, info: BorderStyleInfo, color: Color) -> String {
             out.num(width, Float::Shortest);
             out.raw(&format!(
                 "w [{} {}] {} d\n",
-                info.dash.dash, info.dash.gap, info.dash.phase
+                info.dash.on, info.dash.gap, info.dash.phase
             ));
             out.point(left + half, bottom + half, Float::Shortest);
             out.raw("m\n");
@@ -423,7 +423,7 @@ mod tests {
             width: 2.0,
             style: BorderStyle::Dash,
             dash: Dash {
-                dash: 3,
+                on: 3,
                 gap: 1,
                 phase: 0,
             },

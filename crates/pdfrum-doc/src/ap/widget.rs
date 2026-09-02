@@ -90,7 +90,11 @@ use crate::names;
 /// Measured with gdb on the oracle: both files reach `ResetAppearance`, and
 /// only one of them shows it.
 #[must_use]
-pub fn needs_appearance<R: Resolve>(dict: &Dict, r: &R) -> bool {
+// Reached only by the tests beside it now that the module is private; the
+// library compiles once without `cfg(test)`, so `dead_code` fires. §WP8's
+// recurring cost — the item is pinned by a test, not unreachable.
+#[allow(dead_code)]
+pub(crate) fn needs_appearance<R: Resolve>(dict: &Dict, r: &R) -> bool {
     needs_appearance_in(dict, None, r)
 }
 
@@ -99,7 +103,7 @@ pub fn needs_appearance<R: Resolve>(dict: &Dict, r: &R) -> bool {
 /// The catalog is what `/NeedAppearances` is read from; a caller without one
 /// answers as a form that does not set it would.
 #[must_use]
-pub fn needs_appearance_in<R: Resolve>(dict: &Dict, catalog: Option<&Dict>, r: &R) -> bool {
+pub(crate) fn needs_appearance_in<R: Resolve>(dict: &Dict, catalog: Option<&Dict>, r: &R) -> bool {
     // Read coercively, matching how the annotation list classifies subtypes.
     if dict.byte_string(obj_names::SUBTYPE, r).as_deref() != Some(b"Widget") {
         return false;
@@ -177,7 +181,7 @@ fn rebuild_would_be_seen<R: Resolve>(dict: &Dict, r: &R) -> bool {
 /// index as a decimal string instead, and an answer that comes back empty
 /// becomes `Yes`.
 #[must_use]
-pub fn checked_ap_state<R: Resolve>(dict: &Dict, r: &R) -> Vec<u8> {
+pub(crate) fn checked_ap_state<R: Resolve>(dict: &Dict, r: &R) -> Vec<u8> {
     let (limits, mut diags) = (Limits::default(), Diagnostics::default());
     if attr::field_attr(dict, names::OPT, r, &limits, &mut diags)
         .is_some_and(|value| matches!(value, pdfrum_object::Object::Array(_)))
@@ -224,7 +228,7 @@ fn control_index<R: Resolve>(dict: &Dict, r: &R) -> usize {
 /// with neither colour present — the ordinary case — it comes out empty,
 /// which is a valid appearance and is what the oracle writes too.
 #[must_use]
-pub fn generate<R: Resolve>(dict: &Dict, r: &R) -> Option<GeneratedAp> {
+pub(crate) fn generate<R: Resolve>(dict: &Dict, r: &R) -> Option<GeneratedAp> {
     build(dict, None, None, LiveInput::default(), r)
 }
 
@@ -237,7 +241,7 @@ pub fn generate<R: Resolve>(dict: &Dict, r: &R) -> Option<GeneratedAp> {
 /// The text is the one the **file** stores. A field being edited shows
 /// something else, and [`generate_with_live`] is the entry point for that.
 #[must_use]
-pub fn generate_with_text<R: Resolve>(
+pub(crate) fn generate_with_text<R: Resolve>(
     dict: &Dict,
     catalog: &Dict,
     font: &crate::ap::TextFont<'_>,
@@ -334,7 +338,11 @@ pub struct LiveInput<'a> {
 /// need not be simultaneous, and it delegates there with
 /// [`LiveInput::substitute`] unset.
 #[must_use]
-pub fn generate_with_live<R: Resolve>(
+// Reached only by the tests beside it now that the module is private; the
+// library compiles once without `cfg(test)`, so `dead_code` fires. §WP8's
+// recurring cost — the item is pinned by a test, not unreachable.
+#[allow(dead_code)]
+pub(crate) fn generate_with_live<R: Resolve>(
     dict: &Dict,
     catalog: &Dict,
     font: &crate::ap::TextFont<'_>,
@@ -483,7 +491,7 @@ fn build<R: Resolve>(
 /// an `/FT` naming something outside the three the spec defines. Each falls
 /// off the end of the dispatch, and nothing is written.
 #[must_use]
-pub fn has_known_field_type<R: Resolve>(dict: &Dict, r: &R) -> bool {
+pub(crate) fn has_known_field_type<R: Resolve>(dict: &Dict, r: &R) -> bool {
     let (limits, mut diags) = (Limits::default(), Diagnostics::default());
     let kind = attr::field_attr(dict, names::FT, r, &limits, &mut diags)
         .map(|value| value.to_byte_string())
@@ -497,7 +505,11 @@ pub fn has_known_field_type<R: Resolve>(dict: &Dict, r: &R) -> bool {
 /// with no `/AS` at all is off, because that is what the generator writes
 /// when it finds none.
 #[must_use]
-pub fn is_checked<R: Resolve>(dict: &Dict, r: &R) -> bool {
+// Reached only by the tests beside it now that the module is private; the
+// library compiles once without `cfg(test)`, so `dead_code` fires. §WP8's
+// recurring cost — the item is pinned by a test, not unreachable.
+#[allow(dead_code)]
+pub(crate) fn is_checked<R: Resolve>(dict: &Dict, r: &R) -> bool {
     is_checked_with(dict, r, None)
 }
 
@@ -511,7 +523,11 @@ pub fn is_checked<R: Resolve>(dict: &Dict, r: &R) -> bool {
 /// named. See [`LiveInput::appearance_state`] for why the session cannot say
 /// this through the dictionary instead.
 #[must_use]
-pub fn is_checked_with<R: Resolve>(dict: &Dict, r: &R, override_state: Option<&[u8]>) -> bool {
+pub(crate) fn is_checked_with<R: Resolve>(
+    dict: &Dict,
+    r: &R,
+    override_state: Option<&[u8]>,
+) -> bool {
     match override_state {
         Some(state) => state != names::OFF.as_bytes(),
         None => match dict.byte_string(names::AS, r) {
@@ -528,7 +544,7 @@ pub fn is_checked_with<R: Resolve>(dict: &Dict, r: &R, override_state: Option<&[
 /// unrecognized or absent caption falls back per kind: a check mark for a
 /// checkbox, a circle for a radio button.
 #[must_use]
-pub fn check_style<R: Resolve>(dict: &Dict, r: &R) -> Option<CheckStyle> {
+pub(crate) fn check_style<R: Resolve>(dict: &Dict, r: &R) -> Option<CheckStyle> {
     if !is_button(dict, r) {
         return None;
     }
@@ -550,7 +566,7 @@ pub fn check_style<R: Resolve>(dict: &Dict, r: &R) -> Option<CheckStyle> {
 /// Push buttons are excluded: they carry a caption and an icon rather than a
 /// glyph.
 #[must_use]
-pub fn is_button<R: Resolve>(dict: &Dict, r: &R) -> bool {
+pub(crate) fn is_button<R: Resolve>(dict: &Dict, r: &R) -> bool {
     let (limits, mut diags) = (Limits::default(), Diagnostics::default());
     let kind = attr::field_attr(dict, names::FT, r, &limits, &mut diags)
         .map(|value| value.to_byte_string())
@@ -567,7 +583,7 @@ pub fn is_button<R: Resolve>(dict: &Dict, r: &R) -> bool {
 
 /// Whether the widget is specifically a radio button — bit 16 of `/Ff`.
 #[must_use]
-pub fn is_radio<R: Resolve>(dict: &Dict, r: &R) -> bool {
+pub(crate) fn is_radio<R: Resolve>(dict: &Dict, r: &R) -> bool {
     let (limits, mut diags) = (Limits::default(), Diagnostics::default());
     let flags = attr::field_attr(dict, names::FF, r, &limits, &mut diags)
         .and_then(|value| value.as_int())
@@ -581,7 +597,7 @@ pub fn is_radio<R: Resolve>(dict: &Dict, r: &R) -> bool {
 /// writes no colour operator into the stream — the glyph then takes whatever
 /// the enclosing stream had set.
 #[must_use]
-pub fn text_color<R: Resolve>(dict: &Dict, r: &R) -> Color {
+pub(crate) fn text_color<R: Resolve>(dict: &Dict, r: &R) -> Color {
     let (limits, mut diags) = (Limits::default(), Diagnostics::default());
     attr::field_attr(dict, names::DA, r, &limits, &mut diags)
         .map(|value| value.to_byte_string())
@@ -595,7 +611,7 @@ pub fn text_color<R: Resolve>(dict: &Dict, r: &R) -> Color {
 /// width and height swap, and any other value — including a negative one,
 /// since the remainder keeps its sign — leaves the box **empty**.
 #[must_use]
-pub fn rotated_rect<R: Resolve>(dict: &Dict, r: &R) -> Rect {
+pub(crate) fn rotated_rect<R: Resolve>(dict: &Dict, r: &R) -> Rect {
     let rect = dict.rect(obj_names::RECT, r);
     let (width, height) = (geom::width(rect), geom::height(rect));
     let rotation = dict

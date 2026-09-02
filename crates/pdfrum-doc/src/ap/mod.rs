@@ -29,16 +29,16 @@
 //! already has an appearance" case is covered by the same test. Only a
 //! missing `/AP`, a missing `/N`, or a scalar `/N` leaves the door open.
 
-pub mod border;
-pub mod da;
-pub mod emit;
+mod border;
+mod da;
+pub(crate) mod emit;
 pub mod field_body;
-pub mod fmt;
+pub(crate) mod fmt;
 pub mod font_map;
 pub mod freetext;
-pub mod markup;
-pub mod popup;
-pub mod shapes;
+mod markup;
+pub(crate) mod popup;
+mod shapes;
 pub mod widget;
 
 use kurbo::{Affine, Rect};
@@ -836,7 +836,7 @@ fn generate_text_bearing<R: Resolve>(
 
 /// Generates one annotation's appearance, if it should have one.
 #[must_use]
-pub fn generate_one<R: Resolve>(
+pub(crate) fn generate_one<R: Resolve>(
     dict: &Dict,
     r: &R,
     diags: &mut Diagnostics,
@@ -893,7 +893,7 @@ pub fn generate_one<R: Resolve>(
 /// appearance" case and the multi-state checkbox case are the same test. And
 /// a hidden annotation never generates.
 #[must_use]
-pub fn should_generate<R: Resolve>(dict: &Dict, r: &R) -> bool {
+pub(crate) fn should_generate<R: Resolve>(dict: &Dict, r: &R) -> bool {
     if appearance::has_appearance(dict, r) {
         return false;
     }
@@ -907,7 +907,7 @@ pub fn should_generate<R: Resolve>(dict: &Dict, r: &R) -> bool {
 /// its type reads as, and one otherwise. Only the highlight generator asks
 /// for a blend mode other than normal.
 #[must_use]
-pub fn ext_gstate_dict<R: Resolve>(dict: &Dict, multiply: bool, r: &R) -> Dict {
+pub(crate) fn ext_gstate_dict<R: Resolve>(dict: &Dict, multiply: bool, r: &R) -> Dict {
     let opacity = if dict.contains_key(names::CA) {
         dict.number(names::CA, r).unwrap_or(0.0)
     } else {
@@ -933,7 +933,7 @@ pub fn ext_gstate_dict<R: Resolve>(dict: &Dict, multiply: bool, r: &R) -> Dict {
 
 /// The appearance stream's `/Resources`, omitting either half when absent.
 #[must_use]
-pub fn resources_dict(ext_gstate: Dict, font: Option<Dict>) -> Dict {
+pub(crate) fn resources_dict(ext_gstate: Dict, font: Option<Dict>) -> Dict {
     let mut resources = Dict::new();
     resources.push(names::EXT_GSTATE.clone(), Object::Dict(ext_gstate));
     if let Some(font) = font {
