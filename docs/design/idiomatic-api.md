@@ -2,10 +2,13 @@
 
 **Status:** proposal. Not a `[spec]` change yet — each work package below
 becomes one when it lands, per SPEC.md §0.
-**Date:** 2026-09-02.
-**Scope:** the public API of `pdfrum` and, secondarily, the curated public
-surface of the member crates it composes. Behaviour against the oracle does
-not move.
+**Date:** 2026-09-02. **Amended 2026-09-02 — see §A, which supersedes §1's
+governing principle and §7's sequence, revises §3's audience table, and
+withdraws one sentence of §5's preamble. §2, §4 and §6 stand.**
+**Scope:** ~~the public API of `pdfrum` and, secondarily, the curated public
+surface of the member crates it composes.~~ **Widened by §A:** the public API
+of `pdfrum` *and of every published member crate*, each on its own terms.
+Behaviour against the oracle does not move.
 
 PLAN.md locked the API as “pure idiomatic Rust” on day one. STYLE.md §4
 points at the [Rust API Guidelines](https://rust-lang.github.io/api-guidelines/)
@@ -17,6 +20,612 @@ The engine is not the problem. The core open / page / render / text / save
 path is already a Rust library. The remaining work is to make the rest of the
 surface match that core, without smuggling PDFium or Win32 names, packed
 integers, or types a `cargo add pdfrum` caller cannot name.
+
+---
+
+## A. Amendment, 2026-09-02 — every crate is idiomatic, not just the facade
+
+**This section supersedes §1's governing principle and §7's ordering, revises
+§3's table, and withdraws one sentence of §5's preamble. §2, §4 and §6 stand
+unchanged; §A.8 confirms each line by line.** Nothing below is deleted from
+§§1–9 — the superseded text is quoted where it is replaced, per the house rule
+that a claim a later ruling overturns is withdrawn in place.
+
+Reading order, if you only want the ruling: §A.2 is the new principle, §A.3 is
+the distinction it depends on, §A.10 is the new sequence. Everything else is
+the evidence for those three.
+
+### A.1 What §1 said, and why it is withdrawn
+
+§1 governed with:
+
+> **Idiomatic at the facade. Oracle-faithful below.**
+>
+> The C++ is an oracle for *behaviour*, not a vocabulary for *types*. A page
+> index that is `u32` in the file, an `/Ff` word whose bits change meaning by
+> field type, a Win32 `VK_PRIOR`, a form-layout midpoint computed as
+> `(top + bottom) / 2` in `f32` — all of that stays in the crate that has to
+> match a golden. **The facade translates.**
+
+The first two sentences are right and are kept. The third — *the facade
+translates* — is withdrawn. It smuggles in a premise the rest of this
+workspace does not hold: that the facade is the product and a member crate is
+an implementation detail that may stay ugly because something downstream will
+launder it.
+
+Three things in the tree contradict that premise.
+
+1. **Modularity is a stated selling point, and every member crate but two is
+   `publish = true`.** `pdfrum-raster-vello` and `pdfrum-script` are
+   `publish = false`; the other seventeen ship to crates.io as public APIs
+   with their own rustdoc, their own semver, and their own `cargo add`
+   audience. A caller who wants text extraction and nothing else adds
+   `pdfrum-text` — that is the whole point of the split, and PLAN.md §3
+   describes each crate as a thing that *replaces* a PDFium module, not as a
+   private sub-unit of a facade.
+
+2. **The facade's own crate documentation already promises the opposite of
+   §1.** `crates/pdfrum/src/lib.rs` says, under *"This crate composes, it does
+   not compute"*:
+
+   > Everything here is a thin, ergonomic surface over a stack of member
+   > crates, **each of which is a public API in its own right and none of
+   > which this crate hides.** […] `pdfrum-parser`, `pdfrum-page`,
+   > `pdfrum-render`, `pdfrum-text`, `pdfrum-doc` and `pdfrum-edit` are all
+   > **there to be used directly.**
+
+   A crate cannot be "a public API in its own right […] there to be used
+   directly" and also be the place the C-style vocabulary is allowed to live.
+   §1 and the shipped crate docs cannot both be true. The crate docs are the
+   promise made to users, so §1 is the one that gives way.
+
+3. **There is often no facade layer to translate in.** This is the decisive
+   one, and it is measurable rather than rhetorical. The facade does not wrap
+   the offending types; it re-exports them verbatim:
+
+   | Facade line | What it re-exports | Translation performed |
+   |---|---|---|
+   | `crates/pdfrum/src/lib.rs:258` | `pdfrum_text::{CharBox, FindOptions, TextPage, WebLink}` | none |
+   | `crates/pdfrum/src/annotation.rs:3` | `pdfrum_doc::{AnnotFlags, Subtype}` | none |
+   | `crates/pdfrum/src/form.rs:8` | `pdfrum_doc::form::{FieldFlags, FieldKind}` | none |
+   | `crates/pdfrum/src/lib.rs:202` | `pdfrum_form::tab::Rect as FormRect` | a rename |
+
+   So WP8's `page_text(start, count)` and `to_utf32le()` are not "one layer
+   down" from an idiomatic facade — they *are* the facade, because
+   `pdfrum::TextPage` **is** `pdfrum_text::TextPage`. §1 promised a
+   translating layer that, for these types, does not exist and was never
+   going to be written: writing it would mean the facade wraps `TextPage` in
+   a new type, which nobody has proposed and §2 would call a regression.
+
+**The ruling (user, 2026-09-02):** *"since we want to make the crates
+modular, should we, not only make the facade idiomatic, but make the crate
+itself be? then the ugly c style can just be tested in the crate."*
+
+### A.2 The replacement principle
+
+> **Every published crate is idiomatic in its types and its naming. Oracle
+> fidelity lives in function bodies and private representation — never in a
+> public signature.**
+
+The `(top + bottom) / 2.0` midpoint stays, computed inside `pdfrum-form`,
+strict comparisons and all. What goes away is `pdfrum-form` *advertising* an
+`f32` rect and an `f32` point in its own public API. The user's phrase for
+this — "the ugly c style can just be tested in the crate" — is the operative
+half: oracle-shaped behaviour keeps its tests at the crate level, where the
+golden lives and where the `#![allow(clippy::float_cmp)]` that licenses it is
+already written down. The crate's *surface* stops advertising it.
+
+### A.3 The distinction that keeps the goldens green
+
+This amendment is only survivable because two things that look alike are not.
+Getting this line wrong in either direction breaks something: put behaviour on
+the vocabulary side and goldens move; put vocabulary on the behaviour side and
+nothing is ever cleaned up.
+
+**C-style *vocabulary* — transliteration with no reason to exist at any
+level. Eliminate it in the crate; do not translate it at the facade.**
+
+| Item | Where it lives today | Verified at |
+|---|---|---|
+| `page_text(start, count)`, `rects(start, count: Option<usize>)` | `pdfrum-text` | `crates/pdfrum-text/src/lib.rs:214,269`; `src/select.rs:20` |
+| `permissions(owner: bool) -> u32` | `pdfrum-crypt`, `pdfrum-parser` | `crates/pdfrum-crypt/src/lib.rs:552`; `crates/pdfrum-parser/src/doc.rs:797` |
+| `version() -> u8`, packed `major × 10 + minor` | `pdfrum-parser` | `crates/pdfrum-parser/src/doc.rs:695` — the doc comment spells the encoding out |
+| `Key(pub u16)`, `Modifiers(pub u32)` | `pdfrum-form` | `crates/pdfrum-form/src/event.rs:63,119` |
+| `FontFlags(pub u32)`, `AnnotFlags(pub i64)`, `FieldFlags(pub i64)` — public inner fields | `pdfrum-font`, `pdfrum-doc` | `crates/pdfrum-font/src/ids.rs:87`; `crates/pdfrum-doc/src/annot/mod.rs:169`; `crates/pdfrum-doc/src/form/field.rs:102` |
+| `to_utf32le()`, the `annot_dump` module | `pdfrum-text`, `pdfrum-doc` | `crates/pdfrum-text/src/lib.rs:318`; `crates/pdfrum-doc/src/lib.rs:28` |
+| `pub fn is_float_zero(f32)` — **defined twice, publicly, in two crates** | `pdfrum-doc`, `pdfrum-text` | `crates/pdfrum-doc/src/geom.rs:45`; `crates/pdfrum-text/src/charinfo.rs:168` |
+| `pub fn peniko_mix`, `pub const LCD_FIR5`, `LCD_PADDING_26_6` | `pdfrum-render` | `crates/pdfrum-render/src/device.rs:251`; `src/glyph.rs:69,77` — `26_6` is a FreeType fixed-point encoding spelled into the identifier |
+| `pub const NO_CONTENT_STREAM: i32 = -1` — a `-1` sentinel **promoted into the curated re-export block** | `pdfrum-page` | `crates/pdfrum-page/src/mutate.rs:44`, re-exported at `src/lib.rs:80`. `Option<usize>` is the shape. |
+| `as_c_int`, `as_c_float`, `real_as_c_int` — C in the name, in the curated block | `pdfrum-object` | `crates/pdfrum-object/src/lib.rs:62`. The *behaviour* is oracle-required (`FX_Number::GetSigned`); the *name* is not. |
+| `PDFIUM_TEST_CLOCK_SECS`, `PDFIUM_TEST_TZ_OFFSET_SECS`, `PDFIUM_TEST_FX_LOCALTIME_OFFSET_SECS` | `pdfrum-form` | `crates/pdfrum-form/src/script/mod.rs:72,80,111` — the **only** `PDFIUM`/`FX_` strings in any public identifier in the workspace, and there are three of them. |
+
+None of these is load-bearing for a golden. Every one of them is a shape a
+Rust author who had never opened `fpdftext/` or `fpdf_formfill.h` would not
+have written, and every one of them is in a **member** crate, which is why §1's
+"the facade translates" never reached them.
+
+**C-style *behaviour* — this cannot move. It is not ugly code awaiting
+cleanup; it is the oracle contract.**
+
+| Behaviour | Where | Why it stays |
+|---|---|---|
+| `(top + bottom) / 2.0`, sum-then-halve, not `f32::midpoint` | `crates/pdfrum-form/src/tab.rs:76,84` | The banding comparisons are strict; a midpoint differing in the last bit moves an annotation between Tab-order bands. The file carries `#![allow(clippy::manual_midpoint, clippy::float_cmp)]` with that reason. |
+| Widget geometry compared in `f32` after narrowing from `kurbo::Rect` | `crates/pdfrum-form/src/page.rs:415`; `src/hit.rs:157` | The oracle's `CFX_PointF`/`CFX_FloatRect` are `float`; hit tests are inclusive on every edge and a test pins it. |
+| `/Ff` bits whose meaning depends on `/FT` | `pdfrum-doc` | §6's table: bit 26 is "file select" on text and "sort" on choice. A flag *set* would pretend they compose. |
+| `page_index_of` returning `-1` | `crates/pdfrum-doc/src/nav/dest.rs:203,219` | An `impl Fn(u32) -> i32` callback matching the oracle's destination resolution. |
+| UTF-32LE `--txt` dump bytes | `pdfrum-text` | It is the harness's diff format. |
+
+The rule that separates them, and the one to apply when a new case arises:
+
+> **Does the C shape change the answer, or only the spelling?** If a golden
+> moves when you change it, it is behaviour and it belongs in a body or a
+> private field. If only the call site changes, it is vocabulary and it
+> belongs nowhere.
+
+Two borderline cases, resolved by that rule and recorded so they are not
+re-argued:
+
+- **`AnnotFlags::names()` returning flags in a fixed bit order**
+  (`crates/pdfrum-doc/src/annot/mod.rs:213`). The *order* is behaviour — it is
+  the `--annot` dump's order, and §6 already says so. The *location* is
+  vocabulary: it is the tool's output format sitting on a library type, and it
+  moves with `annot_dump`. Split the item, do not exempt it.
+- **`pdfrum_object::as_c_int`** (`lib.rs:62`). The truncation semantics are
+  behaviour and are pinned by tests; the name is vocabulary. Rename, keep the
+  body, keep the tests, keep the doc comment's citation of
+  `FX_Number::GetSigned` — a doc comment may name the C++, an identifier may
+  not. That is the general form: **provenance belongs in rustdoc, never in a
+  signature.**
+
+### A.4 Two cross-cutting findings
+
+Both surfaced when the surface was inventoried per crate rather than through
+the facade, which is itself evidence for §A.7's revised audience table.
+
+**One: `pub mod` count is the best single predictor of leaked surface, and
+STYLE.md §4 is currently satisfied in letter and broken in spirit.** §4 asks
+that a crate's public API "fits in one `lib.rs` re-export block a reviewer can
+read in one screen." The four crates with the *shortest* `lib.rs` —
+`pdfrum-render` (103 lines), `pdfrum-doc` (73), `pdfrum-form` (68),
+`pdfrum-page` (348) — are the four with the *largest* leaked surface, because
+they satisfy "one screen" by listing `pub mod`s instead of re-exporting a
+curated set. `pdfrum-form` is the extreme: **sixteen `pub mod`s and zero
+private modules.** Every module in the crate is public.
+
+This yields a mechanical criterion for WP13, sharper than the current one:
+
+> A member crate's `pub mod` count is justified module by module in its own
+> design doc, **and every type appearing in a public signature is nameable
+> from the crate root.**
+
+`pdfrum_form::tab::Rect` fails the second half today — it appears in ten
+public signatures inside its crate and is not in `lib.rs`'s re-export block at
+all, so a caller must spell a module path the crate never advertises.
+
+**Two: four geometry vocabularies coexist.** §4 (WP4) named three rectangles
+and two points *on the facade*. Per crate there are four, and a value moving
+from `pdfrum-page` to `pdfrum-form` is converted twice:
+
+| Vocabulary | Where | Scalar |
+|---|---|---|
+| `kurbo::Rect` / `Point` — the workspace default, re-exported by `pdfrum-common` | everywhere below form | `f64` |
+| `pdfrum_doc::geom` — 20+ free functions re-implementing kurbo's own API *over* `kurbo::Rect` (`left`, `right`, `width`, `union`, `intersect`, `contains`, `inflate`, `normalize`, `is_empty`) | `pdfrum-doc` | `f32` accessors over `f64` |
+| `pdfrum_form::tab::Rect` — own struct, four `f32` fields, not re-exported | `pdfrum-form` | `f32` |
+| `pdfrum_form::event::Point` — own struct, two `f32` fields | `pdfrum-form` | `f32` |
+
+The `pdfrum-doc` one deserves a note: `crates/pdfrum-doc/src/geom.rs` is a
+`util` module under a domain-sounding name, which STYLE.md §4 bans by
+intent if not by that spelling. `kurbo::Rect` already has `width()`,
+`height()`, `union()`, `intersect()`, `contains()`, `inflate()`, `is_empty()`
+and `abs()`. What is *not* redundant is the epsilon comparison
+(`EPSILON = 1e-4`, compared in `f64` even for `f32` inputs) — that is oracle
+behaviour and stays, as a few private functions. The rest is duplication.
+Note that `pdfrum-form`'s `geom` is a *different* thing entirely — a real
+page↔plate transform — so the two modules do not even mean the same thing.
+
+### A.5 Two tests for every change
+
+Adapted from §1's pair, with the audience widened from "the facade" to "the
+crate the change is in":
+
+1. **A caller who has never seen PDFium, `fpdftext/`, `fpdf_formfill.h`, or
+   Win32 can use the type without reading a comment that names those things —
+   and they are entitled to that from `cargo add pdfrum-text` as much as from
+   `cargo add pdfrum`.** The escape-hatch exemption in §4 survives: a method
+   documented in its first sentence as an escape hatch may name a
+   sibling-crate type, because naming it is the point.
+2. **`conformance` and the `.evt` goldens do not move.** Internal `f32`
+   midpoints, `f32` hit tests, raw `/Annots` indices, packed permission bits,
+   UTF-32LE dumps — those remain, one layer down *inside the crate that owns
+   them*, which is where they already are. If a proposed change cannot keep
+   test 2 while satisfying test 1, test 2 wins and the item is recorded as
+   behaviour in §A.3's second table rather than fixed.
+
+STYLE.md §7's transliteration test now applies to **every** crate's public
+surface, not only the facade's: *would this signature look the same if the
+author had never seen the C++?*
+
+### A.6 What it costs, measured
+
+§5's preamble says: *"Internal types may keep the old shape behind `From` /
+`Into` at the crate boundary."* Under this amendment that conversion layer
+largely **disappears**, which is a simplification — but it moves two costs
+onto the crates, and one of the two claims made for it in the original
+framing does not survive contact with the code.
+
+**Claim checked: "`pdfrum-tool`'s `.evt` replay must convert instead."**
+Verified against the replay path; **the claim is true but materially
+misleading, and the reason is worth recording** because it removes the main
+objection to this amendment.
+
+- The `.evt` parser does not produce `f32` and never did. It produces `i32`,
+  via a hand-rolled C `atoi` — `crates/pdfrum-tool/src/events.rs:340`, with
+  `pub enum Event { MouseDown { x: i32, y: i32, .. }, .. }`. An `.evt` script
+  **cannot express a fractional coordinate at all**: `atoi` stops at the `.`.
+  There is no `parse::<f32>()` anywhere in the path.
+- The widening to `f32` is *invented* by the bridge, in one four-line
+  function — `crates/pdfrum-tool/src/dispatch.rs:287`:
+
+  ```rust
+  #[expect(clippy::cast_precision_loss,
+      reason = "page coordinates; exact below 2^24 and the C++ widens to double here too")]
+  fn at(value: i32) -> f32 { value as f32 }
+  ```
+
+  Under this amendment that becomes `f64::from(value)`, and the mirror
+  `Call` enum's two field types change. **That is the entire cost to
+  `pdfrum-tool`.** The corpus is integer coordinates of at most four digits,
+  exact in both `f32` and `f64`, so no replay result can move.
+- The `expect` reason above already concedes the point: *"the C++ widens to
+  double here too."* Confirmed at the oracle, read-only:
+  `public/fpdf_formfill.h:1202-1206` declares `FORM_OnMouseMove(…, double
+  page_x, double page_y)`, and `fpdfsdk/fpdf_formfill.cpp:435-444` narrows
+  with `CFX_PointF(page_x, page_y)` **at the entry point, before any
+  comparison**. So `pdfrum_form::event::Point`'s `f32` is not oracle
+  fidelity — it is *stricter than the oracle's own API*, and its own doc
+  comment at `crates/pdfrum-form/src/event.rs:19-22` says why: *"the entry
+  points take doubles."* Taking `kurbo::Point` publicly and narrowing on
+  entry reproduces the oracle's boundary **more** exactly than today's
+  signature does.
+- `pdfrum-form` already depends on `kurbo` (`crates/pdfrum-form/Cargo.toml:30`)
+  and already narrows `kurbo::Rect` to its own `f32` rect at
+  `crates/pdfrum-form/src/page.rs:415`. The point conversion is the symmetric
+  half of a boundary the crate already has. **No new dependency, and DEPS.md
+  is not touched.**
+
+**The real cost, which the original framing pointed at the wrong artefact.**
+It is not in `pdfrum-tool`; it is one layer inside `pdfrum-form`, and it is
+a genuine hazard that the implementing WP must handle explicitly:
+
+- `crates/pdfrum-form/src/hit.rs:157` — `contains(rect, x: f32, y: f32)`
+  compares the point against rect edges that were **already rounded to `f32`**
+  by `page.rs:415`. An `f64` point compared against an `f32`-rounded edge
+  changes inclusive-edge behaviour, which `hit.rs`'s
+  `containment_includes_every_edge` test pins.
+- `crates/pdfrum-form/src/route.rs:2279` — `to_plate` subtracts in `f32`
+  (`Plate::to_widget`: `at.x - rect.left`, plus the rotation table) and only
+  then widens to `kurbo::Point`. Six call sites depend on it: caret
+  placement, the double-click client-rect test, `row_at`, `on_drop_button`,
+  `drag_to`, and `popup_hit`. Widening the *public* point without narrowing
+  it at entry would make that a mixed-precision subtraction and could move a
+  caret across a glyph boundary or a list click across a row.
+
+  **The prescription follows directly, and is the amendment's own rule:**
+  narrow to the private `f32` `Point` *in the entry function*, exactly as
+  `to_rect` already narrows the rect and exactly as
+  `fpdf_formfill.cpp:443` narrows to `CFX_PointF`. The interior does not
+  change at all, so neither does any golden. What must **not** happen is a
+  half-migration that leaves an `f64` point meeting an `f32` rect.
+
+- **The `(top + bottom) / 2` midpoint is not part of this cost at all**, and
+  §1 citing it alongside the event point was a category error worth
+  correcting. `tab::Rect::center_y` is fed only by `Focusable::rect` — widget
+  `/Rect`s — in the Tab-order banding at `tab.rs:286-291`. Tab traversal is
+  driven by a key event, which carries **no coordinates**. No event point
+  ever reaches the midpoint. It is an argument for keeping `tab::Rect`
+  private and `f32`; it is not an argument about `Point`.
+
+**Other instances of the same cost — where dropping the boundary layer moves
+work into a crate rather than removing it.**
+
+1. **Permissions, and this one moves work *out* of the facade.**
+   `crates/pdfrum/src/form_session.rs:767-778` does the bit-twiddling today:
+
+   ```rust
+   let bits = self.doc.permissions(false);
+   pdfrum_form::Permissions { fill_form: bits & 0x100 != 0,
+                              modify_annotation: bits & 0x20 != 0 }
+   ```
+
+   `pdfrum-form` **already has** the idiomatic struct-of-booleans WP1 wants
+   (`crates/pdfrum-form/src/hit.rs:118`, with `ALL`, `NONE`, `may_interact`)
+   — a member crate arrived at the right shape for its *own* API's sake, with
+   no facade involved. The raw `u32` survives only in `pdfrum-crypt` and
+   `pdfrum-parser`. Under this amendment the ISO-table-22 decode moves *into*
+   `pdfrum-crypt`, next to the `/P` word it decodes, and the facade's hand-
+   written mask disappears. Net: less code, and the magic numbers `0x100` and
+   `0x20` stop being spelled in a crate that has no business knowing them.
+
+2. **`FormRect` disappears from the facade, and its two remaining callers are
+   in the tool.** `pdfrum::FormRect` appears outside `pdfrum-form` in exactly
+   two places, both `crates/pdfrum-tool/src/chrome.rs:322,324`. `tab::Rect`
+   is not even in `pdfrum-form`'s own curated re-export block
+   (`lib.rs:67` exports `tab::{FocusRing, Focusable, TabOrder}`, not `Rect`);
+   callers reach it as `pdfrum_form::tab::Rect`. Making it private and
+   returning `kurbo::Rect` from `PopupView`/`PopupGeometry` costs those two
+   lines and nothing else.
+
+3. **`RenderOptions` exists twice and the two copies are not the same
+   problem.** `crates/pdfrum/src/render.rs:77-79` and
+   `crates/pdfrum-render/src/options.rs:127-131` both carry `no_path_smooth`
+   / `no_image_smooth`. WP10 flips the facade's pair to positive defaults;
+   whether the engine's pair follows is **not** obvious, and §A.8 records it
+   as the one place this amendment does not settle.
+
+4. **`pdfrum-text` has a name collision WP8 did not notice.** WP8 proposes
+   `pub struct CharIndex(usize)`. `pdfrum_text::CharIndex` **already exists**
+   (`crates/pdfrum-text/src/index.rs:27`) and is the *segment table* mapping
+   the two index spaces — `TextPage.runs: CharIndex`, a public field. The
+   newtype needs a different name, or the table does. This is visible only
+   from inside the crate, which is itself an argument for this amendment: the
+   facade view of `pdfrum-text` never showed it.
+
+### A.7 What is owed to each audience — §3 revised
+
+§3's table said:
+
+> | Engine / conformance / a fourth rasterizer | a member crate | A curated `lib.rs` re-export. Helper functions, oracle dump formats, and scan-conversion internals are crate-private or `#[doc(hidden)]`. |
+
+The *entitlement* named there is right and is kept. The **audience** is wrong:
+"engine / conformance / a fourth rasterizer" describes people who work on this
+repository, and it is what licensed §1's "the facade translates". The people
+who actually depend on a member crate are strangers who ran `cargo add
+pdfrum-text`. Replace the table with:
+
+| Audience | Crate they depend on | What they are owed |
+|---|---|---|
+| Almost everyone | `pdfrum` only | The facade re-export block. Every type that appears in a `pdfrum` signature is named in that block. |
+| **Anyone who adds a single member crate** — a text-extraction pipeline that adds `pdfrum-text`, a viewer that adds `pdfrum-form`, a linter that adds `pdfrum-parser` | one member crate | **The same idiomatic standard the facade is held to, in that crate's own vocabulary.** A curated `lib.rs` re-export block; ranges not `(start, count)`; enums not packed integers; questions not bit words; no Win32 or `FPDF_` names in rustdoc. Helper functions, oracle dump formats and scan-conversion internals are crate-private or `#[doc(hidden)]`. |
+| This repository — engine, conformance, a fourth rasterizer | several member crates | Everything above, plus the `#[doc(hidden)]` items and the escape hatches. This audience is served *by* the second row, not instead of it. |
+
+The dual-crate story ("this crate composes, it does not hide") is still a
+feature, and it is still not a licence to ship `pdfrum_text::pipeline::
+is_float_zero` as public API. What changes is that it is now also not a
+licence to leave `pdfrum_text::TextPage::page_text(start, count)` C-shaped on
+the grounds that a facade caller will never see it. A `pdfrum-text` caller
+sees nothing else.
+
+### A.8 What this does **not** change
+
+Confirmed line by line against the revised principle.
+
+**§2 (already idiomatic — do not undo): stands in full.** Every item on that
+list is a property of the *engine and its member crates*, not of the facade,
+so the amendment strengthens it rather than straining it. Ownership,
+config-structs-with-`Default`, enums for closed sets, one `Error` per crate,
+the `RasterBackend` seam, kurbo/peniko, values-not-callbacks, documented
+escape hatches, `Send + Sync` — all already hold at the crate level and are
+precisely what the second audience is being promised. The happy-path snippet
+is unchanged.
+
+**§4 (non-goals): stands, with one clarification and one strengthened item.**
+
+- *No behaviour change* — stands, and §A.3/§A.5 make it sharper by naming the
+  test.
+- *No `bitflags` crate* — stands; see §6 below.
+- *No fourth trait seam* — stands. Nothing here proposes one.
+- *No builder ladders* — stands.
+- *No hiding escape hatches* — stands, and is **clarified**: an escape hatch
+  may name a sibling-crate type, and §A.5's test 1 exempts it. The amendment
+  narrows the exemption to methods documented as escape hatches in their first
+  sentence; it is not a general licence.
+- *No C ABI, no `prelude`, no `get_` prefixes* — stands, and is nearly
+  satisfied already: a sweep finds three `get_`-prefixed public functions
+  workspace-wide, of which two (`get_or_render`, `get_or_insert`) are the
+  sanctioned `get_or_*` idiom and one (`pdfrum_page::image::scanline::
+  get_bits`, `crates/pdfrum-page/src/image/scanline.rs:23`) should be private.
+- *Member crates stay published* — **this item is now load-bearing rather than
+  incidental.** §4 already refused to make them `publish = false`
+  implementation details. This amendment supplies the reason: they are
+  published *because* they are meant to be depended on individually, and a
+  published crate that is only usable through the facade is not modular. The
+  sentence "their *surface* shrinks; their existence does not" is kept and
+  extended: their surface also gets *renamed*.
+
+**§6 (do not add `bitflags`): stands in full, and the amendment strengthens
+its central case.** §6's argument is that PDF flag words are a poor fit for a
+flag-set crate because unknown bits must round-trip, dump order is fixed, and
+`/Ff`'s meaning depends on `/FT`. Every one of those reasons is a *behaviour*
+reason in §A.3's second table, so none of them is touched. What §6 asks for —
+a hand-rolled newtype with typed constants, `BitOr`, `contains`, and a
+`from_bits` that retains unknown bits — is exactly "idiomatic types, oracle
+fidelity in the body and the private field", i.e. §A.2 restated for flags.
+Two consequences the amendment adds rather than removes:
+
+- §6's "field private" in the `FontFlags` sketch is now **mandatory, in the
+  crate**. All three flag newtypes ship a `pub` inner field today
+  (`FontFlags(pub u32)`, `AnnotFlags(pub i64)`, `FieldFlags(pub i64)`), and
+  all three live in member crates that the facade re-exports verbatim. There
+  is no facade in which to fix them.
+- §6's ruling that `FieldFlags` stays predicates rather than a set is
+  reinforced: the `/FT`-dependence is behaviour, and behaviour does not
+  migrate.
+
+**The one thing that does not survive cleanly: `pdfrum_render::RenderOptions`
+and WP10.** Recorded as an open question rather than papered over. The
+engine's option struct carries a deliberate, documented
+`#[expect(clippy::struct_excessive_bools)]` at
+`crates/pdfrum-render/src/options.rs:92-98`:
+
+> "these are `CPDF_RenderOptions::Options`' independent bit flags one for one;
+> grouping them into sub-structs or an enum would hide which upstream flag
+> each is and **make the port unreviewable**"
+
+That is a claim that in *this* struct the oracle's flag *names* are
+load-bearing — reviewability of the port, not just spelling — which is the one
+place where "vocabulary" and "behaviour" genuinely blur. §13's clippy gate
+already grandfathers it. Two readings, and this document does not choose:
+
+- **Facade only.** WP10 flips `pdfrum`'s copy to `smooth_paths` /
+  `interpolate_images` with `true` defaults, and `pdfrum-render` keeps the
+  oracle's names as a reviewable one-for-one port. Cost: the amendment admits
+  one documented exception, and `pdfrum-render`'s direct callers keep an
+  inverted flag word.
+- **Both.** `pdfrum-render` renames too and the one-for-one mapping moves into
+  a comment table. Cost: the port review argument, which was accepted when the
+  crate was written and has not been re-examined since.
+
+The rest of this amendment does not depend on which is chosen. It is flagged
+here because it is the only item where the ruling and an existing, reasoned,
+in-tree decision actually collide.
+
+### A.9 Which work packages collapse into per-crate work
+
+§7 ordered WP11 (member-crate surface hygiene) **twelfth of thirteen**, with
+the rationale *"Largest diff, least user-facing."* Under this amendment the
+second half of that sentence is false: WP11 is least-user-facing **only if the
+facade is the product**. For the second audience in §A.7, WP11 *is* the
+product, and much of it is not a separate package at all — it is the same edit
+as the WPs that were ordered ahead of it.
+
+The test for collapsing: **is the fix the same edit whether it is done for the
+facade or for a direct dependant?** If the offending item lives in a member
+crate and the facade re-exports it or forwards to it unchanged, then yes —
+there is one edit, and splitting it across two work packages means touching
+the same file twice.
+
+**Collapse into per-crate work** (the WP survives as a heading inside the
+crate's package, not as a package of its own):
+
+| WP | Owning crate(s) | Why it collapses |
+|---|---|---|
+| **WP8** `TextPage` indices | `pdfrum-text` | The clearest case, as expected. `pdfrum::TextPage` **is** `pdfrum_text::TextPage` (`lib.rs:258`, verbatim re-export). Every offending item — `page_text(start, count)`, `rects(start, count)`, the two index spaces, `all_text`, `to_utf32le`, the `text: Vec<char>` field colliding with a `text` method — is in `crates/pdfrum-text/src/lib.rs`. There is no facade edit at all beyond the re-export line. Add the `CharIndex` collision from §A.6. |
+| **WP2** flag algebra | `pdfrum-font`, `pdfrum-doc` | All three newtypes are defined in member crates with `pub` inner fields and re-exported verbatim (`annotation.rs:3`, `form.rs:8`). Identical edit either way. |
+| **WP6** `Key` as an enum | `pdfrum-form` | `Key(pub u16)` is `crates/pdfrum-form/src/event.rs:63`. The facade only aliases it (`Key as VirtualKey`). The enum, the table and `from_virtual`/`virtual_code` are all `pdfrum-form` edits; the facade's share is deleting the alias. |
+| **WP1** *in part* — `PdfVersion`, `Permissions` | `pdfrum-parser`, `pdfrum-crypt` | The packed `u8` and the `(owner: bool) -> u32` pair are member-crate signatures with member-crate doctests demonstrating the raw encoding. The facade forwards them (`document.rs:394,413`) and hand-decodes bits at `form_session.rs:771-777`. Fixing the crate deletes the facade's copy. |
+| **WP12** *in part* — the JavaScript sentence | `pdfrum-form`, facade | The false claim is in the facade's crate docs, but the seam it misdescribes (`Cascade`, the `script` feature) is `pdfrum-form`'s. A `pdfrum-form` caller reads a different, correct story today; fixing the facade's text is a facade edit, but deciding whether to expose the seam is a `pdfrum-form` API question. |
+
+**Stay separate** (genuinely facade-shaped, or genuinely cross-cutting):
+
+| WP | Why it does not collapse |
+|---|---|
+| **WP3** collapse render/text method grid | The six-way grid exists **only** in `crates/pdfrum/src/page.rs:147-391`. `pdfrum-render` has one generic entry point already. Pure facade work. |
+| **WP5** form session names + `Event` | The facade's `FormSession` is its **own type** (`crates/pdfrum/src/form_session.rs`), not a re-export — `pdfrum_form::FormSession` is a state record and `route::apply` is the entry point. The `on_*` names, `force_kill_focus`, `inner()` and the flattened `x, y` arguments are facade inventions. Stays a facade package — but note `route::apply` already takes an `Event`, so a `pdfrum-form` caller is *ahead* of the facade here. |
+| **WP7** facade signatures name only re-exported types | Facade-only by definition. Its *pressure* changes, though: several rows resolve by making the member type idiomatic rather than by re-exporting it as-is. |
+| **WP9** `Option`/`Result` on mutation | The `PageEdit` bool-returners are facade-only (`crates/pdfrum/src/edit.rs:110,124,143`). `Form::set`'s silent ignore has a `pdfrum-doc` twin (`form/field.rs:612`) — that row alone collapses; the rest do not. |
+| **WP13** mechanical gates | Cross-cutting by construction, and it **grows**: the snapshot and the doc-link gate now apply per published crate, not to `pdfrum` alone. |
+| **WP1** *in part* — `PageIndex`, `Error::WrongPassword` | `PageIndex` threads through the facade, `pdfrum-doc` and `pdfrum-form` together; it is a workspace-wide newtype, not one crate's. `WrongPassword` is a facade error-lifting change. |
+| **WP4** geometry vocabulary | Straddles. The *facade* half (drop `FormRect`, drop flattened `x, y`) is facade work; the *crate* half (make `tab::Rect` private, take `kurbo::Point` and narrow at entry, return `kurbo::Rect` from `PopupView`) is `pdfrum-form` work and carries the §A.6 hazard. Ordered as one package but landed crate-first. |
+| **WP10** `RenderOptions` | Straddles, and is the §A.8 open question. |
+
+**WP11 does not survive as a package.** It becomes the *shape* of the
+per-crate packages: each crate's package carries its own `lib.rs` curation
+(`mod` + `pub use`), its own dump-format eviction, and its own
+`cargo public-api` snapshot. What is left of WP11 as written — the four rules
+in its body — is promoted to the standing rule in §8's STYLE.md amendment.
+
+### A.10 Revised sequence
+
+Ordering principle, changed by this amendment: **order by blast radius within
+a crate, then by how many other crates wait on the result** — not by
+"user-facing first, hygiene last", which presupposed the facade is the user.
+Two things stay true from §7: every step is a `[spec]` commit that leaves the
+goldens green, and WP7's re-exports are purely additive and unblock
+everything.
+
+| Order | Package | Why this position | Touches |
+|---|---|---|---|
+| 1 | **WP7 re-exports** (unchanged from §7) | Purely additive, breaks nothing, and makes every later signature change expressible. Keeps its old first place. | `crates/pdfrum/src/lib.rs` |
+| 2 | **`pdfrum-common` + `pdfrum-object` curation** | Bottom of the DAG, smallest surface (18 and 122 public items), nothing above them can be curated while they still leak. Cheap, and it establishes the pattern the other sixteen follow. | those two crates |
+| 3 | **`pdfrum-text` — WP8 entire** | The most C-shaped published surface, the one with no facade translation whatsoever, and it depends on nothing above it. Highest ratio of idiomatic gain to risk in the workspace, which is why it moves from §7's tenth place to here. Resolve the `CharIndex` collision first. | `pdfrum-text`, facade re-export line, `pdfrum-tool` (`to_utf32le` moves) |
+| 4 | **`pdfrum-parser` + `pdfrum-crypt` — WP1's `PdfVersion` and `Permissions`** | Newtypes must exist before anything above can name them, and these two crates own the encodings. Deletes the facade's hand-written bit masks as a side effect. | parser, crypt, facade |
+| 5 | **WP1's `PageIndex`** | Workspace-wide newtype; needs step 4's crates settled and must precede every form and navigation signature. Keeps §7's reasoning, one place later. | facade, doc, form, edit |
+| 6 | **`pdfrum-font` + `pdfrum-doc` — WP2 flag algebra, and `annot_dump` out of the library surface** | The flag newtypes are here, `pub` fields and all. Bundled with evicting `annot_dump` (used only by `pdfrum-tool`) because both are the same crate's surface and both are mechanical. `FontFlags` constants changing from `u32` to `Self` remains the risky bit — many tests construct them. | font, doc, tool |
+| 7 | **`pdfrum-form` — WP6 `Key`, then WP4's crate half** | `Key` first (self-contained table), then the geometry: `tab::Rect` private, `kurbo::Point` in with narrowing **at the entry function**, `kurbo::Rect` out of `PopupView`. The §A.6 hazard lives entirely here; landing it as one crate's package is what keeps it reviewable. `pdfrum-tool`'s `at()` becomes `f64::from`. | form, tool, facade |
+| 8 | **WP5 form session names + `Event` on the facade** | After 7, so the new signatures are the final ones — §7's reasoning, preserved. Now genuinely facade-only, because the crate half landed in 7. | facade, SPEC §15.8, doctests |
+| 9 | **`pdfrum-page` + `pdfrum-render` curation, and WP10** | The two noisiest surfaces (12 and 24 `pub mod`s; 407 and 317 public items) and the largest mechanical diff, so late — but *before* the gates, not after them. Carries the §A.8 `RenderOptions` decision, which must be made here. | page, render, facade, tool, examples |
+| 10 | **WP3 collapse render/text method grid** | Facade-only, and reads best once `RenderOptions` has settled in 9. | facade, examples, docs |
+| 11 | **WP9 `Option`/`Result` on mutation** | Mechanical, facade-shaped, independent. Unchanged from §7's neighbourhood. | facade edit + form, `pdfrum-doc`'s `Form::set` twin |
+| 12 | **`pdfrum-edit` + the raster crates + `pdfrum-cmap`/`filters`/`type1` curation** | Independent of everything above; can run in parallel from step 2 onward. Listed here only because nothing waits on it. | those crates |
+| 13 | **WP12 docs** | After the surface is true, per §7. Now covers every crate's rustdoc, not only the facade's. | rustdoc, README, `docs/status/pdfrum-facade.md` |
+| 14 | **WP13 gates, per published crate** | Last, and larger than §7's version: `cargo public-api` snapshot and the broken-intra-doc-links gate for each of the seventeen published crates, plus STYLE.md and clippy. | CI, STYLE.md, clippy.toml |
+
+What moved and why, in one line each:
+
+- **`pdfrum-text` 10 → 3.** It has no facade layer, so it was never "one layer
+  down"; it was the surface all along.
+- **WP11 12 → dissolved across 2, 6, 9, 12.** Its rationale ("least
+  user-facing") was the §1 premise this amendment withdraws.
+- **WP1 split 2 → 4 and 5.** The crate-owned half (`PdfVersion`,
+  `Permissions`) is a different package from the workspace-wide half
+  (`PageIndex`).
+- **WP4 split 6 → 7 and 8.** Its crate half carries a numerical hazard that
+  deserves its own review; its facade half does not.
+- **WP2 3 → 6, WP6 7 → 7.** Neither moved far, but both are now filed under
+  the crate that owns the type rather than standing alone — which is what
+  makes them one commit instead of two.
+- **WP3 5 → 10, WP9 9 → 11.** Both are facade-only and nothing waits on them,
+  so they yield their early slots to crate work that does block others.
+- **WP12/WP13 11,13 → 13,14.** Unchanged in spirit; both now per-crate.
+
+Net effect on the shape of the plan: §7 had thirteen packages of which one
+(WP11) was a monolith deferred to the end. This has fourteen steps of which
+**seven are named crates** and seven are cross-cutting or facade work. The
+monolith is gone, and the two steps that were hardest to review — WP11's
+"largest diff" and WP4's precision hazard — are each split across the crates
+that own them.
+
+Parallelism: step 12's crates depend on nothing in the chain and can start at
+step 2. Steps 3 and 6 do not depend on each other. Step 7 must follow 5.
+
+### A.11 Per-crate scope
+
+**Basis, stated because it is not `cargo public-api`.** `docs/status/api-baseline/`
+does not exist at the time of writing and the `chore/api-baseline` branch is
+still at `9b8f74b` with no snapshots, so **these numbers are estimated, not
+measured by `cargo public-api`.** They come from two counts run over the
+worktree: `pub mod` declarations in each `lib.rs`, and a grep for
+`^\s*pub (fn|struct|enum|trait|type|const|union)` across each crate's `src/`.
+That over-counts slightly (items inside private modules are counted even
+though they are not reachable) and under-counts re-exports, so treat them as
+an order-of-magnitude signal for *sequencing*, not as an API contract. The
+counts were produced twice, independently, and agree to the item; the named
+offenders in the last column were each opened and read at the cited line.
+When the snapshots land, this table should be re-derived from them — the
+expected direction of change is *downward*, since `cargo public-api` will not
+count items behind private modules.
+
+| Crate | `pub mod` | pub items | pub fn | What its surface needs, concretely | Size |
+|---|---|---|---|---|---|
+| `pdfrum-common` | 0 | 18 | 9 | Already the model: no `pub mod`, tiny, re-exports `kurbo`. | trivial |
+| `pdfrum-object` | 2 | 122 | 100 | `pub mod names` is a legitimate documented namespace; `pub mod number` is not. `as_c_int` / `as_c_float` / `real_as_c_int` renamed (`lib.rs:62`) — bodies and tests unchanged. Otherwise disciplined. | small |
+| `pdfrum-crypt` | 0 | 28 | 16 | One item: `SecurityHandler::permissions(owner: bool) -> u32` (`lib.rs:552`) → two methods returning a `Permissions` struct, with the ISO-table-22 decode moving here from the facade. Its doctest asserts `0xFFFF_FFFF` and must change with it. | small |
+| `pdfrum-filters` | 0 | 30 | 20 | Clean. | trivial |
+| `pdfrum-cmap` | 1 | 32 | 24 | `pub mod lexer` should be private. `CharCode(pub u32)` / `Cid(pub u16)` are genuine identifier newtypes, not bit words — they stay. | trivial |
+| `pdfrum-type1` | 0 | 56 | 40 | Clean within itself. One cross-crate note: it defines `pub struct Gid(pub u16)` (`lib.rs:105`) duplicating `pdfrum-font`'s `Gid` (`ids.rs:14`) — one name, two distinct types, two crates. A coherence question for step 12, not an idiom one. | trivial |
+| `pdfrum-font` | 3 | 282 | 195 | `FontFlags(pub u32)` → private field + typed `Self` constants (`ids.rs:87`). Note *why* this one matters beyond tidiness: the constants are `u32`, not `FontFlags`, so **`flags.has(7)` compiles today** — the type exists but types nothing. Also `WIDTH_UNSET: u16 = 0xffff` (`widths.rs:16`) and `FaceHandle(pub usize)` (`subst/db.rs:19`, a public raw index into a private table). `pub mod encoding` / `subst` / `tounicode` curated. The crate also holds the workspace's best *positive* example — `has_glyph: bool` documented as "PDFium's `-1`, which is distinct from glyph 0" (`lib.rs:139`) — which `Option<Gid>` would make unrepresentable rather than merely documented. | medium |
+| `pdfrum-parser` | 0 | 82 | 63 | The best-shaped large crate in the workspace: a 60-line `lib.rs`, zero `pub mod`, 82 deliberately re-exported items. `version() -> u8` packed (`doc.rs:695`) → `PdfVersion`; `permissions(owner: bool) -> u32` (`doc.rs:797`) → forward crypt's struct. Two `keyword: bool` modes at `lexer.rs:644,664`. | small |
+| `pdfrum-page` | 12 | 407 | 283 | Largest public surface in the workspace. Twelve `pub mod`s (`color`, `function`, `image`, `inline_image`, `mutate`, `optional`, `pattern`, `shading`, `state`, `transfer`, `transparency`, `type3`) → curated re-export. **The clearest single offender in the workspace is here:** `pub const NO_CONTENT_STREAM: i32 = -1` (`mutate.rs:44`) with `pub fn content_stream(&self) -> i32` (`:69`), *re-exported at `lib.rs:80`* — a `-1` sentinel in the curated block. Also `image::scanline::get_bits` (`image/scanline.rs:23`), `Page::color(stroking: bool)` (`page.rs:394`), `is_valid_page_dict(.., strict: bool, ..)` (`page.rs:548`, also re-exported), and **eight** sites carrying `std_conversion: bool` across `color/` — one two-variant enum fixes all eight and is the highest-leverage rename in the crate. Most of the rest become private rather than renamed. | large |
+| `pdfrum-render` | **24** | 317 | 224 | The worst `pub mod` count in the workspace — 24 against **one** private module. Named offenders: `pub fn peniko_mix` (`device.rs:251`, returns a `peniko` type the crate does not re-export), `LCD_FIR5` / `LCD_PADDING_26_6` (`glyph.rs:69,77`), the `SUBPIXEL_*` constants and `to_subpixel` (`scanline.rs:69-153`), `EMPTY_CLIP_RECT: Rect = Rect::new(-1.0, -1.0, 0.0, 0.0)` (`clip.rs:28` — an inverted rect standing for "nothing", i.e. `Option<Rect>`), and the `render_page` / `_with_visibility` / `_with_caches` ladder (`walk.rs:55,79,110`). `pub mod walkprofile` (`lib.rs:88`) is **not** on this list: it looks like a STYLE.md §1 global-state violation (`pub fn take() -> Profile` over a `thread_local!`), but it is behind a default-off `walk-profile` feature and its module doc argues the §1 point explicitly at `walkprofile.rs:38-48` — checked, and the reasoning stands. It needs curation like its neighbours, nothing more. Carries the §A.8 `RenderOptions` decision. | large |
+| `pdfrum-raster-vello-cpu` | 0 | 13 | 10 | Clean — a backend crate should look like this. | trivial |
+| `pdfrum-raster-tinyskia` | 0 | 11 | 9 | Clean. | trivial |
+| `pdfrum-raster-agg` | 2 | 20 | 15 | `pub mod image` / `target` → curated; its two sibling backends have zero `pub mod`, so bring it in line and it is trivial. | trivial |
+| `pdfrum-text` | 4 | 122 | 97 | **The headline crate** — smallest of the six noisy ones, and the one with the least excuse, since no facade stands between it and its callers. `page_text(start, count)` and `rects(start, count)` → ranges (`lib.rs:214,269`, `select.rs:20`); two unnamed index spaces → newtypes, renaming around the existing `CharIndex` table (§A.6); `all_text` → `as_str`/`Display`; `to_utf32le` → `pdfrum-tool` (`lib.rs:318`); `text: Vec<char>` field renamed off the `text` method; `pub fn is_float_zero` (`charinfo.rs:168`) private; `pub mod bidi`/`index`/`links`/`unicode` curated. Two of WP11's claims about this crate are **stale and withdrawn**: `debug_runs` is already `#[doc(hidden)]` (`lib.rs:116`), and `pipeline` is already a private `mod` (`lib.rs:64`) — only the `pub fn`s inside it need demoting. `find` already returns a `Range` and `char_at` already returns `Result`, not a sentinel. | medium |
+| `pdfrum-doc` | 13 | 398 | 322 | Second-largest, and 322 public fns is the most in the workspace. `AnnotFlags(pub i64)` and `FieldFlags(pub i64)` → private fields (`annot/mod.rs:169`, `form/field.rs:102`); `pub mod annot_dump` — the `--annot` output format, used only by `pdfrum-tool` (`crates/pdfrum-tool/src/annot.rs:13,60`) — evicted or `#[doc(hidden)]`, along with its `three_places` / `six_places` float formatters (`annot_dump.rs:276,282`); `pub mod geom` reduced to the epsilon comparisons (§A.4) with the kurbo-duplicating half deleted; thirteen `pub mod`s curated. **`pub mod ap` alone carries ~139 public items** — the whole of appearance generation's internals, where the interface is `generate_appearances`. `page_index_of`'s `-1` stays: behaviour. | large |
+| `pdfrum-form` | 16 | 317 | 205 | `Key(pub u16)` → enum, and note the Win32 names are in the *constants*, not just the type: `PRIOR` and `NEXT` are `VK_PRIOR`/`VK_NEXT` for PageUp/PageDown (`event.rs:63ff`). `Modifiers(pub u32)` → private field (`event.rs:119`) — `contains`/`union`/`without` already exist, so the field need never have been public. `event::Point` → `kurbo::Point` in, narrow at entry; `tab::Rect` private (10 public-signature appearances inside the crate, 2 callers outside, both in `pdfrum-tool`); `PopupView`/`PopupGeometry` return `kurbo::Rect`; `Rotation::degrees() -> i32` / `from_degrees` re-open a four-variant enum (`geom.rs:69`); the three `PDFIUM_TEST_*` constants renamed (`script/mod.rs:72,80,111`). Sixteen `pub mod`s and **zero private ones** curated — it already has a good `pub use` block, it just also exports everything a second way. The midpoint, the strict comparisons and the `f32` hit tests all stay. | medium–large |
+| `pdfrum-edit` | 5 | 154 | 118 | `pub mod content`/`encrypt`/`font`/`import`/`write` → curated; today each is `pub mod` *and* selectively re-exported, so the same items are reachable two ways. One nice illustration of the vocabulary rule in a single signature: `paint_operator(fill: FillRule, stroke: bool)` (`content/path.rs:35`) — one argument is properly an enum, its neighbour is a bool. | medium |
+| `pdfrum` (facade) | 1 | 175 | 153 | Drop `pub mod edit` (§7 WP7). The rest is WP3/WP5/WP7/WP9/WP10 as written. | medium |
+
+Two crates are excluded because they are `publish = false` and therefore have
+no external audience: `pdfrum-raster-vello` and `pdfrum-script`. They are held
+to STYLE.md like anything else, but nothing in this amendment applies to them.
+
+**Where the work actually is.** Four crates — `pdfrum-page` (407),
+`pdfrum-doc` (398), `pdfrum-render` (317), `pdfrum-form` (317) — hold 1439 of
+the workspace's 2584 public items and 65 of its 83 `pub mod`s. Seven crates
+need essentially nothing. That distribution is why §A.10 sequences by
+crate rather than by work package: the packages were a poor unit because they
+cut across a distribution this lopsided.
 
 ---
 
@@ -40,6 +649,17 @@ doctests move in the same commit.
 
 ## 1. Governing principle
 
+> **Superseded 2026-09-02 by §A.** Kept as written, per the house rule that a
+> claim a later ruling overturns is withdrawn in place rather than deleted.
+> **What survives:** the first two sentences, and both numbered tests in
+> substance. **What is withdrawn:** *"The facade translates"* — and with it
+> this section's scoping of the whole principle to the facade. §A.1 gives the
+> three reasons, one of which is that for several of the types named just
+> below there is no facade layer to translate in. §A.2 states the replacement
+> principle; §A.3 draws the vocabulary/behaviour line the replacement depends
+> on; §A.5 restates the two tests with the audience widened from the facade to
+> every published crate.
+
 **Idiomatic at the facade. Oracle-faithful below.**
 
 The C++ is an oracle for *behaviour*, not a vocabulary for *types*. A page
@@ -62,6 +682,11 @@ this signature look the same if the author had never seen the C++?*
 ---
 
 ## 2. What is already idiomatic — do not undo
+
+> **Stands unchanged under the 2026-09-02 amendment** (§A.8). Every item here
+> is a property of the engine and its member crates rather than of the facade,
+> so widening the principle to every crate strengthens this list instead of
+> straining it — these are precisely what §A.7's second audience is promised.
 
 These are load-bearing and correct. A pass that “cleans up” any of them is
 a regression.
@@ -104,6 +729,13 @@ Everything below is about making the *rest* of the crate feel like that.
 
 ## 3. Two audiences
 
+> **Revised 2026-09-02 by §A.7.** The *entitlement* in the second row is
+> right and is kept. The *audience* is wrong: "Engine / conformance / a fourth
+> rasterizer" names people who work on this repository, and naming them is
+> what licensed §1's "the facade translates". The people who actually depend
+> on a member crate are strangers who ran `cargo add pdfrum-text`. §A.7 has
+> the replacement table, with three rows rather than two.
+
 | Audience | Crate they depend on | What they may see |
 |---|---|---|
 | Almost everyone | `pdfrum` only | The facade re-export block. Every type that appears in a `pdfrum` signature is named in that block. |
@@ -117,6 +749,13 @@ as public API.
 ---
 
 ## 4. Non-goals
+
+> **Stands under the 2026-09-02 amendment** (§A.8), with one clarification and
+> one item promoted. Clarified: *no hiding escape hatches* — a method
+> documented as an escape hatch in its first sentence may name a sibling-crate
+> type, and §A.5's first test exempts it. Promoted: *member crates stay
+> published* is now load-bearing rather than incidental — §A.1 supplies the
+> reason this document previously left implicit.
 
 - **No behaviour change.** Goldens, `.evt` scripts, SSIM thresholds, the
   diagnostics channel, damage-tolerant open — untouched.
@@ -134,6 +773,15 @@ as public API.
 ---
 
 ## 5. Work packages
+
+> **Amended 2026-09-02 by §A.** The packages below stand as descriptions of
+> *what* must change; §A.9 revises *how they are grouped* — several are not
+> separate packages at all but the same edit inside one crate — and §A.10
+> revises the order. One sentence in this section's preamble is withdrawn:
+> *"Internal types may keep the old shape behind `From` / `Into` at the crate
+> boundary."* Under §A.2 that conversion layer largely disappears; §A.6
+> measures what its loss actually costs, and corrects two claims about it
+> that do not survive contact with the code.
 
 Each package is one `[spec]` commit (or a tight stack of them), independently
 reviewable, with doctests updated in the same change. Internal types may keep
@@ -644,6 +1292,16 @@ Once the surface is the intended one, stop it drifting.
 
 ## 6. Flags: do not add `bitflags`
 
+> **Stands in full under the 2026-09-02 amendment** (§A.8), which strengthens
+> its central case rather than touching it: every reason given below for
+> rejecting `bitflags` — unknown bits must round-trip, the dump order is
+> fixed, `/Ff`'s meaning depends on `/FT` — is a *behaviour* reason in §A.3's
+> second table, and behaviour does not migrate. Two consequences the amendment
+> adds: the "field private" in the `FontFlags` sketch below becomes mandatory
+> and becomes **member-crate** work (all three newtypes ship `pub` inner
+> fields today, in crates the facade re-exports verbatim), and the ruling that
+> `FieldFlags` stays predicates is reinforced.
+
 Raised separately; recorded here so the next agent does not reopen it.
 
 The `bitflags` crate is the wrong fix. DEPS.md is closed (STYLE.md §5);
@@ -723,6 +1381,16 @@ manifest, is the opposite of STYLE.md §5.
 
 ## 7. Sequence
 
+> **Superseded 2026-09-02 by §A.10.** The table below is kept as written. Its
+> ordering principle — user-facing first, hygiene last — presupposed that the
+> facade is the product, which §A.1 withdraws. The most visible consequence:
+> **WP11 is ordered twelfth of thirteen here, described as "Largest diff,
+> least user-facing."** That description is false for anyone who depends on a
+> single member crate, and §A.9 finds that WP11 does not survive as a package
+> at all — it is the *shape* of the per-crate packages. §A.10 has the replacement
+> sequence, fourteen steps ordered by crate, and closes with a line-by-line
+> account of what moved and why.
+
 Do not attempt this as one milestone. Each WP is a `[spec]` commit that
 leaves the goldens green.
 
@@ -753,6 +1421,16 @@ facade at all.
 ---
 
 ## 8. STYLE.md and SPEC.md amendments
+
+> **Extended 2026-09-02 by §A.** Two of the bullets below are widened from the
+> facade to every published crate — the one on signatures naming only
+> re-exported types, and the one on packed encodings. What remains of WP11
+> after §A.9 dissolves it is promoted here: the four rules in WP11's body
+> become the standing per-crate rule, together with §A.4's sharper criterion
+> — *every type appearing in a public signature is nameable from the crate
+> root*, which `pdfrum_form::tab::Rect` fails today. SPEC.md §9's `TextPage`
+> row and §15.5's `Key` row become `pdfrum-text` and `pdfrum-form` changes
+> rather than facade ones.
 
 When the first WP lands, STYLE.md §4 gains:
 
