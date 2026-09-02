@@ -120,7 +120,7 @@ fn a_control_with_no_on_state_stays_clear() {
 /// from the widget dictionary and took no override.
 #[test]
 fn a_radio_groups_siblings_answer_off_and_the_chosen_kid_answers_its_own_name() {
-    use pdfrum_form::session::AnnotId;
+    use pdfrum_form::AnnotId;
 
     let (first, second) = (AnnotId::new(0, 0), AnnotId::new(0, 1));
 
@@ -149,7 +149,7 @@ fn a_radio_groups_siblings_answer_off_and_the_chosen_kid_answers_its_own_name() 
 /// bolted onto a shared record.
 #[test]
 fn a_check_boxs_only_control_answers_its_own_state() {
-    use pdfrum_form::session::AnnotId;
+    use pdfrum_form::AnnotId;
 
     let only = AnnotId::new(0, 3);
     let mut state = ToggleState::new(OFF_STATE, "Yes");

@@ -25,17 +25,34 @@
 // index with `get()`.
 #![warn(clippy::indexing_slicing)]
 
-pub mod cascade;
-pub mod commit;
+// # The module tree is an implementation detail; the `pub use` block below is
+// the surface
+//
+// Every one of these was `pub` before, *and* selectively re-exported below, so
+// the same item was reachable two ways and a caller had to guess which one
+// this crate meant. It meant the re-export. What survives as `pub mod` are the
+// three whose **contents** are the API rather than a namespace a reader passes
+// through — the pure operations a caller drives directly — and each of those
+// says so in its own module documentation.
+
+mod cascade;
+mod commit;
+// `edit` and `field` stay `pub` because their submodules are surfaces rather
+// than namespaces: `edit::ops`, `field::text`, `field::choice` and
+// `field::toggle` are the pure operations a caller drives without a session,
+// which is how every ported assertion is written, and there are enough of them
+// that flattening the lot into the root would drown it.
 pub mod edit;
-pub mod error;
-pub mod event;
+mod error;
+mod event;
 pub mod field;
-pub mod focus;
-pub mod geom;
-pub mod hit;
-pub mod page;
-pub mod popup;
+mod focus;
+mod geom;
+mod hit;
+mod page;
+mod popup;
+// `route` stays `pub` because that is where `apply`'s and `Context`'s
+// documentation lives; both are re-exported at the root as well.
 pub mod route;
 /// The `boa`-backed [`Cascade`] — a document's own scripts, run.
 ///
@@ -43,9 +60,9 @@ pub mod route;
 /// why it is a feature and what `scripts/check-no-boa.nu` asserts about it.
 #[cfg(feature = "script")]
 pub mod script;
-pub mod session;
-pub mod tab;
-pub mod update;
+mod session;
+mod tab;
+mod update;
 
 pub use cascade::{Cascade, FieldRef, FieldWrites, Keystroke, KeystrokeOutcome, NoScripts};
 pub use commit::CommitOutcome;
@@ -56,10 +73,11 @@ pub use field::{ChoiceConfig, ChoiceState, FieldState, TextConfig, TextState, To
 pub use focus::FocusChange;
 pub use geom::Rotation;
 pub use hit::Permissions;
-pub use page::{PageForm, WidgetInfo};
+pub use page::{PageForm, WidgetInfo, read as read_page};
 pub use popup::{Placement, PopupGeometry, PopupView, ScrollView};
 pub use route::{
-    Context, apply, choose, close_popup, focus_of, kill_focus, popup_view, scroll_view,
+    Context, apply, choose, close_popup, focus_of, kill_focus, popup_view, replace_selection,
+    scroll_view,
 };
 #[cfg(feature = "script")]
 pub use script::{ScriptCascade, ScriptConfig, TranscriptLine};

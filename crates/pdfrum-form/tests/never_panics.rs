@@ -13,13 +13,13 @@
 //! for the same reason.
 
 use pdfrum_form::edit::{Place, Range, Selection, UndoItem, UndoStack};
-use pdfrum_form::event::{Button, Key, Modifiers};
 use pdfrum_form::field::choice::{
     find_next, is_index_selected, move_selection, select_only, select_range_to, set_index_selected,
     toggle_index, top_visible_for, type_ahead,
 };
 use pdfrum_form::field::text::{route_char, route_key};
 use pdfrum_form::field::{ChoiceConfig, ChoiceOption, ChoiceState};
+use pdfrum_form::{Button, Key, Modifiers};
 
 /// A small deterministic generator: a counter run through a mixing step.
 /// Enough spread to reach the awkward cases, and reproducible when one fails.
