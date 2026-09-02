@@ -2454,7 +2454,7 @@ have.
 
 | ssim | document | cause |
 |---:|---|---|
-| .6457 | `bug_867501` | upstream `hayro-jbig2`: segment bodies sliced to a declared length of zero. Issue drafted at `docs/upstream/hayro-jbig2-issue.md` |
+| .6457 | `bug_867501` | upstream `hayro-jbig2`: segment bodies sliced to a declared length of zero. Issue drafted at `docs/upstream/hayro/jbig2-segment-lengths.md` |
 | .8710 | `bug_1772` | image transform: a general (sheared) matrix takes the non-axis-aligned path, which the reduction pre-pass declines |
 | .8751 | `image_transformer_other` | same: `CFX_ImageTransformer`'s rotate/shear resampler is not ported |
 | .9208 | `en_fqa` | 276 masks minified 8.33x; residual is the two-stage phase difference the pre-pass leaves, plus the un-snapped rim |
