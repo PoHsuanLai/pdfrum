@@ -581,6 +581,41 @@ The rest of this amendment does not depend on which is chosen. It is flagged
 here because it is the only item where the ruling and an existing, reasoned,
 in-tree decision actually collide.
 
+> **Resolved 2026-09-02 (user ruling: "which is better?"). The collision was
+> an artefact of the question, not of the code: there are two
+> `RenderOptions`, and the answer is different for each.**
+>
+> `pdfrum::RenderOptions` (`crates/pdfrum/src/render.rs:62`) carries **three**
+> bools — `no_path_smooth`, `no_image_smooth`, `annotations`.
+> `pdfrum_render::RenderOptions` (`options.rs:103`) is a **different type**
+> with **seven**, each one of `CPDF_RenderOptions::Options`' bit flags.
+> Reading the exemption as though it governed the facade's copy is what
+> produced the deadlock.
+>
+> **The ruling is "facade only", and not as a compromise.** The exemption's
+> argument is *correct for the type it is attached to*: `bNoPathSmooth`,
+> `bForceHalftone`, `bRectAA` and `bConvertFillToStroke` are the flag word,
+> and a reader diffing `options.rs` against `cpdf_renderoptions.h` needs the
+> names to line up. That is §B's rule working as written — oracle fidelity in
+> private representation and in the crate that must match a golden — not an
+> exception to it. Nothing about the facade's three bools makes the port
+> harder to review, **because the port does not read the facade.**
+>
+> So WP10 flips `pdfrum`'s copy to `smooth_paths` / `interpolate_images` with
+> `true` defaults and leaves `pdfrum-render`'s seven alone. The amendment
+> admits no exception: the two types have different audiences and the same
+> rule gives different answers for them.
+>
+> **One addition to WP10 that follows from this.** The boundary between the
+> two types is invisible in rustdoc today: `Page::render_on` takes
+> `&pdfrum::RenderOptions` while being generic over
+> `pdfrum_render::device::RasterBackend` and returning
+> `pdfrum_render::pixmap::Pixmap` (`api-baseline/pdfrum.txt:273-277`), so a
+> reader has no way to see which `RenderOptions` is which. WP10 adds one
+> sentence to the facade type's rustdoc saying it is not the engine's and
+> naming the conversion point. Without it the next reader re-derives this
+> same confusion, which is how the "conflict" arose.
+
 ### A.9 Which work packages collapse into per-crate work
 
 §7 ordered WP11 (member-crate surface hygiene) **twelfth of thirteen**, with
@@ -618,7 +653,7 @@ crate's package, not as a package of its own):
 | **WP13** mechanical gates | Cross-cutting by construction, and it **grows**: the snapshot and the doc-link gate now apply per published crate, not to `pdfrum` alone. |
 | **WP1** *in part* — `PageIndex`, `Error::WrongPassword` | `PageIndex` threads through the facade, `pdfrum-doc` and `pdfrum-form` together; it is a workspace-wide newtype, not one crate's. `WrongPassword` is a facade error-lifting change. |
 | **WP4** geometry vocabulary | Straddles. The *facade* half (drop `FormRect`, drop flattened `x, y`) is facade work; the *crate* half (make `tab::Rect` private, take `kurbo::Point` and narrow at entry, return `kurbo::Rect` from `PopupView`) is `pdfrum-form` work and carries the §A.6 hazard. Ordered as one package but landed crate-first. |
-| **WP10** `RenderOptions` | Straddles, and is the §A.8 open question. |
+| **WP10** `RenderOptions` | Straddles. §A.8's open question is **resolved 2026-09-02**: facade only — the two `RenderOptions` are different types with different audiences. |
 
 **WP11 does not survive as a package.** It becomes the *shape* of the
 per-crate packages: each crate's package carries its own `lib.rs` curation
