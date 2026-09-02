@@ -34,14 +34,6 @@
 //! have been seen. `hello_world_2_pages.pdf` reaching `{5,6,7}` is the case
 //! that pins it.
 
-#![allow(
-    dead_code,
-    reason = "`reachable`, `multiply_referenced` and `is_shared` are read by this \
-              module's own tests only — the writer asks `is_reachable`, and \
-              `content::apply` computes sharing its own way. They became visible \
-              to the lint when `pub mod write` went private (§A.11 step 12)"
-)]
-
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 use pdfrum_object::{Dict, Object, Resolve, names};
@@ -61,6 +53,7 @@ pub(crate) struct ReachCounts {
 impl ReachCounts {
     /// Every object number something points at.
     #[must_use]
+    #[cfg(test)]
     pub(crate) fn reachable(&self) -> BTreeSet<u32> {
         self.counts.keys().copied().collect()
     }
@@ -73,18 +66,13 @@ impl ReachCounts {
 
     /// The object numbers more than one distinct source points at.
     #[must_use]
+    #[cfg(test)]
     pub(crate) fn multiply_referenced(&self) -> BTreeSet<u32> {
         self.counts
             .iter()
             .filter(|(_, count)| **count > 1)
             .map(|(num, _)| *num)
             .collect()
-    }
-
-    /// Whether more than one distinct source points at `num`.
-    #[must_use]
-    pub(crate) fn is_shared(&self, num: u32) -> bool {
-        self.counts.get(&num).is_some_and(|c| *c > 1)
     }
 }
 
@@ -362,9 +350,10 @@ mod tests {
         ]));
         let trailer = Dict::from_pairs([(names::ROOT.clone(), r(1))]);
         let counts = walk(&trailer, 0, &store);
-        assert!(counts.is_shared(5), "both pages name the same content");
-        assert!(!counts.is_shared(3));
-        assert!(!counts.is_shared(4));
+        let shared = counts.multiply_referenced();
+        assert!(shared.contains(&5), "both pages name the same content");
+        assert!(!shared.contains(&3));
+        assert!(!shared.contains(&4));
     }
 
     // hello_world_2_pages.pdf → {5,6,7}: two pages sharing a font that in

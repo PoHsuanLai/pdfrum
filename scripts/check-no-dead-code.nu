@@ -32,26 +32,6 @@
 # wire; one that does not is undecided.
 const REGISTRY = 'docs/status/unwired-oracle-ports.md'
 
-# `pdfrum-edit` carries seven module-level suppressions of the "read by this
-# module's own tests only" shape — the same shape every other crate's were,
-# and they get the same treatment: `#[cfg(test)]` on the item, or deletion for
-# a `len`/`is_empty` pair no production code reads.
-#
-# They are exempt only because a font-embedding API was landing in that crate
-# when this check was written, and rewriting seven module headers underneath it
-# would have been a merge conflict for no gain. **This list is meant to reach
-# zero**; it is not a category of allowed suppression, and nothing may be added
-# to it. Remove the entry, not the deadline, when the crate is next quiet.
-const PENDING = [
-    'crates/pdfrum-edit/src/import/copy.rs'
-    'crates/pdfrum-edit/src/import/inherit.rs'
-    'crates/pdfrum-edit/src/import/nup.rs'
-    'crates/pdfrum-edit/src/import/viewer.rs'
-    'crates/pdfrum-edit/src/write/reach.rs'
-    'crates/pdfrum-edit/src/write/trailer.rs'
-    'crates/pdfrum-edit/src/write/xref.rs'
-]
-
 # Every dead-code suppression under `crates/*/src`, as
 # `{file, line, text, cited}` — `cited` being whether the attribute names the
 # registry.
@@ -89,7 +69,7 @@ def main [] {
 
     print "==> no dead-code suppression in library code"
     let all = (suppressions)
-    let undecided = ($all | where {|s| (not $s.cited) and ($s.file not-in $PENDING) })
+    let undecided = ($all | where {|s| not $s.cited })
 
     if not ($undecided | is-empty) {
         print --stderr "error: dead-code suppression in library code:"
@@ -111,22 +91,8 @@ def main [] {
     }
 
     let filed = ($all | where {|s| $s.cited } | length)
-    let pending = ($all | where {|s| $s.file in $PENDING } | length)
     print "ok: no undecided dead-code suppression under crates/*/src"
     print $"    \(($filed) filed as missed wires, each citing ($REGISTRY)\)"
-    if $pending > 0 {
-        print $"    \(($pending) pending in pdfrum-edit — see PENDING, which must reach zero\)"
-    }
-
-    # A `PENDING` entry that no longer has a suppression is a line nobody
-    # deleted. The list only shrinks if forgetting to shrink it is an error.
-    let stale = ($PENDING | where {|f| $f not-in ($all | get file) } | sort)
-    if not ($stale | is-empty) {
-        print --stderr "error: PENDING names files with no dead-code suppression left:"
-        $stale | each {|f| print --stderr $"  ($f)" } | ignore
-        print --stderr "       The exemption was used up — delete these lines from PENDING."
-        exit 1
-    }
 
     # The converse, so the check cannot pass by having stopped looking.
     #

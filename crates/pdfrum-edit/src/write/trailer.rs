@@ -19,15 +19,9 @@
 //! `/Size` counts two higher than a classic trailer's because the trailer
 //! object is itself an object the table must describe.
 
-#![allow(
-    dead_code,
-    reason = "`from_scratch` and `is_suppressed` are read by this module's own \
-              tests only — `build` applies the suppression list inline, and no \
-              save path yet writes a trailer with no source. They became visible \
-              to the lint when `pub mod write` went private (§A.11 step 12)"
-)]
-
-use pdfrum_object::{Array, Dict, Name, Object, names};
+#[cfg(test)]
+use pdfrum_object::Name;
+use pdfrum_object::{Array, Dict, Object, names};
 
 use crate::write::object::{write_dict, write_name, write_object};
 use crate::write::reach::SUPPRESSED_TRAILER_KEYS;
@@ -150,6 +144,7 @@ pub(crate) fn write_tail(out: &mut Vec<u8>, xref_start: u64) {
 
 /// A trailer for a document that never had one — a catalog reference, and an
 /// `/Info` when there is one to name.
+#[cfg(test)]
 pub(crate) fn from_scratch(root: u32, info: Option<u32>) -> Dict {
     let mut out = Dict::new();
     out.push(
@@ -167,6 +162,7 @@ pub(crate) fn from_scratch(root: u32, info: Option<u32>) -> Dict {
 
 /// Whether a key survives the trailer copy.
 #[must_use]
+#[cfg(test)]
 pub(crate) fn is_suppressed(key: &Name) -> bool {
     SUPPRESSED_TRAILER_KEYS.contains(&key)
 }

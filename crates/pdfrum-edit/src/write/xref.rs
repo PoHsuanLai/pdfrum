@@ -25,13 +25,6 @@
 //! The writer renumbers every object to generation 0, so the table must agree
 //! (invariant R9). The only `65535` in the output is the free head's.
 
-#![allow(
-    dead_code,
-    reason = "`ObjectOffsets`'s `numbers`, `len` and `is_empty` are read by this \
-              module's own tests only. They became visible to the lint when \
-              `pub mod write` went private (§A.11 step 12)"
-)]
-
 use std::collections::BTreeMap;
 
 /// Where each object was written, by object number.
@@ -72,27 +65,10 @@ impl ObjectOffsets {
         self.0.contains_key(&num)
     }
 
-    /// The object numbers written, ascending.
-    pub(crate) fn numbers(&self) -> impl Iterator<Item = u32> + '_ {
-        self.0.keys().copied()
-    }
-
     /// The highest object number written, or 0 when nothing was.
     #[must_use]
     pub(crate) fn last(&self) -> u32 {
         self.0.keys().next_back().copied().unwrap_or(0)
-    }
-
-    /// How many objects were written.
-    #[must_use]
-    pub(crate) fn len(&self) -> usize {
-        self.0.len()
-    }
-
-    /// Whether nothing was written.
-    #[must_use]
-    pub(crate) fn is_empty(&self) -> bool {
-        self.0.is_empty()
     }
 }
 
