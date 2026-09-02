@@ -9,8 +9,7 @@
 use std::sync::Arc;
 
 use pdfrum::{
-    Backend, Document, FieldKind, FindOptions, OpenOptions, RenderOptions, SaveOptions, Subtype,
-    Update,
+    Document, FieldKind, FindOptions, OpenOptions, RenderOptions, SaveOptions, Subtype, Update,
 };
 
 const HELLO: &str = "tests/fixtures/hello_world.pdf";
@@ -203,16 +202,20 @@ fn a_zero_sized_render_is_an_error_rather_than_an_empty_image() {
 fn every_backend_renders_the_same_page_at_the_same_size() {
     let doc = Document::open(HELLO).expect("open");
     let page = doc.page(0).expect("page");
-    let render = |backend| {
-        page.render(&RenderOptions {
-            backend,
-            ..RenderOptions::default()
-        })
-        .expect("render")
-    };
-    let vello = render(Backend::VelloCpu);
-    let tiny = render(Backend::TinySkia);
-    let exact = render(Backend::Agg);
+    let opts = RenderOptions::default();
+    // Three backends, each named at the call site rather than selected by an
+    // enum the facade owns (2026-09-02). The two that are not the facade's
+    // default are dev-dependencies here, which is exactly what a caller who
+    // wants one writes.
+    let vello = page
+        .render_on(&pdfrum::VelloCpuBackend::new(), &opts)
+        .expect("render");
+    let tiny = page
+        .render_on(&pdfrum_raster_tinyskia::TinySkiaBackend::new(), &opts)
+        .expect("render");
+    let exact = page
+        .render_on(&pdfrum_raster_agg::AggBackend::new(), &opts)
+        .expect("render");
     // The size is an *engine* decision, so it cannot depend on the backend.
     for pixmap in [&tiny, &exact] {
         assert_eq!(

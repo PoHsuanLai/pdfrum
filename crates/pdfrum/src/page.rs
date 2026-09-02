@@ -8,7 +8,8 @@ use pdfrum_parser::PageDict;
 use pdfrum_render::RenderCaches;
 
 use crate::{
-    Annotation, Backend, Document, Pixmap, RenderOptions, RenderSession, Result, TextPage,
+    Annotation, Document, Pixmap, RasterBackend, RenderOptions, RenderSession, Result, TextPage,
+    VelloCpuBackend,
 };
 
 /// One page of a [`Document`].
@@ -144,8 +145,46 @@ impl<'a> Page<'a> {
     /// # Ok::<(), pdfrum::Error>(())
     /// ```
     pub fn render(&self, options: &RenderOptions) -> Result<Pixmap> {
+        self.render_on(&VelloCpuBackend::new(), options)
+    }
+
+    /// Renders the page on a rasterizer you name.
+    ///
+    /// [`Page::render`] is this with [`VelloCpuBackend`] — the facade's
+    /// default, and the one rasterizer `cargo add pdfrum` pulls in. Any other
+    /// backend is a direct dependency of yours, named here:
+    /// `pdfrum-raster-tinyskia`'s `TinySkiaBackend` for a determinism
+    /// cross-check, `pdfrum-raster-agg`'s `AggBackend` when you want edges
+    /// that match PDFium's, `pdfrum-raster-vello`'s `VelloBackend` for the
+    /// GPU. Nothing about the page changes: a backend rasterizes paths and
+    /// images, it does not interpret PDF.
+    ///
+    /// Added 2026-09-02, replacing `RenderOptions::backend` and the facade's
+    /// `Backend` enum. Const generics were considered and rejected for the
+    /// job: a `const` parameter cannot carry a `wgpu` device, so a
+    /// const-selected backend could never name the GPU one.
+    ///
+    /// # Errors
+    ///
+    /// As [`Page::render`].
+    ///
+    /// ```
+    /// use pdfrum::{Document, RenderOptions, VelloCpuBackend};
+    ///
+    /// let doc = Document::open("tests/fixtures/hello_world.pdf")?;
+    /// let page = doc.page(0)?;
+    ///
+    /// let pixmap = page.render_on(&VelloCpuBackend::new(), &RenderOptions::default())?;
+    /// assert_eq!((pixmap.width(), pixmap.height()), (200, 200));
+    /// # Ok::<(), pdfrum::Error>(())
+    /// ```
+    pub fn render_on<B: RasterBackend>(
+        &self,
+        backend: &B,
+        options: &RenderOptions,
+    ) -> Result<Pixmap> {
         let mut ctx = BuildContext::new();
-        self.render_with(options, &mut ctx)
+        self.render_with_on(backend, options, &mut ctx)
     }
 
     /// Renders the page reusing a caller-owned [`BuildContext`].
@@ -163,7 +202,22 @@ impl<'a> Page<'a> {
     ///
     /// As [`Page::render`].
     pub fn render_with(&self, options: &RenderOptions, ctx: &mut BuildContext) -> Result<Pixmap> {
-        self.paint(options, ctx, &mut RenderCaches::new())
+        self.render_with_on(&VelloCpuBackend::new(), options, ctx)
+    }
+
+    /// [`Page::render_with`] on a rasterizer you name, as
+    /// [`Page::render_on`].
+    ///
+    /// # Errors
+    ///
+    /// As [`Page::render`].
+    pub fn render_with_on<B: RasterBackend>(
+        &self,
+        backend: &B,
+        options: &RenderOptions,
+        ctx: &mut BuildContext,
+    ) -> Result<Pixmap> {
+        self.paint(backend, options, ctx, &mut RenderCaches::new())
     }
 
     /// Renders the page reusing a caller-owned [`RenderSession`] — both the
@@ -200,7 +254,26 @@ impl<'a> Page<'a> {
         options: &RenderOptions,
         session: &mut RenderSession,
     ) -> Result<Pixmap> {
-        self.paint(options, &mut session.build, &mut session.caches)
+        self.render_session_on(&VelloCpuBackend::new(), options, session)
+    }
+
+    /// [`Page::render_session`] on a rasterizer you name, as
+    /// [`Page::render_on`].
+    ///
+    /// The session's glyph cache holds *flattened outlines*, which are the
+    /// engine's own and not a backend's, so one session serves a run that
+    /// changes backend between pages — the cross-check case.
+    ///
+    /// # Errors
+    ///
+    /// As [`Page::render`].
+    pub fn render_session_on<B: RasterBackend>(
+        &self,
+        backend: &B,
+        options: &RenderOptions,
+        session: &mut RenderSession,
+    ) -> Result<Pixmap> {
+        self.paint(backend, options, &mut session.build, &mut session.caches)
     }
 
     /// The device box this page's images should be decoded against
@@ -225,9 +298,11 @@ impl<'a> Page<'a> {
         pdfrum_page::RequestedSize::for_device(corners.width(), corners.height())
     }
 
-    /// The one render body, parameterised by which caches it borrows.
-    fn paint(
+    /// The one render body, parameterised by which rasterizer draws and which
+    /// caches it borrows.
+    fn paint<B: RasterBackend>(
         &self,
+        backend: &B,
         options: &RenderOptions,
         ctx: &mut BuildContext,
         caches: &mut RenderCaches,
@@ -260,29 +335,8 @@ impl<'a> Page<'a> {
         let page = page;
         let inner = options.to_inner();
         let mut diags = Diagnostics::default();
-        let pixmap = match options.backend {
-            Backend::VelloCpu => pdfrum_render::render_page_with_caches(
-                &page,
-                &inner,
-                &pdfrum_raster_vello_cpu::VelloCpuBackend::new(),
-                caches,
-                &mut diags,
-            ),
-            Backend::TinySkia => pdfrum_render::render_page_with_caches(
-                &page,
-                &inner,
-                &pdfrum_raster_tinyskia::TinySkiaBackend::new(),
-                caches,
-                &mut diags,
-            ),
-            Backend::Agg => pdfrum_render::render_page_with_caches(
-                &page,
-                &inner,
-                &pdfrum_raster_agg::AggBackend::new(),
-                caches,
-                &mut diags,
-            ),
-        };
+        let pixmap =
+            pdfrum_render::render_page_with_caches(&page, &inner, backend, caches, &mut diags);
         // Recorded whether or not the render succeeded: a page too large to
         // rasterize may still have reported damage on the way there.
         self.doc.note(&diags);

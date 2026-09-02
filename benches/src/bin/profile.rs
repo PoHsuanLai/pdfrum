@@ -23,7 +23,25 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
 
-use pdfrum::{Backend, Document, RenderOptions, RenderSession, SaveOptions};
+use pdfrum::{Document, RenderOptions, RenderSession, SaveOptions, VelloCpuBackend};
+use pdfrum_raster_agg::AggBackend;
+use pdfrum_raster_tinyskia::TinySkiaBackend;
+
+/// Which rasterizer `--backend` names.
+///
+/// This tool's own enum, not the facade's: the facade stopped owning one on
+/// 2026-09-02 when `Page::render_on` took the backend as an argument. A CLI
+/// still has to turn a *string* into a choice, and a three-arm match at the
+/// one call site is what that costs — the seam below it is the trait.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Backend {
+    /// The analytic AGG-parity rasterizer.
+    Agg,
+    /// `tiny-skia`.
+    TinySkia,
+    /// `vello_cpu`.
+    VelloCpu,
+}
 
 /// What to measure.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -54,9 +72,9 @@ impl Op {
 /// Parse the `--backend` value.
 fn backend(s: &str) -> Option<Backend> {
     match s {
-        "exact" => Some(Backend::Agg),
+        "agg" | "exact" => Some(Backend::Agg),
         "tinyskia" | "tiny-skia" => Some(Backend::TinySkia),
-        "vello" | "vello_cpu" => Some(Backend::VelloCpu),
+        "vello-cpu" | "vello_cpu" | "vello" => Some(Backend::VelloCpu),
         _ => None,
     }
 }
@@ -219,21 +237,21 @@ fn timed_render(args: &Args, bytes: &Arc<[u8]>) {
     for _ in 0..args.iterations {
         for graph in &graphs {
             let pixmap = match args.backend {
-                pdfrum::Backend::Agg => pdfrum_render::render_page_with_caches(
+                Backend::Agg => pdfrum_render::render_page_with_caches(
                     graph,
                     &inner,
                     &timed::TimedBackend(pdfrum_raster_agg::AggBackend::new()),
                     &mut caches,
                     &mut diags,
                 ),
-                pdfrum::Backend::TinySkia => pdfrum_render::render_page_with_caches(
+                Backend::TinySkia => pdfrum_render::render_page_with_caches(
                     graph,
                     &inner,
                     &timed::TimedBackend(pdfrum_raster_tinyskia::TinySkiaBackend::new()),
                     &mut caches,
                     &mut diags,
                 ),
-                pdfrum::Backend::VelloCpu => pdfrum_render::render_page_with_caches(
+                Backend::VelloCpu => pdfrum_render::render_page_with_caches(
                     graph,
                     &inner,
                     &timed::TimedBackend(pdfrum_raster_vello_cpu::VelloCpuBackend::new()),
@@ -462,10 +480,7 @@ fn walk_report(iters: f64, engine: std::time::Duration) {
 
 /// Run the operation `iterations` times, returning how many actually ran.
 fn run(args: &Args, bytes: &Arc<[u8]>) -> u32 {
-    let options = RenderOptions {
-        backend: args.backend,
-        ..RenderOptions::default()
-    };
+    let options = RenderOptions::default();
 
     // `open` re-parses every iteration by definition; the other three parse
     // once, because a profile of rendering must not be three-quarters parser.
@@ -488,7 +503,18 @@ fn run(args: &Args, bytes: &Arc<[u8]>) -> u32 {
             Op::Render => {
                 let mut session = RenderSession::new();
                 for page in doc.pages() {
-                    black_box(page.render_session(&options, &mut session).ok());
+                    let out = match args.backend {
+                        Backend::Agg => {
+                            page.render_session_on(&AggBackend::new(), &options, &mut session)
+                        }
+                        Backend::TinySkia => {
+                            page.render_session_on(&TinySkiaBackend::new(), &options, &mut session)
+                        }
+                        Backend::VelloCpu => {
+                            page.render_session_on(&VelloCpuBackend::new(), &options, &mut session)
+                        }
+                    };
+                    black_box(out.ok());
                 }
             }
             Op::Text => {

@@ -405,3 +405,31 @@ fn the_adapter_is_named_and_is_not_software() {
     assert!(report.is_real_gpu(), "{report} is not hardware");
     assert!(report.max_dimension >= 4096, "{report} is very limited");
 }
+
+/// The GPU backend satisfies [`pdfrum::Page::render_on`]'s bound.
+///
+/// The facade's `Backend` enum could never name this crate — naming it would
+/// have put `wgpu` in every `cargo add pdfrum` tree, which is the thing
+/// `scripts/check-no-wgpu.sh` exists to forbid. Since 2026-09-02 the backend
+/// is an argument instead, so a caller who *does* hold a `wgpu::Device` hands
+/// it straight to `render_on` and the facade never learns the crate exists.
+///
+/// This is the assertion that the arrangement type-checks. It runs a real
+/// render when there is a GPU and skips cleanly when there is not, exactly as
+/// every other test in this file does — and it lives here rather than in the
+/// facade precisely because a dev-dependency edge points this way and not
+/// back.
+#[test]
+fn the_facade_renders_a_page_on_this_backend() {
+    let Some(backend) = gpu() else { return };
+    let doc = pdfrum::Document::open(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../pdfrum/tests/fixtures/hello_world.pdf"
+    ))
+    .expect("open");
+    let page = doc.page(0).expect("page");
+    let pixmap = page
+        .render_on(&backend, &pdfrum::RenderOptions::default())
+        .expect("the GPU backend satisfies Page::render_on's bound");
+    assert_eq!((pixmap.width(), pixmap.height()), (200, 200));
+}

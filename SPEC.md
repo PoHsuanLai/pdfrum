@@ -776,6 +776,35 @@ way. `pdfrum-raster-vello-cpu` (vello_cpu),
 `pdfrum-raster-exact`) implement the two traits; conformance Tier C diffs
 them.
 
+[spec] 2026-09-02: **the facade takes the backend as an argument.**
+`pdfrum::Backend` (the three-variant enum) and `RenderOptions::backend` are
+**withdrawn**. `Page::render_on`, `render_with_on` and `render_session_on` are
+generic over `RasterBackend` — the seam the engine already had — and
+`Page::render`, `render_with` and `render_session` keep their signatures,
+meaning `VelloCpuBackend`:
+
+```rust
+pub fn render_on<B: RasterBackend>(&self, backend: &B, options: &RenderOptions) -> Result<Pixmap>;
+pub fn render_with_on<B: RasterBackend>(&self, backend: &B, options: &RenderOptions, ctx: &mut BuildContext) -> Result<Pixmap>;
+pub fn render_session_on<B: RasterBackend>(&self, backend: &B, options: &RenderOptions, session: &mut RenderSession) -> Result<Pixmap>;
+```
+
+The enum could only ever name the rasterizers the *facade* depended on, so
+`cargo add pdfrum` compiled three of them and no caller could pass a fourth —
+the GPU backend included, which is why M12c had to say "the facade cannot name
+it". Now it can be handed one. `pdfrum` re-exports `RasterBackend`,
+`RenderDevice` and `VelloCpuBackend` so a caller can write the bound and name
+the default without a second dependency; `pdfrum-raster-tinyskia` and
+`pdfrum-raster-agg` leave the facade's manifest and become the caller's.
+**Measured: `cargo tree -p pdfrum -e normal | grep -c pdfrum-raster` goes 3 →
+1.**
+
+Const generics were considered and rejected: a `const` parameter cannot carry a
+`wgpu` device, so a const-selected backend could not name the GPU one either.
+This does **not** add a seam under STYLE.md §2b — `RasterBackend` was already
+one of the three, and this commit moves a call site onto it rather than
+inventing a fourth.
+
 [spec] 2026-09-02 (naming sweep): the two vello crates take **vello's own
 names**. Ours were backwards: upstream ships `vello` (the GPU renderer on
 `wgpu`), `vello_cpu` and `vello_hybrid`, so a reader who knew vello read our

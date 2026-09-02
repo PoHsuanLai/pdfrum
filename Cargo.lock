@@ -2010,6 +2010,7 @@ dependencies = [
  "pdfrum-object",
  "pdfrum-page",
  "pdfrum-parser",
+ "pdfrum-raster-agg",
  "pdfrum-raster-tinyskia",
  "pdfrum-raster-vello-cpu",
  "peniko",

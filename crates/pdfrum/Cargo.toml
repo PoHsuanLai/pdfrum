@@ -20,9 +20,12 @@ pdfrum-font.workspace = true
 pdfrum-page.workspace = true
 pdfrum-filters.workspace = true
 pdfrum-render.workspace = true
+# The facade's ONE rasterizer (2026-09-02). `tiny-skia` and the AGG-parity
+# backend used to be here too, because `render::Backend` named all three in an
+# enum — so `cargo add pdfrum` compiled three rasterizers whatever the caller
+# used. `Page::render_on` takes the backend as an argument now, so those two
+# are the caller's own dependency and this tree carries one.
 pdfrum-raster-vello-cpu.workspace = true
-pdfrum-raster-tinyskia.workspace = true
-pdfrum-raster-agg.workspace = true
 pdfrum-text.workspace = true
 pdfrum-doc.workspace = true
 pdfrum-form.workspace = true
@@ -42,3 +45,12 @@ rayon.workspace = true
 # Encoding a pixmap is not the engine's job — the facade hands out pixels and
 # the examples turn them into files (DEPS.md, "Tools & tests only").
 png.workspace = true
+
+# The other two CPU rasterizers, as **dev**-dependencies (2026-09-02). They
+# left the normal tree when `Page::render_on` took the backend as an argument,
+# and they are here because `tests/facade.rs` asserts the property that
+# justifies the seam: every backend renders the same page at the same size.
+# A dev-dependency is exactly what a caller who names one of them writes, so
+# the test is also the worked example.
+pdfrum-raster-tinyskia.workspace = true
+pdfrum-raster-agg.workspace = true

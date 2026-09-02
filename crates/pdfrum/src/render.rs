@@ -1,42 +1,40 @@
-//! What a render is parameterised by, and which rasterizer performs it.
+//! What a render is parameterised by. *Which* rasterizer performs it is an
+//! argument, not an option — see [`Page::render_on`](crate::Page::render_on).
+//!
+//! # Where `Backend` went
+//!
+//! *Withdrawn 2026-09-02.* This module used to own
+//! `pub enum Backend { VelloCpu, TinySkia, Agg }` and a
+//! `RenderOptions::backend` field, and [`Page::render`](crate::Page::render)
+//! dispatched on it through a three-arm match. That flattened a seam the
+//! engine below already had: `pdfrum_render::RasterBackend` is a trait with
+//! an associated `Device`, and `render_page_with_caches` is generic over it.
+//! The facade's enum could only ever name the rasterizers the *facade*
+//! depended on — so every caller of `cargo add pdfrum` compiled three of
+//! them, and no caller could ever pass a fourth.
+//!
+//! The backend is now a **parameter**: [`Page::render_on`](crate::Page::render_on),
+//! [`Page::render_with_on`](crate::Page::render_with_on) and
+//! [`Page::render_session_on`](crate::Page::render_session_on) each take
+//! `&B where B: RasterBackend`. [`Page::render`](crate::Page::render) and its
+//! two siblings keep their signatures and mean
+//! [`VelloCpuBackend`](crate::VelloCpuBackend), the facade's default and its
+//! one rasterizer dependency. `tiny-skia` and the AGG-parity backend are now
+//! the caller's own dependency, named directly.
+//!
+//! **Const generics were considered and rejected:** a `const` parameter
+//! cannot carry a `wgpu` device, so a const-selected backend could never
+//! name the GPU one — which is precisely the fourth backend the enum could
+//! not name either.
+//!
+//! [`RasterBackend`](crate::RasterBackend) and
+//! [`RenderDevice`](crate::RenderDevice) are re-exported from this crate, so
+//! a caller can write the bound without adding `pdfrum-render` to their
+//! manifest.
 
 use kurbo::Affine;
 
 pub use pdfrum_render::{ColorMode, ColorScheme, Pixmap, TextAa};
-
-/// Which rasterizer draws a page.
-///
-/// All three are pure Rust, all three are deterministic, and all three
-/// produce a [`Pixmap`] — the choice is a trade between speed and matching a
-/// reference renderer's edges. The engine above them is the same either way:
-/// a backend rasterizes paths and images, it does not interpret PDF.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum Backend {
-    /// `vello_cpu` — the default. A modern sparse-strip rasterizer with SIMD
-    /// throughout, pinned to a fixed instruction level so its output does not
-    /// change with the host CPU.
-    ///
-    /// Renamed 2026-09-02, was `Vello`.
-    #[default]
-    VelloCpu,
-    /// `tiny-skia` — a mature Skia CPU port, and this project's determinism
-    /// baseline. Kept as a cross-check: where the two disagree, the bug is in
-    /// a backend rather than in the engine.
-    TinySkia,
-    /// The analytic AGG-parity rasterizer — pick this when you want edges
-    /// that match PDFium's rather than the fastest render.
-    ///
-    /// Renamed 2026-09-02, was `Exact`.
-    ///
-    /// It reproduces the coverage integral of AGG, the scan converter PDFium
-    /// itself draws with, on AGG's own 256ths-of-a-pixel grid — where the
-    /// other two sample or approximate: a half-covered pixel comes out at
-    /// exactly half, not at the nearest of seventeen supersampled levels.
-    /// That is what the project's conformance runs use, and it is worth
-    /// reaching for when you are diffing output against another PDF renderer.
-    /// It has no SIMD, so it is the slower choice for bulk rendering.
-    Agg,
-}
 
 /// Everything a render is parameterised by.
 ///
@@ -44,17 +42,21 @@ pub enum Backend {
 /// syntax (STYLE.md §4). The defaults render a page at one pixel per PDF
 /// point, in colour, with antialiased text — what a viewer shows.
 ///
+/// It says nothing about *which* rasterizer draws the page: that is an
+/// argument to [`Page::render_on`](crate::Page::render_on) rather than a
+/// field here — `RenderOptions::backend`, and the `Backend` enum it selected
+/// from, were withdrawn 2026-09-02.
+///
 /// ```
-/// use pdfrum::{Backend, RenderOptions};
+/// use pdfrum::RenderOptions;
 /// use pdfrum::kurbo::Affine;
 ///
 /// // 150 DPI: PDF points are 1/72 inch, so the scale is 150/72.
 /// let opts = RenderOptions {
 ///     transform: Affine::scale(150.0 / 72.0),
-///     backend: Backend::TinySkia,
 ///     ..RenderOptions::default()
 /// };
-/// assert_eq!(opts.backend, Backend::TinySkia);
+/// assert_eq!(opts.transform, Affine::scale(150.0 / 72.0));
 /// ```
 #[derive(Debug, Clone, PartialEq)]
 pub struct RenderOptions {
@@ -65,8 +67,6 @@ pub struct RenderOptions {
     /// own rotation and crop box are composed in for you, so this is a
     /// scale-and-place transform rather than a full page matrix.
     pub transform: Affine,
-    /// Which rasterizer draws it.
-    pub backend: Backend,
     /// The colour mode. [`ColorMode::Gray`] renders greyscale;
     /// [`ColorMode::Forced`] substitutes a fixed palette, for a
     /// high-contrast or dark-mode view.
@@ -95,7 +95,6 @@ impl Default for RenderOptions {
     fn default() -> Self {
         RenderOptions {
             transform: Affine::IDENTITY,
-            backend: Backend::default(),
             color_mode: ColorMode::default(),
             text_aa: TextAa::default(),
             no_path_smooth: false,
