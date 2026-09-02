@@ -351,16 +351,16 @@ fn render_one(
     session: &mut RenderSession,
 ) -> pdfrum::Result<pdfrum::Pixmap> {
     match args.backend {
-        Backend::Agg => page.render_session_on(&AggBackend::new(), options, session),
-        Backend::TinySkia => page.render_session_on(&TinySkiaBackend::new(), options, session),
-        Backend::VelloCpu => page.render_session_on(&VelloCpuBackend::new(), options, session),
+        Backend::Agg => page.render_on(&AggBackend::new(), options, session),
+        Backend::TinySkia => page.render_on(&TinySkiaBackend::new(), options, session),
+        Backend::VelloCpu => page.render_on(&VelloCpuBackend::new(), options, session),
     }
 }
 
 /// Render every page `iterations` times through a clocked backend, and print
 /// where the time went.
 ///
-/// This bypasses `Page::render_session` and calls `render_page_with`
+/// This bypasses `Page::render_on` and calls `render_page_with`
 /// directly, because the decorator has to be substituted for the backend and
 /// the facade chooses one from `RenderOptions::backend`. The work is otherwise
 /// the same: same page graph, same caches, same options — the `page_graph`
@@ -728,7 +728,7 @@ fn run(args: &Args, bytes: &Arc<[u8]>) -> (u32, std::time::Duration) {
             Op::Text => {
                 let mut session = RenderSession::new();
                 for page in doc.pages() {
-                    black_box(page.text_session(&mut session).to_string().len());
+                    black_box(page.text_on(&mut session).to_string().len());
                 }
             }
             Op::Save => {

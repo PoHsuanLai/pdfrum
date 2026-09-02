@@ -233,7 +233,7 @@ impl<'a> FormSession<'a> {
     }
 
     /// Starts a session whose fonts are resolved through a caller-owned
-    /// [`BuildContext`], as [`Page::render_with`](crate::Page::render_with).
+    /// [`BuildContext`], as [`RenderSession::build`](crate::RenderSession).
     ///
     /// # Use this whenever the caller renders with substitution options
     ///

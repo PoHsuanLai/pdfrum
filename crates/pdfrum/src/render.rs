@@ -13,11 +13,10 @@
 //! depended on — so every caller of `cargo add pdfrum` compiled three of
 //! them, and no caller could ever pass a fourth.
 //!
-//! The backend is now a **parameter**: [`Page::render_on`](crate::Page::render_on),
-//! [`Page::render_with_on`](crate::Page::render_with_on) and
-//! [`Page::render_session_on`](crate::Page::render_session_on) each take
-//! `&B where B: RasterBackend`. [`Page::render`](crate::Page::render) and its
-//! two siblings keep their signatures and mean
+//! The backend is now a **parameter**:
+//! [`Page::render_on`](crate::Page::render_on) takes
+//! `&B where B: RasterBackend`, and [`Page::render`](crate::Page::render)
+//! keeps its signature and means
 //! [`VelloCpuBackend`](crate::VelloCpuBackend), the facade's default and its
 //! one rasterizer dependency. `tiny-skia` and the AGG-parity backend are now
 //! the caller's own dependency, named directly.

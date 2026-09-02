@@ -114,6 +114,12 @@ impl<'a> Page<'a> {
 
     /// Renders the page to a pixel buffer.
     ///
+    /// Use this when you have one page to draw. It rasterizes on
+    /// [`VelloCpuBackend`] — the facade's default, and the one rasterizer
+    /// `cargo add pdfrum` pulls in — with caches of its own that it throws
+    /// away afterwards. For a run over many pages, or on any other
+    /// rasterizer, use [`Page::render_on`].
+    ///
     /// The image is sized by [`RenderOptions::transform`]: the default
     /// identity transform gives one pixel per PDF point, and
     /// `Affine::scale(2.0)` gives a 2x image. The page's own rotation and
@@ -145,19 +151,47 @@ impl<'a> Page<'a> {
     /// # Ok::<(), pdfrum::Error>(())
     /// ```
     pub fn render(&self, options: &RenderOptions) -> Result<Pixmap> {
-        self.render_on(&VelloCpuBackend::new(), options)
+        self.render_on(
+            &VelloCpuBackend::new(),
+            options,
+            &mut RenderSession::default(),
+        )
     }
 
-    /// Renders the page on a rasterizer you name.
+    /// Renders the page on a rasterizer you name, reusing a caller-owned
+    /// [`RenderSession`].
     ///
-    /// [`Page::render`] is this with [`VelloCpuBackend`] — the facade's
-    /// default, and the one rasterizer `cargo add pdfrum` pulls in. Any other
-    /// backend is a direct dependency of yours, named here:
-    /// `pdfrum-raster-tinyskia`'s `TinySkiaBackend` for a determinism
-    /// cross-check, `pdfrum-raster-agg`'s `AggBackend` when you want edges
-    /// that match PDFium's, `pdfrum-raster-vello`'s `VelloBackend` for the
-    /// GPU. Nothing about the page changes: a backend rasterizes paths and
-    /// images, it does not interpret PDF.
+    /// Use this for either half of what it offers, or both.
+    ///
+    /// **A rasterizer other than the default.** [`Page::render`] is this with
+    /// [`VelloCpuBackend`]; any other backend is a direct dependency of
+    /// yours, named here: `pdfrum-raster-tinyskia`'s `TinySkiaBackend` for a
+    /// determinism cross-check, `pdfrum-raster-agg`'s `AggBackend` when you
+    /// want edges that match PDFium's, `pdfrum-raster-vello`'s `VelloBackend`
+    /// for the GPU. Nothing about the page changes: a backend rasterizes
+    /// paths and images, it does not interpret PDF.
+    ///
+    /// **Caches that outlive the page.** The session carries both halves —
+    /// [`BuildContext`] for the fonts, colour spaces, functions and decoded
+    /// images a page is *built* from, and [`RenderCaches`](crate::RenderCaches)
+    /// for the flattened glyph outlines it is *drawn* with. A run over many
+    /// pages of one document should thread one through them all: decoding a
+    /// shared image or flattening a shared glyph once per document instead of
+    /// once per page is the difference between a fast walk and a slow one.
+    /// The session's glyph cache holds outlines that are the engine's own and
+    /// not a backend's, so one session serves a run that changes backend
+    /// between pages — the cross-check case.
+    ///
+    /// A session is `&mut` and not shareable, so under `rayon` each worker
+    /// keeps its own; see the crate docs. On the caveat about type-3 snapping
+    /// and a warm cache, see [`RenderSession`]. For a byte-identical per-page
+    /// baseline pass a fresh `RenderSession::new()`, which is exactly what
+    /// [`Page::render`] does.
+    ///
+    /// A caller that needs the *build* caches configured — substitution
+    /// options for non-embedded fonts, say — sets `session.build` and renders
+    /// through the same session, so the fonts a page is measured with are the
+    /// fonts it is drawn with.
     ///
     /// Added 2026-09-02, replacing `RenderOptions::backend` and the facade's
     /// `Backend` enum. Const generics were considered and rejected for the
@@ -169,105 +203,22 @@ impl<'a> Page<'a> {
     /// As [`Page::render`].
     ///
     /// ```
-    /// use pdfrum::{Document, RenderOptions, VelloCpuBackend};
-    ///
-    /// let doc = Document::open("tests/fixtures/hello_world.pdf")?;
-    /// let page = doc.page(0)?;
-    ///
-    /// let pixmap = page.render_on(&VelloCpuBackend::new(), &RenderOptions::default())?;
-    /// assert_eq!((pixmap.width(), pixmap.height()), (200, 200));
-    /// # Ok::<(), pdfrum::Error>(())
-    /// ```
-    pub fn render_on<B: RasterBackend>(
-        &self,
-        backend: &B,
-        options: &RenderOptions,
-    ) -> Result<Pixmap> {
-        let mut ctx = BuildContext::new();
-        self.render_with_on(backend, options, &mut ctx)
-    }
-
-    /// Renders the page reusing a caller-owned [`BuildContext`].
-    ///
-    /// The context carries the font, colorspace, function and image caches. A
-    /// caller rendering many pages of one document should thread one through
-    /// them all — decoding a shared image or parsing a shared font once per
-    /// document instead of once per page is the difference between a fast
-    /// walk and a slow one.
-    ///
-    /// It is `&mut` and not shareable, so under rayon each worker keeps its
-    /// own; see the crate docs.
-    ///
-    /// # Errors
-    ///
-    /// As [`Page::render`].
-    pub fn render_with(&self, options: &RenderOptions, ctx: &mut BuildContext) -> Result<Pixmap> {
-        self.render_with_on(&VelloCpuBackend::new(), options, ctx)
-    }
-
-    /// [`Page::render_with`] on a rasterizer you name, as
-    /// [`Page::render_on`].
-    ///
-    /// # Errors
-    ///
-    /// As [`Page::render`].
-    pub fn render_with_on<B: RasterBackend>(
-        &self,
-        backend: &B,
-        options: &RenderOptions,
-        ctx: &mut BuildContext,
-    ) -> Result<Pixmap> {
-        self.paint(backend, options, ctx, &mut RenderCaches::new())
-    }
-
-    /// Renders the page reusing a caller-owned [`RenderSession`] — both the
-    /// build caches and the glyph cache.
-    ///
-    /// [`Page::render_with`] threads the resources a page is *built* from,
-    /// which is most of the win but not all of it: the rasterizer still
-    /// flattens every glyph outline afresh for every page. A session carries
-    /// that cache too, so a run over many pages of one document flattens each
-    /// glyph once.
-    ///
-    /// It is `&mut` and not shareable, so under rayon each worker keeps its
-    /// own; see the crate docs. On the caveat about type-3 snapping and a
-    /// warm cache, see [`RenderSession`].
-    ///
-    /// ```
-    /// use pdfrum::{Document, RenderOptions, RenderSession};
+    /// use pdfrum::{Document, RenderOptions, RenderSession, VelloCpuBackend};
     ///
     /// let doc = Document::open("tests/fixtures/bookmarks.pdf")?;
+    /// let backend = VelloCpuBackend::new();
     /// let mut session = RenderSession::new();
+    ///
+    /// // Both pages share one set of caches: the fonts are parsed once, and
+    /// // so are the glyph outlines drawn from them.
     /// let rendered: Vec<_> = doc
     ///     .pages()
-    ///     .map(|page| page.render_session(&RenderOptions::default(), &mut session))
+    ///     .map(|page| page.render_on(&backend, &RenderOptions::default(), &mut session))
     ///     .collect::<Result<_, _>>()?;
     /// assert_eq!(rendered.len(), 2);
     /// # Ok::<(), pdfrum::Error>(())
     /// ```
-    ///
-    /// # Errors
-    ///
-    /// As [`Page::render`].
-    pub fn render_session(
-        &self,
-        options: &RenderOptions,
-        session: &mut RenderSession,
-    ) -> Result<Pixmap> {
-        self.render_session_on(&VelloCpuBackend::new(), options, session)
-    }
-
-    /// [`Page::render_session`] on a rasterizer you name, as
-    /// [`Page::render_on`].
-    ///
-    /// The session's glyph cache holds *flattened outlines*, which are the
-    /// engine's own and not a backend's, so one session serves a run that
-    /// changes backend between pages — the cross-check case.
-    ///
-    /// # Errors
-    ///
-    /// As [`Page::render`].
-    pub fn render_session_on<B: RasterBackend>(
+    pub fn render_on<B: RasterBackend>(
         &self,
         backend: &B,
         options: &RenderOptions,
@@ -348,6 +299,11 @@ impl<'a> Page<'a> {
 
     /// Extracts the page's text.
     ///
+    /// Use this when you have one page to read. It builds the page with
+    /// caches of its own and throws them away afterwards; for a run over many
+    /// pages, or when the text must be measured with the same fonts a render
+    /// uses, use [`Page::text_on`].
+    ///
     /// The returned [`TextPage`] carries the characters in reading order and
     /// answers search, selection and link queries over them.
     ///
@@ -359,15 +315,25 @@ impl<'a> Page<'a> {
     /// ```
     #[must_use]
     pub fn text(&self) -> TextPage {
-        let mut ctx = BuildContext::new();
-        self.text_with(&mut ctx)
+        self.text_on(&mut RenderSession::default())
     }
 
-    /// Extracts the page's text reusing a caller-owned [`BuildContext`], as
-    /// [`Page::render_with`].
+    /// Extracts the page's text reusing a caller-owned [`RenderSession`].
+    ///
+    /// Use this for a run over many pages of one document, so each font and
+    /// colour space is parsed once rather than once per page, and so one
+    /// session serves a run that both renders and extracts — the same
+    /// [`BuildContext`] answers both. A caller whose build context carries
+    /// substitution options must extract through it for the same reason
+    /// [`Page::render_on`] gives: text measured against a different face than
+    /// the page is drawn with is text measured twice.
+    ///
+    /// Extraction never touches the session's glyph cache — it reads the
+    /// content stream's own text and never rasterizes — so only
+    /// `session.build` moves. [`Page::text`] is this with a fresh session.
     #[must_use]
-    pub fn text_with(&self, ctx: &mut BuildContext) -> TextPage {
-        let page = self.build(ctx);
+    pub fn text_on(&self, session: &mut RenderSession) -> TextPage {
+        let page = self.build(&mut session.build);
         let mut diags = Diagnostics::default();
         let options = pdfrum_text::ExtractOptions {
             rtl: self.doc.reads_right_to_left(),
@@ -381,18 +347,6 @@ impl<'a> Page<'a> {
         );
         self.doc.note(&diags);
         text
-    }
-
-    /// Extracts the page's text reusing a [`RenderSession`]'s build caches,
-    /// so one session serves a run that both renders and extracts.
-    ///
-    /// Extraction never touches the glyph cache — it reads the content
-    /// stream's own text and never rasterizes — so this is exactly
-    /// [`Page::text_with`] over `session.build`, offered so a caller holding a
-    /// session need not reach into it.
-    #[must_use]
-    pub fn text_session(&self, session: &mut RenderSession) -> TextPage {
-        self.text_with(&mut session.build)
     }
 
     /// The page's annotations, in `/Annots` order, with pop-ups excluded.

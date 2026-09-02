@@ -32,12 +32,13 @@ fn main() -> ExitCode {
 fn run(input: &Path, needle: Option<&str>) -> Result<(), pdfrum::Error> {
     let doc = Document::open(input)?;
 
-    // One build context for the whole document, so a font used on every page
-    // is parsed once rather than once per page.
-    let mut ctx = pdfrum::BuildContext::new();
+    // One session for the whole document, so a font used on every page is
+    // parsed once rather than once per page. Extraction moves only its build
+    // half; the same session would serve a render alongside.
+    let mut session = pdfrum::RenderSession::new();
 
     for page in doc.pages() {
-        let text = page.text_with(&mut ctx);
+        let text = page.text_on(&mut session);
 
         match needle {
             None => {

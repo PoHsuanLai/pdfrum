@@ -244,15 +244,16 @@ ceremony beyond adding `rayon` to your own manifest:
 
 ```rust
 use rayon::prelude::*;
-use pdfrum::{BuildContext, Document, RenderOptions};
+use pdfrum::{Document, RenderOptions, RenderSession, VelloCpuBackend};
 
 let doc = Document::open("big.pdf")?;
 let pages: Vec<_> = doc.pages().collect();
+let backend = VelloCpuBackend::new();
 
 let pixmaps: Vec<_> = pages
     .par_iter()
-    .map_init(BuildContext::new, |ctx, page| {
-        page.render_with(&RenderOptions::default(), ctx)
+    .map_init(RenderSession::new, |session, page| {
+        page.render_on(&backend, &RenderOptions::default(), session)
     })
     .collect::<Result<_, _>>()?;
 # Ok::<(), pdfrum::Error>(())
@@ -261,7 +262,7 @@ let pixmaps: Vec<_> = pages
 The document is shared by reference; the engine is single-threaded *per page*
 on purpose, because a page is the natural unit of data parallelism and the
 rasterizer beneath is already vectorized within one. `map_init` gives each
-worker its own font and image cache.
+worker its own font, image and glyph cache.
 
 ## Project documents
 

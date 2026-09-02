@@ -261,15 +261,10 @@ pub fn pdfrum::Page<'a>::links(&self) -> alloc::vec::Vec<pdfrum_doc::nav::link::
 pub fn pdfrum::Page<'a>::media_box(&self) -> kurbo::rect::Rect
 pub fn pdfrum::Page<'a>::objects(&self) -> pdfrum_page::page::Page
 pub fn pdfrum::Page<'a>::render(&self, &pdfrum::RenderOptions) -> pdfrum::Result<pdfrum_render::pixmap::Pixmap>
-pub fn pdfrum::Page<'a>::render_on<B: pdfrum_render::device::RasterBackend>(&self, &B, &pdfrum::RenderOptions) -> pdfrum::Result<pdfrum_render::pixmap::Pixmap>
-pub fn pdfrum::Page<'a>::render_session(&self, &pdfrum::RenderOptions, &mut pdfrum::RenderSession) -> pdfrum::Result<pdfrum_render::pixmap::Pixmap>
-pub fn pdfrum::Page<'a>::render_session_on<B: pdfrum_render::device::RasterBackend>(&self, &B, &pdfrum::RenderOptions, &mut pdfrum::RenderSession) -> pdfrum::Result<pdfrum_render::pixmap::Pixmap>
-pub fn pdfrum::Page<'a>::render_with(&self, &pdfrum::RenderOptions, &mut pdfrum_page::build::BuildContext) -> pdfrum::Result<pdfrum_render::pixmap::Pixmap>
-pub fn pdfrum::Page<'a>::render_with_on<B: pdfrum_render::device::RasterBackend>(&self, &B, &pdfrum::RenderOptions, &mut pdfrum_page::build::BuildContext) -> pdfrum::Result<pdfrum_render::pixmap::Pixmap>
+pub fn pdfrum::Page<'a>::render_on<B: pdfrum_render::device::RasterBackend>(&self, &B, &pdfrum::RenderOptions, &mut pdfrum::RenderSession) -> pdfrum::Result<pdfrum_render::pixmap::Pixmap>
 pub fn pdfrum::Page<'a>::rotation(&self) -> pdfrum::Rotation
 pub fn pdfrum::Page<'a>::text(&self) -> pdfrum_text::TextPage
-pub fn pdfrum::Page<'a>::text_session(&self, &mut pdfrum::RenderSession) -> pdfrum_text::TextPage
-pub fn pdfrum::Page<'a>::text_with(&self, &mut pdfrum_page::build::BuildContext) -> pdfrum_text::TextPage
+pub fn pdfrum::Page<'a>::text_on(&self, &mut pdfrum::RenderSession) -> pdfrum_text::TextPage
 pub fn pdfrum::Page<'a>::width(&self) -> f64
 pub struct pdfrum::PageEdit
 impl pdfrum::PageEdit
