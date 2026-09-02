@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-02T08:32:33Z",
+  "generated_at": "2026-09-02T09:12:28Z",
   "totals": {
     "files": 1757,
     "pass": 1512,
@@ -12467,7 +12467,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.994910,
+        "ssim": 0.996609,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
