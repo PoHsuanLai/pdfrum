@@ -393,131 +393,15 @@ pub fn pdfrum_doc::geom::top(kurbo::rect::Rect) -> f32
 pub fn pdfrum_doc::geom::transform_rect(kurbo::affine::Affine, kurbo::rect::Rect) -> kurbo::rect::Rect
 pub fn pdfrum_doc::geom::width(kurbo::rect::Rect) -> f32
 pub mod pdfrum_doc::nav
-pub mod pdfrum_doc::nav::action
-pub enum pdfrum_doc::nav::action::AActionType
-pub pdfrum_doc::nav::action::AActionType::ButtonDown
-pub pdfrum_doc::nav::action::AActionType::ButtonUp
-pub pdfrum_doc::nav::action::AActionType::Calculate
-pub pdfrum_doc::nav::action::AActionType::CloseDocument
-pub pdfrum_doc::nav::action::AActionType::ClosePage
-pub pdfrum_doc::nav::action::AActionType::CursorEnter
-pub pdfrum_doc::nav::action::AActionType::CursorExit
-pub pdfrum_doc::nav::action::AActionType::DocumentPrinted
-pub pdfrum_doc::nav::action::AActionType::DocumentSaved
-pub pdfrum_doc::nav::action::AActionType::Format
-pub pdfrum_doc::nav::action::AActionType::GetFocus
-pub pdfrum_doc::nav::action::AActionType::KeyStroke
-pub pdfrum_doc::nav::action::AActionType::LoseFocus
-pub pdfrum_doc::nav::action::AActionType::OpenPage
-pub pdfrum_doc::nav::action::AActionType::PageClose
-pub pdfrum_doc::nav::action::AActionType::PageInvisible
-pub pdfrum_doc::nav::action::AActionType::PageOpen
-pub pdfrum_doc::nav::action::AActionType::PageVisible
-pub pdfrum_doc::nav::action::AActionType::PrintDocument
-pub pdfrum_doc::nav::action::AActionType::SaveDocument
-pub pdfrum_doc::nav::action::AActionType::Validate
-impl pdfrum_doc::nav::action::AActionType
-pub fn pdfrum_doc::nav::action::AActionType::is_user_input(self) -> bool
-pub fn pdfrum_doc::nav::action::AActionType::key(self) -> &'static [u8]
-pub enum pdfrum_doc::nav::action::ActionKind
-pub pdfrum_doc::nav::action::ActionKind::GoTo
-pub pdfrum_doc::nav::action::ActionKind::GoTo3DView
-pub pdfrum_doc::nav::action::ActionKind::GoToE
-pub pdfrum_doc::nav::action::ActionKind::GoToR
-pub pdfrum_doc::nav::action::ActionKind::Hide
-pub pdfrum_doc::nav::action::ActionKind::ImportData
-pub pdfrum_doc::nav::action::ActionKind::JavaScript
-pub pdfrum_doc::nav::action::ActionKind::Launch
-pub pdfrum_doc::nav::action::ActionKind::Movie
-pub pdfrum_doc::nav::action::ActionKind::Named
-pub pdfrum_doc::nav::action::ActionKind::Rendition
-pub pdfrum_doc::nav::action::ActionKind::ResetForm
-pub pdfrum_doc::nav::action::ActionKind::SetOcgState
-pub pdfrum_doc::nav::action::ActionKind::Sound
-pub pdfrum_doc::nav::action::ActionKind::SubmitForm
-pub pdfrum_doc::nav::action::ActionKind::Thread
-pub pdfrum_doc::nav::action::ActionKind::Trans
-pub pdfrum_doc::nav::action::ActionKind::Unknown
-pub pdfrum_doc::nav::action::ActionKind::Uri
-pub struct pdfrum_doc::nav::action::Action
-pub pdfrum_doc::nav::action::Action::dict: pdfrum_object::dict::Dict
-impl pdfrum_doc::nav::action::Action
-pub fn pdfrum_doc::nav::action::Action::chain<R: pdfrum_object::resolve::Resolve>(&self, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> alloc::vec::Vec<pdfrum_doc::nav::action::Action>
-pub fn pdfrum_doc::nav::action::Action::dest<R: pdfrum_object::resolve::Resolve>(&self, &pdfrum_object::dict::Dict, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_doc::nav::dest::Dest
-pub fn pdfrum_doc::nav::action::Action::fields<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::vec::Vec<pdfrum_object::object::Object>
-pub fn pdfrum_doc::nav::action::Action::file_path<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::string::String
-pub fn pdfrum_doc::nav::action::Action::flags<R: pdfrum_object::resolve::Resolve>(&self, &R) -> i64
-pub fn pdfrum_doc::nav::action::Action::hide_status(&self) -> bool
-pub fn pdfrum_doc::nav::action::Action::javascript<R: pdfrum_object::resolve::Resolve>(&self, &R) -> core::option::Option<alloc::string::String>
-pub fn pdfrum_doc::nav::action::Action::kind(&self) -> pdfrum_doc::nav::action::ActionKind
-pub fn pdfrum_doc::nav::action::Action::named_action<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::vec::Vec<u8>
-pub fn pdfrum_doc::nav::action::Action::new(pdfrum_object::dict::Dict) -> pdfrum_doc::nav::action::Action
-pub fn pdfrum_doc::nav::action::Action::next<R: pdfrum_object::resolve::Resolve>(&self, usize, &R) -> core::option::Option<pdfrum_doc::nav::action::Action>
-pub fn pdfrum_doc::nav::action::Action::next_count<R: pdfrum_object::resolve::Resolve>(&self, &R) -> usize
-pub fn pdfrum_doc::nav::action::Action::uri<R: pdfrum_object::resolve::Resolve>(&self, &pdfrum_object::dict::Dict, &R) -> alloc::vec::Vec<u8>
-pub fn pdfrum_doc::nav::action::additional_action<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, pdfrum_doc::nav::action::AActionType, &R) -> core::option::Option<pdfrum_doc::nav::action::Action>
-pub mod pdfrum_doc::nav::dest
-pub enum pdfrum_doc::nav::dest::ZoomMode
-pub pdfrum_doc::nav::dest::ZoomMode::Fit
-pub pdfrum_doc::nav::dest::ZoomMode::FitB
-pub pdfrum_doc::nav::dest::ZoomMode::FitBH
-pub pdfrum_doc::nav::dest::ZoomMode::FitBV
-pub pdfrum_doc::nav::dest::ZoomMode::FitH
-pub pdfrum_doc::nav::dest::ZoomMode::FitR
-pub pdfrum_doc::nav::dest::ZoomMode::FitV
-pub pdfrum_doc::nav::dest::ZoomMode::Unknown
-pub pdfrum_doc::nav::dest::ZoomMode::Xyz
-pub struct pdfrum_doc::nav::dest::Dest
-pub pdfrum_doc::nav::dest::Dest::array: core::option::Option<pdfrum_object::array::Array>
-impl pdfrum_doc::nav::dest::Dest
-pub fn pdfrum_doc::nav::dest::Dest::create<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, core::option::Option<&pdfrum_object::object::Object>, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_doc::nav::dest::Dest
-pub fn pdfrum_doc::nav::dest::Dest::num_params<R: pdfrum_object::resolve::Resolve>(&self, &R) -> usize
-pub fn pdfrum_doc::nav::dest::Dest::page_index<R: pdfrum_object::resolve::Resolve>(&self, &R, impl core::ops::function::Fn(u32) -> core::option::Option<pdfrum_common::page_index::PageIndex>, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<pdfrum_common::page_index::PageIndex>
-pub fn pdfrum_doc::nav::dest::Dest::param(&self, usize) -> f32
-pub fn pdfrum_doc::nav::dest::Dest::params_all(&self) -> alloc::vec::Vec<f32>
-pub fn pdfrum_doc::nav::dest::Dest::xyz<R: pdfrum_object::resolve::Resolve>(&self, &R) -> core::option::Option<pdfrum_doc::nav::dest::Xyz>
-pub fn pdfrum_doc::nav::dest::Dest::zoom_mode<R: pdfrum_object::resolve::Resolve>(&self, &R) -> pdfrum_doc::nav::dest::ZoomMode
-pub struct pdfrum_doc::nav::dest::Xyz
-pub pdfrum_doc::nav::dest::Xyz::x: core::option::Option<f32>
-pub pdfrum_doc::nav::dest::Xyz::y: core::option::Option<f32>
-pub pdfrum_doc::nav::dest::Xyz::zoom: core::option::Option<f32>
-pub mod pdfrum_doc::nav::filespec
-pub struct pdfrum_doc::nav::filespec::FileSpec
-pub pdfrum_doc::nav::filespec::FileSpec::object: pdfrum_object::object::Object
-impl pdfrum_doc::nav::filespec::FileSpec
-pub fn pdfrum_doc::nav::filespec::FileSpec::file_name<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::string::String
-pub fn pdfrum_doc::nav::filespec::FileSpec::file_stream<R: pdfrum_object::resolve::Resolve>(&self, &R) -> core::option::Option<pdfrum_object::stream::Stream>
-pub fn pdfrum_doc::nav::filespec::FileSpec::new(pdfrum_object::object::Object) -> pdfrum_doc::nav::filespec::FileSpec
-pub fn pdfrum_doc::nav::filespec::FileSpec::params<R: pdfrum_object::resolve::Resolve>(&self, &R) -> core::option::Option<pdfrum_object::dict::Dict>
-pub fn pdfrum_doc::nav::filespec::decode_file_name(&str) -> alloc::string::String
-pub fn pdfrum_doc::nav::filespec::encode_file_name(&str) -> alloc::string::String
 pub mod pdfrum_doc::nav::link
 pub struct pdfrum_doc::nav::link::Link
 pub pdfrum_doc::nav::link::Link::dict: pdfrum_object::dict::Dict
 impl pdfrum_doc::nav::link::Link
-pub fn pdfrum_doc::nav::link::Link::action<R: pdfrum_object::resolve::Resolve>(&self, &R) -> core::option::Option<pdfrum_doc::nav::action::Action>
-pub fn pdfrum_doc::nav::link::Link::dest<R: pdfrum_object::resolve::Resolve>(&self, &pdfrum_object::dict::Dict, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_doc::nav::dest::Dest
+pub fn pdfrum_doc::nav::link::Link::action<R: pdfrum_object::resolve::Resolve>(&self, &R) -> core::option::Option<pdfrum_doc::Action>
+pub fn pdfrum_doc::nav::link::Link::dest<R: pdfrum_object::resolve::Resolve>(&self, &pdfrum_object::dict::Dict, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_doc::Dest
 pub fn pdfrum_doc::nav::link::Link::new(pdfrum_object::dict::Dict) -> pdfrum_doc::nav::link::Link
 pub fn pdfrum_doc::nav::link::Link::rect<R: pdfrum_object::resolve::Resolve>(&self, &R) -> kurbo::rect::Rect
-pub fn pdfrum_doc::nav::link::enumerate_links<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, usize, &R) -> core::option::Option<(usize, pdfrum_doc::nav::link::Link)>
-pub fn pdfrum_doc::nav::link::link_at_point<R: pdfrum_object::resolve::Resolve>(&[core::option::Option<pdfrum_doc::nav::link::Link>], kurbo::point::Point, &R) -> core::option::Option<(usize, pdfrum_doc::nav::link::Link)>
 pub fn pdfrum_doc::nav::link::page_links<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> alloc::vec::Vec<core::option::Option<pdfrum_doc::nav::link::Link>>
-pub mod pdfrum_doc::nav::name_tree
-pub struct pdfrum_doc::nav::name_tree::NameTree
-pub pdfrum_doc::nav::name_tree::NameTree::root: pdfrum_object::dict::Dict
-impl pdfrum_doc::nav::name_tree::NameTree
-pub fn pdfrum_doc::nav::name_tree::NameTree::count<R: pdfrum_object::resolve::Resolve>(&self, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> usize
-pub fn pdfrum_doc::nav::name_tree::NameTree::lookup<R: pdfrum_object::resolve::Resolve>(&self, &str, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<pdfrum_object::object::Object>
-pub fn pdfrum_doc::nav::name_tree::NameTree::lookup_by_index<R: pdfrum_object::resolve::Resolve>(&self, usize, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<(alloc::string::String, pdfrum_object::object::Object)>
-pub fn pdfrum_doc::nav::name_tree::NameTree::open<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &pdfrum_object::name::Name, &R) -> core::option::Option<pdfrum_doc::nav::name_tree::NameTree>
-pub fn pdfrum_doc::nav::name_tree::lookup_named_dest<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &[u8], &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<pdfrum_object::array::Array>
-pub mod pdfrum_doc::nav::number_tree
-pub fn pdfrum_doc::nav::number_tree::find<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, i64, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<pdfrum_doc::nav::number_tree::Found>
-pub fn pdfrum_doc::nav::number_tree::lower_bound<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, i64, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<(i64, core::option::Option<pdfrum_doc::nav::number_tree::Found>)>
-pub type pdfrum_doc::nav::number_tree::Found = pdfrum_object::object::Object
-pub mod pdfrum_doc::nav::number_tree_alias
-pub fn pdfrum_doc::nav::number_tree_alias::find<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, i64, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<pdfrum_doc::nav::number_tree::Found>
-pub fn pdfrum_doc::nav::number_tree_alias::lower_bound<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, i64, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<(i64, core::option::Option<pdfrum_doc::nav::number_tree::Found>)>
 pub mod pdfrum_doc::nav::open_action
 pub struct pdfrum_doc::nav::open_action::Hidden
 impl pdfrum_doc::nav::open_action::Hidden
@@ -529,13 +413,12 @@ pub struct pdfrum_doc::nav::outline::Bookmark
 pub pdfrum_doc::nav::outline::Bookmark::depth: usize
 pub pdfrum_doc::nav::outline::Bookmark::dict: pdfrum_object::dict::Dict
 impl pdfrum_doc::nav::outline::Bookmark
-pub fn pdfrum_doc::nav::outline::Bookmark::action<R: pdfrum_object::resolve::Resolve>(&self, &R) -> core::option::Option<pdfrum_doc::nav::action::Action>
+pub fn pdfrum_doc::nav::outline::Bookmark::action<R: pdfrum_object::resolve::Resolve>(&self, &R) -> core::option::Option<pdfrum_doc::Action>
 pub fn pdfrum_doc::nav::outline::Bookmark::color<R: pdfrum_object::resolve::Resolve>(&self, &R) -> core::option::Option<(f32, f32, f32)>
 pub fn pdfrum_doc::nav::outline::Bookmark::count<R: pdfrum_object::resolve::Resolve>(&self, &R) -> i64
-pub fn pdfrum_doc::nav::outline::Bookmark::dest<R: pdfrum_object::resolve::Resolve>(&self, &pdfrum_object::dict::Dict, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_doc::nav::dest::Dest
+pub fn pdfrum_doc::nav::outline::Bookmark::dest<R: pdfrum_object::resolve::Resolve>(&self, &pdfrum_object::dict::Dict, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_doc::Dest
 pub fn pdfrum_doc::nav::outline::Bookmark::style<R: pdfrum_object::resolve::Resolve>(&self, &R) -> i64
 pub fn pdfrum_doc::nav::outline::Bookmark::title<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::string::String
-pub fn pdfrum_doc::nav::outline::find<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &str, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<pdfrum_doc::nav::outline::Bookmark>
 pub fn pdfrum_doc::nav::outline::walk<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> alloc::vec::Vec<pdfrum_doc::nav::outline::Bookmark>
 pub enum pdfrum_doc::nav::AActionType
 pub pdfrum_doc::nav::AActionType::ButtonDown
@@ -559,9 +442,9 @@ pub pdfrum_doc::nav::AActionType::PageVisible
 pub pdfrum_doc::nav::AActionType::PrintDocument
 pub pdfrum_doc::nav::AActionType::SaveDocument
 pub pdfrum_doc::nav::AActionType::Validate
-impl pdfrum_doc::nav::action::AActionType
-pub fn pdfrum_doc::nav::action::AActionType::is_user_input(self) -> bool
-pub fn pdfrum_doc::nav::action::AActionType::key(self) -> &'static [u8]
+impl pdfrum_doc::AActionType
+pub fn pdfrum_doc::AActionType::is_user_input(self) -> bool
+pub fn pdfrum_doc::AActionType::key(self) -> &'static [u8]
 pub enum pdfrum_doc::nav::ActionKind
 pub pdfrum_doc::nav::ActionKind::GoTo
 pub pdfrum_doc::nav::ActionKind::GoTo3DView
@@ -594,47 +477,47 @@ pub pdfrum_doc::nav::ZoomMode::Unknown
 pub pdfrum_doc::nav::ZoomMode::Xyz
 pub struct pdfrum_doc::nav::Action
 pub pdfrum_doc::nav::Action::dict: pdfrum_object::dict::Dict
-impl pdfrum_doc::nav::action::Action
-pub fn pdfrum_doc::nav::action::Action::chain<R: pdfrum_object::resolve::Resolve>(&self, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> alloc::vec::Vec<pdfrum_doc::nav::action::Action>
-pub fn pdfrum_doc::nav::action::Action::dest<R: pdfrum_object::resolve::Resolve>(&self, &pdfrum_object::dict::Dict, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_doc::nav::dest::Dest
-pub fn pdfrum_doc::nav::action::Action::fields<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::vec::Vec<pdfrum_object::object::Object>
-pub fn pdfrum_doc::nav::action::Action::file_path<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::string::String
-pub fn pdfrum_doc::nav::action::Action::flags<R: pdfrum_object::resolve::Resolve>(&self, &R) -> i64
-pub fn pdfrum_doc::nav::action::Action::hide_status(&self) -> bool
-pub fn pdfrum_doc::nav::action::Action::javascript<R: pdfrum_object::resolve::Resolve>(&self, &R) -> core::option::Option<alloc::string::String>
-pub fn pdfrum_doc::nav::action::Action::kind(&self) -> pdfrum_doc::nav::action::ActionKind
-pub fn pdfrum_doc::nav::action::Action::named_action<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::vec::Vec<u8>
-pub fn pdfrum_doc::nav::action::Action::new(pdfrum_object::dict::Dict) -> pdfrum_doc::nav::action::Action
-pub fn pdfrum_doc::nav::action::Action::next<R: pdfrum_object::resolve::Resolve>(&self, usize, &R) -> core::option::Option<pdfrum_doc::nav::action::Action>
-pub fn pdfrum_doc::nav::action::Action::next_count<R: pdfrum_object::resolve::Resolve>(&self, &R) -> usize
-pub fn pdfrum_doc::nav::action::Action::uri<R: pdfrum_object::resolve::Resolve>(&self, &pdfrum_object::dict::Dict, &R) -> alloc::vec::Vec<u8>
+impl pdfrum_doc::Action
+pub fn pdfrum_doc::Action::chain<R: pdfrum_object::resolve::Resolve>(&self, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> alloc::vec::Vec<pdfrum_doc::Action>
+pub fn pdfrum_doc::Action::dest<R: pdfrum_object::resolve::Resolve>(&self, &pdfrum_object::dict::Dict, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_doc::Dest
+pub fn pdfrum_doc::Action::fields<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::vec::Vec<pdfrum_object::object::Object>
+pub fn pdfrum_doc::Action::file_path<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::string::String
+pub fn pdfrum_doc::Action::flags<R: pdfrum_object::resolve::Resolve>(&self, &R) -> i64
+pub fn pdfrum_doc::Action::hide_status(&self) -> bool
+pub fn pdfrum_doc::Action::javascript<R: pdfrum_object::resolve::Resolve>(&self, &R) -> core::option::Option<alloc::string::String>
+pub fn pdfrum_doc::Action::kind(&self) -> pdfrum_doc::ActionKind
+pub fn pdfrum_doc::Action::named_action<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::vec::Vec<u8>
+pub fn pdfrum_doc::Action::new(pdfrum_object::dict::Dict) -> pdfrum_doc::Action
+pub fn pdfrum_doc::Action::next<R: pdfrum_object::resolve::Resolve>(&self, usize, &R) -> core::option::Option<pdfrum_doc::Action>
+pub fn pdfrum_doc::Action::next_count<R: pdfrum_object::resolve::Resolve>(&self, &R) -> usize
+pub fn pdfrum_doc::Action::uri<R: pdfrum_object::resolve::Resolve>(&self, &pdfrum_object::dict::Dict, &R) -> alloc::vec::Vec<u8>
 pub struct pdfrum_doc::nav::Bookmark
 pub pdfrum_doc::nav::Bookmark::depth: usize
 pub pdfrum_doc::nav::Bookmark::dict: pdfrum_object::dict::Dict
 impl pdfrum_doc::nav::outline::Bookmark
-pub fn pdfrum_doc::nav::outline::Bookmark::action<R: pdfrum_object::resolve::Resolve>(&self, &R) -> core::option::Option<pdfrum_doc::nav::action::Action>
+pub fn pdfrum_doc::nav::outline::Bookmark::action<R: pdfrum_object::resolve::Resolve>(&self, &R) -> core::option::Option<pdfrum_doc::Action>
 pub fn pdfrum_doc::nav::outline::Bookmark::color<R: pdfrum_object::resolve::Resolve>(&self, &R) -> core::option::Option<(f32, f32, f32)>
 pub fn pdfrum_doc::nav::outline::Bookmark::count<R: pdfrum_object::resolve::Resolve>(&self, &R) -> i64
-pub fn pdfrum_doc::nav::outline::Bookmark::dest<R: pdfrum_object::resolve::Resolve>(&self, &pdfrum_object::dict::Dict, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_doc::nav::dest::Dest
+pub fn pdfrum_doc::nav::outline::Bookmark::dest<R: pdfrum_object::resolve::Resolve>(&self, &pdfrum_object::dict::Dict, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_doc::Dest
 pub fn pdfrum_doc::nav::outline::Bookmark::style<R: pdfrum_object::resolve::Resolve>(&self, &R) -> i64
 pub fn pdfrum_doc::nav::outline::Bookmark::title<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::string::String
 pub struct pdfrum_doc::nav::Dest
 pub pdfrum_doc::nav::Dest::array: core::option::Option<pdfrum_object::array::Array>
-impl pdfrum_doc::nav::dest::Dest
-pub fn pdfrum_doc::nav::dest::Dest::create<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, core::option::Option<&pdfrum_object::object::Object>, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_doc::nav::dest::Dest
-pub fn pdfrum_doc::nav::dest::Dest::num_params<R: pdfrum_object::resolve::Resolve>(&self, &R) -> usize
-pub fn pdfrum_doc::nav::dest::Dest::page_index<R: pdfrum_object::resolve::Resolve>(&self, &R, impl core::ops::function::Fn(u32) -> core::option::Option<pdfrum_common::page_index::PageIndex>, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<pdfrum_common::page_index::PageIndex>
-pub fn pdfrum_doc::nav::dest::Dest::param(&self, usize) -> f32
-pub fn pdfrum_doc::nav::dest::Dest::params_all(&self) -> alloc::vec::Vec<f32>
-pub fn pdfrum_doc::nav::dest::Dest::xyz<R: pdfrum_object::resolve::Resolve>(&self, &R) -> core::option::Option<pdfrum_doc::nav::dest::Xyz>
-pub fn pdfrum_doc::nav::dest::Dest::zoom_mode<R: pdfrum_object::resolve::Resolve>(&self, &R) -> pdfrum_doc::nav::dest::ZoomMode
+impl pdfrum_doc::Dest
+pub fn pdfrum_doc::Dest::create<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, core::option::Option<&pdfrum_object::object::Object>, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_doc::Dest
+pub fn pdfrum_doc::Dest::num_params<R: pdfrum_object::resolve::Resolve>(&self, &R) -> usize
+pub fn pdfrum_doc::Dest::page_index<R: pdfrum_object::resolve::Resolve>(&self, &R, impl core::ops::function::Fn(u32) -> core::option::Option<pdfrum_common::page_index::PageIndex>, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<pdfrum_common::page_index::PageIndex>
+pub fn pdfrum_doc::Dest::param(&self, usize) -> f32
+pub fn pdfrum_doc::Dest::params_all(&self) -> alloc::vec::Vec<f32>
+pub fn pdfrum_doc::Dest::xyz<R: pdfrum_object::resolve::Resolve>(&self, &R) -> core::option::Option<pdfrum_doc::nav::Xyz>
+pub fn pdfrum_doc::Dest::zoom_mode<R: pdfrum_object::resolve::Resolve>(&self, &R) -> pdfrum_doc::ZoomMode
 pub struct pdfrum_doc::nav::FileSpec
 pub pdfrum_doc::nav::FileSpec::object: pdfrum_object::object::Object
-impl pdfrum_doc::nav::filespec::FileSpec
-pub fn pdfrum_doc::nav::filespec::FileSpec::file_name<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::string::String
-pub fn pdfrum_doc::nav::filespec::FileSpec::file_stream<R: pdfrum_object::resolve::Resolve>(&self, &R) -> core::option::Option<pdfrum_object::stream::Stream>
-pub fn pdfrum_doc::nav::filespec::FileSpec::new(pdfrum_object::object::Object) -> pdfrum_doc::nav::filespec::FileSpec
-pub fn pdfrum_doc::nav::filespec::FileSpec::params<R: pdfrum_object::resolve::Resolve>(&self, &R) -> core::option::Option<pdfrum_object::dict::Dict>
+impl pdfrum_doc::FileSpec
+pub fn pdfrum_doc::FileSpec::file_name<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::string::String
+pub fn pdfrum_doc::FileSpec::file_stream<R: pdfrum_object::resolve::Resolve>(&self, &R) -> core::option::Option<pdfrum_object::stream::Stream>
+pub fn pdfrum_doc::FileSpec::new(pdfrum_object::object::Object) -> pdfrum_doc::FileSpec
+pub fn pdfrum_doc::FileSpec::params<R: pdfrum_object::resolve::Resolve>(&self, &R) -> core::option::Option<pdfrum_object::dict::Dict>
 pub struct pdfrum_doc::nav::Hidden
 impl pdfrum_doc::nav::open_action::Hidden
 pub fn pdfrum_doc::nav::open_action::Hidden::flags<R: pdfrum_object::resolve::Resolve>(&self, &pdfrum_object::dict::Dict, &R) -> pdfrum_doc::annot::AnnotFlags
@@ -642,31 +525,25 @@ pub fn pdfrum_doc::nav::open_action::Hidden::is_empty(&self) -> bool
 pub struct pdfrum_doc::nav::Link
 pub pdfrum_doc::nav::Link::dict: pdfrum_object::dict::Dict
 impl pdfrum_doc::nav::link::Link
-pub fn pdfrum_doc::nav::link::Link::action<R: pdfrum_object::resolve::Resolve>(&self, &R) -> core::option::Option<pdfrum_doc::nav::action::Action>
-pub fn pdfrum_doc::nav::link::Link::dest<R: pdfrum_object::resolve::Resolve>(&self, &pdfrum_object::dict::Dict, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_doc::nav::dest::Dest
+pub fn pdfrum_doc::nav::link::Link::action<R: pdfrum_object::resolve::Resolve>(&self, &R) -> core::option::Option<pdfrum_doc::Action>
+pub fn pdfrum_doc::nav::link::Link::dest<R: pdfrum_object::resolve::Resolve>(&self, &pdfrum_object::dict::Dict, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_doc::Dest
 pub fn pdfrum_doc::nav::link::Link::new(pdfrum_object::dict::Dict) -> pdfrum_doc::nav::link::Link
 pub fn pdfrum_doc::nav::link::Link::rect<R: pdfrum_object::resolve::Resolve>(&self, &R) -> kurbo::rect::Rect
 pub struct pdfrum_doc::nav::NameTree
 pub pdfrum_doc::nav::NameTree::root: pdfrum_object::dict::Dict
-impl pdfrum_doc::nav::name_tree::NameTree
-pub fn pdfrum_doc::nav::name_tree::NameTree::count<R: pdfrum_object::resolve::Resolve>(&self, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> usize
-pub fn pdfrum_doc::nav::name_tree::NameTree::lookup<R: pdfrum_object::resolve::Resolve>(&self, &str, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<pdfrum_object::object::Object>
-pub fn pdfrum_doc::nav::name_tree::NameTree::lookup_by_index<R: pdfrum_object::resolve::Resolve>(&self, usize, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<(alloc::string::String, pdfrum_object::object::Object)>
-pub fn pdfrum_doc::nav::name_tree::NameTree::open<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &pdfrum_object::name::Name, &R) -> core::option::Option<pdfrum_doc::nav::name_tree::NameTree>
-pub struct pdfrum_doc::nav::NumberTree
-impl pdfrum_doc::nav::NumberTree
-pub fn pdfrum_doc::nav::NumberTree::find<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, i64, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<pdfrum_object::object::Object>
-pub fn pdfrum_doc::nav::NumberTree::lower_bound<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, i64, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<(i64, core::option::Option<pdfrum_object::object::Object>)>
+impl pdfrum_doc::NameTree
+pub fn pdfrum_doc::NameTree::count<R: pdfrum_object::resolve::Resolve>(&self, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> usize
+pub fn pdfrum_doc::NameTree::lookup<R: pdfrum_object::resolve::Resolve>(&self, &str, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<pdfrum_object::object::Object>
+pub fn pdfrum_doc::NameTree::lookup_by_index<R: pdfrum_object::resolve::Resolve>(&self, usize, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<(alloc::string::String, pdfrum_object::object::Object)>
+pub fn pdfrum_doc::NameTree::open<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &pdfrum_object::name::Name, &R) -> core::option::Option<pdfrum_doc::NameTree>
 pub struct pdfrum_doc::nav::Xyz
 pub pdfrum_doc::nav::Xyz::x: core::option::Option<f32>
 pub pdfrum_doc::nav::Xyz::y: core::option::Option<f32>
 pub pdfrum_doc::nav::Xyz::zoom: core::option::Option<f32>
-pub fn pdfrum_doc::nav::additional_action<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, pdfrum_doc::nav::action::AActionType, &R) -> core::option::Option<pdfrum_doc::nav::action::Action>
+pub fn pdfrum_doc::nav::additional_action<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, pdfrum_doc::AActionType, &R) -> core::option::Option<pdfrum_doc::Action>
 pub fn pdfrum_doc::nav::decode_file_name(&str) -> alloc::string::String
 pub fn pdfrum_doc::nav::encode_file_name(&str) -> alloc::string::String
-pub fn pdfrum_doc::nav::enumerate_links<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, usize, &R) -> core::option::Option<(usize, pdfrum_doc::nav::link::Link)>
 pub fn pdfrum_doc::nav::hidden_by_open_action<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_doc::nav::open_action::Hidden
-pub fn pdfrum_doc::nav::link_at_point<R: pdfrum_object::resolve::Resolve>(&[core::option::Option<pdfrum_doc::nav::link::Link>], kurbo::point::Point, &R) -> core::option::Option<(usize, pdfrum_doc::nav::link::Link)>
 pub fn pdfrum_doc::nav::lookup_named_dest<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &[u8], &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<pdfrum_object::array::Array>
 pub fn pdfrum_doc::nav::page_links<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> alloc::vec::Vec<core::option::Option<pdfrum_doc::nav::link::Link>>
 pub mod pdfrum_doc::page_label
@@ -907,9 +784,9 @@ pub pdfrum_doc::AActionType::PageVisible
 pub pdfrum_doc::AActionType::PrintDocument
 pub pdfrum_doc::AActionType::SaveDocument
 pub pdfrum_doc::AActionType::Validate
-impl pdfrum_doc::nav::action::AActionType
-pub fn pdfrum_doc::nav::action::AActionType::is_user_input(self) -> bool
-pub fn pdfrum_doc::nav::action::AActionType::key(self) -> &'static [u8]
+impl pdfrum_doc::AActionType
+pub fn pdfrum_doc::AActionType::is_user_input(self) -> bool
+pub fn pdfrum_doc::AActionType::key(self) -> &'static [u8]
 pub enum pdfrum_doc::ActionKind
 pub pdfrum_doc::ActionKind::GoTo
 pub pdfrum_doc::ActionKind::GoTo3DView
@@ -994,20 +871,20 @@ pub pdfrum_doc::ZoomMode::Unknown
 pub pdfrum_doc::ZoomMode::Xyz
 pub struct pdfrum_doc::Action
 pub pdfrum_doc::Action::dict: pdfrum_object::dict::Dict
-impl pdfrum_doc::nav::action::Action
-pub fn pdfrum_doc::nav::action::Action::chain<R: pdfrum_object::resolve::Resolve>(&self, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> alloc::vec::Vec<pdfrum_doc::nav::action::Action>
-pub fn pdfrum_doc::nav::action::Action::dest<R: pdfrum_object::resolve::Resolve>(&self, &pdfrum_object::dict::Dict, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_doc::nav::dest::Dest
-pub fn pdfrum_doc::nav::action::Action::fields<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::vec::Vec<pdfrum_object::object::Object>
-pub fn pdfrum_doc::nav::action::Action::file_path<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::string::String
-pub fn pdfrum_doc::nav::action::Action::flags<R: pdfrum_object::resolve::Resolve>(&self, &R) -> i64
-pub fn pdfrum_doc::nav::action::Action::hide_status(&self) -> bool
-pub fn pdfrum_doc::nav::action::Action::javascript<R: pdfrum_object::resolve::Resolve>(&self, &R) -> core::option::Option<alloc::string::String>
-pub fn pdfrum_doc::nav::action::Action::kind(&self) -> pdfrum_doc::nav::action::ActionKind
-pub fn pdfrum_doc::nav::action::Action::named_action<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::vec::Vec<u8>
-pub fn pdfrum_doc::nav::action::Action::new(pdfrum_object::dict::Dict) -> pdfrum_doc::nav::action::Action
-pub fn pdfrum_doc::nav::action::Action::next<R: pdfrum_object::resolve::Resolve>(&self, usize, &R) -> core::option::Option<pdfrum_doc::nav::action::Action>
-pub fn pdfrum_doc::nav::action::Action::next_count<R: pdfrum_object::resolve::Resolve>(&self, &R) -> usize
-pub fn pdfrum_doc::nav::action::Action::uri<R: pdfrum_object::resolve::Resolve>(&self, &pdfrum_object::dict::Dict, &R) -> alloc::vec::Vec<u8>
+impl pdfrum_doc::Action
+pub fn pdfrum_doc::Action::chain<R: pdfrum_object::resolve::Resolve>(&self, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> alloc::vec::Vec<pdfrum_doc::Action>
+pub fn pdfrum_doc::Action::dest<R: pdfrum_object::resolve::Resolve>(&self, &pdfrum_object::dict::Dict, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_doc::Dest
+pub fn pdfrum_doc::Action::fields<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::vec::Vec<pdfrum_object::object::Object>
+pub fn pdfrum_doc::Action::file_path<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::string::String
+pub fn pdfrum_doc::Action::flags<R: pdfrum_object::resolve::Resolve>(&self, &R) -> i64
+pub fn pdfrum_doc::Action::hide_status(&self) -> bool
+pub fn pdfrum_doc::Action::javascript<R: pdfrum_object::resolve::Resolve>(&self, &R) -> core::option::Option<alloc::string::String>
+pub fn pdfrum_doc::Action::kind(&self) -> pdfrum_doc::ActionKind
+pub fn pdfrum_doc::Action::named_action<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::vec::Vec<u8>
+pub fn pdfrum_doc::Action::new(pdfrum_object::dict::Dict) -> pdfrum_doc::Action
+pub fn pdfrum_doc::Action::next<R: pdfrum_object::resolve::Resolve>(&self, usize, &R) -> core::option::Option<pdfrum_doc::Action>
+pub fn pdfrum_doc::Action::next_count<R: pdfrum_object::resolve::Resolve>(&self, &R) -> usize
+pub fn pdfrum_doc::Action::uri<R: pdfrum_object::resolve::Resolve>(&self, &pdfrum_object::dict::Dict, &R) -> alloc::vec::Vec<u8>
 pub struct pdfrum_doc::AnnotFlags(_)
 impl pdfrum_doc::annot::AnnotFlags
 pub const pdfrum_doc::annot::AnnotFlags::HIDDEN: Self
@@ -1071,33 +948,33 @@ pub struct pdfrum_doc::Bookmark
 pub pdfrum_doc::Bookmark::depth: usize
 pub pdfrum_doc::Bookmark::dict: pdfrum_object::dict::Dict
 impl pdfrum_doc::nav::outline::Bookmark
-pub fn pdfrum_doc::nav::outline::Bookmark::action<R: pdfrum_object::resolve::Resolve>(&self, &R) -> core::option::Option<pdfrum_doc::nav::action::Action>
+pub fn pdfrum_doc::nav::outline::Bookmark::action<R: pdfrum_object::resolve::Resolve>(&self, &R) -> core::option::Option<pdfrum_doc::Action>
 pub fn pdfrum_doc::nav::outline::Bookmark::color<R: pdfrum_object::resolve::Resolve>(&self, &R) -> core::option::Option<(f32, f32, f32)>
 pub fn pdfrum_doc::nav::outline::Bookmark::count<R: pdfrum_object::resolve::Resolve>(&self, &R) -> i64
-pub fn pdfrum_doc::nav::outline::Bookmark::dest<R: pdfrum_object::resolve::Resolve>(&self, &pdfrum_object::dict::Dict, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_doc::nav::dest::Dest
+pub fn pdfrum_doc::nav::outline::Bookmark::dest<R: pdfrum_object::resolve::Resolve>(&self, &pdfrum_object::dict::Dict, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_doc::Dest
 pub fn pdfrum_doc::nav::outline::Bookmark::style<R: pdfrum_object::resolve::Resolve>(&self, &R) -> i64
 pub fn pdfrum_doc::nav::outline::Bookmark::title<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::string::String
 pub struct pdfrum_doc::Dest
 pub pdfrum_doc::Dest::array: core::option::Option<pdfrum_object::array::Array>
-impl pdfrum_doc::nav::dest::Dest
-pub fn pdfrum_doc::nav::dest::Dest::create<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, core::option::Option<&pdfrum_object::object::Object>, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_doc::nav::dest::Dest
-pub fn pdfrum_doc::nav::dest::Dest::num_params<R: pdfrum_object::resolve::Resolve>(&self, &R) -> usize
-pub fn pdfrum_doc::nav::dest::Dest::page_index<R: pdfrum_object::resolve::Resolve>(&self, &R, impl core::ops::function::Fn(u32) -> core::option::Option<pdfrum_common::page_index::PageIndex>, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<pdfrum_common::page_index::PageIndex>
-pub fn pdfrum_doc::nav::dest::Dest::param(&self, usize) -> f32
-pub fn pdfrum_doc::nav::dest::Dest::params_all(&self) -> alloc::vec::Vec<f32>
-pub fn pdfrum_doc::nav::dest::Dest::xyz<R: pdfrum_object::resolve::Resolve>(&self, &R) -> core::option::Option<pdfrum_doc::nav::dest::Xyz>
-pub fn pdfrum_doc::nav::dest::Dest::zoom_mode<R: pdfrum_object::resolve::Resolve>(&self, &R) -> pdfrum_doc::nav::dest::ZoomMode
+impl pdfrum_doc::Dest
+pub fn pdfrum_doc::Dest::create<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, core::option::Option<&pdfrum_object::object::Object>, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_doc::Dest
+pub fn pdfrum_doc::Dest::num_params<R: pdfrum_object::resolve::Resolve>(&self, &R) -> usize
+pub fn pdfrum_doc::Dest::page_index<R: pdfrum_object::resolve::Resolve>(&self, &R, impl core::ops::function::Fn(u32) -> core::option::Option<pdfrum_common::page_index::PageIndex>, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<pdfrum_common::page_index::PageIndex>
+pub fn pdfrum_doc::Dest::param(&self, usize) -> f32
+pub fn pdfrum_doc::Dest::params_all(&self) -> alloc::vec::Vec<f32>
+pub fn pdfrum_doc::Dest::xyz<R: pdfrum_object::resolve::Resolve>(&self, &R) -> core::option::Option<pdfrum_doc::nav::Xyz>
+pub fn pdfrum_doc::Dest::zoom_mode<R: pdfrum_object::resolve::Resolve>(&self, &R) -> pdfrum_doc::ZoomMode
 pub struct pdfrum_doc::DocOptions
 pub pdfrum_doc::DocOptions::generate_widget_ap: bool
 pub pdfrum_doc::DocOptions::generate_widget_shapes: bool
 pub pdfrum_doc::DocOptions::limits: pdfrum_common::limits::Limits
 pub struct pdfrum_doc::FileSpec
 pub pdfrum_doc::FileSpec::object: pdfrum_object::object::Object
-impl pdfrum_doc::nav::filespec::FileSpec
-pub fn pdfrum_doc::nav::filespec::FileSpec::file_name<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::string::String
-pub fn pdfrum_doc::nav::filespec::FileSpec::file_stream<R: pdfrum_object::resolve::Resolve>(&self, &R) -> core::option::Option<pdfrum_object::stream::Stream>
-pub fn pdfrum_doc::nav::filespec::FileSpec::new(pdfrum_object::object::Object) -> pdfrum_doc::nav::filespec::FileSpec
-pub fn pdfrum_doc::nav::filespec::FileSpec::params<R: pdfrum_object::resolve::Resolve>(&self, &R) -> core::option::Option<pdfrum_object::dict::Dict>
+impl pdfrum_doc::FileSpec
+pub fn pdfrum_doc::FileSpec::file_name<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::string::String
+pub fn pdfrum_doc::FileSpec::file_stream<R: pdfrum_object::resolve::Resolve>(&self, &R) -> core::option::Option<pdfrum_object::stream::Stream>
+pub fn pdfrum_doc::FileSpec::new(pdfrum_object::object::Object) -> pdfrum_doc::FileSpec
+pub fn pdfrum_doc::FileSpec::params<R: pdfrum_object::resolve::Resolve>(&self, &R) -> core::option::Option<pdfrum_object::dict::Dict>
 pub struct pdfrum_doc::Focus
 pub pdfrum_doc::Focus::annot: usize
 pub pdfrum_doc::Focus::box_: pdfrum_doc::ap::FocusBox
@@ -1113,21 +990,17 @@ pub pdfrum_doc::GeneratedAp::stream: alloc::vec::Vec<u8>
 pub struct pdfrum_doc::Link
 pub pdfrum_doc::Link::dict: pdfrum_object::dict::Dict
 impl pdfrum_doc::nav::link::Link
-pub fn pdfrum_doc::nav::link::Link::action<R: pdfrum_object::resolve::Resolve>(&self, &R) -> core::option::Option<pdfrum_doc::nav::action::Action>
-pub fn pdfrum_doc::nav::link::Link::dest<R: pdfrum_object::resolve::Resolve>(&self, &pdfrum_object::dict::Dict, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_doc::nav::dest::Dest
+pub fn pdfrum_doc::nav::link::Link::action<R: pdfrum_object::resolve::Resolve>(&self, &R) -> core::option::Option<pdfrum_doc::Action>
+pub fn pdfrum_doc::nav::link::Link::dest<R: pdfrum_object::resolve::Resolve>(&self, &pdfrum_object::dict::Dict, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_doc::Dest
 pub fn pdfrum_doc::nav::link::Link::new(pdfrum_object::dict::Dict) -> pdfrum_doc::nav::link::Link
 pub fn pdfrum_doc::nav::link::Link::rect<R: pdfrum_object::resolve::Resolve>(&self, &R) -> kurbo::rect::Rect
 pub struct pdfrum_doc::NameTree
 pub pdfrum_doc::NameTree::root: pdfrum_object::dict::Dict
-impl pdfrum_doc::nav::name_tree::NameTree
-pub fn pdfrum_doc::nav::name_tree::NameTree::count<R: pdfrum_object::resolve::Resolve>(&self, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> usize
-pub fn pdfrum_doc::nav::name_tree::NameTree::lookup<R: pdfrum_object::resolve::Resolve>(&self, &str, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<pdfrum_object::object::Object>
-pub fn pdfrum_doc::nav::name_tree::NameTree::lookup_by_index<R: pdfrum_object::resolve::Resolve>(&self, usize, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<(alloc::string::String, pdfrum_object::object::Object)>
-pub fn pdfrum_doc::nav::name_tree::NameTree::open<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &pdfrum_object::name::Name, &R) -> core::option::Option<pdfrum_doc::nav::name_tree::NameTree>
-pub struct pdfrum_doc::NumberTree
-impl pdfrum_doc::nav::NumberTree
-pub fn pdfrum_doc::nav::NumberTree::find<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, i64, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<pdfrum_object::object::Object>
-pub fn pdfrum_doc::nav::NumberTree::lower_bound<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, i64, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<(i64, core::option::Option<pdfrum_object::object::Object>)>
+impl pdfrum_doc::NameTree
+pub fn pdfrum_doc::NameTree::count<R: pdfrum_object::resolve::Resolve>(&self, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> usize
+pub fn pdfrum_doc::NameTree::lookup<R: pdfrum_object::resolve::Resolve>(&self, &str, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<pdfrum_object::object::Object>
+pub fn pdfrum_doc::NameTree::lookup_by_index<R: pdfrum_object::resolve::Resolve>(&self, usize, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<(alloc::string::String, pdfrum_object::object::Object)>
+pub fn pdfrum_doc::NameTree::open<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &pdfrum_object::name::Name, &R) -> core::option::Option<pdfrum_doc::NameTree>
 pub struct pdfrum_doc::StructElement
 pub pdfrum_doc::StructElement::dict: pdfrum_object::dict::Dict
 pub pdfrum_doc::StructElement::kids: alloc::vec::Vec<pdfrum_doc::structure::element::Kid>

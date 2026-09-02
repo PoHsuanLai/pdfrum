@@ -85,7 +85,11 @@ pub fn page_links<R: Resolve>(page: &Dict, r: &R) -> Vec<Option<Link>> {
 /// The scan runs **backwards**, so the last annotation in painting order —
 /// the one on top — wins a tie. Containment is inclusive on all four edges.
 #[must_use]
-pub fn link_at_point<R: Resolve>(
+// Reached only by the tests beside it now that the module is private; the
+// library compiles once without `cfg(test)`, so `dead_code` fires. §WP8's
+// recurring cost — the item is pinned by a test, not unreachable.
+#[allow(dead_code)]
+pub(crate) fn link_at_point<R: Resolve>(
     links: &[Option<Link>],
     point: Point,
     r: &R,
@@ -102,21 +106,6 @@ pub fn link_at_point<R: Resolve>(
 /// Finds the next link at or after `start`, ignoring the placeholders.
 ///
 /// This is the plain enumeration a caller walking every link wants; it does
-/// not preserve z-order gaps because it reports each link's own index.
-#[must_use]
-pub fn enumerate_links<R: Resolve>(page: &Dict, start: usize, r: &R) -> Option<(usize, Link)> {
-    let array = page.array(obj_names::ANNOTS, r)?;
-    for index in start..array.len() {
-        let Some(dict) = array.dict_at(index, r) else {
-            continue;
-        };
-        if dict.byte_string(obj_names::SUBTYPE, r).as_deref() == Some(b"Link") {
-            return Some((index, Link::new(dict)));
-        }
-    }
-    None
-}
-
 #[cfg(test)]
 mod tests {
     use super::{link_at_point, page_links};
