@@ -96,7 +96,16 @@ pub fn process_file(
         // `--time=` is the single source of the scripting clock; absent it the
         // scripts see the real one, which is `pdfium_test`'s rule
         // (`pdfium_test.cc:2129-2135`, hooks installed only inside the guard).
-        crate::jstranscript::write_transcript(&doc, options.time, streams.out)?;
+        // A script that throws writes a line to stderr and a diagnostic here,
+        // and does not stop the scripts after it.
+        let mut diags = pdfrum_common::Diagnostics::default();
+        crate::jstranscript::write_transcript(
+            &doc,
+            options.time,
+            &mut diags,
+            streams.out,
+            streams.err,
+        )?;
         return Ok(Counts::default());
     }
 
@@ -1047,5 +1056,29 @@ trailer<</Root 1 0 R/Size 5>>\n";
             &["--js-transcript", "--time=not-a-number"],
         );
         assert_eq!(out, "Alert: 0\n");
+    }
+    /// An uncaught throw is **reported on stderr and leaves stdout alone**,
+    /// and the script after it still runs.
+    ///
+    /// stdout is the oracle's transcript, which stays byte-exact because the
+    /// oracle prints nothing for a script that threw — `RunScript` drops the
+    /// error under a standing TODO
+    /// (`fpdfsdk/cpdfsdk_formfillenvironment.cpp:1280-1286`). The diagnostic
+    /// is ours.
+    #[cfg(feature = "script")]
+    #[test]
+    fn an_uncaught_throw_is_reported_on_stderr_and_the_next_script_still_runs() {
+        let (out, err) = run(
+            &with_open_action("app.alert('before'); this.getAnnots(); app.alert('after');"),
+            &["--js-transcript", "--time=1399672130"],
+        );
+        // One statement threw, so the rest of *that* script is lost — which is
+        // JavaScript, not a defect — but the transcript up to it survives and
+        // nothing else is printed to stdout.
+        assert_eq!(out, "Alert: before\n");
+        assert!(
+            err.contains("script /OpenAction:") && err.contains("not a callable function"),
+            "the error must be reported rather than swallowed: {err:?}"
+        );
     }
 }
