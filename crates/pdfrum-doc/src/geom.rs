@@ -4,28 +4,39 @@
 //! A PDF rectangle is `[left bottom right top]` in a y-**up** space, and none
 //! of the operations below normalize the way a general-purpose geometry
 //! library would. `kurbo::Rect` is the carrier — `(x0, y0, x1, y1)` reads as
-//! `(left, bottom, right, top)` — but its own `inflate`/`union` normalize on
-//! different rules, so nothing in this crate calls them. These free functions
-//! are the only rectangle vocabulary `pdfrum-doc` uses.
+//! `(left, bottom, right, top)` — but its own accessors answer differently at
+//! every point that matters here, which is why this module exists rather than
+//! calling through to them:
 //!
-//! Two asymmetries drive most of the surprises:
+//! - [`width`] and [`height`] narrow to `f32`, because a `re` operator's
+//!   operands are written from them verbatim and PDF reals are single
+//!   precision. `kurbo`'s answer in `f64` would round to a different decimal.
+//!   Both are plain subtractions and **can be negative**, as `kurbo`'s are.
+//! - `Rect::contains` is half-open on the far edges and does not normalize;
+//!   the annotation hit test is inclusive on all four and does.
+//! - `Rect::union`, `Rect::intersect` and `Rect::inflate` are documented as
+//!   valid only for non-negative extents; the appearance generators feed them
+//!   inverted rectangles and rely on normalization happening first.
+//! - `Rect::is_empty` was renamed `is_zero_area` in `kurbo` 0.13 and tests
+//!   `area() == 0.0`; the emptiness this crate means is `x0 >= x1 || y0 >= y1`,
+//!   which is true of an inverted rectangle that has area.
 //!
-//! - [`inflate`] and [`deflate`] normalize their input first; [`is_empty`]
-//!   does not. So an inverted rectangle is "empty", yet deflating it produces
-//!   a well-formed one.
-//! - [`width`] and [`height`] are plain subtractions and can be negative,
-//!   because a `re` operator's operands are written from them verbatim.
+//! The private half of the module is where those four divergences live. The
+//! public half is the vocabulary `pdfrum-form` and `pdfrum-tool` share with
+//! this crate: the `[left bottom right top]` constructor, the four narrowing
+//! edge accessors and the two extents, [`normalize`], and the two matrix
+//! operations an appearance stream is placed with.
 //!
 //! ```
 //! use pdfrum_doc::geom;
 //! use kurbo::Rect;
 //!
-//! // An inverted rectangle: right < left.
+//! // An inverted rectangle: right < left. The extents stay signed …
 //! let inverted = Rect::new(10.0, 0.0, 4.0, 8.0);
-//! assert!(geom::is_empty(inverted));
 //! assert_eq!(geom::width(inverted), -6.0);
-//! // Deflating normalizes first, so the result is well-formed.
-//! assert_eq!(geom::deflate(inverted, 1.0, 1.0), Rect::new(5.0, 1.0, 9.0, 7.0));
+//! // … until something normalizes it.
+//! assert_eq!(geom::normalize(inverted), Rect::new(4.0, 0.0, 10.0, 8.0));
+//! assert_eq!(geom::width(geom::normalize(inverted)), 6.0);
 //! ```
 
 // PDF real numbers are single-precision, and `kurbo::Rect` carries doubles.
@@ -42,20 +53,20 @@ const EPSILON: f64 = 1e-4;
 
 /// Whether a value is within one epsilon of zero.
 #[must_use]
-pub fn is_float_zero(value: f32) -> bool {
+pub(crate) fn is_float_zero(value: f32) -> bool {
     let value = f64::from(value);
     value < EPSILON && value > -EPSILON
 }
 
 /// Whether `a` exceeds `b` by more than one epsilon.
 #[must_use]
-pub fn is_float_bigger(a: f32, b: f32) -> bool {
+pub(crate) fn is_float_bigger(a: f32, b: f32) -> bool {
     a > b && !is_float_zero(a - b)
 }
 
 /// Whether `a` falls below `b` by more than one epsilon.
 #[must_use]
-pub fn is_float_smaller(a: f32, b: f32) -> bool {
+pub(crate) fn is_float_smaller(a: f32, b: f32) -> bool {
     a < b && !is_float_zero(a - b)
 }
 
@@ -125,14 +136,14 @@ pub fn normalize(r: Rect) -> Rect {
 /// Whether the rectangle encloses nothing — tested **without** normalizing,
 /// so an inverted rectangle is empty even though it has area.
 #[must_use]
-pub fn is_empty(r: Rect) -> bool {
+pub(crate) fn is_empty(r: Rect) -> bool {
     r.x0 >= r.x1 || r.y0 >= r.y1
 }
 
 /// Grows the rectangle by `x` horizontally and `y` vertically, normalizing
 /// first. Negative amounts shrink it (see [`deflate`]).
 #[must_use]
-pub fn inflate(r: Rect, x: f32, y: f32) -> Rect {
+pub(crate) fn inflate(r: Rect, x: f32, y: f32) -> Rect {
     let r = normalize(r);
     let (x, y) = (f64::from(x), f64::from(y));
     Rect::new(r.x0 - x, r.y0 - y, r.x1 + x, r.y1 + y)
@@ -140,13 +151,13 @@ pub fn inflate(r: Rect, x: f32, y: f32) -> Rect {
 
 /// Shrinks the rectangle, normalizing first. Exactly `inflate(-x, -y)`.
 #[must_use]
-pub fn deflate(r: Rect, x: f32, y: f32) -> Rect {
+pub(crate) fn deflate(r: Rect, x: f32, y: f32) -> Rect {
     inflate(r, -x, -y)
 }
 
 /// The smallest rectangle containing both, each normalized first.
 #[must_use]
-pub fn union(a: Rect, b: Rect) -> Rect {
+pub(crate) fn union(a: Rect, b: Rect) -> Rect {
     let (a, b) = (normalize(a), normalize(b));
     Rect::new(
         a.x0.min(b.x0),
@@ -156,23 +167,10 @@ pub fn union(a: Rect, b: Rect) -> Rect {
     )
 }
 
-/// The overlap of both, each normalized first. May come out inverted when
-/// they do not overlap; the caller decides what that means.
-#[must_use]
-pub fn intersect(a: Rect, b: Rect) -> Rect {
-    let (a, b) = (normalize(a), normalize(b));
-    Rect::new(
-        a.x0.max(b.x0),
-        a.y0.max(b.y0),
-        a.x1.min(b.x1),
-        a.y1.min(b.y1),
-    )
-}
-
 /// Whether the point falls inside, **inclusive on all four edges**, after
 /// normalizing a copy of the rectangle.
 #[must_use]
-pub fn contains(r: Rect, p: Point) -> bool {
+pub(crate) fn contains(r: Rect, p: Point) -> bool {
     let r = normalize(r);
     p.x >= r.x0 && p.x <= r.x1 && p.y >= r.y0 && p.y <= r.y1
 }
@@ -180,7 +178,7 @@ pub fn contains(r: Rect, p: Point) -> bool {
 /// The largest centred square that fits: half-extent `min(w, h) / 2` about
 /// the centre.
 #[must_use]
-pub fn center_square(r: Rect) -> Rect {
+pub(crate) fn center_square(r: Rect) -> Rect {
     let half = f64::from(width(r).abs().min(height(r).abs()) / 2.0);
     let (cx, cy) = (f64::midpoint(r.x0, r.x1), f64::midpoint(r.y0, r.y1));
     Rect::new(cx - half, cy - half, cx + half, cy + half)
@@ -188,7 +186,7 @@ pub fn center_square(r: Rect) -> Rect {
 
 /// Scales the half-extents about the centre.
 #[must_use]
-pub fn scale_from_center(r: Rect, scale: f32) -> Rect {
+pub(crate) fn scale_from_center(r: Rect, scale: f32) -> Rect {
     let scale = f64::from(scale);
     let (cx, cy) = (f64::midpoint(r.x0, r.x1), f64::midpoint(r.y0, r.y1));
     let (hw, hh) = ((r.x1 - r.x0) / 2.0 * scale, (r.y1 - r.y0) / 2.0 * scale);
@@ -197,7 +195,7 @@ pub fn scale_from_center(r: Rect, scale: f32) -> Rect {
 
 /// Moves the rectangle by `(dx, dy)` without normalizing.
 #[must_use]
-pub fn translate(r: Rect, dx: f32, dy: f32) -> Rect {
+pub(crate) fn translate(r: Rect, dx: f32, dy: f32) -> Rect {
     let (dx, dy) = (f64::from(dx), f64::from(dy));
     Rect::new(r.x0 + dx, r.y0 + dy, r.x1 + dx, r.y1 + dy)
 }
