@@ -12,6 +12,13 @@ categories = ["command-line-utilities", "graphics", "text-processing"]
 [lints]
 workspace = true
 
+[features]
+# M15's JavaScript transcript flag. Default-off, and it must stay that way:
+# `scripts/check-no-boa.sh` asserts that no workspace member's DEFAULT
+# features reach `boa_engine`, and this crate is the second thing it checks
+# by name because the CLI is what a headless or CI build actually runs.
+script = ["dep:pdfrum-form", "pdfrum-form/script"]
+
 [dependencies]
 pdfrum-common.workspace = true
 pdfrum-doc.workspace = true
@@ -26,6 +33,10 @@ pdfrum-parser.workspace = true
 # `pdfrum-form` directly is what makes the tool exercise the API a consumer
 # would use.
 pdfrum.workspace = true
+# Only for `--js-transcript`, behind the `script` feature: the transcript is
+# `pdfrum_form::script::ScriptCascade`'s, and the facade does not re-export it
+# (it cannot — the facade's default features must not reach an engine).
+pdfrum-form = { workspace = true, optional = true }
 pdfrum-raster-exact.workspace = true
 pdfrum-raster-tinyskia.workspace = true
 pdfrum-raster-vello.workspace = true

@@ -49,6 +49,8 @@ mod chrome;
 mod content;
 mod dispatch;
 pub mod events;
+#[cfg(feature = "script")]
+mod jstranscript;
 mod metadata;
 mod mutate;
 mod options;
