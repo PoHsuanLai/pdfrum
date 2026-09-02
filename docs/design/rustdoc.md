@@ -368,6 +368,25 @@ No other STYLE.md edits.
 WP1–3 are the production-ready bar for `docs.rs/pdfrum`. WP4–5 are the
 same bar for anyone who clicks through to a member crate. WP6 freezes it.
 
+> **WP1–WP4 landed 2026-09-03** as `2685dd0`, `45d4b5c`, `dc7a810`,
+> `76f72a5` (Grok Build's crate-page trim, finished and landed by a Claude
+> agent after Grok's balance ran out). §8 before → after: crate `//!`
+> 201 → **50**; facade items over the cap 24 → **0** with no exception
+> needed; doctest blocks 49 → **24** (§4 and §6 said 51 — two of the 98
+> fence lines were ```` ```text ```` and not doctests); provenance hits
+> 22 → **0**; `cargo test --doc -p pdfrum` 48 → 23 (24 with `script`);
+> no non-doc line changed; the API snapshot unmoved. Three drifts in this
+> file at the code: §6's WP2 table listed three *private* functions
+> (`rgba_of`, `install_calculation_order`, `install_page_scripts`) which
+> never reach the rustdoc index and so are outside the caps; and §4's rayon
+> row assumed the crate page still had a `BuildContext` snippet — WP1 had
+> already removed both, so `RenderSession` keeps the one example and the
+> crate page links to it. One rule for WP5: an intra-doc link to a
+> feature-gated re-export (`[`ScriptCascade`](crate::ScriptCascade)`)
+> breaks the default-feature doc build — spell it as a bare code span, and
+> run `RUSTDOCFLAGS="-D warnings" cargo doc` in **both** feature states.
+> WP5 and WP6 are open.
+
 Do not combine WP1 with WP5. The crate page is a writing task; the inner
 crates are a grind. Mixing them produces an unreviewable diff.
 
