@@ -36,9 +36,10 @@ fn request(name: &str) -> FontRequest {
 /// `cfx_fontmapper_unittest.cpp`'s
 /// `FindSubstFaceForRegularStandardFontWithBoldWeight`.
 ///
-/// The expected weight of **700** is a known upstream bug — the test itself
-/// carries a `TODO(crbug.com/500640684): Should be 400`. We reproduce it,
-/// because it is what the oracle does.
+/// Audit item **A51**. The upstream test expects **700** and carries its own
+/// `TODO(crbug.com/500640684): Should be 400`; under the oracle-bug rule we
+/// implement the 400 the TODO asks for, so this asserts 400 where it used to
+/// assert the reproduced 700.
 #[test]
 fn an_italic_alias_reaches_the_database_as_helvetica_oblique() {
     /// One `find_font` call, as weight, italic, charset, pitch bits and family.
@@ -99,9 +100,12 @@ fn an_italic_alias_reaches_the_database_as_helvetica_oblique() {
     assert!(query.1, "the Oblique index implies italic");
     assert_eq!(query.2, Charset::Ansi);
     assert_eq!(query.3, 0, "index 7 is neither fixed nor Roman");
-    // The known-buggy weight: `n_style != Normal` so Branch B does not reset
-    // it to 400. crbug.com/500640684.
-    assert_eq!(query.0, 700);
+    // `[oracle-bug]` A51: `cfx_fontmapper.cpp:644`'s `nStyle ==
+    // kFontStyleNormal` skips the reset for an italic face, keeping the
+    // requested 700 where Annex D makes Helvetica-Oblique regular weight —
+    // which is what crbug.com/500640684's own TODO says. We reset on "not
+    // force-bold", so the query carries 400.
+    assert_eq!(query.0, 400);
 }
 
 /// `cfx_fontmapper_unittest.cpp`'s `SetSubstFontNameWhenGetFaceNameFails`.

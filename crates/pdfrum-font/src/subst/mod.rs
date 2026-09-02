@@ -403,7 +403,15 @@ fn resolve_inner(
         }
     } else {
         italic_angle = 0;
-        if n_style == style_bits::NORMAL {
+        // `[oracle-bug]` `cfx_fontmapper.cpp:644` asks `nStyle ==
+        // kFontStyleNormal`, which conflates "has no style" with "has no
+        // *bold*": an italic standard face such as `Helvetica-Oblique` skips
+        // the reset and keeps the requested 700, where Annex D makes it a
+        // regular-weight face. The test the reset needs is "not force-bold";
+        // pdf.js reaches 400 structurally, weight being a property of the
+        // resolved face (`font_substitutions.js:32-35` `ITALIC = { style:
+        // "italic", weight: "normal" }`, bound at `:129-133`).
+        if n_style & style_bits::FORCE_BOLD == 0 {
             weight = 400;
         }
         if let Some(m) = &matched {
