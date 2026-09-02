@@ -643,14 +643,15 @@ fn render_grouped<B: RasterBackend>(
         _ => ctx.transparency,
     };
     // Isolated means the group starts transparent; non-isolated means it
-    // starts from a copy of what is already on the page, and PDFium never
-    // removes that copy before compositing back.
-    let mut sub = if needs_backdrop(transparency) {
+    // starts from a copy of what is already on the page. `[oracle-bug]` A12:
+    // that copy is kept so it can be **removed again** below, which
+    // `cpdf_renderstatus.cpp` never does — see `Pixmap::remove_backdrop`.
+    let (mut sub, initial_backdrop) = if needs_backdrop(transparency) {
         let backdrop = backend.snapshot(device);
         let cropped = crop(&backdrop, rect);
-        backend.new_target_with_backdrop(&cropped)
+        (backend.new_target_with_backdrop(&cropped), Some(cropped))
     } else {
-        backend.new_target(w, h, peniko::Color::TRANSPARENT)
+        (backend.new_target(w, h, peniko::Color::TRANSPARENT), None)
     };
 
     let offset = Affine::translate((-f64::from(rect.left), -f64::from(rect.top)));
@@ -677,6 +678,14 @@ fn render_grouped<B: RasterBackend>(
         diags,
     );
     let mut pixels = backend.finish(sub);
+
+    // `[oracle-bug]` A12: take the initial backdrop back out before the group
+    // is composited over the very pixels it was copied from, per §11.4.6's
+    // `C = Cn + (Cn - C0) x (a0/agn - a0)`. It must happen *before* the alphas
+    // and the mask, which apply to the group's own contribution.
+    if let Some(backdrop) = &initial_backdrop {
+        pixels.remove_backdrop(backdrop);
+    }
 
     // The mask first, then the group alpha, then the inherited one — in that
     // order, and the last only outside an enclosing group.
