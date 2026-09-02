@@ -1260,6 +1260,27 @@ PDFium renders `/TR [fR fG fB]` as `[fB fG fR]`. Table 58 also specifies
 `array[3]`; that gray element is left unread here too, as a separate and
 unmeasured change.
 
+### Filed upstream
+
+Five of these items were written up as upstream issues independently, verified
+at the line, and landed on `main` in the same window — three of them **filed**
+with tracker IDs. `docs/upstream/README.md` is the index.
+
+| item | upstream issue | status |
+|---|---|---|
+| **A48** | [`mirror-char-sentinel-collision`](../upstream/pdfium/mirror-char-sentinel-collision.md) | filed, [crbug.com/pdfium/555940408](https://crbug.com/pdfium/555940408) |
+| **A9** | [`tr-array-loaded-reversed`](../upstream/pdfium/tr-array-loaded-reversed.md) | filed, [crbug.com/pdfium/555940409](https://crbug.com/pdfium/555940409) |
+| **A10** | [`tr-samples-unclamped`](../upstream/pdfium/tr-samples-unclamped.md) | filed, [crbug.com/pdfium/555967331](https://crbug.com/pdfium/555967331) |
+| **A40 + A43** | [`text-object-bbox-gate-drops-spaces`](../upstream/pdfium/text-object-bbox-gate-drops-spaces.md) | drafted; the root cause behind `crbug.com/40643656` and `crbug.com/444176962` |
+| **A55** | [`ispunctuation-range-typo`](../upstream/pdfium/ispunctuation-range-typo.md) | drafted |
+
+Two readings of the same lines reached from different directions is a stronger
+record than either alone, and it is why those five are not restated here.
+**A40b is not among them** — it was found by measuring A40+A43 and has no
+upstream write-up yet; it is a candidate for one, since it is the same `[oracle-bug]`
+shape (a normalization table consulted on a condition the specification does
+not impose) and its repro is a single Latin-run NO-BREAK SPACE.
+
 ### Gates
 
 Green at `land/oracle-bugs`: `cargo nextest run --workspace` (**3817 passed, 1
