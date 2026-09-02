@@ -1,6 +1,11 @@
 //! The analytic cell rasterizer: exact per-pixel area and cover, in the style
 //! the oracle's scan converter uses.
 //!
+//! **Part of the backend seam.** A backend that owns its pixels rasterizes
+//! with [`Rasterizer`] rather than with a rasterizer of its own, because the
+//! coverage a page's edges get is exactly what Tier C compares across
+//! backends. `pdfrum-raster-agg` is the in-tree caller.
+//!
 //! # Why cells
 //!
 //! A scanline rasterizer has to answer one question per pixel — what fraction

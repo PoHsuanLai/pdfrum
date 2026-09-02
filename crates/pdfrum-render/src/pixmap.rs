@@ -1,6 +1,12 @@
 //! The two raster buffers the engine and the backends share: [`Pixmap`], a
 //! premultiplied RGBA8 image, and [`AlphaMask`], an 8-bit coverage plane.
 //!
+//! **Part of the backend seam.** The two types are re-exported at the crate
+//! root, since they are in [`RasterBackend`](crate::RasterBackend)'s own
+//! signatures; the alpha arithmetic beside them — [`mul255`],
+//! [`alpha_merge`], [`alpha_byte_truncating`] — is here because a backend
+//! must round its alpha the way the oracle rounds it.
+//!
 //! PDFium's own buffers are *straight* (non-premultiplied) BGRA or BGR; both
 //! our rasterizers are premultiplied RGBA8. The conversions that difference
 //! forces are owned here rather than in either backend, so the engine's
