@@ -251,7 +251,7 @@ factor of two" was one factor applied in the wrong place, and the alpha belongs
 on the procedure's fill colour with an opaque blit (.835 → .952). `en_fqa`
 re-derived from scratch and found to be an *image* file — 87 masks minified
 8.33x, one font that can render only a space (.885 → .921). The upstream
-`hayro-jbig2` issue drafted at `docs/upstream/hayro-jbig2-issue.md`.
+`hayro-jbig2` issue drafted at `docs/upstream/hayro/jbig2-segment-lengths.md`.
 
 **Annot 100%** — met, and by two separate fixes, neither the expected one: a
 form field carrying `/Kids` is not a control and must not generate an
@@ -471,7 +471,7 @@ changing the cold convention; it is documented and ratcheted deliberately.
   `image_en_fqa` (552 small images; `to_pixmap` totals 0.1 ms there, so its cost
   is per-image and out of scope) and `image_ccitt_3bigpreview` (band edge). The
   zune-jpeg `scale_denom` request is written up at
-  `docs/upstream/zune-jpeg-scaled-decode.md` with our numbers *including* the
+  `docs/upstream/zune/scaled-decode.md` with our numbers *including* the
   one that argues against its urgency — it is worth ~59 ms of decode plus most
   of a remaining 464 ms of buffer-sized downstream work on one file, against the
   658 ms option (b) already took off it. Still owed: `ratchet update` on an idle
