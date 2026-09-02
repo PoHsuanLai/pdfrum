@@ -34,7 +34,7 @@
 
 use pdfrum_common::kurbo::Affine;
 use pdfrum_object::{Dict, Name, Object};
-use pdfrum_page::state::{BlendMode, ClipEntry, ClipRule, GraphicsState};
+use pdfrum_page::{BlendMode, ClipEntry, ClipRule, GraphicsState};
 use pdfrum_page::{ColorValue, LineCap, LineJoin, PageObject, Rgb};
 
 use crate::content::num::{write_float, write_matrix};
@@ -410,7 +410,7 @@ mod tests {
     use super::{DEFAULT_GRAPHICS, GraphicsKey, ResourceNames, default_graphics, emit_object};
     use pdfrum_common::kurbo::{Affine, BezPath, Point};
     use pdfrum_object::{Name, names};
-    use pdfrum_page::state::{BlendMode, ClipRule, ClipStack, GraphicsState};
+    use pdfrum_page::{BlendMode, ClipRule, ClipStack, GraphicsState};
     use pdfrum_page::{
         ColorSpace, ColorValue, Content, FillRule, LineCap, LineJoin, PageObject, PathObject, Rgb,
     };
@@ -456,7 +456,7 @@ mod tests {
                 stroke,
             },
             state,
-            marks: pdfrum_page::state::ContentMarks::new(),
+            marks: pdfrum_page::ContentMarks::new(),
             content_stream: Some(0),
             dirty: false,
             active: true,
@@ -590,7 +590,7 @@ mod tests {
         // components — a half-tint over DeviceGray is mid-grey.
         let separation = ColorValue {
             space: Some(Arc::new(ColorSpace::Separation(Box::new(
-                pdfrum_page::color::Separation {
+                pdfrum_page::Separation {
                     none: false,
                     alternate: Some(Box::new(ColorSpace::DeviceGray)),
                     tint: None,
@@ -613,7 +613,7 @@ mod tests {
     fn a_pattern_colour_still_writes_nothing() {
         let pattern = || ColorValue {
             space: Some(Arc::new(ColorSpace::Pattern(Box::new(
-                pdfrum_page::color::PatternSpace { base: None },
+                pdfrum_page::PatternSpace { base: None },
             )))),
             components: SmallVec::new(),
             pattern: Some(Box::new(pdfrum_page::PatternValue {
@@ -721,7 +721,7 @@ mod tests {
                 type3_metrics: std::collections::BTreeMap::new(),
             },
             state: GraphicsState::default(),
-            marks: pdfrum_page::state::ContentMarks::new(),
+            marks: pdfrum_page::ContentMarks::new(),
             content_stream: Some(0),
             dirty: false,
             active: true,

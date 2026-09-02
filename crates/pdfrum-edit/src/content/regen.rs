@@ -175,7 +175,7 @@ pub fn regenerate(page: &Page, resources: &Dict, r: &impl Resolve) -> Option<Pag
 #[derive(Debug, Default)]
 struct StreamBuffer {
     bytes: String,
-    marks: pdfrum_page::state::ContentMarks,
+    marks: pdfrum_page::ContentMarks,
     open_marks: usize,
     wrote_something: bool,
 }
@@ -481,8 +481,8 @@ mod tests {
     use super::{ContentsShape, Regenerated, regenerate};
     use pdfrum_common::kurbo::{Affine, BezPath};
     use pdfrum_object::{Dict, Name, NoResolve, ObjRef, Object};
-    use pdfrum_page::state::{ContentMarks, GraphicsState};
     use pdfrum_page::{Content, FillRule, Page, PageObject, PathObject};
+    use pdfrum_page::{ContentMarks, GraphicsState};
     use std::collections::{BTreeMap, BTreeSet};
 
     fn path(stream: usize, dirty: bool) -> PageObject {

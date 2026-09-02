@@ -9,7 +9,7 @@
 
 use kurbo::{Affine, BezPath, Rect};
 use pdfrum_common::PageIndex;
-use pdfrum_page::state::GraphicsState;
+use pdfrum_page::GraphicsState;
 use pdfrum_page::{ColorSpace, Content, FillRule, PageObject, PathObject, TextObject, TextSegment};
 
 use crate::Page;

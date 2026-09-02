@@ -8,19 +8,21 @@
 //! `Q` on an empty stack is a **no-op**, not an error — an unbalanced content
 //! stream simply keeps its current state.
 
-pub mod clip;
+mod clip;
 mod extgstate;
-pub mod general;
-pub mod graph;
-pub mod marks;
-pub mod text;
+mod general;
+mod graph;
+mod marks;
+mod text;
 
 pub use clip::{ClipEntry, ClipRule, ClipStack, MAX_TEXT_OBJECTS, TextClipRun};
-pub use extgstate::{apply_ext_gstate, ext_gstate_dash, soft_mask_matrix};
-pub use general::{BlendMode, GeneralState, RenderIntent};
-pub use graph::{MIN_DASH_CYCLE, NormalizedDash, StrokeParams};
+pub use extgstate::apply_ext_gstate;
+pub(crate) use general::RenderIntent;
+pub use general::{BlendMode, GeneralState};
+pub use graph::StrokeParams;
 pub use marks::{ContentMarks, Mark};
-pub use text::{TextCursor, TextState, glyph_matrix, kerning_shift};
+pub use text::TextState;
+pub(crate) use text::{TextCursor, glyph_matrix, kerning_shift};
 
 use crate::color::ColorValue;
 use kurbo::Affine;

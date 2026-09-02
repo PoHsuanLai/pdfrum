@@ -22,7 +22,6 @@ use crate::function::FunctionCache;
 use crate::names;
 use crate::transfer::TransferFunc;
 use crate::transparency::SoftMask;
-use kurbo::Affine;
 use pdfrum_common::{Diagnostics, Limits};
 use pdfrum_font::Font;
 use pdfrum_object::{Dict, Object, Resolve};
@@ -208,6 +207,10 @@ pub fn apply_ext_gstate<R: Resolve>(
 /// The dash array an `/ExtGState` `/D` entry states, or `None` when the entry
 /// is not the nested-array shape the key requires.
 #[must_use]
+#[allow(
+    dead_code,
+    reason = "the oracle behaviour it ports is pinned by this module's own tests; the curation removed its only caller outside the crate"
+)]
 pub fn ext_gstate_dash(ext: &Dict, r: &impl Resolve) -> Option<(SmallVec<[f32; 4]>, f32)> {
     let outer = ext.array(names::D, r)?;
     // Element 0 **must itself be an array**, or the key is skipped.
@@ -218,13 +221,6 @@ pub fn ext_gstate_dash(ext: &Dict, r: &impl Resolve) -> Option<(SmallVec<[f32; 4
         lengths.iter().map(|o| o.number().unwrap_or(0.0)).collect(),
         outer.number_at_or_zero(1),
     ))
-}
-
-/// The matrix in force when an `/ExtGState` installed a soft mask, which is
-/// what places the mask.
-#[must_use]
-pub fn soft_mask_matrix(state: &GraphicsState) -> Affine {
-    state.ctm
 }
 
 #[cfg(test)]

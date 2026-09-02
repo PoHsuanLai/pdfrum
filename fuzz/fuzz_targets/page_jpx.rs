@@ -11,8 +11,8 @@
 #![no_main]
 
 use libfuzzer_sys::fuzz_target;
-use pdfrum_page::color::ColorSpace;
-use pdfrum_page::image::RequestedSize;
+use pdfrum_page::ColorSpace;
+use pdfrum_page::RequestedSize;
 use pdfrum_page::decode_jpx;
 
 fuzz_target!(|data: &[u8]| {

@@ -93,7 +93,7 @@ pub struct TextRun {
     /// drop an **opt-out** (`keepWhiteSpace: true`), not a loss.
     pub advance: f64,
     /// The marks enclosing the object.
-    pub marks: pdfrum_page::state::ContentMarks,
+    pub marks: pdfrum_page::ContentMarks,
     /// What each shown character's Type 3 glyph procedure declared, empty for
     /// every other kind of font. A Type 3 glyph's box and advance live inside
     /// a content stream, so they arrive from the page layer rather than from

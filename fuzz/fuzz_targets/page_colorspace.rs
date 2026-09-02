@@ -12,8 +12,8 @@
 
 use libfuzzer_sys::fuzz_target;
 use pdfrum_object::NoResolve;
-use pdfrum_page::color::load_colorspace;
-use pdfrum_page::function::FunctionCache;
+use pdfrum_page::load_colorspace;
+use pdfrum_page::FunctionCache;
 use pdfrum_parser::{Lexer, Strictness, parse_object};
 
 fuzz_target!(|data: &[u8]| {

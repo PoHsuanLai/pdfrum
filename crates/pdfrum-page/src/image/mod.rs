@@ -24,25 +24,21 @@
 mod cache;
 mod dct;
 mod decode_array;
-pub mod dict;
+mod dict;
 mod jbig2;
 mod jpx;
 mod mask;
 mod scanline;
 
-pub use cache::{ImageCache, MAX_BYTES, MAX_ENTRIES, RequestedSize};
-pub use dct::{
-    ADOBE_CMYK_DECODE, DctImage, allows_reduced_resolution, decode_dct, probe as probe_dct,
-    scale_denominator, scaled_size,
-};
-pub use decode_array::DecodeMap;
-pub use dict::{ImageDict, MAX_DIMENSION};
+pub use cache::{ImageCache, MAX_BYTES, RequestedSize};
+pub(crate) use dct::decode_dct;
+pub(crate) use decode_array::DecodeMap;
+pub(crate) use dict::ImageDict;
 pub use jbig2::{BitImage, decode_jbig2};
-pub use jpx::{JpxAction, JpxColorSpace, JpxImage, decode_jpx, is_stock_device};
-pub use mask::{ColorKey, ImageMask, matte_color};
-pub use scanline::{
-    get_bits, invert_line, palette_index, rgb_line_to_bgr, scale_to_byte, scanline,
-};
+pub(crate) use jpx::SpaceOverride;
+pub use jpx::{JpxImage, decode_jpx};
+pub use mask::ImageMask;
+pub(crate) use mask::{ColorKey, matte_color};
 
 use crate::color::{ColorSpace, Rgb};
 use crate::error::Error;
@@ -318,7 +314,7 @@ pub fn decode_image<R: Resolve>(
                 .inspect_err(|_| {
                     diags.record(Severity::Suspicious, DiagKind::ImageDecodeFailed, None);
                 })?;
-            if image.space_override.is_some() {
+            if image.space_override != SpaceOverride::Keep {
                 diags.record(Severity::Recovered, DiagKind::JpxColorSpaceOverride, None);
             }
             let pixels = match (&space, image.components) {

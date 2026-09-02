@@ -1097,7 +1097,7 @@ fn paint_pattern<B: RasterBackend>(
         .space
         .as_ref()
         .map_or(&pdfrum_page::ColorSpace::DeviceGray, |s| &**s);
-    let rgb = pdfrum_page::pattern::uncolored_pattern_rgb(space, &value.components, colored_tiling);
+    let rgb = pdfrum_page::uncolored_pattern_rgb(space, &value.components, colored_tiling);
     let [r, g, b] = rgb.to_bytes();
     let uncolored = Argb {
         a: alpha_byte_truncating(alpha),
@@ -1257,7 +1257,7 @@ fn render_pattern_text<B: RasterBackend>(
     // pushed the text object's stack before dispatching here — so only the
     // run's own contribution is added, and only it is popped.
     let mut clip = pdfrum_page::ClipStack::new();
-    if !clip.push_text(vec![pdfrum_page::state::TextClipRun {
+    if !clip.push_text(vec![pdfrum_page::TextClipRun {
         object: object.clone(),
         char_space: state.text.char_space,
         word_space: state.text.word_space,
@@ -1677,7 +1677,7 @@ fn render_translucent_char_proc<B: RasterBackend>(
     device: &mut B::Device,
     backend: &B,
     caches: &mut RenderCaches,
-    metrics: &pdfrum_page::type3::Type3Metrics,
+    metrics: &pdfrum_page::Type3Metrics,
     placed: &crate::text::PlacedType3Char,
     fill: Argb,
     device_box: Rect,
@@ -2268,7 +2268,7 @@ mod tests {
     use std::collections::BTreeMap;
 
     use kurbo::BezPath;
-    use pdfrum_page::state::ContentMarks;
+    use pdfrum_page::ContentMarks;
     use pdfrum_page::{Content, GraphicsState, PathObject};
 
     use super::*;

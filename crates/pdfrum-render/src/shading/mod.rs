@@ -25,7 +25,7 @@ pub mod steps;
 
 use kurbo::Affine;
 use pdfrum_page::Shading;
-use pdfrum_page::shading::{Geometry, ShadingKind};
+use pdfrum_page::{Geometry, ShadingKind};
 
 use crate::color::Argb;
 use crate::device::RenderDevice;
@@ -204,7 +204,7 @@ mod tests {
     use std::sync::Arc;
 
     use kurbo::Point;
-    use pdfrum_page::shading::Axial;
+    use pdfrum_page::Axial;
     use pdfrum_page::{ColorSpace, Rgb};
 
     use super::*;

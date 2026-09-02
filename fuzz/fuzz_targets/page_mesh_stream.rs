@@ -12,8 +12,8 @@
 #![no_main]
 
 use libfuzzer_sys::fuzz_target;
-use pdfrum_page::color::ColorSpace;
-use pdfrum_page::shading::{MeshParams, MeshReader, ShadingKind};
+use pdfrum_page::ColorSpace;
+use pdfrum_page::{MeshParams, MeshReader, ShadingKind};
 
 fuzz_target!(|data: &[u8]| {
     const WIDTHS: [u32; 9] = [0, 1, 2, 3, 4, 8, 12, 16, 32];

@@ -45,37 +45,40 @@
 #![warn(clippy::indexing_slicing)]
 
 mod build;
-pub mod color;
+mod color;
 mod content;
 mod error;
-pub mod function;
-pub mod image;
-pub mod inline_image;
-pub mod mutate;
+mod function;
+mod image;
+mod inline_image;
+mod mutate;
 mod ops;
-pub mod optional;
+mod optional;
 mod page;
-pub mod pattern;
+mod pattern;
 mod resources;
-pub mod shading;
-pub mod state;
+mod shading;
+mod state;
 mod tokenize;
-pub mod transfer;
-pub mod transparency;
-pub mod type3;
+mod transfer;
+mod transparency;
+mod type3;
 
 pub use build::{
     BuildContext, FormFontsKey, FoundPattern, MAX_FORM_LEVEL, StreamBounds, build_form_object,
     build_form_object_with, build_page, build_page_from_dict, build_page_streams,
     eliminate_redundant_clips, load_pattern,
 };
-pub use color::{ColorSpace, ColorValue, PatternValue, Rgb};
+pub use color::{
+    ColorSpace, ColorValue, Family, PatternSpace, PatternValue, Rgb, Separation,
+    adobe_cmyk_to_srgb, load_colorspace,
+};
 pub use content::parse_content;
 pub use error::Error;
-pub use function::Function;
+pub use function::{Function, FunctionCache, PostScript, parse_program};
 pub use image::{
-    BitImage, ImageCache, ImageData, ImageMask, JpxImage, Pixels, RequestedSize, decode_image,
-    decode_jbig2, decode_jpx,
+    BitImage, ImageCache, ImageData, ImageMask, JpxImage, MAX_BYTES, Pixels, RequestedSize,
+    decode_image, decode_jbig2, decode_jpx,
 };
 pub use ops::{
     FillRule, InlineImage, LineCap, LineJoin, MarkProperties, Op, TextItem, TextRenderMode,
@@ -85,14 +88,17 @@ pub use page::{
     Content, DEFAULT_MEDIA_BOX, FormObject, ImageObject, Page, PageObject, PathObject, Rotation,
     ShadingObject, TextObject, TextSegment, derive_boxes, display_size_from_dict,
 };
-pub use pattern::{Pattern, ShadingPattern, TilingPattern};
+pub use pattern::{Pattern, ShadingPattern, TileRange, TilingPattern, uncolored_pattern_rgb};
 pub use resources::Resources;
-pub use shading::{Mesh, Shading, ShadingKind};
-pub use state::{
-    BlendMode, ClipRule, ClipStack, GraphicsState, StateStack, StrokeParams, TextState,
-    apply_ext_gstate,
+pub use shading::{
+    Axial, FunctionBased, Geometry, Mesh, MeshParams, MeshReader, Patch, Radial, Shading,
+    ShadingKind, ShadingSource, Triangle, Vertex, coons_interior,
 };
-pub use transfer::TransferFunc;
+pub use state::{
+    BlendMode, ClipEntry, ClipRule, ClipStack, ContentMarks, GeneralState, GraphicsState,
+    MAX_TEXT_OBJECTS, Mark, StateStack, StrokeParams, TextClipRun, TextState, apply_ext_gstate,
+};
+pub use transfer::{CHANNEL_SAMPLES, TransferFunc};
 pub use transparency::{SoftMask, SoftMaskKind, Transparency};
 pub use type3::Type3Metrics;
 

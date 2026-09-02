@@ -16,7 +16,7 @@
 use kurbo::{Affine, BezPath, Rect, Shape};
 use pdfrum_font::GlyphCache;
 use pdfrum_page::ClipStack;
-use pdfrum_page::state::{ClipEntry, ClipRule, TextClipRun};
+use pdfrum_page::{ClipEntry, ClipRule, TextClipRun};
 
 use crate::options::RenderOptions;
 

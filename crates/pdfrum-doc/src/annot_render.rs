@@ -431,13 +431,13 @@ fn focus_rect(annot: &Annotation, box_: ap::FocusBox) -> Option<pdfrum_page::Pag
     stroke.set_components(&[0.0, 0.0, 0.0]);
     let state = pdfrum_page::GraphicsState {
         stroke,
-        stroke_params: pdfrum_page::state::StrokeParams {
+        stroke_params: pdfrum_page::StrokeParams {
             // `CFX_GraphStateData`'s own defaults, none of which
             // `DrawFocusRect` overrides.
             width: 1.0,
             dash: [1.0].into_iter().collect(),
             dash_phase: 0.0,
-            ..pdfrum_page::state::StrokeParams::default()
+            ..pdfrum_page::StrokeParams::default()
         },
         ..pdfrum_page::GraphicsState::default()
     };
@@ -451,7 +451,7 @@ fn focus_rect(annot: &Annotation, box_: ap::FocusBox) -> Option<pdfrum_page::Pag
                 stroke: true,
             },
             state,
-            marks: pdfrum_page::state::ContentMarks::default(),
+            marks: pdfrum_page::ContentMarks::default(),
             content_stream: None,
             // Annotation chrome is drawn into the page graph but is not page
             // content: it belongs to no `/Contents` element and must never
@@ -538,10 +538,10 @@ fn invalid_outline<R: Resolve>(annot: &Annotation, r: &R) -> Option<pdfrum_page:
     stroke.set_components(&[OUTLINE_GREY, OUTLINE_GREY, OUTLINE_GREY]);
     let state = pdfrum_page::GraphicsState {
         stroke,
-        stroke_params: pdfrum_page::state::StrokeParams {
+        stroke_params: pdfrum_page::StrokeParams {
             // `gsd.set_line_width(0.0f)` — a hairline, not a zero-area stroke.
             width: 0.0,
-            ..pdfrum_page::state::StrokeParams::default()
+            ..pdfrum_page::StrokeParams::default()
         },
         ..pdfrum_page::GraphicsState::default()
     };
@@ -559,7 +559,7 @@ fn invalid_outline<R: Resolve>(annot: &Annotation, r: &R) -> Option<pdfrum_page:
                 stroke: true,
             },
             state,
-            marks: pdfrum_page::state::ContentMarks::default(),
+            marks: pdfrum_page::ContentMarks::default(),
             content_stream: None,
             // Annotation chrome is drawn into the page graph but is not page
             // content: it belongs to no `/Contents` element and must never
@@ -676,7 +676,7 @@ fn highlight<R: Resolve>(
                 stroke: false,
             },
             state: highlight_state(),
-            marks: pdfrum_page::state::ContentMarks::default(),
+            marks: pdfrum_page::ContentMarks::default(),
             content_stream: None,
             // Annotation chrome is drawn into the page graph but is not page
             // content: it belongs to no `/Contents` element and must never
@@ -710,9 +710,9 @@ fn highlight_state() -> pdfrum_page::GraphicsState {
     fill.set_components(&[channel(0), channel(8), channel(16)]);
     pdfrum_page::GraphicsState {
         fill,
-        general: pdfrum_page::state::GeneralState {
+        general: pdfrum_page::GeneralState {
             fill_alpha: HIGHLIGHT_ALPHA,
-            ..pdfrum_page::state::GeneralState::default()
+            ..pdfrum_page::GeneralState::default()
         },
         ..pdfrum_page::GraphicsState::default()
     }

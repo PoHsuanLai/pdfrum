@@ -20,7 +20,7 @@ use std::collections::BTreeMap;
 
 use kurbo::{Affine, BezPath, Point, Rect};
 use pdfrum_common::Diagnostics;
-use pdfrum_page::state::{ClipRule, ContentMarks};
+use pdfrum_page::{ClipRule, ContentMarks};
 use pdfrum_page::{
     ColorSpace, Content, FillRule, GraphicsState, Page, PageObject, PathObject, Rotation,
     ShadingObject, TextRenderMode, Transparency,
@@ -368,7 +368,7 @@ fn an_axial_shading_paints_a_ramp_identically_on_both_backends() {
     // blitted, so the backends never integrate their coverage: they must be
     // bit-identical.
     let shading = std::sync::Arc::new(pdfrum_page::Shading {
-        geometry: pdfrum_page::shading::Geometry::Axial(pdfrum_page::shading::Axial {
+        geometry: pdfrum_page::Geometry::Axial(pdfrum_page::Axial {
             start: Point::new(0.0, 0.0),
             end: Point::new(16.0, 0.0),
             t_min: 0.0,
@@ -873,7 +873,7 @@ fn pattern_filled(path: BezPath, pattern: pdfrum_page::Pattern, operands: &[f32]
     state
         .fill
         .set_space(std::sync::Arc::new(ColorSpace::Pattern(Box::new(
-            pdfrum_page::color::PatternSpace {
+            pdfrum_page::PatternSpace {
                 base: Some(Box::new(ColorSpace::DeviceRgb)),
             },
         ))));
