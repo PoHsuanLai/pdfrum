@@ -46,11 +46,11 @@ pub trait PlaceExt {
 
 impl PlaceExt for Place {
     fn start() -> Place {
-        Place::new(0, 0, -1)
+        Place::new(0, 0, None)
     }
 
     fn at_line_start(self) -> bool {
-        self.word < 0
+        self.word.is_none()
     }
 
     fn same_line(self, other: Place) -> bool {
@@ -114,29 +114,32 @@ mod tests {
 
     #[test]
     fn places_order_lexicographically_over_the_triple() {
-        assert!(Place::new(0, 0, -1) < Place::new(0, 0, 0));
-        assert!(Place::new(0, 0, 9) < Place::new(0, 1, -1));
-        assert!(Place::new(0, 9, 9) < Place::new(1, 0, -1));
+        // `None < Some(0)` is what the old `word: -1` bought by being
+        // negative, and `Option`'s derived `Ord` gives it for free — which is
+        // the whole argument for the replacement.
+        assert!(Place::new(0, 0, None) < Place::new(0, 0, Some(0)));
+        assert!(Place::new(0, 0, Some(9)) < Place::new(0, 1, None));
+        assert!(Place::new(0, 9, Some(9)) < Place::new(1, 0, None));
     }
 
     #[test]
     fn the_start_is_before_the_first_character() {
         assert!(Place::start().at_line_start());
-        assert_eq!(Place::start().word, -1);
-        assert!(!Place::new(0, 0, 0).at_line_start());
+        assert_eq!(Place::start().word, None);
+        assert!(!Place::new(0, 0, Some(0)).at_line_start());
     }
 
     #[test]
     fn same_line_ignores_the_character() {
-        assert!(Place::new(1, 2, 0).same_line(Place::new(1, 2, 7)));
-        assert!(!Place::new(1, 2, 0).same_line(Place::new(1, 3, 0)));
-        assert!(!Place::new(1, 2, 0).same_line(Place::new(2, 2, 0)));
+        assert!(Place::new(1, 2, Some(0)).same_line(Place::new(1, 2, Some(7))));
+        assert!(!Place::new(1, 2, Some(0)).same_line(Place::new(1, 3, Some(0))));
+        assert!(!Place::new(1, 2, Some(0)).same_line(Place::new(2, 2, Some(0))));
     }
 
     #[test]
     fn a_range_normalizes_whichever_way_it_is_built() {
-        let lo = Place::new(0, 0, 1);
-        let hi = Place::new(0, 0, 5);
+        let lo = Place::new(0, 0, Some(1));
+        let hi = Place::new(0, 0, Some(5));
         assert_eq!(Range::new(lo, hi), Range::new(hi, lo));
         assert_eq!(Range::new(hi, lo).begin(), lo);
         assert_eq!(Range::new(hi, lo).end(), hi);
@@ -145,6 +148,6 @@ mod tests {
     #[test]
     fn an_empty_range_covers_nothing() {
         assert!(Range::empty_at(Place::start()).is_empty());
-        assert!(!Range::new(Place::start(), Place::new(0, 0, 0)).is_empty());
+        assert!(!Range::new(Place::start(), Place::new(0, 0, Some(0))).is_empty());
     }
 }

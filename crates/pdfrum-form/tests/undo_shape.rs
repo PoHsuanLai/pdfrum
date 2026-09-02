@@ -202,7 +202,7 @@ fn a_fresh_edit_after_an_undo_drops_the_redo_branch() {
 /// Redo carries no selection to restore, so it leaves the caret collapsed.
 #[test]
 fn an_item_carries_the_selection_from_before_the_edit() {
-    let before = Selection::new(Place::new(0, 0, 0), Place::new(0, 0, 3));
+    let before = Selection::new(Place::new(0, 0, Some(0)), Place::new(0, 0, Some(3)));
     let mut stack = UndoStack::default();
     stack.push(typed('X', before));
 

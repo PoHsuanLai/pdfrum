@@ -88,12 +88,11 @@ fn dump_element<R: Resolve>(
     // 7. Marked-content identifiers, through the *unfiltered* accessor: the
     // dump reports content on other pages too, which the page-filtered kid
     // list deliberately does not.
-    let count = element::marked_content_id_count(&element.dict, r);
-    for mcid_index in 0..count.max(0) {
-        let index = usize::try_from(mcid_index).unwrap_or(usize::MAX);
-        let id = element::marked_content_id_at(&element.dict, index, r);
-        if id != -1 {
-            let _ = writeln!(out, "{pad} MCID{mcid_index}: {id}");
+    // No `/K` at all means no loop, which the old `-1`-as-a-count spelled as
+    // `0..-1` being empty after a cast.
+    for index in 0..element::marked_content_id_count(&element.dict, r).unwrap_or(0) {
+        if let Some(id) = element::marked_content_id_at(&element.dict, index, r) {
+            let _ = writeln!(out, "{pad} MCID{index}: {id}");
         }
     }
 

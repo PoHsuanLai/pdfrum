@@ -33,6 +33,7 @@ pub mod place;
 pub mod split;
 
 use kurbo::Rect;
+use std::ops::Range;
 
 pub use bidi::Direction;
 
@@ -142,9 +143,6 @@ pub struct Word {
     /// The code point. A password field still records the real one; only its
     /// width and its output byte come from the substitute.
     pub ch: u32,
-    /// Which font in the map set it. Always zero here — the system-font slot
-    /// is permanently empty on this platform.
-    pub font_index: i32,
     /// Position, y-down from the plate's top-left.
     pub x: f32,
     /// Position, y-down from the plate's top-left.
@@ -156,12 +154,19 @@ pub struct Word {
 }
 
 /// One line of a section.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Line {
-    /// First word index, or `-1` for the single line of an empty section.
-    pub begin: i32,
-    /// Last word index, **inclusive**, or `-1`.
-    pub end: i32,
+    /// The words this line covers, **half-open**, or `None` for the single
+    /// line of an empty section.
+    ///
+    /// Was two public `i32` fields, `begin` and `end`, with `end`
+    /// **inclusive** and `-1` in both meaning "empty" — three ways to get it
+    /// wrong in one record, driving seven private `< 0` guards
+    /// (`docs/design/idiomatic-api.md` §C, Tier 2 item 11). One `Option` of a
+    /// half-open range replaces both fields: absence is the `None`, the
+    /// bounds cannot be crossed, and `for i in range` is the loop everyone
+    /// wanted to write.
+    pub words: Option<Range<u32>>,
     /// Position, y-down.
     pub x: f32,
     /// Position, y-down.
@@ -172,6 +177,32 @@ pub struct Line {
     pub ascent: f32,
     /// The deepest descent on the line, capped at zero.
     pub descent: f32,
+}
+
+impl Line {
+    /// The words this line covers, as a `usize` range clamped to `available`.
+    ///
+    /// Empty for the single line of an empty section, and for a `begin` past
+    /// the section's words — a layout that shrank under an edit.
+    #[must_use]
+    pub fn word_range(&self, available: usize) -> Range<usize> {
+        let Some(words) = self.words.clone() else {
+            return 0..0;
+        };
+        let begin = usize::try_from(words.start).unwrap_or(usize::MAX);
+        let end = usize::try_from(words.end).unwrap_or(usize::MAX);
+        if begin >= available {
+            return 0..0;
+        }
+        begin..end.min(available)
+    }
+
+    /// The **last** word index the line covers, if it covers any.
+    #[must_use]
+    pub fn last_word(&self) -> Option<u32> {
+        let words = self.words.clone()?;
+        words.end.checked_sub(1).filter(|last| *last >= words.start)
+    }
 }
 
 /// One paragraph.
@@ -223,14 +254,7 @@ impl Layout {
     pub fn words(&self) -> impl Iterator<Item = (usize, usize, &Word)> {
         self.sections.iter().enumerate().flat_map(|(s, section)| {
             section.lines.iter().enumerate().flat_map(move |(l, line)| {
-                let (begin, end) = (line.begin, line.end);
-                let range = if begin < 0 || end < begin {
-                    0..0
-                } else {
-                    let begin = usize::try_from(begin).unwrap_or(0);
-                    let end = usize::try_from(end).unwrap_or(0);
-                    begin..(end + 1).min(section.words.len())
-                };
+                let range = line.word_range(section.words.len());
                 section
                     .words
                     .get(range)
@@ -307,7 +331,6 @@ pub fn layout(text: &str, config: &Config, metrics: &Metrics<'_>) -> Layout {
                 .into_iter()
                 .map(|ch| Word {
                     ch,
-                    font_index: 0,
                     x: 0.0,
                     y: 0.0,
                     tail: 0.0,

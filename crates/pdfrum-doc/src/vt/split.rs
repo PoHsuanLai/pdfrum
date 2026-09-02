@@ -57,8 +57,7 @@ pub fn split_at_size(
         // line's height.
         if typeset {
             section.lines.push(crate::vt::Line {
-                begin: -1,
-                end: -1,
+                words: None,
                 x: 0.0,
                 y: 0.0,
                 width: 0.0,
@@ -187,8 +186,10 @@ pub fn split_at_size(
 /// One line record, with its placement left for the placement pass.
 fn line_of(head: usize, tail: usize, width: f32, ascent: f32, descent: f32) -> crate::vt::Line {
     crate::vt::Line {
-        begin: i32::try_from(head).unwrap_or(0),
-        end: i32::try_from(tail).unwrap_or(0),
+        // `tail` is the last index the line covers; the range is half-open.
+        words: Some(
+            u32::try_from(head).unwrap_or(0)..u32::try_from(tail).unwrap_or(0).saturating_add(1),
+        ),
         x: 0.0,
         y: 0.0,
         width,
@@ -209,7 +210,6 @@ mod tests {
                 .chars()
                 .map(|ch| Word {
                     ch: ch as u32,
-                    font_index: 0,
                     x: 0.0,
                     y: 0.0,
                     tail: 0.0,
@@ -227,9 +227,12 @@ mod tests {
         let config = Config::default();
         let got = split_at_size(&mut empty, &config, &stub::metrics(), true, 10.0);
         assert_eq!(empty.lines.len(), 1);
+        // The single line of an empty section covers no words at all, which
+        // used to be spelled `(begin, end) == (-1, -1)`.
         assert_eq!(
-            empty.lines.first().map(|l| (l.begin, l.end)),
-            Some((-1, -1))
+            empty.lines.first().map(|l| l.words.clone()),
+            Some(None),
+            "an empty section's one line covers nothing"
         );
         // Ascent 0.1 less descent -0.02 at size 10.
         assert!((geom::height(got) - 0.12).abs() < 1e-6, "{got:?}");
@@ -276,13 +279,15 @@ mod tests {
         let _ = split_at_size(&mut wrapped, &config, &stub::metrics(), true, 10.0);
         // A tenth per character into a quarter: two lines of two, then one.
         assert_eq!(wrapped.lines.len(), 3);
+        // Half-open now, so a line that used to read `(0, 1)` inclusive
+        // reads `0..2`.
         assert_eq!(
             wrapped
                 .lines
                 .iter()
-                .map(|l| (l.begin, l.end))
+                .map(|l| l.words.clone())
                 .collect::<Vec<_>>(),
-            [(0, 1), (2, 3), (4, 4)]
+            [Some(0..2), Some(2..4), Some(4..5)]
         );
     }
 
@@ -311,7 +316,12 @@ mod tests {
         let mut text = section("ab cd");
         let _ = split_at_size(&mut text, &config, &stub::metrics(), true, 10.0);
         assert_eq!(text.lines.len(), 2);
-        // The break falls after the space, not inside the second word.
-        assert_eq!(text.lines.first().map(|l| l.end), Some(2));
+        // The break falls after the space, not inside the second word: the
+        // first line's last character is index 2, so its half-open range ends
+        // at 3.
+        assert_eq!(
+            text.lines.first().and_then(crate::vt::Line::last_word),
+            Some(2)
+        );
     }
 }

@@ -44,7 +44,7 @@ pub fn output_lines(
 
     let mut pos_y = 0.0_f32;
     for index in 0..section.lines.len() {
-        let Some(line) = section.lines.get(index).copied() else {
+        let Some(line) = section.lines.get(index).cloned() else {
             continue;
         };
         let mut pos_x = offset_for(line.width);
@@ -53,15 +53,14 @@ pub fn output_lines(
             slot.x = pos_x - min_x;
             slot.y = pos_y;
         }
-        if line.begin < 0 {
+        let Some(words) = line.words.clone() else {
             // The single line of an empty section: nothing to place, but it
             // still advances the pen.
             pos_y -= line.descent;
             continue;
-        }
-        let begin = usize::try_from(line.begin).unwrap_or(0);
-        // The end index is inclusive, so a one-character line has begin == end.
-        let length = usize::try_from(line.end - line.begin + 1).unwrap_or(0);
+        };
+        let begin = usize::try_from(words.start).unwrap_or(0);
+        let length = usize::try_from(words.end.saturating_sub(words.start)).unwrap_or(0);
 
         let mut runs = resolver
             .as_ref()
@@ -125,7 +124,6 @@ mod tests {
                 .chars()
                 .map(|ch| Word {
                     ch: ch as u32,
-                    font_index: 0,
                     x: 0.0,
                     y: 0.0,
                     tail: 0.0,

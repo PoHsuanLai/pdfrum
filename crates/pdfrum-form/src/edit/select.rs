@@ -66,12 +66,12 @@ impl Selection {
             begin: Place {
                 section: u32::MAX,
                 line: u32::MAX,
-                word: -1,
+                word: None,
             },
             end: Place {
                 section: u32::MAX,
                 line: u32::MAX,
-                word: -1,
+                word: None,
             },
         }
     }
@@ -89,13 +89,13 @@ impl Selection {
             == Place {
                 section: u32::MAX,
                 line: u32::MAX,
-                word: -1,
+                word: None,
             }
             && self.end
                 == Place {
                     section: u32::MAX,
                     line: u32::MAX,
-                    word: -1,
+                    word: None,
                 }
     }
 
@@ -130,8 +130,8 @@ mod tests {
 
     #[test]
     fn a_selection_keeps_the_direction_it_was_built_with() {
-        let lo = Place::new(0, 0, 1);
-        let hi = Place::new(0, 0, 5);
+        let lo = Place::new(0, 0, Some(1));
+        let hi = Place::new(0, 0, Some(5));
         let forwards = Selection::new(lo, hi);
         let backwards = Selection::new(hi, lo);
 
@@ -145,7 +145,7 @@ mod tests {
     /// Both report empty; only one has an anchor to extend from.
     #[test]
     fn collapsed_and_reset_are_different_states() {
-        let here = Place::new(0, 0, 3);
+        let here = Place::new(0, 0, Some(3));
         let collapsed = Selection::collapsed_at(here);
         let reset = Selection::reset();
 
@@ -159,19 +159,19 @@ mod tests {
 
     #[test]
     fn extending_moves_only_the_active_end() {
-        let anchor = Place::new(0, 0, 1);
+        let anchor = Place::new(0, 0, Some(1));
         let mut sel = Selection::collapsed_at(anchor);
-        sel.set_active(Place::new(0, 0, 4));
+        sel.set_active(Place::new(0, 0, Some(4)));
 
         assert_eq!(sel.begin, anchor);
-        assert_eq!(sel.end, Place::new(0, 0, 4));
+        assert_eq!(sel.end, Place::new(0, 0, Some(4)));
         assert!(!sel.is_empty());
     }
 
     #[test]
     fn the_range_is_always_ordered() {
-        let sel = Selection::new(Place::new(0, 0, 7), Place::new(0, 0, 2));
+        let sel = Selection::new(Place::new(0, 0, Some(7)), Place::new(0, 0, Some(2)));
         assert!(sel.range().begin() <= sel.range().end());
-        assert_eq!(sel.range().begin(), Place::new(0, 0, 2));
+        assert_eq!(sel.range().begin(), Place::new(0, 0, Some(2)));
     }
 }

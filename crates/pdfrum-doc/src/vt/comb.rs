@@ -89,8 +89,7 @@ pub fn rearrange_char_array(section: &mut Section, config: &Config, metrics: &Me
     }
 
     section.lines.push(Line {
-        begin: 0,
-        end: i32::try_from(count.saturating_sub(1)).unwrap_or(0),
+        words: Some(0..u32::try_from(count).unwrap_or(u32::MAX)),
         x: line_x,
         y,
         width: x - line_x,
@@ -112,7 +111,6 @@ mod tests {
                 .chars()
                 .map(|ch| Word {
                     ch: ch as u32,
-                    font_index: 0,
                     x: 0.0,
                     y: 0.0,
                     tail: 0.0,

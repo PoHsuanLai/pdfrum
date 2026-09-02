@@ -94,7 +94,6 @@ mod tests {
                 .chars()
                 .map(|ch| Word {
                     ch: ch as u32,
-                    font_index: 0,
                     x: 0.0,
                     y: 0.0,
                     tail: 0.0,
