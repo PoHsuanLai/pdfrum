@@ -123,9 +123,13 @@ anything that converts into a `PageIndex`.
 
 **Form interaction** (M14). `FormSession` is the facade's *own* type over
 `pdfrum-form`'s state record: `new`, `with_config`, `with_context`,
-`with_config_in`, the `on_*` event methods, `force_kill_focus`,
+`with_config_in`, `apply(Event)` and the thin wrappers over it
+(`mouse_move`, `mouse_down`, `mouse_up`, `double_click`, `mouse_wheel`,
+`focus_at`, `key_down`, `character`), `blur`,
 `focused_annot`/`focused_text`, `focus_for_page`, `popup_for_page`,
-`scroll_view`, `choose`, `close_popup`, and `inner()` as the escape hatch.
+`scroll_view`, `choose`, `close_popup`. There is **no** escape hatch: `inner()`
+is gone (§WP5), because a power user wants a session of their own and
+`pdfrum-form` builds one.
 
 **JavaScript, behind the `script` feature** (M15 step 1, WP12). The facade has
 one cargo feature and it is off: `script = ["pdfrum-form/script"]`. Off, the
