@@ -634,7 +634,7 @@ const R6_PASSWORD_BYTES: usize = 127;
 /// Which spelling of a password unlocked a document.
 ///
 /// The authentication path tries a document's password in several spellings
-/// (see [`try_password`]) and this records the one that worked. This crate
+/// (see `try_password`) and this records the one that worked. This crate
 /// never *sets* a password — SPEC.md §3 keeps `/Encrypt` construction out of
 /// scope, and the save path re-uses the file key the original password already
 /// produced — so the value is reportable state rather than an input to
