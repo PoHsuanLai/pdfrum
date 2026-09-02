@@ -1,4 +1,4 @@
-# Design brief — `pdfrum-render` (+ `pdfrum-raster-vello`, `pdfrum-raster-tinyskia`)
+# Design brief — `pdfrum-render` (+ `pdfrum-raster-vello-cpu`, `pdfrum-raster-tinyskia`)
 
 **Contract:** SPEC.md §8. **Behavior source:** `core/fpdfapi/render/` (5 543 LOC)
 and the device half of `core/fxge/` (`cfx_renderdevice.cpp`, `cfx_path.cpp`,
@@ -2067,11 +2067,11 @@ backend.finish(device) -> Pixmap
 Every `render_*` is a free function taking `&RenderCtx` and `&mut dyn
 RenderDevice`; the only `dyn` in the crate, as STYLE §2b permits.
 
-### 3.2 `pdfrum-raster-vello`
+### 3.2 `pdfrum-raster-vello-cpu`
 
 ```
-crates/pdfrum-raster-vello/src/
-  lib.rs        // VelloBackend (RasterBackend), VelloDevice (RenderDevice)
+crates/pdfrum-raster-vello-cpu/src/
+  lib.rs        // VelloCpuBackend (RasterBackend), VelloCpuDevice (RenderDevice)
   convert.rs    // kurbo/peniko -> vello_cpu vocabulary; BlendMode mapping table
   layer.rs      // push_layer/pop over vello_cpu's own layer stack
 ```
@@ -2673,7 +2673,7 @@ recorded so the burn-down agent knows the fallback.**
 `vello_cpu` and `peniko` are absent from this machine's cargo registry and the
 network is unavailable, so §5.1's vello column and §4's assumption that
 vello_cpu offers native layers with blend+opacity+mask are **inferred, not
-verified**. Three things must be confirmed before `pdfrum-raster-vello` is
+verified**. Three things must be confirmed before `pdfrum-raster-vello-cpu` is
 written:
 (a) that `push_layer`/`pop_layer` accept a blend mode, an opacity **and** an
 8-bit mask (E8/§1.5 depend on all three);

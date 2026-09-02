@@ -33,7 +33,7 @@ else
 fi
 
 echo "==> pure-Rust check (no -sys / cc / cmake / pkg-config / bindgen)"
-# M12c scopes one exemption to `pdfrum-raster-vello-gpu` and bounds it two
+# M12c scopes one exemption to `pdfrum-raster-vello` and bounds it two
 # ways. The `cc`/`cmake`/`pkg-config`/`bindgen` half of the guarantee is NOT
 # relaxed — measured 2026-08-31, the whole vello/wgpu tree has none of them as
 # a build dependency, so no C is compiled and nothing below changes for them.

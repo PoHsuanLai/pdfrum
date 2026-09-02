@@ -74,7 +74,7 @@ right, and none of it is hidden. Reach past `pdfrum` whenever you need to.
 | `pdfrum-font` | `fpdfapi/font` + `fxge` | Font dictionaries, encodings, ToUnicode, glyph mapping; outlines via `skrifa`; substitution via `fontdb`; the glyph cache. |
 | `pdfrum-page` | `fpdfapi/page` | Content-stream interpreter → typed page-object graph; graphics state; colorspaces; PDF functions; patterns and shadings 1–7; the transparency model. |
 | `pdfrum-render` | `fpdfapi/render` + `fxge` | The `RenderDevice`/`RasterBackend` seam, the engine that walks the page graph, the layer compositor, image resampling. |
-| `pdfrum-raster-vello` | Skia backend | `vello_cpu` rasterizer. **Primary.** |
+| `pdfrum-raster-vello-cpu` | Skia backend | `vello_cpu` rasterizer. **Primary.** *(renamed 2026-09-02, was `pdfrum-raster-vello`)* |
 | `pdfrum-raster-tinyskia` | AGG backend | `tiny-skia` rasterizer. Cross-check and determinism baseline. |
 | `pdfrum-text` | `fpdftext` | Extraction, reading order, whitespace heuristics, search, selection, link detection. |
 | `pdfrum-doc` | `fpdfdoc` | Bookmarks, named destinations, links and actions, annotations with appearance generation, the AcroForm data model, the structure tree. |

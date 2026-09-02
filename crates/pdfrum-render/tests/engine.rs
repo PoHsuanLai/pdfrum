@@ -26,7 +26,7 @@ use pdfrum_page::{
     ShadingObject, TextRenderMode, Transparency,
 };
 use pdfrum_raster_tinyskia::TinySkiaBackend;
-use pdfrum_raster_vello::VelloBackend;
+use pdfrum_raster_vello_cpu::VelloCpuBackend;
 use pdfrum_render::{Pixmap, RenderOptions, render_page, render_page_with_visibility};
 
 /// A page of the given device size with no rotation and no transparency.
@@ -91,7 +91,7 @@ fn stroked(path: BezPath, rgb: [f32; 3], width: f32) -> PageObject {
 
 fn render_both(p: &Page, opts: &RenderOptions) -> (Pixmap, Pixmap) {
     let mut diags = Diagnostics::default();
-    let vello = render_page(p, opts, &VelloBackend::new(), &mut diags).expect("vello renders");
+    let vello = render_page(p, opts, &VelloCpuBackend::new(), &mut diags).expect("vello renders");
     let mut diags = Diagnostics::default();
     let tiny =
         render_page(p, opts, &TinySkiaBackend::new(), &mut diags).expect("tiny-skia renders");
@@ -482,7 +482,7 @@ fn a_page_too_large_for_a_backend_is_an_error_not_a_panic() {
     let err = render_page(
         &page(1000.0, 1000.0, Vec::new()),
         &opts,
-        &VelloBackend::new(),
+        &VelloCpuBackend::new(),
         &mut diags,
     )
     .expect_err("beyond the u16 target limit");

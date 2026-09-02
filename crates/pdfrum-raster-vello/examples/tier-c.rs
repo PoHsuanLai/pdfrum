@@ -28,13 +28,13 @@
 //! is that this does not quietly invent a friendlier metric for the backend it
 //! is grading.
 //!
-//! Run: `cargo run --release -p pdfrum-raster-vello-gpu --bin gpu-tier-c`
+//! Run: `cargo run --release -p pdfrum-raster-vello --bin gpu-tier-c`
 
 #[path = "shared/harness.rs"]
 mod harness;
 
 use pdfrum_raster_agg::AggBackend;
-use pdfrum_raster_vello_gpu::try_real_gpu;
+use pdfrum_raster_vello::try_real_gpu;
 use pdfrum_render::Pixmap;
 
 /// The per-channel difference an *edge* pixel may show without being counted.
@@ -56,7 +56,7 @@ fn main() {
     };
     let report = gpu.adapter_report();
     println!(
-        "# Tier C: pdfrum-raster-vello-gpu against pdfrum-raster-agg\n\
+        "# Tier C: pdfrum-raster-vello against pdfrum-raster-agg\n\
          # adapter: {}\n",
         report.map_or_else(|| "<unknown>".to_owned(), |r| r.to_string())
     );

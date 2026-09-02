@@ -35,7 +35,7 @@ thiserror.workspace = true
 
 [dev-dependencies]
 pdfrum-raster-tinyskia.workspace = true
-pdfrum-raster-vello.workspace = true
+pdfrum-raster-vello-cpu.workspace = true
 pdfrum-parser.workspace = true
 
 # M12 benches. This crate owns the six render groups: three backends x cold and warm,

@@ -26,7 +26,7 @@ Two footnotes outside the library tree:
   is a separate non-published workspace either way.
 - GPU `vello` speaks to OS graphics drivers via `wgpu` (system API calls, not
   vendored C). No longer a post-M8 decision: promoted into M12c and **landed**
-  as `pdfrum-raster-vello-gpu`. It is the single scoped exemption from the
+  as `pdfrum-raster-vello`. It is the single scoped exemption from the
   paragraph above, it is confined to that one crate, and the confinement is a
   CI check rather than a claim — see "The GPU exemption" under Rendering &
   geometry. Every *other* crate in this workspace remains pure Rust with no
@@ -47,14 +47,14 @@ Two footnotes outside the library tree:
 |---|---|---|
 | `kurbo` **lib** | Paths, affines, rects — the geometry vocabulary of the whole workspace | Linebender; the ecosystem-standard 2D geometry crate; arcs/beziers/flattening done right |
 | `peniko` **lib** | Brushes, gradients, blend modes, color | Shared vocabulary between our engine and both backends |
-| `vello_cpu` **lib** | Primary rasterizer (`pdfrum-raster-vello`) | Modern sparse-strip CPU renderer; SIMD + multithreaded; native layers/masks/blends; "feature-rich, ready for production use cases" per Linebender, API still moving — pin exactly, wrap fully behind `RenderDevice` |
+| `vello_cpu` **lib** | Primary rasterizer (`pdfrum-raster-vello-cpu`, renamed 2026-09-02, was `pdfrum-raster-vello`) | Modern sparse-strip CPU renderer; SIMD + multithreaded; native layers/masks/blends; "feature-rich, ready for production use cases" per Linebender, API still moving — pin exactly, wrap fully behind `RenderDevice` |
 | `tiny-skia` **lib** | Cross-check rasterizer (`pdfrum-raster-tinyskia`) | Mature, deterministic Skia-CPU port (resvg's engine); Tier-C referee against vello_cpu |
 | *(none)* | Parity rasterizer (`pdfrum-raster-agg`, renamed 2026-09-02, was `pdfrum-raster-exact`) | **Adds no dependency.** The analytic backend is written against `kurbo` and `peniko` alone — both already in this table — because the thing it exists to control is precisely what a third-party rasterizer decides for itself: how a partially covered pixel is quantised. Wrapping a fourth crate would reintroduce the question |
-| `vello` **lib, scoped** | GPU backend (`pdfrum-raster-vello-gpu`) — M12c | Same peniko/kurbo types the engine already speaks. **The one exemption from the pure-Rust guarantee**; its blast radius and the checks that bound it are below. Pinned `=0.10.0`, which resolves `wgpu` **29** — see the version note |
+| `vello` **lib, scoped** | GPU backend (`pdfrum-raster-vello`, renamed 2026-09-02, was `pdfrum-raster-vello-gpu`) — M12c | Same peniko/kurbo types the engine already speaks. **The one exemption from the pure-Rust guarantee**; its blast radius and the checks that bound it are below. Pinned `=0.10.0`, which resolves `wgpu` **29** — see the version note |
 
 ### The GPU exemption: extent, and the checks that bound it
 
-`wgpu` reaches the platform's graphics drivers, so `pdfrum-raster-vello-gpu` is
+`wgpu` reaches the platform's graphics drivers, so `pdfrum-raster-vello` is
 the only crate here that is not pure Rust to the syscall layer. PLAN.md §M12c
 grants that on one argument — pdfrum's likely consumer is a wgpu-backed Rust
 GUI that already holds an open device — and bounds it two ways. Both bounds are
@@ -89,7 +89,7 @@ injection works today **only for a caller on `wgpu` 29** — and neither
 shared-device benefit that justifies this exemption is currently unavailable to
 the frontends it was justified by, and arrives when vello bumps. Depend on
 `wgpu` only *through* `vello` so our manifest cannot disagree with it, and use
-the crate's re-exported `pdfrum_raster_vello_gpu::wgpu`. Full argument and the
+the crate's re-exported `pdfrum_raster_vello::wgpu`. Full argument and the
 compiler output that proves it: docs/status/M12c.md §1.
 
 ## Fonts

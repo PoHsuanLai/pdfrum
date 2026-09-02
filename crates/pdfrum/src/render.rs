@@ -15,8 +15,10 @@ pub enum Backend {
     /// `vello_cpu` — the default. A modern sparse-strip rasterizer with SIMD
     /// throughout, pinned to a fixed instruction level so its output does not
     /// change with the host CPU.
+    ///
+    /// Renamed 2026-09-02, was `Vello`.
     #[default]
-    Vello,
+    VelloCpu,
     /// `tiny-skia` — a mature Skia CPU port, and this project's determinism
     /// baseline. Kept as a cross-check: where the two disagree, the bug is in
     /// a backend rather than in the engine.

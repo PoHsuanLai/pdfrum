@@ -14,21 +14,21 @@
 //! side." So this reports the **crossover** rather than a single ratio, and
 //! sorts by it.
 //!
-//! The CPU column is `pdfrum-raster-vello` (`vello_cpu`), the facade's default
+//! The CPU column is `pdfrum-raster-vello-cpu` (`vello_cpu`), the facade's default
 //! and the backend an API user actually gets. `pdfrum-raster-agg` is the
 //! conformance default but has no SIMD and does not try to be fast, so timing
 //! against it would flatter the GPU for a reason that has nothing to do with
 //! the GPU. §7's *correctness* column uses `exact` for the opposite reason.
 //!
-//! Run: `cargo run --release -p pdfrum-raster-vello-gpu --example bench`
+//! Run: `cargo run --release -p pdfrum-raster-vello --example bench`
 
 #[path = "shared/harness.rs"]
 mod harness;
 
 use std::time::Duration;
 
-use pdfrum_raster_vello::VelloBackend;
-use pdfrum_raster_vello_gpu::try_real_gpu;
+use pdfrum_raster_vello::try_real_gpu;
+use pdfrum_raster_vello_cpu::VelloCpuBackend;
 
 /// How many timed renders each document gets.
 ///
@@ -52,7 +52,7 @@ fn main() {
          # median of {ITERATIONS} renders, one pixel per PDF point\n",
         report.map_or_else(|| "<unknown>".to_owned(), |r| r.to_string())
     );
-    let cpu = VelloBackend::new();
+    let cpu = VelloCpuBackend::new();
 
     println!(
         "{:<28} {:>9} {:>10} {:>10} {:>8} {:>7}",

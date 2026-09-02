@@ -56,7 +56,7 @@ fn backend(s: &str) -> Option<Backend> {
     match s {
         "exact" => Some(Backend::Agg),
         "tinyskia" | "tiny-skia" => Some(Backend::TinySkia),
-        "vello" | "vello_cpu" => Some(Backend::Vello),
+        "vello" | "vello_cpu" => Some(Backend::VelloCpu),
         _ => None,
     }
 }
@@ -233,10 +233,10 @@ fn timed_render(args: &Args, bytes: &Arc<[u8]>) {
                     &mut caches,
                     &mut diags,
                 ),
-                pdfrum::Backend::Vello => pdfrum_render::render_page_with_caches(
+                pdfrum::Backend::VelloCpu => pdfrum_render::render_page_with_caches(
                     graph,
                     &inner,
-                    &timed::TimedBackend(pdfrum_raster_vello::VelloBackend::new()),
+                    &timed::TimedBackend(pdfrum_raster_vello_cpu::VelloCpuBackend::new()),
                     &mut caches,
                     &mut diags,
                 ),

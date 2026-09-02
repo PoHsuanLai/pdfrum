@@ -1613,8 +1613,8 @@ fn compare_backends_inner(
     let Some(tiny) = render_with(tool, &input, "tiny-skia") else {
         return TierCOutcome::skipped(id, "tiny-skia produced nothing".to_owned());
     };
-    let Some(vello) = render_with(tool, &input, "vello") else {
-        return TierCOutcome::skipped(id, "vello produced nothing".to_owned());
+    let Some(vello) = render_with(tool, &input, "vello-cpu") else {
+        return TierCOutcome::skipped(id, "vello_cpu produced nothing".to_owned());
     };
     // The third backend is rendered but not gated on: see
     // `TierCOutcome::agg_edge_rate` for why it is a reported column. A file

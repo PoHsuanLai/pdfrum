@@ -13,13 +13,13 @@
 
 use kurbo::{Affine, BezPath, Rect};
 use pdfrum_page::BlendMode;
-use pdfrum_raster_vello_gpu::{Error, VelloGpuBackend, try_real_gpu};
+use pdfrum_raster_vello::{Error, VelloBackend, try_real_gpu};
 use pdfrum_render::{
     AlphaMask, AntiAlias, Brush, FillRule, ImageQuality, Pixmap, RasterBackend, RenderDevice,
 };
 
 /// A backend on this machine's GPU, or `None` with the reason printed.
-fn gpu() -> Option<VelloGpuBackend<'static>> {
+fn gpu() -> Option<VelloBackend<'static>> {
     let found = try_real_gpu();
     if found.is_none() {
         println!("skipping: no hardware wgpu adapter on this machine");
@@ -312,7 +312,7 @@ fn an_image_lands_on_its_own_pixel_grid() {
 #[test]
 fn a_translucent_image_needs_no_wrapping_layer() {
     // `vello_cpu 0.2.0` panics on a sampler alpha below one and
-    // `pdfrum-raster-vello` wraps every such draw in an opacity layer. GPU
+    // `pdfrum-raster-vello-cpu` wraps every such draw in an opacity layer. GPU
     // vello encodes the multiplier in the draw tag, so the wrapper is not
     // needed here — asserted rather than assumed, because adding it back
     // "for symmetry" would change the rounding.
