@@ -26,7 +26,9 @@ reports `0 files compared`, that is the reason; pass `--tool` explicitly.
 every row as `missing-golden` **and still exits 0** — `--check-regressions`
 cannot regress against nothing. From a worktree, pass the main checkout's
 directory explicitly: `--goldens /mnt/data2/pdfium/pdfrum/conformance/goldens`.
-`--checkout` resolves the same way and needs the same treatment. A board that
+`--checkout` resolves the same way and needs the same treatment; the oracle
+checkout is `/mnt/data2/pdfium/pdfium-c++` (its parent directory is the same
+silent zero). A board that
 reports no passes and no failures has not run — and it has still overwritten
 `conformance/scoreboard.json` on the way out, so restore that from git before
 the next `--check-regressions` — or write a trial run to `--out` under a
