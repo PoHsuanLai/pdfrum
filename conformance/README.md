@@ -21,6 +21,13 @@ than a flag diff.
 a workspace with a redirected `CARGO_TARGET_DIR` puts it. When `tier-c`
 reports `0 files compared`, that is the reason; pass `--tool` explicitly.
 
+`--goldens` has the same shape of trap. `conformance/goldens/` is
+`.gitignore`d, so a fresh worktree has none, and a run without the flag reads
+every row as `missing-golden` **and still exits 0** — `--check-regressions`
+cannot regress against nothing. From a worktree, pass the main checkout's
+directory explicitly: `--goldens /mnt/data2/pdfium/pdfrum/conformance/goldens`.
+A board that reports no passes and no failures has not run.
+
 `--limit N` truncates the corpus listing to its first `N` entries. It is a
 smoke-test switch, not a filter: there is no way to select a named file.
 

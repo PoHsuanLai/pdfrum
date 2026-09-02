@@ -2283,6 +2283,29 @@ Either:
   precisely: “this crate never runs scripts; `pdfrum-form`’s `script`
   feature does.”
 
+> **Ruled 2026-09-02: the first option, landed as `a1b72a2`.** The user's
+> framing was that this is not a product decision but the ordinary Rust
+> convention — document that a feature exists, off by default, and that
+> enabling it turns the behaviour on — and that the security sentence stays
+> as the *reason for the default*, not as a permanence claim. What landed:
+> a default-off `script` feature on `pdfrum` forwarding to
+> `pdfrum-form/script`; `FormSession::with_cascade(doc, impl Cascade)`
+> **unconditionally**, with `Cascade`, `NoScripts` and the keystroke types
+> re-exported without a gate because they sit in a public facade signature
+> (WP7's rule); `with_scripts`/`scripts()` and nine `Script*` re-exports
+> behind the feature; a second baseline `pdfrum+script.txt` because the
+> crate's own `# Features` section tells an embedder to turn it on; and a
+> fifth `check-no-boa.nu` assertion that the facade's feature is not vacuous.
+> Two findings on the way: **there was no existing `/AA` wiring to copy** —
+> `set_field`/`set_calculation_order` had zero non-test callers, and the
+> tool's transcript path handles document-open scripts only — so the facade
+> now installs field actions per page at page-read time; and two
+> `pdfrum-form` defects were measured and recorded in
+> `docs/status/pdfrum-facade.md` §7–8 rather than fixed here (a format
+> script's output is computed and dropped; `FieldRef::index` conflates a
+> page-local id with a `/Fields` position). The `pdfrum-facade.md`
+> `Backend` staleness named below is fixed in the same commit.
+
 Stale docs are an API bug. Same pass: `docs/status/pdfrum-facade.md` still
 lists `RenderOptions::backend` and `Backend { Vello, TinySkia }`, which
 were withdrawn 2026-09-02.
