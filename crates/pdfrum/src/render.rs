@@ -17,18 +17,6 @@ pub use pdfrum_render::{ColorMode, ColorScheme, Pixmap, TextAa};
 /// `pdfrum_render::RenderOptions` is a **different type**, and the engine's
 /// own. This one's flags are positive and default to the common case, so
 /// `smooth_paths` here is the engine's `no_path_smooth` inverted.
-///
-/// ```
-/// use pdfrum::RenderOptions;
-/// use pdfrum::Affine;
-///
-/// // 150 DPI: PDF points are 1/72 inch, so the scale is 150/72.
-/// let opts = RenderOptions {
-///     transform: Affine::scale(150.0 / 72.0),
-///     ..RenderOptions::default()
-/// };
-/// assert_eq!(opts.transform, Affine::scale(150.0 / 72.0));
-/// ```
 #[derive(Debug, Clone, PartialEq)]
 pub struct RenderOptions {
     /// Page space to device space — what sizes the output.

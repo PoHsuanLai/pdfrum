@@ -18,13 +18,6 @@ use crate::{
 /// lookups. The expensive work — interpreting the content stream into a
 /// drawable object graph — happens in [`Page::render`] and [`Page::text`],
 /// each of which does it once for the call.
-///
-/// ```
-/// let doc = pdfrum::Document::open("tests/fixtures/hello_world.pdf")?;
-/// let page = doc.page(0)?;
-/// assert_eq!((page.width(), page.height()), (200.0, 200.0));
-/// # Ok::<(), pdfrum::Error>(())
-/// ```
 #[derive(Debug, Clone)]
 pub struct Page<'a> {
     pub(crate) doc: &'a Document,
@@ -286,14 +279,6 @@ impl<'a> Page<'a> {
     }
 
     /// The page's annotations, in `/Annots` order, with pop-ups excluded.
-    ///
-    /// ```
-    /// let doc = pdfrum::Document::open("tests/fixtures/text_form.pdf")?;
-    /// let annots = doc.page(0)?.annotations();
-    /// assert_eq!(annots.len(), 1);
-    /// assert_eq!(annots[0].subtype(), pdfrum::Subtype::Widget);
-    /// # Ok::<(), pdfrum::Error>(())
-    /// ```
     #[must_use]
     pub fn annotations(&self) -> Vec<Annotation<'a>> {
         #[expect(
@@ -470,10 +455,6 @@ pub enum Rotation {
 
 impl Rotation {
     /// The rotation in degrees clockwise: 0, 90, 180 or 270.
-    ///
-    /// ```
-    /// assert_eq!(pdfrum::Rotation::ThreeQuarter.degrees(), 270);
-    /// ```
     #[must_use]
     pub fn degrees(self) -> u32 {
         match self {

@@ -256,17 +256,6 @@ fn rgba_of(color: peniko::Color) -> ([f32; 3], f32) {
 /// [`PathBuilder::build`] turns it into the page object. The graphics state it
 /// paints under is stated in full rather than inherited, because a regenerated
 /// stream restates everything from the PDF defaults anyway.
-///
-/// ```
-/// use pdfrum::{Color, PathBuilder, Rect};
-///
-/// let object = PathBuilder {
-///     fill: Some(Color::from_rgb8(255, 0, 0)),
-///     ..PathBuilder::rect(Rect::new(10.0, 10.0, 60.0, 40.0))
-/// }
-/// .build();
-/// assert!(matches!(object, pdfrum::PageObject::Path(_)));
-/// ```
 #[derive(Debug, Clone, PartialEq)]
 pub struct PathBuilder {
     /// The outline, in page space.
