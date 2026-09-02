@@ -162,4 +162,16 @@ pub pdfrum_common::Limits::max_xref_size: u32
 pub pdfrum_common::Limits::startxref_scan: u64
 impl core::default::Default for pdfrum_common::Limits
 pub fn pdfrum_common::Limits::default() -> Self
+pub struct pdfrum_common::PdfVersion
+pub pdfrum_common::PdfVersion::major: u8
+pub pdfrum_common::PdfVersion::minor: u8
+impl pdfrum_common::PdfVersion
+pub const pdfrum_common::PdfVersion::PDF_1_0: Self
+pub const pdfrum_common::PdfVersion::PDF_1_4: Self
+pub const pdfrum_common::PdfVersion::PDF_1_5: Self
+pub const pdfrum_common::PdfVersion::PDF_1_7: Self
+pub const pdfrum_common::PdfVersion::PDF_2_0: Self
+pub const fn pdfrum_common::PdfVersion::new(u8, u8) -> Self
+impl core::fmt::Display for pdfrum_common::PdfVersion
+pub fn pdfrum_common::PdfVersion::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub type pdfrum_common::FxBuildHasher = core::hash::BuildHasherDefault<pdfrum_common::FxHasher>

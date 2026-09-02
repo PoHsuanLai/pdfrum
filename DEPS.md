@@ -41,6 +41,18 @@ Two footnotes outside the library tree:
 - Library crates depend only on rows marked **lib**; rows marked *tool/test*
   never appear in a library crate's `Cargo.toml`.
 
+### Workspace-internal edges
+
+This file's tables are the **external** set, and they are closed. Edges
+*between* workspace members are governed instead by README.md's rule —
+"dependencies flow strictly leaf-to-root; nothing below `pdfrum-page` may
+depend on rendering" — and adding one is a `[spec]` change on the same
+protocol (SPEC.md §0), recorded here so the graph has one place to read.
+
+| Added | Edge | Why |
+|---|---|---|
+| 2026-09-02, WP1 step 4 | `pdfrum` → `pdfrum-crypt` | The facade names `pdfrum_crypt::Permissions` in `Document::permissions` and `Document::owner_permissions`, and re-exports it, so it depends on the crate that owns the type rather than laundering it through `pdfrum-parser`. **No external crate reaches the tree**: `pdfrum-crypt` was already there transitively through the parser, so the facade's `cargo tree` is unchanged. The alternative — `pdfrum-form` depending on `pdfrum-crypt` so the form's own `Permissions` could gain a `From` — was declined: it would pull `aes`, `cbc`, `cipher`, `md-5`, `sha1`, `sha2` and `unicode-normalization` into a crate about widget interaction, for two booleans. |
+
 ## Rendering & geometry
 
 | Crate | Use | Why this one |

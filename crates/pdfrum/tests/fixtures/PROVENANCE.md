@@ -55,3 +55,12 @@ is not read by a default build: `tests/form_scripts.rs` is behind
 | File | Size | What it exercises |
 |---|---:|---|
 | `public_methods.pdf` | 30 KB | `testing/resources/javascript/public_methods.pdf`, verbatim. One `/Tx` field named `Text Box` whose `/AA` carries **all four hooks** — `/C`, `/F`, `/K` and `/V` — which makes it the one file in the oracle's corpus that exercises every wire `FormSession::with_scripts` installs. Its `/AA /K` opens with an `app.alert` naming itself, and that line is what the seam test keys on: it is produced by the document's own JavaScript and by nothing else. It is by far the largest fixture here, and that is the trade — every smaller `/AA` fixture in the corpus either carries one hook or needs the `Doc`/`Field` object model M15 has not built (`this.getField(…)`), and a fixture whose script cannot run proves nothing about a seam. |
+
+One arrived with WP1's `Error::WrongPassword`
+(`docs/design/idiomatic-api.md` §WP1), because a doctest that shows a caller
+matching that variant needs a file that produces it, and until now none of
+these was encrypted:
+
+| File | Size | What it exercises |
+|---|---:|---|
+| `encrypted.pdf` | 10564 B | A one-page linearized 1.6 document under the standard handler at revision 4 (`/V 4`, `/CFM /AESV2`), `/P -3392`, opening with the user password `1234` or the owner password `5678` and refusing everything else. `/P` grants exactly one of ISO 32000-1 table 22's eight named bits — bit 10, accessibility extraction — so it is also the only fixture where [`Document::permissions`] is not `Permissions::ALL`, and the only one where the owner's view and the user's differ. |

@@ -56,9 +56,10 @@ pub fn pdfrum_crypt::SecurityHandler::embedded_cipher(&self) -> core::option::Op
 pub fn pdfrum_crypt::SecurityHandler::encrypt(&self, pdfrum_object::object::ObjRef, pdfrum_crypt::CryptClass, pdfrum_crypt::Iv, &[u8]) -> alloc::vec::Vec<u8>
 pub fn pdfrum_crypt::SecurityHandler::encrypt_metadata(&self) -> bool
 pub fn pdfrum_crypt::SecurityHandler::from_encrypt_dict(&pdfrum_object::dict::Dict, &[u8], &[u8], &impl pdfrum_object::resolve::Resolve) -> core::result::Result<Self, pdfrum_crypt::Error>
+pub fn pdfrum_crypt::SecurityHandler::owner_permissions(&self) -> pdfrum_crypt::Permissions
 pub fn pdfrum_crypt::SecurityHandler::owner_unlocked(&self) -> bool
 pub fn pdfrum_crypt::SecurityHandler::password_encoding(&self) -> pdfrum_crypt::PasswordEncoding
-pub fn pdfrum_crypt::SecurityHandler::permissions(&self, bool) -> u32
+pub fn pdfrum_crypt::SecurityHandler::permissions(&self) -> pdfrum_crypt::Permissions
 pub fn pdfrum_crypt::SecurityHandler::revision(&self) -> u8
 pub const fn pdfrum_crypt::SecurityHandler::strings_identity(&self) -> bool
 pub struct pdfrum_crypt::EncryptParams
@@ -78,6 +79,20 @@ pub pdfrum_crypt::EncryptParams::version: i64
 pub struct pdfrum_crypt::Iv(pub [u8; 16])
 impl pdfrum_crypt::Iv
 pub const fn pdfrum_crypt::Iv::bytes(&self) -> &[u8; 16]
+pub struct pdfrum_crypt::Permissions
+pub pdfrum_crypt::Permissions::annotate: bool
+pub pdfrum_crypt::Permissions::assemble: bool
+pub pdfrum_crypt::Permissions::copy: bool
+pub pdfrum_crypt::Permissions::extract: bool
+pub pdfrum_crypt::Permissions::fill_form: bool
+pub pdfrum_crypt::Permissions::modify: bool
+pub pdfrum_crypt::Permissions::print: bool
+pub pdfrum_crypt::Permissions::print_high_quality: bool
+impl pdfrum_crypt::Permissions
+pub const pdfrum_crypt::Permissions::ALL: Self
+pub const pdfrum_crypt::Permissions::NONE: Self
+pub const fn pdfrum_crypt::Permissions::bits(self) -> u32
+pub const fn pdfrum_crypt::Permissions::from_bits(u32) -> Self
 pub struct pdfrum_crypt::SmallKey
 impl pdfrum_crypt::SmallKey
 pub const pdfrum_crypt::SmallKey::MAX_LEN: usize

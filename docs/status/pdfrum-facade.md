@@ -24,7 +24,7 @@ facade's own types.
 `outline() -> Outline`, `metadata() -> Metadata`, `xmp_metadata()`,
 `form() -> Option<Form>`, `attachments() -> Vec<Attachment>`,
 `diagnostics()` (load-time) and `all_diagnostics()` (running total),
-`version`, `is_encrypted`, `permissions(owner)`,
+`version`, `is_encrypted`, `permissions`, `owner_permissions`,
 `xref_was_rebuilt`, `bytes`, and the escape hatch `parser()`.
 
 **Page.** `index`, `width`/`height` (rotation applied), `media_box`,

@@ -329,6 +329,18 @@ pub use pdfrum_doc::{Action, ActionKind, Dest, Link};
 /// Returned by [`Document::diagnostics`].
 pub use pdfrum_common::{DiagKind, Diagnostic, Diagnostics, Limits, Severity};
 
+/// The version a header declares, and the one a save writes back.
+///
+/// Named by [`Document::version`] and [`SaveOptions::version`].
+pub use pdfrum_common::PdfVersion;
+
+/// What a document's security handler permits — eight questions, not a
+/// bitfield.
+///
+/// Returned by [`Document::permissions`] and
+/// [`Document::owner_permissions`].
+pub use pdfrum_crypt::Permissions;
+
 /// 2D geometry — `Rect`, `Point`, `Affine`, `BezPath`.
 ///
 /// Re-exported so callers need not depend on `kurbo` themselves to name the

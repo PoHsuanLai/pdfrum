@@ -16,7 +16,7 @@
 //! // A document with no /Encrypt needs no handler: payloads pass through.
 //! let handler = SecurityHandler::Identity;
 //! assert_eq!(handler.decrypt(ObjRef::new(1, 0), CryptClass::Stream, b"raw"), b"raw");
-//! assert_eq!(handler.permissions(false), 0xFFFF_FFFF);
+//! assert_eq!(handler.permissions(), pdfrum_crypt::Permissions::ALL);
 //! # let _ = (Dict::new(), NoResolve);
 //! ```
 //!
@@ -60,6 +60,7 @@
 
 mod key;
 mod object;
+mod permissions;
 mod primitives;
 mod rc4;
 mod saslprep;
@@ -70,6 +71,7 @@ mod test_fixtures;
 
 pub use key::SmallKey;
 pub use object::{CryptClass, Iv};
+pub use permissions::Permissions;
 pub use primitives::sha1;
 pub use rc4::rc4;
 pub use standard::{Cipher, EncryptParams, PAD, PasswordEncoding, parse_encrypt_dict};
@@ -534,6 +536,45 @@ impl SecurityHandler {
         }
     }
 
+    /// What the document permits, for the password that opened it.
+    ///
+    /// A document opened with the **owner** password reports what `/P`
+    /// allows, the same as a user reading of it; the owner's own unrestricted
+    /// view is [`SecurityHandler::owner_permissions`]. An unencrypted document
+    /// has no restrictions at all.
+    ///
+    /// Was `permissions(owner: bool) -> u32` — a boolean mode argument
+    /// selecting between two answers, plus a raw ISO bitfield the caller had
+    /// to decode. `docs/design/idiomatic-api.md` §WP1 splits the mode into two
+    /// named methods and §A.3 moves the table-22 decode here, next to the
+    /// `/P` word, out of the facade that used to spell `bits & 0x100`.
+    ///
+    /// ```
+    /// # use pdfrum_crypt::{Permissions, SecurityHandler};
+    /// assert_eq!(SecurityHandler::Identity.permissions(), Permissions::ALL);
+    /// ```
+    #[must_use]
+    pub fn permissions(&self) -> Permissions {
+        Permissions::from_bits(self.permission_word(false))
+    }
+
+    /// What the document permits under the owner's view.
+    ///
+    /// A document the **owner password** opened reports every permission
+    /// granted here, whatever `/P` says, because the owner may lift every
+    /// restriction. For a document the user password opened — and for an
+    /// unencrypted one — this is the same answer as
+    /// [`SecurityHandler::permissions`].
+    ///
+    /// ```
+    /// # use pdfrum_crypt::{Permissions, SecurityHandler};
+    /// assert_eq!(SecurityHandler::Identity.owner_permissions(), Permissions::ALL);
+    /// ```
+    #[must_use]
+    pub fn owner_permissions(&self) -> Permissions {
+        Permissions::from_bits(self.permission_word(true))
+    }
+
     /// The permission word as the C++ reports it.
     ///
     /// `owner` selects the owner-unlocked override: a document opened with
@@ -544,12 +585,12 @@ impl SecurityHandler {
     ///
     /// An unencrypted document has no restrictions at all.
     ///
-    /// ```
-    /// # use pdfrum_crypt::SecurityHandler;
-    /// assert_eq!(SecurityHandler::Identity.permissions(false), 0xFFFF_FFFF);
-    /// ```
-    #[must_use]
-    pub fn permissions(&self, owner: bool) -> u32 {
+    /// Private: the word itself is `pdfrum-crypt`'s business, and the two
+    /// public methods above are the whole of what leaves the crate. The
+    /// forcing is kept exactly as the C++ has it because it is behaviour —
+    /// clearing bits 1 and 2 is what makes `/P 4092` and `/P 4095` report
+    /// alike — and only the channel changed.
+    fn permission_word(&self, owner: bool) -> u32 {
         let (permissions, owner_unlocked) = match self {
             Self::Identity => return 0xFFFF_FFFF,
             Self::Rc4V2 {
@@ -682,7 +723,7 @@ fn signature_valued(dict: &Dict, key: &Name) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{CryptClass, Error, Iv, SecurityHandler, is_signature_dict};
+    use super::{CryptClass, Error, Iv, Permissions, SecurityHandler, is_signature_dict};
     use crate::standard::Cipher;
     use crate::test_fixtures::{self, unhex};
     use pdfrum_object::{Dict, Name, NoResolve, ObjRef, Object, PdfString, names};
@@ -709,15 +750,15 @@ mod tests {
             .expect("the user password");
         assert!(matches!(user, SecurityHandler::AesV4 { .. }));
         assert!(!user.owner_unlocked());
-        assert_eq!(user.permissions(false), 0xFFFF_F2C0);
-        assert_eq!(user.permissions(true), 0xFFFF_F2C0);
+        assert_eq!(user.permission_word(false), 0xFFFF_F2C0);
+        assert_eq!(user.permission_word(true), 0xFFFF_F2C0);
         assert_eq!(user.revision(), 4);
 
         let owner = SecurityHandler::from_encrypt_dict(&dict, &id, b"5678", &NoResolve)
             .expect("the owner password");
         assert!(owner.owner_unlocked());
-        assert_eq!(owner.permissions(true), 0xFFFF_FFFC);
-        assert_eq!(owner.permissions(false), 0xFFFF_F2C0);
+        assert_eq!(owner.permission_word(true), 0xFFFF_FFFC);
+        assert_eq!(owner.permission_word(false), 0xFFFF_F2C0);
     }
 
     #[test]
@@ -824,13 +865,13 @@ mod tests {
         let owner = SecurityHandler::from_encrypt_dict(&dict, &[], b"b", &NoResolve)
             .expect("the owner password");
         assert!(owner.owner_unlocked());
-        assert_eq!(owner.permissions(true), 0xFFFF_FFFC);
-        assert_eq!(owner.permissions(false), 0xFFFF_FFFC);
+        assert_eq!(owner.permission_word(true), 0xFFFF_FFFC);
+        assert_eq!(owner.permission_word(false), 0xFFFF_FFFC);
 
         let user = SecurityHandler::from_encrypt_dict(&dict, &[], b"a", &NoResolve)
             .expect("the user password");
         assert!(!user.owner_unlocked());
-        assert_eq!(user.permissions(false), 0xFFFF_FFFC);
+        assert_eq!(user.permission_word(false), 0xFFFF_FFFC);
         // Both roles reach the same file key, since /OE and /UE wrap it.
         assert_eq!(
             format!("{:?}", (owner.revision(), user.revision())),
@@ -1066,8 +1107,8 @@ mod tests {
     #[test]
     fn identity_reports_no_restrictions_and_no_revision() {
         let handler = SecurityHandler::Identity;
-        assert_eq!(handler.permissions(false), 0xFFFF_FFFF);
-        assert_eq!(handler.permissions(true), 0xFFFF_FFFF);
+        assert_eq!(handler.permission_word(false), 0xFFFF_FFFF);
+        assert_eq!(handler.permission_word(true), 0xFFFF_FFFF);
         assert_eq!(handler.revision(), 0);
         assert!(handler.encrypt_metadata());
         assert!(!handler.owner_unlocked());
@@ -1079,13 +1120,48 @@ mod tests {
         let id = unhex("1B0FD0F5E29AD84DBF67775E9E3B009F");
         let handler = SecurityHandler::from_encrypt_dict(&dict, &id, b"1234", &NoResolve)
             .expect("the user password");
-        let reported = handler.permissions(false);
+        let reported = handler.permission_word(false);
         assert_eq!(reported & 0b11, 0, "the two reserved bits are cleared");
         assert_eq!(
             reported & 0xFFFF_F0C0,
             0xFFFF_F0C0,
             "the forced bits are set"
         );
+    }
+
+    // The two public methods are the private word, decoded. This is the
+    // assertion the facade used to make for itself with `bits & 0x100`
+    // (`docs/design/idiomatic-api.md` §A.3): the AESV2 fixture's `/P` reports
+    // `0xFFFF_F2C0`, which grants neither form filling (bit 9) nor annotation
+    // modification (bit 6) — and the owner's view of the same document grants
+    // everything.
+    #[test]
+    fn the_public_methods_decode_the_word_the_private_one_reports() {
+        let dict = test_fixtures::encrypted_pdf_dict();
+        let id = unhex("1B0FD0F5E29AD84DBF67775E9E3B009F");
+
+        let user = SecurityHandler::from_encrypt_dict(&dict, &id, b"1234", &NoResolve)
+            .expect("the user password");
+        let granted = user.permissions();
+        assert_eq!(granted, Permissions::from_bits(user.permission_word(false)));
+        // `0xFFFF_F2C0` sets exactly one of table 22's eight named bits — 10,
+        // accessibility extraction. Neither of the two the form session asks
+        // about is granted, and neither is printing.
+        assert_eq!(
+            granted,
+            Permissions {
+                extract: true,
+                ..Permissions::NONE
+            }
+        );
+        // The user's own owner view is still the user's, since the user
+        // password opened it, not the owner's.
+        assert_eq!(user.owner_permissions(), granted);
+
+        let owner = SecurityHandler::from_encrypt_dict(&dict, &id, b"5678", &NoResolve)
+            .expect("the owner password");
+        assert_eq!(owner.owner_permissions(), Permissions::ALL);
+        assert_eq!(owner.permissions(), granted);
     }
 
     // ---- T12 / T13: damage tolerance ----

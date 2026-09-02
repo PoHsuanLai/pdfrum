@@ -33,8 +33,8 @@ fuzz_target!(|data: &[u8]| {
     let _ = doc.header_offset();
     let _ = doc.xref_was_rebuilt();
     let _ = doc.is_encrypted();
-    let _ = doc.permissions(false);
-    let _ = doc.permissions(true);
+    let _ = doc.permissions();
+    let _ = doc.owner_permissions();
     let _ = doc.trailer_object_number();
     let _ = doc.catalog();
 

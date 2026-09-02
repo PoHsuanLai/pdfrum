@@ -61,6 +61,7 @@ pub mod xref;
 
 use std::io::Write;
 
+use pdfrum_common::PdfVersion;
 use pdfrum_object::{ObjRef, Object, Resolve, names};
 
 use crate::doc::EditDoc;
@@ -105,9 +106,12 @@ pub struct SaveOptions {
     pub remove_security: bool,
     /// Subset newly embedded fonts.
     pub subset_new_fonts: bool,
-    /// The version to declare in the header, `10..=17` for 1.0 through 1.7.
-    /// Anything outside that range, and `None`, keep the document's own.
-    pub version: Option<u8>,
+    /// The version to declare in the header. 1.0 through 1.7 are honoured;
+    /// anything outside that range, and `None`, keep the document's own.
+    ///
+    /// Was `Option<u8>` in the `major × 10 + minor` packing
+    /// (`docs/design/idiomatic-api.md` §WP1).
+    pub version: Option<PdfVersion>,
     /// Where `/ID` and subset tags come from.
     pub id_source: IdSource,
 }
@@ -222,7 +226,7 @@ pub fn save(doc: &EditDoc<'_>, opts: &SaveOptions, out: &mut impl Write) -> Resu
         // digests valid (invariant R7).
         sink.write(base.bytes())?;
     } else {
-        write_header(&mut body, opts.version.unwrap_or(0), base.version());
+        write_header(&mut body, opts.version, base.version());
         sink.write(&body)?;
         body.clear();
     }

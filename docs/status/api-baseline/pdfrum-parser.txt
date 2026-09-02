@@ -64,14 +64,15 @@ pub fn pdfrum_parser::Document::is_encrypted(&self) -> bool
 pub fn pdfrum_parser::Document::last_xref_offset(&self) -> u64
 pub fn pdfrum_parser::Document::lazy_diagnostics(&self) -> pdfrum_common::diagnostics::Diagnostics
 pub fn pdfrum_parser::Document::main_xref_is_stream(&self) -> bool
+pub fn pdfrum_parser::Document::owner_permissions(&self) -> pdfrum_crypt::permissions::Permissions
 pub fn pdfrum_parser::Document::page(&self, u32) -> core::result::Result<pdfrum_parser::PageDict, pdfrum_parser::Error>
 pub fn pdfrum_parser::Document::page_count(&self) -> u32
-pub fn pdfrum_parser::Document::permissions(&self, bool) -> u32
+pub fn pdfrum_parser::Document::permissions(&self) -> pdfrum_crypt::permissions::Permissions
 pub fn pdfrum_parser::Document::security_handler(&self) -> &pdfrum_crypt::SecurityHandler
 pub fn pdfrum_parser::Document::store(&self) -> &alloc::sync::Arc<pdfrum_parser::ObjectStore>
 pub fn pdfrum_parser::Document::trailer(&self) -> &pdfrum_object::dict::Dict
 pub fn pdfrum_parser::Document::trailer_object_number(&self) -> u32
-pub fn pdfrum_parser::Document::version(&self) -> u8
+pub fn pdfrum_parser::Document::version(&self) -> core::option::Option<pdfrum_common::version::PdfVersion>
 pub fn pdfrum_parser::Document::xref(&self) -> &pdfrum_parser::Xref
 pub fn pdfrum_parser::Document::xref_was_rebuilt(&self) -> bool
 impl pdfrum_object::resolve::Resolve for pdfrum_parser::Document

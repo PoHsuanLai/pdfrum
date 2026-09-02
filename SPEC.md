@@ -55,6 +55,25 @@ caps neither; exceeding it drops further ranges with a diagnostic rather than
 erroring, the same shape as the accepted `max_decoded_stream_len` divergence
 (§4). No real CMap approaches the value.
 
+**[spec] 2026-09-02 (idiomatic-API pass, WP1 step 4): this crate also owns
+`PdfVersion`.**
+
+```rust
+pub struct PdfVersion { pub major: u8, pub minor: u8 }  // PDF_1_0/1_4/1_5/1_7/2_0, new, Display, Ord
+```
+
+The "owns exactly" list above grows by one type, and the reason is the rule
+this crate exists for: `PdfVersion` is *read* by `pdfrum-parser` out of the
+`%PDF-M.N` header and *written* by `pdfrum-edit` into one, and neither of those
+crates should depend on the other for a two-digit value. This is the bottom of
+the graph, so it is the only place both can name it.
+`docs/design/idiomatic-api.md` §WP1 replaces the `major × 10 + minor` packed
+`u8` that `Document::version()`, `SaveOptions::version` and `write_header` all
+published; the packing survives as a private conversion inside
+`pdfrum-parser`'s `read_version`, and appears in no public signature anywhere
+in the workspace. `Ord` is on the pair rather than on the packed byte, which is
+what makes "at least 1.5" mean what it says.
+
 This crate has no fallible operation, so — uniquely — it ships no `Error` enum
 and no `thiserror` dependency. No string types, no stream traits, no "utils".
 If something feels like it belongs here, it probably belongs in the crate that
@@ -267,6 +286,43 @@ Randomness stays out of the crate: `Iv` is a caller argument (no global
 state per STYLE.md §1, no `getrandom` per DEPS.md). Building an `/Encrypt`
 dictionary — `OnCreate`, `AES256_SetPassword`, `AES256_SetPerms` — remains out
 of scope: v1 preserves passwords and never sets them.
+
+**[spec] 2026-09-02 (idiomatic-API pass, WP1 step 4): the ISO 32000-1 table 22
+decode moves here, and the boolean mode argument becomes two methods.**
+
+```rust
+pub struct Permissions {   // eight booleans, ALL, NONE, from_bits(u32), bits()
+    pub print: bool, pub modify: bool, pub copy: bool, pub annotate: bool,
+    pub fill_form: bool, pub extract: bool, pub assemble: bool,
+    pub print_high_quality: bool,
+}
+impl SecurityHandler {
+    pub fn permissions(&self) -> Permissions;        // was permissions(owner: bool) -> u32
+    pub fn owner_permissions(&self) -> Permissions;
+}
+```
+
+`docs/design/idiomatic-api.md` §A.3: the crate that owns the `/P` word owns the
+type that decodes it. Before this, `pdfrum-crypt` and `pdfrum-parser` published
+the raw word and `crates/pdfrum/src/form_session.rs` hand-decoded it with
+`bits & 0x100` and `bits & 0x20` — magic numbers in a crate with no business
+knowing them, which this deletes. `Permissions` is a **struct of booleans, not
+a `bitflags` newtype** (§6): table 22's bits are eight independent questions
+with reserved holes between them, not a set that composes. `from_bits` ignores
+reserved bits rather than refusing them, and `bits()` reconstructs only the
+eight named ones — a save that must reproduce `/P` verbatim keeps the original
+word, which is what the writer does by copying `/Encrypt` whole.
+
+The forcing the standard handler applies — clearing the two reserved low bits
+and setting bits 7 through 32, so `/P 4092` reports `0xFFFFFFFC` — is
+**behaviour** and is unchanged; it now happens in a private `permission_word`,
+and only the channel out of the crate is different.
+
+`pdfrum-form` keeps its own two-field `Permissions` (`fill_form`,
+`modify_annotation`, `may_interact`), which arrived at the idiomatic shape for
+its own API's sake and asks only two of the eight questions. It does **not**
+gain a dependency on `pdfrum-crypt`: the two vocabularies meet in the facade,
+where the conversion is now a field-for-field rename.
 
 ## 4. `pdfrum-filters`  *(behavior: `core/fxcodec` basic codecs)*
 
