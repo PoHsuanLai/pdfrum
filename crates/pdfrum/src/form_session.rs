@@ -12,6 +12,15 @@ pub use pdfrum_form::event::{Button as MouseButton, Key as VirtualKey};
 pub use pdfrum_form::update::{AppearanceUpdate, UpdateKind};
 pub use pdfrum_form::{Modifiers as EventModifiers, Response as EventResponse};
 
+/// The four points where a field's `/AA` scripts can intervene.
+///
+/// Re-exported **unconditionally**, because it is named in
+/// [`FormSession::with_cascade`]'s signature and a caller who writes their own
+/// implementation must be able to name it from `pdfrum` alone (WP7's rule).
+/// The trait and [`NoScripts`] exist whether or not the `script` feature is
+/// on; only `ScriptCascade` is behind it.
+pub use pdfrum_form::{Cascade, FieldRef, FieldWrites, Keystroke, KeystrokeOutcome, NoScripts};
+
 /// A live form-filling session over a document (ISO 32000-1 §12.7).
 ///
 /// Events go in and appearance updates come out. Nothing is pushed to a
@@ -109,6 +118,57 @@ pub struct FormSession<'a> {
     page_in_view: u32,
     /// The form's default-resource fonts, loaded once.
     fonts: std::sync::Arc<pdfrum_doc::ap::FormFonts>,
+    /// The script hooks every commit passes through.
+    ///
+    /// [`NoScripts`] by default, which is a JavaScript-off viewer's behaviour
+    /// rather than a stub of one — see [`Cascade`]'s own documentation.
+    cascade: Cascades,
+}
+
+/// Which cascade a session holds.
+///
+/// Two variants rather than one `Box<dyn Cascade>`, and the reason is the
+/// `/AA` wiring: a [`ScriptCascade`](crate::ScriptCascade) does not read a
+/// document — it deliberately holds none — so **the caller installs each
+/// field's scripts**, and the caller here is this session. Behind a
+/// `dyn Cascade` the concrete methods that take the installation
+/// (`set_field`, `set_calculation_order`) are unreachable, so the scripted
+/// path keeps its concrete type and the general path keeps its trait object.
+enum Cascades {
+    /// [`NoScripts`], or an implementation the caller wrote.
+    ///
+    /// Nothing is installed into it: a caller who wants a document's `/AA`
+    /// scripts run uses [`FormSession::with_scripts`], and a caller who wrote
+    /// their own cascade already knows what it should do.
+    Plain(Box<dyn Cascade>),
+    /// A `boa`-backed cascade this session installs the document's own `/AA`
+    /// scripts into, page by page as pages are read.
+    #[cfg(feature = "script")]
+    Scripted(Box<pdfrum_form::ScriptCascade>),
+}
+
+impl Cascades {
+    /// The cascade as the seam sees it.
+    fn as_dyn(&mut self) -> &mut dyn Cascade {
+        match self {
+            Cascades::Plain(cascade) => cascade.as_mut(),
+            #[cfg(feature = "script")]
+            Cascades::Scripted(cascade) => cascade.as_mut(),
+        }
+    }
+}
+
+impl std::fmt::Debug for Cascades {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            // `dyn Cascade` is not `Debug` and must not require it: a bound a
+            // caller's own implementation would have to satisfy is a bound on
+            // the seam, and the seam has none.
+            Cascades::Plain(_) => f.write_str("Plain(..)"),
+            #[cfg(feature = "script")]
+            Cascades::Scripted(cascade) => f.debug_tuple("Scripted").field(cascade).finish(),
+        }
+    }
 }
 
 impl<'a> FormSession<'a> {
@@ -209,9 +269,173 @@ impl<'a> FormSession<'a> {
         FormSession::build(doc, Inner::with_config(config), ctx)
     }
 
+    /// Starts a session whose commits pass through `cascade` — the seam a
+    /// field's `/AA` scripts hang off.
+    ///
+    /// [`FormSession::new`] uses [`NoScripts`], whose behaviour *is* a
+    /// JavaScript-off viewer's rather than a stub of one. This is how a
+    /// caller substitutes something else, and the two implementations worth
+    /// naming are:
+    ///
+    /// - **`ScriptCascade`**, behind the `script` feature — but reach for
+    ///   `FormSession::with_scripts` instead, which builds one *and* installs
+    ///   the document's own `/AA` scripts into it. A `ScriptCascade` passed
+    ///   here runs nothing, because nothing has told it what any field's
+    ///   scripts are.
+    /// - **your own** implementation of [`Cascade`], for a host that gates
+    ///   commits on rules of its own — a validator, an audit log, a policy
+    ///   that refuses a keystroke.
+    ///
+    /// ```
+    /// use pdfrum::{Cascade, Document, FieldRef, FormSession};
+    ///
+    /// /// A cascade that refuses every commit.
+    /// struct ReadOnly;
+    /// impl Cascade for ReadOnly {
+    ///     fn validate(&mut self, _field: &FieldRef, _value: &str) -> bool {
+    ///         false
+    ///     }
+    /// }
+    ///
+    /// let doc = Document::open("tests/fixtures/text_form.pdf")?;
+    /// let session = FormSession::with_cascade(&doc, ReadOnly);
+    /// assert!(session.focused_annot().is_none());
+    /// # Ok::<(), pdfrum::Error>(())
+    /// ```
+    #[must_use]
+    pub fn with_cascade(doc: &'a Document, cascade: impl Cascade + 'static) -> FormSession<'a> {
+        FormSession::build_with(
+            doc,
+            Inner::new(),
+            &mut BuildContext::new(),
+            Cascades::Plain(Box::new(cascade)),
+        )
+    }
+
+    /// Starts a session that **runs the document's own JavaScript**: a
+    /// `boa`-backed cascade with every field's `/AA` scripts installed into
+    /// it.
+    ///
+    /// This is the constructor to use for scripting. It does what
+    /// [`FormSession::with_cascade`] alone cannot: each page's `/AA /K`,
+    /// `/AA /V`, `/AA /C` and `/AA /F` entries are read as a page is read and
+    /// handed to the cascade, along with each field's fully qualified name,
+    /// its stored value and the form's `/AcroForm /CO` calculation order — a
+    /// [`ScriptCascade`](crate::ScriptCascade) holds no document and cannot
+    /// read any of that for itself.
+    ///
+    /// # What a script can and cannot reach
+    ///
+    /// The `AF*` library (`AFNumber_Format`, `AFDate_*`, `AFSimple_Calculate`,
+    /// …), `util`, `app.alert` and the `event` object are bound and the four
+    /// field hooks run; the `Doc`/`Field` object model — `this.getField(…)`,
+    /// and everything a script does through it — **is not built yet**, so
+    /// 11 of the oracle's 47 JavaScript fixtures reproduce byte-exactly today.
+    /// See PLAN.md §M15 for the milestone and `docs/status/M15.md` for the
+    /// per-fixture accounting. Do not enable this expecting Acrobat.
+    ///
+    /// # Errors
+    ///
+    /// Only if `boa` cannot build a context at all, which no document can
+    /// cause.
+    ///
+    /// ```
+    /// # #[cfg(feature = "script")]
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// use pdfrum::{Document, FormSession, ScriptConfig};
+    ///
+    /// let doc = Document::open("tests/fixtures/public_methods.pdf")?;
+    /// let mut session = FormSession::with_scripts(&doc, &ScriptConfig::wall_clock())?;
+    ///
+    /// // The fixture's one field is `/Rect [100 160 200 190]`, and its `/AA`
+    /// // carries all four hooks. A click, then a character, reaches the
+    /// // keystroke one — and what the script asked the host to do comes back
+    /// // on the transcript rather than being performed here.
+    /// use pdfrum::EventModifiers as M;
+    /// session.on_mouse_move(0, 150.0, 175.0, M::NONE);
+    /// session.on_mouse_down(0, 150.0, 175.0, M::NONE);
+    /// session.on_mouse_up(0, 150.0, 175.0, M::NONE);
+    /// session.on_char('7', M::NONE);
+    ///
+    /// let transcript = session.scripts().expect("a scripted session").transcript_text();
+    /// assert!(transcript.starts_with("Alert: *** starting test 2 ***"));
+    /// # Ok(())
+    /// # }
+    /// # #[cfg(not(feature = "script"))] fn main() {}
+    /// ```
+    #[cfg(feature = "script")]
+    pub fn with_scripts(
+        doc: &'a Document,
+        config: &pdfrum_form::ScriptConfig,
+    ) -> Result<FormSession<'a>, crate::ScriptBuildError> {
+        let cascade = pdfrum_form::ScriptCascade::new(config)?;
+        let mut session = FormSession::build_with(
+            doc,
+            Inner::new(),
+            &mut BuildContext::new(),
+            Cascades::Scripted(Box::new(cascade)),
+        );
+        session.install_calculation_order();
+        Ok(session)
+    }
+
+    /// Installs the form's `/AcroForm /CO` order into a scripted cascade.
+    ///
+    /// **An empty order means no calculation runs at all**, however many
+    /// fields carry `/AA /C` — `cpdf_interactiveform.cpp:739-745`, and
+    /// `pdfrum_doc::form::Form::calculation_order` carries the reasoning.
+    ///
+    /// # A known index-space mismatch, inherited rather than introduced
+    ///
+    /// `calculation_order` answers positions in
+    /// [`Form::fields`](crate::Form::fields) — the document's whole field
+    /// list — while everything else the cascade is keyed by is a **page-local
+    /// `FieldId`**, allocated in first-seen order as one page's `/Annots` are
+    /// walked. The two spaces agree for a single-page form whose widgets
+    /// appear in `/Fields` order, which is every `/CO`-bearing fixture in the
+    /// oracle's corpus, and disagree otherwise.
+    ///
+    /// This is not this method's defect to fix: `route::commit_field` already
+    /// spends a calculation's writes as `FieldId(index)` under a comment
+    /// asserting the two are the same thing, so the mismatch is a
+    /// `pdfrum-form` question about what `FieldRef::index` means, and fixing
+    /// it in one place and not the other would make them disagree in a new
+    /// way. Recorded in `docs/status/pdfrum-facade.md`; it belongs to M15
+    /// step 2, where the `Doc`/`Field` object model settles what a script's
+    /// field identity is.
+    #[cfg(feature = "script")]
+    fn install_calculation_order(&mut self) {
+        let Cascades::Scripted(cascade) = &mut self.cascade else {
+            return;
+        };
+        let catalog = self.doc.catalog();
+        let mut diags = pdfrum_common::Diagnostics::default();
+        let Some(form) =
+            pdfrum_doc::form::Form::load(&catalog, self.doc.parser(), &self.doc.limits, &mut diags)
+        else {
+            return;
+        };
+        let order = form
+            .calculation_order(&catalog, self.doc.parser())
+            .into_iter()
+            .map(|index| u32::try_from(index).unwrap_or(u32::MAX))
+            .collect();
+        cascade.set_calculation_order(order);
+    }
+
     /// The shared constructor: a session plus the fonts its appearances are
     /// laid out with.
     fn build(doc: &'a Document, inner: Inner, ctx: &mut BuildContext) -> FormSession<'a> {
+        FormSession::build_with(doc, inner, ctx, Cascades::Plain(Box::new(NoScripts)))
+    }
+
+    /// [`FormSession::build`] with the cascade named.
+    fn build_with(
+        doc: &'a Document,
+        inner: Inner,
+        ctx: &mut BuildContext,
+        cascade: Cascades,
+    ) -> FormSession<'a> {
         let fonts = pdfrum_doc::ap::FormFonts::load(&doc.catalog(), doc.parser(), ctx);
         FormSession {
             doc,
@@ -219,6 +443,7 @@ impl<'a> FormSession<'a> {
             pages: std::collections::BTreeMap::new(),
             page_in_view: 0,
             fonts,
+            cascade,
         }
     }
 
@@ -653,6 +878,29 @@ impl<'a> FormSession<'a> {
         }
     }
 
+    /// The session's scripting engine, when it has one — what the
+    /// document's JavaScript asked the host to do, and what stopped.
+    ///
+    /// `Some` only for a session built by [`FormSession::with_scripts`]: a
+    /// default session runs no script and a caller who passed their own
+    /// [`Cascade`] to [`FormSession::with_cascade`] already holds the type
+    /// they wrote.
+    ///
+    /// This is where `app.alert`, `Doc.submitForm`, `app.launchURL` and every
+    /// other thing a script *asks for* comes back —
+    /// [`transcript`](pdfrum_form::ScriptCascade::transcript) as values the
+    /// host reads and decides about, never as I/O the library performs. See
+    /// [`stops`](pdfrum_form::ScriptCascade::stops) for scripts that threw:
+    /// they are reported and the next one still runs.
+    #[cfg(feature = "script")]
+    #[must_use]
+    pub fn scripts(&self) -> Option<&pdfrum_form::ScriptCascade> {
+        match &self.cascade {
+            Cascades::Scripted(cascade) => Some(cascade),
+            Cascades::Plain(_) => None,
+        }
+    }
+
     /// **Escape hatch — requires `pdfrum-form`.** The session's own record,
     /// for callers that need to read more than these methods expose.
     ///
@@ -691,12 +939,7 @@ impl<'a> FormSession<'a> {
             &pdfrum_form::Context<'_, pdfrum_parser::Document>,
         ) -> T,
     ) -> T {
-        if !self.pages.contains_key(&page) {
-            let Some(read) = self.read_page(page) else {
-                return T::default();
-            };
-            self.pages.insert(page, read);
-        }
+        self.ensure_page(page);
         let Some(form) = self.pages.get(&page) else {
             return T::default();
         };
@@ -714,23 +957,35 @@ impl<'a> FormSession<'a> {
     /// [`FormSession::with_page`] for the three entry points that can commit
     /// a field, which take the script hooks as a second parameter.
     ///
-    /// The hooks are [`NoScripts`](pdfrum_form::NoScripts) — the script-free
-    /// cascade, whose method defaults *are* a JavaScript-off viewer's
-    /// behaviour rather than a stub of it. A build that runs a document's own
-    /// scripts substitutes a different value here and changes no call site,
-    /// which is the whole reason the seam is a trait.
+    /// The hooks are this session's [`Cascade`] — [`NoScripts`] unless a
+    /// caller named another through [`FormSession::with_cascade`] or
+    /// [`FormSession::with_scripts`]. `NoScripts`'s method defaults *are* a
+    /// JavaScript-off viewer's behaviour rather than a stub of it, so
+    /// substituting a different value here changes no call site, which is the
+    /// whole reason the seam is a trait.
+    ///
+    /// The cascade is **moved out of `self` for the duration of the call**
+    /// and put back after, because the body needs it and the page cache at
+    /// the same time and both live behind the one `&mut self`. `NoScripts` is
+    /// the placeholder left in its slot, which is the correct value for a
+    /// session that has none.
     fn with_page_scripted<T: Default>(
         &mut self,
         page: u32,
         body: impl FnOnce(
             &mut pdfrum_form::FormSession,
             &pdfrum_form::Context<'_, pdfrum_parser::Document>,
-            &mut dyn pdfrum_form::Cascade,
+            &mut dyn Cascade,
         ) -> T,
     ) -> T {
-        self.with_page(page, |inner, ctx| {
-            body(inner, ctx, &mut pdfrum_form::NoScripts)
-        })
+        // The page is read — and its scripts installed — **before** the
+        // cascade leaves `self`, because the install needs both.
+        self.ensure_page(page);
+        let mut cascade =
+            std::mem::replace(&mut self.cascade, Cascades::Plain(Box::new(NoScripts)));
+        let out = self.with_page(page, |inner, ctx| body(inner, ctx, cascade.as_dyn()));
+        self.cascade = cascade;
+        out
     }
 
     /// Routes an event that goes to whatever holds focus.
@@ -759,6 +1014,97 @@ impl<'a> FormSession<'a> {
             _ => Response::ignored(),
         }
     }
+
+    /// Reads a page into the cache if it is not there yet, installing its
+    /// `/AA` scripts into a scripted cascade as it arrives.
+    ///
+    /// Separated from [`FormSession::with_page`] because
+    /// [`FormSession::with_page_scripted`] must do it *before* it takes the
+    /// cascade out of `self` — a cascade that has left cannot be installed
+    /// into, and the page a commit is about is exactly the page whose scripts
+    /// the commit runs.
+    fn ensure_page(&mut self, page: u32) {
+        if self.pages.contains_key(&page) {
+            return;
+        }
+        let Some(read) = self.read_page(page) else {
+            return;
+        };
+        self.pages.insert(page, read);
+        self.install_page_scripts(page);
+    }
+
+    /// Hands a scripted cascade every `/AA` script the page just read carries.
+    ///
+    /// # Why per page, and why here
+    ///
+    /// A [`FieldRef`]'s index is a **page-local** field id, allocated in
+    /// first-seen order as that page's `/Annots` are walked
+    /// (`pdfrum_form::page::read`). It is not a position in
+    /// [`Form::fields`](crate::Form::fields), and it does not exist until the
+    /// page has been read — so the install cannot happen at construction, and
+    /// happens at exactly the moment the ids come into being.
+    ///
+    /// A [`ScriptCascade`](crate::ScriptCascade) deliberately holds no
+    /// document, which is what lets the whole engine be tested against a
+    /// script string and no PDF; the price is that its caller reads `/AA` and
+    /// hands it over, and this is that caller.
+    ///
+    /// Compiled away entirely without the `script` feature: with no scripted
+    /// variant to match, there is nothing to install.
+    #[cfg(feature = "script")]
+    fn install_page_scripts(&mut self, page: u32) {
+        use pdfrum_doc::nav::AActionType;
+
+        let Cascades::Scripted(cascade) = &mut self.cascade else {
+            return;
+        };
+        let Some(form) = self.pages.get(&page) else {
+            return;
+        };
+        let resolve = self.doc.parser();
+        for widget in &form.widgets {
+            let Some(entries) = widget.dict.dict(pdfrum_object::names::AA, resolve) else {
+                continue;
+            };
+            // A trigger's source, or `None` — for an `/AA` entry that is not
+            // a JavaScript action at all, and for one whose `/JS` is empty,
+            // which `DoActionJavaScript` also declines to run
+            // (`cpdfsdk_formfillenvironment.cpp:912-924`).
+            let source_of = |trigger| {
+                pdfrum_doc::nav::additional_action(&entries, trigger, resolve)
+                    .filter(|action| action.kind() == pdfrum_doc::ActionKind::JavaScript)
+                    .and_then(|action| action.javascript(resolve))
+                    .filter(|source| !source.is_empty())
+            };
+            let actions = pdfrum_form::script::FieldActions {
+                keystroke: source_of(AActionType::KeyStroke),
+                validate: source_of(AActionType::Validate),
+                calculate: source_of(AActionType::Calculate),
+                format: source_of(AActionType::Format),
+            };
+            if actions == pdfrum_form::script::FieldActions::default() {
+                // Nearly every field in nearly every document: no script at
+                // all, and a hook with no script takes `NoScripts`'s answer.
+                continue;
+            }
+            cascade.set_field(
+                widget.field.0,
+                widget.name.clone(),
+                widget.value(resolve),
+                actions,
+            );
+        }
+    }
+
+    /// Without the `script` feature there is no cascade that can be installed
+    /// into, so this is the whole of it.
+    #[cfg(not(feature = "script"))]
+    #[expect(
+        clippy::unused_self,
+        reason = "the feature-on twin takes `&mut self`; one signature, two bodies"
+    )]
+    fn install_page_scripts(&mut self, _page: u32) {}
 
     /// Reads one page's annotations, or `None` when the page will not load.
     fn read_page(&self, page: u32) -> Option<pdfrum_form::PageForm> {

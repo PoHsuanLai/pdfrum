@@ -95,14 +95,40 @@ def published-libs []: nothing -> list<string> {
     | compact
 }
 
+# The non-default surfaces worth recording, as `{file, crate, features}`.
+#
+# The baseline is a *default*-features measurement, because the default surface
+# is what `cargo add <crate>` gets and that is the surface WP13 will gate. One
+# feature earns a second file anyway, and the test is whether the crate's own
+# documentation tells an embedder to turn it on:
+#
+#   - `pdfrum --features script` (WP12) does. The facade's crate docs carry a
+#     `# Features` section naming it, and it adds seven types and two
+#     constructors an embedder is meant to use — a surface no file would record
+#     otherwise, so a change to it would be invisible to every gate here.
+#   - `pdfrum-render/walk-profile` does not. It is a profiling switch, not a
+#     surface offered to callers.
+#   - `pdfrum-form/script` does, but its items are the same ones
+#     `pdfrum+script.txt` records one layer up, and the facade is the surface a
+#     `cargo add` reaches. Recording it twice would make one API change diff in
+#     two files.
+#
+# Named here rather than derived, on purpose: a feature entering this list is a
+# statement that its surface is part of the product, and that should be a
+# decision someone makes rather than a consequence of a manifest edit.
+const FEATURED = [
+    {file: 'pdfrum+script', crate: 'pdfrum', features: 'script'}
+]
+
 # One crate's public API, as `cargo public-api` prints it.
 #
 # A failure here is fatal rather than an empty file. The whole point of a
 # baseline is that a missing surface is loud: a crate that stopped building
 # would otherwise diff as "every public item removed", which reads as a
 # spectacular API break rather than as a broken build.
-def surface [crate: string]: nothing -> string {
-    let r = (^cargo $"+($TOOLCHAIN)" public-api $SIMPLIFY -p $crate | complete)
+def surface [crate: string, features: string = '']: nothing -> string {
+    let flags = (if ($features | is-empty) { [] } else { [--features $features] })
+    let r = (^cargo $"+($TOOLCHAIN)" public-api $SIMPLIFY -p $crate ...$flags | complete)
     if $r.exit_code != 0 {
         print --stderr $"error: `cargo public-api -p ($crate)` failed:"
         $r.stderr | lines | each {|l| print --stderr $"  ($l)" } | ignore
@@ -145,8 +171,14 @@ def "main update" [] {
         surface $crate | save --force $path
         print $"  ($crate)"
     }
+    for extra in $FEATURED {
+        let path = ($BASELINE | path join $"($extra.file).txt")
+        surface $extra.crate $extra.features | save --force $path
+        print $"  ($extra.file)"
+    }
+    let total = (($crates | length) + ($FEATURED | length))
     print ""
-    print $"Wrote ($crates | length) files to ($BASELINE)/."
+    print $"Wrote ($total) files to ($BASELINE)/."
     print "Review the diff before committing: this is a baseline, and a change to"
     print "it is a change to what `cargo add pdfrum` sees."
 }
@@ -160,14 +192,18 @@ def "main diff" [] {
     cd ($env.FILE_PWD | path dirname)
     require-tool
 
-    let crates = (published-libs)
-    print $"==> diffing ($crates | length) crates against the committed baseline"
+    let targets = (
+        (published-libs | each {|crate| {file: $crate, crate: $crate, features: ''} })
+        ++ $FEATURED
+    )
+    print $"==> diffing ($targets | length) surfaces against the committed baseline"
 
     # Collected rather than printed as they go, so the summary can lead with
     # the count and a reader knows how much scrolling is ahead of them.
-    let results = ($crates | each {|crate|
-        let path = ($BASELINE | path join $"($crate).txt")
-        let now = (surface $crate | lines)
+    let results = ($targets | each {|target|
+        let crate = $target.file
+        let path = ($BASELINE | path join $"($target.file).txt")
+        let now = (surface $target.crate $target.features | lines)
         let then = (if ($path | path exists) { open --raw $path | lines } else { [] })
         {
             crate: $crate
@@ -199,7 +235,7 @@ def "main diff" [] {
         print "The public API matches the committed baseline."
         return
     }
-    print $"($changed | length) of ($crates | length) crates differ from the baseline."
+    print $"($changed | length) of ($targets | length) surfaces differ from the baseline."
     print "If this is an intended idiomatic-API work package, re-record it with"
     print "  ./scripts/api-snapshot.nu update"
     print "and say in the commit message which WP the diff is."

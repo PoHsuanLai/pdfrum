@@ -12,9 +12,10 @@
 # engine is isolated by a *flag any crate in a workspace can turn on*, and
 # feature unification means one member enabling it enables it for the build.
 # That is a real weakness, and it is exactly why the check below is not
-# optional and why the fourth assertion — that the feature does still bring
-# boa — exists: without it, every other assertion here would pass vacuously
-# the day someone deleted the dependency.
+# optional and why the last two assertions — that the feature does still bring
+# boa, at both the engine's crate and the facade that forwards to it — exist:
+# without them, every other assertion here would pass vacuously the day
+# someone deleted the dependency.
 #
 # What it asserts, in the order a violation would most likely arrive:
 #
@@ -29,6 +30,13 @@
 #      for a test" — at the point where it is one line to undo.
 #   4. The converse: `pdfrum-form --features script` DOES reach `boa_engine`,
 #      so none of the above is vacuously true.
+#   5. And the facade's own forwarding feature: `pdfrum --features script`
+#      DOES reach `boa_engine` too. Added with WP12, which gave `pdfrum` a
+#      `script = ["pdfrum-form/script"]` feature so an embedder can turn
+#      scripting on without depending on `pdfrum-form` directly. Assertion 1
+#      is the claim that feature must not break; this is the claim that it is
+#      not merely a name — a forwarding feature that forwarded nothing would
+#      pass assertion 1 perfectly and do nothing at all.
 #
 # Run standalone, or via scripts/ci.nu which calls it.
 
@@ -111,14 +119,18 @@ def main [] {
     # vacuous. This is the assertion that caught a leaked edge in M12c and it
     # is worth repeating.
     print "==> M15 isolation: the script feature does still bring boa"
-    if 'boa_engine' in (deps pdfrum-form [--features script]) {
-        print "ok: pdfrum-form --features script depends on boa_engine, so the"
-        print "    checks above are not vacuous"
-    } else {
-        print --stderr "error: pdfrum-form --features script no longer reaches boa_engine —"
-        print --stderr "       every check above is trivially true and this script is"
-        print --stderr "       measuring nothing."
-        $ok = false
+    for probe in [
+        {crate: 'pdfrum-form', why: "the engine's own crate"}
+        {crate: 'pdfrum', why: "the facade's forwarding feature (WP12)"}
+    ] {
+        if 'boa_engine' in (deps $probe.crate [--features script]) {
+            print $"ok: ($probe.crate) --features script depends on boa_engine — ($probe.why)"
+        } else {
+            print --stderr $"error: ($probe.crate) --features script no longer reaches boa_engine —"
+            print --stderr "       every check above is trivially true and this script is"
+            print --stderr "       measuring nothing."
+            $ok = false
+        }
     }
 
     if not $ok { exit 1 }

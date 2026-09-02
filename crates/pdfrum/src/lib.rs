@@ -35,15 +35,23 @@
 //! build and no `-sys` crate appears anywhere in the tree — enforced in CI
 //! rather than promised. `unsafe` is forbidden in every crate.
 //!
+//! # JavaScript is off by default
+//!
+//! A PDF may carry scripts for form validation, calculation and formatting.
+//! **With default features this crate reads them as data and never runs
+//! them** — `scripts/check-no-boa.nu` asserts that no JavaScript engine is
+//! anywhere in the dependency tree of a default `cargo add pdfrum`, so it is
+//! a checked property rather than a promise. A field whose displayed value
+//! would come from a calculation script reads as whatever the file last
+//! stored.
+//!
+//! That is the *default* because an engine which executes untrusted script
+//! out of a document is a different security proposition from a renderer, and
+//! most PDF work does not need one. It is not a permanent absence: the
+//! `script` feature turns it on. See [§Features](#features).
+//!
 //! # What this deliberately is not
 //!
-//! - **No JavaScript.** A PDF may carry scripts for form validation,
-//!   calculation and formatting. This crate reads them as data and never runs
-//!   them. That is a permanent scope decision, not a missing feature: an
-//!   engine that executes untrusted script from a document is a different
-//!   security proposition, and the overwhelming majority of PDF work does not
-//!   need it. A field whose displayed value would come from a calculation
-//!   script reads here as whatever the file last stored.
 //! - **No XFA.** Adobe's XML forms architecture is a second, largely
 //!   disjoint document format that happens to travel inside a PDF wrapper.
 //!   PDFium implements it in a subsystem the size of the rest of the engine.
@@ -69,6 +77,36 @@
 //! - [`Document::save`] and friends — write a document back out, whole or as
 //!   an incremental update, and [copy pages](Document::import_pages) between
 //!   documents.
+//!
+//! # Features
+//!
+//! One, and it is off.
+//!
+//! - **`script`** — run the document's own JavaScript. It brings a pure-Rust
+//!   engine ([boa](https://boajs.dev/), pinned exactly, and the ~116 crates
+//!   behind it; zero `-sys`, `cargo deny` clean — DEPS.md records the audit)
+//!   and adds `ScriptCascade`, `ScriptConfig` and
+//!   `FormSession::with_scripts` — all three exist only with the feature on.
+//!   Send a session built that way the events you would send anyway, and the
+//!   document's own `/AA` scripts run on them:
+//!
+//!   ```text
+//!   pdfrum = { version = "0.1", features = ["script"] }
+//!   ```
+//!
+//!   **What a script can and cannot reach today.** The `AF*` library
+//!   (`AFNumber_Format`, `AFDate_*`, `AFSimple_Calculate`, …), `util`,
+//!   `app.alert` and the `event` object are bound and the four field hooks —
+//!   keystroke, validate, calculate, format — run; the `Doc`/`Field` object
+//!   model is **not built yet**, so a script that calls `this.getField(…)`
+//!   throws, and 11 of the oracle's 47 JavaScript fixtures reproduce
+//!   byte-exactly. See PLAN.md §M15 and `docs/status/M15.md`. Do not enable
+//!   this expecting Acrobat.
+//!
+//!   Nothing a script asks for is performed by this crate: `app.alert`,
+//!   `Doc.submitForm` and `app.launchURL` come back as values on
+//!   `ScriptCascade::transcript` for the host to decide about, and no socket,
+//!   file or process is reachable from a script at all.
 //!
 //! # Damage is not an error
 //!
@@ -195,8 +233,8 @@ pub use edit::{ImageBuilder, PageEdit, PathBuilder, TextBuilder};
 pub use error::{Error, Result};
 pub use form::{Field, FieldFlags, FieldKind, Form};
 pub use form_session::{
-    AppearanceUpdate, EventModifiers, EventResponse, FormSession, MouseButton, SessionConfig,
-    UpdateKind, VirtualKey,
+    AppearanceUpdate, Cascade, EventModifiers, EventResponse, FieldRef, FieldWrites, FormSession,
+    Keystroke, KeystrokeOutcome, MouseButton, NoScripts, SessionConfig, UpdateKind, VirtualKey,
 };
 // The viewer chrome a host draws for itself: an open combo dropdown and a
 // scrolled choice widget. Values, not a trait — see `FormSession::popup_for_page`
@@ -207,6 +245,24 @@ pub use page::{Page, Rotation};
 pub use pdfrum_form::session::AnnotId;
 pub use pdfrum_form::tab::Rect as FormRect;
 pub use pdfrum_form::{Placement, PopupGeometry, PopupView, ScrollView};
+
+/// The `boa`-backed [`Cascade`] and what a caller needs to build and read one
+/// — behind the default-off `script` feature.
+///
+/// [`ScriptCascade`] is [`Cascade`]'s second implementation; hand one to
+/// [`FormSession::with_cascade`], or — better — let
+/// [`FormSession::with_scripts`] build it *and* install the document's own
+/// `/AA` scripts into it. [`ScriptBuildError`] is what
+/// [`ScriptCascade::new`](pdfrum_form::ScriptCascade::new) can return and
+/// [`ScriptFailure`] is what [`stops`](pdfrum_form::ScriptCascade::stops)
+/// hands back, so both are nameable here rather than only through
+/// `pdfrum-form`.
+#[cfg(feature = "script")]
+pub use pdfrum_form::script::{
+    BuildError as ScriptBuildError, FieldActions, ScriptFailure, ScriptStop,
+};
+#[cfg(feature = "script")]
+pub use pdfrum_form::{ScriptCascade, ScriptConfig, TranscriptLine};
 pub use render::{ColorMode, ColorScheme, Pixmap, RenderOptions, TextAa};
 
 /// The rasterizer seam, re-exported so a caller can write

@@ -26,8 +26,15 @@ that are *correct*; porting the recovery folklore gets you one for files that
 and no `-sys` crate appears anywhere in the dependency tree, checked
 mechanically in CI. `unsafe` is forbidden in every crate.
 
-Deliberately absent, permanently: JavaScript execution, XFA, and any viewer
-behaviour. This turns pages into pixels and text into strings.
+Deliberately absent, permanently: XFA and any viewer behaviour. This turns
+pages into pixels and text into strings.
+
+**JavaScript is off by default**, which is a different claim: with default
+features a document's scripts are read as data and never run —
+`scripts/check-no-boa.nu` asserts no engine is in the tree — and the `script`
+feature turns them on, behind a pure-Rust engine (boa). See the crate docs'
+`# Features` section for what a script reaches today, which is not yet
+Acrobat.
 
 ## The facade
 

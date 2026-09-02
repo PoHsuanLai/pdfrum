@@ -194,7 +194,7 @@ hand-rolled copy would be wrong in exactly the places a password uses.
 
 | Crate | Use | Why this one |
 |---|---|---|
-| `boa_engine` **lib, feature-gated** | JavaScript engine (`pdfrum-form --features script`) — M15 | Pure Rust, 116 added crates, **zero `-sys`, zero `cc`/`cmake`/`bindgen`**, `cargo-deny` clean against the existing allowlist with no edit. 95.5% of test262; register VM; `RuntimeLimits` for loop/recursion/stack, which is a bound the C++ has no equivalent of. Pinned `=0.22.0`, `default-features = false`. **Reachable from no crate's default features**, asserted mechanically by `scripts/check-no-boa.nu`. Alternatives `rquickjs` and `deno_core` bind C and V8 and fail the purity rule outright |
+| `boa_engine` **lib, feature-gated** | JavaScript engine (`pdfrum-form --features script`, and `pdfrum --features script` / `pdfrum-tool --features script`, both of which only forward that flag and take no direct dependency on it) — M15 | Pure Rust, 116 added crates, **zero `-sys`, zero `cc`/`cmake`/`bindgen`**, `cargo-deny` clean against the existing allowlist with no edit. 95.5% of test262; register VM; `RuntimeLimits` for loop/recursion/stack, which is a bound the C++ has no equivalent of. Pinned `=0.22.0`, `default-features = false`. **Reachable from no crate's default features**, asserted mechanically by `scripts/check-no-boa.nu`. Alternatives `rquickjs` and `deno_core` bind C and V8 and fail the purity rule outright |
 
 ### The audit, run rather than promised — 2026-09-02
 
@@ -236,13 +236,15 @@ The GPU exemption is isolated by being *a crate nothing depends on*. The
 engine is isolated by *a flag any workspace member can turn on*, and feature
 unification means one member enabling it enables it for the whole build. That
 is a real weakness of features and it is why `scripts/check-no-boa.nu` is not
-optional. It asserts, on the same four-part shape as `check-no-wgpu.nu`: the
-`pdfrum` facade's default features, `pdfrum-tool`'s default features, and
-**every** workspace member (`conformance/` and `benches/` included) reach none
-of `boa_engine`/`boa_ast`/`boa_parser`/`boa_gc`/`boa_interner`/`boa_string`/
-`boa_macros` — plus the converse, that `pdfrum-form --features script` *does*
-reach `boa_engine`, so the first three cannot pass vacuously. `scripts/ci.nu`
-runs it.
+optional. It asserts, on the same shape as `check-no-wgpu.nu`: the `pdfrum`
+facade's default features, `pdfrum-tool`'s default features, and **every**
+workspace member (`conformance/` and `benches/` included) reach none of
+`boa_engine`/`boa_ast`/`boa_parser`/`boa_gc`/`boa_interner`/`boa_string`/
+`boa_macros` — plus **two** converses, so the first three cannot pass
+vacuously: that `pdfrum-form --features script` *does* reach `boa_engine`, and
+(added with WP12, when the facade grew a forwarding feature of its own) that
+`pdfrum --features script` does too, since a facade feature that forwarded
+nothing would be a feature in name only. `scripts/ci.nu` runs it.
 
 **What the engine's limits do and do not bound** is a security fact and is
 recorded in SPEC §10 with the measurement rather than here: boa's

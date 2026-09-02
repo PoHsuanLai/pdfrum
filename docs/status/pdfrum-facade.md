@@ -1,6 +1,6 @@
 # `pdfrum` (facade) status
 
-**Updated:** 2026-08-30 · **State:** implemented. The user-facing API over the
+**Updated:** 2026-09-02 · **State:** implemented. The user-facing API over the
 whole stack — open, page, render, text, annotations, form, save, import —
 with runnable doctests on real fixtures, four examples, and integration tests
 over every facade path. The workspace `README.md` is written.
@@ -73,13 +73,20 @@ same cipher because they are written the same way as the rest of the body.
 — a plain record of the two caches that live in different crates, added in M8
 so a run over many pages shares its *glyph outlines* as well as its fonts.
 
-**Rendering.** `RenderOptions { transform, backend, color_mode, text_aa,
+**Rendering.** `RenderOptions { transform, color_mode, text_aa,
 no_path_smooth, no_image_smooth, background, annotations }` plus the two
 constructors callers otherwise write by hand: `RenderOptions::scaled(scale)`
-and `RenderOptions::fit(w, h, max_w, max_h)`. `Backend { Vello, TinySkia }`
-— `vello_cpu` is the facade default, per DEPS.md's "primary rasterizer"
-(note this differs from `pdfrum-tool`, which defaults to tiny-skia on purpose
-because conformance wants the determinism baseline).
+and `RenderOptions::fit(w, h, max_w, max_h)`.
+
+*Corrected 2026-09-02.* This paragraph used to list a `backend` field and a
+`Backend { Vello, TinySkia }` enum. **Both were withdrawn**: naming three
+rasterizers in one enum meant `cargo add pdfrum` compiled all three whatever
+the caller used, so the backend became an *argument* — `Page::render_on` and
+`Page::render_with_on` take an `impl RasterBackend` — and the facade carries
+one rasterizer, `vello_cpu`, per DEPS.md's "primary rasterizer". The other two
+are dev-dependencies of this crate and a normal dependency of any caller who
+names one. `pdfrum-tool` still defaults to tiny-skia on purpose, because
+conformance wants the determinism baseline.
 
 **Text.** `TextPage` is re-exported from `pdfrum-text` unchanged — it was
 already the right shape, and wrapping it would only have hidden `all_text`,
@@ -98,6 +105,41 @@ never needs a `&mut Document` and the document stays shareable.
 `save_form(path, &Form, …)`, `write_form_to(…)`,
 `import_pages(path, &source, &[u32], at)`.
 `SaveOptions { update: Update::{Rewrite, Incremental}, version }`.
+
+**Form interaction** (M14). `FormSession` is the facade's *own* type over
+`pdfrum-form`'s state record: `new`, `with_config`, `with_context`,
+`with_config_in`, the `on_*` event methods, `force_kill_focus`,
+`focused_annot`/`focused_text`, `focus_for_page`, `popup_for_page`,
+`scroll_view`, `choose`, `close_popup`, and `inner()` as the escape hatch.
+
+**JavaScript, behind the `script` feature** (M15 step 1, WP12). The facade has
+one cargo feature and it is off: `script = ["pdfrum-form/script"]`. Off, the
+crate compiles no engine — `scripts/check-no-boa.nu` asserts that a default
+`pdfrum` tree contains no `boa_*` crate, and that this feature does reach one,
+so neither half can pass vacuously. On, it re-exports `ScriptCascade`,
+`ScriptConfig`, `TranscriptLine`, `ScriptBuildError`, `ScriptFailure`,
+`ScriptStop` and `FieldActions`, and adds two entry points:
+
+- `FormSession::with_cascade(doc, impl Cascade + 'static)` — **unconditional**,
+  because `Cascade` and `NoScripts` are. This is the seam a host puts its own
+  commit rules on, and the facade re-exports `Cascade`, `FieldRef`,
+  `FieldWrites`, `Keystroke`, `KeystrokeOutcome` and `NoScripts` with no
+  feature gate so a caller can write one from `pdfrum::*` alone.
+- `FormSession::with_scripts(doc, &ScriptConfig)` — feature-gated, and the one
+  to use for scripting. It builds a `ScriptCascade` *and* installs what the
+  cascade cannot read for itself: each page's `/AA /K`, `/AA /V`, `/AA /C` and
+  `/AA /F` sources, each field's fully qualified name and stored value, and the
+  form's `/AcroForm /CO` calculation order. The install is **per page, as a
+  page is first read**, because a `FieldRef`'s index is a page-local field id
+  allocated while that page's `/Annots` are walked — it does not exist before
+  the page does. `FormSession::scripts()` hands back the cascade so the host
+  can read the transcript (`app.alert`, `Doc.submitForm`, `app.launchURL` come
+  back as values, never as I/O) and the stops.
+
+What a script reaches is M15 step 1's surface: the `AF*` library, `util`,
+`app.alert` and `event`, with no `Doc`/`Field` object model — 11 of the
+oracle's 47 JavaScript fixtures byte-exact. `docs/status/M15.md` has the
+per-fixture accounting.
 
 **Errors.** One `Error` enum whose variants name **domains** rather than
 crates — `Open`, `Read`, `Render`, `Doc`, `Save`, `Text`, `Io` — each
@@ -222,3 +264,52 @@ sharp edge a caller would eventually hit.
    is documented on `Form` and pinned by a test that states the split rather
    than wishing it away — but it is the one place where "fill a form and save
    it" does not fully deliver what a user expects.
+
+7. **A formatting script's output is computed and then dropped.** Found while
+   wiring WP12's `script` feature, and it is a `pdfrum-form` defect rather
+   than a facade one, so it is recorded here rather than fixed here.
+
+   `commit::run` returns a `CommitOutcome` carrying `display: Option<String>`
+   — the string `/AA /F` produced, which by design does *not* change the
+   stored value — and `route.rs`'s `commit_field` reads `outcome.reverted` and
+   `outcome.writes` and **nothing else**. `grep -rn '\.display' crates/` finds
+   no reader outside `commit.rs`'s own tests. So the format hook runs, the
+   engine answers, and the answer goes nowhere: `UpdateKind` has no variant
+   that can carry it, and a caller applying the returned updates sees the raw
+   value.
+
+   Measured on `testing/resources/pixel/bug_113910.pdf`, whose one field's
+   `/AA /F` is `AFNumber_Format(0, 1, 0, 0, "", false)`: typing `1234` and
+   committing regenerates an appearance whose content stream is `(1234) Tj`.
+   That is PLAN.md §M15's own worked example of what a JavaScript-off renderer
+   gets wrong — "a field with `AFNumber_Format` shows raw text where Acrobat
+   shows `$1,234.00`" — reproduced with the engine *on*. The engine is not the
+   missing piece; the wire from `CommitOutcome::display` to `UpdateKind` is.
+
+   It is why `tests/form_scripts.rs` proves the seam through the **transcript**
+   rather than through a formatted field value: the transcript is the one
+   script-produced value that currently reaches a caller. Closing this needs a
+   `pdfrum-form` change (a new `UpdateKind` variant, or `display` on
+   `AppearanceUpdate`) and belongs to M15 step 2, not to WP12.
+
+8. **`FieldRef::index` means two different things.** Also found wiring WP12,
+   also a `pdfrum-form` question rather than a facade one.
+
+   `pdfrum_form::page::read` allocates a `FieldId` **per page**, in first-seen
+   order as that page's `/Annots` are walked (`field_id_of`), and
+   `route::field_ref` hands that number to a cascade as `FieldRef::index`. But
+   `pdfrum_doc::form::Form::calculation_order` — the `/CO` walk M15 step 1
+   added — answers positions in the document's whole `Form::fields` list, and
+   `route::commit_field` spends a calculation's writes as `FieldId(index)`
+   under the comment *"A calculation names fields by their index in the form's
+   list, which is what `FieldId` is."* **It is not.** The two spaces coincide
+   for a single-page form whose widgets appear in `/Fields` order — which is
+   every `/CO`-bearing fixture in the oracle's corpus, so nothing red is
+   visible today — and diverge for a form spread over pages, or one whose
+   `/Annots` order differs from its `/Fields` order.
+
+   `FormSession::with_scripts` inherits the mismatch rather than introducing
+   it, and says so where it installs the order. Fixing it in one place and not
+   the other would make them disagree in a *new* way, so it belongs to M15
+   step 2, where the `Doc`/`Field` object model has to settle what a script's
+   field identity is in the first place.

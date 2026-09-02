@@ -331,3 +331,66 @@ fn a_focus_answer_is_matchable() {
 
     assert_eq!(stroke(Some(Focus::at(3))), None);
 }
+
+/// Every type [`FormSession::with_cascade`] names is reachable **with the
+/// `script` feature off**, which is the whole point of it not being gated.
+///
+/// A host writing its own commit gate — a validator, an audit log, a policy
+/// that refuses a keystroke — needs `Cascade` and the four payload types, and
+/// needs them from a default `cargo add pdfrum`. WP12 re-exports them
+/// unconditionally for exactly that reason; only `ScriptCascade` is behind the
+/// feature.
+#[test]
+fn the_cascade_seam_is_nameable_without_the_script_feature() {
+    nameable::<dyn Cascade>();
+    nameable::<NoScripts>();
+    nameable::<FieldRef>();
+    nameable::<FieldWrites>();
+    nameable::<Keystroke>();
+    nameable::<KeystrokeOutcome>();
+
+    /// A caller's own cascade, written with nothing but `pdfrum` in scope.
+    struct Mine;
+    impl Cascade for Mine {
+        fn keystroke(&mut self, field: &FieldRef, change: Keystroke) -> KeystrokeOutcome {
+            let _: &str = &field.name;
+            let _: u32 = field.index;
+            KeystrokeOutcome::Accept(change)
+        }
+        fn calculate(&mut self, writes: &mut FieldWrites, _trigger: &FieldRef) {
+            writes.set(0, "computed");
+        }
+    }
+
+    let doc = Document::open("tests/fixtures/text_form.pdf").expect("fixture opens");
+    let session = FormSession::with_cascade(&doc, Mine);
+    assert!(session.focused_annot().is_none());
+}
+
+/// With the feature **on**, everything a caller needs to build, drive and read
+/// a `ScriptCascade` is nameable from `pdfrum` too.
+///
+/// `ScriptCascade::new` returns `Result<_, BuildError>` and `stops()` answers
+/// `&[ScriptFailure]`, so both of those types appear in signatures a caller
+/// writes and both are re-exported — `BuildError` as `ScriptBuildError`,
+/// because the bare name beside `BuildContext` in one `pdfrum::*` namespace
+/// would read as that type's error and it is not.
+#[test]
+#[cfg(feature = "script")]
+fn the_script_types_are_nameable_from_the_facade() {
+    nameable::<ScriptCascade>();
+    nameable::<ScriptConfig>();
+    nameable::<TranscriptLine>();
+    nameable::<ScriptBuildError>();
+    nameable::<ScriptFailure>();
+    nameable::<ScriptStop>();
+    nameable::<FieldActions>();
+
+    // The two signatures those types exist for, written out as a caller would.
+    let doc = Document::open("tests/fixtures/text_form.pdf").expect("fixture opens");
+    let built: std::result::Result<FormSession<'_>, ScriptBuildError> =
+        FormSession::with_scripts(&doc, &ScriptConfig::wall_clock());
+    let session = built.expect("boa builds a realm on any input");
+    let stops: &[ScriptFailure] = session.scripts().expect("a scripted session").stops();
+    assert!(stops.is_empty());
+}

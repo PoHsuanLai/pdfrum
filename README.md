@@ -42,14 +42,36 @@ build and no `-sys` crate appears anywhere in the dependency tree — checked
 mechanically in CI by `cargo-deny` plus a dependency-graph grep, not promised
 in prose. `unsafe_code = "forbid"` in every crate.
 
+## JavaScript is off by default
+
+A PDF may carry scripts for form validation, calculation and formatting. With
+default features this engine reads them as data and never runs them, and
+`scripts/check-no-boa.nu` asserts that no JavaScript engine is anywhere in the
+dependency tree of a default `cargo add pdfrum` — a checked property, not a
+promise. That is the *default* because an engine which executes untrusted
+script out of a document is a different security proposition from a renderer,
+and most PDF work does not need one.
+
+The `script` feature turns it on. This section used to say "the future slot,
+if it is ever filled, is a pure-Rust interpreter behind a trait; never V8" —
+that came true: the slot is filled, the interpreter is
+[boa](https://boajs.dev/), and it sits behind the `Cascade` trait as its
+second implementation. `FormSession::with_scripts` builds one and installs the
+document's own `/AA` scripts into it.
+
+```toml
+pdfrum = { version = "0.1", features = ["script"] }
+```
+
+What a script reaches today is the `AF*` library, `util`, `app.alert` and the
+`event` object; the `Doc`/`Field` object model is not built yet, so 11 of the
+oracle's 47 JavaScript fixtures reproduce byte-exactly (PLAN.md §M15). Nothing
+a script asks for is performed by the library — `app.alert`, `Doc.submitForm`
+and `app.launchURL` come back as values the host decides about, and no socket,
+file or process is reachable from a script at all.
+
 ## What it deliberately is not
 
-- **No JavaScript.** A PDF may carry scripts for form validation, calculation
-  and formatting. This engine reads them as data and never runs them — a
-  permanent scope decision, not a missing feature. An engine that executes
-  untrusted script out of a document is a different security proposition, and
-  the overwhelming majority of PDF work does not need it. The future slot, if
-  it is ever filled, is a pure-Rust interpreter behind a trait; never V8.
 - **No XFA.** Adobe's XML Forms Architecture is a second, largely disjoint
   document format that travels inside a PDF wrapper. PDFium implements it in
   a subsystem the size of the rest of the engine. Out of scope, permanently.
