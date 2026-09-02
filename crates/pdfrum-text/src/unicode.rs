@@ -220,9 +220,25 @@ pub fn bidi_class(code: u32) -> BidiClass {
 /// assert_eq!(mirror_char('(' as u32), ')' as u32);
 /// assert_eq!(mirror_char('[' as u32), ']' as u32);
 /// assert_eq!(mirror_char('a' as u32), 'a' as u32);
+/// // `[oracle-bug]` Above the BMP nothing mirrors.
+/// assert_eq!(mirror_char(0x10800), 0x10800);
 /// ```
 #[must_use]
 pub fn mirror_char(code: u32) -> u32 {
+    // `[oracle-bug]` A supplementary code point is its own mirror.
+    // `fx_unicode.cpp:48` returns **`0`** for `wch >= 0x10000`, but the
+    // in-table "no mirror" value is `0x1FF` (`kMirrorMax`, `:27`), so
+    // `GetMirrorChar`'s sentinel test at `:147` misses and index `0` is read
+    // instead — and `kFXTextLayoutBidiMirror[0] == 0x0029` (`:87-88`), the
+    // pair belonging to `'('` (`fx_ucddata.inc:41`). Every character above
+    // `U+FFFF` therefore mirrors to `')'`. UAX #9 rule L4 mirrors only
+    // characters *possessing* `Bidi_Mirrored`, and `BidiMirroring.txt` has no
+    // mappings above the BMP at all, so the identity is the whole answer;
+    // pdf.js declines to mirror even in the BMP, with the reason at
+    // `bidi.js:441` ("characters are already mirrored in the pdf").
+    if code > 0xFFFF {
+        return code;
+    }
     let index = usize::from(properties(code) >> 5);
     // 0x1FF is the "no mirror" sentinel.
     if index == 0x1FF {
@@ -501,12 +517,16 @@ mod tests {
         }
         // A code point with the sentinel index is its own mirror.
         assert_eq!(mirror_char(0x0041), 0x0041);
-        // But a code point *above* the BMP is not: the property word falls
-        // back to zero, whose mirror field is index zero rather than the
-        // sentinel, so it mirrors to the first pair. The C++ does the same
-        // thing for the same reason, and this is only ever reached from an
-        // RTL run, where a supplementary-plane character is already unusual.
-        assert_eq!(mirror_char(0x1_0000), 0x0029);
+        // Audit item **A48**. This used to assert `0x0029`, reproducing the
+        // oracle: `fx_unicode.cpp:48` returns 0 above the BMP where the "no
+        // mirror" sentinel is `0x1FF`, so index 0 is read and
+        // `kFXTextLayoutBidiMirror[0] == 0x0029`. UAX #9 rule L4 mirrors only
+        // characters possessing `Bidi_Mirrored` and `BidiMirroring.txt` has no
+        // mappings above the BMP, so a supplementary code point is its own
+        // mirror.
+        assert_eq!(mirror_char(0x1_0000), 0x1_0000);
+        // Including one that really is an RTL letter: GOTHIC LETTER AHSA.
+        assert_eq!(mirror_char(0x1_0330), 0x1_0330);
     }
 
     #[test]
