@@ -70,6 +70,14 @@ impl ColorSteps {
     /// Build a ramp from an explicit colour list, for tests and for callers
     /// that already hold the colours.
     #[must_use]
+    #[allow(
+        dead_code,
+        reason = "exercised only by this module's own tests; the library builds once without `cfg(test)`"
+    )]
+    #[expect(
+        clippy::large_types_passed_by_value,
+        reason = "a test helper's caller has the array by value; a reference would only move the copy"
+    )]
     pub fn from_colors(colors: [Rgb; STEPS], alpha: u8) -> Self {
         let mut entries = Box::new([Argb::TRANSPARENT; STEPS]);
         for (slot, rgb) in entries.iter_mut().zip(colors.iter()) {

@@ -356,7 +356,12 @@ impl Points {
     }
 
     /// The same path as its own value, for callers outside the subdivision
-    /// loop where one allocation is not worth threading a buffer for.
+    /// loop where one allocation is not worth threading a buffer for. Only
+    /// [`patch_outline`] wants that, and only its test wants that.
+    #[allow(
+        dead_code,
+        reason = "exercised only by this module's own tests; the library builds once without `cfg(test)`"
+    )]
     fn boundary_path(&self) -> BezPath {
         let mut p = BezPath::new();
         self.write_boundary_path(&mut p);
@@ -615,29 +620,17 @@ pub fn patch_is_offscreen(patch: &Patch, to_bitmap: Affine, width: u32, height: 
     b.x1 <= 0.0 || b.x0 >= f64::from(width) || b.y1 <= 0.0 || b.y0 >= f64::from(height)
 }
 
-/// The device-space bounding box of a whole mesh's patches.
+/// A closed path over a patch's twelve outer control points — the silhouette
+/// rather than the filled cells.
+///
+/// Written for a caller that wanted a clip out of a patch; that caller was
+/// never written, and privatising the module is what surfaced the fact. Kept
+/// because its test is what pins `Points::from_boundary`'s corner ordering.
 #[must_use]
-pub fn patches_bbox(patches: &[Patch], to_bitmap: Affine) -> Option<Rect> {
-    let mut bbox: Option<Rect> = None;
-    for patch in patches {
-        for &p in &patch.points {
-            let q = to_bitmap * p;
-            if !q.x.is_finite() || !q.y.is_finite() {
-                continue;
-            }
-            let cell = Rect::new(q.x, q.y, q.x, q.y);
-            bbox = Some(match bbox {
-                Some(acc) => acc.union(cell),
-                None => cell,
-            });
-        }
-    }
-    bbox
-}
-
-/// A closed path over a patch's twelve outer control points, for callers that
-/// need the silhouette (a clip, say) rather than the filled cells.
-#[must_use]
+#[allow(
+    dead_code,
+    reason = "exercised only by this module's own tests; the library builds once without `cfg(test)`"
+)]
 pub fn patch_outline(patch: &Patch, to_bitmap: Affine) -> BezPath {
     let transformed: Vec<Point> = patch.points.iter().map(|&p| to_bitmap * p).collect();
     Points::from_boundary(&transformed)
@@ -647,6 +640,10 @@ pub fn patch_outline(patch: &Patch, to_bitmap: Affine) -> BezPath {
 
 /// The area a patch outline encloses, for tests.
 #[must_use]
+#[allow(
+    dead_code,
+    reason = "exercised only by this module's own tests; the library builds once without `cfg(test)`"
+)]
 pub fn outline_area(path: &BezPath) -> f64 {
     path.area().abs()
 }
