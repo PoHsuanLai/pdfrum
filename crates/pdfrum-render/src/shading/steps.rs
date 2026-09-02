@@ -9,6 +9,7 @@
 //! parametric value into the same ramp, scales by `255` instead — the two
 //! sides of the same table disagree by design.
 
+#[cfg(test)]
 use pdfrum_page::Rgb;
 
 use crate::color::Argb;
@@ -67,13 +68,12 @@ impl ColorSteps {
         Some(Self { entries })
     }
 
-    /// Build a ramp from an explicit colour list, for tests and for callers
-    /// that already hold the colours.
+    /// Build a ramp from an explicit colour list.
+    ///
+    /// Every shading rasterizer's tests assemble a ramp this way; production
+    /// builds one from the shading's own function through [`Self::build`].
+    #[cfg(test)]
     #[must_use]
-    #[allow(
-        dead_code,
-        reason = "exercised only by this module's own tests; the library builds once without `cfg(test)`"
-    )]
     #[expect(
         clippy::large_types_passed_by_value,
         reason = "a test helper's caller has the array by value; a reference would only move the copy"

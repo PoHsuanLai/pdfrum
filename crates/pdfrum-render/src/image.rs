@@ -178,21 +178,6 @@ pub fn overprint_blend(space: Option<&ColorSpace>, state: &pdfrum_page::GeneralS
     }
 }
 
-/// The destination flip rule (`GetDimensionsFromUnitRect`,
-/// `cpdf_imagerenderer.cpp:667-699`).
-///
-/// `a < 0` flips horizontally and `d > 0` — not `< 0` — flips vertically,
-/// which is correct given PDF's y-down device space.
-#[must_use]
-#[allow(
-    dead_code,
-    reason = "exercised only by this module's own tests; the library builds once without `cfg(test)`"
-)]
-pub fn destination_flips(m: Affine) -> (bool, bool) {
-    let [a, _, _, d, _, _] = m.as_coeffs();
-    (a < 0.0, d > 0.0)
-}
-
 /// Whether a destination dimension or offset is within `IsImageValueTooBig`.
 #[must_use]
 pub fn image_value_fits(v: f64) -> bool {
@@ -675,20 +660,6 @@ mod tests {
             BlendMode::Normal
         );
         assert_eq!(overprint_blend(None, &state), BlendMode::Normal);
-    }
-
-    #[test]
-    fn dimensions_flip_rule_uses_a_less_than_and_d_greater_than() {
-        // `d > 0` is correct, not `d < 0`, because device y points down.
-        assert_eq!(destination_flips(Affine::IDENTITY), (false, true));
-        assert_eq!(
-            destination_flips(Affine::new([1.0, 0.0, 0.0, -1.0, 0.0, 0.0])),
-            (false, false)
-        );
-        assert_eq!(
-            destination_flips(Affine::new([-1.0, 0.0, 0.0, -1.0, 0.0, 0.0])),
-            (true, false)
-        );
     }
 
     #[test]

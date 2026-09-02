@@ -8,7 +8,7 @@
 //! at one and no soft mask draws **directly**, with no group semantics at
 //! all.
 
-use pdfrum_page::{BlendMode, GraphicsState, PageObject, Transparency};
+use pdfrum_page::{BlendMode, PageObject, Transparency};
 
 /// Everything the offscreen decision reads, gathered from one object.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -139,44 +139,37 @@ impl GroupFinish {
     }
 }
 
-/// The transparency a finished group composites back under
-/// (`cpdf_renderstatus.cpp:746-752`).
-///
-/// The **enclosing** transparency, with `group` forced on for a form — *not*
-/// the form's own group flags. The isolated bit therefore comes from the
-/// page, which sets it unconditionally, so it is almost always true at the
-/// top level.
-#[must_use]
-#[allow(
-    dead_code,
-    reason = "exercised only by this module's own tests; the library builds once without `cfg(test)`"
-)]
-pub fn composite_transparency(enclosing: Transparency, is_form: bool) -> Transparency {
-    Transparency {
-        group: enclosing.group || is_form,
-        ..enclosing
-    }
-}
-
-/// The graphics state a form's own content starts from.
-///
-/// Entering a transparency group clears the blend mode, both alphas and the
-/// soft mask, because all four have already been consumed by the group's own
-/// compositing — applying them again inside would double-count.
-#[must_use]
-#[allow(
-    dead_code,
-    reason = "exercised only by this module's own tests; the library builds once without `cfg(test)`"
-)]
-pub fn state_inside_group(state: &GraphicsState) -> GraphicsState {
-    let mut inner = state.clone();
-    inner.general.enter_transparency_group();
-    inner
-}
-
 #[cfg(test)]
 mod tests {
+    use pdfrum_page::GraphicsState;
+
     use super::*;
+
+    /// The transparency a finished group composites back under
+    /// (`cpdf_renderstatus.cpp:746-752`), spelled out so a test can pin it.
+    ///
+    /// The **enclosing** transparency, with `group` forced on for a form —
+    /// *not* the form's own group flags. The walk never asks the question
+    /// separately: it hands [`GroupFinish::of`] the object's own transparency
+    /// and its `in_group` flag, which is where the same distinction lands.
+    fn composite_transparency(enclosing: Transparency, is_form: bool) -> Transparency {
+        Transparency {
+            group: enclosing.group || is_form,
+            ..enclosing
+        }
+    }
+
+    /// The graphics state a form's own content starts from.
+    ///
+    /// `pdfrum-page`'s content builder calls
+    /// `GeneralState::enter_transparency_group` on the state it already holds
+    /// (`build.rs:594`); this is the same clearing written as a function of
+    /// the whole state so a test here can name it.
+    fn state_inside_group(state: &GraphicsState) -> GraphicsState {
+        let mut inner = state.clone();
+        inner.general.enter_transparency_group();
+        inner
+    }
 
     fn plain() -> GroupInputs {
         GroupInputs {

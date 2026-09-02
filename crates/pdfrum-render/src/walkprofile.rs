@@ -47,24 +47,20 @@
 //! rayon render reports per-thread totals rather than a contended one, and
 //! [`take`] resets it.
 //!
-//! # Why the whole module carries `allow(dead_code, unused_imports)`
+//! # Why the reporting half is `cfg`-gated
 //!
-//! With `walk-profile` off this module is private and its *reporting* half —
-//! [`Profile`], [`take`], and [`Phase`]/[`Site`]'s `index`/`name`/`ALL` —
-//! has no reader, because the recording half compiles to empty inline
-//! functions and nothing ever produces a `Profile` to report. The library
-//! builds once without `cfg(test)`, so every one of those items reddens in
-//! the default build even though each is exercised with the feature on and by
-//! this module's own tests. One suppression at the module that owns the
-//! feature is more honest than nine scattered attributes; the same reasoning
-//! `pdfrum-edit` recorded for its twenty-three, one layer up.
+//! With `walk-profile` off, the recording half compiles to empty inline
+//! functions and nothing ever produces a [`Profile`] to report — so the
+//! *reporting* half ([`Profile`] itself, and [`Phase`]/[`Site`]'s
+//! `index`/`name`/`ALL`) has no reader at all. Rather than suppress the lint
+//! that says so, each of those items carries
+//! `#[cfg(feature = "walk-profile")]`: it exists exactly where it is read —
+//! `benches/src/bin/profile.rs` is the whole readership — and does not exist
+//! otherwise. `Site` and `Phase`'s *variants* are unconditional,
+//! because the recording half names them at every call site whether or not
+//! the feature is on.
 
-#![allow(
-    dead_code,
-    unused_imports,
-    reason = "the reporting half of the instrument has no reader with `walk-profile` off; see the module docs"
-)]
-
+#[cfg(feature = "walk-profile")]
 use core::time::Duration;
 
 /// One phase of the walk's engine-side work.
@@ -140,20 +136,11 @@ pub enum Site {
     /// The `Vec<PlacedGlyph>` `crate::text::place_glyphs` returns, once per
     /// text object.
     GlyphVec,
-    /// One glyph's outline, cloned out of the cache into its `PlacedGlyph`.
-    GlyphOutline,
     /// A `RenderOptions` cloned into a nested context — a form, a char proc, a
     /// tile cell, a soft mask.
     OptionsClone,
     /// A `RenderCtx` cloned by `crate::ctx::RenderCtx::deeper`.
     CtxClone,
-    /// The `Vec<SubPath>` and its per-sub-path `Vec<Point>` that
-    /// `crate::zero_area::zero_area_sub_paths` builds — once per fill-only
-    /// path object, and discarded as soon as the scan is done.
-    ZeroAreaPoints,
-    /// The `Vec<ZeroArea>` that scan returns, which is empty for the
-    /// overwhelming majority of paths and still costs the call.
-    ZeroAreaVec,
     /// The device-space `BezPath`s `crate::paint::draw_path`'s ordinary case
     /// builds for a fill or a stroke: one per fill since M12b P3 fused the
     /// transform and the clamp (`crate::path::transform_hard_clip`), three
@@ -162,21 +149,13 @@ pub enum Site {
     /// **Not in P2's site list**, which is why P2's "allocation is 0.6%"
     /// covered less of the walk than it appeared to — see M12b-P3.md §3.
     PathGeometry,
-    /// The three `Vec<Point>`s `crate::path::path_rect` used to build — the
-    /// candidate points, their normalization, and their transform — on every
-    /// fill-only path object, whether or not it turned out to be a rectangle.
-    ///
-    /// **This row should read zero**, and reads zero because M12b P3 replaced
-    /// all three with one inline `Points` buffer. It is kept rather than
-    /// deleted so that a future edit which puts a `Vec` back into the rect test
-    /// shows up here as a number instead of only as a millisecond.
-    RectPoints,
 }
 
 /// Everything one render's walk accumulated.
 ///
 /// A record of facts, per STYLE §1: the counters are public and the reporting
 /// lives in whoever reads them.
+#[cfg(feature = "walk-profile")]
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Profile {
     /// Time in each phase, indexed as [`Phase`] orders them.
@@ -184,15 +163,16 @@ pub struct Profile {
     /// How many times each phase was entered.
     pub phase_calls: [u64; 11],
     /// How many allocations each site made, indexed as [`Site`] orders them.
-    pub site_count: [u64; 10],
+    pub site_count: [u64; 6],
     /// How many bytes those allocations asked for, where the size is knowable
     /// from the value itself (a `Vec`'s capacity times its element size, a
     /// `BezPath`'s element count times a `PathEl`).
-    pub site_bytes: [u64; 10],
+    pub site_bytes: [u64; 6],
 }
 
 impl Phase {
     /// The index this phase occupies in [`Profile::phase_time`].
+    #[cfg(feature = "walk-profile")]
     #[must_use]
     pub const fn index(self) -> usize {
         match self {
@@ -211,6 +191,7 @@ impl Phase {
     }
 
     /// The phases in the order the arrays index them.
+    #[cfg(feature = "walk-profile")]
     pub const ALL: [Phase; 11] = [
         Phase::Clip,
         Phase::Color,
@@ -226,6 +207,7 @@ impl Phase {
     ];
 
     /// A short name for a report column.
+    #[cfg(feature = "walk-profile")]
     #[must_use]
     pub const fn name(self) -> &'static str {
         match self {
@@ -246,50 +228,41 @@ impl Phase {
 
 impl Site {
     /// The index this site occupies in [`Profile::site_count`].
+    #[cfg(feature = "walk-profile")]
     #[must_use]
     pub const fn index(self) -> usize {
         match self {
             Site::ClipVec => 0,
             Site::ClipPath => 1,
             Site::GlyphVec => 2,
-            Site::GlyphOutline => 3,
-            Site::OptionsClone => 4,
-            Site::CtxClone => 5,
-            Site::ZeroAreaPoints => 6,
-            Site::ZeroAreaVec => 7,
-            Site::PathGeometry => 8,
-            Site::RectPoints => 9,
+            Site::OptionsClone => 3,
+            Site::CtxClone => 4,
+            Site::PathGeometry => 5,
         }
     }
 
     /// The sites in the order the arrays index them.
-    pub const ALL: [Site; 10] = [
+    #[cfg(feature = "walk-profile")]
+    pub const ALL: [Site; 6] = [
         Site::ClipVec,
         Site::ClipPath,
         Site::GlyphVec,
-        Site::GlyphOutline,
         Site::OptionsClone,
         Site::CtxClone,
-        Site::ZeroAreaPoints,
-        Site::ZeroAreaVec,
         Site::PathGeometry,
-        Site::RectPoints,
     ];
 
     /// A short name for a report row.
+    #[cfg(feature = "walk-profile")]
     #[must_use]
     pub const fn name(self) -> &'static str {
         match self {
             Site::ClipVec => "clip Vec<Clip>",
             Site::ClipPath => "clip BezPath",
             Site::GlyphVec => "Vec<PlacedGlyph>",
-            Site::GlyphOutline => "glyph outline clone",
             Site::OptionsClone => "RenderOptions clone",
             Site::CtxClone => "RenderCtx clone",
-            Site::ZeroAreaPoints => "zero-area Vec<Point>",
-            Site::ZeroAreaVec => "zero-area Vec<ZeroArea>",
             Site::PathGeometry => "draw_path BezPath",
-            Site::RectPoints => "rect-test Vec<Point>",
         }
     }
 }
@@ -310,8 +283,8 @@ mod imp {
         static PROFILE: Cell<Profile> = const { Cell::new(Profile {
             phase_time: [Duration::ZERO; 11],
             phase_calls: [0; 11],
-            site_count: [0; 10],
-            site_bytes: [0; 10],
+            site_count: [0; 6],
+            site_bytes: [0; 6],
         }) };
     }
 
@@ -382,9 +355,12 @@ mod imp {
 
 #[cfg(not(feature = "walk-profile"))]
 mod imp {
-    use super::{Phase, Profile, Site};
+    #[cfg(feature = "walk-profile")]
+    use super::Profile;
+    use super::{Phase, Site};
 
     /// Nothing was recorded, because nothing is recording.
+    #[cfg(feature = "walk-profile")]
     #[inline]
     pub fn take() -> Profile {
         Profile::default()
@@ -421,7 +397,9 @@ mod imp {
     }
 }
 
-pub use imp::{Started, alloc, phase, phase_start, take};
+#[cfg(feature = "walk-profile")]
+pub use imp::take;
+pub use imp::{alloc, phase, phase_start};
 
 /// Record one allocation whose size is the capacity of a slice-shaped value.
 ///
@@ -436,6 +414,8 @@ pub fn alloc_items(site: Site, items: usize, item_size: usize) {
 mod tests {
     use super::*;
 
+    /// The arrays exist only with the feature on, so their indexing does too.
+    #[cfg(feature = "walk-profile")]
     #[test]
     fn the_indices_are_dense_and_distinct() {
         // The arrays are indexed by these, so a duplicate or a gap would
@@ -457,10 +437,10 @@ mod tests {
     #[test]
     fn taking_the_profile_clears_it() {
         let _ = take();
-        alloc_items(Site::GlyphOutline, 4, 16);
+        alloc_items(Site::CtxClone, 4, 16);
         let first = take();
-        assert_eq!(first.site_count.get(Site::GlyphOutline.index()), Some(&1));
-        assert_eq!(first.site_bytes.get(Site::GlyphOutline.index()), Some(&64));
+        assert_eq!(first.site_count.get(Site::CtxClone.index()), Some(&1));
+        assert_eq!(first.site_bytes.get(Site::CtxClone.index()), Some(&64));
         assert_eq!(take(), Profile::default());
     }
 }

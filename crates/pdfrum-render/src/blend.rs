@@ -204,30 +204,6 @@ pub(crate) fn blend_rgb(mode: BlendMode, back: [u8; 3], src: [u8; 3]) -> [u8; 3]
     })
 }
 
-/// How the four non-separable modes collapse on a grayscale destination
-/// (`GetGrayWithBlend`, `cfx_scanlinecompositor.cpp:226-235`): `Luminosity`
-/// takes the source, the other three keep the backdrop unchanged.
-#[must_use]
-#[allow(
-    dead_code,
-    reason = "exercised only by this module's own tests; the library builds once without `cfg(test)`"
-)]
-pub(crate) fn blend_gray(mode: BlendMode, back: u8, src: u8) -> u8 {
-    match mode {
-        BlendMode::Luminosity => src,
-        BlendMode::Hue | BlendMode::Saturation | BlendMode::Color => back,
-        separable => {
-            #[expect(
-                clippy::cast_sign_loss,
-                reason = "the clamp lower bound is 0, so the value fits u8 exactly"
-            )]
-            let byte =
-                blend_channel(separable, i32::from(back), i32::from(src)).clamp(0, 255) as u8;
-            byte
-        }
-    }
-}
-
 /// The straight-alpha source-over composite the oracle performs
 /// (`cfx_scanlinecompositor.cpp:553-608`), returning the new
 /// `(rgb, alpha)` of the destination.
@@ -954,14 +930,6 @@ mod tests {
             *ch = l + ((*ch - l) * (255 - l) / (x - l));
         }
         assert_eq!(clip_color(c), manual);
-    }
-
-    #[test]
-    fn nonseparable_on_gray_collapses() {
-        assert_eq!(blend_gray(BlendMode::Luminosity, 10, 200), 200);
-        assert_eq!(blend_gray(BlendMode::Hue, 10, 200), 10);
-        assert_eq!(blend_gray(BlendMode::Saturation, 10, 200), 10);
-        assert_eq!(blend_gray(BlendMode::Color, 10, 200), 10);
     }
 
     #[test]

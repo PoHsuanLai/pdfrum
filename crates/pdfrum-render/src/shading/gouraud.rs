@@ -261,22 +261,17 @@ pub fn draw(
     }
 }
 
-/// A vertex colour as `Rgb`, for callers assembling meshes in tests.
-#[must_use]
-#[allow(
-    dead_code,
-    reason = "exercised only by this module's own tests; the library builds once without `cfg(test)`"
-)]
-pub fn gray(v: f32) -> Rgb {
-    Rgb { r: v, g: v, b: v }
-}
-
 #[cfg(test)]
 mod tests {
     use kurbo::Point;
     use pdfrum_page::Vertex;
 
     use super::*;
+
+    /// A vertex colour as `Rgb`, for a test assembling a mesh.
+    fn gray(v: f32) -> Rgb {
+        Rgb { r: v, g: v, b: v }
+    }
 
     fn tri(pts: [(f64, f64); 3], colors: [Rgb; 3]) -> Triangle {
         let mut vertices = [Vertex {

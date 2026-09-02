@@ -242,17 +242,7 @@ pub struct RenderedImageCache {
     bytes: usize,
 }
 
-#[allow(
-    dead_code,
-    reason = "the constructor and the four size questions are exercised only by this module's own tests; the walk reaches the cache through `RenderCaches`, which derives `Default`"
-)]
 impl RenderedImageCache {
-    /// An empty cache.
-    #[must_use]
-    pub fn new() -> Self {
-        Self::default()
-    }
-
     /// The pixmap for `source` at `request`, producing it through `render` on
     /// a miss.
     ///
@@ -290,30 +280,6 @@ impl RenderedImageCache {
             // panic in library code even for a case the code above excludes.
             None => Rendered::Uncached(render_empty()),
         }
-    }
-
-    /// How many pixmaps are held.
-    #[must_use]
-    pub fn len(&self) -> usize {
-        self.entries.len()
-    }
-
-    /// Whether anything is held.
-    #[must_use]
-    pub fn is_empty(&self) -> bool {
-        self.entries.is_empty()
-    }
-
-    /// Roughly how many bytes of pixels are held.
-    #[must_use]
-    pub fn byte_size(&self) -> usize {
-        self.bytes
-    }
-
-    /// Forget everything.
-    pub fn clear(&mut self) {
-        self.entries.clear();
-        self.bytes = 0;
     }
 }
 
@@ -367,7 +333,7 @@ mod tests {
 
     #[test]
     fn a_second_draw_of_the_same_image_does_not_re_render_it() {
-        let mut cache = RenderedImageCache::new();
+        let mut cache = RenderedImageCache::default();
         let key = PixmapRequest::for_image(&gray(4, 4), Argb::BLACK, None, 4, 4);
         let mut renders = 0;
         for _ in 0..5 {
@@ -378,19 +344,19 @@ mod tests {
             assert_eq!(p.width(), 4);
         }
         assert_eq!(renders, 1, "four of the five draws should be hits");
-        assert_eq!(cache.len(), 1);
+        assert_eq!(cache.entries.len(), 1);
     }
 
     #[test]
     fn two_sizes_of_one_image_are_two_entries() {
         let img = gray(8, 8);
-        let mut cache = RenderedImageCache::new();
+        let mut cache = RenderedImageCache::default();
         let full = PixmapRequest::for_image(&img, Argb::BLACK, None, 8, 8);
         let half = PixmapRequest::for_image(&img, Argb::BLACK, None, 4, 4);
         assert_ne!(full, half);
         let _ = cache.get_or_render(Some(ObjRef::new(1, 0)), full, || filled(8, 8));
         let _ = cache.get_or_render(Some(ObjRef::new(1, 0)), half, || filled(4, 4));
-        assert_eq!(cache.len(), 2, "a reduction is a different pixmap");
+        assert_eq!(cache.entries.len(), 2, "a reduction is a different pixmap");
     }
 
     #[test]
@@ -413,7 +379,7 @@ mod tests {
 
     #[test]
     fn an_image_with_no_reference_is_never_cached() {
-        let mut cache = RenderedImageCache::new();
+        let mut cache = RenderedImageCache::default();
         let key = PixmapRequest::for_image(&gray(4, 4), Argb::BLACK, None, 4, 4);
         let mut renders = 0;
         for _ in 0..3 {
@@ -424,25 +390,25 @@ mod tests {
             assert_eq!(p.width(), 4, "and the caller still gets its pixels");
         }
         assert_eq!(renders, 3, "an inline image has no key");
-        assert!(cache.is_empty());
+        assert!(cache.entries.is_empty());
     }
 
     #[test]
     fn a_full_cache_stops_inserting_and_still_answers() {
-        let mut cache = RenderedImageCache::new();
+        let mut cache = RenderedImageCache::default();
         // One entry that fills the budget on its own: 4097^2 * 4 bytes is just
         // over 64 MiB.
         let side = 4097;
         let key = PixmapRequest::for_image(&gray(side, side), Argb::BLACK, None, side, side);
         let _ = cache.get_or_render(Some(ObjRef::new(1, 0)), key, || filled(side, side));
-        assert_eq!(cache.len(), 1);
-        assert!(cache.byte_size() > RENDERED_CACHE_BUDGET);
+        assert_eq!(cache.entries.len(), 1);
+        assert!(cache.bytes > RENDERED_CACHE_BUDGET);
 
         // A second one does not fit, and is answered without being kept.
         let key2 = PixmapRequest::for_image(&gray(side, side), Argb::BLACK, None, side, side);
         let p = cache.get_or_render(Some(ObjRef::new(2, 0)), key2, || filled(8, 8));
         assert_eq!(p.width(), 8, "the caller gets its pixmap regardless");
-        assert_eq!(cache.len(), 1, "and the cache did not grow");
+        assert_eq!(cache.entries.len(), 1, "and the cache did not grow");
     }
 
     #[test]
@@ -450,7 +416,7 @@ mod tests {
         // The `image_bug_718762` case: a 5000x5000 image is 100 MB
         // premultiplied, larger than the 64 MB budget, and is exactly the
         // entry M12.md §3.6 exists to make a hit.
-        let mut cache = RenderedImageCache::new();
+        let mut cache = RenderedImageCache::default();
         let side = 5000;
         let key = PixmapRequest::for_image(&gray(side, side), Argb::BLACK, None, side, side);
         let mut renders = 0;
@@ -465,21 +431,22 @@ mod tests {
 
     #[test]
     fn clearing_empties_the_cache() {
-        let mut cache = RenderedImageCache::new();
+        let mut cache = RenderedImageCache::default();
         let key = PixmapRequest::for_image(&gray(4, 4), Argb::BLACK, None, 4, 4);
         let _ = cache.get_or_render(Some(ObjRef::new(1, 0)), key, || filled(4, 4));
-        assert!(!cache.is_empty());
-        cache.clear();
-        assert!(cache.is_empty());
-        assert_eq!(cache.byte_size(), 0);
+        assert!(!cache.entries.is_empty());
+        cache.entries.clear();
+        cache.bytes = 0;
+        assert!(cache.entries.is_empty());
+        assert_eq!(cache.bytes, 0);
     }
 
     #[test]
     fn two_generations_of_one_object_number_are_two_entries() {
-        let mut cache = RenderedImageCache::new();
+        let mut cache = RenderedImageCache::default();
         let key = PixmapRequest::for_image(&gray(4, 4), Argb::BLACK, None, 4, 4);
         let _ = cache.get_or_render(Some(ObjRef::new(7, 0)), key, || filled(4, 4));
         let _ = cache.get_or_render(Some(ObjRef::new(7, 1)), key, || filled(4, 4));
-        assert_eq!(cache.len(), 2);
+        assert_eq!(cache.entries.len(), 2);
     }
 }
