@@ -18,14 +18,9 @@
 //! `/ViewerPreferences` is a legitimate outcome, distinct from the source
 //! having none at all.
 
-#![allow(
-    dead_code,
-    reason = "`array_is_flat` is read by this module's own tests only — the filter \
-              calls it through `is_copyable`. It became visible to the lint when \
-              `pub mod import` went private (§A.11 step 12)"
-)]
-
-use pdfrum_object::{Array, Dict, Object, Resolve, names};
+#[cfg(test)]
+use pdfrum_object::Array;
+use pdfrum_object::{Dict, Object, Resolve, names};
 
 /// Whether a value may be copied into a viewer-preferences dictionary.
 ///
@@ -72,6 +67,7 @@ pub(crate) fn filtered(src_catalog: &Dict, r: &impl Resolve) -> Option<Dict> {
 /// Whether an array would survive the filter, for a caller inspecting one
 /// value rather than a whole dictionary.
 #[must_use]
+#[cfg(test)]
 pub(crate) fn array_is_flat(a: &Array) -> bool {
     a.iter().all(is_flat_element)
 }

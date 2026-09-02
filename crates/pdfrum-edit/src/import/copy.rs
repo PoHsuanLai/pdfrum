@@ -36,14 +36,6 @@
 //! decrypted-but-still-compressed bytes, and an untouched image survives the
 //! trip with its checksum intact.
 
-#![allow(
-    dead_code,
-    reason = "`ObjectMap`'s `len` and `is_empty` are read by this module's own \
-              tests only. They round out a collection type STYLE.md §1 wants \
-              complete, and they became visible to the lint when `pub mod import` \
-              went private (§A.11 step 12)"
-)]
-
 use std::collections::BTreeMap;
 
 use pdfrum_object::{Array, Dict, Name, ObjRef, Object, Resolve, names};
@@ -93,18 +85,6 @@ impl ObjectMap {
     #[must_use]
     pub(crate) fn get(&self, from: u32) -> Option<u32> {
         self.map.get(&from).copied()
-    }
-
-    /// How many objects have been copied.
-    #[must_use]
-    pub(crate) fn len(&self) -> usize {
-        self.map.len()
-    }
-
-    /// Whether nothing has been copied.
-    #[must_use]
-    pub(crate) fn is_empty(&self) -> bool {
-        self.map.is_empty()
     }
 }
 
@@ -375,7 +355,8 @@ trailer\n<< /Root 1 0 R /Size 4 >>\n";
         let mut dest = EditDoc::new(&base);
         let mut map = ObjectMap::new();
         assert!(copy_object(&mut dest, &src, ObjRef::new(1, 0), &mut map, 2).is_some());
-        assert_eq!(map.len(), 2);
+        assert!(map.get(1).is_some());
+        assert!(map.get(2).is_some());
     }
 
     // The back-pointer keys are skipped, so a page does not drag its tree in.
@@ -408,7 +389,11 @@ trailer\n<< /Root 1 0 R /Size 4 >>\n";
         assert!(!d.contains_key(names::FIRST));
         assert!(d.contains_key(&Name::from("Keep")));
         // Only the kept child was copied, alongside object 1 itself.
-        assert_eq!(map.len(), 2);
+        assert!(map.get(1).is_some());
+        assert!(map.get(53).is_some());
+        assert!(map.get(50).is_none());
+        assert!(map.get(51).is_none());
+        assert!(map.get(52).is_none());
     }
 
     // D13: a `/Type /Pages` resolves to the destination's real pages node,

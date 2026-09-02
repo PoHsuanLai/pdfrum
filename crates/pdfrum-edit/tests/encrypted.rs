@@ -23,7 +23,7 @@
 
 // The helpers below are shared by `#[test]` functions; `allow-expect-in-tests`
 // does not reach them, so the allowance is stated once for the file.
-#![allow(
+#![expect(
     clippy::expect_used,
     reason = "helpers shared by the tests below; a panic here is a failure"
 )]

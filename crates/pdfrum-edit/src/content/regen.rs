@@ -473,7 +473,7 @@ impl ContentsShape {
 
 #[cfg(test)]
 mod tests {
-    #![allow(
+    #![expect(
         clippy::indexing_slicing,
         reason = "test fixtures index collections whose length the fixture fixes"
     )]

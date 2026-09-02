@@ -18,13 +18,6 @@
 //! branch that adds nothing. There is **no clamping**: a source page smaller
 //! than its slot is scaled *up* to fill it.
 
-#![allow(
-    dead_code,
-    reason = "`NupGrid::sheet_count` is read by this module's own tests only; it \
-              became visible to the lint when `pub mod import` went private \
-              (§A.11 step 12)"
-)]
-
 use pdfrum_common::kurbo::Affine;
 
 use crate::content::num::write_matrix;
@@ -85,13 +78,6 @@ impl NupGrid {
     #[must_use]
     pub(crate) fn per_sheet(self) -> u32 {
         self.x.saturating_mul(self.y)
-    }
-
-    /// How many sheets `pages` source pages need; the last one is short.
-    #[must_use]
-    pub(crate) fn sheet_count(self, pages: usize) -> usize {
-        let per = self.per_sheet().max(1) as usize;
-        pages.div_ceil(per)
     }
 
     /// The column and bottom-origin row of sub-page `index` on its sheet.
@@ -232,11 +218,12 @@ mod tests {
     // ImportNPages (:108): the sheet counts.
     #[test]
     fn sheet_counts_round_up() {
-        assert_eq!(grid(612.0, 792.0, 2, 1).sheet_count(5), 3);
-        assert_eq!(grid(612.0, 792.0, 5, 1).sheet_count(5), 1);
-        assert_eq!(grid(792.0, 612.0, 8, 1).sheet_count(5), 1);
-        assert_eq!(grid(792.0, 612.0, 128, 1).sheet_count(5), 1);
-        assert_eq!(grid(792.0, 612.0, 3, 1).sheet_count(5), 2);
+        let sheets = |g: NupGrid, pages: usize| pages.div_ceil(g.per_sheet().max(1) as usize);
+        assert_eq!(sheets(grid(612.0, 792.0, 2, 1), 5), 3);
+        assert_eq!(sheets(grid(612.0, 792.0, 5, 1), 5), 1);
+        assert_eq!(sheets(grid(792.0, 612.0, 8, 1), 5), 1);
+        assert_eq!(sheets(grid(792.0, 612.0, 128, 1), 5), 1);
+        assert_eq!(sheets(grid(792.0, 612.0, 3, 1), 5), 2);
     }
 
     // A source page the same shape as its slot fits exactly and is centred

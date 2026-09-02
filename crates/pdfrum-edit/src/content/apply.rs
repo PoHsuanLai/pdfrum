@@ -270,11 +270,6 @@ pub fn shared_objects(doc: &EditDoc<'_>) -> ShareCounts {
 
 #[cfg(test)]
 mod tests {
-    #![allow(
-        clippy::indexing_slicing,
-        reason = "test fixtures index collections whose length the fixture fixes"
-    )]
-
     use super::{apply_rewrite, shared_objects};
     use crate::content::regen::{PageRewrite, Regenerated};
     use crate::doc::EditDoc;
