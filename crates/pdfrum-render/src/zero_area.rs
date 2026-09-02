@@ -69,21 +69,13 @@ pub struct Scratch {
     found: Vec<ZeroArea>,
 }
 
-impl Scratch {
-    /// Empty buffers.
-    #[must_use]
-    pub fn new() -> Self {
-        Self::default()
-    }
-}
-
 /// Apply the detector to every `MoveTo`-delimited sub-path of `path`, reusing
 /// `scratch`'s buffers, and return what it found.
 ///
 /// The borrow is the whole point: the result borrows `scratch`, so the caller
 /// reads the detections and the buffers stay allocated for the next path. A
 /// sub-path the detector rejects is *not* in the result and must still be
-/// filled normally, exactly as [`zero_area_sub_paths`] documents.
+/// filled normally.
 pub fn scan_into<'a>(
     scratch: &'a mut Scratch,
     path: &BezPath,
@@ -318,37 +310,6 @@ pub fn zero_area_path(
         .or_else(|| check_folding(points, has_curve))
 }
 
-/// Apply the detector to every `MoveTo`-delimited sub-path of `path`, owning
-/// the result.
-///
-/// Returns the sub-paths that were degenerate, each with its replacement.
-/// A sub-path the detector rejects is *not* in the result and must still be
-/// filled normally.
-///
-/// The walk does **not** call this — it calls [`scan_into`] with the session's
-/// [`Scratch`], because the scan runs on every fill-only path object and the
-/// allocations this signature forces were 9866 per render on one corpus document
-/// (`docs/status/M12b-P2.md` §5). This stays as the convenient form for a caller
-/// asking the question once.
-#[must_use]
-#[allow(
-    dead_code,
-    reason = "exercised only by this module's own tests; the library builds once without `cfg(test)`"
-)]
-pub fn zero_area_sub_paths(
-    path: &BezPath,
-    transform: Option<kurbo::Affine>,
-    adjust: bool,
-) -> Vec<ZeroArea> {
-    let mut scratch = Scratch::new();
-    crate::walkprofile::alloc_items(
-        crate::walkprofile::Site::ZeroAreaVec,
-        path.elements().len(),
-        core::mem::size_of::<Point>(),
-    );
-    scan_into(&mut scratch, path, transform, adjust).to_vec()
-}
-
 /// The alpha a thin zero-area replacement is stroked at: the fill's alpha
 /// **shifted right by two**, i.e. a quarter (`cfx_renderdevice.cpp:968`).
 ///
@@ -360,6 +321,23 @@ pub fn thin_alpha(fill_alpha: u8) -> u8 {
 
 #[cfg(test)]
 mod tests {
+    /// The detector applied to every `MoveTo`-delimited sub-path of `path`,
+    /// owning the result.
+    ///
+    /// The walk never spells it this way — it calls [`scan_into`] with the
+    /// session's [`Scratch`], because the scan runs on every fill-only path
+    /// object and the allocations this signature forces were 9866 per render
+    /// on one corpus document (`docs/status/M12b-P2.md` §5). A test asking
+    /// the question once can afford them.
+    fn zero_area_sub_paths(
+        path: &BezPath,
+        transform: Option<kurbo::Affine>,
+        adjust: bool,
+    ) -> Vec<ZeroArea> {
+        let mut scratch = Scratch::default();
+        scan_into(&mut scratch, path, transform, adjust).to_vec()
+    }
+
     use kurbo::{Affine, Shape};
 
     use super::*;
@@ -604,7 +582,7 @@ mod tests {
         let paths = [boundaries, several, curved, bare, BezPath::new()];
         // One scratch across all of them, which is the point: the second path
         // runs against buffers the first left behind.
-        let mut scratch = Scratch::new();
+        let mut scratch = Scratch::default();
         for path in &paths {
             for adjust in [false, true] {
                 for transform in [None, Some(kurbo::Affine::scale(2.0))] {

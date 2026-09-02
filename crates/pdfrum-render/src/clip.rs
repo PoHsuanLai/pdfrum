@@ -213,35 +213,31 @@ pub fn pop(device: &mut dyn RenderDevice, n: usize) {
     }
 }
 
-/// The device-space rectangle a clip stack confines drawing to, or the whole
-/// device when it confines nothing.
-///
-/// Used for the per-object cull test and to size a transparency group's
-/// offscreen buffer.
-#[must_use]
-#[allow(
-    dead_code,
-    reason = "exercised only by this module's own tests; the library builds once without `cfg(test)`"
-)]
-pub fn device_bounds(clips: &[Clip]) -> Option<Rect> {
-    let mut acc: Option<Rect> = None;
-    for clip in clips {
-        let r = match clip {
-            Clip::Rect(r) => *r,
-            Clip::Path(p, _) => p.bounding_box(),
-            Clip::Empty => EMPTY_CLIP_RECT,
-        };
-        acc = Some(match acc {
-            Some(a) => a.intersect(r),
-            None => r,
-        });
-    }
-    acc
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The device-space rectangle a clip stack confines drawing to, or the
+    /// whole device when it confines nothing.
+    ///
+    /// A test's reading of what [`resolve`] produced. Nothing in the walk
+    /// asks the question: the cull test works from the object's own bbox and
+    /// a group's offscreen is sized by the device.
+    fn device_bounds(clips: &[Clip]) -> Option<Rect> {
+        let mut acc: Option<Rect> = None;
+        for clip in clips {
+            let r = match clip {
+                Clip::Rect(r) => *r,
+                Clip::Path(p, _) => p.bounding_box(),
+                Clip::Empty => EMPTY_CLIP_RECT,
+            };
+            acc = Some(match acc {
+                Some(a) => a.intersect(r),
+                None => r,
+            });
+        }
+        acc
+    }
 
     fn rect_path(x0: f64, y0: f64, x1: f64, y1: f64) -> BezPath {
         let mut p = BezPath::new();

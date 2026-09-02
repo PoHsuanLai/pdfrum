@@ -33,7 +33,9 @@
 //! cap of 32 plus a non-finite check as additive safety; each level halves
 //! the patch, so 32 levels covers any patch up to 2^32 device units.
 
-use kurbo::{Affine, BezPath, Point, Rect, Shape};
+#[cfg(test)]
+use kurbo::Shape;
+use kurbo::{Affine, BezPath, Point, Rect};
 use pdfrum_page::Patch;
 use pdfrum_page::Rgb;
 
@@ -354,19 +356,6 @@ impl Points {
         into.curve_to(lower[0], upper[0], top[0]);
         into.close_path();
     }
-
-    /// The same path as its own value, for callers outside the subdivision
-    /// loop where one allocation is not worth threading a buffer for. Only
-    /// [`patch_outline`] wants that, and only its test wants that.
-    #[allow(
-        dead_code,
-        reason = "exercised only by this module's own tests; the library builds once without `cfg(test)`"
-    )]
-    fn boundary_path(&self) -> BezPath {
-        let mut p = BezPath::new();
-        self.write_boundary_path(&mut p);
-        p
-    }
 }
 
 /// What the whole subdivision of one patch shares: the device it fills into,
@@ -620,37 +609,28 @@ pub fn patch_is_offscreen(patch: &Patch, to_bitmap: Affine, width: u32, height: 
     b.x1 <= 0.0 || b.x0 >= f64::from(width) || b.y1 <= 0.0 || b.y0 >= f64::from(height)
 }
 
-/// A closed path over a patch's twelve outer control points — the silhouette
-/// rather than the filled cells.
-///
-/// Written for a caller that wanted a clip out of a patch; that caller was
-/// never written, and privatising the module is what surfaced the fact. Kept
-/// because its test is what pins `Points::from_boundary`'s corner ordering.
-#[must_use]
-#[allow(
-    dead_code,
-    reason = "exercised only by this module's own tests; the library builds once without `cfg(test)`"
-)]
-pub fn patch_outline(patch: &Patch, to_bitmap: Affine) -> BezPath {
-    let transformed: Vec<Point> = patch.points.iter().map(|&p| to_bitmap * p).collect();
-    Points::from_boundary(&transformed)
-        .map(|p| p.boundary_path())
-        .unwrap_or_default()
-}
-
-/// The area a patch outline encloses, for tests.
-#[must_use]
-#[allow(
-    dead_code,
-    reason = "exercised only by this module's own tests; the library builds once without `cfg(test)`"
-)]
-pub fn outline_area(path: &BezPath) -> f64 {
-    path.area().abs()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A closed path over a patch's twelve outer control points — the
+    /// silhouette rather than the filled cells.
+    ///
+    /// The rasterizer never draws a patch this way: it subdivides and fills
+    /// cells, writing each through the one reused buffer
+    /// [`Points::write_boundary_path`] takes. This spelling exists so a test
+    /// can pin [`Points::from_boundary`]'s corner ordering, which is the one
+    /// relationship nothing else catches.
+    fn patch_outline(patch: &Patch, to_bitmap: Affine) -> BezPath {
+        let transformed: Vec<Point> = patch.points.iter().map(|&p| to_bitmap * p).collect();
+        Points::from_boundary(&transformed)
+            .map(|points| {
+                let mut out = BezPath::new();
+                points.write_boundary_path(&mut out);
+                out
+            })
+            .unwrap_or_default()
+    }
 
     /// A corner colour with no ramp behind it — the direct-colour conversion.
     fn to_int_color_plain(c: Rgb) -> IntColor {
@@ -1019,6 +999,6 @@ mod tests {
         let bbox = outline.bounding_box();
         assert!((bbox.x0 - 0.0).abs() < 1e-9);
         assert!((bbox.x1 - 9.0).abs() < 1e-9);
-        assert!(outline_area(&outline) > 0.0);
+        assert!(outline.area().abs() > 0.0);
     }
 }

@@ -472,7 +472,7 @@ pub fn adjust_glyph_space(origins: &mut [kurbo::Point], device: &[kurbo::Point])
 )]
 #[allow(
     dead_code,
-    reason = "exercised only by this module's own tests; the library builds once without `cfg(test)`"
+    reason = "unwired — see docs/status/unwired-oracle-ports.md"
 )]
 pub fn stroke_ctm_split(text_matrix: Affine, to_device: Affine, ctm: [f64; 4]) -> (Affine, Affine) {
     let [a, b, c, d] = ctm;

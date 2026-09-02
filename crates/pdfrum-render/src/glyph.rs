@@ -273,11 +273,8 @@ impl SubpixelPhase {
 ///
 /// Returns `None` when the glyph would exceed [`MAX_GLYPH_DIMENSION`], which is
 /// what `RenderGlyph` does, or when it has no area at all.
+#[cfg(test)]
 #[must_use]
-#[allow(
-    dead_code,
-    reason = "exercised only by this module's own tests; the library builds once without `cfg(test)`"
-)]
 pub(crate) fn rasterize(outline: &BezPath, phase: SubpixelPhase) -> Option<GlyphBitmap> {
     Some(render_lcd(outline)?.to_gray(phase))
 }
@@ -690,17 +687,7 @@ impl std::ops::Deref for Cached<'_> {
     }
 }
 
-#[allow(
-    dead_code,
-    reason = "the constructor and the four size questions are exercised only by this module's own tests; the walk reaches the cache through `RenderCaches`, which derives `Default`"
-)]
 impl BitmapCache {
-    /// An empty cache.
-    #[must_use]
-    pub fn new() -> Self {
-        Self::default()
-    }
-
     /// The bitmap for `key`, rasterizing it through `render` on a miss.
     ///
     /// `render` is a closure rather than an outline because producing the
@@ -725,30 +712,6 @@ impl BitmapCache {
             .get(&key)
             .and_then(Option::as_ref)
             .map(Cached::Hit)
-    }
-
-    /// How many bitmaps — hits and misses alike — are memoized.
-    #[must_use]
-    pub fn len(&self) -> usize {
-        self.entries.len()
-    }
-
-    /// Whether anything has been rasterized yet.
-    #[must_use]
-    pub fn is_empty(&self) -> bool {
-        self.entries.is_empty()
-    }
-
-    /// Roughly how many bytes of bitmaps are held.
-    #[must_use]
-    pub fn byte_size(&self) -> usize {
-        self.bytes
-    }
-
-    /// Forget everything.
-    pub fn clear(&mut self) {
-        self.entries.clear();
-        self.bytes = 0;
     }
 }
 
