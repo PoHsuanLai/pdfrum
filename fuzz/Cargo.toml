@@ -2,7 +2,7 @@
 # root one. DEPS.md's Pure-Rust guarantee is that no published crate's
 # dependency tree compiles C or C++; `libfuzzer-sys` links LLVM's C++
 # libFuzzer runtime. Severing this package from the root workspace is what
-# keeps `cargo tree --workspace` in scripts/ci.sh clean — the guarantee then
+# keeps `cargo tree --workspace` in scripts/ci.nu clean — the guarantee then
 # holds by construction rather than by anyone remembering.
 #
 # The empty `[workspace]` table below is what does the severing: without it

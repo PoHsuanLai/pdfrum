@@ -410,7 +410,7 @@ fn the_adapter_is_named_and_is_not_software() {
 ///
 /// The facade's `Backend` enum could never name this crate — naming it would
 /// have put `wgpu` in every `cargo add pdfrum` tree, which is the thing
-/// `scripts/check-no-wgpu.sh` exists to forbid. Since 2026-09-02 the backend
+/// `scripts/check-no-wgpu.nu` exists to forbid. Since 2026-09-02 the backend
 /// is an argument instead, so a caller who *does* hold a `wgpu::Device` hands
 /// it straight to `render_on` and the facade never learns the crate exists.
 ///
