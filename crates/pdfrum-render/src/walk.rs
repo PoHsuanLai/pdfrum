@@ -20,7 +20,7 @@
 
 use kurbo::{Affine, Rect, Shape};
 use pdfrum_common::Diagnostics;
-use pdfrum_page::{Conversion, Page, PageObject, Visibility};
+use pdfrum_page::{Page, PageObject, Visibility};
 
 use crate::clip;
 use crate::color::{Argb, ObjectKind, resolve_argb};
@@ -666,7 +666,6 @@ fn render_grouped<B: RasterBackend>(
     let inner_ctx = RenderCtx {
         transparency,
         in_group: true,
-        std_cs: Conversion::Standard,
         // The group does *not* inherit the parent's colour: `Initialize(null,
         // null)` in the C++.
         initial_fill: None,
@@ -778,7 +777,6 @@ fn render_soft_mask<B: RasterBackend>(
             initial_stroke: None,
             type3: None,
             in_group: true,
-            std_cs: Conversion::Standard,
             ..ctx.deeper()
         };
         // The mask's own matrix already places it; only the shift into the
@@ -1805,10 +1803,7 @@ fn render_pattern_stencil<B: RasterBackend>(
 
     // The pattern, over the stencil's whole extent.
     let mut pattern_target = backend.new_target(w, h, peniko::Color::TRANSPARENT);
-    let inner = RenderCtx {
-        std_cs: Conversion::Standard,
-        ..ctx.deeper()
-    };
+    let inner = RenderCtx { ..ctx.deeper() };
     paint_pattern(
         &inner,
         &mut pattern_target,

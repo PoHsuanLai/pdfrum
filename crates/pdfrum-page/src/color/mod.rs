@@ -39,45 +39,6 @@ pub use load::{ColorSpaceCache, load_cached, load_colorspace, stock_for_name};
 pub use special::{DeviceN, MAX_PATTERN_COMPONENTS, PatternSpace, Separation};
 pub use value::{ColorValue, PatternValue};
 
-/// Which `DeviceCMYK` -> RGB formula a conversion uses.
-///
-/// PDFium spells this as a boolean it calls *standard conversion*
-/// (`CPDF_ColorSpace::EnableStdConversion`, `cpdf_colorspace.cpp:663`), held
-/// as a counter and read back through `IsStdConversionEnabled()`. Only
-/// `DeviceCMYK` ever reads it — `CPDF_DeviceCS::GetRGB`
-/// (`cpdf_devicecs.cpp:65`) and `CPDF_DeviceCS::TranslateImageLine`
-/// (`cpdf_devicecs.cpp:119`) are the sole consumers in the whole C++ tree.
-/// Every other family, `ICCBased` and `Lab` included, ignores it; `Indexed`
-/// and `Pattern` merely pass it down to their base space
-/// (`CPDF_BasedCS::EnableStdConversion`, `cpdf_basedcs.cpp:13`).
-///
-/// The two variants are genuinely different colours, not a rounding
-/// difference: see [`ColorSpace::to_rgb_with`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum Conversion {
-    /// The Adobe sample table: a four-dimensional interpolated lookup that
-    /// models real ink, after clamping each component into `0..=1`.
-    ///
-    /// This is what every path in this workspace uses, and what PDFium uses
-    /// whenever its counter is zero.
-    #[default]
-    Managed,
-    /// The naive subtractive formula `1 - min(1, x + k)`, run **without
-    /// clamping its inputs**.
-    ///
-    /// PDFium's "std conversion". It is the cheaper, cruder answer and it
-    /// disagrees substantially with [`Self::Managed`] for saturated colours.
-    Standard,
-}
-
-impl Conversion {
-    /// Whether this is [`Self::Standard`].
-    #[must_use]
-    pub fn is_standard(self) -> bool {
-        matches!(self, Self::Standard)
-    }
-}
-
 /// A colour in the device's RGB space, each channel nominally in `0..=1`.
 ///
 /// Not clamped on construction: several conversion paths deliberately return
@@ -265,30 +226,23 @@ impl ColorSpace {
     /// Use [`Self::try_to_rgb`] when the distinction matters.
     #[must_use]
     pub fn to_rgb(&self, comps: &[f32]) -> Rgb {
-        self.to_rgb_with(comps, Conversion::Managed)
-    }
-
-    /// [`Self::to_rgb`] with the standard-conversion flag, which only
-    /// `DeviceCMYK` reads and which is on only inside the image decoder.
-    #[must_use]
-    pub fn to_rgb_with(&self, comps: &[f32], conversion: Conversion) -> Rgb {
-        self.try_to_rgb(comps, conversion).unwrap_or(Rgb::BLACK)
+        self.try_to_rgb(comps).unwrap_or(Rgb::BLACK)
     }
 
     /// Convert components, distinguishing "black" from "no colour at all".
     #[must_use]
-    pub fn try_to_rgb(&self, comps: &[f32], conversion: Conversion) -> Option<Rgb> {
+    pub fn try_to_rgb(&self, comps: &[f32]) -> Option<Rgb> {
         match self {
             Self::DeviceGray => Some(device::gray_to_rgb(comps)),
             Self::DeviceRgb => Some(device::rgb_to_rgb(comps)),
-            Self::DeviceCmyk => Some(device::cmyk_to_rgb(comps, conversion)),
+            Self::DeviceCmyk => Some(device::cmyk_to_rgb(comps)),
             Self::CalGray(_) => Some(cie::cal_gray_to_rgb(comps)),
             Self::CalRgb(cs) => Some(cie::cal_rgb_to_rgb(cs, comps)),
             Self::Lab(_) => Some(cie::lab_to_rgb(comps)),
-            Self::IccBased(icc) => Some(icc.to_rgb(comps, conversion)),
-            Self::Indexed(cs) => cs.to_rgb(comps, conversion),
-            Self::Separation(cs) => cs.to_rgb(comps, conversion),
-            Self::DeviceN(cs) => cs.to_rgb(comps, conversion),
+            Self::IccBased(icc) => Some(icc.to_rgb(comps)),
+            Self::Indexed(cs) => cs.to_rgb(comps),
+            Self::Separation(cs) => cs.to_rgb(comps),
+            Self::DeviceN(cs) => cs.to_rgb(comps),
             // A pattern's colour is not a function of its components; see
             // `PatternValue`.
             Self::Pattern(_) => None,
@@ -325,7 +279,7 @@ impl ColorSpace {
     /// family — see the module docs. `samples` holds `pixels *
     /// n_components()` bytes; `dest` receives `pixels * 3`.
     ///
-    /// `trans_mask` selects `DeviceCMYK`'s third formula, the one that is
+    /// `trans_mask` selects `DeviceCMYK`'s second formula, the one that is
     /// unreachable from the scalar path; every other family ignores it.
     pub fn translate_image_line(
         &self,
@@ -333,7 +287,6 @@ impl ColorSpace {
         samples: &[u8],
         pixels: usize,
         trans_mask: bool,
-        conversion: Conversion,
     ) {
         match self {
             // The byte replicated, written R,G,B — the one family that does
@@ -350,7 +303,7 @@ impl ColorSpace {
             // its gamma, matrix and white point are silently dropped.
             Self::DeviceRgb | Self::CalRgb(_) => reverse_rgb(dest, samples, pixels),
             Self::DeviceCmyk => {
-                Self::translate_cmyk_line(dest, samples, pixels, trans_mask, conversion);
+                Self::translate_cmyk_line(dest, samples, pixels, trans_mask);
             }
             // The same maths as the scalar path but on a different input
             // encoding: L* spans the byte range, a* and b* are offset by 128.
@@ -371,31 +324,25 @@ impl ColorSpace {
                 if icc.profile.is_srgb() {
                     reverse_rgb(dest, samples, pixels);
                 } else if icc.profile.is_supported() {
-                    self.translate_generic_line(dest, samples, pixels, conversion);
+                    self.translate_generic_line(dest, samples, pixels);
                 } else if let Some(base) = &icc.base {
-                    base.translate_image_line(dest, samples, pixels, false, conversion);
+                    base.translate_image_line(dest, samples, pixels, false);
                 } else {
                     for i in 0..pixels {
                         write_bgr(dest, i, Rgb::BLACK);
                     }
                 }
             }
-            _ => self.translate_generic_line(dest, samples, pixels, conversion),
+            _ => self.translate_generic_line(dest, samples, pixels),
         }
     }
 
-    /// `DeviceCMYK`'s three bulk formulas.
+    /// `DeviceCMYK`'s two bulk formulas.
     #[expect(
         clippy::many_single_char_names,
         reason = "cyan, magenta, yellow and black are single-letter by convention"
     )]
-    fn translate_cmyk_line(
-        dest: &mut [u8],
-        samples: &[u8],
-        pixels: usize,
-        trans_mask: bool,
-        conversion: Conversion,
-    ) {
+    fn translate_cmyk_line(dest: &mut [u8], samples: &[u8], pixels: usize, trans_mask: bool) {
         for i in 0..pixels {
             let Some(&[c8, m8, y8, k8]) = samples
                 .get(i * 4..i * 4 + 4)
@@ -419,13 +366,6 @@ impl ColorSpace {
                     (((255 - m) * kk) / 255) as u8,
                     (((255 - y) * kk) / 255) as u8,
                 ]
-            } else if conversion.is_standard() {
-                // Note the channel swap: cyan drives blue, yellow drives red.
-                [
-                    (255 - (y + k).min(255)) as u8,
-                    (255 - (m + k).min(255)) as u8,
-                    (255 - (c + k).min(255)) as u8,
-                ]
             } else {
                 let [r, g, b] = device::adobe_cmyk_to_srgb(c8, m8, y8, k8);
                 [b, g, r]
@@ -438,13 +378,7 @@ impl ColorSpace {
     ///
     /// `Indexed` divides by **1** rather than 255, so its samples reach
     /// `to_rgb` as raw indices; every other family normalizes.
-    fn translate_generic_line(
-        &self,
-        dest: &mut [u8],
-        samples: &[u8],
-        pixels: usize,
-        conversion: Conversion,
-    ) {
+    fn translate_generic_line(&self, dest: &mut [u8], samples: &[u8], pixels: usize) {
         let n = self.n_components();
         let divisor = if matches!(self, Self::Indexed(_)) {
             1.0
@@ -457,7 +391,7 @@ impl ColorSpace {
                 *slot = f32::from(samples.get(i * n + j).copied().unwrap_or(0)) / divisor;
             }
             // A failed conversion renders black rather than skipping.
-            write_bgr(dest, i, self.to_rgb_with(&comps, conversion));
+            write_bgr(dest, i, self.to_rgb(&comps));
         }
     }
 }
@@ -506,52 +440,50 @@ mod tests {
         reason = "test fixtures quote oracle vectors verbatim and compare exactly"
     )]
 
-    use super::{ColorSpace, Conversion, Family, Rgb};
+    use super::{ColorSpace, Family, Rgb};
 
-    /// The two `Conversion` variants are different colours on the **bulk**
-    /// path, not just the scalar one.
+    /// The bulk `DeviceCMYK` arm this crate runs, and the record of the one
+    /// it does not.
     ///
-    /// Pins both of `CPDF_DeviceCS::TranslateImageLine`'s `kDeviceCMYK` arms
-    /// (`cpdf_devicecs.cpp:119`). Note the channel order: the std arm writes
-    /// `255 - min(255, cyan + k)` into **blue** and yellow into red, which is
-    /// the same swap the managed arm gets from `write_bgr`.
+    /// Pins `CPDF_DeviceCS::TranslateImageLine`'s reachable `kDeviceCMYK` arm
+    /// (`cpdf_devicecs.cpp:119`). The *other* arm — the one behind
+    /// `IsStdConversionEnabled()` — is recomputed here rather than called,
+    /// because it is not implemented: `device::cmyk_to_rgb`'s docs prove it
+    /// can never run in the oracle. It is asserted to disagree, so the record
+    /// stays falsifiable.
     #[test]
-    fn the_two_conversions_disagree_on_the_image_line() {
+    fn the_bulk_cmyk_arm_is_the_adobe_table() {
         let cs = ColorSpace::DeviceCmyk;
         // One saturated pixel: c=128, m=64, y=0, k=64.
         let src = [128u8, 64, 0, 64];
 
-        let mut std_dest = [0u8; 3];
-        cs.translate_image_line(&mut std_dest, &src, 1, false, Conversion::Standard);
-        // The oracle assigns `blue = 255 - min(255, cyan + k)` into an
-        // `FX_RGB_STRUCT`, whose fields are laid out **red, green, blue**
-        // (`fx_dib.h:53`) — so cyan lands in the *last* byte and yellow in the
-        // first. Byte 0 = 255-min(255,0+64) = 191, byte 1 = 255-min(255,64+64)
-        // = 127, byte 2 = 255-min(255,128+64) = 63.
-        assert_eq!(std_dest, [191, 127, 63]);
-
-        let mut managed_dest = [0u8; 3];
-        cs.translate_image_line(&mut managed_dest, &src, 1, false, Conversion::Managed);
-        assert_ne!(
-            managed_dest, std_dest,
-            "the Adobe table must not agree with the naive formula here"
-        );
+        let mut dest = [0u8; 3];
+        cs.translate_image_line(&mut dest, &src, 1, false);
         // The Adobe table's own answer, as bytes in B, G, R order.
         let [r, g, b] = super::device::adobe_cmyk_to_srgb(128, 64, 0, 64);
-        assert_eq!(managed_dest, [b, g, r]);
+        assert_eq!(dest, [b, g, r]);
+
+        // What the inert std arm would have written. The oracle assigns
+        // `blue = 255 - min(255, cyan + k)` into an `FX_RGB_STRUCT`, whose
+        // fields are laid out **red, green, blue** (`fx_dib.h:53`) — so cyan
+        // lands in the *last* byte and yellow in the first. Byte 0 =
+        // 255-min(255,0+64) = 191, byte 1 = 255-min(255,64+64) = 127, byte 2 =
+        // 255-min(255,128+64) = 63.
+        let would_have_been = [191u8, 127, 63];
+        assert_ne!(
+            dest, would_have_been,
+            "the Adobe table must not agree with the naive formula here"
+        );
     }
 
-    /// `trans_mask` overrides the conversion entirely: both variants take the
-    /// third formula, which is the one arm where cyan drives the *first* byte.
+    /// `trans_mask` takes the second formula, the one arm where cyan drives
+    /// the *first* byte rather than being swapped with yellow.
     #[test]
-    fn trans_mask_beats_both_conversions() {
+    fn trans_mask_takes_the_naive_un_inversion() {
         let cs = ColorSpace::DeviceCmyk;
         let src = [128u8, 64, 0, 64];
         let mut a = [0u8; 3];
-        let mut b = [0u8; 3];
-        cs.translate_image_line(&mut a, &src, 1, true, Conversion::Standard);
-        cs.translate_image_line(&mut b, &src, 1, true, Conversion::Managed);
-        assert_eq!(a, b, "trans_mask ignores the conversion");
+        cs.translate_image_line(&mut a, &src, 1, true);
         // k' = 255-64 = 191; ((255-128)*191)/255 = 95, ((255-64)*191)/255 = 143,
         // ((255-0)*191)/255 = 191.
         assert_eq!(a, [95, 143, 191]);
@@ -577,7 +509,7 @@ mod tests {
         }));
         let src = [255u8, 0, 0, 0, 255, 0, 0, 0, 255, 128, 128, 128];
         let mut dest = [0u8; 12];
-        cs.translate_image_line(&mut dest, &src, 4, false, Conversion::Managed);
+        cs.translate_image_line(&mut dest, &src, 4, false);
         assert_eq!(dest, [255, 255, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
     }
 
@@ -593,7 +525,7 @@ mod tests {
         }));
         let src = [255u8, 0, 0, 0, 255, 0, 0, 0, 255, 128, 128, 128];
         let mut dest = [0u8; 12];
-        cs.translate_image_line(&mut dest, &src, 4, false, Conversion::Managed);
+        cs.translate_image_line(&mut dest, &src, 4, false);
         assert_eq!(dest, [0, 0, 255, 0, 255, 0, 255, 0, 0, 128, 128, 128]);
     }
 
@@ -631,7 +563,7 @@ mod tests {
     #[test]
     fn pattern_has_no_scalar_colour() {
         let cs = ColorSpace::Pattern(Box::default());
-        assert!(cs.try_to_rgb(&[0.5], Conversion::Managed).is_none());
+        assert!(cs.try_to_rgb(&[0.5]).is_none());
         // …and the fallible-free wrapper paints black rather than panicking.
         assert_eq!(cs.to_rgb(&[0.5]), Rgb::BLACK);
     }

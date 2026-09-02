@@ -17,8 +17,8 @@
     reason = "cyan, magenta, yellow and black are single-letter by convention"
 )]
 
+use super::Rgb;
 use super::cmyk_table::{AXIS, CMYK};
-use super::{Conversion, Rgb};
 
 /// The value `(v * 255)` is offset by before truncating, chosen so the result
 /// matches `roundf` on every float in `0..=1`.
@@ -48,24 +48,45 @@ pub fn rgb_to_rgb(comps: &[f32]) -> Rgb {
     }
 }
 
-/// `DeviceCMYK`.
+/// `DeviceCMYK`: the Adobe sample table, after clamping each component.
 ///
-/// With `std_conversion` the naive subtractive formula runs **without
-/// clamping its inputs**; without it, the Adobe sample table does, after
-/// clamping. The two disagree substantially for saturated colours, and which
-/// one runs is not a rendering option — it is whether the caller is the image
-/// decoder.
+/// # PDFium's second formula, and why it is not here
+///
+/// The C++ carries an alternative — the naive subtractive
+/// `1 - min(1, x + k)`, run *without* clamping its inputs — behind a counter
+/// it calls *standard conversion* (`CPDF_ColorSpace::EnableStdConversion`,
+/// `cpdf_colorspace.cpp:663`, read back through `IsStdConversionEnabled()`).
+/// **That formula can never reach a pixel**, so this port does not implement
+/// it and no signature carries the switch:
+///
+/// - The only consumer in the whole C++ tree is `CPDF_DeviceCS`'s
+///   `kDeviceCMYK` arm — `GetRGB` (`cpdf_devicecs.cpp:65`) and
+///   `TranslateImageLine` (`cpdf_devicecs.cpp:119`). `ICCBased`, `Lab` and
+///   `CalRGB` never consult it; `CPDF_BasedCS` only forwards the counter to a
+///   base space (`cpdf_basedcs.cpp:13`).
+/// - `CPDF_DIB` raises the counter *after* the image's own colour work is
+///   done and lowers it before returning. `StartLoadDIBBase`
+///   (`cpdf_dib.cpp:199`) runs `LoadPalette` (`:184`) and `CreateDecoder`
+///   **before** `ContinueToLoadMask` raises it at `:153`; `:244` lowers it.
+/// - The image body is never translated inside that bracket.
+///   `TranslateImageLine` is reached only from `TranslateScanline24bpp`
+///   (`:1007`), called only from `CPDF_DIB::GetScanline` (`:1129`) — a
+///   `const` accessor the rasterizer pulls during compositing, long after the
+///   counter is back to zero. So `cpdf_devicecs.cpp:119`'s
+///   `IsStdConversionEnabled()` is always false.
+///
+/// What is left inside the bracket is one conversion, the `/Matte` colour at
+/// `cpdf_dib.cpp:839` — so the flag could only move a `DeviceCMYK` image
+/// carrying an `/SMask` with a `/Matte` array *and* drawn offscreen, a
+/// conjunction no file in `testing/corpus` or `testing/resources` contains,
+/// and the mask's own DIB (which `StartLoadMaskDIB` (`:832`) hands
+/// `bStdCS=true` unconditionally) is always `DeviceGray`, which ignores it.
+/// The naive formula is also the *less* correct of the two, so nothing of
+/// value is lost. `std_conversion_would_have_computed` pins what it would
+/// have produced.
 #[must_use]
-pub fn cmyk_to_rgb(comps: &[f32], conversion: Conversion) -> Rgb {
+pub fn cmyk_to_rgb(comps: &[f32]) -> Rgb {
     let at = |i: usize| comps.get(i).copied().unwrap_or(0.0);
-    if conversion.is_standard() {
-        let (c, m, y, k) = (at(0), at(1), at(2), at(3));
-        return Rgb {
-            r: 1.0 - (c + k).min(1.0),
-            g: 1.0 - (m + k).min(1.0),
-            b: 1.0 - (y + k).min(1.0),
-        };
-    }
     let clamp = |i: usize| at(i).clamp(0.0, 1.0);
     adobe_cmyk_to_srgb_f(clamp(0), clamp(1), clamp(2), clamp(3))
 }
@@ -169,7 +190,6 @@ mod tests {
         reason = "test fixtures quote oracle vectors verbatim and compare exactly"
     )]
 
-    use super::Conversion;
     use super::{cmyk_to_rgb, gray_to_rgb, rgb_to_rgb};
 
     fn close(a: f32, b: f32) -> bool {
@@ -210,7 +230,7 @@ mod tests {
             ([0.15, 0.5, 1.5, -0.6], [0.85098046, 0.552941, 0.15686275]),
         ];
         for (input, want) in cases {
-            let got = cmyk_to_rgb(&input, Conversion::Managed);
+            let got = cmyk_to_rgb(&input);
             assert!(
                 close(got.r, want[0]) && close(got.g, want[1]) && close(got.b, want[2]),
                 "cmyk {input:?}: got {got:?}, want {want:?}"
@@ -218,14 +238,31 @@ mod tests {
         }
     }
 
+    /// The record of PDFium's inert second formula, kept because the reason
+    /// it is absent is a claim about the oracle and should stay falsifiable.
+    ///
+    /// This is **not** a test of `cmyk_to_rgb`: it recomputes the naive
+    /// subtractive formula `1 - min(1, x + k)` here, unclamped, exactly as
+    /// `cpdf_devicecs.cpp:65` writes it, and pins what the oracle's
+    /// standard-conversion path *would* have produced had it ever run. See
+    /// `cmyk_to_rgb`'s docs for the proof that it cannot.
     #[test]
-    fn std_conversion_takes_the_naive_formula_unclamped() {
-        let got = cmyk_to_rgb(&[0.5, 0.25, 0.0, 0.25], Conversion::Standard);
-        assert!(close(got.r, 0.25) && close(got.g, 0.5) && close(got.b, 0.75));
+    fn std_conversion_would_have_computed() {
+        let naive = |comps: &[f32; 4]| {
+            let at = |i: usize| comps.get(i).copied().unwrap_or(0.0);
+            let (c, m, y, k) = (at(0), at(1), at(2), at(3));
+            [
+                1.0 - (c + k).min(1.0),
+                1.0 - (m + k).min(1.0),
+                1.0 - (y + k).min(1.0),
+            ]
+        };
+        let got = naive(&[0.5, 0.25, 0.0, 0.25]);
+        assert!(close(got[0], 0.25) && close(got[1], 0.5) && close(got[2], 0.75));
         // The naive path saturates at 1 through `min`, not through a clamp of
-        // the inputs.
-        let got = cmyk_to_rgb(&[2.0, 0.0, 0.0, 0.0], Conversion::Standard);
-        assert!(close(got.r, 0.0));
+        // the inputs — and the managed path this crate does run disagrees.
+        assert!(close(naive(&[2.0, 0.0, 0.0, 0.0])[0], 0.0));
+        assert!(close(cmyk_to_rgb(&[2.0, 0.0, 0.0, 0.0]).r, 0.0));
     }
 
     #[test]
