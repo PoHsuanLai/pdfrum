@@ -31,6 +31,17 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
 
 ## Performance (`docs/status/M13-perf-baseline.md`)
 
+- ~~`forms_combo_box` third cost~~ — landed 30c0419 (2026-09-03): an AGG
+  clip push allocated, walked and cloned a page-sized coverage plane per
+  appearance form; forms geomean 2.29x → 1.17x, `combo_box` 3.76x → 1.54x,
+  controls flat, board byte-identical (§11).
+- `forms_text_field` is now the class's worst row at 3.10x with one of the
+  lowest speedups (1.69x) — by §10.6's argument a *fourth* cost; its
+  `--op forms` split is next (§11.7).
+- tinyskia has a smaller instance of the same clip-plane clone (one clone,
+  no `sync_clip`), noted in §11.4, unmeasured.
+- A deep-clip-stack document outside `forms` would gain from 30c0419; none
+  was looked for.
 - An idle re-take of the §10.5 table. The box has never been idle (load
   30–66 through every run); the ratios are upper bounds until then.
 - `vector_font_size14` 3.70x and `vector_font_feature` 3.42x — glyph-heavy
