@@ -44,10 +44,11 @@
 //! turns the sorted cells into spans of constant coverage. It lives in the
 //! engine rather than here because the engine's own glyph path needs the same
 //! integrator, and a glyph bitmap must not depend on which rasterizer draws the
-//! page. [`target`] holds the pixel
+//! page. This crate's own two modules are private, because
+//! [`AggBackend`] is the whole of what it offers: `target` holds the pixel
 //! buffer, the clip — a coverage plane multiplied in per pixel, which is how
-//! the oracle's clip region works too — and the span blitter. [`image`] holds
-//! the inverse-mapped image sampler. The compositing arithmetic itself is
+//! the oracle's clip region works too — and the span blitter, and `image`
+//! holds the inverse-mapped image sampler. The compositing arithmetic itself is
 //! **`pdfrum-render`'s**, not this crate's: `blend::composite_premultiplied`
 //! is the one authority, so a pixel this backend blends and a pixel the engine
 //! blends in its own offscreen buffers agree by construction.
@@ -86,8 +87,8 @@
 // the engine: index with `get()` and do arithmetic with `checked_*`.
 #![warn(clippy::indexing_slicing)]
 
-pub mod image;
-pub mod target;
+mod image;
+mod target;
 
 use kurbo::{Affine, BezPath, Rect, Shape, Stroke};
 use pdfrum_page::BlendMode;
