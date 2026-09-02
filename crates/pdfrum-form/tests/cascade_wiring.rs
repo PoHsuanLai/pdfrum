@@ -105,7 +105,7 @@ fn two_text_fields() -> Dict {
 struct Fixture {
     page: pdfrum_form::PageForm,
     catalog: Dict,
-    fonts: ap::FormFonts,
+    fonts: std::sync::Arc<ap::FormFonts>,
     resolve: NoResolve,
 }
 

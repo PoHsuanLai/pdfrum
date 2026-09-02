@@ -65,7 +65,7 @@ pub mod transparency;
 pub mod type3;
 
 pub use build::{
-    BuildContext, FoundPattern, MAX_FORM_LEVEL, StreamBounds, build_form_object,
+    BuildContext, FormFontsKey, FoundPattern, MAX_FORM_LEVEL, StreamBounds, build_form_object,
     build_form_object_with, build_page, build_page_from_dict, build_page_streams,
     eliminate_redundant_clips, load_pattern,
 };
