@@ -827,14 +827,14 @@ Only the counts move.
 
 | Crate | `pub mod` | pub items | pub fn | What its surface needs, concretely | Size |
 |---|---|---|---|---|---|
-| `pdfrum-common` | 0 | 18 | 9 | Already the model: no `pub mod`, tiny, re-exports `kurbo`. | trivial |
-| `pdfrum-object` | 2 | 122 | 100 | `pub mod names` is a legitimate documented namespace; `pub mod number` is not. `as_c_int` / `as_c_float` / `real_as_c_int` renamed (`lib.rs:62`) — bodies and tests unchanged. Otherwise disciplined. | small |
+| `pdfrum-common` | 0 | 18 | 9 | Already the model: no `pub mod`, tiny, re-exports `kurbo`. **Confirmed by audit on landing (see the note below the table): no private-module path in its snapshot, `Diagnostics`'s fields private behind accessors that all have callers, `fasthash` a real cross-crate item. Two findings recorded there rather than fixed.** | trivial |
+| `pdfrum-object` | 2 | 122 | 100 | `pub mod names` is a legitimate documented namespace; `pub mod number` is not. `as_c_int` / `as_c_float` / `real_as_c_int` renamed (`lib.rs:62`) — bodies and tests unchanged. Otherwise disciplined. **Landed: the three are `narrow_to_signed32` / `widen_to_f32` / `truncate_to_signed32`; `names` also lost 14 constants with no reader, and `SharedObject` had none either. The `2` is a `lib.rs` count — the snapshot says 3.** | small |
 | `pdfrum-crypt` | 0 | 28 | 16 | One item: `SecurityHandler::permissions(owner: bool) -> u32` (`lib.rs:552`) → two methods returning a `Permissions` struct, with the ISO-table-22 decode moving here from the facade. Its doctest asserts `0xFFFF_FFFF` and must change with it. | small |
 | `pdfrum-filters` | 0 | 30 | 20 | Clean. | trivial |
 | `pdfrum-cmap` | 1 | 32 | 24 | `pub mod lexer` should be private. `CharCode(pub u32)` / `Cid(pub u16)` are genuine identifier newtypes, not bit words — they stay. | trivial |
 | `pdfrum-type1` | 0 | 56 | 40 | Clean within itself. One cross-crate note: it defines `pub struct Gid(pub u16)` (`lib.rs:105`) duplicating `pdfrum-font`'s `Gid` (`ids.rs:14`) — one name, two distinct types, two crates. A coherence question for step 12, not an idiom one. | trivial |
 | `pdfrum-font` | 3 | 282 | 195 | `FontFlags(pub u32)` → private field + typed `Self` constants (`ids.rs:87`). Note *why* this one matters beyond tidiness: the constants are `u32`, not `FontFlags`, so **`flags.has(7)` compiles today** — the type exists but types nothing. Also `WIDTH_UNSET: u16 = 0xffff` (`widths.rs:16`) and `FaceHandle(pub usize)` (`subst/db.rs:19`, a public raw index into a private table). `pub mod encoding` / `subst` / `tounicode` curated. The crate also holds the workspace's best *positive* example — `has_glyph: bool` documented as "PDFium's `-1`, which is distinct from glyph 0" (`lib.rs:139`) — which `Option<Gid>` would make unrepresentable rather than merely documented. | medium |
-| `pdfrum-parser` | 0 | 82 | 63 | The best-shaped large crate in the workspace: a 60-line `lib.rs`, zero `pub mod`, 82 deliberately re-exported items. `version() -> u8` packed (`doc.rs:695`) → `PdfVersion`; `permissions(owner: bool) -> u32` (`doc.rs:797`) → forward crypt's struct. Two `keyword: bool` modes at `lexer.rs:644,664`. | small |
+| `pdfrum-parser` | 0 | 82 | 63 | The best-shaped large crate in the workspace: a 60-line `lib.rs`, zero `pub mod`, 82 deliberately re-exported items. `version() -> u8` packed (`doc.rs:695`) → `PdfVersion`; `permissions(owner: bool) -> u32` (`doc.rs:797`) → forward crypt's struct. Two `keyword: bool` modes at `lexer.rs:644,664`. **Landed as `WordBoundary`; and the shape claim held everywhere except one item — `parse_indirect_object`'s return type `syntax::Indirect` was `pub` in a private module and never re-exported, so no caller could name it. Now a root re-export.** | small |
 | `pdfrum-page` | 12 | 407 | 283 | Largest public surface in the workspace. Twelve `pub mod`s (`color`, `function`, `image`, `inline_image`, `mutate`, `optional`, `pattern`, `shading`, `state`, `transfer`, `transparency`, `type3`) → curated re-export. **The clearest single offender in the workspace is here:** `pub const NO_CONTENT_STREAM: i32 = -1` (`mutate.rs:44`) with `pub fn content_stream(&self) -> i32` (`:69`), *re-exported at `lib.rs:80`* — a `-1` sentinel in the curated block. Also `image::scanline::get_bits` (`image/scanline.rs:23`), `Page::color(stroking: bool)` (`page.rs:394`), `is_valid_page_dict(.., strict: bool, ..)` (`page.rs:548`, also re-exported), and **eight** sites carrying `std_conversion: bool` across `color/` — one two-variant enum fixes all eight and is the highest-leverage rename in the crate. Most of the rest become private rather than renamed. | large |
 | `pdfrum-render` | **24** | 317 | 224 | ~~The worst `pub mod` count in the workspace — 24 against **one** private module.~~ **Corrected 2026-09-02: measured, this crate has 31 `pub mod`s against one private module, and `pdfrum-doc` has 49 — so it is the *second* worst, not the worst. The diagnosis (a crate that publishes its module tree) stands; only the ranking moves.** Named offenders: `pub fn peniko_mix` (`device.rs:251`, returns a `peniko` type the crate does not re-export — ~~private, or re-export `peniko::Color`~~ **withdrawn on landing: it has no caller at all and `pdfrum-raster-vello` duplicates it privately, so it is deleted**), `LCD_FIR5` / `LCD_PADDING_26_6` (`glyph.rs:69,77`), the `SUBPIXEL_*` constants and `to_subpixel` (`scanline.rs:69-153`), `EMPTY_CLIP_RECT: Rect = Rect::new(-1.0, -1.0, 0.0, 0.0)` (`clip.rs:28` — an inverted rect standing for "nothing", i.e. `Option<Rect>`), and the `render_page` / `_with_visibility` / `_with_caches` ladder (`walk.rs:55,79,110`). `pub mod walkprofile` (`lib.rs:88`) is **not** on this list: it looks like a STYLE.md §1 global-state violation (`pub fn take() -> Profile` over a `thread_local!`), but it is behind a default-off `walk-profile` feature and its module doc argues the §1 point explicitly at `walkprofile.rs:38-48` — checked, and the reasoning stands. It needs curation like its neighbours, nothing more. ~~It is "behind" the feature.~~ **Corrected on landing: it was `pub mod` *unconditionally* and so was in the default-features snapshot with 45 items — the feature gated what its functions *did*, never who could name them. "Curation like its neighbours" is what fixed that; see the landed note's item 4.** Carries the §A.8 `RenderOptions` decision. | large |
 | `pdfrum-raster-vello-cpu` | 0 | 13 | 10 | Clean — a backend crate should look like this. | trivial |
@@ -845,6 +845,124 @@ Only the counts move.
 | `pdfrum-form` | 16 | 317 | 205 | `Key(pub u16)` → enum, and note the Win32 names are in the *constants*, not just the type: `PRIOR` and `NEXT` are `VK_PRIOR`/`VK_NEXT` for PageUp/PageDown (`event.rs:63ff`). `Modifiers(pub u32)` → private field (`event.rs:119`) — `contains`/`union`/`without` already exist, so the field need never have been public. `event::Point` → `kurbo::Point` in, narrow at entry; `tab::Rect` private (10 public-signature appearances inside the crate, 2 callers outside, both in `pdfrum-tool`); `PopupView`/`PopupGeometry` return `kurbo::Rect`; `Rotation::degrees() -> i32` / `from_degrees` re-open a four-variant enum (`geom.rs:69`); the three `PDFIUM_TEST_*` constants renamed (`script/mod.rs:72,80,111`). Sixteen `pub mod`s and **zero private ones** curated — it already has a good `pub use` block, it just also exports everything a second way. The midpoint, the strict comparisons and the `f32` hit tests all stay. | medium–large |
 | `pdfrum-edit` | 5 | 154 | 118 | `pub mod content`/`encrypt`/`font`/`import`/`write` → curated; today each is `pub mod` *and* selectively re-exported, so the same items are reachable two ways. One nice illustration of the vocabulary rule in a single signature: `paint_operator(fill: FillRule, stroke: bool)` (`content/path.rs:35`) — one argument is properly an enum, its neighbour is a bool. | medium |
 | `pdfrum` (facade) | 1 | 175 | 153 | Drop `pub mod edit` (§7 WP7). The rest is WP3/WP5/WP7/WP9/WP10 as written. | medium |
+
+> **§A.10 step 2's three rows landed 2026-09-03**, in two commits —
+> `pdfrum-object` and `pdfrum-parser`. **`pdfrum-common` needed no commit**:
+> its row is right, and the audit below is the evidence rather than a
+> formality. The board is byte-identical after each (1757 / 1512 / 245, every
+> tag: form-events 8, js-transcript 33, page-count 2, pixel-fail 43,
+> tierA-mismatch 170; text 86.3% / 75.5%) and **zero of the 1757 per-file rows
+> differ in any field, SSIM included**.
+>
+> | Crate | items | `pub mod` (snapshot lines) | |
+> |---|---:|---:|---|
+> | `pdfrum-object` | **409 → 387** | **3 → 2** | `names` stays; `number` goes |
+> | `pdfrum-parser` | **143 → 150** | **1 → 1** | the crate root alone, as the row says |
+> | `pdfrum-common` | **188 → 188** | **1 → 1** | unchanged, and correctly so |
+>
+> **The three number functions, and why the brief's two candidate names were
+> both wrong.** The row asks for `as_c_int` / `as_c_float` / `real_as_c_int`
+> renamed off the C type they imitate, and the brief offered `clamp_to_c_int`
+> and `to_int32_saturating` as sketches. Neither describes `as_c_int`: its
+> body narrows to `u32` and reinterprets those bits as signed, so
+> `4294967295` reads back as `-1` **by wrapping, not by clamping and not by
+> saturating** — a clamping function would have answered `2147483647`. The
+> names that survived reading the bodies are `narrow_to_signed32`,
+> `widen_to_f32` and `truncate_to_signed32`, and the third one is where the
+> distinction earns its keep: `truncate_to_signed32` really does saturate, so
+> the pair now reads as the contrast it always was and its doc says so
+> explicitly. `fmt_int`, `fmt_number` and `INT_RANGE` keep their names —
+> they already say what they do. Bodies and tests are unchanged, as the row
+> asked.
+>
+> **Five things these three rows got wrong or left unsaid:**
+>
+> 1. **`pdfrum-object` has three `pub mod`, and the row's "2" is the
+>    `lib.rs` count.** The snapshot counts the crate root as a `pub mod` line
+>    too. This is the *fourth* time a prose `pub mod` count read off `lib.rs`
+>    has undercounted the published surface (§A.11's `pdfrum-edit`,
+>    `pdfrum-form` and `pdfrum-page` notes are the first three), and the rule
+>    those notes state — the snapshot is the measurement — held again. The
+>    row's substance is right: `names` is the legitimate namespace and stays,
+>    `number` is not and is now private. Its six items were already root
+>    re-exports, so nothing outside the crate ever named the module path.
+> 2. **14 of `names`'s 166 constants have no reader anywhere**, and three of
+>    them show *why* a shared-constant table needs auditing rather than only
+>    growing. `BTN`, `TX` and `CH` are `/FT` **values**, not dictionary keys —
+>    the module's own doc says it holds "the dictionary-key names the
+>    specification defines" — and every reader in the workspace matches them
+>    as byte literals (`b"Btn"` at `pdfrum-doc`'s `ap/widget.rs:491` and
+>    `form/field.rs:59-68`), which is the right shape for a match arm and
+>    leaves the constants unreachable by construction. The other eleven
+>    (`AC`, `DL`, `END_OF_BLOCK`, `LINEARIZED`, `RC`, `RV`, `STRUCT_PARENT`,
+>    `TM`, `TRANSPARENCY`, `VERSION`, `VERTICES`) are keys no reader has
+>    landed for. All fourteen are deleted; `names!` stays public because five
+>    workspace crates build their own tables with it. **Five of the fourteen
+>    were reachable only through `pdfrum-doc`'s `#[allow(unused_imports)]`
+>    re-export shim**, which is why a plain grep for `names::X` under-reported
+>    them — the same over/under-reporting hazard the `pdfrum-page` note
+>    records for comment greps, in the other direction.
+> 3. **`pub type SharedObject = Arc<Object>` had no user at all**, in this
+>    crate or any other — `Resolve::fetch` spells `Arc<Object>` directly in
+>    its own signature. **Privatising found dead code for the seventh time in
+>    this pass**, though this one did not need privatising to find: it was
+>    dead in the curated block itself.
+> 4. **`pdfrum-parser`'s row calls it "the best-shaped large crate" and is
+>    right about the shape, but one of its items was not reachable at all.**
+>    `parse_indirect_object` returns `syntax::Indirect`, a `pub struct` in a
+>    private module that was never re-exported, so the snapshot spelled the
+>    return type `pdfrum_parser::syntax::Indirect` (`pdfrum-parser.txt:144`) —
+>    a path no caller can write and a type no caller can name. That is §C.3
+>    item 4's shape, "public by leak, which is the worst form", found in the
+>    crate this document holds up as the model. It is the crate's only such
+>    path; `Indirect` is now a root re-export. **A `pub` item in a private
+>    module is not automatically a leak — it is a leak exactly when a public
+>    signature names it**, and the snapshot is what makes the difference
+>    visible.
+> 5. **The `keyword: bool` was worse than a bare bool: it was a bool with a
+>    prose gloss.** `Lexer::search_back` passed `false` nine lines below its
+>    own doc comment explaining what `false` meant, and `scan_for_end` passed
+>    `true` twice. The enum is `WordBoundary::{WhitespaceOnly,
+>    WhitespaceOrDelimiter}` — naming the *rule* rather than the keyword that
+>    happened to want the strict one — with the predicate moved onto it.
+>
+> **What the `pdfrum-common` audit found, since "already the model" is a
+> claim and not a measurement.** Its 188 items are 110 `DiagKind` variants,
+> one `kurbo` re-export line, and 77 items across `Diagnostics`, `Limits`,
+> `PageIndex`, `PdfVersion` and `FxHasher`. **No private-module path appears
+> anywhere in its snapshot** — the leak that caught `pdfrum-parser` and
+> §C.3 item 4's `pdfrum-font` is absent here. `Diagnostics`'s three fields
+> are private behind seven accessors, all of which have external callers.
+> `fasthash` is a genuine cross-crate item, named by `pdfrum-parser`'s store
+> and two of `pdfrum-render`'s caches, with a module doc that argues the
+> dependency question. WP1's `PdfVersion` and `PageIndex` are both
+> documented past the point this pass asks for — `PageIndex`'s rustdoc
+> already states that it is not a count, that it is not validated, and that
+> an unresolvable destination is `Option<PageIndex>` and never a sentinel.
+> Two things are worth recording rather than fixing:
+>
+> - **`Limits::max_string_len` is a public knob nothing reads.** §C.3's
+>   ruled-out list says it and `max_array_len` are "used in `<=`
+>   comparisons"; that is true of `max_array_len` (three call sites across
+>   `pdfrum-parser`, `pdfrum-font` and `pdfrum-type1`) and **false of
+>   `max_string_len`, which is consulted nowhere.** It stays, because the
+>   module's own doc states the reason — "where PDFium has no cap at all …
+>   the field exists for future hardening and fuzz budgets" — and wiring it
+>   would invent a parse limit the oracle does not have. The §C.3 line is
+>   corrected here rather than in place, since the ruling it supports is
+>   unaffected either way.
+> - **15 `DiagKind` variants are recorded by no crate**
+>   (`AutoFontSizeZero`, `ChoiceIndicesIgnored`, `DefaultAppearanceMalformed`,
+>   `FieldKidsMalformed`, `FieldNameNormalized`, `FieldSkippedNoName`,
+>   `FieldSkippedNoType`, `FormResourcesInvalid`, `InkPathDropped`,
+>   `PageTreeDepthExceeded`, `PageTreeRepaired`, `StructKidUnresolved`,
+>   `TextTruncatedAtSurrogate`, `ToUnicodeLoneSurrogate`,
+>   `WidgetRotationInvalid`). Unlike every other dead item this pass has
+>   deleted, these are covered by an explicit written policy: the enum is
+>   `#[non_exhaustive]` and its doc says it "grows as each crate lands; every
+>   recovery PDFium performs silently gets a variant here". A taxonomy is
+>   allowed to run ahead of its recorders. They are listed so the next reader
+>   knows the gap is known and not new.
 
 > **`pdfrum-page`'s row landed 2026-09-03 as §A.10 step 9's second half**, in
 > three commits — the `Conversion` deletion, the bool→enum pass, then the
