@@ -51,11 +51,11 @@ pub use cascade::{Cascade, FieldRef, FieldWrites, Keystroke, KeystrokeOutcome, N
 pub use commit::CommitOutcome;
 pub use edit::{Place, PlaceExt, Range, Selection, UndoItem, UndoStack};
 pub use error::Error;
-pub use event::{Button, Event, Key, Modifiers, Point};
+pub use event::{Button, Event, Key, Modifiers};
 pub use field::{ChoiceConfig, ChoiceState, FieldState, TextConfig, TextState, ToggleState};
 pub use focus::FocusChange;
-pub use geom::{Plate, Rotation};
-pub use hit::{Candidate, LayoutBand, Permissions, WidgetHit};
+pub use geom::Rotation;
+pub use hit::Permissions;
 pub use page::{PageForm, WidgetInfo};
 pub use popup::{Placement, PopupGeometry, PopupView, ScrollView};
 pub use route::{
@@ -64,5 +64,5 @@ pub use route::{
 #[cfg(feature = "script")]
 pub use script::{ScriptCascade, ScriptConfig, TranscriptLine};
 pub use session::{AnnotId, DragAnchor, FieldId, FocusTarget, FormSession, SessionConfig};
-pub use tab::{FocusRing, Focusable, TabOrder};
+pub use tab::{FocusRing, TabOrder};
 pub use update::{AppearanceUpdate, Response, UpdateKind};

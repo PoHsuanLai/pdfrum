@@ -84,6 +84,19 @@ impl<R: Resolve> Context<'_, R> {
 ///
 /// The single entry point, and a total function: every event has an answer,
 /// including "nothing here", which is [`Response::ignored`].
+///
+/// # Where the `f64` stops
+///
+/// An [`Event`]'s point is a [`kurbo::Point`], and **this function is the one
+/// place it is narrowed** to the crate's private `f32` `Point`. That is
+/// deliberate and load-bearing rather than incidental:
+/// `fpdf_formfill.cpp:435-444` narrows the oracle's own `double page_x,
+/// page_y` to a `CFX_PointF` at exactly this boundary, before any comparison,
+/// and every geometric query below here — `hit::contains`'s inclusive-edge
+/// test against edges `page::to_rect` already rounded, `geom::Plate::to_plate`'s
+/// subtraction and its six callers — is `f32` against `f32`. A half-migration
+/// that widened the signature and let the `f64` reach one of those would move
+/// an inclusive edge or a caret across a glyph boundary.
 pub fn apply<R: Resolve>(
     session: &mut FormSession,
     ctx: &Context<'_, R>,
@@ -91,17 +104,17 @@ pub fn apply<R: Resolve>(
     event: Event,
 ) -> Response {
     match event {
-        Event::MouseMove { at, .. } => mouse_move(session, ctx, at),
+        Event::MouseMove { at, .. } => mouse_move(session, ctx, Point::narrow(at)),
         Event::MouseDown {
             button: Button::Left,
             at,
             modifiers,
-        } => mouse_down(session, ctx, cascade, at, modifiers),
+        } => mouse_down(session, ctx, cascade, Point::narrow(at), modifiers),
         Event::MouseUp {
             button: Button::Left,
             at,
             ..
-        } => mouse_up(session, ctx, at),
+        } => mouse_up(session, ctx, Point::narrow(at)),
         // The right button reaches a widget but changes nothing and — the
         // asymmetry `focus::miss_drops_focus` records — does not drop focus
         // when it misses.
@@ -113,13 +126,13 @@ pub fn apply<R: Resolve>(
             button: Button::Right,
             ..
         } => Response::ignored(),
-        Event::DoubleClick { at, .. } => double_click(session, ctx, at),
+        Event::DoubleClick { at, .. } => double_click(session, ctx, Point::narrow(at)),
         Event::MouseWheel {
             at,
             delta,
             modifiers,
-        } => wheel(session, ctx, at, delta, modifiers),
-        Event::Focus { at, .. } => focus_at(session, ctx, cascade, at),
+        } => wheel(session, ctx, Point::narrow(at), delta, modifiers),
+        Event::Focus { at, .. } => focus_at(session, ctx, cascade, Point::narrow(at)),
         Event::KeyDown { key, modifiers } => key_down(session, ctx, cascade, key, modifiers),
         Event::Char { ch, modifiers } => char_typed(session, ctx, cascade, ch, modifiers),
     }
@@ -1448,7 +1461,7 @@ pub fn popup_view<R: Resolve>(
     let geometry = popup_geometry(ctx, widget, choice)?;
     Some(crate::popup::PopupView {
         annot,
-        anchor: widget.rect,
+        anchor: crate::popup::widen(widget.rect),
         geometry,
         options: choice
             .options

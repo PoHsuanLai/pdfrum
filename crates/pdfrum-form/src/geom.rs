@@ -42,57 +42,40 @@ pub enum Rotation {
 }
 
 impl Rotation {
-    /// Normalizes a rotation in degrees, from any integer, into a quadrant.
-    ///
-    /// A negative or out-of-range angle is folded into `[0, 360)` first, and
-    /// an angle that is not a multiple of ninety degrees rounds **down** to
-    /// the quadrant containing it — matching the oracle's integer division.
-    #[must_use]
-    pub fn from_degrees(degrees: i32) -> Rotation {
-        let normalized = degrees.rem_euclid(360);
-        match normalized / 90 {
-            1 => Rotation::Quarter,
-            2 => Rotation::Half,
-            3 => Rotation::ThreeQuarter,
-            _ => Rotation::None,
-        }
-    }
-
     /// Whether this rotation exchanges the plate's width and height.
     #[must_use]
     pub fn swaps_axes(self) -> bool {
         matches!(self, Rotation::Quarter | Rotation::ThreeQuarter)
     }
-
-    /// The rotation in degrees.
-    #[must_use]
-    pub fn degrees(self) -> i32 {
-        match self {
-            Rotation::None => 0,
-            Rotation::Quarter => 90,
-            Rotation::Half => 180,
-            Rotation::ThreeQuarter => 270,
-        }
-    }
 }
 
 /// The mapping between a widget's page-space rectangle and its plate.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Plate {
+pub(crate) struct Plate {
     /// The widget's rectangle in page space, normalized.
-    pub rect: Rect,
+    pub(crate) rect: Rect,
     /// How the widget is rotated.
-    pub rotation: Rotation,
+    pub(crate) rotation: Rotation,
 }
 
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "the inverse half of the plate mapping: `to_widget` is what routing calls, and \\
+                      `to_plate`/`to_page`/`width`/`height` are what its round-trip and \\
+                      rotation-table tests check it against. They were `pub` before this \\
+                      package and had no caller outside the crate's own tests then either \\
+                      — see the Landed note under §WP4."
+    )
+)]
 impl Plate {
     /// The mapping for a widget, normalizing an inverted rectangle.
     ///
     /// A file may write a rectangle with its edges the wrong way round; the
     /// specification says to normalize, and a widget whose box is inverted
     /// still draws.
-    #[must_use]
-    pub fn new(rect: Rect, rotation: Rotation) -> Plate {
+    pub(crate) fn new(rect: Rect, rotation: Rotation) -> Plate {
         Plate {
             rect: normalize(rect),
             rotation,
@@ -101,8 +84,7 @@ impl Plate {
 
     /// The plate's width — the widget's, with the axes exchanged for an odd
     /// quadrant.
-    #[must_use]
-    pub fn width(self) -> f32 {
+    pub(crate) fn width(self) -> f32 {
         let (w, h) = (
             self.rect.right - self.rect.left,
             self.rect.top - self.rect.bottom,
@@ -111,8 +93,7 @@ impl Plate {
     }
 
     /// The plate's height, with the same exchange.
-    #[must_use]
-    pub fn height(self) -> f32 {
+    pub(crate) fn height(self) -> f32 {
         let (w, h) = (
             self.rect.right - self.rect.left,
             self.rect.top - self.rect.bottom,
@@ -143,8 +124,7 @@ impl Plate {
     /// Prefer this over [`Plate::to_plate`] for anything handed to a layout
     /// query: those flip y themselves, so passing them a y-down point flips
     /// it twice and lands every click on the wrong line.
-    #[must_use]
-    pub fn to_widget(self, at: Point) -> Point {
+    pub(crate) fn to_widget(self, at: Point) -> Point {
         // Offset into the widget's own box first, y-up.
         let dx = at.x - self.rect.left;
         let dy = at.y - self.rect.bottom;
@@ -167,15 +147,13 @@ impl Plate {
     ///
     /// [`Plate::to_widget`] plus the y flip. Callers wanting to hand the
     /// result to a `vt` query want that one instead.
-    #[must_use]
-    pub fn to_plate(self, at: Point) -> Point {
+    pub(crate) fn to_plate(self, at: Point) -> Point {
         let upright = self.to_widget(at);
         Point::new(upright.x, self.height() - upright.y)
     }
 
     /// Converts a plate-space point back into page space.
-    #[must_use]
-    pub fn to_page(self, at: Point) -> Point {
+    pub(crate) fn to_page(self, at: Point) -> Point {
         let (w, h) = (
             self.rect.right - self.rect.left,
             self.rect.top - self.rect.bottom,
@@ -198,8 +176,7 @@ impl Plate {
 }
 
 /// Puts a rectangle's edges the right way round.
-#[must_use]
-pub fn normalize(rect: Rect) -> Rect {
+pub(crate) fn normalize(rect: Rect) -> Rect {
     Rect::new(
         rect.left.min(rect.right),
         rect.bottom.min(rect.top),
@@ -224,26 +201,6 @@ mod tests {
 
     fn close(a: Point, b: Point) -> bool {
         (a.x - b.x).abs() < 1e-3 && (a.y - b.y).abs() < 1e-3
-    }
-
-    #[test]
-    fn a_rotation_normalizes_into_a_quadrant() {
-        assert_eq!(Rotation::from_degrees(0), Rotation::None);
-        assert_eq!(Rotation::from_degrees(90), Rotation::Quarter);
-        assert_eq!(Rotation::from_degrees(180), Rotation::Half);
-        assert_eq!(Rotation::from_degrees(270), Rotation::ThreeQuarter);
-        assert_eq!(Rotation::from_degrees(360), Rotation::None);
-        assert_eq!(Rotation::from_degrees(450), Rotation::Quarter);
-    }
-
-    /// A negative angle folds forward rather than truncating toward zero,
-    /// which is the difference between a quarter turn and no turn at all.
-    #[test]
-    fn a_negative_rotation_folds_forward() {
-        assert_eq!(Rotation::from_degrees(-90), Rotation::ThreeQuarter);
-        assert_eq!(Rotation::from_degrees(-180), Rotation::Half);
-        assert_eq!(Rotation::from_degrees(-270), Rotation::Quarter);
-        assert_eq!(Rotation::from_degrees(-360), Rotation::None);
     }
 
     #[test]

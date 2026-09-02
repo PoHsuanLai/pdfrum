@@ -1839,11 +1839,21 @@ pub enum Event {
     Char        { ch: char, modifiers: Modifiers },
 }
 
-pub struct Point { pub x: f32, pub y: f32 }   // page space (PDF user space), y-up
 pub enum Button { Left, Right }
 pub enum Key { Unknown, Tab, Return, .., A, Y, Z, Other(u16) }  // `Other` is FWL_VKEY's remainder
 pub struct Modifiers(u32);                    // FWL_EVENTFLAG bits, hand-rolled, private field
 ```
+
+`at` is a `kurbo::Point` — page space (PDF user space), y-**up**, and `f64`.
+That is the vocabulary `Page::crop_box` speaks and the one the oracle's own
+entry points take (`FORM_OnMouseMove(.., double page_x, double page_y)`). The
+crate narrows it to a private `f32` point **in `route::apply`**, exactly where
+`fpdf_formfill.cpp:443` narrows to `CFX_PointF`: every geometric comparison
+below that line is `f32` against widget edges already rounded to `f32`, and a
+half-migration that let the `f64` reach one of them would move an inclusive
+edge or a caret across a glyph boundary. `tab::Rect` is private for the same
+reason — its `(top + bottom) / 2` banding midpoint is compared strictly.
+`PopupGeometry`/`PopupView` widen back to `kurbo::Rect` on the way out.
 
 `Key` is an enum and not a newtype over `FWL_VKEY`. The wire format admits any
 integer, and the ported assertions deliberately send codes the form layer does

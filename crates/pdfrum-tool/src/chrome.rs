@@ -141,12 +141,10 @@ pub fn push_popup<R: Resolve>(
     // popup is a second object with a rectangle of its own instead of a
     // taller `/AP` on the widget, whose rectangle would have squeezed it.
     let resources = Resources::for_page(page.resources.clone());
-    let placed = kurbo::Rect::new(
-        f64::from(popup.geometry.rect.left),
-        f64::from(popup.geometry.rect.bottom),
-        f64::from(popup.geometry.rect.right),
-        f64::from(popup.geometry.rect.top),
-    );
+    // Already page-space `kurbo`: `PopupGeometry::rect` widens on the way out
+    // of `pdfrum-form`, so the four `f64::from` calls this used to need are
+    // gone (§WP4).
+    let placed = popup.geometry.rect;
     let matrix = pdfrum_doc::geom::match_rect(
         pdfrum_doc::geom::normalize(placed),
         pdfrum_doc::geom::transform_rect(generated.matrix, generated.bbox),
@@ -206,14 +204,17 @@ fn popup_dict<R: Resolve>(popup: &pdfrum::PopupView, widget: &Dict, r: &R) -> Di
     // list must not, and every other choice flag is irrelevant to a window
     // that is drawn once and never interacted with through this dictionary.
     let rect = popup.geometry.rect;
+    // `Object::Real` is `f32`, and every value here was widened from an `f32`
+    // by `PopupGeometry::rect`, so the narrowing is exact and the `/Rect`
+    // array is byte-for-byte what it was before §WP4 widened the field.
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "every value in PopupGeometry::rect was widened from an f32"
+    )]
+    let edges = [rect.x0, rect.y0, rect.x1, rect.y1].map(|v| v as f32);
     dict.push(
         pdfrum_object::names::RECT.clone(),
-        Object::Array(
-            [rect.left, rect.bottom, rect.right, rect.top]
-                .into_iter()
-                .map(Object::Real)
-                .collect::<Array>(),
-        ),
+        Object::Array(edges.into_iter().map(Object::Real).collect::<Array>()),
     );
     dict.push(
         Name::from(b"Opt".as_slice()),
@@ -319,9 +320,9 @@ mod tests {
     fn view() -> pdfrum::PopupView {
         pdfrum::PopupView {
             annot: pdfrum::AnnotId::new(0, 0),
-            anchor: pdfrum::FormRect::new(70.0, 135.0, 150.0, 155.0),
+            anchor: kurbo::Rect::new(70.0, 135.0, 150.0, 155.0),
             geometry: PopupGeometry {
-                rect: pdfrum::FormRect::new(70.0, 92.824, 150.0, 135.0),
+                rect: kurbo::Rect::new(70.0, 92.824, 150.0, 135.0),
                 placement: Placement::Below,
                 row_height: 13.392,
             },

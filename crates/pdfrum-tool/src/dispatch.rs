@@ -6,8 +6,8 @@
 //! **grammar**: one variant per `.evt` verb, `i32` straight out of `atoi`, a
 //! `u32` modifier mask, and a `KeyCode` variant that is the down/up *pair* the
 //! verb emits. [`pdfrum::FormSession`]'s methods are the **semantics**: page
-//! space `f32`, a typed [`VirtualKey`], typed [`EventModifiers`], and no
-//! key-up at all. This module is the bridge, and it is the only place in the
+//! space coordinates, a typed [`VirtualKey`], typed [`EventModifiers`], and
+//! no key-up at all. This module is the bridge, and it is the only place in the
 //! tool that knows both.
 //!
 //! Five of the harness reviewer's seven bridging facts
@@ -280,6 +280,13 @@ fn button_call(button: events::MouseButton, down: bool, x: i32, y: i32, modifier
 /// corpus's largest is four digits, and `f32` is exact to 2^24 — and a value
 /// past that rounds rather than trapping, which is what a `double` in the C++
 /// would also do.
+///
+/// **This stays `f32` until the facade's own signatures move.** `pdfrum-form`
+/// now takes a [`kurbo::Point`] and narrows it in `route::apply`, but
+/// `FormSession`'s `on_*` methods still take the flattened `x: f32, y: f32`
+/// pair, so widening here would only add an `as f32` at the dispatch below.
+/// The `f64::from` §A.6 prices belongs with those signatures, in the facade's
+/// own package.
 #[expect(
     clippy::cast_precision_loss,
     reason = "page coordinates; exact below 2^24 and the C++ widens to double here too"

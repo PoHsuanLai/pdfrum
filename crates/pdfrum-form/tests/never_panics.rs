@@ -6,23 +6,20 @@
 //! tests drive the crate's pure operations over generated inputs and assert
 //! only that they return.
 //!
-//! Two of them assert termination as well as return, on the two paths where
-//! the oracle can spin: the tab-order banding, and the undo walk. Those are
-//! not hypothetical — the banding's upstream loop has an unreachable `erase`
-//! on one branch and hangs.
+//! One of them asserts termination as well as return, on the undo walk. Its
+//! twin — the tab-order banding, whose upstream loop has an unreachable
+//! `erase` on one branch and hangs — lives in `src/tab.rs` beside the private
+//! `f32` geometry it generates, along with the plate and hit-test properties,
+//! for the same reason.
 
 use pdfrum_form::edit::{Place, Range, Selection, UndoItem, UndoStack};
-use pdfrum_form::event::{Button, Key, Modifiers, Point};
+use pdfrum_form::event::{Button, Key, Modifiers};
 use pdfrum_form::field::choice::{
     find_next, is_index_selected, move_selection, select_only, select_range_to, set_index_selected,
     toggle_index, top_visible_for, type_ahead,
 };
 use pdfrum_form::field::text::{route_char, route_key};
 use pdfrum_form::field::{ChoiceConfig, ChoiceOption, ChoiceState};
-use pdfrum_form::geom::{Plate, Rotation};
-use pdfrum_form::hit::{Candidate, LayoutBand, Permissions, WidgetHit, widget_at_point};
-use pdfrum_form::session::AnnotId;
-use pdfrum_form::tab::{FocusRing, Focusable, Rect, TabOrder};
 
 /// A small deterministic generator: a counter run through a mixing step.
 /// Enough spread to reach the awkward cases, and reproducible when one fails.
@@ -34,140 +31,8 @@ impl Gen {
         self.0 >> 8
     }
 
-    /// A coordinate spanning negatives, zero and page-sized values.
-    fn coord(&mut self) -> f32 {
-        // Bounded to -1000..1000, so the conversion is exact.
-        let raw = i16::try_from(self.next() % 2000).unwrap_or(0) - 1000;
-        f32::from(raw) / 2.0
-    }
-
     fn below(&mut self, n: u32) -> u32 {
         if n == 0 { 0 } else { self.next() % n }
-    }
-}
-
-/// Rectangles that would break a naive implementation: inverted, degenerate,
-/// negative, and a one-by-one box a real corpus file contains.
-fn awkward_rects() -> Vec<Rect> {
-    vec![
-        Rect::new(0.0, 0.0, 0.0, 0.0),
-        Rect::new(10.0, 10.0, 10.0, 10.0),
-        Rect::new(1.0, 1.0, 2.0, 2.0),
-        // Written inside out, as bug_889099's field is.
-        Rect::new(100.0, 100.0, 200.0, -130.0),
-        Rect::new(200.0, 200.0, 100.0, 100.0),
-        Rect::new(-500.0, -500.0, -400.0, -400.0),
-        Rect::new(0.0, 0.0, 1e6, 1e6),
-    ]
-}
-
-/// The plate transform survives every awkward rectangle and every rotation,
-/// and never produces a value that is not a number.
-#[test]
-fn the_plate_transform_never_panics_or_produces_nonsense() {
-    let mut rng = Gen(1);
-    for rect in awkward_rects() {
-        for degrees in [-450, -90, 0, 37, 90, 180, 270, 360, 1_000_000] {
-            let plate = Plate::new(rect, Rotation::from_degrees(degrees));
-            for _ in 0..20 {
-                let at = Point::new(rng.coord(), rng.coord());
-                let there = plate.to_plate(at);
-                let back = plate.to_page(there);
-                assert!(there.x.is_finite() && there.y.is_finite());
-                assert!(back.x.is_finite() && back.y.is_finite());
-            }
-            assert!(plate.width().is_finite());
-            assert!(plate.height().is_finite());
-            assert!(
-                plate.width() >= 0.0,
-                "a normalized box has no negative width"
-            );
-            assert!(plate.height() >= 0.0);
-        }
-    }
-}
-
-/// Hit testing over generated geometry returns, and never names an
-/// annotation that is not in the list.
-#[test]
-fn hit_testing_never_panics_and_never_invents_an_annotation() {
-    let mut rng = Gen(7);
-    for _ in 0..200 {
-        let count = rng.below(6);
-        let candidates: Vec<Candidate> = (0..count)
-            .map(|i| {
-                let (x, y) = (rng.coord(), rng.coord());
-                Candidate {
-                    id: AnnotId::new(rng.below(3), i),
-                    rect: Rect::new(x, y, x + rng.coord(), y + rng.coord()),
-                    band: match rng.below(3) {
-                        0 => LayoutBand::Popup,
-                        1 => LayoutBand::Widget,
-                        _ => LayoutBand::Other,
-                    },
-                    widget: (rng.below(2) == 0).then(|| WidgetHit {
-                        signature: rng.below(2) == 0,
-                        hidden: rng.below(2) == 0,
-                        read_only: rng.below(2) == 0,
-                        push_button: rng.below(2) == 0,
-                    }),
-                }
-            })
-            .collect();
-
-        let focused = candidates.first().map(|c| c.id);
-        for permissions in [Permissions::ALL, Permissions::NONE] {
-            let hit = widget_at_point(&candidates, focused, permissions, rng.coord(), rng.coord());
-            if let Some(hit) = hit {
-                assert!(
-                    candidates.iter().any(|c| c.id == hit),
-                    "hit test named an annotation that is not in the list"
-                );
-            }
-        }
-    }
-}
-
-/// The tab-order banding terminates over any geometry, in every order, and
-/// emits each annotation exactly once. The upstream loop hangs here.
-#[test]
-fn the_focus_ring_always_terminates_and_is_always_a_permutation() {
-    let mut rng = Gen(13);
-    for _ in 0..300 {
-        let count = rng.below(8);
-        let annots: Vec<Focusable> = (0..count)
-            .map(|i| {
-                let (x, y) = (rng.coord(), rng.coord());
-                Focusable {
-                    id: AnnotId::new(0, i),
-                    // Deliberately including zero-area and inverted boxes.
-                    rect: Rect::new(x, y, x + rng.coord(), y + rng.coord()),
-                }
-            })
-            .collect();
-
-        for order in [TabOrder::Row, TabOrder::Column, TabOrder::Structure] {
-            let built = FocusRing::build(&annots, order);
-            assert_eq!(built.len(), annots.len(), "{order:?} lost an annotation");
-
-            let mut seen: Vec<u32> = built.order.iter().map(|a| a.index).collect();
-            seen.sort_unstable();
-            let expected: Vec<u32> = (0..count).collect();
-            assert_eq!(seen, expected, "{order:?} is not a permutation");
-
-            // Walking the ring from either end terminates.
-            if let Some(mut at) = built.first() {
-                let mut steps = 0;
-                while let Some(next) = built.next(at) {
-                    at = next;
-                    steps += 1;
-                    assert!(
-                        steps <= count as usize,
-                        "the forward walk did not terminate"
-                    );
-                }
-            }
-        }
     }
 }
 
@@ -376,7 +241,7 @@ fn both_buttons_are_representable() {
     for button in [Button::Left, Button::Right] {
         let event = pdfrum_form::Event::MouseDown {
             button,
-            at: Point::new(0.0, 0.0),
+            at: kurbo::Point::ZERO,
             modifiers: Modifiers::NONE,
         };
         // Matching is exhaustive over the event enum, so this compiles only

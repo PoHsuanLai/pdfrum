@@ -28,7 +28,6 @@ pub use pdfrum::FieldWrites
 pub use pdfrum::FindOptions
 pub use pdfrum::Focus
 pub use pdfrum::FocusBox
-pub use pdfrum::FormRect
 pub use pdfrum::GeneratedAp
 pub use pdfrum::IndexMap
 pub use pdfrum::Keystroke

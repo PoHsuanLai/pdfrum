@@ -90,7 +90,9 @@ fn every_type_in_a_public_signature_is_nameable_from_the_facade() {
     nameable::<EventResponse>();
     nameable::<AppearanceUpdate>();
     nameable::<UpdateKind>();
-    nameable::<FormRect>();
+    // `FormRect` is gone: `PopupView`/`PopupGeometry` speak `kurbo::Rect`
+    // now, and the facade re-exports the whole of `kurbo` (§WP4).
+    nameable::<kurbo::Rect>();
 
     // pdfrum-object
     nameable::<Dict>();

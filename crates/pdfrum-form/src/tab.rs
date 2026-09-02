@@ -38,26 +38,33 @@
 
 use crate::session::AnnotId;
 
-/// A rectangle in page space, as a focusable annotation's `/Rect`.
+/// A rectangle in page space, as a focusable annotation's `/Rect`, in this
+/// crate's own `f32`.
 ///
 /// The raw rectangle, deliberately: the ring is built from `/Rect` and not
 /// from the inflated box a focused widget draws into.
+///
+/// **Private.** The public vocabulary is [`kurbo::Rect`]; `page::to_rect`
+/// narrows into this one on the way in and `PopupGeometry` widens back out
+/// on the way out. It stays `f32` because [`Rect::center_y`]'s banding
+/// midpoint is compared *strictly* against other `f32` edges: widening it
+/// would move annotations between bands, and it is fed only by widget
+/// `/Rect`s, never by an event point.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Rect {
+pub(crate) struct Rect {
     /// Left edge.
-    pub left: f32,
+    pub(crate) left: f32,
     /// Bottom edge.
-    pub bottom: f32,
+    pub(crate) bottom: f32,
     /// Right edge.
-    pub right: f32,
+    pub(crate) right: f32,
     /// Top edge.
-    pub top: f32,
+    pub(crate) top: f32,
 }
 
 impl Rect {
     /// A rectangle from its four edges.
-    #[must_use]
-    pub fn new(left: f32, bottom: f32, right: f32, top: f32) -> Rect {
+    pub(crate) fn new(left: f32, bottom: f32, right: f32, top: f32) -> Rect {
         Rect {
             left,
             bottom,
@@ -72,16 +79,14 @@ impl Rect {
     /// `f32::midpoint`, which rounds differently at the extremes. The banding
     /// comparisons are strict, so a midpoint that differs in the last bit
     /// moves an annotation between bands.
-    #[must_use]
-    pub fn center_y(self) -> f32 {
+    pub(crate) fn center_y(self) -> f32 {
         (self.top + self.bottom) / 2.0
     }
 
     /// The horizontal midpoint, which column banding tests.
     ///
     /// Sum then halve, for the reason [`Rect::center_y`] gives.
-    #[must_use]
-    pub fn center_x(self) -> f32 {
+    pub(crate) fn center_x(self) -> f32 {
         (self.left + self.right) / 2.0
     }
 }
@@ -124,12 +129,12 @@ impl TabOrder {
 /// from its own positions, and it would be wrong for the same reason —
 /// whatever the ring hands back is used to key an appearance.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Focusable {
+pub(crate) struct Focusable {
     /// Which annotation, by its raw `/Annots` index.
-    pub id: AnnotId,
+    pub(crate) id: AnnotId,
     /// Its rectangle, from the raw `/Rect` rather than a focused widget's
     /// inflated box.
-    pub rect: Rect,
+    pub(crate) rect: Rect,
 }
 
 /// The focus ring for one page, in traversal order.
@@ -151,8 +156,7 @@ impl FocusRing {
     /// `annots` arrives in annotation order and must already be filtered to
     /// the focusable subtypes — signature widgets excluded, which the caller
     /// does because only it knows which widgets are signatures.
-    #[must_use]
-    pub fn build(annots: &[Focusable], order: TabOrder) -> FocusRing {
+    pub(crate) fn build(annots: &[Focusable], order: TabOrder) -> FocusRing {
         match order {
             TabOrder::Structure => FocusRing {
                 order: annots.iter().map(|a| a.id).collect(),
@@ -584,5 +588,327 @@ mod tests {
         let ring = FocusRing::build(&annots, TabOrder::Structure);
         assert_eq!(ring.next(AnnotId::new(0, 99)), None);
         assert_eq!(ring.prev(AnnotId::new(0, 99)), None);
+    }
+
+    mod annotiter {
+        //! Ported focus-traversal assertions.
+        //!
+        //! In-crate rather than in `tests/`, because the fixture is built from
+        //! [`Focusable`] and [`Rect`] — the crate's own `f32` geometry, not its
+        //! public vocabulary. Nothing else about them moved.
+        //!
+        //! The fixture is the oracle's own `annotiter.pdf`, transcribed rather than
+        //! parsed: one field with four widget kids, on three pages that differ only
+        //! in the traversal order they ask for. Its geometry is the point — the four
+        //! widgets sit at the corners of a square, in an annotation order that is
+        //! none of the three traversal orders, so each order produces a different
+        //! answer and a wrong implementation cannot accidentally agree.
+        //!
+        //! ```text
+        //!   (201,400) LeftTop  #2        #1 RightTop  (401,401)
+        //!
+        //!   (200,200) LeftBottom #0      #3 RightBottom (400,201)
+        //! ```
+
+        use super::*;
+
+        /// The four widgets of `annotiter.pdf`, in the order its `/Annots` array
+        /// lists them.
+        fn annotiter_widgets() -> Vec<Focusable> {
+            [
+                (0, 200.0, 200.0, 220.0, 220.0), // Sub_LeftBottom
+                (1, 401.0, 401.0, 421.0, 421.0), // Sub_RightTop
+                (2, 201.0, 400.0, 221.0, 420.0), // Sub_LeftTop
+                (3, 400.0, 201.0, 420.0, 221.0), // Sub_RightBottom
+            ]
+            .into_iter()
+            .map(|(index, left, bottom, right, top)| Focusable {
+                id: AnnotId::new(0, index),
+                rect: Rect::new(left, bottom, right, top),
+            })
+            .collect()
+        }
+
+        fn row_ring() -> FocusRing {
+            FocusRing::build(&annotiter_widgets(), TabOrder::Row)
+        }
+
+        fn indices(ring: &FocusRing) -> Vec<u32> {
+            ring.order.iter().map(|a| a.index).collect()
+        }
+
+        /// `FormFillFirstTab`: a forward tab with nothing focused lands on annot 1.
+        #[test]
+        fn first_tab_lands_on_annot_one() {
+            assert_eq!(row_ring().first(), Some(AnnotId::new(0, 1)));
+        }
+
+        /// `FormFillFirstShiftTab`: a backward tab with nothing focused lands on
+        /// annot 0 — a *different* annotation, because the cursor starts between the
+        /// ends rather than before them.
+        #[test]
+        fn first_shift_tab_lands_on_annot_zero() {
+            assert_eq!(row_ring().last(), Some(AnnotId::new(0, 0)));
+        }
+
+        /// `FormFillContinuousTab`: four forward tabs visit 1, 2, 3, 0 and the fifth
+        /// is not handled, because focus does not wrap.
+        #[test]
+        fn continuous_tab_visits_one_two_three_zero_then_stops() {
+            let ring = row_ring();
+            let mut at = ring.first().expect("the ring is not empty");
+            assert_eq!(at, AnnotId::new(0, 1));
+
+            let mut visited = vec![at.index];
+            for _ in 0..3 {
+                at = ring.next(at).expect("a next annotation");
+                visited.push(at.index);
+            }
+            assert_eq!(visited, vec![1, 2, 3, 0]);
+
+            assert_eq!(ring.next(at), None, "the fifth tab is not handled");
+        }
+
+        /// `FormFillContinuousShiftTab`: four backward tabs visit 0, 3, 2, 1 and the
+        /// fifth is not handled.
+        #[test]
+        fn continuous_shift_tab_visits_zero_three_two_one_then_stops() {
+            let ring = row_ring();
+            let mut at = ring.last().expect("the ring is not empty");
+            assert_eq!(at, AnnotId::new(0, 0));
+
+            let mut visited = vec![at.index];
+            for _ in 0..3 {
+                at = ring.prev(at).expect("a previous annotation");
+                visited.push(at.index);
+            }
+            assert_eq!(visited, vec![0, 3, 2, 1]);
+
+            assert_eq!(ring.prev(at), None, "the fifth shift-tab is not handled");
+        }
+
+        /// The forward and backward walks are exact reverses of one another over this
+        /// fixture, which is what makes the two "first tab" answers differ.
+        #[test]
+        fn the_backward_walk_reverses_the_forward_one() {
+            let ring = row_ring();
+            let forward = indices(&ring);
+            let mut backward = forward.clone();
+            backward.reverse();
+
+            let mut walked = vec![ring.last().expect("a last").index];
+            let mut at = ring.last().expect("a last");
+            while let Some(prev) = ring.prev(at) {
+                walked.push(prev.index);
+                at = prev;
+            }
+            assert_eq!(walked, backward);
+        }
+
+        /// The three pages of the fixture differ only in the order they ask for, and
+        /// each produces a different answer over the same four widgets — which is
+        /// what makes the fixture able to tell the orders apart at all.
+        #[test]
+        fn the_three_orders_disagree_over_this_fixture() {
+            let widgets = annotiter_widgets();
+            let row = indices(&FocusRing::build(&widgets, TabOrder::Row));
+            let column = indices(&FocusRing::build(&widgets, TabOrder::Column));
+            let structure = indices(&FocusRing::build(&widgets, TabOrder::Structure));
+
+            assert_eq!(structure, vec![0, 1, 2, 3], "structure order sorts nothing");
+            assert_eq!(row, vec![1, 2, 3, 0]);
+            assert_ne!(row, column);
+            assert_ne!(row, structure);
+            assert_ne!(column, structure);
+        }
+
+        /// Every order is a permutation of the annotations: none is dropped and none
+        /// is visited twice, whichever way the page asks for.
+        #[test]
+        fn every_order_is_a_permutation() {
+            let widgets = annotiter_widgets();
+            for order in [TabOrder::Row, TabOrder::Column, TabOrder::Structure] {
+                let ring = FocusRing::build(&widgets, order);
+                let mut seen = indices(&ring);
+                seen.sort_unstable();
+                assert_eq!(seen, vec![0, 1, 2, 3], "{order:?} is not a permutation");
+                assert!(!ring.degenerate, "{order:?} should not degenerate");
+            }
+        }
+    }
+
+    mod never_panics {
+        //! The property that outranks every behavioural one, for the geometry
+        //! this crate keeps private: **no input panics.**
+        //!
+        //! In-crate rather than in `tests/never_panics.rs`, because these three
+        //! generate [`Plate`]s, [`Candidate`]s and [`Focusable`]s out of
+        //! `f32` [`Rect`]s — the crate's own geometry, not its public
+        //! vocabulary. The rest of that file's properties are over public
+        //! types and stayed where they were.
+
+        use crate::event::Point;
+        use crate::geom::{Plate, Rotation};
+        use crate::hit::{Candidate, LayoutBand, Permissions, WidgetHit, widget_at_point};
+        use crate::session::AnnotId;
+        use crate::tab::{FocusRing, Focusable, Rect, TabOrder};
+
+        /// A small deterministic generator: a counter run through a mixing
+        /// step. Enough spread to reach the awkward cases, and reproducible
+        /// when one fails.
+        struct Gen(u32);
+
+        impl Gen {
+            fn next(&mut self) -> u32 {
+                self.0 = self.0.wrapping_mul(1_103_515_245).wrapping_add(12_345);
+                self.0
+            }
+
+            fn coord(&mut self) -> f32 {
+                // Bounded to -1000..1000, so the conversion is exact.
+                let raw = i16::try_from(self.next() % 2000).unwrap_or(0) - 1000;
+                f32::from(raw) / 2.0
+            }
+
+            fn below(&mut self, n: u32) -> u32 {
+                if n == 0 { 0 } else { self.next() % n }
+            }
+        }
+
+        /// Rectangles that would break a naive implementation: inverted, degenerate,
+        /// negative, and a one-by-one box a real corpus file contains.
+        fn awkward_rects() -> Vec<Rect> {
+            vec![
+                Rect::new(0.0, 0.0, 0.0, 0.0),
+                Rect::new(10.0, 10.0, 10.0, 10.0),
+                Rect::new(1.0, 1.0, 2.0, 2.0),
+                // Written inside out, as bug_889099's field is.
+                Rect::new(100.0, 100.0, 200.0, -130.0),
+                Rect::new(200.0, 200.0, 100.0, 100.0),
+                Rect::new(-500.0, -500.0, -400.0, -400.0),
+                Rect::new(0.0, 0.0, 1e6, 1e6),
+            ]
+        }
+
+        /// The plate transform survives every awkward rectangle and every rotation,
+        /// and never produces a value that is not a number.
+        #[test]
+        fn the_plate_transform_never_panics_or_produces_nonsense() {
+            let mut rng = Gen(1);
+            for rect in awkward_rects() {
+                for rotation in [
+                    Rotation::None,
+                    Rotation::Quarter,
+                    Rotation::Half,
+                    Rotation::ThreeQuarter,
+                ] {
+                    let plate = Plate::new(rect, rotation);
+                    for _ in 0..20 {
+                        let at = Point::new(rng.coord(), rng.coord());
+                        let there = plate.to_plate(at);
+                        let back = plate.to_page(there);
+                        assert!(there.x.is_finite() && there.y.is_finite());
+                        assert!(back.x.is_finite() && back.y.is_finite());
+                    }
+                    assert!(plate.width().is_finite());
+                    assert!(plate.height().is_finite());
+                    assert!(
+                        plate.width() >= 0.0,
+                        "a normalized box has no negative width"
+                    );
+                    assert!(plate.height() >= 0.0);
+                }
+            }
+        }
+
+        /// Hit testing over generated geometry returns, and never names an
+        /// annotation that is not in the list.
+        #[test]
+        fn hit_testing_never_panics_and_never_invents_an_annotation() {
+            let mut rng = Gen(7);
+            for _ in 0..200 {
+                let count = rng.below(6);
+                let candidates: Vec<Candidate> = (0..count)
+                    .map(|i| {
+                        let (x, y) = (rng.coord(), rng.coord());
+                        Candidate {
+                            id: AnnotId::new(rng.below(3), i),
+                            rect: Rect::new(x, y, x + rng.coord(), y + rng.coord()),
+                            band: match rng.below(3) {
+                                0 => LayoutBand::Popup,
+                                1 => LayoutBand::Widget,
+                                _ => LayoutBand::Other,
+                            },
+                            widget: (rng.below(2) == 0).then(|| WidgetHit {
+                                signature: rng.below(2) == 0,
+                                hidden: rng.below(2) == 0,
+                                read_only: rng.below(2) == 0,
+                                push_button: rng.below(2) == 0,
+                            }),
+                        }
+                    })
+                    .collect();
+
+                let focused = candidates.first().map(|c| c.id);
+                for permissions in [Permissions::ALL, Permissions::NONE] {
+                    let hit = widget_at_point(
+                        &candidates,
+                        focused,
+                        permissions,
+                        rng.coord(),
+                        rng.coord(),
+                    );
+                    if let Some(hit) = hit {
+                        assert!(
+                            candidates.iter().any(|c| c.id == hit),
+                            "hit test named an annotation that is not in the list"
+                        );
+                    }
+                }
+            }
+        }
+
+        /// The tab-order banding terminates over any geometry, in every order, and
+        /// emits each annotation exactly once. The upstream loop hangs here.
+        #[test]
+        fn the_focus_ring_always_terminates_and_is_always_a_permutation() {
+            let mut rng = Gen(13);
+            for _ in 0..300 {
+                let count = rng.below(8);
+                let annots: Vec<Focusable> = (0..count)
+                    .map(|i| {
+                        let (x, y) = (rng.coord(), rng.coord());
+                        Focusable {
+                            id: AnnotId::new(0, i),
+                            // Deliberately including zero-area and inverted boxes.
+                            rect: Rect::new(x, y, x + rng.coord(), y + rng.coord()),
+                        }
+                    })
+                    .collect();
+
+                for order in [TabOrder::Row, TabOrder::Column, TabOrder::Structure] {
+                    let built = FocusRing::build(&annots, order);
+                    assert_eq!(built.len(), annots.len(), "{order:?} lost an annotation");
+
+                    let mut seen: Vec<u32> = built.order.iter().map(|a| a.index).collect();
+                    seen.sort_unstable();
+                    let expected: Vec<u32> = (0..count).collect();
+                    assert_eq!(seen, expected, "{order:?} is not a permutation");
+
+                    // Walking the ring from either end terminates.
+                    if let Some(mut at) = built.first() {
+                        let mut steps = 0;
+                        while let Some(next) = built.next(at) {
+                            at = next;
+                            steps += 1;
+                            assert!(
+                                steps <= count as usize,
+                                "the forward walk did not terminate"
+                            );
+                        }
+                    }
+                }
+            }
+        }
     }
 }
