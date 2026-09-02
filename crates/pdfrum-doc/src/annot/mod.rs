@@ -1,11 +1,11 @@
 //! Annotations (ISO 32000-1 §12.5): the subtype table, the flag word, and
 //! the record every reader in this crate works from.
 
-pub mod appearance;
+pub(crate) mod appearance;
 mod list;
-pub mod quad;
+pub(crate) mod quad;
 
-pub use appearance::{ApMode, annot_ap};
+pub use appearance::{ApMode, annot_ap, has_appearance};
 pub use list::AnnotList;
 pub use quad::{quad_point_count, rect_from_quad_points};
 

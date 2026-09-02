@@ -21,11 +21,11 @@ use std::fmt::Write as _;
 use pdfrum_common::{DiagKind, Diagnostics, Severity};
 use pdfrum_object::{Array, Dict, Resolve, decode_text, names as obj_names};
 
-use pdfrum_doc::annot::{Subtype, appearance, quad};
+use pdfrum_doc::annot::{self, Subtype};
 use pdfrum_doc::ap::AnnotOverlay;
 use pdfrum_doc::color::Color;
 use pdfrum_doc::geom;
-use pdfrum_doc::nav::open_action::Hidden;
+use pdfrum_doc::nav::Hidden;
 
 /// The two `/F`-adjacent keys this format reads that `pdfrum_object::names`
 /// does not declare. `pdfrum-doc`'s own table is private, and the emitter no
@@ -159,7 +159,7 @@ fn write_annotation<R: Resolve>(
     }
 
     let has_appearance = overlay.is_some_and(|overlay| overlay.get(index).is_some())
-        || appearance::annot_ap(dict, appearance::ApMode::Normal, true, r).is_some();
+        || annot::annot_ap(dict, annot::ApMode::Normal, true, r).is_some();
     write_color(out, dict, has_appearance, false, r);
     write_color(out, dict, has_appearance, true, r);
 
@@ -173,7 +173,7 @@ fn write_annotation<R: Resolve>(
 
     if subtype.has_attachment_points() {
         let quads = dict.array(names::QUAD_POINTS, r);
-        let count = quad::quad_point_count(quads.as_ref());
+        let count = annot::quad_point_count(quads.as_ref());
         let _ = writeln!(out, "Number of quadpoints sets: {count}");
         if let Some(quads) = &quads {
             if quads.len() % 8 != 0 {

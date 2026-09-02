@@ -427,7 +427,7 @@ impl<'a> Page<'a> {
     /// carries (ISO 32000-1 §12.5.6.5).
     #[must_use]
     pub fn links(&self) -> Vec<pdfrum_doc::Link> {
-        pdfrum_doc::nav::link::page_links(&self.dict.dict, &self.doc.inner)
+        pdfrum_doc::nav::page_links(&self.dict.dict, &self.doc.inner)
             .into_iter()
             .flatten()
             .collect()
