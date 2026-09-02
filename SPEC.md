@@ -2002,12 +2002,20 @@ whole device row off. `pdfrum-tool` therefore makes one context per file and
 hands it to both. `SubstitutionOptions` is re-exported from the facade so a
 caller can build one without reaching for `pdfrum-font`.
 
-**Present:** `on_mouse_move`, `on_mouse_down`, `on_mouse_up`, `on_button`,
-`on_double_click`, `on_mouse_wheel`, `on_focus_at`, `on_key_down`, `on_char`,
-`force_kill_focus`, `focused_text`, `focused_annot`, `selected_text`,
-`replace_selection`, `focus_for_page`, `hover_for_page`, `set_page_in_view`,
-`page_in_view`, `can_undo`, `can_redo`, `is_index_selected`,
-`set_index_selected`, `config`, `inner`.
+**`apply(Event) -> Response` is the central method**, and every event method
+beside it is a thin spelling of it. `Event` carries a point and no page,
+because the page is the embedder's fact rather than the event's — so a mouse
+event applied that way goes to the page `viewed_page` names, and the wrappers
+take the page explicitly.
+
+**Present:** `apply`, `mouse_move`, `mouse_down`, `mouse_up`, `double_click`,
+`mouse_wheel`, `focus_at`, `key_down`, `character`, `blur`, `focused_text`,
+`focused_annot`, `selected_text`, `replace_selection`, `focus_for_page`,
+`hover_for_page`, `set_viewed_page`, `viewed_page`, `can_undo`, `can_redo`,
+`is_index_selected`, `set_index_selected`, `config`.
+
+Every mouse method takes one `kurbo::Point` in page space, not a flattened
+`x, y` pair — §15.5's vocabulary, unchanged all the way in.
 
 **`focus_for_page` and `hover_for_page` are what a renderer asks**, and they
 are two facts rather than one. Focus decides which widget is *not* given the
@@ -2019,24 +2027,33 @@ the whole of the signal. The two move independently — a pointer resting on an
 annotation leaves the keyboard where it was, and the annotation under it need
 not be focusable at all.
 
-`on_button` is not in the oracle's list and exists for a reason the `.evt`
-corpus forces: scripts contain right-button lines, a bridge must be able to
-express them, and the correct behaviour for those lines is to consume nothing.
+**The right button has no method.** `mouse_down`/`mouse_up` are the left
+button, because that is what every widget interaction is made of. A
+right-button line — the `.evt` corpus has them, and a bridge must be able to
+express them — is `apply(Event::MouseDown { button: Button::Right, .. })`,
+which is the shape the value already had; a `button` argument beside a
+`down: bool` was an enum spelled as two parameters. The correct behaviour for
+those lines is still to consume nothing.
 
-**`set_page_in_view` is this crate's spelling of a parameter the oracle puts
+**`set_viewed_page` is this crate's spelling of a parameter the oracle puts
 on the call.** `FORM_OnKeyDown` takes a page, and its callers fill it in with
 whatever the embedder is showing. Here keyboard methods take no page, because
 a key normally goes to the field holding focus and that field knows its own
 page — but **one keyboard event arrives with nothing focused and must still
 act: Tab**, which is what enters the focus ring in the first place. Refusing
 it would make the ring unreachable from the keyboard, and hard-coding page 0
-would be a silent guess on any document showing another page. So the page in
-view is session state, set by the embedder, defaulting to 0. `pdfrum-tool`
+would be a silent guess on any document showing another page. So the viewed
+page is session state, set by the embedder, defaulting to 0. `pdfrum-tool`
 sets it per page as it replays, since a replay knows which page it is
-replaying.
+replaying. It is also the page `apply` routes a mouse event to, for the same
+reason.
 
 **Not present:** `select_all`, `replace_and_keep_selection`, `undo`, `redo`,
-`set_focused_annot`, `field_at_point`. The operations behind all six exist in
+`set_focused_annot`, `field_at_point`, `inner`. `inner()` was an escape hatch
+onto `pdfrum_form::FormSession` — a type with the same name, `&`-borrowed,
+with no document, no `BuildContext` and no way to route an event. It had no
+caller in the workspace and could not have a useful one; a power user wants a
+session of their own, and `pdfrum-form` builds one. The operations behind all six exist in
 the crate (`edit::ops`, `focus`, `hit`) and are reachable through the event
 methods — select-all and undo have keyboard spellings that the ported
 assertions drive — so what is missing is the direct call, not the behaviour.
