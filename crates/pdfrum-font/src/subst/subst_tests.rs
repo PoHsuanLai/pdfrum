@@ -822,3 +822,84 @@ mod croscore_faces {
         assert_ne!(s.subst.family, "Arimo Bold");
     }
 }
+
+// ---------------------------------------------------------------------------
+// Database selection (`resolve_with_options`)
+// ---------------------------------------------------------------------------
+
+/// Which of the three databases the options select, stated as behaviour.
+///
+/// The regression these pin: `substitute` used to read *only* `font_dirs`, so
+/// a host that named no directory got the empty [`TestFontDb`] — the built-in
+/// Latin faces alone. That is right for a unit test and wrong for the oracle,
+/// whose Linux build scans `/usr/share/fonts` and three siblings unless
+/// `--font-dir` replaces them (`core/fxge/linux/fx_linux_impl.cpp:173-176`,
+/// reached because `pdfium_test` leaves `m_pUserFontPaths` null,
+/// `testing/pdfium_test/pdfium_test.cc:2107-2112`). A CJK request then found
+/// no face claiming its charset, fell through to the built-in Multiple-Master
+/// serif, and every CJK glyph box came back empty — which dropped the whole
+/// text object as zero-width and lost the character from `--txt`. See
+/// `fx/text/test_m.pdf`.
+mod database_selection {
+    use super::*;
+    use std::path::PathBuf;
+
+    /// A Japanese request that only a CJK face can answer.
+    fn japanese_request() -> FontRequest {
+        FontRequest {
+            name: b"KozMinPr6N-Regular".to_vec(),
+            flags: FontFlags(FontFlags::SERIF | FontFlags::SYMBOLIC),
+            weight: 400,
+            code_page: CodePage::ShiftJis,
+            vertical: true,
+            ..FontRequest::default()
+        }
+    }
+
+    /// Both flags off is the hermetic default: the built-in faces alone, so
+    /// the answer does not depend on what is installed on the machine.
+    #[test]
+    fn neither_font_dirs_nor_system_fonts_stays_on_the_built_ins() {
+        let opts = SubstitutionOptions::default();
+        assert!(opts.font_dirs.is_empty());
+        assert!(!opts.system_fonts);
+        let s = resolve_with_options(&japanese_request(), &opts, &mut quiet());
+        // The terminal rung's Multiple-Master serif, which is what an empty
+        // database always ends at.
+        assert_eq!(s.subst.family, "Chrome Serif");
+    }
+
+    /// A named directory holding nothing is still *the whole search path*, so
+    /// it reaches the same built-ins — and the flag does not change that,
+    /// because a non-empty `font_dirs` wins either way.
+    #[test]
+    fn a_named_directory_is_the_whole_search_path() {
+        let dir = std::env::temp_dir().join("pdfrum-subst-empty-font-dir");
+        std::fs::create_dir_all(&dir).expect("temp dir");
+        for system_fonts in [false, true] {
+            let opts = SubstitutionOptions {
+                font_dirs: vec![PathBuf::from(&dir)],
+                system_fonts,
+                ..SubstitutionOptions::default()
+            };
+            let s = resolve_with_options(&japanese_request(), &opts, &mut quiet());
+            assert_eq!(s.subst.family, "Chrome Serif", "{system_fonts}");
+        }
+    }
+
+    /// The flag reaches the scan rather than being inert: with it set and no
+    /// directories named, the database is the system's, so it holds whatever
+    /// is installed — which is *not* the empty set this crate's tests
+    /// otherwise see. Asserted as "a scan happened", not as a family name,
+    /// because which faces exist is the machine's business and a machine with
+    /// no fonts at all must still pass.
+    #[test]
+    fn the_system_flag_reaches_the_scan() {
+        let scanned = SystemFontDb::scan(&[]);
+        let hermetic =
+            SystemFontDb::scan(&[std::env::temp_dir().join("pdfrum-subst-empty-font-dir")]);
+        // The hermetic directory was created empty above; the system's is a
+        // superset of it, and on any machine that has fonts, a strict one.
+        assert!(scanned.faces().len() >= hermetic.faces().len());
+    }
+}

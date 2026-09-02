@@ -13,9 +13,7 @@ mod transform;
 pub use transform::{CidTransform, cid_transform_to_float, japan1_transform};
 
 use crate::glyphs::{Charmap, Face, GlyphSource};
-use crate::subst::{
-    self, CodePage, FontRequest, SubstFont, SubstitutionOptions, SystemFontDb, TestFontDb,
-};
+use crate::subst::{self, CodePage, FontRequest, SubstFont, SubstitutionOptions};
 use crate::widths::CidWidths;
 use crate::{
     CharCode, CharItem, Cid, Error, FontCache, FontDescriptor, FontId, Gid, ToUnicode, descriptor,
@@ -582,11 +580,7 @@ fn substitute(
     opts: &SubstitutionOptions,
     diags: &mut Diagnostics,
 ) -> subst::Substitution {
-    if opts.font_dirs.is_empty() {
-        return subst::resolve(request, &TestFontDb::new(), opts, diags);
-    }
-    let db = SystemFontDb::scan(&opts.font_dirs);
-    subst::resolve(request, &db, opts, diags)
+    subst::resolve_with_options(request, opts, diags)
 }
 
 /// Choose the charmap a CID font drives (`UseCIDCharmap`).

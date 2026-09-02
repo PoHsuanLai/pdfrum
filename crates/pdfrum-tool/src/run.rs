@@ -87,6 +87,16 @@ pub fn process_file(
         }
     };
 
+    // `--js-transcript` is a whole different output: the transcript alone on
+    // stdout, and none of the notices, dumps or counts below.
+    // `testing/tools/text_diff.py` compares the *whole* of the oracle's
+    // stdout against `<fixture>_expected.txt`, so one extra line is a diff.
+    #[cfg(feature = "script")]
+    if options.js_transcript {
+        crate::jstranscript::write_transcript(&doc, streams.out)?;
+        return Ok(Counts::default());
+    }
+
     let catalog = doc.catalog().unwrap_or_default();
     for feature in unsupported::document(&catalog, &doc) {
         write!(streams.out, "{}", feature.line())?;
@@ -285,10 +295,30 @@ fn save_document(
 /// `skip_font_enumeration` stays at its default `false`: the oracle's Linux
 /// build drives `CFX_FolderFontInfo`, which enumerates, and `--font-dir` is
 /// precisely the flag that puts it in that mode.
+///
+/// `system_fonts` is on unless `--no-system-fonts` turned it off, because
+/// `--font-dir` *replaces* the oracle's search path rather than enabling it:
+/// `pdfium_test` leaves `config.m_pUserFontPaths` null without the flag
+/// (`testing/pdfium_test/pdfium_test.cc:2107-2112`) and `CFX_LinuxFontInfo`
+/// then scans `/usr/share/fonts` and three siblings
+/// (`core/fxge/linux/fx_linux_impl.cpp:173-176`). The library's own default is
+/// the other way round — see [`SubstitutionOptions::system_fonts`] — so this
+/// is the one place the oracle's default is re-asserted.
+///
+/// The flag itself is the oracle's, whose help text says it "overrides
+/// --font-dir" (`pdfium_test.cc:1946`); clearing the directory list here is
+/// that override.
 fn substitution_options(options: &Options) -> pdfrum_font::SubstitutionOptions {
+    if options.no_system_fonts {
+        return pdfrum_font::SubstitutionOptions {
+            croscore_font_names: options.croscore_font_names,
+            ..pdfrum_font::SubstitutionOptions::default()
+        };
+    }
     pdfrum_font::SubstitutionOptions {
         font_dirs: options.font_dirs.clone(),
         croscore_font_names: options.croscore_font_names,
+        system_fonts: true,
         ..pdfrum_font::SubstitutionOptions::default()
     }
 }
@@ -583,6 +613,44 @@ mod tests {
             String::from_utf8_lossy(&out).into_owned(),
             String::from_utf8_lossy(&err).into_owned(),
         )
+    }
+
+    fn options_of(args: &[&str]) -> Options {
+        crate::options::parse(&args.iter().map(|a| (*a).to_owned()).collect::<Vec<_>>()).unwrap()
+    }
+
+    /// The three states `substitution_options` can produce, which is where the
+    /// oracle's font-path default is re-asserted over the library's hermetic
+    /// one. `--font-dir` *replaces* the system path; `--no-system-fonts`
+    /// removes it and overrides `--font-dir` with it.
+    #[test]
+    fn the_font_path_defaults_to_the_systems_and_font_dir_replaces_it() {
+        // No flags: the oracle's own default, which is to scan the system.
+        let bare = substitution_options(&options_of(&["a.pdf"]));
+        assert!(bare.system_fonts);
+        assert!(bare.font_dirs.is_empty());
+
+        // `--font-dir` names the whole search path. `system_fonts` stays set
+        // and is inert, because a non-empty list wins over it.
+        let hermetic = substitution_options(&options_of(&["--font-dir=/fonts", "a.pdf"]));
+        assert_eq!(hermetic.font_dirs, [PathBuf::from("/fonts")]);
+
+        // `--no-system-fonts` overrides `--font-dir`: no directories at all.
+        let none = substitution_options(&options_of(&[
+            "--no-system-fonts",
+            "--font-dir=/fonts",
+            "a.pdf",
+        ]));
+        assert!(!none.system_fonts);
+        assert!(none.font_dirs.is_empty());
+
+        // It carries `--croscore-font-names` through either way.
+        for args in [
+            &["--croscore-font-names", "a.pdf"][..],
+            &["--croscore-font-names", "--no-system-fonts", "a.pdf"][..],
+        ] {
+            assert!(substitution_options(&options_of(args)).croscore_font_names);
+        }
     }
 
     /// A one-page document whose page carries a `MediaBox` and an `/Info`
