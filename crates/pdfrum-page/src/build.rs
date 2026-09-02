@@ -365,10 +365,16 @@ impl StreamBounds {
     /// The last element whose start is at or before the operator — so an
     /// operator past every recorded start belongs to the final element, and a
     /// record with no starts at all answers `0`.
+    ///
+    /// Was `-> i32`, which was never a sentinel: the body could not return a
+    /// negative. It was signed only by contagion from the `NO_CONTENT_STREAM`
+    /// this result used to feed (`docs/design/idiomatic-api.md` §C, Tier 2
+    /// item 16).
     #[must_use]
-    pub fn stream_of(&self, op_index: usize) -> i32 {
-        let count = self.starts.partition_point(|start| *start <= op_index);
-        i32::try_from(count.saturating_sub(1)).unwrap_or(0)
+    pub fn stream_of(&self, op_index: usize) -> usize {
+        self.starts
+            .partition_point(|start| *start <= op_index)
+            .saturating_sub(1)
     }
 
     /// How many elements the content was split into.
@@ -636,7 +642,7 @@ pub fn build_form_object_with<R: Resolve>(
         // An annotation appearance is not part of the page's content stream,
         // so it has no index in one. The dump numbers streams from zero and
         // the oracle counts an annotation's form as belonging to none.
-        content_stream: crate::mutate::NO_CONTENT_STREAM,
+        content_stream: None,
         // An appearance is drawn into the page graph but is not page content:
         // it is never regenerated into `/Contents`, and marking it dirty
         // would make an ordinary render rewrite the page.
@@ -673,10 +679,10 @@ struct Interp<'a, R: Resolve> {
     objects: Vec<PageObject>,
     /// Which `/Contents` element the operator being applied came from, which
     /// every object it produces records (see [`crate::mutate`]).
-    stream: i32,
+    stream: usize,
     /// The transform each element leaves in force at its end, recorded only
     /// where it changed.
-    stream_ctms: BTreeMap<i32, Affine>,
+    stream_ctms: BTreeMap<usize, Affine>,
 }
 
 /// How a path point continues the path.
@@ -742,7 +748,7 @@ fn interpret_streams<R: Resolve>(
     ctx: &mut BuildContext,
     limits: &Limits,
     diags: &mut Diagnostics,
-) -> (Vec<PageObject>, BTreeMap<i32, Affine>) {
+) -> (Vec<PageObject>, BTreeMap<usize, Affine>) {
     let mut interp = Interp {
         state: initial.clone(),
         stack: StateStack::new(),
@@ -1166,7 +1172,7 @@ impl<R: Resolve> Interp<'_, R> {
             object,
             state: self.state.clone(),
             marks: self.marks.clone(),
-            content_stream: self.stream,
+            content_stream: Some(self.stream),
             // Parsed objects describe bytes that already exist, so nothing
             // needs rewriting until a caller changes one.
             dirty: false,

@@ -19,8 +19,7 @@ mod tables;
 
 pub use charset::{Charset, CodePage, PitchFamily, charset_from_unicode, default_face_name};
 pub use db::{
-    CroscoreDb, FaceHandle, FaceInfo, FontDb, SIMILARITY_SCORE_MAX, SystemFontDb, TestFontDb,
-    find_family_name_match,
+    CroscoreDb, FaceHandle, FaceInfo, FontDb, SystemFontDb, TestFontDb, find_family_name_match,
 };
 pub use standard::{
     ALL_STANDARD_FONTS, StandardFont, canonical_font_name, is_standard_font_name,

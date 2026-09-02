@@ -69,6 +69,23 @@ impl FaceInfo {
         score
     }
 
+    /// Whether this face agrees with the request on **every** term.
+    ///
+    /// The early-exit the substitution ladder takes: a face scoring the
+    /// maximum cannot be beaten, so the search stops. This is the predicate
+    /// `SIMILARITY_SCORE_MAX` used to be public for — the caller wants the
+    /// question, not the number (`docs/design/idiomatic-api.md` §C).
+    #[must_use]
+    pub fn is_exact_match(
+        &self,
+        weight: i32,
+        italic: bool,
+        pitch: PitchFamily,
+        exact_match_bonus: bool,
+    ) -> bool {
+        self.similarity_score(weight, italic, pitch, exact_match_bonus) == SIMILARITY_SCORE_MAX
+    }
+
     /// Can this face answer a request for `charset` at all?
     ///
     /// A `Default` charset makes every face eligible, which is what lets the
@@ -80,7 +97,13 @@ impl FaceInfo {
 }
 
 /// The highest score [`FaceInfo::similarity_score`] can return.
-pub const SIMILARITY_SCORE_MAX: i32 = 68;
+///
+/// **Private on purpose** (`docs/design/idiomatic-api.md` §C, Tier 1 item 6).
+/// It was public solely so a caller could equality-test a score against it,
+/// which is asking the number to answer a question;
+/// [`FaceInfo::is_exact_match`] is that question, and it is what the one
+/// caller in this crate now asks.
+const SIMILARITY_SCORE_MAX: i32 = 68;
 
 /// The face-style bits read from a face's own tables, which are a different
 /// set from the request's `/Flags`.
@@ -148,7 +171,7 @@ pub trait FontDb {
         {
             best_score = face.similarity_score(weight, italic, pitch, true);
             best = Some(i);
-            if best_score == SIMILARITY_SCORE_MAX {
+            if face.is_exact_match(weight, italic, pitch, true) {
                 return Some(FaceHandle(i));
             }
         }

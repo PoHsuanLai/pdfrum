@@ -61,7 +61,15 @@ pub struct SimpleFont {
     pub unicodes: [u16; 256],
     /// The glyph each code selects. `WIDTH_UNSET` means "no glyph", which is
     /// distinct from glyph 0.
-    pub glyph_index: [u16; 256],
+    ///
+    /// Private for the same reason as [`SimpleWidths::raw`]
+    /// (`docs/design/idiomatic-api.md` §C, Tier 1 item 4): a public `[u16;
+    /// 256]` whose `0xffff` entries mean *absence* hands a caller a sentinel
+    /// with no exported name to compare against.
+    /// [`SimpleFont::glyph_from_charcode`] is the predicate, and it already
+    /// answered `Option<Gid>`. §C names only the widths array; this is the
+    /// same leak in the same struct, found on reaching the code.
+    pub(crate) glyph_index: [u16; 256],
     /// The declared widths.
     pub widths: SimpleWidths,
     /// The `/ToUnicode` CMap.

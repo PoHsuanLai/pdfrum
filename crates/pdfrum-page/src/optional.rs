@@ -899,7 +899,7 @@ mod tests {
             },
             state: crate::GraphicsState::default(),
             marks,
-            content_stream: 0,
+            content_stream: Some(0),
             dirty: false,
             active: true,
         }))
@@ -987,7 +987,7 @@ mod tests {
             },
             state: crate::GraphicsState::default(),
             marks: ContentMarks::new(),
-            content_stream: 0,
+            content_stream: Some(0),
             dirty: false,
             active: true,
         }));
@@ -1020,7 +1020,7 @@ mod tests {
             },
             state: crate::GraphicsState::default(),
             marks: ContentMarks::new(),
-            content_stream: 0,
+            content_stream: Some(0),
             dirty: false,
             active: true,
         }));

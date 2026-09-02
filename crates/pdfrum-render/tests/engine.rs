@@ -64,7 +64,7 @@ fn filled(path: BezPath, rgb: [f32; 3]) -> PageObject {
         },
         state,
         marks: ContentMarks::new(),
-        content_stream: 0,
+        content_stream: Some(0),
         dirty: false,
         active: true,
     }))
@@ -83,7 +83,7 @@ fn stroked(path: BezPath, rgb: [f32; 3], width: f32) -> PageObject {
         },
         state,
         marks: ContentMarks::new(),
-        content_stream: 0,
+        content_stream: Some(0),
         dirty: false,
         active: true,
     }))
@@ -336,7 +336,7 @@ fn a_clipped_fill_stops_at_the_clip() {
         },
         state,
         marks: ContentMarks::new(),
-        content_stream: 0,
+        content_stream: Some(0),
         dirty: false,
         active: true,
     }))];
@@ -376,7 +376,7 @@ fn an_axial_shading_paints_a_ramp_identically_on_both_backends() {
         },
         state: GraphicsState::default(),
         marks: ContentMarks::new(),
-        content_stream: 0,
+        content_stream: Some(0),
         dirty: false,
         active: true,
     }))];
@@ -411,7 +411,7 @@ fn a_form_renders_the_children_the_page_graph_gave_it() {
         },
         state: GraphicsState::default(),
         marks: ContentMarks::new(),
-        content_stream: 0,
+        content_stream: Some(0),
         dirty: false,
         active: true,
     }));
@@ -446,7 +446,7 @@ fn a_translucent_fill_blends_with_the_background() {
         },
         state,
         marks: ContentMarks::new(),
-        content_stream: 0,
+        content_stream: Some(0),
         dirty: false,
         active: true,
     }))];
@@ -503,7 +503,7 @@ fn invisible_text_paints_nothing() {
         },
         state: GraphicsState::default(),
         marks: ContentMarks::new(),
-        content_stream: 0,
+        content_stream: Some(0),
         dirty: false,
         active: true,
     }));
@@ -565,7 +565,7 @@ fn text_object(
         },
         state: GraphicsState::default(),
         marks: ContentMarks::new(),
-        content_stream: 0,
+        content_stream: Some(0),
         dirty: false,
         active: true,
     }));
@@ -878,7 +878,7 @@ fn pattern_filled(path: BezPath, pattern: pdfrum_page::Pattern, operands: &[f32]
         },
         state,
         marks: ContentMarks::new(),
-        content_stream: 0,
+        content_stream: Some(0),
         dirty: false,
         active: true,
     }))
@@ -1040,7 +1040,7 @@ fn a_pattern_that_did_not_resolve_paints_nothing_rather_than_black() {
         },
         state,
         marks: ContentMarks::new(),
-        content_stream: 0,
+        content_stream: Some(0),
         dirty: false,
         active: true,
     }));
@@ -1093,7 +1093,7 @@ fn masked_form(
         },
         state,
         marks: ContentMarks::new(),
-        content_stream: 0,
+        content_stream: Some(0),
         dirty: false,
         active: true,
     }))
@@ -1212,7 +1212,7 @@ fn an_unusable_pattern_paints_nothing_rather_than_the_current_colour() {
         },
         state,
         marks: ContentMarks::new(),
-        content_stream: 0,
+        content_stream: Some(0),
         dirty: false,
         active: true,
     }));
@@ -1365,7 +1365,7 @@ fn a_groups_own_alpha_multiplies_the_alpha_inside_it() {
         },
         state: inner_state,
         marks: ContentMarks::new(),
-        content_stream: 0,
+        content_stream: Some(0),
         dirty: false,
         active: true,
     }));
@@ -1388,7 +1388,7 @@ fn a_groups_own_alpha_multiplies_the_alpha_inside_it() {
         },
         state: form_state,
         marks: ContentMarks::new(),
-        content_stream: 0,
+        content_stream: Some(0),
         dirty: false,
         active: true,
     }));

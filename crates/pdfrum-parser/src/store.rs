@@ -186,7 +186,7 @@ impl ObjectStore {
     /// running.
     pub fn get(&self, num: u32) -> Result<Arc<Object>, Error> {
         let reference = ObjRef::new(num, self.xref.generation(num));
-        if num == 0 || num == ObjRef::INVALID_NUM {
+        if num == 0 || reference.is_invalid() {
             return Err(Error::Unresolved(reference));
         }
         // Numbers past the table's end name nothing, whatever the file holds.
