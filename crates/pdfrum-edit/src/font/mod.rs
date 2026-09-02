@@ -33,6 +33,17 @@
 //! is added, so a font that has been subsetted twice still carries exactly
 //! one tag.
 
+#![allow(
+    dead_code,
+    reason = "the `/W`, `/ToUnicode` and subset-tag re-keying this module holds is the \
+              save-path stage `SaveOptions::subset_new_fonts` names, and nothing \
+              reads that option yet (`docs/design/pdfrum-edit.md` §6.2). Each item \
+              is implemented and pinned by a test below; they were reachable only \
+              because `pub mod font` was public, and privatising the module (§A.11 \
+              step 12) is what exposed the gap. Deleting them would discard \
+              SPEC §11 E4's re-keying contract"
+)]
+
 mod tounicode;
 mod widths;
 
@@ -40,9 +51,6 @@ use std::collections::BTreeMap;
 
 use crate::error::Error;
 use crate::write::id::IdSource;
-
-pub use tounicode::to_unicode_cmap;
-pub use widths::widths_array;
 
 /// How the glyphs of a font were renumbered by subsetting.
 ///
@@ -147,7 +155,7 @@ pub fn subset(font_bytes: &[u8], gids: &[u16]) -> Result<Subsetted, Error> {
 /// Uppercase ASCII, drawn from the save's own [`IdSource`] so a fixed save is
 /// byte-reproducible.
 #[must_use]
-pub fn subset_tag(source: IdSource) -> [u8; 6] {
+pub(crate) fn subset_tag(source: IdSource) -> [u8; 6] {
     let mut out = [b'A'; 6];
     for (i, slot) in out.iter_mut().enumerate() {
         *slot = b'A' + (source.tag_byte(i as u64) % 26);
@@ -157,7 +165,7 @@ pub fn subset_tag(source: IdSource) -> [u8; 6] {
 
 /// `ABCDEF+Original`, with any existing tag stripped first.
 #[must_use]
-pub fn subset_name(base: &[u8], tag: [u8; 6]) -> Vec<u8> {
+pub(crate) fn subset_name(base: &[u8], tag: [u8; 6]) -> Vec<u8> {
     let mut out = Vec::with_capacity(base.len() + 7);
     out.extend_from_slice(&tag);
     out.push(b'+');
@@ -170,7 +178,7 @@ pub fn subset_name(base: &[u8], tag: [u8; 6]) -> Vec<u8> {
 /// A tag is exactly six uppercase letters followed by `+`, and the name must
 /// be longer than that — a name that is *only* a tag has nothing to strip.
 #[must_use]
-pub fn strip_subset_prefix(name: &[u8]) -> &[u8] {
+pub(crate) fn strip_subset_prefix(name: &[u8]) -> &[u8] {
     if name.len() <= 7 {
         return name;
     }
@@ -192,7 +200,7 @@ pub fn strip_subset_prefix(name: &[u8]) -> &[u8] {
 /// It decides two things at once: the descriptor writes `/FontFile3` rather
 /// than `/FontFile2`, and the descendant font is a `/CIDFontType0`.
 #[must_use]
-pub fn is_opentype_cff(bytes: &[u8]) -> bool {
+pub(crate) fn is_opentype_cff(bytes: &[u8]) -> bool {
     bytes.get(..4) == Some(b"OTTO")
 }
 

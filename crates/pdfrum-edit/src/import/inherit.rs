@@ -24,6 +24,13 @@
 //! chain runs through a dictionary that is not a `/Pages` node still inherits
 //! from it.
 
+#![allow(
+    dead_code,
+    reason = "`copy_inheritable` is exercised by this module's own tests only — \
+              `import_pages` reaches for `inheritable` directly. It became visible \
+              to the lint when `pub mod import` went private (§A.11 step 12)"
+)]
+
 use pdfrum_object::{Dict, Name, Object, Resolve, names};
 
 /// How far up a `/Parent` chain to walk before giving up.
@@ -34,7 +41,7 @@ const MAX_ANCESTORS: usize = 64;
 /// Returns `None` when the chain cannot be entered, the key is nowhere in it,
 /// or the chain cycles.
 #[must_use]
-pub fn inheritable(page: &Dict, key: &Name, r: &impl Resolve) -> Option<Object> {
+pub(crate) fn inheritable(page: &Dict, key: &Name, r: &impl Resolve) -> Option<Object> {
     // Both keys must be present for the chain to be entered at all.
     if !page.contains_key(names::PARENT) || !page.contains_key(names::TYPE) {
         return None;
@@ -75,7 +82,7 @@ pub fn inheritable(page: &Dict, key: &Name, r: &impl Resolve) -> Option<Object> 
 ///
 /// Returns whether the key is present afterwards, which the `/MediaBox`
 /// fallback ladder reads.
-pub fn copy_inheritable(out: &mut Dict, page: &Dict, key: &Name, r: &impl Resolve) -> bool {
+pub(crate) fn copy_inheritable(out: &mut Dict, page: &Dict, key: &Name, r: &impl Resolve) -> bool {
     // Already copied by the shallow key sweep: the page's own value takes
     // precedence over any ancestor's, and this is where that precedence is
     // enforced.

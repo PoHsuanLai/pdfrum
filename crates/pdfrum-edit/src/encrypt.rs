@@ -181,21 +181,21 @@ impl<'a> Encryptor<'a> {
 /// `remove_security` save, which is what makes "pass `None` and nothing is
 /// enciphered" the whole of the plaintext path.
 #[derive(Debug)]
-pub struct Security<'a> {
+pub(crate) struct Security<'a> {
     /// The handler the original password opened the document with.
-    pub handler: &'a SecurityHandler,
+    pub(crate) handler: &'a SecurityHandler,
     /// The vector source for this save.
-    pub ivs: IvSource,
+    pub(crate) ivs: IvSource,
     /// The object number the `/Encrypt` dictionary will be written as — the
     /// one object that is never enciphered.
-    pub encrypt_object: Option<u32>,
+    pub(crate) encrypt_object: Option<u32>,
 }
 
 impl Security<'_> {
     /// The encryptor for object `num`, or `None` when that object is the
     /// `/Encrypt` dictionary.
     #[must_use]
-    pub fn for_object(&self, num: u32) -> Option<Encryptor<'_>> {
+    pub(crate) fn for_object(&self, num: u32) -> Option<Encryptor<'_>> {
         if self.encrypt_object == Some(num) {
             return None;
         }

@@ -33,7 +33,7 @@ const fn is_honoured(version: PdfVersion) -> bool {
 /// `requested` is what the caller asked for and `document` what the file
 /// declared; the first wins when it is in range, then the second, then 1.7.
 /// `None` for either means it named nothing.
-pub fn write_header(
+pub(crate) fn write_header(
     out: &mut Vec<u8>,
     requested: Option<PdfVersion>,
     document: Option<PdfVersion>,

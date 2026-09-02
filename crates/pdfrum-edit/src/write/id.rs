@@ -147,17 +147,17 @@ pub struct FileId {
 
 /// What the save needs to know about the document to decide `/ID`.
 #[derive(Debug, Clone, Copy)]
-pub struct IdContext<'a> {
+pub(crate) struct IdContext<'a> {
     /// The trailer's own `/ID`, if it had one.
-    pub old: Option<&'a Array>,
+    pub(crate) old: Option<&'a Array>,
     /// The `/Encrypt` dictionary, if the file declared one.
-    pub encrypt: Option<&'a Dict>,
+    pub(crate) encrypt: Option<&'a Dict>,
     /// Whether this save is an incremental one.
-    pub incremental: bool,
+    pub(crate) incremental: bool,
 }
 
 /// Build the `/ID` array for one save.
-pub fn build(ctx: IdContext<'_>, source: IdSource) -> FileId {
+pub(crate) fn build(ctx: IdContext<'_>, source: IdSource) -> FileId {
     let fresh = |nonce: u64| Object::Str(PdfString::hex(source.bytes(nonce)));
 
     let Some(old) = ctx.old else {

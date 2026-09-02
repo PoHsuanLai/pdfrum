@@ -25,6 +25,13 @@
 //! The writer renumbers every object to generation 0, so the table must agree
 //! (invariant R9). The only `65535` in the output is the free head's.
 
+#![allow(
+    dead_code,
+    reason = "`ObjectOffsets`'s `numbers`, `len` and `is_empty` are read by this \
+              module's own tests only. They became visible to the lint when \
+              `pub mod write` went private (§A.11 step 12)"
+)]
+
 use std::collections::BTreeMap;
 
 /// Where each object was written, by object number.
@@ -34,57 +41,57 @@ use std::collections::BTreeMap;
 /// vanishes from both the body and the table together. An entry here is a
 /// promise that `N 0 obj` really sits at that byte.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct ObjectOffsets(BTreeMap<u32, u64>);
+pub(crate) struct ObjectOffsets(BTreeMap<u32, u64>);
 
 impl ObjectOffsets {
     /// An empty table.
     #[must_use]
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self(BTreeMap::new())
     }
 
     /// Record that object `num` starts at `offset`.
-    pub fn set(&mut self, num: u32, offset: u64) {
+    pub(crate) fn set(&mut self, num: u32, offset: u64) {
         self.0.insert(num, offset);
     }
 
     /// Forget object `num` — it turned out not to be writable.
-    pub fn erase(&mut self, num: u32) {
+    pub(crate) fn erase(&mut self, num: u32) {
         self.0.remove(&num);
     }
 
     /// Where object `num` was written.
     #[must_use]
-    pub fn get(&self, num: u32) -> Option<u64> {
+    pub(crate) fn get(&self, num: u32) -> Option<u64> {
         self.0.get(&num).copied()
     }
 
     /// Whether object `num` was written.
     #[must_use]
-    pub fn contains(&self, num: u32) -> bool {
+    pub(crate) fn contains(&self, num: u32) -> bool {
         self.0.contains_key(&num)
     }
 
     /// The object numbers written, ascending.
-    pub fn numbers(&self) -> impl Iterator<Item = u32> + '_ {
+    pub(crate) fn numbers(&self) -> impl Iterator<Item = u32> + '_ {
         self.0.keys().copied()
     }
 
     /// The highest object number written, or 0 when nothing was.
     #[must_use]
-    pub fn last(&self) -> u32 {
+    pub(crate) fn last(&self) -> u32 {
         self.0.keys().next_back().copied().unwrap_or(0)
     }
 
     /// How many objects were written.
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub(crate) fn len(&self) -> usize {
         self.0.len()
     }
 
     /// Whether nothing was written.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub(crate) fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
 }
@@ -124,7 +131,7 @@ const FREE_HEAD: &[u8] = b"0000000000 65535 f\r\n";
 /// Subsections are runs of consecutive present numbers; a gap starts a new
 /// one. The run that starts at object 1 is written as starting at object 0
 /// with the free head inline, so its count is one higher than the run length.
-pub fn classic_full(out: &mut Vec<u8>, offsets: &ObjectOffsets, last: u32) {
+pub(crate) fn classic_full(out: &mut Vec<u8>, offsets: &ObjectOffsets, last: u32) {
     out.extend_from_slice(b"xref\r\n");
     // Object 1 missing means no subsection will carry the free head, so it
     // needs one of its own.
@@ -163,7 +170,7 @@ pub fn classic_full(out: &mut Vec<u8>, offsets: &ObjectOffsets, last: u32) {
 
 /// A delta table covering exactly `written` — the objects an incremental save
 /// appended, in ascending order.
-pub fn classic_delta(out: &mut Vec<u8>, offsets: &ObjectOffsets, written: &[u32]) {
+pub(crate) fn classic_delta(out: &mut Vec<u8>, offsets: &ObjectOffsets, written: &[u32]) {
     out.extend_from_slice(b"xref\r\n");
 
     let mut i = 0usize;
@@ -201,7 +208,7 @@ pub fn classic_delta(out: &mut Vec<u8>, offsets: &ObjectOffsets, written: &[u32]
 /// The type field has width zero, which ISO 32000-1 §7.5.8.3 says defaults to
 /// type 1 — an in-use object. The generation byte is always zero, matching
 /// what the body writes.
-pub fn stream_record(out: &mut Vec<u8>, offset: u64) {
+pub(crate) fn stream_record(out: &mut Vec<u8>, offset: u64) {
     let truncated = u32::try_from(offset).unwrap_or(u32::MAX);
     out.extend_from_slice(&truncated.to_be_bytes());
     out.push(0);

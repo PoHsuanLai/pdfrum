@@ -34,6 +34,14 @@
 //! have been seen. `hello_world_2_pages.pdf` reaching `{5,6,7}` is the case
 //! that pins it.
 
+#![allow(
+    dead_code,
+    reason = "`reachable`, `multiply_referenced` and `is_shared` are read by this \
+              module's own tests only — the writer asks `is_reachable`, and \
+              `content::apply` computes sharing its own way. They became visible \
+              to the lint when `pub mod write` went private (§A.11 step 12)"
+)]
+
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 use pdfrum_object::{Dict, Object, Resolve, names};
@@ -46,26 +54,26 @@ const MAX_INLINE_DEPTH: u32 = 128;
 
 /// How many objects were pointed at, and by how many distinct sources.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct ReachCounts {
+pub(crate) struct ReachCounts {
     counts: BTreeMap<u32, u32>,
 }
 
 impl ReachCounts {
     /// Every object number something points at.
     #[must_use]
-    pub fn reachable(&self) -> BTreeSet<u32> {
+    pub(crate) fn reachable(&self) -> BTreeSet<u32> {
         self.counts.keys().copied().collect()
     }
 
     /// Whether anything points at `num`.
     #[must_use]
-    pub fn is_reachable(&self, num: u32) -> bool {
+    pub(crate) fn is_reachable(&self, num: u32) -> bool {
         self.counts.contains_key(&num)
     }
 
     /// The object numbers more than one distinct source points at.
     #[must_use]
-    pub fn multiply_referenced(&self) -> BTreeSet<u32> {
+    pub(crate) fn multiply_referenced(&self) -> BTreeSet<u32> {
         self.counts
             .iter()
             .filter(|(_, count)| **count > 1)
@@ -75,7 +83,7 @@ impl ReachCounts {
 
     /// Whether more than one distinct source points at `num`.
     #[must_use]
-    pub fn is_shared(&self, num: u32) -> bool {
+    pub(crate) fn is_shared(&self, num: u32) -> bool {
         self.counts.get(&num).is_some_and(|c| *c > 1)
     }
 }
@@ -87,7 +95,7 @@ impl ReachCounts {
 /// non-zero one is **seeded into the result** with a count of one, which is
 /// why an xref-stream document's trailer object appears in the reachable set
 /// even though nothing in the document body points at it.
-pub fn walk(trailer: &Dict, trailer_number: u32, r: &impl Resolve) -> ReachCounts {
+pub(crate) fn walk(trailer: &Dict, trailer_number: u32, r: &impl Resolve) -> ReachCounts {
     let mut counts: BTreeMap<u32, u32> = BTreeMap::new();
     if trailer_number != 0 {
         counts.insert(trailer_number, 1);
@@ -182,7 +190,7 @@ fn count_reference(
 /// says `/Type /XRef`, which would be a lie on a classic trailer. Everything
 /// else — including keys no specification defines — is copied through
 /// verbatim, which is how a malformed `/Foo` survives a save.
-pub const SUPPRESSED_TRAILER_KEYS: [&pdfrum_object::Name; 11] = [
+pub(crate) const SUPPRESSED_TRAILER_KEYS: [&pdfrum_object::Name; 11] = [
     names::ENCRYPT,
     names::SIZE,
     names::FILTER,

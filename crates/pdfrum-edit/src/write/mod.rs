@@ -52,12 +52,12 @@
 //! at any more.
 
 mod header;
-pub mod id;
-pub mod object;
-pub mod reach;
-pub mod stream;
-pub mod trailer;
-pub mod xref;
+pub(crate) mod id;
+pub(crate) mod object;
+mod reach;
+mod stream;
+mod trailer;
+mod xref;
 
 use std::io::Write;
 
@@ -67,10 +67,9 @@ use pdfrum_object::{ObjRef, Object, Resolve, names};
 use crate::doc::EditDoc;
 use crate::encrypt;
 use crate::error::Error;
+use crate::write::header::write_header;
 use crate::write::id::{IdContext, IdSource};
 use crate::write::xref::ObjectOffsets;
-
-pub use header::write_header;
 
 /// How a document is written back out.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]

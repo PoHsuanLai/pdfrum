@@ -36,6 +36,14 @@
 //! decrypted-but-still-compressed bytes, and an untouched image survives the
 //! trip with its checksum intact.
 
+#![allow(
+    dead_code,
+    reason = "`ObjectMap`'s `len` and `is_empty` are read by this module's own \
+              tests only. They round out a collection type STYLE.md §1 wants \
+              complete, and they became visible to the lint when `pub mod import` \
+              went private (§A.11 step 12)"
+)]
+
 use std::collections::BTreeMap;
 
 use pdfrum_object::{Array, Dict, Name, ObjRef, Object, Resolve, names};
@@ -59,14 +67,14 @@ const SKIPPED_KEYS: [&Name; 3] = [names::PARENT, names::PREV, names::FIRST];
 /// point at the one copy — that deduplication is the whole reason this lives
 /// on the importer rather than inside a per-page loop.
 #[derive(Debug, Default)]
-pub struct ObjectMap {
+pub(crate) struct ObjectMap {
     map: BTreeMap<u32, u32>,
 }
 
 impl ObjectMap {
     /// An empty map.
     #[must_use]
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self::default()
     }
 
@@ -77,25 +85,25 @@ impl ObjectMap {
     /// self-reference from inside the page — an annotation's `/P`
     /// back-pointer — resolve to the new page instead of being pruned by the
     /// cross-page rule.
-    pub fn record(&mut self, from: u32, to: u32) {
+    pub(crate) fn record(&mut self, from: u32, to: u32) {
         self.map.insert(from, to);
     }
 
     /// The destination number for a source object, if it has one.
     #[must_use]
-    pub fn get(&self, from: u32) -> Option<u32> {
+    pub(crate) fn get(&self, from: u32) -> Option<u32> {
         self.map.get(&from).copied()
     }
 
     /// How many objects have been copied.
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub(crate) fn len(&self) -> usize {
         self.map.len()
     }
 
     /// Whether nothing has been copied.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub(crate) fn is_empty(&self) -> bool {
         self.map.is_empty()
     }
 }
@@ -111,7 +119,7 @@ impl ObjectMap {
 ///
 /// Returns `None` when the object cannot be copied: it dangles, it is another
 /// page, or one of its array elements failed.
-pub fn copy_object(
+pub(crate) fn copy_object(
     dest: &mut EditDoc<'_>,
     src: &impl Resolve,
     reference: ObjRef,
@@ -161,7 +169,7 @@ pub fn copy_object(
 /// Returns whether the value survived. A dictionary always survives — the
 /// keys that failed are simply gone — while an array fails whole if any
 /// element does, and a reference fails when its target cannot be copied.
-pub fn rewrite_in_place(
+pub(crate) fn rewrite_in_place(
     dest: &mut EditDoc<'_>,
     src: &impl Resolve,
     value: &mut Object,

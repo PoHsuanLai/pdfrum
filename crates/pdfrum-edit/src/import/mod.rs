@@ -84,11 +84,11 @@ use crate::doc::EditDoc;
 use crate::error::Error;
 use crate::names as edit_names;
 
-pub use copy::ObjectMap;
-pub use inherit::{copy_inheritable, inheritable};
-pub use nup::{NupGrid, PageEdit, sub_page_fragment};
+use copy::ObjectMap;
+use inherit::inheritable;
+use nup::{NupGrid, sub_page_fragment};
+
 pub use range::PageRange;
-pub use viewer::{array_is_flat, filtered as filtered_viewer_preferences, is_copyable};
 
 /// US Letter, the last fallback when a page states no box and inherits none.
 const LETTER: [i64; 4] = [0, 0, 612, 792];
@@ -136,7 +136,7 @@ impl Default for NUpOptions {
 ///
 /// [`Error::NoDestinationCatalog`] when there is no catalog to repair — the
 /// one hard failure in the whole import path.
-pub fn init_dest(dest: &mut EditDoc<'_>) -> Result<u32, Error> {
+pub(crate) fn init_dest(dest: &mut EditDoc<'_>) -> Result<u32, Error> {
     let catalog_ref = dest
         .base()
         .trailer()

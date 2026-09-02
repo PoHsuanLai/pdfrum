@@ -17,6 +17,13 @@
 //! renumbers, so the CID a subsetted font uses is the **new** glyph ID and
 //! the array must be keyed by that.
 
+#![allow(
+    dead_code,
+    reason = "reached only from `font::widths_array`, which the unwired \
+              `SaveOptions::subset_new_fonts` stage is the caller for; see \
+              `font/mod.rs`'s allowance for the whole argument"
+)]
+
 use std::collections::BTreeMap;
 
 use pdfrum_object::{Array, Object};
@@ -31,7 +38,7 @@ use pdfrum_object::{Array, Object};
               number; a tolerance would merge two widths into one and move \
               every glyph after them"
 )]
-pub fn widths_array(widths: &BTreeMap<u32, f32>) -> Array {
+pub(crate) fn widths_array(widths: &BTreeMap<u32, f32>) -> Array {
     let mut out = Array::new();
     let entries: Vec<(u32, f32)> = widths.iter().map(|(c, w)| (*c, *w)).collect();
 

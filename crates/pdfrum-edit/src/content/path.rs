@@ -24,6 +24,30 @@ use pdfrum_page::FillRule;
 
 use crate::content::num::{write_float, write_point};
 
+/// Whether a painted path also draws its outline.
+///
+/// The second half of what selects a paint operator, and an enum rather than a
+/// `bool` because its neighbour in [`paint_operator`] is a [`FillRule`]: two
+/// arguments that jointly index one table should read the same way at the call
+/// (`docs/design/idiomatic-api.md` §A.11's illustration for this crate).
+///
+/// `pdfrum-page`'s `PathObject::stroke` is still the `bool` this narrows from;
+/// the conversion is [`Stroked::of`], at the one call that needs it (§B.3).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Stroked {
+    /// The outline is drawn: `S`, `B` or `B*`.
+    Yes,
+    /// Only the fill, if any: `n`, `f` or `f*`.
+    No,
+}
+
+impl Stroked {
+    /// Narrow `pdfrum-page`'s `PathObject::stroke`.
+    pub(crate) const fn of(stroke: bool) -> Self {
+        if stroke { Self::Yes } else { Self::No }
+    }
+}
+
 /// The paint operator for a fill rule and whether the path also strokes
 /// (ISO 32000-1 table 60), including its leading space.
 ///
@@ -32,14 +56,14 @@ use crate::content::num::{write_float, write_point};
 /// because clipping is emitted by the graphics frame rather than by the paint
 /// operator.
 #[must_use]
-pub fn paint_operator(fill: FillRule, stroke: bool) -> &'static str {
+pub(crate) fn paint_operator(fill: FillRule, stroke: Stroked) -> &'static str {
     match (fill, stroke) {
-        (FillRule::None, false) => " n",
-        (FillRule::None, true) => " S",
-        (FillRule::Winding, false) => " f",
-        (FillRule::Winding, true) => " B",
-        (FillRule::EvenOdd, false) => " f*",
-        (FillRule::EvenOdd, true) => " B*",
+        (FillRule::None, Stroked::No) => " n",
+        (FillRule::None, Stroked::Yes) => " S",
+        (FillRule::Winding, Stroked::No) => " f",
+        (FillRule::Winding, Stroked::Yes) => " B",
+        (FillRule::EvenOdd, Stroked::No) => " f*",
+        (FillRule::EvenOdd, Stroked::Yes) => " B*",
     }
 }
 
@@ -47,7 +71,7 @@ pub fn paint_operator(fill: FillRule, stroke: bool) -> &'static str {
 ///
 /// Points are separated by single spaces and each operator follows its
 /// operands with a leading space, so a subpath reads `3.1 4.6 m 5.4 .2 l`.
-pub fn emit_path_points(out: &mut String, path: &BezPath) {
+pub(crate) fn emit_path_points(out: &mut String, path: &BezPath) {
     if let Some(rect) = as_rectangle(path) {
         // `left bottom width height re` — the extents may be negative.
         write_point(out, Point::new(rect.x0, rect.y0));
@@ -191,7 +215,7 @@ fn near(a: f64, b: f64) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{emit_path_points, paint_operator};
+    use super::{Stroked, emit_path_points, paint_operator};
     use pdfrum_common::kurbo::{BezPath, Point};
     use pdfrum_page::FillRule;
 
@@ -322,12 +346,15 @@ mod tests {
     // The paint matrix, every cell (:796-802).
     #[test]
     fn the_paint_operator_matrix() {
-        assert_eq!(paint_operator(FillRule::None, false), " n");
-        assert_eq!(paint_operator(FillRule::None, true), " S");
-        assert_eq!(paint_operator(FillRule::Winding, false), " f");
-        assert_eq!(paint_operator(FillRule::Winding, true), " B");
-        assert_eq!(paint_operator(FillRule::EvenOdd, false), " f*");
-        assert_eq!(paint_operator(FillRule::EvenOdd, true), " B*");
+        assert_eq!(paint_operator(FillRule::None, Stroked::No), " n");
+        assert_eq!(paint_operator(FillRule::None, Stroked::Yes), " S");
+        assert_eq!(paint_operator(FillRule::Winding, Stroked::No), " f");
+        assert_eq!(paint_operator(FillRule::Winding, Stroked::Yes), " B");
+        assert_eq!(paint_operator(FillRule::EvenOdd, Stroked::No), " f*");
+        assert_eq!(paint_operator(FillRule::EvenOdd, Stroked::Yes), " B*");
+        // The narrowing that feeds it.
+        assert_eq!(Stroked::of(true), Stroked::Yes);
+        assert_eq!(Stroked::of(false), Stroked::No);
     }
 
     #[test]

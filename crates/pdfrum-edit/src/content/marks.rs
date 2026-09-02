@@ -29,13 +29,13 @@ use crate::write::object::{write_dict, write_name};
 /// caller that owns the resource dictionary. Returning `None` falls back to
 /// writing the properties inline, which renders correctly but detaches the
 /// mark from any optional-content group.
-pub type PropertyNamer<'a> = &'a dyn Fn(&Mark) -> Option<Name>;
+pub(crate) type PropertyNamer<'a> = &'a dyn Fn(&Mark) -> Option<Name>;
 
 /// Emit the operators that turn `previous`'s marks into `current`'s.
 ///
 /// Returns how many marks are open afterwards, which [`finish_marks`] needs
 /// at the end of a stream.
-pub fn emit_mark_diff(
+pub(crate) fn emit_mark_diff(
     out: &mut String,
     previous: &ContentMarks,
     current: &ContentMarks,
@@ -56,7 +56,7 @@ pub fn emit_mark_diff(
 }
 
 /// Close every mark still open at the end of a stream.
-pub fn finish_marks(out: &mut String, open: usize) {
+pub(crate) fn finish_marks(out: &mut String, open: usize) {
     for _ in 0..open {
         out.push_str("EMC\n");
     }
