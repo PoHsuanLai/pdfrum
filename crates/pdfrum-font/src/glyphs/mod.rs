@@ -10,9 +10,9 @@ mod cache;
 mod face;
 
 pub use cache::{GlyphCache, GlyphKey};
-pub(crate) use face::{Charmap, CharmapId, Face};
+pub use face::{Charmap, CharmapId, Face};
 
-pub use crate::descriptor::{em_adjust, normalize_font_metric};
+pub(crate) use crate::descriptor::{em_adjust, normalize_font_metric};
 
 use crate::{Gid, GlyphName};
 use pdfrum_common::kurbo::{Affine, BezPath, Rect};
@@ -40,7 +40,7 @@ pub enum GlyphSource {
 /// are not: `dest_width` alone changes the outline, which is why the glyph
 /// cache keys on them (SPEC §6's amended key).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
-pub struct GlyphParams {
+pub(crate) struct GlyphParams {
     /// The width the PDF declared for this character code, in 1000/em units.
     /// Zero means "whatever the face does naturally".
     pub dest_width: i32,
@@ -51,7 +51,7 @@ pub struct GlyphParams {
 impl GlyphSource {
     /// Is there a face at all?
     #[must_use]
-    pub fn is_some(&self) -> bool {
+    pub(crate) fn is_some(&self) -> bool {
         !matches!(self, Self::None)
     }
 
@@ -67,7 +67,7 @@ impl GlyphSource {
 
     /// How many glyphs the face declares.
     #[must_use]
-    pub fn num_glyphs(&self) -> u32 {
+    pub(crate) fn num_glyphs(&self) -> u32 {
         match self {
             Self::Fontations(f) => f.num_glyphs(),
             Self::Type1(f) => f.num_glyphs(),
@@ -110,7 +110,7 @@ impl GlyphSource {
     /// The glyph a *name* selects. Zero on a miss, as `FT_Get_Name_Index`
     /// leaves it.
     #[must_use]
-    pub fn name_index(&self, name: &[u8]) -> u16 {
+    pub(crate) fn name_index(&self, name: &[u8]) -> u16 {
         let Ok(name) = std::str::from_utf8(name) else {
             return 0;
         };
@@ -123,7 +123,7 @@ impl GlyphSource {
 
     /// A glyph's own name, when the face has a name table.
     #[must_use]
-    pub fn glyph_name(&self, gid: Gid) -> Option<GlyphName> {
+    pub(crate) fn glyph_name(&self, gid: Gid) -> Option<GlyphName> {
         match self {
             Self::Fontations(f) => f.glyph_name(gid).map(|n| GlyphName::new(n.into_bytes())),
             Self::Type1(f) => f
@@ -135,7 +135,7 @@ impl GlyphSource {
 
     /// Whether the face can name its glyphs at all.
     #[must_use]
-    pub fn has_glyph_names(&self) -> bool {
+    pub(crate) fn has_glyph_names(&self) -> bool {
         match self {
             Self::Fontations(f) => f.has_glyph_names(),
             Self::Type1(_) => true,
@@ -168,11 +168,11 @@ impl GlyphSource {
     ///   what a rasterizer produces.
     /// - An outline that trims to nothing yields `None`, not an empty path.
     #[must_use]
-    pub fn outline(&self, gid: Gid, params: &GlyphParams) -> Option<BezPath> {
+    pub(crate) fn outline(&self, gid: Gid, params: GlyphParams) -> Option<BezPath> {
         let upem = self.units_per_em();
         let raw = match self {
             Self::Fontations(f) => f.outline(gid)?,
-            Self::Type1(f) => match Self::mm_instance(f, gid, *params) {
+            Self::Type1(f) => match Self::mm_instance(f, gid, params) {
                 Some(inst) => inst.outline(gid.into())?.0,
                 None => f.outline(gid.into())?.0,
             },
@@ -208,7 +208,7 @@ impl GlyphSource {
     /// programs the interpreter refuses, which is the case upstream handles by
     /// reloading the glyph unhinted (`cfx_face.cpp:849-857`).
     #[must_use]
-    pub fn hinted_outline(&self, gid: Gid) -> Option<BezPath> {
+    pub(crate) fn hinted_outline(&self, gid: Gid) -> Option<BezPath> {
         let Self::Fontations(f) = self else {
             return None;
         };
@@ -223,11 +223,11 @@ impl GlyphSource {
     /// `CFX_Face::GetGlyphWidth` calls — its sibling rounds, and the two
     /// disagree for half the inputs (§1.3).
     #[must_use]
-    pub fn advance(&self, gid: Gid, params: &GlyphParams) -> i32 {
+    pub(crate) fn advance(&self, gid: Gid, params: GlyphParams) -> i32 {
         let upem = self.units_per_em();
         let raw = match self {
             Self::Fontations(f) => f.advance(gid),
-            Self::Type1(f) => match Self::mm_instance(f, gid, *params) {
+            Self::Type1(f) => match Self::mm_instance(f, gid, params) {
                 Some(inst) => inst.advance(gid.into()),
                 None => f.outline(gid.into()).map(|(_, a)| a),
             },
@@ -246,7 +246,7 @@ impl GlyphSource {
     /// A glyph's advance through the **rounding** normalizer, which is what
     /// `LoadCharMetrics` uses when filling in a width the PDF omitted (§1.3).
     #[must_use]
-    pub fn advance_tt(&self, gid: Gid) -> i32 {
+    pub(crate) fn advance_tt(&self, gid: Gid) -> i32 {
         let upem = self.units_per_em();
         let raw = match self {
             Self::Fontations(f) => f.advance(gid),
@@ -263,7 +263,7 @@ impl GlyphSource {
     /// asserts agreement within 2 units; we take that mapping and keep the
     /// result y-up, which is what `kurbo::Rect` means.
     #[must_use]
-    pub fn glyph_bbox(&self, gid: Gid) -> Option<Rect> {
+    pub(crate) fn glyph_bbox(&self, gid: Gid) -> Option<Rect> {
         let upem = self.units_per_em();
         let raw = match self {
             Self::Fontations(f) => f.glyph_bbox(gid)?,
@@ -461,8 +461,8 @@ mod tests {
         assert!(s.glyph_name(Gid(0)).is_none());
         assert!(!s.has_glyph_names());
         assert!(s.charmaps().is_empty());
-        assert!(s.outline(Gid(0), &GlyphParams::default()).is_none());
-        assert_eq!(s.advance(Gid(0), &GlyphParams::default()), 0);
+        assert!(s.outline(Gid(0), GlyphParams::default()).is_none());
+        assert_eq!(s.advance(Gid(0), GlyphParams::default()), 0);
         assert_eq!(s.advance_tt(Gid(0)), 0);
         assert!(s.glyph_bbox(Gid(0)).is_none());
     }

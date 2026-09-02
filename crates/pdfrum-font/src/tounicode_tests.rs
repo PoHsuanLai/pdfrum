@@ -8,6 +8,17 @@
 use super::*;
 use std::fmt::Write as _;
 
+#[test]
+fn a_two_entry_bfchar_block_maps_both_ways() {
+    let map = parse(
+        b"2 beginbfchar <0041> <0061> <0042> <0062> endbfchar",
+        &Limits::default(),
+        &mut Diagnostics::default(),
+    );
+    assert_eq!(map.lookup(0x41.into()).as_slice(), ['a']);
+    assert_eq!(map.reverse('a').0, 0x41);
+}
+
 fn map_of(program: &str) -> ToUnicode {
     parse(
         program.as_bytes(),

@@ -9,7 +9,7 @@ mod truetype;
 mod type1;
 
 use crate::encoding::{FontEncoding, adobe_char_name, load_differences};
-use crate::glyphs::{Charmap, Face, GlyphParams, GlyphSource};
+use crate::glyphs::{Charmap, Face, GlyphSource};
 use crate::subst::{
     self, CodePage, FontRequest, StandardFont, SubstFont, SubstitutionOptions, strip_subset_prefix,
 };
@@ -28,6 +28,7 @@ use smallvec::SmallVec;
 const SPACE: u8 = 32;
 
 /// Which of the two ladders a simple font runs.
+#[cfg(test)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SimpleKind {
     /// Type 1, MMType1, or a font with no usable `/Subtype`.
@@ -48,17 +49,15 @@ pub enum SimpleKind {
 #[derive(Debug)]
 pub struct SimpleFont {
     /// This font's identity, for glyph-cache keys.
-    pub id: FontId,
+    pub(crate) id: FontId,
     /// Where glyphs come from.
     pub glyphs: GlyphSource,
-    /// The `/Differences` overlay, empty when the font declared none.
-    pub encoding: [Option<GlyphName>; 256],
     /// Which predefined set the encoding resolved to.
-    pub encoding_kind: FontEncoding,
+    pub(crate) encoding_kind: FontEncoding,
     /// The Unicode each code stands for, as the ladder computed it. **Not** a
     /// `/ToUnicode` substitute: this is the ladder's own working table, which
     /// several branches write into and later branches read back.
-    pub unicodes: [u16; 256],
+    pub(crate) unicodes: [u16; 256],
     /// The glyph each code selects. `WIDTH_UNSET` means "no glyph", which is
     /// distinct from glyph 0.
     ///
@@ -71,21 +70,22 @@ pub struct SimpleFont {
     /// same leak in the same struct, found on reaching the code.
     pub(crate) glyph_index: [u16; 256],
     /// The declared widths.
-    pub widths: SimpleWidths,
+    pub(crate) widths: SimpleWidths,
     /// The `/ToUnicode` CMap.
-    pub to_unicode: Option<ToUnicode>,
+    pub(crate) to_unicode: Option<ToUnicode>,
     /// The `/FontDescriptor`'s contents, after repair.
-    pub descriptor: FontDescriptor,
+    pub(crate) descriptor: FontDescriptor,
     /// What substitution decided, when the font was not embedded.
-    pub subst: Option<SubstFont>,
+    pub(crate) subst: Option<SubstFont>,
     /// Which ladder ran.
-    pub kind: SimpleKind,
+    #[cfg(test)]
+    pub(crate) kind: SimpleKind,
     /// Whether a usable font program was embedded. A program that failed to
     /// parse counts as **not** embedded, which is what routes it to
     /// substitution.
-    pub embedded: bool,
+    pub(crate) embedded: bool,
     /// The base font name, subset prefix stripped.
-    pub base_font_name: Vec<u8>,
+    pub(crate) base_font_name: Vec<u8>,
     /// Per-code bounding boxes, filled lazily by the metric derivation.
     char_bbox: [Rect; 256],
 }
@@ -97,7 +97,7 @@ impl SimpleFont {
     /// All the work happened at load time; this is a table read. **Glyph 0 is
     /// a legitimate result** and is distinct from `None`.
     #[must_use]
-    pub fn glyph_from_charcode(&self, code: CharCode) -> Option<Gid> {
+    pub(crate) fn glyph_from_charcode(&self, code: CharCode) -> Option<Gid> {
         let index = usize::try_from(code.0).ok()?;
         match self.glyph_index.get(index) {
             Some(&WIDTH_UNSET) | None => None,
@@ -111,7 +111,7 @@ impl SimpleFont {
     /// the reason a stray wide code draws a space-ish advance rather than
     /// nothing.
     #[must_use]
-    pub fn char_width(&self, code: CharCode) -> f32 {
+    pub(crate) fn char_width(&self, code: CharCode) -> f32 {
         let code = if code.0 > 0xff { 0 } else { code.0 as u8 };
         if let Some(w) = self.widths.get(code) {
             return w;
@@ -146,7 +146,7 @@ impl SimpleFont {
     /// The Unicode a code stands for, `/ToUnicode` first and the ladder's own
     /// table second.
     #[must_use]
-    pub fn unicode_from_charcode(&self, code: CharCode) -> SmallVec<[char; 2]> {
+    pub(crate) fn unicode_from_charcode(&self, code: CharCode) -> SmallVec<[char; 2]> {
         if let Some(tu) = &self.to_unicode {
             let chars = tu.lookup(code);
             if !chars.is_empty() {
@@ -171,7 +171,7 @@ impl SimpleFont {
     /// font the document already carries, which is the opposite direction from
     /// everything else here.
     #[must_use]
-    pub fn char_code_from_unicode(&self, unicode: char) -> Option<CharCode> {
+    pub(crate) fn char_code_from_unicode(&self, unicode: char) -> Option<CharCode> {
         if let Some(tu) = &self.to_unicode {
             let code = tu.reverse(unicode);
             if code.0 != 0 {
@@ -197,7 +197,7 @@ impl SimpleFont {
     /// substituted font, the same rescue [`char_width`](Self::char_width)
     /// applies and for the same reason.
     #[must_use]
-    pub fn char_bbox(&self, code: CharCode) -> Rect {
+    pub(crate) fn char_bbox(&self, code: CharCode) -> Rect {
         let code = if code.0 > 0xff { 0 } else { code.0 as u8 };
         let stored = self
             .char_bbox
@@ -236,15 +236,16 @@ impl SimpleFont {
     /// Whether the PDF declared widths, which gates the glyph-spacing
     /// heuristic (`HasFontWidths`).
     #[must_use]
-    pub fn has_font_widths(&self) -> bool {
+    pub(crate) fn has_font_widths(&self) -> bool {
         self.widths.has_declared_widths()
     }
 
     /// Whether this font resolved to one of the standard fourteen **and** is
     /// not embedded — an embedded font named `Helvetica` is not standard
     /// (`IsStandardFont`).
+    #[cfg(test)]
     #[must_use]
-    pub fn is_standard_font(&self) -> bool {
+    pub(crate) fn is_standard_font(&self) -> bool {
         matches!(self.kind, SimpleKind::Type1 { base14: Some(_) }) && !self.embedded
     }
 }
@@ -353,7 +354,7 @@ pub(crate) fn load(
 
     // Step 5 — the PDF's own encoding.
     let mut differences: [Option<GlyphName>; 256] = [const { None }; 256];
-    let has_differences = load_pdf_encoding(
+    let _has_differences = load_pdf_encoding(
         dict,
         r,
         &base_font_name,
@@ -433,11 +434,6 @@ pub(crate) fn load(
     SimpleFont {
         id: cache.next_id(),
         glyphs,
-        encoding: if has_differences {
-            differences
-        } else {
-            [const { None }; 256]
-        },
         encoding_kind,
         unicodes,
         glyph_index,
@@ -445,6 +441,7 @@ pub(crate) fn load(
         to_unicode,
         descriptor,
         subst: subst_font,
+        #[cfg(test)]
         kind: if is_truetype {
             SimpleKind::TrueType
         } else {
@@ -678,9 +675,11 @@ pub(crate) fn char_index(glyphs: &GlyphSource, charmap: Charmap, code: u32) -> u
 /// Drawn-outline access, so a caller need not reach into `glyphs`.
 impl SimpleFont {
     /// The outline for a glyph, in 1000/em text space.
+    #[cfg(test)]
     #[must_use]
-    pub fn glyph_path(&self, gid: Gid) -> Option<pdfrum_common::kurbo::BezPath> {
-        self.glyphs.outline(gid, &GlyphParams::default())
+    pub(crate) fn glyph_path(&self, gid: Gid) -> Option<pdfrum_common::kurbo::BezPath> {
+        self.glyphs
+            .outline(gid, crate::glyphs::GlyphParams::default())
     }
 }
 

@@ -15,8 +15,22 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 /// A handle to one face in a database.
+///
+/// An index into that database's face table, not a value a caller constructs.
+/// The field is private so the index cannot be forged from outside the crate;
+/// the type itself never leaves this crate.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct FaceHandle(pub usize);
+pub(crate) struct FaceHandle(usize);
+
+impl FaceHandle {
+    pub(crate) const fn from_index(index: usize) -> Self {
+        Self(index)
+    }
+
+    pub(crate) const fn index(self) -> usize {
+        self.0
+    }
+}
 
 /// What a database knows about one installed face.
 #[derive(Debug, Clone, PartialEq)]
@@ -172,7 +186,7 @@ pub trait FontDb {
             best_score = face.similarity_score(weight, italic, pitch, true);
             best = Some(i);
             if face.is_exact_match(weight, italic, pitch, true) {
-                return Some(FaceHandle(i));
+                return Some(FaceHandle::from_index(i));
             }
         }
 
@@ -196,7 +210,7 @@ pub trait FontDb {
         }
 
         if let Some(i) = best {
-            return Some(FaceHandle(i));
+            return Some(FaceHandle::from_index(i));
         }
         // The one hard-coded consolation prize: a fixed-pitch ANSI request
         // that matched nothing gets Courier New if it exists.
@@ -211,7 +225,7 @@ pub trait FontDb {
         self.faces()
             .iter()
             .position(|f| f.name == name)
-            .map(FaceHandle)
+            .map(FaceHandle::from_index)
     }
 
     /// Find an installed face whose *normalized* name equals `normalized`,
@@ -307,6 +321,7 @@ impl TestFontDb {
 
     /// Register a face with no bytes, for testing the ladder's decisions
     /// without needing a real font program.
+    #[cfg(test)]
     pub fn push(&mut self, name: &str, styles: u32, charsets: Vec<Charset>) {
         self.faces.push(FaceInfo {
             name: name.to_owned(),
@@ -317,6 +332,7 @@ impl TestFontDb {
     }
 
     /// Register a face with real bytes.
+    #[cfg(test)]
     pub fn push_with_bytes(
         &mut self,
         name: &str,

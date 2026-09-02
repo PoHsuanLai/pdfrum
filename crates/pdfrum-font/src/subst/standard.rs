@@ -99,13 +99,6 @@ impl StandardFont {
 }
 
 /// The canonical PostScript name.
-///
-/// ```
-/// use pdfrum_font::{StandardFont, subst::canonical_font_name};
-///
-/// assert_eq!(canonical_font_name(StandardFont::Times), "Times-Roman");
-/// assert_eq!(canonical_font_name(StandardFont::HelveticaOblique), "Helvetica-Oblique");
-/// ```
 #[must_use]
 pub fn canonical_font_name(f: StandardFont) -> &'static str {
     BASE14_FONT_NAMES.get(f.index()).copied().unwrap_or("")
@@ -118,14 +111,6 @@ pub fn canonical_font_name(f: StandardFont) -> &'static str {
 /// a table sorted by `FXSYS_stricmp`; a case-insensitive scan is behaviorally
 /// identical and is what we do, so the table's sortedness stops being a
 /// correctness requirement.
-///
-/// ```
-/// use pdfrum_font::{StandardFont, subst::standard_font_index};
-///
-/// assert_eq!(standard_font_index(b"ArialMT"), Some(StandardFont::Helvetica));
-/// assert_eq!(standard_font_index(b"arial"), Some(StandardFont::Helvetica));
-/// assert_eq!(standard_font_index(b"Nonesuch"), None);
-/// ```
 #[must_use]
 pub fn standard_font_index(name: &[u8]) -> Option<StandardFont> {
     let name = std::str::from_utf8(name).ok()?;
@@ -140,6 +125,7 @@ pub fn standard_font_index(name: &[u8]) -> Option<StandardFont> {
 /// Case-**sensitive**, and it does not consult the alias table — a different
 /// question from [`standard_font_index`], and PDFium asks both.
 #[must_use]
+#[cfg(test)]
 pub fn is_standard_font_name(name: &[u8]) -> bool {
     std::str::from_utf8(name).is_ok_and(|n| BASE14_FONT_NAMES.contains(&n))
 }
@@ -174,6 +160,7 @@ pub fn standard_font_data(f: StandardFont) -> &'static [u8] {
 }
 
 /// Every standard font, in index order.
+#[cfg(test)]
 pub const ALL_STANDARD_FONTS: [StandardFont; 14] = [
     StandardFont::Courier,
     StandardFont::CourierBold,
@@ -196,6 +183,15 @@ mod tests {
     // Test fixtures are fixed-size arrays with known contents.
     #![allow(clippy::indexing_slicing)]
     use super::*;
+
+    #[test]
+    fn canonical_names_are_the_postscript_spellings() {
+        assert_eq!(canonical_font_name(StandardFont::Times), "Times-Roman");
+        assert_eq!(
+            canonical_font_name(StandardFont::HelveticaOblique),
+            "Helvetica-Oblique"
+        );
+    }
 
     /// `cfx_standardfont_unittest.cpp`'s `IsStandardFontName`.
     #[test]

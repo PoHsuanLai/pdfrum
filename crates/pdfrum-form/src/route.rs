@@ -2825,7 +2825,7 @@ mod tests {
 
         let da = fonts.face(b"Arial").expect("the /DR declares one face");
         let substitute = fonts
-            .substitute(pdfrum_font::subst::Charset::Hebrew)
+            .substitute(pdfrum_font::Charset::Hebrew)
             .expect("the Hebrew second face loads with no font directory at all");
         assert!(
             !ap::font_map::da_font_writes(da, ap::font_map::font_charset(da), BET),

@@ -1309,8 +1309,7 @@ mod tests {
         live: Option<&LiveState<'_>>,
     ) -> Option<String> {
         let cache = pdfrum_font::FontCache::new();
-        let face =
-            pdfrum_font::Font::load_standard(pdfrum_font::subst::StandardFont::Helvetica, &cache);
+        let face = pdfrum_font::Font::load_standard(pdfrum_font::StandardFont::Helvetica, &cache);
         let width = |code: u32| TextFont::char_width(&face, code);
         let font = TextFont {
             metrics: TextFont::metrics_of(&face, &width),
@@ -1851,11 +1850,10 @@ mod tests {
         let mut ctx = pdfrum_page::BuildContext::with_substitution(options);
         let fonts = crate::ap::FormFonts::load(&catalog(), &NoResolve, &mut ctx);
         let substitute = fonts
-            .substitute(pdfrum_font::subst::Charset::Hebrew)
+            .substitute(pdfrum_font::Charset::Hebrew)
             .expect("a Hebrew substitute");
 
-        let face =
-            pdfrum_font::Font::load_standard(pdfrum_font::subst::StandardFont::Helvetica, &cache);
+        let face = pdfrum_font::Font::load_standard(pdfrum_font::StandardFont::Helvetica, &cache);
         let charset = crate::ap::font_map::font_charset(&face);
         let width = |code: u32| {
             if crate::ap::font_map::da_font_writes(&face, charset, code) {
@@ -1925,10 +1923,9 @@ mod tests {
         let mut ctx = pdfrum_page::BuildContext::with_substitution(options);
         let fonts = crate::ap::FormFonts::load(&catalog(), &NoResolve, &mut ctx);
         let substitute = fonts
-            .substitute(pdfrum_font::subst::Charset::Hebrew)
+            .substitute(pdfrum_font::Charset::Hebrew)
             .expect("a Hebrew substitute");
-        let face =
-            pdfrum_font::Font::load_standard(pdfrum_font::subst::StandardFont::Helvetica, &cache);
+        let face = pdfrum_font::Font::load_standard(pdfrum_font::StandardFont::Helvetica, &cache);
         let width = |code: u32| TextFont::char_width(&face, code);
         let font = TextFont {
             metrics: TextFont::metrics_of(&face, &width),

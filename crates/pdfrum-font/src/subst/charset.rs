@@ -58,7 +58,7 @@ impl Charset {
     /// Macintosh CJK charsets. The set is exactly what `FX_CharSetIsCJK`
     /// names, and it decides whether Branch A of §1.12 takes its CJK arm.
     #[must_use]
-    pub fn is_cjk(self) -> bool {
+    pub(crate) fn is_cjk(self) -> bool {
         matches!(
             self,
             Self::ChineseSimplified | Self::ChineseTraditional | Self::Hangul | Self::ShiftJis
@@ -67,7 +67,7 @@ impl Charset {
 
     /// The charset a code page implies.
     #[must_use]
-    pub fn from_code_page(cp: CodePage) -> Self {
+    pub(crate) fn from_code_page(cp: CodePage) -> Self {
         match cp {
             CodePage::ShiftJis => Self::ShiftJis,
             CodePage::ChineseSimplified => Self::ChineseSimplified,
@@ -224,6 +224,7 @@ pub fn charset_for_code_page_bit(bit: u32) -> Option<Charset> {
 /// A default face name per charset (`kDefaultTTFMap`), taking the Linux
 /// spellings the oracle's build uses.
 #[must_use]
+#[cfg(test)]
 pub fn default_face_name(charset: Charset) -> &'static str {
     match charset {
         Charset::Ansi => "Helvetica",

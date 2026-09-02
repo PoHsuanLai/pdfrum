@@ -9,6 +9,7 @@
 //! output (`docs/design/pdfrum-font.md` §1.14).
 
 use super::charset::Charset;
+#[cfg(test)]
 use super::tables::{ANGLE_SKEW, WEIGHT_POW, WEIGHT_POW_11, WEIGHT_POW_SHIFT_JIS};
 
 /// The record a substitution produces.
@@ -21,20 +22,20 @@ use super::tables::{ANGLE_SKEW, WEIGHT_POW, WEIGHT_POW_11, WEIGHT_POW_SHIFT_JIS}
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct SubstFont {
     /// The family name the substitution settled on.
-    pub family: String,
+    pub(crate) family: String,
     /// The charset the face was chosen for.
     pub charset: Charset,
     /// The requested weight, or `None` for the face's own.
-    pub weight: Option<i32>,
+    pub(crate) weight: Option<i32>,
     /// The CJK weight, tracked separately because it has its own default.
-    pub weight_cjk: Option<i32>,
+    pub(crate) weight_cjk: Option<i32>,
     /// The synthetic italic angle, in degrees. Negative slants right.
     pub italic_angle: i32,
     /// Whether a CJK substitution happened, which switches both the weight and
     /// the skew to their CJK variants for a CID font.
-    pub subst_cjk: bool,
+    pub(crate) subst_cjk: bool,
     /// Whether the CJK substitution asked for italic.
-    pub italic_cjk: bool,
+    pub(crate) italic_cjk: bool,
     /// Whether this is one of the two built-in Multiple-Master generics, which
     /// suppresses artificial emboldening entirely — the design space handles
     /// weight properly, so dilating on top would double-count it.
@@ -51,8 +52,9 @@ impl SubstFont {
 
     /// The weight in effect, which for a CID font in a CJK substitution is the
     /// separately-tracked CJK weight (`GetEffectiveWeight`).
+    #[cfg(test)]
     #[must_use]
-    pub fn effective_weight(&self, is_cid_font: bool) -> i32 {
+    pub(crate) fn effective_weight(&self, is_cid_font: bool) -> i32 {
         if self.subst_cjk && is_cid_font {
             self.weight_cjk.unwrap_or(0)
         } else {
@@ -64,22 +66,25 @@ impl SubstFont {
     ///
     /// A table lookup by `-italic_angle`, saturating at **-58** for a positive
     /// angle or one past the table's 30 entries.
+    #[cfg(test)]
     #[must_use]
-    pub fn skew(&self) -> i32 {
+    pub(crate) fn skew(&self) -> i32 {
         skew_from_angle(self.italic_angle)
     }
 
     /// The CJK shear: a fixed -15° when the CJK substitution asked for italic,
     /// and none otherwise.
+    #[cfg(test)]
     #[must_use]
-    pub fn skew_cjk(&self) -> i32 {
+    pub(crate) fn skew_cjk(&self) -> i32 {
         skew_from_angle(if self.italic_cjk { -15 } else { 0 })
     }
 
     /// The shear actually applied, which for a CID font in a CJK substitution
     /// is the CJK one.
+    #[cfg(test)]
     #[must_use]
-    pub fn effective_skew(&self, is_cid_font: bool) -> i32 {
+    pub(crate) fn effective_skew(&self, is_cid_font: bool) -> i32 {
         if self.subst_cjk && is_cid_font {
             self.skew_cjk()
         } else {
@@ -98,7 +103,8 @@ impl SubstFont {
     // please the lint would make the pair harder to read, not easier.
     #[allow(clippy::similar_names)]
     #[must_use]
-    pub fn embolden_level_for_render(
+    #[cfg(test)]
+    pub(crate) fn embolden_level_for_render(
         &self,
         is_cid_font: bool,
         matrix_xx: i32,
@@ -123,8 +129,9 @@ impl SubstFont {
     /// failing past 99.
     ///
     /// Note it also reads the plain weight, not the effective one.
+    #[cfg(test)]
     #[must_use]
-    pub fn embolden_level_for_load(&self) -> i32 {
+    pub(crate) fn embolden_level_for_load(&self) -> i32 {
         if self.is_builtin_generic {
             return 0;
         }
@@ -139,8 +146,9 @@ impl SubstFont {
     }
 
     /// The stem thickness implied by the weight.
+    #[cfg(test)]
     #[must_use]
-    pub fn estimated_stem_v(&self) -> i32 {
+    pub(crate) fn estimated_stem_v(&self) -> i32 {
         self.raw_weight() / 5
     }
 
@@ -157,7 +165,7 @@ impl SubstFont {
     /// pay for it twice. An empty family never matches: a substitution that
     /// named no family did not load the document's font.
     #[must_use]
-    pub fn is_actual_font_loaded(&self, base_name: &[u8]) -> bool {
+    pub(crate) fn is_actual_font_loaded(&self, base_name: &[u8]) -> bool {
         let normalized: String = self
             .family
             .chars()
@@ -183,7 +191,7 @@ impl SubstFont {
     // rung of the adjustment above, and grouping them into a struct would only
     // move the same eight values behind a name that means nothing on its own.
     #[allow(clippy::too_many_arguments)]
-    pub fn configure_external(
+    pub(crate) fn configure_external(
         &mut self,
         face_name: String,
         charset: Charset,
@@ -211,7 +219,7 @@ impl SubstFont {
 
     /// Mark this as the built-in serif generic, which also scales the weight
     /// down by a fifth (`UseChromeSerif`).
-    pub fn use_chrome_serif(&mut self) {
+    pub(crate) fn use_chrome_serif(&mut self) {
         "Chrome Serif".clone_into(&mut self.family);
         if let Some(w) = self.weight {
             self.weight = Some(w * 4 / 5);
@@ -220,6 +228,7 @@ impl SubstFont {
 }
 
 /// The shear for an italic angle (`GetSkewFromAngle`).
+#[cfg(test)]
 #[must_use]
 pub fn skew_from_angle(angle: i32) -> i32 {
     // A positive angle, the `i32::MIN` whose negation overflows, and anything
@@ -234,6 +243,7 @@ pub fn skew_from_angle(angle: i32) -> i32 {
 /// The render-path dilation table lookup. `None` past the table, where the
 /// C++ returns -1 and its caller abandons the glyph.
 #[must_use]
+#[cfg(test)]
 fn weight_level(index: usize, shift_jis: bool) -> Option<i32> {
     if index >= 100 {
         return None;
@@ -249,6 +259,7 @@ fn weight_level(index: usize, shift_jis: bool) -> Option<i32> {
 /// The load-path dilation table lookup, whose Shift-JIS arm is additionally
 /// rescaled by `65536 / 36655`.
 #[must_use]
+#[cfg(test)]
 fn weight_level_for_load(index: usize, shift_jis: bool) -> i32 {
     if shift_jis {
         WEIGHT_POW_SHIFT_JIS

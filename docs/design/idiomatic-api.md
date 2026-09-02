@@ -834,6 +834,66 @@ Only the counts move.
 | `pdfrum-cmap` | 1 | 32 | 24 | `pub mod lexer` should be private. `CharCode(pub u32)` / `Cid(pub u16)` are genuine identifier newtypes, not bit words — they stay. | trivial |
 | `pdfrum-type1` | 0 | 56 | 40 | Clean within itself. One cross-crate note: it defines `pub struct Gid(pub u16)` (`lib.rs:105`) duplicating `pdfrum-font`'s `Gid` (`ids.rs:14`) — one name, two distinct types, two crates. A coherence question for step 12, not an idiom one. | trivial |
 | `pdfrum-font` | 3 | 282 | 195 | `FontFlags(pub u32)` → private field + typed `Self` constants (`ids.rs:87`). Note *why* this one matters beyond tidiness: the constants are `u32`, not `FontFlags`, so **`flags.has(7)` compiles today** — the type exists but types nothing. Also `WIDTH_UNSET: u16 = 0xffff` (`widths.rs:16`) and `FaceHandle(pub usize)` (`subst/db.rs:19`, a public raw index into a private table). `pub mod encoding` / `subst` / `tounicode` curated. The crate also holds the workspace's best *positive* example — `has_glyph: bool` documented as "PDFium's `-1`, which is distinct from glyph 0" (`lib.rs:139`) — which `Option<Gid>` would make unrepresentable rather than merely documented. | medium |
+
+> **Landed 2026-09-03 as the last crate-level WP11 step.** The board is not
+> run here. `FontFlags` and `WIDTH_UNSET` were already done, as the row said;
+> `CharItem::has_glyph` is kept. Snapshot **556 → 212** items (−62%) and
+> **5 → 1** `pub mod` (the crate root alone).
+>
+> The seam, enumerated from dependents' `use` lines *and* call sites with
+> comments stripped: `Font`, `FontCache`, `load` / `load_with_options`,
+> `StandardFont`, `SubstitutionOptions`, `CharCode`, `CharItem`, `Type3Font`
+> (`char_proc`, `font_matrix`, `resources`), `GlyphCache` / `GlyphKey` /
+> `FontId`, `CidTransform` / `cid_transform_to_float`, `MAX_TYPE3_DEPTH`,
+> `SubstFont::{raw_weight, charset, italic_angle, is_builtin_generic}`,
+> `Charset` / `charset_from_unicode`, `adobe_name_from_unicode`. Root
+> re-exports also keep `Face`, `Charmap`, `CharmapId` and
+> `GlyphSource::{units_per_em, charmaps, char_index, is_truetype}` for a
+> concurrent embedding job. No `pub mod` survived the "coherent vocabulary
+> with many call sites" bar: `encoding` had one function, `tounicode` had
+> none, `subst` had `Charset` at about ten sites.
+>
+> `FaceHandle` never left the crate — `FontDb` has no external implementor —
+> so it is `pub(crate) struct FaceHandle(usize)` with a constructor. The
+> public bool parameters that selected between named states lived on that
+> internal trait and on `SubstFont::{effective_weight, effective_skew,
+> embolden_level_for_render}`; they are no longer public. Flag-shaped bools
+> (`SubstitutionOptions`, `GlyphKey::vertical`, `CharItem`) stay.
+>
+> **Deleted as dead public code:** `fallback_glyph` (no caller anywhere);
+> `FaceEncoding::{AdobeStandard, AdobeExpert}` (never constructed);
+> `CidWidths::is_empty` and `VerticalMetrics::is_empty` (no caller even in
+> tests); `SimpleFont::encoding` (written at load, never read after).
+> `SimpleFont::glyph_path` looked dead until its own tests; it is
+> `#[cfg(test)]`. Test-only helpers (`TestFontDb::{push, push_with_bytes}`,
+> `GlyphCache::{path, len, is_empty, clear}`, the embolden/skew cluster)
+> went under `#[cfg(test)]`, not `#[allow(dead_code)]`.
+>
+> **What the row got wrong or left unsaid:**
+>
+> 1. **The `3` is a `lib.rs` count; the snapshot had 5 `pub mod`s** — crate
+>    root, `encoding`, `subst`, `subst::style_bits`, `tounicode`. Same
+>    undercount the other landed notes record.
+> 2. **`FaceHandle` was never a public-signature problem for a sibling.** The
+>    only consumer is `FontDb::face_bytes` inside this crate. Privatising the
+>    module was enough to take it off the snapshot; the private field is the
+>    extra the row asked for.
+> 3. **`GlyphSource::Fontations` leaked `glyphs::face::Face`**, which the row
+>    does not mention. Re-exporting `Face` / `Charmap` / `CharmapId` at the
+>    root is the parser lesson: a `pub` type in a private module is a leak
+>    exactly when a public signature names it.
+> 4. **`Gid`'s docs already said `pdfrum_type1::Gid` is a distinct space.**
+>    No edit.
+>
+> Doctests inside privatised modules (`tounicode::parse`,
+> `canonical_font_name`, `standard_font_index`, `unicode_from_adobe_name`)
+> became unit tests pinning the same values; `adobe_name_from_unicode`'s
+> doctest now names the root path. Clippy's `trivially_copy_pass_by_ref`
+> fired on `GlyphParams` the moment `outline`/`advance` stopped being
+> public — passed by value. Two rustdoc links (`GlyphCache::shared` →
+> `Self::path`, `SubstitutionOptions` → `CroscoreDb`) broke and only
+> `cargo doc` caught them.
+
 | `pdfrum-parser` | 0 | 82 | 63 | The best-shaped large crate in the workspace: a 60-line `lib.rs`, zero `pub mod`, 82 deliberately re-exported items. `version() -> u8` packed (`doc.rs:695`) → `PdfVersion`; `permissions(owner: bool) -> u32` (`doc.rs:797`) → forward crypt's struct. Two `keyword: bool` modes at `lexer.rs:644,664`. **Landed as `WordBoundary`; and the shape claim held everywhere except one item — `parse_indirect_object`'s return type `syntax::Indirect` was `pub` in a private module and never re-exported, so no caller could name it. Now a root re-export.** | small |
 | `pdfrum-page` | 12 | 407 | 283 | Largest public surface in the workspace. Twelve `pub mod`s (`color`, `function`, `image`, `inline_image`, `mutate`, `optional`, `pattern`, `shading`, `state`, `transfer`, `transparency`, `type3`) → curated re-export. **The clearest single offender in the workspace is here:** `pub const NO_CONTENT_STREAM: i32 = -1` (`mutate.rs:44`) with `pub fn content_stream(&self) -> i32` (`:69`), *re-exported at `lib.rs:80`* — a `-1` sentinel in the curated block. Also `image::scanline::get_bits` (`image/scanline.rs:23`), `Page::color(stroking: bool)` (`page.rs:394`), `is_valid_page_dict(.., strict: bool, ..)` (`page.rs:548`, also re-exported), and **eight** sites carrying `std_conversion: bool` across `color/` — one two-variant enum fixes all eight and is the highest-leverage rename in the crate. Most of the rest become private rather than renamed. | large |
 | `pdfrum-render` | **24** | 317 | 224 | ~~The worst `pub mod` count in the workspace — 24 against **one** private module.~~ **Corrected 2026-09-02: measured, this crate has 31 `pub mod`s against one private module, and `pdfrum-doc` has 49 — so it is the *second* worst, not the worst. The diagnosis (a crate that publishes its module tree) stands; only the ranking moves.** Named offenders: `pub fn peniko_mix` (`device.rs:251`, returns a `peniko` type the crate does not re-export — ~~private, or re-export `peniko::Color`~~ **withdrawn on landing: it has no caller at all and `pdfrum-raster-vello` duplicates it privately, so it is deleted**), `LCD_FIR5` / `LCD_PADDING_26_6` (`glyph.rs:69,77`), the `SUBPIXEL_*` constants and `to_subpixel` (`scanline.rs:69-153`), `EMPTY_CLIP_RECT: Rect = Rect::new(-1.0, -1.0, 0.0, 0.0)` (`clip.rs:28` — an inverted rect standing for "nothing", i.e. `Option<Rect>`), and the `render_page` / `_with_visibility` / `_with_caches` ladder (`walk.rs:55,79,110`). `pub mod walkprofile` (`lib.rs:88`) is **not** on this list: it looks like a STYLE.md §1 global-state violation (`pub fn take() -> Profile` over a `thread_local!`), but it is behind a default-off `walk-profile` feature and its module doc argues the §1 point explicitly at `walkprofile.rs:38-48` — checked, and the reasoning stands. It needs curation like its neighbours, nothing more. ~~It is "behind" the feature.~~ **Corrected on landing: it was `pub mod` *unconditionally* and so was in the default-features snapshot with 45 items — the feature gated what its functions *did*, never who could name them. "Curation like its neighbours" is what fixed that; see the landed note's item 4.** Carries the §A.8 `RenderOptions` decision. | large |

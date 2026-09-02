@@ -121,7 +121,7 @@ pub fn push_popup<R: Resolve>(
             // never does. Selection and the first visible row travel in the
             // dictionary below instead.
             live: None,
-            substitute: fonts.substitute(pdfrum_font::subst::Charset::Hebrew),
+            substitute: fonts.substitute(pdfrum_font::Charset::Hebrew),
             appearance_state: None,
         },
     ) else {

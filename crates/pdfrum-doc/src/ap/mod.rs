@@ -627,7 +627,7 @@ impl FormFonts {
     /// face would not load — in both cases the caller leaves the character to
     /// the `/DA` font, which is the behaviour that predates this.
     #[must_use]
-    pub fn substitute(&self, charset: pdfrum_font::subst::Charset) -> Option<Substitute<'_>> {
+    pub fn substitute(&self, charset: pdfrum_font::Charset) -> Option<Substitute<'_>> {
         let alias = font_map::substitute_alias(charset);
         self.substitutes
             .iter()
@@ -750,7 +750,7 @@ pub fn generate_appearances_with_text<R: Resolve>(
         // with the first gives a line the wrong length wherever the second one
         // writes. So the substitute enters through the width closure the
         // layout is built from, not only through the encoder.
-        let da_charset = named.map_or(pdfrum_font::subst::Charset::Ansi, font_map::font_charset);
+        let da_charset = named.map_or(pdfrum_font::Charset::Ansi, font_map::font_charset);
         let substitute = fonts.and_then(|fonts| {
             font_map::SUBSTITUTABLE_CHARSETS
                 .iter()
