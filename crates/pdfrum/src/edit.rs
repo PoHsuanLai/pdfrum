@@ -1,11 +1,4 @@
 //! Changing what a page draws, and writing the result out.
-//!
-//! Private since WP7 (`docs/design/idiomatic-api.md`): [`PageEdit`],
-//! [`PathBuilder`], [`TextBuilder`] and [`ImageBuilder`] are re-exported at
-//! the crate root and that is the only path to them, so two spellings for one
-//! type stopped being offered. The prose that used to live here — what
-//! regeneration loses, and why nothing is mutated until you save — moved onto
-//! [`PageEdit`], where a caller reading the rustdoc actually arrives.
 
 use kurbo::{Affine, BezPath, Rect};
 use pdfrum_common::PageIndex;
@@ -22,24 +15,23 @@ use crate::Page;
 /// order, plus a record of what has changed — which is what tells the save
 /// which content streams to write again and which to leave alone.
 ///
-/// ```
-/// let doc = pdfrum::Document::open("tests/fixtures/hello_world.pdf")?;
-/// let page = doc.page(0)?.edit();
-/// assert_eq!(page.len(), 2);
-/// assert!(!page.is_modified());
-/// # Ok::<(), pdfrum::Error>(())
-/// ```
-///
 /// # Nothing is mutated until you save
 ///
-/// [`Document`](crate::Document) is a shared, `Sync`, lazily-caching reader,
-/// and every other crate borrows from that shape. So editing follows the same
-/// pattern form filling does: [`Page::edit`] hands back an owned `PageEdit`
-/// holding this page's object graph, you change *that*, and
+/// [`Page::edit`] hands back an owned graph, you change *that*, and
 /// [`Document::save_pages`](crate::Document::save_pages) turns the changes
-/// into replacement objects on the way out. The document itself is never
-/// touched, which is why editing a page does not need a `&mut Document` and
-/// why two threads can edit two pages at once.
+/// into replacement objects on the way out. The document is never touched,
+/// which is why editing a page needs no `&mut Document` and why two threads
+/// can edit two pages at once.
+///
+/// # Saving an edited page rewrites it, and rewriting loses things
+///
+/// A page whose objects you changed is written again **from the object
+/// graph**, not patched. Only `rg`/`RG` colours survive, so a CMYK or
+/// ICC-based fill comes back black; patterns, shadings and Type 3 text are
+/// lost; text keeps only its matrix, font, render mode and strings, so
+/// character and word spacing go. [`pdfrum_edit`]'s crate documentation lists
+/// them in full. This applies **only to pages you edited** — every other page
+/// is copied through byte-for-byte.
 ///
 /// ```no_run
 /// use pdfrum::{Document, SaveOptions};
@@ -50,24 +42,6 @@ use crate::Page;
 /// doc.save_pages("out.pdf", &[page], &SaveOptions::default())?;
 /// # Ok::<(), pdfrum::Error>(())
 /// ```
-///
-/// # Saving an edited page rewrites it, and rewriting loses things
-///
-/// A page whose objects you changed is written again **from the object
-/// graph**, not patched. That regeneration reproduces what PDFium's does,
-/// including what PDFium's drops: only `rg`/`RG` colours survive, so a CMYK or
-/// ICC-based fill comes back black; patterns, shadings and Type 3 text are
-/// lost entirely; and text keeps only its matrix, font, render mode and
-/// strings, so character and word spacing go. The losses are listed in full in
-/// [`pdfrum_edit`]'s crate documentation.
-///
-/// Two consequences worth stating plainly. First, this applies **only to pages
-/// you edited** — every other page of the document is copied through
-/// byte-for-byte, and a document you edit nothing in saves exactly as it would
-/// have without this type. Second, the losses are matched to the oracle
-/// deliberately rather than tolerated: a regenerated page of ours is compared
-/// against a regenerated page of PDFium's, and emitting *more* than it does
-/// would fail that comparison as surely as emitting less.
 #[derive(Debug, Clone)]
 pub struct PageEdit {
     pub(crate) index: PageIndex,
@@ -243,9 +217,9 @@ impl PageEdit {
 /// The RGB triple and the alpha `pdfrum-edit` writes, out of a
 /// [`peniko::Color`].
 ///
-/// This is the §B entry point for colour: the facade takes the idiomatic
-/// type and narrows on the first line, so the writer's `[f32; 3]` never
-/// appears in a public signature. Two things happen here.
+/// The facade takes the idiomatic type and narrows on the first line, so the
+/// writer's `[f32; 3]` never appears in a public signature. Two things happen
+/// here.
 ///
 /// **The components are clamped to `0..=1`.** A PDF colour operand outside
 /// that range is out of gamut, and the engine clamps it on the way back out

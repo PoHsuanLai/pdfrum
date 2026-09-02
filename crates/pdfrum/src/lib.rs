@@ -84,14 +84,12 @@ pub use pdfrum_form::{Placement, PopupGeometry, PopupView, ScrollView};
 /// The `boa`-backed [`Cascade`] and what a caller needs to build and read one
 /// — behind the default-off `script` feature.
 ///
-/// [`ScriptCascade`] is [`Cascade`]'s second implementation; hand one to
-/// [`FormSession::with_cascade`], or — better — let
+/// [`ScriptCascade`] is [`Cascade`]'s second implementation; let
 /// [`FormSession::with_scripts`] build it *and* install the document's own
 /// `/AA` scripts into it. [`ScriptBuildError`] is what
 /// [`ScriptCascade::new`](pdfrum_form::ScriptCascade::new) can return and
 /// [`ScriptFailure`] is what [`stops`](pdfrum_form::ScriptCascade::stops)
-/// hands back, so both are nameable here rather than only through
-/// `pdfrum-form`.
+/// hands back.
 #[cfg(feature = "script")]
 pub use pdfrum_form::script::{
     BuildError as ScriptBuildError, FieldActions, ScriptFailure, ScriptStop,
@@ -151,11 +149,8 @@ pub use pdfrum_page::BuildContext;
 ///
 /// Settled once, when a [`BuildContext`] is made with
 /// [`BuildContext::with_substitution`], because it must not vary across one
-/// document. A caller that renders through such a context must start its
-/// [`FormSession`] through [`FormSession::with_context`] with the same one:
-/// the session lays out carets and selection bands from the *substituted*
-/// face's ascent and descent, and a second substitution over one document
-/// puts them at heights the page is not drawn at.
+/// document — a caller that renders through such a context must start its
+/// [`FormSession`] through [`FormSession::with_context`] with the same one.
 pub use pdfrum_font::SubstitutionOptions;
 
 /// One page's extracted text: the characters in reading order, plus search,
@@ -203,13 +198,9 @@ pub use pdfrum_crypt::Permissions;
 /// [`ImageBuilder::matrix`]. [`BezPath`] is [`PathBuilder::path`]. [`Size`] is
 /// the tolerance `TextPage::index_at` takes.
 ///
-/// **Five names, not the whole crate.** `pub use kurbo;` published all of
-/// kurbo's public API under `pdfrum::kurbo::` — every curve type, every
-/// solver, `Shape` and its whole method set — as though this crate had an
-/// opinion about them. It has one about these five, because they are what its
-/// own signatures are written in; a caller who wants `kurbo::Shape` or
-/// `CubicBez` adds `kurbo` themselves, which is the ordinary Rust rule and
-/// what §A.7 asks for.
+/// **Five names, not the whole crate.** These are what this crate's own
+/// signatures are written in; a caller who wants `kurbo::Shape` or `CubicBez`
+/// adds `kurbo` themselves.
 pub use kurbo::{Affine, BezPath, Point, Rect, Size};
 
 /// Colour: the one `peniko` type this crate's signatures name.
@@ -249,26 +240,13 @@ pub use pdfrum_parser::Error as ReadError;
 /// The seven errors [`Error`] wraps, each under the name of the *domain* its
 /// variant is called by.
 ///
-/// The enum's shape was already right — one error, domain variants,
-/// `thiserror`, `#[non_exhaustive]` — but its payloads were not reachable: a
-/// caller could match `Error::Open(_)` and `Display` what was inside, and
-/// could not write the type to inspect it, which is the entire reason a
-/// variant carries a payload at all.
-///
-/// # Why they are renamed rather than re-exported under their own names
-///
-/// All seven member crates spell their error type `Error`, per STYLE.md §4's
-/// one-error-per-crate rule, so seven of them cannot share this crate's
-/// namespace and `pdfrum::Error` already occupies the name. The scheme is
-/// **the variant's own name plus `Error`** — [`Error::Open`] wraps
-/// [`OpenError`], [`Error::Read`] wraps [`ReadError`], and so on — chosen over
-/// the alternative of naming them after their crates (`ParserError`,
-/// `EditError`) because the variants deliberately name domains rather than
-/// crates, and a caller who reads `Error::Save(e)` should not have to learn
-/// that saving lives in `pdfrum-edit` to write `e`'s type. The one exception
-/// is [`ObjectError`], which is not a variant of [`Error`] at all: it is what
-/// [`Document::fetch`] returns, and it keeps its crate's noun because there is
-/// no domain word to borrow.
+/// Every member crate spells its own error type `Error`, so the payloads are
+/// renamed here: **the variant's name plus `Error`** — [`Error::Open`] wraps
+/// [`OpenError`], [`Error::Read`] wraps [`ReadError`], and so on. Without
+/// them a caller could match `Error::Open(_)` and `Display` what was inside,
+/// and could not write the type to inspect it. [`ObjectError`] is the one
+/// exception: it is not a variant of [`Error`] at all but what
+/// [`Document::fetch`] returns, so it keeps its crate's noun.
 pub use pdfrum_parser::LoadError as OpenError;
 /// The error behind [`Error::Render`] — see [`OpenError`] for the naming.
 pub use pdfrum_render::Error as RenderError;
@@ -278,10 +256,8 @@ pub use pdfrum_text::Error as TextError;
 /// A straight (non-premultiplied) 32-bit draw colour: the type all four of
 /// [`ColorScheme`]'s fields are.
 ///
-/// Without this, [`ColorMode::Forced`] was unconstructible from this crate —
-/// `ColorScheme` has no `Default` and no constructor, so there was no
-/// expression a caller could write that produced one. The variant was visible
-/// in the rustdoc and unreachable from the API.
+/// [`ColorMode::Forced`] needs one for each of [`ColorScheme`]'s four fields,
+/// and `ColorScheme` has no `Default` and no constructor.
 ///
 /// ```
 /// use pdfrum::{Argb, ColorMode, ColorScheme, Document, RenderOptions};
@@ -306,10 +282,9 @@ pub use pdfrum_text::Error as TextError;
 /// # Ok::<(), pdfrum::Error>(())
 /// ```
 ///
-/// Note that [`peniko::Color`] is the vocabulary [`RenderOptions::background`]
-/// speaks; `Argb` is the engine's own resolved-colour byte quartet and is
-/// what a forced scheme substitutes. They are not interchangeable and this
-/// crate does not convert between them.
+/// [`peniko::Color`] is the vocabulary [`RenderOptions::background`] speaks;
+/// `Argb` is the engine's own resolved-colour byte quartet. They are not
+/// interchangeable and this crate does not convert between them.
 pub use pdfrum_render::Argb;
 
 /// Which annotation on a page holds the keyboard focus, and what rectangle to
@@ -379,9 +354,7 @@ pub use pdfrum_page::Rotation as PageRotation;
 ///
 /// The type of [`RenderSession::caches`], which stays a public field: it is
 /// half of a two-field record whose whole purpose is that a caller can reach
-/// either half on its own (STYLE.md §1 — data, not an object), and hiding it
-/// behind an accessor would buy nothing while making the pair asymmetric with
-/// [`RenderSession::build`], whose type was already re-exported.
+/// either half on its own.
 pub use pdfrum_render::RenderCaches;
 
 #[cfg(test)]

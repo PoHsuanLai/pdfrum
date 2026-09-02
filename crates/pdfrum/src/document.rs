@@ -12,8 +12,7 @@ use crate::{Outline, Page, Result};
 
 /// How to open a document.
 ///
-/// A plain config struct with [`Default`], filled in with struct-update
-/// syntax (STYLE.md §4):
+/// A config struct with [`Default`], filled in with struct-update syntax:
 ///
 /// ```
 /// use pdfrum::OpenOptions;
@@ -57,12 +56,9 @@ pub struct Document {
     pub(crate) limits: Limits,
     /// What *this crate's* reads have repaired since the file opened.
     ///
-    /// Interior mutability for a lazy record, documented as STYLE.md §2
-    /// requires: every read below this crate takes a `&mut Diagnostics` and
-    /// this crate's methods take `&self`, so what those reads recover has
-    /// nowhere else to go. A `Mutex` rather than a `RefCell` because
-    /// `Document` is what a rayon `par_iter` shares, and it is only ever
-    /// locked to append a handful of entries — never held across a parse.
+    /// Interior mutability for a lazy record: every read below this crate
+    /// takes a `&mut Diagnostics` while this crate's methods take `&self`, so
+    /// what those reads recover has nowhere else to go.
     ///
     /// It is deliberately *not* what [`Document::diagnostics`] returns: that
     /// stays the load-time snapshot, so an existing caller's answer does not
@@ -332,9 +328,10 @@ impl Document {
     /// Everything the reader repaired, worked around, or refused while
     /// opening the file.
     ///
-    /// Damage tolerance is a channel of its own, not an error (STYLE.md §3):
-    /// a document with a rebuilt cross-reference table opens successfully and
-    /// says so here.
+    /// Damage tolerance is a channel of its own, not an error: a document
+    /// with a rebuilt cross-reference table opens successfully and says so
+    /// here. [`Document::all_diagnostics`] is the running total over every
+    /// lazy read since.
     ///
     /// ```
     /// let doc = pdfrum::Document::open("tests/fixtures/hello_world.pdf")?;
@@ -353,38 +350,14 @@ impl Document {
     /// Everything this document has needed repaired **in total** — at load,
     /// and in every lazy read since.
     ///
-    /// [`Document::diagnostics`] answers only the first of those. PDF is read
-    /// lazily by design: the cross-reference is recovered when the file opens,
-    /// but an object is parsed when something first asks for it, a content
+    /// [`Document::diagnostics`] is the load-time snapshot alone. Reading is
+    /// lazy: an object is parsed when something first asks for it, a content
     /// stream is decoded when its page is rendered, and a font is substituted
-    /// when a glyph from it is drawn. A stream with a bad `/Length` on page
-    /// 400 is a repair that happens hundreds of calls after `open` returned,
-    /// and until now it was recorded into whatever short-lived sink the call
-    /// created and then dropped.
+    /// when a glyph from it is drawn, so a bad `/Length` on page 400 is a
+    /// repair that happens hundreds of calls after `open` returned.
     ///
-    /// This gathers three sinks into one owned snapshot: the load-time
-    /// diagnostics, the object store's running total
-    /// ([`pdfrum_parser::Document::lazy_diagnostics`]), and what this crate's
-    /// own reads — page building, text extraction, appearance generation,
-    /// attachment decoding — have recorded.
-    ///
-    /// It is a **running total**, so it is worth reading *after* the work
-    /// rather than before: a document that has been opened but not yet
-    /// rendered has nothing to say about its content streams. Reading it twice
-    /// without doing anything in between gives the same answer both times.
-    ///
-    /// ```
-    /// use pdfrum::{Document, RenderOptions};
-    ///
-    /// let doc = Document::open("tests/fixtures/hello_world.pdf")?;
-    /// let at_open = doc.all_diagnostics().len();
-    ///
-    /// // Rendering reaches the content stream, which is where this fixture's
-    /// // missing /Length is discovered.
-    /// let _ = doc.page(0)?.render(&RenderOptions::default())?;
-    /// assert!(doc.all_diagnostics().len() >= at_open);
-    /// # Ok::<(), pdfrum::Error>(())
-    /// ```
+    /// It is a **running total** — read it *after* the work. A document opened
+    /// but not yet rendered has nothing to say about its content streams.
     #[must_use]
     pub fn all_diagnostics(&self) -> Diagnostics {
         let mut all = self.inner.diags.clone();
@@ -400,8 +373,7 @@ impl Document {
     /// Every facade method that reads through the stack creates a sink to
     /// satisfy the signatures below it; this is where that sink goes instead
     /// of into the floor. A poisoned lock drops the entries rather than
-    /// panicking — losing a diagnostic is not worth failing a render for
-    /// (STYLE.md §3: no panics in library code).
+    /// panicking — losing a diagnostic is not worth failing a render for.
     pub(crate) fn note(&self, diags: &Diagnostics) {
         if diags.is_empty() {
             return;

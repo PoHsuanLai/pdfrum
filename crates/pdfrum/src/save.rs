@@ -11,8 +11,7 @@ use crate::{Document, EmbeddedFont, FontEncoding, Form, PageEdit, Result, Standa
 
 /// How a document is written back out.
 ///
-/// A plain config struct with [`Default`], filled in with struct-update
-/// syntax (STYLE.md §4).
+/// A config struct with [`Default`], filled in with struct-update syntax.
 ///
 /// ```
 /// use pdfrum::{SaveOptions, Update};
@@ -228,9 +227,9 @@ impl Document {
     /// changed, and every page not listed at all, comes through untouched.
     /// See [`PageEdit`] for what regeneration loses.
     ///
-    /// This is the no-new-objects convenience: it opens a [`DocEdit`] with
-    /// nothing added and delegates. Adding a font (or any other new object)
-    /// needs [`Document::edit`] and [`DocEdit::save_pages`].
+    /// The no-new-objects convenience: it opens a [`DocEdit`] with nothing
+    /// added and delegates to [`DocEdit::save_pages`]. Adding a font, or any
+    /// other new object, needs [`Document::edit`] directly.
     ///
     /// # Errors
     ///
