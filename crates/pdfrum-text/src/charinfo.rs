@@ -22,7 +22,11 @@ pub enum CharType {
     NotUnicode,
     /// The soft hyphen at a line break. Its `unicode` is forced to `0x0002`,
     /// which is what `--txt` emits at that position — the search-facing text
-    /// gets `U+FFFE` instead. The two outputs genuinely differ here.
+    /// gets `U+00AD` instead. The two outputs genuinely differ here, and
+    /// since audit **A41**'s buffer half they differ in a way that is
+    /// deliberately ours: the record keeps PDFium's `0x2` (the char-list half
+    /// stays declined at 12 golden rows) while the buffer carries the real
+    /// soft hyphen instead of the `U+FFFE` noncharacter.
     Hyphen,
     /// One piece of a character that normalization split into several.
     Piece,

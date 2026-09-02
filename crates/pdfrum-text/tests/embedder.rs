@@ -154,7 +154,16 @@ fn a_space_in_the_stream_is_not_generated_but_a_line_break_is() {
 fn a_soft_hyphen_becomes_the_sentinel_and_a_hard_one_survives() {
     // `IsHyphen` plus `GetTextWithHyphen` — the two halves of the two-output
     // finding. The *character* at the break holds U+0002; the *text* at the
-    // same place holds U+FFFE. Both are read, by different callers.
+    // same place holds U+00AD. Both are read, by different callers.
+    //
+    // `[oracle-bug]` **A41, buffer half.** This used to assert
+    // `"Verita\u{FFFE}serum"`, reproducing `cpdf_textpage.cpp:1360-1361`'s
+    // `AppendChar(0xfffe)`. `U+FFFE` is a permanent Unicode noncharacter
+    // (Unicode §23.7) and reached callers verbatim through `all_text()`. It is
+    // now the real soft hyphen the document contained and `IsHyphenCode`
+    // (`:1149-1151`) recognised before discarding. The *record* still holds
+    // PDFium's `0x2` — A41's char-list half costs 12 golden rows and stays
+    // declined — so the two outputs now diverge in a new, deliberate way.
     let page = fixture!("bug_781804.pdf");
     assert_eq!(page.chars[0].unicode, u32::from('V'));
     assert_ne!(page.chars[0].char_type, CharType::Hyphen);
@@ -162,7 +171,7 @@ fn a_soft_hyphen_becomes_the_sentinel_and_a_hard_one_survives() {
     assert_eq!(page.chars[6].char_type, CharType::Hyphen);
     assert_eq!(
         page.all_text().chars().take(12).collect::<String>(),
-        "Verita\u{FFFE}serum"
+        "Verita\u{00AD}serum"
     );
     assert_eq!(page.chars[14].unicode, u32::from('U'));
     assert_ne!(page.chars[14].char_type, CharType::Hyphen);
@@ -222,11 +231,19 @@ fn an_unmappable_character_is_still_counted() {
     let page = fixture!("bug_583.pdf");
     assert_eq!(page.chars.len(), 1);
     assert_eq!(page.chars[0].unicode, 0);
-    // The *text* holds the sentinel rather than nothing: a character code
-    // that maps to U+0000 is still "normal" (its code is non-zero), so it
-    // reaches the text buffer, and the buffer writes the sentinel wherever
-    // the character would have been a NUL.
-    assert_eq!(page.all_text(), "\u{FFFE}");
+    // The *text* holds a replacement character rather than nothing: a
+    // character code that maps to U+0000 is still "normal" (its code is
+    // non-zero), so it reaches the text buffer, and the buffer cannot write a
+    // bare NUL there.
+    //
+    // `[oracle-bug]` **A41, buffer half.** This used to assert `"\u{FFFE}"`,
+    // reproducing `cpdf_textpage.cpp:1462`'s `AppendChar(c ? c : 0xfffe)` —
+    // the same Unicode noncharacter as the hyphen path, in the same public
+    // channel, so the same ruling applies. `U+FFFD` is the sanctioned stand-in
+    // for an unrepresentable character and is already what this workspace
+    // answers for an unpaired surrogate (audit A54). The character *record*
+    // still holds `0`, so `--txt` is byte-identical.
+    assert_eq!(page.all_text(), "\u{FFFD}");
 }
 
 /// Audit items **A40 + A43**. `WhitespaceCharCount` used to assert zero
@@ -290,16 +307,21 @@ fn a_hyphen_sentinel_replaces_a_hard_hyphen_in_a_non_ascii_word() {
     if text.len() < 227 {
         return;
     }
-    // The *text* holds the sentinel at the break; the *character stream*
+    // The *text* holds the soft hyphen at the break; the *character stream*
     // holds `U+0002` at the same place. The upstream assertion is on the
     // text, and the design brief's §5.2 quotes the character stream's value
     // for it -- both are right, about different outputs.
+    //
+    // `[oracle-bug]` **A41, buffer half.** This used to look for
+    // `"...it noti\u{FFFE}fi"`, the `U+FFFE` noncharacter
+    // `cpdf_textpage.cpp:1361` writes. It is now the real `U+00AD`; the
+    // char-list assertion below is unchanged and still pins PDFium's `0x02`.
     // Pinned by content rather than by offset: A40+A43 restores characters
     // ahead of this run, so an absolute index would pin the bug's arithmetic.
     let whole: String = text.iter().collect();
     assert!(
-        whole.contains("METADATA table. When the split has committed, it noti\u{FFFE}fi"),
-        "the sentinel replaces the hard hyphen mid-word"
+        whole.contains("METADATA table. When the split has committed, it noti\u{00AD}fi"),
+        "the soft hyphen replaces the hard hyphen mid-word"
     );
     let sentinels: Vec<_> = page
         .chars

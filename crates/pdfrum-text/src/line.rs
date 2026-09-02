@@ -13,7 +13,10 @@
 //! drift apart by accident.
 //!
 //! The staging text is `Vec<u32>`, not a `String`: it legitimately holds the
-//! `0xFFFE` sentinel and lone zeroes that the final string will not contain.
+//! `0xFFFE` charcode-zero placeholder and lone zeroes that the final string
+//! will not contain. That placeholder is private and dies here — its record is
+//! never `normal`, so it is dropped before the buffer a caller reads, which is
+//! the shape §C.1 of `docs/design/idiomatic-api.md` permits a sentinel to keep.
 
 use crate::bidi::{self, Direction};
 use crate::charinfo::{CharBox, CharType};
@@ -48,7 +51,8 @@ impl Line {
     /// The staged text units, which are **not** the staged characters'
     /// unicodes: a character-code-zero placeholder stages `U+FFFE` while its
     /// record keeps zero, and the hyphen path deliberately writes different
-    /// values into the two.
+    /// values into the two. Only the hyphen's reaches a caller; the
+    /// placeholder is filtered out when the line closes.
     #[must_use]
     pub fn text(&self) -> &[u32] {
         &self.text
@@ -86,7 +90,7 @@ impl Line {
     /// Replaces the last text unit without touching its character record.
     ///
     /// The one place the two are *meant* to disagree: the hyphen path writes
-    /// `0x0002` into the record and `U+FFFE` into the text, and both readings
+    /// `0x0002` into the record and `U+00AD` into the text, and both readings
     /// of that position are observable.
     pub fn set_last_unit(&mut self, unit: u32) {
         if let Some(last) = self.text.last_mut() {
@@ -222,7 +226,7 @@ pub fn close(line: &mut Line, out: &mut Output, rtl: bool) {
 /// 2. Only a right-to-left character has its record's unicode rewritten from
 ///    the mirrored, normalized text; a left-to-right one keeps whatever it
 ///    was constructed with. That is what carries the hyphen sentinel's
-///    `0x0002` through while the text buffer receives `U+FFFE`. The one
+///    `0x0002` through while the text buffer receives `U+00AD`. The one
 ///    exception is `[oracle-bug]` A40b's space normalization, which rewrites
 ///    the record in either direction precisely so the two outputs *cannot*
 ///    disagree about a space.
@@ -433,21 +437,27 @@ mod tests {
     }
 
     #[test]
-    fn the_hyphen_sentinel_splits_the_two_outputs() {
+    fn the_hyphen_splits_the_two_outputs() {
         // What ProcessGenerateCharacter leaves behind: the record says 0x2,
-        // the staged text says 0xFFFE.
+        // the staged text says U+00AD. The asymmetry is the point, and after
+        // audit A41's buffer half it is an asymmetry of our own making — the
+        // record keeps PDFium's 0x2, the buffer carries a real soft hyphen
+        // where PDFium writes the U+FFFE noncharacter.
         let mut line = Line::default();
         line.push(u32::from('a'), info(u32::from('a')));
         let mut hyphen = info(0x02);
         hyphen.char_type = CharType::Hyphen;
-        line.push(0xFFFE, hyphen);
+        line.push(0x00AD, hyphen);
         line.push(u32::from('s'), info(u32::from('s')));
 
         let mut out = Output::default();
         close(&mut line, &mut out, false);
-        // The text keeps the sentinel; the character list keeps 0x2.
-        assert_eq!(out.text, [u32::from('a'), 0xFFFE, u32::from('s')]);
+        // The text keeps the soft hyphen; the character list keeps 0x2.
+        assert_eq!(out.text, [u32::from('a'), 0x00AD, u32::from('s')]);
         assert_eq!(char_units(&out), [u32::from('a'), 0x02, u32::from('s')]);
+        // And what lands in the buffer is a real character, which is the
+        // whole of A41's buffer half.
+        assert!(char::from_u32(0x00AD).is_some());
     }
 
     #[test]
