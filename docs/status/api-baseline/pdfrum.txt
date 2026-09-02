@@ -280,11 +280,11 @@ pub fn pdfrum::PageEdit::set_visible(&mut self, usize, bool) -> bool
 pub fn pdfrum::PageEdit::transform(&mut self, usize, kurbo::affine::Affine) -> bool
 pub struct pdfrum::PathBuilder
 pub pdfrum::PathBuilder::even_odd: bool
-pub pdfrum::PathBuilder::fill: core::option::Option<[f32; 3]>
+pub pdfrum::PathBuilder::fill: core::option::Option<peniko::Color>
 pub pdfrum::PathBuilder::line_width: f32
 pub pdfrum::PathBuilder::matrix: kurbo::affine::Affine
 pub pdfrum::PathBuilder::path: kurbo::bezpath::BezPath
-pub pdfrum::PathBuilder::stroke: core::option::Option<[f32; 3]>
+pub pdfrum::PathBuilder::stroke: core::option::Option<peniko::Color>
 impl pdfrum::PathBuilder
 pub fn pdfrum::PathBuilder::build(self) -> pdfrum_page::page::PageObject
 pub fn pdfrum::PathBuilder::rect(kurbo::rect::Rect) -> Self
@@ -294,8 +294,8 @@ pub struct pdfrum::RenderOptions
 pub pdfrum::RenderOptions::annotations: bool
 pub pdfrum::RenderOptions::background: core::option::Option<peniko::Color>
 pub pdfrum::RenderOptions::color_mode: pdfrum_render::options::ColorMode
-pub pdfrum::RenderOptions::no_image_smooth: bool
-pub pdfrum::RenderOptions::no_path_smooth: bool
+pub pdfrum::RenderOptions::interpolate_images: bool
+pub pdfrum::RenderOptions::smooth_paths: bool
 pub pdfrum::RenderOptions::text_aa: pdfrum_render::options::TextAa
 pub pdfrum::RenderOptions::transform: kurbo::affine::Affine
 impl pdfrum::RenderOptions
@@ -314,7 +314,7 @@ pub pdfrum::SaveOptions::update: pdfrum::Update
 pub pdfrum::SaveOptions::version: core::option::Option<u8>
 pub struct pdfrum::TextBuilder
 pub pdfrum::TextBuilder::codes: alloc::vec::Vec<u8>
-pub pdfrum::TextBuilder::fill: [f32; 3]
+pub pdfrum::TextBuilder::fill: peniko::Color
 pub pdfrum::TextBuilder::font: pdfrum_object::object::ObjRef
 pub pdfrum::TextBuilder::position: kurbo::point::Point
 pub pdfrum::TextBuilder::render_mode: pdfrum_page::ops::TextRenderMode

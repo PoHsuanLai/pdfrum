@@ -16,6 +16,7 @@ const HELLO: &str = "tests/fixtures/hello_world.pdf";
 const FORM: &str = "tests/fixtures/text_form.pdf";
 const BOOKMARKS: &str = "tests/fixtures/bookmarks.pdf";
 const JPX_TWO_SIZES: &str = "tests/fixtures/jpx_two_sizes.pdf";
+const RECTANGLES: &str = "tests/fixtures/rectangles.pdf";
 
 /// Whether a page dimension is exactly this many points.
 ///
@@ -1133,4 +1134,126 @@ fn an_error_keeps_the_member_crates_own_error_as_its_source() {
     let err = Document::from_bytes(Arc::from(b"nope".as_slice())).expect_err("err");
     let source = err.source().expect("the wrapped error survives");
     assert_eq!(source.to_string(), "not a PDF file");
+}
+
+// ------------------------------------------------- WP10: options and colour
+
+// The facade's `RenderOptions` flags are positive (`smooth_paths`,
+// `interpolate_images`) where the engine's are the oracle's inverted flag
+// words (`no_path_smooth`, `no_image_smooth`). §A.8 rules that the two types
+// stay different and §B rules that the conversion is a narrowing at the entry
+// point — `RenderOptions::to_inner`. This test is what makes that mapping
+// checkable from outside: it renders the *same* page graph twice, once
+// through the facade asking for `smooth_paths: false` and once through the
+// engine asking for `no_path_smooth: true`, and the two pixmaps must be
+// byte-equal. A mapping that dropped the `!`, or crossed the two flags over,
+// fails here rather than in a golden nobody reads.
+#[test]
+fn a_positive_facade_flag_reaches_the_engine_as_the_inverted_one() {
+    let doc = Document::open(RECTANGLES).expect("open");
+    let page = doc.page(0).expect("page");
+
+    let via_facade = page
+        .render(&RenderOptions {
+            smooth_paths: false,
+            annotations: false,
+            ..RenderOptions::default()
+        })
+        .expect("render");
+
+    // The engine, driven directly with the oracle's own flag name. The page
+    // graph is the public one, so this is the same input by construction.
+    let graph = page.objects();
+    let engine_options = pdfrum_render::RenderOptions {
+        no_path_smooth: true,
+        ..pdfrum_render::RenderOptions::default()
+    };
+    let mut diags = pdfrum::Diagnostics::default();
+    let via_engine = pdfrum_render::render_page_with_caches(
+        &graph,
+        &engine_options,
+        &pdfrum::VelloCpuBackend::new(),
+        &mut pdfrum::RenderCaches::new(),
+        &mut diags,
+    )
+    .expect("render");
+
+    assert_eq!(
+        via_facade, via_engine,
+        "smooth_paths: false is no_path_smooth: true"
+    );
+
+    // And the flag is not inert: the default (smoothed) render differs.
+    let smoothed = page
+        .render(&RenderOptions {
+            annotations: false,
+            ..RenderOptions::default()
+        })
+        .expect("render");
+    assert_ne!(via_facade, smoothed, "the flag has to change something");
+}
+
+// The defaults are the common case, positively stated.
+#[test]
+fn the_render_defaults_are_the_common_case() {
+    let options = RenderOptions::default();
+    assert!(options.smooth_paths);
+    assert!(options.interpolate_images);
+    assert!(options.annotations);
+}
+
+// `PathBuilder::fill` takes a `peniko::Color` — the vocabulary the crate
+// already re-exports for `RenderOptions::background` — rather than a bare
+// `[f32; 3]`. The conversion to the writer's triple happens at the entry
+// point into `pdfrum-edit`, and this proves the colour a caller names is the
+// colour the *saved file* carries: build the path from a `Color`, save,
+// reopen, and read the fill back off the reloaded page object.
+#[test]
+fn a_path_fill_named_as_a_color_round_trips_through_a_save() {
+    use pdfrum::{PathBuilder, kurbo::Rect, peniko::Color};
+
+    let dir = temp_dir("wp10-color");
+    let out = dir.join("filled.pdf");
+
+    let doc = Document::open(HELLO).expect("open");
+    let mut edit = doc.page(0).expect("page").edit();
+    edit.push(
+        PathBuilder {
+            // Alpha is deliberately not 255. It is *kept*: the colour goes out
+            // as `rg`, which has no alpha, but the alpha goes out beside it as
+            // an `/ExtGState` `/ca`, so a translucent colour survives the save.
+            fill: Some(Color::from_rgba8(64, 128, 192, 128)),
+            stroke: None,
+            ..PathBuilder::rect(Rect::new(10.0, 10.0, 60.0, 40.0))
+        }
+        .build(),
+    );
+    doc.save_pages(&out, &[edit], &SaveOptions::default())
+        .expect("save");
+
+    let reopened = Document::open(&out).expect("reopen");
+    let objects = reopened.page(0).expect("page").objects();
+    let path = objects
+        .objects
+        .iter()
+        .rev()
+        .find_map(|o| match o {
+            pdfrum::PageObject::Path(p) => Some(p),
+            _ => None,
+        })
+        .expect("the path we pushed");
+
+    let rgb = path.state.fill.to_rgb().expect("an expressible fill");
+    let expected = Color::from_rgba8(64, 128, 192, 128);
+    for (name, got, want) in [
+        ("r", rgb.r, expected.components[0]),
+        ("g", rgb.g, expected.components[1]),
+        ("b", rgb.b, expected.components[2]),
+        ("a", path.state.general.fill_alpha, expected.components[3]),
+    ] {
+        assert!(
+            (got - want).abs() < 2.0 / 255.0,
+            "{name} survived the save: got {got}, want {want}"
+        );
+    }
 }
