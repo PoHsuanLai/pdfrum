@@ -89,7 +89,7 @@ fn trunc_i32(x: f64) -> i32 {
 /// every fourth century. 2000 is a leap year; 1900 is not.
 ///
 /// This is also the rule the surrounding day arithmetic already assumes —
-/// [`day_from_year`] counts leap days with the correct `/4 − /100 + /400`
+/// `day_from_year` counts leap days with the correct `/4 − /100 + /400`
 /// cadence — so getting it wrong here would make the two disagree with each
 /// other for a century year.
 //
