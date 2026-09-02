@@ -26,8 +26,6 @@ names! {
     /// External file holding the data, also an annotation's flag word
     /// (`/F` — the meaning follows the dictionary, not the key).
     F = "F";
-    /// Length of the decoded data, as a hint (`/DL`).
-    DL = "DL";
 
     // ---- Stream filters and their abbreviations (tables 6 and 92) ----
 
@@ -88,9 +86,6 @@ names! {
     ROWS = "Rows";
     /// Whether a CCITT 1 bit means black (`/BlackIs1`).
     BLACK_IS_1 = "BlackIs1";
-    /// Whether a CCITT stream ends with an end-of-block pattern
-    /// (`/EndOfBlock`).
-    END_OF_BLOCK = "EndOfBlock";
 
     // ---- Trailer and cross-reference (tables 15 and 17) ----
 
@@ -144,8 +139,6 @@ names! {
 
     // ---- Catalog and page tree (tables 28 and 29) ----
 
-    /// The version override in the catalog (`/Version`).
-    VERSION = "Version";
     /// The root of the page tree (`/Pages`).
     PAGES = "Pages";
     /// A leaf of the page tree (`/Page`).
@@ -240,8 +233,6 @@ names! {
 
     // ---- Linearization (annex F) ----
 
-    /// The linearization parameter (`/Linearized`).
-    LINEARIZED = "Linearized";
     /// Length of the whole file (`/L`), also a line annotation's endpoints.
     L = "L";
     /// Offset and length of the hint stream (`/H`).
@@ -274,12 +265,8 @@ names! {
     BORDER = "Border";
     /// Colour (`/C`).
     C = "C";
-    /// Structure-tree parent key (`/StructParent`).
-    STRUCT_PARENT = "StructParent";
     /// Optional-content membership (`/OC`).
     OC = "OC";
-    /// Polygon and polyline vertices (`/Vertices`).
-    VERTICES = "Vertices";
     /// Ink annotation stroke list (`/InkList`).
     INK_LIST = "InkList";
 
@@ -291,10 +278,6 @@ names! {
     BC = "BC";
     /// Normal caption (`/CA`), also the non-stroking alpha constant.
     CA = "CA";
-    /// Rollover caption (`/RC`), also rich-text contents.
-    RC = "RC";
-    /// Alternate (down) caption (`/AC`).
-    AC = "AC";
     /// Normal icon (`/I`), also a transparency group's isolation flag.
     I = "I";
     /// Rollover icon (`/RI`).
@@ -310,20 +293,12 @@ names! {
     XFA = "XFA";
     /// Alternate field name, shown to the user (`/TU`).
     TU = "TU";
-    /// Mapping field name, for exporting (`/TM`).
-    TM = "TM";
     /// Field flags (`/Ff`).
     FF = "Ff";
     /// Default value (`/DV`).
     DV = "DV";
     /// Additional-actions dictionary (`/AA`).
     AA = "AA";
-    /// Button field type (`/Btn`).
-    BTN = "Btn";
-    /// Text field type (`/Tx`).
-    TX = "Tx";
-    /// Choice field type (`/Ch`).
-    CH = "Ch";
     /// Signature field type (`/Sig`).
     SIG = "Sig";
     /// Default appearance string (`/DA`).
@@ -332,8 +307,6 @@ names! {
     Q = "Q";
     /// Default style string (`/DS`).
     DS = "DS";
-    /// Rich-text value (`/RV`).
-    RV = "RV";
 
     // ---- Predefined encodings (annex D) ----
 
@@ -388,8 +361,6 @@ names! {
     G = "G";
     /// A soft mask's transfer function (`/TR`).
     TR = "TR";
-    /// The transparency group subtype (`/Transparency`).
-    TRANSPARENCY = "Transparency";
     /// A group's colour space (`/CS`).
     CS = "CS";
 }

@@ -35,7 +35,8 @@
 //! **Integers have two readings.** [`Object::Int`] stores the mathematical
 //! value, but a file that writes `4294967295` for a permissions word means
 //! `-1` when read as an integer and `4294967296.0` when read as a number. The
-//! accessors reproduce both; see the [`number`] module.
+//! accessors reproduce both: [`narrow_to_signed32`] is the integer view and
+//! [`widen_to_f32`] the numeric one.
 
 #![forbid(unsafe_code)]
 // Every byte in this crate came from an untrusted file: index with `get()`.
@@ -46,7 +47,7 @@ mod dict;
 mod error;
 mod name;
 pub mod names;
-pub mod number;
+mod number;
 mod object;
 mod resolve;
 mod stream;
@@ -59,8 +60,10 @@ pub use array::Array;
 pub use dict::Dict;
 pub use error::Error;
 pub use name::{Name, name_decode, name_encode};
-pub use number::{INT_RANGE, as_c_float, as_c_int, fmt_int, fmt_number, real_as_c_int};
-pub use object::{ObjRef, Object, SharedObject};
+pub use number::{
+    INT_RANGE, fmt_int, fmt_number, narrow_to_signed32, truncate_to_signed32, widen_to_f32,
+};
+pub use object::{ObjRef, Object};
 pub use resolve::{NoResolve, Resolve, Resolved};
 pub use stream::{ByteSpan, Stream};
 pub use string::{

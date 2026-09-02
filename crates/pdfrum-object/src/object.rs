@@ -6,9 +6,8 @@
 //! variant makes every coercion fail to compile until it is considered.
 
 use std::collections::HashSet;
-use std::sync::Arc;
 
-use crate::number::{as_c_float, as_c_int, fmt_int, fmt_number, real_as_c_int};
+use crate::number::{fmt_int, fmt_number, narrow_to_signed32, truncate_to_signed32, widen_to_f32};
 use crate::{Array, Dict, Error, Name, PdfString, Resolve, Resolved, Stream};
 
 /// An indirect object's identity: the pair a `N G obj` header carries and a
@@ -86,7 +85,7 @@ pub enum Object {
     /// (see [`INT_RANGE`](crate::INT_RANGE)) — larger literals fold to zero
     /// during parsing. Reading it back has two flavours,
     /// [`as_int`](Object::as_int) and [`number`](Object::number), which
-    /// disagree above `i32::MAX`; see the [`number`](crate::number) module.
+    /// disagree above `i32::MAX`; see [`narrow_to_signed32`](crate::narrow_to_signed32).
     Int(i64),
     /// A real number. `f32` rather than `f64` to match the precision the
     /// oracle parses, formats and renders with.
@@ -128,8 +127,8 @@ impl Object {
     pub fn as_int(&self) -> Option<i64> {
         match self {
             Self::Bool(b) => Some(i64::from(*b)),
-            Self::Int(v) => Some(as_c_int(*v)),
-            Self::Real(v) => Some(real_as_c_int(*v)),
+            Self::Int(v) => Some(narrow_to_signed32(*v)),
+            Self::Real(v) => Some(truncate_to_signed32(*v)),
             Self::Null
             | Self::Str(_)
             | Self::Name(_)
@@ -147,7 +146,7 @@ impl Object {
     #[must_use]
     pub fn number(&self) -> Option<f32> {
         match self {
-            Self::Int(v) => Some(as_c_float(*v)),
+            Self::Int(v) => Some(widen_to_f32(*v)),
             Self::Real(v) => Some(*v),
             Self::Null
             | Self::Bool(_)
@@ -458,6 +457,3 @@ impl From<ObjRef> for Object {
         Self::Ref(v)
     }
 }
-
-/// A shared object, as the store hands them out.
-pub type SharedObject = Arc<Object>;

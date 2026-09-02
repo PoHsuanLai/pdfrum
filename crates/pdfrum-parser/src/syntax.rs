@@ -716,7 +716,7 @@ mod tests {
     /// one is worth zero.
     ///
     /// Found by the `filters_chain` and `crypt_encrypt_dict` fuzz targets: a
-    /// `/Columns 999999999999999999999999` reached `as_c_int`, whose
+    /// `/Columns 999999999999999999999999` reached `narrow_to_signed32`, whose
     /// `debug_assert!` on that range is the contract this pins. The bug was
     /// an `i64` accumulator that *saturated* — turning an absurd token into
     /// `i64::MAX` rather than into nothing.
@@ -765,7 +765,7 @@ mod tests {
                 String::from_utf8_lossy(spelling)
             );
             // The accessor whose debug_assert the fuzzer tripped.
-            let _ = pdfrum_object::as_c_int(v);
+            let _ = pdfrum_object::narrow_to_signed32(v);
         }
     }
 

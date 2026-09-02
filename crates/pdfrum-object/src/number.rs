@@ -13,9 +13,10 @@
 //!
 //! We keep one variant, [`Object::Int`](crate::Object::Int), holding the
 //! *mathematical* value in an `i64`, and reproduce both observables in the
-//! accessors: [`as_c_int`] for integer contexts, [`as_c_float`] for numeric
-//! ones. Every integer a lexer can produce lies in `-2^31 ..= 2^32 - 1`
-//! (see [`INT_RANGE`]) because PDFium's parse rules fold anything wider to 0.
+//! accessors: [`narrow_to_signed32`] for integer contexts,
+//! [`widen_to_f32`] for numeric ones. Every integer a lexer can produce lies
+//! in `-2^31 ..= 2^32 - 1` (see [`INT_RANGE`]) because PDFium's parse rules
+//! fold anything wider to 0.
 
 use core::ops::RangeInclusive;
 
@@ -27,22 +28,24 @@ use core::ops::RangeInclusive;
 /// reachable from parsing, and the accessors are only faithful within it.
 pub const INT_RANGE: RangeInclusive<i64> = -2_147_483_648..=4_294_967_295;
 
-/// The integer view of a stored integer: PDFium's `FX_Number::GetSigned`.
+/// The integer view of a stored integer: keep the low 32 bits and read them
+/// as signed. PDFium's `FX_Number::GetSigned`.
 ///
-/// Values above `i32::MAX` came from an unsigned token and are reinterpreted
-/// as a signed 32-bit integer, exactly as C++ does when it hands its
-/// `uint32_t` to an `int` accessor.
+/// It neither clamps nor saturates: a value above `i32::MAX` came from an
+/// unsigned token, and its bit pattern is reinterpreted, exactly as C++ does
+/// when it hands its `uint32_t` to an `int` accessor. Within `INT_RANGE` the
+/// only inputs that move are those above `i32::MAX`.
 ///
 /// ```
-/// use pdfrum_object::as_c_int;
+/// use pdfrum_object::narrow_to_signed32;
 ///
-/// assert_eq!(as_c_int(1245), 1245);
-/// assert_eq!(as_c_int(-99), -99);
-/// assert_eq!(as_c_int(4_294_967_295), -1);
-/// assert_eq!(as_c_int(2_147_483_648), -2_147_483_648);
+/// assert_eq!(narrow_to_signed32(1245), 1245);
+/// assert_eq!(narrow_to_signed32(-99), -99);
+/// assert_eq!(narrow_to_signed32(4_294_967_295), -1);
+/// assert_eq!(narrow_to_signed32(2_147_483_648), -2_147_483_648);
 /// ```
 #[must_use]
-pub fn as_c_int(v: i64) -> i64 {
+pub fn narrow_to_signed32(v: i64) -> i64 {
     debug_assert!(
         INT_RANGE.contains(&v),
         "Object::Int outside the reachable parse range"
@@ -58,23 +61,24 @@ pub fn as_c_int(v: i64) -> i64 {
     i64::from(bits.cast_signed())
 }
 
-/// The numeric view of a stored integer: PDFium's `FX_Number::GetFloat`.
+/// The numeric view of a stored integer: widen it to `f32`. PDFium's
+/// `FX_Number::GetFloat`.
 ///
 /// No wrapping here — `4294967295` widens to `4294967296.0` because that is
 /// the nearest `f32`.
 ///
 /// ```
-/// use pdfrum_object::as_c_float;
+/// use pdfrum_object::widen_to_f32;
 ///
-/// assert_eq!(as_c_float(1245), 1245.0);
-/// assert_eq!(as_c_float(4_294_967_295), 4_294_967_296.0);
+/// assert_eq!(widen_to_f32(1245), 1245.0);
+/// assert_eq!(widen_to_f32(4_294_967_295), 4_294_967_296.0);
 /// ```
 #[must_use]
 #[expect(
     clippy::cast_precision_loss,
     reason = "matching C++ uint32->float / int32->float, which rounds the same way"
 )]
-pub fn as_c_float(v: i64) -> f32 {
+pub fn widen_to_f32(v: i64) -> f32 {
     debug_assert!(
         INT_RANGE.contains(&v),
         "Object::Int outside the reachable parse range"
@@ -82,20 +86,23 @@ pub fn as_c_float(v: i64) -> f32 {
     v as f32
 }
 
-/// The integer view of a real: a saturating cast, with NaN mapping to 0.
+/// The integer view of a real: truncate toward zero, saturating at the
+/// signed 32-bit bounds, with NaN mapping to 0.
 ///
-/// PDFium reaches this through `pdfium::saturated_cast<int32_t>`.
+/// Unlike [`narrow_to_signed32`] this one really does saturate — a real out
+/// of range clamps rather than wrapping. PDFium reaches it through
+/// `pdfium::saturated_cast<int32_t>`.
 ///
 /// ```
-/// use pdfrum_object::real_as_c_int;
+/// use pdfrum_object::truncate_to_signed32;
 ///
-/// assert_eq!(real_as_c_int(5.2), 5);
-/// assert_eq!(real_as_c_int(-5.9), -5);
-/// assert_eq!(real_as_c_int(f32::NAN), 0);
-/// assert_eq!(real_as_c_int(f32::INFINITY), i64::from(i32::MAX));
+/// assert_eq!(truncate_to_signed32(5.2), 5);
+/// assert_eq!(truncate_to_signed32(-5.9), -5);
+/// assert_eq!(truncate_to_signed32(f32::NAN), 0);
+/// assert_eq!(truncate_to_signed32(f32::INFINITY), i64::from(i32::MAX));
 /// ```
 #[must_use]
-pub fn real_as_c_int(v: f32) -> i64 {
+pub fn truncate_to_signed32(v: f32) -> i64 {
     if v.is_nan() {
         return 0;
     }
@@ -216,8 +223,8 @@ pub fn fmt_number(value: f32) -> String {
     out
 }
 
-/// Spell an integer the way PDFium's writers do: through the C-int view, so a
-/// stored `4294967295` writes as `-1`.
+/// Spell an integer the way PDFium's writers do: through the signed 32-bit
+/// view, so a stored `4294967295` writes as `-1`.
 ///
 /// ```
 /// use pdfrum_object::fmt_int;
@@ -228,7 +235,7 @@ pub fn fmt_number(value: f32) -> String {
 /// ```
 #[must_use]
 pub fn fmt_int(value: i64) -> String {
-    as_c_int(value).to_string()
+    narrow_to_signed32(value).to_string()
 }
 
 #[cfg(test)]
@@ -237,39 +244,39 @@ pub fn fmt_int(value: i64) -> String {
     reason = "these assertions pin exact bit patterns the oracle produces"
 )]
 mod tests {
-    use super::{as_c_float, as_c_int, fmt_int, fmt_number, real_as_c_int};
+    use super::{fmt_int, fmt_number, narrow_to_signed32, truncate_to_signed32, widen_to_f32};
 
     // Restated from FX_Number's tri-state semantics (fx_number.cpp:87-115):
     // the same stored value reads differently through the two accessors.
     #[test]
     fn integer_view_wraps_the_unsigned_range() {
-        assert_eq!(as_c_int(0), 0);
-        assert_eq!(as_c_int(1245), 1245);
-        assert_eq!(as_c_int(-2_147_483_648), -2_147_483_648);
-        assert_eq!(as_c_int(2_147_483_647), 2_147_483_647);
+        assert_eq!(narrow_to_signed32(0), 0);
+        assert_eq!(narrow_to_signed32(1245), 1245);
+        assert_eq!(narrow_to_signed32(-2_147_483_648), -2_147_483_648);
+        assert_eq!(narrow_to_signed32(2_147_483_647), 2_147_483_647);
         // Beyond i32::MAX the token was unsigned, so the bits reinterpret.
-        assert_eq!(as_c_int(2_147_483_648), -2_147_483_648);
-        assert_eq!(as_c_int(4_294_967_295), -1);
-        assert_eq!(as_c_int(4_294_967_294), -2);
+        assert_eq!(narrow_to_signed32(2_147_483_648), -2_147_483_648);
+        assert_eq!(narrow_to_signed32(4_294_967_295), -1);
+        assert_eq!(narrow_to_signed32(4_294_967_294), -2);
     }
 
     #[test]
     fn numeric_view_widens_instead_of_wrapping() {
-        assert_eq!(as_c_float(0), 0.0);
-        assert_eq!(as_c_float(1245), 1245.0);
-        assert_eq!(as_c_float(-2_147_483_648), -2_147_483_648.0);
-        assert_eq!(as_c_float(4_294_967_295), 4_294_967_296.0);
+        assert_eq!(widen_to_f32(0), 0.0);
+        assert_eq!(widen_to_f32(1245), 1245.0);
+        assert_eq!(widen_to_f32(-2_147_483_648), -2_147_483_648.0);
+        assert_eq!(widen_to_f32(4_294_967_295), 4_294_967_296.0);
     }
 
     #[test]
     fn real_to_integer_saturates_and_zeroes_nan() {
-        assert_eq!(real_as_c_int(5.2), 5);
-        assert_eq!(real_as_c_int(9.003_45), 9);
-        assert_eq!(real_as_c_int(-0.5), 0);
-        assert_eq!(real_as_c_int(f32::NAN), 0);
-        assert_eq!(real_as_c_int(f32::INFINITY), i64::from(i32::MAX));
-        assert_eq!(real_as_c_int(f32::NEG_INFINITY), i64::from(i32::MIN));
-        assert_eq!(real_as_c_int(1e30), i64::from(i32::MAX));
+        assert_eq!(truncate_to_signed32(5.2), 5);
+        assert_eq!(truncate_to_signed32(9.003_45), 9);
+        assert_eq!(truncate_to_signed32(-0.5), 0);
+        assert_eq!(truncate_to_signed32(f32::NAN), 0);
+        assert_eq!(truncate_to_signed32(f32::INFINITY), i64::from(i32::MAX));
+        assert_eq!(truncate_to_signed32(f32::NEG_INFINITY), i64::from(i32::MIN));
+        assert_eq!(truncate_to_signed32(1e30), i64::from(i32::MAX));
     }
 
     // Goldens from cpdf_contentstream_write_utils_unittest.cpp:26-50 and

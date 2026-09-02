@@ -175,7 +175,7 @@ against.
 **`pdfrum-parser::syntax::parse_int` violated `pdfrum-object`'s `INT_RANGE`**
 (fixed 2026-08-29). Found independently by `filters_chain`
 (`/Columns 999999999999999999999999`) and `crypt_encrypt_dict`, both landing on
-the `debug_assert!` in `as_c_int`.
+the `debug_assert!` in `narrow_to_signed32`.
 
 `parse_int` accumulated into an `i64` and *saturated*, so an over-wide token
 became `i64::MAX` — far outside the `-2^31 ..= 2^32-1` that `INT_RANGE`
