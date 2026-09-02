@@ -680,7 +680,7 @@ everything.
 | 6 | **`pdfrum-font` + `pdfrum-doc` — WP2 flag algebra, `annot_dump` out of the library surface, and the `vt` sentinel cluster** | The flag newtypes are here, `pub` fields and all. Bundled with evicting `annot_dump` (used only by `pdfrum-tool`) because both are the same crate's surface and both are mechanical. `FontFlags` constants changing from `u32` to `Self` remains the risky bit — many tests construct them. **Measured, `pdfrum-doc` is 1267 items and 49 `pub mod`s — the worst module count in the workspace, not `pdfrum-render` — so this step is larger than §A.11 estimated and should be split by module. It also carries §C.3 items 4 and 6–15: `WIDTH_UNSET`'s leak through `SimpleFont::widths`, `SIMILARITY_SCORE_MAX`, the six `vt` surfaces, the three `marked_content_id_*` functions, and `Dest::page_index`'s `-1` (§C.4).** | font, doc, tool |
 | 7 | **`pdfrum-form` — WP6 `Key`, then WP4's crate half** | `Key` first (self-contained table), then the geometry: `tab::Rect` private, `kurbo::Point` in with narrowing **at the entry function**, `kurbo::Rect` out of `PopupView`. The §A.6 hazard lives entirely here; landing it as one crate's package is what keeps it reviewable. `pdfrum-tool`'s `at()` becomes `f64::from`. | form, tool, facade |
 | 8 | **WP5 form session names + `Event` on the facade** | After 7, so the new signatures are the final ones — §7's reasoning, preserved. Now genuinely facade-only, because the crate half landed in 7. | facade, SPEC §15.8, doctests |
-| 9 | **`pdfrum-page` + `pdfrum-render` curation, and WP10** | ~~The two noisiest surfaces (12 and 24 `pub mod`s; 407 and 317 public items)~~ **Measured: `pdfrum-page` is the single largest published surface in the workspace at 1470 items / 19 `pub mod`, and `pdfrum-render` is 707 / 31 — together 2177 items, 30% of the workspace.** The largest mechanical diff, so late — but *before* the gates, not after them. Carries the §A.8 `RenderOptions` decision, which must be made here, and §C.3 items 1, 5 and 16: `NO_CONTENT_STREAM` (the purest case in the enumeration), `EMPTY_CLIP_RECT`, and `stream_of`'s signedness, which item 1 fixes as a side effect. | page, render, facade, tool, examples, `pdfrum-edit` (`regen.rs`'s `pub stream: i32`) |
+| 9 | **`pdfrum-page` + `pdfrum-render` curation, and WP10** | ~~The two noisiest surfaces (12 and 24 `pub mod`s; 407 and 317 public items)~~ **Measured: `pdfrum-page` is the single largest published surface in the workspace at 1470 items / 19 `pub mod`, and `pdfrum-render` is 707 / 31 — together 2177 items, 30% of the workspace.** The largest mechanical diff, so late — but *before* the gates, not after them. Carries the §A.8 `RenderOptions` decision, which must be made here, and §C.3 items 1, 5 and 16: `NO_CONTENT_STREAM` (the purest case in the enumeration), `EMPTY_CLIP_RECT`, and `stream_of`'s signedness, which item 1 fixes as a side effect. | page, render, facade, tool, examples, `pdfrum-edit` (`regen.rs`'s `pub stream: i32`) — **`pdfrum-render`'s half landed 2026-09-02, 707 items → 209 and 31 `pub mod` → 5; see §A.11's row** |
 | 10 | **WP3 collapse render/text method grid** | Facade-only, and reads best once `RenderOptions` has settled in 9. | facade, examples, docs |
 | 11 | **WP9 `Option`/`Result` on mutation** | Mechanical, facade-shaped, independent. Unchanged from §7's neighbourhood. **Scope corrected by §C.3 Tier 3: eleven public `bool`-returning mutators, not the four the facade shows** — the `pdfrum-page` and `pdfrum-form` twins land with their crates in steps 9 and 7 respectively, and only the facade's five land here. | facade edit + form, `pdfrum-page`, `pdfrum-doc`'s `Form::set` twin |
 | 12 | **`pdfrum-edit` + the raster crates + `pdfrum-cmap`/`filters`/`type1` curation** | Independent of everything above; can run in parallel from step 2 onward. Listed here only because nothing waits on it. | those crates |
@@ -836,7 +836,7 @@ Only the counts move.
 | `pdfrum-font` | 3 | 282 | 195 | `FontFlags(pub u32)` → private field + typed `Self` constants (`ids.rs:87`). Note *why* this one matters beyond tidiness: the constants are `u32`, not `FontFlags`, so **`flags.has(7)` compiles today** — the type exists but types nothing. Also `WIDTH_UNSET: u16 = 0xffff` (`widths.rs:16`) and `FaceHandle(pub usize)` (`subst/db.rs:19`, a public raw index into a private table). `pub mod encoding` / `subst` / `tounicode` curated. The crate also holds the workspace's best *positive* example — `has_glyph: bool` documented as "PDFium's `-1`, which is distinct from glyph 0" (`lib.rs:139`) — which `Option<Gid>` would make unrepresentable rather than merely documented. | medium |
 | `pdfrum-parser` | 0 | 82 | 63 | The best-shaped large crate in the workspace: a 60-line `lib.rs`, zero `pub mod`, 82 deliberately re-exported items. `version() -> u8` packed (`doc.rs:695`) → `PdfVersion`; `permissions(owner: bool) -> u32` (`doc.rs:797`) → forward crypt's struct. Two `keyword: bool` modes at `lexer.rs:644,664`. | small |
 | `pdfrum-page` | 12 | 407 | 283 | Largest public surface in the workspace. Twelve `pub mod`s (`color`, `function`, `image`, `inline_image`, `mutate`, `optional`, `pattern`, `shading`, `state`, `transfer`, `transparency`, `type3`) → curated re-export. **The clearest single offender in the workspace is here:** `pub const NO_CONTENT_STREAM: i32 = -1` (`mutate.rs:44`) with `pub fn content_stream(&self) -> i32` (`:69`), *re-exported at `lib.rs:80`* — a `-1` sentinel in the curated block. Also `image::scanline::get_bits` (`image/scanline.rs:23`), `Page::color(stroking: bool)` (`page.rs:394`), `is_valid_page_dict(.., strict: bool, ..)` (`page.rs:548`, also re-exported), and **eight** sites carrying `std_conversion: bool` across `color/` — one two-variant enum fixes all eight and is the highest-leverage rename in the crate. Most of the rest become private rather than renamed. | large |
-| `pdfrum-render` | **24** | 317 | 224 | ~~The worst `pub mod` count in the workspace — 24 against **one** private module.~~ **Corrected 2026-09-02: measured, this crate has 31 `pub mod`s against one private module, and `pdfrum-doc` has 49 — so it is the *second* worst, not the worst. The diagnosis (a crate that publishes its module tree) stands; only the ranking moves.** Named offenders: `pub fn peniko_mix` (`device.rs:251`, returns a `peniko` type the crate does not re-export), `LCD_FIR5` / `LCD_PADDING_26_6` (`glyph.rs:69,77`), the `SUBPIXEL_*` constants and `to_subpixel` (`scanline.rs:69-153`), `EMPTY_CLIP_RECT: Rect = Rect::new(-1.0, -1.0, 0.0, 0.0)` (`clip.rs:28` — an inverted rect standing for "nothing", i.e. `Option<Rect>`), and the `render_page` / `_with_visibility` / `_with_caches` ladder (`walk.rs:55,79,110`). `pub mod walkprofile` (`lib.rs:88`) is **not** on this list: it looks like a STYLE.md §1 global-state violation (`pub fn take() -> Profile` over a `thread_local!`), but it is behind a default-off `walk-profile` feature and its module doc argues the §1 point explicitly at `walkprofile.rs:38-48` — checked, and the reasoning stands. It needs curation like its neighbours, nothing more. Carries the §A.8 `RenderOptions` decision. | large |
+| `pdfrum-render` | **24** | 317 | 224 | ~~The worst `pub mod` count in the workspace — 24 against **one** private module.~~ **Corrected 2026-09-02: measured, this crate has 31 `pub mod`s against one private module, and `pdfrum-doc` has 49 — so it is the *second* worst, not the worst. The diagnosis (a crate that publishes its module tree) stands; only the ranking moves.** Named offenders: `pub fn peniko_mix` (`device.rs:251`, returns a `peniko` type the crate does not re-export — ~~private, or re-export `peniko::Color`~~ **withdrawn on landing: it has no caller at all and `pdfrum-raster-vello` duplicates it privately, so it is deleted**), `LCD_FIR5` / `LCD_PADDING_26_6` (`glyph.rs:69,77`), the `SUBPIXEL_*` constants and `to_subpixel` (`scanline.rs:69-153`), `EMPTY_CLIP_RECT: Rect = Rect::new(-1.0, -1.0, 0.0, 0.0)` (`clip.rs:28` — an inverted rect standing for "nothing", i.e. `Option<Rect>`), and the `render_page` / `_with_visibility` / `_with_caches` ladder (`walk.rs:55,79,110`). `pub mod walkprofile` (`lib.rs:88`) is **not** on this list: it looks like a STYLE.md §1 global-state violation (`pub fn take() -> Profile` over a `thread_local!`), but it is behind a default-off `walk-profile` feature and its module doc argues the §1 point explicitly at `walkprofile.rs:38-48` — checked, and the reasoning stands. It needs curation like its neighbours, nothing more. ~~It is "behind" the feature.~~ **Corrected on landing: it was `pub mod` *unconditionally* and so was in the default-features snapshot with 45 items — the feature gated what its functions *did*, never who could name them. "Curation like its neighbours" is what fixed that; see the landed note's item 4.** Carries the §A.8 `RenderOptions` decision. | large |
 | `pdfrum-raster-vello-cpu` | 0 | 13 | 10 | Clean — a backend crate should look like this. | trivial |
 | `pdfrum-raster-tinyskia` | 0 | 11 | 9 | Clean. | trivial |
 | `pdfrum-raster-agg` | 2 | 20 | 15 | `pub mod image` / `target` → curated; its two sibling backends have zero `pub mod`, so bring it in line and it is trivial. | trivial |
@@ -922,6 +922,127 @@ to STYLE.md like anything else, but nothing in this amendment applies to them.
 > named two-state parameter the file format defines, not a mode selector
 > hiding an enum. §C.1's rule for a format's own values applies to arguments
 > as well as to sentinels.
+
+> **Landed 2026-09-02 as §A.10 step 9, `pdfrum-render` half**, in eight
+> commits. The board is byte-identical — **1757 / 1512 / 245, every tag**
+> (form-events 8, js-transcript 33, page-count 2, pixel-fail 43,
+> tierA-mismatch 170), text 86.3% / 75.5% — and **zero of the 1757 per-file
+> rows differ in any field, SSIM included.** Tier C is unchanged: 1628 files,
+> 3 hard failures, 434 over the edge budget, worst edge divergence 66.6634%.
+> Which is what a renderer's API pass has to show.
+>
+> | | before | after | |
+> |---|---:|---:|---|
+> | items | **707** | **209** | −70% |
+> | `pub mod` | **31** | **5** | crate root, `blend`, `glyph`, `pixmap`, `scanline` |
+>
+> **The `RasterBackend`-required list, enumerated from the three raster crates'
+> sources before anything was privatised**, because rule 2 makes it the whole
+> test. Every one of `AlphaMask`, `AntiAlias`, `Brush`, `FillRule`,
+> `ImageQuality`, `MAX_TARGET_DIMENSION`, `Pixmap`, `RasterBackend`,
+> `RasterImage` and `RenderDevice` was already a *root re-export* and stays
+> one. Beyond those, exactly five module paths are named outside this crate,
+> all by `pdfrum-raster-agg`: `scanline::{self, Rasterizer}` — and through it
+> `scanline::FillRule` and `scanline::Coverage` — `blend::{composite_solid,
+> composite_premultiplied}`, `pixmap::{mul255, alpha_merge,
+> alpha_byte_truncating}`, and `glyph::SubpixelBitmap`, which is also
+> `RenderDevice::draw_glyph_lcd`'s parameter and so is required by the trait
+> itself. That is the entire cross-crate surface: **four modules, and inside
+> them ten items plus two value types' own method lists.** `pdfrum-font` and
+> `pdfrum-page` name `glyph::BitmapCache` and `image::to_pixmap` only in
+> *comments*, which is why a `grep` for the crate name over-reports the seam
+> by two modules.
+>
+> **The ladder became two entry points, not one.** `RenderSession { caches:
+> Option<&'a mut RenderCaches>, visible: Option<&'a Visibility> }` is a config
+> struct with `Default` — `Option<&mut T>` is `Default` as `None`, so this is
+> genuinely STYLE.md §4's shape and not a borrow smuggled into a builder — and
+> `render_page_with` takes it. `render_page` survives as the four-argument
+> convenience because both defaults are the conservative answer and a caller
+> wanting neither should not have to write `..Default::default()` to say so;
+> its rustdoc now says when to reach for the other. Callers, enumerated before
+> choosing: `render_page` — the crate doctest and `tests/engine.rs`;
+> `_with_visibility` — `pdfrum-tool`'s three backend arms and two engine tests;
+> `_with_caches` — the facade's `Page::render_on`, WP10's cross-backend
+> equality test in `tests/facade.rs`, `benches/profile.rs`'s three arms, one
+> engine test, and `pdfrum-raster-vello`'s example harness. That last one
+> documents itself as rendering "from cold caches", which *is* `render_page`,
+> so it became that and shed a cache it allocated to throw away.
+> **`target_size` left the surface with them**: it had no caller anywhere in
+> the workspace outside its own module.
+>
+> **Six things this row got wrong or left unsaid, found on reaching the code:**
+>
+> 1. **`peniko_mix` is not "private, or re-export `peniko::Color`". It is
+>    dead.** The row's remedy assumed a caller; there is none, anywhere. And
+>    `pdfrum-raster-vello` carries a byte-for-byte duplicate of its sixteen-arm
+>    match as a private `convert::to_mix`, with the same three-assertion test —
+>    so it is deleted, not hidden, and nothing loses coverage. That makes
+>    **five** dead public functions this commit set found by privatising:
+>    `peniko_mix`, `shading::patch::patches_bbox`, `path::transformed_bbox`,
+>    `walk::solid` and `walk::default_transparency`, plus the constant
+>    `image::SHEAR_THRESHOLD`. The fourth time this pass has turned up dead
+>    code by privatising a module rather than by looking for it.
+> 2. **`EMPTY_CLIP_RECT` was already done, and the row's "already done" is
+>    right**: §C.3 item 5 landed with the sentinel pass as `Clip::Empty`. The
+>    constant is private, the rect it holds is unchanged and still what reaches
+>    the device, and the test asserting a rect that means *empty* measures one
+>    unit wide now lives beside the private constant. Verified and left.
+> 3. **The named offenders' modules could not all go private, so the items
+>    went instead.** `LCD_FIR5`, `LCD_PADDING_26_6`, the three `SUBPIXEL_*`
+>    constants and `to_subpixel` live in `glyph` and `scanline`, which the
+>    backend seam keeps public. Each is `pub(crate)` on its own, along with
+>    seventeen neighbours no backend names. A module surviving the curation is
+>    not a licence for everything in it, and the row's framing — offenders as a
+>    list of items, modules as a separate count — is what made that visible.
+> 4. **`walkprofile` was 45 of the 254 items the module curation left**, 18% of
+>    the crate. The row is right that it needs "curation like its neighbours,
+>    nothing more", and right that its STYLE.md §1 argument stands. The
+>    curation its neighbours got is `mod` unless a caller outside needs it —
+>    and the caller here is a *feature*. It is `pub` under `walk-profile` and
+>    `mod` without, which is what `docs/status/api-baseline/README.md:103`
+>    already said the module was ("a profiling switch, not a surface offered to
+>    callers") where it declined to snapshot the feature. The cost was one
+>    non-mechanical bench edit: `benches/src/bin/profile.rs` read the module
+>    with the feature *off*, to notice every counter was zero and print which
+>    rebuild would fill them in. `walk_report` is now two `cfg` functions and
+>    the feature-off one names no `walkprofile` item.
+> 5. **A lint can fire *because* an item stopped being public.** Two
+>    instances: `clippy::large_types_passed_by_value` on
+>    `ColorSteps::from_colors` and `clippy::unused_self` on `Started::end`'s
+>    feature-off stub. Both lints exempt public items and neither exempts
+>    private ones, so both appeared with the visibility change and neither is
+>    findable before it. This belongs next to §WP8's doctest finding and step
+>    12's `dead_code` one as a third cost of the same shape — and the
+>    `dead_code` cost recurred here at **thirteen items across eleven files**,
+>    plus one module-wide suppression on `walkprofile`.
+> 6. **`RenderCtx::std_cs` is set in five places and read in none.** It mirrors
+>    `CPDF_RenderStatus::std_cs_` (`cpdf_renderstatus.h:62`), which
+>    `CPDF_ImageRenderer` consults when converting an image's samples; this
+>    port sets the flag everywhere the oracle sets it and never wired the
+>    consumer. **A live gap in the port, not an API-shape one** — the same
+>    shape as §WP2's `SaveOptions::subset_new_fonts` — so the field keeps a
+>    reasoned `allow(dead_code)` and a comment saying exactly that. Closing it
+>    is a behaviour change and has to be measured on its own.
+>
+> **`RenderCaches` had five public fields and no external reader**, which the
+> row does not mention and which the module curation forced anyway: their types
+> live in `imagecache`, `zero_area` and `text`, so a public field of a private
+> type would have been a `private_interfaces` error. All five are `pub(crate)`;
+> the one integration test that asked `placed_glyphs.capacity()` gets a
+> `#[doc(hidden)]` accessor, because the property it pins — the walk
+> `mem::take`s the buffer and must hand it back — is invisible to every pixel
+> test.
+>
+> **`pdfrum_render::RenderOptions`' seven bools and its
+> `struct_excessive_bools` expectation are untouched, as §A.8's 2026-09-02
+> ruling requires.** The facade's copy landed with WP10 and is a different
+> type; nothing here re-opens that.
+>
+> **`pdfrum-render.txt` is the only baseline file that moved.** `pdfrum.txt`,
+> `pdfrum+script.txt` and all three raster crates' are byte-identical, which is
+> the check that the root re-exports already carried everything a caller could
+> reach through a module path.
 
 **Where the work actually is.** Four crates — `pdfrum-page` (407),
 `pdfrum-doc` (398), `pdfrum-render` (317), `pdfrum-form` (317) — hold 1439 of
