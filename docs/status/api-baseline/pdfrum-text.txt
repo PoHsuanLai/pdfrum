@@ -19,18 +19,18 @@ pub pdfrum_text::bidi::Segment::start: usize
 pub fn pdfrum_text::bidi::is_right_to_left(&[u32]) -> bool
 pub fn pdfrum_text::bidi::segments(&[u32], bool) -> pdfrum_text::bidi::BidiLine
 pub mod pdfrum_text::index
-pub struct pdfrum_text::index::CharIndex
-impl pdfrum_text::index::CharIndex
-pub fn pdfrum_text::index::CharIndex::char_index(&self, usize) -> core::option::Option<usize>
-pub fn pdfrum_text::index::CharIndex::segments(&self) -> &[pdfrum_text::index::CharSegment]
-pub fn pdfrum_text::index::CharIndex::text_index(&self, usize) -> core::option::Option<usize>
-pub fn pdfrum_text::index::CharIndex::text_index_at_or_after(&self, usize) -> core::option::Option<usize>
-pub fn pdfrum_text::index::CharIndex::text_index_end(&self, usize) -> usize
-pub fn pdfrum_text::index::CharIndex::text_len(&self) -> usize
 pub struct pdfrum_text::index::CharSegment
 pub pdfrum_text::index::CharSegment::count: u32
 pub pdfrum_text::index::CharSegment::index: u32
-pub fn pdfrum_text::index::build(&[pdfrum_text::CharBox]) -> pdfrum_text::index::CharIndex
+pub struct pdfrum_text::index::IndexMap
+impl pdfrum_text::index::IndexMap
+pub fn pdfrum_text::index::IndexMap::char_index(&self, usize) -> core::option::Option<usize>
+pub fn pdfrum_text::index::IndexMap::segments(&self) -> &[pdfrum_text::index::CharSegment]
+pub fn pdfrum_text::index::IndexMap::text_index(&self, usize) -> core::option::Option<usize>
+pub fn pdfrum_text::index::IndexMap::text_index_at_or_after(&self, usize) -> core::option::Option<usize>
+pub fn pdfrum_text::index::IndexMap::text_index_end(&self, usize) -> usize
+pub fn pdfrum_text::index::IndexMap::text_len(&self) -> usize
+pub fn pdfrum_text::index::build(&[pdfrum_text::CharBox]) -> pdfrum_text::index::IndexMap
 pub mod pdfrum_text::links
 pub struct pdfrum_text::links::FoundLink
 pub pdfrum_text::links::FoundLink::range: core::ops::range::Range<usize>
@@ -40,7 +40,7 @@ pub pdfrum_text::links::WebLink::range: core::ops::range::Range<usize>
 pub pdfrum_text::links::WebLink::url: alloc::string::String
 pub fn pdfrum_text::links::check_mail_link(&str) -> core::option::Option<alloc::string::String>
 pub fn pdfrum_text::links::check_web_link(&str) -> core::option::Option<pdfrum_text::links::FoundLink>
-pub fn pdfrum_text::links::extract(&[pdfrum_text::CharBox], &[char], &pdfrum_text::index::CharIndex) -> alloc::vec::Vec<pdfrum_text::links::WebLink>
+pub fn pdfrum_text::links::extract(&[pdfrum_text::CharBox], &[char], &pdfrum_text::index::IndexMap) -> alloc::vec::Vec<pdfrum_text::links::WebLink>
 pub fn pdfrum_text::links::find_web_link_ending(&[char], usize, usize) -> usize
 pub fn pdfrum_text::links::trim_external_brackets(&[char], usize, usize) -> usize
 pub mod pdfrum_text::unicode
@@ -104,14 +104,6 @@ impl pdfrum_text::CharBox
 pub fn pdfrum_text::CharBox::is_control(&self) -> bool
 pub fn pdfrum_text::CharBox::is_generated(&self) -> bool
 pub fn pdfrum_text::CharBox::is_normal(&self) -> bool
-pub struct pdfrum_text::CharIndex
-impl pdfrum_text::index::CharIndex
-pub fn pdfrum_text::index::CharIndex::char_index(&self, usize) -> core::option::Option<usize>
-pub fn pdfrum_text::index::CharIndex::segments(&self) -> &[pdfrum_text::index::CharSegment]
-pub fn pdfrum_text::index::CharIndex::text_index(&self, usize) -> core::option::Option<usize>
-pub fn pdfrum_text::index::CharIndex::text_index_at_or_after(&self, usize) -> core::option::Option<usize>
-pub fn pdfrum_text::index::CharIndex::text_index_end(&self, usize) -> usize
-pub fn pdfrum_text::index::CharIndex::text_len(&self) -> usize
 pub struct pdfrum_text::CharSegment
 pub pdfrum_text::CharSegment::count: u32
 pub pdfrum_text::CharSegment::index: u32
@@ -121,10 +113,18 @@ pub struct pdfrum_text::FindOptions
 pub pdfrum_text::FindOptions::consecutive: bool
 pub pdfrum_text::FindOptions::match_case: bool
 pub pdfrum_text::FindOptions::match_whole_word: bool
+pub struct pdfrum_text::IndexMap
+impl pdfrum_text::index::IndexMap
+pub fn pdfrum_text::index::IndexMap::char_index(&self, usize) -> core::option::Option<usize>
+pub fn pdfrum_text::index::IndexMap::segments(&self) -> &[pdfrum_text::index::CharSegment]
+pub fn pdfrum_text::index::IndexMap::text_index(&self, usize) -> core::option::Option<usize>
+pub fn pdfrum_text::index::IndexMap::text_index_at_or_after(&self, usize) -> core::option::Option<usize>
+pub fn pdfrum_text::index::IndexMap::text_index_end(&self, usize) -> usize
+pub fn pdfrum_text::index::IndexMap::text_len(&self) -> usize
 pub struct pdfrum_text::ObjectIndex(pub u32)
 pub struct pdfrum_text::TextPage
 pub pdfrum_text::TextPage::chars: alloc::vec::Vec<pdfrum_text::CharBox>
-pub pdfrum_text::TextPage::runs: pdfrum_text::index::CharIndex
+pub pdfrum_text::TextPage::runs: pdfrum_text::index::IndexMap
 pub pdfrum_text::TextPage::text: alloc::vec::Vec<char>
 impl pdfrum_text::TextPage
 pub fn pdfrum_text::TextPage::all_text(&self) -> alloc::string::String

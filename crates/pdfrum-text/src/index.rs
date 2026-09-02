@@ -22,9 +22,13 @@ pub struct CharSegment {
     pub count: u32,
 }
 
-/// The segment table.
+/// The map between the two index spaces.
+///
+/// A table of segments, not an index: it converts a character index into a
+/// text offset and back, and it is the reason a caller never has to guess
+/// which of the two sequences a number counts in.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct CharIndex {
+pub struct IndexMap {
     segments: Vec<CharSegment>,
 }
 
@@ -36,7 +40,7 @@ pub struct CharIndex {
 /// anything in it, and otherwise just slides the current segment's start
 /// forward.
 #[must_use]
-pub fn build(chars: &[CharBox]) -> CharIndex {
+pub fn build(chars: &[CharBox]) -> IndexMap {
     let mut segments: Vec<CharSegment> = Vec::new();
     if !chars.is_empty() {
         segments.push(CharSegment { index: 0, count: 0 });
@@ -61,10 +65,10 @@ pub fn build(chars: &[CharBox]) -> CharIndex {
             last.index = next;
         }
     }
-    CharIndex { segments }
+    IndexMap { segments }
 }
 
-impl CharIndex {
+impl IndexMap {
     /// The segments, oldest first.
     #[must_use]
     pub fn segments(&self) -> &[CharSegment] {
@@ -83,8 +87,8 @@ impl CharIndex {
     /// The character index a text offset names.
     ///
     /// ```
-    /// # use pdfrum_text::index::CharIndex;
-    /// let index = CharIndex::default();
+    /// # use pdfrum_text::index::IndexMap;
+    /// let index = IndexMap::default();
     /// assert_eq!(index.char_index(0), None);
     /// ```
     #[must_use]

@@ -2,7 +2,7 @@
 //!
 //! Searches run over the **search-facing text**, not over the character
 //! stream `--txt` emits, so a match's offsets are text offsets and a caller
-//! wanting character indices goes through [`CharIndex`](crate::index::CharIndex).
+//! wanting character indices goes through [`IndexMap`](crate::index::IndexMap).
 //!
 //! # The needle is split, not matched whole
 //!
