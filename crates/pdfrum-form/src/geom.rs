@@ -58,17 +58,6 @@ pub(crate) struct Plate {
     pub(crate) rotation: Rotation,
 }
 
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "the inverse half of the plate mapping: `to_widget` is what routing calls, and \\
-                      `to_plate`/`to_page`/`width`/`height` are what its round-trip and \\
-                      rotation-table tests check it against. They were `pub` before this \\
-                      package and had no caller outside the crate's own tests then either \\
-                      — see the Landed note under §WP4."
-    )
-)]
 impl Plate {
     /// The mapping for a widget, normalizing an inverted rectangle.
     ///
@@ -80,25 +69,6 @@ impl Plate {
             rect: normalize(rect),
             rotation,
         }
-    }
-
-    /// The plate's width — the widget's, with the axes exchanged for an odd
-    /// quadrant.
-    pub(crate) fn width(self) -> f32 {
-        let (w, h) = (
-            self.rect.right - self.rect.left,
-            self.rect.top - self.rect.bottom,
-        );
-        if self.rotation.swaps_axes() { h } else { w }
-    }
-
-    /// The plate's height, with the same exchange.
-    pub(crate) fn height(self) -> f32 {
-        let (w, h) = (
-            self.rect.right - self.rect.left,
-            self.rect.top - self.rect.bottom,
-        );
-        if self.rotation.swaps_axes() { w } else { h }
     }
 
     /// Converts a page-space point into the widget's own upright box:
@@ -140,6 +110,34 @@ impl Plate {
             Rotation::Half => Point::new(w - dx, h - dy),
             Rotation::ThreeQuarter => Point::new(h - dy, dx),
         }
+    }
+}
+
+/// The inverse half of the plate mapping, and the dimensions it needs.
+///
+/// [`Plate::to_widget`] is what routing calls; these are what its round-trip
+/// and rotation-table tests check it against. They were `pub` before the
+/// crate curation and had no caller outside the crate's own tests then either
+/// — see the Landed note under §WP4.
+#[cfg(test)]
+impl Plate {
+    /// The plate's width — the widget's, with the axes exchanged for an odd
+    /// quadrant.
+    pub(crate) fn width(self) -> f32 {
+        let (w, h) = (
+            self.rect.right - self.rect.left,
+            self.rect.top - self.rect.bottom,
+        );
+        if self.rotation.swaps_axes() { h } else { w }
+    }
+
+    /// The plate's height, with the same exchange.
+    pub(crate) fn height(self) -> f32 {
+        let (w, h) = (
+            self.rect.right - self.rect.left,
+            self.rect.top - self.rect.bottom,
+        );
+        if self.rotation.swaps_axes() { w } else { h }
     }
 
     /// Converts a page-space point into plate space: y-down from the plate's
