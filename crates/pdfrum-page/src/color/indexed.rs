@@ -8,7 +8,7 @@
 //! *range* (`max - min`), which is what the lookup formula multiplies by.
 //! Getting that wrong silently shifts every indexed colour.
 
-use super::{ColorSpace, Rgb};
+use super::{ColorSpace, Conversion, Rgb};
 
 /// An `Indexed` colorspace.
 #[derive(Debug, Clone, PartialEq)]
@@ -33,7 +33,7 @@ impl Indexed {
     /// A `None` here is *no colour*: the caller paints black in bulk
     /// conversion and skips the object in scalar use.
     #[must_use]
-    pub fn to_rgb(&self, comps: &[f32], std_conversion: bool) -> Option<Rgb> {
+    pub fn to_rgb(&self, comps: &[f32], conversion: Conversion) -> Option<Rgb> {
         let raw = comps.first().copied().unwrap_or(0.0);
         if raw.is_nan() {
             return None;
@@ -59,7 +59,7 @@ impl Indexed {
             let (min, range) = self.component_ranges.get(i).copied().unwrap_or((0.0, 1.0));
             base_comps.push(min + range * f32::from(byte) / 255.0);
         }
-        Some(self.base.to_rgb_with(&base_comps, std_conversion))
+        Some(self.base.to_rgb_with(&base_comps, conversion))
     }
 }
 
@@ -77,6 +77,7 @@ mod tests {
         reason = "test fixtures quote oracle vectors verbatim and compare exactly"
     )]
 
+    use super::Conversion;
     use super::Indexed;
     use crate::color::ColorSpace;
 
@@ -92,18 +93,18 @@ mod tests {
     #[test]
     fn indices_map_through_the_palette() {
         let cs = gray_palette();
-        let rgb = cs.to_rgb(&[0.0], false).expect("index 0");
+        let rgb = cs.to_rgb(&[0.0], Conversion::Managed).expect("index 0");
         assert!(rgb.r.abs() < 1e-6);
-        let rgb = cs.to_rgb(&[3.0], false).expect("index 3");
+        let rgb = cs.to_rgb(&[3.0], Conversion::Managed).expect("index 3");
         assert!((rgb.r - 1.0).abs() < 1e-6);
     }
 
     #[test]
     fn out_of_range_indices_yield_no_colour() {
         let cs = gray_palette();
-        assert!(cs.to_rgb(&[-1.0], false).is_none());
-        assert!(cs.to_rgb(&[4.0], false).is_none());
-        assert!(cs.to_rgb(&[f32::NAN], false).is_none());
+        assert!(cs.to_rgb(&[-1.0], Conversion::Managed).is_none());
+        assert!(cs.to_rgb(&[4.0], Conversion::Managed).is_none());
+        assert!(cs.to_rgb(&[f32::NAN], Conversion::Managed).is_none());
     }
 
     #[test]
@@ -115,16 +116,16 @@ mod tests {
             lookup: Box::from(&[10u8, 20, 30][..]),
             component_ranges: Box::from(&[(0.0f32, 1.0f32); 3][..]),
         };
-        assert!(cs.to_rgb(&[0.0], false).is_some());
-        assert!(cs.to_rgb(&[1.0], false).is_none());
+        assert!(cs.to_rgb(&[0.0], Conversion::Managed).is_some());
+        assert!(cs.to_rgb(&[1.0], Conversion::Managed).is_none());
     }
 
     #[test]
     fn indices_truncate_toward_zero() {
         let cs = gray_palette();
         // 2.9 selects entry 2, not entry 3.
-        let a = cs.to_rgb(&[2.9], false).expect("2.9");
-        let b = cs.to_rgb(&[2.0], false).expect("2.0");
+        let a = cs.to_rgb(&[2.9], Conversion::Managed).expect("2.9");
+        let b = cs.to_rgb(&[2.0], Conversion::Managed).expect("2.0");
         assert!((a.r - b.r).abs() < 1e-6);
     }
 }

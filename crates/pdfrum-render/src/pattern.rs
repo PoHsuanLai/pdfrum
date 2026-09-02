@@ -33,7 +33,7 @@
 
 use kurbo::{Affine, BezPath, Rect, Shape};
 use pdfrum_common::Diagnostics;
-use pdfrum_page::{Pattern, TilingPattern};
+use pdfrum_page::{Conversion, Pattern, TilingPattern};
 
 use crate::clip;
 use crate::color::Argb;
@@ -426,7 +426,7 @@ fn draw_tiling_per_tile<B: RasterBackend>(
         opts,
         initial_fill: (!pattern.colored).then_some(uncolored),
         initial_stroke: (!pattern.colored).then_some(uncolored),
-        std_cs: true,
+        std_cs: Conversion::Standard,
         ..ctx.deeper()
     };
     let target = clip.to_rect();
@@ -533,7 +533,7 @@ fn render_cell<B: RasterBackend>(
         // type-3 char proc's is: every uncoloured operation inside takes it.
         initial_fill: (!pattern.colored).then_some(uncolored),
         initial_stroke: (!pattern.colored).then_some(uncolored),
-        std_cs: true,
+        std_cs: Conversion::Standard,
         ..ctx.deeper()
     };
     let mut cell_device = backend.new_target(render_w, render_h, peniko::Color::TRANSPARENT);

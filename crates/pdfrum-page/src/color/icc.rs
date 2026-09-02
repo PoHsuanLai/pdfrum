@@ -16,7 +16,7 @@
 //! That last rung matters: a wholly broken ICC space paints black, it does
 //! not skip the object.
 
-use super::{ColorSpace, Rgb};
+use super::{ColorSpace, Conversion, Rgb};
 use std::sync::Arc;
 
 /// The exact byte length of the sRGB profile PDFium special-cases.
@@ -215,7 +215,7 @@ pub struct IccBased {
 impl IccBased {
     /// The ladder from the module docs, in order.
     #[must_use]
-    pub fn to_rgb(&self, comps: &[f32], std_conversion: bool) -> Rgb {
+    pub fn to_rgb(&self, comps: &[f32], conversion: Conversion) -> Rgb {
         if self.profile.is_srgb() {
             // A pass-through, unclamped — the sRGB profile is the identity by
             // definition, so the components *are* the colour.
@@ -229,7 +229,7 @@ impl IccBased {
             return rgb;
         }
         if let Some(base) = &self.base {
-            return base.to_rgb_with(comps, std_conversion);
+            return base.to_rgb_with(comps, conversion);
         }
         // Black, not "no colour": a broken ICC space still paints.
         Rgb {

@@ -155,7 +155,7 @@ pub fn uncolored_pattern_rgb(
     colored_tiling: bool,
 ) -> crate::color::Rgb {
     if let ColorSpace::Pattern(p) = space
-        && let Some(rgb) = p.to_rgb(components, false)
+        && let Some(rgb) = p.to_rgb(components, crate::color::Conversion::Managed)
     {
         return rgb;
     }

@@ -8,7 +8,7 @@
 //! that space's default, this is why `cs` followed by an under-specified `sc`
 //! paints the space's default rather than anything the operands suggested.
 
-use super::{ColorSpace, MAX_PATTERN_COMPONENTS, Rgb};
+use super::{ColorSpace, Conversion, MAX_PATTERN_COMPONENTS, Rgb};
 use pdfrum_object::Name;
 use smallvec::SmallVec;
 use std::sync::Arc;
@@ -145,9 +145,9 @@ impl ColorValue {
         let space = self.space.as_ref()?;
         if let ColorSpace::Pattern(pattern_space) = &**space {
             let value = self.pattern.as_ref()?;
-            return pattern_space.to_rgb(&value.components, false);
+            return pattern_space.to_rgb(&value.components, Conversion::Managed);
         }
-        space.try_to_rgb(&self.components, false)
+        space.try_to_rgb(&self.components, Conversion::Managed)
     }
 
     /// Whether this colour comes from a pattern.

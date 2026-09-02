@@ -7,7 +7,7 @@
 //! [`RenderCaches`], owned by the session rather than by a global.
 
 use pdfrum_font::{FontId, GlyphCache};
-use pdfrum_page::Transparency;
+use pdfrum_page::{Conversion, Transparency};
 
 use crate::color::Argb;
 use crate::options::RenderOptions;
@@ -60,23 +60,56 @@ pub struct RenderCtx<'a> {
     /// Whether this context is already inside a transparency group, which
     /// stops a nested group re-applying the enclosing group's alpha.
     pub in_group: bool,
-    /// Whether colour conversion uses the standard (device) spaces, set for
-    /// every offscreen sub-render.
+    /// Which `DeviceCMYK` formula an image decoded under this status would
+    /// use, mirroring `CPDF_RenderStatus::std_cs_` (`cpdf_renderstatus.h:62`).
     ///
-    /// **Set in five places and read in none.** It mirrors the oracle's
-    /// `CPDF_RenderStatus::std_cs_` (`cpdf_renderstatus.h:62`), which
-    /// `CPDF_ImageRenderer` consults when it converts an image's samples;
-    /// this port sets the flag at every site the oracle sets it and has never
-    /// wired the consumer. Making the module private is what surfaced that —
-    /// a live gap in the port, not an API-shape one, and not this pass's to
-    /// close: deleting the field would erase the record of where the oracle
-    /// sets it, and reading it is a behaviour change that has to be measured
-    /// against the goldens on its own.
+    /// [`Conversion::Standard`] on every *offscreen* sub-render, exactly where
+    /// the oracle calls `SetStdCS(true)`; [`Conversion::Managed`] at top
+    /// level, where it leaves the default.
+    ///
+    /// # Why nothing reads it, and why that is the oracle's own answer
+    ///
+    /// This field records where the oracle sets the flag. It is deliberately
+    /// not plumbed into the image path, because reading the C++ end to end
+    /// shows the flag **cannot change a pixel that this port renders**:
+    ///
+    /// - The only consumer in the entire C++ tree is `CPDF_DeviceCS`, and only
+    ///   its `kDeviceCMYK` arm — `GetRGB` (`cpdf_devicecs.cpp:65`) and
+    ///   `TranslateImageLine` (`cpdf_devicecs.cpp:119`). `ICCBased`, `Lab` and
+    ///   `CalRGB` never consult it; `CPDF_BasedCS` only forwards the counter to
+    ///   a base space (`cpdf_basedcs.cpp:13`).
+    /// - `CPDF_DIB` opens the bracket *after* the image's own colour work is
+    ///   done. `StartLoadDIBBase` (`cpdf_dib.cpp:199`) runs `LoadInternal` —
+    ///   and with it `LoadPalette` (`:184`), which builds an `Indexed`
+    ///   palette — and `CreateDecoder` **before** `ContinueToLoadMask` raises
+    ///   the counter at `:153`. It is lowered again at `:244` before the
+    ///   function returns.
+    /// - The image body is never translated inside that bracket at all.
+    ///   `TranslateImageLine` is reached only from `TranslateScanline24bpp`
+    ///   (`:1007`), called only from `CPDF_DIB::GetScanline` (`:1129`) — a
+    ///   `const` accessor over `mutable` buffers that the *rasterizer* pulls
+    ///   during compositing, long after the counter went back to zero. So
+    ///   `cpdf_devicecs.cpp:119`'s `IsStdConversionEnabled()` is always false.
+    ///
+    /// What is left inside the bracket is one conversion: the `/Matte` colour
+    /// at `cpdf_dib.cpp:839`. So the flag can only alter a `DeviceCMYK` image
+    /// that carries an `/SMask` with a `/Matte` array **and** is drawn
+    /// offscreen. No file in `testing/corpus` or `testing/resources` pairs
+    /// `/Matte` with `DeviceCMYK`, and the mask's own DIB — which
+    /// `StartLoadMaskDIB` (`:832`) hands `bStdCS=true` unconditionally — is
+    /// always `DeviceGray`, which ignores the flag.
+    ///
+    /// Wiring it would therefore mean threading a parameter across the
+    /// page-build/render boundary and widening
+    /// `pdfrum_page::ImageCache`'s key — decoding happens once per page in
+    /// `build_page`, so one image drawn both inside and outside a group would
+    /// need two entries — to reproduce a formula switch that is unreachable.
+    /// The field stays, typed, as the record of where the oracle sets it.
     #[allow(
         dead_code,
-        reason = "an oracle-mirrored flag whose consumer is not ported yet; see above"
+        reason = "records where the oracle calls SetStdCS; provably cannot change a rendered pixel, see above"
     )]
-    pub std_cs: bool,
+    pub std_cs: Conversion,
 }
 
 impl RenderCtx<'_> {
@@ -92,7 +125,7 @@ impl RenderCtx<'_> {
             type3_fonts: &[],
             transparency,
             in_group: false,
-            std_cs: false,
+            std_cs: Conversion::Managed,
         }
     }
 
