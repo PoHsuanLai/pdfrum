@@ -8,13 +8,12 @@
 //! - **A `/TR2` that is a Name stores nothing** — so `/TR2 /Identity` and
 //!   `/TR2 /Default` alike disable any transfer function rather than
 //!   installing one.
-//! - The array form needs **at least three elements**, and **element `i`
-//!   drives channel `2 - i`**: the last array element is the red channel and
-//!   the first is blue. This is not a storage convenience — it is the
-//!   observable, and it survives to the rendered pixel. Any element failing
-//!   to load makes the whole transfer function null.
+//! - The array form needs **at least three elements**. `[oracle-bug]` element
+//!   `i` drives channel `i`, per table 58's `[red green blue gray]` — see the
+//!   note below. Any element failing to load makes the whole transfer
+//!   function null.
 //!
-//! # The array reversal is real
+//! # The oracle's array reversal is real, and it is a bug
 //!
 //! It is easy to conclude the opposite from the oracle's own unit test.
 //! `CPDFDocRenderDataTest.TransferFunctionArray` builds the array
@@ -33,8 +32,21 @@
 //! `0x001A0D00`, and `FX_COLORREF` packs as `(b << 16) | (g << 8) | r`, so
 //! `samples_r[255] == 0`, `samples_g[255] == 13`, `samples_b[255] == 26`.
 //! Zero is the type 4 program's last sample, 13 the type 2 function's, and 26
-//! the type 0 function's — i.e. **`array[2]` is red and `array[0]` is blue**,
-//! exactly what `pFuncs[2 - i] = Load(array[i])` reads like literally.
+//! the type 0 function's — i.e. in the oracle **`array[2]` is red and
+//! `array[0]` is blue**, exactly what `pFuncs[2 - i] = Load(array[i])` reads
+//! like literally.
+//!
+//! **`[oracle-bug]` A9.** `cpdf_docrenderdata.cpp:90` is
+//! `pFuncs[2 - i] = Load(array[i])` while `:113-114` names `samples[0]` as
+//! `samples_r`. The consumption side was traced end to end and there is no
+//! second reversal, so PDFium renders `/TR [fR fG fB]` as `[fB fG fR]` —
+//! invisible whenever the three functions are equal, which is why it has
+//! survived. §8.6.5.9 / table 58 give the array as `[red green blue gray]`, so
+//! `array[0]` is red; table 58 also specifies **four** functions, where
+//! PDFium requires `size() >= 3` and never reads `array[3]`. pdf.js preserves
+//! the order (`evaluator.js:944-959` pushes in order,
+//! `filter_factory.js:212` destructures `[tableR, tableG, tableB]`). We take
+//! element `i` for channel `i`, and read `array[3]` as gray when present.
 
 use crate::function::{Function, FunctionCache};
 use pdfrum_common::{Diagnostics, Limits};
@@ -71,9 +83,9 @@ pub struct TransferFunc {
     /// The samples, indexed `[channel][input]` with channel 0 red, 1 green
     /// and 2 blue.
     ///
-    /// A consumer indexes by channel and nothing else: the array form's
-    /// reversal is already applied here, so channel 0 holds `/TR`'s *last*
-    /// element.
+    /// A consumer indexes by channel and nothing else. `[oracle-bug]`
+    /// channel 0 holds `/TR`'s **first** element (table 58's `red`), not its
+    /// last; see the module note.
     pub samples: Box<[[u8; CHANNEL_SAMPLES]; 3]>,
     /// Whether every entry is its own index, in which case the function is a
     /// no-op and a renderer may skip it entirely.
@@ -101,15 +113,16 @@ impl TransferFunc {
         }
         let mut samples = Box::new([[0u8; CHANNEL_SAMPLES]; 3]);
         if let Some(array) = resolved.as_array() {
-            // The array form needs three elements, and is reversed: element
-            // 0 drives blue, element 2 drives red.
+            // `[oracle-bug]` The array form needs three elements and is *not*
+            // reversed: element 0 drives red, per table 58's
+            // `[red green blue gray]`.
             if array.len() < 3 {
                 return None;
             }
             for i in 0..3 {
                 let element = array.raw_at(i)?;
                 let func = cache.load(element, r, limits, diags)?;
-                let channel = samples.get_mut(2 - i)?;
+                let channel = samples.get_mut(i)?;
                 sample_channel(&func, channel);
             }
         } else {
@@ -141,17 +154,22 @@ impl TransferFunc {
     }
 }
 
-/// Sample one channel: 256 inputs from `i / 255`, rounded and **wrapped**
+/// Sample one channel: 256 inputs from `i / 255`, rounded and **saturated**
 /// into a byte.
 ///
-/// The wrap is deliberate and observable. PDFium rounds `output[0] * 255`
-/// into a `size_t` and stores it into a `uint8_t` with no clamp, so a
-/// function whose `/Range` admits negatives — the oracle's own type 4
-/// fixture, `{ 360 mul sin 2 div }` over `[-1 1]`, is one — folds its
-/// negative half back to the top of the byte range rather than to zero.
-/// `CPDFDocRenderDataTest.TransferFunctionArray` pins two such samples:
-/// `-121.26` becomes `0x87`, not `0x00`. Clamping instead would quietly
-/// flatten every signed transfer function's lower half to black.
+/// `[oracle-bug]` A10. `cpdf_docrenderdata.cpp:124` is
+/// `size_t o = FXSYS_roundf(output[0] * 255); samples[i][v] = o;` — no clamp,
+/// so a function whose `/Range` admits negatives folds its lower half onto
+/// the **top** of the byte range. The oracle's own type 4 fixture,
+/// `{ 360 mul sin 2 div }` over `[-1 1]`, is one:
+/// `CPDFDocRenderDataTest.TransferFunctionArray` pins `-121.26` arriving at
+/// `0xCC` as `0x87`. It is a bug twice over — a negative float converted to
+/// an unsigned integer type is undefined behaviour in C++ — and §7.10.1
+/// requires the output be clipped to `/Range` before use, which `eval_into`
+/// already does here (`function/mod.rs:162-174`); the remaining step is that
+/// the byte store saturate rather than wrap. pdf.js clamps to `/Range`
+/// (`function.js:265`) and then to the byte range
+/// (`evaluator.js:888-896`). We saturate, so `-121.26` is `0x00`.
 ///
 /// A function with too many outputs is skipped and the identity used — the
 /// `[oracle-bug]` on [`MAX_OUTPUTS`], at the line where it bites.
@@ -175,30 +193,26 @@ fn sample_channel(func: &Function, out: &mut [u8; CHANNEL_SAMPLES]) {
             continue;
         }
         let value = results.first().copied().unwrap_or(0.0);
-        *slot = wrap_to_byte(value * 255.0);
+        *slot = saturate_to_byte(value * 255.0);
     }
 }
 
-/// Round to the nearest integer and keep the low eight bits.
+/// Round to the nearest integer and saturate into a byte.
 ///
-/// This is the arithmetic PDFium's `size_t o = FXSYS_roundf(x); u8 = o`
-/// performs — a wrap, not a clamp, so a sample of `-121.26` lands on `135`.
-/// Rust's `as u8` saturates instead, so the two-step cast is written out.
-/// A non-finite sample has no defined wrap and becomes zero.
-fn wrap_to_byte(value: f32) -> u8 {
+/// `[oracle-bug]` A10 — see [`sample_channel`]. A non-finite sample has no
+/// meaningful byte and becomes zero.
+fn saturate_to_byte(value: f32) -> u8 {
     let rounded = value.round();
     if !rounded.is_finite() {
         return 0;
     }
-    // `rem_euclid` folds any magnitude into `0.0..256.0` the way the two
-    // C++ casts do for the values a function can actually produce.
     #[expect(
         clippy::cast_possible_truncation,
         clippy::cast_sign_loss,
-        reason = "rem_euclid bounds the value to 0.0..256.0"
+        reason = "the clamp bounds the value to 0.0..=255.0"
     )]
-    let wrapped = rounded.rem_euclid(256.0) as u8;
-    wrapped
+    let saturated = rounded.clamp(0.0, 255.0) as u8;
+    saturated
 }
 
 /// Which of `/TR` and `/TR2` a dictionary's transfer function comes from.
@@ -303,8 +317,13 @@ mod tests {
         ]))
     }
 
+    /// Audit item **A9**. This asserted the oracle's reversal —
+    /// `array[2]` red, `array[0]` blue — from
+    /// `cpdf_docrenderdata.cpp:90`'s `pFuncs[2 - i] = Load(array[i])`.
+    /// Table 58 gives the array as `[red green blue gray]`, so element `i`
+    /// drives channel `i`.
     #[test]
-    fn the_last_array_element_drives_red() {
+    fn the_first_array_element_drives_red() {
         // Three constants no two of which collide, so the mapping of array
         // position to channel reads straight off the output bytes.
         let array = Object::Array(Array::of([
@@ -315,18 +334,18 @@ mod tests {
         let tr = load(&array).expect("should load");
         // Read through the public accessor, not the raw slots: this is the
         // observable the render crate consumes.
-        assert_eq!(tr.apply(0, 0), 200, "array[2] must drive red");
+        assert_eq!(tr.apply(0, 0), 10, "array[0] must drive red");
         assert_eq!(tr.apply(1, 0), 100, "array[1] must drive green");
-        assert_eq!(tr.apply(2, 0), 10, "array[0] must drive blue");
+        assert_eq!(tr.apply(2, 0), 200, "array[2] must drive blue");
     }
 
+    /// Audit item **A9**, end to end: the ordering survives to the bytes a
+    /// renderer reads. The inverting function is in the **first** slot now,
+    /// because table 58 makes that one red.
     #[test]
-    fn a_reversed_array_survives_to_the_output_bytes() {
-        // Red inverts, green and blue are the identity — but the inverting
-        // function is in the *last* array slot, because that is the one the
-        // oracle reads as red.
+    fn the_array_order_survives_to_the_output_bytes() {
         let identity = constant_ramp();
-        let array = Object::Array(Array::of([identity.clone(), identity, invert()]));
+        let array = Object::Array(Array::of([invert(), identity.clone(), identity]));
         let tr = load(&array).expect("should load");
         assert!(!tr.identity);
         assert_eq!(tr.apply(0, 0), 255, "red inverts");
