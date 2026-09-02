@@ -853,6 +853,25 @@ fn render_direct<B: RasterBackend>(
                 initial_stroke: ctx.initial_stroke,
                 ..ctx.deeper()
             };
+            // `[oracle-bug]` A13: a knockout group composites each of its own
+            // objects against the group's **initial** backdrop rather than
+            // against the accumulated result, so a later object *replaces* an
+            // earlier one where they overlap instead of blending over it
+            // (§11.6.6, table 147's `/K`).
+            if f.object.transparency.knockout {
+                render_knockout_form(
+                    &inner,
+                    device,
+                    backend,
+                    caches,
+                    &f.object.objects,
+                    children,
+                    to_device,
+                    device_box,
+                    diags,
+                );
+                return;
+            }
             // The children's own matrices already carry the form's, because
             // `build_page` composes `/Matrix` into the CTM before recursing.
             // Composing it again here would apply it twice.
@@ -868,6 +887,90 @@ fn render_direct<B: RasterBackend>(
                 diags,
             );
         }
+    }
+}
+
+/// `[oracle-bug]` Render a **knockout** group's objects (§11.6.6, `/K`).
+///
+/// PDFium never honours `/K`: the only `/K` read under `core/fpdfapi` is
+/// CCITT's (`fpdf_parser_decode.cpp:330`), and although knockout plumbing
+/// exists in `core/fxge/`, `RenderDeviceDriverIface::SetGroupKnockout` is an
+/// empty body (`renderdevicedriver_iface.cpp:132`) that the AGG driver never
+/// overrides — so on the oracle's configuration a knockout group renders as
+/// an ordinary one. pdf.js reads `/I` and `/K` (`evaluator.js:523-524`) and
+/// implements knockout in earnest (`canvas.js:499-534`, `:3310-3318`).
+///
+/// The rule §11.6.6 states is that every object in the group composites
+/// against the group's **initial** backdrop rather than against the
+/// accumulated result, so a later object *replaces* an earlier one where they
+/// overlap. That is implemented here by rendering each object into its own
+/// transparent buffer over that one backdrop and replacing the running result
+/// wherever the object put coverage down — which is exactly "the last object
+/// wins per pixel", and degenerates to the ordinary walk when nothing
+/// overlaps.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the knockout path needs every input the ordinary walk had"
+)]
+fn render_knockout_form<B: RasterBackend>(
+    ctx: &RenderCtx<'_>,
+    device: &mut B::Device,
+    backend: &B,
+    caches: &mut RenderCaches,
+    objects: &[PageObject],
+    children: &Visibility,
+    to_device: Affine,
+    device_box: Rect,
+    diags: &mut Diagnostics,
+) {
+    let rect = outer_rect(device_box);
+    let (Ok(w), Ok(h)) = (u32::try_from(rect.width()), u32::try_from(rect.height())) else {
+        return;
+    };
+    if w == 0 || h == 0 || w > MAX_TARGET_DIMENSION || h > MAX_TARGET_DIMENSION {
+        // Too large to buffer: fall back to the ordinary walk rather than
+        // drawing nothing.
+        render_object_list(
+            ctx, device, backend, caches, objects, children, to_device, device_box, diags,
+        );
+        return;
+    }
+
+    // Each object is composited against this, never against its predecessors.
+    let mut result: Option<crate::pixmap::Pixmap> = None;
+    let offset = Affine::translate((-f64::from(rect.left), -f64::from(rect.top)));
+    let inner_box = Rect::new(0.0, 0.0, f64::from(w), f64::from(h));
+
+    for (index, object) in objects.iter().enumerate() {
+        if !children.visible(index) {
+            continue;
+        }
+        let mut sub = backend.new_target(w, h, peniko::Color::TRANSPARENT);
+        render_object(
+            ctx,
+            &mut sub,
+            backend,
+            caches,
+            object,
+            children,
+            offset * to_device,
+            inner_box,
+            diags,
+        );
+        let drawn = backend.finish(sub);
+        match &mut result {
+            None => result = Some(drawn),
+            Some(acc) => acc.knockout_over(&drawn),
+        }
+    }
+
+    if let Some(pixels) = result {
+        device.draw_image(
+            &pixels,
+            Affine::translate((f64::from(rect.left), f64::from(rect.top))),
+            ImageQuality::Nearest,
+            1.0,
+        );
     }
 }
 
