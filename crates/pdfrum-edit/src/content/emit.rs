@@ -8,15 +8,23 @@
 //! objects from several source streams be redistributed into new ones without
 //! a fixup pass.
 //!
-//! # Only two colour operators exist here
+//! # Only two colour operators exist here, but every space reaches them
 //!
-//! `WriteColorToStream` writes three components and the `rg`/`RG` operator,
-//! and only when the colour's space is stock `DeviceRGB` **or** `DeviceGray`. A
-//! `DeviceGray` colour is written as three equal components rather than as
-//! `g`/`G`. Every other space — CMYK, `ICCBased`, Indexed, Separation, `DeviceN`,
-//! Lab, `CalRGB`, and every pattern — writes *nothing*, and the object inherits
-//! the black the stream prologue set. This is a real fidelity loss and it is
-//! the behavior of a regenerated page.
+//! `rg` and `RG` are the only colour operators written, and a `DeviceGray`
+//! colour goes out as three equal components rather than as `g`/`G`. What
+//! *converts* to them is every space, not two.
+//!
+//! *Corrected 2026-09-02 (A71, `[oracle-bug]`).* This paragraph used to end
+//! "Every other space — CMYK, `ICCBased`, Indexed, Separation, `DeviceN`, Lab,
+//! `CalRGB`, and every pattern — writes *nothing*, and the object inherits the
+//! black the stream prologue set. This is a real fidelity loss and it is the
+//! behavior of a regenerated page." The first sentence was an accurate
+//! description of `WriteColorToStream`'s gate
+//! (`cpdf_pagecontentgenerator.cpp:64-78`) and the last was the mistake: the
+//! loss is a defect rather than a contract, and reproducing it was costing
+//! fidelity for nothing. See `expressible_rgb` for the citations. **Only a
+//! pattern still writes nothing**, because a pattern paints through a resource
+//! no `rg` can name.
 //!
 //! # The `ExtGState` carries three keys and no more
 //!
@@ -27,7 +35,7 @@
 use pdfrum_common::kurbo::Affine;
 use pdfrum_object::{Dict, Name, Object};
 use pdfrum_page::state::{BlendMode, ClipEntry, GraphicsState};
-use pdfrum_page::{ColorSpace, ColorValue, FillRule, LineCap, LineJoin, PageObject, Rgb};
+use pdfrum_page::{ColorValue, FillRule, LineCap, LineJoin, PageObject, Rgb};
 
 use crate::content::num::{write_float, write_matrix};
 use crate::content::path::{emit_path_points, paint_operator};
@@ -143,28 +151,41 @@ fn blend_name(blend: BlendMode) -> Name {
     }
 }
 
-/// The RGB triple a colour writes, or `None` when its space is one the
-/// emitter has no operator for.
+/// The RGB triple a colour writes, or `None` when it has no colour to write.
+///
+/// `[oracle-bug]` **Every colour space converts, not just two.**
+/// `cpdf_pagecontentgenerator.cpp:64-78` refuses at the gate —
+/// `if (!color || (!color->IsColorSpaceRGB() && !color->IsColorSpaceGray()))
+/// return false;` — and its one consumer at `:819-824` then writes no operator
+/// at all, so a CMYK, `ICCBased`, `Separation`, `DeviceN`, `Lab`, `CalGray` or
+/// `CalRGB` fill silently becomes the black the stream prologue set. §8.6
+/// defines every one of those spaces, and the refusal is *only* that gate:
+/// `CPDF_Color::GetRGB` (`cpdf_color.cpp:116-127`) delegates to
+/// `cs_->GetRGB(buffer)` for **any** space, so the conversion PDFium needs is
+/// already written and simply never reached. **pdf.js has no counterpart to
+/// cite** — it does not regenerate page content, so it is silent here.
+///
+/// The fix is the delegation the C++ declines to perform, not a new operator:
+/// [`ColorValue::to_rgb`] is this crate's `GetRGB`, and `rg`/`RG` stays the
+/// only colour operator the emitter writes. Emitting each space's own operator
+/// — `k`/`K`, or `cs`/`scn` against a realized `/ColorSpace` resource — would
+/// preserve more, but it is a wider change (a new resource family and a second
+/// operator family, whose absence is what the module docs describe) where
+/// converting is one call. SPEC §12 asks for the narrowest faithful fix, and
+/// converting is both.
 fn expressible_rgb(colour: &ColorValue) -> Option<Rgb> {
-    // A pattern paints through a resource no `rg` can name.
+    // A pattern paints through a resource no `rg` can name. That one is a
+    // genuine limit rather than the oversight above, and stays.
     if colour.pattern.is_some() {
         return None;
     }
-    match colour.space.as_deref() {
-        // No space set yet reads as DeviceGray, a page's initial colour.
-        None | Some(ColorSpace::DeviceGray) => {
-            let v = colour.components.first().copied()?;
-            Some(Rgb { r: v, g: v, b: v })
-        }
-        Some(ColorSpace::DeviceRgb) => Some(Rgb {
-            r: colour.components.first().copied()?,
-            g: colour.components.get(1).copied()?,
-            b: colour.components.get(2).copied()?,
-        }),
-        // Everything else — CMYK, ICC, Indexed, Separation, DeviceN, Lab,
-        // CalGray, CalRGB, Pattern — writes nothing.
-        _ => None,
+    // No space set yet reads as DeviceGray, a page's initial colour. There is
+    // no space for `to_rgb` to ask, so this case is still answered here.
+    if colour.space.is_none() {
+        let v = colour.components.first().copied()?;
+        return Some(Rgb { r: v, g: v, b: v });
     }
+    colour.to_rgb()
 }
 
 /// Write one colour operator, or nothing.
@@ -413,7 +434,7 @@ mod tests {
     use pdfrum_object::{Name, names};
     use pdfrum_page::state::{BlendMode, ClipStack, GraphicsState};
     use pdfrum_page::{
-        ColorSpace, ColorValue, Content, FillRule, LineCap, LineJoin, PageObject, PathObject,
+        ColorSpace, ColorValue, Content, FillRule, LineCap, LineJoin, PageObject, PathObject, Rgb,
     };
     use smallvec::SmallVec;
     use std::sync::Arc;
@@ -562,9 +583,10 @@ mod tests {
         assert!(out.contains("[3 2] 1.5 d "), "got {out}");
     }
 
-    // The colour loss, pinned: a CMYK fill writes no operator at all.
+    // `[oracle-bug]` A71: a CMYK fill converts and writes `rg`, where the C++
+    // writes no operator at all and leaves the object black.
     #[test]
-    fn a_cmyk_colour_writes_nothing() {
+    fn a_cmyk_colour_converts_and_writes_rg() {
         let state = GraphicsState {
             fill: cmyk(),
             stroke: cmyk(),
@@ -572,8 +594,65 @@ mod tests {
         };
         let object = path_object(state, triangle(), FillRule::Winding, false);
         let out = emit(&object, &ResourceNames::default()).expect("emits");
-        assert!(!out.contains(" rg "), "got {out}");
-        assert!(!out.contains(" RG "), "got {out}");
+        assert!(out.contains(" rg "), "got {out}");
+        assert!(out.contains(" RG "), "got {out}");
+        // The triple is `ColorValue::to_rgb`'s, which is `GetRGB`'s — the
+        // conversion PDFium has and declines to call.
+        let expected = cmyk().to_rgb().expect("CMYK converts");
+        assert_ne!(expected, Rgb::BLACK, "the loss was to black; this is not");
+        // What the C++ would have emitted, pinned as the thing we no longer do.
+        assert_ne!(out, "q 1 2 m 3 4 l 5 6 l h f Q\n");
+    }
+
+    // Every non-pattern space reaches an operator, not just the two the gate
+    // at `cpdf_pagecontentgenerator.cpp:65` admits.
+    #[test]
+    fn a_separation_colour_converts_through_its_alternate() {
+        // No tint transform, so the tint broadcasts into the alternate's
+        // components — a half-tint over DeviceGray is mid-grey.
+        let separation = ColorValue {
+            space: Some(Arc::new(ColorSpace::Separation(Box::new(
+                pdfrum_page::color::Separation {
+                    none: false,
+                    alternate: Some(Box::new(ColorSpace::DeviceGray)),
+                    tint: None,
+                },
+            )))),
+            components: SmallVec::from_slice(&[0.5]),
+            pattern: None,
+        };
+        let state = GraphicsState {
+            fill: separation,
+            ..GraphicsState::default()
+        };
+        let object = path_object(state, triangle(), FillRule::Winding, false);
+        let out = emit(&object, &ResourceNames::default()).expect("emits");
+        assert!(out.contains(".5 .5 .5 rg "), "got {out}");
+    }
+
+    // The one loss that stays: a pattern has no `rg` to name it.
+    #[test]
+    fn a_pattern_colour_still_writes_nothing() {
+        let pattern = || ColorValue {
+            space: Some(Arc::new(ColorSpace::Pattern(Box::new(
+                pdfrum_page::color::PatternSpace { base: None },
+            )))),
+            components: SmallVec::new(),
+            pattern: Some(Box::new(pdfrum_page::PatternValue {
+                name: Name::new(b"P0".to_vec()),
+                components: SmallVec::new(),
+                loaded: None,
+            })),
+        };
+        // Both, so the frame carries no colour at all: the default stroke is
+        // the unset-space black, which does write an operator.
+        let state = GraphicsState {
+            fill: pattern(),
+            stroke: pattern(),
+            ..GraphicsState::default()
+        };
+        let object = path_object(state, triangle(), FillRule::Winding, false);
+        let out = emit(&object, &ResourceNames::default()).expect("emits");
         assert_eq!(out, "q 1 2 m 3 4 l 5 6 l h f Q\n");
     }
 
