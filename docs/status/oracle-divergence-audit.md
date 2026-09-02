@@ -3,7 +3,10 @@
 **Date:** 2026-09-02. **Oracle pin:** `pdfium-c++` at `6f2272e`.
 **Tiebreaker:** Mozilla pdf.js at `645324bb` (2026-09-01), cloned fresh for this
 audit. **Scoreboard:** `conformance/scoreboard.json`, 1705 files, 1652 pass /
-53 fail.
+53 fail — the board *as this audit was written*. It has moved twice since: to
+1757 / 1667 / 90 when the JavaScript transcripts landed, and to 1757 / **1512**
+/ 245 when §9 applied the seventeen ruled oracle-bug items. Row counts anywhere
+below are against the 1705-file board unless a section says otherwise.
 
 ## The rule this applies
 
@@ -660,6 +663,15 @@ Ordered so each can be ruled on independently. "Rows lost" is the number of
 scoreboard rows that would move from **pass** to
 **not-achievable-by-construction**.
 
+> **Annotated 2026-09-02, after all seventeen were measured and applied
+> (§8's second tranche).** The estimates below are **kept as written** — none
+> is struck — because the way they are wrong is itself the finding. Every one
+> counted rows that *use* a feature; measured against rows that *hit the bug*
+> they are wrong in both directions and by large factors. Fourteen of the
+> seventeen cost **zero** rows, and one costs **151** where the table said 2.
+> The measured column is in §8; the per-item reasons are there too. Read the
+> numbers below as an upper bound on exposure, never as a cost.
+
 | # | id | behaviour | rows lost | why here / caveat |
 |---|---|---|---|---|
 | 1 | **A64, A11, A23, A24, A72, A73, A74, A50** | the eight already-correct sites | **0** | pure relabelling; no code, no goldens. Do these regardless. |
@@ -668,22 +680,22 @@ scoreboard rows that would move from **pass** to
 | 4 | **A18** | `/ExtGState /Font`'s indirect form | **0** | no corpus file uses it; try resolving a reference before falling back to the resource-name lookup, keeping the fallback for the oracle's form. |
 | 5 | **A63** | a failing validate loses focus | **0** | unreachable until M15 wires scripts, so it costs nothing *now* and becomes load-bearing later. pdf.js settles it at a commented line. Rule on it before it has a blast radius. |
 | 6 | **A31** | password SASLprep / 127-byte truncation | **0** — **measured 0, APPLIED 2026-09-02, §8** | both R5/R6 rows use ASCII passwords so the corpus cannot tell; keep PDFium's transcode retry as a second candidate. *Applied as written, with one correction: the transcode is the **third** candidate, not the second — pdf.js's prepped-then-raw retry (`crypto.js:1178-1180`) sits between them, and running the oracle's transcode last is what makes it unable to shadow a correct answer. Also: preparation is R6-only (`crypto.js:1142`), and the 127-byte cut applies to every candidate, not only the prepared one. `unicode-normalization` admitted for NFKC.* |
-| 7 | **A9 + A10** | `/TR` array order and the unclamped sample | **2** | `transfer_function.in`/`.pdf`. Self-contained, table 58 is explicit, and A11 is already declined — ruling here completes `/TR`. |
-| 8 | **A40 + A43** | the glyph-bbox object gate | **2** | one root cause, two upstream bugs, two rows (`whitespace.pdf`, `bug_444176962.pdf`). The fix is to gate on advance width; §9.4.3 is explicit. Best value-per-row on the list. |
+| 7 | **A9 + A10** | `/TR` array order and the unclamped sample | **2** — **measured 0, APPLIED 2026-09-02, §8** | `transfer_function.in`/`.pdf`. Self-contained, table 58 is explicit, and A11 is already declined — ruling here completes `/TR`. |
+| 8 | **A40 + A43** | the glyph-bbox object gate | **2** — **measured 151, APPLIED 2026-09-02, §8** | one root cause, two upstream bugs, two rows (`whitespace.pdf`, `bug_444176962.pdf`). The fix is to gate on advance width; §9.4.3 is explicit. Best value-per-row on the list. |
 | 9 | **A66** | column-pass seed index zero | **2** | `annotiter`; only pages with negative x reach the guard, so the effective loss is probably 0. Measure first. |
-| 10 | **A67** | Return on a push button | **2** | one-line branch; upstream itself calls it wrong, and the sibling link test asserts the opposite behaviour. |
-| 11 | **A48** | supplementary characters mirror to `)` | **2** | `hebrew_mirrored`. UAX #9 is unambiguous, pdf.js declines to mirror at all, and the oracle-side fix is one line. |
-| 12 | **A42 + A41** | the hyphen sentinel and unfindable split words | **2 + 3** | rule together; A42 alone is defensible as "repair the sentinel in find as link-extract already does", which is a smaller change than removing the sentinel. |
+| 10 | **A67** | Return on a push button | **2** — **measured 0, APPLIED 2026-09-02, §8** | one-line branch; upstream itself calls it wrong, and the sibling link test asserts the opposite behaviour. |
+| 11 | **A48** | supplementary characters mirror to `)` | **2** — **measured 0, APPLIED 2026-09-02, §8** | `hebrew_mirrored`. UAX #9 is unambiguous, pdf.js declines to mirror at all, and the oracle-side fix is one line. |
+| 12 | **A42 + A41** | the hyphen sentinel and unfindable split words | **2 + 3** — **A42 measured 0, APPLIED 2026-09-02, §8; A41 not attempted** | rule together; A42 alone is defensible as "repair the sentinel in find as link-extract already does", which is a smaller change than removing the sentinel. |
 | 13 | **A45** | `CountRects` splits per text object | **2** | note the TODO wants **4**, not 1 — the merge predicate is per-font runs, which must be designed rather than inferred. |
-| 14 | **A46** | link-extraction index mismatch | **4** | `weblinks` ×2, `weblinks_across_lines` ×2. No independent implementation to check against; the verdict rests on PDFium indexing one array with another's offsets while owning the converter. |
+| 14 | **A46** | link-extraction index mismatch | **4** — **measured 0, APPLIED 2026-09-02, §8** | `weblinks` ×2, `weblinks_across_lines` ×2. No independent implementation to check against; the verdict rests on PDFium indexing one array with another's offsets while owning the converter. |
 | 15 | **A15** | zero-length dash → 0.1 | **≥2** | `dashed_lines`; pixel-visible and §8.4.3.6 is explicit about the dot. |
 | 16 | **A76** | auto-size 4pt floor and 12pt multiline ceiling | **≥0 up to 14** | the ladder itself must stay for parity; only the two boundary behaviours are arguable. Measure how many `text_form*` rows actually auto-size. |
-| 17 | **A55** | `IsPunctuation`'s `<= 0x0094` | **≥0 up to 14** | **measure the effective radius first** — it needs text containing U+0080–U+0094 and is plausibly zero, which would move it up to position 5. |
-| 18 | **A27** | `/StmF ≠ /StrF` refused | **2** | `bug_644`. Accepting differing filters means also applying the `Identity` default for absent entries — two behaviour changes in one function. |
+| 17 | **A55** | `IsPunctuation`'s `<= 0x0094` | **≥0 up to 14** — **measured 0, APPLIED 2026-09-02, §8** | **measure the effective radius first** — it needs text containing U+0080–U+0094 and is plausibly zero, which would move it up to position 5. |
+| 18 | **A27** | `/StmF ≠ /StrF` refused | **2** — **measured 0, APPLIED 2026-09-02, §8** | `bug_644`. Accepting differing filters means also applying the `Identity` default for absent entries — two behaviour changes in one function. |
 | 19 | **A6 + A8** | shading LUT off-by-one; radial integer truncation | **≥42 at risk** | Tier-B pixel changes across every shading file. The LUT skew is one part in 256 so most rows should stay inside SSIM — but this is the first item whose radius is a *measurement*, not a count. Run it before ruling. |
-| 20 | **A2 + A3 + A4** | the three sampled-function items | **≥29 at risk** | one function, three defects. A3 (multilinear) is the largest single behavioural change on this list — it alters every multi-input sampled function everywhere. All three together or none. |
-| 21 | **A12 + A13** | non-isolated backdrop double-count; `/K` unhonoured | **≥11 at risk** | both touch the compositing core, and A12 interacts with render D6's collapse of the five-armed compositor into one arm. Highest risk, lowest urgency: last. |
-| — | **A44** | text overlap dedup drops characters | **0 lost** | both `bug_1769` rows **already fail** — we keep the characters the oracle drops. This is a request to re-derive the golden, not to change code. Handle separately. |
+| 20 | **A2 + A3 + A4** | the three sampled-function items | **≥29 at risk** — **measured 0, APPLIED 2026-09-02, §8** | one function, three defects. A3 (multilinear) is the largest single behavioural change on this list — it alters every multi-input sampled function everywhere. All three together or none. |
+| 21 | **A12 + A13** | non-isolated backdrop double-count; `/K` unhonoured | **≥11 at risk** — **measured A12 1 down / 2 up, A13 0, APPLIED 2026-09-02, §8** | both touch the compositing core, and A12 interacts with render D6's collapse of the five-armed compositor into one arm. Highest risk, lowest urgency: last. |
+| — | **A44** | text overlap dedup drops characters | **0 lost** — **measured 3 down, APPLIED 2026-09-02, §8** | both `bug_1769` rows **already fail** — we keep the characters the oracle drops. This is a request to re-derive the golden, not to change code. Handle separately. |
 | — | **A71** | regenerated-page colour loss | **n/a** | keep reproducing: Tier-B scores us against the oracle's own regenerated page, so a fix reads as a regression. Revisit only if the scoring changes. |
 | — | **A22** | colour-key `/Mask` masks blacks | **≥0** | our output already matches; only §6's stale justification needs replacing. Reclassify to BUG if the user wants malformed `/Mask` rejected outright. |
 
@@ -693,9 +705,20 @@ validate-focus rule, and password preparation. Together they cost no golden,
 close six `[oracle-bug]` sites, and settle A63 while its blast radius is still
 zero.
 
+**Superseded 2026-09-02.** The user ruled on **all seventeen** remaining items
+at once rather than tranche by tranche, and all seventeen are applied — see
+§8's "Applied — the second tranche". The prioritisation above was built to make
+a costly list rulable in pieces; the measurement removed the premise, because
+fourteen of the seventeen cost nothing and the ordering by "rows lost" was
+ordering by a number that was not the cost.
+
 ---
 
 ## 8. Applied — the first tranche
+
+*(The remaining seventeen items are in **§9**, applied 2026-09-02 under the same
+ruling. Their measured costs are there, and §7's estimates are annotated in
+place rather than struck.)*
 
 **Date:** 2026-09-02. §7's recommended first tranche, minus A63 (owned by the
 M15 agent on the validate path) and A31 (not attempted; see the end of this
@@ -971,3 +994,286 @@ A fourth, from the A31 pass (2026-09-02):
    "intentionally omitted", to stay permissive for non-conforming producers. The
    citation `sasl_prep.js:27` in §1's table is the `saslPrep` function itself,
    not a four-step implementation. Corrected in §1 and §3.
+
+---
+
+## 9. Applied — the second tranche, all seventeen
+
+**Date:** 2026-09-02. The user ruled on **all seventeen** remaining items at
+once — implement the correct behaviour for every one — rather than tranche by
+tranche, so §7's prioritisation is superseded (annotated in place there). The
+work was written and measured on the branch `measure/oracle-bugs`, whose
+`MEASUREMENT.md` is the measurement record; this section is what landed on
+`main`, re-measured against a board that had grown from 1705 files to 1757 in
+the interval.
+
+Every fix carries `// [oracle-bug]` at the site with **both** citations, in the
+form §8 established: the PDFium file and line, and the ISO 32000-1 clause
+together with the pdf.js file and line.
+
+### The board
+
+| | files | pass | fail |
+|---|---|---|---|
+| before (`9e57d70`) | 1757 | 1667 | 90 |
+| after | 1757 | **1512** | 245 |
+
+**155 rows down, 0 up by status, 2 newly byte-exact.** Additive over the items
+as 151 + 3 + 1 = 155, so no two items interact on this corpus. The final board
+was re-run from a **clean rebuild of the whole tree** and is row-for-row
+identical to the incremental one taken item by item — 0 rows differ
+field-by-field over `status`, `tags`, `tierA.mismatched`, `tierB.ssim`,
+`tierB.exact`, `tierB.max_channel_diff`, the four Tier-A text counters and
+`notes`.
+
+**The monotone rule is suspended for exactly these 155 rows**, under PLAN.md
+§212–229 as the user ruled. Every one is named below. No row moved for any
+other reason.
+
+### The measured cost, item by item
+
+`tests` is tests whose assertion changed; `+` is tests added where an item
+pinned none.
+
+| item | crate | rows down | rows up | tests | commit |
+|---|---|---|---|---|---|
+| **A55** | `pdfrum-doc` | **0** | 0 | 1 | `2ffc664` |
+| **A51** | `pdfrum-font` | **0** | 0 | 1 | `b81ba32` |
+| **A67** | `pdfrum-form`, `pdfrum` | **0** | 0 | 2 | `faae056` |
+| **A27** | `pdfrum-crypt`, `pdfrum-edit` | **0** | 0 | 4, +1 | `412fd13` |
+| **A48** | `pdfrum-text` | **0** | 0 | 1 | `47d010a` |
+| **A42** | `pdfrum-text` | **0** | 0 | +1 | `8130dc6` |
+| **A46** | `pdfrum-text` | **0** | 0 | +1 | `fdc395a`, `58b674e` |
+| **A40b** | `pdfrum-text` | **0** | 0 | 1, +1 | `8439cb6` |
+| **A40 + A43** | `pdfrum-text` | **151** | 0 | 4 | `3a64e35` |
+| **A44** | `pdfrum-text`, `pdfrum-common` | **3** | 0 | — | `2d6186c` |
+| **A9 + A10** | `pdfrum-page`, `pdfrum-render` | **0** | 0 | 4 | `25af91e` |
+| **A2 + A3 + A4** | `pdfrum-page` | **0** | 0 | 2, +1 | `5ad069a` |
+| **A12** | `pdfrum-render` | **1** | **2** | +2 | `195f00b` |
+| **A13** | `pdfrum-render` | **0** | 0 | +2 | `f5d01b5` |
+| | | **155** | **2** | **20 changed, 9 added** | |
+
+Fourteen rows for seventeen items, because three groups are inseparable:
+A2/A3/A4 are three clauses of one expression, A9/A10 one file, A40/A43 one line
+of code. Where an item was measured inside such a group that is stated rather
+than glossed. **A31 is absent from this table because it was already applied**
+in §8's own pass (`b144fed`), with `unicode-normalization` admitted for NFKC.
+
+**A40b is not on the original list of seventeen.** It is a second oracle bug
+found while measuring A40+A43, sitting one layer below it, and it had to be
+settled before A40+A43's cost could be read at all — see below.
+
+### What the audit's estimates were, measured
+
+The "affected rows" column counted rows that **use** a feature. Measured against
+rows that **hit the bug** it is wrong in both directions and by large factors.
+This is the tranche's most transferable result and the reason §7's numbers are
+annotated rather than struck.
+
+| item | audit said | measured | why the audit's number was what it was |
+|---|---|---|---|
+| A2/A3/A4 | ≥29 at risk | **0** | every corpus sampled function is single-input or lands on grid points, where the tangent-plane form and the multilinear form agree exactly |
+| A9/A10 | 3 (2 pass) | **0** | the corpus's only `/TR` fixture uses the **single-function** form with `/Range [0 1]`; neither bug is reachable |
+| A12 | ≥11 (1 fail) | **1 down, 2 up** | most non-isolated groups are at alpha 1 under Normal blending, where the double-count is invisible |
+| A13 | ≥11 (1 fail) | **0** | the corpus's five `/K true` form XObjects all have **empty content streams** |
+| A27 | 2 (`bug_644`) | **0** | `bug_644` names `/StmF /StdCF /StrF /StdCF` — **equal**; it fails for an unrelated reason |
+| A40+A43 | 1 each | **151** | the bbox gate is not confined to two fixtures — see below |
+| A42 | 2 | **0** | no board pass exercises search |
+| A44 | 2, both already failing | **3** | `bug_1769` indeed still fails; three *other* rows flip |
+| A46 | 4 | **0** | no board pass extracts links |
+| A48 | 2 | **0** | `hebrew_mirrored` contains no astral character |
+| A51 | 2 | **0** | `font_weight.{in,pdf}` pass at SSIM 1.0 either way |
+| A55 | ≥0 up to 14 | **0** | no corpus text contains U+0080–U+0094 |
+| A67 | 2 | **0** | no `.evt` fixture presses Return on a push button, on either the key or the char path |
+
+### A40b — the space normalization, and why it had to come first
+
+`AddCharInfo` (`cpdf_textpage.cpp:793-795`) consults `GetUnicodeNormalization`
+only when `is_rtl || (wc >= 0xFB00 && wc <= 0xFB06)`. That table maps `U+00A0`
+to `U+0020`, so **a NO-BREAK SPACE inside a Hebrew run comes out as a plain
+space and the identical character in a Latin run does not** — the same page,
+two answers, decided by its neighbours. pdf.js settles it: `normalizeUnicode`
+(`src/shared/util.js:1050-1065`) puts `U+00A0` first in `NormalizeRegex` and
+applies `.normalize("NFKC")`, applied to every extracted chunk in
+`runBidiTransform` (`src/core/evaluator.js:2685-2689`), gated only by
+`disableNormalization`, which defaults to `false` (`:2403`). Both
+implementations emit `U+0020`; only PDFium's route is conditional on direction.
+
+**The narrow fix, deliberately, and the measurement that forced it.** The
+obvious implementation is to reuse this crate's existing `unicode::normalize` —
+PDFium's own table, already ported. Enumerating it says no: **6715 of the 65536
+BMP code points differ from the identity**, and it is not NFKC. It strips
+accents (`U+00C0 À → U+0041 A`), expands `U+00BD ½` to `1/2`, folds `U+00AE ®`
+to `R`. Applying it to Latin text would destroy every accented character on the
+page. Of pdf.js's own 513-code-point `NormalizeRegex` set, exactly **thirteen**
+normalise to `U+0020` under NFKC — `U+00A0`, the `U+2000..=U+200A` band and
+`U+202F` — and those thirteen are the whole of what this seam needs. Two further
+BMP code points (`U+205F`, `U+3000`) also NFKC to `U+0020` and are **not** in
+pdf.js's set, so they are not implemented here either; following the independent
+implementation exactly is the point of citing it, and neither appears in the
+corpus. **No dependency was needed**: the fix is a three-arm `match`, so
+`unicode-normalization` — admitted to DEPS.md for `pdfrum-crypt` under A31 —
+gains no second consumer and DEPS.md is unchanged.
+
+The character **record** is normalized too, not only the search-facing text:
+`--txt` writes the char list, and normalizing one output and not the other would
+recreate the very split the item closes.
+
+**Measured cost: 0 rows** — 1757 files, 1667 pass, byte-identical to the
+baseline board.
+
+### A40 + A43 — 151 rows, and what they actually are
+
+`cpdf_textpage.cpp:881` and `:1076` decide whether a text object exists at all
+from `GetRect().Width()`, which `cpdf_textobject.cpp:305-331` builds from
+`GetCharBBox` — the glyph **bounding boxes**. §9.2.2 keeps displacement and
+bounding box distinct, and a space's box is empty while its `w0` per §9.4.3 is
+not, so any object made only of spaces vanishes before extraction. The two
+gates now accept an object whose **advance** is non-zero.
+
+**Both fixtures the audit names are rescued, and both are among the 151**,
+because both goldens pin the bug:
+
+- `resources/whitespace.pdf` — oracle: **nothing**. Ours: one `U+0020`, exactly
+  the one character `crbug.com/40643656` says should be there.
+- `resources/bug_444176962.pdf` — oracle: `localact`. Ours: `local act`,
+  exactly the missing space `crbug.com/444176962` reports.
+
+**The other 149, classified rather than assumed.** `MEASUREMENT.md` records them
+as a second-order `U+0020`-vs-`U+00A0` disagreement — the oracle regenerating
+plain spaces from its inter-object heuristic while we keep the real `U+00A0`
+glyph. **That is not what they are, and this correction is the substantive
+finding of the tranche.** With A40b applied first, **zero** rows differ by any
+non-ASCII character; a `U+00A0` normalization alone changes not one row's status.
+Diffing our `--txt` against every golden and classifying all 151:
+
+- **142** — our text is the oracle's text with whitespace **inserted**. Nothing
+  is changed and nothing is lost: these are precisely the spaces-only text
+  objects the gate deleted, restored. `corpus/pdfium/annots/annotation_highlight.pdf`
+  is the archetype: oracle `This is a highlight annotation.`, ours the same
+  string plus the trailing space the page's final spaces-only object draws.
+- **5** — a *stronger* case for the item than the record makes, because the
+  deleted objects carried **real characters**, not only spaces:
+  `resources/bug_921.pdf` (the oracle loses an `И`, an `—`, a `в` and a `я`);
+  `resources/pixel/use_symbolneu/bug_1449.pdf` (the oracle extracts nothing
+  where the page draws `µ`); `corpus/fx/FRC_8.5_part2/FRC_8.5_U_GoToR_NewWindow{,_2}.pdf`
+  (the restored space changes where the line-break heuristic breaks);
+  `corpus/fx/font/font_1_embedded_font_en_feature.pdf`.
+- **4** — `.in` rows with no page-level text diff of their own.
+
+Where the 151 fall:
+
+```
+  41  corpus/pdfium/annots          33  corpus/fx/FRC_8.2.2_part1
+  22  corpus/fx/form                17  resources
+  15  corpus/fx/text                 5  corpus/third_party/tcpdf
+   4  corpus/fx/FRC_8.5_part2        3  corpus/fx/js
+   3  corpus/fx/other                2  corpus/fx/FRC_8.4_part2
+   2  corpus/fx/font                 2  resources/pixel/use_symbolneu
+   1  corpus/fx/FRC_8.4_part1        1  corpus/pdfium
+```
+
+Every one is a `tierA-mismatch` on `input.pdf.0.txt`; **no pixel row moves**,
+because this changes extraction only.
+
+### A44 — 3 rows, all pure insertions
+
+The 7-entry lookback at `cpdf_textpage.cpp:1437-1458` suppresses a character
+sharing an earlier one's code and font within `0.07 × fontsize`. §8.2
+composites coincident glyphs — drawing one twice is how faux-bold is done — and
+pdf.js has no dedup at all. All three flipped rows gain characters the oracle
+**deleted**:
+
+- `corpus/fx/layer/4_39.pdf` — oracle `Springummer Autumn Winter`, the `" S"` of
+  `" Summer"` deleted; ours `Spring Summer Autumn Winter`. This is
+  `crbug.com/42270780` reproducing on a file nobody had connected to it.
+- `resources/bug_782596.pdf` — oracle `-`; ours `- -`, the page drawing the
+  hyphen twice.
+- `corpus/third_party/tcpdf/example_001.pdf` — one deleted space.
+
+`bug_1769`'s two rows do still fail, unchanged, as the record says.
+
+### A12 — 1 down, 2 up, and the 2 are the evidence
+
+`resources/pixel/bug_986108.{in,pdf}` become **byte-identical to the oracle's
+own render** (SSIM `0.999995 → 1.000000`, `exact false → true`,
+`max_channel_diff 28 → 0`). A fix that merely perturbed pixels could not do
+that; removing the double-counted backdrop lands exactly on the answer the
+oracle produces where its own double-count cancels. Down: 
+`corpus/fx/FRC_8.2.4_part1/FRC_10_8.2.4_View_C.pdf`, whose golden encodes the
+doubled backdrop.
+
+### Not achievable by construction — the goldens this tranche moves
+
+None was deleted. Each is a golden that pins behaviour the C++ gets wrong
+against the specification and an independent implementation.
+
+| fixture | the assertion | the oracle's line | ours | why ours is right |
+|---|---|---|---|---|
+| `resources/whitespace.pdf` | `input.pdf.0.txt` is a 4-byte file: the BOM and nothing else | nothing | one `U+0020` | §9.4.3: the object's `w0` is non-zero. `crbug.com/40643656` asks for exactly this one character. |
+| `resources/bug_444176962.pdf` | `input.pdf.0.txt` is `localact` | `localact` | `local act` | The page draws a space between the words; `crbug.com/444176962` reports its loss. |
+| the other **149** A40+A43 rows | `input.pdf.0.txt` without the page's spaces-only objects | text with those objects deleted | the same text with them kept | §9.2.2/§9.4.3: an empty glyph box is not an absent glyph. 142 differ by inserted whitespace alone; 5 differ because the oracle also deleted real letters (`И`, `—`, `в`, `я`, `µ`). |
+| `corpus/fx/layer/4_39.pdf` | `Springummer Autumn Winter` | deletes `" S"` | `Spring Summer Autumn Winter` | §8.2 composites coincident glyphs. `crbug.com/42270780`. |
+| `resources/bug_782596.pdf` | `-` | one hyphen | `- -` | The page draws the hyphen twice; §8.2 composites, it does not delete. |
+| `corpus/third_party/tcpdf/example_001.pdf` | text with one space deleted | deletes it | keeps it | Same rule as above. |
+| `corpus/fx/FRC_8.2.4_part1/FRC_10_8.2.4_View_C.pdf` | the pixels of a non-isolated group whose backdrop is counted twice | double-counts | §11.4.6's removal applied | The sibling rows `bug_986108.{in,pdf}` become byte-exact under the same code, which a perturbation could not do. |
+
+Two **test** assertions move into the bucket for the same reason, both in the
+`pdfrum` facade's `tests/form_actions.rs`:
+`a_push_buttons_return_fires_nothing_and_is_not_consumed`, the direct port of
+`ButtonActionInvokeTest` whose own doc comment names `crbug.com/1028991` and
+says the behaviour is wrong; and `links_are_not_focusable_by_default`, whose "a
+default session's ring holds widgets alone" was true only because the ring's
+push button silently swallowed its Return. Both are rewritten to assert the
+answer §12.6.3 table 196 gives.
+
+### Corrections to the record found by applying it
+
+Beyond §8's four, this tranche found five more. Each is recorded rather than
+quietly fixed.
+
+1. **A40+A43's 149 are not a `U+0020`/`U+00A0` disagreement.** They are restored
+   whitespace, and in five cases restored *letters*. `MEASUREMENT.md`'s reading
+   was inferred from one archetype (`annotation_highlight.pdf`) whose diff does
+   contain `U+00A0`; classifying all 151 shows the character was a symptom of a
+   second bug (A40b) sitting underneath, and that fixing it moves **no** row.
+2. **A40b exists at all.** A second oracle bug, not on the list of seventeen,
+   found only because measuring A40+A43 exposed it.
+3. **The measure branch's A46 fixed only half the item.** It converted the
+   *cut* into text space and left the reported range mixing the two spaces
+   (`start + link.range.start`, a char base plus a text offset). Completed here
+   by `char_range`; the added test is what caught it.
+4. **A13's five `/K true` fixtures are form XObjects, not page-level groups.**
+   The A13 commit message said "all 11 are page-level"; there are five, they are
+   form XObjects, the new path *is* entered for them, and every one has an empty
+   content stream. (`MEASUREMENT.md` carries this correction; the commit message
+   does not.)
+5. **A44's third row is `corpus/third_party/tcpdf/example_001.pdf`**, a real
+   pass→fail, not `corpus/fx/other/3bigpreview.pdf` gaining a tag as
+   `MEASUREMENT.md` records. On current main `3bigpreview` does not move.
+
+A sixth, about the audit's own §1 table: **A9's row understates the defect.**
+`cpdf_docrenderdata.cpp:90` is not merely a storage convenience — the
+consumption side was traced end to end and there is no second reversal, so
+PDFium renders `/TR [fR fG fB]` as `[fB fG fR]`. Table 58 also specifies
+**four** functions where PDFium requires `size() >= 3` and never reads
+`array[3]`; that gray element is left unread here too, as a separate and
+unmeasured change.
+
+### Gates
+
+Green at `land/oracle-bugs`: `cargo nextest run --workspace` (**3817 passed, 1
+skipped, 0 failed**), `cargo test --doc --workspace`, `cargo clippy -p <crate>
+--all-targets -- -D warnings` on all ten touched crates,
+`RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --workspace`, `scripts/ci.sh`,
+`scripts/check-no-boa.sh`, `scripts/check-no-wgpu.sh`, `cargo deny check`.
+`forbid(unsafe)` intact; **no new dependencies** — `Cargo.toml`, `Cargo.lock`
+and `DEPS.md` are untouched by this tranche.
+
+**Nineteen tests pinned the old behaviour** on the measure branch; **twenty**
+were found here — `line::tests::a_non_ligature_is_not_normalized_left_to_right`
+pins A40b and is not on that list. All twenty now pin the new behaviour, each
+with a comment naming its item. Nine tests were added where an item pinned none,
+including direct pins for A3 (the largest behavioural change on the list, which
+pinned nothing) and A42/A46 (whose fixes no board pass exercises); each added
+test was verified to fail on the old code.
