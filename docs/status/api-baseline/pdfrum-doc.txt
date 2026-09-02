@@ -313,7 +313,7 @@ pub fn pdfrum_doc::ap::Focus::at(usize) -> pdfrum_doc::ap::Focus
 pub struct pdfrum_doc::ap::FormFonts
 impl pdfrum_doc::ap::FormFonts
 pub fn pdfrum_doc::ap::FormFonts::face(&self, &[u8]) -> core::option::Option<&pdfrum_font::Font>
-pub fn pdfrum_doc::ap::FormFonts::load<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R, &mut pdfrum_page::build::BuildContext) -> pdfrum_doc::ap::FormFonts
+pub fn pdfrum_doc::ap::FormFonts::load<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R, &mut pdfrum_page::build::BuildContext) -> alloc::sync::Arc<pdfrum_doc::ap::FormFonts>
 pub fn pdfrum_doc::ap::FormFonts::substitute(&self, pdfrum_font::subst::charset::Charset) -> core::option::Option<pdfrum_doc::ap::Substitute<'_>>
 pub fn pdfrum_doc::ap::FormFonts::text_font<'a>(&'a self, &[u8], &'a dyn core::ops::function::Fn(u32) -> i32) -> core::option::Option<pdfrum_doc::ap::TextFont<'a>>
 impl core::fmt::Debug for pdfrum_doc::ap::FormFonts

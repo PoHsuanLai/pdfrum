@@ -949,6 +949,10 @@ pub enum pdfrum_page::FillRule
 pub pdfrum_page::FillRule::EvenOdd
 pub pdfrum_page::FillRule::None
 pub pdfrum_page::FillRule::Winding
+pub enum pdfrum_page::FormFontsKey
+pub pdfrum_page::FormFontsKey::Direct
+pub pdfrum_page::FormFontsKey::Form(pdfrum_object::object::ObjRef)
+pub pdfrum_page::FormFontsKey::None
 pub enum pdfrum_page::FoundPattern
 pub pdfrum_page::FoundPattern::Loaded(alloc::sync::Arc<pdfrum_page::pattern::Pattern>)
 pub pdfrum_page::FoundPattern::Missing
@@ -1180,6 +1184,7 @@ pub pdfrum_page::BuildContext::functions: pdfrum_page::function::FunctionCache
 pub pdfrum_page::BuildContext::images: pdfrum_page::ImageCache
 pub pdfrum_page::BuildContext::substitution: pdfrum_font::subst::SubstitutionOptions
 impl pdfrum_page::BuildContext
+pub fn pdfrum_page::BuildContext::form_fonts<T: core::any::Any + core::marker::Send + core::marker::Sync>(&mut self, pdfrum_page::FormFontsKey, impl core::ops::function::FnOnce(&mut Self) -> T) -> alloc::sync::Arc<T>
 pub fn pdfrum_page::BuildContext::forms_in_flight(&self) -> usize
 pub fn pdfrum_page::BuildContext::new() -> Self
 pub fn pdfrum_page::BuildContext::with_substitution(pdfrum_font::subst::SubstitutionOptions) -> Self

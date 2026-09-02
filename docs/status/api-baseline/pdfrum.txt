@@ -4,6 +4,7 @@ pub use pdfrum::ActionKind
 pub use pdfrum::AnnotFlags
 pub use pdfrum::AnnotId
 pub use pdfrum::AppearanceUpdate
+pub use pdfrum::Argb
 pub use pdfrum::BuildContext
 pub use pdfrum::CharBox
 pub use pdfrum::ColorMode
@@ -12,83 +13,53 @@ pub use pdfrum::Dest
 pub use pdfrum::DiagKind
 pub use pdfrum::Diagnostic
 pub use pdfrum::Diagnostics
+pub use pdfrum::Dict
+pub use pdfrum::DocError
+pub use pdfrum::Event
 pub use pdfrum::EventModifiers
 pub use pdfrum::EventResponse
 pub use pdfrum::FieldFlags
 pub use pdfrum::FieldKind
 pub use pdfrum::FindOptions
+pub use pdfrum::Focus
+pub use pdfrum::FocusBox
 pub use pdfrum::FormRect
+pub use pdfrum::GeneratedAp
 pub use pdfrum::Limits
 pub use pdfrum::Link
 pub use pdfrum::MouseButton
+pub use pdfrum::ObjRef
+pub use pdfrum::Object
+pub use pdfrum::ObjectError
+pub use pdfrum::OpenError
 pub use pdfrum::PageObject
+pub use pdfrum::PageRotation
 pub use pdfrum::Pixmap
 pub use pdfrum::Placement
 pub use pdfrum::PopupGeometry
 pub use pdfrum::PopupView
 pub use pdfrum::RasterBackend
+pub use pdfrum::ReadError
+pub use pdfrum::RenderCaches
 pub use pdfrum::RenderDevice
+pub use pdfrum::RenderError
+pub use pdfrum::Resolve
+pub use pdfrum::SaveError
 pub use pdfrum::ScrollView
 pub use pdfrum::SessionConfig
 pub use pdfrum::Severity
 pub use pdfrum::SubstitutionOptions
 pub use pdfrum::Subtype
 pub use pdfrum::TextAa
+pub use pdfrum::TextError
 pub use pdfrum::TextPage
+pub use pdfrum::TextRenderMode
 pub use pdfrum::UpdateKind
 pub use pdfrum::VelloCpuBackend
 pub use pdfrum::VirtualKey
 pub use pdfrum::WebLink
 pub use pdfrum::kurbo
 pub use pdfrum::peniko
-pub mod pdfrum::edit
-pub struct pdfrum::edit::ImageBuilder
-pub pdfrum::edit::ImageBuilder::matrix: kurbo::affine::Affine
-pub pdfrum::edit::ImageBuilder::source: pdfrum_object::object::ObjRef
-impl pdfrum::edit::ImageBuilder
-pub fn pdfrum::edit::ImageBuilder::at(pdfrum_object::object::ObjRef, kurbo::rect::Rect) -> Self
-pub fn pdfrum::edit::ImageBuilder::build(self) -> pdfrum_page::page::PageObject
-pub struct pdfrum::edit::PageEdit
-impl pdfrum::edit::PageEdit
-pub fn pdfrum::edit::PageEdit::font_of(&self, usize) -> core::option::Option<pdfrum_object::object::ObjRef>
-pub fn pdfrum::edit::PageEdit::image_of(&self, usize) -> core::option::Option<pdfrum_object::object::ObjRef>
-impl pdfrum::edit::PageEdit
-pub fn pdfrum::edit::PageEdit::graph(&self) -> &pdfrum_page::page::Page
-pub fn pdfrum::edit::PageEdit::graph_mut(&mut self) -> &mut pdfrum_page::page::Page
-pub fn pdfrum::edit::PageEdit::index(&self) -> u32
-pub fn pdfrum::edit::PageEdit::insert(&mut self, usize, pdfrum_page::page::PageObject) -> bool
-pub fn pdfrum::edit::PageEdit::is_empty(&self) -> bool
-pub fn pdfrum::edit::PageEdit::is_modified(&self) -> bool
-pub fn pdfrum::edit::PageEdit::is_visible(&self, usize) -> core::option::Option<bool>
-pub fn pdfrum::edit::PageEdit::len(&self) -> usize
-pub fn pdfrum::edit::PageEdit::object_mut(&mut self, usize) -> core::option::Option<&mut pdfrum_page::page::PageObject>
-pub fn pdfrum::edit::PageEdit::objects(&self) -> &[pdfrum_page::page::PageObject]
-pub fn pdfrum::edit::PageEdit::push(&mut self, pdfrum_page::page::PageObject)
-pub fn pdfrum::edit::PageEdit::remove(&mut self, usize) -> core::option::Option<pdfrum_page::page::PageObject>
-pub fn pdfrum::edit::PageEdit::set_visible(&mut self, usize, bool) -> bool
-pub fn pdfrum::edit::PageEdit::transform(&mut self, usize, kurbo::affine::Affine) -> bool
-pub struct pdfrum::edit::PathBuilder
-pub pdfrum::edit::PathBuilder::even_odd: bool
-pub pdfrum::edit::PathBuilder::fill: core::option::Option<[f32; 3]>
-pub pdfrum::edit::PathBuilder::line_width: f32
-pub pdfrum::edit::PathBuilder::matrix: kurbo::affine::Affine
-pub pdfrum::edit::PathBuilder::path: kurbo::bezpath::BezPath
-pub pdfrum::edit::PathBuilder::stroke: core::option::Option<[f32; 3]>
-impl pdfrum::edit::PathBuilder
-pub fn pdfrum::edit::PathBuilder::build(self) -> pdfrum_page::page::PageObject
-pub fn pdfrum::edit::PathBuilder::rect(kurbo::rect::Rect) -> Self
-impl core::default::Default for pdfrum::edit::PathBuilder
-pub fn pdfrum::edit::PathBuilder::default() -> Self
-pub struct pdfrum::edit::TextBuilder
-pub pdfrum::edit::TextBuilder::codes: alloc::vec::Vec<u8>
-pub pdfrum::edit::TextBuilder::fill: [f32; 3]
-pub pdfrum::edit::TextBuilder::font: pdfrum_object::object::ObjRef
-pub pdfrum::edit::TextBuilder::position: kurbo::point::Point
-pub pdfrum::edit::TextBuilder::render_mode: pdfrum_page::ops::TextRenderMode
-pub pdfrum::edit::TextBuilder::size: f32
-impl pdfrum::edit::TextBuilder
-pub fn pdfrum::edit::TextBuilder::build(self) -> pdfrum_page::page::PageObject
-pub fn pdfrum::edit::TextBuilder::new(impl core::convert::Into<alloc::vec::Vec<u8>>, pdfrum_object::object::ObjRef, f32) -> Self
 #[non_exhaustive] pub enum pdfrum::Error
 pub pdfrum::Error::Doc(pdfrum_doc::error::Error)
 pub pdfrum::Error::Io(core::io::error::Error)
@@ -166,10 +137,10 @@ pub fn pdfrum::Document::import_pages(&self, impl core::convert::AsRef<std::path
 pub fn pdfrum::Document::save(&self, impl core::convert::AsRef<std::path::Path>) -> pdfrum::Result<()>
 pub fn pdfrum::Document::save_form(&self, impl core::convert::AsRef<std::path::Path>, &pdfrum::Form<'_>, &pdfrum::SaveOptions) -> pdfrum::Result<()>
 pub fn pdfrum::Document::save_incremental(&self, impl core::convert::AsRef<std::path::Path>) -> pdfrum::Result<()>
-pub fn pdfrum::Document::save_pages(&self, impl core::convert::AsRef<std::path::Path>, &[pdfrum::edit::PageEdit], &pdfrum::SaveOptions) -> pdfrum::Result<()>
+pub fn pdfrum::Document::save_pages(&self, impl core::convert::AsRef<std::path::Path>, &[pdfrum::PageEdit], &pdfrum::SaveOptions) -> pdfrum::Result<()>
 pub fn pdfrum::Document::save_with(&self, impl core::convert::AsRef<std::path::Path>, &pdfrum::SaveOptions) -> pdfrum::Result<()>
 pub fn pdfrum::Document::write_form_to(&self, &mut impl core::io::write::Write, &pdfrum::Form<'_>, &pdfrum::SaveOptions) -> pdfrum::Result<()>
-pub fn pdfrum::Document::write_pages_to(&self, &mut impl core::io::write::Write, &[pdfrum::edit::PageEdit], &pdfrum::SaveOptions) -> pdfrum::Result<()>
+pub fn pdfrum::Document::write_pages_to(&self, &mut impl core::io::write::Write, &[pdfrum::PageEdit], &pdfrum::SaveOptions) -> pdfrum::Result<()>
 pub fn pdfrum::Document::write_to(&self, &mut impl core::io::write::Write, &pdfrum::SaveOptions) -> pdfrum::Result<()>
 impl pdfrum_object::resolve::Resolve for pdfrum::Document
 pub fn pdfrum::Document::fetch(&self, pdfrum_object::object::ObjRef) -> core::result::Result<alloc::sync::Arc<pdfrum_object::object::Object>, pdfrum_object::error::Error>
@@ -235,9 +206,9 @@ pub fn pdfrum::FormSession<'a>::with_context(&'a pdfrum::Document, &mut pdfrum_p
 pub struct pdfrum::ImageBuilder
 pub pdfrum::ImageBuilder::matrix: kurbo::affine::Affine
 pub pdfrum::ImageBuilder::source: pdfrum_object::object::ObjRef
-impl pdfrum::edit::ImageBuilder
-pub fn pdfrum::edit::ImageBuilder::at(pdfrum_object::object::ObjRef, kurbo::rect::Rect) -> Self
-pub fn pdfrum::edit::ImageBuilder::build(self) -> pdfrum_page::page::PageObject
+impl pdfrum::ImageBuilder
+pub fn pdfrum::ImageBuilder::at(pdfrum_object::object::ObjRef, kurbo::rect::Rect) -> Self
+pub fn pdfrum::ImageBuilder::build(self) -> pdfrum_page::page::PageObject
 #[non_exhaustive] pub struct pdfrum::Metadata
 pub pdfrum::Metadata::author: core::option::Option<alloc::string::String>
 pub pdfrum::Metadata::creation_date: core::option::Option<alloc::string::String>
@@ -261,7 +232,7 @@ pub type &'a pdfrum::Outline<'a>::Item = pdfrum::Bookmark<'a>
 pub fn &'a pdfrum::Outline<'a>::into_iter(self) -> Self::IntoIter
 pub struct pdfrum::Page<'a>
 impl pdfrum::Page<'_>
-pub fn pdfrum::Page<'_>::edit(&self) -> pdfrum::edit::PageEdit
+pub fn pdfrum::Page<'_>::edit(&self) -> pdfrum::PageEdit
 impl<'a> pdfrum::Page<'a>
 pub fn pdfrum::Page<'a>::annotations(&self) -> alloc::vec::Vec<pdfrum::Annotation<'a>>
 pub fn pdfrum::Page<'a>::crop_box(&self) -> kurbo::rect::Rect
@@ -282,24 +253,24 @@ pub fn pdfrum::Page<'a>::text_session(&self, &mut pdfrum::RenderSession) -> pdfr
 pub fn pdfrum::Page<'a>::text_with(&self, &mut pdfrum_page::build::BuildContext) -> pdfrum_text::TextPage
 pub fn pdfrum::Page<'a>::width(&self) -> f64
 pub struct pdfrum::PageEdit
-impl pdfrum::edit::PageEdit
-pub fn pdfrum::edit::PageEdit::font_of(&self, usize) -> core::option::Option<pdfrum_object::object::ObjRef>
-pub fn pdfrum::edit::PageEdit::image_of(&self, usize) -> core::option::Option<pdfrum_object::object::ObjRef>
-impl pdfrum::edit::PageEdit
-pub fn pdfrum::edit::PageEdit::graph(&self) -> &pdfrum_page::page::Page
-pub fn pdfrum::edit::PageEdit::graph_mut(&mut self) -> &mut pdfrum_page::page::Page
-pub fn pdfrum::edit::PageEdit::index(&self) -> u32
-pub fn pdfrum::edit::PageEdit::insert(&mut self, usize, pdfrum_page::page::PageObject) -> bool
-pub fn pdfrum::edit::PageEdit::is_empty(&self) -> bool
-pub fn pdfrum::edit::PageEdit::is_modified(&self) -> bool
-pub fn pdfrum::edit::PageEdit::is_visible(&self, usize) -> core::option::Option<bool>
-pub fn pdfrum::edit::PageEdit::len(&self) -> usize
-pub fn pdfrum::edit::PageEdit::object_mut(&mut self, usize) -> core::option::Option<&mut pdfrum_page::page::PageObject>
-pub fn pdfrum::edit::PageEdit::objects(&self) -> &[pdfrum_page::page::PageObject]
-pub fn pdfrum::edit::PageEdit::push(&mut self, pdfrum_page::page::PageObject)
-pub fn pdfrum::edit::PageEdit::remove(&mut self, usize) -> core::option::Option<pdfrum_page::page::PageObject>
-pub fn pdfrum::edit::PageEdit::set_visible(&mut self, usize, bool) -> bool
-pub fn pdfrum::edit::PageEdit::transform(&mut self, usize, kurbo::affine::Affine) -> bool
+impl pdfrum::PageEdit
+pub fn pdfrum::PageEdit::font_of(&self, usize) -> core::option::Option<pdfrum_object::object::ObjRef>
+pub fn pdfrum::PageEdit::image_of(&self, usize) -> core::option::Option<pdfrum_object::object::ObjRef>
+impl pdfrum::PageEdit
+pub fn pdfrum::PageEdit::graph(&self) -> &pdfrum_page::page::Page
+pub fn pdfrum::PageEdit::graph_mut(&mut self) -> &mut pdfrum_page::page::Page
+pub fn pdfrum::PageEdit::index(&self) -> u32
+pub fn pdfrum::PageEdit::insert(&mut self, usize, pdfrum_page::page::PageObject) -> bool
+pub fn pdfrum::PageEdit::is_empty(&self) -> bool
+pub fn pdfrum::PageEdit::is_modified(&self) -> bool
+pub fn pdfrum::PageEdit::is_visible(&self, usize) -> core::option::Option<bool>
+pub fn pdfrum::PageEdit::len(&self) -> usize
+pub fn pdfrum::PageEdit::object_mut(&mut self, usize) -> core::option::Option<&mut pdfrum_page::page::PageObject>
+pub fn pdfrum::PageEdit::objects(&self) -> &[pdfrum_page::page::PageObject]
+pub fn pdfrum::PageEdit::push(&mut self, pdfrum_page::page::PageObject)
+pub fn pdfrum::PageEdit::remove(&mut self, usize) -> core::option::Option<pdfrum_page::page::PageObject>
+pub fn pdfrum::PageEdit::set_visible(&mut self, usize, bool) -> bool
+pub fn pdfrum::PageEdit::transform(&mut self, usize, kurbo::affine::Affine) -> bool
 pub struct pdfrum::PathBuilder
 pub pdfrum::PathBuilder::even_odd: bool
 pub pdfrum::PathBuilder::fill: core::option::Option<[f32; 3]>
@@ -307,11 +278,11 @@ pub pdfrum::PathBuilder::line_width: f32
 pub pdfrum::PathBuilder::matrix: kurbo::affine::Affine
 pub pdfrum::PathBuilder::path: kurbo::bezpath::BezPath
 pub pdfrum::PathBuilder::stroke: core::option::Option<[f32; 3]>
-impl pdfrum::edit::PathBuilder
-pub fn pdfrum::edit::PathBuilder::build(self) -> pdfrum_page::page::PageObject
-pub fn pdfrum::edit::PathBuilder::rect(kurbo::rect::Rect) -> Self
-impl core::default::Default for pdfrum::edit::PathBuilder
-pub fn pdfrum::edit::PathBuilder::default() -> Self
+impl pdfrum::PathBuilder
+pub fn pdfrum::PathBuilder::build(self) -> pdfrum_page::page::PageObject
+pub fn pdfrum::PathBuilder::rect(kurbo::rect::Rect) -> Self
+impl core::default::Default for pdfrum::PathBuilder
+pub fn pdfrum::PathBuilder::default() -> Self
 pub struct pdfrum::RenderOptions
 pub pdfrum::RenderOptions::annotations: bool
 pub pdfrum::RenderOptions::background: core::option::Option<peniko::Color>
@@ -341,7 +312,7 @@ pub pdfrum::TextBuilder::font: pdfrum_object::object::ObjRef
 pub pdfrum::TextBuilder::position: kurbo::point::Point
 pub pdfrum::TextBuilder::render_mode: pdfrum_page::ops::TextRenderMode
 pub pdfrum::TextBuilder::size: f32
-impl pdfrum::edit::TextBuilder
-pub fn pdfrum::edit::TextBuilder::build(self) -> pdfrum_page::page::PageObject
-pub fn pdfrum::edit::TextBuilder::new(impl core::convert::Into<alloc::vec::Vec<u8>>, pdfrum_object::object::ObjRef, f32) -> Self
+impl pdfrum::TextBuilder
+pub fn pdfrum::TextBuilder::build(self) -> pdfrum_page::page::PageObject
+pub fn pdfrum::TextBuilder::new(impl core::convert::Into<alloc::vec::Vec<u8>>, pdfrum_object::object::ObjRef, f32) -> Self
 pub type pdfrum::Result<T> = core::result::Result<T, pdfrum::Error>
