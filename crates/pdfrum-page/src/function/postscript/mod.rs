@@ -238,6 +238,10 @@ pub fn parse_program(source: &[u8], domain: &[f32], range: &[f32]) -> Option<Pos
 /// The stack size the engine runs with, exposed for tests that probe the
 /// overflow behaviour.
 #[must_use]
+#[allow(
+    dead_code,
+    reason = "the PostScript stack depth is pinned by this module's own tests; nothing in the crate reads it, and the `function` module is no longer public"
+)]
 pub fn stack_size() -> usize {
     STACK_SIZE
 }

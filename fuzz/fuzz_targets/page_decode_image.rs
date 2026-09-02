@@ -15,8 +15,8 @@
 
 use libfuzzer_sys::fuzz_target;
 use pdfrum_object::{ByteSpan, NoResolve, Object, Stream};
-use pdfrum_page::function::FunctionCache;
-use pdfrum_page::image::RequestedSize;
+use pdfrum_page::FunctionCache;
+use pdfrum_page::RequestedSize;
 use pdfrum_page::decode_image;
 use pdfrum_parser::{Lexer, Strictness, parse_object};
 

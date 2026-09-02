@@ -363,7 +363,7 @@ impl Machine {
             // `cvr` is genuinely nothing, since every value is already a
             // float; the other four are handled by `run`, which sees them in
             // the context they need.
-            PsOp::Cvr | PsOp::If | PsOp::IfElse | PsOp::Proc | PsOp::Const => {}
+            PsOp::Cvr | PsOp::If | PsOp::IfElse => {}
         }
     }
 }

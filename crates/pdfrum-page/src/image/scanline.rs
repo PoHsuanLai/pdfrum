@@ -110,6 +110,10 @@ pub fn invert_line(line: &mut [u8]) {
 /// Component `j` occupies bits `[j*bpc, (j+1)*bpc)`, so the *first* component
 /// is in the low bits. The palette builder enumerates indices the same way.
 #[must_use]
+#[allow(
+    dead_code,
+    reason = "the oracle behaviour it ports is pinned by this module's own tests; the curation removed its only caller outside the crate"
+)]
 pub fn palette_index(line: &[u8], pixel: usize, components: u32, bpc: u32) -> u32 {
     let mut index = 0u32;
     for j in 0..components {
@@ -125,6 +129,10 @@ pub fn palette_index(line: &[u8], pixel: usize, components: u32, bpc: u32) -> u3
 /// `v * 255 / max`, matching the C++ exactly — not a float multiply, whose
 /// rounding differs at several values.
 #[must_use]
+#[allow(
+    dead_code,
+    reason = "the oracle behaviour it ports is pinned by this module's own tests; the curation removed its only caller outside the crate"
+)]
 pub fn scale_to_byte(v: u32, max: u32) -> u8 {
     if max == 0 {
         return 0;
@@ -138,6 +146,10 @@ pub fn scale_to_byte(v: u32, max: u32) -> u8 {
 }
 
 /// Write three bytes at pixel `index`.
+#[allow(
+    dead_code,
+    reason = "the oracle behaviour it ports is pinned by this module's own tests; the curation removed its only caller outside the crate"
+)]
 fn write(dest: &mut [u8], index: usize, bytes: [u8; 3]) {
     if let Some(px) = dest.get_mut(index * 3..index * 3 + 3) {
         px.copy_from_slice(&bytes);
@@ -149,6 +161,10 @@ fn write(dest: &mut [u8], index: usize, bytes: [u8; 3]) {
 /// Returns whether it handled the line: a component count other than three
 /// leaves the destination untouched, which is the C++'s "handled but wrote
 /// nothing" case.
+#[allow(
+    dead_code,
+    reason = "the oracle behaviour it ports is pinned by this module's own tests; the curation removed its only caller outside the crate"
+)]
 pub fn rgb_line_to_bgr(
     dest: &mut [u8],
     line: &[u8],

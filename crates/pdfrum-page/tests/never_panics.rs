@@ -9,8 +9,8 @@
 
 use pdfrum_common::{Diagnostics, Limits};
 use pdfrum_object::{Array, ByteSpan, Dict, Name, NoResolve, Object, PdfString, Stream};
-use pdfrum_page::function::FunctionCache;
-use pdfrum_page::image::RequestedSize;
+use pdfrum_page::FunctionCache;
+use pdfrum_page::RequestedSize;
 use pdfrum_page::{
     BuildContext, Resources, build_page, decode_image, decode_jbig2, decode_jpx, parse_content,
 };
@@ -384,7 +384,7 @@ fn postscript_programs_survive_random_source() {
         }
         program.push('}');
         let Some(function) =
-            pdfrum_page::function::parse_program(program.as_bytes(), &[0.0, 1.0], &[0.0, 1.0])
+            pdfrum_page::parse_program(program.as_bytes(), &[0.0, 1.0], &[0.0, 1.0])
         else {
             continue;
         };
@@ -434,7 +434,7 @@ fn colorspace_loading_survives_random_arrays() {
         let object = Object::Array(Array::of(elements));
         let mut functions = FunctionCache::new();
         let mut diags = Diagnostics::default();
-        let space = pdfrum_page::color::load_colorspace(
+        let space = pdfrum_page::load_colorspace(
             &object,
             None,
             &NoResolve,

@@ -52,7 +52,7 @@ impl<'a> TransferFunc<'a> {
     /// A borrow of the tables, digested by the caller — the key owns a `u64`,
     /// not three quarters of a kilobyte.
     #[must_use]
-    pub fn samples(&self) -> &[[u8; pdfrum_page::transfer::CHANNEL_SAMPLES]; 3] {
+    pub fn samples(&self) -> &[[u8; pdfrum_page::CHANNEL_SAMPLES]; 3] {
         &self.inner.samples
     }
 
@@ -78,7 +78,7 @@ mod tests {
 
     use pdfrum_common::{Diagnostics, Limits};
     use pdfrum_object::{Array, ByteSpan, Dict, Name, NoResolve, Object, Stream};
-    use pdfrum_page::function::FunctionCache;
+    use pdfrum_page::FunctionCache;
 
     use super::*;
 

@@ -285,7 +285,7 @@ pub struct Content<T> {
     pub content_stream: Option<usize>,
     /// Whether the object has been changed since it was parsed, so its
     /// content stream must be written again on save
-    /// (see [`mutate`](crate::mutate)).
+    /// (see [`PageObject::set_active`]).
     pub dirty: bool,
     /// Whether the object is painted. An inactive object keeps its place in
     /// the list but contributes nothing to a regenerated stream.
@@ -411,7 +411,7 @@ pub struct Page {
     /// a name.
     pub resources: Option<Dict>,
     /// `/Contents` elements that must be written again because objects were
-    /// removed from them (see [`mutate`](crate::mutate)).
+    /// removed from them (see [`PageObject::set_active`]).
     ///
     /// Only removals need recording here: a modified or hidden object still
     /// carries its own [`Content::dirty`], but a removed one leaves nothing

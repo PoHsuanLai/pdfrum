@@ -962,7 +962,7 @@ fn rectangle() -> pdfrum_page::PageObject {
     path.line_to((90.0, 60.0));
     path.line_to((10.0, 60.0));
     path.close_path();
-    let mut state = pdfrum_page::state::GraphicsState::default();
+    let mut state = pdfrum_page::GraphicsState::default();
     state
         .fill
         .set_stock(pdfrum_page::ColorSpace::DeviceRgb, &[0.5, 0.5, 0.5]);

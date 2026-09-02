@@ -33,11 +33,28 @@ pub struct JpxImage {
     pub components: u8,
     /// Interleaved eight-bit samples, `width * height * components` bytes.
     pub data: Vec<u8>,
-    /// The colour space the samples are in, when the conversion table
-    /// replaced the dictionary's.
-    pub space_override: Option<Option<ColorSpace>>,
+    /// What the conversion table did to the dictionary's colour space.
+    pub space_override: SpaceOverride,
     /// The alpha channel, when `/SMaskInData 1` captured one.
     pub alpha: Option<Vec<u8>>,
+}
+
+/// What a [`JpxAction`] does to the image dictionary's `/ColorSpace`.
+///
+/// Three distinct outcomes, which is why this is an enum rather than a
+/// nested `Option`: the dictionary's space can be kept, replaced, or
+/// **removed**. Removing it is not the same as keeping it — the RGB actions
+/// hand back samples that are already device RGB, so keeping the original
+/// space would convert them a second time.
+#[derive(Debug, Clone, PartialEq)]
+pub enum SpaceOverride {
+    /// The dictionary's `/ColorSpace` stands.
+    Keep,
+    /// The dictionary's `/ColorSpace` is dropped: the samples are already in
+    /// the device's own space.
+    Clear,
+    /// The dictionary's `/ColorSpace` is replaced by this one.
+    Replace(ColorSpace),
 }
 
 /// What the conversion table decided to do with the decoded channels.
@@ -149,19 +166,14 @@ pub fn conversion_action(
 }
 
 impl JpxAction {
-    /// The colour space this action installs, if it replaces the
-    /// dictionary's.
-    ///
-    /// `Some(None)` means "reset to no colour space at all", which is what
-    /// the RGB actions do: the samples are already device RGB, so keeping the
-    /// original space would convert them twice.
+    /// What this action does to the dictionary's `/ColorSpace`.
     #[must_use]
-    pub fn space_override(self) -> Option<Option<ColorSpace>> {
+    pub fn space_override(self) -> SpaceOverride {
         match self {
-            Self::UseGray => Some(Some(ColorSpace::DeviceGray)),
-            Self::UseCmyk => Some(Some(ColorSpace::DeviceCmyk)),
-            Self::UseRgb | Self::ConvertArgbToRgb => Some(None),
-            Self::DoNothing | Self::UseIndexed | Self::Fail => None,
+            Self::UseGray => SpaceOverride::Replace(ColorSpace::DeviceGray),
+            Self::UseCmyk => SpaceOverride::Replace(ColorSpace::DeviceCmyk),
+            Self::UseRgb | Self::ConvertArgbToRgb => SpaceOverride::Clear,
+            Self::DoNothing | Self::UseIndexed | Self::Fail => SpaceOverride::Keep,
         }
     }
 
@@ -390,6 +402,10 @@ pub fn decode_jpx(
 
 /// Whether a colour space is one the JPX path treats as a stock device space.
 #[must_use]
+#[allow(
+    dead_code,
+    reason = "the oracle behaviour it ports is pinned by this module's own tests; the curation removed its only caller outside the crate"
+)]
 pub fn is_stock_device(space: &ColorSpace) -> bool {
     matches!(
         space.family(),
@@ -412,8 +428,8 @@ mod tests {
     )]
 
     use super::{
-        JpxAction, JpxColorSpace, RequestedSize, components_agree, conversion_action, decode_jpx,
-        is_stock_device,
+        JpxAction, JpxColorSpace, RequestedSize, SpaceOverride, components_agree,
+        conversion_action, decode_jpx, is_stock_device,
     };
     use crate::color::{ColorSpace, Indexed};
     use pdfrum_common::Limits;
@@ -526,14 +542,17 @@ mod tests {
 
     #[test]
     fn the_rgb_actions_reset_the_space_rather_than_replacing_it() {
-        assert_eq!(JpxAction::UseRgb.space_override(), Some(None));
-        assert_eq!(JpxAction::ConvertArgbToRgb.space_override(), Some(None));
+        assert_eq!(JpxAction::UseRgb.space_override(), SpaceOverride::Clear);
+        assert_eq!(
+            JpxAction::ConvertArgbToRgb.space_override(),
+            SpaceOverride::Clear
+        );
         assert_eq!(
             JpxAction::UseGray.space_override(),
-            Some(Some(ColorSpace::DeviceGray))
+            SpaceOverride::Replace(ColorSpace::DeviceGray)
         );
-        assert_eq!(JpxAction::UseIndexed.space_override(), None);
-        assert_eq!(JpxAction::DoNothing.space_override(), None);
+        assert_eq!(JpxAction::UseIndexed.space_override(), SpaceOverride::Keep);
+        assert_eq!(JpxAction::DoNothing.space_override(), SpaceOverride::Keep);
     }
 
     /// A `SOC`+`SIZ` head with `count` components described by `fields`.

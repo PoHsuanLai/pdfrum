@@ -7,7 +7,7 @@
 //! division by zero whose infinities and NaNs the extend rules then absorb.
 
 use kurbo::{Affine, Point};
-use pdfrum_page::shading::Axial;
+use pdfrum_page::Axial;
 
 use crate::pixmap::Pixmap;
 use crate::shading::steps::ColorSteps;

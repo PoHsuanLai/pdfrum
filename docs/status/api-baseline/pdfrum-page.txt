@@ -1,894 +1,4 @@
 pub mod pdfrum_page
-pub mod pdfrum_page::color
-#[non_exhaustive] pub enum pdfrum_page::color::ColorSpace
-pub pdfrum_page::color::ColorSpace::CalGray(alloc::boxed::Box<pdfrum_page::color::CalGray>)
-pub pdfrum_page::color::ColorSpace::CalRgb(alloc::boxed::Box<pdfrum_page::color::CalRgb>)
-pub pdfrum_page::color::ColorSpace::DeviceCmyk
-pub pdfrum_page::color::ColorSpace::DeviceGray
-pub pdfrum_page::color::ColorSpace::DeviceN(alloc::boxed::Box<pdfrum_page::color::DeviceN>)
-pub pdfrum_page::color::ColorSpace::DeviceRgb
-pub pdfrum_page::color::ColorSpace::IccBased(alloc::boxed::Box<pdfrum_page::color::IccBased>)
-pub pdfrum_page::color::ColorSpace::Indexed(alloc::boxed::Box<pdfrum_page::color::Indexed>)
-pub pdfrum_page::color::ColorSpace::Lab(alloc::boxed::Box<pdfrum_page::color::Lab>)
-pub pdfrum_page::color::ColorSpace::Pattern(alloc::boxed::Box<pdfrum_page::color::PatternSpace>)
-pub pdfrum_page::color::ColorSpace::Separation(alloc::boxed::Box<pdfrum_page::color::Separation>)
-impl pdfrum_page::color::ColorSpace
-pub fn pdfrum_page::color::ColorSpace::default_color(&self) -> alloc::vec::Vec<f32>
-pub fn pdfrum_page::color::ColorSpace::default_value(&self, usize) -> (f32, f32, f32)
-pub fn pdfrum_page::color::ColorSpace::family(&self) -> pdfrum_page::color::Family
-pub fn pdfrum_page::color::ColorSpace::is_normal(&self) -> bool
-pub fn pdfrum_page::color::ColorSpace::is_special(&self) -> bool
-pub fn pdfrum_page::color::ColorSpace::n_components(&self) -> usize
-pub fn pdfrum_page::color::ColorSpace::to_rgb(&self, &[f32]) -> pdfrum_page::color::Rgb
-pub fn pdfrum_page::color::ColorSpace::to_rgb_with(&self, &[f32], pdfrum_page::color::Conversion) -> pdfrum_page::color::Rgb
-pub fn pdfrum_page::color::ColorSpace::translate_image_line(&self, &mut [u8], &[u8], usize, bool, pdfrum_page::color::Conversion)
-pub fn pdfrum_page::color::ColorSpace::try_to_rgb(&self, &[f32], pdfrum_page::color::Conversion) -> core::option::Option<pdfrum_page::color::Rgb>
-pub enum pdfrum_page::color::Conversion
-pub pdfrum_page::color::Conversion::Managed
-pub pdfrum_page::color::Conversion::Standard
-impl pdfrum_page::color::Conversion
-pub fn pdfrum_page::color::Conversion::is_standard(self) -> bool
-pub enum pdfrum_page::color::Family
-pub pdfrum_page::color::Family::CalGray = 4
-pub pdfrum_page::color::Family::CalRgb = 5
-pub pdfrum_page::color::Family::DeviceCmyk = 3
-pub pdfrum_page::color::Family::DeviceGray = 1
-pub pdfrum_page::color::Family::DeviceN = 9
-pub pdfrum_page::color::Family::DeviceRgb = 2
-pub pdfrum_page::color::Family::IccBased = 7
-pub pdfrum_page::color::Family::Indexed = 10
-pub pdfrum_page::color::Family::Lab = 6
-pub pdfrum_page::color::Family::Pattern = 11
-pub pdfrum_page::color::Family::Separation = 8
-pub pdfrum_page::color::Family::Unknown = 0
-pub struct pdfrum_page::color::CalGray
-pub pdfrum_page::color::CalGray::black_point: [f32; 3]
-pub pdfrum_page::color::CalGray::gamma: f32
-pub pdfrum_page::color::CalGray::white_point: [f32; 3]
-pub struct pdfrum_page::color::CalRgb
-pub pdfrum_page::color::CalRgb::black_point: [f32; 3]
-pub pdfrum_page::color::CalRgb::gamma: core::option::Option<[f32; 3]>
-pub pdfrum_page::color::CalRgb::matrix: core::option::Option<[f32; 9]>
-pub pdfrum_page::color::CalRgb::white_point: [f32; 3]
-pub struct pdfrum_page::color::ColorSpaceCache
-impl pdfrum_page::color::ColorSpaceCache
-pub fn pdfrum_page::color::ColorSpaceCache::is_empty(&self) -> bool
-pub fn pdfrum_page::color::ColorSpaceCache::len(&self) -> usize
-pub fn pdfrum_page::color::ColorSpaceCache::new() -> Self
-pub struct pdfrum_page::color::ColorValue
-pub pdfrum_page::color::ColorValue::components: smallvec::SmallVec<[f32; 4]>
-pub pdfrum_page::color::ColorValue::pattern: core::option::Option<alloc::boxed::Box<pdfrum_page::PatternValue>>
-pub pdfrum_page::color::ColorValue::space: core::option::Option<alloc::sync::Arc<pdfrum_page::color::ColorSpace>>
-impl pdfrum_page::ColorValue
-pub fn pdfrum_page::ColorValue::is_pattern(&self) -> bool
-pub fn pdfrum_page::ColorValue::set_components(&mut self, &[f32]) -> bool
-pub fn pdfrum_page::ColorValue::set_pattern(&mut self, pdfrum_object::name::Name, &[f32], core::option::Option<alloc::sync::Arc<pdfrum_page::pattern::Pattern>>)
-pub fn pdfrum_page::ColorValue::set_space(&mut self, alloc::sync::Arc<pdfrum_page::color::ColorSpace>)
-pub fn pdfrum_page::ColorValue::set_stock(&mut self, pdfrum_page::color::ColorSpace, &[f32])
-pub fn pdfrum_page::ColorValue::to_rgb(&self) -> core::option::Option<pdfrum_page::color::Rgb>
-impl core::default::Default for pdfrum_page::ColorValue
-pub fn pdfrum_page::ColorValue::default() -> Self
-pub struct pdfrum_page::color::DeviceN
-pub pdfrum_page::color::DeviceN::alternate: alloc::boxed::Box<pdfrum_page::color::ColorSpace>
-pub pdfrum_page::color::DeviceN::names: alloc::boxed::Box<[pdfrum_object::name::Name]>
-pub pdfrum_page::color::DeviceN::tint: alloc::sync::Arc<pdfrum_page::function::Function>
-impl pdfrum_page::color::DeviceN
-pub fn pdfrum_page::color::DeviceN::to_rgb(&self, &[f32], pdfrum_page::color::Conversion) -> core::option::Option<pdfrum_page::color::Rgb>
-pub struct pdfrum_page::color::IccBased
-pub pdfrum_page::color::IccBased::base: core::option::Option<alloc::boxed::Box<pdfrum_page::color::ColorSpace>>
-pub pdfrum_page::color::IccBased::n: u8
-pub pdfrum_page::color::IccBased::profile: alloc::sync::Arc<pdfrum_page::color::IccProfile>
-pub pdfrum_page::color::IccBased::ranges: alloc::boxed::Box<[f32]>
-impl pdfrum_page::color::IccBased
-pub fn pdfrum_page::color::IccBased::is_normal(&self) -> bool
-pub fn pdfrum_page::color::IccBased::stock_alternate(u8) -> core::option::Option<pdfrum_page::color::ColorSpace>
-pub fn pdfrum_page::color::IccBased::to_rgb(&self, &[f32], pdfrum_page::color::Conversion) -> pdfrum_page::color::Rgb
-pub struct pdfrum_page::color::IccProfile
-impl pdfrum_page::color::IccProfile
-pub fn pdfrum_page::color::IccProfile::is_normal(&self) -> bool
-pub fn pdfrum_page::color::IccProfile::is_srgb(&self) -> bool
-pub fn pdfrum_page::color::IccProfile::is_supported(&self) -> bool
-pub fn pdfrum_page::color::IccProfile::load(&[u8], usize) -> Self
-pub fn pdfrum_page::color::IccProfile::to_rgb(&self, &[f32]) -> core::option::Option<pdfrum_page::color::Rgb>
-impl core::cmp::PartialEq for pdfrum_page::color::IccProfile
-pub fn pdfrum_page::color::IccProfile::eq(&self, &Self) -> bool
-impl core::fmt::Debug for pdfrum_page::color::IccProfile
-pub fn pdfrum_page::color::IccProfile::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
-pub struct pdfrum_page::color::Indexed
-pub pdfrum_page::color::Indexed::base: alloc::boxed::Box<pdfrum_page::color::ColorSpace>
-pub pdfrum_page::color::Indexed::component_ranges: alloc::boxed::Box<[(f32, f32)]>
-pub pdfrum_page::color::Indexed::lookup: alloc::boxed::Box<[u8]>
-pub pdfrum_page::color::Indexed::max_index: u8
-impl pdfrum_page::color::Indexed
-pub fn pdfrum_page::color::Indexed::to_rgb(&self, &[f32], pdfrum_page::color::Conversion) -> core::option::Option<pdfrum_page::color::Rgb>
-pub struct pdfrum_page::color::Lab
-pub pdfrum_page::color::Lab::black_point: [f32; 3]
-pub pdfrum_page::color::Lab::ranges: [f32; 4]
-pub pdfrum_page::color::Lab::white_point: [f32; 3]
-impl pdfrum_page::color::Lab
-pub fn pdfrum_page::color::Lab::default_value(&self, usize) -> (f32, f32, f32)
-pub struct pdfrum_page::color::PatternSpace
-pub pdfrum_page::color::PatternSpace::base: core::option::Option<alloc::boxed::Box<pdfrum_page::color::ColorSpace>>
-impl pdfrum_page::color::PatternSpace
-pub fn pdfrum_page::color::PatternSpace::n_components(&self) -> usize
-pub fn pdfrum_page::color::PatternSpace::to_rgb(&self, &[f32], pdfrum_page::color::Conversion) -> core::option::Option<pdfrum_page::color::Rgb>
-pub struct pdfrum_page::color::PatternValue
-pub pdfrum_page::color::PatternValue::components: smallvec::SmallVec<[f32; 4]>
-pub pdfrum_page::color::PatternValue::loaded: core::option::Option<alloc::sync::Arc<pdfrum_page::pattern::Pattern>>
-pub pdfrum_page::color::PatternValue::name: pdfrum_object::name::Name
-pub struct pdfrum_page::color::Rgb
-pub pdfrum_page::color::Rgb::b: f32
-pub pdfrum_page::color::Rgb::g: f32
-pub pdfrum_page::color::Rgb::r: f32
-impl pdfrum_page::color::Rgb
-pub const pdfrum_page::color::Rgb::BLACK: Self
-pub fn pdfrum_page::color::Rgb::to_bytes(self) -> [u8; 3]
-pub fn pdfrum_page::color::Rgb::to_bytes_truncating(self) -> [u8; 3]
-pub struct pdfrum_page::color::Separation
-pub pdfrum_page::color::Separation::alternate: core::option::Option<alloc::boxed::Box<pdfrum_page::color::ColorSpace>>
-pub pdfrum_page::color::Separation::none: bool
-pub pdfrum_page::color::Separation::tint: core::option::Option<alloc::sync::Arc<pdfrum_page::function::Function>>
-impl pdfrum_page::color::Separation
-pub fn pdfrum_page::color::Separation::to_rgb(&self, &[f32], pdfrum_page::color::Conversion) -> core::option::Option<pdfrum_page::color::Rgb>
-pub const pdfrum_page::color::MAX_PATTERN_COMPONENTS: usize
-pub fn pdfrum_page::color::adobe_cmyk_to_srgb(u8, u8, u8, u8) -> [u8; 3]
-pub fn pdfrum_page::color::is_srgb_profile(&[u8]) -> bool
-pub fn pdfrum_page::color::is_valid_icc_components(i64) -> bool
-pub fn pdfrum_page::color::load_cached<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::object::Object, core::option::Option<&pdfrum_object::dict::Dict>, &R, &mut pdfrum_page::color::ColorSpaceCache, &mut pdfrum_page::function::FunctionCache, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<alloc::sync::Arc<pdfrum_page::color::ColorSpace>>
-pub fn pdfrum_page::color::load_colorspace<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::object::Object, core::option::Option<&pdfrum_object::dict::Dict>, &R, &mut pdfrum_page::function::FunctionCache, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<pdfrum_page::color::ColorSpace>
-pub fn pdfrum_page::color::stock_for_name(&[u8]) -> core::option::Option<pdfrum_page::color::ColorSpace>
-pub mod pdfrum_page::function
-#[non_exhaustive] pub enum pdfrum_page::function::Function
-pub pdfrum_page::function::Function::Exponential(pdfrum_page::function::Exponential)
-pub pdfrum_page::function::Function::PostScript(pdfrum_page::function::PostScript)
-pub pdfrum_page::function::Function::Sampled(pdfrum_page::function::Sampled)
-pub pdfrum_page::function::Function::Stitching(pdfrum_page::function::Stitching)
-impl pdfrum_page::function::Function
-pub fn pdfrum_page::function::Function::domain(&self) -> &[f32]
-pub fn pdfrum_page::function::Function::eval(&self, &[f32], &mut [f32]) -> core::result::Result<(), pdfrum_page::Error>
-pub fn pdfrum_page::function::Function::eval_into(&self, &[f32], &mut [f32]) -> usize
-pub fn pdfrum_page::function::Function::input_count(&self) -> usize
-pub fn pdfrum_page::function::Function::output_count(&self) -> usize
-pub fn pdfrum_page::function::Function::range(&self) -> &[f32]
-#[non_exhaustive] pub enum pdfrum_page::function::PsOp
-pub pdfrum_page::function::PsOp::Abs
-pub pdfrum_page::function::PsOp::Add
-pub pdfrum_page::function::PsOp::And
-pub pdfrum_page::function::PsOp::Atan
-pub pdfrum_page::function::PsOp::Bitshift
-pub pdfrum_page::function::PsOp::Ceiling
-pub pdfrum_page::function::PsOp::Const
-pub pdfrum_page::function::PsOp::Copy
-pub pdfrum_page::function::PsOp::Cos
-pub pdfrum_page::function::PsOp::Cvi
-pub pdfrum_page::function::PsOp::Cvr
-pub pdfrum_page::function::PsOp::Div
-pub pdfrum_page::function::PsOp::Dup
-pub pdfrum_page::function::PsOp::Eq
-pub pdfrum_page::function::PsOp::Exch
-pub pdfrum_page::function::PsOp::Exp
-pub pdfrum_page::function::PsOp::False
-pub pdfrum_page::function::PsOp::Floor
-pub pdfrum_page::function::PsOp::Ge
-pub pdfrum_page::function::PsOp::Gt
-pub pdfrum_page::function::PsOp::Idiv
-pub pdfrum_page::function::PsOp::If
-pub pdfrum_page::function::PsOp::IfElse
-pub pdfrum_page::function::PsOp::Index
-pub pdfrum_page::function::PsOp::Le
-pub pdfrum_page::function::PsOp::Ln
-pub pdfrum_page::function::PsOp::Log
-pub pdfrum_page::function::PsOp::Lt
-pub pdfrum_page::function::PsOp::Mod
-pub pdfrum_page::function::PsOp::Mul
-pub pdfrum_page::function::PsOp::Ne
-pub pdfrum_page::function::PsOp::Neg
-pub pdfrum_page::function::PsOp::Not
-pub pdfrum_page::function::PsOp::Or
-pub pdfrum_page::function::PsOp::Pop
-pub pdfrum_page::function::PsOp::Proc
-pub pdfrum_page::function::PsOp::Roll
-pub pdfrum_page::function::PsOp::Round
-pub pdfrum_page::function::PsOp::Sin
-pub pdfrum_page::function::PsOp::Sqrt
-pub pdfrum_page::function::PsOp::Sub
-pub pdfrum_page::function::PsOp::True
-pub pdfrum_page::function::PsOp::Truncate
-pub pdfrum_page::function::PsOp::Xor
-impl pdfrum_page::function::PsOp
-pub fn pdfrum_page::function::PsOp::all_named() -> impl core::iter::traits::iterator::Iterator<Item = (&'static [u8], Self)>
-pub fn pdfrum_page::function::PsOp::from_name(&[u8]) -> core::option::Option<Self>
-pub struct pdfrum_page::function::Exponential
-pub pdfrum_page::function::Exponential::c0: alloc::boxed::Box<[f32]>
-pub pdfrum_page::function::Exponential::c1: alloc::boxed::Box<[f32]>
-pub pdfrum_page::function::Exponential::domain: alloc::boxed::Box<[f32]>
-pub pdfrum_page::function::Exponential::exponent: f32
-pub pdfrum_page::function::Exponential::orig_outputs: usize
-pub pdfrum_page::function::Exponential::outputs: usize
-pub pdfrum_page::function::Exponential::range: alloc::boxed::Box<[f32]>
-pub struct pdfrum_page::function::FunctionCache
-impl pdfrum_page::function::FunctionCache
-pub fn pdfrum_page::function::FunctionCache::is_empty(&self) -> bool
-pub fn pdfrum_page::function::FunctionCache::len(&self) -> usize
-pub fn pdfrum_page::function::FunctionCache::load<R: pdfrum_object::resolve::Resolve>(&mut self, &pdfrum_object::object::Object, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<alloc::sync::Arc<pdfrum_page::function::Function>>
-pub fn pdfrum_page::function::FunctionCache::new() -> Self
-pub struct pdfrum_page::function::PostScript
-pub pdfrum_page::function::PostScript::domain: alloc::boxed::Box<[f32]>
-pub pdfrum_page::function::PostScript::outputs: usize
-pub pdfrum_page::function::PostScript::range: alloc::boxed::Box<[f32]>
-impl pdfrum_page::function::PostScript
-pub fn pdfrum_page::function::PostScript::eval_with_diagnostics(&self, &[f32], &mut [f32], &mut pdfrum_common::diagnostics::Diagnostics) -> bool
-pub fn pdfrum_page::function::PostScript::stack_depth_after(&self, &[f32]) -> usize
-pub struct pdfrum_page::function::Sampled
-pub pdfrum_page::function::Sampled::bits_per_sample: u32
-pub pdfrum_page::function::Sampled::decode: alloc::boxed::Box<[f32]>
-pub pdfrum_page::function::Sampled::domain: alloc::boxed::Box<[f32]>
-pub pdfrum_page::function::Sampled::encode: alloc::boxed::Box<[f32]>
-pub pdfrum_page::function::Sampled::outputs: usize
-pub pdfrum_page::function::Sampled::range: alloc::boxed::Box<[f32]>
-pub pdfrum_page::function::Sampled::sample_max: u32
-pub pdfrum_page::function::Sampled::samples: alloc::boxed::Box<[u8]>
-pub pdfrum_page::function::Sampled::sizes: alloc::boxed::Box<[u32]>
-pub struct pdfrum_page::function::Stitching
-pub pdfrum_page::function::Stitching::bounds: alloc::boxed::Box<[f32]>
-pub pdfrum_page::function::Stitching::domain: alloc::boxed::Box<[f32]>
-pub pdfrum_page::function::Stitching::encode: alloc::boxed::Box<[f32]>
-pub pdfrum_page::function::Stitching::functions: alloc::boxed::Box<[alloc::sync::Arc<pdfrum_page::function::Function>]>
-pub pdfrum_page::function::Stitching::outputs: usize
-pub pdfrum_page::function::Stitching::range: alloc::boxed::Box<[f32]>
-pub const pdfrum_page::function::MAX_DEPTH: u32
-pub const pdfrum_page::function::MAX_NESTING: u32
-pub const pdfrum_page::function::MAX_OUTPUTS: usize
-pub fn pdfrum_page::function::interpolate(f32, f32, f32, f32, f32) -> f32
-pub fn pdfrum_page::function::parse_program(&[u8], &[f32], &[f32]) -> core::option::Option<pdfrum_page::function::PostScript>
-pub fn pdfrum_page::function::stack_size() -> usize
-pub mod pdfrum_page::image
-pub mod pdfrum_page::image::dict
-pub struct pdfrum_page::image::dict::ImageDict
-pub pdfrum_page::image::dict::ImageDict::bpc: u32
-pub pdfrum_page::image::dict::ImageDict::components: u32
-pub pdfrum_page::image::dict::ImageDict::decode: core::option::Option<pdfrum_object::array::Array>
-pub pdfrum_page::image::dict::ImageDict::default_decode: bool
-pub pdfrum_page::image::dict::ImageDict::height: u32
-pub pdfrum_page::image::dict::ImageDict::image_mask: bool
-pub pdfrum_page::image::dict::ImageDict::last_filter: core::option::Option<pdfrum_filters::Filter>
-pub pdfrum_page::image::dict::ImageDict::last_filter_name: core::option::Option<pdfrum_object::name::Name>
-pub pdfrum_page::image::dict::ImageDict::params: pdfrum_object::dict::Dict
-pub pdfrum_page::image::dict::ImageDict::width: u32
-impl pdfrum_page::image::dict::ImageDict
-pub fn pdfrum_page::image::dict::ImageDict::load<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R, &mut pdfrum_common::diagnostics::Diagnostics) -> core::result::Result<Self, pdfrum_page::Error>
-pub fn pdfrum_page::image::dict::ImageDict::pitch(&self) -> core::option::Option<usize>
-pub fn pdfrum_page::image::dict::ImageDict::total_bytes(&self) -> core::option::Option<usize>
-pub const pdfrum_page::image::dict::MAX_DIMENSION: i64
-pub fn pdfrum_page::image::dict::is_allowed_bits_per_component(i64) -> bool
-pub fn pdfrum_page::image::dict::is_valid_dimension(i64) -> bool
-#[non_exhaustive] pub enum pdfrum_page::image::ImageMask
-pub pdfrum_page::image::ImageMask::Alpha
-pub pdfrum_page::image::ImageMask::Alpha::alpha: alloc::boxed::Box<[u8]>
-pub pdfrum_page::image::ImageMask::Alpha::height: u32
-pub pdfrum_page::image::ImageMask::Alpha::stencil: bool
-pub pdfrum_page::image::ImageMask::Alpha::width: u32
-pub pdfrum_page::image::ImageMask::ColorKey(pdfrum_page::image::ColorKey)
-impl pdfrum_page::ImageMask
-pub fn pdfrum_page::ImageMask::alpha_at(&self, u32, u32) -> u8
-pub enum pdfrum_page::image::JpxAction
-pub pdfrum_page::image::JpxAction::ConvertArgbToRgb
-pub pdfrum_page::image::JpxAction::DoNothing
-pub pdfrum_page::image::JpxAction::Fail
-pub pdfrum_page::image::JpxAction::UseCmyk
-pub pdfrum_page::image::JpxAction::UseGray
-pub pdfrum_page::image::JpxAction::UseIndexed
-pub pdfrum_page::image::JpxAction::UseRgb
-impl pdfrum_page::image::JpxAction
-pub fn pdfrum_page::image::JpxAction::components(self, u8) -> u8
-pub fn pdfrum_page::image::JpxAction::space_override(self) -> core::option::Option<core::option::Option<pdfrum_page::color::ColorSpace>>
-pub enum pdfrum_page::image::JpxColorSpace
-pub pdfrum_page::image::JpxColorSpace::Cmyk
-pub pdfrum_page::image::JpxColorSpace::Gray
-pub pdfrum_page::image::JpxColorSpace::Srgb
-pub pdfrum_page::image::JpxColorSpace::Unspecified
-#[non_exhaustive] pub enum pdfrum_page::image::Pixels
-pub pdfrum_page::image::Pixels::Cmyk8(alloc::boxed::Box<[u8]>)
-pub pdfrum_page::image::Pixels::Gray8(alloc::boxed::Box<[u8]>)
-pub pdfrum_page::image::Pixels::Indexed
-pub pdfrum_page::image::Pixels::Indexed::indices: alloc::boxed::Box<[u8]>
-pub pdfrum_page::image::Pixels::Indexed::palette: alloc::boxed::Box<[pdfrum_page::color::Rgb]>
-pub pdfrum_page::image::Pixels::Rgb8(alloc::boxed::Box<[u8]>)
-pub pdfrum_page::image::Pixels::Stencil(pdfrum_page::BitImage)
-impl pdfrum_page::image::Pixels
-pub fn pdfrum_page::image::Pixels::byte_palette(&self) -> core::option::Option<alloc::vec::Vec<[u8; 3]>>
-pub fn pdfrum_page::image::Pixels::byte_size(&self) -> usize
-pub fn pdfrum_page::image::Pixels::color_at(&self, u32, u32, u32) -> pdfrum_page::color::Rgb
-pub fn pdfrum_page::image::Pixels::components(&self) -> usize
-pub fn pdfrum_page::image::Pixels::sample_bytes(&self, u32, u32, u32) -> [u8; 3]
-pub enum pdfrum_page::image::RequestedSize
-pub pdfrum_page::image::RequestedSize::Full
-pub pdfrum_page::image::RequestedSize::Reduced
-pub pdfrum_page::image::RequestedSize::Reduced::height: u32
-pub pdfrum_page::image::RequestedSize::Reduced::width: u32
-impl pdfrum_page::RequestedSize
-pub fn pdfrum_page::RequestedSize::for_device(f64, f64) -> Self
-pub fn pdfrum_page::RequestedSize::levels(self, u32, u32) -> u8
-pub fn pdfrum_page::RequestedSize::satisfies(self, Self, u32, u32) -> bool
-pub struct pdfrum_page::image::BitImage
-pub pdfrum_page::image::BitImage::bits: alloc::vec::Vec<u8>
-pub pdfrum_page::image::BitImage::height: u32
-pub pdfrum_page::image::BitImage::row_bytes: usize
-pub pdfrum_page::image::BitImage::width: u32
-impl pdfrum_page::BitImage
-pub fn pdfrum_page::BitImage::pixel(&self, u32, u32) -> bool
-pub struct pdfrum_page::image::ColorKey
-pub pdfrum_page::image::ColorKey::ranges: alloc::boxed::Box<[(u32, u32)]>
-impl pdfrum_page::image::ColorKey
-pub fn pdfrum_page::image::ColorKey::from_array(&pdfrum_object::array::Array, usize, u32) -> Self
-pub fn pdfrum_page::image::ColorKey::is_complete(&pdfrum_object::array::Array, usize) -> bool
-pub fn pdfrum_page::image::ColorKey::is_transparent(&self, &[u32]) -> bool
-pub struct pdfrum_page::image::DctImage
-pub pdfrum_page::image::DctImage::bpc: u32
-pub pdfrum_page::image::DctImage::components: u8
-pub pdfrum_page::image::DctImage::data: alloc::vec::Vec<u8>
-pub pdfrum_page::image::DctImage::height: u32
-pub pdfrum_page::image::DctImage::width: u32
-pub struct pdfrum_page::image::DecodeMap
-pub pdfrum_page::image::DecodeMap::base: alloc::boxed::Box<[f32]>
-pub pdfrum_page::image::DecodeMap::default: bool
-pub pdfrum_page::image::DecodeMap::step: alloc::boxed::Box<[f32]>
-impl pdfrum_page::image::DecodeMap
-pub fn pdfrum_page::image::DecodeMap::apply(&self, usize, f32) -> f32
-pub fn pdfrum_page::image::DecodeMap::new(core::option::Option<&pdfrum_page::color::ColorSpace>, usize, u32, core::option::Option<&pdfrum_object::array::Array>) -> Self
-pub struct pdfrum_page::image::ImageCache
-impl pdfrum_page::ImageCache
-pub fn pdfrum_page::ImageCache::bytes(&self) -> usize
-pub fn pdfrum_page::ImageCache::clear(&mut self)
-pub fn pdfrum_page::ImageCache::get(&mut self, pdfrum_object::object::ObjRef, pdfrum_page::RequestedSize) -> core::option::Option<alloc::sync::Arc<pdfrum_page::image::ImageData>>
-pub fn pdfrum_page::ImageCache::insert(&mut self, pdfrum_object::object::ObjRef, pdfrum_page::RequestedSize, alloc::sync::Arc<pdfrum_page::image::ImageData>)
-pub fn pdfrum_page::ImageCache::is_empty(&self) -> bool
-pub fn pdfrum_page::ImageCache::len(&self) -> usize
-pub fn pdfrum_page::ImageCache::new() -> Self
-pub struct pdfrum_page::image::ImageData
-pub pdfrum_page::image::ImageData::height: u32
-pub pdfrum_page::image::ImageData::interpolate: bool
-pub pdfrum_page::image::ImageData::mask: core::option::Option<pdfrum_page::ImageMask>
-pub pdfrum_page::image::ImageData::matte: core::option::Option<pdfrum_page::color::Rgb>
-pub pdfrum_page::image::ImageData::pixels: pdfrum_page::image::Pixels
-pub pdfrum_page::image::ImageData::width: u32
-impl pdfrum_page::image::ImageData
-pub fn pdfrum_page::image::ImageData::byte_size(&self) -> usize
-pub struct pdfrum_page::image::ImageDict
-pub pdfrum_page::image::ImageDict::bpc: u32
-pub pdfrum_page::image::ImageDict::components: u32
-pub pdfrum_page::image::ImageDict::decode: core::option::Option<pdfrum_object::array::Array>
-pub pdfrum_page::image::ImageDict::default_decode: bool
-pub pdfrum_page::image::ImageDict::height: u32
-pub pdfrum_page::image::ImageDict::image_mask: bool
-pub pdfrum_page::image::ImageDict::last_filter: core::option::Option<pdfrum_filters::Filter>
-pub pdfrum_page::image::ImageDict::last_filter_name: core::option::Option<pdfrum_object::name::Name>
-pub pdfrum_page::image::ImageDict::params: pdfrum_object::dict::Dict
-pub pdfrum_page::image::ImageDict::width: u32
-impl pdfrum_page::image::dict::ImageDict
-pub fn pdfrum_page::image::dict::ImageDict::load<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R, &mut pdfrum_common::diagnostics::Diagnostics) -> core::result::Result<Self, pdfrum_page::Error>
-pub fn pdfrum_page::image::dict::ImageDict::pitch(&self) -> core::option::Option<usize>
-pub fn pdfrum_page::image::dict::ImageDict::total_bytes(&self) -> core::option::Option<usize>
-pub struct pdfrum_page::image::JpxImage
-pub pdfrum_page::image::JpxImage::alpha: core::option::Option<alloc::vec::Vec<u8>>
-pub pdfrum_page::image::JpxImage::components: u8
-pub pdfrum_page::image::JpxImage::data: alloc::vec::Vec<u8>
-pub pdfrum_page::image::JpxImage::height: u32
-pub pdfrum_page::image::JpxImage::space_override: core::option::Option<core::option::Option<pdfrum_page::color::ColorSpace>>
-pub pdfrum_page::image::JpxImage::width: u32
-pub const pdfrum_page::image::ADOBE_CMYK_DECODE: [f32; 8]
-pub const pdfrum_page::image::MAX_BYTES: usize
-pub const pdfrum_page::image::MAX_DIMENSION: i64
-pub const pdfrum_page::image::MAX_ENTRIES: usize
-pub fn pdfrum_page::image::allows_reduced_resolution(u32, u32, u32, u32) -> bool
-pub fn pdfrum_page::image::decode_dct(&[u8], (u32, u32)) -> core::result::Result<pdfrum_page::image::DctImage, pdfrum_page::Error>
-pub fn pdfrum_page::image::decode_image<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::stream::Stream, core::option::Option<&pdfrum_object::dict::Dict>, core::option::Option<&pdfrum_object::dict::Dict>, pdfrum_page::RequestedSize, &R, &mut pdfrum_page::function::FunctionCache, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::result::Result<pdfrum_page::image::ImageData, pdfrum_page::Error>
-pub fn pdfrum_page::image::decode_jbig2(core::option::Option<&[u8]>, &[u8], u32, u32, &pdfrum_common::limits::Limits) -> core::result::Result<pdfrum_page::BitImage, pdfrum_page::Error>
-pub fn pdfrum_page::image::decode_jpx(&[u8], core::option::Option<&pdfrum_page::color::ColorSpace>, i64, pdfrum_page::RequestedSize, &pdfrum_common::limits::Limits) -> core::result::Result<pdfrum_page::JpxImage, pdfrum_page::Error>
-pub fn pdfrum_page::image::get_bits(&[u8], usize, u32) -> u32
-pub fn pdfrum_page::image::invert_line(&mut [u8])
-pub fn pdfrum_page::image::is_stock_device(&pdfrum_page::color::ColorSpace) -> bool
-pub fn pdfrum_page::image::matte_color(core::option::Option<&pdfrum_object::array::Array>, core::option::Option<&pdfrum_page::color::ColorSpace>, usize) -> core::option::Option<pdfrum_page::color::Rgb>
-pub fn pdfrum_page::image::palette_index(&[u8], usize, u32, u32) -> u32
-pub fn pdfrum_page::image::probe_dct(&[u8]) -> core::option::Option<(u32, u32, u8)>
-pub fn pdfrum_page::image::rgb_line_to_bgr(&mut [u8], &[u8], usize, u32, u32) -> bool
-pub fn pdfrum_page::image::scale_denominator(u8) -> u32
-pub fn pdfrum_page::image::scale_to_byte(u32, u32) -> u8
-pub fn pdfrum_page::image::scaled_size(u32, u32) -> u32
-pub fn pdfrum_page::image::scanline(&[u8], u32, usize) -> (alloc::vec::Vec<u8>, pdfrum_page::image::scanline::Availability)
-pub mod pdfrum_page::inline_image
-pub fn pdfrum_page::inline_image::as_xobject_dict(&pdfrum_page::InlineImage) -> pdfrum_object::dict::Dict
-pub fn pdfrum_page::inline_image::expand_key_abbreviation(&[u8]) -> &[u8]
-pub fn pdfrum_page::inline_image::expand_value_abbreviation(&[u8]) -> &[u8]
-pub fn pdfrum_page::inline_image::inline_colorspace_name(&pdfrum_object::dict::Dict) -> core::option::Option<pdfrum_object::name::Name>
-pub fn pdfrum_page::inline_image::inline_decode(&pdfrum_object::dict::Dict) -> core::option::Option<pdfrum_object::array::Array>
-pub fn pdfrum_page::inline_image::inline_filters(&pdfrum_object::dict::Dict) -> alloc::vec::Vec<pdfrum_object::name::Name>
-pub fn pdfrum_page::inline_image::inline_predictor_params(&pdfrum_object::dict::Dict) -> pdfrum_filters::predictor::PredictorParams
-pub fn pdfrum_page::inline_image::with_colorspace(&pdfrum_object::dict::Dict, pdfrum_object::object::Object) -> pdfrum_object::dict::Dict
-pub mod pdfrum_page::mutate
-pub mod pdfrum_page::optional
-pub enum pdfrum_page::optional::UsageType
-pub pdfrum_page::optional::UsageType::Design
-pub pdfrum_page::optional::UsageType::Export
-pub pdfrum_page::optional::UsageType::Print
-pub pdfrum_page::optional::UsageType::View
-impl pdfrum_page::optional::UsageType
-pub fn pdfrum_page::optional::UsageType::as_bytes(self) -> &'static [u8]
-pub fn pdfrum_page::optional::UsageType::state_key(self) -> pdfrum_object::name::Name
-pub struct pdfrum_page::optional::OcContext
-impl pdfrum_page::optional::OcContext
-pub fn pdfrum_page::optional::OcContext::content_visible<R: pdfrum_object::resolve::Resolve>(&mut self, core::option::Option<&pdfrum_object::dict::Dict>, &R, &mut pdfrum_common::diagnostics::Diagnostics) -> bool
-pub fn pdfrum_page::optional::OcContext::group_visible<R: pdfrum_object::resolve::Resolve>(&mut self, core::option::Option<&pdfrum_object::dict::Dict>, &R) -> bool
-pub fn pdfrum_page::optional::OcContext::memoized(&self) -> usize
-pub fn pdfrum_page::optional::OcContext::new(core::option::Option<pdfrum_object::dict::Dict>, pdfrum_page::optional::UsageType) -> Self
-pub fn pdfrum_page::optional::OcContext::permissive() -> Self
-pub struct pdfrum_page::optional::Visibility
-impl pdfrum_page::optional::Visibility
-pub fn pdfrum_page::optional::Visibility::all_visible() -> Self
-pub fn pdfrum_page::optional::Visibility::children(&self, usize) -> Self
-pub fn pdfrum_page::optional::Visibility::shows_everything(&self) -> bool
-pub fn pdfrum_page::optional::Visibility::visible(&self, usize) -> bool
-pub const pdfrum_page::optional::MAX_VE_DEPTH: u32
-pub fn pdfrum_page::optional::page_visibility<R: pdfrum_object::resolve::Resolve>(&pdfrum_page::Page, &mut pdfrum_page::optional::OcContext, &R, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_page::optional::Visibility
-pub mod pdfrum_page::pattern
-#[non_exhaustive] pub enum pdfrum_page::pattern::Pattern
-pub pdfrum_page::pattern::Pattern::Shading(alloc::boxed::Box<pdfrum_page::pattern::ShadingPattern>)
-pub pdfrum_page::pattern::Pattern::Tiling(alloc::boxed::Box<pdfrum_page::TilingPattern>)
-impl pdfrum_page::pattern::Pattern
-pub fn pdfrum_page::pattern::Pattern::load<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::object::Object, kurbo::affine::Affine, core::option::Option<&pdfrum_object::dict::Dict>, &R, &mut pdfrum_page::function::FunctionCache, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<Self>
-pub fn pdfrum_page::pattern::Pattern::matrix(&self) -> kurbo::affine::Affine
-pub struct pdfrum_page::pattern::ShadingPattern
-pub pdfrum_page::pattern::ShadingPattern::ext_g_state: core::option::Option<pdfrum_object::dict::Dict>
-pub pdfrum_page::pattern::ShadingPattern::matrix: kurbo::affine::Affine
-pub pdfrum_page::pattern::ShadingPattern::shading: alloc::sync::Arc<pdfrum_page::shading::Shading>
-pub struct pdfrum_page::pattern::TileRange
-pub pdfrum_page::pattern::TileRange::max_col: i32
-pub pdfrum_page::pattern::TileRange::max_row: i32
-pub pdfrum_page::pattern::TileRange::min_col: i32
-pub pdfrum_page::pattern::TileRange::min_row: i32
-pub struct pdfrum_page::pattern::TilingPattern
-pub pdfrum_page::pattern::TilingPattern::bbox: kurbo::rect::Rect
-pub pdfrum_page::pattern::TilingPattern::colored: bool
-pub pdfrum_page::pattern::TilingPattern::content: pdfrum_object::stream::ByteSpan
-pub pdfrum_page::pattern::TilingPattern::matrix: kurbo::affine::Affine
-pub pdfrum_page::pattern::TilingPattern::objects: alloc::vec::Vec<pdfrum_page::PageObject>
-pub pdfrum_page::pattern::TilingPattern::resources: core::option::Option<pdfrum_object::dict::Dict>
-pub pdfrum_page::pattern::TilingPattern::x_step: f32
-pub pdfrum_page::pattern::TilingPattern::y_step: f32
-impl pdfrum_page::TilingPattern
-pub fn pdfrum_page::TilingPattern::cell_size(&self, kurbo::affine::Affine) -> core::option::Option<(i32, i32)>
-pub fn pdfrum_page::TilingPattern::steps_are_drawable(&self) -> bool
-pub fn pdfrum_page::TilingPattern::tile_range(&self, kurbo::rect::Rect, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<pdfrum_page::pattern::TileRange>
-pub fn pdfrum_page::pattern::uncolored_pattern_rgb(&pdfrum_page::color::ColorSpace, &[f32], bool) -> pdfrum_page::color::Rgb
-pub mod pdfrum_page::shading
-#[non_exhaustive] pub enum pdfrum_page::shading::Geometry
-pub pdfrum_page::shading::Geometry::Axial(pdfrum_page::shading::Axial)
-pub pdfrum_page::shading::Geometry::FunctionBased(pdfrum_page::shading::FunctionBased)
-pub pdfrum_page::shading::Geometry::Mesh
-pub pdfrum_page::shading::Geometry::Mesh::kind: pdfrum_page::shading::ShadingKind
-pub pdfrum_page::shading::Geometry::Mesh::mesh: alloc::boxed::Box<pdfrum_page::Mesh>
-pub pdfrum_page::shading::Geometry::Radial(pdfrum_page::shading::Radial)
-pub enum pdfrum_page::shading::ShadingKind
-pub pdfrum_page::shading::ShadingKind::Axial = 2
-pub pdfrum_page::shading::ShadingKind::CoonsMesh = 6
-pub pdfrum_page::shading::ShadingKind::FreeFormMesh = 4
-pub pdfrum_page::shading::ShadingKind::FunctionBased = 1
-pub pdfrum_page::shading::ShadingKind::LatticeMesh = 5
-pub pdfrum_page::shading::ShadingKind::Radial = 3
-pub pdfrum_page::shading::ShadingKind::TensorMesh = 7
-impl pdfrum_page::shading::ShadingKind
-pub fn pdfrum_page::shading::ShadingKind::from_int(i64) -> core::option::Option<Self>
-pub fn pdfrum_page::shading::ShadingKind::is_mesh(self) -> bool
-pub struct pdfrum_page::shading::Axial
-pub pdfrum_page::shading::Axial::end: kurbo::point::Point
-pub pdfrum_page::shading::Axial::extend_end: bool
-pub pdfrum_page::shading::Axial::extend_start: bool
-pub pdfrum_page::shading::Axial::start: kurbo::point::Point
-pub pdfrum_page::shading::Axial::t_max: f32
-pub pdfrum_page::shading::Axial::t_min: f32
-impl pdfrum_page::shading::Axial
-pub fn pdfrum_page::shading::Axial::axis_len_squared(&self) -> f64
-pub fn pdfrum_page::shading::Axial::position(&self, kurbo::point::Point) -> core::option::Option<f32>
-pub struct pdfrum_page::shading::ColorSteps
-pub pdfrum_page::shading::ColorSteps::colors: alloc::boxed::Box<[pdfrum_page::color::Rgb; 256]>
-impl pdfrum_page::shading::ColorSteps
-pub fn pdfrum_page::shading::ColorSteps::lookup(&self, f32, bool, bool) -> core::option::Option<pdfrum_page::color::Rgb>
-pub fn pdfrum_page::shading::ColorSteps::sample(&[alloc::sync::Arc<pdfrum_page::function::Function>], &pdfrum_page::color::ColorSpace, f32, f32) -> core::option::Option<Self>
-pub struct pdfrum_page::shading::FunctionBased
-pub pdfrum_page::shading::FunctionBased::domain: [f32; 4]
-pub pdfrum_page::shading::FunctionBased::matrix: kurbo::affine::Affine
-impl pdfrum_page::shading::FunctionBased
-pub fn pdfrum_page::shading::FunctionBased::contains(&self, kurbo::point::Point) -> bool
-pub struct pdfrum_page::shading::Mesh
-pub pdfrum_page::shading::Mesh::component_range: [f32; 2]
-pub pdfrum_page::shading::Mesh::patches: alloc::vec::Vec<pdfrum_page::shading::Patch>
-pub pdfrum_page::shading::Mesh::triangles: alloc::vec::Vec<pdfrum_page::shading::Triangle>
-impl pdfrum_page::Mesh
-pub fn pdfrum_page::Mesh::bounds(&self) -> core::option::Option<kurbo::rect::Rect>
-pub struct pdfrum_page::shading::MeshParams
-pub pdfrum_page::shading::MeshParams::component_bits: u32
-pub pdfrum_page::shading::MeshParams::component_max: u32
-pub pdfrum_page::shading::MeshParams::components: usize
-pub pdfrum_page::shading::MeshParams::coord_bits: u32
-pub pdfrum_page::shading::MeshParams::coord_max: u32
-pub pdfrum_page::shading::MeshParams::decode: alloc::boxed::Box<[f32]>
-pub pdfrum_page::shading::MeshParams::flag_bits: u32
-impl pdfrum_page::shading::MeshParams
-pub fn pdfrum_page::shading::MeshParams::component_range(&self) -> [f32; 2]
-pub fn pdfrum_page::shading::MeshParams::new(u32, u32, u32, usize, &[f32], bool) -> core::option::Option<Self>
-pub struct pdfrum_page::shading::MeshReader<'a>
-impl<'a> pdfrum_page::shading::MeshReader<'a>
-pub fn pdfrum_page::shading::MeshReader<'a>::can_read_color(&self) -> bool
-pub fn pdfrum_page::shading::MeshReader<'a>::can_read_coords(&self) -> bool
-pub fn pdfrum_page::shading::MeshReader<'a>::can_read_flag(&self) -> bool
-pub fn pdfrum_page::shading::MeshReader<'a>::new(&'a [u8], &'a pdfrum_page::shading::MeshParams, &'a pdfrum_page::color::ColorSpace, &'a [alloc::sync::Arc<pdfrum_page::function::Function>]) -> Self
-pub fn pdfrum_page::shading::MeshReader<'a>::read_color(&mut self) -> pdfrum_page::color::Rgb
-pub fn pdfrum_page::shading::MeshReader<'a>::read_coords(&mut self) -> kurbo::point::Point
-pub fn pdfrum_page::shading::MeshReader<'a>::read_flag(&mut self) -> u8
-pub fn pdfrum_page::shading::MeshReader<'a>::read_free_form(&mut self) -> alloc::vec::Vec<pdfrum_page::shading::Triangle>
-pub fn pdfrum_page::shading::MeshReader<'a>::read_lattice(&mut self, usize) -> alloc::vec::Vec<pdfrum_page::shading::Triangle>
-pub fn pdfrum_page::shading::MeshReader<'a>::read_patches(&mut self, bool) -> alloc::vec::Vec<pdfrum_page::shading::Patch>
-pub fn pdfrum_page::shading::MeshReader<'a>::read_vertex(&mut self) -> core::option::Option<(u8, pdfrum_page::shading::Vertex)>
-pub fn pdfrum_page::shading::MeshReader<'a>::read_vertex_row(&mut self, usize) -> alloc::vec::Vec<pdfrum_page::shading::Vertex>
-pub struct pdfrum_page::shading::Patch
-pub pdfrum_page::shading::Patch::colors: [pdfrum_page::color::Rgb; 4]
-pub pdfrum_page::shading::Patch::points: alloc::boxed::Box<[kurbo::point::Point]>
-pub struct pdfrum_page::shading::Radial
-pub pdfrum_page::shading::Radial::end: kurbo::point::Point
-pub pdfrum_page::shading::Radial::end_radius: f32
-pub pdfrum_page::shading::Radial::extend_end: bool
-pub pdfrum_page::shading::Radial::extend_start: bool
-pub pdfrum_page::shading::Radial::start: kurbo::point::Point
-pub pdfrum_page::shading::Radial::start_radius: f32
-pub pdfrum_page::shading::Radial::t_max: f32
-pub pdfrum_page::shading::Radial::t_min: f32
-impl pdfrum_page::shading::Radial
-pub fn pdfrum_page::shading::Radial::is_decreasing(&self) -> bool
-pub fn pdfrum_page::shading::Radial::position(&self, kurbo::point::Point) -> pdfrum_page::shading::radial::RadialPosition
-pub struct pdfrum_page::shading::Shading
-pub pdfrum_page::shading::Shading::background: core::option::Option<pdfrum_page::color::Rgb>
-pub pdfrum_page::shading::Shading::bbox: core::option::Option<kurbo::rect::Rect>
-pub pdfrum_page::shading::Shading::functions: alloc::boxed::Box<[alloc::sync::Arc<pdfrum_page::function::Function>]>
-pub pdfrum_page::shading::Shading::geometry: pdfrum_page::shading::Geometry
-pub pdfrum_page::shading::Shading::space: alloc::sync::Arc<pdfrum_page::color::ColorSpace>
-impl pdfrum_page::shading::Shading
-pub fn pdfrum_page::shading::Shading::color_at(&self, f32) -> pdfrum_page::color::Rgb
-pub fn pdfrum_page::shading::Shading::color_steps(&self) -> core::option::Option<pdfrum_page::shading::ColorSteps>
-pub fn pdfrum_page::shading::Shading::kind(&self) -> pdfrum_page::shading::ShadingKind
-pub fn pdfrum_page::shading::Shading::load<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::object::Object, core::option::Option<&pdfrum_object::dict::Dict>, bool, &R, &mut pdfrum_page::function::FunctionCache, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<Self>
-pub struct pdfrum_page::shading::Triangle
-pub pdfrum_page::shading::Triangle::vertices: [pdfrum_page::shading::Vertex; 3]
-pub struct pdfrum_page::shading::Vertex
-pub pdfrum_page::shading::Vertex::color: pdfrum_page::color::Rgb
-pub pdfrum_page::shading::Vertex::point: kurbo::point::Point
-pub const pdfrum_page::shading::MAX_COMPONENTS: usize
-pub const pdfrum_page::shading::MAX_FUNCTIONS: usize
-pub const pdfrum_page::shading::STEPS: usize
-pub fn pdfrum_page::shading::coons_interior(&[kurbo::point::Point]) -> [kurbo::point::Point; 4]
-pub fn pdfrum_page::shading::read_domain(&pdfrum_object::dict::Dict, &impl pdfrum_object::resolve::Resolve) -> (f32, f32)
-pub fn pdfrum_page::shading::read_extend(&pdfrum_object::dict::Dict, &impl pdfrum_object::resolve::Resolve) -> (bool, bool)
-pub fn pdfrum_page::shading::read_matrix(&pdfrum_object::dict::Dict, &impl pdfrum_object::resolve::Resolve) -> kurbo::affine::Affine
-pub mod pdfrum_page::state
-pub mod pdfrum_page::state::clip
-pub enum pdfrum_page::state::clip::ClipEntry
-pub pdfrum_page::state::clip::ClipEntry::Path
-pub pdfrum_page::state::clip::ClipEntry::Path::even_odd: bool
-pub pdfrum_page::state::clip::ClipEntry::Path::path: kurbo::bezpath::BezPath
-pub pdfrum_page::state::clip::ClipEntry::Text
-pub pdfrum_page::state::clip::ClipEntry::Text::runs: alloc::vec::Vec<pdfrum_page::state::clip::TextClipRun>
-pub struct pdfrum_page::state::clip::ClipStack
-impl pdfrum_page::state::clip::ClipStack
-pub fn pdfrum_page::state::clip::ClipStack::bounds(&self) -> core::option::Option<kurbo::rect::Rect>
-pub fn pdfrum_page::state::clip::ClipStack::entries(&self) -> &[pdfrum_page::state::clip::ClipEntry]
-pub fn pdfrum_page::state::clip::ClipStack::is_empty(&self) -> bool
-pub fn pdfrum_page::state::clip::ClipStack::len(&self) -> usize
-pub fn pdfrum_page::state::clip::ClipStack::new() -> Self
-pub fn pdfrum_page::state::clip::ClipStack::push_empty(&mut self)
-pub fn pdfrum_page::state::clip::ClipStack::push_path(&mut self, kurbo::bezpath::BezPath, bool)
-pub fn pdfrum_page::state::clip::ClipStack::push_text(&mut self, alloc::vec::Vec<pdfrum_page::state::clip::TextClipRun>) -> bool
-pub struct pdfrum_page::state::clip::TextClipRun
-pub pdfrum_page::state::clip::TextClipRun::char_space: f32
-pub pdfrum_page::state::clip::TextClipRun::object: pdfrum_page::TextObject
-pub pdfrum_page::state::clip::TextClipRun::word_space: f32
-pub const pdfrum_page::state::clip::MAX_TEXT_OBJECTS: usize
-pub mod pdfrum_page::state::general
-pub enum pdfrum_page::state::general::BlendMode
-pub pdfrum_page::state::general::BlendMode::Color
-pub pdfrum_page::state::general::BlendMode::ColorBurn
-pub pdfrum_page::state::general::BlendMode::ColorDodge
-pub pdfrum_page::state::general::BlendMode::Compatible
-pub pdfrum_page::state::general::BlendMode::Darken
-pub pdfrum_page::state::general::BlendMode::Difference
-pub pdfrum_page::state::general::BlendMode::Exclusion
-pub pdfrum_page::state::general::BlendMode::HardLight
-pub pdfrum_page::state::general::BlendMode::Hue
-pub pdfrum_page::state::general::BlendMode::Lighten
-pub pdfrum_page::state::general::BlendMode::Luminosity
-pub pdfrum_page::state::general::BlendMode::Multiply
-pub pdfrum_page::state::general::BlendMode::Normal
-pub pdfrum_page::state::general::BlendMode::Overlay
-pub pdfrum_page::state::general::BlendMode::Saturation
-pub pdfrum_page::state::general::BlendMode::Screen
-pub pdfrum_page::state::general::BlendMode::SoftLight
-impl pdfrum_page::state::general::BlendMode
-pub fn pdfrum_page::state::general::BlendMode::from_name(&[u8]) -> Self
-pub fn pdfrum_page::state::general::BlendMode::needs_backdrop(self) -> bool
-pub enum pdfrum_page::state::general::RenderIntent
-pub pdfrum_page::state::general::RenderIntent::Absolute
-pub pdfrum_page::state::general::RenderIntent::Perceptual
-pub pdfrum_page::state::general::RenderIntent::Saturation
-pub pdfrum_page::state::general::RenderIntent::Unknown
-impl pdfrum_page::state::general::RenderIntent
-pub fn pdfrum_page::state::general::RenderIntent::from_name(&[u8]) -> Self
-pub struct pdfrum_page::state::general::GeneralState
-pub pdfrum_page::state::general::GeneralState::alpha_is_shape: bool
-pub pdfrum_page::state::general::GeneralState::blend: pdfrum_page::state::general::BlendMode
-pub pdfrum_page::state::general::GeneralState::fill_alpha: f32
-pub pdfrum_page::state::general::GeneralState::fill_overprint: bool
-pub pdfrum_page::state::general::GeneralState::flatness: f32
-pub pdfrum_page::state::general::GeneralState::overprint_mode: i64
-pub pdfrum_page::state::general::GeneralState::render_intent: pdfrum_page::state::general::RenderIntent
-pub pdfrum_page::state::general::GeneralState::smoothness: f32
-pub pdfrum_page::state::general::GeneralState::soft_mask: core::option::Option<alloc::sync::Arc<pdfrum_page::transparency::SoftMask>>
-pub pdfrum_page::state::general::GeneralState::stroke_adjust: bool
-pub pdfrum_page::state::general::GeneralState::stroke_alpha: f32
-pub pdfrum_page::state::general::GeneralState::stroke_overprint: bool
-pub pdfrum_page::state::general::GeneralState::text_knockout: bool
-pub pdfrum_page::state::general::GeneralState::transfer: core::option::Option<alloc::sync::Arc<pdfrum_page::transfer::TransferFunc>>
-impl pdfrum_page::state::general::GeneralState
-pub fn pdfrum_page::state::general::GeneralState::enter_transparency_group(&mut self)
-impl core::default::Default for pdfrum_page::state::general::GeneralState
-pub fn pdfrum_page::state::general::GeneralState::default() -> Self
-pub mod pdfrum_page::state::graph
-pub struct pdfrum_page::state::graph::NormalizedDash
-pub pdfrum_page::state::graph::NormalizedDash::lengths: smallvec::SmallVec<[f32; 4]>
-pub pdfrum_page::state::graph::NormalizedDash::phase: f32
-pub struct pdfrum_page::state::graph::StrokeParams
-pub pdfrum_page::state::graph::StrokeParams::cap: pdfrum_page::LineCap
-pub pdfrum_page::state::graph::StrokeParams::dash: smallvec::SmallVec<[f32; 4]>
-pub pdfrum_page::state::graph::StrokeParams::dash_phase: f32
-pub pdfrum_page::state::graph::StrokeParams::join: pdfrum_page::LineJoin
-pub pdfrum_page::state::graph::StrokeParams::miter_limit: f32
-pub pdfrum_page::state::graph::StrokeParams::width: f32
-impl pdfrum_page::state::graph::StrokeParams
-pub fn pdfrum_page::state::graph::StrokeParams::normalized_dash(&self, f32, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_page::state::graph::NormalizedDash
-impl core::default::Default for pdfrum_page::state::graph::StrokeParams
-pub fn pdfrum_page::state::graph::StrokeParams::default() -> Self
-pub const pdfrum_page::state::graph::MIN_DASH_CYCLE: f32
-pub mod pdfrum_page::state::marks
-pub struct pdfrum_page::state::marks::ContentMarks
-impl pdfrum_page::state::marks::ContentMarks
-pub fn pdfrum_page::state::marks::ContentMarks::content_id(&self) -> core::option::Option<i64>
-pub fn pdfrum_page::state::marks::ContentMarks::is_empty(&self) -> bool
-pub fn pdfrum_page::state::marks::ContentMarks::len(&self) -> usize
-pub fn pdfrum_page::state::marks::ContentMarks::marks(&self) -> &[pdfrum_page::state::marks::Mark]
-pub fn pdfrum_page::state::marks::ContentMarks::new() -> Self
-pub fn pdfrum_page::state::marks::ContentMarks::optional_content(&self) -> core::option::Option<&pdfrum_object::dict::Dict>
-pub fn pdfrum_page::state::marks::ContentMarks::optional_content_all(&self) -> alloc::vec::Vec<&pdfrum_object::dict::Dict>
-pub fn pdfrum_page::state::marks::ContentMarks::pop(&mut self) -> bool
-pub fn pdfrum_page::state::marks::ContentMarks::push(&mut self, pdfrum_object::name::Name)
-pub fn pdfrum_page::state::marks::ContentMarks::push_with_properties(&mut self, pdfrum_object::name::Name, &pdfrum_page::MarkProperties, impl core::ops::function::FnOnce(&pdfrum_object::name::Name) -> core::option::Option<pdfrum_object::dict::Dict>) -> bool
-pub struct pdfrum_page::state::marks::Mark
-pub pdfrum_page::state::marks::Mark::from_resources: bool
-pub pdfrum_page::state::marks::Mark::properties: core::option::Option<alloc::sync::Arc<pdfrum_object::dict::Dict>>
-pub pdfrum_page::state::marks::Mark::tag: pdfrum_object::name::Name
-impl pdfrum_page::state::marks::Mark
-pub fn pdfrum_page::state::marks::Mark::content_id(&self) -> core::option::Option<i64>
-pub mod pdfrum_page::state::text
-pub struct pdfrum_page::state::text::TextCursor
-pub pdfrum_page::state::text::TextCursor::line_pos: kurbo::point::Point
-pub pdfrum_page::state::text::TextCursor::matrix: kurbo::affine::Affine
-pub pdfrum_page::state::text::TextCursor::pos: kurbo::point::Point
-impl pdfrum_page::state::text::TextCursor
-pub fn pdfrum_page::state::text::TextCursor::advance(&mut self, f64, bool)
-pub fn pdfrum_page::state::text::TextCursor::device_position(&self, f32, kurbo::affine::Affine) -> kurbo::point::Point
-pub fn pdfrum_page::state::text::TextCursor::move_line(&mut self, f64, f64)
-pub fn pdfrum_page::state::text::TextCursor::next_line(&mut self, f64)
-pub fn pdfrum_page::state::text::TextCursor::set_matrix(&mut self, kurbo::affine::Affine)
-impl core::default::Default for pdfrum_page::state::text::TextCursor
-pub fn pdfrum_page::state::text::TextCursor::default() -> Self
-pub struct pdfrum_page::state::text::TextState
-pub pdfrum_page::state::text::TextState::char_space: f32
-pub pdfrum_page::state::text::TextState::font: core::option::Option<(alloc::sync::Arc<pdfrum_font::Font>, f32)>
-pub pdfrum_page::state::text::TextState::font_source: core::option::Option<pdfrum_object::object::ObjRef>
-pub pdfrum_page::state::text::TextState::horz_scale: f32
-pub pdfrum_page::state::text::TextState::leading: f32
-pub pdfrum_page::state::text::TextState::render_mode: pdfrum_page::TextRenderMode
-pub pdfrum_page::state::text::TextState::rise: f32
-pub pdfrum_page::state::text::TextState::word_space: f32
-impl core::cmp::PartialEq for pdfrum_page::state::text::TextState
-pub fn pdfrum_page::state::text::TextState::eq(&self, &Self) -> bool
-impl core::default::Default for pdfrum_page::state::text::TextState
-pub fn pdfrum_page::state::text::TextState::default() -> Self
-pub fn pdfrum_page::state::text::glyph_matrix(f32, kurbo::affine::Affine, kurbo::affine::Affine) -> kurbo::affine::Affine
-pub fn pdfrum_page::state::text::kerning_shift(f32, f32, f32, bool) -> f64
-pub enum pdfrum_page::state::BlendMode
-pub pdfrum_page::state::BlendMode::Color
-pub pdfrum_page::state::BlendMode::ColorBurn
-pub pdfrum_page::state::BlendMode::ColorDodge
-pub pdfrum_page::state::BlendMode::Compatible
-pub pdfrum_page::state::BlendMode::Darken
-pub pdfrum_page::state::BlendMode::Difference
-pub pdfrum_page::state::BlendMode::Exclusion
-pub pdfrum_page::state::BlendMode::HardLight
-pub pdfrum_page::state::BlendMode::Hue
-pub pdfrum_page::state::BlendMode::Lighten
-pub pdfrum_page::state::BlendMode::Luminosity
-pub pdfrum_page::state::BlendMode::Multiply
-pub pdfrum_page::state::BlendMode::Normal
-pub pdfrum_page::state::BlendMode::Overlay
-pub pdfrum_page::state::BlendMode::Saturation
-pub pdfrum_page::state::BlendMode::Screen
-pub pdfrum_page::state::BlendMode::SoftLight
-impl pdfrum_page::state::general::BlendMode
-pub fn pdfrum_page::state::general::BlendMode::from_name(&[u8]) -> Self
-pub fn pdfrum_page::state::general::BlendMode::needs_backdrop(self) -> bool
-pub enum pdfrum_page::state::ClipEntry
-pub pdfrum_page::state::ClipEntry::Path
-pub pdfrum_page::state::ClipEntry::Path::even_odd: bool
-pub pdfrum_page::state::ClipEntry::Path::path: kurbo::bezpath::BezPath
-pub pdfrum_page::state::ClipEntry::Text
-pub pdfrum_page::state::ClipEntry::Text::runs: alloc::vec::Vec<pdfrum_page::state::clip::TextClipRun>
-pub enum pdfrum_page::state::RenderIntent
-pub pdfrum_page::state::RenderIntent::Absolute
-pub pdfrum_page::state::RenderIntent::Perceptual
-pub pdfrum_page::state::RenderIntent::Saturation
-pub pdfrum_page::state::RenderIntent::Unknown
-impl pdfrum_page::state::general::RenderIntent
-pub fn pdfrum_page::state::general::RenderIntent::from_name(&[u8]) -> Self
-pub struct pdfrum_page::state::ClipStack
-impl pdfrum_page::state::clip::ClipStack
-pub fn pdfrum_page::state::clip::ClipStack::bounds(&self) -> core::option::Option<kurbo::rect::Rect>
-pub fn pdfrum_page::state::clip::ClipStack::entries(&self) -> &[pdfrum_page::state::clip::ClipEntry]
-pub fn pdfrum_page::state::clip::ClipStack::is_empty(&self) -> bool
-pub fn pdfrum_page::state::clip::ClipStack::len(&self) -> usize
-pub fn pdfrum_page::state::clip::ClipStack::new() -> Self
-pub fn pdfrum_page::state::clip::ClipStack::push_empty(&mut self)
-pub fn pdfrum_page::state::clip::ClipStack::push_path(&mut self, kurbo::bezpath::BezPath, bool)
-pub fn pdfrum_page::state::clip::ClipStack::push_text(&mut self, alloc::vec::Vec<pdfrum_page::state::clip::TextClipRun>) -> bool
-pub struct pdfrum_page::state::ContentMarks
-impl pdfrum_page::state::marks::ContentMarks
-pub fn pdfrum_page::state::marks::ContentMarks::content_id(&self) -> core::option::Option<i64>
-pub fn pdfrum_page::state::marks::ContentMarks::is_empty(&self) -> bool
-pub fn pdfrum_page::state::marks::ContentMarks::len(&self) -> usize
-pub fn pdfrum_page::state::marks::ContentMarks::marks(&self) -> &[pdfrum_page::state::marks::Mark]
-pub fn pdfrum_page::state::marks::ContentMarks::new() -> Self
-pub fn pdfrum_page::state::marks::ContentMarks::optional_content(&self) -> core::option::Option<&pdfrum_object::dict::Dict>
-pub fn pdfrum_page::state::marks::ContentMarks::optional_content_all(&self) -> alloc::vec::Vec<&pdfrum_object::dict::Dict>
-pub fn pdfrum_page::state::marks::ContentMarks::pop(&mut self) -> bool
-pub fn pdfrum_page::state::marks::ContentMarks::push(&mut self, pdfrum_object::name::Name)
-pub fn pdfrum_page::state::marks::ContentMarks::push_with_properties(&mut self, pdfrum_object::name::Name, &pdfrum_page::MarkProperties, impl core::ops::function::FnOnce(&pdfrum_object::name::Name) -> core::option::Option<pdfrum_object::dict::Dict>) -> bool
-pub struct pdfrum_page::state::GeneralState
-pub pdfrum_page::state::GeneralState::alpha_is_shape: bool
-pub pdfrum_page::state::GeneralState::blend: pdfrum_page::state::general::BlendMode
-pub pdfrum_page::state::GeneralState::fill_alpha: f32
-pub pdfrum_page::state::GeneralState::fill_overprint: bool
-pub pdfrum_page::state::GeneralState::flatness: f32
-pub pdfrum_page::state::GeneralState::overprint_mode: i64
-pub pdfrum_page::state::GeneralState::render_intent: pdfrum_page::state::general::RenderIntent
-pub pdfrum_page::state::GeneralState::smoothness: f32
-pub pdfrum_page::state::GeneralState::soft_mask: core::option::Option<alloc::sync::Arc<pdfrum_page::transparency::SoftMask>>
-pub pdfrum_page::state::GeneralState::stroke_adjust: bool
-pub pdfrum_page::state::GeneralState::stroke_alpha: f32
-pub pdfrum_page::state::GeneralState::stroke_overprint: bool
-pub pdfrum_page::state::GeneralState::text_knockout: bool
-pub pdfrum_page::state::GeneralState::transfer: core::option::Option<alloc::sync::Arc<pdfrum_page::transfer::TransferFunc>>
-impl pdfrum_page::state::general::GeneralState
-pub fn pdfrum_page::state::general::GeneralState::enter_transparency_group(&mut self)
-impl core::default::Default for pdfrum_page::state::general::GeneralState
-pub fn pdfrum_page::state::general::GeneralState::default() -> Self
-pub struct pdfrum_page::state::GraphicsState
-pub pdfrum_page::state::GraphicsState::clip: pdfrum_page::state::clip::ClipStack
-pub pdfrum_page::state::GraphicsState::ctm: kurbo::affine::Affine
-pub pdfrum_page::state::GraphicsState::fill: pdfrum_page::ColorValue
-pub pdfrum_page::state::GraphicsState::general: pdfrum_page::state::general::GeneralState
-pub pdfrum_page::state::GraphicsState::stroke: pdfrum_page::ColorValue
-pub pdfrum_page::state::GraphicsState::stroke_params: pdfrum_page::state::graph::StrokeParams
-pub pdfrum_page::state::GraphicsState::text: pdfrum_page::state::text::TextState
-impl core::default::Default for pdfrum_page::state::GraphicsState
-pub fn pdfrum_page::state::GraphicsState::default() -> Self
-pub struct pdfrum_page::state::Mark
-pub pdfrum_page::state::Mark::from_resources: bool
-pub pdfrum_page::state::Mark::properties: core::option::Option<alloc::sync::Arc<pdfrum_object::dict::Dict>>
-pub pdfrum_page::state::Mark::tag: pdfrum_object::name::Name
-impl pdfrum_page::state::marks::Mark
-pub fn pdfrum_page::state::marks::Mark::content_id(&self) -> core::option::Option<i64>
-pub struct pdfrum_page::state::NormalizedDash
-pub pdfrum_page::state::NormalizedDash::lengths: smallvec::SmallVec<[f32; 4]>
-pub pdfrum_page::state::NormalizedDash::phase: f32
-pub struct pdfrum_page::state::StateStack
-impl pdfrum_page::state::StateStack
-pub fn pdfrum_page::state::StateStack::depth(&self) -> usize
-pub fn pdfrum_page::state::StateStack::is_empty(&self) -> bool
-pub fn pdfrum_page::state::StateStack::new() -> Self
-pub fn pdfrum_page::state::StateStack::pop(&mut self, &mut pdfrum_page::state::GraphicsState) -> bool
-pub fn pdfrum_page::state::StateStack::push(&mut self, &pdfrum_page::state::GraphicsState)
-pub struct pdfrum_page::state::StrokeParams
-pub pdfrum_page::state::StrokeParams::cap: pdfrum_page::LineCap
-pub pdfrum_page::state::StrokeParams::dash: smallvec::SmallVec<[f32; 4]>
-pub pdfrum_page::state::StrokeParams::dash_phase: f32
-pub pdfrum_page::state::StrokeParams::join: pdfrum_page::LineJoin
-pub pdfrum_page::state::StrokeParams::miter_limit: f32
-pub pdfrum_page::state::StrokeParams::width: f32
-impl pdfrum_page::state::graph::StrokeParams
-pub fn pdfrum_page::state::graph::StrokeParams::normalized_dash(&self, f32, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_page::state::graph::NormalizedDash
-impl core::default::Default for pdfrum_page::state::graph::StrokeParams
-pub fn pdfrum_page::state::graph::StrokeParams::default() -> Self
-pub struct pdfrum_page::state::TextClipRun
-pub pdfrum_page::state::TextClipRun::char_space: f32
-pub pdfrum_page::state::TextClipRun::object: pdfrum_page::TextObject
-pub pdfrum_page::state::TextClipRun::word_space: f32
-pub struct pdfrum_page::state::TextCursor
-pub pdfrum_page::state::TextCursor::line_pos: kurbo::point::Point
-pub pdfrum_page::state::TextCursor::matrix: kurbo::affine::Affine
-pub pdfrum_page::state::TextCursor::pos: kurbo::point::Point
-impl pdfrum_page::state::text::TextCursor
-pub fn pdfrum_page::state::text::TextCursor::advance(&mut self, f64, bool)
-pub fn pdfrum_page::state::text::TextCursor::device_position(&self, f32, kurbo::affine::Affine) -> kurbo::point::Point
-pub fn pdfrum_page::state::text::TextCursor::move_line(&mut self, f64, f64)
-pub fn pdfrum_page::state::text::TextCursor::next_line(&mut self, f64)
-pub fn pdfrum_page::state::text::TextCursor::set_matrix(&mut self, kurbo::affine::Affine)
-impl core::default::Default for pdfrum_page::state::text::TextCursor
-pub fn pdfrum_page::state::text::TextCursor::default() -> Self
-pub struct pdfrum_page::state::TextState
-pub pdfrum_page::state::TextState::char_space: f32
-pub pdfrum_page::state::TextState::font: core::option::Option<(alloc::sync::Arc<pdfrum_font::Font>, f32)>
-pub pdfrum_page::state::TextState::font_source: core::option::Option<pdfrum_object::object::ObjRef>
-pub pdfrum_page::state::TextState::horz_scale: f32
-pub pdfrum_page::state::TextState::leading: f32
-pub pdfrum_page::state::TextState::render_mode: pdfrum_page::TextRenderMode
-pub pdfrum_page::state::TextState::rise: f32
-pub pdfrum_page::state::TextState::word_space: f32
-impl core::cmp::PartialEq for pdfrum_page::state::text::TextState
-pub fn pdfrum_page::state::text::TextState::eq(&self, &Self) -> bool
-impl core::default::Default for pdfrum_page::state::text::TextState
-pub fn pdfrum_page::state::text::TextState::default() -> Self
-pub const pdfrum_page::state::MAX_TEXT_OBJECTS: usize
-pub const pdfrum_page::state::MIN_DASH_CYCLE: f32
-pub fn pdfrum_page::state::apply_ext_gstate<R: pdfrum_object::resolve::Resolve>(&mut pdfrum_page::state::GraphicsState, &pdfrum_object::dict::Dict, impl core::ops::function::Fn(core::option::Option<&pdfrum_object::object::Object>) -> core::option::Option<alloc::sync::Arc<pdfrum_font::Font>>, &R, &mut pdfrum_page::function::FunctionCache, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics)
-pub fn pdfrum_page::state::ext_gstate_dash(&pdfrum_object::dict::Dict, &impl pdfrum_object::resolve::Resolve) -> core::option::Option<(smallvec::SmallVec<[f32; 4]>, f32)>
-pub fn pdfrum_page::state::glyph_matrix(f32, kurbo::affine::Affine, kurbo::affine::Affine) -> kurbo::affine::Affine
-pub fn pdfrum_page::state::kerning_shift(f32, f32, f32, bool) -> f64
-pub fn pdfrum_page::state::soft_mask_matrix(&pdfrum_page::state::GraphicsState) -> kurbo::affine::Affine
-pub mod pdfrum_page::transfer
-pub struct pdfrum_page::transfer::TransferFunc
-pub pdfrum_page::transfer::TransferFunc::identity: bool
-pub pdfrum_page::transfer::TransferFunc::samples: alloc::boxed::Box<[[u8; 256]; 3]>
-impl pdfrum_page::transfer::TransferFunc
-pub fn pdfrum_page::transfer::TransferFunc::apply(&self, usize, u8) -> u8
-pub fn pdfrum_page::transfer::TransferFunc::load<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::object::Object, &R, &mut pdfrum_page::function::FunctionCache, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<Self>
-pub const pdfrum_page::transfer::CHANNEL_SAMPLES: usize
-pub const pdfrum_page::transfer::MAX_OUTPUTS: usize
-pub fn pdfrum_page::transfer::transfer_key(bool) -> &'static pdfrum_object::name::Name
-pub mod pdfrum_page::transparency
-pub enum pdfrum_page::transparency::SoftMaskKind
-pub pdfrum_page::transparency::SoftMaskKind::Alpha
-pub pdfrum_page::transparency::SoftMaskKind::Luminosity
-pub struct pdfrum_page::transparency::SoftMask
-pub pdfrum_page::transparency::SoftMask::backdrop: pdfrum_page::color::Rgb
-pub pdfrum_page::transparency::SoftMask::group: pdfrum_object::stream::Stream
-pub pdfrum_page::transparency::SoftMask::kind: pdfrum_page::transparency::SoftMaskKind
-pub pdfrum_page::transparency::SoftMask::matrix: kurbo::affine::Affine
-pub pdfrum_page::transparency::SoftMask::objects: alloc::vec::Vec<pdfrum_page::PageObject>
-pub pdfrum_page::transparency::SoftMask::transfer: core::option::Option<alloc::boxed::Box<[u8; 256]>>
-impl pdfrum_page::transparency::SoftMask
-pub fn pdfrum_page::transparency::SoftMask::apply_transfer(&self, u8) -> u8
-pub fn pdfrum_page::transparency::SoftMask::load<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::object::Object, kurbo::affine::Affine, &R, &mut pdfrum_page::function::FunctionCache, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<Self>
-pub struct pdfrum_page::transparency::Transparency
-pub pdfrum_page::transparency::Transparency::group: bool
-pub pdfrum_page::transparency::Transparency::isolated: bool
-pub pdfrum_page::transparency::Transparency::knockout: bool
-impl pdfrum_page::transparency::Transparency
-pub fn pdfrum_page::transparency::Transparency::for_page(core::option::Option<&pdfrum_object::dict::Dict>, &impl pdfrum_object::resolve::Resolve) -> Self
-pub fn pdfrum_page::transparency::Transparency::from_group(core::option::Option<&pdfrum_object::dict::Dict>, &impl pdfrum_object::resolve::Resolve) -> Self
-pub mod pdfrum_page::type3
-pub struct pdfrum_page::type3::Type3Metrics
-pub pdfrum_page::type3::Type3Metrics::bbox: kurbo::rect::Rect
-pub pdfrum_page::type3::Type3Metrics::colored: bool
-pub pdfrum_page::type3::Type3Metrics::objects: alloc::vec::Vec<pdfrum_page::PageObject>
-pub pdfrum_page::type3::Type3Metrics::painted: kurbo::rect::Rect
-pub pdfrum_page::type3::Type3Metrics::width: f32
-pub fn pdfrum_page::type3::metrics<R: pdfrum_object::resolve::Resolve>(&pdfrum_font::type3::Type3Font, pdfrum_cmap::ids::CharCode, core::option::Option<&pdfrum_object::dict::Dict>, &R, &mut pdfrum_page::BuildContext, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<pdfrum_page::type3::Type3Metrics>
 pub enum pdfrum_page::BlendMode
 pub pdfrum_page::BlendMode::Color
 pub pdfrum_page::BlendMode::ColorBurn
@@ -907,37 +17,40 @@ pub pdfrum_page::BlendMode::Overlay
 pub pdfrum_page::BlendMode::Saturation
 pub pdfrum_page::BlendMode::Screen
 pub pdfrum_page::BlendMode::SoftLight
-impl pdfrum_page::state::general::BlendMode
-pub fn pdfrum_page::state::general::BlendMode::from_name(&[u8]) -> Self
-pub fn pdfrum_page::state::general::BlendMode::needs_backdrop(self) -> bool
+impl pdfrum_page::BlendMode
+pub fn pdfrum_page::BlendMode::from_name(&[u8]) -> Self
+pub fn pdfrum_page::BlendMode::needs_backdrop(self) -> bool
+pub enum pdfrum_page::ClipEntry
+pub pdfrum_page::ClipEntry::Path
+pub pdfrum_page::ClipEntry::Path::path: kurbo::bezpath::BezPath
+pub pdfrum_page::ClipEntry::Path::rule: pdfrum_page::ClipRule
+pub pdfrum_page::ClipEntry::Text
+pub pdfrum_page::ClipEntry::Text::runs: alloc::vec::Vec<pdfrum_page::TextClipRun>
+pub enum pdfrum_page::ClipRule
+pub pdfrum_page::ClipRule::EvenOdd
+pub pdfrum_page::ClipRule::Winding
 #[non_exhaustive] pub enum pdfrum_page::ColorSpace
-pub pdfrum_page::ColorSpace::CalGray(alloc::boxed::Box<pdfrum_page::color::CalGray>)
-pub pdfrum_page::ColorSpace::CalRgb(alloc::boxed::Box<pdfrum_page::color::CalRgb>)
+pub pdfrum_page::ColorSpace::CalGray(alloc::boxed::Box<pdfrum_page::color::cie::CalGray>)
+pub pdfrum_page::ColorSpace::CalRgb(alloc::boxed::Box<pdfrum_page::color::cie::CalRgb>)
 pub pdfrum_page::ColorSpace::DeviceCmyk
 pub pdfrum_page::ColorSpace::DeviceGray
-pub pdfrum_page::ColorSpace::DeviceN(alloc::boxed::Box<pdfrum_page::color::DeviceN>)
+pub pdfrum_page::ColorSpace::DeviceN(alloc::boxed::Box<pdfrum_page::color::special::DeviceN>)
 pub pdfrum_page::ColorSpace::DeviceRgb
-pub pdfrum_page::ColorSpace::IccBased(alloc::boxed::Box<pdfrum_page::color::IccBased>)
-pub pdfrum_page::ColorSpace::Indexed(alloc::boxed::Box<pdfrum_page::color::Indexed>)
-pub pdfrum_page::ColorSpace::Lab(alloc::boxed::Box<pdfrum_page::color::Lab>)
-pub pdfrum_page::ColorSpace::Pattern(alloc::boxed::Box<pdfrum_page::color::PatternSpace>)
-pub pdfrum_page::ColorSpace::Separation(alloc::boxed::Box<pdfrum_page::color::Separation>)
-impl pdfrum_page::color::ColorSpace
-pub fn pdfrum_page::color::ColorSpace::default_color(&self) -> alloc::vec::Vec<f32>
-pub fn pdfrum_page::color::ColorSpace::default_value(&self, usize) -> (f32, f32, f32)
-pub fn pdfrum_page::color::ColorSpace::family(&self) -> pdfrum_page::color::Family
-pub fn pdfrum_page::color::ColorSpace::is_normal(&self) -> bool
-pub fn pdfrum_page::color::ColorSpace::is_special(&self) -> bool
-pub fn pdfrum_page::color::ColorSpace::n_components(&self) -> usize
-pub fn pdfrum_page::color::ColorSpace::to_rgb(&self, &[f32]) -> pdfrum_page::color::Rgb
-pub fn pdfrum_page::color::ColorSpace::to_rgb_with(&self, &[f32], pdfrum_page::color::Conversion) -> pdfrum_page::color::Rgb
-pub fn pdfrum_page::color::ColorSpace::translate_image_line(&self, &mut [u8], &[u8], usize, bool, pdfrum_page::color::Conversion)
-pub fn pdfrum_page::color::ColorSpace::try_to_rgb(&self, &[f32], pdfrum_page::color::Conversion) -> core::option::Option<pdfrum_page::color::Rgb>
-pub enum pdfrum_page::Conversion
-pub pdfrum_page::Conversion::Managed
-pub pdfrum_page::Conversion::Standard
-impl pdfrum_page::color::Conversion
-pub fn pdfrum_page::color::Conversion::is_standard(self) -> bool
+pub pdfrum_page::ColorSpace::IccBased(alloc::boxed::Box<pdfrum_page::color::icc::IccBased>)
+pub pdfrum_page::ColorSpace::Indexed(alloc::boxed::Box<pdfrum_page::color::indexed::Indexed>)
+pub pdfrum_page::ColorSpace::Lab(alloc::boxed::Box<pdfrum_page::color::cie::Lab>)
+pub pdfrum_page::ColorSpace::Pattern(alloc::boxed::Box<pdfrum_page::PatternSpace>)
+pub pdfrum_page::ColorSpace::Separation(alloc::boxed::Box<pdfrum_page::Separation>)
+impl pdfrum_page::ColorSpace
+pub fn pdfrum_page::ColorSpace::default_color(&self) -> alloc::vec::Vec<f32>
+pub fn pdfrum_page::ColorSpace::default_value(&self, usize) -> (f32, f32, f32)
+pub fn pdfrum_page::ColorSpace::family(&self) -> pdfrum_page::Family
+pub fn pdfrum_page::ColorSpace::is_normal(&self) -> bool
+pub fn pdfrum_page::ColorSpace::is_special(&self) -> bool
+pub fn pdfrum_page::ColorSpace::n_components(&self) -> usize
+pub fn pdfrum_page::ColorSpace::to_rgb(&self, &[f32]) -> pdfrum_page::Rgb
+pub fn pdfrum_page::ColorSpace::translate_image_line(&self, &mut [u8], &[u8], usize, bool)
+pub fn pdfrum_page::ColorSpace::try_to_rgb(&self, &[f32]) -> core::option::Option<pdfrum_page::Rgb>
 #[non_exhaustive] pub enum pdfrum_page::Error
 pub pdfrum_page::Error::CodecRejected
 pub pdfrum_page::Error::CodecRejected::codec: &'static str
@@ -954,6 +67,19 @@ pub pdfrum_page::Error::ImageTooLarge
 pub pdfrum_page::Error::ImageUndecodable
 pub pdfrum_page::Error::ImageUndecodable::what: &'static str
 pub pdfrum_page::Error::Unresolved(pdfrum_object::object::ObjRef)
+pub enum pdfrum_page::Family
+pub pdfrum_page::Family::CalGray = 4
+pub pdfrum_page::Family::CalRgb = 5
+pub pdfrum_page::Family::DeviceCmyk = 3
+pub pdfrum_page::Family::DeviceGray = 1
+pub pdfrum_page::Family::DeviceN = 9
+pub pdfrum_page::Family::DeviceRgb = 2
+pub pdfrum_page::Family::IccBased = 7
+pub pdfrum_page::Family::Indexed = 10
+pub pdfrum_page::Family::Lab = 6
+pub pdfrum_page::Family::Pattern = 11
+pub pdfrum_page::Family::Separation = 8
+pub pdfrum_page::Family::Unknown = 0
 pub enum pdfrum_page::FillRule
 pub pdfrum_page::FillRule::EvenOdd
 pub pdfrum_page::FillRule::None
@@ -963,28 +89,35 @@ pub pdfrum_page::FormFontsKey::Direct
 pub pdfrum_page::FormFontsKey::Form(pdfrum_object::object::ObjRef)
 pub pdfrum_page::FormFontsKey::None
 pub enum pdfrum_page::FoundPattern
-pub pdfrum_page::FoundPattern::Loaded(alloc::sync::Arc<pdfrum_page::pattern::Pattern>)
+pub pdfrum_page::FoundPattern::Loaded(alloc::sync::Arc<pdfrum_page::Pattern>)
 pub pdfrum_page::FoundPattern::Missing
 pub pdfrum_page::FoundPattern::Unusable
 #[non_exhaustive] pub enum pdfrum_page::Function
-pub pdfrum_page::Function::Exponential(pdfrum_page::function::Exponential)
-pub pdfrum_page::Function::PostScript(pdfrum_page::function::PostScript)
-pub pdfrum_page::Function::Sampled(pdfrum_page::function::Sampled)
-pub pdfrum_page::Function::Stitching(pdfrum_page::function::Stitching)
-impl pdfrum_page::function::Function
-pub fn pdfrum_page::function::Function::domain(&self) -> &[f32]
-pub fn pdfrum_page::function::Function::eval(&self, &[f32], &mut [f32]) -> core::result::Result<(), pdfrum_page::Error>
-pub fn pdfrum_page::function::Function::eval_into(&self, &[f32], &mut [f32]) -> usize
-pub fn pdfrum_page::function::Function::input_count(&self) -> usize
-pub fn pdfrum_page::function::Function::output_count(&self) -> usize
-pub fn pdfrum_page::function::Function::range(&self) -> &[f32]
+pub pdfrum_page::Function::Exponential(pdfrum_page::function::exponential::Exponential)
+pub pdfrum_page::Function::PostScript(pdfrum_page::PostScript)
+pub pdfrum_page::Function::Sampled(pdfrum_page::function::sampled::Sampled)
+pub pdfrum_page::Function::Stitching(pdfrum_page::function::stitching::Stitching)
+impl pdfrum_page::Function
+pub fn pdfrum_page::Function::domain(&self) -> &[f32]
+pub fn pdfrum_page::Function::eval(&self, &[f32], &mut [f32]) -> core::result::Result<(), pdfrum_page::Error>
+pub fn pdfrum_page::Function::eval_into(&self, &[f32], &mut [f32]) -> usize
+pub fn pdfrum_page::Function::input_count(&self) -> usize
+pub fn pdfrum_page::Function::output_count(&self) -> usize
+pub fn pdfrum_page::Function::range(&self) -> &[f32]
+#[non_exhaustive] pub enum pdfrum_page::Geometry
+pub pdfrum_page::Geometry::Axial(pdfrum_page::Axial)
+pub pdfrum_page::Geometry::FunctionBased(pdfrum_page::FunctionBased)
+pub pdfrum_page::Geometry::Mesh
+pub pdfrum_page::Geometry::Mesh::kind: pdfrum_page::ShadingKind
+pub pdfrum_page::Geometry::Mesh::mesh: alloc::boxed::Box<pdfrum_page::Mesh>
+pub pdfrum_page::Geometry::Radial(pdfrum_page::Radial)
 #[non_exhaustive] pub enum pdfrum_page::ImageMask
 pub pdfrum_page::ImageMask::Alpha
 pub pdfrum_page::ImageMask::Alpha::alpha: alloc::boxed::Box<[u8]>
 pub pdfrum_page::ImageMask::Alpha::height: u32
 pub pdfrum_page::ImageMask::Alpha::stencil: bool
 pub pdfrum_page::ImageMask::Alpha::width: u32
-pub pdfrum_page::ImageMask::ColorKey(pdfrum_page::image::ColorKey)
+pub pdfrum_page::ImageMask::ColorKey(pdfrum_page::image::mask::ColorKey)
 impl pdfrum_page::ImageMask
 pub fn pdfrum_page::ImageMask::alpha_at(&self, u32, u32) -> u8
 pub enum pdfrum_page::LineCap
@@ -1090,10 +223,6 @@ pub pdfrum_page::PageObject::Path(alloc::boxed::Box<pdfrum_page::Content<pdfrum_
 pub pdfrum_page::PageObject::Shading(alloc::boxed::Box<pdfrum_page::Content<pdfrum_page::ShadingObject>>)
 pub pdfrum_page::PageObject::Text(alloc::boxed::Box<pdfrum_page::Content<pdfrum_page::TextObject>>)
 impl pdfrum_page::PageObject
-pub fn pdfrum_page::PageObject::color(&self, bool) -> &pdfrum_page::ColorValue
-pub fn pdfrum_page::PageObject::marks(&self) -> &pdfrum_page::state::marks::ContentMarks
-pub fn pdfrum_page::PageObject::state(&self) -> &pdfrum_page::state::GraphicsState
-impl pdfrum_page::PageObject
 pub fn pdfrum_page::PageObject::content_stream(&self) -> core::option::Option<usize>
 pub fn pdfrum_page::PageObject::is_active(&self) -> bool
 pub fn pdfrum_page::PageObject::is_dirty(&self) -> bool
@@ -1101,26 +230,29 @@ pub fn pdfrum_page::PageObject::mark_clean(&mut self)
 pub fn pdfrum_page::PageObject::mark_dirty(&mut self)
 pub fn pdfrum_page::PageObject::set_active(&mut self, bool)
 pub fn pdfrum_page::PageObject::set_content_stream(&mut self, core::option::Option<usize>)
+impl pdfrum_page::PageObject
+pub fn pdfrum_page::PageObject::marks(&self) -> &pdfrum_page::ContentMarks
+pub fn pdfrum_page::PageObject::state(&self) -> &pdfrum_page::GraphicsState
 #[non_exhaustive] pub enum pdfrum_page::Pattern
-pub pdfrum_page::Pattern::Shading(alloc::boxed::Box<pdfrum_page::pattern::ShadingPattern>)
+pub pdfrum_page::Pattern::Shading(alloc::boxed::Box<pdfrum_page::ShadingPattern>)
 pub pdfrum_page::Pattern::Tiling(alloc::boxed::Box<pdfrum_page::TilingPattern>)
-impl pdfrum_page::pattern::Pattern
-pub fn pdfrum_page::pattern::Pattern::load<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::object::Object, kurbo::affine::Affine, core::option::Option<&pdfrum_object::dict::Dict>, &R, &mut pdfrum_page::function::FunctionCache, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<Self>
-pub fn pdfrum_page::pattern::Pattern::matrix(&self) -> kurbo::affine::Affine
+impl pdfrum_page::Pattern
+pub fn pdfrum_page::Pattern::load<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::object::Object, kurbo::affine::Affine, core::option::Option<&pdfrum_object::dict::Dict>, &R, &mut pdfrum_page::FunctionCache, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<Self>
+pub fn pdfrum_page::Pattern::matrix(&self) -> kurbo::affine::Affine
 #[non_exhaustive] pub enum pdfrum_page::Pixels
 pub pdfrum_page::Pixels::Cmyk8(alloc::boxed::Box<[u8]>)
 pub pdfrum_page::Pixels::Gray8(alloc::boxed::Box<[u8]>)
 pub pdfrum_page::Pixels::Indexed
 pub pdfrum_page::Pixels::Indexed::indices: alloc::boxed::Box<[u8]>
-pub pdfrum_page::Pixels::Indexed::palette: alloc::boxed::Box<[pdfrum_page::color::Rgb]>
+pub pdfrum_page::Pixels::Indexed::palette: alloc::boxed::Box<[pdfrum_page::Rgb]>
 pub pdfrum_page::Pixels::Rgb8(alloc::boxed::Box<[u8]>)
 pub pdfrum_page::Pixels::Stencil(pdfrum_page::BitImage)
-impl pdfrum_page::image::Pixels
-pub fn pdfrum_page::image::Pixels::byte_palette(&self) -> core::option::Option<alloc::vec::Vec<[u8; 3]>>
-pub fn pdfrum_page::image::Pixels::byte_size(&self) -> usize
-pub fn pdfrum_page::image::Pixels::color_at(&self, u32, u32, u32) -> pdfrum_page::color::Rgb
-pub fn pdfrum_page::image::Pixels::components(&self) -> usize
-pub fn pdfrum_page::image::Pixels::sample_bytes(&self, u32, u32, u32) -> [u8; 3]
+impl pdfrum_page::Pixels
+pub fn pdfrum_page::Pixels::byte_palette(&self) -> core::option::Option<alloc::vec::Vec<[u8; 3]>>
+pub fn pdfrum_page::Pixels::byte_size(&self) -> usize
+pub fn pdfrum_page::Pixels::color_at(&self, u32, u32, u32) -> pdfrum_page::Rgb
+pub fn pdfrum_page::Pixels::components(&self) -> usize
+pub fn pdfrum_page::Pixels::sample_bytes(&self, u32, u32, u32) -> [u8; 3]
 pub enum pdfrum_page::RequestedSize
 pub pdfrum_page::RequestedSize::Full
 pub pdfrum_page::RequestedSize::Reduced
@@ -1147,9 +279,13 @@ pub pdfrum_page::ShadingKind::FunctionBased = 1
 pub pdfrum_page::ShadingKind::LatticeMesh = 5
 pub pdfrum_page::ShadingKind::Radial = 3
 pub pdfrum_page::ShadingKind::TensorMesh = 7
-impl pdfrum_page::shading::ShadingKind
-pub fn pdfrum_page::shading::ShadingKind::from_int(i64) -> core::option::Option<Self>
-pub fn pdfrum_page::shading::ShadingKind::is_mesh(self) -> bool
+impl pdfrum_page::ShadingKind
+pub fn pdfrum_page::ShadingKind::from_int(i64) -> core::option::Option<Self>
+pub fn pdfrum_page::ShadingKind::is_mesh(self) -> bool
+pub fn pdfrum_page::ShadingKind::reads_edge_flags(self) -> bool
+pub enum pdfrum_page::ShadingSource
+pub pdfrum_page::ShadingSource::Pattern
+pub pdfrum_page::ShadingSource::ShadingOperator
 pub enum pdfrum_page::SoftMaskKind
 pub pdfrum_page::SoftMaskKind::Alpha
 pub pdfrum_page::SoftMaskKind::Luminosity
@@ -1175,9 +311,19 @@ pub pdfrum_page::UsageType::Design
 pub pdfrum_page::UsageType::Export
 pub pdfrum_page::UsageType::Print
 pub pdfrum_page::UsageType::View
-impl pdfrum_page::optional::UsageType
-pub fn pdfrum_page::optional::UsageType::as_bytes(self) -> &'static [u8]
-pub fn pdfrum_page::optional::UsageType::state_key(self) -> pdfrum_object::name::Name
+impl pdfrum_page::UsageType
+pub fn pdfrum_page::UsageType::as_bytes(self) -> &'static [u8]
+pub fn pdfrum_page::UsageType::state_key(self) -> pdfrum_object::name::Name
+pub struct pdfrum_page::Axial
+pub pdfrum_page::Axial::end: kurbo::point::Point
+pub pdfrum_page::Axial::extend_end: bool
+pub pdfrum_page::Axial::extend_start: bool
+pub pdfrum_page::Axial::start: kurbo::point::Point
+pub pdfrum_page::Axial::t_max: f32
+pub pdfrum_page::Axial::t_min: f32
+impl pdfrum_page::Axial
+pub fn pdfrum_page::Axial::axis_len_squared(&self) -> f64
+pub fn pdfrum_page::Axial::position(&self, kurbo::point::Point) -> core::option::Option<f32>
 pub struct pdfrum_page::BitImage
 pub pdfrum_page::BitImage::bits: alloc::vec::Vec<u8>
 pub pdfrum_page::BitImage::height: u32
@@ -1186,10 +332,10 @@ pub pdfrum_page::BitImage::width: u32
 impl pdfrum_page::BitImage
 pub fn pdfrum_page::BitImage::pixel(&self, u32, u32) -> bool
 pub struct pdfrum_page::BuildContext
-pub pdfrum_page::BuildContext::colorspaces: pdfrum_page::color::ColorSpaceCache
+pub pdfrum_page::BuildContext::colorspaces: pdfrum_page::color::load::ColorSpaceCache
 pub pdfrum_page::BuildContext::decode_target: pdfrum_page::RequestedSize
 pub pdfrum_page::BuildContext::fonts: pdfrum_font::FontCache
-pub pdfrum_page::BuildContext::functions: pdfrum_page::function::FunctionCache
+pub pdfrum_page::BuildContext::functions: pdfrum_page::FunctionCache
 pub pdfrum_page::BuildContext::images: pdfrum_page::ImageCache
 pub pdfrum_page::BuildContext::substitution: pdfrum_font::subst::SubstitutionOptions
 impl pdfrum_page::BuildContext
@@ -1198,37 +344,49 @@ pub fn pdfrum_page::BuildContext::forms_in_flight(&self) -> usize
 pub fn pdfrum_page::BuildContext::new() -> Self
 pub fn pdfrum_page::BuildContext::with_substitution(pdfrum_font::subst::SubstitutionOptions) -> Self
 pub struct pdfrum_page::ClipStack
-impl pdfrum_page::state::clip::ClipStack
-pub fn pdfrum_page::state::clip::ClipStack::bounds(&self) -> core::option::Option<kurbo::rect::Rect>
-pub fn pdfrum_page::state::clip::ClipStack::entries(&self) -> &[pdfrum_page::state::clip::ClipEntry]
-pub fn pdfrum_page::state::clip::ClipStack::is_empty(&self) -> bool
-pub fn pdfrum_page::state::clip::ClipStack::len(&self) -> usize
-pub fn pdfrum_page::state::clip::ClipStack::new() -> Self
-pub fn pdfrum_page::state::clip::ClipStack::push_empty(&mut self)
-pub fn pdfrum_page::state::clip::ClipStack::push_path(&mut self, kurbo::bezpath::BezPath, bool)
-pub fn pdfrum_page::state::clip::ClipStack::push_text(&mut self, alloc::vec::Vec<pdfrum_page::state::clip::TextClipRun>) -> bool
+impl pdfrum_page::ClipStack
+pub fn pdfrum_page::ClipStack::bounds(&self) -> core::option::Option<kurbo::rect::Rect>
+pub fn pdfrum_page::ClipStack::entries(&self) -> &[pdfrum_page::ClipEntry]
+pub fn pdfrum_page::ClipStack::is_empty(&self) -> bool
+pub fn pdfrum_page::ClipStack::len(&self) -> usize
+pub fn pdfrum_page::ClipStack::new() -> Self
+pub fn pdfrum_page::ClipStack::push_empty(&mut self)
+pub fn pdfrum_page::ClipStack::push_path(&mut self, kurbo::bezpath::BezPath, pdfrum_page::ClipRule)
+pub fn pdfrum_page::ClipStack::push_text(&mut self, alloc::vec::Vec<pdfrum_page::TextClipRun>) -> bool
 pub struct pdfrum_page::ColorValue
 pub pdfrum_page::ColorValue::components: smallvec::SmallVec<[f32; 4]>
 pub pdfrum_page::ColorValue::pattern: core::option::Option<alloc::boxed::Box<pdfrum_page::PatternValue>>
-pub pdfrum_page::ColorValue::space: core::option::Option<alloc::sync::Arc<pdfrum_page::color::ColorSpace>>
+pub pdfrum_page::ColorValue::space: core::option::Option<alloc::sync::Arc<pdfrum_page::ColorSpace>>
 impl pdfrum_page::ColorValue
 pub fn pdfrum_page::ColorValue::is_pattern(&self) -> bool
 pub fn pdfrum_page::ColorValue::set_components(&mut self, &[f32]) -> bool
-pub fn pdfrum_page::ColorValue::set_pattern(&mut self, pdfrum_object::name::Name, &[f32], core::option::Option<alloc::sync::Arc<pdfrum_page::pattern::Pattern>>)
-pub fn pdfrum_page::ColorValue::set_space(&mut self, alloc::sync::Arc<pdfrum_page::color::ColorSpace>)
-pub fn pdfrum_page::ColorValue::set_stock(&mut self, pdfrum_page::color::ColorSpace, &[f32])
-pub fn pdfrum_page::ColorValue::to_rgb(&self) -> core::option::Option<pdfrum_page::color::Rgb>
+pub fn pdfrum_page::ColorValue::set_pattern(&mut self, pdfrum_object::name::Name, &[f32], core::option::Option<alloc::sync::Arc<pdfrum_page::Pattern>>)
+pub fn pdfrum_page::ColorValue::set_space(&mut self, alloc::sync::Arc<pdfrum_page::ColorSpace>)
+pub fn pdfrum_page::ColorValue::set_stock(&mut self, pdfrum_page::ColorSpace, &[f32])
+pub fn pdfrum_page::ColorValue::to_rgb(&self) -> core::option::Option<pdfrum_page::Rgb>
 impl core::default::Default for pdfrum_page::ColorValue
 pub fn pdfrum_page::ColorValue::default() -> Self
 pub struct pdfrum_page::Content<T>
 pub pdfrum_page::Content::active: bool
 pub pdfrum_page::Content::content_stream: core::option::Option<usize>
 pub pdfrum_page::Content::dirty: bool
-pub pdfrum_page::Content::marks: pdfrum_page::state::marks::ContentMarks
+pub pdfrum_page::Content::marks: pdfrum_page::ContentMarks
 pub pdfrum_page::Content::object: T
-pub pdfrum_page::Content::state: pdfrum_page::state::GraphicsState
+pub pdfrum_page::Content::state: pdfrum_page::GraphicsState
 impl<T> pdfrum_page::Content<T>
-pub fn pdfrum_page::Content<T>::new(T, pdfrum_page::state::GraphicsState) -> Self
+pub fn pdfrum_page::Content<T>::new(T, pdfrum_page::GraphicsState) -> Self
+pub struct pdfrum_page::ContentMarks
+impl pdfrum_page::ContentMarks
+pub fn pdfrum_page::ContentMarks::content_id(&self) -> core::option::Option<i64>
+pub fn pdfrum_page::ContentMarks::is_empty(&self) -> bool
+pub fn pdfrum_page::ContentMarks::len(&self) -> usize
+pub fn pdfrum_page::ContentMarks::marks(&self) -> &[pdfrum_page::Mark]
+pub fn pdfrum_page::ContentMarks::new() -> Self
+pub fn pdfrum_page::ContentMarks::optional_content(&self) -> core::option::Option<&pdfrum_object::dict::Dict>
+pub fn pdfrum_page::ContentMarks::optional_content_all(&self) -> alloc::vec::Vec<&pdfrum_object::dict::Dict>
+pub fn pdfrum_page::ContentMarks::pop(&mut self) -> bool
+pub fn pdfrum_page::ContentMarks::push(&mut self, pdfrum_object::name::Name)
+pub fn pdfrum_page::ContentMarks::push_with_properties(&mut self, pdfrum_object::name::Name, &pdfrum_page::MarkProperties, impl core::ops::function::FnOnce(&pdfrum_object::name::Name) -> core::option::Option<pdfrum_object::dict::Dict>) -> bool
 pub struct pdfrum_page::FormObject
 pub pdfrum_page::FormObject::bbox: core::option::Option<kurbo::rect::Rect>
 pub pdfrum_page::FormObject::live_edit: bool
@@ -1236,23 +394,53 @@ pub pdfrum_page::FormObject::matrix: kurbo::affine::Affine
 pub pdfrum_page::FormObject::objects: alloc::vec::Vec<pdfrum_page::PageObject>
 pub pdfrum_page::FormObject::oc: core::option::Option<alloc::sync::Arc<pdfrum_object::dict::Dict>>
 pub pdfrum_page::FormObject::source: core::option::Option<pdfrum_object::object::ObjRef>
-pub pdfrum_page::FormObject::transparency: pdfrum_page::transparency::Transparency
+pub pdfrum_page::FormObject::transparency: pdfrum_page::Transparency
+pub struct pdfrum_page::FunctionBased
+pub pdfrum_page::FunctionBased::domain: [f32; 4]
+pub pdfrum_page::FunctionBased::matrix: kurbo::affine::Affine
+impl pdfrum_page::FunctionBased
+pub fn pdfrum_page::FunctionBased::contains(&self, kurbo::point::Point) -> bool
+pub struct pdfrum_page::FunctionCache
+impl pdfrum_page::FunctionCache
+pub fn pdfrum_page::FunctionCache::is_empty(&self) -> bool
+pub fn pdfrum_page::FunctionCache::len(&self) -> usize
+pub fn pdfrum_page::FunctionCache::load<R: pdfrum_object::resolve::Resolve>(&mut self, &pdfrum_object::object::Object, &R, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<alloc::sync::Arc<pdfrum_page::Function>>
+pub fn pdfrum_page::FunctionCache::new() -> Self
+pub struct pdfrum_page::GeneralState
+pub pdfrum_page::GeneralState::alpha_is_shape: bool
+pub pdfrum_page::GeneralState::blend: pdfrum_page::BlendMode
+pub pdfrum_page::GeneralState::fill_alpha: f32
+pub pdfrum_page::GeneralState::fill_overprint: bool
+pub pdfrum_page::GeneralState::flatness: f32
+pub pdfrum_page::GeneralState::overprint_mode: i64
+pub pdfrum_page::GeneralState::render_intent: pdfrum_page::state::general::RenderIntent
+pub pdfrum_page::GeneralState::smoothness: f32
+pub pdfrum_page::GeneralState::soft_mask: core::option::Option<alloc::sync::Arc<pdfrum_page::SoftMask>>
+pub pdfrum_page::GeneralState::stroke_adjust: bool
+pub pdfrum_page::GeneralState::stroke_alpha: f32
+pub pdfrum_page::GeneralState::stroke_overprint: bool
+pub pdfrum_page::GeneralState::text_knockout: bool
+pub pdfrum_page::GeneralState::transfer: core::option::Option<alloc::sync::Arc<pdfrum_page::TransferFunc>>
+impl pdfrum_page::GeneralState
+pub fn pdfrum_page::GeneralState::enter_transparency_group(&mut self)
+impl core::default::Default for pdfrum_page::GeneralState
+pub fn pdfrum_page::GeneralState::default() -> Self
 pub struct pdfrum_page::GraphicsState
-pub pdfrum_page::GraphicsState::clip: pdfrum_page::state::clip::ClipStack
+pub pdfrum_page::GraphicsState::clip: pdfrum_page::ClipStack
 pub pdfrum_page::GraphicsState::ctm: kurbo::affine::Affine
 pub pdfrum_page::GraphicsState::fill: pdfrum_page::ColorValue
-pub pdfrum_page::GraphicsState::general: pdfrum_page::state::general::GeneralState
+pub pdfrum_page::GraphicsState::general: pdfrum_page::GeneralState
 pub pdfrum_page::GraphicsState::stroke: pdfrum_page::ColorValue
-pub pdfrum_page::GraphicsState::stroke_params: pdfrum_page::state::graph::StrokeParams
-pub pdfrum_page::GraphicsState::text: pdfrum_page::state::text::TextState
-impl core::default::Default for pdfrum_page::state::GraphicsState
-pub fn pdfrum_page::state::GraphicsState::default() -> Self
+pub pdfrum_page::GraphicsState::stroke_params: pdfrum_page::StrokeParams
+pub pdfrum_page::GraphicsState::text: pdfrum_page::TextState
+impl core::default::Default for pdfrum_page::GraphicsState
+pub fn pdfrum_page::GraphicsState::default() -> Self
 pub struct pdfrum_page::ImageCache
 impl pdfrum_page::ImageCache
 pub fn pdfrum_page::ImageCache::bytes(&self) -> usize
 pub fn pdfrum_page::ImageCache::clear(&mut self)
-pub fn pdfrum_page::ImageCache::get(&mut self, pdfrum_object::object::ObjRef, pdfrum_page::RequestedSize) -> core::option::Option<alloc::sync::Arc<pdfrum_page::image::ImageData>>
-pub fn pdfrum_page::ImageCache::insert(&mut self, pdfrum_object::object::ObjRef, pdfrum_page::RequestedSize, alloc::sync::Arc<pdfrum_page::image::ImageData>)
+pub fn pdfrum_page::ImageCache::get(&mut self, pdfrum_object::object::ObjRef, pdfrum_page::RequestedSize) -> core::option::Option<alloc::sync::Arc<pdfrum_page::ImageData>>
+pub fn pdfrum_page::ImageCache::insert(&mut self, pdfrum_object::object::ObjRef, pdfrum_page::RequestedSize, alloc::sync::Arc<pdfrum_page::ImageData>)
 pub fn pdfrum_page::ImageCache::is_empty(&self) -> bool
 pub fn pdfrum_page::ImageCache::len(&self) -> usize
 pub fn pdfrum_page::ImageCache::new() -> Self
@@ -1260,13 +448,13 @@ pub struct pdfrum_page::ImageData
 pub pdfrum_page::ImageData::height: u32
 pub pdfrum_page::ImageData::interpolate: bool
 pub pdfrum_page::ImageData::mask: core::option::Option<pdfrum_page::ImageMask>
-pub pdfrum_page::ImageData::matte: core::option::Option<pdfrum_page::color::Rgb>
-pub pdfrum_page::ImageData::pixels: pdfrum_page::image::Pixels
+pub pdfrum_page::ImageData::matte: core::option::Option<pdfrum_page::Rgb>
+pub pdfrum_page::ImageData::pixels: pdfrum_page::Pixels
 pub pdfrum_page::ImageData::width: u32
-impl pdfrum_page::image::ImageData
-pub fn pdfrum_page::image::ImageData::byte_size(&self) -> usize
+impl pdfrum_page::ImageData
+pub fn pdfrum_page::ImageData::byte_size(&self) -> usize
 pub struct pdfrum_page::ImageObject
-pub pdfrum_page::ImageObject::image: alloc::sync::Arc<pdfrum_page::image::ImageData>
+pub pdfrum_page::ImageObject::image: alloc::sync::Arc<pdfrum_page::ImageData>
 pub pdfrum_page::ImageObject::is_mask: bool
 pub pdfrum_page::ImageObject::matrix: kurbo::affine::Affine
 pub pdfrum_page::ImageObject::oc: core::option::Option<alloc::sync::Arc<pdfrum_object::dict::Dict>>
@@ -1279,21 +467,52 @@ pub pdfrum_page::JpxImage::alpha: core::option::Option<alloc::vec::Vec<u8>>
 pub pdfrum_page::JpxImage::components: u8
 pub pdfrum_page::JpxImage::data: alloc::vec::Vec<u8>
 pub pdfrum_page::JpxImage::height: u32
-pub pdfrum_page::JpxImage::space_override: core::option::Option<core::option::Option<pdfrum_page::color::ColorSpace>>
+pub pdfrum_page::JpxImage::space_override: pdfrum_page::image::jpx::SpaceOverride
 pub pdfrum_page::JpxImage::width: u32
+pub struct pdfrum_page::Mark
+pub pdfrum_page::Mark::from_resources: bool
+pub pdfrum_page::Mark::properties: core::option::Option<alloc::sync::Arc<pdfrum_object::dict::Dict>>
+pub pdfrum_page::Mark::tag: pdfrum_object::name::Name
+impl pdfrum_page::Mark
+pub fn pdfrum_page::Mark::content_id(&self) -> core::option::Option<i64>
 pub struct pdfrum_page::Mesh
 pub pdfrum_page::Mesh::component_range: [f32; 2]
-pub pdfrum_page::Mesh::patches: alloc::vec::Vec<pdfrum_page::shading::Patch>
-pub pdfrum_page::Mesh::triangles: alloc::vec::Vec<pdfrum_page::shading::Triangle>
+pub pdfrum_page::Mesh::patches: alloc::vec::Vec<pdfrum_page::Patch>
+pub pdfrum_page::Mesh::triangles: alloc::vec::Vec<pdfrum_page::Triangle>
 impl pdfrum_page::Mesh
 pub fn pdfrum_page::Mesh::bounds(&self) -> core::option::Option<kurbo::rect::Rect>
+pub struct pdfrum_page::MeshParams
+pub pdfrum_page::MeshParams::component_bits: u32
+pub pdfrum_page::MeshParams::component_max: u32
+pub pdfrum_page::MeshParams::components: usize
+pub pdfrum_page::MeshParams::coord_bits: u32
+pub pdfrum_page::MeshParams::coord_max: u32
+pub pdfrum_page::MeshParams::decode: alloc::boxed::Box<[f32]>
+pub pdfrum_page::MeshParams::flag_bits: u32
+impl pdfrum_page::MeshParams
+pub fn pdfrum_page::MeshParams::component_range(&self) -> [f32; 2]
+pub fn pdfrum_page::MeshParams::new(u32, u32, u32, usize, &[f32], pdfrum_page::ShadingKind) -> core::option::Option<Self>
+pub struct pdfrum_page::MeshReader<'a>
+impl<'a> pdfrum_page::MeshReader<'a>
+pub fn pdfrum_page::MeshReader<'a>::can_read_color(&self) -> bool
+pub fn pdfrum_page::MeshReader<'a>::can_read_coords(&self) -> bool
+pub fn pdfrum_page::MeshReader<'a>::can_read_flag(&self) -> bool
+pub fn pdfrum_page::MeshReader<'a>::new(&'a [u8], &'a pdfrum_page::MeshParams, &'a pdfrum_page::ColorSpace, &'a [alloc::sync::Arc<pdfrum_page::Function>]) -> Self
+pub fn pdfrum_page::MeshReader<'a>::read_color(&mut self) -> pdfrum_page::Rgb
+pub fn pdfrum_page::MeshReader<'a>::read_coords(&mut self) -> kurbo::point::Point
+pub fn pdfrum_page::MeshReader<'a>::read_flag(&mut self) -> u8
+pub fn pdfrum_page::MeshReader<'a>::read_free_form(&mut self) -> alloc::vec::Vec<pdfrum_page::Triangle>
+pub fn pdfrum_page::MeshReader<'a>::read_lattice(&mut self, usize) -> alloc::vec::Vec<pdfrum_page::Triangle>
+pub fn pdfrum_page::MeshReader<'a>::read_patches(&mut self, pdfrum_page::ShadingKind) -> alloc::vec::Vec<pdfrum_page::Patch>
+pub fn pdfrum_page::MeshReader<'a>::read_vertex(&mut self) -> core::option::Option<(u8, pdfrum_page::Vertex)>
+pub fn pdfrum_page::MeshReader<'a>::read_vertex_row(&mut self, usize) -> alloc::vec::Vec<pdfrum_page::Vertex>
 pub struct pdfrum_page::OcContext
-impl pdfrum_page::optional::OcContext
-pub fn pdfrum_page::optional::OcContext::content_visible<R: pdfrum_object::resolve::Resolve>(&mut self, core::option::Option<&pdfrum_object::dict::Dict>, &R, &mut pdfrum_common::diagnostics::Diagnostics) -> bool
-pub fn pdfrum_page::optional::OcContext::group_visible<R: pdfrum_object::resolve::Resolve>(&mut self, core::option::Option<&pdfrum_object::dict::Dict>, &R) -> bool
-pub fn pdfrum_page::optional::OcContext::memoized(&self) -> usize
-pub fn pdfrum_page::optional::OcContext::new(core::option::Option<pdfrum_object::dict::Dict>, pdfrum_page::optional::UsageType) -> Self
-pub fn pdfrum_page::optional::OcContext::permissive() -> Self
+impl pdfrum_page::OcContext
+pub fn pdfrum_page::OcContext::content_visible<R: pdfrum_object::resolve::Resolve>(&mut self, core::option::Option<&pdfrum_object::dict::Dict>, &R, &mut pdfrum_common::diagnostics::Diagnostics) -> bool
+pub fn pdfrum_page::OcContext::group_visible<R: pdfrum_object::resolve::Resolve>(&mut self, core::option::Option<&pdfrum_object::dict::Dict>, &R) -> bool
+pub fn pdfrum_page::OcContext::memoized(&self) -> usize
+pub fn pdfrum_page::OcContext::new(core::option::Option<pdfrum_object::dict::Dict>, pdfrum_page::UsageType) -> Self
+pub fn pdfrum_page::OcContext::permissive() -> Self
 pub struct pdfrum_page::Page
 pub pdfrum_page::Page::crop_box: kurbo::rect::Rect
 pub pdfrum_page::Page::dirty_streams: alloc::collections::btree::set::BTreeSet<core::option::Option<usize>>
@@ -1302,7 +521,7 @@ pub pdfrum_page::Page::objects: alloc::vec::Vec<pdfrum_page::PageObject>
 pub pdfrum_page::Page::resources: core::option::Option<pdfrum_object::dict::Dict>
 pub pdfrum_page::Page::rotate: pdfrum_page::Rotation
 pub pdfrum_page::Page::stream_ctms: alloc::collections::btree::map::BTreeMap<usize, kurbo::affine::Affine>
-pub pdfrum_page::Page::transparency: pdfrum_page::transparency::Transparency
+pub pdfrum_page::Page::transparency: pdfrum_page::Transparency
 impl pdfrum_page::Page
 pub fn pdfrum_page::Page::active_objects(&self) -> impl core::iter::traits::iterator::Iterator<Item = &pdfrum_page::PageObject>
 pub fn pdfrum_page::Page::ctm_at_end_of_stream(&self, usize) -> kurbo::affine::Affine
@@ -1318,15 +537,42 @@ pub fn pdfrum_page::Page::remove_object(&mut self, usize) -> core::option::Optio
 impl pdfrum_page::Page
 pub fn pdfrum_page::Page::display_size(&self) -> (f64, f64)
 pub fn pdfrum_page::Page::empty() -> Self
+pub struct pdfrum_page::Patch
+pub pdfrum_page::Patch::colors: [pdfrum_page::Rgb; 4]
+pub pdfrum_page::Patch::points: alloc::boxed::Box<[kurbo::point::Point]>
 pub struct pdfrum_page::PathObject
 pub pdfrum_page::PathObject::fill_rule: pdfrum_page::FillRule
 pub pdfrum_page::PathObject::matrix: kurbo::affine::Affine
 pub pdfrum_page::PathObject::path: kurbo::bezpath::BezPath
 pub pdfrum_page::PathObject::stroke: bool
+pub struct pdfrum_page::PatternSpace
+pub pdfrum_page::PatternSpace::base: core::option::Option<alloc::boxed::Box<pdfrum_page::ColorSpace>>
+impl pdfrum_page::PatternSpace
+pub fn pdfrum_page::PatternSpace::n_components(&self) -> usize
+pub fn pdfrum_page::PatternSpace::to_rgb(&self, &[f32]) -> core::option::Option<pdfrum_page::Rgb>
 pub struct pdfrum_page::PatternValue
 pub pdfrum_page::PatternValue::components: smallvec::SmallVec<[f32; 4]>
-pub pdfrum_page::PatternValue::loaded: core::option::Option<alloc::sync::Arc<pdfrum_page::pattern::Pattern>>
+pub pdfrum_page::PatternValue::loaded: core::option::Option<alloc::sync::Arc<pdfrum_page::Pattern>>
 pub pdfrum_page::PatternValue::name: pdfrum_object::name::Name
+pub struct pdfrum_page::PostScript
+pub pdfrum_page::PostScript::domain: alloc::boxed::Box<[f32]>
+pub pdfrum_page::PostScript::outputs: usize
+pub pdfrum_page::PostScript::range: alloc::boxed::Box<[f32]>
+impl pdfrum_page::PostScript
+pub fn pdfrum_page::PostScript::eval_with_diagnostics(&self, &[f32], &mut [f32], &mut pdfrum_common::diagnostics::Diagnostics) -> bool
+pub fn pdfrum_page::PostScript::stack_depth_after(&self, &[f32]) -> usize
+pub struct pdfrum_page::Radial
+pub pdfrum_page::Radial::end: kurbo::point::Point
+pub pdfrum_page::Radial::end_radius: f32
+pub pdfrum_page::Radial::extend_end: bool
+pub pdfrum_page::Radial::extend_start: bool
+pub pdfrum_page::Radial::start: kurbo::point::Point
+pub pdfrum_page::Radial::start_radius: f32
+pub pdfrum_page::Radial::t_max: f32
+pub pdfrum_page::Radial::t_min: f32
+impl pdfrum_page::Radial
+pub fn pdfrum_page::Radial::is_decreasing(&self) -> bool
+pub fn pdfrum_page::Radial::position(&self, kurbo::point::Point) -> pdfrum_page::shading::radial::RadialPosition
 pub struct pdfrum_page::Resources
 pub pdfrum_page::Resources::chosen: core::option::Option<pdfrum_object::dict::Dict>
 pub pdfrum_page::Resources::page: core::option::Option<pdfrum_object::dict::Dict>
@@ -1341,46 +587,52 @@ pub struct pdfrum_page::Rgb
 pub pdfrum_page::Rgb::b: f32
 pub pdfrum_page::Rgb::g: f32
 pub pdfrum_page::Rgb::r: f32
-impl pdfrum_page::color::Rgb
-pub const pdfrum_page::color::Rgb::BLACK: Self
-pub fn pdfrum_page::color::Rgb::to_bytes(self) -> [u8; 3]
-pub fn pdfrum_page::color::Rgb::to_bytes_truncating(self) -> [u8; 3]
+impl pdfrum_page::Rgb
+pub const pdfrum_page::Rgb::BLACK: Self
+pub fn pdfrum_page::Rgb::to_bytes(self) -> [u8; 3]
+pub fn pdfrum_page::Rgb::to_bytes_truncating(self) -> [u8; 3]
+pub struct pdfrum_page::Separation
+pub pdfrum_page::Separation::alternate: core::option::Option<alloc::boxed::Box<pdfrum_page::ColorSpace>>
+pub pdfrum_page::Separation::none: bool
+pub pdfrum_page::Separation::tint: core::option::Option<alloc::sync::Arc<pdfrum_page::Function>>
+impl pdfrum_page::Separation
+pub fn pdfrum_page::Separation::to_rgb(&self, &[f32]) -> core::option::Option<pdfrum_page::Rgb>
 pub struct pdfrum_page::Shading
-pub pdfrum_page::Shading::background: core::option::Option<pdfrum_page::color::Rgb>
+pub pdfrum_page::Shading::background: core::option::Option<pdfrum_page::Rgb>
 pub pdfrum_page::Shading::bbox: core::option::Option<kurbo::rect::Rect>
-pub pdfrum_page::Shading::functions: alloc::boxed::Box<[alloc::sync::Arc<pdfrum_page::function::Function>]>
-pub pdfrum_page::Shading::geometry: pdfrum_page::shading::Geometry
-pub pdfrum_page::Shading::space: alloc::sync::Arc<pdfrum_page::color::ColorSpace>
-impl pdfrum_page::shading::Shading
-pub fn pdfrum_page::shading::Shading::color_at(&self, f32) -> pdfrum_page::color::Rgb
-pub fn pdfrum_page::shading::Shading::color_steps(&self) -> core::option::Option<pdfrum_page::shading::ColorSteps>
-pub fn pdfrum_page::shading::Shading::kind(&self) -> pdfrum_page::shading::ShadingKind
-pub fn pdfrum_page::shading::Shading::load<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::object::Object, core::option::Option<&pdfrum_object::dict::Dict>, bool, &R, &mut pdfrum_page::function::FunctionCache, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<Self>
+pub pdfrum_page::Shading::functions: alloc::boxed::Box<[alloc::sync::Arc<pdfrum_page::Function>]>
+pub pdfrum_page::Shading::geometry: pdfrum_page::Geometry
+pub pdfrum_page::Shading::space: alloc::sync::Arc<pdfrum_page::ColorSpace>
+impl pdfrum_page::Shading
+pub fn pdfrum_page::Shading::color_at(&self, f32) -> pdfrum_page::Rgb
+pub fn pdfrum_page::Shading::color_steps(&self) -> core::option::Option<pdfrum_page::shading::steps::ColorSteps>
+pub fn pdfrum_page::Shading::kind(&self) -> pdfrum_page::ShadingKind
+pub fn pdfrum_page::Shading::load<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::object::Object, core::option::Option<&pdfrum_object::dict::Dict>, pdfrum_page::ShadingSource, &R, &mut pdfrum_page::FunctionCache, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<Self>
 pub struct pdfrum_page::ShadingObject
 pub pdfrum_page::ShadingObject::bounds: kurbo::rect::Rect
 pub pdfrum_page::ShadingObject::matrix: kurbo::affine::Affine
-pub pdfrum_page::ShadingObject::shading: alloc::sync::Arc<pdfrum_page::shading::Shading>
+pub pdfrum_page::ShadingObject::shading: alloc::sync::Arc<pdfrum_page::Shading>
 pub struct pdfrum_page::ShadingPattern
 pub pdfrum_page::ShadingPattern::ext_g_state: core::option::Option<pdfrum_object::dict::Dict>
 pub pdfrum_page::ShadingPattern::matrix: kurbo::affine::Affine
-pub pdfrum_page::ShadingPattern::shading: alloc::sync::Arc<pdfrum_page::shading::Shading>
+pub pdfrum_page::ShadingPattern::shading: alloc::sync::Arc<pdfrum_page::Shading>
 pub struct pdfrum_page::SoftMask
-pub pdfrum_page::SoftMask::backdrop: pdfrum_page::color::Rgb
+pub pdfrum_page::SoftMask::backdrop: pdfrum_page::Rgb
 pub pdfrum_page::SoftMask::group: pdfrum_object::stream::Stream
-pub pdfrum_page::SoftMask::kind: pdfrum_page::transparency::SoftMaskKind
+pub pdfrum_page::SoftMask::kind: pdfrum_page::SoftMaskKind
 pub pdfrum_page::SoftMask::matrix: kurbo::affine::Affine
 pub pdfrum_page::SoftMask::objects: alloc::vec::Vec<pdfrum_page::PageObject>
 pub pdfrum_page::SoftMask::transfer: core::option::Option<alloc::boxed::Box<[u8; 256]>>
-impl pdfrum_page::transparency::SoftMask
-pub fn pdfrum_page::transparency::SoftMask::apply_transfer(&self, u8) -> u8
-pub fn pdfrum_page::transparency::SoftMask::load<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::object::Object, kurbo::affine::Affine, &R, &mut pdfrum_page::function::FunctionCache, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<Self>
+impl pdfrum_page::SoftMask
+pub fn pdfrum_page::SoftMask::apply_transfer(&self, u8) -> u8
+pub fn pdfrum_page::SoftMask::load<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::object::Object, kurbo::affine::Affine, &R, &mut pdfrum_page::FunctionCache, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<Self>
 pub struct pdfrum_page::StateStack
-impl pdfrum_page::state::StateStack
-pub fn pdfrum_page::state::StateStack::depth(&self) -> usize
-pub fn pdfrum_page::state::StateStack::is_empty(&self) -> bool
-pub fn pdfrum_page::state::StateStack::new() -> Self
-pub fn pdfrum_page::state::StateStack::pop(&mut self, &mut pdfrum_page::state::GraphicsState) -> bool
-pub fn pdfrum_page::state::StateStack::push(&mut self, &pdfrum_page::state::GraphicsState)
+impl pdfrum_page::StateStack
+pub fn pdfrum_page::StateStack::depth(&self) -> usize
+pub fn pdfrum_page::StateStack::is_empty(&self) -> bool
+pub fn pdfrum_page::StateStack::new() -> Self
+pub fn pdfrum_page::StateStack::pop(&mut self, &mut pdfrum_page::GraphicsState) -> bool
+pub fn pdfrum_page::StateStack::push(&mut self, &pdfrum_page::GraphicsState)
 pub struct pdfrum_page::StreamBounds
 impl pdfrum_page::StreamBounds
 pub fn pdfrum_page::StreamBounds::from_counts(impl core::iter::traits::collect::IntoIterator<Item = usize>) -> Self
@@ -1395,10 +647,14 @@ pub pdfrum_page::StrokeParams::dash_phase: f32
 pub pdfrum_page::StrokeParams::join: pdfrum_page::LineJoin
 pub pdfrum_page::StrokeParams::miter_limit: f32
 pub pdfrum_page::StrokeParams::width: f32
-impl pdfrum_page::state::graph::StrokeParams
-pub fn pdfrum_page::state::graph::StrokeParams::normalized_dash(&self, f32, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_page::state::graph::NormalizedDash
-impl core::default::Default for pdfrum_page::state::graph::StrokeParams
-pub fn pdfrum_page::state::graph::StrokeParams::default() -> Self
+impl pdfrum_page::StrokeParams
+pub fn pdfrum_page::StrokeParams::normalized_dash(&self, f32, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_page::state::graph::NormalizedDash
+impl core::default::Default for pdfrum_page::StrokeParams
+pub fn pdfrum_page::StrokeParams::default() -> Self
+pub struct pdfrum_page::TextClipRun
+pub pdfrum_page::TextClipRun::char_space: f32
+pub pdfrum_page::TextClipRun::object: pdfrum_page::TextObject
+pub pdfrum_page::TextClipRun::word_space: f32
 pub struct pdfrum_page::TextObject
 pub pdfrum_page::TextObject::font: core::option::Option<(alloc::sync::Arc<pdfrum_font::Font>, f32)>
 pub pdfrum_page::TextObject::font_source: core::option::Option<pdfrum_object::object::ObjRef>
@@ -1406,7 +662,7 @@ pub pdfrum_page::TextObject::matrix: kurbo::affine::Affine
 pub pdfrum_page::TextObject::position: kurbo::point::Point
 pub pdfrum_page::TextObject::render_mode: pdfrum_page::TextRenderMode
 pub pdfrum_page::TextObject::segments: alloc::boxed::Box<[pdfrum_page::TextSegment]>
-pub pdfrum_page::TextObject::type3_metrics: alloc::collections::btree::map::BTreeMap<u32, pdfrum_page::type3::Type3Metrics>
+pub pdfrum_page::TextObject::type3_metrics: alloc::collections::btree::map::BTreeMap<u32, pdfrum_page::Type3Metrics>
 impl core::cmp::PartialEq for pdfrum_page::TextObject
 pub fn pdfrum_page::TextObject::eq(&self, &Self) -> bool
 pub struct pdfrum_page::TextSegment
@@ -1421,10 +677,15 @@ pub pdfrum_page::TextState::leading: f32
 pub pdfrum_page::TextState::render_mode: pdfrum_page::TextRenderMode
 pub pdfrum_page::TextState::rise: f32
 pub pdfrum_page::TextState::word_space: f32
-impl core::cmp::PartialEq for pdfrum_page::state::text::TextState
-pub fn pdfrum_page::state::text::TextState::eq(&self, &Self) -> bool
-impl core::default::Default for pdfrum_page::state::text::TextState
-pub fn pdfrum_page::state::text::TextState::default() -> Self
+impl core::cmp::PartialEq for pdfrum_page::TextState
+pub fn pdfrum_page::TextState::eq(&self, &Self) -> bool
+impl core::default::Default for pdfrum_page::TextState
+pub fn pdfrum_page::TextState::default() -> Self
+pub struct pdfrum_page::TileRange
+pub pdfrum_page::TileRange::max_col: i32
+pub pdfrum_page::TileRange::max_row: i32
+pub pdfrum_page::TileRange::min_col: i32
+pub pdfrum_page::TileRange::min_row: i32
 pub struct pdfrum_page::TilingPattern
 pub pdfrum_page::TilingPattern::bbox: kurbo::rect::Rect
 pub pdfrum_page::TilingPattern::colored: bool
@@ -1437,47 +698,59 @@ pub pdfrum_page::TilingPattern::y_step: f32
 impl pdfrum_page::TilingPattern
 pub fn pdfrum_page::TilingPattern::cell_size(&self, kurbo::affine::Affine) -> core::option::Option<(i32, i32)>
 pub fn pdfrum_page::TilingPattern::steps_are_drawable(&self) -> bool
-pub fn pdfrum_page::TilingPattern::tile_range(&self, kurbo::rect::Rect, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<pdfrum_page::pattern::TileRange>
+pub fn pdfrum_page::TilingPattern::tile_range(&self, kurbo::rect::Rect, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<pdfrum_page::TileRange>
 pub struct pdfrum_page::TransferFunc
 pub pdfrum_page::TransferFunc::identity: bool
 pub pdfrum_page::TransferFunc::samples: alloc::boxed::Box<[[u8; 256]; 3]>
-impl pdfrum_page::transfer::TransferFunc
-pub fn pdfrum_page::transfer::TransferFunc::apply(&self, usize, u8) -> u8
-pub fn pdfrum_page::transfer::TransferFunc::load<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::object::Object, &R, &mut pdfrum_page::function::FunctionCache, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<Self>
+impl pdfrum_page::TransferFunc
+pub fn pdfrum_page::TransferFunc::apply(&self, usize, u8) -> u8
+pub fn pdfrum_page::TransferFunc::load<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::object::Object, &R, &mut pdfrum_page::FunctionCache, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<Self>
 pub struct pdfrum_page::Transparency
 pub pdfrum_page::Transparency::group: bool
 pub pdfrum_page::Transparency::isolated: bool
 pub pdfrum_page::Transparency::knockout: bool
-impl pdfrum_page::transparency::Transparency
-pub fn pdfrum_page::transparency::Transparency::for_page(core::option::Option<&pdfrum_object::dict::Dict>, &impl pdfrum_object::resolve::Resolve) -> Self
-pub fn pdfrum_page::transparency::Transparency::from_group(core::option::Option<&pdfrum_object::dict::Dict>, &impl pdfrum_object::resolve::Resolve) -> Self
+impl pdfrum_page::Transparency
+pub fn pdfrum_page::Transparency::for_page(core::option::Option<&pdfrum_object::dict::Dict>, &impl pdfrum_object::resolve::Resolve) -> Self
+pub fn pdfrum_page::Transparency::from_group(core::option::Option<&pdfrum_object::dict::Dict>, &impl pdfrum_object::resolve::Resolve) -> Self
+pub struct pdfrum_page::Triangle
+pub pdfrum_page::Triangle::vertices: [pdfrum_page::Vertex; 3]
 pub struct pdfrum_page::Type3Metrics
 pub pdfrum_page::Type3Metrics::bbox: kurbo::rect::Rect
 pub pdfrum_page::Type3Metrics::colored: bool
 pub pdfrum_page::Type3Metrics::objects: alloc::vec::Vec<pdfrum_page::PageObject>
 pub pdfrum_page::Type3Metrics::painted: kurbo::rect::Rect
 pub pdfrum_page::Type3Metrics::width: f32
+pub struct pdfrum_page::Vertex
+pub pdfrum_page::Vertex::color: pdfrum_page::Rgb
+pub pdfrum_page::Vertex::point: kurbo::point::Point
 pub struct pdfrum_page::Visibility
-impl pdfrum_page::optional::Visibility
-pub fn pdfrum_page::optional::Visibility::all_visible() -> Self
-pub fn pdfrum_page::optional::Visibility::children(&self, usize) -> Self
-pub fn pdfrum_page::optional::Visibility::shows_everything(&self) -> bool
-pub fn pdfrum_page::optional::Visibility::visible(&self, usize) -> bool
+impl pdfrum_page::Visibility
+pub fn pdfrum_page::Visibility::all_visible() -> Self
+pub fn pdfrum_page::Visibility::children(&self, usize) -> Self
+pub fn pdfrum_page::Visibility::shows_everything(&self) -> bool
+pub fn pdfrum_page::Visibility::visible(&self, usize) -> bool
+pub const pdfrum_page::CHANNEL_SAMPLES: usize
 pub const pdfrum_page::DEFAULT_MEDIA_BOX: kurbo::rect::Rect
+pub const pdfrum_page::MAX_BYTES: usize
 pub const pdfrum_page::MAX_FORM_LEVEL: usize
-pub fn pdfrum_page::apply_ext_gstate<R: pdfrum_object::resolve::Resolve>(&mut pdfrum_page::state::GraphicsState, &pdfrum_object::dict::Dict, impl core::ops::function::Fn(core::option::Option<&pdfrum_object::object::Object>) -> core::option::Option<alloc::sync::Arc<pdfrum_font::Font>>, &R, &mut pdfrum_page::function::FunctionCache, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics)
+pub const pdfrum_page::MAX_TEXT_OBJECTS: usize
+pub fn pdfrum_page::adobe_cmyk_to_srgb(u8, u8, u8, u8) -> [u8; 3]
+pub fn pdfrum_page::apply_ext_gstate<R: pdfrum_object::resolve::Resolve>(&mut pdfrum_page::GraphicsState, &pdfrum_object::dict::Dict, impl core::ops::function::Fn(core::option::Option<&pdfrum_object::object::Object>) -> core::option::Option<alloc::sync::Arc<pdfrum_font::Font>>, &R, &mut pdfrum_page::FunctionCache, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics)
 pub fn pdfrum_page::build_form_object<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::stream::Stream, kurbo::affine::Affine, &pdfrum_page::Resources, &R, &mut pdfrum_page::BuildContext, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<pdfrum_page::PageObject>
 pub fn pdfrum_page::build_form_object_with<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::stream::Stream, kurbo::affine::Affine, &pdfrum_page::Resources, &R, &mut pdfrum_page::BuildContext, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics, bool) -> core::option::Option<pdfrum_page::PageObject>
 pub fn pdfrum_page::build_page<R: pdfrum_object::resolve::Resolve>(&[pdfrum_page::Op], &pdfrum_page::Resources, &R, &mut pdfrum_page::BuildContext, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_page::Page
 pub fn pdfrum_page::build_page_from_dict<R: pdfrum_object::resolve::Resolve>(&[pdfrum_page::Op], &pdfrum_object::dict::Dict, impl core::ops::function::Fn(&pdfrum_object::name::Name) -> core::option::Option<pdfrum_object::object::Object>, &pdfrum_page::Resources, &R, &mut pdfrum_page::BuildContext, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_page::Page
 pub fn pdfrum_page::build_page_streams<R: pdfrum_object::resolve::Resolve>(&[pdfrum_page::Op], &pdfrum_page::StreamBounds, &pdfrum_object::dict::Dict, impl core::ops::function::Fn(&pdfrum_object::name::Name) -> core::option::Option<pdfrum_object::object::Object>, &pdfrum_page::Resources, &R, &mut pdfrum_page::BuildContext, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_page::Page
-pub fn pdfrum_page::decode_image<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::stream::Stream, core::option::Option<&pdfrum_object::dict::Dict>, core::option::Option<&pdfrum_object::dict::Dict>, pdfrum_page::RequestedSize, &R, &mut pdfrum_page::function::FunctionCache, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::result::Result<pdfrum_page::image::ImageData, pdfrum_page::Error>
+pub fn pdfrum_page::coons_interior(&[kurbo::point::Point]) -> [kurbo::point::Point; 4]
+pub fn pdfrum_page::decode_image<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::stream::Stream, core::option::Option<&pdfrum_object::dict::Dict>, core::option::Option<&pdfrum_object::dict::Dict>, pdfrum_page::RequestedSize, &R, &mut pdfrum_page::FunctionCache, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::result::Result<pdfrum_page::ImageData, pdfrum_page::Error>
 pub fn pdfrum_page::decode_jbig2(core::option::Option<&[u8]>, &[u8], u32, u32, &pdfrum_common::limits::Limits) -> core::result::Result<pdfrum_page::BitImage, pdfrum_page::Error>
-pub fn pdfrum_page::decode_jpx(&[u8], core::option::Option<&pdfrum_page::color::ColorSpace>, i64, pdfrum_page::RequestedSize, &pdfrum_common::limits::Limits) -> core::result::Result<pdfrum_page::JpxImage, pdfrum_page::Error>
+pub fn pdfrum_page::decode_jpx(&[u8], core::option::Option<&pdfrum_page::ColorSpace>, i64, pdfrum_page::RequestedSize, &pdfrum_common::limits::Limits) -> core::result::Result<pdfrum_page::JpxImage, pdfrum_page::Error>
 pub fn pdfrum_page::derive_boxes<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, impl core::ops::function::Fn(&pdfrum_object::name::Name) -> core::option::Option<pdfrum_object::object::Object>, &R, &mut pdfrum_common::diagnostics::Diagnostics) -> (kurbo::rect::Rect, kurbo::rect::Rect)
 pub fn pdfrum_page::display_size_from_dict<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, impl core::ops::function::Fn(&pdfrum_object::name::Name) -> core::option::Option<pdfrum_object::object::Object>, &R, &mut pdfrum_common::diagnostics::Diagnostics) -> (f64, f64)
 pub fn pdfrum_page::eliminate_redundant_clips(&mut [pdfrum_page::PageObject], impl core::ops::function::Fn(&pdfrum_page::PageObject) -> kurbo::rect::Rect)
-pub fn pdfrum_page::is_valid_page_dict<R: pdfrum_object::resolve::Resolve>(core::option::Option<&pdfrum_object::dict::Dict>, bool, &R) -> bool
-pub fn pdfrum_page::load_pattern<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::name::Name, &pdfrum_page::Resources, kurbo::affine::Affine, &pdfrum_page::state::general::GeneralState, &R, &mut pdfrum_page::BuildContext, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_page::FoundPattern
-pub fn pdfrum_page::page_visibility<R: pdfrum_object::resolve::Resolve>(&pdfrum_page::Page, &mut pdfrum_page::optional::OcContext, &R, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_page::optional::Visibility
+pub fn pdfrum_page::load_colorspace<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::object::Object, core::option::Option<&pdfrum_object::dict::Dict>, &R, &mut pdfrum_page::FunctionCache, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<pdfrum_page::ColorSpace>
+pub fn pdfrum_page::load_pattern<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::name::Name, &pdfrum_page::Resources, kurbo::affine::Affine, &pdfrum_page::GeneralState, &R, &mut pdfrum_page::BuildContext, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_page::FoundPattern
+pub fn pdfrum_page::page_visibility<R: pdfrum_object::resolve::Resolve>(&pdfrum_page::Page, &mut pdfrum_page::OcContext, &R, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_page::Visibility
 pub fn pdfrum_page::parse_content(&[u8], &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> alloc::vec::Vec<pdfrum_page::Op>
+pub fn pdfrum_page::parse_program(&[u8], &[f32], &[f32]) -> core::option::Option<pdfrum_page::PostScript>
+pub fn pdfrum_page::uncolored_pattern_rgb(&pdfrum_page::ColorSpace, &[f32], bool) -> pdfrum_page::Rgb

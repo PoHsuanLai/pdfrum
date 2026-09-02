@@ -113,7 +113,7 @@ use crate::pixmap::Pixmap;
 
 /// How many bytes of rendered images one render session keeps.
 ///
-/// Deliberately smaller than [`pdfrum_page::image::MAX_BYTES`], the 100 MiB the
+/// Deliberately smaller than [`pdfrum_page::MAX_BYTES`], the 100 MiB the
 /// *decoded* cache is allowed: this cache holds the same images again at four
 /// bytes per pixel, and holding both at the same budget would double a
 /// session's floor for no gain. 64 MiB holds every image in the bench corpus

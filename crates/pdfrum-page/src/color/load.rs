@@ -489,29 +489,6 @@ fn load_pattern<R: Resolve>(
     }
 }
 
-/// Load a colorspace through the session cache, keyed on the reference.
-#[must_use]
-pub fn load_cached<R: Resolve>(
-    obj: &Object,
-    resources: Option<&Dict>,
-    r: &R,
-    cache: &mut ColorSpaceCache,
-    functions: &mut FunctionCache,
-    limits: &Limits,
-    diags: &mut Diagnostics,
-) -> Option<Arc<ColorSpace>> {
-    if let Object::Ref(id) = obj
-        && let Some(hit) = cache.entries.get(id)
-    {
-        return hit.clone();
-    }
-    let loaded = load_colorspace(obj, resources, r, functions, limits, diags).map(Arc::new);
-    if let Object::Ref(id) = obj {
-        cache.entries.insert(*id, loaded.clone());
-    }
-    loaded
-}
-
 /// Unused import guard: `Function` is named in the cache's signature docs.
 const _: Option<&Function> = None;
 

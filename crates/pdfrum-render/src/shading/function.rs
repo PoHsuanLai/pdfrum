@@ -11,8 +11,8 @@
 //! rather than per corner, and the bounds test is inclusive at both ends.
 
 use kurbo::{Affine, Point};
+use pdfrum_page::FunctionBased;
 use pdfrum_page::Shading;
-use pdfrum_page::shading::FunctionBased;
 
 use crate::color::Argb;
 use crate::pixmap::Pixmap;
@@ -120,7 +120,7 @@ mod tests {
     fn a_singular_matrix_is_declined() {
         let mut p = Pixmap::filled(2, 2, peniko::Color::from_rgba8(9, 9, 9, 255));
         let shading = Shading {
-            geometry: pdfrum_page::shading::Geometry::FunctionBased(FunctionBased {
+            geometry: pdfrum_page::Geometry::FunctionBased(FunctionBased {
                 domain: [0.0, 1.0, 0.0, 1.0],
                 matrix: Affine::IDENTITY,
             }),

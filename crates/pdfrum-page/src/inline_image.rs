@@ -21,10 +21,8 @@
 use crate::ops::InlineImage;
 use crate::tokenize::{ContentLexer, Element};
 use pdfrum_common::{DiagKind, Diagnostics, Limits, Severity};
-use pdfrum_filters::{
-    Filter, PredictorParams, decode_ascii_hex, decode_ascii85, decode_run_length,
-};
-use pdfrum_object::{Array, Dict, Name, NoResolve, Object};
+use pdfrum_filters::{Filter, decode_ascii_hex, decode_ascii85, decode_run_length};
+use pdfrum_object::{Dict, Name, NoResolve, Object};
 
 /// Key abbreviations, expanded on a whole-key match only.
 const KEY_ABBR: [(&[u8], &[u8]); 9] = [
@@ -427,16 +425,12 @@ fn scan_for_ei(lexer: &mut ContentLexer<'_>) -> EiScan {
     }
 }
 
-/// The predictor parameters an inline image's `/DecodeParms` names, for the
-/// image path to reuse without re-reading abbreviations.
-#[must_use]
-pub fn inline_predictor_params(dict: &Dict) -> PredictorParams {
-    let (_, params) = first_filter(dict);
-    PredictorParams::from_dict(&params, &NoResolve).unwrap_or_default()
-}
-
 /// The filter names an inline image declares, expanded, in order.
 #[must_use]
+#[allow(
+    dead_code,
+    reason = "the oracle behaviour it ports is pinned by this module's own tests; the curation removed its only caller outside the crate"
+)]
 pub fn inline_filters(dict: &Dict) -> Vec<Name> {
     match dict.raw(&Name::from("Filter")) {
         Some(Object::Name(n)) => vec![n.clone()],
@@ -455,53 +449,6 @@ pub fn as_xobject_dict(image: &InlineImage) -> Dict {
         Object::Int(i64::try_from(image.data.len()).unwrap_or(0)),
     );
     dict
-}
-
-/// The `/ColorSpace` name an inline image gives, when it is a name that needs
-/// resolving through the page's `/ColorSpace` resources.
-///
-/// The three device names resolve on their own; everything else is a resource
-/// lookup, and a name that resolves to nothing is left in place to fail later.
-#[must_use]
-pub fn inline_colorspace_name(dict: &Dict) -> Option<Name> {
-    match dict.raw(&Name::from("ColorSpace")) {
-        Some(Object::Name(n))
-            if !matches!(
-                n.as_bytes(),
-                b"DeviceGray" | b"DeviceRGB" | b"DeviceCMYK" | b"G" | b"RGB" | b"CMYK"
-            ) =>
-        {
-            Some(n.clone())
-        }
-        _ => None,
-    }
-}
-
-/// Substitute a resolved colorspace object into an inline image's dictionary.
-#[must_use]
-pub fn with_colorspace(dict: &Dict, cs: Object) -> Dict {
-    let mut out = Dict::new();
-    let mut replaced = false;
-    for (k, v) in dict.iter() {
-        if k.as_bytes() == b"ColorSpace" {
-            out.push(k.clone(), cs.clone());
-            replaced = true;
-        } else {
-            out.push(k.clone(), v.clone());
-        }
-    }
-    if !replaced {
-        out.push(Name::from("ColorSpace"), cs);
-    }
-    out
-}
-
-/// The `/Array`-shaped `/Decode` an inline image declares, if any.
-#[must_use]
-pub fn inline_decode(dict: &Dict) -> Option<Array> {
-    dict.raw(&Name::from("Decode"))
-        .and_then(Object::as_array)
-        .cloned()
 }
 
 #[cfg(test)]

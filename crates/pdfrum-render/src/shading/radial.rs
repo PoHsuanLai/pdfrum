@@ -15,7 +15,7 @@
 //!   two-root branch, not in the `b == 0` or `a == 0` ones.
 
 use kurbo::{Affine, Point};
-use pdfrum_page::shading::Radial;
+use pdfrum_page::Radial;
 
 use crate::pixmap::Pixmap;
 use crate::shading::steps::ColorSteps;

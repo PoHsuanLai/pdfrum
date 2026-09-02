@@ -34,8 +34,8 @@
 //! the patch, so 32 levels covers any patch up to 2^32 device units.
 
 use kurbo::{Affine, BezPath, Point, Rect, Shape};
+use pdfrum_page::Patch;
 use pdfrum_page::Rgb;
-use pdfrum_page::shading::Patch;
 
 use crate::color::Argb;
 use crate::device::{AntiAlias, Brush, FillRule, RenderDevice};
@@ -201,7 +201,7 @@ impl Points {
         // own order — p11, p12, p21, p22 — and each lands in the grid slot it
         // is named for. A tensor patch fills the same four slots from the
         // stream, which is what makes the two patch types one surface.
-        let interior = pdfrum_page::shading::coons_interior(boundary);
+        let interior = pdfrum_page::coons_interior(boundary);
         let grid = [
             [g(0)?, g(1)?, g(2)?, g(3)?],
             [g(11)?, interior[0], interior[1], g(4)?],
@@ -795,7 +795,7 @@ mod tests {
         .map(|(x, y)| Point::new(x, y))
         .collect();
         let coons = Points::from_boundary(&pts).expect("built");
-        let interior = pdfrum_page::shading::coons_interior(&pts);
+        let interior = pdfrum_page::coons_interior(&pts);
         assert_ne!(
             interior[1], interior[2],
             "the fixture separates p12 and p21"

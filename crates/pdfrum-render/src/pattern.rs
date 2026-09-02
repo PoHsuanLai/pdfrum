@@ -408,7 +408,7 @@ fn draw_tiling_per_tile<B: RasterBackend>(
     backend: &B,
     caches: &mut RenderCaches,
     pattern: &TilingPattern,
-    range: &pdfrum_page::pattern::TileRange,
+    range: &pdfrum_page::TileRange,
     pattern_to_device: Affine,
     uncolored: Argb,
     clip: IntRect,

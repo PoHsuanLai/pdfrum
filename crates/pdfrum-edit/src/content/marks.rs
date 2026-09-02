@@ -18,7 +18,7 @@
 //! not have would fail the comparison the sweep exists to pass.
 
 use pdfrum_object::Name;
-use pdfrum_page::state::{ContentMarks, Mark};
+use pdfrum_page::{ContentMarks, Mark};
 
 use crate::write::object::{write_dict, write_name};
 
@@ -117,8 +117,8 @@ fn emit_open(out: &mut String, mark: &Mark, namer: PropertyNamer<'_>) {
 mod tests {
     use super::{emit_mark_diff, finish_marks};
     use pdfrum_object::{Dict, Name, Object};
+    use pdfrum_page::ContentMarks;
     use pdfrum_page::MarkProperties;
-    use pdfrum_page::state::ContentMarks;
 
     fn marks(specs: &[(&str, Option<Dict>)]) -> ContentMarks {
         let mut out = ContentMarks::new();

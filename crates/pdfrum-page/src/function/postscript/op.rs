@@ -94,10 +94,6 @@ pub enum PsOp {
     Truncate,
     /// `xor`: bitwise exclusive disjunction of two integers.
     Xor,
-    /// A `{ … }` block, inert until an `if` or `ifelse` reaches it.
-    Proc,
-    /// A literal value.
-    Const,
 }
 
 /// The operator table, alphabetically sorted because the C++ binary-searches
@@ -160,6 +156,10 @@ impl PsOp {
     }
 
     /// Every named operator, for tests and dumps.
+    #[allow(
+        dead_code,
+        reason = "the operator table's completeness is pinned by this module's own tests"
+    )]
     pub fn all_named() -> impl Iterator<Item = (&'static [u8], Self)> {
         NAMES.iter().copied()
     }

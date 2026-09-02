@@ -14,7 +14,7 @@
 #![no_main]
 
 use libfuzzer_sys::fuzz_target;
-use pdfrum_page::function::parse_program;
+use pdfrum_page::parse_program;
 
 fuzz_target!(|data: &[u8]| {
     let mut split = pdfrum_fuzz::Split::new(data);

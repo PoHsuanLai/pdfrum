@@ -14,7 +14,7 @@
 
 use kurbo::Affine;
 use pdfrum_page::Rgb;
-use pdfrum_page::shading::{Triangle, Vertex};
+use pdfrum_page::{Triangle, Vertex};
 
 use crate::color::Argb;
 use crate::pixmap::Pixmap;
@@ -274,7 +274,7 @@ pub fn gray(v: f32) -> Rgb {
 #[cfg(test)]
 mod tests {
     use kurbo::Point;
-    use pdfrum_page::shading::Vertex;
+    use pdfrum_page::Vertex;
 
     use super::*;
 

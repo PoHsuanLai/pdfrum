@@ -32,7 +32,7 @@ use std::collections::BTreeMap;
 
 use pdfrum_common::{Diagnostics, Limits};
 use pdfrum_edit::EditDoc;
-use pdfrum_page::state::GraphicsState;
+use pdfrum_page::GraphicsState;
 use pdfrum_page::{BuildContext, ColorSpace, Content, FillRule, PageObject, PathObject};
 use pdfrum_parser::Document;
 

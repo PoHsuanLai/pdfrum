@@ -156,16 +156,13 @@ pub fn effective_quality(quality: ImageQuality, to_device: Affine) -> ImageQuali
               epsilon would apply the Darken approximation to files PDFium \
               composites Normal, changing the corpus"
 )]
-pub fn overprint_blend(
-    space: Option<&ColorSpace>,
-    state: &pdfrum_page::state::GeneralState,
-) -> BlendMode {
+pub fn overprint_blend(space: Option<&ColorSpace>, state: &pdfrum_page::GeneralState) -> BlendMode {
     let subtractive = matches!(
         space.map(ColorSpace::family),
         Some(
-            pdfrum_page::color::Family::DeviceCmyk
-                | pdfrum_page::color::Family::Separation
-                | pdfrum_page::color::Family::DeviceN
+            pdfrum_page::Family::DeviceCmyk
+                | pdfrum_page::Family::Separation
+                | pdfrum_page::Family::DeviceN
         )
     );
     let eligible = subtractive
@@ -345,7 +342,7 @@ pub fn to_pixmap(
                             .saturating_add(x as usize)
                             .saturating_mul(4);
                         let at = |o: usize| data.get(i.saturating_add(o)).copied().unwrap_or(0);
-                        pdfrum_page::color::adobe_cmyk_to_srgb(at(0), at(1), at(2), at(3))
+                        pdfrum_page::adobe_cmyk_to_srgb(at(0), at(1), at(2), at(3))
                     }
                     _ => image.pixels.sample_bytes(x, y, image.width),
                 };
@@ -563,7 +560,7 @@ pub fn matte_source(sample: [u8; 3], mask: u8, matte: [u8; 3]) -> [u8; 3] {
 
 #[cfg(test)]
 mod tests {
-    use pdfrum_page::state::GeneralState;
+    use pdfrum_page::GeneralState;
     use pdfrum_page::{BitImage, ImageMask, Rgb};
 
     use super::*;

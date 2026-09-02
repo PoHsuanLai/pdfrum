@@ -33,12 +33,12 @@ pub use mesh::{
     MAX_COMPONENTS, Mesh, MeshParams, MeshReader, Patch, Triangle, Vertex, coons_interior,
 };
 pub use radial::Radial;
-pub use steps::{ColorSteps, STEPS};
+pub use steps::ColorSteps;
 
 use crate::color::{ColorSpace, Rgb};
 use crate::function::{Function, FunctionCache};
 use crate::names;
-use kurbo::{Affine, Rect};
+use kurbo::Rect;
 use pdfrum_common::{DiagKind, Diagnostics, Limits, Severity};
 use pdfrum_filters::decode_chain;
 use pdfrum_object::{Dict, Object, Resolve};
@@ -472,12 +472,6 @@ pub fn read_domain(dict: &Dict, r: &impl Resolve) -> (f32, f32) {
         Some(a) => (a.number_at_or_zero(0), a.number_at_or_zero(1)),
         None => (0.0, 1.0),
     }
-}
-
-/// Read a shading's own `/Matrix`, which is distinct from a pattern's.
-#[must_use]
-pub fn read_matrix(dict: &Dict, r: &impl Resolve) -> Affine {
-    dict.matrix(names::MATRIX, r)
 }
 
 #[cfg(test)]

@@ -283,7 +283,7 @@ mod tests {
         // applies at all.
         let mut c = ColorValue::default();
         c.set_space(Arc::new(ColorSpace::Pattern(Box::new(
-            pdfrum_page::color::PatternSpace {
+            pdfrum_page::PatternSpace {
                 base: Some(Box::new(ColorSpace::DeviceRgb)),
             },
         ))));
@@ -323,7 +323,7 @@ mod tests {
         // which is black — not transparent.
         let none = ColorValue {
             space: Some(Arc::new(ColorSpace::Separation(Box::new(
-                pdfrum_page::color::Separation {
+                pdfrum_page::Separation {
                     none: true,
                     alternate: None,
                     tint: None,

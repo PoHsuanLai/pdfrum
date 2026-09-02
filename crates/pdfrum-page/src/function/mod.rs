@@ -28,10 +28,10 @@ mod stitching;
 
 pub(crate) use sampled::BitReader;
 
-pub use exponential::Exponential;
-pub use postscript::{MAX_NESTING, PostScript, PsOp, parse_program, stack_size};
-pub use sampled::Sampled;
-pub use stitching::Stitching;
+pub(crate) use exponential::Exponential;
+pub use postscript::{PostScript, parse_program};
+pub(crate) use sampled::Sampled;
+pub(crate) use stitching::Stitching;
 
 use crate::error::Error;
 use crate::names;
@@ -116,7 +116,7 @@ impl Function {
     /// ```
     /// # use pdfrum_common::{Diagnostics, Limits};
     /// # use pdfrum_object::{Array, Dict, Name, NoResolve, Object};
-    /// # use pdfrum_page::function::FunctionCache;
+    /// # use pdfrum_page::FunctionCache;
     /// let dict = Dict::from_pairs([
     ///     (Name::from("FunctionType"), Object::Int(2)),
     ///     (Name::from("Domain"), Object::Array(Array::of([Object::Int(0), Object::Int(1)]))),

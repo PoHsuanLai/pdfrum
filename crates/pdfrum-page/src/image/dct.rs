@@ -85,6 +85,10 @@ pub struct DctImage {
 ///
 /// `[1 0 1 0 1 0 1 0]` — every channel reversed, which is the Adobe CMYK
 /// inversion expressed as a decode array rather than as a decoder step.
+#[allow(
+    dead_code,
+    reason = "the oracle behaviour it ports is pinned by this module's own tests; the curation removed its only caller outside the crate"
+)]
 pub const ADOBE_CMYK_DECODE: [f32; 8] = [1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0];
 
 /// How much a reduced-resolution decode may shrink the image.
@@ -92,6 +96,10 @@ pub const ADOBE_CMYK_DECODE: [f32; 8] = [1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0]
 /// `1 << min(levels, 3)`, so at most one eighth — libjpeg's limit, which
 /// PDFium inherits.
 #[must_use]
+#[allow(
+    dead_code,
+    reason = "the oracle behaviour it ports is pinned by this module's own tests; the curation removed its only caller outside the crate"
+)]
 pub fn scale_denominator(levels: u8) -> u32 {
     1u32 << levels.min(3)
 }
@@ -99,6 +107,10 @@ pub fn scale_denominator(levels: u8) -> u32 {
 /// The size a reduced decode produces: **ceiling** division, unlike the JPX
 /// path's plain right shift.
 #[must_use]
+#[allow(
+    dead_code,
+    reason = "the oracle behaviour it ports is pinned by this module's own tests; the curation removed its only caller outside the crate"
+)]
 pub fn scaled_size(dimension: u32, denominator: u32) -> u32 {
     if denominator == 0 {
         return dimension;
@@ -113,6 +125,10 @@ pub fn scaled_size(dimension: u32, denominator: u32) -> u32 {
 /// (crbug 890745), so a 408×408 4:2:0 image asked for at 50×50 still comes
 /// back at 408×408.
 #[must_use]
+#[allow(
+    dead_code,
+    reason = "the oracle behaviour it ports is pinned by this module's own tests; the curation removed its only caller outside the crate"
+)]
 pub fn allows_reduced_resolution(width: u32, height: u32, max_h: u32, max_v: u32) -> bool {
     let h_mcu = max_h.saturating_mul(8);
     let v_mcu = max_v.saturating_mul(8);
