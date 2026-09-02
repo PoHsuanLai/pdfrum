@@ -29,7 +29,9 @@ directory explicitly: `--goldens /mnt/data2/pdfium/pdfrum/conformance/goldens`.
 `--checkout` resolves the same way and needs the same treatment. A board that
 reports no passes and no failures has not run — and it has still overwritten
 `conformance/scoreboard.json` on the way out, so restore that from git before
-the next `--check-regressions`.
+the next `--check-regressions` — or write a trial run to `--out` under a
+scratch path in the first place. The same silence covers a missing `--tool`:
+every row reads `unsupported-tool`, and the exit code is still 0.
 
 `--limit N` truncates the corpus listing to its first `N` entries. It is a
 smoke-test switch, not a filter: there is no way to select a named file.
