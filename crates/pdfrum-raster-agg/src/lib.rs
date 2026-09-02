@@ -90,6 +90,8 @@
 mod image;
 mod target;
 
+use std::sync::Arc;
+
 use kurbo::{Affine, BezPath, Rect, Shape, Stroke};
 use pdfrum_page::BlendMode;
 use pdfrum_render::{
@@ -117,6 +119,38 @@ use target::{Source, Target};
 /// engine's own stroke outlining already uses, so a stroke expanded for a clip
 /// and a stroke expanded for a fill are the same polygon.
 const FLATTEN_TOLERANCE: f64 = 0.1;
+
+/// Intersect `mask` with `other` over the half-open row range `rows`,
+/// `old * new / 255` — `CFX_AggClipRgn::IntersectMask`'s truncating integer
+/// product, restricted to a band.
+///
+/// [`AlphaMask::intersect`] over the whole buffer is what this replaces, and
+/// the two agree byte for byte whenever every row outside `rows` is zero in
+/// `mask`: `mul255(0, b) == 0` for every `b`, so those rows are already the
+/// product. [`AggDevice::coverage_of`] is the only producer and it reports the
+/// band it wrote, so the precondition holds by construction. A mismatched size
+/// declines, exactly as `intersect` does.
+fn intersect_rows(mask: &mut AlphaMask, other: &AlphaMask, rows: core::ops::Range<u32>) {
+    if other.width() != mask.width() || other.height() != mask.height() {
+        return;
+    }
+    let width = mask.width() as usize;
+    let Some(start) = (rows.start as usize).checked_mul(width) else {
+        return;
+    };
+    let Some(end) = (rows.end as usize).checked_mul(width) else {
+        return;
+    };
+    let Some(src) = other.data().get(start..end) else {
+        return;
+    };
+    let Some(dest) = mask.data_mut().get_mut(start..end) else {
+        return;
+    };
+    for (a, &b) in dest.iter_mut().zip(src) {
+        *a = pixmap::mul255(*a, b);
+    }
+}
 
 /// The analytic backend.
 #[derive(Debug, Clone, Copy, Default)]
@@ -157,7 +191,11 @@ pub struct AggDevice {
     base: Target,
     layers: Vec<Layer>,
     /// The clip stack, innermost last. `None` is "everything visible".
-    clips: Vec<Option<AlphaMask>>,
+    ///
+    /// Each plane is behind an `Arc` because the active target holds the same
+    /// one — see `Target`'s `clip` field for why that share replaced a
+    /// device-sized copy on every push and pop.
+    clips: Vec<Option<Arc<AlphaMask>>>,
     frames: Vec<Frame>,
     /// Reused across draws so a page of paths costs one allocation, not one
     /// per fill.
@@ -299,13 +337,35 @@ impl AggDevice {
         }
     }
 
-    /// The coverage plane a path fills, device-sized — a clip.
-    fn coverage_of(&mut self, path: &BezPath, rule: FillRule, aa: AntiAlias) -> AlphaMask {
+    /// The coverage plane a path fills, device-sized — a clip — and the half-
+    /// open band of rows the sweep actually wrote to.
+    ///
+    /// The plane is device-sized because that is what a clip is: [`Target`]
+    /// indexes it by absolute device row and column. The *band* is what makes
+    /// intersecting one cheap. Every row outside it is untouched, which for a
+    /// freshly allocated mask means it is all zero, and `mul255(0, b)` is `0`
+    /// for every `b` — so an intersection restricted to the band produces
+    /// byte-for-byte the plane a whole-buffer one would. See
+    /// [`AggDevice::push_clip_mask`].
+    fn coverage_of(
+        &mut self,
+        path: &BezPath,
+        rule: FillRule,
+        aa: AntiAlias,
+    ) -> (AlphaMask, core::ops::Range<u32>) {
         let (w, h) = self.size();
         let mut mask = AlphaMask::new(w, h);
         self.raster.reset();
         self.raster.add_path(path, FLATTEN_TOLERANCE);
         let width = w as usize;
+        // The sweep visits rows in order, but the band is folded rather than
+        // read off the first and last call: a span whose columns all fall
+        // outside the buffer writes nothing, and counting it would widen the
+        // band past what was written. Widening is harmless to correctness —
+        // the band is an upper bound on the non-zero rows — but the fold costs
+        // nothing and keeps it tight.
+        let mut first = h;
+        let mut last = 0_u32;
         self.raster.sweep(
             to_scanline_rule(rule),
             to_coverage(aa),
@@ -318,6 +378,10 @@ impl AggDevice {
                 }
                 let x0 = x.max(0);
                 let x1 = x.saturating_add(len).min(w_i32);
+                if x1 > x0 {
+                    first = first.min(row);
+                    last = last.max(row.saturating_add(1));
+                }
                 for col in x0..x1 {
                     let Ok(col) = usize::try_from(col) else {
                         continue;
@@ -328,22 +392,32 @@ impl AggDevice {
                 }
             },
         );
-        mask
+        (mask, first..last.max(first))
     }
 
     /// Push a clip that is the intersection of the current one with `mask`.
-    fn push_clip_mask(&mut self, mut mask: AlphaMask) {
+    ///
+    /// `band` is the row range `coverage_of` wrote; every row outside it is
+    /// zero, and zero survives the product. So the intersection runs over the
+    /// band alone and the result is the same plane the whole-buffer spelling
+    /// produced — on an annotation appearance's `/BBox`, thirty rows of a
+    /// letter page's eight hundred.
+    fn push_clip_mask(&mut self, mut mask: AlphaMask, band: core::ops::Range<u32>) {
         if let Some(current) = self.clips.last().and_then(Option::as_ref) {
-            mask.intersect(current);
+            intersect_rows(&mut mask, current, band);
         }
-        self.clips.push(Some(mask));
+        self.clips.push(Some(Arc::new(mask)));
         self.frames.push(Frame::Clip);
         self.sync_clip();
     }
 
     /// Point the active target at the innermost clip.
+    ///
+    /// A refcount bump, not a copy: see [`Target`]'s `clip` field for why the
+    /// plane is shared. This runs on every clip push and on every pop, and a
+    /// page of annotation appearances performs hundreds of them.
     fn sync_clip(&mut self) {
-        let clip = self.clips.last().and_then(Option::as_ref).cloned();
+        let clip = self.clips.last().and_then(Option::as_ref).map(Arc::clone);
         self.target().set_clip(clip);
     }
 
@@ -544,8 +618,8 @@ impl RenderDevice for AggDevice {
     }
 
     fn push_clip(&mut self, path: &BezPath, rule: FillRule) {
-        let mask = self.coverage_of(path, rule, AntiAlias::On);
-        self.push_clip_mask(mask);
+        let (mask, band) = self.coverage_of(path, rule, AntiAlias::On);
+        self.push_clip_mask(mask, band);
     }
 
     fn push_clip_rect(&mut self, rect: Rect) {
@@ -553,8 +627,8 @@ impl RenderDevice for AggDevice {
         // aliased, and softening them would add a partial pixel along every
         // `re W n` edge in the corpus. The same integrator runs — only the
         // coverage-to-alpha step thresholds instead of scaling.
-        let mask = self.coverage_of(&rect_path(rect), FillRule::Winding, AntiAlias::Off);
-        self.push_clip_mask(mask);
+        let (mask, band) = self.coverage_of(&rect_path(rect), FillRule::Winding, AntiAlias::Off);
+        self.push_clip_mask(mask, band);
     }
 
     fn push_layer(&mut self, blend: BlendMode, alpha: f32, mask: Option<&AlphaMask>) {
@@ -575,7 +649,7 @@ impl RenderDevice for AggDevice {
         let mut target = Target::new(w, h, peniko::Color::TRANSPARENT);
         // A layer inherits the clip in force, so geometry drawn inside it is
         // clipped once, on the way in, rather than again on the way out.
-        target.set_clip(self.clips.last().and_then(Option::as_ref).cloned());
+        target.set_clip(self.clips.last().and_then(Option::as_ref).map(Arc::clone));
         self.layers.push(Layer {
             target,
             blend,
@@ -611,7 +685,7 @@ impl RenderDevice for AggDevice {
                 // squared, so this blit runs unclipped.
                 let (w, h) = (pixels.width(), pixels.height());
                 let target = self.target();
-                let saved = target.clip().cloned();
+                let saved = target.clip().map(Arc::clone);
                 target.set_clip(None);
                 for y in 0..h {
                     for x in 0..w {
@@ -808,6 +882,119 @@ mod tests {
         assert_eq!(out.pixel(0, 0).map(|px| px[3]), Some(0));
         assert_eq!(out.pixel(3, 0).map(|px| px[3]), Some(255));
         assert_eq!(out.pixel(5, 0).map(|px| px[3]), Some(0));
+    }
+
+    /// The band `push_clip_mask` intersects over is an optimisation, and this
+    /// is the case that would catch it being wrong: two clips whose row ranges
+    /// **do not overlap at all**, so the intersection is empty and every byte
+    /// of the answer lies outside the inner clip's band.
+    ///
+    /// A whole-buffer `intersect` produces an all-zero plane here. The banded
+    /// one writes nothing outside rows 4..8 — and the plane is already zero
+    /// there, because `coverage_of` allocates it zero and the sweep touched
+    /// only that band. So the two agree, and nothing paints.
+    #[test]
+    fn a_clip_outside_the_previous_ones_rows_paints_nothing() {
+        let backend = AggBackend::new();
+        let mut device = backend.new_target(8, 8, peniko::Color::TRANSPARENT);
+        // Rows 0..2, then rows 4..8: disjoint.
+        device.push_clip_rect(Rect::new(0.0, 0.0, 8.0, 2.0));
+        device.push_clip_rect(Rect::new(0.0, 4.0, 8.0, 8.0));
+        device.fill_path(
+            &square(0.0, 0.0, 8.0, 8.0),
+            Affine::IDENTITY,
+            &Brush::Solid(RED),
+            FillRule::Winding,
+            AntiAlias::Off,
+        );
+        device.pop();
+        device.pop();
+        let out = backend.finish(device);
+        for y in 0..8 {
+            for x in 0..8 {
+                assert_eq!(
+                    out.pixel(x, y).map(|px| px[3]),
+                    Some(0),
+                    "({x}, {y}) painted through two disjoint clips"
+                );
+            }
+        }
+    }
+
+    /// The banded intersection must agree with the whole-buffer one *inside*
+    /// the overlap too, byte for byte — the outer clip's coverage has to reach
+    /// the inner plane's rows.
+    ///
+    /// Two rectangles overlapping in rows 2..4 and in columns 2..4. Only that
+    /// square may paint: a band that lost the outer clip's columns would leave
+    /// the whole of rows 2..4 visible.
+    #[test]
+    fn a_banded_intersection_still_carries_the_outer_clips_columns() {
+        let backend = AggBackend::new();
+        let mut device = backend.new_target(8, 8, peniko::Color::TRANSPARENT);
+        device.push_clip_rect(Rect::new(0.0, 0.0, 4.0, 4.0));
+        device.push_clip_rect(Rect::new(2.0, 2.0, 8.0, 8.0));
+        device.fill_path(
+            &square(0.0, 0.0, 8.0, 8.0),
+            Affine::IDENTITY,
+            &Brush::Solid(RED),
+            FillRule::Winding,
+            AntiAlias::Off,
+        );
+        device.pop();
+        device.pop();
+        let out = backend.finish(device);
+        for y in 0..8 {
+            for x in 0..8 {
+                let inside = (2..4).contains(&x) && (2..4).contains(&y);
+                assert_eq!(
+                    out.pixel(x, y).map(|px| px[3]),
+                    Some(if inside { 255 } else { 0 }),
+                    "({x}, {y}) disagrees with the two clips' intersection"
+                );
+            }
+        }
+    }
+
+    /// Popping a clip must hand the target the *previous* plane, not a stale
+    /// share of the one just popped. The `Arc` turned `sync_clip` from a
+    /// device-sized copy into a refcount bump, and this is what says the bump
+    /// points at the right plane.
+    ///
+    /// `popping_a_clip_restores_the_previous_one` covers the same unwind on
+    /// one level; this one nests four deep and checks every level on the way
+    /// out, because a share that lagged by one would still pass a single pop.
+    #[test]
+    fn each_pop_hands_the_target_the_plane_one_level_out() {
+        let backend = AggBackend::new();
+        let widths = [8.0_f64, 6.0, 4.0, 2.0];
+        // At each depth, everything left of `widths[depth]` paints and
+        // everything from it rightwards does not.
+        for (depth, &edge) in widths.iter().enumerate() {
+            let mut device = backend.new_target(8, 1, peniko::Color::TRANSPARENT);
+            for w in &widths {
+                device.push_clip_rect(Rect::new(0.0, 0.0, *w, 1.0));
+            }
+            for _ in 0..(widths.len() - 1 - depth) {
+                device.pop();
+            }
+            device.fill_path(
+                &square(0.0, 0.0, 8.0, 1.0),
+                Affine::IDENTITY,
+                &Brush::Solid(RED),
+                FillRule::Winding,
+                AntiAlias::Off,
+            );
+            let out = backend.finish(device);
+            for x in 0..8 {
+                let inside = f64::from(x) < edge;
+                assert_eq!(
+                    out.pixel(x, 0).map(|px| px[3]),
+                    Some(if inside { 255 } else { 0 }),
+                    "column {x} at depth {depth} (clip edge {edge})"
+                );
+            }
+        }
     }
 
     #[test]
