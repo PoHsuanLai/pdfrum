@@ -183,16 +183,12 @@ pub(crate) fn hit_order(candidates: &[Candidate], focused: Option<AnnotId>) -> V
 
 /// Orders candidates for drawing: the same band sort, with the focused
 /// annotation moved to the **end** so it paints on top.
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "the painting half of the band sort — `hit_order` is the hit-testing half. \\
-              Both were `pub` before this package and only the crate's own tests called \\
-              this one; kept because the pair is the invariant, and dropping one leaves \\
-              the other undocumented — see the Landed note under §WP4."
-    )
-)]
+///
+/// The painting half of the band sort — [`hit_order`] is the hit-testing half.
+/// Only the crate's own tests call this one, and it lives under `cfg(test)`
+/// for that reason; the pair is the invariant, and dropping one leaves the
+/// other undocumented — see the Landed note under §WP4.
+#[cfg(test)]
 pub(crate) fn draw_order(candidates: &[Candidate], focused: Option<AnnotId>) -> Vec<Candidate> {
     let mut ordered = band_sorted(candidates);
     if let Some(focused) = focused
@@ -263,14 +259,10 @@ pub(crate) fn widget_at_point(
 /// none.
 ///
 /// The index is into the band-sorted list, which is what the oracle reports.
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "the z-ordered form of `widget_at_point`, kept for the same reason as \\
-              `draw_order` — see the Landed note under §WP4."
-    )
-)]
+///
+/// The z-ordered form of [`widget_at_point`], under `cfg(test)` for the same
+/// reason as [`draw_order`] — see the Landed note under §WP4.
+#[cfg(test)]
 pub(crate) fn widget_z_order_at_point(
     candidates: &[Candidate],
     permissions: Permissions,
