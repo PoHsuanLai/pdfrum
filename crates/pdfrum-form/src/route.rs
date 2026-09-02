@@ -459,7 +459,20 @@ fn key_down<R: Resolve>(
                 Response::ignored()
             }
         }
-        Some(FieldState::Button(_)) | None => Response::ignored(),
+        // `[oracle-bug]` a focused push button fires its `/A` on Return, the
+        // same activation a focused link gets. `CFFL_PushButton` has no
+        // `OnChar` override (where `CFFL_TextField` does, at
+        // `cffl_textfield.cpp:116-140`), so
+        // `fpdf_formfill_embeddertest.cpp:3658-3667` asserts `DoURIAction`
+        // `.Times(0)` and `ASSERT_FALSE(FORM_OnChar(…, kReturn, 0))` — both
+        // marked `TODO(crbug.com/1028991)` saying they should be one and
+        // true — while the adjacent `LinkActionInvokeTest` (`:3670-3690`)
+        // asserts `.Times(4)` and `ASSERT_TRUE` for a link. §12.6.3 table 196
+        // performs an annotation's `/A` when it is *activated*, and a keyboard
+        // activation of a tab-focused button is one. pdf.js gets it free by
+        // rendering push buttons as `<a>` (`annotation_layer.js:2129-2137`).
+        Some(FieldState::Button(_)) => annot_key(session, ctx, annot, key, modifiers),
+        None => Response::ignored(),
     }
 }
 
@@ -507,6 +520,13 @@ fn char_typed<R: Resolve>(
                 return Response::consumed();
             }
             Response::ignored()
+        }
+        // `[oracle-bug]` The char path too: the upstream assertion is on
+        // `FORM_OnChar(…, kReturn, 0)` (`fpdf_formfill_embeddertest.cpp:3667`),
+        // so a typed Return activates a focused push button exactly as the
+        // key path does. See `key_down`.
+        Some(FieldState::Button(_)) if ch == '\r' => {
+            annot_key(session, ctx, annot, Key::RETURN, modifiers)
         }
         Some(FieldState::Button(_)) | None => Response::ignored(),
     }
