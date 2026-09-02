@@ -14,191 +14,40 @@
 //! # Ok::<(), pdfrum::Error>(())
 //! ```
 //!
-//! # What this is
-//!
-//! `pdfrum` is a rewrite of [PDFium](https://pdfium.googlesource.com/pdfium/)
-//! — the PDF engine inside Chrome — as idiomatic Rust. Not a binding, not a
-//! transliteration: a rewrite, with PDFium kept alongside as a differential
-//! test oracle so the behaviour that matters is preserved even where the code
-//! shares nothing.
-//!
-//! That behaviour is the point. Two decades of a browser opening whatever the
-//! web threw at it left PDFium with a large body of undocumented recovery
-//! folklore — how to find objects when the cross-reference table is a lie,
-//! what to do with a stream whose `/Length` is wrong, which of a damaged
-//! page tree's contradictions to believe. Reimplementing PDF from the spec
-//! gets you a reader for files that are correct. Porting *that* gets you one
-//! for files that exist. Every release is measured against the oracle over a
-//! corpus of 1675 real and deliberately-broken PDFs.
-//!
-//! **Pure Rust, all the way down.** No C or C++ is compiled into any library
-//! build and no `-sys` crate appears anywhere in the tree — enforced in CI
-//! rather than promised. `unsafe` is forbidden in every crate.
-//!
-//! # JavaScript is off by default
-//!
-//! A PDF may carry scripts for form validation, calculation and formatting.
-//! **With default features this crate reads them as data and never runs
-//! them** — `scripts/check-no-boa.nu` asserts that no JavaScript engine is
-//! anywhere in the dependency tree of a default `cargo add pdfrum`, so it is
-//! a checked property rather than a promise. A field whose displayed value
-//! would come from a calculation script reads as whatever the file last
-//! stored.
-//!
-//! That is the *default* because an engine which executes untrusted script
-//! out of a document is a different security proposition from a renderer, and
-//! most PDF work does not need one. It is not a permanent absence: the
-//! `script` feature turns it on. See [§Features](#features).
-//!
-//! # What this deliberately is not
-//!
-//! - **No XFA.** Adobe's XML forms architecture is a second, largely
-//!   disjoint document format that happens to travel inside a PDF wrapper.
-//!   PDFium implements it in a subsystem the size of the rest of the engine.
-//!   Out of scope, permanently.
-//! - **Not a viewer.** There is no window, no scrolling, no text caret and no
-//!   interactive widget behaviour. This crate turns pages into pixels and
-//!   text into strings; what you do with them is yours.
+//! A rewrite of [PDFium](https://pdfium.googlesource.com/pdfium/) — Chrome's
+//! PDF engine — with PDFium kept alongside as a differential test oracle. No
+//! C or C++ is compiled in and `unsafe` is forbidden. Deliberately absent,
+//! permanently: XFA, and any viewer behaviour — this turns pages into pixels
+//! and text into strings. Everything under this facade is a public crate in
+//! its own right; [`Document::parser`], [`Page::objects`], [`PageEdit::graph`]
+//! and [`Annotation::dict`] are the documented escape hatches.
 //!
 //! # Where to start
 //!
-//! - [`Document`] — open a file, and reach everything that belongs to the
-//!   document as a whole: [page count](Document::page_count),
-//!   [metadata](Document::metadata), [outline](Document::outline),
-//!   [form](Document::form), [attachments](Document::attachments),
-//!   [diagnostics](Document::diagnostics) and the document-wide
-//!   [running total](Document::all_diagnostics).
-//! - [`Page`] — [render](Page::render) it, [read its text](Page::text), list
-//!   its [annotations](Page::annotations) and [links](Page::links), ask for
-//!   its [boxes](Page::crop_box) and [rotation](Page::rotation).
-//! - [`TextPage`] — search, select, and pull the web links out of a page's
-//!   text.
-//! - [`Form`] — enumerate fields, read them, fill them, and save the result.
-//! - [`Document::save`] and friends — write a document back out, whole or as
-//!   an incremental update, and [copy pages](Document::import_pages) between
-//!   documents. [`Document::edit`] embeds a font program (or a standard-14
-//!   face) so [`TextBuilder`] can write text the page did not already have.
+//! - [`Document`] — open a file; pages, metadata, outline, form, attachments,
+//!   [diagnostics](Document::diagnostics).
+//! - [`Page`] — [render](Page::render), [text](Page::text), annotations, links,
+//!   boxes.
+//! - [`TextPage`] — search, select, and web links.
+//! - [`Form`] — enumerate, read, fill; [`FormSession`] for live events.
+//! - [`Document::save`] — write back; [`Document::edit`] embeds fonts for
+//!   [`TextBuilder`].
 //!
-//! # Features
+//! # JavaScript is off by default
 //!
-//! One, and it is off.
-//!
-//! - **`script`** — run the document's own JavaScript. It brings a pure-Rust
-//!   engine ([boa](https://boajs.dev/), pinned exactly, and the ~116 crates
-//!   behind it; zero `-sys`, `cargo deny` clean — DEPS.md records the audit)
-//!   and adds `ScriptCascade`, `ScriptConfig` and
-//!   `FormSession::with_scripts` — all three exist only with the feature on.
-//!   Send a session built that way the events you would send anyway, and the
-//!   document's own `/AA` scripts run on them:
-//!
-//!   ```text
-//!   pdfrum = { version = "0.1", features = ["script"] }
-//!   ```
-//!
-//!   **What a script can and cannot reach today.** The `AF*` library
-//!   (`AFNumber_Format`, `AFDate_*`, `AFSimple_Calculate`, …), `util`,
-//!   `app.alert` and the `event` object are bound and the four field hooks —
-//!   keystroke, validate, calculate, format — run; the `Doc`/`Field` object
-//!   model is **not built yet**, so a script that calls `this.getField(…)`
-//!   throws, and 11 of the oracle's 47 JavaScript fixtures reproduce
-//!   byte-exactly. See PLAN.md §M15 and `docs/status/M15.md`. Do not enable
-//!   this expecting Acrobat.
-//!
-//!   Nothing a script asks for is performed by this crate: `app.alert`,
-//!   `Doc.submitForm` and `app.launchURL` come back as values on
-//!   `ScriptCascade::transcript` for the host to decide about, and no socket,
-//!   file or process is reachable from a script at all.
+//! A PDF may carry scripts. With default features they are read as data and
+//! never run. The `script` feature turns them on behind a pure-Rust engine
+//! (boa). The `Doc`/`Field` object model is incomplete — do not enable this
+//! expecting Acrobat.
 //!
 //! # Damage is not an error
 //!
-//! A broken file is the normal case, so recovery is a *channel* rather than a
-//! failure. Opening a document whose cross-reference table had to be rebuilt
-//! by scanning succeeds, and says so through [`Document::diagnostics`]; a
-//! content stream that ends mid-operator renders everything before the
-//! damage. [`Error`] is reserved for "no answer can be produced" — a file
-//! that is not a PDF, a password that does not open it, a page index that
-//! does not exist.
-//!
-//! Reading is lazy, so damage surfaces late: a bad `/Length` on page 400 is
-//! found when page 400 is rendered, not when the file opens.
-//! [`Document::diagnostics`] is the load-time snapshot;
-//! [`Document::all_diagnostics`] is the running total over everything the
-//! document has needed since — ask it *after* the work.
-//!
-//! # Rendering pages in parallel
-//!
-//! Every type here is `Send + Sync`, so rayon works with no ceremony beyond
-//! adding it to your own `Cargo.toml`:
-//!
-//! ```
-//! use rayon::prelude::*;
-//! use pdfrum::{Document, RenderOptions};
-//!
-//! let doc = Document::open("tests/fixtures/bookmarks.pdf")?;
-//!
-//! let pages: Vec<_> = doc.pages().collect();
-//! let rendered: Vec<_> = pages
-//!     .par_iter()
-//!     .map(|page| page.render(&RenderOptions::default()))
-//!     .collect::<Result<_, _>>()?;
-//!
-//! assert_eq!(rendered.len(), 2);
-//! # Ok::<(), pdfrum::Error>(())
-//! ```
-//!
-//! The document is shared by reference and each page renders independently.
-//! For a long document, give each worker its own [`RenderSession`] with
-//! [`Page::render_on`] so fonts, images and glyph outlines are decoded once
-//! per *thread* rather than once per page — `rayon`'s `map_init` does exactly
-//! this:
-//!
-//! ```
-//! use rayon::prelude::*;
-//! use pdfrum::{Document, RenderOptions, RenderSession, VelloCpuBackend};
-//!
-//! let doc = Document::open("tests/fixtures/bookmarks.pdf")?;
-//! let pages: Vec<_> = doc.pages().collect();
-//! let backend = VelloCpuBackend::new();
-//!
-//! let rendered: Vec<_> = pages
-//!     .par_iter()
-//!     .map_init(RenderSession::new, |session, page| {
-//!         page.render_on(&backend, &RenderOptions::default(), session)
-//!     })
-//!     .collect::<Result<_, _>>()?;
-//!
-//! assert_eq!(rendered.len(), 2);
-//! # Ok::<(), pdfrum::Error>(())
-//! ```
-//!
-//! The session is per-thread rather than shared because it is reached through
-//! `&mut` — sharing one behind a lock would serialize the very work the
-//! parallelism is for. A backend, by contrast, is `Sync` and one is enough
-//! for every worker.
-//!
-//! [`RenderSession`] carries both caches a run can reuse: its
-//! [`BuildContext`] half holds what a page is *built* from — fonts, colour
-//! spaces, functions, decoded images — and its [`RenderCaches`] half holds
-//! the flattened glyph outlines it is *drawn* with, which a per-page render
-//! throws away. [`Page::text_on`] takes the same session, so one run that
-//! both renders and extracts parses each font once.
-//!
-//! # This crate composes, it does not compute
-//!
-//! Everything here is a thin, ergonomic surface over a stack of member
-//! crates, each of which is a public API in its own right and none of which
-//! this crate hides. When you need something this surface does not offer —
-//! a dictionary key, an intermediate representation, a knob — reach past it:
-//! [`Document::parser`], [`Page::objects`], [`PageEdit::graph`] and
-//! [`Annotation::dict`] are the documented escape hatches, and
-//! `pdfrum-parser`, `pdfrum-page`, `pdfrum-render`, `pdfrum-text`,
-//! `pdfrum-doc` and `pdfrum-edit` are all there to be used directly.
-//!
-//! Reaching past is the *only* thing that needs a second dependency. Every
-//! type this crate's own signatures name is re-exported here, errors and
-//! their payloads included, so a caller who stays on this surface never has
-//! to add a crate merely to write a type down. `tests/reexports.rs` holds
-//! that property to a compile test.
+//! Recovery is a channel, not a failure. Opening a file whose cross-reference
+//! table had to be rebuilt succeeds and says so through
+//! [`Document::diagnostics`]; [`Error`] is reserved for "no answer can be
+//! produced". Reading is lazy, so [`Document::all_diagnostics`] is the running
+//! total — read it *after* the work. Every type here is `Send + Sync`; for a
+//! long document give each rayon worker its own [`RenderSession`].
 
 #![forbid(unsafe_code)]
 
