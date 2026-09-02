@@ -20,9 +20,14 @@ pub fn pdfrum_page::color::ColorSpace::is_normal(&self) -> bool
 pub fn pdfrum_page::color::ColorSpace::is_special(&self) -> bool
 pub fn pdfrum_page::color::ColorSpace::n_components(&self) -> usize
 pub fn pdfrum_page::color::ColorSpace::to_rgb(&self, &[f32]) -> pdfrum_page::color::Rgb
-pub fn pdfrum_page::color::ColorSpace::to_rgb_with(&self, &[f32], bool) -> pdfrum_page::color::Rgb
-pub fn pdfrum_page::color::ColorSpace::translate_image_line(&self, &mut [u8], &[u8], usize, bool, bool)
-pub fn pdfrum_page::color::ColorSpace::try_to_rgb(&self, &[f32], bool) -> core::option::Option<pdfrum_page::color::Rgb>
+pub fn pdfrum_page::color::ColorSpace::to_rgb_with(&self, &[f32], pdfrum_page::color::Conversion) -> pdfrum_page::color::Rgb
+pub fn pdfrum_page::color::ColorSpace::translate_image_line(&self, &mut [u8], &[u8], usize, bool, pdfrum_page::color::Conversion)
+pub fn pdfrum_page::color::ColorSpace::try_to_rgb(&self, &[f32], pdfrum_page::color::Conversion) -> core::option::Option<pdfrum_page::color::Rgb>
+pub enum pdfrum_page::color::Conversion
+pub pdfrum_page::color::Conversion::Managed
+pub pdfrum_page::color::Conversion::Standard
+impl pdfrum_page::color::Conversion
+pub fn pdfrum_page::color::Conversion::is_standard(self) -> bool
 pub enum pdfrum_page::color::Family
 pub pdfrum_page::color::Family::CalGray = 4
 pub pdfrum_page::color::Family::CalRgb = 5
@@ -68,7 +73,7 @@ pub pdfrum_page::color::DeviceN::alternate: alloc::boxed::Box<pdfrum_page::color
 pub pdfrum_page::color::DeviceN::names: alloc::boxed::Box<[pdfrum_object::name::Name]>
 pub pdfrum_page::color::DeviceN::tint: alloc::sync::Arc<pdfrum_page::function::Function>
 impl pdfrum_page::color::DeviceN
-pub fn pdfrum_page::color::DeviceN::to_rgb(&self, &[f32], bool) -> core::option::Option<pdfrum_page::color::Rgb>
+pub fn pdfrum_page::color::DeviceN::to_rgb(&self, &[f32], pdfrum_page::color::Conversion) -> core::option::Option<pdfrum_page::color::Rgb>
 pub struct pdfrum_page::color::IccBased
 pub pdfrum_page::color::IccBased::base: core::option::Option<alloc::boxed::Box<pdfrum_page::color::ColorSpace>>
 pub pdfrum_page::color::IccBased::n: u8
@@ -77,7 +82,7 @@ pub pdfrum_page::color::IccBased::ranges: alloc::boxed::Box<[f32]>
 impl pdfrum_page::color::IccBased
 pub fn pdfrum_page::color::IccBased::is_normal(&self) -> bool
 pub fn pdfrum_page::color::IccBased::stock_alternate(u8) -> core::option::Option<pdfrum_page::color::ColorSpace>
-pub fn pdfrum_page::color::IccBased::to_rgb(&self, &[f32], bool) -> pdfrum_page::color::Rgb
+pub fn pdfrum_page::color::IccBased::to_rgb(&self, &[f32], pdfrum_page::color::Conversion) -> pdfrum_page::color::Rgb
 pub struct pdfrum_page::color::IccProfile
 impl pdfrum_page::color::IccProfile
 pub fn pdfrum_page::color::IccProfile::is_normal(&self) -> bool
@@ -95,7 +100,7 @@ pub pdfrum_page::color::Indexed::component_ranges: alloc::boxed::Box<[(f32, f32)
 pub pdfrum_page::color::Indexed::lookup: alloc::boxed::Box<[u8]>
 pub pdfrum_page::color::Indexed::max_index: u8
 impl pdfrum_page::color::Indexed
-pub fn pdfrum_page::color::Indexed::to_rgb(&self, &[f32], bool) -> core::option::Option<pdfrum_page::color::Rgb>
+pub fn pdfrum_page::color::Indexed::to_rgb(&self, &[f32], pdfrum_page::color::Conversion) -> core::option::Option<pdfrum_page::color::Rgb>
 pub struct pdfrum_page::color::Lab
 pub pdfrum_page::color::Lab::black_point: [f32; 3]
 pub pdfrum_page::color::Lab::ranges: [f32; 4]
@@ -106,7 +111,7 @@ pub struct pdfrum_page::color::PatternSpace
 pub pdfrum_page::color::PatternSpace::base: core::option::Option<alloc::boxed::Box<pdfrum_page::color::ColorSpace>>
 impl pdfrum_page::color::PatternSpace
 pub fn pdfrum_page::color::PatternSpace::n_components(&self) -> usize
-pub fn pdfrum_page::color::PatternSpace::to_rgb(&self, &[f32], bool) -> core::option::Option<pdfrum_page::color::Rgb>
+pub fn pdfrum_page::color::PatternSpace::to_rgb(&self, &[f32], pdfrum_page::color::Conversion) -> core::option::Option<pdfrum_page::color::Rgb>
 pub struct pdfrum_page::color::PatternValue
 pub pdfrum_page::color::PatternValue::components: smallvec::SmallVec<[f32; 4]>
 pub pdfrum_page::color::PatternValue::loaded: core::option::Option<alloc::sync::Arc<pdfrum_page::pattern::Pattern>>
@@ -124,7 +129,7 @@ pub pdfrum_page::color::Separation::alternate: core::option::Option<alloc::boxed
 pub pdfrum_page::color::Separation::none: bool
 pub pdfrum_page::color::Separation::tint: core::option::Option<alloc::sync::Arc<pdfrum_page::function::Function>>
 impl pdfrum_page::color::Separation
-pub fn pdfrum_page::color::Separation::to_rgb(&self, &[f32], bool) -> core::option::Option<pdfrum_page::color::Rgb>
+pub fn pdfrum_page::color::Separation::to_rgb(&self, &[f32], pdfrum_page::color::Conversion) -> core::option::Option<pdfrum_page::color::Rgb>
 pub const pdfrum_page::color::MAX_PATTERN_COMPONENTS: usize
 pub fn pdfrum_page::color::adobe_cmyk_to_srgb(u8, u8, u8, u8) -> [u8; 3]
 pub fn pdfrum_page::color::is_srgb_profile(&[u8]) -> bool
@@ -925,9 +930,14 @@ pub fn pdfrum_page::color::ColorSpace::is_normal(&self) -> bool
 pub fn pdfrum_page::color::ColorSpace::is_special(&self) -> bool
 pub fn pdfrum_page::color::ColorSpace::n_components(&self) -> usize
 pub fn pdfrum_page::color::ColorSpace::to_rgb(&self, &[f32]) -> pdfrum_page::color::Rgb
-pub fn pdfrum_page::color::ColorSpace::to_rgb_with(&self, &[f32], bool) -> pdfrum_page::color::Rgb
-pub fn pdfrum_page::color::ColorSpace::translate_image_line(&self, &mut [u8], &[u8], usize, bool, bool)
-pub fn pdfrum_page::color::ColorSpace::try_to_rgb(&self, &[f32], bool) -> core::option::Option<pdfrum_page::color::Rgb>
+pub fn pdfrum_page::color::ColorSpace::to_rgb_with(&self, &[f32], pdfrum_page::color::Conversion) -> pdfrum_page::color::Rgb
+pub fn pdfrum_page::color::ColorSpace::translate_image_line(&self, &mut [u8], &[u8], usize, bool, pdfrum_page::color::Conversion)
+pub fn pdfrum_page::color::ColorSpace::try_to_rgb(&self, &[f32], pdfrum_page::color::Conversion) -> core::option::Option<pdfrum_page::color::Rgb>
+pub enum pdfrum_page::Conversion
+pub pdfrum_page::Conversion::Managed
+pub pdfrum_page::Conversion::Standard
+impl pdfrum_page::color::Conversion
+pub fn pdfrum_page::color::Conversion::is_standard(self) -> bool
 #[non_exhaustive] pub enum pdfrum_page::Error
 pub pdfrum_page::Error::CodecRejected
 pub pdfrum_page::Error::CodecRejected::codec: &'static str

@@ -17,8 +17,8 @@
     reason = "cyan, magenta, yellow and black are single-letter by convention"
 )]
 
-use super::Rgb;
 use super::cmyk_table::{AXIS, CMYK};
+use super::{Conversion, Rgb};
 
 /// The value `(v * 255)` is offset by before truncating, chosen so the result
 /// matches `roundf` on every float in `0..=1`.
@@ -56,9 +56,9 @@ pub fn rgb_to_rgb(comps: &[f32]) -> Rgb {
 /// one runs is not a rendering option — it is whether the caller is the image
 /// decoder.
 #[must_use]
-pub fn cmyk_to_rgb(comps: &[f32], std_conversion: bool) -> Rgb {
+pub fn cmyk_to_rgb(comps: &[f32], conversion: Conversion) -> Rgb {
     let at = |i: usize| comps.get(i).copied().unwrap_or(0.0);
-    if std_conversion {
+    if conversion.is_standard() {
         let (c, m, y, k) = (at(0), at(1), at(2), at(3));
         return Rgb {
             r: 1.0 - (c + k).min(1.0),
@@ -169,6 +169,7 @@ mod tests {
         reason = "test fixtures quote oracle vectors verbatim and compare exactly"
     )]
 
+    use super::Conversion;
     use super::{cmyk_to_rgb, gray_to_rgb, rgb_to_rgb};
 
     fn close(a: f32, b: f32) -> bool {
@@ -209,7 +210,7 @@ mod tests {
             ([0.15, 0.5, 1.5, -0.6], [0.85098046, 0.552941, 0.15686275]),
         ];
         for (input, want) in cases {
-            let got = cmyk_to_rgb(&input, false);
+            let got = cmyk_to_rgb(&input, Conversion::Managed);
             assert!(
                 close(got.r, want[0]) && close(got.g, want[1]) && close(got.b, want[2]),
                 "cmyk {input:?}: got {got:?}, want {want:?}"
@@ -219,11 +220,11 @@ mod tests {
 
     #[test]
     fn std_conversion_takes_the_naive_formula_unclamped() {
-        let got = cmyk_to_rgb(&[0.5, 0.25, 0.0, 0.25], true);
+        let got = cmyk_to_rgb(&[0.5, 0.25, 0.0, 0.25], Conversion::Standard);
         assert!(close(got.r, 0.25) && close(got.g, 0.5) && close(got.b, 0.75));
         // The naive path saturates at 1 through `min`, not through a clamp of
         // the inputs.
-        let got = cmyk_to_rgb(&[2.0, 0.0, 0.0, 0.0], true);
+        let got = cmyk_to_rgb(&[2.0, 0.0, 0.0, 0.0], Conversion::Standard);
         assert!(close(got.r, 0.0));
     }
 
