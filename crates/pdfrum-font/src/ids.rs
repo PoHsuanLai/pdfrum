@@ -10,6 +10,13 @@ pub use pdfrum_cmap::{CharCode, Cid};
 /// deliberately distinguishes from "no glyph at all" (that is `None`, the C++'s
 /// `-1`). Every ladder in this crate returns `Option<Gid>` for exactly that
 /// reason.
+///
+/// Whose numbering this is depends on the loaded program: `skrifa`'s
+/// `GlyphId` for an sfnt or bare-CFF face, and `/CharStrings` declaration
+/// order for a Type 1 one. [`pdfrum_type1::Gid`] names that second space in
+/// its own crate and stays a separate type; the `From` impls below are the
+/// conversion, and they live here because this is the one crate that holds
+/// both (`docs/design/idiomatic-api.md` §B.3, and §A.11's step-12 ruling).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct Gid(pub u16);
 
