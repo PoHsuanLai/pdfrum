@@ -9,9 +9,9 @@
 //! - `src/bin/ratchet.rs`, which compares a criterion run against that file and
 //!   fails on a regression outside the band;
 //! - `src/bin/profile.rs`, which runs one operation in a loop with nothing else
-//!   in the process, for `scripts/profile.sh` to record;
+//!   in the process, for `scripts/profile.nu` to record;
 //! - `src/bin/scaling.rs`, one rayon thread count per process, for
-//!   `scripts/bench-scaling.sh`;
+//!   `scripts/bench-scaling.nu`;
 //! - `corpus/`, the 44 documents themselves.
 //!
 //! The criterion groups no longer live here. Since M12's per-crate split each

@@ -27,7 +27,7 @@ must_use_candidate = "allow"
 # walk. It is **off by default and must stay that way**: cargo unifies features
 # across a workspace build, so a default-on forward here would put the
 # instrument inside every criterion group in `pdfrum-render`'s own bench and
-# make the committed numbers measure the instrument. `scripts/profile.sh --walk`
+# make the committed numbers measure the instrument. `scripts/profile.nu --walk`
 # builds this one binary with it and nothing else.
 [features]
 default = []

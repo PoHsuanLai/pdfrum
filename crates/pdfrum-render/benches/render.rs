@@ -47,7 +47,7 @@
 //! Every group times a whole document, because the oracle's `pdfium_test
 //! --render-repeats` also times a whole document and comparing a per-page
 //! average against a whole-document time would be arithmetic dressed up as
-//! measurement. `scripts/bench-oracle.sh` times the same files the same way.
+//! measurement. `scripts/bench-oracle.nu` times the same files the same way.
 //!
 //! # Three backends, not one parameterised group
 //!
