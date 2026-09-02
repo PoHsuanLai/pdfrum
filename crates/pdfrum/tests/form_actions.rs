@@ -129,42 +129,68 @@ fn no_key_but_return_fires_a_links_action() {
     }
 }
 
-/// Links are **not** in the ring by default, so the same Return does nothing
-/// in a default session. The ring's membership being the caller's choice is a
-/// contract, and this is the half of it that is easy to break silently.
+/// Links are **not** in the ring by default, so the *four* link actions the
+/// fixture carries cannot be reached from a default session.
+///
+/// Audit item **A67**. This used to assert that no stop in the default ring
+/// fires anything at all — "a default session's ring holds widgets alone" —
+/// an assertion that was only ever true because the ring's push button
+/// silently swallowed its Return. The ring did contain a focusable non-link
+/// widget all along, so the property this test actually owns is a
+/// **comparison**: admitting links to the ring puts strictly more actions in
+/// reach than the default ring has, and the difference is the links.
 #[test]
 fn links_are_not_focusable_by_default() {
-    let doc = document();
-    let mut session = FormSession::new(&doc);
-
-    for _ in 0..12 {
-        if !session
-            .on_key_down(VirtualKey::TAB, EventModifiers::NONE)
-            .consumed
-        {
-            break;
-        }
-        assert_eq!(
-            session
+    fn reachable(session: &mut FormSession<'_>) -> usize {
+        let mut fired = 0;
+        for _ in 0..12 {
+            if !session
+                .on_key_down(VirtualKey::TAB, EventModifiers::NONE)
+                .consumed
+            {
+                break;
+            }
+            fired += session
                 .on_key_down(VirtualKey::RETURN, EventModifiers::NONE)
                 .actions()
-                .count(),
-            0,
-            "a default session's ring holds widgets alone"
-        );
+                .count();
+        }
+        fired
     }
+
+    let doc = document();
+    let default_ring = reachable(&mut FormSession::new(&doc));
+    let with_links = reachable(&mut session_with_links(&doc));
+
+    // The fixture carries four links, each with a `/A`, and none of them is
+    // in the default ring.
+    // The default ring's only action is the push button's own. Admitting
+    // links puts strictly more in reach, and the difference is a link.
+    assert_eq!(
+        default_ring, 1,
+        "a default session's ring holds widgets alone — the button is the one"
+    );
+    assert!(
+        with_links > default_ring,
+        "admitting links to the ring puts a link's action in reach \
+         (default {default_ring}, with links {with_links})"
+    );
 }
 
-/// `ButtonActionInvokeTest`: a focused push button's Return produces **no**
-/// action and is **not** consumed — the asserted-broken upstream behaviour,
-/// ported as it stands with the open bug named.
+/// `ButtonActionInvokeTest`, inverted. Audit item **A67**.
 ///
-/// `crbug.com/1028991` says this should fire the button's action and does
-/// not. Reproducing it rather than improving on it is what keeps a golden
-/// comparison honest; a test asserting the *fixed* behaviour would fail
-/// against every oracle build.
+/// Upstream asserts `DoURIAction` `.Times(0)` and
+/// `ASSERT_FALSE(FORM_OnChar(…, kReturn, 0))`, both under
+/// `TODO(crbug.com/1028991)` saying they should be one and true; the adjacent
+/// `LinkActionInvokeTest` asserts `.Times(4)` for a link. §12.6.3 table 196
+/// performs an annotation's `/A` when it is activated, and a keyboard
+/// activation of a tab-focused button is one. Under the oracle-bug rule we
+/// implement the TODO's answer, so this asserts the fire the oracle omits.
+///
+/// The upstream call is `FORM_OnChar`, so the **char** path is the one the
+/// assertion is on; the key path is checked below it.
 #[test]
-fn a_push_buttons_return_fires_nothing_and_is_not_consumed() {
+fn a_push_buttons_return_fires_its_action() {
     let doc = document();
     let mut session = FormSession::new(&doc);
 
@@ -175,8 +201,17 @@ fn a_push_buttons_return_fires_nothing_and_is_not_consumed() {
     let response = session.on_char('\r', EventModifiers::NONE);
     assert_eq!(
         response.actions().count(),
-        0,
-        "a push button's Return fires no action (crbug.com/1028991)"
+        1,
+        "a push button's Return fires its action (crbug.com/1028991)"
+    );
+
+    // The key path answers identically — `key_down` and `char_typed` route a
+    // focused button's Return through the same `annot_key`.
+    let response = session.on_key_down(VirtualKey::RETURN, EventModifiers::NONE);
+    assert_eq!(
+        response.actions().count(),
+        1,
+        "the key path fires the same action as the char path"
     );
 }
 
