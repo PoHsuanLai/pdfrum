@@ -104,14 +104,19 @@ pub mod glyph;
 pub mod pixmap;
 pub mod scanline;
 
-// The walk's own phase timers and allocation counters, behind the default-off
-// `walk-profile` feature. Public, and unconditionally so, because
-// `benches/src/bin/profile.rs` reads it either way: with the feature on for
-// the numbers, and with it off to notice every counter is zero and print
-// which rebuild would fill them in. A module gated on the feature could not
-// answer the second question. Its docs make the STYLE.md §1 argument for the
-// thread-local, and it holds.
+// The walk's own phase timers and allocation counters. Public *with the
+// default-off `walk-profile` feature and only then*: the module always
+// exists, because the walk calls its entry points unconditionally and they
+// compile to empty inline functions with the feature off, but its forty-five
+// reporting items are part of the instrument rather than of the crate a
+// `cargo add pdfrum-render` reaches —
+// `docs/status/api-baseline/README.md:103` says exactly that where it
+// declines to snapshot the feature. Its own docs make the STYLE.md §1
+// argument for the thread-local, and it holds.
+#[cfg(feature = "walk-profile")]
 pub mod walkprofile;
+#[cfg(not(feature = "walk-profile"))]
+mod walkprofile;
 
 pub use color::{Argb, ObjectKind};
 pub use ctx::RenderCaches;
