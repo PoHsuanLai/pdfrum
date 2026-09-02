@@ -17,7 +17,7 @@
 
 use crate::bidi::{self, Direction};
 use crate::charinfo::{CharBox, CharType};
-use crate::unicode::{mirror_char, normalize};
+use crate::unicode::{mirror_char, normalize, normalize_space};
 
 /// The two staging buffers, kept one-to-one.
 #[derive(Debug, Clone, Default)]
@@ -222,7 +222,10 @@ pub fn close(line: &mut Line, out: &mut Output, rtl: bool) {
 /// 2. Only a right-to-left character has its record's unicode rewritten from
 ///    the mirrored, normalized text; a left-to-right one keeps whatever it
 ///    was constructed with. That is what carries the hyphen sentinel's
-///    `0x0002` through while the text buffer receives `U+FFFE`.
+///    `0x0002` through while the text buffer receives `U+FFFE`. The one
+///    exception is `[oracle-bug]` A40b's space normalization, which rewrites
+///    the record in either direction precisely so the two outputs *cannot*
+///    disagree about a space.
 /// 3. Normalization multiplies one character record into several, all sharing
 ///    one box, origin and matrix, and retypes them as pieces.
 fn add(unit: u32, info: CharBox, is_rtl: bool, out: &mut Output) {
@@ -231,6 +234,22 @@ fn add(unit: u32, info: CharBox, is_rtl: bool, out: &mut Output) {
         return;
     }
     let unit = if is_rtl { mirror_char(unit) } else { unit };
+    // `[oracle-bug]` The NFKC space normalization, applied to **every**
+    // character rather than only inside a right-to-left run. `AddCharInfo`
+    // (`cpdf_textpage.cpp:793-795`) consults `GetUnicodeNormalization` — whose
+    // table maps `U+00A0` to `U+0020` — only when `is_rtl` or the code point
+    // is in the `U+FB00..=U+FB06` band, so the same NO-BREAK SPACE comes out
+    // as a plain space in a Hebrew run and as `U+00A0` in a Latin one. pdf.js
+    // normalises every extracted chunk (`src/shared/util.js:1050-1065`,
+    // applied at `src/core/evaluator.js:2685-2689` with
+    // `disableNormalization` defaulting to `false` at `:2403`), so both
+    // implementations emit `U+0020`; only the route differs. See
+    // [`normalize_space`](crate::unicode::normalize_space) for why this is the
+    // thirteen space code points and not PDFium's whole normalization table,
+    // which is not NFKC and would strip every accent on the page.
+    let normalized_unit = normalize_space(unit);
+    let space_normalized = normalized_unit != unit;
+    let unit = normalized_unit;
     // Latin ligatures decompose unconditionally; everything else only inside
     // a right-to-left run.
     let normalized = if is_rtl || (0xFB00..=0xFB06).contains(&unit) {
@@ -247,7 +266,13 @@ fn add(unit: u32, info: CharBox, is_rtl: bool, out: &mut Output) {
     // letters and why the hyphen look-back accepts it.
     if normalized.is_empty() {
         out.text.push(unit);
-        if is_rtl {
+        // `[oracle-bug]` The character *record* carries the normalized space
+        // too. `--txt` writes the char list, not the search-facing text
+        // (`cpdf_textpage.cpp:797-800` sets `modified_info.set_unicode` only
+        // under `is_rtl`), so normalizing the text alone would leave the two
+        // outputs disagreeing about the same character — which is the very
+        // split this item is closing.
+        if is_rtl || space_normalized {
             modified.unicode = unit;
         }
         out.chars.push(modified);
@@ -436,13 +461,33 @@ mod tests {
         assert_eq!(out.chars[2].char_type, CharType::Piece);
     }
 
+    /// Audit item **A40b**. This asserted `"a\u{00A0}b"`, reproducing
+    /// `cpdf_textpage.cpp:793-795`'s gate: `GetUnicodeNormalization` maps
+    /// `U+00A0` to `U+0020` but is consulted only inside a right-to-left run,
+    /// so the same character came out two ways on the same page. pdf.js
+    /// NFKC-normalises every chunk, so the space is a space in either
+    /// direction now.
     #[test]
-    fn a_non_ligature_is_not_normalized_left_to_right() {
-        // U+00A0 does normalize, but only inside a right-to-left run.
+    fn a_no_break_space_normalizes_in_either_direction() {
         let mut out = Output::default();
         close(&mut staged("a\u{00A0}b"), &mut out, false);
-        assert_eq!(rendered(&out), "a\u{00A0}b");
+        assert_eq!(rendered(&out), "a b");
+        // Not retyped as a piece: the space normalization is a substitution,
+        // not a decomposition, so the record stays a normal character.
         assert_eq!(out.chars[1].char_type, CharType::Normal);
+        // And the character *record* carries it too — `--txt` writes the char
+        // list, not the search-facing text.
+        assert_eq!(out.chars[1].unicode, 0x0020);
+    }
+
+    /// Audit item **A40b**, the other half: this is not PDFium's whole
+    /// normalization table, which is not NFKC and would strip the accent.
+    #[test]
+    fn an_accented_letter_is_not_normalized_left_to_right() {
+        let mut out = Output::default();
+        close(&mut staged("a\u{00C0}b"), &mut out, false);
+        assert_eq!(rendered(&out), "a\u{00C0}b");
+        assert_eq!(out.chars[1].unicode, 0x00C0);
     }
 
     #[test]
