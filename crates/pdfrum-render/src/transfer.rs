@@ -147,10 +147,12 @@ mod tests {
         stream(dict, b"{ 360 mul sin 2 div }")
     }
 
+    /// Audit item **A9**, at the consuming end. This asserted the oracle's
+    /// reversal (`cpdf_docrenderdata.cpp:90`); table 58 gives the array as
+    /// `[red green blue gray]`, so element `i` drives channel `i`, and
+    /// nothing here undoes it.
     #[test]
-    fn the_last_array_element_drives_red() {
-        // Three constants no two of which collide. `pdfrum-page` applies the
-        // `/TR` array's reversal, and nothing here undoes it.
+    fn the_first_array_element_drives_red() {
         let array = Object::Array(Array::of([
             constant(10.0 / 255.0),
             constant(100.0 / 255.0),
@@ -158,9 +160,9 @@ mod tests {
         ]));
         let parsed = load(&array).expect("should load");
         let out = TransferFunc::new(&parsed).translate(Argb::opaque(10, 20, 30));
-        assert_eq!(out.r, 200, "array[2] must drive red");
+        assert_eq!(out.r, 10, "array[0] must drive red");
         assert_eq!(out.g, 100, "array[1] must drive green");
-        assert_eq!(out.b, 10, "array[0] must drive blue");
+        assert_eq!(out.b, 200, "array[2] must drive blue");
     }
 
     #[test]
@@ -174,15 +176,34 @@ mod tests {
         let tf = TransferFunc::new(&parsed);
         assert!(!tf.is_identity());
 
-        // 0x00ffffff -> 0x001a0d00, i.e. r=0x00, g=0x0d, b=0x1a. Red comes
-        // from array[2] (the sine, zero at t=1), blue from array[0].
+        // Audit items **A9** and **A10**, and this table is where both are
+        // visible at once. The upstream expectations are on the left; ours,
+        // on the right, differ in exactly two ways and no others:
+        //
+        // * **A9** swaps red and blue. Upstream `0x00ffffff -> 0x001a0d00`
+        //   makes red `0x00` (the sine, `array[2]`) and blue `0x1a` (the type
+        //   0 function, `array[0]`); table 58 puts the type 0 function in red.
+        // * **A10** saturates instead of wrapping. Upstream's `0xcccccc` row
+        //   pins `-121.26` arriving as `0x87` — `size_t o =
+        //   FXSYS_roundf(output[0] * 255)` stored into a `uint8_t` with no
+        //   clamp, which is also undefined behaviour for a negative float.
+        //   Clipped to `/Range` per §7.10.1 and saturated, it is `0x00`.
+        //
+        // | input      | upstream   | ours       |
+        // |------------|------------|------------|
+        // | `ff ff ff` | `00 0d 1a` | `1a 0d 00` |
+        // | `00 00 ff` | `00 1a 1a` | `19 1a 00` |
+        // | `00 ff 00` | `00 0d 19` | `19 0d 00` |
+        // | `ff 00 00` | `00 1a 19` | `1a 1a 00` |
+        // | `cc cc cc` | `87 0f 1a` | `1a 0f 00` |
+        // | `56 34 12` | `6d 17 19` | `19 17 37` |
         for (input, expected) in [
-            ((0xff, 0xff, 0xff), (0x00, 0x0d, 0x1a)),
-            ((0x00, 0x00, 0xff), (0x00, 0x1a, 0x1a)),
-            ((0x00, 0xff, 0x00), (0x00, 0x0d, 0x19)),
-            ((0xff, 0x00, 0x00), (0x00, 0x1a, 0x19)),
-            ((0xcc, 0xcc, 0xcc), (0x87, 0x0f, 0x1a)),
-            ((0x56, 0x34, 0x12), (0x6d, 0x17, 0x19)),
+            ((0xff, 0xff, 0xff), (0x1a, 0x0d, 0x00)),
+            ((0x00, 0x00, 0xff), (0x19, 0x1a, 0x00)),
+            ((0x00, 0xff, 0x00), (0x19, 0x0d, 0x00)),
+            ((0xff, 0x00, 0x00), (0x1a, 0x1a, 0x00)),
+            ((0xcc, 0xcc, 0xcc), (0x1a, 0x0f, 0x00)),
+            ((0x56, 0x34, 0x12), (0x19, 0x17, 0x37)),
         ] {
             let (r, g, b) = input;
             let out = TransferFunc::new(&parsed).translate(Argb::opaque(r, g, b));
