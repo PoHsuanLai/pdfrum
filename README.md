@@ -14,7 +14,7 @@ use pdfrum::{Document, RenderOptions};
 let doc = Document::open("report.pdf")?;
 for page in doc.pages() {
     let pixmap = page.render(&RenderOptions::scaled(2.0))?;
-    let text = page.text().all_text();
+    let text = page.text().to_string();
     println!("page {}: {}x{}, {} chars",
         page.index(), pixmap.width(), pixmap.height(), text.len());
 }

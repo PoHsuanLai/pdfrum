@@ -111,18 +111,6 @@ impl BidiLine {
 /// neutral and it pushes the *completed* segment on every change. It produces
 /// empty spans downstream and is a no-op there, but it is counted by the
 /// auto-order heuristic, so dropping it would change which lines flip.
-///
-/// ```
-/// use pdfrum_text::bidi::{Direction, segments};
-///
-/// let latin: Vec<u32> = "abc".chars().map(u32::from).collect();
-/// let line = segments(&latin, false);
-/// assert_eq!(line.overall(), Direction::Left);
-/// // A leading zero-count neutral segment, then the run itself.
-/// assert_eq!(line.segments().len(), 2);
-/// assert_eq!(line.segments()[0].count, 0);
-/// assert_eq!(line.segments()[1].count, 3);
-/// ```
 #[must_use]
 pub fn segments(codes: &[u32], auto_order: bool) -> BidiLine {
     let mut out: Vec<Segment> = Vec::new();
@@ -286,5 +274,17 @@ mod tests {
                 Direction::LeftWeak,
             ]
         );
+    }
+
+    /// Was a doctest until WP8 made `bidi` a private module.
+    #[test]
+    fn a_latin_line_resolves_left_with_a_leading_neutral_segment() {
+        let latin: Vec<u32> = "abc".chars().map(u32::from).collect();
+        let line = segments(&latin, false);
+        assert_eq!(line.overall(), Direction::Left);
+        // A leading zero-count neutral segment, then the run itself.
+        assert_eq!(line.segments().len(), 2);
+        assert_eq!(line.segments()[0].count, 0);
+        assert_eq!(line.segments()[1].count, 3);
     }
 }

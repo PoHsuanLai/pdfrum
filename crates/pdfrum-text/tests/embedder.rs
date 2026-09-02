@@ -34,7 +34,13 @@ use std::path::PathBuf;
 use pdfrum_common::{Diagnostics, Limits};
 use pdfrum_object::{Name, Object};
 use pdfrum_page::{BuildContext, Resources, build_page_from_dict, parse_content};
-use pdfrum_text::{CharType, ExtractOptions, FindOptions, TextPage};
+use pdfrum_text::{CharIndex, CharType, ExtractOptions, FindOptions, TextPage};
+
+/// A character-list position, spelled short because the fixtures below are
+/// full of them.
+fn at(index: usize) -> CharIndex {
+    CharIndex::new(index)
+}
 
 /// Where the oracle's test files live, when this checkout has them.
 fn resources() -> Option<PathBuf> {
@@ -131,7 +137,7 @@ const HELLO: &str = "Hello, world!\r\nGoodbye, world!";
 fn hello_world_extracts_thirty_characters_in_reading_order() {
     let page = fixture!("hello_world.pdf");
     assert_eq!(page.chars.len(), 30);
-    assert_eq!(page.all_text(), HELLO);
+    assert_eq!(page.to_string(), HELLO);
 }
 
 #[test]
@@ -159,7 +165,7 @@ fn a_soft_hyphen_becomes_the_sentinel_and_a_hard_one_survives() {
     // `[oracle-bug]` **A41, buffer half.** This used to assert
     // `"Verita\u{FFFE}serum"`, reproducing `cpdf_textpage.cpp:1360-1361`'s
     // `AppendChar(0xfffe)`. `U+FFFE` is a permanent Unicode noncharacter
-    // (Unicode §23.7) and reached callers verbatim through `all_text()`. It is
+    // (Unicode §23.7) and reached callers verbatim through `Display`. It is
     // now the real soft hyphen the document contained and `IsHyphenCode`
     // (`:1149-1151`) recognised before discarding. The *record* still holds
     // PDFium's `0x2` — A41's char-list half costs 12 golden rows and stays
@@ -170,7 +176,7 @@ fn a_soft_hyphen_becomes_the_sentinel_and_a_hard_one_survives() {
     assert_eq!(page.chars[6].unicode, 0x0002);
     assert_eq!(page.chars[6].char_type, CharType::Hyphen);
     assert_eq!(
-        page.all_text().chars().take(12).collect::<String>(),
+        page.to_string().chars().take(12).collect::<String>(),
         "Verita\u{00AD}serum"
     );
     assert_eq!(page.chars[14].unicode, u32::from('U'));
@@ -181,7 +187,7 @@ fn a_soft_hyphen_becomes_the_sentinel_and_a_hard_one_survives() {
     assert_eq!(page.chars[18].unicode, 0x2010);
     assert_ne!(page.chars[18].char_type, CharType::Hyphen);
     assert_eq!(
-        page.all_text()
+        page.to_string()
             .chars()
             .skip(14)
             .take(16)
@@ -211,9 +217,47 @@ fn control_characters_are_in_the_char_stream_and_not_in_the_text() {
     // space still counts them, so "Goodbye" starts at character 17 rather
     // than at text offset 15.
     let page = fixture!("control_characters.pdf");
-    assert_eq!(page.all_text(), HELLO);
+    assert_eq!(page.to_string(), HELLO);
     assert!(!units(&page).contains(&0x02) || page.chars.len() > 30);
-    assert_eq!(page.page_text(17, 15), "Goodbye, world!");
+    assert_eq!(page.slice(at(17)..at(32)), "Goodbye, world!");
+
+    // `slice(a..b)` is the old `page_text(a, b - a)`, and this is the fixture
+    // where the two index spaces diverge: the two control characters after
+    // "Hello" mean every char index past them is two higher than its text
+    // offset, so a range that ignored the distinction would cut the wrong
+    // string. Walked over every (start, count) pair the page has, against the
+    // old formula computed directly from the segment table.
+    let total = page.chars.len();
+    for start in 0..=total {
+        for count in 0..=(total - start) {
+            let want = old_page_text(&page, start, count);
+            let got = page.slice(at(start)..at(start + count));
+            assert_eq!(got, want, "slice({start}..{}) ", start + count);
+        }
+    }
+}
+
+/// `page_text(start, count)` as it stood before WP8, computed from the public
+/// segment table alone.
+///
+/// The point of keeping it here rather than deleting it with the method: it is
+/// the *old* arithmetic, so a range-shaped `slice` that quietly changed a bound
+/// fails against it rather than against a copy of itself.
+fn old_page_text(page: &TextPage, start: usize, count: usize) -> String {
+    if count == 0 || start >= page.chars.len() || page.search_text.is_empty() {
+        return String::new();
+    }
+    let Some(text_start) = page.runs.text_index_at_or_after(at(start)) else {
+        return String::new();
+    };
+    let count = count.min(page.chars.len() - start);
+    let text_end = page.runs.text_index_end(at(start + count - 1));
+    if text_end <= text_start {
+        return String::new();
+    }
+    page.search_text[text_start.get()..text_end.get()]
+        .iter()
+        .collect()
 }
 
 #[test]
@@ -221,7 +265,7 @@ fn a_leading_control_character_lengthens_the_char_stream_only() {
     // `Bug1139`: one more character than the text has.
     let page = fixture!("bug_1139.pdf");
     assert_eq!(page.chars.len(), 31);
-    assert_eq!(page.all_text(), HELLO);
+    assert_eq!(page.to_string(), HELLO);
 }
 
 #[test]
@@ -243,7 +287,7 @@ fn an_unmappable_character_is_still_counted() {
     // for an unrepresentable character and is already what this workspace
     // answers for an unpaired surrogate (audit A54). The character *record*
     // still holds `0`, so `--txt` is byte-identical.
-    assert_eq!(page.all_text(), "\u{FFFD}");
+    assert_eq!(page.to_string(), "\u{FFFD}");
 }
 
 /// Audit items **A40 + A43**. `WhitespaceCharCount` used to assert zero
@@ -256,9 +300,10 @@ fn an_unmappable_character_is_still_counted() {
 fn a_whitespace_only_page_yields_the_one_space_it_draws() {
     let page = fixture!("whitespace.pdf");
     assert_eq!(page.chars.len(), 1);
-    assert_eq!(page.all_text(), " ");
-    // Byte-order mark plus one UTF-32LE code unit.
-    assert_eq!(page.to_utf32le(), [0xFF, 0xFE, 0x00, 0x00, 0x20, 0, 0, 0]);
+    assert_eq!(page.to_string(), " ");
+    // The one character is the space itself, which is what a `--txt` dump
+    // writes as its single code unit.
+    assert_eq!(units(&page), [0x20]);
 }
 
 #[test]
@@ -266,7 +311,7 @@ fn twenty_two_charcode_zeroes_precede_the_text() {
     // `Bug425244539`: the text is five characters while the stream is
     // twenty-seven, so a search's result index is 22 rather than 0.
     let page = fixture!("bug_425244539.pdf");
-    assert_eq!(page.all_text(), "hello");
+    assert_eq!(page.to_string(), "hello");
     assert_eq!(page.chars.len(), 27);
     assert!(units(&page)[..22].iter().all(|u| *u == 0));
 }
@@ -303,7 +348,7 @@ fn a_hyphen_sentinel_can_land_mid_string() {
 fn a_hyphen_sentinel_replaces_a_hard_hyphen_in_a_non_ascii_word() {
     // `Bug1029`.
     let page = fixture!("bug_1029.pdf");
-    let text: Vec<char> = page.all_text().chars().collect();
+    let text: Vec<char> = page.to_string().chars().collect();
     if text.len() < 227 {
         return;
     }
@@ -397,7 +442,7 @@ fn four_letter_and_sentence_fixtures_read_plainly() {
         let Some(page) = page_text(name, 0) else {
             continue;
         };
-        assert_eq!(page.all_text(), expected, "{name}");
+        assert_eq!(page.to_string(), expected, "{name}");
     }
 }
 
@@ -419,7 +464,7 @@ fn two_pinned_upstream_bugs_stay_pinned() {
         let Some(page) = page_text(name, 0) else {
             continue;
         };
-        assert_eq!(page.all_text(), expected, "{name}");
+        assert_eq!(page.to_string(), expected, "{name}");
     }
 }
 
@@ -461,7 +506,7 @@ fn cropping_a_page_does_not_change_its_characters() {
         let Some(page) = page_text("cropped_text.pdf", index) else {
             continue;
         };
-        assert_eq!(page.all_text(), HELLO, "page {index}");
+        assert_eq!(page.to_string(), HELLO, "page {index}");
     }
 }
 
@@ -474,7 +519,7 @@ fn cropping_a_page_does_not_change_its_characters() {
 #[test]
 fn invisible_spaces_are_extracted_as_the_spaces_they_draw() {
     let page = fixture!("hello_world_with_invisible_spaces.pdf");
-    assert_eq!(page.all_text(), format!(" \r\n \r\n {HELLO}"));
+    assert_eq!(page.to_string(), format!(" \r\n \r\n {HELLO}"));
 }
 
 // ---------------------------------------------------------------------------
@@ -484,7 +529,9 @@ fn invisible_spaces_are_extracted_as_the_spaces_they_draw() {
 fn searching_finds_both_occurrences_and_honours_the_flags() {
     let page = fixture!("hello_world.pdf");
     let find = |needle: &str, options: FindOptions| -> Vec<std::ops::Range<usize>> {
-        page.find(needle, options).collect()
+        page.find(needle, options)
+            .map(|hit| hit.start.get()..hit.end.get())
+            .collect()
     };
     assert_eq!(find("nope", FindOptions::default()), []);
     assert_eq!(find("world", FindOptions::default()), [7..12, 24..29]);
@@ -512,7 +559,9 @@ fn a_needle_with_spaces_spans_the_generated_line_break() {
     // separators, so one space consumes the two-character CRLF.
     let page = fixture!("hello_world.pdf");
     let find = |needle: &str| -> Vec<std::ops::Range<usize>> {
-        page.find(needle, FindOptions::default()).collect()
+        page.find(needle, FindOptions::default())
+            .map(|hit| hit.start.get()..hit.end.get())
+            .collect()
     };
     assert_eq!(find("world!"), [7..13, 24..30]);
     // The leading space matched the '\n' at 14, so the match starts there.
@@ -530,7 +579,10 @@ fn case_insensitive_matching_reaches_latin_extended() {
     // platform variance, so it runs.
     let page = fixture!("latin_extended.pdf");
     for needle in ["\u{0102}", "\u{0103}"] {
-        let hits: Vec<_> = page.find(needle, FindOptions::default()).collect();
+        let hits: Vec<_> = page
+            .find(needle, FindOptions::default())
+            .map(|hit| hit.start.get()..hit.end.get())
+            .collect();
         assert_eq!(hits, [2..3, 3..4], "{needle}");
     }
 }
@@ -546,8 +598,7 @@ fn a_page_of_links_yields_them_with_their_character_ranges() {
     let links = page.web_links();
     assert_eq!(links.len(), 2, "{links:?}");
     assert_eq!(links[0].url, "http://example.com?q=foo");
-    assert_eq!(links[0].range.start, 35);
-    assert_eq!(links[0].range.len(), 24);
+    assert_eq!(links[0].range, at(35)..at(59));
 }
 
 #[test]
@@ -608,7 +659,9 @@ fn a_characters_origin_and_rect_count_are_exact() {
     assert!(info.char_box.width() > 0.0 && info.char_box.height() > 0.0);
     assert!(info.char_box.x0 >= info.origin.x - 1.0);
     // Two rects, because the page is set in two fonts.
-    assert_eq!(page.rects(0, Some(30)).len(), 2);
+    assert_eq!(page.rects(at(0)..at(30)).len(), 2);
+    // An unbounded end is the old `rects(0, None)`.
+    assert_eq!(page.rects(..), page.rects(at(0)..at(page.chars.len())));
 }
 
 #[test]
@@ -791,24 +844,26 @@ fn extraction_never_panics_on_any_resource_fixture() {
             // arithmetic.
             let _ = page.web_links();
             let _ = page.find("e", FindOptions::default()).count();
-            let _ = page.rects(0, None);
-            let _ = page.to_utf32le();
+            let _ = page.rects(..);
+            let _ = units(&page);
         }
         seen += 1;
     }
     assert!(seen > 100, "only {seen} fixtures found");
 }
 
-/// A hand-check that the emitted bytes really are what the oracle writes.
+/// A hand-check that the character stream really is what the oracle dumps.
+///
+/// The encoding itself moved to `pdfrum-tool` with `--txt` (WP8); what this
+/// crate owes the dump is the *stream*, so that is what is checked: one entry
+/// per character, in order, decoding to the page's text.
 #[test]
-fn the_utf32_encoding_round_trips_through_the_harness_transcode() {
+fn the_character_stream_is_what_the_harness_transcode_reads_back() {
     let page = fixture!("hello_world.pdf");
-    let bytes = page.to_utf32le();
-    assert_eq!(&bytes[..4], &[0xFF, 0xFE, 0x00, 0x00]);
-    assert_eq!(bytes.len(), (page.chars.len() + 1) * 4);
-    let decoded: String = bytes[4..]
-        .chunks_exact(4)
-        .filter_map(|unit| char::from_u32(u32::from_le_bytes([unit[0], unit[1], unit[2], unit[3]])))
+    let decoded: String = units(&page)
+        .into_iter()
+        .filter_map(char::from_u32)
         .collect();
     assert_eq!(decoded, HELLO);
+    assert_eq!(page.chars.len(), HELLO.chars().count());
 }

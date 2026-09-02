@@ -124,6 +124,14 @@ fn every_type_in_a_public_signature_is_nameable_from_the_facade() {
     nameable::<FindOptions>();
     nameable::<WebLink>();
     nameable::<TextError>();
+    // WP8's two index spaces, and the table that converts between them. Every
+    // one appears in a `TextPage` signature: `CharIndex` in `char`, `rects`,
+    // `index_at`, `slice` and `WebLink::range`; `TextIndex` in `find`; and
+    // `IndexMap` as the public `runs` field a caller needs to cross from one
+    // space to the other.
+    nameable::<CharIndex>();
+    nameable::<TextIndex>();
+    nameable::<IndexMap>();
 
     // The facade's own, for completeness of the block a caller reads.
     nameable::<Document>();

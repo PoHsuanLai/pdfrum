@@ -81,19 +81,11 @@ fuzz_target!(|data: &[u8]| {
                 &limits,
                 &mut diags,
             );
-            // The dump must be a byte-order mark plus four bytes per
-            // character, whatever the page held.
-            let dump = text.to_utf32le();
-            assert_eq!(
-                dump.len(),
-                (text.chars.len() + 1) * 4,
-                "the UTF-32 dump must be one unit per character plus the mark"
-            );
             // The query half, whose index arithmetic spans two index spaces
             // that are allowed to disagree.
             let _ = text.web_links();
-            let _ = text.rects(0, None);
-            let _ = text.page_text(0, text.chars.len());
+            let _ = text.rects(..);
+            let _ = text.slice(..);
             let _ = text
                 .find("e", FindOptions::default())
                 .take(64)

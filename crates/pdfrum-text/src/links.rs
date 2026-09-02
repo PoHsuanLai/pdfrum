@@ -29,7 +29,7 @@
 //!   converted back to char space.
 
 use crate::charinfo::{CharBox, CharType};
-use crate::index::IndexMap;
+use crate::index::{CharIndex, IndexMap, TextIndex};
 use crate::unicode::{is_alnum, is_decimal_digit, lower_string};
 use std::ops::Range;
 
@@ -39,8 +39,8 @@ pub struct WebLink {
     /// The URL, ready to open: a `www.` address has gained an `http://` and a
     /// mail address a `mailto:`.
     pub url: String,
-    /// The characters it covers, as **character-list** indices.
-    pub range: Range<usize>,
+    /// The characters it covers, in the character list.
+    pub range: Range<CharIndex>,
 }
 
 /// Every address in a page's text.
@@ -87,11 +87,11 @@ pub fn extract(chars: &[CharBox], text: &[char], index: &IndexMap) -> Vec<WebLin
         // cutting. A candidate whose characters are all absent from the text
         // has no text span at all, which is an empty candidate — the same
         // answer `Substr` gives out of range, reached for the right reason.
-        let text_start = index.text_index_at_or_after(start);
+        let text_start = index.text_index_at_or_after(CharIndex::new(start));
         let mut candidate: String = match text_start {
             Some(first) if count > 0 => {
-                let last = index.text_index_end(start + count - 1);
-                substr(text, first, last.saturating_sub(first))
+                let last = index.text_index_end(CharIndex::new(start + count - 1));
+                substr(text, first.get(), last.get().saturating_sub(first.get()))
             }
             _ => String::new(),
         };
@@ -134,7 +134,7 @@ pub fn extract(chars: &[CharBox], text: &[char], index: &IndexMap) -> Vec<WebLin
                 } else if let Some(url) = check_mail_link(&candidate) {
                     links.push(WebLink {
                         url,
-                        range: start..start + count,
+                        range: CharIndex::new(start)..CharIndex::new(start + count),
                     });
                 }
             }
@@ -154,22 +154,22 @@ pub fn extract(chars: &[CharBox], text: &[char], index: &IndexMap) -> Vec<WebLin
 /// malformed page, not a reason to report a wrong offset.
 fn char_range(
     index: &IndexMap,
-    text_start: Option<usize>,
+    text_start: Option<TextIndex>,
     found: &Range<usize>,
     start: usize,
     count: usize,
-) -> Range<usize> {
-    let whole = start..start + count;
+) -> Range<CharIndex> {
+    let whole = CharIndex::new(start)..CharIndex::new(start + count);
     let Some(first) = text_start else {
         return whole;
     };
     let (Some(from), Some(to)) = (
-        index.char_index(first + found.start),
-        index.char_index(first + found.end.saturating_sub(1)),
+        index.char_index(TextIndex::new(first.get() + found.start)),
+        index.char_index(TextIndex::new(first.get() + found.end.saturating_sub(1))),
     ) else {
         return whole;
     };
-    from..to + 1
+    from..CharIndex::new(to.get() + 1)
 }
 
 /// `count` characters from `first`, or **nothing** when the range runs past
@@ -509,7 +509,7 @@ mod tests {
         assert_eq!(links[0].url, "http://a.com");
         // Reported in char space: the URL starts at char 2, past the two
         // hidden characters.
-        assert_eq!(links[0].range, 2..14);
+        assert_eq!(links[0].range, CharIndex::new(2)..CharIndex::new(14));
     }
 
     fn web(candidate: &str) -> Option<(String, usize, usize)> {

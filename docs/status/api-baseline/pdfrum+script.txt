@@ -8,6 +8,7 @@ pub use pdfrum::Argb
 pub use pdfrum::BuildContext
 pub use pdfrum::Cascade
 pub use pdfrum::CharBox
+pub use pdfrum::CharIndex
 pub use pdfrum::ColorMode
 pub use pdfrum::ColorScheme
 pub use pdfrum::Dest
@@ -29,6 +30,7 @@ pub use pdfrum::Focus
 pub use pdfrum::FocusBox
 pub use pdfrum::FormRect
 pub use pdfrum::GeneratedAp
+pub use pdfrum::IndexMap
 pub use pdfrum::Keystroke
 pub use pdfrum::KeystrokeOutcome
 pub use pdfrum::Limits
@@ -67,6 +69,7 @@ pub use pdfrum::SubstitutionOptions
 pub use pdfrum::Subtype
 pub use pdfrum::TextAa
 pub use pdfrum::TextError
+pub use pdfrum::TextIndex
 pub use pdfrum::TextPage
 pub use pdfrum::TextRenderMode
 pub use pdfrum::TranscriptLine

@@ -15,6 +15,7 @@
 //! what lets a search find text that reflowed across a line break, and what
 //! lets a CJK needle match without the spaces a Latin one would need.
 
+use crate::index::TextIndex;
 use crate::unicode::{is_decimal_digit, lower_string};
 use std::ops::Range;
 
@@ -283,9 +284,9 @@ pub fn search<'a>(text: &str, needle: &str, options: FindOptions) -> Search<'a> 
 }
 
 impl Iterator for Search<'_> {
-    type Item = Range<usize>;
+    type Item = Range<TextIndex>;
 
-    fn next(&mut self) -> Option<Range<usize>> {
+    fn next(&mut self) -> Option<Range<TextIndex>> {
         let start = self.next_start?;
         let (result_start, result_end) = self.scan(start)?;
         self.next_start = Some(if self.options.consecutive {
@@ -296,7 +297,7 @@ impl Iterator for Search<'_> {
         // `[oracle-bug]` Back into text offsets. The end is inclusive here, so
         // the exclusive bound is its origin plus one — which is what keeps a
         // match that *spans* a dropped sentinel covering it in the text.
-        Some(self.origin(result_start)..self.origin(result_end) + 1)
+        Some(TextIndex::new(self.origin(result_start))..TextIndex::new(self.origin(result_end) + 1))
     }
 }
 
@@ -456,8 +457,13 @@ mod tests {
 
     use super::*;
 
+    /// The matches as plain numbers, so a fixture reads as offsets rather
+    /// than as constructor calls. The type the iterator yields is
+    /// [`TextIndex`]; what these tests pin is the arithmetic inside it.
     fn ranges(text: &str, needle: &str, options: FindOptions) -> Vec<Range<usize>> {
-        search(text, needle, options).collect()
+        search(text, needle, options)
+            .map(|hit| hit.start.get()..hit.end.get())
+            .collect()
     }
 
     const HELLO: &str = "Hello, world!\r\nGoodbye, world!";
@@ -484,7 +490,7 @@ mod tests {
         // The range is a *text* offset, and it spans the soft hyphen, so
         // slicing the original text by it recovers the split spelling.
         let chars: Vec<char> = text.chars().collect();
-        let hit = hits[0].clone();
+        let hit = hits[0].start.get()..hits[0].end.get();
         let slice: String = chars[hit.clone()].iter().collect();
         assert_eq!(slice, "note\u{00AD}book");
         assert_eq!(hit, 2..11);

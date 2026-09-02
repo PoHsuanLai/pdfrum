@@ -48,10 +48,10 @@ const SIZE_EPSILON: f64 = 0.01;
 /// reserved and forbidden in interchange (Unicode §23.7), yet it crosses a
 /// public C ABI verbatim (`GetPageText`, `:590`; `FPDFText_GetText`,
 /// `fpdf_text.cpp:341-372`) — and reaches our own callers through
-/// [`TextPage::all_text`](crate::TextPage::all_text),
-/// [`TextPage::page_text`](crate::TextPage::page_text) and the public
-/// `TextPage::text` field, where it silently breaks a substring search across
-/// a line break.
+/// [`TextPage`](crate::TextPage)'s [`Display`](std::fmt::Display),
+/// [`TextPage::slice`](crate::TextPage::slice) and the public
+/// [`TextPage::search_text`](crate::TextPage::search_text) field, where it
+/// silently breaks a substring search across a line break.
 ///
 /// "Matches upstream" is not available as a defence, because **upstream does
 /// not match itself**: `cpdf_linkextract.cpp:154-155` repairs this very
@@ -108,7 +108,7 @@ fn actual_text_key() -> Name {
 
 /// What to put between the previous object and this one.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Generate {
+pub(crate) enum Generate {
     /// Nothing.
     None,
     /// A space.
@@ -143,7 +143,7 @@ struct Previous {
 /// One value, built by [`crate::extract`], driven, and destructured. Small on
 /// purpose: the C++'s fourteen-member class splits into this plus a file of
 /// free functions that take exactly what they need.
-pub struct Builder<'a, R: Resolve> {
+pub(crate) struct Builder<'a, R: Resolve> {
     /// The final output.
     pub out: Output,
     /// The staging line.
@@ -169,7 +169,7 @@ pub struct Builder<'a, R: Resolve> {
 
 impl<'a, R: Resolve> Builder<'a, R> {
     /// A builder over one page's text objects.
-    pub fn new(
+    pub(crate) fn new(
         runs: &'a [TextRun],
         page_flow: Orientation,
         display: Affine,
@@ -202,7 +202,7 @@ impl<'a, R: Resolve> Builder<'a, R> {
     /// otherwise either triggers a flush (the y jumped) or is
     /// insertion-sorted into place by its transformed x, which is the whole
     /// of the reading-order machinery.
-    pub fn offer(&mut self, index: usize, diags: &mut Diagnostics) {
+    pub(crate) fn offer(&mut self, index: usize, diags: &mut Diagnostics) {
         let Some(run) = self.run(index) else { return };
         // `[oracle-bug]` Gate on the **advance**, not the glyph bounding box.
         // `cpdf_textpage.cpp:881` tests `GetRect().Width()`, which
@@ -271,7 +271,7 @@ impl<'a, R: Resolve> Builder<'a, R> {
 
     /// Drains the batch, emitting characters in x-sorted order
     /// (`ProcessTransformedTextObjects`).
-    pub fn flush(&mut self, diags: &mut Diagnostics) {
+    pub(crate) fn flush(&mut self, diags: &mut Diagnostics) {
         let batch = std::mem::take(&mut self.batch);
         for index in batch {
             let Some(run) = self.run(index) else { continue };
@@ -316,7 +316,7 @@ impl<'a, R: Resolve> Builder<'a, R> {
     }
 
     /// Closes the staging line into the final output.
-    pub fn close_line(&mut self) {
+    pub(crate) fn close_line(&mut self) {
         crate::line::close(&mut self.line, &mut self.out, self.rtl);
     }
 
@@ -1070,7 +1070,7 @@ impl<'a, R: Resolve> Builder<'a, R> {
 /// **Not** U+2010 HYPHEN, which is why a document using the typographically
 /// correct character gets no soft-hyphen handling at all.
 #[must_use]
-pub fn is_hyphen_code(code: u32) -> bool {
+pub(crate) fn is_hyphen_code(code: u32) -> bool {
     code == 0x2D || code == 0xAD
 }
 
@@ -1080,7 +1080,7 @@ pub fn is_hyphen_code(code: u32) -> bool {
 /// glyph's width and `(400, 700, 800)` for an inter-object gap — and divides
 /// by two, four, five or six accordingly.
 #[must_use]
-pub fn normalize_threshold(threshold: f64, t1: f64, t2: f64, t3: f64) -> f64 {
+pub(crate) fn normalize_threshold(threshold: f64, t1: f64, t2: f64, t3: f64) -> f64 {
     if threshold < t1 {
         threshold / 2.0
     } else if threshold < t2 {
@@ -1099,7 +1099,7 @@ pub fn normalize_threshold(threshold: f64, t1: f64, t2: f64, t3: f64) -> f64 {
 /// zero again for the two special cases at the end — a negative result, or
 /// exactly two glyphs with any adjustment between them.
 #[must_use]
-pub fn base_space(run: &TextRun, matrix: Affine) -> f64 {
+pub(crate) fn base_space(run: &TextRun, matrix: Affine) -> f64 {
     let count = run.count();
     if run.char_space == 0.0 || count < 2 {
         return 0.0;
@@ -1128,7 +1128,7 @@ pub fn base_space(run: &TextRun, matrix: Affine) -> f64 {
 /// magnitude. Combined with [`base_space`] the two mostly cancel — but only
 /// mostly, and only when nothing was adjusted.
 #[must_use]
-pub fn base_space_adjustment(run: &TextRun, matrix: Affine) -> f64 {
+pub(crate) fn base_space_adjustment(run: &TextRun, matrix: Affine) -> f64 {
     let char_space = run.char_space;
     if char_space > 0.001 {
         return -transform_distance(matrix, f64::from(char_space));
@@ -1146,7 +1146,7 @@ pub fn base_space_adjustment(run: &TextRun, matrix: Affine) -> f64 {
 /// third of the font size, in which case it is not to be trusted and the
 /// *current* character's width, bucketed, stands in for it.
 #[must_use]
-pub fn space_threshold(run: &TextRun, code: CharCode) -> f64 {
+pub(crate) fn space_threshold(run: &TextRun, code: CharCode) -> f64 {
     let font_size_h = f64::from(run.font_size_h);
     let mut threshold = 0.0;
     if let Some(space) = run.font.char_code_from_unicode(' ') {
@@ -1172,7 +1172,7 @@ pub fn space_threshold(run: &TextRun, code: CharCode) -> f64 {
 /// threshold, which the width ladder cannot produce. Ported anyway, because
 /// that reasoning rests on invariants of other crates.
 #[must_use]
-pub fn generates_space(
+pub(crate) fn generates_space(
     pos: Point,
     last_pos: f64,
     this_width: f64,
@@ -1199,7 +1199,7 @@ pub fn generates_space(
 /// Short objects never end a line: anything under four and a half units tall
 /// is treated as decoration rather than as a line of text.
 #[must_use]
-pub fn ends_horizontal_line(this_rect: Rect, previous_rect: Rect) -> bool {
+pub(crate) fn ends_horizontal_line(this_rect: Rect, previous_rect: Rect) -> bool {
     if this_rect.height() <= 4.5 || previous_rect.height() <= 4.5 {
         return false;
     }
@@ -1214,7 +1214,7 @@ pub fn ends_horizontal_line(this_rect: Rect, previous_rect: Rect) -> bool {
 /// Note the asymmetry with the horizontal test: this one compares against the
 /// **accumulated line box**, not against the previous object.
 #[must_use]
-pub fn ends_vertical_line(
+pub(crate) fn ends_vertical_line(
     this_rect: Rect,
     line_rect: Rect,
     font_size: f32,

@@ -195,17 +195,6 @@ fn normalization_table() -> &'static RleTable {
 }
 
 /// The bidi class PDFium assigns a code point (`GetBidiClass`).
-///
-/// ```
-/// use pdfrum_text::unicode::{BidiClass, bidi_class};
-///
-/// assert_eq!(bidi_class('A' as u32), BidiClass::L);
-/// assert_eq!(bidi_class(0x05D0), BidiClass::R);  // HEBREW ALEF
-/// assert_eq!(bidi_class(0x0627), BidiClass::Al); // ARABIC ALEF
-/// assert_eq!(bidi_class('(' as u32), BidiClass::On);
-/// // Above the BMP the table is not consulted at all.
-/// assert_eq!(bidi_class(0x1_0000), BidiClass::On);
-/// ```
 #[must_use]
 pub fn bidi_class(code: u32) -> BidiClass {
     BidiClass::from_packed(properties(code) & 0x1F)
@@ -213,16 +202,6 @@ pub fn bidi_class(code: u32) -> BidiClass {
 
 /// The character a code point mirrors to in a right-to-left run, or the code
 /// point itself (`GetMirrorChar`).
-///
-/// ```
-/// use pdfrum_text::unicode::mirror_char;
-///
-/// assert_eq!(mirror_char('(' as u32), ')' as u32);
-/// assert_eq!(mirror_char('[' as u32), ']' as u32);
-/// assert_eq!(mirror_char('a' as u32), 'a' as u32);
-/// // `[oracle-bug]` Above the BMP nothing mirrors.
-/// assert_eq!(mirror_char(0x10800), 0x10800);
-/// ```
 #[must_use]
 pub fn mirror_char(code: u32) -> u32 {
     // `[oracle-bug]` A supplementary code point is its own mirror.
@@ -298,19 +277,6 @@ pub fn mirror_char(code: u32) -> u32 {
 /// **not** in pdf.js's set, so they are not here either. Following the
 /// independent implementation exactly is the point of citing it; adding them
 /// would be our own widening, and neither appears in the corpus.
-///
-/// ```
-/// use pdfrum_text::unicode::normalize_space;
-///
-/// // NO-BREAK SPACE and the fixed-width spaces become a plain space.
-/// assert_eq!(normalize_space(0x00A0), 0x0020);
-/// assert_eq!(normalize_space(0x2003), 0x0020);
-/// assert_eq!(normalize_space(0x202F), 0x0020);
-/// // An accented letter is untouched — this is not `normalize`.
-/// assert_eq!(normalize_space(0x00C0), 0x00C0);
-/// // And a real space is already one.
-/// assert_eq!(normalize_space(0x0020), 0x0020);
-/// ```
 #[must_use]
 pub const fn normalize_space(code: u32) -> u32 {
     match code {
@@ -327,15 +293,6 @@ pub const fn normalize_space(code: u32) -> u32 {
 /// ligature band (`AddCharInfo`), never to text at large. The index table is
 /// `wch & 0xFFFF`-indexed in the C++, so a supplementary-plane code point
 /// reads a *BMP* entry — reproduced here, mask included.
-///
-/// ```
-/// use pdfrum_text::unicode::normalize;
-///
-/// // LATIN SMALL LIGATURE FI decomposes.
-/// assert_eq!(normalize(0xFB01), vec![u32::from(b'f'), u32::from(b'i')]);
-/// // An unlisted code point is itself.
-/// assert_eq!(normalize(u32::from(b'a')), vec![u32::from(b'a')]);
-/// ```
 #[must_use]
 pub fn normalize(code: u32) -> Vec<u32> {
     let code = code & 0xFFFF;
@@ -403,15 +360,6 @@ fn in_ranges(payload: &[u8], code: u32) -> bool {
 }
 
 /// General category `L*` — ICU's `u_isalpha`, which `IsHyphen` consults.
-///
-/// ```
-/// use pdfrum_text::unicode::is_alpha;
-///
-/// assert!(is_alpha(u32::from(b'a')));
-/// assert!(is_alpha(0x4E00));      // CJK ideograph
-/// assert!(!is_alpha(u32::from(b'0')));
-/// assert!(!is_alpha(u32::from(b'-')));
-/// ```
 #[must_use]
 pub fn is_alpha(code: u32) -> bool {
     in_ranges(section(*b"ALPH"), code)
@@ -419,15 +367,6 @@ pub fn is_alpha(code: u32) -> bool {
 
 /// General category `L*` or `Nd` — ICU's `u_isalnum`, which `IsHyphen` and
 /// `CheckMailLink` consult.
-///
-/// ```
-/// use pdfrum_text::unicode::is_alnum;
-///
-/// assert!(is_alnum(u32::from(b'z')));
-/// assert!(is_alnum(u32::from(b'7')));
-/// assert!(is_alnum(0x0660));      // ARABIC-INDIC DIGIT ZERO, not alphabetic
-/// assert!(!is_alnum(u32::from(b'@')));
-/// ```
 #[must_use]
 pub fn is_alnum(code: u32) -> bool {
     in_ranges(section(*b"ALNM"), code)
@@ -438,15 +377,6 @@ pub fn is_alnum(code: u32) -> bool {
 ///
 /// Simple, not full: one code point in, one out, so a needle and a haystack
 /// lowercased this way keep their lengths and their offsets stay comparable.
-///
-/// ```
-/// use pdfrum_text::unicode::to_lower;
-///
-/// assert_eq!(to_lower(u32::from(b'A')), u32::from(b'a'));
-/// assert_eq!(to_lower(0x0102), 0x0103);      // LATIN CAPITAL A WITH BREVE
-/// assert_eq!(to_lower(0x1_0400), 0x1_0428);  // DESERET, above the BMP
-/// assert_eq!(to_lower(u32::from(b'!')), u32::from(b'!'));
-/// ```
 #[must_use]
 pub fn to_lower(code: u32) -> u32 {
     let payload = section(*b"LOWR");
@@ -700,5 +630,82 @@ mod tests {
             assert_eq!(table.get(65536), 0);
             assert_eq!(table.get(usize::MAX), 0);
         }
+    }
+
+    /// Was a doctest until WP8 made `unicode` a private module; the
+    /// examples pin real table values, so they stay as a test.
+    #[test]
+    fn the_bidi_class_table_answers_for_each_script() {
+        assert_eq!(bidi_class('A' as u32), BidiClass::L);
+        assert_eq!(bidi_class(0x05D0), BidiClass::R); // HEBREW ALEF
+        assert_eq!(bidi_class(0x0627), BidiClass::Al); // ARABIC ALEF
+        assert_eq!(bidi_class('(' as u32), BidiClass::On);
+        // Above the BMP the table is not consulted at all.
+        assert_eq!(bidi_class(0x1_0000), BidiClass::On);
+    }
+
+    /// Was a doctest until WP8 made `unicode` a private module; the
+    /// examples pin real table values, so they stay as a test.
+    #[test]
+    fn mirroring_swaps_brackets_and_leaves_everything_else() {
+        assert_eq!(mirror_char('(' as u32), ')' as u32);
+        assert_eq!(mirror_char('[' as u32), ']' as u32);
+        assert_eq!(mirror_char('a' as u32), 'a' as u32);
+        // `[oracle-bug]` Above the BMP nothing mirrors.
+        assert_eq!(mirror_char(0x10800), 0x10800);
+    }
+
+    /// Was a doctest until WP8 made `unicode` a private module; the
+    /// examples pin real table values, so they stay as a test.
+    #[test]
+    fn space_normalization_touches_only_the_spaces() {
+        // NO-BREAK SPACE and the fixed-width spaces become a plain space.
+        assert_eq!(normalize_space(0x00A0), 0x0020);
+        assert_eq!(normalize_space(0x2003), 0x0020);
+        assert_eq!(normalize_space(0x202F), 0x0020);
+        // An accented letter is untouched -- this is not `normalize`.
+        assert_eq!(normalize_space(0x00C0), 0x00C0);
+        // And a real space is already one.
+        assert_eq!(normalize_space(0x0020), 0x0020);
+    }
+
+    /// Was a doctest until WP8 made `unicode` a private module; the
+    /// examples pin real table values, so they stay as a test.
+    #[test]
+    fn the_normalization_table_decomposes_ligatures_and_passes_the_rest() {
+        // LATIN SMALL LIGATURE FI decomposes.
+        assert_eq!(normalize(0xFB01), vec![u32::from(b'f'), u32::from(b'i')]);
+        // An unlisted code point is itself.
+        assert_eq!(normalize(u32::from(b'a')), vec![u32::from(b'a')]);
+    }
+
+    /// Was a doctest until WP8 made `unicode` a private module; the
+    /// examples pin real table values, so they stay as a test.
+    #[test]
+    fn the_alpha_test_accepts_letters_and_ideographs() {
+        assert!(is_alpha(u32::from(b'a')));
+        assert!(is_alpha(0x4E00)); // CJK ideograph
+        assert!(!is_alpha(u32::from(b'0')));
+        assert!(!is_alpha(u32::from(b'-')));
+    }
+
+    /// Was a doctest until WP8 made `unicode` a private module; the
+    /// examples pin real table values, so they stay as a test.
+    #[test]
+    fn the_alnum_test_accepts_letters_and_digits_of_any_script() {
+        assert!(is_alnum(u32::from(b'z')));
+        assert!(is_alnum(u32::from(b'7')));
+        assert!(is_alnum(0x0660)); // ARABIC-INDIC DIGIT ZERO, not alphabetic
+        assert!(!is_alnum(u32::from(b'@')));
+    }
+
+    /// Was a doctest until WP8 made `unicode` a private module; the
+    /// examples pin real table values, so they stay as a test.
+    #[test]
+    fn lowering_reaches_above_the_basic_plane() {
+        assert_eq!(to_lower(u32::from(b'A')), u32::from(b'a'));
+        assert_eq!(to_lower(0x0102), 0x0103); // LATIN CAPITAL A WITH BREVE
+        assert_eq!(to_lower(0x1_0400), 0x1_0428); // DESERET, above the BMP
+        assert_eq!(to_lower(u32::from(b'!')), u32::from(b'!'));
     }
 }

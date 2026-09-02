@@ -13,7 +13,7 @@ use pdfrum_text::{ExtractOptions, extract};
 fn demo(page: &pdfrum_page::Page, resolver: &impl pdfrum_object::Resolve) {
     let mut diags = Diagnostics::default();
     let text = extract(page, resolver, &ExtractOptions::default(), &Limits::default(), &mut diags);
-    println!("{}", text.all_text());
+    println!("{text}");
 }
 ```
 
@@ -25,7 +25,8 @@ including control characters, a `\0` for an unmappable code, and a sentinel
 where a word was hyphenated across a line — this is what a raw text dump
 emits, unfiltered, in order. The *text* is what a search matches and a
 selection copies: control characters and placeholders dropped, ligatures
-expanded. A mapping between the two index spaces is provided.
+expanded. The two index spaces are `CharIndex` and `TextIndex`, distinct types
+in every signature that names one, and `IndexMap` converts between them.
 
 Reading order comes from sorting text objects by their transformed x within a
 batch and flushing the batch when the baseline jumps. Spaces are generated from

@@ -713,7 +713,7 @@ fn run(args: &Args, bytes: &Arc<[u8]>) -> (u32, std::time::Duration) {
             Op::Text => {
                 let mut session = RenderSession::new();
                 for page in doc.pages() {
-                    black_box(page.text_session(&mut session).all_text().len());
+                    black_box(page.text_session(&mut session).to_string().len());
                 }
             }
             Op::Save => {

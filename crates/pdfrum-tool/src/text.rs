@@ -31,6 +31,29 @@ pub fn output_path(input: &Path, page: u32) -> Option<PathBuf> {
     (name.len() < 256).then(|| PathBuf::from(name))
 }
 
+/// The character stream as UTF-32LE with a leading byte-order mark —
+/// exactly the bytes the oracle's `--txt` writes for one page.
+///
+/// One code unit per character, **unfiltered**: this reads
+/// [`TextPage::chars`], not the search-facing text, and routing it through the
+/// latter would drop the control characters and the hyphen sentinels that the
+/// goldens contain.
+///
+/// This is `--txt`'s output format, so it lives with the tool that writes it
+/// rather than on the library type it reads
+/// (`docs/design/idiomatic-api.md` §A.3, WP8). `pdfrum-text` publishes the
+/// data — `chars`, one `CharBox` per character with its `unicode` — and this
+/// is one of the shapes a caller can put it in.
+#[must_use]
+pub fn to_utf32le(page: &TextPage) -> Vec<u8> {
+    let mut out = Vec::with_capacity((page.chars.len() + 1) * 4);
+    out.extend_from_slice(&0x0000_FEFFu32.to_le_bytes());
+    for info in &page.chars {
+        out.extend_from_slice(&info.unicode.to_le_bytes());
+    }
+    out
+}
+
 /// Extracts one page's text.
 ///
 /// The graphics-state and font work happens in `pdfrum-page`; everything from
@@ -82,8 +105,55 @@ pub fn direction_is_r2l<R: Resolve>(catalog: &Dict, resolver: &R) -> bool {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::unreadable_literal, reason = "test fixtures pin exact bytes")]
+
     use super::*;
     use pdfrum_object::{NoResolve, Object};
+
+    #[test]
+    fn the_utf32_dump_is_a_bare_mark_for_an_empty_page() {
+        // The oracle writes a four-byte file for a page with no text, and the
+        // harness's transcode reads that back as the empty string.
+        assert_eq!(to_utf32le(&TextPage::default()), [0xFF, 0xFE, 0x00, 0x00]);
+    }
+
+    #[test]
+    fn the_utf32_dump_writes_every_character_unfiltered() {
+        use kurbo::{Affine, Point, Rect};
+        use pdfrum_text::{CharBox, CharType};
+        let unit = |unicode: u32| CharBox {
+            char_type: CharType::Normal,
+            unicode,
+            code: None,
+            origin: Point::ZERO,
+            char_box: Rect::ZERO,
+            loose_char_box: Rect::ZERO,
+            matrix: Affine::IDENTITY,
+            object: None,
+            font_size: 1.0,
+            angle: 0.0,
+        };
+        // 'a', the hyphen sentinel, 's' -- the `bug_781804.pdf` shape.
+        let page = TextPage {
+            chars: vec![unit(0x61), unit(0x02), unit(0x73)],
+            ..TextPage::default()
+        };
+        assert_eq!(
+            to_utf32le(&page),
+            [
+                0xFF, 0xFE, 0x00, 0x00, // BOM
+                0x61, 0x00, 0x00, 0x00, // 'a'
+                0x02, 0x00, 0x00, 0x00, // U+0002: the char list, not the buffer
+                0x73, 0x00, 0x00, 0x00, // 's'
+            ]
+        );
+        // And a zero is written as four zero bytes rather than skipped.
+        let page = TextPage {
+            chars: vec![unit(0)],
+            ..TextPage::default()
+        };
+        assert_eq!(to_utf32le(&page), [0xFF, 0xFE, 0x00, 0x00, 0, 0, 0, 0]);
+    }
 
     #[test]
     fn the_output_name_is_the_input_plus_page_and_extension() {
