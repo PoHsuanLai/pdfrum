@@ -1,27 +1,4 @@
 pub mod pdfrum_raster_agg
-pub mod pdfrum_raster_agg::image
-pub struct pdfrum_raster_agg::image::Sampler<'a>
-impl<'a> pdfrum_raster_agg::image::Sampler<'a>
-pub fn pdfrum_raster_agg::image::Sampler<'a>::new(&'a pdfrum_render::pixmap::Pixmap, kurbo::affine::Affine, pdfrum_render::device::ImageQuality) -> core::option::Option<Self>
-pub fn pdfrum_raster_agg::image::Sampler<'a>::sample(&self, u32, u32) -> core::option::Option<[u8; 4]>
-pub fn pdfrum_raster_agg::image::scale_alpha([u8; 4], u8) -> [u8; 4]
-pub mod pdfrum_raster_agg::target
-pub enum pdfrum_raster_agg::target::Source
-pub pdfrum_raster_agg::target::Source::Premultiplied([u8; 4])
-pub pdfrum_raster_agg::target::Source::Straight([u8; 3], u8)
-pub struct pdfrum_raster_agg::target::Target
-impl pdfrum_raster_agg::target::Target
-pub fn pdfrum_raster_agg::target::Target::blend_span(&mut self, i32, i32, i32, u8, pdfrum_raster_agg::target::Source, pdfrum_page::state::general::BlendMode)
-pub fn pdfrum_raster_agg::target::Target::blend_span_with(&mut self, i32, i32, i32, u8, pdfrum_page::state::general::BlendMode, impl core::ops::function::FnMut(u32, u32) -> core::option::Option<[u8; 4]>)
-pub fn pdfrum_raster_agg::target::Target::clip(&self) -> core::option::Option<&pdfrum_render::pixmap::AlphaMask>
-pub fn pdfrum_raster_agg::target::Target::from_pixmap(pdfrum_render::pixmap::Pixmap) -> Self
-pub fn pdfrum_raster_agg::target::Target::height(&self) -> u32
-pub fn pdfrum_raster_agg::target::Target::into_pixmap(self) -> pdfrum_render::pixmap::Pixmap
-pub fn pdfrum_raster_agg::target::Target::merge_lcd_pixel(&mut self, i32, i32, [u8; 3], u8, [u8; 3])
-pub fn pdfrum_raster_agg::target::Target::new(u32, u32, peniko::Color) -> Self
-pub fn pdfrum_raster_agg::target::Target::pixels(&self) -> &pdfrum_render::pixmap::Pixmap
-pub fn pdfrum_raster_agg::target::Target::set_clip(&mut self, core::option::Option<pdfrum_render::pixmap::AlphaMask>)
-pub fn pdfrum_raster_agg::target::Target::width(&self) -> u32
 pub struct pdfrum_raster_agg::AggBackend
 impl pdfrum_raster_agg::AggBackend
 pub fn pdfrum_raster_agg::AggBackend::new() -> Self
