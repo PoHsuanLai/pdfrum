@@ -1,11 +1,12 @@
 {
-  "generated_at": "2026-09-01T16:27:19Z",
+  "generated_at": "2026-09-02T06:00:57Z",
   "totals": {
-    "files": 1705,
-    "pass": 1652,
-    "fail": 53,
+    "files": 1757,
+    "pass": 1667,
+    "fail": 90,
     "by_tag": {
-      "form-events": 4,
+      "form-events": 8,
+      "js-transcript": 33,
       "page-count": 2,
       "pixel-fail": 40,
       "tierA-mismatch": 9
@@ -32547,6 +32548,27 @@
       "notes": ""
     },
     {
+      "path": "resources/javascript/annot_properties.in#js-transcript",
+      "status": "fail",
+      "tags": [
+        "js-transcript"
+      ],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": null,
+      "notes": "line 2: expected \"Alert: SUCCESS: Document.getAnnot: Object no longer exists.\", got \"Alert: SUCCESS: TypeError: not a callable function\""
+    },
+    {
       "path": "resources/javascript/annot_properties.pdf",
       "status": "pass",
       "tags": [],
@@ -32605,6 +32627,27 @@
         "pages": 1
       },
       "notes": ""
+    },
+    {
+      "path": "resources/javascript/app_methods.in#js-transcript",
+      "status": "fail",
+      "tags": [
+        "js-transcript"
+      ],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": null,
+      "notes": "line 7: expected \"Alert: undefined\", got \"Alert: ERROR: app.alert: Incorrect number of parameters passed to function.\""
     },
     {
       "path": "resources/javascript/app_methods.pdf",
@@ -32673,6 +32716,27 @@
       "notes": ""
     },
     {
+      "path": "resources/javascript/app_properties.in#js-transcript",
+      "status": "fail",
+      "tags": [
+        "js-transcript"
+      ],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": null,
+      "notes": "line 2: expected \"Alert: app.activeDocs is object [object global]\", got \"Alert: app.activeDocs is undefined undefined\""
+    },
+    {
       "path": "resources/javascript/app_properties.pdf",
       "status": "pass",
       "tags": [],
@@ -32739,6 +32803,27 @@
       "notes": ""
     },
     {
+      "path": "resources/javascript/apply.in#js-transcript",
+      "status": "fail",
+      "tags": [
+        "js-transcript"
+      ],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": null,
+      "notes": "line 4: expected \"Alert: Caught: TypeError: Illegal invocation\", got \"Alert: A\""
+    },
+    {
       "path": "resources/javascript/apply.pdf",
       "status": "pass",
       "tags": [],
@@ -32799,6 +32884,27 @@
       "notes": ""
     },
     {
+      "path": "resources/javascript/array_buffer.in#js-transcript",
+      "status": "fail",
+      "tags": [
+        "js-transcript"
+      ],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": null,
+      "notes": "line 5: expected \"Alert: Caught error RangeError: Array buffer allocation failed\", got \"Alert: Caught error RangeError: cannot allocate a buffer that exceeds the maximum buffer size\""
+    },
+    {
       "path": "resources/javascript/array_buffer.pdf",
       "status": "pass",
       "tags": [],
@@ -32857,6 +32963,27 @@
         "pages": 2
       },
       "notes": ""
+    },
+    {
+      "path": "resources/javascript/bug_1098213.in#js-transcript",
+      "status": "fail",
+      "tags": [
+        "js-transcript"
+      ],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": null,
+      "notes": "line 1: expected \"Alert: Done\", got \"Alert: Caught: TypeError: not a callable function\""
     },
     {
       "path": "resources/javascript/bug_1098213.pdf",
@@ -32921,6 +33048,27 @@
       "notes": ""
     },
     {
+      "path": "resources/javascript/bug_1142688.in#js-transcript",
+      "status": "fail",
+      "tags": [
+        "js-transcript"
+      ],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": null,
+      "notes": "line 1: expected \"Alert: Done.\", got end of output"
+    },
+    {
       "path": "resources/javascript/bug_1142688.pdf",
       "status": "pass",
       "tags": [],
@@ -32983,6 +33131,27 @@
       "notes": ""
     },
     {
+      "path": "resources/javascript/bug_1314658.in#js-transcript",
+      "status": "fail",
+      "tags": [
+        "js-transcript"
+      ],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": null,
+      "notes": "line 1: expected \"Alert: done\", got end of output"
+    },
+    {
       "path": "resources/javascript/bug_1314658.pdf",
       "status": "pass",
       "tags": [],
@@ -33040,6 +33209,25 @@
         "max_channel_diff": 0,
         "pages": 1
       },
+      "notes": ""
+    },
+    {
+      "path": "resources/javascript/bug_1335681.in#js-transcript",
+      "status": "pass",
+      "tags": [],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": null,
       "notes": ""
     },
     {
@@ -33101,6 +33289,27 @@
         "pages": 1
       },
       "notes": ""
+    },
+    {
+      "path": "resources/javascript/bug_1358075.in#js-transcript",
+      "status": "fail",
+      "tags": [
+        "js-transcript"
+      ],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": null,
+      "notes": "line 1: expected \"Alert: completed\", got end of output"
     },
     {
       "path": "resources/javascript/bug_1358075.pdf",
@@ -33165,6 +33374,51 @@
       "notes": ""
     },
     {
+      "path": "resources/javascript/bug_1445426.in#form-events",
+      "status": "fail",
+      "tags": [
+        "form-events"
+      ],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": {
+        "ssim": 0.977241,
+        "exact": false,
+        "max_channel_diff": 255,
+        "pages": 2
+      },
+      "notes": "ssim 0.977241 below floor 0.990000"
+    },
+    {
+      "path": "resources/javascript/bug_1445426.in#js-transcript",
+      "status": "pass",
+      "tags": [],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": null,
+      "notes": ""
+    },
+    {
       "path": "resources/javascript/bug_1445426.pdf",
       "status": "pass",
       "tags": [],
@@ -33195,6 +33449,32 @@
         "pages": 2
       },
       "notes": ""
+    },
+    {
+      "path": "resources/javascript/bug_1445426.pdf#form-events",
+      "status": "fail",
+      "tags": [
+        "form-events"
+      ],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": {
+        "ssim": 0.977241,
+        "exact": false,
+        "max_channel_diff": 255,
+        "pages": 2
+      },
+      "notes": "ssim 0.977241 below floor 0.990000"
     },
     {
       "path": "resources/javascript/bug_1447268.in",
@@ -33235,6 +33515,53 @@
       "notes": ""
     },
     {
+      "path": "resources/javascript/bug_1447268.in#form-events",
+      "status": "fail",
+      "tags": [
+        "form-events"
+      ],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": {
+        "ssim": 0.941250,
+        "exact": false,
+        "max_channel_diff": 255,
+        "pages": 5
+      },
+      "notes": "ssim 0.941250 below floor 0.990000"
+    },
+    {
+      "path": "resources/javascript/bug_1447268.in#js-transcript",
+      "status": "fail",
+      "tags": [
+        "js-transcript"
+      ],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": null,
+      "notes": "line 1: expected \"Goto Page: 2\", got end of output"
+    },
+    {
       "path": "resources/javascript/bug_1447268.pdf",
       "status": "pass",
       "tags": [],
@@ -33273,6 +33600,32 @@
       "notes": ""
     },
     {
+      "path": "resources/javascript/bug_1447268.pdf#form-events",
+      "status": "fail",
+      "tags": [
+        "form-events"
+      ],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": {
+        "ssim": 0.941250,
+        "exact": false,
+        "max_channel_diff": 255,
+        "pages": 5
+      },
+      "notes": "ssim 0.941250 below floor 0.990000"
+    },
+    {
       "path": "resources/javascript/bug_361.in",
       "status": "pass",
       "tags": [],
@@ -33301,6 +33654,27 @@
         "pages": 1
       },
       "notes": ""
+    },
+    {
+      "path": "resources/javascript/bug_361.in#js-transcript",
+      "status": "fail",
+      "tags": [
+        "js-transcript"
+      ],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": null,
+      "notes": "line 1: expected \"Alert: Answer for \\\"\\\" is: string \", got end of output"
     },
     {
       "path": "resources/javascript/bug_361.pdf",
@@ -33361,6 +33735,27 @@
         "pages": 1
       },
       "notes": ""
+    },
+    {
+      "path": "resources/javascript/bug_421304870.in#js-transcript",
+      "status": "fail",
+      "tags": [
+        "js-transcript"
+      ],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": null,
+      "notes": "line 1: expected \"Alert: 1\", got end of output"
     },
     {
       "path": "resources/javascript/bug_421304870.pdf",
@@ -33425,6 +33820,27 @@
       "notes": ""
     },
     {
+      "path": "resources/javascript/bug_492_1.in#js-transcript",
+      "status": "fail",
+      "tags": [
+        "js-transcript"
+      ],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": null,
+      "notes": "line 1: expected \"Alert: annot_s_name\", got end of output"
+    },
+    {
       "path": "resources/javascript/bug_492_1.pdf",
       "status": "pass",
       "tags": [],
@@ -33487,6 +33903,27 @@
       "notes": ""
     },
     {
+      "path": "resources/javascript/bug_494057.in#js-transcript",
+      "status": "fail",
+      "tags": [
+        "js-transcript"
+      ],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": null,
+      "notes": "line 1: expected \"Alert: field is MyField\", got \"Alert: Unexpected error: TypeError: not a callable function\""
+    },
+    {
       "path": "resources/javascript/bug_494057.pdf",
       "status": "pass",
       "tags": [],
@@ -33544,6 +33981,25 @@
         "max_channel_diff": 0,
         "pages": 1
       },
+      "notes": ""
+    },
+    {
+      "path": "resources/javascript/bug_695826.in#js-transcript",
+      "status": "pass",
+      "tags": [],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": null,
       "notes": ""
     },
     {
@@ -33607,6 +34063,25 @@
       "notes": ""
     },
     {
+      "path": "resources/javascript/bug_740166.in#js-transcript",
+      "status": "pass",
+      "tags": [],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": null,
+      "notes": ""
+    },
+    {
       "path": "resources/javascript/bug_740166.pdf",
       "status": "pass",
       "tags": [],
@@ -33664,6 +34139,25 @@
         "max_channel_diff": 0,
         "pages": 1
       },
+      "notes": ""
+    },
+    {
+      "path": "resources/javascript/bug_895152.in#js-transcript",
+      "status": "pass",
+      "tags": [],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": null,
       "notes": ""
     },
     {
@@ -33727,6 +34221,25 @@
       "notes": ""
     },
     {
+      "path": "resources/javascript/bug_959274_1.in#js-transcript",
+      "status": "pass",
+      "tags": [],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": null,
+      "notes": ""
+    },
+    {
       "path": "resources/javascript/bug_959274_1.pdf",
       "status": "pass",
       "tags": [],
@@ -33785,6 +34298,27 @@
         "pages": 1
       },
       "notes": ""
+    },
+    {
+      "path": "resources/javascript/bug_983867.in#js-transcript",
+      "status": "fail",
+      "tags": [
+        "js-transcript"
+      ],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": null,
+      "notes": "line 1: expected \"Alert: Finished !!!\", got end of output"
     },
     {
       "path": "resources/javascript/bug_983867.pdf",
@@ -33847,6 +34381,27 @@
       "notes": ""
     },
     {
+      "path": "resources/javascript/color_methods.in#js-transcript",
+      "status": "fail",
+      "tags": [
+        "js-transcript"
+      ],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": null,
+      "notes": "line 1: expected \"Alert: PASS: color.convert() threw color.convert: Incorrect number of parameters passed to function.\", got \"Alert: PASS: color.convert() threw ReferenceError: color is not defined\""
+    },
+    {
       "path": "resources/javascript/color_methods.pdf",
       "status": "pass",
       "tags": [],
@@ -33907,6 +34462,27 @@
       "notes": ""
     },
     {
+      "path": "resources/javascript/color_properties.in#js-transcript",
+      "status": "fail",
+      "tags": [
+        "js-transcript"
+      ],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": null,
+      "notes": "line 2: expected \"Alert: transparent: T\", got \"Alert: FAILUREReferenceError: color is not defined\""
+    },
+    {
       "path": "resources/javascript/color_properties.pdf",
       "status": "pass",
       "tags": [],
@@ -33964,6 +34540,25 @@
         "max_channel_diff": 0,
         "pages": 1
       },
+      "notes": ""
+    },
+    {
+      "path": "resources/javascript/console_methods.in#js-transcript",
+      "status": "pass",
+      "tags": [],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": null,
       "notes": ""
     },
     {
@@ -34027,6 +34622,27 @@
       "notes": ""
     },
     {
+      "path": "resources/javascript/constructor.in#js-transcript",
+      "status": "fail",
+      "tags": [
+        "js-transcript"
+      ],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": null,
+      "notes": "line 1: expected \"Alert: PASS: this.constructor(): illegal constructor\", got \"Alert: FAIL: this.constructor(): returned\""
+    },
+    {
       "path": "resources/javascript/constructor.pdf",
       "status": "pass",
       "tags": [],
@@ -34085,6 +34701,27 @@
         "pages": 1
       },
       "notes": ""
+    },
+    {
+      "path": "resources/javascript/consts.in#js-transcript",
+      "status": "fail",
+      "tags": [
+        "js-transcript"
+      ],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": null,
+      "notes": "line 1: expected \"Alert: border.s is solid\", got \"Alert: ERROR: ReferenceError: border is not defined\""
     },
     {
       "path": "resources/javascript/consts.pdf",
@@ -34151,6 +34788,27 @@
         "pages": 4
       },
       "notes": ""
+    },
+    {
+      "path": "resources/javascript/document_methods.in#js-transcript",
+      "status": "fail",
+      "tags": [
+        "js-transcript"
+      ],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": null,
+      "notes": "line 2: expected \"Alert: PASS: typeof this.addAnnot = function\", got \"Alert: FAIL: typeof this.addAnnot = undefined, expected function \""
     },
     {
       "path": "resources/javascript/document_methods.pdf",
@@ -34225,6 +34883,27 @@
       "notes": ""
     },
     {
+      "path": "resources/javascript/document_properties.in#js-transcript",
+      "status": "fail",
+      "tags": [
+        "js-transcript"
+      ],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": null,
+      "notes": "line 3: expected \"Alert: this.author is string Joe Random Author\", got \"Alert: this.author is undefined undefined\""
+    },
+    {
       "path": "resources/javascript/document_properties.pdf",
       "status": "pass",
       "tags": [],
@@ -34291,6 +34970,27 @@
       "notes": ""
     },
     {
+      "path": "resources/javascript/event_properties.in#js-transcript",
+      "status": "fail",
+      "tags": [
+        "js-transcript"
+      ],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": null,
+      "notes": "line 1: expected \"Alert: *** starting test ***\", got end of output"
+    },
+    {
       "path": "resources/javascript/event_properties.pdf",
       "status": "pass",
       "tags": [],
@@ -34349,6 +35049,27 @@
         "pages": 1
       },
       "notes": ""
+    },
+    {
+      "path": "resources/javascript/field_methods.in#js-transcript",
+      "status": "fail",
+      "tags": [
+        "js-transcript"
+      ],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": null,
+      "notes": "line 1: expected \"Alert: empty is \", got \"Alert: Unexpected error: TypeError: not a callable function\""
     },
     {
       "path": "resources/javascript/field_methods.pdf",
@@ -34411,6 +35132,27 @@
       "notes": ""
     },
     {
+      "path": "resources/javascript/field_properties.in#js-transcript",
+      "status": "fail",
+      "tags": [
+        "js-transcript"
+      ],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": null,
+      "notes": "line 1: expected \"Alert: Testing properties under delay\", got \"Alert: Unexpected error: TypeError: not a callable function\""
+    },
+    {
       "path": "resources/javascript/field_properties.pdf",
       "status": "pass",
       "tags": [],
@@ -34469,6 +35211,27 @@
         "pages": 1
       },
       "notes": ""
+    },
+    {
+      "path": "resources/javascript/foreground_task.in#js-transcript",
+      "status": "fail",
+      "tags": [
+        "js-transcript"
+      ],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": null,
+      "notes": "line 1: expected \"Alert: Posted\", got \"Alert: Error: ReferenceError: gc is not defined\""
     },
     {
       "path": "resources/javascript/foreground_task.pdf",
@@ -34531,6 +35294,27 @@
       "notes": ""
     },
     {
+      "path": "resources/javascript/globals.in#js-transcript",
+      "status": "fail",
+      "tags": [
+        "js-transcript"
+      ],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": null,
+      "notes": "line 3: expected \"Alert:   setPersistent = function setPersistent() { [native code] }, own property = true\", got end of output"
+    },
+    {
       "path": "resources/javascript/globals.pdf",
       "status": "pass",
       "tags": [],
@@ -34589,6 +35373,27 @@
         "pages": 1
       },
       "notes": ""
+    },
+    {
+      "path": "resources/javascript/icons.in#js-transcript",
+      "status": "fail",
+      "tags": [
+        "js-transcript"
+      ],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": null,
+      "notes": "line 1: expected \"Alert: doc is [object global]\", got \"Alert: doc is [object Object]\""
     },
     {
       "path": "resources/javascript/icons.pdf",
@@ -34651,6 +35456,27 @@
       "notes": ""
     },
     {
+      "path": "resources/javascript/immutable_proto.in#js-transcript",
+      "status": "fail",
+      "tags": [
+        "js-transcript"
+      ],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": null,
+      "notes": "line 3: expected \"Alert: PASS: this.__proto__ = {} threw TypeError: Immutable prototype object '[object global]' cannot have their prototy…\", got \"Alert: FAIL: this.__proto__ = {} = [object Object], expected to throw\""
+    },
+    {
       "path": "resources/javascript/immutable_proto.pdf",
       "status": "pass",
       "tags": [],
@@ -34709,6 +35535,27 @@
         "pages": 1
       },
       "notes": ""
+    },
+    {
+      "path": "resources/javascript/listbox_methods.in#js-transcript",
+      "status": "fail",
+      "tags": [
+        "js-transcript"
+      ],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": null,
+      "notes": "line 1: expected \"Alert: Value is: string \", got \"Alert: For getField(MyField.MySingleSelect) ERROR: TypeError: not a callable function\""
     },
     {
       "path": "resources/javascript/listbox_methods.pdf",
@@ -34771,6 +35618,51 @@
       "notes": ""
     },
     {
+      "path": "resources/javascript/mouse_events.in#form-events",
+      "status": "pass",
+      "tags": [],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": {
+        "ssim": 0.998592,
+        "exact": false,
+        "max_channel_diff": 255,
+        "pages": 1
+      },
+      "notes": ""
+    },
+    {
+      "path": "resources/javascript/mouse_events.in#js-transcript",
+      "status": "fail",
+      "tags": [
+        "js-transcript"
+      ],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": null,
+      "notes": "line 1: expected \"Alert: enter\", got end of output"
+    },
+    {
       "path": "resources/javascript/mouse_events.pdf",
       "status": "pass",
       "tags": [],
@@ -34796,6 +35688,30 @@
         "ssim": 1,
         "exact": true,
         "max_channel_diff": 0,
+        "pages": 1
+      },
+      "notes": ""
+    },
+    {
+      "path": "resources/javascript/mouse_events.pdf#form-events",
+      "status": "pass",
+      "tags": [],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": {
+        "ssim": 0.998592,
+        "exact": false,
+        "max_channel_diff": 255,
         "pages": 1
       },
       "notes": ""
@@ -34831,6 +35747,51 @@
       "notes": ""
     },
     {
+      "path": "resources/javascript/public_methods.in#form-events",
+      "status": "pass",
+      "tags": [],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": {
+        "ssim": 0.999466,
+        "exact": false,
+        "max_channel_diff": 130,
+        "pages": 1
+      },
+      "notes": ""
+    },
+    {
+      "path": "resources/javascript/public_methods.in#js-transcript",
+      "status": "fail",
+      "tags": [
+        "js-transcript"
+      ],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": null,
+      "notes": "line 1: expected \"Alert: *** starting test 1 ***\", got end of output"
+    },
+    {
       "path": "resources/javascript/public_methods.pdf",
       "status": "pass",
       "tags": [],
@@ -34856,6 +35817,30 @@
         "ssim": 0.999901,
         "exact": false,
         "max_channel_diff": 53,
+        "pages": 1
+      },
+      "notes": ""
+    },
+    {
+      "path": "resources/javascript/public_methods.pdf#form-events",
+      "status": "pass",
+      "tags": [],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": {
+        "ssim": 0.999466,
+        "exact": false,
+        "max_channel_diff": 130,
         "pages": 1
       },
       "notes": ""
@@ -34888,6 +35873,25 @@
         "max_channel_diff": 0,
         "pages": 1
       },
+      "notes": ""
+    },
+    {
+      "path": "resources/javascript/unsupported.in#js-transcript",
+      "status": "pass",
+      "tags": [],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": null,
       "notes": ""
     },
     {
@@ -34951,6 +35955,25 @@
       "notes": ""
     },
     {
+      "path": "resources/javascript/util_bytetochar.in#js-transcript",
+      "status": "pass",
+      "tags": [],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": null,
+      "notes": ""
+    },
+    {
       "path": "resources/javascript/util_bytetochar.pdf",
       "status": "pass",
       "tags": [],
@@ -35011,6 +36034,27 @@
       "notes": ""
     },
     {
+      "path": "resources/javascript/util_printd.in#js-transcript",
+      "status": "fail",
+      "tags": [
+        "js-transcript"
+      ],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": null,
+      "notes": "line 13: expected \"Alert: dddd: Sunday\", got \"Alert: dddd: Friday\""
+    },
+    {
       "path": "resources/javascript/util_printd.pdf",
       "status": "pass",
       "tags": [],
@@ -35068,6 +36112,25 @@
         "max_channel_diff": 0,
         "pages": 1
       },
+      "notes": ""
+    },
+    {
+      "path": "resources/javascript/util_printx.in#js-transcript",
+      "status": "pass",
+      "tags": [],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": null,
       "notes": ""
     },
     {
@@ -35131,6 +36194,25 @@
       "notes": ""
     },
     {
+      "path": "resources/javascript/util_scand.in#js-transcript",
+      "status": "pass",
+      "tags": [],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": null,
+      "notes": ""
+    },
+    {
       "path": "resources/javascript/util_scand.pdf",
       "status": "pass",
       "tags": [],
@@ -35189,6 +36271,27 @@
         "pages": 1
       },
       "notes": ""
+    },
+    {
+      "path": "resources/javascript/v8_features.in#js-transcript",
+      "status": "fail",
+      "tags": [
+        "js-transcript"
+      ],
+      "tierA": {
+        "compared": [],
+        "mismatched": [],
+        "golden_pages": null,
+        "actual_pages": null,
+        "text": {
+          "pages": 0,
+          "matched": 0,
+          "nonempty": 0,
+          "nonempty_matched": 0
+        }
+      },
+      "tierB": null,
+      "notes": "line 1: expected \"Alert: PASS: typeof gc = function\", got \"Alert: FAIL: typeof gc = undefined, expected = function\""
     },
     {
       "path": "resources/javascript/v8_features.pdf",
