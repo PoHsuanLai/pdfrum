@@ -98,7 +98,7 @@ pub fn load(desc: &Dict, r: &impl Resolve) -> FontDescriptor {
         flags: desc
             .int(names::FLAGS, r)
             .and_then(|f| u32::try_from(f).ok())
-            .map_or(FontFlags::DEFAULT, FontFlags),
+            .map_or(FontFlags::DEFAULT, FontFlags::from_bits),
         ..FontDescriptor::default()
     };
 

@@ -374,28 +374,36 @@ pub fn pdfrum_font::FontDescriptor::subst_weight(&self) -> i32
 pub fn pdfrum_font::FontDescriptor::weight(&self) -> core::option::Option<i32>
 impl core::default::Default for pdfrum_font::FontDescriptor
 pub fn pdfrum_font::FontDescriptor::default() -> Self
-pub struct pdfrum_font::FontFlags(pub u32)
+pub struct pdfrum_font::FontFlags(_)
 impl pdfrum_font::FontFlags
-pub const pdfrum_font::FontFlags::ALL_CAP: u32
+pub const pdfrum_font::FontFlags::ALL_CAP: Self
 pub const pdfrum_font::FontFlags::DEFAULT: Self
-pub const pdfrum_font::FontFlags::FIXED_PITCH: u32
-pub const pdfrum_font::FontFlags::FORCE_BOLD: u32
-pub const pdfrum_font::FontFlags::ITALIC: u32
-pub const pdfrum_font::FontFlags::NON_SYMBOLIC: u32
-pub const pdfrum_font::FontFlags::SCRIPT: u32
-pub const pdfrum_font::FontFlags::SERIF: u32
-pub const pdfrum_font::FontFlags::SMALL_CAP: u32
-pub const pdfrum_font::FontFlags::SYMBOLIC: u32
-pub const pdfrum_font::FontFlags::USE_EXTERN_ATTR: u32
-pub const fn pdfrum_font::FontFlags::has(self, u32) -> bool
+pub const pdfrum_font::FontFlags::FIXED_PITCH: Self
+pub const pdfrum_font::FontFlags::FORCE_BOLD: Self
+pub const pdfrum_font::FontFlags::ITALIC: Self
+pub const pdfrum_font::FontFlags::NONE: Self
+pub const pdfrum_font::FontFlags::NON_SYMBOLIC: Self
+pub const pdfrum_font::FontFlags::SCRIPT: Self
+pub const pdfrum_font::FontFlags::SERIF: Self
+pub const pdfrum_font::FontFlags::SMALL_CAP: Self
+pub const pdfrum_font::FontFlags::SYMBOLIC: Self
+pub const pdfrum_font::FontFlags::USE_EXTERN_ATTR: Self
+pub const fn pdfrum_font::FontFlags::bits(self) -> u32
+pub const fn pdfrum_font::FontFlags::contains(self, Self) -> bool
+pub const fn pdfrum_font::FontFlags::from_bits(u32) -> Self
 pub const fn pdfrum_font::FontFlags::is_all_cap(self) -> bool
+pub const fn pdfrum_font::FontFlags::is_empty(self) -> bool
 pub const fn pdfrum_font::FontFlags::is_fixed_pitch(self) -> bool
 pub const fn pdfrum_font::FontFlags::is_italic(self) -> bool
 pub const fn pdfrum_font::FontFlags::is_non_symbolic(self) -> bool
 pub const fn pdfrum_font::FontFlags::is_symbolic(self) -> bool
+pub const fn pdfrum_font::FontFlags::union(self, Self) -> Self
 pub const fn pdfrum_font::FontFlags::uses_extern_attr(self) -> bool
-pub const fn pdfrum_font::FontFlags::with(self, u32) -> Self
-pub const fn pdfrum_font::FontFlags::without(self, u32) -> Self
+pub const fn pdfrum_font::FontFlags::with(self, Self) -> Self
+pub const fn pdfrum_font::FontFlags::without(self, Self) -> Self
+impl core::ops::bit::BitOr for pdfrum_font::FontFlags
+pub type pdfrum_font::FontFlags::Output = pdfrum_font::FontFlags
+pub fn pdfrum_font::FontFlags::bitor(self, Self) -> Self
 pub struct pdfrum_font::FontId(pub u64)
 pub struct pdfrum_font::Gid(pub u16)
 impl core::convert::From<pdfrum_font::Gid> for pdfrum_type1::Gid

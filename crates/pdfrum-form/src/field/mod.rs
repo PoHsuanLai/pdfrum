@@ -72,13 +72,13 @@ impl TextConfig {
         TextConfig {
             multi_line: flags.is_multiline(),
             password: flags.is_password(),
-            comb: flags.0 & (1 << 24) != 0,
+            comb: flags.is_comb(),
             max_len: max_len.and_then(NonZeroU32::new),
             read_only: flags.is_read_only(),
             // Undo is always available on a text field: the oracle turns it
             // on unconditionally rather than from any flag.
             undo_enabled: true,
-            auto_scroll: !flags.do_not_scroll(),
+            auto_scroll: flags.scrolls(),
         }
     }
 }
@@ -302,14 +302,19 @@ mod tests {
         assert_eq!(family_of(FieldKind::Button), Some(Family::Button));
     }
 
+    /// `/Ff` as a bare word, so a bit-shift table reads as one.
+    fn ff(bits: i64) -> FieldFlags {
+        FieldFlags::from_bits(bits)
+    }
+
     /// A non-positive limit means unlimited, which the type says rather than
     /// the reader having to remember.
     #[test]
     fn a_zero_length_limit_is_no_limit() {
-        assert_eq!(TextConfig::read(FieldFlags(0), Some(0)).max_len, None);
-        assert_eq!(TextConfig::read(FieldFlags(0), None).max_len, None);
+        assert_eq!(TextConfig::read(ff(0), Some(0)).max_len, None);
+        assert_eq!(TextConfig::read(ff(0), None).max_len, None);
         assert_eq!(
-            TextConfig::read(FieldFlags(0), Some(10)).max_len,
+            TextConfig::read(ff(0), Some(10)).max_len,
             NonZeroU32::new(10)
         );
     }
@@ -317,20 +322,20 @@ mod tests {
     /// Undo is on for every text field, from no flag at all.
     #[test]
     fn a_text_field_always_records_undo() {
-        assert!(TextConfig::read(FieldFlags(0), None).undo_enabled);
-        assert!(TextConfig::read(FieldFlags(1), None).undo_enabled);
+        assert!(TextConfig::read(ff(0), None).undo_enabled);
+        assert!(TextConfig::read(ff(1), None).undo_enabled);
     }
 
     #[test]
     fn a_field_scrolls_unless_it_is_told_not_to() {
-        assert!(TextConfig::read(FieldFlags(0), None).auto_scroll);
-        assert!(TextConfig::read(FieldFlags(1 << 12), None).auto_scroll);
-        assert!(!TextConfig::read(FieldFlags(1 << 23), None).auto_scroll);
+        assert!(TextConfig::read(ff(0), None).auto_scroll);
+        assert!(TextConfig::read(ff(1 << 12), None).auto_scroll);
+        assert!(!TextConfig::read(ff(1 << 23), None).auto_scroll);
     }
 
     #[test]
     fn text_flags_read_the_documented_bits() {
-        let config = TextConfig::read(FieldFlags((1 << 12) | (1 << 13) | (1 << 24) | 1), None);
+        let config = TextConfig::read(ff((1 << 12) | (1 << 13) | (1 << 24) | 1), None);
         assert!(config.multi_line);
         assert!(config.password);
         assert!(config.comb);
@@ -341,11 +346,11 @@ mod tests {
     /// set is not editable, because the bit does not mean that there.
     #[test]
     fn only_a_combo_box_can_be_editable() {
-        let combo = ChoiceConfig::read(FieldFlags((1 << 17) | (1 << 18)));
+        let combo = ChoiceConfig::read(ff((1 << 17) | (1 << 18)));
         assert!(combo.combo);
         assert!(combo.editable);
 
-        let list = ChoiceConfig::read(FieldFlags(1 << 18));
+        let list = ChoiceConfig::read(ff(1 << 18));
         assert!(!list.combo);
         assert!(!list.editable);
     }
@@ -353,10 +358,10 @@ mod tests {
     /// And multi-select is a list box's alone, for the same reason.
     #[test]
     fn only_a_list_box_can_be_multi_select() {
-        let list = ChoiceConfig::read(FieldFlags(1 << 21));
+        let list = ChoiceConfig::read(ff(1 << 21));
         assert!(list.multi_select);
 
-        let combo = ChoiceConfig::read(FieldFlags((1 << 17) | (1 << 21)));
+        let combo = ChoiceConfig::read(ff((1 << 17) | (1 << 21)));
         assert!(!combo.multi_select);
     }
 

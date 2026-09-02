@@ -629,7 +629,7 @@ fn flags_reach_the_substitution_request() {
     // route a CID font has to a face when nothing is embedded.
     let desc = dict_of(vec![(
         names::FLAGS,
-        Object::Int(i64::from(FontFlags::SERIF)),
+        Object::Int(i64::from(FontFlags::SERIF.bits())),
     )]);
     let d = type0(
         Object::Name(Name::from("Identity-H")),

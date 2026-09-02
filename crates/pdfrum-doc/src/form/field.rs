@@ -94,75 +94,122 @@ impl FieldKind {
 
 /// A field's `/Ff` flag word (ISO 32000-1 tables 227–230).
 ///
-/// Kept as the raw word rather than a bitflags set: the meaning of a bit
-/// depends on the field type, so the same bit 26 is "file select" on a text
-/// field and "sort" on a choice field. The accessors below are the ones whose
-/// reading is type-independent or whose type is implied by the name.
+/// Kept as the raw word rather than a set, and **deliberately without the
+/// `contains` / `union` algebra its two sibling flag types have**: the meaning
+/// of a bit depends on the field type, so the same bit 26 is "file select" on
+/// a text field and "sort" on a choice field, and `FieldFlags::COMBO |
+/// FieldFlags::MULTILINE` would be a lie. The predicates below — the ones
+/// whose reading is type-independent or whose type is implied by the name —
+/// are the API. [`FieldFlags::bits`] and [`FieldFlags::from_bits`] exist for
+/// round-tripping the word itself, unknown bits included.
+///
+/// ```
+/// use pdfrum_doc::form::FieldFlags;
+///
+/// // Bit 1 is `ReadOnly` on every field type.
+/// assert!(FieldFlags::from_bits(1).is_read_only());
+/// // A reserved bit survives the trip.
+/// assert_eq!(FieldFlags::from_bits(1 << 40).bits(), 1 << 40);
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
-pub struct FieldFlags(pub i64);
+pub struct FieldFlags(i64);
 
 impl FieldFlags {
+    /// The raw `/Ff` word, including every bit no predicate here reads.
+    #[must_use]
+    pub const fn bits(self) -> i64 {
+        self.0
+    }
+
+    /// The word as written in the file. **Unknown bits are retained**: a bit
+    /// whose meaning belongs to a `/FT` this type knows nothing about is
+    /// kept, not dropped.
+    #[must_use]
+    pub const fn from_bits(bits: i64) -> Self {
+        Self(bits)
+    }
+
     /// Bit 1: the field may not be changed.
     #[must_use]
-    pub fn is_read_only(self) -> bool {
+    pub const fn is_read_only(self) -> bool {
         self.0 & (1 << 0) != 0
     }
 
     /// Bit 2: the field must have a value when the form is submitted.
     #[must_use]
-    pub fn is_required(self) -> bool {
+    pub const fn is_required(self) -> bool {
         self.0 & (1 << 1) != 0
     }
 
     /// Bit 16, on a `/Btn`: the field is a radio button rather than a check
     /// box.
     #[must_use]
-    pub fn is_radio(self) -> bool {
+    pub const fn is_radio(self) -> bool {
         self.0 & (1 << 15) != 0
     }
 
     /// Bit 17, on a `/Btn`: the field is a push button and holds no value.
     #[must_use]
-    pub fn is_push_button(self) -> bool {
+    pub const fn is_push_button(self) -> bool {
         self.0 & (1 << 16) != 0
     }
 
     /// Bit 18, on a `/Ch`: the field is a drop-down rather than a list box.
     #[must_use]
-    pub fn is_combo(self) -> bool {
+    pub const fn is_combo(self) -> bool {
         self.0 & (1 << 17) != 0
     }
 
     /// Bit 19, on a `/Ch`: the combo box includes an editable text box.
     #[must_use]
-    pub fn is_editable_combo(self) -> bool {
+    pub const fn is_editable_combo(self) -> bool {
         self.0 & (1 << 18) != 0
     }
 
     /// Bit 22, on a `/Ch`: more than one option may be selected at once.
     #[must_use]
-    pub fn is_multi_select(self) -> bool {
+    pub const fn is_multi_select(self) -> bool {
         self.0 & (1 << 21) != 0
     }
 
     /// Bit 13, on a `/Tx`: the field accepts more than one line.
     #[must_use]
-    pub fn is_multiline(self) -> bool {
+    pub const fn is_multiline(self) -> bool {
         self.0 & (1 << 12) != 0
     }
 
     /// Bit 14, on a `/Tx`: the field's contents are obscured as they are
     /// typed.
     #[must_use]
-    pub fn is_password(self) -> bool {
+    pub const fn is_password(self) -> bool {
         self.0 & (1 << 13) != 0
     }
 
-    /// Bit 24, on a `/Tx`: the field does not scroll to fit more text than
-    /// its rectangle holds.
+    /// Bit 25, on a `/Tx`: the text is laid out in equally spaced cells.
     #[must_use]
-    pub fn do_not_scroll(self) -> bool {
-        self.0 & (1 << 23) != 0
+    #[doc(alias = "Comb")]
+    pub const fn is_comb(self) -> bool {
+        self.0 & (1 << 24) != 0
+    }
+
+    /// Bit 24, on a `/Tx`: whether the field scrolls to fit more text than
+    /// its rectangle holds.
+    ///
+    /// The positive reading of the spec's `DoNotScroll` bit: a field scrolls
+    /// *unless* the bit is set.
+    #[must_use]
+    #[doc(alias = "DoNotScroll")]
+    pub const fn scrolls(self) -> bool {
+        self.0 & (1 << 23) == 0
+    }
+
+    /// Bit 23, on a `/Tx` or `/Ch`: whether the value is spell-checked.
+    ///
+    /// The positive reading of the spec's `DoNotSpellCheck` bit.
+    #[must_use]
+    #[doc(alias = "DoNotSpellCheck")]
+    pub const fn spell_checks(self) -> bool {
+        self.0 & (1 << 22) == 0
     }
 }
 
@@ -491,7 +538,7 @@ fn visit<R: Resolve>(
     let field_type = field_attr(dict, names::FT, r, limits, diags)
         .map(|value| value.to_byte_string())
         .unwrap_or_default();
-    let flags = FieldFlags(
+    let flags = FieldFlags::from_bits(
         field_attr(dict, names::FF, r, limits, diags)
             .and_then(|value| value.as_int())
             .unwrap_or(0),
@@ -1166,17 +1213,17 @@ mod tests {
     fn the_button_flags_split_the_three_button_kinds() {
         // No bits: a check box.
         assert_eq!(
-            FieldKind::classify(b"Btn", FieldFlags(0)),
+            FieldKind::classify(b"Btn", FieldFlags::from_bits(0)),
             Some(FieldKind::Check)
         );
         // Bit 16: a radio button.
         assert_eq!(
-            FieldKind::classify(b"Btn", FieldFlags(1 << 15)),
+            FieldKind::classify(b"Btn", FieldFlags::from_bits(1 << 15)),
             Some(FieldKind::Radio)
         );
         // Bit 17 wins over bit 16: a push button.
         assert_eq!(
-            FieldKind::classify(b"Btn", FieldFlags((1 << 16) | (1 << 15))),
+            FieldKind::classify(b"Btn", FieldFlags::from_bits((1 << 16) | (1 << 15))),
             Some(FieldKind::Button)
         );
     }
@@ -1184,19 +1231,22 @@ mod tests {
     #[test]
     fn a_choice_field_splits_on_the_combo_bit() {
         assert_eq!(
-            FieldKind::classify(b"Ch", FieldFlags(0)),
+            FieldKind::classify(b"Ch", FieldFlags::from_bits(0)),
             Some(FieldKind::List)
         );
         assert_eq!(
-            FieldKind::classify(b"Ch", FieldFlags(1 << 17)),
+            FieldKind::classify(b"Ch", FieldFlags::from_bits(1 << 17)),
             Some(FieldKind::Combo)
         );
     }
 
     #[test]
     fn a_node_with_no_field_type_is_not_a_field() {
-        assert_eq!(FieldKind::classify(b"", FieldFlags(0)), None);
-        assert_eq!(FieldKind::classify(b"Nonsense", FieldFlags(0)), None);
+        assert_eq!(FieldKind::classify(b"", FieldFlags::from_bits(0)), None);
+        assert_eq!(
+            FieldKind::classify(b"Nonsense", FieldFlags::from_bits(0)),
+            None
+        );
     }
 
     #[test]
@@ -1447,22 +1497,47 @@ mod tests {
 
     #[test]
     fn the_flag_word_accessors_read_the_documented_bits() {
-        assert!(FieldFlags(1).is_read_only());
-        assert!(FieldFlags(2).is_required());
-        assert!(FieldFlags(1 << 12).is_multiline());
-        assert!(FieldFlags(1 << 13).is_password());
-        assert!(FieldFlags(1 << 18).is_editable_combo());
-        assert!(FieldFlags(1 << 21).is_multi_select());
-        assert!(FieldFlags(1 << 23).do_not_scroll());
-        assert!(!FieldFlags(0).is_read_only());
-        assert!(!FieldFlags(0).is_editable_combo());
-        assert!(!FieldFlags(0).is_multi_select());
-        assert!(!FieldFlags(0).do_not_scroll());
+        let f = FieldFlags::from_bits;
+        assert!(f(1).is_read_only());
+        assert!(f(2).is_required());
+        assert!(f(1 << 12).is_multiline());
+        assert!(f(1 << 13).is_password());
+        assert!(f(1 << 18).is_editable_combo());
+        assert!(f(1 << 21).is_multi_select());
+        assert!(f(1 << 24).is_comb());
+        assert!(!f(0).is_read_only());
+        assert!(!f(0).is_editable_combo());
+        assert!(!f(0).is_multi_select());
+        assert!(!f(0).is_comb());
         // Neighbouring bits must not alias: combo (bit 18) is not editable
         // combo (bit 19), and do-not-spell-check (bit 23) is not do-not-scroll
         // (bit 24).
-        assert!(!FieldFlags(1 << 17).is_editable_combo());
-        assert!(!FieldFlags(1 << 22).do_not_scroll());
+        assert!(!f(1 << 17).is_editable_combo());
+    }
+
+    /// The two negative spec bits, read positively. `DoNotScroll` and
+    /// `DoNotSpellCheck` are adjacent, so the alias test is also an
+    /// anti-aliasing test.
+    #[test]
+    fn the_negative_spec_bits_read_positively() {
+        let f = FieldFlags::from_bits;
+        assert!(f(0).scrolls());
+        assert!(!f(1 << 23).scrolls());
+        assert!(f(1 << 22).scrolls());
+        assert!(f(0).spell_checks());
+        assert!(!f(1 << 22).spell_checks());
+        assert!(f(1 << 23).spell_checks());
+    }
+
+    /// `/Ff` has no set algebra by design (§6): the round trip is the whole
+    /// contract, and a bit belonging to a `/FT` nothing here reads survives.
+    #[test]
+    fn the_flag_word_round_trips_unknown_bits() {
+        let raw = (1 << 40) | (1 << 25) | 1;
+        let f = FieldFlags::from_bits(raw);
+        assert_eq!(f.bits(), raw);
+        assert!(f.is_read_only());
+        assert_eq!(FieldFlags::default().bits(), 0);
     }
 
     // ---- `/CO`, the calculation order ----

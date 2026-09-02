@@ -60,13 +60,38 @@ pub fn pdfrum_doc::annot::Subtype::as_bytes(self) -> &'static [u8]
 pub fn pdfrum_doc::annot::Subtype::from_bytes(&[u8]) -> pdfrum_doc::annot::Subtype
 pub fn pdfrum_doc::annot::Subtype::has_attachment_points(self) -> bool
 pub fn pdfrum_doc::annot::Subtype::is_text_markup(self) -> bool
-pub struct pdfrum_doc::annot::AnnotFlags(pub i64)
+pub struct pdfrum_doc::annot::AnnotFlags(_)
 impl pdfrum_doc::annot::AnnotFlags
-pub fn pdfrum_doc::annot::AnnotFlags::is_hidden(self) -> bool
+pub const pdfrum_doc::annot::AnnotFlags::HIDDEN: Self
+pub const pdfrum_doc::annot::AnnotFlags::INVISIBLE: Self
+pub const pdfrum_doc::annot::AnnotFlags::LOCKED: Self
+pub const pdfrum_doc::annot::AnnotFlags::LOCKED_CONTENTS: Self
+pub const pdfrum_doc::annot::AnnotFlags::NONE: Self
+pub const pdfrum_doc::annot::AnnotFlags::NO_ROTATE: Self
+pub const pdfrum_doc::annot::AnnotFlags::NO_VIEW: Self
+pub const pdfrum_doc::annot::AnnotFlags::NO_ZOOM: Self
+pub const pdfrum_doc::annot::AnnotFlags::PRINT: Self
+pub const pdfrum_doc::annot::AnnotFlags::READ_ONLY: Self
+pub const pdfrum_doc::annot::AnnotFlags::TOGGLE_NO_VIEW: Self
+pub const fn pdfrum_doc::annot::AnnotFlags::bits(self) -> i64
+pub const fn pdfrum_doc::annot::AnnotFlags::contains(self, Self) -> bool
+pub const fn pdfrum_doc::annot::AnnotFlags::from_bits(i64) -> Self
+pub const fn pdfrum_doc::annot::AnnotFlags::is_empty(self) -> bool
+pub const fn pdfrum_doc::annot::AnnotFlags::is_hidden(self) -> bool
+pub const fn pdfrum_doc::annot::AnnotFlags::is_visible(self) -> bool
 pub fn pdfrum_doc::annot::AnnotFlags::names(self) -> alloc::vec::Vec<&'static str>
-pub fn pdfrum_doc::annot::AnnotFlags::no_rotate(self) -> bool
-pub fn pdfrum_doc::annot::AnnotFlags::no_view(self) -> bool
-pub fn pdfrum_doc::annot::AnnotFlags::prints(self) -> bool
+pub const fn pdfrum_doc::annot::AnnotFlags::no_rotate(self) -> bool
+pub const fn pdfrum_doc::annot::AnnotFlags::no_view(self) -> bool
+pub const fn pdfrum_doc::annot::AnnotFlags::prints(self) -> bool
+pub const fn pdfrum_doc::annot::AnnotFlags::rotates(self) -> bool
+pub const fn pdfrum_doc::annot::AnnotFlags::union(self, Self) -> Self
+pub const fn pdfrum_doc::annot::AnnotFlags::views(self) -> bool
+pub const fn pdfrum_doc::annot::AnnotFlags::with(self, Self) -> Self
+pub const fn pdfrum_doc::annot::AnnotFlags::without(self, Self) -> Self
+pub const fn pdfrum_doc::annot::AnnotFlags::zooms(self) -> bool
+impl core::ops::bit::BitOr for pdfrum_doc::annot::AnnotFlags
+pub type pdfrum_doc::annot::AnnotFlags::Output = pdfrum_doc::annot::AnnotFlags
+pub fn pdfrum_doc::annot::AnnotFlags::bitor(self, Self) -> Self
 pub struct pdfrum_doc::annot::AnnotList
 pub pdfrum_doc::annot::AnnotList::annots: alloc::vec::Vec<pdfrum_doc::annot::Annotation>
 pub pdfrum_doc::annot::AnnotList::popups: alloc::vec::Vec<(usize, pdfrum_doc::annot::Annotation)>
@@ -91,20 +116,6 @@ pub fn pdfrum_doc::annot::quad_point_count(core::option::Option<&pdfrum_object::
 pub fn pdfrum_doc::annot::rect_from_quad_points(core::option::Option<&pdfrum_object::array::Array>, usize) -> kurbo::rect::Rect
 pub fn pdfrum_doc::annot::rect_from_quad_points_array(&pdfrum_object::array::Array, usize) -> kurbo::rect::Rect
 pub fn pdfrum_doc::annot::subtype_name(pdfrum_doc::annot::Subtype) -> pdfrum_object::name::Name
-pub mod pdfrum_doc::annot_dump
-pub enum pdfrum_doc::annot_dump::ObjectKind
-pub pdfrum_doc::annot_dump::ObjectKind::Form
-pub pdfrum_doc::annot_dump::ObjectKind::Image
-pub pdfrum_doc::annot_dump::ObjectKind::Path
-pub pdfrum_doc::annot_dump::ObjectKind::Shading
-pub pdfrum_doc::annot_dump::ObjectKind::Text
-impl pdfrum_doc::annot_dump::ObjectKind
-pub fn pdfrum_doc::annot_dump::ObjectKind::as_str(self) -> &'static str
-pub fn pdfrum_doc::annot_dump::is_annotation(&pdfrum_object::object::Object) -> bool
-pub fn pdfrum_doc::annot_dump::render<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, core::option::Option<&pdfrum_doc::ap::AnnotOverlay>, &pdfrum_doc::nav::open_action::Hidden, impl core::ops::function::FnMut(usize, &pdfrum_object::dict::Dict) -> alloc::vec::Vec<pdfrum_doc::annot_dump::ObjectKind>, &R, &mut pdfrum_common::diagnostics::Diagnostics) -> alloc::string::String
-pub fn pdfrum_doc::annot_dump::reported_rect<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, usize, core::option::Option<&pdfrum_doc::ap::AnnotOverlay>, &R) -> kurbo::rect::Rect
-pub fn pdfrum_doc::annot_dump::six_places(f32) -> alloc::string::String
-pub fn pdfrum_doc::annot_dump::three_places(f32) -> alloc::string::String
 pub mod pdfrum_doc::annot_render
 pub fn pdfrum_doc::annot_render::overlay<R: pdfrum_object::resolve::Resolve>(&mut pdfrum_page::page::Page, &pdfrum_object::dict::Dict, &pdfrum_object::dict::Dict, &R, &mut pdfrum_page::build::BuildContext, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics)
 pub fn pdfrum_doc::annot_render::overlay_with<R: pdfrum_object::resolve::Resolve>(&mut pdfrum_page::page::Page, &pdfrum_object::dict::Dict, &pdfrum_object::dict::Dict, &R, &mut pdfrum_page::build::BuildContext, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics, core::option::Option<&pdfrum_doc::ap::AnnotOverlay>)
@@ -397,18 +408,22 @@ pub struct pdfrum_doc::form::field::FieldEdit
 pub pdfrum_doc::form::field::FieldEdit::dict: pdfrum_object::dict::Dict
 pub pdfrum_doc::form::field::FieldEdit::reference: pdfrum_object::object::ObjRef
 pub pdfrum_doc::form::field::FieldEdit::widgets: alloc::vec::Vec<(pdfrum_object::object::ObjRef, pdfrum_object::dict::Dict, pdfrum_doc::ap::GeneratedAp)>
-pub struct pdfrum_doc::form::field::FieldFlags(pub i64)
+pub struct pdfrum_doc::form::field::FieldFlags(_)
 impl pdfrum_doc::form::field::FieldFlags
-pub fn pdfrum_doc::form::field::FieldFlags::do_not_scroll(self) -> bool
-pub fn pdfrum_doc::form::field::FieldFlags::is_combo(self) -> bool
-pub fn pdfrum_doc::form::field::FieldFlags::is_editable_combo(self) -> bool
-pub fn pdfrum_doc::form::field::FieldFlags::is_multi_select(self) -> bool
-pub fn pdfrum_doc::form::field::FieldFlags::is_multiline(self) -> bool
-pub fn pdfrum_doc::form::field::FieldFlags::is_password(self) -> bool
-pub fn pdfrum_doc::form::field::FieldFlags::is_push_button(self) -> bool
-pub fn pdfrum_doc::form::field::FieldFlags::is_radio(self) -> bool
-pub fn pdfrum_doc::form::field::FieldFlags::is_read_only(self) -> bool
-pub fn pdfrum_doc::form::field::FieldFlags::is_required(self) -> bool
+pub const fn pdfrum_doc::form::field::FieldFlags::bits(self) -> i64
+pub const fn pdfrum_doc::form::field::FieldFlags::from_bits(i64) -> Self
+pub const fn pdfrum_doc::form::field::FieldFlags::is_comb(self) -> bool
+pub const fn pdfrum_doc::form::field::FieldFlags::is_combo(self) -> bool
+pub const fn pdfrum_doc::form::field::FieldFlags::is_editable_combo(self) -> bool
+pub const fn pdfrum_doc::form::field::FieldFlags::is_multi_select(self) -> bool
+pub const fn pdfrum_doc::form::field::FieldFlags::is_multiline(self) -> bool
+pub const fn pdfrum_doc::form::field::FieldFlags::is_password(self) -> bool
+pub const fn pdfrum_doc::form::field::FieldFlags::is_push_button(self) -> bool
+pub const fn pdfrum_doc::form::field::FieldFlags::is_radio(self) -> bool
+pub const fn pdfrum_doc::form::field::FieldFlags::is_read_only(self) -> bool
+pub const fn pdfrum_doc::form::field::FieldFlags::is_required(self) -> bool
+pub const fn pdfrum_doc::form::field::FieldFlags::scrolls(self) -> bool
+pub const fn pdfrum_doc::form::field::FieldFlags::spell_checks(self) -> bool
 pub struct pdfrum_doc::form::field::FieldValues
 impl pdfrum_doc::form::field::FieldValues
 pub fn pdfrum_doc::form::field::FieldValues::get(&self, &str) -> core::option::Option<&str>
@@ -462,18 +477,22 @@ pub struct pdfrum_doc::form::FieldEdit
 pub pdfrum_doc::form::FieldEdit::dict: pdfrum_object::dict::Dict
 pub pdfrum_doc::form::FieldEdit::reference: pdfrum_object::object::ObjRef
 pub pdfrum_doc::form::FieldEdit::widgets: alloc::vec::Vec<(pdfrum_object::object::ObjRef, pdfrum_object::dict::Dict, pdfrum_doc::ap::GeneratedAp)>
-pub struct pdfrum_doc::form::FieldFlags(pub i64)
+pub struct pdfrum_doc::form::FieldFlags(_)
 impl pdfrum_doc::form::field::FieldFlags
-pub fn pdfrum_doc::form::field::FieldFlags::do_not_scroll(self) -> bool
-pub fn pdfrum_doc::form::field::FieldFlags::is_combo(self) -> bool
-pub fn pdfrum_doc::form::field::FieldFlags::is_editable_combo(self) -> bool
-pub fn pdfrum_doc::form::field::FieldFlags::is_multi_select(self) -> bool
-pub fn pdfrum_doc::form::field::FieldFlags::is_multiline(self) -> bool
-pub fn pdfrum_doc::form::field::FieldFlags::is_password(self) -> bool
-pub fn pdfrum_doc::form::field::FieldFlags::is_push_button(self) -> bool
-pub fn pdfrum_doc::form::field::FieldFlags::is_radio(self) -> bool
-pub fn pdfrum_doc::form::field::FieldFlags::is_read_only(self) -> bool
-pub fn pdfrum_doc::form::field::FieldFlags::is_required(self) -> bool
+pub const fn pdfrum_doc::form::field::FieldFlags::bits(self) -> i64
+pub const fn pdfrum_doc::form::field::FieldFlags::from_bits(i64) -> Self
+pub const fn pdfrum_doc::form::field::FieldFlags::is_comb(self) -> bool
+pub const fn pdfrum_doc::form::field::FieldFlags::is_combo(self) -> bool
+pub const fn pdfrum_doc::form::field::FieldFlags::is_editable_combo(self) -> bool
+pub const fn pdfrum_doc::form::field::FieldFlags::is_multi_select(self) -> bool
+pub const fn pdfrum_doc::form::field::FieldFlags::is_multiline(self) -> bool
+pub const fn pdfrum_doc::form::field::FieldFlags::is_password(self) -> bool
+pub const fn pdfrum_doc::form::field::FieldFlags::is_push_button(self) -> bool
+pub const fn pdfrum_doc::form::field::FieldFlags::is_radio(self) -> bool
+pub const fn pdfrum_doc::form::field::FieldFlags::is_read_only(self) -> bool
+pub const fn pdfrum_doc::form::field::FieldFlags::is_required(self) -> bool
+pub const fn pdfrum_doc::form::field::FieldFlags::scrolls(self) -> bool
+pub const fn pdfrum_doc::form::field::FieldFlags::spell_checks(self) -> bool
 pub struct pdfrum_doc::form::FieldValues
 impl pdfrum_doc::form::field::FieldValues
 pub fn pdfrum_doc::form::field::FieldValues::get(&self, &str) -> core::option::Option<&str>
@@ -1137,13 +1156,38 @@ pub fn pdfrum_doc::nav::action::Action::new(pdfrum_object::dict::Dict) -> pdfrum
 pub fn pdfrum_doc::nav::action::Action::next<R: pdfrum_object::resolve::Resolve>(&self, usize, &R) -> core::option::Option<pdfrum_doc::nav::action::Action>
 pub fn pdfrum_doc::nav::action::Action::next_count<R: pdfrum_object::resolve::Resolve>(&self, &R) -> usize
 pub fn pdfrum_doc::nav::action::Action::uri<R: pdfrum_object::resolve::Resolve>(&self, &pdfrum_object::dict::Dict, &R) -> alloc::vec::Vec<u8>
-pub struct pdfrum_doc::AnnotFlags(pub i64)
+pub struct pdfrum_doc::AnnotFlags(_)
 impl pdfrum_doc::annot::AnnotFlags
-pub fn pdfrum_doc::annot::AnnotFlags::is_hidden(self) -> bool
+pub const pdfrum_doc::annot::AnnotFlags::HIDDEN: Self
+pub const pdfrum_doc::annot::AnnotFlags::INVISIBLE: Self
+pub const pdfrum_doc::annot::AnnotFlags::LOCKED: Self
+pub const pdfrum_doc::annot::AnnotFlags::LOCKED_CONTENTS: Self
+pub const pdfrum_doc::annot::AnnotFlags::NONE: Self
+pub const pdfrum_doc::annot::AnnotFlags::NO_ROTATE: Self
+pub const pdfrum_doc::annot::AnnotFlags::NO_VIEW: Self
+pub const pdfrum_doc::annot::AnnotFlags::NO_ZOOM: Self
+pub const pdfrum_doc::annot::AnnotFlags::PRINT: Self
+pub const pdfrum_doc::annot::AnnotFlags::READ_ONLY: Self
+pub const pdfrum_doc::annot::AnnotFlags::TOGGLE_NO_VIEW: Self
+pub const fn pdfrum_doc::annot::AnnotFlags::bits(self) -> i64
+pub const fn pdfrum_doc::annot::AnnotFlags::contains(self, Self) -> bool
+pub const fn pdfrum_doc::annot::AnnotFlags::from_bits(i64) -> Self
+pub const fn pdfrum_doc::annot::AnnotFlags::is_empty(self) -> bool
+pub const fn pdfrum_doc::annot::AnnotFlags::is_hidden(self) -> bool
+pub const fn pdfrum_doc::annot::AnnotFlags::is_visible(self) -> bool
 pub fn pdfrum_doc::annot::AnnotFlags::names(self) -> alloc::vec::Vec<&'static str>
-pub fn pdfrum_doc::annot::AnnotFlags::no_rotate(self) -> bool
-pub fn pdfrum_doc::annot::AnnotFlags::no_view(self) -> bool
-pub fn pdfrum_doc::annot::AnnotFlags::prints(self) -> bool
+pub const fn pdfrum_doc::annot::AnnotFlags::no_rotate(self) -> bool
+pub const fn pdfrum_doc::annot::AnnotFlags::no_view(self) -> bool
+pub const fn pdfrum_doc::annot::AnnotFlags::prints(self) -> bool
+pub const fn pdfrum_doc::annot::AnnotFlags::rotates(self) -> bool
+pub const fn pdfrum_doc::annot::AnnotFlags::union(self, Self) -> Self
+pub const fn pdfrum_doc::annot::AnnotFlags::views(self) -> bool
+pub const fn pdfrum_doc::annot::AnnotFlags::with(self, Self) -> Self
+pub const fn pdfrum_doc::annot::AnnotFlags::without(self, Self) -> Self
+pub const fn pdfrum_doc::annot::AnnotFlags::zooms(self) -> bool
+impl core::ops::bit::BitOr for pdfrum_doc::annot::AnnotFlags
+pub type pdfrum_doc::annot::AnnotFlags::Output = pdfrum_doc::annot::AnnotFlags
+pub fn pdfrum_doc::annot::AnnotFlags::bitor(self, Self) -> Self
 pub struct pdfrum_doc::AnnotOverlay
 impl pdfrum_doc::ap::AnnotOverlay
 pub fn pdfrum_doc::ap::AnnotOverlay::appearance(&self, usize) -> &pdfrum_doc::ap::Appearance

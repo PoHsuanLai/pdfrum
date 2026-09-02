@@ -897,7 +897,7 @@ pub fn should_generate<R: Resolve>(dict: &Dict, r: &R) -> bool {
     if appearance::has_appearance(dict, r) {
         return false;
     }
-    let flags = crate::annot::AnnotFlags(dict.int(names::F, r).unwrap_or(0));
+    let flags = crate::annot::AnnotFlags::from_bits(dict.int(names::F, r).unwrap_or(0));
     !flags.is_hidden()
 }
 

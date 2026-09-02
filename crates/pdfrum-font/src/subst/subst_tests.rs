@@ -86,7 +86,7 @@ fn an_italic_alias_reaches_the_database_as_helvetica_oblique() {
     let req = FontRequest {
         name: b"Arial-ItalicMT".to_vec(),
         is_truetype: true,
-        flags: FontFlags(FontFlags::USE_EXTERN_ATTR),
+        flags: FontFlags::USE_EXTERN_ATTR,
         weight: 700,
         italic_angle: 0,
         code_page: CodePage::DefAnsi,
@@ -132,7 +132,7 @@ fn a_database_that_cannot_name_a_face_falls_back_to_the_faces_own_name() {
 fn without_use_extern_attr_the_weight_and_slant_are_discarded() {
     let req = FontRequest {
         name: b"NoSuchFont".to_vec(),
-        flags: FontFlags(FontFlags::NON_SYMBOLIC),
+        flags: FontFlags::NON_SYMBOLIC,
         weight: 900,
         italic_angle: -20,
         ..FontRequest::default()
@@ -152,7 +152,7 @@ fn without_use_extern_attr_the_weight_and_slant_are_discarded() {
 fn with_use_extern_attr_they_survive() {
     let req = FontRequest {
         name: b"NoSuchFont".to_vec(),
-        flags: FontFlags(FontFlags::NON_SYMBOLIC | FontFlags::USE_EXTERN_ATTR),
+        flags: FontFlags::NON_SYMBOLIC | FontFlags::USE_EXTERN_ATTR,
         weight: 900,
         italic_angle: -20,
         ..FontRequest::default()
@@ -171,7 +171,7 @@ fn with_use_extern_attr_they_survive() {
 fn a_zero_weight_becomes_four_hundred() {
     let req = FontRequest {
         name: b"NoSuchFont".to_vec(),
-        flags: FontFlags(FontFlags::USE_EXTERN_ATTR),
+        flags: FontFlags::USE_EXTERN_ATTR,
         weight: 0,
         ..FontRequest::default()
     };
@@ -337,7 +337,7 @@ fn an_unknown_name_reaches_the_multiple_master_generic() {
 fn a_serif_request_reaches_the_serif_generic_with_a_scaled_weight() {
     let req = FontRequest {
         name: b"SomeSerifNobodyHas".to_vec(),
-        flags: FontFlags(FontFlags::SERIF | FontFlags::USE_EXTERN_ATTR),
+        flags: FontFlags::SERIF | FontFlags::USE_EXTERN_ATTR,
         weight: 500,
         ..FontRequest::default()
     };
@@ -411,7 +411,7 @@ fn a_face_the_database_cannot_supply_bytes_for_falls_through() {
 fn a_symbolic_request_retries_once_as_a_plain_one() {
     let req = FontRequest {
         name: b"SomeSymbolicFont".to_vec(),
-        flags: FontFlags(FontFlags::SYMBOLIC),
+        flags: FontFlags::SYMBOLIC,
         ..FontRequest::default()
     };
     let mut db = TestFontDb::new();
@@ -429,7 +429,7 @@ fn a_symbolic_request_named_symbol_takes_the_chrome_symbol_face() {
     let req = FontRequest {
         name: b"Symbol".to_vec(),
         is_truetype: true,
-        flags: FontFlags(FontFlags::SYMBOLIC),
+        flags: FontFlags::SYMBOLIC,
         ..FontRequest::default()
     };
     let mut db = TestFontDb::new();
@@ -447,7 +447,7 @@ fn a_symbolic_request_named_symbol_takes_the_chrome_symbol_face() {
 fn a_cjk_request_records_its_weight_separately() {
     let req = FontRequest {
         name: b"SomeJapaneseFont-Bold".to_vec(),
-        flags: FontFlags(FontFlags::USE_EXTERN_ATTR),
+        flags: FontFlags::USE_EXTERN_ATTR,
         weight: 700,
         code_page: CodePage::ShiftJis,
         ..FontRequest::default()
@@ -499,7 +499,7 @@ fn skip_font_enumeration_changes_whether_the_weight_survives_branch_a() {
     // it or resets it to the pre-inference value.
     let req = FontRequest {
         name: b"SomeUnknownFont-Bold".to_vec(),
-        flags: FontFlags(FontFlags::USE_EXTERN_ATTR),
+        flags: FontFlags::USE_EXTERN_ATTR,
         weight: 400,
         ..FontRequest::default()
     };
@@ -571,11 +571,15 @@ fn arbitrary_names_never_panic_and_always_produce_a_face() {
     ];
     for name in names {
         for is_truetype in [false, true] {
-            for flags in [0, FontFlags::SYMBOLIC, FontFlags::USE_EXTERN_ATTR] {
+            for flags in [
+                FontFlags::NONE,
+                FontFlags::SYMBOLIC,
+                FontFlags::USE_EXTERN_ATTR,
+            ] {
                 let req = FontRequest {
                     name: name.to_vec(),
                     is_truetype,
-                    flags: FontFlags(flags),
+                    flags,
                     weight: 700,
                     italic_angle: -12,
                     ..FontRequest::default()
@@ -737,7 +741,7 @@ mod croscore_faces {
         let req = FontRequest {
             name: name.as_bytes().to_vec(),
             is_truetype: true,
-            flags: FontFlags(FontFlags::SYMBOLIC | FontFlags::USE_EXTERN_ATTR),
+            flags: FontFlags::SYMBOLIC | FontFlags::USE_EXTERN_ATTR,
             weight,
             italic_angle,
             code_page: CodePage::DefAnsi,
@@ -810,7 +814,7 @@ mod croscore_faces {
         let req = FontRequest {
             name: b"Arial,Bold".to_vec(),
             is_truetype: true,
-            flags: FontFlags(FontFlags::USE_EXTERN_ATTR),
+            flags: FontFlags::USE_EXTERN_ATTR,
             weight: 680,
             italic_angle: 0,
             code_page: CodePage::DefAnsi,
@@ -852,7 +856,7 @@ mod database_selection {
     fn japanese_request() -> FontRequest {
         FontRequest {
             name: b"KozMinPr6N-Regular".to_vec(),
-            flags: FontFlags(FontFlags::SERIF | FontFlags::SYMBOLIC),
+            flags: FontFlags::SERIF | FontFlags::SYMBOLIC,
             weight: 400,
             code_page: CodePage::ShiftJis,
             vertical: true,

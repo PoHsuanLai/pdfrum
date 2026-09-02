@@ -112,7 +112,7 @@ fn a_non_symbolic_flags_entry_clobbers_a_symbolic_base14_encoding() {
     // it directly, because the effect is otherwise invisible — step 5's
     // no-`/Encoding` branch re-sets a font named `Symbol` regardless of flags.
     let mut e = crate::encoding::FontEncoding::AdobeSymbol;
-    let non_symbolic = FontFlags(FontFlags::NON_SYMBOLIC);
+    let non_symbolic = FontFlags::NON_SYMBOLIC;
     if !non_symbolic.is_symbolic() {
         e = crate::encoding::FontEncoding::Standard;
     }
@@ -122,7 +122,7 @@ fn a_non_symbolic_flags_entry_clobbers_a_symbolic_base14_encoding() {
     // `Symbol` with non-symbolic flags still ends up with the symbol set.
     let desc = dict_of(vec![(
         names::FLAGS,
-        Object::Int(i64::from(FontFlags::NON_SYMBOLIC)),
+        Object::Int(i64::from(FontFlags::NON_SYMBOLIC.bits())),
     )]);
     let d = dict_of(vec![
         (names::BASE_FONT, Object::Name(Name::from("Symbol"))),
@@ -139,7 +139,7 @@ fn a_non_symbolic_flags_entry_clobbers_a_symbolic_base14_encoding() {
         names::FONT_DESCRIPTOR,
         Object::Dict(dict_of(vec![(
             names::FLAGS,
-            Object::Int(i64::from(FontFlags::SYMBOLIC)),
+            Object::Int(i64::from(FontFlags::SYMBOLIC.bits())),
         )])),
     )]);
     let embedded_symbolic = load_simple(&with_bit, false);
@@ -216,19 +216,13 @@ use crate::encoding::FontEncoding as E;
 fn resolve_enc(
     dict: &Dict,
     base_name: &[u8],
-    flags: u32,
+    flags: FontFlags,
     embedded: bool,
     truetype: bool,
     prior: E,
 ) -> E {
     resolve_encoding_for_test(
-        dict,
-        &NoResolve,
-        base_name,
-        FontFlags(flags),
-        embedded,
-        truetype,
-        prior,
+        dict, &NoResolve, base_name, flags, embedded, truetype, prior,
     )
     .0
 }
@@ -236,12 +230,26 @@ fn resolve_enc(
 #[test]
 fn no_encoding_and_a_font_named_symbol_takes_a_symbol_set() {
     assert_eq!(
-        resolve_enc(&Dict::new(), b"Symbol", 0, false, false, E::Builtin),
+        resolve_enc(
+            &Dict::new(),
+            b"Symbol",
+            FontFlags::NONE,
+            false,
+            false,
+            E::Builtin
+        ),
         E::AdobeSymbol
     );
     // A TrueType one takes the Microsoft symbol charmap instead.
     assert_eq!(
-        resolve_enc(&Dict::new(), b"Symbol", 0, false, true, E::Builtin),
+        resolve_enc(
+            &Dict::new(),
+            b"Symbol",
+            FontFlags::NONE,
+            false,
+            true,
+            E::Builtin
+        ),
         E::MsSymbol
     );
 }
@@ -249,17 +257,38 @@ fn no_encoding_and_a_font_named_symbol_takes_a_symbol_set() {
 #[test]
 fn no_encoding_on_a_non_embedded_builtin_font_becomes_winansi() {
     assert_eq!(
-        resolve_enc(&Dict::new(), b"Foo", 0, false, false, E::Builtin),
+        resolve_enc(
+            &Dict::new(),
+            b"Foo",
+            FontFlags::NONE,
+            false,
+            false,
+            E::Builtin
+        ),
         E::WinAnsi
     );
     // An *embedded* one keeps its built-in encoding.
     assert_eq!(
-        resolve_enc(&Dict::new(), b"Foo", 0, true, false, E::Builtin),
+        resolve_enc(
+            &Dict::new(),
+            b"Foo",
+            FontFlags::NONE,
+            true,
+            false,
+            E::Builtin
+        ),
         E::Builtin
     );
     // And a prior non-builtin encoding is left alone either way.
     assert_eq!(
-        resolve_enc(&Dict::new(), b"Foo", 0, false, false, E::Standard),
+        resolve_enc(
+            &Dict::new(),
+            b"Foo",
+            FontFlags::NONE,
+            false,
+            false,
+            E::Standard
+        ),
         E::Standard
     );
 }
@@ -278,7 +307,7 @@ fn only_four_encoding_names_change_anything() {
     ] {
         let d = dict_of(vec![(names::ENCODING, Object::Name(Name::from(name)))]);
         assert_eq!(
-            resolve_enc(&d, b"Foo", 0, false, false, E::Standard),
+            resolve_enc(&d, b"Foo", FontFlags::NONE, false, false, E::Standard),
             expected,
             "{name}"
         );
@@ -294,12 +323,12 @@ fn macexpert_is_reachable_only_through_a_non_truetype_base_encoding() {
     let d = dict_of(vec![(names::ENCODING, Object::Dict(enc.clone()))]);
     // Non-TrueType: the one path that reaches it.
     assert_eq!(
-        resolve_enc(&d, b"Foo", 0, false, false, E::Standard),
+        resolve_enc(&d, b"Foo", FontFlags::NONE, false, false, E::Standard),
         E::MacExpert
     );
     // TrueType: rewritten to WinAnsi.
     assert_eq!(
-        resolve_enc(&d, b"Foo", 0, false, true, E::Standard),
+        resolve_enc(&d, b"Foo", FontFlags::NONE, false, true, E::Standard),
         E::WinAnsi
     );
 }
@@ -311,7 +340,10 @@ fn a_symbolic_set_is_never_overridden_by_a_name() {
             names::ENCODING,
             Object::Name(Name::from("WinAnsiEncoding")),
         )]);
-        assert_eq!(resolve_enc(&d, b"Foo", 0, false, false, prior), prior);
+        assert_eq!(
+            resolve_enc(&d, b"Foo", FontFlags::NONE, false, false, prior),
+            prior
+        );
     }
 }
 
@@ -341,7 +373,7 @@ fn an_encoding_that_is_neither_a_name_nor_a_dict_does_nothing() {
     ] {
         let d = dict_of(vec![(names::ENCODING, value.clone())]);
         assert_eq!(
-            resolve_enc(&d, b"Foo", 0, false, false, E::Standard),
+            resolve_enc(&d, b"Foo", FontFlags::NONE, false, false, E::Standard),
             E::Standard,
             "{value:?}"
         );
@@ -352,17 +384,17 @@ fn an_encoding_that_is_neither_a_name_nor_a_dict_does_nothing() {
 fn a_dict_encoding_promotes_builtin_to_standard_when_not_embedded() {
     let d = dict_of(vec![(names::ENCODING, Object::Dict(Dict::new()))]);
     assert_eq!(
-        resolve_enc(&d, b"Foo", 0, false, false, E::Builtin),
+        resolve_enc(&d, b"Foo", FontFlags::NONE, false, false, E::Builtin),
         E::Standard
     );
     // An embedded *non*-TrueType font keeps Builtin.
     assert_eq!(
-        resolve_enc(&d, b"Foo", 0, true, false, E::Builtin),
+        resolve_enc(&d, b"Foo", FontFlags::NONE, true, false, E::Builtin),
         E::Builtin
     );
     // An embedded TrueType font is promoted anyway.
     assert_eq!(
-        resolve_enc(&d, b"Foo", 0, true, true, E::Builtin),
+        resolve_enc(&d, b"Foo", FontFlags::NONE, true, true, E::Builtin),
         E::Standard
     );
 }
@@ -527,7 +559,7 @@ fn a_truetype_font_with_a_real_face_maps_through_its_charmap() {
         (names::FONT_FILE2, stream),
         (
             names::FLAGS,
-            Object::Int(i64::from(FontFlags::NON_SYMBOLIC)),
+            Object::Int(i64::from(FontFlags::NON_SYMBOLIC.bits())),
         ),
     ]);
     let d = dict_of(vec![

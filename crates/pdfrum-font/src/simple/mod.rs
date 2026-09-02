@@ -286,9 +286,9 @@ pub(crate) fn load(
     if let Some(f) = base14 {
         base_font_name = subst::canonical_font_name(f).as_bytes().to_vec();
         flags = if f.is_symbolic() {
-            FontFlags(FontFlags::SYMBOLIC)
+            FontFlags::SYMBOLIC
         } else {
-            FontFlags(FontFlags::NON_SYMBOLIC)
+            FontFlags::NON_SYMBOLIC
         };
         if f.is_fixed() {
             // The four Couriers: every glyph 600 units wide.

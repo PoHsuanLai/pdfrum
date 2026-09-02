@@ -369,25 +369,28 @@ pub const pdfrum_form::event::Key::UNKNOWN: pdfrum_form::event::Key
 pub const pdfrum_form::event::Key::UP: pdfrum_form::event::Key
 pub const pdfrum_form::event::Key::Y: pdfrum_form::event::Key
 pub const pdfrum_form::event::Key::Z: pdfrum_form::event::Key
-pub struct pdfrum_form::event::Modifiers(pub u32)
+pub struct pdfrum_form::event::Modifiers(_)
 impl pdfrum_form::event::Modifiers
-pub const pdfrum_form::event::Modifiers::ALT: pdfrum_form::event::Modifiers
-pub const pdfrum_form::event::Modifiers::AUTO_REPEAT: pdfrum_form::event::Modifiers
-pub const pdfrum_form::event::Modifiers::CONTROL: pdfrum_form::event::Modifiers
-pub const pdfrum_form::event::Modifiers::KEYPAD: pdfrum_form::event::Modifiers
-pub const pdfrum_form::event::Modifiers::LEFT_BUTTON: pdfrum_form::event::Modifiers
-pub const pdfrum_form::event::Modifiers::META: pdfrum_form::event::Modifiers
-pub const pdfrum_form::event::Modifiers::MIDDLE_BUTTON: pdfrum_form::event::Modifiers
-pub const pdfrum_form::event::Modifiers::NONE: pdfrum_form::event::Modifiers
-pub const pdfrum_form::event::Modifiers::RIGHT_BUTTON: pdfrum_form::event::Modifiers
-pub const pdfrum_form::event::Modifiers::SHIFT: pdfrum_form::event::Modifiers
-pub fn pdfrum_form::event::Modifiers::contains(self, pdfrum_form::event::Modifiers) -> bool
-pub fn pdfrum_form::event::Modifiers::is_empty(self) -> bool
-pub fn pdfrum_form::event::Modifiers::union(self, pdfrum_form::event::Modifiers) -> pdfrum_form::event::Modifiers
-pub fn pdfrum_form::event::Modifiers::without(self, pdfrum_form::event::Modifiers) -> pdfrum_form::event::Modifiers
+pub const pdfrum_form::event::Modifiers::ALT: Self
+pub const pdfrum_form::event::Modifiers::AUTO_REPEAT: Self
+pub const pdfrum_form::event::Modifiers::CONTROL: Self
+pub const pdfrum_form::event::Modifiers::KEYPAD: Self
+pub const pdfrum_form::event::Modifiers::LEFT_BUTTON: Self
+pub const pdfrum_form::event::Modifiers::META: Self
+pub const pdfrum_form::event::Modifiers::MIDDLE_BUTTON: Self
+pub const pdfrum_form::event::Modifiers::NONE: Self
+pub const pdfrum_form::event::Modifiers::RIGHT_BUTTON: Self
+pub const pdfrum_form::event::Modifiers::SHIFT: Self
+pub const fn pdfrum_form::event::Modifiers::bits(self) -> u32
+pub const fn pdfrum_form::event::Modifiers::contains(self, Self) -> bool
+pub const fn pdfrum_form::event::Modifiers::from_bits(u32) -> Self
+pub const fn pdfrum_form::event::Modifiers::is_empty(self) -> bool
+pub const fn pdfrum_form::event::Modifiers::union(self, Self) -> Self
+pub const fn pdfrum_form::event::Modifiers::with(self, Self) -> Self
+pub const fn pdfrum_form::event::Modifiers::without(self, Self) -> Self
 impl core::ops::bit::BitOr for pdfrum_form::event::Modifiers
 pub type pdfrum_form::event::Modifiers::Output = pdfrum_form::event::Modifiers
-pub fn pdfrum_form::event::Modifiers::bitor(self, pdfrum_form::event::Modifiers) -> pdfrum_form::event::Modifiers
+pub fn pdfrum_form::event::Modifiers::bitor(self, Self) -> Self
 pub struct pdfrum_form::event::Point
 pub pdfrum_form::event::Point::x: f32
 pub pdfrum_form::event::Point::y: f32
@@ -1029,25 +1032,28 @@ pub pdfrum_form::Keystroke::value: alloc::string::String
 impl pdfrum_form::cascade::Keystroke
 pub fn pdfrum_form::cascade::Keystroke::applied(&self) -> alloc::string::String
 pub fn pdfrum_form::cascade::Keystroke::of(&pdfrum_form::edit::ops::TextEdit, impl core::convert::Into<alloc::string::String>) -> pdfrum_form::cascade::Keystroke
-pub struct pdfrum_form::Modifiers(pub u32)
+pub struct pdfrum_form::Modifiers(_)
 impl pdfrum_form::event::Modifiers
-pub const pdfrum_form::event::Modifiers::ALT: pdfrum_form::event::Modifiers
-pub const pdfrum_form::event::Modifiers::AUTO_REPEAT: pdfrum_form::event::Modifiers
-pub const pdfrum_form::event::Modifiers::CONTROL: pdfrum_form::event::Modifiers
-pub const pdfrum_form::event::Modifiers::KEYPAD: pdfrum_form::event::Modifiers
-pub const pdfrum_form::event::Modifiers::LEFT_BUTTON: pdfrum_form::event::Modifiers
-pub const pdfrum_form::event::Modifiers::META: pdfrum_form::event::Modifiers
-pub const pdfrum_form::event::Modifiers::MIDDLE_BUTTON: pdfrum_form::event::Modifiers
-pub const pdfrum_form::event::Modifiers::NONE: pdfrum_form::event::Modifiers
-pub const pdfrum_form::event::Modifiers::RIGHT_BUTTON: pdfrum_form::event::Modifiers
-pub const pdfrum_form::event::Modifiers::SHIFT: pdfrum_form::event::Modifiers
-pub fn pdfrum_form::event::Modifiers::contains(self, pdfrum_form::event::Modifiers) -> bool
-pub fn pdfrum_form::event::Modifiers::is_empty(self) -> bool
-pub fn pdfrum_form::event::Modifiers::union(self, pdfrum_form::event::Modifiers) -> pdfrum_form::event::Modifiers
-pub fn pdfrum_form::event::Modifiers::without(self, pdfrum_form::event::Modifiers) -> pdfrum_form::event::Modifiers
+pub const pdfrum_form::event::Modifiers::ALT: Self
+pub const pdfrum_form::event::Modifiers::AUTO_REPEAT: Self
+pub const pdfrum_form::event::Modifiers::CONTROL: Self
+pub const pdfrum_form::event::Modifiers::KEYPAD: Self
+pub const pdfrum_form::event::Modifiers::LEFT_BUTTON: Self
+pub const pdfrum_form::event::Modifiers::META: Self
+pub const pdfrum_form::event::Modifiers::MIDDLE_BUTTON: Self
+pub const pdfrum_form::event::Modifiers::NONE: Self
+pub const pdfrum_form::event::Modifiers::RIGHT_BUTTON: Self
+pub const pdfrum_form::event::Modifiers::SHIFT: Self
+pub const fn pdfrum_form::event::Modifiers::bits(self) -> u32
+pub const fn pdfrum_form::event::Modifiers::contains(self, Self) -> bool
+pub const fn pdfrum_form::event::Modifiers::from_bits(u32) -> Self
+pub const fn pdfrum_form::event::Modifiers::is_empty(self) -> bool
+pub const fn pdfrum_form::event::Modifiers::union(self, Self) -> Self
+pub const fn pdfrum_form::event::Modifiers::with(self, Self) -> Self
+pub const fn pdfrum_form::event::Modifiers::without(self, Self) -> Self
 impl core::ops::bit::BitOr for pdfrum_form::event::Modifiers
 pub type pdfrum_form::event::Modifiers::Output = pdfrum_form::event::Modifiers
-pub fn pdfrum_form::event::Modifiers::bitor(self, pdfrum_form::event::Modifiers) -> pdfrum_form::event::Modifiers
+pub fn pdfrum_form::event::Modifiers::bitor(self, Self) -> Self
 pub struct pdfrum_form::NoScripts
 impl pdfrum_form::cascade::Cascade for pdfrum_form::cascade::NoScripts
 pub fn pdfrum_form::cascade::NoScripts::calculate(&mut self, &mut pdfrum_form::cascade::FieldWrites, &pdfrum_form::cascade::FieldRef)

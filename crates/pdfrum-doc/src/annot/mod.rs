@@ -161,60 +161,202 @@ impl Subtype {
     }
 }
 
-/// An annotation's `/F` flag word.
+/// An annotation's `/F` flag word (ISO 32000-1 table 165).
 ///
-/// A newtype rather than a bitflags dependency: nine named predicates and one
-/// bit-order iterator is the whole surface, and the dump needs the order.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub struct AnnotFlags(pub i64);
+/// A hand-rolled newtype rather than a `bitflags` dependency, for two reasons
+/// the crate would get wrong: **unknown bits round-trip**
+/// ([`AnnotFlags::from_bits`] keeps the whole word), and the dump needs a
+/// **fixed name order** — [`AnnotFlags::names`] is that order, and the tenth
+/// defined bit, `LOCKED_CONTENTS`, has no printed name at all.
+///
+/// ```
+/// use pdfrum_doc::AnnotFlags;
+///
+/// let f = AnnotFlags::PRINT | AnnotFlags::NO_ZOOM;
+/// assert!(f.contains(AnnotFlags::PRINT));
+/// assert_eq!(f.names(), ["Print", "NoZoom"]);
+/// assert_eq!(AnnotFlags::from_bits(1 << 20).bits(), 1 << 20);
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
+pub struct AnnotFlags(i64);
 
 /// The nine flags the dump prints, in bit order. The tenth defined bit
 /// (`LockedContents`) has no printed name.
-const FLAG_NAMES: [(i64, &str); 9] = [
-    (1, "Invisible"),
-    (2, "Hidden"),
-    (4, "Print"),
-    (8, "NoZoom"),
-    (16, "NoRotate"),
-    (32, "NoView"),
-    (64, "ReadOnly"),
-    (128, "Locked"),
-    (256, "ToggleNoView"),
+const FLAG_NAMES: [(AnnotFlags, &str); 9] = [
+    (AnnotFlags::INVISIBLE, "Invisible"),
+    (AnnotFlags::HIDDEN, "Hidden"),
+    (AnnotFlags::PRINT, "Print"),
+    (AnnotFlags::NO_ZOOM, "NoZoom"),
+    (AnnotFlags::NO_ROTATE, "NoRotate"),
+    (AnnotFlags::NO_VIEW, "NoView"),
+    (AnnotFlags::READ_ONLY, "ReadOnly"),
+    (AnnotFlags::LOCKED, "Locked"),
+    (AnnotFlags::TOGGLE_NO_VIEW, "ToggleNoView"),
 ];
 
 impl AnnotFlags {
+    /// Bit 1: an annotation whose subtype the viewer does not handle is not
+    /// drawn at all, rather than falling back to its appearance stream.
+    ///
+    /// Only widgets consult it here — `CPDFSDK_BAAnnot::IsVisible` adds it,
+    /// and Pass A never tests it.
+    pub const INVISIBLE: Self = Self(1 << 0);
+    /// Bit 2: not displayed and not printed at all.
+    pub const HIDDEN: Self = Self(1 << 1);
+    /// Bit 3: appears in printed output.
+    pub const PRINT: Self = Self(1 << 2);
+    /// Bit 4: the annotation keeps its size when the page is zoomed.
+    pub const NO_ZOOM: Self = Self(1 << 3);
+    /// Bit 5: the annotation ignores the page's rotation.
+    pub const NO_ROTATE: Self = Self(1 << 4);
+    /// Bit 6: suppressed on screen, though it may still print.
+    pub const NO_VIEW: Self = Self(1 << 5);
+    /// Bit 7: the annotation does not interact with the user.
+    pub const READ_ONLY: Self = Self(1 << 6);
+    /// Bit 8: the annotation may not be deleted, moved or resized.
+    pub const LOCKED: Self = Self(1 << 7);
+    /// Bit 9: [`AnnotFlags::NO_VIEW`]'s sense is inverted for the viewer's
+    /// own idea of "selected".
+    pub const TOGGLE_NO_VIEW: Self = Self(1 << 8);
+    /// Bit 10: the annotation's contents may not be changed.
+    ///
+    /// The one defined bit the dump has no printed name for.
+    pub const LOCKED_CONTENTS: Self = Self(1 << 9);
+
+    /// No bit set.
+    pub const NONE: Self = Self(0);
+
+    /// The raw `/F` word, including any bit this type does not name.
+    #[must_use]
+    pub const fn bits(self) -> i64 {
+        self.0
+    }
+
+    /// The word as written in the file. **Unknown bits are retained**: a
+    /// reserved bit a damaged file sets is kept, not dropped.
+    #[must_use]
+    pub const fn from_bits(bits: i64) -> Self {
+        Self(bits)
+    }
+
+    /// Whether every bit of `other` is set here.
+    ///
+    /// [`AnnotFlags::NONE`] is contained in everything, so `contains` is the
+    /// wrong question to ask about "no flags at all" — use
+    /// `== AnnotFlags::NONE`.
+    #[must_use]
+    pub const fn contains(self, other: Self) -> bool {
+        self.0 & other.0 == other.0
+    }
+
+    /// Both sets of bits.
+    #[must_use]
+    pub const fn union(self, other: Self) -> Self {
+        Self(self.0 | other.0)
+    }
+
+    /// A copy with `other`'s bits set. An alias for [`AnnotFlags::union`].
+    #[must_use]
+    pub const fn with(self, other: Self) -> Self {
+        self.union(other)
+    }
+
+    /// The bits of `self` that are not in `other`.
+    #[must_use]
+    pub const fn without(self, other: Self) -> Self {
+        Self(self.0 & !other.0)
+    }
+
+    /// Whether no bit at all is set.
+    #[must_use]
+    pub const fn is_empty(self) -> bool {
+        self.0 == 0
+    }
+
+    /// The annotation is drawn even when its subtype has no handler.
+    ///
+    /// The positive reading of the spec's `Invisible` bit, and **the bit
+    /// alone**: whether an annotation is actually drawn also depends on
+    /// [`AnnotFlags::is_hidden`], [`AnnotFlags::no_view`] and the subtype.
+    #[must_use]
+    #[doc(alias = "Invisible")]
+    pub const fn is_visible(self) -> bool {
+        !self.contains(Self::INVISIBLE)
+    }
+
     /// The annotation is not displayed and not printed at all.
     #[must_use]
-    pub fn is_hidden(self) -> bool {
-        self.0 & 2 != 0
+    pub const fn is_hidden(self) -> bool {
+        self.contains(Self::HIDDEN)
     }
 
     /// The annotation appears in printed output.
     #[must_use]
-    pub fn prints(self) -> bool {
-        self.0 & 4 != 0
+    pub const fn prints(self) -> bool {
+        self.contains(Self::PRINT)
+    }
+
+    /// The annotation is shown on screen.
+    ///
+    /// The positive reading of the spec's `NoView` bit.
+    #[must_use]
+    #[doc(alias = "NoView")]
+    pub const fn views(self) -> bool {
+        !self.contains(Self::NO_VIEW)
     }
 
     /// The annotation is suppressed on screen.
     #[must_use]
-    pub fn no_view(self) -> bool {
-        self.0 & 32 != 0
+    #[doc(alias = "NoView")]
+    pub const fn no_view(self) -> bool {
+        self.contains(Self::NO_VIEW)
+    }
+
+    /// The annotation scales with the page.
+    ///
+    /// The positive reading of the spec's `NoZoom` bit.
+    #[must_use]
+    #[doc(alias = "NoZoom")]
+    pub const fn zooms(self) -> bool {
+        !self.contains(Self::NO_ZOOM)
+    }
+
+    /// The annotation turns with the page.
+    ///
+    /// The positive reading of the spec's `NoRotate` bit.
+    #[must_use]
+    #[doc(alias = "NoRotate")]
+    pub const fn rotates(self) -> bool {
+        !self.contains(Self::NO_ROTATE)
     }
 
     /// The annotation ignores the page's rotation.
     #[must_use]
-    pub fn no_rotate(self) -> bool {
-        self.0 & 16 != 0
+    #[doc(alias = "NoRotate")]
+    pub const fn no_rotate(self) -> bool {
+        self.contains(Self::NO_ROTATE)
     }
 
     /// The set flags' names, in bit order.
+    ///
+    /// **The order is the dump's** — `--annot` prints exactly this sequence,
+    /// and [`AnnotFlags::LOCKED_CONTENTS`] never appears because it has no
+    /// printed name.
     #[must_use]
     pub fn names(self) -> Vec<&'static str> {
         FLAG_NAMES
             .iter()
-            .filter(|(bit, _)| self.0 & bit != 0)
+            .filter(|(bit, _)| self.contains(*bit))
             .map(|(_, name)| *name)
             .collect()
+    }
+}
+
+impl std::ops::BitOr for AnnotFlags {
+    type Output = Self;
+
+    fn bitor(self, rhs: Self) -> Self {
+        self.union(rhs)
     }
 }
 
@@ -245,7 +387,7 @@ impl Annotation {
             // an annotation widget but not a form widget.
             subtype: Subtype::from_bytes(&dict.byte_string(names::SUBTYPE, r).unwrap_or_default()),
             rect: dict.rect(names::RECT, r),
-            flags: AnnotFlags(dict.int(names::F, r).unwrap_or(0)),
+            flags: AnnotFlags::from_bits(dict.int(names::F, r).unwrap_or(0)),
             dict: dict.clone(),
             quad_points: dict.array(names::QUAD_POINTS, r),
         }
@@ -347,12 +489,59 @@ mod tests {
     #[test]
     fn flag_names_come_out_in_bit_order() {
         assert_eq!(
-            AnnotFlags(4 | 8 | 16).names(),
+            AnnotFlags::from_bits(4 | 8 | 16).names(),
             ["Print", "NoZoom", "NoRotate"]
         );
-        assert!(AnnotFlags(0).names().is_empty());
+        assert!(AnnotFlags::NONE.names().is_empty());
         // The tenth bit has no printed name.
-        assert!(AnnotFlags(512).names().is_empty());
-        assert!(AnnotFlags(2).is_hidden());
+        assert!(AnnotFlags::LOCKED_CONTENTS.names().is_empty());
+        assert!(AnnotFlags::HIDDEN.is_hidden());
+    }
+
+    /// The dump's `Flags set:` line is byte-compared by the conformance
+    /// harness, so the name order is behaviour, not presentation. Every
+    /// printed name, in the one order they may appear in.
+    #[test]
+    fn the_dump_order_is_fixed() {
+        let all = AnnotFlags::from_bits(0x3FF);
+        assert_eq!(
+            all.names().join(", "),
+            "Invisible, Hidden, Print, NoZoom, NoRotate, NoView, ReadOnly, Locked, ToggleNoView"
+        );
+        // Setting the unnamed tenth bit, or a reserved one, changes nothing.
+        assert_eq!(
+            AnnotFlags::from_bits(0x3FF | (1 << 20)).names().join(", "),
+            "Invisible, Hidden, Print, NoZoom, NoRotate, NoView, ReadOnly, Locked, ToggleNoView"
+        );
+    }
+
+    #[test]
+    fn unknown_bits_round_trip() {
+        let f = AnnotFlags::from_bits((1 << 20) | AnnotFlags::PRINT.bits());
+        assert_eq!(f.bits(), (1 << 20) | 4);
+        assert!(f.contains(AnnotFlags::PRINT));
+        assert!(!f.contains(AnnotFlags::HIDDEN));
+    }
+
+    #[test]
+    fn set_algebra_and_the_positive_predicates() {
+        let f = AnnotFlags::PRINT | AnnotFlags::NO_VIEW | AnnotFlags::NO_ROTATE;
+        assert!(f.contains(AnnotFlags::PRINT | AnnotFlags::NO_VIEW));
+        assert!(f.contains(AnnotFlags::NONE));
+        assert!(!f.contains(AnnotFlags::PRINT | AnnotFlags::LOCKED));
+        assert!(!f.views() && f.no_view());
+        assert!(!f.rotates() && f.no_rotate());
+        assert!(f.zooms());
+        assert!(f.is_visible());
+        assert!(!AnnotFlags::INVISIBLE.is_visible());
+
+        let cleared = f.without(AnnotFlags::NO_VIEW);
+        assert!(cleared.views());
+        assert!(cleared.contains(AnnotFlags::PRINT));
+        assert!(AnnotFlags::NONE.is_empty());
+        assert_eq!(
+            AnnotFlags::NONE.with(AnnotFlags::LOCKED),
+            AnnotFlags::LOCKED
+        );
     }
 }

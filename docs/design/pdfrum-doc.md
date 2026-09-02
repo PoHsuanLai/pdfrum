@@ -3405,7 +3405,11 @@ crates/pdfrum-doc/src/
   page_label.rs     // roman / letters / the label assembly (§1.8)
   prefs.rs          // ViewerPrefs (§1.9)
   metadata.rs       // raw XMP bytes only (D11)
-  annot_dump.rs     // the --annot emitter (§1.12.2) — same reasoning as structure/dump.rs
+                    // (annot_dump.rs was here; WP2 moved the --annot emitter to
+                    //  pdfrum-tool. structure/dump.rs's reasoning does not carry:
+                    //  its ordering rules are the *structure tree's* behaviour, so
+                    //  a library caller needs them; the --annot line format is the
+                    //  CLI's own and had no caller outside pdfrum-tool.)
   error.rs          // Error (thiserror)
 ```
 
@@ -3475,7 +3479,7 @@ page_dict[/Annots] ──▶ AnnotList ──generate_appearances──▶ Annot
                           │                              (stream bytes)
                           │                                     │
                           ▼                                     ▼
-                    annot_dump.rs                    pdfrum-page::build_page
+            pdfrum-tool::annot_dump                  pdfrum-page::build_page
                     (--annot golden)                          │
                                                               ▼
                                                        pdfrum-render
@@ -4079,7 +4083,7 @@ commit — recording it here for the changelog.
 | `cpvt_word{,info}.cpp` | 56 | records → `vt/mod.rs` |
 | **out-of-tree but in scope** | | |
 | `fpdfsdk/cpdfsdk_appstream.cpp` | 1937 | **E1** — shapes only (`ap/shapes.rs`), off by default |
-| `testing/pdfium_test/write.cc` (annot half) | ~110 | §1.12.2 → `annot_dump.rs` |
+| `testing/pdfium_test/write.cc` (annot half) | ~110 | §1.12.2 → `pdfrum-tool`'s `annot_dump.rs` |
 | `testing/pdfium_test/dump.cc` (structure half) | ~120 | §1.7.3 → `structure/dump.rs` |
 | `fpdfsdk/fpdf_doc.cpp` (semantics only) | ~150 | §1.1/§1.3/§1.6 — the `/Dest`-then-`/A` ladders and the colour clamp |
 | `fpdfsdk/fpdf_annot.cpp` (semantics only) | ~250 | §1.12.2 — the colour defaults and attachment-point predicate |

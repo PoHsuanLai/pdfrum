@@ -514,7 +514,7 @@ fn invalid_outline<R: Resolve>(annot: &Annotation, r: &R) -> Option<pdfrum_page:
         return None;
     }
     let (limits, mut diags) = (Limits::default(), Diagnostics::default());
-    let flags = crate::form::FieldFlags(
+    let flags = crate::form::FieldFlags::from_bits(
         crate::form::attr::field_attr(&annot.dict, names::FF, r, &limits, &mut diags)
             .and_then(|value| value.as_int())
             .unwrap_or(0),
@@ -634,7 +634,7 @@ fn highlight<R: Resolve>(
     let field_type = crate::form::attr::field_attr(&annot.dict, names::FT, r, limits, diags)
         .map(|value| value.to_byte_string())
         .unwrap_or_default();
-    let flags = crate::form::FieldFlags(
+    let flags = crate::form::FieldFlags::from_bits(
         crate::form::attr::field_attr(&annot.dict, names::FF, r, limits, diags)
             .and_then(|value| value.as_int())
             .unwrap_or(0),
@@ -737,7 +737,7 @@ fn is_visible(subtype: Subtype, flags: crate::annot::AnnotFlags) -> bool {
     }
     // `CPDFSDK_BAAnnot::IsVisible` adds `kInvisible`, and only widgets reach
     // it — Pass A never tests that bit.
-    if subtype == Subtype::Widget && flags.0 & 1 != 0 {
+    if subtype == Subtype::Widget && flags.contains(crate::annot::AnnotFlags::INVISIBLE) {
         return false;
     }
     true
@@ -754,7 +754,7 @@ mod tests {
 
     fn annot(subtype: Subtype, flags: i64) -> Annotation {
         let mut annot = Annotation::read(&Dict::new(), &NoResolve);
-        annot.flags = AnnotFlags(flags);
+        annot.flags = AnnotFlags::from_bits(flags);
         annot.subtype = subtype;
         annot
     }
@@ -822,7 +822,7 @@ mod tests {
         // annotation's own `ReadOnly` at bit 6 of `/F`.
         assert!(!tinted(&widget("Tx", 1)));
         let mut not_read_only = widget("Tx", 0);
-        not_read_only.flags = AnnotFlags(64);
+        not_read_only.flags = AnnotFlags::from_bits(64);
         assert!(
             tinted(&not_read_only),
             "the annotation's ReadOnly bit is a different flag word"
@@ -939,7 +939,7 @@ mod tests {
     /// below means by it — the open-action override is exercised in
     /// `nav::open_action`.
     fn visible(subtype: Subtype, flags: i64) -> bool {
-        is_visible(subtype, AnnotFlags(flags))
+        is_visible(subtype, AnnotFlags::from_bits(flags))
     }
 
     #[test]

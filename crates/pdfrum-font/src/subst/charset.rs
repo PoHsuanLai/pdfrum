@@ -137,13 +137,13 @@ impl PitchFamily {
     #[must_use]
     pub fn from_flags(flags: FontFlags) -> Self {
         let mut p = 0;
-        if flags.has(FontFlags::SERIF) {
+        if flags.contains(FontFlags::SERIF) {
             p |= Self::ROMAN;
         }
-        if flags.has(FontFlags::SCRIPT) {
+        if flags.contains(FontFlags::SCRIPT) {
             p |= Self::SCRIPT;
         }
-        if flags.has(FontFlags::FIXED_PITCH) {
+        if flags.contains(FontFlags::FIXED_PITCH) {
             p |= Self::FIXED;
         }
         Self(p)
@@ -322,7 +322,7 @@ mod tests {
             PitchFamily::ROMAN
         );
 
-        let flags = FontFlags(FontFlags::SERIF | FontFlags::FIXED_PITCH);
+        let flags = FontFlags::SERIF | FontFlags::FIXED_PITCH;
         let p = PitchFamily::from_flags(flags);
         assert!(p.has(PitchFamily::ROMAN));
         assert!(p.has(PitchFamily::FIXED));
