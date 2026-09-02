@@ -20,7 +20,8 @@ transliteration: a rewrite, with PDFium kept alongside as a differential test
 oracle so the behaviour that matters survives even where the code shares
 nothing. Reimplementing PDF from the specification gets you a reader for files
 that are *correct*; porting the recovery folklore gets you one for files that
-*exist*.
+*exist*. Every release is measured against that oracle over a corpus of real
+and deliberately-broken PDFs.
 
 **Pure Rust, all the way down.** No C or C++ is compiled into any library build
 and no `-sys` crate appears anywhere in the dependency tree, checked
@@ -32,9 +33,10 @@ pages into pixels and text into strings.
 **JavaScript is off by default**, which is a different claim: with default
 features a document's scripts are read as data and never run —
 `scripts/check-no-boa.nu` asserts no engine is in the tree — and the `script`
-feature turns them on, behind a pure-Rust engine (boa). See the crate docs'
-`# Features` section for what a script reaches today, which is not yet
-Acrobat.
+feature turns them on, behind a pure-Rust engine (boa). The `Doc`/`Field`
+object model is incomplete; do not enable this expecting Acrobat. Nothing a
+script asks for (`app.alert`, `Doc.submitForm`) is performed here — those
+come back as values for the host.
 
 ## The facade
 
@@ -44,6 +46,8 @@ library in its own right and none of it is hidden, so reach past `pdfrum`
 whenever you need to: `pdfrum-parser` for damaged-file recovery,
 `pdfrum-filters` for stream codecs, `pdfrum-type1` for Type 1 fonts,
 `pdfrum-crypt` for the standard security handler, and a dozen more.
+`Document::parser`, `Page::objects`, `PageEdit::graph` and `Annotation::dict`
+are the documented escape hatches.
 
 Damage is a *channel*, not a failure: opening a file whose cross-reference table
 had to be rebuilt succeeds and says so through `Document::diagnostics`. Every
