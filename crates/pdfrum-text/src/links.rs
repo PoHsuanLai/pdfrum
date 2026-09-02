@@ -99,9 +99,14 @@ pub fn extract(chars: &[CharBox], text: &[char], index: &CharIndex) -> Vec<WebLi
             candidate.retain(|ch| ch != '\n' && ch != '\r');
             line_break = false;
         }
-        // The sentinel the search-facing text carries at a soft hyphen reads
-        // back as the hyphen it stood for.
-        candidate = candidate.replace('\u{FFFE}', "-");
+        // The soft hyphen the search-facing text carries at a line break reads
+        // back as the hyphen it stood for, so a URL split across two lines is
+        // still matched. `cpdf_linkextract.cpp:154-155` does exactly this —
+        // over `U+FFFE`, because that is what its buffer holds; audit A41's
+        // buffer half made ours hold the real `U+00AD` instead, so the repair
+        // is the same repair over a character that is no longer a
+        // noncharacter.
+        candidate = candidate.replace('\u{00AD}', "-");
 
         if candidate.chars().count() > 5 {
             // Trailing sentence punctuation is context, not address.

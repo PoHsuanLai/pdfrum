@@ -30,7 +30,7 @@
 //!   ligatures that the character stream keeps whole.
 //!
 //! On `bug_781804.pdf` the two disagree at one position: the character stream
-//! holds `U+0002` where the text holds `U+FFFE`. On `control_characters.pdf`
+//! holds `U+0002` where the text holds `U+00AD`. On `control_characters.pdf`
 //! the stream holds two characters the text does not. Neither is a bug —
 //! both are read, by different callers, and both are pinned by tests.
 //! [`TextPage::runs`] maps between the two index spaces.
@@ -379,7 +379,7 @@ mod tests {
             [
                 0xFF, 0xFE, 0x00, 0x00, // BOM
                 0x61, 0x00, 0x00, 0x00, // 'a'
-                0x02, 0x00, 0x00, 0x00, // U+0002, not U+FFFE
+                0x02, 0x00, 0x00, 0x00, // U+0002: the char list, not the buffer
                 0x73, 0x00, 0x00, 0x00, // 's'
             ]
         );

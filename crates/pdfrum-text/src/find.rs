@@ -21,9 +21,16 @@ use std::ops::Range;
 /// A non-breaking space, which counts as a separator between sub-needles.
 const NON_BREAKING_SPACE: char = '\u{00A0}';
 
-/// The sentinel the text buffer carries where a word was hyphenated across a
-/// line break (`cpdf_textpage.cpp:1361`, `AppendChar(0xfffe)`).
-const HYPHEN_SENTINEL: char = '\u{FFFE}';
+/// The soft hyphen the text buffer carries where a word was hyphenated across
+/// a line break.
+///
+/// `U+00AD`, not the `U+FFFE` noncharacter `cpdf_textpage.cpp:1361`
+/// (`AppendChar(0xfffe)`) writes: audit **A41**'s buffer half repairs it at
+/// the source, in `pipeline`'s `SOFT_HYPHEN`. Dropping it from the haystack is
+/// **A42**, and the two are independent — A42 would still be needed if the
+/// buffer carried a plain `-`, because a query for the un-hyphenated word has
+/// to match across the break either way.
+const HYPHEN_SENTINEL: char = '\u{00AD}';
 
 /// How a search behaves.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -458,27 +465,32 @@ mod tests {
     /// Audit item **A42**. `cpdf_textpage.cpp:1360-1361` writes `U+FFFE` into
     /// the text buffer at a soft hyphen and `cpdf_textpagefind.cpp:262`
     /// searches that buffer verbatim, so a word split across a line break can
-    /// never be found (crbug.com/431824298). We drop the sentinel from the
+    /// never be found (crbug.com/431824298). We drop the hyphen from the
     /// haystack and map back, so the word is found and the range is still a
     /// text offset — which is the property the fix has to keep.
+    ///
+    /// The character dropped is `U+00AD` rather than `U+FFFE` since audit
+    /// **A41**'s buffer half; A42 is unaffected by that, because what it
+    /// needs is that *something* stands between the two halves of the word
+    /// and is not itself part of either.
     #[test]
     fn a_word_split_across_a_line_break_is_found_joined() {
         // "a note-\nbook here", as the pipeline writes it: the hyphen and the
-        // break collapse to the one sentinel.
-        let text = "a note\u{FFFE}book here";
+        // break collapse to the one soft hyphen.
+        let text = "a note\u{00AD}book here";
         let hits: Vec<_> = search(text, "notebook", FindOptions::default()).collect();
         assert_eq!(hits.len(), 1, "the joined word is found");
 
-        // The range is a *text* offset, and it spans the sentinel, so slicing
-        // the original text by it recovers the split spelling.
+        // The range is a *text* offset, and it spans the soft hyphen, so
+        // slicing the original text by it recovers the split spelling.
         let chars: Vec<char> = text.chars().collect();
         let hit = hits[0].clone();
         let slice: String = chars[hit.clone()].iter().collect();
-        assert_eq!(slice, "note\u{FFFE}book");
+        assert_eq!(slice, "note\u{00AD}book");
         assert_eq!(hit, 2..11);
 
-        // And the sentinel is not itself a space: dropping it must not splice
-        // two words into a spelling the page does not contain.
+        // And the soft hyphen is not itself a space: dropping it must not
+        // splice two words into a spelling the page does not contain.
         assert_eq!(
             search(text, "note book", FindOptions::default()).count(),
             0,

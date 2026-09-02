@@ -331,7 +331,54 @@ can never match. What makes it a bug rather than a trade-off is the
 (`Replace(L"\xfffe", L"-")`) for link detection and search does not. pdf.js
 keeps a real hyphen (`unicode.js:57-58`) and joins across the break at query
 time with a reversible index map (`pdf_find_controller.js:131`, `:290-307`).
-**A41: 3 rows. A42: 2 rows.**
+**A41: 3 rows. A42: 2 rows.** *(Both counts were re-measured and are wrong;
+see below.)*
+
+> **A41 — split, half implemented, and the halves now disagree on purpose.**
+> Re-measured in `docs/status/reopened-declines.md` §2.9, the single "3 rows"
+> concealed two halves with wildly different costs, and they were ruled
+> separately.
+>
+> | half | what it changes | measured cost | ruling |
+> |---|---|---|---|
+> | **buffer** — `U+FFFE` → `U+00AD` in `TextPage.text` | `all_text()`, `page_text()`, the public `text` field | **0 rows** | **IMPLEMENTED.** The `.txt` goldens are written from the *char list* (`testing/pdfium_test/write.cc:364-366` loops `FPDFText_GetUnicode`), so they pin `U+0002` and never see the buffer; a grep for the UTF-8 encoding of `U+FFFE` across every golden directory returns 0 files. |
+> | **char list** — `U+0002` → `U+00AD` in `CharBox.unicode` | the `--txt` dump | **12 rows**, 11 passing | **DECLINED**, and this ruling does not reopen it. `FPDFText_IsHyphen` already gives callers a supported way to identify the position. |
+>
+> **The consequence, recorded here so it is not later read as an oversight.**
+> The two parallel outputs encode the same event differently, and *since the
+> buffer half landed they differ in a new way that is ours rather than
+> PDFium's*:
+>
+> | | character record (`--txt`) | text buffer (`all_text()`) |
+> |---|---|---|
+> | before | `U+0002` — PDFium's | `U+FFFE` — PDFium's |
+> | **after** | `U+0002` — **PDFium's, unchanged** | `U+00AD` — **ours** |
+>
+> This asymmetry is **deliberate and ruled** (user, 2026-09-02), not a
+> half-finished migration. It was argued against in
+> `docs/design/idiomatic-api.md` §C.5's Reading 2 — "one coherent divergence is
+> better than a mixed one" — and the argument was heard and rejected, because
+> the two halves are not comparable: the buffer half removes a **Unicode
+> noncharacter from a public `String`** (§23.7 forbids it in interchange) at
+> **zero cost**, while the char half would pay 12 golden rows to change a code
+> point that never leaves a stream whose consumers have a working alternative
+> API. A noncharacter reaching a caller is a defect at any price; `U+0002` in
+> the char list is a quirk with a documented reading.
+>
+> Same reasoning, same citations, for the second `U+FFFE` in the buffer:
+> `cpdf_textpage.cpp:1462`'s `AppendChar(c ? c : 0xfffe)` for a code whose
+> `/ToUnicode` maps it to `U+0000` now writes **`U+FFFD`**, the sanctioned
+> stand-in and already this workspace's answer for an unpaired surrogate
+> (A54). The `U+FFFE` staged for a *character code* of zero (`:1433`) is
+> **untouched**: that record is never `normal`, so the placeholder is dropped
+> before the buffer and never reaches a caller — a private sentinel collapsed
+> at the boundary, which is `mirror_char`'s shape and what §C.1 permits.
+>
+> Sites: `crates/pdfrum-text/src/pipeline.rs`'s `SOFT_HYPHEN` and `UNMAPPABLE`,
+> both carrying `[oracle-bug]` with the PDFium and pdf.js citations.
+> Assertions updated with their narrative:
+> `crates/pdfrum-text/tests/embedder.rs` (three), and the
+> `crates/pdfrum-text/src/line.rs` unit test that stages the value directly.
 
 **A44 — the overlap dedup drops characters.**
 `cpdf_textpage.cpp:1437-1458` suppresses a character (`add_unicode = false`,
