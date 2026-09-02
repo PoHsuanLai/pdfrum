@@ -76,7 +76,7 @@ impl CharmapId {
     /// The `fxge`-level encoding this charmap reports, for the reverse lookups
     /// of §1.7.
     #[must_use]
-    pub fn face_encoding(self) -> crate::encoding::FaceEncoding {
+    pub(crate) fn face_encoding(self) -> crate::encoding::FaceEncoding {
         use crate::encoding::FaceEncoding as E;
         match (self.platform, self.encoding) {
             (0, _) | (3, 1 | 10) => E::Unicode,
@@ -442,7 +442,7 @@ impl Face {
     /// is correct and was read as "not worth porting". Wave 7 measured what
     /// 1/25 of a pixel is *worth* once the glyph is rasterized the oracle's
     /// way, and the answer is up to 10 counts per pixel on a 6 pt stem.
-    pub const HINT_PPEM: f32 = 64.0;
+    pub(crate) const HINT_PPEM: f32 = 64.0;
 
     /// A glyph's outline grid-fitted at [`Self::HINT_PPEM`], in **64ths of an
     /// em** — the units a 64-ppem instance draws in.
@@ -461,7 +461,7 @@ impl Face {
     /// run — so it is memoized per face rather than per glyph. See
     /// [`Self::hinting`].
     #[must_use]
-    pub fn hinted_outline(&self, gid: Gid) -> Option<BezPath> {
+    pub(crate) fn hinted_outline(&self, gid: Gid) -> Option<BezPath> {
         let instance = self.hinting_instance()?;
         let font = skrifa::FontRef::from_index(&self.bytes, self.index).ok()?;
         let glyph = font
@@ -512,7 +512,7 @@ impl Face {
     /// corpus font needs. The glyph-*bitmap* side is a different rule and a
     /// different function: see [`Self::hinted_outline`].
     #[must_use]
-    pub fn outline(&self, gid: Gid) -> Option<BezPath> {
+    pub(crate) fn outline(&self, gid: Gid) -> Option<BezPath> {
         let mut pen = PathPen::default();
         if let Some(cff) = self.cff() {
             let id = Self::cff_glyph_id(&cff, gid);
@@ -541,7 +541,7 @@ impl Face {
     /// A bare CFF carries no `hmtx`: the advance comes out of the charstring
     /// itself, which is why drawing is how it is read.
     #[must_use]
-    pub fn advance(&self, gid: Gid) -> Option<f32> {
+    pub(crate) fn advance(&self, gid: Gid) -> Option<f32> {
         if let Some(cff) = self.cff() {
             let id = Self::cff_glyph_id(&cff, gid);
             let subfont_index = cff.subfont_index(id)?;
@@ -564,7 +564,7 @@ impl Face {
     /// this wrong makes every glyph of a CFF font report a zero box, which
     /// text extraction reads as a degenerate text object and drops whole.
     #[must_use]
-    pub fn glyph_bbox(&self, gid: Gid) -> Option<Rect> {
+    pub(crate) fn glyph_bbox(&self, gid: Gid) -> Option<Rect> {
         if self.backend != Backend::BareCff {
             let font = skrifa::FontRef::from_index(&self.bytes, self.index).ok()?;
             if let Some(b) = font
@@ -586,7 +586,7 @@ impl Face {
 
     /// The raw metrics `CheckFontMetrics` derives a bounding box from.
     #[must_use]
-    pub fn metrics(&self) -> Option<crate::descriptor::FaceMetrics> {
+    pub(crate) fn metrics(&self) -> Option<crate::descriptor::FaceMetrics> {
         if self.backend == Backend::BareCff {
             // A bare CFF declares no `head` or `hhea`; PDFium's FreeType
             // backend synthesizes the same nothing, and the caller's
@@ -609,13 +609,13 @@ impl Face {
 
     /// The face's own bytes, for the `GSUB` reader.
     #[must_use]
-    pub fn bytes(&self) -> &Arc<[u8]> {
+    pub(crate) fn bytes(&self) -> &Arc<[u8]> {
         &self.bytes
     }
 
     /// The face index within a collection.
     #[must_use]
-    pub fn index(&self) -> u32 {
+    pub(crate) fn index(&self) -> u32 {
         self.index
     }
 
@@ -623,7 +623,7 @@ impl Face {
     /// joins them: family, then a space and the style unless the style is
     /// empty or `Regular`.
     #[must_use]
-    pub fn display_name(&self) -> Option<String> {
+    pub(crate) fn display_name(&self) -> Option<String> {
         if let Some(cff) = self.cff() {
             let meta = cff.metadata()?;
             return meta

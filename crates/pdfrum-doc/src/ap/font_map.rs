@@ -14,7 +14,7 @@
 //! **charset** comparison, made before any mapping is attempted:
 //!
 //! - Every code point has a charset, from a fixed range ladder
-//!   ([`pdfrum_font::subst::charset_from_unicode`]). Everything below U+007F
+//!   ([`pdfrum_font::charset_from_unicode`]). Everything below U+007F
 //!   is ANSI — deliberately, so that ASCII never drags a CJK face in — and
 //!   U+0590..U+05FF is Hebrew.
 //! - The `/DA` font has a charset too, the one its substitution chose, or ANSI
@@ -65,7 +65,7 @@
 //! own measurement. Having the table is what makes adding a charset a
 //! one-line change rather than a transcription.
 
-use pdfrum_font::subst::{Charset, charset_from_unicode};
+use pdfrum_font::{Charset, charset_from_unicode};
 use pdfrum_object::{Dict, Name, Object, names as obj_names};
 
 use crate::names;
@@ -176,8 +176,8 @@ pub(crate) fn substitute_font_dict(charset: Charset) -> Option<Dict> {
     let mut differences: Vec<Object> = Vec::with_capacity(table.len() + 1);
     differences.push(Object::Int(0x80));
     for &unicode in table {
-        let name = pdfrum_font::encoding::adobe_name_from_unicode(unicode)
-            .unwrap_or_else(|| ".notdef".to_owned());
+        let name =
+            pdfrum_font::adobe_name_from_unicode(unicode).unwrap_or_else(|| ".notdef".to_owned());
         differences.push(Object::Name(Name::from(name.as_str())));
     }
     let encoding = Dict::from_pairs([
@@ -639,8 +639,7 @@ mod tests {
     #[test]
     fn a_latin_fonts_charset_admits_ascii_and_refuses_hebrew() {
         let cache = pdfrum_font::FontCache::new();
-        let latin =
-            pdfrum_font::Font::load_standard(pdfrum_font::subst::StandardFont::Helvetica, &cache);
+        let latin = pdfrum_font::Font::load_standard(pdfrum_font::StandardFont::Helvetica, &cache);
         let charset = super::font_charset(&latin);
         assert_eq!(charset, Charset::Ansi);
         assert!(super::da_font_writes(&latin, charset, u32::from(b'A')));

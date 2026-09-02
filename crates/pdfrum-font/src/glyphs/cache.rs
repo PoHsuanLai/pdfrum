@@ -99,15 +99,16 @@ impl GlyphCache {
     /// `font` must be the font `key.font` identifies; passing a different one
     /// returns that font's glyph under the wrong key, which is why the key
     /// carries the id at all.
-    pub fn path(&mut self, font: &Font, key: GlyphKey) -> Option<&BezPath> {
+    #[cfg(test)]
+    pub(crate) fn path(&mut self, font: &Font, key: GlyphKey) -> Option<&BezPath> {
         self.entry(font, key).map(AsRef::as_ref)
     }
 
     /// The same outline, as a handle that outlives the borrow.
     ///
     /// For a caller that needs the outline *after* asking the cache for the next
-    /// glyph. Cloning the returned `Arc` is a refcount bump; cloning what
-    /// [`Self::path`] returns copies every element of the path.
+    /// glyph. Cloning the returned `Arc` is a refcount bump; cloning a borrowed
+    /// path copies every element.
     pub fn shared(&mut self, font: &Font, key: GlyphKey) -> Option<Arc<BezPath>> {
         self.entry(font, key).map(Arc::clone)
     }
@@ -116,24 +117,27 @@ impl GlyphCache {
     fn entry(&mut self, font: &Font, key: GlyphKey) -> Option<&Arc<BezPath>> {
         self.entries
             .entry(key)
-            .or_insert_with(|| font.glyphs().outline(key.gid, &key.params()).map(Arc::new))
+            .or_insert_with(|| font.glyphs().outline(key.gid, key.params()).map(Arc::new))
             .as_ref()
     }
 
     /// How many outlines — hits and misses alike — are memoized.
+    #[cfg(test)]
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub(crate) fn len(&self) -> usize {
         self.entries.len()
     }
 
     /// Whether anything has been drawn yet.
+    #[cfg(test)]
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub(crate) fn is_empty(&self) -> bool {
         self.entries.is_empty()
     }
 
     /// Forget everything.
-    pub fn clear(&mut self) {
+    #[cfg(test)]
+    pub(crate) fn clear(&mut self) {
         self.entries.clear();
     }
 }
@@ -260,7 +264,7 @@ mod tests {
             dest_width: w,
             weight: 0,
         };
-        let at = |w: i32| font.glyphs().advance(gid, &params(w));
+        let at = |w: i32| font.glyphs().advance(gid, params(w));
 
         let default = at(0);
         let narrow = at(300);
@@ -330,14 +334,14 @@ mod tests {
 
         let narrow = source.outline(
             gid,
-            &GlyphParams {
+            GlyphParams {
                 dest_width: 200,
                 weight: 400,
             },
         );
         let wide = source.outline(
             gid,
-            &GlyphParams {
+            GlyphParams {
                 dest_width: 900,
                 weight: 400,
             },
@@ -358,14 +362,14 @@ mod tests {
         let gid = Gid(source.name_index(b"A"));
         let light = source.outline(
             gid,
-            &GlyphParams {
+            GlyphParams {
                 dest_width: 0,
                 weight: 100,
             },
         );
         let heavy = source.outline(
             gid,
-            &GlyphParams {
+            GlyphParams {
                 dest_width: 0,
                 weight: 900,
             },
@@ -385,14 +389,14 @@ mod tests {
         let gid = Gid(font.glyphs().name_index(b"A"));
         let a = font.glyphs().outline(
             gid,
-            &GlyphParams {
+            GlyphParams {
                 dest_width: 100,
                 weight: 100,
             },
         );
         let b = font.glyphs().outline(
             gid,
-            &GlyphParams {
+            GlyphParams {
                 dest_width: 900,
                 weight: 900,
             },

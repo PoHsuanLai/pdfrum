@@ -120,11 +120,8 @@ impl FontEncoding {
 pub enum FaceEncoding {
     /// The charmap is Unicode: a code *is* its character.
     Unicode,
-    /// Adobe standard.
-    AdobeStandard,
-    /// Adobe expert, read through the MacExpert table.
-    AdobeExpert,
     /// Latin-1, read through the WinAnsi table.
+    #[cfg(test)]
     Latin1,
     /// Apple Roman, read through the MacRoman table.
     AppleRoman,
@@ -148,8 +145,7 @@ impl FaceEncoding {
         let table: &[u16; 256] = match self {
             // The identity arm: a Unicode charmap needs no table.
             Self::Unicode => return u32::from(unicode),
-            Self::AdobeStandard => &tables::STANDARD_ENCODING,
-            Self::AdobeExpert => &tables::MAC_EXPERT_ENCODING,
+            #[cfg(test)]
             Self::Latin1 => &tables::ADOBE_WIN_ANSI_ENCODING,
             Self::AppleRoman => &tables::MAC_ROMAN_ENCODING,
             Self::AdobeCustom => &tables::PDF_DOC_ENCODING,

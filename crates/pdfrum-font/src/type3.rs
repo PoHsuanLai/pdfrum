@@ -23,28 +23,28 @@ pub const MAX_TYPE3_DEPTH: u32 = 4;
 #[derive(Debug)]
 pub struct Type3Font {
     /// This font's identity.
-    pub id: FontId,
+    pub(crate) id: FontId,
     /// `/FontMatrix`, mapping glyph space to text space.
     pub font_matrix: Affine,
     /// `/CharProcs`: glyph name to content stream.
-    pub char_procs: Dict,
+    pub(crate) char_procs: Dict,
     /// `/Resources` for the glyph procedures, which fall back to the page's.
     pub resources: Option<Dict>,
     /// The `/Differences` overlay. **Not cleared after loading**, unlike a
     /// simple font's — a Type 3 font consults it for the life of the font,
     /// because it is the only way a code names a procedure.
-    pub encoding: [Option<GlyphName>; 256],
+    pub(crate) encoding: [Option<GlyphName>; 256],
     /// Which predefined set the encoding resolved to, usually `Builtin`.
-    pub encoding_kind: FontEncoding,
+    pub(crate) encoding_kind: FontEncoding,
     /// Widths in **glyph space × 1000**, `0` meaning "ask the procedure".
     ///
     /// An `i32` table defaulting to zero, unlike a simple font's `u16` table
     /// defaulting to the unset sentinel.
-    pub widths: [i32; 256],
+    pub(crate) widths: [i32; 256],
     /// `/FontBBox`, scaled into glyph units.
-    pub font_bbox: Rect,
+    pub(crate) font_bbox: Rect,
     /// The `/ToUnicode` CMap.
-    pub to_unicode: Option<ToUnicode>,
+    pub(crate) to_unicode: Option<ToUnicode>,
 }
 
 impl Type3Font {
@@ -62,7 +62,7 @@ impl Type3Font {
 
     /// The name of the glyph procedure for a code.
     #[must_use]
-    pub fn char_proc_name(&self, code: CharCode) -> Option<&[u8]> {
+    pub(crate) fn char_proc_name(&self, code: CharCode) -> Option<&[u8]> {
         adobe_char_name(self.encoding_kind, &self.encoding, code.0)
     }
 
@@ -73,7 +73,7 @@ impl Type3Font {
     /// `d0`/`d1` operator supplies the width — which only the page layer can
     /// see, so this returns 0 and the caller asks it.
     #[must_use]
-    pub fn char_width(&self, code: CharCode) -> f32 {
+    pub(crate) fn char_width(&self, code: CharCode) -> f32 {
         let code = if code.0 >= 256 { 0 } else { code.0 as usize };
         self.widths.get(code).copied().unwrap_or(0) as f32
     }
@@ -81,7 +81,7 @@ impl Type3Font {
     /// The Unicode a code stands for, from `/ToUnicode` only — a Type 3 font
     /// has no encoding table to fall back on.
     #[must_use]
-    pub fn unicode_from_charcode(&self, code: CharCode) -> SmallVec<[char; 2]> {
+    pub(crate) fn unicode_from_charcode(&self, code: CharCode) -> SmallVec<[char; 2]> {
         self.to_unicode
             .as_ref()
             .map(|tu| tu.lookup(code))
@@ -93,7 +93,7 @@ impl Type3Font {
     /// A Type 3 font has no encoding table to scan, so this is `/ToUnicode`'s
     /// reverse map or nothing.
     #[must_use]
-    pub fn char_code_from_unicode(&self, unicode: char) -> Option<CharCode> {
+    pub(crate) fn char_code_from_unicode(&self, unicode: char) -> Option<CharCode> {
         let code = self.to_unicode.as_ref()?.reverse(unicode);
         (code.0 != 0).then_some(code)
     }

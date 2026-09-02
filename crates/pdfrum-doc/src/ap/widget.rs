@@ -1014,8 +1014,7 @@ mod tests {
     #[test]
     fn the_live_entry_point_carries_its_override_down_to_the_body() {
         let cache = pdfrum_font::FontCache::new();
-        let face =
-            pdfrum_font::Font::load_standard(pdfrum_font::subst::StandardFont::Helvetica, &cache);
+        let face = pdfrum_font::Font::load_standard(pdfrum_font::StandardFont::Helvetica, &cache);
         let width = |code: u32| crate::ap::TextFont::char_width(&face, code);
         let font = crate::ap::TextFont {
             metrics: crate::ap::TextFont::metrics_of(&face, &width),
@@ -1073,11 +1072,10 @@ mod tests {
         let catalog = text_catalog();
         let fonts = crate::ap::FormFonts::load(&catalog, &NoResolve, &mut ctx);
         let substitute = fonts
-            .substitute(pdfrum_font::subst::Charset::Hebrew)
+            .substitute(pdfrum_font::Charset::Hebrew)
             .expect("a Hebrew substitute");
 
-        let face =
-            pdfrum_font::Font::load_standard(pdfrum_font::subst::StandardFont::Helvetica, &cache);
+        let face = pdfrum_font::Font::load_standard(pdfrum_font::StandardFont::Helvetica, &cache);
         let charset = crate::ap::font_map::font_charset(&face);
         // The run is measured by the face that writes each character, or it
         // is set in two faces and laid out by one.
@@ -1169,8 +1167,7 @@ mod tests {
     fn a_sessions_appearance_state_overrides_the_dictionarys_own() {
         let catalog = Dict::new();
         let cache = pdfrum_font::FontCache::new();
-        let font =
-            pdfrum_font::Font::load_standard(pdfrum_font::subst::StandardFont::Helvetica, &cache);
+        let font = pdfrum_font::Font::load_standard(pdfrum_font::StandardFont::Helvetica, &cache);
         let width = |code: u32| crate::ap::TextFont::char_width(&font, code);
         let text = crate::ap::TextFont {
             metrics: crate::ap::TextFont::metrics_of(&font, &width),

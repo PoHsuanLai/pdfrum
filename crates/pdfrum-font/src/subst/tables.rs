@@ -130,6 +130,7 @@ pub(crate) const ALT_FONT_NAMES: &[(&str, StandardFont)] = &[
 ];
 
 /// `kWeightPow` (core/fxge/cfx_substfont.cpp).
+#[cfg(test)]
 pub(crate) const WEIGHT_POW: [u8; 100] = [
     0, 6, 12, 14, 16, 18, 22, 24, 28, 30, 32, 34, 36, 38, 40, 42, 44, 46, 48, 50, 52, 54, 56, 58,
     60, 62, 64, 66, 68, 70, 70, 72, 72, 74, 74, 74, 76, 76, 76, 78, 78, 78, 80, 80, 80, 82, 82, 82,
@@ -139,6 +140,7 @@ pub(crate) const WEIGHT_POW: [u8; 100] = [
 ];
 
 /// `kWeightPow11` (core/fxge/cfx_substfont.cpp).
+#[cfg(test)]
 pub(crate) const WEIGHT_POW_11: [u8; 100] = [
     0, 4, 7, 8, 9, 10, 12, 13, 15, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 28, 29, 30, 31, 32, 33,
     34, 35, 36, 37, 39, 39, 40, 40, 41, 41, 41, 42, 42, 42, 43, 43, 43, 44, 44, 44, 45, 45, 45, 46,
@@ -148,6 +150,7 @@ pub(crate) const WEIGHT_POW_11: [u8; 100] = [
 ];
 
 /// `kWeightPowShiftJis` (core/fxge/cfx_substfont.cpp).
+#[cfg(test)]
 pub(crate) const WEIGHT_POW_SHIFT_JIS: [u8; 100] = [
     0, 0, 2, 4, 6, 8, 10, 14, 16, 20, 22, 26, 28, 32, 34, 38, 42, 44, 48, 52, 56, 60, 64, 66, 70,
     74, 78, 82, 86, 90, 96, 96, 96, 96, 98, 98, 98, 100, 100, 100, 100, 102, 102, 102, 102, 104,
@@ -157,6 +160,7 @@ pub(crate) const WEIGHT_POW_SHIFT_JIS: [u8; 100] = [
 ];
 
 /// `kAngleSkew` (core/fxge/cfx_substfont.cpp).
+#[cfg(test)]
 pub(crate) const ANGLE_SKEW: [i8; 30] = [
     0, -2, -3, -5, -7, -9, -11, -12, -14, -16, -18, -19, -21, -23, -25, -27, -29, -31, -32, -34,
     -36, -38, -40, -42, -45, -47, -49, -51, -53, -55,

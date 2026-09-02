@@ -52,36 +52,37 @@ pub enum CidFontKind {
 #[derive(Debug)]
 pub struct Type0Font {
     /// This font's identity, for glyph-cache keys.
-    pub id: FontId,
+    pub(crate) id: FontId,
     /// The CMap that splits bytes into codes and maps them to CIDs.
-    pub cmap: CMap,
+    pub(crate) cmap: CMap,
     /// Where glyphs come from.
-    pub glyphs: GlyphSource,
+    pub(crate) glyphs: GlyphSource,
     /// The CID collection, from the CMap or from `/CIDSystemInfo`.
-    pub charset: CidSet,
+    pub(crate) charset: CidSet,
     /// How a CID becomes a glyph.
-    pub cid_to_gid: CidToGid,
+    pub(crate) cid_to_gid: CidToGid,
     /// `/W` and `/DW`.
-    pub widths: CidWidths,
+    pub(crate) widths: CidWidths,
     /// `/W2` and `/DW2`, only for a vertical font.
-    pub vertical: Option<VerticalMetrics>,
+    pub(crate) vertical: Option<VerticalMetrics>,
     /// The `/ToUnicode` CMap.
-    pub to_unicode: Option<ToUnicode>,
+    pub(crate) to_unicode: Option<ToUnicode>,
     /// The descendant's `/FontDescriptor`.
-    pub descriptor: FontDescriptor,
+    pub(crate) descriptor: FontDescriptor,
     /// What substitution decided.
-    pub subst: Option<SubstFont>,
+    pub(crate) subst: Option<SubstFont>,
     /// Which flavour of descendant.
-    pub kind: CidFontKind,
+    pub(crate) kind: CidFontKind,
     /// Whether a usable font program was embedded.
-    pub embedded: bool,
+    pub(crate) embedded: bool,
     /// The descendant's `/BaseFont`.
-    pub base_font_name: Vec<u8>,
+    pub(crate) base_font_name: Vec<u8>,
     /// Adobe's CourierStd, whose CIDs are offset from the standard encoding by
     /// 31 — a hard-coded rescue with no general rule behind it.
-    pub adobe_courier_std: bool,
+    pub(crate) adobe_courier_std: bool,
     /// The GB2312 rescue path, which fixes ASCII widths.
-    pub ansi_widths_fixed: bool,
+    #[cfg(test)]
+    pub(crate) ansi_widths_fixed: bool,
     /// Vertical substitution, parsed from `GSUB` on first use.
     gsub: gsub::VerticalSubst,
 }
@@ -89,7 +90,7 @@ pub struct Type0Font {
 impl Type0Font {
     /// The CID a character code maps to.
     #[must_use]
-    pub fn cid_from_charcode(&self, code: CharCode) -> Cid {
+    pub(crate) fn cid_from_charcode(&self, code: CharCode) -> Cid {
         self.cmap.cid(code)
     }
 
@@ -98,19 +99,19 @@ impl Type0Font {
     /// Also reports whether a vertical form was substituted, which suppresses
     /// the Japan1 transform downstream.
     #[must_use]
-    pub fn glyph_from_charcode(&self, code: CharCode) -> (Option<Gid>, bool) {
+    pub(crate) fn glyph_from_charcode(&self, code: CharCode) -> (Option<Gid>, bool) {
         glyph::resolve(self, code)
     }
 
     /// The advance width for a character code, in 1000/em units.
     #[must_use]
-    pub fn char_width(&self, code: CharCode) -> f32 {
+    pub(crate) fn char_width(&self, code: CharCode) -> f32 {
         self.widths.width(code, self.cid_from_charcode(code))
     }
 
     /// The vertical advance for a character code.
     #[must_use]
-    pub fn vert_width(&self, code: CharCode) -> f32 {
+    pub(crate) fn vert_width(&self, code: CharCode) -> f32 {
         match &self.vertical {
             Some(v) => v.width(self.cid_from_charcode(code)),
             None => -1000.0,
@@ -122,7 +123,7 @@ impl Type0Font {
     /// Absent a `/W2` record this is **half the horizontal width** and
     /// `DW2[0]`, which is why the horizontal table is consulted here.
     #[must_use]
-    pub fn vert_origin(&self, code: CharCode) -> (f32, f32) {
+    pub(crate) fn vert_origin(&self, code: CharCode) -> (f32, f32) {
         let cid = self.cid_from_charcode(code);
         match &self.vertical {
             Some(v) => v.origin(cid, &self.widths),
@@ -133,7 +134,7 @@ impl Type0Font {
     /// The Unicode a code stands for, `/ToUnicode` first
     /// (`CPDF_CIDFont::UnicodeFromCharCode`).
     #[must_use]
-    pub fn unicode_from_charcode(&self, code: CharCode) -> SmallVec<[char; 2]> {
+    pub(crate) fn unicode_from_charcode(&self, code: CharCode) -> SmallVec<[char; 2]> {
         if let Some(tu) = &self.to_unicode {
             let chars = tu.lookup(code);
             if !chars.is_empty() {
@@ -155,7 +156,7 @@ impl Type0Font {
     /// character code simply *is* the Unicode, while a CID-coded one goes
     /// through the collection's table.
     #[must_use]
-    pub fn scalar_unicode(&self, code: CharCode) -> u16 {
+    pub(crate) fn scalar_unicode(&self, code: CharCode) -> u16 {
         match self.cmap.coding() {
             CidCoding::Ucs2 | CidCoding::Utf16 => return (code.0 & 0xffff) as u16,
             CidCoding::Cid => {
@@ -185,7 +186,7 @@ impl Type0Font {
 
     /// The character code for a Unicode, or 0 (`CharCodeFromUnicode`).
     #[must_use]
-    pub fn charcode_from_unicode(&self, unicode: char) -> CharCode {
+    pub(crate) fn charcode_from_unicode(&self, unicode: char) -> CharCode {
         if let Some(tu) = &self.to_unicode {
             let c = tu.reverse(unicode);
             if c.0 != 0 {
@@ -220,7 +221,7 @@ impl Type0Font {
 
     /// Whether codes can be turned into Unicode at all (`IsUnicodeCompatible`).
     #[must_use]
-    pub fn is_unicode_compatible(&self) -> bool {
+    pub(crate) fn is_unicode_compatible(&self) -> bool {
         if pdfrum_cmap::has_cid2unicode(self.charset) && self.cmap.is_loaded() {
             return true;
         }
@@ -229,14 +230,14 @@ impl Type0Font {
 
     /// Whether the font writes vertically.
     #[must_use]
-    pub fn is_vertical(&self) -> bool {
+    pub(crate) fn is_vertical(&self) -> bool {
         self.cmap.is_vertical()
     }
 
     /// The bounding box for a code, in 1000/em units, with the Japan1
     /// transform applied when it applies.
     #[must_use]
-    pub fn char_bbox(&self, code: CharCode) -> Rect {
+    pub(crate) fn char_bbox(&self, code: CharCode) -> Rect {
         let (gid, vertical) = self.glyph_from_charcode(code);
         let Some(gid) = gid else { return Rect::ZERO };
         let Some(bbox) = self.glyphs.glyph_bbox(gid) else {
@@ -258,7 +259,7 @@ impl Type0Font {
     /// Only for a **non-embedded** Adobe-Japan1 font: an embedded one is
     /// expected to carry its own vertical forms.
     #[must_use]
-    pub fn japan1_transform(&self, code: CharCode) -> Option<CidTransform> {
+    pub(crate) fn japan1_transform(&self, code: CharCode) -> Option<CidTransform> {
         if self.charset != CidSet::Japan1 || self.embedded {
             return None;
         }
@@ -570,6 +571,7 @@ fn build(
         embedded,
         base_font_name,
         adobe_courier_std,
+        #[cfg(test)]
         ansi_widths_fixed: gb2312,
         gsub,
     }

@@ -17,22 +17,24 @@ mod substfont;
 #[allow(clippy::doc_markdown)]
 mod tables;
 
-pub use charset::{Charset, CodePage, PitchFamily, charset_from_unicode, default_face_name};
-pub use db::{
-    CroscoreDb, FaceHandle, FaceInfo, FontDb, SystemFontDb, TestFontDb, find_family_name_match,
+pub use charset::{Charset, charset_from_unicode};
+pub(crate) use charset::{CodePage, PitchFamily};
+#[cfg(test)]
+pub(crate) use db::FaceInfo;
+pub(crate) use db::{CroscoreDb, FaceHandle, FontDb, SystemFontDb, TestFontDb};
+#[cfg(test)]
+pub(crate) use standard::ALL_STANDARD_FONTS;
+pub use standard::StandardFont;
+pub(crate) use standard::{canonical_font_name, standard_font_data, standard_font_index};
+pub(crate) use style::{
+    NARROW_FAMILY, font_family, is_narrow_font_name, parse_styles, strip_subset_prefix, style_bits,
+    style_type, subst_name, tt_normalize,
 };
-pub use standard::{
-    ALL_STANDARD_FONTS, StandardFont, canonical_font_name, is_standard_font_name,
-    standard_font_data, standard_font_index,
-};
-pub use style::{
-    ALT_FONT_FAMILIES, FONT_STYLES, FontStyle, NARROW_FAMILY, font_family, is_narrow_font_name,
-    parse_styles, strip_subset_prefix, style_bits, style_type, subst_name, tt_normalize,
-};
-pub use substfont::{GlyphSpacingGate, SubstFont, applies_glyph_spacing, skew_from_angle};
+pub use substfont::SubstFont;
+pub(crate) use substfont::{GlyphSpacingGate, applies_glyph_spacing};
 
+use crate::FontFlags;
 use crate::glyphs::{Face, GlyphSource};
-use crate::{FontFlags, GlyphName};
 use pdfrum_common::{DiagKind, Diagnostics, Severity};
 use std::path::PathBuf;
 use std::sync::{Arc, OnceLock};
@@ -99,9 +101,10 @@ pub struct SubstitutionOptions {
     /// run needs the rewrite or a `/BaseFont /Helvetica` looks for a face that
     /// is not there and falls through to the built-ins with different metrics.
     ///
-    /// The rewrite sits at the database boundary — see [`CroscoreDb`] — and
-    /// **not** at the top of the ladder: the whole name/style/base-14 analysis
-    /// runs on the document's own spelling first.
+    /// The rewrite sits at the database boundary — the family a lookup asks
+    /// for is renamed, not the `/BaseFont` the ladder starts from — so the
+    /// whole name/style/base-14 analysis runs on the document's own spelling
+    /// first.
     pub croscore_font_names: bool,
     /// Whether an empty [`font_dirs`](Self::font_dirs) means *the system's own
     /// font directories* rather than *no directories at all*.
@@ -167,6 +170,7 @@ pub struct Substitution {
     /// The synthetic adjustments that follow from the choice.
     pub subst: SubstFont,
     /// The standard font this resolved to, when it resolved to one.
+    #[cfg(test)]
     pub standard: Option<StandardFont>,
 }
 
@@ -431,6 +435,7 @@ fn resolve_inner(
         return Substitution {
             glyphs: s,
             subst,
+            #[cfg(test)]
             standard: base_font,
         };
     }
@@ -455,6 +460,7 @@ fn resolve_inner(
                     Some(s) => Substitution {
                         glyphs: s,
                         subst,
+                        #[cfg(test)]
                         standard: base_font,
                     },
                     None => terminal(
@@ -518,7 +524,7 @@ fn resolve_inner(
         .faces()
         .iter()
         .position(|f| f.charsets.contains(&charset))
-        .map(FaceHandle);
+        .map(FaceHandle::from_index);
     match by_charset {
         None => terminal(
             base_font,
@@ -533,6 +539,7 @@ fn resolve_inner(
                 Substitution {
                     glyphs: s,
                     subst,
+                    #[cfg(test)]
                     standard: base_font,
                 }
             } else {
@@ -541,6 +548,7 @@ fn resolve_inner(
                 Substitution {
                     glyphs: GlyphSource::None,
                     subst,
+                    #[cfg(test)]
                     standard: base_font,
                 }
             }
@@ -623,7 +631,7 @@ fn external(
 ) -> Option<GlyphSource> {
     let (bytes, index) = db.face_bytes(h)?;
     let face = Face::new(bytes, index)?;
-    let info = db.faces().get(h.0)?;
+    let info = db.faces().get(h.index())?;
     // A database that cannot name its own face falls back to the face's, which
     // is the `SetSubstFontNameWhenGetFaceNameFails` behavior.
     let name = if info.name.is_empty() {
@@ -666,6 +674,7 @@ fn terminal(
         return Substitution {
             glyphs,
             subst,
+            #[cfg(test)]
             standard: Some(f),
         };
     }
@@ -688,6 +697,7 @@ fn terminal(
     Substitution {
         glyphs,
         subst,
+        #[cfg(test)]
         standard: None,
     }
 }
@@ -787,12 +797,6 @@ pub fn builtin_generic(serif: bool) -> (GlyphSource, &'static str) {
         }
     });
     (source.clone(), family)
-}
-
-/// A glyph name looked up in the substituted face, for the fallback path.
-#[must_use]
-pub fn fallback_glyph(source: &GlyphSource, name: &GlyphName) -> u16 {
-    source.name_index(name.as_bytes())
 }
 
 #[cfg(test)]

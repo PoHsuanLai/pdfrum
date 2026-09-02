@@ -363,7 +363,7 @@ fn both_built_in_generics_parse_and_draw() {
         assert_ne!(gid.0, 0, "{family} has an A");
         assert!(
             glyphs
-                .outline(gid, &crate::glyphs::GlyphParams::default())
+                .outline(gid, crate::glyphs::GlyphParams::default())
                 .is_some(),
             "{family} draws"
         );

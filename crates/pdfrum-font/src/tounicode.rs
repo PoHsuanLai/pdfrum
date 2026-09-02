@@ -8,19 +8,6 @@
 //! discarded whole, a code above `0xFFFF` invalidates its entire block, and
 //! where two entries collide the numerically smaller value wins in **both**
 //! directions (`docs/design/pdfrum-font.md` §1.6).
-//!
-//! ```
-//! use pdfrum_common::{Diagnostics, Limits};
-//! use pdfrum_font::tounicode;
-//!
-//! let map = tounicode::parse(
-//!     b"2 beginbfchar <0041> <0061> <0042> <0062> endbfchar",
-//!     &Limits::default(),
-//!     &mut Diagnostics::default(),
-//! );
-//! assert_eq!(map.lookup(0x41.into()).as_slice(), ['a']);
-//! assert_eq!(map.reverse('a').0, 0x41);
-//! ```
 
 use pdfrum_cmap::{CharCode, CidSet, Words};
 use pdfrum_common::{DiagKind, Diagnostics, Limits, Severity};
@@ -123,12 +110,14 @@ impl ToUnicode {
     }
 
     /// The number of committed code→Unicode entries.
+    #[cfg(test)]
     #[must_use]
     pub fn len(&self) -> usize {
         self.map.len()
     }
 
     /// The registry whose CID→Unicode table answers a lookup miss.
+    #[cfg(test)]
     #[must_use]
     pub fn base_set(&self) -> CidSet {
         self.base_set

@@ -203,20 +203,16 @@ impl CidWidths {
 
     /// `/DW`.
     #[must_use]
+    #[cfg(test)]
     pub fn default_width(&self) -> f32 {
         self.default as f32
     }
 
     /// How many `/W` records were read.
+    #[cfg(test)]
     #[must_use]
     pub fn len(&self) -> usize {
         self.records.len()
-    }
-
-    /// Whether `/W` declared nothing.
-    #[must_use]
-    pub fn is_empty(&self) -> bool {
-        self.records.is_empty()
     }
 }
 
@@ -300,27 +296,24 @@ impl VerticalMetrics {
     }
 
     /// `DW2[0]`, the default vertical origin's y coordinate.
+    #[cfg(test)]
     #[must_use]
     pub fn default_origin_y(&self) -> f32 {
         self.default_vy as f32
     }
 
     /// `DW2[1]`, the default vertical advance.
+    #[cfg(test)]
     #[must_use]
     pub fn default_advance(&self) -> f32 {
         self.default_w1 as f32
     }
 
     /// How many `/W2` records were read.
+    #[cfg(test)]
     #[must_use]
     pub fn len(&self) -> usize {
         self.records.len()
-    }
-
-    /// Whether `/W2` declared nothing.
-    #[must_use]
-    pub fn is_empty(&self) -> bool {
-        self.records.is_empty()
     }
 }
 

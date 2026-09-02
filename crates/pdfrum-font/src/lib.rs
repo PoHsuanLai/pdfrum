@@ -57,32 +57,36 @@
     clippy::cast_possible_wrap
 )]
 
+// Every module is private and the `pub use` block below is the whole surface
+// (STYLE.md §4). A type a sibling crate names is re-exported here; a function
+// only this crate uses is not (`docs/design/idiomatic-api.md` §WP11).
 mod cid;
 mod descriptor;
-pub mod encoding;
+mod encoding;
 mod error;
 mod glyphs;
 mod ids;
 mod simple;
-pub mod subst;
+mod subst;
 #[cfg(test)]
 mod test_resolve;
 #[cfg(test)]
 mod testfonts;
-pub mod tounicode;
+mod tounicode;
 mod type3;
 mod widths;
 
-pub use cid::{CidToGid, CidTransform, Type0Font, VerticalMetrics, cid_transform_to_float};
-pub use descriptor::FontDescriptor;
+pub use cid::{CidTransform, Type0Font, cid_transform_to_float};
+pub(crate) use descriptor::FontDescriptor;
+pub use encoding::adobe_name_from_unicode;
 pub use error::Error;
-pub use glyphs::{GlyphCache, GlyphKey, GlyphSource, em_adjust, normalize_font_metric};
-pub use ids::{CharCode, Cid, FontFlags, FontId, Gid, GlyphName};
-pub use simple::{SimpleFont, SimpleKind};
-pub use subst::{StandardFont, SubstFont, SubstitutionOptions};
-pub use tounicode::ToUnicode;
+pub use glyphs::{Charmap, CharmapId, Face, GlyphCache, GlyphKey, GlyphSource};
+pub(crate) use ids::GlyphName;
+pub use ids::{CharCode, Cid, FontFlags, FontId, Gid};
+pub use simple::SimpleFont;
+pub use subst::{Charset, StandardFont, SubstFont, SubstitutionOptions, charset_from_unicode};
+pub(crate) use tounicode::ToUnicode;
 pub use type3::{MAX_TYPE3_DEPTH, Type3Font};
-pub use widths::CidWidths;
 
 use pdfrum_common::kurbo::{BezPath, Rect};
 use pdfrum_common::{Diagnostics, Limits};
@@ -172,7 +176,7 @@ impl Font {
     /// parameters that change the outline for a Multiple-Master face.
     #[must_use]
     pub fn glyph_path(&self, gid: Gid) -> Option<BezPath> {
-        self.glyphs().outline(gid, &glyphs::GlyphParams::default())
+        self.glyphs().outline(gid, glyphs::GlyphParams::default())
     }
 
     /// A glyph's outline in 1000/em text space, **grid-fitted at 64 ppem**.
@@ -326,7 +330,7 @@ impl Font {
     /// Read by the glyph-spacing correction of §1.15, which only means
     /// anything when the document's widths and the face's disagree.
     #[must_use]
-    pub fn has_declared_widths(&self) -> bool {
+    pub(crate) fn has_declared_widths(&self) -> bool {
         match self {
             Self::Simple(f) => f.has_font_widths(),
             Self::Type0(_) | Self::Type3(_) => true,
@@ -335,10 +339,8 @@ impl Font {
 
     /// Whether this font's glyphs take the glyph-spacing correction of §1.15.
     ///
-    /// Reads the font's five relevant facts into a
-    /// [`GlyphSpacingGate`](subst::GlyphSpacingGate) and
-    /// asks [`applies_glyph_spacing`](subst::applies_glyph_spacing), where the
-    /// rule and its reasoning live.
+    /// Reads the font's five relevant facts and asks the glyph-spacing rule
+    /// of §1.15, where the reasoning lives.
     #[must_use]
     pub fn applies_glyph_spacing(&self) -> bool {
         subst::applies_glyph_spacing(&subst::GlyphSpacingGate {
@@ -357,7 +359,7 @@ impl Font {
     /// treat as "unknown" rather than as a genuine zero-width glyph.
     #[must_use]
     pub fn glyph_advance(&self, gid: Gid) -> i32 {
-        self.glyphs().advance(gid, &glyphs::GlyphParams::default())
+        self.glyphs().advance(gid, glyphs::GlyphParams::default())
     }
 
     /// The bounding box of one character code's glyph, in 1000/em text space
@@ -1083,9 +1085,9 @@ mod send_sync {
         assert_send_sync::<FontDescriptor>();
         assert_send_sync::<SubstFont>();
         assert_send_sync::<SubstitutionOptions>();
-        assert_send_sync::<CidWidths>();
-        assert_send_sync::<VerticalMetrics>();
-        assert_send_sync::<CidToGid>();
+        assert_send_sync::<crate::widths::CidWidths>();
+        assert_send_sync::<crate::widths::VerticalMetrics>();
+        assert_send_sync::<crate::cid::CidToGid>();
         assert_send_sync::<Error>();
         assert_send_sync::<GlyphName>();
         assert_send_sync::<subst::FontRequest>();

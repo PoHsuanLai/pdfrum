@@ -21,15 +21,6 @@ use read_fonts::ps::agl;
 /// bit, so `"A.swash"` resolves to `A`. `read-fonts` strips the `.`-variant
 /// itself, reaching the same answer by a cleaner route.
 ///
-/// ```
-/// use pdfrum_font::encoding::unicode_from_adobe_name;
-///
-/// assert_eq!(unicode_from_adobe_name(b"paragraph"), 0x00B6);
-/// assert_eq!(unicode_from_adobe_name(b"Euro"), 0x20AC);
-/// assert_eq!(unicode_from_adobe_name(b"uni0041"), 0x0041);
-/// assert_eq!(unicode_from_adobe_name(b"A.swash"), 0x0041);
-/// assert_eq!(unicode_from_adobe_name(b"nonesuch"), 0);
-/// ```
 #[must_use]
 pub fn unicode_from_adobe_name(name: &[u8]) -> u16 {
     let Ok(name) = std::str::from_utf8(name) else {
@@ -47,7 +38,7 @@ pub fn unicode_from_adobe_name(name: &[u8]) -> u16 {
 /// the underlying API writes into a caller buffer.
 ///
 /// ```
-/// use pdfrum_font::encoding::adobe_name_from_unicode;
+/// use pdfrum_font::adobe_name_from_unicode;
 ///
 /// assert_eq!(adobe_name_from_unicode(0x00F7).as_deref(), Some("divide"));
 /// assert_eq!(adobe_name_from_unicode(0x0141).as_deref(), Some("Lslash"));
