@@ -18,7 +18,7 @@ workspace = true
 # Default-off, and that is the whole point: with the feature off `boa_engine`
 # and its 132 transitive crates are not in the tree at all, so
 # `cargo add pdfrum` puts no JavaScript engine in anyone's dependency graph.
-# `scripts/check-no-boa.sh` asserts it in both directions.
+# `scripts/check-no-boa.nu` asserts it in both directions.
 script = ["dep:boa_engine", "dep:pdfrum-script"]
 
 [dependencies]

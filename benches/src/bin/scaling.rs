@@ -1,6 +1,6 @@
 //! One thread count, every multi-page corpus document, one line each.
 //!
-//! `scripts/bench-scaling.sh` runs this once per thread count and reads the
+//! `scripts/bench-scaling.nu` runs this once per thread count and reads the
 //! curve off the output. It is a separate process per configuration on purpose:
 //! rayon's global pool is built once and cannot be resized, so a single process
 //! sweeping thread counts would measure the first one several times.

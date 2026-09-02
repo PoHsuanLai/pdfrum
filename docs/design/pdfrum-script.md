@@ -693,7 +693,7 @@ to keep it next to the first. `pdfrum-form`'s `lib.rs` gains **one** name,
 **The feature flag is what keeps the cost off everyone else.** With `script`
 off, `boa_engine` and its 132 transitive crates are not in the tree at all, and
 `cargo add pdfrum` puts no JS engine in anyone's dependency graph — the same
-property `scripts/check-no-wgpu.sh` enforces for the GPU backend, and it should
+property `scripts/check-no-wgpu.nu` enforces for the GPU backend, and it should
 be enforced the same way, mechanically (§6.5).
 
 **The counter-argument, stated fairly.** A `pdfrum-script` crate would make the
@@ -1394,8 +1394,8 @@ would catch a regression in the copy-back rule immediately.
   fast, and the highest-density arithmetic in the milestone.
 - `fuzz_af_date_parse` — arbitrary value × arbitrary picture string.
 
-**The dependency gate is a test, not a claim.** `scripts/ci.sh` gains an
-assertion in the shape of `check-no-wgpu.sh`: with default features, **no
+**The dependency gate is a test, not a claim.** `scripts/ci.nu` gains an
+assertion in the shape of `check-no-wgpu.nu`: with default features, **no
 workspace crate reaches `boa_engine`, `boa_ast`, `boa_parser`, `boa_gc`,
 `boa_interner`, `boa_string` or `boa_macros`** — plus a fourth assertion that
 `pdfrum-form --features script` *does*, so the first three cannot pass
@@ -1429,7 +1429,7 @@ consumer. Recorded here so M13 inherits a fact rather than a surprise.
 
 The DEPS.md row this earns:
 
-> | `boa_engine` **lib, feature-gated** | JavaScript engine (`pdfrum-form --features script`) — M15 | Pure Rust, 132 crates, **zero `-sys`, zero `cc`**, `cargo-deny` clean against the existing allowlist. 95.5% of test262; register VM; `RuntimeLimits` for loop/recursion/stack, which is a sandbox the C++ has no equivalent of. Pinned `=0.22.0`, `default-features = false` (the `temporal` default drags ICU for nothing we use). MSRV 1.91.0 applies to this feature only. Alternatives `rquickjs` and `deno_core` bind C and V8 and fail the purity rule outright. **Reachable from no crate's default features**, asserted mechanically by `scripts/ci.sh`. |
+> | `boa_engine` **lib, feature-gated** | JavaScript engine (`pdfrum-form --features script`) — M15 | Pure Rust, 132 crates, **zero `-sys`, zero `cc`**, `cargo-deny` clean against the existing allowlist. 95.5% of test262; register VM; `RuntimeLimits` for loop/recursion/stack, which is a sandbox the C++ has no equivalent of. Pinned `=0.22.0`, `default-features = false` (the `temporal` default drags ICU for nothing we use). MSRV 1.91.0 applies to this feature only. Alternatives `rquickjs` and `deno_core` bind C and V8 and fail the purity rule outright. **Reachable from no crate's default features**, asserted mechanically by `scripts/ci.nu`. |
 
 ---
 

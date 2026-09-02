@@ -84,7 +84,7 @@ GUI that already holds an open device — and bounds it two ways. Both bounds ar
 mechanical, not prose:
 
 - **Blast radius: one crate, nothing in the core ring.**
-  `scripts/check-no-wgpu.sh` (run by `scripts/ci.sh`) asserts that the `pdfrum`
+  `scripts/check-no-wgpu.nu` (run by `scripts/ci.nu`) asserts that the `pdfrum`
   facade's default features, `pdfrum-tool`'s default features, and **every
   other workspace crate** reach none of `wgpu`/`wgpu-core`/`wgpu-hal`/
   `wgpu-types`/`vello`/`vello_encoding`/`vello_shaders` — plus a fourth
@@ -194,7 +194,7 @@ hand-rolled copy would be wrong in exactly the places a password uses.
 
 | Crate | Use | Why this one |
 |---|---|---|
-| `boa_engine` **lib, feature-gated** | JavaScript engine (`pdfrum-form --features script`) — M15 | Pure Rust, 116 added crates, **zero `-sys`, zero `cc`/`cmake`/`bindgen`**, `cargo-deny` clean against the existing allowlist with no edit. 95.5% of test262; register VM; `RuntimeLimits` for loop/recursion/stack, which is a bound the C++ has no equivalent of. Pinned `=0.22.0`, `default-features = false`. **Reachable from no crate's default features**, asserted mechanically by `scripts/check-no-boa.sh`. Alternatives `rquickjs` and `deno_core` bind C and V8 and fail the purity rule outright |
+| `boa_engine` **lib, feature-gated** | JavaScript engine (`pdfrum-form --features script`) — M15 | Pure Rust, 116 added crates, **zero `-sys`, zero `cc`/`cmake`/`bindgen`**, `cargo-deny` clean against the existing allowlist with no edit. 95.5% of test262; register VM; `RuntimeLimits` for loop/recursion/stack, which is a bound the C++ has no equivalent of. Pinned `=0.22.0`, `default-features = false`. **Reachable from no crate's default features**, asserted mechanically by `scripts/check-no-boa.nu`. Alternatives `rquickjs` and `deno_core` bind C and V8 and fail the purity rule outright |
 
 ### The audit, run rather than promised — 2026-09-02
 
@@ -235,13 +235,13 @@ inherits a fact instead of a surprise.
 The GPU exemption is isolated by being *a crate nothing depends on*. The
 engine is isolated by *a flag any workspace member can turn on*, and feature
 unification means one member enabling it enables it for the whole build. That
-is a real weakness of features and it is why `scripts/check-no-boa.sh` is not
-optional. It asserts, on the same four-part shape as `check-no-wgpu.sh`: the
+is a real weakness of features and it is why `scripts/check-no-boa.nu` is not
+optional. It asserts, on the same four-part shape as `check-no-wgpu.nu`: the
 `pdfrum` facade's default features, `pdfrum-tool`'s default features, and
 **every** workspace member (`conformance/` and `benches/` included) reach none
 of `boa_engine`/`boa_ast`/`boa_parser`/`boa_gc`/`boa_interner`/`boa_string`/
 `boa_macros` — plus the converse, that `pdfrum-form --features script` *does*
-reach `boa_engine`, so the first three cannot pass vacuously. `scripts/ci.sh`
+reach `boa_engine`, so the first three cannot pass vacuously. `scripts/ci.nu`
 runs it.
 
 **What the engine's limits do and do not bound** is a security fact and is
@@ -262,7 +262,7 @@ not deps).
 `criterion` is held at 0.5 deliberately. From 0.6 it depends unconditionally
 on `alloca`, which has a `cc` build-dependency and compiles C — which the
 pure-Rust guarantee above forbids and `cargo-deny` rejects, failing
-`scripts/ci.sh`. No feature flag avoids it (`alloca` is not optional). Unlike
+`scripts/ci.nu`. No feature flag avoids it (`alloca` is not optional). Unlike
 `libfuzzer-sys`, this one is not worth an exception: `benches/` is inside the
 workspace the ban walks, and 0.5 measures the same thing.
 SSIM is hand-rolled in the harness (~60 lines) — the ratchet metric must

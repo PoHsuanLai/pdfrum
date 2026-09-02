@@ -11,7 +11,7 @@ criterion: *parser fuzzers running clean for 24h*.
 rather than stylistic. DEPS.md's Pure-Rust guarantee is that no published
 crate's dependency tree compiles C or C++; `libfuzzer-sys` links LLVM's C++
 libFuzzer runtime. Keeping this directory out of the root `members` list is
-what makes `cargo tree --workspace` in `scripts/ci.sh` stay clean — the
+what makes `cargo tree --workspace` in `scripts/ci.nu` stay clean — the
 guarantee holds by construction, not by anyone remembering.
 
 Two consequences worth knowing:
@@ -21,7 +21,7 @@ Two consequences worth knowing:
   `fuzz/Cargo.toml` anyway, because no target needs it: `fuzz_target!` hands
   the body a safe `&[u8]`. The panic lints are deliberately *not* re-declared
   — a panic is what these targets exist to find.
-- `cargo build`, `cargo test` and `scripts/ci.sh` at the repo root never see
+- `cargo build`, `cargo test` and `scripts/ci.nu` at the repo root never see
   this directory. Building it is an explicit `cd fuzz`.
 
 ## Running
@@ -77,7 +77,7 @@ to the four strictly-parser targets on a smaller machine.
 Sequential mode divides the budget instead, which is what you want for a
 quick pre-commit check.
 
-The gate is **not** in `scripts/ci.sh`. The fast gate is seconds; this is
+The gate is **not** in `scripts/ci.nu`. The fast gate is seconds; this is
 minutes to days.
 
 ## Targets

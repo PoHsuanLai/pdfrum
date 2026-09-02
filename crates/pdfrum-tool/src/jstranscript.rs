@@ -2,7 +2,7 @@
 //! asked the host to do.
 //!
 //! Behind the default-off `script` feature, because the engine is
-//! (`scripts/check-no-boa.sh`). The output is `ScriptCascade::transcript_text`
+//! (`scripts/check-no-boa.nu`). The output is `ScriptCascade::transcript_text`
 //! verbatim on stdout and nothing else — no page count, no MD5 line — because
 //! `testing/tools/text_diff.py` compares the whole of `pdfium_test`'s stdout
 //! against `<fixture>_expected.txt` and any extra line is a diff.

@@ -15,7 +15,7 @@
 //!
 //! - **Nothing in the core ring depends on this crate.** Not the `pdfrum`
 //!   facade, not `pdfrum-tool`. A headless build still resolves a tree with
-//!   zero `wgpu`, and `scripts/check-no-wgpu.sh` asserts it in CI rather than
+//!   zero `wgpu`, and `scripts/check-no-wgpu.nu` asserts it in CI rather than
 //!   this paragraph asserting it in prose.
 //! - **The device is injected, never created.** [`VelloBackend::new`] takes
 //!   the caller's `Device` and `Queue` by reference. Standing up a second

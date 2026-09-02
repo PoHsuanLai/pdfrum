@@ -162,18 +162,29 @@ Stable Rust, no external toolchain, no system libraries.
 cargo build --workspace
 cargo nextest run                    # the test runner this project uses
 cargo test --doc --workspace         # nextest silently SKIPS doctests
-./scripts/ci.sh                      # the full gate, exactly as CI runs it
+./scripts/ci.nu                      # the full gate, exactly as CI runs it
 ```
 
-`scripts/ci.sh` runs, in order: `cargo fmt --check`, `cargo clippy
+`scripts/ci.nu` runs, in order: `cargo fmt --check`, `cargo clippy
 --workspace --all-targets -D warnings`, `cargo nextest run`, `cargo test
 --doc`, `cargo deny check`, and the pure-Rust dependency-tree check. It is the
 definition of done for every change.
 
 ```bash
+cargo binstall nu                      # required: the scripts are nushell
 cargo install cargo-nextest --locked   # required by the gate
 cargo install cargo-deny --locked      # optional; the gate skips it if absent
 ```
+
+**Nushell is a hard dependency for contributors.** The gate and every bench
+and check script under `scripts/` is a `.nu` script, and there is no bash
+fallback, because maintaining two spellings of a gate is how the two stop
+agreeing. (`scripts/fuzz-gate.sh` is still bash, and the one-shot fixture
+generators are Python run under `uv`.) **Minimum version 0.110**;
+`cargo binstall nu` fetches a prebuilt binary, and `cargo install nu --locked`
+builds it from source when `binstall` is absent.
+Nothing pdfrum *ships* depends on it: this is a contributor tool, and the
+library's own dependency set is still the closed table in PLAN.md §3.
 
 **Examples.** Runnable programs live in `crates/pdfrum/examples/`:
 
