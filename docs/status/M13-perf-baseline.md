@@ -54,7 +54,7 @@ rebuilds the page graph inside them, which is exactly
 `crates/pdfrum-render/benches/render.rs`'s `warm` group and exactly what M12
 §1.8 established the target is judged on.
 
-**It is deliberately not `--sample`.** `scripts/profile.sh`'s header warns that
+**It is deliberately not `--sample`.** `scripts/profile.nu`'s header warns that
 the plain render loop rebuilds the page graph every iteration while `--sample`
 hoists it, and that an A/B run on the wrong loop produced a reproducible +5%
 regression that did not exist (`M12b-P3.md` §4). That warning is about A/Bing an
@@ -88,7 +88,7 @@ crates are now `pdfrum-raster-agg` (was `-exact`) and `-vello-cpu` (was
 `profile` binary accepts both spellings, so M12-era commands still run. Each
 file is measured on all three and the **best** is taken, as M12 did.
 
-**Oracle.** `scripts/bench-oracle.sh` at `n=21`, best of 5, against
+**Oracle.** `scripts/bench-oracle.nu` at `n=21`, best of 5, against
 `/mnt/data2/pdfium/pdfium-c++/out/Release/pdfium_test` — the same binary and the
 same invocation M12 §1.6 used. The script was fit for purpose and is unchanged.
 PDFs were copied to a scratch directory first, because `pdfium_test` writes
@@ -104,7 +104,7 @@ between the two sides.** The box was running at a load average of **47 rising to
 dozen `osmium` processes belonging to another user. These are the same
 conditions `M12d.md` records at its own close.
 
-Measured rather than asserted: on the oracle side, `bench-oracle.sh`'s 30 files
+Measured rather than asserted: on the oracle side, `bench-oracle.nu`'s 30 files
 come out at a **1.18x geomean** over M12 §1.6's column, on a binary that has not
 changed. On our side, an unchanged document measures **~1.5–2x** its committed
 baseline (`vector_paths_1751` warm-agg: 21.24 ms against 10.44 ms).
@@ -253,7 +253,7 @@ has a fifth.
 
 **`--op forms` is the annotation appearance overlay, isolated by A/B.** The
 definition, and the reason it is this and not the interaction path, is argued at
-length in `scripts/profile.sh`'s header; in short: M12's 3.35x is a *render*
+length in `scripts/profile.nu`'s header; in short: M12's 3.35x is a *render*
 ratio taken against `pdfium_test --render-repeats`, and `pdfium_test` never types
 into a field, so **not one line of `pdfrum-form` executes on either side of the
 number**. An op that looped over `pdfrum_form::apply` would have profiled real
@@ -266,7 +266,7 @@ every bitmap render, and we do the same through
 `pdfrum_doc::annot_render::overlay` under `RenderOptions::annotations`. So the op
 runs the same warm render twice — `annotations: true` against `false` —
 interleaved round by round in one process, and reports the difference. Both arms
-are warm, primed, and best-of-five, for the reasons `bench-oracle.sh` gives for
+are warm, primed, and best-of-five, for the reasons `bench-oracle.nu` gives for
 the same discipline.
 
 It reports a two-row split and a share, and it declines `--sample`, which has no
@@ -290,7 +290,7 @@ document, one binary, one machine.
 
 Every number in this document's first sweep was taken with that defect and was
 discarded. The clock now starts after setup for every op but `open`, whose
-operation is the parse. The trap is written into `scripts/profile.sh`'s header so
+operation is the parse. The trap is written into `scripts/profile.nu`'s header so
 the next `--warm` figure that scales with `--iterations` is diagnosed in one
 reading rather than bisected.
 
@@ -432,3 +432,326 @@ move. That is M12d's D3 landing, and it is the only improvement in the four
 classes. M12 §11 called it "the proof" that single-image documents were where
 the engine was genuinely behind; it is substantially less behind.
 
+
+---
+
+## 10. The fix, and the table re-taken — on a box that never went idle
+
+**Taken 2026-09-02, after §7 items 1 and 2 landed as one change.** Everything above this line is left exactly
+as it was written. §1 and §9's figures were taken at a load average of 47–65 on
+32 cores and §3 says so; they are **not** deleted or corrected in place, because
+they are the measurement that motivated the fix and the reason it was found. This
+section adds the post-fix numbers beside them.
+
+### 10.1 What was changed
+
+`ap::FormFonts::load` is now **memoized on `BuildContext`**, keyed on the
+catalog's `/AcroForm`, and returns `Arc<FormFonts>`.
+
+§7 recommends making the substitute load lazy first (item 1) and memoizing
+second (item 2). Measured on this machine, **laziness alone is the smaller
+half**: replacing the `SUBSTITUTABLE_CHARSETS` loop with an empty iterator —
+§4.3's excision, re-run on this box — takes `forms_text_field`'s overlay from
+38.3 ms to 26.8 ms and `forms_number`'s from 7.20 to 3.20. The `/DR` walk §5
+identifies as the older, larger half is untouched by it. Memoizing subsumes
+laziness, so that is what landed, and item 1 is closed by item 2 rather than
+separately.
+
+**It also does something §7 did not anticipate, and this is the part worth
+recording.** The loop is only one of the three per-call costs §7 lists, and the
+two documents §1 shows worst — `image_bug_718762` and `shading_coons` — **have
+no `/AcroForm` at all**. Their `/DR` walk finds nothing; their entire bill is the
+unconditional fallback load and the synthesized substitutes. A cache keyed on the
+form reference alone would have missed exactly the case that made this a
+whole-corpus regression rather than a forms one. So the key names three cases:
+
+| catalog's `/AcroForm` | cached | why |
+|---|---|---|
+| an indirect reference | under that reference | the document-scoped identity every other `BuildContext` cache keys on |
+| absent | one shared slot | with no form the faces depend on **nothing** document-specific — the fallback dict and the synthesized substitutes are constants |
+| a direct dictionary | not cached | no identity to key on, and its content *is* document-specific |
+
+The cache lives on `BuildContext`, beside `font_instances`, `colorspaces`,
+`functions` and `images`, and is keyed for the reason those are: one context may
+legitimately be threaded through two documents. `Page::render_with`'s contract —
+"thread one context through them all" — is what now covers form fonts too;
+putting the cache on `RenderSession` would have left that promise unpaid for
+every `render_with` caller.
+
+`pdfrum-page` is below `pdfrum-doc` and cannot name `FormFonts`, so the slot
+stores `Arc<dyn Any + Send + Sync>` and the layer above supplies the type. That is
+storage erasure, not a polymorphism seam — nothing is dispatched through the
+`Any`, it is downcast straight back to the one type that put it there — so
+STYLE.md §2b's closed list of three trait seams is untouched.
+
+### 10.2 The invariants at `ap/mod.rs`'s comments are preserved, deliberately
+
+The two comments the brief flags were **not** changed, and neither was the
+behaviour they describe:
+
+- **The fallback still goes through the same loader**, not the stock-metrics
+  constructor, because the ascent and descent must come from the face actually
+  substituted — 905/−211 against the base-14 tables' 718/−219, which on a list
+  box is the row pitch and two extra rows in a thirty-unit box.
+- **The second faces are still loaded in `load`**, not lazily where a field
+  discovers it needs one, because loading needs the page's font cache and the
+  generators are pure functions of the faces handed to them.
+
+Nothing about *what* is built changed — **only how many times**. That is what
+makes the appearance streams identical rather than merely equivalent, and it is
+why the lazy shape §7 preferred was not taken: laziness would have had to move
+the substitute load out from under the page's font cache, which is precisely
+what the comment at that line forbids.
+
+### 10.3 Conformance: nothing moved
+
+§8 warned that a fix here would need the scoreboard, "because `266783f` landed
+for a reason and a document that genuinely needs a Hebrew second face must keep
+getting one." It does.
+
+**1757 rows, 1512 pass, 245 fail — before and after, identical.** Every tag
+bucket identical (`form-events` 8, `js-transcript` 33, `page-count` 2,
+`pixel-fail` 43, `tierA-mismatch` 170). Stronger than the totals: **all 1757
+rows' Tier-A mismatch lists are byte-identical**, so not one generated appearance
+stream moved anywhere in the corpus. The eight `form-events` rows are unchanged.
+Four unit tests pin the three key cases and the two-document one.
+
+### 10.4 The machine, again — and why this table is *not* labelled idle
+
+§3 asked for §1 to be re-taken on an idle box, and §7 item 4 repeats it. **That
+was attempted for the whole of this session and could not be delivered**, and
+saying so is more useful than relabelling a loaded run.
+
+Load was sampled every two minutes from 17:49 to the close of this run. It began
+at **57.9** (1-minute) / 61.0 (5-minute) and never fell below **30.4**. The floor
+is not this work: in the 17:54–18:00 window, with nothing of this session's own
+running, the box still read **30.8, 32.3, 42.8, 30.4**. The occupants are the
+same ones §3 names — two `python3` training jobs at 473% and 445% CPU (elapsed
+**16 h 27 m** and 1 h 20 m at the time of measurement) and twelve `osmium`
+processes belonging to another user. Neither is this session's to stop.
+
+So the honest statement is: **§1's ratios were taken at load 47–65, and §10.5's
+at load 30–66 — lower, overlapping, and still not idle.** §10.5's absolute
+milliseconds inherit a machine tax of the same kind §3 measured, and the
+asymmetry §3 found — ~1.18x on the oracle's side against ~1.5–2x on ours —
+applies to them too. **They remain upper bounds**, and §3's instruction to
+re-take them on a quiet box is *not* discharged by this section; it is carried
+forward with a measurement of why.
+
+**What does not depend on the machine is §10.5's before/after column**, and that
+is the column the fix is judged on. It is an interleaved A/B — both binaries, both
+arms, round by round, on one document in one stretch of minutes, each arm's
+minimum kept — so a load excursion lands on both arms rather than one. §4.3 used
+exactly this discipline for the same reason, and §3 says why it is
+load-independent even where the absolute ratios are not.
+
+### 10.5 The table
+
+Whole document, milliseconds, best of the three backends over three interleaved
+rounds, **lower is better**; the ratio is ours over the oracle's, so **> 1 is
+pdfrum being slower**. `M12` is `benches/baseline.json`'s committed warm median
+over M12 §1.6's oracle column; `under load` is §9's column; `now` is this run's
+post-fix figure over this run's oracle, taken by `scripts/bench-oracle.nu`'s
+method at `n=21`, best of 5, on the same binary and the same 30 files.
+
+*On the script's name:* §2 and this section were measured while `scripts/` was
+still bash, and PR #1 has since translated every script to nushell — the
+references above and throughout this document now name the `.nu` files, which
+are what exist. The oracle method is unchanged by that translation and was
+checked rather than assumed: `bench-oracle.nu` runs the same
+`(t[n] − t[1]) / (n − 1)` marginal-pass formula against the same
+`--md5 --render-repeats` invocation, takes the same minimum-of-rounds rather
+than a mean, and carries the same defaults. The figures below were produced by
+that method restricted to the four classes' 30 files, with the PDFs copied to a
+scratch directory first because `pdfium_test` writes beside its input and the
+oracle tree is read-only.
+
+| class | M12 §1.10 | under load (§1) | **now, fixed** | vs M12 | vs under-load |
+|---|---:|---:|---:|---:|---:|
+| `image` | 0.24x | 0.53x | **0.09x** | 0.38x | 0.17x |
+| `vector` | 0.90x | 1.98x | **0.78x** | 0.87x | 0.39x |
+| `shading` | 0.95x | 2.95x | **0.86x** | 0.90x | 0.29x |
+| `forms` | 3.35x | 7.32x | **2.16x** | 0.64x | 0.29x |
+
+**All four class geomeans are better than M12's**, not merely recovered to
+them, and the whole-corpus geomean over the four goes from §1's **2.02x** to
+**0.53x** — against M12's own 0.83x. Three things to read carefully before that
+is quoted:
+
+- **A class geomean beating M12 does not mean every row did.** Eight of the
+  thirty are above their M12 figure and §10.6 names all eight; the geomeans are
+  below M12's anyway because the rows that improved improved by more.
+
+- **`forms` at 2.16x is the first movement on M12 §11's named residue since M12
+  named it.** M12's 3.35x had never been re-measured (`M12b.md` §10 item 2,
+  `M12d.md` at close); it is now 0.64x of what it was. §7 item 2 predicted "at
+  or near its content cost" as the ceiling and this is not yet that — see §10.6's
+  `forms_combo_box` row.
+- **This is still not an idle box** (§10.4). The absolute milliseconds on both
+  sides carry a machine tax, and §3 measured that tax as asymmetric — ~1.18x on
+  the oracle, ~1.5–2x on ours. If that asymmetry still holds, these ratios are
+  *upper bounds* and the true figures are better again. That cuts the same way
+  it did in §1, which is the one respect in which nothing has changed.
+
+### 10.6 The per-fixture spread
+
+### `image`
+
+| fixture | M12 | under load | **now** | ours (ms) | oracle (ms) |
+|---|---:|---:|---:|---:|---:|
+| `image_bug_583804` | 0.89x | 1.12x | **0.79x** | 160.31 | 204.16 |
+| `image_bug_718762` | 0.00x | 0.01x | **0.00x** | 0.02 | 708.50 |
+| `image_bug_898443` | 0.03x | 0.08x | **0.02x** | 1.99 | 87.66 |
+| `image_ccitt_3bigpreview` | 1.94x | 2.45x | **1.66x** | 22.18 | 13.34 |
+| `image_ccitt_transfer` | 1.54x | 6.14x | **0.26x** | 0.88 | 3.34 |
+| `image_en_fqa` | 11.24x | 2.50x | **2.03x** | 146.76 | 72.33 |
+| `image_jbig2_1478366` | 0.02x | 0.13x | **0.00x** | 0.16 | 34.87 |
+| `image_jbig2_880920` | 0.22x | 0.68x | **0.19x** | 3.06 | 15.70 |
+| `image_jpx_123` | 0.65x | 1.41x | **0.83x** | 9.68 | 11.61 |
+| **geomean** | **0.24x** | **0.53x** | **0.09x** | | |
+
+Spread of the `now` column: **0.00x .. 2.03x**.
+
+### `vector`
+
+| fixture | M12 | under load | **now** | ours (ms) | oracle (ms) |
+|---|---:|---:|---:|---:|---:|
+| `vector_en_system` | 2.84x | 1.90x | **1.08x** | 89.64 | 82.95 |
+| `vector_en_tem` | 1.32x | 5.84x | **0.62x** | 9.03 | 14.51 |
+| `vector_font_feature` | 2.65x | 5.61x | **3.42x** | 119.66 | 35.02 |
+| `vector_font_size14` | 1.49x | 4.21x | **3.70x** | 65.00 | 17.58 |
+| `vector_paths_1751` | 0.51x | 0.90x | **0.44x** | 10.68 | 24.42 |
+| `vector_tcpdf_009` | 0.07x | 0.26x | **0.06x** | 2.90 | 48.28 |
+| **geomean** | **0.90x** | **1.98x** | **0.78x** | | |
+
+Spread of the `now` column: **0.06x .. 3.70x**.
+
+### `shading`
+
+| fixture | M12 | under load | **now** | ours (ms) | oracle (ms) |
+|---|---:|---:|---:|---:|---:|
+| `shading_axial_radial` | 0.55x | 0.82x | **0.55x** | 36.84 | 67.42 |
+| `shading_coons` | 1.12x | 5.72x | **0.57x** | 0.85 | 1.50 |
+| `shading_gouraud` | 1.04x | 5.88x | **0.76x** | 0.74 | 0.97 |
+| `shading_tcpdf_030` | 0.56x | 1.01x | **0.49x** | 53.74 | 109.88 |
+| `shading_tcpdf_056` | 1.30x | 4.46x | **0.74x** | 2.43 | 3.27 |
+| `shading_tcpdf_058` | 1.29x | 3.90x | **1.88x** | 12.72 | 6.78 |
+| `shading_tensor` | 0.27x | 0.52x | **0.42x** | 16.74 | 39.81 |
+| `shading_type4_5` | 3.97x | 22.78x | **4.38x** | 1.26 | 0.29 |
+| **geomean** | **0.95x** | **2.95x** | **0.86x** | | |
+
+Spread of the `now` column: **0.42x .. 4.38x**.
+
+### `forms`
+
+| fixture | M12 | under load | **now** | ours (ms) | oracle (ms) |
+|---|---:|---:|---:|---:|---:|
+| `forms_combo_box` | 5.44x | 12.09x | **8.16x** | 36.10 | 4.42 |
+| `forms_list_box` | 6.87x | 15.57x | **5.38x** | 31.61 | 5.88 |
+| `forms_number` | 3.14x | 8.13x | **1.83x** | 1.99 | 1.08 |
+| `forms_push_button` | 0.39x | 0.69x | **0.20x** | 13.45 | 68.08 |
+| `forms_signature` | 3.84x | 11.42x | **2.58x** | 6.45 | 2.50 |
+| `forms_text_field` | 5.83x | 9.92x | **2.06x** | 10.41 | 5.05 |
+| `forms_widgets_407` | 4.67x | 9.36x | **2.57x** | 15.54 | 6.05 |
+| **geomean** | **3.35x** | **7.32x** | **2.16x** | | |
+
+Spread of the `now` column: **0.20x .. 8.16x**.
+
+**All thirty rows are better than their §9 figure. Twenty-two of the thirty are
+also better than their M12 figure**, and the eight that are not must be named
+rather than averaged away — the class geomeans are all below M12's, so an
+unqualified "every class beat M12" would hide these:
+
+| row | M12 | now | its §10.7 speedup |
+|---|---:|---:|---:|
+| `forms_combo_box` | 5.44x | **8.16x** | 1.86x |
+| `vector_font_size14` | 1.49x | **3.70x** | 1.27x |
+| `vector_font_feature` | 2.65x | **3.42x** | 1.12x |
+| `shading_tcpdf_058` | 1.29x | **1.88x** | 1.33x |
+| `shading_type4_5` | 3.97x | **4.38x** | 6.24x |
+| `image_jpx_123` | 0.65x | **0.83x** | 1.03x |
+| `shading_tensor` | 0.27x | **0.42x** | 2.39x |
+| `image_bug_718762` | 0.00x | **0.00x** | 206.26x |
+
+Seven of the eight have a §10.7 speedup at or below **2.4x** against a
+corpus geomean of 3.13x — they are the documents where the removed constant was
+the *smallest* share, so what is left in them is the machine (§10.4) and whatever
+each was already carrying, not this regression. `image_bug_718762` is in the list
+only as a rounding artefact: 0.023 ms over 708 ms is 0.00003x, below the two
+decimals this table prints, and it is the corpus's largest improvement.
+
+**`forms_combo_box` is the one that is not explained that way, and it is now the
+worst row in the corpus.** Its speedup, 1.86x, is the lowest in its class against
+a class geomean of 3.36x, which says the cost left in it is **not** the one this
+fix removed. Its `--op forms` split is the next thing to take, not another cache
+— and §7 item 3's warning still stands: `generate_appearances_with_text` was
+0.35–0.84 ms and `AnnotList::load` 0.10–0.38 ms, so whatever this is, it is a
+third thing neither §5 nor this section has isolated.
+
+At the other end, `forms_push_button` at **0.20x** is the fastest relative row in
+the corpus (0.39x at M12), on a document where the oracle takes 68 ms.
+
+The pattern across all thirty is one shape: the fix removed a **fixed per-render
+cost**, so it helped most where the document was cheapest and least where the
+document was already expensive. That is why `image` moves 0.53x → 0.09x while
+`vector` only moves 1.98x → 0.78x, and it is the same explanation §4.4 gave for
+why the regression looked worst on the cheapest documents.
+
+### 10.7 Before and after the fix, per fixture
+
+Both binaries, interleaved round by round on one document in one stretch of
+minutes, each arm's minimum over three rounds × three backends kept. **Every one
+of the thirty fixtures improved**, which is itself the finding: the cost removed
+was a *constant per render*, not something proportional to the work, so the
+speedup is largest exactly where the document is cheapest.
+
+| class | pre-fix geomean (ms) | post-fix geomean (ms) | speedup | spread |
+|---|---:|---:|---:|---|
+| `image` | 16.73 | **3.60** | **4.65x** | 1.01x .. 206.26x |
+| `vector` | 40.50 | **24.08** | **1.68x** | 1.04x .. 4.21x |
+| `shading` | 16.52 | **5.48** | **3.01x** | 1.13x .. 9.60x |
+| `forms` | 39.64 | **11.80** | **3.36x** | 1.86x .. 4.53x |
+| **all 30** | **24.33** | **7.77** | **3.13x** | 1.01x .. 206.26x |
+
+The three fixtures §4.3 excised the loop on, and the three `forms` documents §5
+profiled:
+
+| fixture | pre-fix | **post-fix** | speedup | §4.3's "loop excised" | M12 committed |
+|---|---:|---:|---:|---:|---:|
+| `shading_coons` | 7.12 | **0.85** | 8.41x | 1.67 | 1.04 |
+| `shading_gouraud` | 7.13 | **0.74** | 9.60x | 1.56 | 1.04 |
+| `image_bug_718762` | 4.74 | **0.02** | 206.26x | 0.69 | 0.48 |
+| `forms_list_box` | 89.80 | **31.61** | 2.84x | — | — |
+| `forms_text_field` | 45.71 | **10.41** | 4.39x | — | — |
+| `forms_number` | 8.01 | **1.99** | 4.03x | 6.40 | 3.22 |
+
+**All three of §4.3's documents now land *below* their M12 committed baselines**,
+on a machine carrying load 30–66 where those baselines were taken quieter. §4.3
+predicted 1.67 / 1.56 / 0.69 for the excision; memoizing beats that by a further
+2–30x, because the excision removed one of three costs and this removes all
+three. `forms_number` is 1.99 against §4.3's 6.40 and M12's 3.22 — so §5's "older
+cost that `266783f` merely stacked on top of", the `/DR` walk, is paid too.
+
+### 10.8 What this contradicts, and what it confirms
+
+**Confirmed, in full:** §4's diagnosis (one commit, one function, most of the
+corpus), §4.4's explanation of why documents with no form fields paid it,
+§5's finding that the `/DR` walk is a second and larger cost than the substitute
+loop, §5's correction of M12 §10.1's "under 2%" (that conclusion did not
+generalize, and this fix is the proof of what it was hiding), and §6.1's harness
+defect — which was **not** on `main` and was cherry-picked (`9cbc347`) rather
+than reproduced, so this document's two commits and the fix now share one
+history.
+
+**One thing this document under-stated.** §7 item 1 describes the substitute loop
+as the thing to remove and item 2 as the follow-up. On the corpus the ordering is
+the other way round for *reach*: item 2 subsumes item 1, and item 1 alone would
+have left the two worst rows in §1 — `image_bug_718762` and `shading_coons`,
+both of which have **no `/AcroForm`** — paying the fallback load on every render.
+§7's own expected-win table anticipated their post-fix values as 0.69 and 1.67 ms;
+they are **0.02 and 0.85**. The estimate was right about the mechanism and low
+about the size, because it costed the excision rather than the cache.
+
+**Nothing here contradicts §1's arithmetic, §3's machine analysis, or §9's
+per-fixture spread.** They were measured under load and they say so; §10.4 finds
+the same box under the same tenants and does not claim otherwise.
