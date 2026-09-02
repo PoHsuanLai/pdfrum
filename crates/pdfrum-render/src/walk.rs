@@ -1257,11 +1257,14 @@ fn render_pattern_text<B: RasterBackend>(
     // pushed the text object's stack before dispatching here — so only the
     // run's own contribution is added, and only it is popped.
     let mut clip = pdfrum_page::ClipStack::new();
-    if !clip.push_text(vec![pdfrum_page::TextClipRun {
-        object: object.clone(),
-        char_space: state.text.char_space,
-        word_space: state.text.word_space,
-    }]) {
+    if clip
+        .push_text(vec![pdfrum_page::TextClipRun {
+            object: object.clone(),
+            char_space: state.text.char_space,
+            word_space: state.text.word_space,
+        }])
+        .is_err()
+    {
         return;
     }
     // The colour and general state are the text's; the clip is *not* carried

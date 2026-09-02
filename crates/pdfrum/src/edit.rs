@@ -10,7 +10,9 @@
 use kurbo::{Affine, BezPath, Rect};
 use pdfrum_common::PageIndex;
 use pdfrum_page::GraphicsState;
-use pdfrum_page::{ColorSpace, Content, FillRule, PageObject, PathObject, TextObject, TextSegment};
+use pdfrum_page::{
+    ColorSpace, Content, FillRule, IndexOutOfRange, PageObject, PathObject, TextObject, TextSegment,
+};
 
 use crate::Page;
 
@@ -74,7 +76,7 @@ pub struct PageEdit {
 
 impl PageEdit {
     /// How many objects the page draws, including any switched off with
-    /// [`PageEdit::set_visible`].
+    /// [`PageEdit::hide`].
     #[must_use]
     pub fn len(&self) -> usize {
         self.page.objects().len()
@@ -114,8 +116,12 @@ impl PageEdit {
     }
 
     /// Insert an object at `index`, pushing the ones there and after later in
-    /// the painting order. Returns `false` when `index` is past the end.
-    pub fn insert(&mut self, index: usize, object: PageObject) -> bool {
+    /// the painting order. An index equal to [`PageEdit::len`] appends.
+    ///
+    /// # Errors
+    ///
+    /// [`IndexOutOfRange`] when `index` is past the end.
+    pub fn insert(&mut self, index: usize, object: PageObject) -> Result<(), IndexOutOfRange> {
         self.page.insert_object(index, object)
     }
 
@@ -124,17 +130,37 @@ impl PageEdit {
         self.page.remove_object(index)
     }
 
-    /// Show or hide the object at `index` without removing it.
+    /// Show the object at `index` without removing it.
     ///
     /// A hidden object keeps its place and its index, so it can be shown again
     /// — but it contributes nothing to the saved page, and reloading the saved
-    /// file will not find it. Returns `false` when there is no such object.
-    pub fn set_visible(&mut self, index: usize, visible: bool) -> bool {
+    /// file will not find it.
+    ///
+    /// # Errors
+    ///
+    /// [`IndexOutOfRange`] when there is no object at `index`.
+    pub fn show(&mut self, index: usize) -> Result<(), IndexOutOfRange> {
+        self.set_active(index, true)
+    }
+
+    /// Hide the object at `index` without removing it.
+    ///
+    /// See [`PageEdit::show`].
+    ///
+    /// # Errors
+    ///
+    /// [`IndexOutOfRange`] when there is no object at `index`.
+    pub fn hide(&mut self, index: usize) -> Result<(), IndexOutOfRange> {
+        self.set_active(index, false)
+    }
+
+    fn set_active(&mut self, index: usize, active: bool) -> Result<(), IndexOutOfRange> {
+        let len = self.page.objects.len();
         let Some(object) = self.page.objects.get_mut(index) else {
-            return false;
+            return Err(IndexOutOfRange { index, len });
         };
-        object.set_active(visible);
-        true
+        object.set_active(active);
+        Ok(())
     }
 
     /// Whether the object at `index` is drawn.
@@ -148,9 +174,14 @@ impl PageEdit {
     /// The transform is applied *before* the object's existing one, so
     /// `Affine::translate((10.0, 0.0))` moves it ten points right in page
     /// space whatever it was already doing.
-    pub fn transform(&mut self, index: usize, transform: Affine) -> bool {
+    ///
+    /// # Errors
+    ///
+    /// [`IndexOutOfRange`] when there is no object at `index`.
+    pub fn transform(&mut self, index: usize, transform: Affine) -> Result<(), IndexOutOfRange> {
+        let len = self.page.objects.len();
         let Some(object) = self.page.object_mut(index) else {
-            return false;
+            return Err(IndexOutOfRange { index, len });
         };
         match object {
             PageObject::Path(p) => p.object.matrix = transform * p.object.matrix,
@@ -162,7 +193,7 @@ impl PageEdit {
             PageObject::Shading(s) => s.object.matrix = transform * s.object.matrix,
             PageObject::Form(f) => f.object.matrix = transform * f.object.matrix,
         }
-        true
+        Ok(())
     }
 
     /// Whether anything has been changed since the page was opened.

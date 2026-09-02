@@ -1,6 +1,6 @@
 # `pdfrum` (facade) status
 
-**Updated:** 2026-09-02 · **State:** implemented. The user-facing API over the
+**Updated:** 2026-09-03 · **State:** implemented. The user-facing API over the
 whole stack — open, page, render, text, annotations, form, save, import —
 with runnable doctests on real fixtures, four examples, and integration tests
 over every facade path. The workspace `README.md` is written.
@@ -52,11 +52,19 @@ the same reason: `Document` is a `Sync` shared reader, so editing a page must
 not need `&mut` on it.
 
 `PageEdit` offers `len`/`is_empty`/`objects`/`object_mut`/`push`/`insert`/
-`remove`/`set_visible`/`is_visible`/`transform`/`is_modified`, plus
+`remove`/`show`/`hide`/`is_visible`/`transform`/`is_modified`, plus
 `font_of`/`image_of` to name a resource an existing object already uses, and
-`graph`/`graph_mut` as the escape hatch onto `pdfrum-page`. **Taking
+`graph`/`graph_mut` as the escape hatch onto `pdfrum-page`. `insert` / `show` /
+`hide` / `transform` return `Result<(), IndexOutOfRange>` (WP9, 2026-09-03);
+`remove` already returned `Option<PageObject>`. **Taking
 `object_mut` is the edit**: the object is marked dirty on the way out, so a
 caller that only wants to look uses `objects`.
+
+*Corrected 2026-09-03 (WP9).* `Form::set` / `Form::set_checked` return
+`Result<(), UnknownField>` — an unknown name is an error, not a silent ignore.
+`FormSession::replace_selection` and `set_index_selected` keep `bool` because
+the bool is the answer. `Outline`'s `IntoIterator` walks in place through
+`OutlineIter`; it no longer `collect`s into a `Vec` to satisfy the trait.
 
 Three plain config structs build objects to add — `PathBuilder` (with a `rect`
 constructor), `TextBuilder`, `ImageBuilder` — each with `build() -> PageObject`,

@@ -120,7 +120,10 @@ impl FieldWrites {
         self.depth < self.max_depth
     }
 
-    /// Enters one level of nesting. Returns whether the budget allowed it.
+    /// Enters one level of nesting.
+    ///
+    /// The `bool` is the answer, not a failed mutation: whether the recursion
+    /// budget allowed another level. `false` means the cap is already reached.
     pub fn enter(&mut self) -> bool {
         if !self.can_recurse() {
             return false;

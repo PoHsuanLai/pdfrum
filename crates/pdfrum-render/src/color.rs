@@ -408,7 +408,7 @@ mod tests {
         let value = {
             let mut c = ColorValue::default();
             c.set_space(Arc::new(ColorSpace::DeviceRgb));
-            c.set_components(&[0.0, 0.0, 0.0]);
+            let _ = c.set_components(&[0.0, 0.0, 0.0]);
             c
         };
         let path = resolve_argb(&value, 1.0, None, None, &opts, ObjectKind::Path, false);

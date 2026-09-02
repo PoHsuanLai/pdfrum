@@ -336,7 +336,11 @@ mod tests {
     #[test]
     fn text_clips_union_every_run_in_the_batch_into_one_path() {
         let mut stack = ClipStack::new();
-        assert!(stack.push_text(vec![text_run(b"H", 0.0), text_run(b"H", 100.0)]));
+        assert!(
+            stack
+                .push_text(vec![text_run(b"H", 0.0), text_run(b"H", 100.0)])
+                .is_ok()
+        );
         let clips = resolve_bare(&stack);
         let Some(Clip::Path(p, rule)) = clips.first() else {
             panic!("expected a path clip, got {clips:?}")
@@ -354,7 +358,7 @@ mod tests {
     #[test]
     fn an_empty_text_clip_still_clips_everything_out() {
         let mut stack = ClipStack::new();
-        assert!(stack.push_text(vec![text_run(b"", 0.0)]));
+        assert!(stack.push_text(vec![text_run(b"", 0.0)]).is_ok());
         let clips = resolve_bare(&stack);
         assert_eq!(clips.as_slice(), &[Clip::Empty]);
     }

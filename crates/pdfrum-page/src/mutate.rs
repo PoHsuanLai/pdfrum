@@ -43,6 +43,19 @@ use std::collections::BTreeSet;
 
 use crate::page::{Page, PageObject};
 
+/// An object index that is not on the page.
+///
+/// Returned by [`Page::insert_object`] when `index` is past the end — an index
+/// equal to the length appends and is valid.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[error("page object index {index} is out of range (len {len})")]
+pub struct IndexOutOfRange {
+    /// The index that was asked for.
+    pub index: usize,
+    /// How many objects the page has.
+    pub len: usize,
+}
+
 impl PageObject {
     /// Whether the object has been changed since it was parsed.
     ///
@@ -144,10 +157,19 @@ impl Page {
     /// A streamless object **adopts its new neighbour's stream** so that the
     /// requested position survives the save: without that it would be appended
     /// to a fresh `/Contents` element, which is drawn last whatever its index
-    /// in the list said. Returns `false` when `index` is past the end.
-    pub fn insert_object(&mut self, index: usize, mut object: PageObject) -> bool {
-        if index > self.objects.len() {
-            return false;
+    /// in the list said. An index equal to the length appends.
+    ///
+    /// # Errors
+    ///
+    /// [`IndexOutOfRange`] when `index` is past the end.
+    pub fn insert_object(
+        &mut self,
+        index: usize,
+        mut object: PageObject,
+    ) -> Result<(), IndexOutOfRange> {
+        let len = self.objects.len();
+        if index > len {
+            return Err(IndexOutOfRange { index, len });
         }
         object.mark_dirty();
         if object.content_stream().is_none()
@@ -158,7 +180,7 @@ impl Page {
             self.dirty_streams.insert(Some(stream));
         }
         self.objects.insert(index, object);
-        true
+        Ok(())
     }
 
     /// Remove the object at `index` and hand it back.
@@ -261,6 +283,7 @@ mod tests {
         reason = "test fixtures index arrays whose length the fixture fixes"
     )]
 
+    use super::IndexOutOfRange;
     use crate::page::{Content, Page, PageObject, PathObject};
     use crate::state::{ContentMarks, GraphicsState};
     use kurbo::{Affine, BezPath};
@@ -331,7 +354,7 @@ mod tests {
         let mut page = page_of(&[0, 2, 2]);
         let mut fresh = object(None);
         fresh.set_content_stream(None);
-        assert!(page.insert_object(1, fresh));
+        assert!(page.insert_object(1, fresh).is_ok());
         assert_eq!(page.objects.len(), 4);
         assert_eq!(page.objects[1].content_stream(), Some(2));
         assert!(page.dirty_streams.contains(&Some(2)));
@@ -340,10 +363,13 @@ mod tests {
     #[test]
     fn an_insert_past_the_end_is_refused() {
         let mut page = page_of(&[0]);
-        assert!(!page.insert_object(2, object(None)));
+        let err = page
+            .insert_object(2, object(None))
+            .expect_err("past the end");
+        assert_eq!(err, IndexOutOfRange { index: 2, len: 1 });
         assert_eq!(page.objects.len(), 1);
         // One past the last index appends.
-        assert!(page.insert_object(1, object(None)));
+        assert!(page.insert_object(1, object(None)).is_ok());
         assert_eq!(page.objects.len(), 2);
     }
 

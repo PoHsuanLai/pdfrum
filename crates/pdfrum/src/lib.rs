@@ -217,7 +217,7 @@ pub use annotation::{AnnotFlags, Annotation, Subtype};
 pub use document::{Attachment, Document, Metadata, OpenOptions};
 pub use edit::{ImageBuilder, PageEdit, PathBuilder, TextBuilder};
 pub use error::{Error, Result};
-pub use form::{Field, FieldFlags, FieldKind, Form};
+pub use form::{Field, FieldFlags, FieldKind, Form, UnknownField};
 pub use form_session::{
     AppearanceUpdate, Button, Cascade, FieldRef, FieldWrites, FormSession, Key, Keystroke,
     KeystrokeOutcome, Modifiers, NoScripts, Response, SessionConfig, UpdateKind,
@@ -226,7 +226,7 @@ pub use form_session::{
 // scrolled choice widget. Values, not a trait — see `FormSession::popup_for_page`
 // and STYLE.md §2b's 2026-09-01 ruling for why this is state a caller pulls
 // rather than a seam the library calls back through.
-pub use outline::{Bookmark, Outline};
+pub use outline::{Bookmark, Outline, OutlineIter};
 pub use page::{Page, Rotation};
 pub use pdfrum_form::AnnotId;
 pub use pdfrum_form::{Placement, PopupGeometry, PopupView, ScrollView};
@@ -277,6 +277,12 @@ pub use session::RenderSession;
 /// of the editing API: [`PathBuilder`], [`TextBuilder`] and [`ImageBuilder`]
 /// each build one.
 pub use pdfrum_page::PageObject;
+
+/// An object index that is not on the page being edited.
+///
+/// Returned by [`PageEdit::insert`], [`PageEdit::show`], [`PageEdit::hide`]
+/// and [`PageEdit::transform`].
+pub use pdfrum_page::IndexOutOfRange;
 
 /// Per-document caches — fonts, colour spaces, decoded images — that a caller
 /// threads through many pages to avoid decoding the same resource twice.

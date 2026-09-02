@@ -58,6 +58,22 @@ pub struct PatternValue {
     pub loaded: Option<Arc<crate::pattern::Pattern>>,
 }
 
+/// Why [`ColorValue::set_components`] refused the values.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum SetComponentsError {
+    /// The slice was shorter than the space's component count.
+    #[error("need {needed} colour components, got {got}")]
+    TooFew {
+        /// Components the space requires.
+        needed: usize,
+        /// Components the caller supplied.
+        got: usize,
+    },
+    /// The current space is a pattern; only `scn` with a name changes it.
+    #[error("a pattern colour is not set by components")]
+    PatternSpace,
+}
+
 impl ColorValue {
     /// Install a colorspace, **resetting** the components to its default
     /// colour.
@@ -72,26 +88,32 @@ impl ColorValue {
 
     /// Set the components without changing the space.
     ///
-    /// Returns whether anything changed. **Too few values change nothing**;
-    /// surplus values are kept, since PDFium stores the vector verbatim.
-    /// With no space installed, `DeviceGray` is installed first.
-    pub fn set_components(&mut self, values: &[f32]) -> bool {
-        if self.space.is_none() {
-            self.space = Some(Arc::new(ColorSpace::DeviceGray));
-        }
-        let Some(space) = &self.space else {
-            return false;
-        };
+    /// **Too few values change nothing**; surplus values are kept, since
+    /// PDFium stores the vector verbatim. With no space installed,
+    /// `DeviceGray` is installed first.
+    ///
+    /// # Errors
+    ///
+    /// [`SetComponentsError::TooFew`] when `values` is shorter than the space
+    /// requires. [`SetComponentsError::PatternSpace`] when the current space
+    /// is a pattern — only `scn` with a name changes a pattern colour.
+    pub fn set_components(&mut self, values: &[f32]) -> Result<(), SetComponentsError> {
+        let space = self
+            .space
+            .get_or_insert_with(|| Arc::new(ColorSpace::DeviceGray));
         if space.n_components() > values.len() {
-            return false;
+            return Err(SetComponentsError::TooFew {
+                needed: space.n_components(),
+                got: values.len(),
+            });
         }
         if matches!(**space, ColorSpace::Pattern(_)) {
             // A pattern space keeps its pattern; only `scn` with a name
             // changes it.
-            return false;
+            return Err(SetComponentsError::PatternSpace);
         }
         self.components = SmallVec::from_slice(values);
-        true
+        Ok(())
     }
 
     /// Set both the space and the components in one step, as `g`, `rg` and
@@ -173,7 +195,7 @@ mod tests {
         reason = "test fixtures quote oracle vectors verbatim and compare exactly"
     )]
 
-    use super::{ColorSpace, ColorValue};
+    use super::{ColorSpace, ColorValue, SetComponentsError};
     use pdfrum_object::Name;
     use smallvec::SmallVec;
     use std::sync::Arc;
@@ -196,13 +218,28 @@ mod tests {
     }
 
     #[test]
+    fn a_pattern_space_refuses_component_operands() {
+        let mut c = ColorValue::default();
+        c.set_space(Arc::new(ColorSpace::Pattern(Box::default())));
+        let before = c.components.clone();
+        assert_eq!(
+            c.set_components(&[0.5]),
+            Err(SetComponentsError::PatternSpace)
+        );
+        assert_eq!(c.components, before);
+    }
+
+    #[test]
     fn too_few_components_change_nothing_at_all() {
         let mut c = ColorValue::default();
         c.set_stock(ColorSpace::DeviceCmyk, &[0.1, 0.2, 0.3, 0.4]);
-        assert!(!c.set_components(&[0.9, 0.9]));
+        assert_eq!(
+            c.set_components(&[0.9, 0.9]),
+            Err(SetComponentsError::TooFew { needed: 4, got: 2 })
+        );
         assert_eq!(&c.components[..], &[0.1, 0.2, 0.3, 0.4]);
         // Exactly enough does change it.
-        assert!(c.set_components(&[0.5, 0.5, 0.5, 0.5]));
+        assert!(c.set_components(&[0.5, 0.5, 0.5, 0.5]).is_ok());
         assert_eq!(&c.components[..], &[0.5, 0.5, 0.5, 0.5]);
     }
 
@@ -213,7 +250,7 @@ mod tests {
             components: SmallVec::new(),
             pattern: None,
         };
-        assert!(c.set_components(&[0.75]));
+        assert!(c.set_components(&[0.75]).is_ok());
         assert_eq!(
             c.space.as_deref(),
             Some(&ColorSpace::DeviceGray),

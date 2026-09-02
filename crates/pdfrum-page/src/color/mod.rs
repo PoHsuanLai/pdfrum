@@ -39,7 +39,7 @@ pub(crate) use load::ColorSpaceCache;
 pub use load::load_colorspace;
 pub(crate) use special::{DeviceN, MAX_PATTERN_COMPONENTS};
 pub use special::{PatternSpace, Separation};
-pub use value::{ColorValue, PatternValue};
+pub use value::{ColorValue, PatternValue, SetComponentsError};
 
 /// A colour in the device's RGB space, each channel nominally in `0..=1`.
 ///

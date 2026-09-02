@@ -428,7 +428,7 @@ fn focus_rect(annot: &Annotation, box_: ap::FocusBox) -> Option<pdfrum_page::Pag
     }
     let mut stroke = pdfrum_page::ColorValue::default();
     stroke.set_space(std::sync::Arc::new(pdfrum_page::ColorSpace::DeviceRgb));
-    stroke.set_components(&[0.0, 0.0, 0.0]);
+    let _ = stroke.set_components(&[0.0, 0.0, 0.0]);
     let state = pdfrum_page::GraphicsState {
         stroke,
         stroke_params: pdfrum_page::StrokeParams {
@@ -535,7 +535,7 @@ fn invalid_outline<R: Resolve>(annot: &Annotation, r: &R) -> Option<pdfrum_page:
     let rect = normalized(annot.rect);
     let mut stroke = pdfrum_page::ColorValue::default();
     stroke.set_space(std::sync::Arc::new(pdfrum_page::ColorSpace::DeviceRgb));
-    stroke.set_components(&[OUTLINE_GREY, OUTLINE_GREY, OUTLINE_GREY]);
+    let _ = stroke.set_components(&[OUTLINE_GREY, OUTLINE_GREY, OUTLINE_GREY]);
     let state = pdfrum_page::GraphicsState {
         stroke,
         stroke_params: pdfrum_page::StrokeParams {
@@ -707,7 +707,7 @@ fn highlight_state() -> pdfrum_page::GraphicsState {
     fill.set_space(std::sync::Arc::new(pdfrum_page::ColorSpace::DeviceRgb));
     // Red is the low byte and blue the high one: `FX_COLORREF` is BGR, so
     // `0xFFE4DD` is a pale blue rather than the pink it reads as.
-    fill.set_components(&[channel(0), channel(8), channel(16)]);
+    let _ = fill.set_components(&[channel(0), channel(8), channel(16)]);
     pdfrum_page::GraphicsState {
         fill,
         general: pdfrum_page::GeneralState {

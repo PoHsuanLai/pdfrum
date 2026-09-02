@@ -271,6 +271,11 @@ impl pdfrum_page::Rotation
 pub fn pdfrum_page::Rotation::display_matrix(self, kurbo::rect::Rect) -> kurbo::affine::Affine
 pub fn pdfrum_page::Rotation::from_degrees(i64) -> Self
 pub fn pdfrum_page::Rotation::quarters(self) -> u8
+pub enum pdfrum_page::SetComponentsError
+pub pdfrum_page::SetComponentsError::PatternSpace
+pub pdfrum_page::SetComponentsError::TooFew
+pub pdfrum_page::SetComponentsError::TooFew::got: usize
+pub pdfrum_page::SetComponentsError::TooFew::needed: usize
 pub enum pdfrum_page::ShadingKind
 pub pdfrum_page::ShadingKind::Axial = 2
 pub pdfrum_page::ShadingKind::CoonsMesh = 6
@@ -352,14 +357,14 @@ pub fn pdfrum_page::ClipStack::len(&self) -> usize
 pub fn pdfrum_page::ClipStack::new() -> Self
 pub fn pdfrum_page::ClipStack::push_empty(&mut self)
 pub fn pdfrum_page::ClipStack::push_path(&mut self, kurbo::bezpath::BezPath, pdfrum_page::ClipRule)
-pub fn pdfrum_page::ClipStack::push_text(&mut self, alloc::vec::Vec<pdfrum_page::TextClipRun>) -> bool
+pub fn pdfrum_page::ClipStack::push_text(&mut self, alloc::vec::Vec<pdfrum_page::TextClipRun>) -> core::result::Result<(), pdfrum_page::TextClipLimit>
 pub struct pdfrum_page::ColorValue
 pub pdfrum_page::ColorValue::components: smallvec::SmallVec<[f32; 4]>
 pub pdfrum_page::ColorValue::pattern: core::option::Option<alloc::boxed::Box<pdfrum_page::PatternValue>>
 pub pdfrum_page::ColorValue::space: core::option::Option<alloc::sync::Arc<pdfrum_page::ColorSpace>>
 impl pdfrum_page::ColorValue
 pub fn pdfrum_page::ColorValue::is_pattern(&self) -> bool
-pub fn pdfrum_page::ColorValue::set_components(&mut self, &[f32]) -> bool
+pub fn pdfrum_page::ColorValue::set_components(&mut self, &[f32]) -> core::result::Result<(), pdfrum_page::SetComponentsError>
 pub fn pdfrum_page::ColorValue::set_pattern(&mut self, pdfrum_object::name::Name, &[f32], core::option::Option<alloc::sync::Arc<pdfrum_page::Pattern>>)
 pub fn pdfrum_page::ColorValue::set_space(&mut self, alloc::sync::Arc<pdfrum_page::ColorSpace>)
 pub fn pdfrum_page::ColorValue::set_stock(&mut self, pdfrum_page::ColorSpace, &[f32])
@@ -459,6 +464,9 @@ pub pdfrum_page::ImageObject::is_mask: bool
 pub pdfrum_page::ImageObject::matrix: kurbo::affine::Affine
 pub pdfrum_page::ImageObject::oc: core::option::Option<alloc::sync::Arc<pdfrum_object::dict::Dict>>
 pub pdfrum_page::ImageObject::source: core::option::Option<pdfrum_object::object::ObjRef>
+pub struct pdfrum_page::IndexOutOfRange
+pub pdfrum_page::IndexOutOfRange::index: usize
+pub pdfrum_page::IndexOutOfRange::len: usize
 pub struct pdfrum_page::InlineImage
 pub pdfrum_page::InlineImage::data: alloc::boxed::Box<[u8]>
 pub pdfrum_page::InlineImage::dict: pdfrum_object::dict::Dict
@@ -527,7 +535,7 @@ pub fn pdfrum_page::Page::active_objects(&self) -> impl core::iter::traits::iter
 pub fn pdfrum_page::Page::ctm_at_end_of_stream(&self, usize) -> kurbo::affine::Affine
 pub fn pdfrum_page::Page::ctm_at_start_of_stream(&self, core::option::Option<usize>) -> kurbo::affine::Affine
 pub fn pdfrum_page::Page::dirty_stream_set(&self) -> alloc::collections::btree::set::BTreeSet<core::option::Option<usize>>
-pub fn pdfrum_page::Page::insert_object(&mut self, usize, pdfrum_page::PageObject) -> bool
+pub fn pdfrum_page::Page::insert_object(&mut self, usize, pdfrum_page::PageObject) -> core::result::Result<(), pdfrum_page::IndexOutOfRange>
 pub fn pdfrum_page::Page::is_dirty(&self) -> bool
 pub fn pdfrum_page::Page::mark_clean(&mut self)
 pub fn pdfrum_page::Page::object_mut(&mut self, usize) -> core::option::Option<&mut pdfrum_page::PageObject>
@@ -651,6 +659,10 @@ impl pdfrum_page::StrokeParams
 pub fn pdfrum_page::StrokeParams::normalized_dash(&self, f32, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_page::state::graph::NormalizedDash
 impl core::default::Default for pdfrum_page::StrokeParams
 pub fn pdfrum_page::StrokeParams::default() -> Self
+pub struct pdfrum_page::TextClipLimit
+pub pdfrum_page::TextClipLimit::adding: usize
+pub pdfrum_page::TextClipLimit::have: usize
+pub pdfrum_page::TextClipLimit::limit: usize
 pub struct pdfrum_page::TextClipRun
 pub pdfrum_page::TextClipRun::char_space: f32
 pub pdfrum_page::TextClipRun::object: pdfrum_page::TextObject

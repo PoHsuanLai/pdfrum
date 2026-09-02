@@ -15,6 +15,18 @@ use kurbo::{BezPath, Rect, Shape};
 /// The most text objects a clipping path may accumulate.
 pub const MAX_TEXT_OBJECTS: usize = 1024;
 
+/// A text-clip batch that would take the clip past [`MAX_TEXT_OBJECTS`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[error("text clip batch of {adding} would exceed the {limit}-object cap ({have} already held)")]
+pub struct TextClipLimit {
+    /// How many text objects the stack already holds.
+    pub have: usize,
+    /// How many the refused batch wanted to add.
+    pub adding: usize,
+    /// The cap, [`MAX_TEXT_OBJECTS`].
+    pub limit: usize,
+}
+
 /// Which rule decides a clipping path's interior (ISO 32000-1 §8.5.4).
 ///
 /// Distinct from [`FillRule`](crate::FillRule), which has a third state for
@@ -127,18 +139,26 @@ impl ClipStack {
 
     /// Add a batch of clipping text runs.
     ///
-    /// Returns whether the batch was kept: a batch taking the total past
-    /// [`MAX_TEXT_OBJECTS`] is **dropped whole**, not truncated
-    /// (`CPDF_ClipPath::AppendTexts`, `cpdf_clippath.cpp:104-112`) — and the
-    /// caller's list is cleared either way, so a refused batch does not
-    /// re-offer itself at the next `ET`.
-    pub fn push_text(&mut self, runs: Vec<TextClipRun>) -> bool {
-        if self.text_objects + runs.len() > MAX_TEXT_OBJECTS {
-            return false;
+    /// A batch taking the total past [`MAX_TEXT_OBJECTS`] is **dropped whole**,
+    /// not truncated (`CPDF_ClipPath::AppendTexts`, `cpdf_clippath.cpp:104-112`).
+    ///
+    /// # Errors
+    ///
+    /// [`TextClipLimit`] when the batch would take the stack past the cap.
+    /// The stack is left unchanged; a refused batch does not re-offer itself
+    /// at the next `ET`.
+    pub fn push_text(&mut self, runs: Vec<TextClipRun>) -> Result<(), TextClipLimit> {
+        let adding = runs.len();
+        if self.text_objects + adding > MAX_TEXT_OBJECTS {
+            return Err(TextClipLimit {
+                have: self.text_objects,
+                adding,
+                limit: MAX_TEXT_OBJECTS,
+            });
         }
-        self.text_objects += runs.len();
+        self.text_objects += adding;
         self.entries.push(ClipEntry::Text { runs });
-        true
+        Ok(())
     }
 
     /// Add an empty clip, which blanks everything after it.
@@ -236,7 +256,7 @@ mod tests {
         reason = "test fixtures quote oracle vectors verbatim and compare exactly"
     )]
 
-    use super::{ClipRule, ClipStack, MAX_TEXT_OBJECTS, TextClipRun};
+    use super::{ClipRule, ClipStack, MAX_TEXT_OBJECTS, TextClipLimit, TextClipRun};
     use kurbo::{BezPath, Rect, Shape};
 
     fn rect_path(x0: f64, y0: f64, x1: f64, y1: f64) -> BezPath {
@@ -290,10 +310,17 @@ mod tests {
         let run = || run_at(0.0, 0.0);
         // Exactly the cap fits.
         let batch: Vec<_> = std::iter::repeat_with(run).take(MAX_TEXT_OBJECTS).collect();
-        assert!(stack.push_text(batch));
+        assert!(stack.push_text(batch).is_ok());
         assert_eq!(stack.len(), 1);
         // One more is refused, and nothing is truncated in.
-        assert!(!stack.push_text(vec![run()]));
+        assert_eq!(
+            stack.push_text(vec![run()]),
+            Err(TextClipLimit {
+                have: MAX_TEXT_OBJECTS,
+                adding: 1,
+                limit: MAX_TEXT_OBJECTS,
+            })
+        );
         assert_eq!(stack.len(), 1);
     }
 
@@ -304,9 +331,16 @@ mod tests {
         let batch: Vec<_> = std::iter::repeat_with(run)
             .take(MAX_TEXT_OBJECTS - 1)
             .collect();
-        assert!(stack.push_text(batch));
+        assert!(stack.push_text(batch).is_ok());
         // Two more would make 1025: the whole batch is dropped.
-        assert!(!stack.push_text(vec![run(), run()]));
+        assert_eq!(
+            stack.push_text(vec![run(), run()]),
+            Err(TextClipLimit {
+                have: MAX_TEXT_OBJECTS - 1,
+                adding: 2,
+                limit: MAX_TEXT_OBJECTS,
+            })
+        );
         assert_eq!(stack.len(), 1);
     }
 
@@ -329,11 +363,19 @@ mod tests {
     fn text_layers_union_within_and_intersect_between() {
         let mut stack = ClipStack::new();
         // One layer covering two far-apart runs unions to a wide box.
-        stack.push_text(vec![run_at(0.0, 0.0), run_at(100.0, 0.0)]);
+        assert!(
+            stack
+                .push_text(vec![run_at(0.0, 0.0), run_at(100.0, 0.0)])
+                .is_ok()
+        );
         let bounds = stack.bounds().expect("bounds");
         assert!((bounds.width() - 100.0).abs() < 1.0);
         // A second layer intersects with the first.
-        stack.push_text(vec![run_at(0.0, 0.0), run_at(20.0, 0.0)]);
+        assert!(
+            stack
+                .push_text(vec![run_at(0.0, 0.0), run_at(20.0, 0.0)])
+                .is_ok()
+        );
         let bounds = stack.bounds().expect("bounds");
         assert!(bounds.width() <= 21.0);
     }

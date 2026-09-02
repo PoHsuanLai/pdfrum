@@ -71,7 +71,7 @@ pub use build::{
 };
 pub use color::{
     ColorSpace, ColorValue, Family, PatternSpace, PatternValue, Rgb, Separation,
-    adobe_cmyk_to_srgb, load_colorspace,
+    SetComponentsError, adobe_cmyk_to_srgb, load_colorspace,
 };
 pub use content::parse_content;
 pub use error::Error;
@@ -80,6 +80,7 @@ pub use image::{
     BitImage, ImageCache, ImageData, ImageMask, JpxImage, MAX_BYTES, Pixels, RequestedSize,
     decode_image, decode_jbig2, decode_jpx,
 };
+pub use mutate::IndexOutOfRange;
 pub use ops::{
     FillRule, InlineImage, LineCap, LineJoin, MarkProperties, Op, TextItem, TextRenderMode,
 };
@@ -96,7 +97,8 @@ pub use shading::{
 };
 pub use state::{
     BlendMode, ClipEntry, ClipRule, ClipStack, ContentMarks, GeneralState, GraphicsState,
-    MAX_TEXT_OBJECTS, Mark, StateStack, StrokeParams, TextClipRun, TextState, apply_ext_gstate,
+    MAX_TEXT_OBJECTS, Mark, StateStack, StrokeParams, TextClipLimit, TextClipRun, TextState,
+    apply_ext_gstate,
 };
 pub use transfer::{CHANNEL_SAMPLES, TransferFunc};
 pub use transparency::{SoftMask, SoftMaskKind, Transparency};
