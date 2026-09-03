@@ -15,13 +15,23 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
   existing filter decision, an `/SMask` split off `Rgba8`, `/ImageMask` for
   `Mask1`). The subsetting/collector logic was indeed untouched.
   `docs/design/pdfrum-edit.md` §3.9.
-- **JavaScript M15 step 2 — the `Doc`/`Field` object model.** 11 of 47
-  transcript fixtures byte-exact; 22 fixtures reach `this.*`
-  (`docs/status/M15.md` §"1. `Doc` as the global"). Two `pdfrum-form`
-  defects measured by WP12 go with it (`docs/status/pdfrum-facade.md`):
-  a format script's output is computed and dropped (`CommitOutcome::display`
-  has no reader; `UpdateKind` cannot carry it), and `FieldRef::index`
-  conflates a page-local id with a `/Fields` position.
+- ~~**JavaScript M15 step 2 — the `Doc`/`Field` object model.**~~ — landed
+  2026-09-03: 11 of 47 transcript fixtures byte-exact became **23 of 47**, and
+  both WP12 defects are closed. `docs/status/M15.md` §2 has the per-name table
+  and §3 the correction to the seven owed regressions — five of them turn out
+  to be *timer* tests needing `advance_time`, not object-model work.
+- **What M15 still owes**, from `docs/status/M15.md`'s per-fixture table:
+  - the **`/AA` event path** — four fixtures (`event_properties`,
+    `mouse_events`, `public_methods`, `bug_1142688`) print nothing because
+    nothing fires their field actions. The largest single remaining bucket.
+  - **`advance_time`** — M14's D14 reserved it and nothing calls it. Five of
+    the seven V8-gated formfill regressions and `bug_1447268` wait on it.
+  - the object-model slices step 2 did **not** take: `color` (2 fixtures),
+    the nine constant namespaces (1), `global`'s interceptors (1), and
+    `constructor`'s `illegal constructor` shape (1).
+  - **`Doc.getPageNthWord`** needs a content-stream word extraction; it is
+    declined with the oracle's own message and its range check, and
+    `document_methods` is the one fixture that wants the words.
 - ~~**No caller-supplied `/ToUnicode` CMap or `/CIDToGIDMap` on font load.**~~
   — landed 2026-09-03 as `DocEdit::embed_cid_font(program, to_unicode,
   cid_to_gid)`, the `FPDFText_LoadCidType2Font` counterpart. `/W` is computed
