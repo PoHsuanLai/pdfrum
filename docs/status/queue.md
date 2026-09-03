@@ -444,16 +444,50 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
   `push_layer` and the sweep. **No census was taken of which other corpus
   documents push layers** — all five of §20's controls push none — so a
   document with a deep layer stack would gain from §20 and was not looked for.
-- **`mixed_en_uicase` at 3.52x is now the corpus's largest ratio, and is a
-  different shape from both §19's and §20's.** 257 619 cell rows per iteration but **837 sweeps**, row walk
-  37.3 ms against 5.2 ms of sort, and **zero** off-page clips. Many small
-  sweeps. §18.3 said §19's fix would not move it and **§19.6 confirms it did
-  not**: 1.03x on the wall clock, with its row and sweep counts identical
-  before and after to the row. **§20 does not move it either** — it pushes no
-  layer at all, and reads 1.002x as one of that section's controls. Its
-  `pop` is 0.96 ms per iteration and **0.85 of that is the band clear**, over
-  574 pops and 122.7 MB per iteration: the one row in the corpus where the
-  clear is a measurable share of anything, and still under 2% of its render.
+- ~~**`mixed_en_uicase` at 3.52x, the corpus's largest ratio: many small
+  sweeps.**~~ — **landed as §21, and "many small sweeps" is the one phrase that
+  was wrong.** They are the largest sweeps in the corpus: **307.7 rows and
+  86 500 painted pixels each**, against `vector_font_size14`'s 8.7 rows and
+  102 pixels, which is what a document of many small sweeps actually looks
+  like. Three of the four candidates die on the counts — `reset` is **0.015 ms
+  across all 837 sweeps**, the sort is 5.2 against a 68.3 ms row walk, and
+  `CellStore::rows()` already yields only rows that have cells, never a
+  full-height walk. What was left is per-cell against per-pixel, and the counts
+  separate them: **2.0 cells per row** — the fewest in the corpus, the count a
+  rectangle gives — against **258 pixels per span** and **72.4 million pixels
+  painted per iteration**, the whole page 130 times over. `--sample` puts
+  **78% of the render in `clip`**, not in the fills, and all 574 of its
+  `coverage_of` calls are `push_clip_rect` with `intersect_rows` called **zero
+  times**. The defect is `coverage_of`'s sweep callback writing the plane **one
+  column at a time** — `data_mut()` re-borrowed per pixel, `row * width + col`
+  re-derived per pixel, a bounds check the row's slice answers once. Writing
+  that 69.9 MB costs **1.1 ms** measured in isolation against a **62.5 ms**
+  sweep, so **98% was scaffolding and not bytes**. One row `fill` instead:
+  `coverage_of` **63.44 → 7.53 ms**, whole render **47.50 → 23.57 ms wall
+  (2.015x)** at load 9.2–11.4, like-for-like **3.49x → 1.72x**. Four mutations
+  planted and caught. **This is the fourth instance of §14.1's defect** — a
+  loop re-deriving per pixel an index the row already knows, after the blit
+  (§14), the glyph's two loops (§16) and the layer composite (§20) — and with
+  it the engine's four per-pixel raster loops are all row-hoisted.
+- **§21 reaches every clip push in the corpus and only four fixtures were
+  re-taken.** `forms_combo_box` 1.035x, `shading_tcpdf_058` 1.045x and
+  `forms_text_field` 1.024x move in rank order with their rect-clip counts;
+  `vector_font_size14`, which pushes no clip at all, is the honest control at
+  0.964x. **No corpus-wide re-take was done**, so §18.2's geomeans are stale by
+  an unmeasured amount in this direction — the one measurement this milestone
+  now most obviously owes.
+- **`--op render --warm` does not yet prepare outside its loop, so §18.1's
+  subtraction is retired in the docs and still load-bearing in the numbers.**
+  `Page::prepare` landed and §18.1's addendum says the bench's warm loop now
+  times only the draws; that is true of `warm_pass`, the arm `--op forms` A/Bs
+  with, and **not of the `--op render --warm` loop every §18.2/§19/§20/§21 row
+  comes from**, which still calls `render_one` per iteration. §21.8 was re-taken
+  on the post-`PreparedPage` base and its parse and interpretation rows are
+  still per-iteration at 4.2% and 2.2%. Point that loop at `prepare` too, then
+  re-take §18.2 without the subtraction; `whole` and `amortz` should converge.
+- **`mixed_en_uicase` at 1.72x has no single dominant line left**: with
+  `coverage_of` at 7.53 ms what remains is `fill_path` at 10.7 ms and a long
+  tail. Not closed as a defect, but not a split's target either.
 - **Seven more rows above 1.5x like-for-like, all of them in the rasterizer.**
   `vector_font_feature` 2.67x (90.9% raster), `shading_type4_5` 2.67x,
   `image_ccitt_3bigpreview` 2.45x (87.5% raster), `image_ccitt_transfer`
