@@ -701,7 +701,7 @@ const R6_PASSWORD_BYTES: usize = 127;
 ///
 /// The authentication path tries a document's password in several spellings
 /// (see `try_password`) and this records the one that worked. This crate
-/// never *sets* a password — SPEC.md §3 keeps `/Encrypt` construction out of
+/// never *sets* a password — building an `/Encrypt` dictionary is out of
 /// scope, and the save path re-uses the file key the original password already
 /// produced — so the value is reportable state rather than an input to
 /// anything here.
@@ -762,9 +762,9 @@ pub(crate) struct Unlocked {
 ///    — but it rescues a real class of embedder mis-encoding (a host that
 ///    handed the library bytes in the wrong one of two encodings), no
 ///    independent implementation contradicts it, and by running last it can
-///    only turn a failure into a success. Kept as a tolerance under PLAN.md's
-///    oracle-bug rule, which obliges the correct behaviour *first*; pdf.js has
-///    no equivalent (`crypto.js:1136-1152` transcodes nothing).
+///    only turn a failure into a success. Kept as a tolerance, tried after the
+///    two conforming spellings; pdf.js has no equivalent
+///    (`crypto.js:1136-1152` transcodes nothing).
 ///
 /// A pure-ASCII password is a fixed point of every one of these conversions,
 /// so all three candidates collapse to one attempt — the early returns make
@@ -851,8 +851,7 @@ fn r6_prepared(revision: i64, password: &[u8]) -> Option<Vec<u8>> {
 /// preparation: pdf.js applies it inside the key derivation, so every
 /// candidate it tries is cut (`crypto.js:896-897`). PDFium applies it nowhere,
 /// and hashes a 200-byte password whole — `[oracle-bug]`,
-/// `cpdf_security_handler.cpp:425-455`, superseding SPEC.md §3's original
-/// "passwords are NOT capped at ISO's 127 bytes" ruling.
+/// `cpdf_security_handler.cpp:425-455`.
 fn check_password(
     p: &EncryptParams,
     password: &[u8],

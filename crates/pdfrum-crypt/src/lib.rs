@@ -22,15 +22,14 @@
 //!
 //! # Writing one back out
 //!
-//! [`SecurityHandler::encrypt`] is the inverse, added in M10 (SPEC.md §3's
-//! ruling D2, "decrypt only", is lifted). It takes the same handler — the one
-//! the *original* password opened — so a save re-enciphers under the key the
+//! [`SecurityHandler::encrypt`] is the inverse. It takes the same handler —
+//! the one the *original* password opened — so a save re-enciphers under the key the
 //! file already had and the result opens with the same password. There is no
 //! re-keying API: changing a document's password is not a v1 feature.
 //!
 //! AES needs a fresh initialisation vector per payload, and this crate has no
-//! randomness of its own — no global state (STYLE.md §1) and no `getrandom`
-//! dependency (DEPS.md). So the vector is an argument, an [`Iv`] the caller
+//! randomness of its own — no global state and no `getrandom` dependency.
+//! So the vector is an argument, an [`Iv`] the caller
 //! supplies. `pdfrum-edit` derives one deterministically from the file's own
 //! bytes and a per-object counter, which makes a save reproducible; a caller
 //! wanting unpredictable vectors passes its own source.
@@ -543,11 +542,8 @@ impl SecurityHandler {
     /// view is [`SecurityHandler::owner_permissions`]. An unencrypted document
     /// has no restrictions at all.
     ///
-    /// Was `permissions(owner: bool) -> u32` — a boolean mode argument
-    /// selecting between two answers, plus a raw ISO bitfield the caller had
-    /// to decode. `docs/design/idiomatic-api.md` §WP1 splits the mode into two
-    /// named methods and §A.3 moves the table-22 decode here, next to the
-    /// `/P` word, out of the facade that used to spell `bits & 0x100`.
+    /// The ISO table-22 decode lives in [`Permissions`], next to the `/P`
+    /// word, so no caller has to spell `bits & 0x100`.
     ///
     /// ```
     /// # use pdfrum_crypt::{Permissions, SecurityHandler};
@@ -1558,13 +1554,13 @@ mod tests {
         }
     }
 
-    // ---- M10: encrypt-then-decrypt, per revision ----
+    // ---- encrypt-then-decrypt, per revision ----
 
     /// Every revision the corpus exercises, as an opened handler.
     ///
     /// `opened_handlers` covers three; this adds R2 and R5 so the round-trip
-    /// matrix spans /R 2 through /R 6 — which is what "byte-identity per
-    /// revision" in the M10 test plan means.
+    /// matrix spans /R 2 through /R 6, which is what byte-identity per
+    /// revision requires.
     fn every_revision() -> Vec<(&'static str, SecurityHandler)> {
         let r2_id = unhex("2b778de1bcef1733b35e680882812409");
         let mut all = vec![(

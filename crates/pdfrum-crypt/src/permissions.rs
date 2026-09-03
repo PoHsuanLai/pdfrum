@@ -3,9 +3,9 @@
 //! ISO 32000-1 table 22 numbers the bits from 1, and only eight of the
 //! thirty-two carry meaning; the rest are reserved and must be preserved
 //! rather than interpreted. The decode lives here, next to the `/P` value it
-//! decodes, and not in the crates that ask the questions — that was the point
-//! of `docs/design/idiomatic-api.md` §A.3, which found the facade spelling
-//! `bits & 0x100` for a bit it had no business knowing the number of.
+//! decodes, and not in the crates that ask the questions — no caller should
+//! be spelling `bits & 0x100` for a bit it has no business knowing the
+//! number of.
 
 /// One bit's number in ISO 32000-1 table 22, **1-indexed as the table writes
 /// it**.
@@ -26,9 +26,8 @@ const fn mask(position: u32) -> u32 {
 /// What a document's security handler permits.
 ///
 /// Eight questions, not a bitfield — a caller asks "may I print?", never "is
-/// bit 3 set?" (`docs/design/idiomatic-api.md` §6, which rules this a struct
-/// of booleans rather than a fourth `bitflags`-shaped newtype precisely
-/// because the answers do not compose into a set).
+/// bit 3 set?". A struct of booleans rather than a `bitflags`-shaped newtype,
+/// because the answers do not compose into a set.
 ///
 /// The reserved bits are *not* dropped: [`Permissions::from_bits`] ignores
 /// them and [`Permissions::bits`] reconstructs only the eight it knows, so a
