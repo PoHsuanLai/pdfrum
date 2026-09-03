@@ -429,35 +429,43 @@ impl Face {
 
     /// The pixels-per-em every hinted glyph is grid-fitted at.
     ///
-    /// It is a constant rather than the glyph's real size because that is what
-    /// the oracle does: `CFX_Face::New` calls `FT_Set_Pixel_Sizes(rec, 64, 64)`
-    /// once (`cfx_face.cpp:376`) and nothing ever changes it, and the real size
-    /// reaches FreeType through `FT_Set_Transform` with the matrix pre-divided
-    /// by 64 (`cfx_face.cpp:822-825`). FreeType applies a transform *after*
-    /// hinting, so the interpreter always fits to a 64-pixel grid whose
-    /// alignment is then scaled away.
+    /// A pinned constant rather than the glyph's real size: hinting always
+    /// fits to a 64-pixel grid, and the size the glyph is actually drawn at
+    /// is applied afterwards as a plain scale. Grid-fitting at a pinned ppem
+    /// is therefore *not* the same thing as grid-fitting at the drawn size.
     ///
     /// The measured consequence: this moves outline points by about 1/25 of a
     /// device pixel at 9 pt, which is up to 10 counts per pixel on a 6 pt stem
-    /// once the glyph is rasterized the oracle's way.
+    /// once the glyph is rasterized.
+    // Where the 64 comes from: `CFX_Face::New` calls
+    // `FT_Set_Pixel_Sizes(rec, 64, 64)` once (`cfx_face.cpp:376`) and nothing
+    // ever changes it; the real size reaches FreeType through
+    // `FT_Set_Transform` with the matrix pre-divided by 64
+    // (`cfx_face.cpp:822-825`). FreeType applies a transform *after* hinting,
+    // so the interpreter fits to a 64-pixel grid whose alignment is then
+    // scaled away.
     pub(crate) const HINT_PPEM: f32 = 64.0;
 
     /// A glyph's outline grid-fitted at [`Self::HINT_PPEM`], in **64ths of an
     /// em** — the units a 64-ppem instance draws in.
     ///
-    /// `None` for anything the oracle would not hint, which is the whole of
-    /// its rule: `CFX_Face::RenderGlyph` adds `FT_LOAD_NO_HINTING` exactly when
-    /// `!IsTtOt()` — when the face has no `FT_FACE_FLAG_SFNT`, i.e. no table
-    /// directory (`cfx_face.cpp:841-843`). A bare CFF is therefore never
-    /// hinted, which matters because all fourteen base-14 blobs are bare CFF.
+    /// `None` for every face that is not hinted, and that is exactly the
+    /// faces with **no table directory**: a bare CFF is never hinted, which
+    /// matters because all fourteen base-14 blobs are bare CFF.
     ///
-    /// It is also `None` when the interpreter refuses the face's programs.
-    /// Upstream reaches the same place by a different route: the glyph is
-    /// loaded under `FT_LOAD_PEDANTIC`, and on an error
-    /// `cfx_face.cpp:849-857` reloads it *unhinted* rather than failing.
-    /// Building it costs about 50 µs — the face's `fpgm` and `prep` programs
-    /// run — so it is memoized per face rather than per glyph. See
+    /// It is also `None` when the interpreter refuses the face's own
+    /// programs, in which case the caller falls back to the unhinted
+    /// [`Self::outline`] rather than drawing nothing.
+    ///
+    /// Building the instance costs about 50 µs — the face's `fpgm` and `prep`
+    /// programs run — so it is memoized per face rather than per glyph. See
     /// [`Self::hinting`].
+    // The two `None` arms restate one upstream rule each.
+    // `CFX_Face::RenderGlyph` adds `FT_LOAD_NO_HINTING` exactly when
+    // `!IsTtOt()` — no `FT_FACE_FLAG_SFNT`, i.e. no table directory
+    // (`cfx_face.cpp:841-843`). And a glyph is loaded `FT_LOAD_PEDANTIC`; on
+    // an error `cfx_face.cpp:849-857` reloads it *unhinted* rather than
+    // failing, which is the same place our second `None` sends the caller.
     #[must_use]
     pub(crate) fn hinted_outline(&self, gid: Gid) -> Option<BezPath> {
         let instance = self.hinting_instance()?;
@@ -504,11 +512,13 @@ impl Face {
 
     /// A glyph's outline in **font units**, unhinted.
     ///
-    /// This is what the *path* side of the oracle draws: `CFX_Face::LoadGlyphPath`
-    /// hints only a face that is both SFNT and on FreeType's ~20-font "tricky"
-    /// list (`cfx_face.cpp:948-951`), which `skrifa` does not model and no
-    /// corpus font needs. The glyph-*bitmap* side is a different rule and a
-    /// different function: see [`Self::hinted_outline`].
+    /// Unhinted at every size, for every face — this is the *path* side of
+    /// text, which is never grid-fitted. The glyph-*bitmap* side is a
+    /// different rule and a different function: see [`Self::hinted_outline`].
+    // Unconditionally unhinted is not a simplification. `CFX_Face::LoadGlyphPath`
+    // hints only a face that is both SFNT and on FreeType's ~20-font "tricky"
+    // list (`cfx_face.cpp:948-951`); `skrifa` does not model that list and no
+    // corpus font is on it, so the hinted arm is unreachable either way.
     #[must_use]
     pub(crate) fn outline(&self, gid: Gid) -> Option<BezPath> {
         let mut pen = PathPen::default();

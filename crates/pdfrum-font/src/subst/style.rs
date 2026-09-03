@@ -15,7 +15,11 @@ pub struct FontStyle {
     pub style: u32,
 }
 
-/// Style bits, as `CFX_FontMapper` uses them.
+/// The style bits a face or a `/BaseFont` name carries.
+///
+/// Not a dense enum: the values are the bit positions the substitution
+/// scoring reads, and `FaceInfo::similarity_score` weights bold and italic
+/// separately, so the two must stay distinguishable in a single `u32`.
 pub mod style_bits {
     /// No style.
     pub const NORMAL: u32 = 0;

@@ -1,10 +1,12 @@
 //! Substitution: choosing a face when the document did not supply one.
 //!
-//! `CFX_FontMapper::FindSubstFace` is a thousand-line class whose only real
-//! job is one decision. It decomposes into a request record, a decision
-//! record, a pure function between them, and a database seam — and the ladder
-//! itself stays recognisable, because its *order* is the behavior.
+//! One decision, in four pieces: a request record, a decision record, a pure
+//! function between them, and a database seam. The ladder inside that
+//! function stays whole and stays in order, because which rung fires first
+//! *is* the result.
 
+// The shape is a decomposition of `CFX_FontMapper::FindSubstFace`, a
+// thousand-line class whose only real job is that one decision.
 mod charset;
 mod db;
 mod standard;
@@ -85,11 +87,11 @@ pub struct SubstitutionOptions {
     /// architecturally honest value and bold and light variants survive into
     /// the query.
     ///
-    /// The default is **`false`**, because the oracle's own Linux build drives
-    /// `CFX_FolderFontInfo`, which enumerates, and matching the oracle is what
-    /// conformance measures. Set it to `true` for the modern behavior. This is
-    /// the brief's OQ-6(a), resolved toward oracle fidelity with the knob left
-    /// public.
+    /// The default is **`false`**, because that is the behaviour the
+    /// conformance corpus was rendered under — an enumerating font info,
+    /// where the weight reset applies. Set it to `true` for the modern
+    /// behaviour. This is the brief's OQ-6(a), resolved toward oracle
+    /// fidelity with the knob left public.
     pub skip_font_enumeration: bool,
     /// Directories to scan instead of the system's, for a hermetic run.
     pub font_dirs: Vec<PathBuf>,
@@ -109,13 +111,10 @@ pub struct SubstitutionOptions {
     /// Whether an empty [`font_dirs`](Self::font_dirs) means *the system's own
     /// font directories* rather than *no directories at all*.
     ///
-    /// The oracle's Linux build always enumerates the system's fonts:
-    /// `pdfium_test` leaves `config.m_pUserFontPaths` null unless `--font-dir`
-    /// was given (`testing/pdfium_test/pdfium_test.cc:2107-2112`), and a null
-    /// path list makes `CFX_LinuxFontInfo` add `/usr/share/fonts`,
-    /// `/usr/share/X11/fonts/Type1`, `/usr/share/X11/fonts/TTF` and
-    /// `/usr/local/share/fonts` (`core/fxge/linux/fx_linux_impl.cpp:173-176`).
-    /// So `--font-dir` *replaces* the search path; it does not *enable* it.
+    /// A Linux reference run always enumerates the system's fonts —
+    /// `/usr/share/fonts`, `/usr/share/X11/fonts/Type1`,
+    /// `/usr/share/X11/fonts/TTF` and `/usr/local/share/fonts` — so a
+    /// `--font-dir` *replaces* that search path rather than *enabling* it.
     ///
     /// The default is **`false`**, because a library whose output depends on
     /// which fonts happen to be installed is not testable and every unit test
@@ -126,6 +125,11 @@ pub struct SubstitutionOptions {
     /// It has no effect when `font_dirs` is non-empty: those directories are
     /// then the whole search path either way, which is why every conformance
     /// invocation (which always passes `--font-dir`) is unaffected by it.
+    // Where the four directories come from: `pdfium_test` leaves
+    // `config.m_pUserFontPaths` null unless `--font-dir` was given
+    // (`testing/pdfium_test/pdfium_test.cc:2107-2112`), and a null path list
+    // makes `CFX_LinuxFontInfo` add exactly those four
+    // (`core/fxge/linux/fx_linux_impl.cpp:173-176`).
     pub system_fonts: bool,
 }
 
@@ -208,9 +212,9 @@ pub fn resolve(
 /// - **the built-in faces alone** (both unset) — the hermetic default, so a
 ///   unit test's answer does not depend on what is installed on the machine.
 ///
-/// The scan is not cached: it happens once per substituted font, exactly as
-/// `CFX_FolderFontInfo::EnumFontList` is re-entered per lookup. Measure before
-/// changing that — a document whose fonts are all embedded never reaches here.
+/// The scan is not cached: it happens once per substituted font. Measure
+/// before changing that — a document whose fonts are all embedded never
+/// reaches here at all.
 #[must_use]
 pub fn resolve_with_options(
     req: &FontRequest,

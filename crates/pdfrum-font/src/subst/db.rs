@@ -156,10 +156,10 @@ pub trait FontDb {
     /// The bytes and collection index of one face.
     fn face_bytes(&self, h: FaceHandle) -> Option<(Arc<[u8]>, u32)>;
 
-    /// Find the best face for a request (`CFX_FolderFontInfo::FindFont`).
+    /// Find the best face for a request.
     ///
-    /// The default implementation is the port; an implementor overrides it
-    /// only to delegate somewhere else entirely.
+    /// The default implementation is the scoring scan below; an implementor
+    /// overrides it only to delegate somewhere else entirely.
     ///
     /// Two passes, and the first exists purely to seed the score: a face whose
     /// name is exactly the requested family establishes a baseline the general
@@ -449,20 +449,22 @@ fn face_bytes_of(_db: &fontdb::Database, face: &fontdb::FaceInfo) -> Option<Arc<
     }
 }
 
-/// The three style bits an enumerated face carries, from its two name strings
-/// (`CFX_FolderFontInfo::ReportFace`, `cfx_folderfontinfo.cpp:349-358`).
+/// The three style bits an enumerated face carries, from its two name strings.
 ///
 /// `name` is the joined face name — family, then the style unless the style is
-/// `Regular` — and `style` is the subfamily on its own. The asymmetry is the
-/// port's, not a simplification: bold and italic read the **style**, serif
-/// reads the **whole face name**. So a family literally called `PT Serif`
-/// carries the bit through every one of its faces, and no other family carries
-/// it at all.
+/// `Regular` — and `style` is the subfamily on its own. The asymmetry is
+/// deliberate, not a simplification: bold and italic read the **style**,
+/// serif reads the **whole face name**. So a family literally called
+/// `PT Serif` carries the bit through every one of its faces, and no other
+/// family carries it at all.
 ///
-/// All three tests are case-sensitive substring tests, as `ByteString::Contains`
-/// is. A `SERIF` in caps or a `serif` in lower case does not match, and that is
-/// ported rather than corrected — the scoring must agree with the oracle's,
-/// including where the oracle's is crude.
+/// All three are case-sensitive substring tests. A `SERIF` in caps or a
+/// `serif` in lower case does not match, and that is reproduced rather than
+/// corrected — the scoring must agree with the reference implementation's,
+/// including where that one is crude.
+// The rule and its crudeness are `CFX_FolderFontInfo::ReportFace`,
+// `cfx_folderfontinfo.cpp:349-358`; the case sensitivity is
+// `ByteString::Contains`.
 fn face_styles(name: &str, style: &str) -> u32 {
     let mut styles = style_bits::NORMAL;
     if style.contains("Bold") {
@@ -486,17 +488,7 @@ fn face_styles(name: &str, style: &str) -> u32 {
 /// Latin text.
 ///
 /// The three **style bits are read off the two name strings**, not off the
-/// face's own tables, because that is what the enumerator this stands in for
-/// does (`CFX_FolderFontInfo::ReportFace`, `cfx_folderfontinfo.cpp:349-358`):
-///
-/// ```cpp
-/// pInfo->styles_ = 0;
-/// if (style.Contains("Bold")) { pInfo->styles_ |= kFontStyleForceBold; }
-/// if (style.Contains("Italic") || style.Contains("Oblique")) {
-///   pInfo->styles_ |= kFontStyleItalic;
-/// }
-/// if (facename.Contains("Serif")) { pInfo->styles_ |= kFontStyleSerif; }
-/// ```
+/// face's own tables — `face_styles` below is the whole of the rule.
 ///
 /// Three bits, three substring tests, and **nothing else is ever set** — the
 /// script and fixed-pitch bits stay zero for every enumerated face, so the two
@@ -504,16 +496,27 @@ fn face_styles(name: &str, style: &str) -> u32 {
 /// the requests whose pitch family is neither script nor fixed.
 ///
 /// This is coarser than the face's own tables and deliberately so. Reading the
-/// serif bit from `OS/2`'s PANOSE — which is the *other* rule PDFium has, in
-/// `CFX_Face::GetFontStyle` (`cfx_face.cpp:1608-1633`) — is only reachable
-/// from the XFA and Android font managers, never from the folder enumerator a
-/// `--font-dir` run goes through. The two disagree loudly on the hermetic font
-/// set: PANOSE gives `Tinos`, `Cousine`, `GardinerMod` and three of the four
-/// `Gelasio` faces a serif bit the oracle gives none of them, and it gives
-/// `Gelasio Bold` no serif bit while giving its own Regular and Bold Italic
-/// siblings one. A rule that splits a single family three ways is a rule
-/// scoring on something other than the family, and the 16-point serif term is
-/// the largest in the score.
+/// serif bit from `OS/2`'s PANOSE instead would split a single family three
+/// ways on the hermetic font set: it gives `Tinos`, `Cousine`, `GardinerMod`
+/// and three of the four `Gelasio` faces a serif bit the name rule gives none
+/// of them, and it gives `Gelasio Bold` no serif bit while giving that face's
+/// own Regular and Bold Italic siblings one. A rule that splits one family
+/// three ways is scoring on something other than the family, and the
+/// 16-point serif term is the largest in the score.
+// The name rule is `CFX_FolderFontInfo::ReportFace`,
+// `cfx_folderfontinfo.cpp:349-358`:
+//
+//   pInfo->styles_ = 0;
+//   if (style.Contains("Bold")) { pInfo->styles_ |= kFontStyleForceBold; }
+//   if (style.Contains("Italic") || style.Contains("Oblique")) {
+//     pInfo->styles_ |= kFontStyleItalic;
+//   }
+//   if (facename.Contains("Serif")) { pInfo->styles_ |= kFontStyleSerif; }
+//
+// The PANOSE rule is the other one PDFium has, `CFX_Face::GetFontStyle`
+// (`cfx_face.cpp:1608-1633`), and is reachable only from the XFA and Android
+// font managers — never from the folder enumerator a `--font-dir` run goes
+// through, which is why this side takes the name rule.
 fn describe(index: u32, bytes: &Arc<[u8]>) -> Option<FaceInfo> {
     let font = skrifa::FontRef::from_index(bytes, index).ok()?;
 
@@ -811,9 +814,11 @@ mod tests {
 ///
 /// The bits decide 48 of [`FaceInfo::similarity_score`]'s 68 points, so the
 /// rule that sets them is the rule that picks the face. These tests pin it to
-/// `CFX_FolderFontInfo::ReportFace` and to nothing else — in particular not to
-/// the face's own `OS/2` PANOSE, which is a different rule PDFium reaches only
-/// from XFA and Android.
+/// the two name strings and to nothing else — in particular not to the face's
+/// own `OS/2` PANOSE.
+// The rule pinned here is `CFX_FolderFontInfo::ReportFace`; the PANOSE rule
+// these tests exclude is `CFX_Face::GetFontStyle`, which PDFium reaches only
+// from XFA and Android.
 #[cfg(test)]
 mod face_style_bits {
     use super::*;

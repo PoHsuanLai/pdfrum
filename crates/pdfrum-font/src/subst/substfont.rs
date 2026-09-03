@@ -289,8 +289,7 @@ pub struct GlyphSpacingGate<'a> {
     pub subst: Option<&'a SubstFont>,
 }
 
-/// Whether a font's glyphs take the glyph-spacing correction of §1.15
-/// (`CPDF_Font::ShouldApplyGlyphSpacingHeuristic`).
+/// Whether a font's glyphs take the glyph-spacing correction of §1.15.
 ///
 /// The correction exists for one situation: a PDF that declares its own
 /// advance widths, does **not** ship the font program, and got substituted

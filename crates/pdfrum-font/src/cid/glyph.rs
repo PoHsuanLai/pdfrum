@@ -25,7 +25,7 @@ const BOX_DRAWINGS_LIGHT_VERTICAL: u32 = 0x2502;
 const NO_DIFFS: [Option<GlyphName>; 256] = [const { None }; 256];
 
 /// Resolve a character code to a glyph, and whether a vertical form was
-/// substituted (`CPDF_CIDFont::GlyphFromCharCode`).
+/// substituted.
 pub(super) fn resolve(font: &Type0Font, code: CharCode) -> (Option<Gid>, bool) {
     // Half 1 — no embedded program, and either no `/CIDToGIDMap` stream or a
     // known collection to derive a Unicode from.
