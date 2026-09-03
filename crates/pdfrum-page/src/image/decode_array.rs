@@ -106,6 +106,7 @@ mod tests {
         clippy::indexing_slicing,
         clippy::cast_precision_loss,
         clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
         reason = "test fixtures quote oracle vectors verbatim and compare exactly"
     )]
 
@@ -186,5 +187,65 @@ mod tests {
     fn a_zero_bit_depth_yields_a_flat_mapping_rather_than_a_division_by_zero() {
         let m = DecodeMap::new(Some(&ColorSpace::DeviceGray), 1, 0, None);
         assert!(m.apply(0, 99.0).is_finite());
+    }
+
+    /// The 16-bit ruling, pinned over the whole sample range.
+    ///
+    /// A 16-bit sample is a value in `[0, 65535]` mapped linearly onto the
+    /// `/Decode` range (ISO 32000-1 §8.9.5) and then **rounded** onto a byte.
+    /// pdf.js computes exactly that (`DeviceRgbCS.getRgbBuffer`,
+    /// `src/core/colorspace.js`: `scale = 255 / ((1 << bits) - 1)` stored into
+    /// a rounding `Uint8ClampedArray`); PDFium approximates it by dropping the
+    /// low byte (`cpdf_dib.cpp:1093-1101`, `sample >> 8`), which is within one
+    /// count everywhere. We take the exact map.
+    ///
+    /// Two properties are asserted for all 65 536 samples, which is what makes
+    /// this a pin and not a spot check:
+    ///
+    /// 1. the byte equals `round(sample * 255 / 65535)` computed in `f64`, so
+    ///    the `f32` decode arithmetic is proven not to drift off it; and
+    /// 2. it is within one count of PDFium's `sample >> 8`, so a divergence
+    ///    from the oracle can never grow past the rounding difference it is.
+    #[test]
+    fn sixteen_bit_samples_round_onto_the_byte_and_stay_within_a_count_of_the_oracle() {
+        let m = DecodeMap::new(Some(&ColorSpace::DeviceGray), 1, 16, None);
+        let mut differ_from_oracle = 0u32;
+        for raw in 0u32..=65535 {
+            let byte = (m.apply(0, raw as f32).clamp(0.0, 1.0) * 255.0).round() as u8;
+            let exact = (f64::from(raw) * 255.0 / 65535.0).round() as u8;
+            assert_eq!(byte, exact, "sample {raw} must be the exact rounded map");
+            // PDFium's fast path drops the low byte instead of rounding.
+            let oracle = (raw >> 8) as u8;
+            let gap = i32::from(byte) - i32::from(oracle);
+            assert!(gap.abs() <= 1, "sample {raw}: {byte} vs oracle {oracle}");
+            if gap != 0 {
+                differ_from_oracle += 1;
+            }
+        }
+        // 16 256 of 65 536 — the rest of the range is where dropping the low
+        // byte happens to land on the rounded answer anyway. Pinned so the
+        // ruling's blast radius against the oracle is a number in the tree
+        // rather than a claim in a doc.
+        assert_eq!(differ_from_oracle, 16_256);
+    }
+
+    /// Below 16 bits the ruling changes nothing at all.
+    ///
+    /// `step` is exactly `1/max` and the products are small enough to be exact
+    /// in `f32`, so rounding and truncating agree on every raw value at 1, 2, 4
+    /// and 8 bits — and both agree with PDFium's integer `v * 255 / max`
+    /// (`cpdf_dib.cpp:1104-1121`).
+    #[test]
+    fn below_sixteen_bits_rounding_truncating_and_the_oracles_integer_scale_agree() {
+        for bpc in [1u32, 2, 4, 8] {
+            let max = (1u32 << bpc) - 1;
+            let m = DecodeMap::new(Some(&ColorSpace::DeviceGray), 1, bpc, None);
+            for raw in 0..=max {
+                let value = m.apply(0, raw as f32).clamp(0.0, 1.0) * 255.0;
+                let integer = u8::try_from(raw * 255 / max).unwrap();
+                assert_eq!(value.round() as u8, integer, "bpc {bpc} raw {raw}");
+                assert_eq!(value as u8, integer, "bpc {bpc} raw {raw} truncated");
+            }
+        }
     }
 }
