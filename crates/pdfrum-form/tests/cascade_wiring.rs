@@ -957,3 +957,261 @@ fn a_widget_outside_the_forms_field_list_has_no_document_position() {
         );
     }
 }
+
+// ---- setFocus: the request a script leaves, and what spends it ----
+
+/// A cascade that asks for the keyboard once, and records every pointer
+/// trigger it is told about.
+///
+/// The recording is what makes the *order* assertable: `PointerTrigger` says
+/// which `/AA` entry fired, and the field name says whose.
+#[derive(Default)]
+struct AskForFocus {
+    /// The field to ask for, taken on the first drain and never again.
+    wanted: Option<u32>,
+    /// `(field name, trigger)`, in the order the hooks ran.
+    fired: Vec<(String, pdfrum_form::PointerTrigger)>,
+}
+
+impl Cascade for AskForFocus {
+    fn pointer(
+        &mut self,
+        field: &FieldRef,
+        trigger: pdfrum_form::PointerTrigger,
+        _held: Modifiers,
+    ) {
+        self.fired.push((field.name.clone(), trigger));
+    }
+
+    fn take_focus_request(&mut self) -> Option<u32> {
+        self.wanted.take()
+    }
+}
+
+/// The two-field fixture whose `/Fields` order is the reverse of `/Annots`,
+/// so a document-wide index cannot be mistaken for a page-local one.
+fn transposed_fixture() -> (pdfrum_form::PageForm, Dict, std::sync::Arc<ap::FormFonts>) {
+    let (typed, total) = field_dicts();
+    let catalog = catalog_with_fields(Some(Object::Array(
+        [Object::Dict(total), Object::Dict(typed)]
+            .into_iter()
+            .collect(),
+    )));
+    let page = pdfrum_form::read_page(0, &two_text_fields(), &catalog, &NoResolve);
+    let mut build = pdfrum_page::BuildContext::new();
+    let fonts = ap::FormFonts::load(&catalog, &NoResolve, &mut build);
+    (page, catalog, fonts)
+}
+
+/// **`Field.setFocus` moves the keyboard, and fires `/AA /Bl` then `/AA /Fo`
+/// in that order.**
+///
+/// `Cascade::take_focus_request` had no caller at all: a script could ask for
+/// the keyboard and nothing anywhere read the answer, so `setFocus` was a
+/// method that returned successfully and did nothing. This is the assertion
+/// that its wire exists.
+///
+/// The order is the whole property. `CJS_Field::setFocus` reaches
+/// `CPDFSDK_FormFillEnvironment::SetFocusAnnot`, which kills the outgoing
+/// widget's focus first — running its `/AA /Bl` through
+/// `CFFL_InteractiveFormFiller::OnKillFocus` — and gives the keyboard to the
+/// incoming one second, running its `/AA /Fo`. A document with a script on
+/// each therefore alerts the outgoing field's line first, and this test fails
+/// if the two are transposed or if either is missing.
+#[test]
+fn a_scripts_focus_request_fires_blur_then_focus() {
+    use pdfrum_form::PointerTrigger;
+
+    let (page, catalog, fonts) = transposed_fixture();
+    let resolve = NoResolve;
+    let ctx = Context {
+        page: &page,
+        catalog: &catalog,
+        resolve: &resolve,
+        fonts: &fonts,
+        permissions: Permissions::ALL,
+    };
+
+    let mut session = FormSession::new();
+    let mut cascade = AskForFocus::default();
+
+    // `Typed` takes the keyboard by a click, which fires its own `/AA /Fo`.
+    click(&mut session, &ctx, &mut cascade, IN_TYPED);
+    assert_eq!(
+        session.focus.map(pdfrum_form::FocusTarget::annot),
+        Some(pdfrum_form::AnnotId::new(0, 0)),
+        "the click must have left the keyboard on Typed"
+    );
+    cascade.fired.clear();
+
+    // Now a script asks for form field **0**, which is `Total` — the page's
+    // *second* widget. A wire that spent the number as a page-local id would
+    // ask for `Typed`, the field that already holds focus, and move nothing.
+    cascade.wanted = Some(0);
+    route::apply(
+        &mut session,
+        &ctx,
+        &mut cascade,
+        Event::Char {
+            ch: 'q',
+            modifiers: Modifiers::NONE,
+        },
+    );
+
+    assert_eq!(
+        session.focus.map(pdfrum_form::FocusTarget::annot),
+        Some(pdfrum_form::AnnotId::new(0, 1)),
+        "the keyboard must have moved to the field the script named"
+    );
+    assert_eq!(
+        cascade.fired,
+        vec![
+            ("Typed".to_string(), PointerTrigger::Blur),
+            ("Total".to_string(), PointerTrigger::Focus),
+        ],
+        "the outgoing field's /AA /Bl runs before the incoming field's /AA /Fo"
+    );
+}
+
+/// A `setFocus` naming the field that **already** holds the keyboard runs
+/// neither script and moves nothing.
+///
+/// `SetFocusAnnot`'s first line is `if (focus_annot_ == pAnnot) return true;`
+/// — an early return before the kill, so a document cannot make its own blur
+/// script fire by asking for the focus it has.
+#[test]
+fn a_focus_request_for_the_focused_field_fires_nothing() {
+    let (page, catalog, fonts) = transposed_fixture();
+    let resolve = NoResolve;
+    let ctx = Context {
+        page: &page,
+        catalog: &catalog,
+        resolve: &resolve,
+        fonts: &fonts,
+        permissions: Permissions::ALL,
+    };
+
+    let mut session = FormSession::new();
+    let mut cascade = AskForFocus::default();
+    click(&mut session, &ctx, &mut cascade, IN_TYPED);
+    cascade.fired.clear();
+
+    // `Typed` is form field 1, and it is the one holding the keyboard.
+    cascade.wanted = Some(1);
+    route::apply(
+        &mut session,
+        &ctx,
+        &mut cascade,
+        Event::Char {
+            ch: 'q',
+            modifiers: Modifiers::NONE,
+        },
+    );
+
+    assert_eq!(
+        session.focus.map(pdfrum_form::FocusTarget::annot),
+        Some(pdfrum_form::AnnotId::new(0, 0)),
+        "the keyboard has not moved"
+    );
+    assert!(
+        cascade.fired.is_empty(),
+        "neither /AA /Bl nor /AA /Fo runs: {:?}",
+        cascade.fired
+    );
+}
+
+/// A focus request naming a field this page does not carry is **declined**,
+/// not guessed at.
+///
+/// `GetWidget` answering null is `setFocus` doing nothing at all, and a
+/// routing context that cannot see the widget cannot run its scripts either.
+#[test]
+fn a_focus_request_for_an_unknown_field_moves_nothing() {
+    let (page, catalog, fonts) = transposed_fixture();
+    let resolve = NoResolve;
+    let ctx = Context {
+        page: &page,
+        catalog: &catalog,
+        resolve: &resolve,
+        fonts: &fonts,
+        permissions: Permissions::ALL,
+    };
+
+    let mut session = FormSession::new();
+    let mut cascade = AskForFocus::default();
+    click(&mut session, &ctx, &mut cascade, IN_TYPED);
+    cascade.fired.clear();
+
+    cascade.wanted = Some(97);
+    route::apply(
+        &mut session,
+        &ctx,
+        &mut cascade,
+        Event::Char {
+            ch: 'q',
+            modifiers: Modifiers::NONE,
+        },
+    );
+
+    assert_eq!(
+        session.focus.map(pdfrum_form::FocusTarget::annot),
+        Some(pdfrum_form::AnnotId::new(0, 0)),
+        "the keyboard stays where it was"
+    );
+    assert!(cascade.fired.is_empty(), "and no /AA entry runs");
+}
+
+/// **Two fields asking for each other stop.**
+///
+/// A `/AA /Fo` that calls `setFocus` on the other field is a live-lock:
+/// upstream recurses through `SetFocusAnnot` until the stack runs out, and
+/// here the move is bounded instead. The assertion is that the call
+/// terminates and leaves the keyboard on one of the two — not which one.
+#[test]
+fn two_fields_asking_for_each_other_terminate() {
+    /// Answers the *other* field's index every time it is asked.
+    #[derive(Default)]
+    struct PingPong {
+        armed: bool,
+        moves: usize,
+    }
+    impl Cascade for PingPong {
+        fn pointer(&mut self, _f: &FieldRef, trigger: pdfrum_form::PointerTrigger, _h: Modifiers) {
+            if trigger == pdfrum_form::PointerTrigger::Focus {
+                // Every focus arrival asks for the other field.
+                self.armed = true;
+            }
+        }
+        fn take_focus_request(&mut self) -> Option<u32> {
+            if !std::mem::take(&mut self.armed) {
+                return None;
+            }
+            self.moves += 1;
+            Some(u32::from(self.moves.is_multiple_of(2)))
+        }
+    }
+
+    let (page, catalog, fonts) = transposed_fixture();
+    let resolve = NoResolve;
+    let ctx = Context {
+        page: &page,
+        catalog: &catalog,
+        resolve: &resolve,
+        fonts: &fonts,
+        permissions: Permissions::ALL,
+    };
+
+    let mut session = FormSession::new();
+    let mut cascade = PingPong::default();
+    click(&mut session, &ctx, &mut cascade, IN_TYPED);
+
+    assert!(
+        session.focus.is_some(),
+        "the keyboard is on one of the two, and the call returned"
+    );
+    assert!(
+        cascade.moves <= 16,
+        "the bound held rather than the loop running away: {}",
+        cascade.moves
+    );
+}

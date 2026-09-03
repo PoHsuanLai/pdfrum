@@ -319,6 +319,7 @@ pub pdfrum_form::route::Context::resolve: &'a R
 pub fn pdfrum_form::route::apply<R: pdfrum_object::resolve::Resolve>(&mut pdfrum_form::FormSession, &pdfrum_form::route::Context<'_, R>, &mut dyn pdfrum_form::Cascade, pdfrum_form::Event) -> pdfrum_form::Response
 pub fn pdfrum_form::route::choose<R: pdfrum_object::resolve::Resolve>(&mut pdfrum_form::FormSession, &pdfrum_form::route::Context<'_, R>, &mut dyn pdfrum_form::Cascade, pdfrum_form::AnnotId, usize) -> pdfrum_form::Response
 pub fn pdfrum_form::route::close_popup<R: pdfrum_object::resolve::Resolve>(&mut pdfrum_form::FormSession, &pdfrum_form::route::Context<'_, R>, pdfrum_form::AnnotId) -> pdfrum_form::Response
+pub fn pdfrum_form::route::focus_field<R: pdfrum_object::resolve::Resolve>(&mut pdfrum_form::FormSession, &pdfrum_form::route::Context<'_, R>, &mut dyn pdfrum_form::Cascade, u32) -> pdfrum_form::Response
 pub fn pdfrum_form::route::focus_of<R: pdfrum_object::resolve::Resolve>(&pdfrum_form::FormSession, &pdfrum_form::route::Context<'_, R>) -> core::option::Option<pdfrum_doc::ap::Focus>
 pub fn pdfrum_form::route::kill_focus<R: pdfrum_object::resolve::Resolve>(&mut pdfrum_form::FormSession, &pdfrum_form::route::Context<'_, R>, &mut dyn pdfrum_form::Cascade) -> pdfrum_form::Response
 pub fn pdfrum_form::route::popup_view<R: pdfrum_object::resolve::Resolve>(&pdfrum_form::FormSession, &pdfrum_form::route::Context<'_, R>) -> core::option::Option<pdfrum_form::PopupView>
@@ -599,6 +600,7 @@ pub fn pdfrum_form::NoScripts::format(&mut self, &pdfrum_form::FieldRef, &str) -
 pub fn pdfrum_form::NoScripts::keystroke(&mut self, &pdfrum_form::FieldRef, pdfrum_form::Keystroke) -> pdfrum_form::KeystrokeOutcome
 pub fn pdfrum_form::NoScripts::keystroke_commit(&mut self, &pdfrum_form::FieldRef, &str) -> bool
 pub fn pdfrum_form::NoScripts::pointer(&mut self, &pdfrum_form::FieldRef, pdfrum_form::PointerTrigger, pdfrum_form::Modifiers)
+pub fn pdfrum_form::NoScripts::take_focus_request(&mut self) -> core::option::Option<u32>
 pub fn pdfrum_form::NoScripts::validate(&mut self, &pdfrum_form::FieldRef, &str) -> bool
 pub struct pdfrum_form::PageForm
 pub pdfrum_form::PageForm::dicts: alloc::collections::btree::map::BTreeMap<u32, pdfrum_object::dict::Dict>
@@ -754,6 +756,7 @@ pub fn pdfrum_form::Cascade::format(&mut self, &pdfrum_form::FieldRef, &str) -> 
 pub fn pdfrum_form::Cascade::keystroke(&mut self, &pdfrum_form::FieldRef, pdfrum_form::Keystroke) -> pdfrum_form::KeystrokeOutcome
 pub fn pdfrum_form::Cascade::keystroke_commit(&mut self, &pdfrum_form::FieldRef, &str) -> bool
 pub fn pdfrum_form::Cascade::pointer(&mut self, &pdfrum_form::FieldRef, pdfrum_form::PointerTrigger, pdfrum_form::Modifiers)
+pub fn pdfrum_form::Cascade::take_focus_request(&mut self) -> core::option::Option<u32>
 pub fn pdfrum_form::Cascade::validate(&mut self, &pdfrum_form::FieldRef, &str) -> bool
 impl pdfrum_form::Cascade for pdfrum_form::NoScripts
 pub fn pdfrum_form::NoScripts::calculate(&mut self, &mut pdfrum_form::FieldWrites, &pdfrum_form::FieldRef)
@@ -761,6 +764,7 @@ pub fn pdfrum_form::NoScripts::format(&mut self, &pdfrum_form::FieldRef, &str) -
 pub fn pdfrum_form::NoScripts::keystroke(&mut self, &pdfrum_form::FieldRef, pdfrum_form::Keystroke) -> pdfrum_form::KeystrokeOutcome
 pub fn pdfrum_form::NoScripts::keystroke_commit(&mut self, &pdfrum_form::FieldRef, &str) -> bool
 pub fn pdfrum_form::NoScripts::pointer(&mut self, &pdfrum_form::FieldRef, pdfrum_form::PointerTrigger, pdfrum_form::Modifiers)
+pub fn pdfrum_form::NoScripts::take_focus_request(&mut self) -> core::option::Option<u32>
 pub fn pdfrum_form::NoScripts::validate(&mut self, &pdfrum_form::FieldRef, &str) -> bool
 pub trait pdfrum_form::PlaceExt
 pub fn pdfrum_form::PlaceExt::at_line_start(self) -> bool
@@ -773,6 +777,7 @@ pub fn pdfrum_doc::vt::hit::Place::start() -> pdfrum_doc::vt::hit::Place
 pub fn pdfrum_form::apply<R: pdfrum_object::resolve::Resolve>(&mut pdfrum_form::FormSession, &pdfrum_form::route::Context<'_, R>, &mut dyn pdfrum_form::Cascade, pdfrum_form::Event) -> pdfrum_form::Response
 pub fn pdfrum_form::choose<R: pdfrum_object::resolve::Resolve>(&mut pdfrum_form::FormSession, &pdfrum_form::route::Context<'_, R>, &mut dyn pdfrum_form::Cascade, pdfrum_form::AnnotId, usize) -> pdfrum_form::Response
 pub fn pdfrum_form::close_popup<R: pdfrum_object::resolve::Resolve>(&mut pdfrum_form::FormSession, &pdfrum_form::route::Context<'_, R>, pdfrum_form::AnnotId) -> pdfrum_form::Response
+pub fn pdfrum_form::focus_field<R: pdfrum_object::resolve::Resolve>(&mut pdfrum_form::FormSession, &pdfrum_form::route::Context<'_, R>, &mut dyn pdfrum_form::Cascade, u32) -> pdfrum_form::Response
 pub fn pdfrum_form::focus_of<R: pdfrum_object::resolve::Resolve>(&pdfrum_form::FormSession, &pdfrum_form::route::Context<'_, R>) -> core::option::Option<pdfrum_doc::ap::Focus>
 pub fn pdfrum_form::kill_focus<R: pdfrum_object::resolve::Resolve>(&mut pdfrum_form::FormSession, &pdfrum_form::route::Context<'_, R>, &mut dyn pdfrum_form::Cascade) -> pdfrum_form::Response
 pub fn pdfrum_form::popup_view<R: pdfrum_object::resolve::Resolve>(&pdfrum_form::FormSession, &pdfrum_form::route::Context<'_, R>) -> core::option::Option<pdfrum_form::PopupView>

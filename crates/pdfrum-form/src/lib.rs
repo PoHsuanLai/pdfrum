@@ -72,8 +72,8 @@ pub use hit::Permissions;
 pub use page::{PageForm, WidgetInfo, read as read_page};
 pub use popup::{Placement, PopupGeometry, PopupView, ScrollView};
 pub use route::{
-    Context, apply, choose, close_popup, focus_of, kill_focus, popup_view, replace_selection,
-    scroll_view,
+    Context, apply, choose, close_popup, focus_field, focus_of, kill_focus, popup_view,
+    replace_selection, scroll_view,
 };
 #[cfg(feature = "script")]
 pub use script::{ScriptCascade, ScriptConfig, TranscriptLine};

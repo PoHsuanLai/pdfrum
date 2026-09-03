@@ -841,6 +841,76 @@ impl<'a> FormSession<'a> {
             .filter(|source| !source.is_empty())
     }
 
+    /// Gives the keyboard to whichever field the document's own scripts asked
+    /// for, running the two `/AA` entries a click would.
+    ///
+    /// **Only a document-level script needs this called.** Every event method
+    /// already spends the request on its way out, because a field script that
+    /// calls `Field.setFocus` runs inside routing that can move the keyboard
+    /// itself. `/OpenAction`, `/Names /JavaScript` and a page's own `/AA /O`
+    /// run through [`scripts_mut`](Self::scripts_mut) instead, outside any
+    /// event, so a host that runs them spends the request here.
+    ///
+    /// Answers how many times the keyboard moved — `0` when nothing asked,
+    /// which is the ordinary case.
+    ///
+    /// # The field may be on a page nobody has read
+    ///
+    /// A script names a field, not a page, so the page holding it is read
+    /// here if it has not been already. That read runs the page's formatters
+    /// like any other, which is upstream's behaviour: `setFocus` reaches
+    /// `GetWidget`, which reaches `GetPageViewAtIndex`, which builds the page
+    /// view and loads its annotations.
+    #[cfg(feature = "script")]
+    pub fn honour_focus_requests(&mut self) -> usize {
+        let mut moved = 0;
+        while let Some(index) = self
+            .scripts_mut()
+            .and_then(pdfrum_form::Cascade::take_focus_request)
+        {
+            let Some(page) = self.page_of_field(index) else {
+                // No page carries the field, so there is no widget to give
+                // the keyboard to — `GetWidget` answering null, where
+                // `setFocus` does nothing at all.
+                continue;
+            };
+            self.with_page_scripted(page, |inner, ctx, cascade| {
+                pdfrum_form::focus_field(inner, ctx, cascade, index);
+            });
+            moved += 1;
+        }
+        moved
+    }
+
+    /// Which page carries a field's widget, reading pages until one does.
+    ///
+    /// The pages this session has already read are searched first, so the
+    /// ordinary case costs no parse; only a field on an untouched page makes
+    /// this read one.
+    #[cfg(feature = "script")]
+    fn page_of_field(&mut self, index: u32) -> Option<PageIndex> {
+        let found = self
+            .pages
+            .iter()
+            .find(|(_, form)| form.field_of_index(index).is_some())
+            .map(|(page, _)| *page);
+        if found.is_some() {
+            return found;
+        }
+        for page in 0..self.doc.page_count() {
+            let page = PageIndex::from(page);
+            self.ensure_page(page);
+            if self
+                .pages
+                .get(&page)
+                .is_some_and(|form| form.field_of_index(index).is_some())
+            {
+                return Some(page);
+            }
+        }
+        None
+    }
+
     /// Runs the page's `/AA /O` — what showing a page fires.
     ///
     /// Separate from [`load_page`](Self::load_page) because the two are
