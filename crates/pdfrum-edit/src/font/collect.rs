@@ -1,5 +1,4 @@
-//! Finding the fonts a save may subset, and the glyphs each one still needs
-//! (`cpdf_fontsubsetter.cpp:233-328`).
+//! Finding the fonts a save may subset, and the glyphs each one still needs.
 //!
 //! A candidate is a font **new in this save** that a text operator on some
 //! page actually shows through. Both halves matter: an old font is shared
@@ -8,22 +7,17 @@
 //!
 //! # Why this walks operators rather than page objects
 //!
-//! The C++ calls `page->ParseContent()` and iterates `CPDF_PageObject`s,
-//! because that is the only view it has. We have a cheaper one that answers
-//! exactly the same question: [`pdfrum_page::parse_content`] gives the
-//! operator list, and `Tf` plus the show operators carry the font resource
-//! and the character codes between them. Building the page-object graph
+//! [`pdfrum_page::parse_content`] gives the operator list, and `Tf` plus the
+//! show operators carry the font resource and the character codes between
+//! them — everything the question needs. Building the page-object graph
 //! instead would decode every image and evaluate every shading on the page to
 //! learn nothing more.
 //!
 //! The one thing the operator view costs is the *inline* font: a `Tf` naming
 //! a `/Font` entry that is a direct dictionary rather than a reference has no
-//! object number, so it can never be new, so it is never a candidate — which
-//! is the same answer the C++ reaches through `GetFontDict()->GetObjNum()`
-//! being zero.
+//! object number, so it can never be new, so it is never a candidate.
 //!
-//! # Text inside a form `XObject` is not reached, and the C++ does not reach
-//! it either
+//! # Text inside a form `XObject` is not reached
 //!
 //! Only the page's own `/Contents` is scanned. A `Do` naming a form is not
 //! followed, so a glyph shown only from inside one is not in the used set —
@@ -31,13 +25,20 @@
 //! half of the gap.
 //!
 //! The unsafe half would be a font used both on the page and inside a form:
-//! the form's glyphs would be dropped from the subset. **The C++ has exactly
-//! the same hole.** `CollectSubsetCandidatesFromPage` iterates the page's
-//! object list and asks each for `AsText()`; a form arrives as a
-//! `CPDF_FormObject`, which is not a text object, so its contents are never
-//! visited (`cpdf_fontsubsetter.cpp:237-241`). Matched rather than fixed, and
-//! recorded here because it is a real limit of the option in both
-//! implementations.
+//! the form's glyphs would be dropped from the subset. Recorded here because
+//! it is a real limit of the option.
+
+// Where this module's shape comes from: `cpdf_fontsubsetter.cpp:233-328`.
+// The C++ calls `page->ParseContent()` and iterates `CPDF_PageObject`s
+// because that is the only view it has, and it reaches the same "an inline
+// font is never a candidate" answer through `GetFontDict()->GetObjNum()`
+// being zero.
+//
+// The form-`XObject` gap above is the C++'s too:
+// `CollectSubsetCandidatesFromPage` iterates the page's object list and asks
+// each for `AsText()`; a form arrives as a `CPDF_FormObject`, which is not a
+// text object, so its contents are never visited
+// (`cpdf_fontsubsetter.cpp:237-241`). Matched rather than fixed.
 
 use std::collections::btree_map::Entry;
 use std::collections::{BTreeMap, BTreeSet};

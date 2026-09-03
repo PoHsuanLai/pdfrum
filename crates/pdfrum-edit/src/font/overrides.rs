@@ -1,5 +1,5 @@
 //! The objects a subsetting save writes in place of the ones the document
-//! holds (`cpdf_fontsubsetter.cpp:126-226`).
+//! holds.
 //!
 //! Nothing here mutates the document. The pass builds a map from object
 //! number to replacement object, and the writer's new-object loop consults it
@@ -26,6 +26,10 @@
 //! absorbs the renumbering at the one place it can be absorbed without
 //! touching anything a content stream said. See [`super`] for why that
 //! replaced the re-keying the design originally planned.
+
+// Where the pass's shape comes from: `cpdf_fontsubsetter.cpp:126-226`. The
+// `/CIDToGIDMap` reading the test's `glyph_at` reproduces is
+// `cpdf_cidfont.cpp:508-518`.
 
 use std::collections::BTreeMap;
 
@@ -252,8 +256,8 @@ mod tests {
         }
     }
 
-    /// Read the table back the way `cpdf_cidfont.cpp:508-518` and
-    /// `pdfrum_font::cid::glyph` both read it.
+    /// Read the table back the way a reader does: two big-endian bytes at
+    /// `cid * 2`, which is what `pdfrum_font::cid::glyph` does.
     fn glyph_at(table: &[u8], cid: u16) -> Option<u16> {
         let at = usize::from(cid) * 2;
         let pair = table.get(at..at + 2)?;

@@ -1,11 +1,8 @@
 //! Embed caller-supplied pixels, or a compressed codestream, as an image
 //! `XObject`.
 //!
-//! This is the `EditDoc`-level equivalent of PDFium's
-//! `FPDFImageObj_LoadJpegFile` and `FPDFImageObj_SetBitmap`
-//! (`fpdfsdk/fpdf_editimg.cpp`, reaching `CPDF_Image::SetJpegImage` and
-//! `CPDF_Image::SetImage`, `core/fpdfapi/page/cpdf_image.cpp`). A caller hands
-//! over bytes; we allocate the `/XObject` a content stream's `Do` can name.
+//! A caller hands over bytes — a JPEG codestream or raw interleaved samples —
+//! and this allocates the `/XObject` a content stream's `Do` can name.
 
 mod jpeg;
 mod raw;
@@ -72,8 +69,8 @@ impl EditDoc<'_> {
     /// The samples are stored uncompressed and the stream writer flate-encodes
     /// them (there is no `/Filter` on the dictionary this writes). An
     /// [`PixelFormat::Rgba8`] alpha channel is split off into a separate
-    /// `/DeviceGray` `/SMask` image, as `CPDF_Image::SetImage` does; the
-    /// colour channels keep their own stream.
+    /// `/DeviceGray` `/SMask` image; the colour channels keep their own
+    /// stream.
     ///
     /// # Errors
     ///

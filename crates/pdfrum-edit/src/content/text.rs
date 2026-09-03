@@ -6,18 +6,17 @@
 //! `ET`. There is no `Td`, no `T*`, no `Tj`, no `'` or `"` — all positioning
 //! goes into the text matrix. `Tc`, `Tw`, `Tz`, `TL` and `Ts` are never
 //! written either, so character spacing, word spacing, horizontal scaling,
-//! leading and rise are **lost** on a regenerated page. That is the C++'s
-//! behavior and matching it is the requirement (see the module docs of
+//! leading and rise are **lost** on a regenerated page. That is a limit of
+//! this emitter rather than a requirement (see the module docs of
 //! [`crate::content`]).
 //!
 //! # The matrix is transposed
 //!
 //! `TextObject::matrix` stores the glyph matrix with translation excluded,
 //! and the operand order `Tm` wants is `a b c d e f` where `b` and `c` are
-//! **swapped** relative to how the object holds them
-//! (`cpdf_textobject.cpp:198-202`). Getting this backwards mirrors slanted
-//! text about its own baseline, which renders as something almost right —
-//! the worst kind of wrong.
+//! **swapped** relative to how the object holds them. Getting this backwards
+//! mirrors slanted text about its own baseline, which renders as something
+//! almost right — the worst kind of wrong.
 //!
 //! # A font we cannot classify drops the whole object
 //!
@@ -141,6 +140,7 @@ fn matrix_font_size(matrix: Affine) -> f32 {
 /// to take out of the linear part for a constructed object, whose matrix
 /// *is* that size.
 fn text_matrix(text: &TextObject, divide_out: Option<f32>) -> Affine {
+    // The swap is `cpdf_textobject.cpp:198-202`.
     let coeffs = text.matrix.as_coeffs();
     let scale = divide_out
         .map(f64::from)

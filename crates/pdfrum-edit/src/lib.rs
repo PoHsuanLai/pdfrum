@@ -71,14 +71,11 @@
 //! A page whose objects were never touched is not regenerated at all, so none
 //! of this applies to an ordinary save.
 //!
-//! *Corrected 2026-09-02 (A71).* This paragraph used to say the emitter
-//! "reproduces the C++'s emitter exactly, because a conformance comparison
-//! against the oracle's regenerated page requires matching what the oracle
-//! regenerates." **There is no such comparison**: `pdfium_test` has no save
-//! flag, so the oracle cannot produce a regenerated page at all. The
-//! remaining losses are limits of this emitter, not a
-//! matching requirement — the crate's private `content` module holds the three
-//! lines that settle it.
+//! *Corrected 2026-09-02 (A71).* The losses above are limits of this emitter,
+//! **not** a matching requirement: nothing constrains a regenerated page to
+//! look like anyone else's. The paragraph that used to claim otherwise was
+//! wrong, and the crate's private `content` module holds the three lines that
+//! settle it.
 
 #![forbid(unsafe_code)]
 // Everything here is written *from* untrusted input: index with `get()`.
