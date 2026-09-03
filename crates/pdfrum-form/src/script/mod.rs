@@ -16,9 +16,12 @@
 
 mod af;
 mod bind;
+mod color;
+mod consts;
 mod doc;
 pub(crate) mod event;
 mod field;
+mod global;
 mod host;
 pub mod model;
 mod submit;

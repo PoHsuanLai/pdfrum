@@ -355,6 +355,10 @@ macro_rules! set_timer {
                     Attribute::all(),
                 )
                 .build();
+            // A timer is `FXJSOBJTYPE_DYNAMIC`, so `new timer.constructor`
+            // succeeds where the same expression on every static object
+            // throws.
+            allow_construction(&timer, context)?;
             Ok(JsValue::from(timer))
         }
     };
@@ -636,6 +640,82 @@ pub(crate) fn now_ms(context: &Context) -> f64 {
     }
 }
 
+/// Gives one object a `constructor` that refuses both ways.
+///
+/// Every object PDFium defines with `FXJSOBJTYPE_STATIC` shares one call
+/// handler and it refuses both: a plain call throws the bare string
+/// `illegal constructor`, and a `new` throws `not a dynamic object`
+/// (`fxjs/cfxjs_engine.cpp:186-196`). Only a `FXJSOBJTYPE_DYNAMIC` object —
+/// a `Field`, an `Annot`, a timer — can be constructed at all, and what it
+/// constructs is a bare object with nothing on it.
+///
+/// **Bare strings, not `Error`s**, exactly as every other message this
+/// binding throws: `ThrowExceptionHelper` throws the string itself, so
+/// `'' + e` is the message with no `TypeError: ` in front of it.
+///
+/// The property is **non-enumerable**, because a real `constructor` is: the
+/// `globals` fixture walks `for (var name in global)` and would otherwise
+/// see it.
+pub(crate) fn refuse_construction(
+    object: &boa_engine::JsObject,
+    context: &mut Context,
+) -> JsResult<()> {
+    define_constructor(object, DYNAMIC_REFUSES, context)
+}
+
+/// The same for a **dynamic** object: a plain call still throws
+/// `illegal constructor`, and `new` **succeeds**, answering a bare object.
+///
+/// One kind of object reaches this — a timer — and the difference is the
+/// whole of what `FXJSOBJTYPE_DYNAMIC` means: `CallHandler` falls past the
+/// second guard and initialises the new instance's two internal fields,
+/// leaving an object with nothing on it, which is why the golden reads
+/// `[object Object]` and not a message.
+pub(crate) fn allow_construction(
+    object: &boa_engine::JsObject,
+    context: &mut Context,
+) -> JsResult<()> {
+    define_constructor(object, DYNAMIC_ALLOWS, context)
+}
+
+/// A static object's constructor body.
+const DYNAMIC_REFUSES: &[u8] = b"(function () {\n\
+        throw new.target === undefined\n\
+            ? 'illegal constructor'\n\
+            : 'not a dynamic object';\n\
+      })";
+
+/// A dynamic object's: the `new` branch falls through and builds nothing.
+const DYNAMIC_ALLOWS: &[u8] = b"(function () {\n\
+        if (new.target === undefined) { throw 'illegal constructor'; }\n\
+      })";
+
+/// Defines one `constructor` property from a function source.
+fn define_constructor(
+    object: &boa_engine::JsObject,
+    source: &[u8],
+    context: &mut Context,
+) -> JsResult<()> {
+    // **A JavaScript function, not a bound native one.** `new f()` requires a
+    // `[[Construct]]` slot, and a `NativeFunction` registered through
+    // `ObjectInitializer::function` has none — `new` on one throws boa's own
+    // `TypeError: not a constructor` before the body is ever entered, which
+    // is a message about the engine rather than the one the golden asserts.
+    // A source-level function has both slots and can tell the two calls
+    // apart by `new.target`.
+    let function = context.eval(boa_engine::Source::from_bytes(source))?;
+    object.define_property_or_throw(
+        boa_engine::js_string!("constructor"),
+        boa_engine::property::PropertyDescriptor::builder()
+            .value(function)
+            .writable(true)
+            .enumerable(false)
+            .configurable(true),
+        context,
+    )?;
+    Ok(())
+}
+
 // ---- assembling the realm ----
 
 /// Installs every object this milestone binds.
@@ -647,6 +727,50 @@ pub(crate) fn install(context: &mut Context, host: Host) -> JsResult<()> {
     super::af::install(context)?;
     super::doc::install(context)?;
     super::event::install(context)?;
+    super::color::install(context)?;
+    super::consts::install(context)?;
+    super::global::install(context)?;
+    refuse_static_construction(context)
+}
+
+/// Gives every **static** bound object — and the global itself — a
+/// `constructor` that refuses.
+///
+/// One pass at the end rather than a call inside each installer, because the
+/// property is the same on all of them and the list is exactly "the globals
+/// this binding defines". A timer object is deliberately absent: it is
+/// `FXJSOBJTYPE_DYNAMIC` upstream and `new` on its constructor succeeds.
+fn refuse_static_construction(context: &mut Context) -> JsResult<()> {
+    // `this` and `globalThis` are the same object here, because `Doc` **is**
+    // the global — so refusing its construction covers both names the
+    // fixture tests.
+    let global = context.global_object();
+    refuse_construction(&global, context)?;
+    for name in [
+        "app",
+        "border",
+        "color",
+        "console",
+        "display",
+        "event",
+        "font",
+        "global",
+        "highlight",
+        "position",
+        "scaleHow",
+        "scaleWhen",
+        "style",
+        "util",
+        "zoomtype",
+    ] {
+        let value = global.get(boa_engine::js_string!(name), context)?;
+        // `global` is a proxy, and a proxy's `defineProperty` reaches its
+        // target through the trap it has — which is none, so the definition
+        // lands on the target object and is found by the `get` fall-through.
+        if let Some(object) = value.as_object() {
+            refuse_construction(&object, context)?;
+        }
+    }
     Ok(())
 }
 

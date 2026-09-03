@@ -449,6 +449,173 @@ fn a_format_function_writes_the_event_value() {
     assert_eq!(cascade.transcript_text(), "Alert: $1,234.50\n");
 }
 
+// ---- `color`, `global`, the constant namespaces, `constructor` ----
+
+/// The transcript of one script over a fresh session, for the table-shaped
+/// assertions below.
+fn transcript_of(source: &str) -> String {
+    let mut cascade = session();
+    assert!(cascade.run(source, "test"), "{:?}", cascade.stops());
+    cascade.transcript_text()
+}
+
+/// **`color.equal` compares in the richer space**, not component-wise: a grey
+/// equals the RGB it promotes to, and an RGB equals the CMYK.
+#[test]
+fn color_equality_promotes_to_the_richer_space() {
+    assert_eq!(
+        transcript_of(
+            "app.alert(color.equal(['G', 0.5], ['RGB', 0.5, 0.5, 0.5]));\n\
+             app.alert(color.equal(['G', 0.5], ['CMYK', 0, 0, 0, 0.5]));\n\
+             app.alert(color.equal(['RGB', 0.25, 0.25, 0.25], ['G', 0.25]));\n\
+             app.alert(color.equal(['T'], ['G', 0]));"
+        ),
+        "Alert: true\nAlert: true\nAlert: true\nAlert: false\n"
+    );
+}
+
+/// **An unrecognised destination space is transparent**, not an error — which
+/// is what makes `color.convert(x, 'BOGUS')` answer `T`.
+#[test]
+fn an_unknown_colour_space_converts_to_transparent() {
+    assert_eq!(
+        transcript_of(
+            // Concatenated rather than passed as an array, because
+            // `app.alert` renders an array argument as its own multi-line
+            // message shape rather than joining it.
+            "app.alert('' + color.convert(['G', 0.5], 'BOGUS'));\n\
+             app.alert('' + color.convert(['G', 0.5], 'CMYK'));"
+        ),
+        "Alert: T\nAlert: CMYK,0,0,0,0.5\n"
+    );
+}
+
+/// The twelve names are **variables**: assigning to one is read back, and the
+/// assignment may be in a different space from the name's own.
+#[test]
+fn a_named_colour_is_a_variable_and_not_a_constant() {
+    assert_eq!(
+        transcript_of(
+            "app.alert('' + color.black);\n\
+             color.black = ['RGB', 1, 0, 0];\n\
+             app.alert('' + color.black);"
+        ),
+        "Alert: G,0\nAlert: RGB,1,0,0\n"
+    );
+}
+
+/// **A deleted global is a tombstone**: it reads `undefined`, is not
+/// enumerated, refuses `setPersistent` — and an assignment **revives** it.
+#[test]
+fn a_deleted_global_is_a_tombstone_and_can_be_revived() {
+    assert_eq!(
+        transcript_of(
+            "global.x = 1;\n\
+             delete global.x;\n\
+             app.alert('' + global.x);\n\
+             try { global.setPersistent('x', true); }\n\
+             catch (e) { app.alert('' + e); }\n\
+             global.x = 2;\n\
+             app.alert('' + global.x);"
+        ),
+        "Alert: undefined\n\
+         Alert: global.setPersistent: Global value not found.\n\
+         Alert: 2\n"
+    );
+}
+
+/// **Assigning `undefined` deletes**, which is why a name set that way is
+/// never enumerable.
+#[test]
+fn assigning_undefined_to_a_global_deletes_it() {
+    assert_eq!(
+        transcript_of(
+            "global.a = 1;\n\
+             global.b = undefined;\n\
+             var seen = [];\n\
+             for (var name in global) { if (name != 'setPersistent') seen.push(name); }\n\
+             app.alert(seen.join(','));"
+        ),
+        "Alert: a\n"
+    );
+}
+
+/// **Enumeration is sorted**, because upstream's bag is a `std::map` and the
+/// golden pins its order.
+#[test]
+fn globals_enumerate_in_byte_order() {
+    assert_eq!(
+        transcript_of(
+            "global.zeta = 1; global.alpha = 2; global.mid = 3;\n\
+             var seen = [];\n\
+             for (var name in global) { if (name != 'setPersistent') seen.push(name); }\n\
+             app.alert(seen.join(','));"
+        ),
+        "Alert: alpha,mid,zeta\n"
+    );
+}
+
+/// A name a constant namespace does not carry reads `undefined` rather than
+/// throwing, and the nine namespaces carry what their tables say.
+#[test]
+fn the_constant_namespaces_are_tables_with_undefined_holes() {
+    assert_eq!(
+        transcript_of(
+            "app.alert(border.s);\n\
+             app.alert('' + border.nonesuch);\n\
+             app.alert(display.noView);\n\
+             app.alert(font.ZapfD);\n\
+             app.alert(scaleHow.anamorphic);\n\
+             app.alert(zoomtype.fitV);"
+        ),
+        "Alert: solid\n\
+         Alert: undefined\n\
+         Alert: 3\n\
+         Alert: ZapfDingbats\n\
+         Alert: 1\n\
+         Alert: FitVisibleWidth\n"
+    );
+}
+
+/// **A static object's `constructor` refuses both ways**, with a different
+/// message each, and a *dynamic* one — a timer — refuses only the plain call.
+#[test]
+fn a_static_constructor_refuses_and_a_dynamic_one_constructs() {
+    assert_eq!(
+        transcript_of(
+            "function say(f) { try { f(); app.alert('no throw'); } \
+              catch (e) { app.alert('' + e); } }\n\
+             say(function () { app.constructor(); });\n\
+             say(function () { new app.constructor; });\n\
+             var t = app.setTimeOut('0', 1);\n\
+             say(function () { t.constructor(); });\n\
+             app.alert('' + new t.constructor);"
+        ),
+        "Alert: illegal constructor\n\
+         Alert: not a dynamic object\n\
+         Alert: illegal constructor\n\
+         Alert: [object Object]\n"
+    );
+}
+
+/// The `IDS_*` strings and `RE_*` arrays are **bare globals**, not members of
+/// a namespace — and the `% s` spacing is theirs.
+#[test]
+fn the_message_strings_and_pattern_arrays_are_bare_globals() {
+    assert_eq!(
+        transcript_of(
+            "app.alert(IDS_AM + ',' + IDS_PM);\n\
+             app.alert(IDS_LESS_THAN);\n\
+             app.alert(RE_ZIP_COMMIT.length + ':' + RE_ZIP_COMMIT[0]);\n\
+             app.alert(RE_PHONE_COMMIT.length);"
+        ),
+        "Alert: am,pm\n\
+         Alert: Invalid value: must be less than or equal to % s.\n\
+         Alert: 1:\\d{5}\n\
+         Alert: 4\n"
+    );
+}
+
 // ---- the `event` object's four property shapes ----
 
 /// A session whose one field carries the named pointer or focus trigger.
