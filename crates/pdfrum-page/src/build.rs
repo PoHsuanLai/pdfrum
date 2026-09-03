@@ -136,12 +136,12 @@ pub struct BuildContext {
     ///
     /// # Why it is keyed
     ///
-    /// On the `/AcroForm` reference, for the same reason
+    /// On a reference, for the same reason
     /// [`font_instances`](Self::font_instances) is keyed on the reference
     /// that named a font: one context may legitimately be threaded through
     /// two documents, and a slot keyed on nothing would hand the second
-    /// document the first one's faces. [`FormFontsKey`] says which of the
-    /// three cases a catalog is in, and only the first two are cached.
+    /// document the first one's faces. [`FormFontsKey`] says which of its
+    /// four cases a catalog is in, and only the last is uncached.
     form_fonts: HashMap<FormFontsKey, Arc<dyn Any + Send + Sync>>,
     /// The content buffers currently being parsed, which is the form guard.
     in_flight: HashSet<BufferId>,
@@ -158,27 +158,42 @@ pub struct BuildContext {
 
 /// Which interactive form a set of cached form faces belongs to.
 ///
-/// The catalog's `/AcroForm` entry is one of exactly three things, and they
-/// have three different cache lifetimes:
+/// # What the faces actually depend on
 ///
-/// - **an indirect reference**, which is what a real form is written as. The
-///   reference is the document-scoped identity every other cache on
+/// Not the `/AcroForm` dictionary: the **`/DR /Font` dictionary inside it**,
+/// and nothing else. Everything `FormFonts` builds is either a face named
+/// there or one of two constants — the fallback Helvetica and the second
+/// face a substitutable charset needs, both from dictionaries written in the
+/// source. So that is what the key names, and a form declaring no `/DR
+/// /Font` has faces indistinguishable from a document with no form at all.
+///
+/// # The four cases
+///
+/// - **an indirect `/AcroForm`**, which is what a real form is written as.
+///   The reference is the document-scoped identity every other cache on
 ///   [`BuildContext`] keys on, so the faces are cached under it.
-/// - **absent**, which is most documents — including every document that
-///   carries an annotation but no form at all, which is the case the
-///   annotation overlay made expensive. The faces then depend on *nothing*
-///   from the document: they are the fallback face and the second faces the
-///   font map can add, both built from constant dictionaries. One slot serves
-///   every such document a context is threaded through.
-/// - **a direct dictionary**, which is legal and rare. It has no reference to
-///   key on and its content *is* document-specific, so it is not cached.
+/// - **no `/DR /Font` to load from** — no `/AcroForm`, or one that declares
+///   no default resources. The faces then depend on *nothing* from the
+///   document, so one slot serves every such document a context is threaded
+///   through. This is `None`, and it is the common case: most documents have
+///   no form, and an empty `<</Fields[]>>` written directly into the catalog
+///   is common enough that six of this corpus's 44 files carry one.
+/// - **a direct `/AcroForm` whose `/DR /Font` is a reference**, which is the
+///   ordinary spelling of an unusual one. The font dictionary's reference is
+///   as good an identity as the form's own would have been, so it is cached
+///   under that instead.
+/// - **a direct `/AcroForm` with a direct `/DR /Font`**, which is legal and
+///   genuinely rare. There is no reference anywhere to key on and the
+///   content is document-specific, so it is not cached.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum FormFontsKey {
     /// The `/AcroForm` the given object holds.
     Form(pdfrum_object::ObjRef),
-    /// No `/AcroForm` at all.
+    /// No `/DR /Font` for the faces to depend on.
     None,
-    /// An `/AcroForm` written as a direct dictionary.
+    /// A direct `/AcroForm` whose `/DR /Font` is the given object.
+    DirectResources(pdfrum_object::ObjRef),
+    /// A direct `/AcroForm` with a direct `/DR /Font`.
     Direct,
 }
 
@@ -233,9 +248,9 @@ impl BuildContext {
     /// ask and handed back from the cache on every later one.
     ///
     /// `load` is a closure, not a value, so a hit costs nothing to build.
-    /// [`FormFontsKey::Direct`] is never cached and always calls `load`: a
-    /// direct `/AcroForm` dictionary has no identity to key on, and reusing
-    /// one document's faces for another's would be wrong.
+    /// [`FormFontsKey::Direct`] is never cached and always calls `load`: it
+    /// is the one case with no reference anywhere to key on, and reusing one
+    /// document's faces for another's would be wrong.
     // Erased in storage and downcast back on the way out. A cached value whose
     // type does not match — which cannot happen, since one caller owns the type
     // — is treated as a miss and rebuilt rather than reported.
