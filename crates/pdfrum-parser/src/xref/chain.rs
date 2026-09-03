@@ -101,7 +101,7 @@ pub(crate) fn load(
 /// reconstructed by scanning, where the newest section starts (an incremental
 /// update's `/Prev`), and whether that section was a stream (which decides
 /// between emitting a classic table and folding the whole cross-reference
-/// into a stream object). See SPEC.md §5's 2026-08-29 additions.
+/// into a stream object).
 #[derive(Debug, Clone, Copy, Default)]
 pub(crate) struct XrefShape {
     pub rebuilt: bool,

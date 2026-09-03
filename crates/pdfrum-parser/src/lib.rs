@@ -2,7 +2,7 @@
 //! object syntax, xref reading (classic tables, xref streams, hybrids,
 //! prev-chains) with PDFium's full-file recovery rebuild, object streams,
 //! incremental updates, encryption hookup, and the lazy object store behind
-//! `Resolve`. Broken-file tolerance is this crate's superpower (SPEC.md §5).
+//! `Resolve`. Broken-file tolerance is this crate's superpower.
 //!
 //! # Reading a document
 //!
