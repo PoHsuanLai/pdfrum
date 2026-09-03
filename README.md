@@ -60,7 +60,7 @@ second implementation. `FormSession::with_scripts` builds one and installs the
 document's own `/AA` scripts into it.
 
 ```toml
-pdfrum = { version = "0.1", features = ["script"] }
+pdfrum = { version = "0.1", features = ["javascript"] }
 ```
 
 What a script reaches today is the `AF*` library, `util`, `app.alert` and the

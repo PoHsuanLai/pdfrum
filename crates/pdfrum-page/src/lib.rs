@@ -53,7 +53,7 @@ mod ops;
 mod optional;
 mod page;
 mod pattern;
-// The whole-render stage timers. Public *with the default-off `walk-profile`
+// The whole-render stage timers. Public *with the default-off `profiling`
 // feature and only then*: the module always exists, because the render calls
 // its entry points unconditionally and they compile to empty inline functions
 // with the feature off, but its reporting items are part of the instrument
@@ -63,12 +63,12 @@ mod pattern;
 // the feature.
 //
 // The two crates above this one time their own stages, so they forward a
-// `walk-profile` of their own and gate their call sites on it: a caller cannot
+// `profiling` of their own and gate their call sites on it: a caller cannot
 // `#[cfg]` on another crate's feature, and leaving this module unconditionally
 // public so they need not is a surface with no reader in the default build.
-#[cfg(feature = "walk-profile")]
+#[cfg(feature = "profiling")]
 pub mod renderprofile;
-#[cfg(not(feature = "walk-profile"))]
+#[cfg(not(feature = "profiling"))]
 mod renderprofile;
 mod resources;
 mod shading;

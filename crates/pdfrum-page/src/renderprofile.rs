@@ -14,7 +14,7 @@
 //! their sum plus one *unattributed* remainder is the whole render, and the
 //! remainder's size is the instrument's own honesty check.
 //!
-//! **Costs nothing when the `walk-profile` feature is off**: every entry point
+//! **Costs nothing when the `profiling` feature is off**: every entry point
 //! compiles to an empty inline function, exactly as `walkprofile`'s do, and
 //! the flag is the same one — `scripts/profile.nu --walk` turns on both.
 //!
@@ -28,12 +28,12 @@
 // there is still exactly one flag to turn on.
 //
 // The reporting half — `Profile` itself, and `Stage`'s `index`/`name`/`ALL` —
-// carries `#[cfg(feature = "walk-profile")]` because with the feature off
+// carries `#[cfg(feature = "profiling")]` because with the feature off
 // nothing ever produces a `Profile` to report. `Stage`'s *variants* are
 // unconditional: the recording half names them at every call site whether or
 // not the feature is on.
 
-#[cfg(feature = "walk-profile")]
+#[cfg(feature = "profiling")]
 use core::time::Duration;
 
 /// One stage of a page render, from the dictionary to the pixels.
@@ -44,7 +44,7 @@ use core::time::Duration;
 /// it is the reason this is a separate set rather than more variants there.
 ///
 /// [pdfrum_render_phase]: https://docs.rs/pdfrum-render
-#[cfg(feature = "walk-profile")]
+#[cfg(feature = "profiling")]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Stage {
     /// Tokenizing the content stream into operators: the `/Contents` decode
@@ -85,7 +85,7 @@ pub enum Stage {
 ///
 /// A record of facts: the counters are public and the reporting lives in
 /// whoever reads them.
-#[cfg(feature = "walk-profile")]
+#[cfg(feature = "profiling")]
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Profile {
     /// Time in each stage, indexed as [`Stage`] orders them.
@@ -101,7 +101,7 @@ pub struct Profile {
     pub form_font_misses: u64,
 }
 
-#[cfg(feature = "walk-profile")]
+#[cfg(feature = "profiling")]
 impl Stage {
     /// The index this stage occupies in [`Profile::stage_time`].
     #[must_use]
@@ -164,7 +164,7 @@ impl Stage {
     }
 }
 
-#[cfg(feature = "walk-profile")]
+#[cfg(feature = "profiling")]
 mod imp {
     use core::cell::Cell;
     use core::time::Duration;
@@ -218,20 +218,20 @@ mod imp {
     }
 }
 
-#[cfg(not(feature = "walk-profile"))]
+#[cfg(not(feature = "profiling"))]
 mod imp {
     /// A no-op without the feature.
     ///
     /// The only entry point the feature-off build keeps. `stage` is not here
     /// because nothing in this crate times a stage — the two crates above it
-    /// do, through their own `walk-profile`, and with the feature off they
+    /// do, through their own `profiling`, and with the feature off they
     /// never name this module at all.
     #[inline]
     pub fn form_font_miss() {}
 }
 
 pub use imp::form_font_miss;
-#[cfg(feature = "walk-profile")]
+#[cfg(feature = "profiling")]
 pub use imp::{stage, take};
 
 #[cfg(test)]
@@ -239,7 +239,7 @@ mod tests {
     use super::*;
 
     /// The arrays exist only with the feature on, so their indexing does too.
-    #[cfg(feature = "walk-profile")]
+    #[cfg(feature = "profiling")]
     #[test]
     fn the_indices_are_dense_and_distinct() {
         // The arrays are indexed by these, so a duplicate or a gap would
@@ -255,7 +255,7 @@ mod tests {
     }
 
     /// With the feature on, the wrapper is transparent as well as clocked.
-    #[cfg(feature = "walk-profile")]
+    #[cfg(feature = "profiling")]
     #[test]
     fn the_stage_wrapper_returns_the_body_s_value() {
         assert_eq!(stage(Stage::Raster, || 7_u32), 7);
@@ -263,7 +263,7 @@ mod tests {
 
     /// The annotation pass is exactly the five stages between the graph build
     /// and the raster.
-    #[cfg(feature = "walk-profile")]
+    #[cfg(feature = "profiling")]
     #[test]
     fn the_annotation_pass_is_the_five_stages_between_the_build_and_the_raster() {
         let pass: Vec<&str> = Stage::ALL
@@ -288,7 +288,7 @@ mod tests {
         }
     }
 
-    #[cfg(feature = "walk-profile")]
+    #[cfg(feature = "profiling")]
     #[test]
     fn taking_the_profile_clears_it() {
         let _ = take();

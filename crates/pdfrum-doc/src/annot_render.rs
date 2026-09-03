@@ -54,19 +54,19 @@ use crate::ap;
 use crate::names;
 
 /// The five stages of this pass, timed into `pdfrum-page`'s accumulator under
-/// this crate's `walk-profile`.
+/// this crate's `profiling`.
 ///
 /// A module of its own so the pass below reads as the pass rather than as the
 /// instrument, and so the feature-off build names no `renderprofile` item at
 /// all — the module is `pub` in `pdfrum-page` only with the feature, and a
 /// crate cannot `#[cfg]` on another crate's flag.
-#[cfg(feature = "walk-profile")]
+#[cfg(feature = "profiling")]
 mod profile {
     pub use pdfrum_page::renderprofile::{Stage, stage};
 }
 
 /// The feature-off twin: the stage names, and a `stage` that is its body.
-#[cfg(not(feature = "walk-profile"))]
+#[cfg(not(feature = "profiling"))]
 mod profile {
     /// The stages this pass names. Only the variants it uses, because with the
     /// feature off nothing reads them and the set exists to keep one spelling

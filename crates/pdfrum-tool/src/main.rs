@@ -50,7 +50,7 @@ mod chrome;
 mod content;
 mod dispatch;
 pub mod events;
-#[cfg(feature = "script")]
+#[cfg(feature = "javascript")]
 mod jstranscript;
 mod metadata;
 mod mutate;

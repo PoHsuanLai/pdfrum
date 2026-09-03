@@ -8,7 +8,7 @@ red run. These files began as a "before" picture, taken 2026-09-02 at commit
 One file per published library crate, each holding that crate's complete
 public API as `cargo public-api` prints it. `pdfrum.txt` is the facade — the
 surface a `cargo add pdfrum` caller sees — and the rest are the member crates
-it composes. One file is not a crate: `pdfrum+script.txt` is the facade again
+it composes. One file is not a crate: `pdfrum+javascript.txt` is the facade again
 with its one cargo feature on (WP12), and the reason it exists is under "What
 else is not here" below.
 
@@ -86,7 +86,7 @@ for that property and a better one than a four-hundred-line diff nobody reads.
   `cargo add` gets, and so is what these files record.
 
   *Amended 2026-09-02 (WP12).* One feature earns a second file:
-  **`pdfrum+script.txt`** is `pdfrum --features script`, nine items more than
+  **`pdfrum+javascript.txt`** is `pdfrum --features javascript`, nine items more than
   `pdfrum.txt` (`ScriptCascade`, `ScriptConfig`, `TranscriptLine`,
   `ScriptBuildError`, `ScriptFailure`, `ScriptStop`, `FieldActions`,
   `FormSession::with_scripts` and `FormSession::scripts`). The test for
@@ -95,9 +95,9 @@ for that property and a better one than a four-hundred-line diff nobody reads.
   naming `script`, so its items are part of the product and a change to them
   would otherwise be invisible to every gate here.
 
-  `pdfrum-render/walk-profile` does not qualify — it is a profiling switch,
-  not a surface offered to callers. Neither does `pdfrum-form/script`, whose
-  items are the same ones `pdfrum+script.txt` records one layer up; recording
+  `pdfrum-render/profiling` does not qualify — it is a profiling switch,
+  not a surface offered to callers. Neither does `pdfrum-form/javascript`, whose
+  items are the same ones `pdfrum+javascript.txt` records one layer up; recording
   both would make one API change diff in two files. `scripts/api-snapshot.nu`
   names the list in a `FEATURED` constant rather than deriving it, so a
   feature joining it is a decision someone makes rather than a consequence of

@@ -419,7 +419,7 @@ fn timed_render(args: &Args, bytes: &Arc<[u8]>) {
     timed::reset();
     // The page-graph build above walks nothing, but `take` is what clears the
     // walk's accumulator and the loop below must start from zero either way.
-    #[cfg(feature = "walk-profile")]
+    #[cfg(feature = "profiling")]
     let _ = pdfrum_render::walkprofile::take();
     let mut caches = pdfrum_render::RenderCaches::default();
     let mut diags = pdfrum_common::Diagnostics::default();
@@ -551,12 +551,12 @@ fn report(
 
 /// The note that stands in for the whole-render split when the instrument is
 /// off, for the same reason `walk_report`'s does.
-#[cfg(not(feature = "walk-profile"))]
+#[cfg(not(feature = "profiling"))]
 fn render_report(_args: &Args, _done: u32, _elapsed: std::time::Duration) {
     eprintln!();
     eprintln!(
         "note: the whole-render stage split is off. Rebuild with it:\n\
-         \x20 cargo build --release -p pdfrum-bench --bin profile --features walk-profile\n\
+         \x20 cargo build --release -p pdfrum-bench --bin profile --features profiling\n\
          or run `scripts/profile.nu render <file> <iters> <backend> --warm --walk`."
     );
 }
@@ -574,7 +574,7 @@ fn render_report(_args: &Args, _done: u32, _elapsed: std::time::Duration) {
 /// The remainder is the instrument's own honesty check and is printed whatever
 /// its size: a few percent is the `Instant` pairs and the arithmetic between
 /// the stages, and a large one means a bucket is missing.
-#[cfg(feature = "walk-profile")]
+#[cfg(feature = "profiling")]
 fn render_report(args: &Args, done: u32, elapsed: std::time::Duration) {
     use pdfrum_page::renderprofile::Stage;
 
@@ -685,19 +685,19 @@ fn render_report(args: &Args, done: u32, elapsed: std::time::Duration) {
 /// This is the whole of `walk_report` without the feature, and it names no
 /// `walkprofile` item — the module's surface is part of the feature, not of
 /// the crate a `cargo add` reaches.
-#[cfg(not(feature = "walk-profile"))]
+#[cfg(not(feature = "profiling"))]
 fn walk_report(_iters: f64, _engine: std::time::Duration) {
     eprintln!();
     eprintln!(
         "note: the walk's own phase split is off. Rebuild with it:\n\
-         \x20 cargo build --release -p pdfrum-bench --bin profile --features walk-profile\n\
+         \x20 cargo build --release -p pdfrum-bench --bin profile --features profiling\n\
          or run `scripts/profile.nu <op> <file> <iters> <backend> --walk`."
     );
 }
 
 /// Whether a phase's time is already inside another phase's, so that summing
 /// it into the named total would double-count.
-#[cfg(feature = "walk-profile")]
+#[cfg(feature = "profiling")]
 fn nested(phase: pdfrum_render::walkprofile::Phase) -> bool {
     use pdfrum_render::walkprofile::Phase;
     matches!(
@@ -707,7 +707,7 @@ fn nested(phase: pdfrum_render::walkprofile::Phase) -> bool {
 }
 
 /// Split the ENGINE half further, from the walk's own instrumentation.
-#[cfg(feature = "walk-profile")]
+#[cfg(feature = "profiling")]
 fn walk_report(iters: f64, engine: std::time::Duration) {
     use pdfrum_render::walkprofile::{Phase, Site};
 
@@ -869,7 +869,7 @@ fn run(args: &Args, bytes: &Arc<[u8]>) -> (u32, std::time::Duration) {
     // The priming render above is a *cold* one and its stages are not the
     // loop's, so the accumulator starts from zero at the same moment the clock
     // does.
-    #[cfg(feature = "walk-profile")]
+    #[cfg(feature = "profiling")]
     let _ = pdfrum_page::renderprofile::take();
 
     let started = Instant::now();

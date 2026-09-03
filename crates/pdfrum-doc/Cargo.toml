@@ -21,7 +21,7 @@ workspace = true
 # features and nothing else's.
 [features]
 default = []
-walk-profile = ["pdfrum-page/walk-profile"]
+profiling = ["pdfrum-page/profiling"]
 
 [dependencies]
 pdfrum-common.workspace = true

@@ -150,7 +150,7 @@ is gone (§WP5), because a power user wants a session of their own and
 `pdfrum-form` builds one.
 
 **JavaScript, behind the `script` feature** (M15 step 1, WP12). The facade has
-one cargo feature and it is off: `script = ["pdfrum-form/script"]`. Off, the
+one cargo feature and it is off: `script = ["pdfrum-form/javascript"]`. Off, the
 crate compiles no engine — `scripts/check-no-boa.nu` asserts that a default
 `pdfrum` tree contains no `boa_*` crate, and that this feature does reach one,
 so neither half can pass vacuously. On, it re-exports `ScriptCascade`,

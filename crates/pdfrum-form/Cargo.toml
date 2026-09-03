@@ -19,7 +19,7 @@ workspace = true
 # and its 132 transitive crates are not in the tree at all, so
 # `cargo add pdfrum` puts no JavaScript engine in anyone's dependency graph.
 # `scripts/check-no-boa.nu` asserts it in both directions.
-script = ["dep:boa_engine", "dep:pdfrum-script"]
+javascript = ["dep:boa_engine", "dep:pdfrum-script"]
 
 [dependencies]
 pdfrum-common.workspace = true

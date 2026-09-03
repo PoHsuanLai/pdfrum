@@ -96,11 +96,11 @@ pub use pdfrum_form::{Placement, PopupGeometry, PopupView, ScrollView};
 /// [`ScriptCascade::new`](pdfrum_form::ScriptCascade::new) can return and
 /// [`ScriptFailure`] is what [`stops`](pdfrum_form::ScriptCascade::stops)
 /// hands back.
-#[cfg(feature = "script")]
+#[cfg(feature = "javascript")]
 pub use pdfrum_form::script::{
     BuildError as ScriptBuildError, FieldActions, ScriptFailure, ScriptStop,
 };
-#[cfg(feature = "script")]
+#[cfg(feature = "javascript")]
 pub use pdfrum_form::{ScriptCascade, ScriptConfig, TranscriptLine};
 pub use render::{ColorMode, ColorScheme, Pixmap, RenderOptions, TextAa};
 

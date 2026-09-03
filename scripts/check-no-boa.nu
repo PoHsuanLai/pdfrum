@@ -26,13 +26,13 @@
 #      or CI build actually runs.
 #   3. No workspace crate's default features reach boa, `conformance/` and
 #      `benches/` included. This catches the accident the other two would
-#      eventually catch anyway — a crate enabling `pdfrum-form/script` "just
+#      eventually catch anyway — a crate enabling `pdfrum-form/javascript` "just
 #      for a test" — at the point where it is one line to undo.
-#   4. The converse: `pdfrum-form --features script` DOES reach `boa_engine`,
+#   4. The converse: `pdfrum-form --features javascript` DOES reach `boa_engine`,
 #      so none of the above is vacuously true.
-#   5. And the facade's own forwarding feature: `pdfrum --features script`
+#   5. And the facade's own forwarding feature: `pdfrum --features javascript`
 #      DOES reach `boa_engine` too. Added with WP12, which gave `pdfrum` a
-#      `script = ["pdfrum-form/script"]` feature so an embedder can turn
+#      `script = ["pdfrum-form/javascript"]` feature so an embedder can turn
 #      scripting on without depending on `pdfrum-form` directly. Assertion 1
 #      is the claim that feature must not break; this is the claim that it is
 #      not merely a name — a forwarding feature that forwarded nothing would
@@ -123,10 +123,10 @@ def main [] {
         {crate: 'pdfrum-form', why: "the engine's own crate"}
         {crate: 'pdfrum', why: "the facade's forwarding feature (WP12)"}
     ] {
-        if 'boa_engine' in (deps $probe.crate [--features script]) {
-            print $"ok: ($probe.crate) --features script depends on boa_engine — ($probe.why)"
+        if 'boa_engine' in (deps $probe.crate [--features javascript]) {
+            print $"ok: ($probe.crate) --features javascript depends on boa_engine — ($probe.why)"
         } else {
-            print --stderr $"error: ($probe.crate) --features script no longer reaches boa_engine —"
+            print --stderr $"error: ($probe.crate) --features javascript no longer reaches boa_engine —"
             print --stderr "       every check above is trivially true and this script is"
             print --stderr "       measuring nothing."
             $ok = false

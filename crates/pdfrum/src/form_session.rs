@@ -127,7 +127,7 @@ enum Cascades {
     Plain(Box<dyn Cascade>),
     /// A `boa`-backed cascade this session installs the document's own `/AA`
     /// scripts into, page by page as pages are read.
-    #[cfg(feature = "script")]
+    #[cfg(feature = "javascript")]
     Scripted(Box<pdfrum_form::ScriptCascade>),
 }
 
@@ -136,7 +136,7 @@ impl Cascades {
     fn as_dyn(&mut self) -> &mut dyn Cascade {
         match self {
             Cascades::Plain(cascade) => cascade.as_mut(),
-            #[cfg(feature = "script")]
+            #[cfg(feature = "javascript")]
             Cascades::Scripted(cascade) => cascade.as_mut(),
         }
     }
@@ -149,7 +149,7 @@ impl std::fmt::Debug for Cascades {
             // caller's own implementation would have to satisfy is a bound on
             // the seam, and the seam has none.
             Cascades::Plain(_) => f.write_str("Plain(..)"),
-            #[cfg(feature = "script")]
+            #[cfg(feature = "javascript")]
             Cascades::Scripted(cascade) => f.debug_tuple("Scripted").field(cascade).finish(),
         }
     }
@@ -251,7 +251,7 @@ impl<'a> FormSession<'a> {
     /// cause.
     ///
     /// ```
-    /// # #[cfg(feature = "script")]
+    /// # #[cfg(feature = "javascript")]
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// use pdfrum::{Document, FormSession, ScriptConfig};
     ///
@@ -273,9 +273,9 @@ impl<'a> FormSession<'a> {
     /// assert!(transcript.starts_with("Alert: *** starting test 2 ***"));
     /// # Ok(())
     /// # }
-    /// # #[cfg(not(feature = "script"))] fn main() {}
+    /// # #[cfg(not(feature = "javascript"))] fn main() {}
     /// ```
-    #[cfg(feature = "script")]
+    #[cfg(feature = "javascript")]
     pub fn with_scripts(
         doc: &'a Document,
         config: &pdfrum_form::ScriptConfig,
@@ -320,7 +320,7 @@ impl<'a> FormSession<'a> {
     /// a form session should pay for. A host that wants them installs them
     /// itself, and an empty list is the honest answer for one that has not —
     /// `getPageNumWords` answering 0, which is what an empty page gives.
-    #[cfg(feature = "script")]
+    #[cfg(feature = "javascript")]
     fn install_document_model(&mut self) {
         let catalog = self.doc.catalog();
         let info = self
@@ -360,7 +360,7 @@ impl<'a> FormSession<'a> {
     /// under. It used to be keyed by the page-local `FieldId` instead, which
     /// agreed only for a single-page form whose widgets appear in `/Fields`
     /// order; `pdfrum_form::WidgetInfo::field_index` is what closed that.
-    #[cfg(feature = "script")]
+    #[cfg(feature = "javascript")]
     fn install_calculation_order(&mut self) {
         let Cascades::Scripted(cascade) = &mut self.cascade else {
             return;
@@ -822,7 +822,7 @@ impl<'a> FormSession<'a> {
     /// host decides about rather than I/O the library performs. A script that
     /// threw is reported on [`stops`](pdfrum_form::ScriptCascade::stops), and
     /// the next one still runs.
-    #[cfg(feature = "script")]
+    #[cfg(feature = "javascript")]
     #[must_use]
     pub fn scripts(&self) -> Option<&pdfrum_form::ScriptCascade> {
         match &self.cascade {
@@ -838,7 +838,7 @@ impl<'a> FormSession<'a> {
     /// not any field's, so the session cannot run them on its own behalf.
     ///
     /// `Some` only for a session built by [`FormSession::with_scripts`].
-    #[cfg(feature = "script")]
+    #[cfg(feature = "javascript")]
     pub fn scripts_mut(&mut self) -> Option<&mut pdfrum_form::ScriptCascade> {
         match &mut self.cascade {
             Cascades::Scripted(cascade) => Some(cascade),
@@ -859,7 +859,7 @@ impl<'a> FormSession<'a> {
     /// is zero.
     ///
     /// ```
-    /// # #[cfg(feature = "script")]
+    /// # #[cfg(feature = "javascript")]
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// use std::time::Duration;
     /// use pdfrum::{Document, FormSession, ScriptConfig};
@@ -872,9 +872,9 @@ impl<'a> FormSession<'a> {
     /// assert_eq!(session.advance_time(Duration::from_secs(60)), 0);
     /// # Ok(())
     /// # }
-    /// # #[cfg(not(feature = "script"))] fn main() {}
+    /// # #[cfg(not(feature = "javascript"))] fn main() {}
     /// ```
-    #[cfg(feature = "script")]
+    #[cfg(feature = "javascript")]
     pub fn advance_time(&mut self, elapsed: std::time::Duration) -> usize {
         self.scripts_mut()
             .map_or(0, |cascade| cascade.advance_time(elapsed))
@@ -887,7 +887,7 @@ impl<'a> FormSession<'a> {
     /// (`FORM_DoPageAAction`, `fpdfsdk/fpdf_formfill.cpp:918-944`). Not to be
     /// confused with a field's `/AA /C`, which is Calculate — the two share a
     /// key in different dictionaries.
-    #[cfg(feature = "script")]
+    #[cfg(feature = "javascript")]
     fn page_action(&self, page: PageIndex, opening: bool) -> Option<String> {
         use pdfrum_doc::nav::AActionType;
         let loaded = self.doc.page(page).ok()?;
@@ -924,7 +924,7 @@ impl<'a> FormSession<'a> {
     /// like any other, which is upstream's behaviour: `setFocus` reaches
     /// `GetWidget`, which reaches `GetPageViewAtIndex`, which builds the page
     /// view and loads its annotations.
-    #[cfg(feature = "script")]
+    #[cfg(feature = "javascript")]
     pub fn honour_focus_requests(&mut self) -> usize {
         let mut moved = 0;
         while let Some(index) = self
@@ -950,7 +950,7 @@ impl<'a> FormSession<'a> {
     /// The pages this session has already read are searched first, so the
     /// ordinary case costs no parse; only a field on an untouched page makes
     /// this read one.
-    #[cfg(feature = "script")]
+    #[cfg(feature = "javascript")]
     fn page_of_field(&mut self, index: u32) -> Option<PageIndex> {
         let found = self
             .pages
@@ -980,7 +980,7 @@ impl<'a> FormSession<'a> {
     /// separate calls upstream and a host may show a page it has already
     /// read: `FORM_OnAfterLoadPage` and `FORM_DoPageAAction(…, OPEN)` are two
     /// lines in `pdfium_test`'s own `GetPage`.
-    #[cfg(feature = "script")]
+    #[cfg(feature = "javascript")]
     pub fn page_opened(&mut self, page: impl Into<PageIndex>) {
         let page = page.into();
         let Some(source) = self.page_action(page, true) else {
@@ -992,7 +992,7 @@ impl<'a> FormSession<'a> {
     }
 
     /// Runs the page's `/AA /C` — what leaving a page fires.
-    #[cfg(feature = "script")]
+    #[cfg(feature = "javascript")]
     pub fn page_closed(&mut self, page: impl Into<PageIndex>) {
         let page = page.into();
         let Some(source) = self.page_action(page, false) else {
@@ -1155,7 +1155,7 @@ impl<'a> FormSession<'a> {
     ///
     /// Compiled away entirely without the `script` feature: with no scripted
     /// variant to match, there is nothing to install.
-    #[cfg(feature = "script")]
+    #[cfg(feature = "javascript")]
     fn install_page_scripts(&mut self, page: PageIndex) {
         use pdfrum_doc::nav::AActionType;
 
@@ -1236,7 +1236,7 @@ impl<'a> FormSession<'a> {
 
     /// Without the `script` feature there is no cascade that can be installed
     /// into, so this is the whole of it.
-    #[cfg(not(feature = "script"))]
+    #[cfg(not(feature = "javascript"))]
     #[expect(
         clippy::unused_self,
         reason = "the feature-on twin takes `&mut self`; one signature, two bodies"

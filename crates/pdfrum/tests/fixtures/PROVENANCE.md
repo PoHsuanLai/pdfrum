@@ -50,7 +50,7 @@ that is precisely the shape the decode target has to be tested against:
 
 One arrived with the `script` feature (WP12). It is the only fixture here that
 is not read by a default build: `tests/form_scripts.rs` is behind
-`#[cfg(feature = "script")]`, so a `cargo test -p pdfrum` never opens it.
+`#[cfg(feature = "javascript")]`, so a `cargo test -p pdfrum` never opens it.
 
 | File | Size | What it exercises |
 |---|---:|---|

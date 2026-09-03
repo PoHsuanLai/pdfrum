@@ -96,7 +96,7 @@ pub fn process_file(
     // stdout, and none of the notices, dumps or counts below.
     // `testing/tools/text_diff.py` compares the *whole* of the oracle's
     // stdout against `<fixture>_expected.txt`, so one extra line is a diff.
-    #[cfg(feature = "script")]
+    #[cfg(feature = "javascript")]
     if options.js_transcript {
         // `--time=` is the single source of the scripting clock; absent it the
         // scripts see the real one, which is `pdfium_test`'s rule
@@ -1095,7 +1095,7 @@ trailer<</Root 1 0 R/Size 5>>\n";
     // ---- `--time=` is the scripting clock, end to end ----
 
     /// A one-page document whose `/OpenAction` runs `script`.
-    #[cfg(feature = "script")]
+    #[cfg(feature = "javascript")]
     fn with_open_action(script: &str) -> Vec<u8> {
         format!(
             "%PDF-1.7\n\
@@ -1114,7 +1114,7 @@ trailer<</Root 1 0 R/Size 5>>\n";
     ///
     /// The seed here is deliberately *not* the harness's `1399672130`, so a
     /// constant hard-coded anywhere below the flag could not pass this.
-    #[cfg(feature = "script")]
+    #[cfg(feature = "javascript")]
     #[test]
     fn the_time_flag_reaches_the_scripting_clock() {
         let (out, _) = run(
@@ -1128,7 +1128,7 @@ trailer<</Root 1 0 R/Size 5>>\n";
     /// rule: its clock hooks are installed only when the flag was given.
     /// Asserted as "not 2014", which is the claim, rather than as a
     /// stopwatch reading, which would flake.
-    #[cfg(feature = "script")]
+    #[cfg(feature = "javascript")]
     #[test]
     fn without_the_time_flag_the_clock_is_the_machines() {
         let (out, _) = run(
@@ -1149,7 +1149,7 @@ trailer<</Root 1 0 R/Size 5>>\n";
     /// A malformed value does what `std::stringstream(s) >> time_t` does —
     /// leaves the target at zero, which passes the non-negative check and is
     /// the epoch. Accepted, not refused, and the scripts see 1970.
-    #[cfg(feature = "script")]
+    #[cfg(feature = "javascript")]
     #[test]
     fn a_malformed_time_freezes_the_clock_at_the_epoch() {
         let (out, _) = run(
@@ -1164,7 +1164,7 @@ trailer<</Root 1 0 R/Size 5>>\n";
     /// stdout is the oracle's transcript, which stays byte-exact because the
     /// oracle prints nothing for a script that threw — it drops the error
     /// under a standing TODO. The diagnostic is ours.
-    #[cfg(feature = "script")]
+    #[cfg(feature = "javascript")]
     #[test]
     fn an_uncaught_throw_is_reported_on_stderr_and_the_next_script_still_runs() {
         let (out, err) = run(
