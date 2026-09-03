@@ -173,10 +173,23 @@ so neither half can pass vacuously. On, it re-exports `ScriptCascade`,
   can read the transcript (`app.alert`, `Doc.submitForm`, `app.launchURL` come
   back as values, never as I/O) and the stops.
 
-What a script reaches is M15 step 1's surface: the `AF*` library, `util`,
-`app.alert` and `event`, with no `Doc`/`Field` object model — 11 of the
-oracle's 47 JavaScript fixtures byte-exact. `docs/status/M15.md` has the
-per-fixture accounting.
+What a script reaches is M15 step 2's surface: the `AF*` library, `util`,
+`app.alert`, `event`, and the `Doc`/`Field` object model — `getField`,
+`getNthFieldName`, `numFields`, `numPages`, the metadata properties,
+`getAnnot(s)`, `gotoNamedDest`, `resetForm`, `calculateNow`, and `Field`'s 52
+properties and 26 methods. **23 of the oracle's 47 JavaScript fixtures
+byte-exact**, up from 11. `docs/status/M15.md` §2 has the per-name table and
+the per-fixture accounting.
+
+*Both WP12 defects are closed* (2026-09-03, `9f3046e`). A format script's
+output now reaches the regenerated appearance — `FormSession::formatted`
+carries it, keyed by field, because `ResetFieldAppearance` gives every control
+of the field the same string and this crate hands appearances back rather than
+painting them. And `FieldRef::index` is now unambiguously a **document-wide**
+`/Fields` position: `WidgetInfo::field_index` carries it beside the page-local
+`FieldId`, and `PageForm::field_of_index` converts back, so a calculation on a
+multi-page form writes the field `/CO` named rather than the one that happened
+to sit at the same position on the page.
 
 **Errors.** One `Error` enum whose variants name **domains** rather than
 crates — `Open`, `Read`, `Render`, `Doc`, `Save`, `Text`, `Io` — each

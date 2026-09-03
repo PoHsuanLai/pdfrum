@@ -1,12 +1,12 @@
 {
-  "generated_at": "2026-09-03T07:20:56Z",
+  "generated_at": "2026-09-03T08:37:24Z",
   "totals": {
     "files": 1757,
-    "pass": 1514,
-    "fail": 243,
+    "pass": 1526,
+    "fail": 231,
     "by_tag": {
       "form-events": 8,
-      "js-transcript": 33,
+      "js-transcript": 21,
       "page-count": 2,
       "pixel-fail": 41,
       "tierA-mismatch": 170
@@ -33272,10 +33272,8 @@
     },
     {
       "path": "resources/javascript/annot_properties.in#js-transcript",
-      "status": "fail",
-      "tags": [
-        "js-transcript"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [],
         "mismatched": [],
@@ -33289,7 +33287,7 @@
         }
       },
       "tierB": null,
-      "notes": "line 2: expected \"Alert: SUCCESS: Document.getAnnot: Object no longer exists.\", got \"Alert: SUCCESS: TypeError: not a callable function\""
+      "notes": ""
     },
     {
       "path": "resources/javascript/annot_properties.pdf",
@@ -33353,10 +33351,8 @@
     },
     {
       "path": "resources/javascript/app_methods.in#js-transcript",
-      "status": "fail",
-      "tags": [
-        "js-transcript"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [],
         "mismatched": [],
@@ -33370,7 +33366,7 @@
         }
       },
       "tierB": null,
-      "notes": "line 7: expected \"Alert: undefined\", got \"Alert: ERROR: app.alert: Incorrect number of parameters passed to function.\""
+      "notes": ""
     },
     {
       "path": "resources/javascript/app_methods.pdf",
@@ -33440,10 +33436,8 @@
     },
     {
       "path": "resources/javascript/app_properties.in#js-transcript",
-      "status": "fail",
-      "tags": [
-        "js-transcript"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [],
         "mismatched": [],
@@ -33457,7 +33451,7 @@
         }
       },
       "tierB": null,
-      "notes": "line 2: expected \"Alert: app.activeDocs is object [object global]\", got \"Alert: app.activeDocs is undefined undefined\""
+      "notes": ""
     },
     {
       "path": "resources/javascript/app_properties.pdf",
@@ -33689,10 +33683,8 @@
     },
     {
       "path": "resources/javascript/bug_1098213.in#js-transcript",
-      "status": "fail",
-      "tags": [
-        "js-transcript"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [],
         "mismatched": [],
@@ -33706,7 +33698,7 @@
         }
       },
       "tierB": null,
-      "notes": "line 1: expected \"Alert: Done\", got \"Alert: Caught: TypeError: not a callable function\""
+      "notes": ""
     },
     {
       "path": "resources/javascript/bug_1098213.pdf",
@@ -34015,10 +34007,8 @@
     },
     {
       "path": "resources/javascript/bug_1358075.in#js-transcript",
-      "status": "fail",
-      "tags": [
-        "js-transcript"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [],
         "mismatched": [],
@@ -34032,7 +34022,7 @@
         }
       },
       "tierB": null,
-      "notes": "line 1: expected \"Alert: completed\", got end of output"
+      "notes": ""
     },
     {
       "path": "resources/javascript/bug_1358075.pdf",
@@ -34380,10 +34370,8 @@
     },
     {
       "path": "resources/javascript/bug_361.in#js-transcript",
-      "status": "fail",
-      "tags": [
-        "js-transcript"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [],
         "mismatched": [],
@@ -34397,7 +34385,7 @@
         }
       },
       "tierB": null,
-      "notes": "line 1: expected \"Alert: Answer for \\\"\\\" is: string \", got end of output"
+      "notes": ""
     },
     {
       "path": "resources/javascript/bug_361.pdf",
@@ -34461,10 +34449,8 @@
     },
     {
       "path": "resources/javascript/bug_421304870.in#js-transcript",
-      "status": "fail",
-      "tags": [
-        "js-transcript"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [],
         "mismatched": [],
@@ -34478,7 +34464,7 @@
         }
       },
       "tierB": null,
-      "notes": "line 1: expected \"Alert: 1\", got end of output"
+      "notes": ""
     },
     {
       "path": "resources/javascript/bug_421304870.pdf",
@@ -34544,10 +34530,8 @@
     },
     {
       "path": "resources/javascript/bug_492_1.in#js-transcript",
-      "status": "fail",
-      "tags": [
-        "js-transcript"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [],
         "mismatched": [],
@@ -34561,7 +34545,7 @@
         }
       },
       "tierB": null,
-      "notes": "line 1: expected \"Alert: annot_s_name\", got end of output"
+      "notes": ""
     },
     {
       "path": "resources/javascript/bug_492_1.pdf",
@@ -34644,7 +34628,7 @@
         }
       },
       "tierB": null,
-      "notes": "line 1: expected \"Alert: field is MyField\", got \"Alert: Unexpected error: TypeError: not a callable function\""
+      "notes": "line 3: expected \"Alert: field value is ''\", got \"Alert: field value is 'new value'\""
     },
     {
       "path": "resources/javascript/bug_494057.pdf",
@@ -35024,10 +35008,8 @@
     },
     {
       "path": "resources/javascript/bug_983867.in#js-transcript",
-      "status": "fail",
-      "tags": [
-        "js-transcript"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [],
         "mismatched": [],
@@ -35041,7 +35023,7 @@
         }
       },
       "tierB": null,
-      "notes": "line 1: expected \"Alert: Finished !!!\", got end of output"
+      "notes": ""
     },
     {
       "path": "resources/javascript/bug_983867.pdf",
@@ -35531,7 +35513,7 @@
         }
       },
       "tierB": null,
-      "notes": "line 2: expected \"Alert: PASS: typeof this.addAnnot = function\", got \"Alert: FAIL: typeof this.addAnnot = undefined, expected function \""
+      "notes": "line 99: expected \"Alert: PASS: this.getPageNthWord(0, 0, true, \\\"clams\\\", [1, 2]) = Hello,\", got \"Alert: ERROR: Document.getPageNthWord: Operation not supported.\""
     },
     {
       "path": "resources/javascript/document_methods.pdf",
@@ -35607,10 +35589,8 @@
     },
     {
       "path": "resources/javascript/document_properties.in#js-transcript",
-      "status": "fail",
-      "tags": [
-        "js-transcript"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [],
         "mismatched": [],
@@ -35624,7 +35604,7 @@
         }
       },
       "tierB": null,
-      "notes": "line 3: expected \"Alert: this.author is string Joe Random Author\", got \"Alert: this.author is undefined undefined\""
+      "notes": ""
     },
     {
       "path": "resources/javascript/document_properties.pdf",
@@ -35775,10 +35755,8 @@
     },
     {
       "path": "resources/javascript/field_methods.in#js-transcript",
-      "status": "fail",
-      "tags": [
-        "js-transcript"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [],
         "mismatched": [],
@@ -35792,7 +35770,7 @@
         }
       },
       "tierB": null,
-      "notes": "line 1: expected \"Alert: empty is \", got \"Alert: Unexpected error: TypeError: not a callable function\""
+      "notes": ""
     },
     {
       "path": "resources/javascript/field_methods.pdf",
@@ -35873,7 +35851,7 @@
         }
       },
       "tierB": null,
-      "notes": "line 1: expected \"Alert: Testing properties under delay\", got \"Alert: Unexpected error: TypeError: not a callable function\""
+      "notes": "line 103: expected \"Alert: PASS: style = circle\", got \"Alert: FAIL: style = check, expected = circle\""
     },
     {
       "path": "resources/javascript/field_properties.pdf",
@@ -36116,7 +36094,7 @@
         }
       },
       "tierB": null,
-      "notes": "line 1: expected \"Alert: doc is [object global]\", got \"Alert: doc is [object Object]\""
+      "notes": "line 9: expected \"Alert: Prototype comparison is true\", got \"Alert: Prototype comparison is false\""
     },
     {
       "path": "resources/javascript/icons.pdf",
@@ -36261,10 +36239,8 @@
     },
     {
       "path": "resources/javascript/listbox_methods.in#js-transcript",
-      "status": "fail",
-      "tags": [
-        "js-transcript"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [],
         "mismatched": [],
@@ -36278,7 +36254,7 @@
         }
       },
       "tierB": null,
-      "notes": "line 1: expected \"Alert: Value is: string \", got \"Alert: For getField(MyField.MySingleSelect) ERROR: TypeError: not a callable function\""
+      "notes": ""
     },
     {
       "path": "resources/javascript/listbox_methods.pdf",
@@ -44616,9 +44592,9 @@
         }
       },
       "tierB": {
-        "ssim": 1,
-        "exact": true,
-        "max_channel_diff": 0,
+        "ssim": 0.999980,
+        "exact": false,
+        "max_channel_diff": 1,
         "pages": 1
       },
       "notes": ""
@@ -44646,9 +44622,9 @@
         }
       },
       "tierB": {
-        "ssim": 1,
-        "exact": true,
-        "max_channel_diff": 0,
+        "ssim": 0.999980,
+        "exact": false,
+        "max_channel_diff": 1,
         "pages": 1
       },
       "notes": ""
