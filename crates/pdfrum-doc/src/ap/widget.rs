@@ -270,10 +270,7 @@ pub(crate) fn generate_with_text<R: Resolve>(
 /// [`generate_with_live_faces`] renders exactly as `generate_with_text`
 /// does with no substitute.
 /// Adding a field to this struct breaks every exhaustive literal outside
-/// this crate, and M14 did it twice mid-flight — `substitute` in
-/// `266783f`, then `appearance_state` in `6e87424`, the second breaking
-/// `pdfrum-form`'s `route.rs` while another agent was measuring against
-/// it. `#[non_exhaustive]` is NOT the fix: it forbids the literal form
+/// this crate. `#[non_exhaustive]` is NOT the fix: it forbids the literal form
 /// entirely outside the crate, `..Default::default()` included (E0639),
 /// and the two external callers (`pdfrum-form::route`,
 /// `pdfrum-tool::chrome`) legitimately build the whole value. Before a

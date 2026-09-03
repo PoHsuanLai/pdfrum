@@ -76,11 +76,10 @@ use crate::names;
 /// has a table for. The tables say how a charset's characters would be
 /// *written*; this list says which charsets a field is allowed to reach for a
 /// second face over, and widening it changes what the corpus renders. Hebrew
-/// is the one measured against the oracle (`bug_725389`, `docs/status/
-/// M14-doc.md` §8.2). Widening this is a behaviour change owed its own
-/// measurement, and each added charset also needs the default-face question of
-/// §8.2 answered for it — Hebrew's answer, the serif fallback, is not
-/// automatically the others'.
+/// is the one measured against the oracle. Widening this is a behaviour change
+/// owed its own measurement, and each added charset also needs its own
+/// default-face answered — Hebrew's, the serif fallback, is not automatically
+/// the others'.
 pub const SUBSTITUTABLE_CHARSETS: &[Charset] = &[Charset::Hebrew];
 
 /// The charset a font's substitution chose, or ANSI when it has none.
@@ -681,8 +680,8 @@ mod tests {
 /// `cp1250`, `cp1251`, `cp1253`, `cp1254`, `cp1255`, `cp1256` and `cp1257`
 /// codecs — a fourth source, and one this crate cannot carry — with **zero
 /// mismatches on all eight**. That check is recorded here rather than run
-/// here because it needs a codec table this workspace has no dependency for
-/// (DEPS.md is closed), and repeating 1024 literals to restate it would only
+/// here because it needs a codec table this workspace takes no dependency for,
+/// and repeating 1024 literals to restate it would only
 /// verify the copy against itself.
 #[cfg(test)]
 mod charset_tables {
