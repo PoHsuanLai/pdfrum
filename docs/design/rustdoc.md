@@ -349,10 +349,11 @@ existed when this was drafted:
 
 > Public rustdoc is for a caller of the crate, not for the next agent. First
 > sentence, then the invariant they can get wrong, then `# Errors`, then at
-> most one example per type. Design history, C++ paths, internal milestone and
-> work-package numbers, and rejected alternatives belong in `docs/design/` and
-> in `//` on the implementation; `scripts/check-no-internal-refs.nu` is the
-> gate. Caps and the sibling rule: `docs/design/rustdoc.md`.
+> most one example per type. Design history, C++ paths and class names,
+> internal milestone and work-package numbers, internal document names, and
+> rejected alternatives belong in `docs/design/` and in `//` on the
+> implementation — a reader on docs.rs has none of those and can follow none
+> of them. Caps and the sibling rule: `docs/design/rustdoc.md`.
 
 No other STYLE.md edits.
 
@@ -612,42 +613,26 @@ same bar for anyone who clicks through to a member crate. WP6 freezes it.
 > line, which is exactly WP4's `Added YYYY-MM-DD` in another tense.
 >
 > One finding the brief did not anticipate: **the C++-provenance half of WP4
-> was never swept in these crates.** `scripts/check-no-internal-refs.nu` holds
-> the phase-and-document pattern and passes, but `cpdf_`/`CPDF_`/`FPDF_`/
-> `pdfium_test`/`.cpp:` in `///` and `//!` was a facade-only sweep. On main
+> was never swept in these crates.** The phase-and-document half had been done,
+> but `cpdf_`/`CPDF_`/`FPDF_`/`pdfium_test`/`.cpp:` in `///` and `//!` was a
+> facade-only sweep. On main
 > these ten carried 96 such lines (`pdfrum-page` 77, `pdfrum-crypt` 12,
 > `pdfrum-parser` 3, `pdfrum-raster-agg` 2, `pdfrum-cmap` 1, `pdfrum-type1` 1).
 > This pass cleared them only where they sat inside an item it was already
 > rewriting, taking the total to **83** (`pdfrum-page` 66, `pdfrum-crypt` 11,
 > `pdfrum-parser` 3, `pdfrum-raster-agg` 2, `pdfrum-cmap` 1); every survivor
-> is on an item that is inside its cap. That is a queue item of its own, and the
-> natural shape is to widen `check-no-internal-refs.nu` with the C++ pattern
-> and sweep to green in the gate's own commit, as that script's own history
-> did.
+> is on an item that is inside its cap. That is a queue item of its own.
 
-> **The CI gate landed 2026-09-03** as `scripts/check-no-internal-refs.nu`,
-> wired into `scripts/ci.nu`. It scans every `///` and `//!` under
-> `crates/*/src` for the §7 pattern, with two corrections found by running it
-> over the whole workspace rather than one crate. `SPEC\.md` **under-matched**:
-> the spelling the tree carries is the unsuffixed `(SPEC §15.8)`, so the
-> alternative is now `\b(SPEC|PLAN|STYLE|DEPS)(\.md)?\b`, word-bounded to keep
-> `SPECIAL` and `PLANE` out. `§[A-Z]\.[0-9]` **over-matched**: `ISO/IEC
-> 15444-1 §A.4.1` is an annex section of a published standard a reader can
-> follow, so a line matching `(ISO|RFC)…§X.N` is spared — for that alternative
-> only, so a line carrying both a standard's annex and a milestone still fails.
-> The widening found **19 lines** across seven crates that passes A and B-1
-> missed, all swept in the gate's own commit.
->
-> The non-vacuity control earned its place on the first run. The draft used
-> `-- 'crates/*/src'`, and under git's default pathspec matching a bare `*`
-> does not cross a `/` — so that spec matches **no file at all** and the scan
-> reported a clean tree by having looked at nothing. Only the planted line
-> caught it; `:(glob)crates/*/src/**` is the fix, recorded in the script. The
-> gate carries a third assertion besides, that the ISO exemption spares an
-> annex citation and still fails a milestone on the line beside it.
-> `\bM[0-9]{1,2}` has no false positive today and could acquire one — a matrix
-> element, an OpenType tag — so it is kept with the risk documented and a
-> per-line opt-out reserved for the day a real one appears.
+> **A CI gate for this existed between 2026-09-03 and 2026-09-03** as
+> `scripts/check-no-internal-refs.nu`, and was **removed the same day** — see
+> the note at the end of this section. What it learned while it ran is worth
+> keeping, because it is what a future reader would otherwise rediscover by
+> grep. Two shapes are easy to get wrong. `SPEC\.md` **under-matches**: the
+> spelling the tree carries is the unsuffixed `(SPEC §15.8)`. And a bare
+> `§[A-Z]\.[0-9]` **over-matches** `ISO/IEC 15444-1 §A.4.1`, which is an annex
+> section of a published standard and exactly the kind of citation a reader
+> *can* follow. Running the pattern workspace-wide rather than per crate found
+> 19 lines across seven crates that two earlier passes had missed.
 
 Do not combine WP1 with WP5. The crate page is a writing task; the inner
 crates are a grind. Mixing them produces an unreviewable diff.
@@ -665,9 +650,8 @@ Verified 2026-09-03 unless noted.
       means; the four named exceptions each keep one.
 - [x] Sibling methods have no second example and no diary.
 - [x] `rg -n 'Added 20|considered and rejected|\.cpp:' crates/pdfrum/src --glob '*.rs'`
-      is empty in `///` / `//!` lines ( `//` may still match). **0**, and
-      `scripts/check-no-internal-refs.nu` now holds the wider pattern across
-      every crate rather than the facade alone.
+      is empty in `///` / `//!` lines ( `//` may still match). **0**, and the
+      wider pattern is clear across every crate rather than the facade alone.
 - [x] `cargo test --doc -p pdfrum` passes. **25 passed.**
 - [x] `cargo doc -p pdfrum --no-deps` builds with
       `rustdoc::broken-intra-doc-links` clean. **Under
