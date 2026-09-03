@@ -3,22 +3,12 @@
 //! baseline that conformance diffs against `vello_cpu`.
 //!
 //! tiny-skia has neither a layer stack nor a clip stack, so both are emulated
-//! here rather than in the engine: the engine must not know which rasterizer
-//! it has. A layer is an offscreen pixmap composited on `pop`; a clip is a
-//! coverage `Mask`, and pushing one intersects a clone of the current mask —
-//! which is literally `a * b / 255`, the same truncating product PDFium's own
-//! `CFX_AggClipRgn::IntersectMask` uses.
-//!
-//! ## What this backend deliberately does not do
-//!
-//! tiny-skia silently drops any path fill or clip whose bounding box is
-//! thinner than `1/4096` in either axis, turning a degenerate *clip* into a
-//! no-op clip rather than an empty one — a correctness inversion. Fixing that
-//! here, per call, would make this backend's geometry differ from
-//! `vello_cpu`'s and break the cross-backend contract's premise. The engine
-//! ports PDFium's rectangle snapping and zero-area detection instead, which
-//! removes the bulk of the cases, and the harness turns a residual drop into
-//! a hard failure rather than a quiet drift.
+//! here: the engine must not know which rasterizer it has. A layer is an
+//! offscreen pixmap composited on `pop`; a clip is a coverage mask, and
+//! pushing one intersects a clone of the current mask with the truncating
+//! product `a * b / 255`. A path fill or clip thinner than `1/4096` in either
+//! axis is dropped by tiny-skia itself, turning a degenerate *clip* into a
+//! no-op rather than an empty one, and this backend does not correct that.
 //!
 //! ```
 //! use kurbo::{Affine, Rect};
@@ -49,6 +39,16 @@
 //! assert_eq!(pixmap.pixel(1, 1), Some([255, 0, 0, 255]), "inside the clip");
 //! assert_eq!(pixmap.pixel(6, 1), Some([255, 255, 255, 255]), "outside it");
 //! ```
+
+// The truncating clip product is the same one PDFium's `CFX_AggClipRgn::
+// IntersectMask` uses.
+//
+// What this backend deliberately does not do: correct tiny-skia's `1/4096`
+// drop. Fixing it here, per call, would make this backend's geometry differ
+// from `vello_cpu`'s and break the cross-backend contract's premise. The engine
+// ports PDFium's rectangle snapping and zero-area detection instead, which
+// removes the bulk of the cases, and the harness turns a residual drop into a
+// hard failure rather than a quiet drift.
 
 #![forbid(unsafe_code)]
 
