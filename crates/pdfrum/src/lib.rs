@@ -56,6 +56,7 @@ mod attach;
 mod document;
 mod edit;
 mod error;
+mod flatten;
 mod form;
 mod form_session;
 mod outline;
@@ -71,6 +72,7 @@ pub use annotation::{AnnotFlags, Annotation, Subtype};
 pub use document::{Attachment, Document, Metadata, OpenOptions};
 pub use edit::{ImageBuilder, PageEdit, PathBuilder, TextBuilder};
 pub use error::{Error, Result};
+pub use flatten::{FlattenMode, Flattened};
 pub use form::{Field, FieldFlags, FieldKind, Form, UnknownField};
 pub use form_session::{
     AppearanceUpdate, Button, Cascade, FieldRef, FieldWrites, FormSession, Key, Keystroke,
