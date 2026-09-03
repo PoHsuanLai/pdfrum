@@ -98,13 +98,14 @@ pub struct EncryptParams {
     ///
     /// §7.6.5 defines `/StmF` and `/StrF` as two independent entries, each
     /// defaulting to `Identity`, and says nothing forbidding them from
-    /// differing. `cpdf_security_handler.cpp:305` and `:325` instead
-    /// `return false` on a raw **name** inequality, so `/StmF /StdCF /StrF
-    /// /StdCF2` is refused even when the two `/CF` entries are identical, and
-    /// because the comparison runs *before* the default is applied, a V≥4
-    /// document with **neither** entry present also fails to load. pdf.js
-    /// applies the defaults and consults the two independently, with no
-    /// equality check (`crypto.js:1116-1120`).
+    /// differing. So `/StmF /StdCF /StrF /StdCF2` opens even when the two
+    /// `/CF` entries are identical, and so does a V≥4 document with
+    /// **neither** entry present, which is two `Identity` defaults.
+    // [oracle-bug] cpdf_security_handler.cpp:305 and :325 return false on a
+    // raw name inequality, and the comparison runs *before* the default is
+    // applied, so an absent pair reads as two empty names and is refused
+    // too. pdf.js applies the defaults and consults the two independently,
+    // with no equality check (crypto.js:1116-1120).
     ///
     /// Only the two values §7.6.5 makes observable at this seam are carried:
     /// a class is either the file's cipher or `Identity`. A document naming
@@ -353,12 +354,14 @@ fn embedded_cipher(
 /// `/StmF` and `/StrF`, each defaulting to `/Identity`.
 ///
 /// `[oracle-bug]` §7.6.5 table 20 defines both as independent entries whose
-/// default is `Identity`. `cpdf_security_handler.cpp:305` and `:325` instead
-/// compare the two raw names and `return false` on inequality — and because
-/// the comparison runs *before* any default is applied, an absent entry reads
-/// as the empty name, which is neither `Identity` nor a key in `/CF`, so a
-/// V≥4 document with **neither** entry present is refused as well. pdf.js
-/// applies the defaults and consults the two independently (`crypto.js:1116-1120`).
+/// default is `Identity`, so the two are resolved separately and a document
+/// naming neither is two `Identity` defaults rather than an error.
+// [oracle-bug] cpdf_security_handler.cpp:305 and :325 compare the two raw
+// names and return false on inequality — and the comparison runs *before*
+// any default is applied, so an absent entry reads as the empty name, which
+// is neither Identity nor a key in /CF, and a V>=4 document with neither
+// entry present is refused as well. pdf.js applies the defaults and consults
+// the two independently (crypto.js:1116-1120).
 fn crypt_filter_names(dict: &Dict, r: &impl Resolve) -> (Name, Name) {
     let named = |key| match dict.byte_string(key, r) {
         Some(bytes) if !bytes.is_empty() => Name::from(bytes.as_slice()),
@@ -754,17 +757,18 @@ pub(crate) struct Unlocked {
 ///    pdf.js's tolerance, at `crypto.js:1178-1180`, where a prepped password
 ///    that differs from the raw one yields *two* candidates rather than one.
 ///
-/// 3. **PDFium's transcode**, `[oracle-bug]`. `cpdf_security_handler.cpp:425-455`
-///    performs none of the specification's three steps; instead it retries a
-///    non-ASCII password with a Latin-1→UTF-8 transcode (revision 5 and up) or
-///    a UTF-8→Latin-1 one (revisions 2 to 4). That is not the specification and
-///    it is not `PDFDocEncoding` either — the three disagree across `0x80..0x9F`
-///    — but it rescues a real class of embedder mis-encoding (a host that
+/// 3. **A transcode retry**, `[oracle-bug]`. A non-ASCII password is retried
+///    with a Latin-1 to UTF-8 transcode (revision 5 and up) or a UTF-8 to
+///    Latin-1 one (revisions 2 to 4). That is not the specification and it is
+///    not `PDFDocEncoding` either — the three disagree across `0x80..0x9F` —
+///    but it rescues a real class of embedder mis-encoding (a host that
 ///    handed the library bytes in the wrong one of two encodings), no
 ///    independent implementation contradicts it, and by running last it can
-///    only turn a failure into a success. Kept as a tolerance, tried after the
-///    two conforming spellings; pdf.js has no equivalent
-///    (`crypto.js:1136-1152` transcodes nothing).
+///    only turn a failure into a success. Kept as a tolerance, tried after
+///    the two conforming spellings.
+// [oracle-bug] The transcode is cpdf_security_handler.cpp:425-455, which
+// performs none of the specification's three preparation steps. pdf.js has
+// no equivalent: crypto.js:1136-1152 transcodes nothing.
 ///
 /// A pure-ASCII password is a fixed point of every one of these conversions,
 /// so all three candidates collapse to one attempt — the early returns make
@@ -848,10 +852,11 @@ fn r6_prepared(revision: i64, password: &[u8]) -> Option<Vec<u8>> {
 /// At revision 5 and up the password is first cut to 127 bytes — ISO 32000-2
 /// §7.6.4.3.3 Algorithm 2.A step (a). The cut belongs *here* rather than to
 /// one candidate because it is a property of the AES-256 hash, not of the
-/// preparation: pdf.js applies it inside the key derivation, so every
-/// candidate it tries is cut (`crypto.js:896-897`). PDFium applies it nowhere,
-/// and hashes a 200-byte password whole — `[oracle-bug]`,
-/// `cpdf_security_handler.cpp:425-455`.
+/// preparation, so every candidate tried is cut. `[oracle-bug]`
+// [oracle-bug] pdf.js applies the cut inside the key derivation
+// (crypto.js:896-897), so every candidate it tries is cut too. PDFium
+// applies it nowhere and hashes a 200-byte password whole
+// (cpdf_security_handler.cpp:425-455).
 fn check_password(
     p: &EncryptParams,
     password: &[u8],

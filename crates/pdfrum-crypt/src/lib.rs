@@ -87,19 +87,20 @@ pub enum Error {
     /// (`/Adobe.PubSec`) land here.
     #[error("/Filter {0:?} is not the standard security handler")]
     UnsupportedHandler(Box<[u8]>),
-    /// `[oracle-bug]` **Never constructed.** `cpdf_security_handler.cpp:305`
-    /// and `:325` `return false` when `/StmF` and `/StrF` name different
-    /// crypt filters, but §7.6.5 table 20 makes the two entries independent
-    /// (audit item A27), so a differing pair is conformant and this crate
-    /// resolves each class separately. The variant is kept because it is a
-    /// public enum member and removing it is a breaking change no caller
-    /// gains from; nothing produces it.
+    /// `[oracle-bug]` **Never constructed.** §7.6.5 table 20 makes `/StmF`
+    /// and `/StrF` independent (audit item A27), so a pair naming different
+    /// crypt filters is conformant and this crate resolves each class
+    /// separately. The variant is kept because it is a public enum member
+    /// and removing it is a breaking change no caller gains from; nothing
+    /// produces it.
+    // [oracle-bug] cpdf_security_handler.cpp:305 and :325 return false on a
+    // differing pair.
     #[error("/StmF and /StrF name different crypt filters")]
     MismatchedCryptFilters,
     /// The named crypt filter is not a key in `/CF`. An **empty** name no
     /// longer lands here: both class keys absent is §7.6.5's `/Identity`
-    /// default, not the rejection `cpdf_security_handler.cpp:305` gives it
-    /// (audit item A27).
+    /// default rather than an error (audit item A27).
+    // [oracle-bug] cpdf_security_handler.cpp:305 rejects the absent pair.
     #[error("crypt filter {0:?} is not present in /CF")]
     MissingCryptFilter(Box<[u8]>),
     /// The dictionary is structurally unusable.
@@ -147,8 +148,9 @@ pub enum SecurityHandler {
         embedded_cipher: Option<Cipher>,
         /// `[oracle-bug]` Whether `/StrF` resolved to `/Identity` while
         /// `/StmF` did not, so strings pass through undeciphered while
-        /// streams are enciphered. §7.6.5 makes the two entries independent;
-        /// `cpdf_security_handler.cpp:305` refuses such a document outright.
+        /// streams are enciphered. §7.6.5 makes the two entries independent,
+        /// so such a document is conformant and is opened.
+        // [oracle-bug] cpdf_security_handler.cpp:305 refuses it outright.
         strings_identity: bool,
     },
     /// AESV2: a 16- or 24-byte file key with per-object `sAlT` derivation.
@@ -171,8 +173,9 @@ pub enum SecurityHandler {
         embedded_cipher: Option<Cipher>,
         /// `[oracle-bug]` Whether `/StrF` resolved to `/Identity` while
         /// `/StmF` did not, so strings pass through undeciphered while
-        /// streams are enciphered. §7.6.5 makes the two entries independent;
-        /// `cpdf_security_handler.cpp:305` refuses such a document outright.
+        /// streams are enciphered. §7.6.5 makes the two entries independent,
+        /// so such a document is conformant and is opened.
+        // [oracle-bug] cpdf_security_handler.cpp:305 refuses it outright.
         strings_identity: bool,
     },
     /// AESV3 (`/V 5`, revision 5 or 6): the 32-byte key is used as-is.
@@ -195,8 +198,9 @@ pub enum SecurityHandler {
         embedded_cipher: Option<Cipher>,
         /// `[oracle-bug]` Whether `/StrF` resolved to `/Identity` while
         /// `/StmF` did not, so strings pass through undeciphered while
-        /// streams are enciphered. §7.6.5 makes the two entries independent;
-        /// `cpdf_security_handler.cpp:305` refuses such a document outright.
+        /// streams are enciphered. §7.6.5 makes the two entries independent,
+        /// so such a document is conformant and is opened.
+        // [oracle-bug] cpdf_security_handler.cpp:305 refuses it outright.
         strings_identity: bool,
     },
     /// No encryption, or `/StrF /Identity`.
@@ -968,11 +972,12 @@ mod tests {
 
     // ---- T15: the crypt-filter class rules ----
 
-    /// Audit item **A27**. This asserted `Err(MismatchedCryptFilters)`:
-    /// `cpdf_security_handler.cpp:305` and `:325` `return false` on a raw
-    /// name inequality. §7.6.5 table 20 makes `/StmF` and `/StrF` two
-    /// independent entries, so differing names are conformant — the stream
-    /// filter supplies the cipher this record models.
+    /// Audit item **A27**. This asserted `Err(MismatchedCryptFilters)`.
+    /// §7.6.5 table 20 makes `/StmF` and `/StrF` two independent entries, so
+    /// differing names are conformant — the stream filter supplies the
+    /// cipher this record models.
+    // [oracle-bug] cpdf_security_handler.cpp:305 and :325 return false on a
+    // raw name inequality.
     #[test]
     fn differing_stream_and_string_filters_open_rather_than_refusing() {
         let mut dict = test_fixtures::encrypt_dict(4, Some(128), Some(16), Some("AESV2"));
