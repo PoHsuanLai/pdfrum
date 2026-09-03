@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-02T19:29:05Z",
+  "generated_at": "2026-09-03T07:20:56Z",
   "totals": {
     "files": 1757,
     "pass": 1514,
@@ -12465,7 +12465,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.996609,
+        "ssim": 0.998815,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
@@ -28504,7 +28504,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.998737,
+        "ssim": 0.998736,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
@@ -28534,7 +28534,7 @@
         }
       },
       "tierB": {
-        "ssim": 0.998737,
+        "ssim": 0.998736,
         "exact": false,
         "max_channel_diff": 255,
         "pages": 1
