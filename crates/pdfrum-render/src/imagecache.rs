@@ -1,107 +1,37 @@
 //! The rendered-image cache: decoded samples, converted and reduced, kept for
 //! the next draw of the same image at the same size.
 //!
-//! # What it caches, and why that is not what `pdfrum_page::ImageCache` caches
+//! Downstream of [`pdfrum_page::ImageCache`], which holds **decoded** images
+//! and stops a page decoding the same `XObject` twice. This one holds the
+//! result of two pure functions applied to those samples —
+//! [`crate::image::to_pixmap`] and [`crate::stretch::prescale`] — both
+//! `O(source pixels)`, both otherwise re-run on every draw.
 //!
-//! [`pdfrum_page::ImageCache`] holds **decoded** images: the result of running
-//! a JPEG, a JBIG2 or a CCITT stream through its codec. It is keyed
-//! `(ObjRef, RequestedSize)` (SPEC.md §7) and it is what stops a page decoding
-//! the same `XObject` twice.
-//!
-//! Downstream of it sit two pure functions that this cache holds the result of:
-//!
-//! - [`crate::image::to_pixmap`] — samples to premultiplied RGBA, folding in a
-//!   co-registered mask, the `/Matte` un-premultiply, and any `/TR`;
-//! - [`crate::stretch::prescale`] — the box-filter reduction toward the device
-//!   footprint, added in M11 so a shrunken image is low-passed before the
-//!   backend's two-tap kernel sees it.
-//!
-//! Neither was cached, and both are `O(source pixels)`. `docs/status/M12.md`
-//! §3.6 measured what that costs: on `image_bug_718762` — 1 KB of PDF
-//! declaring a 5000x5000 JPEG — a render spends **872 ms in the engine and
-//! 0.03 ms in the rasterizer**, and every one of those milliseconds is these
-//! two functions running again over 25 million pixels that did not change.
-//! §7.4 of the same document is why no amount of vectorizing them was the
-//! answer: a 4x win on redundant work is still redundant work.
-//!
-//! # The key, and the one thing it cannot be
-//!
-//! The key names the *source object* and the *shape of the request*:
-//!
-//! ```text
-//! (ObjRef, PixmapRequest { stencil_color, transfer, reduced_width, reduced_height })
-//! ```
-//!
-//! **`ObjRef` and not the `Arc<ImageData>`'s address.** An `Arc::as_ptr` is
-//! stable only while that `Arc` is alive; the allocator reuses the address
-//! afterwards, and a cache keyed on one would hand a freed image's pixels to
-//! whatever landed on its bytes. `ImageObject::source` carries the reference
-//! the interpreter resolved the `XObject` from (SPEC.md §7, M11), and an image
-//! with no reference — an inline `BI…EI`, or one reached through an
-//! annotation's `/AP` — is simply not cached. That is the correct answer for
-//! an inline image anyway: its samples live in the content stream, are decoded
-//! once by the page build, and are drawn once.
-//!
-//! **The reduction is keyed by its *output* dimensions, not by the device
-//! footprint that produced them.** `prescale` maps a fractional footprint
-//! through `reduced_len` — a `ceil` and a clamp — onto an integer pixel count,
-//! and it is only that integer the reduced pixmap depends on. Keying on the
-//! `f64` footprint instead would miss on two draws of the same image that
-//! differ in the seventh decimal of their placement and reduce to byte-identical
-//! pixels, which is exactly what a page tiling one image across a row does.
-//!
-//! **The colour inputs are in the key because they are inputs to the pixels.**
-//! A stencil takes its ink from the fill colour, so the same 1-bit image
-//! painted red and painted blue is two different pixmaps; a non-stencil ignores
-//! `stencil_color` entirely and [`PixmapRequest::for_image`] normalizes it away
-//! so that two draws of a photograph under different fill colours share one
-//! entry. The transfer function is hashed by its samples rather than held by
-//! reference, for the same address-reuse reason as the image.
-//!
-//! # The budget, and why it refuses rather than evicts
-//!
-//! [`RENDERED_CACHE_BUDGET`] bounds what one session holds. Past it the cache
-//! **stops inserting and the caller still gets its pixmap** — the same policy
-//! [`crate::glyph::BitmapCache`] takes, and for a sharper version of the same
-//! reason. A rendered image is large (a 5000x5000 one is 100 MB premultiplied),
-//! so an LRU that evicted to make room for the image about to be drawn would,
-//! on a page holding two images that each fill the budget, evict each to make
-//! room for the other and never register a hit — the classic thrash, at 100 MB
-//! a step. Refusing to grow degrades to *no cache*, never to *no image*, and
-//! keeps the bound with no policy to get wrong.
-//!
-//! # What bounds it in practice is the page, which is what upstream relies on
-//!
-//! The budget is a backstop rather than the working mechanism. Every caller in
-//! this workspace builds [`crate::RenderCaches`] **per page** — `pdfrum-tool`
-//! and the facade's `Page::render` both do — so a page's rendered images are
-//! freed when the page is. That is precisely `CPDF_PageImageCache`'s own
-//! lifetime: it is constructed from a `CPDF_Page` and dies with it.
-//!
-//! Upstream's byte budget is not the default path either, and the shape of
-//! that is worth recording because it is the opposite of what the C++ reads
-//! like at first. `CacheOptimization` — the 15-entry cap, then the 100 MiB
-//! budget, oldest first — runs only `if (options.bLimitedImageCache)`, a flag
-//! that is **`false` by default** and opt-in through the public
-//! `FPDF_RENDER_LIMITEDIMAGECACHE`. It also runs once per rendered *layer*,
-//! not per insert. So PDFium's default is an unbounded per-page cache, and
-//! ours is a 64 MiB-bounded per-page cache: strictly the more conservative of
-//! the two, with the same lifetime.
-//!
-//! # The bound was tested for the obvious tightening, and it did not pay
-//!
-//! An opt-in "hold at most one image" mode mirroring `bLimitedImageCache` was
-//! implemented and measured, and is **not** here because the measurement said
-//! it buys nothing (`docs/status/M12.md` §9). The corpus explains why: the
-//! documents with a memory problem — `image_bug_583804`, `image_bug_718762`,
-//! `image_bug_898443` — draw **exactly one image each**, so "at most one
-//! entry" is already what the unbounded cache holds and the two configurations
-//! measure within 500 KB of one another in both directions. The documents that
-//! draw many images (`mixed_en_uicase` at 5208 draws, `image_ccitt_3bigpreview`
-//! at 1129) have small ones and no memory problem at all. The two never
-//! coincide in 44 files, so the knob had no document that could show it
-//! working, and shipping an option whose effect cannot be demonstrated is
-//! how a config surface fills up with things nobody can delete later.
+//! Keyed by the source object's [`ObjRef`] and the *shape* of the request.
+//! An image with no reference — an inline `BI…EI`, or one reached through an
+//! annotation's `/AP` — is not cached at all.
+
+// **`ObjRef` and not the `Arc<ImageData>`'s address.** An `Arc::as_ptr` is
+// stable only while that `Arc` is alive; the allocator reuses the address
+// afterwards, and a cache keyed on one would hand a freed image's pixels to
+// whatever landed on its bytes. Not caching an inline image is the correct
+// answer anyway: its samples live in the content stream, are decoded once by
+// the page build, and are drawn once.
+//
+// **The reduction is keyed by its *output* dimensions, not by the device
+// footprint that produced them.** `prescale` maps a fractional footprint
+// through `reduced_len` — a `ceil` and a clamp — onto an integer pixel count,
+// and it is only that integer the reduced pixmap depends on. Keying on the
+// `f64` footprint instead would miss on two draws of the same image that
+// differ in the seventh decimal of their placement.
+//
+// The byte budget is a backstop, not the working mechanism: every caller in
+// this workspace builds `crate::RenderCaches` per page, so a page's rendered
+// images are freed with the page. That is `CPDF_PageImageCache`'s own
+// lifetime — constructed from a `CPDF_Page`, dying with it. Upstream's own
+// 15-entry / 100 MiB budget runs only under `bLimitedImageCache`, which is
+// `false` by default, so the oracle's default is an unbounded per-page cache
+// and ours is a bounded one.
 
 use std::collections::HashMap;
 
@@ -229,8 +159,7 @@ impl std::ops::Deref for Rendered<'_> {
 /// shape.
 ///
 /// Owned by [`crate::RenderCaches`], passed down by `&mut` — no global state,
-/// no interior mutability (STYLE.md §1), and under `rayon` each worker keeps
-/// its own.
+/// no interior mutability, and under `rayon` each worker keeps its own.
 #[derive(Debug, Default)]
 pub struct RenderedImageCache {
     /// Keyed with [`FxBuildHasher`] rather than `SipHash`.

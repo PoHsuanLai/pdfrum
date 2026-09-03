@@ -1,6 +1,5 @@
-//! Drawing an image `XObject`: the decision tree in `StartRenderDIBBase`
-//! (`cpdf_imagerenderer.cpp:86-186`) and the resample selection
-//! (`CStretchEngine::UseInterpolateBilinear`, `cstretchengine.cpp:48-59`).
+//! Drawing an image `XObject`: the draw decision tree and the resample
+//! selection.
 //!
 //! The *kernels* belong to whichever rasterizer is in use; the **selection**
 //! belongs here, because both must receive the same answer. Three inputs feed
@@ -20,16 +19,16 @@ use crate::options::RenderOptions;
 use crate::pixmap::{Pixmap, mul255};
 
 /// Above this many bytes, bilinear interpolation is forced on unless
-/// halftoning was requested (`kHugeImageSize`, `cpdf_dib.h:39`).
+/// halftoning was requested.
 ///
 /// A memory/quality heuristic, and nonetheless pixel-visible.
 pub const HUGE_IMAGE_SIZE: u64 = 60_000_000;
 
-/// `IsImageValueTooBig` (`cpdf_imagerenderer.cpp:52-59`): a destination
-/// dimension or offset at or beyond this is rejected outright.
+/// A destination dimension or offset at or beyond this is rejected
+/// outright.
 pub const MAX_IMAGE_VALUE: i64 = 256 * 1024 * 1024;
 
-/// `UseInterpolateBilinear`, transcribed exactly.
+/// The bilinear-interpolation predicate, transcribed exactly.
 ///
 /// Both divisions are **integer and truncating**, and only the right-hand
 /// product widens. Read plainly: bilinear turns itself on unless the image is
@@ -366,12 +365,12 @@ pub fn is_coregistered(mask: &pdfrum_page::ImageMask, image: &ImageData) -> bool
 }
 
 /// The mask an image carries on a grid of its own, as a standalone image to
-/// be stretched to the device by itself (`DrawMaskedImage` →
-/// `CalculateDrawImage`, `cpdf_imagerenderer.cpp:375-424` and `:263-319`).
+/// be stretched to the device by itself.
 ///
-/// PDFium never fuses a mask into its base's samples. It renders the base
-/// into a device-sized buffer, renders the mask into a second buffer over the
-/// *same device rect* through the *same* matrix, and multiplies. Both are
+/// A mask is never fused into its base's samples. The base renders into a
+/// device-sized buffer, the mask renders into a second buffer over the
+/// *same device rect* through the *same* matrix, and the two multiply. Both
+/// are
 /// therefore resampled from their own resolution straight to the device, and
 /// neither ever passes through the other's grid — which is what lets a 64×64
 /// stencil keep its detail over a 3×3 base (`bug_1396266`), and a 100×100
@@ -506,15 +505,14 @@ pub fn reduced_mask_pixmap(
     }
 }
 
-/// One pixel of the `/Matte` un-premultiplication (`CalculateDrawImage`,
-/// `cpdf_imagerenderer.cpp:263-319`), in the integer arithmetic the C++ uses.
+/// One pixel of the `/Matte` un-premultiplication, in integer arithmetic.
 ///
 /// A `/Matte` entry says the image's samples were **already composited**
 /// against that colour at the mask's own coverage, so the sample is not the
 /// colour to draw — the colour to draw is what the sample would have been
-/// before that blend. Recovering it is the inverse blend, and the C++ spells
-/// it with a truncating integer divide by the mask byte and a clamp, not with
-/// floats: `(dest - matte) * 255 / mask + matte`.
+/// before that blend. Recovering it is the inverse blend, spelled with a
+/// truncating integer divide by the mask byte and a clamp, not with floats:
+/// `(dest - matte) * 255 / mask + matte`.
 ///
 /// **A zero mask is skipped rather than guarded.** The C++ never enters the
 /// loop body for such a pixel, which is what avoids the divide by zero; the

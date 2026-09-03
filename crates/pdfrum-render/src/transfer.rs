@@ -1,5 +1,5 @@
 //! Applying a `/TR` transfer function to a resolved colour (ISO 32000-1
-//! §10.4, `cpdf_transferfunc.cpp:34-38`).
+//! §10.4).
 //!
 //! The three 256-entry byte tables are sampled once at parse time by
 //! `pdfrum-page`, already indexed by channel — 0 red, 1 green, 2 blue. What
@@ -148,9 +148,8 @@ mod tests {
     }
 
     /// Audit item **A9**, at the consuming end. This asserted the oracle's
-    /// reversal (`cpdf_docrenderdata.cpp:90`); table 58 gives the array as
-    /// `[red green blue gray]`, so element `i` drives channel `i`, and
-    /// nothing here undoes it.
+    /// reversal; table 58 gives the array as `[red green blue gray]`, so
+    /// element `i` drives channel `i`, and nothing here undoes it.
     #[test]
     fn the_first_array_element_drives_red() {
         let array = Object::Array(Array::of([

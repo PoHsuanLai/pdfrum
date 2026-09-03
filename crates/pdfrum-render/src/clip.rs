@@ -1,5 +1,4 @@
-//! Applying a page object's clip stack to a device
-//! (`ProcessClipPath`, `cpdf_renderstatus.cpp:534-596`).
+//! Applying a page object's clip stack to a device.
 //!
 //! Three contracts survive the translation from PDFium's 8-bit coverage
 //! region to our two-method trait:
@@ -26,13 +25,9 @@ use crate::path::{outer_rect, path_rect};
 /// The rectangle an empty clip path becomes: one pixel entirely off the top
 /// left of any device, i.e. "clip everything out".
 ///
-/// **Private on purpose** (`docs/design/idiomatic-api.md` §C, Tier 1 item 5).
-/// It was public as `EMPTY_CLIP_RECT`, an inverted off-device rectangle
-/// standing for "nothing" — a magic value a caller had to recognise, and one
-/// whose own test had to assert that a rect meaning *empty* measures one unit
-/// wide. [`Clip::Empty`] says it in the type instead. The rectangle itself is
-/// unchanged and still what reaches the device, because it interacts with the
-/// outer-rect rounding of the rect fast path downstream.
+/// [`Clip::Empty`] is the type-level spelling; this rectangle is what
+/// actually reaches the device, and its exact value matters because it
+/// interacts with the outer-rect rounding of the rect fast path downstream.
 const EMPTY_CLIP_RECT: Rect = Rect::new(-1.0, -1.0, 0.0, 0.0);
 
 /// One clip the engine will push, already reduced to what the device takes.
@@ -70,13 +65,10 @@ fn is_degenerate(path: &BezPath) -> bool {
 /// font's width solve are one implementation, so the shape that clips is the
 /// shape that would have been painted.
 ///
-/// The placement is **fractional**. `ProcessText`'s snapping gate is
-/// `if (is_clip || is_stroke)`, and `is_clip` is true for exactly this caller:
-/// `ProcessClipPath` passes a `clipping_path` where the painting pass passes
-/// `nullptr` (`cpdf_renderstatus.cpp:573-581` against `:312`). So a `Tr 4`
-/// run's *painted* glyphs snap to the blit grid and the *same* run's clipping
-/// glyphs do not, and asking for `subpixel_text_positioning` here is how that
-/// is spelled.
+/// The placement is **fractional**: the snapping gate excludes a clipping
+/// pass. So a `Tr 4` run's *painted* glyphs snap to the blit grid and the
+/// *same* run's clipping glyphs do not, and asking for
+/// `subpixel_text_positioning` here is how that is spelled.
 fn text_clip_glyphs(
     run: &TextClipRun,
     glyphs: &mut GlyphCache,

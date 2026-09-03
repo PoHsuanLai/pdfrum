@@ -1,12 +1,9 @@
 //! Transparency groups: when an offscreen buffer is forced, and what happens
-//! to it (`ProcessTransparency`, `cpdf_renderstatus.cpp:628-753`).
+//! to it.
 //!
-//! The single most consequential function in the module, and the one whose
-//! bail-out predicate decides whether a form draws directly or through a
-//! whole extra buffer. What is *not* in that predicate matters as much as
-//! what is: a non-isolated group with `/Group` present but `/I` absent, `ca`
-//! at one and no soft mask draws **directly**, with no group semantics at
-//! all.
+//! What is *not* in the bail-out predicate matters as much as what is: a
+//! non-isolated group with `/Group` present but `/I` absent, `ca` at one and
+//! no soft mask draws **directly**, with no group semantics at all.
 
 use pdfrum_page::{BlendMode, PageObject, Transparency};
 
@@ -53,12 +50,11 @@ impl GroupInputs {
     }
 }
 
-/// Whether the object must be rendered through an offscreen buffer
-/// (`cpdf_renderstatus.cpp:655-657`, negated).
+/// Whether the object must be rendered through an offscreen buffer.
 ///
-/// The text-clip clause of the original predicate is a constant `false` for
-/// us: it requires `!RenderCapSoftClip()`, and a bitmap device supports soft
-/// clipping, so it never fires.
+/// The oracle's predicate has a text-clip clause that is a constant `false`
+/// here: it requires a device *without* soft-clip support, and every device
+/// this engine drives has it.
 #[must_use]
 #[expect(
     clippy::float_cmp,
@@ -88,7 +84,7 @@ pub fn needs_backdrop(transparency: Transparency) -> bool {
 }
 
 /// The order the mask and the two alphas are applied to a finished group
-/// buffer (`cpdf_renderstatus.cpp:728-745`).
+/// buffer.
 ///
 /// Named as a type rather than left implicit because the *order* is the
 /// contract: the soft mask multiplies the alpha channel first, then the
@@ -105,10 +101,10 @@ impl GroupFinish {
     /// Work out which alphas apply.
     ///
     /// **`transparency` is the object's own, not the enclosing one.** A form
-    /// takes `pFormObj->form()->GetTransparency()` (`cpdf_renderstatus.cpp:646`)
-    /// and the group-alpha multiply is gated on *that* (`:740-742`) — the page
-    /// declaring a group does not make a form inside it take one, and a form
-    /// declaring one takes it whatever the page said. Handing the enclosing
+    /// takes its own group flags and the group-alpha multiply is gated on
+    /// *those* — the page declaring a group does not make a form inside it
+    /// take one, and a form declaring one takes it whatever the page said.
+    /// Handing the enclosing
     /// transparency in instead drops the multiply wherever the two disagree,
     /// which is silent: `group_alpha` is 1.0 for every non-form, so the wrong
     /// reading only ever *loses* an alpha and never adds a spurious one.
@@ -145,8 +141,8 @@ mod tests {
 
     use super::*;
 
-    /// The transparency a finished group composites back under
-    /// (`cpdf_renderstatus.cpp:746-752`), spelled out so a test can pin it.
+    /// The transparency a finished group composites back under, spelled out
+    /// so a test can pin it.
     ///
     /// The **enclosing** transparency, with `group` forced on for a form —
     /// *not* the form's own group flags. The walk never asks the question

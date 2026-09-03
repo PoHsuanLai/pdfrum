@@ -1,5 +1,4 @@
-//! Type 3, radial shadings (`DrawRadialShading`,
-//! `cpdf_rendershading.cpp:177-275`).
+//! Type 3, radial shadings.
 //!
 //! The quadratic and its root selection are ported verbatim, because every
 //! branch of the ladder is pixel-visible on the corpus's
@@ -20,22 +19,22 @@ use pdfrum_page::Radial;
 use crate::pixmap::Pixmap;
 use crate::shading::steps::ColorSteps;
 
-/// `FXSYS_IsFloatZero` (`fx_system.h:36`): `(f) < 0.0001 && (f) > -0.0001`.
+/// The oracle's float-zero test: `|f| < 0.0001`.
 ///
 /// A **fixed 1e-4 tolerance**, not a machine epsilon — roughly 840 times
 /// wider than `f32::EPSILON`, and the difference is pixel-visible. `a` is
 /// `dx² + dy² - dr²`, so when the start point sits on the end circle it is a
-/// catastrophic cancellation: `radial_shading_point_at_border` has
-/// `|start| = 1 + 1.1e-7` against `r1 = 1`, giving `a ≈ 2.4e-7`. That is
-/// above `f32::EPSILON` and far below 1e-4, so the real test takes the
-/// **linear** `a == 0` branch — which has no negative-radius skip — while a
-/// machine epsilon takes the quadratic one and skips 14601 pixels the oracle
-/// paints in `C0`.
+/// catastrophic cancellation: `radial_shading_point_at_border` has `|start| =
+/// 1 + 1.1e-7` against `r1 = 1`, giving `a ≈ 2.4e-7`. That is above
+/// `f32::EPSILON` and far below 1e-4, so the real test takes the **linear**
+/// `a == 0` branch — which has no negative-radius skip — while a machine
+/// epsilon takes the quadratic one and skips 14601 pixels the oracle paints
+/// in `C0`.
 fn is_float_zero(v: f64) -> bool {
     v.abs() < FLOAT_ZERO
 }
 
-/// The `FXSYS_IsFloatZero` tolerance.
+/// The float-zero tolerance.
 const FLOAT_ZERO: f64 = 1e-4;
 
 /// Whether the shading's radius shrinks fast enough that the *first* root is

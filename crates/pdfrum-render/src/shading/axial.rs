@@ -1,5 +1,4 @@
-//! Type 2, axial shadings (`DrawAxialShading`,
-//! `cpdf_rendershading.cpp:109-175`).
+//! Type 2, axial shadings.
 //!
 //! One projection onto the axis per pixel, then a ramp lookup. Two details
 //! are pixel-visible: the sample point is the pixel's **corner**, not its

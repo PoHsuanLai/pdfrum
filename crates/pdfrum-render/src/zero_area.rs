@@ -1,5 +1,4 @@
-//! Degenerate fills that PDFium redraws as hairlines
-//! (`GetZeroAreaPath`, `cfx_renderdevice.cpp:430-500`).
+//! Degenerate fills that PDFium redraws as hairlines.
 //!
 //! A filled sub-path that encloses no area would paint nothing at all, so the
 //! oracle detects three shapes of degeneracy — a there-and-back line, a
@@ -27,9 +26,8 @@ pub struct ZeroArea {
     pub identity: bool,
 }
 
-/// Snap a coordinate to a pixel centre the way the oracle does:
-/// `(int)c + 0.5`, i.e. **truncation toward zero** and then a half-pixel
-/// offset (`cfx_renderdevice.cpp:368-369`).
+/// Snap a coordinate to a pixel centre the way the oracle does: `(int)c +
+/// 0.5`, i.e. **truncation toward zero** and then a half-pixel offset.
 ///
 /// Truncation, not `floor`: at `-2.7` this gives `-1.5`, where a floor-based
 /// reading would give `-2.5`.
@@ -48,14 +46,13 @@ pub fn snap_to_pixel_center(c: f64) -> f64 {
 
 /// The two buffers a zero-area scan needs, kept between calls.
 ///
-/// The scan runs on **every fill-only path object of every page**, and on the
-/// corpus it almost never finds anything: `vector_paths_1751` scans 4925 paths
-/// and detects zero. Building a `Vec<SubPath>` — plus one `Vec<Point>` per
-/// sub-path — to answer "no" 4925 times was 9866 allocations per render
-/// (docs/status/M12b-P2.md §4). Now one sub-path's points go into a buffer that
-/// is cleared and refilled, and the results into a second, and a caller that
-/// holds a [`Scratch`] across a page allocates neither after the first path
-/// that needs them.
+/// The scan runs on **every fill-only path object of every page** and almost
+/// never finds anything, so building a `Vec<SubPath>` plus one `Vec<Point>`
+/// per sub-path to answer "no" would be two allocations per path object.
+/// Instead one sub-path's points go into a buffer that is cleared and
+/// refilled, and the results into a second, and a caller that holds a
+/// [`Scratch`] across a page allocates neither after the first path that
+/// needs them.
 ///
 /// A record of two buffers, not an object: [`scan_into`] is the operation and
 /// this only holds its working memory. It lives on
@@ -311,7 +308,7 @@ pub fn zero_area_path(
 }
 
 /// The alpha a thin zero-area replacement is stroked at: the fill's alpha
-/// **shifted right by two**, i.e. a quarter (`cfx_renderdevice.cpp:968`).
+/// **shifted right by two**, i.e. a quarter.
 ///
 /// Not a scale by 0.25 — a shift, so `255` becomes `63`, not `64`.
 #[must_use]

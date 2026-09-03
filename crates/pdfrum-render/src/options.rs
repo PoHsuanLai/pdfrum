@@ -1,21 +1,22 @@
 //! What a caller can ask of a render, and the defaults that reproduce the
-//! oracle (`CPDF_RenderOptions`, `cpdf_renderoptions.h:19-84`).
+//! oracle.
 //!
-//! `pdfium_test` renders every golden with `flags = FPDF_ANNOT` and nothing
-//! else, so the whole option surface collapses to its defaults: colour mode
-//! normal, no forced colours, and — the one that surprises — `bClearType
-//! = false`, because `RenderPageImpl` overwrites the constructor's `true`
-//! from the flag word on every public render call.
-//!
-//! **`bClearType = false` does not mean the LCD path is off.** It sets
-//! `CFX_TextRenderOptions::aliasing_type` to `kAntiAliasing`, and that is a
-//! different variable from `FontAntiAliasingMode`, which `DrawNormalText`
-//! derives separately (`cfx_renderdevice.cpp:1165-1206`): on a display device
-//! at 32 bpp with a smooth aliasing type the mode is `kLcd` *whatever*
-//! `bClearType` said, and `aliasing_type` only decides `normalize`. This
-//! crate's docs asserted the opposite until burn-down wave 5, and it matters
-//! for exactly one thing — the glyph-origin snap floors in x under `kLcd` and
-//! rounds under `kMono`. See [`RenderOptions::subpixel_text_positioning`].
+//! The conformance corpus renders with annotations on and nothing else, so
+//! the whole option surface collapses to its defaults.
+
+// `pdfium_test` renders every golden with `flags = FPDF_ANNOT` and nothing
+// else: colour mode normal, no forced colours, and — the one that surprises
+// — `bClearType = false`, because `RenderPageImpl` overwrites the
+// constructor's `true` from the flag word on every public render call.
+//
+// **`bClearType = false` does not mean the LCD path is off.** It sets
+// `CFX_TextRenderOptions::aliasing_type` to `kAntiAliasing`, and that is a
+// different variable from `FontAntiAliasingMode`, which `DrawNormalText`
+// derives separately (`cfx_renderdevice.cpp:1165-1206`): on a display device
+// at 32 bpp with a smooth aliasing type the mode is `kLcd` *whatever*
+// `bClearType` said, and `aliasing_type` only decides `normalize`. It matters
+// for exactly one thing — the glyph-origin snap floors in x under `kLcd` and
+// rounds under `kMono`.
 
 use kurbo::Affine;
 
@@ -23,7 +24,7 @@ use crate::color::Argb;
 
 /// The four colour modes. Three are reachable without any caller asking:
 /// `Alpha` from an alpha-type soft mask and from an uncoloured tiling
-/// pattern, `Gray` from `FPDF_GRAYSCALE`, `Forced` from a colour scheme.
+/// pattern, `Gray` from a grayscale render, `Forced` from a colour scheme.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ColorMode {
     /// Colours pass through unchanged.
@@ -54,15 +55,9 @@ pub struct ColorScheme {
 
 /// How glyphs are antialiased.
 ///
-/// The oracle's own choice with `FPDF_ANNOT` alone is [`TextAa::Grayscale`]:
-/// `bNoTextSmooth` and `bClearType` are both false, so `kAntiAliasing` wins
-/// and the three subpixel coverages are averaged back to grey.
-/// [`TextAa::None`] is `bNoTextSmooth`.
-///
-/// The three map onto `CFX_TextRenderOptions::aliasing_type`'s three
-/// (`GetTextRenderOptionsHelper`, `cpdf_textrenderer.cpp:27-47`) — `kAliasing`,
-/// `kAntiAliasing` and `kLcd` — and the last one is genuinely reachable:
-/// see [`TextAa::LcdSubpixel`].
+/// [`TextAa::Grayscale`] is the oracle's own choice on an ordinary page: the
+/// three subpixel coverages are averaged back to grey. [`TextAa::LcdSubpixel`]
+/// is reachable, but only per-draw — see its own note.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum TextAa {
     /// Grayscale coverage — the oracle's conformance setting.
@@ -74,25 +69,18 @@ pub enum TextAa {
     /// merge into their own destination channel, so a glyph drawn in one colour
     /// carries colour fringes.
     ///
-    /// This is `bClearType`, and it is **not** something only a caller asks
-    /// for. `bClearType` starts *true* in `CPDF_RenderOptions`' constructor
-    /// (`cpdf_renderoptions.cpp:23-27`); the two public render entry points
-    /// clear it from their flag word (`!!(flags & FPDF_LCD_TEXT)`), which is
-    /// why an ordinary page render is grayscale. But `DrawTextString`
-    /// (`cpwl_edit_impl.cpp:40-57`) builds a **local** `CPDF_RenderOptions`
-    /// that no flag word ever touches, and `CHECK`s that `bClearType` survived.
-    /// So a live edit's text — and only that text — is drawn with `ClearType` on
-    /// while the rest of the page is not, which is why this is a *per-draw*
-    /// selection rather than a whole-render one. See
-    /// [`RenderOptions::text_aa_override`].
+    /// It is **not** something only a caller asks for: a live edit's text —
+    /// and only that text — is drawn with `ClearType` on while the rest of
+    /// the page is not, which is why this is a *per-draw* selection rather
+    /// than a whole-render one. See [`RenderOptions::text_aa_override`].
     LcdSubpixel,
 }
 
 /// Everything a render is parameterised by.
 ///
-/// Constructed with `..RenderOptions::default()` struct update, per STYLE §4.
-/// The defaults are the oracle's: reproducing a golden needs no configuration
-/// beyond the target size.
+/// Constructed with `..RenderOptions::default()` struct update. The defaults
+/// are the oracle's: reproducing a golden needs no configuration beyond the
+/// target size.
 #[derive(Debug, PartialEq)]
 #[expect(
     clippy::struct_excessive_bools,
@@ -110,18 +98,12 @@ pub struct RenderOptions {
     pub text_aa: TextAa,
     /// Glyph antialiasing for *this draw only*, overriding [`Self::text_aa`].
     ///
-    /// The oracle's own text antialiasing is per-draw, not per-render, and the
-    /// difference is load-bearing rather than theoretical: `DrawTextString`
-    /// builds a local `CPDF_RenderOptions` whose `bClearType` no flag word
-    /// clears, so on a page whose every other run is grayscale a live edit's
-    /// text is drawn with `ClearType`. `text_aa` alone cannot say that, because
-    /// it says one thing about the whole page.
+    /// Text antialiasing is per-draw, not per-render: on a page whose every
+    /// other run is grayscale, a live edit's text is drawn with `ClearType`.
     ///
-    /// `None` — the default, and the whole corpus — means [`Self::text_aa`]
-    /// decides. A caller drawing one run differently sets this on a clone of
-    /// its options for that run and lets it fall out of scope afterwards; it is
-    /// deliberately not a mutation of `text_aa`, so the page's own setting
-    /// stays readable while a run is overridden.
+    /// `None` — the default — means [`Self::text_aa`] decides. A caller
+    /// drawing one run differently sets this on a clone of its options for
+    /// that run, so the page's own setting stays readable.
     pub text_aa_override: Option<TextAa>,
     /// `bNoPathSmooth`: hard-edge every path fill and stroke.
     pub no_path_smooth: bool,
@@ -139,27 +121,14 @@ pub struct RenderOptions {
     /// Place each glyph at its true fractional device origin instead of
     /// snapping it to a whole pixel.
     ///
-    /// **Default `false`, which is the oracle.** Below `|char2device.a| +
-    /// |char2device.b| > 50` PDFium renders a glyph *bitmap* and blits it on
-    /// a grid: **y on whole pixels, x on thirds of one**
-    /// (`cfx_renderdevice.cpp:1254-1257` for the snap, `1352` for the
-    /// `x_subpixel` that gives x back its thirds). We fill outlines rather
-    /// than blit bitmaps, but the placement is reproducible and it is the
-    /// larger half of D7: burn-down wave 4 measured the displacement at a
-    /// mean +0.45 px per text line on `example_063.pdf`, and re-aligning each
-    /// line onto the oracle's baseline removed 63% of the ±128 pixel swings.
+    /// **Default `false`, which is the oracle**: small text is placed on a
+    /// grid of whole pixels in y and thirds of a pixel in x. Set this to
+    /// `true` when a caller wants text where the PDF actually puts it —
+    /// smooth animation, a non-integer device scale, any use where oracle
+    /// parity is not the goal — at the cost of matching a golden.
     ///
-    /// The knob is the parity/off-grid tradeoff, and it is a real tradeoff.
-    /// Snapping is what the oracle does and what a golden compares against,
-    /// so it is the default; it also *quantises text geometry*, which is what
-    /// D7 originally declined in order to keep glyph origins exact. Set this
-    /// to `true` when a caller wants text placed where the PDF actually puts
-    /// it — smooth animation, a non-integer device scale, or any use where
-    /// oracle parity is not the goal.
-    ///
-    /// It has no effect on large text: above the `> 50` threshold the oracle
-    /// takes `DrawTextPath` and places glyphs fractionally itself, so both
-    /// settings agree there. See `crate::text::snap_origin`.
+    /// No effect on large text: above the size threshold glyphs are placed
+    /// fractionally either way.
     pub subpixel_text_positioning: bool,
     /// The page background. `None` follows the oracle: opaque white for a
     /// page without transparency, fully transparent for one with it.
@@ -171,14 +140,11 @@ pub struct RenderOptions {
     pub background: Option<peniko::Color>,
 }
 
-/// Hand-written so that the nested contexts a walk builds — a form's, a char
-/// proc's, a tile cell's, a soft mask's, and one per *run* of a text clip — are
-/// countable at a single point.
-///
-/// The body is `*self`: every field is `Copy`, which is itself the finding
-/// `docs/status/M12b-P2.md` §3 records. Deriving `Clone` would produce exactly
-/// this code and would leave the count unanswerable without a sampling
-/// allocator, which `unsafe_code = "forbid"` puts out of reach.
+// Hand-written so that the nested contexts a walk builds — a form's, a char
+// proc's, a tile cell's, a soft mask's, and one per *run* of a text clip —
+// are countable at a single point. The body is `*self`: every field is
+// `Copy`, so deriving `Clone` would produce exactly this code and would leave
+// the count unanswerable.
 impl Clone for RenderOptions {
     fn clone(&self) -> Self {
         crate::walkprofile::alloc_items(
@@ -210,8 +176,8 @@ impl Default for RenderOptions {
 
 impl RenderOptions {
     /// The background a page with the given transparency renders onto:
-    /// `0xFFFFFFFF` white when opaque, `0x00000000` when transparent
-    /// (`pdfium_test.cc:1070-1088`), unless overridden.
+    /// opaque white when the page is opaque, fully transparent when it is
+    /// not, unless [`RenderOptions::background`] overrides it.
     #[must_use]
     pub fn background_for(&self, has_transparency: bool) -> peniko::Color {
         self.background.unwrap_or(if has_transparency {
@@ -238,11 +204,10 @@ impl RenderOptions {
         self.text_aa_override.unwrap_or(self.text_aa)
     }
 
-    /// The options one text run draws under with `aa` forced.
+    /// The options one text run draws under with `aa` forced, leaving the
+    /// page's own options untouched.
     ///
-    /// The spelling `pdfrum-form`'s live-edit path wants: `DrawTextString`'s
-    /// local `CPDF_RenderOptions` as one expression, leaving the page's own
-    /// options untouched.
+    /// This is what a live edit's text draws through.
     #[must_use]
     pub fn for_text_run(&self, aa: TextAa) -> Self {
         Self {
@@ -253,11 +218,10 @@ impl RenderOptions {
 
     /// Whether glyph *outlines* are antialiased under these options.
     ///
-    /// The outline path has no subpixel spelling — above the oracle's size
-    /// threshold `DrawTextPath` fills a path and reads only `!is_text_smooth`
-    /// — so [`TextAa::LcdSubpixel`] antialiases here exactly like
-    /// [`TextAa::Grayscale`]. The subpixel choice is expressed on the *bitmap*
-    /// path, which is the only place the oracle expresses it either.
+    /// The outline path has no subpixel spelling, so [`TextAa::LcdSubpixel`]
+    /// antialiases here exactly like [`TextAa::Grayscale`]. The subpixel
+    /// choice is expressed on the *bitmap* path, the only place the oracle
+    /// expresses it either.
     #[must_use]
     pub fn text_antialias(&self) -> crate::device::AntiAlias {
         match self.effective_text_aa() {
@@ -266,10 +230,9 @@ impl RenderOptions {
         }
     }
 
-    /// The options a type-3 char proc renders under: `bForceHalftone` and
-    /// `bRectAA` forced on (`cpdf_renderstatus.cpp:997-998`), which means a
-    /// rectangle inside a type-3 glyph *is* antialiased where the same
-    /// rectangle on the page would not be.
+    /// The options a type-3 char proc renders under: forced halftone and
+    /// rectangle antialiasing, which means a rectangle inside a type-3 glyph
+    /// *is* antialiased where the same rectangle on the page would not be.
     #[must_use]
     pub fn for_type3_char_proc(&self) -> Self {
         Self {
@@ -280,7 +243,7 @@ impl RenderOptions {
     }
 
     /// The options an uncoloured tiling pattern's cell renders under: alpha
-    /// colour mode plus `bForceHalftone` (`cpdf_rendertiling.cpp:61-66`).
+    /// colour mode plus forced halftone.
     #[must_use]
     pub fn for_uncolored_tile(&self) -> Self {
         Self {

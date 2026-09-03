@@ -1,4 +1,4 @@
-//! The only seam between the engine and a rasterizer (SPEC.md §8).
+//! The only seam between the engine and a rasterizer.
 //!
 //! Two traits and a handful of vocabulary types, all spoken in kurbo/peniko.
 //! Nothing PDF-specific crosses this boundary: every decision that both
@@ -21,11 +21,9 @@ use crate::pixmap::{AlphaMask, Pixmap};
 /// - `Off` is the oracle's `aliased_path`, which thresholds the *same*
 ///   coverage at `> 127 -> 255` rather than turning the rasterizer off. It is
 ///   what the axis-aligned rect fast path and a hard-edged clip ask for.
-/// - `FullCover` is the oracle's `full_cover`, which keeps the rasterizer's
-///   choice of *which* pixels a span covers and then ignores the coverage
-///   value, writing every one of them at the source alpha
-///   (`CFX_AggRenderer::GetSrcAlpha` against `GetSourceAlpha`,
-///   `cfx_agg_devicedriver.cpp:481-491`).
+/// - `FullCover` keeps the rasterizer's choice of *which* pixels a span
+///   covers and then ignores the coverage value, writing every one of them at
+///   the source alpha.
 ///
 /// The distinction between the last two is the whole reason `FullCover`
 /// exists. Thresholding drops a pixel two abutting cells each cover halfway,
@@ -236,8 +234,8 @@ pub trait RasterBackend {
 pub const MAX_TARGET_DIMENSION: u32 = u16::MAX as u32;
 
 impl From<pdfrum_page::FillRule> for FillRule {
-    /// `kWinding` maps to non-zero and **everything else, `kNoFill`
-    /// included, maps to even-odd** (`cfx_agg_devicedriver.cpp:395-400`).
+    /// `kWinding` maps to non-zero and **everything else, `kNoFill` included,
+    /// maps to even-odd**.
     fn from(value: pdfrum_page::FillRule) -> Self {
         match value {
             pdfrum_page::FillRule::Winding => Self::Winding,

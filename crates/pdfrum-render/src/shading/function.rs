@@ -1,5 +1,4 @@
-//! Type 1, function-based shadings (`DrawFuncShading`,
-//! `cpdf_rendershading.cpp:277-336`).
+//! Type 1, function-based shadings.
 //!
 //! The only rasterizer with no ramp: the functions are evaluated per pixel,
 //! at the pixel's corner, and the result is converted to bytes by

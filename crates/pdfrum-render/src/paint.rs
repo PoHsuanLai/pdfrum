@@ -1,5 +1,4 @@
-//! Drawing one path object: the fast paths that change pixels
-//! (`CFX_RenderDevice::DrawPath`, `cfx_renderdevice.cpp:688-830`).
+//! Drawing one path object: the fast paths that change pixels.
 //!
 //! Four of them fire before an ordinary fill ever does, in this order: a
 //! two-point "fill" becomes a cosmetic line, an axis-aligned rectangle is

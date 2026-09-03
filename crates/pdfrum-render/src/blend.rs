@@ -1,35 +1,36 @@
-//! The sixteen PDF blend modes as the oracle computes them: all-integer,
-//! truncating, unclamped (ISO 32000-1 §11.3.5, `core/fxge/dib/blend.cpp` and
-//! `cfx_scanlinecompositor.cpp:41-121`).
+//! The sixteen PDF blend modes (ISO 32000-1 §11.3.5), computed the way the
+//! oracle does: all-integer, truncating, unclamped.
 //!
 //! **Part of the backend seam.** A backend that writes its own pixels
 //! composites with [`composite_solid`] and [`composite_premultiplied`] rather
-//! than with its rasterizer library's, which rounds differently; that is what
-//! `pdfrum-raster-agg` does.
+//! than with its rasterizer library's, which rounds differently.
 //!
-//! These are the *engine's* blend functions, used where the engine composites
-//! its own offscreen buffers. On-device compositing goes through each
-//! rasterizer's native blend modes instead, which round differently by ±1 —
-//! a difference Tier B's threshold absorbs and Tier C's edge budget names.
-//! Where a value is a *decision* rather than rasterization, it comes from
-//! here, so both backends see the same bytes.
-//!
-//! Three formulas resist re-derivation and are reproduced literally:
-//! `Overlay` is `HardLight` with its arguments swapped, `HardLight`'s
-//! threshold is `s < 128` rather than `2s <= 255`, and `SoftLight` reads a
-//! 256-entry table that is *not* a square root.
+//! These are the *engine's* blend functions, used where the engine
+//! composites its own offscreen buffers; on-device compositing goes through
+//! each rasterizer's native blend modes, which round differently by ±1.
+//! Where a value is a *decision* rather than rasterization it comes from
+//! here, so every backend sees the same bytes.
+
+// Sources: `core/fxge/dib/blend.cpp` and `cfx_scanlinecompositor.cpp:41-121`.
+// `pdfrum-raster-agg` is the in-tree proof that a backend can composite
+// through this module alone. The ±1 rounding difference is what Tier B's
+// threshold absorbs and Tier C's edge budget names.
+//
+// Three formulas resist re-derivation and are reproduced literally:
+// `Overlay` is `HardLight` with its arguments swapped, `HardLight`'s
+// threshold is `s < 128` rather than `2s <= 255`, and `SoftLight` reads a
+// 256-entry table that is *not* a square root.
 
 use pdfrum_page::BlendMode;
 
-/// ISO 32000-1 §11.3.5.2's auxiliary `D(x)`, tabulated at 8-bit precision
-/// (`core/fxge/dib/blend.cpp:21-43`), transcribed verbatim.
+/// ISO 32000-1 §11.3.5.2's auxiliary `D(x)`, tabulated at 8-bit precision,
+/// transcribed verbatim.
 ///
-/// The closed form is
-/// `D(x) = if x <= 0.25 { ((16x - 12)x + 4)x } else { sqrt(x) }`
-/// and `kColorSqrt[i] == round(255 * D(i / 255))` for all 256 entries — but
-/// the low branch is a cubic, not a root: entry `1` is `3` where a plain
-/// `round(255 * sqrt(1/255))` would give `16`. A rewrite that "simplifies"
-/// this to a square root is wrong by 17 counts, not by rounding.
+/// The closed form is `D(x) = if x <= 0.25 { ((16x - 12)x + 4)x } else {
+/// sqrt(x) }` and `kColorSqrt[i] == round(255 * D(i / 255))` for all 256
+/// entries — but the low branch is a cubic, not a root: entry `1` is `3`
+/// where a plain `round(255 * sqrt(1/255))` would give `16`. A rewrite that
+/// "simplifies" this to a square root is wrong by 17 counts, not by rounding.
 pub(crate) const COLOR_SQRT: [u8; 256] = [
     0x00, 0x03, 0x07, 0x0B, 0x0F, 0x12, 0x16, 0x19, 0x1D, 0x20, 0x23, 0x26, 0x29, 0x2C, 0x2F, 0x32,
     0x35, 0x37, 0x3A, 0x3C, 0x3F, 0x41, 0x43, 0x46, 0x48, 0x4A, 0x4C, 0x4E, 0x50, 0x52, 0x54, 0x56,
@@ -204,9 +205,8 @@ pub(crate) fn blend_rgb(mode: BlendMode, back: [u8; 3], src: [u8; 3]) -> [u8; 3]
     })
 }
 
-/// The straight-alpha source-over composite the oracle performs
-/// (`cfx_scanlinecompositor.cpp:553-608`), returning the new
-/// `(rgb, alpha)` of the destination.
+/// The straight-alpha source-over composite the oracle performs, returning
+/// the new `(rgb, alpha)` of the destination.
 ///
 /// The `dest.a == 0` short circuit is the structural difference from a
 /// textbook Porter-Duff implementation: over a fully transparent backdrop the
@@ -260,51 +260,14 @@ pub(crate) fn composite_straight(
 /// destination pixel, blending with `mode` and scaling the source by
 /// `coverage`.
 ///
-/// This is `composite_straight` wearing the buffer layout both rasterizer
-/// backends and every offscreen target in this crate actually use, and it
-/// exists so there is exactly one place the blend arithmetic lives. It
-/// un-premultiplies, delegates, and premultiplies back rather than deriving a
-/// second premultiplied formula — the round trip costs two divides on a pixel
-/// that is being blended anyway, and a second formula is a second thing to
-/// keep in step with the oracle.
-///
 /// `coverage` is the rasterizer's antialiasing byte, folded into the source
-/// alpha by the same truncating product the oracle folds a clip mask in with.
-/// A zero coverage or a zero source alpha leaves the destination untouched,
-/// which is what lets a caller blend unconditionally.
+/// alpha by a truncating product. A zero coverage or a zero source alpha
+/// leaves the destination untouched, which is what lets a caller blend
+/// unconditionally.
 ///
-/// # The opaque-destination fast path (M12)
-///
-/// The general route below is four divides and two multiplies per channel: it
-/// un-premultiplies both pixels, blends them straight, and premultiplies the
-/// result back. For **`BlendMode::Normal` over an opaque destination** the
-/// whole of that collapses, algebraically and exactly, to one
-/// [`alpha_merge`](crate::pixmap::alpha_merge) per channel. Substituting
-/// `dest_a = 255` and `mode = Normal` into `composite_straight`:
-///
-/// - `blend_rgb(Normal, ..)` is the identity on the source
-///   (`blend_channel`'s first arm), so `blended == src_rgb`;
-/// - `out_a = 255 + sa - 255*sa/255 = 255`, so the result is opaque and the
-///   premultiply-back is the identity;
-/// - `ratio = sa * 255 / 255 = sa`;
-/// - `to_source = alpha_merge(s, blended, 255) = s`, because `blended` *is*
-///   `s`;
-/// - and the channel is therefore `alpha_merge(d, s, sa)`.
-///
-/// The un-premultiply of the destination is also the identity at `da == 255`,
-/// so the only surviving work is un-premultiplying the source and one
-/// `alpha_merge`. That is not an approximation and not a "close enough": it is
-/// the same expression with a constant folded in, and
-/// `the_opaque_normal_fast_path_is_exhaustively_identical` checks all
-/// 256^3 relevant inputs against the general route rather than asserting it
-/// here.
-///
-/// It is worth a fast path because it is not a corner case: a PDF page renders
-/// onto an opaque white backdrop by default, so *every* pixel of *every*
-/// ordinary fill, stroke, glyph blit and image draw on a page with no
-/// transparency group takes exactly this branch. Measured on the M12 corpus,
-/// it is 60% of `render-exact`'s `text` class and 78% of its `shading` class —
-/// see `docs/status/M12.md`.
+/// A source that carries a *straight* colour — every
+/// [`Brush::Solid`](crate::device::Brush) — must use [`composite_solid`]
+/// instead: premultiplying it first quantises it.
 #[must_use]
 pub fn composite_premultiplied(
     dest: [u8; 4],
@@ -312,6 +275,49 @@ pub fn composite_premultiplied(
     coverage: u8,
     mode: BlendMode,
 ) -> [u8; 4] {
+    // This is `composite_straight` wearing the buffer layout both rasterizer
+    // backends and every offscreen target in this crate actually use, and it
+    // exists so there is exactly one place the blend arithmetic lives. It
+    // un-premultiplies, delegates, and premultiplies back rather than deriving
+    // a second premultiplied formula — the round trip costs two divides on a
+    // pixel that is being blended anyway, and a second formula is a second
+    // thing to keep in step with the oracle.
+    //
+    // The coverage fold is the same truncating product the oracle folds a
+    // clip mask in with.
+    //
+    // # The opaque-destination fast path (M12)
+    //
+    // The general route below is four divides and two multiplies per channel:
+    // it un-premultiplies both pixels, blends them straight, and
+    // premultiplies the result back. For **`BlendMode::Normal` over an opaque
+    // destination** the whole of that collapses, algebraically and exactly, to
+    // one `alpha_merge` per channel. Substituting `dest_a = 255` and
+    // `mode = Normal` into `composite_straight`:
+    //
+    // - `blend_rgb(Normal, ..)` is the identity on the source
+    //   (`blend_channel`'s first arm), so `blended == src_rgb`;
+    // - `out_a = 255 + sa - 255*sa/255 = 255`, so the result is opaque and the
+    //   premultiply-back is the identity;
+    // - `ratio = sa * 255 / 255 = sa`;
+    // - `to_source = alpha_merge(s, blended, 255) = s`, because `blended` *is*
+    //   `s`;
+    // - and the channel is therefore `alpha_merge(d, s, sa)`.
+    //
+    // The un-premultiply of the destination is also the identity at
+    // `da == 255`, so the only surviving work is un-premultiplying the source
+    // and one `alpha_merge`. That is not an approximation and not a "close
+    // enough": it is the same expression with a constant folded in, and
+    // `the_opaque_normal_fast_path_is_exhaustively_identical` checks all
+    // 256^3 relevant inputs against the general route rather than asserting it
+    // here.
+    //
+    // It is worth a fast path because it is not a corner case: a PDF page
+    // renders onto an opaque white backdrop by default, so *every* pixel of
+    // *every* ordinary fill, stroke, glyph blit and image draw on a page with
+    // no transparency group takes exactly this branch. Measured on the M12
+    // corpus, it is 60% of `render-exact`'s `text` class and 78% of its
+    // `shading` class — see `docs/status/M12.md`.
     let (Some(&sr), Some(&sg), Some(&sb), Some(&sa)) =
         (src.first(), src.get(1), src.get(2), src.get(3))
     else {
@@ -357,25 +363,13 @@ pub fn composite_premultiplied(
 /// `coverage`.
 ///
 /// The same composite as [`composite_premultiplied`], entered one step
-/// earlier. That step is not free: premultiplying a straight colour and
+/// earlier — and that step is not free: premultiplying a straight colour and
 /// un-premultiplying it back **quantises it**, because a premultiplied byte
-/// at alpha `a` can only express `a + 1` of the 256 straight values. At the
-/// alpha the form-field highlight uses — 100/255 — the representable reds
-/// near `221` are `219`, `222`, `224`: `221` is not among them, so the round
-/// trip that stores it lands on `219` and the tint composites a count low
-/// wherever a solid colour is drawn below full alpha.
-///
-/// The oracle never takes that step at all. Its AGG render targets are
-/// `FXDIB_Format::kBgra` — **straight** alpha; `CFX_DIBitmap::PreMultiply`
-/// exists only behind `PDF_USE_SKIA`. So a solid fill's colour reaches
-/// `CFX_ScanlineCompositor` exactly as the content stream stated it, and this
-/// is the entry point that reproduces that: every caller with a straight
-/// colour in hand — which is every [`Brush::Solid`](crate::device::Brush) —
-/// must use it rather than premultiplying first.
-///
-/// A source that is *already* premultiplied (an image sample, a composited
-/// layer) has no straight colour to preserve and goes on using
-/// [`composite_premultiplied`].
+/// at alpha `a` can only express `a + 1` of the 256 straight values. Every
+/// caller holding a straight colour — every
+/// [`Brush::Solid`](crate::device::Brush) — must use this; a source already
+/// premultiplied (an image sample, a composited layer) has no straight
+/// colour to preserve and uses [`composite_premultiplied`].
 #[must_use]
 pub fn composite_solid(
     dest: [u8; 4],
@@ -384,6 +378,17 @@ pub fn composite_solid(
     coverage: u8,
     mode: BlendMode,
 ) -> [u8; 4] {
+    // At the alpha the form-field highlight uses — 100/255 — the
+    // representable reds near `221` are `219`, `222`, `224`: `221` is not
+    // among them, so the round trip that stores it lands on `219` and the
+    // tint composites a count low wherever a solid colour is drawn below full
+    // alpha.
+    //
+    // The oracle never takes that step at all. Its AGG render targets are
+    // `FXDIB_Format::kBgra` — **straight** alpha; `CFX_DIBitmap::PreMultiply`
+    // exists only behind `PDF_USE_SKIA`. So a solid fill's colour reaches
+    // `CFX_ScanlineCompositor` exactly as the content stream stated it, and
+    // this is the entry point that reproduces that.
     let src_alpha = crate::pixmap::mul255(src_a, coverage);
     if src_alpha == 0 {
         return dest;
@@ -428,9 +433,9 @@ pub fn composite_solid(
 /// Here it is wrong for a structural reason: this is not one of the oracle's
 /// products at all, it is the *storage* half of a round trip our premultiplied
 /// buffers impose and the oracle's straight ones do not. Its inverse,
-/// [`unpremultiply_rgb`](crate::pixmap::unpremultiply_rgb), rounds — it is
-/// ported from `CFX_DIBitmap::UnPreMultiply`'s `+ alpha / 2` — so truncating
-/// on the way in makes the pair lose a count on most values instead of none.
+/// [`unpremultiply_rgb`](crate::pixmap::unpremultiply_rgb), rounds, so
+/// truncating on the way in would make the pair lose a count on most values
+/// instead of none.
 ///
 /// Measured: a straight `145` at alpha `223` premultiplies to `126` truncating
 /// and `127` rounding, and only `127` comes back as `145`. That count is
@@ -449,7 +454,8 @@ fn premultiply_channel(c: u8, a: u8) -> u8 {
 mod tests {
     use super::*;
 
-    /// The general route, with the M12 fast path deliberately not taken.
+    /// The general route, with the opaque-Normal fast path deliberately not
+    /// taken.
     ///
     /// A transcription of [`composite_premultiplied`]'s body from the
     /// `src_alpha == 0` check onward, which is what the fast path claims to be

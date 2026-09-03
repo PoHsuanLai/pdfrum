@@ -1,6 +1,4 @@
-//! Painting a path or a glyph run with a pattern colour
-//! (`ProcessPathPattern`, `DrawShadingPattern` and `DrawTilingPattern`,
-//! `cpdf_renderstatus.cpp:1185-1295`, `cpdf_rendertiling.cpp:85-299`).
+//! Painting a path or a glyph run with a pattern colour.
 //!
 //! A pattern colour is not a colour: it is an instruction to paint the
 //! object's geometry with something else entirely, and the ordinary fill is
@@ -13,7 +11,7 @@
 //!
 //! - **A shading pattern's alpha is rounded, not truncated.** Every other
 //!   alpha in the engine truncates (§1.3); `DrawShadingPattern` alone spells
-//!   `FXSYS_roundf`, so `/ca 0.5` is 128 here and 127 everywhere else.
+//!   rounds, so `/ca 0.5` is 128 here and 127 everywhere else.
 //! - **A pattern clips by the object's own geometry.** `ClipPattern` fills or
 //!   strokes the path into the clip; an image clips by its transformed bbox;
 //!   anything else drops the pattern entirely rather than painting it
@@ -42,8 +40,7 @@ use crate::device::{ImageQuality, MAX_TARGET_DIMENSION, RasterBackend, RenderDev
 use crate::path::{IntRect, is_available_matrix, outer_rect};
 use crate::pixmap::{AlphaMask, Pixmap, alpha_byte_rounding};
 
-/// The cell area below which a tile is rendered at 8×8 and scaled down
-/// (`cpdf_rendertiling.cpp:217-227`).
+/// The cell area below which a tile is rendered at 8×8 and scaled down.
 ///
 /// Strictly below: a 4×4 cell is exactly sixteen and renders at its own size.
 pub const MIN_CELL_AREA: i64 = 16;
@@ -71,10 +68,9 @@ pub fn render_size(width: u32, height: u32) -> (u32, u32) {
 
 /// What a pattern is painted through: the geometry that clips it.
 ///
-/// `ClipPattern` (`cpdf_renderstatus.cpp:598-609`) accepts exactly two
-/// shapes and **drops the pattern** for anything else, which is why this is
-/// not an `Option<BezPath>` — the third case is a real one and it is not
-/// "no clip".
+/// `ClipPattern` accepts exactly two shapes and **drops the pattern** for
+/// anything else, which is why this is not an `Option<BezPath>` — the third
+/// case is a real one and it is not "no clip".
 #[derive(Debug, Clone)]
 pub enum PatternClip<'a> {
     /// A path object, clipping by its own fill or stroke geometry.
@@ -229,7 +225,7 @@ pub fn draw<B: RasterBackend>(
     clip::pop(device, pushed);
 }
 
-/// Tile one cell across a clip rectangle (`CPDF_RenderTiling::Draw`).
+/// Tile one cell across a clip rectangle.
 ///
 /// The cell is rendered once into its own buffer and blitted at every tile
 /// position into a screen buffer the size of the clip; that buffer is then
@@ -370,7 +366,7 @@ fn draw_tiling<B: RasterBackend>(
 }
 
 /// Whether the tiles are drawn one at a time rather than through a cached
-/// cell (`cpdf_rendertiling.cpp:151`).
+/// cell.
 ///
 /// Either axis larger than the clip's, or a larger area, and the cell is not
 /// worth caching — in the extreme it cannot even be allocated.
@@ -388,8 +384,8 @@ fn tiles_one_at_a_time(cell: (i32, i32), clip: (i32, i32)) -> bool {
 
 /// Draw every tile straight to the device, one object list per position.
 ///
-/// `CPDF_RenderTiling`'s slow path. There is no cell buffer and nothing is
-/// composited at the end: each tile is a translated render of the pattern's
+/// The slow path: there is no cell buffer and nothing is composited at the
+/// end. Each tile is a translated render of the pattern's
 /// own objects, clipped to the region the pattern is filling. That makes it
 /// the only way to paint a cell larger than the clip, where allocating the
 /// cell is either impossible or wasteful.
@@ -567,9 +563,9 @@ fn render_cell<B: RasterBackend>(
     }))
 }
 
-/// One rendered tile, in the shape `CPDF_RenderTiling` blits it in.
+/// One rendered tile, in the shape the tiler blits it in.
 enum Cell {
-    /// A `/PaintType 1` cell: its own premultiplied pixels, `CompositeBitmap`.
+    /// A `/PaintType 1` cell: its own premultiplied pixels.
     Colored(Pixmap),
     /// A `/PaintType 2` cell: an 8-bit coverage plane plus the one flat colour
     /// every one of its pixels takes, `CompositeMask`.
