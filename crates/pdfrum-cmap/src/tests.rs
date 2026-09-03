@@ -487,9 +487,8 @@ fn wide_cid_ranges_need_a_four_byte_scheme() {
 }
 
 /// `usecmap` inherits the named base, and the child's own mappings win
-/// (ISO 32000-1 §9.7.5.3). This is audit A1: the oracle's
-/// `cpdf_cmapparser.cpp:61` is an empty `else if` and inherits nothing, so
-/// this test fails against the behaviour we shipped before 2026-09-02.
+/// (ISO 32000-1 §9.7.5.3). This is audit A1.
+// The oracle inherits nothing: cpdf_cmapparser.cpp:61 is an empty `else if`.
 #[test]
 fn usecmap_inherits_the_named_base_and_the_child_wins() {
     let (cmap, _) = embedded(
