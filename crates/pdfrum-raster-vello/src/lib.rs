@@ -1,6 +1,5 @@
 //! GPU `vello` implementation of `pdfrum-render`'s `RenderDevice` and
-//! `RasterBackend` traits, on a **caller-supplied** `wgpu` device
-//! (PLAN.md §M12c).
+//! `RasterBackend` traits, on a **caller-supplied** `wgpu` device.
 //!
 //! *Renamed 2026-09-02, was `pdfrum-raster-vello-gpu` with
 //! `VelloGpuBackend`.* The crates now take vello's own names: upstream's
@@ -8,8 +7,8 @@
 //! and the CPU wrapper is `pdfrum-raster-vello-cpu`.
 //!
 //! This is the fourth backend and the only one that is not pure Rust all the
-//! way down: `wgpu` reaches the platform's graphics drivers. DEPS.md grants
-//! that exemption for exactly one reason — pdfrum's most likely consumer is a
+//! way down: `wgpu` reaches the platform's graphics drivers. That exemption
+//! exists for exactly one reason — pdfrum's most likely consumer is a
 //! Rust GUI frontend that already holds an open `wgpu::Device` — and the
 //! exemption is bounded by two rules this crate exists to keep:
 //!
@@ -34,8 +33,7 @@
 //! as [`wgpu`]. Hand [`VelloBackend::new`] a device from
 //! `pdfrum_raster_vello::wgpu`, not from a `wgpu` you depend on
 //! separately: if the versions differ the types differ and no conversion
-//! exists. `vello 0.10` resolves `wgpu` **29**, not 30 as PLAN.md's version
-//! note claimed — see `docs/status/M12c.md` §1.
+//! exists. `vello 0.10` resolves `wgpu` **29**.
 //!
 //! # What this backend is for, and what it is not
 //!
@@ -53,7 +51,7 @@
 //! buffer) becomes a texture allocation, a GPU dispatch and a `map_async`
 //! stall on the host. A page that is one big scene wins; a page built from
 //! many small offscreen targets loses, and loses for a structural reason
-//! rather than a tuning one. `docs/status/M12c.md` §4.3 and §8 measure it.
+//! rather than a tuning one.
 //!
 //! ```no_run
 //! use kurbo::Affine;
@@ -121,8 +119,8 @@ pub use vello::wgpu;
 /// multisampling mode, and pinned rather than configurable. It is the closest
 /// of the three to what the CPU backends compute (`pdfrum-raster-agg`
 /// integrates the same quantity), which is what keeps the Tier C divergence
-/// budget in §7 of `docs/status/M12c.md` about *drivers* rather than about a
-/// sampling policy we chose differently on purpose. `AaSupport::area_only`
+/// budget about *drivers* rather than about a sampling policy we chose
+/// differently on purpose. `AaSupport::area_only`
 /// also compiles the fewest shader permutations at startup.
 pub const PINNED_AA: AaConfig = AaConfig::Area;
 
@@ -140,11 +138,10 @@ pub const MAX_TARGET_DIMENSION: u32 = pdfrum_render::MAX_TARGET_DIMENSION;
 
 /// A GPU `vello` backend bound to a caller's device.
 ///
-/// Holds the device and queue by reference — the whole point of the milestone
-/// — plus one [`Renderer`], which owns the compiled compute pipelines and is
-/// far too expensive to build per target. The [`RefCell`] is the standard
-/// lazy-mutation exception STYLE.md §2 allows, and it is documented here
-/// because it is the only interior mutability in the crate:
+/// Holds the device and queue by reference — the whole point of injection —
+/// plus one [`Renderer`], which owns the compiled compute pipelines and is
+/// far too expensive to build per target. The [`RefCell`] is the only
+/// interior mutability in the crate, and it is here because:
 /// [`RasterBackend::finish`] takes `&self` while [`Renderer::render_to_texture`]
 /// needs `&mut`, and threading a `&mut` backend through the engine would
 /// change the trait for three CPU backends that do not need it.
@@ -391,8 +388,7 @@ impl<'a> VelloBackend<'a> {
     /// The whole GPU round trip: allocate a storage texture, dispatch vello's
     /// pipelines, `copy_texture_to_buffer` into a mapped readback buffer, and
     /// block the host until the GPU is done. Callers pay upload *and*
-    /// readback here, which is the honest accounting `docs/status/M12c.md` §8
-    /// benchmarks.
+    /// readback here.
     ///
     /// A target the device cannot accept, or a zero axis, yields a blank
     /// pixmap of the requested size rather than an error, because

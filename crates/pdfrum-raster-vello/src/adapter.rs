@@ -176,8 +176,8 @@ fn open_shared_device() -> Result<Opened, Error> {
 /// A backend on this machine's GPU, or `None` when there is none.
 ///
 /// The shape every GPU test and benchmark in this workspace uses: a container
-/// or a CI runner has no adapter, and PLAN.md §M12c's guardrails say such an
-/// environment must **skip with a clear message**, never fail the suite and
+/// or a CI runner has no adapter, and such an environment must **skip with a
+/// clear message**, never fail the suite and
 /// never hang. Returning `None` rather than an error is what makes the
 /// skipping side of that a one-liner at each call site.
 ///
