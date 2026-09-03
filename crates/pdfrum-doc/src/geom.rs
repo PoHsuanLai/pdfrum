@@ -245,8 +245,78 @@ pub fn transform_rect(m: Affine, r: Rect) -> Rect {
     out
 }
 
+/// A widget annotation's `/MK /R`, normalized to one of the four quadrants.
+///
+/// ISO 32000-1 Table 189 defines `/R` as "the number of degrees by which the
+/// widget annotation shall be rotated counterclockwise relative to the page",
+/// and says it "shall be a multiple of 90". Neither clause is a guarantee
+/// about real files, so [`WidgetRotation::from_degrees`] rules on both: a
+/// negative or out-of-range angle is the *same* quadrant it names modulo a
+/// full turn, and an angle that is not a multiple of 90 names no quadrant at
+/// all and is upright.
+///
+/// This is the one normalization both readers of the key share — the
+/// appearance builder, which needs the box, and `pdfrum-form`'s routing,
+/// which needs the map. They used to fold it separately and disagreed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum WidgetRotation {
+    /// Upright.
+    #[default]
+    None,
+    /// A quarter turn counterclockwise.
+    Quarter,
+    /// A half turn.
+    Half,
+    /// Three quarters counterclockwise.
+    ThreeQuarter,
+}
+
+impl WidgetRotation {
+    /// The quadrant `/MK /R n` names, or [`WidgetRotation::None`] when it
+    /// names none.
+    ///
+    /// The fold is `rem_euclid(360)`, so `-90` is `270` — a quarter turn
+    /// *clockwise* is three quarters counterclockwise, which is what a
+    /// counterclockwise angle of `-90` means. A value that is not a multiple
+    /// of 90 is upright.
+    ///
+    /// [oracle-bug] PDFium folds with `abs(GetRotation() % 360)`
+    /// (`fpdfsdk/cpdfsdk_widget.cpp:1029` in `GetRotatedRect`, `:1049` in
+    /// `GetMatrix`), which sends `-90` to `90` — the wrong direction. The two
+    /// agree on the *box*, since 90 and 270 swap the same axes, but
+    /// `GetMatrix` builds `CFX_Matrix(0, 1, -1, 0, fWidth, 0)` for 90 and
+    /// `CFX_Matrix(0, -1, 1, 0, 0, fHeight)` for 270 (`:1053-1062`), so a
+    /// `/R -90` widget is drawn and hit-tested a half turn away from where
+    /// the file asked. pdf.js is the tiebreaker and normalizes the way this
+    /// does — `angle %= 360; if (angle < 0) { angle += 360; }`, then
+    /// `if (angle % 90 === 0)` before it is kept (`src/core/annotation.js`,
+    /// `WidgetAnnotation.setRotation`). We follow pdf.js and the
+    /// specification's "counterclockwise".
+    ///
+    /// The `default:` arm on both of the oracle's switches falls through to
+    /// the 0/180 case, so a non-multiple of 90 is upright there too; pdf.js's
+    /// `angle % 90 === 0` gate leaves `this.rotation` at its initialized `0`.
+    /// All three agree, and this is not a divergence.
+    #[must_use]
+    pub fn from_degrees(degrees: i64) -> WidgetRotation {
+        match degrees.rem_euclid(360) {
+            90 => WidgetRotation::Quarter,
+            180 => WidgetRotation::Half,
+            270 => WidgetRotation::ThreeQuarter,
+            _ => WidgetRotation::None,
+        }
+    }
+
+    /// Whether this rotation exchanges the widget's width and height.
+    #[must_use]
+    pub fn swaps_axes(self) -> bool {
+        matches!(self, WidgetRotation::Quarter | WidgetRotation::ThreeQuarter)
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use super::WidgetRotation;
     use super::{
         contains, deflate, height, inflate, is_empty, is_float_bigger, is_float_smaller,
         is_float_zero, match_rect, normalize, union, width,
@@ -299,6 +369,53 @@ mod tests {
         assert!(!is_float_bigger(1.0, 1.0 - 5e-5));
         assert!(is_float_smaller(0.5, 1.0));
         assert!(!is_float_smaller(1.0 - 5e-5, 1.0));
+    }
+
+    #[test]
+    fn a_negative_quarter_turn_is_three_quarters_counterclockwise() {
+        // ISO 32000-1 table 189: `/R` counts degrees *counterclockwise*, so
+        // `-90` is a quarter turn clockwise, which is `270`. PDFium's
+        // `abs()` answers `90` — see the `[oracle-bug]` note on
+        // `from_degrees`.
+        assert_eq!(
+            WidgetRotation::from_degrees(-90),
+            WidgetRotation::ThreeQuarter
+        );
+        assert_eq!(WidgetRotation::from_degrees(-270), WidgetRotation::Quarter);
+        assert_eq!(WidgetRotation::from_degrees(-180), WidgetRotation::Half);
+        assert_eq!(WidgetRotation::from_degrees(-360), WidgetRotation::None);
+    }
+
+    #[test]
+    fn a_rotation_that_is_not_a_quarter_turn_is_upright() {
+        // Both readers agree here: PDFium's `default:` falls through to the
+        // 0/180 case and pdf.js's `angle % 90 === 0` gate leaves the angle
+        // at zero.
+        for degrees in [45, -45, 1, 359, 91, 100_000] {
+            assert_eq!(
+                WidgetRotation::from_degrees(degrees),
+                WidgetRotation::None,
+                "{degrees}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_full_turn_folds_away() {
+        assert_eq!(WidgetRotation::from_degrees(450), WidgetRotation::Quarter);
+        assert_eq!(
+            WidgetRotation::from_degrees(-450),
+            WidgetRotation::ThreeQuarter
+        );
+        assert_eq!(WidgetRotation::from_degrees(720), WidgetRotation::None);
+    }
+
+    #[test]
+    fn only_the_odd_quadrants_swap_the_axes() {
+        assert!(!WidgetRotation::None.swaps_axes());
+        assert!(WidgetRotation::Quarter.swaps_axes());
+        assert!(!WidgetRotation::Half.swaps_axes());
+        assert!(WidgetRotation::ThreeQuarter.swaps_axes());
     }
 
     #[test]
