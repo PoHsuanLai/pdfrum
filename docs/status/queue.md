@@ -34,9 +34,19 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
   113397 on `FoxitSerifMM.pfb`) and do not partition it as ISO 32000-1 §9.9
   Table 127 requires. Pinned by the `#[ignore]`d
   `load_font.rs::type1_font_file_lengths_partition_the_stream`.
-- **Coloured tiling pattern paints grey where the oracle paints teal** on
-  `corpus/fx/other/1.pdf` — the pattern sentinel carried forward from the
-  render audit; not yet isolated.
+- ~~**Coloured tiling pattern paints grey where the oracle paints teal** on
+  `corpus/fx/other/1.pdf`~~ — landed, and **it was never a pattern**. The
+  file contains no `/Pattern` object at all: the teal is `Im1`, a 1x1
+  eight-bit image in a `/Separation` (PANTONE 327 CV over `DeviceCMYK`)
+  scaled across the region by a `cm`. Its lone `0xC6` sample is a 0.776
+  *tint*, and `unpack` bucketed every one-component image straight into
+  `Pixels::Gray8` without running the tint transform, so the tint byte
+  reached the page as the grey level `(198, 198, 198)` rather than the teal
+  `(0, 182, 162)` the transform produces. Every `Separation` and `DeviceN`
+  image was wrong the same way. Fixed by giving those two families the
+  conversion PDFium reaches through `LoadPalette` and
+  `TranslateScanline24bpp`; SSIM 0.996609 -> 0.998815. See
+  `docs/status/pdfrum-render.md` §"Tint-space images".
 
 ## Cleanliness before public CI (added 2026-09-03, user)
 

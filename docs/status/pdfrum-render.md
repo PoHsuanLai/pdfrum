@@ -52,7 +52,7 @@ rasterizer.
 | `text.rs` | the `Tr` mode table, the glyph matrix, the stroked-text CTM split, glyph placement, the origin snap and its three gates, `AdjustGlyphSpace`, the substituted-font width solve, type-3 character placement |
 | `glyph.rs` | the FreeType-parity glyph raster: the LCD 3× implosion, `ft_lcd_padding`, the FIR5 filter, `kTextGammaAdjust`, the subpixel phase, and the bitmap cache under the oracle's own key |
 | `scanline.rs` | the analytic cell rasterizer — the engine's, so a glyph bitmap is the same under every backend |
-| `image.rs` | `UseInterpolateBilinear`, the `kHugeImageSize` rule, the CMYK-overprint gate, the flip rule, sample-to-pixmap, the `/Matte` un-premultiply |
+| `image.rs` | `UseInterpolateBilinear`, the `kHugeImageSize` rule, the CMYK-overprint gate, the flip rule, sample-to-pixmap, the `/Matte` un-premultiply. Samples arrive already in device colour: `pdfrum-page`'s `unpack` resolves a `Separation`/`DeviceN` image through its tint transform first, per "Tint-space images" below |
 | `ctx.rs` | `RenderCtx`, the depth cap, the type-3 font *set*, `RenderCaches` |
 | `walk.rs` | `render_page`, the object dispatch, the cull test, the page matrix, the group path, the soft-mask group, the type-3 char-proc walk, `DrawPatternImage`, the glyph-bitmap blit |
 | `pdfrum-raster-tinyskia` | the emulated layer and clip stacks, the conversions, the `1/4096` note |
@@ -2896,6 +2896,127 @@ and only stem-edge antialiasing differs — plus the shading-pattern residue
 (10 files, mostly type 6/7 patch meshes reached through a pattern rather than
 through `sh`) and six tiling files whose cell rasterization differs in
 antialiasing rather than in placement.
+
+## Tint-space images
+
+`corpus/fx/other/1.pdf` sat in the queue as "a coloured tiling pattern paints
+grey where the oracle paints teal", carried forward from the render audit and
+never isolated. **The attribution was wrong in every part except the colours.**
+The file contains no `/Pattern` object at all — no `/PatternType`, no `scn`
+with a name operand, nothing. The teal region is `Im1`, a **1x1 eight-bit
+image** in
+
+```
+[/Separation /PANTONE#203278#20CV /DeviceCMYK
+   <</FunctionType 2 /N 1.0 /Domain[0 1]
+     /C0[0 0 0 0] /C1[1.0 0.0 0.600006 0.0]>>]
+```
+
+drawn under `106.45 0 0 127.84 51.38 247.45 cm` so that one sample covers a
+144x146 device box. Its lone sample byte is `0xC6` — a tint of 198/255 =
+0.7765, which the transform carries to CMYK `(0.7765, 0, 0.4659, 0)` and the
+Adobe table to `(0, 182, 162)`.
+
+We painted `(198, 198, 198)`: `unpack` buckets a decoded image on its
+**component count** alone — `1 => Gray8`, `4 => Cmyk8`, `_ => Rgb8` — so a
+one-component image was a grey plane and the tint byte *was* the grey level.
+The tint transform never ran. Nothing about the diagnosis was pattern-shaped;
+the only reason it read as one is that a flat expanse of a single wrong colour
+looks like a pattern cell painting its fallback.
+
+The bug was never confined to this file. Every `Separation` and every
+`DeviceN` image took the same path, and a four-colorant `DeviceN` was being
+read as raw `DeviceCMYK`.
+
+**And the conversion was already written.**
+`ColorSpace::translate_image_line` (`crates/pdfrum-page/src/color/mod.rs`) is
+a faithful port of `CPDF_ColorSpace::TranslateImageLine` and every family
+override — the `CalGray` replication, the `CalRGB` reversal, `Lab`'s byte
+domain, the `ICCBased` cascade, and the generic `GetRGB`-per-pixel base that
+`Separation` and `DeviceN` fall through to. It had **no caller in the image
+build at all**: the only thing that touched it was
+`tests/never_panics.rs:460`. So this was not a missing port but a missing
+*call site* — the arithmetic was there the whole time and `unpack` never
+asked for it. `tint_per_pixel` is now that call site, and the byte order is
+the only adaptation: the port writes B, G, R because that is the device order
+PDFium's scanline is in, and `Pixels::Rgb8` wants R, G, B.
+
+That is also why the two arms encode differently and both are right.
+`LoadPalette` rounds (`FXSYS_roundf`, `cpdf_dib.cpp:925`) and our palette
+stores `Rgb` that `to_bytes` rounds; `TranslateScanline24bpp` truncates
+(`static_cast<uint8_t>(B * 255)`, `:1049-1051`) and the port's `write_bgr`
+uses `to_bytes_truncating`. Swapping either for the other is a visible
+one-bit error on about half of all inputs.
+
+### The oracle reaches the same conversion from two directions
+
+Both end at `GetRGB`, and which one runs is only a question of how wide the
+sample is:
+
+| | when | what runs |
+|---|---|---|
+| `CPDF_DIB::LoadPalette` (`cpdf_dib.cpp:894-979`) | `bpc_ * components_ <= 8` | `GetRGB` over all `1 << bits` sample values, once |
+| `CPDF_DIB::TranslateScanline24bpp` (`:1007-1054`) | anything wider | `GetRGB` per pixel |
+
+`TranslateScanline24bpp`'s default-decode shortcut (`:1056-1075`) keeps only
+`DeviceRGB`/`CalRGB` and hands every other family to `TranslateImageLine`,
+whose generic base (`cpdf_colorspace.cpp:636-660`) is `GetRGB` per pixel
+again — so there is no escape from the conversion for a tint space.
+
+### Only two families, and the reason matters
+
+`needs_image_conversion` answers `Separation` and `DeviceN` and nothing else,
+because the other non-device families each have a `TranslateImageLine`
+override that is **not** the scalar conversion, and folding them in would be a
+new divergence rather than a fix:
+
+| family | override | what it does |
+|---|---|---|
+| `CalGray` | `cpdf_colorspace.cpp:725-742` | copies the grey byte into all three channels |
+| `CalRGB` | `:808-816` | a channel reversal — gamma and matrix dropped |
+| `Lab` | `:899-915` | rescales out of the **byte** domain, not the decoded range |
+| `ICCBased` | `:991-1010` | runs the profile over bytes |
+
+`Indexed` is already handled by its own palette, and `Pattern` carries no
+image samples at all — `TranslateScanline24bpp` skips it explicitly
+(`:1043`).
+
+### Spec and pdf.js agree, so there is no `[oracle-bug]` here
+
+ISO 32000-1 §8.6.6.4 and §8.6.6.5 make the components of a `Separation` and a
+`DeviceN` *colorant tints*, with the tint transform the thing that turns them
+into colour; an image's samples are colour-space components like any other.
+pdf.js runs the same conversion over image samples — `PDFImage.createImageData`
+calls `colorSpace.fillRgb(...)`, and `AlternateCS.getRgbBuffer`
+(`src/core/colorspace.js`) applies `tintFn` and then the base space per sample.
+It builds no lookup table, which is a performance choice rather than a
+different answer. All three agree; we were alone in being wrong.
+
+### What it moved
+
+Three rows, all `pass -> pass`, no `pass -> fail`:
+
+| file | SSIM before | after |
+|---|---|---|
+| `corpus/fx/other/1.pdf` | 0.996609 | **0.998815** |
+| `resources/bug_555784.pdf` | 0.998737 | 0.998736 |
+| `resources/bug_555784.in` | 0.998737 | 0.998736 |
+
+`bug_555784` is a fuzz file — a 81915x1 image over a **3277**-colorant
+`DeviceN` whose type-2 transform reports `orig_outputs * inputs = 4` outputs
+against a `DeviceRGB` alternate, so the space loads in both implementations.
+Its samples are all zero, so the transform yields `C0` and the correct colour
+is black; we now paint that instead of the dark grey the raw samples gave. The
+oracle paints **white**, because it never decodes the image at all:
+`ContinueInternal` (`cpdf_dib.cpp:178-181`) calls
+`CalculatePitch32(bpc_ * components_, width)`, and `52432 * 81915 + 31 =
+4294967311` overflows `uint32` by sixteen, so the load fails. Our `pitch()`
+(`crates/pdfrum-page/src/image/dict.rs:189-194`) computes in `u64` and caps
+only the whole-image product, so the image survives. **That gap is
+pre-existing and independent of this change** — the fix altered which colour
+the surviving pixels take, not whether they exist — and the row's -0.000001
+is 139 pixels of one scanline in a 612x792 page. It is left as it is rather
+than fixed by widening a colour change into a size-limit change.
 
 ## Deliberate divergences
 
