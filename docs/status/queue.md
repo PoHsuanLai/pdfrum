@@ -47,9 +47,15 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
   `DEPS.md` by name (`pdfrum-font` 38, `pdfrum-render` 37, `pdfrum-page` 29,
   `pdfrum-edit` 19, `pdfrum-form` 18, …). None of that means anything on
   docs.rs. It is the WP4 provenance sweep with a wider pattern, applied
-  workspace-wide: the sentence keeps its *content* (what the invariant is),
-  loses the *pointer* (where we decided it), and the pointer moves to `//`
-  on the body if it is worth keeping. Then a CI grep in `scripts/ci.nu`
+  workspace-wide — and **the lean is to delete, not relocate** (user): most
+  of these sentences are diary entries (when we decided, which pass, which
+  ruling superseded which) that git history and `docs/` already hold. Keep
+  only an invariant a caller can get wrong (rustdoc, rewritten without the
+  pointer) or a measured fact that changes how the code must be read (a
+  short `//` stating the fact, not "see M12 §1.6"). If the next reader's
+  need cannot be said in one sentence, it goes. Folded into the in-flight
+  `pdfrum-object`/`pdfrum-render` and `pdfrum-form` rustdoc agents; the
+  other crates remain. Then a CI grep in `scripts/ci.nu`
   over `///`/`//!` lines for `\bM[0-9]{1,2}[a-z]?\b|\bWP[0-9]+\b|§[A-Z]\.[0-9]|docs/(status|design|upstream)|PLAN\.md|SPEC\.md|STYLE\.md|DEPS\.md`
   so it does not regrow (non-vacuity control as the other checks have).
   Sequence after the in-flight rustdoc WP5 crates land, so it does not
