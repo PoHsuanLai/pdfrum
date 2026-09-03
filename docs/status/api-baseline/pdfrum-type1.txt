@@ -22,6 +22,11 @@ pub pdfrum_type1::Error::NoCharStrings
 pub pdfrum_type1::Error::NoEexec
 pub pdfrum_type1::Error::PfbSegment
 pub pdfrum_type1::Error::PfbSegment::at: usize
+pub struct pdfrum_type1::FontFile
+pub pdfrum_type1::FontFile::length1: u32
+pub pdfrum_type1::FontFile::length2: u32
+pub pdfrum_type1::FontFile::length3: u32
+pub pdfrum_type1::FontFile::program: alloc::vec::Vec<u8>
 pub struct pdfrum_type1::Gid(pub u16)
 pub struct pdfrum_type1::Glyph
 pub pdfrum_type1::Glyph::advance: f32
@@ -71,6 +76,6 @@ pub const pdfrum_type1::EEXEC_SEED: u16
 pub const pdfrum_type1::EEXEC_SKIP: usize
 pub fn pdfrum_type1::decrypt(&[u8], u16, usize) -> alloc::vec::Vec<u8>
 pub fn pdfrum_type1::encrypt(&[u8], u16) -> alloc::vec::Vec<u8>
-pub fn pdfrum_type1::font_file_lengths(&[u8]) -> (u32, u32, u32)
+pub fn pdfrum_type1::font_file(&[u8]) -> pdfrum_type1::FontFile
 pub fn pdfrum_type1::standard_encoding_name(u8) -> core::option::Option<&'static str>
 pub fn pdfrum_type1::unicode_from_glyph_name(&str) -> core::option::Option<char>

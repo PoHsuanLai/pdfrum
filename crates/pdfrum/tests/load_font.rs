@@ -1346,10 +1346,12 @@ fn load_simple_type1_font() {
 
     let (_, l1, l2, l3) = type1_font_file(&saved_doc, font.object());
     // The three are the PFB's three segment payload lengths: clear text,
-    // eexec-encrypted, and the 512-zeros-plus-`cleartomark` trailer. This is
-    // the divergence `embed.rs` documents against the oracle, which writes
-    // `/FontFile` with none of the three (`fpdf_edittext.cpp:166`,
-    // `TODO(npm): Lengths for Type1 fonts.`).
+    // eexec-encrypted, and the 512-zeros-plus-`cleartomark` trailer — and the
+    // stream holds exactly those payloads, the PFB framing having been
+    // unwrapped. This is the divergence `embed.rs` documents against the
+    // oracle, which writes `/FontFile` with none of the three
+    // (`fpdf_edittext.cpp:166`, `TODO(npm): Lengths for Type1 fonts.`) and
+    // stores the container verbatim.
     assert_eq!((l1, l2, l3), (10710, 102_155, 532));
     assert_eq!(
         l1 + l2 + l3 + 6 * 3 + 2,
@@ -1377,30 +1379,22 @@ fn load_simple_type1_font() {
     }
 }
 
-/// A library defect this port found, kept as the failing test that pins it.
+/// The ISO 32000-1 §9.9 Table 127 partition, on the container that used to
+/// break it.
 ///
-/// `embed_program` (`crates/pdfrum-edit/src/font/embed.rs:451-485`) writes the
-/// caller's bytes into `/FontFile` **verbatim** — for a PFB, that is the file
-/// including its three 6-byte `80 01`/`80 02` segment headers and its `80 03`
-/// end marker. But the `/Length1` `/Length2` `/Length3` it writes beside them
-/// come from `pdfrum_font::type1_program_lengths`, which returns the *unwrapped*
-/// segment payload lengths. The two disagree by the 20 wrapper bytes: the
-/// decoded stream is 113417 bytes while `Length1 + Length2 + Length3` is
-/// 113397.
-///
-/// ISO 32000-1 §9.9 Table 127 defines the three as a partition of the stream's
-/// decoded data, so a conforming reader that slices `[0..Length1]` gets six
-/// bytes of PFB header followed by 10704 bytes of clear text, and its
-/// `[Length1..Length1+Length2]` slice straddles the second segment header. The
-/// fix belongs in `embed_program`: strip the PFB framing before storing, or
-/// compute the lengths over the bytes actually stored. Not fixed here — this
-/// port touches tests only.
+/// A PFB is not a Type 1 program: it is a chain of `[0x80, type, len:u32le]`
+/// records wrapping one. Storing it verbatim in `/FontFile` — which the oracle
+/// does (`fpdfsdk/fpdf_edittext.cpp:166-174`, `TODO(npm): Lengths for Type1
+/// fonts.`) — leaves a conforming reader slicing `[0..Length1]` off six bytes
+/// of segment header, and `[Length1..Length1+Length2]` straddling the next
+/// one. `embed_program` therefore unwraps the container and stores the raw
+/// program its records carry, so the three lengths measure what was written:
+/// 10710 + 102155 + 532 = 113397 bytes, the 113417-byte file less its three
+/// 6-byte headers and its two-byte `80 03` end marker.
 #[test]
-#[ignore = "library defect: embed_program stores the PFB verbatim (113417 B) while \
-            /Length1+/Length2+/Length3 describe the unwrapped program (113397 B), so the \
-            three lengths do not partition the stream as ISO 32000-1 §9.9 Table 127 requires"]
 fn type1_font_file_lengths_partition_the_stream() {
     let doc = Document::from_bytes(Arc::from(HELLO_PDF)).expect("opens");
+    let original_dark = dark_pixels(&pixels(HELLO_PDF).2);
     let mut edit = doc.edit();
     let font = edit
         .embed_font(FOXIT_SERIF_MM, FontEncoding::Simple)
@@ -1436,18 +1430,78 @@ fn type1_font_file_lengths_partition_the_stream() {
         l1 + l2 + l3,
         "the three lengths must partition the decoded /FontFile"
     );
+    assert_eq!(
+        i64::try_from(FOXIT_SERIF_MM.len()).expect("fits"),
+        l1 + l2 + l3 + 6 * 3 + 2,
+        "…and what was dropped is exactly the PFB framing"
+    );
     assert!(
         program.starts_with(b"%!"),
         "the stored program must open with the clear-text segment's PostScript \
          banner, not with a PFB segment header"
     );
+
+    // Portion 1: clear text, ending at the `eexec` boundary.
     let clear = program
         .get(..usize::try_from(l1).expect("fits"))
         .expect("clear-text segment");
+    let boundary = clear.len().saturating_sub(8);
     assert!(
-        clear.windows(5).any(|w| w == b"eexec"),
-        "/Length1 must end at the eexec boundary"
+        clear
+            .get(boundary..)
+            .is_some_and(|t| t.windows(5).any(|w| w == b"eexec")),
+        "/Length1 must end at the eexec boundary, got {:?}",
+        clear.get(boundary..)
     );
+
+    // Portion 2: the encrypted private dictionary, starting right after it.
+    let cipher_at = usize::try_from(l1).expect("fits");
+    let cipher_end = cipher_at + usize::try_from(l2).expect("fits");
+    let cipher = program.get(cipher_at..cipher_end).expect("eexec segment");
+    assert_eq!(cipher.len(), 102_155);
+    assert!(
+        !cipher.is_ascii(),
+        "the PFB's private portion is binary, not the hexadecimal a PFA writes"
+    );
+
+    // Portion 3: the fixed-content trailer — 512 zeros, then `cleartomark`.
+    let trailer = program.get(cipher_end..).expect("trailer segment");
+    assert_eq!(trailer.len(), usize::try_from(l3).expect("fits"));
+    assert!(
+        trailer.starts_with(&[b'0'; 64]),
+        "/Length3 must start at the 512-zeros block"
+    );
+    assert!(
+        trailer
+            .get(..512)
+            .is_some_and(|z| z.iter().all(|b| *b == b'0' || b.is_ascii_whitespace())),
+        "the fixed-content portion opens with the 512-zero block"
+    );
+    assert!(
+        trailer.windows(11).any(|w| w == b"cleartomark"),
+        "the fixed-content portion ends with `cleartomark`"
+    );
+
+    // Round trip: what we wrote is a Type 1 program our own reader accepts,
+    // and the glyphs draw.
+    let (_, _, pix) = pixels(&saved);
+    assert!(
+        dark_pixels(&pix) > original_dark,
+        "the unwrapped Type 1 program still draws"
+    );
+
+    match oracle_md5(&out) {
+        Ok(stdout) => {
+            assert!(
+                stdout.contains("MD5:"),
+                "the oracle reopens a file whose /FontFile is a raw Type 1 \
+                 program, got {stdout:?}"
+            );
+        }
+        Err(msg) => {
+            eprintln!("skipping oracle reopen: {msg}");
+        }
+    }
 }
 
 /// Ports `FPDFEditEmbedderTest.LoadCIDType0Font`.

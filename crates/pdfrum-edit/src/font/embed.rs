@@ -343,9 +343,11 @@ fn embed_composite(
 ///   as `/FontFile3`). pdf.js: `translateFont` looks up `"FontFile3"`
 ///   (`src/core/evaluator.js:4633`); `isOpenTypeFile` /
 ///   `getFontFileType` sniff `OTTO` (`src/core/fonts.js:319-321`, `:357-363`).
-/// - **Type 1** writes `/Length1` `/Length2` `/Length3` (ISO 32000-1 §9.9
-///   table 127). The oracle leaves them off (`:166` `TODO(npm): Lengths
-///   for Type1 fonts.`). pdf.js: `translateFont` reads the lengths
+/// - **Type 1** is unwrapped out of its PFB container and stored raw, with
+///   `/Length1` `/Length2` `/Length3` partitioning what was stored
+///   (ISO 32000-1 §9.9 table 127). The oracle stores the container verbatim
+///   and writes no lengths at all (`:166` `TODO(npm): Lengths for Type1
+///   fonts.`). pdf.js: `translateFont` reads the lengths
 ///   (`src/core/evaluator.js:4672-4674`); `Type1Font.#parseType1`
 ///   consumes them (`src/core/type1_font.js:195-201`).
 /// - **`/CapHeight`** uses OS/2 `sCapHeight` when present, else the
@@ -448,40 +450,55 @@ fn load_font_desc(
     doc.add(Object::Dict(desc))
 }
 
+/// The `/FontFile*` stream: the program bytes, and the length keys that
+/// describe them.
+///
+/// A TrueType or OpenType program is stored exactly as handed over. A **Type 1
+/// program is unwrapped first**: a PFB is a container whose `[0x80, type,
+/// len:u32le]` record headers and `80 03` end marker are framing, not font
+/// data, and ISO 32000-1 §9.9 table 127 defines `/Length1` `/Length2`
+/// `/Length3` as a partition of the *stored* stream. Concatenating the PFB's
+/// record bodies gives the raw PFA-shaped program those three lengths measure.
 fn embed_program(doc: &mut EditDoc<'_>, program: &[u8], kind: ProgramKind) -> ObjRef {
     let mut dict = Dict::new();
-    match kind {
+    let bytes = match kind {
         ProgramKind::TrueType => {
             dict.push(
                 names::LENGTH1.clone(),
                 Object::Int(i64::try_from(program.len()).unwrap_or(i64::MAX)),
             );
+            program.to_vec()
         }
         ProgramKind::OpenTypeCff => {
             dict.push(
                 names::SUBTYPE.clone(),
                 Object::Name(names::OPEN_TYPE.clone()),
             );
+            program.to_vec()
         }
         ProgramKind::Type1 => {
-            // [oracle-bug] fpdfsdk/fpdf_edittext.cpp:166 `TODO(npm): Lengths
-            // for Type1 fonts.` — the oracle writes /FontFile with none of
-            // /Length1 /Length2 /Length3. ISO 32000-1 §9.9 table 127 requires
-            // all three. pdf.js is a reader: `translateFont` pulls the three
-            // lengths off the stream dict (src/core/evaluator.js:4672-4674)
-            // and `Type1Font.#parseType1` splits the header and eexec blocks
-            // with `properties.length1` / `properties.length2`
-            // (src/core/type1_font.js:195-201).
-            let (l1, l2, l3) = pdfrum_font::type1_program_lengths(program);
-            dict.push(names::LENGTH1.clone(), Object::Int(i64::from(l1)));
-            dict.push(names::LENGTH2.clone(), Object::Int(i64::from(l2)));
-            dict.push(names::LENGTH3.clone(), Object::Int(i64::from(l3)));
+            // [oracle-bug] fpdfsdk/fpdf_edittext.cpp:166-174 stores the
+            // caller's bytes verbatim under `TODO(npm): Lengths for Type1
+            // fonts.` and writes none of /Length1 /Length2 /Length3 — so a PFB
+            // reaches /FontFile with its segment framing intact and nothing
+            // describing it. ISO 32000-1 §9.9 table 127 requires all three,
+            // and requires them to partition the stream: clear-text portion,
+            // encrypted portion, fixed-content (`cleartomark`) portion of a
+            // *raw* Type 1 program. So the PFB is unwrapped and the raw
+            // program is what we store. pdf.js is a reader: `translateFont`
+            // pulls the three lengths off the stream dict
+            // (src/core/evaluator.js:4672-4674) and `Type1Font.#parseType1`
+            // splits the header and eexec blocks with `properties.length1` /
+            // `properties.length2` (src/core/type1_font.js:195-201) — given
+            // the oracle's output it would slice PFB headers as font data.
+            let file = pdfrum_font::type1_font_file(program);
+            dict.push(names::LENGTH1.clone(), Object::Int(i64::from(file.length1)));
+            dict.push(names::LENGTH2.clone(), Object::Int(i64::from(file.length2)));
+            dict.push(names::LENGTH3.clone(), Object::Int(i64::from(file.length3)));
+            file.program
         }
-    }
-    doc.add(Object::Stream(Stream::new(
-        dict,
-        ByteSpan::from(program.to_vec()),
-    )))
+    };
+    doc.add(Object::Stream(Stream::new(dict, ByteSpan::from(bytes))))
 }
 
 fn font_name(glyphs: &GlyphSource) -> Vec<u8> {

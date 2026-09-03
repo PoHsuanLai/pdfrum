@@ -1339,12 +1339,27 @@ so the pdf.js lines are the ones that *depend* on the value:
   requires `fontFileN === "FontFile3"` for an OTTO CFF CID (`:2761-2763`).
   `translateFont` walks FontFile/2/3 (`src/core/evaluator.js:4633`) and
   reads the stream dict `/Subtype` (`:4668-4670`).
-- **Type 1 `/FontFile`** writes `/Length1` `/Length2` `/Length3` (ISO 32000-1
-  §9.9 table 127). The oracle leaves them off (`:166` TODO). pdf.js:
-  `translateFont` pulls the three lengths off the stream dict
+- **Type 1 `/FontFile`** is *unwrapped out of its PFB container* and stored
+  raw, with `/Length1` `/Length2` `/Length3` partitioning what was stored
+  (ISO 32000-1 §9.9 table 127). The oracle stores the caller's bytes verbatim
+  and leaves all three off (`:166` TODO), so a PFB reaches `/FontFile` with
+  its `[0x80, type, len:u32le]` record headers and `80 03` end marker intact
+  and nothing describing them. A PFB is a container, not a program:
+  concatenating its record bodies in order yields exactly the PFA-shaped raw
+  program table 127 describes — clear text, `eexec` binary, the
+  512-zeros-plus-`cleartomark` trailer — and the three lengths are those
+  bodies' sizes. `FoxitSerifMM.pfb` is 113417 B in, 113397 B stored
+  (10710 + 102155 + 532), the 20 bytes of framing gone. A PFA or a bare
+  program has no wrapper and is stored as-is, its private portion left in
+  whatever form it arrived in — hexadecimal stays hexadecimal, which §9.9
+  permits, and `/Length2` counts the hex digits. `pdfrum_type1::font_file`
+  returns the bytes and the three lengths *together* (`FontFile`), which is
+  what makes the disagreement unrepresentable rather than merely fixed.
+  pdf.js: `translateFont` pulls the three lengths off the stream dict
   (`src/core/evaluator.js:4672-4674`); `Type1Font.#parseType1` splits the
   header and eexec blocks with `properties.length1` / `properties.length2`
-  (`src/core/type1_font.js:195-201`).
+  (`src/core/type1_font.js:195-201`) — given the oracle's output it would
+  slice PFB headers as font data.
 - **`/CapHeight`** uses OS/2 `sCapHeight` when present, else the oracle's
   ascent fallback (`:160-161`). pdf.js: `translateFont` reads
   `descriptor.get("CapHeight")` (`src/core/evaluator.js:4731`); `Font`
