@@ -328,15 +328,21 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
   `vector_en_system` **2.15x → 0.79x** are not defects at all. `text`,
   `forms`, `shading` and `mixed` have oracle-relative rows for the first
   time; geomeans 0.13x / 0.52x / 0.56x / 0.78x / 0.68x / 0.63x (§18.2).
-- **DECISION OWED: should `Page` retain its built graph across `render_on`
-  calls, the way `CPDF_Page` does?** §18.1 argues it and **deliberately does
-  not implement it** — it is a design change, not a measurement one. The cost
-  is measured: a page graph holds its **decoded images**, so
-  `image_bug_583804` retains **176 MB for one page** and `image_en_fqa`
-  +21.8 MB over four. `CPDF_PageImageCache` is the oracle's equivalent and it
-  has an eviction policy we would not. It would make our loop natively
-  comparable and remove §18.1's subtraction; it also changes what
-  `Page::render_on` promises about lifetime. **The user's call.**
+- **DECIDED 2026-09-04 (user): `Page` keeps its built graph across renders —
+  as an explicit prepared-page value, not a hidden cache.** §18.1 measured the
+  cost of the implicit version: a page graph holds its **decoded images**, so
+  `image_bug_583804` would retain **176 MB for one page** with no eviction
+  policy (`CPDF_PageImageCache` is the oracle's, and has one). The shape is
+  therefore `Page::prepare() -> PreparedPage` carrying the built graph, with
+  the same `render`/`render_on` methods; retention is visible in the type and
+  ends when the value is dropped, so there is no policy to invent. Decoded
+  image pixels stay out of the prepared graph (decoded at render time as now;
+  a budgeted image cache is a separate, later question). `Page::render` keeps
+  its one-shot semantics by preparing internally. Board byte-identical by
+  construction; API snapshot, `reexports.rs` and `construct_enums.rs` updated.
+  The per-render rebuild it removes is 38–65% of `size14` / `en_system` /
+  `en_fqa` (§18.1), and makes the warm loop natively comparable to
+  `--render-repeats`, retiring §18.1's subtraction.
 - ~~**`pdfrum-tool --md5` renders nothing.**~~ — **landed**: the no-format arm
   now rasterizes, as the oracle's `default:` case does ("Other formats won't
   write the output to a file, but still rasterize"). `vector_font_size14`
