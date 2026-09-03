@@ -126,9 +126,6 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
 
 - Fifteen `DiagKind` variants are never recorded (`#[non_exhaustive]`, doc
   says the enum grows as crates land).
-- `docs/design/idiomatic-api.md`'s leak-count derivation cannot see payload
-  types of re-exported types (WP7's finding); the method is wrong, the
-  gate that replaced it (`crates/pdfrum/tests/reexports.rs`) is right.
 
 ## Upstream, drafted and not filed (`docs/upstream/README.md`)
 

@@ -1791,6 +1791,24 @@ leaks anyway, through a public field (§C.3 item 4). **A value-agnostic pass
 over every `pub const` in the snapshots is the reliable form**, and it is what
 WP13's gate should encode.
 
+**A third failure mode, found when WP7 was implemented (2026-09-03):
+neither sweep can see a payload type of a re-exported type.** The snapshot
+lists `pub use pdfrum::ColorMode` and `pub use pdfrum::Argb` as separate
+lines and never records that the first *contains* the second, so a
+derivation that filters `pub use` lines out — as §A.0's leak-count command
+does — drops `Argb` entirely while still needing it to write
+`ColorMode::Forced(..)`. Three leaks were undercounted this way. The lesson
+generalises past sentinels: **a snapshot of names cannot answer a question
+about payloads**, and any sweep of this document that ends in a name list
+inherits the gap.
+
+The gates that close it are compile-time and live in the tree:
+`crates/pdfrum/tests/reexports.rs` (every type in a public signature is
+nameable from `pdfrum::*`, checked from a caller's position by being an
+integration test) and `crates/pdfrum/tests/construct_enums.rs` (every public
+enum variant is constructible *with its payload*). Where this section and
+those files disagree, the files are right.
+
 ### C.3 The enumeration
 
 Every sentinel reachable from a public surface in the workspace. `file:line`
@@ -2890,6 +2908,34 @@ every value they receive. Today they cannot:
 > ```
 >
 > and subtract the leaf names of `pdfrum.txt`'s 42 `pub use` lines.
+>
+> **The command undercounts, and the gate that replaced it is the authority
+> (added 2026-09-03).** WP7's own implementation found three leaks this
+> derivation cannot see, for a structural reason worth stating: the first
+> `grep -vE '^pub use pdfrum::'` drops every already-re-exported line, and a
+> **payload type only ever mentioned on such a line becomes invisible**.
+> `Argb` is the worked example — it occurs exactly once in `pdfrum.txt`, as
+> `pub use pdfrum::Argb` (line 8), so the command never emits it, yet
+> `ColorMode::Forced(ColorScheme { .. })` cannot be constructed without it.
+> The same shape hides any type reachable only as a variant payload or a
+> field of a re-exported type: the snapshot names the *container*, never the
+> payload, and `cargo public-api` does not expand one into the other.
+>
+> So the command is a starting point for a human sweep, not a check. The
+> checks are two compile-time gates, and they are what a reader should
+> trust:
+>
+> - **`crates/pdfrum/tests/reexports.rs`** — an *integration* test, compiled
+>   against the published artefact with only `pdfrum` in scope, so "can a
+>   caller name this?" has a truthful answer. Every type named by a public
+>   `pdfrum` signature must be nameable from `pdfrum::*` or the file stops
+>   compiling.
+> - **`crates/pdfrum/tests/construct_enums.rs`** — constructs every public
+>   enum variant *with its payload*, which is the half `reexports.rs` and the
+>   `grep` both miss. `ColorMode::Forced` was the first known hole.
+>
+> Neither can be satisfied by an out-of-date document, which is the property
+> the derivation command lacked.
 
 **The original table, kept as the record of what was believed:**
 
