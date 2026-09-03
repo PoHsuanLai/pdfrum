@@ -271,6 +271,23 @@ impl LcdBitmap {
     }
 }
 
+/// The gamma-adjusted coverage for a window's tap sum.
+///
+/// Three bytes summed and divided by three is a byte, so the table index needs
+/// neither a clamp nor a fallible narrowing — which is what the per-subpixel
+/// spelling paid, once per pixel, for a value that cannot leave `0..=255`.
+fn gamma_of_mean(sum: u32) -> u8 {
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "at most `3 * 255 / 3`, which is 255"
+    )]
+    let mean = (sum / 3) as u8;
+    TEXT_GAMMA_ADJUST
+        .get(usize::from(mean))
+        .copied()
+        .unwrap_or(0)
+}
+
 /// Stages 1–3: pad, implode, rasterize, filter.
 ///
 /// Independent of where the glyph lands and of the colour it will be drawn in,
@@ -429,39 +446,80 @@ impl LcdBitmap {
     /// `out` is cleared and refilled, so nothing carries over from the previous
     /// glyph.
     pub(crate) fn gray_coverage_into(&self, phase: SubpixelPhase, out: &mut Vec<u8>) {
-        let shift = i32::try_from(phase.shift()).unwrap_or(0);
-        let sub_width = self.width * 3;
+        let shift = phase.shift();
+        let (Ok(width), Ok(height)) = (usize::try_from(self.width), usize::try_from(self.height))
+        else {
+            out.clear();
+            return;
+        };
+        let sub_width = width * 3;
+        // A zero-width bitmap has no columns to average and would make both
+        // `chunks_exact` below panic on a zero chunk size. It draws nothing;
+        // an empty buffer is what the per-subpixel spelling's `0..0` column
+        // loop left behind for it.
+        if sub_width == 0 {
+            out.clear();
+            return;
+        }
+        // Sized to the pixel count, and **every byte is written below**: the
+        // row loop covers every row and the column walk every column of it,
+        // so the `resize`'s fill value never survives. `subpixels.len() / 3`
+        // said the same thing the long way round.
         out.clear();
-        out.resize(self.subpixels.len() / 3, 0);
-        let coverage = out;
-        for y in 0..self.height {
-            let row = y * sub_width;
-            for x in 0..self.width {
-                let start = row + x * 3 - shift;
-                // Only the first column can reach left of the bitmap, and only
-                // then by fewer than three subpixels.
-                let sum: i32 = (0..3)
-                    .map(|k| {
-                        let idx = start + k;
-                        if idx < row {
-                            return 0;
-                        }
-                        usize::try_from(idx)
-                            .ok()
-                            .and_then(|i| self.subpixels.get(i))
-                            .map_or(0, |v| i32::from(*v))
-                    })
-                    .sum();
-                let average = (sum / 3).clamp(0, 255);
-                let Ok(average) = usize::try_from(average) else {
-                    continue;
-                };
-                let gamma = TEXT_GAMMA_ADJUST.get(average).copied().unwrap_or(0);
-                if let Ok(i) = usize::try_from(y * self.width + x)
-                    && let Some(cell) = coverage.get_mut(i)
-                {
-                    *cell = gamma;
-                }
+        out.resize(width * height, 0);
+
+        // **The window's shift, applied to the row rather than to every
+        // subpixel index.** Pixel `x` reads subpixels `[3x - shift, 3x -
+        // shift + 3)` of its row, and a shift is the same for every pixel of
+        // every row — so instead of re-deriving that index three times per
+        // pixel and bounds-checking each, the row itself is shifted once:
+        // `shift` zero taps are prepended and the row's last `shift`
+        // subpixels fall off the end, which is exactly the window walking
+        // left.
+        //
+        // The zeros are what the old spelling's `if idx < row { return 0 }`
+        // produced. Only the first pixel of a row could ever reach left of
+        // it, and only by fewer than three subpixels — the C++ averages the
+        // surviving taps *over the same divisor of three*, which **darkens**
+        // that column rather than brightening it, and prepending zeros is
+        // that. Clamping the window to the row start instead would brighten
+        // it, and `the_first_column_darkens_at_a_shifted_phase` is the test
+        // that says which.
+        //
+        // The row's last `shift` subpixels are then the tail of no complete
+        // window, and `chunks_exact` drops them — which is right, because
+        // once every window has moved left by `shift` there is no pixel whose
+        // window reaches them.
+        for (dst_row, src_row) in out
+            .chunks_exact_mut(width)
+            .zip(self.subpixels.chunks_exact(sub_width))
+        {
+            // `shift` is 0, 1 or 2, so the taps a pixel reads are the row's
+            // own except for the first pixel's, which reads `shift` fewer.
+            // Splitting the row at `sub_width - shift` puts every complete
+            // window in `body` — walked three at a time with no index
+            // arithmetic and no bounds check — and leaves the leading partial
+            // window, if there is one, to the arm below.
+            // Column zero's window is the one that can reach left of the
+            // row, and `head` is the part of it that survives: `3 - shift`
+            // taps at a non-zero phase, all three at phase zero. Splitting
+            // there leaves `body` holding every *complete* window, one after
+            // another, which is what makes the loop below a `chunks_exact(3)`
+            // with no index arithmetic and no bounds check.
+            let (head, body) = src_row.split_at(3 - shift);
+            let mut cells = dst_row.iter_mut();
+            if let Some(cell) = cells.next() {
+                // The C++ averages column zero's survivors over the same
+                // divisor of three, which **darkens** it rather than
+                // brightening it; summing `head` alone and dividing by three
+                // is exactly that. Clamping the window to the row start —
+                // reading three real taps — would brighten it, and
+                // `the_first_column_darkens_at_a_shifted_phase` is the test
+                // that says which.
+                *cell = gamma_of_mean(head.iter().map(|v| u32::from(*v)).sum());
+            }
+            for (cell, taps) in cells.zip(body.chunks_exact(3)) {
+                *cell = gamma_of_mean(taps.iter().map(|v| u32::from(*v)).sum());
             }
         }
     }
@@ -675,6 +733,22 @@ impl BitmapCache {
         key: BitmapKey,
         render: impl FnOnce() -> Option<LcdBitmap>,
     ) -> Option<Cached<'_>> {
+        // Two probes on the hit path, and it is not for want of trying to
+        // make it one. A hit is what every call after the first is — on
+        // `benches/corpus/vector_font_size14.pdf` this runs 8775 times per
+        // render and misses zero times — so the obvious fix is to return the
+        // occupied entry's borrow directly. It does not compile: returning a
+        // borrow taken from `self.entries` in one arm and re-borrowing it
+        // mutably in the other is NLL problem case 3, which the current
+        // borrow checker rejects and Polonius accepts. The `Entry` API does
+        // not rescue it either, because the budget check needs `render()`'s
+        // result and `render()` cannot run while a `Vacant` entry holds the
+        // borrow.
+        //
+        // It was measured before being left: the pair costs about 85 ns of a
+        // 1000 ns per-glyph chain (`docs/status/M13-perf-baseline.md` §16.2),
+        // and the second probe is at most half of that on a table that is
+        // already in cache from the first.
         if !self.entries.contains_key(&key) {
             let bitmap = render();
             let size = bitmap.as_ref().map_or(0, LcdBitmap::byte_size);
@@ -833,15 +907,34 @@ fn recolour_ref_into(
     out.reshape_keeping_pixels(width, height);
     let stride = width as usize;
     let data = out.data_mut();
-    for (y, row) in data.chunks_exact_mut(stride * 4).enumerate() {
-        for (x, dest) in row.chunks_exact_mut(4).enumerate() {
-            // The `at` the old spelling called: the buffer is exactly
-            // `height * width` bytes, so the index is in range by
-            // construction and the bounds check it did is the `get`'s.
-            let coverage = bitmap.coverage.get(y * stride + x).copied().unwrap_or(0);
+    // The colour's three channels and the alpha, lifted out of the loop:
+    // they are the text object's and do not vary with the pixel. That is what
+    // the `let [r, g, b, alpha]` above already does; what is new below is the
+    // *index*.
+    //
+    // The coverage buffer is exactly `height * width` bytes — `render_lcd`
+    // sizes it and `gray_coverage_into` refills it to that — so zipping the
+    // two row-wise is the index arithmetic and the bounds check the old
+    // spelling paid per pixel (`coverage.get(y * stride + x)`), done once per
+    // row by the iterator instead. A shorter coverage buffer simply yields
+    // fewer rows here, where the old `get` would have painted the missing
+    // ones transparent; the two are produced together and cannot differ, and
+    // `reshape_keeping_pixels` has already sized `out` to this glyph.
+    //
+    // **A coverage-to-pixel lookup table was tried here and is not this.** It
+    // is the obvious hoist — 256 entries derived once per occurrence turn the
+    // four `mul255`es into one array read — and it was measured 3.9x *slower*
+    // on both vector fixtures, because a glyph is about fifty pixels and a
+    // 256-entry table is five times more arithmetic than the pixels it
+    // serves. The quantity to amortize over here is the glyph, not the page.
+    for (dst_row, cov_row) in data
+        .chunks_exact_mut(stride * 4)
+        .zip(bitmap.coverage.chunks_exact(stride))
+    {
+        for (dest, coverage) in dst_row.chunks_exact_mut(4).zip(cov_row) {
             // `CalcAlpha(TextGammaAdjust(src), bgra.alpha)`, whose product is
             // the truncating one the whole engine uses.
-            let a = crate::pixmap::mul255(coverage, alpha);
+            let a = crate::pixmap::mul255(*coverage, alpha);
             // Zero coverage and zero alpha both wrote nothing before, into a
             // buffer that was already zero; writing the zero explicitly is the
             // same pixel and is what makes a reused buffer sound.
@@ -1191,6 +1284,197 @@ mod tests {
             peniko::Color::from_rgba8(1, 2, 3, 0),
             &mut scratch
         ));
+    }
+
+    /// The per-subpixel spelling `gray_coverage_into` replaced, kept in the
+    /// tests as the *specification*.
+    ///
+    /// The same relationship `clip_at` has to `clip_span` and the span loop
+    /// has to `blit_image`: the reference is the code that was there, written
+    /// the slow obvious way, so that a divergence in the fast one is a failed
+    /// comparison rather than an argument about which is right.
+    fn gray_coverage_per_subpixel(lcd: &LcdBitmap, phase: SubpixelPhase) -> Vec<u8> {
+        let shift = i32::try_from(phase.shift()).unwrap_or(0);
+        let sub_width = lcd.width * 3;
+        let mut coverage = vec![0u8; lcd.subpixels.len() / 3];
+        for y in 0..lcd.height {
+            let row = y * sub_width;
+            for x in 0..lcd.width {
+                let start = row + x * 3 - shift;
+                let sum: i32 = (0..3)
+                    .map(|k| {
+                        let idx = start + k;
+                        if idx < row {
+                            return 0;
+                        }
+                        usize::try_from(idx)
+                            .ok()
+                            .and_then(|i| lcd.subpixels.get(i))
+                            .map_or(0, |v| i32::from(*v))
+                    })
+                    .sum();
+                let average = (sum / 3).clamp(0, 255);
+                let Ok(average) = usize::try_from(average) else {
+                    continue;
+                };
+                let gamma = TEXT_GAMMA_ADJUST.get(average).copied().unwrap_or(0);
+                if let Ok(i) = usize::try_from(y * lcd.width + x)
+                    && let Some(cell) = coverage.get_mut(i)
+                {
+                    *cell = gamma;
+                }
+            }
+        }
+        coverage
+    }
+
+    /// The row-sliced coverage walk equals the per-subpixel one it replaced,
+    /// on every glyph shape and at every phase.
+    ///
+    /// The shapes are chosen for the two things the hoist trades on: the
+    /// **row band**, so a one-row and a many-row glyph both appear, and the
+    /// **window's left edge**, which is the only index the old spelling's
+    /// bounds check could ever have caught — column zero at a non-zero phase.
+    /// A single-column glyph is in the list because for it *every* column is
+    /// column zero.
+    #[test]
+    fn the_sliced_coverage_walk_matches_the_per_subpixel_one() {
+        let shapes: [BezPath; 6] = [
+            square(1.0, 1.0),
+            square(1.0, 7.0),
+            square(9.0, 1.0),
+            square(5.0, 3.0),
+            split_box(3.0, 5.0),
+            split_box(1.0, 4.0),
+        ];
+        let mut compared = 0;
+        for shape in &shapes {
+            let lcd = render_lcd(shape).expect("rasterizes");
+            for phase in [SubpixelPhase::Zero, SubpixelPhase::One, SubpixelPhase::Two] {
+                let expected = gray_coverage_per_subpixel(&lcd, phase);
+                let mut got = Vec::new();
+                lcd.gray_coverage_into(phase, &mut got);
+                assert_eq!(
+                    got, expected,
+                    "coverage differs at phase {phase:?} on a {}x{} bitmap",
+                    lcd.width, lcd.height
+                );
+                compared += 1;
+            }
+        }
+        assert_eq!(compared, 18, "every shape must have been compared");
+    }
+
+    /// Column zero at a non-zero phase reads fewer taps, and darkens.
+    ///
+    /// The one index the old bounds check existed for, isolated: at phase two
+    /// the first pixel's window starts two subpixels before the row, so only
+    /// one of its three taps is real and the average is over three anyway.
+    /// A hoist that clamped the window to the row start instead — reading
+    /// subpixels 0, 1, 2 rather than dropping the two missing taps — would
+    /// *brighten* that column, which is the opposite of what the C++ does.
+    #[test]
+    fn the_first_column_darkens_at_a_shifted_phase() {
+        let lcd = render_lcd(&square(4.0, 2.0)).expect("rasterizes");
+        let mut zero = Vec::new();
+        lcd.gray_coverage_into(SubpixelPhase::Zero, &mut zero);
+        let mut two = Vec::new();
+        lcd.gray_coverage_into(SubpixelPhase::Two, &mut two);
+        let width = usize::try_from(lcd.width).expect("positive");
+        let first = |v: &[u8]| v.first().copied().expect("a non-empty bitmap");
+        assert!(first(&zero) > 0, "the glyph must cover its first column");
+        assert!(
+            first(&two) < first(&zero),
+            "phase two drops two of the first column's three taps: {} vs {}",
+            first(&two),
+            first(&zero)
+        );
+        // And the rest of the row is the same window moved, not a clamp: it
+        // still reads three real taps.
+        assert_eq!(
+            two,
+            gray_coverage_per_subpixel(&lcd, SubpixelPhase::Two),
+            "only the first column of each row may differ from an unshifted read"
+        );
+        assert_eq!(
+            two.len(),
+            width * usize::try_from(lcd.height).expect("positive")
+        );
+    }
+
+    /// The row-zipped recolour is the indexed arithmetic it replaced, over
+    /// **every** coverage byte and a spread of colours.
+    ///
+    /// The hoist changed how a coverage byte is *reached* — a zipped row slice
+    /// rather than `coverage.get(y * stride + x)` — and not what is done with
+    /// it. So the comparison is against the four `mul255`es spelled out here,
+    /// swept over all 256 coverages including zero, which is the transparent
+    /// pixel a reused buffer depends on being written rather than skipped.
+    #[test]
+    fn the_row_zipped_recolour_is_the_indexed_arithmetic() {
+        for colour in [
+            peniko::Color::from_rgba8(255, 255, 255, 255),
+            peniko::Color::from_rgba8(0, 0, 0, 255),
+            peniko::Color::from_rgba8(200, 100, 50, 255),
+            peniko::Color::from_rgba8(3, 251, 128, 137),
+            peniko::Color::from_rgba8(17, 200, 99, 1),
+        ] {
+            let [r, g, b, alpha] = colour.to_rgba8().to_u8_array();
+            // Every coverage byte a glyph can carry, as a one-row bitmap.
+            let coverage: Vec<u8> = (0..=255).collect();
+            let bitmap = GlyphBitmapRef {
+                width: 256,
+                height: 1,
+                coverage: &coverage,
+            };
+            let mut out = crate::Pixmap::new(0, 0);
+            assert!(recolour_ref_into(bitmap, colour, &mut out));
+            for (i, dest) in out.data().chunks_exact(4).enumerate() {
+                #[expect(clippy::cast_possible_truncation, reason = "the index runs 0..256")]
+                let cov = i as u8;
+                let a = crate::pixmap::mul255(cov, alpha);
+                assert_eq!(
+                    dest,
+                    [
+                        crate::pixmap::mul255(r, a),
+                        crate::pixmap::mul255(g, a),
+                        crate::pixmap::mul255(b, a),
+                        a,
+                    ],
+                    "coverage {cov} under {colour:?}"
+                );
+            }
+        }
+    }
+
+    /// A zero-width bitmap yields no coverage rather than panicking.
+    ///
+    /// The row walk chunks by `width` and by `width * 3`, and `chunks_exact`
+    /// panics on a chunk size of zero — so the degenerate bitmap the old
+    /// spelling's `0..0` column loop simply skipped needs saying out loud
+    /// here. `render_lcd` does not produce one, and this is the guard for a
+    /// caller that constructs an `LcdBitmap` some other way.
+    #[test]
+    fn a_zero_width_bitmap_yields_no_coverage() {
+        for (width, height) in [(0, 4), (0, 0), (4, 0)] {
+            let lcd = LcdBitmap {
+                left: 0,
+                top: 0,
+                width,
+                height,
+                subpixels: Vec::new(),
+            };
+            for phase in [SubpixelPhase::Zero, SubpixelPhase::One, SubpixelPhase::Two] {
+                // Primed with a previous glyph's bytes, so "left empty" is a
+                // claim about this call and not about the buffer's history.
+                let mut out = vec![7u8; 12];
+                lcd.gray_coverage_into(phase, &mut out);
+                assert!(
+                    out.is_empty(),
+                    "a {width}x{height} bitmap has no coverage at phase {phase:?}"
+                );
+            }
+        }
     }
 
     #[test]
