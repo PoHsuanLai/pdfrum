@@ -2275,3 +2275,314 @@ decomposition of one process's own work and does not depend on the box.
   functions live in `pdfrum-render`, so all three backends composite the same
   cheaper glyph; only AGG was instrumented.
 - **The ratchet is still not re-baselined.** §8's third bullet stands.
+
+---
+
+## 17. The whole render, attributed: the ~50 ms was never in the glyph path
+
+**Taken 2026-09-03, on the same box, at load 25–100.** §16.8 left
+`vector_font_size14` at 3.16x against the oracle with the glyph chain
+accounted for down to the nanosecond — the blit ~3.15 ms, the recolour chain
+~0.91 ms, `place_glyphs_into` 1.39 ms, under 6 ms in total against a **56 ms**
+render. This section asks where the other fifty are, and the answer is that
+three sections' worth of instruments could not see them:
+
+**`ap::FormFonts::load` was 78% of `vector_font_size14`'s render, on a document
+with no annotations and no form fields.** Six of the corpus's 44 documents
+write their `/AcroForm` as a *direct* dictionary rather than a reference, and
+the memoization added in §5 keys on the `/AcroForm` **reference**, so all six
+missed the cache on every call — once per page, per render. `size14` is
+**53.85 ms → 10.31 ms**, a **5.22x** wall-clock speedup against a zero-form
+control at 0.988x.
+
+### 17.1 Equal work on both sides: what each wall clock includes
+
+The brief's first instruction, and it turned up a harness asymmetry worth
+recording before any ratio is quoted.
+
+| stage | `pdfium_test --md5` | `profile --op render --warm` |
+|---|---|---|
+| process start, font database | once, outside the timed span | outside the process |
+| file read, document parse | once, before the repeat loop | once, before the timed loop |
+| **page load** (`FPDF_LoadPage`) | **once** — `loaded_pages` memoizes it | n/a |
+| **content stream parse** | **once** — `CPDF_Page::ParseContent` returns early when `kParsed` | **every iteration** |
+| **page-graph build** | **once**, with the parse | **every iteration** |
+| **annotation / form-field appearances** | once per page, from `CPDFSDK_InteractiveForm` built before the loop | **every iteration** |
+| render | every repetition | every iteration |
+| text page (`FPDFText_LoadPage`) | **every repetition** — ours does not | — |
+| PNG encode, file write | not under `--md5` | not under `--op render` |
+
+**Neither side encodes a PNG in the benchmarked path**, so the encoder is not
+in any ratio this document prints and was not timed in isolation. Both sides
+consume their pixels — the oracle hashes the buffer under `--md5`, ours
+`black_box`es the pixmap.
+
+**The asymmetry that matters is the middle four rows.** `pdfium_test` renders
+one `CPDF_Page` n times; we rebuild the page graph n times, because
+`Page::render_on` calls `Page::build` per render by construction. The oracle's
+`--render-repeats` therefore amortizes work our warm loop pays for every
+iteration, and **a like-for-like of the two loops is not what the ratio
+measures** — it is our whole per-page pipeline against the oracle's raster half.
+That was true for §10.5, §15 and every ratio before them; it is recorded here
+rather than corrected, because the corrected comparison would need a
+`--render-repeats` of our own and the corpus ratios are all quoted on this one.
+
+**The tool's `--md5` renders nothing.** `pdfrum-tool --md5` returned in 0.02 s
+against the oracle's 0.17 s and printed no `MD5:` line at all. `--png` is the
+only end-to-end pair that does the same work on both sides, and on `size14` it
+reads oracle 0.21 s against ours **12.37 s before and 1.72 s after** — a **7.2x**
+whole-process improvement, still 8x the oracle. That last figure is a cold
+process and includes nine PNG encodes; it is here for scale, not as a ratio.
+
+### 17.2 The whole-render split, anchored by counts
+
+`--sample` builds the page graphs **once, outside its loop** (`timed_render`'s
+own comment says so) and calls `render_page_with` directly, so it sees neither
+the rebuild nor the annotation pass. `--walk` sits inside `render_page_with`
+and sees less still. **That is why §13–§16 kept finding a well-behaved
+6–12 ms document inside a 56–120 ms render, and why `INTERPRETATION` never
+added up.** Both are honest about their own scope; neither is a whole-render
+instrument, and this is the first section to place `Instant` pairs *outside*
+`render_page_with` rather than inside it.
+
+Pairs around `Page::build`, `annot_render::overlay` and `render_page_with` in
+`Page::paint`, plus the five sites inside `overlay_with`. Minimum over 21
+warm rounds, and **the buckets kept are the round that won**, so the split and
+the total describe one and the same render. Load 33–57.
+
+| bucket | `size14` | share | `feature` | share |
+|---|---:|---:|---:|---:|
+| **whole warm render** | **54.69 ms** | 100.0% | **144.98 ms** | 100.0% |
+| page-graph build | 4.39 | 8.0% | 6.01 | 4.1% |
+| &nbsp;&nbsp;content parse | 1.73 | 3.2% | 2.58 | 1.8% |
+| &nbsp;&nbsp;interpretation | 2.66 | 4.9% | 3.44 | 2.4% |
+| **annotation overlay** | **42.32** | **77.4%** | **65.62** | **45.3%** |
+| &nbsp;&nbsp;`AnnotList::load` | 0.00 | 0.0% | 0.39 | 0.3% |
+| &nbsp;&nbsp;**`FormFonts::load`** | **42.22** | **77.2%** | **63.88** | **44.1%** |
+| &nbsp;&nbsp;`generate_appearances` | 0.00 | 0.0% | 0.49 | 0.3% |
+| &nbsp;&nbsp;`hidden_by_open_action` | 0.00 | 0.0% | 0.00 | 0.0% |
+| &nbsp;&nbsp;the annotation loop | 0.00 | 0.0% | 0.67 | 0.5% |
+| `render_page_with` (§13–§16's whole subject) | 7.61 | 13.9% | 71.50 | 49.3% |
+| **sum of buckets** | **54.33** | **99.3%** | **143.14** | **98.7%** |
+| unattributed | 0.36 | 0.7% | 1.85 | 1.3% |
+
+**The buckets sum to 98.7–99.3%**, which is what says the attribution is
+complete. Two controls say it is also *correct*: `shading_axial_radial` splits
+0.7% / 0.1% / 99.2% with 0.1% unattributed — a document whose whole cost is
+inside `render_page_with`, exactly where §13–§16 were looking — and
+`vector_en_tem` splits 17.9% / 2.1% / 79.6%.
+
+**The counts that anchor it.** `FormFonts::load` is called **9 times per render
+on `size14` and 10 on `feature` — once per page — and misses the cache 9 times
+and 10 times.** `forms_text_field`, whose `/AcroForm` **is** a reference, is
+called 3 times and misses **zero**, at 0.001 ms. That pair is the whole finding:
+same code, same call count, 100% miss against 0% miss, and the difference is
+which spelling the file uses. The documents carry **0 annotations** —
+`--annot` reports "Number of annotations: 0" on every page of `size14` — so
+every one of those 42 ms builds faces for a form with no fields.
+
+**The oracle side.** `pdfium_test` has no per-phase timer, and the split above
+is of a defect the oracle does not have rather than of work it does
+differently, so the second column is the one row that matters:
+`CPDFSDK_InteractiveForm` is a `unique_ptr` member constructed once with the
+form-fill environment, before `--render-repeats`' loop, and
+`CPDF_Page::ParseContent` returns immediately at `kParsed`. **The oracle builds
+its form fonts once per document; we built ours once per page per render.**
+Its per-pass figures under `bench-oracle.nu`'s formula, taken in the same
+stretch of minutes: `size14` **15.15 ms**, `feature` **23.65 ms**,
+`text_foxit_products` 23.43 ms, `text_cjk_page` 11.59 ms, `image_jpx_123`
+10.04 ms, `forms_text_field` 4.99 ms, `shading_axial_radial` 49.35 ms.
+
+### 17.3 Why it is a defect, and what the key should have been
+
+Not a bucket that is inherent work at the oracle's own cost: the oracle does
+this once per document and the six affected files declare **no form fields at
+all**. The faces built are the fallback Helvetica and one substitute face,
+both from dictionaries this repository writes — nothing document-specific
+crosses the boundary — and they were rebuilt 9 and 10 times per render.
+
+§5's memoization was right about everything except its key. It keyed on the
+`/AcroForm` *reference*, and reasoned that a direct dictionary "has no
+reference to key on and its content **is** document-specific, so it is not
+cached". The second half is what does not hold: `FormFonts::build` reads
+exactly one thing out of the document, the `/AcroForm`'s **`/DR /Font`**, and
+takes everything else from constants. So the faces are a function of that
+dictionary alone, and there are three ways for it to be identified rather than
+one.
+
+The corpus disagrees with "legal and rare" as well. Six of 44 files carry a
+direct `/AcroForm`, every one of them spelt `<</Fields[]>>` — what a producer
+writes when it declares a form and puts nothing in it — and **none of them is a
+form document**: two `vector`, three `text`, one `image`. The `forms_*` class
+uses references throughout, which is precisely why §11, §12 and §16 measured
+`forms_text_field` and saw nothing.
+
+### 17.4 The fix, and the invariants it preserves
+
+`FormFontsKey` gains one case and `FormFonts::key` is split out of
+`FormFonts::load` so the four can be asserted directly:
+
+- an **indirect `/AcroForm`** → `Form(reference)`, unchanged;
+- **no `/DR /Font`** — no `/AcroForm`, or one that declares no default
+  resources → `None`, one slot for every such document. This is the case the
+  six corpus files land in, and folding them in is the whole speedup;
+- a direct `/AcroForm` whose **`/DR /Font` is a reference** →
+  `DirectResources(reference)`, keyed on the font dictionary instead of the
+  form;
+- a direct `/AcroForm` with a **direct `/DR /Font`** → `Direct`, still
+  uncached. There is no reference anywhere and the content really is
+  document-specific.
+
+**The invariants:**
+
+- **Nothing about what is built moved.** `FormFonts::build` is untouched, so
+  the faces, their order, the fallback's empty name and the substitutes are
+  byte-for-byte what they were. Only which slot they are filed under changed.
+- **Two documents still cannot share.** The case §5's comment protects against
+  — one `BuildContext` threaded through two documents — is preserved by
+  keying every document-dependent case on a reference, and
+  `two_documents_do_not_share_one_contexts_form_faces` still passes unchanged.
+- **The `None` fold is sound because the two builds are identical.** A
+  catalog with no `/AcroForm` and one with `<</Fields[]>>` both reach `build`
+  with no `/DR /Font`, so `entries` is empty in both and only the fallback and
+  the substitutes are pushed. `a_direct_form_declaring_no_fonts_is_the_no_form_case`
+  asserts the two return the *same `Arc`*.
+- **No new device primitive, no `RenderDevice` change, no `BitmapKey`
+  change.** §13.4's invariants are untouched: nothing in this section is below
+  the device seam.
+
+**One public surface does move, deliberately.** `FormFontsKey` is `pub` and
+gains `DirectResources(ObjRef)`, which `scripts/api-snapshot.nu` reports as
+`pdfrum-page: +1 -0` — the only line in nineteen surfaces. The baseline is
+re-recorded with the change rather than the enum being made
+`#[non_exhaustive]` or the case smuggled into an existing variant: which of
+the four slots a catalog lands in *is* the contract this type exists to
+express, and a fourth case is the honest way to say a fourth exists. Nothing
+is removed and no existing variant changes shape.
+
+**The old spelling is kept as the specification.**
+`the_key_reads_the_font_dictionarys_spelling_and_not_its_value` asserts all
+four slots directly, which is the way §14 kept the span loop and §16 kept the
+per-subpixel walk.
+
+**Five mutations were planted and every one failed two named tests:**
+
+| mutation | caught by |
+|---|---|
+| `DirectResources` collapsed back to `Direct` | `the_key_reads_…`, `a_direct_form_is_keyed_on_the_font_dictionary_it_names` |
+| a direct form with no `/DR` falls to `Direct` (the fix reverted) | `the_key_reads_…`, `a_direct_form_declaring_no_fonts_is_the_no_form_case` |
+| a wholly-direct `/DR /Font` cached under `None` (two documents share faces) | `the_key_reads_…`, `a_form_whose_fonts_are_written_out_in_full_is_not_cached` |
+| the walk keys on `/DR` rather than `/DR /Font` | `the_key_reads_…`, `a_direct_form_is_keyed_on_the_font_dictionary_it_names` |
+| an indirect `/AcroForm` no longer keys on its own reference | `the_key_reads_…`, `two_documents_do_not_share_one_contexts_form_faces` |
+
+The third is the one that matters: it is the *hazard* the change introduces if
+the key is drawn too coarsely, and it is caught.
+
+### 17.5 The wall clock, and the four controls that stayed controls
+
+Interleaved A/B, rounds of `before, after, after, before` at 21 warm
+iterations, each arm's minimum kept — §16.6's discipline, on two binaries built
+into **separate `CARGO_TARGET_DIR` trees**.
+
+Eight rounds, load 25–100:
+
+| fixture | `/AcroForm` | before (ms) | after (ms) | reading | load |
+|---|---|---:|---:|---|---:|
+| `vector_font_size14` | direct | 53.85 | 10.31 | **5.222x** | 25 |
+| `vector_font_feature` | direct | 105.16 | 53.47 | **1.967x** | 34 |
+| `text_foxit_products` | direct | 67.78 | 16.15 | **4.196x** | 37 |
+| `text_cjk_page` | direct | 43.82 | 9.12 | **4.802x** | 39 |
+| `text_cjk_structure` | direct | 45.88 | 10.79 | **4.253x** | 47 |
+| `image_jpx_123` | direct | 28.63 | 20.32 | **1.409x** | 64 |
+| `forms_text_field` | **reference** | 5.83 | 5.50 | 1.059x | 63 |
+| `shading_axial_radial` | **none** | 34.51 | 40.39 | 0.854x | 81 |
+| `vector_en_tem` | **none** | 15.93 | 7.45 | 2.138x | 100 |
+
+The last two rows were taken at load 81 and 100 and read 0.854x and 2.138x on
+documents the changed code **cannot** move — neither has an `/AcroForm` at all,
+so both take the `None` slot before and after. That is not a result, it is the
+box, and the honest response is to re-take them rather than average them in.
+Ten rounds, load 50–60:
+
+| fixture | `/AcroForm` | before (ms) | after (ms) | reading | load |
+|---|---|---:|---:|---|---:|
+| `shading_axial_radial` | none | 35.12 | 35.52 | **0.988x** | 60 |
+| `vector_en_tem` | none | 4.70 | 4.61 | **1.020x** | 60 |
+| `vector_paths_1751` | none | 8.99 | 8.54 | **1.053x** | 57 |
+| `forms_text_field` | reference | 5.00 | 5.13 | **0.975x** | 54 |
+| `vector_font_size14` | direct | 52.66 | 9.66 | **5.450x** | 50 |
+
+**Four controls in 0.975–1.053x, and the one real row at 5.45x.** The controls
+bracket unity from both sides, which is what a noise floor looks like; the
+signal is fifty times wider than it. This is the first change in §11–§17 the
+wall clock resolves without argument.
+
+`image_jpx_123`'s 1.409x is the smallest real row, and correctly so: it is one
+page, so it paid one rebuild rather than nine.
+
+### 17.6 The five rows against the oracle, before and after
+
+§10.5's method, both arms and the oracle taken on the same file in the same
+stretch of minutes at load 47–52: `bench-oracle.nu`'s marginal-pass formula
+`(t[21] - t[1]) / 20` against `pdfium_test --md5 --render-repeats`, ours
+`--op render --warm` at 21 iterations, minimum of three rounds per arm.
+Ratio is ours over the oracle's, so **> 1 is pdfrum being slower**.
+
+| fixture | oracle (ms) | before (ms) | after (ms) | was | **now** |
+|---|---:|---:|---:|---:|---:|
+| `vector_font_size14` | 27.03 | 73.81 | 15.97 | 2.73x | **0.59x** |
+| `vector_font_feature` | 46.14 | 131.80 | 59.39 | 2.86x | **1.29x** |
+| `text_foxit_products` | 26.57 | 75.11 | 16.66 | 2.83x | **0.63x** |
+| `text_cjk_page` | 11.65 | 41.09 | 8.97 | 3.53x | **0.77x** |
+| `image_jpx_123` | 8.56 | 22.15 | 14.81 | 2.59x | **1.73x** |
+
+**Four of the five cross below 1.0x**, and `vector_font_size14` — the row
+§10.5 put at 3.70x and §15 at 3.16x, the row §13, §14 and §16 were all taken
+to close — reads **0.59x**. The oracle column is 27.03 ms here against §15's
+20.01 ms and §17.2's 15.15 ms on the same unchanged binary, which is the box
+moving under all three; §15.2 records the same effect in the other direction.
+**The ratios are what this table is for and the milliseconds are not.**
+
+### 17.7 Conformance: nothing moved
+
+- **The board is byte-identical**, checked the strict way: both binaries run
+  over the whole corpus and the two `--out` JSONs compared field by field.
+  `per_file` is **equal across all 1757 entries** and `totals` is equal; the
+  only difference between the two documents is `generated_at`.
+- **The board's own numbers are 1757 / 1536 / 221** — 8 `form-events`, 11
+  `js-transcript`, 2 `page-count`, 41 `pixel-fail`, 170 `tierA-mismatch`, text
+  1783/2065 and 758/1003. `js-transcript` reads 11 against §16's 42 because
+  the concurrent JavaScript work landed in between; the before-arm reads the
+  same 11, which is what makes the comparison this section's own rather than a
+  remembered one.
+- **`conformance tier-c` is unchanged**: 1628 files compared under the gating
+  pair, **3** hard failures, **434** over the 1% edge budget, worst edge
+  divergence **66.6634%**, divergent files 26.84% — every figure §16.7 carries,
+  to the digit.
+
+### 17.8 What this does not claim
+
+- **The two vector rows are closed as *defects*; the ratios are one box's.**
+  §17.6 reads 0.59x and 1.29x where §15 read 3.16x and 5.32x, and both arms
+  were taken beside the same oracle run, which is what makes the *movement*
+  trustworthy. The absolute ratio still rides a box at load 50 whose oracle
+  column has now been measured at 15.15, 20.01 and 27.03 ms for one file on
+  one binary. Five fixtures were taken, not a class; a class re-take is owed.
+- **§13–§16 are not wrong, they are scoped.** Every figure in them is a figure
+  about `render_page_with`, and every one still stands: the blit is still the
+  largest line *inside* the raster half, the recolour chain is still 2.2x
+  faster, and `place_glyphs_into` is still 1.39 ms. What this section corrects
+  is the *denominator* — those sections read their shares against a 56 ms
+  render that was 78% something they were not measuring.
+- **The instruments still cannot see this.** `--sample` and `--walk` both sit
+  at or below `render_page_with` and neither was changed. A whole-render
+  instrument is owed; this section used temporary `Instant` pairs that were
+  removed before the commit, which is not a thing the next reader can re-run.
+- **The remaining three `image`/`vector` rows are untouched.**
+  `vector_en_system` (2.14x), `image_ccitt_3bigpreview` (2.27x) and
+  `image_en_fqa` (3.15x) carry no `/AcroForm` and are unmoved by this.
+- **Not an idle box, for the ninth time.** Load 25–100 throughout, and the two
+  rows taken above load 80 had to be re-taken. §3's instruction stands.
+- **`tiny-skia` and `vello_cpu` get the change and were not measured.** The
+  cache is in `pdfrum-page`, above every backend; only AGG was timed.
+- **The ratchet is still not re-baselined.** §8's third bullet stands.
