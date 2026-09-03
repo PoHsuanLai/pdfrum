@@ -121,8 +121,7 @@ pub fn same_object(earlier: &TextRun, current: &TextRun, chars: &[CharBox]) -> b
     dx.abs() <= f64::from(0.9 * char_size * font_size / 1000.0) && dy.abs() <= max_pre_size / 8.0
 }
 
-/// The intersection of two rectangles, taken as unnormalized corner pairs the
-/// way `CFX_FloatRect::Intersect` does.
+/// The intersection of two rectangles, taken as unnormalized corner pairs.
 fn intersect(a: kurbo::Rect, b: kurbo::Rect) -> kurbo::Rect {
     kurbo::Rect::new(
         a.x0.max(b.x0),
