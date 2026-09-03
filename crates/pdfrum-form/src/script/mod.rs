@@ -384,12 +384,12 @@ impl ScriptCascade {
     /// long it lives — which is what makes a document's `app.setInterval`
     /// inert in a renderer that only draws pages.
     ///
-    /// Answers how many timer scripts ran. See [`super::script::timer`] for
-    /// the four rules that decide which ones those are; the two a caller is
-    /// most likely to be surprised by are that **a timer fires at most once
-    /// per call**, however large the increment, and that a timer is
-    /// **re-armed before** its script runs, so a script cancelling its own
-    /// timer cancels the next firing rather than this one.
+    /// Answers how many timer scripts ran. Two rules a caller is likely to be
+    /// surprised by: **a timer fires at most once per call**, however large
+    /// the increment — so advancing five seconds in one step fires a
+    /// one-second interval once, not five times — and a timer is **re-armed
+    /// before** its script runs, so a script cancelling its own timer cancels
+    /// the next firing rather than this one.
     ///
     /// A script a timer runs is an ordinary script: it may throw, and its
     /// failure is recorded on [`stops`](Self::stops) like any other.
