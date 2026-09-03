@@ -12,7 +12,15 @@ use super::transcript::TranscriptLine;
 /// global, a thread local, or a `Copy` closure capture. `Context::get_data`
 /// hands back `&T`, hence the `RefCell`: the mutation is one `borrow_mut` at
 /// the point of use and never spans a call back into the engine.
-#[derive(Debug, Default)]
+#[allow(
+    clippy::struct_excessive_bools,
+    reason = "each flag is one JavaScript property a script reads and writes \
+              — `Doc.delay`, `Doc.dirty`, `app.calculate`, \
+              `app.runtimeHighlight`, and the two request flags. They are not \
+              a state machine and grouping them into an enum would put names \
+              between the binding and the value it answers."
+)]
+#[derive(Debug)]
 pub(crate) struct HostState {
     /// Every line a script has asked the host to print, in order.
     pub(crate) transcript: Vec<TranscriptLine>,
@@ -21,6 +29,60 @@ pub(crate) struct HostState {
     /// Per-session, because upstream's registry is process-wide and STYLE §1
     /// forbids that outright.
     pub(crate) timers: Vec<(String, i32)>,
+    /// What the `Doc` object answers from, and what a `Field` reads and
+    /// writes.
+    ///
+    /// Installed by the caller rather than read here, because reading it
+    /// needs a document and [`ScriptCascade`](super::ScriptCascade)
+    /// deliberately holds none. See [`super::model`] for the bargain.
+    pub(crate) document: super::model::DocumentModel,
+    /// Icon names `Doc.addIcon` was given, in order.
+    ///
+    /// Append-only, exactly as upstream's `icon_names_` is: `addIcon` and
+    /// `getIcon` are real and `removeIcon` is a no-op
+    /// (`fxjs/cjs_document.cpp`), so the list only grows and duplicates are
+    /// allowed. The icon's *contents* are discarded upstream too — only the
+    /// name is kept.
+    pub(crate) icon_names: Vec<String>,
+    /// Fields a script wrote through `Field.value`, by `/Fields` position.
+    ///
+    /// A record the host reads back after a script runs, so a value a script
+    /// set reaches the session's own state and the appearance regenerates.
+    /// The model's own `value` is updated in step, so a later script in the
+    /// same run reads what an earlier one wrote.
+    pub(crate) field_writes: Vec<(u32, String)>,
+    /// Whether a script called `Doc.calculateNow()`.
+    ///
+    /// A **request**, not a call: running the sweep from inside a native
+    /// function would re-enter the cascade the script is already inside,
+    /// which is exactly the `busy_` re-entry upstream refuses
+    /// (`fxjs/cjs_event_context.cpp:32-38`). The caller reads the flag after
+    /// the script returns and sweeps then.
+    pub(crate) calculate_requested: bool,
+    /// `Doc.baseURL` — pure JavaScript-side state.
+    ///
+    /// A real read/write property that reaches nothing else: `base_url_` is a
+    /// `CJS_Document` member that no other code ever consults
+    /// (`fxjs/cjs_document.cpp`). Reproducing it is reproducing a variable,
+    /// and `document_properties_expected.txt` reads back each of the six
+    /// values it is assigned.
+    pub(crate) base_url: String,
+    /// `Doc.delay` — the document-wide batching flag.
+    pub(crate) delay: bool,
+    /// `app.calculate` — whether recalculation runs, as `app` reports it.
+    ///
+    /// Defaults **on**, which is `CPDFSDK_InteractiveForm`'s own initial
+    /// state and what `app_properties_expected.txt` reads first.
+    pub(crate) app_calculate: bool,
+    /// `app.runtimeHighlight` — defaults off.
+    pub(crate) app_runtime_highlight: bool,
+    /// `Doc.dirty` — the change mark, which a script may set and clear.
+    pub(crate) dirty: bool,
+    /// The field a script asked for the keyboard for, by `/Fields` position.
+    ///
+    /// Recorded for the same reason: focus is the session's, and moving it
+    /// mid-script would re-enter routing.
+    pub(crate) focus_requested: Option<u32>,
 }
 
 /// The handle the context holds.
@@ -43,5 +105,29 @@ pub(crate) struct FixedZone {
 impl boa_engine::context::HostHooks for FixedZone {
     fn local_timezone_offset_seconds(&self, _unix_time_seconds: i64) -> i32 {
         self.offset_secs
+    }
+}
+
+impl Default for HostState {
+    /// The state a fresh realm starts in.
+    ///
+    /// Not derived, because two of the flags default **on** and a derived
+    /// `Default` would say otherwise: `app.calculate` reports `true` before
+    /// any script touches it, and so does `Doc.calculate`.
+    fn default() -> HostState {
+        HostState {
+            transcript: Vec::new(),
+            timers: Vec::new(),
+            document: super::model::DocumentModel::empty(),
+            icon_names: Vec::new(),
+            field_writes: Vec::new(),
+            base_url: String::new(),
+            app_calculate: true,
+            app_runtime_highlight: false,
+            delay: false,
+            dirty: false,
+            calculate_requested: false,
+            focus_requested: None,
+        }
     }
 }

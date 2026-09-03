@@ -82,6 +82,28 @@ pub fn write_transcript(
     };
     let mut cascade = cascade;
     let catalog = doc.catalog().unwrap_or_default();
+    // The `Doc` object model, installed from the document the tool opened.
+    // The cascade holds no PDF — `model::read` is what turns one into the
+    // values it answers from — and the *path* is the caller's, because no PDF
+    // carries one: under a frozen clock it is the harness's own
+    // `myfile.pdf`, which two golden lines pin, and otherwise it is nothing,
+    // since a real embedder would pass the file it opened.
+    let path = if time.is_some() {
+        pdfrum_form::script::GOLDEN_FILE_PATH
+    } else {
+        ""
+    };
+    let pages: Vec<Dict> = (0..doc.page_count())
+        .filter_map(|index| doc.page(index).ok().map(|page| page.dict.clone()))
+        .collect();
+    let info = doc.trailer().dict(names::INFO, doc);
+    cascade.set_document(pdfrum_form::script::model::read(
+        &catalog,
+        info.as_ref(),
+        &pages,
+        path,
+        doc,
+    ));
     // **A script that throws does not stop the ones after it.** `run` records
     // the failure and answers `false`; the loop does not read that answer,
     // which is upstream's shape — `ProcJavascriptAction` walks the name tree
