@@ -325,30 +325,18 @@ impl AggDevice {
     /// there is nothing to rasterize and nothing to invert: the source column
     /// is the destination column minus the offset.
     ///
-    /// The clip still applies, through the same `blend_span_with` the general
-    /// path uses, so a clipped blit lands on exactly the pixels a clipped image
-    /// draw would.
+    /// Picking the layer is all this does; the walk itself is the target's,
+    /// because the whole point is that a blit's column range, source offset and
+    /// row band are the same on every row and are derived once rather than per
+    /// row. The clip applies there, as the same coverage product every other
+    /// primitive folds it in with, so a clipped blit lands on exactly the
+    /// pixels a clipped image draw would.
     fn blit(&mut self, img: &RasterImage, dx: i32, dy: i32, alpha: u8) {
         let target = match self.layers.last_mut() {
             Some(layer) => &mut layer.target,
             None => &mut self.base,
         };
-        for row in 0..img.height() {
-            let Ok(row_i32) = i32::try_from(row) else {
-                continue;
-            };
-            let Some(y) = row_i32.checked_add(dy) else {
-                continue;
-            };
-            let Ok(width) = i32::try_from(img.width()) else {
-                continue;
-            };
-            target.blend_span_with(dx, width, y, 255, BlendMode::Normal, |col, _| {
-                let src_col = u32::try_from(i64::from(col) - i64::from(dx)).ok()?;
-                img.pixel(src_col, row)
-                    .map(|px| image::scale_alpha(px, alpha))
-            });
-        }
+        target.blit_image(img, dx, dy, alpha);
     }
 
     /// A device-sized coverage plane with every byte zero, from the pool if

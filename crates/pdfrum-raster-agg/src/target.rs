@@ -12,6 +12,8 @@ use std::sync::Arc;
 use pdfrum_page::BlendMode;
 use pdfrum_render::{AlphaMask, Pixmap, blend, pixmap};
 
+use crate::image::scale_alpha;
+
 /// A premultiplied RGBA8 render target with a clip.
 #[derive(Debug, Clone)]
 pub struct Target {
@@ -232,6 +234,153 @@ impl Target {
         }
     }
 
+    /// Composite a whole image at a whole-pixel offset, one row at a time.
+    ///
+    /// The blit `AggDevice::draw_image` degenerates to when its transform is a
+    /// whole-pixel translation: every device pixel takes exactly one texel and
+    /// the source column is the destination column minus `dx`.
+    ///
+    /// # Why this is not a loop over [`Self::blend_span_with`]
+    ///
+    /// It was, and the row scaffolding cost more than the pixels. Every row of
+    /// a blit has the **same** column range — `x` and `len` do not vary with
+    /// the row — so [`Self::span_range`]'s clamp, the source-column offset and
+    /// the destination row's stride are loop-invariant, and re-deriving them
+    /// per row paid a fixed cost against rows that are eight pixels wide on a
+    /// glyph. Hoisting them leaves each row as three slice takes and a `zip`.
+    ///
+    /// The arithmetic is untouched and is the same
+    /// [`blend_into`] over the same [`Source::Premultiplied`] at the same
+    /// coverage, so a blit lands on exactly the pixels the span loop landed on;
+    /// `an_integer_blit_agrees_with_the_general_path` is what says so against
+    /// the sampled path, and `a_blit_matches_the_span_loop_it_replaced` against
+    /// the spelling this replaced.
+    ///
+    /// The clip still applies, per row, as the same byte-for-byte coverage
+    /// product — including a clip narrower than the target, which reads zero
+    /// past its edge rather than wrapping into the next row.
+    pub fn blit_image(&mut self, img: &Pixmap, dx: i32, dy: i32, alpha: u8) {
+        // The column range, once. `span_range` derived it per row from `x`,
+        // `len` and the target's width, and a blit varies none of the three
+        // with the row.
+        let end = i64::from(dx) + i64::from(img.width());
+        let (Ok(x0), Ok(x1)) = (
+            u32::try_from(dx.max(0)),
+            u32::try_from(end.clamp(0, i64::from(self.width()))),
+        ) else {
+            return;
+        };
+        if x0 >= x1 {
+            return;
+        }
+        let span = (x1 - x0) as usize;
+        // The source column the leftmost painted device column reads. `x0` is
+        // `max(dx, 0)`, so `x0 - dx` is non-negative and no wider than `x0`.
+        let Ok(src_x0) = usize::try_from(i64::from(x0) - i64::from(dx)) else {
+            return;
+        };
+
+        // The row band, once: the image rows whose `row + dy` lands inside the
+        // target. `span_range` returned `None` outside it, which painted
+        // nothing, so the band and the per-row rejection are the same answer.
+        let height = i64::from(img.height());
+        let (Ok(first), Ok(last)) = (
+            u32::try_from(i64::from(-dy).clamp(0, height)),
+            u32::try_from((i64::from(self.height()) - i64::from(dy)).clamp(0, height)),
+        ) else {
+            return;
+        };
+        if first >= last {
+            return;
+        }
+
+        // `scale_alpha` is the identity at 255 — the glyph blit's whole
+        // traffic — so the branch is taken once here rather than per pixel.
+        let opaque = alpha == 255;
+        let Self { pixels, clip } = self;
+        let dest_stride = pixels.width() as usize * 4;
+        let src_stride = img.width() as usize * 4;
+        // A clip in force whose rows do not reach `x1` reads zero across the
+        // whole span — `clip_span`'s `Owned` arm — and zero coverage paints
+        // nothing, so such a blit is a no-op rather than an unclipped one.
+        // Confusing the two is the one way this hoist could have painted a
+        // pixel the span loop did not, and
+        // `a_clip_narrower_than_the_blit_paints_nothing` pins it. It is decided
+        // here rather than per row because `x1` does not vary with the row.
+        let clip = clip.as_deref();
+        let clip_width = clip.map_or(0, |mask| mask.width() as usize);
+        if clip.is_some() && (x1 as usize) > clip_width {
+            return;
+        }
+
+        for row in first..last {
+            let Ok(y) = usize::try_from(i64::from(row) + i64::from(dy)) else {
+                continue;
+            };
+            let Some(dest) = y
+                .checked_mul(dest_stride)
+                .and_then(|start| {
+                    let lo = start.checked_add(x0 as usize * 4)?;
+                    Some(lo..lo.checked_add(span * 4)?)
+                })
+                .and_then(|range| pixels.data_mut().get_mut(range))
+            else {
+                continue;
+            };
+            let Some(src) = (row as usize)
+                .checked_mul(src_stride)
+                .and_then(|start| {
+                    let lo = start.checked_add(src_x0 * 4)?;
+                    Some(lo..lo.checked_add(span * 4)?)
+                })
+                .and_then(|range| img.data().get(range))
+            else {
+                continue;
+            };
+            match clip {
+                None => {
+                    for (dest, src) in dest.chunks_exact_mut(4).zip(src.chunks_exact(4)) {
+                        let Ok(px) = <[u8; 4]>::try_from(src) else {
+                            continue;
+                        };
+                        let px = if opaque { px } else { scale_alpha(px, alpha) };
+                        blend_into(dest, Source::Premultiplied(px), 255, BlendMode::Normal);
+                    }
+                }
+                Some(mask) => {
+                    // The mask row, taken whole — the same bytes `clip_span`
+                    // borrowed. A row past the mask's end reads zero for every
+                    // pixel, which paints nothing, so it is skipped rather than
+                    // walked.
+                    let Some(band) = y
+                        .checked_mul(clip_width)
+                        .and_then(|start| {
+                            let lo = start.checked_add(x0 as usize)?;
+                            Some(lo..lo.checked_add(span)?)
+                        })
+                        .and_then(|range| mask.data().get(range))
+                    else {
+                        continue;
+                    };
+                    for ((dest, src), &cov) in dest
+                        .chunks_exact_mut(4)
+                        .zip(src.chunks_exact(4))
+                        .zip(band.iter())
+                    {
+                        if cov == 0 {
+                            continue;
+                        }
+                        let Ok(px) = <[u8; 4]>::try_from(src) else {
+                            continue;
+                        };
+                        let px = if opaque { px } else { scale_alpha(px, alpha) };
+                        blend_into(dest, Source::Premultiplied(px), cov, BlendMode::Normal);
+                    }
+                }
+            }
+        }
+    }
+
     /// Merge one `ClearType` glyph pixel: three coverages, three destination
     /// channels, each merged on its own alpha.
     ///
@@ -428,6 +577,160 @@ fn blend_into(dest: &mut [u8], src: Source, coverage: u8, mode: BlendMode) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The spelling [`Target::blit_image`] replaced: one
+    /// [`Target::blend_span_with`] per image row, the source pixel recovered
+    /// from the destination column. Kept in the tests as the *specification*
+    /// the fast one is checked against, exactly as [`Target::clip_at`] is kept
+    /// for [`clip_span`]. Deleting it would leave the blit with nothing to be
+    /// compared with.
+    fn blit_by_spans(target: &mut Target, img: &Pixmap, dx: i32, dy: i32, alpha: u8) {
+        for row in 0..img.height() {
+            let Ok(row_i32) = i32::try_from(row) else {
+                continue;
+            };
+            let Some(y) = row_i32.checked_add(dy) else {
+                continue;
+            };
+            let Ok(width) = i32::try_from(img.width()) else {
+                continue;
+            };
+            target.blend_span_with(dx, width, y, 255, BlendMode::Normal, |col, _| {
+                let src_col = u32::try_from(i64::from(col) - i64::from(dx)).ok()?;
+                img.pixel(src_col, row).map(|px| scale_alpha(px, alpha))
+            });
+        }
+    }
+
+    /// A deterministic pseudo-random image, so the comparison below runs over
+    /// real colours and real alphas rather than over one flat value.
+    fn noisy(w: u32, h: u32, seed: u64) -> Pixmap {
+        let mut p = Pixmap::new(w, h);
+        let mut state = seed | 1;
+        for y in 0..h {
+            for x in 0..w {
+                let mut next = || {
+                    state ^= state << 13;
+                    state ^= state >> 7;
+                    state ^= state << 17;
+                    u8::try_from(state & 0xff).unwrap_or(0)
+                };
+                let a = next();
+                // Premultiplied, so no channel may exceed the alpha.
+                let px = [
+                    pixmap::mul255(next(), a),
+                    pixmap::mul255(next(), a),
+                    pixmap::mul255(next(), a),
+                    a,
+                ];
+                p.set_pixel(x, y, px);
+            }
+        }
+        p
+    }
+
+    /// The fast blit and the span loop it replaced agree **byte for byte**, on
+    /// every offset that puts the image off each edge and each corner of the
+    /// target, clipped and unclipped.
+    ///
+    /// This is the test the whole rewrite rests on: the hoist is only sound if
+    /// the column clamp, the source offset, the row band and the clip lookup
+    /// are the same answers the per-row derivation gave, and the way to know
+    /// that is to run both and compare the pixels.
+    #[test]
+    fn a_blit_matches_the_span_loop_it_replaced() {
+        let img = noisy(5, 4, 0x9E37_79B9);
+        for clip in [None, Some(0), Some(1)] {
+            for dy in -6_i32..=8 {
+                for dx in -6_i32..=10 {
+                    for alpha in [255_u8, 128, 0] {
+                        let seed = |t: &mut Target| {
+                            if let Some(kind) = clip {
+                                let mut mask = AlphaMask::filled(8, 6, 200);
+                                if kind == 1 {
+                                    // A ragged clip, so a row's bytes differ.
+                                    for (i, b) in mask.data_mut().iter_mut().enumerate() {
+                                        *b = u8::try_from((i * 37) % 256).unwrap_or(0);
+                                    }
+                                }
+                                t.set_clip(Some(Arc::new(mask)));
+                            }
+                        };
+                        let mut fast = Target::new(8, 6, peniko::Color::WHITE);
+                        seed(&mut fast);
+                        fast.blit_image(&img, dx, dy, alpha);
+
+                        let mut slow = Target::new(8, 6, peniko::Color::WHITE);
+                        seed(&mut slow);
+                        blit_by_spans(&mut slow, &img, dx, dy, alpha);
+
+                        assert_eq!(
+                            fast.pixels().data(),
+                            slow.pixels().data(),
+                            "dx={dx} dy={dy} alpha={alpha} clip={clip:?}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    /// A clip **narrower than the target** clips the blit away entirely rather
+    /// than reading the next mask row as though it were this one.
+    ///
+    /// `clip_span` answered this per row with a zero-filled `Owned` slice;
+    /// `blit_image` decides it once, before the row walk, because `x1` does not
+    /// vary with the row. A version that dropped the check would paint the
+    /// wrong mask bytes; one that mistook it for "unclipped" would paint an
+    /// unclipped blit, which is the one way this could have changed a pixel.
+    #[test]
+    fn a_clip_narrower_than_the_blit_paints_nothing() {
+        let img = noisy(6, 2, 7);
+        let mut t = Target::new(8, 4, peniko::Color::WHITE);
+        t.set_clip(Some(Arc::new(AlphaMask::filled(4, 4, 255))));
+        t.blit_image(&img, 0, 0, 255);
+        assert!(
+            t.pixels().data().iter().all(|&b| b == 255),
+            "a clip that does not reach the span's last column paints nothing"
+        );
+    }
+
+    /// Every row inside the band is painted, and the row's source is *its own*
+    /// image row.
+    ///
+    /// The mutation this exists for is an off-by-one in the band or a row walk
+    /// that reads a fixed source row: both leave a plausible-looking image, and
+    /// only a per-row-distinct source catches them. Each image row here is a
+    /// different solid colour, so a skipped, duplicated or shifted row is a
+    /// visible mismatch at a named coordinate.
+    #[test]
+    fn each_row_of_a_blit_lands_on_its_own_row() {
+        let mut img = Pixmap::new(3, 5);
+        for y in 0..5_u32 {
+            let v = u8::try_from(y + 1).unwrap_or(1) * 40;
+            for x in 0..3_u32 {
+                img.set_pixel(x, y, [v, v, v, 255]);
+            }
+        }
+        let mut t = Target::new(6, 9, peniko::Color::TRANSPARENT);
+        t.blit_image(&img, 2, 3, 255);
+        for y in 0..5_u32 {
+            let v = u8::try_from(y + 1).unwrap_or(1) * 40;
+            for x in 0..3_u32 {
+                assert_eq!(
+                    t.pixels().pixel(x + 2, y + 3),
+                    Some([v, v, v, 255]),
+                    "row {y} of the image belongs at device row {}",
+                    y + 3
+                );
+            }
+        }
+        // And nothing outside the footprint was touched.
+        assert_eq!(t.pixels().pixel(1, 3), Some([0, 0, 0, 0]));
+        assert_eq!(t.pixels().pixel(5, 3), Some([0, 0, 0, 0]));
+        assert_eq!(t.pixels().pixel(2, 2), Some([0, 0, 0, 0]));
+        assert_eq!(t.pixels().pixel(2, 8), Some([0, 0, 0, 0]));
+    }
 
     fn opaque(r: u8, g: u8, b: u8) -> Source {
         Source::Straight([r, g, b], 255)
