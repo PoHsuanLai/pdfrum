@@ -1,57 +1,14 @@
-//! GPU `vello` implementation of `pdfrum-render`'s `RenderDevice` and
-//! `RasterBackend` traits, on a **caller-supplied** `wgpu` device.
+//! GPU `vello` backend for `pdfrum-render`, on a caller-supplied `wgpu` device.
 //!
-//! *Renamed 2026-09-02, was `pdfrum-raster-vello-gpu` with
-//! `VelloGpuBackend`.* The crates now take vello's own names: upstream's
-//! `vello` **is** the GPU renderer on `wgpu`, so the bare name belongs here
-//! and the CPU wrapper is `pdfrum-raster-vello-cpu`.
-//!
-//! This is the fourth backend and the only one that is not pure Rust all the
-//! way down: `wgpu` reaches the platform's graphics drivers. That exemption
-//! exists for exactly one reason — pdfrum's most likely consumer is a
-//! Rust GUI frontend that already holds an open `wgpu::Device` — and the
-//! exemption is bounded by two rules this crate exists to keep:
-//!
-//! - **Nothing in the core ring depends on this crate.** Not the `pdfrum`
-//!   facade, not `pdfrum-tool`. A headless build still resolves a tree with
-//!   zero `wgpu`, and `scripts/check-no-wgpu.nu` asserts it in CI rather than
-//!   this paragraph asserting it in prose.
-//! - **The device is injected, never created.** [`VelloBackend::new`] takes
-//!   the caller's `Device` and `Queue` by reference. Standing up a second
-//!   device inside a PDF library is waste an embedder cannot opt out of.
-//!   [`request_adapter`] exists for a headless process that has no device to
-//!   lend — a benchmark, a test, a thumbnailer — and it leaks the one device it
-//!   makes, which its own documentation says loudly; a second call reuses that
-//!   device rather than leaking another. Borrowing is primary; requesting is
-//!   the fallback, and the ordering is expressed by which one the type's own
-//!   constructor is.
-//!
-//! # Which `wgpu`
-//!
-//! Device injection only typechecks against the exact `wgpu` a
-//! [`vello::Renderer`] was compiled against, so this crate **re-exports it**
-//! as [`wgpu`]. Hand [`VelloBackend::new`] a device from
-//! `pdfrum_raster_vello::wgpu`, not from a `wgpu` you depend on
-//! separately: if the versions differ the types differ and no conversion
-//! exists. `vello 0.10` resolves `wgpu` **29**.
-//!
-//! # What this backend is for, and what it is not
-//!
-//! GPU rasterization is not bit-reproducible across vendors and drivers, so
-//! this backend is a **Tier C participant only**: the CPU backends stay the
-//! oracle-compared ones and this is compared against *them*. It is not the
-//! facade's default and it never joins the conformance scoreboard.
-//!
-//! # The cost model, stated up front
-//!
-//! [`vello::Scene`] is retained: drawing records an encoding and pixels appear
-//! only when the scene is rendered. That suits the engine, which is a one-pass
-//! emitter — but every [`RasterBackend`] target the engine asks for (a
-//! transparency group, a soft mask, each tiling-pattern cell, the mesh scratch
-//! buffer) becomes a texture allocation, a GPU dispatch and a `map_async`
-//! stall on the host. A page that is one big scene wins; a page built from
-//! many small offscreen targets loses, and loses for a structural reason
-//! rather than a tuning one.
+//! [`VelloBackend::new`] borrows the caller's `Device` and `Queue`; nothing is
+//! created here. Hand it a device from this crate's re-exported [`wgpu`], not
+//! from one you depend on separately — injection only typechecks against the
+//! exact version [`vello::Renderer`] was built against. [`request_adapter`] is
+//! the fallback for a headless process, and it leaks its one device. GPU
+//! rasterization is not bit-reproducible across vendors and drivers, so this
+//! is never the facade's default; and [`vello::Scene`] is retained, so every
+//! offscreen target the engine asks for — a transparency group, a soft mask, a
+//! tiling-pattern cell — costs a texture, a dispatch and a `map_async`.
 //!
 //! ```no_run
 //! use kurbo::Affine;
@@ -84,6 +41,32 @@
 //! # Ok(())
 //! # }
 //! ```
+
+// The crate names follow vello's own: upstream's `vello` is the GPU renderer on
+// `wgpu`, so the bare name belongs here and the CPU wrapper is
+// `pdfrum-raster-vello-cpu`.
+//
+// This is the fourth backend and the only one that is not pure Rust all the way
+// down: `wgpu` reaches the platform's graphics drivers. That exemption exists
+// for exactly one reason — pdfrum's most likely consumer is a Rust GUI frontend
+// that already holds an open `wgpu::Device` — and it is bounded by two rules
+// this crate exists to keep:
+//
+// - Nothing in the core ring depends on this crate. Not the `pdfrum` facade,
+//   not `pdfrum-tool`. A headless build still resolves a tree with zero `wgpu`,
+//   and a CI script asserts it rather than this comment asserting it in prose.
+// - The device is injected, never created. Standing up a second device inside a
+//   PDF library is waste an embedder cannot opt out of. `request_adapter`
+//   exists for a headless process that has no device to lend — a benchmark, a
+//   test, a thumbnailer — and a second call reuses the first call's device
+//   rather than leaking another. Borrowing is primary; requesting is the
+//   fallback, and the ordering is expressed by which one the type's own
+//   constructor is.
+//
+// `vello 0.10` resolves `wgpu` 29.
+//
+// Tier C only: the CPU backends stay the oracle-compared ones and this is
+// compared against them. It never joins the conformance scoreboard.
 
 #![forbid(unsafe_code)]
 
@@ -219,29 +202,22 @@ impl std::fmt::Debug for VelloBackend<'_> {
 }
 
 impl<'a> VelloBackend<'a> {
-    /// A backend on the caller's device and queue — **the primary
-    /// constructor**.
+    /// A backend on the caller's device and queue — the primary constructor.
     ///
     /// Compiles vello's pipelines for [`PINNED_AA`] once, which is the
-    /// expensive part; hold the backend for as long as you render, rather than
+    /// expensive part; hold the backend for as long as you render rather than
     /// building one per page.
+    ///
+    /// Replaces the device's uncaptured-error handler, which is process-wide
+    /// per device and which `wgpu` defaults to `panic!`, so an embedder that
+    /// installed its own will find it displaced. Faults recorded through it
+    /// surface from [`device_fault`][Self::device_fault],
+    /// [`try_finish`][Self::try_finish] and [`try_snapshot`][Self::try_snapshot].
     ///
     /// # Errors
     ///
     /// [`Error::Renderer`] if vello cannot build its pipelines on this device
     /// — typically a missing compute feature or a shader compilation failure.
-    ///
-    /// # The uncaptured-error handler
-    ///
-    /// This **replaces** the device's uncaptured-error handler, which is
-    /// process-wide per device and which `wgpu` defaults to `panic!`. An
-    /// embedder that installed its own will find it displaced; that is the
-    /// price of never panicking on a borrowed device, and the alternative —
-    /// leaving the default in place — is a PDF library that aborts the host
-    /// application when a driver resets. Recorded faults surface from
-    /// [`device_fault`][Self::device_fault],
-    /// [`try_finish`][Self::try_finish] and
-    /// [`try_snapshot`][Self::try_snapshot].
     pub fn new(device: &'a wgpu::Device, queue: &'a wgpu::Queue) -> Result<Self, Error> {
         let faults = Faults::default();
         {

@@ -1,35 +1,30 @@
 //! Asking `wgpu` for hardware, for a process that has none to lend us.
 //!
-//! [`crate::VelloBackend::new`] is the primary constructor and it borrows
-//! the embedder's device, which is what this milestone exists to deliver. But
-//! a benchmark, a test or a command-line thumbnailer has no device to borrow,
-//! so it has to walk `wgpu`'s own chain — instance, adapter, device — itself.
-//! That is what [`request_adapter`] does, and its name says so rather than
-//! naming the ownership arrangement that falls out of it.
-//!
-//! # Why the device is leaked
-//!
-//! [`crate::VelloBackend`] borrows its device. A constructor that creates
-//! one therefore has to produce a `&'static wgpu::Device` from a device it
-//! just made, and the safe way to do that is [`Box::leak`] — the crate is
-//! `forbid(unsafe_code)`, so a self-referential struct is not on the table.
-//!
-//! The cost is bounded rather than hidden, and it is a property of *this
-//! function* rather than of the build: **one device and one queue per
-//! process**, never freed. A headless caller opens one for the life of the
-//! process, which is the intended use; a second call reuses the first call's
-//! device rather than leaking another. The borrowing constructor has no such
-//! cost at all, which is one more reason it is the primary one.
-//!
-//! # Why the software check comes before the leak
-//!
-//! The leak is only acceptable for a caller that goes on to *use* the device.
-//! A caller about to reject the adapter — [`try_real_gpu`] on a machine whose
-//! only adapter is `llvmpipe`, which is the ordinary CI case — must not pay
-//! it, and until the check moved it did: the device was opened and leaked and
-//! only then found to be software. The report is therefore built from the
-//! *adapter*, which allocates nothing on the GPU, and the refusal happens
-//! before `request_device` is ever called.
+//! `crate::VelloBackend::new` is the primary constructor and it borrows the
+//! embedder's device. But a benchmark, a test or a command-line thumbnailer has
+//! no device to borrow, so it has to walk `wgpu`'s own chain — instance,
+//! adapter, device — itself. That is what `request_adapter` does, and its name
+//! says so rather than naming the ownership arrangement that falls out of it.
+
+// Why the device is leaked. `VelloBackend` borrows its device, so a constructor
+// that creates one has to produce a `&'static wgpu::Device` from a device it
+// just made, and the safe way to do that is `Box::leak` — the crate is
+// `forbid(unsafe_code)`, so a self-referential struct is not on the table.
+//
+// The cost is bounded rather than hidden, and it is a property of this function
+// rather than of the build: one device and one queue per process, never freed.
+// A headless caller opens one for the life of the process, which is the
+// intended use; a second call reuses the first call's device rather than
+// leaking another. The borrowing constructor has no such cost at all, which is
+// one more reason it is the primary one.
+//
+// Why the software check comes before the leak. The leak is only acceptable for
+// a caller that goes on to use the device. A caller about to reject the adapter
+// — `try_real_gpu` on a machine whose only adapter is `llvmpipe`, which is the
+// ordinary CI case — must not pay it, and until the check moved it did: the
+// device was opened and leaked and only then found to be software. The report
+// is therefore built from the adapter, which allocates nothing on the GPU, and
+// the refusal happens before `request_device` is ever called.
 
 use std::sync::OnceLock;
 
@@ -70,19 +65,15 @@ struct Opened {
 
 /// Request an adapter and a device, and build a backend on them.
 ///
-/// Mirrors `wgpu::Instance::request_adapter`, which is the operation it
-/// actually performs: it enumerates hardware and takes the highest-performance
-/// adapter, then opens a device on it. Contrast
-/// [`VelloBackend::new`][crate::VelloBackend::new], which takes a device
-/// the caller already has.
+/// Enumerates hardware, takes the highest-performance adapter and opens a
+/// device on it. Contrast [`VelloBackend::new`][crate::VelloBackend::new],
+/// which borrows a device the caller already has, and prefer it.
 ///
-/// **This leaks one device and one queue, once per process** — see the module
-/// documentation for why it leaks, and why it does so only once.
-///
-/// A software adapter is refused here rather than after the device is open:
-/// `llvmpipe` presents itself as an ordinary Vulkan adapter, so
-/// `force_fallback_adapter: false` does not exclude it, and a caller that is
-/// going to reject it should not have paid for a device first.
+/// This leaks one device and one queue, once per process, because
+/// `VelloBackend` borrows its device and this crate is `forbid(unsafe_code)`.
+/// A second call reuses the first call's device rather than leaking another,
+/// and a software adapter is refused before any device is opened, so a caller
+/// that rejects one has not paid the leak.
 ///
 /// # Errors
 ///
