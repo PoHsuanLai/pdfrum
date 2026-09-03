@@ -33,9 +33,8 @@ use super::transcript::TranscriptLine;
 
 /// Turns a call's effects into transcript lines.
 ///
-/// An `AF*` alert is **not** an `app.alert`: `AlertIfPossible`
-/// (`fxjs/cjs_publicmethods.cpp:94-102`) passes the function's own name as
-/// the title, always with `icon = 3` and `button = 0`, so it renders in the
+/// An `AF*` alert is **not** an `app.alert`: the function's own name is the
+/// title, always with `icon = 3` and `button = 0`, so it renders in the
 /// decorated form with no `Alert:` prefix and interleaves with the plain
 /// lines. [`TranscriptLine::FunctionAlert`] is that shape.
 fn report(effects: &pdfrum_script::AfEffects, context: &Context) {
@@ -235,10 +234,9 @@ fn apply_keystroke(
 /// One bound `AF*` function.
 ///
 /// The Acrobat name is threaded in as `name` because **every error a bound
-/// function throws carries it** — `JSFormatErrorString`
-/// (`fxjs/js_resources.cpp:97-108`) prefixes `"<name>: "`, and roughly
-/// seventy golden assertions quote the qualified form. The macro exists so
-/// that name is written once per function rather than once per `throw`.
+/// function throws carries it** as a `"<name>: "` prefix, and roughly seventy
+/// golden assertions quote the qualified form. The macro exists so that name
+/// is written once per function rather than once per `throw`.
 macro_rules! af {
     ($fn_name:ident, $acrobat:literal, $body:expr) => {
         fn $fn_name(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
@@ -633,13 +631,10 @@ af!(
 
 /// `AFSimple_Calculate(cFunction, cFields)`.
 ///
-/// **Declined for M15 step 1 with a reason rather than stubbed silently.**
-/// The calculation reads *other fields' values*, which needs the `Doc`/`Field`
-/// object model this step deliberately does not build (PLAN §M15's order puts
-/// the cascade at item 3 and the mutation surface at item 4). The pure half —
+/// **Declined with a reason rather than stubbed silently.** The pure half —
 /// `pdfrum_script::af_simple_calculate` over a slice of numbers — is written
-/// and tested; what is missing is only the lookup that fills the slice, which
-/// is the follow-on's first job.
+/// and tested; what is missing is the lookup that fills the slice from other
+/// fields' values.
 // The signature is the table's, and every entry must share it.
 #[allow(clippy::unnecessary_wraps)]
 fn af_simple_calculate(
@@ -656,8 +651,7 @@ fn af_simple_calculate(
 /// why it is a function pointer rather than a closure.
 pub(crate) type Bound = fn(&JsValue, &[JsValue], &mut Context) -> JsResult<JsValue>;
 
-/// Registers all twenty-two as bare globals, which is what
-/// `fxjs/cjs_publicmethods.cpp:48-71` does.
+/// Registers all twenty-two as bare globals.
 pub(crate) fn install(context: &mut Context) -> JsResult<()> {
     let functions: &[(&str, Bound)] = &[
         ("AFNumber_Format", af_number_format),

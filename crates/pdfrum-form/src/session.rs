@@ -33,20 +33,17 @@ pub struct FieldId(pub u32);
 /// This distinction is invisible until a page carries a pop-up annotation,
 /// and then it decides whether an appearance lands on the right widget.
 ///
-/// A page's annotation list, as the rendering path builds it, **drops
-/// pop-ups** — they are synthesized separately from the annotations they
-/// belong to — so a widget's position in that list is not its position in the
-/// file's `/Annots` array. On a page whose first annotation is a pop-up,
-/// every later widget's filtered position is one lower than its raw index.
+/// A page's annotation list as the rendering path builds it **drops
+/// pop-ups**, so a widget's position in that list is not its position in the
+/// file's `/Annots` array: on a page whose first annotation is a pop-up, every
+/// later widget's filtered position is one lower than its raw index.
 ///
 /// The appearance overlay a caller draws through is keyed by the **raw**
-/// index. So that is what this carries: hand back a filtered position and
-/// every appearance after the first pop-up is applied to the wrong
-/// annotation, silently, with no type to catch it.
-///
-/// This is also the natural choice rather than a concession, because hit
-/// testing walks `/Annots` itself: the raw index is what the walk already
-/// has, and the filtered one would have to be computed.
+/// index. Hand back a filtered position and every appearance after the first
+/// pop-up lands on the wrong annotation, silently, with no type to catch it.
+// It is also the natural choice rather than a concession: hit testing walks
+// `/Annots` itself, so the raw index is what the walk already has and the
+// filtered one would have to be computed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct AnnotId {
     /// Which page.
@@ -133,15 +130,12 @@ pub struct SessionConfig {
     pub max_undo_items: u32,
     /// How deep a calculation may trigger another calculation.
     ///
-    /// **One by default, which is the oracle's answer and not a loose
-    /// reading of it.** `CPDFSDK_InteractiveForm::busy_`
-    /// (`fpdfsdk/cpdfsdk_interactiveform.cpp:259-264`) is a plain flag: the
-    /// outer sweep is authoritative and every nested call it provokes returns
-    /// immediately, so upstream permits **no** nesting at all. The knob makes
-    /// that configurable rather than looser — mirroring
-    /// [`Limits::max_calculate_depth`](pdfrum_common::Limits::max_calculate_depth),
-    /// which is where the same number lives for a caller configuring the
-    /// script engine rather than the session.
+    /// **One by default, which is the oracle's answer and not a loose reading
+    /// of it**: upstream guards the sweep with a flag rather than a counter,
+    /// so the outer sweep is authoritative and every nested call it provokes
+    /// returns immediately — no nesting at all. The knob makes that
+    /// configurable rather than looser, mirroring
+    /// [`Limits::max_calculate_depth`](pdfrum_common::Limits::max_calculate_depth).
     pub max_calculate_depth: u32,
 }
 
@@ -189,27 +183,17 @@ pub struct FormSession {
     /// What a `/AA /F` format script asked each field to *show*, which is not
     /// what it stores.
     ///
-    /// # Why the display string needs a home at all
+    /// [`CommitOutcome::display`](crate::CommitOutcome::display) is a
+    /// formatting script's whole output, and this is where it survives until
+    /// the next appearance is generated — a field with
+    /// `AFNumber_Format(2, 0, 0, 0, "", true)` otherwise regenerates `(1234)`
+    /// where it should draw `(1,234.00)`.
     ///
-    /// `CommitOutcome::display` is a formatting script's whole output, and
-    /// without somewhere to put it the string is computed and dropped — a
-    /// field with `AFNumber_Format(2, 0, 0, 0, "", true)` regenerates
-    /// `(1234) Tj` where the oracle draws `(1,234.00) Tj`.
-    ///
-    /// Upstream it is not stored either, because upstream *regenerates
-    /// immediately*: `AfterValueChange` is
-    /// `ResetFieldAppearance(pField, OnFormat(pField))`
-    /// (`fpdfsdk/cpdfsdk_interactiveform.cpp:588`) and the optional reaches
-    /// exactly one line, `pEdit->SetText(sValue.value_or(pField->GetValue()))`
-    /// (`fpdfsdk/cpdfsdk_appstream.cpp:1752`). This crate hands appearances
-    /// back rather than painting them, so the same answer has to survive
-    /// until the next generation — which is what this map is, and why it is
-    /// keyed by field rather than by widget: `ResetFieldAppearance` walks
-    /// **every control of the field** and gives each the same string.
-    ///
-    /// Cleared when a field takes focus, because the form filler's editor is
-    /// seeded from `GetValue()` and never from the formatted text: a user who
-    /// clicks into a currency field sees `1234` to edit, not `1,234.00`.
+    /// Keyed by **field** rather than by widget, because regeneration gives
+    /// every control of the field the same string. Cleared when a field takes
+    /// focus: the editor is seeded from the stored value and never from the
+    /// formatted text, so a user who clicks into a currency field sees `1234`
+    /// to edit, not `1,234.00`.
     pub formatted: BTreeMap<FieldId, String>,
     /// The switches.
     pub config: SessionConfig,

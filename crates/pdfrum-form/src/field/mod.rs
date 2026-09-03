@@ -6,15 +6,13 @@
 //! Grouping by behaviour rather than by `/FT` is what keeps each machine
 //! small enough to state as a transition table.
 //!
-//! # Configuration is a record, not a bit mask
-//!
-//! The C++ translates a field's flags, quadding and length limit into a
-//! 32-bit style word whose low bits are **overloaded across widget
-//! families** — the same bit means multiline for an edit, multi-select for a
-//! list box and allow-custom-text for a combo box — and then keeps that safe
-//! by masking sub-styles off when it builds a child. Here the kinds are
-//! separate types, so the overloading has nowhere to happen, and each switch
-//! is a named field read once when the field is first touched.
+//! **Configuration is a record, not a bit mask.** Each switch is a named
+//! field on its own kind's type, read once when the field is first touched.
+// The oracle packs flags, quadding and length limit into one 32-bit style
+// word whose low bits are overloaded across widget families — the same bit is
+// multiline for an edit, multi-select for a list box and allow-custom-text for
+// a combo box — and masks sub-styles off when it builds a child. Separate
+// types leave the overloading nowhere to happen.
 
 mod button;
 // The three below stay `pub`: their *contents* are the surface — the pure
@@ -186,9 +184,8 @@ pub struct ChoiceState {
     pub top_visible: usize,
     /// Whether a combo box's dropdown is open.
     ///
-    /// `CPWL_ComboBox::is_popup_`, toggled by `SetPopup`
-    /// (`fpdfsdk/pwl/cpwl_combo_box.cpp:325-377`). Meaningless on a list box,
-    /// which has no second window to open, and never set on one.
+    /// Meaningless on a list box, which has no second window to open, and
+    /// never set on one.
     ///
     /// Open is a *session* fact and not a document one: nothing a file can
     /// say opens a dropdown, and the only thing that does is a click on the
@@ -199,13 +196,9 @@ pub struct ChoiceState {
     pub popup_open: bool,
     /// The row the pointer is over while the dropdown is open.
     ///
-    /// The list is created with `Styles::kListboxHoverSel`
-    /// (`cpwl_combo_box.cpp:210-211`), whose whole effect is
-    /// `CPWL_ListBox::OnMouseMove` calling `Select(GetItemIndex(point))` —
-    /// hovering a row *selects* it. Kept beside the selection rather than
-    /// folded into it so that closing the list without clicking can leave the
-    /// stored selection alone, which is what `bug_736695_4` asserts by
-    /// rendering an untouched field after hovering one.
+    /// Hovering a row *selects* it. Kept beside the selection rather than
+    /// folded into it, so that closing the list without clicking leaves the
+    /// stored selection alone.
     pub hovered: Option<usize>,
     /// How the field is configured.
     pub config: ChoiceConfig,

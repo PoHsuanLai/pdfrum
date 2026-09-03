@@ -1,36 +1,17 @@
 //! Applying one event to a session: the function the whole crate exists to
 //! provide.
 //!
-//! # What routing is, and what it is not
+//! Every decision here is already a pure function elsewhere — `hit`,
+//! `field::text`, `edit::ops`. Routing sequences those answers, and owns one
+//! thing: **when a field's interaction state comes into being, and when it is
+//! written back to an appearance.**
 //!
-//! Every decision this module reaches has already been made somewhere else as
-//! a pure function — which annotation is under a point (`hit`), whether a
-//! keystroke is a shortcut (`field::text`), what a click does to a list box
-//! (`field::choice`), where the caret lands (`edit::ops`). Routing is the
-//! sequencing of those answers, and it owns exactly one thing: **when a
-//! field's interaction state comes into being, and when it is written back to
-//! an appearance.**
+//! **State is built lazily, once.** The first event to touch a field reads its
+//! value, options and flags out of the file; every later event finds it there.
 //!
-//! That is why this module is short relative to what it does. The C++ spreads
-//! the same sequencing across a widget hierarchy, a form-filler environment
-//! and a per-field handler, each re-deriving the others' state; here the
-//! sequence is one `match` over an event and the state is one map.
-//!
-//! # A field's state is built lazily, from the file, once
-//!
-//! Nothing is created when a document opens. The first event that touches a
-//! field reads its value, options and flags out of the file and builds its
-//! [`FieldState`]; every later event finds it already there. That is what
-//! makes clicking away from a half-typed field and back find the typing still
-//! there, and it is also why a document with a thousand fields costs nothing
-//! until one is used.
-//!
-//! # The appearance is produced on the way out, not stored
-//!
-//! A [`Response`] carries the appearance a changed field should now draw.
-//! Nothing is cached: the appearance is a pure function of the interaction
-//! state and the file, so recomputing it is always correct and storing it
-//! would introduce the one invariant this design does not otherwise have.
+//! **The appearance is produced on the way out, not stored.** A [`Response`]
+//! carries what a changed field should draw; nothing is cached, because the
+//! appearance is a pure function of the state and the file.
 
 use pdfrum_doc::ap::{self, TextFont};
 use pdfrum_doc::vt;
@@ -97,15 +78,10 @@ impl<R: Resolve> Context<'_, R> {
 /// # Where the `f64` stops
 ///
 /// An [`Event`]'s point is a [`kurbo::Point`], and **this function is the one
-/// place it is narrowed** to the crate's private `f32` `Point`. That is
-/// deliberate and load-bearing rather than incidental:
-/// `fpdf_formfill.cpp:435-444` narrows the oracle's own `double page_x,
-/// page_y` to a `CFX_PointF` at exactly this boundary, before any comparison,
-/// and every geometric query below here — `hit::contains`'s inclusive-edge
-/// test against edges `page::to_rect` already rounded, `geom::Plate::to_plate`'s
-/// subtraction and its six callers — is `f32` against `f32`. A half-migration
-/// that widened the signature and let the `f64` reach one of those would move
-/// an inclusive edge or a caret across a glyph boundary.
+/// place it is narrowed** to `f32`, before any comparison. Every geometric
+/// query below here compares `f32` against widget edges already rounded the
+/// same way; letting an `f64` reach one of them would move an inclusive edge,
+/// or a caret across a glyph boundary.
 pub fn apply<R: Resolve>(
     session: &mut FormSession,
     ctx: &Context<'_, R>,
@@ -365,16 +341,12 @@ fn double_click<R: Resolve>(
 /// The wheel scrolls whatever is under the pointer, focused or not.
 ///
 /// A **list box** moves its selection rather than its view, with the wheel's
-/// own Shift and Control passed through — `CPWL_ListBox::OnMouseWheel`
-/// (`cpwl_list_box.cpp:357-368`) hands `IsSHIFTKeyDown`/`IsCTRLKeyDown` to the
-/// same `OnVK_DOWN`/`OnVK_UP` the arrow keys call, and those flags change what
-/// a multi-select list does with the row it lands on.
+/// own Shift and Control passed through: the wheel and the arrow keys are one
+/// operation, and those flags change what a multi-select list does with the
+/// row it lands on.
 ///
-/// A **combo box** does nothing. It has no `OnMouseWheel` of its own, so it
-/// falls through to `CPWL_Wnd::OnMouseWheel` (`cpwl_wnd.cpp:412-429`), which
-/// returns false unless a child holds the keyboard capture — and a closed
-/// combo's list window is not shown, so nothing moves. Treating it as a list
-/// would let a wheel notch silently change a committed value.
+/// A **combo box** does nothing. Treating it as a list would let a wheel notch
+/// silently change a committed value.
 fn wheel<R: Resolve>(
     session: &mut FormSession,
     ctx: &Context<'_, R>,
@@ -697,16 +669,12 @@ enum Keyed {
 /// # Which actions reach a script, and which do not
 ///
 /// Only the ones that **change the text**: an insertion, a return, and the
-/// two deletions. Caret movement, selection, undo, redo and scrolling never
-/// build a `CFFL_FieldAction` upstream, because `OnChar` and `OnKeyDown` gate
-/// the whole gathering on there being a change to describe — a script that
-/// saw arrow keys would be seeing keystrokes the specification says a
-/// keystroke event is not about.
+/// two deletions. Caret movement, selection, undo, redo and scrolling build no
+/// action at all — a script that saw arrow keys would be seeing keystrokes the
+/// specification says a keystroke event is not about.
 ///
-/// A hook that rewrites `change` is answered by *replacing the selection*
-/// with what it returned, which is `SetActionData`
-/// (`fpdfsdk/formfiller/cffl_textfield.cpp:216-222`) — `SetSelection` then
-/// `ReplaceSelection` — rather than by re-running the original action.
+/// A hook that rewrites `change` is answered by *replacing the selection* with
+/// what it returned, rather than by re-running the original action.
 fn keystroke_hook<R: Resolve>(
     session: &mut FormSession,
     ctx: &Context<'_, R>,
@@ -843,10 +811,7 @@ fn line_y(edit: &TextEdit, section: u32, line: i64) -> f32 {
 /// A key for a focused choice field.
 ///
 /// The arrow keys carry their modifiers for the same reason the wheel does:
-/// `CPWL_ListBox::OnKeyDown` (`cpwl_list_box.cpp:103-119`) hands
-/// `IsSHIFTKeyDown`/`IsCTRLKeyDown` to the very `OnVK_UP`/`OnVK_DOWN` that
-/// `OnMouseWheel` calls, so the two gestures are one operation upstream and
-/// must not diverge here.
+/// the two gestures are one operation and must not diverge here.
 fn choice_key<R: Resolve>(
     session: &mut FormSession,
     ctx: &Context<'_, R>,
@@ -1083,11 +1048,10 @@ fn visible_rows<R: Resolve>(
 
 /// The width of a combo box's drop button, in PDF units.
 ///
-/// `kDefaultButtonWidth` (`fpdfsdk/pwl/cpwl_combo_box.cpp:22`), the same
-/// constant `ap::shapes::drop_button` draws with. `RepositionChildWnd`
-/// (`:284-289`) places it as the right `kDefaultButtonWidth` of the client
-/// rectangle, clamped to the client's left edge for a widget narrower than
-/// the button — which is why the `max` below is not decoration.
+/// The same constant `ap::shapes::drop_button` draws with. It takes the
+/// rightmost slice of the client rectangle, clamped to the client's left edge
+/// for a widget narrower than the button — which is why the `max` below is not
+/// decoration.
 const DROP_BUTTON_WIDTH: f32 = 13.0;
 
 /// Whether a page-space point is inside a combo box's drop button.
@@ -1136,9 +1100,8 @@ fn popup_geometry<R: Resolve>(
 
 /// Opens or closes a combo box's dropdown, reporting whether the state moved.
 ///
-/// `CPWL_ComboBox::SetPopup` (`cpwl_combo_box.cpp:325-377`) and its **three
-/// failure returns**, all of which are `true` — the call reports success and
-/// changes nothing:
+/// There are **three failure paths**, all of which report success and change
+/// nothing:
 ///
 /// - no list at all (a field that is not a combo);
 /// - a list whose content rectangle has no height (no options);
@@ -1181,10 +1144,10 @@ fn set_popup<R: Resolve>(
 
 /// Shuts every open dropdown on the page.
 ///
-/// `CPWL_ComboBox::KillFocus` (`cpwl_combo_box.cpp:52-58`) closes the list
-/// before the base class drops focus, so nothing survives a focus change —
-/// and because a session focuses one field at a time, closing *every* one is
-/// the same operation stated without a special case for which field it was.
+/// A list is closed before focus is dropped, so nothing survives a focus
+/// change — and because a session focuses one field at a time, closing *every*
+/// one is the same operation stated without a special case for which field it
+/// was.
 fn close_all_popups(session: &mut FormSession) -> bool {
     let mut closed = false;
     for state in session.fields.values_mut() {
@@ -1218,14 +1181,10 @@ fn open_popup_of(session: &FormSession, page: &PageForm) -> Option<(FieldId, Ann
 
 /// The open dropdown a page-space point falls inside, with the row it names.
 ///
-/// **This is the routing gap the pixels could not show.** A mouse-down below
-/// an open combo is inside the list window, and upstream `CPWL_Wnd::OnLButtonDown`
-/// walks the child windows before the widget's own hit test — so it selects a
-/// row. Here the widget hit test is rect containment over `/Annots`, and the
-/// list is not in `/Annots`, so the same click read as a **miss** and dropped
-/// focus. `bug_736695_3` scored 0.997 anyway, because a wrong 150×15 box is
-/// under the SSIM floor; the selection it never made is invisible to the
-/// metric and plain in the state.
+/// **An open dropdown must be hit-tested before the annotations are.** A
+/// mouse-down below an open combo is inside the list, and the list is not in
+/// `/Annots` — so plain rect containment over the array reads that click as a
+/// miss and drops focus instead of selecting a row.
 fn popup_hit<R: Resolve>(
     session: &FormSession,
     ctx: &Context<'_, R>,
@@ -1312,9 +1271,9 @@ fn toggle_popup_at<R: Resolve>(
 /// `Return` (or a gated combo's `Space`) toggling the dropdown.
 ///
 /// The keyboard spelling of `toggle_popup_at`, without a point to test. The
-/// response is always consumed — `CPWL_ComboBox::OnChar`'s two early cases
-/// return `true` even when `SetPopup` refused — so a list with nowhere to
-/// open still swallows the key rather than letting it type a character.
+/// response is always consumed, even when the list refused to open, so a
+/// combo with nowhere to open still swallows the key rather than letting it
+/// type a character.
 fn toggle_popup_by_key<R: Resolve>(
     session: &mut FormSession,
     ctx: &Context<'_, R>,
@@ -1343,13 +1302,10 @@ fn toggle_popup_by_key<R: Resolve>(
 
 /// A left-down inside an open dropdown's rows.
 ///
-/// **Down hovers, up selects.** `CPWL_ListBox::OnLButtonDown`
-/// (`cpwl_list_box.cpp:137-150`) runs `list_ctrl_->OnMouseDown`, which moves
-/// the list control's own selection; the *commit* — copying the row's text
-/// into the edit half and shutting the list — is
-/// `CPWL_ComboBox::NotifyLButtonUp` (`cpwl_combo_box.cpp:505-516`), reached
-/// from `CPWL_CBListBox::OnLButtonUp`. Splitting them matters because a press
-/// that drags off the list before releasing must leave the field alone.
+/// **Down hovers, up selects.** The press moves the list's own selection; the
+/// *commit* — copying the row's text into the edit half and shutting the list
+/// — happens on release. Splitting them matters because a press that drags off
+/// the list before releasing must leave the field alone.
 fn press_in_popup<R: Resolve>(
     session: &mut FormSession,
     ctx: &Context<'_, R>,
@@ -1367,13 +1323,10 @@ fn press_in_popup<R: Resolve>(
 
 /// A left-up inside an open dropdown's rows: the row is chosen.
 ///
-/// `CPWL_ComboBox::NotifyLButtonUp` (`cpwl_combo_box.cpp:505-516`) in order —
-/// `SetSelectText()`, `SelectAllText()`, `edit_->SetFocus()`,
-/// `SetPopup(false)`. The first is what makes the chosen row the field's
-/// value, and it routes through `ReplaceSelection` upstream so **every combo
-/// selection is undoable**; here `select_only` is the same state change over
-/// this crate's model. The last is why the list shuts on release rather than
-/// on press.
+/// Four steps in order: carry the row's label into the text half, select all
+/// of it, focus the edit, shut the list. The first routes through a selection
+/// replacement, so **every combo selection is undoable**. The last is why the
+/// list shuts on release rather than on press.
 fn release_in_popup<R: Resolve>(
     session: &mut FormSession,
     ctx: &Context<'_, R>,
@@ -1408,14 +1361,10 @@ fn release_in_popup<R: Resolve>(
 /// `SetSelectText()` then `SelectAllText()`: the chosen row's label into the
 /// combo's text half, **left selected**.
 ///
-/// Both halves matter and the second is the one that shows.
-/// `CPWL_ComboBox::SetSelectText` (`cpwl_combo_box.cpp:518-523`) is
-/// `SelectAllText(); ReplaceSelection(list_->GetText()); SelectAllText();` —
-/// it *ends* on a select-all — and `NotifyLButtonUp` (`:505-516`) then calls
-/// `SelectAllText()` again for good measure. So after choosing a row the
-/// text half holds that row's label with **every character selected**, which
-/// is why `bug_736695_3`'s golden shows `Spain` as white glyphs on a navy
-/// band rather than as black text on white.
+/// Both halves matter and the second is the one that shows: after choosing a
+/// row the text half holds that row's label with **every character selected**,
+/// so it draws as white glyphs on a navy band rather than as black text on
+/// white.
 ///
 /// The control is rebuilt from the label rather than edited in place: the
 /// whole text is being replaced, so there is nothing of the old one to keep,
@@ -1448,11 +1397,10 @@ fn set_combo_text<R: Resolve>(
 
 /// What a host draws for one page's open dropdown, if one is open.
 ///
-/// The **state-plus-geometry** half of the M14 chrome ruling (STYLE §2b): the
-/// library says where the list is and what is in it, and the host paints it
-/// on its own schedule. Nothing here is a callback and nothing is a trait —
-/// a viewer that never asks is never told, and one that asks twice gets the
-/// same answer.
+/// State and geometry: the library says where the list is and what is in it,
+/// and the host paints it on its own schedule. Nothing here is a callback and
+/// nothing is a trait — a viewer that never asks is never told, and one that
+/// asks twice gets the same answer.
 ///
 /// [`None`] when nothing on the page has its dropdown open, which is the
 /// common case: only a click on a drop button, a `Return` or a `Space` on a
@@ -1592,21 +1540,17 @@ pub fn close_popup<R: Resolve>(
 
 /// The height of one list-box row: the **laid-out** line, not the font size.
 ///
-/// `CPWL_ListCtrl::Item::GetItemHeight` (`cpwl_list_ctrl.cpp:49-51`) is the
-/// item's own edit's `GetContentRect().Height()`, and `ReArrange` (`:525-551`)
-/// stacks the items by exactly that. At 12 points in Arimo that is **13.392**
-/// units, not 12: the line is `(ascent - descent) * size / 1000` and the pair
-/// sums to 1116, not 1000. Returning the font size made every row an eighth
-/// short, which moved the scroll clamp, the wheel's visible-row count and the
-/// hit test together — and put the drawn selection band two device rows short
-/// of the golden's on `scrollable_widgets2`.
+/// A row is one laid-out line: `(ascent - descent) * size / 1000`. At 12
+/// points in Arimo that is **13.392** units, not 12, because the pair sums to
+/// 1116. Returning the font size instead makes every row an eighth short,
+/// which moves the scroll clamp, the wheel's visible-row count and the hit
+/// test together.
 ///
 /// The call below is deliberately the **same one** `ap::field_body::list_box`
-/// makes per row — `vt::layout(label, &config, &metrics)`, into a zero-height
-/// plate so the layout reports the row's extent rather than the box's — so the
-/// height that is hit-tested and the height that is drawn cannot drift apart.
-/// The first option's label is measured because every row shares one font and
-/// one size, which is what makes a uniform division the right model at all.
+/// makes per row, into a zero-height plate so the layout reports the row's
+/// extent rather than the box's — so the height that is hit-tested and the
+/// height that is drawn cannot drift apart. The first option's label is
+/// measured because every row shares one font and one size.
 fn row_height<R: Resolve>(ctx: &Context<'_, R>, widget: &WidgetInfo, choice: &ChoiceState) -> f32 {
     let client = ap::field_body::client_rect(&widget.dict, ctx.resolve);
     let plate = pdfrum_doc::geom::rect(
@@ -1662,12 +1606,11 @@ fn font_size<R: Resolve>(ctx: &Context<'_, R>, widget: &WidgetInfo) -> f32 {
 
 /// A wheel notch over a list box.
 ///
-/// **It moves the selection, not the view.** `CPWL_ListBox::OnMouseWheel`
-/// (`cpwl_list_box.cpp:357-368`) calls the very same `OnVK_DOWN`/`OnVK_UP`
-/// the arrow keys do, and the view follows only when the newly selected row
-/// would otherwise be off screen. Reading the wheel as a scrollbar drag — the
-/// obvious guess — leaves the selection behind on a row that has scrolled out
-/// of sight, where the oracle keeps it under the pointer's last step.
+/// **It moves the selection, not the view** — the same operation the arrow
+/// keys perform — and the view follows only when the newly selected row would
+/// otherwise be off screen. Reading the wheel as a scrollbar drag, the obvious
+/// guess, leaves the selection behind on a row that has scrolled out of
+/// sight.
 fn scroll_choice(
     state: &mut ChoiceState,
     delta_y: i32,
@@ -1693,13 +1636,9 @@ fn scroll_choice(
 
 /// Scrolls a text field by a wheel notch.
 ///
-/// A `DoNotScroll` field does not move, and the gate is upstream's own:
-/// `CPWL_EditImpl::SetScrollPosY` (`fpdfsdk/pwl/cpwl_edit_impl.cpp:1175-1178`)
-/// returns at its first statement when `enable_scroll_` is clear, so every
-/// caller — the wheel included — writes nothing.
-/// `CFFL_TextField::GetCreateParam` (`cffl_textfield.cpp:54-57`) withholds
-/// `kWindowVScroll` from such a field besides, so upstream draws it no
-/// scrollbar to drag either.
+/// A `DoNotScroll` field does not move: [`TextEdit::auto_scroll`] gates every
+/// writer of the scroll position, the wheel included, and such a field is
+/// drawn no scrollbar to drag either.
 fn scroll_text<R: Resolve>(
     session: &mut FormSession,
     ctx: &Context<'_, R>,
@@ -1761,11 +1700,9 @@ fn tab_to_next<R: Resolve>(
 
 /// The page's focus ring, filtered to the session's focusable subtypes.
 ///
-/// The order is the **page's**, from its `/Tabs`, not a constant.
-/// `CPDFSDK_AnnotIterator`'s constructor reads it per page view
-/// (`cpdfsdk_annotiterator.cpp:41`), and `annotiter.pdf` is the fixture that
-/// tells the three apart: its first Tab lands on annot 1 under `/R` where
-/// structure order would answer 0.
+/// The order is the **page's**, read from its `/Tabs` per page, not a
+/// constant: under `/R` the first Tab can land on a different annotation than
+/// structure order would answer.
 fn focus_ring<R: Resolve>(session: &FormSession, ctx: &Context<'_, R>) -> tab::FocusRing {
     let focusables: Vec<tab::Focusable> = ctx
         .page
@@ -1797,10 +1734,8 @@ fn field_ref<R: Resolve>(ctx: &Context<'_, R>, field: FieldId) -> Option<FieldRe
 /// The text a field currently holds in the session, for the commit gate.
 ///
 /// Only the two families that carry text have one: a toggle's value is its
-/// `/AS` state and a push button has none, and neither reaches the commit
-/// cascade upstream either (`CFFL_CheckBox`/`CFFL_RadioButton` reach
-/// `CommitData` through `IsDataChanged`, which their own `SaveData` answers
-/// without a keystroke script).
+/// `/AS` state and a push button has none, and neither reaches the keystroke
+/// half of the commit cascade.
 fn edited_text(session: &FormSession, field: FieldId) -> Option<String> {
     match session.fields.get(&field)? {
         FieldState::Text(text) => Some(text.edit.text.clone()),
@@ -1811,12 +1746,10 @@ fn edited_text(session: &FormSession, field: FieldId) -> Option<String> {
 
 /// Runs the commit cascade for a field that is losing focus.
 ///
-/// This is `CFFL_FormField::KillFocusForAnnot`'s call to `CommitData`
-/// (`fpdfsdk/formfiller/cffl_formfield.cpp:306`), which is the *only* place
-/// upstream where the script gates run over a whole field value. The answer
-/// says whether focus may proceed: see [`commit::CommitOutcome::keeps_focus`]
-/// and `commit`'s module documentation for why a refusal keeps the field here
-/// where the oracle drops it.
+/// Losing focus is the *only* point at which the script gates run over a
+/// whole field value. The answer says whether focus may proceed: see
+/// [`commit::CommitOutcome::keeps_focus`] and `commit`'s module documentation
+/// for why a refusal keeps the field here where the oracle drops it.
 ///
 /// `None` when nothing ran — a field with no text, or one whose value has not
 /// moved — which is the ordinary case and the one that must cost nothing.
@@ -1875,10 +1808,9 @@ fn commit_field<R: Resolve>(
 ///
 /// `None` is the answer for a field with no format script and for one whose
 /// script produced its input unchanged, and it must **erase** any earlier
-/// string rather than leaving one: `std::nullopt` reaches
-/// `sValue.value_or(pField->GetValue())` (`cpdfsdk_appstream.cpp:1752`) as
-/// the raw value, so a stale entry here would keep drawing an answer the
-/// document no longer gives.
+/// string rather than leaving one: `None` means "draw the raw value", so a
+/// stale entry here would keep drawing an answer the document no longer
+/// gives.
 fn record_display(session: &mut FormSession, field: FieldId, display: Option<String>) {
     match display {
         Some(display) => {
@@ -2025,11 +1957,10 @@ fn clear_undo(session: &mut FormSession, field: FieldId) {
 
 /// A radio button's siblings on this page lose their state when it is set.
 ///
-/// `CPDF_FormField::CheckControl` (`cpdf_formfield.cpp:683-716`) walks every
-/// control of the field: the one at the clicked index takes its own on state
-/// and **every other one is set to `Off`**. Which control is which matters,
-/// because two kids of a radio group carry different on-state names — that is
-/// how `/V` names the chosen one.
+/// Every control of the field is walked: the one at the clicked index takes
+/// its own on state and **every other one is set to `Off`**. Which control is
+/// which matters, because two kids of a radio group carry different on-state
+/// names — that is how `/V` names the chosen one.
 ///
 /// A field's controls share one [`ToggleState`] here, so the per-control `/AS`
 /// that walk writes cannot be stored control by control. What *is* storable is
@@ -2037,20 +1968,13 @@ fn clear_undo(session: &mut FormSession, field: FieldId) {
 /// caller reading [`ToggleState::checked_control`] can tell the chosen kid
 /// from its siblings, where before the two were indistinguishable.
 ///
-/// # What this still cannot do, and why it is recorded rather than faked
+/// # How the difference is drawn
 ///
-/// # And how the difference is drawn
-///
-/// A toggle's appearance is its `/AS` state, which the generator used to read
-/// only from the **widget dictionary** — so a session could record the chosen
-/// kid and not show it, which is how this landed in M14's OWED list. It now
-/// reads [`ap::widget::LiveInput::appearance_state`] first, and `generate`
-/// fills that in from [`ToggleState::state_for_control`]: the chosen kid its
-/// own on-state name, every sibling `Off`, and a group nothing has clicked
-/// `None`, which is the file's own `/AS` unchanged.
-///
-/// Recording the chosen control was what made that a one-line change when the
-/// seam arrived, rather than a second state model — and it was.
+/// A toggle's appearance is its `/AS` state. The generator reads
+/// [`ap::widget::LiveInput::appearance_state`] first, filled in from
+/// [`ToggleState::state_for_control`]: the chosen kid its own on-state name,
+/// every sibling `Off`, and a group nothing has clicked `None`, which is the
+/// file's own `/AS` unchanged.
 fn clear_siblings<R: Resolve>(
     session: &mut FormSession,
     ctx: &Context<'_, R>,
@@ -2250,12 +2174,11 @@ fn text_config<R: Resolve>(
 /// The point worth restating is that the substitute enters through the
 /// **width closure** and not only through the encoder. A run set in two faces
 /// advances by two faces' metrics; measuring it all with the first gives a
-/// line the wrong length wherever the second one writes — which is exactly
-/// how a Hebrew selection band came to end ten units short of the glyphs it
-/// was supposed to cover. `CPDF_BAFontMap::GetWordFontIndex`
-/// (`core/fpdfdoc/cpdf_bafontmap.cpp:116-151`) asks the same question per
-/// character and knows nothing about whether the character was typed or
-/// stored, so the typed path takes the same answer.
+/// line the wrong length wherever the second one writes — which is exactly how
+/// a Hebrew selection band comes to end ten units short of the glyphs it was
+/// supposed to cover. The face is chosen per character, and knows nothing
+/// about whether the character was typed or stored, so the typed path takes
+/// the same answer as the stored one.
 fn with_font<R: Resolve, T>(
     ctx: &Context<'_, R>,
     widget: &WidgetInfo,
@@ -2324,8 +2247,7 @@ pub fn replace_selection<R: Resolve>(
 
 /// A page-space point in the widget's **appearance-stream** space, y-up.
 ///
-/// This is `CFFL_FormField::FFLtoPWL`, and the two spaces differ by two
-/// things rather than one.
+/// The two spaces differ by two things rather than one.
 ///
 /// The widget's own corner, first: `ap::widget::rotated_rect` places a
 /// widget's box at the origin, so a plate is always `(0, 0)`-based while an
@@ -2515,28 +2437,23 @@ fn generate<R: Resolve>(
 /// what is stroked in the tint's place, which most field types answer with
 /// nothing at all.
 ///
-/// The whole table, each row from the control's own `GetFocusRect`, which is
-/// what `CFFL_FormField::GetFocusBox` (`cffl_formfield.cpp:480-489`) asks:
+/// The whole table, by control:
 ///
-/// | control | `GetFocusRect` | here |
-/// |---|---|---|
-/// | text field (`cpwl_edit.cpp:313-315`) | empty | [`ap::FocusBox::None`] |
-/// | **any** combo box (`cpwl_combo_box.cpp:321-323`) | empty | [`ap::FocusBox::None`] |
-/// | multi-select list (`cpwl_list_box.cpp:227-234`) | the caret item ∩ client | its caret row |
-/// | single-select list, check box, radio (`cpwl_wnd.cpp:713-719`) | window inflated by 1 | [`ap::FocusBox::Inflated`] |
-/// | push button (`cpwl_special_button.cpp:21-24`) | window **deflated by the border** | [`ap::FocusBox::Rect`] of that box |
-///
-/// Two rows are easy to get wrong in the same direction, by reaching for the
-/// generic `CPWL_Wnd` answer where a subclass overrides it. A combo box
-/// returns an empty rectangle **whatever** its custom-text flag says — the
-/// override takes no branch at all, so the editable and gated cases are one
-/// row, not two. And a push button deflates where the generic answer
-/// inflates, which is the opposite sign on the same number.
+/// | control | focus box |
+/// |---|---|
+/// | text field | [`ap::FocusBox::None`] |
+/// | **any** combo box | [`ap::FocusBox::None`] |
+/// | multi-select list | its caret row |
+/// | single-select list, check box, radio | [`ap::FocusBox::Inflated`] |
+/// | push button | [`ap::FocusBox::Rect`] of the window **deflated by the border** |
 ///
 /// So "focused" is mostly a *negative* instruction: it suppresses the tint,
-/// and only three of the five controls stroke anything in its place. That is
-/// what the four `form_textfield_focused_*` goldens carry — a caret and
-/// glyphs over plain white, with no outline of any kind.
+/// and only three of the five controls stroke anything in its place.
+// Two rows are easy to get wrong in the same direction, by reaching for the
+// generic answer where the control overrides it. A combo box gives an empty
+// rectangle whatever its custom-text flag says, so the editable and gated
+// cases are one row, not two. And a push button deflates where the generic
+// answer inflates — the opposite sign on the same number.
 #[must_use]
 pub fn focus_of<R: Resolve>(session: &FormSession, ctx: &Context<'_, R>) -> Option<ap::Focus> {
     let target = session.focus?;
@@ -2574,12 +2491,10 @@ pub fn focus_of<R: Resolve>(session: &FormSession, ctx: &Context<'_, R>) -> Opti
 
 /// The rectangle a push button strokes: its window, deflated by the border.
 ///
-/// `CPWL_PushButton::GetFocusRect` (`cpwl_special_button.cpp:21-24`) is
-/// `GetWindowRect().GetDeflated(GetBorderWidth(), GetBorderWidth())`, and the
-/// deflation is by the border on **each** side — the same `widget_border`
+/// The deflation is by the border on **each** side — the same `widget_border`
 /// width `ap::field_body::client_rect` already reads. Unlike every other row
-/// in the table this is a real rectangle rather than a rule, so it is
-/// produced in page space, which is what [`ap::FocusBox::Rect`] carries.
+/// in the table this is a real rectangle rather than a rule, so it is produced
+/// in page space, which is what [`ap::FocusBox::Rect`] carries.
 fn push_button_box<R: Resolve>(ctx: &Context<'_, R>, annot: AnnotId) -> ap::FocusBox {
     let Some(widget) = ctx.widget(annot) else {
         return ap::FocusBox::None;
@@ -2851,26 +2766,18 @@ mod tests {
     ///
     /// # The defect this pins, which the appearance-stream test cannot
     ///
-    /// `8e45897` gave the typed path the second face, and the assertion it
-    /// shipped with reads the emitted stream for `/_B1`. That catches a
-    /// regression in the *encoder* and misses one in the **widths**: a
-    /// version that puts the substitute on `LiveInput` and leaves the closure
-    /// on the `/DA` font still writes `/_B1` and still emits the right bytes,
-    /// while every advance, caret column and selection band comes out of the
-    /// wrong table.
+    /// Reading the emitted stream for `/_B1` catches a regression in the
+    /// *encoder* and misses one in the **widths**: a version that puts the
+    /// substitute on `LiveInput` and leaves the width closure on the `/DA`
+    /// font still writes `/_B1` and still emits the right bytes, while every
+    /// advance, caret column and selection band comes out of the wrong table.
+    /// That was a real regression: a Hebrew selection band ended at device
+    /// column 101 with its glyphs running to 111, ten columns of dark where
+    /// the oracle's are white, because Latin advances were measuring a Hebrew
+    /// run.
     ///
-    /// That is not hypothetical — it is the F2 residue this crate carried:
-    /// `form_textfield_selected_rtl`'s band ended at device column 101 with
-    /// its glyphs running to 111, ten columns of dark where the oracle's are
-    /// white, because Latin advances were measuring a Hebrew run.
-    ///
-    /// # What upstream does
-    ///
-    /// `CPWL_EditImpl::Provider::GetCharWidth`
-    /// (`fpdfsdk/pwl/cpwl_edit_impl.cpp:124-137`) measures the face
-    /// `GetWordFontIndex` (`core/fpdfdoc/cpdf_bafontmap.cpp:116-151`)
-    /// selected for that character. Layout and encoding share the one index,
-    /// so a character written in the second face is measured in it too.
+    /// Layout and encoding share one per-character face index, so a character
+    /// written in the second face is measured in it too.
     ///
     /// The numbers are the two faces' own and are asserted as a **relation**
     /// rather than as constants: which face stands in for `/Arial` depends on

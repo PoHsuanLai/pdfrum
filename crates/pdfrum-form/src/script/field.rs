@@ -2,9 +2,8 @@
 //!
 //! # The densest table in the object model, and the shape it has
 //!
-//! `fxjs/cjs_field.cpp` is 2897 lines and binds **52 properties and 26
-//! methods**. Read for what each *does* rather than what each is named, it
-//! collapses:
+//! **52 properties and 26 methods.** Read for what each *does* rather than
+//! what each is named, they collapse:
 //!
 //! | shape | count | why |
 //! |---|---|---|
@@ -17,20 +16,17 @@
 //! they are why this file is mechanical rather than deep: `set_fill_color`
 //! checks the field exists, checks the permission, checks the argument is an
 //! array — and then returns success without writing anything. The validation
-//! *is* the observable behaviour, because the errors are what
-//! `field_properties_expected.txt` asserts; the write was never there to
-//! reproduce.
+//! *is* the observable behaviour, because the errors are what the goldens
+//! assert; the write was never there to reproduce.
 //!
 //! # A `Field` is a value, not a handle
 //!
 //! Each call to `getField` builds a fresh object carrying the field's
 //! `/Fields` position, and every accessor reads the model through the host
 //! slot by that number. Nothing here borrows the document or the session, so
-//! a `Field` a script kept across events cannot be a dangling pointer — which
-//! is the whole class of bug the seven owed regressions are about
-//! (`Bug620428`, `Bug634394`, `Bug634716`, `Bug679649`, `Bug707673`,
-//! `Bug765384`, `Bug1477093`): each is a use-after-free upstream, and each is
-//! unreachable here by construction rather than by a guard.
+//! a `Field` a script kept across events cannot be a dangling pointer — a
+//! whole class of use-after-free upstream that is unreachable here by
+//! construction rather than by a guard.
 
 #![allow(
     clippy::unnecessary_wraps,
@@ -218,15 +214,13 @@ fn get_value(this: &JsValue, _a: &[JsValue], context: &mut Context) -> JsResult<
     Ok(maybe_number(&value, context))
 }
 
-/// `CJS_Runtime::MaybeCoerceToNumber` (`fxjs/cjs_runtime.cpp:218-244`),
-/// reproduced.
+/// A field value coerced to a number the way the engine would.
 ///
 /// **It is JavaScript's own `Number(s)`**, not a hand-written parser, with two
 /// gates around it: the empty string is left alone, and a result that is `NaN`
-/// is left alone **unless the string was literally `"NaN"`**. That is why
-/// `bug_361`'s forty-nine cases read the way they do — `" 4"` is 4 because JS
-/// trims, `"0x100"` is 256 because JS reads hex, `"Infinity"` is a number and
-/// `"INFINITY"` is not, and `"1,000,000"` stays a string.
+/// is left alone **unless the string was literally `"NaN"`**. So `" 4"` is 4
+/// because JS trims, `"0x100"` is 256 because JS reads hex, `"Infinity"` is a
+/// number and `"INFINITY"` is not, and `"1,000,000"` stays a string.
 ///
 /// Using boa's `to_number` rather than Rust's `f64::from_str` is what makes
 /// that true rather than approximately true: the two disagree on hex, on
@@ -324,21 +318,18 @@ fn set_value(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResul
 /// The key a `Field` holds a delayed write under.
 const QUEUE_KEY: &str = "__pdfrum_field_queue";
 
-/// `SetFieldValue`'s per-kind branch (`fxjs/cjs_field.cpp:474-525`), and the
-/// answer the field then holds.
+/// Assigning `Field.value`, per kind, and the answer the field then holds.
 ///
 /// **Three families, and only one of them looks past the first element.**
-/// Text, combo, check box and radio take `strArray[0]` and ignore the rest; a
-/// **list box** walks the whole array calling `SetItemSelection(FindOption(s))`
-/// for each. That is the rule behind three otherwise puzzling golden lines:
+/// Text, combo, check box and radio take the first element and ignore the
+/// rest; a **list box** walks the whole array, selecting each. So
 /// `['bar','qux']` on a single-select list reads back `qux` — each selection
-/// replaces the last — while `['foo',1]` reads back `foo`, because
-/// `FindOption("1")` is `-1` and selecting nothing changes nothing.
+/// replaces the last — while `['foo',1]` reads back `foo`, because `1` matches
+/// no option and selecting nothing changes nothing.
 ///
 /// A choice field also refuses anything that is not one of its **export
-/// values**: `FindOption` compares `GetOptionValue(i)` alone, so the label
-/// `Foo` selects nothing where the value `foo` selects the row. Fifty of
-/// `listbox_methods`'s assertions are that one rule.
+/// values**: matching is against the export value alone, so the label `Foo`
+/// selects nothing where the value `foo` selects the row.
 fn apply_value(field: &mut FieldModel, offered: &[String]) -> String {
     let first = offered.first().cloned().unwrap_or_default();
     if !field.kind.is_choice() {
@@ -493,8 +484,7 @@ fn set_readonly(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsRe
 ///
 /// The getter's order and the setter's disagree: the setter reads
 /// `(left, bottom, right, top)`, so `f.rect = f.rect` **swaps top and
-/// bottom**. `[oracle-bug]`, and it is what `field_properties`'s four `rect`
-/// lines pin — see the module note in `docs/status/M15.md`.
+/// bottom**. `[oracle-bug]`, reproduced because the goldens pin it.
 fn get_rect(this: &JsValue, _a: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let rect = read(this, context, "rect", |field| field.rect)?;
     let values: Vec<JsValue> = rect
@@ -938,8 +928,7 @@ fn get_user_name(this: &JsValue, _a: &[JsValue], context: &mut Context) -> JsRes
 /// `Field.exportValues = …` — **validate then discard**, and the validation
 /// is what shows: a non-array throws `Object no longer exists.` rather than
 /// the `Cannot assign to readonly property.` a reader would expect, which is
-/// upstream's own choice of message (`fxjs/cjs_field.cpp`'s
-/// `set_export_values`).
+/// the oracle's own choice of message.
 fn set_export_values(_t: &JsValue, args: &[JsValue], _c: &mut Context) -> JsResult<JsValue> {
     let is_array = args
         .first()
@@ -1092,10 +1081,7 @@ fn get_undefined(_t: &JsValue, _a: &[JsValue], _c: &mut Context) -> JsResult<JsV
 ///
 /// A real setter — one of the ten that write — and the value is per field
 /// rather than per object, so it lives on the model. An unrecognized spelling
-/// is **silently ignored** rather than refused: the helper at
-/// `fxjs/cjs_field.cpp:238` returns early without throwing, which is why
-/// `field_properties` can assert `borderStyle = inset` and nothing about a
-/// bad one.
+/// is **silently ignored** rather than refused.
 const BORDER_STYLES: [&str; 5] = ["solid", "dashed", "beveled", "inset", "underline"];
 
 /// `Field.borderStyle`.
@@ -1131,10 +1117,8 @@ const DELAY_KEY: &str = "__pdfrum_field_delay";
 
 /// `Field.delay` — a **per-object** batching flag.
 ///
-/// Per `CJS_Field` instance and not per field: `delay_` is a member of the
-/// JavaScript wrapper (`fxjs/cjs_field.cpp`), so two `getField` calls for one
-/// field give two objects with independent flags. `field_properties.in`
-/// exercises exactly that, reading the flag back off the object it set it on.
+/// Per JavaScript object and not per field, so two `getField` calls for one
+/// field give two objects with independent flags.
 fn get_delay(this: &JsValue, _a: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let Some(object) = this.as_object() else {
         return Ok(JsValue::from(false));

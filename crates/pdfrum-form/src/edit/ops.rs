@@ -1,26 +1,15 @@
 //! The editing operations, and the postlude they share.
 //!
-//! # Text is the source of truth; the layout is derived
+//! **Text is the source of truth; the layout is derived.** Every mutation
+//! edits a `String` and re-lays it out wholesale, so the two cannot disagree.
 //!
-//! Every mutation here edits a `String` and then re-lays it out. That is a
-//! deliberate simplification of an engine that rearranges only the affected
-//! paragraph, and it is safe for the same reason the incremental version is
-//! correct: a layout is a pure function of its text, its configuration and
-//! its metrics. Doing it wholesale means the two can never disagree — the
-//! property that a partial rearrangement has to be careful to preserve, this
-//! design cannot violate.
-//!
-//! Positions are the bridge. A [`Place`] is meaningless without the layout it
-//! indexes, so every operation converts to a **flat character index** first,
-//! edits the string there, re-lays out, and converts back. That is also why
-//! undo can replay against a layout that intervening edits have reshaped.
-//!
-//! # One postlude, five callers
+//! A [`Place`] is meaningless without the layout it indexes, so every
+//! operation converts to a **flat character index** first, edits there and
+//! converts back — which is why undo can replay against a layout that
+//! intervening edits have reshaped.
 //!
 //! Every mutation ends the same way: re-lay out, collapse the selection onto
-//! the caret, and re-seed the sticky column. The one operation that does not
-//! re-seed is a vertical move, because the whole point of the sticky column
-//! is to survive a run of them.
+//! the caret, re-seed the sticky column — except a vertical move.
 
 use pdfrum_doc::ap::field_body::Highlight;
 use pdfrum_doc::vt::{self, Layout, Metrics};
@@ -64,15 +53,10 @@ pub struct TextEdit {
     pub scroll: (f32, f32),
     /// Whether the view follows the caret out of the plate.
     ///
-    /// Upstream's `enable_scroll_` (`cpwl_edit_impl.h:284`), which
-    /// `CPWL_Edit::OnCreated` (`cpwl_edit.cpp:131`) sets from
-    /// `Styles::kEditAutoScroll`, and which `CFFL_TextField::GetCreateParam`
-    /// (`cffl_textfield.cpp:54-63`) raises for any text field **without** the
-    /// `DoNotScroll` flag — single-line and multi-line alike.
-    ///
-    /// It gates `SetScrollPosX` and `SetScrollPosY` at their first statement,
-    /// so a field that declines it never moves its view at all, however far
-    /// past the plate the caret goes.
+    /// True for any text field **without** the `DoNotScroll` flag —
+    /// single-line and multi-line alike. It gates every writer of the scroll
+    /// position, so a field that declines it never moves its view at all,
+    /// however far past the plate the caret goes.
     pub auto_scroll: bool,
     /// The vertical alignment offset the text is *drawn* with.
     ///
@@ -314,13 +298,10 @@ pub fn room_for(edit: &TextEdit, max_len: Option<u32>, replacing: usize) -> Opti
 /// Whether an insertion that first removes `[from, to)` is refused because
 /// the field is full.
 ///
-/// Upstream's order is `ClearSelection()` **then** `InsertText`
-/// (`CPWL_EditImpl::ReplaceSelection`, `:1881-1890`; `TypeChar`, `:1892-1924`),
-/// and the overflow test is `InsertText`'s first statement — so it is asked
-/// of the text with the selection already gone. Typing over a full field's
-/// entire contents therefore works, which is the behaviour a user relies on
-/// to correct an overfull field, and asking before the removal would break
-/// it.
+/// The removal happens **first**, and the overflow test is asked of the text
+/// with the selection already gone. Typing over a full field's entire
+/// contents therefore works, which is the behaviour a user relies on to
+/// correct an overfull field; asking before the removal would break it.
 ///
 /// The removal is measured rather than performed: a trial layout of the text
 /// as it would stand answers the same question without an undo item or a
@@ -349,38 +330,20 @@ fn insertion_is_refused(
     layout_overflows(&layout, config)
 }
 
-/// Whether the plate is already full, so that no further text is accepted —
-/// `CPWL_EditImpl::IsTextOverflow` (`fpdfsdk/pwl/cpwl_edit_impl.cpp:1984-1996`).
+/// Whether the plate is already full, so that no further text is accepted.
 ///
-/// # Why a full field refuses rather than merely not scrolling
+/// True when the field can neither scroll nor overflow **and** its content is
+/// bigger than its plate; every insertion returns without mutating when it
+/// is. ISO 32000-1 Table 228 says the same about `DoNotScroll`: once the field
+/// is full, no further text is accepted. Without this gate a `DoNotScroll`
+/// field keeps taking characters, the caret walks off the plate, and the extra
+/// text sits invisibly in the value.
 ///
-/// [`TextEdit::auto_scroll`] is upstream's `enable_scroll_`, and it gates two
-/// separate things. The visible half is `SetScrollPosX`/`Y`, which
-/// [`scroll_to_caret`] already honours. The half that had no port is this
-/// one: `IsTextOverflow` is true when the field can neither scroll nor
-/// overflow **and** its content is bigger than its plate, and every insertion
-/// entry point — `InsertWord` (`:1698`), `InsertReturn` (`:1719`) and
-/// `InsertText` (`:1839`) — returns without mutating when it is. PDF 32000-1
-/// Table 228 says the same thing about `DoNotScroll`: once the field is full,
-/// no further text is accepted. Without this gate a `DoNotScroll` field keeps
-/// taking characters, the caret walks off the plate, and the extra text sits
-/// invisibly in the value.
+/// **The check is made *before* the character**, so the one that first makes
+/// the content exceed the plate is accepted and the **next** is refused.
 ///
-/// # The check is made *before* the character, so the overflowing one is kept
-///
-/// Upstream asks the question against the content as it stands and then
-/// inserts, so the character that first makes the content exceed the plate is
-/// accepted and the **next** one is refused. Reproduced exactly: this is
-/// called at the top of the insertion, never after the relayout.
-///
-/// # `enable_overflow_` is a comb field's, and only a comb field's
-///
-/// `SetTextOverflow(true)` is reached from two places, and both are combs:
-/// `CPWL_Edit::OnCreated` under `Styles::kEditTextOverflow`
-/// (`cpwl_edit.cpp:134-136`) and `SetCharArray` (`:285`), and
-/// `CFFL_TextField::GetCreateParam` raises that style only for
-/// `kTextComb` (`cffl_textfield.cpp:66-68`). A comb therefore never refuses,
-/// which is why the `char_array` test comes first here.
+/// Overflow is a **comb field's** property and only a comb field's, so a comb
+/// never refuses — which is why the `char_array` test comes first here.
 #[must_use]
 pub fn is_text_overflow(edit: &TextEdit, config: &vt::Config) -> bool {
     if edit.auto_scroll || config.char_array > 0 {
@@ -681,15 +644,9 @@ fn settle(edit: &mut TextEdit, config: &vt::Config, metrics: &Metrics<'_>) {
 /// Scrolls a multiline field's view vertically by a wheel notch, answering
 /// whether it moved.
 ///
-/// # A `DoNotScroll` field does not move
-///
-/// The gate is upstream's own and it is not this function's invention:
-/// `CPWL_EditImpl::SetScrollPosY` (`fpdfsdk/pwl/cpwl_edit_impl.cpp:1175-1178`)
-/// returns at its first statement when `enable_scroll_` is clear, so **every**
-/// writer of the vertical scroll position no-ops, the wheel included.
-/// `CFFL_TextField::GetCreateParam` (`cffl_textfield.cpp:54-57`) withholds
-/// `kWindowVScroll` from a multiline `DoNotScroll` field besides, so upstream
-/// gives it no scrollbar to drag either — the field simply does not pan.
+/// **A `DoNotScroll` field does not move.** [`TextEdit::auto_scroll`] gates
+/// every writer of the vertical scroll position, the wheel included, and such
+/// a field is given no scrollbar to drag either — it simply does not pan.
 ///
 /// The step is a quarter of the plate per notch, and the position is clamped
 /// to the slack between content and plate, so a field with nothing to scroll
@@ -714,62 +671,19 @@ pub fn scroll_by(edit: &mut TextEdit, config: &vt::Config, delta_y: i32) -> bool
     (edit.scroll.1 - was).abs() > f32::EPSILON
 }
 
-/// Scrolls the view so the caret is inside the plate — `ScrollToCaret`
-/// (`fpdfsdk/pwl/cpwl_edit_impl.cpp:1246-1286`).
+/// Scrolls the view so the caret is inside the plate.
 ///
-/// Upstream runs this after essentially every mutation and every caret move,
-/// and without it [`TextEdit::scroll`]`.0` is never written at all — a field
-/// whose text outruns its plate keeps drawing from the first character and
-/// hides the caret entirely.
+/// Run after every mutation and every caret move; without it a field whose
+/// text outruns its plate keeps drawing from the first character and hides
+/// the caret entirely.
 ///
-/// It is **not** what `password` needed. That fixture's two fields are
-/// `/MaxLen 5` and its `.evt` types nine characters, so each holds `"tiger"`,
-/// five asterisks fit the plate, and neither implementation scrolls; its
-/// residual caret column is a font-metric question recorded in
-/// `docs/status/M14.md`, not this one. The port is here because it is the
-/// postlude upstream runs after every mutation, not because one row asked
-/// for it.
+/// The three comparisons carry a `0.0001` tolerance rather than a raw `<`: a
+/// caret landing exactly on the plate edge must count as *inside*, or a field
+/// scrolls by a whole advance on a rounding error. This is the opposite of
+/// the hit test's tie-break, which is raw.
 ///
-/// # The two coordinate systems, which is the whole of the port
-///
-/// Upstream keeps `scroll_pos_point_.x` as an **absolute layout position**
-/// seeded at `rcPlate.left`, and `VTToEdit`
-/// (`cpwl_edit_impl.cpp:1105-1106`) converts a layout point to the plate's
-/// own frame by subtracting `scroll_pos_point_.x - rcPlate.left`. We store a
-/// **distance** instead — [`TextEdit::scroll`] is what
-/// `LiveState::shift` negates to move the drawn text — so ours is upstream's
-/// minus `plate.left`, and every branch below drops that term:
-///
-/// | upstream | here |
-/// |---|---|
-/// | `VTToEdit(head).x` | `head - edit.scroll.0` |
-/// | `SetScrollPosX(ptHead.x)` | `edit.scroll.0 = head - plate.left` |
-/// | `SetScrollPosX(ptHead.x - rcPlate.Width())` | `edit.scroll.0 = head - plate.left - width` |
-///
-/// # The asymmetry is deliberate and is the bug it fixes
-///
-/// The comparisons are made on the **edit-space** point and the assignment is
-/// made from the **layout-space** one. Reading both in one frame is the
-/// obvious simplification and it is wrong by exactly one advance: a field
-/// scrolled that way lands its caret one character short of the plate's right
-/// edge on every scroll. The table above is the whole of the difference, and
-/// `tests/scroll_to_caret.rs` pins it — including at two different plate
-/// origins, which is the assertion a port that kept upstream's absolute
-/// position fails.
-///
-/// # `FXSYS_IsFloatSmaller`, not `<`
-///
-/// The three comparisons carry the `0.0001` tolerance of
-/// `core/fxcrt/fx_system.h:36-41`. A caret landing exactly on the plate edge
-/// must count as *inside*, or a field scrolls by a whole advance on a
-/// rounding error. This is the opposite of the hit test's tie-break, which is
-/// the one float comparison upstream makes raw.
-///
-/// Only the horizontal half is ported. Upstream's vertical branches have
-/// doubled conditions to stop a caret taller than its plate from thrashing,
-/// and nothing in the corpus reaches them: a field that scrolls vertically is
-/// multi-line, and `scroll_text` — the wheel — is the only thing that moves
-/// `scroll.1` today.
+/// Only the **horizontal** half moves the view here; the wheel
+/// ([`scroll_by`]) is the only thing that moves the vertical offset.
 pub fn scroll_to_caret(edit: &mut TextEdit, config: &vt::Config, metrics: &Metrics<'_>) {
     if !edit.auto_scroll {
         return;
@@ -815,17 +729,17 @@ pub fn scroll_to_caret(edit: &mut TextEdit, config: &vt::Config, metrics: &Metri
     }
 }
 
-/// `FXSYS_IsFloatEqual` (`core/fxcrt/fx_system.h:41`).
+/// Equal within the oracle's `0.0001` float tolerance.
 fn is_float_equal(a: f32, b: f32) -> bool {
     (a - b).abs() < 0.0001
 }
 
-/// `FXSYS_IsFloatSmaller` (`core/fxcrt/fx_system.h:39-40`).
+/// Strictly smaller by more than the oracle's `0.0001` float tolerance.
 fn is_float_smaller(a: f32, b: f32) -> bool {
     a < b && !is_float_equal(a, b)
 }
 
-/// `FXSYS_IsFloatBigger` (`core/fxcrt/fx_system.h:37-38`).
+/// Strictly bigger by more than the oracle's `0.0001` float tolerance.
 fn is_float_bigger(a: f32, b: f32) -> bool {
     a > b && !is_float_equal(a, b)
 }
@@ -1099,22 +1013,16 @@ pub fn highlight(
 /// character. Measured on `form_textfield_selected_rtl`, whose ten Hebrew
 /// characters produced a six-unit band where the oracle paints fifty.
 ///
-/// `CPWL_EditImpl::DrawEdit` (`cpwl_edit_impl.cpp:659-676`) has no such
-/// assumption: it walks the selected words and fills `GetWordRect(word, line)`
-/// — `[word.x, word.x + word.width]` at the line's ascent and descent — for
-/// each one. That is direction-agnostic by construction, which is why it needs
-/// no right-to-left case.
-///
-/// Reproduced here from the carets that bound each word, whose min and max are
-/// that word's own extent whichever way the line runs. Touching rectangles are
-/// merged so a contiguous run is still one fill rather than one per character.
+/// Filling one rectangle per **word** — its own extent at the line's ascent
+/// and descent — is direction-agnostic by construction, which is why it needs
+/// no right-to-left case. Built from the carets that bound each word, whose
+/// min and max are that word's extent whichever way the line runs. Touching
+/// rectangles are merged so a contiguous run is one fill.
 ///
 /// A **section break** is skipped rather than filled. It occupies an index in
 /// the flat numbering — the tokenizer counted it, so undo and the caret both
-/// need it to — but it is not a word: `DrawEdit`'s loop fills only what
-/// `GetWord` returns, and a break returns nothing. Filling it would produce a
-/// rectangle spanning from the end of one line to the start of the next,
-/// which covers both lines whole.
+/// need it to — but it is not a word, and filling it would produce a rectangle
+/// spanning from the end of one line to the start of the next.
 fn selection_bands(
     edit: &TextEdit,
     config: &vt::Config,
@@ -1170,8 +1078,8 @@ fn is_section_break(edit: &TextEdit, index: usize) -> bool {
     here.section != next.section || here.line != next.line
 }
 
-/// One selected word's rectangle: `GetWordRect`'s `[x, x + width]` at the
-/// line's ascent and descent (`cpwl_edit_impl.cpp:34-38`).
+/// One selected word's rectangle: `[x, x + width]` at the line's ascent and
+/// descent.
 ///
 /// Built from the two carets that bound the word, whose min and max are its
 /// extent whichever way the line runs. That is the whole rule, and it needs no

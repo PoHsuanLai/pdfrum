@@ -64,10 +64,8 @@ pub struct Keystroke {
     /// Where the replaced range starts, as a character index.
     ///
     /// Signed, and negative is a real value a script can write: `event.selStart`
-    /// is stored as an `int` upstream (`fxjs/cjs_event.cpp:206` takes it
-    /// through `ToInt32Reentrant`) and read back into `CalcMergedString`
-    /// without a clamp. See [`Keystroke::applied`] for what an out-of-range
-    /// index does.
+    /// is an `int32`, read back without a clamp. See [`Keystroke::applied`]
+    /// for what an out-of-range index does.
     pub selection_start: i32,
     /// Where it ends, as a character index. Signed for the same reason.
     pub selection_end: i32,
@@ -193,9 +191,8 @@ pub trait Cascade {
 impl Keystroke {
     /// The payload a field offers its keystroke hook, read off a live edit.
     ///
-    /// The four fields are exactly what `CFFL_TextField::GetActionData`
-    /// gathers: the text being inserted, the field's value *before* the
-    /// change, and the selection the change replaces — which is a caret's
+    /// The four fields: the text being inserted, the field's value *before*
+    /// the change, and the selection the change replaces — which is a caret's
     /// position twice over when nothing is selected.
     #[must_use]
     pub fn of(edit: &crate::edit::TextEdit, change: impl Into<String>) -> Keystroke {
@@ -217,22 +214,15 @@ impl Keystroke {
     ///
     /// # An out-of-range index yields nothing, not a clamp
     ///
-    /// This is `CalcMergedString` (`fxjs/cjs_publicmethods.cpp:127-137`)
-    /// reproduced exactly, and the two halves do not agree with each other:
+    /// The two halves do not agree with each other, and both are reproduced:
     ///
-    /// - the **prefix** is `value.First(SelStart())`, and `First(n)` is
-    ///   `Substr(0, n)`, which returns the **empty** string whenever `n`
-    ///   exceeds the length (`core/fxcrt/string_view_template.h:226-249`).
-    ///   `SelStart()` is an `int` widened to `size_t`, so a script writing
-    ///   `event.selStart = -1` produces an enormous count and an empty prefix
-    ///   — the field's leading text vanishes.
-    /// - the **suffix** is guarded explicitly by `end >= 0 && end < length`,
-    ///   so a negative or past-the-end `selEnd` yields an empty suffix, which
-    ///   is the same answer a clamp to the end would give.
+    /// - an out-of-range **`selection_start`** — negative, or past the end —
+    ///   yields an **empty prefix**, so the field's leading text vanishes;
+    /// - an out-of-range **`selection_end`** yields an empty suffix, which is
+    ///   the same answer a clamp to the end would give.
     ///
-    /// Clamping the prefix instead — which is the reasonable behaviour, and
-    /// what this function used to do — would keep text the oracle drops on
-    /// an input any `/AA /K` script can produce in one assignment.
+    /// Clamping the prefix instead would keep text the oracle drops, on an
+    /// input any `/AA /K` script can produce in one assignment.
     #[must_use]
     pub fn applied(&self) -> String {
         let chars: Vec<char> = self.value.chars().collect();

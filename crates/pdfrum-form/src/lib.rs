@@ -1,47 +1,44 @@
 //! Form interaction (ISO 32000-1 §12.7): events in, appearance updates out.
 //!
-//! This crate is the *interacting with a document* half of forms, sitting on
-//! top of the *what a document is* half: the field data model, the
-//! variable-text layout engine and the appearance generators all belong to
-//! `pdfrum-doc` and are used, not re-implemented, here.
+//! Applying an event is a function over a [`FormSession`]: [`apply`] **returns**
+//! what changed as a [`Response`], and nothing is pushed at the caller. This
+//! crate rasterizes nothing; the field data model, the variable-text layout
+//! engine and the appearance generators live in `pdfrum-doc`.
 //!
-//! # The shape, in one paragraph
+//! ```text
+//! let mut session = FormSession::new();
+//! let ctx = Context { page, catalog, resolve, fonts, permissions };
+//! let response = apply(&mut session, &ctx, &mut NoScripts, event);
+//! for update in &response.updates { /* re-render this annotation */ }
+//! ```
 //!
-//! There is no widget object hierarchy, no callback table and no invalidation
-//! channel. A session is a record of facts — what has focus, what each field's
-//! interaction state is, what the pointer is over — and applying an event is a
-//! function over it that **returns** what changed. A caller re-renders
-//! whatever it likes; nothing is pushed at it, and nothing here rasterizes.
+//! Four things a caller can get wrong:
 //!
-//! # The one switch worth knowing before reading further
-//!
-//! A **focused** field draws from live editor state, with its caret and its
-//! selection band. An **unfocused** one falls back to a generated appearance
-//! stream. That switch is the whole seam between appearance generation and
-//! interaction, and it is one `if`.
+//! - **Coordinates are page space**, `y`-up from the crop-box origin, and
+//!   narrowed to `f32` by [`apply`] — see [`Event`].
+//! - **Focus decides where a field's appearance comes from.** Focused draws
+//!   from live editor state with its caret and selection band; unfocused falls
+//!   back to a generated stream.
+//! - **Two field index spaces exist**: [`FieldId`] is page-local, and
+//!   [`FieldRef::index`] is the document-wide position a script names.
+//! - **Scripts are off by default.** [`NoScripts`] is the identity cascade;
+//!   `ScriptCascade`, behind the `script` feature, runs the document's own
+//!   JavaScript.
 
 #![forbid(unsafe_code)]
 // Every position in this crate is derived from an untrusted file's layout:
 // index with `get()`.
 #![warn(clippy::indexing_slicing)]
 
-// # The module tree is an implementation detail; the `pub use` block below is
-// the surface
-//
-// Every one of these was `pub` before, *and* selectively re-exported below, so
-// the same item was reachable two ways and a caller had to guess which one
-// this crate meant. It meant the re-export. What survives as `pub mod` are the
-// three whose **contents** are the API rather than a namespace a reader passes
-// through — the pure operations a caller drives directly — and each of those
-// says so in its own module documentation.
+// The module tree is an implementation detail; the `pub use` block below is
+// the surface. What stays `pub mod` are the modules whose *contents* are the
+// API rather than a namespace a reader passes through.
 
 mod cascade;
 mod commit;
-// `edit` and `field` stay `pub` because their submodules are surfaces rather
-// than namespaces: `edit::ops`, `field::text`, `field::choice` and
-// `field::toggle` are the pure operations a caller drives without a session,
-// which is how every ported assertion is written, and there are enough of them
-// that flattening the lot into the root would drown it.
+// `edit::ops`, `field::text`, `field::choice` and `field::toggle` are the pure
+// operations a caller drives without a session; too many to flatten into the
+// root.
 pub mod edit;
 mod error;
 mod event;
@@ -51,13 +48,10 @@ mod geom;
 mod hit;
 mod page;
 mod popup;
-// `route` stays `pub` because that is where `apply`'s and `Context`'s
-// documentation lives; both are re-exported at the root as well.
 pub mod route;
 /// The `boa`-backed [`Cascade`] — a document's own scripts, run.
 ///
-/// Behind the default-off `script` feature; see the module documentation for
-/// why it is a feature and what `scripts/check-no-boa.nu` asserts about it.
+/// Behind the default-off `script` feature.
 #[cfg(feature = "script")]
 pub mod script;
 mod session;

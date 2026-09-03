@@ -1,48 +1,18 @@
 //! A `boa`-backed [`Cascade`](crate::Cascade): a document's own scripts, run.
 //!
-//! Behind the default-off `script` feature. With the feature off `boa_engine`
-//! and the 116 crates it brings are not in the tree at all, which
-//! `scripts/check-no-boa.nu` asserts in both directions.
+//! Behind the default-off `script` feature; with it off, `boa_engine` is not
+//! in the dependency tree at all.
 //!
-//! # This is `Cascade`'s second implementation, not a fourth seam
+//! **A script reaches no I/O.** `Doc.submitForm`, `Doc.print`, `app.launchURL`
+//! and the rest are transcript lines a host reads back through
+//! [`ScriptCascade::transcript`], so a URL or a form's bytes come back rather
+//! than going out; nothing opens a socket, a file or a process.
 //!
-//! STYLE §2b closes the trait-seam list at three, and this does not open it.
-//! [`ScriptCascade`] implements the trait `NoScripts` already implements, and
-//! everything a script asks of the host comes back as a **value the host
-//! reads** — [`ScriptCascade::transcript`] — rather than through a
-//! `ScriptHost` trait the host implements. §2b's own rule is the test: invert
-//! only when the library must ask a question it cannot answer and cannot
-//! proceed without the reply. `app.alert` is not that: with no form-fill
-//! environment upstream it returns `0` and the script carries on
-//! (`fxjs/cjs_app.cpp:233-236`), so the line goes on a list.
-//!
-//! # The sandbox is a property, and it is tested
-//!
-//! Three of boa's four `RuntimeLimits` are wired to [`Limits`] fields, and a
-//! script that exhausts one produces a [`Diagnostic`] and the *refusing*
-//! answer from whichever hook was running — `Reject` for `keystroke`, `false`
-//! for `keystroke_commit` and `validate`, no writes for `calculate`, `None`
-//! for `format`. Never a hang, never a panic, and never a silent acceptance:
-//! a script that ran out of budget did not say "accept", and inventing an
-//! acceptance on its behalf is the failure mode that lets a hostile file walk
-//! past a validator.
-//!
-//! What the limits do **not** bound is heap growth and regex backtracking —
-//! and neither does a V8-enabled PDFium, measured rather than assumed
-//! (`docs/status/data/v8probe/REPORT.md`; SPEC §10 carries the ruling and the
-//! reopening condition). So pdfrum is bounded where the oracle hangs, and
-//! unbounded only where the oracle is too.
-//!
-//! # No I/O is reachable from a script
-//!
-//! Not "removed" — **never built**. `Doc.submitForm`, `Doc.print`,
-//! `Doc.mailDoc`, `app.launchURL` and `app.response` are transcript lines, so
-//! the URL and the form bytes come back to the host rather than going out;
-//! nothing here opens a socket, a file, or a process, and
-//! `sandbox.rs`'s tests assert the absence rather than trusting the reading.
+//! **A script that exhausts a sandbox limit refuses rather than accepting.**
+//! [`Limits`] bounds loops, recursion and stack depth; not heap or regex
+//! backtracking.
 //!
 //! [`Limits`]: pdfrum_common::Limits
-//! [`Diagnostic`]: pdfrum_common::Diagnostic
 
 mod af;
 mod bind;
@@ -71,10 +41,8 @@ pub use transcript::TranscriptLine;
 /// `AFParseDateEx(1, 2) = 1399672130000`), so a conformance run must set it
 /// and an ordinary embedder must not.
 ///
-/// Exported for tests and for a harness that wants to name the seed; the tool
-/// reads its own `--time=` rather than reaching for this.
-///
-/// The oracle spells it `pdfium_test --time=1399672130`.
+/// Exported for tests and for a harness that wants to name the seed; the
+/// conformance tool reads its own `--time=` rather than reaching for this.
 pub const GOLDEN_CLOCK_SECS: u64 = 1_399_672_130;
 
 /// The timezone the **engine's `Date`** saw when the goldens were recorded:
@@ -90,44 +58,20 @@ pub const GOLDEN_TIMEZONE_OFFSET_SECS: i32 = -7 * 3600;
 /// is not the one `Date` uses: a flat `GMT-0800`, with no daylight saving,
 /// whatever the date.
 ///
-/// The oracle's own name for the function that applies it is `FX_LocalTime`.
-///
 /// # Why the two differ, which is not a bug in either
 ///
-/// `CJS_Util::printd` converts its instant with `FX_LocalTime`
-/// (`fxjs/cjs_util.cpp:185`) before reading the components, and
-/// `FX_LocalTime` is `d + GetLocalTZA() + GetDaylightSavingTA(d)`
-/// (`fxjs/fx_date_helpers.cpp:254-256`). Both terms go through PDFium's own
-/// overridable clock hooks, and the test binary overrides them:
-///
-/// ```text
-/// FSDK_SetTimeFunction([]() { return time_ret; });
-/// FSDK_SetLocaltimeFunction([](const time_t* tp) { return gmtime(tp); });
-/// ```
-/// (`testing/pdfium_test/pdfium_test.cc:2133-2134`)
-///
-/// **`localtime` is replaced by `gmtime`.** So `GetDaylightSavingTA` reads
-/// `tm_isdst == 0` for every instant and contributes nothing (`:54-68`),
-/// while `GetLocalTZA` still reads glibc's `timezone` global — the zone's
-/// **standard** offset, PST, −8 hours (`:38-52`). V8's own `Date`, which
-/// never goes through those hooks, keeps the real −7. The two are one hour
-/// apart, all summer, by construction.
-///
-/// Confirmed against the goldens rather than reasoned:
-/// `util_printd_expected.txt:4` prints `14:59:58` from an instant
-/// `new Date(2014, 6, 4, 15, 59, 58)` places at `22:59:58Z` — −8, not −7 —
-/// while `util_scand`'s every line round-trips to the UTC string it was
-/// given, which only holds if `Date` and the parser agree on −7.
+/// The golden harness replaces `localtime` with `gmtime`, so the daylight
+/// term contributes nothing while the standard-offset term still reads the
+/// zone's own — PST, −8 hours. The engine's `Date` never goes through those
+/// hooks and keeps the real −7. The two are one hour apart, all summer, by
+/// construction.
 pub const GOLDEN_PRINTD_OFFSET_SECS: i32 = -8 * 3600;
 
 /// The file path **the goldens were recorded with**, which is the test
 /// harness's own and not any real file's.
 ///
-/// `ExampleDocGetFilePath` answers a hard-coded `"myfile.pdf"`
-/// (`testing/pdfium_test/pdfium_test.cc:368-369`), and it leaks into the
-/// expected bytes twice: `document_properties_expected.txt` pins
-/// `this.URL is string myfile.pdf` and `this.path is string /myfile.pdf`, the
-/// second because `SysPathToPDFPath` prefixes a separator.
+/// It leaks into the expected bytes twice, as `this.URL` and as `this.path`
+/// — the second with a leading separator.
 ///
 /// A constant a golden run passes in, exactly as [`GOLDEN_CLOCK_SECS`] is —
 /// an embedder passes the path it actually opened.
@@ -141,11 +85,8 @@ pub struct ScriptConfig {
     /// The clock scripts see, in milliseconds since the epoch.
     ///
     /// `None` reads the **host clock**, which is the ordinary case and is the
-    /// oracle's too: `pdfium_test` installs its time hooks only when
-    /// `--time=` was given (`testing/pdfium_test/pdfium_test.cc:2129-2135`),
-    /// and without them `FXSYS_time` is libc's
-    /// (`core/fxcrt/fx_extension.cpp:110-116`). `Some` freezes it, which is
-    /// what a golden run needs — see [`ScriptConfig::frozen_at`].
+    /// oracle's too. `Some` freezes it, which is what a golden run needs — see
+    /// [`ScriptConfig::frozen_at`].
     pub clock_ms: Option<i64>,
     /// The local timezone offset scripts see, in seconds east of UTC.
     ///
@@ -162,24 +103,16 @@ pub struct ScriptConfig {
 
 impl ScriptConfig {
     /// The configuration for a run whose clock is frozen at `seconds` since
-    /// the epoch — `pdfium_test --time=<seconds>`.
+    /// the epoch.
     ///
-    /// **The seed is the caller's**, which is the whole point: `--time=` is
-    /// the single source of the scripting clock, and this crate no longer
-    /// knows which instant a golden run wants. A conformance run passes
-    /// [`GOLDEN_CLOCK_SECS`].
+    /// **The seed is the caller's**: a conformance run passes
+    /// [`GOLDEN_CLOCK_SECS`], an embedder its own instant.
     ///
     /// The two timezone offsets come with it rather than being separately
-    /// configurable, because upstream installs both hooks under the *same*
-    /// guard: `FSDK_SetTimeFunction` and `FSDK_SetLocaltimeFunction` are set
-    /// together inside `if (options.time > -1)`
-    /// (`testing/pdfium_test/pdfium_test.cc:2129-2135`), and the second one —
-    /// `localtime` replaced by `gmtime` — is what makes `util.printd`'s offset
-    /// differ from `Date`'s. Freezing the instant without freezing the zone
-    /// would reproduce neither.
+    /// configurable, because the clock and the zone are frozen together —
+    /// freezing the instant without freezing the zone reproduces neither.
     ///
-    /// A `seconds` past `i64` milliseconds saturates rather than wrapping; no
-    /// `time_t` a command line can carry reaches that.
+    /// A `seconds` past `i64` milliseconds saturates rather than wrapping.
     #[must_use]
     pub fn frozen_at(seconds: u64) -> ScriptConfig {
         let millis = i64::try_from(seconds)
@@ -220,42 +153,15 @@ pub enum ScriptStop {
 
 /// One script that stopped, named and explained.
 ///
-/// # Why this exists rather than an error the caller could ignore
-///
-/// **An uncaught exception must never be swallowed**, and upstream swallows
-/// it: `CJS_EventContext::RunScript` returns
-/// `std::optional<IJS_Runtime::JS_Error>` carrying the message, the line and
-/// the column (`fxjs/cfxjs_engine.cpp:600-622`, `fxjs/ijs_runtime.h:26-32`),
-/// and `CPDFSDK_FormFillEnvironment::RunScript` — the funnel every document,
-/// page and field action goes through — drops it on the floor under a
-/// standing `// TODO(dsinclair): Return error if RunScript returns a
-/// IJS_Runtime::JS_Error.` (`fpdfsdk/cpdfsdk_formfillenvironment.cpp:
-/// 1280-1286`). Nothing prints it, nothing alerts it, and no
-/// `IPDF_JSPLATFORM` or `FFI_` callback is on the path, so `pdfium_test`
-/// emits **nothing at all** for a script that throws — which is how a
-/// fixture that crashes on its first line reads as an empty transcript
-/// (`testing/tools/test_runner.py`'s `_VerifyEmptyText` then scores that a
-/// pass). `[oracle-bug]`.
-///
-/// pdf.js is the counter-example and is what "correct" means here: every
-/// action's evaluation is individually wrapped, the error is serialized with
-/// its message *and* stack and sent out as a `{command: "error"}` message
-/// (`src/scripting_api/field.js:542-561`,
-/// `src/scripting_api/doc.js:192-206`, `src/scripting_api/app_utils.js:
-/// 24-27`), the viewer routes it to `console.error`
-/// (`web/pdf_scripting_manager.js:316-322`), and — because the `try` sits
-/// *inside* the `for (const action of actions)` loop — **the next action
-/// still runs**.
-///
-/// So pdfrum takes pdf.js's rule: report the error on the diagnostic channel
-/// and carry on with the next script. The *transcript* still matches PDFium
-/// byte for byte, because the transcript is the oracle's stdout and the
-/// oracle prints nothing; this is what the oracle should have written down.
+/// **An uncaught exception is never swallowed.** The error is reported on the
+/// diagnostic channel and the **next script still runs**; the transcript is
+/// unaffected, because a throwing script prints nothing to it. `[oracle-bug]`:
+/// the oracle drops the error entirely, so a fixture that crashes on its first
+/// line reads as an empty transcript and scores as a pass.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ScriptFailure {
     /// Which script — a field's fully-qualified name, a `/Names /JavaScript`
-    /// key, or the empty string for `/OpenAction`, which is the name upstream
-    /// passes too (`cpdfsdk_formfillenvironment.cpp:1000-1006`).
+    /// key, or the empty string for `/OpenAction`.
     pub whence: String,
     /// Why it stopped.
     pub stop: ScriptStop,
@@ -265,24 +171,16 @@ impl ScriptFailure {
     /// The failure as **one** diagnostic line: where, and what the engine
     /// said.
     ///
-    /// # The position rides in the message
+    /// The position rides **in** the message — a throw reads
+    /// `TypeError: not a callable function (unknown at :1:25)` — so there is
+    /// no separate line/column pair.
     ///
-    /// `boa` puts it there itself — a throw reads
-    /// `TypeError: not a callable function (unknown at :1:25)` and a parse
-    /// failure names its line and column the same way — so there is no
-    /// separate `line`/`column` pair to reassemble. That is the same
-    /// information upstream's `JS_Error` carries as two `int`s
-    /// (`fxjs/ijs_runtime.h:26-32`, filled from `GetLineAndColumnFromError`
-    /// at `fxjs/cfxjs_engine.cpp:610,617`) and then throws away.
-    ///
-    /// # And only the first line of it
+    /// Only the **first** line of it:
     ///
     /// `boa` appends a stack — `\n    at <main> (…)` — after the message.
     /// A diagnostic is a line, and a caller writing one per failure must not
-    /// have a multi-line one silently break its own format; the frames say
-    /// nothing a document's one-expression `/OpenAction` did not already say
-    /// in the position. [`ScriptStop::Threw`] keeps the whole string for a
-    /// caller that wants it.
+    /// have a multi-line one break its format. [`ScriptStop::Threw`] keeps the
+    /// whole string for a caller that wants it.
     #[must_use]
     pub fn line(&self) -> String {
         let whence = if self.whence.is_empty() {
@@ -442,18 +340,15 @@ impl ScriptCascade {
 
     /// Timers a script asked for, as `(script, interval_ms)`.
     ///
-    /// **Recorded and never fired.** A later milestone fires them from
-    /// `advance_time`, which M14's D14 reserved as the step function; until
-    /// then this is the honest answer to "what did the document want", and it
-    /// is a *value the host reads* rather than a process-wide registry, which
-    /// STYLE §1 forbids and which is what upstream uses
-    /// (`fxjs/global_timer.cpp:18-19`).
+    /// **Recorded and never fired.** This is the honest answer to "what did
+    /// the document want", and it is a *value the host reads* rather than a
+    /// process-wide registry.
     #[must_use]
     pub fn timers(&self) -> Vec<(String, i32)> {
         self.host.borrow().timers.clone()
     }
 
-    /// The transcript, rendered the way `pdfium_test` writes stdout.
+    /// The transcript, rendered the way the oracle writes it to stdout.
     #[must_use]
     pub fn transcript_text(&self) -> String {
         transcript::render(&self.transcript())
@@ -533,18 +428,12 @@ impl ScriptCascade {
     ///
     /// # Every kind resets every field first
     ///
-    /// `Initialize(kind)` (`fxjs/cjs_event_context.cpp:289-310`) clears
-    /// everything before a setup method fills in what its kind makes live, so
-    /// a Validate event never sees the selection a preceding Keystroke event
-    /// wrote. That reset is reproduced here by writing every field on every
-    /// event rather than only the live ones — the same observable behaviour,
-    /// and one fewer thing to get wrong than a per-kind write list.
+    /// Every field is written on every event, so a Validate event never sees
+    /// the selection a preceding Keystroke event wrote.
     ///
     /// **Which fields are read back afterwards is where the kinds differ**,
     /// and that lives in the [`Cascade`] methods rather than here: a write to
-    /// a field that is dead for the kind lands in the object and is dropped,
-    /// which is exactly what upstream's dummy-fallback pointers do without
-    /// any pointer aliasing.
+    /// a field that is dead for the kind lands in the object and is dropped.
     fn run_event(&mut self, source: &str, live: &EventFields<'_>, whence: &str) -> bool {
         let setup = format!(
             "event.name = {};\n\
@@ -626,10 +515,9 @@ impl ScriptCascade {
     ///
     /// A **value the caller reads back**, not a write this type performed:
     /// applying it from inside a native function would re-enter the cascade
-    /// the script is already inside, which is the `busy_` re-entry upstream
-    /// refuses (`fxjs/cjs_event_context.cpp:32-38`). The caller spends these
-    /// through the ordinary commit path, so the appearance regenerates the
-    /// way any other value change does.
+    /// the script is already inside. The caller spends these through the
+    /// ordinary commit path, so the appearance regenerates the way any other
+    /// value change does.
     ///
     /// Each entry is a `/Fields` position and the value the script set — the
     /// same shape [`FieldWrites`] carries, and the same index space.
@@ -684,10 +572,9 @@ impl ScriptCascade {
     /// Installs the `/CO` calculation order — the field indices a calculation
     /// sweep visits, in the order it visits them.
     ///
-    /// **An empty order means no calculation runs**, which is the answer for
-    /// a document with no `/CO` array and is not a fallback to "every field":
-    /// `Form::calculation_order` explains why, and
-    /// `cpdf_interactiveform.cpp:739-745` is where the rule lives.
+    /// **An empty order means no calculation runs**, which is the answer for a
+    /// document with no `/CO` array and is not a fallback to "every field";
+    /// see `pdfrum_doc`'s `Form::calculation_order`.
     pub fn set_calculation_order(&mut self, order: Vec<u32>) {
         self.order = order;
     }
@@ -709,16 +596,9 @@ impl ScriptCascade {
     /// # Why it returns the failures rather than only recording them
     ///
     /// [`Diagnostic`](pdfrum_common::Diagnostic) is a *kind*, a severity and a
-    /// byte offset — deliberately, because it is a bounded sink a hostile file
-    /// must not be able to grow — so
-    /// [`DiagKind::ScriptFailed`](pdfrum_common::DiagKind::ScriptFailed) can
-    /// say **that** a script threw but not *which* one or *what it said*. Both
-    /// are what a reader needs, and losing them is the whole defect this
-    /// method exists to close: a name that was never bound produced an empty
-    /// transcript and no word anywhere about why. So the kind goes on the sink
-    /// and the detail comes back to the caller, which prints it — see
-    /// [`ScriptFailure`] for what PDFium and pdf.js each do with the same
-    /// error.
+    /// byte offset — a bounded sink a hostile file must not be able to grow —
+    /// so it can say **that** a script threw but not *which* one or *what it
+    /// said*. The kind goes on the sink and the detail comes back here.
     ///
     /// The session is drained: a second call answers nothing.
     pub fn drain_diagnostics(&mut self, diags: &mut Diagnostics) -> Vec<ScriptFailure> {
@@ -738,9 +618,8 @@ impl ScriptCascade {
 
     /// Reads `event.rc` back as JavaScript truthiness.
     ///
-    /// `ToBooleanReentrant`, not a type check (`fxjs/cjs_event.cpp`), so
-    /// `event.rc = 'boo'` is `true` — upstream's behaviour, reproduced rather
-    /// than tightened.
+    /// JavaScript truthiness, not a type check, so `event.rc = 'boo'` is
+    /// `true` — the oracle's behaviour, reproduced rather than tightened.
     fn event_rc(&mut self) -> bool {
         self.context
             .eval(boa_engine::Source::from_bytes(b"!!event.rc"))
@@ -789,10 +668,9 @@ struct EventFields<'a> {
     name: &'a str,
     /// `event.targetName` — the **fully-qualified** name, always set by value.
     target_name: String,
-    /// `event.source`'s name. **Set only by Calculate**
-    /// (`fxjs/cjs_event_context.cpp`), so everywhere else `event.source` is a
-    /// field attached to the empty name — which is upstream's behaviour and
-    /// is reproduced rather than tidied.
+    /// `event.source`'s name. **Set only by Calculate**, so everywhere else
+    /// `event.source` is a field attached to the empty name — the oracle's
+    /// behaviour, reproduced rather than tidied.
     source_name: Option<String>,
     value: String,
     change: String,
@@ -806,8 +684,7 @@ struct EventFields<'a> {
 impl EventFields<'_> {
     /// The `Initialize` defaults every kind starts from.
     ///
-    /// `commit_key` resets to **`-1`**, not 0
-    /// (`fxjs/cjs_event_context.cpp:289-310`); only Keystroke and Format set
+    /// `commit_key` resets to **`-1`**, not 0; only Keystroke and Format set
     /// it to 0.
     fn blank(name: &str) -> EventFields<'_> {
         EventFields {
@@ -852,11 +729,9 @@ impl Cascade for ScriptCascade {
     /// The keystroke hook: `/AA /K` with `willCommit` false.
     ///
     /// The script may **rewrite `event.change` and move the selection**, and
-    /// what it left is what gets applied — `SetActionData`
-    /// (`fpdfsdk/formfiller/cffl_textfield.cpp:216-222`) reads
-    /// `fa.nSelStart`, `fa.nSelEnd` and `fa.sChange` back and nothing else.
-    /// A write to `event.value` on this path compiles, does not throw, and is
-    /// **discarded**: no code upstream ever reads it back.
+    /// what it left is what gets applied — only the change and the two
+    /// selection indices are read back. A write to `event.value` on this path
+    /// compiles, does not throw, and is **discarded**.
     fn keystroke(&mut self, field: &FieldRef, change: Keystroke) -> KeystrokeOutcome {
         let Some(source) = self.script_for(field, Trigger::Keystroke) else {
             return KeystrokeOutcome::Accept(change);
@@ -927,12 +802,10 @@ impl Cascade for ScriptCascade {
 
     /// `/AA /C`, over the whole calculation order.
     ///
-    /// **One call runs the entire sweep**, which is `OnCalculate`
-    /// (`fpdfsdk/cpdfsdk_interactiveform.cpp:270-310`) walking `/CO` and
-    /// writing each field in turn. The three-way gate at `:307` is normative
-    /// and is reproduced: a calculated value is written **only if** the script
-    /// did not throw, **and** `event.rc` is still truthy, **and** the string
-    /// actually changed.
+    /// **One call runs the entire sweep**: `/CO` is walked and each field
+    /// written in turn. The three-way gate is normative — a calculated value
+    /// is written **only if** the script did not throw, **and** `event.rc` is
+    /// still truthy, **and** the string actually changed.
     ///
     /// The `busy_` guard is [`FieldWrites`]'s depth budget, whose default is
     /// 1 because upstream permits no nesting at all.
@@ -979,17 +852,13 @@ impl Cascade for ScriptCascade {
 
     /// `/AA /F`.
     ///
-    /// **The write reaches the appearance only, never `/V`.** `OnFormat`
-    /// (`fpdfsdk/cpdfsdk_interactiveform.cpp:313-346`) binds `event.value` to
-    /// a *local* string, runs the script, and returns the mutated local as an
-    /// optional that reaches
-    /// `pEdit->SetText(sValue.value_or(pField->GetValue()))`
-    /// (`cpdfsdk_appstream.cpp:1752`) — one line, and the whole mechanism.
-    /// Re-running with no formatter reverts the appearance to the raw value.
+    /// **The write reaches the appearance only, never `/V`.** `event.value`
+    /// is bound to a *local* string; what the script leaves there is drawn,
+    /// and re-running with no formatter reverts the appearance to the raw
+    /// value.
     ///
-    /// Format also **hard-codes `willCommit = true`** (`:282`), which is why
-    /// `event_properties.in` — a Format handler — reads `true`, and leaves
-    /// `rc` unbound, so a Format script's `event.rc` writes reach nothing.
+    /// Format also **hard-codes `willCommit = true`** and leaves `rc` unbound,
+    /// so a Format script's `event.rc` writes reach nothing.
     fn format(&mut self, field: &FieldRef, value: &str) -> Option<String> {
         let source = self.script_for(field, Trigger::Format)?;
         let live = EventFields {

@@ -1,23 +1,13 @@
 //! Check boxes and radio buttons: the two controls whose value is a state
 //! name rather than text.
 //!
-//! They share a machine and differ in one line. A check box **toggles** — a
-//! second click turns it off again. A radio button **sets**, unconditionally,
-//! and clearing is something its siblings do to each other, never something a
-//! click does to the button it landed on. There is no way to un-select a
-//! radio button by clicking it, and that is deliberate rather than an
-//! oversight in the model.
+//! They share a machine and differ in one line. A check box **toggles**; a
+//! radio button **sets**, unconditionally, and there is no way to un-select
+//! one by clicking it.
 //!
-//! # Two rules that look like bugs and are not
-//!
-//! - **A read-only control consumes the keystroke and does nothing.** Return
-//!   and Space on a focused read-only check box both report the event as
-//!   handled while the checked state does not move. Consumption and effect
-//!   are independent here: the event was for this control, and this control
-//!   declined to act on it.
-//! - **Neither control handles arrow keys at all.** Arrow-key navigation
-//!   within a radio group — which a reader who knows how desktop radio
-//!   buttons behave will expect — is simply not implemented at this layer.
+//! Two rules that look like bugs and are not: **a read-only control consumes
+//! the keystroke and does nothing** (consumption and effect are independent),
+//! and **neither control handles arrow keys at all**.
 
 /// The off state's appearance name, which every check box and radio button
 /// shares.
@@ -38,13 +28,11 @@ pub struct ToggleState {
     /// `/Annots` index, once one has been chosen.
     ///
     /// A field's controls share one state here, which is right for a check
-    /// box (a field with one kid) and not enough for a radio group. Upstream
-    /// keeps a per-control `/AS`: `CPDF_FormField::CheckControl`
-    /// (`cpdf_formfield.cpp:683-716`) sets the clicked control to its own on
-    /// state and every other control of the field to `Off`. This records the
-    /// half of that a shared state *can* express — **which** control is on —
-    /// so a sibling's appearance can be answered `Off` without inventing a
-    /// second state record.
+    /// box (a field with one kid) and not enough for a radio group, where the
+    /// clicked control shows its own on state and every other control of the
+    /// field shows `Off`. This records the half of that a shared state *can*
+    /// express — **which** control is on — so a sibling's appearance can be
+    /// answered `Off` without a second state record.
     ///
     /// `None` before any control has been activated, which is the state a
     /// group loaded from a file with no `/V` is in.
@@ -70,28 +58,23 @@ impl ToggleState {
 
     /// The appearance state one **control** of this field should draw.
     ///
-    /// The per-control answer a shared [`ToggleState`] can give, and the
-    /// resolution of the half of `CPDF_FormField::CheckControl`
-    /// (`cpdf_formfield.cpp:683-716`) that a field-level record could not
-    /// reach before: the clicked control shows its own on state and every
-    /// other control of the same field shows `Off`.
+    /// The per-control answer a shared [`ToggleState`] can give: the clicked
+    /// control shows its own on state and every other control of the same
+    /// field shows `Off`.
     ///
     /// Three cases, and the middle one is why this is not simply
     /// [`Self::state`]:
     ///
     /// - **Nothing has been clicked** ([`Self::checked_control`] is `None`):
-    ///   answers `None`, meaning "read the widget's own `/AS`". A group
-    ///   loaded from a file is in this state and must render exactly as the
-    ///   file wrote it, kid by kid.
+    ///   `None`, meaning "read the widget's own `/AS`" — a group loaded from a
+    ///   file must render exactly as the file wrote it, kid by kid.
     /// - **This control is the chosen one**: its own on state, which for a
     ///   radio group is a name only this kid carries.
     /// - **A sibling was chosen**: [`OFF_STATE`], whatever the file's `/AS`
-    ///   still says — which is the case the shared record could not express
-    ///   and the one a group of two kids makes visible.
-    ///
-    /// A **check box** is a field with one control, so `control` is always
-    /// the chosen one once anything has been clicked and the answer is its
-    /// own state either way.
+    ///   still says.
+    // A check box is a field with one control, so `control` is always the
+    // chosen one once anything has been clicked and the answer is its own
+    // state either way.
     #[must_use]
     pub fn state_for_control(&self, control: crate::session::AnnotId) -> Option<&str> {
         let chosen = self.checked_control?;

@@ -19,8 +19,8 @@
 /// crop box — in this crate's own `f32`.
 ///
 /// **Private, deliberately.** The public vocabulary is [`kurbo::Point`], and
-/// this is what [`crate::route::apply`] narrows it to on the way in, exactly
-/// where `fpdf_formfill.cpp:443` narrows a `double` pair to `CFX_PointF`.
+/// this is what [`crate::route::apply`] narrows it to on the way in — the same
+/// place the oracle narrows its own `double` pair.
 /// Every geometric comparison in this crate is `f32` against widget edges
 /// that `page::to_rect` already rounded to `f32`: an `f64` point meeting one
 /// of those changes inclusive-edge behaviour and can move a caret across a
@@ -73,16 +73,11 @@ pub enum Button {
 ///
 /// The named variants are the keys the form layer *decides on* — navigation,
 /// editing, and the three accelerator letters — plus the two modifier keys a
-/// host reports as keys in their own right. Everything else is
-/// [`Key::Other`], which is not a fallback so much as the whole point: the
-/// ported assertions deliberately send F-keys, digits and the clipboard
-/// letters to check that they are **not** consumed, and `Other` is the arm
-/// that says "the form layer does not decide on this".
+/// host reports as keys in their own right. Everything else is [`Key::Other`],
+/// the arm that says "the form layer does not decide on this".
 ///
-/// [`Key::from_virtual`] and [`Key::virtual_code`] are the boundary with the
-/// wire format, which is a bare integer. That integer stays where it belongs:
-/// in the `.evt` parser and in a host's own event queue, never in a
-/// signature here.
+/// [`Key::from_virtual`] and [`Key::virtual_code`] are the boundary with a
+/// host's own event queue, which speaks in bare integers.
 ///
 /// ```
 /// use pdfrum_form::Key;
@@ -220,11 +215,9 @@ impl Key {
 
 /// The modifier bits carried by an event (`FWL_EVENTFLAG`).
 ///
-/// A hand-written bitflag newtype rather than a dependency: the dependency
-/// manifest is closed and this is nine constants and a handful of operations
-/// (STYLE.md §5, SPEC.md §15.5). It shares the algebra of
-/// `pdfrum_font::FontFlags` and `pdfrum_doc::AnnotFlags`, unknown-bit
-/// retention included.
+/// A hand-written bitflag newtype: nine constants and a handful of
+/// operations, sharing the algebra of `pdfrum_font::FontFlags` and
+/// `pdfrum_doc::AnnotFlags`, unknown-bit retention included.
 ///
 /// ```
 /// use pdfrum_form::Modifiers;
@@ -397,7 +390,7 @@ pub enum Event {
 mod tests {
     use super::*;
 
-    /// §B.5's hazard, pinned at the boundary that answers it.
+    /// The `f64`-to-`f32` hazard, pinned at the boundary that answers it.
     ///
     /// [`crate::route::apply`] narrows an [`Event`]'s `f64` point to this
     /// `f32` one before any comparison. The interior then compares against
