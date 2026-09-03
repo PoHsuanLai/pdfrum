@@ -234,18 +234,13 @@ impl BuildContext {
     /// The interactive form's faces for `key`, built by `load` on the first
     /// ask and handed back from the cache on every later one.
     ///
-    /// `load` is a closure rather than a value because the whole point is not
-    /// to build the faces on a hit — see [`form_fonts`](Self::form_fonts) for
-    /// what building them costs and why the result is safe to reuse.
-    ///
-    /// [`FormFontsKey::Direct`] is not cached and always calls `load`: a
+    /// `load` is a closure, not a value, so a hit costs nothing to build.
+    /// [`FormFontsKey::Direct`] is never cached and always calls `load`: a
     /// direct `/AcroForm` dictionary has no identity to key on, and reusing
-    /// one document's faces for another's would be wrong. That case
-    /// re-derives, which is correct if slower.
-    ///
-    /// Erased in storage and downcast back on the way out. A cached value
-    /// whose type does not match — which cannot happen, since one caller owns
-    /// the type — is treated as a miss and rebuilt rather than reported.
+    /// one document's faces for another's would be wrong.
+    // Erased in storage and downcast back on the way out. A cached value whose
+    // type does not match — which cannot happen, since one caller owns the type
+    // — is treated as a miss and rebuilt rather than reported.
     pub fn form_fonts<T: Any + Send + Sync>(
         &mut self,
         key: FormFontsKey,
@@ -323,16 +318,14 @@ impl StreamBounds {
     /// The boundaries for content joined from elements ending at the given
     /// byte offsets.
     ///
-    /// Each element is parsed on its own and its operators counted, which is
-    /// exact rather than approximate because of the separating space a join
-    /// inserts after every element: it terminates whatever token the element
-    /// ended on, so no operator can span a boundary. The last element takes
-    /// whatever the joined list has left over, which absorbs any disagreement
-    /// rather than dropping objects off the end.
-    ///
     /// `ends[i]` is one past the last byte of element `i`, counting the
-    /// separator. A single element — or none — yields the default, where
-    /// everything is element 0.
+    /// separator a join inserts. A single element — or none — yields the
+    /// default, where everything is element 0.
+    // Each element is parsed on its own and its operators counted, which is
+    // exact rather than approximate because of that separating space: it
+    // terminates whatever token the element ended on, so no operator can span a
+    // boundary. The last element takes whatever the joined list has left over,
+    // which absorbs any disagreement rather than dropping objects off the end.
     #[must_use]
     pub fn from_joined(bytes: &[u8], total_ops: usize, ends: &[usize], limits: &Limits) -> Self {
         if ends.len() <= 1 {
@@ -2003,18 +1996,16 @@ pub enum FoundPattern {
 
 /// A pattern named in a colour value, looked up through the resources.
 ///
-/// The **parent matrix** anchors it, not the current transform — patterns
-/// live in the space they were declared in.
-///
-/// `general` is the painting object's general state, which a tiling pattern's
-/// cell inherits wholesale — its alpha, blend mode and soft mask — while
-/// taking *default* colour, text and path state. That asymmetry is the whole
-/// reason a pattern is loaded where it is installed rather than where the
-/// resource is declared, and it is what makes `/ca 0.5` on the filling object
-/// fade the tiles.
+/// `parent_matrix` anchors it, not the current transform — patterns live in
+/// the space they were declared in. `general` is the painting object's general
+/// state, which a tiling pattern's cell inherits wholesale — alpha, blend mode
+/// and soft mask — while taking *default* colour, text and path state, so
+/// `/ca 0.5` on the filling object fades the tiles.
 ///
 /// See [`FoundPattern`] for why "the resource exists" and "the pattern loads"
 /// are two answers rather than one.
+// That state asymmetry is the whole reason a pattern is loaded where it is
+// installed rather than where the resource is declared.
 #[expect(
     clippy::too_many_arguments,
     reason = "looking a pattern up needs its name, resources, anchor matrix, \

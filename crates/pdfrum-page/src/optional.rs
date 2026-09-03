@@ -449,19 +449,14 @@ impl Visibility {
 
 /// Resolve which of a page's objects optional content hides.
 ///
-/// A **pre-pass**: it runs between building the page and rendering it, reads
-/// the page graph and the document, and produces plain data. Nothing about
-/// rendering enters, and no resolver reaches the render walk — which is the
-/// whole point of the split, because `content_visible` needs `&mut OcContext`
-/// and a `Resolve` and a rasterizer needs neither.
-///
-/// PDFium answers the same question inside `RenderSingleObject`
-/// (`cpdf_renderstatus.cpp:247`) with the context hanging off
-/// `CPDF_RenderOptions`, plus `/OC` on forms (`:401`) and on images
-/// (`cpdf_imagerenderer.cpp:197`). All three are here, and the two `XObject`
-/// ones are genuinely separate from the marked-content one: a form can be
-/// hidden by its own dictionary while the `Do` that drew it sits under no
-/// `/OC` mark at all.
+/// A pre-pass: it runs between building the page and rendering it and produces
+/// plain data, so no resolver reaches the render walk. It answers all three
+/// forms of `/OC` — the marked-content one, a form `XObject`'s own dictionary
+/// and an image's — and the `XObject` ones are separate from the mark: a form
+/// can be hidden by its own dictionary while the `Do` that drew it sits under
+/// no `/OC` mark at all.
+// The split is the point: `content_visible` needs `&mut OcContext` and a
+// `Resolve`, and a rasterizer needs neither.
 #[must_use]
 pub fn page_visibility<R: Resolve>(
     page: &crate::Page,
