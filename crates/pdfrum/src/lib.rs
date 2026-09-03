@@ -52,6 +52,7 @@
 #![forbid(unsafe_code)]
 
 mod annotation;
+mod attach;
 mod document;
 mod edit;
 mod error;

@@ -299,8 +299,8 @@ impl Document {
 /// them.
 #[derive(Debug)]
 pub struct DocEdit<'a> {
-    doc: &'a Document,
-    inner: EditDoc<'a>,
+    pub(crate) doc: &'a Document,
+    pub(crate) inner: EditDoc<'a>,
 }
 
 impl DocEdit<'_> {
