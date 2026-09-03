@@ -695,7 +695,7 @@ fn is_afternoon(hour: i32) -> bool {
     hour >= 12
 }
 
-/// `CJS_PublicMethods::PrintDateUsingFormat`.
+/// Render an instant through a date format string.
 #[must_use]
 pub fn print_date_using_format(date_ms: f64, format: &str) -> String {
     let c = civil_from_ms(date_ms);

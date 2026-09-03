@@ -1,4 +1,4 @@
-//! `util.printf` and `CJS_Util::ParseDataType`.
+//! `util.printf`, and the format-string classification it needs first.
 
 use crate::error::Error;
 use crate::parse::is_decimal_digit;
@@ -45,7 +45,9 @@ pub enum PrintfArg {
     String(String),
 }
 
-/// `CJS_Util::ParseDataType`. Mutates `%s` → `%S` like the C++.
+/// Which single conversion a `util.printf` format asks for, if any.
+///
+/// Mutates the format in place, upper-casing a `%s` to `%S`.
 ///
 /// Integer conversions with more than two precision digits are `Invalid`
 /// (<https://crbug.com/740166>).
