@@ -234,6 +234,7 @@ pub fn pdfrum_object::Array::bool_at(&self, usize) -> core::option::Option<bool>
 pub fn pdfrum_object::Array::byte_string_at(&self, usize) -> core::option::Option<alloc::vec::Vec<u8>>
 pub fn pdfrum_object::Array::dict_at(&self, usize, &impl pdfrum_object::Resolve) -> core::option::Option<pdfrum_object::Dict>
 pub fn pdfrum_object::Array::get<'a>(&'a self, usize, &impl pdfrum_object::Resolve) -> core::option::Option<pdfrum_object::Resolved<'a>>
+pub fn pdfrum_object::Array::insert(&mut self, usize, pdfrum_object::Object)
 pub fn pdfrum_object::Array::int_at(&self, usize) -> core::option::Option<i64>
 pub fn pdfrum_object::Array::is_empty(&self) -> bool
 pub fn pdfrum_object::Array::iter(&self) -> impl core::iter::traits::iterator::Iterator<Item = &pdfrum_object::Object>
@@ -247,6 +248,7 @@ pub fn pdfrum_object::Array::of(impl core::iter::traits::collect::IntoIterator<I
 pub fn pdfrum_object::Array::push(&mut self, pdfrum_object::Object)
 pub fn pdfrum_object::Array::raw_at(&self, usize) -> core::option::Option<&pdfrum_object::Object>
 pub fn pdfrum_object::Array::reference_at(&self, usize) -> core::option::Option<pdfrum_object::ObjRef>
+pub fn pdfrum_object::Array::remove(&mut self, usize) -> core::option::Option<pdfrum_object::Object>
 pub fn pdfrum_object::Array::stream_at(&self, usize, &impl pdfrum_object::Resolve) -> core::option::Option<pdfrum_object::Stream>
 pub fn pdfrum_object::Array::string_at(&self, usize) -> core::option::Option<&pdfrum_object::PdfString>
 pub fn pdfrum_object::Array::text_at(&self, usize) -> core::option::Option<alloc::string::String>
@@ -291,6 +293,7 @@ pub fn pdfrum_object::Dict::dict(&self, &pdfrum_object::Name, &impl pdfrum_objec
 pub fn pdfrum_object::Dict::direct_int(&self, &pdfrum_object::Name) -> core::option::Option<i64>
 pub fn pdfrum_object::Dict::from_pairs(impl core::iter::traits::collect::IntoIterator<Item = (pdfrum_object::Name, pdfrum_object::Object)>) -> Self
 pub fn pdfrum_object::Dict::get<'a>(&'a self, &pdfrum_object::Name, &impl pdfrum_object::Resolve) -> core::option::Option<pdfrum_object::Resolved<'a>>
+pub fn pdfrum_object::Dict::insert(&mut self, pdfrum_object::Name, pdfrum_object::Object)
 pub fn pdfrum_object::Dict::int(&self, &pdfrum_object::Name, &impl pdfrum_object::Resolve) -> core::option::Option<i64>
 pub fn pdfrum_object::Dict::is_empty(&self) -> bool
 pub fn pdfrum_object::Dict::iter(&self) -> impl core::iter::traits::iterator::Iterator<Item = &(pdfrum_object::Name, pdfrum_object::Object)>
@@ -305,6 +308,7 @@ pub fn pdfrum_object::Dict::push(&mut self, pdfrum_object::Name, pdfrum_object::
 pub fn pdfrum_object::Dict::raw(&self, &pdfrum_object::Name) -> core::option::Option<&pdfrum_object::Object>
 pub fn pdfrum_object::Dict::rect(&self, &pdfrum_object::Name, &impl pdfrum_object::Resolve) -> kurbo::rect::Rect
 pub fn pdfrum_object::Dict::reference(&self, &pdfrum_object::Name) -> core::option::Option<pdfrum_object::ObjRef>
+pub fn pdfrum_object::Dict::remove(&mut self, &pdfrum_object::Name) -> core::option::Option<pdfrum_object::Object>
 pub fn pdfrum_object::Dict::stream(&self, &pdfrum_object::Name, &impl pdfrum_object::Resolve) -> core::option::Option<pdfrum_object::Stream>
 pub fn pdfrum_object::Dict::string(&self, &pdfrum_object::Name) -> core::option::Option<&pdfrum_object::PdfString>
 pub fn pdfrum_object::Dict::text(&self, &pdfrum_object::Name, &impl pdfrum_object::Resolve) -> core::option::Option<alloc::string::String>

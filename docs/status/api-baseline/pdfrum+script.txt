@@ -145,6 +145,12 @@ pub fn pdfrum::Bookmark<'_>::page_index(&self) -> core::option::Option<pdfrum_co
 pub fn pdfrum::Bookmark<'_>::title(&self) -> alloc::string::String
 pub struct pdfrum::DocEdit<'a>
 impl pdfrum::DocEdit<'_>
+pub fn pdfrum::DocEdit<'_>::add_attachment(&mut self, &str, &[u8]) -> pdfrum::Result<usize>
+pub fn pdfrum::DocEdit<'_>::delete_attachment(&mut self, usize) -> pdfrum::Result<bool>
+pub fn pdfrum::DocEdit<'_>::set_attachment_description(&mut self, usize, &str) -> pdfrum::Result<bool>
+pub fn pdfrum::DocEdit<'_>::set_attachment_file(&mut self, usize, &[u8]) -> pdfrum::Result<bool>
+pub fn pdfrum::DocEdit<'_>::set_attachment_param(&mut self, usize, &str, &str) -> pdfrum::Result<bool>
+impl pdfrum::DocEdit<'_>
 pub fn pdfrum::DocEdit<'_>::embed_cid_font(&mut self, &[u8], &str, &[u8]) -> pdfrum::Result<pdfrum_edit::font::embed::EmbeddedFont>
 pub fn pdfrum::DocEdit<'_>::embed_font(&mut self, &[u8], pdfrum_edit::font::embed::FontEncoding) -> pdfrum::Result<pdfrum_edit::font::embed::EmbeddedFont>
 pub fn pdfrum::DocEdit<'_>::embed_image(&mut self, &[u8], u32, u32, pdfrum_edit::image::raw::PixelFormat) -> pdfrum::Result<pdfrum_edit::image::EmbeddedImage>
