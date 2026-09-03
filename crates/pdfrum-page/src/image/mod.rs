@@ -1005,7 +1005,7 @@ fn unpack(
                     clippy::cast_sign_loss,
                     reason = "the clamp bounds the product to 0..=255"
                 )]
-                let byte = (value.clamp(0.0, 1.0) * 255.0).round() as u8;
+                let byte = (value.clamp(0.0, 1.0) * 255.0 + 0.5) as u8;
                 if let Some(slot) = out.get_mut((y * pixels_per_row + x) * components + c) {
                     *slot = byte;
                 }
@@ -1118,7 +1118,7 @@ fn decode_table(decode: &DecodeMap, components: usize) -> Vec<[u8; 256]> {
                     clippy::cast_sign_loss,
                     reason = "the clamp bounds the product to 0..=255"
                 )]
-                let byte = (value.clamp(0.0, 1.0) * 255.0).round() as u8;
+                let byte = (value.clamp(0.0, 1.0) * 255.0 + 0.5) as u8;
                 *slot = byte;
             }
             row
