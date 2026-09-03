@@ -40,8 +40,7 @@ pub fn output_path(input: &Path, page: u32) -> Option<PathBuf> {
 /// goldens contain.
 ///
 /// This is `--txt`'s output format, so it lives with the tool that writes it
-/// rather than on the library type it reads
-/// (`docs/design/idiomatic-api.md` §A.3, WP8). `pdfrum-text` publishes the
+/// rather than on the library type it reads. `pdfrum-text` publishes the
 /// data — `chars`, one `CharBox` per character with its `unicode` — and this
 /// is one of the shapes a caller can put it in.
 #[must_use]

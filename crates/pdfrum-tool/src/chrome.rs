@@ -2,8 +2,8 @@
 //!
 //! `pdfrum-form` publishes an open combo box's dropdown as state and geometry
 //! ([`pdfrum::PopupView`]) and stops there, because a dropdown is a window and
-//! a PDF library has no business creating one (STYLE.md §2b, ruled
-//! 2026-09-01). The oracle's `pdfium_test` **is** a host, though — it drives
+//! a PDF library has no business creating one. The oracle's `pdfium_test`
+//! **is** a host, though — it drives
 //! `FPDF_FFLDraw`, which composites `CPWL_Wnd::DrawAppearance` over the page
 //! bitmap — so to compare against its goldens this tool has to be a host too.
 //!

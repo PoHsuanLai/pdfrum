@@ -1,8 +1,8 @@
 //! `--send-events`: driving a [`pdfrum::FormSession`] from a parsed `.evt`
 //! script, the way `pdfium_test` drives `FPDF_FORMHANDLE` from one.
 //!
-//! Two enums meet here and they are deliberately different layers
-//! (`docs/design/pdfrum-form.md` §4.2). [`crate::events::Event`] is the
+//! Two enums meet here and they are deliberately different layers.
+//! [`crate::events::Event`] is the
 //! **grammar**: one variant per `.evt` verb, `i32` straight out of `atoi`, a
 //! `u32` modifier mask, and a `KeyCode` variant that is the down/up *pair* the
 //! verb emits. [`pdfrum::FormSession`]'s methods are the **semantics**: page
