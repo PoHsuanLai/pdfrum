@@ -195,9 +195,9 @@ mod tests {
     /// `/Decode` range (ISO 32000-1 §8.9.5) and then **rounded** onto a byte.
     /// pdf.js computes exactly that (`DeviceRgbCS.getRgbBuffer`,
     /// `src/core/colorspace.js`: `scale = 255 / ((1 << bits) - 1)` stored into
-    /// a rounding `Uint8ClampedArray`); PDFium approximates it by dropping the
-    /// low byte (`cpdf_dib.cpp:1093-1101`, `sample >> 8`), which is within one
-    /// count everywhere. We take the exact map.
+    /// a rounding `Uint8ClampedArray`); the oracle approximates it by dropping
+    /// the low byte, which is within one count everywhere. We take the exact
+    /// map.
     ///
     /// Two properties are asserted for all 65 536 samples, which is what makes
     /// this a pin and not a spot check:
@@ -233,8 +233,7 @@ mod tests {
     ///
     /// `step` is exactly `1/max` and the products are small enough to be exact
     /// in `f32`, so rounding and truncating agree on every raw value at 1, 2, 4
-    /// and 8 bits — and both agree with PDFium's integer `v * 255 / max`
-    /// (`cpdf_dib.cpp:1104-1121`).
+    /// and 8 bits — and both agree with the oracle's integer `v * 255 / max`.
     #[test]
     fn below_sixteen_bits_rounding_truncating_and_the_oracles_integer_scale_agree() {
         for bpc in [1u32, 2, 4, 8] {

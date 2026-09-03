@@ -8,13 +8,13 @@
 //! translating the CTM before filling does not slide the tiling. This is a
 //! frequent source of bugs and is worth restating whenever it comes up.
 //!
-//! In C++ notation the composition is `pattern_matrix * parent_matrix`;
-//! `CFX_Matrix` multiplies left-to-right where `kurbo::Affine` multiplies
-//! right-to-left, so the code writes `parent * pattern` (design brief D14).
+//! `kurbo::Affine` multiplies right-to-left, so the code writes
+//! `parent * pattern` — the pattern's matrix applied first, then the parent's
+//! (design brief D14).
 //!
 //! One asymmetry to know: a **bare shading** reached through the `sh`
-//! operator ignores any `/Matrix` on its dictionary entirely, because the C++
-//! only composes the matrix for a pattern, not for a shading object.
+//! operator ignores any `/Matrix` on its dictionary entirely. The matrix is
+//! composed for a pattern, never for a shading object reached directly.
 
 mod tiling;
 

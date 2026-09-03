@@ -2,8 +2,8 @@
 //!
 //! Two byte tables sampling the sRGB transfer function on 1024 steps: the
 //! first 192 steps at full resolution, the rest at every fourth step. The
-//! branch and index arithmetic that reads them is `super::cie::rgb_conversion`
-//! (`RGB_Conversion`, `cpdf_colorspace.cpp`).
+//! branch and index arithmetic that reads them is
+//! `super::cie::rgb_conversion`.
 
 /// Samples for scaled inputs below [`SAMPLES1_LEN`].
 pub(crate) static SRGB_SAMPLES1: [u8; 192] = [

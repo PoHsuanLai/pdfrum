@@ -488,15 +488,10 @@ pub fn decode_image<R: Resolve>(
 /// A `/Mask` array names, per component, a closed range of **raw sample**
 /// values that is transparent — so the test cannot be run on the decoded
 /// colours, and it cannot be run at draw time either, because by then the
-/// samples are gone. PDFium runs it inside `CPDF_DIB::GetScanline`, filling a
-/// parallel BGRA buffer whose alpha byte is
-///
-/// ```text
-/// dest.alpha = IsColorIndexOutOfBounds(index, comp_data_[0]) ? 0xFF : 0;
-/// ```
-///
-/// — **in range means transparent**, which reads backwards until you notice
-/// the predicate is named for the opposite. `bug_343075986.in` masks index 0
+/// samples are gone. It runs at unpack time instead, beside the scanline that
+/// still has the raw samples, and produces an alpha plane where **a sample
+/// inside the named range is transparent** — opaque everywhere else.
+/// `bug_343075986.in` masks index 0
 /// out of an indexed image so a yellow background shows through; without this
 /// the index paints its palette entry, which is black.
 ///
@@ -550,23 +545,14 @@ fn resolve_color_key(
 /// Whether the samples are read straight out of the stream, with no image
 /// codec standing between it and the scanline.
 ///
-/// This is the precondition of `CPDF_DIB::GetScanline`'s zeroed-output arm,
-/// and it is easy to get wrong because the arm itself does not name it. The
-/// C++ picks a source in this order:
-///
-/// ```text
-/// if (cached_bitmap_ && ...)          src_line = cached_bitmap_->GetScanline(line);
-/// else if (decoder_)                  src_line = decoder_->GetScanline(line);
-/// else if (GetSize() > line * pitch)  ... zero-pad what remains ...
-/// if (src_line.empty()) { fill(result, 0); return result; }   // decode skipped
-/// ```
-///
-/// A codec — JBIG2, JPX, DCT, CCITT, or a Flate/RunLength predictor built as
-/// a scanline decoder — always hands back a full row, so the empty case never
-/// arises and every row is decoded normally. Only a stream read directly can
-/// run out. Applying the zeroed arm to a codec's output instead makes a
-/// truncated JBIG2 mask stop inverting partway down, which is what
-/// `bug_674771.in` showed.
+/// This is the precondition of the zeroed-output arm: a row past the end of
+/// the data reads as all zeros only when the samples came straight from the
+/// stream. A codec — JBIG2, JPX, DCT, CCITT, or a Flate/RunLength predictor
+/// built as a scanline decoder — always hands back a full row, so the empty
+/// case never arises there and every row is decoded normally. Only a stream
+/// read directly can run out. Applying the zeroed arm to a codec's output
+/// instead makes a truncated JBIG2 mask stop inverting partway down, which is
+/// what `bug_674771.in` showed.
 fn reads_the_stream_directly(info: &ImageDict) -> bool {
     !matches!(
         info.last_filter,
@@ -838,8 +824,8 @@ fn scan_indices(
 
 /// Resolve a one-component tint image into a palette and its indices.
 ///
-/// This is `CPDF_DIB::LoadPalette` (`cpdf_dib.cpp:894-979`) for the families
-/// that have no device reading: the tint transform runs once per distinct
+/// For the families that have no device reading the tint transform runs once
+/// per distinct
 /// sample value rather than once per pixel, which is both exact — a sample of
 /// at most eight bits has at most 256 values — and the shape
 /// `pdfrum_render::image::to_pixmap` already has a fast path for.
@@ -874,13 +860,11 @@ fn tint_palette(
 
 /// Resolve a multi-colorant tint image one pixel at a time.
 ///
-/// This is `CPDF_DIB::TranslateScanline24bpp` (`cpdf_dib.cpp:1007-1054`),
-/// reached the same way PDFium reaches it: the default-decode shortcut at
-/// `:1056-1075` keeps only `DeviceRGB`/`CalRGB` and hands every other family
-/// to `TranslateImageLine`, whose generic base
-/// (`cpdf_colorspace.cpp:636-660`) is `GetRGB` per pixel. A `DeviceN` over
-/// more than one colorant has too wide a sample tuple to tabulate, so there
-/// is no palette to build.
+/// Reached the way the oracle reaches its own equivalent: the default-decode
+/// shortcut keeps only `DeviceRGB`/`CalRGB` and hands every other family to
+/// the bulk translation, whose generic base is the scalar conversion per
+/// pixel. A `DeviceN` over more than one colorant has too wide a sample tuple
+/// to tabulate, so there is no palette to build.
 ///
 /// The conversion itself is [`ColorSpace::translate_image_line`], which was
 /// ported whole and until now had no caller in the image build at all — only

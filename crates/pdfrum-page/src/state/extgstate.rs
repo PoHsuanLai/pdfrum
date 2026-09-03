@@ -284,8 +284,7 @@ mod tests {
         assert!(!s.general.fill_overprint, "/op wins for the fill flag");
     }
 
-    /// `/D` takes a **nested** array, matching `CPDF_AllStates::ProcessExtGS`
-    /// (`cpdf_allstates.cpp:64-77`): the outer value must be an array *and*
+    /// `/D` takes a **nested** array: the outer value must be an array *and*
     /// its element 0 must itself be an array, or the key is skipped entirely.
     #[test]
     fn a_dash_entry_needs_a_nested_array() {
@@ -406,10 +405,9 @@ mod tests {
 
     /// Table 58's own form — `[<ref> size]` — reaches the resolver **as the
     /// reference**, which is what lets it be followed to a font dictionary.
-    /// The oracle turns it into `""` at `cpdf_allstates.cpp:88`
-    /// (`GetByteStringAt(0)` on a reference), and this test fails against
-    /// that reading. pdf.js takes the same reference at
-    /// `evaluator.js:1256-1261` ("Loading by ref").
+    /// The oracle reads element 0 as a byte string and so turns a reference
+    /// into `""`; this test fails against that reading. pdf.js takes the same
+    /// reference intact (`evaluator.js:1256-1261`, "Loading by ref").
     #[test]
     fn the_specs_indirect_reference_form_reaches_the_lookup_intact() {
         let seen = font_lookup_argument(Object::Ref(pdfrum_object::ObjRef::new(7, 0)));

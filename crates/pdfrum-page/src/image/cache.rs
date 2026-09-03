@@ -161,11 +161,10 @@ impl ImageCache {
 
     /// Look an image up, refreshing its recency.
     ///
-    /// Three rungs, and the third is what
-    /// `CPDF_PageImageCache::Entry::IsCacheValid` (`cpdf_pageimagecache.cpp:347`)
-    /// does: the exact key, then a full-resolution entry — which serves
-    /// anything — then any entry whose *decoded* dimensions already cover the
-    /// request in both axes. The third matters because a decoder is free to
+    /// Three rungs: the exact key, then a full-resolution entry — which
+    /// serves anything — then any entry whose *decoded* dimensions already
+    /// cover the request in both axes. The third matters because a decoder is
+    /// free to
     /// ignore the hint: an image asked for at 600x600 that came back at 5000x5000
     /// is stored under the 600x600 request, and a later 300x300 request must
     /// find it rather than decode the same codestream again.

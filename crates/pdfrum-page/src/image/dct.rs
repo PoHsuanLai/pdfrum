@@ -10,11 +10,10 @@
 //! they live rather than folded into the decode step, because a file that
 //! states its own `/Decode` must override the first and not the second.
 //!
-//! The literal `[1 0 1 0 1 0 1 0]` has no home in this crate: PDFium
-//! materialises it only when *authoring* an image `XObject` from a JPEG file
-//! (`CPDF_Image::InitJPEG`, `cpdf_image.cpp:121-125`, reached from
-//! `FPDFImageObj_LoadJpegFile`), never on a read or render path, and pdfrum
-//! has no image-writing API. Reading takes the file's own `/Decode` through
+//! The literal `[1 0 1 0 1 0 1 0]` has no home in this crate: it is
+//! materialised only when *authoring* an image `XObject` from a JPEG file,
+//! never on a read or render path, and pdfrum has no image-writing API.
+//! Reading takes the file's own `/Decode` through
 //! `super::decode_array::DecodeMap`.
 //!
 //! # The component mismatch gate
@@ -228,9 +227,9 @@ const CENTER_SAMPLE: i32 = 128;
 /// its composite bakes in the Adobe inversion *and* collapses four channels to
 /// three, so the image would arrive with neither the components the image
 /// dictionary declares nor a value `/Decode` can still act on. §7.4.8 puts the
-/// CMYK inversion in `/Decode`, not in the codec — `cpdf_devicecs.cpp:104-136`
-/// on one side and `jpg.js:1275-1279` on the other — and this crate reproduces
-/// that in `image/mod.rs`. Producing raw CMYK here keeps that seam intact.
+/// CMYK inversion in `/Decode`, not in the codec — pdf.js agrees
+/// (`jpg.js:1275-1279`) — and this crate reproduces that in `image/mod.rs`.
+/// Producing raw CMYK here keeps that seam intact.
 ///
 /// The arithmetic is libjpeg's exactly, tables and all: the per-value tables
 /// `build_ycc_rgb_table` (`jdcolor.c:215-254`) precomputes are the same four
@@ -273,28 +272,30 @@ fn clamp_sample(value: i32) -> u8 {
 
 /// The two byte offsets a known-bad SOF height is patched at.
 ///
-/// `kKnownBadHeaderWithInvalidHeightByteOffsetStarts`,
-/// `libjpeg_scanline_decoder.cpp:26`. They are *positions*, not a search: the
-/// two encoders that emit this header put their SOF segment at one of exactly
-/// these two places, and PDFium declines to guess anywhere else.
+/// They are *positions*, not a search: the two encoders that emit this header
+/// put their SOF segment at one of exactly these two places, and nothing here
+/// guesses anywhere else.
+// The oracle's `kKnownBadHeaderWithInvalidHeightByteOffsetStarts`,
+// `libjpeg_scanline_decoder.cpp:26`.
 const KNOWN_BAD_HEIGHT_OFFSETS: [usize; 2] = [94, 163];
 
-/// How far back from the dimension bytes the SOF marker sits.
-///
-/// `kSofMarkerByteOffset`, used at `libjpeg_scanline_decoder.cpp:290`: two
-/// marker bytes, two length bytes and the one-byte sample precision.
+/// How far back from the dimension bytes the SOF marker sits: two marker
+/// bytes, two length bytes and the one-byte sample precision.
+// The oracle's `kSofMarkerByteOffset`, used at
+// `libjpeg_scanline_decoder.cpp:290`.
 const SOF_MARKER_BACK_OFFSET: usize = 5;
 
 /// Whether a codestream carries the known-bad SOF header with height `0xffff`,
 /// at `offset`.
 ///
-/// `HasKnownBadHeaderWithInvalidHeight`,
-/// `libjpeg_scanline_decoder.cpp:272-303`. Its own comment calls the checks
-/// "lots of possibly redundant" ones, and they are kept in full for the reason
-/// it gives: this rewrites image bytes, so a false positive corrupts a picture
-/// that would otherwise have decoded. The declared width must match the
-/// dictionary's *exactly*, which is what makes a bare height of `0xffff`
-/// insufficient on its own.
+/// The checks are redundant several times over, and they are kept in full for
+/// the reason the oracle gives for its own: this rewrites image bytes, so a
+/// false positive corrupts a picture that would otherwise have decoded. The
+/// declared width must match the dictionary's *exactly*, which is what makes a
+/// bare height of `0xffff` insufficient on its own.
+// `HasKnownBadHeaderWithInvalidHeight`,
+// `libjpeg_scanline_decoder.cpp:272-303`; its own comment calls these "lots of
+// possibly redundant" checks.
 fn has_known_bad_height(data: &[u8], offset: usize, declared: (u32, u32)) -> bool {
     let (width, height) = declared;
     if width == 0 || width > JPEG_MAX_DIMENSION || height == 0 || height > JPEG_MAX_DIMENSION {
@@ -334,10 +335,9 @@ fn big_endian(dimension: u32) -> [u8; 2] {
 ///
 /// `declared` is the image dictionary's `/Width` and `/Height`, which the
 /// codestream normally overrides — see [`probe`]. It is threaded in for the
-/// one case where the codestream is *wrong* and the dictionary is right:
-/// PDFium seeds `cinfo` with the dictionary's dimensions before reading the
-/// header (`libjpeg_scanline_decoder.cpp:85-86`), and when the header is
-/// refused it looks for a specific malformation and rewrites the bytes.
+/// one case where the codestream is *wrong* and the dictionary is right: when
+/// the header is refused, a specific malformation is looked for and the bytes
+/// rewritten from the dictionary's dimensions.
 ///
 /// # Errors
 ///

@@ -208,28 +208,23 @@ impl ColorSpace {
     /// Whether an image's samples in this space have to be **run through the
     /// space** before they are colour.
     ///
-    /// Every family reaches a colour through `GetRGB` somewhere in PDFium's
-    /// image path, but most of them have a shortcut that makes the trip
-    /// unnecessary — and taking the scalar conversion anyway would be a
-    /// divergence rather than a fix, because two of those shortcuts are not
-    /// the scalar conversion. `CPDF_CalGray::TranslateImageLine`
-    /// (`cpdf_colorspace.cpp:725-742`) copies the grey byte into all three
-    /// channels, `CPDF_CalRGB`'s (`:808-816`) is a channel reversal that
-    /// drops gamma and matrix entirely, `CPDF_ICCBasedCS`'s (`:991-1010`)
-    /// runs the profile over bytes, and `CPDF_LabCS`'s (`:899-915`) rescales
-    /// `L*a*b*` out of the **byte** domain rather than out of the decoded
-    /// component range. `Indexed` is handled before this by its palette, and
-    /// `Pattern` never carries image samples at all —
-    /// `TranslateScanline24bpp` skips it explicitly (`cpdf_dib.cpp:1043`).
+    /// Every family could reach a colour through the scalar conversion, but
+    /// most have a bulk shortcut that makes the trip unnecessary — and taking
+    /// the scalar conversion anyway would be a divergence rather than a fix,
+    /// because two of those shortcuts are *not* the scalar conversion.
+    /// `CalGray` copies the grey byte into all three channels; `CalRGB` is a
+    /// channel reversal that drops gamma and matrix entirely; `ICCBased` runs
+    /// the profile over bytes; and `Lab` rescales `L*a*b*` out of the **byte**
+    /// domain rather than out of the decoded component range. `Indexed` is
+    /// handled before this by its palette, and `Pattern` never carries image
+    /// samples at all.
     ///
     /// What is left is `Separation` and `DeviceN`, whose samples are *tints*
     /// driving a tint transform and have no device reading whatsoever. Those
-    /// fall through to the generic `CPDF_ColorSpace::TranslateImageLine`
-    /// (`:636-660`) — `GetRGB` per pixel — and to `LoadPalette`'s
-    /// `1 << bits` precomputation (`cpdf_dib.cpp:894-979`) when the sample
-    /// depth allows it. ISO 32000-1 §8.6.6.4 and §8.6.6.5 say the same: the
-    /// components are colorant tints, and the tint transform is what turns
-    /// them into colour.
+    /// take the generic per-pixel path, and the palette precomputation over
+    /// `1 << bits` entries when the sample depth allows it. ISO 32000-1
+    /// §8.6.6.4 and §8.6.6.5 say the same: the components are colorant tints,
+    /// and the tint transform is what turns them into colour.
     ///
     /// Crate-internal: this is `unpack`'s dispatch rule, not a fact about the
     /// space a caller outside the image build has any use for.
@@ -480,12 +475,11 @@ mod tests {
     /// The bulk `DeviceCMYK` arm this crate runs, and the record of the one
     /// it does not.
     ///
-    /// Pins `CPDF_DeviceCS::TranslateImageLine`'s reachable `kDeviceCMYK` arm
-    /// (`cpdf_devicecs.cpp:119`). The *other* arm — the one behind
-    /// `IsStdConversionEnabled()` — is recomputed here rather than called,
-    /// because it is not implemented: `device::cmyk_to_rgb`'s docs prove it
-    /// can never run in the oracle. It is asserted to disagree, so the record
-    /// stays falsifiable.
+    /// Pins the reachable bulk `DeviceCMYK` arm, the Adobe table. The
+    /// *other* arm — the oracle's standard-conversion formula — is recomputed
+    /// here rather than called, because it is not implemented:
+    /// `device::cmyk_to_rgb` carries the proof that it can never run in the
+    /// oracle. It is asserted to disagree, so the record stays falsifiable.
     #[test]
     fn the_bulk_cmyk_arm_is_the_adobe_table() {
         let cs = ColorSpace::DeviceCmyk;

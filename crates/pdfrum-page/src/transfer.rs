@@ -9,44 +9,47 @@
 //!   `/TR2 /Default` alike disable any transfer function rather than
 //!   installing one.
 //! - The array form needs **at least three elements**. `[oracle-bug]` element
-//!   `i` drives channel `i`, per table 58's `[red green blue gray]` — see the
-//!   note below. Any element failing to load makes the whole transfer
-//!   function null.
+//!   `i` drives channel `i`, per table 58's `[red green blue gray]` — the
+//!   oracle reverses it, see the note on the body below. Any element failing
+//!   to load makes the whole transfer function null.
 //!
-//! # The oracle's array reversal is real, and it is a bug
+//! # Element `i` drives channel `i`
 //!
-//! It is easy to conclude the opposite from the oracle's own unit test.
-//! `CPDFDocRenderDataTest.TransferFunctionArray` builds the array
-//! `[Type0, Type2, Type4]` and asserts `GetSamplesR() ==
-//! kExpectedType0FunctionSamples` — which reads as "element 0 drives red".
-//! **The constants are misnamed.** `kExpectedType0FunctionSamples` begins
-//! `0, 3, 6, 9, 13, 16, …` and ends `…, 250, 253, 0`, which is the *type 4*
-//! program `{ 360 mul sin 2 div }` sampled at `v / 255` — a full sine period,
-//! verified to match all 256 entries exactly. `kExpectedType4FunctionSamples`
-//! is flat at 25/26, which is the *type 0* sampled function's ramp over its
-//! `/Range [0 0.5]`. Only `kExpectedType2FunctionSamples` is named for the
-//! function it actually holds.
-//!
-//! The test's ten `TranslateColor` pairs settle it independently, without
-//! having to name any function: `TranslateColor(0x00FFFFFF)` yields
-//! `0x001A0D00`, and `FX_COLORREF` packs as `(b << 16) | (g << 8) | r`, so
-//! `samples_r[255] == 0`, `samples_g[255] == 13`, `samples_b[255] == 26`.
-//! Zero is the type 4 program's last sample, 13 the type 2 function's, and 26
-//! the type 0 function's — i.e. in the oracle **`array[2]` is red and
-//! `array[0]` is blue**, exactly what `pFuncs[2 - i] = Load(array[i])` reads
-//! like literally.
-//!
-//! **`[oracle-bug]` A9.** `cpdf_docrenderdata.cpp:90` is
-//! `pFuncs[2 - i] = Load(array[i])` while `:113-114` names `samples[0]` as
-//! `samples_r`. The consumption side was traced end to end and there is no
-//! second reversal, so PDFium renders `/TR [fR fG fB]` as `[fB fG fR]` —
-//! invisible whenever the three functions are equal, which is why it has
-//! survived. §8.6.5.9 / table 58 give the array as `[red green blue gray]`, so
-//! `array[0]` is red; table 58 also specifies **four** functions, where
-//! PDFium requires `size() >= 3` and never reads `array[3]`. pdf.js preserves
-//! the order (`evaluator.js:944-959` pushes in order,
-//! `filter_factory.js:212` destructures `[tableR, tableG, tableB]`). We take
-//! element `i` for channel `i`, and read `array[3]` as gray when present.
+//! §8.6.5.9 / table 58 give the array as `[red green blue gray]`, so
+//! `array[0]` is red and `array[3]` is gray, which we read when present. The
+//! oracle reverses the first three and requires exactly three; audit item
+//! **A9** records the divergence, and the derivation is a `//` note below.
+
+// [oracle-bug] A9. `cpdf_docrenderdata.cpp:90` is
+// `pFuncs[2 - i] = Load(array[i])` while `:113-114` names `samples[0]` as
+// `samples_r`. The consumption side was traced end to end and there is no
+// second reversal, so PDFium renders `/TR [fR fG fB]` as `[fB fG fR]` —
+// invisible whenever the three functions are equal, which is why it has
+// survived. Table 58 also specifies **four** functions, where PDFium requires
+// `size() >= 3` and never reads `array[3]`. pdf.js preserves the order
+// (`evaluator.js:944-959` pushes in order, `filter_factory.js:212`
+// destructures `[tableR, tableG, tableB]`).
+//
+// It is easy to conclude the opposite from the oracle's own unit test.
+// `CPDFDocRenderDataTest.TransferFunctionArray` builds the array
+// `[Type0, Type2, Type4]` and asserts `GetSamplesR() ==
+// kExpectedType0FunctionSamples` — which reads as "element 0 drives red".
+// **The constants are misnamed.** `kExpectedType0FunctionSamples` begins
+// `0, 3, 6, 9, 13, 16, …` and ends `…, 250, 253, 0`, which is the *type 4*
+// program `{ 360 mul sin 2 div }` sampled at `v / 255` — a full sine period,
+// verified to match all 256 entries exactly. `kExpectedType4FunctionSamples`
+// is flat at 25/26, which is the *type 0* sampled function's ramp over its
+// `/Range [0 0.5]`. Only `kExpectedType2FunctionSamples` is named for the
+// function it actually holds.
+//
+// The test's ten `TranslateColor` pairs settle it independently, without
+// having to name any function: `TranslateColor(0x00FFFFFF)` yields
+// `0x001A0D00`, and `FX_COLORREF` packs as `(b << 16) | (g << 8) | r`, so
+// `samples_r[255] == 0`, `samples_g[255] == 13`, `samples_b[255] == 26`.
+// Zero is the type 4 program's last sample, 13 the type 2 function's, and 26
+// the type 0 function's — i.e. in the oracle `array[2]` is red and `array[0]`
+// is blue, exactly what `pFuncs[2 - i] = Load(array[i])` reads like
+// literally.
 
 use crate::function::{Function, FunctionCache};
 use pdfrum_common::{Diagnostics, Limits};
@@ -157,22 +160,26 @@ impl TransferFunc {
 /// Sample one channel: 256 inputs from `i / 255`, rounded and **saturated**
 /// into a byte.
 ///
-/// `[oracle-bug]` A10. `cpdf_docrenderdata.cpp:124` is
-/// `size_t o = FXSYS_roundf(output[0] * 255); samples[i][v] = o;` — no clamp,
-/// so a function whose `/Range` admits negatives folds its lower half onto
-/// the **top** of the byte range. The oracle's own type 4 fixture,
-/// `{ 360 mul sin 2 div }` over `[-1 1]`, is one:
-/// `CPDFDocRenderDataTest.TransferFunctionArray` pins `-121.26` arriving at
-/// `0xCC` as `0x87`. It is a bug twice over — a negative float converted to
-/// an unsigned integer type is undefined behaviour in C++ — and §7.10.1
-/// requires the output be clipped to `/Range` before use, which `eval_into`
-/// already does here (`function/mod.rs:162-174`); the remaining step is that
-/// the byte store saturate rather than wrap. pdf.js clamps to `/Range`
-/// (`function.js:265`) and then to the byte range
-/// (`evaluator.js:888-896`). We saturate, so `-121.26` is `0x00`.
+/// `[oracle-bug]` A10. §7.10.1 requires the output be clipped to `/Range`
+/// before use, which `eval_into` already does, and the byte store here
+/// **saturates** rather than wrapping — so a function whose `/Range` admits
+/// negatives gives `0x00` at its bottom, not a value folded onto the top of
+/// the byte range. The oracle wraps; see the note on the body.
 ///
 /// A function with too many outputs is skipped and the identity used — the
 /// `[oracle-bug]` on [`MAX_OUTPUTS`], at the line where it bites.
+// [oracle-bug] A10. `cpdf_docrenderdata.cpp:124` is
+// `size_t o = FXSYS_roundf(output[0] * 255); samples[i][v] = o;` — no clamp,
+// so a function whose `/Range` admits negatives folds its lower half onto the
+// **top** of the byte range. The oracle's own type 4 fixture,
+// `{ 360 mul sin 2 div }` over `[-1 1]`, is one:
+// `CPDFDocRenderDataTest.TransferFunctionArray` pins `-121.26` arriving at
+// `0xCC` as `0x87`. It is a bug twice over — a negative float converted to an
+// unsigned integer type is undefined behaviour in C++. The clip to `/Range`
+// is in `function/mod.rs`'s `eval_into`; the remaining step is that the byte
+// store saturate rather than wrap. pdf.js clamps to `/Range`
+// (`function.js:265`) and then to the byte range (`evaluator.js:888-896`).
+// We saturate, so `-121.26` is `0x00`.
 fn sample_channel(func: &Function, out: &mut [u8; CHANNEL_SAMPLES]) {
     if func.output_count() > MAX_OUTPUTS {
         for (i, slot) in out.iter_mut().enumerate() {
@@ -299,11 +306,9 @@ mod tests {
         ]))
     }
 
-    /// Audit item **A9**. This asserted the oracle's reversal —
-    /// `array[2]` red, `array[0]` blue — from
-    /// `cpdf_docrenderdata.cpp:90`'s `pFuncs[2 - i] = Load(array[i])`.
-    /// Table 58 gives the array as `[red green blue gray]`, so element `i`
-    /// drives channel `i`.
+    /// Audit item **A9**. This asserted the oracle's reversal — `array[2]`
+    /// red, `array[0]` blue. Table 58 gives the array as
+    /// `[red green blue gray]`, so element `i` drives channel `i`.
     #[test]
     fn the_first_array_element_drives_red() {
         // Three constants no two of which collide, so the mapping of array

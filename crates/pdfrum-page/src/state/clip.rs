@@ -57,11 +57,10 @@ pub enum ClipEntry {
     /// The *objects*, not their outlines, because turning a run into glyph
     /// outlines needs the placement arithmetic — advances, kerning, word and
     /// character spacing, the substituted-font width solve — that lives in the
-    /// renderer beside the code that draws the same run normally. Upstream
-    /// keeps `CPDF_TextObject`s here for the same reason and calls
-    /// `ProcessText` on each at clip time (`cpdf_renderstatus.cpp:573-582`);
-    /// deriving them twice, once for painting and once for clipping, is how
-    /// the two would drift apart.
+    /// renderer beside the code that draws the same run normally. The oracle
+    /// holds text objects here for the same reason and lays each one out at
+    /// clip time; deriving them twice, once for painting and once for
+    /// clipping, is how the two would drift apart.
     Text {
         /// The runs, in the order they were shown.
         runs: Vec<TextClipRun>,
@@ -139,8 +138,8 @@ impl ClipStack {
 
     /// Add a batch of clipping text runs.
     ///
-    /// A batch taking the total past [`MAX_TEXT_OBJECTS`] is **dropped whole**,
-    /// not truncated (`CPDF_ClipPath::AppendTexts`, `cpdf_clippath.cpp:104-112`).
+    /// A batch taking the total past [`MAX_TEXT_OBJECTS`] is **dropped
+    /// whole**, not truncated — no prefix of it clips.
     ///
     /// # Errors
     ///

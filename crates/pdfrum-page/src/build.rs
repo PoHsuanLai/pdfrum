@@ -77,12 +77,10 @@ pub struct BuildContext {
     /// asks for every sample, which is what a build with no render target
     /// behind it wants.
     ///
-    /// One value per build rather than one per image, because that is the
-    /// granularity the oracle works at: `CPDF_ImageRenderer::StartLoadDIBBase`
-    /// fills `max_size_required` from the *render device's* dimensions
-    /// (`cpdf_imagerenderer.cpp:74-77`), so the question is how much bigger an
-    /// image is than the whole page bitmap, not how small a rectangle it lands
-    /// in.
+    /// One value per build rather than one per image: the size that matters
+    /// is the render target's, so the question a decode hint answers is how
+    /// much bigger an image is than the whole page bitmap, not how small a
+    /// rectangle it lands in.
     pub decode_target: RequestedSize,
     /// Fonts.
     pub fonts: FontCache,
@@ -518,9 +516,9 @@ pub fn build_page_streams<R: Resolve>(
 /// Build one form `XObject` as a standalone page object, placed by `matrix`.
 ///
 /// This is the `Do` handler's body reached from outside a content stream,
-/// which is what an **annotation appearance** needs: `CPDF_Annot::DrawInContext`
-/// hands `CPDF_Form` the annotation matrix rather than a CTM built up by
-/// operators, and the result is appended to the page's own object list.
+/// which is what an **annotation appearance** needs: the annotation matrix is
+/// handed in directly rather than built up by operators, and the result is
+/// appended to the page's own object list.
 ///
 /// The form's `/Matrix` composes with `matrix` exactly as it would inside a
 /// `Do`, and a missing `/BBox` is **no clip at all** rather than an empty one.
@@ -654,8 +652,6 @@ struct Interp<'a, R: Resolve> {
     /// The current point.
     current: Point,
     /// Runs a clipping text mode has accumulated since the last `ET`.
-    ///
-    /// `clip_text_list_`, `cpdf_streamcontentparser.cpp:1359-1361`.
     text_clip: Vec<TextClipRun>,
     resources: &'a Resources,
     /// The form's or page's coordinate system, which patterns anchor to —
@@ -1969,14 +1965,13 @@ fn build_path(points: &[(Point, PointKind)]) -> BezPath {
 
 /// What `scn` found when it named a pattern.
 ///
-/// The two halves are separate because `FindPattern` and the pattern's own
-/// `Load` are separate in the C++ and fail differently.
-/// `FindPattern` (`cpdf_streamcontentparser.cpp:1295-1303`) checks only that
-/// the resource exists and is a dictionary or a stream; **that** is what
-/// decides whether `scn` installs a pattern colour at all. Whether the
-/// pattern is *usable* — a `/PatternType` it recognises, a shading it can
-/// validate, steps it can tile with — is answered later, at draw time, and a
-/// failure there means the object paints **nothing**.
+/// The two halves are separate because finding the resource and loading the
+/// pattern fail differently. Finding it checks only that the resource exists
+/// and is a dictionary or a stream; **that** is what decides whether `scn`
+/// installs a pattern colour at all. Whether the pattern is *usable* — a
+/// `/PatternType` it recognises, a shading it can validate, steps it can tile
+/// with — is answered later, at draw time, and a failure there means the
+/// object paints **nothing**.
 ///
 /// Collapsing the two makes an `scn` naming an unusable pattern a no-op, so
 /// the object keeps whatever colour was current and paints solid. On a
@@ -2224,10 +2219,9 @@ mod tests {
         assert!(clip_kinds(&page).is_empty());
     }
 
-    /// `Handle_EndText` re-reads the mode **at `ET`**
-    /// (`cpdf_streamcontentparser.cpp:926`), not the one each run was shown
-    /// under, so a run collected under `Tr 7` is discarded when the mode has
-    /// gone back to filling before the text object closes.
+    /// The render mode is re-read **at `ET`**, not the one each run was
+    /// shown under, so a run collected under `Tr 7` is discarded when the
+    /// mode has gone back to filling before the text object closes.
     #[test]
     fn the_mode_at_et_decides_whether_the_batch_is_kept() {
         let (page, _) = build(b"BT /F1 24 Tf 7 Tr 10 10 Td (Hi) Tj 0 Tr ET 0 0 50 50 re f");
