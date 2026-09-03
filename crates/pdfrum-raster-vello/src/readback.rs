@@ -1,8 +1,8 @@
 //! The GPU round trip: scene in, host pixels out.
 //!
 //! Four steps, and an embedder rendering a page to a texture pays the first
-//! three of them whatever it does with the result — which is why
-//! `docs/status/M12c.md` §8 times all four rather than just the dispatch:
+//! three of them whatever it does with the result, so the cost of a render is
+//! all four and not just the dispatch:
 //!
 //! 1. allocate a storage texture the fine-rasterization stage can write,
 //! 2. dispatch vello's pipelines into it,

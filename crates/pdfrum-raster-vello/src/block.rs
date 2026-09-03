@@ -3,9 +3,8 @@
 //! `wgpu` 29's `request_adapter` and `request_device` are async and its
 //! `map_async` is callback-shaped, while this crate is a synchronous
 //! rasterizer behind a synchronous trait. The ecosystem's answer is
-//! `pollster`, which DEPS.md's closed set does not contain and which is not
-//! worth a `[spec]` change for forty lines — STYLE.md §5 says to write the
-//! forty lines.
+//! `pollster`, which is outside this workspace's dependency set and not worth
+//! adding for forty lines, so the forty lines are here.
 //!
 //! Two primitives, and the distinction between them is a deadlock rather than
 //! a slowdown:
@@ -20,8 +19,8 @@
 //!
 //! Both are bounded. `wgpu`'s own `wait_indefinitely` is the obvious spelling
 //! and it is the wrong one for a benchmark: a lost device or a wedged driver
-//! would hang the suite forever, and PLAN.md §M12c's guardrails say a GPU test
-//! must degrade rather than hang.
+//! would hang the suite forever, and a GPU test must degrade rather than
+//! hang.
 //!
 //! Bounded is not the same as spinning, and only [`block_on`] spins. It has to:
 //! a plain future has no object to wait *on*, so the loop re-polls, and the
