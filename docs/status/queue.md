@@ -254,7 +254,12 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
   bounds until then. **§15 tried again and could not deliver it**: the brief
   made `shading` and `forms` conditional on load < 30, the 1-minute average
   read 27.4 when the run was armed and 33–49 through it, so those two classes
-  were *not* re-taken and the item stands for the eighth time (§15.3).
+  were *not* re-taken and the item stood for the eighth time (§15.3).
+  **§18.2 very nearly discharges it**: all 44 rows at **load 6–10**, the
+  quietest any table here has had, and `shading` and `forms` finally taken.
+  Not fully — §3 asks for idle and the 1-minute average moved 6.06 → 10.16
+  across the run — but §18.2 is the first table in this document whose
+  milliseconds are worth reading.
 - ~~the AGG blit's per-row scaffolding~~ — landed as §14: `AggDevice::blit`
   now walks the rows itself through one `Target::blit_image` instead of a
   `blend_span_with` per row. **The blit is 1.56-1.61x faster**, worth 1.5 ms
@@ -297,28 +302,54 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
   still the largest line** — §13–§16's figures all stand, they were shares of
   a denominator that was 78% something else — and `place_glyphs_into` at
   1.39 ms is still the unsplit item above it.
-- **`--sample` and `--walk` cannot see a whole render, and nothing replaces
-  them.** Both sit at or below `render_page_with`: `--sample` builds the page
-  graphs *outside* its loop and calls `render_page_with` directly, so it sees
-  neither the per-iteration page-graph rebuild nor the annotation pass, and
-  `--walk` sits inside `render_page_with`. That is why three sections read a
-  well-behaved 7–12 ms document inside a 54–145 ms render and why
-  `INTERPRETATION` never added up (§17.2). §17 used temporary `Instant` pairs
-  in `Page::paint` and removed them; **a whole-render instrument is owed**,
-  and until there is one, any share quoted from `--sample` is a share of the
-  raster half alone.
-- **`Page::render_on` rebuilds the page graph every call, and the oracle does
-  not.** `CPDF_Page::ParseContent` returns immediately at `kParsed` and
-  `pdfium_test` memoizes `FPDF_LoadPage`, so `--render-repeats` amortizes the
-  parse, the interpretation and the form-field appearances that our warm loop
-  pays per iteration (§17.1). The graph build is 4–8% of `size14` after §17,
-  so it is not urgent — but **every oracle-relative ratio in this document is
-  our whole per-page pipeline against the oracle's raster half**, and that is
-  not what §10.5 or §15 say they measure.
-- **`pdfrum-tool --md5` renders nothing.** It returns in 0.02 s against the
-  oracle's 0.17 s and prints no `MD5:` line, so `--png` is the only
-  end-to-end pair that does the same work on both sides (§17.1). Small, and
-  it silently makes an obvious like-for-like invalid.
+- ~~**`--sample` and `--walk` cannot see a whole render.**~~ — **landed as
+  §2's instrument**: `pdfrum_page::renderprofile`, eight stages placed
+  *around* `render_page_with` rather than inside it, so their sum plus one
+  printed remainder is the ms/iteration figure above them (0.1–4.8% across the
+  corpus). `form fonts` carries a **miss count beside its call count**, which
+  is the row §17 needed and did not have. It reproduces §17.2's `size14`
+  split on the pre-§17 binary to within a point — `FormFonts` **78.2%** against
+  §17.2's 77.2%, 9 calls and **9 misses**, raster 13.1% against 13.9%, 99.1%
+  attributed against 99.3% — and §17.2's three controls likewise. Read it with
+  `scripts/profile.nu render <file> <iters> <backend> --warm --walk`. No public
+  surface moved: the module is `pub` only under the feature, as
+  `walkprofile` is, and the two crates above it forward a `walk-profile` of
+  their own.
+- ~~**every oracle-relative ratio is our whole pipeline against the oracle's
+  raster half**~~ — **corrected in §18**, and the correction is worth more
+  than any change §11–§17 landed. §18.1 takes option (a): ours is measured the
+  way the oracle amortizes, `whole − (content parse + interpretation)`, both
+  terms out of **one** run of §2's instrument so the subtraction is a
+  measurement rather than an estimate. §17's "4–8% of `size14`" was wrong —
+  the graph build is **38% of `size14`, 63% of `en_system` and 65% of
+  `en_fqa`**. All 44 rows re-taken on the corrected pairing at **load 6–10**,
+  the quietest table in the document: **nine rows above 1.5x, against
+  nineteen on the old pairing**. `image_en_fqa` **3.34x → 1.16x** and
+  `vector_en_system` **2.15x → 0.79x** are not defects at all. `text`,
+  `forms`, `shading` and `mixed` have oracle-relative rows for the first
+  time; geomeans 0.13x / 0.52x / 0.56x / 0.78x / 0.68x / 0.63x (§18.2).
+- **DECISION OWED: should `Page` retain its built graph across `render_on`
+  calls, the way `CPDF_Page` does?** §18.1 argues it and **deliberately does
+  not implement it** — it is a design change, not a measurement one. The cost
+  is measured: a page graph holds its **decoded images**, so
+  `image_bug_583804` retains **176 MB for one page** and `image_en_fqa`
+  +21.8 MB over four. `CPDF_PageImageCache` is the oracle's equivalent and it
+  has an eviction policy we would not. It would make our loop natively
+  comparable and remove §18.1's subtraction; it also changes what
+  `Page::render_on` promises about lifetime. **The user's call.**
+- ~~**`pdfrum-tool --md5` renders nothing.**~~ — **landed**: the no-format arm
+  now rasterizes, as the oracle's `default:` case does ("Other formats won't
+  write the output to a file, but still rasterize"). `vector_font_size14`
+  goes 0.04 s → 1.85 s, which is nine pages of render where there were none.
+  **§17.1's "prints no `MD5:` line" was a defect report about the wrong half**:
+  the oracle prints none either, verified against both its source and its
+  binary — `BitmapPageRenderer::Write` returns early on a null writer, and
+  `--md5`'s own help text says it writes "output image **paths** and their md5
+  hashes", so with no file there is no line. Only the *render* was missing.
+  `render` split into `rasterize` plus `encode` so the no-output path pays
+  neither the hash nor the PNG encoder, which the oracle does not pay there.
+  No conformance pass uses `--md5` alone, so the board cannot move — and does
+  not (`per_file` equal across all 1757 entries, both binaries run).
 - **`BitmapCache::get_or_insert`'s second hash probe is named, measured and
   cannot be removed.** The hit path is 100% of calls and asks `contains_key`
   then `get`. Returning the occupied entry's borrow is NLL problem case 3 —
@@ -348,11 +379,45 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
   here: a zero-glyph control read 1.055x in the same table (§13.5). Board
   byte-identical, tier-c unchanged. Kept for the allocations it removes, not
   for a figure it moves.
-- `shading_type4_5` 4.38x and `shading_tcpdf_058` 1.88x are §10.5's and have
-  not been re-taken (§15 covered `image` and `vector` only). `image_en_fqa`
-  and `image_ccitt_3bigpreview` were re-taken and read **3.15x** and **2.27x**
-  at loads 49 and 40, against §10.5's 2.03x and 1.66x at a lower load — the
-  movement is the box, and both remain residue of the same shape.
+- ~~`shading_type4_5` 4.38x and `shading_tcpdf_058` 1.88x have not been
+  re-taken~~ — **both re-taken in §18.2**, like-for-like at load 6–10:
+  `shading_type4_5` **2.67x** (a 0.27 ms oracle row — the least trustworthy
+  band in the table) and `shading_tcpdf_058` **8.67x**, which is the corpus's
+  largest ratio and is split in §18.3. `image_en_fqa` reads **1.16x**
+  like-for-like against §15's 3.15x — 65% of it was the graph build — and
+  `image_ccitt_3bigpreview` **2.45x**, which is real residue.
+- **`shading_tcpdf_058` at 8.67x: off-page clip paths are sorted and swept and
+  then discarded.** Named and measured in §18.3, **not fixed** — it is a change
+  to the shared scanline integrator and needs its own board and tier-c cycle.
+  **Fourteen of its 64 clip paths per render have bounding boxes tens of
+  thousands of device units off a 595x842 page** — `24561 x 92164` and
+  `31910 x 58307` among them — and they cost **31.7 ms, 97% of the sweep and
+  68% of the whole render**. §11's banded intersection (2 µs) and §12's plane
+  pool (17 µs) are both working and are *not* the cost: `Rasterizer`
+  accumulates a cell for every scanline the **path** crosses, `CellStore::sort`
+  sorts all **530 073** of them per iteration, `sweep` walks every row, and
+  then `coverage_of`'s callback drops each one outside the target with
+  `if row >= h { return; }`. The work is done and thrown away. **The fix is
+  not in the path**: `hard_clip`'s ±32000 clamp is a deliberate artefact
+  reproducing the oracle's 16-bit truncation and the clamped vertex is
+  observable in the pixels. It goes in `pdfrum-render`'s `scanline`, dropping
+  a cell whose row cannot be written — byte-identical, because those spans are
+  already discarded by every consumer. Judge the fix by §18.3's table: 23.1 ms
+  of sort and 4.6 ms of row walk should fall to what `forms_text_field` pays,
+  and the row from 8.67x to about 1.2x.
+- **`mixed_en_uicase` at 3.71x is a different shape and must not be conflated
+  with it.** 257 619 cell rows per iteration but **837 sweeps**, row walk
+  37.3 ms against 5.2 ms of sort, and **zero** off-page clips. Many small
+  sweeps. The item above will not move it (§18.3).
+- **Seven more rows above 1.5x like-for-like, all of them in the rasterizer.**
+  `vector_font_feature` 2.67x (90.9% raster), `shading_type4_5` 2.67x,
+  `image_ccitt_3bigpreview` 2.45x (87.5% raster), `image_ccitt_transfer`
+  2.31x, `forms_list_box` 1.74x, `image_jpx_123` 1.70x (99.4% raster),
+  `forms_number` 1.56x. That is the opposite of §17's finding and is the
+  correction the pairing was for: with §17's annotation-pass defect fixed and
+  the graph build paired correctly, **everything left is raster** (§18.2).
+  Four of the seven have oracle columns under 1.1 ms and their ratios are the
+  least trustworthy in the table.
 
 ## Unwired oracle ports (`docs/status/unwired-oracle-ports.md`)
 
