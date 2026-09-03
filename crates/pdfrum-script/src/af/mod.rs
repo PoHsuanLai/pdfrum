@@ -1,23 +1,15 @@
 //! Acrobat `AF*` field helpers as pure functions.
 //!
-//! Every function here is a transformation of text (plus, for dates, an
-//! explicit "now" in milliseconds). There is no JavaScript engine, no form
-//! session, and no field lookup.
+//! Every function here is a transformation of text, plus for dates an
+//! explicit "now" in milliseconds. No engine, no session, no field lookup.
 //!
-//! # What the host is asked for comes back as data
+//! **What the host is asked for comes back as data.** Raising an alert and
+//! recolouring the field's text are *returned* rather than performed, as
+//! [`AfEffects`] — which is how the negative styles that carry their sign in
+//! the colour are fully reproduced.
 //!
-//! Two things Acrobat does through its host a pure function cannot do: raise
-//! an alert, and recolour the target field's text. Both are *returned* rather
-//! than performed, as [`AfEffects`] — a list of [`AfAlert`]s and an optional
-//! [`AfColor`]. That is why the negative styles that carry their sign in the
-//! colour rather than in a minus sign are fully reproduced here: the string
-//! half is in the outcome and the colour half is in the effects, and the
-//! caller applies the colour once it has a field to apply it to.
-//!
-//! An alert also travels with an error. Rejecting a keystroke and throwing are
-//! different answers, and the one path that does *both* — throw an exception
-//! **and** notify the user — returns the alert alongside the error as
-//! [`Thrown`], rather than dropping the notification on the floor.
+//! An alert also travels with an error: the one path that throws **and**
+//! notifies returns both as [`Thrown`].
 
 mod calc;
 mod date;

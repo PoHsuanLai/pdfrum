@@ -1,7 +1,7 @@
-//! Number parsing matching `core/fxcrt/fx_string.cpp` and C `atof`.
+//! Number parsing, matching the oracle's own string-to-number routines and C
+//! `atof` rather than Rust's `f64::from_str`.
 
-/// Trim only ASCII spaces, matching `StrTrim(str)` / `Trim(' ')` in
-/// `cjs_publicmethods.cpp`.
+/// Trims **only ASCII spaces** — not tabs, newlines or other whitespace.
 #[must_use]
 pub fn trim_spaces(s: &str) -> &str {
     s.trim_matches(' ')
@@ -30,8 +30,8 @@ pub fn is_ascii_alnum(c: char) -> bool {
     c.is_ascii_alphanumeric()
 }
 
-/// Skip leading spaces and extra `+`/`-`, leaving at most the minus immediately
-/// before the first digit — `ParseLeadingChars` in `fx_string.cpp`.
+/// Skips leading spaces and extra `+`/`-`, leaving at most the minus
+/// immediately before the first digit.
 fn parse_leading_chars(s: &str) -> &str {
     let bytes = s.as_bytes();
     let mut start = 0;
@@ -148,8 +148,8 @@ pub fn c_atof(input: &str) -> f64 {
     parse_scanned(bytes, i, end)
 }
 
-/// `StringToDouble` / `StringToFloatImpl` in `fx_string.cpp`: skip extra signs,
-/// then parse a floating prefix. Does not require consuming the whole string.
+/// Skips extra signs, then parses a floating **prefix** — the whole string
+/// need not be consumed, so `"12abc"` is 12.
 #[must_use]
 pub fn string_to_double(input: &str) -> f64 {
     let rest = parse_leading_chars(input);

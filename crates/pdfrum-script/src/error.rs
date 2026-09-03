@@ -1,23 +1,15 @@
 //! Errors, alerts and colour effects this crate can return.
 //!
-//! `Err` is for the cases the C++ throws a JavaScript exception
-//! (`CJS_Result::Failure`). Keystroke rejection (`event.rc = false` without a
-//! throw) is [`crate::af::AfOutcome::Rejected`] /
-//! [`crate::af::KeystrokeOutcome::Reject`], not an error.
+//! `Err` is for the cases that throw a JavaScript exception; a keystroke
+//! *rejection* is [`crate::af::AfOutcome::Rejected`] /
+//! [`crate::af::KeystrokeOutcome::Reject`] instead, not an error.
 //!
-//! # The message strings are API, not diagnostics
-//!
-//! Acrobat's message table has no localisation layer, and the golden
-//! transcripts compare the thrown text character for character — for example
-//! `AFNumber_Keystroke: The input value is invalid.` and the notification line
-//! `AFNumber_Keystroke[icon=3,type=0]: The input value is invalid.`. Both
-//! [`Error`]'s `Display` and [`AfAlert`]'s therefore reproduce the table
-//! verbatim, including the two entries that are bare literals rather than
-//! table rows and so carry **no trailing period**
+//! **The message strings are API, not diagnostics.** Acrobat's table has no
+//! localisation layer and the conformance transcripts compare the thrown text
+//! character for character, so `Display` reproduces it verbatim — including
+//! the two entries that carry **no trailing period**
 //! ([`Error::NoEventHandler`] and [`Error::DateKeystrokeArity`]).
-//!
-//! Changing any string in this file changes observable behaviour. Do not
-//! "tidy" the capitalisation or the punctuation.
+//! Changing any string here changes observable behaviour.
 
 /// What went wrong in an AF* / util.* helper.
 ///

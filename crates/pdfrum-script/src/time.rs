@@ -1,4 +1,4 @@
-//! Date/time arithmetic matching `fxjs/fx_date_helpers.cpp`.
+//! Date and time arithmetic.
 //!
 //! The time value is milliseconds from 1970-01-01 00:00:00, the same number
 //! ECMAScript `Date` uses. There is no machine timezone: callers who want
@@ -769,7 +769,8 @@ pub fn print_date_using_format(date_ms: f64, format: &str) -> String {
     out
 }
 
-/// Heuristic `ParseDate` in `cjs_publicmethods.cpp` (no V8 `Date.parse`).
+/// The heuristic date parser Acrobat applies, which is **not** ECMAScript
+/// `Date.parse`.
 ///
 /// Missing pieces stay at `now_ms`. Two-digit groups are month/day (or
 /// day/month if that is the only valid assignment). Three groups try

@@ -8,7 +8,8 @@ use super::{
 use crate::error::{AfColor, AlertMessage, Error};
 use crate::parse::{c_atof, is_decimal_digit, is_number, normalize_decimal_mark, trim_spaces};
 
-/// Nudge added when `nDec > 0` (`kDoubleCorrect` in `cjs_publicmethods.cpp`).
+/// Nudge added when `nDec > 0`, so a value a hair under a rounding boundary
+/// rounds the way Acrobat's does.
 const DOUBLE_CORRECT: f64 = 0.000_000_000_000_001;
 /// `std::numeric_limits<double>::digits10`.
 const DOUBLE_DIGITS10: i32 = 15;
