@@ -2586,3 +2586,289 @@ moving under all three; §15.2 records the same effect in the other direction.
 - **`tiny-skia` and `vello_cpu` get the change and were not measured.** The
   cache is in `pdfrum-page`, above every backend; only AGG was timed.
 - **The ratchet is still not re-baselined.** §8's third bullet stands.
+
+---
+
+## 18. Like-for-like: the pairing corrected, and the whole corpus re-taken on it
+
+**Taken 2026-09-03/04, on the same box, at load 6–10 — the quietest it has
+been for any table in this document.** §17.1 established that
+`pdfium_test --render-repeats` parses once (`ParseContent` returns at
+`kParsed`, `FPDF_LoadPage` memoized) while our warm loop rebuilds the page
+graph every iteration, so **every ratio in §10.5 and §15 was our whole
+per-page pipeline against the oracle's raster half**. This section fixes the
+pairing and re-takes all 44 rows on it, and the headline is that the
+correction is worth more than any change §11–§17 landed:
+
+**Nine rows of forty-four are above 1.5x like-for-like, against nineteen on
+the old pairing. The graph rebuild was up to 65% of a row.**
+
+Two rows the previous sections named as residue are not defects at all:
+`image_en_fqa` goes **3.34x → 1.16x** and `vector_en_system` **2.15x →
+0.79x**, and in both cases the whole gap was work the oracle amortizes.
+
+### 18.1 The decision: measure ours the way the oracle amortizes
+
+Two pairings were possible and the brief asked for one, with numbers.
+
+**Taken: option (a).** Ours is measured the way the oracle amortizes — the
+graph built once, the render repeated — and the figure is produced by §2's
+whole-render instrument rather than by a second loop:
+
+```
+amortized = (whole warm render) − (content parse + interpretation)
+```
+
+Both terms come out of **one** `profile --op render --warm` run, so they
+describe one and the same render rather than two arms taken minutes apart.
+That is what makes this subtraction a measurement and not an estimate, and it
+is the reason §2's instrument had to land first. Its unattributed remainder is
+**0.1–4.8%** across the corpus, which bounds the error in the subtraction.
+
+**Declined: option (b), `Page` retaining its built graph across `render_on`
+calls.** It is the change that would make our loop *natively* comparable, and
+it is a real design change rather than a measurement one, so it is argued here
+and **not implemented** — it goes to the queue for the user's decision.
+
+The argument against doing it silently is the retained memory, measured rather
+than guessed. Peak RSS of holding every page graph of one document at once,
+against building each and dropping it, with no render in either arm:
+
+| fixture | pages | graphs held | built and dropped | retained |
+|---|---:|---:|---:|---:|
+| `image_bug_583804` | 1 | 175.97 MB | 176.22 MB | **176 MB for one page** |
+| `image_en_fqa` | 4 | 31.73 MB | 9.89 MB | **+21.8 MB** |
+| `vector_en_system` | 1 | 29.01 MB | 30.08 MB | 29 MB for one page |
+| `vector_en_tem` | 6 | 12.70 MB | 4.54 MB | +8.2 MB |
+| `vector_font_size14` | 9 | 3.92 MB | 0.98 MB | +2.9 MB |
+| `text_foxit_products` | 11 | 3.00 MB | 1.70 MB | +1.3 MB |
+| `forms_text_field` | 3 | 2.09 MB | 2.02 MB | +0.07 MB |
+| `shading_axial_radial` | 1 | 0.96 MB | 0.86 MB | +0.10 MB |
+
+A page graph holds its **decoded images**, which is why `image_bug_583804`'s
+single page is 176 MB. Retaining that for a `Page`'s whole lifetime changes
+what `Page::render_on` promises: today the memory a render needs lives for the
+render, and a caller who walks a thousand-page document holding a `Page` at a
+time pays a page at a time. `CPDF_Page` does hold its parsed content, and
+`CPDF_PageImageCache` is where the oracle's decoded images live — but the
+oracle also has an eviction policy for it and we would not.
+
+So the honest position is: option (a) is the right *measurement* and it is
+taken here; option (b) is a plausible *design*, its cost is the table above,
+and it is the user's call rather than a benchmark's.
+
+### 18.2 The table, all forty-four rows
+
+Method: `scripts/bench-oracle.nu`'s marginal-pass formula
+`(t[21] − t[1]) / 20` against `pdfium_test --md5 --render-repeats`, minimum of
+five rounds, one untimed warm-up first — run over the whole corpus in one
+stretch so the oracle column is internally consistent. Ours is
+`profile --op render --warm` at 21 iterations, backend AGG, **minimum of three
+rounds**, with §2's instrument splitting each run. PDFs were copied to a
+scratch directory first, because `pdfium_test` writes beside its input and the
+oracle tree is read-only.
+
+**`whole`** is our whole per-page pipeline — the quantity §10.5 and §15
+divided by the oracle. **`amortz`** is that minus the graph build, which is
+what the oracle's loop actually runs. **`build%`** is how much of our render
+the oracle amortizes away. Ratios are ours over the oracle's, so **> 1 is
+pdfrum being slower**; `ratioA` is the one that means what it says.
+
+#### `image`
+
+| fixture | oracle (ms) | whole (ms) | amortz (ms) | build% | ratioW | **ratioA** |
+|---|---:|---:|---:|---:|---:|---:|
+| `image_bug_583804` | 157.42 | 107.06 | 107.04 | 0% | 0.68x | **0.68x** |
+| `image_bug_718762` | 562.18 | 0.02 | 0.02 | 17% | 0.00x | **0.00x** |
+| `image_bug_898443` | 78.06 | 1.89 | 1.88 | 1% | 0.02x | **0.02x** |
+| `image_ccitt_3bigpreview` | 7.66 | 20.96 | 18.80 | 10% | 2.74x | **2.45x** |
+| `image_ccitt_transfer` | 1.04 | 2.45 | 2.41 | 2% | 2.35x | **2.31x** |
+| `image_en_fqa` | 52.31 | 174.67 | 60.91 | **65%** | 3.34x | **1.16x** |
+| `image_jbig2_1478366` | 30.89 | 0.16 | 0.15 | 3% | 0.01x | **0.01x** |
+| `image_jbig2_880920` | 12.59 | 3.15 | 3.13 | 0% | 0.25x | **0.25x** |
+| `image_jpx_123` | 8.18 | 13.98 | 13.94 | 0% | 1.71x | **1.70x** |
+| **geomean** | | | | | 0.15x | **0.13x** |
+
+#### `vector`
+
+| fixture | oracle (ms) | whole (ms) | amortz (ms) | build% | ratioW | **ratioA** |
+|---|---:|---:|---:|---:|---:|---:|
+| `vector_en_system` | 62.07 | 133.15 | 48.77 | **63%** | 2.15x | **0.79x** |
+| `vector_en_tem` | 7.29 | 4.45 | 3.75 | 16% | 0.61x | **0.51x** |
+| `vector_font_feature` | 19.66 | 56.10 | 52.49 | 6% | 2.85x | **2.67x** |
+| `vector_font_size14` | 11.15 | 9.17 | 5.71 | 38% | 0.82x | **0.51x** |
+| `vector_paths_1751` | 21.02 | 9.73 | 5.07 | 48% | 0.46x | **0.24x** |
+| `vector_tcpdf_009` | 46.52 | 7.02 | 6.82 | 3% | 0.15x | **0.15x** |
+| **geomean** | | | | | 0.77x | **0.52x** |
+
+#### `text`
+
+| fixture | oracle (ms) | whole (ms) | amortz (ms) | build% | ratioW | **ratioA** |
+|---|---:|---:|---:|---:|---:|---:|
+| `text_bug_1029` | 0.78 | 0.26 | 0.19 | 27% | 0.33x | **0.24x** |
+| `text_cjk_functions` | 6.03 | 3.94 | 2.69 | 32% | 0.65x | **0.45x** |
+| `text_cjk_page` | 10.28 | 8.41 | 5.68 | 32% | 0.82x | **0.55x** |
+| `text_cjk_structure` | 12.44 | 10.61 | 7.98 | 25% | 0.85x | **0.64x** |
+| `text_foxit_products` | 21.31 | 15.64 | 10.99 | 30% | 0.73x | **0.52x** |
+| `text_foxittext` | 2.74 | 2.20 | 1.58 | 28% | 0.80x | **0.58x** |
+| `text_quick_start` | 121.64 | 98.97 | 59.15 | 40% | 0.81x | **0.49x** |
+| `text_tcpdf_055` | 56.47 | 65.16 | 48.97 | 25% | 1.15x | **0.87x** |
+| `text_tcpdf_063` | 34.17 | 60.48 | 38.18 | 37% | 1.77x | **1.12x** |
+| **geomean** | | | | | 0.81x | **0.56x** |
+
+**The whole `text` class is below 1.15x like-for-like**, and it was never
+re-taken against the oracle before now — §10.5 covered it, §15 took `image`
+and `vector` only.
+
+#### `forms`
+
+| fixture | oracle (ms) | whole (ms) | amortz (ms) | build% | ratioW | **ratioA** |
+|---|---:|---:|---:|---:|---:|---:|
+| `forms_combo_box` | 3.54 | 5.08 | 4.64 | 9% | 1.43x | **1.31x** |
+| `forms_list_box` | 5.23 | 9.60 | 9.11 | 5% | 1.83x | **1.74x** |
+| `forms_number` | 0.88 | 1.55 | 1.38 | 12% | 1.76x | **1.56x** |
+| `forms_push_button` | 59.85 | 4.49 | 4.00 | 11% | 0.08x | **0.07x** |
+| `forms_signature` | 2.24 | 1.97 | 1.61 | 18% | 0.88x | **0.72x** |
+| `forms_text_field` | 4.24 | 4.86 | 4.28 | 12% | 1.15x | **1.01x** |
+| `forms_widgets_407` | 5.54 | 5.71 | 5.68 | 1% | 1.03x | **1.02x** |
+| **geomean** | | | | | 0.86x | **0.78x** |
+
+`forms` was the class §11 and §12 were taken to fix and §15 could not re-take.
+It is re-taken here and the geomean is **0.78x**, against §10.5's 1.17x after
+§11's fix and 2.29x before it.
+
+#### `shading`
+
+| fixture | oracle (ms) | whole (ms) | amortz (ms) | build% | ratioW | **ratioA** |
+|---|---:|---:|---:|---:|---:|---:|
+| `shading_axial_radial` | 44.26 | 31.57 | 31.38 | 1% | 0.71x | **0.71x** |
+| `shading_coons` | 0.89 | 0.61 | 0.13 | 79% | 0.69x | **0.14x** |
+| `shading_gouraud` | 0.94 | 0.63 | 0.13 | 80% | 0.68x | **0.14x** |
+| `shading_tcpdf_030` | 72.17 | 47.50 | 46.98 | 1% | 0.66x | **0.65x** |
+| `shading_tcpdf_056` | 2.08 | 2.05 | 1.52 | 26% | 0.98x | **0.73x** |
+| `shading_tcpdf_058` | 5.30 | 46.92 | 45.90 | 2% | 8.86x | **8.67x** |
+| `shading_tensor` | 34.43 | 11.06 | 11.01 | 1% | 0.32x | **0.32x** |
+| `shading_type4_5` | 0.27 | 0.74 | 0.73 | 1% | 2.69x | **2.67x** |
+| **geomean** | | | | | 1.06x | **0.68x** |
+
+`shading` was also conditional in §15 and also not delivered. It is taken
+here, and it carries the corpus's largest ratio — see §18.3.
+
+#### `mixed`
+
+| fixture | oracle (ms) | whole (ms) | amortz (ms) | build% | ratioW | **ratioA** |
+|---|---:|---:|---:|---:|---:|---:|
+| `mixed_en_uicase` | 13.13 | 50.31 | 48.70 | 3% | 3.83x | **3.71x** |
+| `mixed_formfield` | 3.61 | 2.71 | 2.70 | 0% | 0.75x | **0.75x** |
+| `mixed_tcpdf_006` | 15.94 | 11.80 | 7.50 | 36% | 0.74x | **0.47x** |
+| `mixed_tcpdf_045` | 18.42 | 7.14 | 4.77 | 33% | 0.39x | **0.26x** |
+| `mixed_tcpdf_059` | 17.41 | 7.96 | 5.27 | 34% | 0.46x | **0.30x** |
+| **geomean** | | | | | 0.82x | **0.63x** |
+
+#### What is left above 1.5x
+
+| fixture | **ratioA** | ratioW | build% | where its time is |
+|---|---:|---:|---:|---|
+| `shading_tcpdf_058` | **8.67x** | 8.86x | 2% | 97.5% raster — §18.3 |
+| `mixed_en_uicase` | **3.71x** | 3.83x | 3% | 96.1% raster, 837 sweeps/iter |
+| `vector_font_feature` | **2.67x** | 2.85x | 6% | 90.9% raster |
+| `shading_type4_5` | **2.67x** | 2.69x | 1% | a 0.27 ms oracle row |
+| `image_ccitt_3bigpreview` | **2.45x** | 2.74x | 10% | 87.5% raster |
+| `image_ccitt_transfer` | **2.31x** | 2.35x | 2% | a 1.04 ms oracle row |
+| `forms_list_box` | **1.74x** | 1.83x | 5% | — |
+| `image_jpx_123` | **1.70x** | 1.71x | 0% | 99.4% raster |
+| `forms_number` | **1.56x** | 1.76x | 12% | a 0.88 ms oracle row |
+
+**Nine rows, and every one of them is in the rasterizer rather than in the
+pipeline in front of it.** That is the opposite of what §17 found, and it is
+the correction the like-for-like pairing was for: §17's defect was in the
+annotation pass, and with that fixed and the graph build paired correctly,
+what is left is raster.
+
+### 18.3 The next defect, named and measured but not fixed
+
+`shading_tcpdf_058` at **8.67x** is the largest ratio in the corpus and it is
+a defect, not the price of a shading. It was split with §2's instrument and
+then with temporary `Instant` pairs one level below it, and the mechanism is
+completely determined:
+
+| | `shading_tcpdf_058` | `forms_text_field` | `shading_axial_radial` |
+|---|---:|---:|---:|
+| whole warm render | 47.6 ms | 5.3 ms | 31.1 ms |
+| raster | **97.5%** | 65.6% | 99.2% |
+| `clip` (device calls) | **30.9 ms / 61 calls** | — | — |
+| clip-plane acquire (§12's pool) | 0.017 ms | 0.058 ms | 0.008 ms |
+| clip-plane intersect (§11's band) | 0.002 ms | 0.090 ms | 0.001 ms |
+| **the coverage sweep** | **32.8 ms** | 0.30 ms | 0.28 ms |
+| &nbsp;&nbsp;of which `finish` (the cell sort) | **23.1 ms** | 0.15 ms | — |
+| &nbsp;&nbsp;of which the row walk | 4.6 ms | 0.99 ms | — |
+| cell rows swept per iteration | **530 073** | 7 836 | — |
+| clip paths whose bbox leaves the page | **14 of 64** | **0 of 133** | **0 of 35** |
+| their share of the sweep | **97%** | — | — |
+
+**Fourteen clip paths per render extend tens of thousands of device units off
+a 595×842 page**, and they cost 31.7 ms — 97% of the sweep and 68% of the
+whole render. Two of the fourteen:
+
+```
+bbox = (-7.1, -92075.9)-(24554.1,  87.7)    24 561 x 92 164
+bbox = (-2.4, -58239.9)-(31907.1,  67.2)    31 910 x 58 307
+```
+
+**§11 and §12 are not the fix and are not at fault.** Both are working: the
+plane pool acquires in 17 µs and the banded intersection runs in 2 µs. The
+cost is one level lower, in the shared scanline integrator: `Rasterizer`
+accumulates a cell for every scanline the *path* crosses, `CellStore::sort`
+sorts all 530 073 of them, and `sweep` walks every row — and then the
+`coverage_of` callback discards each row outside the target with
+`if row >= h { return; }`. **The work is done and then thrown away.**
+
+**Where the fix goes, and where it must not.** Not in the path: `hard_clip`'s
+±32000 clamp is a *deliberate artefact* whose comment says so — it reproduces
+the oracle's own 16-bit truncation, and the clamped vertex position is
+observable in the pixels, so clamping a clip path tighter would move them. The
+fix belongs in `pdfrum-render`'s `scanline`, discarding a cell whose row
+cannot be written rather than sorting and sweeping it. That is provably
+byte-identical, because those rows' spans are already dropped by every
+consumer — but it is a change to the integrator **every** fill, stroke, glyph
+and clip on both AGG and the two wrapped backends runs through, so it needs
+its own board and tier-c cycle rather than riding this one.
+
+It is therefore **named, measured, and queued** rather than fixed here. The
+figures above are what will judge the fix: 23.1 ms of sort and 4.6 ms of row
+walk should both fall to what `forms_text_field` pays, and the row should go
+from 8.67x to about 1.2x.
+
+`mixed_en_uicase` at 3.71x is a *different* shape and is recorded so the two
+are not conflated: 257 619 rows per iteration but **837 sweeps**, with the row
+walk at 37.3 ms and the sort at 5.2 ms. Many small sweeps, none of them
+off-page. It is the second item, and the first one's fix will not move it.
+
+### 18.4 What this section does not claim
+
+- **No code changed for any ratio here.** §18.2 is a re-measurement of the
+  same binary under a corrected pairing, plus the first `text`, `forms`,
+  `shading` and `mixed` rows this document has against the oracle. The only
+  code in this section's commits is `--md5`'s render and §2's instrument,
+  neither of which is on a measured path — the board is byte-identical across
+  all 1757 entries.
+- **`amortz` is a subtraction, not a second loop.** It is our whole render
+  minus the two stages the oracle amortizes, both from one run of §2's
+  instrument, whose unattributed remainder is 0.1–4.8%. A row whose build is
+  1% of it is insensitive to that; `shading_coons` and `shading_gouraud`, at
+  79–80% build on a 0.6 ms render, are the two rows where the subtraction is
+  most of the figure and their `ratioA` should be read as a bound.
+- **Six rows have oracle columns under 1.1 ms**, where `bench-oracle.nu`'s own
+  formula divides a difference of two sub-100 ms process timings by 20.
+  `shading_type4_5` (0.27 ms), `forms_number` (0.88 ms),
+  `shading_coons`/`gouraud` (0.89/0.94 ms) and `image_ccitt_transfer`
+  (1.04 ms) are all in that band; their ratios are the least trustworthy in
+  the table and three of them are in the above-1.5x list for that reason.
+- **The load was 6–10, and that is the *first* table here for which §3's
+  instruction is nearly discharged.** Not fully: the 1-minute average was 6.06
+  at the `image` rows and 10.16 by the end, and §3 asks for idle. But every
+  previous table in this document was taken at load 25–131, and this one is
+  the first whose milliseconds are worth reading at all.
+- **AGG only.** `tiny-skia` and `vello_cpu` were not measured, as in every
+  section since §12.
+- **The ratchet is still not re-baselined.** §8's third bullet stands.
