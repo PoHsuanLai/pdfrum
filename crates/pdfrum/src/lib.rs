@@ -296,8 +296,8 @@ pub use pdfrum_render::Argb;
 /// stroke over it.
 ///
 /// Returned by [`FormSession::focus_for_page`], which a renderer asks once per
-/// page per frame (SPEC §15.8) — so this is an ordinary answer a caller acts
-/// on, not an escape hatch. [`FocusBox`] is the second half and is useless
+/// page per frame — so this is an ordinary answer a caller acts on, not an
+/// escape hatch. [`FocusBox`] is the second half and is useless
 /// without the first.
 pub use pdfrum_doc::{Focus, FocusBox};
 
