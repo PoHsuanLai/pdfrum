@@ -21,7 +21,10 @@ pub enum Error {
     /// [`pdfrum_crypt::SecurityHandler::Identity`]), and `remove_security`
     /// was not set. Re-declaring a cipher over plaintext would produce a file
     /// nothing could open.
-    #[error("saving an encrypted document requires remove_security (SPEC §11 E3)")]
+    #[error(
+        "cannot save an encrypted document without its key; \
+         set `SaveOptions::remove_security` to save it decrypted"
+    )]
     EncryptedSaveUnsupported,
 
     /// A document with no usable catalog cannot be the destination of an
