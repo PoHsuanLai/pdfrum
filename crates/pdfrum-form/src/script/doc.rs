@@ -2,18 +2,16 @@
 //!
 //! # `this` and the global are one object
 //!
-//! `CJS_Document` is registered `FXJSOBJTYPE_GLOBAL` (`fxjs/cjs_document.cpp`),
-//! so `this.getField(…)` and a bare `getField(…)` are the same call and
-//! `this === globalThis`. Everything here is therefore defined **on the global
-//! object** rather than on a `Doc` binding a script would have to name — which
-//! is also why `icons_expected.txt` reads `doc is [object global]` for a
-//! variable a script assigned `this` to.
+//! `Doc` **is** the global, so `this.getField(…)` and a bare `getField(…)` are
+//! the same call and `this === globalThis`. Everything here is defined on the
+//! global object rather than on a `Doc` binding a script would have to name —
+//! which is also why a variable a script assigned `this` to stringifies as
+//! `[object global]`.
 //!
 //! # Three shapes, and only one of them is ours
 //!
-//! Reading `cjs_document.cpp` end to end, its 42 methods fall into three
-//! classes, and the count matters because it is what makes this module a table
-//! rather than an implementation:
+//! The 42 methods fall into three classes, and the counts are what make this
+//! module a table rather than an implementation:
 //!
 //! | class | count | what we do |
 //! |---|---|---|
@@ -21,20 +19,15 @@
 //! | no-op returning success | 23 | **one shared body**, [`noop`] — this is upstream's own behaviour, not a stub of it |
 //! | throws unconditionally | 2 | answer the oracle's own message |
 //!
-//! The 23 are not shortcuts. `addField`'s C++ body is
-//! `// Not supported, but do not return an error.` followed by
-//! `return CJS_Result::Success();` — there is nothing to decline, because the
-//! oracle already declined it, and `document_methods_expected.txt` asserts
-//! `= undefined` for each with both no arguments and four.
+//! The 23 are not shortcuts: there is nothing to decline, because the oracle
+//! already declines them and the goldens assert `= undefined` for each.
 //!
 //! # The properties split the same way, and two idioms are conflated
 //!
-//! Of the 32 properties, eight metadata getters are commented `// Read-only.`
-//! upstream and yet **silently succeed** on assignment, while eight others
-//! throw `Cannot assign to readonly property.`. That is not a distinction with
-//! a rule behind it — it is two idioms in one file — and it is reproduced
-//! exactly, because `document_properties_expected.txt` pins both halves line
-//! by line.
+//! Of the 32 properties, eight metadata setters **silently succeed** on
+//! assignment while eight others throw `Cannot assign to readonly property.`.
+//! That is two idioms in one file rather than a distinction with a rule behind
+//! it, and both halves are reproduced exactly.
 
 #![allow(
     clippy::unnecessary_wraps,
@@ -283,8 +276,7 @@ fn set_calculate(_t: &JsValue, args: &[JsValue], context: &mut Context) -> JsRes
     Ok(JsValue::undefined())
 }
 
-/// `Doc.filesize` — **always zero**, never the real size
-/// (`cjs_document.cpp`'s `get_filesize` is `NewNumber(0)`).
+/// `Doc.filesize` — **always zero**, never the real size.
 #[allow(clippy::unnecessary_wraps)]
 fn get_filesize(_t: &JsValue, _a: &[JsValue], _c: &mut Context) -> JsResult<JsValue> {
     Ok(JsValue::from(0))
@@ -316,12 +308,10 @@ fn get_icons(_t: &JsValue, _a: &[JsValue], context: &mut Context) -> JsResult<Js
 /// The key an `Icon` carries its name under.
 const ICON_KEY: &str = "__pdfrum_icon_name";
 
-/// `Icon.name` — the whole of the object (`fxjs/cjs_icon.cpp`, 38 lines).
+/// `Icon.name` — the whole of the object.
 ///
 /// `undefined` for an icon nothing named, which is what
-/// `Field.buttonGetIcon` hands back: it builds an unbound `CJS_Icon` with no
-/// `SetIconName` call, and `icons_expected.txt` reads
-/// `Dubious name is undefined` off exactly that.
+/// `Field.buttonGetIcon` hands back: an icon object with no name set.
 fn icon_get_name(this: &JsValue, _a: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let Some(object) = this.as_object() else {
         return Ok(JsValue::undefined());
@@ -491,14 +481,13 @@ fn get_nth_field_name(_t: &JsValue, args: &[JsValue], context: &mut Context) -> 
 
 /// `Doc.getField(name)` — a `Field` object, or **`undefined`**.
 ///
-/// Not `null` and not an error: `CountFields(wideName) <= 0` short-circuits to
-/// `NewUndefined()` before a `CJS_Field` is ever built
-/// (`cjs_document.cpp:267`), which is why `field_methods_expected.txt` reads
-/// `undefined` for `MyField.nonesuch` and an object for the empty string.
+/// Not `null` and not an error: a name that counts no fields short-circuits
+/// to `undefined` before a `Field` is ever built, which is why
+/// `MyField.nonesuch` is `undefined` and the empty string is an object.
 ///
-/// The name is normalized first: `".."` collapses to `"."`, repeatedly, which
-/// is `AttachField`'s own loop and is what makes `MyField..MyPushButton`
-/// resolve and `MyField...nonesuch` not.
+/// The name is normalized **after** that count: `".."` collapses to `"."`,
+/// repeatedly, which is what makes `MyField..MyPushButton` resolve and
+/// `MyField...nonesuch` not.
 fn get_field(_t: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     if args.is_empty() {
         return Err(params("getField"));
@@ -544,7 +533,7 @@ fn collapse_dots_once(name: &str) -> String {
     name.replace("..", ".")
 }
 
-/// `ParseFieldName` (`fxjs/cjs_field.cpp:137-158`), as the field name half.
+/// The field-name half of a `<name>.<widget index>` spelling.
 ///
 /// Splits a trailing `.<n>` widget index off a name that reached no node:
 /// `MyField.3` becomes `MyField`. The suffix must parse as an integer, and a
@@ -566,9 +555,8 @@ fn parse_field_name(name: &str) -> Option<String> {
 ///
 /// The sweep itself is the `Cascade`'s, and what this can do from inside a
 /// script is ask for it: the flag is read back by the caller after the script
-/// returns, because re-entering the cascade from a native function would be
-/// exactly the `busy_` re-entry upstream refuses
-/// (`fxjs/cjs_event_context.cpp:32-38`).
+/// returns, because re-entering the cascade from a native function is the
+/// re-entry the oracle refuses too.
 fn calculate_now(_t: &JsValue, _a: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     if let Some(host) = host(context) {
         host.borrow_mut().calculate_requested = true;
@@ -756,8 +744,7 @@ fn annot_set_type(_t: &JsValue, _a: &[JsValue], _c: &mut Context) -> JsResult<Js
     Err(qualified("Annot.type", READ_ONLY))
 }
 
-/// One `Annot` — three properties, and only `type` refuses a write
-/// (`fxjs/cjs_annot.cpp`, 116 lines).
+/// One `Annot` — three properties, and only `type` refuses a write.
 fn annot_object(index: usize, context: &mut Context) -> JsResult<JsObject> {
     let object = ObjectInitializer::new(context).build();
     object.create_data_property_or_throw(
@@ -865,11 +852,9 @@ fn mail_msg(_t: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<J
 /// `app.mailMsg(bUI, …)` — the same message, and the **one** difference:
 /// `bUI` is required rather than defaulted.
 ///
-/// `CJS_App::mailMsg` gates on `IsExpandedParamKnown(newParams[0])`
-/// (`fxjs/cjs_app.cpp:460-462`) where `CJS_Document::mailDoc` simply defaults
-/// it to `true`. So `app.mailMsg()` throws and `this.mailDoc()` sends an
-/// empty message, and `app_methods_expected.txt` and
-/// `document_methods_expected.txt` each assert their own half.
+/// `app.mailMsg` requires `bUI` where `Doc.mailDoc` defaults it to `true`, so
+/// `app.mailMsg()` throws and `this.mailDoc()` sends an empty message. The
+/// goldens assert each half.
 pub(crate) fn app_mail_msg(
     _t: &JsValue,
     args: &[JsValue],
@@ -930,10 +915,9 @@ fn mail(args: &[JsValue], context: &mut Context, required: Option<&str>) -> JsRe
 /// `Doc.print(...)` and `Doc.submitForm(...)` — **refused, and it is the
 /// oracle that refuses them.**
 ///
-/// `IsUserGesture()` is false for a script that no click provoked, and both
-/// guard on it (`cjs_document.cpp`). A headless run is exactly that case, so
-/// `User gesture required.` is the answer rather than a decline of ours —
-/// `document_methods_expected.txt` asserts it for both.
+/// Both guard on a user gesture, which is false for a script no click
+/// provoked. A headless run is exactly that case, so `User gesture required.`
+/// is the answer rather than a decline of ours.
 ///
 /// `submitForm` checks its arity **first**, which is why the golden has a
 /// parameter-count line for the no-argument call and a gesture line for the

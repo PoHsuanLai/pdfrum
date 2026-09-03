@@ -162,25 +162,18 @@ fn bind_param_error() -> &'static str {
 /// **Every error a bound function throws carries its own name and nothing
 /// else**, which is the form the goldens quote.
 ///
-/// `JSFormatErrorString` (`fxjs/js_resources.cpp:97-108`) is
-/// `class_name` + optional `"." + property` + `": "` + the message, and every
-/// throw in `fxjs/` routes through it — the `AF*` wrapper at
-/// `cjs_publicmethods.cpp:159-161` included. So
-/// `public_methods_expected.txt` reads
+/// The form is `<name>: <message>`, so a golden reads
 /// `AFDate_Format: Incorrect number of parameters passed to function.` and
-/// `util_printd_expected.txt` reads `util.printd: …`, not the bare message.
+/// `util.printd: …`, not the bare message.
 ///
-/// And it is thrown as a **bare string**, not an `Error`:
-/// `fxv8::ThrowExceptionHelper` is `ThrowException(NewStringHelper(...))`
-/// (`fxjs/fxv8.cpp:350-356`), so `'' + e` is the message alone. The goldens
-/// show the difference directly — PDFium's own errors read
-/// `threw app.alert: Incorrect number of parameters passed to function.`
-/// while the two genuine V8 exceptions in `immutable_proto` read
-/// `threw TypeError: Immutable prototype object …`.
+/// And it is thrown as a **bare string**, not an `Error`, so `'' + e` is the
+/// message alone. The goldens show the difference directly — the oracle's own
+/// errors read `threw app.alert: …` while a genuine engine exception reads
+/// `threw TypeError: …`.
 ///
-/// Roughly seventy of the golden assertions are arity checks and every one
-/// goes through `expect.js`'s `' threw ' + e`, so a `TypeError:` prefix or a
-/// bare message fails all of them. Hence a test rather than a comment.
+/// Roughly seventy golden assertions are arity checks and every one stringifies
+/// the caught value, so a `TypeError:` prefix or a bare message fails all of
+/// them. Hence a test rather than a comment.
 #[test]
 fn every_thrown_error_carries_the_function_name() {
     // `'' + e`, exactly as `expect.js` stringifies it — not `e.message`,
@@ -341,8 +334,7 @@ fn the_clock_follows_the_configured_seed() {
 }
 
 /// With **no** seed the clock is the machine's, which is the ordinary
-/// embedder's answer and the oracle's when `--time=` is absent
-/// (`pdfium_test.cc:2129`, the hooks installed only inside the guard).
+/// embedder's answer and the oracle's when no time is given.
 ///
 /// The window is generous on purpose: this asserts "the real clock, not a
 /// frozen 2014", not a stopwatch reading, so a loaded machine cannot flake it.
@@ -383,8 +375,7 @@ fn the_timezone_is_pdfiums_own() {
 
 // ---- the AF* globals ----
 
-/// The twenty-two are bare globals, as
-/// `fxjs/cjs_publicmethods.cpp:48-71` registers them.
+/// The twenty-two are bare globals.
 #[test]
 fn the_af_library_is_reachable_as_bare_globals() {
     let mut cascade = session();
@@ -587,9 +578,9 @@ fn a_calculation_sweep_writes_the_fields_the_order_names() {
     assert_eq!(writes.writes().collect::<Vec<_>>(), vec![(1, "computed")]);
 }
 
-/// The three-way gate at `cpdfsdk_interactiveform.cpp:307` is normative: a
-/// value is written only if the script did not throw, `event.rc` is still
-/// truthy, **and the string actually changed**.
+/// The three-way gate is normative: a value is written only if the script did
+/// not throw, `event.rc` is still truthy, **and the string actually
+/// changed**.
 #[test]
 fn the_three_way_calculation_gate_is_reproduced() {
     let unchanged = |source: &str, seed: &str| {
@@ -625,9 +616,8 @@ fn the_three_way_calculation_gate_is_reproduced() {
 /// refusal, not on elapsed time — but the budget is small enough that this
 /// runs in well under a second, which the whole test file's runtime shows.
 ///
-/// PDFium with V8 does not have this property: the same script ran until an
-/// external SIGKILL at 600 seconds, measured
-/// (`docs/status/data/v8probe/REPORT.md`).
+/// PDFium with V8 does not have this property: measured, the same script ran
+/// until an external SIGKILL at 600 seconds.
 #[test]
 fn a_runaway_loop_terminates_with_a_diagnostic() {
     let mut cascade = bounded(Limits {
@@ -857,11 +847,10 @@ fn no_io_is_reachable_from_a_script() {
 /// A timer is **recorded and never fired**, and the object it returns is the
 /// opaque handle `constructor.in` asks about.
 ///
-/// Not firing is the ruling rather than a gap: upstream's registry is a
-/// process-wide `map<int32_t, GlobalTimer*>` (`fxjs/global_timer.cpp:18-19`)
-/// which STYLE §1 forbids outright, a timer inside an alert never fires
-/// anyway (`cjs_app.cpp:433-441`), and a one-shot with `ms == 0` never runs
-/// its script at all (`:418-423`).
+/// Not firing is the ruling rather than a gap: the oracle's registry is
+/// process-wide state this workspace does not build, a timer inside an alert
+/// never fires anyway, and a one-shot with `ms == 0` never runs its script at
+/// all.
 #[test]
 fn a_timer_is_recorded_and_never_fired() {
     let mut cascade = session();
@@ -1015,9 +1004,8 @@ fn an_uncaught_throw_yields_one_diagnostic_with_its_whence_and_message() {
     assert!(cascade.drain_diagnostics(&mut again).is_empty());
 }
 
-/// An unnamed script — `/OpenAction`'s, which upstream runs with an *empty*
-/// name (`cpdfsdk_formfillenvironment.cpp:1000-1006`) — still reads as
-/// something rather than as a blank.
+/// An unnamed script — `/OpenAction`'s, which runs with an *empty* name —
+/// still reads as something rather than as a blank.
 #[test]
 fn an_unnamed_script_is_reported_as_the_open_action() {
     let mut cascade = session();
@@ -1034,13 +1022,10 @@ fn an_unnamed_script_is_reported_as_the_open_action() {
 /// the second `app.alert` still reaches the transcript, and both failures are
 /// recorded rather than only the first.
 ///
-/// This is pdf.js's rule made ours — its `try` sits *inside* the
-/// `for (const action of actions)` loop (`src/scripting_api/field.js:542-561`,
-/// `src/scripting_api/doc.js:192-206`), so action N+1 runs — and it is also
-/// upstream's *control flow*, since `RunDocumentOpenJavaScript` is `void` and
-/// `ExecuteDocumentOpenAction` walks every `/Next` regardless
-/// (`cpdfsdk_formfillenvironment.cpp:1000-1018`). What upstream does not do is
-/// the reporting, which is the `[oracle-bug]`.
+/// This is pdf.js's rule made ours — its `try` sits *inside* the action loop,
+/// so action N+1 runs — and it is also the oracle's *control flow*, which
+/// walks every `/Next` regardless. What the oracle does not do is the
+/// reporting, which is the `[oracle-bug]`.
 #[test]
 fn a_throw_does_not_stop_the_scripts_after_it() {
     let mut cascade = session();
@@ -1211,13 +1196,12 @@ fn with_document() -> ScriptCascade {
 /// `Bug765384` — **`setFocus` and `borderStyle` on fields a script names,
 /// without a crash.**
 ///
-/// `fpdfsdk/fpdf_formfill_embeddertest.cpp:1338-1347` is three lines of
-/// JavaScript and one click, and the assertion is entirely negative: the
-/// oracle's test passes if nothing dies. Upstream that mattered because
-/// `setFocus` re-entered the widget layer while a `CJS_Field` still held a
-/// raw pointer into it; here it cannot, because a `Field` carries a `/Fields`
-/// **position** and never a pointer (see `script::field`'s module doc), so
-/// the crash is unreachable by construction rather than by a guard.
+/// The oracle's regression is three lines of JavaScript and one click, and
+/// its assertion is entirely negative: the test passes if nothing dies. There
+/// that mattered because `setFocus` re-entered the widget layer while a field
+/// object still held a raw pointer into it; here it cannot, because a `Field`
+/// carries a `/Fields` **position** and never a pointer (see `script::field`'s
+/// module doc), so the crash is unreachable by construction.
 ///
 /// What is asserted positively is the part that *is* observable: the
 /// `borderStyle` write lands, and the focus request comes back to the host as
@@ -1245,17 +1229,16 @@ fn bug_765384_set_focus_and_border_style_do_not_reenter() {
 
 /// `Bug1477093` — **`getField` on a name the form does not have.**
 ///
-/// `:1349-1359`, commented *"Test passes if `DCHECK()` not hit."* The fixture's
+/// The oracle's regression passes if an assertion is not hit. The fixture's
 /// script is `this.getField('bad_field').value = 'Apple';` inside a timer, and
 /// the field genuinely does not exist — so `getField` answers `undefined` and
 /// the assignment throws a `TypeError` on it.
 ///
 /// That throw is the correct outcome and not a defect: `getField` returns
-/// `undefined` for a name `CountFields` cannot reach
-/// (`fxjs/cjs_document.cpp:267`), and reading `.value` off `undefined` is a
-/// language-level error whatever the host does. What must not happen is a
-/// crash, and what must not happen *here* is silence — the failure is
-/// reported with its message, per `ScriptFailure`.
+/// `undefined` for a name that counts no fields, and reading `.value` off
+/// `undefined` is a language-level error whatever the host does. What must not
+/// happen is a crash, and what must not happen *here* is silence — the failure
+/// is reported with its message, per `ScriptFailure`.
 #[test]
 fn bug_1477093_a_missing_field_is_undefined_and_the_throw_is_reported() {
     let mut cascade = with_document();
@@ -1292,24 +1275,17 @@ fn bug_1477093_a_missing_field_is_undefined_and_the_throw_is_reported() {
 /// `Bug620428`, `Bug634394`, `Bug634716`, `Bug679649`, `Bug707673` —
 /// **timers are recorded and cancellable, and none of them fires.**
 ///
-/// # What these five actually test, which is not what M15's inventory said
+/// # What these five actually test
 ///
-/// The step-1 record listed all seven as "crash-and-alert regressions over
-/// `Doc`/`Field` mutation", each needing "`this.getField` plus one or two
-/// `Field` properties". Read at the line, five of them are **timer** tests
-/// and touch no field at all: every one drives
-/// `EmbedderTestTimerHandlingDelegate` and asserts on what
-/// `AdvanceTime(1000)` fires — `Bug620428` that a cancelled timer and
-/// interval fire nothing over five seconds
-/// (`fpdf_formfill_embeddertest.cpp:1251-1264`), `Bug634394` and `Bug634716`
-/// that cancelling from *inside* a callback stops the sequence at two alerts
-/// (`:1266-1305`), `Bug679649` that a timer the host refuses to create fires
-/// nothing (`:1307-1320`), and `Bug707673` that a click after
-/// `DoOpenActions` fires nothing (`:1322-1336`).
+/// All five are **timer** tests and touch no field at all: each asserts on
+/// what advancing the clock by a second fires — that a cancelled timer and
+/// interval fire nothing over five seconds, that cancelling from *inside* a
+/// callback stops the sequence at two alerts, that a timer the host refuses to
+/// create fires nothing, and that a click after the open actions fires
+/// nothing.
 ///
-/// So the blocking dependency is `advance_time`, which M14's D14 reserved as
-/// the step function and which nothing calls yet — **not** the object model.
-/// That correction is recorded in `docs/status/M15.md` §3.
+/// So the blocking dependency is a clock step function that nothing calls yet
+/// — **not** the object model.
 ///
 /// What is portable today is the half that does not need a clock, and it is
 /// the half that matters for a document in the wild: the scripts **parse and

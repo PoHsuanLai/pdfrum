@@ -1,43 +1,26 @@
 //! What a script asked the host to do, as data the host reads.
 //!
-//! # Why this is a value and not a trait
+//! **A value, not a trait.** The script does not need the host's answer to
+//! continue, so the line goes on a list and the host reads the list on its own
+//! schedule.
 //!
-//! PDFium's `IPDF_JSPLATFORM` is a host callback interface — `app_alert`,
-//! `app_beep`, `Doc_print`, `Doc_submitForm` — because C++ had no better
-//! option: the engine is running, the script has called `app.alert`, and the
-//! answer has to come from somewhere.
-//!
-//! Here it does not. STYLE §2b's rule is to invert — take a trait — only when
-//! the library must **ask a question it cannot answer** and cannot proceed
-//! until it hears back; not to let a host draw or display something the
-//! library merely knows about. An alert is the second case: the script does
-//! not need the answer to continue (with no form-fill environment upstream,
-//! `app.alert` returns `0` and carries on — `fxjs/cjs_app.cpp:233-236`), so
-//! the line goes on a list and the host reads the list on its own schedule.
-//! That is what `PopupView`/`ScrollView` did for M14's chrome, and it is why
-//! `Cascade` remains the third and last trait seam.
-//!
-//! # It is also the milestone's scoring surface
-//!
-//! `testing/tools/run_javascript_tests.py` compares `pdfium_test`'s **stdout**
-//! against a checked-in `_expected.txt`, line-wise and byte-exact. Those lines
-//! are this transcript rendered — so [`TranscriptLine::render`] is not a
-//! debugging convenience, it is the comparison contract, and its formats are
-//! transcribed from the C++ that prints them rather than invented here.
+//! It is also the conformance comparison surface: a golden run compares the
+//! oracle's stdout, line-wise and byte-exact, against these lines rendered.
+//! [`TranscriptLine::render`] is that contract rather than a debugging
+//! convenience.
 
 use std::fmt::Write as _;
 
 /// One thing a script asked the host to do.
 ///
 /// Ten shapes, because the goldens carry ten. Each variant's `render` output
-/// is quoted from the `pdfium_test` callback that produces it, cited on the
-/// variant.
+/// is quoted from the callback that produces it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TranscriptLine {
     /// `app.alert` — 1933 of the 2004 golden lines.
     ///
-    /// `samples/pdfium_test.cc`'s `ExampleAppAlert` prints the message with a
-    /// conditional decoration: see [`TranscriptLine::render`].
+    /// The message is printed with a conditional decoration: see
+    /// [`TranscriptLine::render`].
     Alert {
         /// `cTitle`, defaulting to the literal `"Alert"`.
         title: String,
@@ -116,18 +99,16 @@ pub enum TranscriptLine {
     /// A named action fired from a non-JavaScript callback —
     /// `ExampleNamedAction`. `named_action.in` is its one fixture.
     NamedAction(String),
-    /// `console.println`. **Upstream discards it** (`fxjs/cjs_console.cpp` —
-    /// all four methods are empty), so this variant renders to nothing and is
-    /// carried only so a host can see what a script logged.
+    /// `console.println`. **The oracle discards it**, so this variant renders
+    /// to nothing and is carried only so a host can see what a script
+    /// logged.
     ConsolePrintln(String),
     /// An `AF*` function's own alert, which is not routed through `app.alert`.
     ///
-    /// `AlertIfPossible` (`fxjs/cjs_publicmethods.cpp:94-102`) passes the
-    /// **function's own name** as the title and always `icon = 3`
-    /// (`JSPLATFORM_ALERT_ICON_STATUS`), `button = 0`
-    /// (`JSPLATFORM_ALERT_BUTTON_OK`) — so these render in the decorated form
-    /// and appear *unprefixed by `Alert:`*, interleaved with the plain lines.
-    /// Getting that interleaving right is a scoring requirement.
+    /// The **function's own name** is the title, always with `icon = 3` and
+    /// `button = 0` — so these render in the decorated form and appear
+    /// *unprefixed by `Alert:`*, interleaved with the plain lines. Getting
+    /// that interleaving right is a scoring requirement.
     FunctionAlert {
         /// The function's own name, e.g. `AFNumber_Keystroke`.
         caller: String,
@@ -140,12 +121,10 @@ pub enum TranscriptLine {
 pub const DEFAULT_ALERT_TITLE: &str = "Alert";
 
 impl TranscriptLine {
-    /// The line `pdfium_test` would print, without its newline.
+    /// The line the oracle would print, without its newline.
     ///
     /// `None` for a shape that prints nothing — [`TranscriptLine::ConsolePrintln`]
-    /// alone, because upstream's `console` methods are empty and a golden that
-    /// expected their output would be a golden of behaviour PDFium does not
-    /// have.
+    /// alone, because the oracle's `console` methods are empty.
     ///
     /// # The alert decoration is conditional, and it is exact
     ///
@@ -157,9 +136,8 @@ impl TranscriptLine {
     /// | non-default title only | `<title>: <msg>` |
     /// | non-default icon **or** type | `<title>[icon=N,type=N]: <msg>` |
     ///
-    /// An `AF*` alert always takes the third form with `icon=3,type=0`, which
-    /// is why `public_methods_expected.txt` carries lines like
-    /// `AFNumber_Keystroke[icon=3,type=0]: The input value is invalid.`
+    /// An `AF*` alert always takes the third form with `icon=3,type=0`, so it
+    /// reads `AFNumber_Keystroke[icon=3,type=0]: The input value is invalid.`
     /// with no `Alert:` prefix.
     #[must_use]
     pub fn render(&self) -> Option<String> {
@@ -275,7 +253,7 @@ impl TranscriptLine {
     }
 }
 
-/// Renders a whole transcript the way `pdfium_test` writes stdout: one line
+/// Renders a whole transcript the way the oracle writes stdout: one line
 /// each, newline-terminated, lines that print nothing omitted.
 #[must_use]
 pub fn render(lines: &[TranscriptLine]) -> String {

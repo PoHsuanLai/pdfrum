@@ -1,30 +1,13 @@
 //! The open combo-box dropdown, as **state and geometry** rather than as a
 //! window.
 //!
-//! # Why this is a value and not a callback
-//!
-//! `fpdfsdk/pwl` is a closed list of five chrome pieces — the caret, the
-//! selection band, the focus rectangle, the scroll bar and this dropdown. The
-//! first three are baked *inside* the widget's `/Rect`, so they belong in the
-//! appearance stream and are already there. The last two are drawn *outside*
-//! it, and a library that creates windows to draw them is a library that has
-//! taken over the host's job.
-//!
-//! So this module publishes what the C++'s `CPWL_ComboBox` knows and lets the
-//! host paint: **where** the list would be ([`PopupView::geometry`]), **what** is
-//! in it ([`PopupView::options`]), **which** row is selected or hovered, and
-//! how tall a row is. A host that wants to draw the dropdown has every number
-//! it needs; a host that does not want to draw it is not asked to. The
-//! reverse direction — the host telling the session what the user did with
-//! the list — is [`crate::route`]'s `choose` and `close_popup`, which are
-//! ordinary intent methods and not a trait (STYLE §2b, ruled 2026-09-01).
-//!
-//! # The one thing this is *not*
-//!
-//! It is not an appearance stream. A widget's `/AP` form is mapped onto its
-//! `/Rect` by `CFX_Matrix::MatchRect`, so folding a taller list into it would
-//! **scale** the widget's own body rather than overflowing below it. The
-//! popup has a bbox of its own, and a caller draws it as a second object.
+//! A dropdown is drawn *outside* the widget's `/Rect`, so it cannot live in
+//! the widget's appearance stream: a form's `/AP` is mapped onto its `/Rect`,
+//! and folding a taller list into it would scale the widget's body rather
+//! than overflow below it. This module publishes what a host needs to paint
+//! the list as a second object — where it would be, what is in it, which row
+//! is selected or hovered, and how tall a row is. The reverse direction is
+//! [`crate::route`]'s `choose` and `close_popup`.
 
 use crate::field::ChoiceState;
 use crate::session::AnnotId;
@@ -32,31 +15,26 @@ use crate::tab::Rect;
 
 /// The list's border, in PDF units, on every side.
 ///
-/// `CPWL_ComboBox::CreateListBox` (`fpdfsdk/pwl/cpwl_combo_box.cpp:205-236`)
-/// sets `dwBorderWidth = 1` and `BorderStyle::kSolid` on the list it makes,
-/// whatever the widget's own `/MK /BW` says: the dropdown is chrome the
-/// viewer draws, not something the file describes.
+/// A fixed solid 1 unit whatever the widget's own `/MK /BW` says: the dropdown
+/// is chrome the viewer draws, not something the file describes.
 pub const LIST_BORDER: f32 = 1.0;
 
 /// The tallest a dropdown is allowed to grow, in PDF units.
-///
-/// `kMaxListBoxHeight` (`formfiller/cffl_interactiveformfiller.cpp:706`).
 pub const MAX_LIST_HEIGHT: f32 = 140.0;
 
 /// How many rows the minimum popup shows, and the count above which that
 /// minimum applies at all.
 ///
-/// `CPWL_ComboBox::SetPopup` (`cpwl_combo_box.cpp:337-340`): a list of **more
-/// than three** options may not be clamped below three rows plus its border;
-/// a list of three or fewer has no floor and may be squeezed to nothing.
+/// A list of **more than three** options may not be clamped below three rows
+/// plus its border; a list of three or fewer has no floor and may be squeezed
+/// to nothing.
 pub const MIN_POPUP_ROWS: usize = 3;
 
 /// Which side of the widget the list opens on.
 ///
-/// `CFFL_InteractiveFormFiller::QueryWherePopup`
-/// (`cffl_interactiveformfiller.cpp:670-729`) picks by room: below when the
-/// space under the widget can hold the whole list, above when it cannot but
-/// the space over it can, and otherwise whichever side is larger.
+/// Picked by room: below when the space under the widget can hold the whole
+/// list, above when it cannot but the space over it can, and otherwise
+/// whichever side is larger.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Placement {
     /// The list hangs below the widget, growing downward from its bottom
@@ -119,11 +97,9 @@ impl PopupGeometry {
 
     /// The area the rows are drawn in: the window deflated by its border.
     ///
-    /// `CPWL_ListBox::GetListRect` (`cpwl_list_box.cpp:352-355`), which is
-    /// what `CPWL_ListCtrl::SetPlateRect` is handed and therefore what the
-    /// item rectangles are measured against. It is deliberately **not**
-    /// `GetClientRect`: that one also subtracts a visible scroll bar's width,
-    /// and the rows keep their full width behind one.
+    /// This is what row rectangles are measured against, and a visible scroll
+    /// bar's width is **not** subtracted from it — the rows keep their full
+    /// width behind one.
     #[must_use]
     pub fn plate(&self) -> kurbo::Rect {
         widen(self.plate_f32())
@@ -152,10 +128,9 @@ impl PopupGeometry {
     /// The rectangle of one visible row, counting `offset` rows down from the
     /// first one showing.
     ///
-    /// `CPWL_ListCtrl::ReArrange` (`cpwl_list_ctrl.cpp:525-551`) stacks the
-    /// items downward from the plate's top by exactly one row height each,
-    /// so this is that stack read back out. A row past the bottom of the
-    /// plate still has a rectangle — the caller clips.
+    /// Rows stack downward from the plate's top by exactly one row height
+    /// each. A row past the bottom of the plate still has a rectangle — the
+    /// caller clips.
     #[must_use]
     pub fn row_rect(&self, offset: usize) -> kurbo::Rect {
         let plate = self.plate_f32();
@@ -209,9 +184,9 @@ impl PopupGeometry {
 
     /// How many rows fit in the plate, whole and partial alike.
     ///
-    /// A partial row at the bottom is still drawn — `CPWL_ListBox`'s cull
-    /// keeps any item overlapping the plate — so a viewer counting rows to
-    /// paint wants the rounded-up count, not the floor.
+    /// A partial row at the bottom is still drawn — any item overlapping the
+    /// plate is kept — so a viewer counting rows to paint wants the rounded-up
+    /// count, not the floor.
     #[must_use]
     pub fn visible_rows(&self) -> usize {
         if self.row_height <= 0.0 {
@@ -234,27 +209,13 @@ impl PopupGeometry {
 
 /// Everything a host needs to draw one open dropdown.
 ///
-/// Returned by `FormSession::popup_for_page` and by [`crate::route::popup_view`].
+/// Returned by [`crate::route::popup_view`].
 ///
-/// # Owned, and not borrowed from the session
-///
-/// The M14 ruling sketched this with a lifetime — `options: &'a [String]`,
-/// `edit_text: Option<&'a str>` — and it is owned instead, deliberately. Two
-/// reasons, one practical and one from the ruling's own text:
-///
-/// - The facade's per-page entry point assembles a borrowed
-///   [`crate::route::Context`] around a `PageForm` it owns, drives the body,
-///   and drops it. A view borrowing the session cannot outlive that scope, so
-///   a borrowed `PopupView` is reachable from `pdfrum-form` and **not** from
-///   `pdfrum::FormSession` — which is the one caller the ruling names.
-/// - STYLE §2b's ruling says the point of exposing state rather than
-///   inverting is to avoid "a trait object threaded through the session, a
-///   synchronous mid-dispatch callback contract, **or a lifetime on a public
-///   type**". An owned view is the ruling's own preference stated plainly.
-///
-/// The cost is a `Vec<String>` per query, on a query a host makes once per
-/// render of a page that has a dropdown open — which is at most one page in a
-/// session, and only while a list is showing.
+/// **Owned, not borrowed from the session.** A per-page entry point assembles
+/// a borrowed [`crate::route::Context`], drives the body and drops it, so a
+/// view that borrowed the session could not outlive the call. The cost is a
+/// `Vec<String>` per query, on a query a host makes once per render of a page
+/// that has a dropdown open.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PopupView {
     /// Which widget the list belongs to, by **raw** `/Annots` index — the
@@ -279,10 +240,9 @@ pub struct PopupView {
     pub selected: Option<usize>,
     /// Which option the pointer is over, if any.
     ///
-    /// The list carries `Styles::kListboxHoverSel`
-    /// (`cpwl_combo_box.cpp:210-211`), so hovering a row *selects* it
-    /// upstream rather than merely tinting it. This reports the pointer's row
-    /// so a host can paint the band before the click lands.
+    /// Hovering a row *selects* it rather than merely tinting it. This
+    /// reports the pointer's row so a host can paint the band before the click
+    /// lands.
     pub hovered: Option<usize>,
     /// The first option currently showing, for a list taller than the popup.
     pub top_visible: usize,
@@ -307,11 +267,9 @@ impl PopupView {
 
     /// Whether the row at `offset` visible rows down is the selected one.
     ///
-    /// The band `CPWL_ListBox::DrawThisAppearance` (`cpwl_list_box.cpp:66-84`)
-    /// fills navy behind and writes white text into. **Hover counts**: the
-    /// list is created with `kListboxHoverSel`, so the row under the pointer
-    /// is selected as far as the drawing is concerned even though the field's
-    /// stored value has not moved.
+    /// The band drawn navy with white text. **Hover counts**: the row under
+    /// the pointer is selected as far as the drawing is concerned, even though
+    /// the field's stored value has not moved.
     #[must_use]
     pub fn is_banded(&self, offset: usize) -> bool {
         let Some(index) = self.top_visible.checked_add(offset) else {
@@ -340,9 +298,8 @@ pub struct ScrollView {
 impl ScrollView {
     /// Whether a scroll bar would be drawn at all.
     ///
-    /// `CPWL_ListBox::OnSetScrollInfoY` (`cpwl_list_box.cpp:288-303`) hides
-    /// the bar whenever the plate is at least as tall as the content, which
-    /// is exactly "every row fits".
+    /// The bar is hidden whenever the plate is at least as tall as the
+    /// content, which is exactly "every row fits".
     #[must_use]
     pub fn is_scrollable(&self) -> bool {
         self.total > self.visible_rows
@@ -352,10 +309,7 @@ impl ScrollView {
 /// Where a list of `rows` rows would open from a widget whose `/Rect` is
 /// `anchor` on a page `page` units tall, and how tall it would be.
 ///
-/// This is `CPWL_ComboBox::SetPopup`'s clamp
-/// (`cpwl_combo_box.cpp:325-377`) followed by
-/// `CFFL_InteractiveFormFiller::QueryWherePopup`
-/// (`cffl_interactiveformfiller.cpp:670-729`), as one function over numbers:
+/// The clamp and the side choice, as one function over numbers:
 ///
 /// 1. the list's content is `rows * row_height`, and the window it wants is
 ///    that plus a border on each side;
@@ -368,11 +322,10 @@ impl ScrollView {
 ///    hold that height, else above if the space over it can, else whichever
 ///    side is larger — and the height becomes that side's room.
 ///
-/// Returns [`None`] when the list would have no height at all, which is
-/// `SetPopup`'s two early `return true`s: a zero-height content rectangle,
-/// and a `fPopupRet` that comes back non-positive. Both are **refusals to
-/// open**, and `SetPopup` reporting `true` for them is why a combo whose list
-/// cannot fit stays closed while the click is still consumed.
+/// Returns [`None`] when the list would have no height at all — a zero-height
+/// content rectangle, or a chosen side with non-positive room. Both are
+/// **refusals to open**: the combo stays closed and the click is still
+/// consumed.
 pub(crate) fn place(
     anchor: Rect,
     page_height: f32,

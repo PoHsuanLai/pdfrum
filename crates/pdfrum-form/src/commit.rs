@@ -11,33 +11,17 @@
 //! rather than a reduced one, which is what lets a scripting implementation
 //! drop in without a redesign.
 //!
-//! # A rejected commit keeps focus — where we diverge from the oracle
+//! # A rejected commit keeps focus
 //!
-//! **In PDFium a refused commit still loses focus, and that is a defect.**
-//! `CFFL_FormField::CommitData` reverts the edit and returns `true` on both
-//! refusal paths (`fpdfsdk/formfiller/cffl_formfield.cpp:525-531`), which
-//! makes a rejection indistinguishable from an acceptance to its only
-//! caller; `KillFocusForAnnot`'s sole guard is that return value
-//! (`:306`), so `pWnd->KillFocus()` (`:311`) and `EscapeFiller()` (`:324`)
-//! run either way. A user who typed something a validation script rejected
-//! finds the caret gone and their typing discarded, with no way to correct
-//! it — which defeats the purpose of a validation hook.
+//! ISO 32000-1 §12.7.5.3 gives the Validate event the job of rejecting the
+//! *value*, not of ending the interaction: **a refused commit reverts the edit
+//! and keeps the field**, so the user can fix what the script objected to.
 //!
-//! ISO 32000-1 §12.7.5.3 gives the Validate event the job of *rejecting the
-//! value*, not of ending the interaction, and pdf.js implements the rule with
-//! the comment to prove it: on the not-valid branch it sends
-//! `focus: true, // Stay in the field.`
-//! (`src/scripting_api/event.js:277`). Under PLAN.md's oracle-bug rule we
-//! implement the correct behaviour: **a refused commit reverts the edit and
-//! keeps focus**, so the user can fix what the script objected to.
-//!
-//! [`CommitOutcome`] is shaped to say all three things separately, because
-//! "the commit finished", "the value was stored" and "focus should move on"
-//! are three different questions: `committed`, `reverted` and
-//! [`CommitOutcome::keeps_focus`].
-//!
-//! Without scripts the rejection branch is unreachable — nothing can refuse —
-//! so this costs nothing today and becomes visible the moment scripts arrive.
+//! [`CommitOutcome`] says three things separately, because "the commit
+//! finished", "the value was stored" and "focus should move on" are three
+//! different questions: `committed`, `reverted` and
+//! [`CommitOutcome::keeps_focus`]. Without scripts the rejection branch is
+//! unreachable — nothing can refuse.
 
 use crate::cascade::{Cascade, FieldRef, FieldWrites};
 
@@ -55,12 +39,11 @@ pub struct CommitOutcome {
     /// stored value.
     ///
     /// Meaningful only when [`committed`](CommitOutcome::committed) and not
-    /// [`reverted`](CommitOutcome::reverted): a commit that ran no hooks
+    /// [`reverted`](CommitOutcome::reverted). A commit that ran no hooks
     /// because the value had not moved says nothing about what the field
-    /// shows, and a reader must not take its `None` for "show the raw value"
-    /// — `AfterValueChange` is what calls `OnFormat`, and it runs on a
-    /// *change* (`fpdfsdk/cpdfsdk_interactiveform.cpp:575-588`).
-    /// [`CommitOutcome::formats`] is that question asked directly.
+    /// shows, and a reader must not take its `None` for "show the raw value":
+    /// the formatting hook runs on a *change*. [`CommitOutcome::formats`] is
+    /// that question asked directly.
     pub display: Option<String>,
     /// Values a calculation asked to be written to other fields.
     pub writes: Vec<(u32, String)>,
@@ -81,10 +64,7 @@ impl CommitOutcome {
 
     /// Whether the field that just committed should **keep** the keyboard.
     ///
-    /// True exactly when a hook refused. See the module documentation: the
-    /// oracle drops focus here and it is a defect
-    /// (`cffl_formfield.cpp:525-531` versus pdf.js
-    /// `src/scripting_api/event.js:277`).
+    /// True exactly when a hook refused; see the module documentation.
     #[must_use]
     pub fn keeps_focus(&self) -> bool {
         self.reverted
@@ -97,9 +77,7 @@ impl CommitOutcome {
     /// value" and must erase any earlier answer, while a `None` from a commit
     /// that never ran — because the value had not moved, or because a gate
     /// refused — means nothing at all and must leave the field showing what
-    /// it was showing. Only the first is `AfterValueChange`'s
-    /// `ResetFieldAppearance(pField, OnFormat(pField))`
-    /// (`fpdfsdk/cpdfsdk_interactiveform.cpp:588`).
+    /// it was showing. Only the first regenerates the appearance.
     #[must_use]
     pub fn formats(&self) -> bool {
         self.committed && !self.reverted && self.stored.is_some()
@@ -206,14 +184,8 @@ mod tests {
     }
 
     /// A refusal reports the commit as finished — and **keeps the field**,
-    /// which is where we diverge from the oracle on purpose.
-    ///
-    /// PDFium's `CommitData` returns `true` on this path
-    /// (`cffl_formfield.cpp:525-531`), which is its caller's only guard
-    /// (`:306`), so the caret goes and the typing with it. pdf.js keeps the
-    /// field at `src/scripting_api/event.js:277`, commented `// Stay in the
-    /// field.`, and ISO 32000-1 §12.7.5.3 agrees: Validate rejects the value,
-    /// not the interaction.
+    /// which is where we diverge from the oracle on purpose; see the
+    /// `[oracle-bug]` note on `run`.
     #[test]
     fn a_refused_commit_reports_success_and_keeps_the_field() {
         struct Refusing;

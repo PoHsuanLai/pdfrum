@@ -59,11 +59,9 @@ impl Plate {
     /// Converts a page-space point into the widget's own upright box:
     /// **y-up**, origin at the plate's bottom-left.
     ///
-    /// This is `CFFL_FormField::FFLtoPWL` (`cffl_formfield.cpp:499-500`), the
-    /// inverse of `GetCurMatrix` (`:442-464`), and it is the space every
-    /// appearance-stream query in `pdfrum-doc` consumes — `client_rect`,
-    /// `place_at_point`, a list box's rows. Writing out the inverse of the
-    /// four matrices that function builds:
+    /// This is the space every appearance-stream query in `pdfrum-doc`
+    /// consumes — `client_rect`, `place_at_point`, a list box's rows — and
+    /// it is the inverse of the widget's own placement matrix:
     ///
     /// | rotation | page → PWL |
     /// |---|---|
@@ -101,9 +99,7 @@ impl Plate {
 /// The inverse half of the plate mapping, and the dimensions it needs.
 ///
 /// [`Plate::to_widget`] is what routing calls; these are what its round-trip
-/// and rotation-table tests check it against. They were `pub` before the
-/// crate curation and had no caller outside the crate's own tests then either
-/// — see the Landed note under §WP4.
+/// and rotation-table tests check it against.
 #[cfg(test)]
 impl Plate {
     /// The plate's width — the widget's, with the axes exchanged for an odd
@@ -199,13 +195,11 @@ mod tests {
         assert_eq!(plate(Rotation::Quarter).height(), 100.0);
     }
 
-    /// `to_widget` is `FFLtoPWL` on all four quadrants, corner for corner.
+    /// `to_widget` on all four quadrants, corner for corner.
     ///
-    /// The expectations are not derived from the table in the doc comment;
-    /// they were produced by compiling `CFFL_FormField::GetCurMatrix`
-    /// (`cffl_formfield.cpp:442-464`) verbatim, inverting it the way
-    /// `FFLtoPWL` (`:499-500`) does, and transforming this widget's four
-    /// corners. Reading the four matrices off the source and writing the
+    /// The expectations are not derived from the table in the doc comment:
+    /// they were produced by compiling the oracle's placement matrix verbatim,
+    /// inverting it, and transforming this widget's four corners. Writing the
     /// inverse by hand is exactly where a sign or an axis goes missing, and
     /// the resulting click lands on the wrong line with nothing to say so.
     #[test]

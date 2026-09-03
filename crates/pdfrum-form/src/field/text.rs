@@ -1,27 +1,15 @@
 //! The text field's keyboard machine.
 //!
-//! # The split that decides everything
-//!
 //! **Typed text arrives as a character; navigation and shortcuts arrive as a
-//! key.** Nothing crosses over: typing sends no key-down, and the accelerator
-//! shortcuts are decided only on the key path. The negative half of that is
-//! asserted as hard as the positive half — an accelerator-modified *character*
-//! is explicitly not a shortcut, and is not text either. It is simply
-//! refused.
+//! key.** Nothing crosses over: an accelerator-modified *character* is neither
+//! a shortcut nor text, and is refused.
 //!
-//! This module is the routing decision alone, as a pure function from an
-//! event to a named [`TextAction`]. Keeping it separate from the editing
-//! operations is what lets the whole shortcut table be pinned without a
-//! layout: whether the accelerator with `A` selects all is a question about
-//! dispatch, and answering it does not require knowing where any character
-//! sits.
+//! The routing decision alone, as a pure function from an event to a named
+//! [`TextAction`], so the shortcut table is pinned without a layout.
 //!
-//! # The clipboard is not ours
-//!
-//! Cut, copy and paste do not exist at this layer. The accelerator with C, V
-//! or X is refused outright so that an embedder's own handling sees it — the
-//! selected text is read out and replacement text is written in through
-//! ordinary calls, and a cut is an embedder doing both.
+//! **The clipboard is not ours.** The accelerator with C, V or X is refused
+//! outright so an embedder's own handling sees it; the selected text is read
+//! out and replacement text written in through ordinary calls.
 
 use crate::event::{Key, Modifiers};
 

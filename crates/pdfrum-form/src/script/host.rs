@@ -38,11 +38,10 @@ pub(crate) struct HostState {
     pub(crate) document: super::model::DocumentModel,
     /// Icon names `Doc.addIcon` was given, in order.
     ///
-    /// Append-only, exactly as upstream's `icon_names_` is: `addIcon` and
-    /// `getIcon` are real and `removeIcon` is a no-op
-    /// (`fxjs/cjs_document.cpp`), so the list only grows and duplicates are
-    /// allowed. The icon's *contents* are discarded upstream too — only the
-    /// name is kept.
+    /// Append-only: `addIcon` and `getIcon` are real and `removeIcon` is a
+    /// no-op, so the list only grows and duplicates are allowed. The icon's
+    /// *contents* are discarded, as upstream discards them — only the name is
+    /// kept.
     pub(crate) icon_names: Vec<String>,
     /// Fields a script wrote through `Field.value`, by `/Fields` position.
     ///
@@ -54,17 +53,14 @@ pub(crate) struct HostState {
     /// Whether a script called `Doc.calculateNow()`.
     ///
     /// A **request**, not a call: running the sweep from inside a native
-    /// function would re-enter the cascade the script is already inside,
-    /// which is exactly the `busy_` re-entry upstream refuses
-    /// (`fxjs/cjs_event_context.cpp:32-38`). The caller reads the flag after
-    /// the script returns and sweeps then.
+    /// function would re-enter the cascade the script is already inside, which
+    /// the oracle refuses too. The caller reads the flag after the script
+    /// returns and sweeps then.
     pub(crate) calculate_requested: bool,
     /// `Doc.baseURL` — pure JavaScript-side state.
     ///
-    /// A real read/write property that reaches nothing else: `base_url_` is a
-    /// `CJS_Document` member that no other code ever consults
-    /// (`fxjs/cjs_document.cpp`). Reproducing it is reproducing a variable,
-    /// and `document_properties_expected.txt` reads back each of the six
+    /// A real read/write property that reaches nothing else — reproducing it
+    /// is reproducing a variable, and a golden reads back each of the six
     /// values it is assigned.
     pub(crate) base_url: String,
     /// `Doc.delay` — the document-wide batching flag.

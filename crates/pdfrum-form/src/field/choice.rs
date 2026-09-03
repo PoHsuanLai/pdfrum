@@ -1,22 +1,14 @@
 //! Combo boxes and list boxes: the operations over a set of rows.
 //!
-//! One machine covers both, because the differences are few enough to be
-//! parameters rather than a second implementation — but the differences that
-//! do exist are sharp, and three of them are the sort a reasonable design
-//! would smooth away:
+//! One machine covers both. Three differences are sharp enough that a
+//! reasonable design would smooth them away, and none is smoothed:
 //!
-//! - **A combo box cannot be deselected and a list box can.** Asking a combo
-//!   box to clear a row fails outright, whatever the row; asking a
-//!   single-select list box to clear its only selected row succeeds and
-//!   leaves the field genuinely empty.
-//! - **A call that changes nothing still moves the caret.** Clearing an
-//!   already-clear row of a list box reports success and moves the row last
-//!   acted upon to it — which changes what the field reports as its focused
-//!   text. That is asserted, not incidental.
-//! - **Type-ahead jumps rather than accumulates.** Typing `A`, then `B`, then
-//!   `C` lands on the row starting with C, not on one starting with "ABC".
-//!   Each character is an independent search from the current row, and the
-//!   search is circular.
+//! - **A combo box cannot be deselected and a list box can.**
+//! - **A call that changes nothing still moves the caret**, which changes what
+//!   the field reports as its focused text.
+//! - **Type-ahead jumps rather than accumulates.** Typing `A`, `B`, `C` lands
+//!   on the row starting with C; each character is an independent circular
+//!   search from the current row.
 
 use std::collections::BTreeSet;
 
@@ -178,19 +170,17 @@ pub fn move_selection(state: &mut ChoiceState, delta: i32) -> bool {
 /// Moves the caret one row **with modifiers**, which is what an arrow key and
 /// a wheel notch both do.
 ///
-/// `CPWL_ListCtrl::OnVK` (`cpwl_list_ctrl.cpp:242-265`) branches three ways on
-/// a multi-select list, and the first of them is the surprising one:
+/// A multi-select list branches three ways, and the first is the surprising
+/// one:
 ///
-/// - **Ctrl** — the body is *empty*. Only the caret moves; the selection is
-///   left exactly as it was. Upstream writes it as `if (bCtrl) {}`, which is
-///   easy to read as an oversight and is not: it is how a user walks the
-///   caret to a row before toggling it.
+/// - **Ctrl** — nothing but the caret moves; the selection is left exactly as
+///   it was. Not an oversight: it is how a user walks the caret to a row
+///   before toggling it.
 /// - **Shift** — deselect everything, then select the whole run from the
 ///   anchor to the new row.
 /// - **neither** — deselect everything, select the one row, and re-anchor.
 ///
-/// A single-select list ignores all three and just selects the row, because
-/// `OnVK`'s whole `bShift`/`bCtrl` structure is inside `IsMultipleSel()`.
+/// A single-select list ignores all three and just selects the row.
 ///
 /// [`move_selection`] is this function with both flags clear, and is kept
 /// because that is what most callers want.
@@ -302,8 +292,8 @@ pub fn combo_text_config(editable: bool, read_only: bool) -> TextConfig {
 
 /// Scrolls the view just far enough to bring `index` into it.
 ///
-/// **Only when it is not already visible**, which is the whole rule
-/// (`cpwl_list_ctrl.cpp:263-265`): moving the caret within the visible rows
+/// **Only when it is not already visible**, which is the whole rule: moving
+/// the caret within the visible rows
 /// scrolls nothing, and moving it past either edge scrolls by exactly the
 /// overshoot. That is what keeps a run of arrow keys — or wheel notches,
 /// which are the same operation — from scrolling on every step.
@@ -328,10 +318,10 @@ pub fn scroll_into_view(state: &mut ChoiceState, index: usize, visible_rows: usi
 ///
 /// # This is where the four-item undo group comes from
 ///
-/// Upstream spells it as three operations — select all, replace the
-/// selection, select all again (`cpwl_combo_box.cpp:522-527`) — and the
-/// middle one is itself a group of two, a removal and an insertion. So
-/// choosing an option from an open combo box pushes **four** undo items that
+/// It is three operations — select all, replace the selection, select all
+/// again — and the middle one is itself a group of two, a removal and an
+/// insertion. So choosing an option from an open combo box pushes **four**
+/// undo items that
 /// must undo together, which is the worst case `SessionConfig::max_undo_items`
 /// is clamped to four to hold: a capacity that could not fit one whole group
 /// would have to evict half of it.

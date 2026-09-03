@@ -1,31 +1,15 @@
 //! What the host tells the realm about the document, and about its fields.
 //!
-//! # Why the model is *installed* rather than read
-//!
-//! [`ScriptCascade`](super::ScriptCascade) holds no document, on purpose: that
-//! is what lets the whole engine be tested against a script string and no PDF,
-//! and it is the property `script/tests.rs` depends on throughout. The price
-//! is that its caller reads the catalog and hands the answers over — the same
-//! bargain [`set_field`](super::ScriptCascade::set_field) already struck for
-//! `/AA`.
-//!
-//! So this module is a set of **plain records**: no `Resolve`, no `Dict`, no
-//! borrow of anything. A host that is not `pdfrum` — a test, another
-//! embedder — fills them in from wherever it likes, and the object model
-//! answers from them.
-//!
-//! # The two things it is not
+//! [`ScriptCascade`](super::ScriptCascade) holds no document on purpose, so
+//! its caller reads the catalog and hands the answers over. These are **plain
+//! records**: no `Resolve`, no `Dict`, no borrow of anything.
 //!
 //! It is **not a document handle**. Nothing here can reach back into the
-//! session, open a file, or resolve an object; a script that asks
-//! `this.numPages` is answered from a number the caller wrote down, not from
-//! a page tree it can walk. That is the whole of why `Doc.submitForm` cannot
-//! exfiltrate a document it was never given.
+//! session, open a file or resolve an object, which is the whole of why
+//! `Doc.submitForm` cannot exfiltrate a document it was never given.
 //!
-//! It is **not a snapshot that updates itself**. A script that adds a field —
-//! which no bound method can do, since `addField` is a no-op upstream too —
-//! would not be reflected here. Values *are* updated, because a calculation
-//! sweep writes them and a later script must read what it wrote.
+//! It is **not a snapshot that updates itself** — but values *are*, because a
+//! calculation sweep writes them and a later script must read what it wrote.
 
 /// Everything the `Doc` object answers from.
 ///
@@ -47,9 +31,8 @@ pub struct DocumentModel {
     /// The `/Info` entries, in the order the dictionary writes them.
     ///
     /// A `Vec` rather than a map because `Doc.info` enumerates the *whole*
-    /// dictionary after its nine fixed keys, in the file's own order
-    /// (`cjs_document.cpp`'s clone-and-iterate), and a sorted map would
-    /// reorder what a golden pins.
+    /// dictionary after its nine fixed keys, in the file's own order, and a
+    /// sorted map would reorder what a golden pins.
     pub info: Vec<(String, String)>,
     /// Whether the document has an `/Info` dictionary at all.
     ///
@@ -108,20 +91,14 @@ impl DocumentModel {
     ///
     /// # A name may be a whole subtree, and it answers the first leaf under it
     ///
-    /// `GetField(index, name)` is `field_tree_->FindNode(name)
-    /// ->GetFieldAtIndex(index)` (`core/fpdfdoc/cpdf_interactiveform.cpp:
-    /// 675-684`), and the tree has a node per **name segment**, not per
-    /// terminal field. So a name that is only naming structure —
-    /// `MyField`, whose eight kids each carry their own `/T` — is a node,
-    /// `GetFieldAtIndex(0)` walks its subtree, and the answer is the first
-    /// terminal field beneath it.
+    /// The field tree has a node per **name segment**, not per terminal
+    /// field. So a name that only names structure — one whose kids each carry
+    /// their own `/T` — is still a node, and the answer is the first terminal
+    /// field beneath it.
     ///
-    /// `field.fragment`'s `MyField` is exactly that, and the golden proves
-    /// the resolution: `getField('MyField').rect` reads `200,221,220,201`,
-    /// which is `MyField.MyText`'s `/Rect [200 201 220 221]`. The `.name`
-    /// still reads `MyField`, because `AttachField` keeps the name the
-    /// *caller* asked for rather than the field's own — which is why
-    /// [`super::field`] carries the lookup name on the object.
+    /// The object's `.name` still reads the name the *caller* asked for rather
+    /// than the field's own, which is why the `Field` object carries the lookup
+    /// name on the object.
     ///
     /// A prefix that is not a whole segment matches nothing: `MyFie` is not
     /// a node.
@@ -142,8 +119,7 @@ impl DocumentModel {
         }
     }
 
-    /// How many terminal fields sit under the node a name reaches —
-    /// `CPDF_InteractiveForm::CountFields`.
+    /// How many terminal fields sit under the node a name reaches.
     ///
     /// Zero means `Doc.getField` answers `undefined`.
     #[must_use]
@@ -163,22 +139,21 @@ impl DocumentModel {
         }
     }
 
-    /// `CFieldTree::FindNode`, as the prefix the node it reaches spells.
+    /// The prefix the node a name reaches spells.
     ///
     /// See [`FieldNode`] for the three answers.
     ///
     /// # The walk **stops at the first empty segment**, and that is the rule
     ///
-    /// `CFieldNameExtractor::GetNext` splits on `.` and yields empty views for
-    /// consecutive dots (`core/fpdfdoc/cpdf_interactiveform.cpp:374-396`), and
-    /// `FindNode`'s loop `break`s on the first one (`:578-585`) — returning
-    /// whatever node the *previous* segment reached rather than failing.
+    /// The name is split on `.`, consecutive dots yield empty segments, and
+    /// the walk `break`s on the first one — returning whatever node the
+    /// *previous* segment reached rather than failing.
     ///
     /// So `MyField..nonesuch` finds the `MyField` node: the walk consumes
-    /// `MyField`, meets `""`, and stops before `nonesuch` is ever looked up.
-    /// That is why `getField('MyField..nonesuch')` returns an object where
-    /// `getField('MyField.nonesuch')` returns `undefined` — one dot apart, and
-    /// the difference is which of them the extractor stops on.
+    /// `MyField`, meets the empty segment, and stops before `nonesuch` is ever
+    /// looked up. That is why `getField('MyField..nonesuch')` returns an object
+    /// where `getField('MyField.nonesuch')` returns `undefined` — one dot
+    /// apart.
     fn node_of(&self, name: &str) -> FieldNode {
         if name.is_empty() {
             return FieldNode::Root;
@@ -321,8 +296,7 @@ pub enum FieldModelKind {
 }
 
 impl FieldModelKind {
-    /// The string `Field.type` answers, verbatim from
-    /// `fxjs/cjs_field.cpp`'s `get_type`.
+    /// The string `Field.type` answers, verbatim.
     #[must_use]
     pub fn as_str(self) -> &'static str {
         match self {
@@ -513,9 +487,8 @@ fn widget_pages<R: pdfrum_object::Resolve>(
 /// Every annotation `Doc.getAnnots` lists.
 ///
 /// **Pop-ups and widgets are excluded**, because `getAnnots` skips both
-/// subtypes (`fxjs/cjs_document.cpp`) — and `bug_421304870`'s whole assertion
-/// is the resulting count, so including them would be visibly wrong rather
-/// than merely generous.
+/// subtypes — and a golden's whole assertion is the resulting count, so
+/// including them would be visibly wrong rather than merely generous.
 fn read_annotations<R: pdfrum_object::Resolve>(
     pages: &[pdfrum_object::Dict],
     r: &R,
@@ -553,8 +526,8 @@ fn read_annotations<R: pdfrum_object::Resolve>(
 /// The named destinations `Doc.gotoNamedDest` can reach.
 ///
 /// Both spellings: `/Names /Dests`, the name tree, and `/Dests`, the older
-/// flat dictionary — `CPDF_NameTree::LookupNamedDest` consults the tree and
-/// falls back to the dictionary, so a document using either works.
+/// flat dictionary — the tree is consulted first and the dictionary is the
+/// fallback, so a document using either works.
 ///
 /// The **page** each lands on needs the destination array resolved against
 /// the page tree, which this reader does not walk; zero is what it answers,
@@ -732,10 +705,8 @@ fn read_field<R: pdfrum_object::Resolve>(
 /// A toggle control's export value — the `/AP /N` key that is not `Off`,
 /// falling back to the literal `Yes`.
 ///
-/// The fallback is not a guess: `CPDF_FormControl::GetExportValue` answers
-/// `"Yes"` when there is no on-state to read, and `field.fragment`'s check box
-/// and radio button carry **no `/AP` at all** while
-/// `field_properties_expected.txt` reads `exportValues = Yes` for both. A
+/// The fallback is not a guess: `"Yes"` is the answer when there is no
+/// on-state to read, which is what a control with no `/AP` at all exports. A
 /// group whose buttons really are named `Red` and `Blue` gets those, which is
 /// why the name is read rather than assumed.
 fn on_state_of<R: pdfrum_object::Resolve>(widget: &pdfrum_object::Dict, r: &R) -> String {

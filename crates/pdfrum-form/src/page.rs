@@ -111,15 +111,12 @@ pub struct PageForm {
     /// The page's height in PDF units, for the one thing that needs it: how
     /// much room a combo box has to open its dropdown into.
     ///
-    /// `CFFL_InteractiveFormFiller::QueryWherePopup`
-    /// (`cffl_interactiveformfiller.cpp:679-680`) builds its page rectangle
-    /// as `(0, GetPageHeight(), GetPageWidth(), 0)` normalized — from the
-    /// **origin**, whatever the crop box says — and measures the widget's
-    /// `/Rect` against it. So this is the display height and the comparison
-    /// is against zero on the other side, reproduced rather than corrected:
-    /// a page whose crop box starts away from the origin gets the oracle's
-    /// answer, right or wrong, because the popup's position is what a golden
-    /// pins.
+    /// The room is measured against a rectangle taken from the **origin**,
+    /// whatever the crop box says, so this is the display height and the
+    /// comparison on the other side is against zero. Reproduced rather than
+    /// corrected: a page whose crop box starts away from the origin gets the
+    /// oracle's answer, right or wrong, because the popup's position is what
+    /// a golden pins.
     pub page_height: f32,
 }
 
@@ -209,24 +206,18 @@ impl WidgetInfo {
     /// Which options the file says are selected, as **interaction** reads it.
     ///
     /// Deliberately not `ap::field_body::selected_indices`, and the two are
-    /// both right. There are two producers of a list box's selection upstream
-    /// and they disagree on purpose:
+    /// both right — a list box's selection has two readers that disagree on
+    /// purpose:
     ///
-    /// - the **appearance** reader is `CPDFSDK_AppStream::SetAsListBox` →
-    ///   `GetSelectedIndex` → `GetValueOrSelectedIndicesObject`, which takes
-    ///   `/V` first and matches it as text. That is what draws a file with no
-    ///   `/AP`, and it is what `ap::field_body::selected_indices` reproduces.
-    /// - the **interaction** reader is `CPDF_FormField::IsItemSelected`
-    ///   (`cpdf_formfield.cpp:546-554`), which consults `/I` first, as
-    ///   integer indices, and falls back to `/V` only when `/I` is not
-    ///   *usable* — `UseSelectedIndicesObject` (`:863-935`). That is what
-    ///   `FORM_IsIndexSelected` answers and what a session's state must be
-    ///   seeded from.
+    /// - the **appearance** reader takes `/V` first and matches it as text.
+    ///   That is what draws a file with no `/AP`, and it is what
+    ///   `ap::field_body::selected_indices` reproduces.
+    /// - the **interaction** reader, this one, consults `/I` first as integer
+    ///   indices and falls back to `/V` only when `/I` is not *usable*. That
+    ///   is what a session's state must be seeded from.
     ///
     /// They agree except on one shape — `/I` present, `/V` absent — where the
     /// first selects nothing and the second selects the rows `/I` names.
-    /// `listbox_form.pdf`'s indices field is exactly that shape, and
-    /// `CheckIfMultipleSelectedIndices` expects rows 1 and 3.
     #[must_use]
     pub fn selected<R: Resolve>(&self, r: &R) -> Vec<usize> {
         let values: Vec<String> = ap::field_body::options(&self.valued, r)

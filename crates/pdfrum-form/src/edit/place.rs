@@ -1,24 +1,13 @@
 //! Positions in a laid-out text, and spans between them.
 //!
-//! # The caret invariant
+//! **The caret invariant.** A [`Place`] names the position **after**
+//! character `word` of line `line` of section `section`, and `word == -1` is
+//! the *line header*, before that line's first character. Reading it as "at
+//! character `word`" is the easiest way to get this module wrong.
 //!
-//! A [`Place`] names the position **after** character `word` of line `line`
-//! of section `section`, and `word == -1` is the *line header* — the position
-//! before that line's first character. Reading it as "at character `word`" is
-//! the easiest way to get this module wrong: it is why an insert at the very
-//! start of a field targets `word == -1`, why backspace removes the character
-//! the caret names, and why a forward delete has to step to the next place
-//! first.
-//!
-//! # One `Place`, not two
-//!
-//! The type itself is the layout engine's ([`pdfrum_doc::vt::hit::Place`]),
-//! re-exported rather than mirrored. Every interesting operation on a place —
-//! turning a click into one, turning one into a caret rectangle, counting
-//! characters to it — belongs to the engine that owns the layout, so a second
-//! structurally identical type here would buy nothing and cost a conversion
-//! at every one of those calls. What this module adds is the vocabulary the
-//! *editor* needs on top: the ordered [`Range`], and the small predicates in
+//! The type is the layout engine's ([`pdfrum_doc::vt::hit::Place`]),
+//! re-exported rather than mirrored. What this module adds is the vocabulary
+//! the *editor* needs on top: the ordered [`Range`] and the predicates in
 //! [`PlaceExt`].
 
 pub use pdfrum_doc::vt::hit::Place;

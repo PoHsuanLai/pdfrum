@@ -186,8 +186,7 @@ pub(crate) fn hit_order(candidates: &[Candidate], focused: Option<AnnotId>) -> V
 ///
 /// The painting half of the band sort — [`hit_order`] is the hit-testing half.
 /// Only the crate's own tests call this one, and it lives under `cfg(test)`
-/// for that reason; the pair is the invariant, and dropping one leaves the
-/// other undocumented — see the Landed note under §WP4.
+/// for that reason; the pair is the invariant.
 #[cfg(test)]
 pub(crate) fn draw_order(candidates: &[Candidate], focused: Option<AnnotId>) -> Vec<Candidate> {
     let mut ordered = band_sorted(candidates);
@@ -261,7 +260,7 @@ pub(crate) fn widget_at_point(
 /// The index is into the band-sorted list, which is what the oracle reports.
 ///
 /// The z-ordered form of [`widget_at_point`], under `cfg(test)` for the same
-/// reason as [`draw_order`] — see the Landed note under §WP4.
+/// reason as [`draw_order`].
 #[cfg(test)]
 pub(crate) fn widget_z_order_at_point(
     candidates: &[Candidate],

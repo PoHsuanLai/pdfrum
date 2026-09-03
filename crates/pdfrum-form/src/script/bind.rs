@@ -35,8 +35,7 @@ use boa_engine::{Context, JsArgs, JsError, JsResult, JsValue, NativeFunction};
 use super::host::{Host, HostState};
 use super::transcript::{DEFAULT_ALERT_TITLE, TranscriptLine};
 
-/// The message every declined method answers with, verbatim from
-/// `fxjs/js_resources.cpp` — `JSMessage::kNotSupported`.
+/// The message every declined method answers with, verbatim.
 pub(crate) const NOT_SUPPORTED: &str = "Operation not supported.";
 
 /// `JSMessage::kParamError`, the message sixteen of the goldens assert.
@@ -44,33 +43,17 @@ pub(crate) const PARAM_ERROR: &str = "Incorrect number of parameters passed to f
 
 /// **Every error a bound function throws carries its own name.**
 ///
-/// `JSFormatErrorString` (`fxjs/js_resources.cpp:97-108`) is
-/// `class_name` + optional `"." + property_name` + `": "` + the message, and
-/// every call site in `fxjs/` routes through it — the `AF*` wrapper at
-/// `cjs_publicmethods.cpp:159-161`, and `JSMethod`/`JSPropGetter` for the
-/// object methods. So the goldens read
-/// `util.printd: Incorrect number of parameters passed to function.` and
-/// `AFDate_Format: Incorrect number of parameters passed to function.`, not
-/// the bare message.
+/// The form is `<name>: <message>`, so a golden reads
+/// `util.printd: Incorrect number of parameters passed to function.` rather
+/// than the bare message. Roughly seventy golden assertions are arity checks
+/// and every one quotes the qualified form.
 ///
-/// This is a scoring requirement rather than a nicety: roughly seventy of the
-/// golden assertions are arity checks, and every one of them quotes the
-/// qualified form. A bare message fails all of them.
 /// # And it is thrown as a **bare string**, not an `Error`
 ///
-/// `fxv8::ThrowExceptionHelper` is
-/// `pIsolate->ThrowException(NewStringHelper(pIsolate, str))`
-/// (`fxjs/fxv8.cpp:350-356`) — a string primitive, not an `Error` object. So
-/// `'' + e` is the message alone, with **no `TypeError: ` prefix**, and
-/// `expect.js`'s `'PASS: ' + expression + ' threw ' + e` produces
-/// `threw app.alert: Incorrect number of parameters passed to function.`
-///
-/// The goldens show the difference directly: PDFium's own errors carry no
-/// class name, while the two genuine V8 exceptions in `immutable_proto` read
-/// `threw TypeError: Immutable prototype object …`. A `JsNativeError` here
-/// would prefix every one of ours, failing every `expectError` assertion in
-/// the seven fixtures that include `expect.js` — so the throw is
-/// `JsError::from_opaque` over a string.
+/// A string primitive, so `'' + e` is the message alone with **no
+/// `TypeError: ` prefix** — a `JsNativeError` here would prefix every one of
+/// ours and fail every `expectError` assertion. Hence `JsError::from_opaque`
+/// over a string.
 pub(crate) fn qualified(name: &str, message: &str) -> JsError {
     JsError::from_opaque(JsValue::from(boa_engine::js_string!(format!(
         "{name}: {message}"
@@ -113,24 +96,20 @@ pub(crate) fn string_of(value: &JsValue, context: &mut Context) -> JsResult<Stri
 ///
 /// # Argument handling is two shapes, and the second is easy to miss
 ///
-/// `ExpandKeywordParams(params, 4, "cMsg", "nIcon", "nType", "cTitle")`
-/// (`fxjs/js_define.cpp:65-98`) reads the four positionally — **unless** there
-/// is exactly one argument, it is an object, and it is *not* an array, in
-/// which case the four are read as named properties off it and the positional
-/// reading is discarded entirely. A property that is `undefined` stays
-/// "unknown" and takes its default rather than becoming the string
+/// `cMsg`, `nIcon`, `nType` and `cTitle` are read positionally — **unless**
+/// there is exactly one argument, it is an object, and it is *not* an array,
+/// in which case the four are read as named properties off it and the
+/// positional reading is discarded entirely. A property that is `undefined`
+/// stays "unknown" and takes its default rather than becoming the string
 /// `"undefined"`.
 ///
 /// # And three details the goldens pin
 ///
-/// - **An array `cMsg` is joined**, not stringified:
-///   `"[" + join(", ") + "]"` (`cjs_app.cpp:239-250`). A plain object is not,
-///   which is why `consts_expected.txt` carries `[object Object]`.
+/// - **An array `cMsg` is joined**, not stringified: `"[" + join(", ") + "]"`.
+///   A plain object is not, so it renders `[object Object]`.
 /// - A missing `cMsg` throws [`PARAM_ERROR`], and the message is asserted.
-/// - With no form-fill environment the call **returns 0 without erroring**
-///   (`:233-236`). Here there is always a transcript, so the value returned is
-///   the host's answer — 0, because nothing is prompted and no button is
-///   pressed.
+/// - The call **returns 0 without erroring** — nothing is prompted and no
+///   button is pressed, so the host's answer is 0.
 fn app_alert(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let expanded = expand_keywords(args, &["cMsg", "nIcon", "nType", "cTitle"], context)?;
     // `IsExpandedParamKnown` (`fxjs/js_define.cpp:100-105`) asks whether the
@@ -189,9 +168,8 @@ fn app_alert(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResu
 ///
 /// Returns exactly `keywords.len()` values, `undefined` where the caller said
 /// nothing. The single-object form replaces the positional reading rather
-/// than supplementing it — `result[0]` is explicitly cleared first
-/// (`js_define.cpp:83`), so `alert({nIcon: 1})` has no message at all and
-/// throws.
+/// than supplementing it — the first slot is cleared first, so
+/// `alert({nIcon: 1})` has no message at all and throws.
 pub(crate) fn expand_keywords(
     args: &[JsValue],
     keywords: &[&str],
@@ -226,8 +204,7 @@ pub(crate) fn expand_keywords(
     Ok(out)
 }
 
-/// `app.beep(nType)`. One argument, and its absence is an error
-/// (`cjs_app.cpp:283-286`).
+/// `app.beep(nType)`. One argument, and its absence is an error.
 fn app_beep(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     if args.len() != 1 {
         return Err(param_error("app.beep"));
@@ -291,18 +268,17 @@ fn app_response(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsR
 
 /// What `app.response` answers when nobody is there to be asked.
 ///
-/// `pdfium_test`'s own reply (`testing/pdfium_test/pdfium_test.cc:356-364`),
-/// and the value seven golden assertions read back. An embedder that wants to
-/// prompt reads the [`TranscriptLine::Response`] and asks; this is what the
-/// library says on its own.
+/// The golden harness's own reply, and the value seven golden assertions read
+/// back. An embedder that wants to prompt reads the
+/// [`TranscriptLine::Response`] and asks; this is what the library says on its
+/// own.
 pub(crate) const GOLDEN_RESPONSE: &str = "No";
 
 /// One of the eight `app` methods that are **no-ops returning success**
-/// upstream (`cjs_app.cpp:207, 219, 296, 443, 449, 502, 532, 608`).
+/// upstream.
 ///
-/// `app.launchURL` is the interesting one and the reason this is a shared
-/// body rather than a decline: its C++ body is literally a comment and
-/// `return Success()` — it does not even parse its arguments. There is
+/// `app.launchURL` is the interesting one and the reason this is a shared body
+/// rather than a decline: upstream does not even parse its arguments. There is
 /// nothing to decline, because the oracle already declines it.
 // The signature is the table's, and every entry must share it.
 #[allow(clippy::unnecessary_wraps)]
@@ -339,18 +315,12 @@ declined!(app_popup_menu_ex, "app.popUpMenuEx");
 /// **The script and the interval are recorded; nothing ever fires them.**
 ///
 /// Three facts make that the right answer rather than a shortfall. The
-/// machinery upstream is a **process-wide** `map<int32_t, GlobalTimer*>`
-/// (`fxjs/global_timer.cpp:18-19`), which STYLE §1 forbids outright ("No
-/// global state. None."). `RunJsScript` bails entirely while the runtime is
-/// blocking (`cjs_app.cpp:433-441`), so a timer inside an alert never fires
-/// anyway. And a one-shot with `ms == 0` **never runs its script at all**,
-/// because `TimerProc` gates on `!IsOneShot() || GetTimeOut() > 0`
-/// (`:418-423`).
+/// machinery upstream is a **process-wide** timer map, which this workspace
+/// does not build. A timer that fires while the runtime is blocking is
+/// discarded anyway. And a one-shot with `ms == 0` never runs its script at
+/// all.
 ///
-/// No fixture calls `app.setInterval`, and the one that touches `setTimeOut`
-/// (`constructor.in`) only asks whether the returned object's constructor is
-/// callable. M14's D14 reserved `advance_time` as the step function where a
-/// later milestone fires these; the registry is per-session, never global.
+/// The registry here is per-session, never global.
 fn app_set_timer(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     if args.len() < 2 {
         return Err(param_error("app.setTimeOut"));
@@ -378,10 +348,8 @@ fn app_set_timer(_this: &JsValue, args: &[JsValue], context: &mut Context) -> Js
 
 // ---- console ----
 
-/// `console.println`. **Upstream discards its argument**
-/// (`fxjs/cjs_console.cpp` — all four methods are empty bodies returning
-/// success), so the line is recorded but renders to nothing, and
-/// `console_methods.in` passes precisely because nothing is printed.
+/// `console.println`. **The argument is discarded**, as upstream discards it,
+/// so the line is recorded but renders to nothing.
 fn console_println(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let text = match args.first() {
         Some(value) => string_of(&value.clone(), context)?,
@@ -512,9 +480,8 @@ fn util_printx(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsRe
 
 /// `util.scand(cFormat, cDate)` — bound to `pdfrum_script::util_scand`.
 ///
-/// Answers a real `Date`, because that is what the fixture reads properties
-/// off. A string the picture cannot parse answers `undefined` rather than
-/// throwing (`cjs_util.cpp:296-311`).
+/// Answers a real `Date`. A string the picture cannot parse answers
+/// `undefined` rather than throwing.
 fn util_scand(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     if args.len() < 2 {
         return Err(param_error("util.scand"));
@@ -532,7 +499,7 @@ fn util_scand(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsRes
 }
 
 /// `util.byteToChar(n)`. One byte, `0..=255`, as a one-character string;
-/// anything else is a value error (`cjs_util.cpp:334-345`).
+/// anything else is a value error.
 fn util_byte_to_char(
     _this: &JsValue,
     args: &[JsValue],
@@ -555,41 +522,32 @@ fn util_byte_to_char(
 ///
 /// **The messages are API, not diagnostics.** Sixteen of the 46 goldens
 /// assert exception text verbatim, which is why `pdfrum_script::Error`'s
-/// `Display` carries `fxjs/js_resources.cpp`'s table word for word and this
-/// function does nothing but pass it through.
+/// `Display` carries the oracle's table word for word and this function does
+/// nothing but pass it through.
 pub(crate) fn thrown(name: &str, error: &pdfrum_script::Error) -> JsError {
     qualified(name, &error.to_string())
 }
 
-/// `FX_LocalTime` — an epoch instant shifted into the viewer's local zone.
+/// An epoch instant shifted into the viewer's local zone: the standard
+/// offset plus a daylight-saving term.
 ///
-/// **`util.printd` prints *local* time, and this is where that happens.**
-/// `CJS_Util::printd` calls `FX_LocalTime(ToDoubleReentrant(v8_date))`
-/// (`fxjs/cjs_util.cpp:185`) *before* extracting year, month, day, hour,
-/// minute and second, and `FX_LocalTime` is
-/// `d + GetLocalTZA() + GetDaylightSavingTA(d)`
-/// (`fxjs/fx_date_helpers.cpp:254-256`).
+/// **`util.printd` prints *local* time, and this is where that happens** — the
+/// shift is applied before year, month, day, hour, minute and second are
+/// extracted. Missing it is an 8-hour error on every `util_printd` line.
 ///
-/// Missing it is an 8-hour error on every `util_printd` golden line, because
-/// the fixture's `new Date(2014, 6, 4, 15, 59, 58)` is a **local-time**
-/// constructor: the instant is `22:59:58Z`, and the golden prints
-/// `14:59:58` — the local wall clock, one hour off the constructor's
-/// argument because the offset is the *standard* one and July is not.
-///
-/// The DST term is the reason the shift is applied here rather than folded
-/// into the frozen clock: the clock is one instant, and the offset depends
-/// on which instant is being printed.
+/// The daylight term is why the shift is applied here rather than folded into
+/// the frozen clock: the clock is one instant, and the offset depends on which
+/// instant is being printed.
 fn to_local_time(millis: f64, context: &Context) -> f64 {
     let offset = context.get_data::<PrintdOffset>().map_or(0, |o| o.0);
     millis + f64::from(offset) * 1000.0
 }
 
-/// `FX_LocalTime`'s offset, in the context's own data slot.
+/// The local-time offset, in the context's own data slot.
 ///
 /// A separate value from the `Date` timezone on purpose: the two are an hour
-/// apart all summer under the fixture runner, because `pdfium_test` replaces
-/// `localtime` with `gmtime` and `FX_LocalTime`'s daylight-saving term
-/// therefore always reads zero. See
+/// apart all summer under the fixture runner, whose replacement `localtime`
+/// makes the daylight-saving term always read zero. See
 /// `ScriptConfig::printd_offset_secs`.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct PrintdOffset(pub(crate) i32);
@@ -703,8 +661,7 @@ fn install_app(context: &mut Context) -> JsResult<()> {
 
 /// `app`'s twelve properties, which fall into three shapes.
 ///
-/// `cjs_app.cpp:38-52` and the `JS_STATIC_PROP` table, and
-/// `app_properties_expected.txt` asserts every line of all three:
+/// The goldens assert every line of all three:
 ///
 /// - **five constants** whose *setter throws* `Operation not supported.` —
 ///   `formsVersion`, `language`, `platform`, `viewerType`, `viewerVariation`,
@@ -754,7 +711,7 @@ fn install_app_properties(app: &boa_engine::JsObject, context: &mut Context) -> 
     Ok(())
 }
 
-/// The six constant `app` getters — `cjs_app.cpp:38-52`, values and all.
+/// The six constant `app` getters, values and all.
 macro_rules! app_constant {
     ($fn_name:ident, $value:expr) => {
         #[allow(clippy::unnecessary_wraps)]
