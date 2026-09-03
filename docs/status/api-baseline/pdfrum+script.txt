@@ -215,6 +215,7 @@ pub fn pdfrum::Form<'a>::set(&mut self, &str, impl core::convert::Into<alloc::st
 pub fn pdfrum::Form<'a>::set_checked(&mut self, &str, bool) -> core::result::Result<(), pdfrum::UnknownField>
 pub struct pdfrum::FormSession<'a>
 impl<'a> pdfrum::FormSession<'a>
+pub fn pdfrum::FormSession<'a>::advance_time(&mut self, core::time::Duration) -> usize
 pub fn pdfrum::FormSession<'a>::apply(&mut self, pdfrum_form::event::Event) -> pdfrum_form::update::Response
 pub fn pdfrum::FormSession<'a>::blur(&mut self) -> pdfrum_form::update::Response
 pub fn pdfrum::FormSession<'a>::can_redo(&self) -> bool
@@ -237,6 +238,8 @@ pub fn pdfrum::FormSession<'a>::mouse_move(&mut self, impl core::convert::Into<p
 pub fn pdfrum::FormSession<'a>::mouse_up(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, kurbo::point::Point, pdfrum_form::event::Modifiers) -> pdfrum_form::update::Response
 pub fn pdfrum::FormSession<'a>::mouse_wheel(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, kurbo::point::Point, (i32, i32), pdfrum_form::event::Modifiers) -> pdfrum_form::update::Response
 pub fn pdfrum::FormSession<'a>::new(&'a pdfrum::Document) -> pdfrum::FormSession<'a>
+pub fn pdfrum::FormSession<'a>::page_closed(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>)
+pub fn pdfrum::FormSession<'a>::page_opened(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>)
 pub fn pdfrum::FormSession<'a>::popup_for_page(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>) -> core::option::Option<pdfrum_form::popup::PopupView>
 pub fn pdfrum::FormSession<'a>::replace_selection(&mut self, &str) -> bool
 pub fn pdfrum::FormSession<'a>::scripts(&self) -> core::option::Option<&pdfrum_form::script::ScriptCascade>

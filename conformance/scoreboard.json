@@ -1,12 +1,12 @@
 {
-  "generated_at": "2026-09-03T10:39:30Z",
+  "generated_at": "2026-09-03T11:01:11Z",
   "totals": {
     "files": 1757,
-    "pass": 1529,
-    "fail": 228,
+    "pass": 1530,
+    "fail": 227,
     "by_tag": {
       "form-events": 8,
-      "js-transcript": 18,
+      "js-transcript": 17,
       "page-count": 2,
       "pixel-fail": 41,
       "tierA-mismatch": 170
@@ -34255,10 +34255,8 @@
     },
     {
       "path": "resources/javascript/bug_1447268.in#js-transcript",
-      "status": "fail",
-      "tags": [
-        "js-transcript"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [],
         "mismatched": [],
@@ -34272,7 +34270,7 @@
         }
       },
       "tierB": null,
-      "notes": "line 3: expected \"Goto Page: 1\", got end of output"
+      "notes": ""
     },
     {
       "path": "resources/javascript/bug_1447268.pdf",

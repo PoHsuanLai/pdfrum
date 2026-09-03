@@ -22,6 +22,7 @@ mod field;
 mod host;
 pub mod model;
 mod submit;
+mod timer;
 pub mod transcript;
 
 use std::rc::Rc;
@@ -361,14 +362,61 @@ impl ScriptCascade {
         self.host.borrow().transcript.clone()
     }
 
-    /// Timers a script asked for, as `(script, interval_ms)`.
+    /// The timers this session currently has armed, as
+    /// `(script, interval_ms)`.
     ///
-    /// **Recorded and never fired.** This is the honest answer to "what did
-    /// the document want", and it is a *value the host reads* rather than a
-    /// process-wide registry.
+    /// A *value the host reads* rather than a process-wide registry — and a
+    /// **live** one: a timer a script has cancelled, and a one-shot that has
+    /// already fired, are gone from it.
     #[must_use]
     pub fn timers(&self) -> Vec<(String, i32)> {
-        self.host.borrow().timers.clone()
+        self.host.borrow().timers.listed()
+    }
+
+    /// Tells the session that `elapsed` passed, and runs whatever came due.
+    ///
+    /// **This library never reads a clock.** A host with an event loop calls
+    /// this from its own timer; a test calls it with a number. Nothing here
+    /// starts a thread, and a session nobody advances fires nothing however
+    /// long it lives — which is what makes a document's `app.setInterval`
+    /// inert in a renderer that only draws pages.
+    ///
+    /// Answers how many timer scripts ran. See [`super::script::timer`] for
+    /// the four rules that decide which ones those are; the two a caller is
+    /// most likely to be surprised by are that **a timer fires at most once
+    /// per call**, however large the increment, and that a timer is
+    /// **re-armed before** its script runs, so a script cancelling its own
+    /// timer cancels the next firing rather than this one.
+    ///
+    /// A script a timer runs is an ordinary script: it may throw, and its
+    /// failure is recorded on [`stops`](Self::stops) like any other.
+    pub fn advance_time(&mut self, elapsed: std::time::Duration) -> usize {
+        let millis = u64::try_from(elapsed.as_millis()).unwrap_or(u64::MAX);
+        let due = self.host.borrow_mut().timers.advance(millis);
+        let mut ran = 0;
+        for (id, script) in due {
+            self.host.borrow_mut().timers.begin(id);
+            // `CJS_App::RunJsScript` runs the source under a fresh
+            // `OnExternal_Exec` event — kind `Exec`, whose `type` is
+            // `External` and whose `value` is not live, so a timer script
+            // reading `event.value` gets the same refusal a mouse script
+            // does.
+            self.host.borrow_mut().event = EventState::initialize(event::EventKind::Unknown);
+            self.run(&script, "app.setTimeOut");
+            self.host.borrow_mut().timers.end(id);
+            ran += 1;
+        }
+        ran
+    }
+
+    /// Makes the **next** timer a script arms fail to arm.
+    ///
+    /// A host that cannot give out another timer, which upstream models with
+    /// `SetFailNextTimer` — the script still gets a timer object back, its id
+    /// is the invalid `0`, and nothing ever fires. Exported because it is the
+    /// only way to reach the branch a crash regression pins.
+    pub fn fail_next_timer(&mut self) {
+        self.host.borrow_mut().timers.fail_next();
     }
 
     /// The transcript, rendered the way the oracle writes it to stdout.

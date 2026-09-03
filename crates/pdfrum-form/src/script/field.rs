@@ -664,13 +664,20 @@ fn check_this_box(this: &JsValue, args: &[JsValue], context: &mut Context) -> Js
     if args.is_empty() {
         return Err(params("checkThisBox"));
     }
+    // **The index is coerced first, before the field is even looked at.**
+    // `ToInt32Reentrant(params[0])` is line one of the body and the type
+    // check is eight lines below it (`cjs_field.cpp`), so an argument with a
+    // `valueOf` runs its callback on a *text* field too — which is exactly
+    // what `bug_1447268` is: six `checkThisBox({valueOf: cb_func})` calls
+    // whose side effects are the whole of the expected output. Type-checking
+    // first loses them.
+    let widget = args.get_or_undefined(0).to_i32(context)?;
     let (kind, controls) = read(this, context, "checkThisBox", |field| {
         (field.kind, field.checked.len())
     })?;
     if !kind.is_toggle() {
         return Err(err("checkThisBox", "Object is of the wrong type."));
     }
-    let widget = args.get_or_undefined(0).to_i32(context)?;
     let Some(widget) = usize::try_from(widget).ok().filter(|at| *at < controls) else {
         return Err(err("checkThisBox", VALUE_ERROR));
     };
