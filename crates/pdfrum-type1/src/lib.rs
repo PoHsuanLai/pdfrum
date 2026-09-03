@@ -4,8 +4,7 @@
 //!
 //! # Why this crate exists
 //!
-//! Two things need it, and nothing else does (see `docs/design/pdfrum-font.md`
-//! §3.6):
+//! Two things need it, and nothing else does:
 //!
 //! 1. **Embedded Type 1 programs** — a `/FontFile` stream, or a `/FontFile3`
 //!    whose payload turns out to be Type 1 rather than the usual bare CFF.
@@ -105,9 +104,8 @@ use std::collections::HashMap;
 /// # Not `pdfrum_font::Gid`
 ///
 /// `pdfrum-font` defines a `Gid` of its own, and the two are **deliberately
-/// distinct types for two distinct index spaces** — kept apart rather than
-/// merged into one shared identifier, which is the decision
-/// `docs/design/idiomatic-api.md` §A.11 asked step 12 to make.
+/// distinct types for two distinct index spaces**, never one shared
+/// identifier.
 ///
 /// This one indexes *this* crate's `/CharStrings` order. `pdfrum-font`'s
 /// indexes whatever program a face was loaded from: for an sfnt or bare-CFF
@@ -116,15 +114,10 @@ use std::collections::HashMap;
 /// Type 1 program, and only because `pdfrum-font` chose to carry the
 /// declaration order through unchanged.
 ///
-/// The reason the shared identifier does not move down to `pdfrum-common`,
-/// where §WP1 put [`pdfrum_common::PageIndex`]: WP1's rule is "more than one
-/// crate produces the *same value*", and a page index parsed by
-/// `pdfrum-parser` and one consumed by `pdfrum-page` really are one number in
-/// one space. These are not — merging them would make an sfnt glyph index
-/// assignable to a `/CharStrings` slot with no conversion, which is the exact
-/// shape of the two-index-spaces bug §WP8 found in `pdfrum-text`. The
-/// conversion instead lives in `pdfrum-font`'s `From` impls, at the one
-/// boundary that owns both (§B.3).
+/// A shared identifier in `pdfrum-common` would be wrong for the same reason:
+/// merging them would make an sfnt glyph index assignable to a `/CharStrings`
+/// slot with no conversion. The conversion lives in `pdfrum-font`'s `From`
+/// impls, at the one boundary that owns both index spaces.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Gid(pub u16);
 
@@ -133,7 +126,7 @@ pub struct Gid(pub u16);
 /// A record, not an engine: the fields below are everything the program said,
 /// and every method is a pure function of them. Outlines are computed on
 /// demand and not cached here — the caller's glyph cache owns that, keyed by
-/// the instantiation as well as the glyph (`docs/design/pdfrum-font.md` §3.6).
+/// the instantiation as well as the glyph.
 #[derive(Debug, Clone)]
 pub struct Type1Font {
     container: Container,
