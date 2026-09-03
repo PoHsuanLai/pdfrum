@@ -29,7 +29,7 @@
 
 use std::sync::Arc;
 
-use pdfrum::{Document, RenderOptions};
+use pdfrum::{Document, RenderOptions, VelloCpuBackend};
 use pdfrum_common::PageIndex;
 use pdfrum_edit::{
     EditDoc, IdSource, ImportOptions, PageRange, SaveMode, SaveOptions, import_pages, save,
@@ -117,7 +117,9 @@ fn font_dicts(bytes: &[u8]) -> Vec<(u32, pdfrum_object::Dict)> {
 fn render(bytes: &[u8]) -> (u32, u32, Vec<u8>) {
     let doc = Document::from_bytes(Arc::from(bytes)).expect("opens");
     let page = doc.page(0).expect("has a page");
-    let pixmap = page.render(&RenderOptions::default()).expect("renders");
+    let pixmap = page
+        .render(&VelloCpuBackend::new(), &RenderOptions::default())
+        .expect("renders");
     (pixmap.width(), pixmap.height(), pixmap.data().to_vec())
 }
 

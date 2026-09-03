@@ -29,7 +29,7 @@ must_use_candidate = "allow"
 fn_params_excessive_bools = "deny"
 
 [features]
-# The document's own JavaScript, actually run — `pdfrum-form`'s `script`
+# The document's own JavaScript, actually run — `pdfrum-form`'s `javascript`
 # feature, forwarded.
 #
 # What it brings: `boa_engine` and the ~116 crates behind it, pure Rust and
@@ -43,6 +43,16 @@ fn_params_excessive_bools = "deny"
 # The facade forwards the flag and owns no engine: `boa_engine` is not a
 # dependency of this crate under any feature, and `ScriptCascade` lives in
 # `pdfrum-form`.
+# One rasterizer by default, so `cargo add pdfrum` renders; none with
+# `default-features = false`, for a build that only parses, extracts, reads
+# forms or edits. Every backend is a feature named after its rasterizer, and
+# the GPU one is never in the default set (DEPS.md, "wgpu").
+default = ["vello-cpu"]
+vello-cpu = ["dep:pdfrum-raster-vello-cpu"]
+tinyskia = ["dep:pdfrum-raster-tinyskia"]
+agg = ["dep:pdfrum-raster-agg"]
+vello-gpu = ["dep:pdfrum-raster-vello"]
+
 javascript = ["pdfrum-form/javascript"]
 
 # The whole-render stage timers, forwarded down to `pdfrum-page` where the
@@ -68,12 +78,13 @@ pdfrum-font.workspace = true
 pdfrum-page.workspace = true
 pdfrum-filters.workspace = true
 pdfrum-render.workspace = true
-# The facade's ONE rasterizer (2026-09-02). `tiny-skia` and the AGG-parity
-# backend used to be here too, because `render::Backend` named all three in an
-# enum — so `cargo add pdfrum` compiled three rasterizers whatever the caller
-# used. `Page::render_on` takes the backend as an argument now, so those two
-# are the caller's own dependency and this tree carries one.
-pdfrum-raster-vello-cpu.workspace = true
+# The rasterizers, every one optional and each behind the feature of its
+# name; `vello-cpu` is the default. `Page::render` takes the backend as an
+# argument, so the facade compiles with none of them.
+pdfrum-raster-vello-cpu = { workspace = true, optional = true }
+pdfrum-raster-tinyskia = { workspace = true, optional = true }
+pdfrum-raster-agg = { workspace = true, optional = true }
+pdfrum-raster-vello = { workspace = true, optional = true }
 pdfrum-text.workspace = true
 pdfrum-doc.workspace = true
 pdfrum-form.workspace = true

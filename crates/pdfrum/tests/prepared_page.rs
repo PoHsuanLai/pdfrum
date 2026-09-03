@@ -61,8 +61,8 @@ fn a_prepared_page_is_prepared_for_its_options() {
         &mut session,
     );
 
-    let small = one_to_one.render().unwrap();
-    let big = doubled.render().unwrap();
+    let small = one_to_one.render(&VelloCpuBackend::new()).unwrap();
+    let big = doubled.render(&VelloCpuBackend::new()).unwrap();
     assert_eq!(
         (big.width(), big.height()),
         (small.width() * 2, small.height() * 2)

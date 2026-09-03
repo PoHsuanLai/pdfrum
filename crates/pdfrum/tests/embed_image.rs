@@ -22,6 +22,7 @@ use std::process::Command;
 
 use pdfrum::{
     Dict, Document, ImageBuilder, Object, PixelFormat, Rect, RenderOptions, Resolve, SaveOptions,
+    VelloCpuBackend,
 };
 use pdfrum_object::Name;
 
@@ -157,7 +158,7 @@ fn a_jpeg_is_stored_verbatim_under_dct_decode() {
     let original_dark = dark_pixels(
         doc.page(0)
             .expect("page")
-            .render(&RenderOptions::default())
+            .render(&VelloCpuBackend::new(), &RenderOptions::default())
             .expect("renders")
             .data(),
     );
@@ -209,7 +210,7 @@ fn a_jpeg_is_stored_verbatim_under_dct_decode() {
     let rendered = after
         .page(0)
         .expect("page")
-        .render(&RenderOptions::default())
+        .render(&VelloCpuBackend::new(), &RenderOptions::default())
         .expect("renders");
     assert!(
         dark_pixels(rendered.data()) > original_dark + 1000,

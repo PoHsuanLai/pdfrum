@@ -15,7 +15,7 @@
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-use pdfrum::{Document, Pixmap, RenderOptions};
+use pdfrum::{Document, Pixmap, RenderOptions, VelloCpuBackend};
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -50,7 +50,7 @@ fn run(input: &Path, out_dir: &Path, scale: f64) -> Result<usize, Box<dyn std::e
     let options = RenderOptions::scaled(scale);
     let mut written = 0;
     for page in doc.pages() {
-        let pixmap = page.render(&options)?;
+        let pixmap = page.render(&VelloCpuBackend::new(), &options)?;
         let path = out_dir.join(format!("page-{:04}.png", page.index().get() + 1));
         write_png(&path, &pixmap)?;
         println!(

@@ -2,7 +2,7 @@
 //! document keeps, and that the flattened page draws what the annotated one
 //! drew.
 
-use pdfrum::{Document, FlattenMode, Flattened, RenderOptions, SaveOptions};
+use pdfrum::{Document, FlattenMode, Flattened, RenderOptions, SaveOptions, VelloCpuBackend};
 use std::sync::Arc;
 
 fn open(name: &str) -> pdfrum::Result<Document> {
@@ -31,7 +31,9 @@ fn flattened_matches(name: &str, expected: &str) -> Result<(), Box<dyn std::erro
     let mut edit = doc.edit();
     assert_eq!(edit.flatten(0, FlattenMode::Print)?, Flattened::Done);
     let (_, flat) = saved(&edit)?;
-    let plain = flat.page(0)?.render(&RenderOptions::default())?;
+    let plain = flat
+        .page(0)?
+        .render(&VelloCpuBackend::new(), &RenderOptions::default())?;
     let (width, height, rgba) = expected_rgba(expected)?;
     assert_eq!(
         (plain.width(), plain.height()),
@@ -160,7 +162,11 @@ fn a_flattened_page_is_not_blank() {
     // not render blank"). The flattened page keeps the ink the annotated one
     // drew; only the field highlight, which is not page content, goes.
     let doc = open("bug_861842").unwrap();
-    let annotated = doc.page(0).unwrap().render(&with_annotations()).unwrap();
+    let annotated = doc
+        .page(0)
+        .unwrap()
+        .render(&VelloCpuBackend::new(), &with_annotations())
+        .unwrap();
     let mut edit = doc.edit();
     assert_eq!(
         edit.flatten(0, FlattenMode::Print).unwrap(),
@@ -170,7 +176,7 @@ fn a_flattened_page_is_not_blank() {
     let plain = flat
         .page(0)
         .unwrap()
-        .render(&RenderOptions::default())
+        .render(&VelloCpuBackend::new(), &RenderOptions::default())
         .unwrap();
     let before = dark_pixels(&annotated);
     let after = dark_pixels(&plain);

@@ -168,9 +168,17 @@ fn every_type_in_a_public_signature_is_nameable_from_the_facade() {
     nameable::<UnknownField>();
     nameable::<OutlineIter<'_, '_>>();
     nameable::<SubstitutionOptions>();
-    nameable::<dyn RasterBackend<Device = <VelloCpuBackend as RasterBackend>::Device>>();
     nameable::<dyn RenderDevice>();
+    #[cfg(feature = "vello-cpu")]
+    nameable::<dyn RasterBackend<Device = <VelloCpuBackend as RasterBackend>::Device>>();
+    #[cfg(feature = "vello-cpu")]
     nameable::<VelloCpuBackend>();
+    #[cfg(feature = "tinyskia")]
+    nameable::<TinySkiaBackend>();
+    #[cfg(feature = "agg")]
+    nameable::<AggBackend>();
+    #[cfg(feature = "vello-gpu")]
+    nameable::<VelloGpuBackend<'_>>();
 }
 
 /// Every `Error` variant's payload can be bound and inspected by a
@@ -311,7 +319,7 @@ fn a_forced_colour_scheme_is_constructible_from_the_facade() {
     let pixmap = doc
         .page(0)
         .expect("page 0")
-        .render(&options)
+        .render(&VelloCpuBackend::new(), &options)
         .expect("forced-colour render");
     assert!(pixmap.width() > 0 && pixmap.height() > 0);
 }
