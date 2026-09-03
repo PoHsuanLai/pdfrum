@@ -418,6 +418,100 @@ same bar for anyone who clicks through to a member crate. WP6 freezes it.
 > a summary of a contract must be checked against the implementation before
 > it ships.
 
+> **WP5 `pdfrum-object` landed 2026-09-03.** Crate `//!` 39 → **27** (13
+> prose plus the one open-a-dict fence); module `//!` over the 12-line cap
+> 3 → **0** (`dict` 34 → 11, `number` 19 → 10, `resolve` 14 → 10); indexed
+> items over the cap 1 → **0** (`Object::clone_direct` 44 → 12 prose);
+> provenance hits in `///` / `//!` 12 → **0**; doctest blocks 26 → **26**;
+> 195 doc lines removed against 107 added and **70 `//` lines added**, so
+> every essay moved rather than vanishing. No non-doc line changed; the API
+> snapshot unmoved. The one-hop resolve story is now stated once, on the
+> `Resolve` trait, with `Resolved::as_direct`, the crate root and `dict.rs`
+> linking to it. Contracts re-derived from the code before being
+> summarised: `clone_direct`'s cut edge **disappears** — `clone_flattened`
+> `filter_map`s the key or element away rather than writing null
+> (`object.rs`), and an unresolvable reference takes the same path, so the
+> two are indistinguishable; a flattened stream keeps `s.data.clone()`,
+> i.e. its raw still-encoded bytes with `/Filter` intact. `Dict::name` is
+> `self.raw(key)?.as_name()` — no resolution at all — so "the type check
+> happens before any resolution, so `/Type 5 0 R` never names a type" is
+> exact. `Dict::text` is the one resolving accessor that does *not* route
+> through `as_direct`, but `Object::to_text` returns `""` for `Ref`, so the
+> one-hop rule still holds observationally and the wording on `Resolve`
+> ("reads as missing") covers both spellings.
+
+> **WP5 `pdfrum-render` landed 2026-09-03.** Reading recorded first: the
+> caps apply to the crate's *rustdoc index*, which for this crate is the
+> `pub use` block plus the four public backend-seam modules (`blend`,
+> `glyph`, `pixmap`, `scanline`) and `walkprofile` under its feature —
+> `walk.rs`, `options.rs`, `color.rs`, `ctx.rs`, `text.rs`, `path.rs` and
+> the rest are private modules whose `//!` never reaches docs.rs, and a
+> `pub(crate)` item inside a public module (`glyph::LcdBitmap`,
+> `scanline::coverage_to_alpha`) is not indexed either. Measured against
+> that set: indexed items over the cap 7 → **0**; indexed module `//!` over
+> the 12-line cap 5 → **0** (`glyph` 64 → 12, `walkprofile` 61 → 12,
+> `scanline` 60 → 12, `blend` 20 → 12, `pixmap` 14 → 11); crate `//!` 58
+> lines, 18 prose, unchanged and inside the 50 cap; doctest blocks 1 → **1**;
+> 1023 doc lines removed against 477 added and **196 `//` lines added**. No
+> non-doc line changed; the API snapshot unmoved. `RenderOptions`'
+> `struct_excessive_bools` expectation and its "these are the oracle's flag
+> names one for one" reason are untouched — they are an attribute, not a
+> doc line, so editing them would have broken the non-doc gate.
+>
+> **The provenance sweep was widened** at the reviewer's instruction, and
+> the wider pattern is the one the queued workspace-wide sweep and CI gate
+> should inherit. Beyond `Added 20…` / `cpdf_` / `CPDF_` / `FPDF_` /
+> `pdfium_test` / `.cpp:`, rustdoc must not name our internal phases or
+> internal documents either — on docs.rs nobody knows what `M12`, `WP7`,
+> `§A.11`, `docs/status/M12.md`, `PLAN.md §M15` or `SPEC.md §8` mean. The
+> grep, over `///` / `//!` lines only:
+>
+> ```
+> \bM[0-9]{1,2}[a-z]?\b|\bWP[0-9]+\b|§[A-Z]\.[0-9]|docs/(status|design|upstream)|PLAN\.md|SPEC\.md|STYLE\.md|DEPS\.md
+> ```
+>
+> On main that matched 37 lines in `pdfrum-render` and 3 in `pdfrum-object`;
+> both are **0** now, as are the C++-path hits (172 → 0 in render, 9 → 0 in
+> object, `#[cfg(test)]` excluded). The rule applied was **trim, do not
+> relocate by default**: for each citing sentence, ask whether it is useful
+> at all. Two kinds were kept — an invariant a caller can get wrong, which
+> stays in rustdoc rewritten without the pointer; and a measured fact that
+> changes how the *code* must be read, which becomes a short `//` stating
+> the fact rather than "see M12 §1.6". Everything else — which pass decided
+> what, which corpus document it was measured on, which ruling superseded
+> which — was **deleted**, because git and `docs/` already hold it. The
+> split: of 218 citing `///` lines, ~40 survive as `//` measured facts (the
+> four-stage small-glyph bitmap pipeline, the cell rasterizer's cover/area
+> representation, the opaque-Normal fast-path derivation, the
+> straight-vs-premultiplied quantisation, the backdrop double-count), ~65
+> were rewritten in place as rustdoc with the pointer dropped, and the
+> remainder was retired.
+>
+> Contracts re-derived from the code before being summarised.
+> `needs_alpha_background`: the match arm lists exactly Screen through
+> Luminosity — every mode *above* `Multiply` — and recurses into a
+> `PageObject::Form`, so "any `/ExtGState` on the page, **or in a form it
+> draws**, names a blend mode above `Multiply`" is exact where "declares a
+> `/Group`" would be wrong. `takes_bitmap_path` returns `true` at
+> `|a| + |b| <= 50`, so the doc says "the threshold is `<= 50`; above it the
+> outline is filled", not the C++'s inverted `> 50` spelling.
+> `composite_solid` is the entry point for a *straight* colour and
+> `composite_premultiplied` for an already-premultiplied one; both docs now
+> name the other so a backend author cannot pick the quantising path by
+> accident.
+>
+> Two traps for the next crate. `cargo doc --features walk-profile` was
+> **already failing on main**: `walkprofile::phase_start` linked
+> `[`Started::end`]`, a private item, and `rustdoc::private_intra_doc_links`
+> is `-D warnings`. Same class as §7's feature-gate note above — a doc link
+> to something not in the index breaks the build — so the fix is the same:
+> a bare code span. It is fixed in this commit because the gate had to be
+> green. And a mechanical rewrapper that strips a trailing parenthetical
+> **must not touch a Markdown list**: flattening a bullet's continuation
+> indent from two spaces to none silently turns the list into a paragraph in
+> the rendered page. Strip inside list blocks line by line, or re-indent
+> afterwards and diff the result.
+
 Do not combine WP1 with WP5. The crate page is a writing task; the inner
 crates are a grind. Mixing them produces an unreviewable diff.
 
