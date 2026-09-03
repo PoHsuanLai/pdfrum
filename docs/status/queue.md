@@ -6,12 +6,15 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
 
 ## Feature gaps (added 2026-09-03)
 
-- **Image embedding.** `ImageBuilder::at(source: ObjRef, rect)` can only
-  place an `/XObject` the document already has — the same shape the font
-  gap had before `DocEdit::embed_font` (01df42a). The oracle's
-  `FPDFImageObj_LoadJpegFile` / `FPDFImageObj_SetBitmap` /
-  `FPDFPageObj_NewImageObj` have no equivalent. Belongs on `DocEdit`
-  beside `embed_font`; the subsetting/collector logic is untouched by it.
+- ~~**Image embedding.** `ImageBuilder::at(source: ObjRef, rect)` can only
+  place an `/XObject` the document already has~~ — landed.
+  `DocEdit::embed_jpeg(bytes)` is the `FPDFImageObj_LoadJpegFile` path (DCT
+  and JPX passthrough, header-parsed dimensions and colour space, the Adobe
+  CMYK `/Decode`), and `DocEdit::embed_image(pixels, w, h, PixelFormat)` the
+  `FPDFImageObj_SetBitmap` one (raw samples, flate through the writer's
+  existing filter decision, an `/SMask` split off `Rgba8`, `/ImageMask` for
+  `Mask1`). The subsetting/collector logic was indeed untouched.
+  `docs/design/pdfrum-edit.md` §3.9.
 - **JavaScript M15 step 2 — the `Doc`/`Field` object model.** 11 of 47
   transcript fixtures byte-exact; 22 fixtures reach `this.*`
   (`docs/status/M15.md` §"1. `Doc` as the global"). Two `pdfrum-form`

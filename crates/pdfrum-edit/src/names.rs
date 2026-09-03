@@ -5,10 +5,10 @@
 
 #[expect(unused_imports, reason = "the shared keys are re-exported as one set")]
 pub(crate) use pdfrum_object::names::{
-    ART_BOX, BLEED_BOX, CONTENTS, COUNT, CROP_BOX, DECODE_PARMS, ENCRYPT, FILTER, FIRST,
-    FLATE_DECODE, ID, INDEX, INFO, KIDS, LENGTH, MEDIA_BOX, METADATA, PAGE, PAGES, PARENT, PREV,
-    RESOURCES, ROOT, ROTATE, SIZE, SUBTYPE, TRIM_BOX, TYPE, VIEWER_PREFERENCES, W,
-    WIN_ANSI_ENCODING, XML, XREF, XREF_STM,
+    ART_BOX, BITS_PER_COMPONENT, BLEED_BOX, CONTENTS, COUNT, CROP_BOX, DCT_DECODE, DECODE_PARMS,
+    ENCRYPT, FILTER, FIRST, FLATE_DECODE, ID, INDEX, INFO, JPX_DECODE, KIDS, LENGTH, MEDIA_BOX,
+    METADATA, PAGE, PAGES, PARENT, PREV, RESOURCES, ROOT, ROTATE, SIZE, SUBTYPE, TRIM_BOX, TYPE,
+    VIEWER_PREFERENCES, W, WIN_ANSI_ENCODING, XML, XREF, XREF_STM,
 };
 
 pdfrum_object::names! {
@@ -42,6 +42,30 @@ pdfrum_object::names! {
     FORM = "Form";
     /// An image external object's `/Subtype` value (`/Image`).
     IMAGE = "Image";
+
+    // ---- Image XObjects (table 89) ----
+
+    /// Image width in samples (`/Width`).
+    WIDTH = "Width";
+    /// Image height in samples (`/Height`).
+    HEIGHT = "Height";
+    /// The samples' colour space (`/ColorSpace`).
+    COLOR_SPACE = "ColorSpace";
+    /// Sample-value remapping (`/Decode`).
+    DECODE = "Decode";
+    /// Whether the image is a stencil mask (`/ImageMask`).
+    IMAGE_MASK = "ImageMask";
+    /// The soft mask holding this image's alpha (`/SMask`).
+    SMASK = "SMask";
+    /// Whether a DCT stream's components were transformed
+    /// (`/ColorTransform`).
+    COLOR_TRANSFORM = "ColorTransform";
+    /// One grey component per sample (`/DeviceGray`).
+    DEVICE_GRAY = "DeviceGray";
+    /// Three additive components per sample (`/DeviceRGB`).
+    DEVICE_RGB = "DeviceRGB";
+    /// Four subtractive components per sample (`/DeviceCMYK`).
+    DEVICE_CMYK = "DeviceCMYK";
 
     // ---- Graphics state parameters the generator emits (table 58) ----
 

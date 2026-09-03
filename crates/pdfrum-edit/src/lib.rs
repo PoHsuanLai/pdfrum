@@ -40,7 +40,8 @@
 //! Font subsetting ([`subset`]) hangs off the first as an object-override
 //! pass. Embedding a caller-supplied program ([`EditDoc::embed_font`]) or
 //! one of the standard 14 ([`EditDoc::standard_font`]) is how a new `/Font`
-//! reaches that pass.
+//! reaches that pass; [`EditDoc::embed_jpeg`] and [`EditDoc::embed_image`]
+//! are the same door for an image `XObject`.
 //!
 //! # Determinism is a parameter
 //!
@@ -95,6 +96,7 @@ mod doc;
 mod encrypt;
 mod error;
 mod font;
+mod image;
 mod import;
 mod names;
 mod write;
@@ -108,6 +110,7 @@ pub use encrypt::{Encryptor, IvSource};
 pub use error::Error;
 pub use font::embed::{EmbeddedFont, FontEncoding};
 pub use font::{GidMap, Subsetted, subset};
+pub use image::{EmbeddedImage, PixelFormat};
 pub use import::{ImportOptions, NUpOptions, PageRange, import_pages, n_page_to_one};
 pub use pdfrum_font::StandardFont;
 pub use write::id::{FileId, IdSource};

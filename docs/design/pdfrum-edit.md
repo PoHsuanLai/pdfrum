@@ -1486,6 +1486,92 @@ closes.
 
 ---
 
+### 3.9 Image embedding (`cpdf_image.cpp`, `fpdfsdk/fpdf_editimg.cpp`)
+
+The write-side counterpart of §3.7's font path, and structurally the same:
+`EditDoc` allocates an object chain, hands back a handle carrying the
+`ObjRef`, and nothing in the subsetting or collector stages sees it — §3.7's
+`admit` walks `/Font` roots only, so an image `XObject` is invisible to it.
+`ImageBuilder::at(image.object(), rect)` places the result.
+
+**`DocEdit::embed_jpeg(bytes)` — `FPDFImageObj_LoadJpegFile` /
+`CPDF_Image::SetJpegImage` (`cpdf_image.cpp:96-165`).** The codestream becomes
+the stream **verbatim**; there is no encoder in this workspace and none is
+wanted (DEPS.md is closed). `InitJPEG` (`:96-135`) is reproduced key for key:
+
+| Key | Value | Source |
+|---|---|---|
+| `/Type` `/Subtype` `/Width` `/Height` | `XObject`, `Image`, the SOF's | `CreateXObjectImageDict` (`:401-410`) |
+| `/ColorSpace` | `DeviceGray` / `DeviceRGB` / `DeviceCMYK` for 1 / 3 / 4 components | `:114-127` |
+| `/BitsPerComponent` | the SOF's sample precision | `:128` |
+| `/Filter` | `/DCTDecode` | `:129` |
+| `/Decode` | `[1 0 1 0 1 0 1 0]`, **four components only** | `:121-125` |
+| `/DecodeParms /ColorTransform 0` | only when libjpeg would report no colour transform | `:130-132` |
+
+Two divergences, both forced and both narrow:
+
+- **The header is parsed here, not by libjpeg.** `JpegModule::LoadInfo`
+  (`core/fxcodec/jpeg/libjpeg_scanline_decoder.cpp:340-368`) runs
+  `jpeg_read_header` and reads `image_width`, `image_height`,
+  `num_components`, `data_precision` and a `color_transform` derived from
+  `jpeg_color_space`. Those five come out of the SOF and APP14 segments
+  directly, which reaches the same values without decoding a scan.
+  `color_transform` needs libjpeg's *derivation* rather than the raw marker:
+  `default_decompress_parms` (`jdapimin.c:150-210`) takes an Adobe transform
+  byte when there is one (`1` YCbCr, `2` YCCK, `0` neither) and otherwise
+  assumes YCbCr for three components and plain CMYK for four.
+- **A JPX passthrough the oracle has no counterpart for.**
+  `FPDFImageObj_LoadJpegFile` is JPEG-only; a JP2 signature box or a bare
+  `SOC`/`SIZ` pair takes a `/JPXDecode` arm instead, whose dictionary carries
+  `/Width` `/Height` `/Filter` and **nothing else** — §7.4.9 leaves
+  `/ColorSpace` and `/BitsPerComponent` to the codestream, and a
+  `/BitsPerComponent` there is ignored outright, so writing one would state
+  something the codestream can contradict. Dimensions come from the `SIZ`
+  segment's `Xsiz - XOsiz` by `Ysiz - YOsiz` (ISO/IEC 15444-1 §A.5.1).
+
+**`DocEdit::embed_image(pixels, w, h, format)` — `FPDFImageObj_SetBitmap` /
+`CPDF_Image::SetImage` (`:185-315`).** Raw interleaved samples with **no
+`/Filter` on the dictionary**, which is what makes §1.13's stream writer
+flate-encode them — the same door the subsetter's font programs go through.
+The oracle writes them uncompressed and leaves it there; ours is strictly
+smaller output for the same picture, and no reader can tell the difference.
+The C++'s `bpp`/`IsMaskFormat()` branch becomes a caller-supplied
+`PixelFormat`, because we are handed loose bytes rather than a
+`CFX_DIBitmap` that knows its own pitch:
+
+| `PixelFormat` | Dictionary | Oracle arm |
+|---|---|---|
+| `Gray8` | `/DeviceGray` `/BitsPerComponent 8` | `:222-250`, no-palette branch |
+| `Rgb8` | `/DeviceRGB` `/BitsPerComponent 8` | `:251-256` |
+| `Cmyk8` | `/DeviceCMYK` `/BitsPerComponent 8` | none — the oracle's bitmaps are never CMYK |
+| `Rgba8` | `/DeviceRGB` plus an eight-bit `/DeviceGray` `/SMask` | `:256-284` (`CloneAlphaMask`) |
+| `Mask1` | `/ImageMask true` `/Decode [1 0]` `/BitsPerComponent 1` | `:196-220` |
+
+Three notes on that table:
+
+- **The oracle's `Indexed` arms are not reproduced.** `:196-220` and
+  `:222-243` build an `/Indexed /DeviceRGB` space out of the bitmap's
+  *palette*, which only exists because a `CFX_DIBitmap` carries one. Loose
+  bytes do not, and a caller who wants an indexed image can write the
+  colour space themselves.
+- **`Mask1`'s `/Decode` is `[1 0]` unconditionally.** The oracle inverts only
+  when the palette's `reset` entry is the transparent one (`:206-211`).
+  Choosing `Mask1` *is* the statement that a set bit paints, and §8.9.6.2
+  makes 0 the painting end of an `/ImageMask`'s range, so `[1 0]` is what
+  that choice means; there is no palette here to say otherwise.
+- **A length that does not match is an error**, which the oracle cannot reach
+  — its bitmap knows its own pitch. `Mask1` rounds each row up to a byte, so
+  a 3x2 mask is two bytes and not one.
+
+A **junk input is an error rather than a panic or a silent no-op**: the
+oracle's `SetJpegImage` leaves its stream unset and `FPDFImageObj_LoadJpegFile`
+returns `false` (`:137-165`), which is the same refusal without the reason;
+`Error::UnrecognisedImageData` carries it. The component and precision gates
+are the oracle's own (`IsValidJpegComponent` / `IsValidJpegBitsPerComponent`,
+`:42-49`): 1, 3 or 4 components and 1, 2, 4, 8 or 16 bits.
+
+---
+
 ## 4. Round-trip obligations
 
 The invariants that must hold for PLAN.md M7's two exit criteria. Each is a

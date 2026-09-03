@@ -99,3 +99,13 @@ Neither is duplicated for the Type 1 cases: `load_font.rs` reaches across to
 `crates/pdfrum-type1/tests/fixtures/FoxitSerifMM.pfb` rather than copy a
 113 KB program into this directory. Its provenance is recorded beside it.
 
+
+Two arrived with `DocEdit::embed_jpeg`, the `FPDFImageObj_LoadJpegFile` port
+(`crates/pdfrum/tests/embed_image.rs`). Both are `testing/resources/` files,
+verbatim, and both are *images* rather than PDFs — the first fixtures here
+that are:
+
+| File | Size | What it exercises |
+|---|---:|---|
+| `mona_lisa.jpg` | 6167 B | `testing/resources/mona_lisa.jpg`, verbatim. The **only** JPEG in the oracle's `testing/resources/`, and the one its own `FPDFEditEmbedderTest` JPEG cases load. A 120x120 baseline SOF0, three components, eight-bit precision, JFIF with no Adobe APP14 — which is exactly the combination that pins the DCT passthrough: `/DeviceRGB`, `/BitsPerComponent 8`, `/Filter /DCTDecode`, and **no** `/DecodeParms /ColorTransform 0`, since libjpeg reads a marker-less three-component frame as YCbCr. Its 6 KB of entropy-coded scan also makes it a real round-trip rather than a header exercise: the same bytes must come back out of the saved file and decode to the same picture. |
+| `gray.jp2` | 211 B | `testing/resources/gray.jp2`, verbatim. A 4x4 one-component JP2 file — the smallest JPEG 2000 in the corpus — carrying the full twelve-byte `jP  ` signature box before its `jp2c`. It is the fixture for the `/JPXDecode` arm, where the point is what is **absent**: §7.4.9 leaves `/ColorSpace` and `/BitsPerComponent` to the codestream, so the dictionary this writes has four keys and a `/Filter`, and a reader that finds a `/BitsPerComponent` there would be reading something we should not have written. |

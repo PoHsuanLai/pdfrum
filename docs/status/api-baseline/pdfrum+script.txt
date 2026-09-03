@@ -22,6 +22,7 @@ pub use pdfrum::Diagnostics
 pub use pdfrum::Dict
 pub use pdfrum::DocError
 pub use pdfrum::EmbeddedFont
+pub use pdfrum::EmbeddedImage
 pub use pdfrum::Event
 pub use pdfrum::FieldActions
 pub use pdfrum::FieldFlags
@@ -51,6 +52,7 @@ pub use pdfrum::PageObject
 pub use pdfrum::PageRotation
 pub use pdfrum::PdfVersion
 pub use pdfrum::Permissions
+pub use pdfrum::PixelFormat
 pub use pdfrum::Pixmap
 pub use pdfrum::Placement
 pub use pdfrum::Point
@@ -141,6 +143,8 @@ pub struct pdfrum::DocEdit<'a>
 impl pdfrum::DocEdit<'_>
 pub fn pdfrum::DocEdit<'_>::embed_cid_font(&mut self, &[u8], &str, &[u8]) -> pdfrum::Result<pdfrum_edit::font::embed::EmbeddedFont>
 pub fn pdfrum::DocEdit<'_>::embed_font(&mut self, &[u8], pdfrum_edit::font::embed::FontEncoding) -> pdfrum::Result<pdfrum_edit::font::embed::EmbeddedFont>
+pub fn pdfrum::DocEdit<'_>::embed_image(&mut self, &[u8], u32, u32, pdfrum_edit::image::raw::PixelFormat) -> pdfrum::Result<pdfrum_edit::image::EmbeddedImage>
+pub fn pdfrum::DocEdit<'_>::embed_jpeg(&mut self, &[u8]) -> pdfrum::Result<pdfrum_edit::image::EmbeddedImage>
 pub fn pdfrum::DocEdit<'_>::save(&self, impl core::convert::AsRef<std::path::Path>, &pdfrum::SaveOptions) -> pdfrum::Result<()>
 pub fn pdfrum::DocEdit<'_>::save_pages(&mut self, impl core::convert::AsRef<std::path::Path>, &[pdfrum::PageEdit], &pdfrum::SaveOptions) -> pdfrum::Result<()>
 pub fn pdfrum::DocEdit<'_>::standard_font(&mut self, pdfrum_font::subst::standard::StandardFont) -> pdfrum::Result<pdfrum_edit::font::embed::EmbeddedFont>
