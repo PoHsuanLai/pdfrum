@@ -1,6 +1,6 @@
 //! `tiny-skia` implementation of `pdfrum-render`'s `RenderDevice` and
 //! `RasterBackend` traits — the cross-check rasterizer and determinism
-//! baseline that Tier-C conformance diffs against `vello_cpu` (PLAN.md §3).
+//! baseline that conformance diffs against `vello_cpu`.
 //!
 //! tiny-skia has neither a layer stack nor a clip stack, so both are emulated
 //! here rather than in the engine: the engine must not know which rasterizer
