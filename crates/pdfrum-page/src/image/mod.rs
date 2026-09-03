@@ -775,6 +775,139 @@ fn resolve_space<R: Resolve>(
         })
 }
 
+/// The sample geometry [`unpack`] derives once and its helpers re-read, kept
+/// together so a helper takes one argument rather than five positional
+/// `usize`s that are trivial to transpose.
+struct SampleLayout {
+    /// Bytes per source row.
+    pitch: usize,
+    /// Samples across.
+    pixels_per_row: usize,
+    /// Rows down.
+    rows: usize,
+    /// `pixels_per_row * rows`, already checked for overflow.
+    total_pixels: usize,
+    /// The largest value the sample depth can express.
+    max_raw: u32,
+}
+
+/// Read a one-component image's raw samples into one byte each.
+///
+/// `remap` is the `/Decode` mapping when the sample *is* the palette index
+/// and the array therefore remaps the index itself — which is the `Indexed`
+/// case — and `None` when the mapping belongs in the palette instead, which
+/// is [`tint_palette`]'s.
+///
+/// An absent row is left at zero: PDFium returns a zeroed *output* buffer
+/// without ever reaching the decode, so the index stays zero whatever
+/// `/Decode` maps a zero sample to. See [`scanline::Availability`].
+fn scan_indices(
+    info: &ImageDict,
+    data: &[u8],
+    remap: Option<&DecodeMap>,
+    layout: &SampleLayout,
+    diags: &mut Diagnostics,
+) -> Box<[u8]> {
+    let mut indices = vec![0u8; layout.total_pixels];
+    let mut padded = false;
+    for y in 0..layout.rows {
+        let (line, availability) =
+            scanline::scanline(data, u32::try_from(y).unwrap_or(0), layout.pitch);
+        padded |= availability != scanline::Availability::Whole;
+        if availability == scanline::Availability::Absent {
+            continue;
+        }
+        for x in 0..layout.pixels_per_row {
+            let raw = scanline::get_bits(&line, x * info.bpc as usize, info.bpc);
+            let index = match remap {
+                #[expect(
+                    clippy::cast_possible_truncation,
+                    clippy::cast_sign_loss,
+                    reason = "the clamp bounds the value to a palette index"
+                )]
+                Some(decode) => decode.apply(0, f64_to_f32(raw)).clamp(0.0, 255.0) as u8,
+                None => u8::try_from(raw.min(255)).unwrap_or(u8::MAX),
+            };
+            if let Some(slot) = indices.get_mut(y * layout.pixels_per_row + x) {
+                *slot = index;
+            }
+        }
+    }
+    if padded {
+        diags.record(Severity::Recovered, DiagKind::ImageStreamTruncated, None);
+    }
+    indices.into()
+}
+
+/// Resolve a one-component tint image into a palette and its indices.
+///
+/// This is `CPDF_DIB::LoadPalette` (`cpdf_dib.cpp:894-979`) for the families
+/// that have no device reading: the tint transform runs once per distinct
+/// sample value rather than once per pixel, which is both exact — a sample of
+/// at most eight bits has at most 256 values — and the shape
+/// `pdfrum_render::image::to_pixmap` already has a fast path for.
+fn tint_palette(
+    info: &ImageDict,
+    space: &ColorSpace,
+    data: &[u8],
+    decode: &DecodeMap,
+    layout: &SampleLayout,
+    diags: &mut Diagnostics,
+) -> Pixels {
+    // The `/Decode` mapping belongs in the palette rather than on the index,
+    // because here the sample is a *tint* the transform consumes rather than
+    // a position in a table.
+    let indices = scan_indices(info, data, None, layout, diags);
+    // The palette spans every value the sample depth can express, with the
+    // mapping folded into each entry exactly as `LoadPalette` folds
+    // `decode_min_ + decode_step_ * i` into its own.
+    let entries = usize::try_from(layout.max_raw).unwrap_or(255).min(255) + 1;
+    let palette = (0..entries)
+        .map(|i| {
+            #[expect(
+                clippy::cast_precision_loss,
+                reason = "an index of at most 255 is exact in f32"
+            )]
+            let value = decode.apply(0, i as f32);
+            space.to_rgb(&[value])
+        })
+        .collect();
+    Pixels::Indexed { indices, palette }
+}
+
+/// Resolve a multi-colorant tint image one pixel at a time.
+///
+/// This is `CPDF_DIB::TranslateScanline24bpp` (`cpdf_dib.cpp:1007-1054`),
+/// reached the same way PDFium reaches it: the default-decode shortcut at
+/// `:1056-1075` keeps only `DeviceRGB`/`CalRGB` and hands every other family
+/// to `TranslateImageLine`, whose generic base
+/// (`cpdf_colorspace.cpp:636-660`) is `GetRGB` per pixel. A `DeviceN` over
+/// more than one colorant has too wide a sample tuple to tabulate, so there
+/// is no palette to build.
+///
+/// The conversion itself is [`ColorSpace::translate_image_line`], which was
+/// ported whole and until now had no caller in the image build at all — only
+/// a panic test. That absent call site is the actual defect: the arithmetic
+/// was always here, `unpack` simply never asked for it.
+///
+/// `samples` holds the `/Decode`-mapped components as bytes in the space's
+/// own component order. The port writes **B, G, R** because that is the
+/// device order PDFium's scanline is in; `Pixels::Rgb8` wants R, G, B, so the
+/// triples are swapped on the way out rather than by giving the port a second
+/// byte order to maintain.
+fn tint_per_pixel(
+    space: &ColorSpace,
+    samples: &[u8],
+    total_pixels: usize,
+) -> Result<Pixels, Error> {
+    let mut bgr = vec![0u8; total_pixels.checked_mul(3).ok_or(Error::ImageTooLarge)?];
+    space.translate_image_line(&mut bgr, samples, total_pixels, false);
+    for px in bgr.chunks_exact_mut(3) {
+        px.swap(0, 2);
+    }
+    Ok(Pixels::Rgb8(bgr.into()))
+}
+
 /// Unpack raw or losslessly-filtered samples into pixels.
 fn unpack(
     info: &ImageDict,
@@ -803,45 +936,53 @@ fn unpack(
         (1u32 << info.bpc) - 1
     };
 
+    let layout = SampleLayout {
+        pitch,
+        pixels_per_row,
+        rows,
+        total_pixels,
+        max_raw,
+    };
+
     // An indexed image keeps its indices and a resolved palette, which is
-    // what a renderer needs to resample it without blending indices.
+    // what a renderer needs to resample it without blending indices. An
+    // `/Decode` on one remaps the **index** itself, so it is applied during
+    // the scan and the palette is the space's own.
     if let ColorSpace::Indexed(indexed) = space {
-        let mut indices = vec![0u8; total_pixels];
-        let mut padded = false;
-        for y in 0..rows {
-            let (line, availability) =
-                scanline::scanline(data, u32::try_from(y).unwrap_or(0), pitch);
-            padded |= availability != scanline::Availability::Whole;
-            // An absent row returns a zeroed *output* buffer without ever
-            // reaching the decode, so the indices stay zero whatever `/Decode`
-            // maps a zero sample to. See `Availability`.
-            if availability == scanline::Availability::Absent {
-                continue;
-            }
-            for x in 0..pixels_per_row {
-                let raw = scanline::get_bits(&line, x * info.bpc as usize, info.bpc);
-                // An `/Decode` on an indexed image remaps the index itself.
-                #[expect(
-                    clippy::cast_possible_truncation,
-                    clippy::cast_sign_loss,
-                    reason = "the clamp bounds the value to a palette index"
-                )]
-                let mapped = decode.apply(0, f64_to_f32(raw)).clamp(0.0, 255.0) as u8;
-                if let Some(slot) = indices.get_mut(y * pixels_per_row + x) {
-                    *slot = mapped;
-                }
-            }
-        }
-        if padded {
-            diags.record(Severity::Recovered, DiagKind::ImageStreamTruncated, None);
-        }
+        let indices = scan_indices(info, data, Some(&decode), &layout, diags);
         let palette = (0..=indexed.max_index)
             .map(|i| space.to_rgb(&[f32::from(i)]))
             .collect();
-        return Ok(Pixels::Indexed {
-            indices: indices.into(),
-            palette,
-        });
+        return Ok(Pixels::Indexed { indices, palette });
+    }
+
+    // A `Separation` or `DeviceN` sample is a **tint**, not a colour, so it
+    // has to be run through the tint transform before it means anything.
+    // Widening it to a byte and handing it to the device reading of the
+    // component count paints the tint itself — one colorant becomes a grey
+    // level, four become a CMYK tuple. See
+    // [`ColorSpace::needs_image_conversion`] for why these two families and
+    // no others.
+    //
+    // PDFium reaches the conversion from two directions and both end at
+    // `GetRGB`. When `bpc_ * components_ <= 8` — which covers every eight-bit
+    // single-component image — `CPDF_DIB::LoadPalette`
+    // (`cpdf_dib.cpp:894-979`) precomputes `GetRGB` over all `1 << bits`
+    // possible sample values and the image becomes a palette lookup.
+    // Anything wider takes `TranslateScanline24bpp` (`:1007-1054`), whose
+    // default-decode shortcut (`:1056-1075`) hands every non-RGB family to
+    // `TranslateImageLine`; the generic base (`cpdf_colorspace.cpp:636-660`)
+    // is `GetRGB` per pixel again.
+    //
+    // For a single component both collapse to the same thing here: resolve
+    // the colour once per distinct sample value into a palette, which is
+    // exact (there are at most 256 of them) and is the shape the renderer's
+    // indexed fast path already consumes. `corpus/fx/other/1.pdf` is the
+    // fixture — a 1x1 `/Separation` image whose lone `0xC6` sample is a 0.776
+    // tint of PANTONE 327 CV, teal `(0, 182, 162)` through the tint transform
+    // and grey `(198, 198, 198)` without it.
+    if components == 1 && space.needs_image_conversion() {
+        return Ok(tint_palette(info, space, data, &decode, &layout, diags));
     }
 
     // Everything else widens to eight bits per component in the space's own
@@ -886,7 +1027,12 @@ fn unpack(
     if padded {
         diags.record(Severity::Recovered, DiagKind::ImageStreamTruncated, None);
     }
-    let _ = max_raw;
+    // A multi-colorant `DeviceN` cannot be tabulated — its sample tuple is
+    // too wide — so it takes `TranslateScanline24bpp`'s own shape instead.
+    if space.needs_image_conversion() {
+        return tint_per_pixel(space, &out, total_pixels);
+    }
+
     Ok(match components {
         1 => Pixels::Gray8(out.into()),
         4 => Pixels::Cmyk8(out.into()),
@@ -2016,6 +2162,197 @@ mod tests {
                 g: 1.0,
                 b: 1.0
             }
+        );
+    }
+
+    /// Build a `[/Separation /Name /DeviceCMYK <tint transform>]` array whose
+    /// transform is the type-2 exponential `C0 -> C1` at `N = 1`.
+    fn separation_cmyk(c1: [f32; 4]) -> Object {
+        let mut c0 = Array::default();
+        for _ in 0..4 {
+            c0.push(Object::Real(0.0));
+        }
+        let mut c1_arr = Array::default();
+        for v in c1 {
+            c1_arr.push(Object::Real(v));
+        }
+        let mut domain = Array::default();
+        domain.push(Object::Int(0));
+        domain.push(Object::Int(1));
+        let mut range = Array::default();
+        for _ in 0..4 {
+            range.push(Object::Int(0));
+            range.push(Object::Int(1));
+        }
+        let tint = Dict::from_pairs(vec![
+            (Name::from("FunctionType"), Object::Int(2)),
+            (Name::from("N"), Object::Real(1.0)),
+            (Name::from("Domain"), Object::Array(domain)),
+            (Name::from("Range"), Object::Array(range)),
+            (Name::from("C0"), Object::Array(c0)),
+            (Name::from("C1"), Object::Array(c1_arr)),
+        ]);
+        let mut space = Array::default();
+        space.push(Object::Name(Name::from("Separation")));
+        space.push(Object::Name(Name::from("Spot")));
+        space.push(Object::Name(Name::from("DeviceCMYK")));
+        space.push(Object::Dict(tint));
+        Object::Array(space)
+    }
+
+    #[test]
+    fn a_separation_image_runs_its_samples_through_the_tint_transform() {
+        // `corpus/fx/other/1.pdf`'s own image, reduced to its essentials: one
+        // eight-bit sample of `0xC6` in a `/Separation` whose alternate is
+        // `DeviceCMYK` and whose `C1` is PANTONE 327 CV. The tint is
+        // 198/255 = 0.7765, so the CMYK is (0.7765, 0, 0.4659, 0) and the
+        // Adobe table turns that into teal.
+        //
+        // Read as a grey level instead — which is what a `Pixels::Gray8`
+        // bucketed on the component count does — the same byte paints
+        // (198, 198, 198). That was the defect: the sample is a *tint*, and
+        // only the tint transform makes it a colour.
+        let s = stream(
+            vec![
+                (Name::from("Width"), Object::Int(1)),
+                (Name::from("Height"), Object::Int(1)),
+                (Name::from("BitsPerComponent"), Object::Int(8)),
+                (
+                    Name::from("ColorSpace"),
+                    separation_cmyk([1.0, 0.0, 0.600_006, 0.0]),
+                ),
+            ],
+            &[0xC6],
+        );
+        let image = decode(&s).expect("should decode");
+        assert_eq!(
+            image.pixels.sample_bytes(0, 0, 1),
+            [0, 182, 162],
+            "the tint must reach the alternate space, not the page as grey"
+        );
+        // The shape matters as much as the colour: a palette is what the
+        // renderer's indexed fast path consumes, and it must span the whole
+        // eight-bit sample domain rather than only the values in use.
+        let Pixels::Indexed { palette, .. } = &image.pixels else {
+            panic!(
+                "a resolved Separation image is a palette, got {:?}",
+                image.pixels
+            );
+        };
+        assert_eq!(palette.len(), 256);
+        // A zero tint is `C0`, which is CMYK all-zero — paper white.
+        assert_eq!(palette[0].to_bytes(), [255, 255, 255]);
+    }
+
+    #[test]
+    fn a_separation_decode_array_is_folded_into_the_palette() {
+        // `/Decode [1 0]` inverts the *tint* before the transform runs, so
+        // the `0xC6` sample becomes a 1 - 0.7765 = 0.2235 tint rather than a
+        // 0.7765 one. `LoadPalette` folds `decode_min_ + decode_step_ * i`
+        // into each entry, and so must this.
+        let mut decode_arr = Array::default();
+        decode_arr.push(Object::Int(1));
+        decode_arr.push(Object::Int(0));
+        let s = stream(
+            vec![
+                (Name::from("Width"), Object::Int(1)),
+                (Name::from("Height"), Object::Int(1)),
+                (Name::from("BitsPerComponent"), Object::Int(8)),
+                (
+                    Name::from("ColorSpace"),
+                    separation_cmyk([1.0, 0.0, 0.600_006, 0.0]),
+                ),
+                (Name::from("Decode"), Object::Array(decode_arr)),
+            ],
+            &[0xC6],
+        );
+        let image = decode(&s).expect("should decode");
+        let inverted = image.pixels.sample_bytes(0, 0, 1);
+        let s_plain = stream(
+            vec![
+                (Name::from("Width"), Object::Int(1)),
+                (Name::from("Height"), Object::Int(1)),
+                (Name::from("BitsPerComponent"), Object::Int(8)),
+                (
+                    Name::from("ColorSpace"),
+                    separation_cmyk([1.0, 0.0, 0.600_006, 0.0]),
+                ),
+            ],
+            &[255 - 0xC6],
+        );
+        let plain = decode(&s_plain).expect("should decode");
+        assert_eq!(
+            inverted,
+            plain.pixels.sample_bytes(0, 0, 1),
+            "`/Decode [1 0]` on a tint is the complement of the sample"
+        );
+    }
+
+    #[test]
+    fn a_devicen_image_converts_per_pixel_rather_than_through_a_palette() {
+        // Two colorants cannot be tabulated over an eight-bit sample, so this
+        // takes `TranslateScanline24bpp`'s per-pixel shape and resolves to
+        // `Rgb8`. The transform is a type-2 exponential from all-zero to
+        // `C1`, evaluated on the *first* input only, which is what a
+        // one-output-per-colorant `DeviceN` degenerates to here — the point of
+        // the fixture is the arm taken, and that both colorants reach it.
+        let mut names = Array::default();
+        names.push(Object::Name(Name::from("SpotA")));
+        names.push(Object::Name(Name::from("SpotB")));
+        let mut domain = Array::default();
+        for _ in 0..2 {
+            domain.push(Object::Int(0));
+            domain.push(Object::Int(1));
+        }
+        let mut range = Array::default();
+        for _ in 0..4 {
+            range.push(Object::Int(0));
+            range.push(Object::Int(1));
+        }
+        let mut c0 = Array::default();
+        let mut c1 = Array::default();
+        for _ in 0..4 {
+            c0.push(Object::Real(0.0));
+        }
+        for v in [0.0_f32, 1.0, 1.0, 0.0] {
+            c1.push(Object::Real(v));
+        }
+        let tint = Dict::from_pairs(vec![
+            (Name::from("FunctionType"), Object::Int(2)),
+            (Name::from("N"), Object::Real(1.0)),
+            (Name::from("Domain"), Object::Array(domain)),
+            (Name::from("Range"), Object::Array(range)),
+            (Name::from("C0"), Object::Array(c0)),
+            (Name::from("C1"), Object::Array(c1)),
+        ]);
+        let mut space = Array::default();
+        space.push(Object::Name(Name::from("DeviceN")));
+        space.push(Object::Array(names));
+        space.push(Object::Name(Name::from("DeviceCMYK")));
+        space.push(Object::Dict(tint));
+        let s = stream(
+            vec![
+                (Name::from("Width"), Object::Int(2)),
+                (Name::from("Height"), Object::Int(1)),
+                (Name::from("BitsPerComponent"), Object::Int(8)),
+                (Name::from("ColorSpace"), Object::Array(space)),
+            ],
+            &[0x00, 0x00, 0xFF, 0xFF],
+        );
+        let image = decode(&s).expect("should decode");
+        assert!(
+            matches!(image.pixels, Pixels::Rgb8(_)),
+            "a two-colorant DeviceN resolves per pixel, got {:?}",
+            image.pixels
+        );
+        // A zero tint vector is `C0` — CMYK all-zero, paper white — and a
+        // full one is `C1`, pure red in the alternate. Neither is the raw
+        // sample pair, which is the whole point.
+        assert_eq!(image.pixels.sample_bytes(0, 0, 2), [255, 255, 255]);
+        let full = image.pixels.sample_bytes(1, 0, 2);
+        assert!(
+            full[0] > 200 && full[1] < 80 && full[2] < 80,
+            "a full tint must reach the alternate space's red, got {full:?}"
         );
     }
 }
