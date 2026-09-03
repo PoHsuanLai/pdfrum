@@ -46,7 +46,10 @@
 
 mod af;
 mod bind;
+mod doc;
+mod field;
 mod host;
+pub mod model;
 pub mod transcript;
 
 use std::rc::Rc;
@@ -56,6 +59,7 @@ use pdfrum_common::{Diagnostics, Limits};
 
 use crate::cascade::{Cascade, FieldRef, FieldWrites, Keystroke, KeystrokeOutcome};
 
+pub use model::{AnnotModel, DocumentModel, FieldModel, FieldModelFlags, FieldModelKind};
 pub use transcript::TranscriptLine;
 
 /// The instant the **goldens were recorded at**, in seconds since the epoch:
@@ -115,6 +119,19 @@ pub const GOLDEN_TIMEZONE_OFFSET_SECS: i32 = -7 * 3600;
 /// while `util_scand`'s every line round-trips to the UTC string it was
 /// given, which only holds if `Date` and the parser agree on −7.
 pub const GOLDEN_PRINTD_OFFSET_SECS: i32 = -8 * 3600;
+
+/// The file path **the goldens were recorded with**, which is the test
+/// harness's own and not any real file's.
+///
+/// `ExampleDocGetFilePath` answers a hard-coded `"myfile.pdf"`
+/// (`testing/pdfium_test/pdfium_test.cc:368-369`), and it leaks into the
+/// expected bytes twice: `document_properties_expected.txt` pins
+/// `this.URL is string myfile.pdf` and `this.path is string /myfile.pdf`, the
+/// second because `SysPathToPDFPath` prefixes a separator.
+///
+/// A constant a golden run passes in, exactly as [`GOLDEN_CLOCK_SECS`] is —
+/// an embedder passes the path it actually opened.
+pub const GOLDEN_FILE_PATH: &str = "myfile.pdf";
 
 /// What a scripting session is allowed to do, and what it sees.
 #[derive(Debug, Clone, Default)]
@@ -587,6 +604,81 @@ impl ScriptCascade {
         self.names.insert(index, name.into());
         self.values.insert(index, value.into());
         self.actions.insert(index, actions);
+    }
+
+    /// Installs what the `Doc` object answers from.
+    ///
+    /// The document half of the same bargain [`set_field`](Self::set_field)
+    /// struck: this type holds no PDF, so the caller reads one and hands over
+    /// a value. [`model::read`] is that reader for a `pdfrum` catalog, and a
+    /// host with its own document type writes its own.
+    ///
+    /// Without this the object model is still **bound** — `getField` exists
+    /// and is callable — and answers as an empty document would: no pages, no
+    /// fields, and `undefined` from `getField`. That is the honest answer for
+    /// a realm nobody told about a document, and it is why an unbound name is
+    /// never what a script meets.
+    pub fn set_document(&mut self, document: model::DocumentModel) {
+        self.host.borrow_mut().document = document;
+    }
+
+    /// What a script wrote through `Field.value` or `Doc.resetForm`, drained.
+    ///
+    /// A **value the caller reads back**, not a write this type performed:
+    /// applying it from inside a native function would re-enter the cascade
+    /// the script is already inside, which is the `busy_` re-entry upstream
+    /// refuses (`fxjs/cjs_event_context.cpp:32-38`). The caller spends these
+    /// through the ordinary commit path, so the appearance regenerates the
+    /// way any other value change does.
+    ///
+    /// Each entry is a `/Fields` position and the value the script set — the
+    /// same shape [`FieldWrites`] carries, and the same index space.
+    pub fn drain_field_writes(&mut self) -> Vec<(u32, String)> {
+        std::mem::take(&mut self.host.borrow_mut().field_writes)
+    }
+
+    /// Whether a script called `Doc.calculateNow()`, drained.
+    pub fn take_calculate_request(&mut self) -> bool {
+        std::mem::take(&mut self.host.borrow_mut().calculate_requested)
+    }
+
+    /// The field a script asked for the keyboard for, drained.
+    ///
+    /// A `/Fields` position, or `None`. Recorded rather than performed for
+    /// the same reason the writes are.
+    pub fn take_focus_request(&mut self) -> Option<u32> {
+        self.host.borrow_mut().focus_requested.take()
+    }
+
+    /// The value the object model currently holds for a field.
+    ///
+    /// What a script last set through `Field.value`, or what the caller
+    /// installed. The caller reads this when applying a write it drained, so
+    /// the model and the session agree.
+    #[must_use]
+    pub fn field_value(&self, index: u32) -> Option<String> {
+        let host = self.host.borrow();
+        host.document
+            .field_at(usize::try_from(index).ok()?)
+            .map(|field| field.value.clone())
+    }
+
+    /// Tells the object model a field's value changed outside a script.
+    ///
+    /// A user typing into a field must be visible to the next script that
+    /// reads `getField(name).value`, and this crate holds no document to
+    /// re-read — so the caller says so, exactly as it says what the value was
+    /// at install time.
+    pub fn set_field_value(&mut self, index: u32, value: impl Into<String>) {
+        let value = value.into();
+        let mut host = self.host.borrow_mut();
+        if let Ok(index) = usize::try_from(index)
+            && let Some(field) = host.document.fields.get_mut(index)
+        {
+            field.value.clone_from(&value);
+        }
+        drop(host);
+        self.values.insert(index, value);
     }
 
     /// Installs the `/CO` calculation order — the field indices a calculation

@@ -90,7 +90,7 @@ pub(crate) fn param_error(name: &str) -> JsError {
 /// The host state, or `None` if the realm was built without one — which
 /// cannot happen through [`super::ScriptCascade`] and is answered rather than
 /// asserted.
-fn host(context: &Context) -> Option<Host> {
+pub(crate) fn host(context: &Context) -> Option<Host> {
     context.get_data::<Host>().cloned()
 }
 
@@ -102,7 +102,7 @@ pub(crate) fn say(context: &Context, line: TranscriptLine) {
 }
 
 /// An argument as a string, the way `ToWideStringReentrant` would take it.
-fn string_of(value: &JsValue, context: &mut Context) -> JsResult<String> {
+pub(crate) fn string_of(value: &JsValue, context: &mut Context) -> JsResult<String> {
     Ok(value.to_string(context)?.to_std_string_lossy())
 }
 
@@ -133,10 +133,15 @@ fn string_of(value: &JsValue, context: &mut Context) -> JsResult<String> {
 ///   pressed.
 fn app_alert(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     let expanded = expand_keywords(args, &["cMsg", "nIcon", "nType", "cTitle"], context)?;
-    let Some(message_value) = expanded.first().filter(|v| !v.is_undefined()) else {
+    // `IsExpandedParamKnown` (`fxjs/js_define.cpp:100-105`) asks whether the
+    // **slot was filled**, and an explicitly passed `undefined` fills it:
+    // `value->IsUndefined()` is one of the six types it accepts. So
+    // `app.alert(undefined)` prints the string `undefined` and answers 0,
+    // while `app.alert()` and `app.alert({})` — which leave the slot empty —
+    // throw. `app_methods_expected.txt` asserts all three.
+    let Some(message_value) = expanded.first().cloned().flatten() else {
         return Err(param_error("app.alert"));
     };
-    let message_value = message_value.clone();
 
     let message = if let Some(array) = message_value.as_object().filter(|o| o.is_array()) {
         let length = array
@@ -152,12 +157,7 @@ fn app_alert(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResu
         string_of(&message_value, context)?
     };
 
-    let known = |index: usize| -> Option<JsValue> {
-        expanded
-            .get(index)
-            .filter(|value| !value.is_undefined())
-            .cloned()
-    };
+    let known = |index: usize| -> Option<JsValue> { expanded.get(index).cloned().flatten() };
     let icon = match known(1) {
         Some(value) => value.to_i32(context)?,
         None => 0,
@@ -192,14 +192,14 @@ fn app_alert(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResu
 /// than supplementing it — `result[0]` is explicitly cleared first
 /// (`js_define.cpp:83`), so `alert({nIcon: 1})` has no message at all and
 /// throws.
-fn expand_keywords(
+pub(crate) fn expand_keywords(
     args: &[JsValue],
     keywords: &[&str],
     context: &mut Context,
-) -> JsResult<Vec<JsValue>> {
-    let mut out = vec![JsValue::undefined(); keywords.len()];
+) -> JsResult<Vec<Option<JsValue>>> {
+    let mut out: Vec<Option<JsValue>> = vec![None; keywords.len()];
     for (slot, value) in out.iter_mut().zip(args.iter()) {
-        *slot = value.clone();
+        *slot = Some(value.clone());
     }
 
     // The named form applies only to a lone non-array object.
@@ -213,14 +213,14 @@ fn expand_keywords(
     };
 
     if let Some(first) = out.first_mut() {
-        *first = JsValue::undefined();
+        *first = None;
     }
     for (index, keyword) in keywords.iter().enumerate() {
         let value = object.get(boa_engine::js_string!(*keyword), context)?;
         if !value.is_undefined()
             && let Some(slot) = out.get_mut(index)
         {
-            *slot = value;
+            *slot = Some(value);
         }
     }
     Ok(out)
@@ -245,18 +245,18 @@ fn app_response(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsR
         &["cQuestion", "cTitle", "cDefault", "bPassword", "cLabel"],
         context,
     )?;
-    if expanded.first().is_none_or(JsValue::is_undefined) {
+    if expanded.first().is_none_or(Option::is_none) {
         return Err(param_error("app.response"));
     }
     let text = |index: usize, context: &mut Context| -> JsResult<String> {
-        match expanded.get(index).filter(|v| !v.is_undefined()) {
-            Some(value) => string_of(&value.clone(), context),
+        match expanded.get(index).cloned().flatten() {
+            Some(value) => string_of(&value, context),
             None => Ok(String::new()),
         }
     };
     let question = text(0, context)?;
-    let title = match expanded.get(1).filter(|v| !v.is_undefined()) {
-        Some(value) => string_of(&value.clone(), context)?,
+    let title = match expanded.get(1).cloned().flatten() {
+        Some(value) => string_of(&value, context)?,
         // `JSMessage::kAlert` is reused as the response dialog's default
         // title, which is why the goldens read `PDF: question` for one call
         // and `title: question` for the other.
@@ -265,7 +265,8 @@ fn app_response(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsR
     let default_value = text(2, context)?;
     let password = expanded
         .get(3)
-        .is_some_and(|value| !value.is_undefined() && value.to_boolean());
+        .and_then(Clone::clone)
+        .is_some_and(|value| value.to_boolean());
     let label = text(4, context)?;
 
     say(
@@ -278,8 +279,23 @@ fn app_response(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsR
             password,
         },
     );
-    Ok(JsValue::from(boa_engine::js_string!("")))
+    // **The host's answer, and the harness's is `No`.** Nothing prompts here;
+    // the question went on the transcript for a host to decide about, and the
+    // value a script sees is what a host would have replied.
+    // `ExampleAppResponse` writes the two UTF-16 code units `N`, `o` into the
+    // caller's buffer (`testing/pdfium_test/pdfium_test.cc:356-364`), which
+    // seven `app_methods` assertions read back — a harness constant, like
+    // `myfile.pdf` and the frozen clock.
+    Ok(JsValue::from(boa_engine::js_string!(GOLDEN_RESPONSE)))
 }
+
+/// What `app.response` answers when nobody is there to be asked.
+///
+/// `pdfium_test`'s own reply (`testing/pdfium_test/pdfium_test.cc:356-364`),
+/// and the value seven golden assertions read back. An embedder that wants to
+/// prompt reads the [`TranscriptLine::Response`] and asks; this is what the
+/// library says on its own.
+pub(crate) const GOLDEN_RESPONSE: &str = "No";
 
 /// One of the eight `app` methods that are **no-ops returning success**
 /// upstream (`cjs_app.cpp:207, 219, 296, 443, 449, 502, 532, 608`).
@@ -613,12 +629,13 @@ pub(crate) fn install(context: &mut Context, host: Host) -> JsResult<()> {
     install_console(context)?;
     install_util(context)?;
     super::af::install(context)?;
+    super::doc::install(context)?;
     Ok(())
 }
 
 /// A native function from a plain function pointer, which is the only form
 /// that can reach the host state (see the module documentation).
-fn native(function: super::af::Bound) -> NativeFunction {
+pub(crate) fn native(function: super::af::Bound) -> NativeFunction {
     NativeFunction::from_fn_ptr(function)
 }
 
@@ -643,6 +660,11 @@ fn install_app(context: &mut Context) -> JsResult<()> {
         // The eight that are no-ops returning success upstream. Reproducing
         // "does nothing, succeeds" is correct behaviour, not a shortcut — a
         // script calling `app.browseForDoc` must not throw.
+        init.function(
+            native(super::doc::app_mail_msg),
+            boa_engine::js_string!("mailMsg"),
+            6,
+        );
         for name in [
             "browseForDoc",
             "execDialog",
@@ -669,52 +691,192 @@ fn install_app(context: &mut Context) -> JsResult<()> {
         ] {
             init.function(native(function), boa_engine::js_string!(name), 0);
         }
-        // `cjs_app.cpp:38-52`. The values are PDFium's own, and
-        // `app_properties.in` asserts each.
-        init.property(
-            boa_engine::js_string!("viewerType"),
-            boa_engine::js_string!("pdfium"),
-            Attribute::all(),
-        )
-        .property(
-            boa_engine::js_string!("viewerVariation"),
-            boa_engine::js_string!("Full"),
-            Attribute::all(),
-        )
-        .property(
-            boa_engine::js_string!("platform"),
-            boa_engine::js_string!("WIN"),
-            Attribute::all(),
-        )
-        .property(
-            boa_engine::js_string!("language"),
-            boa_engine::js_string!("ENU"),
-            Attribute::all(),
-        )
-        .property(
-            boa_engine::js_string!("viewerVersion"),
-            JsValue::from(8),
-            Attribute::all(),
-        )
-        .property(
-            boa_engine::js_string!("formsVersion"),
-            JsValue::from(7),
-            Attribute::all(),
-        )
-        .property(
-            boa_engine::js_string!("calculate"),
-            JsValue::from(true),
-            Attribute::all(),
-        )
-        .property(
-            boa_engine::js_string!("runtimeHighlight"),
-            JsValue::from(false),
-            Attribute::all(),
-        );
         init.build()
     };
-    context.register_global_property(boa_engine::js_string!("app"), app, Attribute::all())
+    context.register_global_property(
+        boa_engine::js_string!("app"),
+        app.clone(),
+        Attribute::all(),
+    )?;
+    install_app_properties(&app, context)
 }
+
+/// `app`'s twelve properties, which fall into three shapes.
+///
+/// `cjs_app.cpp:38-52` and the `JS_STATIC_PROP` table, and
+/// `app_properties_expected.txt` asserts every line of all three:
+///
+/// - **five constants** whose *setter throws* `Operation not supported.` —
+///   `formsVersion`, `language`, `platform`, `viewerType`, `viewerVariation`,
+///   `viewerVersion`;
+/// - **three that throw on read as well** — `fs`, `fullscreen`, `media`;
+/// - **two real booleans**, `calculate` and `runtimeHighlight`, whose setters
+///   coerce: `app.calculate = 3` yields 3 to the assignment expression and
+///   reads back `true`, because the slot is a `bool`.
+///
+/// `activeDocs` is the odd one: it **reads** an array-like whose sole entry is
+/// the document — which stringifies as `[object global]`, since `Doc` is the
+/// global — and refuses a write.
+fn install_app_properties(app: &boa_engine::JsObject, context: &mut Context) -> JsResult<()> {
+    // The six constants. Each needs a **throwing setter**, which a
+    // non-writable data property cannot give — an assignment to one of those
+    // is a silent no-op in sloppy mode, and the golden asserts a thrown
+    // `Operation not supported.` So each is an accessor over a getter that
+    // answers its one value, and there is a two-line getter per name rather
+    // than a closure, because `NativeFunction` needs `Copy` and a closure
+    // capturing a `JsValue` is not.
+    let properties: [(&str, super::af::Bound, super::af::Bound); 12] = [
+        ("formsVersion", app_forms_version, app_no_forms_version),
+        ("language", app_language, app_no_language),
+        ("platform", app_platform, app_no_platform),
+        ("viewerType", app_viewer_type, app_no_viewer_type),
+        (
+            "viewerVariation",
+            app_viewer_variation,
+            app_no_viewer_variation,
+        ),
+        ("viewerVersion", app_viewer_version, app_no_viewer_version),
+        ("activeDocs", app_active_docs, app_no_active_docs),
+        ("calculate", app_get_calculate, app_set_calculate),
+        (
+            "runtimeHighlight",
+            app_get_runtime_highlight,
+            app_set_runtime_highlight,
+        ),
+        // The three that throw on read as well as on write.
+        ("fs", app_no_fs, app_no_fs),
+        ("fullscreen", app_no_fullscreen, app_no_fullscreen),
+        ("media", app_no_media, app_no_media),
+    ];
+    for (name, get, set) in properties {
+        define_accessor(app, context, name, get, set)?;
+    }
+    Ok(())
+}
+
+/// The six constant `app` getters — `cjs_app.cpp:38-52`, values and all.
+macro_rules! app_constant {
+    ($fn_name:ident, $value:expr) => {
+        #[allow(clippy::unnecessary_wraps)]
+        fn $fn_name(_t: &JsValue, _a: &[JsValue], _c: &mut Context) -> JsResult<JsValue> {
+            Ok(JsValue::from($value))
+        }
+    };
+}
+
+app_constant!(app_forms_version, 7);
+app_constant!(app_language, boa_engine::js_string!("ENU"));
+app_constant!(app_platform, boa_engine::js_string!("WIN"));
+app_constant!(app_viewer_type, boa_engine::js_string!("pdfium"));
+app_constant!(app_viewer_variation, boa_engine::js_string!("Full"));
+app_constant!(app_viewer_version, 8);
+
+/// A `JsObject` wrapping a bound function, for an accessor half.
+fn accessor_function(
+    function: super::af::Bound,
+    context: &mut Context,
+) -> JsResult<boa_engine::JsObject> {
+    let object = ObjectInitializer::new(context)
+        .function(native(function), boa_engine::js_string!("f"), 1)
+        .build();
+    object
+        .get(boa_engine::js_string!("f"), context)?
+        .as_object()
+        .ok_or_else(|| JsError::from_opaque(JsValue::undefined()))
+}
+
+/// Defines one accessor property on an object.
+pub(crate) fn define_accessor(
+    object: &boa_engine::JsObject,
+    context: &mut Context,
+    name: &str,
+    get: super::af::Bound,
+    set: super::af::Bound,
+) -> JsResult<()> {
+    let getter = accessor_function(get, context)?;
+    let setter = accessor_function(set, context)?;
+    object.define_property_or_throw(
+        boa_engine::js_string!(name.to_string()),
+        boa_engine::property::PropertyDescriptor::builder()
+            .get(JsValue::from(getter))
+            .set(JsValue::from(setter))
+            .enumerable(true)
+            .configurable(true),
+        context,
+    )?;
+    Ok(())
+}
+
+/// `app.activeDocs` — an array whose one entry is the document.
+///
+/// The document **is** the global, so the golden reads
+/// `app.activeDocs is object [object global]`: a one-element array
+/// stringifies to its element.
+#[allow(
+    clippy::unnecessary_wraps,
+    reason = "the bound-function signature, which every entry in the table shares"
+)]
+fn app_active_docs(_t: &JsValue, _a: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    let global = JsValue::from(context.global_object());
+    Ok(JsValue::from(
+        boa_engine::object::builtins::JsArray::from_iter([global], context),
+    ))
+}
+
+/// The `app` members that throw `Operation not supported.` — on read, on
+/// write, or on both.
+///
+/// Each carries **its own qualified name**, because `JSFormatErrorString`
+/// prefixes `class.property` and `app_properties_expected.txt` quotes the
+/// prefixed form for all nine of them.
+macro_rules! app_declined {
+    ($fn_name:ident, $member:literal) => {
+        fn $fn_name(_t: &JsValue, _a: &[JsValue], _c: &mut Context) -> JsResult<JsValue> {
+            Err(unsupported(concat!("app.", $member)))
+        }
+    };
+}
+
+app_declined!(app_no_active_docs, "activeDocs");
+app_declined!(app_no_forms_version, "formsVersion");
+app_declined!(app_no_language, "language");
+app_declined!(app_no_platform, "platform");
+app_declined!(app_no_viewer_type, "viewerType");
+app_declined!(app_no_viewer_variation, "viewerVariation");
+app_declined!(app_no_viewer_version, "viewerVersion");
+app_declined!(app_no_fs, "fs");
+app_declined!(app_no_fullscreen, "fullscreen");
+app_declined!(app_no_media, "media");
+
+/// `app.calculate` and `app.runtimeHighlight` — two real booleans.
+///
+/// The setter **coerces**, which is why `app.calculate = 3` yields 3 to the
+/// assignment expression and reads back `true`.
+macro_rules! app_flag {
+    ($get:ident, $set:ident, $slot:ident, $default:literal) => {
+        fn $get(_t: &JsValue, _a: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+            Ok(JsValue::from(
+                host(context).map_or($default, |host| host.borrow().$slot),
+            ))
+        }
+
+        fn $set(_t: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+            let value = args.get_or_undefined(0).to_boolean();
+            if let Some(host) = host(context) {
+                host.borrow_mut().$slot = value;
+            }
+            Ok(JsValue::undefined())
+        }
+    };
+}
+
+app_flag!(app_get_calculate, app_set_calculate, app_calculate, true);
+app_flag!(
+    app_get_runtime_highlight,
+    app_set_runtime_highlight,
+    app_runtime_highlight,
+    false
+);
 
 /// `console` — four methods, **all four no-ops upstream**, so this is four
 /// empty functions and `console_methods.in` passes.
