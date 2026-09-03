@@ -130,7 +130,11 @@ pub struct pdfrum::Attachment<'a>
 pub pdfrum::Attachment::name: alloc::string::String
 impl pdfrum::Attachment<'_>
 pub fn pdfrum::Attachment<'_>::data(&self) -> core::option::Option<alloc::vec::Vec<u8>>
+pub fn pdfrum::Attachment<'_>::description(&self) -> alloc::string::String
 pub fn pdfrum::Attachment<'_>::file_name(&self) -> alloc::string::String
+pub fn pdfrum::Attachment<'_>::has_param(&self, &str) -> bool
+pub fn pdfrum::Attachment<'_>::param(&self, &str) -> core::option::Option<alloc::string::String>
+pub fn pdfrum::Attachment<'_>::subtype(&self) -> core::option::Option<alloc::string::String>
 pub struct pdfrum::Bookmark<'a>
 impl pdfrum::Bookmark<'_>
 pub fn pdfrum::Bookmark<'_>::action(&self) -> core::option::Option<pdfrum_doc::nav::action::Action>
@@ -186,6 +190,8 @@ pub fn pdfrum::Document::save_with(&self, impl core::convert::AsRef<std::path::P
 pub fn pdfrum::Document::write_form_to(&self, &mut impl core::io::write::Write, &pdfrum::Form<'_>, &pdfrum::SaveOptions) -> pdfrum::Result<()>
 pub fn pdfrum::Document::write_pages_to(&self, &mut impl core::io::write::Write, &[pdfrum::PageEdit], &pdfrum::SaveOptions) -> pdfrum::Result<()>
 pub fn pdfrum::Document::write_to(&self, &mut impl core::io::write::Write, &pdfrum::SaveOptions) -> pdfrum::Result<()>
+impl pdfrum::Document
+pub fn pdfrum::Document::signatures(&self) -> alloc::vec::Vec<pdfrum::Signature<'_>>
 impl pdfrum_object::resolve::Resolve for pdfrum::Document
 pub fn pdfrum::Document::fetch(&self, pdfrum_object::object::ObjRef) -> core::result::Result<alloc::sync::Arc<pdfrum_object::object::Object>, pdfrum_object::error::Error>
 pub struct pdfrum::Field<'a>
@@ -291,6 +297,10 @@ pub fn pdfrum::OutlineIter<'outline, 'doc>::size_hint(&self) -> (usize, core::op
 pub struct pdfrum::Page<'a>
 impl pdfrum::Page<'_>
 pub fn pdfrum::Page<'_>::edit(&self) -> pdfrum::PageEdit
+impl pdfrum::Page<'_>
+pub fn pdfrum::Page<'_>::thumbnail(&self) -> core::option::Option<pdfrum_render::pixmap::Pixmap>
+pub fn pdfrum::Page<'_>::thumbnail_data(&self) -> core::option::Option<alloc::vec::Vec<u8>>
+pub fn pdfrum::Page<'_>::thumbnail_raw(&self) -> core::option::Option<alloc::vec::Vec<u8>>
 impl<'a> pdfrum::Page<'a>
 pub fn pdfrum::Page<'a>::annotations(&self) -> alloc::vec::Vec<pdfrum::Annotation<'a>>
 pub fn pdfrum::Page<'a>::crop_box(&self) -> kurbo::rect::Rect
@@ -365,6 +375,14 @@ pub pdfrum::SaveOptions::remove_security: bool
 pub pdfrum::SaveOptions::subset_new_fonts: bool
 pub pdfrum::SaveOptions::update: pdfrum::Update
 pub pdfrum::SaveOptions::version: core::option::Option<pdfrum_common::version::PdfVersion>
+pub struct pdfrum::Signature<'a>
+impl pdfrum::Signature<'_>
+pub fn pdfrum::Signature<'_>::byte_range(&self) -> alloc::vec::Vec<i64>
+pub fn pdfrum::Signature<'_>::contents(&self) -> alloc::vec::Vec<u8>
+pub fn pdfrum::Signature<'_>::doc_mdp_permission(&self) -> u32
+pub fn pdfrum::Signature<'_>::reason(&self) -> core::option::Option<alloc::string::String>
+pub fn pdfrum::Signature<'_>::sub_filter(&self) -> core::option::Option<alloc::string::String>
+pub fn pdfrum::Signature<'_>::time(&self) -> core::option::Option<alloc::string::String>
 pub struct pdfrum::TextBuilder
 pub pdfrum::TextBuilder::codes: alloc::vec::Vec<u8>
 pub pdfrum::TextBuilder::fill: peniko::Color
