@@ -2,11 +2,11 @@
 //! fill its forms, write it back out.
 //!
 //! ```
-//! use pdfrum::{Document, RenderOptions};
+//! use pdfrum::{Document, RenderOptions, VelloCpuBackend};
 //!
 //! let doc = Document::open("tests/fixtures/hello_world.pdf")?;
 //! for page in doc.pages() {
-//!     let pixmap = page.render(&RenderOptions::default())?;
+//!     let pixmap = page.render(&VelloCpuBackend::new(), &RenderOptions::default())?;
 //!     let text = page.text().to_string();
 //!     assert_eq!((pixmap.width(), pixmap.height()), (200, 200));
 //!     assert!(text.contains("Hello, world!"));
@@ -123,13 +123,19 @@ pub use pdfrum_edit::{EmbeddedFont, FontEncoding, StandardFont};
 /// [`DocEdit::embed_jpeg`] or [`DocEdit::embed_image`], and [`PixelFormat`]
 /// naming the layout of raw samples handed to the latter.
 pub use pdfrum_edit::{EmbeddedImage, PixelFormat};
-/// The facade's default rasterizer, re-exported so a caller can name it
-/// without a second dependency.
-///
-/// [`Page::render`] is [`Page::render_on`] with this. It lives in
-/// `pdfrum-raster-vello-cpu`, which is the facade's one rasterizer
-/// dependency; `tiny-skia`, the AGG-parity backend and the GPU one are the
-/// caller's own, named directly at the call site.
+/// The AGG-parity rasterizer, behind the `agg` feature.
+#[cfg(feature = "agg")]
+pub use pdfrum_raster_agg::AggBackend;
+/// The `tiny-skia` rasterizer, behind the `tinyskia` feature.
+#[cfg(feature = "tinyskia")]
+pub use pdfrum_raster_tinyskia::TinySkiaBackend;
+/// The GPU rasterizer over `wgpu`, behind the `vello-gpu` feature, which no
+/// default build carries.
+#[cfg(feature = "vello-gpu")]
+pub use pdfrum_raster_vello::VelloBackend as VelloGpuBackend;
+/// The default rasterizer, behind the `vello-cpu` feature that is on by
+/// default: what a caller passes to [`Page::render`] unless it chose another.
+#[cfg(feature = "vello-cpu")]
 pub use pdfrum_raster_vello_cpu::VelloCpuBackend;
 pub use save::{DocEdit, SaveOptions, Update};
 pub use session::RenderSession;
@@ -272,7 +278,7 @@ pub use pdfrum_text::Error as TextError;
 /// and `ColorScheme` has no `Default` and no constructor.
 ///
 /// ```
-/// use pdfrum::{Argb, ColorMode, ColorScheme, Document, RenderOptions};
+/// use pdfrum::{Argb, ColorMode, ColorScheme, Document, RenderOptions, VelloCpuBackend};
 ///
 /// // Black on white, forced over whatever the file's own colours are.
 /// let black = Argb { a: 255, r: 0, g: 0, b: 0 };
@@ -289,7 +295,7 @@ pub use pdfrum_text::Error as TextError;
 /// };
 ///
 /// let doc = Document::open("tests/fixtures/hello_world.pdf")?;
-/// let pixmap = doc.page(0)?.render(&options)?;
+/// let pixmap = doc.page(0)?.render(&VelloCpuBackend::new(), &options)?;
 /// assert!(pixmap.width() > 0);
 /// # Ok::<(), pdfrum::Error>(())
 /// ```

@@ -96,7 +96,7 @@ impl RenderOptions {
     /// # let doc = pdfrum::Document::open("tests/fixtures/hello_world.pdf")?;
     /// let page = doc.page(0)?;
     /// let opts = pdfrum::RenderOptions::fit(page.width(), page.height(), 100, 100);
-    /// let pixmap = page.render(&opts)?;
+    /// let pixmap = page.render(&pdfrum::VelloCpuBackend::new(), &opts)?;
     /// assert!(pixmap.width() <= 100 && pixmap.height() <= 100);
     /// # Ok::<(), pdfrum::Error>(())
     /// ```

@@ -19,7 +19,7 @@
 // fixtures' object counts are asserted a line above every index.
 #![allow(clippy::expect_used, clippy::indexing_slicing)]
 
-use pdfrum::{Color, Document, PageEdit, PathBuilder, Rect, SaveOptions, Update};
+use pdfrum::{Color, Document, PageEdit, PathBuilder, Rect, SaveOptions, Update, VelloCpuBackend};
 
 const HELLO: &str = "tests/fixtures/hello_world.pdf";
 /// Nineteen objects across three `/Contents` elements: 15 in element 0, 3 in
@@ -638,7 +638,7 @@ fn an_edited_page_renders_and_renders_differently() {
     let before = doc
         .page(0)
         .expect("page")
-        .render(&RenderOptions::default())
+        .render(&VelloCpuBackend::new(), &RenderOptions::default())
         .expect("renders");
 
     let mut page = doc.page(0).expect("page").edit();
@@ -649,7 +649,7 @@ fn an_edited_page_renders_and_renders_differently() {
     let after = saved
         .page(0)
         .expect("page")
-        .render(&RenderOptions::default())
+        .render(&VelloCpuBackend::new(), &RenderOptions::default())
         .expect("renders");
 
     assert_eq!(
@@ -676,7 +676,7 @@ fn a_saved_but_unedited_page_renders_identically() {
     let before = doc
         .page(0)
         .expect("page")
-        .render(&RenderOptions::default())
+        .render(&VelloCpuBackend::new(), &RenderOptions::default())
         .expect("renders");
 
     let page = doc.page(0).expect("page").edit();
@@ -684,7 +684,7 @@ fn a_saved_but_unedited_page_renders_identically() {
     let after = saved
         .page(0)
         .expect("page")
-        .render(&RenderOptions::default())
+        .render(&VelloCpuBackend::new(), &RenderOptions::default())
         .expect("renders");
 
     let differing = (0..before.height())

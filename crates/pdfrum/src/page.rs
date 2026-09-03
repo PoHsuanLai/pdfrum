@@ -7,7 +7,6 @@ use pdfrum_parser::PageDict;
 
 use crate::{
     Annotation, Document, Pixmap, RasterBackend, RenderOptions, RenderSession, Result, TextPage,
-    VelloCpuBackend,
 };
 
 /// One page of a [`Document`].
@@ -104,11 +103,14 @@ impl<'a> Page<'a> {
         self.rotation
     }
 
-    /// Renders the page to a pixel buffer.
+    /// Renders the page to a pixel buffer on the rasterizer you name, with
+    /// caches of its own that it throws away afterwards.
     ///
-    /// Rasterizes on [`VelloCpuBackend`], with caches of its own that it
-    /// throws away afterwards. For a run over many pages, or on any other
-    /// rasterizer, use [`Page::render_on`].
+    /// The backend is an argument, never a default: [`VelloCpuBackend`] is
+    /// the one the `vello-cpu` feature (on by default) provides, and the
+    /// `tinyskia`, `agg` and `vello-gpu` features provide the others. For a
+    /// run over many pages, use [`Page::render_on`] with one
+    /// [`RenderSession`].
     ///
     /// The image is sized by [`RenderOptions::transform`]: the default
     /// identity transform gives one pixel per PDF point, and
@@ -123,38 +125,32 @@ impl<'a> Page<'a> {
     /// and the rest of the page still renders.
     ///
     /// ```
-    /// use pdfrum::{Document, RenderOptions};
-    /// use pdfrum::Affine;
+    /// use pdfrum::{Affine, Document, RenderOptions, VelloCpuBackend};
     ///
     /// let doc = Document::open("tests/fixtures/hello_world.pdf")?;
     /// let page = doc.page(0)?;
+    /// let backend = VelloCpuBackend::new();
     ///
-    /// let pixmap = page.render(&RenderOptions::default())?;
+    /// let pixmap = page.render(&backend, &RenderOptions::default())?;
     /// assert_eq!((pixmap.width(), pixmap.height()), (200, 200));
     ///
     /// // Twice the size, same page.
-    /// let big = page.render(&RenderOptions {
+    /// let big = page.render(&backend, &RenderOptions {
     ///     transform: Affine::scale(2.0),
     ///     ..RenderOptions::default()
     /// })?;
     /// assert_eq!((big.width(), big.height()), (400, 400));
     /// # Ok::<(), pdfrum::Error>(())
     /// ```
-    pub fn render(&self, options: &RenderOptions) -> Result<Pixmap> {
-        self.render_on(
-            &VelloCpuBackend::new(),
-            options,
-            &mut RenderSession::default(),
-        )
+    pub fn render<B: RasterBackend>(&self, backend: &B, options: &RenderOptions) -> Result<Pixmap> {
+        self.render_on(backend, options, &mut RenderSession::default())
     }
 
-    /// [`Page::render`] on a rasterizer you name, reusing a caller-owned
-    /// [`RenderSession`].
+    /// [`Page::render`] reusing a caller-owned [`RenderSession`].
     ///
-    /// Any backend other than [`VelloCpuBackend`] is a direct dependency of
-    /// yours, named here; a backend rasterizes paths and images, it does not
-    /// interpret PDF. The session carries the caches a run over many pages of
-    /// one document should thread through all of them — see [`RenderSession`].
+    /// A backend rasterizes paths and images, it does not interpret PDF. The
+    /// session carries the caches a run over many pages of one document
+    /// should thread through all of them — see [`RenderSession`].
     ///
     /// # Errors
     ///
@@ -522,14 +518,14 @@ pub struct PreparedPage<'a> {
 }
 
 impl PreparedPage<'_> {
-    /// Draws the prepared page on [`VelloCpuBackend`], with glyph caches of
-    /// its own that it throws away afterwards.
+    /// Draws the prepared page on the rasterizer you name, with glyph caches
+    /// of its own that it throws away afterwards.
     ///
     /// # Errors
     ///
     /// As [`Page::render`].
-    pub fn render(&self) -> Result<Pixmap> {
-        self.render_on(&VelloCpuBackend::new(), &mut RenderSession::default())
+    pub fn render<B: RasterBackend>(&self, backend: &B) -> Result<Pixmap> {
+        self.render_on(backend, &mut RenderSession::default())
     }
 
     /// Draws the prepared page on a rasterizer you name, reusing a
