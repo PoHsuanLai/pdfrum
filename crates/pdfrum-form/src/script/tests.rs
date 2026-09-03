@@ -15,7 +15,7 @@ use crate::cascade::{Cascade, FieldRef, FieldWrites, Keystroke, KeystrokeOutcome
 fn field() -> FieldRef {
     FieldRef {
         name: "Text Box".to_string(),
-        index: 0,
+        index: Some(0),
     }
 }
 
@@ -1106,7 +1106,7 @@ fn a_throwing_hook_leaves_the_session_usable_for_the_next_one() {
 
     let other = FieldRef {
         name: "Other Box".to_string(),
-        index: 1,
+        index: Some(1),
     };
     assert!(
         cascade.validate(&other, "x"),

@@ -496,6 +496,7 @@ pub pdfrum_form::CommitOutcome::reverted: bool
 pub pdfrum_form::CommitOutcome::stored: core::option::Option<alloc::string::String>
 pub pdfrum_form::CommitOutcome::writes: alloc::vec::Vec<(u32, alloc::string::String)>
 impl pdfrum_form::CommitOutcome
+pub fn pdfrum_form::CommitOutcome::formats(&self) -> bool
 pub fn pdfrum_form::CommitOutcome::keeps_focus(&self) -> bool
 pub fn pdfrum_form::CommitOutcome::unchanged() -> pdfrum_form::CommitOutcome
 pub struct pdfrum_form::Context<'a, R: pdfrum_object::resolve::Resolve>
@@ -509,7 +510,7 @@ pub pdfrum_form::DragAnchor::field: pdfrum_form::FieldId
 pub pdfrum_form::DragAnchor::start: pdfrum_doc::vt::hit::Place
 pub struct pdfrum_form::FieldId(pub u32)
 pub struct pdfrum_form::FieldRef
-pub pdfrum_form::FieldRef::index: u32
+pub pdfrum_form::FieldRef::index: core::option::Option<u32>
 pub pdfrum_form::FieldRef::name: alloc::string::String
 pub struct pdfrum_form::FieldWrites
 impl pdfrum_form::FieldWrites
@@ -545,6 +546,7 @@ pub pdfrum_form::FormSession::dirty: alloc::collections::btree::set::BTreeSet<pd
 pub pdfrum_form::FormSession::drag: core::option::Option<pdfrum_form::DragAnchor>
 pub pdfrum_form::FormSession::fields: alloc::collections::btree::map::BTreeMap<pdfrum_form::FieldId, pdfrum_form::field::FieldState>
 pub pdfrum_form::FormSession::focus: core::option::Option<pdfrum_form::FocusTarget>
+pub pdfrum_form::FormSession::formatted: alloc::collections::btree::map::BTreeMap<pdfrum_form::FieldId, alloc::string::String>
 pub pdfrum_form::FormSession::hover: core::option::Option<pdfrum_form::AnnotId>
 impl pdfrum_form::FormSession
 pub fn pdfrum_form::FormSession::focused_field(&self) -> core::option::Option<pdfrum_form::FieldId>
@@ -596,6 +598,8 @@ pub pdfrum_form::PageForm::page: pdfrum_common::page_index::PageIndex
 pub pdfrum_form::PageForm::page_height: f32
 pub pdfrum_form::PageForm::tab_order: pdfrum_form::TabOrder
 pub pdfrum_form::PageForm::widgets: alloc::vec::Vec<pdfrum_form::WidgetInfo>
+impl pdfrum_form::PageForm
+pub fn pdfrum_form::PageForm::field_of_index(&self, u32) -> core::option::Option<pdfrum_form::FieldId>
 pub struct pdfrum_form::Permissions
 pub pdfrum_form::Permissions::fill_form: bool
 pub pdfrum_form::Permissions::modify_annotation: bool
@@ -722,6 +726,7 @@ pub fn pdfrum_form::UndoStack::default() -> pdfrum_form::UndoStack
 pub struct pdfrum_form::WidgetInfo
 pub pdfrum_form::WidgetInfo::dict: pdfrum_object::dict::Dict
 pub pdfrum_form::WidgetInfo::field: pdfrum_form::FieldId
+pub pdfrum_form::WidgetInfo::field_index: core::option::Option<u32>
 pub pdfrum_form::WidgetInfo::flags: pdfrum_doc::form::field::FieldFlags
 pub pdfrum_form::WidgetInfo::id: pdfrum_form::AnnotId
 pub pdfrum_form::WidgetInfo::kind: core::option::Option<pdfrum_doc::form::field::FieldKind>

@@ -33,8 +33,24 @@
 pub struct FieldRef {
     /// The field's fully qualified name.
     pub name: String,
-    /// Its index in the form's field list.
-    pub index: u32,
+    /// Its position in the document's terminal-field list — the flat
+    /// `/AcroForm /Fields` walk.
+    ///
+    /// # Document-wide, and `Option` because not every field is in that list
+    ///
+    /// This is the space `/AcroForm /CO` indexes, the space `Doc.numFields`
+    /// counts and the space `Doc.getNthFieldName(n)` reads — every way a
+    /// script has of naming a field by number. It is **not** the page-local
+    /// `FieldId` a session stores interaction state under; those coincide
+    /// only for a single-page form whose widgets appear in `/Fields` order,
+    /// and a calculation that confused them would write the wrong field on
+    /// any other file.
+    ///
+    /// `None` for a widget the form's field list does not reach — an unnamed
+    /// one, most often. Such a field is real for interaction and invisible to
+    /// a script, which is the oracle's answer too: `GetFieldByDict` returns
+    /// null for it and `CountFields` never counted it.
+    pub index: Option<u32>,
 }
 
 /// A keystroke offered to the keystroke hook.
@@ -258,7 +274,7 @@ mod tests {
     fn field() -> FieldRef {
         FieldRef {
             name: "Text Box".to_string(),
-            index: 0,
+            index: Some(0),
         }
     }
 

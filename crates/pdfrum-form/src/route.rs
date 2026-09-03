@@ -78,6 +78,15 @@ impl<R: Resolve> Context<'_, R> {
     fn widget_of_field(&self, field: FieldId) -> Option<&WidgetInfo> {
         self.page.widgets.iter().find(|w| w.field == field)
     }
+
+    /// The page-local field a document-wide field position names, when one of
+    /// its widgets is on this page.
+    ///
+    /// The two spaces are different and only this converts between them: see
+    /// `page`'s module documentation, and [`PageForm::field_of_index`].
+    fn field_of_index(&self, index: u32) -> Option<FieldId> {
+        self.page.field_of_index(index)
+    }
 }
 
 /// Applies one event to a session.
@@ -1776,7 +1785,12 @@ fn field_ref<R: Resolve>(ctx: &Context<'_, R>, field: FieldId) -> Option<FieldRe
     let widget = ctx.widget_of_field(field)?;
     Some(FieldRef {
         name: widget.name.clone(),
-        index: field.0,
+        // The **document-wide** position, not the page-local `FieldId`: a
+        // script names fields in the space `/CO`, `Doc.numFields` and
+        // `Doc.getNthFieldName` count in, and handing it a page-local id
+        // would make a two-page form recalculate the wrong field. See
+        // `page`'s module documentation for the two spaces.
+        index: widget.field_index,
     })
 }
 
@@ -1824,17 +1838,56 @@ fn commit_field<R: Resolve>(
     );
 
     if outcome.reverted {
-        // The gate refused: the field goes back to what the document holds.
+        // The gate refused: the field goes back to what the document holds,
+        // and whatever a previous format script asked to be shown goes with
+        // it — the value it described is no longer the value.
         set_field_text(session, field, &stored);
+        session.formatted.remove(&field);
         return Some(outcome);
     }
     for (index, value) in &outcome.writes {
-        // A calculation names fields by their index in the form's list, which
-        // is what `FieldId` is.
-        set_field_text(session, FieldId(*index), value);
-        session.dirty.insert(FieldId(*index));
+        // A calculation names fields by their document-wide field id, which
+        // is what `FieldRef::index` carries.
+        let written = ctx.field_of_index(*index).unwrap_or(FieldId(*index));
+        set_field_text(session, written, value);
+        session.dirty.insert(written);
+        // A calculated field is formatted too: `AfterValueChange` is
+        // `OnCalculate` then `ResetFieldAppearance(pField, OnFormat(pField))`
+        // (`fpdfsdk/cpdfsdk_interactiveform.cpp:586-588`), and the second
+        // half runs for every field the first half wrote.
+        let display = field_ref(ctx, written)
+            .and_then(|reference| cascade.format(&reference, value))
+            .filter(|display| display != value);
+        record_display(session, written, display);
+    }
+    // `ResetFieldAppearance(pField, OnFormat(pField))` — the formatting
+    // script's answer is what the regenerated appearance draws, and `None`
+    // puts the raw value back rather than leaving a stale display string.
+    // Only when the commit actually ran: see `CommitOutcome::formats`.
+    if outcome.formats() {
+        record_display(session, field, outcome.display.clone());
     }
     Some(outcome)
+}
+
+/// Remembers — or forgets — what a field is to *show* in place of what it
+/// stores.
+///
+/// `None` is the answer for a field with no format script and for one whose
+/// script produced its input unchanged, and it must **erase** any earlier
+/// string rather than leaving one: `std::nullopt` reaches
+/// `sValue.value_or(pField->GetValue())` (`cpdfsdk_appstream.cpp:1752`) as
+/// the raw value, so a stale entry here would keep drawing an answer the
+/// document no longer gives.
+fn record_display(session: &mut FormSession, field: FieldId, display: Option<String>) {
+    match display {
+        Some(display) => {
+            session.formatted.insert(field, display);
+        }
+        None => {
+            session.formatted.remove(&field);
+        }
+    }
 }
 
 /// Puts a field's text back to `value`, whichever text-bearing family it is.
@@ -2384,7 +2437,14 @@ fn appearance_of<R: Resolve>(
     let state = session.fields.get(&field)?;
     let focused = session.focus.map(FocusTarget::annot) == Some(id);
 
-    let generated = generate(ctx, widget, state, focused)?;
+    // A format script's answer is what an **unfocused** field draws, and the
+    // raw value is what a focused one edits — `CFFL_FormField::OnSetFocus`
+    // seeds its editor from `GetValue()`, never from the formatted text.
+    let display = (!focused)
+        .then(|| session.formatted.get(&field))
+        .flatten()
+        .map(String::as_str);
+    let generated = generate(ctx, widget, state, focused, display)?;
     let kind = if focused {
         UpdateKind::LiveEdit(Box::new(generated))
     } else {
@@ -2405,9 +2465,10 @@ fn generate<R: Resolve>(
     widget: &WidgetInfo,
     state: &FieldState,
     focused: bool,
+    display: Option<&str>,
 ) -> Option<pdfrum_doc::GeneratedAp> {
     let selected = selected_rows(state);
-    let live = live_state(state, &selected);
+    let live = live_state(state, &selected, display);
     let highlight = focused.then(|| highlight_of(ctx, widget, state)).flatten();
     // A radio group's kids each carry a different on-state name, and a click
     // on one sets that kid's `/AS` to its own name and every sibling's to
@@ -2610,10 +2671,16 @@ fn selected_rows(state: &FieldState) -> Vec<usize> {
 fn live_state<'a>(
     state: &'a FieldState,
     selected: &'a [usize],
+    display: Option<&'a str>,
 ) -> Option<ap::field_body::LiveState<'a>> {
     match state {
         FieldState::Text(text) => Some(ap::field_body::LiveState {
-            text: &text.edit.text,
+            // `pEdit->SetText(sValue.value_or(pField->GetValue()))` — one
+            // line, and the whole of what a format script changes
+            // (`fpdfsdk/cpdfsdk_appstream.cpp:1752`). The formatted string is
+            // drawn and never stored, which is why the caret still edits the
+            // raw value the moment this field takes focus.
+            text: display.unwrap_or(&text.edit.text),
             scroll: text.edit.scroll,
             ..ap::field_body::LiveState::default()
         }),
@@ -2621,10 +2688,16 @@ fn live_state<'a>(
             // An editable combo shows what has been typed into it; every
             // other choice field shows the row it has selected, which the
             // generator resolves from `selected` rather than from text.
-            text: if choice.config.editable {
-                &choice.edit_text
-            } else {
-                ""
+            //
+            // A format script's answer overrides the typed text and nothing
+            // else: `SetAsComboBox(sValue)` is the combo half of the same
+            // `ResetAppearance` optional, and a list box is passed
+            // `std::nullopt` unconditionally
+            // (`cpdfsdk_interactiveform.cpp:611`).
+            text: match (display, choice.config.editable) {
+                (Some(display), true) => display,
+                (_, true) => &choice.edit_text,
+                (_, false) => "",
             },
             selected,
             top_visible: choice.top_visible,

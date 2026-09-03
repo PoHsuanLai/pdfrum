@@ -287,15 +287,16 @@ impl<'a> FormSession<'a> {
     /// fields carry `/AA /C`; `pdfrum_doc::form::Form::calculation_order`
     /// carries the reasoning.
     ///
-    /// # A known index-space mismatch
+    /// # One index space, and it is the document's
     ///
     /// `calculation_order` answers positions in
-    /// [`Form::fields`](crate::Form::fields) — the document's whole field
-    /// list — while everything else the cascade is keyed by is a **page-local
-    /// `FieldId`**, allocated in first-seen order as one page's `/Annots` are
-    /// walked. The two spaces agree for a single-page form whose widgets
-    /// appear in `/Fields` order, and disagree otherwise. Fixing it belongs to
-    /// `pdfrum-form`'s question of what `FieldRef::index` means, not here.
+    /// [`Form::fields`](crate::Form::fields) — the document's flat
+    /// terminal-field list — and that is the space
+    /// [`FieldRef::index`](pdfrum_form::FieldRef::index) carries and the space
+    /// [`install_page_scripts`](FormSession::install_page_scripts) installs
+    /// under. It used to be keyed by the page-local `FieldId` instead, which
+    /// agreed only for a single-page form whose widgets appear in `/Fields`
+    /// order; `pdfrum_form::WidgetInfo::field_index` is what closed that.
     #[cfg(feature = "script")]
     fn install_calculation_order(&mut self) {
         let Cascades::Scripted(cascade) = &mut self.cascade else {
@@ -889,12 +890,13 @@ impl<'a> FormSession<'a> {
     ///
     /// # Why per page, and why here
     ///
-    /// A [`FieldRef`]'s index is a **page-local** field id, allocated in
-    /// first-seen order as that page's `/Annots` are walked
-    /// (`pdfrum_form::read`). It is not a position in
-    /// [`Form::fields`](crate::Form::fields), and it does not exist until the
-    /// page has been read — so the install cannot happen at construction, and
-    /// happens at exactly the moment the ids come into being.
+    /// A [`FieldRef`]'s index *is* a position in
+    /// [`Form::fields`](crate::Form::fields), so the number does not depend on
+    /// the page — but the `/AA` dictionaries do: they hang off the widget
+    /// annotations, which are reached through `/Annots` and exist only once a
+    /// page has been read. So the install is still per page, and a document
+    /// whose second page is never touched never runs its scripts, which is
+    /// also the oracle's behaviour.
     ///
     /// A [`ScriptCascade`](crate::ScriptCascade) deliberately holds no
     /// document, which is what lets the whole engine be tested against a
@@ -939,12 +941,13 @@ impl<'a> FormSession<'a> {
                 // all, and a hook with no script takes `NoScripts`'s answer.
                 continue;
             }
-            cascade.set_field(
-                widget.field.0,
-                widget.name.clone(),
-                widget.value(resolve),
-                actions,
-            );
+            let Some(index) = widget.field_index else {
+                // A widget the form's `/Fields` does not reach. A script has
+                // no way to name it, so there is nothing to install it under
+                // — `GetFieldByDict` answers null for it upstream too.
+                continue;
+            };
+            cascade.set_field(index, widget.name.clone(), widget.value(resolve), actions);
         }
     }
 
