@@ -242,11 +242,16 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
   worth 6.0% of a `forms_text_field` render and 7.0% of a `forms_combo_box`
   one, and nothing on `forms_number`, whose draws mostly run with no clip in
   force (§12.5, §12.9). The push's own clone stays.
-- **A wall-clock A/B of §12 is still owed.** Its claim rests on the in-process
-  profile (§12.7), because the box ran at load 43–131 — the other user's jobs
-  *plus* three sibling agents' boards and test suites — and at four times the
-  core count the interleaved before/after stopped resolving the effect
-  (§12.6). Re-take §11.6's table for §12 when the box is quiet.
+- ~~**A wall-clock A/B of §12 is still owed.**~~ — **taken as §12.12
+  (2026-09-04)** at load 13–23: `forms` 1.04–1.19x, geomean 1.11x, two
+  controls flat. **It found something**: the third control,
+  `image_bug_583804`, is reproducibly **0.76x** across `cd1a511` — 153 → 201
+  ms, all of it in `draw_image`, on a page that pushes no clip, through code
+  the commit did not touch. A codegen (inlining/layout) effect, not the pool.
+  §14's "before" of 201 ms for this file is the post-`cd1a511` figure. Open:
+  whether today's binary still carries it — a `perf annotate` of
+  `draw_image_sampled` on the two arms, or an `#[inline]` experiment,
+  when the box allows hardware sampling (`perf_event_paranoid` is 4).
 - A deep-clip-stack document outside `forms` would gain from 30c0419; none
   was looked for.
 - An idle re-take of the §10.5 table. The box has never been idle (load

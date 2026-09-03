@@ -1361,6 +1361,54 @@ run, as do all 3926 tests.
 
 ---
 
+
+### 12.12 The wall-clock A/B, taken (2026-09-04)
+
+§12.8's table could not resolve the effect at load 43–131. Re-taken with the
+same two binaries — `cd1a511`'s parent and `cd1a511`, each built in its own
+target directory — five interleaved rounds of 21 warm iterations, minimum per
+arm, on AGG, at a 1-minute load of 13–23 (the other user's jobs; no sibling
+agents). The oracle column is §22's.
+
+| fixture | before (ms) | **after (ms)** | speedup | oracle (ms) | **ratio after** | load |
+|---|---:|---:|---:|---:|---:|---:|
+| `forms_combo_box` | 6.10 | **5.22** | **1.17x** | 3.68 | 1.42x | 22.6 |
+| `forms_list_box` | 10.74 | **10.07** | 1.07x | 5.27 | 1.91x | 21.3 |
+| `forms_number` | 1.57 | **1.45** | 1.09x | 1.03 | 1.41x | 21.3 |
+| `forms_push_button` | 5.14 | **4.66** | 1.10x | 60.57 | 0.08x | 21.3 |
+| `forms_signature` | 2.15 | **2.06** | 1.04x | 2.10 | 0.98x | 19.9 |
+| `forms_text_field` | 5.50 | **5.02** | 1.10x | 4.08 | 1.23x | 19.9 |
+| `forms_widgets_407` | 6.92 | **5.80** | **1.19x** | 5.34 | 1.09x | 19.9 |
+| **`forms` geomean** | | | **1.11x** | | | |
+| | | | | | | |
+| `vector_paths_1751` | 7.45 | 7.37 | 1.01x | 20.79 | 0.35x | 19.9 |
+| `shading_axial_radial` | 32.12 | 32.25 | 1.00x | 43.54 | 0.74x | 12.8 |
+| `image_bug_583804` | 152.75 | **201.16** | **0.76x** | 155.01 | 1.30x | 18.7 |
+
+**§12's claim holds on the wall clock: 1.04–1.19x across the seven forms
+fixtures, geomean 1.11x, in rank order with their clip counts, and two of the
+three controls flat at 1.00–1.01x.** The ratios in the table are those two
+binaries against today's oracle and are *not* the current state — §22 has that
+(`forms` 0.48x) — they are here so the row can be read against §11.6.
+
+**The third control is not flat, and it is reproducible.** `image_bug_583804`
+reads 153 ms before and 201 ms after, and five more interleaved pairs at load
+10.5 read 153–158 against 196–204. `--sample` places all of it in
+`draw_image` — 126.4 → 151.9 ms per iteration — on a page that pushes **no
+clip** (`clip 0 calls`), through a function `cd1a511` did not touch: the
+commit's diff is `AggDevice`'s two new fields, `blank_plane`, `recycle`, the
+`pop` reclaim and `coverage_of`'s one-line change to take its plane from the
+pool, plus tinyskia. With the pool empty `blank_plane` is `AlphaMask::new`,
+which is what it replaced. Nothing on the image path changed at the source
+level, so this is a **codegen effect** — an inlining or layout decision in the
+sampled-image loop that moved when the device grew — and not the pool.
+
+Two consequences. §14's "before" figure for this file, 201 ms, is the
+post-`cd1a511` number, so §14's 201 → 120 ms includes winning back what this
+lost; the file reads 105–117 ms on today's main (§22: 0.69x). And whether the
+perturbation is still present in today's binary cannot be read from a two-arm
+A/B; it is queued as its own question.
+
 ## 13. The glyph rows: where their time is, and the one thing it is not
 
 **Taken 2026-09-03, on the same box, at load 29–86.** `docs/status/queue.md`
