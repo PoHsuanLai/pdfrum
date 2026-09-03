@@ -634,6 +634,108 @@ same bar for anyone who clicks through to a member crate. WP6 freezes it.
 > *can* follow. Running the pattern workspace-wide rather than per crate found
 > 19 lines across seven crates that two earlier passes had missed.
 
+> **The C++-provenance sweep landed 2026-09-03, workspace-wide.** WP4's
+> `cpdf_`/`CPDF_`/`FPDF_`/`pdfium_test`/`.cpp:` half had only ever run on the
+> facade. The note above left it as a queue item and estimated 83 lines across
+> the ten crates WP5 had just finished; measured with the wider pattern and
+> over every crate rather than ten, it was **416**. Two things the estimate
+> could not see: `CFX_` and `CJS_` were never in WP4's pattern at all, and four
+> crates — `pdfrum-doc`, `pdfrum-tool`, `pdfrum-edit`, `pdfrum-font`, 302 lines
+> between them — had been in no rustdoc work package of any kind. The 83 is
+> reproducible and was right for what it measured: WP4's five alternatives over
+> those ten crates is 84 today.
+>
+> Citing lines before and after, then the shape of the diff: doc lines
+> removed, doc lines added, and `//` lines added — the last being the essays
+> and derivations that **moved** rather than going.
+>
+> | Crate | Before | After | doc − | doc + | `//` + |
+> |---|---|---|---|---|---|
+> | `pdfrum-doc` | 105 | **0** | 452 | 317 | 47 |
+> | `pdfrum-tool` | 76 | **0** | 218 | 165 | 63 |
+> | `pdfrum-page` | 70 | **0** | 288 | 171 | 76 |
+> | `pdfrum-edit` | 61 | **0** | 218 | 143 | 89 |
+> | `pdfrum-font` | 60 | **0** | 167 | 132 | 55 |
+> | `pdfrum-crypt` | 11 | **0** | 48 | 31 | 26 |
+> | `pdfrum-form` | 7 | **0** | 23 | 18 | 0 |
+> | `pdfrum-text` | 6 | **0** | 9 | 6 | 0 |
+> | `pdfrum-script` | 6 | **0** | 8 | 14 | 0 |
+> | `pdfrum-raster-agg` | 4 | **0** | 24 | 20 | 0 |
+> | `pdfrum-render` | 3 | **0** | 11 | 7 | 4 |
+> | `pdfrum-parser` | 3 | **0** | 8 | 5 | 7 |
+> | `pdfrum-common` | 3 | **0** | 12 | 8 | 3 |
+> | `pdfrum-cmap` | 1 | **0** | 3 | 1 | 1 |
+>
+> The four crates with no `//` added are the ones whose citations were all
+> pure appendix — `pdfrum-text`'s six geometry helpers each stated the
+> behaviour completely and then named the `CFX_` class that also has it — and
+> `pdfrum-script`, where every citation was a *title* naming the C++ symbol
+> for a function the caller knows by its JavaScript name (`util.printx`,
+> `util.scand`), so the docs got longer rather than shorter.
+>
+> The rule was §4's, and the lean was to delete: a citation that only says
+> where a sentence came from goes, because the sentence already carries the
+> fact; a sentence whose *content* is an invariant a caller can get wrong keeps
+> the content and loses the pointer; and a measured fact that changes how the
+> **code** must be read becomes a `//` on the body, where the file and line may
+> stay in full. No non-doc line changed in any crate and the API snapshot is
+> unmoved.
+>
+> **Every `[oracle-bug]` site keeps both citations.** That is the one place
+> nothing may be dropped, because the record of where PDFium is wrong is the
+> whole reason we diverge from it. The `///` states what *we* do and why the
+> specification permits it; a `//` beside it carries PDFium's defect and
+> pdf.js's agreement, file and line intact — `cpdf_security_handler.cpp:305`
+> and `crypto.js:1116-1120` on the crypt-filter pair, `cpdf_docrenderdata.cpp`
+> and `evaluator.js:944-959` on the transfer-function array,
+> `cpdfsdk_widget.cpp:1029` and `annotation.js` on widget rotation,
+> `cpvt_section.cpp:84`'s `<=`-for-`==` typo and `annotation.js:3107-3134` on
+> punctuation classification, `fpdf_edittext.cpp:488-491` and
+> `evaluator.js:4103-4116` on `/CIDToGIDMap`.
+>
+> **`pdfrum-tool` needed no exception, which was the surprise.** It is a CLI
+> whose stated job is to mirror `pdfium_test`'s flags, so naming that tool
+> looked like its own contract rather than provenance, and the first design
+> here was a per-line opt-out marker for it. In the event no line wanted one:
+> the crate already writes "the oracle" in almost every sentence, and
+> substituting that reads better, not worse — "the oracle cannot save a
+> document at all" says everything about `--save` that the binary's name did.
+> What was left after the substitution was file-and-line provenance, and it
+> split the ordinary way. `events.rs` is the one that changes shape, because it
+> documents a file format the harness writes: the verb grammar is the contract
+> and the eight `— event.cc:NN-NN` suffixes were decoration on it.
+>
+> Three contracts were found **stated wrong** and corrected against the code,
+> which is the argument for reading rather than pattern-matching.
+> `pdfrum-edit`'s `content/text.rs` said the text state the emitter loses "is
+> the C++'s behavior and matching it is the requirement" — its own module
+> three headings away had already established the opposite, so the loss is a
+> limit of the emitter and now says so. `write/reach.rs` named a
+> `seen_ref_objects` filter that does not exist; the function is
+> `count_reference` and the set is `seen_sources`, and the old name was the
+> C++'s. And `pdfrum-render`'s `to_straight_bgra` explained its `opaque` flag
+> by naming the oracle's bitmap format instead of saying what a caller gets.
+>
+> One thing left open, and it is a live regression risk:
+> `crates/pdfrum-font/src/encoding/tables.rs` is `@generated`, and
+> `scripts/extract-font-tables.py` still emits the `/// \`kFoo\` (path.cpp).`
+> form the sweep replaced. Re-running the extractor reverts fifteen lines.
+> Nothing in `scripts/ci.nu` regenerates the file, so this is a trap rather
+> than a break; the extractor needs the same edit, and that is a queue item.
+>
+> **The gate that was going to hold this is not being written.** A first draft
+> widened `scripts/check-no-internal-refs.nu` with the C++ pattern as a second
+> class, and the shape of what it grew is the argument against it: nine
+> alternatives, an ISO exemption, a per-line opt-out for the identifiers that
+> are legitimately ours, and a fourth planted-line control to prove the opt-out
+> both fires and does not over-fire. Each of those exists because the one
+> before it was too blunt, and none of them helps anyone write a better doc
+> comment. The rule is one sentence in STYLE.md §6 and a person can follow it;
+> a citation that comes back comes back in review, where a human can tell an
+> `[oracle-bug]` record that must keep its citation from a diary entry that
+> must not — a distinction no pattern could make. The existing script went with
+> it, in the commit before these.
+
 Do not combine WP1 with WP5. The crate page is a writing task; the inner
 crates are a grind. Mixing them produces an unreviewable diff.
 
@@ -674,11 +776,12 @@ Verified 2026-09-03 unless noted.
       `pdfrum-cmap`, `pdfrum-crypt`, `pdfrum-filters`, `pdfrum-type1` and the
       four rasterizer crates.
 
-Not in done: the C++-provenance sweep outside the facade — `cpdf_`, `CPDF_`,
-`FPDF_`, `pdfium_test` and `.cpp:` still appear in `///` and `//!` across the
-member crates, on items that are inside their caps; see §7's WP5 note for the
-count and the suggested shape. Not in done: comment ratio as a number — we are
-not optimizing 0.28.
+- [x] The C++-provenance sweep, workspace-wide. **416 → 0** across fourteen
+      crates, on `cpdf_`, `CPDF_`, `FPDF_`, `CFX_`, `CJS_`, `cpdfsdk_`,
+      `pdfium_test`, `.cpp:` and `.h:`. See §7's note for the per-crate table,
+      the three contracts it corrected, and why no CI gate holds it.
+
+Not in done: comment ratio as a number — we are not optimizing 0.28.
 
 ---
 

@@ -164,15 +164,46 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
   changed and the API snapshot is unmoved. `pdfrum-raster-vello` was included
   despite `publish = false` because it was grossly over on both halves.
   rustdoc.md §7 carries the per-crate table and the re-derived contracts.
-- **C++ provenance outside the facade is still open.** WP4's `cpdf_`/`CPDF_`/
-  `FPDF_`/`pdfium_test`/`.cpp:` sweep only ever ran on `crates/pdfrum`; the CI
-  gate covers the phase-and-document pattern, not this one. 94 such lines
-  survive in the ten crates WP5 just finished (`pdfrum-page` 75 of them), all
-  on items that are inside their caps, plus whatever the other crates carry.
-  Widen `scripts/check-no-internal-refs.nu` with the C++ pattern and sweep to
-  green in the gate's own commit, as that script's own history did — the rule
-  is §7's: keep an invariant a caller can get wrong, rewritten without the
-  citation; turn a measured fact into a `//`; delete the rest.
+- ~~**C++ provenance outside the facade.**~~ — landed 2026-09-03,
+  workspace-wide. The real count was **416**, not the 83 this entry estimated:
+  that number was WP4's five alternatives over the ten crates WP5 had just
+  finished, and it is still right for that (84 today). What it could not see
+  was that `CFX_` and `CJS_` were never in WP4's pattern, and that four crates
+  — `pdfrum-doc` 105, `pdfrum-tool` 76, `pdfrum-edit` 61, `pdfrum-font` 60 —
+  had been in no rustdoc work package at all. One commit per crate, no non-doc
+  line changed, the API snapshot unmoved. Every `[oracle-bug]` site keeps both
+  its citations, moved to `//` at the site. Three contracts were found stated
+  **wrong** and corrected against the code, which is the case for reading each
+  site rather than pattern-matching it: `pdfrum-edit`'s `content/text.rs`
+  claimed the emitter's lost text state was a requirement when its own module
+  had established it is a limit; `write/reach.rs` named a `seen_ref_objects`
+  filter that does not exist (the C++'s name for `seen_sources`); and
+  `pdfrum-render`'s `to_straight_bgra` explained its flag by naming the
+  oracle's bitmap format rather than saying what a caller gets. `pdfrum-tool`
+  needed no exception despite being a `pdfium_test`-compatibility CLI — it
+  already says "the oracle" everywhere, and that reads better than the binary's
+  name. rustdoc.md §7 carries the per-crate table and the rest.
+- ~~**A CI gate to keep C++ citations out of rustdoc.**~~ — **not doing it**,
+  and `scripts/check-no-internal-refs.nu` went with the decision (2026-09-03,
+  user). A draft widened that script with the C++ pattern as a second class and
+  it worked, but the shape it grew is the argument against it: nine
+  alternatives, an ISO exemption for the annex citations it would otherwise
+  refuse, a per-line opt-out for identifiers that are legitimately ours, and a
+  fourth planted-line control to prove the opt-out both fires and does not
+  over-fire — each one there because the one before it was too blunt, and none
+  of them any help in writing a better doc comment. The rule is one sentence in
+  STYLE.md §6 and a person can follow it. A citation that comes back comes back
+  in review, where a human can tell an `[oracle-bug]` record that must keep its
+  citation from a diary entry that must not.
+- **`scripts/extract-font-tables.py` regenerates rustdoc the sweep removed.**
+  `crates/pdfrum-font/src/encoding/tables.rs` is `@generated`, and the sweep
+  above rewrote its fifteen table docs from ``/// `kFoo` (path.cpp).`` to a
+  sentence naming the code page. The extractor still emits the old form (lines
+  ~147 and ~160), so re-running it reverts all fifteen. Nothing in
+  `scripts/ci.nu` regenerates the file, so this is a trap rather than a break.
+  Give the two `chunks.append` templates the same treatment the checked-in file
+  got. While there: the generator's `HEADER` names a `scripts/extract_tables.py`
+  that does not exist.
 
 ## Performance (`docs/status/M13-perf-baseline.md`)
 
