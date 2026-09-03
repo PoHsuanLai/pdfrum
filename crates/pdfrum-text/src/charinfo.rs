@@ -169,13 +169,12 @@ pub(crate) fn is_float_zero(value: f32) -> bool {
 }
 
 /// A rectangle is empty when it has no positive area in either direction,
-/// which is `CFX_FloatRect::IsEmpty`'s test on an unnormalized rect.
+/// tested on the corner pair as given rather than on a normalized rect.
 fn is_empty(rect: Rect) -> bool {
     rect.x1 <= rect.x0 || rect.y1 <= rect.y0
 }
 
-/// The union of two rectangles taken as unnormalized corner pairs, matching
-/// `CFX_FloatRect::Union`.
+/// The union of two rectangles, taken as unnormalized corner pairs.
 fn union(a: Rect, b: Rect) -> Rect {
     Rect::new(
         a.x0.min(b.x0),
@@ -186,8 +185,7 @@ fn union(a: Rect, b: Rect) -> Rect {
 }
 
 /// The inverse of a matrix, or the **zero matrix** when it is singular —
-/// which maps every point to the origin. Degenerate but never a panic, and
-/// what `CFX_Matrix::GetInverse` does.
+/// which maps every point to the origin. Degenerate, but never a panic.
 #[must_use]
 pub fn inverse_or_zero(matrix: Affine) -> Affine {
     let [a, b, c, d, ..] = matrix.as_coeffs();
@@ -272,7 +270,7 @@ pub fn loose_bounds(input: &LooseBoundsInput<'_>) -> Rect {
 }
 
 /// The axis-aligned bound of a transformed rectangle, taking the corners as
-/// an unnormalized pair the way `CFX_Matrix::TransformRect` does.
+/// an unnormalized pair.
 #[must_use]
 pub fn transform_rect(matrix: Affine, rect: Rect) -> Rect {
     let corners = [
@@ -292,7 +290,7 @@ pub fn transform_rect(matrix: Affine, rect: Rect) -> Rect {
 }
 
 /// The distance a matrix scales a length by: the mean of its two axis
-/// scales, which is `CFX_Matrix::TransformDistance`.
+/// scales.
 #[must_use]
 pub fn transform_distance(matrix: Affine, distance: f64) -> f64 {
     let [a, b, c, d, ..] = matrix.as_coeffs();
