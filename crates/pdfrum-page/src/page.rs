@@ -4,7 +4,7 @@
 //! Every object is a small record — geometry or payload, a graphics-state
 //! snapshot, and the marks in force at its creation. No behaviour lives
 //! inside them: `pdfrum-render` walks the graph and `pdfrum-text` reads it,
-//! and neither re-derives semantics (STYLE.md §1).
+//! and neither re-derives semantics.
 //!
 //! # Box derivation is this crate's job
 //!
@@ -247,8 +247,8 @@ pub struct FormObject {
 
 /// One thing to paint.
 ///
-/// Deliberately **not** `#[non_exhaustive]`: STYLE.md §1 wants a new variant
-/// to fail every match site to compile, and a downstream renderer that
+/// Deliberately **not** `#[non_exhaustive]`: a new variant must fail every
+/// match site to compile, and a downstream renderer that
 /// silently ignored a new kind of page object would silently stop drawing it.
 #[derive(Debug, Clone, PartialEq)]
 pub enum PageObject {
@@ -280,8 +280,7 @@ pub struct Content<T> {
     /// the lowest free `/Contents` index in the regenerator's ordered walk
     /// rather than one past the end. That ordering used to be bought with a
     /// `-1` sentinel; `Option`'s own `Ord` gives it for free and makes the
-    /// check something the compiler enforces
-    /// (`docs/design/idiomatic-api.md` §C, Tier 1 item 1).
+    /// check something the compiler enforces.
     pub content_stream: Option<usize>,
     /// Whether the object has been changed since it was parsed, so its
     /// content stream must be written again on save
@@ -467,7 +466,7 @@ impl Page {
 ///
 /// The same crop box and the same `/Rotate` swap [`Page::display_size`]
 /// applies, for a caller that has to know how large a page will draw *before*
-/// building it — which is what the decode target (SPEC.md §7) needs, since the
+/// building it — which is what choosing a decode target needs, since the
 /// build is the thing that decodes the images.
 #[must_use]
 pub fn display_size_from_dict<R: Resolve>(

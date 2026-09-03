@@ -2,7 +2,7 @@
 //! a typed `Op` list, the interpreter folding ops into a typed page-object
 //! graph, graphics state, colorspaces (device/ICC/Indexed/Separation/Lab),
 //! PDF functions (types 0/2/3/4), patterns and shadings (types 1–7), and the
-//! transparency model — groups, soft masks, blend modes (SPEC.md §7).
+//! transparency model — groups, soft masks, blend modes.
 //!
 //! # The two stages
 //!
@@ -37,7 +37,7 @@
 //! is nonsense — each records a
 //! [`Diagnostic`](pdfrum_common::Diagnostic) and yields the same best-effort
 //! result PDFium produces, because that behaviour is what makes broken PDFs
-//! render. The recoveries are inventoried in `docs/design/pdfrum-page.md`.
+//! render.
 
 #![forbid(unsafe_code)]
 // Every byte reaching this crate came from an untrusted file: index with

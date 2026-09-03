@@ -6,7 +6,7 @@
 //! whether a wrong operand count makes it a no-op. Everything else in the
 //! crate matches on `Op` and never spells an operator name, so adding one is
 //! a single-line edit here and every consumer fails to compile until it
-//! handles the new variant (STYLE.md §1, §2b).
+//! handles the new variant.
 //!
 //! # Operand order is the contract
 //!
@@ -288,8 +288,7 @@ macro_rules! ops {
                 $(#[$meta])*
                 $variant ( $($ty),* ),
             )*
-            /// An inline image, consumed whole by the tokenizer
-            /// (`docs/design/pdfrum-page.md` §1.12).
+            /// An inline image, consumed whole by the tokenizer.
             InlineImage(Box<InlineImage>),
             /// A keyword that names no operator. PDFium drops it silently
             /// after clearing the operands; we keep the spelling so a

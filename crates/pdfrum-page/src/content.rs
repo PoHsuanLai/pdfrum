@@ -1,6 +1,6 @@
 //! `parse_content`: content bytes to a list of typed operators.
 //!
-//! Infallible by contract (SPEC.md §7): an operator nobody recognises, an
+//! Infallible by contract: an operator nobody recognises, an
 //! operator with the wrong number of operands, an unterminated string — all
 //! become a diagnostic and are skipped, never an error. This mirrors PDFium's
 //! interpreter, which has no failure path at all in its dispatch loop.

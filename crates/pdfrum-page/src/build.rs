@@ -1,7 +1,7 @@
 //! `build_page`: the fold from operators to page objects.
 //!
 //! Pure with respect to its inputs, and the only mutable state is the build
-//! context's three caches, passed down by `&mut` (STYLE.md §1).
+//! context's three caches, passed down by `&mut`.
 //!
 //! # Path assembly has three silent repairs
 //!
@@ -70,8 +70,7 @@ pub struct BuildContext {
     pub functions: FunctionCache,
     /// Decoded images, keyed on `(reference, requested size)`.
     pub images: ImageCache,
-    /// How much resolution this build's images are wanted at (SPEC.md §7,
-    /// `[spec]` 2026-08-31).
+    /// How much resolution this build's images are wanted at.
     ///
     /// A **hint**: a codec that cannot reduce returns full resolution and the
     /// image reports the size it actually decoded at. `Full` — the default —
@@ -122,8 +121,7 @@ pub struct BuildContext {
     /// So the slot is erased and the layer above supplies the type through
     /// [`Self::form_fonts`]. This is storage erasure, not a polymorphism
     /// seam: nothing is ever *dispatched* through the `Any`, it is
-    /// downcast straight back to the one type that put it there, so the trait
-    /// list STYLE.md §2b closes at three is untouched.
+    /// downcast straight back to the one type that put it there.
     ///
     /// # Why it is memoized at all
     ///
@@ -136,7 +134,7 @@ pub struct BuildContext {
     /// render**. On a form document whose `/DR` fonts are embedded it was
     /// measured at 78 ms against an appearance generation of under 1 ms, and
     /// it was paid by every document carrying any annotation, not only by
-    /// forms (`docs/status/M13-perf-baseline.md` §4-5).
+    /// forms.
     ///
     /// # Why it is keyed
     ///
@@ -365,11 +363,6 @@ impl StreamBounds {
     /// The last element whose start is at or before the operator — so an
     /// operator past every recorded start belongs to the final element, and a
     /// record with no starts at all answers `0`.
-    ///
-    /// Was `-> i32`, which was never a sentinel: the body could not return a
-    /// negative. It was signed only by contagion from the `NO_CONTENT_STREAM`
-    /// this result used to feed (`docs/design/idiomatic-api.md` §C, Tier 2
-    /// item 16).
     #[must_use]
     pub fn stream_of(&self, op_index: usize) -> usize {
         self.starts

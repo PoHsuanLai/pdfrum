@@ -11,9 +11,8 @@
 //!
 //! Knockout groups are **unimplemented in PDFium**: `/K` is never read
 //! anywhere in its core, and `CPDF_Transparency` carries only "is a group"
-//! and "is isolated". We parse `/K` into the model because SPEC.md §8 asks
-//! for it and it is genuinely in the file, and the renderer ignores it so
-//! output matches the oracle (design brief D20).
+//! and "is isolated". We parse `/K` into the model because it is genuinely in
+//! the file, and the renderer ignores it so output matches the oracle.
 //!
 //! # Pages are always isolated
 //!

@@ -34,7 +34,7 @@ pub enum Error {
     #[error("function domain or range interval is inverted")]
     FunctionInterval,
     /// An image dictionary's `/Width`, `/Height` or `/BitsPerComponent` is
-    /// outside the range PDFium accepts (`docs/design/pdfrum-page.md` §1.19.1).
+    /// outside the range PDFium accepts.
     #[error("image dimensions or bit depth are not usable: {what}")]
     ImageBadDict {
         /// Which value was rejected.
@@ -56,7 +56,7 @@ pub enum Error {
     /// pitch computation overflowed.
     #[error("image needs more than the configured byte budget")]
     ImageTooLarge,
-    /// A JBIG2 or JPEG 2000 codec rejected its input (SPEC.md §12).
+    /// A JBIG2 or JPEG 2000 codec rejected its input.
     #[error("{codec} could not decode the embedded image")]
     CodecRejected {
         /// `"JBIG2"` or `"JPX"`.
