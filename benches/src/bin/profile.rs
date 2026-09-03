@@ -848,13 +848,23 @@ fn run(args: &Args, bytes: &Arc<[u8]>) -> (u32, std::time::Duration) {
     // than by luck — `render.rs`'s `warm` group primes for the same reason.
     // `None` is the cold convention: `Op::Render` builds a fresh session per
     // iteration below, which is what `render-cold-*` does.
-    let mut held = args.warm.then(|| {
-        let mut session = RenderSession::new();
-        for page in doc.pages() {
-            drop(render_one(args, &page, &options, &mut session));
-        }
-        session
-    });
+    let mut held = args.warm.then(RenderSession::new);
+    // Under `--warm` every page is prepared once, here, and the loop below
+    // only draws it: that is what `pdfium_test --render-repeats` repeats, so
+    // it is the only shape the two columns can be read against each other
+    // in. The priming draw makes the first measured iteration warm by
+    // construction rather than by luck.
+    let prepared: Vec<pdfrum::PreparedPage<'_>> = match held.as_mut() {
+        Some(session) => doc
+            .pages()
+            .map(|page| {
+                let prepared = page.prepare(&options, session);
+                drop(draw_one(args, &prepared, session));
+                prepared
+            })
+            .collect(),
+        None => Vec::new(),
+    };
 
     // The priming render above is a *cold* one and its stages are not the
     // loop's, so the accumulator starts from zero at the same moment the clock
@@ -875,17 +885,20 @@ fn run(args: &Args, bytes: &Arc<[u8]>) -> (u32, std::time::Duration) {
                 // `render-cold-*` and `render-warm-*` criterion groups
                 // (`crates/pdfrum-render/benches/render.rs`), and only the
                 // second is comparable with `pdfium_test --render-repeats`.
-                // See the header of `scripts/profile.nu`.
-                // `get_or_insert_with` rather than a match: on the cold
-                // convention it replaces the session every iteration, which is
+                // See the header of `scripts/profile.nu`. The warm arm draws
+                // the pages prepared above; the cold one replaces the session
+                // and re-interprets every page each iteration, which is
                 // exactly `render-cold-*`'s fresh-session-inside-the-closure.
-                let session = if args.warm {
-                    held.get_or_insert_with(RenderSession::new)
+                if args.warm {
+                    let session = held.get_or_insert_with(RenderSession::new);
+                    for page in &prepared {
+                        black_box(draw_one(args, page, session).ok());
+                    }
                 } else {
-                    held.insert(RenderSession::new())
-                };
-                for page in doc.pages() {
-                    black_box(render_one(args, &page, &options, session).ok());
+                    let session = held.insert(RenderSession::new());
+                    for page in doc.pages() {
+                        black_box(render_one(args, &page, &options, session).ok());
+                    }
                 }
             }
             Op::Text => {
