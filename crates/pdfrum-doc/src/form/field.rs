@@ -585,6 +585,17 @@ fn visit<R: Resolve>(
     }
 
     let Some(kids) = kids else {
+        // No `/FT` on this dictionary or its `/Parent`, and no `/Kids` to
+        // inherit one down: upstream's `AddTerminalField` returns here
+        // (`cpdf_interactiveform.cpp:905-912`, "Key \"FT\" is required for
+        // terminal fields") and the dictionary contributes no field at all.
+        if field_type.is_empty() {
+            diags.record(
+                pdfrum_common::Severity::Suspicious,
+                pdfrum_common::DiagKind::FieldSkippedNoType,
+                None,
+            );
+        }
         return;
     };
     for index in 0..kids.len() {

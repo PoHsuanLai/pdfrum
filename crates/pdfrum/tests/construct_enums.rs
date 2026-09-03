@@ -144,11 +144,10 @@ fn construct_default_feature_variants() -> usize {
     let _ = Update::Rewrite;
     n += 2;
 
-    // DiagKind — 110. Two variants carry a `u32` count.
+    // DiagKind — 101. Two variants carry a `u32` count.
     let diag: &[DiagKind] = &[
         DiagKind::AnnotSubtypeUnknown,
         DiagKind::AppearanceGenerated,
-        DiagKind::AutoFontSizeZero,
         DiagKind::BadStartXref,
         DiagKind::BadTextRenderMode,
         DiagKind::CMapCodespaceDropped,
@@ -161,7 +160,6 @@ fn construct_default_feature_variants() -> usize {
         DiagKind::CMapUsecmapDepth,
         DiagKind::CMapUsecmapUnknown,
         DiagKind::CMapWideMappingsDropped,
-        DiagKind::ChoiceIndicesIgnored,
         DiagKind::CidToGidStreamShort,
         DiagKind::ColorKeyArrayShort,
         DiagKind::ColorSpaceUnsupported,
@@ -169,9 +167,6 @@ fn construct_default_feature_variants() -> usize {
         DiagKind::DashPatternDropped,
         DiagKind::DefaultAppearanceMalformed,
         DiagKind::DestPageUnresolved,
-        DiagKind::FieldKidsMalformed,
-        DiagKind::FieldNameNormalized,
-        DiagKind::FieldSkippedNoName,
         DiagKind::FieldSkippedNoType,
         DiagKind::FontProgramUnreadable,
         DiagKind::FontSubstitutionFailed,
@@ -225,7 +220,6 @@ fn construct_default_feature_variants() -> usize {
         DiagKind::ShadingUnsupported,
         DiagKind::StreamInCompositeDropped,
         DiagKind::StructElementDropped,
-        DiagKind::StructKidUnresolved,
         DiagKind::TextActualTextCharDropped,
         DiagKind::TextActualTextUnprintable,
         DiagKind::TextCharcodeZero,
@@ -235,12 +229,10 @@ fn construct_default_feature_variants() -> usize {
         DiagKind::TextObjectDegenerate,
         DiagKind::TextObjectDropped,
         DiagKind::TextObjectDuplicate,
-        DiagKind::TextTruncatedAtSurrogate,
         DiagKind::TilingRangeOverflow,
         DiagKind::TilingStepInvalid,
         DiagKind::TintTransformDropped,
         DiagKind::ToUnicodeBlockRejected,
-        DiagKind::ToUnicodeLoneSurrogate,
         DiagKind::TreeDepthExceeded,
         DiagKind::Type1BlendInconsistent,
         DiagKind::Type1CharstringAborted,
@@ -251,7 +243,6 @@ fn construct_default_feature_variants() -> usize {
         DiagKind::UnbalancedRestore,
         DiagKind::UndecodableStream,
         DiagKind::UnknownOperator,
-        DiagKind::WidgetRotationInvalid,
         DiagKind::XrefEntriesShifted,
         DiagKind::XrefPrevLoop,
         DiagKind::XrefRebuilt,
@@ -676,7 +667,7 @@ fn every_public_enum_variant_is_constructible_from_the_facade() {
         "constructed {constructed} default-feature variants, snapshots derive {derived}; \
          SNAPSHOT_ENUMS is the derivation index — add a construction when a variant lands"
     );
-    assert_eq!(constructed, 291, "default-feature variant count");
+    assert_eq!(constructed, 282, "default-feature variant count");
     assert_eq!(SNAPSHOT_ENUMS.len(), 29, "default-feature enum count");
 }
 

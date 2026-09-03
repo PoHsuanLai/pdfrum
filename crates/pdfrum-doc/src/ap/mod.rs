@@ -818,8 +818,14 @@ fn generate_text_bearing<R: Resolve>(
         return None;
     }
     let font = text_font?;
-    let generated =
-        freetext::free_text(dict, catalog, r, &font.metrics, &|code| font.encode(code))?;
+    let generated = freetext::free_text(
+        dict,
+        catalog,
+        r,
+        &font.metrics,
+        &|code| font.encode(code),
+        diags,
+    )?;
     diags.record(Severity::Recovered, DiagKind::AppearanceGenerated, None);
     Some(GeneratedAp {
         stream: generated.stream,
@@ -848,7 +854,7 @@ pub(crate) fn generate_one<R: Resolve>(
     let generated = match subtype {
         Subtype::Circle => markup::circle(dict, r),
         Subtype::Highlight => markup::highlight(dict, r),
-        Subtype::Ink => markup::ink(dict, r)?,
+        Subtype::Ink => markup::ink(dict, r, diags)?,
         Subtype::Square => markup::square(dict, r),
         Subtype::Squiggly => markup::squiggly(dict, r),
         Subtype::StrikeOut => markup::strike_out(dict, r),

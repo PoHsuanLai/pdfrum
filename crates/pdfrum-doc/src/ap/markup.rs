@@ -25,6 +25,7 @@
 )]
 
 use kurbo::Rect;
+use pdfrum_common::{DiagKind, Diagnostics, Severity};
 use pdfrum_object::{Array, Dict, Resolve, names as obj_names};
 
 use crate::annot::quad;
@@ -209,7 +210,7 @@ pub fn squiggly<R: Resolve>(dict: &Dict, r: &R) -> Generated {
 /// Each sub-array's first point is written **twice**, once as the move and
 /// again as the first line, because the line loop starts at index zero.
 #[must_use]
-pub fn ink<R: Resolve>(dict: &Dict, r: &R) -> Option<Generated> {
+pub fn ink<R: Resolve>(dict: &Dict, r: &R, diags: &mut Diagnostics) -> Option<Generated> {
     let ink_list = dict.array(names::INK_LIST, r).filter(|a| !a.is_empty())?;
     let width = border::border_width(dict, r);
     if width <= 0.0 {
@@ -224,7 +225,11 @@ pub fn ink<R: Resolve>(dict: &Dict, r: &R) -> Option<Generated> {
     out.raw(&border::dash_pattern_string(dict, r));
 
     for index in 0..ink_list.len() {
+        // `CPDF_GenerateAP` skips a sub-array that is missing or holds fewer
+        // than two numbers (`cpdf_generateap.cpp:1210-1213`): one stroke of
+        // the drawing silently does not appear.
         let Some(points) = ink_list.array_at(index, r).filter(|a| a.len() >= 2) else {
+            diags.record(Severity::Recovered, DiagKind::InkPathDropped, None);
             continue;
         };
         out.point(
@@ -442,6 +447,7 @@ mod tests {
         circle, highlight, ink, square, squiggly, strike_out, text, text_symbol, underline,
     };
     use crate::geom;
+    use pdfrum_common::{DiagKind, Diagnostics};
     use pdfrum_object::{Array, Dict, Name, NoResolve, Object};
 
     fn dict(pairs: &[(&str, Object)]) -> Dict {
@@ -562,7 +568,8 @@ mod tests {
             ),
             ("Rect", numbers(&[0.0, 0.0, 10.0, 10.0])),
         ]);
-        let got = ink(&annot, &NoResolve).expect("has an ink list");
+        let mut diags = Diagnostics::default();
+        let got = ink(&annot, &NoResolve, &mut diags).expect("has an ink list");
         assert_eq!(stream(&got), "/GS gs 0 0 0 RG\n1 w 1 2 m 1 2 l 3 4 l S\n");
         // The rectangle grew by half the border width.
         assert_eq!(got.rect_override, Some(geom::rect(-0.5, -0.5, 10.5, 10.5)));
@@ -570,11 +577,13 @@ mod tests {
 
     #[test]
     fn ink_declines_entirely_without_a_usable_list_or_a_positive_width() {
-        assert!(ink(&Dict::new(), &NoResolve).is_none());
+        let mut diags = Diagnostics::default();
+        assert!(ink(&Dict::new(), &NoResolve, &mut diags).is_none());
         assert!(
             ink(
                 &dict(&[("InkList", Object::Array(Array::new()))]),
-                &NoResolve
+                &NoResolve,
+                &mut diags
             )
             .is_none()
         );
@@ -585,7 +594,32 @@ mod tests {
             ),
             ("Border", numbers(&[0.0, 0.0, 0.0])),
         ]);
-        assert!(ink(&zero_width, &NoResolve).is_none());
+        assert!(ink(&zero_width, &NoResolve, &mut diags).is_none());
+    }
+
+    #[test]
+    fn a_too_short_ink_sub_array_is_dropped_and_recorded() {
+        // Three strokes: a good one, one with a single coordinate, and one
+        // that is not an array at all. PDFium `continue`s past the last two
+        // (`cpdf_generateap.cpp:1210-1213`) and so do we — the difference is
+        // that the caller can now find out a stroke went missing.
+        let annot = dict(&[
+            (
+                "InkList",
+                Object::Array(Array::of([
+                    numbers(&[1.0, 2.0, 3.0, 4.0]),
+                    numbers(&[9.0]),
+                    Object::Int(7),
+                ])),
+            ),
+            ("Rect", numbers(&[0.0, 0.0, 10.0, 10.0])),
+        ]);
+        let mut diags = Diagnostics::default();
+        let got = ink(&annot, &NoResolve, &mut diags).expect("has an ink list");
+        // Only the usable stroke is drawn.
+        assert_eq!(stream(&got), "/GS gs 0 0 0 RG\n1 w 1 2 m 1 2 l 3 4 l S\n");
+        assert!(diags.contains(&DiagKind::InkPathDropped));
+        assert_eq!(diags.recorded(), 2, "one per dropped sub-array");
     }
 
     #[test]

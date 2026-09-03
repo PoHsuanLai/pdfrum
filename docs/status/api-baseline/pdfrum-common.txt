@@ -3,7 +3,6 @@ pub use pdfrum_common::kurbo
 #[non_exhaustive] pub enum pdfrum_common::DiagKind
 pub pdfrum_common::DiagKind::AnnotSubtypeUnknown
 pub pdfrum_common::DiagKind::AppearanceGenerated
-pub pdfrum_common::DiagKind::AutoFontSizeZero
 pub pdfrum_common::DiagKind::BadStartXref
 pub pdfrum_common::DiagKind::BadTextRenderMode
 pub pdfrum_common::DiagKind::CMapCodespaceDropped
@@ -16,7 +15,6 @@ pub pdfrum_common::DiagKind::CMapTruncatedCodespace
 pub pdfrum_common::DiagKind::CMapUsecmapDepth
 pub pdfrum_common::DiagKind::CMapUsecmapUnknown
 pub pdfrum_common::DiagKind::CMapWideMappingsDropped
-pub pdfrum_common::DiagKind::ChoiceIndicesIgnored
 pub pdfrum_common::DiagKind::CidToGidStreamShort
 pub pdfrum_common::DiagKind::ColorKeyArrayShort
 pub pdfrum_common::DiagKind::ColorSpaceUnsupported
@@ -24,9 +22,6 @@ pub pdfrum_common::DiagKind::DashElementClamped
 pub pdfrum_common::DiagKind::DashPatternDropped
 pub pdfrum_common::DiagKind::DefaultAppearanceMalformed
 pub pdfrum_common::DiagKind::DestPageUnresolved
-pub pdfrum_common::DiagKind::FieldKidsMalformed
-pub pdfrum_common::DiagKind::FieldNameNormalized
-pub pdfrum_common::DiagKind::FieldSkippedNoName
 pub pdfrum_common::DiagKind::FieldSkippedNoType
 pub pdfrum_common::DiagKind::FontProgramUnreadable
 pub pdfrum_common::DiagKind::FontSubstitutionFailed
@@ -80,7 +75,6 @@ pub pdfrum_common::DiagKind::ScriptLimitReached
 pub pdfrum_common::DiagKind::ShadingUnsupported
 pub pdfrum_common::DiagKind::StreamInCompositeDropped
 pub pdfrum_common::DiagKind::StructElementDropped
-pub pdfrum_common::DiagKind::StructKidUnresolved
 pub pdfrum_common::DiagKind::TextActualTextCharDropped
 pub pdfrum_common::DiagKind::TextActualTextUnprintable
 pub pdfrum_common::DiagKind::TextCharcodeZero
@@ -90,12 +84,10 @@ pub pdfrum_common::DiagKind::TextHyphenNoPrevChar
 pub pdfrum_common::DiagKind::TextObjectDegenerate
 pub pdfrum_common::DiagKind::TextObjectDropped
 pub pdfrum_common::DiagKind::TextObjectDuplicate
-pub pdfrum_common::DiagKind::TextTruncatedAtSurrogate
 pub pdfrum_common::DiagKind::TilingRangeOverflow
 pub pdfrum_common::DiagKind::TilingStepInvalid
 pub pdfrum_common::DiagKind::TintTransformDropped
 pub pdfrum_common::DiagKind::ToUnicodeBlockRejected
-pub pdfrum_common::DiagKind::ToUnicodeLoneSurrogate
 pub pdfrum_common::DiagKind::TreeDepthExceeded
 pub pdfrum_common::DiagKind::Type1BlendInconsistent
 pub pdfrum_common::DiagKind::Type1CharstringAborted
@@ -106,7 +98,6 @@ pub pdfrum_common::DiagKind::UnbalancedMarkedContent
 pub pdfrum_common::DiagKind::UnbalancedRestore
 pub pdfrum_common::DiagKind::UndecodableStream
 pub pdfrum_common::DiagKind::UnknownOperator
-pub pdfrum_common::DiagKind::WidgetRotationInvalid
 pub pdfrum_common::DiagKind::XrefEntriesShifted
 pub pdfrum_common::DiagKind::XrefPrevLoop
 pub pdfrum_common::DiagKind::XrefRebuilt

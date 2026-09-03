@@ -126,8 +126,35 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
 
 ## Policy-kept, decision owed
 
-- Fifteen `DiagKind` variants are never recorded (`#[non_exhaustive]`, doc
-  says the enum grows as crates land).
+*(Emptied 2026-09-03. The `DiagKind` item is decided: six variants wired, nine
+deleted — see the commit and `crates/pdfrum-common/src/diagnostics.rs`.)*
+
+## Conformance gaps found while auditing `DiagKind`, 2026-09-03
+
+Three real divergences surfaced by asking "does our port reach this
+condition?". None is a diagnostic problem, so none was papered over with one;
+each needs its own ruling.
+
+- **A negative quarter turn empties a widget's box.**
+  `ap::widget::rotated_rect` (`crates/pdfrum-doc/src/ap/widget.rs:613-617`)
+  matches `rotation % 360` against `0|180` and `90|270`, and Rust's remainder
+  keeps the sign — so `/MK /R -90` falls to `_ => Rect::ZERO`. PDFium switches
+  on `abs(GetRotation() % 360)` and has a `default:` that falls through to the
+  0/180 case (`fpdfsdk/cpdfsdk_widget.cpp:1029-1039`), so it never empties the
+  box. Our own second reader already agrees with PDFium
+  (`pdfrum-form/src/page.rs:326-332` folds the default to `Rotation::None`),
+  so two readers of the same key disagree with each other. A test currently
+  pins the wrong behaviour
+  (`a_rotation_that_is_not_a_quarter_turn_empties_the_box`).
+- **A field whose fully-qualified name is empty is kept, not skipped.**
+  `AddTerminalField` drops it (`cpdf_interactiveform.cpp:914-917`); our
+  `form::field::visit` pushes unconditionally
+  (`crates/pdfrum-doc/src/form/field.rs:576`) and `full_name`
+  (`form/attr.rs:55`) can return `""`.
+- **A malformed `/Kids[0]` does not abandon the subtree.** The oracle returns
+  outright when `kids->GetDictAt(0)` is null
+  (`cpdf_interactiveform.cpp:871-874`); we drop that one index and keep
+  walking (`crates/pdfrum-doc/src/form/field.rs:592`).
 
 ## Upstream, drafted and not filed (`docs/upstream/README.md`)
 
