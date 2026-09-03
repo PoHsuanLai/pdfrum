@@ -87,7 +87,9 @@ per-family record and the rulings are in `docs/status/M17.md`.
 ## Ratchet re-baseline (2026-09-04, on `d3c842f`)
 
 `cargo bench --workspace` at load 8–11, then `ratchet update`: 146 unchanged, 273 improved, 21 regressed, 0 new, 0 not run.
-The improvements are recorded in `benches/baseline.json`; the 21
+`ratchet update` writes nothing while a regression stands, so
+`benches/baseline.json` is **unchanged** — the improvements are not yet
+recorded either — and the 21
 regressions the check still reports are **not** written and stand as the
 debt, largest first:
 
@@ -123,7 +125,7 @@ ran while a `cargo doc` was building on the box and should be re-taken before
 being believed. `text/vector_paths_1751` and its `build/` row are the one
 group that looks like a real change since the 2026-09-02 baseline, and the
 `open/*` rows are microseconds. Each needs a bisect or a re-take; none is
-paid here.
+paid here. Once they are, `ratchet update` records the whole set.
 
 ## Found during the features pass (2026-09-04)
 
