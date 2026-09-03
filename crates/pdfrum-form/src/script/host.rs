@@ -74,6 +74,18 @@ pub(crate) struct HostState {
     pub(crate) base_url: String,
     /// `Doc.delay` — the document-wide batching flag.
     pub(crate) delay: bool,
+    /// Writes a field's own `delay` deferred, in the order they were made.
+    ///
+    /// **The queue is the document's, not the field's.** Upstream it is
+    /// `CJS_Document::delay_data_`, which every `CJS_Field` pushes into and
+    /// which two different things drain: `Field.delay = false` takes only the
+    /// entries naming *that* field (`DoFieldDelay`), and `Doc.delay = false`
+    /// takes them all. Setting `Doc.delay = true` **clears** it outright, so
+    /// a write parked behind a field's flag is discarded by a document-level
+    /// one — which is the whole of what `bug_494057` measures.
+    ///
+    /// Each entry is a `/Fields` position and the strings that were assigned.
+    pub(crate) delayed_writes: Vec<(u32, Vec<String>)>,
     /// `app.calculate` — whether recalculation runs, as `app` reports it.
     ///
     /// Defaults **on**, which is `CPDFSDK_InteractiveForm`'s own initial
@@ -137,6 +149,7 @@ impl Default for HostState {
             app_calculate: true,
             app_runtime_highlight: false,
             delay: false,
+            delayed_writes: Vec::new(),
             dirty: false,
             calculate_requested: false,
             focus_requested: None,

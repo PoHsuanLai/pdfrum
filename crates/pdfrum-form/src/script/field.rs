@@ -42,7 +42,7 @@ use boa_engine::object::ObjectInitializer;
 use boa_engine::{Context, JsArgs, JsError, JsObject, JsResult, JsValue};
 
 use super::bind::{host, native, param_error, qualified, string_of};
-use super::doc::{BAD_OBJECT, NOT_SUPPORTED, VALUE_ERROR};
+use super::doc::{BAD_OBJECT, NOT_SUPPORTED, OBJECT_TYPE, VALUE_ERROR};
 use super::model::{FieldModel, FieldModelKind};
 
 /// The class name every error this object throws is qualified by.
@@ -285,19 +285,13 @@ fn set_value(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResul
         .and_then(|object| object.get(boa_engine::js_string!(DELAY_KEY), context).ok())
         .is_some_and(|value| value.to_boolean());
     if delayed {
-        if let Some(object) = this.as_object() {
-            let queued = boa_engine::object::builtins::JsArray::from_iter(
-                offered
-                    .into_iter()
-                    .map(|text| JsValue::from(boa_engine::js_string!(text))),
-                context,
-            );
-            object.set(
-                boa_engine::js_string!(QUEUE_KEY),
-                JsValue::from(queued),
-                false,
-                context,
-            )?;
+        // Parked on the **document's** queue, which is where `AddDelay_*`
+        // puts it — so `Doc.delay = true` can clear it and a `Field.delay`
+        // flush can find it by name.
+        if let Some(host) = host(context) {
+            host.borrow_mut()
+                .delayed_writes
+                .push((u32::try_from(index).unwrap_or(u32::MAX), offered));
         }
         return Ok(JsValue::undefined());
     }
@@ -315,9 +309,6 @@ fn set_value(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResul
     Ok(JsValue::undefined())
 }
 
-/// The key a `Field` holds a delayed write under.
-const QUEUE_KEY: &str = "__pdfrum_field_queue";
-
 /// Assigning `Field.value`, per kind, and the answer the field then holds.
 ///
 /// **Three families, and only one of them looks past the first element.**
@@ -330,8 +321,35 @@ const QUEUE_KEY: &str = "__pdfrum_field_queue";
 /// A choice field also refuses anything that is not one of its **export
 /// values**: matching is against the export value alone, so the label `Foo`
 /// selects nothing where the value `foo` selects the row.
-fn apply_value(field: &mut FieldModel, offered: &[String]) -> String {
+pub(crate) fn apply_value(field: &mut FieldModel, offered: &[String]) -> String {
     let first = offered.first().cloned().unwrap_or_default();
+    // **A toggle only accepts one of its own export values.** `SetValue`
+    // routes a check box and a radio button through `SetCheckValue`, which
+    // walks the controls checking each against the string and *unchecking*
+    // every one that does not match — so a value naming no control leaves the
+    // whole group off, and the field reads back `Off`. That is what makes
+    // `field_properties`'s `value = 42` a write the field ignores rather than
+    // a value it stores.
+    if field.kind.is_toggle() {
+        let mut hit = false;
+        for (at, export) in field.export_values.iter().enumerate() {
+            let matched = *export == first;
+            if let Some(checked) = field.checked.get_mut(at) {
+                *checked = matched;
+            }
+            if matched {
+                hit = true;
+                break;
+            }
+        }
+        let value = if hit { first } else { "Off".to_string() };
+        field.value.clone_from(&value);
+        // `valueAsString` is a check box's own literal and moves with it.
+        if field.kind == FieldModelKind::CheckBox {
+            field.value_as_string = Some(if hit { "Yes" } else { "Off" }.to_string());
+        }
+        return value;
+    }
     if !field.kind.is_choice() {
         field.value.clone_from(&first);
         return first;
@@ -1072,7 +1090,52 @@ macro_rules! fixed_string {
 // stringifies to the bare `T` a golden reads.
 fixed_string!(get_alignment, "left");
 fixed_string!(get_highlight, "invert");
-fixed_string!(get_style, "check");
+
+/// `Field.style` — which ZapfDingbats glyph a toggle draws when it is on.
+///
+/// Read off the widget's **normal caption** (`/MK /CA`), whose first
+/// character is the selector: `4` a check, `l` a circle, `8` a cross, `u` a
+/// diamond, `n` a square, `H` a star. Anything else is a check, which is the
+/// `default:` arm rather than an error.
+///
+/// # An empty caption is answered by the field's kind, not by `check`
+///
+/// A widget with no `/MK /CA` at all — which is the ordinary case, since a
+/// viewer draws the standard glyph for the type — takes `circle` for a radio
+/// button and `check` for everything else. That is the whole of what
+/// `field_properties`'s two `style` lines assert: the fixture's radio group
+/// and its check box both carry no caption, and they answer differently.
+///
+/// Throws `Object is of the wrong type.` for a field that is neither a check
+/// box nor a radio button, which is the one guard upstream puts ahead of the
+/// read.
+fn get_style(this: &JsValue, _a: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    let kind = read(this, context, "style", |field| field.kind)?;
+    if !kind.is_toggle() {
+        return Err(err("style", OBJECT_TYPE));
+    }
+    let caption = read(this, context, "style", |field| field.captions[0].clone())?;
+    let selector = caption.chars().next().unwrap_or(
+        // No caption: the field's own kind decides. A radio button is a
+        // circle and everything else a check.
+        if kind == super::model::FieldModelKind::RadioButton {
+            'l'
+        } else {
+            '4'
+        },
+    );
+    let style = match selector {
+        'l' => "circle",
+        '8' => "cross",
+        'u' => "diamond",
+        'n' => "square",
+        'H' => "star",
+        // `case kCheckSelector: default:` — one arm, and every unrecognised
+        // caption lands in it rather than failing.
+        _ => "check",
+    };
+    Ok(JsValue::from(boa_engine::js_string!(style)))
+}
 fixed_string!(get_text_font, "Helv");
 
 /// One of the three colour getters — all `["T"]`.
@@ -1161,36 +1224,33 @@ fn set_delay(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResul
     if delay {
         return Ok(JsValue::undefined());
     }
-    // The flush.
-    let queued = object.get(boa_engine::js_string!(QUEUE_KEY), context)?;
-    let Some(array) = queued.as_object().filter(|o| o.is_array()) else {
-        return Ok(JsValue::undefined());
-    };
-    object.set(
-        boa_engine::js_string!(QUEUE_KEY),
-        JsValue::undefined(),
-        false,
-        context,
-    )?;
-    let length = array
-        .get(boa_engine::js_string!("length"), context)?
-        .to_length(context)?;
-    let mut offered = Vec::new();
-    for at in 0..length {
-        let element = array.get(at, context)?;
-        offered.push(string_of(&element, context)?);
-    }
+    // The flush — `DoFieldDelay`, which takes **only this field's** entries
+    // off the document's queue and leaves every other field's parked.
     let Some(index) = index_of(this, context) else {
         return Ok(JsValue::undefined());
     };
-    if let Some(host) = host(context) {
-        let mut state = host.borrow_mut();
-        if let Some(field) = state.document.fields.get_mut(index) {
-            let accepted = apply_value(field, &offered);
-            state
-                .field_writes
-                .push((u32::try_from(index).unwrap_or(u32::MAX), accepted));
+    let index = u32::try_from(index).unwrap_or(u32::MAX);
+    let Some(host) = host(context) else {
+        return Ok(JsValue::undefined());
+    };
+    let mut state = host.borrow_mut();
+    let mut mine = Vec::new();
+    state.delayed_writes.retain(|(at, offered)| {
+        if *at == index {
+            mine.push(offered.clone());
+            return false;
         }
+        true
+    });
+    for offered in mine {
+        let Ok(at) = usize::try_from(index) else {
+            continue;
+        };
+        let Some(field) = state.document.fields.get_mut(at) else {
+            continue;
+        };
+        let accepted = apply_value(field, &offered);
+        state.field_writes.push((index, accepted));
     }
     Ok(JsValue::undefined())
 }

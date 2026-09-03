@@ -62,6 +62,9 @@ pub(crate) const TYPE_ERROR: &str = "Incorrect parameter type.";
 /// `JSMessage::kBadObjectError` — thrown for a thing that is gone or was
 /// never there, which upstream uses for a great deal more than it sounds like.
 pub(crate) const BAD_OBJECT: &str = "Object no longer exists.";
+/// `JSMessage::kObjectTypeError` — the object is there, and is the wrong
+/// kind of thing to be asked this.
+pub(crate) const OBJECT_TYPE: &str = "Object is of the wrong type.";
 /// `JSMessage::kUserGestureRequiredError`.
 const USER_GESTURE: &str = "User gesture required.";
 /// `JSMessage::kNotSupportedError`.
@@ -378,6 +381,30 @@ fn icon_prototype(context: &mut Context) -> JsResult<JsObject> {
     }
     let prototype = ObjectInitializer::new(context).build();
     super::bind::define_accessor(&prototype, context, "name", icon_get_name, icon_set_name)?;
+    // **`Icon` is a dynamic object**, so `new icon.constructor()` succeeds
+    // and answers a bare instance rather than throwing
+    // (`FXJSOBJTYPE_DYNAMIC`, `cjs_icon.cpp:22-23`). Two things follow, and
+    // `icons.in` asserts both: the object `new` builds inherits from **this**
+    // prototype — which is what makes `dubious.__proto__ == icon1.__proto__`
+    // true — and it carries no binding, so `name` reads `undefined` and
+    // assigning to it is a silent no-op rather than the readonly refusal a
+    // real icon gives.
+    super::bind::allow_construction(&prototype, context)?;
+    // `new f()` takes its prototype from `f.prototype`, so the constructor
+    // must point back here. Without this the instance inherits from
+    // `Object.prototype` and the comparison reads false.
+    let constructor = prototype.get(boa_engine::js_string!("constructor"), context)?;
+    if let Some(constructor) = constructor.as_object() {
+        constructor.define_property_or_throw(
+            boa_engine::js_string!("prototype"),
+            PropertyDescriptor::builder()
+                .value(prototype.clone())
+                .writable(false)
+                .enumerable(false)
+                .configurable(false),
+            context,
+        )?;
+    }
     global.define_property_or_throw(
         boa_engine::js_string!(ICON_PROTOTYPE),
         PropertyDescriptor::builder()
@@ -1417,8 +1444,43 @@ macro_rules! flag {
     };
 }
 
-flag!(get_delay, set_delay, delay);
+flag!(get_delay, set_delay_flag, delay);
 flag!(get_dirty, set_dirty, dirty);
+
+/// `Doc.delay = b` — the document-wide batching flag, **and what it does to
+/// the queue**.
+///
+/// Setting it `true` **clears** everything parked, so a write a field's own
+/// `delay` deferred is discarded rather than merely postponed; setting it
+/// `false` runs the lot. Both halves are `CJS_Document::set_delay`, and the
+/// clearing one is the surprise: `bug_494057` parks a write behind
+/// `ff.delay = true`, sets `this.delay = true`, and then drops the field's
+/// flag — and the value has still not moved, because the document-level set
+/// threw the entry away in between.
+fn set_delay(this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    let delay = args.get_or_undefined(0).to_boolean();
+    set_delay_flag(this, args, context)?;
+    let Some(host) = host(context) else {
+        return Ok(JsValue::undefined());
+    };
+    let mut state = host.borrow_mut();
+    let queued = std::mem::take(&mut state.delayed_writes);
+    if delay {
+        // `delay_data_.clear()` — parked writes are dropped, not deferred.
+        return Ok(JsValue::undefined());
+    }
+    for (index, offered) in queued {
+        let Ok(at) = usize::try_from(index) else {
+            continue;
+        };
+        let Some(field) = state.document.fields.get_mut(at) else {
+            continue;
+        };
+        let accepted = super::field::apply_value(field, &offered);
+        state.field_writes.push((index, accepted));
+    }
+    Ok(JsValue::undefined())
+}
 
 /// `Doc.baseURL` — a real variable that reaches nothing else.
 fn get_base_url(_t: &JsValue, _a: &[JsValue], context: &mut Context) -> JsResult<JsValue> {

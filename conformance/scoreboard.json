@@ -1,12 +1,12 @@
 {
-  "generated_at": "2026-09-03T11:30:24Z",
+  "generated_at": "2026-09-03T13:03:18Z",
   "totals": {
     "files": 1757,
-    "pass": 1536,
-    "fail": 221,
+    "pass": 1539,
+    "fail": 218,
     "by_tag": {
       "form-events": 8,
-      "js-transcript": 11,
+      "js-transcript": 8,
       "page-count": 2,
       "pixel-fail": 41,
       "tierA-mismatch": 170
@@ -34609,10 +34609,8 @@
     },
     {
       "path": "resources/javascript/bug_494057.in#js-transcript",
-      "status": "fail",
-      "tags": [
-        "js-transcript"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [],
         "mismatched": [],
@@ -34626,7 +34624,7 @@
         }
       },
       "tierB": null,
-      "notes": "line 3: expected \"Alert: field value is ''\", got \"Alert: field value is 'new value'\""
+      "notes": ""
     },
     {
       "path": "resources/javascript/bug_494057.pdf",
@@ -35820,10 +35818,8 @@
     },
     {
       "path": "resources/javascript/field_properties.in#js-transcript",
-      "status": "fail",
-      "tags": [
-        "js-transcript"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [],
         "mismatched": [],
@@ -35837,7 +35833,7 @@
         }
       },
       "tierB": null,
-      "notes": "line 103: expected \"Alert: PASS: style = circle\", got \"Alert: FAIL: style = check, expected = circle\""
+      "notes": ""
     },
     {
       "path": "resources/javascript/field_properties.pdf",
@@ -36061,10 +36057,8 @@
     },
     {
       "path": "resources/javascript/icons.in#js-transcript",
-      "status": "fail",
-      "tags": [
-        "js-transcript"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [],
         "mismatched": [],
@@ -36078,7 +36072,7 @@
         }
       },
       "tierB": null,
-      "notes": "line 9: expected \"Alert: Prototype comparison is true\", got \"Alert: Prototype comparison is false\""
+      "notes": ""
     },
     {
       "path": "resources/javascript/icons.pdf",

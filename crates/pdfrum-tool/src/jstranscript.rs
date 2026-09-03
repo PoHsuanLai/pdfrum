@@ -134,9 +134,7 @@ pub fn write_transcript(
             return Ok(());
         };
         cascade.set_document(model);
-        for (whence, source) in scripts {
-            cascade.run(&source, &whence);
-        }
+        run_document_actions(&mut cascade, scripts);
         write!(out, "{}", cascade.transcript_text())?;
         return report_failures(&mut cascade, diags, err);
     };
@@ -146,17 +144,7 @@ pub fn write_transcript(
     };
     if let Some(cascade) = session.scripts_mut() {
         cascade.set_document(model);
-        // **A script that throws does not stop the ones after it.** `run`
-        // records the failure and answers `false`; the loop does not read
-        // that answer, which is upstream's shape — `ProcJavascriptAction`
-        // walks the name tree `for (i = 0; i < count; ++i)` calling a `void`
-        // `DoActionJavaScript` (`cpdfsdk_formfillenvironment.cpp:697-701`),
-        // and `ExecuteDocumentOpenAction` runs every `/Next` sub-action
-        // unconditionally after the JS (`:1000-1018`). The difference from
-        // upstream is only that we write the failure down.
-        for (whence, source) in scripts {
-            cascade.run(&source, &whence);
-        }
+        run_document_actions(cascade, scripts);
     }
     // A document-level script may have called `Field.setFocus`, which records
     // a request rather than moving the keyboard itself. Spending it here is
@@ -193,6 +181,25 @@ pub fn write_transcript(
     report_failures(cascade, diags, err)
 }
 
+/// Runs the document's open actions in order, whatever kind each is.
+///
+/// **A script that throws does not stop the ones after it.** `run` records
+/// the failure and answers `false`; this loop does not read that answer,
+/// which is upstream's shape — `ProcJavascriptAction` walks the name tree
+/// calling a `void` `DoActionJavaScript`, and `ExecuteDocumentOpenAction`
+/// runs every `/Next` sub-action unconditionally after the JavaScript. The
+/// difference from upstream is only that we write the failure down.
+fn run_document_actions(cascade: &mut ScriptCascade, actions: Vec<DocumentAction>) {
+    for action in actions {
+        match action {
+            DocumentAction::Script { whence, source } => {
+                cascade.run(&source, &whence);
+            }
+            DocumentAction::Named(name) => cascade.record_named_action(name),
+        }
+    }
+}
+
 /// Writes what each stopped script said to `err`, and records the kinds.
 ///
 /// **`err`, never `out`.** The transcript is the oracle's stdout and
@@ -212,11 +219,24 @@ fn report_failures(
     Ok(())
 }
 
-/// Every script the document runs on open, in the oracle's order.
+/// One thing a document asks for on open.
 ///
-/// Paired with the name the oracle would use for the script in a diagnostic:
-/// its name-tree key, or `/OpenAction`.
-fn document_scripts(catalog: &Dict, doc: &Document) -> Vec<(String, String)> {
+/// Two kinds reach the transcript and they are not both scripts: `/S
+/// /JavaScript` runs source in the realm, and `/S /Named` runs no JavaScript
+/// at all — it is a viewer verb the host is asked to perform, and
+/// `ExecuteNamedAction` hands it straight to the embedder. Collected together
+/// because the walk that finds them is one walk and the **order** between
+/// them is what a transcript records.
+enum DocumentAction {
+    /// `/S /JavaScript` — the source, and the name a diagnostic would use for
+    /// it: its name-tree key, or the empty string for `/OpenAction`.
+    Script { whence: String, source: String },
+    /// `/S /Named` — the verb, as `/N` spells it.
+    Named(String),
+}
+
+/// Everything the document asks for on open, in the oracle's order.
+fn document_scripts(catalog: &Dict, doc: &Document) -> Vec<DocumentAction> {
     let limits = Limits::default();
     let mut diags = Diagnostics::default();
     let mut found = Vec::new();
@@ -241,7 +261,10 @@ fn document_scripts(catalog: &Dict, doc: &Document) -> Vec<(String, String)> {
             // `DoActionJavaScript` runs only a non-empty script
             // (`cpdfsdk_formfillenvironment.cpp:912-924`).
             if let Some(source) = action.javascript(doc).filter(|s| !s.is_empty()) {
-                found.push((name, source));
+                found.push(DocumentAction::Script {
+                    whence: name,
+                    source,
+                });
             }
         }
     }
@@ -261,14 +284,28 @@ fn document_scripts(catalog: &Dict, doc: &Document) -> Vec<(String, String)> {
         // with a visited set (`cpdfsdk_formfillenvironment.cpp:995-1025`),
         // which is exactly what `Action::chain` walks.
         for action in std::iter::once(root.clone()).chain(root.chain(doc, &limits, &mut diags)) {
-            if action.kind() != ActionKind::JavaScript {
-                continue;
-            }
-            if let Some(source) = action.javascript(doc).filter(|s| !s.is_empty()) {
-                // `RunDocumentOpenJavaScript(WideString(), swJS)` — the open
-                // action's script is run with an *empty* name
-                // (`cpdfsdk_formfillenvironment.cpp:1000-1006`).
-                found.push((String::new(), source));
+            match action.kind() {
+                ActionKind::JavaScript => {
+                    if let Some(source) = action.javascript(doc).filter(|s| !s.is_empty()) {
+                        // `RunDocumentOpenJavaScript(WideString(), swJS)` —
+                        // the open action's script is run with an *empty*
+                        // name (`cpdfsdk_formfillenvironment.cpp:1000-1006`).
+                        found.push(DocumentAction::Script {
+                            whence: String::new(),
+                            source,
+                        });
+                    }
+                }
+                // `DoActionNamed` is `ExecuteNamedAction(action.GetNamedAction())`
+                // (`cpdfsdk_formfillenvironment.cpp:1161-1164`) — the name
+                // goes to the embedder and nothing is run in the realm. An
+                // empty `/N` still reaches the callback upstream, so it is
+                // not filtered out here either.
+                ActionKind::Named => {
+                    let name = String::from_utf8_lossy(&action.named_action(doc)).into_owned();
+                    found.push(DocumentAction::Named(name));
+                }
+                _ => {}
             }
         }
     }
