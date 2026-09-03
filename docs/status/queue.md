@@ -272,16 +272,47 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
   device primitive, `BitmapKey` untouched. The wall clock **resolves** it this
   time: 1.047x / 1.089x / 1.043x against a zero-glyph control at 0.995x
   (§16.6).
-- **`vector_font_size14` and `vector_font_feature` are still not closed.**
-  §15 re-measured them: `size14` **3.16x** (from 3.70x, at load 33 — the
-  lowest in that table and the only fair comparison in it) and `font_feature`
-  **5.32x**, which is *not* a regression — its oracle column moved 35.02 →
-  22.74 ms on an unchanged binary while ours stayed flat, so the ratio is
-  measuring the box (§15.2). §14 took 1.5 ms and §16 takes ~1.1 ms off renders
-  of 56–120 ms; neither retires the rows. **After §16 the blit is still the
-  largest single line** (~3.15 ms of `size14` against the recolour chain's
-  ~0.91 ms), and the next thing above it is `place_glyphs_into` at 1.39 ms,
-  whose own split was not taken.
+- ~~**`vector_font_size14` and `vector_font_feature` are still not closed.**~~
+  — **closed as defects in §17**, and not where §13–§16 were looking. The
+  ~50 ms those sections could not account for was `ap::FormFonts::load`:
+  **78% of `size14`'s render and 44% of `feature`'s**, on documents with
+  **zero annotations**. §5's memoization keys on the `/AcroForm`
+  *reference*, and six of the corpus's 44 files write theirs as a direct
+  `<</Fields[]>>` dictionary, so all six missed the cache **once per page per
+  render** — 9 calls, 9 misses on `size14`, against `forms_text_field`'s 3
+  calls and **0** misses. Keying on the `/DR /Font` the faces actually depend
+  on instead: `size14` **53.85 → 10.31 ms (5.22x)**, `feature` 1.97x,
+  `text_foxit_products` 4.20x, `text_cjk_page` 4.80x, `text_cjk_structure`
+  4.25x, `image_jpx_123` 1.41x, against four zero-form controls at
+  **0.975–1.053x**. Against the oracle the five re-taken rows go 2.73x →
+  **0.59x**, 2.86x → 1.29x, 2.83x → 0.63x, 3.53x → 0.77x, 2.59x → 1.73x
+  (§17.6). Board byte-identical (`per_file` equal across 1757 entries, both
+  binaries run), tier-c unchanged. **Inside `render_page_with` the blit is
+  still the largest line** — §13–§16's figures all stand, they were shares of
+  a denominator that was 78% something else — and `place_glyphs_into` at
+  1.39 ms is still the unsplit item above it.
+- **`--sample` and `--walk` cannot see a whole render, and nothing replaces
+  them.** Both sit at or below `render_page_with`: `--sample` builds the page
+  graphs *outside* its loop and calls `render_page_with` directly, so it sees
+  neither the per-iteration page-graph rebuild nor the annotation pass, and
+  `--walk` sits inside `render_page_with`. That is why three sections read a
+  well-behaved 7–12 ms document inside a 54–145 ms render and why
+  `INTERPRETATION` never added up (§17.2). §17 used temporary `Instant` pairs
+  in `Page::paint` and removed them; **a whole-render instrument is owed**,
+  and until there is one, any share quoted from `--sample` is a share of the
+  raster half alone.
+- **`Page::render_on` rebuilds the page graph every call, and the oracle does
+  not.** `CPDF_Page::ParseContent` returns immediately at `kParsed` and
+  `pdfium_test` memoizes `FPDF_LoadPage`, so `--render-repeats` amortizes the
+  parse, the interpretation and the form-field appearances that our warm loop
+  pays per iteration (§17.1). The graph build is 4–8% of `size14` after §17,
+  so it is not urgent — but **every oracle-relative ratio in this document is
+  our whole per-page pipeline against the oracle's raster half**, and that is
+  not what §10.5 or §15 say they measure.
+- **`pdfrum-tool --md5` renders nothing.** It returns in 0.02 s against the
+  oracle's 0.17 s and prints no `MD5:` line, so `--png` is the only
+  end-to-end pair that does the same work on both sides (§17.1). Small, and
+  it silently makes an obvious like-for-like invalid.
 - **`BitmapCache::get_or_insert`'s second hash probe is named, measured and
   cannot be removed.** The hit path is 100% of calls and asks `contains_key`
   then `get`. Returning the occupied entry's borrow is NLL problem case 3 —
