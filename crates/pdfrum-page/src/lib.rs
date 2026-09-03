@@ -53,6 +53,23 @@ mod ops;
 mod optional;
 mod page;
 mod pattern;
+// The whole-render stage timers. Public *with the default-off `walk-profile`
+// feature and only then*: the module always exists, because the render calls
+// its entry points unconditionally and they compile to empty inline functions
+// with the feature off, but its reporting items are part of the instrument
+// rather than of the crate a `cargo add pdfrum-page` reaches. Same argument
+// and same shape as `pdfrum_render::walkprofile`, which
+// `docs/status/api-baseline/README.md` records where it declines to snapshot
+// the feature.
+//
+// The two crates above this one time their own stages, so they forward a
+// `walk-profile` of their own and gate their call sites on it: a caller cannot
+// `#[cfg]` on another crate's feature, and leaving this module unconditionally
+// public so they need not is a surface with no reader in the default build.
+#[cfg(feature = "walk-profile")]
+pub mod renderprofile;
+#[cfg(not(feature = "walk-profile"))]
+mod renderprofile;
 mod resources;
 mod shading;
 mod state;

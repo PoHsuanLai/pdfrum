@@ -45,6 +45,13 @@ fn_params_excessive_bools = "deny"
 # `pdfrum-form`.
 script = ["pdfrum-form/script"]
 
+# The whole-render stage timers, forwarded down to `pdfrum-page` where the
+# accumulator lives and across to `pdfrum-doc`, which times the annotation
+# pass's five stages. Default-off, and it is not a published capability: the
+# flag exists so `pdfrum-bench`'s `profile` binary can measure the pipeline
+# `Page::paint` runs, and it adds no public item to this crate.
+walk-profile = ["pdfrum-page/walk-profile", "pdfrum-doc/walk-profile"]
+
 [dependencies]
 pdfrum-common.workspace = true
 pdfrum-object.workspace = true

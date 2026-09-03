@@ -190,6 +190,10 @@ fn main() {
         elapsed.as_secs_f64() * 1000.0 / f64::from(done.max(1)),
     );
 
+    if args.op == Op::Render {
+        render_report(&args, done, elapsed);
+    }
+
     if args.sample {
         eprintln!();
         eprintln!(
@@ -522,6 +526,136 @@ fn report(
     walk_report(iters, engine);
 }
 
+/// The note that stands in for the whole-render split when the instrument is
+/// off, for the same reason `walk_report`'s does.
+#[cfg(not(feature = "walk-profile"))]
+fn render_report(_args: &Args, _done: u32, _elapsed: std::time::Duration) {
+    eprintln!();
+    eprintln!(
+        "note: the whole-render stage split is off. Rebuild with it:\n\
+         \x20 cargo build --release -p pdfrum-bench --bin profile --features walk-profile\n\
+         or run `scripts/profile.nu render <file> <iters> <backend> --warm --walk`."
+    );
+}
+
+/// Where a whole page render's time goes, from the page dictionary to the
+/// pixels.
+///
+/// **The one instrument that measures what the caller's clock measures.**
+/// `--sample` builds the page graphs outside its loop and calls
+/// `render_page_with` directly, and the walk's own phase split sits inside
+/// that; both are honest about their scope and neither can see the work in
+/// front of the raster. The rows below are placed around it instead, so their
+/// sum plus one remainder is the figure printed above them.
+///
+/// The remainder is the instrument's own honesty check and is printed whatever
+/// its size: a few percent is the `Instant` pairs and the arithmetic between
+/// the stages, and a large one means a bucket is missing.
+#[cfg(feature = "walk-profile")]
+fn render_report(args: &Args, done: u32, elapsed: std::time::Duration) {
+    use pdfrum_page::renderprofile::Stage;
+
+    let p = pdfrum_page::renderprofile::take();
+    if p.stage_calls.iter().all(|c| *c == 0) {
+        eprintln!();
+        eprintln!("note: the render ran but recorded no stages, which should not happen.");
+        return;
+    }
+
+    let iters = f64::from(done.max(1));
+    let total_ms = elapsed.as_secs_f64() * 1000.0 / iters;
+    let share = |ms: f64| {
+        if total_ms > 0.0 {
+            ms * 100.0 / total_ms
+        } else {
+            0.0
+        }
+    };
+
+    let ms_of = |stage: Stage| {
+        p.stage_time
+            .get(stage.index())
+            .map_or(0.0, |t| t.as_secs_f64() * 1000.0 / iters)
+    };
+    let calls_of = |stage: Stage| {
+        p.stage_calls
+            .get(stage.index())
+            .map_or(0.0, |c| calls_per_iter(*c, iters))
+    };
+
+    eprintln!();
+    // Pages per iteration from the raster's own call count rather than from
+    // the document: this instrument reports what ran, and a `--pages` range or
+    // a page that refused to rasterize would make the two disagree.
+    eprintln!(
+        "WHOLE RENDER, by stage ({:.0} pages x {done} iterations, backend={:?}, warm={})",
+        calls_of(Stage::Raster),
+        args.backend,
+        args.warm
+    );
+    eprintln!();
+    eprintln!(
+        "{:<22} {:>10} {:>8} {:>12}",
+        "stage", "ms/iter", "share", "calls/iter"
+    );
+    eprintln!("{:-<22} {:->10} {:->8} {:->12}", "", "", "", "");
+
+    let mut named = 0.0;
+    let mut pass = 0.0;
+    for stage in Stage::ALL {
+        let ms = ms_of(stage);
+        named += ms;
+        if stage.in_annotation_pass() {
+            pass += ms;
+        }
+        // The five annotation-pass rows are indented under the subtotal
+        // printed after them, which is why the pass has no row of its own:
+        // it has no span, only members.
+        let indent = if stage.in_annotation_pass() { "  " } else { "" };
+        eprint!(
+            "{indent}{:<width$} {ms:>10.3} {:>7.1}% {:>12.0}",
+            stage.name(),
+            share(ms),
+            calls_of(stage),
+            width = 22 - indent.len(),
+        );
+        if stage == Stage::FormFonts {
+            eprint!(
+                "  {} misses/iter",
+                calls_per_iter(p.form_font_misses, iters)
+            );
+        }
+        eprintln!();
+    }
+    eprintln!("{:-<22} {:->10} {:->8} {:->12}", "", "", "", "");
+    eprintln!(
+        "{:<22} {pass:>10.3} {:>7.1}%   the five rows above, summed",
+        "annotation pass",
+        share(pass)
+    );
+    eprintln!(
+        "{:<22} {named:>10.3} {:>7.1}%",
+        "sum of stages",
+        share(named)
+    );
+    eprintln!(
+        "{:<22} {:>10.3} {:>7.1}%",
+        "unattributed",
+        total_ms - named,
+        share(total_ms - named)
+    );
+    eprintln!("{:<22} {total_ms:>10.3} {:>7.1}%", "TOTAL", 100.0);
+    eprintln!();
+    eprintln!(
+        "The stages are disjoint at the outermost level, which is what lets them be\n\
+         summed; an appearance form's own parse and interpretation are charged to\n\
+         their own rows *and* to the annotation loop that ran them, so a forms\n\
+         document's sum can exceed its total. `form fonts`' miss count beside its\n\
+         call count is the memoization: once per document is a hit rate of\n\
+         (calls - 1) / calls, and once per page per render is no hit rate at all."
+    );
+}
+
 /// The note that stands in for the phase split when the instrument is off.
 ///
 /// A table of zeroes reads as a finding, so the remedy is printed instead.
@@ -698,6 +832,12 @@ fn run(args: &Args, bytes: &Arc<[u8]>) -> (u32, std::time::Duration) {
         }
         session
     });
+
+    // The priming render above is a *cold* one and its stages are not the
+    // loop's, so the accumulator starts from zero at the same moment the clock
+    // does.
+    #[cfg(feature = "walk-profile")]
+    let _ = pdfrum_page::renderprofile::take();
 
     let started = Instant::now();
     for _ in 0..args.iterations {

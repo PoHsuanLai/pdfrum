@@ -31,7 +31,7 @@ must_use_candidate = "allow"
 # builds this one binary with it and nothing else.
 [features]
 default = []
-walk-profile = ["pdfrum-render/walk-profile"]
+walk-profile = ["pdfrum-render/walk-profile", "pdfrum/walk-profile"]
 
 [dependencies]
 pdfrum.workspace = true

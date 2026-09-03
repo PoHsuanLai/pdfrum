@@ -59,6 +59,7 @@ mod form;
 mod form_session;
 mod outline;
 mod page;
+mod profile;
 mod render;
 mod save;
 mod session;

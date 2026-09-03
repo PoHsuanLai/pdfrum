@@ -226,7 +226,9 @@ impl<'a> Page<'a> {
             caches: Some(caches),
             ..Default::default()
         };
-        let pixmap = pdfrum_render::render_page_with(&page, &inner, backend, session, &mut diags);
+        let pixmap = crate::profile::stage(crate::profile::Stage::Raster, || {
+            pdfrum_render::render_page_with(&page, &inner, backend, session, &mut diags)
+        });
         // Recorded whether or not the render succeeded: a page too large to
         // rasterize may still have reported damage on the way there.
         self.doc.note(&diags);
@@ -327,24 +329,34 @@ impl<'a> Page<'a> {
     /// array's members are joined with one space each — including after the
     /// last, which is what terminates a stream ending mid-token.
     fn build(&self, ctx: &mut BuildContext) -> pdfrum_page::Page {
+        use crate::profile::{Stage, stage};
+
         let mut diags = Diagnostics::default();
-        let bytes = self.content_bytes(&mut diags);
-        let ops = pdfrum_page::parse_content(&bytes, &self.doc.limits, &mut diags);
+        // The decode and the operator scan, split from the fold that reads
+        // them: a document whose `/Contents` is a megabyte of Flate and a
+        // document with three hundred `Do`s cost their time in different
+        // halves, and one bucket cannot tell them apart.
+        let ops = stage(Stage::ContentParse, || {
+            let bytes = self.content_bytes(&mut diags);
+            pdfrum_page::parse_content(&bytes, &self.doc.limits, &mut diags)
+        });
         let resources = pdfrum_page::Resources::for_page(
             self.dict
                 .inherited(&Name::from("Resources"), &self.doc.inner)
                 .and_then(|object| object.resolve(&self.doc.inner).ok()?.as_dict().cloned()),
         );
-        let page = pdfrum_page::build_page_from_dict(
-            &ops,
-            &self.dict.dict,
-            |key| self.dict.inherited(key, &self.doc.inner),
-            &resources,
-            &self.doc.inner,
-            ctx,
-            &self.doc.limits,
-            &mut diags,
-        );
+        let page = stage(Stage::Interpretation, || {
+            pdfrum_page::build_page_from_dict(
+                &ops,
+                &self.dict.dict,
+                |key| self.dict.inherited(key, &self.doc.inner),
+                &resources,
+                &self.doc.inner,
+                ctx,
+                &self.doc.limits,
+                &mut diags,
+            )
+        });
         // Where most of a document's lazy damage surfaces: a `/Length` the
         // filter chain had to work around, a font that had to be substituted.
         self.doc.note(&diags);

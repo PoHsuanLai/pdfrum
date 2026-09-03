@@ -12,6 +12,17 @@ categories = ["parser-implementations", "data-structures"]
 [lints]
 workspace = true
 
+# The annotation and appearance pass's own stage timers, forwarded to
+# `pdfrum-page` where the accumulator lives. Default-off for the reason its
+# does: cargo unifies features across a workspace build, so a default-on flag
+# here would put `Instant::now()` pairs inside every criterion group in the
+# workspace. This crate needs a flag of its own rather than reading
+# `pdfrum-page`'s because `#[cfg(feature = ...)]` names *this* crate's
+# features and nothing else's.
+[features]
+default = []
+walk-profile = ["pdfrum-page/walk-profile"]
+
 [dependencies]
 pdfrum-common.workspace = true
 pdfrum-object.workspace = true
