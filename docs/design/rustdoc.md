@@ -1,8 +1,7 @@
 # Production rustdoc — trim pass
 
-**Status:** WP1–WP6 landed 2026-09-03; §8 is ticked but for the one box a
-human has to tick, and WP5's remaining crates are open (see §8's "not in
-done"). Not a `[spec]` change: no signatures move.
+**Status:** WP1–WP6 landed 2026-09-03, WP5 included: every library crate is at
+the §3 caps. §8 is ticked but for the one box a human has to tick. Not a `[spec]` change: no signatures move.
 **Date:** 2026-09-02. **Updated 2026-09-03:** names and counts re-measured
 after the idiomatic-API pass landed (`docs/design/idiomatic-api.md`), which
 renamed or removed most of the methods the first draft cited.
@@ -370,10 +369,10 @@ No other STYLE.md edits.
 | 5 | WP5 inner crates | After the facade is the template | per crate |
 | 6 | WP6 STYLE.md | Last, so it describes the pass that landed | 1 |
 
-WP1–WP6 are landed. WP5's remaining crates (`pdfrum-page`, `pdfrum-parser`,
-`pdfrum-cmap`, `pdfrum-crypt`, `pdfrum-filters`, `pdfrum-type1`,
-`pdfrum-raster-*`) are not in the definition of done and stay open; the CI gate
-holds the provenance half of the bar across all of them today.
+WP1–WP6 are landed, and so is every crate WP5 named: the ten that were open
+(`pdfrum-page`, `pdfrum-parser`, `pdfrum-cmap`, `pdfrum-crypt`,
+`pdfrum-filters`, `pdfrum-type1` and the four `pdfrum-raster-*`) landed
+2026-09-03. Every library crate is now at the §3 caps.
 
 WP1–3 are the production-ready bar for `docs.rs/pdfrum`. WP4–5 are the
 same bar for anyone who clicks through to a member crate. WP6 freezes it.
@@ -557,6 +556,75 @@ same bar for anyone who clicks through to a member crate. WP6 freezes it.
 > doctest blocks 2 → 2. All seven citations were pointers, so each states what
 > it pointed at instead.
 
+> **WP5's remaining ten crates landed 2026-09-03**, closing WP5. None has a
+> Cargo feature, so each was measured and gated in its one feature state, and
+> the facade was rebuilt in both of its. Measured from the crate's own rustdoc
+> JSON rather than by grep, which is what settled two counting questions the
+> earlier notes left open: an item's cap is checked against the *index*, so a
+> private helper carrying a 40-line essay is out of scope however long it is,
+> and §3's "excluding `# Errors` and one example" means the `# Errors` section
+> is subtracted from an item's prose the way a fence already was.
+>
+> | Crate | Root prose | Items over cap | Doctests | doc − / doc + / `//` + |
+> |---|---|---|---|---|
+> | `pdfrum-page` | 29 → **15** (25 cap) | 8 → **0** | 5 → 4 | 143 / 49 / 49 |
+> | `pdfrum-parser` | 27 → **9** | 2 → **0** | 9 → 9 | 48 / 17 / 17 |
+> | `pdfrum-cmap` | 42 → **12** | 1 → **0** | 13 → 13 | 53 / 15 / 12 |
+> | `pdfrum-crypt` | 43 → **12** | 2 → **0** | 9 → 9 | 67 / 19 / 25 |
+> | `pdfrum-filters` | 30 → **12** | 3 → **0** | 15 → 15 | 51 / 23 / 12 |
+> | `pdfrum-type1` | 44 → **12** | 2 → **0** | 4 → 4 | 73 / 21 / 22 |
+> | `pdfrum-raster-agg` | 55 → **11** | 0 → 0 | 1 → 1 | 52 / 8 / 30 |
+> | `pdfrum-raster-tinyskia` | 22 → **12** | 0 → 0 | 1 → 1 | 16 / 6 / 9 |
+> | `pdfrum-raster-vello-cpu` | 32 → **12** | 0 → 0 | 1 → 1 | 29 / 9 / 17 |
+> | `pdfrum-raster-vello` | 55 → **12** | 2 → **0** | 1 → 1 | 110 / 31 / 44 |
+>
+> No non-doc line changed in any of the ten; the API snapshot unmoved;
+> `cargo test --doc` and `RUSTDOCFLAGS="-D warnings" cargo doc --no-deps` green
+> per crate and for `pdfrum` in both feature states. `pdfrum-raster-vello` is
+> `publish = false` and was included under §6's rule anyway: its root was 55
+> against a cap of 12 and two indexed items were over, which is grossly over on
+> both halves.
+>
+> Contracts re-derived from the code and corrected before shipping.
+> `Pixels::sample_bytes` returns `[0, 0, 0]` for a pixel whose index does not
+> compute — the doc had never said what an out-of-range read does.
+> `decode_image` searches `form_resources` *before* `page_resources`; the old
+> text said only that inline images get it, which is the interpreter's
+> convention, not this function's rule. `RequestedSize::for_device` falls back
+> to `Self::Full` on a non-finite or sub-one axis, which "no reduction" left
+> ambiguous. `Document::lazy_diagnostics` clones rather than draining, and a
+> poisoned lock yields empty rather than panicking. `inherit_from` returns the
+> *child unchanged* past the depth limit — the parent is dropped, so "refused
+> with a diagnostic" left a caller unable to tell which CMap survives.
+> `font_file` puts the **whole** blob in `/Length1` when there is no `eexec` at
+> all, a third case beside the PFB and PFA ones the doc described.
+> `decoder_list`'s `/DecodeParms` rule is one rule, not three cases: only the
+> two shapes that match `/Filter` ever yield parameters and every other
+> combination lands on the same empty dictionary. `VelloCpuDevice::draw_image`
+> clamps its alpha to `0.0..=1.0` before the strict `< 1.0` that takes the
+> opacity layer.
+>
+> Two traps of §7's kind fired again. `request_adapter` said "see the module
+> documentation for why it leaks", but `adapter` is a **private** module whose
+> `//!` never reaches docs.rs — the same class as the feature-gated and
+> private-item link traps, in its third spelling: a pointer into the index from
+> outside it. And three crate roots carried a `*Renamed 2026-09-02, was …*`
+> line, which is exactly WP4's `Added YYYY-MM-DD` in another tense.
+>
+> One finding the brief did not anticipate: **the C++-provenance half of WP4
+> was never swept in these crates.** `scripts/check-no-internal-refs.nu` holds
+> the phase-and-document pattern and passes, but `cpdf_`/`CPDF_`/`FPDF_`/
+> `pdfium_test`/`.cpp:` in `///` and `//!` was a facade-only sweep. On main
+> these ten carried 96 such lines (`pdfrum-page` 77, `pdfrum-crypt` 12,
+> `pdfrum-parser` 3, `pdfrum-raster-agg` 2, `pdfrum-cmap` 1, `pdfrum-type1` 1).
+> This pass cleared them only where they sat inside an item it was already
+> rewriting, taking the total to **83** (`pdfrum-page` 66, `pdfrum-crypt` 11,
+> `pdfrum-parser` 3, `pdfrum-raster-agg` 2, `pdfrum-cmap` 1); every survivor
+> is on an item that is inside its cap. That is a queue item of its own, and the
+> natural shape is to widen `check-no-internal-refs.nu` with the C++ pattern
+> and sweep to green in the gate's own commit, as that script's own history
+> did.
+
 > **The CI gate landed 2026-09-03** as `scripts/check-no-internal-refs.nu`,
 > wired into `scripts/ci.nu`. It scans every `///` and `//!` under
 > `crates/*/src` for the §7 pattern, with two corrections found by running it
@@ -616,12 +684,17 @@ Verified 2026-09-03 unless noted.
       / `Page` / `Document` pages and could see the summary above the fold.
       **The one box no gate can tick.**
 
-Not in done: inner crates at the cap (WP5 may lag) — `pdfrum-text`,
-`pdfrum-object`, `pdfrum-render`, `pdfrum-form` and `pdfrum-script` are at it;
-`pdfrum-page`, `pdfrum-parser`, `pdfrum-cmap`, `pdfrum-crypt`,
-`pdfrum-filters`, `pdfrum-type1` and the rasterizer crates are not, and the CI
-gate holds only the provenance half of the bar for them. Not in done: comment
-ratio as a number — we are not optimizing 0.28.
+- [x] Inner crates at the cap. **All of them**, as of 2026-09-03:
+      `pdfrum-text`, `pdfrum-object`, `pdfrum-render`, `pdfrum-form` and
+      `pdfrum-script` first, then `pdfrum-page`, `pdfrum-parser`,
+      `pdfrum-cmap`, `pdfrum-crypt`, `pdfrum-filters`, `pdfrum-type1` and the
+      four rasterizer crates.
+
+Not in done: the C++-provenance sweep outside the facade — `cpdf_`, `CPDF_`,
+`FPDF_`, `pdfium_test` and `.cpp:` still appear in `///` and `//!` across the
+member crates, on items that are inside their caps; see §7's WP5 note for the
+count and the suggested shape. Not in done: comment ratio as a number — we are
+not optimizing 0.28.
 
 ---
 
