@@ -1,13 +1,9 @@
 //! The PDF object model as plain values (ISO 32000 §7.3): the [`Object`] enum
 //! (Null/Bool/Int/Real/String/Name/Array/Dict/Stream/Ref), dictionary-key
 //! name constants, and the [`Resolve`] trait for indirect-reference lookup.
-//! Construction and typed access only — no parsing lives here (SPEC.md §2).
-//!
-//! # Reading a document's structure
-//!
-//! Everything above this crate reads PDF through the typed accessors on
-//! [`Dict`] and [`Array`], threading a `&impl Resolve` for the store that
-//! holds indirect objects:
+//! Construction and typed access only — no parsing lives here. Everything
+//! above this crate reads PDF through the typed accessors on [`Dict`] and
+//! [`Array`], threading a `&impl Resolve` for the store of indirect objects:
 //!
 //! ```
 //! use pdfrum_object::{Array, Dict, NoResolve, Object, names};
@@ -24,19 +20,11 @@
 //! assert_eq!(page.rect(names::RECT, &NoResolve).width(), 612.0);
 //! ```
 //!
-//! # Two things to know before writing an accessor call
-//!
-//! **Resolution is one level, and which accessors do it is deliberate.** An
-//! indirect `/Prev` is ignored by the cross-reference reader while an
-//! indirect `/Length` is chased; both behaviors keep real files opening. Each
-//! accessor comes in a resolving and a non-resolving flavour, documented on
-//! [`Dict`], and a caller picks the one whose C++ counterpart it is matching.
-//!
-//! **Integers have two readings.** [`Object::Int`] stores the mathematical
-//! value, but a file that writes `4294967295` for a permissions word means
-//! `-1` when read as an integer and `4294967296.0` when read as a number. The
-//! accessors reproduce both: [`narrow_to_signed32`] is the integer view and
-//! [`widen_to_f32`] the numeric one.
+//! **Resolution is one hop**: a reference to a reference is absent, and each
+//! accessor comes in a resolving and a non-resolving flavour ([`Resolve`],
+//! [`Dict`]). **Integers have two readings**: a permissions word written
+//! `4294967295` means `-1` through [`narrow_to_signed32`] and
+//! `4294967296.0` through [`widen_to_f32`].
 
 #![forbid(unsafe_code)]
 // Every byte in this crate came from an untrusted file: index with `get()`.

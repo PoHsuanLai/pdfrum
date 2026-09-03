@@ -4,10 +4,10 @@ use crate::ObjRef;
 
 /// What can go wrong constructing or resolving PDF objects.
 ///
-/// Deliberately short: almost everything in this crate is total. Typed
-/// accessors never error — a wrong type or a broken reference is *absence*
-/// (`None` or the C++ fallback value), matching PDFium, and the store records
-/// the underlying failure in its `Diagnostics`.
+/// Deliberately short: almost everything in this crate is total. A typed
+/// accessor never errors — a wrong type or a broken reference is *absence*
+/// (`None`, or the type's fallback value), and the store records the
+/// underlying failure in its `Diagnostics`.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[non_exhaustive]
 pub enum Error {

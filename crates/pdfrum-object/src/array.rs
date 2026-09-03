@@ -15,20 +15,14 @@ use crate::{Dict, Name, ObjRef, Object, PdfString, Resolve, Resolved, Stream};
 /// # Streams as elements
 ///
 /// ISO 32000-1 §7.3.8.1 forbids a *file* from writing a stream as a direct
-/// array element, and the reader enforces that while parsing: a stream found
-/// inline in an array is dropped, exactly as
-/// `cpdf_syntax_parser.cpp:591-596` drops it. But that is a **file-format**
-/// constraint, not an in-memory invariant, and this type deliberately does
-/// not police it. [`Object::clone_direct`](crate::Object::clone_direct)
-/// flattens references, so a `/Resources` whose `/XObject` entries are
-/// indirect streams clones into a dictionary holding those streams directly —
-/// which is what `CPDF_Dictionary::CloneNonCyclic` produces too, since its
-/// loop writes straight into `map_` and bypasses the `CHECK(!IsStream())`
-/// that guards the ordinary setters. [`Array::stream_at`] reads such an
-/// element back, mirroring `CPDF_Array::GetStreamAt`.
-///
-/// The §7.3.8.1 constraint is the **writer's** to enforce: `pdfrum-edit`
-/// hoists a direct stream to an indirect object at serialization time.
+/// array element, and the reader drops one found inline while parsing. That
+/// is a **file-format** constraint, not an in-memory invariant, and this
+/// type does not police it:
+/// [`Object::clone_direct`](crate::Object::clone_direct) flattens
+/// references, so an array of indirect streams clones into one holding those
+/// streams directly, and [`Array::stream_at`] reads such an element back.
+/// Enforcing §7.3.8.1 is the **writer's** job: `pdfrum-edit` hoists a direct
+/// stream to an indirect object at serialization time.
 ///
 /// ```
 /// use pdfrum_object::{Array, NoResolve, Object};
@@ -39,6 +33,11 @@ use crate::{Dict, Name, ObjRef, Object, PdfString, Resolve, Resolved, Stream};
 /// // Out of range is absence, never a panic.
 /// assert_eq!(a.int_at(99), None);
 /// ```
+// The inline-stream drop while parsing is `cpdf_syntax_parser.cpp:591-596`.
+// `CPDF_Dictionary::CloneNonCyclic` produces the same flattened shape, since
+// its loop writes straight into `map_` and bypasses the `CHECK(!IsStream())`
+// that guards the ordinary setters; `Array::stream_at` mirrors
+// `CPDF_Array::GetStreamAt` in reading it back.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Array(Vec<Object>);
 
@@ -194,7 +193,7 @@ impl Array {
     /// The PDF order is left, bottom, right, top, mapping onto kurbo's
     /// `(x0, y0, x1, y1)` in that order. The result is **not** normalized:
     /// files write inverted boxes and consumers that care normalize
-    /// themselves, exactly as the C++ does.
+    /// themselves.
     ///
     /// ```
     /// use pdfrum_object::{Array, Object};

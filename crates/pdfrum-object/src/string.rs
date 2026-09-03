@@ -13,8 +13,8 @@ use crate::name::hex_pair;
 ///
 /// Identity with Latin-1 except for the eight accent characters at
 /// `0x18..=0x1F`, the typographic block at `0x80..=0x9E`, the euro at `0xA0`,
-/// and three undefined positions (`0x7F`, `0x9F`, `0xAD`) that PDFium maps to
-/// U+0000 rather than dropping.
+/// and three undefined positions (`0x7F`, `0x9F`, `0xAD`) that map to
+/// U+0000 rather than being dropped.
 #[rustfmt::skip]
 pub const PDF_DOC_ENCODING: [u16; 256] = [
     0x0000, 0x0001, 0x0002, 0x0003, 0x0004, 0x0005, 0x0006, 0x0007,
@@ -53,7 +53,7 @@ pub const PDF_DOC_ENCODING: [u16; 256] = [
 
 /// How the string was spelled in the file.
 ///
-/// PDF has two string syntaxes and PDFium remembers which one a string came
+/// PDF has two string syntaxes; a parsed string remembers which one it came
 /// from so that rewriting a file reproduces it. The choice carries no
 /// semantics — the bytes are identical either way.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -168,10 +168,10 @@ fn decode_utf16(units: impl Iterator<Item = u16>) -> String {
 
 /// Read a text string's bytes as text (ISO 32000-1 §7.9.2.2).
 ///
-/// A leading `FE FF` selects UTF-16BE and `EF BB BF` selects UTF-8, both as
-/// PDFium reads them; `FF FE` selects UTF-16LE, which is PDFium's extension
-/// beyond the specification. Anything else is `PDFDocEncoding`, one byte per
-/// character. In the marked encodings, language-code regions are stripped.
+/// A leading `FE FF` selects UTF-16BE and `EF BB BF` selects UTF-8; `FF FE`
+/// selects UTF-16LE, which is an extension beyond the specification.
+/// Anything else is `PDFDocEncoding`, one byte per character. In the marked
+/// encodings, language-code regions are stripped.
 ///
 /// Unpaired surrogates and invalid UTF-8 become U+FFFD (Rust's `str` cannot
 /// carry either), and a trailing odd byte in a UTF-16 payload is ignored.

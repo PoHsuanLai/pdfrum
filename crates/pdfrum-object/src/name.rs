@@ -103,11 +103,10 @@ impl From<&str> for Name {
     }
 }
 
+// PDFium's classifier also calls `0x80` and `0xFF` whitespace; both are
+// already at or above `0x80`, so they escape either way and the distinction
+// is invisible to `name_encode`.
 /// Bytes the PDF grammar treats as whitespace (ISO 32000-1 table 1).
-///
-/// PDFium's classifier also calls `0x80` and `0xFF` whitespace; both are
-/// already at or above `0x80`, so they escape either way and the distinction
-/// is invisible to [`name_encode`].
 const fn is_pdf_whitespace(b: u8) -> bool {
     matches!(b, 0x00 | 0x09 | 0x0A | 0x0C | 0x0D | 0x20)
 }
@@ -202,8 +201,7 @@ pub(crate) const fn hex_pair(b: u8) -> [u8; 2] {
 /// Declare PDF name constants: one table, no desyncing spellings.
 ///
 /// Each entry names a Rust constant and the exact bytes the specification
-/// spells the key with. This is one of the two sanctioned macros in the
-/// project (STYLE.md §2b): a table that would otherwise be written twice, in
+/// spells the key with — a table that would otherwise be written twice, in
 /// the constants module and at every use site.
 ///
 /// ```
@@ -213,6 +211,7 @@ pub(crate) const fn hex_pair(b: u8) -> [u8; 2] {
 /// }
 /// assert_eq!(LENGTH.as_str(), Some("Length"));
 /// ```
+// One of the two sanctioned macros in the project (STYLE.md §2b).
 #[macro_export]
 macro_rules! names {
     ($($(#[$meta:meta])* $konst:ident = $spelling:literal;)*) => {

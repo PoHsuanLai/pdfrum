@@ -1,14 +1,10 @@
 //! Indirect-reference lookup: the one seam between the object model and
 //! whatever holds the document's objects.
 //!
-//! # One level, never two
-//!
-//! PDF lets an indirect object's body be itself a reference (`7 0 obj 8 0 R
-//! endobj`). PDFium resolves exactly one level and refuses to chase further:
-//! its value-coercion paths treat a reference-to-reference as absent, so such
-//! a chain reads as a missing value rather than following to object 8. Every
-//! typed accessor in this crate reproduces that — see
-//! [`Resolved::as_direct`].
+//! **Resolution is one hop.** PDF lets an indirect object's body be itself a
+//! reference (`7 0 obj 8 0 R endobj`); a chain like that reads as a *missing
+//! value* rather than following to object 8. Every typed accessor in this
+//! crate reproduces that — see [`Resolve`] and [`Resolved::as_direct`].
 //!
 //! Cycle safety is the store's problem, not this crate's: accessors resolve
 //! one level by construction and cannot recurse.
@@ -19,6 +15,11 @@ use std::sync::Arc;
 use crate::{Error, ObjRef, Object};
 
 /// A store that can produce the object behind a reference.
+///
+/// **Resolution is one hop: a reference to a reference is absent.** A typed
+/// accessor that takes a `&impl Resolve` follows at most one `n g R`; if
+/// what it finds there is itself a reference, the value reads as missing
+/// rather than being chased further ([`Resolved::as_direct`]).
 ///
 /// Implementations must look up by object *number* alone and ignore the
 /// generation: a `12 3 R` in a real file resolves to whatever object 12 the
@@ -75,9 +76,9 @@ impl Resolved<'_> {
 
     /// The object unless it is *itself* a reference.
     ///
-    /// One resolution step is all PDFium performs, and it refuses to read a
-    /// value through a reference-to-reference chain. Typed accessors go
-    /// through here so that such a chain reads as absence.
+    /// This is where [`Resolve`]'s one-hop rule is enforced: every typed
+    /// accessor goes through here, so a reference-to-reference chain reads
+    /// as absence.
     #[must_use]
     pub fn as_direct(&self) -> Option<&Object> {
         let obj = self.get();
