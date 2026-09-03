@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-03T08:37:24Z",
+  "generated_at": "2026-09-03T09:15:13Z",
   "totals": {
     "files": 1757,
     "pass": 1526,
@@ -12,12 +12,12 @@
       "tierA-mismatch": 170
     },
     "text": {
-      "pages": 2061,
-      "matched": 1779,
-      "nonempty": 999,
-      "nonempty_matched": 754,
-      "rate": 0.863173,
-      "nonempty_rate": 0.754755
+      "pages": 2065,
+      "matched": 1783,
+      "nonempty": 1003,
+      "nonempty_matched": 758,
+      "rate": 0.863438,
+      "nonempty_rate": 0.755733
     }
   },
   "per_file": [
@@ -53239,25 +53239,33 @@
         "compared": [
           "input.pdf.0.annot.txt",
           "input.pdf.0.txt",
+          "input.pdf.1.annot.txt",
+          "input.pdf.1.txt",
+          "input.pdf.2.annot.txt",
+          "input.pdf.2.txt",
+          "input.pdf.3.annot.txt",
+          "input.pdf.3.txt",
+          "input.pdf.4.annot.txt",
+          "input.pdf.4.txt",
           "metadata.txt",
           "pageinfo.txt",
           "structure.txt"
         ],
         "mismatched": [],
-        "golden_pages": 1,
-        "actual_pages": 1,
+        "golden_pages": 5,
+        "actual_pages": 5,
         "text": {
-          "pages": 1,
-          "matched": 1,
-          "nonempty": 1,
-          "nonempty_matched": 1
+          "pages": 5,
+          "matched": 5,
+          "nonempty": 5,
+          "nonempty_matched": 5
         }
       },
       "tierB": {
         "ssim": 1.000000,
         "exact": false,
         "max_channel_diff": 6,
-        "pages": 1
+        "pages": 5
       },
       "notes": ""
     },
