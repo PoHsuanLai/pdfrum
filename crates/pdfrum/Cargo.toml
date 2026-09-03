@@ -47,7 +47,7 @@ fn_params_excessive_bools = "deny"
 # `default-features = false`, for a build that only parses, extracts, reads
 # forms or edits. Every backend is a feature named after its rasterizer, and
 # the GPU one is never in the default set (DEPS.md, "wgpu").
-default = ["vello-cpu", "edit", "forms"]
+default = ["vello-cpu", "edit", "forms", "codecs-all"]
 vello-cpu = ["dep:pdfrum-raster-vello-cpu"]
 tinyskia = ["dep:pdfrum-raster-tinyskia"]
 agg = ["dep:pdfrum-raster-agg"]
@@ -59,6 +59,13 @@ vello-gpu = ["dep:pdfrum-raster-vello"]
 edit = ["dep:pdfrum-edit"]
 forms = ["dep:pdfrum-form"]
 javascript = ["forms", "pdfrum-form/javascript"]
+
+# The specialised image codecs. Flate and JPEG are always in; these three
+# are what a build that will never meet them can leave out.
+codecs-all = ["jpx", "jbig2", "ccitt"]
+jpx = ["pdfrum-page/jpx"]
+jbig2 = ["pdfrum-page/jbig2"]
+ccitt = ["pdfrum-page/ccitt", "pdfrum-filters/ccitt"]
 
 # The whole-render stage timers, forwarded down to `pdfrum-page` where the
 # accumulator lives and across to `pdfrum-doc`, which times the annotation
@@ -124,3 +131,103 @@ pdfrum-raster-agg.workspace = true
 # asserts the facade's positive `smooth_paths` renders byte-identically — the
 # only way to check that inversion from outside the crate.
 pdfrum-render.workspace = true
+
+# Which features each integration test needs. The three not listed —
+# signatures, searchex, thumbnails — run on any feature set; the rest
+# exercise rendering, editing or forms, or name their types.
+[[test]]
+name = "attachments"
+required-features = ["vello-cpu", "edit", "forms"]
+
+[[test]]
+name = "embed_image"
+required-features = ["vello-cpu", "edit", "forms"]
+
+[[test]]
+name = "facade"
+required-features = ["vello-cpu", "edit", "forms"]
+
+[[test]]
+name = "flatten"
+required-features = ["vello-cpu", "edit", "forms"]
+
+[[test]]
+name = "form_actions"
+required-features = ["vello-cpu", "edit", "forms"]
+
+[[test]]
+name = "form_choice"
+required-features = ["vello-cpu", "edit", "forms"]
+
+[[test]]
+name = "form_listbox"
+required-features = ["vello-cpu", "edit", "forms"]
+
+[[test]]
+name = "form_routing"
+required-features = ["vello-cpu", "edit", "forms"]
+
+[[test]]
+name = "form_scripts"
+required-features = ["vello-cpu", "edit", "forms"]
+
+[[test]]
+name = "form_substitution"
+required-features = ["vello-cpu", "edit", "forms"]
+
+[[test]]
+name = "form_tab"
+required-features = ["vello-cpu", "edit", "forms"]
+
+[[test]]
+name = "form_toggle"
+required-features = ["vello-cpu", "edit", "forms"]
+
+[[test]]
+name = "load_font"
+required-features = ["vello-cpu", "edit", "forms"]
+
+[[test]]
+name = "load_font_subset"
+required-features = ["vello-cpu", "edit", "forms"]
+
+[[test]]
+name = "mutation"
+required-features = ["vello-cpu", "edit", "forms"]
+
+[[test]]
+name = "prepared_page"
+required-features = ["vello-cpu", "edit", "forms"]
+
+[[test]]
+name = "subset"
+required-features = ["vello-cpu", "edit", "forms"]
+
+# The examples render, edit or both; none runs on the headless set.
+[[example]]
+name = "extract-text"
+required-features = ["vello-cpu", "edit", "forms"]
+
+[[example]]
+name = "fill-form-and-save"
+required-features = ["vello-cpu", "edit", "forms"]
+
+[[example]]
+name = "parallel-render"
+required-features = ["vello-cpu", "edit", "forms"]
+
+[[example]]
+name = "render-to-png"
+required-features = ["vello-cpu", "edit", "forms"]
+
+[[example]]
+name = "subset_dump"
+required-features = ["vello-cpu", "edit", "forms"]
+
+[[test]]
+name = "reexports"
+required-features = ["vello-cpu", "edit", "forms"]
+
+[[test]]
+name = "construct_enums"
+required-features = ["vello-cpu", "edit", "forms"]

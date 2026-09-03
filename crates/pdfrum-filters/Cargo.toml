@@ -12,11 +12,16 @@ categories = ["compression", "encoding", "parser-implementations"]
 [lints]
 workspace = true
 
+[features]
+# CCITT Group 3/4 fax decoding, behind its own feature; a stream in it
+# decodes to a recorded failure without it.
+ccitt = ["dep:hayro-ccitt"]
+
 [dependencies]
 pdfrum-common.workspace = true
 pdfrum-object.workspace = true
 
-hayro-ccitt.workspace = true
+hayro-ccitt = { workspace = true, optional = true }
 miniz_oxide.workspace = true
 thiserror.workspace = true
 weezl.workspace = true

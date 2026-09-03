@@ -26,6 +26,13 @@ workspace = true
 # because the stages cross three crates and this is the lowest of the three.
 [features]
 default = []
+# The specialised image codecs, each behind its own feature: JPEG 2000,
+# JBIG2, and CCITT fax (which lives in `pdfrum-filters`). Flate and JPEG
+# are always present. A stream in a codec this build left out decodes to a
+# recorded failure, and the rest of the page still draws.
+jpx = ["dep:hayro-jpeg2000"]
+jbig2 = ["dep:hayro-jbig2"]
+ccitt = ["pdfrum-filters/ccitt"]
 profiling = []
 
 [dependencies]
@@ -38,8 +45,8 @@ smallvec.workspace = true
 thiserror.workspace = true
 moxcms.workspace = true
 zune-jpeg.workspace = true
-hayro-jpeg2000.workspace = true
-hayro-jbig2.workspace = true
+hayro-jpeg2000 = { workspace = true, optional = true }
+hayro-jbig2 = { workspace = true, optional = true }
 
 [dev-dependencies]
 pdfrum-parser.workspace = true

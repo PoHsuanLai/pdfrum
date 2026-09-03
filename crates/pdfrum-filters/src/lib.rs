@@ -48,6 +48,7 @@
 #![warn(clippy::indexing_slicing)]
 
 mod ascii;
+#[cfg(feature = "ccitt")]
 mod ccitt;
 mod chain;
 mod error;
@@ -57,6 +58,7 @@ mod predictor;
 mod runlength;
 
 pub use ascii::{decode_ascii_hex, decode_ascii85};
+#[cfg(feature = "ccitt")]
 pub use ccitt::{CcittImage, CcittParams, decode_ccitt};
 pub use chain::{DecodedStream, decode_chain, decoder_list, validate_pipeline};
 pub use error::Error;

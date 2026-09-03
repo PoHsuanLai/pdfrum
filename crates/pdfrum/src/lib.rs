@@ -412,6 +412,7 @@ mod tests {
         send_sync::<TextPage>();
         send_sync::<Error>();
         send_sync::<RenderOptions>();
+        #[cfg(feature = "edit")]
         send_sync::<SaveOptions>();
         send_sync::<Metadata>();
         send::<BuildContext>();
@@ -425,6 +426,7 @@ mod tests {
         fn send_sync<T: Send + Sync>() {}
         send_sync::<Page<'static>>();
         send_sync::<Annotation<'static>>();
+        #[cfg(feature = "forms")]
         send_sync::<Form<'static>>();
         send_sync::<Outline<'static>>();
         send_sync::<Bookmark<'static>>();
