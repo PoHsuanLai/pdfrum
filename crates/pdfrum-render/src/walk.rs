@@ -1380,7 +1380,10 @@ fn render_text<B: RasterBackend>(
         {
             draw_glyph_bitmap(
                 device,
-                &mut caches.glyph_bitmaps,
+                GlyphBlitCaches {
+                    bitmaps: &mut caches.glyph_bitmaps,
+                    scratch: &mut caches.glyph_blit,
+                },
                 font,
                 glyph,
                 placement,
@@ -1429,6 +1432,16 @@ fn render_text<B: RasterBackend>(
     caches.placed_glyphs = glyphs;
 }
 
+/// The two session-owned pieces a glyph blit needs: the bitmaps it may already
+/// have rasterized, and the buffers it fills for this occurrence.
+///
+/// One argument rather than two because they are drawn from the same
+/// [`crate::ctx::RenderCaches`] and are handed on together.
+struct GlyphBlitCaches<'a> {
+    bitmaps: &'a mut crate::glyph::BitmapCache,
+    scratch: &'a mut crate::ctx::GlyphBlitScratch,
+}
+
 /// Blit one glyph as an alpha bitmap.
 ///
 /// The bitmap is rasterized about the glyph's **own** origin — the matrix's
@@ -1442,7 +1455,7 @@ fn render_text<B: RasterBackend>(
 /// `FT_LOAD_PEDANTIC` retry.
 fn draw_glyph_bitmap(
     device: &mut dyn RenderDevice,
-    cache: &mut crate::glyph::BitmapCache,
+    caches: GlyphBlitCaches<'_>,
     font: &pdfrum_font::Font,
     glyph: &crate::text::PlacedGlyph,
     placement: crate::text::BitmapPlacement,
@@ -1458,7 +1471,8 @@ fn draw_glyph_bitmap(
     let shape = Affine::new([a, b, c, d, 0.0, 0.0]);
     let key = crate::glyph::BitmapKey::new(glyph.key, shape);
 
-    let Some(lcd) = cache.get_or_insert(key, || {
+    let GlyphBlitCaches { bitmaps, scratch } = caches;
+    let Some(lcd) = bitmaps.get_or_insert(key, || {
         // A hinted outline is worth up to ten counts a pixel at 6 pt and costs
         // a bytecode run, so it is requested only here — on a cache miss — and
         // never on the outline path, which the oracle also draws unhinted.
@@ -1489,15 +1503,18 @@ fn draw_glyph_bitmap(
         device.draw_glyph_lcd(&bitmap, corner(bitmap.left, bitmap.top), fill.to_peniko());
         return;
     }
-    let bitmap = lcd.to_gray(placement.phase);
-    let Some(pixels) = crate::glyph::recolour(&bitmap, fill.to_peniko()) else {
+    // Both halves write into buffers the session owns rather than allocating
+    // per glyph occurrence: the bytes are this glyph's and this colour's and
+    // are rewritten in full, so only the memory is reused.
+    let (left, top) = (lcd.left, lcd.top);
+    if !crate::glyph::recolour_glyph_into(&lcd, placement.phase, fill.to_peniko(), scratch) {
         return;
-    };
+    }
     // `draw_image` maps the image's own pixel grid, so a plain translation puts
     // texel (0, 0) at the bitmap's top-left corner.
     device.draw_image(
-        &pixels,
-        Affine::translate(corner(bitmap.left, bitmap.top)),
+        &scratch.pixels,
+        Affine::translate(corner(left, top)),
         ImageQuality::Nearest,
         1.0,
     );

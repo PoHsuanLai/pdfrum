@@ -155,6 +155,41 @@ pub struct RenderCaches {
     /// thousands of times per render. Nothing is remembered between objects;
     /// the memory is.
     pub(crate) placed_glyphs: Vec<crate::text::PlacedGlyph>,
+    /// One glyph blit's two working buffers, refilled per glyph.
+    ///
+    /// The same kind of thing as [`Self::placed_glyphs`], one level finer.
+    /// The blit runs per glyph *occurrence* — tens of thousands of times on a
+    /// text-heavy page, against a few hundred distinct glyphs — and each
+    /// occurrence built a coverage `Vec` and a premultiplied `Pixmap` of its
+    /// own. Neither is a cache: the bytes depend on the glyph and the fill
+    /// colour and are rewritten in full every time. Only the memory is reused.
+    pub(crate) glyph_blit: GlyphBlitScratch,
+}
+
+/// The per-occurrence buffers a glyph blit fills.
+///
+/// Held on [`RenderCaches`] rather than built per glyph. Both are fully
+/// rewritten on every use, so nothing carries between glyphs but the
+/// allocation.
+#[derive(Debug)]
+pub(crate) struct GlyphBlitScratch {
+    /// [`crate::glyph::LcdBitmap::gray_coverage_into`]'s output.
+    pub(crate) coverage: Vec<u8>,
+    /// The premultiplied pixmap that coverage is recoloured into.
+    pub(crate) pixels: crate::Pixmap,
+}
+
+impl Default for GlyphBlitScratch {
+    fn default() -> Self {
+        Self {
+            coverage: Vec::new(),
+            // Zero-sized: `Pixmap::new` allocates nothing at this size, and
+            // the first glyph resizes it to its own. `Pixmap` is public and
+            // deliberately has no `Default`, so this is spelt out rather than
+            // derived.
+            pixels: crate::Pixmap::new(0, 0),
+        }
+    }
 }
 
 impl RenderCaches {
