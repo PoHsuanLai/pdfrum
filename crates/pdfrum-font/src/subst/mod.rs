@@ -1,10 +1,9 @@
 //! Substitution: choosing a face when the document did not supply one.
 //!
 //! `CFX_FontMapper::FindSubstFace` is a thousand-line class whose only real
-//! job is one decision. Per STYLE.md §1 it decomposes into a request record, a
-//! decision record, a pure function between them, and a database seam — and
-//! the ladder itself stays recognisable, because its *order* is the behavior
-//! (`docs/design/pdfrum-font.md` §1.12).
+//! job is one decision. It decomposes into a request record, a decision
+//! record, a pure function between them, and a database seam — and the ladder
+//! itself stays recognisable, because its *order* is the behavior.
 
 mod charset;
 mod db;
@@ -742,7 +741,7 @@ fn builtin_standard(f: StandardFont) -> GlyphSource {
 /// The two PFB blobs are `include_bytes!` constants, so parsing one is a pure
 /// function of a `bool` — the same 66 KB (sans) or 113 KB of container split,
 /// `eexec` decryption, charstring extraction and glyph-name indexing, producing
-/// the same face, every time. Before M12 it ran on **every call**, and the call
+/// the same face, every time. Unmemoized it ran on **every call**, and the call
 /// is the last rung of the substitution ladder: it fires for every non-embedded
 /// font whose name is not one of the base fourteen and which no system database
 /// supplied. `mixed_formfield.pdf` has sixteen such fonts in its AcroForm

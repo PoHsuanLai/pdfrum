@@ -2,7 +2,7 @@
 //! `/BaseFont` name before it asks a font database anything.
 //!
 //! Five short functions, each with a quirk that changes which font a document
-//! gets (`docs/design/pdfrum-font.md` §1.12).
+//! gets.
 
 use super::standard::{canonical_font_name, standard_font_index};
 

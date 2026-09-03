@@ -2,7 +2,7 @@
 //!
 //! The array interleaves integers (a new starting code) with names (glyphs at
 //! consecutive codes from there). Its damage behavior is specific and
-//! load-bearing (`docs/design/pdfrum-font.md` §1.7).
+//! load-bearing.
 
 use crate::GlyphName;
 use pdfrum_object::{Array, Object, Resolve};

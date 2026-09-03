@@ -6,8 +6,7 @@
 //! then to a glyph. Which names a code may take comes from a base encoding —
 //! one of five the specification defines plus four PDFium adds — overlaid by
 //! the font dictionary's own `/Differences` array. Both halves are pure data,
-//! so this module is tables plus the small resolution functions
-//! (`docs/design/pdfrum-font.md` §1.7).
+//! so this module is tables plus the small resolution functions.
 
 mod agl;
 mod differences;

@@ -2,8 +2,7 @@
 //! derivation that fills in what it did not.
 //!
 //! Every non-Type3 font runs this. The order matters and so do several
-//! sign and presence quirks that look like bugs and are load-bearing
-//! (`docs/design/pdfrum-font.md` §1.2, §1.3).
+//! sign and presence quirks that look like bugs and are load-bearing.
 
 use crate::{FontFlags, names};
 use pdfrum_common::kurbo::Rect;

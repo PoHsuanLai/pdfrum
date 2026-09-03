@@ -1,7 +1,7 @@
 //! Font handling (ISO 32000-1 §9): font dictionaries (Type1/TrueType/Type0/
 //! Type3/CID), encodings and `/Differences`, `/ToUnicode`, code→CID→GID
 //! mapping, glyph outlines and metrics via `skrifa`, substitution and fallback
-//! selection, and the per-session glyph cache (SPEC.md §6).
+//! selection, and the per-session glyph cache.
 //!
 //! # The shape of the problem
 //!
@@ -106,7 +106,7 @@ pub use pdfrum_type1::FontFile as Type1FontFile;
 ///
 /// Where several codes map to one Unicode value the **numerically smallest**
 /// code wins, which is the collision policy `InsertIntoMaps` applies in both
-/// directions (`docs/design/pdfrum-font.md` §1.6.1). Multi-character
+/// directions. Multi-character
 /// destinations are unreachable — the reverse map is keyed on the packed
 /// stored value, and a multi-character entry's key is an indicator rather
 /// than any real character, which is the oracle's behaviour too.
@@ -693,8 +693,8 @@ fn truncate(value: f32) -> i32 {
 /// Per-document caches: parsed faces, resolved substitutions, font identities.
 ///
 /// Replaces the C++'s two process-wide singletons (`CPDF_FontGlobals` and
-/// `CFX_FontMgr`) with a value the document owns, per STYLE.md §1. Cheap to
-/// create and `Send + Sync`; the only mutable state is the identity counter.
+/// `CFX_FontMgr`) with a value the document owns. Cheap to create and
+/// `Send + Sync`; the only mutable state is the identity counter.
 #[derive(Debug, Default)]
 pub struct FontCache {
     next_id: AtomicU64,
@@ -1107,9 +1107,9 @@ mod tests {
 
 #[cfg(test)]
 mod send_sync {
-    //! STYLE.md §4: every public type is `Send + Sync`, so rendering pages in
-    //! parallel with `rayon` needs no wrapper. A compile failure here is the
-    //! whole test.
+    //! Every public type is `Send + Sync`, so rendering pages in parallel
+    //! with `rayon` needs no wrapper. A compile failure here is the whole
+    //! test.
 
     use super::*;
 

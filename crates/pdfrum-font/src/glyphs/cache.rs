@@ -1,7 +1,7 @@
 //! The glyph outline cache.
 //!
-//! Owned by a render session, never global (SPEC §6, `docs/design/pdfrum-font.md`
-//! D10). The key is the interesting part: SPEC's original `(font_id, gid,
+//! Owned by a render session, never global. The key is the interesting part:
+//! the obvious `(font_id, gid,
 //! hint_flags)` is **insufficient**, because `dest_width` alone changes the
 //! outline of a Multiple-Master face — and the Multiple-Master faces are the
 //! terminal rung of the substitution ladder, so they are what draws every font
@@ -81,7 +81,7 @@ impl GlyphKey {
 /// hold a borrow because placing the next glyph needs the cache mutably again —
 /// takes a refcount rather than a copy of the path. Copying instead was 2891
 /// `BezPath` clones and 3.3 MiB per render of one corpus page, on a document
-/// where the copies were then never read (`docs/status/M12b-P2.md` §6).
+/// where the copies were then never read.
 #[derive(Debug, Default)]
 pub struct GlyphCache {
     entries: HashMap<GlyphKey, Option<Arc<BezPath>>>,

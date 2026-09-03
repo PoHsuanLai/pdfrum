@@ -2,8 +2,7 @@
 //!
 //! Windows vocabulary that PDFium carries everywhere, because the
 //! font-selection API it was written against was Windows'. On Linux it
-//! survives as the language a font request is phrased in
-//! (`docs/design/pdfrum-font.md` §1.12, §1.14).
+//! survives as the language a font request is phrased in.
 
 use crate::FontFlags;
 

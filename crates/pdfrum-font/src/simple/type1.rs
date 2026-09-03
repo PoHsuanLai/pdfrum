@@ -3,7 +3,7 @@
 //! Three branches, and which one runs is decided before any code is looked up.
 //! The governing rule is **name first, charmap second**: a Type 1 font names
 //! its glyphs, so a name that resolves is trusted over anything a charmap
-//! says (`docs/design/pdfrum-font.md` §1.8).
+//! says.
 
 use super::{LadderContext, char_index, name_index};
 use crate::encoding::{FontEncoding, unicode_from_adobe_name};

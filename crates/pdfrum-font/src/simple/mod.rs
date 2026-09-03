@@ -3,7 +3,7 @@
 //! Type 1 and TrueType share everything except the glyph ladder itself, so
 //! they share this module and differ only in which of [`type1`] and
 //! [`truetype`] runs. The **order** of the load steps is behavior, because
-//! each one reads state the previous wrote (`docs/design/pdfrum-font.md` §1.4).
+//! each one reads state the previous wrote.
 
 mod truetype;
 mod type1;
@@ -61,13 +61,11 @@ pub struct SimpleFont {
     /// The glyph each code selects. `WIDTH_UNSET` means "no glyph", which is
     /// distinct from glyph 0.
     ///
-    /// Private for the same reason as [`SimpleWidths::raw`]
-    /// (`docs/design/idiomatic-api.md` §C, Tier 1 item 4): a public `[u16;
+    /// Private for the same reason as [`SimpleWidths::raw`]: a public `[u16;
     /// 256]` whose `0xffff` entries mean *absence* hands a caller a sentinel
     /// with no exported name to compare against.
     /// [`SimpleFont::glyph_from_charcode`] is the predicate, and it already
-    /// answered `Option<Gid>`. §C names only the widths array; this is the
-    /// same leak in the same struct, found on reaching the code.
+    /// answers `Option<Gid>`.
     pub(crate) glyph_index: [u16; 256],
     /// The declared widths.
     pub(crate) widths: SimpleWidths,

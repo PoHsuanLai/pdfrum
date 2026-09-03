@@ -3,8 +3,7 @@
 //! Two backends sit behind one enum: `skrifa` for everything with an SFNT or
 //! CFF shape, and `pdfrum-type1` for Type 1 programs, which Fontations reads
 //! only at the weight vector the file ships with — not enough for the
-//! Multiple-Master fallback faces PDFium leans on
-//! (`docs/design/pdfrum-font.md` §1.14, §3.6).
+//! Multiple-Master fallback faces PDFium leans on.
 
 mod cache;
 mod face;
