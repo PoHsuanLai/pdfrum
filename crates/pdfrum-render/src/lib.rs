@@ -127,3 +127,14 @@ pub use error::Error;
 pub use options::{ColorMode, ColorScheme, RenderOptions, TextAa};
 pub use pixmap::{AlphaMask, Pixmap};
 pub use walk::{RenderSession, needs_alpha_background, render_page, render_page_with};
+
+/// A decoded image as a pixmap, composed the way a page draw would compose
+/// it: its mask applied, its matte removed, a stencil painted black.
+///
+/// For an image that is not on a page — a `/Thumb`, an embedded file — where
+/// there is no graphics state to take a fill colour or a transfer function
+/// from.
+#[must_use]
+pub fn image_to_pixmap(image: &pdfrum_page::ImageData) -> Pixmap {
+    image::to_pixmap(image, Argb::BLACK, None)
+}
