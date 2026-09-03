@@ -205,6 +205,39 @@ impl ColorSpace {
         )
     }
 
+    /// Whether an image's samples in this space have to be **run through the
+    /// space** before they are colour.
+    ///
+    /// Every family reaches a colour through `GetRGB` somewhere in PDFium's
+    /// image path, but most of them have a shortcut that makes the trip
+    /// unnecessary — and taking the scalar conversion anyway would be a
+    /// divergence rather than a fix, because two of those shortcuts are not
+    /// the scalar conversion. `CPDF_CalGray::TranslateImageLine`
+    /// (`cpdf_colorspace.cpp:725-742`) copies the grey byte into all three
+    /// channels, `CPDF_CalRGB`'s (`:808-816`) is a channel reversal that
+    /// drops gamma and matrix entirely, `CPDF_ICCBasedCS`'s (`:991-1010`)
+    /// runs the profile over bytes, and `CPDF_LabCS`'s (`:899-915`) rescales
+    /// `L*a*b*` out of the **byte** domain rather than out of the decoded
+    /// component range. `Indexed` is handled before this by its palette, and
+    /// `Pattern` never carries image samples at all —
+    /// `TranslateScanline24bpp` skips it explicitly (`cpdf_dib.cpp:1043`).
+    ///
+    /// What is left is `Separation` and `DeviceN`, whose samples are *tints*
+    /// driving a tint transform and have no device reading whatsoever. Those
+    /// fall through to the generic `CPDF_ColorSpace::TranslateImageLine`
+    /// (`:636-660`) — `GetRGB` per pixel — and to `LoadPalette`'s
+    /// `1 << bits` precomputation (`cpdf_dib.cpp:894-979`) when the sample
+    /// depth allows it. ISO 32000-1 §8.6.6.4 and §8.6.6.5 say the same: the
+    /// components are colorant tints, and the tint transform is what turns
+    /// them into colour.
+    ///
+    /// Crate-internal: this is `unpack`'s dispatch rule, not a fact about the
+    /// space a caller outside the image build has any use for.
+    #[must_use]
+    pub(crate) fn needs_image_conversion(&self) -> bool {
+        matches!(self, Self::Separation(_) | Self::DeviceN(_))
+    }
+
     /// Whether the space is a plain additive or subtractive colour space,
     /// which decides whether a soft mask may take its backdrop from it.
     #[must_use]
