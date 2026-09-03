@@ -21,21 +21,28 @@
 //! laziness is gone. Memory is bounded by the same four-gibibyte cap the C++
 //! enforces.
 
+mod bitimage;
 mod cache;
 mod dct;
 mod decode_array;
 mod dict;
+#[cfg(feature = "jbig2")]
 mod jbig2;
+#[cfg(feature = "jpx")]
 mod jpx;
 mod mask;
 mod scanline;
 
+pub use bitimage::BitImage;
 pub use cache::{ImageCache, MAX_BYTES, RequestedSize};
 pub(crate) use dct::decode_dct;
 pub(crate) use decode_array::DecodeMap;
 pub(crate) use dict::ImageDict;
-pub use jbig2::{BitImage, decode_jbig2};
+#[cfg(feature = "jbig2")]
+pub use jbig2::decode_jbig2;
+#[cfg(feature = "jpx")]
 pub(crate) use jpx::SpaceOverride;
+#[cfg(feature = "jpx")]
 pub use jpx::{JpxImage, decode_jpx};
 pub use mask::ImageMask;
 pub(crate) use mask::{ColorKey, matte_color};
@@ -45,7 +52,9 @@ use crate::error::Error;
 use crate::function::FunctionCache;
 use crate::names;
 use pdfrum_common::{DiagKind, Diagnostics, Limits, Severity};
-use pdfrum_filters::{CcittParams, Filter, decode_ccitt, decode_chain};
+#[cfg(feature = "ccitt")]
+use pdfrum_filters::{CcittParams, decode_ccitt};
+use pdfrum_filters::{Filter, decode_chain};
 use pdfrum_object::{Dict, Object, Resolve, Stream};
 
 /// Decoded pixels, in whichever shape the source produced.
@@ -300,8 +309,12 @@ pub fn decode_image<R: Resolve>(
 
     let decoded = decode_chain(stream, info.total_bytes().unwrap_or(0), r, limits, diags);
 
-    // The codecs, dispatched on the last filter.
+    // The codecs, dispatched on the last filter. The requested size reaches
+    // only the JPEG 2000 decoder, which is the one that carries a pyramid.
+    #[cfg(not(feature = "jpx"))]
+    let _ = size;
     let (width, height, pixels, jpx_alpha) = match info.last_filter {
+        #[cfg(feature = "jpx")]
         Some(Filter::Jpx) => {
             let smask_in_data = stream.dict.int(names::SMASK_IN_DATA, r).unwrap_or(0);
             // The request goes to the codec whole rather than as a level
@@ -359,6 +372,14 @@ pub fn decode_image<R: Resolve>(
             };
             (image.width, image.height, pixels, image.alpha)
         }
+        #[cfg(not(feature = "jpx"))]
+        Some(Filter::Jpx) => {
+            diags.record(Severity::Suspicious, DiagKind::ImageDecodeFailed, None);
+            return Err(Error::ImageUndecodable {
+                what: concat!("this build has no ", "Jpx", " decoder (feature `jpx`)"),
+            });
+        }
+        #[cfg(feature = "jbig2")]
         Some(Filter::Jbig2) => {
             let globals = info
                 .params
@@ -396,6 +417,13 @@ pub fn decode_image<R: Resolve>(
                 let pixels = unpack(&info, space.as_ref(), &samples, diags)?;
                 (info.width, info.height, pixels, None)
             }
+        }
+        #[cfg(not(feature = "jbig2"))]
+        Some(Filter::Jbig2) => {
+            diags.record(Severity::Suspicious, DiagKind::ImageDecodeFailed, None);
+            return Err(Error::ImageUndecodable {
+                what: concat!("this build has no ", "Jbig2", " decoder (feature `jbig2`)"),
+            });
         }
         Some(Filter::Dct) => {
             let image = decode_dct(&decoded.data, (info.width, info.height)).inspect_err(|_| {
@@ -632,6 +660,7 @@ fn decode_stencil<R: Resolve>(
     })
 }
 
+#[cfg(feature = "ccitt")]
 /// Decode a `/CCITTFaxDecode` image into the sample buffer the rest of the
 /// image path expects.
 ///
@@ -689,7 +718,21 @@ fn ccitt_samples<R: Resolve>(
     }
     Ok(out)
 }
+#[cfg(not(feature = "ccitt"))]
+fn ccitt_samples<R: Resolve>(
+    info: &ImageDict,
+    data: &[u8],
+    r: &R,
+    diags: &mut Diagnostics,
+) -> Result<Vec<u8>, Error> {
+    let _ = (info, data, r);
+    diags.record(Severity::Suspicious, DiagKind::ImageDecodeFailed, None);
+    Err(Error::ImageUndecodable {
+        what: "this build has no CCITT fax decoder (feature `ccitt`)",
+    })
+}
 
+#[cfg(feature = "jbig2")]
 /// A stencil whose bits come out of a JBIG2 codestream.
 ///
 /// A codestream that will not decode is **fatal to the image**, not something
@@ -734,6 +777,21 @@ fn stencil_from_jbig2<R: Resolve>(
         mask: None,
         matte: None,
         interpolate: stream.dict.bool(names::INTERPOLATE).unwrap_or(false),
+    })
+}
+#[cfg(not(feature = "jbig2"))]
+fn stencil_from_jbig2<R: Resolve>(
+    stream: &Stream,
+    info: &ImageDict,
+    data: &[u8],
+    r: &R,
+    limits: &Limits,
+    diags: &mut Diagnostics,
+) -> Result<ImageData, Error> {
+    let _ = (stream, info, data, r, limits);
+    diags.record(Severity::Suspicious, DiagKind::ImageDecodeFailed, None);
+    Err(Error::ImageUndecodable {
+        what: "this build has no JBIG2 decoder (feature `jbig2`)",
     })
 }
 

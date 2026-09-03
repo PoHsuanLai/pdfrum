@@ -90,10 +90,13 @@ pub use color::{
 pub use content::parse_content;
 pub use error::Error;
 pub use function::{Function, FunctionCache, PostScript, parse_program};
+#[cfg(feature = "jbig2")]
+pub use image::decode_jbig2;
 pub use image::{
-    BitImage, ImageCache, ImageData, ImageMask, JpxImage, MAX_BYTES, Pixels, RequestedSize,
-    decode_image, decode_jbig2, decode_jpx,
+    BitImage, ImageCache, ImageData, ImageMask, MAX_BYTES, Pixels, RequestedSize, decode_image,
 };
+#[cfg(feature = "jpx")]
+pub use image::{JpxImage, decode_jpx};
 pub use mutate::IndexOutOfRange;
 pub use ops::{
     FillRule, InlineImage, LineCap, LineJoin, MarkProperties, Op, TextItem, TextRenderMode,
