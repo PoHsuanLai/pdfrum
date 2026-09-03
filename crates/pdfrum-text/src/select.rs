@@ -1,5 +1,4 @@
-//! Selection helpers over the character list
-//! (`docs/design/pdfrum-text.md` §1.16).
+//! Selection helpers over the character list.
 //!
 //! These answer the questions a viewer asks while a user drags a cursor:
 //! which boxes cover this run of characters, which character is under this
