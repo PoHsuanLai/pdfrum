@@ -1,7 +1,6 @@
 //! Editing and saving (ISO 32000 §7.5.8 incremental updates and full
 //! rewrite): the deterministic object serializer, full and incremental save,
-//! page import and N-up, content-stream generation, and CID font subsetting
-//! (SPEC.md §11).
+//! page import and N-up, content-stream generation, and CID font subsetting.
 //!
 //! This is the one crate that *writes*. Everything below it derives values
 //! from bytes; this turns values back into bytes another reader must be able

@@ -33,13 +33,11 @@
 //!   `fpdf_save_embeddertest.cpp:362-383` asserts of the C++ (round-trip
 //!   obligation R15).
 //!
-//! *This replaced the plan in `docs/design/pdfrum-edit.md` §5's D1, which
-//! would re-key `/W`, `/ToUnicode` and the content streams instead. That plan
-//! is sound but strictly worse: it makes subsetting depend on an emitter that
-//! drops character spacing, shadings, text clips and soft masks
+//! The alternative — re-keying `/W`, `/ToUnicode` and the content streams —
+//! is strictly worse: it makes subsetting depend on an emitter that drops
+//! character spacing, shadings, text clips and soft masks
 //! ([`crate::content`]'s loss list), so a page would come back visibly
-//! changed to save bytes no reader can see. D1's own item 1 offered
-//! `/CIDToGIDMap` as the alternative; it is the one taken.*
+//! changed to save bytes no reader can see.
 //!
 //! # What is subsetted, and what is left alone
 //!

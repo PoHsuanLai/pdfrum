@@ -14,7 +14,7 @@
 //! operator list, and `Tf` plus the show operators carry the font resource
 //! and the character codes between them. Building the page-object graph
 //! instead would decode every image and evaluate every shading on the page to
-//! learn nothing more (`docs/design/pdfrum-edit.md` §3.7).
+//! learn nothing more.
 //!
 //! The one thing the operator view costs is the *inline* font: a `Tf` naming
 //! a `/Font` entry that is a direct dictionary rather than a reference has no

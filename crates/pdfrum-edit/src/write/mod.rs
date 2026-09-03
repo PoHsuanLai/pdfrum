@@ -32,9 +32,9 @@
 //!
 //! Objects reach the writer plaintext, because the parser deciphered them on
 //! fetch. A save under a document's own security handler puts the cipher back
-//! on with the same file key, so the saved file opens with the same password
-//! (SPEC.md §11's M10 ruling; [`crate::encrypt`] holds the exemptions and the
-//! initialisation-vector story). [`SaveOptions::remove_security`] is the
+//! on with the same file key, so the saved file opens with the same password;
+//! [`crate::encrypt`] holds the exemptions and the initialisation-vector
+//! story. [`SaveOptions::remove_security`] is the
 //! explicit opt-out, and turns the save into a plaintext rewrite with no
 //! `/Encrypt` in the trailer.
 //!
@@ -129,9 +129,6 @@ pub struct SaveOptions {
     pub subset_new_fonts: bool,
     /// The version to declare in the header. 1.0 through 1.7 are honoured;
     /// anything outside that range, and `None`, keep the document's own.
-    ///
-    /// Was `Option<u8>` in the `major × 10 + minor` packing
-    /// (`docs/design/idiomatic-api.md` §WP1).
     pub version: Option<PdfVersion>,
     /// Where `/ID` and subset tags come from.
     pub id_source: IdSource,

@@ -101,8 +101,7 @@ fn write_array(out: &mut Vec<u8>, a: &Array, enc: Option<&Encryptor<'_>>) {
     out.push(b']');
 }
 
-/// A dictionary, keys in **insertion order** (SPEC.md §2's permanent
-/// divergence from the C++'s sorted `std::map`).
+/// A dictionary, keys in **insertion order** — not sorted.
 pub(crate) fn write_dict(out: &mut Vec<u8>, d: &Dict, enc: Option<&Encryptor<'_>>) {
     let signature = is_signature_dict(d);
     out.extend_from_slice(b"<<");

@@ -20,10 +20,6 @@ const DEFAULT_VERSION: PdfVersion = PdfVersion::PDF_1_7;
 /// 1.0 through 1.7. Anything else — 1.8, 2.0, a major other than 1 — means
 /// "use the document's own", which is what makes an out-of-range request
 /// produce the input's version rather than an error.
-///
-/// Was `10..=17` over the packed `u8` this function used to take. The bound is
-/// the same one; it is now spelled in digits (`docs/design/idiomatic-api.md`
-/// §WP1).
 const fn is_honoured(version: PdfVersion) -> bool {
     version.major == 1 && version.minor <= 7
 }

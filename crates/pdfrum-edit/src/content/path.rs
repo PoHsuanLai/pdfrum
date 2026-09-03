@@ -28,11 +28,8 @@ use crate::content::num::{write_float, write_point};
 ///
 /// The second half of what selects a paint operator, and an enum rather than a
 /// `bool` because its neighbour in [`paint_operator`] is a [`FillRule`]: two
-/// arguments that jointly index one table should read the same way at the call
-/// (`docs/design/idiomatic-api.md` §A.11's illustration for this crate).
-///
-/// `pdfrum-page`'s `PathObject::stroke` is still the `bool` this narrows from;
-/// the conversion is [`Stroked::of`], at the one call that needs it (§B.3).
+/// arguments that jointly index one table should read the same way at the
+/// call. [`Stroked::of`] narrows `pdfrum-page`'s `PathObject::stroke` bool.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Stroked {
     /// The outline is drawn: `S`, `B` or `B*`.
