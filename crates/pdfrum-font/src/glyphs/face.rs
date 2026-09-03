@@ -135,9 +135,9 @@ pub struct Face {
     charmaps: Vec<CharmapId>,
     /// The 64-ppem hinting instance, built on first use.
     ///
-    /// The one piece of state this type keeps, and the exception STYLE §2
-    /// sanctions for a lazy cache. It earns it by measurement rather than by
-    /// principle: building the instance runs the face's `fpgm` and `prep`
+    /// The one piece of state this type keeps, and it earns the exception by
+    /// measurement rather than by principle: building the instance runs the
+    /// face's `fpgm` and `prep`
     /// programs and costs about **50 µs**, against 4 µs to rasterize a glyph
     /// bitmap and 0.4 µs to blit one. Rebuilding it per glyph made a
     /// text-heavy page 30% slower than filling outlines; keeping it makes the

@@ -125,7 +125,7 @@ fn without(dict: &Dict, key: &Name) -> Dict {
 }
 
 /// Set a key, replacing in place so the insertion order — and therefore the
-/// emitted key order (SPEC §2) — does not shuffle on a rewrite.
+/// emitted key order — does not shuffle on a rewrite.
 fn set(dict: &mut Dict, key: &Name, value: Object) {
     let existing: Vec<(Name, Object)> = dict.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
     if existing.iter().any(|(k, _)| k == key) {

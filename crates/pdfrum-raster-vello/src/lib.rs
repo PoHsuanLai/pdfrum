@@ -167,14 +167,15 @@ struct Limits {
 /// `wgpu`'s default handler for an uncaptured error is `panic!`, and a lost
 /// device — a driver reset, a hung GPU, a watchdog timeout — arrives that way:
 /// not as a `Result` from the call that provoked it, but as a callback on
-/// whichever thread was driving the device. A library that panics on a hostile
-/// environment violates STYLE §3, and "the display driver restarted" is
-/// exactly the condition a PDF renderer must survive rather than abort its
+/// whichever thread was driving the device. A library must not panic on a
+/// hostile environment, and "the display driver restarted" is exactly the
+/// condition a PDF renderer must survive rather than abort its
 /// host over. [`VelloBackend::new`] therefore installs a handler that
 /// *records*, and the rasterizing entry points consult it.
 ///
-/// `Arc<Mutex<…>>` and not a `static`: STYLE §1 forbids global state, and the
-/// handler must be `Send + Sync + 'static` while the backend only borrows its
+/// `Arc<Mutex<…>>` and not a `static`, because this crate keeps no global
+/// state: the handler must be `Send + Sync + 'static` while the backend only
+/// borrows its
 /// device. The `Arc` is what lets the two share one cell without a
 /// process-wide one. Only the *first* fault is kept — a lost device produces a
 /// cascade of them, and the first is the one that says what happened.
@@ -235,7 +236,7 @@ impl<'a> VelloBackend<'a> {
     /// This **replaces** the device's uncaptured-error handler, which is
     /// process-wide per device and which `wgpu` defaults to `panic!`. An
     /// embedder that installed its own will find it displaced; that is the
-    /// price of STYLE §3 holding on a borrowed device, and the alternative —
+    /// price of never panicking on a borrowed device, and the alternative —
     /// leaving the default in place — is a PDF library that aborts the host
     /// application when a driver resets. Recorded faults surface from
     /// [`device_fault`][Self::device_fault],

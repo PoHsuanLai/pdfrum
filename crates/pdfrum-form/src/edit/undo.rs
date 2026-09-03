@@ -1,4 +1,4 @@
-//! The undo stack (SPEC §15.4).
+//! The undo stack.
 //!
 //! # Why this is not the obvious design
 //!

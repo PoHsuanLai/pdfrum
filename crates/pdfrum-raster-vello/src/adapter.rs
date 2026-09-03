@@ -51,9 +51,9 @@ pub struct OwnedDevice {
 ///
 /// `Device` and `Queue` are both `Send + Sync`, so the leaked pair is shared
 /// rather than re-leaked: a second [`request_adapter`] gets the same device
-/// back and pays only for its own `Renderer`. This is the lazy-cache exception
-/// STYLE §2 permits for interior mutability, and the *why* is the fourteen GPU
-/// tests in `tests/gpu.rs` — under `cargo test` they share one process, and
+/// back and pays only for its own `Renderer`. This is a lazy cache, and the
+/// *why* is the fourteen GPU tests in `tests/gpu.rs` — under `cargo test`
+/// they share one process, and
 /// one leaked device between them is the difference between a bounded cost and
 /// a per-test one. `VelloBackend` itself cannot live here: its `RefCell`
 /// makes it `!Sync`, and a `Renderer` is cheap enough beside a whole device

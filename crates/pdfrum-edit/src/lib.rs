@@ -75,8 +75,8 @@
 //! "reproduces the C++'s emitter exactly, because a conformance comparison
 //! against the oracle's regenerated page requires matching what the oracle
 //! regenerates." **There is no such comparison**: `pdfium_test` has no save
-//! flag, so the oracle cannot produce a regenerated page at all (SPEC §11
-//! ruling E7). The remaining losses are limits of this emitter, not a
+//! flag, so the oracle cannot produce a regenerated page at all. The
+//! remaining losses are limits of this emitter, not a
 //! matching requirement — the crate's private `content` module holds the three
 //! lines that settle it.
 
