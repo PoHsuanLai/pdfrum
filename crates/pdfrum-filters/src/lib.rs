@@ -1,7 +1,7 @@
 //! PDF stream filters (ISO 32000-1 §7.4) as pure functions over byte slices:
 //! Flate with PNG/TIFF predictors, LZW, RunLength, ASCIIHex/ASCII85, and
 //! CCITT fax. Image codecs (DCT/JPX/JBIG2) are recognized here but decoded by
-//! the page layer's image path (SPEC.md §4).
+//! the page layer's image path.
 //!
 //! ```
 //! use pdfrum_common::{Diagnostics, Limits};
@@ -206,7 +206,7 @@ pub enum DecodeOutput {
     Image(NeedsImageCodec),
 }
 
-/// A filter chain that ended at an image codec (SPEC.md §4's punt).
+/// A filter chain that ended at an image codec this crate does not decode.
 ///
 /// The codec's *input* is not here: it is [`DecodedStream::data`], which is
 /// already the right bytes whether earlier filters produced them or the codec
