@@ -66,7 +66,7 @@ mod test_fixtures;
 pub use key::SmallKey;
 pub use object::{CryptClass, Iv};
 pub use permissions::Permissions;
-pub use primitives::sha1;
+pub use primitives::{md5, sha1};
 pub use rc4::rc4;
 pub use standard::{Cipher, EncryptParams, PAD, PasswordEncoding, parse_encrypt_dict};
 
