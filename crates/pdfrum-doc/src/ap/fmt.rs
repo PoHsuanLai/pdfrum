@@ -253,10 +253,8 @@ mod tests {
         }
     }
 
-    /// Was the module doctest until `ap::fmt` went private with the rest of
-    /// `ap`'s internals (§WP8's recurring cost). It is the one assertion that
-    /// shows both writers on the same two inputs, so it is kept rather than
-    /// folded into the table-driven tests above.
+    /// The one assertion that shows both writers on the same two inputs, so
+    /// it is kept rather than folded into the table-driven tests above.
     #[test]
     fn the_two_writers_disagree_where_it_matters() {
         assert_eq!(shortest(0.5), ".5");

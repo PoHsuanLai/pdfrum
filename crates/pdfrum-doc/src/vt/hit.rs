@@ -133,10 +133,8 @@ pub struct Place {
     pub line: u32,
     /// The character the caret follows, or `None` for the line header.
     ///
-    /// Was `i32` with `-1` for the header
-    /// (`docs/design/idiomatic-api.md` §C, Tier 2 items 8-10). `None` orders
-    /// before every `Some`, which is what the negative bought, and the
-    /// compiler now makes the header case impossible to forget.
+    /// `None` orders before every `Some`, so the header sorts ahead of the
+    /// line's characters.
     pub word: Option<u32>,
 }
 

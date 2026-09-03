@@ -158,14 +158,6 @@ pub struct Word {
 pub struct Line {
     /// The words this line covers, **half-open**, or `None` for the single
     /// line of an empty section.
-    ///
-    /// Was two public `i32` fields, `begin` and `end`, with `end`
-    /// **inclusive** and `-1` in both meaning "empty" — three ways to get it
-    /// wrong in one record, driving seven private `< 0` guards
-    /// (`docs/design/idiomatic-api.md` §C, Tier 2 item 11). One `Option` of a
-    /// half-open range replaces both fields: absence is the `None`, the
-    /// bounds cannot be crossed, and `for i in range` is the loop everyone
-    /// wanted to write.
     pub words: Option<Range<u32>>,
     /// Position, y-down.
     pub x: f32,

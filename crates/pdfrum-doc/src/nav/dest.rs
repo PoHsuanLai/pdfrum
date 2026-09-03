@@ -197,23 +197,12 @@ impl Dest {
     /// number looked up in the page tree, so an inline page dictionary, which
     /// has no number, cannot be found.
     ///
-    /// Was `-> i32` with `-1` for unresolvable, and an
-    /// `impl Fn(u32) -> i32` callback that imposed the same sentinel on the
-    /// *caller's* code (`docs/design/idiomatic-api.md` §C, Tier 2 item 7, and
-    /// §C.4, which resolves this in favour of `Option` against §A.3's earlier
-    /// reading). The resolution logic — which entry is consulted, that a
-    /// number is returned verbatim, that four distinct failures answer alike
-    /// — is unchanged; only the channel is.
-    ///
-    /// Note what the sentinel concealed and `Option` separates: an
-    /// out-of-range page index is a `Some`, and only a genuine failure is
-    /// `None`. Both used to arrive as the same `-1`.
+    /// An out-of-range page index is a `Some`; only a genuine failure — four
+    /// of them, all answering alike — is `None`.
     ///
     /// `page_index_of` maps an **object number** — the indirect reference a
-    /// dictionary entry carries — to the page it is, and its `u32` argument is
-    /// therefore an object number and not an index. Only the answer is a
-    /// [`PageIndex`] (WP1 step 5; the design's §WP1 sketch reads as though
-    /// both halves of the callback were page numbers, and only the return is).
+    /// dictionary entry carries — to the page it is, so its `u32` argument is
+    /// an object number and not an index. Only the answer is a [`PageIndex`].
     #[must_use]
     pub fn page_index<R: Resolve>(
         &self,

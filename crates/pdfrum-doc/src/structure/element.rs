@@ -197,11 +197,8 @@ impl StructElement {
     /// dump uses a different, unfiltered accessor
     /// (`marked_content_id_count`).
     ///
-    /// Was `-> i64` with `-1` for absence. A real `/MCID` is non-negative
-    /// (ISO 32000-1 §14.7.4.2) so `-1` could not *collide*, but the file
-    /// never contains it either — it was invented to mean "none", which is
-    /// what `Option` is for (`docs/design/idiomatic-api.md` §C, Tier 2
-    /// item 15).
+    /// A real `/MCID` is non-negative (ISO 32000-1 §14.7.4.2), so a `Some`
+    /// is always a value the file carries.
     #[must_use]
     pub fn kid_content_id(&self, index: usize) -> Option<i64> {
         match self.kids.get(index) {
@@ -287,12 +284,6 @@ fn load_kid<R: Resolve>(
 /// Deliberately different from [`StructElement::kid_content_id`]: it ignores
 /// the page entirely, counts a bare number or dictionary as one, and answers
 /// `None` for an absent or unusable `/K`.
-///
-/// Was `-> i64` answering `-1`, documented as being `-1` "so the caller's
-/// `0..count` loop never runs" — a count that relies on `0..-1` being empty
-/// after a cast is a sentinel wearing a count's type
-/// (`docs/design/idiomatic-api.md` §C, Tier 2 item 13). `None` says the same
-/// thing and the compiler enforces the check.
 #[must_use]
 pub(crate) fn marked_content_id_count<R: Resolve>(dict: &Dict, r: &R) -> Option<usize> {
     match dict.get(names::K, r).map(|k| k.get().clone()) {
@@ -305,10 +296,8 @@ pub(crate) fn marked_content_id_count<R: Resolve>(dict: &Dict, r: &R) -> Option<
 
 /// The **unfiltered** marked-content identifier at one index, or `None`.
 ///
-/// Was `-> i64` with six `-1` exits. A real `/MCID` is non-negative
-/// (ISO 32000-1 §14.7.4.2), so `-1` could not collide — but the file never
-/// contains it either; it was invented for absence
-/// (`docs/design/idiomatic-api.md` §C, Tier 2 item 14).
+/// A real `/MCID` is non-negative (ISO 32000-1 §14.7.4.2), so a `Some` is
+/// always a value the file carries.
 #[must_use]
 pub(crate) fn marked_content_id_at<R: Resolve>(dict: &Dict, index: usize, r: &R) -> Option<i64> {
     match dict.get(names::K, r).map(|k| k.get().clone()) {

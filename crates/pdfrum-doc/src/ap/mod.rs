@@ -535,8 +535,7 @@ impl FormFonts {
     /// result is cached in the [`BuildContext`](pdfrum_page::BuildContext)
     /// beside the rest of the per-document font state, keyed on the
     /// `/AcroForm` reference. A caller threading one context through many
-    /// renders of one document pays for this once;
-    /// `docs/status/M13-perf-baseline.md` §5 measures what it used to cost.
+    /// renders of one document pays for this once.
     ///
     /// Nothing about *what* is built changed when the cache was added, which
     /// is what makes the appearance streams identical: the fallback still
