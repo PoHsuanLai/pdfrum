@@ -227,6 +227,7 @@ pub fn decode_chain(
 
     let last = filters.len() - 1;
     let mut current = raw.to_vec();
+    let complaints_before = diags.len();
     for (i, (name, params)) in filters.iter().enumerate() {
         let filter = Filter::from_name(name);
         match filter {
@@ -275,8 +276,11 @@ pub fn decode_chain(
         }
     }
 
-    // Fallback 4: the chain ran and produced nothing.
-    if current.is_empty() {
+    // Fallback 4: the chain ran, produced nothing, and a decoder complained
+    // on the way — a corrupt stream, whose own bytes are the most useful
+    // answer. A chain that decoded cleanly to nothing is a stream of
+    // nothing, and is delivered as such.
+    if current.is_empty() && diags.len() > complaints_before {
         diags.record(Severity::Recovered, DiagKind::UndecodableStream, None);
         return undecoded();
     }
