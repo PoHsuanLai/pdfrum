@@ -9,10 +9,10 @@
 //! - A **one-bit stencil mask with the default decode is inverted
 //!   bit-for-bit**; with `/Decode [1 0]` it is copied verbatim. So `/Decode`
 //!   flips a mask's sense in the opposite direction from what one expects.
-//! - PDFium additionally *palettizes* any image with `bpc * components <= 8`,
-//!   packing component `j` into bits `[j*bpc, (j+1)*bpc)` and precomputing one
-//!   colour per index (`cpdf_dib.cpp:164-171`, `LoadPalette` at `:905-980`,
-//!   `GetScanline`'s packed loop at `:1200-1210`). **pdfrum does not, and the
+//! - The oracle additionally *palettizes* any image with
+//!   `bpc * components <= 8`, packing component `j` into bits
+//!   `[j*bpc, (j+1)*bpc)` and precomputing one colour per index.
+//!   **pdfrum does not, and the
 //!   pixels are the same either way** — the palette precomputes the very
 //!   composition the general path evaluates per pixel, which is proved
 //!   exhaustively by
@@ -31,11 +31,10 @@
 //!   into a `Uint8ClampedArray`, whose store rounds. That is the linear map
 //!   done exactly.
 //! - **PDFium truncates the high byte.** Its default-decode RGB fast path
-//!   (`CPDF_DIB::TranslateScanline24bppDefaultDecode`,
-//!   `core/fpdfapi/page/cpdf_dib.cpp:1093-1101`) writes `src_pos[4]`,
-//!   `src_pos[2]`, `src_pos[0]` — `sample >> 8`, the low byte dropped. It is
-//!   within one count of the rounded answer on every sample (16 256 of 65 536
-//!   differ), an approximation of the same map rather than a different one.
+//!   keeps only each sample's high byte — `sample >> 8`, the low byte
+//!   dropped. It is within one count of the rounded answer on every sample
+//!   (16 256 of 65 536 differ), an approximation of the same map rather than
+//!   a different one.
 //!
 //! So the ecosystem agrees on the map and differs only on how carefully it is
 //! rounded. `image::mod`'s general `/Decode` path computes it exactly, which
@@ -65,23 +64,11 @@ pub fn get_bits(data: &[u8], bit_pos: usize, nbits: u32) -> u32 {
 
 /// How much of a requested scanline the stream actually held.
 ///
-/// The distinction is load-bearing, and `CPDF_DIB::GetScanline`
-/// (`cpdf_dib.cpp:1129`) is where it comes from. Its three arms are:
-///
-/// ```text
-/// } else if (stream_acc_->GetSize() > line * src_pitch_value) {
-///   ... copy what remains into a zeroed pitch-sized buffer ...
-/// }
-/// if (src_line.empty()) {
-///   std::ranges::fill(result, 0);
-///   return result;                 // <-- returns BEFORE TranslateScanline24bpp
-/// }
-/// ```
-///
-/// A row that begins *inside* the stream is zero-padded and then decoded
-/// normally. A row that begins at or past the end never reaches the decode at
-/// all: PDFium hands back a zeroed *output* buffer, so the pixels are literal
-/// black rather than whatever `/Decode` maps a zero sample to. On
+/// The distinction is load-bearing. A row that begins *inside* the stream is
+/// zero-padded and then decoded normally. A row that begins at or past the
+/// end never reaches the decode at all: the *output* buffer is zeroed, so the
+/// pixels are literal black rather than whatever `/Decode` maps a zero sample
+/// to. On
 /// `bug_554151` — a `/Decode [1.0]` that maps sample 0 to full red — the two
 /// spellings differ across the whole page.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -215,16 +202,15 @@ mod tests {
     /// The packed-palette path and the general path are the **same pixels**.
     ///
     /// This is the proof that retired the unwired `palette_index` helper. The
-    /// oracle palettizes any image with `bpc * components <= 8`
-    /// (`cpdf_dib.cpp:164-171`, `LoadPalette` at `:905-980`), building one
-    /// entry per possible packed index and looking each pixel up
-    /// (`GetScanline`'s packed loop, `:1200-1210`). pdfrum palettizes only
-    /// `Indexed` and widens every other space to a byte per component.
+    /// oracle palettizes any image with `bpc * components <= 8`, building one
+    /// entry per possible packed index and looking each pixel up. pdfrum
+    /// palettizes only `Indexed` and widens every other space to a byte per
+    /// component.
     ///
     /// Both routes evaluate the same two functions in the same order:
     /// `decode_min + decode_step * raw` per component — `DecodeMap::apply`
-    /// here, `comp_data_[j].decode_min_ + decode_step_ * encoded_component`
-    /// there — and then the space's own conversion. The palette merely
+    /// here, the same affine map there — and then the space's own conversion.
+    /// The palette merely
     /// *precomputes* that composition for all `1 << (bpc * components)`
     /// inputs, and since the composition is a pure function of the packed
     /// index, precomputing it cannot change an answer. Enumerating every

@@ -52,38 +52,42 @@ pub fn rgb_to_rgb(comps: &[f32]) -> Rgb {
 ///
 /// # PDFium's second formula, and why it is not here
 ///
-/// The C++ carries an alternative — the naive subtractive
-/// `1 - min(1, x + k)`, run *without* clamping its inputs — behind a counter
-/// it calls *standard conversion* (`CPDF_ColorSpace::EnableStdConversion`,
-/// `cpdf_colorspace.cpp:663`, read back through `IsStdConversionEnabled()`).
-/// **That formula can never reach a pixel**, so this port does not implement
-/// it and no signature carries the switch:
-///
-/// - The only consumer in the whole C++ tree is `CPDF_DeviceCS`'s
-///   `kDeviceCMYK` arm — `GetRGB` (`cpdf_devicecs.cpp:65`) and
-///   `TranslateImageLine` (`cpdf_devicecs.cpp:119`). `ICCBased`, `Lab` and
-///   `CalRGB` never consult it; `CPDF_BasedCS` only forwards the counter to a
-///   base space (`cpdf_basedcs.cpp:13`).
-/// - `CPDF_DIB` raises the counter *after* the image's own colour work is
-///   done and lowers it before returning. `StartLoadDIBBase`
-///   (`cpdf_dib.cpp:199`) runs `LoadPalette` (`:184`) and `CreateDecoder`
-///   **before** `ContinueToLoadMask` raises it at `:153`; `:244` lowers it.
-/// - The image body is never translated inside that bracket.
-///   `TranslateImageLine` is reached only from `TranslateScanline24bpp`
-///   (`:1007`), called only from `CPDF_DIB::GetScanline` (`:1129`) — a
-///   `const` accessor the rasterizer pulls during compositing, long after the
-///   counter is back to zero. So `cpdf_devicecs.cpp:119`'s
-///   `IsStdConversionEnabled()` is always false.
-///
-/// What is left inside the bracket is one conversion, the `/Matte` colour at
-/// `cpdf_dib.cpp:839` — so the flag could only move a `DeviceCMYK` image
-/// carrying an `/SMask` with a `/Matte` array *and* drawn offscreen, a
-/// conjunction no file in `testing/corpus` or `testing/resources` contains,
-/// and the mask's own DIB (which `StartLoadMaskDIB` (`:832`) hands
-/// `bStdCS=true` unconditionally) is always `DeviceGray`, which ignores it.
-/// The naive formula is also the *less* correct of the two, so nothing of
-/// value is lost. `std_conversion_would_have_computed` pins what it would
-/// have produced.
+/// The oracle carries an alternative — the naive subtractive
+/// `1 - min(1, x + k)`, run *without* clamping its inputs — behind a flag it
+/// calls *standard conversion*. **That formula can never reach a pixel**, so
+/// this port does not implement it and no signature here carries the switch:
+/// this function is the only `DeviceCMYK` conversion a colour goes through.
+/// The proof is a `//` note on the body, and
+/// `std_conversion_would_have_computed` pins what the formula would have
+/// produced so the claim stays falsifiable.
+// The proof that PDFium's standard-conversion formula is unreachable:
+//
+// - The only consumer in the whole C++ tree is `CPDF_DeviceCS`'s
+//   `kDeviceCMYK` arm — `GetRGB` (`cpdf_devicecs.cpp:65`) and
+//   `TranslateImageLine` (`cpdf_devicecs.cpp:119`). The flag itself is
+//   `CPDF_ColorSpace::EnableStdConversion` (`cpdf_colorspace.cpp:663`), read
+//   back through `IsStdConversionEnabled()`. `ICCBased`, `Lab` and `CalRGB`
+//   never consult it; `CPDF_BasedCS` only forwards the counter to a base
+//   space (`cpdf_basedcs.cpp:13`).
+// - `CPDF_DIB` raises the counter *after* the image's own colour work is done
+//   and lowers it before returning. `StartLoadDIBBase` (`cpdf_dib.cpp:199`)
+//   runs `LoadPalette` (`:184`) and `CreateDecoder` **before**
+//   `ContinueToLoadMask` raises it at `:153`; `:244` lowers it.
+// - The image body is never translated inside that bracket.
+//   `TranslateImageLine` is reached only from `TranslateScanline24bpp`
+//   (`:1007`), called only from `CPDF_DIB::GetScanline` (`:1129`) — a `const`
+//   accessor the rasterizer pulls during compositing, long after the counter
+//   is back to zero. So `cpdf_devicecs.cpp:119`'s `IsStdConversionEnabled()`
+//   is always false.
+//
+// What is left inside the bracket is one conversion, the `/Matte` colour at
+// `cpdf_dib.cpp:839` — so the flag could only move a `DeviceCMYK` image
+// carrying an `/SMask` with a `/Matte` array *and* drawn offscreen, a
+// conjunction no file in `testing/corpus` or `testing/resources` contains,
+// and the mask's own DIB (which `StartLoadMaskDIB` (`:832`) hands
+// `bStdCS=true` unconditionally) is always `DeviceGray`, which ignores it.
+// The naive formula is also the *less* correct of the two, so nothing of
+// value is lost.
 #[must_use]
 pub fn cmyk_to_rgb(comps: &[f32]) -> Rgb {
     let at = |i: usize| comps.get(i).copied().unwrap_or(0.0);
@@ -242,10 +246,9 @@ mod tests {
     /// it is absent is a claim about the oracle and should stay falsifiable.
     ///
     /// This is **not** a test of `cmyk_to_rgb`: it recomputes the naive
-    /// subtractive formula `1 - min(1, x + k)` here, unclamped, exactly as
-    /// `cpdf_devicecs.cpp:65` writes it, and pins what the oracle's
-    /// standard-conversion path *would* have produced had it ever run. See
-    /// `cmyk_to_rgb`'s docs for the proof that it cannot.
+    /// subtractive formula `1 - min(1, x + k)` here, unclamped, and pins what
+    /// the oracle's standard-conversion path *would* have produced had it
+    /// ever run. See `cmyk_to_rgb` for the proof that it cannot.
     #[test]
     fn std_conversion_would_have_computed() {
         let naive = |comps: &[f32; 4]| {

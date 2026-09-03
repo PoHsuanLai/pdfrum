@@ -156,7 +156,7 @@ impl Radial {
     }
 }
 
-/// `FXSYS_IsFloatZero` (`fx_system.h:36`): `(f) < 0.0001 && (f) > -0.0001`.
+/// Whether `v` is zero to the shading tolerance: `|v| < 1e-4`.
 ///
 /// A **fixed 1e-4 tolerance**, not a machine epsilon — roughly 840 times
 /// wider than `f32::EPSILON`. `a` is `dx² + dy² - dr²`, a catastrophic
@@ -165,8 +165,11 @@ impl Radial {
 /// which has no negative-radius skip, or the quadratic one, which does.
 /// `radial_shading_point_at_border` lands in exactly that gap at `a ≈ 2.4e-7`.
 ///
-/// The comparison widens to `f64` as the C++ macro's does — its operand is a
-/// `float` but the literals are `double`.
+/// The comparison widens to `f64` before the test, so a `f32` operand is not
+/// rounded against a `f32` bound.
+// The oracle's `FXSYS_IsFloatZero` (`fx_system.h:36`),
+// `(f) < 0.0001 && (f) > -0.0001`: its operand is a `float` but the literals
+// are `double`, so the comparison happens in `double` there too.
 fn is_float_zero(v: f32) -> bool {
     f64::from(v).abs() < FLOAT_ZERO
 }

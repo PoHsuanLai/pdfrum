@@ -1,8 +1,9 @@
 //! Type 0: sampled functions (ISO 32000-1 §7.10.2).
 //!
-//! `[oracle-bug]` **Three defects live in the oracle's forty-line
-//! `cpdf_sampledfunc.cpp` evaluator, and none of them is reproduced here.**
-//! All three are pixel-visible through shadings and `Separation` colour.
+//! `[oracle-bug]` **Three defects live in the oracle's forty-line sampled
+//! evaluator, and none of them is reproduced here.** All three are
+//! pixel-visible through shadings and `Separation` colour. The `//` notes on
+//! each site below carry the oracle's file and line.
 //!
 //! - **A2 — a negative encoded input lands on the *top* cell.** `:128` is
 //!   `std::clamp(static_cast<uint32_t>(encoded_input[i]), 0U, sizes - 1)`: the
@@ -65,8 +66,8 @@ pub struct Sampled {
 }
 
 /// A big-endian, MSB-first bit reader that returns **zero past the end**
-/// rather than failing — matching `CFX_BitStream`, whose out-of-range
-/// behaviour several quirks depend on.
+/// rather than failing. Several sampled-function quirks depend on that: a
+/// truncated `/Length` reads as zero samples rather than an error.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct BitReader<'a> {
     data: &'a [u8],
@@ -406,12 +407,11 @@ mod tests {
     /// Audit item **A3**, the largest behavioural change of the three, and
     /// the one no test pinned.
     ///
-    /// `cpdf_function.cpp:163` seeds `float encoded = sample;` from a single
-    /// base corner and `:184` adds one per-axis gradient term each, reading
-    /// `m + 1` of the `2^m` corners: every **cross term** is dropped, and the
-    /// result is the tangent plane at the base corner. It is exact for one
-    /// input and wrong for every function above one. §7.10.2 specifies
-    /// multilinear interpolation.
+    /// The oracle seeds one base corner and adds one per-axis gradient term
+    /// each, reading `m + 1` of the `2^m` corners: every **cross term** is
+    /// dropped, and the result is the tangent plane at the base corner. It is
+    /// exact for one input and wrong for every function above one. §7.10.2
+    /// specifies multilinear interpolation, which is what we do.
     ///
     /// A 2x2 grid whose corners are `0, 0 / 0, 1` separates the two forms at
     /// a stroke. At the centre `(0.5, 0.5)`:

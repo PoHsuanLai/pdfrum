@@ -132,9 +132,9 @@ impl ContentMarks {
     /// **Every** optional-content dictionary enclosing this content, outermost
     /// first.
     ///
-    /// `CheckPageObjectVisible` (`cpdf_occontext.cpp:189-200`) scans the whole
-    /// mark stack and any one entry can veto, so nested `BDC /OC` sequences
-    /// each get a say — which the innermost alone does not capture. The same
+    /// A visibility test scans the whole mark stack and any one entry can
+    /// veto, so nested `BDC /OC` sequences each get a say — which the
+    /// innermost alone does not capture. The same
     /// two conditions apply to each: the tag is exactly `OC`, and the
     /// properties came from the `/Properties` resource rather than being
     /// written inline.

@@ -10,7 +10,7 @@
 //! # `/K` is parsed and not honoured
 //!
 //! Knockout groups are **unimplemented in PDFium**: `/K` is never read
-//! anywhere in its core, and `CPDF_Transparency` carries only "is a group"
+//! anywhere in its core, whose transparency model carries only "is a group"
 //! and "is isolated". We parse `/K` into the model because it is genuinely in
 //! the file, and the renderer ignores it so output matches the oracle.
 //!

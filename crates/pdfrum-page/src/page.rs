@@ -233,10 +233,10 @@ pub struct FormObject {
     /// editing is `true`.
     ///
     /// A renderer needs it because the oracle draws that one form differently
-    /// from every other object on the page. `CPWL_EditImpl::DrawTextString`
-    /// builds a **local** `CPDF_RenderOptions` whose `bClearType` no flag word
-    /// ever clears, so the text of a live edit — and no other text — is drawn
-    /// with subpixel antialiasing. The distinction has to travel with the
+    /// from every other object on the page: the widget's editor builds its own
+    /// local render options with subpixel antialiasing forced on, which no
+    /// page-level flag ever clears, so the text of a live edit — and no other
+    /// text — is drawn that way. The distinction has to travel with the
     /// object because by the time anything rasterizes, this form is one entry
     /// in the page's object list among all the others, and the whole page is
     /// rendered under a single set of options.

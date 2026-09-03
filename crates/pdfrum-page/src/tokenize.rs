@@ -92,9 +92,9 @@ fn is_numeric_char(b: u8) -> bool {
 ///
 /// # The real half must be *correctly rounded*, not accumulated
 ///
-/// `StringToFloat` hands the digits to a correctly-rounded parser
-/// (`fx_string.cpp:124-140`), so a literal reads as the nearest `f32` to what
-/// it spells. Accumulating digit-by-digit into an `f32` instead — adding each
+/// A literal must read as the nearest `f32` to what it spells, which is what
+/// a correctly-rounded parser gives and what the oracle's string-to-float
+/// does. Accumulating digit-by-digit into an `f32` instead — adding each
 /// digit times a repeatedly-multiplied `0.1` — compounds error per digit and
 /// drifts, because `0.1f32` is not one tenth. The two disagree in the last
 /// couple of ulps, which sounds unobservable and is not: a rectangle's edge
