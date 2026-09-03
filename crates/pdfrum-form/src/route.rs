@@ -88,6 +88,55 @@ pub fn apply<R: Resolve>(
     cascade: &mut dyn Cascade,
     event: Event,
 ) -> Response {
+    let mut response = route(session, ctx, cascade, event);
+    // A script the event ran may have called `Field.setFocus`, which records
+    // a request rather than moving the keyboard itself. Spending it here is
+    // what `SetFocusAnnot` does at the end of the native call, and it is
+    // spent *after* the event's own routing so the field the event was about
+    // has already committed.
+    response.absorb(honour_focus_requests(session, ctx, cascade));
+    response
+}
+
+/// Spends every `Field.setFocus` a script left, until none is left.
+///
+/// A loop rather than one drain because the `/AA /Bl` and `/AA /Fo` this
+/// runs are themselves scripts that may call `setFocus` again. The bound is
+/// [`MAX_SCRIPTED_FOCUS_MOVES`], because two fields whose focus scripts each
+/// name the other would otherwise never stop.
+fn honour_focus_requests<R: Resolve>(
+    session: &mut FormSession,
+    ctx: &Context<'_, R>,
+    cascade: &mut dyn Cascade,
+) -> Response {
+    let mut response = Response::ignored();
+    for _ in 0..MAX_SCRIPTED_FOCUS_MOVES {
+        let Some(index) = cascade.take_focus_request() else {
+            return response;
+        };
+        response.absorb(focus_field(session, ctx, cascade, index));
+    }
+    // The budget is spent. Whatever is still queued is dropped rather than
+    // followed, and the keyboard stays where the last honoured move left it.
+    cascade.take_focus_request();
+    response
+}
+
+/// How many times one event may move the keyboard through `Field.setFocus`.
+///
+/// Two fields whose `/AA /Fo` scripts each call `setFocus` on the other are a
+/// live-lock, and upstream has no counter for it — `SetFocusAnnot` recurses
+/// through `OnSetFocus` until the stack runs out. A bound is the refusing
+/// answer, and eight is past anything a document does on purpose.
+const MAX_SCRIPTED_FOCUS_MOVES: u32 = 8;
+
+/// The event's own routing, with no focus request spent.
+fn route<R: Resolve>(
+    session: &mut FormSession,
+    ctx: &Context<'_, R>,
+    cascade: &mut dyn Cascade,
+    event: Event,
+) -> Response {
     match event {
         Event::MouseMove { at, modifiers } => {
             mouse_move(session, ctx, cascade, Point::narrow(at), modifiers)
@@ -2005,6 +2054,79 @@ fn take_focus<R: Resolve>(
     response
 }
 
+/// Gives the keyboard to a field a script named, running the two `/AA`
+/// entries a click would.
+///
+/// `index` is a position in the document-wide field list — what
+/// [`Cascade::take_focus_request`] answers and what
+/// [`FieldRef::index`](crate::FieldRef::index) carries.
+///
+/// # The order, which is the whole of what this function is for
+///
+/// `CJS_Field::setFocus` reaches `CPDFSDK_FormFillEnvironment::SetFocusAnnot`,
+/// which does two things in one order and never the other:
+///
+/// 1. the widget that **held** the keyboard loses it, which runs its
+///    `/AA /Bl`;
+/// 2. the widget that **takes** it runs its `/AA /Fo`.
+///
+/// So a document with a script on each alerts the outgoing field's line
+/// first. A `setFocus` naming the field that already holds the keyboard is
+/// `SetFocusAnnot`'s `focus_annot_ == pAnnot` early return: neither script
+/// runs and nothing moves.
+///
+/// Answers [`Response::ignored`] for an index this page does not carry —
+/// a script may name a field on a page nobody has read, and a routing context
+/// that cannot see the widget cannot run its scripts.
+pub fn focus_field<R: Resolve>(
+    session: &mut FormSession,
+    ctx: &Context<'_, R>,
+    cascade: &mut dyn Cascade,
+    index: u32,
+) -> Response {
+    let Some(field) = ctx.field_of_index(index) else {
+        return Response::ignored();
+    };
+    let Some(id) = ctx.widget_of_field(field).map(|widget| widget.id) else {
+        return Response::ignored();
+    };
+    let target = FocusTarget::Widget(field, id);
+    if session.focus == Some(target) {
+        // `if (focus_annot_ == pAnnot) return true;` — the keyboard is
+        // already here, and neither script fires.
+        return Response::consumed();
+    }
+    // (1) The outgoing widget's `/AA /Bl`. `KillFocusAnnot` reaches
+    // `CFFL_InteractiveFormFiller::OnKillFocus`, which is the one path that
+    // runs the entry — a click that leaves a field does not, which is the
+    // upstream bug `mouse_events.evt` names beside its own two "should
+    // trigger an On Blur event" comments and which we reproduce.
+    if let Some(previous) = session.focus.map(FocusTarget::annot) {
+        fire_pointer(
+            session,
+            ctx,
+            cascade,
+            previous,
+            PointerTrigger::Blur,
+            Modifiers::NONE,
+        );
+    }
+    // (2) The incoming widget's `/AA /Fo`, then the move itself — which
+    // commits whatever the outgoing field held, exactly as a click does.
+    fire_pointer(
+        session,
+        ctx,
+        cascade,
+        id,
+        PointerTrigger::Focus,
+        Modifiers::NONE,
+    );
+    let mut response = take_focus(session, ctx, cascade, target);
+    ensure_state(session, ctx, field);
+    response.absorb(redraw(session, ctx, field, id));
+    response
+}
+
 /// Drops focus, redrawing what held it as a committed appearance.
 ///
 /// Public because it is not only a left click's miss path: the embedder's own
@@ -2014,6 +2136,20 @@ fn take_focus<R: Resolve>(
 /// (brief §3.3 step 6), so a version that only reported `FocusChanged` would
 /// leave the caret and the live text on the page.
 pub fn kill_focus<R: Resolve>(
+    session: &mut FormSession,
+    ctx: &Context<'_, R>,
+    cascade: &mut dyn Cascade,
+) -> Response {
+    let mut response = drop_focus(session, ctx, cascade);
+    // The commit this ran is a script, and a script may call
+    // `Field.setFocus` — which then puts the keyboard somewhere rather than
+    // nowhere. Spent here for the same reason `apply` spends it.
+    response.absorb(honour_focus_requests(session, ctx, cascade));
+    response
+}
+
+/// [`kill_focus`] without spending a focus request.
+fn drop_focus<R: Resolve>(
     session: &mut FormSession,
     ctx: &Context<'_, R>,
     cascade: &mut dyn Cascade,

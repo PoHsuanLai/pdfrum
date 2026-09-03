@@ -621,14 +621,6 @@ impl ScriptCascade {
         std::mem::take(&mut self.host.borrow_mut().calculate_requested)
     }
 
-    /// The field a script asked for the keyboard for, drained.
-    ///
-    /// A `/Fields` position, or `None`. Recorded rather than performed for
-    /// the same reason the writes are.
-    pub fn take_focus_request(&mut self) -> Option<u32> {
-        self.host.borrow_mut().focus_requested.take()
-    }
-
     /// The value the object model currently holds for a field.
     ///
     /// What a script last set through `Field.value`, or what the caller
@@ -946,6 +938,23 @@ impl Cascade for ScriptCascade {
             shift: held.contains(crate::Modifiers::SHIFT),
         };
         self.run_pointer_trigger(field, kind, pointer);
+    }
+
+    /// The field the last `Field.setFocus()` named, drained.
+    ///
+    /// `CJS_Field::setFocus` reaches `CPDFSDK_FormFillEnvironment::SetFocusAnnot`,
+    /// which kills the outgoing widget's focus — firing its `/AA /Bl` — and
+    /// then gives the keyboard to the incoming one, firing its `/AA /Fo`.
+    /// Neither half can run from inside the native function without
+    /// re-entering the routing the script is already inside, so the request
+    /// is recorded here and the caller spends it.
+    ///
+    /// **The last call wins.** The slot holds one field, so a script calling
+    /// `setFocus` twice moves the keyboard once, to the second field — which
+    /// is upstream's shape, where each call overwrites `focus_annot_` and only
+    /// the final one survives the script.
+    fn take_focus_request(&mut self) -> Option<u32> {
+        self.host.borrow_mut().focus_requested.take()
     }
 
     /// `/AA /F`.

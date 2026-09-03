@@ -158,6 +158,12 @@ pub fn write_transcript(
             cascade.run(&source, &whence);
         }
     }
+    // A document-level script may have called `Field.setFocus`, which records
+    // a request rather than moving the keyboard itself. Spending it here is
+    // `SetFocusAnnot` running at the end of the native call: the outgoing
+    // field's `/AA /Bl` and the incoming field's `/AA /Fo` both fire, and the
+    // page holding the field is read if nothing has read it yet.
+    session.honour_focus_requests();
     // Then each page in turn: load it — which installs its `/AA` and runs its
     // formatters — and replay the whole event script against it. Both halves
     // are `ProcessPage`'s and in its order.
@@ -168,6 +174,9 @@ pub fn write_transcript(
         // between it and the closing action, which `ProcessPage` runs after
         // rendering (`:1646`).
         session.page_opened(page);
+        // A page's own `/AA /O` runs outside any event, so its focus request
+        // is spent the same way the document-level ones are.
+        session.honour_focus_requests();
         if !events.is_empty() {
             crate::dispatch::replay_page(&mut session, page, events, err);
         }

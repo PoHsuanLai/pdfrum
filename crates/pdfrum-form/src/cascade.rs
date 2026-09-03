@@ -201,6 +201,23 @@ pub trait Cascade {
     /// nothing downstream branches on which one fired — the branch is inside
     /// the implementation, on the `event` object it populates.
     fn pointer(&mut self, _field: &FieldRef, _trigger: PointerTrigger, _held: Modifiers) {}
+
+    /// The field a script asked the keyboard for, drained.
+    ///
+    /// A position in the document-wide field list — the space
+    /// [`FieldRef::index`] counts in — or `None` when nothing asked.
+    ///
+    /// **Recorded while a script runs and spent afterwards.** Moving the
+    /// keyboard from inside a running script would re-enter the routing the
+    /// script is already inside, so the request is written down here and the
+    /// caller routes it through the same path a click takes: the outgoing
+    /// field's `/AA /Bl`, then the incoming field's `/AA /Fo`.
+    ///
+    /// The default is `None` — [`NoScripts`]'s answer and every
+    /// non-scripting cascade's, because with no engine nothing can ask.
+    fn take_focus_request(&mut self) -> Option<u32> {
+        None
+    }
 }
 
 /// Which of the six pointer and focus `/AA` entries a [`Cascade::pointer`]

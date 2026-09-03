@@ -229,6 +229,7 @@ pub fn pdfrum::FormSession<'a>::focus_at(&mut self, impl core::convert::Into<pdf
 pub fn pdfrum::FormSession<'a>::focus_for_page(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>) -> core::option::Option<pdfrum_doc::ap::Focus>
 pub fn pdfrum::FormSession<'a>::focused_annot(&self) -> core::option::Option<pdfrum_form::session::AnnotId>
 pub fn pdfrum::FormSession<'a>::focused_text(&self) -> core::option::Option<alloc::string::String>
+pub fn pdfrum::FormSession<'a>::honour_focus_requests(&mut self) -> usize
 pub fn pdfrum::FormSession<'a>::hover_for_page(&self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>) -> core::option::Option<usize>
 pub fn pdfrum::FormSession<'a>::is_index_selected(&self, usize) -> bool
 pub fn pdfrum::FormSession<'a>::key_down(&mut self, pdfrum_form::event::Key, pdfrum_form::event::Modifiers) -> pdfrum_form::update::Response
