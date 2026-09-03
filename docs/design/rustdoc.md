@@ -1,6 +1,8 @@
 # Production rustdoc — trim pass
 
-**Status:** scoped, not started. Not a `[spec]` change: no signatures move.
+**Status:** WP1–WP6 landed 2026-09-03; §8 is ticked but for the one box a
+human has to tick, and WP5's remaining crates are open (see §8's "not in
+done"). Not a `[spec]` change: no signatures move.
 **Date:** 2026-09-02. **Updated 2026-09-03:** names and counts re-measured
 after the idiomatic-API pass landed (`docs/design/idiomatic-api.md`), which
 renamed or removed most of the methods the first draft cited.
@@ -340,15 +342,18 @@ by the curation pass** since; a private item's essay becomes `//` on the
 function body, and only what a crate still re-exports gets a 12-line `///`.
 Re-measure per crate with the same script as WP2 before starting.
 
-### WP6 — STYLE.md one paragraph
+### WP6 — STYLE.md one paragraph — **landed 2026-09-03**
 
-Append to §6, after “Every public item has a doc comment…”:
+Appended to §6, after “Every public item has a doc comment…”. The landed
+text adds the internal-reference clause and names the gate, neither of which
+existed when this was drafted:
 
-> Public rustdoc is for a caller of the crate, not for the next agent.
-> First sentence, then the invariant they can get wrong, then `# Errors`,
-> then at most one example per type. Design history, C++ paths, and
-> rejected alternatives belong in `docs/design/` and in `//` on the
-> implementation. Caps and the sibling rule: `docs/design/rustdoc.md`.
+> Public rustdoc is for a caller of the crate, not for the next agent. First
+> sentence, then the invariant they can get wrong, then `# Errors`, then at
+> most one example per type. Design history, C++ paths, internal milestone and
+> work-package numbers, and rejected alternatives belong in `docs/design/` and
+> in `//` on the implementation; `scripts/check-no-internal-refs.nu` is the
+> gate. Caps and the sibling rule: `docs/design/rustdoc.md`.
 
 No other STYLE.md edits.
 
@@ -364,6 +369,11 @@ No other STYLE.md edits.
 | 4 | WP4 provenance | Mechanical, can run parallel to WP3 once WP2 has rewritten the essays | facade, then inner `lib.rs` re-exports |
 | 5 | WP5 inner crates | After the facade is the template | per crate |
 | 6 | WP6 STYLE.md | Last, so it describes the pass that landed | 1 |
+
+WP1–WP6 are landed. WP5's remaining crates (`pdfrum-page`, `pdfrum-parser`,
+`pdfrum-cmap`, `pdfrum-crypt`, `pdfrum-filters`, `pdfrum-type1`,
+`pdfrum-raster-*`) are not in the definition of done and stay open; the CI gate
+holds the provenance half of the bar across all of them today.
 
 WP1–3 are the production-ready bar for `docs.rs/pdfrum`. WP4–5 are the
 same bar for anyone who clicks through to a member crate. WP6 freezes it.
@@ -512,6 +522,65 @@ same bar for anyone who clicks through to a member crate. WP6 freezes it.
 > the rendered page. Strip inside list blocks line by line, or re-indent
 > afterwards and diff the result.
 
+> **WP5 `pdfrum-form` landed 2026-09-03.** The crate carrying the most
+> `cpdf_`/`cffl_`/`cpwl_` citations in the workspace. Crate `//!` 21 (no
+> snippet) → **26**, of which 20 are prose and six a `text` fence, inside §3's
+> 25-line exception; indexed items over the 20-line cap 15 → **0**; indexed
+> module `//!` over the 12-line cap 11 → **0**; provenance hits in `///`/`//!`
+> 207 → **0**; internal phase and document references 21 → **0**; doctest
+> blocks 4 → **4**. 1370 doc lines removed against 693 added and **22 `//`
+> lines added**; five essays moved rather than being cut. No non-doc line
+> changed; the API snapshot unmoved.
+>
+> The rule the reviewer set was applied as stated: **lean toward deleting**.
+> Most citing sentences were diary — which pass, which fixture, which ruling —
+> and git and `docs/` hold that already. What survived is an invariant a caller
+> can get wrong, rewritten without the pointer, or a measured fact that changes
+> how the code reads, as a short `//`. Contracts re-derived from the code
+> before being summarised: `Keystroke::applied` — an out-of-range
+> `selection_start` yields an **empty prefix** while an out-of-range
+> `selection_end` yields an empty suffix, the two halves genuinely disagreeing;
+> `CommitOutcome::formats` — a `None` from a commit that *ran* erases while a
+> `None` from one that never ran means nothing; `is_text_overflow` — the check
+> is made **before** the character, and overflow is a comb field's property
+> alone; `page::selected` — the interaction reader takes `/I` first where the
+> appearance reader takes `/V`, agreeing except on `/I` present with `/V`
+> absent. The feature-gate trap fired again in its private-item form:
+> `model.rs` linked `[`super::field`]`, a private module, so
+> `cargo doc --features script` failed where the default build passed. A bare
+> code span, as §7 already recorded.
+
+> **WP5 `pdfrum-script` landed 2026-09-03.** Nearly clean already: provenance
+> hits 7 → **0**, internal references 0 → 0, indexed items over the cap 0 → 0,
+> indexed module `//!` over the cap 2 → **0** (`af` 20 → 13, `error` 20 → 12),
+> crate `//!` 41 (29 prose plus two fences) unchanged and inside the 50 cap,
+> doctest blocks 2 → 2. All seven citations were pointers, so each states what
+> it pointed at instead.
+
+> **The CI gate landed 2026-09-03** as `scripts/check-no-internal-refs.nu`,
+> wired into `scripts/ci.nu`. It scans every `///` and `//!` under
+> `crates/*/src` for the §7 pattern, with two corrections found by running it
+> over the whole workspace rather than one crate. `SPEC\.md` **under-matched**:
+> the spelling the tree carries is the unsuffixed `(SPEC §15.8)`, so the
+> alternative is now `\b(SPEC|PLAN|STYLE|DEPS)(\.md)?\b`, word-bounded to keep
+> `SPECIAL` and `PLANE` out. `§[A-Z]\.[0-9]` **over-matched**: `ISO/IEC
+> 15444-1 §A.4.1` is an annex section of a published standard a reader can
+> follow, so a line matching `(ISO|RFC)…§X.N` is spared — for that alternative
+> only, so a line carrying both a standard's annex and a milestone still fails.
+> The widening found **19 lines** across seven crates that passes A and B-1
+> missed, all swept in the gate's own commit.
+>
+> The non-vacuity control earned its place on the first run. The draft used
+> `-- 'crates/*/src'`, and under git's default pathspec matching a bare `*`
+> does not cross a `/` — so that spec matches **no file at all** and the scan
+> reported a clean tree by having looked at nothing. Only the planted line
+> caught it; `:(glob)crates/*/src/**` is the fix, recorded in the script. The
+> gate carries a third assertion besides, that the ISO exemption spares an
+> annex citation and still fails a milestone on the line beside it.
+> `\bM[0-9]{1,2}` has no false positive today and could acquire one — a matrix
+> element, an OpenType tag — so it is kept with the risk documented and a
+> per-line opt-out reserved for the day a real one appears.
+
 Do not combine WP1 with WP5. The crate page is a writing task; the inner
 crates are a grind. Mixing them produces an unreviewable diff.
 
@@ -519,21 +588,39 @@ crates are a grind. Mixing them produces an unreviewable diff.
 
 ## 8. Definition of done
 
-- [ ] `pdfrum` crate `//!` ≤ 50 lines.
-- [ ] No facade item doc over the §3 cap except the listed exceptions, and
-      those exceptions still have a single example.
-- [ ] Sibling methods have no second example and no diary.
-- [ ] `rg -n 'Added 20|considered and rejected|\.cpp:' crates/pdfrum/src --glob '*.rs'`
-      is empty in `///` / `//!` lines ( `//` may still match).
-- [ ] `cargo test --doc -p pdfrum` passes.
-- [ ] `cargo doc -p pdfrum --no-deps` builds with
-      `rustdoc::broken-intra-doc-links` clean.
-- [ ] Facade doctest block count is in the 15–25 range (51 today).
-- [ ] STYLE.md §6 has the paragraph in WP6.
+Verified 2026-09-03 unless noted.
+
+- [x] `pdfrum` crate `//!` ≤ 50 lines. **50.**
+- [x] No facade item doc over the §3 cap except the listed exceptions, and
+      those exceptions still have a single example. **0 over**, counting prose
+      lines and excluding the fence, which is what §3's "excluding example"
+      means; the four named exceptions each keep one.
+- [x] Sibling methods have no second example and no diary.
+- [x] `rg -n 'Added 20|considered and rejected|\.cpp:' crates/pdfrum/src --glob '*.rs'`
+      is empty in `///` / `//!` lines ( `//` may still match). **0**, and
+      `scripts/check-no-internal-refs.nu` now holds the wider pattern across
+      every crate rather than the facade alone.
+- [x] `cargo test --doc -p pdfrum` passes. **25 passed.**
+- [x] `cargo doc -p pdfrum --no-deps` builds with
+      `rustdoc::broken-intra-doc-links` clean. **Under
+      `RUSTDOCFLAGS="-D warnings"`, in both feature states** — which is the
+      stronger claim, and the one the feature-gate and private-item traps of
+      §7 make necessary.
+- [x] Facade doctest block count is in the 15–25 range (51 today). **26** —
+      one over the stated range, and left there: the range was written when
+      the count was 51 and every surviving fence is the canonical site for its
+      type under §4's table. Trimming one to reach 25 would delete a worked
+      example to satisfy a number.
+- [x] STYLE.md §6 has the paragraph in WP6.
 - [ ] A human opened `target/doc/pdfrum/index.html` and the `FormSession`
       / `Page` / `Document` pages and could see the summary above the fold.
+      **The one box no gate can tick.**
 
-Not in done: inner crates at the cap (WP5 may lag). Not in done: comment
+Not in done: inner crates at the cap (WP5 may lag) — `pdfrum-text`,
+`pdfrum-object`, `pdfrum-render`, `pdfrum-form` and `pdfrum-script` are at it;
+`pdfrum-page`, `pdfrum-parser`, `pdfrum-cmap`, `pdfrum-crypt`,
+`pdfrum-filters`, `pdfrum-type1` and the rasterizer crates are not, and the CI
+gate holds only the provenance half of the bar for them. Not in done: comment
 ratio as a number — we are not optimizing 0.28.
 
 ---
