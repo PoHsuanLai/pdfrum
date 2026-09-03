@@ -559,6 +559,24 @@ fn visit<R: Resolve>(
         && !kids_are_fields
     {
         let name = full_name(dict, r);
+        // A field's fully-qualified name is its **identity**, not a label:
+        // the merge below keys on it, `Form::field` is the only public lookup,
+        // and `pdfrum-form` allocates one `FieldId` per distinct name. So an
+        // empty name is not merely an unaddressable field — it is a field that
+        // every *other* unnamed field in the document would be merged into.
+        // ISO 32000-1 §12.7.3.2 makes the fully qualified name the thing an
+        // action, an export or a JavaScript reference names a field by, and a
+        // node with no `/T` anywhere in its ancestry has none, so there is
+        // nothing a caller could do with the entry. Upstream drops it too
+        // (`cpdf_interactiveform.cpp:914-917`, `AddTerminalField`).
+        if name.is_empty() {
+            diags.record(
+                pdfrum_common::Severity::Suspicious,
+                pdfrum_common::DiagKind::FieldSkippedNoName,
+                None,
+            );
+            return;
+        }
         let widgets = widgets_of(dict, reference, kids.as_ref(), r);
         // A name already in the tree gets these widgets **added as further
         // controls** rather than a second field of its own. Upstream's
@@ -1178,8 +1196,14 @@ mod tests {
     }
 
     fn load(catalog: &Dict) -> Option<Form> {
+        load_with_diags(catalog).0
+    }
+
+    /// `load`, plus the diagnostics the walk recorded.
+    fn load_with_diags(catalog: &Dict) -> (Option<Form>, Diagnostics) {
         let (limits, mut diags) = (Limits::default(), Diagnostics::default());
-        Form::load(catalog, &NoResolve, &limits, &mut diags)
+        let form = Form::load(catalog, &NoResolve, &limits, &mut diags);
+        (form, diags)
     }
 
     /// The single field a one-field fixture is expected to have.
@@ -1442,6 +1466,65 @@ mod tests {
     fn rewriting_an_absent_key_appends_it() {
         let out = rewrite(&Dict::new(), &Name::from("V"), text("v"));
         assert_eq!(out.len(), 1);
+    }
+
+    #[test]
+    fn a_field_with_no_name_anywhere_in_its_ancestry_is_dropped() {
+        // ISO 32000-1 §12.7.3.2: a field is addressed by its fully qualified
+        // name, and this one has none — no `/T` on itself and no `/Parent`
+        // carrying one — so no action, export or script could ever name it.
+        // `AddTerminalField` drops it (`cpdf_interactiveform.cpp:914-917`).
+        let catalog = catalog_with(vec![Object::Dict(dict(&[
+            ("FT", name("Tx")),
+            ("V", text("unreachable")),
+        ]))]);
+        let (form, diags) = load_with_diags(&catalog);
+        let form = form.expect("an AcroForm is still a form");
+        assert!(form.is_empty(), "an unnamed terminal field is not a field");
+        assert!(diags.contains(&pdfrum_common::DiagKind::FieldSkippedNoName));
+    }
+
+    #[test]
+    fn unnamed_fields_do_not_collapse_into_one() {
+        // The reason the drop is the *correct* answer and not merely the
+        // oracle's: `name` is the identity the merge below keys on, so
+        // keeping the empty name would fold every unnamed field in the
+        // document into a single field carrying all their widgets — a field
+        // that is not in the file. Two unnamed entries plus a real one must
+        // leave exactly the real one.
+        let unnamed = || Object::Dict(dict(&[("FT", name("Tx")), ("V", text("a"))]));
+        let catalog = catalog_with(vec![
+            unnamed(),
+            unnamed(),
+            Object::Dict(dict(&[
+                ("FT", name("Tx")),
+                ("T", text("real")),
+                ("V", text("b")),
+            ])),
+        ]);
+        let form = load(&catalog).expect("a form");
+        assert_eq!(only_field(&form).name, "real");
+    }
+
+    #[test]
+    fn a_field_named_only_by_an_ancestor_survives() {
+        // The drop is about the *fully qualified* name, not about `/T` on the
+        // node itself: a kid with no `/T` inherits its parent's name and is
+        // addressable as it, so it must be kept.
+        let kid = Object::Dict(dict(&[
+            ("Subtype", name("Widget")),
+            (
+                "Parent",
+                Object::Dict(dict(&[("FT", name("Tx")), ("T", text("parent"))])),
+            ),
+        ]));
+        let catalog = catalog_with(vec![Object::Dict(dict(&[
+            ("FT", name("Tx")),
+            ("T", text("parent")),
+            ("Kids", Object::Array(Array::of([kid]))),
+        ]))]);
+        let form = load(&catalog).expect("a form");
+        assert_eq!(only_field(&form).name, "parent");
     }
 
     #[test]

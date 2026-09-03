@@ -319,6 +319,9 @@ pub enum DiagKind {
     FormResourcesInvalid,
     /// A form field carries no `/FT` on itself or its parent.
     FieldSkippedNoType,
+    /// A form field's fully-qualified name came out empty, so it was dropped:
+    /// the name is a field's identity and its only address.
+    FieldSkippedNoName,
     /// A structure element was dropped: its page did not match, or its parent
     /// could not be linked.
     StructElementDropped,
