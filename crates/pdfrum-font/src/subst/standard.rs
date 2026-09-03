@@ -4,7 +4,7 @@
 //! Every PDF reader is required to supply these fourteen faces. PDFium ships
 //! Foxit's bare-CFF clones of all fourteen plus two Multiple-Master faces for
 //! everything else, and they are what makes the substitution ladder always
-//! terminate in *something* (`docs/design/pdfrum-font.md` §1.13).
+//! terminate in *something*.
 
 use super::tables::{ALT_FONT_NAMES, BASE14_FONT_NAMES};
 

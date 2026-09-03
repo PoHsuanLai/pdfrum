@@ -1,8 +1,7 @@
 //! Advance widths: `/Widths` for simple fonts, `/W` and `/W2` for CID fonts.
 //!
 //! Two unrelated formats sharing a module because they answer the same
-//! question. Both have damage behaviors that real files depend on
-//! (`docs/design/pdfrum-font.md` §1.5, §1.10.2).
+//! question. Both have damage behaviors that real files depend on.
 
 use crate::names;
 use pdfrum_cmap::{CharCode, Cid};
@@ -19,9 +18,8 @@ use pdfrum_object::{Array, Dict, Object, Resolve};
 /// anyway — not by name, since `mod widths` is private, but through the
 /// **value**, because [`SimpleWidths::raw`] was a public array documented as
 /// holding it. A caller could read `0xffff` out of a public field with no
-/// exported name to compare it against and no way to `use` one, which is the
-/// worst form of the defect `docs/design/idiomatic-api.md` §C names (Tier 1
-/// item 4). The array is now private and [`SimpleWidths::get`] — which
+/// exported name to compare it against and no way to `use` one. The array is
+/// now private and [`SimpleWidths::get`] — which
 /// already had exactly the right shape — is the only way in.
 pub(crate) const WIDTH_UNSET: u16 = 0xffff;
 

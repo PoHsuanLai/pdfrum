@@ -2,7 +2,7 @@
 //!
 //! PDFium drives FreeType, which carries a *selected charmap* as face state
 //! and mutates it as the glyph ladders walk. Selecting a charmap on a shared
-//! face is exactly the kind of hidden mutation STYLE.md §1 forbids, so the
+//! face is exactly the kind of hidden mutation this crate avoids, so the
 //! selection becomes a value — [`Charmap`] — that the ladders pass to every
 //! lookup. The ladders' sequence of "select this, try that" reads the same;
 //! nothing is hidden in the face.
@@ -437,11 +437,9 @@ impl Face {
     /// hinting, so the interpreter always fits to a 64-pixel grid whose
     /// alignment is then scaled away.
     ///
-    /// The consequence measured in `docs/status/pdfrum-render.md` wave 4 —
-    /// that this moves outline points by about 1/25 of a device pixel at 9 pt —
-    /// is correct and was read as "not worth porting". Wave 7 measured what
-    /// 1/25 of a pixel is *worth* once the glyph is rasterized the oracle's
-    /// way, and the answer is up to 10 counts per pixel on a 6 pt stem.
+    /// The measured consequence: this moves outline points by about 1/25 of a
+    /// device pixel at 9 pt, which is up to 10 counts per pixel on a 6 pt stem
+    /// once the glyph is rasterized the oracle's way.
     pub(crate) const HINT_PPEM: f32 = 64.0;
 
     /// A glyph's outline grid-fitted at [`Self::HINT_PPEM`], in **64ths of an

@@ -2,11 +2,9 @@
 //!
 //! PDFium compiles FreeType's `pstables.h` into `fxge` and wraps it in two
 //! functions. We take the same table from `read-fonts`' `agl` feature, which
-//! is the choice PDFium's own skrifa bridge makes
-//! (`docs/design/pdfrum-font.md` §1.7, D6). Both the synthetic `uniXXXX` /
-//! `uXXXX`–`uXXXXXX` spellings and the `.variant` suffix strip are covered
-//! there, so the ~30 lines the brief budgeted for reimplementing them are not
-//! needed.
+//! is the choice PDFium's own skrifa bridge makes. Both the synthetic
+//! `uniXXXX` / `uXXXX`–`uXXXXXX` spellings and the `.variant` suffix strip are
+//! covered there, so neither is reimplemented here.
 
 use read_fonts::ps::agl;
 

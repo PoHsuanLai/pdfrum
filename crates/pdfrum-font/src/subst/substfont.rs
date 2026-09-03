@@ -6,7 +6,7 @@
 //! outline and dilating it, by amounts read from three hand-tuned tables. The
 //! tables are ported verbatim — including three entries in the middle of one
 //! of them that look like transcription errors and are part of the observable
-//! output (`docs/design/pdfrum-font.md` §1.14).
+//! output.
 
 use super::charset::Charset;
 #[cfg(test)]

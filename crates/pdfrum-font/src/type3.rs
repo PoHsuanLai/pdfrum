@@ -4,7 +4,7 @@
 //! are `/CharProcs` entries that the page layer executes as content streams in
 //! the font's own coordinate system. This crate's job is therefore only to
 //! resolve a character code to the *name* of a procedure, and to carry the
-//! matrix and widths that place it (`docs/design/pdfrum-font.md` §1.11).
+//! matrix and widths that place it.
 
 use crate::encoding::{FontEncoding, adobe_char_name};
 use crate::{

@@ -3,7 +3,7 @@
 //! A non-embedded Japanese font is substituted with a face that has only
 //! upright glyphs, so PDFium rotates and shifts a hundred and fifty-four of
 //! them itself. The table is per-CID and hand-tuned; there is no rule behind
-//! it (`docs/design/pdfrum-font.md` §1.10.3).
+//! it.
 
 use pdfrum_cmap::Cid;
 use pdfrum_common::kurbo::Rect;

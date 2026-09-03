@@ -16,7 +16,7 @@ pub use pdfrum_cmap::{CharCode, Cid};
 /// order for a Type 1 one. [`pdfrum_type1::Gid`] names that second space in
 /// its own crate and stays a separate type; the `From` impls below are the
 /// conversion, and they live here because this is the one crate that holds
-/// both (`docs/design/idiomatic-api.md` §B.3, and §A.11's step-12 ruling).
+/// both index spaces.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct Gid(pub u16);
 
@@ -128,8 +128,7 @@ impl FontFlags {
     pub const FORCE_BOLD: Self = Self(1 << 18);
     /// **Not** a PDF flag. PDFium sets this bit when the descriptor carried a
     /// complete enough metric set to be trusted, and the substitution ladder
-    /// discards the caller's weight and slant entirely when it is absent
-    /// (`docs/design/pdfrum-font.md` §1.2, §1.12 step 0).
+    /// discards the caller's weight and slant entirely when it is absent.
     pub const USE_EXTERN_ATTR: Self = Self(1 << 19);
 
     /// No bit set.

@@ -4,7 +4,7 @@
 //! punctuation than it does horizontally, and says so through the `vert` and
 //! `vrt2` features. `read-fonts` parses the table; what is ported here is
 //! PDFium's **selection policy**, which is not what the OpenType specification
-//! prescribes (`docs/design/pdfrum-font.md` §1.10.6).
+//! prescribes.
 
 use crate::GlyphSource;
 use pdfrum_common::{DiagKind, Diagnostics, Severity};

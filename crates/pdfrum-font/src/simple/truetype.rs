@@ -3,8 +3,7 @@
 //! Five rungs, each with its own "did anything map?" test, tried in order
 //! until one succeeds. Unlike the Type 1 ladder this one is charmap-first: a
 //! TrueType font's glyph names are optional and often absent, so the `cmap`
-//! table is the primary route and names are the rescue
-//! (`docs/design/pdfrum-font.md` §1.9).
+//! table is the primary route and names are the rescue.
 
 use super::{LadderContext, char_index, name_index};
 use crate::encoding::{

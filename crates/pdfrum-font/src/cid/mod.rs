@@ -3,8 +3,7 @@
 //!
 //! This is the one font kind whose load can genuinely **fail** — four ways,
 //! all of which mean "the resource is not there" and cause the content-stream
-//! interpreter to skip text using the font
-//! (`docs/design/pdfrum-font.md` §1.10).
+//! interpreter to skip text using the font.
 
 mod glyph;
 mod gsub;

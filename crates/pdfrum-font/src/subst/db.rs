@@ -88,7 +88,7 @@ impl FaceInfo {
     /// The early-exit the substitution ladder takes: a face scoring the
     /// maximum cannot be beaten, so the search stops. This is the predicate
     /// `SIMILARITY_SCORE_MAX` used to be public for — the caller wants the
-    /// question, not the number (`docs/design/idiomatic-api.md` §C).
+    /// question, not the number.
     #[must_use]
     pub fn is_exact_match(
         &self,
@@ -112,8 +112,8 @@ impl FaceInfo {
 
 /// The highest score [`FaceInfo::similarity_score`] can return.
 ///
-/// **Private on purpose** (`docs/design/idiomatic-api.md` §C, Tier 1 item 6).
-/// It was public solely so a caller could equality-test a score against it,
+/// **Private on purpose.** It was public solely so a caller could
+/// equality-test a score against it,
 /// which is asking the number to answer a question;
 /// [`FaceInfo::is_exact_match`] is that question, and it is what the one
 /// caller in this crate now asks.
@@ -145,7 +145,7 @@ pub fn find_family_name_match(family: &str, installed: &str) -> bool {
 
 /// A source of installed faces.
 ///
-/// A genuine seam by STYLE.md §2b's bar: there are two real implementations —
+/// A genuine seam: there are two real implementations —
 /// [`SystemFontDb`] over the operating system's fonts, and [`TestFontDb`] over
 /// an explicit list, which the substitution tests and the hermetic
 /// `--font-dir` runs both need. Threaded as `&impl FontDb`, never `dyn`.

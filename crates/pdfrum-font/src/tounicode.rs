@@ -7,7 +7,7 @@
 //! happy path: a block whose declared count disagrees with its contents is
 //! discarded whole, a code above `0xFFFF` invalidates its entire block, and
 //! where two entries collide the numerically smaller value wins in **both**
-//! directions (`docs/design/pdfrum-font.md` §1.6).
+//! directions.
 
 use pdfrum_cmap::{CharCode, CidSet, Words};
 use pdfrum_common::{DiagKind, Diagnostics, Limits, Severity};
@@ -61,7 +61,7 @@ impl ToUnicode {
     ///
     /// A stored value of `0x10000` or above is masked to its low 16 bits
     /// before the U+FFFF test, so a code can map to a single NUL — measured
-    /// against the oracle, not inferred (see `docs/status/pdfrum-font.md`).
+    /// against the oracle, not inferred.
     #[must_use]
     pub fn lookup(&self, code: CharCode) -> SmallVec<[char; 2]> {
         let Some(&value) = self.map.get(&code.0) else {
@@ -583,8 +583,7 @@ fn commit_range(range: &Range, map: &mut ToUnicode) {
 /// four hex digits, no element starts above `0xFFFF` either, which makes the
 /// carry arm **unreachable from any input at all**. It is written out anyway
 /// because the algorithm has one and a reader should be able to see why it
-/// never runs. Measured against the oracle, not inferred; the probe and its
-/// output are recorded in `docs/status/pdfrum-font.md`.
+/// never runs. Measured against the oracle, not inferred.
 fn string_data_add(units: &[u32]) -> Vec<u32> {
     let mut out: Vec<u32> = Vec::with_capacity(units.len() + 1);
     let mut value: u32 = 1;

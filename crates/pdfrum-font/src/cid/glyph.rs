@@ -5,8 +5,7 @@
 //! `CIDFontType2` either indexes a `/CIDToGIDMap` table or goes through a
 //! charmap. The **substituted** half is long, because a system face knows
 //! nothing about the document's CID collection and the ladder has to
-//! reconstruct a Unicode to look up instead
-//! (`docs/design/pdfrum-font.md` §1.10.4).
+//! reconstruct a Unicode to look up instead.
 
 use super::{CidFontKind, CidToGid, Type0Font, cid_charmap};
 use crate::encoding::{FaceEncoding, FontEncoding, adobe_char_name, unicode_from_adobe_name};
