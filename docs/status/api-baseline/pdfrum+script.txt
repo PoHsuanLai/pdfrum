@@ -231,6 +231,7 @@ pub fn pdfrum::FormSession<'a>::focused_text(&self) -> core::option::Option<allo
 pub fn pdfrum::FormSession<'a>::hover_for_page(&self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>) -> core::option::Option<usize>
 pub fn pdfrum::FormSession<'a>::is_index_selected(&self, usize) -> bool
 pub fn pdfrum::FormSession<'a>::key_down(&mut self, pdfrum_form::event::Key, pdfrum_form::event::Modifiers) -> pdfrum_form::update::Response
+pub fn pdfrum::FormSession<'a>::load_page(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>)
 pub fn pdfrum::FormSession<'a>::mouse_down(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, kurbo::point::Point, pdfrum_form::event::Modifiers) -> pdfrum_form::update::Response
 pub fn pdfrum::FormSession<'a>::mouse_move(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, kurbo::point::Point, pdfrum_form::event::Modifiers) -> pdfrum_form::update::Response
 pub fn pdfrum::FormSession<'a>::mouse_up(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, kurbo::point::Point, pdfrum_form::event::Modifiers) -> pdfrum_form::update::Response
@@ -239,6 +240,7 @@ pub fn pdfrum::FormSession<'a>::new(&'a pdfrum::Document) -> pdfrum::FormSession
 pub fn pdfrum::FormSession<'a>::popup_for_page(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>) -> core::option::Option<pdfrum_form::popup::PopupView>
 pub fn pdfrum::FormSession<'a>::replace_selection(&mut self, &str) -> bool
 pub fn pdfrum::FormSession<'a>::scripts(&self) -> core::option::Option<&pdfrum_form::script::ScriptCascade>
+pub fn pdfrum::FormSession<'a>::scripts_mut(&mut self) -> core::option::Option<&mut pdfrum_form::script::ScriptCascade>
 pub fn pdfrum::FormSession<'a>::scroll_view(&mut self, pdfrum_form::session::AnnotId) -> core::option::Option<pdfrum_form::popup::ScrollView>
 pub fn pdfrum::FormSession<'a>::selected_text(&self) -> core::option::Option<alloc::string::String>
 pub fn pdfrum::FormSession<'a>::set_index_selected(&mut self, usize, bool) -> bool

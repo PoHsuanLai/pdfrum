@@ -409,15 +409,17 @@ fn the_af_library_is_reachable_as_bare_globals() {
 /// the plain lines. Getting that interleaving right is a scoring requirement.
 #[test]
 fn an_af_alert_is_titled_by_its_caller_and_interleaves() {
-    let mut cascade = session();
-    // `AFRange_Validate` alerts when the value is outside the range.
-    assert!(cascade.run(
+    // Through a real trigger, because `event.value` is only live inside one:
+    // its setter answers `Bad event type.` in a realm nothing has fired,
+    // exactly as upstream's does.
+    let mut cascade = with_script(
+        "V",
+        // `AFRange_Validate` alerts when the value is outside the range.
         "app.alert('before');\n\
-         event.value = '5';\n\
          AFRange_Validate(true, 10, false, 0);\n\
          app.alert('after');",
-        "test"
-    ));
+    );
+    cascade.validate(&field(), "5");
     let text = cascade.transcript_text();
     let lines: Vec<&str> = text.lines().collect();
     assert_eq!(lines.first(), Some(&"Alert: before"));
@@ -434,14 +436,260 @@ fn an_af_alert_is_titled_by_its_caller_and_interleaves() {
 /// every `AF*_Format` does.
 #[test]
 fn a_format_function_writes_the_event_value() {
-    let mut cascade = session();
-    assert!(cascade.run(
-        "event.value = '1234.5';\n\
-         AFNumber_Format(2, 0, 0, 0, '$', true);\n\
+    let mut cascade = with_script(
+        "F",
+        "AFNumber_Format(2, 0, 0, 0, '$', true);\n\
          app.alert(event.value);",
-        "test"
-    ));
+    );
+    assert_eq!(
+        cascade.format(&field(), "1234.5"),
+        Some("$1,234.50".to_string()),
+        "the formatter's answer is what the appearance draws"
+    );
     assert_eq!(cascade.transcript_text(), "Alert: $1,234.50\n");
+}
+
+// ---- the `event` object's four property shapes ----
+
+/// A session whose one field carries the named pointer or focus trigger.
+fn with_pointer_script(trigger: &str, source: &str) -> ScriptCascade {
+    let mut cascade = session();
+    let mut actions = FieldActions::default();
+    match trigger {
+        "E" => actions.mouse_enter = Some(source.to_string()),
+        "X" => actions.mouse_exit = Some(source.to_string()),
+        "D" => actions.mouse_down = Some(source.to_string()),
+        "U" => actions.mouse_up = Some(source.to_string()),
+        "Fo" => actions.focus = Some(source.to_string()),
+        _ => actions.blur = Some(source.to_string()),
+    }
+    cascade.set_field(0, "Text Box", "typed", actions);
+    cascade
+}
+
+/// **A read-only property throws on assignment rather than ignoring it.**
+///
+/// The distinction a data property cannot make: a non-writable data property
+/// is a *silent* no-op in sloppy mode, and every one of these goldens asserts
+/// a thrown message.
+#[test]
+fn a_read_only_event_property_throws_on_assignment() {
+    let mut cascade = with_script(
+        "F",
+        "try { event.name = 'boo'; app.alert('no throw'); }\n\
+         catch (e) { app.alert('' + e); }",
+    );
+    cascade.format(&field(), "x");
+    assert_eq!(
+        cascade.transcript_text(),
+        "Alert: event.name: Operation not supported.\n"
+    );
+}
+
+/// The three `rich*` names read `undefined`, take any assignment, and keep
+/// reading `undefined`.
+#[test]
+fn the_rich_event_properties_accept_and_discard() {
+    let mut cascade = with_script(
+        "F",
+        "app.alert('' + event.richValue);\n\
+         app.alert('' + (event.richValue = 'boo'));\n\
+         app.alert('' + event.richValue);",
+    );
+    cascade.format(&field(), "x");
+    assert_eq!(
+        cascade.transcript_text(),
+        "Alert: undefined\nAlert: boo\nAlert: undefined\n"
+    );
+}
+
+/// `event.fieldFull` **throws on read** outside a Keystroke, and the message
+/// is upstream's own bare `unrecognized event` rather than one of the
+/// `JSMessage` table's.
+#[test]
+fn field_full_throws_outside_a_keystroke() {
+    let mut cascade = with_script(
+        "F",
+        "try { app.alert('' + event.fieldFull); }\n\
+         catch (e) { app.alert('' + e); }",
+    );
+    cascade.format(&field(), "x");
+    assert_eq!(
+        cascade.transcript_text(),
+        "Alert: event.fieldFull: unrecognized event\n"
+    );
+
+    let mut keystroke = with_script("K", "app.alert('' + event.fieldFull);");
+    keystroke.keystroke_commit(&field(), "x");
+    assert_eq!(keystroke.transcript_text(), "Alert: false\n");
+}
+
+/// The two selection indices are live for a Keystroke and `undefined`
+/// everywhere else — and **assigning to one outside a Keystroke is silently
+/// dropped**, not an error.
+#[test]
+fn the_selection_indices_are_live_only_for_a_keystroke() {
+    let mut cascade = with_script(
+        "F",
+        "app.alert('' + event.selStart);\n\
+         event.selStart = 3;\n\
+         app.alert('' + event.selStart);",
+    );
+    cascade.format(&field(), "x");
+    assert_eq!(
+        cascade.transcript_text(),
+        "Alert: undefined\nAlert: undefined\n"
+    );
+}
+
+/// `event.value` refuses a boolean, `null` and `undefined` — and takes a
+/// **number**, stringified.
+#[test]
+fn event_value_refuses_three_types_and_stringifies_a_number() {
+    let mut cascade = with_script(
+        "F",
+        "try { event.value = true; } catch (e) { app.alert('' + e); }\n\
+         try { event.value = null; } catch (e) { app.alert('' + e); }\n\
+         event.value = 2;\n\
+         app.alert('' + event.value);",
+    );
+    cascade.format(&field(), "x");
+    assert_eq!(
+        cascade.transcript_text(),
+        "Alert: event.value: Set not possible, invalid or unknown.\n\
+         Alert: event.value: Set not possible, invalid or unknown.\n\
+         Alert: 2\n"
+    );
+}
+
+/// **`event.rc` resets to `false`** for a kind whose caller does not read it
+/// back, and to `true` for the three that do.
+#[test]
+fn event_rc_resets_false_except_for_the_three_kinds_that_read_it() {
+    let mut format = with_script("F", "app.alert('' + event.rc);");
+    format.format(&field(), "x");
+    assert_eq!(format.transcript_text(), "Alert: false\n");
+
+    let mut validate = with_script("V", "app.alert('' + event.rc);");
+    validate.validate(&field(), "x");
+    assert_eq!(validate.transcript_text(), "Alert: true\n");
+}
+
+// ---- the six pointer and focus triggers ----
+
+/// Each of the six fires its own script and names itself, and **the two
+/// mouse-button names carry a space**.
+#[test]
+fn each_pointer_trigger_names_itself() {
+    use crate::cascade::PointerTrigger;
+    let cases = [
+        ("E", PointerTrigger::Enter, "Mouse Enter"),
+        ("X", PointerTrigger::Exit, "Mouse Exit"),
+        ("D", PointerTrigger::Down, "Mouse Down"),
+        ("U", PointerTrigger::Up, "Mouse Up"),
+        ("Fo", PointerTrigger::Focus, "Focus"),
+        ("Bl", PointerTrigger::Blur, "Blur"),
+    ];
+    for (key, trigger, expected) in cases {
+        let mut cascade = with_pointer_script(key, "app.alert(event.name);");
+        cascade.pointer(&field(), trigger, crate::Modifiers::NONE);
+        assert_eq!(
+            cascade.transcript_text(),
+            format!("Alert: {expected}\n"),
+            "trigger {key}"
+        );
+    }
+}
+
+/// **A mouse-down is a user gesture and a mouse-enter is not**, which is the
+/// whole of what decides whether `Doc.submitForm` is permitted.
+#[test]
+fn only_three_triggers_are_a_user_gesture() {
+    use crate::cascade::PointerTrigger;
+    let source = "try { this.submitForm('u'); app.alert('allowed'); }\n\
+                  catch (e) { app.alert('' + e); }";
+
+    // Past the gate, and the bytes are an FDF file with an empty `/Fields`:
+    // this session has no document model, so there is nothing to submit and
+    // the empty file is the honest answer rather than a refusal.
+    let mut down = with_pointer_script("D", source);
+    down.pointer(&field(), PointerTrigger::Down, crate::Modifiers::NONE);
+    let text = down.transcript_text();
+    assert!(
+        text.starts_with("Doc Submit Form: url=u + 85 data bytes:"),
+        "the gesture must let the submission through, got {text}"
+    );
+    assert!(text.ends_with("Alert: allowed\n"), "{text}");
+
+    let mut enter = with_pointer_script("E", source);
+    enter.pointer(&field(), PointerTrigger::Enter, crate::Modifiers::NONE);
+    assert_eq!(
+        enter.transcript_text(),
+        "Alert: Document.submitForm: User gesture required.\n"
+    );
+}
+
+/// **`event.value` is not live for the four mouse triggers** and is for the
+/// two focus ones, which is upstream's own split: only `OnField_Focus` and
+/// `OnField_Blur` take a value pointer.
+#[test]
+fn a_mouse_trigger_has_no_value_and_a_focus_trigger_does() {
+    use crate::cascade::PointerTrigger;
+    let source = "try { app.alert('' + event.value); }\n\
+                  catch (e) { app.alert('' + e); }";
+
+    let mut down = with_pointer_script("D", source);
+    down.pointer(&field(), PointerTrigger::Down, crate::Modifiers::NONE);
+    assert_eq!(
+        down.transcript_text(),
+        "Alert: event.value: Object no longer exists.\n"
+    );
+
+    let mut focus = with_pointer_script("Fo", source);
+    focus.pointer(&field(), PointerTrigger::Focus, crate::Modifiers::NONE);
+    assert_eq!(focus.transcript_text(), "Alert: typed\n");
+}
+
+/// `event.modifier` is the **control** key and `event.shift` is Shift; Alt
+/// reaches neither.
+#[test]
+fn the_two_modifier_flags_are_control_and_shift() {
+    use crate::cascade::PointerTrigger;
+    let source = "app.alert(event.modifier + ',' + event.shift);";
+    let cases = [
+        (crate::Modifiers::NONE, "false,false"),
+        (crate::Modifiers::CONTROL, "true,false"),
+        (crate::Modifiers::SHIFT, "false,true"),
+        (crate::Modifiers::ALT, "false,false"),
+    ];
+    for (held, expected) in cases {
+        let mut cascade = with_pointer_script("D", source);
+        cascade.pointer(&field(), PointerTrigger::Down, held);
+        assert_eq!(cascade.transcript_text(), format!("Alert: {expected}\n"));
+    }
+}
+
+/// A field with no script for the trigger runs nothing and says nothing —
+/// which is nearly every field in nearly every document.
+#[test]
+fn a_field_without_the_trigger_runs_nothing() {
+    use crate::cascade::PointerTrigger;
+    let mut cascade = with_pointer_script("D", "app.alert('fired');");
+    cascade.pointer(&field(), PointerTrigger::Up, crate::Modifiers::NONE);
+    assert_eq!(cascade.transcript_text(), "");
+}
+
+/// **Loading a page runs a text field's formatter**, and everything the
+/// script asked the host to do on the way survives even though the display
+/// string is dropped.
+#[test]
+fn a_page_load_runs_the_formatter_for_its_side_effects() {
+    let mut cascade = with_script("F", "app.alert('formatted ' + event.value);");
+    // The value the *field* holds, which the caller installed — a page load
+    // has no typing to offer, so `event.value` is `/V`.
+    cascade.set_field_value(0, "stored");
+    assert!(cascade.format_on_load(&field()));
+    assert_eq!(cascade.transcript_text(), "Alert: formatted stored\n");
 }
 
 // ---- the cascade hooks, actually running scripts ----

@@ -73,6 +73,11 @@ pub(crate) struct HostState {
     pub(crate) app_runtime_highlight: bool,
     /// `Doc.dirty` — the change mark, which a script may set and clear.
     pub(crate) dirty: bool,
+    /// The live `event` object's fields, as plain data.
+    ///
+    /// One per realm and re-`Initialize`d per trigger — see
+    /// [`super::event`] for why every field is reset every time.
+    pub(crate) event: super::event::EventState,
     /// The field a script asked for the keyboard for, by `/Fields` position.
     ///
     /// Recorded for the same reason: focus is the session's, and moving it
@@ -123,6 +128,7 @@ impl Default for HostState {
             dirty: false,
             calculate_requested: false,
             focus_requested: None,
+            event: super::event::EventState::default(),
         }
     }
 }

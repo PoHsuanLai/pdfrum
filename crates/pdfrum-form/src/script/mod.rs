@@ -17,9 +17,11 @@
 mod af;
 mod bind;
 mod doc;
+pub(crate) mod event;
 mod field;
 mod host;
 pub mod model;
+mod submit;
 pub mod transcript;
 
 use std::rc::Rc;
@@ -28,6 +30,7 @@ use boa_engine::context::Context;
 use pdfrum_common::{Diagnostics, Limits};
 
 use crate::cascade::{Cascade, FieldRef, FieldWrites, Keystroke, KeystrokeOutcome};
+use event::EventState;
 
 pub use model::{AnnotModel, DocumentModel, FieldModel, FieldModelFlags, FieldModelKind};
 pub use transcript::TranscriptLine;
@@ -200,12 +203,20 @@ impl ScriptFailure {
     }
 }
 
-/// The four `/AA` entries a field can carry, as their JavaScript source.
+/// The ten `/AA` entries a field can carry, as their JavaScript source.
 ///
 /// `None` is the ordinary case and is not an absence to be filled in later:
 /// nearly every field in nearly every document has no script at all, and a
 /// hook with no script takes the permissive answer — which is `NoScripts`'s
 /// answer, and is correct rather than a fallback.
+///
+/// # Four value hooks and six event ones
+///
+/// The first four intervene in a *value*: they can rewrite what is typed,
+/// refuse a commit, compute another field or produce a display string. The
+/// six below them intervene in nothing — a pointer or focus script can talk
+/// to the host and read the form, and `event.value` throws for it — which is
+/// why they are fired rather than consulted.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct FieldActions {
     /// `/AA /K` — the keystroke hook, run per character and again on commit.
@@ -216,6 +227,18 @@ pub struct FieldActions {
     pub calculate: Option<String>,
     /// `/AA /F` — the format hook.
     pub format: Option<String>,
+    /// `/AA /E` — the pointer entered the widget.
+    pub mouse_enter: Option<String>,
+    /// `/AA /X` — the pointer left it.
+    pub mouse_exit: Option<String>,
+    /// `/AA /D` — a button went down over it.
+    pub mouse_down: Option<String>,
+    /// `/AA /U` — a button came up over it.
+    pub mouse_up: Option<String>,
+    /// `/AA /Fo` — the widget took the keyboard.
+    pub focus: Option<String>,
+    /// `/AA /Bl` — it lost the keyboard.
+    pub blur: Option<String>,
 }
 
 /// A `boa`-backed [`Cascade`].
@@ -424,46 +447,20 @@ impl ScriptCascade {
         )
     }
 
-    /// Sets `event`'s fields for one kind and runs the script.
+    /// Installs one trigger's `event` state and runs the script.
     ///
-    /// # Every kind resets every field first
+    /// # Every trigger resets every field first
     ///
-    /// Every field is written on every event, so a Validate event never sees
-    /// the selection a preceding Keystroke event wrote.
+    /// [`EventState::initialize`] is `CJS_EventContext::Initialize`: the
+    /// whole record goes back to its reset values before the trigger's own
+    /// fields are written, so a Validate script never sees the selection a
+    /// preceding Keystroke left.
     ///
     /// **Which fields are read back afterwards is where the kinds differ**,
     /// and that lives in the [`Cascade`] methods rather than here: a write to
-    /// a field that is dead for the kind lands in the object and is dropped.
-    fn run_event(&mut self, source: &str, live: &EventFields<'_>, whence: &str) -> bool {
-        let setup = format!(
-            "event.name = {};\n\
-             event.targetName = {};\n\
-             event.type = \"Field\";\n\
-             event.value = {};\n\
-             event.change = {};\n\
-             event.changeEx = \"\";\n\
-             event.selStart = {};\n\
-             event.selEnd = {};\n\
-             event.willCommit = {};\n\
-             event.fieldFull = {};\n\
-             event.commitKey = {};\n\
-             event.shift = false;\n\
-             event.modifier = false;\n\
-             event.keyDown = false;\n\
-             event.rc = true;\n",
-            quote(live.name),
-            quote(&live.target_name),
-            quote(&live.value),
-            quote(&live.change),
-            live.selection_start,
-            live.selection_end,
-            live.will_commit,
-            live.field_full,
-            live.commit_key,
-        );
-        if !self.run(&setup, whence) {
-            return false;
-        }
+    /// a field that is dead for the kind lands in the record and is dropped.
+    fn run_event(&mut self, source: &str, live: EventState, whence: &str) -> bool {
+        self.host.borrow_mut().event = live;
         self.run(source, whence)
     }
 
@@ -476,7 +473,50 @@ impl ScriptCascade {
             Trigger::Keystroke => actions.keystroke.clone(),
             Trigger::Validate => actions.validate.clone(),
             Trigger::Format => actions.format.clone(),
+            Trigger::Pointer(kind) => match kind {
+                event::EventKind::MouseEnter => actions.mouse_enter.clone(),
+                event::EventKind::MouseExit => actions.mouse_exit.clone(),
+                event::EventKind::MouseDown => actions.mouse_down.clone(),
+                event::EventKind::MouseUp => actions.mouse_up.clone(),
+                event::EventKind::Focus => actions.focus.clone(),
+                event::EventKind::Blur => actions.blur.clone(),
+                // The four value kinds never reach here: `Trigger::Pointer`
+                // is only built from the six above.
+                _ => None,
+            },
         }
+    }
+
+    /// Runs a field's `/AA /F` the way loading its page does, discarding the
+    /// display string.
+    ///
+    /// # Why a page load runs a formatter at all
+    ///
+    /// Reading a page builds every widget on it, and building a text field or
+    /// a combo box runs its format script so the *stored* value can be drawn
+    /// as a formatted one. The script's answer reaches the appearance and
+    /// never `/V`, and for a text field upstream then drops it — only a combo
+    /// box regenerates from it. What is **not** dropped is everything the
+    /// script asked the host to do on its way there, which is why a document
+    /// whose only script is a formatter still prints alerts on open.
+    ///
+    /// The `bool` is whether the script completed.
+    pub fn format_on_load(&mut self, field: &FieldRef) -> bool {
+        let Some(source) = self.script_for(field, Trigger::Format) else {
+            return true;
+        };
+        let mut live = EventState::initialize(event::EventKind::Format);
+        live.target_name.clone_from(&field.name);
+        live.target_index = field.index;
+        live.has_value = true;
+        live.value = self
+            .values
+            .get(&field.index.unwrap_or(u32::MAX))
+            .cloned()
+            .unwrap_or_default();
+        live.will_commit = true;
+        live.commit_key = 0;
+        self.run_event(&source, live, &field.name)
     }
 
     /// Installs one field's scripts, its name and its current value.
@@ -616,39 +656,66 @@ impl ScriptCascade {
         failures
     }
 
-    /// Reads `event.rc` back as JavaScript truthiness.
+    /// Reads `event.rc` back.
     ///
-    /// JavaScript truthiness, not a type check, so `event.rc = 'boo'` is
-    /// `true` — the oracle's behaviour, reproduced rather than tightened.
-    fn event_rc(&mut self) -> bool {
-        self.context
-            .eval(boa_engine::Source::from_bytes(b"!!event.rc"))
-            .is_ok_and(|value| value.to_boolean())
+    /// The slot is a `bool` and the setter coerced on the way in, so
+    /// `event.rc = 'boo'` reads back `true` — the oracle's behaviour,
+    /// reproduced rather than tightened.
+    fn event_rc(&self) -> bool {
+        self.host.borrow().event.rc
     }
 
-    /// Reads a string field back off `event`.
-    fn event_string(&mut self, field: &str) -> Option<String> {
-        let source = format!("String(event.{field})");
-        let value = self
-            .context
-            .eval(boa_engine::Source::from_bytes(source.as_bytes()))
-            .ok()?;
-        Some(
-            value
-                .to_string(&mut self.context)
-                .ok()?
-                .to_std_string_lossy(),
-        )
+    /// Reads `event.value` back.
+    fn event_value(&self) -> String {
+        self.host.borrow().event.value.clone()
     }
 
-    /// Reads an integer field back off `event`.
-    fn event_i32(&mut self, field: &str) -> Option<i32> {
-        let source = format!("event.{field}");
-        let value = self
-            .context
-            .eval(boa_engine::Source::from_bytes(source.as_bytes()))
-            .ok()?;
-        value.to_i32(&mut self.context).ok()
+    /// Reads `event.change` back.
+    fn event_change(&self) -> String {
+        self.host.borrow().event.change.clone()
+    }
+
+    /// Reads the two selection indices back.
+    fn event_selection(&self) -> (i32, i32) {
+        let host = self.host.borrow();
+        (host.event.sel_start, host.event.sel_end)
+    }
+
+    /// Runs one field's `/AA` script for a trigger that carries no value and
+    /// reads nothing back — the six mouse and focus entries.
+    ///
+    /// **The event is a full one**, `targetName` and the modifier flags and
+    /// all: a script on `/AA /D` reads `event.name == "Mouse Down"` and
+    /// `event.target.value`, and `Doc.submitForm` is permitted from it
+    /// because a mouse-down *is* a user gesture. What such a trigger cannot
+    /// do is change the value: `event.value` throws
+    /// `Object no longer exists.`, which is `has_value` being false.
+    fn run_pointer_trigger(
+        &mut self,
+        field: &FieldRef,
+        kind: event::EventKind,
+        pointer: PointerModifiers,
+    ) -> bool {
+        let Some(source) = self.script_for(field, Trigger::Pointer(kind)) else {
+            return true;
+        };
+        let mut live = EventState::initialize(kind);
+        live.target_name.clone_from(&field.name);
+        live.target_index = field.index;
+        live.modifier = pointer.modifier;
+        live.shift = pointer.shift;
+        // Focus and Blur carry the field's value; the four mouse kinds do
+        // not (`cjs_event_context.cpp:146-205` — only the two focus
+        // functions take a `WideString*`).
+        if matches!(kind, event::EventKind::Focus | event::EventKind::Blur) {
+            live.has_value = true;
+            live.value = self
+                .values
+                .get(&field.index.unwrap_or(u32::MAX))
+                .cloned()
+                .unwrap_or_default();
+        }
+        self.run_event(&source, live, &field.name)
     }
 }
 
@@ -661,68 +728,23 @@ enum Trigger {
     Validate,
     /// `/AA /F`.
     Format,
+    /// One of the six that fire on a pointer or the keyboard focus:
+    /// `/AA /E`, `/X`, `/D`, `/U`, `/Fo`, `/Bl`.
+    Pointer(event::EventKind),
 }
 
-/// The `event` fields one kind makes live (brief §4.4).
-struct EventFields<'a> {
-    name: &'a str,
-    /// `event.targetName` — the **fully-qualified** name, always set by value.
-    target_name: String,
-    /// `event.source`'s name. **Set only by Calculate**, so everywhere else
-    /// `event.source` is a field attached to the empty name — the oracle's
-    /// behaviour, reproduced rather than tidied.
-    source_name: Option<String>,
-    value: String,
-    change: String,
-    selection_start: i32,
-    selection_end: i32,
-    will_commit: bool,
-    field_full: bool,
-    commit_key: i32,
-}
-
-impl EventFields<'_> {
-    /// The `Initialize` defaults every kind starts from.
-    ///
-    /// `commit_key` resets to **`-1`**, not 0; only Keystroke and Format set
-    /// it to 0.
-    fn blank(name: &str) -> EventFields<'_> {
-        EventFields {
-            name,
-            target_name: String::new(),
-            source_name: None,
-            value: String::new(),
-            change: String::new(),
-            selection_start: 0,
-            selection_end: 0,
-            will_commit: false,
-            field_full: false,
-            commit_key: -1,
-        }
-    }
-}
-
-/// A JavaScript string literal, escaped.
+/// Whether a modifier key and Shift were held when a pointer event arrived.
 ///
-/// A field value is untrusted document content and goes into a script the
-/// engine then parses, so this is the one place where getting the escaping
-/// wrong would be a *code injection into our own sandbox*. Everything outside
-/// a small safe set is emitted as `\u{XXXX}`, which cannot end the literal
-/// whatever it is.
-fn quote(text: &str) -> String {
-    let mut out = String::with_capacity(text.len() + 2);
-    out.push('"');
-    for ch in text.chars() {
-        if ch.is_ascii_alphanumeric() || matches!(ch, ' ' | '.' | ',' | '-' | '_' | '+' | '/') {
-            out.push(ch);
-        } else {
-            for unit in ch.encode_utf16(&mut [0u16; 2]) {
-                let _ = std::fmt::Write::write_fmt(&mut out, format_args!("\\u{unit:04x}"));
-            }
-        }
-    }
-    out.push('"');
-    out
+/// Two `bool`s rather than a bitmask because that is all the `event` object
+/// exposes: `event.modifier` and `event.shift`, each read-only. Private
+/// because [`Cascade::pointer`] takes the session's own [`crate::Modifiers`]
+/// and this is what it narrows to.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+struct PointerModifiers {
+    /// `event.modifier` — Ctrl on Windows, Command elsewhere.
+    pub modifier: bool,
+    /// `event.shift`.
+    pub shift: bool,
 }
 
 impl Cascade for ScriptCascade {
@@ -736,32 +758,29 @@ impl Cascade for ScriptCascade {
         let Some(source) = self.script_for(field, Trigger::Keystroke) else {
             return KeystrokeOutcome::Accept(change);
         };
-        let live = EventFields {
-            name: "Keystroke",
-            target_name: field.name.clone(),
-            // Only Calculate sets a source.
-            source_name: None,
-            value: change.value.clone(),
-            change: change.change.clone(),
-            selection_start: change.selection_start,
-            selection_end: change.selection_end,
-            will_commit: false,
-            field_full: false,
-            // Keystroke and Format are the only kinds that set it to 0.
-            commit_key: 0,
-        };
-        if !self.run_event(&source, &live, &field.name) {
+        let mut live = EventState::initialize(event::EventKind::Keystroke);
+        live.target_name.clone_from(&field.name);
+        live.target_index = field.index;
+        live.has_value = true;
+        live.value.clone_from(&change.value);
+        live.change.clone_from(&change.change);
+        live.sel_start = change.selection_start;
+        live.sel_end = change.selection_end;
+        // Keystroke and Format are the only kinds that set it to 0.
+        live.commit_key = 0;
+        if !self.run_event(&source, live, &field.name) {
             // A script that threw or ran out of budget did not say "accept".
             return KeystrokeOutcome::Reject;
         }
         if !self.event_rc() {
             return KeystrokeOutcome::Reject;
         }
+        let (selection_start, selection_end) = self.event_selection();
         KeystrokeOutcome::Accept(Keystroke {
-            change: self.event_string("change").unwrap_or(change.change),
+            change: self.event_change(),
             value: change.value,
-            selection_start: self.event_i32("selStart").unwrap_or(change.selection_start),
-            selection_end: self.event_i32("selEnd").unwrap_or(change.selection_end),
+            selection_start,
+            selection_end,
         })
     }
 
@@ -772,20 +791,14 @@ impl Cascade for ScriptCascade {
         let Some(source) = self.script_for(field, Trigger::Keystroke) else {
             return true;
         };
-        let live = EventFields {
-            name: "Keystroke",
-            target_name: field.name.clone(),
-            // Only Calculate sets a source.
-            source_name: None,
-            value: value.to_string(),
-            change: String::new(),
-            selection_start: 0,
-            selection_end: 0,
-            will_commit: true,
-            field_full: false,
-            commit_key: 0,
-        };
-        self.run_event(&source, &live, &field.name) && self.event_rc()
+        let mut live = EventState::initialize(event::EventKind::Keystroke);
+        live.target_name.clone_from(&field.name);
+        live.target_index = field.index;
+        live.has_value = true;
+        live.value = value.to_string();
+        live.will_commit = true;
+        live.commit_key = 0;
+        self.run_event(&source, live, &field.name) && self.event_rc()
     }
 
     /// `/AA /V`. `event.rc` is the whole answer; a write to `event.value` is
@@ -794,10 +807,12 @@ impl Cascade for ScriptCascade {
         let Some(source) = self.script_for(field, Trigger::Validate) else {
             return true;
         };
-        let mut live = EventFields::blank("Validate");
+        let mut live = EventState::initialize(event::EventKind::Validate);
         live.target_name.clone_from(&field.name);
+        live.target_index = field.index;
+        live.has_value = true;
         live.value = value.to_string();
-        self.run_event(&source, &live, &field.name) && self.event_rc()
+        self.run_event(&source, live, &field.name) && self.event_rc()
     }
 
     /// `/AA /C`, over the whole calculation order.
@@ -825,22 +840,24 @@ impl Cascade for ScriptCascade {
                 continue;
             };
             let before = self.values.get(&index).cloned().unwrap_or_default();
-            let mut live = EventFields::blank("Calculate");
+            let mut live = EventState::initialize(event::EventKind::Calculate);
             live.target_name = self.names.get(&index).cloned().unwrap_or_default();
+            live.target_index = Some(index);
+            live.has_value = true;
             live.value.clone_from(&before);
             // `event.source` is meaningful only here, and it names the field
             // whose change provoked the sweep.
-            live.source_name = Some(trigger.name.clone());
+            live.source_name.clone_from(&trigger.name);
+            live.source_index = trigger.index;
 
-            if !self.run_event(&source, &live, &live.target_name.clone()) {
+            let whence = live.target_name.clone();
+            if !self.run_event(&source, live, &whence) {
                 continue;
             }
             if !self.event_rc() {
                 continue;
             }
-            let Some(after) = self.event_string("value") else {
-                continue;
-            };
+            let after = self.event_value();
             if after == before {
                 continue;
             }
@@ -848,6 +865,36 @@ impl Cascade for ScriptCascade {
             writes.set(index, after);
         }
         writes.leave();
+    }
+
+    /// One of the six pointer and focus `/AA` entries.
+    ///
+    /// The trigger decides which script and which `event.name`; the two
+    /// modifier flags are all the `event` object exposes of what was held.
+    fn pointer(
+        &mut self,
+        field: &FieldRef,
+        trigger: crate::cascade::PointerTrigger,
+        held: crate::Modifiers,
+    ) {
+        use crate::cascade::PointerTrigger;
+        let kind = match trigger {
+            PointerTrigger::Enter => event::EventKind::MouseEnter,
+            PointerTrigger::Exit => event::EventKind::MouseExit,
+            PointerTrigger::Down => event::EventKind::MouseDown,
+            PointerTrigger::Up => event::EventKind::MouseUp,
+            PointerTrigger::Focus => event::EventKind::Focus,
+            PointerTrigger::Blur => event::EventKind::Blur,
+        };
+        // `event.modifier` is the **control** key, not "any modifier":
+        // `CPWL_Wnd::IsCTRLpressed` is what every `On*` call passes
+        // (`fpdfsdk/formfiller/cffl_interactiveformfiller.cpp`), and
+        // `event.shift` is `IsSHIFTpressed`. Alt reaches neither.
+        let pointer = PointerModifiers {
+            modifier: held.contains(crate::Modifiers::CONTROL),
+            shift: held.contains(crate::Modifiers::SHIFT),
+        };
+        self.run_pointer_trigger(field, kind, pointer);
     }
 
     /// `/AA /F`.
@@ -861,24 +908,18 @@ impl Cascade for ScriptCascade {
     /// so a Format script's `event.rc` writes reach nothing.
     fn format(&mut self, field: &FieldRef, value: &str) -> Option<String> {
         let source = self.script_for(field, Trigger::Format)?;
-        let live = EventFields {
-            name: "Format",
-            target_name: field.name.clone(),
-            // Only Calculate sets a source.
-            source_name: None,
-            value: value.to_string(),
-            change: String::new(),
-            selection_start: 0,
-            selection_end: 0,
-            // Hard-coded, not inherited.
-            will_commit: true,
-            field_full: false,
-            commit_key: 0,
-        };
-        if !self.run_event(&source, &live, &field.name) {
+        let mut live = EventState::initialize(event::EventKind::Format);
+        live.target_name.clone_from(&field.name);
+        live.target_index = field.index;
+        live.has_value = true;
+        live.value = value.to_string();
+        // Hard-coded, not inherited.
+        live.will_commit = true;
+        live.commit_key = 0;
+        if !self.run_event(&source, live, &field.name) {
             return None;
         }
-        let formatted = self.event_string("value")?;
+        let formatted = self.event_value();
         (formatted != value).then_some(formatted)
     }
 }

@@ -16,7 +16,7 @@
 //! behaviour, bit for bit. A scripting implementation substitutes a different
 //! value for one parameter and changes no call site.
 //!
-//! # Why four methods and not five, or three
+//! # Why four value gates, and a fifth hook that gates nothing
 //!
 //! There are precisely four gates: a keystroke may be rewritten or rejected
 //! as it is typed; a commit may be rejected; other fields may be recalculated
@@ -24,6 +24,8 @@
 //! change the stored value. The first two are the same action dictionary
 //! distinguished only by whether a commit is imminent, which is why they are
 //! two methods over one key.
+
+use crate::event::Modifiers;
 
 /// A field, named the way a script would name it.
 ///
@@ -186,6 +188,37 @@ pub trait Cascade {
     fn format(&mut self, _field: &FieldRef, _value: &str) -> Option<String> {
         None
     }
+
+    /// A pointer or focus event reached a field.
+    ///
+    /// **This hook changes nothing and cannot refuse anything**, which is why
+    /// it returns `()` where the four above return an answer: the six `/AA`
+    /// entries it covers can talk to the host and read the form, and
+    /// `event.value` is not even live for them. A viewer runs them for their
+    /// side effects and carries on regardless.
+    ///
+    /// It is one method over six triggers rather than six methods because
+    /// nothing downstream branches on which one fired — the branch is inside
+    /// the implementation, on the `event` object it populates.
+    fn pointer(&mut self, _field: &FieldRef, _trigger: PointerTrigger, _held: Modifiers) {}
+}
+
+/// Which of the six pointer and focus `/AA` entries a [`Cascade::pointer`]
+/// call is for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PointerTrigger {
+    /// `/AA /E` — the pointer entered the widget's area.
+    Enter,
+    /// `/AA /X` — it left.
+    Exit,
+    /// `/AA /D` — a button went down over it.
+    Down,
+    /// `/AA /U` — a button came up over it.
+    Up,
+    /// `/AA /Fo` — the widget took the keyboard.
+    Focus,
+    /// `/AA /Bl` — it lost the keyboard.
+    Blur,
 }
 
 impl Keystroke {

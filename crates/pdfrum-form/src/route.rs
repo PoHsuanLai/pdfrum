@@ -17,7 +17,7 @@ use pdfrum_doc::ap::{self, TextFont};
 use pdfrum_doc::vt;
 use pdfrum_object::{Dict, Resolve};
 
-use crate::cascade::{Cascade, FieldRef, Keystroke, KeystrokeOutcome};
+use crate::cascade::{Cascade, FieldRef, Keystroke, KeystrokeOutcome, PointerTrigger};
 use crate::commit;
 use crate::edit::ops::{self, TextEdit};
 use crate::event::{Button, Event, Key, Modifiers, Point};
@@ -89,7 +89,9 @@ pub fn apply<R: Resolve>(
     event: Event,
 ) -> Response {
     match event {
-        Event::MouseMove { at, .. } => mouse_move(session, ctx, Point::narrow(at)),
+        Event::MouseMove { at, modifiers } => {
+            mouse_move(session, ctx, cascade, Point::narrow(at), modifiers)
+        }
         Event::MouseDown {
             button: Button::Left,
             at,
@@ -98,8 +100,8 @@ pub fn apply<R: Resolve>(
         Event::MouseUp {
             button: Button::Left,
             at,
-            ..
-        } => mouse_up(session, ctx, Point::narrow(at)),
+            modifiers,
+        } => mouse_up(session, ctx, cascade, Point::narrow(at), modifiers),
         // The right button reaches a widget but changes nothing and — the
         // asymmetry `focus::miss_drops_focus` records — does not drop focus
         // when it misses.
@@ -111,20 +113,30 @@ pub fn apply<R: Resolve>(
             button: Button::Right,
             ..
         } => Response::ignored(),
-        Event::DoubleClick { at, .. } => double_click(session, ctx, Point::narrow(at)),
+        Event::DoubleClick { at, modifiers } => {
+            double_click(session, ctx, cascade, Point::narrow(at), modifiers)
+        }
         Event::MouseWheel {
             at,
             delta,
             modifiers,
         } => wheel(session, ctx, Point::narrow(at), delta, modifiers),
-        Event::Focus { at, .. } => focus_at(session, ctx, cascade, Point::narrow(at)),
+        Event::Focus { at, modifiers } => {
+            focus_at(session, ctx, cascade, Point::narrow(at), modifiers)
+        }
         Event::KeyDown { key, modifiers } => key_down(session, ctx, cascade, key, modifiers),
         Event::Char { ch, modifiers } => char_typed(session, ctx, cascade, ch, modifiers),
     }
 }
 
 /// A pointer move. Drives hover, and extends a drag when one is live.
-fn mouse_move<R: Resolve>(session: &mut FormSession, ctx: &Context<'_, R>, at: Point) -> Response {
+fn mouse_move<R: Resolve>(
+    session: &mut FormSession,
+    ctx: &Context<'_, R>,
+    cascade: &mut dyn Cascade,
+    at: Point,
+    modifiers: Modifiers,
+) -> Response {
     let over = hit::annot_at_point(
         &ctx.page.candidates,
         session.focus.map(FocusTarget::annot),
@@ -132,7 +144,36 @@ fn mouse_move<R: Resolve>(session: &mut FormSession, ctx: &Context<'_, R>, at: P
         at.y,
     );
     let moved = session.hover != over;
+    let left = session.hover;
     session.hover = over;
+
+    // **The hover *edge* is what fires `/AA /X` and `/AA /E`**, in that
+    // order: `CPDFSDK_PageView::OnMouseMove` sends `OnMouseExit` to the
+    // annotation the pointer left and `OnMouseEnter` to the one it arrived
+    // at, and a move within one widget sends neither. Two calls rather than
+    // one, because a move from one widget straight onto another is both.
+    if moved {
+        if let Some(annot) = left {
+            fire_pointer(
+                session,
+                ctx,
+                cascade,
+                annot,
+                PointerTrigger::Exit,
+                modifiers,
+            );
+        }
+        if let Some(annot) = over {
+            fire_pointer(
+                session,
+                ctx,
+                cascade,
+                annot,
+                PointerTrigger::Enter,
+                modifiers,
+            );
+        }
+    }
 
     // An open dropdown carries `Styles::kListboxHoverSel`
     // (`cpwl_combo_box.cpp:210-211`), whose whole effect in
@@ -197,6 +238,12 @@ fn mouse_down<R: Resolve>(
     };
     let field = widget.field;
 
+    // `/AA /D` runs **before** focus moves: `CFFL_InteractiveFormFiller::
+    // OnLButtonDown` fires the action and only then hands the click to the
+    // form field, which is where focus is taken. So a document with all six
+    // scripts alerts `down` and then `focus`, in that order.
+    fire_pointer(session, ctx, cascade, id, PointerTrigger::Down, modifiers);
+
     let mut response = take_focus(session, ctx, cascade, FocusTarget::Widget(field, id));
     ensure_state(session, ctx, field);
 
@@ -235,7 +282,13 @@ fn mouse_down<R: Resolve>(
 }
 
 /// The primary button coming up: activate a toggle, end a drag.
-fn mouse_up<R: Resolve>(session: &mut FormSession, ctx: &Context<'_, R>, at: Point) -> Response {
+fn mouse_up<R: Resolve>(
+    session: &mut FormSession,
+    ctx: &Context<'_, R>,
+    cascade: &mut dyn Cascade,
+    at: Point,
+    modifiers: Modifiers,
+) -> Response {
     // The release **finishes** the drag before ending it. Dropping the anchor
     // first loses the last leg of the selection, which is the whole of it
     // when the pointer never moved between the intermediate positions and the
@@ -245,6 +298,27 @@ fn mouse_up<R: Resolve>(session: &mut FormSession, ctx: &Context<'_, R>, at: Poi
         .drag
         .and_then(|anchor| drag_to(session, ctx, anchor, at));
     session.drag = None;
+
+    // **The two `/AA` entries fire whether or not a drag ended here**, and
+    // before the drag's own answer is returned: upstream's `OnLButtonUp` runs
+    // `SetFocusAnnot` and `OnButtonUp` on every release that lands on a
+    // widget, and the selection the drag left is not something either of them
+    // consults. Firing them only on the no-drag path would make a click that
+    // moved one pixel run no script.
+    if let Some(id) = hit::widget_at_point(
+        &ctx.page.candidates,
+        session.focus.map(FocusTarget::annot),
+        ctx.permissions,
+        at.x,
+        at.y,
+    ) {
+        // `SetFocusAnnot` first, `OnButtonUp` second
+        // (`cffl_interactiveformfiller.cpp:213-250`) — so a document with
+        // both scripts alerts `focus` and then `up`.
+        fire_pointer(session, ctx, cascade, id, PointerTrigger::Focus, modifiers);
+        fire_pointer(session, ctx, cascade, id, PointerTrigger::Up, modifiers);
+    }
+
     if let Some(update) = finished {
         return Response::with(vec![update]);
     }
@@ -293,8 +367,24 @@ fn mouse_up<R: Resolve>(session: &mut FormSession, ctx: &Context<'_, R>, at: Poi
 fn double_click<R: Resolve>(
     session: &mut FormSession,
     ctx: &Context<'_, R>,
+    cascade: &mut dyn Cascade,
     at: Point,
+    modifiers: Modifiers,
 ) -> Response {
+    // A double click is an `OnLButtonDblClk`, which the form filler routes
+    // through `SetFocusAnnot` exactly as a release does — so `/AA /Fo` runs
+    // again even on the field that already holds focus, which is what
+    // `mouse_events`'s second `focus` alert records.
+    if let Some(annot) = session.focus.map(FocusTarget::annot) {
+        fire_pointer(
+            session,
+            ctx,
+            cascade,
+            annot,
+            PointerTrigger::Focus,
+            modifiers,
+        );
+    }
     let Some(field) = session.focused_field() else {
         return Response::ignored();
     };
@@ -398,6 +488,7 @@ fn focus_at<R: Resolve>(
     ctx: &Context<'_, R>,
     cascade: &mut dyn Cascade,
     at: Point,
+    modifiers: Modifiers,
 ) -> Response {
     let hit = hit::widget_at_point(
         &ctx.page.candidates,
@@ -413,6 +504,9 @@ fn focus_at<R: Resolve>(
         return Response::ignored();
     };
     let field = widget.field;
+    // The explicit focus verb is `SetFocusAnnot` directly, so `/AA /Fo` runs
+    // here for the same reason it runs on a release.
+    fire_pointer(session, ctx, cascade, id, PointerTrigger::Focus, modifiers);
     let mut response = take_focus(session, ctx, cascade, FocusTarget::Widget(field, id));
     ensure_state(session, ctx, field);
     response.absorb(redraw(session, ctx, field, id));
@@ -1712,6 +1806,32 @@ fn focus_ring<R: Resolve>(session: &FormSession, ctx: &Context<'_, R>) -> tab::F
         .map(|(_, focusable)| *focusable)
         .collect();
     tab::FocusRing::build(&focusables, ctx.page.tab_order)
+}
+
+/// Runs one of the six pointer and focus `/AA` entries for the field an
+/// annotation belongs to.
+///
+/// **Named by annotation rather than by field**, because that is what the
+/// hover and hit tests answer with: a field with two widgets fires the
+/// trigger for the one the pointer is actually over. A widget the page's
+/// field list does not reach fires nothing, which is what `field_ref`
+/// answering `None` means.
+fn fire_pointer<R: Resolve>(
+    session: &FormSession,
+    ctx: &Context<'_, R>,
+    cascade: &mut dyn Cascade,
+    annot: AnnotId,
+    trigger: PointerTrigger,
+    modifiers: Modifiers,
+) {
+    let _ = session;
+    let Some(widget) = ctx.page.widgets.iter().find(|w| w.id == annot) else {
+        return;
+    };
+    let Some(field) = field_ref(ctx, widget.field) else {
+        return;
+    };
+    cascade.pointer(&field, trigger, modifiers);
 }
 
 /// How a field a caller is leaving named itself to its scripts.

@@ -86,6 +86,27 @@ impl DocumentModel {
         self.fields.get(index)
     }
 
+    /// Every terminal field a name reaches, in `/Fields` order.
+    ///
+    /// `CountFields(name)` is this list's length and `GetField(j, name)` is
+    /// its `j`th entry, so a name that is a whole subtree answers every leaf
+    /// under it rather than one — which is what makes
+    /// `AFSimple_Calculate('SUM', ['Group'])` add a group's fields.
+    #[must_use]
+    pub fn fields_named(&self, name: &str) -> Vec<&FieldModel> {
+        match self.node_of(name) {
+            FieldNode::Missing => Vec::new(),
+            FieldNode::Root => self.fields.iter().collect(),
+            FieldNode::Named(prefix) => {
+                let under = format!("{prefix}.");
+                self.fields
+                    .iter()
+                    .filter(|f| f.name == prefix || f.name.starts_with(&under))
+                    .collect()
+            }
+        }
+    }
+
     /// The position of the field `Doc.getField(name)` resolves to.
     ///
     /// # A name may be a whole subtree, and it answers the first leaf under it
@@ -344,6 +365,9 @@ pub struct FieldModelFlags {
     pub read_only: bool,
     /// Bit 2 — `Field.required`.
     pub required: bool,
+    /// Bit 3 — the field is not submitted. No `Field` property reads it;
+    /// `Doc.submitForm`'s field walk is what it gates.
+    pub no_export: bool,
     /// Bit 13 — `Field.multiline`.
     pub multiline: bool,
     /// Bit 14 — `Field.password`.
@@ -654,6 +678,9 @@ fn read_field<R: pdfrum_object::Resolve>(
         flags: FieldModelFlags {
             read_only: flags.is_read_only(),
             required: flags.is_required(),
+            // `/Ff` bit 3, which `FieldFlags` has no predicate for because
+            // nothing in the appearance path reads it either.
+            no_export: flags.bits() & (1 << 2) != 0,
             multiline: flags.is_multiline(),
             password: flags.is_password(),
             // `/Ff` bit 21, which `FieldFlags` has no predicate for because

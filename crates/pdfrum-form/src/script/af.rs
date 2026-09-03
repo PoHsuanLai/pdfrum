@@ -91,12 +91,27 @@ fn truthy(args: &[JsValue], index: usize) -> bool {
     args.get_or_undefined(index).to_boolean()
 }
 
-/// Rejects a call with the wrong number of arguments.
+/// Rejects a call with **too many or too few** arguments.
 ///
-/// Every `AF*` function checks its own arity upstream and answers the same
-/// message; the checks are asserted by the fixtures and are the 72 assertions
-/// `pdfrum-script` alone could not reach.
-fn arity(args: &[JsValue], expected: usize, name: &str) -> JsResult<()> {
+/// Most `AF*` functions check `params.size() != n`, so an extra argument is
+/// as fatal as a missing one — `AFDate_Format(1, 2)` throws where
+/// `AFDate_Format(1)` works. Three do not; see [`at_least`].
+fn exactly(args: &[JsValue], expected: usize, name: &str) -> JsResult<()> {
+    if args.len() != expected {
+        return Err(param_error(name));
+    }
+    Ok(())
+}
+
+/// Rejects a call with **too few** arguments, ignoring extras.
+///
+/// The three functions that spell their check `params.size() < n` rather than
+/// `!= n`: `AFNumber_Keystroke`, `AFPercent_Format` and
+/// `AFSpecial_KeystrokeEx`. Each reads an optional argument past its minimum
+/// — `AFPercent_Keystroke`'s third, for instance — which is why the check is
+/// the loose one, and `public_methods_expected.txt` asserts the difference on
+/// both sides.
+fn at_least(args: &[JsValue], expected: usize, name: &str) -> JsResult<()> {
     if args.len() < expected {
         return Err(param_error(name));
     }
@@ -117,116 +132,73 @@ fn formatted(outcome: pdfrum_script::AfOutcome) -> Option<String> {
 }
 
 /// Writes `event.rc`, which is how a validate function rejects a value.
-fn set_event_rc(accepted: bool, context: &mut Context) -> JsResult<()> {
-    let event = context
-        .global_object()
-        .get(boa_engine::js_string!("event"), context)?;
-    if let Some(object) = event.as_object() {
-        object.set(boa_engine::js_string!("rc"), accepted, false, context)?;
+fn set_event_rc(accepted: bool, context: &mut Context) {
+    if let Some(host) = super::bind::host(context) {
+        host.borrow_mut().event.rc = accepted;
     }
-    Ok(())
 }
 
 /// Writes a format function's answer back to `event.value`, which is how
 /// every `AF*_Format` reaches the field.
-fn write_event_value(value: Option<String>, context: &mut Context) -> JsResult<()> {
+fn write_event_value(value: Option<String>, context: &mut Context) {
     let Some(value) = value else {
-        return Ok(());
+        return;
     };
-    let event = context
-        .global_object()
-        .get(boa_engine::js_string!("event"), context)?;
-    if let Some(object) = event.as_object() {
-        object.set(
-            boa_engine::js_string!("value"),
-            boa_engine::js_string!(value),
-            false,
-            context,
-        )?;
+    if let Some(host) = super::bind::host(context) {
+        host.borrow_mut().event.value = value;
     }
-    Ok(())
 }
 
 /// The `event` fields an `AF*` keystroke function reads, as the library's own
 /// value type.
-fn keystroke_of(context: &mut Context) -> JsResult<pdfrum_script::Keystroke> {
-    let event = context
-        .global_object()
-        .get(boa_engine::js_string!("event"), context)?;
-    let Some(object) = event.as_object() else {
-        return Ok(pdfrum_script::Keystroke::default());
+///
+/// **Read off the host record, not through the JavaScript property.** The
+/// two are not interchangeable: `event.fieldFull` *throws* outside a
+/// Keystroke event and both selection indices read `undefined`, where the
+/// C++ reads `field_full_`, `SelStart()` and `SelEnd()` straight off the
+/// event context whatever kind it is. Going through the property would make
+/// every `AF*` call on a Format event throw `unrecognized event`, which is
+/// exactly the trap `public_methods` walks into — its whole first test runs
+/// on `/AA /F`.
+fn keystroke_of(context: &mut Context) -> pdfrum_script::Keystroke {
+    let Some(host) = super::bind::host(context) else {
+        return pdfrum_script::Keystroke::default();
     };
-    let read_text = |key: &'static str, context: &mut Context| -> JsResult<String> {
-        let value = object.get(boa_engine::js_string!(key), context)?;
-        if value.is_undefined() {
-            return Ok(String::new());
-        }
-        Ok(value.to_string(context)?.to_std_string_lossy())
-    };
-    let read_i32 = |key: &'static str, context: &mut Context| -> JsResult<i32> {
-        let value = object.get(boa_engine::js_string!(key), context)?;
-        if value.is_undefined() {
-            return Ok(0);
-        }
-        value.to_i32(context)
-    };
-    let read_bool = |key: &'static str, context: &mut Context| -> JsResult<bool> {
-        Ok(object
-            .get(boa_engine::js_string!(key), context)?
-            .to_boolean())
-    };
-    Ok(pdfrum_script::Keystroke {
-        value: read_text("value", context)?,
-        change: read_text("change", context)?,
-        sel_start: read_i32("selStart", context)?,
-        sel_end: read_i32("selEnd", context)?,
-        will_commit: read_bool("willCommit", context)?,
-        field_full: read_bool("fieldFull", context)?,
-    })
+    let event = &host.borrow().event;
+    pdfrum_script::Keystroke {
+        value: event.value.clone(),
+        change: event.change.clone(),
+        sel_start: event.sel_start,
+        sel_end: event.sel_end,
+        will_commit: event.will_commit,
+        field_full: event.field_full,
+    }
 }
 
 /// Applies a keystroke outcome back to the live `event`.
 ///
-/// **Which fields are copied back is a property of the event kind** (§4.4),
-/// and the copy-back here is the Keystroke kind's: `rc`, `change` and the two
-/// selection indices. A write to a field that is dead for the kind lands in
-/// the object and is dropped when the event ends, which is exactly what
-/// upstream's dummy-fallback pointers do — the same observable behaviour,
-/// without the aliasing.
-fn apply_keystroke(
-    outcome: &pdfrum_script::KeystrokeOutcome,
-    context: &mut Context,
-) -> JsResult<()> {
-    let event = context
-        .global_object()
-        .get(boa_engine::js_string!("event"), context)?;
-    let Some(object) = event.as_object() else {
-        return Ok(());
+/// **Which fields are copied back is a property of the event kind**, and the
+/// copy-back here is the Keystroke kind's: `rc`, `value` and `change`. Like
+/// the reader above this writes the host record rather than the JavaScript
+/// property, because a write through `event.value` is refused on a kind whose
+/// value is not live and `AFSpecial_Keystroke` is called from Format events
+/// too.
+fn apply_keystroke(outcome: &pdfrum_script::KeystrokeOutcome, context: &mut Context) {
+    let Some(host) = super::bind::host(context) else {
+        return;
     };
+    let event = &mut host.borrow_mut().event;
     match outcome {
-        pdfrum_script::KeystrokeOutcome::Reject => {
-            object.set(boa_engine::js_string!("rc"), false, false, context)?;
-        }
+        pdfrum_script::KeystrokeOutcome::Reject => event.rc = false,
         pdfrum_script::KeystrokeOutcome::Accept { value, change } => {
             if let Some(value) = value {
-                object.set(
-                    boa_engine::js_string!("value"),
-                    boa_engine::js_string!(value.clone()),
-                    false,
-                    context,
-                )?;
+                event.value.clone_from(value);
             }
             if let Some(change) = change {
-                object.set(
-                    boa_engine::js_string!("change"),
-                    boa_engine::js_string!(change.clone()),
-                    false,
-                    context,
-                )?;
+                event.change.clone_from(change);
             }
         }
     }
-    Ok(())
 }
 
 // ---- the twenty-two ----
@@ -250,7 +222,7 @@ af!(
     af_number_format,
     "AFNumber_Format",
     |args: &[JsValue], context: &mut Context, name: &str| {
-        arity(args, 6, name)?;
+        exactly(args, 6, name)?;
         let (n_dec, sep, neg) = (
             int(args, 0, context)?,
             int(args, 1, context)?,
@@ -258,11 +230,11 @@ af!(
         );
         let currency = text(args, 4, context)?;
         let prepend = truthy(args, 5);
-        let event = keystroke_of(context)?;
+        let event = keystroke_of(context);
         let out =
             pdfrum_script::af_number_format(&event.value, n_dec, sep, neg, &currency, prepend);
         report(&out.effects, context);
-        write_event_value(formatted(out.outcome), context)?;
+        write_event_value(formatted(out.outcome), context);
         Ok(JsValue::undefined())
     }
 );
@@ -271,16 +243,16 @@ af!(
     af_number_keystroke,
     "AFNumber_Keystroke",
     |args: &[JsValue], context: &mut Context, name: &str| {
-        arity(args, 6, name)?;
+        at_least(args, 2, name)?;
         let (n_dec, sep) = (int(args, 0, context)?, int(args, 1, context)?);
-        let event = keystroke_of(context)?;
+        let event = keystroke_of(context);
         let out = settle(
             pdfrum_script::af_number_keystroke(&event, n_dec, sep),
             context,
             name,
         )?;
         report(&out.effects, context);
-        apply_keystroke(&out.outcome, context)?;
+        apply_keystroke(&out.outcome, context);
         Ok(JsValue::undefined())
     }
 );
@@ -289,17 +261,21 @@ af!(
     af_percent_format,
     "AFPercent_Format",
     |args: &[JsValue], context: &mut Context, name: &str| {
-        arity(args, 2, name)?;
+        at_least(args, 2, name)?;
         let (n_dec, sep) = (int(args, 0, context)?, int(args, 1, context)?);
-        let prepend = args.len() < 3 || truthy(args, 2);
-        let event = keystroke_of(context)?;
+        // `params.size() > 2 && ToBooleanReentrant(params[2])` — **absent is
+        // false**, so a two-argument call *appends* the sign. The reading
+        // that made it default true put the `%` on the wrong end of all 186
+        // of `public_methods`'s percent lines.
+        let prepend = args.len() > 2 && truthy(args, 2);
+        let event = keystroke_of(context);
         let out = settle(
             pdfrum_script::af_percent_format(&event.value, n_dec, sep, prepend),
             context,
             name,
         )?;
         report(&out.effects, context);
-        write_event_value(formatted(out.outcome), context)?;
+        write_event_value(formatted(out.outcome), context);
         Ok(JsValue::undefined())
     }
 );
@@ -308,9 +284,12 @@ af!(
     af_percent_keystroke,
     "AFPercent_Keystroke",
     |args: &[JsValue], context: &mut Context, name: &str| {
-        arity(args, 2, name)?;
+        // Registered twice under two names: this *is* `AFNumber_Keystroke`,
+        // arity check and all, which is why the loose `< 2` applies here too
+        // and why the alert it raises names the other function.
+        at_least(args, 2, name)?;
         let sep = int(args, 1, context)?;
-        let event = keystroke_of(context)?;
+        let event = keystroke_of(context);
         let n_dec = int(args, 0, context)?;
         let out = settle(
             pdfrum_script::af_percent_keystroke(&event, n_dec, sep),
@@ -318,7 +297,7 @@ af!(
             name,
         )?;
         report(&out.effects, context);
-        apply_keystroke(&out.outcome, context)?;
+        apply_keystroke(&out.outcome, context);
         Ok(JsValue::undefined())
     }
 );
@@ -327,17 +306,17 @@ af!(
     af_date_format,
     "AFDate_Format",
     |args: &[JsValue], context: &mut Context, name: &str| {
-        arity(args, 1, name)?;
+        exactly(args, 1, name)?;
         let index = int(args, 0, context)?;
         let now = now_ms(context);
-        let event = keystroke_of(context)?;
+        let event = keystroke_of(context);
         let out = settle(
             pdfrum_script::af_date_format(&event.value, index, now),
             context,
             name,
         )?;
         report(&out.effects, context);
-        write_event_value(formatted(out.outcome), context)?;
+        write_event_value(formatted(out.outcome), context);
         Ok(JsValue::undefined())
     }
 );
@@ -346,17 +325,17 @@ af!(
     af_date_format_ex,
     "AFDate_FormatEx",
     |args: &[JsValue], context: &mut Context, name: &str| {
-        arity(args, 1, name)?;
+        exactly(args, 1, name)?;
         let format = text(args, 0, context)?;
         let now = now_ms(context);
-        let event = keystroke_of(context)?;
+        let event = keystroke_of(context);
         let out = settle(
             pdfrum_script::af_date_format_ex(&event.value, &format, now),
             context,
             name,
         )?;
         report(&out.effects, context);
-        write_event_value(formatted(out.outcome), context)?;
+        write_event_value(formatted(out.outcome), context);
         Ok(JsValue::undefined())
     }
 );
@@ -365,13 +344,13 @@ af!(
     af_date_keystroke,
     "AFDate_Keystroke",
     |args: &[JsValue], context: &mut Context, name: &str| {
-        arity(args, 1, name)?;
+        exactly(args, 1, name)?;
         let index = int(args, 0, context)?;
         let now = now_ms(context);
-        let event = keystroke_of(context)?;
+        let event = keystroke_of(context);
         let out = pdfrum_script::af_date_keystroke(&event, index, now);
         report(&out.effects, context);
-        apply_keystroke(&out.outcome, context)?;
+        apply_keystroke(&out.outcome, context);
         Ok(JsValue::undefined())
     }
 );
@@ -388,10 +367,10 @@ af!(
         }
         let format = text(args, 0, context)?;
         let now = now_ms(context);
-        let event = keystroke_of(context)?;
+        let event = keystroke_of(context);
         let out = pdfrum_script::af_date_keystroke_ex(&event, &format, now);
         report(&out.effects, context);
-        apply_keystroke(&out.outcome, context)?;
+        apply_keystroke(&out.outcome, context);
         Ok(JsValue::undefined())
     }
 );
@@ -400,17 +379,17 @@ af!(
     af_time_format,
     "AFTime_Format",
     |args: &[JsValue], context: &mut Context, name: &str| {
-        arity(args, 1, name)?;
+        exactly(args, 1, name)?;
         let index = int(args, 0, context)?;
         let now = now_ms(context);
-        let event = keystroke_of(context)?;
+        let event = keystroke_of(context);
         let out = settle(
             pdfrum_script::af_time_format(&event.value, index, now),
             context,
             name,
         )?;
         report(&out.effects, context);
-        write_event_value(formatted(out.outcome), context)?;
+        write_event_value(formatted(out.outcome), context);
         Ok(JsValue::undefined())
     }
 );
@@ -419,17 +398,17 @@ af!(
     af_time_format_ex,
     "AFTime_FormatEx",
     |args: &[JsValue], context: &mut Context, name: &str| {
-        arity(args, 1, name)?;
+        exactly(args, 1, name)?;
         let format = text(args, 0, context)?;
         let now = now_ms(context);
-        let event = keystroke_of(context)?;
+        let event = keystroke_of(context);
         let out = settle(
             pdfrum_script::af_time_format_ex(&event.value, &format, now),
             context,
             name,
         )?;
         report(&out.effects, context);
-        write_event_value(formatted(out.outcome), context)?;
+        write_event_value(formatted(out.outcome), context);
         Ok(JsValue::undefined())
     }
 );
@@ -438,13 +417,13 @@ af!(
     af_time_keystroke,
     "AFTime_Keystroke",
     |args: &[JsValue], context: &mut Context, name: &str| {
-        arity(args, 1, name)?;
+        exactly(args, 1, name)?;
         let index = int(args, 0, context)?;
         let now = now_ms(context);
-        let event = keystroke_of(context)?;
+        let event = keystroke_of(context);
         let out = pdfrum_script::af_time_keystroke(&event, index, now);
         report(&out.effects, context);
-        apply_keystroke(&out.outcome, context)?;
+        apply_keystroke(&out.outcome, context);
         Ok(JsValue::undefined())
     }
 );
@@ -453,13 +432,18 @@ af!(
     af_time_keystroke_ex,
     "AFTime_KeystrokeEx",
     |args: &[JsValue], context: &mut Context, name: &str| {
-        arity(args, 1, name)?;
+        // It *is* `AFDate_KeystrokeEx`, called through — so it throws that
+        // function's own bespoke message rather than the shared one, under
+        // its own name. Both halves of that are in the expected bytes.
+        if args.len() != 1 {
+            return Err(thrown(name, &pdfrum_script::Error::DateKeystrokeArity));
+        }
         let format = text(args, 0, context)?;
         let now = now_ms(context);
-        let event = keystroke_of(context)?;
+        let event = keystroke_of(context);
         let out = pdfrum_script::af_time_keystroke_ex(&event, &format, now);
         report(&out.effects, context);
-        apply_keystroke(&out.outcome, context)?;
+        apply_keystroke(&out.outcome, context);
         Ok(JsValue::undefined())
     }
 );
@@ -468,12 +452,12 @@ af!(
     af_special_format,
     "AFSpecial_Format",
     |args: &[JsValue], context: &mut Context, name: &str| {
-        arity(args, 1, name)?;
+        exactly(args, 1, name)?;
         let kind = int(args, 0, context)?;
-        let event = keystroke_of(context)?;
+        let event = keystroke_of(context);
         let out = pdfrum_script::af_special_format(&event.value, kind);
         report(&out.effects, context);
-        write_event_value(formatted(out.outcome), context)?;
+        write_event_value(formatted(out.outcome), context);
         Ok(JsValue::undefined())
     }
 );
@@ -482,12 +466,12 @@ af!(
     af_special_keystroke,
     "AFSpecial_Keystroke",
     |args: &[JsValue], context: &mut Context, name: &str| {
-        arity(args, 1, name)?;
+        exactly(args, 1, name)?;
         let kind = int(args, 0, context)?;
-        let event = keystroke_of(context)?;
+        let event = keystroke_of(context);
         let out = pdfrum_script::af_special_keystroke(&event, kind);
         report(&out.effects, context);
-        apply_keystroke(&out.outcome, context)?;
+        apply_keystroke(&out.outcome, context);
         Ok(JsValue::undefined())
     }
 );
@@ -496,12 +480,12 @@ af!(
     af_special_keystroke_ex,
     "AFSpecial_KeystrokeEx",
     |args: &[JsValue], context: &mut Context, name: &str| {
-        arity(args, 1, name)?;
+        at_least(args, 1, name)?;
         let mask = text(args, 0, context)?;
-        let event = keystroke_of(context)?;
+        let event = keystroke_of(context);
         let out = pdfrum_script::af_special_keystroke_ex(&event, &mask);
         report(&out.effects, context);
-        apply_keystroke(&out.outcome, context)?;
+        apply_keystroke(&out.outcome, context);
         Ok(JsValue::undefined())
     }
 );
@@ -510,7 +494,7 @@ af!(
     af_range_validate,
     "AFRange_Validate",
     |args: &[JsValue], context: &mut Context, name: &str| {
-        arity(args, 4, name)?;
+        exactly(args, 4, name)?;
         let check_min = truthy(args, 0);
         let min = number(args, 1, context)?;
         let check_max = truthy(args, 2);
@@ -520,7 +504,7 @@ af!(
         // as `1`.
         let min_label = text(args, 1, context)?;
         let max_label = text(args, 3, context)?;
-        let event = keystroke_of(context)?;
+        let event = keystroke_of(context);
         let out = pdfrum_script::af_range_validate(
             &event.value,
             check_min,
@@ -535,7 +519,7 @@ af!(
         // say about a value is "rejected" — which reaches the field through
         // `event.rc`, this being a Validate event.
         if out.outcome == pdfrum_script::AfOutcome::Rejected {
-            set_event_rc(false, context)?;
+            set_event_rc(false, context);
         }
         Ok(JsValue::undefined())
     }
@@ -544,11 +528,13 @@ af!(
 af!(
     af_merge_change,
     "AFMergeChange",
-    // The one function that reads no argument and cannot fail: it merges the
-    // event's own change into its own value, so there is nothing to check an
-    // arity against and nothing to throw.
-    |_args: &[JsValue], context: &mut Context, _name: &str| {
-        let event = keystroke_of(context)?;
+    // It reads no argument and yet **requires exactly one**: the parameter is
+    // Acrobat's `event` and upstream ignores it, taking the live event
+    // instead — but the arity check runs first, so `AFMergeChange()` and
+    // `AFMergeChange(1, 2)` both throw and `AFMergeChange(undefined)` works.
+    |args: &[JsValue], context: &mut Context, name: &str| {
+        exactly(args, 1, name)?;
+        let event = keystroke_of(context);
         Ok(JsValue::from(boa_engine::js_string!(
             pdfrum_script::af_merge_change(&event)
         )))
@@ -559,7 +545,7 @@ af!(
     af_parse_date_ex,
     "AFParseDateEx",
     |args: &[JsValue], context: &mut Context, name: &str| {
-        arity(args, 2, name)?;
+        exactly(args, 2, name)?;
         let value = text(args, 0, context)?;
         let format = text(args, 1, context)?;
         let now = now_ms(context);
@@ -576,7 +562,7 @@ af!(
     af_extract_nums,
     "AFExtractNums",
     |args: &[JsValue], context: &mut Context, name: &str| {
-        arity(args, 1, name)?;
+        exactly(args, 1, name)?;
         let value = text(args, 0, context)?;
         // `false`, not an empty array, when the string holds no digits at all —
         // `AFExtractNums`'s own answer, which `public_methods.in` asserts.
@@ -595,7 +581,7 @@ af!(
     af_make_number,
     "AFMakeNumber",
     |args: &[JsValue], context: &mut Context, name: &str| {
-        arity(args, 1, name)?;
+        exactly(args, 1, name)?;
         let value = text(args, 0, context)?;
         Ok(JsValue::from(pdfrum_script::af_make_number(&value)))
     }
@@ -605,7 +591,7 @@ af!(
     af_simple,
     "AFSimple",
     |args: &[JsValue], context: &mut Context, name: &str| {
-        arity(args, 3, name)?;
+        exactly(args, 3, name)?;
         let op = text(args, 0, context)?;
         let a = number(args, 1, context)?;
         let b = number(args, 2, context)?;
@@ -618,7 +604,7 @@ af!(
     af_split_field_list,
     "AFMakeArrayFromList",
     |args: &[JsValue], context: &mut Context, name: &str| {
-        arity(args, 1, name)?;
+        at_least(args, 1, name)?;
         let value = text(args, 0, context)?;
         let names = pdfrum_script::af_split_field_list(&value);
         let array = boa_engine::object::builtins::JsArray::new(context)?;
@@ -629,22 +615,115 @@ af!(
     }
 );
 
-/// `AFSimple_Calculate(cFunction, cFields)`.
+/// `AFSimple_Calculate(cFunction, cFields)` — the named operation applied
+/// across **other fields' values**.
 ///
-/// **Declined with a reason rather than stubbed silently.** The pure half —
-/// `pdfrum_script::af_simple_calculate` over a slice of numbers — is written
-/// and tested; what is missing is the lookup that fills the slice from other
-/// fields' values.
-// The signature is the table's, and every entry must share it.
-#[allow(clippy::unnecessary_wraps)]
+/// The one `AF*` function that reads the form rather than the event, which is
+/// why it could not be written until the object model existed. The arithmetic
+/// is still `pdfrum_script`'s; this function's whole job is turning the
+/// caller's field names into the slice of numbers it takes, and writing the
+/// answer back to `event.value`.
+///
+/// # What each field type contributes
+///
+/// Not "its value" — the type decides:
+///
+/// - a **text field or combo box** contributes its trimmed value read as a
+///   number, so a field holding `abc` contributes zero rather than failing;
+/// - a **check box or radio button** contributes the export value of its
+///   *first checked* control, and nothing when none is checked;
+/// - a **list box** contributes its value only when at most one row is
+///   selected — a multi-selection contributes zero;
+/// - a **push button** contributes nothing at all, and neither does a
+///   signature.
+///
+/// Every field reached still **counts**, contributing zero, which is what
+/// makes an average over a text field and a push button divide by two.
 fn af_simple_calculate(
     _this: &JsValue,
-    _args: &[JsValue],
-    _context: &mut Context,
+    args: &[JsValue],
+    context: &mut Context,
 ) -> JsResult<JsValue> {
-    // `Ok` rather than a bare value because every entry in the table below
-    // has this signature; the uniformity is the point.
+    const NAME: &str = "AFSimple_Calculate";
+    exactly(args, 2, NAME)?;
+    // The second argument must be an array or a string, and the check is on
+    // the *type* rather than on what it holds — a number is refused with the
+    // parameter-count message rather than coerced.
+    let list = args.get_or_undefined(1).clone();
+    let is_array = list.as_object().is_some_and(|object| object.is_array());
+    if !is_array && !list.is_string() {
+        return Err(param_error(NAME));
+    }
+    let op = text(args, 0, context)?;
+    let names = field_name_list(&list, is_array, context)?;
+
+    let Some(host) = super::bind::host(context) else {
+        return Ok(JsValue::undefined());
+    };
+    let values: Vec<f64> = {
+        let state = host.borrow();
+        names
+            .iter()
+            .flat_map(|name| state.document.fields_named(name))
+            .map(contribution)
+            .collect()
+    };
+    let value = settle(
+        pdfrum_script::af_simple_calculate(&op, &values),
+        context,
+        NAME,
+    )?;
+    // `ToWideStringReentrant(NewNumber(dValue))` — JavaScript's own number
+    // formatting, which is what turns 289.5 into `289.5` and 579.0 into
+    // `579` rather than `579.0`.
+    let rendered = JsValue::from(value)
+        .to_string(context)?
+        .to_std_string_lossy();
+    write_event_value(Some(rendered), context);
     Ok(JsValue::undefined())
+}
+
+/// What one field contributes to an `AFSimple_Calculate`.
+fn contribution(field: &super::model::FieldModel) -> f64 {
+    use super::model::FieldModelKind as Kind;
+    let text = match field.kind {
+        // A text field or a combo box contributes its value; a check box or
+        // a radio button contributes the export value of its first checked
+        // control, which the model already carries as the field's value —
+        // and an unchecked one's is `Off`, reading as the zero that skipping
+        // it would also give. Four kinds, one expression.
+        Kind::Text | Kind::ComboBox | Kind::CheckBox | Kind::RadioButton => field.value.as_str(),
+        // A multi-selection contributes nothing.
+        Kind::ListBox if field.selected.len() <= 1 => field.value.as_str(),
+        _ => "",
+    };
+    pdfrum_script::string_to_double(text.trim())
+}
+
+/// `AF_MakeArrayFromList`: an array as itself, a string split on commas.
+///
+/// Each name from the string form is trimmed; the array form is **not**
+/// trimmed, because upstream only trims on the splitting path.
+fn field_name_list(list: &JsValue, is_array: bool, context: &mut Context) -> JsResult<Vec<String>> {
+    if !is_array {
+        let joined = super::bind::string_of(list, context)?;
+        return Ok(joined
+            .split(',')
+            .map(|name| name.trim().to_string())
+            .collect());
+    }
+    let Some(object) = list.as_object() else {
+        return Ok(Vec::new());
+    };
+    let length = object
+        .get(boa_engine::js_string!("length"), context)?
+        .to_length(context)?;
+    let mut names = Vec::new();
+    for index in 0..length {
+        let entry = object.get(index, context)?;
+        names.push(super::bind::string_of(&entry, context)?);
+    }
+    Ok(names)
 }
 
 /// The shape every bound function has. See `bind`'s module documentation for

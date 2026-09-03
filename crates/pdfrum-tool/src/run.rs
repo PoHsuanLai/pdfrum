@@ -56,7 +56,12 @@ pub fn process_file(
     // `pdfium_test.cc:2152-2171` loads the sibling `.evt` after announcing
     // the PDF and before opening it — the script is read once for the whole
     // document and replayed against each page in the walk below.
-    let parsed_events = if options.send_events {
+    // `--js-transcript` loads one too, without the flag: the oracle's own text
+    // harness runs `pdfium_test --send-events` for every javascript fixture and
+    // copies `<test>.evt` beside the PDF first
+    // (`testing/tools/test_runner.py:658-680`), so a fixture's mouse and
+    // keyboard script is part of what produces the expected text.
+    let parsed_events = if options.send_events || options.js_transcript {
         load_events(name, streams)?
     } else {
         Vec::new()
@@ -99,8 +104,22 @@ pub fn process_file(
         // A script that throws writes a line to stderr and a diagnostic here,
         // and does not stop the scripts after it.
         let mut diags = pdfrum_common::Diagnostics::default();
+        // The same bytes through the facade, for the form session the field
+        // `/AA` scripts hang off. A file the facade refuses — which cannot
+        // happen when the parser accepted it, since both call the same loader
+        // — leaves the document-level scripts to run on their own.
+        let facade = pdfrum::Document::from_bytes_with(
+            Arc::clone(&bytes),
+            &pdfrum::OpenOptions {
+                password: load.password.clone(),
+                ..pdfrum::OpenOptions::default()
+            },
+        )
+        .ok();
         crate::jstranscript::write_transcript(
             &doc,
+            facade.as_ref(),
+            &parsed_events,
             options.time,
             &mut diags,
             streams.out,

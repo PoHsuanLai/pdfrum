@@ -588,6 +588,7 @@ pub(crate) fn install(context: &mut Context, host: Host) -> JsResult<()> {
     install_util(context)?;
     super::af::install(context)?;
     super::doc::install(context)?;
+    super::event::install(context)?;
     Ok(())
 }
 
