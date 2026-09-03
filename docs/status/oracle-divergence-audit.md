@@ -1437,3 +1437,28 @@ labels are the acceptance criteria.
 therefore raises a passing row's fidelity rather than flipping a failing one,
 and the board's pass count is unchanged by it. The defect and the prescribed
 fix are exactly as described; only the row's status was misstated.
+
+## 11. Two more, found by auditing `DiagKind` (2026-09-03)
+
+Neither came from the phase sweep. Both surfaced by asking of each unwired
+`DiagKind` variant "does our port reach this condition?", which is a different
+question from "does the oracle differ here" and found two places where it
+does. Ruled under the same rule, verified at the line, with pdf.js as the
+tiebreaker in both. Recorded here because both sites carry an `[oracle-bug]`
+marker; the third gap that audit found (an unnamed terminal field being kept)
+went the oracle's way and is not a divergence.
+
+| item | verdict | measured | outcome |
+|---|---|---|---|
+| **A72 — `/MK /R`, the negative quarter turn** | BUG | 0 rows | **Implemented** (`4e48501`). PDFium folds a widget's rotation with `abs(GetRotation() % 360)` (`fpdfsdk/cpdfsdk_widget.cpp:1029` in `GetRotatedRect`, `:1049` in `GetMatrix`), which sends `-90` to **90**. ISO 32000-1 table 189 defines `/R` as degrees **counterclockwise**, so `-90` is `270`; the correct fold is `rem_euclid(360)`. pdf.js agrees exactly — `angle %= 360; if (angle < 0) { angle += 360; }` then an `angle % 90 === 0` gate (`src/core/annotation.js`, `WidgetAnnotation.setRotation`). The divergence is invisible in the **box** (90 and 270 swap the same axes) and real in the **matrix**: `GetMatrix` builds `CFX_Matrix(0, 1, -1, 0, fWidth, 0)` for 90 and `CFX_Matrix(0, -1, 1, 0, 0, fHeight)` for 270 (`:1053-1062`), so an `abs()` widget is drawn and hit-tested a half turn from where the file asked. Fixed as `pdfrum_doc::geom::WidgetRotation::from_degrees`, now the **single** normalization: our own two readers had folded the key separately and disagreed, and `ap::widget::rotated_rect` had additionally emptied the box for any unmatched value, so `/MK /R -90` rendered nothing at all. `pdfrum_form::Rotation` is a re-export of the shared type. A non-multiple of 90 is **upright**, and that is *not* a divergence: PDFium's `default:` arm falls through to the 0/180 case on both switches and pdf.js's gate leaves the angle at zero. No corpus file carries a negative or non-quadrant `/R`, hence 0 rows. |
+| **A73 — a malformed `/Kids[0]`** | BUG | 0 rows | **Implemented** (`586edfe`). `CPDF_InteractiveForm::LoadField` returns outright when `kids->GetDictAt(0)` is null (`core/fpdfdoc/cpdf_interactiveform.cpp:871-874`), so one unresolvable first kid discards **every sibling** under the node, unrecoverably: the walk has returned and `FixPageFields` only re-enters through `/Annots`. We already dropped the bad index and kept walking; the site is now marked and tested. The argument is that the early return is a **side effect rather than a decision** — that `GetDictAt(0)` is a *probe* whose two following lines (`:876-880`) choose between "terminal field" and "recurse", and a non-dict first kid says nothing about whether the array is a field tree. pdf.js skips the entry and continues with the siblings (`#collectFieldObjects`, `src/core/document.js`; its `if (!(fieldRef instanceof Ref) || visitedRefs.has(fieldRef))` guard returns from that kid alone). ISO 32000-1 §12.7.3.1 gives `/Kids` no rule making the array's validity depend on its first element. Nothing is lost by diverging because our terminal probe (`kids_are_fields`) scans *every* kid rather than only the first, so a null at index 0 cannot blind it. |
+
+### The board
+
+**1757 / 1514 / 243 before and after**, per-file byte-identical — zero status
+moves, zero Tier-A mismatch-set changes across all 1757 rows,
+`--check-regressions` clean. **No golden moves to the not-achievable bucket**:
+both divergences are reachable only from inputs the corpus does not contain (a
+negative or non-quadrant `/MK /R`; a `/Kids[0]` that does not resolve to a
+dictionary), so no golden pins either oracle answer. The third gap — dropping
+an unnamed terminal field — matches the oracle and moved nothing either.

@@ -143,32 +143,44 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
 *(Emptied 2026-09-03. The `DiagKind` item is decided: six variants wired, nine
 deleted — see the commit and `crates/pdfrum-common/src/diagnostics.rs`.)*
 
-## Conformance gaps found while auditing `DiagKind`, 2026-09-03
+## ~~Conformance gaps found while auditing `DiagKind`~~, 2026-09-03
 
-Three real divergences surfaced by asking "does our port reach this
-condition?". None is a diagnostic problem, so none was papered over with one;
-each needs its own ruling.
+~~Three real divergences surfaced by asking "does our port reach this
+condition?".~~ — **all three ruled and landed 2026-09-03.** The board did not
+move (1757 / 1514 / 243, per-file byte-identical, `--check-regressions`
+clean): each condition is reachable only from an input the corpus does not
+contain, so no golden pinned either answer and nothing went to the
+not-achievable bucket. The two divergences are written up as A72 and A73 in
+`docs/status/oracle-divergence-audit.md` §11.
 
-- **A negative quarter turn empties a widget's box.**
-  `ap::widget::rotated_rect` (`crates/pdfrum-doc/src/ap/widget.rs:613-617`)
-  matches `rotation % 360` against `0|180` and `90|270`, and Rust's remainder
-  keeps the sign — so `/MK /R -90` falls to `_ => Rect::ZERO`. PDFium switches
-  on `abs(GetRotation() % 360)` and has a `default:` that falls through to the
-  0/180 case (`fpdfsdk/cpdfsdk_widget.cpp:1029-1039`), so it never empties the
-  box. Our own second reader already agrees with PDFium
-  (`pdfrum-form/src/page.rs:326-332` folds the default to `Rotation::None`),
-  so two readers of the same key disagree with each other. A test currently
-  pins the wrong behaviour
-  (`a_rotation_that_is_not_a_quarter_turn_empties_the_box`).
-- **A field whose fully-qualified name is empty is kept, not skipped.**
-  `AddTerminalField` drops it (`cpdf_interactiveform.cpp:914-917`); our
-  `form::field::visit` pushes unconditionally
-  (`crates/pdfrum-doc/src/form/field.rs:576`) and `full_name`
-  (`form/attr.rs:55`) can return `""`.
-- **A malformed `/Kids[0]` does not abandon the subtree.** The oracle returns
-  outright when `kids->GetDictAt(0)` is null
-  (`cpdf_interactiveform.cpp:871-874`); we drop that one index and keep
-  walking (`crates/pdfrum-doc/src/form/field.rs:592`).
+- ~~**A negative quarter turn empties a widget's box.**~~ — landed `4e48501`.
+  Ruled **against the oracle**. ISO 32000-1 table 189 makes `/R`
+  counterclockwise, so `-90` is `270`, and the correct fold is
+  `rem_euclid(360)`; PDFium's `abs(GetRotation() % 360)`
+  (`cpdfsdk_widget.cpp:1029`, `:1049`) answers `90` — the same axis swap for
+  the box, the **wrong matrix** (`:1053-1062` builds different ones for 90 and
+  270). pdf.js normalizes exactly as we now do
+  (`annotation.js`, `setRotation`). `[oracle-bug]` marked. The two readers now
+  share one type, `pdfrum_doc::geom::WidgetRotation`, so they cannot drift
+  again; `pdfrum_form::Rotation` re-exports it. A non-multiple of 90 is
+  **upright**, which all three sources agree on, and no `/R` empties the box
+  any more. The test that pinned the bug now pins the ruling.
+- ~~**A field whose fully-qualified name is empty is kept, not skipped.**~~ —
+  landed `fd185fc`. Ruled **with the oracle**, on a stronger ground than the
+  oracle's: ISO 32000-1 §12.7.3.2 makes the fully qualified name a field's only
+  address, *and* `name` is this crate's field **identity** — the merge in
+  `visit` keys on it, `Form::field` looks up by it, `pdfrum-form` allocates a
+  `FieldId` per distinct name — so keeping `""` merged every unnamed field in a
+  document into one phantom field. `FieldSkippedNoName` came back with the
+  branch it names.
+- ~~**A malformed `/Kids[0]` does not abandon the subtree.**~~ — landed
+  `586edfe`. Ruled **ours correct**. The oracle's `return` on a null
+  `kids->GetDictAt(0)` (`cpdf_interactiveform.cpp:871-874`) loses every sibling
+  to one broken reference; the call is a *probe* for the terminal-vs-branch
+  decision (`:876-880`), so the loss is a side effect rather than a decision.
+  pdf.js skips the entry and keeps walking (`document.js`,
+  `#collectFieldObjects`). `[oracle-bug]` marked, with a fixture whose first
+  kid is a junk reference and whose second is a real field.
 
 ## Upstream, drafted and not filed (`docs/upstream/README.md`)
 
