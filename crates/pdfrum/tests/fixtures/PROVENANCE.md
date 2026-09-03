@@ -144,3 +144,20 @@ that are:
 | `embedded_attachments_invalid_data.pdf` | 638 B | `testing/resources/embedded_attachments_invalid_data.pdf`, verbatim. A file specification with no `/EF`: a name and no bytes. |
 | `embedded_attachments_invalid_types.pdf` | 1172 B | `testing/resources/embedded_attachments_invalid_types.pdf`, verbatim. `CheckSum` written as a name on one attachment and as a stream on the other. |
 | `embedded_attachments_with_desc.pdf` | 1417 B | `testing/resources/embedded_attachments_with_desc.pdf`, verbatim. Four attachments whose `/Desc` is text, absent, a number, and empty. |
+
+## Flatten (M17, 2026-09-04)
+
+| File | Size | What it exercises |
+|---|---:|---|
+| `annotiter.pdf` | 2136 B | `testing/resources/annotiter.pdf`, verbatim. Several annotations with appearance streams: flattens for display and for print. |
+| `344775293.pdf` | 1429 B | `testing/resources/344775293.pdf`, verbatim. A widget whose font `/Encoding` has an invalid `/BaseEncoding`: flattening drops it. |
+| `363015187.pdf` | 1266 B | `testing/resources/363015187.pdf`, verbatim. A font `/Encoding` with `/Differences` and no `/BaseEncoding`: kept. |
+| `bug_861842.pdf` | 1114 B | `testing/resources/bug_861842.pdf`, verbatim. An annotation page the reference renders blank after flattening (crbug.com/861842); ours draws it. |
+| `bug_889099.pdf` | 928 B | `testing/resources/bug_889099.pdf`, verbatim. A malformed media box (height −400): normalized and flattened. |
+| `bug_890322.pdf` | 855 B | `testing/resources/bug_890322.pdf`, verbatim. An annotation appearance with a `/Matrix`: the flattening matrix. |
+| `bug_896366.pdf` | 874 B | `testing/resources/bug_896366.pdf`, verbatim. An annotation appearance with a `/BBox` offset from its `/Rect`. |
+| `bug_498010830_shared_annots.pdf` | 721 B | `testing/resources/bug_498010830_shared_annots.pdf`, verbatim. Two pages sharing one `/Annots` array: the form survives the first flatten. |
+| `bug_498010830_shared_widget.pdf` | 666 B | `testing/resources/bug_498010830_shared_widget.pdf`, verbatim. Two pages listing one widget: the form survives the first flatten. |
+| `bug_889099_flattened_agg.png` | 922 B | `testing/resources/embedder_tests/bug_889099_flattened_agg.png`: the oracle's own render of the flattened `bug_889099.pdf`. |
+| `bug_890322_agg.png` | 161 B | `testing/resources/embedder_tests/bug_890322_agg.png`: the oracle's render of `bug_890322.pdf` with annotations, which its flattened save must match. |
+| `bug_896366_agg.png` | 601 B | `testing/resources/embedder_tests/bug_896366_agg.png`: the oracle's render of `bug_896366.pdf` with annotations, which its flattened save must match. |
