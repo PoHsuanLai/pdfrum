@@ -9,16 +9,18 @@ use pdfrum_common::PageIndex;
 /// Damage in the *input* is not an error here: a broken object silently
 /// vanishes from the output the way the C++ writer drops it, and every such
 /// recovery is recorded as a [`pdfrum_common::Diagnostic`]. `Err` is reserved
-/// for "cannot continue" (SPEC.md §0, STYLE.md §3).
+/// for "cannot continue".
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     /// The sink refused the bytes.
     #[error("write failed: {0}")]
     Io(#[from] io::Error),
 
-    /// The document declares `/Encrypt` and the save was not asked to remove
-    /// it. v1 writes encrypted documents decrypted (SPEC.md §11's 2026-08-29
-    /// ruling E3); preserve-encryption save is deferred past M7.
+    /// The document declares `/Encrypt`, this reader derived no key for it
+    /// (an `/Identity` crypt filter, or a handler opened as
+    /// [`pdfrum_crypt::SecurityHandler::Identity`]), and `remove_security`
+    /// was not set. Re-declaring a cipher over plaintext would produce a file
+    /// nothing could open.
     #[error("saving an encrypted document requires remove_security (SPEC §11 E3)")]
     EncryptedSaveUnsupported,
 

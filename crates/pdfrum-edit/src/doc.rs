@@ -10,9 +10,8 @@
 //!
 //! So edits live here instead. [`EditDoc`] holds `&Document` plus a map of
 //! added and replaced objects and a set of removed ones, and implements
-//! [`Resolve`] by asking the overlay first and the base second. That is the
-//! "editor's flattened view" STYLE.md §2b names as the third sanctioned
-//! `Resolve` implementation, so it adds no new seam.
+//! [`Resolve`] by asking the overlay first and the base second, so an editor
+//! reads a flattened view of the document without adding a new seam.
 //!
 //! The C++'s writer has a memory dance this shape removes entirely: it fetches
 //! an old object, writes it, and then *deletes it from the document again* so

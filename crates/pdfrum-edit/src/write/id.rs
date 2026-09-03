@@ -8,8 +8,8 @@
 //! # Randomness is a parameter here, not a global
 //!
 //! The C++ draws both elements from a process-global Mersenne Twister, which
-//! makes its output unreproducible. STYLE.md §1 forbids global state and a
-//! non-reproducible writer cannot be snapshot-tested, so the source is an
+//! makes its output unreproducible. This workspace takes no global state and
+//! a non-reproducible writer cannot be snapshot-tested, so the source is an
 //! explicit [`IdSource`]: [`IdSource::Random`] by default (matching the C++'s
 //! observable behavior — fresh bytes per save), [`IdSource::Fixed`] for tests
 //! and for byte-reproducible output.

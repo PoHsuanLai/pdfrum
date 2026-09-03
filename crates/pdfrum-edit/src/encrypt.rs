@@ -2,10 +2,8 @@
 //!
 //! An encrypted document saves **encrypted**, under the handler and file key
 //! the original password opened it with, so the saved file opens with that
-//! same password (SPEC.md §11's M10 ruling, superseding the 2026-08-29 ruling
-//! E3 that v1 would save decrypted). Objects arrive here plaintext — the
-//! parser peeled the cipher off at fetch time — and this is where it goes
-//! back on.
+//! same password. Objects arrive here plaintext — the parser peeled the
+//! cipher off at fetch time — and this is where it goes back on.
 //!
 //! [`SaveOptions::remove_security`](crate::SaveOptions::remove_security)
 //! remains the explicit way to drop it: it suppresses `/Encrypt` from the
@@ -31,8 +29,8 @@
 //!
 //! # Where the initialisation vectors come from
 //!
-//! AES needs a fresh vector per payload and `pdfrum-crypt` has none to give —
-//! no global randomness (STYLE.md §1), no `getrandom` dependency (DEPS.md).
+//! AES needs a fresh vector per payload and `pdfrum-crypt` has none to give:
+//! this workspace takes no global randomness and no `getrandom` dependency.
 //! So the writer supplies them, from [`IvSource`]: a counter stirred with a
 //! seed taken from the document's own bytes. Two consequences, both wanted:
 //!

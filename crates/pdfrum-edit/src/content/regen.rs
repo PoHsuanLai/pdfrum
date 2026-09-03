@@ -69,10 +69,6 @@ use crate::content::resource::ResourceTable;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Regenerated {
     /// Which element this is, or `None` for one that did not exist before.
-    ///
-    /// Was `i32` documented as "or `NO_CONTENT_STREAM`", which is the same
-    /// sentinel one crate over (`docs/design/idiomatic-api.md` §C, Tier 1
-    /// item 1, whose fix names this cross-crate leak).
     pub stream: Option<usize>,
     /// The bytes. **Empty means delete this element**, not "write an empty
     /// stream".
@@ -403,10 +399,8 @@ impl ContentsShape {
     /// deliberate: those objects were not written by this regeneration and
     /// their recorded index has to point somewhere.
     ///
-    /// Both halves of the map are `usize`: a `/Contents` index is a position in
-    /// an array, and `NO_CONTENT_STREAM`'s `-1` — the reason this pair was once
-    /// signed — is gone (`docs/design/idiomatic-api.md` §C.3 item 1, and item
-    /// 16's "listed so the fix is not left half-done").
+    /// Both halves of the map are `usize`: a `/Contents` index is a position
+    /// in an array, and there is no negative sentinel.
     #[must_use]
     pub fn with_removed(&self, removed: &BTreeSet<usize>) -> (Self, BTreeMap<usize, usize>) {
         match self {
