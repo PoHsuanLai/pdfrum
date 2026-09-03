@@ -42,6 +42,36 @@ build and no `-sys` crate appears anywhere in the dependency tree — checked
 mechanically in CI by `cargo-deny` plus a dependency-graph grep, not promised
 in prose. `unsafe_code = "forbid"` in every crate.
 
+## Features
+
+The default set renders, edits, reads forms, decodes every image codec and
+scans the host's fonts. Each piece is a feature, so a build that needs less
+compiles less:
+
+| feature | default | what it adds |
+|---|:---:|---|
+| `vello-cpu` | on | the default rasterizer, `VelloCpuBackend` |
+| `tinyskia`, `agg` | off | the other two CPU rasterizers, `TinySkiaBackend` and `AggBackend` |
+| `vello-gpu` | off | the GPU rasterizer over `wgpu`, `VelloGpuBackend`; never in a default tree |
+| `edit` | on | saving, editing, attachments, flattening, and the font subsetter behind them |
+| `forms` | on | the form reader and the interactive session |
+| `javascript` | off | the document's own scripts, run — implies `forms` |
+| `codecs-all` = `jpx` + `jbig2` + `ccitt` | on | JPEG 2000, JBIG2 and CCITT fax; Flate and JPEG are always in |
+| `system-fonts` | on | substitute a missing font from the host's installed ones; a wasm32 build never carries the scan, whatever it asks for |
+| `png` | off | `Pixmap::encode_png` and `Pixmap::save_png` |
+| `profiling` | off | the whole-render stage timers, for `scripts/profile.nu` |
+
+`default-features = false` compiles no rasterizer, no writer, no widget
+machine and no specialised codec: a parser, text extractor, outline and
+signature reader. A render always names its backend —
+`page.render(&VelloCpuBackend::new(), &options)` — so nothing is drawn by an
+engine you did not choose.
+
+```toml
+# A viewer on tiny-skia, no editing, no forms:
+pdfrum = { version = "0.1", default-features = false, features = ["tinyskia", "codecs-all", "system-fonts"] }
+```
+
 ## JavaScript is off by default
 
 A PDF may carry scripts for form validation, calculation and formatting. With
@@ -52,9 +82,9 @@ promise. That is the *default* because an engine which executes untrusted
 script out of a document is a different security proposition from a renderer,
 and most PDF work does not need one.
 
-The `script` feature turns it on. This section used to say "the future slot,
-if it is ever filled, is a pure-Rust interpreter behind a trait; never V8" —
-that came true: the slot is filled, the interpreter is
+The `javascript` feature turns it on. This section used to say "the future
+slot, if it is ever filled, is a pure-Rust interpreter behind a trait; never
+V8" — that came true: the slot is filled, the interpreter is
 [boa](https://boajs.dev/), and it sits behind the `Cascade` trait as its
 second implementation. `FormSession::with_scripts` builds one and installs the
 document's own `/AA` scripts into it.
@@ -63,11 +93,12 @@ document's own `/AA` scripts into it.
 pdfrum = { version = "0.1", features = ["javascript"] }
 ```
 
-What a script reaches today is the `AF*` library, `util`, `app.alert` and the
-`event` object; the `Doc`/`Field` object model is not built yet, so 11 of the
-oracle's 47 JavaScript fixtures reproduce byte-exactly (PLAN.md §M15). Nothing
-a script asks for is performed by the library — `app.alert`, `Doc.submitForm`
-and `app.launchURL` come back as values the host decides about, and no socket,
+What a script reaches: the `AF*` library, `util`, `app.alert`, the `event`
+object, and the `Doc`/`Field` object model with the `/AA` event path and
+timers; 37 of the oracle's 47 JavaScript fixtures reproduce byte-exactly and
+the rest are accounted for (`docs/status/M15.md`). Nothing a script asks for
+is performed by the library — `app.alert`, `Doc.submitForm` and
+`app.launchURL` come back as values the host decides about, and no socket,
 file or process is reachable from a script at all.
 
 ## What it deliberately is not
