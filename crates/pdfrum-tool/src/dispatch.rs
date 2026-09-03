@@ -1,5 +1,5 @@
 //! `--send-events`: driving a [`pdfrum::FormSession`] from a parsed `.evt`
-//! script, the way `pdfium_test` drives `FPDF_FORMHANDLE` from one.
+//! script, the way the oracle drives its form handle from one.
 //!
 //! Two enums meet here and they are deliberately different layers.
 //! [`crate::events::Event`] is the
@@ -16,16 +16,12 @@
 //! (`run.rs`) and the golden store's.
 //!
 //! 1. **Coordinates are page space, y-up, and no transform happens.** The
-//!    `.evt` integers are what `FORM_On*` receives, and
-//!    `public/fpdf_formfill.h` documents those as PDF user space. The widening
-//!    to `f64` is the *whole* conversion, and it is exact. (`FORM_OnLButtonUp`'s
-//!    "in device" comment is an upstream doc bug — its body is
-//!    `OnLButtonDown`'s.)
-//! 2. **`keycode` is the down/up pair → one `key_down`.** `event.cc:46-58`
-//!    fires `FORM_OnKeyDown` then `FORM_OnKeyUp` with identical arguments, and
-//!    `FORM_OnKeyUp` is documented as permanently unimplemented, always
-//!    answering false. The up edge is dropped rather than modelled: the facade
-//!    has no method to send it to, by design.
+//!    `.evt` integers are PDF user space as given. The widening to `f64` is
+//!    the *whole* conversion, and it is exact.
+//! 2. **`keycode` is the down/up pair → one `key_down`.** The verb fires a
+//!    key-down and then a key-up with identical arguments, and the up edge
+//!    does nothing at all upstream. It is dropped rather than modelled: the
+//!    facade has no method to send it to, by design.
 //! 3. **`charcode` carries an `i32` code point, narrowed fallibly.**
 //!    `form_textfield_focused_rtl.evt` sends 1488-1514 (Hebrew), so this path
 //!    is corpus-exercised, not hypothetical. A value that is not a Unicode
@@ -47,6 +43,14 @@
 //! shape the value already had. The correct behaviour for those lines is to
 //! consume nothing, and that is still what happens.
 
+// The oracle readings behind facts 1 and 2 above, kept out of the published
+// docs but not lost. Page space: public/fpdf_formfill.h documents page_x and
+// page_y that way, and FORM_OnLButtonUp's "in device" comment is an upstream
+// doc bug whose body is identical to OnLButtonDown's. The key pair:
+// event.cc:46-58 fires FORM_OnKeyDown and then FORM_OnKeyUp with identical
+// arguments, and FORM_OnKeyUp is documented as permanently unimplemented and
+// always answers false.
+
 use std::io::Write;
 
 use kurbo::Point;
@@ -56,11 +60,11 @@ use crate::events::{self, MOD_ALT, MOD_CONTROL, MOD_SHIFT};
 
 /// Replays a whole parsed script against one page, in order.
 ///
-/// This is `SendPageEvents` (`event.cc:163-195`): the *entire* stream, once
-/// per page, before anything is written for that page. The session is the
-/// caller's and outlives the call, because `pdfium_test` holds one
-/// `FPDF_FORMHANDLE` for the document and every page's replay sees whatever
-/// the previous page's left behind.
+/// The *entire* stream, once per page, before anything is written for that
+/// page. The session is the caller's and outlives the call, because the
+/// oracle holds one form handle for the whole document and every page's
+/// replay sees whatever the previous page's left behind.
+// The oracle's SendPageEvents, event.cc:163-195.
 ///
 /// Returns every appearance update the run produced, in the order the session
 /// reported them, so the caller can render the post-event state.

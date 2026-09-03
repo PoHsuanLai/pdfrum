@@ -7,8 +7,8 @@
 //! Page 0: No CropBox.
 //! ```
 //!
-//! The surprise here is how *little* the oracle does. `FPDFPage_GetMediaBox`
-//! reads the page dictionary's own entry and stops:
+//! The surprise here is how *little* the oracle does. It reads the page
+//! dictionary's own box entry and stops:
 //!
 //! - **No inheritance.** A `/MediaBox` on the `/Pages` node is invisible to
 //!   this dump even though every renderer honours it, so `No MediaBox.` is

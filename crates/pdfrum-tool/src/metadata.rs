@@ -9,10 +9,10 @@
 //!
 //! Three things about that line are not obvious and all three are load-bearing:
 //!
-//! - **The byte count is the C API's, not the text's.** `FPDF_GetMetaText`
-//!   reports the size of a UTF-16LE encoding *including* its two-byte
-//!   terminator, so an empty value is `(2 bytes)` and a three-character CJK
-//!   title is `(8 bytes)`. A character outside the BMP counts as two units.
+//! - **The byte count is the C API's, not the text's.** It is the size of a
+//!   UTF-16LE encoding *including* its two-byte terminator, so an empty value
+//!   is `(2 bytes)` and a three-character CJK title is `(8 bytes)`. A
+//!   character outside the BMP counts as two units.
 //! - **An absent key still prints.** Only a document with no readable `/Info`
 //!   dictionary at all suppresses a tag; a dictionary that simply lacks
 //!   `/Title` prints `Title        =  (2 bytes)`. That distinction is exactly

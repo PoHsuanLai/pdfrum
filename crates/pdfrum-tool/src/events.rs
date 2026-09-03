@@ -1,33 +1,38 @@
-//! `.evt` scripts as `testing/pdfium_test/event.cc` reads them.
+//! `.evt` scripts, as the oracle's event driver reads them.
 //!
 //! A script is a comma-separated verb per line. `#` starts a comment. Empty
 //! lines, unknown verbs, and lines whose argument count the C++ rejects are
 //! skipped rather than failing the parse — `SendPageEvents` never aborts a
 //! file. Numbers go through C `atoi` (leading whitespace, optional sign,
-//! trailing junk ignored, no digits → 0). Coordinates are the integers
-//! `FORM_On*` receives, and those are **page space** — PDF user space, y-up
-//! (`public/fpdf_formfill.h` documents `page_x`/`page_y` that way for
-//! `OnMouseMove`, `OnLButtonDown`, `OnFocus` and `DoubleClick`, and
-//! `fpdf_formfill.cpp` passes them through with no transform). The header's
-//! "in device" on `FORM_OnLButtonUp` is an upstream doc bug: its body is
-//! identical to `OnLButtonDown`'s.
+//! trailing junk ignored, no digits → 0). Coordinates are **page space** —
+//! PDF user space, y-up — for every verb, `mouseup` included.
 //!
-//! Mouse verbs in event.cc:63, 85, 105, 135 test arity with `size < N &&
-//! size > N+1`, which is never true. Extra tokens on those verbs are therefore
-//! ignored, matching the C++ rather than the comment that wanted `||`.
+//! The four mouse verbs **ignore extra tokens** rather than rejecting them.
+
+// Two readings of the oracle behind the paragraph above.
+//
+// Page space: public/fpdf_formfill.h documents page_x / page_y that way for
+// OnMouseMove, OnLButtonDown, OnFocus and DoubleClick, and fpdf_formfill.cpp
+// passes them through with no transform. The header's "in device" on
+// FORM_OnLButtonUp is an upstream doc bug -- its body is identical to
+// OnLButtonDown's.
+//
+// Extra tokens: the mouse verbs at event.cc:63, 85, 105 and 135 test arity
+// with `size < N && size > N+1`, which is never true, so the test is dead.
+// That is the C++'s behaviour rather than the comment's, which wanted `||`.
 
 use std::path::{Path, PathBuf};
 
-/// `FWL_EVENTFLAG_ShiftKey` (`public/fpdf_fwlevent.h`).
+/// The shift-key bit in an event's `modifiers` mask.
 pub const MOD_SHIFT: u32 = 1 << 0;
-/// `FWL_EVENTFLAG_ControlKey`.
+/// The control-key bit.
 pub const MOD_CONTROL: u32 = 1 << 1;
-/// `FWL_EVENTFLAG_AltKey`.
+/// The alt-key bit.
 pub const MOD_ALT: u32 = 1 << 2;
 
 /// Which mouse button a down/up event names.
 ///
-/// `mousedoubleclick` accepts only [`MouseButton::Left`] (event.cc:112-115);
+/// `mousedoubleclick` accepts only [`MouseButton::Left`];
 /// a right double-click is skipped the way an unknown button is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MouseButton {
@@ -37,18 +42,17 @@ pub enum MouseButton {
     Right,
 }
 
-/// One scripted form event, as `event.cc` would dispatch it.
+/// One scripted form event, as the oracle's driver would dispatch it.
 ///
-/// Public fields are the seam the form-interaction slice consumes. Line
-/// numbers cite `testing/pdfium_test/event.cc`.
+/// Public fields are the seam the form-interaction slice consumes.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Event {
-    /// `charcode,<code>` — `SendCharCodeEvent`, event.cc:34-44.
+    /// `charcode,<code>`.
     CharCode {
         /// `atoi` of the second token, passed to `FORM_OnChar`.
         code: i32,
     },
-    /// `keycode,<code>[,modifiers]` — `SendKeyCodeEvent`, event.cc:46-58.
+    /// `keycode,<code>[,modifiers]`.
     ///
     /// The C++ fires `FORM_OnKeyDown` then `FORM_OnKeyUp` with the same
     /// arguments; this variant is that pair, not a single edge.
@@ -58,7 +62,7 @@ pub enum Event {
         /// Bitmask from the optional third token; 0 when omitted.
         modifiers: u32,
     },
-    /// `mousedown,<left|right>,<x>,<y>[,modifiers]` — event.cc:60-79.
+    /// `mousedown,<left|right>,<x>,<y>[,modifiers]`.
     MouseDown {
         /// `left` or `right`; any other button name is skipped.
         button: MouseButton,
@@ -69,7 +73,7 @@ pub enum Event {
         /// Optional fifth token; 0 when omitted.
         modifiers: u32,
     },
-    /// `mouseup,<left|right>,<x>,<y>[,modifiers]` — event.cc:81-99.
+    /// `mouseup,<left|right>,<x>,<y>[,modifiers]`.
     MouseUp {
         /// `left` or `right`; any other button name is skipped.
         button: MouseButton,
@@ -80,7 +84,7 @@ pub enum Event {
         /// Optional fifth token; 0 when omitted.
         modifiers: u32,
     },
-    /// `mousedoubleclick,left,<x>,<y>[,modifiers]` — event.cc:101-117.
+    /// `mousedoubleclick,left,<x>,<y>[,modifiers]`.
     ///
     /// Only `left` is accepted; a right double-click prints "bad button name"
     /// and is skipped.
@@ -92,14 +96,14 @@ pub enum Event {
         /// Optional fifth token; 0 when omitted.
         modifiers: u32,
     },
-    /// `mousemove,<x>,<y>` — event.cc:119-130.
+    /// `mousemove,<x>,<y>`.
     MouseMove {
         /// Page-space X, `atoi` of the first argument.
         x: i32,
         /// Page-space Y, `atoi` of the second argument.
         y: i32,
     },
-    /// `mousewheel,<x>,<y>,<dx>,<dy>[,modifiers]` — event.cc:132-146.
+    /// `mousewheel,<x>,<y>,<dx>,<dy>[,modifiers]`.
     MouseWheel {
         /// Page-space X of the wheel event.
         x: i32,
@@ -112,7 +116,7 @@ pub enum Event {
         /// Optional sixth token; 0 when omitted.
         modifiers: u32,
     },
-    /// `focus,<x>,<y>` — event.cc:148-159.
+    /// `focus,<x>,<y>`.
     Focus {
         /// Page-space X.
         x: i32,
@@ -135,8 +139,7 @@ pub enum EvtError {
     Message(String),
 }
 
-/// Parses a whole `.evt` script the way `SendPageEvents` (event.cc:163-195)
-/// walks one.
+/// Parses a whole `.evt` script the way the oracle's driver walks one.
 ///
 /// # Errors
 ///
@@ -146,11 +149,13 @@ pub fn parse_evt(script: &str) -> Result<Vec<Event>, EvtError> {
     Ok(script.split('\n').filter_map(parse_line).collect())
 }
 
-/// The sibling `.evt` path `pdfium_test.cc:2152-2156` would look for.
+/// The sibling `.evt` path `--send-events` looks for.
 ///
-/// The C++ searches for the first `".pdf"` substring and replaces those four
-/// bytes with `".evt"`. No match means `--send-events` is a no-op. The file
-/// is not required to exist; the caller checks that.
+/// The first `".pdf"` **substring** is replaced with `".evt"` — a substring,
+/// not a suffix, so a directory named `x.pdf/` is rewritten too. No match
+/// means `--send-events` is a no-op. The file is not required to exist; the
+/// caller checks that.
+// pdfium_test.cc:2152-2156.
 #[must_use]
 pub fn sibling_evt_path(pdf_path: &str) -> Option<PathBuf> {
     let pos = pdf_path.find(".pdf")?;
@@ -159,19 +164,20 @@ pub fn sibling_evt_path(pdf_path: &str) -> Option<PathBuf> {
     Some(PathBuf::from(event_filename))
 }
 
-/// Whether `path` is a readable regular file, the `access(..., R_OK)` test
-/// `pdfium_test.cc:2157` uses before loading a script.
+/// Whether `path` is a readable regular file, tested before a script is
+/// loaded.
+// The oracle's access(..., R_OK) at pdfium_test.cc:2157.
 #[must_use]
 pub fn evt_is_readable(path: &Path) -> bool {
     path.is_file()
 }
 
-/// One line → at most one event. `None` is a skip, matching every `return`
-/// and the unrecognized-verb arm in `event.cc`.
+/// One line → at most one event. `None` is a skip: an unrecognized verb and
+/// a bad argument count are both skipped rather than failing the parse.
 fn parse_line(line: &str) -> Option<Event> {
     // StringSplit(line, '#'): everything after the first hash is a comment.
     // An empty pre-hash piece (blank line, or a line that is only a comment)
-    // is skipped (event.cc:169-172).
+    // is skipped.
     let command = string_split(line, '#');
     let body = command.first().map_or("", String::as_str);
     if body.is_empty() {
@@ -193,7 +199,7 @@ fn parse_line(line: &str) -> Option<Event> {
     }
 }
 
-/// `SendCharCodeEvent` (event.cc:34-44): exactly two tokens.
+/// The `CharCode` verb: exactly two tokens.
 fn char_code(tokens: &[String]) -> Option<Event> {
     if tokens.len() != 2 {
         return None;
@@ -203,7 +209,7 @@ fn char_code(tokens: &[String]) -> Option<Event> {
     })
 }
 
-/// `SendKeyCodeEvent` (event.cc:46-58): two or three tokens.
+/// The `KeyCode` verb: two or three tokens.
 fn key_code(tokens: &[String]) -> Option<Event> {
     if tokens.len() < 2 || tokens.len() > 3 {
         return None;
@@ -214,7 +220,7 @@ fn key_code(tokens: &[String]) -> Option<Event> {
     })
 }
 
-/// `SendMouseDownEvent` (event.cc:60-79).
+/// The `MouseDown` verb.
 ///
 /// The arity test is dead (`< 4 && > 5`). Extra tokens are ignored. Missing
 /// `left`/`right`/`x`/`y` cannot be indexed in C++ (it would crash); we skip
@@ -228,7 +234,7 @@ fn mouse_down(tokens: &[String]) -> Option<Event> {
     })
 }
 
-/// `SendMouseUpEvent` (event.cc:81-99). Same dead arity test as mousedown.
+/// The `MouseUp` verb. Same dead arity test as mousedown.
 fn mouse_up(tokens: &[String]) -> Option<Event> {
     mouse_button_event(tokens, |button, x, y, modifiers| Event::MouseUp {
         button,
@@ -250,7 +256,7 @@ where
     Some(wrap(button, x, y, modifiers))
 }
 
-/// `SendMouseDoubleClickEvent` (event.cc:101-117): `left` only.
+/// The `MouseDoubleClick` verb: `left` only.
 fn mouse_double_click(tokens: &[String]) -> Option<Event> {
     if tokens.get(1).map(String::as_str) != Some("left") {
         return None;
@@ -264,7 +270,7 @@ fn mouse_double_click(tokens: &[String]) -> Option<Event> {
     })
 }
 
-/// `SendMouseMoveEvent` (event.cc:119-130): exactly three tokens.
+/// The `MouseMove` verb: exactly three tokens.
 fn mouse_move(tokens: &[String]) -> Option<Event> {
     if tokens.len() != 3 {
         return None;
@@ -275,7 +281,7 @@ fn mouse_move(tokens: &[String]) -> Option<Event> {
     })
 }
 
-/// `SendMouseWheelEvent` (event.cc:132-146). Dead arity test (`< 5 && > 6`).
+/// The `MouseWheel` verb. Dead arity test (`< 5 && > 6`).
 fn mouse_wheel(tokens: &[String]) -> Option<Event> {
     Some(Event::MouseWheel {
         x: atoi(tokens.get(1)?),
@@ -286,7 +292,7 @@ fn mouse_wheel(tokens: &[String]) -> Option<Event> {
     })
 }
 
-/// `SendFocusEvent` (event.cc:148-159): exactly three tokens.
+/// The `Focus` verb: exactly three tokens.
 fn focus(tokens: &[String]) -> Option<Event> {
     if tokens.len() != 3 {
         return None;
@@ -305,7 +311,7 @@ fn parse_button(name: &str) -> Option<MouseButton> {
     }
 }
 
-/// `GetModifiers` (event.cc:19-32): substring search, not token equality.
+/// The modifier mask: substring search, not token equality.
 fn parse_modifiers(text: &str) -> u32 {
     let mut modifiers = 0;
     if text.contains("shift") {
@@ -328,8 +334,8 @@ fn token(tokens: &[String], index: usize) -> &str {
     tokens.get(index).map_or("", String::as_str)
 }
 
-/// `testing/fx_string_testhelpers.cpp:27-41`: split on `delimiter`, keeping
-/// empty pieces, always at least one element (the tail after the last hit).
+/// Split on `delimiter`, keeping empty pieces, always at least one element
+/// (the tail after the last hit).
 fn string_split(text: &str, delimiter: char) -> Vec<String> {
     text.split(delimiter).map(str::to_owned).collect()
 }

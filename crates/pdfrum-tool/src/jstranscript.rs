@@ -4,29 +4,20 @@
 //! Behind the default-off `script` feature, because the engine is
 //! (`scripts/check-no-boa.nu`). The output is `ScriptCascade::transcript_text`
 //! verbatim on stdout and nothing else — no page count, no MD5 line — because
-//! `testing/tools/text_diff.py` compares the whole of `pdfium_test`'s stdout
-//! against `<fixture>_expected.txt` and any extra line is a diff.
+//! the harness compares the whole of the oracle's stdout against
+//! `<fixture>_expected.txt` and any extra line is a diff.
 //!
 //! # Which scripts, in which order
 //!
-//! `pdfium_test.cc` drives the document-open sequence through two public
-//! entry points, in this order:
+//! The document-open sequence is two steps, in this order:
 //!
-//! 1. `FORM_DoDocumentJSAction` → `CPDFSDK_FormFillEnvironment::
-//!    ProcJavascriptAction` (`fpdfsdk/fpdf_formfill.cpp:878-885`,
-//!    `fpdfsdk/cpdfsdk_formfillenvironment.cpp:689-701`): the catalog's
-//!    `/Names /JavaScript` name tree, walked by *index* — `LookupValueAndName(i)`
-//!    for `i` in `0..GetCount()` — so the order is name-tree order, not the
-//!    order the objects happen to sit in the file.
-//! 2. `FORM_DoDocumentOpenAction` → `ProcOpenAction`
-//!    (`fpdfsdk/fpdf_formfill.cpp:887-894`,
-//!    `fpdfsdk/cpdfsdk_formfillenvironment.cpp:704-729`): the catalog's
-//!    `/OpenAction`, when it is a **dictionary**. An `/OpenAction` that is an
-//!    *array* is a destination, and `ProcOpenAction` returns early without
-//!    running anything (`:719-721`). The action chain is then walked
-//!    depth-first through `/Next` by `ExecuteDocumentOpenAction`
-//!    (`fpdfsdk/cpdfsdk_formfillenvironment.cpp:995-1025`), which guards
-//!    against revisiting a dictionary it has already run.
+//! 1. The catalog's `/Names /JavaScript` name tree, walked by **index** — so
+//!    the order is name-tree order, not the order the objects happen to sit
+//!    in the file.
+//! 2. The catalog's `/OpenAction`, when it is a **dictionary**. An
+//!    `/OpenAction` that is an *array* is a destination and runs nothing at
+//!    all. The action chain is then walked depth-first through `/Next`, with
+//!    a guard against revisiting a dictionary already run.
 //!
 //! Field `/AA` actions are **not** part of this sequence: they run on events,
 //! which is `--send-events`' path, not this one.
@@ -38,6 +29,16 @@
 //! goes to **stderr**, because stdout is the byte-for-byte transcript;
 //! `pdfrum_form::script::ScriptFailure` carries the reasoning and the
 //! `[oracle-bug]` citation for why the oracle's own stdout stays empty.
+
+// Where the two-step sequence above was read in the oracle. Step 1 is
+// FORM_DoDocumentJSAction -> CPDFSDK_FormFillEnvironment::ProcJavascriptAction
+// (fpdfsdk/fpdf_formfill.cpp:878-885, cpdfsdk_formfillenvironment.cpp:689-701),
+// whose walk is LookupValueAndName(i) for i in 0..GetCount(). Step 2 is
+// FORM_DoDocumentOpenAction -> ProcOpenAction (fpdf_formfill.cpp:887-894,
+// cpdfsdk_formfillenvironment.cpp:704-729), which returns early at :719-721
+// for an array /OpenAction; the /Next walk and its revisit guard are
+// ExecuteDocumentOpenAction, cpdfsdk_formfillenvironment.cpp:995-1025. The
+// clock hooks sit inside `if (options.time > -1)` at pdfium_test.cc:2129-2135.
 
 use std::io::Write;
 
@@ -55,8 +56,7 @@ use pdfrum_parser::Document;
 /// `time` is `--time=`'s value in seconds, and it is the **single source of
 /// the scripting clock**: `Some` freezes `Date` and `util.printd` at that
 /// instant, `None` leaves them on the machine's real clock. Both are the
-/// oracle's, whose hooks are installed only when the flag was given
-/// (`testing/pdfium_test/pdfium_test.cc:2129-2135`).
+/// oracle's, whose hooks are installed only when the flag was given.
 ///
 /// # Errors
 ///
