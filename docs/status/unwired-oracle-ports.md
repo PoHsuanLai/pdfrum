@@ -88,30 +88,64 @@ images. None are in the corpus.
 
 ## 3-5. `image::dct::{scale_denominator, scaled_size, allows_reduced_resolution}`
 
+**Re-checked 2026-09-03: still blocked upstream, and the blocker is
+confirmed rather than assumed.**
+
 | | |
 |---|---|
 | Items | `crates/pdfrum-page/src/image/dct.rs` |
 | Oracle | `1 << min(levels, 3)` at `core/fpdfapi/page/cpdf_dib.cpp:531-532`; `ScaledJpegSize`, `core/fxcodec/jpeg/libjpeg_scanline_decoder.cpp:44-46`; the MCU-alignment guard at `libjpeg_scanline_decoder.cpp:150-156` |
 | Oracle production? | **Yes, all three** — `cpdf_dib.cpp:535, :566, :623` (every `CreateDCTDecoder` path) and `libjpeg_scanline_decoder.cpp:157, :226` |
-| pdfrum's live path | none |
+| pdfrum's live path | none — and it cannot be built from outside `zune-jpeg` |
+| Blocked on | `zune-jpeg`, `docs/upstream/zune/scaled-decode.md` (drafted, not filed) |
 
 These three are one contract: how far a JPEG may be decoded at reduced
-resolution, what size that yields, and when the MCU grid forbids it. pdfrum
-implements reduced-resolution decoding for **JPX only** — `decode_jpx` takes a
-`RequestedSize` (`image/jpx.rs:287`, wired at `image/mod.rs:313`) while
-`decode_dct` takes only `(data, declared)` and is called at
+resolution, what size that yields, and when the MCU grid forbids it.
+
+**Upstream state, checked 2026-09-03.** `Cargo.lock` pins `zune-jpeg`
+0.5.15; the newest published release is 0.5.16-rc1 (2026-08-07). Neither
+carries the knob. `zune_core::options::DecoderOptions` exposes exactly two
+JPEG setters — `jpeg_set_max_scans` and `jpeg_set_out_colorspace` — and
+`JpegDecoder`'s inherent methods contain nothing resembling `scale_denom`,
+a reduced decode, or a scaled IDCT. So the entry's premise is unchanged and
+a version bump would not close it.
+
+**Why it cannot be worked around locally.** Reduced decoding happens
+*inside* the inverse DCT — only the low-frequency coefficients of each 8x8
+block are dequantized and a smaller IDCT runs — so it is unreachable from
+outside the crate. `set_max_width`/`set_max_height` are rejection guards, not
+scaling requests, and `idct_1x1_func`/`idct_4x4_func` are not libjpeg's
+scaled IDCTs. Decoding fully and downsampling ourselves is not the same
+feature: it is the cost the feature exists to avoid.
+
+**The concept is proved in our own tree, on the codec that offers the
+knob.** `decode_jpx` takes a `RequestedSize` (`image/jpx.rs:287`) and is
+wired at `image/mod.rs:313`; it hands `hayro-jpeg2000` a
+`target_resolution` hint and then reads `image.width()` back rather than
+shifting a number of its own, because the decoder's answer is authoritative
+(`image/jpx.rs:260-275`). That decoder applies the same rule PDFium applies
+to `cp_reduce` — the floored base-two logarithm of the smaller axis ratio,
+`cpdf_dib.cpp:220-224` — clamped to the levels the codestream carries. So
+the surrounding plumbing (a destination-size request threaded to the codec,
+a decoder-authoritative result size) exists and works; **what is missing is
+only the DCT codec's ability to honour the request**, which is precisely the
+upstream gap. `decode_dct` still takes `(data, declared)` and is called at
 `image/mod.rs:404` with no size at all.
 
-So the whole reduced-DCT feature is missing and these are its spec, already
-ported and pinned. `image/cache.rs:437`'s own test comment mentions "a JPEG
-whose MCUs are not aligned", which is the cache having been designed expecting
-this.
+`image/cache.rs:437`'s own test comment mentions "a JPEG whose MCUs are not
+aligned", which is the cache having been designed expecting this.
 
-**Blast radius:** performance, not pixels — a large JPEG drawn small is decoded
-at full resolution and downsampled, which costs time and memory rather than
-correctness. Wiring it would change output only where libjpeg's reduced decode
-differs from a full decode plus our own scaler, which is exactly the
-divergence the oracle accepts.
+**Blast radius:** performance, not pixels — a large JPEG drawn small is
+decoded at full resolution and downsampled, which costs time and memory
+rather than correctness. Measured on `bug_718762` (a 5000x5000 CMYK JPEG on
+a 64x64 page, where PDFium decodes at 625x625): ~59 ms of decode plus most
+of a further ~464 ms of downstream per-pixel work that exists only because
+the buffer is 100 MB instead of 1.5 MB.
+
+**So the three helpers stay**, with this citation, until `zune-jpeg` gains
+the knob or we file and land the request. Wiring them would be a `[spec]`
+DEPS.md bump and a re-measure of the `image_*` fixtures; neither is possible
+today.
 
 ## Checked and *not* a gap
 
