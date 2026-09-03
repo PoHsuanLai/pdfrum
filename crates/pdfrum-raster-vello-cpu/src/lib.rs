@@ -1,34 +1,14 @@
 //! `vello_cpu` implementation of `pdfrum-render`'s `RenderDevice` and
-//! `RasterBackend` traits — the primary rasterizer. Fully wraps
-//! the backend so its still-moving API never leaks into the engine.
+//! `RasterBackend` traits — the primary rasterizer. Fully wraps the backend so
+//! its still-moving API never leaks into the engine.
 //!
-//! *Renamed 2026-09-02, was `pdfrum-raster-vello` with `VelloBackend`.* The
-//! crates now take vello's own names: upstream ships `vello` (GPU, on
-//! `wgpu`), `vello_cpu` and `vello_hybrid`, and ours were the other way
-//! round — the bare name is the GPU backend, and this one, which wraps
-//! `vello_cpu`, says so.
-//!
-//! # Determinism, pinned
-//!
-//! `vello_cpu` is bit-exact across thread counts but **not** across SIMD
-//! feature levels: measured, a baseline-vs-AVX2 pair differs by one count on
-//! a handful of pixels, reproducibly, in the shared flattening stage. That is
-//! inside the cross-backend rounding budget, but it would make our own output
-//! differ between developer machines and CI — so this backend pins
-//! [`vello_cpu::Level::baseline`] and the f32 [`RenderMode::OptimizeQuality`]
-//! pipeline rather than detecting either. Conformance runs are reproducible
-//! as a result, which is the property that actually matters.
-//!
-//! # The image-alpha panic
-//!
-//! `vello_cpu 0.2.0` **panics** rather than honouring a non-1.0
-//! `ImageSampler::alpha` (`vello_common/src/encode.rs:494`,
-//! `unimplemented!("Applying opacity to image commands")`). Every image drawn
-//! with a `ca`/`CA` below one takes that path, which is common in the corpus.
-//! [`VelloCpuDevice::draw_image`] therefore wraps a non-opaque draw in an
-//! opacity layer and always hands the sampler `alpha = 1.0`. The regression
-//! test below asserts the wrapped call does not panic, so a future
-//! `vello_cpu` that implements the field cannot silently change our rounding.
+//! The SIMD feature level and render mode are pinned rather than detected
+//! ([`vello_cpu::Level::baseline`], the f32 [`RenderMode::OptimizeQuality`]
+//! pipeline), so output does not vary between machines: `vello_cpu` is
+//! bit-exact across thread counts but not across feature levels.
+//! [`VelloCpuDevice::draw_image`] clamps its `alpha` to `0.0..=1.0` and, below
+//! one, wraps the draw in an opacity layer with the sampler at exactly `1.0`,
+//! because `vello_cpu 0.2.0` panics on any other sampler alpha.
 //!
 //! ```
 //! use kurbo::Affine;
@@ -48,6 +28,24 @@
 //! assert_eq!(a, 255, "over an opaque page");
 //! assert!(r > g && g == b, "half red over white: {r},{g},{b}");
 //! ```
+
+// Determinism, pinned. Measured, a baseline-vs-AVX2 pair differs by one count
+// on a handful of pixels, reproducibly, in the shared flattening stage. That is
+// inside the cross-backend rounding budget, but it would make our own output
+// differ between developer machines and CI, so neither the level nor the
+// pipeline is detected. Conformance runs are reproducible as a result, which is
+// the property that actually matters.
+//
+// The image-alpha panic: `vello_common/src/encode.rs` reaches an
+// `unimplemented!("Applying opacity to image commands")` for a non-1.0
+// `ImageSampler::alpha`, and every image drawn with a `ca`/`CA` below one takes
+// that path, which is common in the corpus. The doctest above asserts the
+// wrapped call does not panic, so a future `vello_cpu` that implements the
+// field cannot silently change our rounding.
+//
+// The crate names follow vello's own: upstream ships `vello` (GPU, on `wgpu`),
+// `vello_cpu` and `vello_hybrid`, so the bare name is the GPU backend and this
+// one, which wraps `vello_cpu`, says so.
 
 #![forbid(unsafe_code)]
 
