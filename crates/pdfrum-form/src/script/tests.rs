@@ -449,6 +449,36 @@ fn a_format_function_writes_the_event_value() {
     assert_eq!(cascade.transcript_text(), "Alert: $1,234.50\n");
 }
 
+/// **`Field.page`'s array is filled element by element**, so a script that
+/// installed an accessor on `Array.prototype` for one of those indices sees
+/// its setter run.
+///
+/// A bulk construction skips the prototype chain and would not. The
+/// difference is observable from one script, and `bug_679642`'s expected
+/// output is exactly that side effect.
+#[test]
+fn the_page_array_is_filled_through_the_prototype_chain() {
+    let mut cascade = session();
+    let mut model = crate::script::model::DocumentModel::empty();
+    model.page_count = 2;
+    model.fields = vec![crate::script::model::FieldModel {
+        name: "MyField".to_owned(),
+        // Two widgets, on two pages, so index 1 is written.
+        pages: vec![0, 1],
+        ..crate::script::model::FieldModel::default()
+    }];
+    cascade.set_document(model);
+    assert!(cascade.run(
+        "Object.defineProperty(Array.prototype, 1, {\n\
+           set: function (v) { app.alert('intercepted ' + v); },\n\
+           get: function () { return undefined; },\n\
+           configurable: true });\n\
+         this.getField('MyField').page;",
+        "test"
+    ));
+    assert_eq!(cascade.transcript_text(), "Alert: intercepted 1\n");
+}
+
 // ---- the page word list ----
 
 /// A session whose document model carries `pages` pages of words.

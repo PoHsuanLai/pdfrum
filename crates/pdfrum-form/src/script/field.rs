@@ -542,10 +542,18 @@ fn get_page(this: &JsValue, _a: &[JsValue], context: &mut Context) -> JsResult<J
     if pages.is_empty() {
         return Ok(JsValue::from(-1));
     }
-    let values: Vec<JsValue> = pages.iter().map(|page| JsValue::from(*page)).collect();
-    Ok(JsValue::from(
-        boa_engine::object::builtins::JsArray::from_iter(values, context),
-    ))
+    // **Built element by element with an ordinary `Set`**, which is what
+    // `PutArrayElementReentrant` is — so a script that has installed an
+    // accessor on `Array.prototype` for one of these indices sees its setter
+    // run while the array is being filled. A bulk construction skips the
+    // prototype chain and would not. `bug_679642` is that exact script, and
+    // its expected output is the side effect.
+    let array = boa_engine::object::builtins::JsArray::new(context)?;
+    for (index, page) in pages.iter().enumerate() {
+        let index = u64::try_from(index).unwrap_or(u64::MAX);
+        array.set(index, JsValue::from(*page), false, context)?;
+    }
+    Ok(JsValue::from(array))
 }
 
 /// `Field.numItems` — how many options a choice field offers.
