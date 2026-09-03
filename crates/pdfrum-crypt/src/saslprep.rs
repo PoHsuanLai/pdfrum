@@ -24,8 +24,8 @@
 //! strings while permitting them in a query. A password being checked against
 //! an existing `/U` or `/O` entry is a query, not a stored string, so
 //! unassigned code points are permitted here. This crate never *creates* a
-//! password hash (SPEC.md §3: "there is no API to change a document's
-//! password"), so the stored-string direction has no site to be wrong at.
+//! password — there is no API to change a document's password — so the
+//! stored-string direction has no site to be wrong at.
 //!
 //! # Why the failure modes are not errors here
 //!
