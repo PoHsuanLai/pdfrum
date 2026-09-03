@@ -11,9 +11,11 @@ pub fn pdfrum_edit::ContentsShape::to_object(&self, core::option::Option<pdfrum_
 pub fn pdfrum_edit::ContentsShape::with_added(&self, pdfrum_object::object::ObjRef) -> (usize, Self)
 pub fn pdfrum_edit::ContentsShape::with_removed(&self, &alloc::collections::btree::set::BTreeSet<usize>) -> (Self, alloc::collections::btree::map::BTreeMap<usize, usize>)
 pub enum pdfrum_edit::Error
+pub pdfrum_edit::Error::BadCidToGidMap(usize)
 pub pdfrum_edit::Error::BadNupParams
 pub pdfrum_edit::Error::BadPageRange
 pub pdfrum_edit::Error::EmptyFontProgram
+pub pdfrum_edit::Error::EmptyToUnicodeCMap
 pub pdfrum_edit::Error::EncryptedSaveUnsupported
 pub pdfrum_edit::Error::Io(core::io::error::Error)
 pub pdfrum_edit::Error::NoDestinationCatalog
@@ -34,6 +36,7 @@ pub pdfrum_edit::SaveMode::Full
 pub pdfrum_edit::SaveMode::Incremental
 pub struct pdfrum_edit::EditDoc<'a>
 impl pdfrum_edit::EditDoc<'_>
+pub fn pdfrum_edit::EditDoc<'_>::embed_cid_font(&mut self, &[u8], &str, &[u8]) -> core::result::Result<pdfrum_edit::EmbeddedFont, pdfrum_edit::Error>
 pub fn pdfrum_edit::EditDoc<'_>::embed_font(&mut self, &[u8], pdfrum_edit::FontEncoding) -> core::result::Result<pdfrum_edit::EmbeddedFont, pdfrum_edit::Error>
 pub fn pdfrum_edit::EditDoc<'_>::standard_font(&mut self, pdfrum_font::subst::standard::StandardFont) -> core::result::Result<pdfrum_edit::EmbeddedFont, pdfrum_edit::Error>
 impl<'a> pdfrum_edit::EditDoc<'a>

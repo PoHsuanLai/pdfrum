@@ -102,6 +102,21 @@ impl ToUnicode {
         )
     }
 
+    /// Every `(unicode, charcode)` the reverse map holds, in ascending
+    /// Unicode order.
+    ///
+    /// Multi-character destinations are skipped: their reverse key is the
+    /// packed indicator `index << 16 | 0xFFFF`, not a character, so they are
+    /// unreachable through [`reverse`](Self::reverse) as well. Values that
+    /// are not Unicode scalars (unpaired surrogates, which the C++'s
+    /// `wchar_t` map holds and Rust's `char` cannot) are skipped for the same
+    /// reason a lookup would yield U+FFFD for them (divergence D3).
+    pub fn reverse_pairs(&self) -> impl Iterator<Item = (char, u32)> + '_ {
+        self.reverse_map
+            .iter()
+            .filter_map(|(&unicode, &code)| Some((char::from_u32(unicode)?, code)))
+    }
+
     /// Whether the map holds nothing at all — neither entries nor a registry
     /// fallback.
     #[must_use]

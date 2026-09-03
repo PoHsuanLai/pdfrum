@@ -50,6 +50,10 @@ enum EncodeKind {
     Simple { unicode_to_code: HashMap<u32, u8> },
     /// `/WinAnsiEncoding`, used by the standard 14.
     WinAnsi,
+    /// A composite font whose `/ToUnicode` the caller wrote: two-byte
+    /// big-endian CIDs, taken by inverting that CMap rather than the
+    /// program's own cmap.
+    CustomCid { unicode_to_cid: HashMap<char, u32> },
 }
 
 impl EmbeddedFont {
@@ -66,6 +70,17 @@ impl EmbeddedFont {
     /// (`core/fpdfapi/font/cpdf_font.cpp:110-115`). A composite font writes
     /// two-byte big-endian GIDs (Identity-H); a simple or standard font writes
     /// one byte.
+    ///
+    /// A font from [`EditDoc::embed_cid_font`] writes two-byte big-endian
+    /// **CIDs**, and finds them by inverting the caller's `/ToUnicode` CMap
+    /// rather than by consulting the program's cmap. That is not a
+    /// convenience: under a caller-supplied CMap the program's cmap does not
+    /// describe the file's code space, and the CMap is the document's only
+    /// statement of what its codes mean. It is also what the oracle does —
+    /// `CPDF_Font::CharCodeFromUnicode` is `to_unicode_map_->ReverseLookup`
+    /// over the same `/ToUnicode` (`cpdf_font.cpp:110-115`), reached by
+    /// `FPDFText_SetText` on exactly such a font. A character the CMap does
+    /// not reach is code 0, as everywhere else.
     #[must_use]
     pub fn encode(&self, text: &str) -> Vec<u8> {
         let mut out = Vec::with_capacity(text.len());
@@ -79,6 +94,12 @@ impl EmbeddedFont {
             EncodeKind::Simple { unicode_to_code } => {
                 for ch in text.chars() {
                     out.push(unicode_to_code.get(&u32::from(ch)).copied().unwrap_or(0));
+                }
+            }
+            EncodeKind::CustomCid { unicode_to_cid } => {
+                for ch in text.chars() {
+                    let cid = unicode_to_cid.get(&ch).copied().unwrap_or(0);
+                    out.extend_from_slice(&u16::try_from(cid).unwrap_or(0).to_be_bytes());
                 }
             }
             EncodeKind::WinAnsi => {
@@ -127,6 +148,63 @@ impl EditDoc<'_> {
             FontEncoding::Simple => embed_simple(self, program, kind, &glyphs),
             FontEncoding::Composite => embed_composite(self, program, kind, &glyphs),
         }
+    }
+
+    /// Embed `program` as a `/Type0` + `/CIDFontType2` font whose
+    /// `/ToUnicode` and `/CIDToGIDMap` are the **caller's**, not generated
+    /// from the program's own cmap.
+    ///
+    /// This is `FPDFText_LoadCidType2Font`
+    /// (`fpdfsdk/fpdf_edittext.cpp:481-516` → `LoadCustomCompositeFont`
+    /// `:281-334`). The dictionary chain is the one
+    /// [`Self::embed_font`] builds for
+    /// [`FontEncoding::Composite`], with three differences, all of them the
+    /// point of the call:
+    ///
+    /// - **`/CIDToGIDMap`** is a stream holding `cid_to_gid` verbatim: one
+    ///   big-endian `u16` glyph index per CID, indexed by CID (ISO 32000-1
+    ///   §9.7.4.2). [`Self::embed_font`] writes no `/CIDToGIDMap` at all,
+    ///   which means `/Identity` — CID *is* GID.
+    /// - **`/W`** is computed per CID from that map rather than per GID from
+    ///   the cmap: `widths[i / 2] = advance(cid_to_gid[i..i+2])`, so the array
+    ///   is dense from CID 0 and its length is the map's entry count
+    ///   (`:307-315`).
+    /// - **`/ToUnicode`** is a stream holding `to_unicode` verbatim.
+    ///
+    /// The program is always described as TrueType (`FPDF_FONT_TRUETYPE` at
+    /// `:296-303`), because `/CIDFontType2` is what `/CIDToGIDMap` means: a
+    /// `/CIDFontType0` reaches glyphs with the CID as the glyph index and
+    /// never consults the map (`core/fpdfapi/font/cpdf_cidfont.cpp:508-518`).
+    ///
+    /// [`EmbeddedFont::encode`] on the result writes CIDs found by inverting
+    /// `to_unicode`, not GIDs found in the program.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::UnrecognisedFontProgram`] when no backend can read the bytes,
+    /// [`Error::EmptyFontProgram`] when the face declares no glyphs,
+    /// [`Error::EmptyToUnicodeCMap`] for an empty `to_unicode`, and
+    /// [`Error::BadCidToGidMap`] when `cid_to_gid` is empty or is not a whole
+    /// number of two-byte entries.
+    pub fn embed_cid_font(
+        &mut self,
+        program: &[u8],
+        to_unicode: &str,
+        cid_to_gid: &[u8],
+    ) -> Result<EmbeddedFont, Error> {
+        if to_unicode.is_empty() {
+            return Err(Error::EmptyToUnicodeCMap);
+        }
+        if cid_to_gid.is_empty() || !cid_to_gid.len().is_multiple_of(2) {
+            return Err(Error::BadCidToGidMap(cid_to_gid.len()));
+        }
+        let glyphs = GlyphSource::from_bytes(program).ok_or(Error::UnrecognisedFontProgram)?;
+        if glyphs.num_glyphs() == 0 {
+            return Err(Error::EmptyFontProgram);
+        }
+        Ok(embed_custom_composite(
+            self, program, to_unicode, cid_to_gid, &glyphs,
+        ))
     }
 
     /// Add a non-embedded standard-14 Type 1 font (`/BaseFont`, `/Encoding
@@ -286,6 +364,95 @@ fn embed_composite(
         ProgramKind::TrueType => names::CID_FONT_TYPE2.clone(),
         ProgramKind::Type1 | ProgramKind::OpenTypeCff => names::CID_FONT_TYPE0.clone(),
     };
+    let dict = cid_font_dict(doc, &name, cid_subtype, descriptor, w_ref);
+    let cid_font = doc.add(Object::Dict(dict));
+    Ok(EmbeddedFont {
+        font: doc.add(Object::Dict(type0_font_dict(
+            &base,
+            cid_font,
+            tounicode_ref,
+        ))),
+        kind: EncodeKind::Identity { unicode_to_gid },
+    })
+}
+
+/// `LoadCustomCompositeFont` (`fpdfsdk/fpdf_edittext.cpp:281-334`).
+///
+/// The one place the two composite paths genuinely differ is `/W`: here it is
+/// keyed by **CID**, walked out of the caller's map, so the array runs dense
+/// from CID 0 and is exactly as long as the map has entries. `embed_composite`
+/// keys it by GID out of the program's cmap instead, which is only the same
+/// array when `/CIDToGIDMap` is the identity.
+fn embed_custom_composite(
+    doc: &mut EditDoc<'_>,
+    program: &[u8],
+    to_unicode: &str,
+    cid_to_gid: &[u8],
+    glyphs: &GlyphSource,
+) -> EmbeddedFont {
+    let name = font_name(glyphs);
+    // `FPDF_FONT_TRUETYPE` at `:296-303`: /CIDToGIDMap is what makes this a
+    // /CIDFontType2, and a /CIDFontType0 would ignore it outright.
+    let descriptor = load_font_desc(doc, &name, program, ProgramKind::TrueType, glyphs);
+
+    let mut widths: BTreeMap<u32, u32> = BTreeMap::new();
+    for (cid, entry) in cid_to_gid.chunks_exact(2).enumerate() {
+        let gid = u16::from_be_bytes([
+            entry.first().copied().unwrap_or(0),
+            entry.get(1).copied().unwrap_or(0),
+        ]);
+        let advance = glyphs.default_advance(pdfrum_font::Gid(gid));
+        widths.insert(
+            u32::try_from(cid).unwrap_or(u32::MAX),
+            u32::try_from(advance).unwrap_or(0),
+        );
+    }
+    let w_ref = doc.add(Object::Array(create_widths_array(&widths)));
+
+    let map_ref = doc.add(Object::Stream(Stream::new(
+        Dict::new(),
+        ByteSpan::from(cid_to_gid.to_vec()),
+    )));
+    let tounicode_ref = doc.add(Object::Stream(Stream::new(
+        Dict::new(),
+        ByteSpan::from(to_unicode.as_bytes().to_vec()),
+    )));
+
+    let mut dict = cid_font_dict(doc, &name, names::CID_FONT_TYPE2.clone(), descriptor, w_ref);
+    dict.push(names::CID_TO_GID_MAP.clone(), Object::Ref(map_ref));
+    let cid_font = doc.add(Object::Dict(dict));
+
+    // The caller's CMap is the file's statement of what its codes mean, so it
+    // is what `encode` inverts — `CPDF_Font::CharCodeFromUnicode` is
+    // `to_unicode_map_->ReverseLookup` over this same stream
+    // (`core/fpdfapi/font/cpdf_font.cpp:110-115`).
+    let unicode_to_cid = pdfrum_font::invert_to_unicode(
+        to_unicode.as_bytes(),
+        &pdfrum_common::Limits::default(),
+        &mut pdfrum_common::Diagnostics::default(),
+    );
+    EmbeddedFont {
+        font: doc.add(Object::Dict(type0_font_dict(
+            &name,
+            cid_font,
+            tounicode_ref,
+        ))),
+        kind: EncodeKind::CustomCid { unicode_to_cid },
+    }
+}
+
+/// The descendant `/CIDFontType0` / `/CIDFontType2` dictionary and its
+/// `/CIDSystemInfo` (`CreateCidFontDict`, `fpdfsdk/fpdf_edittext.cpp:97-118`).
+///
+/// `Adobe`/`Identity`/`0` because the root's `/Encoding` is `Identity-H`: the
+/// CID *is* the code, so no registry ordering applies.
+fn cid_font_dict(
+    doc: &mut EditDoc<'_>,
+    name: &[u8],
+    subtype: Name,
+    descriptor: ObjRef,
+    widths: ObjRef,
+) -> Dict {
     let system_info = doc.add(Object::Dict(Dict::from_pairs([
         (
             names::REGISTRY.clone(),
@@ -297,38 +464,33 @@ fn embed_composite(
         ),
         (names::SUPPLEMENT.clone(), Object::Int(0)),
     ])));
-    let cid_font = doc.add(Object::Dict(Dict::from_pairs([
+    Dict::from_pairs([
         (names::TYPE.clone(), Object::Name(names::FONT.clone())),
-        (names::SUBTYPE.clone(), Object::Name(cid_subtype)),
-        (
-            names::BASE_FONT.clone(),
-            Object::Name(Name::from(name.as_slice())),
-        ),
+        (names::SUBTYPE.clone(), Object::Name(subtype)),
+        (names::BASE_FONT.clone(), Object::Name(Name::from(name))),
         (names::CID_SYSTEM_INFO.clone(), Object::Ref(system_info)),
         (names::FONT_DESCRIPTOR.clone(), Object::Ref(descriptor)),
-        (names::W.clone(), Object::Ref(w_ref)),
-    ])));
-    let font_dict = Dict::from_pairs([
+        (names::W.clone(), Object::Ref(widths)),
+    ])
+}
+
+/// The `/Type0` root naming `Identity-H`, one descendant and a `/ToUnicode`
+/// (`CreateCompositeFontDict`, `fpdfsdk/fpdf_edittext.cpp:80-95`).
+fn type0_font_dict(base: &[u8], cid_font: ObjRef, to_unicode: ObjRef) -> Dict {
+    Dict::from_pairs([
         (names::TYPE.clone(), Object::Name(names::FONT.clone())),
         (names::SUBTYPE.clone(), Object::Name(names::TYPE0.clone())),
         (
             names::ENCODING.clone(),
             Object::Name(names::IDENTITY_H.clone()),
         ),
-        (
-            names::BASE_FONT.clone(),
-            Object::Name(Name::from(base.as_slice())),
-        ),
+        (names::BASE_FONT.clone(), Object::Name(Name::from(base))),
         (
             names::DESCENDANT_FONTS.clone(),
             Object::Array(Array::of([Object::Ref(cid_font)])),
         ),
-        (names::TO_UNICODE.clone(), Object::Ref(tounicode_ref)),
-    ]);
-    Ok(EmbeddedFont {
-        font: doc.add(Object::Dict(font_dict)),
-        kind: EncodeKind::Identity { unicode_to_gid },
-    })
+        (names::TO_UNICODE.clone(), Object::Ref(to_unicode)),
+    ])
 }
 
 /// `/FontDescriptor` plus the program stream.

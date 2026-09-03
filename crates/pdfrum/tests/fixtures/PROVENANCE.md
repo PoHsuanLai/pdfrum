@@ -86,6 +86,15 @@ are about the same bytes:
 | `bug_2094.ttf` | 1288 B | `testing/resources/fonts/bug_2094.ttf`, verbatim. The smallest font in the corpus that is **degenerate in every direction at once**: it names itself `Test`, its cmap maps nothing, and it declares four glyphs. That combination is the bug — `FPDFEditEmbedderTest.Bug2094` crashed building a CID font from it — and it is why no other fixture substitutes. Because every character encodes to `.notdef`, it is also the only fixture that pins `char_maps`'s empty-cmap fallback and the single-run `/W` (`[0 [1000 0 1000 1000]]`) that follows from it. |
 | `bug_377948405.ttf` | 2084 B | `testing/resources/fonts/bug_377948405.ttf`, verbatim. A `NotoSans-Regular` cut whose cmap covers exactly six characters — `A À Ä Å Æ È` — laid out so their advances are `639`, then `639 639 639`, then `881 556`. That run of three equal widths is the fixture's whole point: it is the shortest input on which `create_widths_array`'s run-length form (`5 7 639`) differs from the naive one, which is what `FPDFEditEmbedderTest.Bug377948405` regressed on. The narrow coverage also makes it the second, genuinely *different* face in the two-font subsetting test, where Roboto's near-complete Latin would not distinguish one subset from another. |
 
+One arrived with `DocEdit::embed_cid_font`, the `FPDFText_LoadCidType2Font`
+port. It is the only fixture here that comes from the oracle's
+`third_party/` rather than its `testing/resources/`, and the only one under a
+licence other than PDFium's own:
+
+| File | Size | What it exercises |
+|---|---:|---|
+| `noto_sans_sc_subset.otf` | 3628 B | `third_party/NotoSansCJK/NotoSansSC-Regular.subset.otf`, verbatim — Noto Sans CJK V2.001, **OFL-1.1**, "Copyright 2018 The Noto Project Authors"; the licence text sits beside the original in the oracle checkout and travels with any redistribution of these bytes. It is the font `FPDFEditEmbedderTest.LoadCidType2FontCustom` loads, which is the reason to take it rather than reuse `roboto.ttf`: eleven glyphs with **real, distinguishable advances** (1000 for nine of them, 224 for glyph 1), so a `/W` array walked out of the caller's `/CIDToGIDMap` is checkable entry by entry. `roboto.ttf` cannot substitute — its subset carries no usable cmap, so `embed_font` falls back to identity GIDs whose advances are mostly 0, and a `/W` of zeros distinguishes nothing. |
+
 Neither is duplicated for the Type 1 cases: `load_font.rs` reaches across to
 `crates/pdfrum-type1/tests/fixtures/FoxitSerifMM.pfb` rather than copy a
 113 KB program into this directory. Its provenance is recorded beside it.

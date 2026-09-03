@@ -334,6 +334,61 @@ impl DocEdit<'_> {
         Ok(self.inner.embed_font(program, encoding)?)
     }
 
+    /// Embed `program` as a composite font whose `/ToUnicode` CMap and
+    /// `/CIDToGIDMap` are the caller's, not generated from the program.
+    ///
+    /// The counterpart of `FPDFText_LoadCidType2Font`. `cid_to_gid` is one
+    /// big-endian `u16` glyph index per CID, indexed by CID; `/W` is computed
+    /// per CID from it. [`EmbeddedFont::encode`] on the result writes CIDs
+    /// found by inverting `to_unicode`.
+    ///
+    /// ```
+    /// use pdfrum::{Document, SaveOptions, TextBuilder};
+    ///
+    /// const CMAP: &str = "\
+    /// /CIDInit /ProcSet findresource begin
+    /// 12 dict begin
+    /// begincmap
+    /// /CMapName /Adobe-Identity-H def
+    /// /CMapType 2 def
+    /// 1 begincodespacerange
+    /// <0000> <FFFF>
+    /// endcodespacerange
+    /// 1 beginbfchar
+    /// <0001> <0048>
+    /// endbfchar
+    /// endcmap
+    /// CMapName currentdict /CMap defineresource pop
+    /// end
+    /// end
+    /// ";
+    ///
+    /// let doc = Document::open("tests/fixtures/hello_world.pdf")?;
+    /// let mut edit = doc.edit();
+    /// // CID 0 → GID 0, CID 1 → GID 1.
+    /// let font = edit.embed_cid_font(
+    ///     include_bytes!("../../pdfrum-edit/tests/files/tiny.ttf"),
+    ///     CMAP,
+    ///     &[0, 0, 0, 1],
+    /// )?;
+    /// assert_eq!(font.encode("H"), vec![0, 1]);
+    /// # Ok::<(), pdfrum::Error>(())
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// [`Error::Save`](crate::Error::Save) when the bytes are not a font
+    /// program, the face has no glyphs, `to_unicode` is empty, or
+    /// `cid_to_gid` is empty or not a whole number of two-byte entries.
+    pub fn embed_cid_font(
+        &mut self,
+        program: &[u8],
+        to_unicode: &str,
+        cid_to_gid: &[u8],
+    ) -> Result<EmbeddedFont> {
+        Ok(self.inner.embed_cid_font(program, to_unicode, cid_to_gid)?)
+    }
+
     /// Add a non-embedded standard-14 Type 1 font.
     ///
     /// # Errors

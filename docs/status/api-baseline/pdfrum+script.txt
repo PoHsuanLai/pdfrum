@@ -139,6 +139,7 @@ pub fn pdfrum::Bookmark<'_>::page_index(&self) -> core::option::Option<pdfrum_co
 pub fn pdfrum::Bookmark<'_>::title(&self) -> alloc::string::String
 pub struct pdfrum::DocEdit<'a>
 impl pdfrum::DocEdit<'_>
+pub fn pdfrum::DocEdit<'_>::embed_cid_font(&mut self, &[u8], &str, &[u8]) -> pdfrum::Result<pdfrum_edit::font::embed::EmbeddedFont>
 pub fn pdfrum::DocEdit<'_>::embed_font(&mut self, &[u8], pdfrum_edit::font::embed::FontEncoding) -> pdfrum::Result<pdfrum_edit::font::embed::EmbeddedFont>
 pub fn pdfrum::DocEdit<'_>::save(&self, impl core::convert::AsRef<std::path::Path>, &pdfrum::SaveOptions) -> pdfrum::Result<()>
 pub fn pdfrum::DocEdit<'_>::save_pages(&mut self, impl core::convert::AsRef<std::path::Path>, &[pdfrum::PageEdit], &pdfrum::SaveOptions) -> pdfrum::Result<()>

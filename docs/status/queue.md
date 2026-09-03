@@ -19,13 +19,13 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
   a format script's output is computed and dropped (`CommitOutcome::display`
   has no reader; `UpdateKind` cannot carry it), and `FieldRef::index`
   conflates a page-local id with a `/Fields` position.
-- **No caller-supplied `/ToUnicode` CMap or `/CIDToGIDMap` on font load.**
-  `DocEdit::embed_font(bytes, FontEncoding::Composite)` always generates both
-  from the program's own cmap, so the oracle's `FPDFText_LoadCidType2Font`
-  (`fpdfsdk/fpdf_edittext.cpp`) — which takes `to_unicode_cmap` and
-  `cid_to_gid_map` spans alongside the program — has no counterpart.
-  `crates/pdfrum/tests/load_font.rs::load_cid_type2_font_custom` is the
-  `#[ignore]`d port waiting on it.
+- ~~**No caller-supplied `/ToUnicode` CMap or `/CIDToGIDMap` on font load.**~~
+  — landed 2026-09-03 as `DocEdit::embed_cid_font(program, to_unicode,
+  cid_to_gid)`, the `FPDFText_LoadCidType2Font` counterpart. `/W` is computed
+  per CID from the caller's map, both blobs are written verbatim, and
+  `EmbeddedFont::encode` inverts the caller's CMap (the oracle's
+  `CharCodeFromUnicode` is the same reverse lookup). `load_cid_type2_font_custom`
+  and `load_cid_type2_font_custom_generated_widths` are un-ignored.
 - ~~**`/FontFile` stores the PFB wrapper but `/Length1-3` describe the unwrapped
   program.**~~ — fixed 2026-09-03. `embed_program` now unwraps the container:
   `pdfrum_type1::font_file` returns the raw program *and* the three lengths

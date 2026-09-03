@@ -93,6 +93,35 @@ pub(crate) use tounicode::ToUnicode;
 
 pub use pdfrum_type1::FontFile as Type1FontFile;
 
+/// Invert a `/ToUnicode` CMap: Unicode scalar → the character code that maps
+/// to it, for every code the program reaches.
+///
+/// This is the oracle's `CPDF_Font::CharCodeFromUnicode`
+/// (`core/fpdfapi/font/cpdf_font.cpp:110-115`,
+/// `to_unicode_map_->ReverseLookup(unicode)`) as a table computed once,
+/// rather than a lookup per character. A writer that embeds a font with a
+/// *caller-supplied* `/ToUnicode` needs exactly this to turn text into codes:
+/// the caller's CMap is the only statement of what its codes mean, and the
+/// font program's own cmap is not it.
+///
+/// Where several codes map to one Unicode value the **numerically smallest**
+/// code wins, which is the collision policy `InsertIntoMaps` applies in both
+/// directions (`docs/design/pdfrum-font.md` §1.6.1). Multi-character
+/// destinations are unreachable — the reverse map is keyed on the packed
+/// stored value, and a multi-character entry's key is an indicator rather
+/// than any real character, which is the oracle's behaviour too.
+#[must_use]
+pub fn invert_to_unicode(
+    bytes: &[u8],
+    limits: &Limits,
+    diags: &mut Diagnostics,
+) -> std::collections::HashMap<char, u32> {
+    tounicode::parse(bytes, limits, diags)
+        .reverse_pairs()
+        .filter(|(_, code)| *code != 0)
+        .collect()
+}
+
 /// A Type 1 program as the `/FontFile` stream a PDF writer stores, with the
 /// ISO 32000-1 table 127 lengths that partition it.
 ///
