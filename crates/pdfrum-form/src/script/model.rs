@@ -22,9 +22,8 @@ pub struct DocumentModel {
     pub page_count: u32,
     /// `Doc.path` — the system path, with the oracle's leading separator.
     ///
-    /// `CJS_App::SysPathToPDFPath` prefixes a `/` when there is not one
-    /// already, which is why `document_properties_expected.txt` reads
-    /// `/myfile.pdf` for `path` and a bare `myfile.pdf` for `URL`.
+    /// A leading `/` is prefixed when there is not one already, which is why
+    /// `path` reads `/myfile.pdf` where `URL` reads a bare `myfile.pdf`.
     pub path: String,
     /// `Doc.URL` — the same path, unprefixed. `JS_docGetFilePath()`.
     pub url: String,

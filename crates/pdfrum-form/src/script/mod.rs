@@ -250,8 +250,8 @@ pub struct ScriptCascade {
     stops: Vec<ScriptFailure>,
     /// How deep a calculation may nest. One, upstream.
     max_calculate_depth: u32,
-    /// `CJS_EventContext::busy_` — a script running inside a script is
-    /// refused rather than re-entered.
+    /// Whether a script is running: one running inside another is refused
+    /// rather than re-entered.
     busy: bool,
 }
 

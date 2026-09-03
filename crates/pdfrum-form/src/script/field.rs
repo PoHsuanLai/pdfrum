@@ -116,11 +116,11 @@ fn read<T>(
 
 /// One of the **32** setters that validate and then do nothing.
 ///
-/// Not a stub: `set_fill_color`, `set_alignment`, `set_char_limit`,
-/// `set_user_name` and twenty-eight more each run their checks and then
-/// `return CJS_Result::Success()` without writing. Reproducing that is
-/// reproducing the specification — and the checks the goldens assert are the
-/// arity and type ones, which are shared, so this really is one body.
+/// Not a stub: `fillColor`, `alignment`, `charLimit`, `userName` and
+/// twenty-eight more each validate their argument and then return success
+/// without writing anything. Reproducing that is reproducing the behaviour —
+/// and the checks that are observable are the arity and type ones, which are
+/// shared, so this really is one body.
 #[allow(clippy::unnecessary_wraps)]
 fn ignoring_setter(_this: &JsValue, _a: &[JsValue], _c: &mut Context) -> JsResult<JsValue> {
     Ok(JsValue::undefined())

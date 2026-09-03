@@ -44,8 +44,7 @@ impl Point {
     ///
     /// The whole of the `f64`/`f32` boundary, in one function, called from
     /// one place. A page coordinate past `f32`'s exact range has already lost
-    /// its meaning, and rounding is what the oracle's own `CFX_PointF` does
-    /// with the same value.
+    /// its meaning, so rounding it loses nothing that was still there.
     #[expect(
         clippy::cast_possible_truncation,
         reason = "page coordinates beyond f32 have already lost meaning, and every \

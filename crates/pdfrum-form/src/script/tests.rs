@@ -790,8 +790,8 @@ fn a_calculate_depth_of_one_refuses_nesting() {
     );
 }
 
-/// A script that runs inside a script is refused rather than re-entered —
-/// `CJS_EventContext::busy_`, and its message.
+/// A script that runs inside a script is refused rather than re-entered,
+/// and the message says so.
 #[test]
 fn a_reentrant_script_is_refused() {
     let mut cascade = session();
