@@ -2,8 +2,8 @@
 # Reclaim the disk that cargo target directories eat.
 #
 # Every agent builds this workspace in its own `CARGO_TARGET_DIR` under
-# `/mnt/data2/r13921098/cargo-target/<name>`, and a finished agent leaves its
-# tree behind. Measured 2026-09-02: thirty-three of them, **600 GB**, of which
+# `$PDFRUM_TARGET_ROOT/<name>` (scripts/env.nu; default `<repo>/../cargo-target`),
+# and a finished agent leaves its tree behind. Measured 2026-09-02: thirty-three of them, **600 GB**, of which
 # two were in use. Incremental compilation is already off
 # (`.cargo/config.toml`); this is the other half of the problem — not that
 # each tree is large, but that nothing removed the ones nobody was reading.
@@ -21,8 +21,8 @@
 # Run standalone, or let the session's periodic sweep call it. `--dry-run`
 # prints what would go and touches nothing.
 
-const TARGET_ROOT = "/mnt/data2/r13921098/cargo-target"
-const WORKTREE_ROOT = "/mnt/data2/r13921098/worktrees"
+use env.nu [target-root worktree-root]
+
 
 # Target directories some running process is using, from its environment.
 def in-use []: nothing -> list<string> {
@@ -48,8 +48,12 @@ def main [
     --keep: list<string> = []  # target-dir names to keep whatever the scan says
 ] {
     let live = (in-use)
-    let candidates = (ls $TARGET_ROOT | where type == dir | get name)
-    let worktree_targets = (glob $"($WORKTREE_ROOT)/*/target" | where {|p| $p | path exists })
+    let target_root = (target-root)
+    let worktree_root = (worktree-root)
+    let candidates = if ($target_root | path exists) {
+        ls $target_root | where type == dir | get name
+    } else { [] }
+    let worktree_targets = (glob $"($worktree_root)/*/target" | where {|p| $p | path exists })
 
     mut freed = 0b
     mut kept = []
@@ -71,5 +75,6 @@ def main [
         }
     }
     let verb = if $dry_run { "would free" } else { "freed" }
+    print $"target root ($target_root)"
     print $"($verb) ($freed); kept ($kept | str join ', ')"
 }

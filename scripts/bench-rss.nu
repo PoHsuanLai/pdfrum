@@ -4,6 +4,9 @@
 #
 # Usage: scripts/bench-rss.nu [pdfium_test] [rounds] [dir] [tool]
 #
+# The binary defaults to `$PDFRUM_ORACLE_BIN` (scripts/env.nu), which itself
+# defaults to `<repo>/../pdfium-c++/out/Release/pdfium_test`.
+#
 # PLAN.md §M12's memory target is "peak RSS <= 1.5x oracle". This is what
 # measures it. The time harness beside it (scripts/bench-oracle.nu) answers a
 # different question with a different method, and the difference is the point:
@@ -49,6 +52,8 @@
 # two renderers. The empty-process floor is measured and printed first for
 # exactly that reason; read the ratios on the heavy documents.
 
+use env.nu [oracle-bin]
+
 # `%.Nf`. Nushell rounds but does not pad, and these columns are read down.
 def fixed [places: int]: float -> string {
     let v = $in
@@ -76,7 +81,7 @@ def worst-of [time_bin: path, rounds: int, argv: list<string>]: nothing -> recor
 }
 
 def main [
-    oracle: path = /mnt/data2/pdfium/pdfium-c++/out/Release/pdfium_test
+    oracle?: path
     rounds: int = 3
     fixtures: path = benches/corpus
     tool?: path
@@ -84,9 +89,11 @@ def main [
     cd ($env.FILE_PWD | path dirname)
     let root = (pwd)
 
+    let oracle = ($oracle | default (oracle-bin))
     if not ($oracle | path exists) {
         print --stderr $"error: no pdfium_test at ($oracle)"
-        print --stderr "       pass its path as the first argument"
+        print --stderr "       pass its path as the first argument, or set"
+        print --stderr "       PDFRUM_ORACLE_BIN / PDFRUM_ORACLE_CHECKOUT"
         exit 1
     }
 

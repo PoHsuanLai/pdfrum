@@ -11,7 +11,14 @@ import subprocess
 import sys
 
 OUT_DIR = os.path.dirname(os.path.abspath(__file__))
-ORACLE = "/mnt/data2/pdfium/pdfium-c++"
+# `docs/status/data/v8probe/` -> the repository root.
+REPO_ROOT = os.path.abspath(os.path.join(OUT_DIR, "..", "..", "..", ".."))
+# One place, two inputs: `$PDFRUM_ORACLE_CHECKOUT`, else the sibling directory
+# README.md and PLAN.md §4 say the checkout lives in. `scripts/env.nu` resolves
+# the same variable with the same default.
+ORACLE = os.environ.get(
+    "PDFRUM_ORACLE_CHECKOUT", os.path.join(REPO_ROOT, "..", "pdfium-c++")
+)
 FIXUP = os.path.join(ORACLE, "testing", "tools", "fixup_pdf_template.py")
 
 TEMPLATE = """{{header}}

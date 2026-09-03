@@ -8,10 +8,17 @@
 # "Seed corpora" for provenance).
 #
 # Usage: fuzz/seed-corpus.sh [path-to-pdfium-c++-checkout]
+#
+# The checkout defaults to `$PDFRUM_ORACLE_CHECKOUT`, itself defaulting to
+# `<repo>/../pdfium-c++` — the sibling directory README.md and PLAN.md §4 say
+# it lives in, and the same variable and default `scripts/env.nu` resolves for
+# the nushell side.
 set -euo pipefail
 cd "$(dirname "$0")"
 
-ORACLE="${1:-/mnt/data2/pdfium/pdfium-c++}"
+# `fuzz/` is one level below the repository root; `..` from here is that root.
+repo_root="$(cd .. && pwd)"
+ORACLE="${1:-${PDFRUM_ORACLE_CHECKOUT:-$repo_root/../pdfium-c++}}"
 
 targets=(
     object_decode_text object_name_decode

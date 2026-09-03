@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Extract PDFium's static font data tables into Rust `const` source fragments.
 
-The read-only C++ oracle checkout (`/mnt/data2/pdfium/pdfium-c++`) holds a
-handful of hand-maintained lookup tables that `pdfrum` needs verbatim: the
+The read-only C++ oracle checkout (`$PDFRUM_ORACLE_CHECKOUT`, default
+`<repo>/../pdfium-c++`) holds a handful of hand-maintained lookup tables that
+`pdfrum` needs verbatim: the
 predefined simple-font encodings, the base-14 name/alias tables, the Japan1
 vertical CID transforms, the substitution weight/skew ramps, and the GBK
 Chinese font-name prefixes. This script reads them out of the C++ sources and
@@ -14,6 +15,7 @@ Usage:
 
 from __future__ import annotations
 
+import os
 import pathlib
 import re
 import sys
@@ -323,10 +325,25 @@ def emit_chinese(oracle: pathlib.Path, out: pathlib.Path, report: list[str]) -> 
 # ------------------------------------------------------------- driver
 
 
+
+def oracle_checkout(argv_index: int = 1) -> pathlib.Path:
+    """The read-only C++ PDFium checkout.
+
+    One place, three inputs, in order: an explicit argument, then
+    `$PDFRUM_ORACLE_CHECKOUT`, then `<repo>/../pdfium-c++` — the sibling
+    directory README.md and PLAN.md §4 already say it lives in. The nushell
+    side resolves the same variable with the same default in `scripts/env.nu`;
+    this is that rule spelled in Python, six lines rather than a shared module
+    the one-shot generators would have to import across directories.
+    """
+    if len(sys.argv) > argv_index:
+        return pathlib.Path(sys.argv[argv_index])
+    repo = pathlib.Path(__file__).resolve().parent.parent
+    return pathlib.Path(os.environ.get("PDFRUM_ORACLE_CHECKOUT", repo.parent / "pdfium-c++"))
+
+
 def main() -> int:
-    oracle = pathlib.Path(
-        sys.argv[1] if len(sys.argv) > 1 else "/mnt/data2/pdfium/pdfium-c++"
-    )
+    oracle = oracle_checkout()
     out = pathlib.Path(sys.argv[2] if len(sys.argv) > 2 else ".").resolve()
     out.mkdir(parents=True, exist_ok=True)
 

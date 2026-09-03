@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Extract the fourteen base-14 Foxit CFF blobs from the C++ oracle checkout.
 
-The oracle (`/mnt/data2/pdfium/pdfium-c++`) stores the base-14 substitution
-faces as C++ `std::array<uint8_t, N>` initializers, one per translation unit
-under `core/fxge/fontdata/chromefontdata/`. This script turns them back into
+The oracle (`$PDFRUM_ORACLE_CHECKOUT`, default `<repo>/../pdfium-c++`) stores
+the base-14 substitution faces as C++ `std::array<uint8_t, N>` initializers,
+one per translation unit under `core/fxge/fontdata/chromefontdata/`. This script turns them back into
 the bare CFF byte streams `pdfrum` embeds. It is the base-14 sibling of
 `scripts/extract-foxit-mm.py`, which does the same for the two Multiple-Master
 PFB fallbacks.
@@ -17,6 +17,7 @@ All files are PDFium-BSD licensed (see PROVENANCE.md alongside them).
 
 from __future__ import annotations
 
+import os
 import pathlib
 import re
 import sys
@@ -70,10 +71,25 @@ def extract(source: bytes, symbol: str) -> bytes:
     return bytes(int(m.group(1), 16) for m in BYTE.finditer(body))
 
 
+
+def oracle_checkout(argv_index: int = 1) -> pathlib.Path:
+    """The read-only C++ PDFium checkout.
+
+    One place, three inputs, in order: an explicit argument, then
+    `$PDFRUM_ORACLE_CHECKOUT`, then `<repo>/../pdfium-c++` — the sibling
+    directory README.md and PLAN.md §4 already say it lives in. The nushell
+    side resolves the same variable with the same default in `scripts/env.nu`;
+    this is that rule spelled in Python, six lines rather than a shared module
+    the one-shot generators would have to import across directories.
+    """
+    if len(sys.argv) > argv_index:
+        return pathlib.Path(sys.argv[argv_index])
+    repo = pathlib.Path(__file__).resolve().parent.parent
+    return pathlib.Path(os.environ.get("PDFRUM_ORACLE_CHECKOUT", repo.parent / "pdfium-c++"))
+
+
 def main() -> int:
-    oracle = pathlib.Path(
-        sys.argv[1] if len(sys.argv) > 1 else "/mnt/data2/pdfium/pdfium-c++"
-    )
+    oracle = oracle_checkout()
     src = oracle / "core/fxge/fontdata/chromefontdata"
     out = pathlib.Path(sys.argv[2] if len(sys.argv) > 2 else "fontdata").resolve()
     out.mkdir(parents=True, exist_ok=True)
