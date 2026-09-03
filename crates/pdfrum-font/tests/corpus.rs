@@ -20,15 +20,46 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+/// The read-only C++ PDFium checkout, resolved the one way every script and
+/// test in this repository resolves it: `$PDFRUM_ORACLE_CHECKOUT`, else the
+/// sibling `../pdfium-c++` directory README.md and PLAN.md §4 name.
+/// `scripts/env.nu` holds the nushell spelling of the same rule.
+///
+/// Six lines rather than a shared module: STYLE.md §4 forbids a `common`,
+/// `util` or `helpers` module name, and an integration test in one crate
+/// cannot reach another crate's test code anyway.
+fn oracle_checkout() -> PathBuf {
+    let checkout = std::env::var_os("PDFRUM_ORACLE_CHECKOUT").map_or_else(
+        || Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../pdfium-c++"),
+        PathBuf::from,
+    );
+    if !checkout.is_dir() {
+        // Said once per test process, so a run where every case below did
+        // nothing says so rather than reporting a silent green.
+        static SAID: std::sync::Once = std::sync::Once::new();
+        SAID.call_once(|| {
+            eprintln!(
+                "skipping the oracle-corpus cases: no checkout at {} \
+                 (set PDFRUM_ORACLE_CHECKOUT)",
+                checkout.display()
+            );
+        });
+    }
+    checkout
+}
+
 /// The read-only oracle checkout, when it is present.
 fn oracle_root() -> Option<PathBuf> {
-    let p = PathBuf::from("/mnt/data2/pdfium/pdfium-c++");
+    let p = oracle_checkout();
     p.is_dir().then_some(p)
 }
 
 /// The golden store.
 fn goldens_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../conformance/goldens")
+    std::env::var_os("PDFRUM_GOLDENS").map_or_else(
+        || Path::new(env!("CARGO_MANIFEST_DIR")).join("../../conformance/goldens"),
+        PathBuf::from,
+    )
 }
 
 /// Whether the golden store has been generated here.

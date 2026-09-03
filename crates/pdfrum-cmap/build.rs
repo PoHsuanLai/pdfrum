@@ -8,7 +8,7 @@
 //!
 //! ```text
 //! PDFRUM_REGEN_CMAP_TABLES=1 \
-//! PDFRUM_ORACLE=/path/to/pdfium-c++ \
+//! PDFRUM_ORACLE_CHECKOUT=/path/to/pdfium-c++ \
 //!   cargo build -p pdfrum-cmap
 //! ```
 //!
@@ -108,20 +108,21 @@ struct IndexRow {
 
 fn main() {
     println!("cargo:rerun-if-env-changed=PDFRUM_REGEN_CMAP_TABLES");
-    println!("cargo:rerun-if-env-changed=PDFRUM_ORACLE");
+    println!("cargo:rerun-if-env-changed=PDFRUM_ORACLE_CHECKOUT");
     println!("cargo:rerun-if-changed=tables/cmaps.bin");
 
     if std::env::var_os("PDFRUM_REGEN_CMAP_TABLES").is_none() {
         return;
     }
-    let oracle = PathBuf::from(
-        std::env::var("PDFRUM_ORACLE").unwrap_or_else(|_| "/mnt/data2/pdfium/pdfium-c++".into()),
+    let oracle = std::env::var_os("PDFRUM_ORACLE_CHECKOUT").map_or_else(
+        || Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../pdfium-c++"),
+        PathBuf::from,
     );
     let cmaps = oracle.join("core/fpdfapi/cmaps");
     assert!(
         cmaps.is_dir(),
         "PDFRUM_REGEN_CMAP_TABLES is set but {} is not a directory; \
-         point PDFRUM_ORACLE at a pdfium checkout",
+         point PDFRUM_ORACLE_CHECKOUT at a pdfium checkout",
         cmaps.display()
     );
     let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("tables");

@@ -8,7 +8,7 @@
 //!
 //! ```text
 //! PDFRUM_REGEN_TEXT_TABLES=1 \
-//! PDFRUM_ORACLE=/path/to/pdfium-c++ \
+//! PDFRUM_ORACLE_CHECKOUT=/path/to/pdfium-c++ \
 //!   cargo build -p pdfrum-text
 //! ```
 //!
@@ -55,19 +55,20 @@ const BIDI_CLASSES: [&str; 19] = [
 
 fn main() {
     println!("cargo:rerun-if-env-changed=PDFRUM_REGEN_TEXT_TABLES");
-    println!("cargo:rerun-if-env-changed=PDFRUM_ORACLE");
+    println!("cargo:rerun-if-env-changed=PDFRUM_ORACLE_CHECKOUT");
     println!("cargo:rerun-if-changed=tables/unicode.bin");
 
     if std::env::var_os("PDFRUM_REGEN_TEXT_TABLES").is_none() {
         return;
     }
-    let oracle = PathBuf::from(
-        std::env::var("PDFRUM_ORACLE").unwrap_or_else(|_| "/mnt/data2/pdfium/pdfium-c++".into()),
+    let oracle = std::env::var_os("PDFRUM_ORACLE_CHECKOUT").map_or_else(
+        || Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../pdfium-c++"),
+        PathBuf::from,
     );
     assert!(
         oracle.join("core/fxcrt/fx_ucddata.inc").is_file(),
         "PDFRUM_REGEN_TEXT_TABLES is set but {} holds no fx_ucddata.inc; \
-         point PDFRUM_ORACLE at a pdfium checkout",
+         point PDFRUM_ORACLE_CHECKOUT at a pdfium checkout",
         oracle.display()
     );
     let tables = Path::new(env!("CARGO_MANIFEST_DIR")).join("tables");

@@ -5,15 +5,43 @@
 //! keys are all behavior, and a test that checked only "contains" would let
 //! any of them drift.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use pdfrum_common::{Diagnostics, Limits};
 use pdfrum_doc::structure::{StructTree, dump_tree};
 
+/// The read-only C++ PDFium checkout, resolved the one way every script and
+/// test in this repository resolves it: `$PDFRUM_ORACLE_CHECKOUT`, else the
+/// sibling `../pdfium-c++` directory README.md and PLAN.md §4 name.
+/// `scripts/env.nu` holds the nushell spelling of the same rule.
+///
+/// Six lines rather than a shared module: STYLE.md §4 forbids a `common`,
+/// `util` or `helpers` module name, and an integration test in one crate
+/// cannot reach another crate's test code anyway.
+fn oracle_checkout() -> PathBuf {
+    let checkout = std::env::var_os("PDFRUM_ORACLE_CHECKOUT").map_or_else(
+        || Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../pdfium-c++"),
+        PathBuf::from,
+    );
+    if !checkout.is_dir() {
+        // Said once per test process, so a run where every case below did
+        // nothing says so rather than reporting a silent green.
+        static SAID: std::sync::Once = std::sync::Once::new();
+        SAID.call_once(|| {
+            eprintln!(
+                "skipping the oracle-corpus cases: no checkout at {} \
+                 (set PDFRUM_ORACLE_CHECKOUT)",
+                checkout.display()
+            );
+        });
+    }
+    checkout
+}
+
 /// The oracle checkout's fixture directory. Tests skip when it is absent, so
 /// the suite still runs on a machine that has only this repository.
 fn resource(name: &str) -> Option<PathBuf> {
-    let path = PathBuf::from("/mnt/data2/pdfium/pdfium-c++/testing/resources").join(name);
+    let path = oracle_checkout().join("testing/resources").join(name);
     path.exists().then_some(path)
 }
 

@@ -601,14 +601,24 @@ mod tests {
         assert_eq!(sibling_evt_path("no-extension"), None);
     }
 
+    /// The read-only C++ PDFium checkout, resolved as every script and test in
+    /// this repository resolves it: `$PDFRUM_ORACLE_CHECKOUT`, else the
+    /// sibling `../pdfium-c++` directory README.md and PLAN.md §4 name.
+    fn oracle_checkout() -> std::path::PathBuf {
+        std::env::var_os("PDFRUM_ORACLE_CHECKOUT").map_or_else(
+            || std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../pdfium-c++"),
+            std::path::PathBuf::from,
+        )
+    }
+
     #[test]
     fn every_corpus_evt_parses_without_error() {
-        let root = Path::new("/mnt/data2/pdfium/pdfium-c++/testing");
+        let root = oracle_checkout().join("testing");
         if !root.is_dir() {
             return;
         }
         let mut files = Vec::new();
-        collect_evt(root, &mut files);
+        collect_evt(&root, &mut files);
         files.sort();
         assert_eq!(
             files.len(),
