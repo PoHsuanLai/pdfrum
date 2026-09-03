@@ -135,33 +135,29 @@ impl Pixels {
         }
     }
 
-    /// The colour at `(x, y)` as the three bytes a device buffer wants —
-    /// [`color_at`](Self::color_at) followed by [`Rgb::to_bytes`], with the
-    /// floats taken out of the middle.
+    /// The colour at `(x, y)` as the three bytes a device buffer wants, with
+    /// the float round trip of [`color_at`](Self::color_at) taken out.
     ///
-    /// # Why this is the same answer and not merely a close one
-    ///
-    /// Every arm of `color_at` reaches `Rgb` from a byte through
-    /// `f32::from(b) / 255.0`, and `Rgb::to_bytes` returns from `Rgb` to a byte
-    /// through `(v.clamp(0.0, 1.0) * 255.0).round()`. That pair is **exactly
-    /// the identity on all 256 byte values** — verified exhaustively, and
-    /// pinned by `the_byte_path_is_exactly_the_float_path`. So for `Gray8` and
-    /// `Rgb8` the float trip is a no-op that the compiler cannot elide (it
-    /// cannot know `round` is exact here), and for `Cmyk8` it wraps
-    /// [`adobe_cmyk_to_srgb`](crate::color::adobe_cmyk_to_srgb), which is
-    /// **byte-in, byte-out already**: the wrapper's own encode uses
-    /// `v * 255.0 + 0.5` truncated, which is likewise the identity on all 256.
-    ///
-    /// This matters because `pdfrum_render::image::to_pixmap` runs it once per
-    /// *source* pixel — twenty-five million times on `image_bug_718762` — and
-    /// measured at ~34 ns each it is 90% of that document's render. Nothing
-    /// about the colour changes; only how many float instructions run on the
-    /// way to it.
-    ///
-    /// An `Indexed` image still pays the palette's `Rgb` → bytes conversion per
-    /// pixel here. Hoisting that is the caller's business, since only the
-    /// caller knows it is about to walk the whole image:
-    /// [`Self::byte_palette`].
+    /// Same answer as `color_at` followed by [`Rgb::to_bytes`], not merely a
+    /// close one. A pixel outside the image reads as black rather than
+    /// panicking. An `Indexed` image still pays its palette conversion per
+    /// pixel; a caller walking the whole image should hoist it with
+    /// [`Self::byte_palette`] instead.
+    // Every arm of `color_at` reaches `Rgb` from a byte through
+    // `f32::from(b) / 255.0`, and `Rgb::to_bytes` returns from `Rgb` to a byte
+    // through `(v.clamp(0.0, 1.0) * 255.0).round()`. That pair is exactly the
+    // identity on all 256 byte values — verified exhaustively, and pinned by
+    // `the_byte_path_is_exactly_the_float_path`. So for `Gray8` and `Rgb8` the
+    // float trip is a no-op the compiler cannot elide (it cannot know `round`
+    // is exact here), and for `Cmyk8` it wraps `adobe_cmyk_to_srgb`, which is
+    // byte-in, byte-out already: that wrapper's own encode uses
+    // `v * 255.0 + 0.5` truncated, likewise the identity on all 256.
+    //
+    // This matters because `pdfrum_render::image::to_pixmap` runs it once per
+    // source pixel — twenty-five million times on `image_bug_718762` — and
+    // measured at ~34 ns each it is 90% of that document's render. Nothing
+    // about the colour changes; only how many float instructions run on the
+    // way to it.
     #[must_use]
     pub fn sample_bytes(&self, x: u32, y: u32, width: u32) -> [u8; 3] {
         let Some(index) = usize::try_from(y)
@@ -248,10 +244,11 @@ impl ImageData {
 
 /// Decode an image `XObject`.
 ///
-/// `form_resources` is consulted for a named colour space **only for inline
-/// images**; a real image `XObject` sees the page's resources alone. `size`
-/// says how much resolution the caller needs, which only the DCT and JPEG
-/// 2000 codecs act on.
+/// `form_resources` is searched for a named colour space before
+/// `page_resources`, and the interpreter passes it only for an inline image:
+/// a real `XObject` sees the page's resources alone. `size` says how much
+/// resolution the caller needs, which only the DCT and JPEG 2000 codecs act
+/// on.
 ///
 /// # Errors
 ///

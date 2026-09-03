@@ -253,25 +253,12 @@ fn components_agree(data: &[u8]) -> bool {
 /// Decode a JPEG 2000 codestream or JP2 file.
 ///
 /// `space` is the PDF dictionary's colour space, and `smask_in_data` its
-/// `/SMaskInData`. `target` says how much resolution the caller needs.
-///
-/// # The reduction is the codestream's own, not a resample
-///
-/// JPEG 2000 stores an image as a pyramid of resolution levels, so decoding at
-/// half size means decoding fewer packets rather than decoding everything and
-/// then shrinking it. `hayro-jpeg2000` takes the request as a
-/// `target_resolution` hint and applies exactly the rule
-/// `CPDF_DIB::StartLoadDIBBase` applies to `cp_reduce`
-/// (`cpdf_dib.cpp:220-224`): the floored base-two logarithm of the smaller
-/// axis ratio. It clamps that to the levels the codestream actually carries,
-/// and it **refuses the reduction outright for a palettized image**, where
-/// interpolating between two palette indices would produce a third colour that
-/// is in neither.
-///
-/// So the returned dimensions are the decoder's answer and not a calculation
-/// of ours — which is the whole point of the hint contract, and is why this
-/// function reads `image.width()` after the request rather than shifting a
-/// number it computed itself.
+/// `/SMaskInData`. `target` is a hint: JPEG 2000 stores a pyramid of
+/// resolution levels, so a reduced request decodes fewer packets rather than
+/// decoding everything and shrinking it. The returned dimensions are the
+/// decoder's answer, which may be larger than the request — it clamps to the
+/// levels the codestream carries and refuses to reduce a palettized image at
+/// all.
 ///
 /// # Errors
 ///

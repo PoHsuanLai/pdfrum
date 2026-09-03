@@ -4,22 +4,9 @@
 //! PDF functions (types 0/2/3/4), patterns and shadings (types 1–7), and the
 //! transparency model — groups, soft masks, blend modes.
 //!
-//! # The two stages
-//!
-//! Content interpretation is a pipeline of two pure functions, which is the
-//! whole design:
-//!
-//! ```text
-//! bytes ──parse_content──▶ Vec<Op> ──build_page──▶ Page { objects, boxes }
-//! ```
-//!
-//! [`parse_content`] is infallible and needs nothing but bytes: it tokenizes,
-//! fills a sixteen-slot operand ring, and emits one [`Op`] per recognised
-//! operator. [`build_page`] is the fold that turns those operators into page
-//! objects, and it is where resources, the graphics-state stack and form
-//! recursion live. Separating them means a content stream can be inspected,
-//! diffed and fuzzed without a document, and a page can be built from
-//! synthesized operators without bytes.
+//! Interpretation is two pure functions: [`parse_content`] turns bytes into
+//! [`Op`]s and needs no document, and [`build_page`] folds those ops into a
+//! [`Page`] against a [`Resources`] dictionary.
 //!
 //! ```
 //! use pdfrum_common::{Diagnostics, Limits};
@@ -30,14 +17,24 @@
 //! assert_eq!(ops, vec![Op::Rectangle(0.0, 0.0, 100.0, 50.0), Op::Fill()]);
 //! ```
 //!
-//! # Damage is data, not failure
-//!
 //! Nothing here refuses a file. An unknown operator, a colorspace that will
 //! not load, a function whose `/Domain` is missing, an image whose bit depth
-//! is nonsense — each records a
-//! [`Diagnostic`](pdfrum_common::Diagnostic) and yields the same best-effort
-//! result PDFium produces, because that behaviour is what makes broken PDFs
-//! render.
+//! is nonsense — each records a [`Diagnostic`](pdfrum_common::Diagnostic) and
+//! yields a best-effort result, so a damaged page still renders.
+
+// The two stages are a pipeline of pure functions:
+//
+//     bytes ──parse_content──▶ Vec<Op> ──build_page──▶ Page { objects, boxes }
+//
+// `parse_content` tokenizes, fills a sixteen-slot operand ring, and emits one
+// `Op` per recognised operator. `build_page` is the fold that turns those
+// operators into page objects, and it is where resources, the graphics-state
+// stack and form recursion live. Separating them means a content stream can be
+// inspected, diffed and fuzzed without a document, and a page can be built from
+// synthesized operators without bytes.
+//
+// Damage is data, not failure: the best-effort results match what PDFium
+// produces, because that behaviour is what makes broken PDFs render.
 
 #![forbid(unsafe_code)]
 // Every byte reaching this crate came from an untrusted file: index with

@@ -45,23 +45,17 @@ pub enum RequestedSize {
 impl RequestedSize {
     /// The request a device box of `width` by `height` float pixels makes.
     ///
-    /// This is the oracle's `max_size_required`, and the two things worth
-    /// knowing about it are both about *which* box it is.
-    ///
-    /// It is the **render device's whole extent**, not an image's destination
-    /// rectangle: `CPDF_ImageRenderer::StartLoadDIBBase` fills it from
-    /// `GetRenderDevice()->GetWidth()/GetHeight()`
-    /// (`cpdf_imagerenderer.cpp:74-77`). So a 5000x5000 image on a 612x792
-    /// page is reduced by four, not by however small the `cm` that draws it
-    /// is. That is deliberately conservative and it is what bounds the error:
-    /// a reduction against the page bitmap can never drop a sample the device
-    /// could have resolved.
-    ///
-    /// And the dimensions **truncate**, because the bitmap that gets allocated
-    /// is `static_cast<int>(FPDF_GetPageWidthF(page) * scale)`
-    /// (`pdfium_test.cc:1513-1514`). A box under one pixel on either axis
-    /// names no reduction at all rather than a zero one, since a zero would
-    /// only be a division the level calculation has to guard against anyway.
+    /// The box is the render device's whole extent, not an image's destination
+    /// rectangle, so a 5000x5000 image on a 612x792 page is reduced by four
+    /// however small the `cm` that draws it is. Dimensions truncate, and a box
+    /// under one pixel on either axis names [`Self::Full`] rather than a zero
+    /// reduction.
+    // Reducing against the page bitmap rather than the destination rectangle is
+    // deliberately conservative, and it is what bounds the error: such a
+    // reduction can never drop a sample the device could have resolved.
+    // Truncation matches the allocated bitmap, whose extent is the float page
+    // size times the scale cast to an int. A zero would only be a division the
+    // level calculation has to guard against anyway.
     #[must_use]
     #[expect(
         clippy::cast_possible_truncation,

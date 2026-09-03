@@ -128,19 +128,14 @@ impl ColorValue {
 
     /// Install a pattern, with the operands an uncoloured one paints with.
     ///
-    /// Two rules, both `CPDF_Color::SetValueForPattern`'s
-    /// (`cpdf_color.cpp:52-66`) and neither obvious:
-    ///
-    /// - **An operand vector longer than sixteen is refused outright.** The
-    ///   C++ returns before touching anything, so the colour keeps whatever it
-    ///   had — the previous pattern, or no pattern at all.
-    /// - **The space becomes `/Pattern` if it was not one already.** A
-    ///   `/P1 scn` with no preceding `/Pattern cs` therefore *is* a pattern
-    ///   colour: the pattern machinery drains it out of the ordinary draw and
-    ///   the object paints the pattern rather than a colour. Leaving the space
-    ///   alone instead resolves the operands through whatever space was
-    ///   current — black in the default `DeviceGray` — and paints the object
-    ///   solid, which on a page-sized rectangle is the whole page.
+    /// More than sixteen operands is refused outright: nothing is written, so
+    /// the colour keeps whatever pattern it had, or none. Otherwise the space
+    /// becomes `/Pattern` if it was not one already, so a `/P1 scn` with no
+    /// preceding `/Pattern cs` still paints the pattern rather than resolving
+    /// its operands through whatever space was current.
+    // Leaving the space alone instead would resolve the operands through the
+    // current space — black in the default `DeviceGray` — and paint the object
+    // solid, which on a page-sized rectangle is the whole page.
     pub fn set_pattern(
         &mut self,
         name: Name,
