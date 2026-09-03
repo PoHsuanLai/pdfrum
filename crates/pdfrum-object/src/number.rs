@@ -1,22 +1,24 @@
-//! Number semantics: the two views PDFium's `FX_Number` exposes, and the
-//! float-to-decimal spelling its writer uses.
+//! Number semantics: the two views a PDF integer has, and the
+//! float-to-decimal spelling the writer uses.
 //!
-//! # Why there are two integer views
-//!
-//! PDFium stores a parsed integer as *either* `uint32_t` or `int32_t`
-//! depending on whether the token carried a sign, and its two accessors
-//! disagree about large unsigned values: the integer accessor reinterprets
-//! the `uint32_t` bit pattern as signed (so `4294967295` reads back as `-1`)
-//! while the numeric accessor widens it (`4294967296.0`). Both are observable
-//! in real files — `/P` in an encryption dictionary is written unsigned and
-//! read signed.
-//!
-//! We keep one variant, [`Object::Int`](crate::Object::Int), holding the
-//! *mathematical* value in an `i64`, and reproduce both observables in the
-//! accessors: [`narrow_to_signed32`] for integer contexts,
-//! [`widen_to_f32`] for numeric ones. Every integer a lexer can produce lies
-//! in `-2^31 ..= 2^32 - 1` (see [`INT_RANGE`]) because PDFium's parse rules
-//! fold anything wider to 0.
+//! A file that writes `4294967295` for a permissions word means `-1` when
+//! the value is read as an integer and `4294967296.0` when it is read as a
+//! number, and both readings are observable in real documents. One variant,
+//! [`Object::Int`](crate::Object::Int), holds the *mathematical* value in an
+//! `i64`; [`narrow_to_signed32`] is the integer view and [`widen_to_f32`]
+//! the numeric one. Every integer a lexer can produce lies in
+//! `-2^31 ..= 2^32 - 1` (see [`INT_RANGE`]).
+
+// # Why there are two integer views
+//
+// PDFium stores a parsed integer as *either* `uint32_t` or `int32_t`
+// depending on whether the token carried a sign, and its two accessors
+// disagree about large unsigned values: the integer accessor reinterprets
+// the `uint32_t` bit pattern as signed (so `4294967295` reads back as `-1`)
+// while the numeric accessor widens it (`4294967296.0`). Both are observable
+// in real files — `/P` in an encryption dictionary is written unsigned and
+// read signed. The `INT_RANGE` bound is PDFium's parse rules folding
+// anything wider to 0.
 
 use core::ops::RangeInclusive;
 
@@ -29,12 +31,11 @@ use core::ops::RangeInclusive;
 pub const INT_RANGE: RangeInclusive<i64> = -2_147_483_648..=4_294_967_295;
 
 /// The integer view of a stored integer: keep the low 32 bits and read them
-/// as signed. PDFium's `FX_Number::GetSigned`.
+/// as signed.
 ///
 /// It neither clamps nor saturates: a value above `i32::MAX` came from an
-/// unsigned token, and its bit pattern is reinterpreted, exactly as C++ does
-/// when it hands its `uint32_t` to an `int` accessor. Within `INT_RANGE` the
-/// only inputs that move are those above `i32::MAX`.
+/// unsigned token, and its bit pattern is reinterpreted. Within
+/// [`INT_RANGE`] the only inputs that move are those above `i32::MAX`.
 ///
 /// ```
 /// use pdfrum_object::narrow_to_signed32;
@@ -61,8 +62,7 @@ pub fn narrow_to_signed32(v: i64) -> i64 {
     i64::from(bits.cast_signed())
 }
 
-/// The numeric view of a stored integer: widen it to `f32`. PDFium's
-/// `FX_Number::GetFloat`.
+/// The numeric view of a stored integer: widen it to `f32`.
 ///
 /// No wrapping here — `4294967295` widens to `4294967296.0` because that is
 /// the nearest `f32`.
@@ -90,8 +90,7 @@ pub fn widen_to_f32(v: i64) -> f32 {
 /// signed 32-bit bounds, with NaN mapping to 0.
 ///
 /// Unlike [`narrow_to_signed32`] this one really does saturate — a real out
-/// of range clamps rather than wrapping. PDFium reaches it through
-/// `pdfium::saturated_cast<int32_t>`.
+/// of range clamps rather than wrapping.
 ///
 /// ```
 /// use pdfrum_object::truncate_to_signed32;
@@ -118,8 +117,8 @@ pub fn truncate_to_signed32(v: f32) -> i64 {
 /// to `v`, with trailing zeros removed: `v == digits * 10^exponent`.
 ///
 /// `v` must be finite, non-zero and positive. Derived from `ryu`'s shortest
-/// representation, which produces the same digit string as the dragonbox
-/// algorithm PDFium uses.
+/// representation, which produces the same digit string as the oracle's
+/// dragonbox.
 fn shortest_decimal(v: f32) -> (Vec<u8>, i32) {
     let mut buf = ryu::Buffer::new();
     let s = buf.format_finite(v);
@@ -146,12 +145,14 @@ fn shortest_decimal(v: f32) -> (Vec<u8>, i32) {
     (digits, exponent)
 }
 
-/// Longest output PDFium's float writer will produce, in bytes.
-/// C++ sizes its buffer at 49 including the terminating NUL, so 48 characters
-/// of payload; the cap only ever binds for `-f32::MIN` denormals.
+// The oracle sizes its buffer at 49 including the terminating NUL, so 48
+// characters of payload.
+/// Longest output the float writer will produce, in bytes.
+///
+/// The cap only ever binds for `-f32::MIN` denormals.
 const MAX_FLOAT_DECIMAL_LEN: usize = 48;
 
-/// Spell a real the way PDFium's content-stream and object writers do.
+/// Spell a real the way the content-stream and object writers do.
 ///
 /// Never scientific notation, never a leading zero before the point, NaN and
 /// both zeros render as `"0"`, and the infinities render as the finite
@@ -223,8 +224,8 @@ pub fn fmt_number(value: f32) -> String {
     out
 }
 
-/// Spell an integer the way PDFium's writers do: through the signed 32-bit
-/// view, so a stored `4294967295` writes as `-1`.
+/// Spell an integer the way the writers do: through the signed 32-bit view,
+/// so a stored `4294967295` writes as `-1`.
 ///
 /// ```
 /// use pdfrum_object::fmt_int;

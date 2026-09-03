@@ -1,9 +1,13 @@
-//! The `Object` enum and the coercions every accessor is built from.
+//! The [`Object`] enum and the coercions every accessor is built from.
 //!
-//! PDFium reaches these through virtual methods with defaults on the base
-//! class — `GetString()` on an array returns `""`, `GetInteger()` on a name
-//! returns `0`, and so on. Here they are exhaustive matches, so adding a
-//! variant makes every coercion fail to compile until it is considered.
+//! A coercion that does not apply to a variant yields that variant's
+//! fallback rather than failing: an array has no string spelling, a name has
+//! no numeric value.
+
+// PDFium reaches these through virtual methods with defaults on the base
+// class — `GetString()` on an array returns `""`, `GetInteger()` on a name
+// returns `0`, and so on. Here they are exhaustive matches, so adding a
+// variant makes every coercion fail to compile until it is considered.
 
 use std::collections::HashSet;
 
@@ -27,16 +31,16 @@ pub struct ObjRef {
 }
 
 impl ObjRef {
-    /// The object number no object may have; a cross-reference entry naming
-    /// it is a broken entry.
-    ///
-    /// **Private on purpose** (`docs/design/idiomatic-api.md` §C, Tier 1
-    /// item 2). PDFium exports this as `kInvalidObjNum`, but the PDF spec
-    /// reserves no such number — the 8388607-object limit simply puts it out
-    /// of reach — so a caller has nothing to compare against and no reason
-    /// to. [`ObjRef::is_invalid`] is the whole public surface: the sentinel
-    /// keeps existing in the parse, where the bytes contain it, and is asked
-    /// about rather than handed over.
+    // The object number no object may have; a cross-reference entry naming
+    // it is a broken entry.
+    //
+    // **Private on purpose** (`docs/design/idiomatic-api.md` §C, Tier 1
+    // item 2). PDFium exports this as `kInvalidObjNum`, but the PDF spec
+    // reserves no such number — the 8388607-object limit simply puts it out
+    // of reach — so a caller has nothing to compare against and no reason
+    // to. `ObjRef::is_invalid` is the whole public surface: the sentinel
+    // keeps existing in the parse, where the bytes contain it, and is asked
+    // about rather than handed over.
     const INVALID_NUM: u32 = 0xFFFF_FFFF;
 
     /// A reference to `num` at `generation`.
@@ -55,10 +59,10 @@ impl ObjRef {
 /// A PDF object (ISO 32000-1 §7.3).
 ///
 /// The eight basic types plus streams, plus a reference standing in for an
-/// indirect object. PDFium's single `Number` type is split into `Int` and
-/// `Real` because the distinction is observable: an integer and a real that
-/// happen to be equal serialize differently and read back differently through
-/// the integer accessors.
+/// indirect object. `Int` and `Real` are separate variants because the
+/// distinction is observable: an integer and a real that happen to be equal
+/// serialize differently and read back differently through the integer
+/// accessors.
 ///
 /// ```
 /// use pdfrum_object::{Object, PdfString};
@@ -66,7 +70,7 @@ impl ObjRef {
 /// assert_eq!(Object::Int(1245).as_int(), Some(1245));
 /// assert_eq!(Object::Real(9.5).number(), Some(9.5));
 /// assert_eq!(Object::Bool(true).as_bool(), Some(true));
-/// // Coercions follow the C++ defaults: a name has no numeric value.
+/// // A name has no numeric value.
 /// assert_eq!(Object::Name("Foo".into()).number(), None);
 /// // ...but every object has a string spelling, empty for most.
 /// assert_eq!(Object::Str(PdfString::literal(b"hi")).to_byte_string(), b"hi");
@@ -107,9 +111,9 @@ pub enum Object {
 impl Object {
     /// The boolean value, only for an actual boolean.
     ///
-    /// `Int(1)` is deliberately *not* a boolean: PDFium's boolean getters
-    /// type-check before coercing, and files that write `1` for a flag
-    /// therefore read as "absent, use the default".
+    /// `Int(1)` is deliberately *not* a boolean: the type check happens
+    /// before any coercion, so a file that writes `1` for a flag reads as
+    /// "absent, use the default".
     #[must_use]
     pub fn as_bool(&self) -> Option<bool> {
         match self {
@@ -142,7 +146,7 @@ impl Object {
     /// The numeric value of a number, coercing integers to `f32`.
     ///
     /// Only numbers have one — unlike [`Object::as_int`], a boolean does not
-    /// count, matching PDFium's `GetNumber`.
+    /// count.
     #[must_use]
     pub fn number(&self) -> Option<f32> {
         match self {
@@ -238,7 +242,7 @@ impl Object {
     /// Booleans spell `true`/`false`, numbers spell as the writer would, a
     /// string yields its bytes and a name its decoded bytes. Everything else
     /// — null, arrays, dictionaries, streams, references — has no spelling
-    /// and yields empty, matching the C++ base-class default.
+    /// and yields empty.
     #[must_use]
     pub fn to_byte_string(&self) -> Vec<u8> {
         match self {
@@ -303,31 +307,16 @@ impl Object {
     }
 
     /// Deep-copy the object with every reference replaced by what it points
-    /// at, dropping the edges that would close a cycle.
-    ///
-    /// An ancestor set guards the recursion, and each child gets its own copy
-    /// of that set: siblings may legitimately share substructure, and only a
-    /// reference back to an *ancestor* is a cycle. A cut edge disappears —
-    /// the dictionary key is omitted, the array element is omitted — rather
-    /// than becoming null. Unresolvable references disappear the same way,
-    /// indistinguishably from a cycle, as `CPDF_Reference::CloneNonCyclic`
-    /// returns `nullptr` for both.
-    ///
-    /// # Streams become direct values
+    /// at, dropping the edges that would close a cycle. Only a reference back
+    /// to an *ancestor* is a cycle; siblings may share substructure and both
+    /// copies survive. A cut edge **disappears** — the key or element is
+    /// omitted rather than becoming null — and an unresolvable reference
+    /// disappears the same way, indistinguishably.
     ///
     /// A reference to a stream flattens into the stream itself, stored
-    /// *directly* in the dictionary or array that held the reference. A
-    /// `/Resources` whose `/XObject` entries are indirect streams — the
-    /// ordinary case — therefore clones into a dictionary holding those
-    /// streams as values. This is what `CPDF_Dictionary::CloneNonCyclic`
-    /// produces as well: its loop inserts into `map_` directly and so
-    /// bypasses the `CHECK(!IsStream())` that guards the ordinary setters.
-    /// ISO 32000-1 §7.3.8.1 constrains what a *file* may contain, and the
-    /// writer honours it by hoisting such a stream back out to an indirect
-    /// object; it is not an invariant of these in-memory types.
-    ///
-    /// The cloned stream keeps its **raw**, still-encoded bytes, matching
-    /// `CPDF_Stream::CloneNonCyclic`'s `LoadAllDataRaw`.
+    /// *directly* in the dictionary or array that held it, with its **raw**,
+    /// still-encoded bytes and its `/Filter` intact: ISO 32000-1 §7.3.8.1
+    /// constrains a *file*, not these in-memory types.
     ///
     /// ```
     /// # use std::collections::HashMap;
@@ -348,6 +337,13 @@ impl Object {
     /// ```
     #[must_use]
     pub fn clone_direct(&self, r: &impl Resolve) -> Self {
+        // A cut edge and a dangling reference are indistinguishable because
+        // `CPDF_Reference::CloneNonCyclic` returns `nullptr` for both.
+        // Flattening a stream into a container matches
+        // `CPDF_Dictionary::CloneNonCyclic`, whose loop inserts into `map_`
+        // directly and so bypasses the `CHECK(!IsStream())` that guards the
+        // ordinary setters; the raw bytes are
+        // `CPDF_Stream::CloneNonCyclic`'s `LoadAllDataRaw`.
         let mut ancestors = HashSet::new();
         clone_flattened(self, r, &mut ancestors).unwrap_or(Self::Null)
     }

@@ -1,37 +1,38 @@
 //! Dictionary objects (ISO 32000-1 §7.3.7) and the typed accessors every
-//! other crate reads PDF structure through.
+//! other crate reads PDF structure through. Keys keep document order,
+//! duplicates and all; the **last** entry with a key wins on lookup.
 //!
-//! # Why a `Vec`, and why insertion order
-//!
-//! PDF dictionaries are small — a handful of keys, a few dozen at the extreme
-//! — so a linear scan beats a hash map on every real document, and the
-//! storage doubles as the writer's key order. PDFium uses a sorted map and
-//! therefore writes keys sorted; we keep document order in storage *and* in
-//! serialization. That difference is invisible to every behavior under test:
-//! lookup semantics are identical, and round-trip fidelity is judged by
-//! reparsing, not by byte-diffing the output.
-//!
-//! Duplicate keys are kept as parsed and the **last** one wins on lookup,
-//! which is what PDFium's overwrite-on-insert produces for a document read
-//! front to back.
-//!
-//! # Which accessors resolve
-//!
-//! Whether an accessor follows an indirect reference is not a detail — it is
-//! load-bearing recovery behavior. An indirect `/Prev` is *ignored* by the
-//! cross-reference reader while an indirect `/Length` *is* chased, and files
-//! in the wild depend on both. So this module offers each accessor in two
-//! flavours and callers pick deliberately:
-//!
-//! - resolving: [`Dict::get`], [`Dict::int`], [`Dict::number`],
-//!   [`Dict::dict`], [`Dict::array`], [`Dict::stream`], [`Dict::text`],
-//!   [`Dict::rect`], [`Dict::matrix`], [`Dict::byte_string`]
-//! - non-resolving: [`Dict::raw`], [`Dict::direct_int`], [`Dict::name`],
-//!   [`Dict::bool`], [`Dict::number_obj`], [`Dict::string`]
-//!
-//! The non-resolving ones are not an optimization; they are the accessors
-//! whose C++ counterparts type-check *before* resolution, so a reference
-//! there reads as absence.
+//! Whether an accessor follows an indirect reference is deliberate, not an
+//! optimization. [`Dict::get`], [`Dict::int`], [`Dict::number`],
+//! [`Dict::dict`], [`Dict::array`], [`Dict::stream`], [`Dict::text`],
+//! [`Dict::rect`], [`Dict::matrix`] and [`Dict::byte_string`] chase one
+//! reference; [`Dict::raw`], [`Dict::direct_int`], [`Dict::name`],
+//! [`Dict::bool`], [`Dict::number_obj`] and [`Dict::string`] read one as
+//! absence.
+
+// # Why a `Vec`, and why insertion order
+//
+// PDF dictionaries are small — a handful of keys, a few dozen at the extreme
+// — so a linear scan beats a hash map on every real document, and the
+// storage doubles as the writer's key order. PDFium uses a sorted map and
+// therefore writes keys sorted; we keep document order in storage *and* in
+// serialization. That difference is invisible to every behavior under test:
+// lookup semantics are identical, and round-trip fidelity is judged by
+// reparsing, not by byte-diffing the output.
+//
+// Duplicate keys are kept as parsed and the **last** one wins on lookup,
+// which is what PDFium's overwrite-on-insert produces for a document read
+// front to back.
+//
+// # Which accessors resolve
+//
+// Whether an accessor follows an indirect reference is not a detail — it is
+// load-bearing recovery behavior. An indirect `/Prev` is *ignored* by the
+// cross-reference reader while an indirect `/Length` *is* chased, and files
+// in the wild depend on both. So this module offers each accessor in two
+// flavours and callers pick deliberately. The non-resolving ones are not an
+// optimization; they are the accessors whose C++ counterparts type-check
+// *before* resolution, so a reference there reads as absence.
 
 use pdfrum_common::kurbo::{Affine, Rect};
 
@@ -42,20 +43,15 @@ use crate::{Array, Name, Object, PdfString, Resolve, Resolved, Stream};
 /// # Streams as values
 ///
 /// ISO 32000-1 §7.3.8.1 forbids a *file* from writing a stream as a direct
-/// dictionary value, and the reader enforces that while parsing: a stream
-/// found inline in a dictionary is dropped, exactly as
-/// `cpdf_syntax_parser.cpp:645-649` drops it. But that is a **file-format**
-/// constraint, not an in-memory invariant, and this type deliberately does
-/// not police it. [`Object::clone_direct`](crate::Object::clone_direct)
-/// flattens references, so a `/Resources` whose `/XObject` entries are
-/// indirect streams clones into a dictionary holding those streams directly —
-/// which is what `CPDF_Dictionary::CloneNonCyclic` produces too, since its
-/// loop writes straight into `map_` and bypasses the `CHECK(!IsStream())`
-/// that guards the ordinary setters. [`Dict::stream`] reads such a value
-/// back, mirroring `CPDF_Dictionary::GetStreamFor`.
-///
-/// The §7.3.8.1 constraint is the **writer's** to enforce: `pdfrum-edit`
-/// hoists a direct stream to an indirect object at serialization time.
+/// dictionary value, and the reader drops one found inline while parsing.
+/// That is a **file-format** constraint, not an in-memory invariant, and
+/// this type does not police it:
+/// [`Object::clone_direct`](crate::Object::clone_direct) flattens
+/// references, so a `/Resources` whose `/XObject` entries are indirect
+/// streams clones into a dictionary holding those streams directly, and
+/// [`Dict::stream`] reads such a value back. Enforcing §7.3.8.1 is the
+/// **writer's** job: `pdfrum-edit` hoists a direct stream to an indirect
+/// object at serialization time.
 ///
 /// ```
 /// use pdfrum_object::{Dict, NoResolve, Object, names};
@@ -68,6 +64,11 @@ use crate::{Array, Name, Object, PdfString, Resolve, Resolved, Stream};
 /// assert_eq!(dict.int(names::COUNT, &NoResolve), Some(3));
 /// assert_eq!(dict.len(), 2);
 /// ```
+// The inline-stream drop while parsing is `cpdf_syntax_parser.cpp:645-649`.
+// `CPDF_Dictionary::CloneNonCyclic` produces the same flattened shape, since
+// its loop writes straight into `map_` and bypasses the `CHECK(!IsStream())`
+// that guards the ordinary setters; `Dict::stream` mirrors
+// `CPDF_Dictionary::GetStreamFor` in reading it back.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Dict(Vec<(Name, Object)>);
 
@@ -146,8 +147,8 @@ impl Dict {
 
     /// The name a `Name`-typed entry holds, without resolving.
     ///
-    /// A reference here reads as absent — PDFium type-checks before
-    /// resolving, so `/Type 5 0 R` never names a type.
+    /// A reference here reads as absent: the type check happens before any
+    /// resolution, so `/Type 5 0 R` never names a type.
     #[must_use]
     pub fn name(&self, key: &Name) -> Option<&Name> {
         self.raw(key)?.as_name()
@@ -180,8 +181,8 @@ impl Dict {
     /// The value, following one level of indirection.
     ///
     /// Returns `None` for a missing key *and* for a reference the store
-    /// cannot produce: PDFium treats both as absence everywhere, and the
-    /// store records the underlying failure in its diagnostics.
+    /// cannot produce — both are absence — and the store records the
+    /// underlying failure in its diagnostics.
     #[must_use]
     pub fn get<'a>(&'a self, key: &Name, r: &impl Resolve) -> Option<Resolved<'a>> {
         self.raw(key)?.resolve(r).ok()
