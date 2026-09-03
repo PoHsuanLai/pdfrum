@@ -403,22 +403,48 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
   1.71 ms**. Wall clock **45.30 → 16.68 ms, 2.72x**, against two controls at
   0.98x / 1.00x, at load 8.9–10.0. Board byte-identical (`per_file` equal
   across all 1757 entries, both binaries run), tier-c unchanged to the digit.
-- **`shading_tcpdf_058` lands at 2.93x, not §18.3's projected ~1.2x, and the
-  residue is `AggDevice::pop` at 10.05 ms on 77 calls.** §19.7: the projection
-  was right about what it measured and wrong to assume the rest of the render
-  matched `forms_text_field`'s. `pop` is **9.88 ms before the fix and 10.05 ms
-  after** — it is §12's clip-plane `recycle`, clearing the band §11 recorded so
-  the pool's zero invariant holds. For a thirty-row appearance `/BBox` that is
-  thirty rows and is why the pool pays; for a clip whose sweep crossed every
-  row of the page on its way past it the band is the whole page, and `recycle`
-  clears half a megabyte per pop. Same family as §11 and §12, different crate
-  from §19, so it wants its own cycle.
-- **`mixed_en_uicase` at 3.71x is a different shape and must not be conflated
-  with it.** 257 619 cell rows per iteration but **837 sweeps**, row walk
+- ~~**`shading_tcpdf_058`'s residue is `AggDevice::pop` at 10.05 ms on 77
+  calls.**~~ — **landed as §20, and §19.7's attribution is corrected with it.**
+  The figure was right; the arm was misread. `pop` has two, and splitting them
+  puts the **clip** arm — `recycle` and its band clear, the mechanism §19.7
+  named — at **0.045 ms of the 10.05**, with the clear itself at **0.032 ms**
+  for 3.82 MB. That is a `memset` at what a `memset` costs; §12.3's "half a
+  megabyte" described the volume and §19.7 read it as the cost. §12.2's own
+  table had already read `pop` at 0.007 ms on a document with no layers.
+  **The band needs no tightening either**: `coverage_of` folds it from the
+  writes rather than from a bbox, and the band measures **7285.1 rows per
+  iteration against 7285.1 rows the plane holds non-zero coverage in** — equal
+  to the row. The 10 ms was the **`Frame::Layer`** arm, compositing the layer
+  back **one pixel per `blend_span` call** — 500 395 calls per layer, 13.6
+  layers per render, each paying `span_range`, `clip_span`, the destination
+  offset and a `chunks_exact_mut` to reach four bytes. **This is §14.1's defect
+  and §16's, one level over**, and the third instance of "a loop re-deriving an
+  index the row already knows". `Target::composite_layer` walks the rows in
+  `blit_image`'s established shape, unclipped by construction because the layer
+  already carries its clip. Layer arm **11.47 → 2.08 ms**, whole render **17.03
+  → 9.32 ms wall (1.83x)** against **five controls at 0.987x–1.010x** at load
+  10.5–12, like-for-like **4.37x → 2.29x**. Four mutations planted and caught;
+  a fifth — dropping the transparent-pixel skip — **did not fail**, because a
+  zero-alpha source is already the identity under every blend mode, so the skip
+  is recorded as an optimisation rather than a behaviour and
+  `a_transparent_source_pixel_is_the_identity_under_every_mode` checks it.
+  Board `per_file` byte-identical across 1757 entries, tier-c unchanged.
+- **`shading_tcpdf_058` at 2.29x is no longer the corpus's largest ratio and
+  has no single large line left.** With the layer arm at 2.08 ms and
+  `coverage_of` at 1.71, the residue is spread across `draw_image`,
+  `push_layer` and the sweep. **No census was taken of which other corpus
+  documents push layers** — all five of §20's controls push none — so a
+  document with a deep layer stack would gain from §20 and was not looked for.
+- **`mixed_en_uicase` at 3.52x is now the corpus's largest ratio, and is a
+  different shape from both §19's and §20's.** 257 619 cell rows per iteration but **837 sweeps**, row walk
   37.3 ms against 5.2 ms of sort, and **zero** off-page clips. Many small
   sweeps. §18.3 said §19's fix would not move it and **§19.6 confirms it did
   not**: 1.03x on the wall clock, with its row and sweep counts identical
-  before and after to the row. It is now the corpus's largest ratio.
+  before and after to the row. **§20 does not move it either** — it pushes no
+  layer at all, and reads 1.002x as one of that section's controls. Its
+  `pop` is 0.96 ms per iteration and **0.85 of that is the band clear**, over
+  574 pops and 122.7 MB per iteration: the one row in the corpus where the
+  clear is a measurable share of anything, and still under 2% of its render.
 - **Seven more rows above 1.5x like-for-like, all of them in the rasterizer.**
   `vector_font_feature` 2.67x (90.9% raster), `shading_type4_5` 2.67x,
   `image_ccitt_3bigpreview` 2.45x (87.5% raster), `image_ccitt_transfer`

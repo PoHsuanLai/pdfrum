@@ -3160,3 +3160,223 @@ measured and queued.
   what is left is §19.7's `pop`, which is a different cost in a different
   crate.
 - **The ratchet is still not re-baselined.** §8's third bullet stands.
+
+## 20. `AggDevice::pop`, split — and §19.7's attribution corrected
+
+**Taken 2026-09-04, on the same box, at load 10.5–12 for the wall clock and
+11–14 for the in-process splits.** §19.7 named `AggDevice::pop` at **10.05 ms
+over 77 calls** as `shading_tcpdf_058`'s largest remaining line and attributed
+it to §12's clip-plane `recycle` — "for a clip whose sweep genuinely touched
+most of an 842-row page the band is the whole page and `recycle` clears half a
+megabyte per pop". This section splits that call.
+
+**The attribution was wrong, and the split says so in the first reading.**
+`pop` has two arms and they were never separated. The clip arm — `recycle` and
+its band clear, the mechanism §19.7 named — is **0.045 ms of the 10.05**. The
+other 10 ms is the `Frame::Layer` arm, which §19.7 did not consider because it
+was reading a per-call total against a call count that mixes the two.
+
+### 20.1 The split
+
+`Instant` pairs inside `pop`, one around each arm and one around the clear
+alone, with the bytes cleared and the call counts banked beside them.
+`--op render --warm` at 21 iterations, backend AGG. The band's extent was
+counted against the rows the plane actually holds non-zero coverage in, which
+is the measurement §20's brief asked for first.
+
+| `shading_tcpdf_058`, per iteration | | |
+|---|---:|---:|
+| `pop` calls | **77.5** | 63.9 clip, **13.6 layer** |
+| the **clip** arm, whole | **0.045 ms** | 63.9 calls |
+| — of which `recycle`'s band clear | **0.032 ms** | 3.82 MB cleared |
+| — of which `sync_clip` | 0.001 ms | |
+| the **layer** arm | **11.47 ms** | **13.6 calls** |
+
+**The clear moves 3.82 MB per iteration in 32 µs.** That is a `memset` at
+about 120 GB/s, which is what a `memset` costs; §12.3's "half a megabyte of
+`memset`" was a true description of the *volume* and §19.7 read it as a
+description of the *cost*. The two are not the same thing, and the difference
+is three hundredfold. §12.2's own table agrees and was available: it read
+`pop` at **0.007 ms** on `forms_text_field`, on a document with no layers.
+
+**The two candidate fixes the brief listed for the band are dead, and the
+measurement is what kills them** rather than an argument:
+
+- *"the band is derived from the pre-`keep_rows` extent and should be the
+  intersection with the kept rows"* — the band is not derived from an extent at
+  all. `coverage_of` **folds it from the writes**: `first`/`last` move only
+  under `if x1 > x0`, so a span whose columns all fall outside the buffer does
+  not widen it. The comment at that fold says exactly this and predates §19.
+- *"the clear should be over the rows the sweep touched, tracked during the
+  sweep rather than derived from the bbox"* — it already is, by the same fold.
+  Measured, on `shading_tcpdf_058`: **7285.1 band rows per iteration against
+  7285.1 rows the recycled plane holds non-zero coverage in.** Equal to the
+  row. There is nothing to tighten.
+- *"a plane about to be re-acquired for the same extent is cleared then
+  re-filled"* — true and worth 0.032 ms, which is 0.3% of the line it was
+  offered to explain. Not taken.
+
+Recorded because the brief asked for the negatives: `recycle` declined the
+reclaim **zero times** across every fixture measured here, which re-confirms
+§12.4's own measurement on a fifth document.
+
+### 20.2 The defect
+
+`pop`'s layer arm composited the layer back **one pixel per call**:
+
+```rust
+for y in 0..h {
+    for x in 0..w {
+        let Some(src) = pixels.pixel(x, y) else { continue };
+        if src[3] == 0 { continue; }
+        target.blend_span(col, 1, row, 255, Source::Premultiplied(src), layer.blend);
+    }
+}
+```
+
+`blend_span` is built for a span. Reaching a single pixel through it pays
+`span_range`'s row check and column clamp, `clip_span`'s decision about whether
+a clip is in force at all, a `checked_mul` for the row's stride, a slice take
+and a `chunks_exact_mut` set-up — none of which varies with the column, all of
+it per pixel. On a 595×841 page that is **500 395 calls per layer** and 13.6
+layers per render.
+
+**This is §14.1's defect and §16's, one level over.** §14 found the same shape
+in the blit — per-row scaffolding re-derived for a row that varies none of it —
+and §16 found it in the glyph's two per-pixel loops. The queue has carried the
+generalisation since §14: *a loop re-deriving an index the row already knows*.
+The layer composite is the third instance and the largest of the three.
+
+### 20.3 The fix
+
+`Target::composite_layer`, a row walk in the shape `blit_image` established,
+and simpler than it in every dimension: a layer is device-sized and
+device-aligned, so there is no source offset to apply, no column range to
+clamp, and no per-row band to derive. The composite is **unclipped by
+construction** — the layer already carries the clip that was in force when it
+was pushed, applied on the way in — which is why the new spelling has no
+clip handling at all rather than a hoisted version of it, and why
+`Target::clip` loses its last non-test reader.
+
+The arithmetic is untouched: the same `blend_into` over the same
+`Source::Premultiplied` at the same full coverage in the same order.
+
+### 20.4 The tests, and the mutations they catch
+
+`composite_layer_by_pixels` is the **specification** — the per-pixel spelling,
+verbatim, with the clip saved, cleared and restored around it — kept in the
+tests exactly as `blit_by_spans` is kept for `blit_image` and `clip_at` for
+`clip_span`. `a_layer_composite_matches_the_span_loop_it_replaced` requires the
+two to agree byte for byte over **all seventeen blend modes**, with and without
+a ragged clip set on the target, against a `noisy` source that carries
+transparent, partial and opaque pixels.
+
+| mutation | what it models | caught by |
+|---|---|---|
+| the layer's blend mode forced to `Normal` | the mode dropped on the way through | `a_layer_composite_matches_the_span_loop_it_replaced` |
+| the coverage read as 254 | the full-coverage constant mistyped | the same, plus `a_clip_under_a_layer_unwinds_with_the_layer_between_them` and `a_layer_inherits_the_clip_and_does_not_apply_it_twice` |
+| the row bound one short | the half-open bound read as closed | the same, plus `a_layer_inherits_the_clip_and_does_not_apply_it_twice` |
+| the composite reading `self.clip` | the clip folded in a second time | `a_layer_composite_matches_the_span_loop_it_replaced` |
+
+**A fifth was planted first and did not fail**, and it is the result that
+changed what this section claims. Dropping the transparent-pixel skip changed
+no test — because a zero-alpha source is **already the identity under every
+blend mode**: `composite_premultiplied` weights the blended colour by the
+source's alpha, so at zero the destination survives whatever the mode computed.
+The skip is therefore an optimisation and not a behaviour, and the first draft
+of this section's rustdoc said the opposite. It is corrected, and
+`a_transparent_source_pixel_is_the_identity_under_every_mode` now checks the
+property over every mode against a destination sweeping alpha and each channel,
+rather than leaving it argued from `blend`'s internals. The skip is kept — a
+layer is mostly transparent — but removing it would change no pixel.
+
+§13.4's clip-plane reuse rule is untouched by this change and was re-checked
+anyway, since the brief required it: planting the skipped clear in `recycle`
+still fails `a_recycled_plane_carries_none_of_the_clip_it_held` and
+`a_recycled_nested_plane_is_cleared_over_its_whole_band`.
+
+### 20.5 The measurement
+
+In-process, `--op render --warm` at 21 iterations, backend AGG:
+
+| `shading_tcpdf_058` | before | **after** |
+|---|---:|---:|
+| the layer arm of `pop` | **11.47 ms** | **2.08 ms** |
+| the clip arm of `pop` | 0.045 ms | 0.044 ms |
+| whole render (probe build) | 19.11 ms | **10.22 ms** |
+
+The whole-render stage split, minimum of three runs each:
+
+| stage | before | **after** |
+|---|---:|---:|
+| content parse | 0.231 ms | 0.222 ms |
+| interpretation | 0.816 ms | 0.763 ms |
+| **raster** | **15.87 ms (91.6%)** | **8.26 ms (86.9%)** |
+| TOTAL | 17.25 ms | **9.50 ms** |
+
+### 20.6 The wall clock
+
+§19.6's discipline: the pre-fix binary and the post-fix one interleaved
+`before, after, after, before`, five rounds of 21 warm iterations each,
+minimum kept per arm, load sampled per row. The two binaries are the same
+source tree stashed and unstashed, built into the same target directory in
+sequence, so neither is the other's cached artefact for the crate that changed.
+
+| fixture | before (ms) | **after (ms)** | speedup | load |
+|---|---:|---:|---:|---:|
+| `shading_tcpdf_058` | 17.03 | **9.32** | **1.83x** | 11.2 |
+| `forms_text_field` | 4.67 | 4.62 | 1.010x | 11.2 |
+| `forms_combo_box` | 4.75 | 4.82 | 0.987x | 10.8 |
+| `shading_axial_radial` | 31.23 | 31.56 | 0.989x | 10.6 |
+| `mixed_en_uicase` | 47.49 | 47.42 | 1.002x | 11.2 |
+| `vector_font_size14` | 8.74 | 8.76 | 0.997x | 12.0 |
+
+**Five controls between 0.987x and 1.010x** is this box's noise floor at this
+load, and it is a tighter floor than any previous section got — §12.8's
+calibration rows read 0.98x and 0.89x, §13.5's read 1.055x. None of the five
+pushes a layer, which is why they are the right controls: `pop`'s layer arm is
+0.000 ms on all of them, and `vector_font_size14` pushes no clip either and so
+does not reach `pop` at all.
+
+### 20.7 Like-for-like
+
+§18.1's subtraction, both terms out of one `--warm --walk` run, minimum of
+three; the oracle by `bench-oracle.nu`'s `(t[21] − t[1]) / 20` against
+`pdfium_test --md5 --render-repeats`, minimum of five with one untimed warm-up
+first, the PDF copied to scratch.
+
+| | whole | − parse | − interp | amortz | oracle | **ratioA** |
+|---|---:|---:|---:|---:|---:|---:|
+| before | 17.254 | 0.231 | 0.816 | 16.207 | 3.709 | **4.37x** |
+| **after** | **9.497** | 0.222 | 0.763 | **8.512** | 3.709 | **2.29x** |
+
+The oracle column reads 3.709 ms here against §19.6's 5.35 on the same
+binary and the same file, which is §3's standing point about absolute
+milliseconds and is why the before arm is re-taken in the same minutes rather
+than carried over: **4.37x → 2.29x** is the comparable pair, and §19.6's 2.93x
+is the same render measured on a busier box.
+
+### 20.8 What this section does not claim
+
+- **The board is byte-identical and tier-c is unchanged.** `per_file` equal
+  across all 1757 entries with both binaries run, `totals` equal at 1539 pass /
+  218 fail, and tier-c at 1628 files, 3 hard failures, 434 over budget, worst
+  66.6634%, divergent 26.84%.
+- **§19.7's figure was right and its attribution was wrong.** `pop` really did
+  cost 10.05 ms over 77 calls; it was the arm that was misread. The lesson is
+  the one §12.1 and §13.6 already recorded in different words — a per-call
+  total over a call count that mixes two mechanisms attributes to whichever one
+  the reader had in mind — and the queue row that carried §19.7's attribution
+  forward is corrected with it.
+- **One fixture of the corpus moves.** `pop`'s layer arm is zero on all five
+  controls, and no census was taken of which other corpus documents push
+  layers; a document elsewhere with a deep layer stack would gain and was not
+  looked for. `shading_tcpdf_058` was the only row the split was run on.
+- **AGG only.** `tiny-skia` and `vello_cpu` have their own layer handling and
+  neither was measured or changed. The board covers them.
+- **`shading_tcpdf_058` is not closed as a defect** at 2.29x, but it is no
+  longer the corpus's largest ratio and nothing in its remaining render is a
+  single line of the kind §19 and §20 removed: with the layer arm at 2.08 ms
+  and `coverage_of` at 1.71, the residue is spread across `draw_image`,
+  `push_layer` and the sweep rather than concentrated.
+- **The ratchet is still not re-baselined.** §8's third bullet stands.
