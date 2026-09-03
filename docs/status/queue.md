@@ -100,6 +100,24 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
   follow the same rule. A CI grep for the two path prefixes outside
   `docs/reviews/` and `docs/status/` keeps it clean.
 
+## Oracle checkout hygiene (added 2026-09-03)
+
+- **The board should refuse a modified oracle checkout.** On 2026-09-03 the
+  checkout at `$PDFRUM_ORACLE_CHECKOUT` was found with 340 tracked
+  modifications under `testing/resources/`: 334 `.pdf`s regenerated from
+  their `.in` templates on 2026-08-29 (every stream `/Length` one lower than
+  committed) and six expected-output files (`*.pdf.0.annot.txt`,
+  `*.0.png`) overwritten by in-place `pdfium_test` runs as late as
+  2026-09-02. The tree was restored to `6f2272e` and the drift saved out of
+  tree; the ~207 *untracked* `.pdf`s generated from `.in` templates are board
+  inputs and stay. Owed: `conformance run`/`generate-goldens` check
+  `git -C $PDFRUM_ORACLE_CHECKOUT status --porcelain` for tracked
+  modifications and refuse with a message (untracked `.in`-derived `.pdf`s
+  are fine); every script that invokes `pdfium_test` copies its input to a
+  scratch directory first (most do — audit the rest); and a note in
+  `conformance/README.md`. Whether any golden was generated from a drifted
+  input is being verified (a board run against the pristine tree).
+
 ## Rustdoc trim (`docs/design/rustdoc.md`)
 
 - WP5 inner crates, host-reachable first: `pdfrum-text`, `pdfrum-form`,
