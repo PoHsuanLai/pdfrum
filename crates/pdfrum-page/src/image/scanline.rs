@@ -9,8 +9,15 @@
 //! - A **one-bit stencil mask with the default decode is inverted
 //!   bit-for-bit**; with `/Decode [1 0]` it is copied verbatim. So `/Decode`
 //!   flips a mask's sense in the opposite direction from what one expects.
-//! - The packed palette index puts component `j` in bits
-//!   `[j*bpc, (j+1)*bpc)` — an order the palette builder must match exactly.
+//! - PDFium additionally *palettizes* any image with `bpc * components <= 8`,
+//!   packing component `j` into bits `[j*bpc, (j+1)*bpc)` and precomputing one
+//!   colour per index (`cpdf_dib.cpp:164-171`, `LoadPalette` at `:905-980`,
+//!   `GetScanline`'s packed loop at `:1200-1210`). **pdfrum does not, and the
+//!   pixels are the same either way** — the palette precomputes the very
+//!   composition the general path evaluates per pixel, which is proved
+//!   exhaustively by
+//!   `a_packed_palette_lookup_and_the_general_path_agree_on_every_index`. It
+//!   is a lookup-table optimisation, and no corpus image would exercise it.
 //!
 //! # 16-bit samples are scaled, not truncated
 //!
@@ -126,25 +133,6 @@ pub fn invert_line(line: &mut [u8]) {
     }
 }
 
-/// Pack `components` samples of `bpc` bits into one palette index.
-///
-/// Component `j` occupies bits `[j*bpc, (j+1)*bpc)`, so the *first* component
-/// is in the low bits. The palette builder enumerates indices the same way.
-#[must_use]
-#[allow(
-    dead_code,
-    reason = "unwired — see docs/status/unwired-oracle-ports.md"
-)]
-pub fn palette_index(line: &[u8], pixel: usize, components: u32, bpc: u32) -> u32 {
-    let mut index = 0u32;
-    for j in 0..components {
-        let bit_pos = (pixel * components as usize + j as usize) * bpc as usize;
-        let v = get_bits(line, bit_pos, bpc);
-        index |= v << (j * bpc);
-    }
-    index
-}
-
 #[cfg(test)]
 mod tests {
     // Test fixtures quote the oracle's own vectors, compare floats exactly
@@ -159,7 +147,19 @@ mod tests {
         reason = "test fixtures quote oracle vectors verbatim and compare exactly"
     )]
 
-    use super::{Availability, get_bits, invert_line, palette_index, scanline};
+    use super::{Availability, get_bits, invert_line, scanline};
+
+    /// The oracle's packing rule, kept here because only these tests need it:
+    /// component `j` occupies bits `[j*bpc, (j+1)*bpc)`, first in the low
+    /// bits, which is the order `LoadPalette` enumerates indices in.
+    fn palette_index(line: &[u8], pixel: usize, components: u32, bpc: u32) -> u32 {
+        let mut index = 0u32;
+        for j in 0..components {
+            let bit_pos = (pixel * components as usize + j as usize) * bpc as usize;
+            index |= get_bits(line, bit_pos, bpc) << (j * bpc);
+        }
+        index
+    }
 
     #[test]
     fn bits_are_read_msb_first_and_zero_past_the_end() {
@@ -210,5 +210,96 @@ mod tests {
         // nibble, must produce index `0b10 << 2 | 0b01`.
         let line = [0b0110_0000u8];
         assert_eq!(palette_index(&line, 0, 2, 2), 0b10_01);
+    }
+
+    /// The packed-palette path and the general path are the **same pixels**.
+    ///
+    /// This is the proof that retired the unwired `palette_index` helper. The
+    /// oracle palettizes any image with `bpc * components <= 8`
+    /// (`cpdf_dib.cpp:164-171`, `LoadPalette` at `:905-980`), building one
+    /// entry per possible packed index and looking each pixel up
+    /// (`GetScanline`'s packed loop, `:1200-1210`). pdfrum palettizes only
+    /// `Indexed` and widens every other space to a byte per component.
+    ///
+    /// Both routes evaluate the same two functions in the same order:
+    /// `decode_min + decode_step * raw` per component — `DecodeMap::apply`
+    /// here, `comp_data_[j].decode_min_ + decode_step_ * encoded_component`
+    /// there — and then the space's own conversion. The palette merely
+    /// *precomputes* that composition for all `1 << (bpc * components)`
+    /// inputs, and since the composition is a pure function of the packed
+    /// index, precomputing it cannot change an answer. Enumerating every
+    /// index and comparing is what turns that argument into a check.
+    ///
+    /// So the oracle's palette is a **lookup-table optimisation, not a
+    /// behaviour**, and the corpus has nothing that would exercise it: a scan
+    /// of all 1319 corpus PDFs and 551 `.in` templates found 839 images with
+    /// `bpc * components <= 8` and **every one single-component**
+    /// (`/DeviceGray` or already-`Indexed`). Wiring it would add a second
+    /// decode path for zero board rows, so the helper was deleted and this
+    /// test keeps the reasoning.
+    #[test]
+    fn a_packed_palette_lookup_and_the_general_path_agree_on_every_index() {
+        use crate::color::ColorSpace;
+        use crate::image::decode_array::DecodeMap;
+
+        // 2-bpc RGB (2*3 = 6 <= 8) and 1-bpc CMYK (1*4 = 4 <= 8): the two
+        // shapes the oracle palettizes and we do not.
+        for (space, components, bpc) in [
+            (ColorSpace::DeviceRgb, 3u32, 2u32),
+            (ColorSpace::DeviceCmyk, 4, 1),
+        ] {
+            let n = components as usize;
+            let map = DecodeMap::new(Some(&space), n, bpc, None);
+
+            // The oracle's palette: one entry per packed index, components
+            // peeled off from the low bits (`LoadPalette`'s `color_data %`
+            // / `/=` loop).
+            let entries = 1u32 << (bpc * components);
+            let palette: Vec<_> = (0..entries)
+                .map(|index| {
+                    let mut rest = index;
+                    let comps: Vec<f32> = (0..n)
+                        .map(|j| {
+                            let raw = rest % (1 << bpc);
+                            rest /= 1 << bpc;
+                            map.apply(j, raw as f32)
+                        })
+                        .collect();
+                    space.to_rgb(&comps)
+                })
+                .collect();
+
+            // Every packed index, as a one-pixel scanline, through both
+            // routes.
+            for index in 0..entries {
+                let mut line = [0u8; 2];
+                for j in 0..components {
+                    let v = (index >> (j * bpc)) & ((1 << bpc) - 1);
+                    let bit_pos = (j * bpc) as usize;
+                    let shift = 8 - bpc as usize - (bit_pos % 8);
+                    line[bit_pos / 8] |= u8::try_from(v).unwrap() << shift;
+                }
+                // `palette_index` must recover the index the palette was
+                // built against — the packing and the enumeration agree.
+                assert_eq!(
+                    palette_index(&line, 0, components, bpc),
+                    index,
+                    "{space:?} bpc {bpc}: packing and enumeration disagree"
+                );
+                // The general path: decode each component, widen to a byte,
+                // convert.
+                let comps: Vec<f32> = (0..n)
+                    .map(|j| {
+                        let raw = get_bits(&line, j * bpc as usize, bpc);
+                        map.apply(j, raw as f32)
+                    })
+                    .collect();
+                assert_eq!(
+                    space.to_rgb(&comps),
+                    palette[index as usize],
+                    "{space:?} bpc {bpc}: index {index} differs between paths"
+                );
+            }
+        }
     }
 }

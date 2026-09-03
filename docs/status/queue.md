@@ -119,8 +119,10 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
 - ~~16-bpc high-byte arm~~ — **decided 2026-09-03**: both readers scale-and-
   round (pdf.js exactly, PDFium's `>> 8` within one count), our shipping path
   truncated and was a count low against both. Path fixed, arm deleted.
-- `palette_index` for packed multi-component images: an optimisation if
-  pixel-identical — verify and delete, or wire.
+- ~~`palette_index` for packed multi-component images~~ — **decided
+  2026-09-03**: pixel-identical (every packed index enumerated for 2-bpc RGB
+  and 1-bpc CMYK), and the corpus has no multi-component image with
+  `bpc * components <= 8` at all. Deleted.
 - DCT reduced-resolution trio: still blocked on `zune-jpeg` — re-checked
   2026-09-03 against 0.5.16-rc1, `DecoderOptions` has no `scale_denom`.
 
