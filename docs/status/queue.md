@@ -30,20 +30,26 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
   40 byte-exact and 7 not achievable by construction** — `bug_1142688` joins
   the V8 declines, because boa's `RuntimeLimitError` is uncatchable *by
   design* and the fixture wants to catch a stack overflow.
-- **What M15 still owes after step 3**, in the order a follow-on would take
-  them:
-  - **`Field.setFocus` reaches nothing.** `take_focus_request` is drained by
-    no caller, so a script moving focus moves nothing and the outgoing
-    field's `/AA /Bl` never runs. The one gap that is a *missing wire* rather
-    than a missing feature; `bug_735912` is its fixture.
-  - **The facade installs no document model.** `FormSession::with_scripts`
-    builds a cascade and never calls `set_document`, so `this.getField` in a
-    facade session answers as an empty document would. The *tool* installs
-    one; the facade does not, which is why no fixture caught it.
-  - `Field.style` and the three colour setters (`field_properties`);
-    `Icon`'s prototype identity under `new` (`icons`); `Field.delay`'s
-    document-wide half (`bug_494057`); `app.execMenuItem` and the
-    `/Names /Print` named-action dispatch (`named_action`).
+- ~~**What M15 still owes after step 3** — `Field.setFocus`, the facade's
+  document model, and the four residues.~~ — landed 2026-09-03 in three
+  commits. **33 of 47 transcript fixtures byte-exact became 37 of 47**, and
+  the board moved 1536 → 1539 with `js-transcript` 11 → 8 and no row moving
+  the other way. `docs/status/M15.md` §"Step 4" has the routing of the focus
+  request, the blur-then-focus proof, and the residues table.
+
+  Two findings worth carrying forward. **Both missing wires moved the board
+  by zero**, because neither had a fixture that could fail — they were found
+  by reading for a value nothing consumes, and that sweep is worth repeating
+  mid-milestone rather than at the end of one. And **two of the five owed
+  items named fixtures that are suppressed for our build**
+  (`bug_735912` `noxfa`, `named_action` `nov8`), so the corpus's 47 javascript
+  templates are 44 board rows; `bug_735912`'s recorded order needs the XFA
+  focus path and it joins the not-achievable bucket rather than staying owed.
+
+  M15 now exits at **47/47 accounted for — 37 byte-exact, 8 not achievable by
+  construction, 1 parser work (`bug_1314658`, a damaged file whose
+  `/OpenAction` our parser does not reach), 1 oracle bug (`util_printd`)**.
+
 - ~~**No caller-supplied `/ToUnicode` CMap or `/CIDToGIDMap` on font load.**~~
   — landed 2026-09-03 as `DocEdit::embed_cid_font(program, to_unicode,
   cid_to_gid)`, the `FPDFText_LoadCidType2Font` counterpart. `/W` is computed
