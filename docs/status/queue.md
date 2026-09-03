@@ -476,15 +476,13 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
   0.964x. **No corpus-wide re-take was done**, so §18.2's geomeans are stale by
   an unmeasured amount in this direction — the one measurement this milestone
   now most obviously owes.
-- **`--op render --warm` does not yet prepare outside its loop, so §18.1's
-  subtraction is retired in the docs and still load-bearing in the numbers.**
-  `Page::prepare` landed and §18.1's addendum says the bench's warm loop now
-  times only the draws; that is true of `warm_pass`, the arm `--op forms` A/Bs
-  with, and **not of the `--op render --warm` loop every §18.2/§19/§20/§21 row
-  comes from**, which still calls `render_one` per iteration. §21.8 was re-taken
-  on the post-`PreparedPage` base and its parse and interpretation rows are
-  still per-iteration at 4.2% and 2.2%. Point that loop at `prepare` too, then
-  re-take §18.2 without the subtraction; `whole` and `amortz` should converge.
+- ~~**`--op render --warm` does not yet prepare outside its loop, so §18.1's
+  subtraction is retired in the docs and still load-bearing in the numbers.**~~
+  — **landed 2026-09-04**: the render loop under `--warm` now prepares every
+  page once (the priming pass) and times only the draws, the same shape as
+  `warm_pass`; the cold arm is unchanged. The stage report's parse and
+  interpretation rows read zero per iteration from here on, and `whole` is
+  the amortized figure. §18.2 has not been re-taken on it yet (see below).
 - **`mixed_en_uicase` at 1.72x has no single dominant line left**: with
   `coverage_of` at 7.53 ms what remains is `fill_path` at 10.7 ms and a long
   tail. Not closed as a defect, but not a split's target either.

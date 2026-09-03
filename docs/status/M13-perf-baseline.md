@@ -2665,12 +2665,14 @@ was run: `per_file` equal across all 1757 entries). The retention above is
 therefore a caller's choice visible in the type — the value holds the graph,
 including images decoded for the size it was prepared at, until it is dropped
 — and there is no cache inside `Page` and no eviction policy to invent. The
-bench's warm loop (`profile --op render --warm`) now prepares each page once
-outside the timed loop and times only the draws, which is what
-`pdfium_test --render-repeats` does; **its `whole` figure is the amortized
-figure from here on, and the subtraction above is retired**. The stage
-instrument still reports parse and interpretation, counted once per page at
-prepare time rather than once per iteration.
+bench's warm loops — `warm_pass`, which `--op forms` A/Bs with, and, from the
+second landing the same day, the `--op render --warm` loop every table here
+is taken from — prepare each page once outside the timed loop and time only
+the draws, which is what `pdfium_test --render-repeats` does; **their `whole`
+figure is the amortized figure from here on, and the subtraction above is
+retired**. The stage instrument's parse and interpretation rows read zero per
+iteration under `--warm`: they ran once, at prepare time, before the clock
+started.
 
 ### 18.2 The table, all forty-four rows
 
