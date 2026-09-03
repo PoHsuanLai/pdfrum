@@ -91,12 +91,16 @@ pub use subst::{
 };
 pub(crate) use tounicode::ToUnicode;
 
-/// ISO 32000-1 table 127 `/Length1` `/Length2` `/Length3` of a Type 1 program.
+pub use pdfrum_type1::FontFile as Type1FontFile;
+
+/// A Type 1 program as the `/FontFile` stream a PDF writer stores, with the
+/// ISO 32000-1 table 127 lengths that partition it.
 ///
-/// See [`pdfrum_type1::font_file_lengths`].
+/// See [`pdfrum_type1::font_file`]: a PFB is unwrapped into the raw program
+/// its records carry, because the container's framing is not part of the font.
 #[must_use]
-pub fn type1_program_lengths(bytes: &[u8]) -> (u32, u32, u32) {
-    pdfrum_type1::font_file_lengths(bytes)
+pub fn type1_font_file(bytes: &[u8]) -> Type1FontFile {
+    pdfrum_type1::font_file(bytes)
 }
 pub use type3::{MAX_TYPE3_DEPTH, Type3Font};
 

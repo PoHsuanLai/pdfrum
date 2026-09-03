@@ -86,7 +86,7 @@ mod program;
 
 pub use blend::{AxisKind, MmAxis};
 pub use charstring::Glyph;
-pub use container::{Container, font_file_lengths};
+pub use container::{Container, FontFile, font_file};
 pub use eexec::{CHARSTRING_SEED, DEFAULT_LEN_IV, EEXEC_SEED, EEXEC_SKIP, decrypt, encrypt};
 pub use encoding::{Encoding, standard_encoding_name, unicode_from_glyph_name};
 pub use error::Error;

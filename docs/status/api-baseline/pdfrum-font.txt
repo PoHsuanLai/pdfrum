@@ -1,6 +1,7 @@
 pub mod pdfrum_font
 pub use pdfrum_font::CharCode
 pub use pdfrum_font::Cid
+pub use pdfrum_font::Type1FontFile
 pub enum pdfrum_font::Charmap
 pub pdfrum_font::Charmap::Index(usize)
 pub pdfrum_font::Charmap::None
@@ -240,4 +241,4 @@ pub fn pdfrum_font::cid_transform_to_float(u8) -> f32
 pub fn pdfrum_font::em_adjust(i32, u16) -> i32
 pub fn pdfrum_font::load(&pdfrum_object::dict::Dict, &impl pdfrum_object::resolve::Resolve, &pdfrum_font::FontCache, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<pdfrum_font::Font>
 pub fn pdfrum_font::load_with_options(&pdfrum_object::dict::Dict, &impl pdfrum_object::resolve::Resolve, &pdfrum_font::FontCache, &pdfrum_font::SubstitutionOptions, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<pdfrum_font::Font>
-pub fn pdfrum_font::type1_program_lengths(&[u8]) -> (u32, u32, u32)
+pub fn pdfrum_font::type1_font_file(&[u8]) -> pdfrum_type1::container::FontFile

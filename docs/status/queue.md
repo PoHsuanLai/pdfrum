@@ -26,14 +26,13 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
   `cid_to_gid_map` spans alongside the program — has no counterpart.
   `crates/pdfrum/tests/load_font.rs::load_cid_type2_font_custom` is the
   `#[ignore]`d port waiting on it.
-- **`/FontFile` stores the PFB wrapper but `/Length1-3` describe the unwrapped
-  program.** `embed_program` (`crates/pdfrum-edit/src/font/embed.rs:451-485`)
-  writes the caller's Type 1 bytes verbatim while
-  `pdfrum_font::type1_program_lengths` returns segment-payload lengths, so the
-  three disagree with the stream by the 20 bytes of PFB framing (113417 vs
-  113397 on `FoxitSerifMM.pfb`) and do not partition it as ISO 32000-1 §9.9
-  Table 127 requires. Pinned by the `#[ignore]`d
-  `load_font.rs::type1_font_file_lengths_partition_the_stream`.
+- ~~**`/FontFile` stores the PFB wrapper but `/Length1-3` describe the unwrapped
+  program.**~~ — fixed 2026-09-03. `embed_program` now unwraps the container:
+  `pdfrum_type1::font_file` returns the raw program *and* the three lengths
+  together (`FontFile`), so they cannot disagree. 113397 B stored,
+  10710 + 102155 + 532, the PFB's 20 bytes of framing dropped.
+  `load_font.rs::type1_font_file_lengths_partition_the_stream` is un-ignored
+  and asserts the partition on the written stream.
 - ~~**Coloured tiling pattern paints grey where the oracle paints teal** on
   `corpus/fx/other/1.pdf`~~ — landed, and **it was never a pattern**. The
   file contains no `/Pattern` object at all: the teal is `Im1`, a 1x1

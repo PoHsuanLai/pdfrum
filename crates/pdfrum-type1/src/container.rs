@@ -50,41 +50,67 @@ const PFB_TEXT: u8 = 1;
 const PFB_BINARY: u8 = 2;
 const PFB_EOF: u8 = 3;
 
-/// ISO 32000-1 table 127 `/Length1` `/Length2` `/Length3` for a Type 1
-/// `/FontFile` stream.
+/// A Type 1 program as a PDF `/FontFile` stream: the bytes to store, and the
+/// ISO 32000-1 §9.9 table 127 lengths that partition them.
 ///
-/// For a PFB these are the concatenated bodies of the leading text segment,
-/// the binary `eexec` segments, and the trailing text (`cleartomark`)
-/// segment. For a PFA or a bare program, `/Length1` is the clear preamble,
-/// `/Length2` the decoded ciphertext, and `/Length3` is 0 when no trailer
-/// can be split out.
+/// The two are produced together because table 127 defines the three lengths
+/// as a *partition of the stream's decoded data* — `/Length1` the clear-text
+/// portion, `/Length2` the encrypted portion, `/Length3` the fixed-content
+/// (`cleartomark`) portion — so computing lengths for one byte string and
+/// storing another is the defect this type exists to make unrepresentable.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FontFile {
+    /// The bytes to write as the stream's decoded data. `length1 + length2 +
+    /// length3 == program.len()` always holds.
+    pub program: Vec<u8>,
+    /// Bytes of clear-text ASCII, up to and including the `eexec` line.
+    pub length1: u32,
+    /// Bytes of the `eexec`-encrypted private portion, in whatever form it is
+    /// stored — binary for a PFB, and still hexadecimal for a PFA whose
+    /// private portion was written that way, which §9.9 permits.
+    pub length2: u32,
+    /// Bytes of the fixed 512-zeros-plus-`cleartomark` trailer, 0 when the
+    /// program carries none.
+    pub length3: u32,
+}
+
+/// Unwrap a Type 1 program into the `/FontFile` stream a PDF writer stores.
 ///
-/// The oracle's `LoadFontDesc` (`fpdfsdk/fpdf_edittext.cpp:166-170`) never
-/// writes these three keys — a TODO, and a file that ISO 32000-1 §9.9
-/// table 127 will not accept as a Type 1 program. Callers that embed a
-/// Type 1 program should use this instead.
+/// A **PFB** is a container, not a font program: its `[0x80, type, len:u32le]`
+/// record headers and its `80 03` end marker are framing that must not reach
+/// the stream. Concatenating the record bodies in order yields exactly the
+/// PFA-shaped raw program table 127 describes — clear text, then the `eexec`
+/// binary, then the trailer — and the three lengths are those bodies' sizes.
+///
+/// A **PFA** or a bare program is already raw: it is stored as-is, with
+/// `/Length1` ending at the `eexec` boundary, `/Length3` covering a trailing
+/// `cleartomark` block when one is present, and `/Length2` the remainder.
+///
+/// The oracle's `LoadFontDesc` (`fpdfsdk/fpdf_edittext.cpp:166-174`) writes
+/// the caller's bytes verbatim under a `TODO(npm): Lengths for Type1 fonts.`
+/// and emits none of the three keys, so a PFB handed to `FPDFText_LoadFont`
+/// reaches `/FontFile` with its framing intact and nothing describing it.
 #[must_use]
-pub fn font_file_lengths(bytes: &[u8]) -> (u32, u32, u32) {
+pub fn font_file(bytes: &[u8]) -> FontFile {
     if bytes.first() == Some(&PFB_MARKER) {
-        return pfb_lengths(bytes);
+        return pfb_font_file(bytes);
     }
-    let mut diags = Diagnostics::default();
-    match split(bytes, &mut diags) {
-        Ok(s) => (len_u32(s.clear.len()), len_u32(s.cipher.len()), 0),
-        Err(_) => (len_u32(bytes.len()), 0, 0),
-    }
+    ascii_font_file(bytes)
 }
 
-fn len_u32(n: usize) -> u32 {
-    u32::try_from(n).unwrap_or(u32::MAX)
-}
-
-/// Walk PFB records for the three table-127 lengths, counting truncated
-/// bodies the same way [`split_pfb`] keeps them.
-fn pfb_lengths(bytes: &[u8]) -> (u32, u32, u32) {
-    let mut length1 = 0u32;
-    let mut length2 = 0u32;
-    let mut length3 = 0u32;
+/// Walk PFB records, concatenating their bodies and measuring each class.
+///
+/// Truncation is tolerated the way [`split_pfb`] tolerates it: a body whose
+/// declared length overruns the blob contributes what is actually there, and
+/// the walk stops. The invariant survives, because every byte counted is a
+/// byte pushed.
+fn pfb_font_file(bytes: &[u8]) -> FontFile {
+    let mut out = FontFile {
+        program: Vec::with_capacity(bytes.len()),
+        length1: 0,
+        length2: 0,
+        length3: 0,
+    };
     let mut seen_binary = false;
     let mut at = 0usize;
     while at < bytes.len() {
@@ -94,33 +120,105 @@ fn pfb_lengths(bytes: &[u8]) -> (u32, u32, u32) {
         if header.first().copied() != Some(PFB_MARKER) {
             break;
         }
-        match header.get(1).copied() {
-            Some(k @ (PFB_TEXT | PFB_BINARY)) => {
-                let declared = le_u32(header.get(2..6).unwrap_or_default()) as usize;
-                let body_at = at.saturating_add(6);
-                let body = bytes
-                    .get(body_at..body_at.saturating_add(declared))
-                    .unwrap_or_else(|| bytes.get(body_at..).unwrap_or_default());
-                let n = len_u32(body.len());
-                if k == PFB_TEXT {
-                    if seen_binary {
-                        length3 = length3.saturating_add(n);
-                    } else {
-                        length1 = length1.saturating_add(n);
-                    }
-                } else {
-                    seen_binary = true;
-                    length2 = length2.saturating_add(n);
-                }
-                at = body_at.saturating_add(body.len());
-                if body.len() < declared {
-                    break;
-                }
+        let Some(k @ (PFB_TEXT | PFB_BINARY)) = header.get(1).copied() else {
+            break;
+        };
+        let declared = le_u32(header.get(2..6).unwrap_or_default()) as usize;
+        let body_at = at.saturating_add(6);
+        let body = bytes
+            .get(body_at..body_at.saturating_add(declared))
+            .unwrap_or_else(|| bytes.get(body_at..).unwrap_or_default());
+        let n = len_u32(body.len());
+        out.program.extend_from_slice(body);
+        if k == PFB_TEXT {
+            if seen_binary {
+                out.length3 = out.length3.saturating_add(n);
+            } else {
+                out.length1 = out.length1.saturating_add(n);
             }
-            _ => break,
+        } else {
+            seen_binary = true;
+            out.length2 = out.length2.saturating_add(n);
+        }
+        at = body_at.saturating_add(body.len());
+        if body.len() < declared {
+            break;
         }
     }
-    (length1, length2, length3)
+    if out.program.is_empty() {
+        // Not a walkable record chain after all — store what we were given
+        // rather than an empty `/FontFile`, and describe it as clear text.
+        return FontFile {
+            program: bytes.to_vec(),
+            length1: len_u32(bytes.len()),
+            length2: 0,
+            length3: 0,
+        };
+    }
+    out
+}
+
+/// Measure an already-raw program: `eexec` splits `/Length1` from `/Length2`,
+/// and a trailing zeros block splits `/Length3` off the end.
+///
+/// The encrypted portion is **not** decoded. A PFA writes it in hexadecimal,
+/// and ISO 32000-1 §9.9 permits that in a `/FontFile` — the lengths describe
+/// the stored bytes, so hex stays hex and `/Length2` counts hex digits.
+fn ascii_font_file(bytes: &[u8]) -> FontFile {
+    let Some(key) = find_eexec(bytes) else {
+        return FontFile {
+            program: bytes.to_vec(),
+            length1: len_u32(bytes.len()),
+            length2: 0,
+            length3: 0,
+        };
+    };
+    let trailer = trailer_start(bytes, key);
+    FontFile {
+        program: bytes.to_vec(),
+        length1: len_u32(key),
+        length2: len_u32(trailer.saturating_sub(key)),
+        length3: len_u32(bytes.len().saturating_sub(trailer)),
+    }
+}
+
+/// Where the fixed-content trailer begins: the first of the 512 ASCII `0`
+/// digits that close a Type 1 program.
+///
+/// The Type 1 specification's trailer is exactly 512 zeros — conventionally
+/// eight 64-digit lines — followed by `cleartomark`. Counting the *maximal*
+/// trailing run of zeros and whitespace would be wrong: a private portion
+/// whose last hex digits happen to be zeros would be eaten into `/Length3`.
+/// So the count is exact, taken backwards from the last zero, and anything
+/// but a 512-zero block means the program has no trailer and `/Length3` is 0.
+fn trailer_start(bytes: &[u8], after: usize) -> usize {
+    const TRAILER_ZEROS: usize = 512;
+    let tail = bytes.get(after..).unwrap_or_default();
+    // Walk back over `cleartomark` and its whitespace to the last zero.
+    let mut end = tail.len();
+    while end > 0 && tail.get(end.saturating_sub(1)) != Some(&b'0') {
+        end = end.saturating_sub(1);
+    }
+    // Then back over exactly 512 zeros, tolerating the line breaks between.
+    let mut zeros = 0usize;
+    let mut at = end;
+    while at > 0 && zeros < TRAILER_ZEROS {
+        match tail.get(at.saturating_sub(1)) {
+            Some(b'0') => zeros = zeros.saturating_add(1),
+            Some(b) if b.is_ascii_whitespace() => {}
+            _ => break,
+        }
+        at = at.saturating_sub(1);
+    }
+    if zeros == TRAILER_ZEROS {
+        after.saturating_add(at)
+    } else {
+        bytes.len()
+    }
+}
+
+fn len_u32(n: usize) -> u32 {
+    u32::try_from(n).unwrap_or(u32::MAX)
 }
 
 /// Sniff the container and split the program.
@@ -486,6 +584,108 @@ mod tests {
         .unwrap();
         assert_eq!(s.cipher, b"\x01\x02\x03\x04real");
         assert!(s.clear.ends_with(b"eexec\r\n"));
+    }
+
+    /// The partition ISO 32000-1 §9.9 table 127 asks for, on the wrapper that
+    /// breaks it: a PFB's framing is 6 bytes per record plus a 2-byte end
+    /// marker, and none of it is font data.
+    #[test]
+    fn pfb_font_file_drops_the_framing_and_partitions_what_is_left() {
+        let clear = b"%!PS-AdobeFont-1.0: T 1\ncurrentfile eexec\n";
+        let binary = b"\x01\x02\x03\x04private";
+        let mut wrapped = pfb(clear, binary);
+        // The trailer PFB files carry after the binary: a text record holding
+        // the 512 zeros and `cleartomark`.
+        let trailer = {
+            let mut t = vec![b'0'; 512];
+            t.extend_from_slice(b"\ncleartomark\n");
+            t
+        };
+        wrapped.truncate(wrapped.len() - 2); // drop the 0x80 0x03 marker
+        wrapped.extend_from_slice(&[0x80, 1]);
+        wrapped.extend_from_slice(&(trailer.len() as u32).to_le_bytes());
+        wrapped.extend_from_slice(&trailer);
+        wrapped.extend_from_slice(&[0x80, 3]);
+
+        let file = super::font_file(&wrapped);
+        assert_eq!(
+            file.program.len() as u32,
+            file.length1 + file.length2 + file.length3,
+            "the three lengths must partition the stored program"
+        );
+        assert!(file.program.starts_with(b"%!"));
+        assert_eq!(file.length1 as usize, clear.len());
+        assert_eq!(file.length2 as usize, binary.len());
+        assert_eq!(file.length3 as usize, trailer.len());
+        assert_eq!(&file.program[..clear.len()], clear);
+        assert_eq!(
+            &file.program[clear.len()..clear.len() + binary.len()],
+            binary
+        );
+        // 20 bytes of framing — three 6-byte headers and the 2-byte end
+        // marker — are gone.
+        assert_eq!(file.program.len() + 20, wrapped.len());
+    }
+
+    /// A PFA has no wrapper: it is stored as-is, hex private portion included,
+    /// with the lengths measured off the `eexec` boundary and the trailer.
+    #[test]
+    fn pfa_font_file_is_stored_as_is_with_hex_kept_hex() {
+        let mut pfa = b"%!PS-AdobeFont-1.0: T 1\ncurrentfile eexec\n".to_vec();
+        let head = pfa.len();
+        pfa.extend_from_slice(b"41424344454647484950\n");
+        let cipher = pfa.len() - head;
+        let mut trailer = vec![b'0'; 512];
+        trailer.extend_from_slice(b"\ncleartomark\n");
+        pfa.extend_from_slice(&trailer);
+
+        let file = super::font_file(&pfa);
+        assert_eq!(file.program, pfa, "a raw program is stored unchanged");
+        assert_eq!(
+            file.program.len() as u32,
+            file.length1 + file.length2 + file.length3
+        );
+        assert_eq!(file.length1 as usize, head);
+        assert_eq!(file.length2 as usize, cipher);
+        assert_eq!(file.length3 as usize, trailer.len());
+    }
+
+    /// No trailer, no `/Length3`: the partition still holds, with the
+    /// encrypted portion running to the end.
+    #[test]
+    fn a_program_without_a_trailer_has_length3_zero() {
+        let raw = b"%!FontType1\ncurrentfile eexec\n\x01\x02\x03\x04tail";
+        let file = super::font_file(raw);
+        assert_eq!(file.length3, 0);
+        assert_eq!(
+            file.program.len() as u32,
+            file.length1 + file.length2 + file.length3
+        );
+        assert_eq!(file.program, raw);
+    }
+
+    /// Bytes with no `eexec` at all are still stored and still partitioned —
+    /// as one clear-text portion, which is the only honest reading.
+    #[test]
+    fn a_program_without_eexec_is_all_length1() {
+        let file = super::font_file(b"not a font");
+        assert_eq!(file.length1, 10);
+        assert_eq!((file.length2, file.length3), (0, 0));
+        assert_eq!(file.program, b"not a font");
+    }
+
+    /// A truncated PFB keeps what it has, and the invariant survives: every
+    /// byte counted is a byte pushed.
+    #[test]
+    fn truncated_pfb_font_file_still_partitions() {
+        let mut good = pfb(b"%!PS-AdobeFont\ncurrentfile eexec\n", b"abcdefgh");
+        good.truncate(good.len() - 6);
+        let file = super::font_file(&good);
+        assert_eq!(
+            file.program.len() as u32,
+            file.length1 + file.length2 + file.length3
+        );
+        assert_eq!(file.length2, 4);
     }
 
     #[test]
