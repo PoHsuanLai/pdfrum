@@ -204,6 +204,7 @@ pub fn pdfrum_render::RenderDevice::push_clip(&mut self, &kurbo::bezpath::BezPat
 pub fn pdfrum_render::RenderDevice::push_clip_rect(&mut self, kurbo::rect::Rect)
 pub fn pdfrum_render::RenderDevice::push_layer(&mut self, pdfrum_page::state::general::BlendMode, f32, core::option::Option<&pdfrum_render::pixmap::AlphaMask>)
 pub fn pdfrum_render::RenderDevice::stroke_path(&mut self, &kurbo::bezpath::BezPath, kurbo::affine::Affine, &pdfrum_render::Brush<'_>, &kurbo::stroke::Stroke, pdfrum_render::AntiAlias)
+pub fn pdfrum_render::image_to_pixmap(&pdfrum_page::image::ImageData) -> pdfrum_render::pixmap::Pixmap
 pub fn pdfrum_render::needs_alpha_background(&pdfrum_page::page::Page) -> bool
 pub fn pdfrum_render::render_page<B: pdfrum_render::RasterBackend>(&pdfrum_page::page::Page, &pdfrum_render::RenderOptions, &B, &mut pdfrum_common::diagnostics::Diagnostics) -> core::result::Result<pdfrum_render::pixmap::Pixmap, pdfrum_render::Error>
 pub fn pdfrum_render::render_page_with<B: pdfrum_render::RasterBackend>(&pdfrum_page::page::Page, &pdfrum_render::RenderOptions, &B, pdfrum_render::RenderSession<'_>, &mut pdfrum_common::diagnostics::Diagnostics) -> core::result::Result<pdfrum_render::pixmap::Pixmap, pdfrum_render::Error>
