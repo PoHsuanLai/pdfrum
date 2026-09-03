@@ -50,7 +50,7 @@ byte regex must accept one or two digits; a two-digit-only regex silently drops
 roughly a sixth of every blob.
 
 **License.** PDFium, BSD 3-clause — `LICENSE` at the oracle checkout root
-(`/mnt/data2/pdfium/pdfium-c++/LICENSE`, first 27 lines; the Apache text that
+(`$PDFRUM_ORACLE_CHECKOUT/LICENSE`, first 27 lines; the Apache text that
 follows in that file covers other third-party components, not `core/fxge`).
 There is no separate LICENSE file under `core/fxge/fontdata`. Each `.cpp`
 carries the standard two-part PDFium header:

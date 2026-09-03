@@ -23,7 +23,8 @@ targets.
 
 ## 1. Oracle PDF fixtures — BSD-3-Clause
 
-From the read-only checkout at `/mnt/data2/pdfium/pdfium-c++`:
+From the read-only checkout at `$PDFRUM_ORACLE_CHECKOUT` (default
+`<repo>/../pdfium-c++`):
 
 | source | files | licence |
 |---|---|---|

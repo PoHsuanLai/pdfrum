@@ -208,11 +208,34 @@ rustup toolchain install nightly         # rustdoc JSON is nightly-only
 cargo install cargo-deny --locked      # optional; the gate skips it if absent
 ```
 
+**Paths outside this repository.** The oracle checkout, the oracle binary,
+the golden store and the build-tree roots are named by environment variables,
+each with a default relative to this repository — so a fresh clone, a CI
+checkout included, resolves every one of them without an edit, and a machine
+laid out differently overrides only the one that differs.
+
+| variable | what it names | default |
+|---|---|---|
+| `PDFRUM_ORACLE_CHECKOUT` | the read-only C++ PDFium checkout | `<repo>/../pdfium-c++` |
+| `PDFRUM_ORACLE_BIN` | its built `pdfium_test` | `<checkout>/out/Release/pdfium_test` |
+| `PDFRUM_GOLDENS` | the golden store (`.gitignore`d) | `<repo>/conformance/goldens` |
+| `PDFRUM_TOOL` | the `pdfrum-tool` binary under test | `<repo>/target/release/pdfrum-tool` |
+| `PDFRUM_TARGET_ROOT` | the directory holding per-agent `CARGO_TARGET_DIR` trees | `<repo>/../cargo-target` |
+| `PDFRUM_WORKTREE_ROOT` | where `git worktree add` puts trees | `<repo>/../worktrees` |
+
+`scripts/env.nu` is the nushell spelling of that table, the `conformance` CLI
+reads the first four through clap (a flag still wins over its variable), and
+the Python generators take the first. **A test that needs the oracle skips
+with a printed message when the binary is absent**, never fails on a path, so
+`cargo nextest run` is green on a machine that has only this repository.
+`scripts/check-no-absolute-paths.nu` is the gate that keeps it that way.
+
 Rust build trees are large and nothing removes them for you. Incremental
 compilation is off workspace-wide (`.cargo/config.toml` says why), and
-`scripts/clean-targets.nu` removes every `cargo-target/<name>` tree no running
-process is using — `--dry-run` to see the plan, `--keep [name]` to spare one.
-Measured 2026-09-02, the first sweep found 33 trees and freed 519 GB.
+`scripts/clean-targets.nu` removes every `$PDFRUM_TARGET_ROOT/<name>` tree no
+running process is using — `--dry-run` to see the plan, `--keep [name]` to
+spare one. Measured 2026-09-02, the first sweep found 33 trees and freed
+519 GB.
 
 **Nushell is a hard dependency for contributors.** The gate and every bench
 and check script under `scripts/` is a `.nu` script, and there is no bash

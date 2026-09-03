@@ -41,7 +41,7 @@ reason.
 
 ```sh
 PDFRUM_REGEN_CMAP_TABLES=1 \
-PDFRUM_ORACLE=/path/to/pdfium-c++ \
+PDFRUM_ORACLE_CHECKOUT=/path/to/pdfium-c++ \
   cargo build -p pdfrum-cmap
 ```
 

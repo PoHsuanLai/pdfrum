@@ -73,12 +73,12 @@ pub fn check_oracle(paths: &OraclePaths) -> Result<()> {
             "oracle binary not found at {}\n\
              \n\
              Build it in the read-only checkout, or point the harness elsewhere:\n\
-             \n  cd /mnt/data2/pdfium/pdfium-c++\n\
+             \n  cd \"$PDFRUM_ORACLE_CHECKOUT\"\n\
                gn gen out/Release --args='is_debug=false pdf_enable_v8=false \
              pdf_enable_xfa=false pdf_use_skia=false pdf_is_standalone=true'\n\
                ninja -C out/Release pdfium_test pdfium_diff\n\
              \n\
-             Then re-run, or set --oracle <path> / PDFRUM_ORACLE=<path>.",
+             Then re-run, or set --oracle <path> / PDFRUM_ORACLE_BIN=<path>.",
             paths.binary.display()
         );
     }
@@ -559,7 +559,7 @@ mod tests {
         let message = format!("{err:#}");
         assert!(message.contains("oracle binary not found"));
         assert!(message.contains("ninja -C out/Release pdfium_test"));
-        assert!(message.contains("PDFRUM_ORACLE"));
+        assert!(message.contains("PDFRUM_ORACLE_BIN"));
     }
 
     #[test]

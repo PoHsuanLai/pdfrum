@@ -6,7 +6,8 @@ byte came from and how to reproduce it, so the blob is auditable rather than
 opaque (the arrangement `crates/pdfrum-cmap/tables/PROVENANCE.md` sets out for
 the CJK CMaps).
 
-Oracle checkout: `/mnt/data2/pdfium/pdfium-c++` @ `6f2272e`.
+Oracle checkout: `$PDFRUM_ORACLE_CHECKOUT` (default `<repo>/../pdfium-c++`)
+@ `6f2272e`.
 
 ## What is in the blob
 
@@ -41,7 +42,7 @@ observation, not a change).
 
 ```bash
 PDFRUM_REGEN_TEXT_TABLES=1 \
-PDFRUM_ORACLE=/mnt/data2/pdfium/pdfium-c++ \
+PDFRUM_ORACLE_CHECKOUT=/path/to/pdfium-c++ \
   cargo build -p pdfrum-text
 ```
 
@@ -83,7 +84,7 @@ relocations that older GNU `ld` cannot read and the headers must resolve to the
 checkout's ICU rather than the system's:
 
 ```bash
-cd /mnt/data2/pdfium/pdfium-c++
+cd "$PDFRUM_ORACLE_CHECKOUT"
 CLANG=third_party/llvm-build/Release+Asserts/bin
 ICU=third_party/icu/source/common
 cp buildtools/third_party/libc++/__config_site /tmp/cxxcfg/
