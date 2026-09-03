@@ -63,6 +63,8 @@ mod profile;
 mod render;
 mod save;
 mod session;
+mod signature;
+mod thumbnail;
 
 pub use annotation::{AnnotFlags, Annotation, Subtype};
 pub use document::{Attachment, Document, Metadata, OpenOptions};
@@ -128,6 +130,7 @@ pub use pdfrum_edit::{EmbeddedImage, PixelFormat};
 pub use pdfrum_raster_vello_cpu::VelloCpuBackend;
 pub use save::{DocEdit, SaveOptions, Update};
 pub use session::RenderSession;
+pub use signature::Signature;
 
 /// The things a page draws, as the interpreter produced them.
 ///
