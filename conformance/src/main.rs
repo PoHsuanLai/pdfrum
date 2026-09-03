@@ -44,7 +44,7 @@ use clap::{Args, Parser, Subcommand};
 
 use corpus::Roots;
 use goldens::Store;
-use oracle::OraclePaths;
+use oracle::{DirtyPolicy, OraclePaths};
 use run::{ToolPaths, ToolState};
 use scoreboard::{FileResult, Scoreboard};
 
@@ -55,6 +55,12 @@ use scoreboard::{FileResult, Scoreboard};
 /// `--oracle` / `$PDFRUM_ORACLE_BIN` override it outright. `scripts/env.nu`
 /// spells the same two variables and the same two defaults for the scripts.
 const DEFAULT_ORACLE: &str = "out/Release/pdfium_test";
+
+/// The environment spelling of `--allow-dirty-oracle`.
+///
+/// Any non-empty value other than `0` enables the override, so both `=1` and
+/// `=true` do what the person typing them meant.
+const ALLOW_DIRTY_ENV: &str = "PDFRUM_ALLOW_DIRTY_ORACLE";
 
 #[derive(Debug, Parser)]
 #[command(
@@ -99,6 +105,18 @@ struct CorpusArgs {
     /// Process at most this many files (smoke tests).
     #[arg(long)]
     limit: Option<usize>,
+    /// Run even though the oracle checkout has tracked modifications.
+    ///
+    /// The checkout is the answer key, so the default is to refuse; this is
+    /// for someone who knows why their tree differs.
+    ///
+    /// The environment spelling is deliberately *not* clap's `env =`: that
+    /// parses the value as a bool, so the `=1` an operator reaches for is a
+    /// hard parse error rather than the override they asked for. It is read
+    /// in `dirty_policy` instead, where any non-empty value except `0`
+    /// enables it.
+    #[arg(long)]
+    allow_dirty_oracle: bool,
 }
 
 #[derive(Debug, Args)]
@@ -263,10 +281,28 @@ fn repo_root() -> PathBuf {
 }
 
 impl CorpusArgs {
-    fn checkout(&self) -> PathBuf {
-        self.checkout
+    /// The oracle checkout, **having checked that it is unmodified**.
+    ///
+    /// Every subcommand that reads the checkout resolves its path through
+    /// here, so the hygiene check cannot be forgotten at a new entry point:
+    /// there is no other way to learn where the tree is.
+    fn checkout(&self) -> Result<PathBuf> {
+        let path = self
+            .checkout
             .clone()
-            .unwrap_or_else(|| repo_root().join("../pdfium-c++"))
+            .unwrap_or_else(|| repo_root().join("../pdfium-c++"));
+        oracle::require_clean_checkout(&path, self.dirty_policy())?;
+        Ok(path)
+    }
+
+    fn dirty_policy(&self) -> DirtyPolicy {
+        let from_env = std::env::var_os(ALLOW_DIRTY_ENV)
+            .is_some_and(|value| !value.is_empty() && value != "0");
+        if self.allow_dirty_oracle || from_env {
+            DirtyPolicy::Allow
+        } else {
+            DirtyPolicy::Refuse
+        }
     }
 
     fn store(&self) -> Store {
@@ -306,7 +342,7 @@ fn scratch_root(tag: &str) -> Result<PathBuf> {
 }
 
 fn generate_goldens(args: &GenerateArgs) -> Result<ExitCode> {
-    let checkout = args.corpus.checkout();
+    let checkout = args.corpus.checkout()?;
     let oracle = OraclePaths {
         binary: args
             .oracle
@@ -397,7 +433,7 @@ fn generate_goldens(args: &GenerateArgs) -> Result<ExitCode> {
 }
 
 fn run_corpus(args: &RunArgs) -> Result<ExitCode> {
-    let checkout = args.corpus.checkout();
+    let checkout = args.corpus.checkout()?;
     let tool = ToolPaths {
         binary: args
             .tool
@@ -572,7 +608,7 @@ fn text_summary(totals: &scoreboard::Totals) -> String {
 /// through the same `pdfrum-tool`, selected by `PDFRUM_BACKEND`, so the two
 /// differ only in which `RasterBackend` the engine was handed.
 fn tier_c(args: &TierCArgs) -> Result<ExitCode> {
-    let checkout = args.corpus.checkout();
+    let checkout = args.corpus.checkout()?;
     let tool = ToolPaths {
         binary: args
             .tool
@@ -704,7 +740,7 @@ fn report_save_totals(totals: &saveroundtrip::SaveTotals, files: usize) {
 /// failed, because Tier B already scores that and counting it twice would let
 /// a parse regression read as a writer bug.
 fn save_round_trip(args: &SaveArgs) -> Result<ExitCode> {
-    let checkout = args.corpus.checkout();
+    let checkout = args.corpus.checkout()?;
     let font_dir = args
         .font_dir
         .clone()
@@ -789,7 +825,7 @@ fn save_round_trip(args: &SaveArgs) -> Result<ExitCode> {
 }
 
 fn mutate_round_trip(args: &MutateArgs) -> Result<ExitCode> {
-    let checkout = args.corpus.checkout();
+    let checkout = args.corpus.checkout()?;
     let font_dir = args
         .font_dir
         .clone()

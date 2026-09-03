@@ -74,6 +74,52 @@ PDFRUM_TOOL="$CARGO_TARGET_DIR/release/pdfrum-tool" \
 `--limit N` truncates the corpus listing to its first `N` entries. It is a
 smoke-test switch, not a filter: there is no way to select a named file.
 
+## The oracle checkout is read-only
+
+`generate-goldens`, `run`, `tier-c`, `save-round-trip` and `mutate-round-trip`
+all run `git -C $PDFRUM_ORACLE_CHECKOUT status --porcelain
+--untracked-files=no` before they read a single file, and **refuse** when any
+tracked file is modified. The refusal names the first five paths and the
+restoring command (`git -C <checkout> checkout -- testing/resources`).
+
+The class it exists for is **a tracked `.pdf` regenerated from a template that
+disagrees with it.** PDFium's `.in` templates and their committed `.pdf`s are
+not always in sync, so re-running `fixup_pdf_template.py` over the checkout
+can silently swap a fixture for a different document. On 2026-09-03 that was
+`testing/resources/viewer_ref.pdf`: the template says `/Count 1`, the
+committed file has five pages, and the regeneration left a one-page file in
+its place — every row scored against it was scoring a document the corpus does
+not contain.
+
+A swapped fixture still opens and still renders, so nothing downstream
+notices. What made it findable was the harmless churn beside it: 333 further
+`.pdf`s rewritten with every stream `/Length` one byte lower than committed
+(render-neutral, and the golden store keys by content hash, so a drifted input
+resolves to a different golden directory and at worst reads `missing-golden`),
+and six expected-output files (`*.pdf.0.annot.txt`, `*.0.png`) overwritten by
+`pdfium_test` runs pointed at the checkout instead of at a scratch copy (read
+by nothing of ours). Refusing on *any* tracked modification is how the one
+that matters is caught alongside the ones that do not.
+
+**Untracked `.pdf`s are legitimate.** Around 207 of them sit in
+`testing/resources`, expanded from `.in` templates, and they are board inputs.
+The check passes `--untracked-files=no` precisely so that it can never be read
+as an argument for cleaning them away.
+
+`--allow-dirty-oracle`, or `PDFRUM_ALLOW_DIRTY_ORACLE` set to anything but
+empty or `0`, runs anyway and prints the same text as a warning. A checkout that is not a git repository at
+all — a tarball export — is skipped with a one-line note rather than failing.
+
+**The rule for scripts:** `pdfium_test` writes `<input>.0.png`,
+`<input>.0.annot.txt` and `<input>.0.txt` **beside its input**, ignoring the
+working directory, and `fixup_pdf_template.py` without `--output-dir` writes
+the expanded `.pdf` beside the `.in`. Every invoker therefore copies its
+document into a scratch directory and runs there — never `cd`s to one and
+passes a checkout path, which does nothing. The harness does this per file
+(`generate.rs`); so do `scripts/bench-rss.nu` and the `crates/pdfrum/tests`
+that shell out to the oracle. `scripts/bench-oracle.nu` is the one exception,
+and only because `--md5` without `--png` writes no file at all.
+
 ## What `mutate-round-trip` compares, and why it is not a golden
 
 Every other pixel check here diffs our render against a golden the oracle made
