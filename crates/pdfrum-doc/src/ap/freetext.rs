@@ -9,6 +9,7 @@
 //! is produced at all — which is visible in the dump, because the two colour
 //! lines then report a colour instead of failing.
 
+use pdfrum_common::{DiagKind, Diagnostics, Severity};
 use pdfrum_object::{Dict, Object, PdfString, Resolve, names as obj_names};
 
 use crate::ap::border;
@@ -34,6 +35,7 @@ pub(crate) fn free_text<R: Resolve>(
     r: &R,
     metrics: &vt::Metrics<'_>,
     encode: &dyn Fn(u32) -> Vec<u8>,
+    diags: &mut Diagnostics,
 ) -> Option<Generated> {
     // A document with no interactive form gets one **created** for it here —
     // a real mutation upstream, and the reason a free-text annotation in a
@@ -44,9 +46,24 @@ pub(crate) fn free_text<R: Resolve>(
         None => synthesized_form(),
     };
     let appearance = default_appearance(dict, &form, r)?;
+    // A `/DA` that parsed but named no font: upstream returns a
+    // default-constructed `FontNameAndSize` from `GetFont`
+    // (`cpdf_defaultappearance.cpp:95-97`) rather than failing, so the size is
+    // zero and the name is empty and the text cannot be placed.
+    if appearance.font_name.is_empty() {
+        diags.record(
+            Severity::Suspicious,
+            DiagKind::DefaultAppearanceMalformed,
+            None,
+        );
+    }
     let resources = form.dict(names::DR, r)?;
     let fonts = resources.dict(names::FONT, r)?;
     if !valid_font_resources(&fonts, r) {
+        // `/DR /Font` is not a dictionary of font dictionaries, so no font can
+        // be resolved and no appearance is generated at all
+        // (`cpdf_generateap.cpp:1071-1074`).
+        diags.record(Severity::Suspicious, DiagKind::FormResourcesInvalid, None);
         return None;
     }
     // The appearance stream names this font in a `Tf`, so the stream's own
@@ -299,6 +316,7 @@ mod tests {
     };
     use crate::color::Color;
     use crate::vt::stub;
+    use pdfrum_common::{DiagKind, Diagnostics};
     use pdfrum_object::{Array, Dict, Name, NoResolve, Object, PdfString};
 
     fn dict(pairs: &[(&str, Object)]) -> Dict {
@@ -346,8 +364,16 @@ mod tests {
     }
 
     fn generate(annot: &Dict, catalog: &Dict) -> Option<String> {
-        free_text(annot, catalog, &NoResolve, &stub::metrics(), &one_byte)
-            .map(|got| String::from_utf8_lossy(&got.stream).into_owned())
+        let mut diags = Diagnostics::default();
+        free_text(
+            annot,
+            catalog,
+            &NoResolve,
+            &stub::metrics(),
+            &one_byte,
+            &mut diags,
+        )
+        .map(|got| String::from_utf8_lossy(&got.stream).into_owned())
     }
 
     #[test]
@@ -390,6 +416,7 @@ mod tests {
             &NoResolve,
             &stub::metrics(),
             &one_byte,
+            &mut Diagnostics::default(),
         )
         .expect("generates");
         let fonts = got.font_resources.expect("a text generator names a font");
@@ -418,6 +445,7 @@ mod tests {
             &NoResolve,
             &stub::metrics(),
             &one_byte,
+            &mut Diagnostics::default(),
         )
         .expect("falls back rather than declining");
         let fonts = got.font_resources.expect("names a font");
@@ -556,5 +584,33 @@ mod tests {
             color: Color::Gray(0.0),
         });
         assert_eq!(sizeless, b"0 g");
+    }
+
+    /// A `/DR /Font` entry that is not a font dictionary stops the generation
+    /// dead (`cpdf_generateap.cpp:1071-1074`), and now says so.
+    #[test]
+    fn a_malformed_dr_font_declines_and_is_recorded() {
+        let bad_dr = dict(&[(
+            "AcroForm",
+            Object::Dict(dict(&[(
+                "DR",
+                Object::Dict(dict(&[(
+                    "Font",
+                    // `/Helv` present but not a `/Type /Font` dictionary.
+                    Object::Dict(dict(&[("Helv", Object::Int(7))])),
+                )])),
+            )])),
+        )]);
+        let mut diags = Diagnostics::default();
+        let got = free_text(
+            &annot(&[("Contents", Object::Str(PdfString::literal(b"Hi")))]),
+            &bad_dr,
+            &NoResolve,
+            &stub::metrics(),
+            &one_byte,
+            &mut diags,
+        );
+        assert!(got.is_none(), "no appearance can be generated");
+        assert!(diags.contains(&DiagKind::FormResourcesInvalid));
     }
 }

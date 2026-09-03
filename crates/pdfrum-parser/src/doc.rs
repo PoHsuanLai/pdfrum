@@ -647,6 +647,13 @@ impl Document {
         // after the leaf case rather than on the way in. Exceeding it stops
         // every later lookup too, not just this one.
         if depth >= self.store.limits().max_page_tree_depth {
+            // The oracle records the same fact in the same shape:
+            // `reached_max_page_level_ = true` at `cpdf_document.cpp:281-283`,
+            // after which its own later lookups fail too. `poisoned` is that
+            // flag; the diagnostic is how a caller finds out *why* the pages
+            // stopped resolving.
+            self.store
+                .note(Severity::Suspicious, DiagKind::PageTreeDepthExceeded, None);
             pages.poisoned = true;
             return;
         }
@@ -668,8 +675,15 @@ impl Document {
                 continue;
             };
             // Only a kid that is already an ancestor would loop; the same
-            // node appearing twice as a sibling is two pages.
+            // node appearing twice as a sibling is two pages. PDFium skips a
+            // kid it has already visited for the same reason
+            // (`cpdf_document.cpp:87-88`), as part of the same pass that
+            // rewrites a wrong `/Count` (`:111`) and guesses a missing `/Type`
+            // (`:60`) — all of it "fix the in-memory representation for page
+            // tree nodes that violate the spec".
             if ancestors.contains(&loaded) {
+                self.store
+                    .note(Severity::Recovered, DiagKind::PageTreeRepaired, None);
                 continue;
             }
             self.visit(&loaded, kid_ref, pages, next, depth + 1, ancestors);

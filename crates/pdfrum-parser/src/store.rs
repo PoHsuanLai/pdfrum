@@ -161,7 +161,12 @@ impl ObjectStore {
     }
 
     /// Record a repair.
-    fn note(&self, severity: Severity, what: DiagKind, at: Option<u64>) {
+    ///
+    /// `&self` rather than `&mut self` because the sink is behind the store's
+    /// own lock: a repair found during a *lazy* read — the page-tree walk
+    /// reaches this way — has no `&mut Diagnostics` to hand, and must still be
+    /// visible to [`Document::lazy_diagnostics`](crate::Document::lazy_diagnostics).
+    pub(crate) fn note(&self, severity: Severity, what: DiagKind, at: Option<u64>) {
         if let Ok(mut guard) = self.diags.lock() {
             guard.record(severity, what, at);
         }

@@ -19,9 +19,20 @@ pub enum Severity {
     Suspicious,
 }
 
-/// What was repaired. Grows as each crate lands; every recovery PDFium
-/// performs silently gets a variant here (see the diagnostics tables in
-/// `docs/design/`).
+/// What was repaired.
+///
+/// Grows as each crate lands, but **a variant earns its place by having a
+/// recording site**: it names a condition some crate actually detects and
+/// recovers from, and there is a `record` call to prove it. `#[non_exhaustive]`
+/// makes both directions non-breaking, and the enum has shrunk as well as
+/// grown — nine variants were removed on 2026-09-03 because no port reached
+/// the condition they described, several of them describing oracle behaviour
+/// we deliberately do not implement.
+///
+/// A variant with no recording site is worse than no variant: it reads as a
+/// promise that `Document::diagnostics()` reports the condition, and a caller
+/// matching on it waits for a row that never comes. See the diagnostics tables
+/// in `docs/design/`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum DiagKind {
@@ -121,9 +132,6 @@ pub enum DiagKind {
     /// of entries than it contained, or contained a character code the format
     /// cannot express, so **every mapping in that block** was discarded.
     ToUnicodeBlockRejected,
-    /// A `/ToUnicode` destination held an unpaired UTF-16 surrogate, which a
-    /// Rust `char` cannot represent; it became U+FFFD (font brief D3).
-    ToUnicodeLoneSurrogate,
     /// An embedded font program could not be read by any backend, so the font
     /// was treated as if it had none and went to substitution.
     FontProgramUnreadable,
@@ -314,32 +322,12 @@ pub enum DiagKind {
     FormResourcesInvalid,
     /// A form field carries no `/FT` on itself or its parent.
     FieldSkippedNoType,
-    /// A form field's fully-qualified name came out empty.
-    FieldSkippedNoName,
-    /// A field's `/Kids[0]` is not a dictionary, which abandons the subtree.
-    FieldKidsMalformed,
-    /// An indirect `/T` was flattened to a direct string, or replaced by an
-    /// empty one because it did not resolve to a string.
-    FieldNameNormalized,
-    /// A choice field's `/I` did not agree with its `/V`, so `/V` decides.
-    ChoiceIndicesIgnored,
-    /// A widget's `/MK /R` is not a multiple of 90, which zeroes its bounding
-    /// box.
-    WidgetRotationInvalid,
     /// A structure element was dropped: its page did not match, or its parent
     /// could not be linked.
     StructElementDropped,
-    /// A `/K` slot was reserved but never filled by the parent-tree walk.
-    StructKidUnresolved,
     /// A page label's `/S` names no known numbering style, so the label is
     /// its prefix alone.
     PageLabelStyleUnknown,
-    /// Automatic font sizing produced zero because the plate had no width, so
-    /// no `Tf` operator is written.
-    AutoFontSizeZero,
-    /// A string being written for a dump stopped at an unpaired surrogate,
-    /// matching where the oracle's wide-character conversion gives up.
-    TextTruncatedAtSurrogate,
 
     /// A document's script exhausted one of the [`Limits`](crate::Limits)
     /// script bounds — loop iterations, recursion depth or stack — and was
