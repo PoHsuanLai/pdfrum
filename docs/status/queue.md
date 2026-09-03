@@ -78,6 +78,64 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
   `TranslateScanline24bpp`; SSIM 0.996609 -> 0.998815. See
   `docs/status/pdfrum-render.md` §"Tint-space images".
 
+## M17 — the small APIs (user, 2026-09-04: "implement them with oai after this run")
+
+PLAN.md's M17: every listed embeddertest assertion ported and passing. All
+fixtures exist in the oracle's `testing/resources/` (copied verbatim under
+`crates/pdfrum/tests/fixtures/` with a PROVENANCE row as they are needed).
+Generation goes through the oai bridge; Claude applies, gates, runs the board
+and lands. Order:
+
+- **searchex** (6 tests, `fpdf_searchex_embeddertest.cpp`) — audit:
+  `IndexMap::char_index`/`text_index` exist; port the two index tables
+  (`hello_world` 0..29, `bug_1139` shifted by its leading control character,
+  the −1/−2/30/31 edges) as facade tests on `TextPage`, adding accessors only if
+  a table cannot be expressed with what is public.
+- **attachments** (14 tests, `fpdf_attachment_embeddertest.cpp`) — audit +
+  fill: `Document::attachments()`, `Attachment::{file_name, data}` exist.
+  Missing readers: `description` (`/Desc`), `subtype` (`/EF /F` stream's
+  `/Subtype`), the string-valued params (`/Params` `CreationDate`,
+  `CheckSum`; a name or non-string answers the oracle's way), `has_key`;
+  missing writers on `DocEdit`: add attachment by name (sorted into the
+  `/EmbeddedFiles` name tree), set file (writes `/Params /Size` and MD5
+  `/CheckSum`), set string value, set description, delete. Fixtures:
+  `embedded_attachments{,_invalid_data,_invalid_types,_with_desc}.pdf`.
+- **signatures** (10 tests, `fpdf_signature_embeddertest.cpp`) — new reader:
+  `Document::signatures()` walks `/AcroForm /Fields` for `/FT /Sig`
+  (top-level only, as the oracle does); `Signature::{contents, byte_range,
+  sub_filter, reason, time, doc_mdp_permission}` with the oracle's
+  absent-key answers (`sub_filter` absent → `None`; `reason` non-string →
+  `None`; DocMDP `P` default 2, outside 1..=3 → 0). Fixtures:
+  `two_signatures.pdf`, `signature_no_sub_filter.pdf`, `signature_reason.pdf`,
+  `docmdp.pdf`.
+- **thumbnails** (14 tests, `fpdf_thumbnail_embeddertest.cpp`) — new reader on
+  `Page`: `thumbnail_raw()` (the `/Thumb` stream's bytes as stored),
+  `thumbnail_data()` (filters decoded), `thumbnail()` (decoded to a `Pixmap`
+  through the image ladder; an empty stream → `None`); a page dictionary
+  without `/Type` answers nothing, as the oracle's does. Fixtures:
+  `simple_thumbnail.pdf` (two pages), `thumbnail_with_no_filters.pdf`,
+  `thumbnail_with_empty_stream.pdf`; the oracle's md5s and the
+  `simple_thumbnail0/1` pngs are the assertions.
+- **flatten** (13 tests, `fpdf_flatten_embeddertest.cpp`, oracle
+  `fpdf_flatten.cpp`) — new on `PageEdit`/`DocEdit`:
+  `flatten(FlattenMode::{Display, Print}) -> Flattened::{Done, NothingToDo}`.
+  The oracle's algorithm, ported: collect visible annotations (skip `Popup`,
+  skip `Hidden`; `Display` skips `Invisible`, `Print` keeps only `Print`),
+  build one form XObject `FFT<n>` whose BBox is the crop box and whose
+  content is `q <matrix> cm /F<i> Do Q` per appearance (`/AP /N` stream, or
+  the `/AS` state's, or the dictionary's first stream), the matrix from the
+  annotation's `/Rect` against the stream's `/BBox` transformed by its
+  `/Matrix` with `b`/`c` zeroed; the page's contents wrapped in `q … Q` and
+  the `Do` appended; each appearance stream given `/Type /XObject /Subtype
+  /Form` and a font `/Encoding` with an invalid `/BaseEncoding` dropped;
+  `/Annots` removed; widget fields pruned from `/AcroForm /Fields` and the
+  AcroForm removed when empty (kept while another page still shares a widget
+  or `/XFA` is present). Fixtures: `annotiter.pdf`, `344775293.pdf`,
+  `363015187.pdf`, `bug_861842.pdf`, `bug_889099.pdf`, `bug_890322.pdf`,
+  `bug_896366.pdf`, `text_form.pdf`, `bug_498010830_shared_{annots,widget}.pdf`.
+  The flattened documents are rendered by both engines (mutate-round-trip)
+  and compared to the oracle's expectation PNGs.
+
 ## Cleanliness before public CI (added 2026-09-03, user)
 
 - ~~**Rustdoc names internal phases and internal documents.**~~ Landed
