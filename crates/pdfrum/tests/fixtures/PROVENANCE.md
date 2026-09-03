@@ -109,3 +109,38 @@ that are:
 |---|---:|---|
 | `mona_lisa.jpg` | 6167 B | `testing/resources/mona_lisa.jpg`, verbatim. The **only** JPEG in the oracle's `testing/resources/`, and the one its own `FPDFEditEmbedderTest` JPEG cases load. A 120x120 baseline SOF0, three components, eight-bit precision, JFIF with no Adobe APP14 — which is exactly the combination that pins the DCT passthrough: `/DeviceRGB`, `/BitsPerComponent 8`, `/Filter /DCTDecode`, and **no** `/DecodeParms /ColorTransform 0`, since libjpeg reads a marker-less three-component frame as YCbCr. Its 6 KB of entropy-coded scan also makes it a real round-trip rather than a header exercise: the same bytes must come back out of the saved file and decode to the same picture. |
 | `gray.jp2` | 211 B | `testing/resources/gray.jp2`, verbatim. A 4x4 one-component JP2 file — the smallest JPEG 2000 in the corpus — carrying the full twelve-byte `jP  ` signature box before its `jp2c`. It is the fixture for the `/JPXDecode` arm, where the point is what is **absent**: §7.4.9 leaves `/ColorSpace` and `/BitsPerComponent` to the codestream, so the dictionary this writes has four keys and a `/Filter`, and a reader that finds a `/BitsPerComponent` there would be reading something we should not have written. |
+
+## Text index mapping (M17, 2026-09-04)
+
+| File | Size | What it exercises |
+|---|---:|---|
+| `bug_1139.pdf` | 796 B | `testing/resources/bug_1139.pdf`, verbatim. `hello_world.pdf` with a leading control character in its text: one more character in the character stream than in the text, so the char-index/text-index maps differ by one — the oracle's `fpdf_searchex_embeddertest.cpp` tables. |
+
+## Signatures (M17, 2026-09-04)
+
+| File | Size | What it exercises |
+|---|---:|---|
+| `two_signatures.pdf` | 2781 B | `testing/resources/two_signatures.pdf`, verbatim. Two `/FT /Sig` fields with `/Contents`, `/ByteRange`, `/SubFilter` and `/M` — the oracle's `fpdf_signature_embeddertest.cpp` values. |
+| `signature_no_sub_filter.pdf` | 1701 B | `testing/resources/signature_no_sub_filter.pdf`, verbatim. A signature whose value dictionary has no `/SubFilter`: the reader answers `None`, not an empty name. |
+| `signature_reason.pdf` | 1764 B | `testing/resources/signature_reason.pdf`, verbatim. A signature carrying a `/Reason` string, `test reason`. |
+| `docmdp.pdf` | 1262 B | `testing/resources/docmdp.pdf`, verbatim. A certifying signature with a `DocMDP` `/Reference` whose `/TransformParams /P` is 1. |
+
+## Thumbnails (M17, 2026-09-04)
+
+| File | Size | What it exercises |
+|---|---:|---|
+| `simple_thumbnail.pdf` | 4514 B | `testing/resources/simple_thumbnail.pdf`, verbatim. Two pages, each with a filtered `/Thumb` (50x50 gray): raw 1851 and 1792 bytes, decoded 1138 and 1110 — `fpdf_thumbnail_embeddertest.cpp`. |
+| `thumbnail_with_no_filters.pdf` | 907 B | `testing/resources/thumbnail_with_no_filters.pdf`, verbatim. A `/Thumb` with no filter, so raw and decoded are the same 301 bytes (10x10 RGB). |
+| `thumbnail_with_empty_stream.pdf` | 545 B | `testing/resources/thumbnail_with_empty_stream.pdf`, verbatim. A `/Thumb` whose stream is empty: bytes are answered, a picture is not. |
+| `simple_thumbnail0.png` | 463 B | `testing/resources/embedder_tests/simple_thumbnail0.png`: page 0's thumbnail as the oracle decodes it. |
+| `simple_thumbnail1.png` | 458 B | `testing/resources/embedder_tests/simple_thumbnail1.png`: page 1's. |
+| `thumbnail_with_no_filters.png` | 99 B | `testing/resources/embedder_tests/thumbnail_with_no_filters.png`: the unfiltered thumbnail as decoded. |
+
+## Attachments (M17, 2026-09-04)
+
+| File | Size | What it exercises |
+|---|---:|---|
+| `embedded_attachments.pdf` | 10447 B | `testing/resources/embedded_attachments.pdf`, verbatim. Two embedded files (`1.txt`, `attached.pdf`) with `/Params` — `Size`, `CreationDate`, a hex `CheckSum` — and a `text/plain` subtype: `fpdf_attachment_embeddertest.cpp`. |
+| `embedded_attachments_invalid_data.pdf` | 638 B | `testing/resources/embedded_attachments_invalid_data.pdf`, verbatim. A file specification with no `/EF`: a name and no bytes. |
+| `embedded_attachments_invalid_types.pdf` | 1172 B | `testing/resources/embedded_attachments_invalid_types.pdf`, verbatim. `CheckSum` written as a name on one attachment and as a stream on the other. |
+| `embedded_attachments_with_desc.pdf` | 1417 B | `testing/resources/embedded_attachments_with_desc.pdf`, verbatim. Four attachments whose `/Desc` is text, absent, a number, and empty. |
