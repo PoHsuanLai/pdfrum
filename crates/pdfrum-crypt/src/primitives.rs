@@ -320,8 +320,7 @@ mod tests {
     }
 
     /// T3 — the `BoringSSL` NIST SP 800-38A vectors, chained so each IV is
-    /// the previous ciphertext (`fx_crypt_unittest.cpp:602-730`). Every case
-    /// is a round trip, as the C++ test is.
+    /// the previous ciphertext. Every case is a round trip.
     fn aes_chain(key_hex: &str, ciphertexts: [&str; 4]) {
         const PLAINTEXTS: [&str; 4] = [
             "6bc1bee22e409f96e93d7e117393172a",
