@@ -84,6 +84,47 @@ All five families, through the oai bridge: searchex (tables pinned),
 attachments (readers and writers), signatures, thumbnails, flatten. The
 per-family record and the rulings are in `docs/status/M17.md`.
 
+## Ratchet re-baseline (2026-09-04, on `d3c842f`)
+
+`cargo bench --workspace` at load 8–11, then `ratchet update`: 146 unchanged, 273 improved, 21 regressed, 0 new, 0 not run.
+The improvements are recorded in `benches/baseline.json`; the 21
+regressions the check still reports are **not** written and stand as the
+debt, largest first:
+
+```
+   +448.7%  save/image_image_bug_898443  528.350 us -> 2.899 ms   (band +5.0%)
+   +119.8%  open/forms_forms_push_button  202.959 us -> 446.200 us   (band +8.0%)
+    +79.6%  render-cold-vello-cpu/forms_forms_number  4.253 ms -> 7.638 ms   (band +4.0%)
+    +70.9%  render-cold-agg/forms_forms_number  3.926 ms -> 6.710 ms   (band +3.0%)
+    +61.3%  render-cold-tinyskia/forms_forms_number  5.792 ms -> 9.340 ms   (band +3.0%)
+    +36.2%  text/vector_vector_paths_1751  4.854 ms -> 6.612 ms   (band +4.0%)
+    +30.4%  open/mixed_mixed_tcpdf_006  14.872 us -> 19.388 us   (band +8.0%)
+    +16.4%  build/vector_vector_paths_1751  5.036 ms -> 5.861 ms   (band +4.0%)
+    +15.4%  render-cold-vello-cpu/forms_forms_signature  10.432 ms -> 12.042 ms   (band +4.0%)
+    +11.8%  text/image_image_bug_898443  242.340 ms -> 270.941 ms   (band +4.0%)
+    +11.5%  render-cold-tinyskia/forms_forms_signature  11.297 ms -> 12.598 ms   (band +3.0%)
+    +10.5%  open/mixed_mixed_en_uicase  12.549 us -> 13.864 us   (band +8.0%)
+     +9.5%  text/text_text_bug_1029  842.736 us -> 922.550 us   (band +4.0%)
+     +8.6%  text/image_image_bug_583804  183.398 ms -> 199.122 ms   (band +4.0%)
+     +6.0%  text/image_image_jbig2_1478366  60.202 ms -> 63.810 ms   (band +4.0%)
+     +5.1%  render-warm-tinyskia/image_image_bug_583804  132.549 ms -> 139.272 ms   (band +4.0%)
+     +4.7%  text/image_image_jpx_123  46.820 ms -> 49.041 ms   (band +4.0%)
+     +4.7%  text/text_text_tcpdf_055  68.952 ms -> 72.161 ms   (band +4.0%)
+     +4.6%  text/text_text_foxittext  2.858 ms -> 2.990 ms   (band +4.0%)
+     +4.3%  text/text_text_cjk_functions  7.501 ms -> 7.824 ms   (band +4.0%)
+     +4.3%  text/forms_forms_number  1.426 ms -> 1.487 ms   (band +4.0%)
+```
+
+Reading: the `render-cold-*/forms_*` rows are the per-session cost of the
+form appearance generation M14 and M15 added — a cold render builds the
+form's faces and generates every widget's appearance; warm renders of the
+same files improved 4–6x. `save/image_bug_898443` and the `save/text_*` group
+ran while a `cargo doc` was building on the box and should be re-taken before
+being believed. `text/vector_paths_1751` and its `build/` row are the one
+group that looks like a real change since the 2026-09-02 baseline, and the
+`open/*` rows are microseconds. Each needs a bisect or a re-take; none is
+paid here.
+
 ## Found during the features pass (2026-09-04)
 
 - **A tool test fails and CI never ran it.** `pdfrum-tool`'s
