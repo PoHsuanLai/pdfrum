@@ -602,6 +602,50 @@ fn read_destinations<R: pdfrum_object::Resolve>(
     out
 }
 
+/// A toggle's `Field.value`: its checked control's export value, or `Off`.
+///
+/// `get_value`'s check-box and radio-button arm walks the controls for a
+/// checked one and answers `NewString("Off")` when it finds none — so a group
+/// with no `/V` reads the literal `Off` rather than the empty string the raw
+/// field value gives. `field_properties`'s radio and check-box cases each
+/// assert it. Every other kind keeps the value it was read with.
+fn toggle_value<R: pdfrum_object::Resolve>(
+    kind: FieldModelKind,
+    value: String,
+    field: &pdfrum_doc::form::Field,
+    r: &R,
+) -> String {
+    if kind.is_toggle() && !field.is_checked(None, r) {
+        return "Off".to_string();
+    }
+    value
+}
+
+/// `Field.valueAsString`, when it differs from `Field.value`.
+///
+/// A check box answers the literal `Yes`/`Off` rather than its export value,
+/// and a multi-select list answers `""`. `None` means "the value itself",
+/// which is every other case.
+fn value_as_string_of<R: pdfrum_object::Resolve>(
+    kind: FieldModelKind,
+    field: &pdfrum_doc::form::Field,
+    selected: usize,
+    r: &R,
+) -> Option<String> {
+    match kind {
+        FieldModelKind::CheckBox => Some(
+            if field.is_checked(None, r) {
+                "Yes"
+            } else {
+                "Off"
+            }
+            .to_string(),
+        ),
+        FieldModelKind::ListBox if selected > 1 => Some(String::new()),
+        _ => None,
+    }
+}
+
 /// One terminal field, as the object model sees it.
 fn read_field<R: pdfrum_object::Resolve>(
     field: &pdfrum_doc::form::Field,
@@ -635,21 +679,8 @@ fn read_field<R: pdfrum_object::Resolve>(
             .map(|index| u32::try_from(index).unwrap_or(u32::MAX))
             .collect::<Vec<u32>>();
 
-    // `valueAsString` is not always the value: a check box answers the
-    // literal `Yes`/`Off` rather than its export value, and a multi-select
-    // list answers `""` (`fxjs/cjs_field.cpp`'s `get_value_as_string`).
-    let value_as_string = match kind {
-        FieldModelKind::CheckBox => Some(
-            if field.is_checked(None, r) {
-                "Yes"
-            } else {
-                "Off"
-            }
-            .to_string(),
-        ),
-        FieldModelKind::ListBox if selected.len() > 1 => Some(String::new()),
-        _ => None,
-    };
+    let value = toggle_value(kind, value, field, r);
+    let value_as_string = value_as_string_of(kind, field, selected.len(), r);
 
     let rect = field
         .widgets

@@ -2003,3 +2003,226 @@ fn a_timer_with_no_interval_defaults_to_one_second() {
     );
     assert_eq!(cascade.advance_time(std::time::Duration::from_millis(1)), 1);
 }
+
+/// A document with one radio group and one check box, neither carrying `/V`.
+///
+/// The two toggle families answer `style` differently from an absent caption,
+/// which is the whole of what `field_properties`'s two `style` lines assert.
+fn with_toggles() -> ScriptCascade {
+    use crate::script::model::{DocumentModel, FieldModel, FieldModelKind};
+
+    let mut cascade = session();
+    cascade.set_document(DocumentModel {
+        page_count: 1,
+        fields: vec![
+            FieldModel {
+                name: "MyRadio".to_string(),
+                kind: FieldModelKind::RadioButton,
+                value: "Off".to_string(),
+                export_values: vec!["Yes".to_string()],
+                checked: vec![false],
+                ..FieldModel::default()
+            },
+            FieldModel {
+                name: "MyCheck".to_string(),
+                kind: FieldModelKind::CheckBox,
+                value: "Off".to_string(),
+                value_as_string: Some("Off".to_string()),
+                export_values: vec!["Yes".to_string()],
+                checked: vec![false],
+                ..FieldModel::default()
+            },
+            FieldModel {
+                name: "MyStarred".to_string(),
+                kind: FieldModelKind::CheckBox,
+                value: "Off".to_string(),
+                // `/MK /CA (H)` — the star selector.
+                captions: ["H".to_string(), String::new(), String::new()],
+                export_values: vec!["Yes".to_string()],
+                checked: vec![false],
+                ..FieldModel::default()
+            },
+        ],
+        ..DocumentModel::empty()
+    });
+    cascade
+}
+
+/// **`Field.style` reads the caption, and its absence is answered by the
+/// field's kind.**
+///
+/// A radio button with no `/MK /CA` is a `circle` and a check box is a
+/// `check` — `GetSelectorFromCaptionForFieldType`'s two arms — and a caption
+/// that *is* present decides on its own first character whatever the kind.
+#[test]
+fn field_style_reads_the_caption_then_falls_back_to_the_kind() {
+    let mut cascade = with_toggles();
+    assert!(
+        cascade.run(
+            "app.alert(this.getField('MyRadio').style);\
+             app.alert(this.getField('MyCheck').style);\
+             app.alert(this.getField('MyStarred').style);",
+            "test",
+        ),
+        "the script must complete: {:?}",
+        cascade.stops()
+    );
+    let text = cascade.transcript_text();
+    assert_eq!(
+        text, "Alert: circle\nAlert: check\nAlert: star\n",
+        "an empty caption is the kind's default and a present one wins"
+    );
+}
+
+/// `Field.style` on a field that is neither toggle throws rather than
+/// answering `check`.
+///
+/// `IsCheckBoxOrRadioButton` is the one guard upstream puts ahead of the
+/// read, and it answers `kObjectTypeError`.
+#[test]
+fn field_style_on_a_text_field_is_the_wrong_type() {
+    let mut cascade = with_document();
+    assert!(
+        cascade.run(
+            "try { this.getField('MyField').style; }\
+             catch (e) { app.alert('' + e); }",
+            "test",
+        ),
+        "the script must complete: {:?}",
+        cascade.stops()
+    );
+    assert_eq!(
+        cascade.transcript_text(),
+        "Alert: Field.style: Object is of the wrong type.\n"
+    );
+}
+
+/// **A toggle only accepts one of its own export values**, and anything else
+/// leaves the whole group off.
+///
+/// `SetCheckValue` walks the controls unchecking every one whose export value
+/// does not match, so `field.value = 42` reads back `Off` rather than `42`.
+/// That is what makes `field_properties`'s `value` a write the field ignores.
+#[test]
+fn a_toggle_ignores_a_value_that_names_no_control() {
+    let mut cascade = with_toggles();
+    assert!(
+        cascade.run(
+            "var f = this.getField('MyCheck');\
+             f.value = 42;\
+             app.alert('after junk: ' + f.value + '/' + f.valueAsString);\
+             f.value = 'Yes';\
+             app.alert('after Yes: ' + f.value + '/' + f.valueAsString);",
+            "test",
+        ),
+        "the script must complete: {:?}",
+        cascade.stops()
+    );
+    assert_eq!(
+        cascade.transcript_text(),
+        "Alert: after junk: Off/Off\nAlert: after Yes: Yes/Yes\n",
+        "a value naming no control leaves the group off; one that names a \
+         control checks it"
+    );
+}
+
+/// **`Doc.delay = true` discards what a field's own `delay` parked.**
+///
+/// The queue is the *document's* (`CJS_Document::delay_data_`), not the
+/// field object's, and `set_delay(true)` clears it outright. So the round
+/// trip `ff.delay = true` → write → `this.delay = true` → `ff.delay = false`
+/// leaves the value where it started, which is `bug_494057`'s assertion.
+#[test]
+fn a_document_delay_clears_what_a_field_delay_parked() {
+    let mut cascade = with_document();
+    assert!(
+        cascade.run(
+            "var ff = this.getField('MyField');\
+             ff.delay = true;\
+             ff.value = 'new value';\
+             this.delay = true;\
+             ff.delay = false;\
+             app.alert(\"field value is '\" + ff.value + \"'\");",
+            "test",
+        ),
+        "the script must complete: {:?}",
+        cascade.stops()
+    );
+    assert_eq!(
+        cascade.transcript_text(),
+        "Alert: field value is 'old'\n",
+        "the parked write was discarded, not deferred"
+    );
+}
+
+/// Without the document-level set in between, dropping the field's own flag
+/// **does** flush the write.
+///
+/// The control for the test above: it is the `this.delay = true` that loses
+/// the value, not the delaying itself, and a test that only asserted the
+/// unchanged value would pass on a `Field.delay` that had simply stopped
+/// working.
+#[test]
+fn dropping_a_field_delay_flushes_what_it_parked() {
+    let mut cascade = with_document();
+    assert!(
+        cascade.run(
+            "var ff = this.getField('MyField');\
+             ff.delay = true;\
+             ff.value = 'new value';\
+             app.alert(\"while delayed: '\" + ff.value + \"'\");\
+             ff.delay = false;\
+             app.alert(\"after flush: '\" + ff.value + \"'\");",
+            "test",
+        ),
+        "the script must complete: {:?}",
+        cascade.stops()
+    );
+    assert_eq!(
+        cascade.transcript_text(),
+        "Alert: while delayed: 'old'\nAlert: after flush: 'new value'\n"
+    );
+}
+
+/// One field's flush leaves **another** field's parked write alone.
+///
+/// `DoFieldDelay` filters the document's queue by field name, so a queue
+/// shared between fields is not a queue one field can drain.
+#[test]
+fn one_fields_flush_leaves_another_fields_parked_write() {
+    let mut cascade = with_document();
+    assert!(
+        cascade.run(
+            "var a = this.getField('MyField');\
+             var b = this.getField('MyField2');\
+             a.delay = true; b.delay = true;\
+             a.value = 'A'; b.value = 'B';\
+             a.delay = false;\
+             app.alert('a=' + a.value + ' b=' + b.value);\
+             b.delay = false;\
+             app.alert('a=' + a.value + ' b=' + b.value);",
+            "test",
+        ),
+        "the script must complete: {:?}",
+        cascade.stops()
+    );
+    assert_eq!(
+        cascade.transcript_text(),
+        "Alert: a=A b=\nAlert: a=A b=B\n",
+        "dropping a's flag flushes only a's write"
+    );
+}
+
+/// **A named viewer action reaches the transcript**, and runs no JavaScript.
+///
+/// `/S /Named` is not a script: `DoActionNamed` hands the verb to
+/// `ExecuteNamedAction` and the embedder decides. The line is the one
+/// `named_action.in` asserts, and `TranscriptLine::NamedAction` had no
+/// producer at all before this — the variant existed and nothing could ever
+/// make one.
+#[test]
+fn a_named_action_is_recorded_as_the_host_request_it_is() {
+    let mut cascade = session();
+    cascade.record_named_action("Print");
+    assert_eq!(cascade.transcript_text(), "Execute named action: Print\n");
+}

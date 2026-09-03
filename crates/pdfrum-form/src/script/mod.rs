@@ -422,6 +422,24 @@ impl ScriptCascade {
         self.host.borrow_mut().timers.fail_next();
     }
 
+    /// Records a **named viewer action** — `/S /Named` — on the transcript.
+    ///
+    /// An action the *document* asks for that runs no JavaScript at all:
+    /// `Print`, `NextPage`, `SaveAs` and the rest. It reaches the host
+    /// through `CPDFSDK_FormFillEnvironment::ExecuteNamedAction`, exactly as
+    /// an alert does — nothing is performed here either, and a host reads the
+    /// request back off [`transcript`](Self::transcript) and decides.
+    ///
+    /// Recorded by the caller rather than found here, for the same reason
+    /// every `/AA` script is: reading an action dictionary needs a document,
+    /// and this type holds none.
+    pub fn record_named_action(&mut self, name: impl Into<String>) {
+        self.host
+            .borrow_mut()
+            .transcript
+            .push(TranscriptLine::NamedAction(name.into()));
+    }
+
     /// The transcript, rendered the way the oracle writes it to stdout.
     #[must_use]
     pub fn transcript_text(&self) -> String {
