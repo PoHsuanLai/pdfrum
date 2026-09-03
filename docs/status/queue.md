@@ -38,6 +38,40 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
   `corpus/fx/other/1.pdf` — the pattern sentinel carried forward from the
   render audit; not yet isolated.
 
+## Cleanliness before public CI (added 2026-09-03, user)
+
+- **Rustdoc names internal phases and internal documents.** 238 `///`/`//!`
+  lines across 18 crates cite `M12`/`M15`-style milestone numbers,
+  `WP1`-style work packages, `§A.11`-style design-doc sections, or
+  `docs/status/…`, `docs/design/…`, `PLAN.md`, `SPEC.md`, `STYLE.md`,
+  `DEPS.md` by name (`pdfrum-font` 38, `pdfrum-render` 37, `pdfrum-page` 29,
+  `pdfrum-edit` 19, `pdfrum-form` 18, …). None of that means anything on
+  docs.rs. It is the WP4 provenance sweep with a wider pattern, applied
+  workspace-wide: the sentence keeps its *content* (what the invariant is),
+  loses the *pointer* (where we decided it), and the pointer moves to `//`
+  on the body if it is worth keeping. Then a CI grep in `scripts/ci.nu`
+  over `///`/`//!` lines for `\bM[0-9]{1,2}[a-z]?\b|\bWP[0-9]+\b|§[A-Z]\.[0-9]|docs/(status|design|upstream)|PLAN\.md|SPEC\.md|STYLE\.md|DEPS\.md`
+  so it does not regrow (non-vacuity control as the other checks have).
+  Sequence after the in-flight rustdoc WP5 crates land, so it does not
+  collide with them.
+- **Hard-coded absolute paths.** 73 lines name `/mnt/data2/…` or
+  `/home/r13921098/…`: `scripts/clean-targets.nu` (its two roots),
+  `scripts/bench-oracle.nu`, `bench-rss.nu`, the three `extract-*.py` and
+  `probe-tounicode.py`, `fuzz/seed-corpus.sh`, `conformance/README.md`
+  (the `--goldens`/`--checkout` examples), `crates/pdfrum/tests/load_font*.rs`
+  and `crates/pdfrum-page/tests/corpus.rs` (oracle binary / checkout
+  paths), two PROVENANCE files, PLAN.md, and the `docs/reviews/` logs
+  (leave the logs — they are records). Before GitHub CI: every script and
+  test resolves the oracle checkout, the oracle binary, the goldens and the
+  target root from **one place** — environment variables with documented
+  defaults relative to the repo (`PDFRUM_ORACLE_CHECKOUT`,
+  `PDFRUM_ORACLE_BIN`, `PDFRUM_GOLDENS`, `PDFRUM_TARGET_ROOT`, or a single
+  `scripts/env.nu` the others source) — and a test that needs the oracle
+  skips with a message when the variable is unset rather than failing on a
+  path. The `conformance` binary's own defaults (`--tool`, `--checkout`)
+  follow the same rule. A CI grep for the two path prefixes outside
+  `docs/reviews/` and `docs/status/` keeps it clean.
+
 ## Rustdoc trim (`docs/design/rustdoc.md`)
 
 - WP5 inner crates, host-reachable first: `pdfrum-text`, `pdfrum-form`,
