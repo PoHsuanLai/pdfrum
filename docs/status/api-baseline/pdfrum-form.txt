@@ -1,5 +1,6 @@
 pub mod pdfrum_form
 pub use pdfrum_form::Place
+pub use pdfrum_form::Rotation
 pub mod pdfrum_form::edit
 pub use pdfrum_form::edit::Place
 pub mod pdfrum_form::edit::ops
@@ -403,13 +404,6 @@ pub pdfrum_form::KeystrokeOutcome::Reject
 pub enum pdfrum_form::Placement
 pub pdfrum_form::Placement::Above
 pub pdfrum_form::Placement::Below
-pub enum pdfrum_form::Rotation
-pub pdfrum_form::Rotation::Half
-pub pdfrum_form::Rotation::None
-pub pdfrum_form::Rotation::Quarter
-pub pdfrum_form::Rotation::ThreeQuarter
-impl pdfrum_form::Rotation
-pub fn pdfrum_form::Rotation::swaps_axes(self) -> bool
 pub enum pdfrum_form::TabOrder
 pub pdfrum_form::TabOrder::Column
 pub pdfrum_form::TabOrder::Row
@@ -732,7 +726,7 @@ pub pdfrum_form::WidgetInfo::flags: pdfrum_doc::form::field::FieldFlags
 pub pdfrum_form::WidgetInfo::id: pdfrum_form::AnnotId
 pub pdfrum_form::WidgetInfo::kind: core::option::Option<pdfrum_doc::form::field::FieldKind>
 pub pdfrum_form::WidgetInfo::name: alloc::string::String
-pub pdfrum_form::WidgetInfo::rotation: pdfrum_form::Rotation
+pub pdfrum_form::WidgetInfo::rotation: pdfrum_doc::geom::WidgetRotation
 pub pdfrum_form::WidgetInfo::valued: pdfrum_object::dict::Dict
 impl pdfrum_form::WidgetInfo
 pub fn pdfrum_form::WidgetInfo::choice_config(&self) -> pdfrum_form::field::ChoiceConfig

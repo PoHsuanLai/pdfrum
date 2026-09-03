@@ -28,26 +28,11 @@ use crate::event::Point;
 use crate::tab::Rect;
 
 /// A widget's rotation, normalized to one of the four quadrants.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum Rotation {
-    /// Upright.
-    #[default]
-    None,
-    /// A quarter turn counter-clockwise.
-    Quarter,
-    /// A half turn.
-    Half,
-    /// Three quarters counter-clockwise.
-    ThreeQuarter,
-}
-
-impl Rotation {
-    /// Whether this rotation exchanges the plate's width and height.
-    #[must_use]
-    pub fn swaps_axes(self) -> bool {
-        matches!(self, Rotation::Quarter | Rotation::ThreeQuarter)
-    }
-}
+///
+/// The appearance builder reads the same key, so this is *its* type rather
+/// than a second one that could fold `/MK /R` differently: routing and the
+/// generator must agree about which box a click lands in.
+pub use pdfrum_doc::geom::WidgetRotation as Rotation;
 
 /// The mapping between a widget's page-space rectangle and its plate.
 #[derive(Debug, Clone, Copy, PartialEq)]

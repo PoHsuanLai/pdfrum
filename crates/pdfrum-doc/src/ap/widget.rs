@@ -599,22 +599,33 @@ pub(crate) fn text_color<R: Resolve>(dict: &Dict, r: &R) -> Color {
 
 /// The widget's bounding box in its own, rotation-corrected space.
 ///
-/// A widget's `/MK /R` names a quarter turn; at 90 or 270 degrees the box's
-/// width and height swap, and any other value — including a negative one,
-/// since the remainder keeps its sign — leaves the box **empty**.
+/// A widget's `/MK /R` names a quarter turn, folded through
+/// [`geom::WidgetRotation::from_degrees`]; at 90 or 270 degrees the box's
+/// width and height swap, and any angle that names no quadrant — a
+/// non-multiple of 90 — leaves the box upright. There is no value of `/R`
+/// that empties it.
 #[must_use]
 pub(crate) fn rotated_rect<R: Resolve>(dict: &Dict, r: &R) -> Rect {
     let rect = dict.rect(obj_names::RECT, r);
     let (width, height) = (geom::width(rect), geom::height(rect));
-    let rotation = dict
+    if widget_rotation(dict, r).swaps_axes() {
+        geom::rect(0.0, 0.0, height, width)
+    } else {
+        geom::rect(0.0, 0.0, width, height)
+    }
+}
+
+/// The widget's `/MK /R`, as the quadrant its appearance stream is set into.
+///
+/// The one reader of the key: `pdfrum-form`'s routing calls this too, so a
+/// click lands in the box this function measured.
+#[must_use]
+pub fn widget_rotation<R: Resolve>(dict: &Dict, r: &R) -> geom::WidgetRotation {
+    let degrees = dict
         .dict(names::MK, r)
         .and_then(|mk| mk.int(names::R, r))
         .unwrap_or(0);
-    match rotation % 360 {
-        0 | 180 => geom::rect(0.0, 0.0, width, height),
-        90 | 270 => geom::rect(0.0, 0.0, height, width),
-        _ => Rect::ZERO,
-    }
+    geom::WidgetRotation::from_degrees(degrees)
 }
 
 /// The widget's border style, which is read from the same `/BS` a markup
@@ -639,7 +650,6 @@ pub fn widget_border<R: Resolve>(dict: &Dict, r: &R) -> BorderStyleInfo {
 mod tests {
     use super::{checked_ap_state, generate, needs_appearance, needs_appearance_in, rotated_rect};
     use crate::geom;
-    use kurbo::Rect;
     use pdfrum_object::{Array, ByteSpan, Dict, Name, NoResolve, Object, Stream};
 
     fn dict(pairs: &[(&str, Object)]) -> Dict {
@@ -962,23 +972,31 @@ mod tests {
     }
 
     #[test]
-    fn a_rotation_that_is_not_a_quarter_turn_empties_the_box() {
-        // The remainder keeps its sign, so a negative quarter turn matches
-        // no case and the box collapses.
-        assert_eq!(
+    fn a_rotation_that_is_not_a_quarter_turn_leaves_the_box_upright() {
+        // No value of `/R` empties the box. A non-multiple of 90 names no
+        // quadrant — PDFium's `default:` arm and pdf.js's `angle % 90 === 0`
+        // gate both land on upright — and a negative angle names the
+        // quadrant it counts counterclockwise to.
+        let rotated = |degrees: i64| {
             rotated_rect(
-                &widget(&[("MK", Object::Dict(dict(&[("R", Object::Int(-90))])))]),
-                &NoResolve
-            ),
-            Rect::ZERO
-        );
-        assert_eq!(
-            rotated_rect(
-                &widget(&[("MK", Object::Dict(dict(&[("R", Object::Int(45))])))]),
-                &NoResolve
-            ),
-            Rect::ZERO
-        );
+                &widget(&[("MK", Object::Dict(dict(&[("R", Object::Int(degrees))])))]),
+                &NoResolve,
+            )
+        };
+        let upright = geom::rect(0.0, 0.0, 100.0, 30.0);
+        let turned = geom::rect(0.0, 0.0, 30.0, 100.0);
+
+        assert_eq!(rotated(45), upright);
+        assert_eq!(rotated(-45), upright);
+        assert_eq!(rotated(1), upright);
+
+        // `-90` is `270`: a swap, not an empty box. PDFium's `abs()` sends it
+        // to `90`, which swaps the same axes but is the wrong quadrant for
+        // the matrix — see the `[oracle-bug]` note on `WidgetRotation`.
+        assert_eq!(rotated(-90), turned);
+        assert_eq!(rotated(-270), turned);
+        assert_eq!(rotated(-180), upright);
+        assert_eq!(rotated(450), turned);
     }
 
     /// A text widget with a `/DA` the font resource below satisfies.

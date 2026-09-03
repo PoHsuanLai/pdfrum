@@ -132,6 +132,7 @@ pub pdfrum_doc::ap::widget::LiveInput::live: core::option::Option<&'a pdfrum_doc
 pub pdfrum_doc::ap::widget::LiveInput::substitute: core::option::Option<pdfrum_doc::ap::Substitute<'a>>
 pub fn pdfrum_doc::ap::widget::generate_with_live_faces<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &pdfrum_object::dict::Dict, &pdfrum_doc::ap::TextFont<'_>, &R, pdfrum_doc::ap::widget::LiveInput<'_>) -> core::option::Option<pdfrum_doc::ap::GeneratedAp>
 pub fn pdfrum_doc::ap::widget::widget_border<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> pdfrum_doc::ap::border::BorderStyleInfo
+pub fn pdfrum_doc::ap::widget::widget_rotation<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> pdfrum_doc::geom::WidgetRotation
 pub enum pdfrum_doc::ap::Appearance
 pub pdfrum_doc::ap::Appearance::Generated(pdfrum_doc::ap::GeneratedAp)
 pub pdfrum_doc::ap::Appearance::Suppressed
@@ -273,6 +274,14 @@ pub fn pdfrum_doc::form::field_attr<R: pdfrum_object::resolve::Resolve>(&pdfrum_
 pub fn pdfrum_doc::form::full_name<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> alloc::string::String
 pub fn pdfrum_doc::form::selected_indices_for_interaction<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &[alloc::string::String], &R) -> alloc::vec::Vec<usize>
 pub mod pdfrum_doc::geom
+pub enum pdfrum_doc::geom::WidgetRotation
+pub pdfrum_doc::geom::WidgetRotation::Half
+pub pdfrum_doc::geom::WidgetRotation::None
+pub pdfrum_doc::geom::WidgetRotation::Quarter
+pub pdfrum_doc::geom::WidgetRotation::ThreeQuarter
+impl pdfrum_doc::geom::WidgetRotation
+pub fn pdfrum_doc::geom::WidgetRotation::from_degrees(i64) -> pdfrum_doc::geom::WidgetRotation
+pub fn pdfrum_doc::geom::WidgetRotation::swaps_axes(self) -> bool
 pub fn pdfrum_doc::geom::bottom(kurbo::rect::Rect) -> f32
 pub fn pdfrum_doc::geom::height(kurbo::rect::Rect) -> f32
 pub fn pdfrum_doc::geom::left(kurbo::rect::Rect) -> f32
