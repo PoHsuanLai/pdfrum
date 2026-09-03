@@ -36,7 +36,7 @@
 //! # JavaScript is off by default
 //!
 //! A PDF may carry scripts. With default features they are read as data and
-//! never run. The `script` feature turns them on behind a pure-Rust engine
+//! never run. The `javascript` feature turns them on behind a pure-Rust engine
 //! (boa). The `Doc`/`Field` object model is incomplete — do not enable this
 //! expecting Acrobat.
 //!

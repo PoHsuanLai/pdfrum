@@ -95,6 +95,14 @@ for that property and a better one than a four-hundred-line diff nobody reads.
   naming `script`, so its items are part of the product and a change to them
   would otherwise be invisible to every gate here.
 
+  *Amended 2026-09-04 (the features pass).* Seven featured files now: the
+  facade with `javascript`, with `png` and with `tinyskia,agg`;
+  `pdfrum-page` with the codecs; `pdfrum-filters` with `ccitt`;
+  `pdfrum-font` with `system-fonts`; `pdfrum-render` with `png`. The rule
+  did not change — a feature that adds public items a caller is told to
+  turn on earns a file — but with the codecs and the host scan off at the
+  crate level, their items would otherwise have left every baseline.
+
   `pdfrum-render/profiling` does not qualify — it is a profiling switch,
   not a surface offered to callers. Neither does `pdfrum-form/javascript`, whose
   items are the same ones `pdfrum+javascript.txt` records one layer up; recording
