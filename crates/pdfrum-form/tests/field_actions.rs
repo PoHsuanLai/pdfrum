@@ -156,7 +156,7 @@ fn the_script_free_cascade_accepts_every_keystroke_unchanged() {
     let mut cascade = NoScripts;
     let field = FieldRef {
         name: "Combo1".to_string(),
-        index: 0,
+        index: Some(0),
     };
     let offered = Keystroke {
         change: "Hamster".to_string(),

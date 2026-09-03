@@ -30,6 +30,25 @@
 //! **fully qualified field name**, and two widgets that resolve to the same
 //! name get the same id. A widget with no name at all is its own field, keyed
 //! by its raw index, because nothing else can distinguish it.
+//!
+//! # Two field index spaces, and they are not the same one
+//!
+//! A [`FieldId`] is **page-local**: it is allocated as *this* page's
+//! `/Annots` are walked, so page 2's third field and page 1's third field are
+//! both `FieldId(2)` and neither is "the third field of the form". It is the
+//! right key for interaction state, which is per session and per widget, and
+//! it is the wrong key for anything a script says.
+//!
+//! Everything a *script* names a field by is document-wide: `/AcroForm /CO`
+//! holds positions in the form's terminal-field list, `Doc.numFields` counts
+//! that list, and `Doc.getNthFieldName(n)` indexes it. So
+//! [`WidgetInfo::field_index`] carries that second number alongside the first
+//! — the widget's field's position in the flat `/Fields` walk — and
+//! [`PageForm::field_of_index`] converts back.
+//!
+//! Conflating them is invisible on a single-page form whose widgets appear in
+//! `/Fields` order, which is most fixtures, and wrong on every other file: a
+//! calculation would write page-local field 3 where `/CO` named form field 3.
 
 use pdfrum_common::{Diagnostics, Limits, PageIndex};
 use pdfrum_doc::form::{FieldFlags, FieldKind};
@@ -104,13 +123,46 @@ pub struct PageForm {
     pub page_height: f32,
 }
 
+impl PageForm {
+    /// The page-local [`FieldId`] for a document-wide field position, when a
+    /// widget of that field is on this page.
+    ///
+    /// The inverse of [`WidgetInfo::field_index`], and the conversion a
+    /// calculation's writes need: `/CO` names its targets in the document's
+    /// space and the session stores state in this one. `None` is the honest
+    /// answer for a field whose widgets are all on other pages — this page
+    /// has no state to write, and inventing a `FieldId` from the number would
+    /// write some *other* field.
+    #[must_use]
+    pub fn field_of_index(&self, index: u32) -> Option<FieldId> {
+        self.widgets
+            .iter()
+            .find(|widget| widget.field_index == Some(index))
+            .map(|widget| widget.field)
+    }
+}
+
 /// One widget annotation, read far enough to build its field's state.
 #[derive(Debug, Clone, PartialEq)]
 pub struct WidgetInfo {
     /// Which annotation, by raw `/Annots` index.
     pub id: AnnotId,
-    /// Which field it is a control of.
+    /// Which field it is a control of, **on this page**.
+    ///
+    /// A page-local id. See [`WidgetInfo::field_index`] for the document-wide
+    /// one, and the module documentation for why both exist.
     pub field: FieldId,
+    /// Where this widget's field sits in the document's flat terminal-field
+    /// list — the `/AcroForm /Fields` walk `pdfrum_doc::form::Form::fields`
+    /// performs, which is the space `/CO`, `Doc.numFields` and
+    /// `Doc.getNthFieldName` all count in.
+    ///
+    /// `None` for a widget whose field the form does not list: an unnamed
+    /// widget, or one under an `/AcroForm` that does not reach it. Such a
+    /// field exists for interaction and is invisible to a script, which is
+    /// also what the oracle answers — `GetFieldByDict` returns null and
+    /// `CountFields` never counted it.
+    pub field_index: Option<u32>,
     /// The field's fully qualified name, empty when it has none.
     pub name: String,
     /// What kind of field it is, when the classifier could name one.
@@ -234,6 +286,11 @@ pub fn read<R: Resolve>(
     // one interaction state. Allocated in first-seen order, which makes the
     // ids stable for a given file.
     let mut names: Vec<String> = Vec::new();
+    // The document-wide field list, walked once per page rather than once per
+    // widget. Empty for a document with no `/AcroForm`, which leaves every
+    // `field_index` `None` — the same answer the oracle's `GetFieldByDict`
+    // gives for a widget the form does not reach.
+    let form_fields = document_field_names(catalog, r);
 
     for index in 0..annots.len() {
         let Some(dict) = annots.dict_at(index, r) else {
@@ -256,10 +313,12 @@ pub fn read<R: Resolve>(
         if let Some((_, info)) = widget {
             let name = pdfrum_doc::form::full_name(&dict, r);
             let field = field_id_of(&mut names, &name, index);
+            let field_index = position_in_form(&form_fields, &name);
             let valued = value_dict_of(&dict, catalog, r).unwrap_or_else(|| dict.clone());
             form.widgets.push(WidgetInfo {
                 id,
                 field,
+                field_index,
                 name,
                 kind: info.kind,
                 flags: info.flags,
@@ -381,6 +440,35 @@ fn value_dict_of<R: Resolve>(dict: &Dict, catalog: &Dict, r: &R) -> Option<Dict>
         .filter_map(|index| fields.dict_at(index, r))
         .find(|entry| entry.byte_string(obj_names::T, r).as_deref() == Some(name.as_slice()))?;
     (first != *dict).then_some(first)
+}
+
+/// The document's terminal fields' fully-qualified names, in `/Fields` order.
+///
+/// The same walk `pdfrum_doc::form::Form::load` performs and in the same
+/// order, because that is the list `/CO`'s indices, `Doc.numFields` and
+/// `Doc.getNthFieldName` all count — reusing it rather than restating the
+/// traversal is what keeps the two spaces from drifting apart.
+fn document_field_names<R: Resolve>(catalog: &Dict, r: &R) -> Vec<String> {
+    let (limits, mut diags) = (Limits::default(), Diagnostics::default());
+    pdfrum_doc::form::Form::load(catalog, r, &limits, &mut diags)
+        .map(|form| form.fields.iter().map(|field| field.name.clone()).collect())
+        .unwrap_or_default()
+}
+
+/// Where a fully-qualified name sits in the document's field list.
+///
+/// Matched by name rather than by dictionary because that is what both ends
+/// of the conversion have: a widget knows its own qualified name, and so does
+/// every terminal field. An unnamed widget matches nothing, which is correct
+/// — a script cannot name it either.
+fn position_in_form(fields: &[String], name: &str) -> Option<u32> {
+    if name.is_empty() {
+        return None;
+    }
+    fields
+        .iter()
+        .position(|field| field == name)
+        .and_then(|index| u32::try_from(index).ok())
 }
 
 /// An inherited integer field attribute.

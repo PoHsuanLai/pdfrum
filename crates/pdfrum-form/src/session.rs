@@ -186,6 +186,31 @@ pub struct FormSession {
     pub drag: Option<DragAnchor>,
     /// Fields whose interaction state has outrun the document's value.
     pub dirty: BTreeSet<FieldId>,
+    /// What a `/AA /F` format script asked each field to *show*, which is not
+    /// what it stores.
+    ///
+    /// # Why the display string needs a home at all
+    ///
+    /// `CommitOutcome::display` is a formatting script's whole output, and
+    /// without somewhere to put it the string is computed and dropped — a
+    /// field with `AFNumber_Format(2, 0, 0, 0, "", true)` regenerates
+    /// `(1234) Tj` where the oracle draws `(1,234.00) Tj`.
+    ///
+    /// Upstream it is not stored either, because upstream *regenerates
+    /// immediately*: `AfterValueChange` is
+    /// `ResetFieldAppearance(pField, OnFormat(pField))`
+    /// (`fpdfsdk/cpdfsdk_interactiveform.cpp:588`) and the optional reaches
+    /// exactly one line, `pEdit->SetText(sValue.value_or(pField->GetValue()))`
+    /// (`fpdfsdk/cpdfsdk_appstream.cpp:1752`). This crate hands appearances
+    /// back rather than painting them, so the same answer has to survive
+    /// until the next generation — which is what this map is, and why it is
+    /// keyed by field rather than by widget: `ResetFieldAppearance` walks
+    /// **every control of the field** and gives each the same string.
+    ///
+    /// Cleared when a field takes focus, because the form filler's editor is
+    /// seeded from `GetValue()` and never from the formatted text: a user who
+    /// clicks into a currency field sees `1234` to edit, not `1,234.00`.
+    pub formatted: BTreeMap<FieldId, String>,
     /// The switches.
     pub config: SessionConfig,
 }

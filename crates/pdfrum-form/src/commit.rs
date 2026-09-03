@@ -53,6 +53,14 @@ pub struct CommitOutcome {
     pub stored: Option<String>,
     /// A display string a formatting hook produced, which does not change the
     /// stored value.
+    ///
+    /// Meaningful only when [`committed`](CommitOutcome::committed) and not
+    /// [`reverted`](CommitOutcome::reverted): a commit that ran no hooks
+    /// because the value had not moved says nothing about what the field
+    /// shows, and a reader must not take its `None` for "show the raw value"
+    /// — `AfterValueChange` is what calls `OnFormat`, and it runs on a
+    /// *change* (`fpdfsdk/cpdfsdk_interactiveform.cpp:575-588`).
+    /// [`CommitOutcome::formats`] is that question asked directly.
     pub display: Option<String>,
     /// Values a calculation asked to be written to other fields.
     pub writes: Vec<(u32, String)>,
@@ -80,6 +88,21 @@ impl CommitOutcome {
     #[must_use]
     pub fn keeps_focus(&self) -> bool {
         self.reverted
+    }
+
+    /// Whether this outcome **decides** what the field displays.
+    ///
+    /// The distinction [`display`](CommitOutcome::display) alone cannot make:
+    /// a `None` from a commit that ran means "no formatter, draw the raw
+    /// value" and must erase any earlier answer, while a `None` from a commit
+    /// that never ran — because the value had not moved, or because a gate
+    /// refused — means nothing at all and must leave the field showing what
+    /// it was showing. Only the first is `AfterValueChange`'s
+    /// `ResetFieldAppearance(pField, OnFormat(pField))`
+    /// (`fpdfsdk/cpdfsdk_interactiveform.cpp:588`).
+    #[must_use]
+    pub fn formats(&self) -> bool {
+        self.committed && !self.reverted && self.stored.is_some()
     }
 }
 
@@ -145,7 +168,7 @@ mod tests {
     fn field() -> FieldRef {
         FieldRef {
             name: "Text Box".to_string(),
-            index: 0,
+            index: Some(0),
         }
     }
 

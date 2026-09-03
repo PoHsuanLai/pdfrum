@@ -50,28 +50,47 @@ fn rect(left: f32, bottom: f32, right: f32, top: f32) -> Object {
 }
 
 fn catalog() -> Dict {
+    catalog_with_fields(None)
+}
+
+/// The catalog, optionally with an `/AcroForm /Fields` array.
+///
+/// `fields` in **reverse** `/Annots` order is what makes the two field index
+/// spaces disagree, which is the whole point of the fixture that passes one:
+/// `Total` is `FieldId(1)` on the page and form field **0** in the document.
+fn catalog_with_fields(fields: Option<Object>) -> Dict {
     let helv = dict([
         (b"Type", name(b"Font")),
         (b"Subtype", name(b"Type1")),
         (b"BaseFont", name(b"Helvetica")),
     ]);
+    let mut acro = vec![
+        (
+            &b"DA"[..],
+            Object::Str(PdfString::literal(b"/Helv 0 Tf 0 g")),
+        ),
+        (
+            &b"DR"[..],
+            Object::Dict(dict([(
+                b"Font",
+                Object::Dict(dict([(b"Helv", Object::Dict(helv))])),
+            )])),
+        ),
+    ];
+    if let Some(fields) = fields {
+        acro.push((&b"Fields"[..], fields));
+    }
     dict([(
         b"AcroForm",
-        Object::Dict(dict([
-            (b"DA", Object::Str(PdfString::literal(b"/Helv 0 Tf 0 g"))),
-            (
-                b"DR",
-                Object::Dict(dict([(
-                    b"Font",
-                    Object::Dict(dict([(b"Helv", Object::Dict(helv))])),
-                )])),
-            ),
-        ])),
+        Object::Dict(Dict::from_pairs(
+            acro.into_iter()
+                .map(|(key, value)| (Name::from(key), value)),
+        )),
     )])
 }
 
-/// Two text fields: the one events go to, and one a calculation can write.
-fn two_text_fields() -> Dict {
+/// The two field dictionaries the page and the form both name.
+fn field_dicts() -> (Dict, Dict) {
     let typed = dict([
         (b"Type", name(b"Annot")),
         (b"Subtype", name(b"Widget")),
@@ -90,6 +109,12 @@ fn two_text_fields() -> Dict {
         (b"Rect", rect(20.0, 40.0, 180.0, 70.0)),
         (b"DA", Object::Str(PdfString::literal(b"/Helv 12 Tf 0 g"))),
     ]);
+    (typed, total)
+}
+
+/// Two text fields: the one events go to, and one a calculation can write.
+fn two_text_fields() -> Dict {
+    let (typed, total) = field_dicts();
     dict([
         (b"MediaBox", rect(0.0, 0.0, 200.0, 200.0)),
         (
@@ -506,4 +531,429 @@ fn tabbing_away_from_a_refused_field_does_not_move_focus() {
         "a refused commit keeps the field even when the user asked to leave"
     );
     assert_eq!(text_of(&session, 0).as_deref(), Some("old"));
+}
+
+// ---- the two WP12 defects, closed ----
+
+/// **A format script's output reaches the appearance.**
+///
+/// The defect this closes: `CommitOutcome::display` was computed and dropped.
+/// `pdfrum-form` had nowhere to put it and `UpdateKind` could not carry it, so
+/// a field with `AFNumber_Format(2, 0, 0, 0, "", true)` regenerated `(1234)
+/// Tj` where the oracle draws `(1,234.00) Tj`.
+///
+/// One line upstream is the whole mechanism —
+/// `pEdit->SetText(sValue.value_or(pField->GetValue()))`
+/// (`fpdfsdk/cpdfsdk_appstream.cpp:1752`) — reached from `AfterValueChange`'s
+/// `ResetFieldAppearance(pField, OnFormat(pField))`
+/// (`fpdfsdk/cpdfsdk_interactiveform.cpp:588`).
+#[test]
+fn a_format_scripts_display_string_reaches_the_regenerated_appearance() {
+    struct Currency;
+    impl Cascade for Currency {
+        fn format(&mut self, _f: &FieldRef, value: &str) -> Option<String> {
+            Some(format!("${value}.00"))
+        }
+    }
+
+    let fixture = Fixture::new();
+    let ctx = fixture.ctx();
+    let mut session = FormSession::new();
+    let mut cascade = Currency;
+
+    click(&mut session, &ctx, &mut cascade, IN_TYPED);
+    route::apply(
+        &mut session,
+        &ctx,
+        &mut cascade,
+        Event::KeyDown {
+            key: pdfrum_form::Key::End,
+            modifiers: Modifiers::NONE,
+        },
+    );
+    route::apply(
+        &mut session,
+        &ctx,
+        &mut cascade,
+        Event::Char {
+            ch: '9',
+            modifiers: Modifiers::NONE,
+        },
+    );
+
+    let response = route::kill_focus(&mut session, &ctx, &mut cascade);
+
+    // The value stored is what was typed; the appearance shows what the
+    // script said.
+    assert_eq!(
+        text_of(&session, 0).as_deref(),
+        Some("old9"),
+        "formatting must not change the stored value"
+    );
+    assert_eq!(
+        session
+            .formatted
+            .get(&pdfrum_form::FieldId(0))
+            .map(String::as_str),
+        Some("$old9.00"),
+        "the display string must survive the commit that produced it"
+    );
+
+    let stream = response
+        .updates
+        .iter()
+        .find_map(|update| update.kind.appearance())
+        .expect("the committed field regenerates an appearance");
+    let text = String::from_utf8_lossy(&stream.stream);
+    assert!(
+        text.contains("($old9.00) Tj"),
+        "the regenerated stream must draw the formatted string, not the raw \
+         value — got {text}"
+    );
+}
+
+/// …and re-running with **no** formatter puts the raw value back, rather than
+/// leaving the last answer drawn.
+///
+/// `std::nullopt` reaches `sValue.value_or(pField->GetValue())` as the raw
+/// value (`cpdfsdk_appstream.cpp:1752`), so a stale display string is not a
+/// harmless leftover: it is an answer the document no longer gives.
+#[test]
+fn a_commit_with_no_formatter_erases_an_earlier_display_string() {
+    /// Formats the first commit and nothing after it.
+    #[derive(Default)]
+    struct Once {
+        formatted: bool,
+    }
+    impl Cascade for Once {
+        fn format(&mut self, _f: &FieldRef, value: &str) -> Option<String> {
+            if self.formatted {
+                return None;
+            }
+            self.formatted = true;
+            Some(format!("[{value}]"))
+        }
+    }
+
+    let fixture = Fixture::new();
+    let ctx = fixture.ctx();
+    let mut session = FormSession::new();
+    let mut cascade = Once::default();
+
+    let mut edit_and_leave = |session: &mut FormSession, ch: char| {
+        click(session, &ctx, &mut cascade, IN_TYPED);
+        route::apply(
+            session,
+            &ctx,
+            &mut cascade,
+            Event::KeyDown {
+                key: pdfrum_form::Key::End,
+                modifiers: Modifiers::NONE,
+            },
+        );
+        route::apply(
+            session,
+            &ctx,
+            &mut cascade,
+            Event::Char {
+                ch,
+                modifiers: Modifiers::NONE,
+            },
+        );
+        route::kill_focus(session, &ctx, &mut cascade);
+    };
+
+    edit_and_leave(&mut session, 'a');
+    assert_eq!(
+        session
+            .formatted
+            .get(&pdfrum_form::FieldId(0))
+            .map(String::as_str),
+        Some("[olda]")
+    );
+
+    edit_and_leave(&mut session, 'b');
+    assert_eq!(
+        session.formatted.get(&pdfrum_form::FieldId(0)),
+        None,
+        "a commit whose formatter answered nothing must erase the old answer"
+    );
+}
+
+/// A commit that **never ran** says nothing about what the field shows.
+///
+/// The distinction `CommitOutcome::formats` exists for: blurring through an
+/// untouched field runs no hook at all (`AfterValueChange` is provoked by a
+/// *change*), so it must not be read as "no formatter, draw the raw value".
+#[test]
+fn blurring_through_an_unchanged_field_keeps_its_display_string() {
+    struct Currency;
+    impl Cascade for Currency {
+        fn format(&mut self, _f: &FieldRef, value: &str) -> Option<String> {
+            Some(format!("${value}"))
+        }
+    }
+
+    let fixture = Fixture::new();
+    let ctx = fixture.ctx();
+    let mut session = FormSession::new();
+    let mut cascade = Currency;
+
+    click(&mut session, &ctx, &mut cascade, IN_TYPED);
+    route::apply(
+        &mut session,
+        &ctx,
+        &mut cascade,
+        Event::Char {
+            ch: 'q',
+            modifiers: Modifiers::NONE,
+        },
+    );
+    route::kill_focus(&mut session, &ctx, &mut cascade);
+    let after_edit = session.formatted.get(&pdfrum_form::FieldId(0)).cloned();
+    assert!(after_edit.is_some(), "the edit produced a display string");
+
+    // In and straight out again, changing nothing.
+    click(&mut session, &ctx, &mut cascade, IN_TYPED);
+    route::kill_focus(&mut session, &ctx, &mut cascade);
+
+    assert_eq!(
+        session.formatted.get(&pdfrum_form::FieldId(0)).cloned(),
+        after_edit,
+        "a commit that ran no hooks must leave the display string alone"
+    );
+}
+
+/// A **focused** field draws the raw value, not the formatted one.
+///
+/// `CFFL_FormField`'s editor is seeded from `GetValue()`, so a user who
+/// clicks into a currency field edits `1234` and not `1,234.00`.
+#[test]
+fn a_focused_field_edits_the_raw_value_and_not_the_display_string() {
+    struct Currency;
+    impl Cascade for Currency {
+        fn format(&mut self, _f: &FieldRef, value: &str) -> Option<String> {
+            Some(format!("${value}.00"))
+        }
+    }
+
+    let fixture = Fixture::new();
+    let ctx = fixture.ctx();
+    let mut session = FormSession::new();
+    let mut cascade = Currency;
+
+    click(&mut session, &ctx, &mut cascade, IN_TYPED);
+    route::apply(
+        &mut session,
+        &ctx,
+        &mut cascade,
+        Event::Char {
+            ch: '5',
+            modifiers: Modifiers::NONE,
+        },
+    );
+    route::kill_focus(&mut session, &ctx, &mut cascade);
+    assert!(session.formatted.contains_key(&pdfrum_form::FieldId(0)));
+
+    // Click back in. The live edit shows what is stored.
+    let response = click_reporting(&mut session, &ctx, &mut cascade, IN_TYPED);
+    let live = response
+        .updates
+        .iter()
+        .rev()
+        .find(|update| update.kind.is_live_edit())
+        .and_then(|update| update.kind.appearance())
+        .expect("a focused field draws its live editor state");
+    let text = String::from_utf8_lossy(&live.stream);
+    assert!(
+        !text.contains('$'),
+        "the caret edits the stored value, never the formatted one — got {text}"
+    );
+}
+
+/// [`click`], keeping the last response.
+fn click_reporting(
+    session: &mut FormSession,
+    ctx: &Context<'_, NoResolve>,
+    cascade: &mut dyn Cascade,
+    at: Point,
+) -> pdfrum_form::Response {
+    let mut last = pdfrum_form::Response::ignored();
+    for event in [
+        Event::MouseMove {
+            at,
+            modifiers: Modifiers::NONE,
+        },
+        Event::MouseDown {
+            button: Button::Left,
+            at,
+            modifiers: Modifiers::NONE,
+        },
+        Event::MouseUp {
+            button: Button::Left,
+            at,
+            modifiers: Modifiers::NONE,
+        },
+    ] {
+        last = route::apply(session, ctx, cascade, event);
+    }
+    last
+}
+
+/// **A calculation names its target in the document's field space, not the
+/// page's.**
+///
+/// The defect this closes: `FieldRef::index` conflated a page-local widget id
+/// with a `/Fields` position. `page::read` allocates a `FieldId` per page as
+/// that page's `/Annots` are walked, `Form::calculation_order` answers
+/// positions in the document's flat terminal-field list, and
+/// `route::commit_field` spent a calculation's writes as `FieldId(index)` —
+/// which is the same number only for a single-page form whose widgets happen
+/// to appear in `/Fields` order.
+///
+/// The fixture makes them disagree by one transposition: `/Annots` is
+/// `[Typed, Total]` and `/Fields` is `[Total, Typed]`. So `Total` is
+/// `FieldId(1)` on the page and form field **0** in the document, and a
+/// calculation writing form field 0 must reach `Total` — where the old
+/// spelling would have written `Typed`, silently overwriting the field the
+/// user had just edited.
+#[test]
+fn a_calculation_writes_the_field_the_document_names_not_the_page() {
+    struct WriteFormFieldZero;
+    impl Cascade for WriteFormFieldZero {
+        fn calculate(&mut self, writes: &mut FieldWrites, _t: &FieldRef) {
+            writes.set(0, "computed");
+        }
+    }
+
+    let (typed, total) = field_dicts();
+    // `/Fields` in the opposite order from `/Annots`.
+    let catalog = catalog_with_fields(Some(Object::Array(
+        [Object::Dict(total), Object::Dict(typed)]
+            .into_iter()
+            .collect(),
+    )));
+    let resolve = NoResolve;
+    let page = pdfrum_form::read_page(0, &two_text_fields(), &catalog, &resolve);
+    let mut build = pdfrum_page::BuildContext::new();
+    let fonts = ap::FormFonts::load(&catalog, &resolve, &mut build);
+    let ctx = Context {
+        page: &page,
+        catalog: &catalog,
+        resolve: &resolve,
+        fonts: &fonts,
+        permissions: Permissions::ALL,
+    };
+
+    // The two spaces really do disagree in this fixture, which is what makes
+    // the assertion below able to fail.
+    let widgets = &ctx.page.widgets;
+    assert_eq!(widgets[0].name, "Typed");
+    assert_eq!(widgets[0].field, pdfrum_form::FieldId(0));
+    assert_eq!(widgets[0].field_index, Some(1), "Typed is form field 1");
+    assert_eq!(widgets[1].name, "Total");
+    assert_eq!(widgets[1].field, pdfrum_form::FieldId(1));
+    assert_eq!(widgets[1].field_index, Some(0), "Total is form field 0");
+
+    let mut session = FormSession::new();
+    let mut cascade = WriteFormFieldZero;
+    click(&mut session, &ctx, &mut cascade, IN_TOTAL);
+    click(&mut session, &ctx, &mut cascade, IN_TYPED);
+    route::apply(
+        &mut session,
+        &ctx,
+        &mut cascade,
+        Event::Char {
+            ch: '1',
+            modifiers: Modifiers::NONE,
+        },
+    );
+    route::kill_focus(&mut session, &ctx, &mut cascade);
+
+    assert_eq!(
+        text_of(&session, 1).as_deref(),
+        Some("computed"),
+        "form field 0 is `Total`, which this page holds as FieldId(1)"
+    );
+    assert_ne!(
+        text_of(&session, 0).as_deref(),
+        Some("computed"),
+        "the page-local id must not be spent as a document-wide one"
+    );
+}
+
+/// …and the hook that runs is the one the *document* installed for that
+/// field, which is the other half of the same conflation.
+///
+/// `ScriptCascade::script_for` looks a field's `/AA` entries up by
+/// `FieldRef::index`, and the facade installs them under the same number, so
+/// the two spaces disagreeing would run one field's format script against
+/// another's value.
+#[test]
+fn a_field_ref_carries_the_documents_field_position() {
+    #[derive(Default)]
+    struct Recording {
+        seen: Vec<(String, Option<u32>)>,
+    }
+    impl Cascade for Recording {
+        fn validate(&mut self, field: &FieldRef, _v: &str) -> bool {
+            self.seen.push((field.name.clone(), field.index));
+            true
+        }
+    }
+
+    let (typed, total) = field_dicts();
+    let catalog = catalog_with_fields(Some(Object::Array(
+        [Object::Dict(total), Object::Dict(typed)]
+            .into_iter()
+            .collect(),
+    )));
+    let resolve = NoResolve;
+    let page = pdfrum_form::read_page(0, &two_text_fields(), &catalog, &resolve);
+    let mut build = pdfrum_page::BuildContext::new();
+    let fonts = ap::FormFonts::load(&catalog, &resolve, &mut build);
+    let ctx = Context {
+        page: &page,
+        catalog: &catalog,
+        resolve: &resolve,
+        fonts: &fonts,
+        permissions: Permissions::ALL,
+    };
+
+    let mut session = FormSession::new();
+    let mut cascade = Recording::default();
+    click(&mut session, &ctx, &mut cascade, IN_TYPED);
+    route::apply(
+        &mut session,
+        &ctx,
+        &mut cascade,
+        Event::Char {
+            ch: 'Z',
+            modifiers: Modifiers::NONE,
+        },
+    );
+    route::kill_focus(&mut session, &ctx, &mut cascade);
+
+    assert_eq!(
+        cascade.seen,
+        vec![("Typed".to_string(), Some(1))],
+        "the gate must be told the document's field position, not the page's"
+    );
+}
+
+/// A widget the form's field list does not reach has **no** document-wide
+/// position, and says so rather than inventing one.
+///
+/// The oracle's answer too: `GetFieldByDict` returns null for it and
+/// `CountFields` never counted it, so a script cannot name it either.
+#[test]
+fn a_widget_outside_the_forms_field_list_has_no_document_position() {
+    let fixture = Fixture::new();
+    // `Fixture`'s catalog has no `/Fields` at all.
+    for widget in &fixture.ctx().page.widgets {
+        assert_eq!(
+            widget.field_index, None,
+            "a form that lists no fields gives none of them a position"
+        );
+    }
 }

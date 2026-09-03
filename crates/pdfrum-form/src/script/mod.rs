@@ -563,7 +563,9 @@ impl ScriptCascade {
 
     /// The script one trigger runs for one field, if it has one.
     fn script_for(&self, field: &FieldRef, trigger: Trigger) -> Option<String> {
-        let actions = self.actions.get(&field.index)?;
+        // A field the form's own list does not reach has no installed scripts
+        // to find, which is `NoScripts`'s answer and the oracle's.
+        let actions = self.actions.get(&field.index?)?;
         match trigger {
             Trigger::Keystroke => actions.keystroke.clone(),
             Trigger::Validate => actions.validate.clone(),

@@ -387,7 +387,7 @@ fn the_cascade_seam_is_nameable_without_the_script_feature() {
     impl Cascade for Mine {
         fn keystroke(&mut self, field: &FieldRef, change: Keystroke) -> KeystrokeOutcome {
             let _: &str = &field.name;
-            let _: u32 = field.index;
+            let _: Option<u32> = field.index;
             KeystrokeOutcome::Accept(change)
         }
         fn calculate(&mut self, writes: &mut FieldWrites, _trigger: &FieldRef) {
