@@ -144,10 +144,7 @@ pub struct Document {
     pub diags: Diagnostics,
 }
 
-/// The page lookup's memory.
-///
-/// Named `PageIndex` until WP1 gave that name to `pdfrum_common`'s newtype for
-/// a page's position. This is the cache, not the index.
+/// The page lookup's memory. The cache, not the index.
 #[derive(Debug, Default)]
 struct PageCache {
     /// One slot per page, filled as pages are found.
@@ -360,7 +357,7 @@ fn encrypt_dict(body: &Arc<[u8]>, xref: &Xref, trailer: &Dict, limits: Limits) -
 /// A writer needs that second fact: an inline encryption dictionary has no
 /// object number of its own, so it must be promoted to a fresh indirect
 /// object before the trailer's `/Encrypt` can name it (ISO 32000-1 §7.6.1
-/// requires `/Encrypt` be indirect). See SPEC.md §5's 2026-08-29 additions.
+/// requires `/Encrypt` be indirect).
 fn encrypt_dict_located(
     body: &Arc<[u8]>,
     xref: &Xref,
@@ -543,7 +540,7 @@ impl Document {
     /// and an index answers "which one", and the last valid index of a
     /// three-page document is 2, not 3. Giving them one type would let each be
     /// passed where the other is meant, which is what the newtype exists to
-    /// stop (`docs/design/idiomatic-api.md` §WP1).
+    /// stop.
     #[must_use]
     pub fn page_count(&self) -> u32 {
         self.page_count
@@ -732,10 +729,6 @@ impl Document {
     /// reports 9.9. `None` means the header carried no readable digits at
     /// all, which a file with no `%PDF` line and one with `%PDF-x.y` both
     /// produce; the writer's fallback for that case is 1.7.
-    ///
-    /// Was `-> u8` in the `major × 10 + minor` packing (`17` for 1.7), which
-    /// `docs/design/idiomatic-api.md` §WP1 replaces with the type; the packing
-    /// survives only in this module's private `read_version`.
     #[must_use]
     pub fn version(&self) -> Option<PdfVersion> {
         self.version
@@ -839,10 +832,6 @@ impl Document {
     /// The owner's own unrestricted view is
     /// [`Document::owner_permissions`]. An unencrypted document permits
     /// everything.
-    ///
-    /// Was `permissions(owner: bool) -> u32`; the boolean mode is now two
-    /// methods and the ISO table-22 decode is in `pdfrum-crypt`, next to the
-    /// `/P` word (`docs/design/idiomatic-api.md` §WP1, §A.3).
     #[must_use]
     pub fn permissions(&self) -> Permissions {
         self.store.security().permissions()
@@ -870,8 +859,7 @@ impl Document {
     ///
     /// The writer needs this to save an encrypted document *as encrypted*: it
     /// re-enciphers every string and stream under the same handler, so the
-    /// result opens with the same password (SPEC.md §11's M10 ruling, which
-    /// supersedes E3's "v1 saves decrypted"). It carries the file key, so it
+    /// result opens with the same password. It carries the file key, so it
     /// is deliberately not `Clone`-friendly to hold onto — borrow it for the
     /// length of a save and let it go.
     #[must_use]

@@ -69,8 +69,7 @@ pub struct ObjectStore {
     /// a document goes through this map. A file cannot choose the key — it can
     /// choose how many there are, which the `Limits` cap governs — so the
     /// collision resistance `SipHash` is paying for is not resistance to
-    /// anything. See `pdfrum_common::FxBuildHasher`'s docs and
-    /// `docs/status/M12.md`.
+    /// anything. See `pdfrum_common::FxBuildHasher`'s docs.
     cells: Mutex<Cells>,
     /// Object numbers whose parse is running right now.
     in_progress: Mutex<Vec<u32>>,
