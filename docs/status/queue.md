@@ -469,24 +469,14 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
   loop re-deriving per pixel an index the row already knows, after the blit
   (§14), the glyph's two loops (§16) and the layer composite (§20) — and with
   it the engine's four per-pixel raster loops are all row-hoisted.
-- **§21 reaches every clip push in the corpus and only four fixtures were
-  re-taken.** `forms_combo_box` 1.035x, `shading_tcpdf_058` 1.045x and
-  `forms_text_field` 1.024x move in rank order with their rect-clip counts;
-  `vector_font_size14`, which pushes no clip at all, is the honest control at
-  0.964x. **No corpus-wide re-take was done**, so §18.2's geomeans are stale by
-  an unmeasured amount in this direction — the one measurement this milestone
-  now most obviously owes.
-- ~~**`--op render --warm` does not yet prepare outside its loop, so §18.1's
-  subtraction is retired in the docs and still load-bearing in the numbers.**~~
-  — **landed 2026-09-04**: the render loop under `--warm` now prepares every
-  page once (the priming pass) and times only the draws, the same shape as
-  `warm_pass`; the cold arm is unchanged. The stage report's parse and
-  interpretation rows read zero per iteration from here on, and `whole` is
-  the amortized figure. §18.2 has not been re-taken on it yet (see below).
-- **`mixed_en_uicase` at 1.72x has no single dominant line left**: with
-  `coverage_of` at 7.53 ms what remains is `fill_path` at 10.7 ms and a long
-  tail. Not closed as a defect, but not a split's target either.
-- **Seven more rows above 1.5x like-for-like, all of them in the rasterizer.**
+- ~~**§21 reaches every clip push in the corpus and only four fixtures were
+  re-taken.**~~ — **re-taken as §22 (2026-09-04)**, all 44 rows on the native
+  pairing: `forms` 0.78x → 0.48x (every widget is rect clips), `vector` 0.52x
+  → 0.36x, all rows 0.36x; six rows above 1.5x, from nine.
+- **Six rows above 1.5x like-for-like after §22** (the paragraph below is
+  §18.2's; §22.2 has the current list — three image decode/resample rows,
+  `shading_type4_5` in the sub-millisecond regime, and §20/§21's two
+  residues). ~~Seven more rows above 1.5x like-for-like, all of them in the rasterizer.~~
   `vector_font_feature` 2.67x (90.9% raster), `shading_type4_5` 2.67x,
   `image_ccitt_3bigpreview` 2.45x (87.5% raster), `image_ccitt_transfer`
   2.31x, `forms_list_box` 1.74x, `image_jpx_123` 1.70x (99.4% raster),

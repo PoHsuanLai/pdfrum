@@ -3659,3 +3659,103 @@ split of *our* side was enough to name the defect without it.
   while sibling agents' boards were running. §3's instruction is undischarged
   and the absolute milliseconds are still upper bounds.
 - **The ratchet is still not re-baselined.** §8's third bullet stands.
+
+## 22. The corpus re-taken after §19–§21, on the native pairing
+
+§21 reaches every clip push in the corpus and §20 every layer, and only four
+fixtures had been re-taken after them. This section re-takes all forty-four
+rows — the first table taken with the bench's `--op render --warm` loop
+preparing each page once (§18.1's closing note), so `ours` here is the whole
+per-iteration figure with nothing subtracted, against the same
+`pdfium_test --md5 --render-repeats` marginal-pass formula §18.2 used
+(21 repeats, minimum of five rounds, the whole corpus in one 3½-minute
+stretch at a 1-minute load of 8–10). Ours: 21 iterations, AGG, minimum of
+three rounds, taken in the following five minutes at load 6.9–9.2 (recorded
+per row). The two arms were not interleaved per file; they were run back to
+back so that neither contended with the other.
+
+### 22.1 The table
+
+| fixture | oracle (ms) | ours (ms) | load | ratio | §18.2 ratioA |
+|---|---:|---:|---:|---:|---:|
+| `forms_combo_box` | 3.68 | 3.00 | 7.65 | **0.82x** | 1.31x |
+| `forms_list_box` | 5.27 | 6.04 | 7.09 | **1.15x** | 1.74x |
+| `forms_number` | 1.03 | 0.70 | 7.09 | **0.68x** | 1.56x |
+| `forms_push_button` | 60.57 | 2.42 | 7.09 | **0.04x** | 0.07x |
+| `forms_signature` | 2.10 | 1.11 | 7.09 | **0.53x** | 0.72x |
+| `forms_text_field` | 4.08 | 2.88 | 7.09 | **0.71x** | 1.01x |
+| `forms_widgets_407` | 5.34 | 3.38 | 6.92 | **0.63x** | 1.02x |
+| `image_bug_583804` | 155.01 | 107.47 | 6.92 | **0.69x** | 0.68x |
+| `image_bug_718762` | 554.26 | 0.02 | 7.81 | **0.00x** | 0.00x |
+| `image_bug_898443` | 78.11 | 1.99 | 7.81 | **0.03x** | 0.02x |
+| `image_ccitt_3bigpreview` | 7.67 | 15.70 | 7.81 | **2.05x** | 2.45x |
+| `image_ccitt_transfer` | 0.92 | 2.40 | 7.58 | **2.61x** | 2.31x |
+| `image_en_fqa` | 53.99 | 58.58 | 7.58 | **1.08x** | 1.16x |
+| `image_jbig2_1478366` | 30.85 | 0.16 | 7.37 | **0.01x** | 0.01x |
+| `image_jbig2_880920` | 12.73 | 2.25 | 7.37 | **0.18x** | 0.25x |
+| `image_jpx_123` | 8.00 | 13.90 | 7.37 | **1.74x** | 1.70x |
+| `mixed_en_uicase` | 13.15 | 21.91 | 7.37 | **1.67x** | 3.71x |
+| `mixed_formfield` | 3.52 | 1.71 | 7.18 | **0.49x** | 0.75x |
+| `mixed_tcpdf_006` | 16.66 | 6.60 | 7.18 | **0.40x** | 0.47x |
+| `mixed_tcpdf_045` | 17.77 | 4.43 | 7.18 | **0.25x** | 0.26x |
+| `mixed_tcpdf_059` | 17.51 | 4.88 | 7.18 | **0.28x** | 0.30x |
+| `shading_axial_radial` | 43.54 | 30.98 | 7.01 | **0.71x** | 0.71x |
+| `shading_coons` | 0.94 | 0.12 | 7.01 | **0.12x** | 0.14x |
+| `shading_gouraud` | 0.89 | 0.12 | 7.01 | **0.14x** | 0.14x |
+| `shading_tcpdf_030` | 72.10 | 47.51 | 7.01 | **0.66x** | 0.65x |
+| `shading_tcpdf_056` | 2.19 | 1.31 | 8.05 | **0.60x** | 0.73x |
+| `shading_tcpdf_058` | 5.14 | 8.03 | 8.05 | **1.56x** | 8.67x |
+| `shading_tensor` | 33.68 | 11.13 | 8.05 | **0.33x** | 0.32x |
+| `shading_type4_5` | 0.28 | 0.78 | 8.05 | **2.82x** | 2.67x |
+| `text_bug_1029` | 0.74 | 0.15 | 7.88 | **0.21x** | 0.24x |
+| `text_cjk_functions` | 5.89 | 2.20 | 7.88 | **0.37x** | 0.45x |
+| `text_cjk_page` | 10.94 | 5.05 | 7.88 | **0.46x** | 0.55x |
+| `text_cjk_structure` | 12.20 | 7.23 | 7.88 | **0.59x** | 0.64x |
+| `text_foxit_products` | 22.07 | 10.04 | 7.88 | **0.45x** | 0.52x |
+| `text_foxittext` | 2.70 | 1.48 | 7.88 | **0.55x** | 0.58x |
+| `text_quick_start` | 123.83 | 56.64 | 7.88 | **0.46x** | 0.49x |
+| `text_tcpdf_055` | 57.67 | 43.33 | 9.17 | **0.75x** | 0.87x |
+| `text_tcpdf_063` | 34.91 | 37.30 | 8.84 | **1.07x** | 1.12x |
+| `vector_en_system` | 61.32 | 44.58 | 8.85 | **0.73x** | 0.79x |
+| `vector_en_tem` | 7.29 | 2.28 | 8.85 | **0.31x** | 0.51x |
+| `vector_font_feature` | 19.09 | 22.90 | 8.46 | **1.20x** | 2.67x |
+| `vector_font_size14` | 11.89 | 5.11 | 8.46 | **0.43x** | 0.51x |
+| `vector_paths_1751` | 20.79 | 2.66 | 8.46 | **0.13x** | 0.24x |
+| `vector_tcpdf_009` | 46.33 | 6.86 | 8.46 | **0.15x** | 0.15x |
+
+### 22.2 What moved, and what did not
+
+- **Six rows above 1.5x, against §18.2's nine.** The three §19–§21 named are
+  where they were measured to be: `shading_tcpdf_058` **8.67x → 1.56x**,
+  `mixed_en_uicase` **3.71x → 1.67x**, `vector_font_feature` **2.67x →
+  1.20x** (the last on §21's clip fill alone — it was never split). `forms_list_box`
+  1.74x → 1.15x and `forms_number` 1.56x → 0.68x left the list the same way,
+  and the whole `forms` class moved 0.78x → **0.48x**: every widget's border
+  and background is a rect clip, and §21 is the fix for exactly that write.
+- **The class geomeans:** image 0.13x → **0.12x**, vector 0.52x → **0.36x**,
+  text 0.56x → **0.50x**, forms 0.78x → **0.48x**, shading 0.68x → **0.54x**,
+  mixed 0.63x → **0.47x**; all forty-four rows **0.36x**. Part of every
+  class's movement is the pairing rather than the code — §18.2's `amortz`
+  was a subtraction and this is a measurement — and the size of that part is
+  visible in the rows that no section touched: `image_bug_583804` 0.68x →
+  0.69x, `shading_tensor` 0.32x → 0.33x, `text_quick_start` 0.49x → 0.46x.
+  Those are the noise floor of the comparison, about ±5%, and the class
+  movements above are all outside it.
+- **The six that remain are two shapes.** `image_ccitt_transfer` 2.61x,
+  `image_ccitt_3bigpreview` 2.05x and `image_jpx_123` 1.74x are decode and
+  resample, which no section since §14 has touched and §15 said so;
+  `shading_type4_5` 2.82x is 0.78 ms against an oracle column of 0.28 ms, the
+  regime where the marginal-pass formula is least trustworthy (§18.4).
+  `mixed_en_uicase` and `shading_tcpdf_058` are §21.10's and §20's residues
+  with no single dominant line left.
+
+### 22.3 What this section does not claim
+
+- **Not idle.** Load 6.9–10 throughout — the quietest window in the document
+  after §18.2's, and still not §3's.
+- **AGG only**, as every table since §10.5. `tiny-skia` and `vello_cpu` are
+  covered by the board, not measured.
+- **The oracle column moved by under 3% on every row** against §18.2's (taken
+  a day earlier), which is the check that the two tables are comparable;
+  `forms_push_button`'s 60 ms oracle column is the same outlier it was there.
+- **The ratchet is still not re-baselined.** §8's third bullet stands.
