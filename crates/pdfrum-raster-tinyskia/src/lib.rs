@@ -143,6 +143,26 @@ impl TinySkiaDevice {
         self.clips.last().and_then(Option::as_ref)
     }
 
+    /// The target and the clip in force, borrowed together.
+    ///
+    /// `target` and `clip` cannot both be called on `&mut self`, and a draw
+    /// needs both — so every draw used to hand `tiny_skia` a **clone** of the
+    /// clip mask. That clone is device-sized: a letter page's is half a
+    /// megabyte, and a page of annotation appearances draws hundreds of
+    /// objects under one, so it is a `memcpy` per fill, per stroke and per
+    /// image rather than per clip push. `clips` and `layers`/`base` are
+    /// disjoint fields, so splitting the borrow by hand is all that was ever
+    /// needed; nothing about the drawing changes, and `tiny_skia` takes the
+    /// mask by reference either way.
+    fn target_and_clip(&mut self) -> Option<(&mut tiny_skia::Pixmap, Option<&Mask>)> {
+        let clip = self.clips.last().and_then(Option::as_ref);
+        let target = match self.layers.last_mut() {
+            Some(layer) => &mut layer.pixmap,
+            None => self.base.as_mut()?,
+        };
+        Some((target, clip))
+    }
+
     /// The device's current base pixels.
     fn snapshot_pixels(&self) -> Pixmap {
         self.base
@@ -200,10 +220,11 @@ impl RenderDevice for TinySkiaDevice {
             return;
         };
         let transform = convert::to_transform(t);
-        let clip = self.clip().cloned();
         let fill_rule = convert::to_fill_rule(rule);
-        let Some(target) = self.target() else { return };
-        target.fill_path(&p, &paint, fill_rule, transform, clip.as_ref());
+        let Some((target, clip)) = self.target_and_clip() else {
+            return;
+        };
+        target.fill_path(&p, &paint, fill_rule, transform, clip);
     }
 
     fn stroke_path(
@@ -243,24 +264,18 @@ impl RenderDevice for TinySkiaDevice {
             return;
         };
         let transform = convert::to_transform(t);
-        let clip = self.clip().cloned();
-        let Some(target) = self.target() else { return };
+        let Some((target, clip)) = self.target_and_clip() else {
+            return;
+        };
         // A stroke outline self-overlaps at joins and caps, so it must be
         // filled non-zero: even-odd would punch the overlaps back out.
-        target.fill_path(
-            &p,
-            &paint,
-            tiny_skia::FillRule::Winding,
-            transform,
-            clip.as_ref(),
-        );
+        target.fill_path(&p, &paint, tiny_skia::FillRule::Winding, transform, clip);
     }
 
     fn draw_image(&mut self, img: &RasterImage, t: Affine, quality: ImageQuality, alpha: f32) {
         let Some(src) = PixmapRef::from_bytes(img.data(), img.width(), img.height()) else {
             return;
         };
-        let clip = self.clip().cloned();
         let paint = PixmapPaint {
             opacity: alpha.clamp(0.0, 1.0),
             blend_mode: tiny_skia::BlendMode::SourceOver,
@@ -270,8 +285,10 @@ impl RenderDevice for TinySkiaDevice {
         // applies the transform, which is exactly the unit-square mapping the
         // trait specifies once the caller has folded in the image's size.
         let transform = convert::to_transform(t);
-        let Some(target) = self.target() else { return };
-        target.draw_pixmap(0, 0, src, &paint, transform, clip.as_ref());
+        let Some((target, clip)) = self.target_and_clip() else {
+            return;
+        };
+        target.draw_pixmap(0, 0, src, &paint, transform, clip);
     }
 
     fn push_clip(&mut self, path: &BezPath, rule: FillRule) {
