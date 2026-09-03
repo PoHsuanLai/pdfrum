@@ -1,6 +1,6 @@
 //! An analytic scanline rasterizer implementing `pdfrum-render`'s
 //! `RenderDevice` and `RasterBackend` traits, written for parity with the
-//! oracle's own scan converter (SPEC.md §8).
+//! oracle's own scan converter.
 //!
 //! # Why a third backend
 //!
@@ -11,9 +11,9 @@
 //! half-covered pixel quantises to 8/16 of the range rather than to a half.
 //! The oracle integrates the covered area analytically and writes the exact
 //! value. Over the corpus that difference is a persistent few-count spread
-//! along every non-axis-aligned edge — measured, in
-//! `docs/status/pdfrum-render.md`, as the population sitting between SSIM 0.95
-//! and 0.99 with no image, shading, pattern or soft mask on the page.
+//! along every non-axis-aligned edge — measured as the population sitting
+//! between SSIM 0.95 and 0.99 with no image, shading, pattern or soft mask on
+//! the page.
 //!
 //! This backend closes that by construction rather than by correction: it
 //! computes the same integral the oracle computes, on the same 256ths-of-a-
