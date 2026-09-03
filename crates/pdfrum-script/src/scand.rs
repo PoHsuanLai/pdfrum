@@ -1,9 +1,11 @@
-//! `util.scand`.
+//! `util.scand`: parsing a date against a format.
 
 use crate::time::parse_date_with_fallback;
 
-/// `CJS_Util::scand`. Empty `date` yields `now_ms`. `NaN` becomes `None`
-/// (the C++ returns `undefined`).
+/// Parse `date` against `format`, as `util.scand` does.
+///
+/// An empty `date` yields `now_ms`. A result that is not a number is `None`,
+/// which is the `undefined` the JavaScript sees.
 #[must_use]
 pub fn util_scand(format: &str, date: &str, now_ms: f64) -> Option<f64> {
     let d = if date.is_empty() {

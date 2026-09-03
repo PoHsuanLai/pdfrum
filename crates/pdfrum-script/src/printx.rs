@@ -1,4 +1,4 @@
-//! `util.printx` / `CJS_Util::StringPrintx`.
+//! `util.printx`: formatting a string through a mask.
 
 use crate::parse::{is_ascii_alnum, is_ascii_alpha, is_decimal_digit};
 
@@ -22,7 +22,9 @@ fn translate_case(input: char, mode: CaseMode) -> char {
     }
 }
 
-/// `CJS_Util::StringPrintx` — mask language used by `AFSpecial_Format`.
+/// Format `source` through `format`'s mask, as `util.printx` does.
+///
+/// This is the mask language the special-format field actions use.
 ///
 /// Directives: `?` any, `X` alnum, `A` alpha, `9` digit, `*` rest of source,
 /// `\` escape, `>`/`<`/`=` case.
