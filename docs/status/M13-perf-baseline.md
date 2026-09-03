@@ -1800,3 +1800,478 @@ and 65 across the table — and the claim rests on §14.4.
 - **`tiny-skia` and `vello_cpu` are unchanged.** The blit is `pdfrum-raster-agg`'s
   alone; neither of the other two backends has this shape looked at.
 - **The ratchet is still not re-baselined.** §8's third bullet stands.
+
+---
+
+## 15. The `image` and `vector` classes, re-taken against the oracle
+
+**Taken 2026-09-03, load 28 rising to 49 across the table.** §10.5 is the last
+time either class was measured against the oracle, and four changes have landed
+since: §11's clip-push split, §12's clip-plane pool, §13's glyph-blit buffer
+reuse and §14's `blit_image`. §14's own closing bullet names the gap this fills
+— "whether the rest of the `image` class moves was not measured".
+
+Method is §10.5's, unchanged: `scripts/bench-oracle.nu`'s marginal-pass formula
+`(t[21] − t[1]) / 20` against `pdfium_test --md5 --render-repeats`, minimum of
+five rounds per arm, one untimed warm-up first; our side is `--op render
+--warm` at 21 iterations, best of three backends over three rounds. Ours and
+the oracle are taken **on the same file in the same stretch of minutes**, which
+is what §3 says makes a ratio load-independent even where the milliseconds are
+not. The PDFs were copied to a scratch directory first, because `pdfium_test`
+writes beside its input and the oracle tree is read-only.
+
+### 15.1 The table
+
+Ratio is ours over the oracle's, so **> 1 is pdfrum being slower**. The
+**reflects** column names the landed change whose code a row's render actually
+*executes* enough of to move it, which is not the same as "landed since
+§10.5" — all four are on `main` for all fifteen rows. §11 and §12 are the clip
+push and the clip plane's allocation, and outside `forms` almost nothing in
+these two classes pushes clips deeply enough to notice; §13 is 18.6 ns of a
+per-glyph chain and reaches only the four text-bearing rows, where it is below
+this table's resolution anyway; §14 is the whole-pixel blit, which reaches the
+glyph rows and exactly one image row. Glyph traffic was counted rather than
+assumed: `--sample` puts `vector_en_system` at **31** `draw_image` calls per
+render against `vector_en_tem`'s 3264 and the two `font_*` rows' 8279 and 8775,
+so `en_system` is a path document that happens to be in the `vector` class and
+is marked `—`.
+
+#### `image`
+
+| fixture | M12 | §10.5 | **§15** | ours (ms) | oracle (ms) | load | reflects |
+|---|---:|---:|---:|---:|---:|---:|---|
+| `image_bug_583804` | 0.89x | 0.79x | **0.72x** | 122.27 | 170.46 | 35 | §14 |
+| `image_bug_718762` | 0.00x | 0.00x | **0.00x** | 0.02 | 658.58 | 44 | — |
+| `image_bug_898443` | 0.03x | 0.02x | **0.02x** | 1.91 | 84.19 | 40 | — |
+| `image_ccitt_3bigpreview` | 1.94x | 1.66x | **2.27x** | 21.54 | 9.48 | 40 | — |
+| `image_ccitt_transfer` | 1.54x | 0.26x | **0.40x** | 0.94 | 2.31 | 40 | — |
+| `image_en_fqa` | 11.24x | 2.03x | **3.15x** | 190.20 | 60.47 | 49 | — |
+| `image_jbig2_1478366` | 0.02x | 0.00x | **0.00x** | 0.16 | 33.92 | 48 | — |
+| `image_jbig2_880920` | 0.22x | 0.19x | **0.20x** | 2.95 | 14.76 | 48 | — |
+| `image_jpx_123` | 0.65x | 0.83x | **1.19x** | 10.12 | 8.48 | 45 | — |
+| **geomean** | **0.24x** | **0.09x** | **0.11x** | | | | |
+
+#### `vector`
+
+| fixture | M12 | §10.5 | **§15** | ours (ms) | oracle (ms) | load | reflects |
+|---|---:|---:|---:|---:|---:|---:|---|
+| `vector_en_system` | 2.84x | 1.08x | **2.14x** | 148.21 | 69.19 | 45 | — |
+| `vector_en_tem` | 1.32x | 0.62x | **0.61x** | 5.38 | 8.86 | 43 | §13, §14 |
+| `vector_font_feature` | 2.65x | 3.42x | **5.32x** | 121.03 | 22.74 | 39 | §13, §14 |
+| `vector_font_size14` | 1.49x | 3.70x | **3.16x** | 63.23 | 20.01 | 33 | §13, §14 |
+| `vector_paths_1751` | 0.51x | 0.44x | **0.34x** | 10.15 | 30.24 | 33 | — |
+| `vector_tcpdf_009` | 0.07x | 0.06x | **0.05x** | 2.93 | 57.62 | 33 | — |
+| **geomean** | **0.90x** | **0.78x** | **0.85x** | | | | |
+
+### 15.2 What this table can and cannot be read for
+
+**The load moved from 28 to 49 across the fifteen rows, and it moved
+monotonically with the row order.** The four rows taken at load 33–35 —
+`image_bug_583804`, `vector_font_size14`, `vector_paths_1751`,
+`vector_tcpdf_009` — are all at or below their §10.5 figure. The five taken at
+load 43–49 — `image_en_fqa`, `image_jbig2_*`, `image_jpx_123`,
+`vector_en_system` — are all above it. That is not a coincidence to be averaged
+into a geomean, and it is why this section names the load per row rather than
+per table.
+
+**`vector_en_system` is the clearest case.** §10.5 read 1.08x; this reads 2.14x
+at load 45, and the row is not one any landed change reaches: it makes **31**
+`draw_image` calls per render, so §14's blit is 31 blits and §13's per-glyph
+buffers are 31 occurrences, on a 148 ms document. There is nothing on `main`
+that could have doubled it, and the honest reading is that the row is
+machine.
+
+**Three rows are worth taking seriously anyway:**
+
+- **`image_bug_583804` at 0.72x, from §10.5's 0.79x.** §14.5 measured its one
+  large image blit going 175/193/179 ms → 96/92/83 ms, roughly 1.9–2.1x, and
+  §14.7 flagged that the rest of the class was not re-measured. It was: this
+  is the only `image` row §14 reaches, and it is the only `image` row that
+  improved on a comparable load.
+- **The rest of the `image` class did not move.** `image_ccitt_3bigpreview`,
+  `image_en_fqa` and `image_jpx_123` all read *worse* than §10.5 at loads
+  40–49, and none of them has a whole-pixel blit of the kind §14 serves —
+  `image_en_fqa`'s cost is its decode and its resample. **§14.7's open question
+  is answered and the answer is no**: `image_bug_583804` was the beneficiary,
+  and it was the beneficiary alone.
+- **`vector_font_size14` at 3.16x, from §10.5's 3.70x**, taken at load 33 —
+  the lowest load in the table and the closest to §10.5's own conditions. That
+  is the one vector row for which the comparison is fair, and it moved in §14's
+  direction by about what §14 predicted (1.5 ms off a 65 ms render is 0.08x of
+  a 3.70x ratio; the row moved 0.54x, so the rest is the load being lower than
+  §10.5's).
+
+**`vector_font_feature`'s 5.32x is not a regression and should not be quoted as
+one.** Its *oracle* column moved from 35.02 ms to 22.74 ms — the oracle got 1.5x
+faster on the same binary and the same file — while ours moved 119.66 → 121.03,
+which is flat. A ratio whose denominator moved that far is measuring the box,
+not the engine. The row's own before/after is §16.5's, and it is a small
+improvement rather than a 1.5x regression.
+
+### 15.3 The idle re-take is still not delivered, and `shading` and `forms` were not taken
+
+The brief made the `shading` and `forms` re-take conditional on the box being
+quieter than load 30. **It never was.** The 1-minute average read 27.4 at the
+moment the run was armed, 28.5 at its first row, and 33–49 through the rest of
+it; by the time §16's measurements ran it was 50. `shading` and `forms` were
+therefore **not** re-taken, and the queue's idle-re-take item stands where §3,
+§10.4, §11.7, §12.11, §13.7 and §14.7 all left it — undischarged for the eighth
+time.
+
+**What the table above is, then**, is a re-take of two classes on a box that was
+quieter than §10.5's for its first third and busier for its last third. The
+per-row load column is what makes it usable; the two class geomeans are not,
+and are printed only because §10.5 printed them.
+
+---
+
+## 16. Above the blit: the glyph's two per-pixel loops, and the one that was not a defect
+
+**Taken 2026-09-03, on the same box, at load 33–50.** §14.7 said the next split
+had to start above the blit, with `--sample` putting `vector_font_size14`'s
+`draw_image` at 3.31 ms and 35.5% and **56–60% of the document in ENGINE**. This
+section is that split. What it found above the blit is the same shape §14 found
+inside it — a per-pixel loop paying general-purpose costs on a specific case —
+in **two** places, and it is worth **2.22–2.26x on the pair**, 1.09–1.14 ms of
+each vector render.
+
+It also found two things worth recording as negatives rather than leaving for
+the next reader to re-derive: a hash probe that **is** a defect and does not
+compile away under today's borrow checker, and an obvious-looking hoist that is
+**3.9x slower** than what it replaces. §16.4 has both.
+
+### 16.1 What `--walk` says, and what it cannot say
+
+`--op render --sample --walk` on `vector_font_size14`, 21 iterations, AGG:
+
+| | ms/iter | share | calls/iter |
+|---|---:|---:|---:|
+| `draw_image` (RASTER) | 4.000 | 35.9% | 8775 |
+| RASTER (sum) | 4.579 | 41.1% | |
+| **ENGINE (rest)** | **6.556** | **58.9%** | |
+| &nbsp;&nbsp;`glyphs` phase | 1.719 | 26.2% of ENGINE | 892 |
+| &nbsp;&nbsp;`clip` + `color` + `cull` | 0.180 | 2.7% of ENGINE | 892 each |
+| &nbsp;&nbsp;**`INTERPRETATION`** | **4.657** | **71.0% of ENGINE** | |
+
+§14.7's 56–60% ENGINE reproduces, and §13.1's 74–77% `INTERPRETATION` reproduces
+at 71%. **`INTERPRETATION` is the bucket defined as what is left**, and on this
+document it is 4.657 ms against 892 text objects — 5.2 µs per object, which is
+not credible as dispatch. The reason is structural and worth stating: `Phase::Glyphs`
+brackets `place_glyphs_into` **and stops there**, so the walk's *per-glyph loop*
+— all 8775 iterations of it, everything `draw_glyph_bitmap` does up to the
+device call — falls into `INTERPRETATION` by construction. The walk instrument
+cannot see it, and no amount of re-reading it would have named this.
+
+### 16.2 What the `Instant` pairs named
+
+Direct pairs, §11/§12/§13's method, one level below the walk. Per render, 21
+iterations, AGG, `--op render --sample`. **The instrument inflates every row**
+— each is a nested `Instant` pair on a call costing hundreds of nanoseconds —
+so the shares are the reading and the absolute milliseconds are upper bounds.
+
+| site | `size14` ms | share | `feature` ms | share | ns/call |
+|---|---:|---:|---:|---:|---:|
+| **`draw_glyph_bitmap` (whole)** | **9.996** | **80.4%** | **11.693** | **53.6%** | 1139 / 1412 |
+| &nbsp;&nbsp;`device.draw_image` | 4.038 | 32.5% | 4.605 | 21.1% | 460 / 556 |
+| &nbsp;&nbsp;&nbsp;&nbsp;of which `blit_image` | 3.151 | 25.4% | 3.694 | 16.9% | 359 / 446 |
+| &nbsp;&nbsp;**`recolour_glyph_into`** | **3.108** | **25.0%** | **3.607** | **16.5%** | 354 / 436 |
+| &nbsp;&nbsp;&nbsp;&nbsp;`gray_coverage_into` | 1.137 | 9.1% | 1.510 | 6.9% | 130 / 182 |
+| &nbsp;&nbsp;&nbsp;&nbsp;`recolour_ref_into` | 1.373 | 11.0% | 1.490 | 6.8% | 157 / 180 |
+| &nbsp;&nbsp;**`BitmapCache::get_or_insert`** | **0.864** | **7.0%** | **1.429** | **6.6%** | 99 / 173 |
+| &nbsp;&nbsp;matrix + `BitmapKey::new` | 0.164 | 1.3% | 0.165 | 0.8% | 19 / 20 |
+| `place_glyphs_into` | 1.390 | 11.2% | 1.706 | 7.8% | 1559 / 1886 |
+| &nbsp;&nbsp;of which `snap_run` | 0.142 | 1.1% | 0.170 | 0.8% | 159 / 197 |
+| `colors()` + `stroke_text_matrices` | 0.090 | 0.7% | 0.105 | 0.5% | 50 / 58 |
+
+**The top two above the blit, and the brief asked for exactly two:**
+
+1. **`recolour_glyph_into` — 25.0% and 16.5%**, and it is *bigger than
+   `blit_image`* on `size14`. Two per-glyph-pixel loops, one each side of a
+   coverage buffer.
+2. **`BitmapCache::get_or_insert` — 7.0% and 6.6%**, at 99–173 ns for what
+   §13.2 measured as a **100% cache hit**.
+
+**Both fixtures share them, which the brief asked to be confirmed.** The
+ordering is identical and the shares differ only in denominator —
+`vector_font_feature`'s render is twice as long, so every glyph-path row is
+about half the share on the same absolute milliseconds.
+
+**And the answers to the brief's specific hypotheses about the `draw_image`
+chain, which were all no:** there is **no** per-glyph `Pixmap` view
+construction (`scratch.pixels` is `RenderCaches`-owned, §13.4), **no** `Arc`
+clone (`PlacedGlyph::outline` is cloned per *placement*, not per blit), **no**
+clip lookup on the blit path (`AggDevice::blit` picks the layer with a
+`last_mut` and the clip is folded inside `blit_image`), and **no** bounds
+recompute (`whole_pixel_offset` is four float compares). The 0.85–0.91 ms
+between `draw_image` and `blit_image` is `alpha_byte_truncating`,
+`whole_pixel_offset`, one `match` — and, mostly, the instrument's own nested
+pair. It is not worth taking and was not taken.
+
+### 16.3 The two costs, and why each is a defect
+
+Both are the shape §14.2 describes: a loop that recomputes per pixel a quantity
+that is fixed for the whole glyph, and bounds-checks an index that cannot be
+out of range.
+
+**`gray_coverage_into`, per glyph pixel**, collapsing three subpixels to one
+coverage byte:
+
+- a closure over `0..3` with a `.sum()`, and inside it, **per subpixel**: an
+  `idx < row` compare, a `usize::try_from`, a `subpixels.get(i)` returning an
+  `Option`, and a `map_or`. That is four operations on an index the caller
+  already knows is in range, three times per pixel;
+- `usize::try_from(average)` on a value clamped to `0..=255` a line earlier;
+- `TEXT_GAMMA_ADJUST.get(average).copied().unwrap_or(0)` — a bounds check on a
+  256-entry table indexed by a byte;
+- `usize::try_from(y * width + x)` and `coverage.get_mut(i)` — the destination
+  index re-derived and re-checked, when the walk is sequential.
+
+**`recolour_ref_into`, per glyph pixel**, turning that coverage into a
+premultiplied pixel:
+
+- `bitmap.coverage.get(y * stride + x).copied().unwrap_or(0)` — a multiply, an
+  add and a bounds check to reach a byte the row walk is already standing on.
+
+Only the second was ever going to be caught by reading: the first *looks* like
+it is handling a real edge, and it is — but the edge is **column zero of each
+row, and only at a non-zero phase**. Every other window in the bitmap is wholly
+inside its row, and there are about fifty of them per glyph paying for the one
+that is not.
+
+### 16.4 What was fixed, what was measured and declined, and what cannot be fixed
+
+**Fixed: the two loops, by hoisting the row.**
+
+`gray_coverage_into` now walks `out.chunks_exact_mut(width)` zipped against
+`self.subpixels.chunks_exact(width * 3)`, and within a row splits at
+`3 - shift`, so that **the phase shift is applied to the row once** rather than
+to every subpixel index. The split's head is column zero's window — all three
+taps at phase zero, `3 - shift` of them otherwise, which is the only window in
+the bitmap that can reach left of its row. Its tail is every *complete* window,
+one after another, so the rest of the row is a `chunks_exact(3)` step with no
+index arithmetic and no bounds check, and `chunks_exact` drops the row's last
+`shift` subpixels, which are the tail of no window once every window has moved
+left.
+
+`recolour_ref_into` zips its destination rows against the coverage's rows, so
+the `y * stride + x` and its `get` are the iterator's business once per row
+instead of the loop body's once per pixel.
+
+**Measured and declined: a coverage-to-pixel lookup table.** The obvious next
+hoist in `recolour_ref_into` is to enumerate the 256 pixels a coverage byte can
+become — the colour is the text object's and does not vary — and turn four
+`mul255`es into one array read. It was implemented and measured **3.9x
+slower**, on both fixtures: 1.12 ms → 4.38 ms. A glyph is about fifty pixels
+and the table is 256 entries, so it is five times more arithmetic than the
+pixels it serves. **The quantity to amortize over here is the glyph, not the
+page**, and the code carries a comment saying so, because the hoist is obvious
+enough that it will be proposed again.
+
+**Cannot be fixed: `get_or_insert`'s second hash probe.** The hit path asks
+`contains_key` and then `get`, hashing the key and walking the table twice on
+the case that is 100% of calls. Returning the occupied entry's borrow directly
+is NLL problem case 3 — the borrow checker rejects a function that returns a
+borrow from one arm and re-borrows mutably in the other, and Polonius accepts
+it. The `Entry` API does not rescue it either: the budget check needs
+`render()`'s result, and `render()` cannot run while a `Vacant` entry holds the
+borrow. Three spellings were tried and all three failed to compile. It is
+**85–99 ns of a 1000 ns per-glyph chain**, the code now says why it is two
+probes rather than leaving the next reader to re-derive it, and it is left.
+
+**The invariants the surrounding comments state are preserved, deliberately:**
+
+- **No seventh device primitive.** §13.4's first invariant and the brief's.
+  Both changes are inside two existing private functions in `pdfrum-render`;
+  `RenderDevice` is untouched, `draw_image` is still the seam the glyph path
+  composites through, and no backend has anything new to implement.
+  `scripts/api-snapshot.nu` reports the surface matching the committed baseline.
+- **`BitmapKey` is untouched**, including the absent subpixel phase whose
+  comment explains that keying on it "would store the same rasterization three
+  times". §13.2's 100% hit rate is why there was nothing to gain, and §16.2
+  re-measures the same 8775 calls and zero misses.
+- **The arithmetic is byte-for-byte the two functions' own.** The same gamma
+  table over the same window shift; the same truncating `CalcAlpha` product;
+  the same premultiplied byte order.
+- **§13.4's reuse invariant survives**, and it is the one the fix could most
+  easily have broken. A reused buffer must write its zero-coverage pixels
+  explicitly rather than skipping them, because the memory holds the previous
+  glyph. The row-zipped loop writes every pixel of every row, and
+  `a_reused_scratch_carries_none_of_the_glyph_before_it` still fails when it
+  does not — verified by planting the skip.
+- **The first column still darkens.** `to_gray`'s doc comment records that the
+  C++ averages column zero's surviving taps *over the same divisor of three*,
+  "which darkens it rather than brightening it, and is reproduced rather than
+  corrected". A hoist that clamped the window to the row start instead would
+  read three real taps and brighten it. That is the single most likely way this
+  change could have shifted a pixel, and it has a test of its own.
+
+**Four tests pin what the change trades on:**
+
+- `the_sliced_coverage_walk_matches_the_per_subpixel_one` keeps the old
+  spelling in the tests as the **specification** — the way §14 kept the span
+  loop and §11 kept `clip_at` — and compares the two over six glyph shapes at
+  all three phases: a one-pixel glyph, a one-column glyph, a one-row glyph, a
+  plain box, and two boxes with a genuine gap. Eighteen whole-buffer
+  comparisons.
+- `the_first_column_darkens_at_a_shifted_phase` isolates the edge above and
+  asserts the *direction*, not just equality.
+- `the_row_zipped_recolour_is_the_indexed_arithmetic` sweeps **all 256**
+  coverage bytes against five colours, including a fully opaque one, a nearly
+  transparent one and black.
+- `a_zero_width_bitmap_yields_no_coverage` is the degenerate case the row walk
+  newly cares about: `chunks_exact` panics on a zero chunk size where the old
+  `0..0` column loop simply did nothing.
+
+**Seven mutations were planted, and the six that are real defects each failed a
+named test:**
+
+| mutation | caught by |
+|---|---|
+| a wrong band (the coverage walk starts one row late) | 4 tests |
+| a skipped row (the walk steps by two) | 3 tests |
+| a wrong offset (the window's shift dropped) | 3 tests |
+| column zero clamped instead of dropping its taps (brightens) | 4 tests |
+| the coverage row skipped (the glyph's rows shift up) | 2 tests |
+| zero-coverage pixels skipped (§13.4's named bug, in the new spelling) | `a_reused_scratch_carries_none_of_the_glyph_before_it`, `the_fused_glyph_blit_is_the_two_functions_it_replaces` |
+
+In every row the named test is one of the four above, and
+`the_sliced_coverage_walk_matches_the_per_subpixel_one` catches all four
+coverage-walk mutations on its own — which is what a specification test is
+for. Two of the rows were re-planted against the final spelling after the row
+split was simplified from a `split_at(sub_width - shift)` with a `rest` index
+to a `split_at(3 - shift)` with none; the counts above are the final form's.
+
+The seventh — "the recolour table's entry zero not written" — was planted
+against the *declined* lookup-table spelling and **was not caught**, correctly:
+the table's array literal already zeroes that entry, so the mutation is a no-op
+rather than a defect. It is recorded because it looks like an escape and is
+not, and because the declined spelling is the one a later reader is most likely
+to re-propose.
+
+### 16.5 What it is worth, in process
+
+**§14.4's method, not §13's.** Both arms run per glyph occurrence, interleaved,
+and the reading kept is the **minimum over the hundreds of occurrences of each
+glyph *shape*, weighted by how often that shape is blitted**. §14.4 explains
+why: a preemption inside one arm's `Instant` pair inflates that arm alone, so a
+sum of pairs is unusable at this box's load, while a minimum over a repeated
+shape is not. The two arms also assert byte equality on every occurrence, so
+the measurement is a correctness check as well as a timing one — about eight
+thousand whole-buffer comparisons per render, on top of the unit tests.
+
+Four repetitions per fixture at load 33–35:
+
+| fixture | | old | new | **speedup** |
+|---|---|---:|---:|---:|
+| `vector_font_size14` | `gray_coverage_into` | 0.855–0.924 ms | 0.390–0.421 ms | **2.18–2.20x** |
+| | `recolour_ref_into` | 1.102–1.151 ms | 0.478–0.513 ms | **2.24–2.31x** |
+| | **the chain** | **1.958–2.076 ms** | **0.868–0.934 ms** | **2.22–2.26x** |
+| | ns per glyph pixel | 4.29–4.55 | 1.90–2.04 | |
+| `vector_font_feature` | `gray_coverage_into` | 0.860–0.894 ms | 0.393–0.407 ms | **2.19–2.20x** |
+| | `recolour_ref_into` | 1.103–1.150 ms | 0.482–0.497 ms | **2.29–2.32x** |
+| | **the chain** | **1.962–2.044 ms** | **0.875–0.904 ms** | **2.24–2.26x** |
+| | ns per glyph pixel | 4.34–4.52 | 1.93–2.00 | |
+| `forms_text_field` | **the chain** | **0.163–0.192 ms** | **0.083–0.095 ms** | **1.96–2.05x** |
+
+**The order of the arms was swapped and the reading did not move**: 2.247x and
+2.260x with the new arm forced second, 2.204x twice with the old arm forced
+second, on `vector_font_size14`. It is not a cache-warming artefact of
+whichever arm happens to run after the other.
+
+**1.09–1.14 ms of each vector render**, against §14's 1.5 ms and §13.5's
+0.16 ms. Per glyph occurrence the chain goes from ~235 ns to ~105 ns; per
+glyph *pixel*, from 4.4 ns to 2.0 ns.
+
+Read against §16.2's own table, which is the instrumented one: `recolour_glyph_into`
+was 25.0% of `size14`'s render and 3.108 ms with the pairs in place; the pairs
+inflate it, and the arms above put the same chain at ~2.0 ms before and
+~0.90 ms after.
+
+### 16.6 The wall clock, and the control that stayed one
+
+Interleaved A/B, fifteen rounds of `before, after, after, before` at 21
+iterations, each arm's minimum kept — §14.5's discipline, on two binaries built
+into **separate `CARGO_TARGET_DIR` trees** so that neither arm is the other's
+cached artefact.
+
+| fixture | glyphs | before (ms) | after (ms) | reading | load |
+|---|---:|---:|---:|---|---:|
+| `vector_font_size14` | 8745 | 58.87 | 56.22 | **1.047x** | 43–49 |
+| `vector_font_feature` | 8240 | 119.99 | 110.20 | **1.089x** | 47–59 |
+| `forms_text_field` | 836 | 5.24 | 5.02 | **1.043x** | 53–59 |
+| `shading_axial_radial` | **0** | 37.65 | 37.83 | **0.995x** | 53–61 |
+
+**`shading_axial_radial` is the control, and `image_bug_583804` is not one for
+this change either — for the opposite reason to §14's.** §14.5 had to disqualify
+it because it *was* a beneficiary; here it would be a legitimate zero-glyph
+control, but it is a 120–200 ms document whose run cost more than the signal is
+worth, and `shading_axial_radial` is the one §14.5 established as this table's
+noise floor. It draws zero glyphs, so not one line of the changed code executes
+on it.
+
+**The wall clock resolves this one.** The three glyph-bearing rows read
+1.043x, 1.089x and 1.043x; the zero-glyph control reads **0.995x**, which is
+this table's noise floor and is where a document the change cannot touch
+belongs. Every real row is outside it and every real row is in the same
+direction.
+
+It reads *larger* than §16.5 predicts, and that gap is worth naming rather than
+claiming. 1.1 ms off renders of 58.9 and 120.0 ms is 1.019x and 1.009x, and
+`forms_text_field`'s own 0.077 ms off 5.24 ms is 1.015x — against 1.047x,
+1.089x and 1.043x measured. At load 43–59 the excess is machine: a fifteen-round
+interleave keeps a load excursion off one arm alone but does not make the
+remainder zero, and §14.5 saw the same asymmetry. **So the wall clock confirms
+the sign and roughly the size, and the size itself is §16.5's** — which is a
+decomposition of one process's own work and does not depend on the box.
+
+### 16.7 Conformance: nothing moved
+
+- **The board is byte-identical**, and it was checked the strict way: both
+  binaries were run over the whole corpus and the two `--out` JSONs compared
+  field by field. `per_file` and `totals` are **equal**, and the only
+  difference between the two documents is `generated_at`. It was run three
+  times in all — the before-arm once and the after-arm twice, before and after
+  the row split was simplified — and all three agree per file.
+- **The board's own numbers are 1757 / 1505 / 252**, not the 1526 / 231 the
+  brief carries, and the difference is **not this change**: the before-arm —
+  `origin/main` at 38c0bd0, unmodified — reads exactly the same 1505 / 252,
+  and the whole 21-file delta is in `js-transcript` (42 against §14's 21).
+  That is the concurrent agent's JavaScript work landing in `pdfrum-form` /
+  `pdfrum-script`. Every other bucket is §14's exactly: 8 `form-events`, 2
+  `page-count`, 41 `pixel-fail`, 170 `tierA-mismatch`, text 1783/2065 and
+  758/1003.
+- **`conformance tier-c` is unchanged**: 1628 files compared under the gating
+  pair, **3** hard failures, **434** over the 1% edge budget, worst edge
+  divergence **66.6634%**, divergent files 26.84% — every figure the brief
+  carries, to the digit. It is the gate that matters
+  here for the same reason it mattered in §14 — the changed code is on the
+  path *every* bitmap-path glyph takes, on every document in the corpus that
+  has small text, which is most of them.
+
+### 16.8 What this does not claim
+
+- **The two vector rows are still not closed.** `vector_font_size14` and
+  `vector_font_feature` were 3.70x and 3.42x at §10.5 and read 3.16x and 5.32x
+  at §15 — the second of which is the oracle's denominator moving, not ours
+  (§15.2). 1.13 ms off a 56–120 ms render does not retire either, and this
+  section does not claim it does. What it closes is §14.7's item: the split
+  above the blit is done, the top two are named, and the larger of them is
+  taken.
+- **The blit is still the single largest line.** After this change
+  `blit_image` is ~3.15 ms of `size14` and the recolour chain is ~0.91 ms, so
+  the ordering §14 established is unchanged and reinforced. The next thing
+  above the blit is `place_glyphs_into` at 1.39 ms, whose own split was not
+  taken here.
+- **`get_or_insert`'s double probe is named, measured and left**, because it
+  does not compile away in today's borrow checker (§16.4). It is 85–99 ns of a
+  1000 ns chain.
+- **The lookup table is a measured negative result, not an untried idea.**
+  §16.4 records it at 3.9x slower with the reason, because it is the obvious
+  hoist and will be proposed again.
+- **Not an idle box, for the eighth time.** Load 33–59 throughout, and the box
+  was *busier* at the end of this session than at the start. §3's instruction
+  is still undischarged, and §15.3 records the attempt.
+- **`tiny-skia` and `vello_cpu` get the change and were not measured.** Both
+  functions live in `pdfrum-render`, so all three backends composite the same
+  cheaper glyph; only AGG was instrumented.
+- **The ratchet is still not re-baselined.** §8's third bullet stands.
