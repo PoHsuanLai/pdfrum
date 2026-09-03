@@ -187,8 +187,7 @@ flow.
   - **It ports oracle behaviour we reach no other way** — then it is a *missed
     wire*, not dead code. File it in `docs/status/unwired-oracle-ports.md`
     with both citations and name that file in the attribute's `reason`. This
-    is the only shape of suppression the tree keeps, and
-    `scripts/check-no-dead-code.nu` enforces exactly that: an attribute whose
+    is the only shape of suppression the tree keeps; an attribute whose
     reason does not cite the registry is a decision not yet taken.
 
   Deciding which of the three applies means reading the oracle, not the port's

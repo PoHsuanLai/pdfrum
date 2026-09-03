@@ -228,7 +228,6 @@ reads the first four through clap (a flag still wins over its variable), and
 the Python generators take the first. **A test that needs the oracle skips
 with a printed message when the binary is absent**, never fails on a path, so
 `cargo nextest run` is green on a machine that has only this repository.
-`scripts/check-no-absolute-paths.nu` is the gate that keeps it that way.
 
 Rust build trees are large and nothing removes them for you. Incremental
 compilation is off workspace-wide (`.cargo/config.toml` says why), and

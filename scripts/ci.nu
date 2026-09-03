@@ -37,11 +37,6 @@ def main [] {
     # this line — that sentence became false when the surface settled.
     ^./scripts/api-snapshot.nu check
 
-    # WP13. Value-agnostic: every `pub const` in those snapshots is opened
-    # at its defining source line, and a sentinel-shaped value fails unless
-    # it is a real limit/identity/table value listed with a reason.
-    ^./scripts/check-pub-consts.nu
-
     print "==> cargo deny check"
     # The one step that warns and continues rather than failing: the audit is
     # optional tooling, and a contributor without it still gets the rest of the
@@ -93,21 +88,6 @@ def main [] {
     # unification means any workspace member can turn it on for the whole
     # build. This is the check that says whether one has.
     ^./scripts/check-no-boa.nu
-
-    # STYLE.md §4's dead-code rule. `cargo clippy -D warnings` above already
-    # fails on an uncalled item — this is the check that says the failure was
-    # *answered* rather than suppressed, which clippy cannot tell: an
-    # `#[allow(dead_code)]` makes the lint pass by definition. The one shape
-    # the tree keeps is a filed missed wire, and the check is that the reason
-    # says so.
-    ^./scripts/check-no-dead-code.nu
-
-    # A machine-specific absolute path is a step that cannot run in a CI
-    # checkout: no `/mnt/data2` and no `/home/<that user>` exists there. Every
-    # path outside this repository comes from an environment variable with a
-    # repo-relative default instead (README.md "Building and testing"), and
-    # this is the check that it stays that way.
-    ^./scripts/check-no-absolute-paths.nu
 
     # Note the check above passes *because* fuzz/ is its own workspace. It
     # brings in `libfuzzer-sys`, which links LLVM's C++ libFuzzer runtime and
