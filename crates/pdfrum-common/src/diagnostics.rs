@@ -1,4 +1,4 @@
-//! The damage-tolerance channel (STYLE.md §3).
+//! The damage-tolerance channel.
 //!
 //! Opening broken PDFs is the behavior this project exists to reproduce, so a
 //! recovery is *not* an error: a function that can proceed past damage takes a
@@ -25,14 +25,11 @@ pub enum Severity {
 /// recording site**: it names a condition some crate actually detects and
 /// recovers from, and there is a `record` call to prove it. `#[non_exhaustive]`
 /// makes both directions non-breaking, and the enum has shrunk as well as
-/// grown — nine variants were removed on 2026-09-03 because no port reached
-/// the condition they described, several of them describing oracle behaviour
-/// we deliberately do not implement.
+/// grown: a variant is added when a port reaches the condition, not before.
 ///
 /// A variant with no recording site is worse than no variant: it reads as a
 /// promise that `Document::diagnostics()` reports the condition, and a caller
-/// matching on it waits for a row that never comes. See the diagnostics tables
-/// in `docs/design/`.
+/// matching on it waits for a row that never comes.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum DiagKind {

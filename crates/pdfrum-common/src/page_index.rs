@@ -1,7 +1,5 @@
 //! A page's position in the document, as a type rather than a bare integer.
 //!
-//! STYLE.md §2 has listed this newtype among the workspace's index types since
-//! before it existed; `docs/design/idiomatic-api.md` §WP1 is where it does.
 //! It is here, at the bottom of the graph, because it appears in the public
 //! signatures of six crates and none of them is below the others.
 
@@ -19,10 +17,10 @@ use core::fmt;
 /// Nor is it validated. Nothing stops `PageIndex::new(9000)` on a two-page
 /// document; what it names is checked where it is used, and the answer there
 /// is a `Result` or an `Option`. A destination that resolves to no page at all
-/// is `Option<PageIndex>` and never a sentinel (§C.4).
+/// is `Option<PageIndex>` and never a sentinel.
 ///
 /// `From<u32>` exists so `impl Into<PageIndex>` arguments accept a literal:
-/// `doc.page(0)` reads the same after this change as before it.
+/// `doc.page(0)` needs no wrapping at the call site.
 ///
 /// ```
 /// use pdfrum_common::PageIndex;
