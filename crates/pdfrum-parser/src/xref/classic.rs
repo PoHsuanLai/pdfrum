@@ -15,14 +15,11 @@
 //!
 //! Byte 17 being `f` marks the slot free — and this reader then *drops the
 //! entry on the floor* rather than recording it. That looks like a bug and is
-//! not: `ParseAndAppendCrossRefSubsectionData`
-//! (`cpdf_parser.cpp:594-597`) sets `pos` and `type` for a free entry and
-//! never reads its generation field, leaving `gennum` at the struct's default
-//! zero; `MergeCrossRefObjectsData` (`cpdf_parser.cpp:682-686`) then gates
-//! `SetFree` on `gennum > 0`, so the call can never fire from a classic
-//! table. A cross-reference *stream*'s type-0 entry does read its generation
-//! (`cpdf_parser.cpp:970-975`) and does free the slot; only this format's
-//! free entries are inert.
+//! not: a classic table's free entry frees nothing, because the generation
+//! field it would have to name the freed slot with is never read from this
+//! format at all. A cross-reference *stream*'s type-0 entry does read its
+//! generation and does free the slot; only this format's free entries are
+//! inert.
 //!
 //! The consequence is load-bearing for hybrid-reference files (ISO 32000-1
 //! §7.5.8.4). Such a file writes its compressed objects as free in the
@@ -180,6 +177,14 @@ fn read_subsection(
         // whatever generation its field names. See the module note above on
         // why that is the C++'s behavior rather than an omission of ours,
         // and why it is what makes a hybrid-reference file work.
+        //
+        // Derived from the oracle: ParseAndAppendCrossRefSubsectionData
+        // (cpdf_parser.cpp:594-597) sets `pos` and `type` for a free entry
+        // and never reads its generation field, leaving `gennum` at the
+        // struct's default zero; MergeCrossRefObjectsData
+        // (cpdf_parser.cpp:682-686) then gates SetFree on `gennum > 0`, so
+        // the call can never fire from a classic table. The stream reader's
+        // type-0 path (cpdf_parser.cpp:970-975) does read the generation.
         if free {
             continue;
         }
