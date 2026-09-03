@@ -102,21 +102,37 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
 
 ## Oracle checkout hygiene (added 2026-09-03)
 
-- **The board should refuse a modified oracle checkout.** On 2026-09-03 the
-  checkout at `$PDFRUM_ORACLE_CHECKOUT` was found with 340 tracked
-  modifications under `testing/resources/`: 334 `.pdf`s regenerated from
-  their `.in` templates on 2026-08-29 (every stream `/Length` one lower than
-  committed) and six expected-output files (`*.pdf.0.annot.txt`,
-  `*.0.png`) overwritten by in-place `pdfium_test` runs as late as
-  2026-09-02. The tree was restored to `6f2272e` and the drift saved out of
-  tree; the ~207 *untracked* `.pdf`s generated from `.in` templates are board
-  inputs and stay. Owed: `conformance run`/`generate-goldens` check
-  `git -C $PDFRUM_ORACLE_CHECKOUT status --porcelain` for tracked
-  modifications and refuse with a message (untracked `.in`-derived `.pdf`s
-  are fine); every script that invokes `pdfium_test` copies its input to a
-  scratch directory first (most do — audit the rest); and a note in
-  `conformance/README.md`. Whether any golden was generated from a drifted
-  input is being verified (a board run against the pristine tree).
+- ~~**The board should refuse a modified oracle checkout.**~~ — landed
+  (2026-09-03): `oracle::require_clean_checkout` runs
+  `git -C <checkout> status --porcelain --untracked-files=no` and refuses
+  before `run`, `generate-goldens`, `tier-c`, `save-round-trip` and
+  `mutate-round-trip` read a file, with `--allow-dirty-oracle` /
+  `PDFRUM_ALLOW_DIRTY_ORACLE=1` as the override and a one-line skip for a
+  non-repository export. `CorpusArgs::checkout()` is the only way to learn
+  where the tree is, so a new subcommand cannot forget the check.
+
+  The refusal names the class it exists for rather than the count: **a
+  tracked `.pdf` regenerated from a template that disagrees with it.** Of
+  the 340 files, the 334 `/Length` regenerations were render-neutral and the
+  golden store's content-hash keying already immunised the board against
+  them (a drifted input maps to a different golden directory; worst case
+  `missing-golden`), and the six overwritten expected-output files are read
+  by nothing of ours. The one behaviourally significant case was
+  `resources/viewer_ref.pdf`, whose `.in` says `/Count 1` while the
+  committed file has five pages — the regeneration replaced a five-page
+  fixture with a one-page one. The harmless churn is the symptom that made
+  it findable, which is why the check refuses on *any* tracked modification.
+
+  Invoker audit: `generate.rs` (per-file scratch copy, `--output-dir` on the
+  fixup), `scripts/bench-rss.nu` (copies to `mktemp -d`), and
+  `crates/pdfrum/tests/{load_font,load_font_subset,embed_image}.rs` (write
+  under `std::env::temp_dir()`) were already safe; `scripts/bench-oracle.nu`
+  passes `--md5` without `--png` and writes nothing (measured);
+  `fuzz/seed-corpus.sh` only `cp`s out of the checkout;
+  `scripts/probe-tounicode.py` and `docs/status/data/v8probe/gen_pdfs.py`
+  build their own PDFs into their own output directory. Nothing ran in
+  place. `conformance/README.md` §"The oracle checkout is read-only" carries
+  the rule.
 
 ## Rustdoc trim (`docs/design/rustdoc.md`)
 

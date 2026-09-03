@@ -9,8 +9,17 @@
 //!    stdout while progress chatter goes to stderr, and the three `--show-*`
 //!    flags are **mutually exclusive** — the binary rejects any two together.
 //!    Each therefore needs its own invocation.
+//!
+//! [`require_clean_checkout`] enforces the first of those, from the other
+//! side: it refuses to run when the checkout it is about to read has tracked
+//! modifications, because a template regenerated over a `.pdf` that disagrees
+//! with it can swap a fixture for a different document without changing
+//! anything a board run would notice.
 
 use std::path::{Path, PathBuf};
+use std::process::Command;
+
+use anyhow::{Result, bail};
 
 /// One `MD5:<path>:<hash>` line from `--md5` stdout.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -160,9 +169,288 @@ pub struct OraclePaths {
     pub font_dir: PathBuf,
 }
 
+/// Whether the read-only oracle checkout may be used despite tracked
+/// modifications.
+///
+/// `--allow-dirty-oracle`, or `PDFRUM_ALLOW_DIRTY_ORACLE=1` in the
+/// environment, for someone who knows why their tree differs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DirtyPolicy {
+    /// Refuse to run against a modified checkout (the default).
+    Refuse,
+    /// Run anyway, having been told to.
+    Allow,
+}
+
+/// What `git status --porcelain --untracked-files=no` said about the checkout.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CheckoutState {
+    /// No tracked file differs from HEAD.
+    Clean,
+    /// Tracked files differ, in the order git listed them.
+    Modified(Vec<String>),
+    /// Not a git repository — a tarball export, say. Nothing to compare.
+    NotAGitRepo,
+}
+
+/// How many drifted paths the refusal names before it stops.
+const NAMED_PATHS: usize = 5;
+
+/// Parses `git status --porcelain --untracked-files=no` into a state.
+///
+/// The porcelain v1 format is a two-character status field, a space, and the
+/// path. Only tracked entries can appear at all once untracked files are
+/// suppressed, so every non-empty line is drift — but `??` is still matched
+/// explicitly, because a caller that forgets the flag would otherwise be told
+/// its legitimately untracked `.pdf`s are corruption.
+///
+/// A renamed entry (`R  old -> new`) is reported under its new name, which is
+/// the path on disk that a `git checkout --` would restore.
+pub fn parse_porcelain(stdout: &str) -> CheckoutState {
+    let mut modified = Vec::new();
+    for line in stdout.lines() {
+        if line.len() < 4 || line.starts_with("??") {
+            continue;
+        }
+        let path = &line[3..];
+        let path = path.rsplit_once(" -> ").map_or(path, |(_, new)| new);
+        modified.push(path.trim_matches('"').to_owned());
+    }
+    if modified.is_empty() {
+        CheckoutState::Clean
+    } else {
+        CheckoutState::Modified(modified)
+    }
+}
+
+/// Asks git what the checkout looks like.
+///
+/// Any failure to run git at all, and any non-zero exit (which is what a
+/// non-repository directory produces), is [`CheckoutState::NotAGitRepo`]: the
+/// harness's job is to run the board, not to diagnose a git installation, and
+/// a checkout unpacked from a tarball is a legitimate way to have one.
+fn inspect(checkout: &Path) -> CheckoutState {
+    let Ok(output) = Command::new("git")
+        .args(["-C"])
+        .arg(checkout)
+        .args(["status", "--porcelain", "--untracked-files=no"])
+        .output()
+    else {
+        return CheckoutState::NotAGitRepo;
+    };
+    if !output.status.success() {
+        return CheckoutState::NotAGitRepo;
+    }
+    parse_porcelain(&String::from_utf8_lossy(&output.stdout))
+}
+
+/// Refuses to touch a modified oracle checkout.
+///
+/// Every subcommand that reads the checkout calls this first, because of one
+/// class of drift: **a tracked `.pdf` regenerated from a template that
+/// disagrees with it.** PDFium's `.in` templates and their committed `.pdf`s
+/// are not always in sync, so re-running `fixup_pdf_template.py` over the
+/// checkout can silently swap a fixture for a different document. The
+/// 2026-09-03 case was `testing/resources/viewer_ref.pdf`: the template says
+/// `/Count 1` and the committed file has five pages, so the regeneration
+/// replaced a five-page fixture with a one-page one, and every row scored
+/// against it was scoring a document the corpus does not contain.
+///
+/// That class is invisible on its own — a swapped fixture still opens and
+/// still renders. What makes it findable is the churn beside it: the same
+/// regeneration rewrote 333 other `.pdf`s with every stream `/Length` one
+/// byte lower than committed (render-neutral, and the golden store's
+/// content-hash keying already absorbs them), and six expected-output files
+/// (`*.pdf.0.annot.txt`, `*.0.png`) were overwritten by `pdfium_test` runs
+/// pointed at the checkout instead of at a scratch copy (read by nothing of
+/// ours). The harmless drift is the symptom; refusing on *any* tracked
+/// modification is how the one harmful file is caught with it.
+///
+/// **Untracked `.pdf`s are not drift.** Around 207 of them sit in
+/// `testing/resources`, expanded from `.in` templates, and they are board
+/// inputs: the check passes `--untracked-files=no` so that nothing here can
+/// ever be read as an argument for cleaning them away.
+pub fn require_clean_checkout(checkout: &Path, policy: DirtyPolicy) -> Result<()> {
+    let state = inspect(checkout);
+    match state {
+        CheckoutState::Clean => Ok(()),
+        CheckoutState::NotAGitRepo => {
+            eprintln!(
+                "note: {} is not a git checkout - skipping the read-only hygiene check.",
+                checkout.display()
+            );
+            Ok(())
+        }
+        CheckoutState::Modified(paths) => {
+            let message = dirty_message(checkout, &paths);
+            if policy == DirtyPolicy::Allow {
+                eprintln!("{message}");
+                eprintln!(
+                    "note: the dirty-oracle override is set; continuing against the modified tree."
+                );
+                return Ok(());
+            }
+            bail!(message)
+        }
+    }
+}
+
+/// The refusal, as one block of text so the test can read it.
+fn dirty_message(checkout: &Path, paths: &[String]) -> String {
+    use std::fmt::Write as _;
+
+    let mut message = format!(
+        "the oracle checkout at {} has drifted: {} tracked file{} modified.\n",
+        checkout.display(),
+        paths.len(),
+        if paths.len() == 1 { " is" } else { "s are" }
+    );
+    for path in paths.iter().take(NAMED_PATHS) {
+        let _ = writeln!(message, "    {path}");
+    }
+    if paths.len() > NAMED_PATHS {
+        let _ = writeln!(message, "    ... and {} more", paths.len() - NAMED_PATHS);
+    }
+    message.push_str(
+        "\n\
+         The checkout is read-only: it is the oracle's answer key, and the board\n\
+         compares our engine against goldens generated from exactly these bytes.\n\
+         \n\
+         The drift that matters is a tracked .pdf regenerated from a template\n\
+         that disagrees with it. PDFium's .in templates and their committed\n\
+         .pdf's are not always in sync, so re-running fixup_pdf_template.py\n\
+         over the checkout can silently swap a fixture for a different\n\
+         document. On 2026-09-03 that was testing/resources/viewer_ref.pdf:\n\
+         the template says /Count 1, the committed file has five pages, and\n\
+         the regeneration left a one-page file in its place.\n\
+         \n\
+         A swapped fixture still opens and still renders, so it is invisible\n\
+         on its own. What reveals it is the churn beside it -- 333 further\n\
+         .pdf's rewritten with every stream /Length one byte lower, and six\n\
+         expected-output files (*.pdf.0.annot.txt, *.0.png) overwritten by\n\
+         pdfium_test runs pointed at the checkout instead of at a scratch\n\
+         copy. Both are harmless in themselves; refusing on any tracked\n\
+         modification is how the one that is not gets caught with them.\n\
+         \n\
+         Restore it with:\n",
+    );
+    let _ = writeln!(
+        message,
+        "    git -C {} checkout -- testing/resources",
+        checkout.display()
+    );
+    message.push_str(
+        "\n\
+         Do NOT clean untracked files. The ~207 untracked .pdf's expanded from\n\
+         .in templates are legitimate board inputs; this check ignores them\n\
+         (--untracked-files=no) and removing them only costs a re-expansion.\n\
+         \n\
+         To proceed against the modified tree anyway, pass --allow-dirty-oracle\n\
+         or set PDFRUM_ALLOW_DIRTY_ORACLE=1.",
+    );
+    message
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_clean_checkout_prints_nothing() {
+        assert_eq!(parse_porcelain(""), CheckoutState::Clean);
+        assert_eq!(parse_porcelain("\n"), CheckoutState::Clean);
+    }
+
+    #[test]
+    fn tracked_modifications_are_drift() {
+        // Verbatim shape from the 2026-09-03 checkout.
+        let stdout = concat!(
+            " M testing/resources/annotation_highlight_alpha.pdf\n",
+            " M testing/resources/bug_1258634.pdf\n",
+            "MM testing/resources/annots.pdf.0.annot.txt\n",
+        );
+        let CheckoutState::Modified(paths) = parse_porcelain(stdout) else {
+            panic!("expected drift");
+        };
+        assert_eq!(
+            paths,
+            vec![
+                "testing/resources/annotation_highlight_alpha.pdf".to_owned(),
+                "testing/resources/bug_1258634.pdf".to_owned(),
+                "testing/resources/annots.pdf.0.annot.txt".to_owned(),
+            ]
+        );
+    }
+
+    #[test]
+    fn untracked_pdfs_expanded_from_templates_are_not_drift() {
+        // The ~207 .in-derived .pdf's are board inputs. `--untracked-files=no`
+        // should keep them off this listing entirely; if a caller forgets the
+        // flag, the parser must still not call them corruption.
+        let stdout = concat!(
+            "?? testing/resources/bug_1258634.pdf\n",
+            "?? testing/resources/annots.pdf\n",
+        );
+        assert_eq!(parse_porcelain(stdout), CheckoutState::Clean);
+    }
+
+    #[test]
+    fn a_deletion_or_a_staged_edit_is_still_drift() {
+        let stdout = concat!(
+            " D testing/resources/gone.pdf\n",
+            "M  testing/resources/staged.pdf\n",
+            "A  testing/resources/added.pdf\n",
+        );
+        let CheckoutState::Modified(paths) = parse_porcelain(stdout) else {
+            panic!("expected drift");
+        };
+        assert_eq!(paths.len(), 3);
+    }
+
+    #[test]
+    fn a_rename_is_reported_under_its_new_name() {
+        // `git checkout --` restores the path on disk, which is the new one.
+        let stdout = "R  testing/resources/old.pdf -> testing/resources/new.pdf\n";
+        let CheckoutState::Modified(paths) = parse_porcelain(stdout) else {
+            panic!("expected drift");
+        };
+        assert_eq!(paths, vec!["testing/resources/new.pdf".to_owned()]);
+    }
+
+    #[test]
+    fn the_refusal_names_a_few_paths_and_says_how_to_restore() {
+        let paths: Vec<String> = (0..340)
+            .map(|i| format!("testing/resources/f{i}.pdf"))
+            .collect();
+        let message = dirty_message(Path::new("/checkout"), &paths);
+        assert!(message.contains("340 tracked files are modified"));
+        assert!(message.contains("testing/resources/f0.pdf"));
+        assert!(message.contains("testing/resources/f4.pdf"));
+        // Bounded: it names five and counts the rest.
+        assert!(!message.contains("testing/resources/f5.pdf"));
+        assert!(message.contains("... and 335 more"));
+        assert!(message.contains("git -C /checkout checkout -- testing/resources"));
+        assert!(message.contains("Do NOT clean untracked files"));
+        assert!(message.contains("--allow-dirty-oracle"));
+        // The reason the check exists is named, not just the symptom.
+        assert!(message.contains("regenerated from a template"));
+        assert!(message.contains("viewer_ref.pdf"));
+    }
+
+    #[test]
+    fn one_drifted_file_reads_as_one() {
+        let message = dirty_message(Path::new("/checkout"), &["a.pdf".to_owned()]);
+        assert!(message.contains("1 tracked file is modified"));
+        assert!(!message.contains("and 0 more"));
+    }
+
+    #[test]
+    fn a_directory_that_is_not_a_repository_is_skipped_rather_than_refused() {
+        // A tarball export has no `.git`; the board should run, with a note.
+        let state = inspect(Path::new("/"));
+        assert_eq!(state, CheckoutState::NotAGitRepo);
+        assert!(require_clean_checkout(Path::new("/"), DirtyPolicy::Refuse).is_ok());
+    }
 
     #[test]
     fn parses_the_lines_the_oracle_actually_prints() {
