@@ -954,9 +954,13 @@ fn a_script_that_will_not_parse_is_recorded_rather_than_fatal() {
 
 // ---- an uncaught throw is reported, and does not truncate the rest ----
 
-/// **The defect this closes.** `bug_421304870` calls `this.getAnnots()`,
-/// which is not bound; before this, the call threw and pdfrum printed nothing
-/// for the rest of that document with no word anywhere about why.
+/// **The defect this closes.** A call to a name the object model does not
+/// bind throws, and before this pdfrum printed nothing for the rest of that
+/// document with no word anywhere about why. `bug_421304870`'s
+/// `this.getAnnots()` was the original case; it is bound now, so the test
+/// uses a name that is still not — which is the honest shape, since the
+/// property being tested is about *unbound names in general* rather than
+/// about that one method.
 ///
 /// One diagnostic, carrying the *whence* and the engine's *message* — because
 /// `DiagKind::ScriptFailed` alone can say that a script threw but not which
@@ -964,7 +968,7 @@ fn a_script_that_will_not_parse_is_recorded_rather_than_fatal() {
 #[test]
 fn an_uncaught_throw_yields_one_diagnostic_with_its_whence_and_message() {
     let mut cascade = session();
-    assert!(!cascade.run("app.alert(this.getAnnots().length);", "/OpenAction"));
+    assert!(!cascade.run("app.alert(this.noSuchThing().length);", "/OpenAction"));
 
     let mut diags = pdfrum_common::Diagnostics::default();
     let failures = cascade.drain_diagnostics(&mut diags);
@@ -975,7 +979,7 @@ fn an_uncaught_throw_yields_one_diagnostic_with_its_whence_and_message() {
     let ScriptStop::Threw(message) = &failure.stop else {
         panic!("an unbound name is a throw, not a limit: {failure:?}");
     };
-    // boa's own words. `this.getAnnots` is *undefined*, so this is a
+    // boa's own words. `this.noSuchThing` is *undefined*, so this is a
     // `TypeError` on the call rather than a `ReferenceError` on the name —
     // which means the message carries the **position** but not the callee's
     // name. That is what the engine said, and reporting it verbatim is the
@@ -986,7 +990,7 @@ fn an_uncaught_throw_yields_one_diagnostic_with_its_whence_and_message() {
         "it says what the engine said: {message}"
     );
     assert!(
-        message.contains(":1:25"),
+        message.contains(":1:27"),
         "and where, which is the line and column upstream's `JS_Error` \
          carries and then discards: {message}"
     );
@@ -998,7 +1002,7 @@ fn an_uncaught_throw_yields_one_diagnostic_with_its_whence_and_message() {
     // The rendered line names both halves — this is what the tool prints.
     let line = failure.line();
     assert_eq!(
-        line, "script /OpenAction: TypeError: not a callable function (unknown at :1:25)",
+        line, "script /OpenAction: TypeError: not a callable function (unknown at :1:27)",
         "the reported line carries the whence, the message and the position"
     );
     assert!(
@@ -1041,7 +1045,7 @@ fn an_unnamed_script_is_reported_as_the_open_action() {
 fn a_throw_does_not_stop_the_scripts_after_it() {
     let mut cascade = session();
     assert!(cascade.run("app.alert('first');", "one"));
-    assert!(!cascade.run("this.getAnnots();", "two"));
+    assert!(!cascade.run("this.noSuchThing();", "two"));
     assert!(cascade.run("app.alert('third');", "three"));
     assert!(!cascade.run("throw 'boom';", "four"));
     assert!(cascade.run("app.alert('fifth');", "five"));
@@ -1075,7 +1079,7 @@ fn a_throwing_hook_leaves_the_session_usable_for_the_next_one() {
         "Text Box",
         "",
         FieldActions {
-            keystroke: Some("this.getAnnots();".to_string()),
+            keystroke: Some("this.noSuchThing();".to_string()),
             ..FieldActions::default()
         },
     );
@@ -1174,4 +1178,200 @@ fn a_hostile_field_value_cannot_escape_its_string_literal() {
             "the value must arrive whole as well as inert"
         );
     }
+}
+
+// ---- the seven V8-gated formfill regressions ----
+
+/// A session with a small document model installed, for the object-model
+/// tests below.
+fn with_document() -> ScriptCascade {
+    use crate::script::model::{DocumentModel, FieldModel, FieldModelKind};
+
+    let mut cascade = session();
+    cascade.set_document(DocumentModel {
+        page_count: 1,
+        fields: vec![
+            FieldModel {
+                name: "MyField".to_string(),
+                kind: FieldModelKind::Text,
+                value: "old".to_string(),
+                ..FieldModel::default()
+            },
+            FieldModel {
+                name: "MyField2".to_string(),
+                kind: FieldModelKind::Text,
+                ..FieldModel::default()
+            },
+        ],
+        ..DocumentModel::empty()
+    });
+    cascade
+}
+
+/// `Bug765384` — **`setFocus` and `borderStyle` on fields a script names,
+/// without a crash.**
+///
+/// `fpdfsdk/fpdf_formfill_embeddertest.cpp:1338-1347` is three lines of
+/// JavaScript and one click, and the assertion is entirely negative: the
+/// oracle's test passes if nothing dies. Upstream that mattered because
+/// `setFocus` re-entered the widget layer while a `CJS_Field` still held a
+/// raw pointer into it; here it cannot, because a `Field` carries a `/Fields`
+/// **position** and never a pointer (see `script::field`'s module doc), so
+/// the crash is unreachable by construction rather than by a guard.
+///
+/// What is asserted positively is the part that *is* observable: the
+/// `borderStyle` write lands, and the focus request comes back to the host as
+/// a value rather than moving focus from inside the script.
+#[test]
+fn bug_765384_set_focus_and_border_style_do_not_reenter() {
+    let mut cascade = with_document();
+    assert!(
+        cascade.run(
+            "this.getField(\"MyField2\").setFocus();\n\
+             this.getField(\"MyField\").borderStyle=\"dashed\";\n\
+             this.getField(\"MyField\").setFocus();",
+            "/OpenAction",
+        ),
+        "the script must complete: {:?}",
+        cascade.stops()
+    );
+    assert_eq!(
+        cascade.take_focus_request(),
+        Some(0),
+        "the last setFocus wins, and it comes back as a request"
+    );
+    assert!(cascade.transcript().is_empty(), "and nothing is alerted");
+}
+
+/// `Bug1477093` — **`getField` on a name the form does not have.**
+///
+/// `:1349-1359`, commented *"Test passes if `DCHECK()` not hit."* The fixture's
+/// script is `this.getField('bad_field').value = 'Apple';` inside a timer, and
+/// the field genuinely does not exist — so `getField` answers `undefined` and
+/// the assignment throws a `TypeError` on it.
+///
+/// That throw is the correct outcome and not a defect: `getField` returns
+/// `undefined` for a name `CountFields` cannot reach
+/// (`fxjs/cjs_document.cpp:267`), and reading `.value` off `undefined` is a
+/// language-level error whatever the host does. What must not happen is a
+/// crash, and what must not happen *here* is silence — the failure is
+/// reported with its message, per `ScriptFailure`.
+#[test]
+fn bug_1477093_a_missing_field_is_undefined_and_the_throw_is_reported() {
+    let mut cascade = with_document();
+    assert!(
+        cascade.run("this.getField('bad_field');", "/OpenAction"),
+        "asking for a missing field is not itself an error"
+    );
+    assert!(cascade.run(
+        "app.alert(typeof this.getField('bad_field'));",
+        "/OpenAction"
+    ));
+    assert_eq!(
+        crate::script::transcript::render(&cascade.transcript()),
+        "Alert: undefined\n",
+        "a missing field is `undefined`, not null and not an error"
+    );
+
+    // …and the assignment the fixture makes throws, reported rather than
+    // swallowed.
+    assert!(!cascade.run("this.getField('bad_field').value = 'Apple';", "run"));
+    let mut diags = pdfrum_common::Diagnostics::default();
+    let failures = cascade.drain_diagnostics(&mut diags);
+    assert_eq!(failures.len(), 1);
+    let failure = failures.first().expect("one failure");
+    assert_eq!(failure.whence, "run");
+    assert!(
+        matches!(&failure.stop, ScriptStop::Threw(message)
+            if message.starts_with("TypeError")),
+        "a property set on `undefined` is a TypeError: {:?}",
+        failure.stop
+    );
+}
+
+/// `Bug620428`, `Bug634394`, `Bug634716`, `Bug679649`, `Bug707673` —
+/// **timers are recorded and cancellable, and none of them fires.**
+///
+/// # What these five actually test, which is not what M15's inventory said
+///
+/// The step-1 record listed all seven as "crash-and-alert regressions over
+/// `Doc`/`Field` mutation", each needing "`this.getField` plus one or two
+/// `Field` properties". Read at the line, five of them are **timer** tests
+/// and touch no field at all: every one drives
+/// `EmbedderTestTimerHandlingDelegate` and asserts on what
+/// `AdvanceTime(1000)` fires — `Bug620428` that a cancelled timer and
+/// interval fire nothing over five seconds
+/// (`fpdf_formfill_embeddertest.cpp:1251-1264`), `Bug634394` and `Bug634716`
+/// that cancelling from *inside* a callback stops the sequence at two alerts
+/// (`:1266-1305`), `Bug679649` that a timer the host refuses to create fires
+/// nothing (`:1307-1320`), and `Bug707673` that a click after
+/// `DoOpenActions` fires nothing (`:1322-1336`).
+///
+/// So the blocking dependency is `advance_time`, which M14's D14 reserved as
+/// the step function and which nothing calls yet — **not** the object model.
+/// That correction is recorded in `docs/status/M15.md` §3.
+///
+/// What is portable today is the half that does not need a clock, and it is
+/// the half that matters for a document in the wild: the scripts **parse and
+/// run**, `setTimeOut` and `setInterval` are recorded rather than fired, and
+/// `clearTimeOut`/`clearInterval` neither throw nor fire anything. A viewer
+/// that ran these five files would show nothing and stay up, which is
+/// precisely what all five oracle tests assert.
+#[test]
+fn the_five_timer_regressions_record_their_timers_and_fire_none() {
+    // `bug_620428.pdf`: set both, cancel both, twice.
+    let mut cascade = session();
+    assert!(cascade.run(
+        "function fireTimeOut() { app.alert(\"hello world\"); }\n\
+         function fireInterval() { app.alert(\"goodbye world\"); }\n\
+         var timer = app.setTimeOut(\"fireTimeOut()\", 3000);\n\
+         var interval = app.setInterval(\"fireInterval()\", 1000);\n\
+         app.clearTimeOut(timer);\n\
+         app.clearInterval(interval);\n\
+         app.clearTimeOut(timer);\n\
+         app.clearInterval(interval);\n\
+         app.alert(\"done\");",
+        "/OpenAction",
+    ));
+    assert_eq!(
+        crate::script::transcript::render(&cascade.transcript()),
+        "Alert: done\n",
+        "only the open action's own alert — no timer fired, which is what \
+         Bug620428 asserts after AdvanceTime(5000)"
+    );
+    assert_eq!(
+        cascade.timers().len(),
+        2,
+        "both are recorded, so a host driving a clock has them"
+    );
+
+    // `bug_679649.pdf`: one timer, cancelled.
+    let mut cascade = session();
+    assert!(cascade.run(
+        "function ping() { app.alert(\"ping\"); }\n\
+         var timer = app.setTimeOut(\"ping()\", 100);\n\
+         app.clearTimeOut(timer);",
+        "/OpenAction",
+    ));
+    assert!(
+        cascade.transcript().is_empty(),
+        "Bug679649 asserts zero alerts after AdvanceTime(2000)"
+    );
+
+    // `bug_634394.pdf`: cancelling from inside a callback. The callbacks are
+    // never entered here, so the outer script is all that runs — and it must
+    // run.
+    let mut cascade = session();
+    assert!(cascade.run(
+        "var interval;\n\
+         function fireTimeOut() { app.alert(\"goodbye world\"); \
+          app.clearInterval(interval); }\n\
+         function fireInterval() { app.alert(\"hello world\"); \
+          app.clearInterval(interval); }\n\
+         var timer = app.setTimeOut(\"fireTimeOut()\", 3000);\n\
+         interval = app.setInterval(\"fireInterval()\", 1000);",
+        "/OpenAction",
+    ));
+    assert!(cascade.transcript().is_empty());
+    assert_eq!(cascade.timers().len(), 2);
 }
