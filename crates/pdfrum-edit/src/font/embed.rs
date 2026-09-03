@@ -1,9 +1,7 @@
 //! Embed a font program, or one of the standard 14, as PDF font objects.
 //!
-//! This is the `EditDoc`-level equivalent of PDFium's `FPDFText_LoadFont` /
-//! `FPDFText_LoadStandardFont` (`fpdfsdk/fpdf_edittext.cpp`). A caller hands
-//! over bytes (or a [`StandardFont`]); we allocate the `/Font` dictionary
-//! chain [`super::collect::admit`] already recognises.
+//! A caller hands over bytes (or a [`StandardFont`]); this allocates the
+//! `/Font` dictionary chain [`super::collect::admit`] already recognises.
 
 use std::collections::{BTreeMap, HashMap};
 use std::fmt::Write as _;
@@ -20,8 +18,7 @@ use crate::names;
 
 /// How character codes in a content stream select glyphs of an embedded font.
 ///
-/// The oracle takes a boolean `cid` (`FPDFText_LoadFont`); this is that
-/// choice as an enum.
+/// The oracle's API spells this choice as a boolean; here it is an enum.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum FontEncoding {
     /// One-byte codes, `/FirstChar` `/LastChar` `/Widths` (ISO 32000-1 §9.6.2).
@@ -65,22 +62,23 @@ impl EmbeddedFont {
 
     /// Character codes for `text` in this font's encoding.
     ///
-    /// Unmappable characters become `.notdef` (code 0), matching the oracle's
-    /// `CPDF_Font::CharCodeFromUnicode` fallback of returning 0
-    /// (`core/fpdfapi/font/cpdf_font.cpp:110-115`). A composite font writes
-    /// two-byte big-endian GIDs (Identity-H); a simple or standard font writes
-    /// one byte.
+    /// Unmappable characters become `.notdef` (code 0). A composite font
+    /// writes two-byte big-endian GIDs (Identity-H); a simple or standard
+    /// font writes one byte.
     ///
     /// A font from [`EditDoc::embed_cid_font`] writes two-byte big-endian
     /// **CIDs**, and finds them by inverting the caller's `/ToUnicode` CMap
     /// rather than by consulting the program's cmap. That is not a
     /// convenience: under a caller-supplied CMap the program's cmap does not
     /// describe the file's code space, and the CMap is the document's only
-    /// statement of what its codes mean. It is also what the oracle does —
-    /// `CPDF_Font::CharCodeFromUnicode` is `to_unicode_map_->ReverseLookup`
-    /// over the same `/ToUnicode` (`cpdf_font.cpp:110-115`), reached by
-    /// `FPDFText_SetText` on exactly such a font. A character the CMap does
-    /// not reach is code 0, as everywhere else.
+    /// statement of what its codes mean. A character the CMap does not reach
+    /// is code 0, as everywhere else.
+    //
+    // Both rules are the oracle's too: `CPDF_Font::CharCodeFromUnicode`
+    // (`core/fpdfapi/font/cpdf_font.cpp:110-115`) falls back to 0, and for a
+    // font with a caller-supplied CMap it *is*
+    // `to_unicode_map_->ReverseLookup` over that same `/ToUnicode`, reached
+    // by `FPDFText_SetText`.
     #[must_use]
     pub fn encode(&self, text: &str) -> Vec<u8> {
         let mut out = Vec::with_capacity(text.len());
@@ -154,10 +152,7 @@ impl EditDoc<'_> {
     /// `/ToUnicode` and `/CIDToGIDMap` are the **caller's**, not generated
     /// from the program's own cmap.
     ///
-    /// This is `FPDFText_LoadCidType2Font`
-    /// (`fpdfsdk/fpdf_edittext.cpp:481-516` → `LoadCustomCompositeFont`
-    /// `:281-334`). The dictionary chain is the one
-    /// [`Self::embed_font`] builds for
+    /// The dictionary chain is the one [`Self::embed_font`] builds for
     /// [`FontEncoding::Composite`], with three differences, all of them the
     /// point of the call:
     ///
@@ -166,15 +161,14 @@ impl EditDoc<'_> {
     ///   §9.7.4.2). [`Self::embed_font`] writes no `/CIDToGIDMap` at all,
     ///   which means `/Identity` — CID *is* GID.
     /// - **`/W`** is computed per CID from that map rather than per GID from
-    ///   the cmap: `widths[i / 2] = advance(cid_to_gid[i..i+2])`, so the array
-    ///   is dense from CID 0 and its length is the map's entry count
-    ///   (`:307-315`).
+    ///   the cmap: each two-byte entry names the glyph whose advance that CID
+    ///   gets, so the array is dense from CID 0 and holds one width per map
+    ///   entry.
     /// - **`/ToUnicode`** is a stream holding `to_unicode` verbatim.
     ///
-    /// The program is always described as TrueType (`FPDF_FONT_TRUETYPE` at
-    /// `:296-303`), because `/CIDFontType2` is what `/CIDToGIDMap` means: a
-    /// `/CIDFontType0` reaches glyphs with the CID as the glyph index and
-    /// never consults the map (`core/fpdfapi/font/cpdf_cidfont.cpp:508-518`).
+    /// The descendant is always a `/CIDFontType2`, because that is what
+    /// `/CIDToGIDMap` means: a `/CIDFontType0` reaches glyphs with the CID as
+    /// the glyph index and never consults the map.
     ///
     /// [`EmbeddedFont::encode`] on the result writes CIDs found by inverting
     /// `to_unicode`, not GIDs found in the program.
@@ -192,6 +186,12 @@ impl EditDoc<'_> {
         to_unicode: &str,
         cid_to_gid: &[u8],
     ) -> Result<EmbeddedFont, Error> {
+        // `FPDFText_LoadCidType2Font` (`fpdfsdk/fpdf_edittext.cpp:481-516` →
+        // `LoadCustomCompositeFont` `:281-334`) is where this shape comes
+        // from. The per-CID `/W` walk is `:307-315`, and the "always
+        // TrueType" choice is `FPDF_FONT_TRUETYPE` at `:296-303`; a
+        // `/CIDFontType0` ignoring `/CIDToGIDMap` is
+        // `core/fpdfapi/font/cpdf_cidfont.cpp:508-518`.
         if to_unicode.is_empty() {
             return Err(Error::EmptyToUnicodeCMap);
         }
@@ -376,7 +376,7 @@ fn embed_composite(
     })
 }
 
-/// `LoadCustomCompositeFont` (`fpdfsdk/fpdf_edittext.cpp:281-334`).
+/// A composite font whose `/ToUnicode` and `/CIDToGIDMap` the caller supplied.
 ///
 /// The one place the two composite paths genuinely differ is `/W`: here it is
 /// keyed by **CID**, walked out of the caller's map, so the array runs dense
@@ -391,6 +391,7 @@ fn embed_custom_composite(
     glyphs: &GlyphSource,
 ) -> EmbeddedFont {
     let name = font_name(glyphs);
+    // `LoadCustomCompositeFont` is `fpdfsdk/fpdf_edittext.cpp:281-334`, and
     // `FPDF_FONT_TRUETYPE` at `:296-303`: /CIDToGIDMap is what makes this a
     // /CIDFontType2, and a /CIDFontType0 would ignore it outright.
     let descriptor = load_font_desc(doc, &name, program, ProgramKind::TrueType, glyphs);
@@ -442,7 +443,7 @@ fn embed_custom_composite(
 }
 
 /// The descendant `/CIDFontType0` / `/CIDFontType2` dictionary and its
-/// `/CIDSystemInfo` (`CreateCidFontDict`, `fpdfsdk/fpdf_edittext.cpp:97-118`).
+/// `/CIDSystemInfo`.
 ///
 /// `Adobe`/`Identity`/`0` because the root's `/Encoding` is `Identity-H`: the
 /// CID *is* the code, so no registry ordering applies.
@@ -474,8 +475,7 @@ fn cid_font_dict(
     ])
 }
 
-/// The `/Type0` root naming `Identity-H`, one descendant and a `/ToUnicode`
-/// (`CreateCompositeFontDict`, `fpdfsdk/fpdf_edittext.cpp:80-95`).
+/// The `/Type0` root naming `Identity-H`, one descendant and a `/ToUnicode`.
 fn type0_font_dict(base: &[u8], cid_font: ObjRef, to_unicode: ObjRef) -> Dict {
     Dict::from_pairs([
         (names::TYPE.clone(), Object::Name(names::FONT.clone())),
@@ -495,27 +495,19 @@ fn type0_font_dict(base: &[u8], cid_font: ObjRef, to_unicode: ObjRef) -> Dict {
 
 /// `/FontDescriptor` plus the program stream.
 ///
-/// Flags, bbox, italic angle, ascent/descent, `/CapHeight` and `/StemV` follow
-/// `LoadFontDesc` (`fpdfsdk/fpdf_edittext.cpp:124-175`) except where we
-/// correct the oracle:
+/// Flags, bbox, italic angle, ascent/descent and `/StemV` are read off the
+/// face. Three keys are `[oracle-bug]` sites, each fixed here to what
+/// ISO 32000-1 asks for; the `//` comments on the body carry the oracle's
+/// defect and the pdf.js reading for each.
 ///
-/// - **OTTO** is `/FontFile3` `/Subtype /OpenType` and not `/FontFile2`
-///   (`fpdf_edittext.cpp:171-174` always writes `/FontFile2` for non-Type1;
-///   `font/mod.rs` `is_opentype_cff` and the subsetter already treat OTTO
-///   as `/FontFile3`). pdf.js: `translateFont` looks up `"FontFile3"`
-///   (`src/core/evaluator.js:4633`); `isOpenTypeFile` /
-///   `getFontFileType` sniff `OTTO` (`src/core/fonts.js:319-321`, `:357-363`).
+/// - **OTTO** goes to `/FontFile3` with `/Subtype /OpenType` (table 126),
+///   not `/FontFile2`. `is_opentype_cff` and the subsetter already agree.
 /// - **Type 1** is unwrapped out of its PFB container and stored raw, with
 ///   `/Length1` `/Length2` `/Length3` partitioning what was stored
-///   (ISO 32000-1 §9.9 table 127). The oracle stores the container verbatim
-///   and writes no lengths at all (`:166` `TODO(npm): Lengths for Type1
-///   fonts.`). pdf.js: `translateFont` reads the lengths
-///   (`src/core/evaluator.js:4672-4674`); `Type1Font.#parseType1`
-///   consumes them (`src/core/type1_font.js:195-201`).
-/// - **`/CapHeight`** uses OS/2 `sCapHeight` when present, else the
-///   oracle's ascent fallback (`:160-161`). pdf.js: `translateFont`
-///   reads `descriptor.get("CapHeight")` (`src/core/evaluator.js:4731`);
-///   `Font` stores it (`src/core/fonts.js:1123`).
+///   (table 127).
+/// - **`/CapHeight`** is OS/2 `sCapHeight` when the face has it, which is the
+///   capital-letter height ISO 32000-1 table 122 asks for; the ascent is only
+///   the fallback.
 fn load_font_desc(
     doc: &mut EditDoc<'_>,
     font_name: &[u8],
@@ -681,7 +673,8 @@ fn char_maps(glyphs: &GlyphSource, max: u32) -> Vec<(u32, u16)> {
     pairs
 }
 
-/// `CreateWidthsArray` (`core/fpdfapi/edit/cpdf_font_util.cpp:82-118`).
+/// The `/W` array: a run of consecutive CIDs sharing one width goes out as
+/// `first last width`, any other consecutive block as `first [w w …]`.
 fn create_widths_array(widths: &BTreeMap<u32, u32>) -> Array {
     let mut out = Array::new();
     let keys: Vec<u32> = widths.keys().copied().collect();
@@ -750,8 +743,18 @@ end\n";
 
 const MAX_BF_ENTRIES: usize = 100;
 
-/// `LoadUnicode` (`core/fpdfapi/edit/cpdf_font_util.cpp:120-273`).
+/// The generated `/ToUnicode` CMap: `bfchar` for isolated codes, `bfrange`
+/// for consecutive runs — with the destination as a list when the Unicode
+/// values are not themselves consecutive, and as a single start value when
+/// they are.
+///
+/// Every range is confined to one 256-code block: a `bfrange` may not span a
+/// change of high byte, so a run crossing that boundary is cut at it.
 fn load_unicode(to_unicode: &BTreeMap<u32, u32>) -> Vec<u8> {
+    // A faithful port of `LoadUnicode`
+    // (`core/fpdfapi/edit/cpdf_font_util.cpp:120-273`), including the
+    // `max_extra = 255 - (code % 256)` cap and the `code % 256 == 0` case
+    // that falls back to two singles rather than opening a range.
     let entries: Vec<(u32, u32)> = to_unicode.iter().map(|(&c, &u)| (c, u)).collect();
     let mut singles: BTreeMap<u32, u32> = BTreeMap::new();
     let mut range_list: BTreeMap<(u32, u32), Vec<u32>> = BTreeMap::new();

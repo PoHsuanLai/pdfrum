@@ -13,7 +13,7 @@
 //! a shared `/Resources` dictionary edited in place would change a page
 //! nobody asked to change.
 //!
-//! Two references are deliberately not counted (`object_tree_traversal_util.cpp:118-137`):
+//! Two references are deliberately not counted:
 //!
 //! - a **self-reference** — an object naming itself does not make itself
 //!   shared;
@@ -24,15 +24,13 @@
 //!
 //! # Object numbers, not pointers
 //!
-//! The C++ keys its visited set on `CPDF_Object*`, because pointer identity
-//! distinguishes two structurally equal inline dictionaries. Our objects are
-//! values with no identity, so the visited set is `ObjRef` for indirect
-//! objects plus a depth cap for inline structure. The two differ in one
-//! situation — a *shared inline sub-object* reached through two parents, which
-//! the pointer set walks once and we walk twice — and the `seen_ref_objects`
-//! filter above already suppresses the second count whenever both endpoints
-//! have been seen. `hello_world_2_pages.pdf` reaching `{5,6,7}` is the case
-//! that pins it.
+//! The visited set is keyed on object number — `ObjRef` for indirect objects,
+//! plus a depth cap for inline structure — because our objects are values
+//! with no identity of their own. The one case that can double-count is a
+//! *shared inline sub-object* reached through two parents; the cycle filter
+//! above already suppresses the second count whenever both endpoints have
+//! been seen. `hello_world_2_pages.pdf` reaching `{5,6,7}` is the case that
+//! pins it.
 
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
@@ -91,8 +89,15 @@ pub(crate) fn walk(trailer: &Dict, trailer_number: u32, r: &impl Resolve) -> Rea
 
     // Sources already known to reference something. Both endpoints being in
     // here is what identifies a reference as part of a cycle already walked.
+    // The two exclusions are `object_tree_traversal_util.cpp:118-137`.
     let mut seen_sources: BTreeSet<u32> = BTreeSet::new();
-    // Indirect objects already queued, so a cycle terminates.
+    // Indirect objects already queued, so a cycle terminates. The C++ keys
+    // this set on `CPDF_Object*`, so pointer identity distinguishes two
+    // structurally equal inline dictionaries; our objects are values, so the
+    // key is the object number. The two walks differ only on a shared inline
+    // sub-object reached through two parents — the pointer set walks it once,
+    // this walks it twice — and `count_reference`'s cycle filter suppresses
+    // the second count.
     let mut visited: BTreeSet<u32> = BTreeSet::new();
 
     // Each item is (the object to walk, the number of the indirect object it

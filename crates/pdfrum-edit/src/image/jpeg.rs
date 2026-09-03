@@ -10,11 +10,9 @@ use crate::names;
 
 /// What a JPEG's start-of-frame segment says about the image.
 ///
-/// `CPDF_Image::InitJPEG` reads exactly these four out of libjpeg's
-/// `jpeg_read_header` (`JpegModule::LoadInfo`,
-/// `core/fxcodec/jpeg/libjpeg_scanline_decoder.cpp:360-367`) and writes each
-/// straight into the dictionary, so parsing the SOF directly reaches the same
-/// values without decoding a scan.
+/// These four are the whole of what the image dictionary needs from the
+/// codestream, and the SOF states all of them, so they are read straight out
+/// of it without decoding a scan.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct Sof {
     width: u32,
@@ -23,12 +21,13 @@ struct Sof {
     bits: u8,
 }
 
-/// Component counts a JPEG may declare in a PDF
-/// (`CPDF_Image::IsValidJpegComponent`, `cpdf_image.cpp:42-44`).
+/// Component counts a JPEG may declare in a PDF: one for `/DeviceGray`,
+/// three for `/DeviceRGB`, four for `/DeviceCMYK`.
 const VALID_COMPONENTS: [u8; 3] = [1, 3, 4];
 
-/// Sample precisions a JPEG may declare in a PDF
-/// (`CPDF_Image::IsValidJpegBitsPerComponent`, `cpdf_image.cpp:47-49`).
+/// Sample precisions a JPEG may declare in a PDF: the `/BitsPerComponent`
+/// values an image `XObject` is allowed to carry. Anything else is refused
+/// with [`Error::UnrecognisedImageData`].
 const VALID_BITS: [u8; 5] = [1, 2, 4, 8, 16];
 
 /// The twelve-byte JPEG 2000 signature box every JP2 file opens with
@@ -41,6 +40,16 @@ const JP2_SIGNATURE: [u8; 12] = [
 /// `SIZ` marker that must come next (ISO/IEC 15444-1 §A.4.1).
 const J2K_SOC_SIZ: [u8; 4] = [0xFF, 0x4F, 0xFF, 0x51];
 
+// Where the four SOF fields and the two validity lists come from:
+// `CPDF_Image::InitJPEG` reads width, height, component count and precision
+// out of libjpeg's `jpeg_read_header` (`JpegModule::LoadInfo`,
+// `core/fxcodec/jpeg/libjpeg_scanline_decoder.cpp:360-367`) and writes each
+// straight into the dictionary, which is why parsing the SOF reaches the same
+// values. The two lists are `CPDF_Image::IsValidJpegComponent`
+// (`cpdf_image.cpp:42-44`) and `CPDF_Image::IsValidJpegBitsPerComponent`
+// (`:47-49`); the image dictionary is `CreateXObjectImageDict` (`:401-410`)
+// and the CMYK `/Decode` is `:121-125`. The colour-transform test is
+// `libjpeg_scanline_decoder.cpp:364-365`.
 pub(super) fn embed(doc: &mut EditDoc<'_>, bytes: &[u8]) -> Result<EmbeddedImage, Error> {
     if is_jpeg2000(bytes) {
         return embed_jpx(doc, bytes);
@@ -117,8 +126,8 @@ fn embed_jpx(doc: &mut EditDoc<'_>, bytes: &[u8]) -> Result<EmbeddedImage, Error
     })
 }
 
-/// `/Type /XObject /Subtype /Image /Width /Height`
-/// (`CPDF_Image::CreateXObjectImageDict`, `cpdf_image.cpp:401-410`).
+/// `/Type /XObject /Subtype /Image /Width /Height` — the four keys every
+/// image `XObject` opens with, whatever its filter or colour space.
 pub(super) fn image_dict(width: u32, height: u32) -> Dict {
     Dict::from_pairs([
         (names::TYPE.clone(), Object::Name(names::XOBJECT.clone())),
@@ -128,7 +137,8 @@ pub(super) fn image_dict(width: u32, height: u32) -> Dict {
     ])
 }
 
-/// `[1 0 1 0 1 0 1 0]`, the Adobe CMYK inversion (`cpdf_image.cpp:121-125`).
+/// `[1 0 1 0 1 0 1 0]`, the Adobe CMYK inversion: an Adobe-marked CMYK JPEG
+/// stores its samples inverted, and this `/Decode` array undoes that.
 fn cmyk_decode() -> Array {
     Array::of(
         [1, 0, 1, 0, 1, 0, 1, 0]
@@ -225,9 +235,9 @@ fn is_sof(marker: u8) -> bool {
     matches!(marker, 0xC0..=0xCF) && !matches!(marker, 0xC4 | 0xC8 | 0xCC)
 }
 
-/// Whether libjpeg would report `color_transform`
-/// (`libjpeg_scanline_decoder.cpp:364-365`: `jpeg_color_space` is `JCS_YCbCr`
-/// or `JCS_YCCK`).
+/// Whether libjpeg would report a colour transform — that is, whether it
+/// would call the JPEG's space `JCS_YCbCr` or `JCS_YCCK` rather than RGB or
+/// plain CMYK.
 ///
 /// `jpeg_read_header` derives that space in `default_decompress_parms`
 /// (`jdapimin.c:150-210`): with an Adobe APP14 marker the transform byte

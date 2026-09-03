@@ -122,7 +122,7 @@ pub(crate) fn write_dict(out: &mut Vec<u8>, d: &Dict, enc: Option<&Encryptor<'_>
 }
 
 /// A dictionary is a signature dictionary when its `/Type` — or, absent that,
-/// its `/FT` — spells `Sig` (`cpdf_crypto_handler.cpp:48-59`).
+/// its `/FT` — spells `Sig`.
 fn is_signature_dict(d: &Dict) -> bool {
     let key = if d.contains_key(names::TYPE) {
         names::TYPE

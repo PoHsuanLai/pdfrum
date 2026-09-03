@@ -18,11 +18,10 @@
 //! "Every other space — CMYK, `ICCBased`, Indexed, Separation, `DeviceN`, Lab,
 //! `CalRGB`, and every pattern — writes *nothing*, and the object inherits the
 //! black the stream prologue set. This is a real fidelity loss and it is the
-//! behavior of a regenerated page." The first sentence was an accurate
-//! description of `WriteColorToStream`'s gate
-//! (`cpdf_pagecontentgenerator.cpp:64-78`) and the last was the mistake: the
-//! loss is a defect rather than a contract, and reproducing it was costing
-//! fidelity for nothing. See `expressible_rgb` for the citations. **Only a
+//! behavior of a regenerated page." The description was accurate of the
+//! oracle; the last sentence was the mistake, because that loss is a defect
+//! rather than a contract and reproducing it was costing fidelity for
+//! nothing. See the comment on `expressible_rgb` for the citations. **Only a
 //! pattern still writes nothing**, because a pattern paints through a resource
 //! no `rg` can name.
 //!
@@ -153,25 +152,30 @@ fn blend_name(blend: BlendMode) -> Name {
 
 /// The RGB triple a colour writes, or `None` when it has no colour to write.
 ///
-/// `[oracle-bug]` **Every colour space converts, not just two.**
-/// `cpdf_pagecontentgenerator.cpp:64-78` refuses at the gate —
-/// `if (!color || (!color->IsColorSpaceRGB() && !color->IsColorSpaceGray()))
-/// return false;` — and its one consumer at `:819-824` then writes no operator
-/// at all, so a CMYK, `ICCBased`, `Separation`, `DeviceN`, `Lab`, `CalGray` or
-/// `CalRGB` fill silently becomes the black the stream prologue set. §8.6
-/// defines every one of those spaces, and the refusal is *only* that gate:
-/// `CPDF_Color::GetRGB` (`cpdf_color.cpp:116-127`) delegates to
-/// `cs_->GetRGB(buffer)` for **any** space, so the conversion PDFium needs is
-/// already written and simply never reached. **pdf.js has no counterpart to
-/// cite** — it does not regenerate page content, so it is silent here.
+/// `[oracle-bug]` **Every colour space converts, not just two.** ISO 32000-1
+/// §8.6 defines CMYK, `ICCBased`, `Separation`, `DeviceN`, `Lab`, `CalGray`
+/// and `CalRGB`, and each of them has an RGB value; [`ColorValue::to_rgb`]
+/// produces it. A fill in any of them therefore writes a real `rg`/`RG`
+/// rather than inheriting the black the stream prologue set.
 ///
-/// The fix is the delegation the C++ declines to perform, not a new operator:
-/// [`ColorValue::to_rgb`] is this crate's `GetRGB`, and `rg`/`RG` stays the
-/// only colour operator the emitter writes. Emitting each space's own operator
-/// — `k`/`K`, or `cs`/`scn` against a realized `/ColorSpace` resource — would
-/// preserve more, but it is a wider change (a new resource family and a second
-/// operator family, whose absence is what the module docs describe) where
-/// converting is one call — the narrowest faithful fix.
+/// `rg`/`RG` stays the *only* colour operator the emitter writes. Emitting
+/// each space's own operator — `k`/`K`, or `cs`/`scn` against a realized
+/// `/ColorSpace` resource — would preserve more, but it is a wider change (a
+/// new resource family and a second operator family, whose absence is what
+/// the module docs describe) where converting is one call. Converting is the
+/// narrowest faithful fix.
+//
+// [oracle-bug] `cpdf_pagecontentgenerator.cpp:64-78` refuses at the gate —
+// `if (!color || (!color->IsColorSpaceRGB() && !color->IsColorSpaceGray()))
+// return false;` — and its one consumer at `:819-824` then writes no operator
+// at all, so a CMYK, `ICCBased`, `Separation`, `DeviceN`, `Lab`, `CalGray` or
+// `CalRGB` fill silently becomes black. The refusal is *only* that gate:
+// `CPDF_Color::GetRGB` (`cpdf_color.cpp:116-127`) delegates to
+// `cs_->GetRGB(buffer)` for **any** space, so the conversion PDFium needs is
+// already written and simply never reached — which is why the fix here is the
+// delegation the C++ declines to perform rather than a new operator.
+// **pdf.js has no counterpart to cite**: it does not regenerate page content,
+// so it is silent here. This is the audit's A71.
 fn expressible_rgb(colour: &ColorValue) -> Option<Rgb> {
     // A pattern paints through a resource no `rg` can name. That one is a
     // genuine limit rather than the oversight above, and stays.

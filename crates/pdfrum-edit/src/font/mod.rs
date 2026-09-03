@@ -3,10 +3,8 @@
 //!
 //! This is the stage [`crate::SaveOptions::subset_new_fonts`] names. It runs
 //! over the objects a save is writing as *new*, produces replacement objects
-//! for the font ones among them, and never touches the document — the
-//! writer's new-object loop consults the map per object, exactly as
-//! `CPDF_Creator::WriteNewObjs` (`:203-226`) consults
-//! `CPDF_FontSubsetter::GenerateObjectOverrides`.
+//! for the font ones among them, and never touches the document: the
+//! writer's new-object loop consults the map per object.
 //!
 //! # One fact about the subsetter decides the shape
 //!
@@ -29,8 +27,7 @@
 //!   widths for glyphs the file no longer draws, which no correct reader can
 //!   observe.
 //! - **`/ToUnicode` is carried through untouched** for the same reason, so
-//!   text extraction over a subsetted save is unchanged — which is what
-//!   `fpdf_save_embeddertest.cpp:362-383` asserts of the C++ (round-trip
+//!   text extraction over a subsetted save is unchanged (round-trip
 //!   obligation R15).
 //!
 //! The alternative — re-keying `/W`, `/ToUnicode` and the content streams —
@@ -52,10 +49,10 @@
 //!   so a subsetted simple font would render nothing. The C++ subsets these;
 //!   this is a narrowing, and the widest one here.
 //! - **`OpenType`-CFF (`OTTO`)**. Its descendant is a `CIDFontType0`, where
-//!   the CID *is* the glyph index and `/CIDToGIDMap` is never consulted
-//!   (`cpdf_cidfont.cpp:508-518`), so the renumbering would have nowhere to
-//!   go but the content streams. The C++ subsets these and switches
-//!   `/Subtype` to `/CIDFontType0` with `/FontFile3`; ours declines. The
+//!   the CID *is* the glyph index and `/CIDToGIDMap` is never consulted, so
+//!   the renumbering would have nowhere to go but the content streams. The
+//!   C++ subsets these and switches `/Subtype` to `/CIDFontType0` with
+//!   `/FontFile3`; ours declines. The
 //!   `OTTO` test that drives the switch ([`is_opentype_cff`]) stays, because
 //!   it is what recognises the case to decline.
 //!
@@ -69,6 +66,12 @@
 //! plus, then the base name. An existing prefix is stripped before a new one
 //! is added, so a font that has been subsetted twice still carries exactly
 //! one tag.
+
+// Where the shape comes from: `CPDF_Creator::WriteNewObjs` (`:203-226`)
+// consults `CPDF_FontSubsetter::GenerateObjectOverrides` the same way. The
+// R15 obligation above is what `fpdf_save_embeddertest.cpp:362-383` asserts
+// of the C++, and the `CIDFontType0` fact — CID *is* the glyph index, so
+// `/CIDToGIDMap` is never consulted — is `cpdf_cidfont.cpp:508-518`.
 
 pub(crate) mod collect;
 pub(crate) mod embed;

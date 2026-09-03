@@ -11,11 +11,9 @@ use crate::names;
 
 /// How the bytes handed to [`crate::EditDoc::embed_image`] are laid out.
 ///
-/// The oracle takes a bitmap whose format is a `FXDIB_Format` enum it reads
-/// back off the object (`CPDF_Image::SetImage` branches on `GetBPP()` and
-/// `IsMaskFormat()`, `cpdf_image.cpp:194-253`); this is that choice made by
-/// the caller, since we are handed loose bytes rather than a bitmap that
-/// knows its own shape.
+/// The oracle takes a bitmap object and reads the format back off it; here
+/// the caller states it, because what arrives is loose bytes rather than a
+/// bitmap that knows its own shape.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum PixelFormat {
     /// One eight-bit grey sample per pixel, `/DeviceGray`.
@@ -132,7 +130,7 @@ fn push_space(dict: &mut Dict, format: PixelFormat) {
 }
 
 /// The alpha image's dictionary: eight-bit `/DeviceGray` at the colour
-/// image's size (`cpdf_image.cpp:263-275`).
+/// image's size.
 fn smask_dict(width: u32, height: u32) -> Dict {
     let mut dict = image_dict(width, height);
     dict.push(
