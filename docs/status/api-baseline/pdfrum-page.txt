@@ -86,6 +86,7 @@ pub pdfrum_page::FillRule::None
 pub pdfrum_page::FillRule::Winding
 pub enum pdfrum_page::FormFontsKey
 pub pdfrum_page::FormFontsKey::Direct
+pub pdfrum_page::FormFontsKey::DirectResources(pdfrum_object::object::ObjRef)
 pub pdfrum_page::FormFontsKey::Form(pdfrum_object::object::ObjRef)
 pub pdfrum_page::FormFontsKey::None
 pub enum pdfrum_page::FoundPattern

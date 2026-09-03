@@ -522,34 +522,79 @@ impl FormFonts {
     ///
     /// # Memoized on the context
     ///
-    /// The faces are a pure function of the catalog's `/AcroForm`, and
-    /// building them is expensive — the `/DR` walk constructs every font the
-    /// form declares, encoding tables and substitution ladder included. The
+    /// The faces are a pure function of the form's `/DR /Font`, and building
+    /// them is expensive — the `/DR` walk constructs every font the form
+    /// declares, encoding tables and substitution ladder included. The
     /// annotation overlay asks for them **once per page per render**, so the
     /// result is cached in the [`BuildContext`](pdfrum_page::BuildContext)
-    /// beside the rest of the per-document font state, keyed on the
-    /// `/AcroForm` reference. A caller threading one context through many
-    /// renders of one document pays for this once.
+    /// beside the rest of the per-document font state. A caller threading one
+    /// context through many renders of one document pays for this once.
     ///
     /// Nothing about *what* is built changed when the cache was added, which
     /// is what makes the appearance streams identical: the fallback still
     /// goes through the same loader, and the second faces are still loaded
     /// here rather than where a field discovers it needs one. Only the number
     /// of times moved.
+    ///
+    /// # What the key names, and why it is not the `/AcroForm`
+    ///
+    /// Building the faces reads exactly one thing out of the document — the
+    /// `/AcroForm`'s `/DR /Font` dictionary — and takes everything else from
+    /// dictionaries written in this crate. So the *faces* are a function of
+    /// that dictionary alone, and keying on the `/AcroForm` instead threw
+    /// away every form written as a direct dictionary, which has no reference
+    /// to name it by.
+    ///
+    /// A direct `/AcroForm` is not the rarity it reads as. An empty
+    /// `<</Fields[]>>` is what a producer writes when it declares a form and
+    /// then puts no fields in it, and six of this corpus's 44 documents carry
+    /// one — none of them a form document. Every one of those was rebuilding
+    /// the fallback face and the substitute face once per page per render, for
+    /// a form with no fields, and on four of them it was the single largest
+    /// line in the render.
     #[must_use]
     pub fn load<R: Resolve>(
         catalog: &Dict,
         r: &R,
         ctx: &mut pdfrum_page::BuildContext,
     ) -> std::sync::Arc<FormFonts> {
-        let key = match catalog.raw(names::ACRO_FORM) {
-            Some(pdfrum_object::Object::Ref(reference)) => {
-                pdfrum_page::FormFontsKey::Form(*reference)
-            }
+        ctx.form_fonts(FormFonts::key(catalog, r), |ctx| {
+            FormFonts::build(catalog, r, ctx)
+        })
+    }
+
+    /// The cache slot this catalog's faces belong in.
+    ///
+    /// Split out from [`Self::load`] so the four cases can be asserted
+    /// directly; the walk is `/AcroForm` then `/DR` then `/Font`, resolving
+    /// references at every step except the last, whose *spelling* is the
+    /// answer.
+    fn key<R: Resolve>(catalog: &Dict, r: &R) -> pdfrum_page::FormFontsKey {
+        match catalog.raw(names::ACRO_FORM) {
+            // A real form: the reference names it, as it names every other
+            // per-document cache on the context.
+            Some(Object::Ref(reference)) => return pdfrum_page::FormFontsKey::Form(*reference),
+            Some(_) => {}
+            // No form at all, so no `/DR /Font`: the constants alone.
+            None => return pdfrum_page::FormFontsKey::None,
+        }
+        // A direct `/AcroForm`. Its faces are its `/DR /Font`'s, so that is
+        // what has to be identified — the same walk `build` makes, stopping
+        // one step earlier and reading the spelling rather than the value.
+        let fonts = catalog
+            .dict(names::ACRO_FORM, r)
+            .and_then(|form| form.dict(names::DR, r))
+            .and_then(|resources| resources.raw(names::FONT).cloned());
+        match fonts {
+            // Written as a reference, which is the ordinary spelling even
+            // inside a direct form: as good an identity as the form's own.
+            Some(Object::Ref(reference)) => pdfrum_page::FormFontsKey::DirectResources(reference),
+            // Written out in full. Nothing to key on, so it is rebuilt.
             Some(_) => pdfrum_page::FormFontsKey::Direct,
+            // No default resources: the constants alone, exactly as a
+            // document with no form at all.
             None => pdfrum_page::FormFontsKey::None,
-        };
-        ctx.form_fonts(key, |ctx| FormFonts::build(catalog, r, ctx))
+        }
     }
 
     /// [`Self::load`] without the cache: the faces, built now.
@@ -1009,7 +1054,7 @@ mod tests {
     };
     use crate::geom;
     use pdfrum_common::Diagnostics;
-    use pdfrum_object::{Array, ByteSpan, Dict, Name, NoResolve, Object, Stream};
+    use pdfrum_object::{Array, ByteSpan, Dict, Name, NoResolve, Object, Resolve, Stream};
 
     fn dict(pairs: &[(&str, Object)]) -> Dict {
         Dict::from_pairs(
@@ -1022,6 +1067,39 @@ mod tests {
 
     fn numbers(values: &[f32]) -> Object {
         Object::Array(Array::of(values.iter().copied().map(Object::from)))
+    }
+
+    /// A map-backed [`Resolve`], for the key tests: what a font dictionary
+    /// *resolves to* is irrelevant to the slot it is filed under, but the
+    /// walk to it goes through `/AcroForm` and `/DR`, so the references on
+    /// the way have to lead somewhere.
+    struct Store(std::collections::HashMap<u32, std::sync::Arc<Object>>);
+
+    impl Store {
+        fn of(pairs: impl IntoIterator<Item = (u32, Object)>) -> Store {
+            Store(
+                pairs
+                    .into_iter()
+                    .map(|(num, obj)| (num, std::sync::Arc::new(obj)))
+                    .collect(),
+            )
+        }
+    }
+
+    impl Resolve for Store {
+        fn fetch(
+            &self,
+            r: pdfrum_object::ObjRef,
+        ) -> Result<std::sync::Arc<Object>, pdfrum_object::Error> {
+            self.0
+                .get(&r.num)
+                .map(std::sync::Arc::clone)
+                .ok_or(pdfrum_object::Error::UnresolvedRef(r))
+        }
+    }
+
+    fn reference(num: u32) -> Object {
+        Object::Ref(pdfrum_object::ObjRef::new(num, 0))
     }
 
     fn sticky_note() -> Dict {
@@ -1334,16 +1412,124 @@ mod tests {
         assert!(!std::sync::Arc::ptr_eq(&one, &two));
     }
 
+    /// A `/DR /Font` written out in full, which is the one spelling with no
+    /// reference anywhere for the key to name.
+    fn wholly_direct_form() -> Dict {
+        dict(&[(
+            "DR",
+            Object::Dict(dict(&[(
+                "Font",
+                Object::Dict(dict(&[("Helv", Object::Dict(dict(&[])))])),
+            )])),
+        )])
+    }
+
     #[test]
-    fn a_direct_form_dictionary_is_not_cached() {
-        // It has no reference to key on, and its content is
-        // document-specific, so it re-derives rather than risking one
-        // document's faces standing in for another's.
-        let catalog = dict(&[("AcroForm", Object::Dict(dict(&[])))]);
+    fn a_form_whose_fonts_are_written_out_in_full_is_not_cached() {
+        // The one case that stays uncached: a direct `/AcroForm` whose
+        // `/DR /Font` is itself direct has no reference at either level, and
+        // its content *is* document-specific, so it re-derives rather than
+        // risking one document's faces standing in for another's.
+        let catalog = dict(&[("AcroForm", Object::Dict(wholly_direct_form()))]);
         let mut ctx = pdfrum_page::BuildContext::new();
         let first = super::FormFonts::load(&catalog, &NoResolve, &mut ctx);
         let second = super::FormFonts::load(&catalog, &NoResolve, &mut ctx);
         assert!(!std::sync::Arc::ptr_eq(&first, &second));
+    }
+
+    #[test]
+    fn a_direct_form_declaring_no_fonts_is_the_no_form_case() {
+        // What the corpus actually carries. `<</Fields[]>>` written straight
+        // into the catalog is what a producer emits when it declares a form
+        // and puts no fields in it, and six of the 44 benchmark documents
+        // have one — none of them a form document. It names no `/DR /Font`,
+        // so its faces are the fallback and the substitutes, built from
+        // dictionaries this crate writes: the same value a catalog with no
+        // `/AcroForm` at all gets, and therefore the same slot.
+        let mut ctx = pdfrum_page::BuildContext::new();
+        let empty_form = super::FormFonts::load(
+            &dict(&[(
+                "AcroForm",
+                Object::Dict(dict(&[("Fields", Object::Array(Array::default()))])),
+            )]),
+            &NoResolve,
+            &mut ctx,
+        );
+        let no_form = super::FormFonts::load(&dict(&[]), &NoResolve, &mut ctx);
+        assert!(
+            std::sync::Arc::ptr_eq(&empty_form, &no_form),
+            "a form with no default resources builds nothing a form-less \
+             catalog does not"
+        );
+    }
+
+    #[test]
+    fn a_direct_form_is_keyed_on_the_font_dictionary_it_names() {
+        // The ordinary spelling of an unusual case: the `/AcroForm` is
+        // direct but its `/DR /Font` is a reference, which is as good an
+        // identity as the form's own reference would have been. Two catalogs
+        // naming *different* font dictionaries must not share, and one
+        // catalog asked twice must.
+        let form = |num: u32| {
+            dict(&[(
+                "AcroForm",
+                Object::Dict(dict(&[(
+                    "DR",
+                    Object::Dict(dict(&[("Font", reference(num))])),
+                )])),
+            )])
+        };
+        let store = Store::of([(7, Object::Dict(dict(&[]))), (8, Object::Dict(dict(&[])))]);
+        let mut ctx = pdfrum_page::BuildContext::new();
+        let first = super::FormFonts::load(&form(7), &store, &mut ctx);
+        let again = super::FormFonts::load(&form(7), &store, &mut ctx);
+        let other = super::FormFonts::load(&form(8), &store, &mut ctx);
+        assert!(
+            std::sync::Arc::ptr_eq(&first, &again),
+            "one font dictionary asked twice must hit the cache"
+        );
+        assert!(
+            !std::sync::Arc::ptr_eq(&first, &other),
+            "two font dictionaries must not share a slot"
+        );
+    }
+
+    #[test]
+    fn the_key_reads_the_font_dictionarys_spelling_and_not_its_value() {
+        // The four cases, asserted directly rather than through the ptr
+        // identity the three tests above compare. This is the function's
+        // whole contract: which of the four slots a catalog lands in.
+        use pdfrum_page::FormFontsKey;
+        let store = Store::of([(7, Object::Dict(dict(&[])))]);
+        let key = |catalog: &Dict| super::FormFonts::key(catalog, &store);
+
+        assert_eq!(key(&dict(&[])), FormFontsKey::None);
+        assert_eq!(
+            key(&dict(&[("AcroForm", reference(7))])),
+            FormFontsKey::Form(pdfrum_object::ObjRef::new(7, 0))
+        );
+        assert_eq!(
+            key(&dict(&[(
+                "AcroForm",
+                Object::Dict(dict(&[("Fields", Object::Array(Array::default()))]))
+            )])),
+            FormFontsKey::None,
+            "a direct form with no `/DR /Font` depends on nothing"
+        );
+        assert_eq!(
+            key(&dict(&[(
+                "AcroForm",
+                Object::Dict(dict(&[(
+                    "DR",
+                    Object::Dict(dict(&[("Font", reference(7))]))
+                )]))
+            )])),
+            FormFontsKey::DirectResources(pdfrum_object::ObjRef::new(7, 0))
+        );
+        assert_eq!(
+            key(&dict(&[("AcroForm", Object::Dict(wholly_direct_form()))])),
+            FormFontsKey::Direct
+        );
     }
 
     #[test]
