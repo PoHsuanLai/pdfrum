@@ -1,4 +1,4 @@
-//! The command line, as `pdfium_test` reads it.
+//! The command line, as the oracle reads it.
 //!
 //! Hand-parsed rather than declared with `clap`, because the oracle's parser
 //! *is* part of the contract: `--pages=` uses `std::stringstream` extraction
@@ -54,7 +54,7 @@ pub struct PageRange {
 /// separately, not a mode: `--md5` and `--save` and `--show-metadata` compose
 /// freely. Folding them into an enum would invent a grammar the oracle does
 /// not have, and this type's whole job is to read the command line the way
-/// `pdfium_test` reads it.
+/// the oracle reads it.
 #[allow(
     clippy::struct_excessive_bools,
     reason = "independent switches, mirroring the oracle's flags"
@@ -71,8 +71,7 @@ pub struct Options {
     ///
     /// Empty means the built-in faces alone. A directory here *replaces* the
     /// system font path rather than adding to it, which is what makes the
-    /// oracle's `--font-dir=third_party/test_fonts` hermetic
-    /// (`fx_linux_impl.cpp:167-176`).
+    /// oracle's `--font-dir=third_party/test_fonts` hermetic.
     pub font_dirs: Vec<PathBuf>,
     /// Whether to rename requested faces to their Croscore equivalents, from
     /// `--croscore-font-names`.
@@ -80,8 +79,7 @@ pub struct Options {
     /// Suppress the system font path entirely, from `--no-system-fonts`.
     ///
     /// Overrides `--font-dir`, exactly as the oracle's own help text says it
-    /// does (`pdfium_test.cc:1946`), leaving the built-in faces as the whole
-    /// font set.
+    /// does, leaving the built-in faces as the whole font set.
     pub no_system_fonts: bool,
     /// Drop the security handler when saving, from `--save-decrypted`.
     ///
@@ -90,7 +88,7 @@ pub struct Options {
     pub save_decrypted: bool,
     /// Write each document back out beside its input, from `--save`.
     ///
-    /// **This flag has no oracle counterpart** — `pdfium_test` cannot save a
+    /// **This flag has no oracle counterpart** — the oracle cannot save a
     /// document at all. It exists so the conformance harness can perform the
     /// two-step save check: pdfrum saves, and the *oracle* then reopens and
     /// renders what pdfrum wrote. The asymmetry is expected, and the harness
@@ -98,8 +96,8 @@ pub struct Options {
     pub save: bool,
     /// A curated page mutation to apply before saving, from `--mutate=`.
     ///
-    /// Like `--save`, this has **no oracle counterpart** — `pdfium_test`
-    /// cannot edit a document either. It exists so the harness can perform
+    /// Like `--save`, this has **no oracle counterpart** — the oracle cannot
+    /// edit a document either. It exists so the harness can perform
     /// the edit round trip: pdfrum mutates page 0 and saves, the oracle reopens
     /// and renders the result, and the two renders of that same file are
     /// compared. Implies `--save`; an unrecognised value is refused, because
@@ -124,9 +122,9 @@ pub struct Options {
     /// Run the document's JavaScript and print the transcript, from
     /// `--js-transcript`.
     ///
-    /// Not an oracle flag: `pdfium_test` prints the transcript as a side
-    /// effect of running with V8 compiled in, and there is no switch that
-    /// asks for it alone. Ours is a switch because the engine is behind a
+    /// Not an oracle flag: the oracle prints the transcript as a side effect
+    /// of running with V8 compiled in, and there is no switch that asks for
+    /// it alone. Ours is a switch because the engine is behind a
     /// default-off cargo feature, so the transcript has to be asked for
     /// rather than assumed. With the feature off this is recorded in
     /// [`Options::unsupported`] instead, so the harness reads
@@ -137,12 +135,12 @@ pub struct Options {
     /// **seconds** since the epoch.
     ///
     /// `None` is "no `--time` given", and it means the real wall clock —
-    /// which is the oracle's own rule: `options.time` is a `time_t`
-    /// initialised to `-1`, and the clock hooks are installed only inside
-    /// `if (options.time > -1)`
-    /// (`testing/pdfium_test/pdfium_test.cc:217,2129-2135`). Absent the flag,
-    /// `FXSYS_time`/`FXSYS_localtime` fall through to libc
-    /// (`core/fxcrt/fx_extension.cpp:110-125`).
+    /// which is the oracle's own rule: its clock hooks are installed only
+    /// when the flag was given, and absent it the time functions fall
+    /// through to libc.
+    // The flag defaults to a time_t of -1 and the hooks sit inside
+    // `if (options.time > -1)` (pdfium_test.cc:217,2129-2135); the fallthrough
+    // is FXSYS_time / FXSYS_localtime (core/fxcrt/fx_extension.cpp:110-125).
     ///
     /// **This flag is the single source of the scripting clock.** A
     /// conformance run passes `--time=1399672130`
@@ -212,7 +210,7 @@ const RENDER_FORMATS: &[(&str, &str)] = &[
     ("--xps", "xps"),
 ];
 
-/// Reads a command line the way `pdfium_test` reads it.
+/// Reads a command line the way the oracle reads it.
 ///
 /// `args` excludes the program name.
 ///
@@ -350,10 +348,10 @@ fn parse_page_range(text: &str) -> PageRange {
 /// `--time=`'s value, read the way `std::stringstream(s) >> time_t` reads it.
 ///
 /// Not [`extract_int`]: `time_t` is signed and 64-bit, and the sign matters
-/// because the oracle's very next line is `if (options->time < 0)` →
-/// `"Invalid --time argument, must be non-negative"`
-/// (`testing/pdfium_test/pdfium_test.cc:783-788`). So a leading `-` has to
+/// because the oracle's very next line rejects a negative value with
+/// `"Invalid --time argument, must be non-negative"`. So a leading `-` has to
 /// survive extraction to be rejected, where `--pages=-3` merely yields zero.
+// The extraction and the check are pdfium_test.cc:783-788.
 ///
 /// The three failure shapes are C++11's, not ours:
 /// - text with no leading number (`--time=x`) fails extraction, which sets
@@ -517,8 +515,8 @@ mod tests {
     }
 
     /// The three malformed shapes, each doing what `std::stringstream >>
-    /// time_t` followed by `if (time < 0)` does
-    /// (`pdfium_test.cc:783-788`).
+    /// time_t` followed by a non-negative check does.
+    // pdfium_test.cc:783-788.
     #[test]
     fn a_malformed_time_behaves_as_the_oracles_stream_extraction_does() {
         // Extraction failure leaves the target at zero, which is a *valid*
@@ -537,7 +535,8 @@ mod tests {
     }
 
     /// A second `--time=` is refused rather than overwriting, unlike
-    /// `--use-renderer=` (`pdfium_test.cc:779-782`).
+    /// `--use-renderer=`.
+    // The two are pdfium_test.cc:783-788 and :779-782 respectively.
     #[test]
     fn a_duplicate_time_is_refused() {
         assert_eq!(
@@ -593,8 +592,9 @@ mod tests {
 
     /// `--no-system-fonts` was accepted-and-ignored while substitution had no
     /// system database to turn off. It is now read, and it means the oracle's
-    /// "overrides --font-dir" (`pdfium_test.cc:1946`) — see
-    /// `run::substitution_options`, which clears the directory list for it.
+    /// "overrides --font-dir" — see `run::substitution_options`, which clears
+    /// the directory list for it.
+    // The help text is pdfium_test.cc:1946.
     #[test]
     fn no_system_fonts_is_read_rather_than_recorded() {
         let options = parse_args(&["--no-system-fonts", "a.pdf"]).unwrap();

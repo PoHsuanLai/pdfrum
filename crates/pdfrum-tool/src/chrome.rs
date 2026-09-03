@@ -2,10 +2,9 @@
 //!
 //! `pdfrum-form` publishes an open combo box's dropdown as state and geometry
 //! ([`pdfrum::PopupView`]) and stops there, because a dropdown is a window and
-//! a PDF library has no business creating one. The oracle's `pdfium_test`
-//! **is** a host, though — it drives
-//! `FPDF_FFLDraw`, which composites `CPWL_Wnd::DrawAppearance` over the page
-//! bitmap — so to compare against its goldens this tool has to be a host too.
+//! a PDF library has no business creating one. The oracle **is** a host,
+//! though, and composites the widget windows over the page bitmap — so to
+//! compare against its goldens this tool has to be a host too.
 //!
 //! This module is that host, and it lives here rather than in a library crate
 //! on purpose. It exists to make three conformance rows comparable
@@ -14,40 +13,46 @@
 //!
 //! # Why it is not folded into the widget's `/AP`
 //!
-//! An annotation's appearance form is placed by `CFX_Matrix::MatchRect`, which
-//! **fits** the form's `/BBox` into the annotation's `/Rect`. A list hanging
-//! twenty-nine units below a fourteen-unit-tall widget would therefore be
-//! *scaled* into the widget's box rather than overflowing below it. So the
-//! popup is a second page object with a bbox of its own, appended after the
-//! annotation pass has laid everything else down — which is also the order the
-//! oracle composites in, since `FPDF_FFLDraw` runs after
-//! `FPDF_RenderPageBitmap`.
+//! An annotation's appearance form is **fitted** into the annotation's
+//! `/Rect`: its `/BBox` is scaled to the rectangle rather than translated
+//! into it. A list hanging twenty-nine units below a fourteen-unit-tall
+//! widget would therefore be squeezed into the widget's box rather than
+//! overflowing below it. So the popup is a second page object with a bbox of
+//! its own, appended after the annotation pass has laid everything else down
+//! — which is also the order a host composites its windows in.
 //!
-//! # What the list looks like, from the C++
+//! # What the list looks like
 //!
-//! `CPWL_ComboBox::CreateListBox` (`fpdfsdk/pwl/cpwl_combo_box.cpp:205-236`)
-//! makes a `CPWL_CBListBox` with a **solid one-unit border**, a background,
-//! and — where the widget's own `/MK` leaves them transparent — the defaults
-//! `kDefaultBlackColor` for the border and `kDefaultWhiteColor` for the fill.
-//! `CPWL_ListBox::DrawThisAppearance` (`cpwl_list_box.cpp:45-85`) then walks
-//! the items: a selected one takes a `ArgbEncode(255, 0, 51, 113)` navy band
-//! with white text, and every other one takes the text colour on the
-//! background. Both goldens carry exactly that — `bug_1372651`'s `Item3` band
-//! is `(0, 51, 113)` at device rows 92..106, verbatim.
+//! A **solid one-unit border**, a background, and — where the widget's own
+//! `/MK` leaves them transparent — a black border and a white fill. A
+//! selected item takes a navy band, `(0, 51, 113)` opaque, with white text;
+//! every other item takes the text colour on the background. Both goldens
+//! carry exactly that: `bug_1372651`'s `Item3` band is `(0, 51, 113)` at
+//! device rows 92..106, verbatim.
 //!
-//! The **12-unit scroll-bar reservation does not apply here.** `GetListRect`
-//! (`cpwl_list_box.cpp:352-355`) — which is what `SetPlateRect` receives and
-//! therefore what the rows are measured against — deflates by the border
-//! alone; only `GetClientRect` subtracts a bar, and `GetScrollBarWidth`
-//! answers **zero** while the bar is invisible, which it is whenever the
-//! content fits. Neither target fixture scrolls.
+//! The **12-unit scroll-bar reservation does not apply here.** The rectangle
+//! the rows are measured against deflates by the border alone, and a
+//! scroll bar occupies no width while it is invisible, which it is whenever
+//! the content fits. Neither target fixture scrolls.
+
+// The oracle's window classes are where the above was measured.
+// CPWL_ComboBox::CreateListBox (fpdfsdk/pwl/cpwl_combo_box.cpp:205-236)
+// makes a CPWL_CBListBox and supplies kDefaultBlackColor /
+// kDefaultWhiteColor for a transparent /MK.
+// CPWL_ListBox::DrawThisAppearance (cpwl_list_box.cpp:45-85) walks the items
+// and bands the selected one with ArgbEncode(255, 0, 51, 113).
+// GetListRect (cpwl_list_box.cpp:352-355) is what SetPlateRect receives, and
+// it deflates by the border alone; only GetClientRect subtracts a bar, and
+// GetScrollBarWidth answers zero while the bar is invisible.
+// The placement is CFX_Matrix::MatchRect, and FPDF_FFLDraw runs after
+// FPDF_RenderPageBitmap.
 
 use pdfrum_common::{Diagnostics, Limits};
 use pdfrum_doc::ap;
 use pdfrum_object::{Array, ByteSpan, Dict, Name, Object, PdfString, Resolve, Stream};
 use pdfrum_page::{BuildContext, Page, Resources, build_form_object_with};
 
-/// The list's border width, in PDF units — `lcp.dwBorderWidth = 1`.
+/// The list's border width, in PDF units.
 const BORDER_WIDTH: i64 = 1;
 
 /// Appends the open dropdown's window to a built page, after everything else.
@@ -181,8 +186,7 @@ pub fn push_popup<R: Resolve>(
 ///   both from the dictionary on the non-live path, which is exactly the
 ///   channel a synthetic dictionary can speak through.
 /// - `/MK /BG` and `/BC`: the widget's own colours where it declares them, and
-///   `CreateListBox`'s white-and-black defaults where it leaves them
-///   transparent (`cpwl_combo_box.cpp:224-231`).
+///   a white fill with a black border where it leaves them transparent.
 /// - `/DA` copied from the widget, so the rows are set in the field's own font
 ///   at the field's own size — which for an automatic size the generator
 ///   resolves to `kComboBoxDefaultFontSize`, twelve points.
@@ -266,13 +270,14 @@ fn popup_dict<R: Resolve>(popup: &pdfrum::PopupView, widget: &Dict, r: &R) -> Di
     dict
 }
 
-/// The list's `/MK`: the widget's own colours, with `CreateListBox`'s
-/// defaults where the widget declares none.
+/// The list's `/MK`: the widget's own colours, with defaults where the widget
+/// declares none.
 ///
-/// `cpwl_combo_box.cpp:224-231` — a **transparent** border colour becomes
-/// `kDefaultBlackColor` and a transparent background becomes
-/// `kDefaultWhiteColor`. That is why `bug_736695_4.pdf`'s widget, which
-/// carries no `/MK` at all, still draws a black-bordered white list.
+/// A **transparent** border colour becomes black and a transparent background
+/// becomes white. That is why `bug_736695_4.pdf`'s widget, which carries no
+/// `/MK` at all, still draws a black-bordered white list.
+// The two defaults are kDefaultBlackColor and kDefaultWhiteColor, supplied at
+// cpwl_combo_box.cpp:224-231.
 fn list_colors<R: Resolve>(widget: &Dict, r: &R) -> Dict {
     let mk = widget.dict(&Name::from(b"MK".as_slice()), r);
     let mut out = Dict::new();

@@ -1,9 +1,9 @@
 //! `Unsupported feature: <name>.` — the oracle's notice lines, which land on
 //! **stdout** and therefore inside the metadata and pageinfo dumps.
 //!
-//! This is the least obvious part of matching those dumps. `pdfium_test`
-//! registers a handler for PDFium's unsupported-feature callback that prints
-//! with `printf`, so a portfolio PDF's `--show-metadata` golden opens with
+//! This is the least obvious part of matching those dumps. The oracle
+//! registers a handler for the unsupported-feature callback that prints on
+//! stdout, so a portfolio PDF's `--show-metadata` golden opens with
 //!
 //! ```text
 //! Unsupported feature: Portfolios_Packages.
@@ -95,7 +95,7 @@ pub fn document(catalog: &Dict, r: &impl Resolve) -> Vec<Feature> {
 /// lands in a different place in the output.
 ///
 /// The other document-level checks run inside the load; this one runs when
-/// the form-fill environment is set up, which `pdfium_test` does **after**
+/// the form-fill environment is set up, which the oracle does **after**
 /// dumping the metadata. So `rectangles_multi_page_xfa.pdf`'s golden carries
 /// the eight metadata lines first and `Unsupported feature: XFA.` last —
 /// a nine-line file that reads as an ordering bug if the two checks are

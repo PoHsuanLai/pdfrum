@@ -5,20 +5,22 @@
 //! like-for-like, and none of them is the obvious choice:
 //!
 //! - **The PNG is RGB, not RGBA**, for a page without transparency. The
-//!   oracle asks `png_codec::EncodeBGRA` to discard transparency whenever the
-//!   page reports none, and the encoder then drops the fourth channel
-//!   (`png_codec_libpng.cpp:620-626`).
+//!   oracle discards transparency whenever the page reports none, and the
+//!   encoder then drops the fourth channel.
 //! - **The MD5 is over the raw bitmap buffer, not the PNG.** It hashes
-//!   `stride * height` bytes straight out of `FPDFBitmap_GetBuffer`
-//!   (`pdfium_test.cc:1024-1038`), which is 32-bit **BGRA** — and for an
-//!   opaque page that is `FPDFBitmap_BGRx`, whose fourth byte is padding the
-//!   `FillRect(0xFFFFFFFF)` clear leaves at `0xFF`.
+//!   `stride * height` bytes of 32-bit **BGRA** — and for an opaque page the
+//!   fourth byte is padding, which the initial white clear leaves at `0xFF`.
 //! - **`--reverse-byte-order` is off by default**, so the buffer really is
 //!   BGRA rather than RGBA.
 //!
-//! The stdout line is `MD5:<path>:<hex>` (`pdfium_test.cc:311`), where the
-//! path is the file just written, and the file name is
-//! `<input>.<page>.png`.
+//! The stdout line is `MD5:<path>:<hex>`, where the path is the file just
+//! written, and the file name is `<input>.<page>.png`.
+
+// Where each of the three was measured in the oracle: the encoder's channel
+// drop is png_codec_libpng.cpp:620-626; the hash reads FPDFBitmap_GetBuffer
+// at pdfium_test.cc:1024-1038, an FPDFBitmap_BGRx buffer whose padding byte
+// the FillRect(0xFFFFFFFF) clear leaves at 0xFF; the stdout line is
+// pdfium_test.cc:311.
 
 use std::path::{Path, PathBuf};
 
@@ -35,9 +37,9 @@ use pdfrum_render::{
 
 /// The default rendering scale, in device pixels per PDF point.
 ///
-/// `pdfium_test` renders at `scale = 1.0` unless `--scale` says otherwise
-/// (`pdfium_test.cc`'s `static_cast<int>(FPDF_GetPageWidth(page) * scale)`),
-/// so a 612x792 page is a 612x792 bitmap.
+/// The oracle renders at `scale = 1.0` unless `--scale` says otherwise, and
+/// truncates the scaled page size to an integer, so a 612x792 page is a
+/// 612x792 bitmap.
 pub const DEFAULT_SCALE: f64 = 1.0;
 
 /// The file a page's PNG is written to: `<input>.<page>.png`, beside the
@@ -177,7 +179,7 @@ pub struct SessionView<'a> {
     /// The library publishes this rather than drawing it — a dropdown is a
     /// window and `pdfrum-form` does not make windows. This
     /// tool is the host that draws it, in [`crate::chrome`], because the
-    /// oracle's `FPDF_FFLDraw` does and a golden comparison has to see the
+    /// oracle's form-filler pass does and a golden comparison has to see the
     /// same pixels.
     pub popup: Option<pdfrum::PopupView>,
 }
@@ -261,20 +263,18 @@ fn session_overlay(view: &SessionView<'_>) -> Option<pdfrum_doc::AnnotOverlay> {
 }
 
 /// Render one page and encode it the way the oracle does, with whatever
-/// appearance updates a form session produced for it — the tool's
-/// `FPDF_RenderPageBitmap` plus `FPDF_FFLDraw`.
+/// appearance updates a form session produced for it — the page pass plus the
+/// form-filler pass.
 ///
 /// Returns `None` when the page has no renderable size, which the oracle
 /// also skips — a page still counts as processed either way.
 ///
 /// # What the oracle does here, and what this can do yet
 ///
-/// `pdfium_test` renders in two steps: `FPDF_RenderPageBitmap` with
-/// `FPDF_ANNOT` paints the page and every annotation's `/AP`, and then
-/// `PageRenderer::Finish` calls `FPDF_FFLDraw` over the same bitmap
-/// (`pdfium_test.cc:1046`, `:1130`) to paint the **form-filler's** view of the
-/// widgets — the focused field's live editor state, its caret and its
-/// selection band — on top. That second pass is the only thing an event can
+/// The oracle renders in two steps: the first paints the page and every
+/// annotation's `/AP`, and the second paints the **form-filler's** view of
+/// the widgets over the same bitmap — the focused field's live editor state,
+/// its caret and its selection band — on top. That second pass is the only thing an event can
 /// change about an image, which is why an unfocused fixture renders
 /// identically with and without `--send-events`.
 ///
@@ -460,8 +460,7 @@ fn md5_hex(bytes: &[u8]) -> String {
         })
 }
 
-/// The stdout line `--md5` prints for one written file
-/// (`pdfium_test.cc:311`).
+/// The stdout line `--md5` prints for one written file.
 #[must_use]
 pub fn md5_line(path: &Path, digest: &str) -> String {
     format!("MD5:{}:{digest}\n", path.display())

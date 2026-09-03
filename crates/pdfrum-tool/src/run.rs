@@ -1,4 +1,4 @@
-//! Processing one PDF, in the order and with the chatter `pdfium_test` uses.
+//! Processing one PDF, in the order and with the chatter the oracle uses.
 //!
 //! The sequence is the contract, because the dumps and the notices share one
 //! stdout stream:
@@ -188,9 +188,10 @@ pub fn process_file(
     Ok(counts)
 }
 
-/// `Using event file` / `Sending events from:` as `pdfium_test.cc:2158-2163`
-/// prints them, then the parsed events. An unreadable or empty file is a
-/// silent no-op, matching `access` + `GetFileContents`.
+/// `Using event file` / `Sending events from:` as the oracle prints them,
+/// then the parsed events. An unreadable or empty file is a silent no-op.
+// The two lines are pdfium_test.cc:2158-2163, and the silence is its
+// access() + GetFileContents() pair.
 fn load_events(pdf_name: &str, streams: &mut Streams<'_>) -> std::io::Result<Vec<events::Event>> {
     let Some(path) = events::sibling_evt_path(pdf_name) else {
         return Ok(Vec::new());
@@ -305,24 +306,27 @@ fn save_document(
 /// The substitution settings a command line asks for.
 ///
 /// `skip_font_enumeration` stays at its default `false`: the oracle's Linux
-/// build drives `CFX_FolderFontInfo`, which enumerates, and `--font-dir` is
+/// build enumerates the directories it is given, and `--font-dir` is
 /// precisely the flag that puts it in that mode.
 ///
 /// `system_fonts` is on unless `--no-system-fonts` turned it off, because
-/// `--font-dir` *replaces* the oracle's search path rather than enabling it:
-/// `pdfium_test` leaves `config.m_pUserFontPaths` null without the flag
-/// (`testing/pdfium_test/pdfium_test.cc:2107-2112`) and `CFX_LinuxFontInfo`
-/// then scans `/usr/share/fonts` and three siblings
-/// (`core/fxge/linux/fx_linux_impl.cpp:173-176`). The library's own default is
-/// the other way round — see `SubstitutionOptions::system_fonts` — so this
-/// is the one place the oracle's default is re-asserted.
+/// `--font-dir` *replaces* the oracle's search path rather than enabling it.
+/// Without the flag the oracle sets no user font path and its Linux backend
+/// scans `/usr/share/fonts` and three siblings anyway. The library's own
+/// default is the other way round — see `SubstitutionOptions::system_fonts`
+/// — so this is the one place the oracle's default is re-asserted.
 //
 // Unlinked rather than linked: the item is `pdfrum_font`'s and is not in
 // this crate's doc scope, which is what `a222068` did for its two siblings.
+//
+// The oracle's side, measured: the enumerating backend is
+// CFX_FolderFontInfo; the null user font path is pdfium_test.cc:2107-2112;
+// the four scanned directories are CFX_LinuxFontInfo at
+// core/fxge/linux/fx_linux_impl.cpp:173-176; the help text claiming
+// --no-system-fonts "overrides --font-dir" is pdfium_test.cc:1946.
 ///
 /// The flag itself is the oracle's, whose help text says it "overrides
-/// --font-dir" (`pdfium_test.cc:1946`); clearing the directory list here is
-/// that override.
+/// --font-dir"; clearing the directory list here is that override.
 fn substitution_options(options: &Options) -> pdfrum_font::SubstitutionOptions {
     if options.no_system_fonts {
         return pdfrum_font::SubstitutionOptions {
@@ -341,9 +345,10 @@ fn substitution_options(options: &Options) -> pdfrum_font::SubstitutionOptions {
 /// Visits the selected pages, dumping each one.
 ///
 /// `script` and `session` are `--send-events`'s: the whole script is replayed
-/// against each page before anything is written for it, which is
-/// `PdfProcessor::ProcessPage` (`pdfium_test.cc:1474-1482`) — `SendPageEvents`
-/// is its first statement, ahead of every dump and every render.
+/// against each page before anything is written for it: the replay is the
+/// first thing that happens to a page, ahead of every dump and every render.
+// The oracle's PdfProcessor::ProcessPage, pdfium_test.cc:1474-1482, calls
+// SendPageEvents as its first statement.
 ///
 /// `ctx` is the caller's, and is the *same* one the session was built from:
 /// two contexts over one document would substitute its non-embedded fonts two
@@ -510,9 +515,10 @@ struct Output<'a> {
     input: &'a Path,
     index: u32,
     /// What this page's event replay left behind — the appearances the
-    /// tool's `FPDF_FFLDraw` lays over, which widget is focused (and so *not*
-    /// tinted), and which annotation the pointer is inside (and so whose note
-    /// card is open). Entirely empty for every run without `--send-events`.
+    /// tool's form-filler pass lays over, which widget is focused (and so
+    /// *not* tinted), and which annotation the pointer is inside (and so
+    /// whose note card is open). Entirely empty for every run without
+    /// `--send-events`.
     session: crate::render::SessionView<'a>,
 }
 
@@ -526,9 +532,9 @@ struct Output<'a> {
 /// the `MD5:<path>:<hex>` line the harness and the oracle both print after
 /// the file lands.
 /// `updates` is what `--send-events` left this page in, and it reaches only
-/// the `--png` arm: `FPDF_FFLDraw` is a *bitmap* call, so the event state
-/// changes what a page renders and nothing about what `--txt`, `--annot` or
-/// `--show-pageinfo` report.
+/// the `--png` arm: the form-filler pass is a *bitmap* one, so the event
+/// state changes what a page renders and nothing about what `--txt`,
+/// `--annot` or `--show-pageinfo` report.
 fn write_page_files<R: Resolve>(
     page: &PageDict,
     where_: Output<'_>,
@@ -1022,10 +1028,10 @@ trailer<</Root 1 0 R/Size 5>>\n";
         assert_eq!(out, "Alert: 1700000000000\n");
     }
 
-    /// Absent the flag the clock is the machine's, which is the oracle's rule
-    /// — its hooks are installed only inside `if (options.time > -1)`
-    /// (`pdfium_test.cc:2129-2135`). Asserted as "not 2014", which is the
-    /// claim, rather than as a stopwatch reading, which would flake.
+    /// Absent the flag the clock is the machine's, which is the oracle's
+    /// rule: its clock hooks are installed only when the flag was given.
+    /// Asserted as "not 2014", which is the claim, rather than as a
+    /// stopwatch reading, which would flake.
     #[cfg(feature = "script")]
     #[test]
     fn without_the_time_flag_the_clock_is_the_machines() {
@@ -1045,9 +1051,8 @@ trailer<</Root 1 0 R/Size 5>>\n";
     }
 
     /// A malformed value does what `std::stringstream(s) >> time_t` does —
-    /// leaves the target at zero, which passes the `< 0` check and is the
-    /// epoch (`pdfium_test.cc:783-788`). Accepted, not refused, and the
-    /// scripts see 1970.
+    /// leaves the target at zero, which passes the non-negative check and is
+    /// the epoch. Accepted, not refused, and the scripts see 1970.
     #[cfg(feature = "script")]
     #[test]
     fn a_malformed_time_freezes_the_clock_at_the_epoch() {
@@ -1061,10 +1066,8 @@ trailer<</Root 1 0 R/Size 5>>\n";
     /// and the script after it still runs.
     ///
     /// stdout is the oracle's transcript, which stays byte-exact because the
-    /// oracle prints nothing for a script that threw — `RunScript` drops the
-    /// error under a standing TODO
-    /// (`fpdfsdk/cpdfsdk_formfillenvironment.cpp:1280-1286`). The diagnostic
-    /// is ours.
+    /// oracle prints nothing for a script that threw — it drops the error
+    /// under a standing TODO. The diagnostic is ours.
     #[cfg(feature = "script")]
     #[test]
     fn an_uncaught_throw_is_reported_on_stderr_and_the_next_script_still_runs() {
