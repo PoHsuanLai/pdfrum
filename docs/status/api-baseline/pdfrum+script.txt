@@ -99,6 +99,12 @@ pub pdfrum::Error::Text(pdfrum_text::error::Error)
 pub pdfrum::Error::WrongPassword
 impl core::convert::From<pdfrum_parser::doc::LoadError> for pdfrum::Error
 pub fn pdfrum::Error::from(pdfrum_parser::doc::LoadError) -> Self
+pub enum pdfrum::FlattenMode
+pub pdfrum::FlattenMode::Display
+pub pdfrum::FlattenMode::Print
+pub enum pdfrum::Flattened
+pub pdfrum::Flattened::Done
+pub pdfrum::Flattened::NothingToDo
 pub enum pdfrum::Rotation
 pub pdfrum::Rotation::Half
 pub pdfrum::Rotation::None
@@ -160,6 +166,8 @@ pub fn pdfrum::DocEdit<'_>::save_pages(&mut self, impl core::convert::AsRef<std:
 pub fn pdfrum::DocEdit<'_>::standard_font(&mut self, pdfrum_font::subst::standard::StandardFont) -> pdfrum::Result<pdfrum_edit::font::embed::EmbeddedFont>
 pub fn pdfrum::DocEdit<'_>::write_pages_to(&mut self, &mut impl core::io::write::Write, &[pdfrum::PageEdit], &pdfrum::SaveOptions) -> pdfrum::Result<()>
 pub fn pdfrum::DocEdit<'_>::write_to(&self, &mut impl core::io::write::Write, &pdfrum::SaveOptions) -> pdfrum::Result<()>
+impl pdfrum::DocEdit<'_>
+pub fn pdfrum::DocEdit<'_>::flatten(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, pdfrum::FlattenMode) -> pdfrum::Result<pdfrum::Flattened>
 pub struct pdfrum::Document
 impl pdfrum::Document
 pub fn pdfrum::Document::all_diagnostics(&self) -> pdfrum_common::diagnostics::Diagnostics
