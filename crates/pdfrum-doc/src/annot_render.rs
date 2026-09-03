@@ -176,9 +176,19 @@ pub fn overlay_with<R: Resolve>(
     // The fonts the form's default resources declare, loaded through the same
     // substitution the rest of the page uses. See `ap::FormFonts` for why the
     // stock Helvetica that used to stand in here was the wrong metric source.
-    let fonts = stage(Stage::FormFonts, || ap::FormFonts::load(catalog, r, ctx));
+    // Only a widget or a free-text annotation lays out text, and only an open
+    // pop-up draws a card, so a page with neither never builds the faces: on
+    // a fresh session the build is milliseconds, and a page with no form was
+    // paying it on every cold render.
+    let needs_fonts = !list.popups.is_empty()
+        || list
+            .annots
+            .iter()
+            .any(|annot| matches!(annot.subtype, Subtype::Widget | Subtype::FreeText));
+    let fonts =
+        needs_fonts.then(|| stage(Stage::FormFonts, || ap::FormFonts::load(catalog, r, ctx)));
     let mut generated = stage(Stage::GenerateAppearances, || {
-        ap::generate_appearances_with_text(page_dict, catalog, Some(&fonts), r, diags)
+        ap::generate_appearances_with_text(page_dict, catalog, fonts.as_deref(), r, diags)
     });
     if let Some(supplied) = supplied {
         generated.merge_over(supplied);
@@ -266,17 +276,19 @@ pub fn overlay_with<R: Resolve>(
             }
             push_chrome(page, annot, index, focus, r, limits, diags);
         }
-        push_open_popup(
-            page,
-            &list,
-            generated.hover(),
-            &fonts,
-            &resources,
-            r,
-            ctx,
-            limits,
-            diags,
-        );
+        if let Some(fonts) = &fonts {
+            push_open_popup(
+                page,
+                &list,
+                generated.hover(),
+                fonts,
+                &resources,
+                r,
+                ctx,
+                limits,
+                diags,
+            );
+        }
     });
 }
 
