@@ -1,6 +1,6 @@
 # Unwired oracle ports
 
-**Opened:** 2026-09-03 · **State:** open, four items (one decided)
+**Opened:** 2026-09-03 · **State:** three items open, all one blocked feature
 
 The no-dead-code pass (`chore/no-dead-code`) went through every
 `#[allow(dead_code)]` the idiomatic-API curation left behind. Most were test
@@ -9,7 +9,15 @@ helpers that had escaped into library scope, and they were gated under
 oracle runs on a **production** path, and the port has no production caller
 because *the feature around it was never wired*. Deleting them would throw
 away a checked, tested spec for a gap that would then be invisible. The
-stroked-text CTM split has since been wired; five remain.
+stroked-text CTM split has since been wired; five remained.
+
+**Ruled 2026-09-03, leaving three.** Items 1 and 2 are decided and their
+helpers deleted — one was a real bug in the *shipping* path rather than a
+missing wire, the other an optimisation proved to be pixel-identical and to
+have nothing in the corpus to optimise. The remaining three are one feature
+with one upstream blocker, re-verified against the current `zune-jpeg`. The
+decided entries are kept in full below: an entry that only says "resolved"
+teaches nobody why.
 
 They stay in the tree with `#[allow(dead_code, reason = "unwired — see
 docs/status/unwired-oracle-ports.md")]` until each is either wired or
@@ -66,25 +74,49 @@ PDFium is approximating the same map, and stays within one count of us.
 
 **Board:** unchanged — no 16-bit RGB image is in the corpus.
 
-## 2. `image::scanline::palette_index` — multi-component packed palettes
+## 2. ~~`image::scanline::palette_index` — multi-component packed palettes~~ — **checked and decided, 2026-09-03**
 
-| | |
-|---|---|
-| Item | `crates/pdfrum-page/src/image/scanline.rs` |
-| Oracle | the packed-index loop in `CPDF_DIB::GetScanline`, `core/fpdfapi/page/cpdf_dib.cpp:1200-1209`, inverse of `LoadPalette`'s enumeration at `:957-967` |
-| Oracle production? | **Yes** — inside `GetScanline`, on the render path |
-| pdfrum's live path | none |
+**Ruled: an optimisation, not a behaviour, and one that would pay nothing.
+Deleted.**
 
-The oracle builds a palette whenever `bpc * components <= 8`, so a 2-bit
-3-component or 4-bit 2-component `DeviceN` image is drawn through a lookup
-table whose index packs the components with the **first in the low bits**.
-pdfrum palettizes only `ColorSpace::Indexed` (`image/mod.rs:822`, one
-component) and widens every other space's components to a byte each. The
-packing rule is ported and tested here; the palette path it belongs to is not
-built.
+The oracle palettizes any image with `bpc * components <= 8`
+(`cpdf_dib.cpp:164-171`), building one palette entry per possible packed
+index (`LoadPalette`, `:905-980`) and looking each pixel up (`GetScanline`'s
+packed loop, `:1200-1210`). pdfrum palettizes only `ColorSpace::Indexed` and
+widens every other space's components to a byte each. The question was
+whether that is a *correctness* gap or merely a different route to the same
+pixels.
 
-**Blast radius:** whole-image, for the narrow class of low-bpc multi-component
-images. None are in the corpus.
+**It is the same pixels, proved exhaustively rather than argued.** Both
+routes evaluate the same two functions in the same order: `decode_min +
+decode_step * raw` per component — `DecodeMap::apply` on our side,
+`comp_data_[j].decode_min_ + comp_data_[j].decode_step_ *
+encoded_component` on theirs — followed by the colour space's own
+conversion. The palette merely **precomputes that composition** for all
+`1 << (bpc * components)` inputs, and a precomputed pure function cannot
+give a different answer than the same function called per pixel.
+`a_packed_palette_lookup_and_the_general_path_agree_on_every_index`
+(`crates/pdfrum-page/src/image/scanline.rs`) enumerates every packed index
+for the two shapes that qualify — 2-bpc `DeviceRGB` (64 indices) and 1-bpc
+`DeviceCMYK` (16) — and asserts both routes produce the identical `Rgb`.
+
+**And the optimisation would pay nothing on this corpus.** A scan of all
+1319 corpus PDFs and 551 `.in` templates (structural walk with `pikepdf` over
+page resources, nested form XObjects, patterns, annotation appearance streams
+and inline images, cross-checked by a raw and inflated byte scan of all 1787
+files) found **1315 images carrying `/BitsPerComponent`, of which 839
+satisfy `bpc * components <= 8` — and every one is single-component**: 542
+`/DeviceGray`, 295 `/Indexed`, one `/Separation`, one `/ICCBased` with
+`N = 1`. All are already palettized or trivially wide. The nearest miss,
+`resources/pixel/bug_554151.pdf`, is 4-bpc `/DeviceRGB` — `4 * 3 = 12 > 8`,
+so the oracle takes the `kBgr` path there too.
+
+So wiring it would add a second decode path, guarded by a predicate no
+corpus file satisfies, for byte-identical output. The helper is deleted; the
+packing rule survives as prose in the module doc and as the test's own local
+fixture, which is where a rule with no production caller belongs.
+
+**Board:** unchanged, and unchangeable by this item.
 
 ## 3-5. `image::dct::{scale_denominator, scaled_size, allows_reduced_resolution}`
 
