@@ -155,10 +155,24 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
   `pdfrum-script`. §8's definition of done is ticked but for the one box a
   human has to tick.
 - ~~WP6 the STYLE.md §6 paragraph, last.~~ — landed 2026-09-03.
-- **Still open, and not in the definition of done:** the remaining WP5 crates
-  — `pdfrum-page`, `pdfrum-parser`, `pdfrum-cmap`, `pdfrum-crypt`,
-  `pdfrum-filters`, `pdfrum-type1`, `pdfrum-raster-*`. The CI gate holds the
-  provenance half of the bar for them today; the caps do not.
+- ~~The remaining WP5 crates — `pdfrum-page`, `pdfrum-parser`, `pdfrum-cmap`,
+  `pdfrum-crypt`, `pdfrum-filters`, `pdfrum-type1`, `pdfrum-raster-*`.~~ —
+  landed 2026-09-03, one commit per crate. Every crate root is at or under its
+  cap (55 → 11 the largest fall, `pdfrum-raster-agg`) and indexed items over
+  the cap went 20 → 0; 642 doc lines removed against 198 added and 237 `//`
+  lines added, so the essays moved rather than vanishing. No non-doc line
+  changed and the API snapshot is unmoved. `pdfrum-raster-vello` was included
+  despite `publish = false` because it was grossly over on both halves.
+  rustdoc.md §7 carries the per-crate table and the re-derived contracts.
+- **C++ provenance outside the facade is still open.** WP4's `cpdf_`/`CPDF_`/
+  `FPDF_`/`pdfium_test`/`.cpp:` sweep only ever ran on `crates/pdfrum`; the CI
+  gate covers the phase-and-document pattern, not this one. 94 such lines
+  survive in the ten crates WP5 just finished (`pdfrum-page` 75 of them), all
+  on items that are inside their caps, plus whatever the other crates carry.
+  Widen `scripts/check-no-internal-refs.nu` with the C++ pattern and sweep to
+  green in the gate's own commit, as that script's own history did — the rule
+  is §7's: keep an invariant a caller can get wrong, rewritten without the
+  citation; turn a measured fact into a `//`; delete the rest.
 
 ## Performance (`docs/status/M13-perf-baseline.md`)
 
