@@ -78,7 +78,7 @@ pub use form_session::{
 // and STYLE.md §2b's 2026-09-01 ruling for why this is state a caller pulls
 // rather than a seam the library calls back through.
 pub use outline::{Bookmark, Outline, OutlineIter};
-pub use page::{Page, Rotation};
+pub use page::{Page, PreparedPage, Rotation};
 pub use pdfrum_form::AnnotId;
 pub use pdfrum_form::{Placement, PopupGeometry, PopupView, ScrollView};
 

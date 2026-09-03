@@ -324,18 +324,27 @@ fn forms_split(args: &Args, bytes: &Arc<[u8]>) {
     );
 }
 
-/// One warm arm: prime a session, then time `iterations` whole-document
-/// renders through it. Milliseconds per iteration.
+/// One warm arm: prepare every page once, then time `iterations`
+/// whole-document draws through one session. Milliseconds per iteration.
+///
+/// Prepared once because that is what the reference tool's loop does: it
+/// parses a page once and repeats only the draw, so a per-iteration
+/// re-interpretation here would be counted on one side and not the other.
 fn warm_pass(args: &Args, doc: &Document, options: &RenderOptions) -> f64 {
     let mut session = RenderSession::new();
-    for page in doc.pages() {
-        drop(render_one(args, &page, options, &mut session));
+    let pages: Vec<_> = doc.pages().collect();
+    let prepared: Vec<_> = pages
+        .iter()
+        .map(|page| page.prepare(options, &mut session))
+        .collect();
+    for page in &prepared {
+        drop(draw_one(args, page, &mut session));
     }
 
     let started = Instant::now();
     for _ in 0..args.iterations {
-        for page in doc.pages() {
-            black_box(render_one(args, &page, options, &mut session).ok());
+        for page in &prepared {
+            black_box(draw_one(args, page, &mut session).ok());
         }
     }
     let elapsed = started.elapsed();
@@ -358,6 +367,20 @@ fn render_one(
         Backend::Agg => page.render_on(&AggBackend::new(), options, session),
         Backend::TinySkia => page.render_on(&TinySkiaBackend::new(), options, session),
         Backend::VelloCpu => page.render_on(&VelloCpuBackend::new(), options, session),
+    }
+}
+
+/// One prepared page drawn on the backend `--backend` named; the warm arm's
+/// half of [`render_one`].
+fn draw_one(
+    args: &Args,
+    page: &pdfrum::PreparedPage<'_>,
+    session: &mut RenderSession,
+) -> pdfrum::Result<pdfrum::Pixmap> {
+    match args.backend {
+        Backend::Agg => page.render_on(&AggBackend::new(), session),
+        Backend::TinySkia => page.render_on(&TinySkiaBackend::new(), session),
+        Backend::VelloCpu => page.render_on(&VelloCpuBackend::new(), session),
     }
 }
 

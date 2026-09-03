@@ -4,7 +4,6 @@ use pdfrum_common::{Diagnostics, PageIndex};
 use pdfrum_object::Name;
 use pdfrum_page::BuildContext;
 use pdfrum_parser::PageDict;
-use pdfrum_render::RenderCaches;
 
 use crate::{
     Annotation, Document, Pixmap, RasterBackend, RenderOptions, RenderSession, Result, TextPage,
@@ -17,7 +16,8 @@ use crate::{
 /// dictionary and its inherited attributes, which is a handful of dictionary
 /// lookups. The expensive work — interpreting the content stream into a
 /// drawable object graph — happens in [`Page::render`] and [`Page::text`],
-/// each of which does it once for the call.
+/// each of which does it once for the call, and in [`Page::prepare`], which
+/// does it once for any number of draws.
 #[derive(Debug, Clone)]
 pub struct Page<'a> {
     pub(crate) doc: &'a Document,
@@ -165,35 +165,22 @@ impl<'a> Page<'a> {
         options: &RenderOptions,
         session: &mut RenderSession,
     ) -> Result<Pixmap> {
-        self.paint(backend, options, &mut session.build, &mut session.caches)
+        self.prepare(options, session).render_on(backend, session)
     }
 
-    /// The device box this page's images should be decoded against.
+    /// Interprets the page once, for drawing any number of times.
     ///
-    /// The bound is the **render device's own dimensions**, not the rectangle
-    /// an individual image lands in — one value for the whole page, and one
-    /// that can be computed before a single object is interpreted, since the
-    /// display size is fixed by the crop box and `/Rotate` alone.
-    ///
-    /// The truncation, and the reason the box is the *page's* rather than any
-    /// image's, are both in [`pdfrum_page::RequestedSize::for_device`].
-    fn decode_target(&self, options: &RenderOptions) -> pdfrum_page::RequestedSize {
-        let (pw, ph) = self.display_size();
-        let corners = options
-            .transform
-            .transform_rect_bbox(kurbo::Rect::new(0.0, 0.0, pw, ph));
-        pdfrum_page::RequestedSize::for_device(corners.width(), corners.height())
-    }
-
-    /// The one render body, parameterised by which rasterizer draws and which
-    /// caches it borrows.
-    fn paint<B: RasterBackend>(
+    /// The expensive half of [`Page::render_on`], separated from the drawing
+    /// so a repaint does not repeat it. The session's build caches are used
+    /// and warmed exactly as `render_on` uses them. See [`PreparedPage`] for
+    /// what the value holds and when to prepare again.
+    #[must_use]
+    pub fn prepare(
         &self,
-        backend: &B,
         options: &RenderOptions,
-        ctx: &mut BuildContext,
-        caches: &mut RenderCaches,
-    ) -> Result<Pixmap> {
+        session: &mut RenderSession,
+    ) -> PreparedPage<'a> {
+        let ctx = &mut session.build;
         // Set before the build, because the build is what decodes the images.
         // Restored afterwards so a caller threading one context through a
         // render and then a `Page::objects` call does not silently inherit this
@@ -219,20 +206,28 @@ impl<'a> Page<'a> {
             self.doc.note(&diags);
         }
         ctx.decode_target = previous;
-        let page = page;
-        let inner = options.to_inner();
-        let mut diags = Diagnostics::default();
-        let session = pdfrum_render::RenderSession {
-            caches: Some(caches),
-            ..Default::default()
-        };
-        let pixmap = crate::profile::stage(crate::profile::Stage::Raster, || {
-            pdfrum_render::render_page_with(&page, &inner, backend, session, &mut diags)
-        });
-        // Recorded whether or not the render succeeded: a page too large to
-        // rasterize may still have reported damage on the way there.
-        self.doc.note(&diags);
-        Ok(pixmap?)
+        PreparedPage {
+            doc: self.doc,
+            graph: page,
+            options: options.clone(),
+        }
+    }
+
+    /// The device box this page's images should be decoded against.
+    ///
+    /// The bound is the **render device's own dimensions**, not the rectangle
+    /// an individual image lands in — one value for the whole page, and one
+    /// that can be computed before a single object is interpreted, since the
+    /// display size is fixed by the crop box and `/Rotate` alone.
+    ///
+    /// The truncation, and the reason the box is the *page's* rather than any
+    /// image's, are both in [`pdfrum_page::RequestedSize::for_device`].
+    fn decode_target(&self, options: &RenderOptions) -> pdfrum_page::RequestedSize {
+        let (pw, ph) = self.display_size();
+        let corners = options
+            .transform
+            .transform_rect_bbox(kurbo::Rect::new(0.0, 0.0, pw, ph));
+        pdfrum_page::RequestedSize::for_device(corners.width(), corners.height())
     }
 
     /// Extracts the page's text.
@@ -486,6 +481,87 @@ impl From<pdfrum_page::Rotation> for Rotation {
             pdfrum_page::Rotation::Half => Rotation::Half,
             pdfrum_page::Rotation::ThreeQuarter => Rotation::ThreeQuarter,
         }
+    }
+}
+
+/// A page whose content has been interpreted, ready to be drawn any number
+/// of times.
+///
+/// [`Page::render`] interprets the content stream on every call; a viewer
+/// that repaints the same page on every scroll pays that again each time.
+/// [`Page::prepare`] does the interpretation once and hands back the result
+/// as a value you own: draw it as often as you like, and drop it when the
+/// page leaves the screen. What it retains is visible in the type — the
+/// interpreted object graph, including every image decoded for the device
+/// size it was prepared at — and nothing is cached behind your back.
+///
+/// Prepared **for** one [`RenderOptions`]: the annotations flag decides what
+/// is in the graph and the transform decides how much resolution its images
+/// were decoded at, so a page is drawn with the options it was prepared
+/// with. To draw at another size or without annotations, prepare again.
+///
+/// ```
+/// use pdfrum::{Document, RenderOptions, RenderSession, VelloCpuBackend};
+///
+/// let doc = Document::open("tests/fixtures/hello_world.pdf")?;
+/// let backend = VelloCpuBackend::new();
+/// let mut session = RenderSession::new();
+/// let prepared = doc.page(0)?.prepare(&RenderOptions::default(), &mut session);
+///
+/// // Interpreted once, drawn twice.
+/// let first = prepared.render_on(&backend, &mut session)?;
+/// let second = prepared.render_on(&backend, &mut session)?;
+/// assert_eq!(first.data(), second.data());
+/// # Ok::<(), pdfrum::Error>(())
+/// ```
+#[derive(Debug)]
+pub struct PreparedPage<'a> {
+    doc: &'a Document,
+    graph: pdfrum_page::Page,
+    options: RenderOptions,
+}
+
+impl PreparedPage<'_> {
+    /// Draws the prepared page on [`VelloCpuBackend`], with glyph caches of
+    /// its own that it throws away afterwards.
+    ///
+    /// # Errors
+    ///
+    /// As [`Page::render`].
+    pub fn render(&self) -> Result<Pixmap> {
+        self.render_on(&VelloCpuBackend::new(), &mut RenderSession::default())
+    }
+
+    /// Draws the prepared page on a rasterizer you name, reusing a
+    /// caller-owned [`RenderSession`]'s glyph caches.
+    ///
+    /// # Errors
+    ///
+    /// As [`Page::render`].
+    pub fn render_on<B: RasterBackend>(
+        &self,
+        backend: &B,
+        session: &mut RenderSession,
+    ) -> Result<Pixmap> {
+        let inner = self.options.to_inner();
+        let mut diags = Diagnostics::default();
+        let render_session = pdfrum_render::RenderSession {
+            caches: Some(&mut session.caches),
+            ..Default::default()
+        };
+        let pixmap = crate::profile::stage(crate::profile::Stage::Raster, || {
+            pdfrum_render::render_page_with(
+                &self.graph,
+                &inner,
+                backend,
+                render_session,
+                &mut diags,
+            )
+        });
+        // Recorded whether or not the render succeeded: a page too large to
+        // rasterize may still have reported damage on the way there.
+        self.doc.note(&diags);
+        Ok(pixmap?)
     }
 }
 

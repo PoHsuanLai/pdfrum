@@ -285,6 +285,7 @@ pub fn pdfrum::Page<'a>::index(&self) -> pdfrum_common::page_index::PageIndex
 pub fn pdfrum::Page<'a>::links(&self) -> alloc::vec::Vec<pdfrum_doc::nav::link::Link>
 pub fn pdfrum::Page<'a>::media_box(&self) -> kurbo::rect::Rect
 pub fn pdfrum::Page<'a>::objects(&self) -> pdfrum_page::page::Page
+pub fn pdfrum::Page<'a>::prepare(&self, &pdfrum::RenderOptions, &mut pdfrum::RenderSession) -> pdfrum::PreparedPage<'a>
 pub fn pdfrum::Page<'a>::render(&self, &pdfrum::RenderOptions) -> pdfrum::Result<pdfrum_render::pixmap::Pixmap>
 pub fn pdfrum::Page<'a>::render_on<B: pdfrum_render::device::RasterBackend>(&self, &B, &pdfrum::RenderOptions, &mut pdfrum::RenderSession) -> pdfrum::Result<pdfrum_render::pixmap::Pixmap>
 pub fn pdfrum::Page<'a>::rotation(&self) -> pdfrum::Rotation
@@ -323,6 +324,10 @@ pub fn pdfrum::PathBuilder::build(self) -> pdfrum_page::page::PageObject
 pub fn pdfrum::PathBuilder::rect(kurbo::rect::Rect) -> Self
 impl core::default::Default for pdfrum::PathBuilder
 pub fn pdfrum::PathBuilder::default() -> Self
+pub struct pdfrum::PreparedPage<'a>
+impl pdfrum::PreparedPage<'_>
+pub fn pdfrum::PreparedPage<'_>::render(&self) -> pdfrum::Result<pdfrum_render::pixmap::Pixmap>
+pub fn pdfrum::PreparedPage<'_>::render_on<B: pdfrum_render::device::RasterBackend>(&self, &B, &mut pdfrum::RenderSession) -> pdfrum::Result<pdfrum_render::pixmap::Pixmap>
 pub struct pdfrum::RenderOptions
 pub pdfrum::RenderOptions::annotations: bool
 pub pdfrum::RenderOptions::background: core::option::Option<peniko::Color>
