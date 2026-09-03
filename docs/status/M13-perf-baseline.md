@@ -989,3 +989,372 @@ rather than M12's. The **before** column is the honest comparand for the
   either still carries the old cost and must not be compared with a row above.
 - **The ratchet is still not re-baselined.** §8's third bullet stands, and
   `benches/baseline.json` is untouched.
+
+## 12. The fourth cost: the clip plane's *allocation*, and the pool that removes it
+
+**Taken 2026-09-03, on the same box, at load 43–131.** §11.7 named
+`forms_text_field` as the class's worst row at **3.10x**, observed that its
+1.69x speedup was among the class's lowest, and concluded that whatever was
+left in it "is — by §10.6's own argument — a *fourth* cost rather than this
+one". This section is that split. It found the fourth cost, and it is the
+half of `push_clip_rect` that §11 did not remove.
+
+**§11 made the clip's intersection cheap and left its allocation alone.**
+
+### 12.1 Where the split landed, and why §11's method had to be re-run
+
+`--op forms` on `forms_text_field` reports **67.6%** of a warm render in the
+*page content* and 32.4% in the overlay — the reverse of `forms_combo_box`'s
+87.9/12.1, and the first thing that says this row is not `forms_combo_box`'s
+residue in a smaller document:
+
+| fixture | page content | annotation overlay |
+|---|---:|---:|
+| `forms_text_field` | **67.6%** (9.57 ms) | 32.4% (4.60 ms) |
+| `forms_signature` | 72.0% | 28.0% |
+| `forms_combo_box` | 29.9% | 70.1% |
+| `forms_number` | 26.2% | 73.8% |
+
+That reversal is real but it is not the finding, and reading it as one would
+have sent this section into `pdfrum-page`. **The overlay's objects are drawn
+through the same device calls the page's own are**, so a cost in the *drawing*
+shows up on whichever side happens to own more objects — and `--op forms`
+attributes by arm, not by function.
+
+`--sample` again could not see it, for §11.2's reason and one more: it hoists
+`page.objects()` and so reports `forms_text_field`'s page content at **1.97 ms**
+against the warm loop's 9.57. `--walk` on the warm loop is not reachable either
+— the walk report is emitted from `timed_render`, which is the `--sample` path.
+So the naming was done as §11 did it, with direct `Instant` pairs, but placed
+one level lower: around `Page::paint`'s three phases, and then around each
+`RenderDevice` call inside `AggDevice`.
+
+### 12.2 What that named
+
+`Page::paint`, per warm render, all pages, `annotations: true`:
+
+| fixture | whole | `build` (graph) | `annot_render::overlay` | `render_page_with` |
+|---|---:|---:|---:|---:|
+| `forms_text_field` | 6.63 ms | 0.73 (11.0%) | 1.17 (17.6%) | **4.66 (70.3%)** |
+| `forms_combo_box` | 9.94 ms | 0.73 (7.3%) | 1.74 (17.5%) | **7.36 (74.1%)** |
+| `forms_number` | 1.96 ms | 0.22 (11.2%) | 0.61 (31.1%) | **1.12 (57.1%)** |
+
+The build is a tenth and the overlay's *build* is a fifth; the rasterizer is
+seventy per cent, which is where §11 left it. Inside `AggDevice`:
+
+| call | `forms_text_field` | `forms_combo_box` | `forms_number` |
+|---|---:|---:|---:|
+| `push_clip_rect` — `coverage_of` | 0.95 ms / 133 | 2.51 ms / 276 | 0.28 ms / 40 |
+| &nbsp;&nbsp;of which **`AlphaMask::new`** | **0.61 ms** | **1.55 ms** | **0.19 ms** |
+| &nbsp;&nbsp;of which the sweep | 0.26 ms | 0.77 ms | 0.07 ms |
+| &nbsp;&nbsp;of which `add_path` | 0.06 ms | 0.13 ms | 0.01 ms |
+| `push_clip_mask` (post-30c0419) | 0.12 ms | 0.40 ms | 0.002 ms |
+| `pop` | 0.007 ms | 0.02 ms | 0.002 ms |
+| `fill_path` | 0.95 ms / 74 | 1.70 ms / 222 | 0.49 ms / 40 |
+| `draw_image` | 0.45 ms / 877 | 0.50 ms / 714 | 0.06 ms / 133 |
+
+**`AlphaMask::new` is 9.1% of a whole `forms_text_field` render and 15.6% of a
+`forms_combo_box` one** — larger, on `combo_box`, than everything else in
+`coverage_of` put together. `push_clip_mask`, which §11 took from 8.2 ms to
+this, is now 0.12 ms; the band worked and the cost moved next door.
+
+**`forms_number` shares it**, at 9.4% of its render on 40 pushes — which the
+brief asked and which matters, because it says the cost scales with the clip
+count on a document whose clip count is small.
+
+### 12.3 Why it is a defect and not the price of a clip
+
+`AlphaMask::new` is `vec![0; width * height]`. On this corpus's letter pages
+that is **half a megabyte of `memset`**, and the allocator cannot hand it back
+already zeroed once the page's first few planes are in flight — a fresh `mmap`
+is zero-filled by the kernel, but a reused heap block is not. `forms_combo_box`
+performs it two hundred and seventy-six times per render, for clips that are
+about thirty rows tall: **140 MB of zeroing per render to describe about
+sixteen megabytes' worth of clip.**
+
+The plane must be device-sized — `Target` indexes it by absolute device row and
+column, which §11.3 established and this does not change. What it need not be
+is *newly allocated*, and the reason it was is that `coverage_of` had no other
+source: a clip is pushed onto a stack and popped off it, and the popped one was
+dropped.
+
+### 12.4 The fix, and the invariant each half preserves
+
+Both halves are inside `pdfrum-raster-agg`, and **neither changes the
+arithmetic** — the same statement §11.4 makes, for the same reason.
+`CFX_AggClipRgn::IntersectMask`'s truncating `a * b / 255` is untouched, and so
+is the sweep.
+
+**The pool.** `AggDevice` holds `planes: Vec<AlphaMask>`, and `coverage_of`
+takes from it through `blank_plane` instead of calling `AlphaMask::new`. The
+pool's invariant is that **every byte in it is zero**, which is exactly what
+`AlphaMask::new` guarantees and exactly what the sweep needs: the sweep
+*assigns* (`*slot = alpha`) rather than accumulates, so a recycled plane's spans
+are the new path's; what the pool has to guarantee is only that the bytes the
+sweep does **not** touch are zero.
+
+**The band, again — this time to clear rather than to intersect.** `pop`
+returns the popped plane to the pool through `recycle`, which restores the
+invariant by clearing the *band* §11 already records for it. The band bounds the
+plane's non-zero rows above: `coverage_of` wrote only inside its own band, and
+`push_clip_mask`'s intersection only narrowed that, so clearing the band clears
+everything that could be non-zero. Clearing thirty rows is what makes the reuse
+worth having; clearing the whole plane would be the `memset` this exists to
+avoid. The bands live in a `bands: Vec<Range<u32>>` parallel to `clips`, pushed
+and popped with it.
+
+**The reclaim takes the plane only when nothing else holds it.** `recycle` runs
+*after* `sync_clip`, because the active target holds a share of the popped plane
+until that repoints it one level out, and it goes through `Arc::try_unwrap`, so
+a plane a layer still holds is simply not pooled. On this corpus that decline
+never fires — **measured: zero declines over all forty-four `benches/corpus`
+documents** — because `frames` is one LIFO and a layer opened after a clip is
+always popped before it. It is kept regardless: `recycle` must not be the thing
+that makes a future share unsound, and it costs one already-loaded refcount.
+
+Three tests pin what the change trades on, and each targets one way it could be
+wrong. `a_recycled_plane_carries_none_of_the_clip_it_held` pushes a clip over
+rows 0..4, pops it, and pushes one over rows 4..8 — the second push takes the
+first's plane, and rows 0..4 are rows the second sweep never touches, so an
+uncleared byte there paints. `a_recycled_nested_plane_is_cleared_over_its_whole_band`
+does the same where the recycled plane held an *intersection* narrower than its
+recorded band, which is the case a band-clear that trusted the intersection
+rather than the sweep would miss. `a_clip_under_a_layer_unwinds_with_the_layer_between_them`
+is the stack shape the `try_unwrap` guards. Both of the first two fail under
+either of the two mutations that matter — dropping the clear, and recording an
+empty band.
+
+**Nothing public moves.** `planes` and `bands` are private fields of
+`AggDevice`, whose `clips` was already one; `AlphaMask::new` in `pdfrum-render`
+is unchanged and still public. `scripts/api-snapshot.nu check` reports the
+surface matching the committed baseline.
+
+### 12.5 tinyskia: the clone §11.4 noted, and the larger one beside it
+
+§11.4 recorded that `pdfrum-raster-tinyskia` "has a clone of the same shape in
+its own `push_clip`/`push_clip_rect`… it pays one copy where AGG paid three
+passes", and left it unmeasured. Looking at it found that description to be
+right about the push and **wrong about where the crate's clone cost is**.
+
+`tiny_skia::Mask::intersect_path` mutates in place, so a push genuinely must
+clone the mask below it — that one is inherent and is left alone. What is not
+inherent is that `fill_path`, `stroke_path` and `draw_image` each also cloned
+the whole clip mask, **once per draw call**, and for a reason that is not about
+tiny-skia at all: `self.target()` needs `&mut self` and `self.clip()` needs
+`&self`, so the clip was cloned to end the borrow. `clips` and `layers`/`base`
+are disjoint fields; a hand-split borrow (`target_and_clip`) returns both and
+the clone goes away. `tiny_skia` takes the mask by reference either way, so
+nothing about the drawing changes.
+
+That is a device-sized `memcpy` **per drawn object under a clip** rather than
+per clip push — on a forms page, hundreds where the push count is dozens.
+
+### 12.6 The machine
+
+**Load 43 rising to 131 on 32 cores**, sampled per fixture and reported in the
+table's last column as a range rather than a point, because within a single
+fixture's own measurement it moved by more than the fixture's own cost.
+
+§10.4's tenants are still there — the two `python3` jobs are now at 407% and
+393% CPU with elapsed times over two hours, and the dozen `osmium` processes
+belong to the same other user — and they are joined by something §3 through §11
+did not have to contend with: **three sibling agents on this repository, each
+running its own conformance board and its own workspace build** in
+`cargo-target/{tiling,m15-step2,writer-fonts}`. §3's instruction to re-take
+these figures on an idle box is undischarged for the fifth time, and the reason
+has changed shape: it is no longer only the other user's jobs.
+
+**The consequence for this section is specific and is not hidden.** At load 76+
+the interleaved A/B stopped resolving the effect: `forms_combo_box` read 0.98x
+before/after in a window whose oracle column read 13.28 ms against §11's 4.38 —
+the box three times slower, and the minimum of fifteen rounds dominated by
+scheduling rather than by the code. The before/after column is load-independent
+in the sense §3 argues *only while both arms see the same machine*, and at three
+times the core count they do not reliably see it within one round.
+
+**So the claim this section rests on is the profile, not the wall clock.**
+§12.2's shares are taken inside one process, are a decomposition of that
+process's own work, and do not change with what else the box is doing; §12.7
+gives the same instrument's reading after the fix, which is the honest
+before/after for a change whose whole content is "this function no longer costs
+what it cost".
+
+A wall-clock table is given anyway, in §12.8, with a shorter measurement unit
+that did resolve the effect (forty five-iteration bursts rather than fifteen
+twenty-one-iteration rounds) — and with two controls that push **zero** clips,
+so their rows measure the instrument rather than the change. That pair is what
+makes the table readable at this load: it says, in the same units as the claim,
+how large the noise is.
+
+### 12.7 The measurement that survives the load: the same instrument, after
+
+Same probe, same documents, same warm loop, on the fixed binary:
+
+| fixture | `AlphaMask::new`, before | `blank_plane` + `recycle`, after | removed |
+|---|---:|---:|---:|
+| `forms_text_field` | 0.605 ms (9.1%) | 0.104 + 0.033 = **0.137 ms** | **0.47 ms** |
+| `forms_combo_box` | 1.551 ms (15.6%) | 0.076 + 0.062 = **0.138 ms** | **1.41 ms** |
+| `forms_number` | 0.185 ms (9.4%) | 0.027 + 0.010 = **0.037 ms** | **0.15 ms** |
+
+**The allocation is gone and the reclaim did not replace it**: `blank_plane` is
+a `Vec::pop` and a size check, `recycle` is a refcount check and a band-sized
+`fill(0)`, and together they are a fifth to a tenth of what they replace. The
+pool reaches steady state after the deepest clip level the page ever holds —
+which is why `recycle`'s call count equals `push_clip_rect`'s and the pool never
+grows past the stack's high-water mark.
+
+### 12.8 The wall-clock table, and the two controls that cannot move
+
+Whole document, milliseconds, AGG, **lower is better**; the ratio is ours over
+the oracle's, so **> 1 is pdfrum being slower**. `before` is `cd1a511`'s
+parent, `after` is `cd1a511`. Read §12.6 before quoting any absolute
+millisecond or any ratio: the machine tax is large here and the load column is
+a *range* because it moved inside a fixture's own measurement.
+
+*On the method:* §11.6's spelling — `n = 21`, best of five — could not resolve
+the effect at this load (§12.6). What could is the same discipline with a
+shorter unit and more of them: **forty alternating bursts of five iterations**,
+which arm goes first swapped every burst, each arm's minimum kept. The argument
+is `bench-oracle.nu`'s own: a timing sample is bounded below by the real cost
+and unbounded above by the machine, so more independent short samples give a
+better chance that one of them landed in an uncontended slice. The oracle
+column is the same `(t[n] − t[1]) / (n − 1)` marginal-pass formula over ten
+rounds, against PDFs copied to scratch because `pdfium_test` writes beside its
+input and the oracle tree is read-only.
+
+| fixture | clips/render | before (ms) | **after (ms)** | speedup | oracle (ms) | ratio before | **ratio after** | load |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| `forms_combo_box` | 263 | 6.49 | **5.55** | **1.17x** | 3.91 | 1.66x | **1.42x** | 65–72 |
+| `forms_list_box` | — | 11.10 | **10.29** | 1.08x | 5.87 | 1.89x | **1.75x** | 59–65 |
+| `forms_number` | 39 | 1.78 | **1.69** | 1.05x | 1.33 | 1.34x | **1.27x** | 57–59 |
+| `forms_push_button` | — | 5.77 | **5.36** | 1.08x | 73.69 | 0.08x | **0.07x** | 53–63 |
+| `forms_signature` | — | 2.35 | **2.27** | 1.04x | 3.91 | 0.60x | **0.58x** | 56–58 |
+| `forms_text_field` | 127 | 8.61 | **7.93** | 1.09x | 7.21 | 1.19x | **1.10x** | 56–65 |
+| `forms_widgets_407` | — | 8.64 | **7.23** | **1.19x** | 9.72 | 0.89x | **0.74x** | 65–69 |
+| **`forms` geomean** | | | | | | **0.80x** | **0.72x** | |
+| | | | | | | | | |
+| `vector_paths_1751` | **0** | 13.53 | 13.78 | 0.98x | 98.78 | 0.14x | 0.14x | 63–93 |
+| `image_bug_583804` | **0** | 199.27 | 222.67 | 0.89x | 189.13 | 1.05x | 1.18x | 57–98 |
+| `shading_axial_radial` | 33 | 32.33 | 36.38 | 0.89x | 61.94 | 0.52x | 0.59x | 65–83 |
+
+**Every one of the seven forms rows improves**, from 1.04x to 1.19x, and the two
+that improve most — `forms_combo_box` at 1.17x and `forms_widgets_407` at 1.19x
+— are the two whose clip counts are highest. `forms_text_field`, the row §11.7
+named, goes **1.19x → 1.10x** against the oracle. The class geomean goes
+**0.80x → 0.72x**.
+
+**The controls are the interesting half of this table, and they say something
+§11.6's could not.** Two of the three push **zero clips per render** — measured,
+by counting `push_clip_mask` calls in a warm render:
+
+| fixture | clip pushes per render |
+|---|---:|
+| `forms_combo_box` | 263 |
+| `forms_text_field` | 127 |
+| `forms_number` | 39 |
+| `shading_axial_radial` | 33 |
+| `vector_paths_1751` | **0** |
+| `image_bug_583804` | **0** |
+
+**On `vector_paths_1751` and `image_bug_583804` the changed code does not
+execute at all.** Their rows are therefore not a control in the usual sense —
+that the fix did not hurt them — but a *calibration of the instrument*: they
+read 0.98x and 0.89x, and every part of that spread is the machine. **A 0.89x
+on a document the change cannot reach is the honest measure of what this box's
+noise is worth**, and it is larger than three of the seven forms improvements.
+Those three rows are real because the profile says so (§12.7) and because they
+order with the clip count; they are not established by this table alone.
+
+`shading_axial_radial` reads 0.89x on 33 clips per render, which by that
+ordering should have shown a small gain and did not — the same noise, on a
+document where the effect is smaller than it.
+
+### 12.9 tinyskia, measured
+
+The brief asked for this on the same three forms fixtures, before and after,
+with `--backend tinyskia`. Both measurements are below and **they disagree**,
+which is the useful part.
+
+The wall clock, same forty-burst method, at load 72–86:
+
+| fixture | before (ms) | after (ms) | speedup | load |
+|---|---:|---:|---:|---:|
+| `forms_combo_box` | 37.07 | **31.47** | **1.18x** | 72–76 |
+| `forms_text_field` | 16.78 | 17.02 | 0.99x | 76–86 |
+| `forms_number` | 8.75 | 14.59 | **0.60x** | 76–86 |
+
+A 0.60x is not a thing this change can do — it removes a clone and adds
+nothing — so the row is noise, and the in-process probe says which rows are and
+which are not. Timing the clip access at `fill_path` and `draw_image`
+directly, before and after:
+
+| fixture | clone, before | access, after | removed | of the render |
+|---|---:|---:|---:|---:|
+| `forms_text_field` | 1.431 ms | 0.020 ms | **1.41 ms** | **6.0%** |
+| `forms_combo_box` | 2.895 ms | 0.018 ms | **2.88 ms** | **7.0%** |
+| `forms_number` | **0.004 ms** | 0.003 ms | 0.001 ms | **0.0%** |
+
+**`forms_number` is the tinyskia analogue of §12.8's zero-clip controls.** Its
+draws almost all run with **no clip in force**, and `self.clip().cloned()` on a
+`None` clones nothing — so the clone this removes never cost that document
+anything, and its 0.60x wall-clock row is measuring the machine, exactly as
+`image_bug_583804`'s 0.89x is. `forms_text_field`'s 0.99x is the same, at a
+smaller amplitude than the 6.0% the probe attributes.
+
+So: the tinyskia change is worth **6–7% of a render on the two documents that
+draw under a clip**, is worth nothing on the one that does not, and the wall
+clock resolved only the largest of the three.
+
+**Only the per-draw clone is removed.** `push_clip`/`push_clip_rect` still clone
+the mask below them, because `tiny_skia::Mask::intersect_path` mutates in place
+and the mask below must survive on the stack — that one is inherent, and AGG's
+band trick does not port to it because `intersect_path` reports no band. §11.4
+described *that* clone and did not see this one.
+
+### 12.10 Conformance: nothing moved
+
+**The board is byte-identical.** 1757 files, 1514 pass, 243 fail; every tag
+bucket unchanged (`form-events` 8, `js-transcript` 33, `page-count` 2,
+`pixel-fail` 41, `tierA-mismatch` 170); the text rates identical to six
+figures. All **1757 per-file rows compare equal** to the committed
+`conformance/scoreboard.json` — status, tags, the Tier A compared and
+mismatched lists, and the Tier B `ssim`, `exact` and `max_channel_diff` on every
+one. Not "no regressions": no row differs at all, which is what a change that
+computes the same planes should produce.
+
+**`conformance tier-c` is unchanged**: 1628 files compared under the gating
+pair, 3 hard failures, 434 over the 1% edge budget, worst edge divergence
+**66.6634%**, the same three named files. That is the cross-backend gate, and it
+matters more here than in §11 because this section changes *both* rasterizers —
+if the AGG pool or the tinyskia borrow had altered a pixel, the two backends
+would have moved apart and this is the number that would say so.
+
+`crates/pdfrum/tests/facade.rs`'s
+`every_backend_renders_the_same_page_at_the_same_size` passes in the workspace
+run, as do all 3926 tests.
+
+### 12.11 What this does not claim
+
+- **Not an idle box, for the fifth time**, and §12.6 says why the reason has
+  changed: it is no longer only the other user's jobs. §3's instruction is still
+  undischarged.
+- **The wall-clock table is the weaker half of the evidence.** §12.8's own
+  controls measure 0.89x on documents the change provably cannot reach, and
+  three of the seven forms improvements are smaller than that. The claim rests
+  on §12.7 and §12.9's in-process probes, which are decompositions of one
+  process's own work; the wall clock corroborates it and does not establish it.
+  A quiet re-take is owed and is on `docs/status/queue.md`.
+- **The oracle column of §12.8 should not be compared with §11.6's.** It was
+  taken at a different load on a different day; `forms_text_field`'s oracle
+  reads 7.21 ms here against 2.59 ms there, which is the machine, not
+  `pdfium_test`.
+- **`vello_cpu` is unchanged.** It has a clip stack of its own that neither §11
+  nor this section has looked at, and a figure taken on it still carries
+  whatever it carries.
+- **The pool is per device, not per session.** An `AggDevice` is built per page
+  render, so the planes are freed with it; a document-lifetime pool would save
+  the first push of each page and was not built, because the first push is one
+  of two hundred and the `RenderCaches` seam it would have to cross is the
+  engine's rather than this crate's.
+- **The ratchet is still not re-baselined.** §8's third bullet stands, and
+  `benches/baseline.json` is untouched.
