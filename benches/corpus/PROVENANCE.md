@@ -7,7 +7,7 @@ criterion column and the `pdfium_test` column describe the same work.
 
 - **Source:** `testing/corpus/` and `testing/resources/` of the PDFium
   repository, at commit `6f2272e1f3aaa141305475b83ef4eac2c1f527b8` (2026-08-28),
-  read-only at `/mnt/data2/pdfium/pdfium-c++`.
+  read-only at `$PDFRUM_ORACLE_CHECKOUT` (default `<repo>/../pdfium-c++`).
 - **License:** BSD-3-Clause, "Copyright 2014 The PDFium Authors" — see the
   `LICENSE` file at the root of that checkout, and `testing/corpus/LICENSE`,
   which carries the same terms for the corpus half. Redistribution in source

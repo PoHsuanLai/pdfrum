@@ -30,16 +30,46 @@ reports `0 files compared`, that is the reason; pass `--tool` explicitly.
 `--goldens` has the same shape of trap. `conformance/goldens/` is
 `.gitignore`d, so a fresh worktree has none, and a run without the flag reads
 every row as `missing-golden` **and still exits 0** — `--check-regressions`
-cannot regress against nothing. From a worktree, pass the main checkout's
-directory explicitly: `--goldens /mnt/data2/pdfium/pdfrum/conformance/goldens`.
-`--checkout` resolves the same way and needs the same treatment; the oracle
-checkout is `/mnt/data2/pdfium/pdfium-c++` (its parent directory is the same
-silent zero). A board that
+cannot regress against nothing. From a worktree, name the main checkout's
+store: `PDFRUM_GOLDENS=/path/to/pdfrum/conformance/goldens`.
+`--checkout` resolves the same way and needs the same treatment
+(`PDFRUM_ORACLE_CHECKOUT`); its parent directory is the same silent zero.
+A board that
 reports no passes and no failures has not run — and it has still overwritten
 `conformance/scoreboard.json` on the way out, so restore that from git before
 the next `--check-regressions` — or write a trial run to `--out` under a
-scratch path in the first place. The same silence covers a missing `--tool`:
+scratch path in the first place. `--out` is a **file** path, not a directory:
+pointing it at one fails with `Is a directory` and still exits 0, the same
+silence as the rest of this paragraph. The same covers a missing `--tool`:
 every row reads `unsupported-tool`, and the exit code is still 0.
+
+## The four paths, and the variables that name them
+
+Every path outside this repository comes from one place — an environment
+variable with a default relative to the repository root — so a fresh clone
+resolves all four without an edit and a differently laid out machine overrides
+only what differs. The flags below still win over the variables.
+
+| variable | flag | default |
+|---|---|---|
+| `PDFRUM_ORACLE_CHECKOUT` | `--checkout` | `<repo>/../pdfium-c++` |
+| `PDFRUM_ORACLE_BIN` | `--oracle` | `<checkout>/out/Release/pdfium_test` |
+| `PDFRUM_GOLDENS` | `--goldens` | `<repo>/conformance/goldens` |
+| `PDFRUM_TOOL` | `--tool` | `<repo>/target/release/pdfrum-tool` |
+
+`scripts/env.nu` resolves the same variables with the same defaults for the
+nushell scripts, and the integration tests that need the oracle read the same
+two `PDFRUM_ORACLE_*` variables and **skip with a printed message** when the
+binary they name is absent.
+
+A board run from a worktree therefore needs no flags at all:
+
+```bash
+PDFRUM_ORACLE_CHECKOUT=/path/to/pdfium-c++ \
+PDFRUM_GOLDENS=/path/to/pdfrum/conformance/goldens \
+PDFRUM_TOOL="$CARGO_TARGET_DIR/release/pdfrum-tool" \
+  cargo run -p conformance --release -- run
+```
 
 `--limit N` truncates the corpus listing to its first `N` entries. It is a
 smoke-test switch, not a filter: there is no way to select a named file.

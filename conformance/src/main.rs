@@ -48,8 +48,13 @@ use oracle::OraclePaths;
 use run::{ToolPaths, ToolState};
 use scoreboard::{FileResult, Scoreboard};
 
-/// Default oracle binary, relative to the repository root.
-const DEFAULT_ORACLE: &str = "../pdfium-c++/out/Release/pdfium_test";
+/// Default oracle binary, relative to the oracle checkout.
+///
+/// Resolved against `CorpusArgs::checkout()`, so `--checkout` and
+/// `$PDFRUM_ORACLE_CHECKOUT` move the binary with the tree they name;
+/// `--oracle` / `$PDFRUM_ORACLE_BIN` override it outright. `scripts/env.nu`
+/// spells the same two variables and the same two defaults for the scripts.
+const DEFAULT_ORACLE: &str = "out/Release/pdfium_test";
 
 #[derive(Debug, Parser)]
 #[command(
@@ -86,7 +91,7 @@ struct CorpusArgs {
     #[arg(long, env = "PDFRUM_ORACLE_CHECKOUT")]
     checkout: Option<PathBuf>,
     /// Golden store root (default: conformance/goldens).
-    #[arg(long)]
+    #[arg(long, env = "PDFRUM_GOLDENS")]
     goldens: Option<PathBuf>,
     /// Parallel workers.
     #[arg(long)]
@@ -101,7 +106,7 @@ struct GenerateArgs {
     #[command(flatten)]
     corpus: CorpusArgs,
     /// Path to the oracle's `pdfium_test` binary.
-    #[arg(long, env = "PDFRUM_ORACLE")]
+    #[arg(long, env = "PDFRUM_ORACLE_BIN")]
     oracle: Option<PathBuf>,
     /// Hermetic font directory (default: `<checkout>/third_party/test_fonts`).
     #[arg(long)]
@@ -157,7 +162,7 @@ struct SaveArgs {
     #[arg(long, env = "PDFRUM_TOOL")]
     tool: Option<PathBuf>,
     /// Path to the oracle's `pdfium_test` binary, which reopens what we save.
-    #[arg(long, env = "PDFRUM_ORACLE")]
+    #[arg(long, env = "PDFRUM_ORACLE_BIN")]
     oracle: Option<PathBuf>,
     /// Hermetic font directory (default: `<checkout>/third_party/test_fonts`).
     #[arg(long)]
@@ -183,7 +188,7 @@ struct MutateArgs {
     tool: Option<PathBuf>,
     /// Path to the oracle's `pdfium_test`, which reopens and renders what we
     /// mutate.
-    #[arg(long, env = "PDFRUM_ORACLE")]
+    #[arg(long, env = "PDFRUM_ORACLE_BIN")]
     oracle: Option<PathBuf>,
     /// Hermetic font directory (default: `<checkout>/third_party/test_fonts`).
     #[arg(long)]
@@ -306,7 +311,7 @@ fn generate_goldens(args: &GenerateArgs) -> Result<ExitCode> {
         binary: args
             .oracle
             .clone()
-            .unwrap_or_else(|| repo_root().join(DEFAULT_ORACLE)),
+            .unwrap_or_else(|| checkout.join(DEFAULT_ORACLE)),
         font_dir: args
             .font_dir
             .clone()
@@ -715,7 +720,7 @@ fn save_round_trip(args: &SaveArgs) -> Result<ExitCode> {
         binary: args
             .oracle
             .clone()
-            .unwrap_or_else(|| repo_root().join(DEFAULT_ORACLE)),
+            .unwrap_or_else(|| checkout.join(DEFAULT_ORACLE)),
         font_dir,
     };
     generate::check_oracle(&oracle)?;
@@ -800,7 +805,7 @@ fn mutate_round_trip(args: &MutateArgs) -> Result<ExitCode> {
         binary: args
             .oracle
             .clone()
-            .unwrap_or_else(|| repo_root().join(DEFAULT_ORACLE)),
+            .unwrap_or_else(|| checkout.join(DEFAULT_ORACLE)),
         font_dir,
     };
     generate::check_oracle(&oracle)?;
@@ -1081,7 +1086,7 @@ mod tests {
 
     #[test]
     fn the_default_oracle_path_is_the_documented_one() {
-        assert_eq!(DEFAULT_ORACLE, "../pdfium-c++/out/Release/pdfium_test");
+        assert_eq!(DEFAULT_ORACLE, "out/Release/pdfium_test");
     }
 
     #[test]
