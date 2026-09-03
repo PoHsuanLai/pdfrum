@@ -1172,6 +1172,24 @@ Only the counts move.
 >   recovery PDFium performs silently gets a variant here". A taxonomy is
 >   allowed to run ahead of its recorders. They are listed so the next reader
 >   knows the gap is known and not new.
+>
+>   *Superseded 2026-09-03.* The policy was the problem: "every recovery
+>   PDFium performs silently gets a variant" is what let fifteen accumulate
+>   with no recorder, and a variant nothing records reads as a promise that
+>   `diagnostics()` reports the condition. Each was re-checked against the
+>   oracle. **Six were missed wires and are now recorded** —
+>   `PageTreeRepaired`, `PageTreeDepthExceeded`, `InkPathDropped`,
+>   `DefaultAppearanceMalformed`, `FormResourcesInvalid`,
+>   `FieldSkippedNoType`. **Nine were deleted**: the behaviour is reached
+>   another way (`FieldNameNormalized`, `StructKidUnresolved`), no oracle
+>   condition exists (`ToUnicodeLoneSurrogate`, `AutoFontSizeZero`), the site
+>   deliberately discards its sink (`ChoiceIndicesIgnored`), or the port does
+>   not implement the branch at all (`FieldSkippedNoName`,
+>   `FieldKidsMalformed`, `WidgetRotationInvalid`,
+>   `TextTruncatedAtSurrogate`) — the last group being real conformance gaps,
+>   written up in `docs/status/queue.md` rather than mislabelled as
+>   diagnostics. The enum's doc now says a variant earns its place by having
+>   a recording site.
 
 > **`pdfrum-page`'s row landed 2026-09-03 as §A.10 step 9's second half**, in
 > three commits — the `Conversion` deletion, the bool→enum pass, then the
