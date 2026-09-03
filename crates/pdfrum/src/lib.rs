@@ -37,8 +37,9 @@
 //!
 //! A PDF may carry scripts. With default features they are read as data and
 //! never run. The `javascript` feature turns them on behind a pure-Rust engine
-//! (boa). The `Doc`/`Field` object model is incomplete — do not enable this
-//! expecting Acrobat.
+//! (boa), with the `Doc`/`Field` object model, the `/AA` event path and
+//! timers; what a script asks the host for comes back as a value to decide
+//! about, never an action taken.
 //!
 //! # Damage is not an error
 //!
