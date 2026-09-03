@@ -20,18 +20,30 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
   both WP12 defects are closed. `docs/status/M15.md` §2 has the per-name table
   and §3 the correction to the seven owed regressions — five of them turn out
   to be *timer* tests needing `advance_time`, not object-model work.
-- **What M15 still owes**, from `docs/status/M15.md`'s per-fixture table:
-  - the **`/AA` event path** — four fixtures (`event_properties`,
-    `mouse_events`, `public_methods`, `bug_1142688`) print nothing because
-    nothing fires their field actions. The largest single remaining bucket.
-  - **`advance_time`** — M14's D14 reserved it and nothing calls it. Five of
-    the seven V8-gated formfill regressions and `bug_1447268` wait on it.
-  - the object-model slices step 2 did **not** take: `color` (2 fixtures),
-    the nine constant namespaces (1), `global`'s interceptors (1), and
-    `constructor`'s `illegal constructor` shape (1).
-  - **`Doc.getPageNthWord`** needs a content-stream word extraction; it is
-    declined with the oracle's own message and its range check, and
-    `document_methods` is the one fixture that wants the words.
+- ~~**What M15 still owes** — the `/AA` event path, `advance_time`, the four
+  object-model slices, and `Doc.getPageNthWord`.~~ — landed 2026-09-03 in
+  four commits. **23 of 47 transcript fixtures byte-exact became 33 of 47**,
+  and the board moved 1526 → 1536 with `js-transcript` 21 → 11 and no row
+  moving the other way. `docs/status/M15.md` §"Step 3" has the
+  event-population table, the six trigger firing rules, the four timer rules,
+  and the per-fixture accounting. The exit restates as **47/47 accounted for,
+  40 byte-exact and 7 not achievable by construction** — `bug_1142688` joins
+  the V8 declines, because boa's `RuntimeLimitError` is uncatchable *by
+  design* and the fixture wants to catch a stack overflow.
+- **What M15 still owes after step 3**, in the order a follow-on would take
+  them:
+  - **`Field.setFocus` reaches nothing.** `take_focus_request` is drained by
+    no caller, so a script moving focus moves nothing and the outgoing
+    field's `/AA /Bl` never runs. The one gap that is a *missing wire* rather
+    than a missing feature; `bug_735912` is its fixture.
+  - **The facade installs no document model.** `FormSession::with_scripts`
+    builds a cascade and never calls `set_document`, so `this.getField` in a
+    facade session answers as an empty document would. The *tool* installs
+    one; the facade does not, which is why no fixture caught it.
+  - `Field.style` and the three colour setters (`field_properties`);
+    `Icon`'s prototype identity under `new` (`icons`); `Field.delay`'s
+    document-wide half (`bug_494057`); `app.execMenuItem` and the
+    `/Names /Print` named-action dispatch (`named_action`).
 - ~~**No caller-supplied `/ToUnicode` CMap or `/CIDToGIDMap` on font load.**~~
   — landed 2026-09-03 as `DocEdit::embed_cid_font(program, to_unicode,
   cid_to_gid)`, the `FPDFText_LoadCidType2Font` counterpart. `/W` is computed
