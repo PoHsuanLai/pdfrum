@@ -306,6 +306,31 @@ pub fn render<R: Resolve>(
     ctx: &mut BuildContext,
     session: &SessionView<'_>,
 ) -> Option<Rendered> {
+    let (pixmap, has_transparency) = rasterize(page, catalog, r, scale, backend, ctx, session)?;
+    Some(encode(&pixmap, has_transparency))
+}
+
+/// [`render`] stopping at the pixels: the page pass, the form-filler pass and
+/// the raster, with neither the hash nor the encoder over them.
+///
+/// Split out because a page rasterizes for output formats that write no image
+/// — and for none at all. Encoding a PNG and hashing a buffer nothing will
+/// read is not work the oracle does on those paths, so charging it to them
+/// would make an unwritten page cost more here than it does there.
+///
+/// The second half of the pair is what the encoding depends on:
+/// `FPDFPage_HasTransparency` is not the page's `/Group`, and the caller
+/// cannot recompute it once the page graph has been dropped.
+#[must_use]
+pub fn rasterize<R: Resolve>(
+    page: &PageDict,
+    catalog: &pdfrum_object::Dict,
+    r: &R,
+    scale: f64,
+    backend: Backend,
+    ctx: &mut BuildContext,
+    session: &SessionView<'_>,
+) -> Option<(Pixmap, bool)> {
     let limits = Limits::default();
     let mut build_diags = Diagnostics::default();
     // The decode target has to be set before the build, because the build is
@@ -402,7 +427,7 @@ pub fn render<R: Resolve>(
     // `FPDFPage_HasTransparency` is not the page's `/Group`: it is set only
     // by a blend mode above Multiply. The engine exposes the same predicate
     // so the output encoding and the background clear cannot disagree.
-    Some(encode(&pixmap, needs_alpha_background(&page)))
+    Some((pixmap, needs_alpha_background(&page)))
 }
 
 /// Encode a rendered pixmap as the oracle's PNG and MD5.
@@ -469,6 +494,110 @@ pub fn md5_line(path: &Path, digest: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A one-page document whose content stream fills the left half of a
+    /// 20x10 page black. The two halves are what make a *render* visible: an
+    /// unrendered page and a rendered one differ only in that the second has
+    /// the fill in it.
+    const HALF_BLACK: &[u8] = b"%PDF-1.7\n\
+1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n\
+2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n\
+3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 20 10]/Contents 4 0 R>>endobj\n\
+4 0 obj<</Length 26>>stream\n\
+0 g 0 0 10 10 re f\n\
+endstream endobj\n\
+trailer<</Root 1 0 R/Size 5>>\n";
+
+    /// `rasterize` produces the page's pixels, and stops there.
+    ///
+    /// The two assertions are the two halves of the split: the fill really
+    /// drew (so this is a render and not a page load), and what comes back is
+    /// pixels rather than a hash and a PNG (so the encode is the caller's).
+    #[test]
+    fn rasterize_draws_the_page_and_hands_back_the_pixels() {
+        let doc = pdfrum_parser::load(
+            std::sync::Arc::from(HALF_BLACK),
+            &pdfrum_parser::LoadOptions::default(),
+        )
+        .expect("loads");
+        let page = doc.page(0u32).expect("one page");
+        let catalog = doc.catalog().unwrap_or_default();
+        let mut ctx = BuildContext::new();
+        let (pixmap, transparency) = rasterize(
+            &page,
+            &catalog,
+            &doc,
+            DEFAULT_SCALE,
+            Backend::Agg,
+            &mut ctx,
+            &SessionView::default(),
+        )
+        .expect("renders");
+        assert_eq!((pixmap.width(), pixmap.height()), (20, 10));
+        assert!(!transparency, "no blend mode above Multiply on this page");
+        // PDF space is y-up, so the fill covers the *bottom* left; the device
+        // rows run the other way and the whole left half is black either way.
+        let left = pixmap.pixel(2, 5).expect("inside");
+        let right = pixmap.pixel(17, 5).expect("inside");
+        assert_eq!(left[3], 0xFF, "opaque");
+        assert!(
+            left[0] < 0x20 && left[1] < 0x20 && left[2] < 0x20,
+            "the fill drew: {left:?}"
+        );
+        assert!(
+            right[0] > 0xE0 && right[1] > 0xE0 && right[2] > 0xE0,
+            "the other half is the white clear: {right:?}"
+        );
+    }
+
+    /// `render` is `rasterize` plus `encode`, with the transparency flag
+    /// carried between them.
+    ///
+    /// The flag is the one thing the split can drop silently: it decides the
+    /// PNG's colour type and whether the hash reads `BGRx` or BGRA, and both
+    /// halves stay perfectly well-formed if it is lost. The opaque page here
+    /// must encode as RGB, which is exactly what a hard-coded `true` would
+    /// turn into RGBA.
+    #[test]
+    fn render_encodes_what_rasterize_drew_with_the_flag_it_reported() {
+        let doc = pdfrum_parser::load(
+            std::sync::Arc::from(HALF_BLACK),
+            &pdfrum_parser::LoadOptions::default(),
+        )
+        .expect("loads");
+        let page = doc.page(0u32).expect("one page");
+        let catalog = doc.catalog().unwrap_or_default();
+
+        let mut ctx = BuildContext::new();
+        let (pixmap, transparency) = rasterize(
+            &page,
+            &catalog,
+            &doc,
+            DEFAULT_SCALE,
+            Backend::Agg,
+            &mut ctx,
+            &SessionView::default(),
+        )
+        .expect("renders");
+
+        let mut ctx = BuildContext::new();
+        let rendered = render(
+            &page,
+            &catalog,
+            &doc,
+            DEFAULT_SCALE,
+            Backend::Agg,
+            &mut ctx,
+            &SessionView::default(),
+        )
+        .expect("renders");
+
+        let expected = encode(&pixmap, transparency);
+        assert_eq!(rendered.digest, expected.digest);
+        assert_eq!(rendered.png, expected.png);
+        // IHDR colour type 2 is RGB; a lost flag makes it 6.
+        assert_eq!(rendered.png.get(25).copied(), Some(2));
+    }
 
     #[test]
     fn output_paths_follow_the_oracle_naming() {

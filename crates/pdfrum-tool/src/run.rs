@@ -541,11 +541,17 @@ struct Output<'a> {
     session: crate::render::SessionView<'a>,
 }
 
-/// The formats that write a file beside the input rather than to stdout.
+/// The formats that write a file beside the input rather than to stdout —
+/// and the one that writes nothing and rasterizes anyway.
 ///
 /// A write that fails is ignored, exactly as the oracle ignores one: it
 /// prints a line on stderr and carries on to the next page, because a page
 /// that could not be written is not a page that failed to load.
+///
+/// **A page with no output format asked for still rasterizes**, which is why
+/// this function is reached at all on that arm. Only the two `--show-*` dumps
+/// return before a bitmap exists; every other format produces one, whether or
+/// not anything reads it.
 ///
 /// Returns whatever the format also owes *stdout*, which for `--png --md5` is
 /// the `MD5:<path>:<hex>` line the harness and the oracle both print after
@@ -611,10 +617,28 @@ fn write_page_files<R: Resolve>(
                 String::new()
             }
         }
-        OutputFormat::None
-        | OutputFormat::PageInfo
-        | OutputFormat::Structure
-        | OutputFormat::Render(_) => String::new(),
+        // No output format asked for still rasterizes the page. Nothing is
+        // written and nothing is printed — the `MD5:` line names the file it
+        // hashed, and there is no file — but the pixels are produced, which
+        // is what makes `--render-repeats` measure a render on this side of a
+        // benchmark as well as on the oracle's.
+        //
+        // `rasterize` rather than `render`: the hash and the PNG encoder are
+        // the output half, and this path has no output.
+        OutputFormat::None => {
+            let backend = render::Backend::resolve(options.use_renderer.as_deref());
+            drop(render::rasterize(
+                page,
+                catalog,
+                r,
+                render::DEFAULT_SCALE,
+                backend,
+                ctx,
+                &session,
+            ));
+            String::new()
+        }
+        OutputFormat::PageInfo | OutputFormat::Structure | OutputFormat::Render(_) => String::new(),
     }
 }
 
@@ -848,6 +872,59 @@ trailer<</Root 1 0 R/Size 5>>\n";
         let (out, err) = run(MINIMAL, &["--txt"]);
         assert_eq!(out, "");
         assert!(err.contains("Processed 1 pages."), "{err}");
+    }
+
+    /// `--md5` with no output format rasterizes, writes nothing, and prints
+    /// nothing.
+    ///
+    /// The silence is the oracle's: `--md5` names the file it hashed, and
+    /// with no format there is no file — `BitmapPageRenderer::Write` returns
+    /// early on a null writer, so no `MD5:` line is produced. What the oracle
+    /// *does* still do is rasterize, and this is the arm every
+    /// `--render-repeats` benchmark runs on both sides.
+    ///
+    /// The render itself is invisible from here, by construction: this path
+    /// has no output. It is pinned one level down, by
+    /// `render::tests::rasterize_draws_the_page_and_hands_back_the_pixels`,
+    /// and the two together are what say the pixels are produced and thrown
+    /// away rather than never produced at all.
+    #[test]
+    fn md5_with_no_format_writes_nothing_and_prints_nothing() {
+        let dir = std::env::temp_dir().join(format!(
+            "pdfrum-md5-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let pdf = dir.join("input.pdf");
+        std::fs::write(&pdf, MINIMAL).unwrap();
+
+        let options = crate::options::parse(&["--md5".to_owned()]).unwrap();
+        let (mut out, mut err) = (Vec::new(), Vec::new());
+        let mut streams = Streams {
+            out: &mut out,
+            err: &mut err,
+        };
+        let counts = process_file(
+            &pdf.to_string_lossy(),
+            MINIMAL.to_vec(),
+            &options,
+            &mut streams,
+        )
+        .unwrap();
+
+        assert_eq!(counts.processed, 1, "the page was processed");
+        assert_eq!(String::from_utf8_lossy(&out), "", "no MD5 line");
+        // Nothing beside the input: no PNG, no anything.
+        let left: Vec<_> = std::fs::read_dir(&dir)
+            .unwrap()
+            .map(|e| e.unwrap().file_name())
+            .collect();
+        assert_eq!(left, ["input.pdf"], "nothing was written");
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]
