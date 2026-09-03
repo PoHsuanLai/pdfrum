@@ -19,8 +19,20 @@
 //!    all. The action chain is then walked depth-first through `/Next`, with
 //!    a guard against revisiting a dictionary already run.
 //!
-//! Field `/AA` actions are **not** part of this sequence: they run on events,
-//! which is `--send-events`' path, not this one.
+//! 3. **Each page is loaded**, in order. Loading a page builds its widgets,
+//!    and `CPDFSDK_Widget::OnLoad` runs every text field's and combo box's
+//!    `/AA /F` formatter (`fpdfsdk/cpdfsdk_widget.cpp:1104-1122`) — which is
+//!    why a document whose only script is a formatter prints alerts on open
+//!    with no event sent at all.
+//! 4. **The sibling `.evt` is replayed against each page**, if there is one.
+//!    `testing/tools/test_runner.py`'s `TestText` runs `pdfium_test` with
+//!    `--send-events` unconditionally and copies `<test>.evt` next to the PDF
+//!    first (`:658-680`), so a javascript fixture's mouse and keyboard script
+//!    is part of what produces the expected text.
+//!
+//! Steps 3 and 4 are per page and interleaved, as `ProcessPage` interleaves
+//! them (`pdfium_test.cc:1474-1482`): page 0 loads and replays before page 1
+//! loads.
 //!
 //! # A script that throws
 //!
@@ -65,6 +77,8 @@ use pdfrum_parser::Document;
 /// throws" below.
 pub fn write_transcript(
     doc: &Document,
+    facade: Option<&pdfrum::Document>,
+    events: &[crate::events::Event],
     time: Option<u64>,
     diags: &mut Diagnostics,
     out: &mut dyn Write,
@@ -74,13 +88,6 @@ pub fn write_transcript(
         Some(seconds) => ScriptConfig::frozen_at(seconds),
         None => ScriptConfig::wall_clock(),
     };
-    let Ok(cascade) = ScriptCascade::new(&config) else {
-        // `boa` cannot fail to build a context on any input; a failure here
-        // is a broken build, and printing a partial transcript would be a
-        // wrong answer rather than an absent one.
-        return Ok(());
-    };
-    let mut cascade = cascade;
     let catalog = doc.catalog().unwrap_or_default();
     // The `Doc` object model, installed from the document the tool opened.
     // The cascade holds no PDF — `model::read` is what turns one into the
@@ -97,26 +104,64 @@ pub fn write_transcript(
         .filter_map(|index| doc.page(index).ok().map(|page| page.dict.clone()))
         .collect();
     let info = doc.trailer().dict(names::INFO, doc);
-    cascade.set_document(pdfrum_form::script::model::read(
-        &catalog,
-        info.as_ref(),
-        &pages,
-        path,
-        doc,
-    ));
-    // **A script that throws does not stop the ones after it.** `run` records
-    // the failure and answers `false`; the loop does not read that answer,
-    // which is upstream's shape — `ProcJavascriptAction` walks the name tree
-    // `for (i = 0; i < count; ++i)` calling a `void` `DoActionJavaScript`
-    // (`cpdfsdk_formfillenvironment.cpp:697-701`), and
-    // `ExecuteDocumentOpenAction` runs every `/Next` sub-action
-    // unconditionally after the JS (`:1000-1018`). The difference from
-    // upstream is only that we write the failure down.
-    for (whence, source) in document_scripts(&catalog, doc) {
-        cascade.run(&source, &whence);
+    let model = pdfrum_form::script::model::read(&catalog, info.as_ref(), &pages, path, doc);
+    let scripts = document_scripts(&catalog, doc);
+
+    // A session, when the facade could open the same bytes. It is what makes
+    // the *field* `/AA` scripts run: loading a page installs them and fires
+    // each formatter, and the replay below fires the six pointer and focus
+    // ones. Without one the document-level scripts still run — a file the
+    // facade refuses is not a file whose `/OpenAction` should be silent.
+    let Some(facade) = facade else {
+        let Ok(mut cascade) = pdfrum_form::script::ScriptCascade::new(&config) else {
+            // `boa` cannot fail to build a context on any input; a failure
+            // here is a broken build, and printing a partial transcript would
+            // be a wrong answer rather than an absent one.
+            return Ok(());
+        };
+        cascade.set_document(model);
+        for (whence, source) in scripts {
+            cascade.run(&source, &whence);
+        }
+        write!(out, "{}", cascade.transcript_text())?;
+        return report_failures(&mut cascade, diags, err);
+    };
+
+    let Ok(mut session) = pdfrum::FormSession::with_scripts(facade, &config) else {
+        return Ok(());
+    };
+    if let Some(cascade) = session.scripts_mut() {
+        cascade.set_document(model);
+        // **A script that throws does not stop the ones after it.** `run`
+        // records the failure and answers `false`; the loop does not read
+        // that answer, which is upstream's shape — `ProcJavascriptAction`
+        // walks the name tree `for (i = 0; i < count; ++i)` calling a `void`
+        // `DoActionJavaScript` (`cpdfsdk_formfillenvironment.cpp:697-701`),
+        // and `ExecuteDocumentOpenAction` runs every `/Next` sub-action
+        // unconditionally after the JS (`:1000-1018`). The difference from
+        // upstream is only that we write the failure down.
+        for (whence, source) in scripts {
+            cascade.run(&source, &whence);
+        }
     }
-    write!(out, "{}", cascade.transcript_text())?;
-    report_failures(&mut cascade, diags, err)
+    // Then each page in turn: load it — which installs its `/AA` and runs its
+    // formatters — and replay the whole event script against it. Both halves
+    // are `ProcessPage`'s and in its order.
+    for page in 0..doc.page_count() {
+        session.load_page(page);
+        if !events.is_empty() {
+            crate::dispatch::replay_page(&mut session, page, events, err);
+        }
+    }
+    let text = session
+        .scripts()
+        .map(pdfrum_form::ScriptCascade::transcript_text)
+        .unwrap_or_default();
+    write!(out, "{text}")?;
+    let Some(cascade) = session.scripts_mut() else {
+        return Ok(());
+    };
+    report_failures(cascade, diags, err)
 }
 
 /// Writes what each stopped script said to `err`, and records the kinds.

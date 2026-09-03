@@ -768,6 +768,36 @@ impl<'a> FormSession<'a> {
         }
     }
 
+    /// The session's scripting engine, mutably.
+    ///
+    /// For a host that runs the document's own document-level scripts —
+    /// `/Names /JavaScript` and `/OpenAction` — which are the document's and
+    /// not any field's, so the session cannot run them on its own behalf.
+    ///
+    /// `Some` only for a session built by [`FormSession::with_scripts`].
+    #[cfg(feature = "script")]
+    pub fn scripts_mut(&mut self) -> Option<&mut pdfrum_form::ScriptCascade> {
+        match &mut self.cascade {
+            Cascades::Scripted(cascade) => Some(cascade),
+            Cascades::Plain(_) => None,
+        }
+    }
+
+    /// Reads a page in, as showing it would.
+    ///
+    /// **The point is the side effects, not the read.** Building a page's
+    /// widgets installs their `/AA` scripts into a scripted cascade and runs
+    /// each text field's and combo box's formatter — so a document whose only
+    /// script is a formatter prints its alerts when this is called and not
+    /// before. A host that renders every page in turn gets that for free
+    /// through the event methods; one that renders none must say so here.
+    ///
+    /// Idempotent: a page already read is not read again, and its scripts do
+    /// not run a second time.
+    pub fn load_page(&mut self, page: impl Into<PageIndex>) {
+        self.ensure_page(page.into());
+    }
+
     /// Routes an event that names a page.
     ///
     /// The page is read on first use and kept: a replay sends dozens of
@@ -916,6 +946,7 @@ impl<'a> FormSession<'a> {
             return;
         };
         let resolve = self.doc.parser();
+        let mut loaded: Vec<pdfrum_form::FieldRef> = Vec::new();
         for widget in &form.widgets {
             let Some(entries) = widget.dict.dict(pdfrum_object::names::AA, resolve) else {
                 continue;
@@ -935,6 +966,12 @@ impl<'a> FormSession<'a> {
                 validate: source_of(AActionType::Validate),
                 calculate: source_of(AActionType::Calculate),
                 format: source_of(AActionType::Format),
+                mouse_enter: source_of(AActionType::CursorEnter),
+                mouse_exit: source_of(AActionType::CursorExit),
+                mouse_down: source_of(AActionType::ButtonDown),
+                mouse_up: source_of(AActionType::ButtonUp),
+                focus: source_of(AActionType::GetFocus),
+                blur: source_of(AActionType::LoseFocus),
             };
             if actions == pdfrum_form::script::FieldActions::default() {
                 // Nearly every field in nearly every document: no script at
@@ -947,7 +984,33 @@ impl<'a> FormSession<'a> {
                 // — `GetFieldByDict` answers null for it upstream too.
                 continue;
             };
+            let text_like = matches!(
+                widget.kind,
+                Some(pdfrum_doc::form::FieldKind::Text | pdfrum_doc::form::FieldKind::Combo)
+            );
             cascade.set_field(index, widget.name.clone(), widget.value(resolve), actions);
+            if text_like {
+                loaded.push(pdfrum_form::FieldRef {
+                    name: widget.name.clone(),
+                    index: Some(index),
+                });
+            }
+        }
+        // **Loading a page runs each text field's and combo box's formatter.**
+        // `CPDFSDK_PageView` calls `OnLoad` on every annotation it builds, and
+        // `CPDFSDK_Widget::OnLoad` runs `OnFormat()` for those two field types
+        // (`fpdfsdk/cpdfsdk_widget.cpp:1104-1122`) so the stored value can be
+        // drawn as a formatted one. The display string reaches the appearance
+        // and is dropped again for a text field; what is *not* dropped is
+        // everything the script asked the host to do on the way there, which
+        // is why a document whose only script is a formatter still alerts on
+        // open.
+        //
+        // After the whole install loop rather than inside it, because a
+        // formatter may call `getField` on a field later in the same page and
+        // must find it installed.
+        for field in loaded {
+            cascade.format_on_load(&field);
         }
     }
 

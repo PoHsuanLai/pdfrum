@@ -909,26 +909,217 @@ fn mail(args: &[JsValue], context: &mut Context, required: Option<&str>) -> JsRe
     Ok(JsValue::undefined())
 }
 
-/// `Doc.print(...)` and `Doc.submitForm(...)` — **refused, and it is the
-/// oracle that refuses them.**
+/// `Doc.submitForm(...)` — **gated on a user gesture**, which only three
+/// triggers are.
 ///
-/// Both guard on a user gesture, which is false for a script no click
-/// provoked. A headless run is exactly that case, so `User gesture required.`
-/// is the answer rather than a decline of ours.
+/// A mouse-down, a mouse-up and a keystroke are gestures
+/// (`cjs_event_context.cpp:316-325`); a formatter, a validator, a calculation
+/// and the pointer's *entering* the widget are not, and neither is a
+/// document-open script. So the same call is a `User gesture required.` from
+/// one trigger and a submission from another, and the goldens assert both
+/// halves of that on the same file.
 ///
-/// `submitForm` checks its arity **first**, which is why the golden has a
+/// The arity check comes **first**, which is why the golden has a
 /// parameter-count line for the no-argument call and a gesture line for the
 /// four-argument one.
-fn submit_form(_t: &JsValue, args: &[JsValue], _context: &mut Context) -> JsResult<JsValue> {
+fn submit_form(_t: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     if args.is_empty() {
         return Err(params("submitForm"));
     }
-    Err(err("submitForm", USER_GESTURE))
+    if !is_user_gesture(context) {
+        return Err(err("submitForm", USER_GESTURE));
+    }
+    let request = submit_request(args, context)?;
+    let data = super::submit::serialize(&request, context);
+    say(
+        context,
+        TranscriptLine::SubmitForm {
+            url: request.url,
+            data,
+        },
+    );
+    Ok(JsValue::undefined())
 }
 
-/// `Doc.print(...)` — see [`submit_form`]. No arity check precedes the gate.
-fn print(_t: &JsValue, _a: &[JsValue], _c: &mut Context) -> JsResult<JsValue> {
-    Err(err("print", USER_GESTURE))
+/// The four things `submitForm` reads out of its arguments, whether they came
+/// as positionals or as one options object.
+///
+/// The two spellings are not equivalent: the positional form defaults `bFDF`
+/// to **true**, and the object form reads `bFDF` off the object, where a
+/// missing property is `undefined` and therefore **false**.
+pub(super) struct SubmitRequest {
+    /// `cURL`.
+    pub(super) url: String,
+    /// `bFDF` — an FDF file rather than a URL-encoded query string.
+    pub(super) fdf: bool,
+    /// `bEmpty` — include fields whose value is empty.
+    pub(super) empty: bool,
+    /// `aFields` — the names to submit, or empty for "every field".
+    pub(super) fields: Vec<String>,
+}
+
+fn submit_request(args: &[JsValue], context: &mut Context) -> JsResult<SubmitRequest> {
+    let first = args.get_or_undefined(0).clone();
+    if first.is_string() {
+        return Ok(SubmitRequest {
+            url: string_of(&first, context)?,
+            fdf: args.get(1).is_none_or(JsValue::to_boolean),
+            empty: args.get(2).is_some_and(JsValue::to_boolean),
+            fields: name_list(args.get(3), context)?,
+        });
+    }
+    let Some(object) = first.as_object() else {
+        return Ok(SubmitRequest {
+            url: String::new(),
+            fdf: false,
+            empty: false,
+            fields: Vec::new(),
+        });
+    };
+    let url = object.get(boa_engine::js_string!("cURL"), context)?;
+    let url = if url.is_undefined() {
+        String::new()
+    } else {
+        string_of(&url, context)?
+    };
+    let fdf = object
+        .get(boa_engine::js_string!("bFDF"), context)?
+        .to_boolean();
+    let empty = object
+        .get(boa_engine::js_string!("bEmpty"), context)?
+        .to_boolean();
+    let fields = object.get(boa_engine::js_string!("aFields"), context)?;
+    Ok(SubmitRequest {
+        url,
+        fdf,
+        empty,
+        fields: name_list(Some(&fields), context)?,
+    })
+}
+
+/// `aFields` as a list of names, from an array or from nothing.
+///
+/// A non-array is an empty list rather than an error, which is what
+/// `ToArrayReentrant` answering an empty handle does.
+fn name_list(value: Option<&JsValue>, context: &mut Context) -> JsResult<Vec<String>> {
+    let Some(object) = value.and_then(JsValue::as_object) else {
+        return Ok(Vec::new());
+    };
+    if !object.is_array() {
+        return Ok(Vec::new());
+    }
+    let length = object.get(boa_engine::js_string!("length"), context)?;
+    let length = length.to_length(context)?;
+    let mut names = Vec::new();
+    for index in 0..length {
+        let entry = object.get(index, context)?;
+        names.push(string_of(&entry, context)?);
+    }
+    Ok(names)
+}
+
+/// `Doc.print(...)` — gated on the same gesture as [`submit_form`], with **no
+/// arity check before it**.
+///
+/// Past the gate it prints its eight arguments and does nothing else, which
+/// is `ExampleDocPrint`'s whole body. Every argument is optional with its own
+/// default, and a **lone object argument names them by keyword** — see
+/// [`expand_keyword_params`], which is why `this.print({"bUi": false, …})`
+/// prints `bUI` as *true*: the object spells the key `bUi`, and `bUI` is not
+/// found.
+fn print(_t: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+    if !is_user_gesture(context) {
+        return Err(err("print", USER_GESTURE));
+    }
+    let expanded = expand_keyword_params(
+        args,
+        &[
+            "bUI",
+            "nStart",
+            "nEnd",
+            "bSilent",
+            "bShrinkToFit",
+            "bPrintAsImage",
+            "bReverse",
+            "bAnnotations",
+        ],
+        context,
+    )?;
+    let flag = |index: usize, default: bool| -> bool {
+        expanded
+            .get(index)
+            .and_then(Option::as_ref)
+            .map_or(default, JsValue::to_boolean)
+    };
+    let page = |index: usize, context: &mut Context| -> JsResult<i32> {
+        match expanded.get(index).and_then(Option::as_ref) {
+            Some(value) => value.to_i32(context),
+            None => Ok(0),
+        }
+    };
+    let ui = flag(0, true);
+    let start = page(1, context)?;
+    let end = page(2, context)?;
+    say(
+        context,
+        TranscriptLine::Print {
+            ui,
+            start,
+            end,
+            silent: flag(3, false),
+            shrink_to_fit: flag(4, false),
+            print_as_image: flag(5, false),
+            reverse: flag(6, false),
+            annotations: flag(7, false),
+        },
+    );
+    Ok(JsValue::undefined())
+}
+
+/// `ExpandKeywordParams`: positional arguments, or **one object naming them**.
+///
+/// The expansion runs only for a call with **exactly one** argument that is
+/// an object and not an array; anything else is the positional reading. A
+/// keyword the object does not carry stays `None`, which is the caller's
+/// default rather than `undefined` — the distinction that makes
+/// `this.print({})` print all eight defaults.
+fn expand_keyword_params(
+    args: &[JsValue],
+    keywords: &[&str],
+    context: &mut Context,
+) -> JsResult<Vec<Option<JsValue>>> {
+    let mut result: Vec<Option<JsValue>> = keywords
+        .iter()
+        .enumerate()
+        .map(|(index, _)| args.get(index).cloned())
+        .collect();
+    if args.len() != 1 {
+        return Ok(result);
+    }
+    let Some(object) = args.first().and_then(JsValue::as_object) else {
+        return Ok(result);
+    };
+    if object.is_array() {
+        return Ok(result);
+    }
+    // The lone object is not itself argument zero any more.
+    if let Some(first) = result.first_mut() {
+        *first = None;
+    }
+    for (index, keyword) in keywords.iter().enumerate() {
+        let value = object.get(boa_engine::js_string!(*keyword), context)?;
+        if !value.is_undefined()
+            && let Some(slot) = result.get_mut(index)
+        {
+            *slot = Some(value);
+        }
+    }
+    Ok(result)
+}
+
+/// Whether the trigger running this script counts as a user gesture.
+fn is_user_gesture(context: &Context) -> bool {
+    super::bind::host(context).is_some_and(|host| host.borrow().event.kind.is_user_gesture())
 }
 
 /// `Doc.removeField(name)` — which **removes nothing**.

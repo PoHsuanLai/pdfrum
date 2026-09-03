@@ -58,7 +58,9 @@ mod session;
 mod tab;
 mod update;
 
-pub use cascade::{Cascade, FieldRef, FieldWrites, Keystroke, KeystrokeOutcome, NoScripts};
+pub use cascade::{
+    Cascade, FieldRef, FieldWrites, Keystroke, KeystrokeOutcome, NoScripts, PointerTrigger,
+};
 pub use commit::CommitOutcome;
 pub use edit::{Place, PlaceExt, Range, Selection, UndoItem, UndoStack};
 pub use error::Error;

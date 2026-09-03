@@ -694,6 +694,16 @@ fn score_js_transcript_inner(
     let path = js_transcript_path(&entry.id);
     let input = scratch.join("input.pdf");
     std::fs::write(&input, &pdf_bytes)?;
+    // **The sibling `.evt` goes beside the PDF**, because the oracle's own
+    // text harness puts it there: `TestOneFileImpl.Generate` copies
+    // `<test>.evt` next to the generated PDF and `TestText` then runs
+    // `pdfium_test --send-events` unconditionally
+    // (`testing/tools/test_runner.py:658-680`). Four of the 47 fixtures carry
+    // one, and their expected text is a *record of those events* — without
+    // the copy their `/AA` scripts never fire and the transcript is empty.
+    if let Some(script) = entry.sibling_evt() {
+        std::fs::copy(&script, scratch.join("input.evt"))?;
+    }
 
     let output = Command::new(&tool.binary)
         .args(crate::oracle::determinism_args(&tool.font_dir))

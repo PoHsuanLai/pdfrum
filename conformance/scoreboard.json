@@ -1,12 +1,12 @@
 {
-  "generated_at": "2026-09-03T09:15:13Z",
+  "generated_at": "2026-09-03T10:39:30Z",
   "totals": {
     "files": 1757,
-    "pass": 1526,
-    "fail": 231,
+    "pass": 1529,
+    "fail": 228,
     "by_tag": {
       "form-events": 8,
-      "js-transcript": 21,
+      "js-transcript": 18,
       "page-count": 2,
       "pixel-fail": 41,
       "tierA-mismatch": 170
@@ -34272,7 +34272,7 @@
         }
       },
       "tierB": null,
-      "notes": "line 1: expected \"Goto Page: 2\", got end of output"
+      "notes": "line 3: expected \"Goto Page: 1\", got end of output"
     },
     {
       "path": "resources/javascript/bug_1447268.pdf",
@@ -35674,10 +35674,8 @@
     },
     {
       "path": "resources/javascript/event_properties.in#js-transcript",
-      "status": "fail",
-      "tags": [
-        "js-transcript"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [],
         "mismatched": [],
@@ -35691,7 +35689,7 @@
         }
       },
       "tierB": null,
-      "notes": "line 1: expected \"Alert: *** starting test ***\", got end of output"
+      "notes": ""
     },
     {
       "path": "resources/javascript/event_properties.pdf",
@@ -36342,10 +36340,8 @@
     },
     {
       "path": "resources/javascript/mouse_events.in#js-transcript",
-      "status": "fail",
-      "tags": [
-        "js-transcript"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [],
         "mismatched": [],
@@ -36359,7 +36355,7 @@
         }
       },
       "tierB": null,
-      "notes": "line 1: expected \"Alert: enter\", got end of output"
+      "notes": ""
     },
     {
       "path": "resources/javascript/mouse_events.pdf",
@@ -36471,10 +36467,8 @@
     },
     {
       "path": "resources/javascript/public_methods.in#js-transcript",
-      "status": "fail",
-      "tags": [
-        "js-transcript"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [],
         "mismatched": [],
@@ -36488,7 +36482,7 @@
         }
       },
       "tierB": null,
-      "notes": "line 1: expected \"Alert: *** starting test 1 ***\", got end of output"
+      "notes": ""
     },
     {
       "path": "resources/javascript/public_methods.pdf",

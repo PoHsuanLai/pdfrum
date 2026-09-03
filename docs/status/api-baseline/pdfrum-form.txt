@@ -404,6 +404,13 @@ pub pdfrum_form::KeystrokeOutcome::Reject
 pub enum pdfrum_form::Placement
 pub pdfrum_form::Placement::Above
 pub pdfrum_form::Placement::Below
+pub enum pdfrum_form::PointerTrigger
+pub pdfrum_form::PointerTrigger::Blur
+pub pdfrum_form::PointerTrigger::Down
+pub pdfrum_form::PointerTrigger::Enter
+pub pdfrum_form::PointerTrigger::Exit
+pub pdfrum_form::PointerTrigger::Focus
+pub pdfrum_form::PointerTrigger::Up
 pub enum pdfrum_form::TabOrder
 pub pdfrum_form::TabOrder::Column
 pub pdfrum_form::TabOrder::Row
@@ -591,6 +598,7 @@ pub fn pdfrum_form::NoScripts::calculate(&mut self, &mut pdfrum_form::FieldWrite
 pub fn pdfrum_form::NoScripts::format(&mut self, &pdfrum_form::FieldRef, &str) -> core::option::Option<alloc::string::String>
 pub fn pdfrum_form::NoScripts::keystroke(&mut self, &pdfrum_form::FieldRef, pdfrum_form::Keystroke) -> pdfrum_form::KeystrokeOutcome
 pub fn pdfrum_form::NoScripts::keystroke_commit(&mut self, &pdfrum_form::FieldRef, &str) -> bool
+pub fn pdfrum_form::NoScripts::pointer(&mut self, &pdfrum_form::FieldRef, pdfrum_form::PointerTrigger, pdfrum_form::Modifiers)
 pub fn pdfrum_form::NoScripts::validate(&mut self, &pdfrum_form::FieldRef, &str) -> bool
 pub struct pdfrum_form::PageForm
 pub pdfrum_form::PageForm::dicts: alloc::collections::btree::map::BTreeMap<u32, pdfrum_object::dict::Dict>
@@ -745,12 +753,14 @@ pub fn pdfrum_form::Cascade::calculate(&mut self, &mut pdfrum_form::FieldWrites,
 pub fn pdfrum_form::Cascade::format(&mut self, &pdfrum_form::FieldRef, &str) -> core::option::Option<alloc::string::String>
 pub fn pdfrum_form::Cascade::keystroke(&mut self, &pdfrum_form::FieldRef, pdfrum_form::Keystroke) -> pdfrum_form::KeystrokeOutcome
 pub fn pdfrum_form::Cascade::keystroke_commit(&mut self, &pdfrum_form::FieldRef, &str) -> bool
+pub fn pdfrum_form::Cascade::pointer(&mut self, &pdfrum_form::FieldRef, pdfrum_form::PointerTrigger, pdfrum_form::Modifiers)
 pub fn pdfrum_form::Cascade::validate(&mut self, &pdfrum_form::FieldRef, &str) -> bool
 impl pdfrum_form::Cascade for pdfrum_form::NoScripts
 pub fn pdfrum_form::NoScripts::calculate(&mut self, &mut pdfrum_form::FieldWrites, &pdfrum_form::FieldRef)
 pub fn pdfrum_form::NoScripts::format(&mut self, &pdfrum_form::FieldRef, &str) -> core::option::Option<alloc::string::String>
 pub fn pdfrum_form::NoScripts::keystroke(&mut self, &pdfrum_form::FieldRef, pdfrum_form::Keystroke) -> pdfrum_form::KeystrokeOutcome
 pub fn pdfrum_form::NoScripts::keystroke_commit(&mut self, &pdfrum_form::FieldRef, &str) -> bool
+pub fn pdfrum_form::NoScripts::pointer(&mut self, &pdfrum_form::FieldRef, pdfrum_form::PointerTrigger, pdfrum_form::Modifiers)
 pub fn pdfrum_form::NoScripts::validate(&mut self, &pdfrum_form::FieldRef, &str) -> bool
 pub trait pdfrum_form::PlaceExt
 pub fn pdfrum_form::PlaceExt::at_line_start(self) -> bool
