@@ -1310,7 +1310,7 @@ progressive load is an *additional* source abstraction, not a rewrite of
 file renders page 1 with only its first-page byte range supplied; full-file
 load numbers unchanged (bench ratchet).
 
-## M17 — The small APIs with tests
+## M17 — The small APIs with tests  — **MET 2026-09-04** (`docs/status/M17.md`)
 
 - **Flatten** (13 tests): bake annotation appearances into page content. Both
   halves exist — appearance streams (M6) and page mutation + regeneration
