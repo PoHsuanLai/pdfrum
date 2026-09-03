@@ -1,17 +1,14 @@
 //! The two raster buffers the engine and the backends share: [`Pixmap`], a
 //! premultiplied RGBA8 image, and [`AlphaMask`], an 8-bit coverage plane.
 //!
-//! **Part of the backend seam.** The two types are re-exported at the crate
-//! root, since they are in [`RasterBackend`](crate::RasterBackend)'s own
-//! signatures; the alpha arithmetic beside them — [`mul255`],
-//! [`alpha_merge`], [`alpha_byte_truncating`] — is here because a backend
-//! must round its alpha the way the oracle rounds it.
-//!
-//! PDFium's own buffers are *straight* (non-premultiplied) BGRA or BGR; both
-//! our rasterizers are premultiplied RGBA8. The conversions that difference
-//! forces are owned here rather than in either backend, so the engine's
-//! arithmetic — the soft-mask luminosity readback, the `/Matte`
-//! un-premultiplication — stays bit-identical whichever rasterizer is in use.
+//! **Part of the backend seam.** Both are in
+//! [`RasterBackend`](crate::RasterBackend)'s own signatures; the alpha
+//! arithmetic beside them — [`mul255`], [`alpha_merge`],
+//! [`alpha_byte_truncating`] — is here because a backend must round its
+//! alpha the way the oracle rounds it. The oracle's own buffers are
+//! *straight* (non-premultiplied) and ours are premultiplied, and the
+//! conversions that forces are owned here rather than in a backend, so the
+//! engine's arithmetic stays bit-identical whichever rasterizer is in use.
 
 use crate::color::rgb_to_gray;
 
@@ -124,11 +121,10 @@ impl Pixmap {
         }
     }
 
-    /// Scale every channel by `alpha`, PDFium's `MultiplyAlpha`.
+    /// Scale every channel by `alpha`.
     ///
     /// The scalar is **truncated** to a byte (`0.5` becomes `127`, not `128`)
-    /// and the per-pixel product truncates too, matching
-    /// `CFX_DIBitmap::MultiplyAlpha` exactly. On a premultiplied buffer all
+    /// and the per-pixel product truncates too. On a premultiplied buffer all
     /// four channels scale, where the oracle scales only the alpha byte of a
     /// straight one — the same image either way.
     pub fn multiply_alpha(&mut self, alpha: f32) {
@@ -142,35 +138,26 @@ impl Pixmap {
     }
 
     /// `[oracle-bug]` Remove a non-isolated group's initial backdrop from its
-    /// finished pixels (ISO 32000 §11.4.6, and §11.6.6's "Group Composition
-    /// Function").
+    /// finished pixels (ISO 32000 §11.4.6, §11.6.6).
     ///
-    /// A non-isolated group's buffer starts as a copy of the page beneath it,
-    /// so that copy is present in the result and would be counted a **second**
-    /// time when the group is composited back over the same pixels.
-    /// `cpdf_renderstatus.cpp:673-679` makes exactly that copy via `GetDIBits`,
-    /// `:680-683` hands it to `CreateForNewBitmapWithBackdrop`, and
-    /// `:740-751` composites it back with **no removal step anywhere between**
-    /// — a grep of `core/` finds no implementation of the formula at all. The
-    /// error is invisible at group alpha 1 under Normal blending and grows with
-    /// both. pdf.js sidesteps it by drawing a non-isolated group directly onto
-    /// the parent canvas (`canvas.js:3205-3237`), which is the same arithmetic
-    /// reached a different way.
-    ///
-    /// The spec's formula, per channel and premultiplied here:
+    /// The group's buffer starts as a copy of the page beneath it, so that
+    /// copy would be counted a **second** time when the group is composited
+    /// back. The spec's formula, per channel and premultiplied:
     ///
     /// ```text
     /// C = Cn + (Cn - C0) * (a0 / agn - a0)
     /// ```
     ///
-    /// where `C0`/`a0` are the backdrop's and `Cn`/`agn` the group's. With
-    /// `agn == a0` — nothing was drawn over that pixel — this is the backdrop
-    /// unchanged, and the removal below returns a transparent pixel there,
-    /// which is the same image once composited back.
-    ///
-    /// `backdrop` must match this pixmap's dimensions; a mismatch is a no-op,
-    /// on the same invariant as [`Self::multiply_alpha_mask`].
+    /// `C0`/`a0` are the backdrop's and `Cn`/`agn` the group's; at
+    /// `agn == a0` this returns a transparent pixel, the same image once
+    /// composited back. `backdrop` must match this pixmap's dimensions; a
+    /// mismatch is a no-op, as for [`Self::multiply_alpha_mask`].
     pub fn remove_backdrop(&mut self, backdrop: &Self) {
+        // The oracle never removes the backdrop: it copies the page beneath
+        // into the group buffer, then composites that buffer back with no
+        // removal step anywhere between, so the backdrop is counted twice.
+        // The error is invisible at group alpha 1 under Normal blending and
+        // grows with both.
         if backdrop.width != self.width || backdrop.height != self.height {
             return;
         }
@@ -281,8 +268,8 @@ impl Pixmap {
         }
     }
 
-    /// The 8-bit luminosity of every pixel under PDFium's `FXRGB2GRAY`
-    /// weights, for a soft mask's luminosity readback (ISO 32000 §11.6.5.2).
+    /// The 8-bit luminosity of every pixel under the oracle's gray weights,
+    /// for a soft mask's luminosity readback (ISO 32000 §11.6.5.2).
     ///
     /// Deliberately *not* either backend's luminance helper: both use BT.709
     /// coefficients and the oracle uses NTSC ones on a 0..100 integer scale.
@@ -384,9 +371,9 @@ impl Pixmap {
 /// An 8-bit coverage plane: one byte per pixel, `255` fully opaque.
 ///
 /// This is both a soft mask (ISO 32000 §11.6.5) and a clip mask. It is always
-/// sized and aligned to the device it applies to — the invariant SPEC §8 pins,
-/// because a mismatched mask is silently ignored by `vello_cpu` and merely
-/// warned about by `tiny-skia`, i.e. it fails *open*.
+/// sized and aligned to the device it applies to, because a mismatched mask
+/// is silently ignored by `vello_cpu` and merely warned about by
+/// `tiny-skia` — it fails *open*.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AlphaMask {
     width: u32,
@@ -457,9 +444,8 @@ impl AlphaMask {
         self.data
     }
 
-    /// Intersect with another mask of the same size, `old * new / 255` —
-    /// `CFX_AggClipRgn::IntersectMask`'s truncating integer product, which is
-    /// also exactly `tiny_skia::Mask::intersect_path`'s.
+    /// Intersect with another mask of the same size: the truncating integer
+    /// product `old * new / 255`.
     pub fn intersect(&mut self, other: &Self) {
         if other.width != self.width || other.height != self.height {
             return;
@@ -511,9 +497,10 @@ impl AlphaMask {
     }
 }
 
-/// PDFium's `alpha_float * 255` cast to an integer: **truncating**, so
-/// `ca 0.5` is `127`. The `// not rounded.` at `cpdf_renderstatus.cpp:518` is
-/// upstream's own acknowledgement.
+/// `alpha * 255` cast to an integer: **truncating**, so `ca 0.5` is `127`.
+///
+/// `alpha_byte_rounding` is the other conversion; the two differ on a large
+/// fraction of real `ca` values.
 #[must_use]
 pub fn alpha_byte_truncating(alpha: f32) -> u8 {
     if alpha.is_nan() {
@@ -529,10 +516,10 @@ pub fn alpha_byte_truncating(alpha: f32) -> u8 {
     byte
 }
 
-/// `FXSYS_roundf(255 * alpha)` — the *other* alpha conversion, used where a
-/// shading pattern resolves its painting object's alpha
-/// (`cpdf_renderstatus.cpp:887`). Half-away-from-zero, unlike the truncating
-/// spelling above; the two differ on a large fraction of real `ca` values.
+/// `round(255 * alpha)` — the *other* alpha conversion, used where a shading
+/// pattern resolves its painting object's alpha. Half-away-from-zero, unlike
+/// [`alpha_byte_truncating`]; the two differ on a large fraction of real `ca`
+/// values.
 #[must_use]
 pub(crate) fn alpha_byte_rounding(alpha: f32) -> u8 {
     if alpha.is_nan() {
@@ -558,8 +545,7 @@ pub fn mul255(a: u8, b: u8) -> u8 {
     byte
 }
 
-/// `AlphaMerge(d, s, a) = (d*(255-a) + s*a) / 255`, truncating and unclamped
-/// (`fx_dib.h:212-214`).
+/// `AlphaMerge(d, s, a) = (d*(255-a) + s*a) / 255`, truncating and unclamped.
 #[must_use]
 pub fn alpha_merge(dest: u8, src: u8, alpha: u8) -> u8 {
     let a = u32::from(alpha);
@@ -572,7 +558,7 @@ pub fn alpha_merge(dest: u8, src: u8, alpha: u8) -> u8 {
     byte
 }
 
-/// `AlphaUnion(d, s) = d + s - d*s/255` (`cfx_scanlinecompositor.cpp:37`).
+/// `AlphaUnion(d, s) = d + s - d*s/255`.
 ///
 /// The truncating product makes this *not* the exact `1-(1-d)(1-s)` a float
 /// composite would give, and it never quite reaches 255 from two partial
@@ -594,9 +580,8 @@ pub(crate) fn premultiply(color: peniko::Color) -> [u8; 4] {
 
 /// Undo premultiplication on one pixel's colour channels.
 ///
-/// Rounds the quotient rather than truncating, matching
-/// `CFX_DIBitmap::UnPreMultiply`'s `+ alpha / 2` and keeping the round trip
-/// through [`premultiply`] stable for opaque pixels.
+/// Rounds the quotient rather than truncating (`+ alpha / 2`), which keeps
+/// the round trip through [`premultiply`] stable for opaque pixels.
 #[must_use]
 pub(crate) fn unpremultiply_rgb(r: u8, g: u8, b: u8, a: u8) -> [u8; 3] {
     if a == 0 {

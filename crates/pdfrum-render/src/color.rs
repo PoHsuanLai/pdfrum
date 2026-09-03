@@ -1,5 +1,5 @@
 //! Turning a page object's `ColorValue` into the 32-bit colour a device draws
-//! with (`GetFillArgb`/`GetStrokeArgb`, `cpdf_renderstatus.cpp:466-532`).
+//! with.
 //!
 //! Four details in that pipeline are pixel-visible and none of them is what a
 //! re-derivation would produce: the alpha is truncated from `alpha * 255`, not
@@ -8,12 +8,11 @@
 //! rather than defaulting to black; and the invisibility sentinel is the whole
 //! 32-bit word `0xFFFFFFFF`, which a resolved colour can never be.
 //!
-//! That last one is the trap. `FXSYS_BGR` packs a resolved colour into the low
-//! 24 bits, so a genuinely white fill is `0x00FFFFFF` — while `0xFFFFFFFF`,
-//! the value the invisibility test compares against, is produced only by
-//! `value_or(0xFFFFFFFF)` when nothing resolved and by the pattern fallback.
-//! Testing the *colour* for white instead of the word for the sentinel makes
-//! every white object in the corpus paint nothing.
+//! That last one is the trap: a resolved colour occupies the low 24 bits, so
+//! a genuinely white fill is `0x00FFFFFF`, while `0xFFFFFFFF` is produced only
+//! when nothing resolved and by the pattern fallback. Testing the *colour* for
+//! white instead of the word for the sentinel makes every white object in the
+//! corpus paint nothing.
 
 use pdfrum_page::{ColorValue, Rgb};
 
@@ -95,7 +94,7 @@ impl Argb {
     }
 }
 
-/// `FXRGB2GRAY(r, g, b) = (b*11 + g*59 + r*30) / 100` (`fx_dib.h:210`).
+/// `gray = (b*11 + g*59 + r*30) / 100`, integer and truncating.
 ///
 /// Integer, truncating, **NTSC weights on a 0..100 scale** — not Rec. 709 and
 /// not floating point. Both rasterizers ship a luminance helper using BT.709
@@ -112,8 +111,7 @@ pub fn rgb_to_gray(r: u8, g: u8, b: u8) -> u8 {
     gray
 }
 
-/// `CPDF_RenderOptions::TranslateColor`: identity in normal and alpha modes,
-/// a gray collapse otherwise.
+/// Identity in normal and alpha modes, a gray collapse otherwise.
 #[must_use]
 fn translate_color(mode: ColorMode, c: Argb) -> Argb {
     match mode {
@@ -149,35 +147,33 @@ fn translate_object_color(opts: &RenderOptions, c: Argb, kind: ObjectKind, strok
     }
 }
 
-/// What a colour ref resolved to, in the three states PDFium's `FX_COLORREF`
+/// What a colour ref resolved to, in the three states the oracle
 /// distinguishes.
 ///
-/// The distinction matters because two of them are white. `FXSYS_BGR` packs a
-/// resolved colour into the **low 24 bits**, so a genuinely white fill is
-/// `0x00FFFFFF`; the "nothing resolved" value is `value_or(0xFFFFFFFF)`, with
-/// the top byte set, and `GetFillArgb`'s invisibility test is
-/// `colorref == 0xFFFFFFFF` — comparing the whole 32-bit word.
+/// The distinction matters because two of them are white. A resolved colour
+/// occupies the **low 24 bits**, so a genuinely white fill is `0x00FFFFFF`;
+/// the "nothing resolved" value is `0xFFFFFFFF`, with the top byte set, and
+/// the invisibility test compares the whole 32-bit word.
 ///
-/// So **a white fill is white, not invisible.** Collapsing the two costs every
-/// white object in the corpus: a transparency group painting a white square
-/// through a soft mask paints nothing, which is not a subtle difference.
+/// So **a white fill is white, not invisible.** Collapsing the two costs
+/// every white object in the corpus: a transparency group painting a white
+/// square through a soft mask paints nothing.
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum ColorRef {
     /// A colour the space produced.
     Resolved(Rgb),
     /// `0xFFFFFFFF` — nothing resolved, and the object is invisible.
     Invisible,
-    /// No colour of its own, so the enclosing state's is inherited
-    /// (`MissingFillColor`).
+    /// No colour of its own, so the enclosing state's is inherited.
     Missing,
 }
 
-/// Resolve a colour value the way `CPDF_ColorState` fills its colour ref.
+/// Resolve a colour value to one of the three [`ColorRef`] states.
 ///
-/// A **pattern** never reaches `GetRGB` in the ordinary way: `SetPattern`
-/// takes the pattern space's own answer when it has one, and otherwise picks
-/// between two sentinels — mid grey for a **coloured tiling** pattern, which
-/// is visible, and `0xFFFFFFFF` for everything else, which is not. That path
+/// A **pattern** never resolves through its colour space in the ordinary way:
+/// the pattern space's own answer wins when it has one, and otherwise one of
+/// two sentinels — mid grey for a **coloured tiling** pattern, which is
+/// visible, and the invisibility word for everything else. That path
 /// rarely reaches a pixel, because a pattern is drained out of the ordinary
 /// draw; the exception is a type-3 text object, whose `GetFillArgbForType3`
 /// runs before the pattern check.

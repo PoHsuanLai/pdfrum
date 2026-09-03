@@ -1,10 +1,8 @@
 //! The render session's context and caches.
 //!
-//! `CPDF_RenderStatus` is a thousand-line class with twenty-four members;
-//! STYLE §1 forbids reproducing it, and none of those members needs the
-//! others. What remains is [`RenderCtx`], a record every field of which some
-//! free function reads and none of which is read by all, plus
-//! [`RenderCaches`], owned by the session rather than by a global.
+//! [`RenderCtx`] is a record every field of which some free function reads
+//! and none of which is read by all; [`RenderCaches`] is owned by the session
+//! rather than by a global.
 
 use pdfrum_font::{FontId, GlyphCache};
 use pdfrum_page::Transparency;
@@ -12,8 +10,7 @@ use pdfrum_page::Transparency;
 use crate::color::Argb;
 use crate::options::RenderOptions;
 
-/// The render-recursion cap (`kRenderMaxRecursionDepth`,
-/// `cpdf_renderstatus.cpp:82`).
+/// The render-recursion cap.
 ///
 /// Upstream keeps this in a *process-global* counter, shared across
 /// concurrent renders in the same process; ours is a field, which is strictly
@@ -111,8 +108,7 @@ impl RenderCtx<'_> {
     }
 }
 
-/// Caches owned by one render session (STYLE §1: no globals; the owner passes
-/// them down).
+/// Caches owned by one render session, passed down by the owner.
 ///
 /// Scoping the glyph cache here rather than to a process makes the type-3
 /// blue-zone snapping deterministic: it is order-dependent by design, so a
@@ -139,32 +135,25 @@ pub struct RenderCaches {
     /// they came from and the shape of the request
     /// (`crate::imagecache::PixmapRequest`).
     ///
-    /// A third cache rather than a field on either of the others because it is
-    /// keyed by neither's key and holds neither's kind of thing: the decoded
-    /// samples upstream of it are `pdfrum-page`'s to cache (SPEC.md §7), and
-    /// what is cached here is the two pure functions *downstream* of those
-    /// samples, which `docs/status/M12.md` §3.6 measured re-running on every
-    /// render of an image that had not changed.
+    /// A third cache rather than a field on either of the others because it
+    /// is keyed by neither's key and holds neither's kind of thing: the
+    /// decoded samples upstream of it are `pdfrum-page`'s to cache, and what
+    /// is cached here is the two pure functions *downstream* of them.
     pub(crate) images: crate::imagecache::RenderedImageCache,
     /// The degenerate-sub-path scan's working buffers.
     ///
-    /// Not a cache — nothing is remembered between paths, and it would be wrong
-    /// to remember anything, since the scan's answer depends on the path. What
-    /// is reused is the *memory*: the scan runs on every fill-only path object,
-    /// building a point list and a result list to answer "nothing degenerate
-    /// here" on the overwhelming majority of them, and on `vector_paths_1751`
-    /// that was 9866 allocations per render for 4925 answers of "no"
-    /// (`docs/status/M12b-P2.md` §4). It sits here because this is where a
-    /// render session's reusable memory lives and because the alternative —
-    /// a fresh `Vec` per path — is what the measurement was about.
+    /// Not a cache — nothing is remembered between paths, and it would be
+    /// wrong to remember anything, since the scan's answer depends on the
+    /// path. What is reused is the *memory*: the scan runs on every fill-only
+    /// path object, building a point list and a result list to answer
+    /// "nothing degenerate here" on the overwhelming majority of them.
     pub(crate) zero_area: crate::zero_area::Scratch,
     /// One text object's placed glyphs, refilled per object.
     ///
     /// The same kind of thing as [`Self::zero_area`] and for the same reason:
-    /// after the outline copies went (`docs/status/M12b-P2.md` §6) this was the
-    /// last per-object allocation left in the walk — one `Vec<PlacedGlyph>` per
-    /// text object, 3654 of them on `text_tcpdf_055`. Nothing is remembered
-    /// between objects; the memory is.
+    /// one `Vec<PlacedGlyph>` per text object, otherwise allocated afresh
+    /// thousands of times per render. Nothing is remembered between objects;
+    /// the memory is.
     pub(crate) placed_glyphs: Vec<crate::text::PlacedGlyph>,
 }
 

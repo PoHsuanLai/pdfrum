@@ -1,11 +1,10 @@
 //! The geometry decisions that must be identical whichever rasterizer is
-//! behind the device (`cfx_renderdevice.cpp:688-830`, `cfx_path.cpp`).
+//! behind the device.
 //!
-//! In the C++ these live above the driver, in `CFX_RenderDevice`; here they
-//! live in the engine for the same reason — they are pure functions of path,
-//! matrix and colour, and Tier C's contract can only demand that the two
-//! backends receive *byte-identical* geometry if the engine is what decides
-//! it. Three of them change pixels on a large fraction of the corpus:
+//! They live in the engine because they are pure functions of path, matrix
+//! and colour, and the cross-backend equality property can only hold if the
+//! engine is what decides them. Three change pixels on a large fraction of
+//! the corpus:
 //!
 //! - a degeneracy filter that is deliberately not a determinant test;
 //! - an axis-aligned rectangle fast path that is **never antialiased** and
@@ -15,8 +14,7 @@
 
 use kurbo::{Affine, BezPath, PathEl, Point, Rect};
 
-/// The per-axis coordinate clamp AGG applies before rasterizing
-/// (`HardClip`, `cfx_agg_devicedriver.cpp:53-58`).
+/// The per-axis coordinate clamp AGG applies before rasterizing.
 ///
 /// It is a *clamp*, not a clip: geometry beyond it is distorted rather than
 /// cut off, which is observable on pathological corpus files. Both our
@@ -25,8 +23,7 @@ use kurbo::{Affine, BezPath, PathEl, Point, Rect};
 /// introducing an artefact, and the only way both backends can agree.
 pub const MAX_POS: f64 = 32000.0;
 
-/// `IsAvailableMatrix` (`cpdf_renderstatus.cpp:148-158`): whether a matrix is
-/// worth drawing through.
+/// `IsAvailableMatrix`: whether a matrix is worth drawing through.
 ///
 /// Deliberately **not** a determinant test — a genuinely singular matrix like
 /// `(1, 1, 1, 1)` passes. It rejects only the two ways a matrix collapses by
@@ -66,17 +63,11 @@ pub fn hard_clip(path: &BezPath) -> BezPath {
 
 /// Transform a path into device space and apply [`hard_clip`] in one pass.
 ///
-/// Exactly `hard_clip(&(matrix * path.clone()))`, which is what every ordinary
-/// fill and stroke in [`crate::paint::draw_path`] used to spell literally. That
-/// spelling builds **two** whole `BezPath`s per drawn path object — the
-/// transformed copy, then the clamped copy of it — and discards the first at the
-/// device call. On `vector_paths_1751` that was 10010 `BezPath` builds and
-/// 4.5 MiB of allocator traffic per render (docs/status/M12b-P3.md §3).
-///
-/// The composition is associative on points — `clamp(matrix * p)` for every
-/// coordinate either way — so fusing them changes no coordinate, and the
-/// capacity is reserved from the source's element count so the single buffer
-/// never grows.
+/// Exactly `hard_clip(&(matrix * path.clone()))`, fused so a drawn path
+/// object builds one `BezPath` rather than two. The composition is
+/// associative on points — `clamp(matrix * p)` for every coordinate either
+/// way — so fusing changes no coordinate, and the capacity is reserved from
+/// the source's element count so the single buffer never grows.
 #[must_use]
 pub fn transform_hard_clip(matrix: Affine, path: &BezPath) -> BezPath {
     let clamp = |p: Point| {
@@ -97,13 +88,11 @@ pub fn transform_hard_clip(matrix: Affine, path: &BezPath) -> BezPath {
 }
 
 /// Nudge a degenerate one-point subpath's line endpoint one device pixel
-/// right, so a stroke has something to expand (`BuildAggPath`,
-/// `cfx_agg_devicedriver.cpp:951-956`).
+/// right, so a stroke has something to expand.
 ///
-/// AGG's `vertex_sequence::add` drops a vertex within `1e-14` of the previous
-/// one, and `vcgen_stroke` then bails with fewer than two vertices, so
-/// `50 40 m 50 40 l S` would stroke *nothing*. PDFium's answer is not to
-/// special-case the stroke but to move the endpoint:
+/// AGG drops a vertex within `1e-14` of the previous one and then bails with
+/// fewer than two vertices, so `50 40 m 50 40 l S` would stroke *nothing*.
+/// The answer is not to special-case the stroke but to move the endpoint:
 ///
 /// ```text
 /// if (i > 0 && points[i - 1].IsTypeAndOpen(kMove) &&
@@ -210,14 +199,11 @@ fn should_nudge(els: &[PathEl], user: &[PathEl], i: usize) -> bool {
 
 /// A rectangle candidate's points, held inline.
 ///
-/// The three `Vec<Point>`s this replaced — the candidate list, its
-/// normalization and its transform — ran on **every fill-only path object**
-/// through [`path_rect`], whether or not the path turned out to be a
-/// rectangle, and were three heap allocations per object for a test that on
-/// `vector_paths_1751` answers "not a rectangle" 4970 times out of 4970
-/// (docs/status/M12b-P3.md §3). Nothing about the sizes was ever dynamic:
-/// [`rect_candidate_points`] bails above 32 points and may append one closing
-/// point, and [`normalize_points`] returns exactly five or nothing.
+/// [`path_rect`] runs on **every fill-only path object** whether or not the
+/// path turns out to be a rectangle, and nothing about the sizes here is
+/// dynamic: [`rect_candidate_points`] bails above 32 points and may append
+/// one closing point, and [`normalize_points`] returns exactly five or
+/// nothing — so the lists this holds are inline rather than heap.
 ///
 /// A record of a buffer and a length, not a collection: it grows by `push` and
 /// is read as a slice, and `push` past the capacity is a *rejection* rather
@@ -290,9 +276,8 @@ fn rect_candidate_points(path: &BezPath) -> Option<Points> {
     Some(points)
 }
 
-/// `GetNormalizedPoints` (`cfx_path.cpp:70-108`): collapse zero-length
-/// segments in a path of more than five points, bailing when more than five
-/// survive.
+/// `GetNormalizedPoints`: collapse zero-length segments in a path of more
+/// than five points, bailing when more than five survive.
 fn normalize_points(points: &[Point]) -> Option<Points> {
     let mut out = Points::new();
     if points.len() <= 5 {
@@ -338,8 +323,8 @@ fn xy_both_differ(a: Point, b: Point) -> bool {
     a.x != b.x && a.y != b.y
 }
 
-/// `IsRectPreTransform` (`cfx_path.cpp:18-40`): four or five points, closing
-/// exactly, non-degenerate diagonals, every segment a line.
+/// `IsRectPreTransform`: four or five points, closing exactly, non-degenerate
+/// diagonals, every segment a line.
 fn is_rect_pre_transform(points: &[Point]) -> bool {
     if points.len() != 5 && points.len() != 4 {
         return false;
@@ -356,8 +341,7 @@ fn is_rect_pre_transform(points: &[Point]) -> bool {
     p0 != p2 && p1 != p3
 }
 
-/// `CFX_Path::GetRect(matrix)` (`cfx_path.cpp:429-466`): the axis-aligned
-/// rectangle a path describes after `matrix`, or `None`.
+/// The axis-aligned rectangle a path describes after `matrix`, or `None`.
 ///
 /// Axis-alignment is tested with **exact float equality**, both before and
 /// after the transform, so a 90-degree rotation qualifies and a 45-degree one
@@ -450,8 +434,7 @@ impl IntRect {
     }
 }
 
-/// `CFX_FloatRect::GetOuterRect`: the smallest integer rectangle containing
-/// a float one.
+/// The smallest integer rectangle containing a float one.
 #[must_use]
 #[expect(
     clippy::cast_possible_truncation,
@@ -469,15 +452,14 @@ pub fn outer_rect(r: Rect) -> IntRect {
     }
 }
 
-/// The axis-aligned rectangle fill fast path
-/// (`cfx_renderdevice.cpp:710-771`), reproduced exactly.
+/// The axis-aligned rectangle fill fast path, reproduced exactly.
 ///
 /// An axis-aligned rectangle in PDFium is **never antialiased** unless
 /// `bRectAA` is set; it is snapped to the outer integer rect, promoted to at
 /// least one pixel per axis, and then shrunk on whichever side sits further
-/// from the true edge. The `>` in that comparison is strict, so a **tie
-/// trims the right or bottom**. This rule is responsible for a large share of
-/// the corpus's pixel-exact rectangles.
+/// from the true edge. The `>` in that comparison is strict, so a **tie trims
+/// the right or bottom**. This rule is responsible for a large share of the
+/// corpus's pixel-exact rectangles.
 ///
 /// Returns `None` when a checked add overflows, which is upstream's `false`
 /// and drops the object.

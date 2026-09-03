@@ -1,64 +1,26 @@
-//! Where the *engine* half of a render goes, split finer than the seam.
+//! Where the *engine* half of a render goes, split finer than the backend
+//! seam.
 //!
-//! `benches/src/bin/profile.rs` splits a render into raster and engine by
-//! clocking every [`RenderDevice`](crate::RenderDevice) call and subtracting.
-//! That answers "is the cost below the seam or above it" exactly, and answers
-//! nothing about the half above it: M12 §3.1's "85% is engine" covers
-//! allocation churn, colour conversion and interpretation without
-//! distinguishing them, which is precisely why M12 §7 refused to reach for an
-//! arena allocator on the strength of it.
+//! Records, per render, the time spent in each of the walk's own phases —
+//! clip resolution, colour resolution, glyph placement, image preparation,
+//! and the dispatch left over — and the allocations at each site in the walk
+//! that makes one, counted and sized.
 //!
-//! This module is the finer instrument. It records, per render:
-//!
-//! - **time** in each of the walk's own phases — clip resolution, colour
-//!   resolution, glyph placement, image preparation, and the dispatch that is
-//!   left over;
-//! - **allocations** at each site in the walk that makes one, counted and
-//!   sized, because "how much is allocation churn" is a question about how many
-//!   bytes pass through the allocator and not about how long a phase took.
-//!
-//! # Why counters and not a sampling allocator
-//!
-//! A `GlobalAlloc` shim would answer the allocation question for the whole
-//! process in one stroke, and it needs `unsafe impl`. `unsafe_code = "forbid"`
-//! is workspace-wide — `benches/` included — so it is not available, and
-//! DEPS.md is closed against pulling in a crate that has it. Counting at the
-//! sites instead is strictly less general and, for this question, enough: the
-//! walk's allocation sites are enumerable by reading it, and what an arena
-//! could remove is exactly the set enumerated here. A number for a site the
-//! arena cannot reach would not change the verdict either way.
-//!
-//! # Cost when the feature is off
-//!
-//! Nothing. Every entry point below compiles to an empty inline function
-//! without the `walk-profile` feature, and [`Phase`]'s timing guard holds no
-//! state. The feature is off by default and no published build ever enables it;
-//! it exists so `pdfrum-bench` can ask the question, and so the next person
-//! asking it does not have to rebuild the instrument.
-//!
-//! # The thread-local, and STYLE §1
-//!
-//! STYLE §1 forbids global state, and this is a thread-local behind a
-//! default-off feature rather than an exception to that rule quietly taken. The
-//! alternative — threading a `&mut Profile` through the walk's fourteen
-//! functions, every one of which already carries eight or nine arguments —
-//! would put the instrument into the shape of the code being measured, which is
-//! the one thing an instrument must not do. The accumulator is per-thread, so a
-//! rayon render reports per-thread totals rather than a contended one, and
-//! [`take`] resets it.
-//!
-//! # Why the reporting half is `cfg`-gated
-//!
-//! With `walk-profile` off, the recording half compiles to empty inline
-//! functions and nothing ever produces a [`Profile`] to report — so the
-//! *reporting* half ([`Profile`] itself, and [`Phase`]/[`Site`]'s
-//! `index`/`name`/`ALL`) has no reader at all. Rather than suppress the lint
-//! that says so, each of those items carries
-//! `#[cfg(feature = "walk-profile")]`: it exists exactly where it is read —
-//! `benches/src/bin/profile.rs` is the whole readership — and does not exist
-//! otherwise. `Site` and `Phase`'s *variants* are unconditional,
-//! because the recording half names them at every call site whether or not
-//! the feature is on.
+//! **Costs nothing when the `walk-profile` feature is off**: every entry
+//! point compiles to an empty inline function. The accumulator is a
+//! thread-local, so a rayon render reports per-thread totals rather than a
+//! contended one, and [`take`] resets it.
+
+// Counters rather than a `GlobalAlloc` shim, which would need `unsafe impl`
+// and `unsafe_code = "forbid"` is workspace-wide. Counting at the sites is
+// enough for the question asked: the walk's allocation sites are enumerable
+// by reading it.
+//
+// The reporting half — `Profile` itself, and `Phase`/`Site`'s
+// `index`/`name`/`ALL` — carries `#[cfg(feature = "walk-profile")]` because
+// with the feature off nothing ever produces a `Profile` to report. `Site`
+// and `Phase`'s *variants* are unconditional: the recording half names them
+// at every call site whether or not the feature is on.
 
 #[cfg(feature = "walk-profile")]
 use core::time::Duration;
@@ -90,8 +52,7 @@ pub enum Phase {
     PathPrep,
     /// The per-object cull test in `crate::walk::render_object_list`:
     /// `crate::walk`'s `object_bbox` and the four comparisons against the
-    /// list's object-space clip box. Added by M12b P3, which had to know
-    /// whether an object rejected early is cheap because the *test* is cheap.
+    /// list's object-space clip box.
     Cull,
     /// `crate::path::path_rect` and `snap_rect` — `draw_path`'s case 2, the
     /// axis-aligned-rectangle fast path, which runs on every fill-only path
@@ -105,19 +66,15 @@ pub enum Phase {
     /// transformed into device space and clamped by
     /// `crate::path::hard_clip`. One reserved `BezPath` per fill, per
     /// object — `crate::path::transform_hard_clip` fuses the transform and
-    /// the clamp into a single pass, where until M12b P3 they were two builds
-    /// with the intermediate thrown away.
+    /// the clamp into a single pass.
     PathXform,
     /// `crate::shading::draw_patches` — the Coons and tensor mesh half of a
     /// shading, which rasterizes patch by patch through a scratch device
     /// rather than writing a buffer.
     ///
     /// It sits beside `shading`, not inside it: `Phase::Shading` wraps
-    /// `draw_to_pixmap`, which the mesh kinds never reach. Until M12b P3 added
-    /// this the mesh half was in no bucket at all, and its cost showed up as
-    /// interpretation — which is why `shading_axial_radial`'s engine residue
-    /// was read as unattributed `pattern.rs` overhead. Like `path prep`, the
-    /// span covers the device calls it makes.
+    /// `draw_to_pixmap`, which the mesh kinds never reach. Like `PathPrep`,
+    /// the span covers the device calls it makes.
     Patches,
 }
 
@@ -142,19 +99,16 @@ pub enum Site {
     /// A `RenderCtx` cloned by `crate::ctx::RenderCtx::deeper`.
     CtxClone,
     /// The device-space `BezPath`s `crate::paint::draw_path`'s ordinary case
-    /// builds for a fill or a stroke: one per fill since M12b P3 fused the
-    /// transform and the clamp (`crate::path::transform_hard_clip`), three
-    /// on the stroke arm, which still composes a nudge between them.
-    ///
-    /// **Not in P2's site list**, which is why P2's "allocation is 0.6%"
-    /// covered less of the walk than it appeared to — see M12b-P3.md §3.
+    /// builds for a fill or a stroke: one per fill, since
+    /// `crate::path::transform_hard_clip` fuses the transform and the clamp;
+    /// three on the stroke arm, which still composes a nudge between them.
     PathGeometry,
 }
 
 /// Everything one render's walk accumulated.
 ///
-/// A record of facts, per STYLE §1: the counters are public and the reporting
-/// lives in whoever reads them.
+/// A record of facts: the counters are public and the reporting lives in
+/// whoever reads them.
 #[cfg(feature = "walk-profile")]
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Profile {
@@ -347,7 +301,7 @@ mod imp {
         }
     }
 
-    /// Start a phase closed by [`Started::end`].
+    /// Start a phase, closed by the returned guard's `end`.
     pub fn phase_start() -> Started {
         Started(std::time::Instant::now())
     }

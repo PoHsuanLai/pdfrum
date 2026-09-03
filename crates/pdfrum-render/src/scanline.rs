@@ -3,61 +3,44 @@
 //!
 //! **Part of the backend seam.** A backend that owns its pixels rasterizes
 //! with [`Rasterizer`] rather than with a rasterizer of its own, because the
-//! coverage a page's edges get is exactly what Tier C compares across
-//! backends. `pdfrum-raster-agg` is the in-tree caller.
+//! coverage a page's edges get is exactly what the cross-backend equality
+//! property compares. `pdfrum-raster-agg` is the in-tree caller.
 //!
-//! # Why cells
-//!
-//! A scanline rasterizer has to answer one question per pixel — what fraction
-//! of it the polygon covers — and there are two ways to answer it. A
-//! supersampler asks a fixed grid of sample points and counts hits, which
-//! quantises coverage to the number of samples it took. An *analytic*
-//! rasterizer integrates the polygon's edges directly, so a pixel's coverage
-//! is the real number the geometry implies, quantised only by the output byte.
-//!
-//! That difference is measurable against the oracle rather than aesthetic.
-//! `tiny-skia` supersamples at four subsamples per axis, so a diagonal edge
-//! has seventeen distinct coverage levels and a half-covered pixel lands on
-//! 8/16 of the range; the oracle's own edge writes the exact half. Over the
-//! corpus that shows up as a persistent few-count spread along every
-//! non-axis-aligned edge — the population `docs/status/pdfrum-render.md`
-//! names the coverage band.
-//!
-//! # The representation
-//!
-//! Each pixel the polygon's boundary crosses gets a `Cell` carrying two
-//! integers:
-//!
-//! - **`cover`** — the net signed vertical distance the boundary travelled
-//!   through this pixel, in `SUBPIXEL_SCALE`ths of a pixel. Summing `cover`
-//!   left to right along a scanline gives the winding number, scaled, at every
-//!   point to the right of the cell.
-//! - **`area`** — twice the signed area the boundary swept *inside* this
-//!   pixel, in the same units squared. It is the correction that turns the
-//!   running `cover` into the exact coverage of the boundary pixel itself.
-//!
-//! A cell is therefore a *difference*: interior pixels between two boundaries
-//! carry no cell at all, and their coverage falls out of the running sum. That
-//! is what makes the sweep linear in the boundary rather than in the area.
-//!
-//! Both quantities are exact integers. There is no floating-point accumulation
-//! anywhere in the sweep, so the same path always produces the same bytes on
-//! every machine — the determinism property the conformance harness needs and
-//! that a SIMD-dispatched rasterizer cannot promise for free.
-//!
-//! # Why it lives in the engine rather than in a backend
-//!
-//! It began as `pdfrum-raster-agg`'s private integrator, and the analytic
-//! backend is still its largest consumer. It moved here when a *second*
-//! consumer appeared that is not a backend at all: [`crate::glyph`] rasterizes
-//! every small glyph into an alpha bitmap, and that bitmap must be identical
-//! under all three rasterizers, because the oracle's own glyph bitmap is
-//! produced by FreeType rather than by whatever draws the page's paths.
-//!
-//! That is the same argument [`crate::blend::composite_premultiplied`] already
-//! makes: a decision the *engine* takes has one implementation the engine owns,
-//! and Tier C's guarantee — that every engine decision is identical under both
-//! gating backends — then holds by construction rather than by testing.
+//! Coverage is *integrated* from the polygon's edges, not sampled: a pixel's
+//! coverage is the real number the geometry implies, quantised only by the
+//! output byte. The sweep is all-integer, so the same path always produces
+//! the same bytes on every machine.
+
+// A supersampler asks a fixed grid of sample points and counts hits, which
+// quantises coverage to the number of samples it took. `tiny-skia`
+// supersamples at four subsamples per axis, so a diagonal edge has seventeen
+// distinct coverage levels and a half-covered pixel lands on 8/16 of the
+// range, where the oracle's own edge writes the exact half. Over the corpus
+// that is a persistent few-count spread along every non-axis-aligned edge.
+//
+// # The representation
+//
+// Each pixel the polygon's boundary crosses gets a `Cell` carrying two
+// integers:
+//
+// - **`cover`** — the net signed vertical distance the boundary travelled
+//   through this pixel, in `SUBPIXEL_SCALE`ths of a pixel. Summing `cover`
+//   left to right along a scanline gives the winding number, scaled, at every
+//   point to the right of the cell.
+// - **`area`** — twice the signed area the boundary swept *inside* this
+//   pixel, in the same units squared. It is the correction that turns the
+//   running `cover` into the exact coverage of the boundary pixel itself.
+//
+// A cell is therefore a *difference*: interior pixels between two boundaries
+// carry no cell at all, and their coverage falls out of the running sum. That
+// is what makes the sweep linear in the boundary rather than in the area.
+//
+// It lives in the engine rather than in a backend because `crate::glyph`
+// rasterizes every small glyph into an alpha bitmap that must be identical
+// under all three rasterizers — the oracle's own glyph bitmap comes from
+// FreeType rather than from whatever draws the page's paths. Same argument as
+// `crate::blend::composite_premultiplied`: a decision the *engine* takes has
+// one implementation the engine owns.
 
 use store::CellStore;
 
@@ -66,11 +49,10 @@ mod store;
 /// The subpixel grid the rasterizer works on: 256 steps per pixel per axis.
 ///
 /// Coordinates arrive as `f64` device pixels and are scaled by this and
-/// truncated, so the rasterizer's whole interior is integer arithmetic. 256 is
-/// the oracle's own `poly_base_size` (`agg_rasterizer_scanline_aa.h:45-48`),
-/// and it is load-bearing rather than a tunable: [`coverage_to_alpha`]'s
-/// mapping is derived from this scale, and changing it would change every
-/// antialiased edge byte in the corpus.
+/// truncated, so the rasterizer's whole interior is integer arithmetic. 256
+/// is the oracle's own `poly_base_size`, and it is load-bearing rather than a
+/// tunable: [`coverage_to_alpha`]'s mapping is derived from this scale, and
+/// changing it would change every antialiased edge byte in the corpus.
 pub(crate) const SUBPIXEL_SCALE: i32 = 256;
 
 /// `log2(SUBPIXEL_SCALE)`, the shift the coordinate conversion uses.
@@ -149,11 +131,10 @@ const COORDINATE_LIMIT: f64 = (1i32 << 22) as f64;
 
 /// A device coordinate as a subpixel one.
 ///
-/// Truncating toward zero, matching the oracle's `int(c * 256)`
-/// (`agg_rasterizer_scanline_aa.h:50-53`) rather than rounding. The clamp
-/// keeps a coordinate the engine's own ±32000 bound somehow missed from
-/// overflowing the multiply; it can only be reached by a non-finite value,
-/// which becomes zero.
+/// Truncating toward zero, matching the oracle's `int(c * 256)` rather than
+/// rounding. The clamp keeps a coordinate the engine's own ±32000 bound
+/// somehow missed from overflowing the multiply; it can only be reached by a
+/// non-finite value, which becomes zero.
 #[must_use]
 pub(crate) fn to_subpixel(v: f64) -> i32 {
     if !v.is_finite() {
@@ -272,8 +253,8 @@ impl Rasterizer {
     /// the segment's horizontal travel across whatever pixels it crosses.
     /// Splitting the general case into this makes the area integral a
     /// trapezoid per pixel, which is where the exactness comes from: each
-    /// pixel's contribution is `(fx_in + fx_out) * dy`, twice the trapezoid's
-    /// area, with no sampling anywhere.
+    /// pixel's contribution is `(fx_in + fx_out) * dy`, twice the
+    /// trapezoid's area, with no sampling anywhere.
     fn render_hline(&mut self, ey: i32, x1: i32, y1: i32, x2: i32, y2: i32) {
         let ex1 = x1 >> SUBPIXEL_SHIFT;
         let ex2 = x2 >> SUBPIXEL_SHIFT;
@@ -593,11 +574,9 @@ fn sweep_row(
 /// — a **×256 scale clamped at the top**, not ×255, and truncating rather than
 /// rounding. It was measured before it was ported: a shallow-slope fill
 /// rendered through the oracle at 64x64 gives the edge ramp `223 159 95 31` on
-/// grays whose true coverages are exactly ⅛, ⅜, ⅝ and ⅞, which is that formula
-/// and no other. `calculate_alpha` (`agg_rasterizer_scanline_aa.h:283-297`) is
-/// where it comes from, and there is **no gamma table anywhere on this path** —
-/// `grep gamma` over the oracle's path driver has no hits, and two waves of the
-/// burn-down separately confirmed that looking for one is wasted effort.
+/// grays whose true coverages are exactly ⅛, ⅜, ⅝ and ⅞, which is that
+/// formula and no other. There is **no gamma table anywhere on this path**;
+/// the text path's is not reachable from here.
 ///
 /// [`Coverage::Thresholded`] is the oracle's `aliased_path`, which does not
 /// turn the rasterizer off but thresholds the same coverage at the midpoint.

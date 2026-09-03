@@ -1,5 +1,4 @@
-//! Text as filled glyph outlines (`ProcessText`,
-//! `cpdf_renderstatus.cpp:824-930`, and `CFX_RenderDevice::DrawTextPath`).
+//! Text as filled glyph outlines.
 //!
 //! # Two paths, and which one a run takes
 //!
@@ -17,8 +16,8 @@
 //! that does not is drawn by filling [`PlacedGlyph::outline`].
 //!
 //! [`RenderOptions::subpixel_text_positioning`](crate::options::RenderOptions::subpixel_text_positioning)
-//! turns the bitmap path off for a caller who wants text where the PDF puts it
-//! rather than where a golden expects it.
+//! turns the bitmap path off for a caller who wants text where the PDF puts
+//! it rather than where a golden expects it.
 
 use kurbo::{Affine, BezPath, Vec2};
 
@@ -26,8 +25,7 @@ use crate::options::{RenderOptions, TextAa};
 use pdfrum_font::{CharItem, Font, GlyphCache, GlyphKey, cid_transform_to_float};
 use pdfrum_page::{TextObject, TextRenderMode};
 
-/// Which of fill, stroke and clip a text render mode asks for
-/// (`cpdf_renderstatus.cpp:752-761`).
+/// Which of fill, stroke and clip a text render mode asks for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TextPaintKinds {
     /// Whether the glyphs are filled.
@@ -121,11 +119,10 @@ pub struct BitmapPlacement {
 pub struct PlacedGlyph {
     /// The outline in 1000-unit text space, straight from the cache.
     ///
-    /// Shared rather than copied. A placement record cannot borrow the cache —
-    /// placing the next glyph needs it mutably again — and copying the path
-    /// instead was 2891 `BezPath` clones per render of `text_foxittext`, on a
-    /// page whose glyphs all take the *bitmap* path and never read this field
-    /// (`docs/status/M12b-P2.md` §6).
+    /// Shared rather than copied. A placement record cannot borrow the cache
+    /// — placing the next glyph needs it mutably again — and copying instead
+    /// clones the path once per glyph, on pages whose glyphs may all take the
+    /// *bitmap* path and never read this field at all.
     pub outline: std::sync::Arc<BezPath>,
     /// Text space to device space for this glyph, font size included.
     ///
@@ -201,14 +198,12 @@ impl Default for GlyphAdjust {
     }
 }
 
-/// The Japan1 adjustment one decoded character takes
-/// (`CPDF_Font::GetCharPosList`, `cpdf_font.cpp:482-498`).
+/// The Japan1 adjustment one decoded character takes.
 ///
 /// A non-embedded Japanese font is substituted onto a face that has only
 /// upright glyphs, so PDFium carries a hand-tuned 154-row table of per-CID
 /// transforms and applies them itself. It is *not* only for vertical writing:
-/// the gate is the charset and the absence of a font program
-/// (`CPDF_CIDFont::GetCIDTransform`, `cpdf_cidfont.cpp:878-887`), and a
+/// the gate is the charset and the absence of a font program, and a
 /// horizontal CMap such as `/90pv-RKSJ-H` reaches the listed CIDs perfectly
 /// well. `bug_1402.pdf` is exactly that file, and without this its three
 /// ideographic full stops land 22 device pixels left and 27 up — right shape,
@@ -218,9 +213,9 @@ impl Default for GlyphAdjust {
 /// the running pen, so a run's spacing is the same with the transform as
 /// without it and only each glyph's own placement moves.
 ///
-/// `is_vertical_glyph` suppresses it: a `GSUB` `vert` substitution has already
-/// produced a rotated form, and rotating it again is the one way to make this
-/// worse than not applying it.
+/// `is_vertical_glyph` suppresses it: a `GSUB` `vert` substitution has
+/// already produced a rotated form, and rotating it again is the one way to
+/// make this worse than not applying it.
 ///
 /// The transform **replaces** any narrowing from [`glyph_spacing_adjust`]
 /// rather than composing freely with it: upstream overwrites the whole
@@ -244,8 +239,7 @@ pub fn japan1_adjust(font: &Font, item: &CharItem, font_size: f32) -> GlyphAdjus
 }
 
 /// The spacing correction one glyph takes when
-/// [`Font::applies_glyph_spacing`] passed (`CPDF_Font::GetCharPosList`,
-/// `cpdf_font.cpp:449-467`).
+/// [`Font::applies_glyph_spacing`] passed.
 ///
 /// `declared` is the advance the PDF gives this character code and `face` the
 /// advance the substituted face gives the glyph, both in 1000/em units. The
@@ -291,7 +285,7 @@ pub fn glyph_spacing_adjust(declared: i32, face: i32, font_size: f32) -> GlyphAd
 }
 
 /// The size threshold above which the oracle abandons glyph bitmaps for
-/// outline fills (`cfx_renderdevice.cpp:1240`).
+/// outline fills.
 ///
 /// `char2device` is the text-to-device matrix scaled by `(font_size,
 /// -font_size)`, so `|a| + |b|` is roughly the em's device width. Above 50
@@ -301,13 +295,12 @@ pub fn glyph_spacing_adjust(declared: i32, face: i32, font_size: f32) -> GlyphAd
 pub const BITMAP_PATH_MAX_EM: f64 = 50.0;
 
 /// Whether a run of this size takes the oracle's glyph-*bitmap* path, and so
-/// gets its origins snapped (`cfx_renderdevice.cpp:1240-1246`).
+/// gets its origins snapped.
 ///
-/// The C++ spelling is `fabs(char2device.a) + fabs(char2device.b) > 50 * 1.0f
-/// || is_printer`, with the `> 50` arm *leaving* the bitmap path. `is_printer`
-/// is false for every `pdfium_test --png` render, and the `font->HasFace()`
-/// guard inside it only matters for a face with no outlines at all — which in
-/// this engine is a type-3 font, and type-3 text never reaches here.
+/// The threshold is `|a| + |b| <= 50` on the char-to-device matrix; above it
+/// the outline is filled instead. A face with no outlines at all would also
+/// leave the bitmap path, but in this engine that is a type-3 font and
+/// type-3 text never reaches here.
 #[must_use]
 pub fn takes_bitmap_path(font_size: f32, text_to_device: Affine) -> bool {
     // char2device = text2device * Scale(font_size, -font_size); a column-major
@@ -318,13 +311,11 @@ pub fn takes_bitmap_path(font_size: f32, text_to_device: Affine) -> bool {
     (a * size).abs() + (b * size).abs() <= BITMAP_PATH_MAX_EM
 }
 
-/// Snap one glyph's device origin to the grid the oracle blits its bitmap
-/// on (`cfx_renderdevice.cpp:1254-1257` **and** `1352`).
+/// Snap one glyph's device origin to the grid a blitted glyph bitmap sits on.
 ///
 /// # The x grid is thirds of a pixel, not whole pixels
 ///
-/// Reading only the snap itself is misleading, and burn-down wave 4 read only
-/// the snap:
+/// Reading only the snap itself is misleading:
 ///
 /// ```cpp
 /// glyph.origin_.x = anti_alias_is_lcd ? static_cast<int>(floor(x))
@@ -352,17 +343,15 @@ pub fn takes_bitmap_path(font_size: f32, text_to_device: Affine) -> bool {
 ///
 /// # Which rounding runs is `FontAntiAliasingMode`, not `bClearType`
 ///
-/// `DrawNormalText` derives that mode itself
-/// (`cfx_renderdevice.cpp:1165-1206`): with a smooth aliasing type on a
-/// display device at 32 bpp it is always `kLcd`, whatever the flag word said,
-/// so the conformance configuration takes the thirds. `--no-smoothtext` sets
-/// `aliasing_type = kAliasing`, `IsSmooth()` is then false, the whole
-/// derivation is skipped and the mode stays at its `kMono` initialiser — one
-/// bit per pixel, no LCD triple to shift into, so x snaps to a whole pixel
-/// through `FXSYS_roundf` like y. Hence the argument here is [`TextAa`]
+/// The antialiasing *mode* is derived separately from the `ClearType` flag:
+/// with a smooth aliasing type on a display device at 32 bpp it is always
+/// LCD, whatever the flag word said, so the conformance configuration takes
+/// the thirds. With text smoothing off the derivation is skipped and the mode
+/// stays monochrome — one bit per pixel, no LCD triple to shift into, so x
+/// snaps to a whole pixel like y. Hence the argument here is [`TextAa`]
 /// rather than a bare "is LCD" boolean: the two are the same decision.
 ///
-/// `round` is `FXSYS_roundf`, which is C `round`: half away from zero, unlike
+/// `round` here is C's `round`: half away from zero, unlike
 /// Rust's `round_ties_even`.
 #[must_use]
 pub fn snap_origin(origin: kurbo::Point, text_aa: TextAa) -> kurbo::Point {
@@ -392,23 +381,22 @@ pub fn snap_origin(origin: kurbo::Point, text_aa: TextAa) -> kurbo::Point {
     };
     kurbo::Point::new(x, origin.y.round())
 }
-
 /// Pull one glyph's origins back together after snapping, when consecutive
 /// integer origins have drifted more than half a pixel from the fractional
-/// spacing they came from (`AdjustGlyphSpace`,
-/// `cfx_renderdevice.cpp:57-98`).
+/// spacing they came from.
 ///
 /// It runs **only when the mode is not LCD and the run has more than one
-/// glyph** (`cfx_renderdevice.cpp:1265-1267`), which under the conformance
-/// flags means it never runs at all — only `--no-smoothtext` reaches it. The
-/// rule is deliberately conservative: it gives up entirely unless the run is
-/// axis-aligned (every origin sharing an x, or every origin sharing a y after
-/// the snap), and it never touches the first or last glyph.
+/// glyph**, which under the conformance flags means it never runs at all —
+/// only `--no-smoothtext` reaches it. The rule is deliberately conservative:
+/// it gives up entirely unless the run is axis-aligned (every origin sharing
+/// an x, or every origin sharing a y after the snap), and it never touches
+/// the first or last glyph.
 ///
 /// Note the loop bound. The C++ walks `i` from `size - 1` down to `2`
 /// exclusive and edits `glyphs[i - 1]`, so glyph 0 is never adjusted and the
 /// *last* glyph is only ever read. That asymmetry is upstream's, not a
 /// transcription slip, and it is why a two-glyph run is a no-op even though
+/// the size guard admits it.
 /// the size guard admits it.
 #[expect(
     clippy::float_cmp,
@@ -455,8 +443,7 @@ pub fn adjust_glyph_space(origins: &mut [kurbo::Point], device: &[kurbo::Point])
         }
     }
 }
-
-/// The stroked-text CTM un-transform (`cpdf_renderstatus.cpp:906-918`).
+/// The stroked-text CTM un-transform.
 ///
 /// A stroke's width is measured in user space (ISO 32000-1 §8.4.3.2), so when
 /// the text state's CTM carries a non-unit x or y scale the text matrix is
@@ -466,9 +453,9 @@ pub fn adjust_glyph_space(origins: &mut [kurbo::Point], device: &[kurbo::Point])
 /// `ctm` is the four-float slot stored on the text state, already transposed
 /// as `[a, c, b, d]`. kurbo is column-vector, so the C++ row-vector
 /// `text_matrix *= ctm.GetInverse(); device = ctm * mtObj2Device` (leftmost
-/// applies first) is spelled `text = ctm.inverse() * text` and
-/// `device = mtObj2Device * ctm`. Writing it the other way round moves the
-/// page-matrix translation by the CTM scale and lands every glyph in the
+/// applies first) is spelled `text = ctm.inverse() * text` and `device =
+/// mtObj2Device * ctm`. Writing it the other way round moves the page-matrix
+/// translation by the CTM scale and lands every glyph in the wrong place.
 /// wrong place.
 #[must_use]
 #[expect(
@@ -506,7 +493,6 @@ pub(crate) fn stroke_text_matrices(
         [f64::from(a), f64::from(b), f64::from(c), f64::from(d)],
     )
 }
-
 /// Lay out one text object's glyphs.
 ///
 /// # The two coordinate systems this has to keep straight
@@ -514,15 +500,15 @@ pub(crate) fn stroke_text_matrices(
 /// `pdfrum-page` hands a text object *two* pieces of placement, and they are
 /// in different spaces. `TextObject::matrix` is `ctm * text_matrix *
 /// horizontal_scale` — **text space to page space**, with no font size —
-/// while `TextObject::position` is `ctm * text_matrix` already applied to
-/// the pen, i.e. a **page-space** point.
+/// while `TextObject::position` is `ctm * text_matrix` already applied to the
+/// pen, i.e. a **page-space** point.
 ///
 /// Composing the two naively applies the matrix twice, which shifts the run
 /// wherever the text matrix has a translation and is invisible wherever it
 /// does not — so it survives every fixture whose `Tm` is the identity. The
 /// run's origin is therefore recovered by pulling `position` *back* through
-/// the matrix, and the pen then advances in text space where the advances
-/// are actually defined.
+/// the matrix, and the pen then advances in text space where the advances are
+/// actually defined.
 ///
 /// Advances follow the same rules `pdfrum-page` used to build the object:
 /// each code's width scaled by the font size, plus the character spacing,
@@ -549,10 +535,8 @@ pub(crate) fn stroke_text_matrices(
 /// only its placement moves — which is what blitting a bitmap at a fixed
 /// origin amounts to.
 ///
-/// **Three conditions gate it, all of them upstream's**
-/// (`ProcessText`, `cpdf_renderstatus.cpp:905-928`, and
-/// `cfx_renderdevice.cpp:1240-1246`), and each of them is a run the oracle
-/// itself places fractionally:
+/// **Three conditions gate it**, and each is a run the oracle itself places
+/// fractionally:
 ///
 /// - the run is **not stroked** — `if (is_clip || is_stroke)` takes
 ///   `DrawTextPath`, which places every glyph at its true origin. A
@@ -571,6 +555,7 @@ pub(crate) fn stroke_text_matrices(
 ///
 /// `AdjustGlyphSpace` then runs over the whole run, but only in the non-LCD
 /// mode, which is `--no-smoothtext` and not conformance. See
+/// [`adjust_glyph_space`].
 /// [`adjust_glyph_space`].
 #[must_use]
 pub fn place_glyphs(
@@ -593,9 +578,8 @@ pub fn place_glyphs(
 /// That is the whole difference — the placement is identical, and
 /// [`place_glyphs`] is this with a fresh `Vec`.
 ///
-/// It exists because the buffer was the last per-object allocation left in the
-/// walk after `docs/status/M12b-P2.md` §5 and §6: one `Vec<PlacedGlyph>` per
-/// text object, 3654 of them on `text_tcpdf_055`.
+/// It exists so that a page's text objects do not each allocate a
+/// `Vec<PlacedGlyph>` of their own.
 pub fn place_glyphs_into(
     out: &mut Vec<PlacedGlyph>,
     object: &TextObject,
@@ -729,7 +713,7 @@ pub fn place_glyphs_into(
 }
 
 /// Whether the PDF's own `/Widths` reach the glyph's *outline* rather than
-/// only its advance (`CPDF_Font::GetCharPosList`, `cpdf_font.cpp:440-444`).
+/// only its advance.
 ///
 /// ```cpp
 /// if (!IsEmbedded() && !IsCIDFont()) {
@@ -739,10 +723,10 @@ pub fn place_glyphs_into(
 /// }
 /// ```
 ///
-/// `font_char_width_` becomes `dest_width` at the face, and there
-/// `AdjustVariationParams` (`cfx_face.cpp:941-943, 1561-1605`) solves a
-/// **Multiple-Master** face's width axis until the glyph's own advance equals
-/// it. The two internal generics the substitution ladder terminates on —
+/// That width becomes a `dest_width` at the face, where a
+/// **Multiple-Master** face's width axis is solved until the glyph's own
+/// advance equals it. The two internal generics the substitution ladder
+/// terminates on —
 /// Chrome Sans and Chrome Serif — *are* MM Type 1 faces, so this is not a
 /// corner: it is how every non-embedded font in the corpus gets drawn at the
 /// width its PDF declares rather than at the fallback face's own.
@@ -919,22 +903,21 @@ pub fn place_type3_chars(
     }
     out
 }
-
 /// A text run's bounding rectangle in page space, or `None` when it is empty.
 ///
-/// `CPDF_TextObject::CalcPositionDataInternal`'s bounding half
-/// (`cpdf_textobject.cpp:288-357`): the pen walks the run exactly as
-/// [`place_glyphs`] does, and each character's **glyph box** — not its
-/// outline — grows the extent. Horizontal writing accumulates x from the pen
-/// and y from the raw box; vertical writing swaps the two roles and offsets
-/// each box by the character's vertical origin first. The finished box is then
-/// scaled by the font size on the axis that was left in 1000/em units, and
-/// mapped through the run's own matrix.
+/// The pen walks the run exactly as [`place_glyphs`] does, and each
+/// character's **glyph box** — not its outline — grows the extent.
+/// Horizontal writing accumulates
+/// x from the pen and y from the raw box; vertical writing swaps the two
+/// roles and offsets each box by the character's vertical origin first. The
+/// finished box is then scaled by the font size on the axis that was left in
+/// 1000/em units, and mapped through the run's own matrix.
 ///
 /// Only [`crate::walk`]'s pattern-text path wants this, and it wants it
 /// because upstream fills that rectangle rather than the glyphs. The stroke
 /// inflation `CalcPositionDataInternal` applies is deliberately absent: that
 /// arm of `DrawTextPathWithPattern` draws glyph outlines instead and never
+/// reads the rectangle at all.
 /// reads the rectangle at all.
 #[must_use]
 pub fn run_rect(object: &TextObject, state: &pdfrum_page::GraphicsState) -> Option<kurbo::Rect> {

@@ -1,11 +1,9 @@
-//! The 256-entry colour ramp axial and radial shadings index
-//! (`GetShadingSteps`, `cpdf_rendershading.cpp:65-100`).
+//! The 256-entry colour ramp axial and radial shadings index.
 //!
 //! Two arithmetic details are load-bearing and neither is what a
 //! re-derivation would write. The LUT's divisor is `kShadingSteps` (256),
 //! **not** `kShadingSteps - 1`, so the ramp never evaluates its functions at
-//! `t_max` — the "shading LUT off-by-one" SPEC §7 already accepted porting
-//! verbatim. And `ComponentToShadingIndex`, which maps a *mesh* vertex's
+//! `t_max`. And [`component_to_shading_index`], which maps a *mesh* vertex's
 //! parametric value into the same ramp, scales by `255` instead — the two
 //! sides of the same table disagree by design.
 
@@ -14,7 +12,7 @@ use pdfrum_page::Rgb;
 
 use crate::color::Argb;
 
-/// The ramp's length (`kShadingSteps`, `cpdf_rendershading.cpp:45`).
+/// The ramp's length.
 pub const STEPS: usize = 256;
 
 /// [`STEPS`] as the `i32` the index comparison is written in upstream.
@@ -143,8 +141,8 @@ impl ColorSteps {
     }
 }
 
-/// `ComponentToShadingIndex` (`cpdf_rendershading.cpp:102-107`): map a mesh
-/// vertex's parametric component into the ramp's index space.
+/// `ComponentToShadingIndex`: map a mesh vertex's parametric component into
+/// the ramp's index space.
 ///
 /// Note the `255` here against the LUT's `256` — the ramp is built with one
 /// divisor and addressed with another, and both spellings are ported as

@@ -1,5 +1,4 @@
-//! The seven shading rasterizers and their common entry
-//! (`CPDF_RenderShading::Draw`, `cpdf_rendershading.cpp:1008-1118`).
+//! The seven shading rasterizers and their common entry.
 //!
 //! Six of the seven produce a [`Pixmap`] by pure engine code and are then
 //! blitted; only the Coons/tensor pair draws through a rasterizer, and even
@@ -7,14 +6,9 @@
 //! is what lets Tier C demand the two backends receive identical shading
 //! pixels: the per-pixel maths never touches a rasterizer.
 //!
-//! # The device buffer is not scaled
-//!
-//! `CPDF_DeviceBuffer::CalculateMatrix` caps resolution at 150 dpi — but only
-//! under `BUILDFLAG(IS_WIN)`. On the oracle's platform it is a pure
-//! translation, so a shading is rasterized at exactly device resolution, one
-//! shading pixel per device pixel, and blitted with a normal blend. The `150`
-//! is dead here and is recorded only because it is the first thing a reader
-//! looks for.
+//! **The device buffer is not scaled.** A shading is rasterized at exactly
+//! device resolution, one shading pixel per device pixel, and blitted with a
+//! normal blend.
 
 pub mod axial;
 pub mod function;
@@ -164,8 +158,7 @@ pub fn draw_patches(
     }
 }
 
-/// The colour-mode post-pass a shading buffer takes
-/// (`cpdf_rendershading.cpp:1111-1115`).
+/// The colour-mode post-pass a shading buffer takes.
 ///
 /// In `kAlpha` mode the red channel is set from the alpha — the group's
 /// drawing wrote alpha as gray and the mask readback reinterprets it. In

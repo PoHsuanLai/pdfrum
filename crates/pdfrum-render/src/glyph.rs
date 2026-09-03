@@ -1,5 +1,5 @@
 //! Glyphs as alpha bitmaps, rendered the way the oracle's FreeType renders
-//! them (`CFX_Face::RenderGlyph` → `FT_Render_Glyph` → `DrawNormalTextHelper`).
+//! them.
 //!
 //! **Part of the backend seam,** for exactly one type: [`SubpixelBitmap`] is
 //! what [`RenderDevice::draw_glyph_lcd`](crate::RenderDevice::draw_glyph_lcd)
@@ -7,61 +7,38 @@
 //! Everything else here — the gray rasterizer, the LCD filter, the session's
 //! bitmap cache — is the engine's own and is private.
 //!
-//! # What the oracle actually does to a small glyph
-//!
-//! Below `|char2device.a| + |char2device.b| > 50` the oracle does not fill a
-//! glyph outline. It asks FreeType for a **bitmap** and blits it, and the four
-//! stages of producing that bitmap each move pixels by more than the coverage
-//! integral that would otherwise decide them. All four were measured against
-//! the oracle before any of them was ported, on a 6 pt `H` from Arimo drawn
-//! into a 200×200 page; the table is the wave-7b section of
-//! `docs/status/pdfrum-render.md`.
-//!
-//! 1. **The outline is grid-fitted at a pinned 64 ppem**, never at the size it
-//!    is drawn at, because `FT_Set_Pixel_Sizes(rec, 64, 64)` runs once at face
-//!    construction and the real size arrives afterwards through
-//!    `FT_Set_Transform`, which FreeType applies *after* hinting. See
-//!    [`pdfrum_font::Font::hinted_glyph_path`].
-//! 2. **It is rasterized three times as wide.** `FT_RENDER_MODE_LCD` multiplies
-//!    every x coordinate by 3 (`ft_smooth_raster_lcd`, `ftsmooth.c`) and the
-//!    bitmap is padded by 43/64 of a subpixel on each side
-//!    (`ft_lcd_padding`, `ftlcdfil.c`) so the filter's tails have somewhere to
-//!    land.
-//! 3. **Every span is spread across five subpixel columns** by the FIR5 filter
-//!    `FT_LCD_FILTER_DEFAULT` selects — `{8, 77, 86, 77, 8}`, summing to 256,
-//!    applied as `(coverage · w + 85) >> 8` and *accumulated*. This is the
-//!    stage that puts ink in columns an outline fill leaves white.
-//! 4. **The triples are averaged back to gray through a gamma table.**
-//!    `DrawNormalTextHelper` with `normalize = true` computes
-//!    `(r + g + b) / 3` and looks the result up in `kTextGammaAdjust`
-//!    (`cfx_renderdevice.cpp:98-121`).
-//!
-//! # Why waves 4 and 5 concluded the opposite
-//!
-//! Wave 4 tested "the gamma table" and "the LCD downsample" separately, applied
-//! each to *our own outline coverage*, found neither improved the match, and
-//! recorded both as dead. Both conclusions are correct about what was tested
-//! and wrong about the pipeline: `kTextGammaAdjust`'s input is the average of
-//! three FIR5-filtered subpixel coverages, not a pixel's coverage, and the FIR5
-//! filter's input is a 3×-wide rasterization of a *hinted* outline. Applying
-//! either stage alone to the wrong input is not a weaker version of the
-//! pipeline — it is a different function.
-//!
-//! Wave 4 also measured hinting in isolation, found it moves points by about
-//! 1/25 of a device pixel, and ruled it out on that number. The number is
-//! right. What it does not say is what 1/25 of a pixel is worth once the glyph
-//! is rasterized this way, and the answer measured here is up to 10 counts per
-//! pixel on a 6 pt stem — because a 3×-wide grid resolves a third of the
-//! horizontal displacement an ordinary one does, and the FIR5 filter then
-//! spreads that difference over five columns.
-//!
-//! # What this is not
-//!
-//! It is not a general glyph rasterizer, and it is deliberately not reachable
-//! for large text. Above the size threshold the oracle itself abandons bitmaps
-//! for `DrawTextPath`, and so does `crate::text::takes_bitmap_path`; a caller
-//! who wants true fractional placement at every size sets
-//! `crate::options::RenderOptions::subpixel_text_positioning`.
+//! Not a general glyph rasterizer: above a size threshold the outline is
+//! filled instead, and `RenderOptions::subpixel_text_positioning` is how a
+//! caller asks for true fractional placement at every size.
+
+// The oracle asks FreeType for a **bitmap** below
+// `|char2device.a| + |char2device.b| > 50` and blits it rather than filling
+// the outline (`CFX_Face::RenderGlyph` -> `FT_Render_Glyph` ->
+// `DrawNormalTextHelper`). Four stages of producing that bitmap each move
+// pixels by more than the coverage integral that would otherwise decide
+// them, so none can be dropped or applied in isolation:
+//
+// 1. The outline is grid-fitted at a pinned 64 ppem, never at the size it is
+//    drawn at: `FT_Set_Pixel_Sizes(rec, 64, 64)` runs once at face
+//    construction and the real size arrives afterwards through
+//    `FT_Set_Transform`, which FreeType applies *after* hinting. On a 6 pt
+//    stem that is worth up to 10 counts per pixel, because a 3x-wide grid
+//    resolves a third of the horizontal displacement an ordinary one does.
+// 2. It is rasterized three times as wide: `FT_RENDER_MODE_LCD` multiplies
+//    every x coordinate by 3, and the bitmap is padded by 43/64 of a
+//    subpixel on each side so the filter's tails have somewhere to land.
+// 3. Every span is spread across five subpixel columns by the FIR5 weights
+//    `{8, 77, 86, 77, 8}`, summing to 256, applied as
+//    `(coverage * w + 85) >> 8` and *accumulated*. This is the stage that
+//    puts ink in columns an outline fill leaves white.
+// 4. The triples are averaged back to gray through `kTextGammaAdjust`:
+//    `(r + g + b) / 3`, then a table lookup.
+//
+// The gamma table's input is the average of three FIR5-filtered subpixel
+// coverages, not a pixel's coverage, and the FIR5 filter's input is a
+// 3x-wide rasterization of a *hinted* outline. Applying any one stage to a
+// plain outline coverage is not a weaker version of the pipeline; it is a
+// different function.
 
 use kurbo::{Affine, BezPath, Shape};
 
@@ -82,14 +59,11 @@ pub(crate) const LCD_FIR5: [i32; 5] = [0x08, 0x4d, 0x56, 0x4d, 0x08];
 /// path differs from an outline fill.
 pub(crate) const LCD_PADDING_26_6: i64 = 43;
 
-/// `kTextGammaAdjust` (`cfx_renderdevice.cpp:98-121`), verbatim.
+/// The text gamma table, transcribed verbatim.
 ///
 /// Applied to the *average of the three subpixel coverages*, not to a pixel's
-/// own coverage — which is the distinction that made wave 4's test of "the
-/// gamma table" measure a different function and correctly reject it.
-///
-/// The table is not a power curve: it is close to `x^(1/1.05)` in the middle
-/// and pinned at both ends, with 24 repeated values. The transcription is the
+/// own coverage. It is not a power curve: close to `x^(1/1.05)` in the middle,
+/// pinned at both ends, with 24 repeated values. The transcription is the
 /// authority.
 pub(crate) const TEXT_GAMMA_ADJUST: [u8; 256] = [
     0, 2, 3, 4, 6, 7, 8, 10, 11, 12, 13, 15, 16, 17, 18, 19, 21, 22, 23, 24, 25, 26, 27, 29, 30,
@@ -107,22 +81,19 @@ pub(crate) const TEXT_GAMMA_ADJUST: [u8; 256] = [
     248, 249, 250, 250, 251, 252, 253, 254, 255,
 ];
 
-/// The largest glyph bitmap either axis may reach, in device pixels
-/// (`kMaxGlyphDimension`, `cfx_face.cpp`).
+/// The largest glyph bitmap either axis may reach, in device pixels.
 ///
-/// A glyph past it renders as nothing at all rather than as a huge allocation,
-/// which is upstream's answer and not a clamp: `RenderGlyph` returns `nullptr`
-/// and `DrawNormalText` skips the glyph.
+/// A glyph past it renders as nothing at all rather than as a huge
+/// allocation, which is upstream's answer and not a clamp: `RenderGlyph`
+/// returns `nullptr` and `DrawNormalText` skips the glyph.
 pub(crate) const MAX_GLYPH_DIMENSION: i32 = 2048;
 
 /// One glyph rasterized to **three** coverages per pixel — one per LCD stripe.
 ///
 /// The same bitmap `GlyphBitmap` holds, with the 3× subpixel triples kept
-/// apart instead of averaged. It is what the oracle produces when `normalize`
-/// is false (`DrawNormalTextHelper`'s `MergeGammaAdjustRgb` arm), which happens
-/// for exactly one kind of text on a page: a live edit's, whose `DrawTextString`
-/// builds a local `CPDF_RenderOptions` with `bClearType` left at its
-/// constructor's `true`.
+/// apart instead of averaged. It is produced for exactly one kind of text on
+/// a page: a live edit's, which is drawn with `ClearType` on while the rest
+/// of the page is not.
 ///
 /// The three bytes are the destination's **red, green and blue** coverages in
 /// that order — the oracle assumes RGB-ordered stripes, mapping the leftmost
@@ -205,8 +176,7 @@ impl GlyphBitmap {
     }
 }
 
-/// Which third of a pixel a glyph's true origin sits in
-/// (`cfx_renderdevice.cpp:1352`).
+/// Which third of a pixel a glyph's true origin sits in.
 ///
 /// The oracle's `origin_.x` is `floor(device_origin.x)` and the fraction is
 /// recovered inside the blit loop as `(int)(device_origin.x * 3) % 3`, which
@@ -281,10 +251,9 @@ pub(crate) fn rasterize(outline: &BezPath, phase: SubpixelPhase) -> Option<Glyph
 
 /// The 3×-wide LCD coverage bitmap FreeType's `FT_RENDER_MODE_LCD` produces.
 ///
-/// This is what the oracle caches, and the reason its cache key
-/// (`UniqueKeyGen`, `cfx_glyphcache.cpp:62-96`) carries no subpixel phase: the
-/// phase is a *window shift into this buffer*, applied by the blit loop, so one
-/// bitmap serves all three thirds of a pixel.
+/// This is what is cached, and the reason the cache key carries no subpixel
+/// phase: the phase is a *window shift into this buffer*, applied by the blit
+/// loop, so one bitmap serves all three thirds of a pixel.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct LcdBitmap {
     /// The device x of column 0, relative to the glyph's snapped origin.
@@ -573,13 +542,11 @@ fn div_ceil(a: i64, b: i64) -> i64 {
 /// an outline is not.
 ///
 /// The matrix is reduced to four integers by `(int)(m · 10000)` on each of
-/// `a`, `b`, `c`, `d`. That is the oracle's own quantisation
-/// (`UniqueKeyGen::UniqueKeyGen`, `cfx_glyphcache.cpp:62-70`), truncating
-/// toward zero rather than rounding, and it is ported rather than improved for
-/// a reason that is visible in pixels: two glyph matrices closer together than
-/// one part in ten thousand share a *bitmap* in the oracle, so a page whose
-/// text matrix drifts by rounding error draws identical glyphs there. A finer
-/// key would draw very slightly different ones.
+/// `a`, `b`, `c`, `d`, truncating toward zero rather than rounding. That
+/// coarseness is visible in pixels: two glyph matrices closer together than
+/// one part in ten thousand share a *bitmap*, so a page whose text matrix
+/// drifts by rounding error draws identical glyphs there. A finer key would
+/// draw very slightly different ones.
 ///
 /// The translation is deliberately absent, as it is upstream: the glyph is
 /// rasterized about its own origin and *placed* by the blit.
@@ -657,8 +624,7 @@ pub(crate) struct BitmapCache {
     /// on a dense page. `SipHash`'s collision resistance buys nothing against a
     /// key an attacker cannot choose, and its mixing is several times the cost
     /// of the lookup it guards. See `pdfrum_common::FxBuildHasher`'s docs for
-    /// which keys may and may not use it, and `docs/status/M12.md` for the
-    /// measurement.
+    /// which keys may and may not use it.
     entries: std::collections::HashMap<BitmapKey, Option<LcdBitmap>, pdfrum_common::FxBuildHasher>,
     bytes: usize,
 }

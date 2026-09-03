@@ -49,7 +49,7 @@ use crate::pixmap::Pixmap;
 /// lets the accumulation shift rather than divide.
 const FIXED_ONE: u32 = 1 << 16;
 
-/// Round-half-away-from-zero, which is what `FXSYS_round` does and what
+/// Round-half-away-from-zero, which is what the oracle does and what
 /// `f64::round` also does — spelled out because the weight table's exactness
 /// depends on the tie direction and a reader should not have to check.
 fn fixed_from(v: f64) -> u32 {

@@ -1,5 +1,4 @@
-//! Types 6 and 7, Coons and tensor patch meshes (`DrawCoonPatchMeshes` and
-//! `PatchDrawer`, `cpdf_rendershading.cpp:588-1003`).
+//! Types 6 and 7, Coons and tensor patch meshes.
 //!
 //! Unlike the other five rasterizers this one draws *through* a path
 //! rasterizer: it subdivides a patch until each cell is either smaller than
@@ -29,7 +28,7 @@
 //!
 //! Upstream has none: termination relies solely on the two-device-unit bbox
 //! test and the colour threshold, so a patch with non-finite control points —
-//! reachable from a crafted mesh stream — never terminates. SPEC §8 accepts a
+//! reachable from a crafted mesh stream — never terminates. We accept a
 //! cap of 32 plus a non-finite check as additive safety; each level halves
 //! the patch, so 32 levels covers any patch up to 2^32 device units.
 
@@ -43,15 +42,13 @@ use crate::color::Argb;
 use crate::device::{AntiAlias, Brush, FillRule, RenderDevice};
 use crate::shading::steps::{ColorSteps, component_to_shading_index};
 
-/// The maximum per-component colour delta before a cell is flat-filled
-/// (`kCoonColorThreshold`, `cpdf_rendershading.cpp:739`).
+/// The maximum per-component colour delta before a cell is flat-filled.
 pub const COLOR_THRESHOLD: i32 = 4;
 
-/// A patch smaller than this in both axes is filled rather than subdivided
-/// (`cpdf_rendershading.cpp:591-595`).
+/// A patch smaller than this in both axes is filled rather than subdivided.
 pub const SMALL_PATCH: f64 = 2.0;
 
-/// The subdivision depth cap (SPEC §8, render brief Q2). Additive safety over
+/// The subdivision depth cap. Additive safety over
 /// a non-terminating recursion, not a fidelity change.
 pub const MAX_DEPTH: u32 = 32;
 
@@ -85,8 +82,7 @@ fn to_int_color(c: Rgb, range: Option<[f32; 2]>) -> IntColor {
     }
 }
 
-/// `Interpolate` (`cpdf_rendershading.cpp:686-696`): integer linear
-/// interpolation with overflow detection.
+/// `Interpolate`: integer linear interpolation with overflow detection.
 ///
 /// Any overflow aborts the whole cell — which is upstream's own guard and the
 /// only thing standing between a crafted mesh and a runaway subdivision.
@@ -231,12 +227,11 @@ impl Points {
     /// subdivider asks of them at once: are they all finite, and what is their
     /// extent.
     ///
-    /// The two were separate walks, and the subdivider ran them back to back
-    /// at every recursion node — 53 348 nodes on `shading_tcpdf_030`, so 1.7
-    /// million point visits where 853 000 will do. They fuse cleanly because
-    /// the finiteness answer cannot be read off the extent: `f64::min` returns
-    /// its non-NaN operand, so a NaN coordinate leaves no trace in a min/max
-    /// fold and has to be tested for as it goes past.
+    /// The subdivider asks both at every recursion node, so they are one
+    /// walk rather than two. They fuse only because the finiteness answer
+    /// cannot be read off the extent: `f64::min` returns its non-NaN operand,
+    /// so a NaN coordinate leaves no trace in a min/max fold and has to be
+    /// tested for as it goes past.
     ///
     /// The extent itself is a fold rather than a chain of [`Rect::union`]s,
     /// which is the same arithmetic — `union` is four `min`/`max`es over a

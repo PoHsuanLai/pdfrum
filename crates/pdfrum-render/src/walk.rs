@@ -1,15 +1,4 @@
-//! The master walk: one page-object list, dispatched by kind
-//! (`CPDF_RenderStatus::RenderObjectList` and `ProcessObjectNoClip`,
-//! `cpdf_renderstatus.cpp:216-330`).
-//!
-//! `CPDF_RenderStatus` is a thousand-line class with twenty-four members and
-//! a `Process*` method per object kind. STYLE §1 forbids reproducing it, so
-//! what is here is a dispatch `match` plus one free function per kind, each
-//! taking the small [`RenderCtx`] record and the backend's own device. The
-//! walk is generic over the backend rather than dynamic, because
-//! [`RasterBackend::snapshot`] needs the concrete device to read pixels back;
-//! `dyn RenderDevice` survives only where a device is genuinely swappable —
-//! the Coons scratch buffer.
+//! The master walk: one page-object list, dispatched by kind.
 //!
 //! Two behaviours of the walk itself are load-bearing. The **cull test** is
 //! computed once per list from the inverse-transformed device clip box and
@@ -17,6 +6,14 @@
 //! is kept. And a **shading that fails is never retried**: every other kind
 //! falls back to a re-render that degenerates to an identical call on a
 //! bitmap device, so a failure is a skipped object and a diagnostic.
+
+// A dispatch `match` plus one free function per kind, each taking the small
+// `RenderCtx` record and the backend's own device, rather than the oracle's
+// thousand-line `CPDF_RenderStatus` with twenty-four members and a `Process*`
+// method per kind. The walk is generic over the backend rather than dynamic,
+// because `RasterBackend::snapshot` needs the concrete device to read pixels
+// back; `dyn RenderDevice` survives only where a device is genuinely
+// swappable — the Coons scratch buffer.
 
 use kurbo::{Affine, Rect, Shape};
 use pdfrum_common::Diagnostics;
@@ -52,21 +49,18 @@ use crate::transfer::TransferFunc;
 /// belongs to the pre-pass that computed it.
 #[derive(Debug, Default)]
 pub struct RenderSession<'a> {
-    /// Caches to reuse across calls, instead of a fresh set per page.
-    ///
-    /// A caller rendering many pages of one document flattens each glyph
+    /// Caches to reuse across calls, instead of a fresh set per page: a
+    /// caller rendering many pages of one document flattens each glyph
     /// outline once for the run rather than once per page.
     ///
     /// # Determinism
     ///
     /// Type-3 blue-zone snapping is order-dependent by design (see
     /// [`RenderCaches`]), so a page rendered with a *warm* cache can differ
-    /// by a snapped pixel from the same page rendered with a cold one. Reuse
-    /// across pages of one document is the intended use and is what the
-    /// oracle does; reusing one set of caches across *unrelated* documents
-    /// makes a page's output depend on what was rendered before it. For a
-    /// byte-identical baseline — the conformance harness's case — leave this
-    /// `None`, which gives every page fresh caches.
+    /// by a snapped pixel from one rendered cold. Reuse across pages of one
+    /// document is intended; reusing caches across *unrelated* documents
+    /// makes output depend on what was rendered before. For a byte-identical
+    /// baseline, leave this `None`.
     pub caches: Option<&'a mut RenderCaches>,
     /// Which objects optional content leaves visible. `None` draws them all.
     ///
@@ -164,21 +158,20 @@ fn render_page_inner<B: RasterBackend>(
 
 /// Whether the page renders onto a transparent background rather than white.
 ///
-/// `pdfium_test` asks `FPDFPage_HasTransparency`, and the obvious reading of
-/// that name is wrong: it is **not** whether the page declares a `/Group`.
-/// It returns `CPDF_PageObjectHolder::BackgroundAlphaNeeded`, a flag the
-/// content parser sets in exactly one place — when an `/ExtGState` names a
-/// blend mode **above `Multiply`** (`cpdf_allstates.cpp:105-106`) — and
-/// which then propagates up from a form to its holder
-/// (`cpdf_streamcontentparser.cpp:835-838`).
-///
-/// So a page carrying a plain `/Group` still renders onto opaque white, and
-/// only a page that actually asks for a backdrop-reading blend gets a
-/// transparent one. Reading it as the `/Group` flag turns every such page's
-/// output from RGB to RGBA and, where nothing paints, from white to black —
-/// which is a whole-page difference, not a pixel one.
+/// This is **not** whether the page declares a `/Group`. It is whether any
+/// `/ExtGState` on the page, or in a form it draws, names a blend mode above
+/// `Multiply` — the ones that read the backdrop. A page carrying a plain
+/// `/Group` still renders onto opaque white.
 #[must_use]
 pub fn needs_alpha_background(page: &Page) -> bool {
+    // Reading this as the `/Group` flag turns every such page's output from
+    // RGB to RGBA and, where nothing paints, from white to black — a
+    // whole-page difference, not a pixel one. The flag the oracle actually
+    // reports through `FPDFPage_HasTransparency` is
+    // `CPDF_PageObjectHolder::BackgroundAlphaNeeded`, set by the content
+    // parser in exactly one place (`cpdf_allstates.cpp:105-106`) and
+    // propagated up from a form to its holder
+    // (`cpdf_streamcontentparser.cpp:835-838`).
     fn any_deep_blend(objects: &[PageObject]) -> bool {
         objects.iter().any(|object| {
             let deep = matches!(
@@ -214,12 +207,10 @@ pub fn needs_alpha_background(page: &Page) -> bool {
 /// *before* paying for a render — [`render_page`] answers the same question
 /// only by doing the work.
 ///
-/// The dimensions **truncate**, they do not round up: `pdfium_test` writes
-/// `static_cast<int>(FPDF_GetPageWidthF(page) * scale)`
-/// (`pdfium_test.cc:1513-1514`), so an A4 page's 595.276 points become 595
-/// device pixels, not 596. Rounding up instead costs a one-pixel border on
-/// every page whose size is not a whole number — which is most of the
-/// non-US-Letter corpus, and a size mismatch rather than a pixel difference.
+/// The dimensions **truncate**, they do not round up: an A4 page's 595.276
+/// points become 595 device pixels, not 596. Rounding up instead costs a
+/// one-pixel border on every page whose size is not a whole number — a size
+/// mismatch rather than a pixel difference.
 ///
 /// # Errors
 ///
@@ -268,32 +259,18 @@ pub fn target_size(page: &Page, opts: &RenderOptions) -> Result<(u32, u32), Erro
 /// own transform applies. Without it a page renders upside down, which the
 /// symmetric fixtures hide and the asymmetric ones do not.
 ///
-/// # The flip is about the *device* box, not the page box
-///
-/// `CPDF_Page::GetDisplayMatrixForRect` (`cpdf_page.cpp:160-220`) builds the
-/// matrix from an `FX_RECT` — **integer** device coordinates — divided by the
-/// page's own float size:
-///
-/// ```cpp
-/// CFX_Matrix matrix((x2 - x0) / page_size_.width, ...,
-///                   (y1 - y0) / page_size_.height, x0, y0);
-/// ```
-///
-/// and `CPDFSDK_RenderPageWithContext` (`cpdfsdk_renderpage.cpp:116-118`)
-/// passes it `FX_RECT(0, 0, size_x, size_y)`, the truncated bitmap size that
-/// [`target_size`] computes. So an A4 page 841.89 points tall renders into
-/// 841 device rows with a y scale of `841 / 841.89`, not of 1 — the page is
-/// very slightly *squeezed* to fit the bitmap it was truncated into.
-///
-/// Flipping about the float height instead leaves a shear of up to a device
-/// pixel between the top of the page and the bottom. That was invisible while
-/// every glyph was filled at its true position, because it moves a stem edge
-/// by a fraction of a count — and it stops being invisible the moment glyph
-/// origins are **snapped**, since a y that was 0.49 off is then a whole row
-/// off. It cost `tcpdf/example_007` and `example_017` about 0.035 SSIM each
-/// before it was found; see `docs/status/pdfrum-render.md`, wave 5.
+/// The flip is about the **device** box, not the page box: the display
+/// matrix divides the *truncated integer* bitmap size by the page's float
+/// size, so an A4 page 841.89 points tall renders into 841 device rows with a
+/// y scale of `841 / 841.89`, not 1.
 #[must_use]
 pub fn page_matrix(page: &Page, opts: &RenderOptions) -> Affine {
+    // Flipping about the float height instead leaves a shear of up to a
+    // device pixel between the top of the page and the bottom. That is
+    // invisible while every glyph is filled at its true position — it moves a
+    // stem edge by a fraction of a count — and stops being invisible the
+    // moment glyph origins are snapped, since a y that was 0.49 off is then a
+    // whole row off.
     let (page_w, page_h) = page.display_size();
     // The device box the oracle fits the page into: the same truncation
     // `target_size` performs, since that is the bitmap that gets allocated.
@@ -424,10 +401,8 @@ fn outside(bbox: Rect, cull: Rect) -> bool {
 /// and `None` when any coordinate is not finite.
 ///
 /// Both are one pass over the elements with four `min`/`max` per point and no
-/// segment reconstruction. The exact box — [`path_bbox`] — solves each cubic's
-/// extrema, which kurbo does honestly and which costs 156 ns per object on
-/// `vector_paths_1751` (docs/status/M12b-P3.md §3) for a decision that on that
-/// document is "keep" 5010 times out of 5010.
+/// segment reconstruction, where the exact box — [`path_bbox`] — has to solve
+/// each cubic's extrema.
 ///
 /// The bracket is what makes skipping the solve *exact* rather than
 /// approximate: a subset that reaches the clip proves the true box reaches it,
@@ -727,7 +702,7 @@ fn render_grouped<B: RasterBackend>(
 }
 
 /// Render a soft mask's group and read it back as a device-sized coverage
-/// plane (`LoadSMask`, `cpdf_renderstatus.cpp:1434-1542`).
+/// plane.
 ///
 /// Four contracts, all pixel-visible:
 ///
@@ -739,8 +714,9 @@ fn render_grouped<B: RasterBackend>(
 ///   corner of a `/BC`-white mask fully *reveal* rather than fully hide.
 /// - **An alpha buffer starts at nothing** and the group renders in alpha
 ///   colour mode, where every drawing operation writes its alpha as gray.
-/// - **The readback is `FXRGB2GRAY`, not BT.709.** Both rasterizers ship a
-///   luminance helper and both use BT.709; neither may be used here.
+/// - **The readback uses the oracle's gray weights, not BT.709.** Both
+///   rasterizers ship a luminance helper and both use BT.709; neither may be
+///   used here.
 fn render_soft_mask<B: RasterBackend>(
     ctx: &RenderCtx<'_>,
     backend: &B,
@@ -899,12 +875,12 @@ fn render_direct<B: RasterBackend>(
 /// `[oracle-bug]` Render a **knockout** group's objects (§11.6.6, `/K`).
 ///
 /// PDFium never honours `/K`: the only `/K` read under `core/fpdfapi` is
-/// CCITT's (`fpdf_parser_decode.cpp:330`), and although knockout plumbing
-/// exists in `core/fxge/`, `RenderDeviceDriverIface::SetGroupKnockout` is an
-/// empty body (`renderdevicedriver_iface.cpp:132`) that the AGG driver never
-/// overrides — so on the oracle's configuration a knockout group renders as
-/// an ordinary one. pdf.js reads `/I` and `/K` (`evaluator.js:523-524`) and
-/// implements knockout in earnest (`canvas.js:499-534`, `:3310-3318`).
+/// CCITT's, and although knockout plumbing exists in `core/fxge/`,
+/// `RenderDeviceDriverIface::SetGroupKnockout` is an empty body that the AGG
+/// driver never overrides — so on the oracle's configuration a knockout group
+/// renders as an ordinary one. pdf.js reads `/I` and `/K`
+/// (`evaluator.js:523-524`) and implements knockout in earnest
+/// (`canvas.js:499-534`, `:3310-3318`).
 ///
 /// The rule §11.6.6 states is that every object in the group composites
 /// against the group's **initial** backdrop rather than against the
@@ -985,13 +961,11 @@ fn render_knockout_form<B: RasterBackend>(
 /// One rule: a **live edit's** appearance draws its text with `ClearType`, and
 /// every other form draws under the options it inherited.
 ///
-/// That is where the oracle puts the decision too.
-/// `CPWL_EditImpl::DrawTextString` builds a *local* `CPDF_RenderOptions` whose
-/// `bClearType` no flag word ever clears, so on a page whose every other run is
-/// grayscale the text of the field being edited — and no other text — carries
-/// subpixel antialiasing. The scope of the override is one subtree, which is
-/// the same shape [`RenderOptions::for_type3_char_proc`] already uses to force
-/// options around a single glyph procedure.
+/// That is where the oracle puts the decision too: on a page whose every
+/// other run is grayscale, the text of the field being edited — and no other
+/// text — carries subpixel antialiasing. The scope of the override is one
+/// subtree, the same shape [`RenderOptions::for_type3_char_proc`] already
+/// uses to force options around a single glyph procedure.
 ///
 /// A caller's own [`RenderOptions::text_aa_override`] **wins**: it was set
 /// deliberately for this render, where the flag on the object is a property of
@@ -1221,8 +1195,7 @@ fn render_path<B: RasterBackend>(
     );
 }
 
-/// A run whose fill is a pattern and which is not stroked
-/// (`DrawTextPathWithPattern`'s first arm, `cpdf_renderstatus.cpp:1290-1310`).
+/// A run whose fill is a pattern and which is not stroked.
 ///
 /// No glyph is drawn. The run's **bounding rectangle** becomes a path object
 /// carrying the text's own colour and general state, and the run itself is
@@ -1456,8 +1429,7 @@ fn render_text<B: RasterBackend>(
     caches.placed_glyphs = glyphs;
 }
 
-/// Blit one glyph as an alpha bitmap (`DrawNormalText`'s per-glyph body,
-/// `cfx_renderdevice.cpp:1330-1367`).
+/// Blit one glyph as an alpha bitmap.
 ///
 /// The bitmap is rasterized about the glyph's **own** origin — the matrix's
 /// translation is dropped — so that one bitmap serves the glyph wherever it
@@ -1532,18 +1504,17 @@ fn draw_glyph_bitmap(
 }
 
 /// Whether a glyph procedure is the sole-image case *and* taking it through
-/// the char-proc path would paint the wrong thing
-/// (`LoadBitmapFromSoleImageOfForm`, `cpdf_type3char.cpp:35-52`).
+/// the char-proc path would paint the wrong thing.
 ///
 /// An uncoloured procedure whose one object is an image has that image lifted
-/// out and blitted as the glyph's 8bpp **mask**, in the text object's colour —
-/// a path this engine does not have.
+/// out and blitted as the glyph's 8bpp **mask**, in the text object's colour
+/// — a path this engine does not have.
 ///
 /// The distinction that matters is what the image *is*. A stencil
-/// (`/ImageMask true`) already paints in the fill colour wherever its bits are
-/// set, which is what the mask blit does, so walking it as a char proc lands
-/// on the same pixels and it is *not* declined — and declining it would lose
-/// every bitmap-font glyph in the corpus, which is what these procedures
+/// (`/ImageMask true`) already paints in the fill colour wherever its bits
+/// are set, which is what the mask blit does, so walking it as a char proc
+/// lands on the same pixels and it is *not* declined — and declining it would
+/// lose every bitmap-font glyph in the corpus, which is what these procedures
 /// overwhelmingly are. A colour image, by contrast, would paint its own
 /// samples where the oracle paints a mask, so that one is declined.
 ///
@@ -1554,8 +1525,7 @@ fn sole_color_image(objects: &[PageObject]) -> bool {
     matches!(objects, [PageObject::Image(i)] if !i.object.is_mask)
 }
 
-/// Draw one type-3 text object, one glyph procedure at a time
-/// (`ProcessType3Text`, `cpdf_renderstatus.cpp:933-1130`).
+/// Draw one type-3 text object, one glyph procedure at a time.
 ///
 /// Four contracts, each of which changes pixels:
 ///
@@ -1783,14 +1753,14 @@ fn mask_quality(
     )
 }
 
-/// Paint a stencil whose fill colour is a pattern (`DrawPatternImage`,
-/// `cpdf_imagerenderer.cpp:325-374`).
+/// Paint a stencil whose fill colour is a pattern.
 ///
 /// The pattern is drawn into its own buffer over the stencil's device extent,
 /// and the **stencil becomes that buffer's alpha** — so the pattern shows
 /// through the set bits and nothing shows through the clear ones. Painting a
-/// pattern colour through the ordinary image path instead paints the pattern's
-/// *fallback* colour, which for a coloured tiling pattern is mid grey.
+/// pattern colour through the ordinary image path instead paints the
+/// pattern's *fallback* colour, which for a coloured tiling pattern is mid
+/// grey.
 ///
 /// The object's alpha is deliberately **not** applied at the blit: unlike
 /// `DrawMaskedImage`, the pattern path has already consumed it inside the
@@ -2055,8 +2025,7 @@ fn render_image<B: RasterBackend>(
     }
 }
 
-/// Paint an image whose mask has a resolution of its own (`DrawMaskedImage`,
-/// `cpdf_imagerenderer.cpp:375-424`).
+/// Paint an image whose mask has a resolution of its own.
 ///
 /// A mask is **never resolution-reduced** (design brief §1.19.9), so its
 /// dimensions are its own and generally not the base's: `bug_1396266` puts a
@@ -2068,9 +2037,9 @@ fn render_image<B: RasterBackend>(
 /// at the other's coordinates.
 ///
 /// Folding the mask into the base's pixels instead reads the wrong sample
-/// everywhere the sizes differ, and — because [`pdfrum_page::ImageMask::alpha_at`]
-/// reports out-of-range as opaque — leaves the majority of a base larger than
-/// its mask completely unmasked.
+/// everywhere the sizes differ, and — because
+/// [`pdfrum_page::ImageMask::alpha_at`] reports out-of-range as opaque —
+/// leaves the majority of a base larger than its mask completely unmasked.
 fn render_masked_image<B: RasterBackend>(
     ctx: &RenderCtx<'_>,
     device: &mut B::Device,

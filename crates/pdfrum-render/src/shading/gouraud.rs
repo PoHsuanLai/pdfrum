@@ -1,9 +1,8 @@
-//! Types 4 and 5, Gouraud-shaded triangle meshes (`DrawGouraud`,
-//! `cpdf_rendershading.cpp:357-456`).
+//! Types 4 and 5, Gouraud-shaded triangle meshes.
 //!
 //! This is a hand-rolled scanline rasterizer, **not** the path rasterizer,
-//! and it is aliased. Three of its quirks are visible on
-//! `2_shading_type4_h` / `2_shading_type5_h` and are ported verbatim:
+//! and it is aliased. Three of its quirks are visible on `2_shading_type4_h`
+//! / `2_shading_type5_h` and are ported verbatim:
 //!
 //! - the colour accumulator is **incremented before the first write**, so the
 //!   leftmost pixel of every span is one interpolation step off;

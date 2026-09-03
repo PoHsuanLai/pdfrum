@@ -1,6 +1,5 @@
 //! Stroke geometry as the oracle resolves it before handing a path to a
-//! rasterizer (`RasterizeStroke`, `cfx_agg_devicedriver.cpp:299-393`, and the
-//! matrix decomposition at `:1229-1246`).
+//! rasterizer.
 //!
 //! Two behaviours here are pixel-visible and belong to the engine rather than
 //! to either backend, so that both receive the same stroke and Tier C can
@@ -18,16 +17,15 @@
 use kurbo::{Affine, BezPath, Dashes, Shape, Stroke};
 use pdfrum_page::{LineCap, LineJoin, StrokeParams};
 
-/// The device-space cycle below which a dash pattern is drawn solid
-/// (`kMinDashCycleThreshold`, `cfx_agg_devicedriver.cpp:358`).
+/// The device-space cycle below which a dash pattern is drawn solid.
 pub const MIN_DASH_CYCLE: f64 = 0.1;
 
-/// The value a non-positive dash entry becomes, applied **before** the
-/// device scale (`cfx_agg_devicedriver.cpp:372-374`).
+/// The value a non-positive dash entry becomes, applied **before** the device
+/// scale.
 pub const DASH_ZERO_SUBSTITUTE: f64 = 0.1;
 
-/// AGG's dash-array capacity (`agg_vcgen_dash.h:31`). Entries past it are
-/// **silently truncated**, not an error.
+/// AGG's dash-array capacity. Entries past it are **silently truncated**, not
+/// an error.
 pub const MAX_DASHES: usize = 32;
 
 /// The matrix split PDFium performs before stroking: an isotropic scale it
@@ -42,7 +40,7 @@ pub struct StrokeMatrices {
     pub scale: f64,
 }
 
-/// `CFX_Matrix::GetXUnit` (`fx_coordinates.cpp:443-452`).
+/// The x-axis unit length of a matrix.
 fn x_unit(m: Affine) -> f64 {
     let [a, b, ..] = m.as_coeffs();
     if b == 0.0 {
@@ -54,7 +52,7 @@ fn x_unit(m: Affine) -> f64 {
     }
 }
 
-/// `CFX_Matrix::GetYUnit` (`fx_coordinates.cpp:453-461`).
+/// The y-axis unit length of a matrix.
 fn y_unit(m: Affine) -> f64 {
     let [_, _, c, d, _, _] = m.as_coeffs();
     if d == 0.0 {

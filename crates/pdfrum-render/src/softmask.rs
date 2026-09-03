@@ -1,5 +1,4 @@
-//! Turning a rendered soft-mask group into an [`AlphaMask`]
-//! (`LoadSMask`, `cpdf_renderstatus.cpp:1434-1542`).
+//! Turning a rendered soft-mask group into an [`AlphaMask`].
 //!
 //! The parse half — which keys, the `/S` default, the `/TR` acceptance rule,
 //! the `/BC` backdrop colour — belongs to `pdfrum-page`; what belongs here is
@@ -13,9 +12,9 @@
 //! - **An alpha buffer starts at zero** and the group renders in alpha colour
 //!   mode, where every drawing operation writes alpha as gray.
 //!
-//! And one that is easy to get wrong: the luminosity readback uses PDFium's
-//! `FXRGB2GRAY` weights. Both rasterizers ship a luminance-mask helper and
-//! both use BT.709; neither may be used here.
+//! And one that is easy to get wrong: the luminosity readback uses the
+//! oracle's own gray weights. Both rasterizers ship a luminance-mask helper
+//! and both use BT.709; neither may be used here.
 
 use pdfrum_page::{SoftMask, SoftMaskKind};
 
