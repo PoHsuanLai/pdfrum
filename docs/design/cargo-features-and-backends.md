@@ -1,6 +1,6 @@
 # Cargo Features & Backend Architecture: Explicit Render, Opt-in Backends, and Modular Dependencies
 
-**Status:** Proposed design & implementation blueprint  
+**Status:** Landed 2026-09-04 (`893e153`..), with the deviations noted at the end  
 **Date:** 2026-09-04  
 **Scope:** `pdfrum`, `pdfrum-form`, `pdfrum-tool`, `pdfrum-render`, `pdfrum-page`, `pdfrum-doc`, `pdfrum-edit`, `pdfrum-font`, `pdfrum-filters`, `benches`, and CI scripts  
 **Related Documents:** [STYLE.md](file:///home/r13921098/pdfium/pdfrum/STYLE.md), [DEPS.md](file:///home/r13921098/pdfium/pdfrum/DEPS.md), [PLAN.md](file:///home/r13921098/pdfium/pdfrum/PLAN.md), [docs/design/idiomatic-api.md](file:///home/r13921098/pdfium/pdfrum/docs/design/idiomatic-api.md)
@@ -479,3 +479,35 @@ To maintain git bisectability and keep CI green at every intermediate commit, th
 3. Update all 31 integration test call sites in `tests/facade.rs`, `tests/flatten.rs`, `tests/prepared_page.rs`.
 4. Re-generate public API baseline: `nu scripts/api-snapshot.nu update`.
 5. **Verification:** Run complete CI gate `nu scripts/ci.nu`.
+
+---
+
+## 8. Landed — what differs from the blueprint
+
+- **`fontconfig` is kept on native targets.** The blueprint's `fontdb` with
+  `fs` and `memmap` alone would change which directories the host scan
+  reads on Linux, and with it which substitute a missing font resolves to;
+  the native target table keeps `fontconfig` so a substitute resolves as it
+  did, and the wasm32 table carries none of the three.
+- **Codec and font features are off at the crate level.** `pdfrum-page`,
+  `pdfrum-filters` and `pdfrum-font` default to nothing; the facade's default
+  set turns them on. Cargo unifies features across a build, so a crate
+  default that was *on* would have been switched back on by every workspace
+  dependent of that crate, and `default-features = false` on the facade
+  would have dropped nothing. Standalone test runs of those crates run
+  without the codecs; the tests that need them are gated, and the fuzz
+  workspace asks for them.
+- **`required-features`.** The facade's integration tests and examples
+  declare the features they need, so a headless `cargo clippy --all-targets`
+  is honest rather than red. Three tests — signatures, searchex, thumbnails —
+  run on any set.
+- **`Error::Save` exists only with `edit`**, as does `SaveError`; saving a
+  filled form needs `edit` and `forms` both.
+- **The png errors carry the encoder's message.** The render error is
+  comparable and cloneable and `png::EncodingError` is neither.
+- **API baselines.** `api-snapshot.nu` records seven featured surfaces now:
+  the facade with `javascript`, with `png`, with `tinyskia,agg`;
+  `pdfrum-page` with the codecs; `pdfrum-filters` with `ccitt`; `pdfrum-font`
+  with `system-fonts`; `pdfrum-render` with `png`.
+- **`Page::render` doc links.** A feature-gated item is named in a bare code
+  span, not a link, so the default and the featured docs both build.

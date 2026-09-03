@@ -84,6 +84,24 @@ All five families, through the oai bridge: searchex (tables pinned),
 attachments (readers and writers), signatures, thumbnails, flatten. The
 per-family record and the rulings are in `docs/status/M17.md`.
 
+## Found during the features pass (2026-09-04)
+
+- **A tool test fails and CI never ran it.** `pdfrum-tool`'s
+  `run::tests::an_uncaught_throw_is_reported_on_stderr_and_the_next_script_still_runs`
+  expects `Alert: before` alone and gets `Alert: before` then `Alert: after`:
+  an uncaught throw no longer stops the rest of the script. It fails on
+  `61734e0`, before this pass, so it is an M15 residue — probably step 4's
+  event path. It never ran in CI because `scripts/ci.nu`'s `cargo nextest run`
+  builds the tool without its `javascript` feature; the tool's JavaScript
+  tests are `cfg`'d out there. Two items: fix the throw, and have the gate
+  build the tool with `--features pdfrum-tool/javascript` (a flag on an
+  existing gate, not a new one).
+- **Headless rustdoc.** `cargo doc -p pdfrum --no-default-features` fails
+  on the crate-level links to `Form`, `PageEdit` and the other gated items.
+  The published docs are the default set's and build clean; the headless
+  build's docs are not a gate. Leave it unless docs.rs is ever configured
+  for a feature-less build.
+
 ## Cleanliness before public CI (added 2026-09-03, user)
 
 - ~~**Rustdoc names internal phases and internal documents.**~~ Landed
