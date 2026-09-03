@@ -69,7 +69,7 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
   so it does not regrow (non-vacuity control as the other checks have).
   Sequence after the in-flight rustdoc WP5 crates land, so it does not
   collide with them.
-- **Hard-coded absolute paths.** 73 lines name `/mnt/data2/…` or
+- ~~**Hard-coded absolute paths.**~~ Landed 58a09fb..eb17508 (2026-09-03): six `PDFRUM_*` variables with repo-relative defaults via `scripts/env.nu` and a per-test-file resolver that prints its skip reason once; `scripts/check-no-absolute-paths.nu` in CI; a variables-only board reproduces 1757/1514/243. The real count was 44 lines in 30 files (the 73 included the record dirs). Original entry: 73 lines name `/mnt/data2/…` or
   `/home/r13921098/…`: `scripts/clean-targets.nu` (its two roots),
   `scripts/bench-oracle.nu`, `bench-rss.nu`, the three `extract-*.py` and
   `probe-tounicode.py`, `fuzz/seed-corpus.sh`, `conformance/README.md`
