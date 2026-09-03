@@ -20,8 +20,9 @@ Nothing else — SPEC §1 lists the contents exhaustively.
   header scan 1024, startxref scan 4096, word length 256, page-tree depth
   1024, page count 0xFFFFF, decoded stream 1 GiB (corrected from 20 MB when
   `pdfrum-filters` landed — see `docs/status/pdfrum-filters.md`).
-  `max_string_len` and `max_array_len` are `usize::MAX` (PDFium has no such
-  cap; the fields exist for fuzz budgets).
+  `max_array_len` is `usize::MAX` (PDFium has no such cap; ours is consulted
+  by the object parser, the `ToUnicode` reader and the Type 1 decoder).
+  `max_string_len` was removed by `[spec]` 2026-09-03: nothing read it.
 - No `Error` enum and no `thiserror` dependency: the crate has no fallible
   operation. Recorded in SPEC §1 rather than shipping an empty enum.
 

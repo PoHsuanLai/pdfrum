@@ -691,9 +691,14 @@ any divergence is observable.
 
 `pdfrum-common::Limits` defaults (values SPEC §1 delegates to this brief):
 `max_object_nesting: 64` (`kParserMaxRecursionDepth`);
-`max_string_len: usize::MAX` and `max_array_len: usize::MAX` (C++ has no such
-caps; fields exist for future hardening and fuzz budgets — outputs are
-already O(file size)); `max_xref_size: 25_165_825`; add (field list is
+`max_array_len: usize::MAX` (C++ has no such cap, and ours defaults to none
+either; the field earns its place by being consulted — `pdfrum_parser::syntax`,
+the `ToUnicode` reader and the Type 1 charstring decoder all compare against
+it). There is deliberately **no `max_string_len`**: it was a knob nothing read,
+and `[spec]` 2026-09-03 removed it rather than keep a cap the oracle does not
+have and no caller enforces (`CPDF_SyntaxParser::ReadString`,
+`cpdf_syntax_parser.cpp:254`, reads to the delimiter). `max_xref_size:
+25_165_825`; add (field list is
 *(abridged)*): `max_object_number: 25_165_824`, `header_scan: 1024`,
 `startxref_scan: 4096`, `max_word_len: 256`, `max_page_tree_depth: 1024`,
 `max_page_count: 0xFFFFF`.

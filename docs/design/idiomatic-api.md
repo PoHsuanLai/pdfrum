@@ -1150,12 +1150,16 @@ Only the counts move.
 >   ruled-out list says it and `max_array_len` are "used in `<=`
 >   comparisons"; that is true of `max_array_len` (three call sites across
 >   `pdfrum-parser`, `pdfrum-font` and `pdfrum-type1`) and **false of
->   `max_string_len`, which is consulted nowhere.** It stays, because the
->   module's own doc states the reason — "where PDFium has no cap at all …
->   the field exists for future hardening and fuzz budgets" — and wiring it
->   would invent a parse limit the oracle does not have. The §C.3 line is
->   corrected here rather than in place, since the ruling it supports is
->   unaffected either way.
+>   `max_string_len`, which is consulted nowhere.**
+>
+>   *Superseded 2026-09-03.* This entry ruled that it stays, on the module
+>   doc's "future hardening and fuzz budgets" argument. That argument is
+>   exactly the dead-option shape the no-dead-options rule refuses: PDFium has
+>   no string-length cap (`CPDF_SyntaxParser::ReadString`,
+>   `cpdf_syntax_parser.cpp:254`, reads to the delimiter), we enforce none,
+>   and the fuzz harness sets only `max_decoded_stream_len`
+>   (`fuzz/src/lib.rs:66`). The field was removed as a `[spec]` change rather
+>   than kept as a promise the type could not keep.
 > - **15 `DiagKind` variants are recorded by no crate**
 >   (`AutoFontSizeZero`, `ChoiceIndicesIgnored`, `DefaultAppearanceMalformed`,
 >   `FieldKidsMalformed`, `FieldNameNormalized`, `FieldSkippedNoName`,
@@ -1848,9 +1852,11 @@ so this is the shape a first-time `cargo add pdfrum` user meets.
 - `pub const MAX_TARGET_DIMENSION: u32 = u16::MAX as u32`
   (`crates/pdfrum-render/src/device.rs:236`) — a genuine backend capability
   limit (the backend dimensions in `u16`), not absence. Public and legitimate.
-- `Limits::max_string_len` / `max_array_len = usize::MAX`
-  (`crates/pdfrum-common/src/limits.rs:126-127`) — "unlimited" as a default,
-  used in `<=` comparisons. A real ceiling, not an absence flag.
+- `Limits::max_array_len = usize::MAX` (`crates/pdfrum-common/src/limits.rs`)
+  — "unlimited" as a default, used in `<=` comparisons. A real ceiling, not an
+  absence flag. (`max_string_len` sat here too until `[spec]` 2026-09-03
+  removed it: nothing compared against it, so it was an absence with no
+  ceiling behind it.)
 - `entry.dword_off == u32::MAX` (`crates/pdfrum-cmap/src/blob.rs:163`) — a
   **genuine file-format sentinel**: the packed CMap blob on disk stores
   `u32::MAX` to mean "no dword array". It is `pub(crate)`, and it converts to
