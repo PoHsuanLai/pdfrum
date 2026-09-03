@@ -22,6 +22,7 @@ pub pdfrum_common::DiagKind::DashElementClamped
 pub pdfrum_common::DiagKind::DashPatternDropped
 pub pdfrum_common::DiagKind::DefaultAppearanceMalformed
 pub pdfrum_common::DiagKind::DestPageUnresolved
+pub pdfrum_common::DiagKind::FieldSkippedNoName
 pub pdfrum_common::DiagKind::FieldSkippedNoType
 pub pdfrum_common::DiagKind::FontProgramUnreadable
 pub pdfrum_common::DiagKind::FontSubstitutionFailed

@@ -144,7 +144,7 @@ fn construct_default_feature_variants() -> usize {
     let _ = Update::Rewrite;
     n += 2;
 
-    // DiagKind — 101. Two variants carry a `u32` count.
+    // DiagKind — 102. Two variants carry a `u32` count.
     let diag: &[DiagKind] = &[
         DiagKind::AnnotSubtypeUnknown,
         DiagKind::AppearanceGenerated,
@@ -167,6 +167,7 @@ fn construct_default_feature_variants() -> usize {
         DiagKind::DashPatternDropped,
         DiagKind::DefaultAppearanceMalformed,
         DiagKind::DestPageUnresolved,
+        DiagKind::FieldSkippedNoName,
         DiagKind::FieldSkippedNoType,
         DiagKind::FontProgramUnreadable,
         DiagKind::FontSubstitutionFailed,
@@ -669,7 +670,7 @@ fn every_public_enum_variant_is_constructible_from_the_facade() {
         "constructed {constructed} default-feature variants, snapshots derive {derived}; \
          SNAPSHOT_ENUMS is the derivation index — add a construction when a variant lands"
     );
-    assert_eq!(constructed, 284, "default-feature variant count");
+    assert_eq!(constructed, 285, "default-feature variant count");
     assert_eq!(SNAPSHOT_ENUMS.len(), 29, "default-feature enum count");
 }
 
