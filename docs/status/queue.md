@@ -195,7 +195,7 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
   STYLE.md §6 and a person can follow it. A citation that comes back comes back
   in review, where a human can tell an `[oracle-bug]` record that must keep its
   citation from a diary entry that must not.
-- **`scripts/extract-font-tables.py` regenerates rustdoc the sweep removed.**
+- ~~**`scripts/extract-font-tables.py` regenerates rustdoc the sweep removed.** — landed c0f6caa (2026-09-03): the generator emits the tables' own one-line docs; header and usage name `scripts/extract-font-tables.py`.
   `crates/pdfrum-font/src/encoding/tables.rs` is `@generated`, and the sweep
   above rewrote its fifteen table docs from ``/// `kFoo` (path.cpp).`` to a
   sentence naming the code page. The extractor still emits the old form (lines
