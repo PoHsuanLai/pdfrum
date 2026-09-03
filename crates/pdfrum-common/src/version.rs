@@ -3,8 +3,7 @@
 //! `%PDF-1.7` is `PdfVersion { major: 1, minor: 7 }`. The parser reads the
 //! header, the writer emits one, and the facade forwards both — so the type
 //! lives here, at the bottom of the dependency graph, where all three can name
-//! it without any of them depending on either of the others
-//! (`docs/design/idiomatic-api.md` §WP1 and §A.10 row 4).
+//! it without any of them depending on either of the others.
 
 use core::fmt;
 

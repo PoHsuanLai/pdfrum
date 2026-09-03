@@ -1,7 +1,7 @@
 //! Hard resource limits, defaulting to PDFium-equivalent values.
 //!
-//! Every field is a cap **some reader consults**, and the defaults are the C++
-//! constants consolidated in `docs/design/pdfrum-parser.md` §1.20.
+//! Every field is a cap **some reader consults**, and the defaults are the
+//! C++ constants.
 //!
 //! A knob nothing reads is not a limit, it is a promise the type cannot keep,
 //! so the rule here is that a field earns its place by having a caller. Where

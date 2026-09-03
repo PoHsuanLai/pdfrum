@@ -14,17 +14,15 @@
 //! POD struct of a glyph id and four matrix coefficients. Both are looked up
 //! once per drawn glyph — tens of thousands of times on a dense page — and for
 //! both, `SipHash` is doing cryptographic-strength mixing on eight bytes that
-//! no file controls. Measured on the M12 corpus, that is where a few percent of a
-//! text-heavy render goes.
+//! no file controls. Measured, that is where a few percent of a text-heavy
+//! render goes.
 //!
 //! # Why not `rustc-hash`
 //!
-//! DEPS.md's performance ring pre-approves `rustc-hash` for exactly this. The
-//! protocol it sets, though, is that a perf dependency lands *beside a
-//! committed A/B against a tuned no-dep baseline*, and stays only if it clears
-//! 10% on a class or 5% on the geomean over that baseline. This module is that
-//! baseline: it is `rustc-hash`'s algorithm, which is a multiply and a rotate
-//! per word and about twenty lines. `docs/status/M12.md` carries the A/B.
+//! `rustc-hash` is the crate that does exactly this. A performance dependency
+//! here only earns its place beside an A/B against a tuned no-dep baseline,
+//! and this module is that baseline: it is `rustc-hash`'s algorithm, which is
+//! a multiply and a rotate per word and about twenty lines.
 //!
 //! The outcome, recorded here because it is the reason this file rather than a
 //! `Cargo.toml` line: the no-dep version is **the same speed**, because it is
