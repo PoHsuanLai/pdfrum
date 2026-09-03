@@ -2872,3 +2872,291 @@ off-page. It is the second item, and the first one's fix will not move it.
 - **AGG only.** `tiny-skia` and `vello_cpu` were not measured, as in every
   section since §12.
 - **The ratchet is still not re-baselined.** §8's third bullet stands.
+
+## 19. The scanline integrator's off-target cells
+
+**Taken 2026-09-04, on the same box, at load 8.9–10.0 for the wall clock and
+11–22 for the in-process splits.** §18.3 named the corpus's largest ratio and
+determined its mechanism completely: `shading_tcpdf_058` at **8.67x**
+like-for-like, with fourteen of its clip paths extending tens of thousands of
+device units off a 595×842 page, the integrator accumulating a cell for every
+scanline each *path* crosses, `CellStore::sort` sorting all 530 073 of them,
+`sweep` walking every row, and each consumer's callback then dropping the rows
+outside its target. This section is that fix.
+
+**The work removed is 31.4 ms of a 47.2 ms render, and it lands exactly where
+§18.3 predicted. What §18.3 did not predict is the row's residue**, which is
+a second defect the first one was hiding — see §19.7.
+
+### 19.1 The mechanism, and why cells rather than edges
+
+Two spellings were available and the brief asked which and why.
+
+**Taken: discard the cell.** `Rasterizer::keep_rows` records a half-open range
+of pixel rows, and a cell whose row falls outside it is dropped at the moment
+it would be banked — before the store grows, before the sort, before the
+sweep. The accumulation arithmetic is not touched at all: `render_line`,
+`render_hline` and `add_cover` are the same functions computing the same
+integers, and the only new code on the path is one range test per banked cell.
+
+**Declined: clipping the edges, the way AGG's `rasterizer_sl_clip` does.**
+That is the reference behaviour, and it is the right answer for a rasterizer
+whose sweep carries state from one row into the next — clipping cells there
+would drop cover a later row needs, so the geometry has to be cut instead.
+**Ours carries nothing across a row**, so edge clipping would buy the same
+answer for a much larger change: new intersection arithmetic on every segment
+that leaves the band, on the one code path every fill, stroke, glyph and clip
+in the engine runs through. The cheaper spelling is available because of a
+property this rasterizer has and AGG's does not, and taking the more invasive
+one to match a reference we do not share the constraint with would be a change
+made for the wrong reason.
+
+### 19.2 Why the discard is exact
+
+`Rasterizer::sweep` resolves each row from that row's cells alone:
+
+```rust
+for (y, row) in self.store.rows() {
+    sweep_row(row, y, rule, coverage, &mut emit);
+}
+```
+
+and `sweep_row` opens with `let mut cover = 0i32;`. The running cover is reset
+at every row boundary and never returned to the caller, so **the spans a row
+emits are a function of that row's cells and nothing else**. Dropping every
+cell on row *k* therefore changes the output of row *k* — to nothing, which is
+what the consumer's `if row >= h { return; }` already produced — and changes
+no byte on any other row.
+
+That is not an accident of the implementation but a property of the geometry:
+a closed boundary crosses any horizontal line an even number of times, so the
+signed covers on one row sum to zero and there is nothing for the next row to
+inherit. `every_rows_cover_returns_to_zero_by_its_end` asserts it directly
+over every path in the test set rather than leaving it as an argument.
+
+**Only rows are clipped, and that is a limit rather than an oversight.** The
+same discard applied to columns would be *wrong*: a row's cells are swept left
+to right with the running cover carried between them, so a cell dropped at
+column −30 000 loses cover that an on-target cell to its right needs. The
+asymmetry is exactly the asymmetry between rows and columns in the sweep, and
+`a_band_is_only_about_rows` pins it. Nothing is lost by it — the cells a
+horizontal excursion banks are bounded by the pixels one segment crosses,
+not by a per-row cost, so `rect(-32000, 2, 32000, 6)` banks the same handful
+of cells either way.
+
+### 19.3 Where it is set
+
+Three call sites reach the integrator, and all three already discarded the
+rows they now never compute:
+
+| consumer | the bound it declares | what it discarded before |
+|---|---|---|
+| `AggDevice::scan` (fills, strokes, glyph silhouettes) | `0..device height` | `Target::span_range`'s `row >= self.height()` |
+| `AggDevice::coverage_of` (every clip) | `0..device height` | `if row >= h { return; }` |
+| `render_lcd` (the shared glyph bitmap) | `0..bitmap height` | `if y < 0 || y >= height` |
+
+Every AGG layer is `Target::new(w, h)` from the device's own size, so the
+device height bounds a layer's rows as well as the base's; the glyph bitmap's
+box is derived from the outline it rasterizes, so nothing is expected outside
+it and the declaration is a statement of that rather than a saving.
+
+**The glyph bitmap is why this reaches all three backends.** `tiny-skia` and
+`vello_cpu` do not call the integrator for paths, but every small glyph on
+every backend is rasterized by `crate::glyph` and drawn as an image, which is
+the cross-backend equality property `scanline`'s module doc exists for. That
+is why §18.3 required this to land on its own board and tier-c cycle, and it
+did: `per_file` is byte-identical across all 1757 entries and tier-c is
+unchanged to the digit.
+
+**One public method is added, and it has a caller.** `Rasterizer` is already
+public — it is the backend seam `pdfrum-raster-agg` reaches across, which is
+what `scanline`'s module doc is about — so a bound only its owning crate could
+set would not reach the two AGG call sites at all. `keep_rows` is therefore
+public, is recorded in the API baseline as one line, and is called from three
+places; nothing else moved, and `Cell`, `CellStore` and the sweep's internals
+stay private.
+
+**`hard_clip`'s ±32000 clamp is untouched**, as §18.3 instructed. It is a
+deliberate reproduction of the oracle's 16-bit truncation and the clamped
+vertex position is observable in the pixels; the fix is downstream of it and
+answers the clamped path rather than re-clamping it. `clamped` and
+`clamped-slanted` in the test set are paths that reach the integrator carrying
+64 000 device units of height *because* the clamp let them, and they are the
+cases the equivalence is checked on.
+
+### 19.4 The tests, and the mutations they catch
+
+`coverage` in `scanline`'s test module is the **specification** — the old
+spelling, with the rasterizer recording every row and the callback dropping
+what it cannot use — and `banded_coverage` is the same plane taken the new
+way, with a callback that is byte-for-byte the old one so the only difference
+between them is where the discard happens.
+`the_band_reproduces_the_unbanded_plane` runs the pair over eight paths that
+leave the target above, below, both ways, out to the clamp on both a
+rectangle and a slanted quad, off each side horizontally, and off every side
+at once — each under both fill rules and all three coverage modes, forty-eight
+comparisons per path. `a_path_that_stays_inside_the_band_is_untouched_by_it`
+is its control: a path with nothing to discard must still agree, or the
+equality would be hiding a difference behind the rows it drops.
+
+Four mutations were planted and each was caught:
+
+| mutation | what it models | caught by |
+|---|---|---|
+| the range's end read one row short | the half-open bound read as closed | `the_band_keeps_the_targets_last_row`, `the_band_reproduces_the_unbanded_plane` |
+| the range's start read one row late | the same at the other end | `the_band_keeps_the_targets_first_row`, `the_band_reproduces_the_unbanded_plane` |
+| the discard applied to columns as well | the dropped cover carry | `a_band_is_only_about_rows`, `the_band_reproduces_the_unbanded_plane` |
+| the device's bound one row short | the wiring rather than the mechanism | nine `pdfrum-raster-agg` tests, including `an_antialiased_path_clip_keeps_partial_coverage` and `a_recycled_plane_carries_none_of_the_clip_it_held` |
+
+A fifth was planted and **did not fail**, which is the result that matters:
+making `sweep` carry the running cover from each row into the next changed no
+test, because §19.2's cover is already zero at every row's end. A mutation
+that cannot be observed is a proof that the quantity it perturbs does not
+exist, and it is why `every_rows_cover_returns_to_zero_by_its_end` was added
+to assert the invariant rather than leave it inferred.
+
+`a_reset_keeps_the_band_the_caller_set` covers the reuse: `AggDevice` holds
+one `Rasterizer` and resets it between paths, and a `reset` that widened the
+range back to everything would silently restore the old cost.
+
+### 19.5 The integrator, measured
+
+In-process, `--op render --warm` at 21 iterations, backend AGG, with `Instant`
+pairs inside `sweep` and around `AggDevice`'s device calls — the same
+instrument §18.3 took its table with, so the `before` column here is that
+table's and can be checked against it.
+
+| | `tcpdf_058` before | **after** | `forms_text_field` before | after |
+|---|---:|---:|---:|---:|
+| cell rows swept per iteration | **530 072** | **9 323** | 7 836 | 7 836 |
+| cells banked per iteration | 1 069 753 | 28 254 | 17 089 | 17 089 |
+| `finish` (the cell sort) | **22.48 ms** | **0.345 ms** | 0.157 ms | 0.147 ms |
+| the row walk | **4.84 ms** | **1.42 ms** | 1.085 ms | 1.018 ms |
+| the whole sweep | **27.33 ms** | **1.78 ms** | 1.258 ms | 1.182 ms |
+| `coverage_of` (device call) | **33.10 ms** | **1.71 ms** | 0.31 ms | 0.31 ms |
+
+**§18.3's two targets are met.** The sort falls from 22.5 ms to **0.345 ms**
+and the row walk from 4.84 ms to **1.42 ms** — both to `forms_text_field`'s
+scale, which is what §18.3 said would judge the fix. The row count falls
+530 072 → 9 323, and `forms_text_field`'s own figures do not move at all,
+which is the control: a document with no off-page geometry has no cells to
+drop.
+
+The whole-render stage split moves with them:
+
+| stage | `tcpdf_058` before | **after** |
+|---|---:|---:|
+| content parse | 0.235 ms | 0.232 ms |
+| interpretation | 0.807 ms | 0.798 ms |
+| **raster** | **47.06 ms (97.5%)** | **16.13 ms (92.0%)** |
+| TOTAL | 48.73 ms | **17.28 ms** |
+
+### 19.6 The wall clock
+
+Interleaved A/B in §10.4's discipline: the pre-fix binary and the post-fix one
+round by round on one document in one stretch of minutes, five rounds of 21
+warm iterations each, minimum kept per arm, load sampled per row. The oracle
+column is `bench-oracle.nu`'s marginal-pass formula `(t[21] − t[1]) / 20`
+against `pdfium_test --md5 --render-repeats`, minimum of five, one untimed
+warm-up first, with the PDFs copied to scratch because `pdfium_test` writes
+beside its input. `amortz` is §18.1's subtraction — the whole render minus
+content parse and interpretation, both from the stage split above — so
+`ratioA` is comparable with §18.2's.
+
+| fixture | before (ms) | **after (ms)** | speedup | oracle (ms) | ratioA before | **ratioA after** | load |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| `shading_tcpdf_058` | 45.30 | **16.68** | **2.72x** | 5.35 | 8.29x | **2.93x** | 9.9 |
+| `forms_text_field` | 4.65 | 4.76 | 0.98x | 3.97 | 1.03x | 1.05x | 10.0 |
+| `shading_axial_radial` | 31.07 | 31.03 | 1.00x | 43.54 | 0.71x | 0.71x | 9.6 |
+| `mixed_en_uicase` | 48.79 | 47.31 | 1.03x | 12.96 | 3.64x | 3.52x | 8.9 |
+
+**The two controls are flat at 0.98x and 1.00x**, which is this box's noise
+floor and not a measurement of anything — the shape a fix to off-page geometry
+should have on documents that have none. **`mixed_en_uicase` does not move**,
+at 1.03x, which §18.3 predicted explicitly ("many small sweeps, none of them
+off-page. It is the second item, and the first one's fix will not move it")
+and the in-process split confirms exactly: its 257 619 rows and 837 sweeps per
+iteration are **identical before and after**, to the row.
+
+**The corpus's other rows above 1.5x were checked for off-page geometry and
+have none.** A census counting, per render, the clip and fill paths whose
+bounding box leaves the device by more than a unit:
+
+| fixture | off-target clips | off-target fills |
+|---|---:|---:|
+| `shading_tcpdf_058` | **17 of 81** | 0 of 44 |
+| `mixed_en_uicase` | 0 of 730 | 0 of 326 |
+| `vector_font_feature` | 0 of 144 | 0 of 1 240 |
+| `image_ccitt_3bigpreview` | 0 of 518 | 0 of 530 |
+| `image_ccitt_transfer` | 0 of 0 | 0 of 13 |
+| `forms_list_box` | 0 of 418 | 0 of 198 |
+| `image_jpx_123` | 0 of 0 | 1 of 1 |
+| `forms_number` | 0 of 52 | 0 of 52 |
+| `shading_type4_5` | 0 of 0 | 0 of 0 |
+
+So **one row of the nine moves, and it is the one §18.3 named.**
+`image_jpx_123`'s single off-target fill is a whole-page image footprint
+overhanging the device by a pixel, which costs one row rather than tens of
+thousands. The census counts 17 of 81 where §18.3 counted 14 of 64 because it
+admits any bbox past the edge rather than only the ones tens of thousands of
+units out; both name the same fourteen paths and three marginal ones.
+
+### 19.7 The residue, and the defect this one was hiding
+
+**`shading_tcpdf_058` lands at 2.93x, not the ~1.2x §18.3 projected.** The
+projection is not wrong about what it measured — the sort and the row walk did
+both fall to `forms_text_field`'s scale, exactly as it said they would — but
+it assumed the rest of the render was what `forms_text_field`'s is, and it is
+not. With `coverage_of` down from 33.10 ms to 1.71 ms, the largest line in the
+render is now a different one:
+
+| `AggDevice` call | before | after | calls/iter |
+|---|---:|---:|---:|
+| **`pop`** | **9.88 ms** | **10.05 ms** | 77 |
+| `coverage_of` | 33.10 ms | **1.71 ms** | 63 |
+| `draw_image` | — | 1.05 ms | 347 |
+| `push_layer` | — | 0.91 ms | 13 |
+| `scan` | — | 0.72 ms | 34 |
+| `stroke_path` | — | 0.45 ms | 23 |
+| `fill_path` | — | 0.23 ms | 9 |
+
+**`pop` does not move — 9.88 ms before, 10.05 ms after — so it is not this
+change's cost and never was.** It is §12's clip-plane `recycle`, which
+restores the pool's zero invariant by clearing the *band* §11 recorded for the
+popped plane. For an annotation appearance's thirty-row `/BBox` that is thirty
+rows, which is what §12.4 measured and why the pool pays. For a clip whose
+sweep genuinely touched most of an 842-row page — which `tcpdf_058`'s
+off-page clips do, since their geometry crosses every row of the target on the
+way past it — the band is the whole page and `recycle` clears half a megabyte
+per pop, seventy-seven times per render.
+
+That is a real defect of the same family as §11 and §12 and it is **not fixed
+here**: it is in `pdfrum-raster-agg` rather than in the integrator, it is a
+different mechanism, and §18.3's instruction that this change land alone on
+its own board cycle applies to it as much as to this one. It is named,
+measured and queued.
+
+### 19.8 What this section does not claim
+
+- **The board is byte-identical and tier-c is unchanged**, which is the whole
+  correctness claim: `per_file` equal across all 1757 entries with both
+  binaries run, 1539 pass / 218 fail, and tier-c at 1628 files, 3 hard
+  failures, 434 over budget, worst 66.6634%, divergent 26.84%. The
+  equivalence argument in §19.2 is what makes that expected rather than
+  fortunate.
+- **One row of forty-four moves.** §19.6's census is the evidence, and it is a
+  census of the nine rows §18.2 lists above 1.5x rather than of all
+  forty-four; a document elsewhere in the corpus with off-page geometry and a
+  ratio already below 1.5x would gain and was not looked for.
+- **The wall-clock table is one interleaved run at load 8.9–10.0.** A second
+  run taken while the board was compiling on the same box, at load 34–46,
+  put the controls at 0.83x and 1.20x and is not reported as a measurement of
+  anything; §3's instruction is still undischarged and the absolute
+  milliseconds are still upper bounds.
+- **AGG only for the figures.** The change reaches `tiny-skia` and
+  `vello_cpu` through the shared glyph bitmap, and the board covers that, but
+  no timing was taken on either.
+- **`shading_tcpdf_058` is not closed as a defect.** It goes 8.67x → 2.93x and
+  what is left is §19.7's `pop`, which is a different cost in a different
+  crate.
+- **The ratchet is still not re-baselined.** §8's third bullet stands.

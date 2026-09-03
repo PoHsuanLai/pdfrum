@@ -386,29 +386,39 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
   largest ratio and is split in §18.3. `image_en_fqa` reads **1.16x**
   like-for-like against §15's 3.15x — 65% of it was the graph build — and
   `image_ccitt_3bigpreview` **2.45x**, which is real residue.
-- **`shading_tcpdf_058` at 8.67x: off-page clip paths are sorted and swept and
-  then discarded.** Named and measured in §18.3, **not fixed** — it is a change
-  to the shared scanline integrator and needs its own board and tier-c cycle.
-  **Fourteen of its 64 clip paths per render have bounding boxes tens of
-  thousands of device units off a 595x842 page** — `24561 x 92164` and
-  `31910 x 58307` among them — and they cost **31.7 ms, 97% of the sweep and
-  68% of the whole render**. §11's banded intersection (2 µs) and §12's plane
-  pool (17 µs) are both working and are *not* the cost: `Rasterizer`
-  accumulates a cell for every scanline the **path** crosses, `CellStore::sort`
-  sorts all **530 073** of them per iteration, `sweep` walks every row, and
-  then `coverage_of`'s callback drops each one outside the target with
-  `if row >= h { return; }`. The work is done and thrown away. **The fix is
-  not in the path**: `hard_clip`'s ±32000 clamp is a deliberate artefact
-  reproducing the oracle's 16-bit truncation and the clamped vertex is
-  observable in the pixels. It goes in `pdfrum-render`'s `scanline`, dropping
-  a cell whose row cannot be written — byte-identical, because those spans are
-  already discarded by every consumer. Judge the fix by §18.3's table: 23.1 ms
-  of sort and 4.6 ms of row walk should fall to what `forms_text_field` pays,
-  and the row from 8.67x to about 1.2x.
+- ~~**`shading_tcpdf_058` at 8.67x: off-page clip paths are sorted and swept
+  and then discarded.**~~ — **landed as §19**: `Rasterizer::keep_rows` records
+  the row range its caller will keep and drops a cell outside it before the
+  store grows, so nothing off-target is sorted or swept. **Exact rather than
+  approximate**, and the reason is a property of this rasterizer that AGG's
+  `rasterizer_sl_clip` does not share: `sweep` resets the running cover at
+  every row boundary, so a row's spans are a function of that row's cells and
+  nothing else, and dropping a row can change no other (§19.2). Edge clipping
+  was declined for that reason — the more invasive change buys the same answer.
+  The discard is rows only: applied to *columns* it would drop the cover an
+  on-target cell to the right needs, and that mutation is one of four planted
+  and caught. **§18.3's two targets are met**: the cell sort **22.5 → 0.345 ms**
+  and the row walk **4.84 → 1.42 ms**, both to `forms_text_field`'s scale, with
+  cell rows per iteration **530 072 → 9 323** and `coverage_of` **33.1 →
+  1.71 ms**. Wall clock **45.30 → 16.68 ms, 2.72x**, against two controls at
+  0.98x / 1.00x, at load 8.9–10.0. Board byte-identical (`per_file` equal
+  across all 1757 entries, both binaries run), tier-c unchanged to the digit.
+- **`shading_tcpdf_058` lands at 2.93x, not §18.3's projected ~1.2x, and the
+  residue is `AggDevice::pop` at 10.05 ms on 77 calls.** §19.7: the projection
+  was right about what it measured and wrong to assume the rest of the render
+  matched `forms_text_field`'s. `pop` is **9.88 ms before the fix and 10.05 ms
+  after** — it is §12's clip-plane `recycle`, clearing the band §11 recorded so
+  the pool's zero invariant holds. For a thirty-row appearance `/BBox` that is
+  thirty rows and is why the pool pays; for a clip whose sweep crossed every
+  row of the page on its way past it the band is the whole page, and `recycle`
+  clears half a megabyte per pop. Same family as §11 and §12, different crate
+  from §19, so it wants its own cycle.
 - **`mixed_en_uicase` at 3.71x is a different shape and must not be conflated
   with it.** 257 619 cell rows per iteration but **837 sweeps**, row walk
   37.3 ms against 5.2 ms of sort, and **zero** off-page clips. Many small
-  sweeps. The item above will not move it (§18.3).
+  sweeps. §18.3 said §19's fix would not move it and **§19.6 confirms it did
+  not**: 1.03x on the wall clock, with its row and sweep counts identical
+  before and after to the row. It is now the corpus's largest ratio.
 - **Seven more rows above 1.5x like-for-like, all of them in the rasterizer.**
   `vector_font_feature` 2.67x (90.9% raster), `shading_type4_5` 2.67x,
   `image_ccitt_3bigpreview` 2.45x (87.5% raster), `image_ccitt_transfer`
@@ -417,7 +427,11 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
   correction the pairing was for: with §17's annotation-pass defect fixed and
   the graph build paired correctly, **everything left is raster** (§18.2).
   Four of the seven have oracle columns under 1.1 ms and their ratios are the
-  least trustworthy in the table.
+  least trustworthy in the table. **None of the seven has off-page geometry**
+  and §19 moved none of them: a census of every clip and fill path per render
+  found `0 of 730`, `0 of 144`, `0 of 518`, `0 of 418` and `0 of 52` off the
+  device, against `shading_tcpdf_058`'s `17 of 81` (§19.6). `image_jpx_123`'s
+  one off-target fill is a whole-page image footprint overhanging by a pixel.
 
 ## Unwired oracle ports (`docs/status/unwired-oracle-ports.md`)
 
