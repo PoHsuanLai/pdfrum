@@ -91,25 +91,22 @@ use target::{Source, Target};
 
 /// The flattening tolerance, in device pixels.
 ///
-/// The oracle's own curve subdivider stops when a control point lies within
-/// **half a device pixel** of the chord (`agg_curves.cpp:36`'s
-/// `m_distance_tolerance_square = 1/4`, which is a squared distance, against a
-/// squared chord length). Matching that number exactly would reproduce its
-/// *vertices*, but not its subdivision — AGG bisects recursively and kurbo
-/// places points adaptively, so the two agree on the curve rather than on the
-/// polyline.
+/// A tenth of a pixel, which is five times finer than the half-pixel a
+/// recursive bisecting subdivider would stop at. Matching such a subdivider's
+/// number exactly would reproduce its *vertices* and still not its
+/// subdivision, because it bisects recursively where kurbo places points
+/// adaptively: the two agree on the curve rather than on the polyline, so
+/// there is nothing to gain by matching the tolerance and something to lose.
 ///
-/// A tenth of a pixel is used instead, and it is the safer direction: it is
-/// five times finer than the oracle's, so the flattening error is well below
-/// the coverage quantisation the output byte imposes, and no edge can land a
-/// count away because a chord cut a corner. It is also the tolerance the
-/// engine's own stroke outlining already uses, so a stroke expanded for a clip
-/// and a stroke expanded for a fill are the same polygon.
+/// Finer is the safer direction: the flattening error stays well below the
+/// coverage quantisation the output byte imposes, so no edge can land a count
+/// away because a chord cut a corner. It is also the tolerance the engine's
+/// own stroke outlining already uses, so a stroke expanded for a clip and a
+/// stroke expanded for a fill are the same polygon.
 const FLATTEN_TOLERANCE: f64 = 0.1;
 
-/// Intersect `mask` with `other` over the half-open row range `rows`,
-/// `old * new / 255` — `CFX_AggClipRgn::IntersectMask`'s truncating integer
-/// product, restricted to a band.
+/// Intersect `mask` with `other` over the half-open row range `rows`, as the
+/// truncating integer product `old * new / 255` restricted to a band.
 ///
 /// [`AlphaMask::intersect`] over the whole buffer is what this replaces, and
 /// the two agree byte for byte whenever every row outside `rows` is zero in
