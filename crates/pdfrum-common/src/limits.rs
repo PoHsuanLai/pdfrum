@@ -30,7 +30,6 @@
 pub struct Limits {
     /// Maximum depth of nested arrays/dictionaries accepted while parsing an
     /// object body. Enforced at parse time so access code may recurse freely.
-    /// PDFium: `kParserMaxRecursionDepth` (`cpdf_syntax_parser.h`).
     pub max_object_nesting: u32,
     /// Maximum number of elements in one array. PDFium has no such cap; ours
     /// is consulted by the object parser (`pdfrum_parser::syntax`), the
@@ -110,12 +109,10 @@ pub struct Limits {
     pub max_script_stack: usize,
     /// How deep a calculation may trigger another calculation.
     ///
-    /// **One, because upstream permits no nesting at all.**
-    /// `CPDFSDK_InteractiveForm::busy_`
-    /// (`fpdfsdk/cpdfsdk_interactiveform.cpp:259-264`) is a flag, not a
-    /// counter: the outer sweep is authoritative and every nested call
-    /// returns immediately. The field makes that configurable rather than
-    /// looser.
+    /// **One**, because a calculation that runs during another calculation
+    /// is refused rather than counted down: the outer sweep is authoritative
+    /// and every nested call returns immediately. The field makes that depth
+    /// configurable rather than looser.
     pub max_calculate_depth: u32,
 }
 
