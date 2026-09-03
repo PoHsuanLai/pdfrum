@@ -91,20 +91,17 @@ fn with_model<T>(context: &Context, body: impl FnOnce(&DocumentModel) -> T) -> O
 
 /// The **23** methods that are no-ops returning success upstream.
 ///
-/// One body, because that is what the C++ is: twenty-three functions whose
-/// entire content is a comment and `return CJS_Result::Success();`. Neither
-/// arity nor argument types are checked, which is why
-/// `document_methods_expected.txt` asserts `= undefined` for
-/// `this.addAnnot(1, 2, "clams", [1, 2, 3])` as readily as for
-/// `this.addAnnot()`.
+/// One body, because upstream is twenty-three functions that each return
+/// success without doing anything. Neither arity nor argument types are
+/// checked, so `this.addAnnot(1, 2, "clams", [1, 2, 3])` answers `undefined`
+/// as readily as `this.addAnnot()` does.
 #[allow(clippy::unnecessary_wraps)]
 fn noop(_this: &JsValue, _args: &[JsValue], _context: &mut Context) -> JsResult<JsValue> {
     Ok(JsValue::undefined())
 }
 
-/// A getter that always answers `undefined`, which is what a bare
-/// `return CJS_Result::Success();` produces for the twelve properties whose
-/// getters have no body at all.
+/// A getter that always answers `undefined`, for the twelve properties whose
+/// getters upstream have no body at all.
 #[allow(clippy::unnecessary_wraps)]
 fn undefined_getter(_this: &JsValue, _a: &[JsValue], _c: &mut Context) -> JsResult<JsValue> {
     Ok(JsValue::undefined())
