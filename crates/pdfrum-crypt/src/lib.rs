@@ -1,13 +1,12 @@
 //! PDF standard security (ISO 32000 §7.6): opening an encrypted document and
-//! decrypting its strings and streams, for standard security handler
-//! revisions 2 through 6.
+//! deciphering its strings and streams, revisions 2 through 6.
 //!
-//! A document's `/Encrypt` dictionary plus a password produce a
-//! [`SecurityHandler`], and every string and stream the parser reads passes
-//! through [`SecurityHandler::decrypt`] keyed by the indirect object it
-//! belongs to. Revisions 2 to 4 derive an RC4 or AES-128 key by an MD5
-//! ladder over the padded password; revisions 5 and 6 verify a SHA-2 hash and
-//! unwrap a 32-byte AES-256 key that the file stores directly.
+//! An `/Encrypt` dictionary plus a password produce a [`SecurityHandler`], and
+//! every string and stream the parser reads passes through
+//! [`SecurityHandler::decrypt`] keyed by the indirect object it belongs to.
+//! [`SecurityHandler::encrypt`] is the inverse under that same handler, so a
+//! save re-enciphers under the file's existing key: no re-keying, and no
+//! `/Encrypt` dictionary is built here.
 //!
 //! ```
 //! use pdfrum_crypt::{CryptClass, SecurityHandler};
@@ -20,37 +19,33 @@
 //! # let _ = (Dict::new(), NoResolve);
 //! ```
 //!
-//! # Writing one back out
-//!
-//! [`SecurityHandler::encrypt`] is the inverse. It takes the same handler —
-//! the one the *original* password opened — so a save re-enciphers under the key the
-//! file already had and the result opens with the same password. There is no
-//! re-keying API: changing a document's password is not a v1 feature.
-//!
-//! AES needs a fresh initialisation vector per payload, and this crate has no
-//! randomness of its own — no global state and no `getrandom` dependency.
-//! So the vector is an argument, an [`Iv`] the caller
-//! supplies. `pdfrum-edit` derives one deterministically from the file's own
-//! bytes and a per-object counter, which makes a save reproducible; a caller
-//! wanting unpredictable vectors passes its own source.
-//!
-//! What this crate still does **not** do is build an `/Encrypt` dictionary:
-//! `/O`, `/U`, `/OE`, `/UE` and `/Perms` are written by whoever chose the
-//! passwords, and password-preserving save copies the dictionary the file
-//! already had.
-//!
-//! Two crypto-driven behaviors also live outside this crate, because both need
-//! to walk the object graph, which this crate deliberately cannot:
-//!
-//! - **The signature exemption.** A `/Contents` value whose parent dictionary
-//!   has a `/Type` or `/FT` key is deferred during the decrypt walk; once the
-//!   parent has been decrypted its type can finally be read, and a parent that
-//!   turns out to be a signature dictionary (`/Type /Sig`, or `/FT /Sig` when
-//!   `/Type` is absent) keeps its contents *undecrypted*. The test cannot be
-//!   made earlier because those names are themselves encrypted strings until
-//!   the parent is done. See [`is_signature_dict`], which the walker calls.
-//! - **The metadata exemption.** When [`SecurityHandler::encrypt_metadata`] is
-//!   false the object `/Root/Metadata` points at is not decrypted.
+//! This crate has no randomness: AES's per-payload [`Iv`] is an argument.
+
+// Revisions 2 to 4 derive an RC4 or AES-128 key by an MD5 ladder over the
+// padded password; revisions 5 and 6 verify a SHA-2 hash and unwrap a 32-byte
+// AES-256 key that the file stores directly.
+//
+// No global state and no `getrandom` dependency is why the vector is an
+// argument. `pdfrum-edit` derives one deterministically from the file's own
+// bytes and a per-object counter, which makes a save reproducible; a caller
+// wanting unpredictable vectors passes its own source.
+//
+// Building an `/Encrypt` dictionary is out of scope: `/O`, `/U`, `/OE`, `/UE`
+// and `/Perms` are written by whoever chose the passwords, and a
+// password-preserving save copies the dictionary the file already had.
+//
+// Two crypto-driven behaviors also live outside this crate, because both need
+// to walk the object graph, which this crate deliberately cannot:
+//
+// - The signature exemption. A `/Contents` value whose parent dictionary has a
+//   `/Type` or `/FT` key is deferred during the decrypt walk; once the parent
+//   has been decrypted its type can finally be read, and a parent that turns
+//   out to be a signature dictionary (`/Type /Sig`, or `/FT /Sig` when `/Type`
+//   is absent) keeps its contents undecrypted. The test cannot be made earlier
+//   because those names are themselves encrypted strings until the parent is
+//   done. `is_signature_dict` is what the walker calls.
+// - The metadata exemption. When `SecurityHandler::encrypt_metadata` is false
+//   the object `/Root/Metadata` points at is not decrypted.
 
 #![forbid(unsafe_code)]
 // Every byte reaching this crate came from an untrusted file or a password:
@@ -211,15 +206,12 @@ pub enum SecurityHandler {
 impl SecurityHandler {
     /// Build a handler from the trailer's `/Encrypt` dictionary.
     ///
-    /// `file_id` is the **first** element of the trailer's `/ID` array as raw
+    /// `file_id` is the first element of the trailer's `/ID` array as raw
     /// bytes; pass `&[]` when `/ID` is absent, which contributes nothing to
-    /// the key rather than contributing an empty marker. `password` is the
-    /// caller's raw bytes, uncapped in length — the specification's 127-byte
-    /// limit is not enforced, matching the C++.
-    ///
-    /// A non-empty password is tried as the *owner* password first and only
-    /// then as the user password; an empty password is only ever a user
-    /// password.
+    /// the key rather than an empty marker. `password` is raw bytes, uncapped
+    /// — the specification's 127-byte limit is not enforced. A non-empty
+    /// password is tried as the owner password first and only then as the
+    /// user password; an empty one is only ever a user password.
     ///
     /// ```
     /// use pdfrum_crypt::{Error, SecurityHandler};
@@ -438,28 +430,14 @@ impl SecurityHandler {
     /// Encipher one string or stream payload belonging to indirect object
     /// `obj`, the inverse of [`SecurityHandler::decrypt`].
     ///
-    /// `iv` is the initialisation vector the AES handlers prefix to their
-    /// output; the RC4 handler ignores it, and so does [`Self::Identity`].
-    /// It must be **fresh per payload** for the cipher to be sound — see the
-    /// crate docs for why this crate makes the caller supply it.
-    ///
-    /// Infallible, like its inverse. The one way to produce no output is a
-    /// key AES cannot accept, which no handler this crate builds can hold.
-    ///
-    /// # Lengths
+    /// `iv` must be fresh per payload for the cipher to be sound; the RC4
+    /// handler and [`Self::Identity`] ignore it. Infallible, like its inverse.
     ///
     /// RC4 preserves length exactly. AES grows a payload of `n` bytes to
-    /// `32 + 16 * (n / 16)` — sixteen for the vector, and a PKCS#7 pad that
-    /// is always present, so a payload that is already block-aligned gains a
-    /// whole block.
-    ///
-    /// **An empty payload is the exception: it stays empty.** The C++ tests
-    /// for it in `CPDF_Encryptor::Encrypt`, one level above the cipher, so an
-    /// empty string is written `()` rather than as a bare vector and pad
-    /// block. That matters for the round trip, because the decrypt side reads
-    /// anything under seventeen bytes as all-vector-and-no-payload and would
-    /// return empty either way — but only the short-circuit keeps a save from
-    /// growing every empty string in a document by 32 bytes.
+    /// `32 + 16 * (n / 16)`: sixteen for the vector, and a PKCS#7 pad that is
+    /// always present, so an already block-aligned payload gains a whole
+    /// block. An empty payload is the exception and stays empty, so a save
+    /// does not grow every empty string in a document by 32 bytes.
     ///
     /// ```
     /// use pdfrum_crypt::{CryptClass, Iv, SecurityHandler};
