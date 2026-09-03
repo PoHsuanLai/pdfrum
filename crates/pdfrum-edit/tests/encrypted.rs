@@ -28,7 +28,7 @@
     reason = "helpers shared by the tests below; a panic here is a failure"
 )]
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use pdfrum_edit::{EditDoc, IdSource, SaveMode, SaveOptions, save};
@@ -51,9 +51,37 @@ const FIXTURES: [(&str, &[u8]); 7] = [
     ("bug_644.pdf", b"a"),
 ];
 
+/// The read-only C++ PDFium checkout, resolved the one way every script and
+/// test in this repository resolves it: `$PDFRUM_ORACLE_CHECKOUT`, else the
+/// sibling `../pdfium-c++` directory README.md and PLAN.md §4 name.
+/// `scripts/env.nu` holds the nushell spelling of the same rule.
+///
+/// Six lines rather than a shared module: STYLE.md §4 forbids a `common`,
+/// `util` or `helpers` module name, and an integration test in one crate
+/// cannot reach another crate's test code anyway.
+fn oracle_checkout() -> PathBuf {
+    let checkout = std::env::var_os("PDFRUM_ORACLE_CHECKOUT").map_or_else(
+        || Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../pdfium-c++"),
+        PathBuf::from,
+    );
+    if !checkout.is_dir() {
+        // Said once per test process, so a run where every case below did
+        // nothing says so rather than reporting a silent green.
+        static SAID: std::sync::Once = std::sync::Once::new();
+        SAID.call_once(|| {
+            eprintln!(
+                "skipping the oracle-corpus cases: no checkout at {} \
+                 (set PDFRUM_ORACLE_CHECKOUT)",
+                checkout.display()
+            );
+        });
+    }
+    checkout
+}
+
 /// Where the oracle's test files live, when this checkout has them.
 fn resources() -> Option<PathBuf> {
-    let path = PathBuf::from("/mnt/data2/pdfium/pdfium-c++/testing/resources");
+    let path = oracle_checkout().join("testing/resources");
     path.is_dir().then_some(path)
 }
 

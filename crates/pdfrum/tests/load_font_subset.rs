@@ -19,7 +19,7 @@
     reason = "a test that cannot open its own fixture has nothing to report but a panic"
 )]
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Arc;
 
@@ -74,12 +74,34 @@ fn extracted(bytes: &[u8]) -> String {
 /// `pdfium_test --md5` over `path`, as the reopen check. The binary exits 0
 /// even when the load fails, so the caller must look for an `MD5:` line: its
 /// absence is how a file the oracle could not open shows up.
+/// The oracle's `pdfium_test`, when this machine has one.
+///
+/// One place, two inputs: `$PDFRUM_ORACLE_BIN`, else
+/// `$PDFRUM_ORACLE_CHECKOUT/out/Release/pdfium_test`, whose own default is the
+/// sibling `../pdfium-c++` directory README.md names. `scripts/env.nu`
+/// resolves the same two variables with the same defaults for the nushell
+/// side, and `conformance` for the CLI.
+///
+/// Six lines rather than a shared module: STYLE.md §4 forbids a `common`,
+/// `util` or `helpers` module name, an integration test cannot reach another
+/// crate's test code, and the one sibling that wants this
+/// (`load_font_subset.rs`) carries the same six lines with the same comment.
+fn oracle_bin() -> Option<PathBuf> {
+    let bin = std::env::var_os("PDFRUM_ORACLE_BIN").map_or_else(
+        || {
+            let checkout = std::env::var_os("PDFRUM_ORACLE_CHECKOUT").map_or_else(
+                || Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../pdfium-c++"),
+                PathBuf::from,
+            );
+            checkout.join("out/Release/pdfium_test")
+        },
+        PathBuf::from,
+    );
+    bin.is_file().then_some(bin)
+}
+
 fn oracle_md5(path: &Path) -> Result<String, String> {
-    let candidates = [
-        "/mnt/data2/pdfium/pdfium-c++/out/Default/pdfium_test",
-        "/mnt/data2/pdfium/pdfium-c++/out/Release/pdfium_test",
-    ];
-    let Some(bin) = candidates.iter().find(|p| Path::new(p).exists()) else {
+    let Some(bin) = oracle_bin() else {
         return Err("pdfium_test binary is absent; skip oracle reopen".into());
     };
     let out = Command::new(bin)

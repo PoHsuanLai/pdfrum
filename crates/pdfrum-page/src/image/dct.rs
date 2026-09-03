@@ -688,14 +688,23 @@ mod tests {
         assert_ne!(&image.data[..3], &[242, 111, 130]);
     }
 
+    /// The read-only C++ PDFium checkout, resolved as every script and test in
+    /// this repository resolves it: `$PDFRUM_ORACLE_CHECKOUT`, else the
+    /// sibling `../pdfium-c++` directory README.md and PLAN.md §4 name.
+    fn oracle_checkout() -> std::path::PathBuf {
+        std::env::var_os("PDFRUM_ORACLE_CHECKOUT").map_or_else(
+            || std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../pdfium-c++"),
+            std::path::PathBuf::from,
+        )
+    }
+
     /// The `/DCTDecode` codestream out of `corpus/fx/other/1.pdf`, or `None`
     /// when the corpus is not present.
     ///
     /// The file stores it uncompressed and unencrypted, so the bytes between
     /// the last `stream` keyword and its `endstream` are the JPEG itself.
     fn ycck_codestream() -> Option<Vec<u8>> {
-        let pdf =
-            std::fs::read("/mnt/data2/pdfium/pdfium-c++/testing/corpus/fx/other/1.pdf").ok()?;
+        let pdf = std::fs::read(oracle_checkout().join("testing/corpus/fx/other/1.pdf")).ok()?;
         let start = pdf
             .windows(2)
             .enumerate()

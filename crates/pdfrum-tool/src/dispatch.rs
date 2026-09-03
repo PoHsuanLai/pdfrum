@@ -507,16 +507,26 @@ mod tests {
         assert!(matches!(got[7], Call::FocusAt { .. }));
     }
 
+    /// The read-only C++ PDFium checkout, resolved as every script and test in
+    /// this repository resolves it: `$PDFRUM_ORACLE_CHECKOUT`, else the
+    /// sibling `../pdfium-c++` directory README.md and PLAN.md §4 name.
+    fn oracle_checkout() -> std::path::PathBuf {
+        std::env::var_os("PDFRUM_ORACLE_CHECKOUT").map_or_else(
+            || std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../pdfium-c++"),
+            std::path::PathBuf::from,
+        )
+    }
+
     #[test]
     fn every_corpus_script_maps_to_a_call_per_line_but_for_bad_code_points() {
         // The whole in-scope corpus through the bridge, asserting the only
         // thing that may shrink a script is fact 3's skip.
-        let root = std::path::Path::new("/mnt/data2/pdfium/pdfium-c++/testing");
+        let root = oracle_checkout().join("testing");
         if !root.is_dir() {
             return;
         }
         let mut files = Vec::new();
-        collect_evt(root, &mut files);
+        collect_evt(&root, &mut files);
         files.sort();
         assert!(!files.is_empty());
         let mut total = 0usize;
