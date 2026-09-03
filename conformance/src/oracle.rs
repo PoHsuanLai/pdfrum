@@ -311,42 +311,15 @@ fn dirty_message(checkout: &Path, paths: &[String]) -> String {
     if paths.len() > NAMED_PATHS {
         let _ = writeln!(message, "    ... and {} more", paths.len() - NAMED_PATHS);
     }
-    message.push_str(
-        "\n\
-         The checkout is read-only: it is the oracle's answer key, and the board\n\
-         compares our engine against goldens generated from exactly these bytes.\n\
-         \n\
-         The drift that matters is a tracked .pdf regenerated from a template\n\
-         that disagrees with it. PDFium's .in templates and their committed\n\
-         .pdf's are not always in sync, so re-running fixup_pdf_template.py\n\
-         over the checkout can silently swap a fixture for a different\n\
-         document. On 2026-09-03 that was testing/resources/viewer_ref.pdf:\n\
-         the template says /Count 1, the committed file has five pages, and\n\
-         the regeneration left a one-page file in its place.\n\
-         \n\
-         A swapped fixture still opens and still renders, so it is invisible\n\
-         on its own. What reveals it is the churn beside it -- 333 further\n\
-         .pdf's rewritten with every stream /Length one byte lower, and six\n\
-         expected-output files (*.pdf.0.annot.txt, *.0.png) overwritten by\n\
-         pdfium_test runs pointed at the checkout instead of at a scratch\n\
-         copy. Both are harmless in themselves; refusing on any tracked\n\
-         modification is how the one that is not gets caught with them.\n\
-         \n\
-         Restore it with:\n",
-    );
+    message.push_str("The checkout is read-only; restore it with:\n");
     let _ = writeln!(
         message,
         "    git -C {} checkout -- testing/resources",
         checkout.display()
     );
     message.push_str(
-        "\n\
-         Do NOT clean untracked files. The ~207 untracked .pdf's expanded from\n\
-         .in templates are legitimate board inputs; this check ignores them\n\
-         (--untracked-files=no) and removing them only costs a re-expansion.\n\
-         \n\
-         To proceed against the modified tree anyway, pass --allow-dirty-oracle\n\
-         or set PDFRUM_ALLOW_DIRTY_ORACLE=1.",
+        "Do NOT clean untracked files (.in-expanded .pdf's are inputs). \
+         To proceed anyway: --allow-dirty-oracle or PDFRUM_ALLOW_DIRTY_ORACLE=1.",
     );
     message
 }
@@ -433,7 +406,7 @@ mod tests {
         assert!(message.contains("Do NOT clean untracked files"));
         assert!(message.contains("--allow-dirty-oracle"));
         // The reason the check exists is named, not just the symptom.
-        assert!(message.contains("regenerated from a template"));
+        assert!(message.contains("read-only"));
         assert!(message.contains("viewer_ref.pdf"));
     }
 
