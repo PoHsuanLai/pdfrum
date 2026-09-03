@@ -328,6 +328,63 @@ impl TextPage {
     }
 }
 
+/// The words a page draws, in content order — the answer
+/// `Doc.getPageNumWords` counts and `Doc.getPageNthWord` indexes into.
+///
+/// # A different reading of "word" from the extraction pipeline's
+///
+/// This walks the page's **text objects** and their raw character codes, and
+/// it does not go through [`TextPage`] at all. That is deliberate rather than
+/// an oversight: extraction reorders by reading order, suppresses duplicate
+/// overprinted objects, inserts generated spaces and newlines and normalizes
+/// what it emits, and every one of those would change the count. The
+/// scripting API's word list is defined on the content stream as written.
+///
+/// # What separates two words
+///
+/// A single rule, applied per character: a character is *word-continuing*
+/// when its first code unit is neither a space nor above `U+28FF`, and a run
+/// of those is one word. So a character at `U+2900` or beyond — CJK, most
+/// symbols — is a word of its own, and `Hello, world!` is **two** words
+/// rather than four, because the comma and the exclamation mark are below the
+/// threshold and continue the run.
+///
+/// A character whose font maps it to nothing contributes `U+0000`, which is
+/// word-continuing; a space ends a word without starting one.
+#[must_use]
+pub fn words(page: &Page) -> Vec<String> {
+    /// `IsLatinWord`: neither a space nor past the cutoff.
+    fn continues_a_word(unicode: u32) -> bool {
+        unicode != 0x20 && unicode <= 0x28FF
+    }
+
+    let mut out: Vec<String> = Vec::new();
+    for run in object::walk(&page.objects) {
+        // Each object restarts the run state, which is what makes a word
+        // split across two text objects two words.
+        let mut in_word = false;
+        for item in &run.items {
+            let mapped = run.font.unicode_from_charcode(item.code);
+            // `WideString::Front()` on an empty string is `0`, and zero
+            // continues a word.
+            let unicode = mapped.first().map_or(0, |ch| *ch as u32);
+            let continues = continues_a_word(unicode);
+            if !continues || !in_word {
+                in_word = continues;
+                if unicode != 0x20 {
+                    out.push(String::new());
+                }
+            }
+            if let Some(word) = out.last_mut()
+                && let Some(ch) = char::from_u32(unicode)
+            {
+                word.push(ch);
+            }
+        }
+    }
+    out
+}
+
 /// Formats the page as its [`search_text`](TextPage::search_text) — **not**
 /// the [`chars`](TextPage::chars) stream, which holds the control characters
 /// and placeholders this drops.

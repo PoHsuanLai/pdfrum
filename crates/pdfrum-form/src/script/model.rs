@@ -27,6 +27,14 @@ pub struct DocumentModel {
     pub path: String,
     /// `Doc.URL` — the same path, unprefixed. `JS_docGetFilePath()`.
     pub url: String,
+    /// The words each page draws, in content order.
+    ///
+    /// **Installed by the caller**, like everything else here: counting them
+    /// needs a parsed content stream, which this model deliberately does not
+    /// hold. `pdfrum_text::words` is the reader for a `pdfrum` page, and an
+    /// empty list is the honest answer for a caller that did not supply one —
+    /// `getPageNumWords` then answers 0, which is what an empty page gives.
+    pub page_words: Vec<Vec<String>>,
     /// The `/Info` entries, in the order the dictionary writes them.
     ///
     /// A `Vec` rather than a map because `Doc.info` enumerates the *whole*

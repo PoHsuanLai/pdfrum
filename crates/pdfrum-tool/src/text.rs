@@ -78,6 +78,28 @@ pub fn extract_page<R: Resolve>(
     )
 }
 
+/// The words one page draws, for `Doc.getPageNthWord` and
+/// `Doc.getPageNumWords`.
+///
+/// A different reading of "word" from extraction's, and deliberately so —
+/// see `pdfrum_text::words`. A page that will not build yields no words,
+/// which is what an empty page gives.
+///
+/// Behind the `script` feature because `--js-transcript` is its only caller:
+/// nothing else the tool prints counts words.
+#[cfg(feature = "script")]
+#[must_use]
+pub fn page_words<R: Resolve>(
+    page: &PageDict,
+    resolver: &R,
+    ctx: &mut BuildContext,
+) -> Vec<String> {
+    let limits = Limits::default();
+    let mut diags = Diagnostics::default();
+    let built = crate::content::build(page, resolver, ctx, &limits, &mut diags);
+    pdfrum_text::words(&built)
+}
+
 /// Whether the document asks for right-to-left reading order
 /// (`/Root /ViewerPreferences /Direction /R2L`).
 ///

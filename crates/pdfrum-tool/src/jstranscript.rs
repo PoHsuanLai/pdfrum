@@ -104,11 +104,21 @@ pub fn write_transcript(
     } else {
         ""
     };
-    let pages: Vec<Dict> = (0..doc.page_count())
-        .filter_map(|index| doc.page(index).ok().map(|page| page.dict.clone()))
+    let loaded: Vec<pdfrum_parser::PageDict> = (0..doc.page_count())
+        .filter_map(|index| doc.page(index).ok())
         .collect();
+    let pages: Vec<Dict> = loaded.iter().map(|page| page.dict.clone()).collect();
     let info = doc.trailer().dict(names::INFO, doc);
-    let model = pdfrum_form::script::model::read(&catalog, info.as_ref(), &pages, path, doc);
+    let mut model = pdfrum_form::script::model::read(&catalog, info.as_ref(), &pages, path, doc);
+    // The words each page draws, which `Doc.getPageNthWord` indexes into.
+    // Read here rather than in the cascade for the same reason everything
+    // else in the model is: counting them needs a parsed content stream, and
+    // the cascade holds no PDF.
+    let mut ctx = pdfrum_page::BuildContext::new();
+    model.page_words = loaded
+        .iter()
+        .map(|page| crate::text::page_words(page, doc, &mut ctx))
+        .collect();
     let scripts = document_scripts(&catalog, doc);
 
     // A session, when the facade could open the same bytes. It is what makes

@@ -449,6 +449,82 @@ fn a_format_function_writes_the_event_value() {
     assert_eq!(cascade.transcript_text(), "Alert: $1,234.50\n");
 }
 
+// ---- the page word list ----
+
+/// A session whose document model carries `pages` pages of words.
+fn with_words(pages: &[&[&str]]) -> ScriptCascade {
+    let mut cascade = session();
+    let mut model = crate::script::model::DocumentModel::empty();
+    model.page_count = u32::try_from(pages.len()).unwrap_or(0);
+    model.page_words = pages
+        .iter()
+        .map(|page| page.iter().map(|word| (*word).to_owned()).collect())
+        .collect();
+    cascade.set_document(model);
+    cascade
+}
+
+/// The two word methods answer from the installed list, and **`bStrip`
+/// defaults to true**.
+#[test]
+fn the_word_methods_read_the_installed_list() {
+    let mut cascade = with_words(&[&["Hello,", " world! "], &["one"]]);
+    assert!(cascade.run(
+        "app.alert(this.getPageNumWords(0));\n\
+         app.alert(this.getPageNthWord(0, 0));\n\
+         app.alert('[' + this.getPageNthWord(0, 1) + ']');\n\
+         app.alert('[' + this.getPageNthWord(0, 1, false) + ']');\n\
+         app.alert(this.getPageNumWords(1));",
+        "test"
+    ));
+    assert_eq!(
+        cascade.transcript_text(),
+        "Alert: 2\nAlert: Hello,\nAlert: [world!]\nAlert: [ world! ]\nAlert: 1\n"
+    );
+}
+
+/// **The page range check comes first**, and its message is a *value* error
+/// rather than a range one.
+#[test]
+fn an_out_of_range_page_is_a_value_error_for_both_word_methods() {
+    let mut cascade = with_words(&[&["a"]]);
+    assert!(cascade.run(
+        "function say(f) { try { f(); app.alert('no throw'); } \
+          catch (e) { app.alert('' + e); } }\n\
+         say(function () { this.getPageNthWord(-1, 0); });\n\
+         say(function () { this.getPageNumWords(6); });",
+        "test"
+    ));
+    assert_eq!(
+        cascade.transcript_text(),
+        "Alert: Document.getPageNthWord: Incorrect parameter value.\n\
+         Alert: Document.getPageNumWords: Incorrect parameter value.\n"
+    );
+}
+
+/// **A word index past the end answers the last word**, not an empty string
+/// — upstream's walk breaks on `>=` and then indexes relative to the object
+/// it stopped in.
+#[test]
+fn a_word_index_past_the_end_answers_the_last_word() {
+    let mut cascade = with_words(&[&["first", "last"]]);
+    assert!(cascade.run("app.alert(this.getPageNthWord(0, 99));", "test"));
+    assert_eq!(cascade.transcript_text(), "Alert: last\n");
+}
+
+/// A caller that installed no words gets **zero and the empty string**, not
+/// a failure: an empty page answers the same.
+#[test]
+fn a_document_with_no_installed_words_answers_zero() {
+    let mut cascade = with_words(&[&[]]);
+    assert!(cascade.run(
+        "app.alert(this.getPageNumWords(0));\n\
+         app.alert('[' + this.getPageNthWord(0, 0) + ']');",
+        "test"
+    ));
+    assert_eq!(cascade.transcript_text(), "Alert: 0\nAlert: []\n");
+}
+
 // ---- `color`, `global`, the constant namespaces, `constructor` ----
 
 /// The transcript of one script over a fresh session, for the table-shaped

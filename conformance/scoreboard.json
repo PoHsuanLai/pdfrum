@@ -1,12 +1,12 @@
 {
-  "generated_at": "2026-09-03T11:17:52Z",
+  "generated_at": "2026-09-03T11:30:24Z",
   "totals": {
     "files": 1757,
-    "pass": 1535,
-    "fail": 222,
+    "pass": 1536,
+    "fail": 221,
     "by_tag": {
       "form-events": 8,
-      "js-transcript": 12,
+      "js-transcript": 11,
       "page-count": 2,
       "pixel-fail": 41,
       "tierA-mismatch": 170
@@ -35486,10 +35486,8 @@
     },
     {
       "path": "resources/javascript/document_methods.in#js-transcript",
-      "status": "fail",
-      "tags": [
-        "js-transcript"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [],
         "mismatched": [],
@@ -35503,7 +35501,7 @@
         }
       },
       "tierB": null,
-      "notes": "line 99: expected \"Alert: PASS: this.getPageNthWord(0, 0, true, \\\"clams\\\", [1, 2]) = Hello,\", got \"Alert: ERROR: Document.getPageNthWord: Operation not supported.\""
+      "notes": ""
     },
     {
       "path": "resources/javascript/document_methods.pdf",
