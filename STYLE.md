@@ -217,6 +217,12 @@ flow.
   explain the design, especially where we deliberately diverge from the C++
   structure. Comments never narrate C++ provenance ("this ports foo.cpp") —
   that mapping lives in the design brief.
+- Public rustdoc is for a caller of the crate, not for the next agent. First
+  sentence, then the invariant they can get wrong, then `# Errors`, then at
+  most one example per type. Design history, C++ paths, internal milestone and
+  work-package numbers, and rejected alternatives belong in `docs/design/` and
+  in `//` on the implementation; `scripts/check-no-internal-refs.nu` is the
+  gate. Caps and the sibling rule: `docs/design/rustdoc.md`.
 
 ## 7. The transliteration test
 

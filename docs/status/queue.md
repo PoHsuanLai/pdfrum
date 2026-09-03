@@ -62,7 +62,21 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
 
 ## Cleanliness before public CI (added 2026-09-03, user)
 
-- **Rustdoc names internal phases and internal documents.** 238 `///`/`//!`
+- ~~**Rustdoc names internal phases and internal documents.**~~ Landed
+  09d7cb5..46d11e8 (2026-09-03): passes A and B-1 swept the crates, WP5 took
+  `pdfrum-form` (207 provenance + 21 internal → 0) and `pdfrum-script`, and
+  `scripts/check-no-internal-refs.nu` is in `scripts/ci.nu` with three
+  assertions of its own. Two corrections to the pattern, both found by running
+  it workspace-wide: `SPEC\.md` under-matched the unsuffixed `(SPEC §15.8)`
+  spelling the tree actually carries, so the doc names are now
+  `\b(SPEC|PLAN|STYLE|DEPS)(\.md)?\b`; and `§[A-Z]\.[0-9]` over-matched the
+  legitimate `ISO/IEC 15444-1 §A.4.1`, so a line citing a standard before its
+  section marker is spared for that alternative alone. The widening found 19
+  further lines across seven crates, swept in the gate's commit. The
+  non-vacuity control caught a live bug on its first run: `-- 'crates/*/src'`
+  matches no file under git's default pathspec globbing, so the scan was
+  reporting a clean tree by looking at nothing (`:(glob)crates/*/src/**`).
+  Original entry: 238 `///`/`//!`
   lines across 18 crates cite `M12`/`M15`-style milestone numbers,
   `WP1`-style work packages, `§A.11`-style design-doc sections, or
   `docs/status/…`, `docs/design/…`, `PLAN.md`, `SPEC.md`, `STYLE.md`,
@@ -136,9 +150,15 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
 
 ## Rustdoc trim (`docs/design/rustdoc.md`)
 
-- WP5 inner crates, host-reachable first: `pdfrum-text`, `pdfrum-form`,
-  `pdfrum-render`, `pdfrum-object`, then any type page over 30 lines.
-- WP6 the STYLE.md §6 paragraph, last.
+- ~~WP5 inner crates, host-reachable first: `pdfrum-text`, `pdfrum-form`,
+  `pdfrum-render`, `pdfrum-object`~~ — all four landed 2026-09-03, plus
+  `pdfrum-script`. §8's definition of done is ticked but for the one box a
+  human has to tick.
+- ~~WP6 the STYLE.md §6 paragraph, last.~~ — landed 2026-09-03.
+- **Still open, and not in the definition of done:** the remaining WP5 crates
+  — `pdfrum-page`, `pdfrum-parser`, `pdfrum-cmap`, `pdfrum-crypt`,
+  `pdfrum-filters`, `pdfrum-type1`, `pdfrum-raster-*`. The CI gate holds the
+  provenance half of the bar for them today; the caps do not.
 
 ## Performance (`docs/status/M13-perf-baseline.md`)
 
