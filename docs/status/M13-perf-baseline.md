@@ -3395,3 +3395,265 @@ is the same render measured on a busier box.
   and `coverage_of` at 1.71, the residue is spread across `draw_image`,
   `push_layer` and the sweep rather than concentrated.
 - **The ratchet is still not re-baselined.** §8's third bullet stands.
+
+## 21. `mixed_en_uicase`: 837 sweeps, and the one loop under all of them
+
+**Taken 2026-09-04, on the same box, at load 9.2–11.4 for the wall clock and
+10–15 for the in-process splits.** §19.6 left `mixed_en_uicase` as the
+corpus's largest like-for-like ratio at 3.52x and §18.3 characterised it:
+257 619 cell rows per iteration over **837 sweeps**, row walk 37.3 ms, sort
+5.2 ms, and — unlike `shading_tcpdf_058` — **no off-page geometry at all**.
+Many small sweeps. This section splits them.
+
+**The characterisation was right and the diagnosis it invited was wrong.** The
+sweeps are not small, the per-sweep fixed cost is not the problem, and the
+cost is not in the integrator. It is one loop in `pdfrum-raster-agg`, and it
+is the same loop §14, §16 and §20 each found somewhere else.
+
+### 21.1 The split, with counts
+
+`Instant` pairs inside `Rasterizer::sweep` — one around `finish`, one around
+`store.sort`, one around the row walk — with the sweeps, rows, cells and spans
+banked beside them, and a second set inside `AggDevice::coverage_of` around
+`blank_plane`, `add_path` and the sweep. `--op render --warm` at 21
+iterations, backend AGG.
+
+| per iteration | `mixed_en_uicase` | `forms_text_field` | `vector_font_size14` |
+|---|---:|---:|---:|
+| sweeps | **837.2** | 224.1 | 159.4 |
+| rows with cells | 257 619 | 7 836 | 1 383 |
+| cells | 515 538 | 17 090 | 11 853 |
+| **cells per row** | **2.0** | 2.2 | 8.6 |
+| rows per sweep | 307.7 | 35.0 | 8.7 |
+| spans emitted | 280 373 | 9 928 | 12 104 |
+| **pixels painted** | **72 398 156** | 534 892 | 16 220 |
+| `add_path` | 0.86 ms | 0.07 ms | 0.58 ms |
+| `reset` | 0.015 ms | 0.004 ms | 0.000 ms |
+| the cell sort | 5.20 ms | 0.14 ms | 0.16 ms |
+| **the row walk** | **68.3 ms** | 1.10 ms | 0.12 ms |
+
+**Three of the brief's four candidates die on this table.**
+
+- *Per-sweep fixed cost — the store reset, the sort of a tiny store.* `reset`
+  is **0.015 ms across all 837 sweeps** and the sort is 5.20, against a row
+  walk of 68.3. The fixed cost is 8% of the sweep and falling.
+- *"Row iteration over a full-height plane vs the rows with cells."*
+  `CellStore::sort` already indexes the rows and `rows()` yields only rows that
+  have cells — 257 619 of them, never a full-height walk. Dead by inspection
+  before it was measured.
+- *"Many small sweeps."* They are not small. **307.7 rows per sweep** and
+  **86 500 painted pixels per sweep**, against `vector_font_size14`'s 8.7 rows
+  and 102 pixels — which is what a document of many small sweeps actually looks
+  like, and it is the control that says so.
+
+What survives is the last one, per-cell against per-pixel, and the counts
+separate them cleanly: **2.0 cells per row** — the fewest in the table, the
+count a rectangle produces — against **258 pixels per span**. The document
+paints 72.4 million pixels into clip planes on a 626×886 page, which is
+**the whole page 130 times over per render**.
+
+### 21.2 Where those pixels go, and why it is not the fills
+
+`--sample` attributes the render by device call:
+
+| phase | ms/iter | share | calls/iter |
+|---|---:|---:|---:|
+| **clip** | **60.2** | **77.9%** | 548 |
+| `fill_path` | 10.7 | 13.8% | 133 |
+| `draw_image` | 1.6 | 2.0% | 5 208 |
+| `stroke_path` | 1.3 | 1.6% | 112 |
+| layer | 0.8 | 1.1% | 548 |
+
+Not the fills — **the clips**, at 78% of the render. And every one of the 574
+`coverage_of` calls is a `push_clip_rect`: **574 rect, 0 path.** A rect clip is
+`AntiAlias::Off`, so its plane is 255 inside and 0 outside, with no partial
+pixel anywhere; the integrator runs on it only because `push_clip_rect` and
+`push_clip` share one code path, which E2 and §12 both established
+deliberately.
+
+`intersect_rows` is called **zero times** on this document: each of the 574
+clips is the only one in force when it is pushed, so there is never an outer
+plane to fold in. The banded intersection §11 built has nothing to do here and
+costs nothing, which rules out the other half of the clip machinery.
+
+### 21.3 The defect
+
+`coverage_of`'s sweep callback wrote the plane **one column at a time**:
+
+```rust
+for col in x0..x1 {
+    let Ok(col) = usize::try_from(col) else { continue };
+    if let Some(slot) = mask.data_mut().get_mut(row as usize * width + col) {
+        *slot = alpha;
+    }
+}
+```
+
+`data_mut()` re-borrows the whole buffer on every pixel, `row * width + col` is
+re-derived from scratch on every pixel, and `get_mut` bounds-checks an index
+the row's own slice would have bounded once. A span is a run of **constant**
+alpha — that is what a span *is* — so all of it is loop-invariant.
+
+**The cost is the scaffolding and not the bytes, and the separation is
+measured rather than argued.** Writing 69.9 MB in this shape — 574 rectangles
+of about 358×340 into a 626×886 buffer — costs **1.12 ms** as a per-byte loop
+and **1.05 ms** as a row `fill`, on this box, in isolation. The sweep was
+costing **62.5 ms**. So **98% of it was the per-pixel scaffolding**, and the
+memory traffic the plane's size implies was never the issue — the same
+conclusion §20.1 reached about `recycle`'s clear, one loop over.
+
+### 21.4 The fix
+
+Take the row's slice once and fill it:
+
+```rust
+let Some(start) = (row as usize).checked_mul(width) else { return };
+let (Some(lo), Some(hi)) = (start.checked_add(x0u), start.checked_add(x1u)) else { return };
+if let Some(span) = mask.data_mut().get_mut(lo..hi) {
+    span.fill(alpha);
+}
+```
+
+Seventeen lines, one function, no new surface and no new device primitive.
+
+**This is the fourth instance of one defect and the last of them.** §14.1
+found it in the blit — per-row scaffolding re-derived for a row that varies
+none of it. §16 found it in the glyph's two per-pixel loops. §20.2 found it in
+the layer composite, at one `blend_span` call per pixel. This is the same
+shape in the clip plane's sweep, and with it the four per-pixel raster loops
+the engine had are all row-hoisted.
+
+### 21.5 The tests, and the mutations they catch
+
+The two spellings differ on exactly one input, and it is the one worth pinning:
+a span whose row overruns the buffer. The per-column loop wrote the in-range
+prefix and dropped the rest; a row `fill` over `lo..hi` writes **nothing**.
+That input is unreachable — `x1` is clamped to the width before the loop and a
+row past the height returns earlier — so the change is a no-op in fact, and
+`a_clip_planes_spans_are_filled_over_exactly_their_own_rows` is what says the
+clamps really do bound it rather than leaving it argued from two guards several
+lines apart. It runs clips that leave the target above, below, left, right, on
+every side at once, and one that is empty, against a **7×5** target chosen so
+that a row's end and the buffer's end are not the same arithmetic.
+
+| mutation | what it models | caught by |
+|---|---|---|
+| the slice's end one short | the half-open bound read as closed | the new test, `a_banded_intersection_still_carries_the_outer_clips_columns`, `a_clip_under_a_layer_unwinds_with_the_layer_between_them`, `a_clear_type_glyph_is_clipped_like_any_other_primitive` |
+| the slice's start one late | the same at the other end | the new test and four others, including `a_recycled_nested_plane_is_cleared_over_its_whole_band` |
+| the row stride taken as `width - 1` | rows overlapping in the buffer | the new test and four others |
+| the fill taking 255 rather than `alpha` | the span's coverage discarded | `an_antialiased_path_clip_keeps_partial_coverage` |
+
+The last one is why the fourth mutation matters more than it looks: a rect
+clip's alpha is always 255, so a document like this one would never notice.
+`push_clip` — the antialiased path clip, which `mixed_en_uicase` calls zero
+times and `shading_tcpdf_058` calls 38.8 times per iteration — is what does.
+
+### 21.6 The measurement
+
+In-process, `--op render --warm` at 21 iterations:
+
+| `mixed_en_uicase` | before | **after** |
+|---|---:|---:|
+| `coverage_of` | **63.44 ms** | **7.53 ms** |
+| — of which the sweep | 62.49 ms | **6.59 ms** |
+| — of which `blank_plane` | 0.11 ms | 0.11 ms |
+| — of which `add_path` | 0.79 ms | 0.79 ms |
+| whole render (probe build) | 80.3 ms | **25.6 ms** |
+
+The whole-render stage split, minimum of three runs each:
+
+| stage | before | **after** |
+|---|---:|---:|
+| content parse | 1.036 ms | 0.975 ms |
+| interpretation | 0.547 ms | 0.516 ms |
+| **raster** | **45.15 ms (95.9%)** | **22.14 ms (92.6%)** |
+| TOTAL | 47.07 ms | **23.91 ms** |
+
+### 21.7 The wall clock
+
+§19.6's discipline: `before, after, after, before`, five rounds of 21 warm
+iterations, minimum per arm, load per row. The binaries are the same tree
+stashed and unstashed.
+
+| fixture | before (ms) | **after (ms)** | speedup | load | rect clips |
+|---|---:|---:|---:|---:|---:|
+| `mixed_en_uicase` | 47.50 | **23.57** | **2.015x** | 10.5 | 574 |
+| `forms_combo_box` | 4.83 | 4.66 | 1.035x | 11.4 | 276 |
+| `shading_tcpdf_058` | 9.23 | 8.84 | 1.045x | 9.2 | 25 |
+| `forms_text_field` | 4.61 | 4.50 | 1.024x | 10.5 | 133 |
+| `shading_axial_radial` | 31.62 | 31.71 | 0.997x | 9.9 | 35 |
+| `vector_font_size14` | 8.85 | 9.18 | 0.964x | 9.6 | **0** |
+
+**The controls are read differently here than in §19 and §20, and the table
+says why.** This change reaches every clip push in the corpus, so a document
+with rect clips is not a control — it is a smaller instance of the same
+result, and three of them read 1.024x–1.045x in rank order with nothing else
+to explain it. `vector_font_size14` pushes **no clip at all** and is the
+honest control at 0.964x; `shading_axial_radial`'s 35 clips are 0.4% of
+`mixed_en_uicase`'s pixel count and it reads 0.997x. Those two bound this
+box's noise floor at this load, and the 2.015x is thirty times either.
+
+### 21.8 Like-for-like
+
+§18.1's subtraction, both terms from one `--warm --walk` run, minimum of
+three; oracle by the marginal-pass formula, minimum of five with an untimed
+warm-up, PDF copied to scratch.
+
+| | whole | − parse | − interp | amortz | oracle | **ratioA** |
+|---|---:|---:|---:|---:|---:|---:|
+| before | 47.992 | 1.061 | 0.563 | 46.368 | 13.017 | **3.56x** |
+| **after** | **23.889** | 1.015 | 0.516 | **22.358** | 13.017 | **1.72x** |
+
+The before column reproduces §18.2's 3.71x and §19.6's 3.52x to within the
+load difference, which is the check that this pairing is the same one.
+
+**§18.1's subtraction is retired but still the right method for this table,
+and the reason is worth stating rather than assuming.** `Page::prepare` landed
+between this section's first measurement and its last, and §18.1's addendum
+says the bench's warm loop now prepares outside the timed loop so that `whole`
+*is* the amortized figure. That is true of `warm_pass` — the arm `--op forms`
+A/Bs with — and **not yet of the `--op render --warm` loop these rows come
+from**, which still calls `render_one` per iteration. The table above was
+re-taken on the post-`PreparedPage` base and its parse and interpretation rows
+are still per-iteration, at 4.2% and 2.2% of the after column, which is what
+says the subtraction still has something to subtract. When the render loop
+follows, this table wants re-taking without it and the two columns should
+converge.
+
+### 21.9 Was the work inherent? No — and the number says so
+
+The brief asked for this explicitly: if the oracle does the same work at the
+same price, say so with the number and stop. It does not. The oracle renders
+this document in **13.017 ms** against our 45.48 before, and it is painting the
+same clips into the same kind of plane. The gap was ours, and 21.4 closes two
+thirds of it. `pdfium_test` has no `--time` in the profiling sense — its
+`--time` sets the system clock for deterministic dates — and hardware sampling
+is unavailable on this box (`kernel.perf_event_paranoid=4`, and no sudo), so
+the oracle side is bounded by its wall clock rather than split; the in-process
+split of *our* side was enough to name the defect without it.
+
+### 21.10 What this section does not claim
+
+- **The board is byte-identical and tier-c is unchanged.** `per_file` equal
+  across all 1757 entries with both binaries run, `totals` equal at 1539 pass /
+  218 fail; tier-c at 1628 files, 3 hard failures, 434 over budget, worst
+  66.6634%, divergent 26.84%.
+- **§18.3's characterisation of this row was accurate and its framing was
+  not.** "Many small sweeps" is the one phrase this section contradicts: at
+  307.7 rows and 86 500 painted pixels per sweep they are the largest in the
+  corpus. The counts §18.3 published are the ones that show it, so nothing was
+  hidden — they were read as being about the integrator when they were about
+  its consumer.
+- **Every clip push in the corpus is on this path**, so the four fixtures that
+  moved are not the extent of it. No corpus-wide re-take was done, and the
+  geomeans in §18.2 are stale by an unmeasured amount in this direction.
+- **AGG only.** `tiny-skia` and `vello_cpu` build their clip masks their own
+  way and neither was measured or changed. The board covers them.
+- **`mixed_en_uicase` is not closed as a defect** at 1.72x, but its remaining
+  render has no single dominant line: with `coverage_of` at 7.53 ms, what is
+  left is `fill_path` at 10.7 and a long tail.
+- **The wall-clock table is one interleaved run** taken in a window where the
+  1-minute average sat at 9.2–11.4, after two runs were declined at load 17–41
+  while sibling agents' boards were running. §3's instruction is undischarged
+  and the absolute milliseconds are still upper bounds.
+- **The ratchet is still not re-baselined.** §8's third bullet stands.
