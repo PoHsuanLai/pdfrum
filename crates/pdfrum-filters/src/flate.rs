@@ -32,14 +32,12 @@ const MAX_CHUNK: usize = 10_000_000;
 /// went wrong, or stopped making progress.
 ///
 /// `estimated_size` sizes the first allocation and nothing else; pass 0 when
-/// the decoded length is unknown. The stream dictionary's `/Length1 +
-/// /Length2 + /Length3` for an embedded font, or `pitch * height` for an
-/// image, are what PDFium passes, and only to the last filter in a chain.
+/// the decoded length is unknown, `/Length1 + /Length2 + /Length3` for an
+/// embedded font, or `pitch * height` for an image.
 ///
-/// Malformed input never fails here. A truncated or corrupt stream yields the
-/// prefix that inflated, with a diagnostic; a stream with trailing garbage
-/// yields its full content and no diagnostic, because the garbage sits past
-/// the end-of-stream marker where nothing reads it.
+/// Malformed input never fails here: a truncated or corrupt stream yields the
+/// prefix that inflated, with a diagnostic. Trailing garbage past the
+/// end-of-stream marker yields the full content and no diagnostic.
 ///
 /// ```
 /// use pdfrum_common::{Diagnostics, Limits};
