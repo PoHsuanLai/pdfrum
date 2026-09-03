@@ -9,17 +9,26 @@ not promise.
 
     python3 crates/pdfrum-cmap/tables/verify_blob.py [ORACLE_ROOT]
 
+`ORACLE_ROOT` defaults to `$PDFRUM_ORACLE_CHECKOUT`, itself defaulting to
+`<repo>/../pdfium-c++`.
+
 Exits non-zero on the first mismatch, naming the symbol. Run it whenever the
 blob is regenerated or the oracle checkout moves.
 """
 
+import os
 import re
 import struct
 import sys
 from pathlib import Path
 
-DEFAULT_ORACLE = "/mnt/data2/pdfium/pdfium-c++"
 BLOB_PATH = Path(__file__).parent / "cmaps.bin"
+# `crates/pdfrum-cmap/tables/` -> the repository root.
+REPO_ROOT = Path(__file__).resolve().parents[3]
+# One place, three inputs: an explicit argument, then `$PDFRUM_ORACLE_CHECKOUT`,
+# then the sibling directory README.md and PLAN.md §4 say the checkout lives in.
+# `scripts/env.nu` resolves the same variable with the same default.
+DEFAULT_ORACLE = os.environ.get("PDFRUM_ORACLE_CHECKOUT", REPO_ROOT.parent / "pdfium-c++")
 
 # (directory, index .inc, index symbol, CID2Unicode .inc, CID2Unicode symbol)
 REGISTRIES = [

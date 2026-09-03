@@ -4,6 +4,9 @@
 #
 # Usage: scripts/bench-oracle.nu [path-to-pdfium_test] [repeats] [rounds] [dir]
 #
+# The binary defaults to `$PDFRUM_ORACLE_BIN` (scripts/env.nu), which itself
+# defaults to `<repo>/../pdfium-c++/out/Release/pdfium_test`.
+#
 # The oracle has no criterion. What it does have is `--render-repeats=<n>`,
 # which renders the document n times inside one process, so the loop is
 # measured and the process start, the font-database build and the file read
@@ -17,6 +20,8 @@
 # The result is deliberately not a like-for-like of `open`: `pdfium_test`
 # gives no way to time loading alone, so M8.md compares render only and says
 # so.
+
+use env.nu [oracle-bin]
 
 # `%.Nf`. Nushell rounds (`math round`) but does not pad, and these columns are
 # read down rather than across, so the decimal points have to line up.
@@ -55,7 +60,7 @@ def best-of [oracle: path, file: path, repeats: int, rounds: int]: nothing -> du
 }
 
 def main [
-    oracle: path = /mnt/data2/pdfium/pdfium-c++/out/Release/pdfium_test
+    oracle?: path
     repeats: int = 40
     rounds: int = 5
     # M12 moved the benchmark set from `benches/fixtures` (seven small M8 files)
@@ -66,9 +71,11 @@ def main [
 ] {
     cd ($env.FILE_PWD | path dirname)
 
+    let oracle = ($oracle | default (oracle-bin))
     if not ($oracle | path exists) {
         print --stderr $"error: no pdfium_test at ($oracle)"
-        print --stderr "       pass its path as the first argument"
+        print --stderr "       pass its path as the first argument, or set"
+        print --stderr "       PDFRUM_ORACLE_BIN / PDFRUM_ORACLE_CHECKOUT"
         exit 1
     }
 

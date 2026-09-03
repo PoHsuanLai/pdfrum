@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Extract the two Foxit Multiple-Master PFB blobs from the C++ oracle checkout.
 
-The oracle (`/mnt/data2/pdfium/pdfium-c++`) stores the terminal-rung fallback
-fonts as C++ `std::array<uint8_t, N>` initializers. This script turns them back
-into the PFB byte streams `pdfrum-type1`'s tests consume.
+The oracle (`$PDFRUM_ORACLE_CHECKOUT`, default `<repo>/../pdfium-c++`) stores
+the terminal-rung fallback fonts as C++ `std::array<uint8_t, N>` initializers.
+This script turns them back into the PFB byte streams `pdfrum-type1`'s tests
+consume.
 
 Usage:
     uv run scripts/extract-foxit-mm.py [ORACLE_ROOT]
@@ -12,6 +13,7 @@ Writes `crates/pdfrum-type1/tests/fixtures/{FoxitSansMM,FoxitSerifMM}.pfb`.
 Both files are PDFium-BSD licensed (see the fixtures' PROVENANCE.md).
 """
 
+import os
 import pathlib
 import re
 import sys
@@ -30,10 +32,25 @@ def extract(source: bytes, symbol: str) -> bytes:
     return bytes(int(m.group(1), 16) for m in BYTE.finditer(body))
 
 
+
+def oracle_checkout(argv_index: int = 1) -> pathlib.Path:
+    """The read-only C++ PDFium checkout.
+
+    One place, three inputs, in order: an explicit argument, then
+    `$PDFRUM_ORACLE_CHECKOUT`, then `<repo>/../pdfium-c++` — the sibling
+    directory README.md and PLAN.md §4 already say it lives in. The nushell
+    side resolves the same variable with the same default in `scripts/env.nu`;
+    this is that rule spelled in Python, six lines rather than a shared module
+    the one-shot generators would have to import across directories.
+    """
+    if len(sys.argv) > argv_index:
+        return pathlib.Path(sys.argv[argv_index])
+    repo = pathlib.Path(__file__).resolve().parent.parent
+    return pathlib.Path(os.environ.get("PDFRUM_ORACLE_CHECKOUT", repo.parent / "pdfium-c++"))
+
+
 def main() -> int:
-    oracle = pathlib.Path(
-        sys.argv[1] if len(sys.argv) > 1 else "/mnt/data2/pdfium/pdfium-c++"
-    )
+    oracle = oracle_checkout()
     src = oracle / "core/fxge/fontdata/chromefontdata"
     out = pathlib.Path(__file__).resolve().parent.parent / (
         "crates/pdfrum-type1/tests/fixtures"

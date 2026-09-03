@@ -4,7 +4,7 @@
 Run from the workspace root with the oracle checkout present:
 
     python3 scripts/probe-tounicode.py /tmp/probes
-    ORACLE=/mnt/data2/pdfium/pdfium-c++
+    ORACLE="${PDFRUM_ORACLE_CHECKOUT:-$PWD/../pdfium-c++}"
     for f in /tmp/probes/*.pdf; do
       "$ORACLE/out/Release/pdfium_test" --time=1399672130 --txt \\
         --croscore-font-names \\

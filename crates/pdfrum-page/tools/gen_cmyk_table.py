@@ -7,10 +7,11 @@ script reads the oracle header and emits `src/color/cmyk_table.rs`, and
 `cmyk_table.rs`'s own test re-derives the shape so a transcription error
 cannot pass CI.
 
-Usage (from the workspace root, with the read-only oracle checked out):
+Usage (from the workspace root, with the read-only oracle checked out at
+`$PDFRUM_ORACLE_CHECKOUT`, default `<repo>/../pdfium-c++`):
 
     python3 crates/pdfrum-page/tools/gen_cmyk_table.py \
-        /mnt/data2/pdfium/pdfium-c++/core/fxge/dib/cfx_cmyk_to_srgb.cpp \
+        "${PDFRUM_ORACLE_CHECKOUT:-../pdfium-c++}/core/fxge/dib/cfx_cmyk_to_srgb.cpp" \
         crates/pdfrum-page/src/color/cmyk_table.rs
 """
 
