@@ -1,10 +1,7 @@
 //! The fidelity-critical file parser (ISO 32000 §7.5): zero-copy lexer,
 //! object syntax, xref reading (classic tables, xref streams, hybrids,
-//! prev-chains) with PDFium's full-file recovery rebuild, object streams,
-//! incremental updates, encryption hookup, and the lazy object store behind
-//! `Resolve`. Broken-file tolerance is this crate's superpower.
-//!
-//! # Reading a document
+//! prev-chains) with full-file recovery rebuild, object streams, incremental
+//! updates, encryption hookup, and the lazy object store behind `Resolve`.
 //!
 //! ```
 //! use std::sync::Arc;
@@ -16,24 +13,22 @@
 //! # Ok::<(), pdfrum_parser::LoadError>(())
 //! ```
 //!
-//! # Layers
-//!
-//! Each module below is a stage that can be tested on values alone:
-//!
-//! - `lexer` turns bytes into tokens and owns the byte classifier every
-//!   other stage asks questions of.
-//! - `syntax` turns tokens into [`Object`](pdfrum_object::Object)s, which
-//!   is where stream `/Length` repair lives.
-//! - `xref` finds and reads cross-reference information by every route a
-//!   file can offer, and rebuilds it from scratch when none of them work.
-//! - `doc` ties those together into a [`Document`] whose object store
-//!   fetches lazily, decrypts, and guards against reference cycles.
-//!
-//! # Damage is normal
-//!
-//! Nothing here treats a malformed file as an error if PDFium would open it.
-//! A repair is recorded in [`Document::diags`] and the read continues; `Err`
-//! is reserved for a document that cannot be opened at all.
+//! Damage is normal. A malformed file that can be read is read: the repair is
+//! recorded in [`Document::diags`] and the parse continues. [`LoadError`] is
+//! reserved for a document that cannot be opened at all.
+
+// Broken-file tolerance is this crate's superpower, and the layering is what
+// makes it testable. Each module is a stage that can be exercised on values
+// alone:
+//
+// - `lexer` turns bytes into tokens and owns the byte classifier every other
+//   stage asks questions of.
+// - `syntax` turns tokens into `Object`s, which is where stream `/Length`
+//   repair lives.
+// - `xref` finds and reads cross-reference information by every route a file
+//   can offer, and rebuilds it from scratch when none of them work.
+// - `doc` ties those together into a `Document` whose object store fetches
+//   lazily, decrypts, and guards against reference cycles.
 
 #![forbid(unsafe_code)]
 #![warn(clippy::indexing_slicing)]

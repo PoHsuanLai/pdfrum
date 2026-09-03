@@ -741,21 +741,14 @@ impl Document {
         self.header_offset
     }
 
-    /// What the object store has repaired **since** the file opened.
+    /// What the object store has repaired since the file opened, as a running
+    /// total — read it *after* the work, not at load.
     ///
-    /// [`Document::diags`] is a snapshot taken at load: it holds what
-    /// recovering the cross-reference, the trailer and the catalog needed, and
-    /// it never changes afterwards. But the store is lazy — every object is
-    /// parsed on the first request for it — so a stream whose `/Length` was
-    /// wrong, or an object the table pointed at the wrong offset, is
-    /// discovered whenever a caller first reaches that object, which is long
-    /// after `load` returned.
-    ///
-    /// Those later repairs accumulate in the store rather than vanishing, and
-    /// this returns a **snapshot** of them. It does not drain: ask twice
-    /// between two fetches and you get the same answer twice. The count grows
-    /// as the document is used, so it is a running total rather than a fixed
-    /// property of the file.
+    /// [`Document::diags`] is the load-time snapshot and never changes. This
+    /// one grows, because the store is lazy: a wrong `/Length` or a bad table
+    /// offset is only discovered when a caller first reaches that object. It
+    /// clones rather than draining, so asking twice between two fetches gives
+    /// the same answer twice.
     ///
     /// ```
     /// # use std::sync::Arc;

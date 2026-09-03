@@ -571,17 +571,16 @@ impl<'a> Lexer<'a> {
     /// Search backwards from the cursor for `word` as a whole word, within
     /// `window` bytes, and leave the cursor on its first byte.
     ///
-    /// "Whole word" here means the neighbouring bytes are not regular or
-    /// numeric; a delimiter beside the word is an acceptable boundary. This
-    /// is how `startxref` is found in a file whose tail is otherwise junk.
-    ///
-    /// The cursor's own byte is **inside** the search: a match may end at
-    /// `pos()` rather than before it. That one byte matters — the caller
-    /// starts nine bytes from the end of the file, so the position only
-    /// reachable this way is a `startxref` followed by exactly eight bytes of
-    /// offset and nothing else. A file truncated with no trailing end-of-line
-    /// or `%%EOF` has precisely that shape, and it is the shape this search
-    /// exists to rescue.
+    /// "Whole word" means the neighbouring bytes are not regular or numeric; a
+    /// delimiter beside the word is an acceptable boundary. The cursor's own
+    /// byte is inside the search, so a match may end at `pos()` rather than
+    /// before it. This is how `startxref` is found in a file whose tail is
+    /// otherwise junk.
+    // That last byte matters: the caller starts nine bytes from the end of the
+    // file, so the position only reachable this way is a `startxref` followed
+    // by exactly eight bytes of offset and nothing else. A file truncated with
+    // no trailing end-of-line or `%%EOF` has precisely that shape, and it is
+    // the shape this search exists to rescue.
     pub fn search_back(&mut self, word: &[u8], window: usize) -> bool {
         if word.is_empty() || self.pos + 1 < word.len() {
             return false;
