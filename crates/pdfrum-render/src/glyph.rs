@@ -158,6 +158,7 @@ pub(crate) struct GlyphBitmap {
 impl GlyphBitmap {
     /// The coverage at `(x, y)` in the bitmap's own coordinates, or zero
     /// outside it.
+    #[cfg(test)]
     #[must_use]
     pub fn at(&self, x: i32, y: i32) -> u8 {
         if x < 0 || y < 0 || x >= self.width || y >= self.height {
@@ -167,12 +168,6 @@ impl GlyphBitmap {
             return 0;
         };
         self.coverage.get(i).copied().unwrap_or(0)
-    }
-
-    /// Whether the bitmap has no pixels at all, which a blank glyph produces.
-    #[must_use]
-    pub fn is_empty(&self) -> bool {
-        self.width <= 0 || self.height <= 0
     }
 }
 
@@ -411,11 +406,34 @@ impl LcdBitmap {
     /// *over the same divisor* — `(src[0] + src[1]) / 3` and `src[0] / 3` —
     /// which darkens it rather than brightening it, and is reproduced rather
     /// than corrected.
+    #[cfg(test)]
     #[must_use]
     pub fn to_gray(&self, phase: SubpixelPhase) -> GlyphBitmap {
+        let mut coverage = Vec::new();
+        self.gray_coverage_into(phase, &mut coverage);
+        GlyphBitmap {
+            left: self.left,
+            top: self.top,
+            width: self.width,
+            height: self.height,
+            coverage,
+        }
+    }
+
+    /// [`Self::to_gray`]'s coverage bytes, into a buffer the caller owns.
+    ///
+    /// The same arithmetic and the same bytes — this is where the body lives
+    /// and [`Self::to_gray`] is this with a fresh `Vec` — split out so that the
+    /// glyph blit, which runs once per glyph *occurrence* rather than once per
+    /// distinct glyph, reuses one buffer instead of allocating per occurrence.
+    /// `out` is cleared and refilled, so nothing carries over from the previous
+    /// glyph.
+    pub(crate) fn gray_coverage_into(&self, phase: SubpixelPhase, out: &mut Vec<u8>) {
         let shift = i32::try_from(phase.shift()).unwrap_or(0);
         let sub_width = self.width * 3;
-        let mut coverage = vec![0u8; self.subpixels.len() / 3];
+        out.clear();
+        out.resize(self.subpixels.len() / 3, 0);
+        let coverage = out;
         for y in 0..self.height {
             let row = y * sub_width;
             for x in 0..self.width {
@@ -445,13 +463,6 @@ impl LcdBitmap {
                     *cell = gamma;
                 }
             }
-        }
-        GlyphBitmap {
-            left: self.left,
-            top: self.top,
-            width: self.width,
-            height: self.height,
-            coverage,
         }
     }
 
@@ -739,44 +750,110 @@ pub(crate) fn average_to_gray(bitmap: &SubpixelBitmap) -> Option<GlyphBitmap> {
 /// transparent — both of which draw nothing.
 #[must_use]
 pub(crate) fn recolour(bitmap: &GlyphBitmap, colour: peniko::Color) -> Option<crate::Pixmap> {
-    if bitmap.is_empty() {
-        return None;
+    let mut pixmap = crate::Pixmap::new(0, 0);
+    let by_ref = GlyphBitmapRef {
+        width: bitmap.width,
+        height: bitmap.height,
+        coverage: &bitmap.coverage,
+    };
+    recolour_ref_into(by_ref, colour, &mut pixmap).then_some(pixmap)
+}
+
+/// One glyph occurrence, from the cached LCD bitmap to a pixmap ready to blit.
+///
+/// The two halves the blit runs per occurrence — [`LcdBitmap::to_gray`] and
+/// [`recolour`] — writing into `scratch`'s buffers instead of allocating a
+/// `Vec` and a `Pixmap` each. Both are rewritten in full, so nothing of the
+/// previous glyph survives into this one; what is reused is the memory alone.
+///
+/// The arithmetic is the two functions' own, unchanged: the same gamma table
+/// over the same window shift, the same truncating `CalcAlpha` product, the
+/// same premultiplied bytes. `false` means the glyph draws nothing, which is
+/// the `None` the two spellings return between them.
+pub(crate) fn recolour_glyph_into(
+    lcd: &LcdBitmap,
+    phase: SubpixelPhase,
+    colour: peniko::Color,
+    scratch: &mut crate::ctx::GlyphBlitScratch,
+) -> bool {
+    lcd.gray_coverage_into(phase, &mut scratch.coverage);
+    let bitmap = GlyphBitmapRef {
+        width: lcd.width,
+        height: lcd.height,
+        coverage: &scratch.coverage,
+    };
+    recolour_ref_into(bitmap, colour, &mut scratch.pixels)
+}
+
+/// A [`GlyphBitmap`]'s pixels without owning them.
+///
+/// The blit's coverage lives in a session-owned buffer, so the recolour reads
+/// it by reference; `left` and `top` are absent because only the caller places
+/// the bitmap and this half never looks at them.
+#[derive(Clone, Copy)]
+struct GlyphBitmapRef<'a> {
+    width: i32,
+    height: i32,
+    coverage: &'a [u8],
+}
+
+/// [`recolour`] into a pixmap the caller owns, reporting whether it drew.
+///
+/// The same arithmetic and the same bytes — this is where the body lives and
+/// [`recolour`] is this with a fresh pixmap — split out for the reason
+/// [`LcdBitmap::gray_coverage_into`] is: the blit runs once per glyph
+/// *occurrence*, and a page of ten thousand glyphs otherwise allocates a
+/// pixmap ten thousand times. `out` is reshaped to this glyph and **every one
+/// of its bytes is written**, which is what makes reusing it sound: the
+/// coverage-zero and alpha-zero pixels, which the allocating spelling got for
+/// free from a freshly zeroed buffer, are written as transparent here rather
+/// than skipped. Skipping them blits the previous glyph's ink through this
+/// one's gaps, and
+/// `a_reused_scratch_carries_none_of_the_glyph_before_it` fails when they are.
+///
+/// `false` means nothing was drawn — an empty bitmap or a fully transparent
+/// colour — and leaves `out` in an unspecified state, exactly as the `None`
+/// it replaces gave the caller no pixmap at all.
+fn recolour_ref_into(
+    bitmap: GlyphBitmapRef<'_>,
+    colour: peniko::Color,
+    out: &mut crate::Pixmap,
+) -> bool {
+    if bitmap.width <= 0 || bitmap.height <= 0 {
+        return false;
     }
     let [r, g, b, alpha] = colour.to_rgba8().to_u8_array();
     if alpha == 0 {
-        return None;
+        return false;
     }
-    let width = u32::try_from(bitmap.width).ok()?;
-    let height = u32::try_from(bitmap.height).ok()?;
-    let mut pixmap = crate::Pixmap::new(width, height);
-    for y in 0..bitmap.height {
-        for x in 0..bitmap.width {
-            let coverage = bitmap.at(x, y);
-            if coverage == 0 {
-                continue;
-            }
+    let (Ok(width), Ok(height)) = (u32::try_from(bitmap.width), u32::try_from(bitmap.height))
+    else {
+        return false;
+    };
+    out.reshape_keeping_pixels(width, height);
+    let stride = width as usize;
+    let data = out.data_mut();
+    for (y, row) in data.chunks_exact_mut(stride * 4).enumerate() {
+        for (x, dest) in row.chunks_exact_mut(4).enumerate() {
+            // The `at` the old spelling called: the buffer is exactly
+            // `height * width` bytes, so the index is in range by
+            // construction and the bounds check it did is the `get`'s.
+            let coverage = bitmap.coverage.get(y * stride + x).copied().unwrap_or(0);
             // `CalcAlpha(TextGammaAdjust(src), bgra.alpha)`, whose product is
             // the truncating one the whole engine uses.
             let a = crate::pixmap::mul255(coverage, alpha);
-            if a == 0 {
-                continue;
-            }
-            let (Ok(px), Ok(py)) = (u32::try_from(x), u32::try_from(y)) else {
-                continue;
-            };
-            pixmap.set_pixel(
-                px,
-                py,
-                [
-                    crate::pixmap::mul255(r, a),
-                    crate::pixmap::mul255(g, a),
-                    crate::pixmap::mul255(b, a),
-                    a,
-                ],
-            );
+            // Zero coverage and zero alpha both wrote nothing before, into a
+            // buffer that was already zero; writing the zero explicitly is the
+            // same pixel and is what makes a reused buffer sound.
+            dest.copy_from_slice(&[
+                crate::pixmap::mul255(r, a),
+                crate::pixmap::mul255(g, a),
+                crate::pixmap::mul255(b, a),
+                a,
+            ]);
         }
     }
-    Some(pixmap)
+    true
 }
 
 #[cfg(test)]
@@ -784,6 +861,19 @@ mod tests {
     use super::*;
 
     /// A unit square filled at the origin, as a device-space outline.
+    /// Two boxes with a clear column between them, so the middle columns of
+    /// the glyph's own box have genuinely zero coverage.
+    fn split_box(w: f64, h: f64) -> BezPath {
+        let mut p = square(w, h);
+        let x = w + 3.0;
+        p.move_to((x, 0.0));
+        p.line_to((x + w, 0.0));
+        p.line_to((x + w, h));
+        p.line_to((x, h));
+        p.close_path();
+        p
+    }
+
     fn square(w: f64, h: f64) -> BezPath {
         let mut p = BezPath::new();
         p.move_to((0.0, 0.0));
@@ -1018,6 +1108,89 @@ mod tests {
         assert_eq!((gray.width, gray.height), (sub.width, sub.height));
         assert_eq!((gray.left, gray.top), (sub.left, sub.top));
         assert_eq!(gray.coverage.len(), sub.channels.len() / 3);
+    }
+
+    /// A big glyph then a small one, through one reused scratch.
+    ///
+    /// This is the way the reuse could be wrong: the buffers are sized to the
+    /// *previous* glyph, so a smaller one that only resized the pixmap without
+    /// rewriting every byte would blit the tail of the glyph before it. Both
+    /// spellings must produce exactly what the allocating one does.
+    #[test]
+    fn a_reused_scratch_carries_none_of_the_glyph_before_it() {
+        let mut scratch = crate::ctx::GlyphBlitScratch::default();
+        let colour = peniko::Color::from_rgba8(200, 100, 50, 255);
+        let big = render_lcd(&square(20.0, 9.0)).expect("rasterizes");
+        // Two boxes with a gap, not one filled box: the gap's pixels have
+        // zero coverage, so a spelling that skipped writing them would leave
+        // the big glyph's ink showing through exactly there. A filled square
+        // covers every pixel of its own box and cannot detect the leak.
+        let small = render_lcd(&split_box(3.0, 5.0)).expect("rasterizes");
+
+        // Prime the scratch with the large glyph, then draw the small one.
+        assert!(recolour_glyph_into(
+            &big,
+            SubpixelPhase::Zero,
+            colour,
+            &mut scratch
+        ));
+        assert!(recolour_glyph_into(
+            &small,
+            SubpixelPhase::Zero,
+            colour,
+            &mut scratch
+        ));
+
+        // The allocating spelling, which starts from a zeroed buffer.
+        let fresh = recolour(&small.to_gray(SubpixelPhase::Zero), colour).expect("draws");
+        assert_eq!(
+            (scratch.pixels.width(), scratch.pixels.height()),
+            (fresh.width(), fresh.height()),
+            "the reused pixmap must be resized to this glyph"
+        );
+        assert_eq!(
+            scratch.pixels.data(),
+            fresh.data(),
+            "a reused buffer must not leak the previous glyph's pixels"
+        );
+    }
+
+    /// The fused chain equals the two functions it replaces, at every phase.
+    ///
+    /// `recolour_glyph_into` is `to_gray` followed by `recolour`; the split
+    /// exists to reuse memory and must not have changed a byte. The phase is
+    /// swept because it is the one input that reaches both halves.
+    #[test]
+    fn the_fused_glyph_blit_is_the_two_functions_it_replaces() {
+        let mut scratch = crate::ctx::GlyphBlitScratch::default();
+        let colour = peniko::Color::from_rgba8(17, 200, 99, 255);
+        let lcd = render_lcd(&square(5.0, 3.0)).expect("rasterizes");
+        for phase in [SubpixelPhase::Zero, SubpixelPhase::One, SubpixelPhase::Two] {
+            let expected = recolour(&lcd.to_gray(phase), colour).expect("draws");
+            assert!(recolour_glyph_into(&lcd, phase, colour, &mut scratch));
+            assert_eq!(
+                scratch.pixels.data(),
+                expected.data(),
+                "the fused blit must be byte-identical at phase {phase:?}"
+            );
+        }
+    }
+
+    /// A fully transparent fill draws nothing and says so.
+    ///
+    /// The `false` arm stands in for the `None` the allocating spelling
+    /// returned, and a caller that blitted anyway would paint the previous
+    /// glyph still sitting in the scratch.
+    #[test]
+    fn a_transparent_colour_draws_no_glyph() {
+        let mut scratch = crate::ctx::GlyphBlitScratch::default();
+        let lcd = render_lcd(&square(4.0, 2.0)).expect("rasterizes");
+        assert!(!recolour_glyph_into(
+            &lcd,
+            SubpixelPhase::Zero,
+            peniko::Color::from_rgba8(1, 2, 3, 0),
+            &mut scratch
+        ));
     }
 
     #[test]

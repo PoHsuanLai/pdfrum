@@ -103,6 +103,34 @@ impl Pixmap {
         Some([*px.first()?, *px.get(1)?, *px.get(2)?, *px.get(3)?])
     }
 
+    /// Reshape this pixmap to `width` x `height`, keeping the allocation and
+    /// **whatever bytes were already in it**.
+    ///
+    /// Deliberately not named for a cleared buffer, because it does not
+    /// produce one: the pixels are left as they were, and only a grow past
+    /// the old length appends zeroes. The one caller is the per-glyph blit,
+    /// which writes all four bytes of every pixel of the new extent before
+    /// anything reads them, so zeroing here would be a second pass over
+    /// bytes that are about to be overwritten. **A caller that does not write
+    /// every pixel would blit the previous glyph's ink**; `Pixmap::new` is
+    /// the spelling that starts transparent.
+    pub(crate) fn reshape_keeping_pixels(&mut self, width: u32, height: u32) {
+        let len = (width as usize)
+            .saturating_mul(height as usize)
+            .saturating_mul(4);
+        self.width = width;
+        self.height = height;
+        // Grow without zeroing what is already there: the caller writes every
+        // byte of the new extent before reading it, so re-zeroing would be a
+        // second pass over the same pixels. `resize` only fills the bytes
+        // beyond the current length, and `truncate` keeps the capacity.
+        if len <= self.data.len() {
+            self.data.truncate(len);
+        } else {
+            self.data.resize(len, 0);
+        }
+    }
+
     /// Overwrite one pixel with premultiplied RGBA bytes. Out of range is a
     /// no-op — the shading rasterizers clip by construction and a stray write
     /// must not panic on a crafted file.
