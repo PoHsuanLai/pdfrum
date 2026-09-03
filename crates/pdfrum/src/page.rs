@@ -404,6 +404,7 @@ impl<'a> Page<'a> {
         (out, ends)
     }
 
+    #[cfg(feature = "edit")]
     /// Interpret the content stream, recording which `/Contents` element each
     /// object came from.
     ///

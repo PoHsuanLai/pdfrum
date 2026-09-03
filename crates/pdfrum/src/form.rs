@@ -168,14 +168,17 @@ impl<'a> Form<'a> {
         self.values.iter()
     }
 
+    #[cfg(feature = "edit")]
     pub(crate) fn values(&self) -> &FieldValues {
         &self.values
     }
 
+    #[cfg(feature = "edit")]
     pub(crate) fn inner(&self) -> &form::Form {
         &self.inner
     }
 
+    #[cfg(feature = "edit")]
     pub(crate) fn document(&self) -> &'a Document {
         self.doc
     }

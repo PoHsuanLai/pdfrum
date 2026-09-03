@@ -7,6 +7,7 @@ use pdfrum_common::{Diagnostics, Limits, PageIndex, PdfVersion};
 use pdfrum_crypt::Permissions;
 use pdfrum_object::{Dict, Name, Object, Resolve};
 
+#[cfg(feature = "forms")]
 use crate::form::Form;
 use crate::{Outline, Page, Result};
 
@@ -245,6 +246,7 @@ impl Document {
         xmp
     }
 
+    #[cfg(feature = "forms")]
     /// The document's interactive form, if it has one.
     ///
     /// ```
