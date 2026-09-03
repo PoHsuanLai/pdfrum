@@ -116,11 +116,13 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
 
 ## Unwired oracle ports (`docs/status/unwired-oracle-ports.md`)
 
-- 16-bpc high-byte arm: ours rounds, the oracle truncates — needs a ruling
-  (correct over oracle says rounding; then the port arm is deleted).
+- ~~16-bpc high-byte arm~~ — **decided 2026-09-03**: both readers scale-and-
+  round (pdf.js exactly, PDFium's `>> 8` within one count), our shipping path
+  truncated and was a count low against both. Path fixed, arm deleted.
 - `palette_index` for packed multi-component images: an optimisation if
   pixel-identical — verify and delete, or wire.
-- DCT reduced-resolution trio: blocked on `zune-jpeg` (`docs/upstream/zune/`).
+- DCT reduced-resolution trio: still blocked on `zune-jpeg` — re-checked
+  2026-09-03 against 0.5.16-rc1, `DecoderOptions` has no `scale_denom`.
 
 ## Policy-kept, decision owed
 
