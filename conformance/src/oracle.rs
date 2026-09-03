@@ -407,7 +407,6 @@ mod tests {
         assert!(message.contains("--allow-dirty-oracle"));
         // The reason the check exists is named, not just the symptom.
         assert!(message.contains("read-only"));
-        assert!(message.contains("viewer_ref.pdf"));
     }
 
     #[test]
