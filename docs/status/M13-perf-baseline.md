@@ -1358,3 +1358,213 @@ run, as do all 3926 tests.
   engine's rather than this crate's.
 - **The ratchet is still not re-baselined.** §8's third bullet stands, and
   `benches/baseline.json` is untouched.
+
+---
+
+## 13. The glyph rows: where their time is, and the one thing it is not
+
+**Taken 2026-09-03, on the same box, at load 29–86.** `docs/status/queue.md`
+carried `vector_font_size14` at **3.70x** and `vector_font_feature` at
+**3.42x** as "glyph-heavy pages, a different shape from the forms residue".
+This section is that split. The shape is indeed different, and the headline is
+a negative result:
+
+**The glyph path's per-occurrence allocations are not the cost. The
+rasterizer's per-row blit scaffolding is.**
+
+### 13.1 What the existing instruments could and could not see
+
+Both fixtures are almost pure text: 8745 glyph occurrences per render on
+`size14`, 8240 on `font_feature`, against a few hundred distinct glyphs.
+
+`--walk` puts its `glyphs` phase at **1.43 ms** and **1.50 ms** — 24% and 20%
+of ENGINE — and 74–77% of ENGINE in `INTERPRETATION`, the bucket defined as
+what is left. That is the same signature §11.2 read: a cost sitting *below*
+the walk. `Phase::Glyphs` times the placement, and stops at the device call.
+
+`--sample` reports the two documents at **10.8 ms** and **18.4 ms** against a
+warm loop's 65 and 120, because it hoists the page graph; §11.2 and §12.1
+record the same trap. What it does show is `draw_image` at **8775 and 8279
+calls per iteration** — one per glyph occurrence — costing **5.1 ms** and
+**5.3 ms**, the largest single line in the RASTER half of either document.
+Those calls are not images. They are glyphs: the gray text path ends in
+`RenderDevice::draw_image`, deliberately (see §13.4).
+
+So the naming was done as §11 and §12 did it, with direct `Instant` pairs
+placed one level below the walk — around the bitmap cache, the two transforms
+the blit runs per occurrence, and the device call.
+
+### 13.2 What that named
+
+Per warm render, AGG, `--op render --warm`, totals over 21 iterations:
+
+| stage | `vector_font_size14` | `vector_font_feature` | `forms_text_field` |
+|---|---:|---:|---:|
+| `BitmapCache::get_or_insert` | 16.5 ms / 183 813 | 15.4 ms / 173 208 | — |
+| &nbsp;&nbsp;of which a miss's outline + `render_lcd` | **0.0 ms / 0** | **0.0 ms / 0** | — |
+| `LcdBitmap::to_gray` | 34.4 ms | 33.6 ms | 3.0 ms |
+| `recolour` | 34.9 ms | 34.7 ms | 3.4 ms |
+| **`AggDevice` blit (`draw_image`)** | **105.1 ms** | **108.0 ms** | **10.6 ms** |
+| glyph pixels touched | 8 890 014 | 9 015 804 | 894 222 |
+
+**The glyph caches are already doing their job and are not the question.**
+`get_or_insert` is called 183 813 times and rasterizes **zero** glyphs: every
+occurrence is a hit, the outline is never re-extracted, `hinted_glyph_path`
+never runs, `render_lcd` never runs. The brief asked whether the key is too
+fine — whether a subpixel offset or a never-repeating matrix defeats it. It is
+not: `BitmapKey` quantises the matrix to `(int)(m · 10000)` and deliberately
+omits the phase, and on these two documents that key hits 100% of the time.
+`pdfrum_font::GlyphCache` is likewise never re-entered. **Nothing in
+`docs/status/M12*.md`'s key design needed changing, and nothing was changed.**
+
+Dividing by the pixel column gives the shape of what is left:
+
+| stage | ns per glyph pixel |
+|---|---:|
+| `to_gray` | 3.9 |
+| `recolour` | 3.9 |
+| **the blit** | **11.8** |
+
+Eleven point eight nanoseconds to move one byte of coverage onto one pixel is
+roughly forty cycles, and that is the finding.
+
+### 13.3 The two costs, and which one is worth having
+
+**The blit, ~650 ns per glyph.** `AggDevice::draw_image` takes its whole-pixel
+fast path (`whole_pixel_offset` succeeds — a snapped glyph origin is integral
+by construction), so this is `blit`, not the sampler. `blit` calls
+`Target::blend_span_with` **once per glyph row** — seven calls for a seven-row
+glyph — and each call recomputes `span_range`, calls `clip_span`, re-derives
+the destination row's byte range, and then, per pixel, runs a closure that
+converts the column back to a source index and returns `img.pixel(..)` as a
+bounds-checked `Option<[u8; 4]>`. On a 48-pixel glyph the scaffolding is a
+large fraction of the work, and it is paid 8745 times per render.
+
+**The two allocations, ~19 ns per glyph.** `to_gray` allocated a coverage
+`Vec` and `recolour` a premultiplied `Pixmap`, per occurrence.
+
+Only the second was fixed here, and **the honest report is that it was the
+smaller half by an order of magnitude** — see §13.5. The first is named,
+measured, and left, because it is a change to `pdfrum-raster-agg`'s blit
+scaffolding rather than to the glyph path, and it is the next thing to take.
+
+### 13.4 The fix, and the invariants it preserves
+
+`LcdBitmap::gray_coverage_into` and `recolour_ref_into` write into buffers
+`RenderCaches` owns, through one `recolour_glyph_into` that runs both. The
+buffers are `GlyphBlitScratch` on `RenderCaches`, beside `zero_area` and
+`placed_glyphs`, whose comments already state the pattern: *"Not a cache —
+nothing is remembered between paths… What is reused is the memory."* That is
+exactly this, one level finer.
+
+**Three invariants the surrounding comments state were preserved deliberately:**
+
+- **No seventh device primitive.** `recolour`'s comment argues that
+  premultiplying the glyph and compositing source-over "is the same arithmetic
+  … expressed in the vocabulary `draw_image` already speaks, which is what lets
+  the glyph path use the existing device seam rather than growing a seventh
+  primitive that every backend would have to reimplement". A `draw_glyph_gray`
+  would have been the obvious way to delete the blit's overhead; it is not
+  taken, and the blit fix in §13.6 must not take it either.
+- **`BitmapKey` is untouched**, including the absent subpixel phase, whose
+  comment explains that keying on it "would store the same rasterization three
+  times". §13.2 shows the key is already at a 100% hit rate, so there was
+  nothing to gain and a documented invariant to lose.
+- **The arithmetic is byte-for-byte the two functions'.** The same gamma table
+  over the same window shift, the same truncating `CalcAlpha` product.
+
+**The one thing reuse changes, and the test that pins it.** The allocating
+spelling could *skip* a zero-coverage pixel, because its buffer arrived zeroed;
+a reused buffer cannot, and must write the transparent pixel explicitly. So
+`Pixmap::reshape_keeping_pixels` is named for what it does rather than for a
+transparent result — assuming the latter is precisely the bug —
+and `a_reused_scratch_carries_none_of_the_glyph_before_it` blits a wide glyph
+and then a narrower one *with a genuine gap in it*, so the gap's pixels are
+ones the second sweep never covers. It fails under either mutation that
+matters: dropping the explicit zero write, and clearing on reshape. Both were
+verified by planting them. An earlier version of the test used a filled square
+and caught neither, because a filled square has no uncovered pixel — recorded
+because the failure mode is easy to reproduce.
+
+### 13.5 What it is worth, measured where the wall clock cannot reach
+
+**In one process, interleaved, minimum of forty rounds**, calling the two
+spellings back to back over a spread of glyph sizes:
+
+| spelling | per glyph |
+|---|---:|
+| `to_gray` + `recolour`, allocating | **210.4 ns** |
+| `recolour_glyph_into`, reusing | **191.8 ns** |
+| | **1.097x** |
+
+18.6 ns per glyph occurrence. On the corpus:
+
+| fixture | glyphs | saved | of the render |
+|---|---:|---:|---:|
+| `vector_font_size14` | 8745 | 0.163 ms | **0.25%** |
+| `vector_font_feature` | 8240 | 0.153 ms | **0.13%** |
+| `forms_text_field` | 836 | 0.016 ms | **0.24%** |
+
+**The wall clock cannot resolve a quarter of a percent on this box, and the
+table below is included to show that rather than to hide it.** Interleaved
+A/B, thirty alternating bursts of five iterations, each arm's minimum:
+
+| fixture | glyphs/render | before (ms) | after (ms) | reading | load |
+|---|---:|---:|---:|---|---:|
+| `vector_font_size14` | 8745 | 57.45 | 60.28 | 0.953x | 72–86 |
+| `vector_font_feature` | 8240 | 111.87 | 107.98 | 1.036x | 50–72 |
+| `forms_text_field` | 836 | 5.53 | 5.37 | 1.030x | 47–48 |
+| `image_bug_583804` | **0** | 210.81 | 199.82 | **1.055x** | 38–48 |
+| `shading_axial_radial` | **0** | 33.41 | 33.47 | 0.998x | 34–39 |
+
+**`image_bug_583804` draws zero glyphs — the changed code does not execute on
+it — and it reads 1.055x, the largest "improvement" in the table.** That is
+the calibration §12.8's zero-clip controls provided for §12, and it says the
+same thing: every reading here is machine. An earlier run of the same two
+vector fixtures read 1.074x and 1.021x at a lower load; the sign flips with the
+load, on one pair of binaries. **No wall-clock speedup is claimed, and none
+should be quoted from this table.** The claim is §13.5's first table, which is
+a decomposition of one process's own work.
+
+### 13.6 What to attack next, and what it is worth
+
+**`Target::blend_span_with`'s per-row scaffolding on the glyph blit.**
+§13.2 measures it at 5.0 ms of `vector_font_size14`'s render and 5.1 ms of
+`vector_font_feature`'s — **thirty times** what §13.5 removed. The shape is
+the one §11 and §12 both found in the clip path: a general-purpose device call
+paying general-purpose costs on a case that is small, hot, and specific. A
+glyph blit is a whole-pixel translation of an opaque-alpha mask onto a known
+row range, and every one of `span_range`, `clip_span`, the destination
+re-slicing and the `Option`-returning sampler closure is re-derived per row.
+
+It belongs to `pdfrum-raster-agg`, not to the glyph path, and it must not be
+bought by adding a device primitive — §13.4's first invariant. `blit` has
+exactly one caller, so the change is contained; note that it serves **all**
+whole-pixel image blits, so a defect there reaches images as well as glyphs
+and the tier-c gate matters for it.
+
+**Do not go back to the caches.** §13.2 measures a 100% hit rate on both, with
+zero outline extractions and zero rasterizations across 183 813 occurrences.
+The brief's hypotheses — a key carrying a subpixel offset, a face re-parsed per
+glyph, a `BezPath` rebuilt per glyph — are all measured false on these
+documents, and `takes_bitmap_path` is not the question either: both fixtures
+sit firmly on the bitmap side of the threshold and never reach the outline
+fallback.
+
+### 13.7 What this does not claim
+
+- **No speedup.** §13.5 is a 0.13–0.25% in-process improvement, below this
+  box's noise floor, and §13.5's own wall-clock table has a zero-glyph control
+  reading larger than either real row. The change is worth having because it
+  removes two allocations per glyph occurrence and costs nothing, not because
+  it moves a corpus figure.
+- **The rows are not explained away.** `vector_font_size14` at 3.70x and
+  `vector_font_feature` at 3.42x are *not* accounted for by this section, and
+  this section does not close them. §13.2 says where their time is; §13.6 says
+  what to take next. The 3.70x stands until that lands.
+- **Not an idle box, for the sixth time.** Load 29–86 throughout. §3's
+  instruction is still undischarged.
+- **`tiny-skia` and `vello_cpu` are unchanged.** The buffers live in
+  `pdfrum-render`, so all three backends get the reuse, but neither of the
+  other two was measured here.
+- **The ratchet is still not re-baselined.** §8's third bullet stands.

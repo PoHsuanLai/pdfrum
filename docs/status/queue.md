@@ -202,8 +202,24 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
   was looked for.
 - An idle re-take of the §10.5 table. The box has never been idle (load
   30–66 through every run); the ratios are upper bounds until then.
-- `vector_font_size14` 3.70x and `vector_font_feature` 3.42x — glyph-heavy
-  pages, a different shape from the forms residue.
+- **`vector_font_size14` 3.70x and `vector_font_feature` 3.42x are split but
+  not closed** (§13). The caches are not the cost: `BitmapCache` hits 100% of
+  183 813 occurrences with zero outline extractions, and `BitmapKey` needed no
+  change. The cost is the **AGG blit's per-row scaffolding** —
+  `Target::blend_span_with` once per glyph row, each call re-deriving
+  `span_range`, `clip_span` and the destination slice before an
+  `Option`-returning closure per pixel — **11.8 ns per glyph pixel, 5.0-5.1 ms
+  of each render**. `blit` has one caller but serves every whole-pixel image
+  blit, so tier-c gates it, and it must not be bought with a seventh device
+  primitive (§13.4). **This is the next thing to take**; the two rows stand at
+  3.70x/3.42x until it lands.
+- ~~the glyph blit's per-occurrence allocations~~ — landed 3e2efe6
+  (2026-09-03): `to_gray` and `recolour` now fill `RenderCaches`-owned
+  buffers. Worth **18.6 ns of a 210 ns per-glyph chain, 0.13-0.25% of a
+  render** — measured in process, because the wall clock cannot resolve it
+  here: a zero-glyph control read 1.055x in the same table (§13.5). Board
+  byte-identical, tier-c unchanged. Kept for the allocations it removes, not
+  for a figure it moves.
 - `shading_type4_5` 4.38x, `image_en_fqa` 2.03x, `image_ccitt_3bigpreview`
   1.66x, `shading_tcpdf_058` 1.88x.
 
