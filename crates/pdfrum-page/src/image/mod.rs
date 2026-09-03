@@ -1012,12 +1012,19 @@ fn unpack(
                     reason = "raw samples cap at 16 bits, exact in f32"
                 )]
                 let value = decode.apply(c, raw as f32);
+                // Rounded, not truncated. At 1, 2, 4 and 8 bits the two agree
+                // on every raw value — `step` is exactly `1/max` and the
+                // products are small enough to be exact in `f32` — so this
+                // changes nothing there, and it matches `decode_table`, which
+                // rounds for the same reason. At **16** bits they diverge on
+                // 32 648 of the 65 536 samples and truncation is a count low
+                // on every one: see the module doc's 16-bit note.
                 #[expect(
                     clippy::cast_possible_truncation,
                     clippy::cast_sign_loss,
                     reason = "the clamp bounds the product to 0..=255"
                 )]
-                let byte = (value.clamp(0.0, 1.0) * 255.0) as u8;
+                let byte = (value.clamp(0.0, 1.0) * 255.0).round() as u8;
                 if let Some(slot) = out.get_mut((y * pixels_per_row + x) * components + c) {
                     *slot = byte;
                 }

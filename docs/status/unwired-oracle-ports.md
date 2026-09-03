@@ -1,6 +1,6 @@
 # Unwired oracle ports
 
-**Opened:** 2026-09-03 · **State:** open, five items
+**Opened:** 2026-09-03 · **State:** open, four items (one decided)
 
 The no-dead-code pass (`chore/no-dead-code`) went through every
 `#[allow(dead_code)]` the idiomatic-API curation left behind. Most were test
@@ -23,34 +23,48 @@ questions had to be answered from the oracle checkout, not from the port's own
 doc comment. Four items looked like this shape and turned out **not** to be —
 they are recorded at the bottom so nobody re-opens them.
 
-## 1. `image::scanline::rgb_line_to_bgr` — the 16-bpc high-byte arm
+## 1. ~~`image::scanline::rgb_line_to_bgr` — the 16-bpc high-byte arm~~ — **checked and decided, 2026-09-03**
 
-| | |
-|---|---|
-| Item | `crates/pdfrum-page/src/image/scanline.rs`, with `scale_to_byte` and `write` |
-| Oracle | `CPDF_DIB::TranslateScanline24bppDefaultDecode`, `core/fpdfapi/page/cpdf_dib.cpp:1056-1127` |
-| Oracle production? | **Yes** — `cpdf_dib.cpp:1014` (`TranslateScanline24bpp`) ← `:1273` (`GetScanline`) |
-| pdfrum's live path | the general `DecodeMap` route, `crates/pdfrum-page/src/image/mod.rs:856-882` |
+**Ruled: scale and round. The arm is deleted and the shipping path was
+wrong too.**
 
-The oracle's default-decode RGB fast path splits three ways on `bpc`. The
-`1|2|4` arm scales with integer `min(v,max) * 255 / max`; **that arm is not a
-gap** — the general path's `(base + step*raw).clamp(0,1) * 255.0 as u8` was
-checked against it exhaustively over every raw value at bpc 1, 2 and 4 and is
-bit-identical, because `step` is exactly `1/max` and the products are small
-enough to be exact in `f32`.
+The entry claimed our general path "lands one count low for 767 of the
+65 536 possible samples". That number was wrong by a factor of forty, and
+finding out why is the whole ruling. Measured exhaustively in the decode's own
+`f32` arithmetic, our shipping path differed from PDFium on **32 648** of
+65 536 samples — because it *truncated* the float product
+(`(value * 255.0) as u8`) rather than rounding it. It was a count low against
+every candidate map, the oracle's included.
 
-The **`bpc == 16` arm is the gap.** The oracle takes the *high byte only*
-(`cpdf_dib.cpp:1094-1099`: `*dest_pos++ = src_pos[4]`), discarding the low byte
-with no rounding. pdfrum's general path reads the whole 16-bit sample through
-`get_bits` and float-scales it, which lands one count low for 767 of the 65 536
-possible samples — every value whose low byte is nonzero and whose scaled
-product falls just under the next integer. `rgb_line_to_bgr`'s `16` arm is the
-oracle's rule, ported and tested (`sixteen_bit_rgb_keeps_only_the_high_byte`),
-and nothing calls it.
+What the readers actually do:
 
-**Blast radius:** ±1 count on 16-bit RGB images with a default `/Decode` —
-rare in the corpus (the board does not move), invisible to Tier B's threshold,
-but a per-file SSIM difference wherever such an image exists.
+- **pdf.js scales and rounds.** `DeviceRgbCS.getRgbBuffer`
+  (`src/core/colorspace.js`) computes `scale = 255 / ((1 << bits) - 1)` and
+  stores `scale * sample` into a `Uint8ClampedArray`, whose store rounds. That
+  is ISO 32000-1 §8.9.5's linear map computed exactly.
+- **PDFium truncates the high byte.** `cpdf_dib.cpp:1093-1101` writes
+  `src_pos[4]`, `src_pos[2]`, `src_pos[0]` — `sample >> 8`. It is within one
+  count of the rounded answer on every sample (16 256 of 65 536 differ).
+
+So the two disagree only on rounding care, not on the map, and *the correct
+answer is the rounded one*. Our own tree already said so twice: `decode_table`
+(`image/mod.rs`) rounds, with a comment explaining that truncating gets the
+`[1 0]` inversion wrong, and `Pixels::bytes_at`'s doc calls
+`(v.clamp(0.0,1.0) * 255.0).round()` the encode. The general path was the odd
+one out.
+
+**Landed:** the general path now rounds (`image/mod.rs`); the unwired
+`rgb_line_to_bgr`, `scale_to_byte` and `write` are deleted with their tests;
+`decode_array.rs` pins the ruling over all 65 536 samples — the byte equals
+`round(sample * 255 / 65535)` in `f64`, and is within one count of the
+oracle's `>> 8` — plus a second test proving 1, 2, 4 and 8 bits are unmoved
+(rounding, truncating and the oracle's integer `v * 255 / max` agree on every
+raw value there, so the change is confined to 16 bpc).
+
+**Not `[oracle-bug]`:** we do not deliberately diverge from a correct PDFium.
+PDFium is approximating the same map, and stays within one count of us.
+
+**Board:** unchanged — no 16-bit RGB image is in the corpus.
 
 ## 2. `image::scanline::palette_index` — multi-component packed palettes
 

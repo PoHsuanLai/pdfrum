@@ -9,11 +9,32 @@
 //! - A **one-bit stencil mask with the default decode is inverted
 //!   bit-for-bit**; with `/Decode [1 0]` it is copied verbatim. So `/Decode`
 //!   flips a mask's sense in the opposite direction from what one expects.
-//! - At **16 bits only the high byte of each sample survives**, with no
-//!   rounding: the low byte is discarded outright.
-//! - At **1, 2 and 4 bits the components are scaled by integer arithmetic**
-//!   (`v * 255 / max`), and the packed index puts component `j` in bits
+//! - The packed palette index puts component `j` in bits
 //!   `[j*bpc, (j+1)*bpc)` — an order the palette builder must match exactly.
+//!
+//! # 16-bit samples are scaled, not truncated
+//!
+//! ISO 32000-1 §8.9.5 defines a 16-bit sample as a value in `[0, 65535]`
+//! mapped linearly onto its `/Decode` range, and the byte a device buffer
+//! wants is that value **rounded**. Both readers land there, by different
+//! routes:
+//!
+//! - **pdf.js scales.** `DeviceRgbCS.getRgbBuffer` (`src/core/colorspace.js`)
+//!   computes `scale = 255 / ((1 << bits) - 1)` and stores `scale * sample`
+//!   into a `Uint8ClampedArray`, whose store rounds. That is the linear map
+//!   done exactly.
+//! - **PDFium truncates the high byte.** Its default-decode RGB fast path
+//!   (`CPDF_DIB::TranslateScanline24bppDefaultDecode`,
+//!   `core/fpdfapi/page/cpdf_dib.cpp:1093-1101`) writes `src_pos[4]`,
+//!   `src_pos[2]`, `src_pos[0]` — `sample >> 8`, the low byte dropped. It is
+//!   within one count of the rounded answer on every sample (16 256 of 65 536
+//!   differ), an approximation of the same map rather than a different one.
+//!
+//! So the ecosystem agrees on the map and differs only on how carefully it is
+//! rounded. `image::mod`'s general `/Decode` path computes it exactly, which
+//! is why there is no 16-bit special case here: the fast path this module once
+//! carried for it would have been a *worse* answer than the general one,
+//! and both `>> 8` and a truncated float product read a count low.
 
 /// Read `nbits` bits at `bit_pos`, MSB-first, with `nbits` in `{1,2,4,8,16}`.
 ///
@@ -124,101 +145,6 @@ pub fn palette_index(line: &[u8], pixel: usize, components: u32, bpc: u32) -> u3
     index
 }
 
-/// Scale a raw sample of `bpc` bits onto a byte with integer arithmetic.
-///
-/// `v * 255 / max`, matching the C++ exactly — not a float multiply, whose
-/// rounding differs at several values.
-#[must_use]
-#[allow(
-    dead_code,
-    reason = "unwired — see docs/status/unwired-oracle-ports.md"
-)]
-pub fn scale_to_byte(v: u32, max: u32) -> u8 {
-    if max == 0 {
-        return 0;
-    }
-    #[expect(
-        clippy::cast_possible_truncation,
-        reason = "v is clamped to max, so the quotient is at most 255"
-    )]
-    let out = (v.min(max) * 255 / max) as u8;
-    out
-}
-
-/// Write three bytes at pixel `index`.
-#[allow(
-    dead_code,
-    reason = "unwired — see docs/status/unwired-oracle-ports.md"
-)]
-fn write(dest: &mut [u8], index: usize, bytes: [u8; 3]) {
-    if let Some(px) = dest.get_mut(index * 3..index * 3 + 3) {
-        px.copy_from_slice(&bytes);
-    }
-}
-
-/// Convert a default-decode RGB-family scanline straight to **B, G, R**.
-///
-/// Returns whether it handled the line: a component count other than three
-/// leaves the destination untouched, which is the C++'s "handled but wrote
-/// nothing" case.
-#[allow(
-    dead_code,
-    reason = "unwired — see docs/status/unwired-oracle-ports.md"
-)]
-pub fn rgb_line_to_bgr(
-    dest: &mut [u8],
-    line: &[u8],
-    pixels: usize,
-    bpc: u32,
-    components: u32,
-) -> bool {
-    if components != 3 {
-        // Handled, having written nothing — the line buffer keeps whatever it
-        // held.
-        return true;
-    }
-    match bpc {
-        8 => {
-            for i in 0..pixels {
-                let Some(&[r, g, b]) = line
-                    .get(i * 3..i * 3 + 3)
-                    .and_then(|s| <&[u8; 3]>::try_from(s).ok())
-                else {
-                    continue;
-                };
-                write(dest, i, [b, g, r]);
-            }
-            true
-        }
-        16 => {
-            // Only the high byte of each big-endian sample survives; the low
-            // byte is discarded with no rounding.
-            for i in 0..pixels {
-                let Some(&[r, _, g, _, b, _]) = line
-                    .get(i * 6..i * 6 + 6)
-                    .and_then(|s| <&[u8; 6]>::try_from(s).ok())
-                else {
-                    continue;
-                };
-                write(dest, i, [b, g, r]);
-            }
-            true
-        }
-        1 | 2 | 4 => {
-            let max = (1u32 << bpc) - 1;
-            for i in 0..pixels {
-                let at = |c: usize| {
-                    let bit_pos = (i * 3 + c) * bpc as usize;
-                    scale_to_byte(get_bits(line, bit_pos, bpc), max)
-                };
-                write(dest, i, [at(2), at(1), at(0)]);
-            }
-            true
-        }
-        _ => false,
-    }
-}
-
 #[cfg(test)]
 mod tests {
     // Test fixtures quote the oracle's own vectors, compare floats exactly
@@ -233,10 +159,7 @@ mod tests {
         reason = "test fixtures quote oracle vectors verbatim and compare exactly"
     )]
 
-    use super::{
-        Availability, get_bits, invert_line, palette_index, rgb_line_to_bgr, scale_to_byte,
-        scanline,
-    };
+    use super::{Availability, get_bits, invert_line, palette_index, scanline};
 
     #[test]
     fn bits_are_read_msb_first_and_zero_past_the_end() {
@@ -287,53 +210,5 @@ mod tests {
         // nibble, must produce index `0b10 << 2 | 0b01`.
         let line = [0b0110_0000u8];
         assert_eq!(palette_index(&line, 0, 2, 2), 0b10_01);
-    }
-
-    #[test]
-    fn sample_scaling_is_integer_arithmetic() {
-        // Four bits: 8/15 of 255 truncates to 136, not 136.0 rounded.
-        assert_eq!(scale_to_byte(8, 15), 136);
-        assert_eq!(scale_to_byte(15, 15), 255);
-        assert_eq!(scale_to_byte(0, 15), 0);
-        assert_eq!(scale_to_byte(1, 1), 255);
-        assert_eq!(scale_to_byte(99, 0), 0);
-    }
-
-    #[test]
-    fn four_bit_rgb_scales_each_nibble() {
-        // The oracle's 2x1 vector: `[0x08, 0xff, 0x08]` gives
-        // `[0xff, 0x88, 0x00, 0x88, 0x00, 0xff]` in BGR.
-        let line = [0x08u8, 0xff, 0x08];
-        let mut dest = [0u8; 6];
-        assert!(rgb_line_to_bgr(&mut dest, &line, 2, 4, 3));
-        assert_eq!(dest, [0xff, 0x88, 0x00, 0x88, 0x00, 0xff]);
-    }
-
-    #[test]
-    fn eight_bit_rgb_is_a_channel_swap() {
-        // `[0x11..0x66]` gives `[0x33,0x22,0x11, 0x66,0x55,0x44]`.
-        let line = [0x11u8, 0x22, 0x33, 0x44, 0x55, 0x66];
-        let mut dest = [0u8; 6];
-        assert!(rgb_line_to_bgr(&mut dest, &line, 2, 8, 3));
-        assert_eq!(dest, [0x33, 0x22, 0x11, 0x66, 0x55, 0x44]);
-    }
-
-    #[test]
-    fn sixteen_bit_rgb_keeps_only_the_high_byte() {
-        // Twelve bytes give `[0x55,0x33,0x11, 0xbb,0x99,0x77]`.
-        let line = [
-            0x11u8, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xaa, 0xbb, 0xcc,
-        ];
-        let mut dest = [0u8; 6];
-        assert!(rgb_line_to_bgr(&mut dest, &line, 2, 16, 3));
-        assert_eq!(dest, [0x55, 0x33, 0x11, 0xbb, 0x99, 0x77]);
-    }
-
-    #[test]
-    fn a_wrong_component_count_writes_nothing_but_reports_handled() {
-        let line = [1u8, 2, 3, 4];
-        let mut dest = [9u8; 6];
-        assert!(rgb_line_to_bgr(&mut dest, &line, 2, 8, 4));
-        assert_eq!(dest, [9; 6], "the buffer must be left as it was");
     }
 }
