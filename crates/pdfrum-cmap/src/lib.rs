@@ -1,20 +1,10 @@
 //! CMaps: how a PDF string becomes character codes, and how those codes
 //! become CIDs (ISO 32000-1 §9.7.5).
 //!
-//! A [`CMap`] fuses two jobs that PDF keeps in one object. It is a
-//! **byte decoder** — the rule that splits a show operator's string into
-//! character codes, which may be one, two or four bytes wide and may mix
-//! widths within a single string — and it is a **charcode→CID map**, turning
-//! each code into an index into a character collection that a `CIDFont` can draw.
-//!
-//! There are two ways a font names one, and they share nothing but their
-//! observable surface:
-//!
-//! - **predefined**: `/Encoding /GB-EUC-H` selects one of 32 built-in CJK
-//!   CMaps (plus `Identity-H` and `Identity-V`), whose tables ship inside this
-//!   crate. [`from_encoding_name`].
-//! - **embedded**: `/Encoding` is a stream holding a CMap program, which
-//!   [`parse_embedded`] reads.
+//! A [`CMap`] both splits a show operator's string into codes one, two or four
+//! bytes wide, mixed within one string, and maps each code to a CID in a
+//! `CIDFont`'s character collection. A font names one by a predefined name
+//! ([`from_encoding_name`]) or as an embedded program ([`parse_embedded`]).
 //!
 //! ```
 //! use pdfrum_cmap::{CharCode, Cid, CodingScheme, from_encoding_name};
@@ -33,29 +23,22 @@
 //! ]);
 //! ```
 //!
-//! # Damage tolerance
-//!
-//! Nothing in this crate refuses to work. An unrecognised `/Encoding` name
-//! yields a CMap that decodes two-byte codes and maps each code to itself; a
-//! truncated multi-byte code yields character code 0; a CMap program full of
-//! garbage yields whatever it managed to say. Every such recovery is recorded
-//! on a [`pdfrum_common::Diagnostics`] sink rather than raised, so
-//! a caller can see what was bent without having to handle it.
-//!
-//! # Inheritance
-//!
-//! Three mechanisms, all live:
-//!
-//! - the built-in tables' own chaining, which is what makes `GB-EUC-V` a thin
-//!   override of `GB-EUC-H`;
-//! - `usecmap` inside an embedded program, resolved by [`parse_embedded`];
-//! - the `/UseCMap` key of an `/Encoding` stream's dictionary, attached by
-//!   [`inherit_from`], which supersedes the operator.
-//!
-//! The last two are ISO 32000-1 §9.7.5.3's two channels, and both are
-//! child-wins: a code the child maps is the child's answer, and only a code
-//! it maps to nothing reaches the parent. The oracle implements neither — see
-//! the marked site in `parser.rs`.
+//! Nothing here refuses to work: an unknown `/Encoding` name decodes two-byte
+//! identity codes, a truncated code yields code 0, a garbage program yields
+//! what it managed to say — each on a [`pdfrum_common::Diagnostics`] sink.
+
+// Inheritance runs through three mechanisms, all live:
+//
+// - the built-in tables' own chaining, which is what makes `GB-EUC-V` a thin
+//   override of `GB-EUC-H`;
+// - `usecmap` inside an embedded program, resolved by `parse_embedded`;
+// - the `/UseCMap` key of an `/Encoding` stream's dictionary, attached by
+//   `inherit_from`, which supersedes the operator.
+//
+// The last two are ISO 32000-1 §9.7.5.3's two channels, and both are
+// child-wins: a code the child maps is the child's answer, and only a code it
+// maps to nothing reaches the parent. The oracle implements neither — see the
+// marked site in `parser.rs`.
 
 #![forbid(unsafe_code)]
 // Every byte reaching this crate came from an untrusted file or a generated
@@ -490,23 +473,15 @@ pub fn parse_embedded(bytes: &[u8], limits: &Limits, diags: &mut Diagnostics) ->
 }
 
 /// Attach the parent a CMap stream's `/UseCMap` key names (ISO 32000-1
-/// §9.7.5.3) — the second of the specification's two inheritance channels.
+/// §9.7.5.3), superseding whatever a `usecmap` operator inside the program
+/// named.
 ///
-/// The dictionary key **supersedes** whatever a `usecmap` operator inside the
-/// program named: the file's explicit statement wins over the program's own.
-/// pdf.js orders the two the same way — `cmap.js:639-643` takes the embedded
-/// operand only `if (!useCMap && embeddedUseCMap)`.
-///
-/// The key may name a stream rather than a built-in CMap, which is why this
-/// takes an already-built parent rather than a name: only the caller has the
-/// resolver. `depth` is the caller's recursion depth, and a chain longer than
-/// [`Limits::max_name_tree_depth`] is refused with a diagnostic — a stream
-/// whose `/UseCMap` names itself would otherwise never terminate, which the
-/// oracle cannot experience because it reads the key at all.
-///
-/// Inheriting codespace ranges is *not* redone here: `parse_embedded` has
-/// already settled the decoder, and a program with no ranges of its own that
-/// reaches this function reads codes the way this parent does.
+/// Takes an already-built parent rather than a name because the key may name a
+/// stream and only the caller has the resolver. `depth` is the caller's
+/// recursion depth: at or past [`Limits::max_name_tree_depth`] the parent is
+/// dropped and a diagnostic recorded, so a `/UseCMap` naming its own stream
+/// terminates. Codespace ranges are not re-inherited here — `parse_embedded`
+/// has already settled the decoder.
 ///
 /// ```
 /// use pdfrum_cmap::{CharCode, Cid, inherit_from, parse_embedded, predefined};
