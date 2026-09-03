@@ -96,20 +96,17 @@ pub use pdfrum_type1::FontFile as Type1FontFile;
 /// Invert a `/ToUnicode` CMap: Unicode scalar → the character code that maps
 /// to it, for every code the program reaches.
 ///
-/// This is the oracle's `CPDF_Font::CharCodeFromUnicode`
-/// (`core/fpdfapi/font/cpdf_font.cpp:110-115`,
-/// `to_unicode_map_->ReverseLookup(unicode)`) as a table computed once,
-/// rather than a lookup per character. A writer that embeds a font with a
-/// *caller-supplied* `/ToUnicode` needs exactly this to turn text into codes:
-/// the caller's CMap is the only statement of what its codes mean, and the
-/// font program's own cmap is not it.
+/// The whole map is built once, rather than a reverse lookup per character.
+/// A writer that embeds a font with a *caller-supplied* `/ToUnicode` needs
+/// exactly this to turn text into codes: the caller's CMap is the only
+/// statement of what its codes mean, and the font program's own cmap is not
+/// it.
 ///
 /// Where several codes map to one Unicode value the **numerically smallest**
-/// code wins, which is the collision policy `InsertIntoMaps` applies in both
-/// directions. Multi-character
-/// destinations are unreachable — the reverse map is keyed on the packed
-/// stored value, and a multi-character entry's key is an indicator rather
-/// than any real character, which is the oracle's behaviour too.
+/// code wins, the same collision policy the forward direction uses.
+/// Multi-character destinations are unreachable — the reverse map is keyed on
+/// the packed stored value, and a multi-character entry's key is an indicator
+/// rather than any real character.
 #[must_use]
 pub fn invert_to_unicode(
     bytes: &[u8],
@@ -228,19 +225,20 @@ impl Font {
     ///
     /// The same space [`Self::glyph_path`] returns, so a caller can substitute
     /// one for the other without touching its matrices — which is what a
-    /// renderer rasterizing a glyph *bitmap* does, since the oracle hints on
-    /// that path and not on the outline one.
+    /// renderer rasterizing a glyph *bitmap* does, since hinting applies to
+    /// that path and not to the outline one.
     ///
-    /// `None` whenever the oracle would not hint either: a face with no table
-    /// directory (`!IsTtOt()`, which covers every bare CFF and every Type 1
-    /// program, so every base-14 substitution), a Type 3 font, and a face whose
-    /// own programs the interpreter refuses — the case
-    /// `cfx_face.cpp:849-857` handles by reloading the glyph unhinted. In all
-    /// of them the caller falls back to [`Self::glyph_path`] rather than
-    /// drawing nothing.
+    /// `None` for every font that is not hinted: a face with no table
+    /// directory (every bare CFF and every Type 1 program, so every base-14
+    /// substitution), a Type 3 font, and a face whose own programs the
+    /// interpreter refuses. In all of them the caller falls back to
+    /// [`Self::glyph_path`] rather than drawing nothing.
     ///
     /// Uncached, and *expensive*: it builds a hinting instance and runs the
     /// face's bytecode. A renderer should call it only on a bitmap-cache miss.
+    // The refused-programs arm is `cfx_face.cpp:849-857`, which reloads the
+    // glyph unhinted rather than failing; falling back to `glyph_path` lands
+    // in the same place.
     #[must_use]
     pub fn hinted_glyph_path(&self, gid: Gid) -> Option<BezPath> {
         self.glyphs().hinted_outline(gid)
@@ -434,9 +432,8 @@ impl Font {
     /// its em box without touching the advance, so a renderer applies it to
     /// the drawing origin alone — the pen walks on as if it were not there.
     ///
-    /// Non-Japan1, embedded and non-CID fonts all answer `None`, which is the
-    /// whole of the C++'s gate (`CPDF_CIDFont::GetCIDTransform`,
-    /// `cpdf_cidfont.cpp:878-887`).
+    /// Non-Japan1, embedded and non-CID fonts all answer `None` — those three
+    /// tests are the whole gate, and there is no fourth.
     #[must_use]
     pub fn japan1_transform(&self, code: CharCode) -> Option<CidTransform> {
         match self {
@@ -692,9 +689,9 @@ fn truncate(value: f32) -> i32 {
 
 /// Per-document caches: parsed faces, resolved substitutions, font identities.
 ///
-/// Replaces the C++'s two process-wide singletons (`CPDF_FontGlobals` and
-/// `CFX_FontMgr`) with a value the document owns. Cheap to create and
-/// `Send + Sync`; the only mutable state is the identity counter.
+/// A value the document owns rather than process-wide state, so two documents
+/// loaded on two threads never share a face or a font identity. Cheap to
+/// create and `Send + Sync`; the only mutable state is the identity counter.
 #[derive(Debug, Default)]
 pub struct FontCache {
     next_id: AtomicU64,

@@ -839,15 +839,15 @@ mod croscore_faces {
 ///
 /// The regression these pin: `substitute` used to read *only* `font_dirs`, so
 /// a host that named no directory got the empty [`TestFontDb`] — the built-in
-/// Latin faces alone. That is right for a unit test and wrong for the oracle,
-/// whose Linux build scans `/usr/share/fonts` and three siblings unless
-/// `--font-dir` replaces them (`core/fxge/linux/fx_linux_impl.cpp:173-176`,
-/// reached because `pdfium_test` leaves `m_pUserFontPaths` null,
-/// `testing/pdfium_test/pdfium_test.cc:2107-2112`). A CJK request then found
-/// no face claiming its charset, fell through to the built-in Multiple-Master
-/// serif, and every CJK glyph box came back empty — which dropped the whole
-/// text object as zero-width and lost the character from `--txt`. See
-/// `fx/text/test_m.pdf`.
+/// Latin faces alone. That is right for a unit test and wrong for a reference
+/// run, which scans `/usr/share/fonts` and three siblings unless `--font-dir`
+/// replaces them. A CJK request then found no face claiming its charset, fell
+/// through to the built-in Multiple-Master serif, and every CJK glyph box came
+/// back empty — which dropped the whole text object as zero-width and lost the
+/// character from `--txt`. See `fx/text/test_m.pdf`.
+// The four system directories are `core/fxge/linux/fx_linux_impl.cpp:173-176`,
+// reached because `pdfium_test` leaves `m_pUserFontPaths` null
+// (`testing/pdfium_test/pdfium_test.cc:2107-2112`).
 mod database_selection {
     use super::*;
     use std::path::PathBuf;

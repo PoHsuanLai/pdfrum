@@ -89,8 +89,7 @@ pub struct SimpleFont {
 }
 
 impl SimpleFont {
-    /// The glyph a character code selects, or `None` for "draw nothing"
-    /// (`CPDF_FaceBasedSimpleFont::GlyphFromCharCode`).
+    /// The glyph a character code selects, or `None` for "draw nothing".
     ///
     /// All the work happened at load time; this is a table read. **Glyph 0 is
     /// a legitimate result** and is distinct from `None`.

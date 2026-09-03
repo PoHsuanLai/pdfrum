@@ -181,8 +181,7 @@ pub fn normalize_font_metric(value: i64, upem: u16) -> i32 {
 }
 
 /// The *other* 1000/em normalizer: truncating integer division, no rounding
-/// and no saturation. Used only for a glyph's advance width
-/// (`CFX_Face::EmAdjust`, §1.3).
+/// and no saturation. Used only for a glyph's advance width (§1.3).
 #[must_use]
 pub fn em_adjust(value: i32, upem: u16) -> i32 {
     if upem == 0 {

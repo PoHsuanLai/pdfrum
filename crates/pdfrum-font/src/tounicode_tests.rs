@@ -1,6 +1,8 @@
-//! Every assertion of `cpdf_tounicodemap_unittest.cpp`, restated over
-//! [`parse`] / [`ToUnicode`], plus the cases the C++ has no test for and
-//! Tier-A depends on.
+//! `/ToUnicode` parsing and lookup, over [`parse`] / [`ToUnicode`].
+
+// The upstream half of this file is every assertion of
+// `cpdf_tounicodemap_unittest.cpp`, restated; the rest are the cases it has no
+// test for and Tier-A depends on.
 
 // Test fixtures are fixed-size arrays with known contents.
 #![allow(clippy::indexing_slicing)]

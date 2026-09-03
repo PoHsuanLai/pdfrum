@@ -18,8 +18,7 @@ use std::sync::Arc;
 ///
 /// `hint_flags` is deliberately absent, and stayed absent when wave 7b brought
 /// hinting in. This cache holds the outlines the *path* side of text fills,
-/// and that side is unhinted at every size — `CFX_Face::LoadGlyphPath` hints
-/// only a face on FreeType's `tricky` list, which no corpus font is.
+/// and that side is unhinted at every size, for every face.
 ///
 /// The hinted outline belongs to the glyph-*bitmap* side, which is a different
 /// cache in a different crate (`pdfrum_render::glyph::BitmapCache`) because it

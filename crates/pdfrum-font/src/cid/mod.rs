@@ -130,8 +130,7 @@ impl Type0Font {
         }
     }
 
-    /// The Unicode a code stands for, `/ToUnicode` first
-    /// (`CPDF_CIDFont::UnicodeFromCharCode`).
+    /// The Unicode a code stands for, `/ToUnicode` first.
     #[must_use]
     pub(crate) fn unicode_from_charcode(&self, code: CharCode) -> SmallVec<[char; 2]> {
         if let Some(tu) = &self.to_unicode {
@@ -149,7 +148,7 @@ impl Type0Font {
     }
 
     /// The *scalar* Unicode derivation, which does **not** consult
-    /// `/ToUnicode` (`CPDF_CIDFont::GetUnicodeFromCharCode`).
+    /// `/ToUnicode`.
     ///
     /// The CMap's coding scheme decides: a UCS-2 or UTF-16 CMap means the
     /// character code simply *is* the Unicode, while a CID-coded one goes
@@ -325,7 +324,7 @@ fn use_cmap_parent(
     Some(pdfrum_cmap::from_encoding_name(name, diags))
 }
 
-/// Load a Type0 font (`CPDF_CIDFont::Load`).
+/// Load a Type0 font.
 ///
 /// # Errors
 ///

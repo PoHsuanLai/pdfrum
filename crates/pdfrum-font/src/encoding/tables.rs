@@ -5,7 +5,8 @@
 // License: PDFium, BSD 3-clause (LICENSE at the oracle checkout root).
 // Original code copyright 2014 Foxit Software Inc.
 
-/// `kMSSymbolEncoding` (core/fpdfapi/font/cpdf_fontencoding.cpp).
+/// The Microsoft symbol charmap `(3, 0)`: code → Unicode, into the
+/// private-use area.
 pub(crate) const MS_SYMBOL_ENCODING: [u16; 256] = [
     0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
     0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
@@ -31,7 +32,8 @@ pub(crate) const MS_SYMBOL_ENCODING: [u16; 256] = [
     0x0000, 0x0000, 0x0000, 0x0000,
 ];
 
-/// `kStandardEncoding` (core/fpdfapi/font/cpdf_fontencoding.cpp).
+/// Adobe standard encoding: code → Unicode. `0x0000` where the encoding
+/// leaves a code unassigned.
 pub(crate) const STANDARD_ENCODING: [u16; 256] = [
     0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
     0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
@@ -57,7 +59,8 @@ pub(crate) const STANDARD_ENCODING: [u16; 256] = [
     0x0000, 0x0000, 0x0000, 0x0000,
 ];
 
-/// `kMacRomanEncoding` (core/fpdfapi/font/cpdf_fontencoding.cpp).
+/// `/MacRomanEncoding`: code → Unicode. `0x0000` where the encoding leaves
+/// a code unassigned.
 pub(crate) const MAC_ROMAN_ENCODING: [u16; 256] = [
     0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
     0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
@@ -83,7 +86,7 @@ pub(crate) const MAC_ROMAN_ENCODING: [u16; 256] = [
     0x00b8, 0x02dd, 0x02db, 0x02c7,
 ];
 
-/// `kAdobeWinAnsiEncoding` (core/fpdfapi/font/cpdf_fontencoding.cpp).
+/// `/WinAnsiEncoding` — Windows code page 1252: code → Unicode.
 pub(crate) const ADOBE_WIN_ANSI_ENCODING: [u16; 256] = [
     0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
     0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
@@ -109,7 +112,7 @@ pub(crate) const ADOBE_WIN_ANSI_ENCODING: [u16; 256] = [
     0x00fc, 0x00fd, 0x00fe, 0x00ff,
 ];
 
-/// `kMacExpertEncoding` (core/fpdfapi/font/cpdf_fontencoding.cpp).
+/// `/MacExpertEncoding`: code → Unicode, mostly into the private-use area.
 pub(crate) const MAC_EXPERT_ENCODING: [u16; 256] = [
     0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
     0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
@@ -135,7 +138,7 @@ pub(crate) const MAC_EXPERT_ENCODING: [u16; 256] = [
     0x0000, 0x0000, 0x0000, 0x0000,
 ];
 
-/// `kAdobeSymbolEncoding` (core/fpdfapi/font/cpdf_fontencoding.cpp).
+/// The Symbol font's own character set: code → Unicode.
 pub(crate) const ADOBE_SYMBOL_ENCODING: [u16; 256] = [
     0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
     0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
@@ -161,7 +164,7 @@ pub(crate) const ADOBE_SYMBOL_ENCODING: [u16; 256] = [
     0xf8fc, 0xf8fd, 0xf8fe, 0x0000,
 ];
 
-/// `kZapfEncoding` (core/fpdfapi/font/cpdf_fontencoding.cpp).
+/// The ZapfDingbats font's own character set: code → Unicode.
 pub(crate) const ZAPF_ENCODING: [u16; 256] = [
     0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
     0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
@@ -187,7 +190,8 @@ pub(crate) const ZAPF_ENCODING: [u16; 256] = [
     0x27bc, 0x27bd, 0x27be, 0x0000,
 ];
 
-/// `kPDFDocEncoding` (core/fpdfapi/parser/fpdf_parser_decode.cpp).
+/// `/PDFDocEncoding`: code → Unicode. Unlike the others it assigns codes
+/// below 32.
 pub(crate) const PDF_DOC_ENCODING: [u16; 256] = [
     0x0000, 0x0001, 0x0002, 0x0003, 0x0004, 0x0005, 0x0006, 0x0007, 0x0008, 0x0009, 0x000a, 0x000b,
     0x000c, 0x000d, 0x000e, 0x000f, 0x0010, 0x0011, 0x0012, 0x0013, 0x0014, 0x0015, 0x0016, 0x0017,
@@ -213,7 +217,7 @@ pub(crate) const PDF_DOC_ENCODING: [u16; 256] = [
     0x00fc, 0x00fd, 0x00fe, 0x00ff,
 ];
 
-/// `kStandardEncodingNames` (core/fpdfapi/font/cpdf_fontencoding.cpp).
+/// Adobe standard encoding's glyph names, indexed from code 32.
 pub(crate) const STANDARD_ENCODING_NAMES: [Option<&str>; 224] = [
     Some("space"),
     Some("exclam"),
@@ -441,7 +445,7 @@ pub(crate) const STANDARD_ENCODING_NAMES: [Option<&str>; 224] = [
     None,
 ];
 
-/// `kAdobeWinAnsiEncodingNames` (core/fpdfapi/font/cpdf_fontencoding.cpp).
+/// `/WinAnsiEncoding`'s glyph names, indexed from code 32.
 pub(crate) const ADOBE_WIN_ANSI_ENCODING_NAMES: [Option<&str>; 224] = [
     Some("space"),
     Some("exclam"),
@@ -669,7 +673,7 @@ pub(crate) const ADOBE_WIN_ANSI_ENCODING_NAMES: [Option<&str>; 224] = [
     Some("ydieresis"),
 ];
 
-/// `kMacRomanEncodingNames` (core/fpdfapi/font/cpdf_fontencoding.cpp).
+/// `/MacRomanEncoding`'s glyph names, indexed from code 32.
 pub(crate) const MAC_ROMAN_ENCODING_NAMES: [Option<&str>; 224] = [
     Some("space"),
     Some("exclam"),
@@ -897,7 +901,7 @@ pub(crate) const MAC_ROMAN_ENCODING_NAMES: [Option<&str>; 224] = [
     Some("caron"),
 ];
 
-/// `kMacExpertEncodingNames` (core/fpdfapi/font/cpdf_fontencoding.cpp).
+/// `/MacExpertEncoding`'s glyph names, indexed from code 32.
 pub(crate) const MAC_EXPERT_ENCODING_NAMES: [Option<&str>; 224] = [
     Some("space"),
     Some("exclamsmall"),
@@ -1125,7 +1129,7 @@ pub(crate) const MAC_EXPERT_ENCODING_NAMES: [Option<&str>; 224] = [
     None,
 ];
 
-/// `kPDFDocEncodingNames` (core/fpdfapi/font/cpdf_fontencoding.cpp).
+/// `/PDFDocEncoding`'s glyph names, indexed from code **24**, not 32.
 pub(crate) const PDF_DOC_ENCODING_NAMES: [Option<&str>; 232] = [
     Some("breve"),
     Some("caron"),
@@ -1361,7 +1365,7 @@ pub(crate) const PDF_DOC_ENCODING_NAMES: [Option<&str>; 232] = [
     Some("ydieresis"),
 ];
 
-/// `kAdobeSymbolEncodingNames` (core/fpdfapi/font/cpdf_fontencoding.cpp).
+/// The Symbol font's glyph names, indexed from code 32.
 pub(crate) const ADOBE_SYMBOL_ENCODING_NAMES: [Option<&str>; 224] = [
     Some("space"),
     Some("exclam"),
@@ -1589,7 +1593,7 @@ pub(crate) const ADOBE_SYMBOL_ENCODING_NAMES: [Option<&str>; 224] = [
     None,
 ];
 
-/// `kZapfEncodingNames` (core/fpdfapi/font/cpdf_fontencoding.cpp).
+/// The ZapfDingbats font's glyph names, indexed from code 32.
 pub(crate) const ZAPF_ENCODING_NAMES: [Option<&str>; 224] = [
     Some("space"),
     Some("a1"),

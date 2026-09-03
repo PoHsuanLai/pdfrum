@@ -28,7 +28,7 @@ enum CharmapType {
     Other,
 }
 
-/// Fill the glyph and unicode tables (`CPDF_TrueTypeFont::LoadGlyphMap`).
+/// Fill the glyph and unicode tables.
 pub(super) fn load_glyph_map(
     ctx: &LadderContext<'_>,
     unicodes: &mut [u16; 256],
@@ -417,7 +417,9 @@ mod tests {
         GlyphSource::Fontations(face)
     }
 
-    /// `cpdf_truetypefont_unittest.cpp`'s `AllUnicodeCmapsTreatedEqually`.
+    /// A `(0, 3)` charmap must be honoured exactly as a `(3, 1)` one is:
+    /// both are Unicode, and neither is preferred over the other.
+    // Pins `cpdf_truetypefont_unittest.cpp`'s `AllUnicodeCmapsTreatedEqually`.
     #[test]
     fn a_zero_three_charmap_is_as_good_as_a_three_one() {
         // Two fonts differing only in cmap platform and encoding, each mapping

@@ -207,22 +207,22 @@ impl GlyphSource {
     /// The same space [`Self::outline`] returns, so the two are interchangeable
     /// at every call site and the renderer's glyph matrix does not change. The
     /// difference is what happened before the scaling: this one ran the face's
-    /// own hinting programs against a 64-pixel grid, which is what the oracle
-    /// does for every SFNT face it draws as a *bitmap*
-    /// (`CFX_Face::RenderGlyph`, `cfx_face.cpp:841-843`).
+    /// own hinting programs against a 64-pixel grid, which is what an SFNT
+    /// face drawn as a *bitmap* gets.
     ///
     /// The conversion is a pure scale — `1000 / 64` — because a 64-ppem
-    /// instance draws in 64ths of an em. That is exactly the composition the
-    /// oracle performs by handing FreeType a matrix pre-divided by 64, and it
-    /// is why grid-fitting at a pinned ppem is not the same thing as
-    /// grid-fitting at the size the glyph is drawn at.
+    /// instance draws in 64ths of an em. Grid-fitting at a pinned ppem and
+    /// then scaling is not the same thing as grid-fitting at the size the
+    /// glyph is drawn at, and the pinned ppem is the one that is correct here.
     ///
-    /// `None` for every face the oracle would not hint, which is the caller's
-    /// signal to fall back to [`Self::outline`] rather than to draw nothing:
-    /// a face with no table directory (`!IsTtOt()` — every bare CFF, so every
-    /// base-14 substitution, and every `Type1` program), and a face whose own
-    /// programs the interpreter refuses, which is the case upstream handles by
-    /// reloading the glyph unhinted (`cfx_face.cpp:849-857`).
+    /// `None` for every face that is not hinted, which is the caller's signal
+    /// to fall back to [`Self::outline`] rather than to draw nothing: a face
+    /// with no table directory (every bare CFF, so every base-14
+    /// substitution, and every `Type1` program), and a face whose own
+    /// programs the interpreter refuses.
+    // The two `None` arms are `cfx_face.cpp:841-843`'s `!IsTtOt()` gate and
+    // `cfx_face.cpp:849-857`'s pedantic-load failure, which reloads the glyph
+    // unhinted; the 64-ppem grid is `CFX_Face::RenderGlyph`'s.
     #[must_use]
     pub(crate) fn hinted_outline(&self, gid: Gid) -> Option<BezPath> {
         let Self::Fontations(f) = self else {
@@ -241,9 +241,9 @@ impl GlyphSource {
 
     /// A glyph's advance width in 1000/em units.
     ///
-    /// Uses the **truncating** normalizer, which is the one
-    /// `CFX_Face::GetGlyphWidth` calls — its sibling rounds, and the two
-    /// disagree for half the inputs (§1.3).
+    /// Uses the **truncating** normalizer [`em_adjust`], not the rounding
+    /// `normalize_font_metric` — the two disagree for half the inputs, and an
+    /// advance takes the truncating one (§1.3).
     #[must_use]
     pub(crate) fn advance(&self, gid: Gid, params: GlyphParams) -> i32 {
         let upem = self.units_per_em();
