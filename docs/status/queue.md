@@ -64,9 +64,9 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
 
 - ~~**Rustdoc names internal phases and internal documents.**~~ Landed
   09d7cb5..46d11e8 (2026-09-03): passes A and B-1 swept the crates, WP5 took
-  `pdfrum-form` (207 provenance + 21 internal → 0) and `pdfrum-script`, and
-  `scripts/check-no-internal-refs.nu` is in `scripts/ci.nu` with three
-  assertions of its own. Two corrections to the pattern, both found by running
+  `pdfrum-form` (207 provenance + 21 internal → 0) and `pdfrum-script`. A CI
+  gate, `scripts/check-no-internal-refs.nu`, landed with it and was removed
+  again the same day (see below). Two corrections to the pattern, both found by running
   it workspace-wide: `SPEC\.md` under-matched the unsuffixed `(SPEC §15.8)`
   spelling the tree actually carries, so the doc names are now
   `\b(SPEC|PLAN|STYLE|DEPS)(\.md)?\b`; and `§[A-Z]\.[0-9]` over-matched the
