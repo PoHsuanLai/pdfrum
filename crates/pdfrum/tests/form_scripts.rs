@@ -17,11 +17,10 @@
 //!
 //! It proves the **seam is wired**: `FormSession::with_scripts` reads the
 //! document's `/AA` entries, installs them into the cascade against the field
-//! ids the routing layer will use, and an event sent through the facade runs
-//! them. It does *not* claim the object model is complete — M15 is at step 1
-//! and 11 of the oracle's 47 JavaScript fixtures reproduce byte-exactly, so
-//! the assertions below are about scripts having run rather than about a
-//! transcript matching the oracle's.
+//! ids the routing layer will use, installs what the `Doc` object answers
+//! from, and an event sent through the facade runs them. It does *not* claim
+//! the object model is complete, so most assertions below are about scripts
+//! having run rather than about a transcript matching the oracle's.
 
 #![cfg(feature = "script")]
 
@@ -263,4 +262,135 @@ fn advancing_a_script_free_session_is_zero_and_not_a_panic() {
     let doc = Document::open(FIXTURE).expect("the public_methods fixture must open");
     let mut session = FormSession::new(&doc);
     assert_eq!(session.advance_time(Duration::from_hours(1)), 0);
+}
+
+/// **The facade installs the document model**, so `this.getField` and
+/// `this.numFields` see the file the session is over.
+///
+/// The defect this closes: `with_scripts` built a cascade and installed every
+/// field's `/AA` scripts into it but never called `set_document`, so a script
+/// asking the *document* anything got an empty one — `numFields` zero,
+/// `numPages` zero, and `undefined` from `getField`. Nothing failed loudly;
+/// a script simply answered as though the file had nothing in it.
+///
+/// `public_methods.pdf` makes that measurable rather than merely visible: it
+/// carries **four** `/Tx` fields, three of them with a stored `/V`, on one
+/// page. A session over an empty model answers `0` and `undefined` here, and
+/// each assertion below names the value that distinguishes the two.
+#[test]
+fn the_facade_installs_what_the_document_object_answers_from() {
+    let doc = Document::open(FIXTURE).expect("the public_methods fixture must open");
+    let mut session = FormSession::with_scripts(&doc, &ScriptConfig::frozen_at(1_399_672_130))
+        .expect("boa builds a realm on any input");
+    let scripts = session
+        .scripts_mut()
+        .expect("a scripted session has an engine");
+
+    assert!(
+        scripts.run(
+            "app.alert('numFields=' + this.numFields);\
+             app.alert('numPages=' + this.numPages);\
+             app.alert('Text3=' + this.getField('Text3').value);\
+             app.alert('name=' + this.getField('Text3').name);\
+             app.alert('nth=' + this.getNthFieldName(0));",
+            "test",
+        ),
+        "the script must complete: {:?}",
+        scripts.stops()
+    );
+
+    let text = scripts.transcript_text();
+    for expected in [
+        "Alert: numFields=4",
+        "Alert: numPages=1",
+        "Alert: Text3=456",
+        "Alert: name=Text3",
+        "Alert: nth=Text Box",
+    ] {
+        assert!(
+            text.contains(expected),
+            "the model must answer {expected:?}; got {text:?}"
+        );
+    }
+}
+
+/// A document with **no** `/Info` throws from every metadata getter rather
+/// than answering `""`.
+///
+/// `public_methods.pdf` has no `/Info` dictionary, so this pins the
+/// distinction `has_info` exists for: absent is not the same as present and
+/// empty, and the getter fails the moment the info dictionary is null.
+///
+/// **It does not distinguish an installed model from an uninstalled one** —
+/// both throw here, for the same reason — and it is not claimed to. The
+/// assertion that separates those two is
+/// `the_facade_installs_what_the_document_object_answers_from`; this one
+/// guards the metadata half against answering `""` in a future change.
+#[test]
+fn a_document_with_no_info_dictionary_throws_from_its_metadata() {
+    let doc = Document::open(FIXTURE).expect("the public_methods fixture must open");
+    let mut session = FormSession::with_scripts(&doc, &ScriptConfig::frozen_at(1_399_672_130))
+        .expect("boa builds a realm on any input");
+    let scripts = session
+        .scripts_mut()
+        .expect("a scripted session has an engine");
+
+    assert!(
+        scripts.run(
+            "try { app.alert('author=' + this.author); }\
+             catch (e) { app.alert('threw: ' + e); }",
+            "test",
+        ),
+        "the script must complete: {:?}",
+        scripts.stops()
+    );
+
+    let text = scripts.transcript_text();
+    assert!(
+        text.contains("Alert: threw: "),
+        "no /Info means the getter throws rather than answering; got {text:?}"
+    );
+}
+
+/// **A default session's model is empty**, which is what makes the
+/// assertions above measurements rather than tautologies.
+///
+/// The same document through the same engine, with the model never installed,
+/// answers the zeros the defect used to produce. Written by driving a bare
+/// cascade through `with_cascade`, which boxes it behind `dyn Cascade` and so
+/// installs nothing into it — the behaviour that constructor's own
+/// documentation promises.
+#[test]
+fn a_cascade_nobody_told_about_a_document_answers_as_an_empty_one() {
+    let doc = Document::open(FIXTURE).expect("the public_methods fixture must open");
+    let mut cascade = pdfrum::ScriptCascade::new(&ScriptConfig::frozen_at(1_399_672_130))
+        .expect("boa builds a realm on any input");
+
+    assert!(
+        cascade.run(
+            "app.alert('numFields=' + this.numFields);\
+             app.alert('field=' + this.getField('Text3'));",
+            "test",
+        ),
+        "the script must complete: {:?}",
+        cascade.stops()
+    );
+    let text = cascade.transcript_text();
+    assert!(
+        text.contains("Alert: numFields=0"),
+        "an uninstalled model counts no fields; got {text:?}"
+    );
+    assert!(
+        text.contains("Alert: field=undefined"),
+        "and finds none by name; got {text:?}"
+    );
+
+    // And the same cascade handed to `with_cascade` stays that way, which is
+    // the documented answer rather than an omission: the constructor boxes it
+    // behind `dyn Cascade`, where the installing methods are unreachable.
+    let session = FormSession::with_cascade(&doc, cascade);
+    assert!(
+        session.scripts().is_none(),
+        "`with_cascade` holds a plain cascade, whatever was passed to it"
+    );
 }

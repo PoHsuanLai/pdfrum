@@ -231,9 +231,19 @@ impl<'a> FormSession<'a> {
     /// entries as the page is read and handing them to the cascade with the
     /// field's qualified name, its value and the `/AcroForm /CO` order.
     ///
-    /// The `AF*` library, `util`, `app.alert` and the `event` object are bound
-    /// and the four field hooks run; the `Doc`/`Field` object model is not.
+    /// The `AF*` library, `util`, `app.alert` and the `event` object are bound,
+    /// the four field hooks run, and the `Doc`/`Field` object model answers
+    /// from the document — `this.getField`, `this.numFields`, `this.numPages`
+    /// and the metadata properties all see the file this session is over.
     /// Do not enable this expecting Acrobat.
+    ///
+    /// Two things the model deliberately does **not** carry: `this.path` and
+    /// `this.URL` are empty, because no PDF records the path it was opened
+    /// from and an embedder has no reason to leak one into a script; and
+    /// `Doc.getPageNthWord` finds no words, because counting them means
+    /// parsing every page's content stream, which building a form session
+    /// should not pay for. A host that wants either installs it through
+    /// [`scripts_mut`](Self::scripts_mut).
     ///
     /// # Errors
     ///
@@ -277,8 +287,61 @@ impl<'a> FormSession<'a> {
             &mut BuildContext::new(),
             Cascades::Scripted(Box::new(cascade)),
         );
+        session.install_document_model();
         session.install_calculation_order();
         Ok(session)
+    }
+
+    /// Installs what the `Doc` object answers from: the field list, the page
+    /// count and the `/Info` entries.
+    ///
+    /// A [`ScriptCascade`](crate::ScriptCascade) deliberately holds no
+    /// document — which is what lets the engine be tested against a script
+    /// string and no PDF — so its caller reads one and hands over a value.
+    /// This is that caller for a facade session, and without it
+    /// `this.getField`, `this.numFields`, `this.numPages` and every metadata
+    /// property answer as an **empty document** would: no fields, no pages,
+    /// and `undefined` from `getField`.
+    ///
+    /// # The path is empty, deliberately
+    ///
+    /// No PDF carries the path it was opened from, so the model's `path` and
+    /// `URL` are the *caller's* to supply and this installs neither: an
+    /// embedder that wants `this.path` to answer sets it through
+    /// [`scripts_mut`](Self::scripts_mut). A conformance run passes the
+    /// harness's own `myfile.pdf`, which two golden lines pin, and an
+    /// ordinary embedder has no reason to leak a filesystem path into a
+    /// script.
+    ///
+    /// # `Doc.getPageNthWord` still answers nothing
+    ///
+    /// The words a page draws need a parsed content stream per page, which is
+    /// the expensive half of opening a document and is not something building
+    /// a form session should pay for. A host that wants them installs them
+    /// itself, and an empty list is the honest answer for one that has not —
+    /// `getPageNumWords` answering 0, which is what an empty page gives.
+    #[cfg(feature = "script")]
+    fn install_document_model(&mut self) {
+        let catalog = self.doc.catalog();
+        let info = self
+            .doc
+            .parser()
+            .trailer()
+            .dict(pdfrum_object::names::INFO, self.doc.parser());
+        let pages: Vec<pdfrum_object::Dict> = (0..self.doc.page_count())
+            .filter_map(|index| self.doc.page(index).ok())
+            .map(|page| page.dict.dict.clone())
+            .collect();
+        let model = pdfrum_form::script::model::read(
+            &catalog,
+            info.as_ref(),
+            &pages,
+            "",
+            self.doc.parser(),
+        );
+        if let Cascades::Scripted(cascade) = &mut self.cascade {
+            cascade.set_document(model);
+        }
     }
 
     /// Installs the form's `/AcroForm /CO` order into a scripted cascade.
