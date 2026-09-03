@@ -510,7 +510,7 @@ same bar for anyone who clicks through to a member crate. WP6 freezes it.
 > name the other so a backend author cannot pick the quantising path by
 > accident.
 >
-> Two traps for the next crate. `cargo doc --features walk-profile` was
+> Two traps for the next crate. `cargo doc --features profiling` was
 > **already failing on main**: `walkprofile::phase_start` linked
 > `[`Started::end`]`, a private item, and `rustdoc::private_intra_doc_links`
 > is `-D warnings`. Same class as §7's feature-gate note above — a doc link

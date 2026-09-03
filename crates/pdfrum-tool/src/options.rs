@@ -254,7 +254,7 @@ pub fn parse(args: &[String]) -> Result<Options, ParseError> {
             // rejection would lose the whole invocation, and answering with
             // an empty transcript would be a wrong answer rather than an
             // absent one.
-            if cfg!(feature = "script") {
+            if cfg!(feature = "javascript") {
                 options.js_transcript = true;
             } else {
                 options.unsupported.push(arg.clone());
@@ -556,7 +556,7 @@ mod tests {
     fn js_transcript_is_read_with_the_engine_and_recorded_without_it() {
         let options = parse_args(&["--js-transcript", "a.pdf"]).unwrap();
         assert_eq!(options.files, [PathBuf::from("a.pdf")]);
-        if cfg!(feature = "script") {
+        if cfg!(feature = "javascript") {
             assert!(options.js_transcript);
             assert!(options.unsupported.is_empty());
         } else {

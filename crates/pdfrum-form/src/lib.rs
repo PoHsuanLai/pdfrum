@@ -52,7 +52,7 @@ pub mod route;
 /// The `boa`-backed [`Cascade`] — a document's own scripts, run.
 ///
 /// Behind the default-off `script` feature.
-#[cfg(feature = "script")]
+#[cfg(feature = "javascript")]
 pub mod script;
 mod session;
 mod tab;
@@ -75,7 +75,7 @@ pub use route::{
     Context, apply, choose, close_popup, focus_field, focus_of, kill_focus, popup_view,
     replace_selection, scroll_view,
 };
-#[cfg(feature = "script")]
+#[cfg(feature = "javascript")]
 pub use script::{ScriptCascade, ScriptConfig, TranscriptLine};
 pub use session::{AnnotId, DragAnchor, FieldId, FocusTarget, FormSession, SessionConfig};
 pub use tab::{FocusRing, TabOrder};

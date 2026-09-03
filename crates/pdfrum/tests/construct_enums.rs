@@ -8,7 +8,7 @@
 //! `cargo add pdfrum` caller could write that produced the variant.
 //!
 //! The list is derived from `docs/status/api-baseline/pdfrum.txt` and
-//! `pdfrum+script.txt`, not by hand:
+//! `pdfrum+javascript.txt`, not by hand:
 //!
 //! 1. Collect every `pub use pdfrum::Foo` and `pub enum pdfrum::Foo`.
 //! 2. Look those names up as `pub enum` in the member-crate snapshots
@@ -23,8 +23,8 @@
 //! construction line is added.
 //!
 //! Script-only enums (`ScriptStop`, `TranscriptLine`) are the `pub use`
-//! names in `pdfrum+script.txt` that `pdfrum.txt` does not carry; they are
-//! gated on `feature = "script"`.
+//! names in `pdfrum+javascript.txt` that `pdfrum.txt` does not carry; they are
+//! gated on `feature = "javascript"`.
 
 #![allow(clippy::too_many_lines)]
 #![allow(clippy::unreadable_literal)]
@@ -591,7 +591,7 @@ fn construct_default_feature_variants() -> usize {
     n
 }
 
-#[cfg(feature = "script")]
+#[cfg(feature = "javascript")]
 fn construct_script_feature_variants() -> usize {
     let _ = ScriptStop::LimitReached;
     let _ = ScriptStop::Threw(String::new());
@@ -698,9 +698,9 @@ fn every_public_enum_variant_is_constructible_from_the_facade() {
 }
 
 #[test]
-#[cfg(feature = "script")]
+#[cfg(feature = "javascript")]
 fn every_script_enum_variant_is_constructible_from_the_facade() {
-    // The two enums `pdfrum+script.txt` adds as `pub use` over `pdfrum.txt`.
+    // The two enums `pdfrum+javascript.txt` adds as `pub use` over `pdfrum.txt`.
     // Their variant lines are not in the facade snapshots (cargo-public-api
     // does not expand re-exported enums there); the constructions are the
     // variants of `ScriptStop` and `TranscriptLine`.

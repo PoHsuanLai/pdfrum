@@ -104,7 +104,7 @@ pub mod pixmap;
 pub mod scanline;
 
 // The walk's own phase timers and allocation counters. Public *with the
-// default-off `walk-profile` feature and only then*: the module always
+// default-off `profiling` feature and only then*: the module always
 // exists, because the walk calls its entry points unconditionally and they
 // compile to empty inline functions with the feature off, but its forty-five
 // reporting items are part of the instrument rather than of the crate a
@@ -112,9 +112,9 @@ pub mod scanline;
 // `docs/status/api-baseline/README.md:103` says exactly that where it
 // declines to snapshot the feature. Its own docs make the STYLE.md §1
 // argument for the thread-local, and it holds.
-#[cfg(feature = "walk-profile")]
+#[cfg(feature = "profiling")]
 pub mod walkprofile;
-#[cfg(not(feature = "walk-profile"))]
+#[cfg(not(feature = "profiling"))]
 mod walkprofile;
 
 pub use color::{Argb, ObjectKind};

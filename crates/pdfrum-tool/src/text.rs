@@ -87,7 +87,7 @@ pub fn extract_page<R: Resolve>(
 ///
 /// Behind the `script` feature because `--js-transcript` is its only caller:
 /// nothing else the tool prints counts words.
-#[cfg(feature = "script")]
+#[cfg(feature = "javascript")]
 #[must_use]
 pub fn page_words<R: Resolve>(
     page: &PageDict,

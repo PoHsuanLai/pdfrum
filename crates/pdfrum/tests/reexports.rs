@@ -409,7 +409,7 @@ fn the_cascade_seam_is_nameable_without_the_script_feature() {
 /// because the bare name beside `BuildContext` in one `pdfrum::*` namespace
 /// would read as that type's error and it is not.
 #[test]
-#[cfg(feature = "script")]
+#[cfg(feature = "javascript")]
 fn the_script_types_are_nameable_from_the_facade() {
     nameable::<ScriptCascade>();
     nameable::<ScriptConfig>();

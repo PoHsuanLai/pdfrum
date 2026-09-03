@@ -206,7 +206,7 @@ hand-rolled copy would be wrong in exactly the places a password uses.
 
 | Crate | Use | Why this one |
 |---|---|---|
-| `boa_engine` **lib, feature-gated** | JavaScript engine (`pdfrum-form --features script`, and `pdfrum --features script` / `pdfrum-tool --features script`, both of which only forward that flag and take no direct dependency on it) — M15 | Pure Rust, 116 added crates, **zero `-sys`, zero `cc`/`cmake`/`bindgen`**, `cargo-deny` clean against the existing allowlist with no edit. 95.5% of test262; register VM; `RuntimeLimits` for loop/recursion/stack, which is a bound the C++ has no equivalent of. Pinned `=0.22.0`, `default-features = false`. **Reachable from no crate's default features**, asserted mechanically by `scripts/check-no-boa.nu`. Alternatives `rquickjs` and `deno_core` bind C and V8 and fail the purity rule outright |
+| `boa_engine` **lib, feature-gated** | JavaScript engine (`pdfrum-form --features javascript`, and `pdfrum --features javascript` / `pdfrum-tool --features javascript`, both of which only forward that flag and take no direct dependency on it) — M15 | Pure Rust, 116 added crates, **zero `-sys`, zero `cc`/`cmake`/`bindgen`**, `cargo-deny` clean against the existing allowlist with no edit. 95.5% of test262; register VM; `RuntimeLimits` for loop/recursion/stack, which is a bound the C++ has no equivalent of. Pinned `=0.22.0`, `default-features = false`. **Reachable from no crate's default features**, asserted mechanically by `scripts/check-no-boa.nu`. Alternatives `rquickjs` and `deno_core` bind C and V8 and fail the purity rule outright |
 
 ### The audit, run rather than promised — 2026-09-02
 
@@ -236,7 +236,7 @@ functions in `pdfrum-script` and reach no engine at all.
 
 **The MSRV is the one number that touches another milestone.** M13's exit
 criterion is "MSRV declared and CI-checked", and `boa 0.22` sets a floor of
-1.91.0 for any build with `--features script`. Because the feature is
+1.91.0 for any build with `--features javascript`. Because the feature is
 default-off, the floor applies **to the feature rather than to the
 workspace** — but it must be written down in M13's declaration as a
 per-feature MSRV rather than discovered by a consumer. Recorded here so M13
@@ -253,9 +253,9 @@ facade's default features, `pdfrum-tool`'s default features, and **every**
 workspace member (`conformance/` and `benches/` included) reach none of
 `boa_engine`/`boa_ast`/`boa_parser`/`boa_gc`/`boa_interner`/`boa_string`/
 `boa_macros` — plus **two** converses, so the first three cannot pass
-vacuously: that `pdfrum-form --features script` *does* reach `boa_engine`, and
+vacuously: that `pdfrum-form --features javascript` *does* reach `boa_engine`, and
 (added with WP12, when the facade grew a forwarding feature of its own) that
-`pdfrum --features script` does too, since a facade feature that forwarded
+`pdfrum --features javascript` does too, since a facade feature that forwarded
 nothing would be a feature in name only. `scripts/ci.nu` runs it.
 
 **What the engine's limits do and do not bound** is a security fact and is

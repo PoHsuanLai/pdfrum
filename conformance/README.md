@@ -17,8 +17,8 @@ The last two are the only ones that need **both** binaries, because
 than a flag diff.
 
 `pdfrum-tool` has its **own** `script` feature. Build it with
-`cargo build -p pdfrum-tool --release --features script`; passing
-`--features pdfrum/script` instead compiles cleanly and silently loses nine
+`cargo build -p pdfrum-tool --release --features javascript`; passing
+`--features pdfrum/javascript` instead compiles cleanly and silently loses nine
 `js-transcript` rows (42 failing instead of 33), because the tool's transcript
 path is behind the tool's feature, not the facade's.
 

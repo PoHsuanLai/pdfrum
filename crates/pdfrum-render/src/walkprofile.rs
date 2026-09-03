@@ -6,7 +6,7 @@
 //! and the dispatch left over — and the allocations at each site in the walk
 //! that makes one, counted and sized.
 //!
-//! **Costs nothing when the `walk-profile` feature is off**: every entry
+//! **Costs nothing when the `profiling` feature is off**: every entry
 //! point compiles to an empty inline function. The accumulator is a
 //! thread-local, so a rayon render reports per-thread totals rather than a
 //! contended one, and [`take`] resets it.
@@ -17,12 +17,12 @@
 // by reading it.
 //
 // The reporting half — `Profile` itself, and `Phase`/`Site`'s
-// `index`/`name`/`ALL` — carries `#[cfg(feature = "walk-profile")]` because
+// `index`/`name`/`ALL` — carries `#[cfg(feature = "profiling")]` because
 // with the feature off nothing ever produces a `Profile` to report. `Site`
 // and `Phase`'s *variants* are unconditional: the recording half names them
 // at every call site whether or not the feature is on.
 
-#[cfg(feature = "walk-profile")]
+#[cfg(feature = "profiling")]
 use core::time::Duration;
 
 /// One phase of the walk's engine-side work.
@@ -109,7 +109,7 @@ pub enum Site {
 ///
 /// A record of facts: the counters are public and the reporting lives in
 /// whoever reads them.
-#[cfg(feature = "walk-profile")]
+#[cfg(feature = "profiling")]
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Profile {
     /// Time in each phase, indexed as [`Phase`] orders them.
@@ -126,7 +126,7 @@ pub struct Profile {
 
 impl Phase {
     /// The index this phase occupies in [`Profile::phase_time`].
-    #[cfg(feature = "walk-profile")]
+    #[cfg(feature = "profiling")]
     #[must_use]
     pub const fn index(self) -> usize {
         match self {
@@ -145,7 +145,7 @@ impl Phase {
     }
 
     /// The phases in the order the arrays index them.
-    #[cfg(feature = "walk-profile")]
+    #[cfg(feature = "profiling")]
     pub const ALL: [Phase; 11] = [
         Phase::Clip,
         Phase::Color,
@@ -161,7 +161,7 @@ impl Phase {
     ];
 
     /// A short name for a report column.
-    #[cfg(feature = "walk-profile")]
+    #[cfg(feature = "profiling")]
     #[must_use]
     pub const fn name(self) -> &'static str {
         match self {
@@ -182,7 +182,7 @@ impl Phase {
 
 impl Site {
     /// The index this site occupies in [`Profile::site_count`].
-    #[cfg(feature = "walk-profile")]
+    #[cfg(feature = "profiling")]
     #[must_use]
     pub const fn index(self) -> usize {
         match self {
@@ -196,7 +196,7 @@ impl Site {
     }
 
     /// The sites in the order the arrays index them.
-    #[cfg(feature = "walk-profile")]
+    #[cfg(feature = "profiling")]
     pub const ALL: [Site; 6] = [
         Site::ClipVec,
         Site::ClipPath,
@@ -207,7 +207,7 @@ impl Site {
     ];
 
     /// A short name for a report row.
-    #[cfg(feature = "walk-profile")]
+    #[cfg(feature = "profiling")]
     #[must_use]
     pub const fn name(self) -> &'static str {
         match self {
@@ -221,7 +221,7 @@ impl Site {
     }
 }
 
-#[cfg(feature = "walk-profile")]
+#[cfg(feature = "profiling")]
 mod imp {
     use core::cell::Cell;
     use core::time::Duration;
@@ -307,14 +307,14 @@ mod imp {
     }
 }
 
-#[cfg(not(feature = "walk-profile"))]
+#[cfg(not(feature = "profiling"))]
 mod imp {
-    #[cfg(feature = "walk-profile")]
+    #[cfg(feature = "profiling")]
     use super::Profile;
     use super::{Phase, Site};
 
     /// Nothing was recorded, because nothing is recording.
-    #[cfg(feature = "walk-profile")]
+    #[cfg(feature = "profiling")]
     #[inline]
     pub fn take() -> Profile {
         Profile::default()
@@ -351,7 +351,7 @@ mod imp {
     }
 }
 
-#[cfg(feature = "walk-profile")]
+#[cfg(feature = "profiling")]
 pub use imp::take;
 pub use imp::{alloc, phase, phase_start};
 
@@ -369,7 +369,7 @@ mod tests {
     use super::*;
 
     /// The arrays exist only with the feature on, so their indexing does too.
-    #[cfg(feature = "walk-profile")]
+    #[cfg(feature = "profiling")]
     #[test]
     fn the_indices_are_dense_and_distinct() {
         // The arrays are indexed by these, so a duplicate or a gap would
@@ -387,7 +387,7 @@ mod tests {
         alloc_items(Site::ClipVec, 3, 8);
     }
 
-    #[cfg(feature = "walk-profile")]
+    #[cfg(feature = "profiling")]
     #[test]
     fn taking_the_profile_clears_it() {
         let _ = take();

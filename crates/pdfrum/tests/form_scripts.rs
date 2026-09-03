@@ -1,14 +1,14 @@
 //! The `script` feature's seam, end to end: a document's own `/AA` script
 //! runs on an event the facade sent, and what it produced comes back.
 //!
-//! **The whole file is behind `#[cfg(feature = "script")]`** — with the
+//! **The whole file is behind `#[cfg(feature = "javascript")]`** — with the
 //! feature off there is no engine at all, which `scripts/check-no-boa.nu`
 //! asserts in both directions.
 //!
 //! # Why an integration test and not a doctest
 //!
 //! It compiles against `pdfrum` with only `pdfrum` in scope, which is the
-//! position a `cargo add pdfrum --features script` caller is in and the only
+//! position a `cargo add pdfrum --features javascript` caller is in and the only
 //! position from which "can a caller reach the document's scripts from the
 //! facade alone?" has a truthful answer. Every name below comes from
 //! `pdfrum::*`; none of them is spelled `pdfrum_form::…`.
@@ -22,7 +22,7 @@
 //! the object model is complete, so most assertions below are about scripts
 //! having run rather than about a transcript matching the oracle's.
 
-#![cfg(feature = "script")]
+#![cfg(feature = "javascript")]
 
 use pdfrum::{Cascade, Document, FieldRef, FormSession, Modifiers, Point, ScriptConfig};
 
@@ -219,7 +219,7 @@ fn a_callers_own_cascade_gates_the_commit() {
 /// and one step of the clock runs what came due. There is no thread and no
 /// wall clock anywhere below this call.
 #[test]
-#[cfg(feature = "script")]
+#[cfg(feature = "javascript")]
 fn a_timer_fires_only_when_the_host_advances_the_clock() {
     use std::time::Duration;
 
@@ -255,7 +255,7 @@ fn a_timer_fires_only_when_the_host_advances_the_clock() {
 /// answer rather than a panic — a caller driving a clock must not have to ask
 /// first whether scripting is on.
 #[test]
-#[cfg(feature = "script")]
+#[cfg(feature = "javascript")]
 fn advancing_a_script_free_session_is_zero_and_not_a_panic() {
     use std::time::Duration;
 

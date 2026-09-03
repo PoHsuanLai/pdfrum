@@ -324,7 +324,7 @@ per-family record and the rulings are in `docs/status/M17.md`.
   attributed against 99.3% — and §17.2's three controls likewise. Read it with
   `scripts/profile.nu render <file> <iters> <backend> --warm --walk`. No public
   surface moved: the module is `pub` only under the feature, as
-  `walkprofile` is, and the two crates above it forward a `walk-profile` of
+  `walkprofile` is, and the two crates above it forward a `profiling` of
   their own.
 - ~~**every oracle-relative ratio is our whole pipeline against the oracle's
   raster half**~~ — **corrected in §18**, and the correction is worth more

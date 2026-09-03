@@ -27,8 +27,8 @@
 #             the ms/iteration figure printed above it. With `--sample` it
 #             additionally splits the ENGINE half into the walk's own phases and
 #             counts the walk's per-object allocations by site. Builds with
-#             `pdfrum-render/walk-profile`, which forwards to
-#             `pdfrum-page/walk-profile`, and forces the in-process
+#             `pdfrum-render/profiling`, which forwards to
+#             `pdfrum-page/profiling`, and forces the in-process
 #             instrumentation path even where `perf` is available, because the
 #             two answer different questions. **The timers cost real time** —
 #             about a third of a path-heavy render for the phase split, a few
@@ -200,7 +200,7 @@ def main [
     # this free of a separate build; if it is ever removed, this is where the
     # profile goes blind.
     print "==> building pdfrum-bench --release"
-    let features = if $walk { [--features walk-profile] } else { [] }
+    let features = if $walk { [--features profiling] } else { [] }
     ^cargo build --release -p pdfrum-bench --bin profile ...$features | ignore
 
     let target = (do --ignore-errors {

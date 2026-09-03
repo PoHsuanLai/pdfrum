@@ -99,14 +99,14 @@ def published-libs []: nothing -> list<string> {
 # feature earns a second file anyway, and the test is whether the crate's own
 # documentation tells an embedder to turn it on:
 #
-#   - `pdfrum --features script` (WP12) does. The facade's crate docs carry a
+#   - `pdfrum --features javascript` (WP12) does. The facade's crate docs carry a
 #     `# Features` section naming it, and it adds seven types and two
 #     constructors an embedder is meant to use — a surface no file would record
 #     otherwise, so a change to it would be invisible to every gate here.
-#   - `pdfrum-render/walk-profile` does not. It is a profiling switch, not a
+#   - `pdfrum-render/profiling` does not. It is a profiling switch, not a
 #     surface offered to callers.
-#   - `pdfrum-form/script` does, but its items are the same ones
-#     `pdfrum+script.txt` records one layer up, and the facade is the surface a
+#   - `pdfrum-form/javascript` does, but its items are the same ones
+#     `pdfrum+javascript.txt` records one layer up, and the facade is the surface a
 #     `cargo add` reaches. Recording it twice would make one API change diff in
 #     two files.
 #
@@ -114,7 +114,7 @@ def published-libs []: nothing -> list<string> {
 # statement that its surface is part of the product, and that should be a
 # decision someone makes rather than a consequence of a manifest edit.
 const FEATURED = [
-    {file: 'pdfrum+script', crate: 'pdfrum', features: 'script'}
+    {file: 'pdfrum+javascript', crate: 'pdfrum', features: 'javascript'}
 ]
 
 # One crate's public API, as `cargo public-api` prints it.

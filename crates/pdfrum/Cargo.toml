@@ -43,14 +43,14 @@ fn_params_excessive_bools = "deny"
 # The facade forwards the flag and owns no engine: `boa_engine` is not a
 # dependency of this crate under any feature, and `ScriptCascade` lives in
 # `pdfrum-form`.
-script = ["pdfrum-form/script"]
+javascript = ["pdfrum-form/javascript"]
 
 # The whole-render stage timers, forwarded down to `pdfrum-page` where the
 # accumulator lives and across to `pdfrum-doc`, which times the annotation
 # pass's five stages. Default-off, and it is not a published capability: the
 # flag exists so `pdfrum-bench`'s `profile` binary can measure the pipeline
 # `Page::paint` runs, and it adds no public item to this crate.
-walk-profile = ["pdfrum-page/walk-profile", "pdfrum-doc/walk-profile"]
+profiling = ["pdfrum-page/profiling", "pdfrum-doc/profiling"]
 
 [dependencies]
 pdfrum-common.workspace = true
