@@ -196,6 +196,30 @@ pub struct AggDevice {
     /// one — see `Target`'s `clip` field for why that share replaced a
     /// device-sized copy on every push and pop.
     clips: Vec<Option<Arc<AlphaMask>>>,
+    /// The band of rows each entry of `clips` has non-zero coverage in, so a
+    /// popped plane can be returned to `planes` by clearing that band alone.
+    ///
+    /// Parallel to `clips` and pushed and popped with it. The bottom entry is
+    /// the `None` clip and its band is empty. An entry is an *upper bound* on
+    /// the plane's non-zero rows, never an exact one — see
+    /// [`AggDevice::coverage_of`].
+    bands: Vec<core::ops::Range<u32>>,
+    /// Device-sized coverage planes, every byte zero, waiting to be swept
+    /// into by [`AggDevice::coverage_of`].
+    ///
+    /// A clip plane is the size of the device — half a megabyte on a letter
+    /// page — and allocating one is `vec![0; len]`, which is a half-megabyte
+    /// `memset` the allocator cannot hand over already zeroed once the page's
+    /// first few are in flight. A page of annotation appearances pushes one
+    /// clip per widget's `/BBox` plus whatever the appearance's own content
+    /// pushes inside it, so `forms_combo_box` allocates two hundred and
+    /// seventy-six of them per render for clips thirty rows tall.
+    ///
+    /// The pool holds the ones a `pop` reclaimed. The invariant that makes a
+    /// reused plane indistinguishable from a fresh one is that **every byte in
+    /// here is zero**: `recycle` clears the popped plane's band, which is an
+    /// upper bound on where it is non-zero, before the plane lands here.
+    planes: Vec<AlphaMask>,
     frames: Vec<Frame>,
     /// Reused across draws so a page of paths costs one allocation, not one
     /// per fill.
@@ -208,6 +232,12 @@ impl AggDevice {
             base: target,
             layers: Vec::new(),
             clips: vec![None],
+            // One entry, matching `clips`'s `None` bottom. Its band is
+            // empty because that entry has no plane to reclaim. Spelt through
+            // `from_iter` because `vec![0..0]` reads to clippy as a `Vec`
+            // built *from* a range rather than a `Vec` holding one.
+            bands: core::iter::once(0..0).collect(),
+            planes: Vec::new(),
             frames: Vec::new(),
             raster: Rasterizer::new(),
         }
@@ -337,16 +367,73 @@ impl AggDevice {
         }
     }
 
+    /// A device-sized coverage plane with every byte zero, from the pool if
+    /// one is waiting there and freshly allocated otherwise.
+    ///
+    /// The pool's invariant is that its planes are all-zero, so this is
+    /// [`AlphaMask::new`] without the `memset` — see the `planes` field. They
+    /// are also device-sized, because `size()` is fixed for the life of an
+    /// `AggDevice` and every plane in the pool came from a `coverage_of` on
+    /// this one; the check is what says so out loud, and a plane that somehow
+    /// failed it is dropped rather than handed back at the wrong stride.
+    fn blank_plane(&mut self, w: u32, h: u32) -> AlphaMask {
+        match self.planes.pop() {
+            Some(plane) if plane.width() == w && plane.height() == h => plane,
+            _ => AlphaMask::new(w, h),
+        }
+    }
+
+    /// Return a popped clip plane to the pool, zeroed.
+    ///
+    /// `band` is the range the entry's plane was recorded with, and it bounds
+    /// the plane's non-zero rows above: `coverage_of` wrote only inside its own
+    /// band and `push_clip_mask`'s intersection only narrowed that, so clearing
+    /// the band restores the pool's all-zero invariant. Clearing thirty rows is
+    /// what makes the reuse worth having; clearing the whole plane would be the
+    /// `memset` this exists to avoid.
+    ///
+    /// The plane is reclaimed only when this stack entry held the **last**
+    /// share of it. A layer pushed while the clip was in force holds one of its
+    /// own (`push_layer`), and the active target holds one until `sync_clip`
+    /// has run — so this is called after that, and `Arc::try_unwrap` declining
+    /// simply means the plane is still somebody's and the pool does without it.
+    fn recycle(&mut self, plane: Option<Arc<AlphaMask>>, band: core::ops::Range<u32>) {
+        let Some(plane) = plane else {
+            return;
+        };
+        let Ok(mut plane) = Arc::try_unwrap(plane) else {
+            return;
+        };
+        let width = plane.width() as usize;
+        let (Some(start), Some(end)) = (
+            (band.start as usize).checked_mul(width),
+            (band.end as usize).checked_mul(width),
+        ) else {
+            return;
+        };
+        let Some(rows) = plane.data_mut().get_mut(start..end) else {
+            return;
+        };
+        rows.fill(0);
+        self.planes.push(plane);
+    }
+
     /// The coverage plane a path fills, device-sized — a clip — and the half-
     /// open band of rows the sweep actually wrote to.
     ///
     /// The plane is device-sized because that is what a clip is: [`Target`]
     /// indexes it by absolute device row and column. The *band* is what makes
     /// intersecting one cheap. Every row outside it is untouched, which for a
-    /// freshly allocated mask means it is all zero, and `mul255(0, b)` is `0`
-    /// for every `b` — so an intersection restricted to the band produces
-    /// byte-for-byte the plane a whole-buffer one would. See
-    /// [`AggDevice::push_clip_mask`].
+    /// zeroed mask means it is all zero, and `mul255(0, b)` is `0` for every
+    /// `b` — so an intersection restricted to the band produces byte-for-byte
+    /// the plane a whole-buffer one would. See [`AggDevice::push_clip_mask`].
+    ///
+    /// The plane comes from [`AggDevice::blank_plane`], which is the pool, and
+    /// the pool's planes are zero for the same reason a fresh one is. The
+    /// sweep *assigns* rather than accumulates — `*slot = alpha` — so a
+    /// recycled plane's spans are the new path's, not a mixture; what the pool
+    /// has to guarantee is only that the bytes the sweep does **not** touch are
+    /// zero, which is exactly `recycle`'s postcondition.
     fn coverage_of(
         &mut self,
         path: &BezPath,
@@ -354,7 +441,7 @@ impl AggDevice {
         aa: AntiAlias,
     ) -> (AlphaMask, core::ops::Range<u32>) {
         let (w, h) = self.size();
-        let mut mask = AlphaMask::new(w, h);
+        let mut mask = self.blank_plane(w, h);
         self.raster.reset();
         self.raster.add_path(path, FLATTEN_TOLERANCE);
         let width = w as usize;
@@ -404,9 +491,13 @@ impl AggDevice {
     /// letter page's eight hundred.
     fn push_clip_mask(&mut self, mut mask: AlphaMask, band: core::ops::Range<u32>) {
         if let Some(current) = self.clips.last().and_then(Option::as_ref) {
-            intersect_rows(&mut mask, current, band);
+            intersect_rows(&mut mask, current, band.clone());
         }
         self.clips.push(Some(Arc::new(mask)));
+        // The intersection only narrows what the sweep wrote, so the sweep's
+        // band still bounds this plane's non-zero rows — which is what
+        // `recycle` needs when this entry is popped.
+        self.bands.push(band);
         self.frames.push(Frame::Clip);
         self.sync_clip();
     }
@@ -662,10 +753,18 @@ impl RenderDevice for AggDevice {
     fn pop(&mut self) {
         match self.frames.pop() {
             Some(Frame::Clip) => {
-                if self.clips.len() > 1 {
-                    self.clips.pop();
-                }
+                let popped = if self.clips.len() > 1 {
+                    Some((self.clips.pop(), self.bands.pop()))
+                } else {
+                    None
+                };
+                // Before the reclaim, not after: the target holds a share of
+                // the popped plane until this repoints it one level out, and
+                // `recycle` takes the plane only when nothing else does.
                 self.sync_clip();
+                if let Some((Some(plane), Some(band))) = popped {
+                    self.recycle(plane, band);
+                }
             }
             Some(Frame::Layer) => {
                 let Some(layer) = self.layers.pop() else {
@@ -992,6 +1091,130 @@ mod tests {
                     out.pixel(x, 0).map(|px| px[3]),
                     Some(if inside { 255 } else { 0 }),
                     "column {x} at depth {depth} (clip edge {edge})"
+                );
+            }
+        }
+    }
+
+    /// A recycled plane must be indistinguishable from a fresh one, and the
+    /// only way it is not is if `recycle` failed to clear a byte the next
+    /// sweep does not overwrite.
+    ///
+    /// Push a clip over rows 0..4, pop it, then push one over rows 4..8. The
+    /// second push takes the first's plane out of the pool. If its rows 0..4
+    /// were still carrying the first clip's coverage, the fill below would
+    /// paint through them — the second clip does not sweep there, so nothing
+    /// would ever clear them.
+    #[test]
+    fn a_recycled_plane_carries_none_of_the_clip_it_held() {
+        let backend = AggBackend::new();
+        let mut device = backend.new_target(8, 8, peniko::Color::TRANSPARENT);
+        device.push_clip_rect(Rect::new(0.0, 0.0, 8.0, 4.0));
+        device.pop();
+        device.push_clip_rect(Rect::new(0.0, 4.0, 8.0, 8.0));
+        device.fill_path(
+            &square(0.0, 0.0, 8.0, 8.0),
+            Affine::IDENTITY,
+            &Brush::Solid(RED),
+            FillRule::Winding,
+            AntiAlias::Off,
+        );
+        device.pop();
+        let out = backend.finish(device);
+        for y in 0..8 {
+            for x in 0..8 {
+                assert_eq!(
+                    out.pixel(x, y).map(|px| px[3]),
+                    Some(if y >= 4 { 255 } else { 0 }),
+                    "({x}, {y}) disagrees with the second clip alone"
+                );
+            }
+        }
+    }
+
+    /// The plane a *nested* clip recycles carries the intersection, not the
+    /// sweep — narrower than its band, and still entirely inside it.
+    ///
+    /// Rows 2..6 intersected with rows 0..4 leaves 2..4 non-zero, recorded
+    /// under the band 2..6. Clearing the band clears the intersection with
+    /// room to spare; clearing anything narrower would not. The third clip
+    /// then reuses that plane over rows 0..2, which touches none of 2..6.
+    #[test]
+    fn a_recycled_nested_plane_is_cleared_over_its_whole_band() {
+        let backend = AggBackend::new();
+        let mut device = backend.new_target(8, 8, peniko::Color::TRANSPARENT);
+        device.push_clip_rect(Rect::new(0.0, 0.0, 8.0, 4.0));
+        device.push_clip_rect(Rect::new(0.0, 2.0, 8.0, 6.0));
+        device.pop();
+        device.push_clip_rect(Rect::new(0.0, 0.0, 8.0, 2.0));
+        device.fill_path(
+            &square(0.0, 0.0, 8.0, 8.0),
+            Affine::IDENTITY,
+            &Brush::Solid(RED),
+            FillRule::Winding,
+            AntiAlias::Off,
+        );
+        device.pop();
+        device.pop();
+        let out = backend.finish(device);
+        for y in 0..8 {
+            for x in 0..8 {
+                assert_eq!(
+                    out.pixel(x, y).map(|px| px[3]),
+                    Some(if y < 2 { 255 } else { 0 }),
+                    "({x}, {y}) disagrees with rows 0..4 and rows 0..2"
+                );
+            }
+        }
+    }
+
+    /// A layer opened over a clip, and a clip opened inside a layer, both
+    /// unwind with the right plane in force at every step.
+    ///
+    /// `push_layer` clones the clip `Arc` into the layer's target, so the two
+    /// hold the same plane for as long as the layer is open. `frames` is one
+    /// LIFO, so a layer opened after a clip is always popped before it and the
+    /// share is gone by the time `recycle` looks — which is why the reclaim's
+    /// `Arc::try_unwrap` never declines on the corpus (measured: zero declines
+    /// over all forty-four `benches/corpus` documents). It is kept anyway,
+    /// because `recycle` must not be the thing that makes a future share
+    /// unsound, and because it costs one already-loaded refcount. This test is
+    /// the shape it guards: nested clips and layers, checked on the way out.
+    #[test]
+    fn a_clip_under_a_layer_unwinds_with_the_layer_between_them() {
+        let backend = AggBackend::new();
+        let mut device = backend.new_target(8, 8, peniko::Color::TRANSPARENT);
+        device.push_clip_rect(Rect::new(0.0, 0.0, 8.0, 4.0));
+        device.push_layer(BlendMode::Normal, 1.0, None);
+        device.push_clip_rect(Rect::new(0.0, 2.0, 8.0, 8.0));
+        device.fill_path(
+            &square(0.0, 0.0, 8.0, 8.0),
+            Affine::IDENTITY,
+            &Brush::Solid(RED),
+            FillRule::Winding,
+            AntiAlias::Off,
+        );
+        device.pop();
+        device.pop();
+        // Back under the outer clip alone, and drawing again must reach rows
+        // 0..2 — which the inner clip excluded and which a recycled plane
+        // would have carried its coverage into.
+        device.fill_path(
+            &square(0.0, 0.0, 8.0, 1.0),
+            Affine::IDENTITY,
+            &Brush::Solid(RED),
+            FillRule::Winding,
+            AntiAlias::Off,
+        );
+        device.pop();
+        let out = backend.finish(device);
+        for y in 0..8 {
+            for x in 0..8 {
+                let inside = (2..4).contains(&y) || y < 1;
+                assert_eq!(
+                    out.pixel(x, y).map(|px| px[3]),
+                    Some(if inside { 255 } else { 0 }),
+                    "({x}, {y}) disagrees with the clips the two fills ran under"
                 );
             }
         }
