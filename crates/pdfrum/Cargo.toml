@@ -47,7 +47,7 @@ fn_params_excessive_bools = "deny"
 # `default-features = false`, for a build that only parses, extracts, reads
 # forms or edits. Every backend is a feature named after its rasterizer, and
 # the GPU one is never in the default set (DEPS.md, "wgpu").
-default = ["vello-cpu", "edit", "forms", "codecs-all"]
+default = ["vello-cpu", "edit", "forms", "codecs-all", "system-fonts"]
 vello-cpu = ["dep:pdfrum-raster-vello-cpu"]
 tinyskia = ["dep:pdfrum-raster-tinyskia"]
 agg = ["dep:pdfrum-raster-agg"]
@@ -63,6 +63,10 @@ javascript = ["forms", "pdfrum-form/javascript"]
 # The specialised image codecs. Flate and JPEG are always in; these three
 # are what a build that will never meet them can leave out.
 codecs-all = ["jpx", "jbig2", "ccitt"]
+
+# Substitute a missing font from the host's installed ones; off, the bundled
+# base-14 faces alone answer. Never compiled into a WebAssembly build.
+system-fonts = ["pdfrum-font/system-fonts"]
 jpx = ["pdfrum-page/jpx"]
 jbig2 = ["pdfrum-page/jbig2"]
 ccitt = ["pdfrum-page/ccitt", "pdfrum-filters/ccitt"]
@@ -72,6 +76,10 @@ ccitt = ["pdfrum-page/ccitt", "pdfrum-filters/ccitt"]
 # pass's five stages. Default-off, and it is not a published capability: the
 # flag exists so `pdfrum-bench`'s `profile` binary can measure the pipeline
 # `Page::paint` runs, and it adds no public item to this crate.
+# `Pixmap::encode_png` and `Pixmap::save_png`, for a caller who wants a file
+# without choosing an encoder.
+png = ["pdfrum-render/png"]
+
 profiling = ["pdfrum-page/profiling", "pdfrum-doc/profiling"]
 
 [dependencies]

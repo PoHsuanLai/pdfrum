@@ -22,9 +22,12 @@ workspace = true
 [features]
 default = []
 profiling = ["pdfrum-page/profiling"]
+# `Pixmap::encode_png` and `Pixmap::save_png`.
+png = ["dep:png"]
 
 [dependencies]
 pdfrum-common.workspace = true
+png = { workspace = true, optional = true }
 pdfrum-object.workspace = true
 pdfrum-font.workspace = true
 pdfrum-page.workspace = true

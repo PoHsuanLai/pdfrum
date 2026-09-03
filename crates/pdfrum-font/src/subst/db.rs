@@ -7,9 +7,13 @@
 //! recommended: `fontdb`'s query ranking is a different function, and Tier-B
 //! results would drift with its version.
 
-use super::charset::{Charset, PitchFamily, charset_for_code_page_bit};
+#[cfg(all(feature = "system-fonts", not(target_arch = "wasm32")))]
+use super::charset::charset_for_code_page_bit;
+use super::charset::{Charset, PitchFamily};
 use super::style::{style_bits, tt_normalize};
+#[cfg(all(feature = "system-fonts", not(target_arch = "wasm32")))]
 use read_fonts::TableProvider;
+#[cfg(all(feature = "system-fonts", not(target_arch = "wasm32")))]
 use skrifa::MetadataProvider;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -377,6 +381,21 @@ impl SystemFontDb {
     /// An empty `extra_dirs` list means "the system's own directories"; a
     /// non-empty one means **only** those, which is how a hermetic run pins
     /// the font set.
+    /// The host's installed fonts, or the faces under `extra_dirs` when any
+    /// are named — behind the `system-fonts` feature and off the WebAssembly
+    /// target, where there is no host to scan: there the database is empty
+    /// and the bundled faces alone answer.
+    #[cfg(not(all(feature = "system-fonts", not(target_arch = "wasm32"))))]
+    #[must_use]
+    pub fn scan(extra_dirs: &[PathBuf]) -> Self {
+        let _ = extra_dirs;
+        Self {
+            faces: Vec::new(),
+            sources: Vec::new(),
+        }
+    }
+
+    #[cfg(all(feature = "system-fonts", not(target_arch = "wasm32")))]
     #[must_use]
     pub fn scan(extra_dirs: &[PathBuf]) -> Self {
         let mut db = fontdb::Database::new();
@@ -440,6 +459,7 @@ impl FontDb for SystemFontDb {
     }
 }
 
+#[cfg(all(feature = "system-fonts", not(target_arch = "wasm32")))]
 fn face_bytes_of(_db: &fontdb::Database, face: &fontdb::FaceInfo) -> Option<Arc<[u8]>> {
     match &face.source {
         fontdb::Source::Binary(data) | fontdb::Source::SharedFile(_, data) => {
@@ -449,6 +469,7 @@ fn face_bytes_of(_db: &fontdb::Database, face: &fontdb::FaceInfo) -> Option<Arc<
     }
 }
 
+#[cfg(all(feature = "system-fonts", not(target_arch = "wasm32")))]
 /// The three style bits an enumerated face carries, from its two name strings.
 ///
 /// `name` is the joined face name — family, then the style unless the style is
@@ -479,6 +500,7 @@ fn face_styles(name: &str, style: &str) -> u32 {
     styles
 }
 
+#[cfg(all(feature = "system-fonts", not(target_arch = "wasm32")))]
 /// Read a face's display name, style bits and charsets from its own tables.
 ///
 /// The charsets come from `OS/2`'s code-page ranges, which `fontdb` does not
@@ -567,7 +589,7 @@ fn describe(index: u32, bytes: &Arc<[u8]>) -> Option<FaceInfo> {
     })
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "system-fonts", not(target_arch = "wasm32")))]
 mod tests {
     // Test fixtures are fixed-size arrays with known contents.
     #![allow(clippy::indexing_slicing)]
@@ -819,7 +841,7 @@ mod tests {
 // The rule pinned here is `CFX_FolderFontInfo::ReportFace`; the PANOSE rule
 // these tests exclude is `CFX_Face::GetFontStyle`, which PDFium reaches only
 // from XFA and Android.
-#[cfg(test)]
+#[cfg(all(test, feature = "system-fonts", not(target_arch = "wasm32")))]
 mod face_style_bits {
     use super::*;
 

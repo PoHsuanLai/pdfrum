@@ -1762,6 +1762,7 @@ dependencies = [
  "pdfrum-parser",
  "pdfrum-raster-agg",
  "pdfrum-raster-tinyskia",
+ "pdfrum-raster-vello",
  "pdfrum-raster-vello-cpu",
  "pdfrum-render",
  "pdfrum-text",
@@ -2015,6 +2016,7 @@ dependencies = [
  "pdfrum-raster-tinyskia",
  "pdfrum-raster-vello-cpu",
  "peniko",
+ "png",
  "smallvec",
  "thiserror",
 ]

@@ -195,6 +195,7 @@ pub fn charset_from_unicode(u: u32) -> Charset {
     }
 }
 
+#[cfg(all(feature = "system-fonts", not(target_arch = "wasm32")))]
 /// The `OS/2` code-page-range bit a charset corresponds to, for reading a
 /// face's charsets out of its own tables (`cfx_folderfontinfo.cpp`).
 #[must_use]
@@ -329,6 +330,7 @@ mod tests {
         assert!(!p.has(PitchFamily::SCRIPT));
     }
 
+    #[cfg(all(feature = "system-fonts", not(target_arch = "wasm32")))]
     #[test]
     fn code_page_bits_map_to_charsets() {
         assert_eq!(charset_for_code_page_bit(17), Some(Charset::ShiftJis));
