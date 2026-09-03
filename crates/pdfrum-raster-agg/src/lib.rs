@@ -447,13 +447,22 @@ impl AggDevice {
                     first = first.min(row);
                     last = last.max(row.saturating_add(1));
                 }
-                for col in x0..x1 {
-                    let Ok(col) = usize::try_from(col) else {
-                        continue;
-                    };
-                    if let Some(slot) = mask.data_mut().get_mut(row as usize * width + col) {
-                        *slot = alpha;
-                    }
+                // A span is a run of *constant* alpha, so it is one `fill`
+                // over the row's slice rather than a write per column. The
+                // per-column spelling asked `data_mut()` for the whole buffer
+                // and re-derived `row * width + col` on every pixel, inside a
+                // bounds check the row's own slice already answers.
+                let (Ok(x0u), Ok(x1u)) = (usize::try_from(x0), usize::try_from(x1)) else {
+                    return;
+                };
+                let Some(start) = (row as usize).checked_mul(width) else {
+                    return;
+                };
+                let (Some(lo), Some(hi)) = (start.checked_add(x0u), start.checked_add(x1u)) else {
+                    return;
+                };
+                if let Some(span) = mask.data_mut().get_mut(lo..hi) {
+                    span.fill(alpha);
                 }
             },
         );
@@ -904,6 +913,63 @@ mod tests {
         let out = backend.finish(device);
         let tip = out.pixel(3, 3).map_or(0, |px| px[3]);
         assert_eq!(tip, 64, "the miter's outer tip is a quarter-covered pixel");
+    }
+
+    /// The row-`fill` spelling of [`AggDevice::coverage_of`]'s sweep writes
+    /// exactly the plane the per-column one wrote.
+    ///
+    /// A span is a run of constant alpha, so filling the row's slice is the
+    /// same bytes as assigning each column of it — but only if the slice is the
+    /// right one, and the two spellings clamp differently on an out-of-range
+    /// span: the per-column one wrote the in-range prefix of a row that
+    /// overruns the buffer, and a row `fill` writes nothing at all. That case
+    /// is unreachable — `x1` is already clamped to the width and `row` is
+    /// rejected past the height, so `row * width + x1` never leaves the buffer
+    /// — and this is what says the clamps really do bound it, over clips that
+    /// leave the target on every side and a target whose width is not a
+    /// multiple of anything.
+    ///
+    /// The comparison is against the plane a whole-device fill produces
+    /// through the same push, so a spelling that silently dropped a row or a
+    /// column would differ from itself under a clip that does not.
+    #[test]
+    fn a_clip_planes_spans_are_filled_over_exactly_their_own_rows() {
+        let backend = AggBackend::new();
+        for (x0, y0, x1, y1) in [
+            (0.0, 0.0, 7.0, 5.0),
+            (-4.0, -3.0, 3.0, 2.0),
+            (3.0, 2.0, 40.0, 30.0),
+            (-9.0, -9.0, 40.0, 30.0),
+            (2.0, 1.0, 2.0, 1.0),
+        ] {
+            // 7x5 rather than a power of two, so a row's end and the buffer's
+            // are not the same arithmetic.
+            let mut device = backend.new_target(7, 5, peniko::Color::TRANSPARENT);
+            device.push_clip_rect(Rect::new(x0, y0, x1, y1));
+            device.fill_path(
+                &square(-20.0, -20.0, 40.0, 40.0),
+                Affine::IDENTITY,
+                &Brush::Solid(RED),
+                FillRule::Winding,
+                AntiAlias::Off,
+            );
+            device.pop();
+            let out = backend.finish(device);
+            for row in 0..5 {
+                for col in 0..7 {
+                    let inside = f64::from(col) >= x0.max(0.0)
+                        && f64::from(col) + 1.0 <= x1.min(7.0)
+                        && f64::from(row) >= y0.max(0.0)
+                        && f64::from(row) + 1.0 <= y1.min(5.0);
+                    let a = out.pixel(col, row).map_or(0, |px| px[3]);
+                    assert_eq!(
+                        a,
+                        u8::from(inside) * 255,
+                        "({x0},{y0},{x1},{y1}) at ({col},{row})"
+                    );
+                }
+            }
+        }
     }
 
     #[test]
