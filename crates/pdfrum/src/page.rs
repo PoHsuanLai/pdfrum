@@ -106,7 +106,7 @@ impl<'a> Page<'a> {
     /// Renders the page to a pixel buffer on the rasterizer you name, with
     /// caches of its own that it throws away afterwards.
     ///
-    /// The backend is an argument, never a default: [`VelloCpuBackend`] is
+    /// The backend is an argument, never a default: `VelloCpuBackend` is
     /// the one the `vello-cpu` feature (on by default) provides, and the
     /// `tinyskia`, `agg` and `vello-gpu` features provide the others. For a
     /// run over many pages, use [`Page::render_on`] with one
