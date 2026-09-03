@@ -516,4 +516,72 @@ impl Attachment<'_> {
         self.doc.note(&diags);
         Some(decoded.data)
     }
+
+    /// The `/Desc` text of the file specification: empty when absent or not
+    /// a string.
+    #[must_use]
+    pub fn description(&self) -> String {
+        self.spec
+            .object
+            .as_dict()
+            .and_then(|dict| dict.text(&Name::from("Desc"), &self.doc.inner))
+            .unwrap_or_default()
+    }
+
+    /// The embedded file's `/Subtype` — its MIME type, such as `text/plain`:
+    /// `None` without an embedded file, empty when the stream names none.
+    #[must_use]
+    pub fn subtype(&self) -> Option<String> {
+        let stream = self.spec.file_stream(&self.doc.inner)?;
+        let name = stream
+            .dict
+            .get(&Name::from("Subtype"), &self.doc.inner)
+            .and_then(|value| {
+                value
+                    .get()
+                    .as_name()
+                    .map(|n| String::from_utf8_lossy(n.as_bytes()).into_owned())
+            });
+        Some(name.unwrap_or_default())
+    }
+
+    /// Whether the embedded file's `/Params` carry `key`.
+    #[must_use]
+    pub fn has_param(&self, key: &str) -> bool {
+        self.spec
+            .params(&self.doc.inner)
+            .is_some_and(|params| params.contains_key(&Name::from(key)))
+    }
+
+    /// A `/Params` entry as text — `CreationDate`, `ModDate`, `CheckSum`:
+    /// `None` when absent; a string or a name gives its text, anything else
+    /// is empty.
+    #[must_use]
+    pub fn param(&self, key: &str) -> Option<String> {
+        let params = self.spec.params(&self.doc.inner)?;
+        let key = Name::from(key);
+        if !params.contains_key(&key) {
+            return None;
+        }
+        let object = params.get(&key, &self.doc.inner)?;
+        Some(match object.get() {
+            // A checksum written as a hex string is shown as that hex string,
+            // brackets and all, rather than as the sixteen bytes it decodes to.
+            pdfrum_object::Object::Str(string) if key.as_bytes() == b"CheckSum" && string.hex => {
+                use std::fmt::Write as _;
+                let mut hex = String::with_capacity(string.bytes.len() * 2 + 2);
+                hex.push('<');
+                for byte in &string.bytes {
+                    let _ = write!(hex, "{byte:02X}");
+                }
+                hex.push('>');
+                hex
+            }
+            pdfrum_object::Object::Str(string) => string.as_text().into_owned(),
+            pdfrum_object::Object::Name(name) => {
+                String::from_utf8_lossy(name.as_bytes()).into_owned()
+            }
+            _ => String::new(),
+        })
+    }
 }
