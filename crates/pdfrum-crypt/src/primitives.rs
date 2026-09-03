@@ -32,7 +32,7 @@ pub(crate) enum CipherError {
 
 /// MD5 of one buffer (RFC 1321).
 #[must_use]
-pub(crate) fn md5(data: &[u8]) -> [u8; 16] {
+pub fn md5(data: &[u8]) -> [u8; 16] {
     Md5::digest(data).into()
 }
 
