@@ -43,6 +43,10 @@ const BUG_377948405: &[u8] = include_bytes!("fixtures/bug_377948405.ttf");
 /// Type 1 program. `pdfrum-type1`'s fixture is one, and is not duplicated
 /// into this directory.
 const FOXIT_SERIF_MM: &[u8] = include_bytes!("../../pdfrum-type1/tests/fixtures/FoxitSerifMM.pfb");
+/// The font `FPDFEditEmbedderTest.LoadCidType2FontCustom` loads: eleven
+/// glyphs, real advances, and no cmap worth speaking of — which is the point,
+/// since the caller's `/CIDToGIDMap` is what reaches its glyphs.
+const NOTO_SANS_SC: &[u8] = include_bytes!("fixtures/noto_sans_sc_subset.otf");
 
 fn scratch_dir() -> std::path::PathBuf {
     let dir = std::env::temp_dir().join("pdfrum-load-font");
@@ -1656,13 +1660,372 @@ fn embed_font_rejects_a_program_it_cannot_read() {
     assert_eq!(good.encode("Hi"), b"Hi".to_vec());
 }
 
+/// The `/ToUnicode` CMap `FPDFEditEmbedderTest.LoadCidType2FontCustom` passes,
+/// verbatim (`fpdfsdk/fpdf_edit_embeddertest.cpp:4004-4029`).
+///
+/// Five `bfrange` blocks, deliberately overlapping at their endpoints — CID 3
+/// appears in two of them, CID 4 in two, CID 5 in two — which is what makes it
+/// a test of the collision policy and not only of the parse.
+const CUSTOM_TO_UNICODE: &str = "\
+/CIDInit /ProcSet findresource begin
+12 dict begin
+begincmap
+/CIDSystemInfo <<
+  /Registry (Adobe)
+  /Ordering (Identity)
+  /Supplement 0
+>> def
+/CMapName /Adobe-Identity-H def
+/CMapType 2 def
+1 begincodespacerange
+<0000> <FFFF>
+endcodespacerange
+5 beginbfrange
+<0001> <0003> [<0020> <3002> <2F00>]
+<0003> <0004> [<4E00> <2F06>]
+<0004> <0005> [<4E8C> <53E5>]
+<0005> <0008> [<F906> <662F> <7B2C> <884C>]
+<0008> <0009> [<FA08> <8FD9>]
+endbfrange
+endcmap
+CMapName currentdict /CMap defineresource pop
+end
+end
+";
+
+/// `kCidToGidMap` from the same case: ten big-endian `u16` entries, CID `i`
+/// to GID `i`.
+const CUSTOM_CID_TO_GID: &[u8] = &[0, 0, 0, 1, 0, 2, 0, 3, 0, 4, 0, 5, 0, 6, 0, 7, 0, 8, 0, 9];
+
+/// The stream behind `key` on `font`'s descendant CID font dictionary.
+fn descendant_stream(doc: &Document, font: ObjRef, key: &str) -> Vec<u8> {
+    let font_dict = fetch_dict(doc, font);
+    let descendants = font_dict
+        .array(&Name::from("DescendantFonts"), doc.parser())
+        .expect("DescendantFonts");
+    let cid_dict = fetch_dict(doc, descendants.reference_at(0).expect("cid ref"));
+    let reference = cid_dict.reference(&Name::from(key)).expect("stream ref");
+    let stream = doc
+        .parser()
+        .fetch(reference)
+        .expect("fetches")
+        .as_stream()
+        .expect("stream")
+        .clone();
+    pdfrum_filters::decode_chain(
+        &stream,
+        0,
+        doc.parser(),
+        &pdfrum_common::Limits::default(),
+        &mut pdfrum_common::Diagnostics::default(),
+    )
+    .data
+}
+
+/// The stream behind `key` on the `/Type0` root itself.
+fn root_stream(doc: &Document, font: ObjRef, key: &str) -> Vec<u8> {
+    let font_dict = fetch_dict(doc, font);
+    let reference = font_dict.reference(&Name::from(key)).expect("stream ref");
+    let stream = doc
+        .parser()
+        .fetch(reference)
+        .expect("fetches")
+        .as_stream()
+        .expect("stream")
+        .clone();
+    pdfrum_filters::decode_chain(
+        &stream,
+        0,
+        doc.parser(),
+        &pdfrum_common::Limits::default(),
+        &mut pdfrum_common::Diagnostics::default(),
+    )
+    .data
+}
+
+/// A closure over `program`'s advances, so a test can state the width it
+/// expects at a GID without reimplementing the metric lookup.
+fn program_advances(program: &[u8]) -> impl Fn(u16) -> i32 + use<> {
+    let glyphs = pdfrum_font::GlyphSource::from_bytes(program).expect("a font program");
+    move |gid| glyphs.default_advance(pdfrum_font::Gid(gid))
+}
+
+/// `CheckCompositeFontWidths` (`fpdfsdk/fpdf_edit_embeddertest.cpp:219-259`)
+/// over the `/W` of `font`'s descendant: walk the two ISO 32000-1 §9.7.4.3
+/// forms, check every width against the advance of the GID
+/// [`CUSTOM_CID_TO_GID`] sends that CID to, and return how many CIDs the array
+/// accounts for.
+fn cid_widths_covered(doc: &Document, font: ObjRef) -> usize {
+    let font_dict = fetch_dict(doc, font);
+    let descendants = font_dict
+        .array(&Name::from("DescendantFonts"), doc.parser())
+        .expect("DescendantFonts");
+    let cid_dict = fetch_dict(doc, descendants.reference_at(0).expect("cid ref"));
+    let w_ref = cid_dict.reference(&Name::from("W")).expect("W");
+    let w = doc
+        .parser()
+        .fetch(w_ref)
+        .expect("w")
+        .as_array()
+        .expect("array")
+        .clone();
+    assert!(w.len() > 1, "/W should carry real runs, got {}", w.len());
+    let advance = program_advances(NOTO_SANS_SC);
+    widths_covered(&w, &|cid| {
+        let at = usize::try_from(cid).expect("fits") * 2;
+        let gid = u16::from_be_bytes([
+            CUSTOM_CID_TO_GID.get(at).copied().unwrap_or(0),
+            CUSTOM_CID_TO_GID.get(at + 1).copied().unwrap_or(0),
+        ]);
+        i64::from(advance(gid))
+    })
+}
+
+/// Walk the two `/W` forms, checking each width against `expected` and
+/// returning the CID count.
+fn widths_covered(w: &pdfrum_object::Array, expected: &dyn Fn(u32) -> i64) -> usize {
+    let mut covered = 0usize;
+    let mut idx = 0usize;
+    while idx < w.len() {
+        let cid = w.int_at(idx).expect("a /W entry opens with a CID");
+        idx += 1;
+        let next = w.raw_at(idx).expect("a /W entry is never a lone CID");
+        if let Some(inner) = next.as_array() {
+            for (offset, item) in inner.iter().enumerate() {
+                let cid = cid + i64::try_from(offset).expect("fits");
+                let width = item.as_int().expect("a width is a number");
+                assert_eq!(
+                    width,
+                    expected(u32::try_from(cid).expect("fits")),
+                    "width at CID {cid}"
+                );
+            }
+            covered += inner.len();
+            idx += 1;
+            continue;
+        }
+        let last = next.as_int().expect("c_first c_last w");
+        idx += 1;
+        let width = w.int_at(idx).expect("c_first c_last w");
+        idx += 1;
+        for cid in cid..=last {
+            assert_eq!(
+                width,
+                expected(u32::try_from(cid).expect("fits")),
+                "width at CID {cid}"
+            );
+        }
+        covered += usize::try_from(last - cid + 1).expect("fits");
+    }
+    covered
+}
+
+/// Ports `FPDFEditEmbedderTest.LoadCidType2FontCustom` and
+/// `FPDFEditEmbedderTest.LoadCidType2FontCustomGeneratedWidths`.
+///
+/// The two C++ cases differ only in the length of the maps they pass — 20
+/// bytes and 10, so `CheckCompositeFontWidths` expects 10 CIDs and 5 — which
+/// is the whole assertion: `/W` is computed **per CID from the caller's
+/// `/CIDToGIDMap`**, not per GID from the program's cmap, so its coverage is
+/// the map's entry count and nothing else. They are merged here because the
+/// second is the first with one input shortened.
+///
+/// The two blobs must also arrive in the file byte for byte: the caller wrote
+/// them, and a writer that regenerated either would have thrown away the
+/// caller's statement of what the file's codes mean.
 #[test]
-#[ignore = "no API takes a caller-supplied /ToUnicode CMap or /CIDToGIDMap: \
-            DocEdit::embed_font(bytes, FontEncoding::Composite) always generates both from the \
-            program's own cmap, so FPDFText_LoadCidType2Font's four extra parameters \
-            (to_unicode_cmap, cid_to_gid_map and their lengths) have no counterpart. \
-            Tracked in docs/status/queue.md under feature gaps"]
 fn load_cid_type2_font_custom() {
-    // Ports FPDFEditEmbedderTest.LoadCidType2FontCustom and
-    // FPDFEditEmbedderTest.LoadCidType2FontCustomGeneratedWidths.
+    let doc = Document::from_bytes(Arc::from(HELLO_PDF)).expect("opens");
+    let original_dark = dark_pixels(&pixels(HELLO_PDF).2);
+
+    let mut edit = doc.edit();
+    let font = edit
+        .embed_cid_font(NOTO_SANS_SC, CUSTOM_TO_UNICODE, CUSTOM_CID_TO_GID)
+        .expect("embeds with a caller-supplied CMap and CIDToGIDMap");
+
+    // `FPDFText_SetText` on such a font goes through
+    // `CPDF_Font::CharCodeFromUnicode`, which is a reverse lookup through the
+    // *caller's* `/ToUnicode` (`core/fpdfapi/font/cpdf_font.cpp:110-115`).
+    // U+3002 is CID 2 and U+4E00 is CID 3 in the CMap above.
+    let codes = font.encode("\u{3002}\u{4e00}");
+    assert_eq!(codes, vec![0, 2, 0, 3], "encode inverts the caller's CMap");
+    // A character the CMap does not reach is `.notdef`, as everywhere else.
+    assert_eq!(font.encode("Z"), vec![0, 0]);
+
+    let mut page = doc.page(0).expect("page").edit();
+    page.push(
+        TextBuilder {
+            position: Point::new(20.0, 120.0),
+            ..TextBuilder::new(codes, font.object(), 24.0)
+        }
+        .build(),
+    );
+
+    let dir = scratch_dir();
+    let out = dir.join("cid_type2_custom.pdf");
+    edit.save_pages(&out, &[page], &SaveOptions::default())
+        .expect("saves");
+    let saved = std::fs::read(&out).expect("reads");
+    let saved_doc = Document::from_bytes(Arc::from(saved.as_slice())).expect("reopens");
+
+    // The chain `LoadCustomCompositeFont` builds: /Type0 Identity-H over one
+    // /CIDFontType2 descendant. `/CIDFontType2` and not `/CIDFontType0`
+    // even though the program is CFF, because a /CIDFontType0 reaches glyphs
+    // with the CID as the glyph index and never consults /CIDToGIDMap
+    // (`core/fpdfapi/font/cpdf_cidfont.cpp:508-518`), which would make the
+    // caller's map dead weight.
+    let font_dict = fetch_dict(&saved_doc, font.object());
+    assert_eq!(
+        font_dict.name(&Name::from("Subtype")).map(Name::as_bytes),
+        Some(&b"Type0"[..])
+    );
+    assert_eq!(
+        font_dict.name(&Name::from("Encoding")).map(Name::as_bytes),
+        Some(&b"Identity-H"[..])
+    );
+    let descendants = font_dict
+        .array(&Name::from("DescendantFonts"), saved_doc.parser())
+        .expect("DescendantFonts");
+    assert_eq!(descendants.len(), 1);
+    let cid_dict = fetch_dict(&saved_doc, descendants.reference_at(0).expect("cid ref"));
+    assert_eq!(
+        cid_dict.name(&Name::from("Subtype")).map(Name::as_bytes),
+        Some(&b"CIDFontType2"[..])
+    );
+
+    // Both blobs, byte for byte.
+    assert_eq!(
+        descendant_stream(&saved_doc, font.object(), "CIDToGIDMap"),
+        CUSTOM_CID_TO_GID,
+        "/CIDToGIDMap must be the caller's bytes, verbatim"
+    );
+    assert_eq!(
+        root_stream(&saved_doc, font.object(), "ToUnicode"),
+        CUSTOM_TO_UNICODE.as_bytes(),
+        "/ToUnicode must be the caller's CMap text, verbatim"
+    );
+
+    // `CheckCompositeFontWidths(widths_array, typed_font, Eq(10))`: ten
+    // entries in, ten CIDs covered, each width the advance of the GID the
+    // caller's map sends that CID to.
+    assert_eq!(
+        cid_widths_covered(&saved_doc, font.object()),
+        10,
+        "/W covers exactly the map's ten CIDs"
+    );
+
+    // Text extracts back through the caller's CMap, which is the only reason
+    // the two blobs are worth carrying.
+    // The CMap's five ranges overlap at their endpoints, so CID 3 is named
+    // twice — U+2F00 by the first block and U+4E00 by the second. The
+    // lowest-value-wins collision policy (`InsertIntoMaps`,
+    // `docs/design/pdfrum-font.md` §1.6.1) keeps U+2F00 forward, while the
+    // *reverse* map keeps CID 3 for U+4E00, which is why `encode` above wrote
+    // CID 3 for it and extraction reads U+2F00 back. That asymmetry is the
+    // oracle's, and it is the caller's CMap that produces it.
+    let text = extracted(&saved);
+    assert!(
+        text.contains('\u{3002}') && text.contains('\u{2f00}'),
+        "text extracts through the caller's /ToUnicode, got {text:?}"
+    );
+
+    let (_, _, pix) = pixels(&saved);
+    assert!(
+        dark_pixels(&pix) > original_dark,
+        "the custom composite font actually draws"
+    );
+
+    match oracle_md5(&out) {
+        Ok(stdout) => {
+            assert!(stdout.contains("MD5:"));
+        }
+        Err(msg) => {
+            eprintln!("skipping oracle reopen: {msg}");
+        }
+    }
+}
+
+/// Ports `FPDFEditEmbedderTest.LoadCidType2FontCustomGeneratedWidths`.
+///
+/// The same font and the same CMap as `load_cid_type2_font_custom`, with the
+/// `/CIDToGIDMap` cut in half. `/W` must shrink with it — five entries in,
+/// five CIDs covered — which is the assertion that `/W` is walked out of the
+/// caller's map and not out of the program.
+#[test]
+fn load_cid_type2_font_custom_generated_widths() {
+    let doc = Document::from_bytes(Arc::from(HELLO_PDF)).expect("opens");
+    let mut edit = doc.edit();
+    let font = edit
+        .embed_cid_font(
+            NOTO_SANS_SC,
+            CUSTOM_TO_UNICODE,
+            CUSTOM_CID_TO_GID.get(..10).expect("ten bytes"),
+        )
+        .expect("embeds");
+
+    let out = scratch_dir().join("cid_type2_custom_short.pdf");
+    edit.save(&out, &SaveOptions::default()).expect("saves");
+    let saved = std::fs::read(&out).expect("reads");
+    let saved_doc = Document::from_bytes(Arc::from(saved.as_slice())).expect("reopens");
+
+    assert_eq!(
+        cid_widths_covered(&saved_doc, font.object()),
+        5,
+        "a five-entry map yields five CIDs of /W"
+    );
+}
+
+/// Ports the four `FPDFEditEmbedderTest.LoadCidType2FontWithBadParameters`
+/// cases `embed_cid_font` can express: an empty `to_unicode_cmap`, and a
+/// `cid_to_gid_map` that is empty or not a whole number of entries.
+///
+/// The C++'s null-pointer arms have no counterpart — a `&str` and a `&[u8]`
+/// cannot be null. Its `size 0` arms are the empty ones here.
+///
+/// [oracle-bug] The **odd-length** map the C++ does not check at all.
+/// `LoadCustomCompositeFont` walks `i += 2` to `cid_to_gid_map_span.size()`
+/// and takes `cid_to_gid_map_span.subspan(i).first<2u>()`
+/// (`fpdfsdk/fpdf_edittext.cpp:308-313`), so a trailing one-byte remainder
+/// asks a 1-element span for its first 2 — a bounds `CHECK` in
+/// `pdfium::span`, i.e. an abort rather than a rejection. ISO 32000-1 §9.7.4.2
+/// defines `/CIDToGIDMap` as a stream of two-byte glyph indices, so a
+/// half-entry is not a map; an error says so without the crash. pdf.js is the
+/// reader that depends on it: `readCidToGidMap` pairs the bytes as
+/// `(glyphsData[j++] << 8) | glyphsData[j]` over the map's whole length
+/// (`src/core/evaluator.js:4103-4116`), so a trailing half-entry reads
+/// `undefined` as its low byte and `x | undefined` is `x << 8` — a glyph index
+/// 256 times too large, silently, for the last CID.
+#[test]
+fn embed_cid_font_rejects_bad_maps() {
+    let doc = Document::from_bytes(Arc::from(HELLO_PDF)).expect("opens");
+    let mut edit = doc.edit();
+
+    let err = edit
+        .embed_cid_font(NOTO_SANS_SC, "", CUSTOM_CID_TO_GID)
+        .expect_err("an empty CMap is not a /ToUnicode");
+    assert!(matches!(err, pdfrum::Error::Save(_)), "got {err:?}");
+
+    let err = edit
+        .embed_cid_font(NOTO_SANS_SC, CUSTOM_TO_UNICODE, &[])
+        .expect_err("an empty map is not a /CIDToGIDMap");
+    assert!(matches!(err, pdfrum::Error::Save(_)), "got {err:?}");
+
+    let err = edit
+        .embed_cid_font(NOTO_SANS_SC, CUSTOM_TO_UNICODE, &[0, 0, 0])
+        .expect_err("three bytes are one and a half entries");
+    assert!(matches!(err, pdfrum::Error::Save(_)), "got {err:?}");
+
+    // The font program is validated the same way `embed_font` validates it.
+    for program in [&b""[..], &[0, 0, 0][..], b"dummy"] {
+        let err = edit
+            .embed_cid_font(program, CUSTOM_TO_UNICODE, CUSTOM_CID_TO_GID)
+            .expect_err("not a font program");
+        assert!(matches!(err, pdfrum::Error::Save(_)), "got {err:?}");
+    }
+
+    // A rejected call leaves the session usable.
+    let good = edit
+        .embed_cid_font(NOTO_SANS_SC, CUSTOM_TO_UNICODE, CUSTOM_CID_TO_GID)
+        .expect("the editor survives four rejections");
+    assert_eq!(good.encode("\u{3002}"), vec![0, 2]);
 }

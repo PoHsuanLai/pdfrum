@@ -239,6 +239,7 @@ pub fn pdfrum_font::canonical_font_name(pdfrum_font::StandardFont) -> &'static s
 pub fn pdfrum_font::charset_from_unicode(u32) -> pdfrum_font::Charset
 pub fn pdfrum_font::cid_transform_to_float(u8) -> f32
 pub fn pdfrum_font::em_adjust(i32, u16) -> i32
+pub fn pdfrum_font::invert_to_unicode(&[u8], &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> std::collections::hash::map::HashMap<char, u32>
 pub fn pdfrum_font::load(&pdfrum_object::dict::Dict, &impl pdfrum_object::resolve::Resolve, &pdfrum_font::FontCache, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<pdfrum_font::Font>
 pub fn pdfrum_font::load_with_options(&pdfrum_object::dict::Dict, &impl pdfrum_object::resolve::Resolve, &pdfrum_font::FontCache, &pdfrum_font::SubstitutionOptions, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<pdfrum_font::Font>
 pub fn pdfrum_font::type1_font_file(&[u8]) -> pdfrum_type1::container::FontFile

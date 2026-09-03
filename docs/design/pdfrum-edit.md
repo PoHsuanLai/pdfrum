@@ -1368,6 +1368,69 @@ so the pdf.js lines are the ones that *depend* on the value:
 
 Unmappable `encode` codes are 0, matching `CharCodeFromUnicode`.
 
+**`EditDoc::embed_cid_font` is the `FPDFText_LoadCidType2Font` equivalent
+(landed 2026-09-03).** `LoadCustomCompositeFont`
+(`fpdfsdk/fpdf_edittext.cpp:281-334`) builds the same `/Type0` +
+`/CIDFontType2` chain `LoadCompositeFont` does, with three things coming from
+the caller instead of from the program:
+
+| Key | Generated (`embed_font`) | Caller's (`embed_cid_font`) |
+|---|---|---|
+| `/CIDToGIDMap` | absent, i.e. `/Identity` — CID *is* GID | a stream of the caller's bytes, verbatim: one big-endian `u16` GID per CID (§9.7.4.2) |
+| `/W` | per **GID**, from the program's cmap | per **CID**, `widths[i / 2] = advance(cid_to_gid[i..i+2])` (`:307-315`) — dense from CID 0, exactly as long as the map has entries |
+| `/ToUnicode` | built by `load_unicode` from the cmap | a stream of the caller's CMap text, verbatim |
+
+The program is always described as TrueType (`FPDF_FONT_TRUETYPE` at
+`:296-303`) even when it is CFF, because `/CIDFontType2` is what
+`/CIDToGIDMap` *means*: a `/CIDFontType0` reaches glyphs with the CID as the
+glyph index and never consults the map
+(`core/fpdfapi/font/cpdf_cidfont.cpp:508-518`), which would make the caller's
+map dead weight. That is the oracle's choice and it is the right one.
+
+**Signature.** `embed_cid_font(program: &[u8], to_unicode: &str,
+cid_to_gid: &[u8])` — the oracle's shape minus the two lengths Rust slices
+carry. A builder was considered and rejected: all three arguments are
+*required*, they are three distinct nouns rather than a bag of options, and a
+builder would add a type and two calls to express a call that reads fine as
+one.
+
+**What `encode` means here, and why.** It writes two-byte big-endian **CIDs**,
+found by inverting the caller's `/ToUnicode` — not GIDs found in the
+program's cmap. Two reasons, and they agree:
+
+- *Correctness.* Under a caller-supplied CMap the program's cmap does not
+  describe the file's code space at all. The CMap is the document's only
+  statement of what its codes mean, so it is the only thing that can turn text
+  into codes. Treating `encode`'s input as raw CIDs was the alternative — the
+  brief's "or unavailable" option — and it is worse: `encode(&str)` taking
+  CIDs is a type lie, and making it unavailable would leave a caller no way to
+  write text at all without hand-assembling bytes.
+- *Parity.* It is what the oracle does. `FPDFText_SetText` on such a font
+  reaches `CPDF_Font::CharCodeFromUnicode`, which is
+  `to_unicode_map_->ReverseLookup(unicode)` over this same `/ToUnicode`
+  (`core/fpdfapi/font/cpdf_font.cpp:110-115`). We compute the inversion once
+  at embed time rather than per character; `pdfrum_font::invert_to_unicode`
+  is that, and it reuses the `ToUnicode` parser text extraction already
+  depends on, so the collision policy is the same one
+  (`docs/design/pdfrum-font.md` §1.6.1, lowest value wins in both directions).
+  A character the CMap does not reach is code 0, as everywhere else.
+
+**One divergence, marked `[oracle-bug]`.** An **odd-length `/CIDToGIDMap`**
+is an error here. `FPDFText_LoadCidType2Font` checks for null and for zero
+length (`:488-495`) but not for a half-entry, and `LoadCustomCompositeFont`
+then walks `i += 2` to the span's size and takes
+`cid_to_gid_map_span.subspan(i).first<2u>()` (`:308-313`) — asking a
+1-element span for its first 2, which is a bounds `CHECK` in `pdfium::span`,
+an abort rather than a rejection. ISO 32000-1 §9.7.4.2 defines the map as a
+stream of two-byte glyph indices, so a half-entry is not a map.
+`Error::BadCidToGidMap` is the same answer without the crash. pdf.js is the
+reader that depends on the shape: `readCidToGidMap` pairs the bytes as
+`(glyphsData[j++] << 8) | glyphsData[j]` over the map's whole length
+(`src/core/evaluator.js:4103-4116`), so a trailing half-entry reads
+`undefined` as its low byte and yields a glyph index 256 times too large for
+the last CID. The empty-CMap and empty-map rejections match the oracle
+exactly.
+
 The brief's claim that "`TextBuilder` embeds nothing" is now only half
 true: `TextBuilder` still takes an `ObjRef`, but `DocEdit::embed_font`
 is how a caller obtains one that did not already live on the page.

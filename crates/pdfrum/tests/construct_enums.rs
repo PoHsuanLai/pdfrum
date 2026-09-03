@@ -338,7 +338,9 @@ fn construct_default_feature_variants() -> usize {
     let _ = SaveError::Subset(String::new());
     let _ = SaveError::UnrecognisedFontProgram;
     let _ = SaveError::EmptyFontProgram;
-    n += 10;
+    let _ = SaveError::EmptyToUnicodeCMap;
+    let _ = SaveError::BadCidToGidMap(3);
+    n += 12;
 
     let _ = FontEncoding::Simple;
     let _ = FontEncoding::Composite;
@@ -667,7 +669,7 @@ fn every_public_enum_variant_is_constructible_from_the_facade() {
         "constructed {constructed} default-feature variants, snapshots derive {derived}; \
          SNAPSHOT_ENUMS is the derivation index — add a construction when a variant lands"
     );
-    assert_eq!(constructed, 282, "default-feature variant count");
+    assert_eq!(constructed, 284, "default-feature variant count");
     assert_eq!(SNAPSHOT_ENUMS.len(), 29, "default-feature enum count");
 }
 
