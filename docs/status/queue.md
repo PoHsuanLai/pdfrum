@@ -233,17 +233,27 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
   was looked for.
 - An idle re-take of the §10.5 table. The box has never been idle (load
   30–66 through every run); the ratios are upper bounds until then.
-- **`vector_font_size14` 3.70x and `vector_font_feature` 3.42x are split but
-  not closed** (§13). The caches are not the cost: `BitmapCache` hits 100% of
-  183 813 occurrences with zero outline extractions, and `BitmapKey` needed no
-  change. The cost is the **AGG blit's per-row scaffolding** —
-  `Target::blend_span_with` once per glyph row, each call re-deriving
-  `span_range`, `clip_span` and the destination slice before an
-  `Option`-returning closure per pixel — **11.8 ns per glyph pixel, 5.0-5.1 ms
-  of each render**. `blit` has one caller but serves every whole-pixel image
-  blit, so tier-c gates it, and it must not be bought with a seventh device
-  primitive (§13.4). **This is the next thing to take**; the two rows stand at
-  3.70x/3.42x until it lands.
+- ~~the AGG blit's per-row scaffolding~~ — landed as §14: `AggDevice::blit`
+  now walks the rows itself through one `Target::blit_image` instead of a
+  `blend_span_with` per row. **The blit is 1.56-1.61x faster**, worth 1.5 ms
+  of each vector render — ten times §13's item — and roughly **half of
+  `image_bug_583804`'s whole render**, because that document spends 59-75% of
+  itself in one whole-pixel image blit. Board byte-identical, tier-c
+  unchanged, no new device primitive (the API snapshot matches). **§13.6's
+  proportions were wrong and §14.1 corrects them**: the per-row scaffolding
+  was 6.5-6.8% of the blit, and the other 93% was the per-pixel
+  `Option`-returning sampler closure re-deriving the source index from the
+  destination column. The same hoist removes both.
+- **`vector_font_size14` and `vector_font_feature` are still not closed.**
+  They stood at 3.70x/3.42x; §14 takes 1.5 ms off a 57-128 ms render, which
+  does not retire either. The next split has to start **above** the blit:
+  `--sample` now puts `size14`'s `draw_image` at 3.31 ms and 35.5% (against
+  §13.2's 5.1 ms) and 56-60% of the document in ENGINE. Neither row has been
+  re-measured against the oracle since §14.
+- **Whether the rest of the `image` class moves with §14 was not measured.**
+  `image_bug_583804` was in §14's table as a control and turned out to be the
+  change's biggest beneficiary; `image_en_fqa` and `image_ccitt_3bigpreview`
+  below were not re-taken.
 - ~~the glyph blit's per-occurrence allocations~~ — landed 3e2efe6
   (2026-09-03): `to_gray` and `recolour` now fill `RenderCaches`-owned
   buffers. Worth **18.6 ns of a 210 ns per-glyph chain, 0.13-0.25% of a

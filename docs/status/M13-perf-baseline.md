@@ -1568,3 +1568,235 @@ fallback.
   `pdfrum-render`, so all three backends get the reuse, but neither of the
   other two was measured here.
 - **The ratchet is still not re-baselined.** §8's third bullet stands.
+
+---
+
+## 14. The blit, taken: the cost was per *pixel*, not per row
+
+**Taken 2026-09-03, on the same box, at load 28–65.** §13.6 named
+`Target::blend_span_with`'s per-row scaffolding on the glyph blit as the next
+thing to take, at 5.0–5.1 ms of each vector render. The item was taken and the
+blit is now **1.56–1.61x** faster, worth **1.5 ms of each of the two vector
+renders** and — unforeseen by §13.6 — **half of `image_bug_583804`'s whole
+render**. But §13.6's *diagnosis* was wrong in its proportions, and this
+section says so before it says anything else:
+
+**The per-row scaffolding was 6.5–6.8% of the blit. The other 93% was the
+per-pixel sampler closure.**
+
+### 14.1 The split, measured with the counts that anchor it
+
+`--sample` cannot see inside `draw_image`, so the naming was done as §11, §12
+and §13 did it, with direct `Instant` pairs — but **one pair per blit, not per
+row**. A blit's row is eight pixels wide here; two `Instant::now()` calls
+around it cost more than the row does, and an earlier per-row placement duly
+reported 22 ns per pixel against a true 12. The pairs therefore bracket a whole
+glyph: arm A the real blit, arm B a second walk that re-derives every row's
+`span_range`, `clip_span` and destination slice and then stops. B is the
+scaffolding's own cost; A − B is the pixel work.
+
+Per warm render, AGG, `--op render --sample`, the geometry first:
+
+| | `vector_font_size14` | `vector_font_feature` |
+|---|---:|---:|
+| blits (glyph occurrences) | 8775 | 8279 |
+| rows | 55 313 | 52 853 |
+| pixels | 456 704 | 452 444 |
+| rows per blit | 6.30 | 6.38 |
+| **pixels per row** | **8.26** | **8.56** |
+
+and then the split:
+
+| | `vector_font_size14` | `vector_font_feature` |
+|---|---:|---:|
+| the whole blit | 5.485 ms | 5.361 ms |
+| &nbsp;&nbsp;the per-row scaffolding | **0.374 ms (6.8%)** | **0.348 ms (6.5%)** |
+| &nbsp;&nbsp;the per-pixel loop | **5.111 ms (93.2%)** | **5.013 ms (93.5%)** |
+| ns per glyph pixel, whole | 12.01 | 11.85 |
+
+The 5.485 ms and 12.01 ns per pixel reproduce §13.2's 5.0 ms and 11.8 ns, which
+is what says the two instruments are looking at the same thing. **§13.2's pixel
+column is a 21-iteration total and this one is per render** — 8 890 014 against
+456 704 is 423 334 per render against 456 704, the same quantity in two units —
+which is why the two ns-per-pixel figures agree while the raw counts read a
+factor of twenty apart. What is new is where inside the blit the time sits, and
+it is not where §13.6 said.
+
+### 14.2 Why the scaffolding looked bigger than it is
+
+§13.3's reasoning was that "on a 48-pixel glyph the scaffolding is a large
+fraction of the work", and the geometry above says a glyph is 52 pixels in 6.3
+rows — so the reasoning's premise was right. What it did not weigh is what the
+*pixel* half was doing. Per pixel, the old spelling ran:
+
+- `clip.get(i)`, a bounds-checked `Option`;
+- `mul255(255, mask)`, a multiply and a divide for a product that is `mask`;
+- `u32::try_from(x0 + i)`, a checked narrowing, to turn the loop index back
+  into a device column;
+- the `sample` closure, which subtracts `dx` in `i64` and narrows again to
+  recover the source column the caller had just thrown away;
+- `Pixmap::pixel`, which re-derives `row * width + col` with two bounds
+  compares, a `checked_mul`, a `checked_add` and a second `checked_mul`, takes
+  a four-byte subslice and reads four `Option`s out of it to build an array;
+- `scale_alpha`, a branch;
+- and `blend_into`, which is the only one of the seven that is the arithmetic.
+
+Six of those seven are the *general* image path's price — an image sampled
+through an arbitrary transform genuinely does have to compute a source index
+per pixel and genuinely may miss the source. A whole-pixel blit does neither:
+its source is a contiguous run of the same length as its destination. So the
+`Option`-returning closure is the same shape of defect §11 and §12 found in the
+clip path — a general-purpose call paying general-purpose costs on a case that
+is small, hot and specific — but it lives one level below where §13.6 looked.
+
+### 14.3 The fix, and the invariant each hoist preserves
+
+One method, `Target::blit_image`, replacing the loop over `blend_span_with` in
+`AggDevice::blit`. **The arithmetic is untouched**: the same `blend_into` over
+the same `Source::Premultiplied` at the same coverage, so every pixel is the
+byte the span loop wrote.
+
+- **The column range, once.** `span_range` derived `(x0, x1)` per row from `x`,
+  `len` and the target width, and a blit varies none of the three with the row.
+- **The source, as a slice.** `x0` is `max(dx, 0)`, so the leftmost painted
+  column reads source column `x0 - dx`, and the row's source is a contiguous
+  run from there. The per-pixel index derivation and its `Option` both go.
+- **The row band, once.** `span_range` returned `None` for a row outside the
+  target, which painted nothing; the band `[max(0, -dy), min(h, height - dy))`
+  is the same answer computed once.
+- **The clip's narrowness, once.** `clip_span` answered a mask that does not
+  reach `x1` with a zero-filled `Owned` slice — every pixel clipped out. `x1`
+  does not vary with the row, so the whole blit is a no-op. **Confusing that
+  with "unclipped" is the one way this hoist could have painted a pixel the
+  span loop did not**, which is why it has a test of its own.
+- **The alpha branch, once.** `scale_alpha` is the identity at 255, which is
+  the glyph blit's whole traffic.
+
+**No seventh device primitive**, which is §13.4's first invariant and the brief's
+second constraint. `blit_image` is a method on `Target`, a type behind a
+private `mod` in `pdfrum-raster-agg`; `RenderDevice` is unchanged, the glyph
+path still composites through `draw_image`, and no backend has anything new to
+implement. `scripts/api-snapshot.nu` reports the surface matching the committed
+baseline.
+
+**Three tests pin what the change trades on**, each aimed at one way it could
+be wrong:
+
+- `a_blit_matches_the_span_loop_it_replaced` keeps the old spelling in the
+  tests as the *specification* — the way `clip_at` is kept for `clip_span` —
+  and runs both over every offset that puts a noisy 5x4 image off each edge and
+  each corner of the target, at three alphas, unclipped, under a flat clip and
+  under a ragged one: about 1700 comparisons of the whole buffer, byte for
+  byte.
+- `a_clip_narrower_than_the_blit_paints_nothing` is the `Owned`-zeros case
+  above.
+- `each_row_of_a_blit_lands_on_its_own_row` gives every image row a different
+  solid colour, so a skipped, duplicated or shifted row is a mismatch at a
+  named coordinate rather than a plausible-looking image.
+
+**Five mutations were planted and every one failed a test**, the two §13.6's
+brief names among them:
+
+| mutation | caught by |
+|---|---|
+| a wrong band (the walk starts one row late) | 8 tests |
+| a skipped row (the walk steps by two) | 7 tests |
+| a narrow clip treated as unclipped | `a_clip_narrower_than_the_blit_paints_nothing` |
+| the column clamp not clamped to the target width | `a_blit_matches_the_span_loop_it_replaced` |
+| the source-column offset dropped | `a_blit_matches_the_span_loop_it_replaced` |
+
+The last three are each caught by exactly one test, and it is the test written
+for them: the existing suite passed all three.
+
+### 14.4 What it is worth, in process
+
+**Interleaved in one process, per blit, minimum over each glyph geometry.** A
+preemption inside one arm's `Instant` pair inflates that arm alone, so the sum
+is unusable at this box's load — the same pair of binaries read 1.60x and
+0.86x on consecutive sums. The minimum over the hundreds of occurrences of each
+glyph *shape*, weighted by how often that shape is blitted, is the reading the
+load cannot touch. Four repetitions at load 45–58:
+
+| fixture | old | new | old ns/px | new ns/px | **speedup** |
+|---|---:|---:|---:|---:|---:|
+| `vector_font_size14` | 3.85–4.19 ms | 2.39–2.65 ms | 8.43–9.17 | 5.23–5.80 | **1.562–1.612x** |
+| `vector_font_feature` | 3.73–4.02 ms | 2.33–2.56 ms | 8.24–8.88 | 5.14–5.66 | **1.569–1.615x** |
+
+The order of the arms was swapped and the reading did not move (1.51x/1.52x
+with the new arm first, 1.60x/1.55x with the old one first), so it is not a
+cache-warming artefact of the arm that runs second.
+
+**1.5 ms of each render**, against §13.5's 0.16 ms — ten times what the
+previous item removed. The whole-render instrument agrees: `--sample` put
+`size14`'s `draw_image` at 5.1 ms in §13.2 and puts it at **3.31 ms** now, a
+1.8 ms saving on the same document. That is roughly what §13.6 predicted the
+blit was worth, arrived at by fixing a different half of it than §13.6 named.
+
+### 14.5 The wall clock, and what the controls actually say
+
+Interleaved A/B, fifteen rounds of `before, after, after, before` at 21
+iterations, each arm's minimum kept:
+
+| fixture | glyphs | before (ms) | after (ms) | reading | load |
+|---|---:|---:|---:|---|---:|
+| `vector_font_size14` | 8745 | 66.24 | 56.99 | **1.162x** | 36–53 |
+| `vector_font_feature` | 8240 | 127.78 | 121.65 | 1.050x | 40–65 |
+| `image_bug_583804` | **0** | 201.67 | 120.50 | **1.674x** | 28–45 |
+| `shading_axial_radial` | **0** | 35.36 | 36.35 | 0.973x | 30–37 |
+
+**`image_bug_583804` is a zero-glyph document and it is not a control for this
+change.** §13.5 used it as one, correctly, because the glyph path does not
+execute on it. This change is not in the glyph path: it is in the blit, and
+§13.6 says so — "it serves **all** whole-pixel image blits". That document
+spends **59–75% of its render inside a single `draw_image` call**, and that
+call is a whole-pixel blit of one large image. Measured directly, three times
+running, the call goes from 175/193/179 ms to 96/92/83 ms — roughly **1.9–2.1x
+on one image blit**, which is the same 1.6x per pixel plus the larger share of
+a bigger image's rows. The 1.674x whole-document reading is that effect, not
+noise.
+
+**`shading_axial_radial` is the control that remains one.** Thirty-three
+`draw_image` calls at 4.9% of its render, none of them large; it reads
+**0.973x**, and that is this table's noise floor.
+
+So the wall clock does resolve this one, on three of the four rows, and it
+agrees with §14.4 in sign and roughly in size. It is still the weaker half of
+the evidence — §3's instruction is undischarged and the load moved between 28
+and 65 across the table — and the claim rests on §14.4.
+
+### 14.6 Conformance: nothing moved
+
+- **The board is byte-identical.** 1757 files, 1526 pass, 231 fail, before and
+  after, with every bucket unchanged: 8 `form-events`, 21 `js-transcript`, 2
+  `page-count`, 41 `pixel-fail`, 170 `tierA-mismatch`, text 1783/2065 and
+  758/1003. The two `--out` JSONs differ in their `generated_at` stamp and in
+  nothing else.
+- **`conformance tier-c` is unchanged**: 1628 files compared under the gating
+  pair, 3 hard failures, 434 over the 1% edge budget, worst edge divergence
+  66.6634%, divergent files 26.84%. This is the gate the brief names, because
+  `blit` serves every whole-pixel image blit and a defect there would reach
+  images as well as glyphs; it did not move.
+
+### 14.7 What this does not claim
+
+- **The rows are still not closed.** `vector_font_size14` at 3.70x and
+  `vector_font_feature` at 3.42x are what the queue carried, and 1.5 ms off a
+  57–128 ms render does not retire either. What this closes is §13.6's item.
+  The next split has to start above the blit: `--sample` now puts `size14`'s
+  `draw_image` at **3.31 ms and 35.5%** of the document, against §13.2's
+  5.1 ms, and **56-60% in ENGINE** — the walk, the glyph placement and the
+  interpretation residue §13.1 measured at 74-77%.
+- **§13.6's proportions were wrong and this section does not hide it.** The
+  scaffolding it named was a fifteenth of the blit. The fix is worth having
+  because the hoist that lifts the row derivation is the same one that turns
+  the source into a slice — the two are not separable in the code — but a
+  reader taking §13.6's 5.0 ms as "the scaffolding's cost" would be misreading
+  it, and §14.1 is the correction.
+- **The biggest beneficiary is an image document, and it was not looked for.**
+  `image_bug_583804` was in the table as a control. Whether the rest of the
+  `image` class moves was not measured.
+- **Not an idle box, for the seventh time.** Load 28–65 throughout. §3's
+  instruction is still undischarged.
+- **`tiny-skia` and `vello_cpu` are unchanged.** The blit is `pdfrum-raster-agg`'s
+  alone; neither of the other two backends has this shape looked at.
+- **The ratchet is still not re-baselined.** §8's third bullet stands.
