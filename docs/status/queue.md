@@ -328,8 +328,11 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
   `vector_en_system` **2.15x → 0.79x** are not defects at all. `text`,
   `forms`, `shading` and `mixed` have oracle-relative rows for the first
   time; geomeans 0.13x / 0.52x / 0.56x / 0.78x / 0.68x / 0.63x (§18.2).
-- **DECIDED 2026-09-04 (user): `Page` keeps its built graph across renders —
-  as an explicit prepared-page value, not a hidden cache.** §18.1 measured the
+- ~~**DECIDED 2026-09-04 (user): `Page` keeps its built graph across renders —
+  as an explicit prepared-page value, not a hidden cache.**~~ — **landed
+  2026-09-04** as `Page::prepare` / `PreparedPage` (§18.1's closing note): one
+  render body, board `per_file` equal across all 1757 entries, the bench's
+  warm loop prepares once and the amortized subtraction is retired. §18.1 measured the
   cost of the implicit version: a page graph holds its **decoded images**, so
   `image_bug_583804` would retain **176 MB for one page** with no eviction
   policy (`CPDF_PageImageCache` is the oracle's, and has one). The shape is
@@ -339,7 +342,7 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
   image pixels stay out of the prepared graph (decoded at render time as now;
   a budgeted image cache is a separate, later question). `Page::render` keeps
   its one-shot semantics by preparing internally. Board byte-identical by
-  construction; API snapshot, `reexports.rs` and `construct_enums.rs` updated.
+  construction; API snapshot re-recorded (no new enum, no new foreign type).
   The per-render rebuild it removes is 38–65% of `size14` / `en_system` /
   `en_fqa` (§18.1), and makes the warm loop natively comparable to
   `--render-repeats`, retiring §18.1's subtraction.
