@@ -93,14 +93,12 @@ kurbo.workspace = true
 peniko.workspace = true
 thiserror.workspace = true
 
-# DEPS.md marks `rayon` "lib (facade only)": the engine stays single-threaded
-# per page and this is the one crate that owns a *set* of pages, so the
-# data-parallel seam is here or nowhere. It is used by the parallel-render
-# example and by the tests that pin the `Send + Sync` story; the library
-# itself spawns no threads.
-rayon.workspace = true
 
 [dev-dependencies]
+# The facade spawns no thread and builds no pool; `rayon` is what the
+# parallel-render example and the test that pins it use, and nothing a
+# `cargo add pdfrum` caller compiles.
+rayon.workspace = true
 # Encoding a pixmap is not the engine's job — the facade hands out pixels and
 # the examples turn them into files (DEPS.md, "Tools & tests only").
 png.workspace = true
