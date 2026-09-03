@@ -64,6 +64,7 @@ impl pdfrum_render::scanline::Rasterizer
 pub fn pdfrum_render::scanline::Rasterizer::add_path(&mut self, &kurbo::bezpath::BezPath, f64)
 pub fn pdfrum_render::scanline::Rasterizer::close_polygon(&mut self)
 pub fn pdfrum_render::scanline::Rasterizer::is_empty(&self) -> bool
+pub fn pdfrum_render::scanline::Rasterizer::keep_rows(&mut self, core::ops::range::Range<i32>)
 pub fn pdfrum_render::scanline::Rasterizer::line_to(&mut self, f64, f64)
 pub fn pdfrum_render::scanline::Rasterizer::move_to(&mut self, f64, f64)
 pub fn pdfrum_render::scanline::Rasterizer::new() -> Self

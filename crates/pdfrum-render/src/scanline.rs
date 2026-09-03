@@ -42,6 +42,8 @@
 // `crate::blend::composite_premultiplied`: a decision the *engine* takes has
 // one implementation the engine owns.
 
+use core::ops::Range;
+
 use store::CellStore;
 
 mod store;
@@ -103,12 +105,19 @@ impl Cell {
 /// [`Rasterizer::sweep`] to turn the cells into spans. Curves are flattened by
 /// the caller — this type sees only straight segments, which is also all the
 /// oracle's scan converter sees.
+///
+/// A caller that will throw away the spans outside a band of rows should say
+/// which band with [`Rasterizer::keep_rows`], and pay for the rows it keeps
+/// rather than for the rows the path reaches.
 #[derive(Debug, Default)]
 pub struct Rasterizer {
     store: CellStore,
     /// The cell currently being accumulated into, held out of the store so a
     /// run of segments crossing one pixel costs no lookup.
     current: Option<Cell>,
+    /// The rows the caller keeps, as a half-open range of pixel rows; `None`
+    /// keeps every row. See [`Rasterizer::keep_rows`].
+    keep: Option<Range<i32>>,
     /// Where the pen is, in subpixel coordinates.
     x: i32,
     y: i32,
@@ -157,14 +166,51 @@ impl Rasterizer {
         Self::default()
     }
 
-    /// Forget every cell, keeping the allocation.
+    /// Forget every cell, keeping the allocation and the kept row range.
     pub fn reset(&mut self) {
         self.store.clear();
         self.current = None;
         self.open = false;
     }
 
+    /// Keep only the cells on rows in `rows`, a half-open range of pixel rows.
+    ///
+    /// This is a promise about the *caller*, not a change to the geometry: it
+    /// says the caller will discard every span outside `rows` anyway, so the
+    /// rasterizer may drop those cells rather than sort and sweep them. The
+    /// spans that do come out are byte-for-byte the ones an unrestricted
+    /// rasterizer emits, because [`Rasterizer::sweep`] resolves each row from
+    /// that row's cells alone — the running cover is reset at every row
+    /// boundary, so a dropped row can change no other.
+    ///
+    /// It is worth setting whenever the path may extend far outside the
+    /// target: a path whose bounding box is tens of thousands of rows tall on
+    /// an 842-row page otherwise pays for every row it crosses.
+    ///
+    /// Only rows are restricted. A span too far left or right still costs its
+    /// cells, because the horizontal extent is bounded by the path's own
+    /// segment count rather than by the rows it crosses.
+    pub fn keep_rows(&mut self, rows: Range<i32>) {
+        self.keep = Some(rows);
+    }
+
+    /// Whether a row would survive [`Rasterizer::keep_rows`].
+    fn kept(&self, y: i32) -> bool {
+        self.keep.as_ref().is_none_or(|rows| rows.contains(&y))
+    }
+
+    /// Bank a cell, unless its row is one the caller discards.
+    fn bank(&mut self, cell: Cell) {
+        if !cell.is_empty() && self.kept(cell.y) {
+            self.store.push(cell);
+        }
+    }
+
     /// Whether any boundary has been accumulated.
+    ///
+    /// A path entirely outside [`Rasterizer::keep_rows`]'s range is empty by
+    /// this test once it has been swept, which is what it means for the caller
+    /// to have said those rows do not matter.
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.store.is_empty() && self.current.is_none_or(Cell::is_empty)
@@ -230,9 +276,7 @@ impl Rasterizer {
         match self.current {
             Some(cell) if cell.x == x && cell.y == y => {}
             Some(cell) => {
-                if !cell.is_empty() {
-                    self.store.push(cell);
-                }
+                self.bank(cell);
                 self.current = Some(Cell::at(x, y));
             }
             None => self.current = Some(Cell::at(x, y)),
@@ -453,10 +497,8 @@ impl Rasterizer {
     /// Bank the in-progress cell and sort, readying the sweep.
     fn finish(&mut self) {
         self.close_polygon();
-        if let Some(cell) = self.current.take()
-            && !cell.is_empty()
-        {
-            self.store.push(cell);
+        if let Some(cell) = self.current.take() {
+            self.bank(cell);
         }
         self.store.sort();
     }
@@ -466,6 +508,12 @@ impl Rasterizer {
     /// `emit` receives `(x, len, alpha)` for each run of equal coverage, in
     /// increasing y then increasing x. Only non-zero alphas are emitted, so a
     /// consumer can blend unconditionally.
+    ///
+    /// Each row is resolved from its own cells: the running cover starts at
+    /// zero on every row and is not carried into the next, because a closed
+    /// boundary crosses each scanline an even number of times and so returns
+    /// the winding count to zero by the row's end. That is what makes
+    /// [`Rasterizer::keep_rows`] exact rather than approximate.
     pub fn sweep(
         &mut self,
         rule: FillRule,
@@ -639,6 +687,12 @@ mod tests {
     use super::*;
 
     /// Fill a path into a width x height coverage plane.
+    ///
+    /// This is the *specification*: the rasterizer records every row the path
+    /// crosses and the callback discards the ones outside the plane, which is
+    /// what every consumer did before `keep_rows` existed.
+    /// [`banded_coverage`] is the same plane taken the cheap way, and
+    /// [`the_band_reproduces_the_unbanded_plane`] is what pins them together.
     fn coverage(path: &kurbo::BezPath, w: i32, h: i32, rule: FillRule, mode: Coverage) -> Vec<u8> {
         let cells = usize::try_from(w * h).expect("a test plane fits");
         let mut out = vec![0u8; cells];
@@ -658,6 +712,54 @@ mod tests {
             }
         });
         out
+    }
+
+    /// The same plane as [`coverage`], with the rasterizer told the rows.
+    ///
+    /// The callback is byte-for-byte [`coverage`]'s, kept rather than
+    /// simplified: the point of the comparison is that the *only* difference
+    /// between the two is where the discard happens.
+    fn banded_coverage(
+        path: &kurbo::BezPath,
+        w: i32,
+        h: i32,
+        rule: FillRule,
+        mode: Coverage,
+    ) -> Vec<u8> {
+        let cells = usize::try_from(w * h).expect("a test plane fits");
+        let mut out = vec![0u8; cells];
+        let mut raster = Rasterizer::new();
+        raster.keep_rows(0..h);
+        raster.add_path(path, 0.1);
+        raster.sweep(rule, mode, |x, len, y, alpha| {
+            if y < 0 || y >= h {
+                return;
+            }
+            for col in x.max(0)..(x + len).min(w) {
+                let Ok(index) = usize::try_from(y * w + col) else {
+                    continue;
+                };
+                if let Some(slot) = out.get_mut(index) {
+                    *slot = alpha;
+                }
+            }
+        });
+        out
+    }
+
+    /// How many cells a path banks under a row range — the cost the band cuts.
+    fn banked(path: &kurbo::BezPath, rows: Option<core::ops::Range<i32>>) -> usize {
+        let mut raster = Rasterizer::new();
+        if let Some(rows) = rows {
+            raster.keep_rows(rows);
+        }
+        raster.add_path(path, 0.1);
+        let mut cells = 0usize;
+        raster.sweep(FillRule::NonZero, Coverage::Exact, |_, _, _, _| {});
+        for (_, row) in raster.store.rows() {
+            cells += row.len();
+        }
+        cells
     }
 
     fn rect(x0: f64, y0: f64, x1: f64, y1: f64) -> kurbo::BezPath {
@@ -952,5 +1054,171 @@ mod tests {
             (painted - area).abs() < 1.0,
             "painted {painted:.3} vs geometric {area:.3}"
         );
+    }
+
+    /// The paths a clip on a real page produces when its geometry leaves the
+    /// target: above it, below it, both, and out to the engine's own clamp.
+    ///
+    /// The last is the case §18.3 measured — `hard_clip`'s +/-32000 is a
+    /// deliberate artefact of the oracle's 16-bit truncation, so a path
+    /// carrying 32000 device units of height reaches the integrator by design
+    /// and must be answered rather than avoided.
+    fn off_target_paths() -> Vec<(&'static str, kurbo::BezPath)> {
+        vec![
+            ("above", rect(2.0, -900.0, 6.0, 5.0)),
+            ("below", rect(2.0, 3.0, 6.0, 900.0)),
+            ("both", rect(2.0, -900.0, 6.0, 900.0)),
+            ("clamped", rect(2.0, -32000.0, 6.0, 32000.0)),
+            ("clamped-slanted", {
+                let mut p = kurbo::BezPath::new();
+                p.move_to((1.5, -32000.0));
+                p.line_to((6.5, 32000.0));
+                p.line_to((7.5, 32000.0));
+                p.line_to((2.5, -32000.0));
+                p.close_path();
+                p
+            }),
+            ("left", rect(-32000.0, 2.0, 3.5, 6.0)),
+            ("right", rect(4.5, 2.0, 32000.0, 6.0)),
+            ("every-side", rect(-32000.0, -32000.0, 32000.0, 32000.0)),
+        ]
+    }
+
+    #[test]
+    fn the_band_reproduces_the_unbanded_plane() {
+        // The invariant the whole change rests on: telling the rasterizer
+        // which rows survive changes no byte on a row that does. Both fill
+        // rules and all three coverage modes, because the band is upstream of
+        // every one of them.
+        for (name, path) in off_target_paths() {
+            for rule in [FillRule::NonZero, FillRule::EvenOdd] {
+                for mode in [Coverage::Exact, Coverage::Thresholded, Coverage::Full] {
+                    let spec = coverage(&path, 8, 8, rule, mode);
+                    let banded = banded_coverage(&path, 8, 8, rule, mode);
+                    assert_eq!(spec, banded, "{name} under {rule:?}/{mode:?}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_path_that_stays_inside_the_band_is_untouched_by_it() {
+        // The control for the test above: a path with nothing to discard must
+        // still agree, or the band would be hiding a difference behind the
+        // rows it drops.
+        let path = rect(1.25, 1.75, 6.5, 5.5);
+        for rule in [FillRule::NonZero, FillRule::EvenOdd] {
+            for mode in [Coverage::Exact, Coverage::Thresholded, Coverage::Full] {
+                assert_eq!(
+                    coverage(&path, 8, 8, rule, mode),
+                    banded_coverage(&path, 8, 8, rule, mode),
+                    "{rule:?}/{mode:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn the_band_keeps_the_targets_last_row() {
+        // A half-open range read as closed, or closed as half-open, moves the
+        // boundary by one and the last row is where that shows. The path is
+        // painted across rows 6 and 7 of an eight-row plane, so row 7 is both
+        // the last kept row and the one an off-by-one drops.
+        let path = rect(1.0, 6.0, 7.0, 8.0);
+        let banded = banded_coverage(&path, 8, 8, FillRule::NonZero, Coverage::Exact);
+        assert_eq!(banded.get(8 * 7 + 3).copied(), Some(255), "the last row");
+        assert_eq!(
+            coverage(&path, 8, 8, FillRule::NonZero, Coverage::Exact),
+            banded
+        );
+    }
+
+    #[test]
+    fn the_band_keeps_the_targets_first_row() {
+        // The other end, for the same reason.
+        let path = rect(1.0, -4.0, 7.0, 1.0);
+        let banded = banded_coverage(&path, 8, 8, FillRule::NonZero, Coverage::Exact);
+        assert_eq!(banded.first().copied(), Some(0), "column 0 is outside");
+        assert_eq!(banded.get(3).copied(), Some(255), "the first row");
+        assert_eq!(
+            coverage(&path, 8, 8, FillRule::NonZero, Coverage::Exact),
+            banded
+        );
+    }
+
+    #[test]
+    fn the_band_drops_the_rows_it_says_it_drops() {
+        // The measurement the change exists for. A path 64 000 rows tall over
+        // an eight-row target banks tens of thousands of cells unbanded and a
+        // handful banded, which is the 530 073 rows of a real render in
+        // miniature.
+        let path = rect(2.0, -32000.0, 6.0, 32000.0);
+        let unbanded = banked(&path, None);
+        let banded = banked(&path, Some(0..8));
+        assert!(
+            unbanded > 60_000,
+            "the unbanded store holds a cell per crossed row, got {unbanded}"
+        );
+        assert!(
+            banded <= 32,
+            "the banded store holds only the target's rows, got {banded}"
+        );
+    }
+
+    #[test]
+    fn a_band_is_only_about_rows() {
+        // Stated as a test because it is a limit of the fix rather than an
+        // oversight: a path 64 000 columns wide costs its cells either way,
+        // because the cells a segment banks are bounded by the pixels it
+        // crosses and a horizontal one crosses them all on a single row.
+        let path = rect(-32000.0, 2.0, 32000.0, 6.0);
+        assert_eq!(banked(&path, None), banked(&path, Some(0..8)));
+    }
+
+    #[test]
+    fn a_band_outside_the_path_leaves_nothing() {
+        // The degenerate end of the range: a target the path misses entirely
+        // paints nothing, which is what the unbanded spelling's callback did
+        // by returning on every row.
+        let path = rect(2.0, -900.0, 6.0, -100.0);
+        assert_eq!(
+            banded_coverage(&path, 8, 8, FillRule::NonZero, Coverage::Exact),
+            vec![0u8; 64]
+        );
+        assert_eq!(banked(&path, Some(0..8)), 0);
+    }
+
+    #[test]
+    fn every_rows_cover_returns_to_zero_by_its_end() {
+        // The proof `keep_rows` rests on, checked rather than argued: the
+        // sweep starts each row's running cover at zero because a closed
+        // boundary crosses a scanline an even number of times, so the cover
+        // one row leaves behind is nothing the next one needs. If it were
+        // not, dropping a row would corrupt the rows below it.
+        for (name, path) in off_target_paths() {
+            let mut raster = Rasterizer::new();
+            raster.add_path(&path, 0.1);
+            raster.sweep(FillRule::NonZero, Coverage::Exact, |_, _, _, _| {});
+            for (y, row) in raster.store.rows() {
+                let cover: i32 = row.iter().map(|c| c.cover).sum();
+                assert_eq!(cover, 0, "{name} leaves cover on row {y}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_reset_keeps_the_band_the_caller_set() {
+        // `AggDevice` sets the band once per sweep, but `reset` is what a
+        // reused rasterizer calls between paths and it must not quietly widen
+        // the range back to everything.
+        let mut raster = Rasterizer::new();
+        raster.keep_rows(0..8);
+        raster.add_path(&rect(2.0, -900.0, 6.0, 900.0), 0.1);
+        raster.sweep(FillRule::NonZero, Coverage::Exact, |_, _, _, _| {});
+        raster.reset();
+        raster.add_path(&rect(2.0, -900.0, 6.0, 900.0), 0.1);
+        raster.sweep(FillRule::NonZero, Coverage::Exact, |_, _, _, _| {});
+        let cells: usize = raster.store.rows().map(|(_, row)| row.len()).sum();
+        assert!(cells <= 32, "the band survives a reset, got {cells}");
     }
 }

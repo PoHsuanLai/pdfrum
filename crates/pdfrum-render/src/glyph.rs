@@ -353,6 +353,11 @@ pub(crate) fn render_lcd(outline: &BezPath) -> Option<LcdBitmap> {
         * outline.clone();
 
     let mut ras = Rasterizer::new();
+    // The bitmap's rows are the only ones written below; the box was derived
+    // from this very outline, so nothing outside them is expected — saying so
+    // makes the callback's own bound the second of two rather than the only
+    // one, and costs a comparison per cell.
+    ras.keep_rows(0..height);
     ras.add_path(&placed, FLATTEN_TOLERANCE);
     ras.sweep(FillRule::NonZero, Coverage::Exact, |x, len, y, alpha| {
         if y < 0 || y >= height {

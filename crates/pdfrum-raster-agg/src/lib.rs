@@ -252,6 +252,11 @@ impl AggDevice {
         mut paint: impl FnMut(&mut Target, i32, i32, i32, u8),
     ) {
         self.raster.reset();
+        // Every consumer below drops a span whose row is off the target, so
+        // the rasterizer is told the range and never records those cells: a
+        // clip path tens of thousands of rows tall otherwise sorts and sweeps
+        // every one of them to have the answer thrown away.
+        self.raster.keep_rows(0..target_rows(self.base.height()));
         self.raster.add_path(path, FLATTEN_TOLERANCE);
         let rule = to_scanline_rule(rule);
         let coverage = to_coverage(aa);
@@ -415,6 +420,7 @@ impl AggDevice {
         let (w, h) = self.size();
         let mut mask = self.blank_plane(w, h);
         self.raster.reset();
+        self.raster.keep_rows(0..target_rows(h));
         self.raster.add_path(path, FLATTEN_TOLERANCE);
         let width = w as usize;
         // The sweep visits rows in order, but the band is folded rather than
@@ -548,6 +554,15 @@ fn to_scanline_rule(rule: FillRule) -> scanline::FillRule {
         FillRule::Winding => scanline::FillRule::NonZero,
         FillRule::EvenOdd => scanline::FillRule::EvenOdd,
     }
+}
+
+/// A device height as the exclusive row bound the rasterizer takes.
+///
+/// A target taller than `i32::MAX` rows cannot exist — its pixels would not
+/// be addressable — so the saturating conversion is a total function rather
+/// than a case anything reaches.
+fn target_rows(height: u32) -> i32 {
+    i32::try_from(height).unwrap_or(i32::MAX)
 }
 
 /// The integrator's coverage mode for the trait's antialiasing mode.
