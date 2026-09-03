@@ -618,6 +618,32 @@ fn visit<R: Resolve>(
     };
     for index in 0..kids.len() {
         let kid_ref = kids.reference_at(index);
+        // [oracle-bug] A `/Kids` entry that is not a dictionary costs *that
+        // entry* and nothing else. `CPDF_InteractiveForm::LoadField` reads
+        // `kids->GetDictAt(0)` and returns outright when it is null
+        // (`cpdf_interactiveform.cpp:871-874`), so one unresolvable first kid
+        // silently discards every sibling under the node — a whole page of
+        // fields lost to one broken reference. Nothing recovers them: the
+        // walk has already returned, and `FixPageFields` only re-enters
+        // through `/Annots`.
+        //
+        // That `GetDictAt(0)` is a **probe**, not a guard: the two lines after
+        // it (`:876-880`) ask whether the first kid has `/T` or `/Kids` to
+        // decide whether this node is the terminal field or a branch. The
+        // early return is what happens when the probe cannot be taken, and it
+        // throws away the siblings as a side effect rather than as a
+        // decision — a non-dict first kid says nothing about whether the
+        // *array* is a field tree. Our own probe (`kids_are_fields` above)
+        // scans every kid rather than only the first, so a null at index 0
+        // does not blind it and there is nothing to recover from.
+        //
+        // pdf.js is the tiebreaker and skips the entry: `#collectFieldObjects`
+        // (`src/core/document.js`) recurses per kid and its
+        // `if (!(fieldRef instanceof Ref) || visitedRefs.has(fieldRef))`
+        // guard returns from *that* kid alone, leaving the loop to continue
+        // with the siblings. ISO 32000-1 §12.7.3.1 says `/Kids` holds the
+        // field's children and gives no rule making the array's validity
+        // depend on its first element.
         let Some(kid) = kids.dict_at(index, r) else {
             continue;
         };
@@ -1662,6 +1688,74 @@ mod tests {
 
     fn reference(num: u32) -> Object {
         Object::Ref(ObjRef { num, generation: 0 })
+    }
+
+    #[test]
+    fn a_junk_first_kid_costs_that_kid_and_not_its_siblings() {
+        // [oracle-bug] `LoadField` returns when `kids->GetDictAt(0)` is null
+        // (`cpdf_interactiveform.cpp:871-874`), losing `real` along with the
+        // broken entry. pdf.js skips the entry and keeps walking
+        // (`#collectFieldObjects`, `src/core/document.js`), and so do we —
+        // one unresolvable reference must not cost a page of fields.
+        //
+        // Object 9 is not in the store, so `/Kids[0]` resolves to nothing;
+        // object 2 is a real text field.
+        let store = Store::of([(
+            2,
+            Object::Dict(dict(&[
+                ("FT", name("Tx")),
+                ("T", text("real")),
+                ("V", text("kept")),
+            ])),
+        )]);
+        let catalog = catalog_with(vec![Object::Dict(dict(&[(
+            "Kids",
+            Object::Array(Array::of([reference(9), reference(2)])),
+        )]))]);
+
+        let (limits, mut diags) = (Limits::default(), Diagnostics::default());
+        let form = Form::load(&catalog, &store, &limits, &mut diags).expect("a form");
+
+        let field = only_field(&form);
+        assert_eq!(field.name, "real");
+        assert_eq!(field.stored_value(&store), "kept");
+    }
+
+    #[test]
+    fn a_junk_first_kid_does_not_blind_the_terminal_probe() {
+        // The oracle's `GetDictAt(0)` is a probe as well as a guard: the
+        // lines after it (`:876-880`) ask the *first* kid whether it carries
+        // `/T` or `/Kids` to decide branch-versus-terminal. Ours scans every
+        // kid instead (`kids_are_fields`), so a null at index 0 cannot make a
+        // branch node look terminal. Here `/Kids[1]` is a named field, so the
+        // parent is naming structure and the kid is the field — even though
+        // `/Kids[0]` says nothing.
+        // The kid carries a `/Parent` back to the branch, which is how a
+        // real file writes it: that is what its `/FT` and the first half of
+        // its qualified name are inherited through.
+        let parent = dict(&[("FT", name("Tx")), ("T", text("parent"))]);
+        let store = Store::of([(
+            2,
+            Object::Dict(dict(&[
+                ("T", text("kid")),
+                ("V", text("v")),
+                ("Parent", Object::Dict(parent.clone())),
+            ])),
+        )]);
+        let catalog = catalog_with(vec![Object::Dict(dict(&[
+            ("FT", name("Tx")),
+            ("T", text("parent")),
+            (
+                "Kids",
+                Object::Array(Array::of([reference(9), reference(2)])),
+            ),
+        ]))]);
+
+        let (limits, mut diags) = (Limits::default(), Diagnostics::default());
+        let form = Form::load(&catalog, &store, &limits, &mut diags).expect("a form");
+
+        // The parent is a branch, so the field is the kid, qualified by it.
+        assert_eq!(only_field(&form).name, "parent.kid");
     }
 
     /// Three text fields as objects 1, 2 and 3, and the catalog that lists
