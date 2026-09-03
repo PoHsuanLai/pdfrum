@@ -41,6 +41,9 @@ pub(crate) const NOT_SUPPORTED: &str = "Operation not supported.";
 /// `JSMessage::kParamError`, the message sixteen of the goldens assert.
 pub(crate) const PARAM_ERROR: &str = "Incorrect number of parameters passed to function.";
 
+/// `JSMessage::kInvalidInputError` — what an empty timer script answers.
+pub(crate) const INVALID_INPUT: &str = "The input value is invalid.";
+
 /// **Every error a bound function throws carries its own name.**
 ///
 /// The form is `<name>: <message>`, so a golden reads
@@ -310,41 +313,96 @@ declined!(app_open_doc, "app.openDoc");
 declined!(app_popup_menu, "app.popUpMenu");
 declined!(app_popup_menu_ex, "app.popUpMenuEx");
 
-/// `app.setTimeOut(cExpr, nMilliseconds)` and `app.setInterval`.
+/// `app.setTimeOut(cExpr, nMilliseconds)` and `app.setInterval(...)`.
 ///
-/// **The script and the interval are recorded; nothing ever fires them.**
+/// **Armed, and fired when a caller says time passed** — see
+/// [`super::ScriptCascade::advance_time`]. The registry is per-session, where
+/// upstream's is process-wide, and there is no clock in this library at all.
 ///
-/// Three facts make that the right answer rather than a shortfall. The
-/// machinery upstream is a **process-wide** timer map, which this workspace
-/// does not build. A timer that fires while the runtime is blocking is
-/// discarded anyway. And a one-shot with `ms == 0` never runs its script at
-/// all.
+/// Three things the arity and the validation decide, all asserted:
 ///
-/// The registry here is per-session, never global.
-fn app_set_timer(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
-    if args.len() < 2 {
-        return Err(param_error("app.setTimeOut"));
-    }
-    let script = string_of(&args.get_or_undefined(0).clone(), context)?;
-    let interval = args.get_or_undefined(1).clone().to_i32(context)?;
-    let id = if let Some(host) = host(context) {
-        let mut state = host.borrow_mut();
-        state.timers.push((script, interval));
-        i32::try_from(state.timers.len()).unwrap_or(i32::MAX)
-    } else {
-        0
+/// - **one or two arguments, never more**: `params.size() == 0 ||
+///   params.size() > 2` is the parameter-count error, so a third argument is
+///   as fatal as none;
+/// - **an empty script is refused** with `The input value is invalid.`, not
+///   armed and ignored;
+/// - **the interval defaults to 1000 ms**, not to zero.
+macro_rules! set_timer {
+    ($fn_name:ident, $kind:expr, $acrobat:literal) => {
+        fn $fn_name(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+            if args.is_empty() || args.len() > 2 {
+                return Err(param_error($acrobat));
+            }
+            let script = string_of(&args.get_or_undefined(0).clone(), context)?;
+            if script.is_empty() {
+                return Err(qualified($acrobat, INVALID_INPUT));
+            }
+            let interval = match args.get(1) {
+                Some(value) => value.clone().to_i32(context)?,
+                None => 1000,
+            };
+            let id = match host(context) {
+                Some(host) => host.borrow_mut().timers.set($kind, script, interval),
+                None => 0,
+            };
+            // `CJS_TimerObj` carries an integer id and **nothing else**: no
+            // properties, no methods (`fxjs/cjs_timerobj.cpp:20-23`). The
+            // name is `timeOut` for both, because there is one class.
+            let timer = ObjectInitializer::new(context)
+                .property(
+                    boa_engine::js_string!("timeOut"),
+                    JsValue::from(id),
+                    Attribute::all(),
+                )
+                .build();
+            Ok(JsValue::from(timer))
+        }
     };
-    // `CJS_TimerObj` carries an integer id and **nothing else**: no
-    // properties, no methods (`fxjs/cjs_timerobj.cpp:20-23`).
-    let timer = ObjectInitializer::new(context)
-        .property(
-            boa_engine::js_string!("timeOut"),
-            JsValue::from(id),
-            Attribute::all(),
-        )
-        .build();
-    Ok(JsValue::from(timer))
 }
+
+set_timer!(
+    app_set_time_out,
+    super::timer::TimerKind::OneShot,
+    "app.setTimeOut"
+);
+set_timer!(
+    app_set_interval,
+    super::timer::TimerKind::Repeating,
+    "app.setInterval"
+);
+
+/// `app.clearTimeOut(oTimer)` and `app.clearInterval(oTimer)` — **the same
+/// function under two names**, as upstream registers them.
+///
+/// It takes **exactly one** argument and reads the id off it. A non-object,
+/// and an object that is not a timer, are *silently ignored* rather than
+/// refused: `ClearTimerCommon` returns at its first line for both, which is
+/// what lets `app.clearTimeOut(app.setTimeOut('', 0))` — a refused arm
+/// followed by a cancel — do nothing at all instead of throwing.
+macro_rules! clear_timer {
+    ($fn_name:ident, $acrobat:literal) => {
+        fn $fn_name(_this: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+            if args.len() != 1 {
+                return Err(param_error($acrobat));
+            }
+            let Some(object) = args.get_or_undefined(0).as_object() else {
+                return Ok(JsValue::undefined());
+            };
+            let id = object.get(boa_engine::js_string!("timeOut"), context)?;
+            if id.is_undefined() {
+                return Ok(JsValue::undefined());
+            }
+            let id = id.to_i32(context)?;
+            if let Some(host) = host(context) {
+                host.borrow_mut().timers.cancel(id);
+            }
+            Ok(JsValue::undefined())
+        }
+    };
+}
+
+clear_timer!(app_clear_time_out, "app.clearTimeOut");
+clear_timer!(app_clear_interval, "app.clearInterval");
 
 // ---- console ----
 
@@ -607,14 +665,24 @@ fn install_app(context: &mut Context) -> JsResult<()> {
             .function(native(app_beep), boa_engine::js_string!("beep"), 1)
             .function(native(app_response), boa_engine::js_string!("response"), 5)
             .function(
-                native(app_set_timer),
+                native(app_set_time_out),
                 boa_engine::js_string!("setTimeOut"),
                 2,
             )
             .function(
-                native(app_set_timer),
+                native(app_set_interval),
                 boa_engine::js_string!("setInterval"),
                 2,
+            )
+            .function(
+                native(app_clear_time_out),
+                boa_engine::js_string!("clearTimeOut"),
+                1,
+            )
+            .function(
+                native(app_clear_interval),
+                boa_engine::js_string!("clearInterval"),
+                1,
             );
         // The eight that are no-ops returning success upstream. Reproducing
         // "does nothing, succeeds" is correct behaviour, not a shortcut — a
@@ -633,8 +701,6 @@ fn install_app(context: &mut Context) -> JsResult<()> {
             "launchURL",
             "newFDF",
             "openFDF",
-            "clearInterval",
-            "clearTimeOut",
         ] {
             init.function(native(app_noop), boa_engine::js_string!(name), 0);
         }

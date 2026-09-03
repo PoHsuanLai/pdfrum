@@ -783,6 +783,93 @@ impl<'a> FormSession<'a> {
         }
     }
 
+    /// Tells the session that `elapsed` passed, and runs whatever timers came
+    /// due.
+    ///
+    /// **This library never reads a clock**, so a document's
+    /// `app.setInterval` is inert until a host says time moved. A viewer
+    /// calls this from its own event loop; a test calls it with a number.
+    /// Answers how many timer scripts ran.
+    ///
+    /// Only for a session built by [`FormSession::with_scripts`] — with no
+    /// engine there is nothing that could have armed a timer, and the answer
+    /// is zero.
+    ///
+    /// ```
+    /// # #[cfg(feature = "script")]
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// use std::time::Duration;
+    /// use pdfrum::{Document, FormSession, ScriptConfig};
+    ///
+    /// let doc = Document::open("tests/fixtures/public_methods.pdf")?;
+    /// let mut session = FormSession::with_scripts(&doc, &ScriptConfig::wall_clock())?;
+    ///
+    /// // Nothing in this document arms a timer, so nothing is due however
+    /// // much time is claimed to have passed.
+    /// assert_eq!(session.advance_time(Duration::from_secs(60)), 0);
+    /// # Ok(())
+    /// # }
+    /// # #[cfg(not(feature = "script"))] fn main() {}
+    /// ```
+    #[cfg(feature = "script")]
+    pub fn advance_time(&mut self, elapsed: std::time::Duration) -> usize {
+        self.scripts_mut()
+            .map_or(0, |cascade| cascade.advance_time(elapsed))
+    }
+
+    /// The page's own `/AA` script for one trigger, if it carries one.
+    ///
+    /// A **page**-level action rather than a widget's: `/AA /O` when the page
+    /// opens and `/AA /C` when it closes, off the page dictionary itself
+    /// (`FORM_DoPageAAction`, `fpdfsdk/fpdf_formfill.cpp:918-944`). Not to be
+    /// confused with a field's `/AA /C`, which is Calculate — the two share a
+    /// key in different dictionaries.
+    #[cfg(feature = "script")]
+    fn page_action(&self, page: PageIndex, opening: bool) -> Option<String> {
+        use pdfrum_doc::nav::AActionType;
+        let loaded = self.doc.page(page).ok()?;
+        let resolve = self.doc.parser();
+        let entries = loaded.dict.dict.dict(pdfrum_object::names::AA, resolve)?;
+        let trigger = if opening {
+            AActionType::OpenPage
+        } else {
+            AActionType::ClosePage
+        };
+        pdfrum_doc::nav::additional_action(&entries, trigger, resolve)
+            .filter(|action| action.kind() == pdfrum_doc::ActionKind::JavaScript)
+            .and_then(|action| action.javascript(resolve))
+            .filter(|source| !source.is_empty())
+    }
+
+    /// Runs the page's `/AA /O` — what showing a page fires.
+    ///
+    /// Separate from [`load_page`](Self::load_page) because the two are
+    /// separate calls upstream and a host may show a page it has already
+    /// read: `FORM_OnAfterLoadPage` and `FORM_DoPageAAction(…, OPEN)` are two
+    /// lines in `pdfium_test`'s own `GetPage`.
+    #[cfg(feature = "script")]
+    pub fn page_opened(&mut self, page: impl Into<PageIndex>) {
+        let page = page.into();
+        let Some(source) = self.page_action(page, true) else {
+            return;
+        };
+        if let Some(cascade) = self.scripts_mut() {
+            cascade.run(&source, "/AA /O");
+        }
+    }
+
+    /// Runs the page's `/AA /C` — what leaving a page fires.
+    #[cfg(feature = "script")]
+    pub fn page_closed(&mut self, page: impl Into<PageIndex>) {
+        let page = page.into();
+        let Some(source) = self.page_action(page, false) else {
+            return;
+        };
+        if let Some(cascade) = self.scripts_mut() {
+            cascade.run(&source, "/AA /C");
+        }
+    }
+
     /// Reads a page in, as showing it would.
     ///
     /// **The point is the side effects, not the read.** Building a page's

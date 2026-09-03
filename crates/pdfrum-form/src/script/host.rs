@@ -24,10 +24,12 @@ use super::transcript::TranscriptLine;
 pub(crate) struct HostState {
     /// Every line a script has asked the host to print, in order.
     pub(crate) transcript: Vec<TranscriptLine>,
-    /// Timers a script asked for: the script source and its interval in
-    /// milliseconds. **Recorded and never fired** — see `app.setTimeOut`.
-    /// Per-session, where upstream's registry is process-wide.
-    pub(crate) timers: Vec<(String, i32)>,
+    /// Every timer a script armed, and how much time the caller has said
+    /// passed.
+    ///
+    /// **Per-session, where upstream's registry is process-wide**, and driven
+    /// by a caller rather than by a clock — see [`super::timer`].
+    pub(crate) timers: super::timer::Timers,
     /// What the `Doc` object answers from, and what a `Field` reads and
     /// writes.
     ///
@@ -117,7 +119,7 @@ impl Default for HostState {
     fn default() -> HostState {
         HostState {
             transcript: Vec::new(),
-            timers: Vec::new(),
+            timers: super::timer::Timers::default(),
             document: super::model::DocumentModel::empty(),
             icon_names: Vec::new(),
             field_writes: Vec::new(),

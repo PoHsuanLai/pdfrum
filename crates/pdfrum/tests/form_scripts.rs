@@ -212,3 +212,55 @@ fn a_callers_own_cascade_gates_the_commit() {
         "a refused commit keeps the caret in the field"
     );
 }
+
+/// **A timer fires only when the host says time passed**, and it is the
+/// facade that says so.
+///
+/// The whole seam in one test: nothing fires while the session merely exists,
+/// and one step of the clock runs what came due. There is no thread and no
+/// wall clock anywhere below this call.
+#[test]
+#[cfg(feature = "script")]
+fn a_timer_fires_only_when_the_host_advances_the_clock() {
+    use std::time::Duration;
+
+    let doc = Document::open(FIXTURE).expect("the public_methods fixture must open");
+    let mut session = FormSession::with_scripts(&doc, &ScriptConfig::frozen_at(1_399_672_130))
+        .expect("boa builds a realm on any input");
+    let scripts = session
+        .scripts_mut()
+        .expect("a scripted session has an engine");
+    assert!(scripts.run("app.setInterval(\"app.alert('tick')\", 1000);", "test"));
+    let before = scripts.transcript().len();
+
+    // A session nobody advances fires nothing, however long it lives.
+    assert_eq!(
+        session
+            .scripts()
+            .expect("a scripted session")
+            .transcript()
+            .len(),
+        before,
+        "arming a timer runs nothing on its own"
+    );
+
+    assert_eq!(session.advance_time(Duration::from_secs(1)), 1);
+    let after = session
+        .scripts()
+        .expect("a scripted session")
+        .transcript_text();
+    assert!(after.ends_with("Alert: tick\n"), "got {after:?}");
+}
+
+/// **A session with no engine advances nothing**, and answering zero is the
+/// answer rather than a panic — a caller driving a clock must not have to ask
+/// first whether scripting is on.
+#[test]
+#[cfg(feature = "script")]
+fn advancing_a_script_free_session_is_zero_and_not_a_panic() {
+    use std::time::Duration;
+
+    let doc = Document::open(FIXTURE).expect("the public_methods fixture must open");
+    let mut session = FormSession::new(&doc);
+    assert_eq!(session.advance_time(Duration::from_hours(1)), 0);
+}

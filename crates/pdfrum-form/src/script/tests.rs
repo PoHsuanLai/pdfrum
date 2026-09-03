@@ -1166,9 +1166,12 @@ fn the_declined_methods_answer_the_oracles_own_message() {
 fn every_stub_is_inert_rather_than_fatal() {
     let mut cascade = session();
     assert!(cascade.run(
+        // The timer functions are **not** in this list any more: they check
+        // their arity, so `app.clearTimeOut()` throws rather than being
+        // inert. `the_timer_functions_check_their_own_arguments` is where
+        // that lives.
         "app.browseForDoc(); app.execDialog(); app.findComponent();\n\
          app.goBack(); app.goForward(); app.newFDF(); app.openFDF();\n\
-         app.clearInterval(); app.clearTimeOut();\n\
          app.alert('survived');",
         "test"
     ));
@@ -1520,30 +1523,17 @@ fn bug_1477093_a_missing_field_is_undefined_and_the_throw_is_reported() {
     );
 }
 
-/// `Bug620428`, `Bug634394`, `Bug634716`, `Bug679649`, `Bug707673` —
-/// **timers are recorded and cancellable, and none of them fires.**
+/// A second of simulated time, the unit the oracle's tests advance by.
+fn one_second() -> std::time::Duration {
+    std::time::Duration::from_secs(1)
+}
+
+/// `Bug620428` — **a cancelled timer and interval fire nothing** over five
+/// seconds of simulated time.
 ///
-/// # What these five actually test
-///
-/// All five are **timer** tests and touch no field at all: each asserts on
-/// what advancing the clock by a second fires — that a cancelled timer and
-/// interval fire nothing over five seconds, that cancelling from *inside* a
-/// callback stops the sequence at two alerts, that a timer the host refuses to
-/// create fires nothing, and that a click after the open actions fires
-/// nothing.
-///
-/// So the blocking dependency is a clock step function that nothing calls yet
-/// — **not** the object model.
-///
-/// What is portable today is the half that does not need a clock, and it is
-/// the half that matters for a document in the wild: the scripts **parse and
-/// run**, `setTimeOut` and `setInterval` are recorded rather than fired, and
-/// `clearTimeOut`/`clearInterval` neither throw nor fire anything. A viewer
-/// that ran these five files would show nothing and stay up, which is
-/// precisely what all five oracle tests assert.
+/// The whole of what the oracle asserts: one alert, the open action's own.
 #[test]
-fn the_five_timer_regressions_record_their_timers_and_fire_none() {
-    // `bug_620428.pdf`: set both, cancel both, twice.
+fn bug_620428_a_cancelled_timer_and_interval_fire_nothing() {
     let mut cascade = session();
     assert!(cascade.run(
         "function fireTimeOut() { app.alert(\"hello world\"); }\n\
@@ -1558,33 +1548,28 @@ fn the_five_timer_regressions_record_their_timers_and_fire_none() {
         "/OpenAction",
     ));
     assert_eq!(
-        crate::script::transcript::render(&cascade.transcript()),
-        "Alert: done\n",
-        "only the open action's own alert — no timer fired, which is what \
-         Bug620428 asserts after AdvanceTime(5000)"
-    );
-    assert_eq!(
         cascade.timers().len(),
-        2,
-        "both are recorded, so a host driving a clock has them"
+        0,
+        "cancelling twice leaves nothing armed, and the second is not an error"
     );
-
-    // `bug_679649.pdf`: one timer, cancelled.
-    let mut cascade = session();
-    assert!(cascade.run(
-        "function ping() { app.alert(\"ping\"); }\n\
-         var timer = app.setTimeOut(\"ping()\", 100);\n\
-         app.clearTimeOut(timer);",
-        "/OpenAction",
-    ));
-    assert!(
-        cascade.transcript().is_empty(),
-        "Bug679649 asserts zero alerts after AdvanceTime(2000)"
+    assert_eq!(cascade.advance_time(std::time::Duration::from_secs(5)), 0);
+    assert_eq!(
+        crate::script::transcript::render(&cascade.transcript()),
+        "Alert: done\n"
     );
+}
 
-    // `bug_634394.pdf`: cancelling from inside a callback. The callbacks are
-    // never entered here, so the outer script is all that runs — and it must
-    // run.
+/// `Bug634394` — **cancelling from inside a callback stops at two alerts**,
+/// over five one-second steps.
+///
+/// It is the clearest demonstration of two of the timer rules at once. The
+/// interval fires at t=1000 and alerts `hello world`, and its own callback
+/// cancels it — so it does not fire again. The one-shot is still armed and
+/// fires at t=3000, alerting `goodbye world` and cancelling an interval that
+/// is already gone, which is not an error. Two alerts, and the remaining
+/// steps produce nothing.
+#[test]
+fn bug_634394_cancelling_inside_a_callback_stops_at_two_alerts() {
     let mut cascade = session();
     assert!(cascade.run(
         "var interval;\n\
@@ -1596,6 +1581,152 @@ fn the_five_timer_regressions_record_their_timers_and_fire_none() {
          interval = app.setInterval(\"fireInterval()\", 1000);",
         "/OpenAction",
     ));
+    // Five separate steps, as the oracle's test writes them: a timer fires at
+    // most once per call, so advancing 5000 in one go is not the same test.
+    for _ in 0..5 {
+        cascade.advance_time(one_second());
+    }
+    assert_eq!(
+        cascade.transcript().len(),
+        2,
+        "got {:?}",
+        crate::script::transcript::render(&cascade.transcript())
+    );
+}
+
+/// `Bug679649` — **a timer the host refuses to create fires nothing**, and
+/// cancelling the refusal is not an error either.
+#[test]
+fn bug_679649_a_refused_timer_fires_nothing() {
+    let mut cascade = session();
+    cascade.fail_next_timer();
+    assert!(cascade.run(
+        "function ping() { app.alert(\"ping\"); }\n\
+         var timer = app.setTimeOut(\"ping()\", 100);\n\
+         app.clearTimeOut(timer);",
+        "/OpenAction",
+    ));
+    assert_eq!(cascade.advance_time(std::time::Duration::from_secs(2)), 0);
     assert!(cascade.transcript().is_empty());
+}
+
+/// **A timer fires at most once per `advance_time`**, however large the
+/// increment — the rule the oracle's tests state in a comment and prove by
+/// calling `AdvanceTime(1000)` five times rather than `AdvanceTime(5000)`
+/// once.
+#[test]
+fn an_interval_fires_once_per_step_and_not_once_per_interval() {
+    let mut cascade = session();
+    assert!(cascade.run(
+        "app.setInterval(\"app.alert('tick')\", 1000);",
+        "/OpenAction",
+    ));
+    assert_eq!(
+        cascade.advance_time(std::time::Duration::from_secs(5)),
+        1,
+        "one 5-second step fires the 1-second interval once"
+    );
+    for _ in 0..3 {
+        cascade.advance_time(one_second());
+    }
+    assert_eq!(
+        cascade.transcript().len(),
+        4,
+        "three more steps, three more firings"
+    );
+}
+
+/// **A one-shot is gone after it fires**; an interval is re-armed.
+#[test]
+fn a_one_shot_fires_once_and_an_interval_keeps_going() {
+    let mut cascade = session();
+    assert!(cascade.run(
+        "app.setTimeOut(\"app.alert('once')\", 500);\n\
+         app.setInterval(\"app.alert('again')\", 500);",
+        "/OpenAction",
+    ));
     assert_eq!(cascade.timers().len(), 2);
+    assert_eq!(cascade.advance_time(one_second()), 2);
+    assert_eq!(cascade.timers().len(), 1, "the one-shot is gone");
+    assert_eq!(cascade.advance_time(one_second()), 1);
+    assert_eq!(
+        crate::script::transcript::render(&cascade.transcript()),
+        "Alert: once\nAlert: again\nAlert: again\n"
+    );
+}
+
+/// **A one-shot with a zero timeout never runs its script**, though it is
+/// armed and cancelled like any other.
+///
+/// `CJS_App::TimerProc`'s guard is `!IsOneShot() || GetTimeOut() > 0`, and
+/// `setTimeOut` passes its interval as both the elapse and the timeout — so
+/// this branch is reachable from one argument.
+#[test]
+fn a_zero_timeout_one_shot_arms_and_runs_nothing() {
+    let mut cascade = session();
+    assert!(cascade.run("app.setTimeOut(\"app.alert('never')\", 0);", "/OpenAction"));
+    assert_eq!(cascade.timers().len(), 1, "it is armed");
+    assert_eq!(cascade.advance_time(one_second()), 0, "and runs nothing");
+    assert!(cascade.transcript().is_empty());
+    assert_eq!(cascade.timers().len(), 0, "and is gone afterwards");
+}
+
+/// A **timer script that throws** is recorded and does not stop the timers
+/// after it, exactly as a document script is.
+#[test]
+fn a_throwing_timer_script_is_recorded_and_the_next_still_fires() {
+    let mut cascade = session();
+    assert!(cascade.run(
+        "app.setTimeOut(\"nonesuch()\", 100);\n\
+         app.setTimeOut(\"app.alert('after')\", 200);",
+        "/OpenAction",
+    ));
+    assert_eq!(cascade.advance_time(one_second()), 2);
+    assert_eq!(
+        crate::script::transcript::render(&cascade.transcript()),
+        "Alert: after\n"
+    );
+    assert_eq!(
+        cascade.stops().len(),
+        1,
+        "the throw is recorded, not swallowed"
+    );
+}
+
+/// **The two arming functions validate**, and the two cancelling ones
+/// tolerate anything.
+#[test]
+fn the_timer_functions_check_their_own_arguments() {
+    let mut cascade = session();
+    assert!(cascade.run(
+        "function say(f) { try { f(); app.alert('no throw'); } \
+          catch (e) { app.alert('' + e); } }\n\
+         say(function () { app.setTimeOut(); });\n\
+         say(function () { app.setTimeOut('a', 1, 2); });\n\
+         say(function () { app.setTimeOut('', 1); });\n\
+         say(function () { app.clearTimeOut(); });\n\
+         say(function () { app.clearTimeOut(42); });",
+        "/OpenAction",
+    ));
+    assert_eq!(
+        crate::script::transcript::render(&cascade.transcript()),
+        "Alert: app.setTimeOut: Incorrect number of parameters passed to function.\n\
+         Alert: app.setTimeOut: Incorrect number of parameters passed to function.\n\
+         Alert: app.setTimeOut: The input value is invalid.\n\
+         Alert: app.clearTimeOut: Incorrect number of parameters passed to function.\n\
+         Alert: no throw\n"
+    );
+}
+
+/// **The interval defaults to 1000 ms**, not to zero — so a one-argument
+/// `setInterval` fires on a one-second step and not before.
+#[test]
+fn a_timer_with_no_interval_defaults_to_one_second() {
+    let mut cascade = session();
+    assert!(cascade.run("app.setInterval(\"app.alert('t')\");", "/OpenAction"));
+    assert_eq!(
+        cascade.advance_time(std::time::Duration::from_millis(999)),
+        0
+    );
+    assert_eq!(cascade.advance_time(std::time::Duration::from_millis(1)), 1);
 }

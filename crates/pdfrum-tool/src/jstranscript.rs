@@ -19,11 +19,15 @@
 //!    all. The action chain is then walked depth-first through `/Next`, with
 //!    a guard against revisiting a dictionary already run.
 //!
-//! 3. **Each page is loaded**, in order. Loading a page builds its widgets,
+//! 3. **Each page is loaded, opened, and closed**, in order. Loading a page
+//!    builds its widgets,
 //!    and `CPDFSDK_Widget::OnLoad` runs every text field's and combo box's
 //!    `/AA /F` formatter (`fpdfsdk/cpdfsdk_widget.cpp:1104-1122`) — which is
 //!    why a document whose only script is a formatter prints alerts on open
-//!    with no event sent at all.
+//!    with no event sent at all. Opening and closing then run the *page's*
+//!    own `/AA /O` and `/AA /C` — page-level actions off the page
+//!    dictionary, not a field's, and the two spell `/C` differently: on a
+//!    page it is Close, on a field it is Calculate.
 //! 4. **The sibling `.evt` is replayed against each page**, if there is one.
 //!    `testing/tools/test_runner.py`'s `TestText` runs `pdfium_test` with
 //!    `--send-events` unconditionally and copies `<test>.evt` next to the PDF
@@ -149,9 +153,15 @@ pub fn write_transcript(
     // are `ProcessPage`'s and in its order.
     for page in 0..doc.page_count() {
         session.load_page(page);
+        // `FORM_OnAfterLoadPage` then `FORM_DoPageAAction(…, OPEN)`, which is
+        // `GetPage`'s own pair (`pdfium_test.cc:871-872`); the events go
+        // between it and the closing action, which `ProcessPage` runs after
+        // rendering (`:1646`).
+        session.page_opened(page);
         if !events.is_empty() {
             crate::dispatch::replay_page(&mut session, page, events, err);
         }
+        session.page_closed(page);
     }
     let text = session
         .scripts()
