@@ -19,8 +19,8 @@ pub struct Target {
     /// The clip in force, or `None` for "everything is visible".
     ///
     /// A clip is a coverage plane the size of the target, and intersecting two
-    /// is `a * b / 255` — the same truncating product `CFX_AggClipRgn` uses,
-    /// which is what makes a clipped edge here land where the oracle's does.
+    /// is the truncating product `a * b / 255`. Truncating rather than
+    /// rounding is what makes a clipped edge land where the oracle's does.
     ///
     /// **Shared, not owned.** The plane is device-sized — half a megabyte on a
     /// letter page — and the clip stack and the target hold the *same* one:
@@ -235,15 +235,14 @@ impl Target {
     /// Merge one `ClearType` glyph pixel: three coverages, three destination
     /// channels, each merged on its own alpha.
     ///
-    /// `MergeGammaAdjustRgb` (`cfx_renderdevice.cpp:132-140`) followed by
-    /// `SetAlpha`. The coverages arrive **already gamma-adjusted** — the table
-    /// is applied where the triples are demultiplexed, so this is only the
-    /// `CalcAlpha` product and the merge:
+    /// The coverages arrive **already gamma-adjusted** — the table is applied
+    /// where the triples are demultiplexed — so this is only the per-channel
+    /// alpha product and the merge:
     ///
     /// - `a_c = coverage_c · colour_alpha / 255`, truncating;
     /// - `dest_c = (dest_c·(255 − a_c) + colour_c·a_c) / 255`, truncating;
-    /// - and the destination is left **opaque**, which is `SetAlpha`'s
-    ///   `alpha[3] = 255`.
+    /// - and the destination is left **opaque**: the alpha byte is forced to
+    ///   255 rather than being merged.
     ///
     /// That last line is why this is not source-over and cannot be one. Three
     /// independent alphas have no single-alpha expression, so the oracle
