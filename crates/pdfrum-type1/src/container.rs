@@ -76,20 +76,13 @@ pub struct FontFile {
 
 /// Unwrap a Type 1 program into the `/FontFile` stream a PDF writer stores.
 ///
-/// A **PFB** is a container, not a font program: its `[0x80, type, len:u32le]`
-/// record headers and its `80 03` end marker are framing that must not reach
-/// the stream. Concatenating the record bodies in order yields exactly the
-/// PFA-shaped raw program table 127 describes — clear text, then the `eexec`
-/// binary, then the trailer — and the three lengths are those bodies' sizes.
-///
-/// A **PFA** or a bare program is already raw: it is stored as-is, with
-/// `/Length1` ending at the `eexec` boundary, `/Length3` covering a trailing
-/// `cleartomark` block when one is present, and `/Length2` the remainder.
-///
-/// The oracle's `LoadFontDesc` (`fpdfsdk/fpdf_edittext.cpp:166-174`) writes
-/// the caller's bytes verbatim under a `TODO(npm): Lengths for Type1 fonts.`
-/// and emits none of the three keys, so a PFB handed to `FPDFText_LoadFont`
-/// reaches `/FontFile` with its framing intact and nothing describing it.
+/// A PFB is a container, not a font program: its record headers and end marker
+/// are framing that must not reach the stream, so the record bodies are
+/// concatenated into the PFA-shaped raw program table 127 describes and the
+/// three lengths are those bodies' sizes. A PFA or bare program is stored
+/// as-is, with `/Length1` ending at the `eexec` boundary, `/Length3` covering
+/// a trailing `cleartomark` block when there is one, and `/Length2` the
+/// remainder. A program with no `eexec` at all is entirely `/Length1`.
 #[must_use]
 pub fn font_file(bytes: &[u8]) -> FontFile {
     if bytes.first() == Some(&PFB_MARKER) {

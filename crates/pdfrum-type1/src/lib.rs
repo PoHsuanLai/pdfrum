@@ -1,34 +1,10 @@
-//! Type 1 font programs — the one outline format Fontations does not read
-//! end-to-end: PFA/PFB containers, `eexec`-encrypted private dictionaries,
-//! Type 1 charstrings, and **Multiple Master** interpolation.
-//!
-//! # Why this crate exists
-//!
-//! Two things need it, and nothing else does:
-//!
-//! 1. **Embedded Type 1 programs** — a `/FontFile` stream, or a `/FontFile3`
-//!    whose payload turns out to be Type 1 rather than the usual bare CFF.
-//! 2. **The two generic fallback faces**, which are PFB Multiple-Master Type 1
-//!    and are the *terminal rung* of the substitution ladder: when a document
-//!    names a font nothing on the system resembles, they are what draws it. A
-//!    renderer that cannot instantiate them at an arbitrary weight draws
-//!    nothing at all for such a font.
-//!
-//! Bare CFF, CFF2, OpenType/CFF, TrueType and Type 2 charstrings are **not**
-//! this crate's business — `skrifa`/`read-fonts` read all of them natively.
-//!
-//! # Shape
-//!
-//! [`Type1Font::parse`] sniffs the container, decrypts, and reads the program
-//! into a record. Nothing about it is lazy and nothing is cached, so a
-//! `Type1Font` is a plain value: `Send`, `Sync`, and cheap to hold.
-//!
-//! Multiple Master arrives through [`Type1Font::instantiate`], which takes
-//! *design* coordinates — a weight of 50–1450, a width of 100–900 — and
-//! returns a [`Type1Instance`] whose outlines are blended at that point. This
-//! is the interface the renderer needs: PDFium picks a width axis coordinate by
-//! bisecting on the advance widths two probe instances report, and picks the
-//! weight axis straight from the substitution font's weight.
+//! Type 1 font programs — PFA/PFB containers, `eexec`-encrypted private
+//! dictionaries, charstrings, Multiple Master interpolation. The one outline
+//! format Fontations does not read; CFF and TrueType are `skrifa`'s.
+//! [`Type1Font::parse`] sniffs the container, decrypts and reads the program
+//! into a plain value (nothing lazy, `Send + Sync`), and
+//! [`Type1Font::instantiate`] blends its outlines at *design* coordinates — a
+//! weight of 50–1450, a width of 100–900.
 //!
 //! ```
 //! use pdfrum_common::Diagnostics;
@@ -53,17 +29,28 @@
 //! # }
 //! ```
 //!
-//! # Damage tolerance
-//!
-//! A Type 1 font effectively never fails to construct in PDFium, and the same
-//! is true here: [`Type1Font::parse`] returns `Err` only when the blob has no
-//! private section or no `/CharStrings` at all. Everything short of that —
-//! a truncated PFB segment, hex that stops mid-byte, a charstring that runs
-//! off its end, a Multiple-Master declaration whose parts disagree — yields
-//! the best-effort font with a [`pdfrum_common::Diagnostics`]
-//! entry recording what was lost. A glyph whose charstring cannot be
-//! interpreted to completion still returns the partial outline; only a glyph
-//! index that does not exist returns `None`.
+//! A Type 1 font effectively never fails to construct: short of a missing
+//! private section or `/CharStrings`, damage yields a best-effort font, a
+//! [`pdfrum_common::Diagnostics`] entry, and partial outlines.
+
+// Two things need this crate, and nothing else does:
+//
+// 1. Embedded Type 1 programs — a `/FontFile` stream, or a `/FontFile3` whose
+//    payload turns out to be Type 1 rather than the usual bare CFF.
+// 2. The two generic fallback faces, which are PFB Multiple-Master Type 1 and
+//    are the terminal rung of the substitution ladder: when a document names a
+//    font nothing on the system resembles, they are what draws it. A renderer
+//    that cannot instantiate them at an arbitrary weight draws nothing at all
+//    for such a font.
+//
+// The design-coordinate interface is what the renderer needs: PDFium picks a
+// width axis coordinate by bisecting on the advance widths two probe instances
+// report, and picks the weight axis straight from the substitution font's
+// weight.
+//
+// Damage tolerated on the way in: a truncated PFB segment, hex that stops
+// mid-byte, a charstring that runs off its end, a Multiple-Master declaration
+// whose parts disagree.
 
 #![forbid(unsafe_code)]
 // Every byte here came from an untrusted `/FontFile` stream: index with
@@ -101,23 +88,14 @@ use std::collections::HashMap;
 /// is our numbering, fixed by the order the dictionary declared them, which is
 /// the same convention FreeType and `read-fonts` use.
 ///
-/// # Not `pdfrum_font::Gid`
-///
-/// `pdfrum-font` defines a `Gid` of its own, and the two are **deliberately
-/// distinct types for two distinct index spaces**, never one shared
-/// identifier.
-///
-/// This one indexes *this* crate's `/CharStrings` order. `pdfrum-font`'s
-/// indexes whatever program a face was loaded from: for an sfnt or bare-CFF
-/// face that is `skrifa`'s `GlyphId`, a numbering this crate never produces
-/// and never sees. The two coincide numerically only for a face that *is* a
-/// Type 1 program, and only because `pdfrum-font` chose to carry the
-/// declaration order through unchanged.
-///
-/// A shared identifier in `pdfrum-common` would be wrong for the same reason:
-/// merging them would make an sfnt glyph index assignable to a `/CharStrings`
-/// slot with no conversion. The conversion lives in `pdfrum-font`'s `From`
-/// impls, at the one boundary that owns both index spaces.
+/// Not interchangeable with `pdfrum_font::Gid`, which indexes whatever program
+/// a face was loaded from. The two are separate index spaces that coincide
+/// numerically only for a face that *is* a Type 1 program; `pdfrum-font` owns
+/// the conversion between them.
+// A shared identifier in `pdfrum-common` would be wrong: merging them would
+// make an sfnt glyph index — `skrifa`'s `GlyphId`, a numbering this crate never
+// produces and never sees — assignable to a `/CharStrings` slot with no
+// conversion. The `From` impls live at the one boundary that owns both spaces.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Gid(pub u16);
 
