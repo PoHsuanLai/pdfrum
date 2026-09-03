@@ -102,6 +102,13 @@ def main [] {
     # says so.
     ^./scripts/check-no-dead-code.nu
 
+    # A machine-specific absolute path is a step that cannot run in a CI
+    # checkout: no `/mnt/data2` and no `/home/<that user>` exists there. Every
+    # path outside this repository comes from an environment variable with a
+    # repo-relative default instead (README.md "Building and testing"), and
+    # this is the check that it stays that way.
+    ^./scripts/check-no-absolute-paths.nu
+
     # Note the check above passes *because* fuzz/ is its own workspace. It
     # brings in `libfuzzer-sys`, which links LLVM's C++ libFuzzer runtime and
     # pulls `cc` — both of which the filter above would reject. DEPS.md
