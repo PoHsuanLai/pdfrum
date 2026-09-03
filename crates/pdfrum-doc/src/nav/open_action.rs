@@ -2,13 +2,12 @@
 //!
 //! # Why a reader executes anything at all
 //!
-//! `pdfium_test` runs `FORM_DoDocumentOpenAction` before it renders the first
-//! page (`pdfium_test.cc:1779`), so a document whose catalog carries an
-//! `/OpenAction` has already acted on the reader by the time any pixel or any
-//! `--annot` line is produced. Of the eighteen action types only one is
-//! observable in a rendered page or a dump without a user, a script engine or
-//! a viewer chrome: **`/Hide`**, which sets flags on the widget annotations
-//! that draw a named field.
+//! A document's open action runs before its first page is rendered, so a
+//! catalog carrying an `/OpenAction` has already acted on the reader by the
+//! time any pixel or any annotation dump is produced. Of the eighteen action
+//! types only one is observable in a rendered page or a dump without a user,
+//! a script engine or a viewer chrome: **`/Hide`**, which sets flags on the
+//! widget annotations that draw a named field.
 //!
 //! Everything else either needs input we never supply (a mouse, a keypress),
 //! reaches a subsystem we deliberately do not have (JavaScript), or changes
@@ -18,19 +17,17 @@
 //!
 //! # The overlay, again
 //!
-//! Upstream this **mutates**: `CPDFSDK_InteractiveForm::DoAction_Hide` writes
-//! a new `/F` into each widget's dictionary
-//! (`cpdfsdk_interactiveform.cpp:420-449`), and the `--annot` dump then reads
-//! that written value back — which is why `checkbox_radiobutton_hide`'s golden
-//! reports `Flags set: Hidden` for two widgets whose file says `/F` is absent.
+//! A hide is conventionally a **mutation** — a new `/F` written into each
+//! widget's dictionary, which a later reader picks up — so a widget whose
+//! file says `/F` is absent still reports `Hidden` once the action has run.
 //! Objects here are values, so [`hidden_by_open_action`] returns the *set* of
 //! affected dictionaries instead and [`Hidden::flags`] applies the edit on
 //! read.
 //!
 //! # What the edit is
 //!
-//! Not "set the hidden bit". The C++ clears `Invisible` and `NoView` in every
-//! case and only then sets or clears `Hidden` per the action's `/H`:
+//! Not "set the hidden bit". `Invisible` and `NoView` are cleared in every
+//! case, and only then is `Hidden` set or cleared per the action's `/H`:
 //!
 //! ```text
 //! flags &= !(Invisible | NoView);

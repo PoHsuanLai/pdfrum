@@ -1,13 +1,12 @@
 //! The two float spellings a generated appearance stream uses.
 //!
-//! `cpdf_generateap.cpp` writes floats two ways and the choice is **per call
-//! site**, not per function: the newer emitters (form fields, free text,
-//! borders, colours, the sticky-note symbol) go through a shortest-round-trip
-//! writer, while the older per-subtype markup generators stream the float
-//! into a C++ `ostream` and get `%g` with six significant digits. Six of the
-//! ten `GenerateAnnotAP` cases are the second kind. Getting one site wrong
-//! costs byte parity on every file that uses it, so both live here, named
-//! apart, and every emitter names the one it wants.
+//! A generated appearance stream writes floats two ways and the choice is
+//! **per call site**, not per function: the form-field, free-text, border,
+//! colour and sticky-note emitters go through a shortest-round-trip writer,
+//! while the per-subtype markup generators write `%g` with six significant
+//! digits. Getting one site wrong costs byte parity on every file that uses
+//! it, so both live here, named apart, and every emitter names the one it
+//! wants.
 //!
 //! The two spellings side by side, which `the_two_writers_disagree_where_it
 //! _matters` below asserts: the shortest writer drops a leading zero and

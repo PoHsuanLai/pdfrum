@@ -50,12 +50,10 @@ use crate::names;
 /// # The appearance test is one dictionary lookup
 ///
 /// Past those, a widget is regenerated exactly when it has **no `/AP`
-/// dictionary** (`CPDFSDK_Widget::OnLoad` →
-/// `CPDFSDK_BAAnnot::IsAppearanceValid`, which is literally
-/// `!!GetDictFor("AP")`, `cpdfsdk_baannot.cpp:85-87`). Not whether `/N`
-/// resolves, not whether `/AS` names a state that exists. So a radio button
-/// whose `/AP /N` lists only its on-state while `/AS` reads `Off` **keeps
-/// having no drawable appearance** and is never regenerated.
+/// dictionary at all** — the presence of the key, nothing more. Not whether
+/// `/N` resolves, not whether `/AS` names a state that exists. So a radio
+/// button whose `/AP /N` lists only its on-state while `/AS` reads `Off`
+/// **keeps having no drawable appearance** and is never regenerated.
 ///
 /// What draws that widget instead is the grey outline
 /// [`crate::annot_render`] strokes over an invalid checkbox or radio — a
@@ -65,18 +63,16 @@ use crate::names;
 ///
 /// # `/NeedAppearances`, and why it so often changes nothing
 ///
-/// `CPDFSDK_PageView::NewAnnot` *also* calls `ResetAppearance` unconditionally
-/// when the document's `/AcroForm` sets `/NeedAppearances`
-/// (`cpdfsdk_pageview.cpp:108-113`), consulting no `/AP` at all. That
-/// rebuild always runs — but for a checkbox or a radio button it is very
-/// often **invisible**, and the reason is a key mismatch rather than a gate:
+/// A document whose `/AcroForm` sets `/NeedAppearances` rebuilds *every*
+/// widget's appearance, consulting no `/AP` at all. That rebuild always runs
+/// — but for a checkbox or a radio button it is very often **invisible**, and
+/// the reason is a key mismatch rather than a gate:
 ///
-/// `SetAsCheckBox` and `SetAsRadioButton` write exactly two sub-states,
-/// `/AP /N /<GetCheckedAPState()>` and `/AP /N /Off`
-/// (`cpdfsdk_appstream.cpp:1405-1414`, `:1520-1524`), while readback resolves
-/// `/AP /N /<AS>` (`cpdf_annot.cpp:112-123`). When `/AS` names neither of
-/// those, the new streams land in keys nothing looks up and the file's own
-/// stream is what draws.
+/// A rebuilt checkbox or radio button writes exactly two sub-states,
+/// `/AP /N /<`[`checked_ap_state`]`>` and `/AP /N /Off`, while readback
+/// resolves `/AP /N /<AS>`. When `/AS` names neither of those, the new
+/// streams land in keys nothing looks up and the file's own stream is what
+/// draws.
 ///
 /// [`checked_ap_state`] is where that goes wrong most often. It answers the
 /// first non-`Off` key of `/AP /N` — **unless** the field carries an `/Opt`
@@ -121,11 +117,10 @@ pub(crate) fn needs_appearance_in<R: Resolve>(dict: &Dict, catalog: Option<&Dict
 /// control of its own.
 ///
 /// A field that carries `/Kids` delegates its geometry to them, and the form
-/// loader never registers it as a control — `AddControl` is reached only for a
-/// field dict with no `/Kids`, and otherwise for each kid instead
-/// (`cpdf_interactiveform.cpp:969-981`). So such a dictionary has no
-/// appearance to build even when it names `/Subtype /Widget` and a field type,
-/// which a field shared by several controls routinely does.
+/// loader never registers it as a control: a control is made for a field dict
+/// with no `/Kids`, and otherwise for each kid instead. So such a dictionary
+/// has no appearance to build even when it names `/Subtype /Widget` and a
+/// field type, which a field shared by several controls routinely does.
 ///
 /// **Without this the parent generates chrome as if it were a control.** Its
 /// `/Rect` is `[0 0 0 0]`, so the stream is empty over an empty box —
@@ -139,10 +134,9 @@ fn has_kids<R: Resolve>(dict: &Dict, r: &R) -> bool {
 
 /// Whether the document's form asks for every appearance to be rebuilt.
 ///
-/// `CPDF_InteractiveForm::NeedConstructAP` is
-/// `form_dict_ && form_dict_->GetBooleanFor("NeedAppearances", false)`
-/// (`cpdf_interactiveform.cpp:735-737`) — strictly a **boolean**, so a
-/// `/NeedAppearances (true)` written as a string does not set it.
+/// `/AcroForm /NeedAppearances`, read strictly as a **boolean** — so a
+/// `/NeedAppearances (true)` written as a string does not set it, and neither
+/// does a document with no `/AcroForm`.
 fn needs_construct_ap<R: Resolve>(catalog: Option<&Dict>, r: &R) -> bool {
     let Some(form) = catalog.and_then(|catalog| catalog.dict(names::ACRO_FORM, r)) else {
         return false;
@@ -170,13 +164,13 @@ fn rebuild_would_be_seen<R: Resolve>(dict: &Dict, r: &R) -> bool {
 }
 
 /// The sub-state key a rebuilt checkbox or radio button writes its on-state
-/// into (`CPDF_FormControl::GetCheckedAPState`, `cpdf_formcontrol.cpp:78-89`).
+/// into.
 ///
-/// The first non-`Off` key of `/AP /N` — in the **sorted** order the C++'s
-/// `std::map` iterates, not the document order this crate's dictionaries keep
-/// — except that a field carrying an `/Opt` array answers the widget's control
-/// index as a decimal string instead, and an answer that comes back empty
-/// becomes `Yes`.
+/// The first non-`Off` key of `/AP /N`, taken in **sorted** key order rather
+/// than the document order this crate's dictionaries keep — except that a
+/// field carrying an `/Opt` array answers the widget's control index as a
+/// decimal string instead, and an answer that comes back empty becomes
+/// `Yes`.
 #[must_use]
 pub(crate) fn checked_ap_state<R: Resolve>(dict: &Dict, r: &R) -> Vec<u8> {
     let (limits, mut diags) = (Limits::default(), Diagnostics::default());
@@ -295,12 +289,10 @@ pub struct LiveInput<'a> {
     /// # Why a session cannot say this through `/AS`
     ///
     /// A radio group is one field with several kid controls, and each kid
-    /// carries a **different** on-state name in its own `/AP /N`. Clicking one
-    /// is `CPDF_FormField::CheckControl`
-    /// (`core/fpdfdoc/cpdf_formfield.cpp:683-716`), which sets the clicked
-    /// control's `/AS` to that control's own on-state and every *other*
-    /// control's to `Off` — so one click restates the state of every kid in
-    /// the group, in as many different names.
+    /// carries a **different** on-state name in its own `/AP /N`. Checking one
+    /// sets the clicked control's `/AS` to that control's own on-state and
+    /// every *other* control's to `Off` — so one click restates the state of
+    /// every kid in the group, in as many different names.
     ///
     /// A session holds one state record per **field**, so all it can say is
     /// which control the click chose. Turning that into what each kid draws is
@@ -365,10 +357,9 @@ pub(crate) fn generate_with_live<R: Resolve>(
 ///
 /// `generate_with_live` with the substitute carried in the same record as
 /// the overlay and the live text. A field being typed into asks the same
-/// charset question a stored value does — `CPDF_BAFontMap::GetWordFontIndex`
-/// (`core/fpdfdoc/cpdf_bafontmap.cpp:116-151`) is per character and knows
-/// nothing about where the characters came from — so the typed path needs the
-/// same answer the stored one gets from
+/// charset question a stored value does — the face is chosen per character,
+/// and nothing in that choice knows where the characters came from — so the
+/// typed path needs the same answer the stored one gets from
 /// `generate_with_text`'s `substitute`.
 ///
 /// `LiveInput::default()` here is `generate`-with-a-font, byte for byte:
@@ -1168,13 +1159,12 @@ mod tests {
     /// A session's appearance state overrides the widget's own `/AS`, in both
     /// directions.
     ///
-    /// This is what lets a radio group's click be drawn. Clicking one kid is
-    /// `CPDF_FormField::CheckControl`
-    /// (`core/fpdfdoc/cpdf_formfield.cpp:683-716`), which sets the clicked
-    /// control's `/AS` to that control's own on-state and every other
-    /// control's to `Off` — one click, one state per kid, in as many different
-    /// names. A session holds one record per **field**, so it can only say
-    /// which control was chosen; this is how it says what each kid draws.
+    /// This is what lets a radio group's click be drawn. Checking one kid
+    /// sets that control's `/AS` to its own on-state and every other
+    /// control's to `Off` — one click, one state per kid, in as many
+    /// different names. A session holds one record per **field**, so it can
+    /// only say which control was chosen; this is how it says what each kid
+    /// draws.
     ///
     /// The dictionary is untouched either way: the same widget answers both
     /// ways depending only on what is passed.

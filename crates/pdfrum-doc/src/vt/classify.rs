@@ -109,15 +109,16 @@ pub fn is_cjk(word: u32) -> bool {
 
 /// Punctuation, for line-breaking purposes.
 ///
-/// `[oracle-bug]` `cpvt_section.cpp:84` writes `word <= 0x0094` inside a chain
-/// of `==` tests, so every code point from `0x80` through `0x94` is
-/// punctuation and the six preceding equality tests are dead. The `<=` is a
-/// typo for `==`: the equality set the author wrote — `0x82 0x84 0x85 0x91
-/// 0x92 0x93 0x94 0x96 0xB4 0xB8` — is exactly the cp1252 quotation and dash
-/// marks, all genuine punctuation, while `0x80..0x94` sweeps in the C1
-/// controls, which UAX #14 classifies `CM`/`AL`, not punctuation (pdf.js
-/// breaks only at `U+0020`, `annotation.js:3107-3134`, so it never treats a
-/// C1 control as a break opportunity either). We test the intended set.
+/// `[oracle-bug]` In the `0x80..=0xFF` range only the ten cp1252 quotation
+/// and dash marks count — `0x82 0x84 0x85 0x91 0x92 0x93 0x94 0x96 0xB4
+/// 0xB8`. The C1 controls that share the range are not punctuation: UAX #14
+/// classifies them `CM`/`AL`, so they are no break opportunity.
+// [oracle-bug] cpvt_section.cpp:84 writes `word <= 0x0094` inside a chain of
+// `==` tests, so 0x80 through 0x94 all answer true and the six preceding
+// equality tests are dead. The `<=` is a typo for `==` — the set the author
+// spelled out is exactly the cp1252 marks below. pdf.js breaks only at
+// U+0020 (annotation.js:3107-3134), so it never treats a C1 control as a
+// break opportunity either.
 #[must_use]
 pub fn is_punctuation(word: u32) -> bool {
     if word <= 0x7F {

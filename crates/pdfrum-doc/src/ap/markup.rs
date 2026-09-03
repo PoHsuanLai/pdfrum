@@ -58,10 +58,7 @@ pub struct Generated {
     ///
     /// Empty for every generator that writes no text — which is all of them
     /// but [`crate::ap::freetext::free_text`], since a stream with no `Tf`
-    /// needs no font to resolve. Upstream draws the same distinction by
-    /// passing `nullptr` to `GenerateResourcesDict` from every generator
-    /// except the free-text one, which passes `GenerateResourceFontDict`
-    /// (`cpdf_generateap.cpp:1141-1144`).
+    /// needs no font to resolve.
     pub font_resources: Option<Dict>,
 }
 

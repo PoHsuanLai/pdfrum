@@ -49,12 +49,11 @@
 //!
 //! # Where this stops
 //!
-//! One second face, not the *N* upstream's map can accumulate: a field mixing
-//! Hebrew and Cyrillic would need two, and no corpus file does. The map here
-//! holds the `/DA` font at index zero and at most one substitute at index one,
-//! which is the shape `CPVT_VariableText::Provider::GetWordFontIndex`
-//! (`core/fpdfdoc/cpvt_variabletext.cpp:69-83`) already assumes when it asks
-//! only slots 0 and 1.
+//! One second face, not the *N* a general font map can accumulate: a field
+//! mixing Hebrew and Cyrillic would need two, and no corpus file does. The
+//! map here holds the `/DA` font at index zero and at most one substitute at
+//! index one, which is the only shape the layout ever asks about — it
+//! consults slots 0 and 1 and no others.
 //!
 //! And **one charset**, not the eight `charset_unicodes` has a table for.
 //! All eight rows of `kFX_CharsetUnicodes` are transcribed and each is pinned
@@ -84,9 +83,9 @@ pub const SUBSTITUTABLE_CHARSETS: &[Charset] = &[Charset::Hebrew];
 
 /// The charset a font's substitution chose, or ANSI when it has none.
 ///
-/// `CPDF_BAFontMap`'s constructor (`core/fpdfdoc/cpdf_bafontmap.cpp:77-93`)
-/// reads `GetSubstFontCharset()` and falls back to ANSI — the Wingdings
-/// special case above it names four faces no corpus file carries.
+/// The charset comes from the face's own substitution record, and ANSI is
+/// the answer when there is none. (The Wingdings special case that would
+/// override it names four faces no corpus file carries.)
 #[must_use]
 pub fn font_charset(font: &pdfrum_font::Font) -> Charset {
     font.subst().map_or(Charset::Ansi, |subst| subst.charset)
@@ -157,18 +156,16 @@ pub fn substitute_width(font: &pdfrum_font::Font, code: u32) -> i32 {
 
 /// A font dictionary for the face a charset's substitute is set in.
 ///
-/// `CPDF_DocPageData::AddFont` (`core/fpdfapi/page/cpdf_docpagedata.cpp:
-/// 545-601`) writes a TrueType font whose `/Encoding` is a dictionary with
-/// `/BaseEncoding /WinAnsiEncoding` and a `/Differences` array starting at
-/// 128, one Adobe glyph name per entry of the charset's Unicode table, with
-/// `.notdef` where the table has a hole.
+/// A TrueType font whose `/Encoding` is a dictionary with `/BaseEncoding
+/// /WinAnsiEncoding` and a `/Differences` array starting at 128 — one Adobe
+/// glyph name per entry of the charset's Unicode table, with `.notdef` where
+/// the table has a hole.
 ///
-/// `/Widths` is deliberately **not** written. Upstream computes it from the
-/// substituted face's own glyph advances, which is the same face our loader
-/// substitutes to and the same advances it reports — so writing them would
-/// restate what the loader already answers, and getting them from a different
-/// place than the one the layout measures with is how a run comes out the
-/// wrong length.
+/// `/Widths` is deliberately **not** written. The advances would come from
+/// the substituted face, which is the same face our loader substitutes to and
+/// the same advances it reports — so writing them would restate what the
+/// loader already answers, and getting them from a different place than the
+/// one the layout measures with is how a run comes out the wrong length.
 #[must_use]
 pub(crate) fn substitute_font_dict(charset: Charset) -> Option<Dict> {
     let table = charset_unicodes(charset)?;
@@ -246,11 +243,11 @@ const SUBSTITUTE_BASE_FONT: &str = "Times-Roman";
 
 /// The resource name a charset's substitute is filed under.
 ///
-/// `EncodeFontAlias` (`core/fpdfdoc/cpdf_bafontmap.cpp:59-63`) is the face
-/// name with its spaces removed and the charset appended as two uppercase hex
-/// digits. The name the alias is built from is the one the ask ended on, which
-/// for every charset here is the **empty** one — so the alias is the charset
-/// alone, and a field can carry both `Arial` and `_B1`.
+/// The alias is the face name with its spaces removed and the charset
+/// appended as two uppercase hex digits. The name it is built from is the one
+/// the ask ended on, which for every charset here is the **empty** one — so
+/// the alias is the charset alone, and a field can carry both `Arial` and
+/// `_B1`.
 #[must_use]
 pub(crate) fn substitute_alias(charset: Charset) -> Vec<u8> {
     format!("_{:02X}", charset_byte(charset)).into_bytes()
@@ -282,10 +279,10 @@ fn charset_byte(charset: Charset) -> u8 {
 
 /// The 128 code points a charset's high half encodes, in code order.
 ///
-/// All eight rows of `kFX_CharsetUnicodes` (`core/fxcrt/fx_codepage.cpp:
-/// 208-217`), transcribed. A charset the array has no row for — every CJK
-/// one, ANSI, Symbol, Vietnamese, US and OEM — answers `None`, and the caller
-/// then leaves the character to the `/DA` font.
+/// Eight rows, one per charset that has a single-byte code page. A charset
+/// with no row — every CJK one, ANSI, Symbol, Vietnamese, US and OEM —
+/// answers `None`, and the caller then leaves the character to the `/DA`
+/// font.
 ///
 /// # How the seven the corpus does not reach are checked
 ///
@@ -322,8 +319,7 @@ fn charset_unicodes(charset: Charset) -> Option<&'static [u16; 128]> {
     }
 }
 
-/// `kFX_MSWinHebrewUnicodes` (`core/fxcrt/fx_codepage.cpp:113-130`), which is
-/// code page 1255. A zero is a hole — the code encodes nothing.
+/// Code page 1255. A zero is a hole — the code encodes nothing.
 static HEBREW_UNICODES: [u16; 128] = [
     0x20AC, 0x0000, 0x201A, 0x0192, 0x201E, 0x2026, 0x2020, 0x2021, 0x02C6, 0x2030, 0x0000, 0x2039,
     0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x2018, 0x2019, 0x201C, 0x201D, 0x2022, 0x2013, 0x2014,
@@ -338,9 +334,7 @@ static HEBREW_UNICODES: [u16; 128] = [
     0x05E8, 0x05E9, 0x05EA, 0x0000, 0x0000, 0x200E, 0x200F, 0x0000,
 ];
 
-/// `kFX_MSDOSThaiUnicodes` (`core/fxcrt/fx_codepage.cpp:23-40`), which is
-/// code page 874. A zero is a hole — the code encodes
-/// nothing.
+/// Code page 874. A zero is a hole — the code encodes nothing.
 static THAI_UNICODES: [u16; 128] = [
     0x20AC, 0x0000, 0x0000, 0x0000, 0x0000, 0x2026, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
     0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x2018, 0x2019, 0x201C, 0x201D, 0x2022, 0x2013, 0x2014,
@@ -355,9 +349,7 @@ static THAI_UNICODES: [u16; 128] = [
     0x0E58, 0x0E59, 0x0E5A, 0x0E5B, 0x0000, 0x0000, 0x0000, 0x0000,
 ];
 
-/// `kFX_MSWinEasternEuropeanUnicodes` (`core/fxcrt/fx_codepage.cpp:41-58`),
-/// which is code page 1250. A zero is a hole — the code encodes
-/// nothing.
+/// Code page 1250. A zero is a hole — the code encodes nothing.
 static EASTERN_EUROPEAN_UNICODES: [u16; 128] = [
     0x20AC, 0x0000, 0x201A, 0x0000, 0x201E, 0x2026, 0x2020, 0x2021, 0x0000, 0x2030, 0x0160, 0x2039,
     0x015A, 0x0164, 0x017D, 0x0179, 0x0000, 0x2018, 0x2019, 0x201C, 0x201D, 0x2022, 0x2013, 0x2014,
@@ -372,9 +364,7 @@ static EASTERN_EUROPEAN_UNICODES: [u16; 128] = [
     0x0159, 0x016F, 0x00FA, 0x0171, 0x00FC, 0x00FD, 0x0163, 0x02D9,
 ];
 
-/// `kFX_MSWinCyrillicUnicodes` (`core/fxcrt/fx_codepage.cpp:59-76`), which is
-/// code page 1251. A zero is a hole — the code encodes
-/// nothing.
+/// Code page 1251. A zero is a hole — the code encodes nothing.
 static CYRILLIC_UNICODES: [u16; 128] = [
     0x0402, 0x0403, 0x201A, 0x0453, 0x201E, 0x2026, 0x2020, 0x2021, 0x20AC, 0x2030, 0x0409, 0x2039,
     0x040A, 0x040C, 0x040B, 0x040F, 0x0452, 0x2018, 0x2019, 0x201C, 0x201D, 0x2022, 0x2013, 0x2014,
@@ -389,9 +379,7 @@ static CYRILLIC_UNICODES: [u16; 128] = [
     0x0448, 0x0449, 0x044A, 0x044B, 0x044C, 0x044D, 0x044E, 0x044F,
 ];
 
-/// `kFX_MSWinGreekUnicodes` (`core/fxcrt/fx_codepage.cpp:77-94`), which is
-/// code page 1253. A zero is a hole — the code encodes
-/// nothing.
+/// Code page 1253. A zero is a hole — the code encodes nothing.
 static GREEK_UNICODES: [u16; 128] = [
     0x20AC, 0x0000, 0x201A, 0x0192, 0x201E, 0x2026, 0x2020, 0x2021, 0x0000, 0x2030, 0x0000, 0x2039,
     0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x2018, 0x2019, 0x201C, 0x201D, 0x2022, 0x2013, 0x2014,
@@ -406,9 +394,7 @@ static GREEK_UNICODES: [u16; 128] = [
     0x03C8, 0x03C9, 0x03CA, 0x03CB, 0x03CC, 0x03CD, 0x03CE, 0x0000,
 ];
 
-/// `kFX_MSWinTurkishUnicodes` (`core/fxcrt/fx_codepage.cpp:95-112`), which is
-/// code page 1254. A zero is a hole — the code encodes
-/// nothing.
+/// Code page 1254. A zero is a hole — the code encodes nothing.
 static TURKISH_UNICODES: [u16; 128] = [
     0x20AC, 0x0000, 0x201A, 0x0192, 0x201E, 0x2026, 0x2020, 0x2021, 0x02C6, 0x2030, 0x0160, 0x2039,
     0x0152, 0x0000, 0x0000, 0x0000, 0x0000, 0x2018, 0x2019, 0x201C, 0x201D, 0x2022, 0x2013, 0x2014,
@@ -423,9 +409,7 @@ static TURKISH_UNICODES: [u16; 128] = [
     0x00F8, 0x00F9, 0x00FA, 0x00FB, 0x00FC, 0x0131, 0x015F, 0x00FF,
 ];
 
-/// `kFX_MSWinArabicUnicodes` (`core/fxcrt/fx_codepage.cpp:131-148`), which is
-/// code page 1256. A zero is a hole — the code encodes
-/// nothing.
+/// Code page 1256. A zero is a hole — the code encodes nothing.
 static ARABIC_UNICODES: [u16; 128] = [
     0x20AC, 0x067E, 0x201A, 0x0192, 0x201E, 0x2026, 0x2020, 0x2021, 0x02C6, 0x2030, 0x0679, 0x2039,
     0x0152, 0x0686, 0x0698, 0x0688, 0x06AF, 0x2018, 0x2019, 0x201C, 0x201D, 0x2022, 0x2013, 0x2014,
@@ -440,9 +424,7 @@ static ARABIC_UNICODES: [u16; 128] = [
     0x0651, 0x00F9, 0x0652, 0x00FB, 0x00FC, 0x200E, 0x200F, 0x06D2,
 ];
 
-/// `kFX_MSWinBalticUnicodes` (`core/fxcrt/fx_codepage.cpp:149-166`), which is
-/// code page 1257. A zero is a hole — the code encodes
-/// nothing.
+/// Code page 1257. A zero is a hole — the code encodes nothing.
 static BALTIC_UNICODES: [u16; 128] = [
     0x20AC, 0x0000, 0x201A, 0x0000, 0x201E, 0x2026, 0x2020, 0x2021, 0x0000, 0x2030, 0x0000, 0x2039,
     0x0000, 0x00A8, 0x02C7, 0x00B8, 0x0000, 0x2018, 0x2019, 0x201C, 0x201D, 0x2022, 0x2013, 0x2014,
@@ -578,10 +560,10 @@ mod tests {
     /// are never read.
     ///
     /// A TrueType font reaches its glyph names only on the first rung of
-    /// `LoadGlyphMap` (`core/fpdfapi/font/cpdf_truetypefont.cpp:60-61`), and
-    /// that rung wants a plain Latin encoding **without** `/Differences`, or a
-    /// non-symbolic declaration. A font carrying `/Differences` only satisfies
-    /// the second, and only if it says so.
+    /// its glyph-map load, and that rung wants a plain Latin encoding
+    /// **without** `/Differences`, or a non-symbolic declaration. A font
+    /// carrying `/Differences` only satisfies the second, and only if it says
+    /// so.
     #[test]
     fn the_substitute_declares_itself_non_symbolic() {
         let dict = substitute_font_dict(Charset::Hebrew).expect("a Hebrew substitute");
@@ -662,11 +644,10 @@ mod tests {
 /// waited — so what pins them is not a render but the **transcription
 /// itself**, checked three ways against a source that is not this file:
 ///
-/// 1. **The digest.** `FNV_ROWS` carries one FNV-1a-32 over each row's 128
-///    values as they stand in `core/fxcrt/fx_codepage.cpp`, computed from
-///    that file rather than from this one. One flipped nibble anywhere in a
-///    row fails its digest — which is what a 128-value transcription needs
-///    and no set of spot checks can give.
+/// 1. **The digest.** One FNV-1a-32 over each row's 128 values, computed
+///    from the code page's own published table rather than from this file.
+///    One flipped nibble anywhere in a row fails its digest — which is what a
+///    128-value transcription needs and no set of spot checks can give.
 /// 2. **The script block.** Every one of these charsets is a Windows or
 ///    MS-DOS code page, and each lays its own script out as one ascending
 ///    run: Cyrillic's `0xC0..=0xFF` is U+0410..=U+044F, Hebrew's
@@ -693,7 +674,7 @@ mod charset_tables {
     /// FNV-1a-32 over a row's 128 values, each taken big-endian.
     ///
     /// A hash rather than a comparison because the thing being checked is a
-    /// transcription: the expected values live in the C++ file, and copying
+    /// transcription: the expected values live outside this file, and copying
     /// them here to compare against would compare the copy with itself.
     fn digest(row: &[u16; 128]) -> u32 {
         let mut hash: u32 = 0x811c_9dc5;
@@ -736,8 +717,7 @@ mod charset_tables {
         }
     }
 
-    /// `kFX_MSDOSThaiUnicodes` (`core/fxcrt/fx_codepage.cpp:23-40`) — code
-    /// page 874. Two Thai runs, split by the six unassigned codes at
+    /// Code page 874. Two Thai runs, split by the six unassigned codes at
     /// `0xDB..=0xDE`.
     #[test]
     fn the_thai_row_is_code_page_874() {
@@ -749,8 +729,7 @@ mod charset_tables {
         assert_eq!(charset_unicodes(Charset::Thai), Some(&THAI_UNICODES));
     }
 
-    /// `kFX_MSWinEasternEuropeanUnicodes`
-    /// (`core/fxcrt/fx_codepage.cpp:41-58`) — code page 1250. Latin
+    /// Code page 1250. Latin
     /// throughout, so it has no script run of its own; the digest and the
     /// hole count are what pin it, with its four corners named.
     #[test]
@@ -768,8 +747,7 @@ mod charset_tables {
         );
     }
 
-    /// `kFX_MSWinCyrillicUnicodes` (`core/fxcrt/fx_codepage.cpp:59-76`) —
-    /// code page 1251. Its upper half is the Cyrillic alphabet in one
+    /// Code page 1251. Its upper half is the Cyrillic alphabet in one
     /// unbroken run, U+0410 А at `0xC0` through U+044F я at `0xFF`.
     #[test]
     fn the_cyrillic_row_is_code_page_1251() {
@@ -784,8 +762,7 @@ mod charset_tables {
         );
     }
 
-    /// `kFX_MSWinGreekUnicodes` (`core/fxcrt/fx_codepage.cpp:77-94`) — code
-    /// page 1253. Two Greek runs, split at `0xD2`, which is the hole where
+    /// Code page 1253. Two Greek runs, split at `0xD2`, which is the hole where
     /// U+03A2 would be — a code point Unicode itself leaves unassigned.
     #[test]
     fn the_greek_row_is_code_page_1253() {
@@ -797,8 +774,7 @@ mod charset_tables {
         assert_eq!(charset_unicodes(Charset::Greek), Some(&GREEK_UNICODES));
     }
 
-    /// `kFX_MSWinTurkishUnicodes` (`core/fxcrt/fx_codepage.cpp:95-112`) —
-    /// code page 1254. Latin-1 above `0xA0` except for the six Turkish
+    /// Code page 1254. Latin-1 above `0xA0` except for the six Turkish
     /// letters, which is what the two identity runs and the named exceptions
     /// below say.
     #[test]
@@ -818,8 +794,7 @@ mod charset_tables {
         assert_eq!(charset_unicodes(Charset::Turkish), Some(&TURKISH_UNICODES));
     }
 
-    /// `kFX_MSWinHebrewUnicodes` (`core/fxcrt/fx_codepage.cpp:113-130`) —
-    /// code page 1255, and the one row the corpus reaches. Aleph U+05D0 sits
+    /// Code page 1255, and the one row the corpus reaches. Aleph U+05D0 sits
     /// at `0xE0` and Tav U+05EA at `0xFA`, which is the pair
     /// `bug_725389`'s appearance stream is written against.
     #[test]
@@ -837,8 +812,7 @@ mod charset_tables {
         assert_eq!(charset_unicodes(Charset::Hebrew), Some(&HEBREW_UNICODES));
     }
 
-    /// `kFX_MSWinArabicUnicodes` (`core/fxcrt/fx_codepage.cpp:131-148`) —
-    /// code page 1256, the only one of the eight with **no holes at all**.
+    /// Code page 1256, the only one of the eight with **no holes at all**.
     #[test]
     fn the_arabic_row_is_code_page_1256() {
         assert_eq!(digest(&ARABIC_UNICODES), 0x0EBA_9A66);
@@ -852,8 +826,7 @@ mod charset_tables {
         assert_eq!(charset_unicodes(Charset::Arabic), Some(&ARABIC_UNICODES));
     }
 
-    /// `kFX_MSWinBalticUnicodes` (`core/fxcrt/fx_codepage.cpp:149-166`) —
-    /// code page 1257. Latin throughout like 1250, so the digest and the
+    /// Code page 1257. Latin throughout like 1250, so the digest and the
     /// hole count carry it, with the three codes 1257 leaves empty in the
     /// `0xA0` block named.
     #[test]

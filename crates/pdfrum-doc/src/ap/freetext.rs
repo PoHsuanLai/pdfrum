@@ -406,8 +406,7 @@ mod tests {
 
     /// The stream names a font in a `Tf`; the stream's own `/Resources /Font`
     /// has to carry it under that name or the operator resolves to nothing and
-    /// the text draws as blank paper. Upstream builds the same one-entry
-    /// dictionary in `GenerateResourceFontDict` (`cpdf_generateap.cpp:1141`).
+    /// the text draws as blank paper.
     #[test]
     fn the_generated_appearance_carries_the_font_its_tf_names() {
         let got = free_text(
@@ -587,7 +586,7 @@ mod tests {
     }
 
     /// A `/DR /Font` entry that is not a font dictionary stops the generation
-    /// dead (`cpdf_generateap.cpp:1071-1074`), and now says so.
+    /// dead, and now says so.
     #[test]
     fn a_malformed_dr_font_declines_and_is_recorded() {
         let bad_dr = dict(&[(
