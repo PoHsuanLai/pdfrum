@@ -1135,14 +1135,12 @@ fn remove_field(_t: &JsValue, args: &[JsValue], _c: &mut Context) -> JsResult<Js
     Ok(JsValue::undefined())
 }
 
-/// `Doc.getPageNthWord` / `getPageNumWords` — **declined, with the oracle's
-/// own range check first.**
+/// The page index both word methods check first, or the value error.
 ///
-/// The words themselves need a content-stream text extraction this object has
-/// no model for, and inventing one would answer something false rather than
-/// nothing. The range check runs anyway because it comes first upstream and
-/// its message is what three of the golden's lines assert.
-fn page_words(member: &str, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
+/// The range check comes **before** anything else that could fail, which is
+/// why an out-of-range page answers `Incorrect parameter value.` rather than
+/// an empty word.
+fn word_page(member: &str, args: &[JsValue], context: &mut Context) -> JsResult<usize> {
     let page = match args.first() {
         Some(value) => value.clone().to_i32(context)?,
         None => 0,
@@ -1152,17 +1150,53 @@ fn page_words(member: &str, args: &[JsValue], context: &mut Context) -> JsResult
     if page < 0 || page >= count {
         return Err(err(member, VALUE_ERROR));
     }
-    Err(err(member, NOT_SUPPORTED))
+    usize::try_from(page).map_err(|_| err(member, VALUE_ERROR))
 }
 
-/// `Doc.getPageNthWord` — see [`page_words`].
+/// `Doc.getPageNthWord(nPage, nWord, bStrip)`.
+///
+/// # An index past the end answers the **last** word, not an empty string
+///
+/// The walk breaks as soon as the running count reaches the index, and the
+/// index it then asks the object for is relative to that object's own start —
+/// so an index one past the end selects the last word of the last object
+/// rather than nothing. Reproduced rather than corrected: it is the answer a
+/// script gets, and a bounds check here would answer `""` where the oracle
+/// answers text.
+///
+/// `bStrip` **defaults to true** and trims the result at both ends.
 fn get_page_nth_word(_t: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
-    page_words("getPageNthWord", args, context)
+    let page = word_page("getPageNthWord", args, context)?;
+    let index = match args.get(1) {
+        Some(value) => value.clone().to_i32(context)?,
+        None => 0,
+    };
+    let strip = args.get(2).is_none_or(JsValue::to_boolean);
+    let word = with_model(context, |model| {
+        model
+            .page_words
+            .get(page)
+            .and_then(|words| {
+                usize::try_from(index)
+                    .ok()
+                    .and_then(|at| words.get(at).or_else(|| words.last()))
+            })
+            .cloned()
+            .unwrap_or_default()
+    })
+    .unwrap_or_default();
+    let word = if strip { word.trim().to_owned() } else { word };
+    Ok(JsValue::from(boa_engine::js_string!(word)))
 }
 
-/// `Doc.getPageNumWords` — see [`page_words`].
+/// `Doc.getPageNumWords(nPage)`.
 fn get_page_num_words(_t: &JsValue, args: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
-    page_words("getPageNumWords", args, context)
+    let page = word_page("getPageNumWords", args, context)?;
+    let count = with_model(context, |model| {
+        model.page_words.get(page).map_or(0, Vec::len)
+    })
+    .unwrap_or(0);
+    Ok(JsValue::from(i32::try_from(count).unwrap_or(i32::MAX)))
 }
 
 /// The two methods that throw `Operation not supported.` whatever they are

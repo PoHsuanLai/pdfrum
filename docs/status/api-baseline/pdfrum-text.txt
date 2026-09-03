@@ -110,3 +110,4 @@ pub struct pdfrum_text::WebLink
 pub pdfrum_text::WebLink::range: core::ops::range::Range<pdfrum_text::CharIndex>
 pub pdfrum_text::WebLink::url: alloc::string::String
 pub fn pdfrum_text::extract<R: pdfrum_object::resolve::Resolve>(&pdfrum_page::page::Page, &R, &pdfrum_text::ExtractOptions, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> pdfrum_text::TextPage
+pub fn pdfrum_text::words(&pdfrum_page::page::Page) -> alloc::vec::Vec<alloc::string::String>
