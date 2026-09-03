@@ -244,7 +244,11 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
 - A deep-clip-stack document outside `forms` would gain from 30c0419; none
   was looked for.
 - An idle re-take of the §10.5 table. The box has never been idle (load
-  30–66 through every run); the ratios are upper bounds until then.
+  30–66 through every run, and 33–61 through §15/§16); the ratios are upper
+  bounds until then. **§15 tried again and could not deliver it**: the brief
+  made `shading` and `forms` conditional on load < 30, the 1-minute average
+  read 27.4 when the run was armed and 33–49 through it, so those two classes
+  were *not* re-taken and the item stands for the eighth time (§15.3).
 - ~~the AGG blit's per-row scaffolding~~ — landed as §14: `AggDevice::blit`
   now walks the rows itself through one `Target::blit_image` instead of a
   `blend_span_with` per row. **The blit is 1.56-1.61x faster**, worth 1.5 ms
@@ -256,16 +260,50 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
   was 6.5-6.8% of the blit, and the other 93% was the per-pixel
   `Option`-returning sampler closure re-deriving the source index from the
   destination column. The same hoist removes both.
+- ~~the split above the blit~~ — landed as §16: the glyph's **two per-pixel
+  loops**, `LcdBitmap::gray_coverage_into` and `recolour_ref_into`, which
+  §16.2's `Instant` pairs put at 25.0% and 16.5% of the two vector renders —
+  `recolour_glyph_into` is *larger than `blit_image`* on `size14`. Both are
+  §14.2's shape one level up: a per-pixel loop re-deriving an index the row
+  already knows and bounds-checking one that cannot be out of range. Hoisting
+  the row makes the pair **2.22–2.26x** faster, worth **1.09–1.14 ms of each
+  vector render** and 4.4 → 2.0 ns per glyph pixel. Board byte-identical (`per_file`
+  equal, both binaries run), tier-c unchanged, API snapshot matching, no new
+  device primitive, `BitmapKey` untouched. The wall clock **resolves** it this
+  time: 1.047x / 1.089x / 1.043x against a zero-glyph control at 0.995x
+  (§16.6).
 - **`vector_font_size14` and `vector_font_feature` are still not closed.**
-  They stood at 3.70x/3.42x; §14 takes 1.5 ms off a 57-128 ms render, which
-  does not retire either. The next split has to start **above** the blit:
-  `--sample` now puts `size14`'s `draw_image` at 3.31 ms and 35.5% (against
-  §13.2's 5.1 ms) and 56-60% of the document in ENGINE. Neither row has been
-  re-measured against the oracle since §14.
-- **Whether the rest of the `image` class moves with §14 was not measured.**
-  `image_bug_583804` was in §14's table as a control and turned out to be the
-  change's biggest beneficiary; `image_en_fqa` and `image_ccitt_3bigpreview`
-  below were not re-taken.
+  §15 re-measured them: `size14` **3.16x** (from 3.70x, at load 33 — the
+  lowest in that table and the only fair comparison in it) and `font_feature`
+  **5.32x**, which is *not* a regression — its oracle column moved 35.02 →
+  22.74 ms on an unchanged binary while ours stayed flat, so the ratio is
+  measuring the box (§15.2). §14 took 1.5 ms and §16 takes ~1.1 ms off renders
+  of 56–120 ms; neither retires the rows. **After §16 the blit is still the
+  largest single line** (~3.15 ms of `size14` against the recolour chain's
+  ~0.91 ms), and the next thing above it is `place_glyphs_into` at 1.39 ms,
+  whose own split was not taken.
+- **`BitmapCache::get_or_insert`'s second hash probe is named, measured and
+  cannot be removed.** The hit path is 100% of calls and asks `contains_key`
+  then `get`. Returning the occupied entry's borrow is NLL problem case 3 —
+  rejected by today's borrow checker, accepted by Polonius — and the `Entry`
+  API does not rescue it because the budget check needs `render()`'s result
+  and `render()` cannot run while a `Vacant` entry holds the borrow. Three
+  spellings were tried and none compiled. Worth **85–99 ns of a 1000 ns
+  per-glyph chain** (§16.4); revisit if Polonius lands.
+- **A coverage-to-pixel lookup table in `recolour_ref_into` is a measured
+  negative result.** It is the obvious next hoist — 256 entries derived once
+  per occurrence turn four `mul255`es into one array read — and it measured
+  **3.9x slower** on both fixtures, because a glyph is ~50 pixels and the
+  table is 256 entries. The code carries a comment saying so; do not
+  re-propose it without re-measuring (§16.4).
+- ~~whether the rest of the `image` class moves with §14~~ — **measured in
+  §15, and the answer is no.** `image_bug_583804` is the only row §14 reaches
+  and the only one that improved on a comparable load (0.79x → **0.72x** at
+  load 35). `image_ccitt_3bigpreview`, `image_en_fqa` and `image_jpx_123` all
+  read *worse* than §10.5 at loads 40–49 and none of them has a whole-pixel
+  blit of the kind §14 serves — `en_fqa`'s cost is its decode and its
+  resample. The class geomean reads 0.11x against §10.5's 0.09x, and the
+  difference is the load, not the change.
 - ~~the glyph blit's per-occurrence allocations~~ — landed 3e2efe6
   (2026-09-03): `to_gray` and `recolour` now fill `RenderCaches`-owned
   buffers. Worth **18.6 ns of a 210 ns per-glyph chain, 0.13-0.25% of a
@@ -273,8 +311,11 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
   here: a zero-glyph control read 1.055x in the same table (§13.5). Board
   byte-identical, tier-c unchanged. Kept for the allocations it removes, not
   for a figure it moves.
-- `shading_type4_5` 4.38x, `image_en_fqa` 2.03x, `image_ccitt_3bigpreview`
-  1.66x, `shading_tcpdf_058` 1.88x.
+- `shading_type4_5` 4.38x and `shading_tcpdf_058` 1.88x are §10.5's and have
+  not been re-taken (§15 covered `image` and `vector` only). `image_en_fqa`
+  and `image_ccitt_3bigpreview` were re-taken and read **3.15x** and **2.27x**
+  at loads 49 and 40, against §10.5's 2.03x and 1.66x at a lower load — the
+  movement is the box, and both remain residue of the same shape.
 
 ## Unwired oracle ports (`docs/status/unwired-oracle-ports.md`)
 
