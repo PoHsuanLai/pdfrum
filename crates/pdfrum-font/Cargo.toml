@@ -16,6 +16,14 @@ include = ["src/**", "fontdata/**", "tests/**", "README*", "LICENSE*"]
 [lints]
 workspace = true
 
+[features]
+default = []
+# Scanning the host's installed fonts for a substitute, through `fontdb`.
+# Off, only the bundled base-14 faces answer. The dependency is declared per
+# target below so a WebAssembly build never carries the filesystem scan or
+# `memmap2`, whatever features it asks for.
+system-fonts = ["dep:fontdb"]
+
 # `docs/design/pdfrum-font.md` §3 pins this set. `skrifa` draws outlines,
 # `read-fonts` reads the tables skrifa does not surface (`cmap` subtable
 # platform ids, `GSUB`, `OS/2` code-page ranges) and owns the Adobe Glyph
@@ -29,9 +37,17 @@ pdfrum-type1.workspace = true
 pdfrum-filters.workspace = true
 skrifa.workspace = true
 read-fonts = { workspace = true, features = ["agl"] }
-fontdb.workspace = true
 smallvec.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]
 pdfrum-parser.workspace = true
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+# The host scan, and fontconfig's font directories where it has them — what
+# the crate always used, kept so a substitute resolves the way it did.
+fontdb = { workspace = true, optional = true, default-features = false, features = ["fs", "memmap", "fontconfig"] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+# No filesystem, no memory maps: an enumerator over bytes handed to it.
+fontdb = { workspace = true, optional = true, default-features = false }

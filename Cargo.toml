@@ -111,7 +111,7 @@ vello = "=0.10.0"
 # fonts
 skrifa = "=0.46.2"
 read-fonts = "=0.43.3"
-fontdb = "=0.24.0"
+fontdb = { version = "=0.24.0", default-features = false }
 # `variable-fonts` (on by default) pulls a second skrifa/write-fonts/kurbo and
 # buys only CFF2 + variation instancing, neither of which the C++ subsetter
 # does either (edit brief E4). Off keeps the tree to one skrifa.

@@ -34,4 +34,29 @@ pub enum Error {
         /// The requested height in pixels.
         height: u32,
     },
+    /// A PNG could not be encoded — only with the `png` feature. The
+    /// encoder's own message, since its error type is neither comparable nor
+    /// cloneable and this one is both.
+    #[cfg(feature = "png")]
+    #[error("PNG encoding failed: {0}")]
+    Png(String),
+    /// A file could not be written — only with the `png` feature; the I/O
+    /// error's message.
+    #[cfg(feature = "png")]
+    #[error("writing the file failed: {0}")]
+    Io(String),
+}
+
+#[cfg(feature = "png")]
+impl From<png::EncodingError> for Error {
+    fn from(error: png::EncodingError) -> Self {
+        Error::Png(error.to_string())
+    }
+}
+
+#[cfg(feature = "png")]
+impl From<std::io::Error> for Error {
+    fn from(error: std::io::Error) -> Self {
+        Error::Io(error.to_string())
+    }
 }

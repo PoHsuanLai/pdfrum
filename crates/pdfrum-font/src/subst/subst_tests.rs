@@ -901,6 +901,7 @@ mod database_selection {
     /// otherwise see. Asserted as "a scan happened", not as a family name,
     /// because which faces exist is the machine's business and a machine with
     /// no fonts at all must still pass.
+    #[cfg(all(feature = "system-fonts", not(target_arch = "wasm32")))]
     #[test]
     fn the_system_flag_reaches_the_scan() {
         let scanned = SystemFontDb::scan(&[]);

@@ -795,3 +795,55 @@ mod tests {
         assert_eq!(p.luminosity_mask().data(), &[28]);
     }
 }
+
+/// Encoding to PNG, behind the `png` feature.
+#[cfg(feature = "png")]
+impl Pixmap {
+    /// The pixmap as a PNG file's bytes: eight-bit RGBA, unpremultiplied.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::Png`] when the encoder refuses the dimensions.
+    pub fn encode_png(&self) -> Result<Vec<u8>, crate::Error> {
+        let mut out = Vec::new();
+        let mut encoder = png::Encoder::new(&mut out, self.width, self.height);
+        encoder.set_color(png::ColorType::Rgba);
+        encoder.set_depth(png::BitDepth::Eight);
+        let mut writer = encoder.write_header()?;
+        writer.write_image_data(&self.data)?;
+        writer.finish()?;
+        Ok(out)
+    }
+
+    /// Writes the pixmap to `path` as a PNG file.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::Png`] as [`Pixmap::encode_png`], and [`Error::Io`] when the
+    /// file cannot be written.
+    pub fn save_png(&self, path: impl AsRef<std::path::Path>) -> Result<(), crate::Error> {
+        std::fs::write(path, self.encode_png()?)?;
+        Ok(())
+    }
+}
+
+#[cfg(all(test, feature = "png"))]
+mod png_tests {
+    use super::Pixmap;
+
+    #[test]
+    fn a_pixmap_round_trips_through_png() {
+        let pixmap = Pixmap::from_vec(2, 1, vec![255, 0, 0, 255, 0, 0, 255, 128]).unwrap();
+        let bytes = pixmap.encode_png().unwrap();
+        assert_eq!(bytes.get(..8), Some(b"\x89PNG\r\n\x1a\n".as_slice()));
+        let decoder = png::Decoder::new(std::io::Cursor::new(bytes));
+        let mut reader = decoder.read_info().unwrap();
+        let mut out = vec![0; reader.output_buffer_size().unwrap()];
+        let info = reader.next_frame(&mut out).unwrap();
+        assert_eq!(
+            (info.width, info.height, info.color_type),
+            (2, 1, png::ColorType::Rgba)
+        );
+        assert_eq!(out.get(..info.buffer_size()), Some(pixmap.data()));
+    }
+}
