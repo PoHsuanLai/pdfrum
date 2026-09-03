@@ -509,7 +509,7 @@ mod tests {
 
     /// The read-only C++ PDFium checkout, resolved as every script and test in
     /// this repository resolves it: `$PDFRUM_ORACLE_CHECKOUT`, else the
-    /// sibling `../pdfium-c++` directory README.md and PLAN.md §4 name.
+    /// sibling `../pdfium-c++` directory the README names.
     fn oracle_checkout() -> std::path::PathBuf {
         std::env::var_os("PDFRUM_ORACLE_CHECKOUT").map_or_else(
             || std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../pdfium-c++"),

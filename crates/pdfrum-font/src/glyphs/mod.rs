@@ -39,7 +39,7 @@ pub enum GlyphSource {
 ///
 /// For an ordinary face these are all inert. For a Multiple-Master face they
 /// are not: `dest_width` alone changes the outline, which is why the glyph
-/// cache keys on them (SPEC §6's amended key).
+/// cache keys on them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub(crate) struct GlyphParams {
     /// The width the PDF declared for this character code, in 1000/em units.

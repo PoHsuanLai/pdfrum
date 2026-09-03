@@ -72,7 +72,7 @@ pub const BACKEND_ENV: &str = "PDFRUM_BACKEND";
 
 /// Which rasterizer a render uses.
 ///
-/// Three, and the split between them is deliberate (SPEC §8). `Agg` is the
+/// Three, and the split between them is deliberate. `Agg` is the
 /// conformance default: it integrates coverage analytically on the oracle's
 /// own subpixel grid — AGG's, the scan converter PDFium itself uses — so a
 /// comparison against a golden measures the *engine* rather than a

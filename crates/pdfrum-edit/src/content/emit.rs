@@ -171,8 +171,7 @@ fn blend_name(blend: BlendMode) -> Name {
 /// — `k`/`K`, or `cs`/`scn` against a realized `/ColorSpace` resource — would
 /// preserve more, but it is a wider change (a new resource family and a second
 /// operator family, whose absence is what the module docs describe) where
-/// converting is one call. SPEC §12 asks for the narrowest faithful fix, and
-/// converting is both.
+/// converting is one call — the narrowest faithful fix.
 fn expressible_rgb(colour: &ColorValue) -> Option<Rgb> {
     // A pattern paints through a resource no `rg` can name. That one is a
     // genuine limit rather than the oversight above, and stays.

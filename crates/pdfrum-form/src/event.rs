@@ -1,4 +1,4 @@
-//! The input vocabulary: what a caller hands the engine (SPEC §15.5).
+//! The input vocabulary: what a caller hands the engine.
 //!
 //! These are *semantic* events, in page space, with typed keys, typed
 //! modifiers and `kurbo` points.

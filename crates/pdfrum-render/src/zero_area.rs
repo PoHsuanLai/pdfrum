@@ -323,9 +323,9 @@ mod tests {
     ///
     /// The walk never spells it this way — it calls [`scan_into`] with the
     /// session's [`Scratch`], because the scan runs on every fill-only path
-    /// object and the allocations this signature forces were 9866 per render
-    /// on one corpus document (`docs/status/M12b-P2.md` §5). A test asking
-    /// the question once can afford them.
+    /// object and the allocations this signature forces were measured at 9866
+    /// per render on one corpus document. A test asking the question once can
+    /// afford them.
     fn zero_area_sub_paths(
         path: &BezPath,
         transform: Option<kurbo::Affine>,

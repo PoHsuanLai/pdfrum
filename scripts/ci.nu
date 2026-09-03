@@ -109,6 +109,13 @@ def main [] {
     # this is the check that it stays that way.
     ^./scripts/check-no-absolute-paths.nu
 
+    # `///` and `//!` become docs.rs. A milestone number, a work-package
+    # number or a path into `docs/` is this project's own vocabulary, which a
+    # host who ran `cargo add pdfrum` cannot look up and cannot follow. This is
+    # the check that none survives into a published doc comment; `//` next to
+    # the code is deliberately out of scope.
+    ^./scripts/check-no-internal-refs.nu
+
     # Note the check above passes *because* fuzz/ is its own workspace. It
     # brings in `libfuzzer-sys`, which links LLVM's C++ libFuzzer runtime and
     # pulls `cc` — both of which the filter above would reject. DEPS.md

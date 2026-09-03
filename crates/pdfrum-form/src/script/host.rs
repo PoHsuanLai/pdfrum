@@ -26,8 +26,7 @@ pub(crate) struct HostState {
     pub(crate) transcript: Vec<TranscriptLine>,
     /// Timers a script asked for: the script source and its interval in
     /// milliseconds. **Recorded and never fired** — see `app.setTimeOut`.
-    /// Per-session, because upstream's registry is process-wide and STYLE §1
-    /// forbids that outright.
+    /// Per-session, where upstream's registry is process-wide.
     pub(crate) timers: Vec<(String, i32)>,
     /// What the `Doc` object answers from, and what a `Field` reads and
     /// writes.
