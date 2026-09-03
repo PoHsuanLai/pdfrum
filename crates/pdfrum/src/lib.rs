@@ -52,17 +52,23 @@
 #![forbid(unsafe_code)]
 
 mod annotation;
+#[cfg(feature = "edit")]
 mod attach;
 mod document;
+#[cfg(feature = "edit")]
 mod edit;
 mod error;
+#[cfg(feature = "edit")]
 mod flatten;
+#[cfg(feature = "forms")]
 mod form;
+#[cfg(feature = "forms")]
 mod form_session;
 mod outline;
 mod page;
 mod profile;
 mod render;
+#[cfg(feature = "edit")]
 mod save;
 mod session;
 mod signature;
@@ -70,10 +76,14 @@ mod thumbnail;
 
 pub use annotation::{AnnotFlags, Annotation, Subtype};
 pub use document::{Attachment, Document, Metadata, OpenOptions};
+#[cfg(feature = "edit")]
 pub use edit::{ImageBuilder, PageEdit, PathBuilder, TextBuilder};
 pub use error::{Error, Result};
+#[cfg(feature = "edit")]
 pub use flatten::{FlattenMode, Flattened};
+#[cfg(feature = "forms")]
 pub use form::{Field, FieldFlags, FieldKind, Form, UnknownField};
+#[cfg(feature = "forms")]
 pub use form_session::{
     AppearanceUpdate, Button, Cascade, FieldRef, FieldWrites, FormSession, Key, Keystroke,
     KeystrokeOutcome, Modifiers, NoScripts, Response, SessionConfig, UpdateKind,
@@ -84,7 +94,9 @@ pub use form_session::{
 // rather than a seam the library calls back through.
 pub use outline::{Bookmark, Outline, OutlineIter};
 pub use page::{Page, PreparedPage, Rotation};
+#[cfg(feature = "forms")]
 pub use pdfrum_form::AnnotId;
+#[cfg(feature = "forms")]
 pub use pdfrum_form::{Placement, PopupGeometry, PopupView, ScrollView};
 
 /// The `boa`-backed [`Cascade`] and what a caller needs to build and read one
@@ -117,11 +129,13 @@ pub use pdfrum_render::{RasterBackend, RenderDevice};
 /// A font this save is adding: [`EmbeddedFont`] from [`DocEdit::embed_font`],
 /// [`FontEncoding`] choosing simple vs composite, and [`StandardFont`] for
 /// [`DocEdit::standard_font`].
+#[cfg(feature = "edit")]
 pub use pdfrum_edit::{EmbeddedFont, FontEncoding, StandardFont};
 
 /// An image this save is adding: [`EmbeddedImage`] from
 /// [`DocEdit::embed_jpeg`] or [`DocEdit::embed_image`], and [`PixelFormat`]
 /// naming the layout of raw samples handed to the latter.
+#[cfg(feature = "edit")]
 pub use pdfrum_edit::{EmbeddedImage, PixelFormat};
 /// The AGG-parity rasterizer, behind the `agg` feature.
 #[cfg(feature = "agg")]
@@ -137,6 +151,7 @@ pub use pdfrum_raster_vello::VelloBackend as VelloGpuBackend;
 /// default: what a caller passes to [`Page::render`] unless it chose another.
 #[cfg(feature = "vello-cpu")]
 pub use pdfrum_raster_vello_cpu::VelloCpuBackend;
+#[cfg(feature = "edit")]
 pub use save::{DocEdit, SaveOptions, Update};
 pub use session::RenderSession;
 pub use signature::Signature;
@@ -250,6 +265,7 @@ pub use peniko::Color;
 /// The error behind [`Error::Doc`] — see [`OpenError`] for the naming.
 pub use pdfrum_doc::Error as DocError;
 /// The error behind [`Error::Save`] — see [`OpenError`] for the naming.
+#[cfg(feature = "edit")]
 pub use pdfrum_edit::Error as SaveError;
 /// The error [`Document::fetch`] returns — see [`OpenError`] for the naming.
 pub use pdfrum_object::Error as ObjectError;
@@ -328,6 +344,7 @@ pub use pdfrum_doc::GeneratedAp;
 /// that type is a thin spelling of it — so this is the same vocabulary as a
 /// value, for a caller that has its own event queue and would rather hand over
 /// a whole event than call the method that matches it.
+#[cfg(feature = "forms")]
 pub use pdfrum_form::Event;
 
 /// An indirect-object reference — an object number and a generation.

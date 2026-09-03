@@ -58,6 +58,7 @@ pub enum Error {
 
     /// Writing the document out failed.
     #[error("cannot save document: {0}")]
+    #[cfg(feature = "edit")]
     Save(#[from] pdfrum_edit::Error),
 
     /// Text extraction refused an index.

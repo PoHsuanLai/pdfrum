@@ -47,13 +47,18 @@ fn_params_excessive_bools = "deny"
 # `default-features = false`, for a build that only parses, extracts, reads
 # forms or edits. Every backend is a feature named after its rasterizer, and
 # the GPU one is never in the default set (DEPS.md, "wgpu").
-default = ["vello-cpu"]
+default = ["vello-cpu", "edit", "forms"]
 vello-cpu = ["dep:pdfrum-raster-vello-cpu"]
 tinyskia = ["dep:pdfrum-raster-tinyskia"]
 agg = ["dep:pdfrum-raster-agg"]
 vello-gpu = ["dep:pdfrum-raster-vello"]
 
-javascript = ["pdfrum-form/javascript"]
+# The subsystems a reader can leave out: `edit` is saving, editing and the
+# font subsetter behind it; `forms` is the widget state machine. JavaScript
+# needs widgets to act on, so it implies `forms`.
+edit = ["dep:pdfrum-edit"]
+forms = ["dep:pdfrum-form"]
+javascript = ["forms", "pdfrum-form/javascript"]
 
 # The whole-render stage timers, forwarded down to `pdfrum-page` where the
 # accumulator lives and across to `pdfrum-doc`, which times the annotation
@@ -87,8 +92,8 @@ pdfrum-raster-agg = { workspace = true, optional = true }
 pdfrum-raster-vello = { workspace = true, optional = true }
 pdfrum-text.workspace = true
 pdfrum-doc.workspace = true
-pdfrum-form.workspace = true
-pdfrum-edit.workspace = true
+pdfrum-form = { workspace = true, optional = true }
+pdfrum-edit = { workspace = true, optional = true }
 kurbo.workspace = true
 peniko.workspace = true
 thiserror.workspace = true

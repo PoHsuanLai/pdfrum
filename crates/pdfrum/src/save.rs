@@ -3,12 +3,17 @@
 use std::io::Write;
 use std::path::Path;
 
-use pdfrum_common::{Diagnostics, PageIndex, PdfVersion};
+#[cfg(feature = "forms")]
+use pdfrum_common::Diagnostics;
+use pdfrum_common::{PageIndex, PdfVersion};
 use pdfrum_edit::{EditDoc, SaveMode};
+#[cfg(feature = "forms")]
 use pdfrum_object::Object;
 
+#[cfg(feature = "forms")]
+use crate::Form;
 use crate::{
-    Document, EmbeddedFont, EmbeddedImage, FontEncoding, Form, PageEdit, PixelFormat, Result,
+    Document, EmbeddedFont, EmbeddedImage, FontEncoding, PageEdit, PixelFormat, Result,
     StandardFont,
 };
 
@@ -103,6 +108,7 @@ impl Document {
         self.edit().write_to(out, options)
     }
 
+    #[cfg(feature = "forms")]
     /// Writes the document with a form's filled-in values applied.
     ///
     /// The values written through [`Form::set`] are turned into replacement
@@ -145,6 +151,7 @@ impl Document {
         Ok(())
     }
 
+    #[cfg(feature = "forms")]
     /// Writes the document with a form's values applied, to any [`Write`]
     /// sink.
     ///
@@ -546,6 +553,7 @@ fn write_edit(edit: &EditDoc<'_>, options: SaveOptions, out: &mut impl Write) ->
     Ok(())
 }
 
+#[cfg(feature = "forms")]
 /// A copy of `dict` with `key` set, keeping every other entry in place.
 fn set_key(dict: &pdfrum_object::Dict, key: &str, value: Object) -> pdfrum_object::Dict {
     let key = pdfrum_object::Name::from(key);
