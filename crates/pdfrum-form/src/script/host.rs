@@ -37,6 +37,14 @@ pub(crate) struct HostState {
     /// needs a document and [`ScriptCascade`](super::ScriptCascade)
     /// deliberately holds none. See [`super::model`] for the bargain.
     pub(crate) document: super::model::DocumentModel,
+    /// The twelve named `color` slots, by name.
+    ///
+    /// Per-session variables rather than constants: `color.black = [...]`
+    /// succeeds and is read back, so a document that overwrites one has
+    /// overwritten it for every script after it.
+    pub(crate) colors: std::collections::BTreeMap<String, super::color::Color>,
+    /// The `global` property bag, whose deletions are tombstones.
+    pub(crate) globals: super::global::Bag,
     /// Icon names `Doc.addIcon` was given, in order.
     ///
     /// Append-only: `addIcon` and `getIcon` are real and `removeIcon` is a
@@ -121,6 +129,8 @@ impl Default for HostState {
             transcript: Vec::new(),
             timers: super::timer::Timers::default(),
             document: super::model::DocumentModel::empty(),
+            colors: super::color::initial(),
+            globals: super::global::Bag::new(),
             icon_names: Vec::new(),
             field_writes: Vec::new(),
             base_url: String::new(),

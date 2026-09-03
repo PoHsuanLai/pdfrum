@@ -1,12 +1,12 @@
 {
-  "generated_at": "2026-09-03T11:01:11Z",
+  "generated_at": "2026-09-03T11:17:52Z",
   "totals": {
     "files": 1757,
-    "pass": 1530,
-    "fail": 227,
+    "pass": 1535,
+    "fail": 222,
     "by_tag": {
       "form-events": 8,
-      "js-transcript": 17,
+      "js-transcript": 12,
       "page-count": 2,
       "pixel-fail": 41,
       "tierA-mismatch": 170
@@ -35085,10 +35085,8 @@
     },
     {
       "path": "resources/javascript/color_methods.in#js-transcript",
-      "status": "fail",
-      "tags": [
-        "js-transcript"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [],
         "mismatched": [],
@@ -35102,7 +35100,7 @@
         }
       },
       "tierB": null,
-      "notes": "line 1: expected \"Alert: PASS: color.convert() threw color.convert: Incorrect number of parameters passed to function.\", got \"Alert: PASS: color.convert() threw ReferenceError: color is not defined\""
+      "notes": ""
     },
     {
       "path": "resources/javascript/color_methods.pdf",
@@ -35166,10 +35164,8 @@
     },
     {
       "path": "resources/javascript/color_properties.in#js-transcript",
-      "status": "fail",
-      "tags": [
-        "js-transcript"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [],
         "mismatched": [],
@@ -35183,7 +35179,7 @@
         }
       },
       "tierB": null,
-      "notes": "line 2: expected \"Alert: transparent: T\", got \"Alert: FAILUREReferenceError: color is not defined\""
+      "notes": ""
     },
     {
       "path": "resources/javascript/color_properties.pdf",
@@ -35326,10 +35322,8 @@
     },
     {
       "path": "resources/javascript/constructor.in#js-transcript",
-      "status": "fail",
-      "tags": [
-        "js-transcript"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [],
         "mismatched": [],
@@ -35343,7 +35337,7 @@
         }
       },
       "tierB": null,
-      "notes": "line 1: expected \"Alert: PASS: this.constructor(): illegal constructor\", got \"Alert: FAIL: this.constructor(): returned\""
+      "notes": ""
     },
     {
       "path": "resources/javascript/constructor.pdf",
@@ -35407,10 +35401,8 @@
     },
     {
       "path": "resources/javascript/consts.in#js-transcript",
-      "status": "fail",
-      "tags": [
-        "js-transcript"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [],
         "mismatched": [],
@@ -35424,7 +35416,7 @@
         }
       },
       "tierB": null,
-      "notes": "line 1: expected \"Alert: border.s is solid\", got \"Alert: ERROR: ReferenceError: border is not defined\""
+      "notes": ""
     },
     {
       "path": "resources/javascript/consts.pdf",
@@ -35992,10 +35984,8 @@
     },
     {
       "path": "resources/javascript/globals.in#js-transcript",
-      "status": "fail",
-      "tags": [
-        "js-transcript"
-      ],
+      "status": "pass",
+      "tags": [],
       "tierA": {
         "compared": [],
         "mismatched": [],
@@ -36009,7 +35999,7 @@
         }
       },
       "tierB": null,
-      "notes": "line 3: expected \"Alert:   setPersistent = function setPersistent() { [native code] }, own property = true\", got end of output"
+      "notes": ""
     },
     {
       "path": "resources/javascript/globals.pdf",
