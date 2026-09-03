@@ -22,30 +22,25 @@
 //! # Ok::<(), pdfrum_filters::Error>(())
 //! ```
 //!
-//! # Damage tolerance is the point
-//!
-//! A broken filter stream is not an error here, because it is not an error in
-//! the files this crate exists to open. Flate stops at the first byte it
-//! cannot inflate and returns the prefix; LZW discards a trailing partial
-//! code; `ASCIIHex` skips bytes that are not hex digits; RunLength zero-fills a
-//! run that runs off the end of its input. Each of those records a
-//! [`Diagnostic`](pdfrum_common::Diagnostic) and returns [`Ok`].
-//!
-//! `Err` is reserved for "this cannot produce bytes at all": a size
-//! computation that overflows, output past
-//! [`Limits::max_decoded_stream_len`](pdfrum_common::Limits::max_decoded_stream_len),
-//! or one of the two malformations PDFium itself rejects outright (the `lzw`
-//! module).
-//! A caller that gets `Err` falls back to the raw, undecoded stream bytes —
-//! see [`decode_chain`], which implements that ladder.
-//!
-//! # Chains
-//!
-//! A stream's `/Filter` is a chain, and [`decode_chain`] walks it left to
-//! right, handing each filter the previous one's output. It stops at the first
-//! filter this crate does not decode and returns [`DecodeOutput::Image`] with
-//! the bytes produced so far, which is how a `/Filter [/ASCII85Decode
-//! /DCTDecode]` image reaches the JPEG decoder already de-ASCII'd.
+//! A broken filter stream is not an error: Flate returns the prefix it
+//! inflated, LZW discards a trailing partial code, `ASCIIHex` skips non-hex
+//! bytes, RunLength zero-fills a run past its input — each with a
+//! [`Diagnostic`](pdfrum_common::Diagnostic) and an [`Ok`]. `Err` means no
+//! bytes can be produced at all, and a caller that gets one falls back to the
+//! raw stream, which is what [`decode_chain`] does for you.
+
+// Damage tolerance is the point: a broken filter stream is not an error in the
+// files this crate exists to open.
+//
+// The `Err` cases are a size computation that overflows, output past
+// `Limits::max_decoded_stream_len`, or one of the two malformations PDFium
+// itself rejects outright (the `lzw` module).
+//
+// A stream's `/Filter` is a chain, and `decode_chain` walks it left to right,
+// handing each filter the previous one's output. It stops at the first filter
+// this crate does not decode and returns `DecodeOutput::Image` with the bytes
+// produced so far, which is how a `/Filter [/ASCII85Decode /DCTDecode]` image
+// reaches the JPEG decoder already de-ASCII'd.
 
 #![forbid(unsafe_code)]
 // Every byte reaching this crate came from an untrusted file: index with
@@ -228,16 +223,11 @@ pub struct NeedsImageCodec {
 /// Apply one filter to `input`.
 ///
 /// `params` is that filter's `/DecodeParms` entry; pass an empty [`Dict`] when
-/// the stream has none. Filter *chains* are [`decode_chain`]'s business.
-///
-/// Flate and LZW apply their `/Predictor` here, matching PDFium, which runs
-/// the predictor inside the same call that decompresses.
-///
-/// The four image codecs return [`DecodeOutput::Image`] rather than decoding:
-/// they need the image dictionary this function does not have, so `input` is
-/// what the codec should read and the caller still holds it. `/Crypt` is the
-/// identity — decryption happened in the security handler, long before the
-/// filter chain runs.
+/// the stream has none. Filter *chains* are [`decode_chain`]'s business. Flate
+/// and LZW apply their `/Predictor` inside this call. The four image codecs
+/// return [`DecodeOutput::Image`] rather than decoding, since they need an
+/// image dictionary this function does not have; `/Crypt` is the identity,
+/// because decryption happened in the security handler long before any filter.
 ///
 /// # Errors
 ///

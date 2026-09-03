@@ -105,17 +105,14 @@ fn filter_name_at(filters: &Array, index: usize, r: &impl Resolve) -> Option<Nam
 /// Read a stream dictionary's `/Filter` and `/DecodeParms` into the chain to
 /// run (PDFium's `GetDecoderArray`).
 ///
-/// `None` means the dictionary's filter declaration is unusable, which sends
-/// the caller to the raw bytes. An empty list means "no filters", which is
-/// different and perfectly ordinary.
+/// `None` means the filter declaration is unusable and the caller should read
+/// the raw bytes; an empty list means "no filters", which is ordinary.
 ///
-/// Three shapes of `/DecodeParms` and what each yields:
-///
-/// - a dictionary beside a name `/Filter` — that filter's parameters;
-/// - an array beside an array `/Filter` — element `i` for filter `i`;
-/// - **anything else** — no parameters for anyone. A single parameter
-///   dictionary beside a two-filter array is a common producer mistake, and
-///   PDFium silently ignores it rather than guessing which filter it meant.
+/// `/DecodeParms` is only read in the two shapes that match `/Filter`: a
+/// dictionary beside a name, and an array beside an array, positionally. Every
+/// other combination — a lone dictionary beside a two-filter array, say —
+/// yields an empty parameter dictionary rather than a guess at which filter it
+/// meant.
 ///
 /// ```
 /// use pdfrum_filters::decoder_list;
