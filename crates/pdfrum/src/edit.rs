@@ -349,8 +349,7 @@ impl PathBuilder {
 /// [`crate::DocEdit::embed_font`] / [`crate::DocEdit::standard_font`] (a font
 /// this save is adding).
 ///
-/// [`crate::ImageBuilder`] has the same "the object must already exist"
-/// limitation for `/XObject` and is **not** paired with an embed API yet.
+/// [`crate::ImageBuilder`] names an `/XObject` the same way.
 #[derive(Debug, Clone, PartialEq)]
 pub struct TextBuilder {
     /// The character codes, in the font's own encoding.
@@ -419,10 +418,11 @@ impl TextBuilder {
 
 /// An image placement, ready to [`PageEdit::push`].
 ///
-/// The pixels are not supplied here: an image page object names an `/XObject`
-/// the file already holds, and the regenerated stream writes `/Name Do`. So
-/// this places an image the document has — one found on another page, or one
-/// added to the document beforehand — rather than encoding a new one.
+/// The pixels are not supplied here: an image page object names an `/XObject`,
+/// and the regenerated stream writes `/Name Do`. Obtain the reference from
+/// [`PageEdit::image_of`] (an image the document already holds) or from
+/// [`crate::DocEdit::embed_jpeg`] / [`crate::DocEdit::embed_image`] (one this
+/// save is adding).
 #[derive(Debug, Clone, PartialEq)]
 pub struct ImageBuilder {
     /// The image `XObject`.
@@ -436,6 +436,10 @@ pub struct ImageBuilder {
 
 impl ImageBuilder {
     /// Place `source` in the rectangle `rect`.
+    ///
+    /// The image is stretched onto `rect`; nothing preserves its aspect
+    /// ratio, so a caller that wants it kept sizes `rect` from
+    /// [`crate::EmbeddedImage::width`] and [`crate::EmbeddedImage::height`].
     #[must_use]
     pub fn at(source: pdfrum_object::ObjRef, rect: Rect) -> Self {
         Self {

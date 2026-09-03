@@ -51,6 +51,7 @@ const SNAPSHOT_ENUMS: &[(&str, &str, &str)] = &[
         "pdfrum_edit::FontEncoding",
         "FontEncoding",
     ),
+    ("pdfrum-edit.txt", "pdfrum_edit::PixelFormat", "PixelFormat"),
     ("pdfrum-form.txt", "pdfrum_form::Button", "Button"),
     ("pdfrum-form.txt", "pdfrum_form::Event", "Event"),
     ("pdfrum-form.txt", "pdfrum_form::Key", "Key"),
@@ -341,11 +342,24 @@ fn construct_default_feature_variants() -> usize {
     let _ = SaveError::EmptyFontProgram;
     let _ = SaveError::EmptyToUnicodeCMap;
     let _ = SaveError::BadCidToGidMap(3);
-    n += 12;
+    let _ = SaveError::UnrecognisedImageData;
+    let _ = SaveError::EmptyImage;
+    let _ = SaveError::ImageDataLength {
+        expected: 0,
+        found: 0,
+    };
+    n += 15;
 
     let _ = FontEncoding::Simple;
     let _ = FontEncoding::Composite;
     n += 2;
+
+    let _ = PixelFormat::Gray8;
+    let _ = PixelFormat::Rgb8;
+    let _ = PixelFormat::Cmyk8;
+    let _ = PixelFormat::Rgba8;
+    let _ = PixelFormat::Mask1;
+    n += 5;
 
     let _ = Button::Left;
     let _ = Button::Right;
@@ -670,8 +684,8 @@ fn every_public_enum_variant_is_constructible_from_the_facade() {
         "constructed {constructed} default-feature variants, snapshots derive {derived}; \
          SNAPSHOT_ENUMS is the derivation index — add a construction when a variant lands"
     );
-    assert_eq!(constructed, 285, "default-feature variant count");
-    assert_eq!(SNAPSHOT_ENUMS.len(), 29, "default-feature enum count");
+    assert_eq!(constructed, 293, "default-feature variant count");
+    assert_eq!(SNAPSHOT_ENUMS.len(), 30, "default-feature enum count");
 }
 
 #[test]

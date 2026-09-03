@@ -157,6 +157,8 @@ fn every_type_in_a_public_signature_is_nameable_from_the_facade() {
     nameable::<EmbeddedFont>();
     nameable::<FontEncoding>();
     nameable::<StandardFont>();
+    nameable::<EmbeddedImage>();
+    nameable::<PixelFormat>();
     nameable::<Rotation>();
     nameable::<Error>();
     nameable::<ImageBuilder>();

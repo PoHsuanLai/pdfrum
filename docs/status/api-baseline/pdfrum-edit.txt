@@ -15,14 +15,19 @@ pub pdfrum_edit::Error::BadCidToGidMap(usize)
 pub pdfrum_edit::Error::BadNupParams
 pub pdfrum_edit::Error::BadPageRange
 pub pdfrum_edit::Error::EmptyFontProgram
+pub pdfrum_edit::Error::EmptyImage
 pub pdfrum_edit::Error::EmptyToUnicodeCMap
 pub pdfrum_edit::Error::EncryptedSaveUnsupported
+pub pdfrum_edit::Error::ImageDataLength
+pub pdfrum_edit::Error::ImageDataLength::expected: usize
+pub pdfrum_edit::Error::ImageDataLength::found: usize
 pub pdfrum_edit::Error::Io(core::io::error::Error)
 pub pdfrum_edit::Error::NoDestinationCatalog
 pub pdfrum_edit::Error::Object(pdfrum_object::error::Error)
 pub pdfrum_edit::Error::PageIndexOutOfRange(pdfrum_common::page_index::PageIndex)
 pub pdfrum_edit::Error::Subset(alloc::string::String)
 pub pdfrum_edit::Error::UnrecognisedFontProgram
+pub pdfrum_edit::Error::UnrecognisedImageData
 pub enum pdfrum_edit::FontEncoding
 pub pdfrum_edit::FontEncoding::Composite
 pub pdfrum_edit::FontEncoding::Simple
@@ -31,6 +36,12 @@ pub pdfrum_edit::IdSource::Fixed([u8; 16])
 pub pdfrum_edit::IdSource::Random
 impl pdfrum_edit::IdSource
 pub fn pdfrum_edit::IdSource::tag_byte(self, u64) -> u8
+pub enum pdfrum_edit::PixelFormat
+pub pdfrum_edit::PixelFormat::Cmyk8
+pub pdfrum_edit::PixelFormat::Gray8
+pub pdfrum_edit::PixelFormat::Mask1
+pub pdfrum_edit::PixelFormat::Rgb8
+pub pdfrum_edit::PixelFormat::Rgba8
 pub enum pdfrum_edit::SaveMode
 pub pdfrum_edit::SaveMode::Full
 pub pdfrum_edit::SaveMode::Incremental
@@ -39,6 +50,9 @@ impl pdfrum_edit::EditDoc<'_>
 pub fn pdfrum_edit::EditDoc<'_>::embed_cid_font(&mut self, &[u8], &str, &[u8]) -> core::result::Result<pdfrum_edit::EmbeddedFont, pdfrum_edit::Error>
 pub fn pdfrum_edit::EditDoc<'_>::embed_font(&mut self, &[u8], pdfrum_edit::FontEncoding) -> core::result::Result<pdfrum_edit::EmbeddedFont, pdfrum_edit::Error>
 pub fn pdfrum_edit::EditDoc<'_>::standard_font(&mut self, pdfrum_font::subst::standard::StandardFont) -> core::result::Result<pdfrum_edit::EmbeddedFont, pdfrum_edit::Error>
+impl pdfrum_edit::EditDoc<'_>
+pub fn pdfrum_edit::EditDoc<'_>::embed_image(&mut self, &[u8], u32, u32, pdfrum_edit::PixelFormat) -> core::result::Result<pdfrum_edit::EmbeddedImage, pdfrum_edit::Error>
+pub fn pdfrum_edit::EditDoc<'_>::embed_jpeg(&mut self, &[u8]) -> core::result::Result<pdfrum_edit::EmbeddedImage, pdfrum_edit::Error>
 impl<'a> pdfrum_edit::EditDoc<'a>
 pub fn pdfrum_edit::EditDoc<'a>::add(&mut self, pdfrum_object::object::Object) -> pdfrum_object::object::ObjRef
 pub fn pdfrum_edit::EditDoc<'a>::base(&self) -> &'a pdfrum_parser::doc::Document
@@ -56,6 +70,11 @@ pub struct pdfrum_edit::EmbeddedFont
 impl pdfrum_edit::EmbeddedFont
 pub fn pdfrum_edit::EmbeddedFont::encode(&self, &str) -> alloc::vec::Vec<u8>
 pub fn pdfrum_edit::EmbeddedFont::object(&self) -> pdfrum_object::object::ObjRef
+pub struct pdfrum_edit::EmbeddedImage
+impl pdfrum_edit::EmbeddedImage
+pub fn pdfrum_edit::EmbeddedImage::height(&self) -> u32
+pub fn pdfrum_edit::EmbeddedImage::object(&self) -> pdfrum_object::object::ObjRef
+pub fn pdfrum_edit::EmbeddedImage::width(&self) -> u32
 pub struct pdfrum_edit::Encryptor<'a>
 impl<'a> pdfrum_edit::Encryptor<'a>
 pub fn pdfrum_edit::Encryptor<'a>::encrypt(&self, pdfrum_crypt::object::CryptClass, &[u8]) -> alloc::vec::Vec<u8>

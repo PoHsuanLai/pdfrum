@@ -7,7 +7,10 @@ use pdfrum_common::{Diagnostics, PageIndex, PdfVersion};
 use pdfrum_edit::{EditDoc, SaveMode};
 use pdfrum_object::Object;
 
-use crate::{Document, EmbeddedFont, FontEncoding, Form, PageEdit, Result, StandardFont};
+use crate::{
+    Document, EmbeddedFont, EmbeddedImage, FontEncoding, Form, PageEdit, PixelFormat, Result,
+    StandardFont,
+};
 
 /// How a document is written back out.
 ///
@@ -397,6 +400,59 @@ impl DocEdit<'_> {
     /// dictionary.
     pub fn standard_font(&mut self, which: StandardFont) -> Result<EmbeddedFont> {
         Ok(self.inner.standard_font(which)?)
+    }
+
+    /// Embed a JPEG or JPEG 2000 codestream as a new image `/XObject`.
+    ///
+    /// The bytes are stored verbatim under `/DCTDecode` or `/JPXDecode`;
+    /// nothing is decoded or re-encoded. The dimensions and colour space come
+    /// from the codestream's own header, which is why they are read back off
+    /// the result rather than passed in.
+    ///
+    /// ```
+    /// use pdfrum::{Document, ImageBuilder, Rect, SaveOptions};
+    ///
+    /// let doc = Document::open("tests/fixtures/hello_world.pdf")?;
+    /// let mut edit = doc.edit();
+    /// let image = edit.embed_jpeg(include_bytes!("../tests/fixtures/mona_lisa.jpg"))?;
+    /// assert_eq!((image.width(), image.height()), (120, 120));
+    ///
+    /// let mut page = doc.page(0)?.edit();
+    /// page.push(ImageBuilder::at(image.object(), Rect::new(20.0, 20.0, 140.0, 140.0)).build());
+    /// let mut bytes = Vec::new();
+    /// edit.write_pages_to(&mut bytes, &[page], &SaveOptions::default())?;
+    /// assert!(bytes.starts_with(b"%PDF-"));
+    /// # Ok::<(), pdfrum::Error>(())
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// [`Error::Save`](crate::Error::Save) when the bytes are neither a JPEG
+    /// nor a JPEG 2000 codestream, or their header cannot be read.
+    pub fn embed_jpeg(&mut self, bytes: &[u8]) -> Result<EmbeddedImage> {
+        Ok(self.inner.embed_jpeg(bytes)?)
+    }
+
+    /// Embed raw interleaved samples as a new image `/XObject`.
+    ///
+    /// The samples are flate-compressed by the save. A
+    /// [`PixelFormat::Rgba8`] alpha channel becomes a separate `/SMask`
+    /// image, and [`PixelFormat::Mask1`] writes an `/ImageMask` whose set
+    /// bits paint.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::Save`](crate::Error::Save) when either dimension is zero, or
+    /// `pixels` is not exactly `width * height * components` bytes — one
+    /// eighth of that, rounded up per row, for [`PixelFormat::Mask1`].
+    pub fn embed_image(
+        &mut self,
+        pixels: &[u8],
+        width: u32,
+        height: u32,
+        format: PixelFormat,
+    ) -> Result<EmbeddedImage> {
+        Ok(self.inner.embed_image(pixels, width, height, format)?)
     }
 
     /// Write the document with this session's new objects and `pages` applied.

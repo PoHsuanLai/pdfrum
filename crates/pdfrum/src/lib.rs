@@ -112,6 +112,11 @@ pub use pdfrum_render::{RasterBackend, RenderDevice};
 /// [`FontEncoding`] choosing simple vs composite, and [`StandardFont`] for
 /// [`DocEdit::standard_font`].
 pub use pdfrum_edit::{EmbeddedFont, FontEncoding, StandardFont};
+
+/// An image this save is adding: [`EmbeddedImage`] from
+/// [`DocEdit::embed_jpeg`] or [`DocEdit::embed_image`], and [`PixelFormat`]
+/// naming the layout of raw samples handed to the latter.
+pub use pdfrum_edit::{EmbeddedImage, PixelFormat};
 /// The facade's default rasterizer, re-exported so a caller can name it
 /// without a second dependency.
 ///

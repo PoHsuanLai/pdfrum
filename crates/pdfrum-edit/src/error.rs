@@ -83,6 +83,39 @@ pub enum Error {
     #[error("the /CIDToGIDMap is {0} bytes; it must be a non-empty whole number of 2-byte entries")]
     BadCidToGidMap(usize),
 
+    /// The bytes are not a JPEG or JPEG 2000 codestream a PDF may hold.
+    ///
+    /// `CPDF_Image::SetJpegImage` reaches the same outcome by leaving its
+    /// stream unset (`core/fpdfapi/page/cpdf_image.cpp:137-165`): `InitJPEG`
+    /// returns null when `JpegModule::LoadInfo` cannot read a header, or when
+    /// the component count is not 1, 3 or 4 or the sample precision is not 1,
+    /// 2, 4, 8 or 16 (`:99-110`, `:42-49`). The caller there gets a `false`
+    /// from `FPDFImageObj_LoadJpegFile`; this is the same refusal with the
+    /// reason attached.
+    #[error("not a JPEG or JPEG 2000 image")]
+    UnrecognisedImageData,
+
+    /// An image was asked for with a zero width or height.
+    ///
+    /// `CPDF_Image::SetImage` returns without producing a stream for the same
+    /// input (`core/fpdfapi/page/cpdf_image.cpp:186-189`).
+    #[error("an image needs a non-zero width and height")]
+    EmptyImage,
+
+    /// The sample buffer is not the length the dimensions and pixel format
+    /// require.
+    ///
+    /// The oracle cannot reach this: it is handed a `CFX_DIBitmap` that
+    /// already knows its own pitch, so a short buffer is not expressible.
+    /// Loose bytes are, and reading past them is not an option.
+    #[error("image data is {found} bytes; {expected} are needed")]
+    ImageDataLength {
+        /// Bytes the dimensions and format require.
+        expected: usize,
+        /// Bytes the caller supplied.
+        found: usize,
+    },
+
     /// An object the writer needed could not be fetched or made sense of.
     #[error("object model: {0}")]
     Object(#[from] pdfrum_object::Error),
