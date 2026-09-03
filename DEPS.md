@@ -175,7 +175,7 @@ not a codec).
 | `ryu` **lib** | Shortest float formatting in the writer | Same guarantees class as the C++'s dragonbox |
 | `smallvec` **lib** | Hot small collections (`CharItem` unicode, dash arrays) | Boring, ubiquitous |
 | `thiserror` **lib** | Per-crate `Error` enums | The convention |
-| `rayon` **lib** (facade only) | Parallel page rendering | Data-parallel fits; engine itself stays single-threaded per page (vello_cpu multithreads internally) |
+| `rayon` **tests & examples only** (was "lib, facade only" until 2026-09-04: the library never called it) | Parallel page rendering, demonstrated | Data-parallel fits; engine itself stays single-threaded per page (vello_cpu multithreads internally) |
 
 ### `unicode-normalization`, measured — 2026-09-02 (`[spec]`, audit A31)
 
