@@ -634,8 +634,6 @@ mod tests {
         }
     }
 
-    /// Was a doctest until WP8 made `unicode` a private module; the
-    /// examples pin real table values, so they stay as a test.
     #[test]
     fn the_bidi_class_table_answers_for_each_script() {
         assert_eq!(bidi_class('A' as u32), BidiClass::L);
@@ -646,8 +644,6 @@ mod tests {
         assert_eq!(bidi_class(0x1_0000), BidiClass::On);
     }
 
-    /// Was a doctest until WP8 made `unicode` a private module; the
-    /// examples pin real table values, so they stay as a test.
     #[test]
     fn mirroring_swaps_brackets_and_leaves_everything_else() {
         assert_eq!(mirror_char('(' as u32), ')' as u32);
@@ -657,8 +653,6 @@ mod tests {
         assert_eq!(mirror_char(0x10800), 0x10800);
     }
 
-    /// Was a doctest until WP8 made `unicode` a private module; the
-    /// examples pin real table values, so they stay as a test.
     #[test]
     fn space_normalization_touches_only_the_spaces() {
         // NO-BREAK SPACE and the fixed-width spaces become a plain space.
@@ -671,8 +665,6 @@ mod tests {
         assert_eq!(normalize_space(0x0020), 0x0020);
     }
 
-    /// Was a doctest until WP8 made `unicode` a private module; the
-    /// examples pin real table values, so they stay as a test.
     #[test]
     fn the_normalization_table_decomposes_ligatures_and_passes_the_rest() {
         // LATIN SMALL LIGATURE FI decomposes.
@@ -681,8 +673,6 @@ mod tests {
         assert_eq!(normalize(u32::from(b'a')), vec![u32::from(b'a')]);
     }
 
-    /// Was a doctest until WP8 made `unicode` a private module; the
-    /// examples pin real table values, so they stay as a test.
     #[test]
     fn the_alpha_test_accepts_letters_and_ideographs() {
         assert!(is_alpha(u32::from(b'a')));
@@ -691,8 +681,6 @@ mod tests {
         assert!(!is_alpha(u32::from(b'-')));
     }
 
-    /// Was a doctest until WP8 made `unicode` a private module; the
-    /// examples pin real table values, so they stay as a test.
     #[test]
     fn the_alnum_test_accepts_letters_and_digits_of_any_script() {
         assert!(is_alnum(u32::from(b'z')));
@@ -701,8 +689,6 @@ mod tests {
         assert!(!is_alnum(u32::from(b'@')));
     }
 
-    /// Was a doctest until WP8 made `unicode` a private module; the
-    /// examples pin real table values, so they stay as a test.
     #[test]
     fn lowering_reaches_above_the_basic_plane() {
         assert_eq!(to_lower(u32::from(b'A')), u32::from(b'a'));

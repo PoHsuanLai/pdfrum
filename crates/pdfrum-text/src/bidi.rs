@@ -1,4 +1,4 @@
-//! The four-way direction segmenter (`docs/design/pdfrum-text.md` §1.10a).
+//! The four-way direction segmenter.
 //!
 //! **This is not the Unicode Bidirectional Algorithm.** PDFium buckets raw
 //! bidi classes four ways, splits a line wherever the bucket changes, and
@@ -276,7 +276,6 @@ mod tests {
         );
     }
 
-    /// Was a doctest until WP8 made `bidi` a private module.
     #[test]
     fn a_latin_line_resolves_left_with_a_leading_neutral_segment() {
         let latin: Vec<u32> = "abc".chars().map(u32::from).collect();
