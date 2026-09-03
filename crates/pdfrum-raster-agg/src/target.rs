@@ -94,9 +94,9 @@ impl Target {
 
     /// The clip's coverage at a pixel: `255` where there is no clip.
     ///
-    /// **Not on the hot path any more.** M12 replaced the per-pixel call with
-    /// [`clip_span`], which takes the whole span's bytes at once. This is kept
-    /// as that function's *specification*: it is the simple, obviously correct
+    /// **Not on the hot path.** [`clip_span`] takes the whole span's bytes at
+    /// once instead. This is kept as that function's *specification*: it is
+    /// the simple, obviously correct
     /// spelling, and `clip_span_reproduces_clip_at_exactly` requires the fast
     /// one to agree with it on every position of a deliberately awkward mask.
     /// Deleting it would leave the fast path with nothing to be checked
@@ -397,8 +397,8 @@ pub enum Source {
 ///
 /// A free function over `&mut [u8]` rather than a method taking `(x, y)`,
 /// because the span loops above already hold the destination row as a slice
-/// and re-deriving an index from coordinates inside the loop was the thing
-/// M12 removed. It is a no-op on a slot that is not exactly four bytes, which
+/// and re-deriving an index from coordinates inside the loop cost measurably
+/// more. It is a no-op on a slot that is not exactly four bytes, which
 /// `chunks_exact_mut(4)` guarantees it always is — the check is there because
 /// `unsafe_code = "forbid"` means the alternative is an index that could
 /// panic, and a rasterizer must not panic on a crafted file.
