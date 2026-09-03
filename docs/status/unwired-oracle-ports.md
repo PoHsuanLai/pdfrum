@@ -33,6 +33,20 @@ they are recorded at the bottom so nobody re-opens them.
 
 ## 1. ~~`image::scanline::rgb_line_to_bgr` — the 16-bpc high-byte arm~~ — **checked and decided, 2026-09-03**
 
+**Board effect, attributed 2026-09-03 after a bisect.** The landing
+(`5db5c5d`) said "no 16-bit RGB image is in the corpus, so the board does not
+move". True and irrelevant: the check looked at PDFium's RGB-only `>> 8` fast
+arm, but `resources/pixel/bug_536543461.{in,pdf}` is a 2×2 **16-bit
+DeviceGray** image whose `0x8000` sample is `127.5019` — the oracle's general
+path truncates to 127, the rounded map gives 128. Both rows moved SSIM
+1 → 0.99998, `max_channel_diff` 0 → 1, still `pass`; the movement is the
+ruled-correct one (ISO 32000-1 §8.9.5 linear map; pdf.js rounds) and bounded
+at one count by construction. The rows reached `conformance/scoreboard.json`
+through `a49131e`'s wholesale rewrite, which listed twelve `js-transcript`
+rows and not these two — this paragraph is the attribution that message
+lacks. A bisect over worktrees needs one target dir per sha; a shared one
+silently hands back the same binary.
+
 **Ruled: scale and round. The arm is deleted and the shipping path was
 wrong too.**
 
