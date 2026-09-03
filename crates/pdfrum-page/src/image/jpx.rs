@@ -1,4 +1,4 @@
-//! JPEG 2000 decoding, behind the thin entry point SPEC.md §12 requires.
+//! JPEG 2000 decoding, behind a thin entry point.
 //!
 //! # The colorspace override table
 //!
@@ -98,7 +98,7 @@ fn matches_or_unspecified(actual: JpxColorSpace, expected: JpxColorSpace) -> boo
     actual == expected || actual == JpxColorSpace::Unspecified
 }
 
-/// The conversion table from `docs/design/pdfrum-page.md` §1.19.7.
+/// How a decoded codestream's channels are reconciled with the dictionary.
 ///
 /// `space` is the PDF dictionary's colour space, `None` when it stated none.
 #[must_use]
@@ -253,8 +253,7 @@ fn components_agree(data: &[u8]) -> bool {
 /// Decode a JPEG 2000 codestream or JP2 file.
 ///
 /// `space` is the PDF dictionary's colour space, and `smask_in_data` its
-/// `/SMaskInData`. `target` says how much resolution the caller needs
-/// (SPEC.md §7).
+/// `/SMaskInData`. `target` says how much resolution the caller needs.
 ///
 /// # The reduction is the codestream's own, not a resample
 ///

@@ -1,4 +1,4 @@
-//! JBIG2 decoding, behind the thin entry point SPEC.md §12 requires.
+//! JBIG2 decoding, behind a thin entry point.
 //!
 //! The decoder crate never appears in a signature: everything crosses this
 //! boundary as bytes in and a [`BitImage`] out, so replacing it with a
@@ -49,7 +49,7 @@ impl BitImage {
 /// The sink is sized by the *dictionary*, and the codestream is free to
 /// disagree with it — see [`decode_jbig2`]'s note on which one wins. Both
 /// fields below exist to make that disagreement cheap and correct rather than
-/// merely survivable; M12 found a corpus document where it was neither.
+/// merely survivable; a corpus document exists where it was neither.
 struct BitSink {
     bits: Vec<u8>,
     row_bytes: usize,

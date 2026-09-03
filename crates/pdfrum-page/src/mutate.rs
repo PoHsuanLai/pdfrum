@@ -36,8 +36,7 @@
 //!
 //! That ordering used to be bought with a public `NO_CONTENT_STREAM: i32 = -1`
 //! that callers compared against. `Option`'s own `Ord` gives the same order,
-//! and the compiler makes the check mandatory rather than optional
-//! (`docs/design/idiomatic-api.md` §C, Tier 1 item 1).
+//! and the compiler makes the check mandatory rather than optional.
 
 use std::collections::BTreeSet;
 

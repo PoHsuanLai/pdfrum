@@ -1,7 +1,7 @@
 //! The decoded-image session cache.
 //!
-//! Keyed on `(ObjRef, RequestedSize)` rather than the reference alone
-//! (SPEC.md §7, 2026-08-29): a plain reference key cannot express
+//! Keyed on `(ObjRef, RequestedSize)` rather than the reference alone: a
+//! plain reference key cannot express
 //! resolution-dependent invalidation, and would hand a fifty-pixel thumbnail
 //! back to a full-resolution request.
 //!
@@ -124,7 +124,7 @@ impl RequestedSize {
 /// A session-scoped cache of decoded images.
 ///
 /// Owned by whatever is rendering or extracting, passed down by `&mut` — no
-/// global state, no interior mutability (STYLE.md §1).
+/// global state, no interior mutability.
 #[derive(Debug, Default)]
 pub struct ImageCache {
     entries: HashMap<(ObjRef, RequestedSize), Entry>,

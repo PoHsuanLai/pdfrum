@@ -15,7 +15,7 @@
 //! # Owned pixels, not a lazy scanline source
 //!
 //! PDFium produces scanlines on demand from three mutable scratch buffers.
-//! SPEC.md §7 pins an owned [`ImageData`] instead (design brief D22): every
+//! We hold an owned [`ImageData`] instead: every
 //! per-scanline *behaviour* is preserved — the truncated-stream zero pad, the
 //! palette packing, the sixteen-bit high-byte truncation — and only the
 //! laziness is gone. Memory is bounded by the same four-gibibyte cap the C++
@@ -154,9 +154,9 @@ impl Pixels {
     ///
     /// This matters because `pdfrum_render::image::to_pixmap` runs it once per
     /// *source* pixel — twenty-five million times on `image_bug_718762` — and
-    /// measured at ~34 ns each it is 90% of that document's render
-    /// (docs/status/M12b-P1.md §6). Nothing about the colour changes; only how
-    /// many float instructions run on the way to it.
+    /// measured at ~34 ns each it is 90% of that document's render. Nothing
+    /// about the colour changes; only how many float instructions run on the
+    /// way to it.
     ///
     /// An `Indexed` image still pays the palette's `Rgb` → bytes conversion per
     /// pixel here. Hoisting that is the caller's business, since only the
@@ -1073,7 +1073,7 @@ fn unpack(
 /// [1 0 1 0 1 0 1 0]` is the Adobe inversion written out, so the
 /// `default_decode` short circuit above does not fire — that loop ran over
 /// 100,000,000 bytes at 2.9 ns each and was **83% of the whole image decode**,
-/// against 17% for `zune_jpeg` itself (docs/status/M12b-P1.md §4.2). The table
+/// against 17% for `zune_jpeg` itself. The table
 /// is built from the same [`DecodeMap::apply`] and the same rounding, so every
 /// output byte is identical by construction; only the number of times the
 /// arithmetic runs changes.
@@ -1256,8 +1256,8 @@ fn load_mask_image<R: Resolve>(
 /// [`Pixels::sample_bytes`] over the image — the byte path
 /// `the_byte_path_is_exactly_the_float_path` proves equal to
 /// `color_at(..).to_bytes()` over the whole domain — rather than the float
-/// round trip through [`Rgb`](crate::color::Rgb) that M12b P1 §7 removed from
-/// `pdfrum_render::image::to_pixmap` for -35% on the image class.
+/// round trip through [`Rgb`](crate::color::Rgb), which cost -35% on the image
+/// class where `pdfrum_render::image::to_pixmap` dropped it.
 ///
 /// **That change reached the render path only.** This is the one call site in
 /// the *build* that walks a whole image the same way, and on a document of
