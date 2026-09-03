@@ -3155,16 +3155,16 @@ Every recovery gets a `Diagnostic` (severity `Recovered` unless noted):
 | `/DA` unparsable (`Tf` not found) → empty font, size 0 | `DefaultAppearanceMalformed` (Suspicious) |
 | `/DR /Font` fails `ValidateFontResourceDict` → no AP | `FormResourcesInvalid` (Suspicious) |
 | field dropped: no `/FT` on it or its parent | `FieldSkippedNoType` |
-| field dropped: empty FQN | `FieldSkippedNoName` |
-| `/Kids[0]` not a dict → subtree abandoned | `FieldKidsMalformed` (Suspicious) |
-| indirect `/T` flattened, or replaced by an empty string | `FieldNameNormalized` |
-| `/I` rejected in favour of `/V` | `ChoiceIndicesIgnored` |
-| `/MK /R` not a multiple of 90 → zero BBox | `WidgetRotationInvalid` (Suspicious) |
+| field dropped: empty FQN | *(specified, never implemented — we keep the field; see `docs/status/queue.md`)* |
+| `/Kids[0]` not a dict → subtree abandoned | *(specified, never implemented — we drop one kid and keep walking; see `docs/status/queue.md`)* |
+| indirect `/T` flattened, or replaced by an empty string | *(no variant: `Dict::text` already reaches both outcomes)* |
+| `/I` rejected in favour of `/V` | *(no variant: the site deliberately discards its sink)* |
+| `/MK /R` not a multiple of 90 → zero BBox | *(specified, never implemented — and the zero BBox is itself a divergence: PDFium's `abs()` + `default:` never empties it; see `docs/status/queue.md`)* |
 | struct element dropped (page mismatch, unlinkable parent) | `StructElementDropped` |
-| `/K` slot reserved but never populated | `StructKidUnresolved` (Suspicious) |
+| `/K` slot reserved but never populated | *(no variant: the same event already records `StructElementDropped`)* |
 | page label `/S` unrecognized → prefix only | `PageLabelStyleUnknown` |
-| auto font size resolved to 0 (no plate width) → no `Tf` | `AutoFontSizeZero` (Suspicious) |
-| a UTF-16 string truncated at a lone surrogate for output | `TextTruncatedAtSurrogate` (Suspicious) |
+| auto font size resolved to 0 (no plate width) → no `Tf` | *(no variant: `vt::layout` is a documented pure function with no sink)* |
+| a UTF-16 string truncated at a lone surrogate for output | *(no variant: no oracle condition — the truncation is a host `printf` artifact, not a PDFium recovery)* |
 
 `Diagnostic.at` is the annotation's or field's `ObjRef` number where one
 exists, encoded in the existing `Option<u64>` byte-offset slot as the object's

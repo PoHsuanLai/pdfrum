@@ -2750,11 +2750,14 @@ Unicode scalar, so we take the 32-bit branch.
 surrogate survives as a lone `0xD800..0xDFFF` value and reaches text output as
 such. Our `CharItem.unicode` is `SmallVec<[char; 2]>` and `char` cannot hold a
 surrogate. **Decision:** `Lookup` pairs valid high+low surrogates into one
-`char`; an **unpaired** surrogate becomes `U+FFFD`, and a `Diagnostic`
-(`DiagKind::ToUnicodeLoneSurrogate`) is recorded. This is a deliberate,
+`char`; an **unpaired** surrogate becomes `U+FFFD`. This is a deliberate,
 permanent divergence: the alternative (carrying `u16`s to the text layer) would
 push UTF-16 into every downstream signature for a case that appears in
-malformed files only. **Conformance must confirm no corpus file trips it**; if
+malformed files only. (A `DiagKind::ToUnicodeLoneSurrogate` was specified here
+and **never recorded**; it was deleted 2026-09-03. `units_to_chars` sits under
+`ToUnicode::lookup`, an `&self` per-glyph query with nowhere to put a sink, and
+there is no oracle condition to mirror — PDFium's `WideString` stores the lone
+surrogate natively rather than recovering from it.) **Conformance must confirm no corpus file trips it**; if
 one does, the waiver is documented in `conformance/thresholds.toml` rather than
 reverting the design. Note the `NonBmpUnicodeLookup` assertion (§1.6.6) is a
 *paired* surrogate and is unaffected.

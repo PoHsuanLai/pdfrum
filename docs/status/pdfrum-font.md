@@ -243,6 +243,13 @@ additive mechanism for a `#[non_exhaustive]` enum documented as growing:
 `CidToGidStreamShort`, `FontWidthsTruncated`, `GsubUnreadable`,
 `FontSubstitutionFailed`.
 
+`ToUnicodeLoneSurrogate` was **deleted 2026-09-03**, never having been
+recorded: its site is inside `ToUnicode::lookup`, an `&self` per-glyph query
+with nowhere to put a sink, and PDFium has no matching condition — its
+`WideString` stores a lone surrogate natively rather than recovering from it.
+The `U+FFFD` substitution (D3) is unchanged; only the unkept promise to report
+it is gone. Six variants remain from this crate.
+
 ## Divergences
 
 The brief's D1–D13 are implemented as written, with these notes:
