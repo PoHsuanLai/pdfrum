@@ -2657,6 +2657,21 @@ So the honest position is: option (a) is the right *measurement* and it is
 taken here; option (b) is a plausible *design*, its cost is the table above,
 and it is the user's call rather than a benchmark's.
 
+**Taken up (2026-09-04): the user chose the explicit form.** `Page::prepare`
+returns a `PreparedPage` that owns the built graph and draws it any number of
+times through `render_on`; `Page::render_on` is now `prepare` followed by one
+draw, so there is one render body and the pixels are byte-identical (the board
+was run: `per_file` equal across all 1757 entries). The retention above is
+therefore a caller's choice visible in the type — the value holds the graph,
+including images decoded for the size it was prepared at, until it is dropped
+— and there is no cache inside `Page` and no eviction policy to invent. The
+bench's warm loop (`profile --op render --warm`) now prepares each page once
+outside the timed loop and times only the draws, which is what
+`pdfium_test --render-repeats` does; **its `whole` figure is the amortized
+figure from here on, and the subtraction above is retired**. The stage
+instrument still reports parse and interpretation, counted once per page at
+prepare time rather than once per iteration.
+
 ### 18.2 The table, all forty-four rows
 
 Method: `scripts/bench-oracle.nu`'s marginal-pass formula
