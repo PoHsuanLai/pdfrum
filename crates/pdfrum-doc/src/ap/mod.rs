@@ -1,16 +1,14 @@
-//! Appearance-stream generation (`cpdf_generateap`): turning an annotation's
-//! dictionary into the content stream a viewer draws.
+//! Appearance-stream generation: turning an annotation's dictionary into the
+//! content stream a viewer draws.
 //!
 //! # The overlay
 //!
-//! Upstream this **mutates the document**. Generating a sticky note's
-//! appearance replaces its `/Rect` with a 20×20 box; generating an ink
-//! annotation's inflates its `/Rect`; every annotation touched gains an
-//! `/AP /N` pointing at a new stream and a marker key saying so. Everything
-//! that reads the file afterwards — including the `--annot` dump the
-//! conformance harness diffs byte for byte — sees the mutated state, which is
-//! why the dump reports 20×20 rectangles for sticky notes whose files say
-//! otherwise.
+//! Generating an appearance is conventionally a **mutation of the
+//! document**. A sticky note's `/Rect` is replaced with a 20×20 box; an ink
+//! annotation's is inflated; every annotation touched gains an `/AP /N`
+//! pointing at a new stream and a marker key saying so. Everything that reads
+//! the file afterwards sees the mutated state, which is why a dump reports
+//! 20×20 rectangles for sticky notes whose files say otherwise.
 //!
 //! Parsed objects here are values and the parser's store is immutable, so
 //! [`generate_appearances`] returns an [`AnnotOverlay`] instead: one entry per
@@ -99,15 +97,12 @@ pub enum Appearance {
 /// - A **text field** and a **combo box** — editable or not — answer an empty
 ///   rectangle outright, so nothing is stroked over them. This is the common
 ///   case and it is why the focused text-field goldens carry a caret and
-///   glyphs but no outline. `CPWL_ComboBox::GetFocusRect`
-///   (`fpdfsdk/pwl/cpwl_combo_box.cpp:321-323`) returns an empty rectangle
-///   with **no editability test in it**; a caller that inflates a read-only
-///   combo strokes a box upstream never draws.
+///   glyphs but no outline. Editability does **not** enter into it: a caller
+///   that inflates a read-only combo strokes a box that must not be drawn.
 /// - A **check box**, a **radio button** and a **single-select list box**
 ///   answer their window rectangle inflated by one unit on every side, which
-///   is [`FocusBox::Inflated`] — `CPWL_Wnd::GetFocusRect`
-///   (`cpwl_wnd.cpp:713-719`), which the list box falls through to when it is
-///   not multi-select.
+///   is [`FocusBox::Inflated`]. A list box falls through to that answer when
+///   it is not multi-select.
 /// - A **multi-select list box** answers the rectangle of the item its caret
 ///   sits on, clipped to the client area — a rectangle only the list control's
 ///   own scroll and caret state can name, so a caller that has it supplies it
@@ -398,13 +393,12 @@ impl TextFont<'_> {
     /// Dropping the character instead loses the object entirely, which on
     /// `bug_725389` — three Hebrew characters in a `/DA` naming Times-Roman —
     /// is the difference between six text objects and three.
-    ///
-    /// Upstream reaches the same place by a longer road: `CPDF_BAFontMap`
-    /// would first look for a second face that knows the character, and only
-    /// `CPWL_EditImpl::GetPDFWordString`'s fallthrough appends the raw value
-    /// when none does. On a hermetic font set no second face is found, so the
-    /// fallthrough is the whole of the observable behaviour, and the N-slot map
-    /// is not built here for a result it does not change.
+    // The oracle reaches the same place by a longer road: CPDF_BAFontMap
+    // first looks for a second face that knows the character, and only
+    // CPWL_EditImpl::GetPDFWordString's fallthrough appends the raw value
+    // when none does. On a hermetic font set no second face is found, so the
+    // fallthrough is the whole of the observable behaviour — which is why no
+    // N-slot map is built here for a result it would not change.
     #[must_use]
     pub fn encode(&self, code: u32) -> Vec<u8> {
         let name = self.font.base_font_name();

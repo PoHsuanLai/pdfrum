@@ -280,23 +280,23 @@ impl WidgetRotation {
     /// counterclockwise angle of `-90` means. A value that is not a multiple
     /// of 90 is upright.
     ///
-    /// [oracle-bug] PDFium folds with `abs(GetRotation() % 360)`
-    /// (`fpdfsdk/cpdfsdk_widget.cpp:1029` in `GetRotatedRect`, `:1049` in
-    /// `GetMatrix`), which sends `-90` to `90` — the wrong direction. The two
-    /// agree on the *box*, since 90 and 270 swap the same axes, but
-    /// `GetMatrix` builds `CFX_Matrix(0, 1, -1, 0, fWidth, 0)` for 90 and
-    /// `CFX_Matrix(0, -1, 1, 0, 0, fHeight)` for 270 (`:1053-1062`), so a
-    /// `/R -90` widget is drawn and hit-tested a half turn away from where
-    /// the file asked. pdf.js is the tiebreaker and normalizes the way this
-    /// does — `angle %= 360; if (angle < 0) { angle += 360; }`, then
-    /// `if (angle % 90 === 0)` before it is kept (`src/core/annotation.js`,
-    /// `WidgetAnnotation.setRotation`). We follow pdf.js and the
-    /// specification's "counterclockwise".
-    ///
-    /// The `default:` arm on both of the oracle's switches falls through to
-    /// the 0/180 case, so a non-multiple of 90 is upright there too; pdf.js's
-    /// `angle % 90 === 0` gate leaves `this.rotation` at its initialized `0`.
-    /// All three agree, and this is not a divergence.
+    /// `[oracle-bug]` A negative multiple of 90 keeps its sign through the
+    /// fold, so `/R -90` draws and hit-tests as a three-quarter turn — the
+    /// specification's "counterclockwise" reading, and pdf.js's.
+    // [oracle-bug] PDFium folds with `abs(GetRotation() % 360)`
+    // (fpdfsdk/cpdfsdk_widget.cpp:1029 in GetRotatedRect, :1049 in
+    // GetMatrix), sending -90 to 90 — the wrong direction. The two agree on
+    // the *box*, since 90 and 270 swap the same axes, but GetMatrix builds
+    // CFX_Matrix(0, 1, -1, 0, fWidth, 0) for 90 and CFX_Matrix(0, -1, 1, 0,
+    // 0, fHeight) for 270 (:1053-1062), so a /R -90 widget lands a half turn
+    // away from where the file asked. pdf.js is the tiebreaker and
+    // normalizes the way this does — `angle %= 360; if (angle < 0) { angle
+    // += 360; }`, then `if (angle % 90 === 0)` before it is kept
+    // (src/core/annotation.js, WidgetAnnotation.setRotation).
+    //
+    // The non-multiple of 90 is not a divergence: the `default:` arm on both
+    // of the oracle's switches falls through to the 0/180 case, and pdf.js's
+    // `angle % 90 === 0` gate leaves this.rotation at its initialized 0.
     #[must_use]
     pub fn from_degrees(degrees: i64) -> WidgetRotation {
         match degrees.rem_euclid(360) {

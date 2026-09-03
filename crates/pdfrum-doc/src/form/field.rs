@@ -453,20 +453,17 @@ impl Form {
     /// # An absent `/CO` is the answer, not a fallback
     ///
     /// A document with no `/CO` array recalculates **nothing**, however many
-    /// of its fields carry an `/AA /C` script. `CountFieldsInCalculationOrder`
-    /// returns 0 and `GetFieldInCalculationOrder` returns null the moment
-    /// `GetArrayFor("CO")` finds nothing
-    /// (`core/fpdfdoc/cpdf_interactiveform.cpp:739-761`), and the sweep that
-    /// drives calculation walks exactly that list. So an empty answer here is
-    /// "no calculation runs", and a reader tempted to fall back to "every
-    /// field, in `/Fields` order" would recalculate documents the oracle
-    /// leaves alone — visibly, on any file with a calculation script and no
-    /// `/CO`.
+    /// of its fields carry an `/AA /C` script: the sweep that drives
+    /// calculation walks exactly this list and nothing else. So an empty
+    /// answer here is "no calculation runs", and a reader tempted to fall
+    /// back to "every field, in `/Fields` order" would recalculate documents
+    /// that must be left alone — visibly, on any file with a calculation
+    /// script and no `/CO`.
     ///
     /// Entries that resolve to nothing, to a non-dictionary, or to a
-    /// dictionary that is not one of this form's terminal fields are dropped,
-    /// which is `GetFieldByDict` answering null. Duplicates are kept: the
-    /// array is the order, and the oracle indexes it positionally.
+    /// dictionary that is not one of this form's terminal fields are dropped.
+    /// Duplicates are kept: the array is the order, and it is indexed
+    /// positionally.
     #[must_use]
     pub fn calculation_order<R: Resolve>(&self, catalog: &Dict, r: &R) -> Vec<usize> {
         let Some(acro) = catalog.dict(names::ACRO_FORM, r) else {
@@ -894,23 +891,19 @@ fn merge(base: &Dict, overlay: &Dict) -> Dict {
 /// # Why this is not the appearance's answer
 ///
 /// A choice field records its selection twice — `/I` as indices, `/V` as the
-/// selected options' export values — and upstream reads the pair *differently
+/// selected options' export values — and the pair is read *differently
 /// depending on who is asking*. The two readers are not reconcilable and
 /// pretending they are is how a corpus row moves in the wrong direction:
 ///
 /// - **Interaction** — "is row `n` selected?", the question a click, an arrow
-///   key or an embedder's query asks — is `CPDF_FormField::IsItemSelected`
-///   (`core/fpdfdoc/cpdf_formfield.cpp:546-554`). It consults **`/I` first**,
-///   as integer indices, and falls back to `/V` only when `/I` is not usable.
-///   That is this function.
-/// - **Appearance** — what the generated `/AP` draws a band behind — is
-///   `CPDFSDK_AppStream::SetAsListBox` by way of
-///   `CPDF_FormField::GetSelectedIndex` (`:GetSelectedIndex`), which reads
-///   `GetValueOrSelectedIndicesObject` — **`/V` first**, `/I` only when there
-///   is no `/V` — and then matches each entry's *text* against the option
-///   values, so an integer index matches nothing. That is
-///   `ap::field_body::selected_indices`, and it is deliberately the
-///   other way round.
+///   key or an embedder's query asks — consults **`/I` first**, as integer
+///   indices, and falls back to `/V` only when `/I` is not usable. That is
+///   this function.
+/// - **Appearance** — what the generated `/AP` draws a band behind — reads
+///   **`/V` first**, `/I` only when there is no `/V`, and then matches each
+///   entry's *text* against the option values, so an integer index matches
+///   nothing. That is `ap::field_body::selected_indices`, and it is
+///   deliberately the other way round.
 ///
 /// So `listbox_form.pdf`'s `Listbox_MultiSelectMultipleIndices` — `/I [1 3]`
 /// and no `/V` — draws **no** selection band while an embedder asking about
@@ -919,8 +912,7 @@ fn merge(base: &Dict, overlay: &Dict) -> Dict {
 ///
 /// # What "usable" means
 ///
-/// `indices_are_usable` is the test, from `UseSelectedIndicesObject`
-/// (`cpdf_formfield.cpp:863-950`), and it is strict because its job is to
+/// `indices_are_usable` is the test, and it is strict because its job is to
 /// catch a stale `/I` left behind by an editor that rewrote `/V`. `/I` is
 /// usable when either
 ///
@@ -1789,8 +1781,8 @@ mod tests {
     }
 
     /// The rule the whole feature turns on: no `/CO`, no calculation. Falling
-    /// back to "every field" here would recalculate documents the oracle
-    /// leaves alone (`cpdf_interactiveform.cpp:739-745`).
+    /// back to "every field" here would recalculate documents that must be
+    /// left alone.
     #[test]
     fn a_document_with_no_calculation_order_calculates_nothing() {
         assert_eq!(order_of(None), Vec::<usize>::new());

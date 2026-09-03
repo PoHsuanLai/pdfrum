@@ -56,12 +56,10 @@
 //!
 //! [`Config::font_size`] is a **request**, and `0.0` is the request for
 //! automatic sizing. [`crate::vt::layout`] resolves it — picking the largest
-//! step that fits, exactly as `CPVT_VariableText::Rearrange`
-//! (`core/fpdfdoc/cpvt_variabletext.cpp:834-846`) does — and records the
-//! answer in [`Layout::font_size`], which is the field upstream's
-//! `SetFontSize(GetAutoFontSize())` writes and every later `GetFontSize()`
-//! reads. So the size that placed the words is the layout's, and the
-//! caller's `Config` still holds the zero it asked with.
+//! step that fits — and records the answer in [`Layout::font_size`]. That
+//! resolved value is what every later measurement reads, so the size that
+//! placed the words is the layout's, and the caller's `Config` still holds
+//! the zero it asked with.
 //!
 //! Every query over a line the layout **has** therefore measures with
 //! [`Layout::font_size`]. Measuring with the config's instead is not a
@@ -177,11 +175,9 @@ impl Place {
 ///
 /// `#[derive(Default)]` would zero all three fields, and a zero `word` is the
 /// position *after* the first character — a different, valid-looking caret
-/// that no layout ever means by "the default". `GetBeginWordPlace`
-/// (`core/fpdfdoc/cpvt_variabletext.cpp:413-415`) is `(0, 0, -1)`, and a
-/// `CPVT_WordPlace` left unset is `(-1, -1, -1)`, which is not a position at
-/// all. Between the two, the one a caller reaching for a default wants is the
-/// beginning.
+/// that no layout ever means by "the default". The beginning of the text is
+/// section 0, line 0, and **no** word, which is what a caller reaching for a
+/// default wants.
 impl Default for Place {
     fn default() -> Place {
         Place::START
@@ -624,29 +620,21 @@ fn line_extent(layout: &Layout, config: &Config, metrics: &Metrics<'_>, place: P
 ///
 /// # A wrapped line's header is not a position of its own
 ///
-/// `place_at_point` names the *line header* — `word == -1` — for a click left
-/// of every midpoint on a line, and on a wrapped line that header is the same
-/// caret position as the end of the line above it. Upstream folds the two
-/// before counting: `WordPlaceToWordIndex`
-/// (`core/fpdfdoc/cpvt_variabletext.cpp:361-379`) runs `UpdateWordPlace`
-/// first, whose `PrevLineHeaderPlace` (`:715-720`) is
-///
-/// ```cpp
-/// if (place.nWordIndex < 0 && place.nLineIndex > 0)
-///     return GetPrevWordPlace(place);
-/// ```
-///
-/// So the header of line 1 of a section whose first line holds characters
-/// `0..=4` counts as **5**, not 0. Skipping the fold is not a rounding
-/// difference: it sends a caret clicked at the start of a wrapped line to the
-/// start of the whole field, and the next keystroke lands there.
+/// `place_at_point` names the *line header* — a place with no word — for a
+/// click left of every midpoint on a line, and on a wrapped line that header
+/// is the same caret position as the end of the line above it. The two are
+/// folded together before anything is counted: a header on any line but the
+/// first becomes the place of the character preceding it. So the header of
+/// line 1 of a section whose first line holds characters `0..=4` counts as
+/// **5**, not 0. Skipping the fold is not a rounding difference: it sends a
+/// caret clicked at the start of a wrapped line to the start of the whole
+/// field, and the next keystroke lands there.
 ///
 /// # A place past the layout
 ///
-/// Clamped to the end, and the clamp counts **no trailing section break** —
-/// `WordPlaceToWordIndex`'s loop adds `kReturnLength` only when `i != sz - 1`
-/// (`:372-374`), so an out-of-range section index yields the last section's
-/// end rather than one past it.
+/// Clamped to the end, and the clamp counts **no trailing section break**, so
+/// an out-of-range section index yields the last section's end rather than
+/// one past it.
 #[must_use]
 pub fn word_index_of_place(layout: &Layout, place: Place) -> usize {
     // The fold, before anything is counted. A header on the first line has no
@@ -1028,11 +1016,10 @@ mod tests {
     /// A wrapped line's header is the previous line's end, and it is a
     /// *caret position*, not zero.
     ///
-    /// `PrevLineHeaderPlace` (`cpvt_variabletext.cpp:715-720`) folds
-    /// `word < 0 && line > 0` onto `GetPrevWordPlace` before
-    /// `WordPlaceToWordIndex` counts anything. Without the fold a click at
-    /// the start of the second visual line reports index 0 — the start of the
-    /// whole field — and the next keystroke is inserted there.
+    /// A header on any line but the first folds onto the place before it
+    /// before the count begins. Without the fold a click at the start of the
+    /// second visual line reports index 0 — the start of the whole field —
+    /// and the next keystroke is inserted there.
     #[test]
     fn a_wrapped_lines_header_indexes_to_the_end_of_the_line_above() {
         // `tens()` is ten thousandths of an em, so at 10pt each character
@@ -1064,9 +1051,8 @@ mod tests {
     /// A place naming a section the layout does not have is the end, and the
     /// end is not one past it.
     ///
-    /// `WordPlaceToWordIndex`'s loop adds `kReturnLength` only when
-    /// `i != sz - 1` (`cpvt_variabletext.cpp:372-374`), so the clamp counts no
-    /// trailing section break.
+    /// The section-break character is counted between sections and not after
+    /// the last one, so the clamp adds no trailing break.
     #[test]
     fn a_place_past_the_last_section_indexes_to_the_very_end() {
         let config = Config {
@@ -1316,14 +1302,11 @@ mod tests {
 
     /// The four caret positions of a right-to-left word, in place order.
     ///
-    /// `CPVT_Word::CaretX` (`core/fpdfdoc/cpvt_word.h:42`) is
-    /// `is_rtl ? x : x + width`, and
-    /// `CPVT_VariableText::Iterator::GetLineCaretX`
-    /// (`core/fpdfdoc/cpvt_variabletext.cpp:103-118`) answers
-    /// `line.ptLine.x + line.fLineWidth` when the line's first word is
-    /// right-to-left. Together they walk the caret **leftward** as the place
-    /// advances: the header sits at the run's right end and each further
-    /// character moves it one advance left.
+    /// A character's caret sits at its own left edge when the run is
+    /// right-to-left rather than at its trailing edge, and the line header
+    /// sits at the line's *right* end. Together those walk the caret
+    /// **leftward** as the place advances: the header at the run's right end,
+    /// each further character one advance left of the last.
     ///
     /// Adding the advance in both directions instead — which is what a
     /// left-to-right-only port does — gives `1, 19, 13, 7`: the header at the
@@ -1417,24 +1400,23 @@ mod tests {
     /// A click in a right-to-left run answers one of the run's two ends, and
     /// the **middle** character's midpoint is what divides them.
     ///
-    /// The predicate `SearchWordPlaceImpl` bisects on
-    /// (`core/fpdfdoc/cpvt_section.cpp:412-424`) is monotone only along a
-    /// left-to-right line. Down a descending run the bisection's first probe
-    /// is the middle character, and the answer follows that one probe alone:
-    /// a click **left** of its midpoint narrows to index 0, whose own
-    /// midpoint is the run's *rightmost*, so the post-loop test there fails
-    /// and the answer is the header; a click right of it narrows to the last
-    /// index, whose midpoint is the run's *leftmost*, which the click is past.
+    /// The word search is a **bisection**, and the midpoint predicate it
+    /// bisects on is monotone only along a left-to-right line. Down a
+    /// descending run the first probe is the middle character and the answer
+    /// follows that one probe alone: a click **left** of its midpoint narrows
+    /// to index 0, whose own midpoint is the run's *rightmost*, so the
+    /// post-loop test there fails and the answer is the header; a click right
+    /// of it narrows to the last index, whose midpoint is the run's
+    /// *leftmost*, which the click is past.
     ///
     /// The two places are the run's two logical ends — its beginning and its
     /// end — and in a right-to-left run those are drawn at the right and left
     /// edges respectively. So the caret crosses the whole run at the middle
-    /// character's midpoint rather than stepping character by character. That
-    /// is upstream's behaviour and not an approximation of it: the assertion
-    /// here is the transcription, not a claim that it is the nicest answer.
-    /// What a scan-based port does instead is worse and not merely
-    /// different — it answers the header for **every** click in the run, so
-    /// the caret never moves at all.
+    /// character's midpoint rather than stepping character by character. The
+    /// assertion here is that transcription, not a claim that it is the
+    /// nicest answer. What a scan-based search does instead is worse and not
+    /// merely different — it answers the header for **every** click in the
+    /// run, so the caret never moves at all.
     #[test]
     fn a_click_in_a_right_to_left_run_answers_the_end_the_bisection_narrows_to() {
         let (config, metrics, layout) = rtl_run();

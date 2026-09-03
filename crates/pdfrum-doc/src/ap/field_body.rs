@@ -555,11 +555,10 @@ fn face_for(
 ///
 /// # Only the selected glyphs are white
 ///
-/// A selection whitens the text it covers and nothing else. `DrawEdit`
-/// (`fpdfsdk/pwl/cpwl_edit_impl.cpp:650-653`) switches the fill colour per
-/// word — white for `place > wrSelect.BeginPos && place <= wrSelect.EndPos`,
-/// `crTextFill` for everything else — so a partial selection leaves the
-/// unselected characters in the field's own colour.
+/// A selection whitens the text it covers and nothing else: the fill colour
+/// switches per word, white inside the selected range and the field's own
+/// colour outside it, so a partial selection leaves the unselected
+/// characters dark.
 ///
 /// [`Highlight`] carries rectangles rather than a character range, so the
 /// split is made geometrically instead of by place: the run is set twice,
@@ -1101,22 +1100,19 @@ pub fn field_value<R: Resolve>(dict: &Dict, r: &R) -> String {
 ///
 /// # This is the appearance's answer, and it is not the only one
 ///
-/// Upstream reads `/V` and `/I` **two different ways**, and they disagree.
-/// This function is the one that draws:
-/// `CPDFSDK_AppStream::SetAsListBox` asks `CPDF_FormField::GetSelectedIndex`,
-/// which reads `GetValueOrSelectedIndicesObject` — `/V` first, `/I` only in
-/// its absence — and then matches each entry's text against the option
-/// values (`core/fpdfdoc/cpdf_formfield.cpp`, `GetSelectedIndex`). An integer
+/// `/V` and `/I` are read **two different ways**, and the two disagree. This
+/// function is the one that draws: `/V` first, `/I` only in its absence, and
+/// then each entry's text matched against the option values. An integer
 /// index has no text that names an option, so `/I` alone draws no band.
 ///
 /// The *interaction* reader is the other way round and lives in
 /// [`crate::form::selected_indices_for_interaction`]: `/I` first, as indices,
 /// with `/V` as the fallback. `listbox_form.pdf`'s
 /// `Listbox_MultiSelectMultipleIndices` is the fixture where the two part
-/// company — the oracle's `--annot` dump shows five text objects and **no**
-/// path for it, while an embedder asking about its rows is told 1 and 3 are
-/// selected. Making this function follow the interaction rule turns that
-/// fixture's row red; the two readers have to stay apart.
+/// company — it draws five text objects and **no** selection path, while an
+/// embedder asking about its rows is told 1 and 3 are selected. Making this
+/// function follow the interaction rule turns that fixture's row red; the
+/// two readers have to stay apart.
 #[must_use]
 pub(crate) fn selected_indices<R: Resolve>(dict: &Dict, options: &[Choice], r: &R) -> Vec<usize> {
     let Some(value) = inherited(dict, names::V, r).or_else(|| inherited(dict, names::I, r)) else {
@@ -1757,11 +1753,10 @@ mod tests {
     /// A partial selection leaves the unselected glyphs in the field's own
     /// colour.
     ///
-    /// `CPWL_EditImpl::DrawEdit` (`fpdfsdk/pwl/cpwl_edit_impl.cpp:650-653`)
-    /// sets white only for words inside the selected range —
-    /// `place > wrSelect.BeginPos && place <= wrSelect.EndPos` — and leaves
-    /// everything else in `crTextFill`. Whitening the whole run because *a*
-    /// band exists draws the unselected text white on the untinted field.
+    /// White is set only for the words inside the selected range; everything
+    /// else keeps the field's text colour. Whitening the whole run because
+    /// *a* band exists draws the unselected text white on the untinted
+    /// field.
     #[test]
     fn a_partial_selection_leaves_the_unselected_run_in_the_fields_colour() {
         let band = geom::rect(120.0, 104.0, 140.0, 120.0);
@@ -1839,10 +1834,9 @@ mod tests {
     /// font writes the Latin, and the second face writes the Hebrew under its
     /// own alias, with a `Tf` at each crossing.
     ///
-    /// The dictionary the second face adds is in the appearance's own
-    /// resources beside the first — `AddFontToAnnotDict`
-    /// (`core/fpdfdoc/cpdf_bafontmap.cpp:318-357`) — because a `Tf` naming a
-    /// resource the stream does not carry sets no font at all.
+    /// The dictionary the second face adds goes in the appearance's own
+    /// resources beside the first, because a `Tf` naming a resource the
+    /// stream does not carry sets no font at all.
     #[test]
     fn a_value_the_da_font_cannot_write_switches_to_a_second_face() {
         let cache = pdfrum_font::FontCache::new();

@@ -1,52 +1,48 @@
 //! Painting a page's annotation appearances onto the page.
 //!
-//! `pdfium_test --png` seeds its render flags with `FPDF_ANNOT`
-//! unconditionally (`pdfium_test.cc:220`), so an annotation's `/AP` form is
-//! part of the page image rather than an overlay a viewer adds. But it does
-//! not all arrive by one route, and the split is the thing to know:
+//! An annotation's `/AP` form is part of the page image rather than an
+//! overlay a viewer adds. But it does not all arrive by one route, and the
+//! split is the thing to know:
 //!
-//! - **Pass A** is the page render. `CPDFSDK_RenderPage` builds a
-//!   `CPDF_AnnotList` and calls `DisplayAnnots(..., bShowWidget=false)`, whose
-//!   `DisplayPass` skips every `/Widget` (`cpdf_annotlist.cpp:250-253`). So
-//!   the page render draws the *non*-widgets.
-//! - **Pass B** is `FPDF_FFLDraw`, which `pdfium_test` calls after every
-//!   bitmap render with no flag guard at all (`pdfium_test.cc:1045-1050`).
-//!   That is where widgets are drawn, one at a time through their own
-//!   one-layer render context.
+//! - **Pass A** is the page render, and it draws the *non*-widgets: the walk
+//!   over the annotation list skips every `/Widget`.
+//! - **Pass B** is the form-fill draw that follows every bitmap render,
+//!   unconditionally. That is where widgets are drawn, one at a time through
+//!   their own one-layer render context.
 //!
-//! Both end in the same `AnnotGetMatrix` arithmetic and both draw the normal
+//! Both end in the same placement arithmetic and both draw the normal
 //! appearance, so one traversal reproduces them — but **their visibility
 //! tests differ**, and merging them would be wrong:
 //!
-//! | test | Pass A (`DisplayPass`) | Pass B (`CPDFSDK_BAAnnot::IsVisible`) |
+//! | flag | Pass A (non-widgets) | Pass B (widgets) |
 //! |---|---|---|
-//! | `kInvisible` (bit 1) | not tested | **suppresses** |
-//! | `kHidden` (bit 2) | suppresses | suppresses |
-//! | `kPrint` (bit 3) | required when printing | not tested |
-//! | `kNoView` (bit 6) | suppresses on screen | suppresses |
+//! | `Invisible` (bit 1) | not tested | **suppresses** |
+//! | `Hidden` (bit 2) | suppresses | suppresses |
+//! | `Print` (bit 3) | required when printing | not tested |
+//! | `NoView` (bit 6) | suppresses on screen | suppresses |
 //!
-//! `is_visible` therefore keys on the subtype: a widget goes through Pass B's
-//! rules and everything else through Pass A's, which is the only place the
-//! `kInvisible` bit is read.
+//! `is_visible` therefore keys on the subtype: a widget goes through Pass
+//! B's rules and everything else through Pass A's, which is the only place
+//! the `Invisible` bit is read.
 //!
 //! Two more decisions change pixels and neither is obvious from the spec:
 //!
-//! - **The appearance is placed by fitting, not by translating.**
-//!   `CFX_Matrix::MatchRect` (`fx_coordinates.cpp:430`) fits the form's
-//!   `/BBox` — mapped through the form's own `/Matrix` and re-bounded — into
-//!   the annotation's `/Rect`, so a form whose `BBox` is a different size
-//!   from the rect is *scaled* to it. A degenerate axis takes scale **1**, not
-//!   zero, and the skew terms are forced to zero whatever `/Matrix` said.
-//! - **Order is `/Annots` order.** Pass B stable-sorts by a layout order that
-//!   is 1 for pop-ups and 5 for everything else, so among non-pop-ups nothing
-//!   moves. Later annotations paint over earlier ones with no z-ordering of
-//!   their own; `bug_1304714.in` stacks three widgets to pin exactly that.
+//! - **The appearance is placed by fitting, not by translating.** The form's
+//!   `/BBox` — mapped through the form's own `/Matrix` and re-bounded — is
+//!   fitted into the annotation's `/Rect`, so a form whose `BBox` is a
+//!   different size from the rect is *scaled* to it. A degenerate axis takes
+//!   scale **1**, not zero, and the skew terms are forced to zero whatever
+//!   `/Matrix` said.
+//! - **Order is `/Annots` order.** The only sort is a stable one that lifts
+//!   pop-ups above everything else, so among non-pop-ups nothing moves. Later
+//!   annotations paint over earlier ones with no z-ordering of their own;
+//!   `bug_1304714.in` stacks three widgets to pin exactly that.
 //!
-//! A pop-up is in the list and painted only while it is **open**:
-//! `ShouldDrawAnnotation` requires `open_state_`, and the one thing that sets
-//! it is the pointer entering the *parent* annotation's rectangle. So a plain
-//! render draws no note cards at all, and a render driven by a script that
-//! moves the mouse over an annotated passage draws exactly one.
+//! A pop-up is in the list and painted only while it is **open**, and the one
+//! thing that opens it is the pointer entering the *parent* annotation's
+//! rectangle. So a plain render draws no note cards at all, and a render
+//! driven by a script that moves the mouse over an annotated passage draws
+//! exactly one.
 
 use pdfrum_common::{Diagnostics, Limits};
 use pdfrum_object::{ByteSpan, Dict, Resolve, Stream};
@@ -60,9 +56,8 @@ use crate::names;
 /// Appends every visible annotation's appearance to a built page.
 ///
 /// The page's own resources are the fallback for an appearance form that
-/// declares none: `CPDF_Annot::GetAPForm` constructs its `CPDF_Form` with
-/// `pPage->GetMutableResources()`, so a form with no `/Resources` of its own
-/// resolves names against the page.
+/// declares none, so a form with no `/Resources` of its own resolves names
+/// against the page.
 pub fn overlay<R: Resolve>(
     page: &mut Page,
     page_dict: &Dict,
@@ -326,17 +321,14 @@ fn push_open_popup<R: Resolve>(
 /// earns, after its appearance is down.
 ///
 /// The two are **exclusive**, and that exclusivity is the whole of this
-/// function. `CFFL_InteractiveFormFiller::OnDraw`
-/// (`cffl_interactiveformfiller.cpp:68-95`) is one `if`/`else` over whether
-/// the widget has a live form-field control:
+/// function. Whether a widget has a live form-field control behind it decides
+/// which it gets:
 ///
-/// - With one (`:69-83`) it draws the control's own appearance, and then
-///   *returns* — through one of three exits, none of which reaches the tint.
-///   It returns immediately when the widget is not the focus annotation, it
-///   returns when the focus box comes back empty, and it returns after
-///   stroking the focus rectangle. **A widget being edited is never tinted.**
-/// - Without one (`:85-94`) it draws the file's appearance and then
-///   `DrawShadow` — the tint.
+/// - With one, the control's own appearance is drawn and the pass then ends —
+///   whether the widget is not the focused one, or the focus box came back
+///   empty, or the focus rectangle was stroked. **A widget being edited is
+///   never tinted.**
+/// - Without one, the file's appearance is drawn and the tint goes over it.
 ///
 /// A live control exists only for a widget an event has reached, and a
 /// session focuses one field at a time, so the focused annotation is the one
@@ -364,30 +356,30 @@ fn push_chrome<R: Resolve>(
 
 /// The dashed black rectangle stroked around a focused widget's focus box.
 ///
-/// `CFX_DrawUtils::DrawFocusRect` (`core/fxge/cfx_drawutils.cpp:16-39`) walks
-/// the box's four corners as an explicit move-and-four-lines path — top-left,
-/// bottom-left, bottom-right, top-right, back to top-left — and strokes it
-/// with a `CFX_GraphStateData` carrying nothing but `set_dash_array({1.0f})`.
-/// Everything else is that struct's defaults (`cfx_graphstatedata.h:52-55`):
-/// width **1.0**, phase **0**, butt caps, miter joins. The colour is
-/// `ArgbEncode(255, 0, 0, 0)` — opaque black — and the fill argb is **0**, so
-/// the `EvenOddOptions()` beside it names a rule for a fill that never
-/// happens. That is [`pdfrum_page::FillRule::None`] here, the same spelling
+/// The path is the box's four corners walked explicitly — top-left,
+/// bottom-left, bottom-right, top-right, back to top-left — stroked in opaque
+/// black with a one-on-one-off dash: width **1.0**, phase **0**, butt caps,
+/// miter joins, all of them the stroke defaults. Nothing is filled, which is
+/// [`pdfrum_page::FillRule::None`] here, the same spelling
 /// [`invalid_outline`] uses for the same reason.
+// The oracle's spelling of that: CFX_DrawUtils::DrawFocusRect
+// (core/fxge/cfx_drawutils.cpp:16-39) strokes with a CFX_GraphStateData
+// carrying nothing but set_dash_array({1.0f}); the rest is that struct's own
+// defaults (cfx_graphstatedata.h:52-55). Its fill argb is 0, so the
+// EvenOddOptions() beside it names a rule for a fill that never happens.
 ///
 /// # Which widgets have a focus box at all
 ///
 /// Most have none, and the empty answer is not an edge case — it is the
-/// common one. `CFFL_FormField::GetFocusBox` (`cffl_formfield.cpp:480-489`)
-/// asks the live control for `GetFocusRect`, and the overrides disagree:
+/// common one. The live control decides, and the controls disagree:
 ///
-/// | control | `GetFocusRect` | box |
+/// | control | focus rectangle | box |
 /// |---|---|---|
-/// | `CPWL_Edit` — text field (`cpwl_edit.cpp:313-315`) | empty | none |
-/// | `CPWL_ComboBox` — combo box (`cpwl_combo_box.cpp:321-323`) | empty | none |
-/// | `CPWL_ListBox`, multi-select (`cpwl_list_box.cpp:227-234`) | the caret item's rectangle, clipped to the client area | [`ap::FocusBox::Rect`] |
-/// | `CPWL_ListBox`, single-select, and the buttons | `CPWL_Wnd::GetFocusRect` (`cpwl_wnd.cpp:713-719`) — the window rectangle inflated by 1 | [`ap::FocusBox::Inflated`] |
-/// | `CPWL_PushButton` (`cpwl_special_button.cpp:21-24`) | the window rectangle *deflated* by the border width | [`ap::FocusBox::Rect`] |
+/// | text field | empty | none |
+/// | combo box | empty | none |
+/// | list box, multi-select | the caret item's rectangle, clipped to the client area | [`ap::FocusBox::Rect`] |
+/// | list box, single-select, and the check box and radio button | the widget rectangle inflated by 1 | [`ap::FocusBox::Inflated`] |
+/// | push button | the widget rectangle *deflated* by the border width | [`ap::FocusBox::Rect`] |
 ///
 /// So a focused text field draws no outline whatever, which is what the four
 /// `form_textfield_focused_*` goldens carry: a caret and glyphs over plain
@@ -403,12 +395,11 @@ fn push_chrome<R: Resolve>(
 ///
 /// # The page-space clip that is not applied here
 ///
-/// `GetFocusBox` also drops the rectangle when the page's `/MediaBox` does
-/// not *contain* it (`cffl_formfield.cpp:487-488`), which is a containment
-/// test rather than an intersection — a box hanging one unit off the page
-/// edge is discarded whole. That test belongs to whoever computes the
-/// rectangle, because it needs the page box; this function strokes what it is
-/// given.
+/// The rectangle is also dropped outright when the page's `/MediaBox` does
+/// not *contain* it — a containment test rather than an intersection, so a
+/// box hanging one unit off the page edge is discarded whole rather than
+/// clipped. That test belongs to whoever computes the rectangle, because it
+/// needs the page box; this function strokes what it is given.
 #[must_use]
 fn focus_rect(annot: &Annotation, box_: ap::FocusBox) -> Option<pdfrum_page::PageObject> {
     let rect = match box_ {
@@ -462,7 +453,7 @@ fn focus_rect(annot: &Annotation, box_: ap::FocusBox) -> Option<pdfrum_page::Pag
     )))
 }
 
-/// A rectangle with its corners sorted, which is `CFX_FloatRect::Normalize`.
+/// A rectangle with its corners sorted.
 fn normalized(rect: kurbo::Rect) -> kurbo::Rect {
     kurbo::Rect::new(
         rect.x0.min(rect.x1),
@@ -480,13 +471,12 @@ fn normalized(rect: kurbo::Rect) -> kurbo::Rect {
 /// This is the second of two `/AP` tests that read almost the same and answer
 /// differently, and keeping them apart is the whole of this function:
 ///
-/// - **Shallow** — `!!GetDictFor("AP")` (`cpdfsdk_baannot.cpp:85-87`). Gates
-///   *regeneration*, in `CPDFSDK_Widget::OnLoad`. A widget with any `/AP`
-///   dictionary is never given a new appearance, however unusable that
-///   dictionary is. [`ap::widget::needs_appearance`] is this one.
-/// - **Deep** — `IsWidgetAppearanceValid` (`cpdfsdk_widget.cpp:364-406`).
-///   Gates *this outline*, in `CPDFSDK_Widget::DrawAppearance`. For a checkbox
-///   or radio button it requires `/AP /N /<AS>` to resolve to a **stream**.
+/// - **Shallow** — is there an `/AP` dictionary at all? Gates
+///   *regeneration*: a widget with any `/AP` dictionary is never given a new
+///   appearance, however unusable that dictionary is.
+///   [`ap::widget::needs_appearance`] is this one.
+/// - **Deep** — gates *this outline*. For a checkbox or radio button it
+///   requires `/AP /N /<AS>` to resolve to a **stream**.
 ///
 /// A radio button whose `/AP /N` lists only its on-state while `/AS` reads
 /// `Off` passes the first and fails the second: it keeps having no appearance
@@ -498,16 +488,15 @@ fn normalized(rect: kurbo::Rect) -> kurbo::Rect {
 /// - **Only checkboxes and radio buttons.** Every other field type — and every
 ///   non-widget — falls to the ordinary appearance path. A push button with an
 ///   unusable `/AP` draws nothing at all.
-/// - **The state is `/AS` alone.** `GetAppState` reads `/AS` and stops; the
-///   `/V`-and-`/Parent` fallback that [`annot_ap`] performs is a different
-///   function, and a widget with no `/AS` therefore looks up the empty state
-///   name and fails here even where `annot_ap` would have found `Off`.
+/// - **The state is `/AS` alone.** The `/V`-and-`/Parent` fallback that
+///   [`annot_ap`] performs is not consulted here, so a widget with no `/AS`
+///   looks up the empty state name and fails this test even where `annot_ap`
+///   would have found `Off`.
 /// - **The rectangle is `/Rect`, normalized, with no border inset**, stroked
 ///   at line width zero — a hairline, which this engine draws as the thinnest
 ///   line the device has.
 fn invalid_outline<R: Resolve>(annot: &Annotation, r: &R) -> Option<pdfrum_page::PageObject> {
-    /// `0xFFAAAAAA`, the one grey `CPDFSDK_Widget::DrawAppearance` strokes
-    /// with (`cpdfsdk_widget.cpp:969`).
+    /// `0xAA` on every channel: the one grey this outline is stroked with.
     const OUTLINE_GREY: f32 = 0xAA_u8 as f32 / 255.0;
 
     if annot.subtype != Subtype::Widget {
@@ -587,41 +576,38 @@ fn state_appearance_resolves<R: Resolve>(dict: &Dict, r: &R) -> bool {
     states.stream(&pdfrum_object::Name::new(state), r).is_some()
 }
 
-/// The form-field highlight `pdfium_test` paints over every fillable widget.
+/// The form-field highlight painted over every fillable widget.
 ///
 /// This is a **host** decision, not a document one, and it is why so many
-/// otherwise-correct form pages differ by a flat tint over every field.
-/// `pdfium_test` opens with
-///
-/// ```text
-/// FPDF_SetFormFieldHighlightColor(form.get(), FPDF_FORMFIELD_UNKNOWN, 0xFFE4DD);
-/// FPDF_SetFormFieldHighlightAlpha(form.get(), 100);
-/// ```
-///
-/// (`pdfium_test.cc:1776-1777`), and `CPDFSDK_Widget::DrawShadow`
-/// (`cpdfsdk_widget.cpp:982-1006`) then fills the widget's `/Rect` with that
-/// colour at that alpha once the appearance is down.
+/// otherwise-correct form pages differ by a flat tint over every field: once
+/// the appearance is down, the widget's `/Rect` is filled with the host's
+/// highlight colour at the host's highlight alpha.
 ///
 /// Three things about it are easy to get wrong:
 ///
-/// - **`FX_COLORREF` is BGR.** `0xFFE4DD` is blue `0xFF`, green `0xE4`, red
+/// - **The colour word is BGR.** `0xFFE4DD` is blue `0xFF`, green `0xE4`, red
 ///   `0xDD` — a pale blue, not the pink the hex reads as. Over white at
 ///   100/255 that is `(241, 244, 255)`, which is exactly what the goldens
 ///   carry.
-/// - **It is a hard-edged integer rect.** `FillRect` takes an `FX_RECT` and
-///   `ToFxRect` **truncates** every edge (`fx_coordinates.cpp:324-327`), so
-///   the tint covers `[floor(left), floor(right))` with no antialiasing on
-///   any side. A `/Rect` of `[100 100 200 130]` on a 200-tall page tints
-///   device rows 70..99 and columns 100..199 — 30 x 100 pixels exactly.
-/// - **It is gated on the *field's* flags, not the annotation's.**
-///   `IsReadOnly` reads `form_flags::kReadOnly`, bit **0** of the inherited
-///   `/Ff` (`constants/form_flags.h:13`), where the annotation's own
-///   `ReadOnly` is bit 6 of `/F`. A push button never tints
-///   (`IsFillingAllowed`), and neither does a widget with no `/FT` to
-///   classify, whose field type is `kUnknown` and which `IsNeedHighLight`
-///   refuses outright. A **signature** field is excluded one level higher
-///   still: `CPDFSDK_Widget::OnDraw` short-circuits it to `DrawAppearance`
-///   and never calls the form filler at all.
+/// - **It is a hard-edged integer rect.** Every edge is **truncated** to a
+///   whole device pixel, so the tint covers `[floor(left), floor(right))`
+///   with no antialiasing on any side. A `/Rect` of `[100 100 200 130]` on a
+///   200-tall page tints device rows 70..99 and columns 100..199 — 30 x 100
+///   pixels exactly.
+/// - **It is gated on the *field's* flags, not the annotation's.** The
+///   read-only test reads bit **0** of the inherited `/Ff`, where the
+///   annotation's own `ReadOnly` is bit 6 of `/F`. A push button never tints,
+///   and neither does a widget with no `/FT` to classify. A **signature**
+///   field is excluded one level higher still: it never reaches the form
+///   filler at all.
+// The host's two calls are FPDF_SetFormFieldHighlightColor(form,
+// FPDF_FORMFIELD_UNKNOWN, 0xFFE4DD) and FPDF_SetFormFieldHighlightAlpha(form,
+// 100) (pdfium_test.cc:1776-1777); CPDFSDK_Widget::DrawShadow
+// (cpdfsdk_widget.cpp:982-1006) is what paints them. The truncation is
+// ToFxRect (fx_coordinates.cpp:324-327); the read-only bit is
+// form_flags::kReadOnly (constants/form_flags.h:13); the /FT-less widget is
+// refused by IsNeedHighLight(kUnknown) and the push button by
+// IsFillingAllowed.
 fn highlight<R: Resolve>(
     annot: &Annotation,
     r: &R,
@@ -698,7 +684,7 @@ fn highlight<R: Resolve>(
 fn highlight_state() -> pdfrum_page::GraphicsState {
     /// `0xFFE4DD` as an `FX_COLORREF`: blue high, then green, then red.
     const HIGHLIGHT_BGR: u32 = 0x00FF_E4DD;
-    /// `FPDF_SetFormFieldHighlightAlpha(form.get(), 100)`.
+    /// The host's highlight alpha, 100 of 255.
     const HIGHLIGHT_ALPHA: f32 = 100.0 / 255.0;
 
     #[allow(clippy::cast_precision_loss)]
@@ -720,10 +706,19 @@ fn highlight_state() -> pdfrum_page::GraphicsState {
 
 /// Whether an annotation is painted at all on a screen render.
 ///
-/// The two passes disagree about `kInvisible`, so the subtype picks which
-/// test applies. Neither pass reads `kPrint` here, because
-/// `pdfium_test --png` is not printing: Pass A's `kPrint` requirement is
-/// gated on `bPrinting`, and Pass B has no print check at all.
+/// The two passes disagree about `Invisible`, so the subtype picks which test
+/// applies. Neither pass reads `Print` here, because a screen render is not
+/// printing: Pass A's `Print` requirement is gated on the printing flag, and
+/// Pass B has no print check at all.
+// Where the two passes come from: Pass A is CPDFSDK_RenderPage building a
+// CPDF_AnnotList and calling DisplayAnnots(..., bShowWidget=false), whose
+// DisplayPass skips every /Widget (cpdf_annotlist.cpp:250-253). Pass B is
+// FPDF_FFLDraw, which pdfium_test calls after every bitmap render with no
+// flag guard (pdfium_test.cc:1045-1050); its own test is
+// CPDFSDK_BAAnnot::IsVisible, which is the one that reads kInvisible.
+// pdfium_test --png seeds its flags with FPDF_ANNOT unconditionally
+// (pdfium_test.cc:220), which is why annotations are in the page image at
+// all.
 fn is_visible(subtype: Subtype, flags: crate::annot::AnnotFlags) -> bool {
     if subtype == Subtype::Popup {
         // A pop-up never draws on this walk. The file's own pop-ups are
@@ -1000,10 +995,10 @@ mod tests {
         );
     }
 
-    /// A focused text field draws no outline: `CPWL_Edit::GetFocusRect`
-    /// answers an empty rectangle and `OnDraw` returns at `:76-78`. All four
-    /// `form_textfield_focused_*` goldens carry a caret and glyphs over plain
-    /// white with no dashes anywhere.
+    /// A focused text field draws no outline: its focus rectangle comes back
+    /// empty and the pass ends there. All four `form_textfield_focused_*`
+    /// goldens carry a caret and glyphs over plain white with no dashes
+    /// anywhere.
     #[test]
     fn a_focus_box_of_none_strokes_nothing_but_still_suppresses_the_tint() {
         let widget = widget("Tx", 0);
@@ -1015,8 +1010,8 @@ mod tests {
         assert_eq!(focus_rect(&widget, ap::FocusBox::None), None);
     }
 
-    /// The dashed rectangle itself: `CFX_DrawUtils::DrawFocusRect` strokes
-    /// opaque black at width 1 with a one-unit dash array and fills nothing.
+    /// The dashed rectangle itself: opaque black, width 1, a one-unit dash
+    /// array, and nothing filled.
     #[test]
     fn a_focused_widget_strokes_a_dashed_black_hairline_over_its_focus_box() {
         let widget = widget("Tx", 0);
@@ -1120,9 +1115,9 @@ mod tests {
         );
     }
 
-    /// A degenerate box is `CFX_FloatRect::IsEmpty` and `OnDraw` returns at
-    /// `:76-78` without stroking — but the tint is still gone, because that
-    /// return is inside the live-control branch.
+    /// A degenerate box — zero wide or zero tall — strokes nothing, but the
+    /// tint is still gone, because that early return is inside the
+    /// live-control branch.
     #[test]
     fn an_empty_focus_box_strokes_nothing_and_does_not_bring_the_tint_back() {
         let widget = widget("Tx", 0);
