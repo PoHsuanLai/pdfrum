@@ -335,10 +335,10 @@ impl Pixmap {
 
     /// The straight-alpha BGRA bytes the oracle hashes and encodes.
     ///
-    /// `opaque` forces the alpha byte to `0xFF` without touching the colours,
-    /// which is what `FPDFBitmap_BGRx` does: a page with no transparency is
-    /// rendered into a 32bpp buffer whose fourth byte is padding, and the
-    /// golden MD5 is taken over that padding as `0xFF`.
+    /// `opaque` forces the alpha byte to `0xFF` without touching the colours.
+    /// A page with no transparency is rendered into a 32bpp buffer whose
+    /// fourth byte is padding, and a hash taken over these bytes sees that
+    /// padding as `0xFF` rather than as whatever the render left there.
     #[must_use]
     pub fn to_straight_bgra(&self, opaque: bool) -> Vec<u8> {
         let mut out = Vec::with_capacity(self.data.len());
@@ -629,10 +629,9 @@ mod tests {
 
     /// Audit item **A13**. Knockout composition, stated pixel-wise: where a
     /// later object has coverage it *replaces* the earlier one rather than
-    /// blending over it. That is the whole of §11.6.6's rule, and it is what
-    /// `RenderDeviceDriverIface::SetGroupKnockout` (an empty body at
-    /// `renderdevicedriver_iface.cpp:132` the AGG driver never overrides)
-    /// does not do.
+    /// blending over it. That is the whole of §11.6.6's rule.
+    // The oracle does not implement it: SetGroupKnockout is an empty body at
+    // renderdevicedriver_iface.cpp:132 that the AGG driver never overrides.
     #[test]
     fn knockout_replaces_rather_than_blending() {
         let red = peniko::Color::from_rgba8(255, 0, 0, 255);
@@ -661,9 +660,10 @@ mod tests {
         assert_eq!(base, before);
     }
 
-    /// Audit item **A12**. The two properties the formula has to have, and
-    /// which `cpdf_renderstatus.cpp` never gives it because it does not
-    /// implement removal at all.
+    /// Audit item **A12**. The two properties the backdrop-removal formula
+    /// has to have.
+    // The oracle gives it neither: cpdf_renderstatus.cpp does not implement
+    // backdrop removal at all.
     #[test]
     fn removing_the_backdrop_leaves_only_the_groups_own_contribution() {
         // 1. A pixel nothing was drawn over is pure backdrop, so the group
