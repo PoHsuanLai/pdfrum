@@ -768,32 +768,10 @@ impl RenderDevice for AggDevice {
                 // The layer already carries the clip, applied on the way in.
                 // Compositing it back through the clip a second time would
                 // darken every clipped edge by the clip's own coverage
-                // squared, so this blit runs unclipped.
-                let (w, h) = (pixels.width(), pixels.height());
-                let target = self.target();
-                let saved = target.clip().map(Arc::clone);
-                target.set_clip(None);
-                for y in 0..h {
-                    for x in 0..w {
-                        let Some(src) = pixels.pixel(x, y) else {
-                            continue;
-                        };
-                        if src[3] == 0 {
-                            continue;
-                        }
-                        let Ok(col) = i32::try_from(x) else { continue };
-                        let Ok(row) = i32::try_from(y) else { continue };
-                        target.blend_span(
-                            col,
-                            1,
-                            row,
-                            255,
-                            Source::Premultiplied(src),
-                            layer.blend,
-                        );
-                    }
-                }
-                target.set_clip(saved);
+                // squared, so this runs unclipped — which `composite_layer`
+                // is, rather than by saving and restoring the target's clip
+                // around a loop that would then have to re-read it per pixel.
+                self.target().composite_layer(&pixels, layer.blend);
             }
             None => {}
         }

@@ -84,8 +84,17 @@ impl Target {
     }
 
     /// The clip in force.
+    ///
+    /// Only the tests read it. The engine's own composites take the clip from
+    /// the field directly and the layer composite is unclipped by
+    /// construction, so a getter reachable from outside would be a surface
+    /// with no caller; `composite_layer_by_pixels` — the per-pixel spelling
+    /// kept as that hoist's specification — is the one thing that needs to
+    /// save and restore it, exactly as [`Target::clip_at`] is kept for
+    /// [`clip_span`].
+    #[cfg(test)]
     #[must_use]
-    pub fn clip(&self) -> Option<&Arc<AlphaMask>> {
+    fn clip(&self) -> Option<&Arc<AlphaMask>> {
         self.clip.as_ref()
     }
 
@@ -381,6 +390,77 @@ impl Target {
         }
     }
 
+    /// Composite a whole layer back onto this target, one row at a time.
+    ///
+    /// A layer's pixels are device-sized and device-aligned, so every
+    /// destination pixel takes exactly the source pixel at the same
+    /// coordinates and there is neither an offset to apply nor a column range
+    /// to clamp. The composite is unclipped: the layer already carries the
+    /// clip that was in force when it was pushed, applied on the way in, and
+    /// folding it in a second time would darken every clipped edge by the
+    /// clip's own coverage squared.
+    ///
+    /// # Why this is not a loop over [`Self::blend_span`]
+    ///
+    /// It was, at one pixel per call, and the per-call scaffolding cost two
+    /// orders of magnitude more than the blend it wrapped: [`Self::span_range`]
+    /// re-derived the row and the column clamp, [`clip_span`] re-decided
+    /// whether a clip was in force, the destination offset was recomputed from
+    /// scratch, and a `chunks_exact_mut` was set up — all of it to reach a
+    /// single four-byte pixel. None of it varies with the column, and on a
+    /// letter page that is half a million calls per layer.
+    ///
+    /// The arithmetic is untouched: the same [`blend_into`] over the same
+    /// [`Source::Premultiplied`] at the same full coverage in the same order,
+    /// so a composited layer lands on exactly the pixels the per-pixel loop
+    /// landed on. `a_layer_composite_matches_the_span_loop_it_replaced` is what
+    /// says the two agree, over every blend mode and a source with transparent,
+    /// partial and opaque pixels in it.
+    ///
+    /// The fully transparent source pixel is skipped **as an optimisation and
+    /// nothing more**. A zero-alpha source is already the identity under every
+    /// blend mode — the composite weights the blended colour by the source's
+    /// alpha, so at zero the destination survives whatever the mode computed —
+    /// and `a_transparent_source_pixel_is_the_identity_under_every_mode` checks
+    /// that over the whole destination space rather than leaving it argued.
+    /// The skip is worth keeping because a layer is mostly transparent, but
+    /// removing it would change no pixel.
+    pub fn composite_layer(&mut self, layer: &Pixmap, mode: BlendMode) {
+        // Rows and columns in common. A layer is built at the device's own
+        // size, so in practice these are both dimensions whole; taking the
+        // minimum rather than asserting keeps a mismatched layer to the
+        // overlap the per-pixel loop painted rather than panicking on it.
+        let rows = self.height().min(layer.height()) as usize;
+        let cols = self.width().min(layer.width()) as usize;
+        if rows == 0 || cols == 0 {
+            return;
+        }
+        let dest_stride = self.width() as usize * 4;
+        let src_stride = layer.width() as usize * 4;
+        let span = cols * 4;
+        let pixels = self.pixels.data_mut();
+        let src_all = layer.data();
+        for row in 0..rows {
+            let (Some(dest), Some(src)) = (
+                row.checked_mul(dest_stride)
+                    .and_then(|lo| pixels.get_mut(lo..lo.checked_add(span)?)),
+                row.checked_mul(src_stride)
+                    .and_then(|lo| src_all.get(lo..lo.checked_add(span)?)),
+            ) else {
+                continue;
+            };
+            for (dest, src) in dest.chunks_exact_mut(4).zip(src.chunks_exact(4)) {
+                let Ok(px) = <[u8; 4]>::try_from(src) else {
+                    continue;
+                };
+                if px[3] == 0 {
+                    continue;
+                }
+                blend_into(dest, Source::Premultiplied(px), 255, mode);
+            }
+        }
+    }
+
     /// Merge one `ClearType` glyph pixel: three coverages, three destination
     /// channels, each merged on its own alpha.
     ///
@@ -670,6 +750,125 @@ mod tests {
                             "dx={dx} dy={dy} alpha={alpha} clip={clip:?}"
                         );
                     }
+                }
+            }
+        }
+    }
+
+    /// Every blend mode, so a test over "all of them" is one list rather than
+    /// a list per test that could drift from the enum.
+    const ALL_BLEND_MODES: [BlendMode; 17] = [
+        BlendMode::Normal,
+        BlendMode::Compatible,
+        BlendMode::Multiply,
+        BlendMode::Screen,
+        BlendMode::Overlay,
+        BlendMode::Darken,
+        BlendMode::Lighten,
+        BlendMode::ColorDodge,
+        BlendMode::ColorBurn,
+        BlendMode::HardLight,
+        BlendMode::SoftLight,
+        BlendMode::Difference,
+        BlendMode::Exclusion,
+        BlendMode::Hue,
+        BlendMode::Saturation,
+        BlendMode::Color,
+        BlendMode::Luminosity,
+    ];
+
+    /// The spelling [`Target::composite_layer`] replaced: one
+    /// [`Target::blend_span`] per **pixel**, with the target's clip saved,
+    /// cleared and restored around the walk. Kept in the tests as the
+    /// *specification* the fast one is checked against, exactly as
+    /// [`blit_by_spans`] is kept for [`Target::blit_image`].
+    fn composite_layer_by_pixels(target: &mut Target, layer: &Pixmap, mode: BlendMode) {
+        let (w, h) = (layer.width(), layer.height());
+        let saved = target.clip().map(Arc::clone);
+        target.set_clip(None);
+        for y in 0..h {
+            for x in 0..w {
+                let Some(src) = layer.pixel(x, y) else {
+                    continue;
+                };
+                if src[3] == 0 {
+                    continue;
+                }
+                let (Ok(col), Ok(row)) = (i32::try_from(x), i32::try_from(y)) else {
+                    continue;
+                };
+                target.blend_span(col, 1, row, 255, Source::Premultiplied(src), mode);
+            }
+        }
+        target.set_clip(saved);
+    }
+
+    /// Compositing a layer row-at-a-time is byte-for-byte the per-pixel walk it
+    /// replaced, on every blend mode.
+    ///
+    /// The source is deliberately mixed — `noisy` gives it transparent, partial
+    /// and opaque pixels — because the transparent skip and the coverage are the
+    /// two things the hoist could have got wrong, and a flat source would hide
+    /// both. Every mode is run rather than `Normal` alone: the separable modes'
+    /// arithmetic is what the skipped pixel is skipped *for*, so a mode that
+    /// composited a zero source differently would be caught here and nowhere
+    /// else.
+    ///
+    /// A clip is set on both arms and must change neither: the layer already
+    /// carries the clip it was pushed under, and the composite is unclipped by
+    /// construction. A `composite_layer` that read `self.clip` would fail this.
+    #[test]
+    fn a_layer_composite_matches_the_span_loop_it_replaced() {
+        let layer = noisy(9, 7, 0x0123_4567);
+        for mode in ALL_BLEND_MODES {
+            for clip in [false, true] {
+                let seed = |t: &mut Target| {
+                    if clip {
+                        let mut mask = AlphaMask::filled(9, 7, 255);
+                        for (i, b) in mask.data_mut().iter_mut().enumerate() {
+                            *b = u8::try_from((i * 37) % 256).unwrap_or(0);
+                        }
+                        t.set_clip(Some(Arc::new(mask)));
+                    }
+                };
+                let mut fast = Target::new(9, 7, peniko::Color::WHITE);
+                seed(&mut fast);
+                fast.composite_layer(&layer, mode);
+
+                let mut slow = Target::new(9, 7, peniko::Color::WHITE);
+                seed(&mut slow);
+                composite_layer_by_pixels(&mut slow, &layer, mode);
+
+                assert_eq!(
+                    fast.pixels().data(),
+                    slow.pixels().data(),
+                    "mode={mode:?} clip={clip}"
+                );
+            }
+        }
+    }
+
+    /// A zero-alpha source pixel is the identity, under every blend mode and
+    /// over every destination — so [`Target::composite_layer`]'s skip of it is
+    /// an optimisation and cannot be a behaviour.
+    ///
+    /// Checked rather than argued, because the argument ("the composite weights
+    /// by the source alpha") is about `blend::composite_premultiplied`'s
+    /// internals and this is the property the skip actually rests on. Every
+    /// mode against a destination sweeping alpha and each channel, which is
+    /// what makes it a statement about the mode set rather than about one
+    /// pixel: a mode whose zero-source arithmetic escaped the alpha weighting
+    /// would fail here, and the skip would then be a divergence rather than a
+    /// hoist.
+    #[test]
+    fn a_transparent_source_pixel_is_the_identity_under_every_mode() {
+        for mode in ALL_BLEND_MODES {
+            for a in [0_u8, 1, 63, 128, 254, 255] {
+                for c in [0_u8, 1, 127, 254] {
+                    // Premultiplied, so no channel may exceed the alpha.
+                    let dest = [c.min(a), a.saturating_sub(c).min(a), c.min(a), a];
+                    let out = blend::composite_premultiplied(dest, [0, 0, 0, 0], 255, mode);
+                    assert_eq!(out, dest, "mode={mode:?} dest={dest:?}");
                 }
             }
         }
