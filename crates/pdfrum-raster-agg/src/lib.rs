@@ -1,57 +1,13 @@
 //! An analytic scanline rasterizer implementing `pdfrum-render`'s
-//! `RenderDevice` and `RasterBackend` traits, written for parity with the
-//! oracle's own scan converter.
+//! `RenderDevice` and `RasterBackend` traits.
 //!
-//! # Why a third backend
-//!
-//! The two existing backends are third-party rasterizers wrapped behind the
-//! trait, and each brings its own idea of what a partially covered pixel is
-//! worth. `tiny-skia` supersamples at four subsamples per axis: a diagonal
-//! edge therefore has **seventeen** distinct coverage levels, and a
-//! half-covered pixel quantises to 8/16 of the range rather than to a half.
-//! The oracle integrates the covered area analytically and writes the exact
-//! value. Over the corpus that difference is a persistent few-count spread
-//! along every non-axis-aligned edge — measured as the population sitting
-//! between SSIM 0.95 and 0.99 with no image, shading, pattern or soft mask on
-//! the page.
-//!
-//! This backend closes that by construction rather than by correction: it
-//! computes the same integral the oracle computes, on the same 256ths-of-a-
-//! pixel grid, and maps coverage to alpha through the same measured formula.
-//! It exists for parity, and the two wrapped backends stay exactly where they
-//! are — `vello_cpu` remains the facade's default for API users, who want a
-//! fast production rasterizer rather than a byte-comparable one.
-//!
-//! # What "AGG parity" means here, and what it does not
-//!
-//! *Renamed 2026-09-02; this crate was `pdfrum-raster-exact` and this section
-//! read "What exact means here".* The content is unchanged, because the claim
-//! always was about AGG: **AGG** is Anti-Grain Geometry, the scan converter
-//! PDFium draws with (`core/fxge/agg`), and parity means this backend
-//! reproduces AGG's coverage integral on AGG's own 256ths-of-a-pixel grid.
-//!
-//! The parity is over the *coverage integral* and the arithmetic downstream
-//! of it: a pixel's alpha is `min(255, floor(coverage * 256))` of the true
-//! geometric coverage, every intermediate value is an integer, and no step
-//! samples. It does not mean the whole page matches the oracle byte for byte —
-//! glyph rendering, image resampling kernels and the engine's own decisions
-//! are all upstream of this crate and unchanged by it.
-//!
-//! # The design in one paragraph
-//!
-//! [`pdfrum_render::scanline`] holds the rasterizer: kurbo flattens curves,
-//! each segment is integrated into per-pixel `(cover, area)` cells, and a sweep
-//! turns the sorted cells into spans of constant coverage. It lives in the
-//! engine rather than here because the engine's own glyph path needs the same
-//! integrator, and a glyph bitmap must not depend on which rasterizer draws the
-//! page. This crate's own two modules are private, because
-//! [`AggBackend`] is the whole of what it offers: `target` holds the pixel
-//! buffer, the clip — a coverage plane multiplied in per pixel, which is how
-//! the oracle's clip region works too — and the span blitter, and `image`
-//! holds the inverse-mapped image sampler. The compositing arithmetic itself is
-//! **`pdfrum-render`'s**, not this crate's: `blend::composite_premultiplied`
-//! is the one authority, so a pixel this backend blends and a pixel the engine
-//! blends in its own offscreen buffers agree by construction.
+//! Where a supersampling rasterizer quantises a partially covered pixel to one
+//! of seventeen levels, this one integrates the covered area and writes
+//! `min(255, floor(coverage * 256))` of the true geometric coverage, every
+//! intermediate value an integer and no step sampling. That is the whole of
+//! what it offers over the other backends. It is not a byte-for-byte page:
+//! glyph rendering, image resampling and the engine's own decisions are
+//! upstream of this crate. [`AggBackend`] is the entire public surface.
 //!
 //! ```
 //! use kurbo::{Affine, Rect};
@@ -81,6 +37,37 @@
 //! assert_eq!(pixmap.pixel(0, 0).map(|px| px[3]), Some(128));
 //! assert_eq!(pixmap.pixel(1, 0).map(|px| px[3]), Some(255));
 //! ```
+
+// Why a third backend. The two existing backends are third-party rasterizers
+// wrapped behind the trait, and each brings its own idea of what a partially
+// covered pixel is worth. `tiny-skia` supersamples at four subsamples per axis,
+// so a diagonal edge has seventeen distinct coverage levels and a half-covered
+// pixel quantises to 8/16 of the range rather than to a half. Over the corpus
+// that difference is a persistent few-count spread along every non-axis-aligned
+// edge — measured as the population sitting between SSIM 0.95 and 0.99 with no
+// image, shading, pattern or soft mask on the page. This backend closes it by
+// construction: the same integral on the same 256ths-of-a-pixel grid, mapped to
+// alpha through the same measured formula. `vello_cpu` remains the facade's
+// default for API users, who want a fast production rasterizer rather than a
+// byte-comparable one.
+//
+// Parity here means AGG parity — Anti-Grain Geometry, the scan converter PDFium
+// draws with — over the coverage integral and the arithmetic downstream of it,
+// and nothing wider.
+//
+// The design in one paragraph. `pdfrum_render::scanline` holds the rasterizer:
+// kurbo flattens curves, each segment is integrated into per-pixel
+// `(cover, area)` cells, and a sweep turns the sorted cells into spans of
+// constant coverage. It lives in the engine rather than here because the
+// engine's own glyph path needs the same integrator, and a glyph bitmap must
+// not depend on which rasterizer draws the page. This crate's own two modules
+// are private: `target` holds the pixel buffer, the clip — a coverage plane
+// multiplied in per pixel, which is how the oracle's clip region works too —
+// and the span blitter, and `image` holds the inverse-mapped image sampler. The
+// compositing arithmetic itself is `pdfrum-render`'s, not this crate's:
+// `blend::composite_premultiplied` is the one authority, so a pixel this
+// backend blends and a pixel the engine blends in its own offscreen buffers
+// agree by construction.
 
 #![forbid(unsafe_code)]
 // Every coordinate reaching this crate came from an untrusted file by way of
