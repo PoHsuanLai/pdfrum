@@ -12,6 +12,22 @@ categories = ["graphics", "parser-implementations", "multimedia::images"]
 [lints]
 workspace = true
 
+# The whole-render instrument's thread-local accumulator, in
+# `src/renderprofile.rs`. **Off by default and it must stay that way**: cargo
+# unifies features across a workspace build, so a default-on flag here would
+# put `Instant::now()` pairs inside every criterion group in the workspace and
+# make the committed numbers measure the instrument.
+#
+# The name is `pdfrum-render`'s, deliberately. The two accumulators answer one
+# question at two altitudes — this one splits the render around the walk, that
+# one splits the walk — and a reader who wants either wants both, so
+# `pdfrum-render/walk-profile` forwards to this and `scripts/profile.nu --walk`
+# turns on one flag. The record lives here rather than beside `walkprofile`
+# because the stages cross three crates and this is the lowest of the three.
+[features]
+default = []
+walk-profile = []
+
 [dependencies]
 pdfrum-common.workspace = true
 pdfrum-object.workspace = true

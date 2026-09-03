@@ -20,14 +20,36 @@
 #             between the `render-cold-*` and `render-warm-*` criterion groups,
 #             and it is the flag that makes a `--op render` figure comparable
 #             with `pdfium_test --render-repeats`. See "WARM, COLD" below.
-#   --walk    also split the ENGINE half into the walk's own phases, and count
-#             the walk's per-object allocations by site. Builds with
-#             `pdfrum-render/walk-profile` and forces the in-process
+#   --walk    turn on the two instruments. On a plain or `--warm` render it
+#             prints the WHOLE-RENDER stage split — content parse,
+#             interpretation, the five stages of the annotation and appearance
+#             pass, the raster, and the unattributed remainder — whose sum is
+#             the ms/iteration figure printed above it. With `--sample` it
+#             additionally splits the ENGINE half into the walk's own phases and
+#             counts the walk's per-object allocations by site. Builds with
+#             `pdfrum-render/walk-profile`, which forwards to
+#             `pdfrum-page/walk-profile`, and forces the in-process
 #             instrumentation path even where `perf` is available, because the
 #             two answer different questions. **The timers cost real time** —
-#             about a third of a path-heavy render, all of it `Instant::now()`
-#             pairs — so read shares from a `--walk` run and absolute
-#             milliseconds from a plain one. See docs/status/M12b-P2.md §3.
+#             about a third of a path-heavy render for the phase split, a few
+#             percent for the stage split, all of it `Instant::now()` pairs — so
+#             read shares from a `--walk` run and absolute milliseconds from a
+#             plain one. See docs/status/M12b-P2.md §3.
+#
+# THE TWO ALTITUDES, AND WHY THE STAGE SPLIT EXISTS
+#
+# `--sample` and the walk's phase split both sit at or below `render_page_with`:
+# `--sample` builds the page graphs OUTSIDE its loop and calls it directly, so
+# it sees neither the per-iteration graph rebuild nor the annotation pass, and
+# the phase split sits inside it. Both are honest about their own scope, and
+# neither can see the work in front of the raster — which is how three
+# consecutive investigations read a well-behaved 7-12 ms document inside a
+# 54-145 ms render.
+#
+# The stage split is the answer: its buckets are placed AROUND `render_page_with`
+# rather than inside it, so their sum plus one remainder is the whole render.
+# Read it first, and take a share from `--sample` only after it says the raster
+# is where the time is.
 #
 # Output: a flat symbol profile on stdout, and — when the tooling is present —
 # `target/profile/<op>-<stem>.svg`, a flamegraph.

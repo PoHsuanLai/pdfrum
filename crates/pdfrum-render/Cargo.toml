@@ -21,7 +21,7 @@ workspace = true
 # accumulator is a thread-local and not a threaded `&mut`.
 [features]
 default = []
-walk-profile = []
+walk-profile = ["pdfrum-page/walk-profile"]
 
 [dependencies]
 pdfrum-common.workspace = true

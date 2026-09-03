@@ -53,6 +53,42 @@ use crate::annot::{AnnotList, Annotation, Subtype};
 use crate::ap;
 use crate::names;
 
+/// The five stages of this pass, timed into `pdfrum-page`'s accumulator under
+/// this crate's `walk-profile`.
+///
+/// A module of its own so the pass below reads as the pass rather than as the
+/// instrument, and so the feature-off build names no `renderprofile` item at
+/// all — the module is `pub` in `pdfrum-page` only with the feature, and a
+/// crate cannot `#[cfg]` on another crate's flag.
+#[cfg(feature = "walk-profile")]
+mod profile {
+    pub use pdfrum_page::renderprofile::{Stage, stage};
+}
+
+/// The feature-off twin: the stage names, and a `stage` that is its body.
+#[cfg(not(feature = "walk-profile"))]
+mod profile {
+    /// The stages this pass names. Only the variants it uses, because with the
+    /// feature off nothing reads them and the set exists to keep one spelling
+    /// at the call sites.
+    #[derive(Debug, Clone, Copy)]
+    pub enum Stage {
+        AnnotList,
+        FormFonts,
+        GenerateAppearances,
+        OpenAction,
+        AnnotLoop,
+    }
+
+    /// The body, unclocked.
+    #[inline]
+    pub fn stage<T>(_stage: Stage, body: impl FnOnce() -> T) -> T {
+        body()
+    }
+}
+
+use profile::{Stage, stage};
+
 /// Appends every visible annotation's appearance to a built page.
 ///
 /// The page's own resources are the fallback for an appearance form that
@@ -121,7 +157,9 @@ pub fn overlay_with<R: Resolve>(
                   value only places a synthesized pop-up, which never paints"
     )]
     let page_width = page.crop_box.width() as f32;
-    let list = AnnotList::load(page_dict, page_width, r);
+    let list = stage(Stage::AnnotList, || {
+        AnnotList::load(page_dict, page_width, r)
+    });
     let resources = Resources::for_page(page.resources.clone());
     // `CPDF_Annot`'s constructor runs `GenerateAPIfNeeded`, so an annotation
     // that arrives without a usable `/AP /N` is given one *before* anything
@@ -138,99 +176,108 @@ pub fn overlay_with<R: Resolve>(
     // The fonts the form's default resources declare, loaded through the same
     // substitution the rest of the page uses. See `ap::FormFonts` for why the
     // stock Helvetica that used to stand in here was the wrong metric source.
-    let fonts = ap::FormFonts::load(catalog, r, ctx);
-    let mut generated =
-        ap::generate_appearances_with_text(page_dict, catalog, Some(&fonts), r, diags);
+    let fonts = stage(Stage::FormFonts, || ap::FormFonts::load(catalog, r, ctx));
+    let mut generated = stage(Stage::GenerateAppearances, || {
+        ap::generate_appearances_with_text(page_dict, catalog, Some(&fonts), r, diags)
+    });
     if let Some(supplied) = supplied {
         generated.merge_over(supplied);
     }
     // `FORM_DoDocumentOpenAction` runs before the first page is rendered
     // (`pdfium_test.cc:1779`), so a `/Hide` in the catalog's open action has
     // already rewritten the flag words the visibility test below reads.
-    let hidden = crate::nav::hidden_by_open_action(catalog, r, limits, diags);
+    let hidden = stage(Stage::OpenAction, || {
+        crate::nav::hidden_by_open_action(catalog, r, limits, diags)
+    });
     let focus = generated.focus();
 
-    for (slot, annot) in list.annots.iter().enumerate() {
-        let flags = hidden.flags(&annot.dict, r);
-        if !is_visible(annot.subtype, flags) {
-            continue;
-        }
-        let index = list.source_indices.get(slot).copied().unwrap_or(slot);
-        // A suppressed appearance draws nothing at all — not the file's
-        // `/AP`, not a generated one, not the invalid-state outline below.
-        // Only the widget highlight survives, because it is painted after the
-        // appearance and independently of it.
-        if matches!(generated.appearance(index), ap::Appearance::Suppressed) {
-            push_chrome(page, annot, index, focus, r, limits, diags);
-            continue;
-        }
-        // A checkbox or radio button whose *state's* appearance stream is
-        // missing is outlined instead of drawn, and the branch replaces the
-        // appearance rather than following it — see `invalid_outline`.
-        if generated.get(index).is_none()
-            && let Some(object) = invalid_outline(annot, r)
-        {
-            page.objects.push(object);
-            push_chrome(page, annot, index, focus, r, limits, diags);
-            continue;
-        }
-        // A generated appearance may also move the rectangle it draws into:
-        // a text markup annotation with a generated AP is placed at its
-        // quadrilaterals' bounding box rather than at its `/Rect`
-        // (`CPDF_Annot::RectForDrawing`).
-        let (form, placed) = if let Some(made) = generated.get(index) {
-            let mut placed = annot.clone();
-            placed.rect = generated.rect(index, annot.rect_for_drawing(true));
-            (
-                Stream::new(ap::stream_dict(made), ByteSpan::from(made.stream.clone())),
-                placed,
-            )
-        } else {
-            // `kNormal` in both passes, and `bFallbackToNormal` is a no-op
-            // when the mode already is normal.
-            let Some(form) = annot_ap(&annot.dict, ApMode::Normal, false, r) else {
-                // No appearance to draw — but a widget's highlight is painted
-                // *after* the appearance and independently of it
-                // (`CFFL_InteractiveFormFiller::OnDraw`,
-                // `cffl_interactiveformfiller.cpp:85-94`), so a field with no
-                // `/AP` at all still tints. `password.in` is nothing but two
-                // such fields.
+    // One span over the whole loop rather than one per annotation: a page with
+    // three hundred widgets would otherwise pay three hundred `Instant` pairs
+    // for a bucket that is read as a total anyway, and the per-annotation
+    // question is `--sample`'s.
+    stage(Stage::AnnotLoop, || {
+        for (slot, annot) in list.annots.iter().enumerate() {
+            let flags = hidden.flags(&annot.dict, r);
+            if !is_visible(annot.subtype, flags) {
+                continue;
+            }
+            let index = list.source_indices.get(slot).copied().unwrap_or(slot);
+            // A suppressed appearance draws nothing at all — not the file's
+            // `/AP`, not a generated one, not the invalid-state outline below.
+            // Only the widget highlight survives, because it is painted after the
+            // appearance and independently of it.
+            if matches!(generated.appearance(index), ap::Appearance::Suppressed) {
                 push_chrome(page, annot, index, focus, r, limits, diags);
                 continue;
+            }
+            // A checkbox or radio button whose *state's* appearance stream is
+            // missing is outlined instead of drawn, and the branch replaces the
+            // appearance rather than following it — see `invalid_outline`.
+            if generated.get(index).is_none()
+                && let Some(object) = invalid_outline(annot, r)
+            {
+                page.objects.push(object);
+                push_chrome(page, annot, index, focus, r, limits, diags);
+                continue;
+            }
+            // A generated appearance may also move the rectangle it draws into:
+            // a text markup annotation with a generated AP is placed at its
+            // quadrilaterals' bounding box rather than at its `/Rect`
+            // (`CPDF_Annot::RectForDrawing`).
+            let (form, placed) = if let Some(made) = generated.get(index) {
+                let mut placed = annot.clone();
+                placed.rect = generated.rect(index, annot.rect_for_drawing(true));
+                (
+                    Stream::new(ap::stream_dict(made), ByteSpan::from(made.stream.clone())),
+                    placed,
+                )
+            } else {
+                // `kNormal` in both passes, and `bFallbackToNormal` is a no-op
+                // when the mode already is normal.
+                let Some(form) = annot_ap(&annot.dict, ApMode::Normal, false, r) else {
+                    // No appearance to draw — but a widget's highlight is painted
+                    // *after* the appearance and independently of it
+                    // (`CFFL_InteractiveFormFiller::OnDraw`,
+                    // `cffl_interactiveformfiller.cpp:85-94`), so a field with no
+                    // `/AP` at all still tints. `password.in` is nothing but two
+                    // such fields.
+                    push_chrome(page, annot, index, focus, r, limits, diags);
+                    continue;
+                };
+                (form, annot.clone())
             };
-            (form, annot.clone())
-        };
-        // Placed in *page* space: `render_page` composes its own page matrix
-        // on top, which is the `mtUser2Device` the C++ concatenates last. So
-        // an identity here is what keeps a rotated or cropped page placing
-        // annotations exactly as it places content.
-        let matrix = annot_matrix(&placed, &form.dict, 0, kurbo::Affine::IDENTITY, r);
-        if !matrix.as_coeffs().iter().all(|c| c.is_finite()) {
-            continue;
+            // Placed in *page* space: `render_page` composes its own page matrix
+            // on top, which is the `mtUser2Device` the C++ concatenates last. So
+            // an identity here is what keeps a rotated or cropped page placing
+            // annotations exactly as it places content.
+            let matrix = annot_matrix(&placed, &form.dict, 0, kurbo::Affine::IDENTITY, r);
+            if !matrix.as_coeffs().iter().all(|c| c.is_finite()) {
+                continue;
+            }
+            // A live edit's appearance is marked so the renderer can draw its text
+            // the way the oracle does — with ClearType, which no other text on the
+            // page gets. The flag rides the object because by the time anything
+            // rasterizes, this form is one entry in the page's object list.
+            let live_edit = supplied.is_some_and(|overlay| overlay.is_live_edit(index));
+            if let Some(object) = pdfrum_page::build_form_object_with(
+                &form, matrix, &resources, r, ctx, limits, diags, live_edit,
+            ) {
+                page.objects.push(object);
+            }
+            push_chrome(page, annot, index, focus, r, limits, diags);
         }
-        // A live edit's appearance is marked so the renderer can draw its text
-        // the way the oracle does — with ClearType, which no other text on the
-        // page gets. The flag rides the object because by the time anything
-        // rasterizes, this form is one entry in the page's object list.
-        let live_edit = supplied.is_some_and(|overlay| overlay.is_live_edit(index));
-        if let Some(object) = pdfrum_page::build_form_object_with(
-            &form, matrix, &resources, r, ctx, limits, diags, live_edit,
-        ) {
-            page.objects.push(object);
-        }
-        push_chrome(page, annot, index, focus, r, limits, diags);
-    }
-    push_open_popup(
-        page,
-        &list,
-        generated.hover(),
-        &fonts,
-        &resources,
-        r,
-        ctx,
-        limits,
-        diags,
-    );
+        push_open_popup(
+            page,
+            &list,
+            generated.hover(),
+            &fonts,
+            &resources,
+            r,
+            ctx,
+            limits,
+            diags,
+        );
+    });
 }
 
 /// Draws the note card belonging to the annotation the pointer is inside.

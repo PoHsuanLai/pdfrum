@@ -260,6 +260,7 @@ impl BuildContext {
         load: impl FnOnce(&mut Self) -> T,
     ) -> Arc<T> {
         if key == FormFontsKey::Direct {
+            crate::renderprofile::form_font_miss();
             return Arc::new(load(self));
         }
         if let Some(cached) = self.form_fonts.get(&key)
@@ -267,6 +268,12 @@ impl BuildContext {
         {
             return hit;
         }
+        // Counted here rather than at the call site, because this is the one
+        // place that knows a miss happened: the caller asks the same way for
+        // both, and a slot that fills once per document against one that
+        // fills once per page per render is the difference the count exists
+        // to show.
+        crate::renderprofile::form_font_miss();
         let built = Arc::new(load(self));
         self.form_fonts
             .insert(key, Arc::clone(&built) as Arc<dyn Any + Send + Sync>);
