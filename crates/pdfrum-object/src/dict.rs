@@ -95,6 +95,24 @@ impl Dict {
         self.0.push((key, value));
     }
 
+    /// Sets `key` to `value`: replaces the existing entry in place, keeping
+    /// its position, or appends.
+    pub fn insert(&mut self, key: Name, value: Object) {
+        if let Some(entry) = self.0.iter_mut().find(|entry| entry.0 == key) {
+            entry.1 = value;
+        } else {
+            self.0.push((key, value));
+        }
+    }
+
+    /// Removes `key`, returning its value; `None` when absent.
+    pub fn remove(&mut self, key: &Name) -> Option<Object> {
+        self.0
+            .iter()
+            .position(|(k, _)| k == key)
+            .map(|index| self.0.remove(index).1)
+    }
+
     /// Number of stored pairs, duplicates included.
     #[must_use]
     pub fn len(&self) -> usize {
@@ -484,5 +502,34 @@ mod tests {
         assert!(dict.contains_key(&key("K")));
         assert_eq!(dict.raw(&key("K")), Some(&Object::Null));
         assert_eq!(dict.int(&key("K"), &NoResolve), None);
+    }
+
+    #[test]
+    fn insert_replaces_in_place_and_appends_when_new() {
+        let mut d = Dict::new();
+        d.push(Name::from("A"), Object::Int(1));
+        d.push(Name::from("B"), Object::Int(2));
+        d.insert(Name::from("B"), Object::Int(20));
+        assert_eq!(d.raw(&Name::from("B")), Some(&Object::Int(20)));
+        let keys: Vec<_> = d.iter().map(|(k, _)| k.clone()).collect();
+        assert_eq!(keys, vec![Name::from("A"), Name::from("B")]);
+        d.insert(Name::from("C"), Object::Int(3));
+        let keys: Vec<_> = d.iter().map(|(k, _)| k.clone()).collect();
+        assert_eq!(
+            keys,
+            vec![Name::from("A"), Name::from("B"), Name::from("C")]
+        );
+    }
+
+    #[test]
+    fn remove_returns_the_value_and_drops_the_key() {
+        let mut d = Dict::new();
+        d.push(Name::from("A"), Object::Int(1));
+        d.push(Name::from("B"), Object::Null);
+        assert_eq!(d.remove(&Name::from("A")), Some(Object::Int(1)));
+        assert_eq!(d.raw(&Name::from("A")), None);
+        assert_eq!(d.raw(&Name::from("B")), Some(&Object::Null));
+        assert_eq!(d.len(), 1);
+        assert_eq!(d.remove(&Name::from("A")), None);
     }
 }

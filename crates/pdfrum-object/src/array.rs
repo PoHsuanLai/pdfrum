@@ -62,6 +62,21 @@ impl Array {
         self.0.push(value);
     }
 
+    /// Inserts `value` at `index`, shifting later items; `index == len()`
+    /// appends.
+    ///
+    /// # Panics
+    ///
+    /// When `index > len()`.
+    pub fn insert(&mut self, index: usize, value: Object) {
+        self.0.insert(index, value);
+    }
+
+    /// Removes and returns the item at `index`; `None` when out of range.
+    pub fn remove(&mut self, index: usize) -> Option<Object> {
+        (index < self.0.len()).then(|| self.0.remove(index))
+    }
+
     /// Number of elements.
     #[must_use]
     pub fn len(&self) -> usize {
@@ -423,5 +438,27 @@ mod tests {
         assert!(a.iter().any(|o| o == &Object::Int(1)));
         assert!(!a.iter().any(|o| o == &Object::Int(2)));
         assert_eq!(a.as_slice().len(), 2);
+    }
+
+    #[test]
+    fn array_insert_shifts_and_appends_at_len() {
+        let mut a = Array::new();
+        a.push(Object::Int(1));
+        a.push(Object::Int(3));
+        a.insert(1, Object::Int(2));
+        assert_eq!(
+            a.as_slice(),
+            [Object::Int(1), Object::Int(2), Object::Int(3)]
+        );
+        a.insert(3, Object::Int(4));
+        assert_eq!(a.raw_at(3), Some(&Object::Int(4)));
+    }
+
+    #[test]
+    fn array_remove_out_of_range_is_none() {
+        let mut a = Array::of([Object::Int(1), Object::Int(2)]);
+        assert_eq!(a.remove(5), None);
+        assert_eq!(a.remove(0), Some(Object::Int(1)));
+        assert_eq!(a.as_slice(), [Object::Int(2)]);
     }
 }
