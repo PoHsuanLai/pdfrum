@@ -124,7 +124,6 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
 
 ## Policy-kept, decision owed
 
-- `Limits::max_string_len` is consulted nowhere.
 - Fifteen `DiagKind` variants are never recorded (`#[non_exhaustive]`, doc
   says the enum grows as crates land).
 - `docs/design/idiomatic-api.md`'s leak-count derivation cannot see payload

@@ -156,7 +156,6 @@ pub pdfrum_common::Limits::max_page_tree_depth: u32
 pub pdfrum_common::Limits::max_script_loop_iterations: u64
 pub pdfrum_common::Limits::max_script_recursion: usize
 pub pdfrum_common::Limits::max_script_stack: usize
-pub pdfrum_common::Limits::max_string_len: usize
 pub pdfrum_common::Limits::max_word_len: usize
 pub pdfrum_common::Limits::max_xref_size: u32
 pub pdfrum_common::Limits::startxref_scan: u64

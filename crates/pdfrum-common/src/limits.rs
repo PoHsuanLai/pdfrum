@@ -1,11 +1,16 @@
 //! Hard resource limits, defaulting to PDFium-equivalent values.
 //!
-//! Every field is a cap the reader enforces against untrusted input. The
-//! defaults are the C++ constants consolidated in
-//! `docs/design/pdfrum-parser.md` §1.20; where PDFium has no cap at all
-//! (string, array and dictionary sizes — its outputs are already bounded by
-//! file size) the field exists for future hardening and fuzz budgets and
-//! defaults to "unbounded".
+//! Every field is a cap **some reader consults**, and the defaults are the C++
+//! constants consolidated in `docs/design/pdfrum-parser.md` §1.20.
+//!
+//! A knob nothing reads is not a limit, it is a promise the type cannot keep,
+//! so the rule here is that a field earns its place by having a caller. Where
+//! PDFium has no cap and we chose to add one anyway the field says so and
+//! names what it bounds (`max_decoded_stream_len`, `max_cmap_ranges`,
+//! `max_name_tree_depth`, the script budgets); where PDFium has no cap and we
+//! enforce none either, there is no field — `max_string_len` was one of those
+//! and was removed rather than left defaulting to `usize::MAX` for a
+//! hardening pass nobody had scheduled.
 
 /// Caps applied while reading a document. Plain configuration data: pass it
 /// down, never store it in a parser struct that also owns state.
@@ -27,9 +32,9 @@ pub struct Limits {
     /// object body. Enforced at parse time so access code may recurse freely.
     /// PDFium: `kParserMaxRecursionDepth` (`cpdf_syntax_parser.h`).
     pub max_object_nesting: u32,
-    /// Maximum length of a single string object. PDFium has no such cap.
-    pub max_string_len: usize,
-    /// Maximum number of elements in one array. PDFium has no such cap.
+    /// Maximum number of elements in one array. PDFium has no such cap; ours
+    /// is consulted by the object parser (`pdfrum_parser::syntax`), the
+    /// `ToUnicode` CMap reader and the Type 1 charstring decoder.
     pub max_array_len: usize,
     /// Maximum number of entries a cross-reference section may declare;
     /// one past the largest legal object number.
@@ -118,7 +123,6 @@ impl Default for Limits {
     fn default() -> Self {
         Self {
             max_object_nesting: 64,
-            max_string_len: usize::MAX,
             max_array_len: usize::MAX,
             max_xref_size: 25_165_825,
             max_object_number: 25_165_824,
@@ -157,7 +161,6 @@ mod tests {
         assert_eq!(l.max_decoded_stream_len, 1024 * 1024 * 1024);
         assert_eq!(l.max_cmap_ranges, 65_536);
         assert_eq!(l.max_name_tree_depth, 32);
-        assert_eq!(l.max_string_len, usize::MAX);
         assert_eq!(l.max_array_len, usize::MAX);
     }
 

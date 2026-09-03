@@ -33,7 +33,6 @@ pub enum DiagKind { /* grows: XrefRebuilt, LengthMismatch, BadEof, ... */ }
 
 pub struct Limits {           // mirror pdfium's hard limits; values set in brief
     pub max_object_nesting: u32,
-    pub max_string_len: usize,
     pub max_array_len: usize,
     pub max_xref_size: u32,
     /* (abridged) */
