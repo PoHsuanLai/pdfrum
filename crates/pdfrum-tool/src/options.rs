@@ -92,15 +92,15 @@ pub struct Options {
     ///
     /// **This flag has no oracle counterpart** — `pdfium_test` cannot save a
     /// document at all. It exists so the conformance harness can perform the
-    /// two-step check M7 requires: pdfrum saves, and the *oracle* then reopens
-    /// and renders what pdfrum wrote (SPEC.md §11's ruling E7). The asymmetry
-    /// is expected, and the harness never diffs this flag against the oracle.
+    /// two-step save check: pdfrum saves, and the *oracle* then reopens and
+    /// renders what pdfrum wrote. The asymmetry is expected, and the harness
+    /// never diffs this flag against the oracle.
     pub save: bool,
     /// A curated page mutation to apply before saving, from `--mutate=`.
     ///
     /// Like `--save`, this has **no oracle counterpart** — `pdfium_test`
     /// cannot edit a document either. It exists so the harness can perform
-    /// M11's exit check: pdfrum mutates page 0 and saves, the oracle reopens
+    /// the edit round trip: pdfrum mutates page 0 and saves, the oracle reopens
     /// and renders the result, and the two renders of that same file are
     /// compared. Implies `--save`; an unrecognised value is refused, because
     /// silently saving an unmutated file would make the check pass for the
@@ -118,8 +118,8 @@ pub struct Options {
     /// Apply the sibling `.evt` script, from `--send-events`.
     ///
     /// The parser is [`crate::events::parse_evt`]; dispatch onto widgets is
-    /// the other M14 slice, so this flag currently records the parsed count
-    /// and leaves the page pixels unchanged.
+    /// not wired yet, so this flag currently records the parsed count and
+    /// leaves the page pixels unchanged.
     pub send_events: bool,
     /// Run the document's JavaScript and print the transcript, from
     /// `--js-transcript`.

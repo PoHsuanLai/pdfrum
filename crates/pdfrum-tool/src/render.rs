@@ -175,7 +175,7 @@ pub struct SessionView<'a> {
     /// The open combo-box dropdown on this page, if one is open.
     ///
     /// The library publishes this rather than drawing it — a dropdown is a
-    /// window and `pdfrum-form` does not make windows (STYLE.md §2b). This
+    /// window and `pdfrum-form` does not make windows. This
     /// tool is the host that draws it, in [`crate::chrome`], because the
     /// oracle's `FPDF_FFLDraw` does and a golden comparison has to see the
     /// same pixels.

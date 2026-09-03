@@ -1,5 +1,5 @@
 //! CLI mirroring the C++ oracle's `pdfium_test` flags and output formats, so
-//! the conformance harness diffs pdfrum against it like-for-like (SPEC.md §13).
+//! the conformance harness diffs pdfrum against it like-for-like.
 //!
 //! # What is implemented
 //!
