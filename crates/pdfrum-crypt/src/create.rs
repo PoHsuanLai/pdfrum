@@ -1,0 +1,205 @@
+//! Making a document encrypted: the `/Encrypt` dictionary and the handler
+//! for a fresh AES-256 (revision 6) file.
+//!
+//! ISO 32000-2 §7.6.4.4.7–8, algorithms 8, 9 and 10 — the inverse of what
+//! [`crate::standard`] checks when such a file is opened. Only revision 6:
+//! RC4 and the 128-bit AES of revisions 2–4 are deprecated by the same
+//! standard, and a file this crate writes should be one its reader would
+//! choose. Opening covers every revision regardless.
+//!
+//! Randomness is the caller's: the file key and the four salts come in as
+//! 64 bytes, so a save asked to be reproducible can be.
+
+use pdfrum_object::{Dict, Name, NoResolve, Object, PdfString};
+
+use crate::Error;
+use crate::SecurityHandler;
+use crate::permissions::Permissions;
+use crate::primitives::aes_cbc_encrypt;
+use crate::standard::{r6_prepared, revision6_hash};
+
+/// The bytes of a new file's secrets: the 32-byte file key, then the
+/// user validation salt, user key salt, owner validation salt and owner key
+/// salt, 8 bytes each.
+pub const ENTROPY_LEN: usize = 64;
+
+/// The `/P` bits this crate names; every other bit is reserved and written
+/// as 1, which is what ISO 32000-2 Table 22 asks for.
+const NAMED_PERMISSION_BITS: u32 = 0x0F3C;
+
+/// The `/Encrypt` dictionary and the handler that enciphers under it, for a
+/// document protected by `user` (opens with reading rights) and `owner`
+/// (opens with every right). An empty user password means anyone can open
+/// the file; an empty owner password is replaced by the user password, as
+/// Acrobat does, so there is always a way to unlock it.
+///
+/// # Errors
+///
+/// [`Error::WrongPassword`] only in the impossible case that the handler
+/// built from the dictionary does not accept the password it was built for
+/// — which would be a defect in this function, not in the caller's input;
+/// a password that is not valid UTF-8 or does not survive `SASLprep`.
+pub fn standard_r6(
+    user: &[u8],
+    owner: &[u8],
+    permissions: Permissions,
+    encrypt_metadata: bool,
+    entropy: &[u8; ENTROPY_LEN],
+) -> Result<(Dict, SecurityHandler), Error> {
+    let owner = if owner.is_empty() { user } else { owner };
+    let user_prepared = r6_prepared(6, user).ok_or(Error::WrongPassword)?;
+    let owner_prepared = r6_prepared(6, owner).ok_or(Error::WrongPassword)?;
+
+    let file_key: [u8; 32] = slice(entropy, 0)?;
+    let user_validation: [u8; 8] = slice(entropy, 32)?;
+    let user_key_salt: [u8; 8] = slice(entropy, 40)?;
+    let owner_validation: [u8; 8] = slice(entropy, 48)?;
+    let owner_key_salt: [u8; 8] = slice(entropy, 56)?;
+
+    // Algorithm 8: /U is the hash of the user password and its validation
+    // salt, then the two salts; /UE is the file key enciphered under the hash
+    // of the password and its key salt.
+    let mut u = [0u8; 48];
+    u[..32].copy_from_slice(&revision6_hash(&user_prepared, user_validation, None));
+    u[32..40].copy_from_slice(&user_validation);
+    u[40..48].copy_from_slice(&user_key_salt);
+    let ue = wrap(
+        &revision6_hash(&user_prepared, user_key_salt, None),
+        &file_key,
+    )?;
+
+    // Algorithm 9: the same for the owner, with /U folded into both hashes.
+    let mut o = [0u8; 48];
+    o[..32].copy_from_slice(&revision6_hash(&owner_prepared, owner_validation, Some(&u)));
+    o[32..40].copy_from_slice(&owner_validation);
+    o[40..48].copy_from_slice(&owner_key_salt);
+    let oe = wrap(
+        &revision6_hash(&owner_prepared, owner_key_salt, Some(&u)),
+        &file_key,
+    )?;
+
+    // Algorithm 10: /Perms is the permissions word, four 0xFF bytes, T or F
+    // for metadata, "adb", and four bytes of anything, under the file key.
+    let p = permissions.bits() | !NAMED_PERMISSION_BITS;
+    let mut perms = [0u8; 16];
+    perms[..4].copy_from_slice(&p.to_le_bytes());
+    perms[4..8].copy_from_slice(&[0xFF; 4]);
+    perms[8] = if encrypt_metadata { b'T' } else { b'F' };
+    perms[9..12].copy_from_slice(b"adb");
+    perms[12..16].copy_from_slice(&entropy[..4]);
+    aes_cbc_encrypt(&file_key, &[0u8; 16], &mut perms).map_err(|_| Error::WrongPassword)?;
+
+    let name = |s: &str| Object::Name(Name::from(s));
+    let bytes = |b: &[u8]| Object::Str(PdfString::hex(b));
+    let std_cf = Dict::from_pairs([
+        (Name::from("CFM"), name("AESV3")),
+        (Name::from("AuthEvent"), name("DocOpen")),
+        (Name::from("Length"), Object::Int(32)),
+    ]);
+    let cf = Dict::from_pairs([(Name::from("StdCF"), Object::Dict(std_cf))]);
+    #[expect(
+        clippy::cast_possible_wrap,
+        reason = "/P is the same 32 bits read as a signed integer, per the standard"
+    )]
+    let p_signed = i64::from(p as i32);
+    let dict = Dict::from_pairs([
+        (Name::from("Filter"), name("Standard")),
+        (Name::from("V"), Object::Int(5)),
+        (Name::from("R"), Object::Int(6)),
+        (Name::from("Length"), Object::Int(256)),
+        (Name::from("P"), Object::Int(p_signed)),
+        (Name::from("O"), bytes(&o)),
+        (Name::from("U"), bytes(&u)),
+        (Name::from("OE"), bytes(&oe)),
+        (Name::from("UE"), bytes(&ue)),
+        (Name::from("Perms"), bytes(&perms)),
+        (Name::from("CF"), Object::Dict(cf)),
+        (Name::from("StmF"), name("StdCF")),
+        (Name::from("StrF"), name("StdCF")),
+        (
+            Name::from("EncryptMetadata"),
+            Object::Bool(encrypt_metadata),
+        ),
+    ]);
+
+    // The handler is built the way an opened file's is, from the dictionary
+    // and the owner password, so what this function wrote is what the
+    // reader will check.
+    let handler = SecurityHandler::from_encrypt_dict(&dict, &[], owner, &NoResolve)?;
+    Ok((dict, handler))
+}
+
+/// `key` enciphered under `intermediate` with AES-256, no IV, no padding —
+/// the /UE and /OE wrapping.
+fn wrap(intermediate: &[u8; 32], key: &[u8; 32]) -> Result<[u8; 32], Error> {
+    let mut wrapped = *key;
+    aes_cbc_encrypt(intermediate, &[0u8; 16], &mut wrapped).map_err(|_| Error::WrongPassword)?;
+    Ok(wrapped)
+}
+
+fn slice<const N: usize>(entropy: &[u8; ENTROPY_LEN], at: usize) -> Result<[u8; N], Error> {
+    entropy
+        .get(at..at + N)
+        .and_then(|s| <[u8; N]>::try_from(s).ok())
+        .ok_or(Error::WrongPassword)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::standard_r6;
+    use crate::permissions::Permissions;
+    use crate::{CryptClass, SecurityHandler};
+    use pdfrum_object::{NoResolve, ObjRef};
+
+    fn entropy() -> [u8; 64] {
+        std::array::from_fn(|i| {
+            u8::try_from(i)
+                .unwrap_or(0)
+                .wrapping_mul(37)
+                .wrapping_add(11)
+        })
+    }
+
+    #[test]
+    fn the_file_opens_with_either_password_and_not_with_a_wrong_one() {
+        let perms = Permissions {
+            print: true,
+            ..Permissions::NONE
+        };
+        let (dict, handler) = standard_r6(b"user", b"owner", perms, true, &entropy()).unwrap();
+        let as_user = SecurityHandler::from_encrypt_dict(&dict, &[], b"user", &NoResolve).unwrap();
+        assert!(!as_user.owner_unlocked());
+        assert!(as_user.permissions().print && !as_user.permissions().copy);
+        let as_owner =
+            SecurityHandler::from_encrypt_dict(&dict, &[], b"owner", &NoResolve).unwrap();
+        assert!(as_owner.owner_unlocked());
+        assert!(SecurityHandler::from_encrypt_dict(&dict, &[], b"nope", &NoResolve).is_err());
+        assert!(
+            handler.owner_unlocked(),
+            "the handler this function hands back is the owner's"
+        );
+    }
+
+    #[test]
+    fn what_the_handler_enciphers_the_opened_one_deciphers() {
+        let (dict, handler) =
+            standard_r6(b"", b"secret", Permissions::ALL, true, &entropy()).unwrap();
+        let obj = ObjRef::new(7, 0);
+        let iv = crate::Iv([3u8; 16]);
+        let enciphered = handler.encrypt(obj, CryptClass::Stream, iv, b"hello, cipher");
+        assert_ne!(enciphered, b"hello, cipher");
+        let reader = SecurityHandler::from_encrypt_dict(&dict, &[], b"", &NoResolve).unwrap();
+        assert_eq!(
+            reader.decrypt(obj, CryptClass::Stream, &enciphered),
+            b"hello, cipher"
+        );
+    }
+
+    #[test]
+    fn an_empty_owner_password_falls_back_to_the_user_password() {
+        let (dict, _) = standard_r6(b"pw", b"", Permissions::ALL, false, &entropy()).unwrap();
+        let opened = SecurityHandler::from_encrypt_dict(&dict, &[], b"pw", &NoResolve).unwrap();
+        assert!(opened.owner_unlocked());
+        assert!(!opened.encrypt_metadata());
+    }
+}

@@ -101,9 +101,11 @@ pub fn pdfrum_crypt::SmallKey::is_empty(&self) -> bool
 pub fn pdfrum_crypt::SmallKey::len(&self) -> usize
 impl core::fmt::Debug for pdfrum_crypt::SmallKey
 pub fn pdfrum_crypt::SmallKey::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub const pdfrum_crypt::ENTROPY_LEN: usize
 pub const pdfrum_crypt::PAD: [u8; 32]
 pub fn pdfrum_crypt::is_signature_dict(&pdfrum_object::dict::Dict) -> bool
 pub fn pdfrum_crypt::md5(&[u8]) -> [u8; 16]
 pub fn pdfrum_crypt::parse_encrypt_dict(&pdfrum_object::dict::Dict, &impl pdfrum_object::resolve::Resolve) -> core::result::Result<pdfrum_crypt::EncryptParams, pdfrum_crypt::Error>
 pub fn pdfrum_crypt::rc4(&[u8], &[u8]) -> alloc::vec::Vec<u8>
 pub fn pdfrum_crypt::sha1(&[u8]) -> [u8; 20]
+pub fn pdfrum_crypt::standard_r6(&[u8], &[u8], pdfrum_crypt::Permissions, bool, &[u8; 64]) -> core::result::Result<(pdfrum_object::dict::Dict, pdfrum_crypt::SecurityHandler), pdfrum_crypt::Error>
