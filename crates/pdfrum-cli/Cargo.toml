@@ -1,0 +1,33 @@
+[package]
+name = "pdfrum-cli"
+description = "The pdfrum command line: inspect, render and extract from PDF files"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+readme = "README.md"
+keywords = ["pdf", "cli", "render", "text-extraction"]
+categories = ["command-line-utilities", "graphics", "text-processing"]
+
+[[bin]]
+name = "pdfrum"
+path = "src/main.rs"
+# The binary shares its name with the library crate; documenting both writes
+# two crates into one `doc/pdfrum/` (cargo#6313). The library's docs are the
+# ones that matter, so the binary's are off.
+doc = false
+
+[lints]
+workspace = true
+
+[dependencies]
+# The facade only: everything the command line needs is what `cargo add
+# pdfrum` gets, and a gap here is a gap there.
+pdfrum = { workspace = true, features = ["png"] }
+anyhow.workspace = true
+clap.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true

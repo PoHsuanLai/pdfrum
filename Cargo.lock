@@ -1790,6 +1790,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "pdfrum-cli"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "pdfrum",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "pdfrum-cmap"
 version = "0.1.0"
 dependencies = [

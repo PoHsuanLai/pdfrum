@@ -52,6 +52,11 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
 
 ## M19 — the `pdfrum` CLI (scoped 2026-09-04, `docs/design/pdfrum-cli.md` §9) — IN PROGRESS from 2026-09-05
 
+- ~~Phase 1 — foundation and the read-only core~~ — landed 2026-09-05
+  (`docs/status/M19.md`): `crates/pdfrum-cli`, `info`, `doctor`, `render`,
+  `extract text|links|toc|attachments|annotations|signatures`, `--json`,
+  `--pages`; facade fills `Document::id`, the three page boxes,
+  `Page::page_links`. Phases 2–5 as scheduled below.
 - Five phases, PLAN.md M19; the read-only core ships on `clap` + `serde_json`
   before any terminal crate is admitted.
 - **`security encrypt` kept** (user, 2026-09-05): R6 only, generation as

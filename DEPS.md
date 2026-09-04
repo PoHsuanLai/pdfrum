@@ -268,10 +268,13 @@ The measurement is `docs/status/data/v8probe/REPORT.md`.
 
 ## Tools & tests only
 
-`anyhow`, `clap` (pdfrum-tool CLI), `png` (encode output; also decode goldens
-in harness), `insta` (snapshots), `criterion` (benches, **pinned `=0.5.1`**),
-`libfuzzer-sys` (fuzz targets), `cargo-deny` / `cargo-nextest` (CI tooling,
-not deps).
+`anyhow`, `clap` (pdfrum-tool and pdfrum-cli), `png` (encode output; also
+decode goldens in harness), `serde` + `serde_json` (pdfrum-cli's `--json`
+output only, `=1.0.229` / `=1.0.151`, both already in the lock through
+other crates; no library crate depends on them), `criterion` (benches,
+**pinned `=0.5.1`**), `libfuzzer-sys` (fuzz targets), `cargo-deny` /
+`cargo-nextest` (CI tooling, not deps). `insta` was listed here once and
+never used; the CLI's tests compare against plain expected-output files.
 
 `criterion` is held at 0.5 deliberately. From 0.6 it depends unconditionally
 on `alloca`, which has a `cc` build-dependency and compiles C — which the
