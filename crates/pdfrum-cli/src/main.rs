@@ -298,6 +298,29 @@ enum Security {
         #[command(flatten)]
         save: SaveArgs,
     },
+    /// Encrypt the document: AES-256, a user password to open it and an
+    /// owner password that unlocks everything.
+    Encrypt {
+        #[command(flatten)]
+        input: Input,
+        /// The password that opens the document with `--allow`'s rights.
+        /// Empty means anyone can open it.
+        #[arg(long, value_name = "PASSWORD", default_value = "")]
+        user_password: String,
+        /// The password that opens the document with every right. Empty
+        /// means the user password serves as both.
+        #[arg(long, value_name = "PASSWORD", default_value = "")]
+        owner_password: String,
+        /// What the user password allows, comma-separated: print, modify,
+        /// copy, annotate, fill-forms, extract, assemble, print-hq, all, none.
+        #[arg(long, value_name = "LIST")]
+        allow: Option<String>,
+        /// Leave the XMP metadata stream readable without the password.
+        #[arg(long)]
+        plain_metadata: bool,
+        #[command(flatten)]
+        save: SaveArgs,
+    },
 }
 
 /// Where a writing command puts its result.
@@ -465,6 +488,23 @@ fn main() -> ExitCode {
             Security::Decrypt { input, save } => {
                 cmd::file::decrypt(&input.file, password, &save.output, save.deterministic)
             }
+            Security::Encrypt {
+                input,
+                user_password,
+                owner_password,
+                allow,
+                plain_metadata,
+                save,
+            } => cmd::file::encrypt(&cmd::file::EncryptRequest {
+                file: &input.file,
+                password,
+                user_password: &user_password,
+                owner_password: &owner_password,
+                allow: allow.as_deref(),
+                encrypt_metadata: !plain_metadata,
+                output: &save.output,
+                deterministic: save.deterministic,
+            }),
         },
     };
     match outcome {

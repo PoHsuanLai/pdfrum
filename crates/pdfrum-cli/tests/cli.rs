@@ -844,3 +844,185 @@ fn markdown_falls_back_to_typography_and_layout_keeps_columns() {
         "the same words, only placed"
     );
 }
+
+// ---- phase 5: security encrypt -------------------------------------------
+
+fn encrypt_hello(dir: &Path, name: &str) -> Result<std::path::PathBuf, String> {
+    let locked = dir.join(name);
+    let out = run(&[
+        "security",
+        "encrypt",
+        "fixtures/hello_world_2_pages.pdf",
+        "--user-password",
+        "reader",
+        "--owner-password",
+        "owner",
+        "--allow",
+        "print",
+        "--deterministic",
+        "-o",
+        locked.to_str().ok_or("non-utf8 path")?,
+    ])
+    .map_err(|e| e.to_string())?;
+    if !out.status.success() {
+        return Err(String::from_utf8_lossy(&out.stderr).into_owned());
+    }
+    Ok(locked)
+}
+
+#[test]
+fn encrypt_locks_the_file_with_the_permissions_asked_for() {
+    let dir = scratch("encrypt").unwrap();
+    let locked = encrypt_hello(&dir, "locked.pdf").unwrap();
+    let refused = run(&["info", locked.to_str().unwrap()]).unwrap();
+    assert_eq!(refused.status.code(), Some(1), "no password, no document");
+    let v = json(&[
+        "info",
+        "--password",
+        "reader",
+        locked.to_str().unwrap(),
+        "--json",
+    ])
+    .unwrap();
+    assert_eq!(v["encrypted"], true);
+    assert_eq!(v["permissions"]["print"], true);
+    assert_eq!(v["permissions"]["copy"], false);
+    let text = stdout(&[
+        "extract",
+        "text",
+        "--password",
+        "owner",
+        locked.to_str().unwrap(),
+    ])
+    .unwrap();
+    assert!(text.contains("Hello, world!") && text.contains("Goodbye, world!"));
+    let bytes = std::fs::read(&locked).unwrap();
+    assert!(
+        !bytes.windows(5).any(|w| w == b"Hello"),
+        "plaintext must not be in the file"
+    );
+    let again = encrypt_hello(&dir, "again.pdf").unwrap();
+    assert_eq!(
+        std::fs::read(&again).unwrap(),
+        bytes,
+        "--deterministic is byte-identical"
+    );
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
+fn encrypt_round_trips_through_decrypt_and_refuses_what_it_should() {
+    let dir = scratch("encrypt2").unwrap();
+    let locked = encrypt_hello(&dir, "locked.pdf").unwrap();
+    let unlocked = dir.join("unlocked.pdf");
+    let out = run(&[
+        "security",
+        "decrypt",
+        "--password",
+        "owner",
+        locked.to_str().unwrap(),
+        "-o",
+        unlocked.to_str().unwrap(),
+    ])
+    .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert_eq!(
+        stdout(&["extract", "text", unlocked.to_str().unwrap()]).unwrap(),
+        stdout(&["extract", "text", "fixtures/hello_world_2_pages.pdf"]).unwrap()
+    );
+    let twice = run(&[
+        "security",
+        "encrypt",
+        "--password",
+        "owner",
+        locked.to_str().unwrap(),
+        "--owner-password",
+        "x",
+        "-o",
+        dir.join("x.pdf").to_str().unwrap(),
+    ])
+    .unwrap();
+    assert_eq!(
+        twice.status.code(),
+        Some(1),
+        "an encrypted input is refused"
+    );
+    assert!(String::from_utf8_lossy(&twice.stderr).contains("decrypt"));
+    let bad = run(&[
+        "security",
+        "encrypt",
+        "fixtures/hello_world_2_pages.pdf",
+        "--owner-password",
+        "x",
+        "--allow",
+        "fly",
+        "-o",
+        dir.join("y.pdf").to_str().unwrap(),
+    ])
+    .unwrap();
+    assert_eq!(bad.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&bad.stderr).contains("--allow"));
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+/// The oracle opens what this crate encrypted: `pdfium_test --password`
+/// extracts the same text from the locked file as from the plain one. Skipped
+/// when the checkout is not on this machine.
+#[test]
+fn the_oracle_opens_what_we_encrypted() {
+    let Some(checkout) = std::env::var_os("PDFRUM_ORACLE_CHECKOUT") else {
+        eprintln!("PDFRUM_ORACLE_CHECKOUT unset: oracle round trip skipped");
+        return;
+    };
+    let pdfium_test = Path::new(&checkout).join("out/Release/pdfium_test");
+    if !pdfium_test.exists() {
+        eprintln!(
+            "{}: not built; oracle round trip skipped",
+            pdfium_test.display()
+        );
+        return;
+    }
+    let dir = scratch("encrypt-oracle").unwrap();
+    let plain = dir.join("plain.pdf");
+    std::fs::copy(
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/hello_world_2_pages.pdf"),
+        &plain,
+    )
+    .unwrap();
+    let locked = encrypt_hello(&dir, "locked.pdf").unwrap();
+    let oracle_text = |file: &Path, password: Option<&str>| -> String {
+        let mut cmd = Command::new(&pdfium_test);
+        cmd.arg("--txt");
+        if let Some(p) = password {
+            cmd.arg(format!("--password={p}"));
+        }
+        let out = cmd.arg(file).output().unwrap();
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let mut text = String::new();
+        for n in 0..2 {
+            let page = file.with_extension(format!("pdf.{n}.txt"));
+            let bytes = std::fs::read(&page).unwrap_or_else(|e| panic!("{}: {e}", page.display()));
+            // pdfium_test writes UTF-16LE with a BOM.
+            let units: Vec<u16> = bytes
+                .chunks_exact(2)
+                .map(|c| u16::from_le_bytes([c[0], c[1]]))
+                .collect();
+            text.push_str(&String::from_utf16_lossy(&units));
+        }
+        text
+    };
+    assert_eq!(
+        oracle_text(&locked, Some("reader")),
+        oracle_text(&plain, None)
+    );
+    assert!(!oracle_text(&plain, None).is_empty());
+    std::fs::remove_dir_all(&dir).unwrap();
+}
