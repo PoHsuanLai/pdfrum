@@ -365,6 +365,70 @@ impl<'a> Page<'a> {
         links
     }
 
+    /// The page as GitHub-flavoured Markdown.
+    ///
+    /// A tagged document's structure tree names the headings, paragraphs,
+    /// lists, tables and figures and is read as it is; an untagged one is
+    /// read by its typography — sizes, weights, bullets, gaps, margins. See
+    /// `pdfrum-markdown` for the rules.
+    #[cfg(feature = "markdown")]
+    #[must_use]
+    pub fn markdown(&self) -> String {
+        let (graph, tree, options, mut diags) = self.markdown_inputs();
+        let text = pdfrum_markdown::page_markdown(
+            &graph,
+            tree.as_ref(),
+            &self.doc.inner,
+            options,
+            &self.doc.limits,
+        );
+        self.doc.note(&diags);
+        diags = Diagnostics::default();
+        self.doc.note(&diags);
+        text
+    }
+
+    /// The page's text with its layout kept: columns stay columns, gaps
+    /// stay gaps, one character cell per half-em.
+    #[cfg(feature = "markdown")]
+    #[must_use]
+    pub fn layout_text(&self) -> String {
+        let (graph, _, options, diags) = self.markdown_inputs();
+        let text = pdfrum_markdown::page_layout(&graph, &self.doc.inner, options, &self.doc.limits);
+        self.doc.note(&diags);
+        text
+    }
+
+    /// The graph (images undecoded), the structure tree when the document
+    /// is tagged, and the reading options `pdfrum-markdown` takes.
+    #[cfg(feature = "markdown")]
+    fn markdown_inputs(
+        &self,
+    ) -> (
+        pdfrum_page::Page,
+        Option<pdfrum_doc::structure::StructTree>,
+        pdfrum_markdown::Options,
+        Diagnostics,
+    ) {
+        let mut ctx = BuildContext::new();
+        ctx.decode_target = pdfrum_page::RequestedSize::NoSamples;
+        let graph = self.build(&mut ctx);
+        let mut diags = Diagnostics::default();
+        let catalog = self.doc.catalog();
+        let tree = pdfrum_doc::structure::StructTree::load_page(
+            &catalog,
+            &self.dict.dict,
+            self.dict.reference.map_or(0, |r| r.num),
+            &self.doc.inner,
+            &self.doc.limits,
+            &mut diags,
+        );
+        let options = pdfrum_markdown::Options {
+            rtl: self.doc.reads_right_to_left(),
+        };
+        (graph, tree, options, diags)
+    }
+
     /// **Escape hatch — requires `pdfrum-page`.** The interpreted page-object
     /// graph, for a caller who wants the drawing operations themselves rather
     /// than pixels or text.

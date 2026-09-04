@@ -1,0 +1,21 @@
+[package]
+name = "pdfrum-markdown"
+description = "Markdown and layout-preserving text from a PDF page: the structure tree where there is one, typographic heuristics where there is not"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+readme = "README.md"
+keywords = ["pdf", "markdown", "text-extraction", "rag"]
+categories = ["text-processing", "parser-implementations"]
+
+[lints]
+workspace = true
+
+[dependencies]
+pdfrum-common.workspace = true
+pdfrum-object.workspace = true
+pdfrum-page.workspace = true
+pdfrum-text.workspace = true
+pdfrum-doc.workspace = true
+kurbo.workspace = true

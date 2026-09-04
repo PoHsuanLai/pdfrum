@@ -52,6 +52,7 @@ protocol (SPEC.md §0), recorded here so the graph has one place to read.
 | Added | Edge | Why |
 |---|---|---|
 | 2026-09-02, WP1 step 4 | `pdfrum` → `pdfrum-crypt` | The facade names `pdfrum_crypt::Permissions` in `Document::permissions` and `Document::owner_permissions`, and re-exports it, so it depends on the crate that owns the type rather than laundering it through `pdfrum-parser`. **No external crate reaches the tree**: `pdfrum-crypt` was already there transitively through the parser, so the facade's `cargo tree` is unchanged. The alternative — `pdfrum-form` depending on `pdfrum-crypt` so the form's own `Permissions` could gain a `From` — was declined: it would pull `aes`, `cbc`, `cipher`, `md-5`, `sha1`, `sha2` and `unicode-normalization` into a crate about widget interaction, for two booleans. |
+| 2026-09-05, M19 phase 4 | `pdfrum-markdown` → `pdfrum-common`, `pdfrum-object`, `pdfrum-page`, `pdfrum-text`, `pdfrum-doc`; `pdfrum` → `pdfrum-markdown` (optional, feature `markdown`) | A new leaf-to-root member beside `pdfrum-text` and `pdfrum-doc`: Markdown and layout-preserving text from a page graph. **No external crate reaches the tree.** The facade takes it as an optional dependency so `cargo add pdfrum` pays nothing for it unless asked. |
 
 ## Rendering & geometry
 

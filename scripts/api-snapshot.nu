@@ -116,6 +116,7 @@ def published-libs []: nothing -> list<string> {
 const FEATURED = [
     {file: 'pdfrum+javascript', crate: 'pdfrum', features: 'javascript'}
     {file: 'pdfrum+png', crate: 'pdfrum', features: 'png'}
+    {file: 'pdfrum+markdown', crate: 'pdfrum', features: 'markdown'}
     {file: 'pdfrum+tinyskia+agg', crate: 'pdfrum', features: 'tinyskia,agg'}
     {file: 'pdfrum-page+codecs', crate: 'pdfrum-page', features: 'jpx,jbig2,ccitt'}
     {file: 'pdfrum-filters+ccitt', crate: 'pdfrum-filters', features: 'ccitt'}
