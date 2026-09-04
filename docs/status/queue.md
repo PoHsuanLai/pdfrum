@@ -34,9 +34,11 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
   and cache the scan per process (measure, as the code's own note asks).
   Exit: ≤ 50 MB on that file, board byte-identical (the ladder's order is by
   name, which does not change).
-- **Clip-stack count**: clip entries cloned per page across the corpus;
+- ~~**Clip-stack count**~~ — measured and landed 2026-09-05 (`docs/status/M18.md` §4:
+  one document over the threshold, `Arc<Vec<ClipEntry>>`, −3.7% on its build). Original row: clip entries cloned per page across the corpus;
   `Arc<ClipEntry>` only if a document spends ≥ 3% of its build there.
-- **Found 2026-09-05: text extraction decodes every image** — `Page::text_on`
+- ~~**Found 2026-09-05: text extraction decodes every image**~~ — landed 2026-09-05
+  (`docs/status/M18.md` §6: `RequestedSize::NoSamples`; 183 ms → 0.03 ms on `image_bug_583804`). Original row: `Page::text_on`
   builds through the render's `build`, and `image::unpack` is 87% of
   `text/image_bug_583804` (3.36 G of 3.85 G `Ir`). A no-decode build mode is
   the fix; it carries an API question (`ImageObject.image` is a decoded

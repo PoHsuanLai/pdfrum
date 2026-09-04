@@ -256,6 +256,7 @@ pub fn pdfrum_page::Pixels::components(&self) -> usize
 pub fn pdfrum_page::Pixels::sample_bytes(&self, u32, u32, u32) -> [u8; 3]
 pub enum pdfrum_page::RequestedSize
 pub pdfrum_page::RequestedSize::Full
+pub pdfrum_page::RequestedSize::NoSamples
 pub pdfrum_page::RequestedSize::Reduced
 pub pdfrum_page::RequestedSize::Reduced::height: u32
 pub pdfrum_page::RequestedSize::Reduced::width: u32
