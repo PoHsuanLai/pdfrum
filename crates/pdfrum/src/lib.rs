@@ -138,6 +138,8 @@ pub use pdfrum_edit::{EmbeddedFont, FontEncoding, StandardFont};
 /// naming the layout of raw samples handed to the latter.
 #[cfg(feature = "edit")]
 pub use pdfrum_edit::{EmbeddedImage, PixelFormat};
+#[cfg(feature = "edit")]
+pub use pdfrum_edit::{IdSource, PageBox};
 /// The AGG-parity rasterizer, behind the `agg` feature.
 #[cfg(feature = "agg")]
 pub use pdfrum_raster_agg::AggBackend;

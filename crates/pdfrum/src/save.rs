@@ -6,7 +6,7 @@ use std::path::Path;
 #[cfg(feature = "forms")]
 use pdfrum_common::Diagnostics;
 use pdfrum_common::{PageIndex, PdfVersion};
-use pdfrum_edit::{EditDoc, SaveMode};
+use pdfrum_edit::{EditDoc, IdSource, PageBox, SaveMode};
 #[cfg(feature = "forms")]
 use pdfrum_object::Object;
 
@@ -41,6 +41,10 @@ pub struct SaveOptions {
     /// that a show operator draws with is replaced by a subset named
     /// `ABCDEF+Original`. See [`pdfrum_edit::SaveOptions::subset_new_fonts`].
     pub subset_new_fonts: bool,
+    /// Where the trailer's fresh `/ID` bytes come from: random per save by
+    /// default, or [`IdSource::Fixed`] for a reproducible file — the same
+    /// input then saves to the same bytes, subset-font tags included.
+    pub id_source: IdSource,
 }
 
 /// Whether a save rewrites the whole file or appends to it.
@@ -311,6 +315,139 @@ pub struct DocEdit<'a> {
 }
 
 impl DocEdit<'_> {
+    /// Import `pages` of `source` as a contiguous run at `at` (past the end
+    /// appends), in the order given, duplicates included. Objects two
+    /// imported pages share are copied once.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::Save`](crate::Error::Save) when `source` has no such page or
+    /// this document has no catalog to hang a page tree on.
+    pub fn import_pages(
+        &mut self,
+        source: &Document,
+        pages: impl IntoIterator<Item = impl Into<PageIndex>>,
+        at: impl Into<PageIndex>,
+    ) -> Result<()> {
+        pdfrum_edit::import_pages(
+            &mut self.inner,
+            &source.inner,
+            &pdfrum_edit::PageRange::of(pages),
+            &pdfrum_edit::ImportOptions {
+                at: at.into(),
+                viewer_preferences: false,
+            },
+        )?;
+        Ok(())
+    }
+
+    /// Delete `pages`, by this document's numbering as opened. A duplicate
+    /// index deletes once; the page objects go with the next full save's
+    /// garbage collection.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::Save`](crate::Error::Save) when there is no such page; nothing
+    /// is deleted then.
+    pub fn delete_pages(
+        &mut self,
+        pages: impl IntoIterator<Item = impl Into<PageIndex>>,
+    ) -> Result<()> {
+        pdfrum_edit::delete_pages(&mut self.inner, &pdfrum_edit::PageRange::of(pages))?;
+        Ok(())
+    }
+
+    /// Add an empty page of `width` by `height` points at `at` (past the end
+    /// appends). It has no contents until something is drawn on it.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::Save`](crate::Error::Save) when the document has no catalog.
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "a page size in points fits f32, which is what the file stores"
+    )]
+    pub fn add_page(&mut self, width: f64, height: f64, at: impl Into<PageIndex>) -> Result<()> {
+        pdfrum_edit::add_blank_page(
+            &mut self.inner,
+            width as f32,
+            height as f32,
+            u32::from(at.into()),
+        )?;
+        Ok(())
+    }
+
+    /// Set a page's `/Rotate`; `degrees` rounds to the nearest quarter turn.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::Save`](crate::Error::Save) when there is no such page.
+    pub fn set_rotation(&mut self, page: impl Into<PageIndex>, degrees: i32) -> Result<()> {
+        pdfrum_edit::set_page_rotation(&mut self.inner, page.into(), degrees)?;
+        Ok(())
+    }
+
+    /// Set one of a page's boxes (ISO 32000-1 §14.11.2).
+    ///
+    /// # Errors
+    ///
+    /// [`Error::Save`](crate::Error::Save) when there is no such page.
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "a box in points fits f32, which is what the file stores"
+    )]
+    pub fn set_page_box(
+        &mut self,
+        page: impl Into<PageIndex>,
+        which: PageBox,
+        rect: kurbo::Rect,
+    ) -> Result<()> {
+        pdfrum_edit::set_page_box(
+            &mut self.inner,
+            page.into(),
+            which,
+            [
+                rect.x0 as f32,
+                rect.y0 as f32,
+                rect.x1 as f32,
+                rect.y1 as f32,
+            ],
+        )?;
+        Ok(())
+    }
+
+    /// Lay `pages` of `source` out `columns` by `rows` per sheet of `sheet`
+    /// points, inserting the sheets at the front of this document — N-up
+    /// imposition, the way `FPDF_ImportNPagesToOne` does it.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::Save`](crate::Error::Save) when a page does not exist, the
+    /// grid or sheet is empty, or this document has no catalog.
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "a sheet size in points fits f32, which is what the file stores"
+    )]
+    pub fn n_up(
+        &mut self,
+        source: &Document,
+        pages: impl IntoIterator<Item = impl Into<PageIndex>>,
+        columns: u32,
+        rows: u32,
+        sheet: (f64, f64),
+    ) -> Result<()> {
+        pdfrum_edit::n_page_to_one(
+            &mut self.inner,
+            &source.inner,
+            &pdfrum_edit::PageRange::of(pages),
+            &pdfrum_edit::NUpOptions {
+                sheet: (sheet.0 as f32, sheet.1 as f32),
+                grid: (columns, rows),
+            },
+        )?;
+        Ok(())
+    }
+
     /// Embed `program` as a new `/Font`.
     ///
     /// ```
@@ -547,6 +684,7 @@ fn write_edit(edit: &EditDoc<'_>, options: SaveOptions, out: &mut impl Write) ->
         // cipher as everything else, because they are written the same way.
         remove_security: options.remove_security,
         subset_new_fonts: options.subset_new_fonts,
+        id_source: options.id_source,
         ..pdfrum_edit::SaveOptions::default()
     };
     pdfrum_edit::save(edit, &opts, out)?;

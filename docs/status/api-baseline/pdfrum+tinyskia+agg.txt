@@ -34,6 +34,7 @@ pub use pdfrum::Focus
 pub use pdfrum::FocusBox
 pub use pdfrum::FontEncoding
 pub use pdfrum::GeneratedAp
+pub use pdfrum::IdSource
 pub use pdfrum::IndexMap
 pub use pdfrum::IndexOutOfRange
 pub use pdfrum::Key
@@ -47,6 +48,7 @@ pub use pdfrum::ObjRef
 pub use pdfrum::Object
 pub use pdfrum::ObjectError
 pub use pdfrum::OpenError
+pub use pdfrum::PageBox
 pub use pdfrum::PageIndex
 pub use pdfrum::PageObject
 pub use pdfrum::PageRotation
@@ -156,12 +158,18 @@ pub fn pdfrum::DocEdit<'_>::set_attachment_description(&mut self, usize, &str) -
 pub fn pdfrum::DocEdit<'_>::set_attachment_file(&mut self, usize, &[u8]) -> pdfrum::Result<bool>
 pub fn pdfrum::DocEdit<'_>::set_attachment_param(&mut self, usize, &str, &str) -> pdfrum::Result<bool>
 impl pdfrum::DocEdit<'_>
+pub fn pdfrum::DocEdit<'_>::add_page(&mut self, f64, f64, impl core::convert::Into<pdfrum_common::page_index::PageIndex>) -> pdfrum::Result<()>
+pub fn pdfrum::DocEdit<'_>::delete_pages(&mut self, impl core::iter::traits::collect::IntoIterator<Item = impl core::convert::Into<pdfrum_common::page_index::PageIndex>>) -> pdfrum::Result<()>
 pub fn pdfrum::DocEdit<'_>::embed_cid_font(&mut self, &[u8], &str, &[u8]) -> pdfrum::Result<pdfrum_edit::font::embed::EmbeddedFont>
 pub fn pdfrum::DocEdit<'_>::embed_font(&mut self, &[u8], pdfrum_edit::font::embed::FontEncoding) -> pdfrum::Result<pdfrum_edit::font::embed::EmbeddedFont>
 pub fn pdfrum::DocEdit<'_>::embed_image(&mut self, &[u8], u32, u32, pdfrum_edit::image::raw::PixelFormat) -> pdfrum::Result<pdfrum_edit::image::EmbeddedImage>
 pub fn pdfrum::DocEdit<'_>::embed_jpeg(&mut self, &[u8]) -> pdfrum::Result<pdfrum_edit::image::EmbeddedImage>
+pub fn pdfrum::DocEdit<'_>::import_pages(&mut self, &pdfrum::Document, impl core::iter::traits::collect::IntoIterator<Item = impl core::convert::Into<pdfrum_common::page_index::PageIndex>>, impl core::convert::Into<pdfrum_common::page_index::PageIndex>) -> pdfrum::Result<()>
+pub fn pdfrum::DocEdit<'_>::n_up(&mut self, &pdfrum::Document, impl core::iter::traits::collect::IntoIterator<Item = impl core::convert::Into<pdfrum_common::page_index::PageIndex>>, u32, u32, (f64, f64)) -> pdfrum::Result<()>
 pub fn pdfrum::DocEdit<'_>::save(&self, impl core::convert::AsRef<std::path::Path>, &pdfrum::SaveOptions) -> pdfrum::Result<()>
 pub fn pdfrum::DocEdit<'_>::save_pages(&mut self, impl core::convert::AsRef<std::path::Path>, &[pdfrum::PageEdit], &pdfrum::SaveOptions) -> pdfrum::Result<()>
+pub fn pdfrum::DocEdit<'_>::set_page_box(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, pdfrum_edit::pages::PageBox, kurbo::rect::Rect) -> pdfrum::Result<()>
+pub fn pdfrum::DocEdit<'_>::set_rotation(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, i32) -> pdfrum::Result<()>
 pub fn pdfrum::DocEdit<'_>::standard_font(&mut self, pdfrum_font::subst::standard::StandardFont) -> pdfrum::Result<pdfrum_edit::font::embed::EmbeddedFont>
 pub fn pdfrum::DocEdit<'_>::write_pages_to(&mut self, &mut impl core::io::write::Write, &[pdfrum::PageEdit], &pdfrum::SaveOptions) -> pdfrum::Result<()>
 pub fn pdfrum::DocEdit<'_>::write_to(&self, &mut impl core::io::write::Write, &pdfrum::SaveOptions) -> pdfrum::Result<()>
@@ -171,6 +179,7 @@ pub struct pdfrum::Document
 impl pdfrum::Document
 pub fn pdfrum::Document::all_diagnostics(&self) -> pdfrum_common::diagnostics::Diagnostics
 pub fn pdfrum::Document::attachments(&self) -> alloc::vec::Vec<pdfrum::Attachment<'_>>
+pub fn pdfrum::Document::blank(f64, f64) -> pdfrum::Result<pdfrum::Document>
 pub fn pdfrum::Document::bytes(&self) -> &alloc::sync::Arc<[u8]>
 pub fn pdfrum::Document::diagnostics(&self) -> &pdfrum_common::diagnostics::Diagnostics
 pub fn pdfrum::Document::form(&self) -> core::option::Option<pdfrum::Form<'_>>
@@ -385,6 +394,7 @@ pub pdfrum::RenderSession::caches: pdfrum_render::ctx::RenderCaches
 impl pdfrum::RenderSession
 pub fn pdfrum::RenderSession::new() -> pdfrum::RenderSession
 pub struct pdfrum::SaveOptions
+pub pdfrum::SaveOptions::id_source: pdfrum_edit::write::id::IdSource
 pub pdfrum::SaveOptions::remove_security: bool
 pub pdfrum::SaveOptions::subset_new_fonts: bool
 pub pdfrum::SaveOptions::update: pdfrum::Update

@@ -413,6 +413,42 @@ impl Document {
         self.inner.catalog().unwrap_or_default()
     }
 
+    /// A new document with one empty page of `width` by `height` points.
+    ///
+    /// The starting point for a file built from nothing — a page of images,
+    /// a merge of other documents — through [`Document::edit`]. The page has
+    /// no contents until something is drawn on it or it is deleted.
+    ///
+    /// # Errors
+    ///
+    /// Never in practice: the bytes are written here and open by
+    /// construction; the `Result` is the one every open returns.
+    pub fn blank(width: f64, height: f64) -> Result<Document> {
+        use std::fmt::Write;
+        let objects = [
+            "<< /Type /Catalog /Pages 2 0 R >>".to_owned(),
+            "<< /Type /Pages /Count 1 /Kids [3 0 R] >>".to_owned(),
+            format!("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {width} {height}] >>"),
+        ];
+        let mut out = String::from("%PDF-1.7\n%\u{e2}\u{e3}\u{cf}\u{d3}\n");
+        let mut offsets = Vec::with_capacity(objects.len());
+        for (i, body) in objects.iter().enumerate() {
+            offsets.push(out.len());
+            let _ = writeln!(out, "{} 0 obj\n{body}\nendobj", i + 1);
+        }
+        let xref = out.len();
+        let _ = writeln!(out, "xref\n0 {}\n0000000000 65535 f ", objects.len() + 1);
+        for offset in offsets {
+            let _ = writeln!(out, "{offset:010} 00000 n ");
+        }
+        let _ = writeln!(
+            out,
+            "trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF",
+            objects.len() + 1
+        );
+        Document::from_bytes(Arc::from(out.into_bytes()))
+    }
+
     /// The trailer's `/ID` pair (ISO 32000-1 §14.4): the first element names
     /// the document as first written, the second this revision. They are equal
     /// when the file has never been re-saved. `None` when the trailer carries
