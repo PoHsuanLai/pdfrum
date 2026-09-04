@@ -255,7 +255,14 @@ impl<'a> Page<'a> {
     /// `session.build` moves.
     #[must_use]
     pub fn text_on(&self, session: &mut RenderSession) -> TextPage {
+        // Extraction never reads an image, so the build decodes none: on the
+        // corpus's image documents the decode was 87% of a text run.
+        let previous = std::mem::replace(
+            &mut session.build.decode_target,
+            pdfrum_page::RequestedSize::NoSamples,
+        );
         let page = self.build(&mut session.build);
+        session.build.decode_target = previous;
         let mut diags = Diagnostics::default();
         let options = pdfrum_text::ExtractOptions {
             rtl: self.doc.reads_right_to_left(),

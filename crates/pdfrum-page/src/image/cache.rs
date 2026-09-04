@@ -40,6 +40,11 @@ pub enum RequestedSize {
         /// Requested height.
         height: u32,
     },
+    /// No samples at all. A build for text extraction, which never reads an
+    /// image, asks for this, and the image object is not emitted — the same
+    /// outcome as a codec refusing it. Never a key the cache holds: on the
+    /// corpus's image documents the decode was 87% of a text run.
+    NoSamples,
 }
 
 impl RequestedSize {
@@ -107,10 +112,14 @@ impl RequestedSize {
             // A full-resolution cache always serves.
             Self::Full => true,
             Self::Reduced { .. } => match wanted {
-                // A reduced cache cannot serve a full-resolution request.
-                Self::Full => false,
+                // A reduced cache cannot serve a full-resolution request, and
+                // nothing is ever requested without samples: the build
+                // returns before it reaches the cache.
+                Self::Full | Self::NoSamples => false,
                 Self::Reduced { width, height } => cached_width >= width && cached_height >= height,
             },
+            // Nothing is ever cached without samples.
+            Self::NoSamples => false,
         }
     }
 }

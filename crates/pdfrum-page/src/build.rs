@@ -1799,6 +1799,9 @@ impl<R: Resolve> Interp<'_, R> {
         diags: &mut Diagnostics,
     ) {
         let size = ctx.decode_target;
+        if size == RequestedSize::NoSamples {
+            return;
+        }
         let cached = reference.and_then(|id| ctx.images.get(id, size));
         let image = if let Some(hit) = cached {
             hit

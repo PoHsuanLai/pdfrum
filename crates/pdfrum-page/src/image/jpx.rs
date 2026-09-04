@@ -282,7 +282,8 @@ pub fn decode_jpx(
         resolve_palette_indices: !matches!(space, Some(ColorSpace::Indexed(_))),
         strict: false,
         target_resolution: match target {
-            RequestedSize::Full => None,
+            // No samples never reaches a codec: the build returns first.
+            RequestedSize::Full | RequestedSize::NoSamples => None,
             RequestedSize::Reduced { width, height } => {
                 // A zero on either axis would make the decoder's own
                 // `checked_div` fall through to zero levels; asking for it is
