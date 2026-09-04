@@ -32,6 +32,7 @@ pdfrum forms flatten filled.pdf -o static.pdf
 pdfrum repair damaged.pdf -o fixed.pdf
 pdfrum optimize big.pdf --deterministic -o small.pdf
 pdfrum security decrypt locked.pdf --password secret -o open.pdf
+pdfrum security encrypt open.pdf --user-password read --owner-password admin --allow print -o locked.pdf
 ```
 
 Every command takes `--password` for an encrypted file and prints notices
