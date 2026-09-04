@@ -11,6 +11,7 @@
 //!   silently, rather than truncating it.
 
 use kurbo::{BezPath, Rect, Shape};
+use std::sync::Arc;
 
 /// The most text objects a clipping path may accumulate.
 pub const MAX_TEXT_OBJECTS: usize = 1024;
@@ -84,11 +85,14 @@ pub struct TextClipRun {
 
 /// The clipping state: an ordered list of contributions to intersect.
 ///
-/// Cloning is cheap enough for `q`/`Q` because the paths are shared through
-/// the enclosing `Arc` on the graphics state.
+/// The entries sit behind an `Arc`, so the clone every emitted object takes
+/// of its graphics state shares them: thousands of consecutive paths under
+/// one clip cost one reference count each, and a push copies the vector
+/// only when it is shared. Measured 2026-09-05 (M18 §4): the state clone
+/// was 9.6% of `vector_paths_1751`'s build with the vector owned.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct ClipStack {
-    entries: Vec<ClipEntry>,
+    entries: Arc<Vec<ClipEntry>>,
     /// How many text objects the whole stack holds, for the 1024 cap.
     text_objects: usize,
 }
@@ -131,9 +135,9 @@ impl ClipStack {
             && let Some(rect) = as_rectangle(previous)
             && contains_rect(rect, incoming)
         {
-            self.entries.pop();
+            Arc::make_mut(&mut self.entries).pop();
         }
-        self.entries.push(ClipEntry::Path { path, rule });
+        Arc::make_mut(&mut self.entries).push(ClipEntry::Path { path, rule });
     }
 
     /// Add a batch of clipping text runs.
@@ -156,7 +160,7 @@ impl ClipStack {
             });
         }
         self.text_objects += adding;
-        self.entries.push(ClipEntry::Text { runs });
+        Arc::make_mut(&mut self.entries).push(ClipEntry::Text { runs });
         Ok(())
     }
 
@@ -165,7 +169,7 @@ impl ClipStack {
     /// This is what a single-point path with a pending clip produces: a
     /// degenerate rectangle at the origin, whose interior is nothing.
     pub fn push_empty(&mut self) {
-        self.entries.push(ClipEntry::Path {
+        Arc::make_mut(&mut self.entries).push(ClipEntry::Path {
             path: Rect::ZERO.to_path(0.1),
             rule: ClipRule::Winding,
         });
@@ -176,7 +180,7 @@ impl ClipStack {
     #[must_use]
     pub fn bounds(&self) -> Option<Rect> {
         let mut result: Option<Rect> = None;
-        for entry in &self.entries {
+        for entry in self.entries.iter() {
             let rect = match entry {
                 ClipEntry::Path { path, .. } => path.bounding_box(),
                 // A text layer's contribution is the *union* of its runs; the
