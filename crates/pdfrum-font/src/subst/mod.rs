@@ -212,9 +212,8 @@ pub fn resolve(
 /// - **the built-in faces alone** (both unset) — the hermetic default, so a
 ///   unit test's answer does not depend on what is installed on the machine.
 ///
-/// The scan is not cached: it happens once per substituted font. Measure
-/// before changing that — a document whose fonts are all embedded never
-/// reaches here at all.
+/// The host scan is cached for the process; a `--font-dir` scan is not. A
+/// document whose fonts are all embedded never reaches here at all.
 #[must_use]
 pub fn resolve_with_options(
     req: &FontRequest,
@@ -223,6 +222,20 @@ pub fn resolve_with_options(
 ) -> Substitution {
     if opts.font_dirs.is_empty() && !opts.system_fonts {
         return resolve(req, &TestFontDb::new(), opts, diags);
+    }
+    if opts.font_dirs.is_empty() {
+        // The host's fonts do not change under a running process, and the
+        // scan parses every installed face: measured 2026-09-05 on a host
+        // with 1 183 faces, 0.2 s per scan and one scan per substituted
+        // font. Once per process. A `--font-dir` run is a hermetic test and
+        // stays unshared.
+        static SYSTEM: OnceLock<SystemFontDb> = OnceLock::new();
+        return resolve(
+            req,
+            SYSTEM.get_or_init(|| SystemFontDb::scan(&[])),
+            opts,
+            diags,
+        );
     }
     let db = SystemFontDb::scan(&opts.font_dirs);
     resolve(req, &db, opts, diags)

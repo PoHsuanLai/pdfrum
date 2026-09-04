@@ -20,8 +20,9 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
 - ~~**`Object::Stream(Box<Stream>)`**~~ — landed 2026-09-05 (`docs/status/M18.md`
   §3: 32 bytes; peak RSS unchanged within noise, written down). Original row: 56 → 32 bytes; `api-snapshot update`
   as its own commit; RSS on the ten largest corpus files before/after.
-- **Found 2026-09-05: the system font scan copies every installed font into
-  memory, per substituted font.** `SystemFontDb::scan` (`pdfrum-font/src/subst/db.rs:400`)
+- ~~**Found 2026-09-05: the system font scan copies every installed font into
+  memory, per substituted font.**~~ — landed 2026-09-05 (`docs/status/M18.md`
+  §5: 1,162 MB → 58 MB, 1.40 s → 0.26 s on `vector_en_tem`; exit missed by 8 MB and named). Original row: `SystemFontDb::scan` (`pdfrum-font/src/subst/db.rs:400`)
   calls `face_bytes_of`, which copies each face's bytes out of `fontdb`'s
   mmap into an `Arc<[u8]>` and keeps all of them in `sources`; the scan is
   uncached and runs once per substituted font. Measured with the tool's
