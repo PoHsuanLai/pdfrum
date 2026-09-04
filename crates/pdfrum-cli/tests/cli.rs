@@ -794,3 +794,53 @@ fn preview_draws_half_blocks_when_told_to_and_view_refuses_a_pipe() {
     assert_eq!(view.status.code(), Some(1));
     assert!(String::from_utf8_lossy(&view.stderr).contains("needs a terminal"));
 }
+
+// ---- phase 4: markdown and layout ----------------------------------------
+
+#[test]
+fn markdown_reads_the_structure_tree_and_keeps_unclaimed_text() {
+    assert_eq!(
+        stdout(&["extract", "markdown", "fixtures/tagged_alt_text.pdf"]).unwrap(),
+        "![Black Image](image)\n"
+    );
+    assert_eq!(
+        stdout(&["extract", "markdown", "fixtures/tagged_actual_text.pdf"]).unwrap(),
+        "Actual Text\n\n![Actual Text](image)\n"
+    );
+    assert_eq!(
+        stdout(&["extract", "markdown", "fixtures/tagged_marked_content.pdf"]).unwrap(),
+        expected("markdown_tagged_marked_content.txt").unwrap()
+    );
+    let v = json(&[
+        "extract",
+        "markdown",
+        "fixtures/tagged_alt_text.pdf",
+        "--json",
+    ])
+    .unwrap();
+    assert_eq!(v[0]["page"], 1);
+    assert!(v[0]["markdown"].as_str().unwrap().starts_with("!["));
+}
+
+#[test]
+fn markdown_falls_back_to_typography_and_layout_keeps_columns() {
+    assert_eq!(
+        stdout(&["extract", "markdown", "fixtures/hello_world_2_pages.pdf"]).unwrap(),
+        expected("markdown_hello_world_2_pages.txt").unwrap()
+    );
+    assert_eq!(
+        stdout(&["extract", "text", "--layout", "fixtures/weblinks.pdf"]).unwrap(),
+        expected("layout_weblinks.txt").unwrap()
+    );
+    let plain = stdout(&["extract", "text", "fixtures/weblinks.pdf"]).unwrap();
+    let laid = expected("layout_weblinks.txt").unwrap();
+    assert!(
+        laid.lines().next().unwrap().starts_with("      "),
+        "indented by its x: {laid:?}"
+    );
+    assert_eq!(
+        plain.split_whitespace().collect::<Vec<_>>(),
+        laid.split_whitespace().collect::<Vec<_>>(),
+        "the same words, only placed"
+    );
+}

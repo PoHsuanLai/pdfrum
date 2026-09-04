@@ -26,3 +26,6 @@ Each row says which command's expected output in `../expected/` it pins.
 | `text_form.pdf` | 927 B | One `/Tx` field named `Text Box` — `forms dump`, `forms fill`, `forms flatten`. |
 | `encrypted.pdf` | 10.6 KB | RC4-encrypted, user password `1234`, owner `5678` — `security decrypt`, `--password`. |
 | `mona_lisa.jpg` | 6.2 KB | A 120 by 120 baseline JPEG — `pages create` embeds it unchanged. |
+| `tagged_alt_text.pdf` | 2.4 KB | A tagged page: `Document` › `P` › `Figure` with `/Alt (Black Image)` — `extract markdown` reads the tree and emits the image with its alternative text. |
+| `tagged_actual_text.pdf` | 2.4 KB | The same tree with `/ActualText` on the paragraph — the tree's own text wins over the page's. |
+| `tagged_marked_content.pdf` | 1.9 KB | Four `NonStruct` elements over four marked-content ids, two of them naming no page and so invalid to the tree, as in PDFium — `extract markdown` emits the two claimed texts from the tree and the two unclaimed ones after them, so nothing is lost. |

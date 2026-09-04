@@ -25,6 +25,7 @@ pub fn text(
     file: &Path,
     password: Option<&str>,
     spec: Option<&str>,
+    layout: bool,
     json: bool,
 ) -> Result<ExitCode> {
     let doc = out::open(file, password)?;
@@ -36,7 +37,11 @@ pub fn text(
             page: out::page_number(page.index()),
             // The extractor keeps PDFium's `\r\n` line ends, which are the
             // oracle's contract; a command line speaks `\n`.
-            text: page.text().slice(..).replace("\r\n", "\n"),
+            text: if layout {
+                page.layout_text()
+            } else {
+                page.text().slice(..).replace("\r\n", "\n")
+            },
         });
     }
     if json {
@@ -52,6 +57,43 @@ pub fn text(
             if !p.text.ends_with('\n') {
                 outln!();
             }
+        }
+    }
+    Ok(ExitCode::SUCCESS)
+}
+
+// ---- markdown -------------------------------------------------------------
+
+#[derive(Serialize)]
+struct PageMarkdown {
+    page: u32,
+    markdown: String,
+}
+
+/// The pages as Markdown, one document, a horizontal rule between pages.
+pub fn markdown(
+    file: &Path,
+    password: Option<&str>,
+    spec: Option<&str>,
+    json: bool,
+) -> Result<ExitCode> {
+    let doc = out::open(file, password)?;
+    let mut out_pages = Vec::new();
+    for index in pages::select(spec, doc.page_count())? {
+        let page = doc.page(index)?;
+        out_pages.push(PageMarkdown {
+            page: out::page_number(page.index()),
+            markdown: page.markdown(),
+        });
+    }
+    if json {
+        out::json(&out_pages)?;
+    } else {
+        for (i, p) in out_pages.iter().enumerate() {
+            if i > 0 {
+                outln!("\n---\n");
+            }
+            out!("{}", p.markdown);
         }
     }
     Ok(ExitCode::SUCCESS)
