@@ -66,6 +66,10 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
   `preview`, `view`, `search`, `--color|--hyperlinks|--graphics`, OSC 8 in
   links and toc, the password prompt; `crossterm` and `rpassword` admitted,
   `viuer` (LGPL rider), `comfy-table` and `indicatif` (no reader) declined.
+- ~~Phase 4 — `pdfrum-markdown`~~ — landed 2026-09-05 (`docs/status/M19.md`):
+  the crate, `Page::markdown` / `Page::layout_text` behind `markdown`,
+  `extract markdown`, `extract text --layout`; tagged tier plus typography,
+  unclaimed text never lost.
 - Five phases, PLAN.md M19; the read-only core ships on `clap` + `serde_json`
   before any terminal crate is admitted.
 - **`security encrypt` kept** (user, 2026-09-05): R6 only, generation as

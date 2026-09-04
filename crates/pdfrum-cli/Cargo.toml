@@ -23,7 +23,7 @@ workspace = true
 [dependencies]
 # The facade only: everything the command line needs is what `cargo add
 # pdfrum` gets, and a gap here is a gap there.
-pdfrum = { workspace = true, features = ["png"] }
+pdfrum = { workspace = true, features = ["png", "markdown"] }
 anyhow.workspace = true
 clap.workspace = true
 serde.workspace = true

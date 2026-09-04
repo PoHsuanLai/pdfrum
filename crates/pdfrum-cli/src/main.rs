@@ -320,7 +320,22 @@ enum Extract {
         /// Pages to extract, 1-based: `3`, `1-5`, `2,7,10-end`. All by default.
         #[arg(long, value_name = "RANGE")]
         pages: Option<String>,
+        /// Keep the layout: columns stay columns, gaps stay gaps.
+        #[arg(long)]
+        layout: bool,
         /// One JSON document: an array of `{page, text}`.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Each page as Markdown: the structure tree where there is one,
+    /// typography where there is not.
+    Markdown {
+        #[command(flatten)]
+        input: Input,
+        /// Pages to convert, 1-based. All by default.
+        #[arg(long, value_name = "RANGE")]
+        pages: Option<String>,
+        /// One JSON document: an array of `{page, markdown}`.
         #[arg(long)]
         json: bool,
     },
@@ -467,8 +482,14 @@ fn run_extract(
     term: term::Term,
 ) -> anyhow::Result<ExitCode> {
     match what {
-        Extract::Text { input, pages, json } => {
-            cmd::extract::text(&input.file, password, pages.as_deref(), json)
+        Extract::Text {
+            input,
+            pages,
+            layout,
+            json,
+        } => cmd::extract::text(&input.file, password, pages.as_deref(), layout, json),
+        Extract::Markdown { input, pages, json } => {
+            cmd::extract::markdown(&input.file, password, pages.as_deref(), json)
         }
         Extract::Links { input, pages, json } => {
             cmd::extract::links(&input.file, password, pages.as_deref(), json, term)

@@ -9,6 +9,8 @@ pdfrum info report.pdf --json          # the same as one JSON document
 pdfrum doctor damaged.pdf --strict     # what the parser recovered; exit 3 if anything
 pdfrum render report.pdf --pages 1-3 --dpi 200 -o out/{stem}-{n}.png
 pdfrum extract text report.pdf --pages 2,5-end
+pdfrum extract text --layout two-column.pdf     # columns stay columns
+pdfrum extract markdown paper.pdf > paper.md    # tags if present, typography if not
 pdfrum extract links report.pdf --json
 pdfrum extract toc report.pdf
 pdfrum extract attachments invoice.pdf -o attachments/
