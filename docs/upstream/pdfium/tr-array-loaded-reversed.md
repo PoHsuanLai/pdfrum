@@ -2,6 +2,8 @@
 
 **Filed** as crbug.com/pdfium/555940409 on 2026-09-02.
 
+**Fixed upstream** in `2621636d3` (2026-09-03), "Fix reversed channel order when loading transfer function array", `Fixed: 555940409`; seen at checkout `a043bed4a` on 2026-09-05.
+
 **Confidence:** code-level, no runtime repro.
 
 **Source read at** PDFium commit `6f2272e1f3aa` (2026-08-28).

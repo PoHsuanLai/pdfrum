@@ -2,6 +2,8 @@
 
 **Filed** as crbug.com/pdfium/555940408 on 2026-09-02.
 
+**Still open** at checkout `a043bed4a` (2026-09-05): `core/fxcrt/fx_unicode.cpp` is untouched since `6f2272e1f`.
+
 **Confidence:** code-level, clear repro.
 
 **Source read at** PDFium commit `6f2272e1f3aa` (2026-08-28).

@@ -2,6 +2,8 @@
 
 **Filed** as crbug.com/pdfium/555821586 on 2026-09-02.
 
+**Fixed upstream** in `017295ab7` (2026-09-03), "Implement 50-year pivot for two-digit year parsing", `Fixed: 555821586`; seen at checkout `a043bed4a` on 2026-09-05.
+
 **Confidence:** observed output.
 
 **Repro files:** `yy.pdf, yy.in` in `../repro/`.

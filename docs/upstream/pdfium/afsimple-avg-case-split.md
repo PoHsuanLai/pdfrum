@@ -2,6 +2,8 @@
 
 **Filed** as crbug.com/pdfium/555848530 on 2026-09-02.
 
+**Still open** at checkout `a043bed4a` (2026-09-05): `fxjs/cjs_publicmethods.cpp` is untouched since `6f2272e1f`.
+
 **Confidence:** observed output.
 
 **Repro files:** `avg.pdf, avg.in` in `../repro/`.
