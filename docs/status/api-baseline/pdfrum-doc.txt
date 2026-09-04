@@ -434,9 +434,23 @@ pub fn pdfrum_doc::prefs::ViewerPrefs::print_page_range<R: pdfrum_object::resolv
 pub fn pdfrum_doc::prefs::ViewerPrefs::print_scaling<R: pdfrum_object::resolve::Resolve>(&self, &R) -> bool
 pub fn pdfrum_doc::prefs::ViewerPrefs::read<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &R) -> pdfrum_doc::prefs::ViewerPrefs
 pub mod pdfrum_doc::structure
+pub enum pdfrum_doc::structure::Kid
+pub pdfrum_doc::structure::Kid::Element
+pub pdfrum_doc::structure::Kid::Element::dict: pdfrum_object::dict::Dict
+pub pdfrum_doc::structure::Kid::Element::linked: core::option::Option<usize>
+pub pdfrum_doc::structure::Kid::Element::reference: core::option::Option<pdfrum_object::object::ObjRef>
+pub pdfrum_doc::structure::Kid::Element::slot: usize
+pub pdfrum_doc::structure::Kid::Invalid
+pub pdfrum_doc::structure::Kid::Object
+pub pdfrum_doc::structure::Kid::Object::obj_num: u32
+pub pdfrum_doc::structure::Kid::PageContent
+pub pdfrum_doc::structure::Kid::PageContent::content_id: i64
+pub pdfrum_doc::structure::Kid::StreamContent
+pub pdfrum_doc::structure::Kid::StreamContent::content_id: i64
+pub pdfrum_doc::structure::Kid::StreamContent::stream_obj_num: u32
 pub struct pdfrum_doc::structure::StructElement
 pub pdfrum_doc::structure::StructElement::dict: pdfrum_object::dict::Dict
-pub pdfrum_doc::structure::StructElement::kids: alloc::vec::Vec<pdfrum_doc::structure::element::Kid>
+pub pdfrum_doc::structure::StructElement::kids: alloc::vec::Vec<pdfrum_doc::structure::Kid>
 pub pdfrum_doc::structure::StructElement::kind: alloc::vec::Vec<u8>
 pub pdfrum_doc::structure::StructElement::parent: core::option::Option<usize>
 pub pdfrum_doc::structure::StructElement::reference: core::option::Option<pdfrum_object::object::ObjRef>
@@ -448,7 +462,7 @@ pub fn pdfrum_doc::StructElement::id(&self) -> core::option::Option<alloc::vec::
 pub fn pdfrum_doc::StructElement::kid_content_id(&self, usize) -> core::option::Option<i64>
 pub fn pdfrum_doc::StructElement::lang(&self) -> core::option::Option<alloc::vec::Vec<u8>>
 pub fn pdfrum_doc::StructElement::link_kid(&mut self, &pdfrum_object::dict::Dict, core::option::Option<pdfrum_object::object::ObjRef>, usize) -> bool
-pub fn pdfrum_doc::StructElement::load_kids<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, u32, &R) -> alloc::vec::Vec<pdfrum_doc::structure::element::Kid>
+pub fn pdfrum_doc::StructElement::load_kids<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, u32, &R) -> alloc::vec::Vec<pdfrum_doc::structure::Kid>
 pub fn pdfrum_doc::StructElement::obj_type<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::vec::Vec<u8>
 pub fn pdfrum_doc::StructElement::title<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::string::String
 pub struct pdfrum_doc::structure::StructTree
@@ -772,7 +786,7 @@ pub fn pdfrum_doc::NameTree::lookup_by_index<R: pdfrum_object::resolve::Resolve>
 pub fn pdfrum_doc::NameTree::open<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, &pdfrum_object::name::Name, &R) -> core::option::Option<pdfrum_doc::NameTree>
 pub struct pdfrum_doc::StructElement
 pub pdfrum_doc::StructElement::dict: pdfrum_object::dict::Dict
-pub pdfrum_doc::StructElement::kids: alloc::vec::Vec<pdfrum_doc::structure::element::Kid>
+pub pdfrum_doc::StructElement::kids: alloc::vec::Vec<pdfrum_doc::structure::Kid>
 pub pdfrum_doc::StructElement::kind: alloc::vec::Vec<u8>
 pub pdfrum_doc::StructElement::parent: core::option::Option<usize>
 pub pdfrum_doc::StructElement::reference: core::option::Option<pdfrum_object::object::ObjRef>
@@ -784,7 +798,7 @@ pub fn pdfrum_doc::StructElement::id(&self) -> core::option::Option<alloc::vec::
 pub fn pdfrum_doc::StructElement::kid_content_id(&self, usize) -> core::option::Option<i64>
 pub fn pdfrum_doc::StructElement::lang(&self) -> core::option::Option<alloc::vec::Vec<u8>>
 pub fn pdfrum_doc::StructElement::link_kid(&mut self, &pdfrum_object::dict::Dict, core::option::Option<pdfrum_object::object::ObjRef>, usize) -> bool
-pub fn pdfrum_doc::StructElement::load_kids<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, u32, &R) -> alloc::vec::Vec<pdfrum_doc::structure::element::Kid>
+pub fn pdfrum_doc::StructElement::load_kids<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::dict::Dict, u32, &R) -> alloc::vec::Vec<pdfrum_doc::structure::Kid>
 pub fn pdfrum_doc::StructElement::obj_type<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::vec::Vec<u8>
 pub fn pdfrum_doc::StructElement::title<R: pdfrum_object::resolve::Resolve>(&self, &R) -> alloc::string::String
 pub struct pdfrum_doc::StructTree

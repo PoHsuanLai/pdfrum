@@ -22,7 +22,7 @@ mod dump;
 mod element;
 
 pub use dump::render as dump_tree;
-pub(crate) use element::Kid;
+pub use element::Kid;
 pub use element::StructElement;
 
 use pdfrum_common::{DiagKind, Diagnostics, Limits, Severity};
