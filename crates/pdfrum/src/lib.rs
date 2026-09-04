@@ -51,6 +51,14 @@
 //! long document give each rayon worker its own [`RenderSession`].
 
 #![forbid(unsafe_code)]
+// The crate docs link to `Form`, `PageEdit`, `Document::save` and their
+// kin, which only exist with `forms` and `edit` on. A headless build
+// (`--no-default-features`) still has the prose; the links become plain
+// text rather than a warning under `-D warnings`.
+#![cfg_attr(
+    not(all(feature = "edit", feature = "forms")),
+    allow(rustdoc::broken_intra_doc_links)
+)]
 
 mod annotation;
 #[cfg(feature = "edit")]

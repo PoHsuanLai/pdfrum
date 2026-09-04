@@ -17,8 +17,10 @@ def main [] {
     print "==> cargo clippy (deny warnings)"
     ^cargo clippy --workspace --all-targets -- -D warnings
 
-    print "==> cargo nextest run"
-    ^cargo nextest run
+    # The tool's JavaScript tests are `cfg`'d behind its `javascript` feature;
+    # without the flag they never run and the gate would pass over them.
+    print "==> cargo nextest run (with the tool's javascript feature)"
+    ^cargo nextest run --workspace --features pdfrum-tool/javascript
 
     print "==> cargo test --doc (nextest silently skips doctests)"
     ^cargo test --doc --workspace

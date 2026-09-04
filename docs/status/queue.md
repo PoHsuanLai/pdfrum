@@ -232,21 +232,20 @@ paid here. Once they are, `ratchet update` records the whole set.
 
 ## Found during the features pass (2026-09-04)
 
-- **A tool test fails and CI never ran it.** `pdfrum-tool`'s
-  `run::tests::an_uncaught_throw_is_reported_on_stderr_and_the_next_script_still_runs`
-  expects `Alert: before` alone and gets `Alert: before` then `Alert: after`:
-  an uncaught throw no longer stops the rest of the script. It fails on
-  `61734e0`, before this pass, so it is an M15 residue — probably step 4's
-  event path. It never ran in CI because `scripts/ci.nu`'s `cargo nextest run`
-  builds the tool without its `javascript` feature; the tool's JavaScript
-  tests are `cfg`'d out there. Two items: fix the throw, and have the gate
-  build the tool with `--features pdfrum-tool/javascript` (a flag on an
-  existing gate, not a new one).
-- **Headless rustdoc.** `cargo doc -p pdfrum --no-default-features` fails
-  on the crate-level links to `Form`, `PageEdit` and the other gated items.
-  The published docs are the default set's and build clean; the headless
-  build's docs are not a gate. Leave it unless docs.rs is ever configured
-  for a feature-less build.
+- ~~**A tool test fails and CI never ran it.**~~ — closed 2026-09-05. The
+  test was stale, not the engine: its throwing call was `this.getAnnots()`,
+  which became a real `Doc` method when the object model landed (3d11da1,
+  after the test was written at 9642f48), so the script stopped throwing and
+  `after` ran. The test now calls a method nothing implements and passes.
+  `scripts/ci.nu`'s test stage runs `cargo nextest run --workspace
+  --features pdfrum-tool/javascript`, so the tool's JavaScript tests are in
+  the gate.
+- ~~**Headless rustdoc.**~~ — closed 2026-09-05: the facade's crate root
+  carries `allow(rustdoc::broken_intra_doc_links)` under
+  `not(all(feature = "edit", feature = "forms"))`, so a
+  `--no-default-features` build keeps the prose with the gated names as
+  plain text and passes `-D warnings`; the default build still checks
+  every link. Verified headless, default, and `edit`-only.
 
 ## Cleanliness before public CI (added 2026-09-03, user)
 
@@ -418,10 +417,16 @@ paid here. Once they are, `ratchet update` records the whole set.
   `image_bug_583804`, is reproducibly **0.76x** across `cd1a511` — 153 → 201
   ms, all of it in `draw_image`, on a page that pushes no clip, through code
   the commit did not touch. A codegen (inlining/layout) effect, not the pool.
-  §14's "before" of 201 ms for this file is the post-`cd1a511` figure. Open:
-  whether today's binary still carries it — a `perf annotate` of
-  `draw_image_sampled` on the two arms, or an `#[inline]` experiment,
-  when the box allows hardware sampling (`perf_event_paranoid` is 4).
+  §14's "before" of 201 ms for this file is the post-`cd1a511` figure.
+  **Answered by `Ir` (2026-09-05)**, since hardware sampling stays closed:
+  callgrind of `profile --op render --backend tinyskia` on this file, the
+  tree at `cd1a511^` (896ff30) against today's (f166f60), inclusive
+  `draw_image` 1,150,195,735 vs 1,150,195,722 instructions — thirteen
+  apart — with `blit_rect` and `sample_bytes` identical to the instruction,
+  and the whole render 8.58 G → 7.09 G from work since. Nothing `cd1a511`
+  did reaches `draw_image`'s instruction stream; whatever the 0.76x was, it
+  was not codegen of this path, and the interleaved re-baseline of
+  2026-09-05 (M13 §23–§24) is the figure the ratchet now carries. Closed.
 - A deep-clip-stack document outside `forms` would gain from 30c0419; none
   was looked for.
 - An idle re-take of the §10.5 table. The box has never been idle (load

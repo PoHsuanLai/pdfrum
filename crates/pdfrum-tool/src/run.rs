@@ -1168,7 +1168,10 @@ trailer<</Root 1 0 R/Size 5>>\n";
     #[test]
     fn an_uncaught_throw_is_reported_on_stderr_and_the_next_script_still_runs() {
         let (out, err) = run(
-            &with_open_action("app.alert('before'); this.getAnnots(); app.alert('after');"),
+            // `getAnnots` was the throwing call when this test was written and
+            // is a real `Doc` method since the object model landed; the call
+            // has to be one nothing implements.
+            &with_open_action("app.alert('before'); this.noSuchMethod(); app.alert('after');"),
             &["--js-transcript", "--time=1399672130"],
         );
         // One statement threw, so the rest of *that* script is lost — which is
