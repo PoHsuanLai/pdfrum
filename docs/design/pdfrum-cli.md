@@ -574,7 +574,7 @@ other.
 | `repair` | opening *is* the recovery; `Document::save` in full mode rewrites from the trailer and garbage-collects unreachable objects (`write/mod.rs` "The garbage collection is the point") | nothing — `repair` = open + full save, and says so in its help |
 | `optimize` | the same full save (prune, re-flate) | **linearization does not exist** (PLAN.md M16, post-1.0). `optimize` ships without Fast Web View; the flag appears when M16 lands, not before (no dead options) |
 | `security decrypt` | `SaveOptions::remove_security` | nothing |
-| `security encrypt` | the writer re-enciphers under an **existing** handler only (`encrypt.rs`); `pdfrum-crypt` verifies passwords, does not generate `/O` `/U` `/OE` `/UE` `/Perms` | encrypt-on-save of an unencrypted document. No oracle (`pdfium_test` cannot do it); spec-driven from ISO 32000-2 §7.6.4 (R6, AES-256 only — RC4/R4 is not worth writing new). PLAN.md M13 listed this as post-1.0; **it is now an M19 library item, the user's call to keep or cut** |
+| `security encrypt` | the writer re-enciphers under an **existing** handler only (`encrypt.rs`); `pdfrum-crypt` verifies passwords, does not generate `/O` `/U` `/OE` `/UE` `/Perms` | encrypt-on-save of an unencrypted document. No oracle (`pdfium_test` cannot do it); spec-driven from ISO 32000-2 §7.6.4 (R6, AES-256 only — RC4/R4 is not worth writing new). PLAN.md M13 listed this as post-1.0; **kept as an M19 phase-5 library item (user, 2026-09-05)**. Test: round trip — our parser accepts user and owner password, the oracle renders the encrypted output byte-identical to the plaintext input, empty user password pinned |
 | `inspect object/xref` | `Document::fetch`, `Document::parser().xref()/trailer()` | an `ObjRef` display of a parsed object (the writer's serializer already prints objects; re-use it) |
 | `inspect revisions` | the parser walks the `/Prev` chain at load | expose the chain: `(offset, object count, whether xref stream)` per revision; "revision N as a file" is the input truncated at that revision's `%%EOF`, valid for incremental files only |
 | `inspect structure` | `pdfrum_doc::StructTree` (+ `pdfrum-tool --show-structure`) | facade re-export of the structure tree (also the markdown crate's Tier 1 input) |
@@ -664,7 +664,7 @@ commands that use them.
    the same line model. Facade feature `markdown`.
 5. **Forensics and polish.** `extract images|fonts` (facade accessors),
    `inspect object|xref|revisions|revision|structure`, `diff`, `hash`,
-   `security encrypt` (if kept), completions and man pages
+   `security encrypt` (R6, kept), completions and man pages
    (`clap_complete`, `clap_mangen`), README row.
 
 ### 9.6 Exit

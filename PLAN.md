@@ -1380,8 +1380,10 @@ the library first. Five phases, dependency-free core first:
    `extract text --layout` over the same line model.
 5. **Forensics and polish:** `extract images|fonts`, `inspect
    object|xref|revisions|revision|structure`, `diff` (hand-rolled Myers, no
-   dep unless it fails the bar), `hash`, `security encrypt` (R6 only,
-   spec-driven, no oracle — **user's call to keep or cut**), completions,
+   dep unless it fails the bar), `hash`, `security encrypt` (**kept, user 2026-09-05**: R6 only,
+   spec-driven; the test is the round trip — our parser accepts both
+   passwords and the oracle renders the encrypted file byte-identical to
+   the plaintext input), completions,
    man pages, README row.
 
 Renamed or dropped because the library has no such thing: `--dark-mode` →

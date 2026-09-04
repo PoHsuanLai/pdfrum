@@ -29,8 +29,12 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
 
 - Five phases, PLAN.md M19; the read-only core ships on `clap` + `serde_json`
   before any terminal crate is admitted.
-- **User decisions recorded as open:** keep or cut `security encrypt`
-  (R6-only, spec-driven, no oracle). The `MinerU-rs` question is closed:
+- **`security encrypt` kept** (user, 2026-09-05): R6 only, generation as
+  the inverse of `pdfrum-crypt`'s existing verification (fresh salts,
+  `/U` `/O` `/UE` `/OE` `/Perms`), the writer's enciphering unchanged; tests
+  are the round trip through our parser and the oracle's render, with the
+  empty-user-password case pinned. Phase 5, library item in `pdfrum-crypt`
+  + `pdfrum-edit`. The `MinerU-rs` question is closed:
   upstream is Apache-2.0 plus a commercial-threshold/attribution rider, so
   the heuristics are implemented from their description with MinerU credited,
   and no code is copied (`docs/design/pdfrum-cli.md` §9.3).
