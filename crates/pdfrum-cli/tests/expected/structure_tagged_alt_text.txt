@@ -1,0 +1,4 @@
+page 1
+  Document
+    P
+      Figure  mcid [0]  alt "Black Image"

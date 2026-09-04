@@ -77,6 +77,20 @@ pub fn write_all(args: std::fmt::Arguments<'_>) {
     }
 }
 
+/// [`write_all`] for bytes that are not text: a decoded stream, a
+/// completion script.
+pub fn write_bytes(bytes: &[u8]) {
+    use std::io::Write;
+    let mut stdout = std::io::stdout().lock();
+    if let Err(err) = stdout.write_all(bytes).and_then(|()| stdout.flush()) {
+        if err.kind() == std::io::ErrorKind::BrokenPipe {
+            std::process::exit(0);
+        }
+        eprintln!("pdfrum: cannot write to stdout: {err}");
+        std::process::exit(1);
+    }
+}
+
 /// `println!` for a command's output; see [`write_all`].
 macro_rules! outln {
     () => {

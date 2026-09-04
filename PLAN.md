@@ -1351,7 +1351,7 @@ instead of `BezPath`). Each premise was profiled before scheduling
   `Object` 32 bytes with RSS recorded on the ten largest corpus files; the
   clip-stack table written down; `docs/status/M18.md`.
 
-## M19 — The `pdfrum` command line  *(after M18; `docs/design/pdfrum-cli.md`, §9 is the scoped version)*  — IN PROGRESS from 2026-09-05
+## M19 — The `pdfrum` command line  *(after M18; `docs/design/pdfrum-cli.md`, §9 is the scoped version)*  — **MET 2026-09-05** (`docs/status/M19.md`: five phases, 40 commands on facade fills, 44 CLI tests against expected files and the oracle's `--password`)
 
 A user-facing binary `pdfrum` (crate `pdfrum-cli`), beside — never instead
 of — `pdfrum-tool`, which stays the oracle mirror. The CLI is a client of the
@@ -1392,6 +1392,13 @@ Renamed or dropped because the library has no such thing: `--dark-mode` →
 command tested non-TTY and `--json`; piping strips every escape; conformance
 byte-identical; a DEPS.md row per new dependency; `api-snapshot` commits per
 facade fill; no option without a reader.
+
+**MET 2026-09-05.** Every command of §9's kept scope landed in five phases,
+each on a facade fill a `cargo add pdfrum` user has too (`docs/status/M19.md`
+§"Close"). Declined and recorded: linearization (M16), date stamping,
+luminance inversion, `viuer`/`comfy-table`/`indicatif`; `security encrypt`
+kept at R6.
+
 
 ## XFA — declined, with the count written down
 

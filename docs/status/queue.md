@@ -70,10 +70,13 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
   the crate, `Page::markdown` / `Page::layout_text` behind `markdown`,
   `extract markdown`, `extract text --layout`; tagged tier plus typography,
   unclaimed text never lost.
-- Phase 5 in progress — `security encrypt` landed 2026-09-05 (R6, round-trip
-  through our parser and through `pdfium_test --password`). Remaining:
-  `extract images|fonts`, `inspect object|xref|revisions|revision|structure`,
-  `diff`, `hash`, completions, man pages.
+- ~~Phase 5 — forensics and polish~~ — landed 2026-09-05 (`docs/status/M19.md`):
+  `security encrypt` (R6, round-trip through our parser and `pdfium_test
+  --password`), `extract images|fonts`, `inspect
+  object|xref|revisions|revision|structure`, `diff` (text and `--visual`),
+  `hash` (file, `/ID`, semantic), `completions`, `manpage`; facade fills
+  `stream_data`, `embedded_fonts`, `revisions`/`revision_bytes`,
+  `Page::images`, `Page::structure`, parser `Xref::sections`.
 - Five phases, PLAN.md M19; the read-only core ships on `clap` + `serde_json`
   before any terminal crate is admitted.
 - **`security encrypt` kept** (user, 2026-09-05): R6 only, generation as

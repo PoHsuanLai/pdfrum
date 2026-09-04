@@ -285,6 +285,9 @@ which is Rust syscall constants) and `cargo deny`:
 |---|---|---|
 | `crossterm` | `=0.29.0`, `default-features = false`, `events` + `windows` | Raw mode, the alternate screen, key events and the window size for `pdfrum view`. Brings `rustix` and its `linux-raw-sys` — generated syscall constants, `build = false`, Rust only — which `scripts/ci.nu`'s name check exempts by name. |
 | `rpassword` | `=7.5.4` | The silent password prompt when an encrypted file is opened at a terminal without `--password`. |
+| `sha2` | workspace | `pdfrum hash`: SHA-256 of the file and of the canonical object dump; the same crate `pdfrum-crypt` already uses. |
+| `clap_complete` | `=4.6.9` | `pdfrum completions <shell>`, generated from the clap tree so it cannot drift from the parser. |
+| `clap_mangen` | `=0.3.3` | `pdfrum manpage -o DIR`, one roff page per command from the same tree. Brings `roff`, Rust only. |
 
 Three the design named and this table does not: **`viuer`** — its
 half-block path depends on `ansi_colours`, LGPL-3.0-or-later, which the

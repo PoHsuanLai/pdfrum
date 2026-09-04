@@ -14,12 +14,14 @@
 mod cmd;
 mod out;
 mod pages;
+mod syntax;
 mod term;
 
 use std::path::PathBuf;
 use std::process::ExitCode;
 
 use clap::{Args, Parser, Subcommand};
+use clap_complete::Shell;
 
 /// Inspect, render and extract from PDF files.
 #[derive(Parser)]
@@ -168,6 +170,112 @@ enum Command {
     Security {
         #[command(subcommand)]
         what: Security,
+    },
+    /// Look inside: objects, the cross-reference table, revisions, structure.
+    Inspect {
+        #[command(subcommand)]
+        what: Inspect,
+    },
+    /// What changed between two documents: text per page, and with
+    /// `--visual` the pixels. Exit 1 when they differ.
+    Diff {
+        /// The older document.
+        #[arg(value_name = "LEFT")]
+        left: PathBuf,
+        /// The newer document.
+        #[arg(value_name = "RIGHT")]
+        right: PathBuf,
+        /// Render every page of both and compare the pixels too.
+        #[arg(long)]
+        visual: bool,
+        /// With `--visual`: write `diff-<n>.png` for each differing page into
+        /// this directory, the changes in red over the faded page.
+        #[arg(short, long, value_name = "DIR", requires = "visual")]
+        output: Option<PathBuf>,
+        /// Resolution for `--visual`, dots per inch.
+        #[arg(long, default_value_t = 72.0)]
+        dpi: f64,
+        /// One JSON document.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Fingerprints: SHA-256 of the file, the trailer's /ID, and a semantic
+    /// hash that ignores timestamps and layout on disk.
+    Hash {
+        #[command(flatten)]
+        input: Input,
+        /// One JSON document.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Shell completions, generated from this command tree.
+    Completions {
+        /// The shell to generate for.
+        #[arg(value_enum, value_name = "SHELL")]
+        shell: Shell,
+    },
+    /// Manual pages, one per command, into a directory.
+    Manpage {
+        /// The directory to write `pdfrum.1`, `pdfrum-extract.1`, … into.
+        #[arg(short, long, value_name = "DIR")]
+        output: PathBuf,
+    },
+}
+
+#[derive(Subcommand)]
+enum Inspect {
+    /// One indirect object in PDF syntax.
+    Object {
+        #[command(flatten)]
+        input: Input,
+        /// The object number.
+        #[arg(value_name = "NUM")]
+        num: u32,
+        /// The generation number.
+        #[arg(value_name = "GEN", default_value_t = 0)]
+        generation: u16,
+        /// For a stream: write its decoded data to stdout instead.
+        #[arg(long)]
+        decode: bool,
+    },
+    /// The cross-reference table as the parser holds it: every object's
+    /// place, and the trailer.
+    Xref {
+        #[command(flatten)]
+        input: Input,
+        /// One JSON document.
+        #[arg(long)]
+        json: bool,
+    },
+    /// The incremental-update history: one row per saved revision.
+    Revisions {
+        #[command(flatten)]
+        input: Input,
+        /// One JSON document.
+        #[arg(long)]
+        json: bool,
+    },
+    /// The file as it stood at an earlier revision, written out whole.
+    Revision {
+        #[command(flatten)]
+        input: Input,
+        /// Which revision, 1-based, as `inspect revisions` numbers them.
+        #[arg(long, value_name = "N")]
+        rev: usize,
+        /// The file to write.
+        #[arg(short, long, value_name = "PATH")]
+        output: PathBuf,
+    },
+    /// The structure tree (tagged PDF) of each page, indented.
+    Structure {
+        #[command(flatten)]
+        input: Input,
+        /// Pages to show, 1-based. All by default.
+        #[arg(long, value_name = "RANGE")]
+        pages: Option<String>,
+        /// One JSON document.
+        #[arg(long)]
+        json: bool,
     },
 }
 
@@ -411,6 +519,32 @@ enum Extract {
         #[arg(long)]
         json: bool,
     },
+    /// Images on the pages: list them, or write them into a directory.
+    Images {
+        #[command(flatten)]
+        input: Input,
+        /// Pages to scan, 1-based. All by default.
+        #[arg(long, value_name = "RANGE")]
+        pages: Option<String>,
+        /// Write every image into this directory: JPEG and JPEG 2000 data as
+        /// it is in the file, everything else decoded to PNG.
+        #[arg(short, long, value_name = "DIR")]
+        output: Option<PathBuf>,
+        /// One JSON document.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Embedded font programs: list them, or write them into a directory.
+    Fonts {
+        #[command(flatten)]
+        input: Input,
+        /// Write every font program into this directory.
+        #[arg(short, long, value_name = "DIR")]
+        output: Option<PathBuf>,
+        /// One JSON document.
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 /// The document every command reads.
@@ -484,28 +618,28 @@ fn main() -> ExitCode {
             save.deterministic,
             "rewritten",
         ),
-        Command::Security { what } => match what {
-            Security::Decrypt { input, save } => {
-                cmd::file::decrypt(&input.file, password, &save.output, save.deterministic)
-            }
-            Security::Encrypt {
-                input,
-                user_password,
-                owner_password,
-                allow,
-                plain_metadata,
-                save,
-            } => cmd::file::encrypt(&cmd::file::EncryptRequest {
-                file: &input.file,
-                password,
-                user_password: &user_password,
-                owner_password: &owner_password,
-                allow: allow.as_deref(),
-                encrypt_metadata: !plain_metadata,
-                output: &save.output,
-                deterministic: save.deterministic,
-            }),
-        },
+        Command::Security { what } => run_security(what, password),
+        Command::Inspect { what } => run_inspect(what, password),
+        Command::Diff {
+            left,
+            right,
+            visual,
+            output,
+            dpi,
+            json,
+        } => cmd::diff::run(&cmd::diff::Request {
+            left: &left,
+            right: &right,
+            password,
+            visual,
+            out_dir: output.as_deref(),
+            dpi,
+            json,
+            term,
+        }),
+        Command::Hash { input, json } => cmd::hash::run(&input.file, password, json),
+        Command::Completions { shell } => Ok(cmd::shell::completions(shell)),
+        Command::Manpage { output } => cmd::shell::manpage(&output),
     };
     match outcome {
         Ok(code) => code,
@@ -545,6 +679,67 @@ fn run_extract(
         }
         Extract::Signatures { input, json } => {
             cmd::extract::signatures(&input.file, password, json)
+        }
+        Extract::Images {
+            input,
+            pages,
+            output,
+            json,
+        } => cmd::extract::images(
+            &input.file,
+            password,
+            pages.as_deref(),
+            output.as_deref(),
+            json,
+        ),
+        Extract::Fonts {
+            input,
+            output,
+            json,
+        } => cmd::extract::fonts(&input.file, password, output.as_deref(), json),
+    }
+}
+
+fn run_security(what: Security, password: Option<&str>) -> anyhow::Result<ExitCode> {
+    match what {
+        Security::Decrypt { input, save } => {
+            cmd::file::decrypt(&input.file, password, &save.output, save.deterministic)
+        }
+        Security::Encrypt {
+            input,
+            user_password,
+            owner_password,
+            allow,
+            plain_metadata,
+            save,
+        } => cmd::file::encrypt(&cmd::file::EncryptRequest {
+            file: &input.file,
+            password,
+            user_password: &user_password,
+            owner_password: &owner_password,
+            allow: allow.as_deref(),
+            encrypt_metadata: !plain_metadata,
+            output: &save.output,
+            deterministic: save.deterministic,
+        }),
+    }
+}
+
+fn run_inspect(what: Inspect, password: Option<&str>) -> anyhow::Result<ExitCode> {
+    match what {
+        Inspect::Object {
+            input,
+            num,
+            generation,
+            decode,
+        } => cmd::inspect::object(&input.file, password, num, generation, decode),
+        Inspect::Xref { input, json } => cmd::inspect::xref(&input.file, password, json),
+        Inspect::Revisions { input, json } => cmd::inspect::revisions(&input.file, password, json),
+        Inspect::Revision { input, rev, output } => {
+            cmd::inspect::revision(&input.file, password, rev, &output)
+        }
+        Inspect::Structure { input, pages, json } => {
+            cmd::inspect::structure(&input.file, password, pages.as_deref(), json)
         }
     }
 }
