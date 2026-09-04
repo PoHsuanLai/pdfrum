@@ -29,3 +29,8 @@ Each row says which command's expected output in `../expected/` it pins.
 | `tagged_alt_text.pdf` | 2.4 KB | A tagged page: `Document` › `P` › `Figure` with `/Alt (Black Image)` — `extract markdown` reads the tree and emits the image with its alternative text. |
 | `tagged_actual_text.pdf` | 2.4 KB | The same tree with `/ActualText` on the paragraph — the tree's own text wins over the page's. |
 | `tagged_marked_content.pdf` | 1.9 KB | Four `NonStruct` elements over four marked-content ids, two of them naming no page and so invalid to the tree, as in PDFium — `extract markdown` emits the two claimed texts from the tree and the two unclaimed ones after them, so nothing is lost. |
+| `rotated_image.pdf` | 831 B | One 50 by 50 Flate image drawn rotated — `extract images` lists it and, having no codec of its own to keep, writes it as PNG. |
+| `bug_674771.pdf` | 995 B | A 400 by 400 `/ImageMask` — `extract images` marks it `mask`. |
+| `bug_1484283.pdf` | 1.4 KB | Two revisions, a classic table then an update with a cross-reference stream and an object stream — `inspect revisions`, `inspect revision --rev 1`, `inspect xref` with an in-stream entry. |
+| `bigtable_mini.pdf` | 2.2 KB | A subset CFF program in `/FontFile3` — `extract fonts` lists it as `cff`. |
+| `bug_488948351.pdf` | 2.4 KB | A subset TrueType program in `/FontFile2` — `extract fonts` writes it as `.ttf`. |

@@ -1026,3 +1026,405 @@ fn the_oracle_opens_what_we_encrypted() {
     assert!(!oracle_text(&plain, None).is_empty());
     std::fs::remove_dir_all(&dir).unwrap();
 }
+
+// ---- phase 5: forensics and polish -----------------------------------------
+
+#[test]
+fn inspect_object_prints_pdf_syntax_and_decodes_a_stream() {
+    assert_eq!(
+        stdout(&[
+            "inspect",
+            "object",
+            fx("fixtures/hello_world_2_pages.pdf"),
+            "1"
+        ])
+        .unwrap(),
+        expected("object_hello_catalog.txt").unwrap()
+    );
+    // Object 7 is the first page's content stream: 83 bytes of Flate.
+    let content = stdout(&[
+        "inspect",
+        "object",
+        fx("fixtures/hello_world_2_pages.pdf"),
+        "7",
+        "--decode",
+    ])
+    .unwrap();
+    assert!(content.contains("(Hello, world!) Tj"), "{content}");
+    let not_a_stream = run(&[
+        "inspect",
+        "object",
+        fx("fixtures/hello_world_2_pages.pdf"),
+        "1",
+        "--decode",
+    ])
+    .unwrap();
+    assert_eq!(not_a_stream.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&not_a_stream.stderr).contains("not a stream"));
+    let missing = run(&[
+        "inspect",
+        "object",
+        fx("fixtures/hello_world_2_pages.pdf"),
+        "99",
+    ])
+    .unwrap();
+    assert_eq!(missing.status.code(), Some(1));
+}
+
+#[test]
+fn inspect_xref_shows_every_entry_and_the_merged_trailer() {
+    assert_eq!(
+        stdout(&["inspect", "xref", fx("fixtures/bug_1484283.pdf")]).unwrap(),
+        expected("xref_bug_1484283.txt").unwrap()
+    );
+    let v = json(&["inspect", "xref", fx("fixtures/bug_1484283.pdf"), "--json"]).unwrap();
+    assert_eq!(v["rebuilt"], false);
+    assert_eq!(v["entries"], 6);
+    let rows = v["rows"].as_array().unwrap();
+    let in_stream = rows.iter().find(|r| r["kind"] == "in_stream").unwrap();
+    assert_eq!(in_stream["object"], 2);
+    assert_eq!(in_stream["stream"], 5);
+    assert_eq!(in_stream["index"], 0);
+    assert!(
+        rows.iter()
+            .all(|r| r["kind"] != "offset" || r["offset"].is_number())
+    );
+    let rebuilt = json(&[
+        "inspect",
+        "xref",
+        fx("fixtures/parser_rebuildxref_correct.pdf"),
+        "--json",
+    ])
+    .unwrap();
+    assert_eq!(rebuilt["rebuilt"], true);
+}
+
+#[test]
+fn inspect_revisions_lists_the_chain_and_revision_writes_an_earlier_file() {
+    assert_eq!(
+        stdout(&["inspect", "revisions", fx("fixtures/bug_1484283.pdf")]).unwrap(),
+        expected("revisions_bug_1484283.txt").unwrap()
+    );
+    let v = json(&[
+        "inspect",
+        "revisions",
+        fx("fixtures/bug_1484283.pdf"),
+        "--json",
+    ])
+    .unwrap();
+    assert_eq!(v.as_array().unwrap().len(), 2);
+    assert_eq!(v[0]["xref_stream"], false);
+    assert_eq!(v[1]["xref_stream"], true);
+    assert_eq!(v[1]["end"], 1399);
+
+    let dir = scratch("revision").unwrap();
+    let first = dir.join("rev1.pdf");
+    stdout(&[
+        "inspect",
+        "revision",
+        fx("fixtures/bug_1484283.pdf"),
+        "--rev",
+        "1",
+        "-o",
+        first.to_str().unwrap(),
+    ])
+    .unwrap();
+    // The first revision is the file's first 633 bytes, and opens on its own.
+    let whole =
+        std::fs::read(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/bug_1484283.pdf"))
+            .unwrap();
+    assert_eq!(std::fs::read(&first).unwrap(), whole[..633]);
+    let opened = json(&["info", first.to_str().unwrap(), "--json"]).unwrap();
+    assert_eq!(opened["pages"], 1);
+
+    let out_of_range = run(&[
+        "inspect",
+        "revision",
+        fx("fixtures/bug_1484283.pdf"),
+        "--rev",
+        "3",
+        "-o",
+        dir.join("none.pdf").to_str().unwrap(),
+    ])
+    .unwrap();
+    assert_eq!(out_of_range.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&out_of_range.stderr).contains("1..=2"));
+
+    // A single-revision file has a chain of one; a rebuilt one has none.
+    let one = json(&[
+        "inspect",
+        "revisions",
+        fx("fixtures/hello_world_2_pages.pdf"),
+        "--json",
+    ])
+    .unwrap();
+    assert_eq!(one.as_array().unwrap().len(), 1);
+    let none = stdout(&[
+        "inspect",
+        "revisions",
+        fx("fixtures/parser_rebuildxref_correct.pdf"),
+    ])
+    .unwrap();
+    assert!(none.contains("no revision chain"));
+}
+
+#[test]
+fn inspect_structure_walks_the_tree_with_its_content_ids_and_text() {
+    assert_eq!(
+        stdout(&["inspect", "structure", fx("fixtures/tagged_alt_text.pdf")]).unwrap(),
+        expected("structure_tagged_alt_text.txt").unwrap()
+    );
+    let v = json(&[
+        "inspect",
+        "structure",
+        fx("fixtures/tagged_actual_text.pdf"),
+        "--json",
+    ])
+    .unwrap();
+    let rows = v.as_array().unwrap();
+    assert_eq!(rows.len(), 3);
+    assert_eq!(rows[0]["kind"], "Document");
+    assert_eq!(rows[0]["depth"], 0);
+    assert_eq!(rows[2]["kind"], "Figure");
+    assert_eq!(rows[2]["depth"], 2);
+    assert_eq!(rows[2]["content_ids"], serde_json::json!([0]));
+    assert_eq!(rows[2]["actual_text"], "Actual Text");
+    let untagged = stdout(&[
+        "inspect",
+        "structure",
+        fx("fixtures/hello_world_2_pages.pdf"),
+    ])
+    .unwrap();
+    assert!(untagged.contains("not a tagged document"));
+}
+
+#[test]
+fn extract_images_keeps_jpeg_bytes_and_decodes_the_rest_to_png() {
+    assert_eq!(
+        stdout(&["extract", "images", fx("fixtures/rotated_image.pdf")]).unwrap(),
+        expected("images_rotated_image.txt").unwrap()
+    );
+    let dir = scratch("images").unwrap();
+    // A JPEG placed by `pages create` comes back out byte for byte.
+    let mona = dir.join("mona.pdf");
+    stdout(&[
+        "pages",
+        "create",
+        fx("fixtures/mona_lisa.jpg"),
+        "--deterministic",
+        "-o",
+        mona.to_str().unwrap(),
+    ])
+    .unwrap();
+    let out = dir.join("out");
+    let v = json(&[
+        "extract",
+        "images",
+        mona.to_str().unwrap(),
+        "-o",
+        out.to_str().unwrap(),
+        "--json",
+    ])
+    .unwrap();
+    assert_eq!(v[0]["format"], "jpg");
+    assert_eq!(v[0]["width"], 120);
+    let written = v[0]["written"].as_str().unwrap();
+    assert!(written.ends_with("mona-p1-1.jpg"), "{written}");
+    assert_eq!(
+        std::fs::read(written).unwrap(),
+        std::fs::read(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/mona_lisa.jpg"))
+            .unwrap()
+    );
+    // A Flate image and an image mask are decoded to PNG.
+    let v = json(&[
+        "extract",
+        "images",
+        fx("fixtures/bug_674771.pdf"),
+        "-o",
+        out.to_str().unwrap(),
+        "--json",
+    ])
+    .unwrap();
+    assert_eq!(v[0]["is_mask"], true);
+    assert_eq!(v[0]["format"], "png");
+    let png = std::fs::read(v[0]["written"].as_str().unwrap()).unwrap();
+    assert_eq!(&png[..8], b"\x89PNG\r\n\x1a\n");
+    assert!(
+        stdout(&["extract", "images", fx("fixtures/hello_world_2_pages.pdf")])
+            .unwrap()
+            .contains("no images")
+    );
+}
+
+#[test]
+fn extract_fonts_lists_and_writes_embedded_programs() {
+    assert_eq!(
+        stdout(&["extract", "fonts", fx("fixtures/bigtable_mini.pdf")]).unwrap(),
+        expected("fonts_bigtable_mini.txt").unwrap()
+    );
+    let dir = scratch("fonts").unwrap();
+    let v = json(&[
+        "extract",
+        "fonts",
+        fx("fixtures/bug_488948351.pdf"),
+        "-o",
+        dir.to_str().unwrap(),
+        "--json",
+    ])
+    .unwrap();
+    assert_eq!(v[0]["kind"], "truetype");
+    assert_eq!(v[0]["name"], "AAAAAI+CambriaMath");
+    assert_eq!(v[0]["size"], 883);
+    let written = v[0]["written"].as_str().unwrap();
+    assert!(written.ends_with("AAAAAI+CambriaMath-8.ttf"), "{written}");
+    let ttf = std::fs::read(written).unwrap();
+    assert_eq!(ttf.len(), 883);
+    assert!(
+        ttf.starts_with(&[0, 1, 0, 0]) || ttf.starts_with(b"true"),
+        "a TrueType program starts with its version tag: {:?}",
+        &ttf[..4]
+    );
+    assert!(
+        stdout(&["extract", "fonts", fx("fixtures/hello_world_2_pages.pdf")])
+            .unwrap()
+            .contains("no embedded fonts")
+    );
+}
+
+#[test]
+fn diff_reports_text_and_pixels_per_page_and_exits_1_on_a_difference() {
+    let same = run(&[
+        "diff",
+        fx("fixtures/hello_world_2_pages.pdf"),
+        fx("fixtures/hello_world_2_pages.pdf"),
+        "--visual",
+    ])
+    .unwrap();
+    assert!(same.status.success(), "{same:?}");
+    assert!(same.stdout.is_empty());
+
+    let dir = scratch("diff").unwrap();
+    let one_page = dir.join("one.pdf");
+    stdout(&[
+        "pages",
+        "slice",
+        fx("fixtures/hello_world_2_pages.pdf"),
+        "--pages",
+        "1",
+        "-o",
+        one_page.to_str().unwrap(),
+    ])
+    .unwrap();
+    let out = run(&[
+        "diff",
+        fx("fixtures/hello_world_2_pages.pdf"),
+        one_page.to_str().unwrap(),
+        "--visual",
+        "-o",
+        dir.join("pictures").to_str().unwrap(),
+    ])
+    .unwrap();
+    assert_eq!(out.status.code(), Some(1));
+    let text = String::from_utf8_lossy(&out.stdout);
+    assert!(text.starts_with("pages: 2 vs 1\n"), "{text}");
+    assert!(
+        text.contains("page 2\n- Hello, world!\n- Goodbye, world!\n"),
+        "{text}"
+    );
+    assert!(
+        !text.contains("page 1\n"),
+        "page 1 is the same in both: {text}"
+    );
+    assert!(dir.join("pictures/diff-2.png").exists());
+    assert!(!dir.join("pictures/diff-1.png").exists());
+
+    // Exit 1 carries the JSON too: different is the answer, not a failure.
+    let out = run(&[
+        "diff",
+        fx("fixtures/hello_world_2_pages.pdf"),
+        fx("fixtures/weblinks.pdf"),
+        "--json",
+    ])
+    .unwrap();
+    assert_eq!(out.status.code(), Some(1));
+    let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(v["left_pages"], 2);
+    assert_eq!(v["right_pages"], 1);
+    assert_eq!(
+        v["pages"][0]["removed"],
+        serde_json::json!(["Hello, world!", "Goodbye, world!"])
+    );
+    assert_eq!(v["pages"][0]["added"].as_array().unwrap().len(), 7);
+    assert!(v["pages"][0]["pixels"].is_null());
+}
+
+#[test]
+fn hash_prints_three_fingerprints_and_the_semantic_one_ignores_the_save() {
+    let v = json(&["hash", fx("fixtures/hello_world_2_pages.pdf"), "--json"]).unwrap();
+    assert_eq!(
+        v["sha256"],
+        "67431cbec27df7cc86a57da5ff11b5151628fa93f661da79b9d272ec85bcdb03"
+    );
+    assert_eq!(v["objects"], 7);
+    assert!(v["id"].is_null(), "the fixture has no /ID");
+    let semantic = v["semantic"].as_str().unwrap().to_owned();
+    assert_eq!(semantic.len(), 64);
+
+    // Two rewrites with fresh /IDs: different files, the same document.
+    let dir = scratch("hash").unwrap();
+    let (a, b) = (dir.join("a.pdf"), dir.join("b.pdf"));
+    for path in [&a, &b] {
+        stdout(&[
+            "repair",
+            fx("fixtures/hello_world_2_pages.pdf"),
+            "-o",
+            path.to_str().unwrap(),
+        ])
+        .unwrap();
+    }
+    let ha = json(&["hash", a.to_str().unwrap(), "--json"]).unwrap();
+    let hb = json(&["hash", b.to_str().unwrap(), "--json"]).unwrap();
+    assert_ne!(ha["id"], hb["id"]);
+    assert_ne!(ha["sha256"], hb["sha256"]);
+    assert_eq!(ha["semantic"], hb["semantic"]);
+    assert_ne!(
+        ha["semantic"].as_str().unwrap(),
+        semantic,
+        "a rewrite renumbers"
+    );
+
+    let text = stdout(&["hash", a.to_str().unwrap()]).unwrap();
+    assert!(text.starts_with("file      "), "{text}");
+    assert!(text.contains("\nid        "), "{text}");
+    assert!(text.contains("\nsemantic  "), "{text}");
+}
+
+#[test]
+fn completions_and_manual_pages_come_from_the_command_tree() {
+    let bash = stdout(&["completions", "bash"]).unwrap();
+    assert!(bash.contains("_pdfrum()"), "{bash}");
+    assert!(bash.contains("inspect"), "{bash}");
+    let zsh = stdout(&["completions", "zsh"]).unwrap();
+    assert!(zsh.starts_with("#compdef pdfrum"), "{zsh}");
+    let fish = stdout(&["completions", "fish"]).unwrap();
+    assert!(
+        fish.contains("__fish_seen_subcommand_from extract"),
+        "{fish}"
+    );
+
+    let dir = scratch("man").unwrap();
+    let report = stdout(&["manpage", "-o", dir.to_str().unwrap()]).unwrap();
+    assert!(report.contains("manual pages"), "{report}");
+    let root = std::fs::read_to_string(dir.join("pdfrum.1")).unwrap();
+    assert!(root.starts_with(".ie"), "{root}");
+    assert!(root.contains(".SH NAME"), "{root}");
+    let leaf = std::fs::read_to_string(dir.join("pdfrum-extract-text.1")).unwrap();
+    assert!(leaf.contains("pdfrum\\-extract\\-text"), "{leaf}");
+    assert!(leaf.contains("layout"), "{leaf}");
+    assert!(
+        !dir.join("pdfrum-help.1").exists(),
+        "clap's help gets no page"
+    );
+    let count = std::fs::read_dir(&dir).unwrap().count();
+    assert!(count > 40, "{count} pages");
+}

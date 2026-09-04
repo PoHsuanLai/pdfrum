@@ -416,3 +416,170 @@ fn signature_rows(doc: &Document) -> Vec<SignatureRow> {
         })
         .collect()
 }
+
+// ---- images ---------------------------------------------------------------
+
+#[derive(Serialize)]
+struct ImageRow {
+    page: u32,
+    index: usize,
+    width: u32,
+    height: u32,
+    is_mask: bool,
+    /// The file's own encoding when it is one a file can hold as is
+    /// (`jpeg`, `jp2`, `jb2`, `ccitt`), else `png` for the decoded pixels.
+    format: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    written: Option<String>,
+}
+
+/// Every image on the selected pages; `-o DIR` writes them out, JPEG and
+/// JPEG 2000 data untouched, everything else decoded to PNG.
+pub fn images(
+    file: &Path,
+    password: Option<&str>,
+    spec: Option<&str>,
+    dir: Option<&Path>,
+    json: bool,
+) -> Result<ExitCode> {
+    let doc = out::open(file, password)?;
+    if let Some(dir) = dir {
+        std::fs::create_dir_all(dir).with_context(|| format!("cannot create {}", dir.display()))?;
+    }
+    let stem = file
+        .file_stem()
+        .map_or_else(|| "page".to_owned(), |s| s.to_string_lossy().into_owned());
+    let mut rows = Vec::new();
+    for index in pages::select(spec, doc.page_count())? {
+        let page = doc.page(index)?;
+        let number = out::page_number(page.index());
+        for (i, image) in page.images().into_iter().enumerate() {
+            let native = image
+                .raw
+                .as_ref()
+                .map(|r| (r.encoding.extension(), &r.data));
+            let format = native.map_or("png", |(ext, _)| ext);
+            let written = match dir {
+                Some(dir) => {
+                    let path = dir.join(format!("{stem}-p{number}-{}.{format}", i + 1));
+                    match native {
+                        Some((_, data)) => std::fs::write(&path, data).map_err(anyhow::Error::from),
+                        None => image.pixmap().save_png(&path).map_err(anyhow::Error::from),
+                    }
+                    .with_context(|| format!("cannot write {}", path.display()))?;
+                    Some(path.display().to_string())
+                }
+                None => None,
+            };
+            rows.push(ImageRow {
+                page: number,
+                index: i + 1,
+                width: image.width,
+                height: image.height,
+                is_mask: image.is_mask,
+                format,
+                written,
+            });
+        }
+    }
+    if json {
+        out::json(&rows)?;
+    } else if rows.is_empty() {
+        outln!("no images");
+    } else {
+        for r in &rows {
+            let mut line = format!(
+                "page {:<4} image {:<3} {:>5}x{:<5} {:<5}{}",
+                r.page,
+                r.index,
+                r.width,
+                r.height,
+                r.format,
+                if r.is_mask { " mask" } else { "" }
+            );
+            if let Some(w) = &r.written {
+                let _ = write!(line, "  -> {w}");
+            }
+            outln!("{line}");
+        }
+    }
+    Ok(ExitCode::SUCCESS)
+}
+
+// ---- fonts ----------------------------------------------------------------
+
+#[derive(Serialize)]
+struct FontRow {
+    name: String,
+    /// `type1`, `truetype`, `cff` or `opentype`.
+    kind: &'static str,
+    object: u32,
+    size: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    written: Option<String>,
+}
+
+/// The font programs embedded in the document; `-o DIR` writes each one
+/// out under its base name with the extension its format takes.
+pub fn fonts(
+    file: &Path,
+    password: Option<&str>,
+    dir: Option<&Path>,
+    json: bool,
+) -> Result<ExitCode> {
+    let doc = out::open(file, password)?;
+    if let Some(dir) = dir {
+        std::fs::create_dir_all(dir).with_context(|| format!("cannot create {}", dir.display()))?;
+    }
+    let mut rows = Vec::new();
+    for font in doc.embedded_fonts() {
+        let written = match dir {
+            Some(dir) => {
+                let safe: String = font
+                    .name
+                    .chars()
+                    .map(|c| {
+                        if c.is_alphanumeric() || matches!(c, '-' | '_' | '+') {
+                            c
+                        } else {
+                            '_'
+                        }
+                    })
+                    .collect();
+                let path = dir.join(format!(
+                    "{safe}-{}.{}",
+                    font.object.num,
+                    font.kind.extension()
+                ));
+                std::fs::write(&path, &font.data)
+                    .with_context(|| format!("cannot write {}", path.display()))?;
+                Some(path.display().to_string())
+            }
+            None => None,
+        };
+        rows.push(FontRow {
+            name: font.name,
+            kind: font.kind.name(),
+            object: font.object.num,
+            size: font.data.len(),
+            written,
+        });
+    }
+    if json {
+        out::json(&rows)?;
+    } else if rows.is_empty() {
+        outln!("no embedded fonts");
+    } else {
+        for r in &rows {
+            let mut line = format!(
+                "{:<40} {:<9} obj {:<6} {:>9} bytes",
+                r.name, r.kind, r.object, r.size
+            );
+            if let Some(w) = &r.written {
+                let _ = write!(line, "  -> {w}");
+            }
+            outln!("{line}");
+        }
+    }
+    Ok(ExitCode::SUCCESS)
+}

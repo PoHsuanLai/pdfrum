@@ -33,6 +33,19 @@ pdfrum repair damaged.pdf -o fixed.pdf
 pdfrum optimize big.pdf --deterministic -o small.pdf
 pdfrum security decrypt locked.pdf --password secret -o open.pdf
 pdfrum security encrypt open.pdf --user-password read --owner-password admin --allow print -o locked.pdf
+pdfrum extract images brochure.pdf -o images/   # JPEGs as they are, the rest as PNG
+pdfrum extract fonts brochure.pdf -o fonts/     # the embedded programs, .ttf/.cff/.otf/.pfb
+pdfrum inspect object report.pdf 12             # one object in PDF syntax
+pdfrum inspect object report.pdf 12 --decode > content.txt
+pdfrum inspect xref report.pdf                  # where every object lives, and the trailer
+pdfrum inspect revisions edited.pdf             # the incremental-update history
+pdfrum inspect revision edited.pdf --rev 1 -o original.pdf
+pdfrum inspect structure tagged.pdf             # the structure tree, indented
+pdfrum diff v1.pdf v2.pdf                       # text per page; exit 1 if they differ
+pdfrum diff v1.pdf v2.pdf --visual -o diffs/    # pixels too, changes in red
+pdfrum hash report.pdf                          # sha256, /ID, and a semantic hash
+pdfrum completions zsh > ~/.zfunc/_pdfrum
+pdfrum manpage -o man/
 ```
 
 Every command takes `--password` for an encrypted file and prints notices
