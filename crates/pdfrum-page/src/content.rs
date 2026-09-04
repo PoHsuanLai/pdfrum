@@ -227,7 +227,7 @@ pub fn parse_content(bytes: &[u8], limits: &Limits, diags: &mut Diagnostics) -> 
             Element::Name(n) => ring.push(Operand::Name(n)),
             Element::Object(o) => ring.push(Operand::Object(o)),
             Element::Keyword(word) => {
-                dispatch(&word, &mut lexer, &mut ring, &mut ops, limits, diags);
+                dispatch(word, &mut lexer, &mut ring, &mut ops, limits, diags);
                 // Operands never survive an operator, recognised or not.
                 ring.clear();
             }
@@ -307,7 +307,7 @@ fn parse_path_run(lexer: &mut ContentLexer<'_>, ops: &mut Vec<Op>) {
             }
             Element::Keyword(word) => {
                 let p = |i: usize| f64::from(params.get(i).copied().unwrap_or(0.0));
-                let op = match &*word {
+                let op = match word {
                     b"m" => Op::MoveTo(Point::new(p(0), p(1))),
                     b"l" => Op::LineTo(Point::new(p(0), p(1))),
                     b"c" => Op::CurveTo(

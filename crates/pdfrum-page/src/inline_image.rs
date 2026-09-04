@@ -117,7 +117,7 @@ pub(crate) fn read(
     loop {
         let save = lexer.pos();
         match lexer.next_element() {
-            Element::Keyword(word) if &*word != b"ID" => {
+            Element::Keyword(word) if word != b"ID" => {
                 // A keyword that is not `ID` abandons the whole `BI`: the
                 // stream is re-read from just after it as ordinary content.
                 let _ = save;
@@ -387,7 +387,7 @@ fn absorb_to_ei(lexer: &mut ContentLexer<'_>, from: usize) -> Option<usize> {
         let before = lexer.pos();
         match lexer.next_element() {
             Element::Eof => return None,
-            Element::Keyword(word) if &*word == b"EI" => {
+            Element::Keyword(word) if word == b"EI" => {
                 lexer.seek(cursor);
                 return Some(absorbed);
             }
@@ -419,7 +419,7 @@ fn scan_for_ei(lexer: &mut ContentLexer<'_>) -> EiScan {
     loop {
         match lexer.next_element() {
             Element::Eof => return EiScan::EndOfData,
-            Element::Keyword(word) if &*word == b"EI" => return EiScan::Closed,
+            Element::Keyword(word) if word == b"EI" => return EiScan::Closed,
             _ => {}
         }
     }
