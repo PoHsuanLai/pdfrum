@@ -86,7 +86,7 @@ pub enum SaveMode {
 }
 
 /// Everything a save may be asked to do differently.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SaveOptions {
     /// Whether to append or rewrite.
     pub mode: SaveMode,
@@ -132,6 +132,26 @@ pub struct SaveOptions {
     pub version: Option<PdfVersion>,
     /// Where `/ID` and subset tags come from.
     pub id_source: IdSource,
+    /// Encrypt an unencrypted document on the way out: AES-256, revision 6,
+    /// under these passwords and permissions. `None` leaves the document as
+    /// it is. A document that is already encrypted cannot be re-keyed here:
+    /// asking for it is [`Error::EncryptedSaveUnsupported`].
+    pub encrypt: Option<Encryption>,
+}
+
+/// How a document is to be encrypted on save (ISO 32000-2 §7.6.4.4).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Encryption {
+    /// Opens the document with the rights `permissions` grants. Empty means
+    /// anyone can open it.
+    pub user_password: Vec<u8>,
+    /// Opens the document with every right. Empty means the user password
+    /// serves as both.
+    pub owner_password: Vec<u8>,
+    /// What a reader who opened with the user password may do.
+    pub permissions: pdfrum_crypt::Permissions,
+    /// Whether the document's XMP metadata stream is enciphered too.
+    pub encrypt_metadata: bool,
 }
 
 impl Default for SaveOptions {
@@ -143,6 +163,7 @@ impl Default for SaveOptions {
             subset_new_fonts: false,
             version: None,
             id_source: IdSource::Random,
+            encrypt: None,
         }
     }
 }
@@ -196,28 +217,23 @@ pub fn save(doc: &EditDoc<'_>, opts: &SaveOptions, out: &mut impl Write) -> Resu
     // `/Encrypt` we could not key — `/Identity`, or a filter this reader
     // answered with the identity handler — would be re-declared over
     // plaintext, which is the one shape that opens for nobody.
-    let declared = base.encrypt_dict().is_some();
+    let SecurityPlan {
+        declared,
+        keep_security,
+        fresh,
+    } = security_plan(base, opts)?;
     let handler = base.security_handler();
-    let keep_security = declared && !opts.remove_security;
-    if keep_security && matches!(handler, pdfrum_crypt::SecurityHandler::Identity) {
-        return Err(Error::EncryptedSaveUnsupported);
-    }
 
-    let id = id::build(
-        IdContext {
-            old: None,
-            encrypt: base.encrypt_dict().map(|(d, _)| d),
-            incremental: opts.mode == SaveMode::Incremental,
-        }
-        .with_old(base.trailer()),
-        opts.id_source,
-    );
+    let id = file_id(base, opts);
 
     // Three things force a full save. A rebuilt cross-reference has no
     // previous section to name in `/Prev`; a rekey makes the original bytes
     // unreadable under the new key; and removing security means the appended
     // objects would be plaintext behind ciphertext.
-    let forced_full = base.xref_was_rebuilt() || id.rekeyed || (declared && opts.remove_security);
+    let forced_full = base.xref_was_rebuilt()
+        || id.rekeyed
+        || (declared && opts.remove_security)
+        || fresh.is_some();
     let incremental = opts.mode == SaveMode::Incremental && !forced_full;
 
     // ---- the security seam ----
@@ -225,10 +241,16 @@ pub fn save(doc: &EditDoc<'_>, opts: &SaveOptions, out: &mut impl Write) -> Resu
     // The number the `/Encrypt` dictionary will be written as decides two
     // things at once: which object the encryptor skips, and which one the
     // body loops leave to the dedicated stage below.
-    let slot = keep_security.then(|| encrypt_slot(doc, base)).flatten();
+    let slot = choose_slot(
+        doc,
+        base,
+        fresh.as_ref().map(|(dict, _)| dict),
+        keep_security,
+    );
     let encrypt_number = slot.as_ref().map(|s| s.number);
-    let security = keep_security.then(|| encrypt::Security {
-        handler,
+    let active_handler = fresh.as_ref().map_or(handler, |(_, h)| h);
+    let security = (keep_security || fresh.is_some()).then(|| encrypt::Security {
+        handler: active_handler,
         ivs: encrypt::IvSource::from_document(base.bytes()),
         encrypt_object: encrypt_number,
     });
@@ -237,17 +259,7 @@ pub fn save(doc: &EditDoc<'_>, opts: &SaveOptions, out: &mut impl Write) -> Resu
     let mut offsets = ObjectOffsets::new();
 
     // ---- header, or the original bytes ----
-    let mut body = Vec::new();
-    if incremental && opts.keep_original {
-        // The original is copied verbatim; nothing in it is ever rewritten.
-        // That append discipline is what keeps signatures and byte-range
-        // digests valid (invariant R7).
-        sink.write(base.bytes())?;
-    } else {
-        write_header(&mut body, opts.version, base.version());
-        sink.write(&body)?;
-        body.clear();
-    }
+    write_front(&mut sink, base, opts, incremental)?;
 
     // ---- partition ----
     let (old_nums, new_nums) = partition(doc, incremental);
@@ -424,6 +436,112 @@ struct EncryptSlot {
 /// reference: there is no dictionary to point at, so the save writes no
 /// `/Encrypt`, and `save`'s plaintext check has already refused the one shape
 /// where that would produce an unopenable file.
+/// The trailer `/ID` this save writes, from the document's own and the
+/// options' source of fresh bytes.
+fn file_id(base: &pdfrum_parser::Document, opts: &SaveOptions) -> id::FileId {
+    id::build(
+        IdContext {
+            old: None,
+            encrypt: base.encrypt_dict().map(|(d, _)| d),
+            incremental: opts.mode == SaveMode::Incremental,
+        }
+        .with_old(base.trailer()),
+        opts.id_source,
+    )
+}
+
+/// The bytes before the first object: the original file when appending to
+/// it, a header otherwise. The original is copied verbatim; nothing in it is
+/// ever rewritten, which is what keeps signatures and byte-range digests
+/// valid (invariant R7).
+fn write_front(
+    sink: &mut Counting<impl Write>,
+    base: &pdfrum_parser::Document,
+    opts: &SaveOptions,
+    incremental: bool,
+) -> Result<(), Error> {
+    if incremental && opts.keep_original {
+        sink.write(base.bytes())
+    } else {
+        let mut header = Vec::new();
+        write_header(&mut header, opts.version, base.version());
+        sink.write(&header)
+    }
+}
+
+/// What the save does about security, decided before a byte is written.
+struct SecurityPlan {
+    /// The document carries an `/Encrypt` of its own.
+    declared: bool,
+    /// That handler stays in force for the output.
+    keep_security: bool,
+    /// A new handler, when the save is to encrypt an unencrypted document.
+    fresh: Option<(pdfrum_object::Dict, pdfrum_crypt::SecurityHandler)>,
+}
+
+fn security_plan(
+    base: &pdfrum_parser::Document,
+    opts: &SaveOptions,
+) -> Result<SecurityPlan, Error> {
+    let declared = base.encrypt_dict().is_some();
+    if declared && opts.encrypt.is_some() {
+        // Re-keying an encrypted document is not a save option: decrypt it
+        // (`remove_security`) and encrypt the result in a second save.
+        return Err(Error::EncryptedSaveUnsupported);
+    }
+    let keep_security = declared && !opts.remove_security;
+    if keep_security
+        && matches!(
+            base.security_handler(),
+            pdfrum_crypt::SecurityHandler::Identity
+        )
+    {
+        return Err(Error::EncryptedSaveUnsupported);
+    }
+    Ok(SecurityPlan {
+        declared,
+        keep_security,
+        fresh: fresh_encryption(opts)?,
+    })
+}
+
+/// A fresh handler when the save is to encrypt: built once, held for the
+/// writer's lifetime beside the document's own.
+fn fresh_encryption(
+    opts: &SaveOptions,
+) -> Result<Option<(pdfrum_object::Dict, pdfrum_crypt::SecurityHandler)>, Error> {
+    let Some(encryption) = &opts.encrypt else {
+        return Ok(None);
+    };
+    pdfrum_crypt::standard_r6(
+        &encryption.user_password,
+        &encryption.owner_password,
+        encryption.permissions,
+        encryption.encrypt_metadata,
+        &opts.id_source.entropy(),
+    )
+    .map(Some)
+    .map_err(|_| Error::PasswordNotText)
+}
+
+/// Where the trailer's `/Encrypt` points: a new object for a fresh
+/// encryption, the document's own slot when its security is kept, nothing
+/// otherwise.
+fn choose_slot(
+    doc: &EditDoc<'_>,
+    base: &pdfrum_parser::Document,
+    fresh: Option<&pdfrum_object::Dict>,
+    keep_security: bool,
+) -> Option<EncryptSlot> {
+    match fresh {
+        Some(dict) => Some(EncryptSlot {
+            number: doc.last_object_number().saturating_add(1),
+            dict: dict.clone(),
+        }),
+        None => keep_security.then(|| encrypt_slot(doc, base)).flatten(),
+    }
+}
+
 fn encrypt_slot(doc: &EditDoc<'_>, base: &pdfrum_parser::Document) -> Option<EncryptSlot> {
     let (dict, inline) = base.encrypt_dict()?;
     let number = if inline {

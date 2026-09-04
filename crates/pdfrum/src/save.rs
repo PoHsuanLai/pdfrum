@@ -6,7 +6,7 @@ use std::path::Path;
 #[cfg(feature = "forms")]
 use pdfrum_common::Diagnostics;
 use pdfrum_common::{PageIndex, PdfVersion};
-use pdfrum_edit::{EditDoc, IdSource, PageBox, SaveMode};
+use pdfrum_edit::{EditDoc, Encryption, IdSource, PageBox, SaveMode};
 #[cfg(feature = "forms")]
 use pdfrum_object::Object;
 
@@ -20,7 +20,7 @@ use crate::{
 /// How a document is written back out.
 ///
 /// A config struct with [`Default`], filled in with struct-update syntax.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct SaveOptions {
     /// Whether to rewrite the file or append to it.
     pub update: Update,
@@ -45,6 +45,11 @@ pub struct SaveOptions {
     /// default, or [`IdSource::Fixed`] for a reproducible file — the same
     /// input then saves to the same bytes, subset-font tags included.
     pub id_source: IdSource,
+    /// Encrypt an unencrypted document on the way out — AES-256, revision
+    /// 6 — under these passwords and permissions. A document that is
+    /// already encrypted cannot be re-keyed in one save: decrypt it with
+    /// [`SaveOptions::remove_security`], then encrypt the result.
+    pub encrypt: Option<Encryption>,
 }
 
 /// Whether a save rewrites the whole file or appends to it.
@@ -195,7 +200,7 @@ impl Document {
             }
         }
         let _ = form.document();
-        write_edit(&edit, *options, out)
+        write_edit(&edit, options, out)
     }
 
     /// Writes the document with edited pages' content regenerated.
@@ -284,7 +289,7 @@ impl Document {
             },
         )?;
         let mut bytes = Vec::new();
-        write_edit(&edit, SaveOptions::default(), &mut bytes)?;
+        write_edit(&edit, &SaveOptions::default(), &mut bytes)?;
         std::fs::write(path.as_ref(), &bytes)?;
         Ok(())
     }
@@ -644,7 +649,7 @@ impl DocEdit<'_> {
             let dict = self.doc.inner.page(page.index())?.dict;
             pdfrum_edit::apply_rewrite(&mut self.inner, reference, &dict, &rewrite, &shared);
         }
-        write_edit(&self.inner, *options, out)
+        write_edit(&self.inner, options, out)
     }
 
     /// Write the document with this session's new objects and no page edits.
@@ -666,12 +671,12 @@ impl DocEdit<'_> {
     ///
     /// As [`Document::save`].
     pub fn write_to(&self, out: &mut impl Write, options: &SaveOptions) -> Result<()> {
-        write_edit(&self.inner, *options, out)
+        write_edit(&self.inner, options, out)
     }
 }
 
 /// The one place a [`SaveOptions`] becomes the writer's own options.
-fn write_edit(edit: &EditDoc<'_>, options: SaveOptions, out: &mut impl Write) -> Result<()> {
+fn write_edit(edit: &EditDoc<'_>, options: &SaveOptions, out: &mut impl Write) -> Result<()> {
     let opts = pdfrum_edit::SaveOptions {
         mode: match options.update {
             Update::Rewrite => SaveMode::Full,
@@ -685,6 +690,7 @@ fn write_edit(edit: &EditDoc<'_>, options: SaveOptions, out: &mut impl Write) ->
         remove_security: options.remove_security,
         subset_new_fonts: options.subset_new_fonts,
         id_source: options.id_source,
+        encrypt: options.encrypt.clone(),
         ..pdfrum_edit::SaveOptions::default()
     };
     pdfrum_edit::save(edit, &opts, out)?;

@@ -26,6 +26,10 @@ pub enum Error {
          set `SaveOptions::remove_security` to save it decrypted"
     )]
     EncryptedSaveUnsupported,
+    /// A password given for a new encryption is not valid UTF-8, or does
+    /// not survive `SASLprep` (ISO 32000-2 §7.6.4.3.3).
+    #[error("a password for encryption must be text")]
+    PasswordNotText,
 
     /// A document with no usable catalog cannot be the destination of an
     /// import: there is nowhere to attach the pages.

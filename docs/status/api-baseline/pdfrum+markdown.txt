@@ -24,6 +24,7 @@ pub use pdfrum::Dict
 pub use pdfrum::DocError
 pub use pdfrum::EmbeddedFont
 pub use pdfrum::EmbeddedImage
+pub use pdfrum::Encryption
 pub use pdfrum::Event
 pub use pdfrum::FieldFlags
 pub use pdfrum::FieldKind
@@ -395,6 +396,7 @@ pub pdfrum::RenderSession::caches: pdfrum_render::ctx::RenderCaches
 impl pdfrum::RenderSession
 pub fn pdfrum::RenderSession::new() -> pdfrum::RenderSession
 pub struct pdfrum::SaveOptions
+pub pdfrum::SaveOptions::encrypt: core::option::Option<pdfrum_edit::write::Encryption>
 pub pdfrum::SaveOptions::id_source: pdfrum_edit::write::id::IdSource
 pub pdfrum::SaveOptions::remove_security: bool
 pub pdfrum::SaveOptions::subset_new_fonts: bool
