@@ -30,9 +30,10 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
 - Five phases, PLAN.md M19; the read-only core ships on `clap` + `serde_json`
   before any terminal crate is admitted.
 - **User decisions recorded as open:** keep or cut `security encrypt`
-  (R6-only, spec-driven, no oracle); the `MinerU-rs` licence before any code
-  is copied (upstream AGPL-3.0; the port names a `LICENSE` that does not
-  exist) — until then the heuristics are implemented from their description.
+  (R6-only, spec-driven, no oracle). The `MinerU-rs` question is closed:
+  upstream is Apache-2.0 plus a commercial-threshold/attribution rider, so
+  the heuristics are implemented from their description with MinerU credited,
+  and no code is copied (`docs/design/pdfrum-cli.md` §9.3).
 - Facade fills the CLI needs, each an `api-snapshot` commit: trailer `/ID`,
   `/BleedBox` `/TrimBox` `/ArtBox`, `n_page_to_one` re-export, rotate/crop on
   save, booklet order, `SaveOptions` + `IdSource` on the facade, raw image
