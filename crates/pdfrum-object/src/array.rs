@@ -328,7 +328,7 @@ mod tests {
             (3, Object::Array(Array::of([Object::Int(1)]))),
             (
                 4,
-                Object::Stream(Stream::new(inner.clone(), b"xyz".to_vec().into())),
+                Object::Stream(Box::new(Stream::new(inner.clone(), b"xyz".to_vec().into()))),
             ),
         ]);
         let a = Array::of([

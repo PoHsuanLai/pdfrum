@@ -429,7 +429,7 @@ mod tests {
     fn dict_accessor_accepts_a_stream() {
         let inner = Dict::from_pairs([(names::LENGTH.clone(), Object::Int(3))]);
         let stream = Stream::new(inner.clone(), b"abc".to_vec().into());
-        let store = TestStore::from_pairs([(5, Object::Stream(stream))]);
+        let store = TestStore::from_pairs([(5, Object::Stream(Box::new(stream)))]);
         let dict = Dict::from_pairs([(key("S"), Object::Ref(ObjRef::new(5, 0)))]);
 
         assert_eq!(dict.dict(&key("S"), &store), Some(inner));

@@ -1117,7 +1117,10 @@ mod tests {
                 "AP",
                 Object::Dict(dict(&[(
                     "N",
-                    Object::Stream(Stream::new(Dict::new(), ByteSpan::from(b"x".to_vec()))),
+                    Object::Stream(Box::new(Stream::new(
+                        Dict::new(),
+                        ByteSpan::from(b"x".to_vec()),
+                    ))),
                 )])),
             ),
         ]);

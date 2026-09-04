@@ -704,7 +704,10 @@ mod tests {
             "AP",
             Object::Dict(dict(&[(
                 "N",
-                Object::Stream(Stream::new(Dict::new(), ByteSpan::from(b"x".to_vec()))),
+                Object::Stream(Box::new(Stream::new(
+                    Dict::new(),
+                    ByteSpan::from(b"x".to_vec()),
+                ))),
             )])),
         )]);
         assert!(!needs_appearance(&with_stream, &NoResolve));
@@ -725,7 +728,10 @@ mod tests {
                     .map(|state| {
                         (
                             Name::from(*state),
-                            Object::Stream(Stream::new(Dict::new(), ByteSpan::from(b"x".to_vec()))),
+                            Object::Stream(Box::new(Stream::new(
+                                Dict::new(),
+                                ByteSpan::from(b"x".to_vec()),
+                            ))),
                         )
                     })
                     .collect::<Vec<_>>(),
@@ -745,7 +751,10 @@ mod tests {
                 "AP",
                 Object::Dict(dict(&[(
                     "N",
-                    Object::Stream(Stream::new(Dict::new(), ByteSpan::from(b"x".to_vec()))),
+                    Object::Stream(Box::new(Stream::new(
+                        Dict::new(),
+                        ByteSpan::from(b"x".to_vec()),
+                    ))),
                 )])),
             ),
         ]);
@@ -866,7 +875,10 @@ mod tests {
                     "N",
                     Object::Dict(dict(&[(
                         "Yes",
-                        Object::Stream(Stream::new(Dict::new(), ByteSpan::from(b"x".to_vec()))),
+                        Object::Stream(Box::new(Stream::new(
+                            Dict::new(),
+                            ByteSpan::from(b"x".to_vec()),
+                        ))),
                     )])),
                 )])),
             ),

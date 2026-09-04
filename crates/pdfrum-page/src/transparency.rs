@@ -297,10 +297,10 @@ mod tests {
     impl Resolve for GroupStore {
         fn fetch(&self, r: ObjRef) -> Result<Arc<Object>, pdfrum_object::Error> {
             if r.num == GROUP_REF.num {
-                return Ok(Arc::new(Object::Stream(Stream::new(
+                return Ok(Arc::new(Object::Stream(Box::new(Stream::new(
                     Dict::new(),
                     ByteSpan::empty(),
-                ))));
+                )))));
             }
             Err(pdfrum_object::Error::UnresolvedRef(r))
         }

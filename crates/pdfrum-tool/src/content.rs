@@ -171,7 +171,7 @@ mod tests {
     use pdfrum_object::{Array, NoResolve, PdfString, Stream};
 
     fn stream(bytes: &[u8]) -> Object {
-        Object::Stream(Stream::new(Dict::new(), bytes.to_vec().into()))
+        Object::Stream(Box::new(Stream::new(Dict::new(), bytes.to_vec().into())))
     }
 
     fn assembled(page: &Dict) -> Vec<u8> {

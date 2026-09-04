@@ -170,7 +170,7 @@ pub pdfrum_object::Object::Null
 pub pdfrum_object::Object::Real(f32)
 pub pdfrum_object::Object::Ref(pdfrum_object::ObjRef)
 pub pdfrum_object::Object::Str(pdfrum_object::PdfString)
-pub pdfrum_object::Object::Stream(pdfrum_object::Stream)
+pub pdfrum_object::Object::Stream(alloc::boxed::Box<pdfrum_object::Stream>)
 impl pdfrum_object::Object
 pub fn pdfrum_object::Object::as_array(&self) -> core::option::Option<&pdfrum_object::Array>
 pub fn pdfrum_object::Object::as_bool(&self) -> core::option::Option<bool>

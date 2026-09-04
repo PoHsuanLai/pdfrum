@@ -155,7 +155,10 @@ mod tests {
     #[test]
     fn stream_reads_as_its_own_dictionary_and_keeps_its_bytes() {
         let dict = Dict::from_pairs([(names::LENGTH.clone(), Object::Int(3))]);
-        let stream = Object::Stream(Stream::new(dict.clone(), ByteSpan::from(b"abc".to_vec())));
+        let stream = Object::Stream(Box::new(Stream::new(
+            dict.clone(),
+            ByteSpan::from(b"abc".to_vec()),
+        )));
         assert_eq!(stream.as_dict(), Some(&dict));
         assert_eq!(stream.as_stream().map(|s| &*s.data), Some(&b"abc"[..]));
         assert_eq!(stream.to_byte_string(), b"");
@@ -192,7 +195,10 @@ mod tests {
         let inner = Dict::from_pairs([(Name::from("Self"), Object::Ref(ObjRef::new(2, 0)))]);
         let store = TestStore::from_pairs([(
             2,
-            Object::Stream(Stream::new(inner, ByteSpan::from(b"data".to_vec()))),
+            Object::Stream(Box::new(Stream::new(
+                inner,
+                ByteSpan::from(b"data".to_vec()),
+            ))),
         )]);
         let cloned = Object::Ref(ObjRef::new(2, 0)).clone_direct(&store);
         let stream = cloned.as_stream().expect("still a stream");
@@ -243,7 +249,7 @@ mod tests {
             ]),
             ByteSpan::from(b"\xDE\xAD\xBE\xEF".to_vec()),
         );
-        let store = TestStore::from_pairs([(9, Object::Stream(image.clone()))]);
+        let store = TestStore::from_pairs([(9, Object::Stream(Box::new(image.clone())))]);
 
         let resources = Object::Dict(Dict::from_pairs([(
             Name::from("XObject"),
@@ -262,7 +268,7 @@ mod tests {
         // Stored directly, not as a reference and not dropped.
         assert_eq!(
             xobject.raw(&Name::from("Image9")),
-            Some(&Object::Stream(image.clone()))
+            Some(&Object::Stream(Box::new(image.clone())))
         );
         // And the resolving accessor reads it back, as `GetStreamFor` does.
         assert_eq!(
@@ -277,12 +283,15 @@ mod tests {
             Dict::from_pairs([(names::LENGTH.clone(), Object::Int(2))]),
             ByteSpan::from(b"hi".to_vec()),
         );
-        let store = TestStore::from_pairs([(4, Object::Stream(stream.clone()))]);
+        let store = TestStore::from_pairs([(4, Object::Stream(Box::new(stream.clone())))]);
         let array = Object::Array(Array::of([Object::Ref(ObjRef::new(4, 0))]));
 
         let cloned = array.clone_direct(&store);
         let cloned = cloned.as_array().expect("still an array");
-        assert_eq!(cloned.raw_at(0), Some(&Object::Stream(stream.clone())));
+        assert_eq!(
+            cloned.raw_at(0),
+            Some(&Object::Stream(Box::new(stream.clone())))
+        );
         assert_eq!(cloned.stream_at(0, &NoResolve), Some(stream));
     }
 
@@ -301,7 +310,7 @@ mod tests {
             ]),
             ByteSpan::from(b"\x78\x9C\x03".to_vec()),
         );
-        let store = TestStore::from_pairs([(1, Object::Stream(stream))]);
+        let store = TestStore::from_pairs([(1, Object::Stream(Box::new(stream)))]);
 
         let cloned = Object::Ref(ObjRef::new(1, 0)).clone_direct(&store);
         let cloned = cloned.as_stream().expect("a stream");
@@ -316,7 +325,7 @@ mod tests {
     #[test]
     fn clone_direct_clones_a_shared_stream_down_both_sibling_paths() {
         let stream = Stream::new(Dict::new(), ByteSpan::from(b"xy".to_vec()));
-        let store = TestStore::from_pairs([(6, Object::Stream(stream.clone()))]);
+        let store = TestStore::from_pairs([(6, Object::Stream(Box::new(stream.clone())))]);
         let dict = Object::Dict(Dict::from_pairs([
             (Name::from("a"), Object::Ref(ObjRef::new(6, 0))),
             (Name::from("b"), Object::Ref(ObjRef::new(6, 0))),
@@ -325,8 +334,8 @@ mod tests {
         assert_eq!(
             dict.clone_direct(&store),
             Object::Dict(Dict::from_pairs([
-                (Name::from("a"), Object::Stream(stream.clone())),
-                (Name::from("b"), Object::Stream(stream)),
+                (Name::from("a"), Object::Stream(Box::new(stream.clone()))),
+                (Name::from("b"), Object::Stream(Box::new(stream))),
             ]))
         );
     }
@@ -347,7 +356,7 @@ mod tests {
                     Object::Ref(ObjRef::new(2, 0)),
                 )])),
             ),
-            (2, Object::Stream(inner)),
+            (2, Object::Stream(Box::new(inner))),
         ]);
 
         let cloned = Object::Ref(ObjRef::new(1, 0)).clone_direct(&store);
@@ -364,7 +373,10 @@ mod tests {
     // §7.3.8.1 is the writer's to enforce, not this type's.
     #[test]
     fn containers_accept_a_stream_value_in_memory() {
-        let stream = Object::Stream(Stream::new(Dict::new(), ByteSpan::from(b"z".to_vec())));
+        let stream = Object::Stream(Box::new(Stream::new(
+            Dict::new(),
+            ByteSpan::from(b"z".to_vec()),
+        )));
         let mut dict = Dict::new();
         dict.push(Name::from("S"), stream.clone());
         assert!(dict.stream(&Name::from("S"), &NoResolve).is_some());

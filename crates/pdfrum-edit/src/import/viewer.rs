@@ -140,9 +140,8 @@ mod tests {
     fn dictionaries_nulls_and_streams_are_refused() {
         assert!(!is_copyable(&Object::Dict(Dict::new())));
         assert!(!is_copyable(&Object::Null));
-        assert!(!is_copyable(&Object::Stream(pdfrum_object::Stream::new(
-            Dict::new(),
-            pdfrum_object::ByteSpan::empty()
+        assert!(!is_copyable(&Object::Stream(Box::new(
+            pdfrum_object::Stream::new(Dict::new(), pdfrum_object::ByteSpan::empty())
         ))));
     }
 

@@ -576,10 +576,10 @@ fn make_form(
         ),
     ]);
 
-    dest.add(Object::Stream(pdfrum_object::Stream::new(
+    dest.add(Object::Stream(Box::new(pdfrum_object::Stream::new(
         dict,
         pdfrum_object::ByteSpan::from(content),
-    )))
+    ))))
 }
 
 /// One output sheet.
@@ -591,13 +591,13 @@ fn make_sheet(
     width: f32,
     height: f32,
 ) -> ObjRef {
-    let stream = dest.add(Object::Stream(pdfrum_object::Stream::new(
+    let stream = dest.add(Object::Stream(Box::new(pdfrum_object::Stream::new(
         Dict::from_pairs([(
             names::LENGTH.clone(),
             Object::Int(i64::try_from(content.len()).unwrap_or(0)),
         )]),
         pdfrum_object::ByteSpan::from(content.as_bytes().to_vec()),
-    )));
+    ))));
 
     dest.add(Object::Dict(Dict::from_pairs([
         (names::TYPE.clone(), Object::Name(names::PAGE.clone())),

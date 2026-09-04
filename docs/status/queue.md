@@ -17,8 +17,22 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
   returns `to_vec()` per token; numbers via `from_utf8` + `parse::<f32>` —
   47% of `vector_paths_1751`'s cold render, ~12% of it malloc/free. Number
   parse stays bit-identical (pin over every number token in the corpus).
-- **`Object::Stream(Box<Stream>)`**: 56 → 32 bytes; `api-snapshot update`
+- ~~**`Object::Stream(Box<Stream>)`**~~ — landed 2026-09-05 (`docs/status/M18.md`
+  §3: 32 bytes; peak RSS unchanged within noise, written down). Original row: 56 → 32 bytes; `api-snapshot update`
   as its own commit; RSS on the ten largest corpus files before/after.
+- **Found 2026-09-05: the system font scan copies every installed font into
+  memory, per substituted font.** `SystemFontDb::scan` (`pdfrum-font/src/subst/db.rs:400`)
+  calls `face_bytes_of`, which copies each face's bytes out of `fontdb`'s
+  mmap into an `Arc<[u8]>` and keeps all of them in `sources`; the scan is
+  uncached and runs once per substituted font. Measured with the tool's
+  `--txt` on `vector_en_tem` (645 KB, two substituted fonts, 490 MB of
+  fonts installed): **1,162,288 KiB peak RSS and 1.40 s**, against 15,964 KiB
+  and 0.01 s with `--no-system-fonts`. Six of the ten largest corpus files
+  sit at 1.1 GB for the same reason. Fix: keep path+index per face, read
+  names from the mmap without copying, load only the chosen face's bytes,
+  and cache the scan per process (measure, as the code's own note asks).
+  Exit: ≤ 50 MB on that file, board byte-identical (the ladder's order is by
+  name, which does not change).
 - **Clip-stack count**: clip entries cloned per page across the corpus;
   `Arc<ClipEntry>` only if a document spends ≥ 3% of its build there.
 - **Found 2026-09-05: text extraction decodes every image** — `Page::text_on`

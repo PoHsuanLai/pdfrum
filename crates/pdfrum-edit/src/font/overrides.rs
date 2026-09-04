@@ -195,7 +195,7 @@ fn stream(dict: Dict, bytes: Vec<u8>) -> Object {
     let length = i64::try_from(bytes.len()).unwrap_or(i64::MAX);
     let mut dict = dict;
     dict.push(names::LENGTH.clone(), Object::Int(length));
-    Object::Stream(Stream::new(dict, ByteSpan::from(bytes)))
+    Object::Stream(Box::new(Stream::new(dict, ByteSpan::from(bytes))))
 }
 
 /// `dict` with `key` set to `value`, replacing the first entry that names it.

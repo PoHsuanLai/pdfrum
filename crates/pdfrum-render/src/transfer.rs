@@ -107,7 +107,7 @@ mod tests {
     fn stream(dict: Dict, data: &[u8]) -> Object {
         let file: Arc<[u8]> = Arc::from(data);
         let span = ByteSpan::new(Arc::clone(&file), 0..file.len()).expect("in range");
-        Object::Stream(Stream::new(dict, span))
+        Object::Stream(Box::new(Stream::new(dict, span)))
     }
 
     /// The oracle fixture's type 0 function: a four-entry eight-bit ramp

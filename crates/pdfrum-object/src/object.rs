@@ -103,7 +103,14 @@ pub enum Object {
     /// A dictionary.
     Dict(Dict),
     /// A stream: a dictionary with bytes attached.
-    Stream(Stream),
+    ///
+    /// Boxed because it is the one wide payload — a `Dict` plus a `ByteSpan`
+    /// is 56 bytes where every other payload is 24 — and the one that never
+    /// sits in the hot structures: ISO 32000-1 §7.3.8.1 forbids a stream as
+    /// a direct array element or dictionary value, so the box is only
+    /// dereferenced on the indirect-object path. It takes `Object` from 56
+    /// bytes to 32 and a dictionary pair from 80 to 56.
+    Stream(Box<Stream>),
     /// A reference to an indirect object.
     Ref(ObjRef),
 }
@@ -388,7 +395,7 @@ fn clone_flattened(
                     clone_flattened(v, r, &mut ancestors.clone()).map(|v| (k.clone(), v))
                 })
                 .collect();
-            Some(Object::Stream(Stream::new(dict, s.data.clone())))
+            Some(Object::Stream(Box::new(Stream::new(dict, s.data.clone()))))
         }
         other => Some(other.clone()),
     }
@@ -444,7 +451,7 @@ impl From<Dict> for Object {
 
 impl From<Stream> for Object {
     fn from(v: Stream) -> Self {
-        Self::Stream(v)
+        Self::Stream(Box::new(v))
     }
 }
 
