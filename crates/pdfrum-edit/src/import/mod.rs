@@ -376,7 +376,12 @@ fn rewrite_value(
 }
 
 /// Insert the created pages into the destination's `/Kids` at `at`.
-fn insert_into_tree(dest: &mut EditDoc<'_>, pages_node: u32, created: &[ObjRef], at: u32) {
+pub(crate) fn insert_into_tree(
+    dest: &mut EditDoc<'_>,
+    pages_node: u32,
+    created: &[ObjRef],
+    at: u32,
+) {
     let node_ref = ObjRef::new(pages_node, 0);
     let mut node = dest
         .fetch(node_ref)
