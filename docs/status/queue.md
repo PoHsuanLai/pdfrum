@@ -4,7 +4,7 @@ What is known to be owed and not yet started, so the next session or agent
 does not rediscover it. Dated when added; struck when landed. Milestone and
 board context live in PLAN.md and `conformance/scoreboard.json`.
 
-## M18 — data layout pass (scoped 2026-09-04, `docs/design/dod-layout.md`) — NOT STARTED
+## ~~M18 — data layout pass~~ — MET 2026-09-05 (`docs/status/M18.md`); rows below are the record
 
 - ~~**`Face::name_index` builds its name map once**~~ — landed 2026-09-05
   (`docs/status/M18.md` §1: `vector_en_tem` build `Ir` −75%, cold render
@@ -50,7 +50,7 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
   does not move with load. Build the binary from `main` first — the one in
   `dawai/release` on 2026-09-04 was from the `fontfix` worktree.
 
-## M19 — the `pdfrum` CLI (scoped 2026-09-04, `docs/design/pdfrum-cli.md` §9) — NOT STARTED
+## M19 — the `pdfrum` CLI (scoped 2026-09-04, `docs/design/pdfrum-cli.md` §9) — IN PROGRESS from 2026-09-05
 
 - Five phases, PLAN.md M19; the read-only core ships on `clap` + `serde_json`
   before any terminal crate is admitted.
