@@ -29,6 +29,7 @@ members = [
     "crates/pdfrum-edit",
     "crates/pdfrum",
     "crates/pdfrum-tool",
+    "crates/pdfrum-markdown",
     "crates/pdfrum-cli",
     "conformance",
     "benches",
@@ -86,6 +87,7 @@ pdfrum-form = { path = "crates/pdfrum-form", version = "=0.1.0" }
 pdfrum-script = { path = "crates/pdfrum-script", version = "=0.1.0" }
 pdfrum-edit = { path = "crates/pdfrum-edit", version = "=0.1.0" }
 pdfrum = { path = "crates/pdfrum", version = "=0.1.0" }
+pdfrum-markdown = { path = "crates/pdfrum-markdown", version = "=0.1.0" }
 # The M12 bench corpus list. A leaf — it depends on nothing, which is what lets
 # five library crates dev-depend on it without any of them acquiring a
 # dependency on the facade that depends on them. `publish = false`.

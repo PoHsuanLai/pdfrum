@@ -1811,6 +1811,7 @@ dependencies = [
  "pdfrum-filters",
  "pdfrum-font",
  "pdfrum-form",
+ "pdfrum-markdown",
  "pdfrum-object",
  "pdfrum-page",
  "pdfrum-parser",
@@ -1970,6 +1971,18 @@ dependencies = [
  "pdfrum-parser",
  "pdfrum-script",
  "thiserror",
+]
+
+[[package]]
+name = "pdfrum-markdown"
+version = "0.1.0"
+dependencies = [
+ "kurbo",
+ "pdfrum-common",
+ "pdfrum-doc",
+ "pdfrum-object",
+ "pdfrum-page",
+ "pdfrum-text",
 ]
 
 [[package]]

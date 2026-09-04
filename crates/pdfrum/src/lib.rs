@@ -99,6 +99,8 @@ pub use page::{LinkTarget, Page, PageLink, PreparedPage, Rotation};
 pub use pdfrum_form::AnnotId;
 #[cfg(feature = "forms")]
 pub use pdfrum_form::{Placement, PopupGeometry, PopupView, ScrollView};
+#[cfg(feature = "markdown")]
+pub use pdfrum_markdown::Block;
 
 /// The `boa`-backed [`Cascade`] and what a caller needs to build and read one
 /// — behind the default-off `script` feature.

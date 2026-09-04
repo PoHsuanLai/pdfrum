@@ -133,6 +133,7 @@ right, and none of it is hidden. Reach past `pdfrum` whenever you need to.
 | `pdfrum-doc` | `fpdfdoc` | Bookmarks, named destinations, links and actions, annotations with appearance generation, the AcroForm data model, the structure tree. |
 | `pdfrum-edit` | `fpdfapi/edit` | Serializer, incremental-update writer, page import, font subsetting. |
 | `pdfrum-tool` | `testing/pdfium_test` | CLI mirroring the oracle's flags and output formats byte for byte, so the harness diffs like for like. |
+| `pdfrum-markdown` | — | Markdown and layout-preserving text from a page: the structure tree where there is one, typography where there is not. Facade feature `markdown`. |
 | `pdfrum-cli` | — | The `pdfrum` command line for people and scripts: `info`, `doctor`, `render`, `extract …`, `--json` everywhere. A client of the facade only. |
 | `conformance/` | `testing/tools` | The differential-test harness. Not published. |
 

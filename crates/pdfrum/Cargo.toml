@@ -59,6 +59,9 @@ vello-gpu = ["dep:pdfrum-raster-vello"]
 edit = ["dep:pdfrum-edit"]
 forms = ["dep:pdfrum-form"]
 javascript = ["forms", "pdfrum-form/javascript"]
+# Markdown and layout-preserving text from a page: `pdfrum-markdown`, the
+# structure tree where there is one and typography where there is not.
+markdown = ["dep:pdfrum-markdown"]
 
 # The specialised image codecs. Flate and JPEG are always in; these three
 # are what a build that will never meet them can leave out.
@@ -107,6 +110,7 @@ pdfrum-raster-agg = { workspace = true, optional = true }
 pdfrum-raster-vello = { workspace = true, optional = true }
 pdfrum-text.workspace = true
 pdfrum-doc.workspace = true
+pdfrum-markdown = { workspace = true, optional = true }
 pdfrum-form = { workspace = true, optional = true }
 pdfrum-edit = { workspace = true, optional = true }
 kurbo.workspace = true
