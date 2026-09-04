@@ -57,6 +57,11 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
   `extract text|links|toc|attachments|annotations|signatures`, `--json`,
   `--pages`; facade fills `Document::id`, the three page boxes,
   `Page::page_links`. Phases 2–5 as scheduled below.
+- ~~Phase 2 — surgery and forms~~ — landed 2026-09-05 (`docs/status/M19.md`):
+  `pages merge|split|slice|reorder|create|nup|booklet`, `forms
+  dump|fill|flatten`, `repair`, `optimize`, `security decrypt`,
+  `--deterministic`; `pdfrum-edit` page-tree edits and six facade fills the
+  design had called composition.
 - Five phases, PLAN.md M19; the read-only core ships on `clap` + `serde_json`
   before any terminal crate is admitted.
 - **`security encrypt` kept** (user, 2026-09-05): R6 only, generation as

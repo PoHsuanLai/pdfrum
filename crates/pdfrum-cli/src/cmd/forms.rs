@@ -1,0 +1,165 @@
+//! `pdfrum forms …`: dump, fill, flatten.
+
+use std::path::Path;
+use std::process::ExitCode;
+
+use anyhow::{Context, Result, bail};
+use pdfrum::{FlattenMode, Flattened};
+use serde::Serialize;
+
+use crate::cmd::pages::save_options;
+use crate::out;
+use crate::out::outln;
+
+#[derive(Serialize)]
+struct FieldRow {
+    name: String,
+    kind: String,
+    value: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    checked: Option<bool>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    options: Vec<String>,
+    read_only: bool,
+    required: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tooltip: Option<String>,
+    widgets: usize,
+}
+
+pub fn dump(file: &Path, password: Option<&str>, json: bool) -> Result<ExitCode> {
+    let doc = out::open(file, password)?;
+    let Some(form) = doc.form() else {
+        if json {
+            out::json(&Vec::<FieldRow>::new())?;
+        } else {
+            outln!("no interactive form");
+        }
+        return Ok(ExitCode::SUCCESS);
+    };
+    let rows: Vec<FieldRow> = form
+        .fields()
+        .iter()
+        .map(|f| {
+            let kind = format!("{:?}", f.kind()).to_ascii_lowercase();
+            let checkable = matches!(
+                kind.as_str(),
+                "check_box" | "checkbox" | "radio_button" | "radio"
+            );
+            FieldRow {
+                name: f.name().to_owned(),
+                checked: checkable.then(|| f.is_checked()),
+                kind,
+                value: f.value(),
+                options: f.options(),
+                read_only: f.is_read_only(),
+                required: f.is_required(),
+                tooltip: f.tooltip(),
+                widgets: f.widget_count(),
+            }
+        })
+        .collect();
+    if json {
+        out::json(&rows)?;
+    } else {
+        for r in &rows {
+            let mut flags = Vec::new();
+            if r.read_only {
+                flags.push("read-only");
+            }
+            if r.required {
+                flags.push("required");
+            }
+            let value = match r.checked {
+                Some(true) => "[x]".to_owned(),
+                Some(false) => "[ ]".to_owned(),
+                None => r.value.clone(),
+            };
+            outln!(
+                "{:<32} {:<12} {value}{}{}",
+                r.name,
+                r.kind,
+                if r.options.is_empty() {
+                    String::new()
+                } else {
+                    format!("  options: {}", r.options.join(" | "))
+                },
+                if flags.is_empty() {
+                    String::new()
+                } else {
+                    format!("  ({})", flags.join(", "))
+                }
+            );
+        }
+    }
+    Ok(ExitCode::SUCCESS)
+}
+
+/// Fill fields from a JSON object: `{"name": "text", "box": true}`. A
+/// boolean checks or clears; anything else is set as the field's text.
+pub fn fill(
+    file: &Path,
+    password: Option<&str>,
+    data: &Path,
+    output: &Path,
+    deterministic: bool,
+) -> Result<ExitCode> {
+    let doc = out::open(file, password)?;
+    let Some(mut form) = doc.form() else {
+        bail!("{} has no interactive form", file.display());
+    };
+    let text =
+        std::fs::read_to_string(data).with_context(|| format!("cannot read {}", data.display()))?;
+    let values: serde_json::Map<String, serde_json::Value> = serde_json::from_str(&text)
+        .with_context(|| format!("{} is not a JSON object of field values", data.display()))?;
+    let mut set = 0;
+    for (name, value) in &values {
+        let result = match value {
+            serde_json::Value::Bool(checked) => form.set_checked(name, *checked),
+            serde_json::Value::String(s) => form.set(name, s.clone()),
+            serde_json::Value::Null => form.set(name, ""),
+            other => form.set(name, other.to_string()),
+        };
+        result.with_context(|| format!("no field named {name:?}"))?;
+        set += 1;
+    }
+    doc.save_form(output, &form, &save_options(deterministic, doc.bytes()))
+        .with_context(|| format!("cannot write {}", output.display()))?;
+    outln!(
+        "{}: {set} field{} set",
+        output.display(),
+        if set == 1 { "" } else { "s" }
+    );
+    Ok(ExitCode::SUCCESS)
+}
+
+/// Bake every page's annotations into its content.
+pub fn flatten(
+    file: &Path,
+    password: Option<&str>,
+    print: bool,
+    output: &Path,
+    deterministic: bool,
+) -> Result<ExitCode> {
+    let doc = out::open(file, password)?;
+    let mode = if print {
+        FlattenMode::Print
+    } else {
+        FlattenMode::Display
+    };
+    let mut edit = doc.edit();
+    let mut flattened = 0;
+    for index in 0..doc.page_count() {
+        if edit.flatten(index, mode)? == Flattened::Done {
+            flattened += 1;
+        }
+    }
+    edit.save(output, &save_options(deterministic, doc.bytes()))
+        .with_context(|| format!("cannot write {}", output.display()))?;
+    outln!(
+        "{}: {flattened} of {} pages had something to flatten",
+        output.display(),
+        doc.page_count()
+    );
+    Ok(ExitCode::SUCCESS)
+}
