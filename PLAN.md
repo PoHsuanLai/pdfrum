@@ -1322,6 +1322,74 @@ load numbers unchanged (bench ratchet).
   fix what fails, and record what was already covered.
 - **Exit**: every listed embeddertest assertion ported and passing.
 
+## M18 — Data layout pass  *(scoped 2026-09-04; `docs/design/dod-layout.md`)*  — NOT STARTED
+
+A data-oriented-design proposal named four layout changes (box
+`Object::Stream`, share the per-object `GraphicsState` and de-box
+`PageObject`, a contiguous bounding-box array for the cull, verbs+points
+instead of `BezPath`). Each premise was profiled before scheduling
+(callgrind `Ir`, `main` at `5142672`), and the profile moved the pass:
+
+- **Kept:** `Object::Stream(Box<Stream>)` — `Object` 56 → 32 bytes, dict
+  pair 80 → 56 — as a memory change with an RSS row, not a speed claim.
+- **Declined on the numbers:** the state clone is 1.7% of the document the
+  proposal cited; the cull is 0.9% after M12b-P3's −69%; `BezPath` is the
+  public geometry type every backend consumes. Reopening conditions are in
+  the design doc. One measurement survives: clip entries cloned per page
+  across the corpus, `Arc<ClipEntry>` if any document spends ≥ 3% there.
+- **Found instead, and now the pass's substance:** `Face::name_index` is a
+  linear scan per name over a `post` table whose own lookup is linear —
+  **58% of `vector_en_tem`'s cold render** — and the content lexer
+  allocates one `Vec<u8>` per token and parses numbers through
+  `from_utf8` + `dec2flt` — **47% of `vector_paths_1751`'s**. Build the
+  name map once per face; make the lexer borrow.
+- **Rules:** no new dependency; conformance byte-identical per commit; every
+  claim carries `Ir` before/after and a ratchet run; the only public type
+  that moves is `Object`.
+- **Exit:** `vector_en_tem` build `Ir` ≤ 50% of today's;
+  `build/vector_paths_1751` −25% or better; `render-warm-*` unmoved;
+  `Object` 32 bytes with RSS recorded on the ten largest corpus files; the
+  clip-stack table written down; `docs/status/M18.md`.
+
+## M19 — The `pdfrum` command line  *(after M18; `docs/design/pdfrum-cli.md`, §9 is the scoped version)*  — NOT STARTED
+
+A user-facing binary `pdfrum` (crate `pdfrum-cli`), beside — never instead
+of — `pdfrum-tool`, which stays the oracle mirror. The CLI is a client of the
+facade crate only, so every gap it hits is a `cargo add pdfrum` gap filled in
+the library first. Five phases, dependency-free core first:
+
+1. **Read-only core** on `clap` + `serde_json`: `info`, `doctor`, `render`,
+   `extract text|links|toc|attachments|annotations|signatures`, `--json`,
+   `--pages`, stdin/stdout `-`, exit codes. Facade fills: trailer `/ID`, the
+   remaining page boxes.
+2. **Surgery and forms:** `pages merge|split|slice|create|nup|booklet`,
+   `forms dump|fill|flatten`, `repair` (open + full save), `optimize`
+   (prune + re-flate; **no linearization until M16**), `security decrypt`,
+   `--deterministic` over `IdSource::Fixed`. Facade fills: `n_page_to_one`
+   re-export, rotate/crop on save, booklet order, `SaveOptions`.
+3. **Terminal:** `preview`, `view`, `search`, OSC 8 links, tables. The
+   terminal crates (`viuer` with sixel **off** — its sixel feature is C —,
+   `crossterm`, `comfy-table`, `indicatif`, `rpassword`) arrive here, one
+   DEPS.md row each, `default-features = false`. No `insta`; expected-output
+   files. No `check-no-sys` script (keep-it-simple, 2026-09-03).
+4. **`pdfrum-markdown`:** Tier 1 over `StructTree`, Tier 2 from the
+   heuristics *as described* — **no code copied from `MinerU-rs`** until the
+   user settles its licence (upstream MinerU is AGPL-3.0; the port's manifest
+   names a licence file that does not exist). `extract markdown`,
+   `extract text --layout` over the same line model.
+5. **Forensics and polish:** `extract images|fonts`, `inspect
+   object|xref|revisions|revision|structure`, `diff` (hand-rolled Myers, no
+   dep unless it fails the bar), `hash`, `security encrypt` (R6 only,
+   spec-driven, no oracle — **user's call to keep or cut**), completions,
+   man pages, README row.
+
+Renamed or dropped because the library has no such thing: `--dark-mode` →
+`--color-scheme` (PDFium's forced colour scheme, which exists);
+`SOURCE_DATE_EPOCH` dropped (the writer stamps no dates). **Exit:** every
+command tested non-TTY and `--json`; piping strips every escape; conformance
+byte-identical; a DEPS.md row per new dependency; `api-snapshot` commits per
+facade fill; no option without a reader.
+
 ## XFA — declined, with the count written down
 
 35 corpus files exist, so it *qualifies* under this phase's criterion, and the

@@ -4,6 +4,44 @@ What is known to be owed and not yet started, so the next session or agent
 does not rediscover it. Dated when added; struck when landed. Milestone and
 board context live in PLAN.md and `conformance/scoreboard.json`.
 
+## M18 — data layout pass (scoped 2026-09-04, `docs/design/dod-layout.md`) — NOT STARTED
+
+- **`Face::name_index` builds its name map once** (`pdfrum-font/src/glyphs/face.rs:379`):
+  today one linear scan per name over `post.glyph_name`, itself linear —
+  58% of `vector_en_tem`'s cold render by callgrind `Ir`. Same for the CFF
+  charset branch. Pin: first-gid-wins against the scan, every corpus face.
+- **Zero-copy content lexer** (`pdfrum-page/src/tokenize.rs:325`): `next_word`
+  returns `to_vec()` per token; numbers via `from_utf8` + `parse::<f32>` —
+  47% of `vector_paths_1751`'s cold render, ~12% of it malloc/free. Number
+  parse stays bit-identical (pin over every number token in the corpus).
+- **`Object::Stream(Box<Stream>)`**: 56 → 32 bytes; `api-snapshot update`
+  as its own commit; RSS on the ten largest corpus files before/after.
+- **Clip-stack count**: clip entries cloned per page across the corpus;
+  `Arc<ClipEntry>` only if a document spends ≥ 3% of its build there.
+- Declined with numbers (state sharing, de-boxed `PageObject`, cull SoA,
+  verbs+points) — the design doc §1.3 has the reopening conditions.
+- Method note: `perf` is closed on this box (`perf_event_paranoid = 4`);
+  `valgrind --tool=callgrind` on the `profile` binary works and its `Ir`
+  does not move with load. Build the binary from `main` first — the one in
+  `dawai/release` on 2026-09-04 was from the `fontfix` worktree.
+
+## M19 — the `pdfrum` CLI (scoped 2026-09-04, `docs/design/pdfrum-cli.md` §9) — NOT STARTED
+
+- Five phases, PLAN.md M19; the read-only core ships on `clap` + `serde_json`
+  before any terminal crate is admitted.
+- **User decisions recorded as open:** keep or cut `security encrypt`
+  (R6-only, spec-driven, no oracle); the `MinerU-rs` licence before any code
+  is copied (upstream AGPL-3.0; the port names a `LICENSE` that does not
+  exist) — until then the heuristics are implemented from their description.
+- Facade fills the CLI needs, each an `api-snapshot` commit: trailer `/ID`,
+  `/BleedBox` `/TrimBox` `/ArtBox`, `n_page_to_one` re-export, rotate/crop on
+  save, booklet order, `SaveOptions` + `IdSource` on the facade, raw image
+  XObject and font-program accessors, `/Prev` chain (revisions),
+  `StructTree` re-export, an object pretty-printer.
+- Not in the library and not faked: linearization (M16), date stamping
+  (`SOURCE_DATE_EPOCH` dropped), luminance inversion (`--color-scheme` is
+  what exists).
+
 ## Feature gaps (added 2026-09-03)
 
 - ~~**Image embedding.** `ImageBuilder::at(source: ObjRef, rect)` can only
