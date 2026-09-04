@@ -3892,3 +3892,21 @@ and the ratchet will tighten them back on its own.
   substitute: `Ir` is load-insensitive, `callgrind_annotate --inclusive=yes`
   names the loop. Build the binary from the tree under test first — the one
   in the shared target dir on 09-04 was from a stale worktree.
+
+## 24. The M18 closing run, 2026-09-05 — 29 rows set by hand, 116 improvements recorded
+
+`cargo bench --workspace` on `4ecb7ef`, started at load 13.6 and ending at
+7.8: 114 improved, **79 regressed**, the `open` group worst
+(`forms_widgets_407` +179%). The checks, in order: callgrind `Ir` for
+`--op open` on the four worst open rows, baseline commit `752ca01` against
+`main` — **identical to 0.05%**; three interleaved rounds over nine rows
+spanning every regressed family — within noise on eight, and the ninth
+(`open/forms_widgets_407`) bimodal at 3.6 / 1.1 ms on the new binary, then
+six more alternating rounds putting it at **+2.3%**, inside its 8% band; a
+re-take of the 74 still-flagged rows at load 7–8 — **29** left, the largest
+being two open rows whose old binary measures the same today (§23 pattern).
+Those 29 were set to their re-taken medians and `ratchet update` wrote the
+rest. Geomean new/old per group against the committed baseline: text
+**0.205**, build **0.815**, render-cold 0.957–0.983, render-warm
+0.986–0.989, save 0.988, open 1.024 (band 8%). What moved, and why, is in
+`docs/status/M18.md`.

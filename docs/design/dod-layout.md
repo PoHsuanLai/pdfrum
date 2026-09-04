@@ -1,6 +1,6 @@
 # Data layout pass — what the profile says a DOD pass should touch
 
-**Status:** Scoped 2026-09-04; PLAN.md M18. In progress (`docs/status/M18.md`).
+**Status:** Landed 2026-09-05; PLAN.md M18 MET (`docs/status/M18.md`).
 **Scope:** `pdfrum-object`, `pdfrum-page` (lexer, state), `pdfrum-font` (glyph names).
 **Method:** callgrind instruction counts (`Ir`) on the `profile` binary built from
 `main` at `5142672`, cold render (`--op render`, fresh session per iteration,

@@ -1322,7 +1322,7 @@ load numbers unchanged (bench ratchet).
   fix what fails, and record what was already covered.
 - **Exit**: every listed embeddertest assertion ported and passing.
 
-## M18 — Data layout pass  *(scoped 2026-09-04; `docs/design/dod-layout.md`)*  — NOT STARTED
+## M18 — Data layout pass  *(scoped 2026-09-04; `docs/design/dod-layout.md`)*  — **MET 2026-09-05** (`docs/status/M18.md`: text geomean 0.205, build 0.815, cold render 0.96–0.98; six items, two of them found on the way — the 1.1 GB font scan and the text build's image decode)
 
 A data-oriented-design proposal named four layout changes (box
 `Object::Stream`, share the per-object `GraphicsState` and de-box
@@ -1351,7 +1351,7 @@ instead of `BezPath`). Each premise was profiled before scheduling
   `Object` 32 bytes with RSS recorded on the ten largest corpus files; the
   clip-stack table written down; `docs/status/M18.md`.
 
-## M19 — The `pdfrum` command line  *(after M18; `docs/design/pdfrum-cli.md`, §9 is the scoped version)*  — NOT STARTED
+## M19 — The `pdfrum` command line  *(after M18; `docs/design/pdfrum-cli.md`, §9 is the scoped version)*  — IN PROGRESS from 2026-09-05
 
 A user-facing binary `pdfrum` (crate `pdfrum-cli`), beside — never instead
 of — `pdfrum-tool`, which stays the oracle mirror. The CLI is a client of the
