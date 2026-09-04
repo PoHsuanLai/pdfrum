@@ -107,9 +107,34 @@ pub struct Trailer {
 #[derive(Debug, Clone, Default)]
 pub struct Xref {
     entries: BTreeMap<u32, XEntry>,
+    /// The cross-reference sections the load followed, oldest first: each
+    /// one an incremental update's table or stream, at its byte offset.
+    sections: Vec<Section>,
+}
+
+/// One cross-reference section of the file, as the `/Prev` chain found it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Section {
+    /// Where the section starts.
+    pub offset: u64,
+    /// A cross-reference stream rather than a classic table.
+    pub is_stream: bool,
 }
 
 impl Xref {
+    /// The sections the load followed, oldest first — one per revision of
+    /// an incrementally updated file. Empty when the table was rebuilt by
+    /// scanning, since no chain was followed then.
+    #[must_use]
+    pub fn sections(&self) -> &[Section] {
+        &self.sections
+    }
+
+    /// Record the chain the load followed.
+    pub(crate) fn set_sections(&mut self, sections: Vec<Section>) {
+        self.sections = sections;
+    }
+
     /// An empty table.
     #[must_use]
     pub fn new() -> Self {

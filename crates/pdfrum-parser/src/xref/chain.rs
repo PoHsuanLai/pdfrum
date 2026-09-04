@@ -178,6 +178,18 @@ pub(crate) fn read_chain(
         return false;
     };
 
+    // Remember the chain, oldest first as the walk returns it; a section
+    // that carries both a table and a stream (a hybrid file) is one
+    // revision, recorded at its stream.
+    xref.set_sections(
+        sections
+            .iter()
+            .map(|s| super::Section {
+                offset: (if s.stream > 0 { s.stream } else { s.table }) as u64,
+                is_stream: s.stream > 0,
+            })
+            .collect(),
+    );
     // The oldest section is loaded first and verified; everything newer is
     // merged on top of it.
     let Some((oldest, newer)) = sections.split_first() else {
