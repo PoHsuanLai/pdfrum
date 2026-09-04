@@ -610,14 +610,22 @@ Phase 3 — the scriptable core ships first on `clap` + `serde_json` alone.
 
 ### 9.3 The markdown crate and MinerU-rs
 
-`MinerU-rs` is the user's own port (`PoHsuanLai/MinerU-rs`) of MinerU, whose
-upstream is **AGPL-3.0**; the port's manifest says
-`LicenseRef-MinerU-Open-Source-License` and its `LICENSE` file is absent.
-`pdfrum` is MIT/Apache-2.0. The heuristics (the 8% margin band, the
-`0.25 × median width` space rule, the 1.6×/1.3× heading ratios, the 1.0 pt /
-2.5 pt dedup tolerances) are described here as rules and will be implemented
-from this description — **no code is copied from `MinerU-rs`** unless the user
-settles its licence first. This is a user decision recorded as open.
+`MinerU-rs` is the user's own port (`PoHsuanLai/MinerU-rs`) of MinerU.
+Upstream MinerU's `LICENSE.md` (checked 2026-09-05) is **Apache-2.0 plus
+supplementary terms**: a separate commercial licence above 100 M monthly
+active users or USD 20 M monthly revenue, a prominent "MinerU is used" notice
+for online services built on it, and automatic termination if either is
+missed. The port's manifest names that as
+`LicenseRef-MinerU-Open-Source-License` (its `LICENSE` file is absent). So it
+is not plain Apache: code copied from it would carry the rider into
+`pdfrum`'s MIT/Apache-2.0 tree, and a downstream `cargo add pdfrum` user
+would inherit obligations nothing in `pdfrum`'s licence field tells them
+about. The heuristics themselves (the 8% margin band, the `0.25 × median
+width` space rule, the 1.6×/1.3× heading ratios, the 1.0 pt / 2.5 pt dedup
+tolerances) are rules, not copyrightable expression, and are implemented
+from this description with MinerU credited in the crate docs as the source
+of the method. **No code is copied from `MinerU-rs`.** That closes the
+question unless the user prefers to carry the rider.
 
 Tier 1 (tagged PDFs) needs no heuristics: `StructTree` is in `pdfrum-doc`
 and `pdfrum-tool --show-structure` already walks it.

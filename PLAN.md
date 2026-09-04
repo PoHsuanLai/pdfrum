@@ -1373,9 +1373,10 @@ the library first. Five phases, dependency-free core first:
    DEPS.md row each, `default-features = false`. No `insta`; expected-output
    files. No `check-no-sys` script (keep-it-simple, 2026-09-03).
 4. **`pdfrum-markdown`:** Tier 1 over `StructTree`, Tier 2 from the
-   heuristics *as described* — **no code copied from `MinerU-rs`** until the
-   user settles its licence (upstream MinerU is AGPL-3.0; the port's manifest
-   names a licence file that does not exist). `extract markdown`,
+   heuristics *as described*, MinerU credited as the method's source —
+   **no code copied from `MinerU-rs`**: upstream MinerU is Apache-2.0 *plus*
+   a commercial-threshold and attribution rider that would ride into a
+   MIT/Apache tree (`docs/design/pdfrum-cli.md` §9.3). `extract markdown`,
    `extract text --layout` over the same line model.
 5. **Forensics and polish:** `extract images|fonts`, `inspect
    object|xref|revisions|revision|structure`, `diff` (hand-rolled Myers, no
