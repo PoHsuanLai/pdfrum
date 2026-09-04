@@ -23,3 +23,6 @@ Each row says which command's expected output in `../expected/` it pins.
 | `annotiter.pdf` | 2.1 KB | Eight widgets over two pages, each with a `/T` — `extract annotations`. |
 | `bookmarks.pdf` | 2.2 KB | A four-entry outline two levels deep — `extract toc`, and `info`'s entry count. |
 | `annots_action_handling.pdf` | 1.9 KB | Four link annotations: a URI, a `GoTo` to page 2, and two other actions — `extract links` with all three target kinds. |
+| `text_form.pdf` | 927 B | One `/Tx` field named `Text Box` — `forms dump`, `forms fill`, `forms flatten`. |
+| `encrypted.pdf` | 10.6 KB | RC4-encrypted, user password `1234`, owner `5678` — `security decrypt`, `--password`. |
+| `mona_lisa.jpg` | 6.2 KB | A 120 by 120 baseline JPEG — `pages create` embeds it unchanged. |

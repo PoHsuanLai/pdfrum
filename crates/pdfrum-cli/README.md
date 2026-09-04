@@ -14,6 +14,19 @@ pdfrum extract toc report.pdf
 pdfrum extract attachments invoice.pdf -o attachments/
 pdfrum extract annotations reviewed.pdf
 pdfrum extract signatures signed.pdf
+pdfrum pages merge a.pdf b.pdf -o both.pdf
+pdfrum pages split both.pdf -o pages/          # one file per page
+pdfrum pages slice report.pdf --pages 2-4 --rotate 90 -o part.pdf
+pdfrum pages reorder report.pdf --pages 3,1,2 -o reordered.pdf
+pdfrum pages create scan1.jpg scan2.png --dpi 300 -o scans.pdf
+pdfrum pages nup slides.pdf --grid 2x2 --sheet a4 -o handout.pdf
+pdfrum pages booklet zine.pdf -o print-me.pdf
+pdfrum forms dump form.pdf --json
+pdfrum forms fill form.pdf --data values.json -o filled.pdf
+pdfrum forms flatten filled.pdf -o static.pdf
+pdfrum repair damaged.pdf -o fixed.pdf
+pdfrum optimize big.pdf --deterministic -o small.pdf
+pdfrum security decrypt locked.pdf --password secret -o open.pdf
 ```
 
 Every command takes `--password` for an encrypted file and prints notices

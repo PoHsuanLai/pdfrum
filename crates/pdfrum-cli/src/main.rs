@@ -85,6 +85,180 @@ enum Command {
         #[command(subcommand)]
         what: Extract,
     },
+    /// Merge, split, slice, reorder, impose, or make pages from images.
+    Pages {
+        #[command(subcommand)]
+        what: Pages,
+    },
+    /// Interactive forms: list fields, fill them, or bake them into the page.
+    Forms {
+        #[command(subcommand)]
+        what: Forms,
+    },
+    /// Open with recovery and write a clean, fully rewritten file.
+    ///
+    /// Opening is the repair: a wrong startxref, a bad stream length, a
+    /// broken cross-reference table are reconstructed on the way in. The
+    /// rewrite then drops every object nothing points at.
+    Repair {
+        #[command(flatten)]
+        input: Input,
+        #[command(flatten)]
+        save: SaveArgs,
+    },
+    /// Rewrite the file compactly: unreferenced objects dropped, streams
+    /// re-encoded.
+    Optimize {
+        #[command(flatten)]
+        input: Input,
+        #[command(flatten)]
+        save: SaveArgs,
+    },
+    /// Encryption.
+    Security {
+        #[command(subcommand)]
+        what: Security,
+    },
+}
+
+#[derive(Subcommand)]
+enum Pages {
+    /// Join files into one, in the order given.
+    Merge {
+        /// The PDF files to join.
+        #[arg(value_name = "FILE", required = true)]
+        files: Vec<PathBuf>,
+        #[command(flatten)]
+        save: SaveArgs,
+    },
+    /// One file per page, `<stem>-<n>.pdf`, into a directory.
+    Split {
+        #[command(flatten)]
+        input: Input,
+        /// Pages to split out, 1-based. All by default.
+        #[arg(long, value_name = "RANGE")]
+        pages: Option<String>,
+        /// The directory to write into.
+        #[arg(short, long, value_name = "DIR")]
+        output: PathBuf,
+        /// Reproducible output: the same input gives the same bytes.
+        #[arg(long)]
+        deterministic: bool,
+    },
+    /// Keep some pages, in document order, rotated or cropped.
+    Slice {
+        #[command(flatten)]
+        input: Input,
+        /// Pages to keep, 1-based. All by default.
+        #[arg(long, value_name = "RANGE")]
+        pages: Option<String>,
+        /// Rotate the kept pages by this many degrees (a multiple of 90).
+        #[arg(long, value_name = "DEGREES", allow_negative_numbers = true)]
+        rotate: Option<i32>,
+        /// Set the kept pages' crop box: `x0,y0,x1,y1` in points.
+        #[arg(long, value_name = "BOX")]
+        crop: Option<String>,
+        #[command(flatten)]
+        save: SaveArgs,
+    },
+    /// Pages in the order named, duplicates allowed: `3,1,1,2`.
+    Reorder {
+        #[command(flatten)]
+        input: Input,
+        /// The order, 1-based.
+        #[arg(long, value_name = "RANGE", required = true)]
+        pages: String,
+        #[command(flatten)]
+        save: SaveArgs,
+    },
+    /// A PDF from JPEG and PNG files, one page per image.
+    Create {
+        /// The images, in page order.
+        #[arg(value_name = "IMAGE", required = true)]
+        images: Vec<PathBuf>,
+        /// Pixels per inch the images are placed at; sets the page size.
+        #[arg(long, default_value_t = 72.0)]
+        dpi: f64,
+        #[command(flatten)]
+        save: SaveArgs,
+    },
+    /// N-up imposition: several pages per sheet.
+    Nup {
+        #[command(flatten)]
+        input: Input,
+        /// Pages to lay out, 1-based. All by default.
+        #[arg(long, value_name = "RANGE")]
+        pages: Option<String>,
+        /// Columns by rows per sheet.
+        #[arg(long, value_name = "CxR", default_value = "2x1")]
+        grid: String,
+        /// Sheet size: `WIDTHxHEIGHT` in points, `letter` or `a4`.
+        #[arg(long, value_name = "SIZE", default_value = "letter")]
+        sheet: String,
+        #[command(flatten)]
+        save: SaveArgs,
+    },
+    /// Saddle-stitch booklet: two pages per side, ordered for folding.
+    Booklet {
+        #[command(flatten)]
+        input: Input,
+        #[command(flatten)]
+        save: SaveArgs,
+    },
+}
+
+#[derive(Subcommand)]
+enum Forms {
+    /// List the fields with their kinds and values.
+    Dump {
+        #[command(flatten)]
+        input: Input,
+        /// One JSON document.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Set field values from a JSON object and save.
+    Fill {
+        #[command(flatten)]
+        input: Input,
+        /// A JSON file: `{"name": "text", "box": true}`.
+        #[arg(long, value_name = "JSON", required = true)]
+        data: PathBuf,
+        #[command(flatten)]
+        save: SaveArgs,
+    },
+    /// Bake annotations and fields into static page content.
+    Flatten {
+        #[command(flatten)]
+        input: Input,
+        /// Keep only what prints (the `/Print` flag), as a printer would.
+        #[arg(long)]
+        print: bool,
+        #[command(flatten)]
+        save: SaveArgs,
+    },
+}
+
+#[derive(Subcommand)]
+enum Security {
+    /// Write the document without its encryption.
+    Decrypt {
+        #[command(flatten)]
+        input: Input,
+        #[command(flatten)]
+        save: SaveArgs,
+    },
+}
+
+/// Where a writing command puts its result.
+#[derive(Args)]
+struct SaveArgs {
+    /// The file to write.
+    #[arg(short, long, value_name = "PATH")]
+    output: PathBuf,
+    /// Reproducible output: the same input gives the same bytes.
+    #[arg(long)]
+    deterministic: bool,
 }
 
 #[derive(Subcommand)]
@@ -185,24 +359,26 @@ fn main() -> ExitCode {
             scale: scale.unwrap_or(dpi / 72.0),
             annotations: !no_annotations,
         }),
-        Command::Extract { what } => match what {
-            Extract::Text { input, pages, json } => {
-                cmd::extract::text(&input.file, password, pages.as_deref(), json)
-            }
-            Extract::Links { input, pages, json } => {
-                cmd::extract::links(&input.file, password, pages.as_deref(), json)
-            }
-            Extract::Toc { input, json } => cmd::extract::toc(&input.file, password, json),
-            Extract::Attachments {
-                input,
-                output,
-                json,
-            } => cmd::extract::attachments(&input.file, password, output.as_deref(), json),
-            Extract::Annotations { input, pages, json } => {
-                cmd::extract::annotations(&input.file, password, pages.as_deref(), json)
-            }
-            Extract::Signatures { input, json } => {
-                cmd::extract::signatures(&input.file, password, json)
+        Command::Extract { what } => run_extract(what, password),
+        Command::Pages { what } => run_pages(what, password),
+        Command::Forms { what } => run_forms(what, password),
+        Command::Repair { input, save } => cmd::file::rewrite(
+            &input.file,
+            password,
+            &save.output,
+            save.deterministic,
+            "repaired",
+        ),
+        Command::Optimize { input, save } => cmd::file::rewrite(
+            &input.file,
+            password,
+            &save.output,
+            save.deterministic,
+            "rewritten",
+        ),
+        Command::Security { what } => match what {
+            Security::Decrypt { input, save } => {
+                cmd::file::decrypt(&input.file, password, &save.output, save.deterministic)
             }
         },
     };
@@ -212,5 +388,120 @@ fn main() -> ExitCode {
             eprintln!("pdfrum: {err:#}");
             ExitCode::from(1)
         }
+    }
+}
+
+fn run_extract(what: Extract, password: Option<&str>) -> anyhow::Result<ExitCode> {
+    match what {
+        Extract::Text { input, pages, json } => {
+            cmd::extract::text(&input.file, password, pages.as_deref(), json)
+        }
+        Extract::Links { input, pages, json } => {
+            cmd::extract::links(&input.file, password, pages.as_deref(), json)
+        }
+        Extract::Toc { input, json } => cmd::extract::toc(&input.file, password, json),
+        Extract::Attachments {
+            input,
+            output,
+            json,
+        } => cmd::extract::attachments(&input.file, password, output.as_deref(), json),
+        Extract::Annotations { input, pages, json } => {
+            cmd::extract::annotations(&input.file, password, pages.as_deref(), json)
+        }
+        Extract::Signatures { input, json } => {
+            cmd::extract::signatures(&input.file, password, json)
+        }
+    }
+}
+
+fn run_pages(what: Pages, password: Option<&str>) -> anyhow::Result<ExitCode> {
+    match what {
+        Pages::Merge { files, save } => {
+            cmd::pages::merge(&files, password, &save.output, save.deterministic)
+        }
+        Pages::Split {
+            input,
+            pages,
+            output,
+            deterministic,
+        } => cmd::pages::split(
+            &input.file,
+            password,
+            pages.as_deref(),
+            &output,
+            deterministic,
+        ),
+        Pages::Slice {
+            input,
+            pages,
+            rotate,
+            crop,
+            save,
+        } => crop
+            .as_deref()
+            .map(cmd::pages::parse_rect)
+            .transpose()
+            .and_then(|crop| {
+                cmd::pages::slice(&cmd::pages::Slice {
+                    file: &input.file,
+                    password,
+                    spec: pages.as_deref(),
+                    rotate,
+                    crop,
+                    output: &save.output,
+                    deterministic: save.deterministic,
+                })
+            }),
+        Pages::Reorder { input, pages, save } => cmd::pages::reorder(
+            &input.file,
+            password,
+            &pages,
+            &save.output,
+            save.deterministic,
+        ),
+        Pages::Create { images, dpi, save } => {
+            cmd::pages::create(&images, dpi, &save.output, save.deterministic)
+        }
+        Pages::Nup {
+            input,
+            pages,
+            grid,
+            sheet,
+            save,
+        } => cmd::pages::parse_grid(&grid).and_then(|grid| {
+            let sheet = cmd::pages::parse_size(&sheet)?;
+            cmd::pages::nup(
+                &input.file,
+                password,
+                pages.as_deref(),
+                grid,
+                sheet,
+                &save.output,
+                save.deterministic,
+            )
+        }),
+        Pages::Booklet { input, save } => {
+            cmd::pages::booklet(&input.file, password, &save.output, save.deterministic)
+        }
+    }
+}
+
+fn run_forms(what: Forms, password: Option<&str>) -> anyhow::Result<ExitCode> {
+    match what {
+        Forms::Dump { input, json } => cmd::forms::dump(&input.file, password, json),
+        Forms::Fill { input, data, save } => cmd::forms::fill(
+            &input.file,
+            password,
+            &data,
+            &save.output,
+            save.deterministic,
+        ),
+        Forms::Flatten { input, print, save } => cmd::forms::flatten(
+            &input.file,
+            password,
+            print,
+            &save.output,
+            save.deterministic,
+        ),
     }
 }

@@ -303,3 +303,397 @@ fn a_missing_file_is_exit_1_with_the_path_named() {
     assert_eq!(out.status.code(), Some(1));
     assert!(String::from_utf8_lossy(&out.stderr).contains("nonesuch.pdf"));
 }
+
+// ---- phase 2: pages, forms, whole-file commands ---------------------------
+
+fn scratch(name: &str) -> std::io::Result<std::path::PathBuf> {
+    let dir = std::env::temp_dir().join(format!("pdfrum-cli-{name}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir)?;
+    Ok(dir)
+}
+
+fn pages_of(path: &Path) -> Result<serde_json::Value, String> {
+    let path = path.to_str().ok_or("non-utf8 path")?;
+    Ok(json(&["info", path, "--json"])?["page_boxes"].clone())
+}
+
+#[test]
+fn merge_joins_files_in_order_and_split_takes_them_apart_again() {
+    let dir = scratch("merge").unwrap();
+    let merged = dir.join("merged.pdf");
+    let out = run(&[
+        "pages",
+        "merge",
+        "fixtures/hello_world_2_pages.pdf",
+        "fixtures/bookmarks.pdf",
+        "-o",
+        merged.to_str().unwrap(),
+    ])
+    .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let pages = pages_of(&merged).unwrap();
+    assert_eq!(pages.as_array().map(Vec::len), Some(4));
+    assert_eq!(pages[0]["width"], 200.0);
+    assert_eq!(pages[2]["width"], 612.0);
+
+    let split = dir.join("split");
+    let out = run(&[
+        "pages",
+        "split",
+        merged.to_str().unwrap(),
+        "-o",
+        split.to_str().unwrap(),
+    ])
+    .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    for n in 1..=4 {
+        let one = split.join(format!("merged-{n}.pdf"));
+        assert_eq!(
+            pages_of(&one).unwrap().as_array().map(Vec::len),
+            Some(1),
+            "{}",
+            one.display()
+        );
+    }
+    let text = stdout(&[
+        "extract",
+        "text",
+        split.join("merged-2.pdf").to_str().unwrap(),
+    ])
+    .unwrap();
+    assert!(
+        text.contains("Goodbye"),
+        "page 2 of the merge is page 2 of hello_world: {text}"
+    );
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
+fn slice_keeps_rotates_and_crops_and_reorder_takes_any_order() {
+    let dir = scratch("slice").unwrap();
+    let sliced = dir.join("sliced.pdf");
+    let out = run(&[
+        "pages",
+        "slice",
+        "fixtures/bookmarks.pdf",
+        "--pages",
+        "2",
+        "--rotate",
+        "90",
+        "--crop",
+        "0,0,300,400",
+        "-o",
+        sliced.to_str().unwrap(),
+    ])
+    .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let pages = pages_of(&sliced).unwrap();
+    assert_eq!(pages.as_array().map(Vec::len), Some(1));
+    assert_eq!(pages[0]["rotation"], 90);
+    assert_eq!(
+        pages[0]["crop_box"],
+        serde_json::json!([0.0, 0.0, 300.0, 400.0])
+    );
+    assert_eq!(
+        pages[0]["width"], 400.0,
+        "rotated a quarter turn, the crop's height is the width"
+    );
+
+    let reordered = dir.join("reordered.pdf");
+    let out = run(&[
+        "pages",
+        "reorder",
+        "fixtures/hello_world_2_pages.pdf",
+        "--pages",
+        "2,1,1",
+        "-o",
+        reordered.to_str().unwrap(),
+    ])
+    .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let v = json(&["extract", "text", reordered.to_str().unwrap(), "--json"]).unwrap();
+    let texts: Vec<&str> = v
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|p| p["text"].as_str().unwrap())
+        .collect();
+    assert_eq!(texts.len(), 3);
+    assert!(
+        texts[0].contains("Goodbye") && texts[1].contains("Hello") && texts[2].contains("Hello")
+    );
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
+fn nup_and_booklet_lay_pages_out_on_sheets() {
+    let dir = scratch("nup").unwrap();
+    let nup = dir.join("nup.pdf");
+    let out = run(&[
+        "pages",
+        "nup",
+        "fixtures/bookmarks.pdf",
+        "--grid",
+        "2x1",
+        "--sheet",
+        "1000x500",
+        "-o",
+        nup.to_str().unwrap(),
+    ])
+    .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let pages = pages_of(&nup).unwrap();
+    assert_eq!(
+        pages.as_array().map(Vec::len),
+        Some(1),
+        "two pages, one sheet"
+    );
+    assert_eq!(pages[0]["width"], 1000.0);
+
+    let booklet = dir.join("booklet.pdf");
+    let out = run(&[
+        "pages",
+        "booklet",
+        "fixtures/hello_world_2_pages.pdf",
+        "-o",
+        booklet.to_str().unwrap(),
+    ])
+    .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let pages = pages_of(&booklet).unwrap();
+    assert_eq!(
+        pages.as_array().map(Vec::len),
+        Some(2),
+        "padded to four pages, two sides"
+    );
+    assert_eq!(pages[0]["width"], 400.0, "two 200 pt pages side by side");
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
+fn create_makes_a_page_per_image() {
+    let dir = scratch("create").unwrap();
+    let png_path = dir.join("tiny.png");
+    {
+        let file = std::fs::File::create(&png_path).unwrap();
+        let mut encoder = png::Encoder::new(std::io::BufWriter::new(file), 2, 3);
+        encoder.set_color(png::ColorType::Rgb);
+        encoder.set_depth(png::BitDepth::Eight);
+        let mut writer = encoder.write_header().unwrap();
+        writer
+            .write_image_data(&[
+                255, 0, 0, 0, 255, 0, 0, 0, 255, 255, 255, 0, 0, 255, 255, 255, 0, 255,
+            ])
+            .unwrap();
+    }
+    let created = dir.join("created.pdf");
+    let out = run(&[
+        "pages",
+        "create",
+        "fixtures/mona_lisa.jpg",
+        png_path.to_str().unwrap(),
+        "--dpi",
+        "72",
+        "-o",
+        created.to_str().unwrap(),
+    ])
+    .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let pages = pages_of(&created).unwrap();
+    assert_eq!(pages.as_array().map(Vec::len), Some(2));
+    assert_eq!(pages[0]["width"], 120.0, "mona_lisa is 120 px at 72 dpi");
+    assert_eq!(pages[1]["width"], 2.0);
+    assert_eq!(pages[1]["height"], 3.0);
+    let out = run(&[
+        "render",
+        "--pages",
+        "2",
+        "--scale",
+        "1",
+        "-o",
+        "-",
+        created.to_str().unwrap(),
+    ])
+    .unwrap();
+    assert!(out.status.success() && out.stdout.starts_with(b"\x89PNG"));
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
+fn forms_dump_fill_and_flatten_round_trip() {
+    assert_eq!(
+        stdout(&["forms", "dump", "fixtures/text_form.pdf"]).unwrap(),
+        expected("forms_dump_text_form.txt").unwrap()
+    );
+    let dir = scratch("forms").unwrap();
+    let data = dir.join("fill.json");
+    std::fs::write(&data, r#"{"Text Box": "filled by pdfrum"}"#).unwrap();
+    let filled = dir.join("filled.pdf");
+    let out = run(&[
+        "forms",
+        "fill",
+        "fixtures/text_form.pdf",
+        "--data",
+        data.to_str().unwrap(),
+        "-o",
+        filled.to_str().unwrap(),
+    ])
+    .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let v = json(&["forms", "dump", filled.to_str().unwrap(), "--json"]).unwrap();
+    assert_eq!(v[0]["value"], "filled by pdfrum");
+
+    let bad = dir.join("bad.json");
+    std::fs::write(&bad, r#"{"Nonesuch": "x"}"#).unwrap();
+    let out = run(&[
+        "forms",
+        "fill",
+        "fixtures/text_form.pdf",
+        "--data",
+        bad.to_str().unwrap(),
+        "-o",
+        filled.to_str().unwrap(),
+    ])
+    .unwrap();
+    assert_eq!(out.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&out.stderr).contains("Nonesuch"));
+
+    let flat = dir.join("flat.pdf");
+    let out = run(&[
+        "forms",
+        "flatten",
+        filled.to_str().unwrap(),
+        "-o",
+        flat.to_str().unwrap(),
+    ])
+    .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let annots = json(&["extract", "annotations", flat.to_str().unwrap(), "--json"]).unwrap();
+    assert_eq!(
+        annots.as_array().map(Vec::len),
+        Some(0),
+        "the widget is baked in: {annots}"
+    );
+    assert!(
+        stdout(&["forms", "dump", flat.to_str().unwrap()])
+            .unwrap()
+            .contains("no interactive form")
+    );
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
+fn repair_optimize_and_decrypt_rewrite_the_file() {
+    let dir = scratch("file").unwrap();
+    let repaired = dir.join("repaired.pdf");
+    let out = run(&[
+        "repair",
+        "fixtures/parser_rebuildxref_correct.pdf",
+        "-o",
+        repaired.to_str().unwrap(),
+    ])
+    .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let strict = run(&["doctor", "--strict", repaired.to_str().unwrap()]).unwrap();
+    assert_eq!(strict.status.code(), Some(0), "the rewrite is clean");
+
+    let a = dir.join("a.pdf");
+    let b = dir.join("b.pdf");
+    for path in [&a, &b] {
+        let out = run(&[
+            "optimize",
+            "fixtures/bookmarks.pdf",
+            "--deterministic",
+            "-o",
+            path.to_str().unwrap(),
+        ])
+        .unwrap();
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+    }
+    assert_eq!(
+        std::fs::read(&a).unwrap(),
+        std::fs::read(&b).unwrap(),
+        "--deterministic is byte-identical"
+    );
+    assert_eq!(pages_of(&a).unwrap().as_array().map(Vec::len), Some(2));
+
+    let refused = run(&["info", "fixtures/encrypted.pdf"]).unwrap();
+    assert_eq!(refused.status.code(), Some(1), "no password, no document");
+    let dec = dir.join("dec.pdf");
+    let out = run(&[
+        "security",
+        "decrypt",
+        "--password",
+        "1234",
+        "fixtures/encrypted.pdf",
+        "-o",
+        dec.to_str().unwrap(),
+    ])
+    .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let v = json(&["info", dec.to_str().unwrap(), "--json"]).unwrap();
+    assert_eq!(v["encrypted"], false);
+    let again = run(&[
+        "security",
+        "decrypt",
+        dec.to_str().unwrap(),
+        "-o",
+        dir.join("x.pdf").to_str().unwrap(),
+    ])
+    .unwrap();
+    assert_eq!(
+        again.status.code(),
+        Some(1),
+        "decrypting a clear file is an error, not a no-op"
+    );
+    std::fs::remove_dir_all(&dir).unwrap();
+}
