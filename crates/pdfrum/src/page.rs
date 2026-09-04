@@ -1,7 +1,7 @@
 //! One page: its geometry, its pixels, its text and its annotations.
 
 use pdfrum_common::{Diagnostics, PageIndex};
-use pdfrum_object::{Name, names};
+use pdfrum_object::{Name, Resolve, names};
 use pdfrum_page::BuildContext;
 use pdfrum_parser::PageDict;
 
@@ -429,6 +429,36 @@ impl<'a> Page<'a> {
         (graph, tree, options, diags)
     }
 
+    /// The images the page draws, in drawing order, forms included: each
+    /// with its decoded pixels, and the raw stream when the file stores it
+    /// in a format worth keeping as it is (JPEG, JPEG 2000, JBIG2, CCITT).
+    #[must_use]
+    pub fn images(&self) -> Vec<PageImage> {
+        let mut ctx = BuildContext::new();
+        let graph = self.build(&mut ctx);
+        let mut out = Vec::new();
+        collect_images(&graph.objects, &self.doc.inner, &mut out);
+        out
+    }
+
+    /// The page's view of the document's structure tree, or `None` when the
+    /// document is not tagged.
+    #[must_use]
+    pub fn structure(&self) -> Option<pdfrum_doc::structure::StructTree> {
+        let mut diags = Diagnostics::default();
+        let catalog = self.doc.catalog();
+        let tree = pdfrum_doc::structure::StructTree::load_page(
+            &catalog,
+            &self.dict.dict,
+            self.dict.reference.map_or(0, |r| r.num),
+            &self.doc.inner,
+            &self.doc.limits,
+            &mut diags,
+        );
+        self.doc.note(&diags);
+        tree
+    }
+
     /// **Escape hatch — requires `pdfrum-page`.** The interpreted page-object
     /// graph, for a caller who wants the drawing operations themselves rather
     /// than pixels or text.
@@ -728,4 +758,122 @@ pub struct PageLink {
     pub rect: kurbo::Rect,
     /// Where it leads.
     pub target: LinkTarget,
+}
+
+/// One image a page draws, from [`Page::images`].
+#[derive(Debug, Clone)]
+pub struct PageImage {
+    /// The image `XObject`, or `None` for an inline image.
+    pub source: Option<pdfrum_object::ObjRef>,
+    /// Pixel width.
+    pub width: u32,
+    /// Pixel height.
+    pub height: u32,
+    /// A stencil mask rather than a picture.
+    pub is_mask: bool,
+    /// The stream as stored, when its encoding is one worth keeping.
+    pub raw: Option<RawImage>,
+    image: std::sync::Arc<pdfrum_page::ImageData>,
+}
+
+impl PageImage {
+    /// The decoded pixels, ready to save as PNG.
+    #[must_use]
+    pub fn pixmap(&self) -> Pixmap {
+        pdfrum_render::image_to_pixmap(&self.image)
+    }
+}
+
+/// An image's stored bytes, from [`PageImage::raw`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RawImage {
+    /// The bytes as the file stores them, the image codec's own format.
+    pub data: Vec<u8>,
+    /// Which codec.
+    pub encoding: ImageEncoding,
+}
+
+/// The codecs whose streams are files in their own right.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ImageEncoding {
+    /// `/DCTDecode`.
+    Jpeg,
+    /// `/JPXDecode`.
+    Jpeg2000,
+    /// `/JBIG2Decode` — an embedded stream, not a standalone file.
+    Jbig2,
+    /// `/CCITTFaxDecode` — raw fax data, not a TIFF.
+    CcittFax,
+}
+
+impl ImageEncoding {
+    /// The file extension the bytes are usually given.
+    #[must_use]
+    pub fn extension(self) -> &'static str {
+        match self {
+            Self::Jpeg => "jpg",
+            Self::Jpeg2000 => "jp2",
+            Self::Jbig2 => "jb2",
+            Self::CcittFax => "ccitt",
+        }
+    }
+
+    fn of_filter(name: &[u8]) -> Option<Self> {
+        match name {
+            b"DCTDecode" | b"DCT" => Some(Self::Jpeg),
+            b"JPXDecode" => Some(Self::Jpeg2000),
+            b"JBIG2Decode" => Some(Self::Jbig2),
+            b"CCITTFaxDecode" | b"CCF" => Some(Self::CcittFax),
+            _ => None,
+        }
+    }
+}
+
+fn collect_images(
+    objects: &[pdfrum_page::PageObject],
+    resolver: &pdfrum_parser::Document,
+    out: &mut Vec<PageImage>,
+) {
+    for object in objects {
+        match object {
+            pdfrum_page::PageObject::Image(content) => {
+                let image = &content.object;
+                let raw = image.source.and_then(|r| raw_image(r, resolver));
+                out.push(PageImage {
+                    source: image.source,
+                    width: image.image.width,
+                    height: image.image.height,
+                    is_mask: image.is_mask,
+                    raw,
+                    image: std::sync::Arc::clone(&image.image),
+                });
+            }
+            pdfrum_page::PageObject::Form(content) => {
+                collect_images(&content.object.objects, resolver, out);
+            }
+            _ => {}
+        }
+    }
+}
+
+/// The stream's bytes when its only filter is an image codec.
+fn raw_image(
+    reference: pdfrum_object::ObjRef,
+    resolver: &pdfrum_parser::Document,
+) -> Option<RawImage> {
+    let object = resolver.fetch(reference).ok()?;
+    let stream = object.as_stream()?;
+    let filters: Vec<Name> = match stream.dict.get(names::FILTER, resolver)?.get() {
+        pdfrum_object::Object::Name(n) => vec![n.clone()],
+        pdfrum_object::Object::Array(a) => a.iter().filter_map(|o| o.as_name().cloned()).collect(),
+        _ => return None,
+    };
+    let [only] = filters.as_slice() else {
+        return None;
+    };
+    let encoding = ImageEncoding::of_filter(only.as_bytes())?;
+    Some(RawImage {
+        data: stream.data.as_ref().to_vec(),
+        encoding,
+    })
 }

@@ -7,9 +7,11 @@ pub use pdfrum::AnnotFlags
 pub use pdfrum::AnnotId
 pub use pdfrum::AppearanceUpdate
 pub use pdfrum::Argb
+pub use pdfrum::Array
 pub use pdfrum::BezPath
 pub use pdfrum::BuildContext
 pub use pdfrum::Button
+pub use pdfrum::ByteSpan
 pub use pdfrum::Cascade
 pub use pdfrum::CharBox
 pub use pdfrum::CharIndex
@@ -41,9 +43,11 @@ pub use pdfrum::IndexOutOfRange
 pub use pdfrum::Key
 pub use pdfrum::Keystroke
 pub use pdfrum::KeystrokeOutcome
+pub use pdfrum::Kid
 pub use pdfrum::Limits
 pub use pdfrum::Link
 pub use pdfrum::Modifiers
+pub use pdfrum::Name
 pub use pdfrum::NoScripts
 pub use pdfrum::ObjRef
 pub use pdfrum::Object
@@ -53,6 +57,7 @@ pub use pdfrum::PageBox
 pub use pdfrum::PageIndex
 pub use pdfrum::PageObject
 pub use pdfrum::PageRotation
+pub use pdfrum::PdfString
 pub use pdfrum::PdfVersion
 pub use pdfrum::Permissions
 pub use pdfrum::PixelFormat
@@ -71,10 +76,14 @@ pub use pdfrum::Resolve
 pub use pdfrum::Response
 pub use pdfrum::SaveError
 pub use pdfrum::ScrollView
+pub use pdfrum::Section
 pub use pdfrum::SessionConfig
 pub use pdfrum::Severity
 pub use pdfrum::Size
 pub use pdfrum::StandardFont
+pub use pdfrum::Stream
+pub use pdfrum::StructElement
+pub use pdfrum::StructTree
 pub use pdfrum::SubstitutionOptions
 pub use pdfrum::Subtype
 pub use pdfrum::TextAa
@@ -86,6 +95,7 @@ pub use pdfrum::TinySkiaBackend
 pub use pdfrum::UpdateKind
 pub use pdfrum::VelloCpuBackend
 pub use pdfrum::WebLink
+pub use pdfrum::XrefEntry
 #[non_exhaustive] pub enum pdfrum::Error
 pub pdfrum::Error::Doc(pdfrum_doc::error::Error)
 pub pdfrum::Error::Io(core::io::error::Error)
@@ -103,6 +113,21 @@ pub pdfrum::FlattenMode::Print
 pub enum pdfrum::Flattened
 pub pdfrum::Flattened::Done
 pub pdfrum::Flattened::NothingToDo
+pub enum pdfrum::FontFileKind
+pub pdfrum::FontFileKind::Cff
+pub pdfrum::FontFileKind::OpenType
+pub pdfrum::FontFileKind::TrueType
+pub pdfrum::FontFileKind::Type1
+impl pdfrum::FontFileKind
+pub fn pdfrum::FontFileKind::extension(self) -> &'static str
+pub fn pdfrum::FontFileKind::name(self) -> &'static str
+pub enum pdfrum::ImageEncoding
+pub pdfrum::ImageEncoding::CcittFax
+pub pdfrum::ImageEncoding::Jbig2
+pub pdfrum::ImageEncoding::Jpeg
+pub pdfrum::ImageEncoding::Jpeg2000
+impl pdfrum::ImageEncoding
+pub fn pdfrum::ImageEncoding::extension(self) -> &'static str
 pub enum pdfrum::LinkTarget
 pub pdfrum::LinkTarget::Other
 pub pdfrum::LinkTarget::Page(pdfrum_common::page_index::PageIndex)
@@ -183,6 +208,7 @@ pub fn pdfrum::Document::attachments(&self) -> alloc::vec::Vec<pdfrum::Attachmen
 pub fn pdfrum::Document::blank(f64, f64) -> pdfrum::Result<pdfrum::Document>
 pub fn pdfrum::Document::bytes(&self) -> &alloc::sync::Arc<[u8]>
 pub fn pdfrum::Document::diagnostics(&self) -> &pdfrum_common::diagnostics::Diagnostics
+pub fn pdfrum::Document::embedded_fonts(&self) -> alloc::vec::Vec<pdfrum::EmbeddedFontFile>
 pub fn pdfrum::Document::form(&self) -> core::option::Option<pdfrum::Form<'_>>
 pub fn pdfrum::Document::from_bytes(alloc::sync::Arc<[u8]>) -> pdfrum::Result<pdfrum::Document>
 pub fn pdfrum::Document::from_bytes_with(alloc::sync::Arc<[u8]>, &pdfrum::OpenOptions) -> pdfrum::Result<pdfrum::Document>
@@ -200,6 +226,9 @@ pub fn pdfrum::Document::page_label(&self, impl core::convert::Into<pdfrum_commo
 pub fn pdfrum::Document::pages(&self) -> impl core::iter::traits::iterator::Iterator<Item = pdfrum::Page<'_>> + '_
 pub fn pdfrum::Document::parser(&self) -> &pdfrum_parser::doc::Document
 pub fn pdfrum::Document::permissions(&self) -> pdfrum_crypt::permissions::Permissions
+pub fn pdfrum::Document::revision_bytes(&self, usize) -> core::option::Option<&[u8]>
+pub fn pdfrum::Document::revisions(&self) -> alloc::vec::Vec<pdfrum::Revision>
+pub fn pdfrum::Document::stream_data(&self, pdfrum_object::object::ObjRef) -> pdfrum::Result<alloc::vec::Vec<u8>>
 pub fn pdfrum::Document::version(&self) -> core::option::Option<pdfrum_common::version::PdfVersion>
 pub fn pdfrum::Document::xmp_metadata(&self) -> core::option::Option<alloc::vec::Vec<u8>>
 pub fn pdfrum::Document::xref_was_rebuilt(&self) -> bool
@@ -218,6 +247,11 @@ impl pdfrum::Document
 pub fn pdfrum::Document::signatures(&self) -> alloc::vec::Vec<pdfrum::Signature<'_>>
 impl pdfrum_object::resolve::Resolve for pdfrum::Document
 pub fn pdfrum::Document::fetch(&self, pdfrum_object::object::ObjRef) -> core::result::Result<alloc::sync::Arc<pdfrum_object::object::Object>, pdfrum_object::error::Error>
+pub struct pdfrum::EmbeddedFontFile
+pub pdfrum::EmbeddedFontFile::data: alloc::vec::Vec<u8>
+pub pdfrum::EmbeddedFontFile::kind: pdfrum::FontFileKind
+pub pdfrum::EmbeddedFontFile::name: alloc::string::String
+pub pdfrum::EmbeddedFontFile::object: pdfrum_object::object::ObjRef
 pub struct pdfrum::Field<'a>
 impl pdfrum::Field<'_>
 pub fn pdfrum::Field<'_>::default_value(&self) -> alloc::string::String
@@ -324,6 +358,7 @@ pub fn pdfrum::Page<'a>::art_box(&self) -> core::option::Option<kurbo::rect::Rec
 pub fn pdfrum::Page<'a>::bleed_box(&self) -> core::option::Option<kurbo::rect::Rect>
 pub fn pdfrum::Page<'a>::crop_box(&self) -> kurbo::rect::Rect
 pub fn pdfrum::Page<'a>::height(&self) -> f64
+pub fn pdfrum::Page<'a>::images(&self) -> alloc::vec::Vec<pdfrum::PageImage>
 pub fn pdfrum::Page<'a>::index(&self) -> pdfrum_common::page_index::PageIndex
 pub fn pdfrum::Page<'a>::links(&self) -> alloc::vec::Vec<pdfrum_doc::nav::link::Link>
 pub fn pdfrum::Page<'a>::media_box(&self) -> kurbo::rect::Rect
@@ -333,6 +368,7 @@ pub fn pdfrum::Page<'a>::prepare(&self, &pdfrum::RenderOptions, &mut pdfrum::Ren
 pub fn pdfrum::Page<'a>::render<B: pdfrum_render::device::RasterBackend>(&self, &B, &pdfrum::RenderOptions) -> pdfrum::Result<pdfrum_render::pixmap::Pixmap>
 pub fn pdfrum::Page<'a>::render_on<B: pdfrum_render::device::RasterBackend>(&self, &B, &pdfrum::RenderOptions, &mut pdfrum::RenderSession) -> pdfrum::Result<pdfrum_render::pixmap::Pixmap>
 pub fn pdfrum::Page<'a>::rotation(&self) -> pdfrum::Rotation
+pub fn pdfrum::Page<'a>::structure(&self) -> core::option::Option<pdfrum_doc::structure::StructTree>
 pub fn pdfrum::Page<'a>::text(&self) -> pdfrum_text::TextPage
 pub fn pdfrum::Page<'a>::text_on(&self, &mut pdfrum::RenderSession) -> pdfrum_text::TextPage
 pub fn pdfrum::Page<'a>::trim_box(&self) -> core::option::Option<kurbo::rect::Rect>
@@ -357,6 +393,14 @@ pub fn pdfrum::PageEdit::push(&mut self, pdfrum_page::page::PageObject)
 pub fn pdfrum::PageEdit::remove(&mut self, usize) -> core::option::Option<pdfrum_page::page::PageObject>
 pub fn pdfrum::PageEdit::show(&mut self, usize) -> core::result::Result<(), pdfrum_page::mutate::IndexOutOfRange>
 pub fn pdfrum::PageEdit::transform(&mut self, usize, kurbo::affine::Affine) -> core::result::Result<(), pdfrum_page::mutate::IndexOutOfRange>
+pub struct pdfrum::PageImage
+pub pdfrum::PageImage::height: u32
+pub pdfrum::PageImage::is_mask: bool
+pub pdfrum::PageImage::raw: core::option::Option<pdfrum::RawImage>
+pub pdfrum::PageImage::source: core::option::Option<pdfrum_object::object::ObjRef>
+pub pdfrum::PageImage::width: u32
+impl pdfrum::PageImage
+pub fn pdfrum::PageImage::pixmap(&self) -> pdfrum_render::pixmap::Pixmap
 pub struct pdfrum::PageLink
 pub pdfrum::PageLink::rect: kurbo::rect::Rect
 pub pdfrum::PageLink::target: pdfrum::LinkTarget
@@ -376,6 +420,9 @@ pub struct pdfrum::PreparedPage<'a>
 impl pdfrum::PreparedPage<'_>
 pub fn pdfrum::PreparedPage<'_>::render<B: pdfrum_render::device::RasterBackend>(&self, &B) -> pdfrum::Result<pdfrum_render::pixmap::Pixmap>
 pub fn pdfrum::PreparedPage<'_>::render_on<B: pdfrum_render::device::RasterBackend>(&self, &B, &mut pdfrum::RenderSession) -> pdfrum::Result<pdfrum_render::pixmap::Pixmap>
+pub struct pdfrum::RawImage
+pub pdfrum::RawImage::data: alloc::vec::Vec<u8>
+pub pdfrum::RawImage::encoding: pdfrum::ImageEncoding
 pub struct pdfrum::RenderOptions
 pub pdfrum::RenderOptions::annotations: bool
 pub pdfrum::RenderOptions::background: core::option::Option<peniko::Color>
@@ -394,6 +441,11 @@ pub pdfrum::RenderSession::build: pdfrum_page::build::BuildContext
 pub pdfrum::RenderSession::caches: pdfrum_render::ctx::RenderCaches
 impl pdfrum::RenderSession
 pub fn pdfrum::RenderSession::new() -> pdfrum::RenderSession
+pub struct pdfrum::Revision
+pub pdfrum::Revision::end: usize
+pub pdfrum::Revision::index: usize
+pub pdfrum::Revision::is_stream: bool
+pub pdfrum::Revision::xref_offset: u64
 pub struct pdfrum::SaveOptions
 pub pdfrum::SaveOptions::encrypt: core::option::Option<pdfrum_edit::write::Encryption>
 pub pdfrum::SaveOptions::id_source: pdfrum_edit::write::id::IdSource

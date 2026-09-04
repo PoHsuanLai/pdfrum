@@ -76,7 +76,9 @@ mod signature;
 mod thumbnail;
 
 pub use annotation::{AnnotFlags, Annotation, Subtype};
-pub use document::{Attachment, Document, Metadata, OpenOptions};
+pub use document::{
+    Attachment, Document, EmbeddedFontFile, FontFileKind, Metadata, OpenOptions, Revision,
+};
 #[cfg(feature = "edit")]
 pub use edit::{ImageBuilder, PageEdit, PathBuilder, TextBuilder};
 pub use error::{Error, Result};
@@ -94,7 +96,9 @@ pub use form_session::{
 // and STYLE.md §2b's 2026-09-01 ruling for why this is state a caller pulls
 // rather than a seam the library calls back through.
 pub use outline::{Bookmark, Outline, OutlineIter};
-pub use page::{LinkTarget, Page, PageLink, PreparedPage, Rotation};
+pub use page::{
+    ImageEncoding, LinkTarget, Page, PageImage, PageLink, PreparedPage, RawImage, Rotation,
+};
 #[cfg(feature = "forms")]
 pub use pdfrum_form::AnnotId;
 #[cfg(feature = "forms")]
@@ -359,13 +363,15 @@ pub use pdfrum_form::Event;
 /// [`PageEdit::image_of`] each return one, and [`Document::fetch`] takes one.
 pub use pdfrum_object::ObjRef;
 
+pub use pdfrum_doc::structure::{Kid, StructElement, StructTree};
 /// A PDF object, and the dictionary type that is one of its variants.
 ///
 /// `Object` is what [`Document::fetch`] hands back and `Dict` is what
 /// [`Annotation::dict`] and [`GeneratedAp::resources`] are. `Dict` is here
 /// rather than behind an escape hatch because `GeneratedAp` carries one and
 /// that is an ordinary payload.
-pub use pdfrum_object::{Dict, Object};
+pub use pdfrum_object::{Array, ByteSpan, Dict, Name, Object, PdfString, Stream};
+pub use pdfrum_parser::{Entry as XrefEntry, Section};
 
 /// Indirect-object lookup — the trait [`Document`] implements and
 /// [`Document::fetch`] comes from.

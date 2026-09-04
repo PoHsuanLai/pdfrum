@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex};
 
 use pdfrum_common::{Diagnostics, Limits, PageIndex, PdfVersion};
 use pdfrum_crypt::Permissions;
-use pdfrum_object::{Dict, Name, Object, Resolve, names};
+use pdfrum_object::{Dict, Name, ObjRef, Object, Resolve, names};
 
 #[cfg(feature = "forms")]
 use crate::form::Form;
@@ -449,6 +449,112 @@ impl Document {
         Document::from_bytes(Arc::from(out.into_bytes()))
     }
 
+    /// A stream's data with its filters applied — what the stream carries,
+    /// not how it was stored.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::Read`](crate::Error::Read) carrying
+    /// [`Unresolved`](pdfrum_parser::Error::Unresolved) when `reference`
+    /// names no object, or names one that is not a stream. A filter that
+    /// fails is a notice, not an error: the data comes back as far as it
+    /// decoded, the way every reader in this crate takes it.
+    pub fn stream_data(&self, reference: ObjRef) -> Result<Vec<u8>> {
+        let unresolved = || crate::Error::Read(pdfrum_parser::Error::Unresolved(reference));
+        let object = self.inner.fetch(reference).map_err(|_| unresolved())?;
+        let Some(stream) = object.as_stream() else {
+            return Err(unresolved());
+        };
+        let mut diags = Diagnostics::default();
+        let decoded =
+            pdfrum_filters::decode_chain(stream, 0, &self.inner, &self.limits, &mut diags);
+        self.note(&diags);
+        Ok(decoded.data.clone())
+    }
+
+    /// Every font program embedded in the document, in object order: the
+    /// `/FontFile`, `/FontFile2` and `/FontFile3` streams of its font
+    /// descriptors, decoded.
+    #[must_use]
+    pub fn embedded_fonts(&self) -> Vec<EmbeddedFontFile> {
+        let mut out = Vec::new();
+        for num in self.inner.xref().object_numbers() {
+            let reference = ObjRef::new(num, self.inner.xref().generation(num));
+            let Ok(object) = self.inner.fetch(reference) else {
+                continue;
+            };
+            let Some(dict) = object.as_dict() else {
+                continue;
+            };
+            let is_descriptor = dict
+                .name(names::TYPE)
+                .is_some_and(|t| t.as_bytes() == b"FontDescriptor");
+            let name = dict
+                .name(&Name::from("FontName"))
+                .map(|n| String::from_utf8_lossy(n.as_bytes()).into_owned())
+                .unwrap_or_default();
+            for (key, kind) in [
+                ("FontFile", FontFileKind::Type1),
+                ("FontFile2", FontFileKind::TrueType),
+                ("FontFile3", FontFileKind::Cff),
+            ] {
+                let Some(Object::Ref(file)) = dict.raw(&Name::from(key)) else {
+                    continue;
+                };
+                if !is_descriptor && kind != FontFileKind::Type1 {
+                    // A stray key on a non-descriptor: `/FontFile` alone is
+                    // enough of a signal; the others need the type.
+                    continue;
+                }
+                let Ok(data) = self.stream_data(*file) else {
+                    continue;
+                };
+                let kind = if kind == FontFileKind::Cff && data.starts_with(b"OTTO") {
+                    FontFileKind::OpenType
+                } else {
+                    kind
+                };
+                out.push(EmbeddedFontFile {
+                    name: name.clone(),
+                    kind,
+                    object: *file,
+                    data,
+                });
+            }
+        }
+        out
+    }
+
+    /// The document's revisions, oldest first: one per cross-reference
+    /// section the open followed, which is one per incremental update. A
+    /// file whose table had to be rebuilt has none, since no chain was
+    /// followed.
+    #[must_use]
+    pub fn revisions(&self) -> Vec<Revision> {
+        let bytes = self.inner.bytes();
+        self.inner
+            .xref()
+            .sections()
+            .iter()
+            .enumerate()
+            .map(|(index, section)| Revision {
+                index,
+                xref_offset: section.offset,
+                is_stream: section.is_stream,
+                end: revision_end(bytes, section.offset).unwrap_or(bytes.len()),
+            })
+            .collect()
+    }
+
+    /// The file as it stood at revision `index` of [`Document::revisions`]:
+    /// the bytes up to that revision's `%%EOF`. A later revision's changes
+    /// are appended after it, so this is the earlier document exactly.
+    #[must_use]
+    pub fn revision_bytes(&self, index: usize) -> Option<&[u8]> {
+        let revision = self.revisions().into_iter().nth(index)?;
+        self.inner.bytes().get(..revision.end)
+    }
+
     /// The trailer's `/ID` pair (ISO 32000-1 §14.4): the first element names
     /// the document as first written, the second this revision. They are equal
     /// when the file has never been re-saved. `None` when the trailer carries
@@ -539,8 +645,105 @@ impl Metadata {
     }
 }
 
+/// One embedded font program, from [`Document::embedded_fonts`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EmbeddedFontFile {
+    /// The descriptor's `/FontName`, possibly with a subset tag.
+    pub name: String,
+    /// What the bytes are.
+    pub kind: FontFileKind,
+    /// The stream object the program came from.
+    pub object: ObjRef,
+    /// The program, filters applied.
+    pub data: Vec<u8>,
+}
+
+/// The kind of an embedded font program, by the key that carried it and
+/// the bytes' own signature.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FontFileKind {
+    /// `/FontFile`: Type 1.
+    Type1,
+    /// `/FontFile2`: TrueType.
+    TrueType,
+    /// `/FontFile3`: a bare CFF program.
+    Cff,
+    /// `/FontFile3` whose bytes start `OTTO`: an OpenType wrapper.
+    OpenType,
+}
+
+impl FontFileKind {
+    /// The format's short name: `type1`, `truetype`, `cff` or `opentype`.
+    #[must_use]
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Type1 => "type1",
+            Self::TrueType => "truetype",
+            Self::Cff => "cff",
+            Self::OpenType => "opentype",
+        }
+    }
+
+    /// The file extension the program is usually given.
+    #[must_use]
+    pub fn extension(self) -> &'static str {
+        match self {
+            Self::Type1 => "pfb",
+            Self::TrueType => "ttf",
+            Self::Cff => "cff",
+            Self::OpenType => "otf",
+        }
+    }
+}
+
+/// One revision of an incrementally updated file, from
+/// [`Document::revisions`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Revision {
+    /// Position in the chain, 0 the oldest.
+    pub index: usize,
+    /// Where its cross-reference section starts.
+    pub xref_offset: u64,
+    /// Whether that section is a cross-reference stream.
+    pub is_stream: bool,
+    /// The byte after its `%%EOF`; the file up to here is this revision.
+    pub end: usize,
+}
+
+/// The byte after the `%%EOF` that closes the revision whose `startxref`
+/// names `offset`.
+fn revision_end(bytes: &[u8], offset: u64) -> Option<usize> {
+    let needle = b"startxref";
+    let mut at = 0;
+    while let Some(found) = find(bytes.get(at..)?, needle) {
+        let start = at + found + needle.len();
+        let rest = bytes.get(start..)?;
+        let digits: String = rest
+            .iter()
+            .skip_while(|b| b.is_ascii_whitespace())
+            .take_while(|b| b.is_ascii_digit())
+            .map(|&b| char::from(b))
+            .collect();
+        if digits.parse::<u64>().ok() == Some(offset) {
+            let eof = find(rest, b"%%EOF")?;
+            let mut end = start + eof + b"%%EOF".len();
+            while bytes.get(end).is_some_and(|b| *b == b'\r' || *b == b'\n') {
+                end += 1;
+            }
+            return Some(end);
+        }
+        at = start;
+    }
+    None
+}
+
+fn find(haystack: &[u8], needle: &[u8]) -> Option<usize> {
+    haystack.windows(needle.len()).position(|w| w == needle)
+}
+
 /// One file attached to the document.
 #[derive(Debug, Clone)]
+
 pub struct Attachment<'a> {
     /// The name the document's embedded-files tree filed it under.
     pub name: String,
