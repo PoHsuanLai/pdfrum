@@ -18,6 +18,11 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
   as its own commit; RSS on the ten largest corpus files before/after.
 - **Clip-stack count**: clip entries cloned per page across the corpus;
   `Arc<ClipEntry>` only if a document spends ≥ 3% of its build there.
+- **Found 2026-09-05: text extraction decodes every image** — `Page::text_on`
+  builds through the render's `build`, and `image::unpack` is 87% of
+  `text/image_bug_583804` (3.36 G of 3.85 G `Ir`). A no-decode build mode is
+  the fix; it carries an API question (`ImageObject.image` is a decoded
+  `Arc<ImageData>` on a public type). Design it before coding.
 - Declined with numbers (state sharing, de-boxed `PageObject`, cull SoA,
   verbs+points) — the design doc §1.3 has the reopening conditions.
 - Method note: `perf` is closed on this box (`perf_event_paranoid = 4`);
@@ -127,7 +132,17 @@ All five families, through the oai bridge: searchex (tables pinned),
 attachments (readers and writers), signatures, thumbnails, flatten. The
 per-family record and the rulings are in `docs/status/M17.md`.
 
-## Ratchet re-baseline (2026-09-04, on `d3c842f`)
+## ~~Ratchet re-baseline (2026-09-04, on `d3c842f`)~~ — paid 2026-09-05 (`docs/status/M13-perf-baseline.md` §23)
+
+Settled by interleaving the baseline commit's own binary against `main` on
+the same loaded box: 19 of the 21 rows are machine state (the old binary
+measures the same today), the cold forms rows are 10–42% *faster* new, and
+two small code items are named (`build/vector_paths_1751` +4.5% with `Ir`
+flat; `text/image_bug_*` +1.6–2.0% `Ir` inside `image::unpack` from the
+rounding fixes). 16 rows set by hand to their re-taken medians, then
+`ratchet update` wrote 440 entries; `check` green. The original row follows.
+
+
 
 `cargo bench --workspace` at load 8–11, then `ratchet update`: 146 unchanged, 273 improved, 21 regressed, 0 new, 0 not run.
 `ratchet update` writes nothing while a regression stands, so
