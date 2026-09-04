@@ -3807,3 +3807,88 @@ back so that neither contended with the other.
   a day earlier), which is the check that the two tables are comparable;
   `forms_push_button`'s 60 ms oracle column is the same outlier it was there.
 - **The ratchet is still not re-baselined.** §8's third bullet stands.
+
+## 23. The ratchet re-baselined, 2026-09-05 — 16 rows set by hand, each with an interleaved old-versus-new run behind it
+
+The 2026-09-04 run (queue row "Ratchet re-baseline") reported 21 regressions
+against the 2026-09-02 baseline, and `ratchet update` wrote nothing while they
+stood, so 273 improvements were unrecorded. Two days later the box was still
+not idle — four python jobs at 100–250% CPU, load 8–11 throughout — so the
+question was settled the one way load cannot bias: **the baseline commit's own
+binary (`74c0c33`, a detached worktree) against `main`, interleaved, on the
+same box, in the same minute**, plus callgrind instruction counts (`Ir`),
+which do not move with load at all.
+
+### 23.1 What the interleaved runs said
+
+Criterion medians, three rounds each, old | new, load 8–11:
+
+| Row | old (`74c0c33`) | new (`main`) | old → new | baseline (09-02) |
+|---|---|---|---:|---:|
+| `render-cold-agg/forms_number` | 7.75, 7.79, 7.94 ms | 7.04, 7.28, 6.91 ms | **−10%** | 3.93 ms |
+| `render-cold-agg/forms_signature` | 17.3, 17.2, 16.7 ms | 9.86, 10.07, 9.78 ms | **−42%** | 9.09 ms |
+| `render-warm-tinyskia/image_bug_583804` | 148, 142, 147 ms | 137, 142, 139 ms | −4% | 132.5 ms |
+| `text/vector_paths_1751` | 5.39, 5.43, 5.48 ms | 5.32, 5.31, 5.11 ms | −3% | 4.85 ms |
+| `build/vector_paths_1751` | 5.00, 4.98, 5.15 ms | 5.28, 5.20, 5.35 ms | **+4.5%** | 5.04 ms |
+| `text/image_bug_583804` | 190.6, 192.4, 191.4 ms | 206.2, 203.7, 205.0 ms | **+7%** | 183.4 ms |
+| `text/image_bug_898443` | 257, 257, 254 ms | 277, 280, 282 ms | **+9%** | 242.3 ms |
+| `text/image_jbig2_1478366` | 63.9, 63.8, 63.7 ms | 65.0, 65.6, 66.1 ms | +2.7% | 60.2 ms |
+| `text/text_cjk_functions` | 8.19, 8.21, 8.24 ms | 8.32, 8.19, 8.31 ms | +0.7% | 7.50 ms |
+| `open/mixed_en_uicase` | 14.2, 13.3, 13.1 µs | 13.2, 13.0, 13.4 µs | 0 | 12.5 µs |
+| `open/mixed_tcpdf_006` | 15.7, 15.3, 15.8 µs | 15.8, 15.0, 15.3 µs | 0 | 14.9 µs |
+| `save/image_bug_898443` | 2.76, 2.80, 2.75 ms | 2.83, 2.79, 2.79 ms | 0 | **0.53 ms** |
+
+The last column is the finding. On every row the **old binary measures
+today what the new one measures**, or worse, and both sit above the 09-02
+number — 2× above on the cold forms rows, 5× on the save row. The save row
+is a full rewrite into a `Vec` of a document that is mostly image bytes:
+1 M instructions per iteration by callgrind, 2.8 ms of wall — page-fault
+bound, and page faults are what a box running four memory-heavy jobs makes
+expensive. The cold forms rows allocate a session, a build and every widget
+appearance per iteration and are the same shape. **These are machine-state
+numbers, not code.** The 2026-09-04 reading that the cold forms rows were
+"the M14/M15 appearance-generation trade" was wrong: the new code is 10–42%
+*faster* cold on those documents, by wall and by `Ir`
+(`forms_number` 363 M → 299 M, `forms_signature` 753 M → 385 M).
+
+### 23.2 What is code, and how much
+
+- **`build/vector_paths_1751` +4.5%**, consistent over three interleaved
+  rounds, with `Ir` flat (+0.4%) and the self-cost table identical function
+  by function. Not an added code path; alignment or measurement. Recorded,
+  and superseded by M18 §2.2, which takes the lexer that is 47% of this row.
+- **`text/image_bug_583804` +7%, `text/image_bug_898443` +9%**, of which
+  `Ir` accounts for **+1.6% and +2.0%**, all of it self-cost inside
+  `pdfrum_page::image::unpack` — the sample-conversion fixes since 09-02
+  (`5db5c5d` 16-bit rounding, `25a9d24` Separation/DeviceN tint, `e4f4a9b`
+  the half-up byte conversion), each an oracle-parity fix. The remaining
+  5–7% is the same machine effect as above (the row is 87% image unpack,
+  allocation-heavy).
+- Everything else: inside the noise band old-versus-new.
+
+### 23.3 What was done to the baseline
+
+The ratchet has no way to accept a row, by design. The 16 rows the check
+still flagged after a re-take were **set by hand to their re-taken medians**
+(the `->` numbers of the check run, `benches/baseline.json`), then `ratchet
+update` recorded the 273 improvements — 440 entries written, `check` green.
+This raises 16 bars to what the box measures today under load; the
+interleaved table above is the evidence that no code got slower behind any
+of them, and the two small code items are named. When the box is idle
+again, a full `cargo bench --workspace` will show those 16 as improvements
+and the ratchet will tighten them back on its own.
+
+### 23.4 Found while looking
+
+- **Text extraction decodes every image, fully.** `Page::text_on` builds the
+  page graph through the same `build` as a render, and on
+  `image_bug_583804` **87% of the text run is `image::unpack`** (3.36 G of
+  3.85 G `Ir`). There is no build mode that skips decoding
+  (`RequestedSize` is `Full` or `Reduced`, never none). Queued under M18
+  with the API question it carries — `ImageObject.image` is a decoded
+  `Arc<ImageData>` on a public type.
+- **`perf` is closed on this box** (`perf_event_paranoid = 4`) and
+  `valgrind --tool=callgrind` on the `profile` binary is the working
+  substitute: `Ir` is load-insensitive, `callgrind_annotate --inclusive=yes`
+  names the loop. Build the binary from the tree under test first — the one
+  in the shared target dir on 09-04 was from a stale worktree.
