@@ -7,6 +7,7 @@ finding, not a rendering defect.
 flag through to its consumer moved zero of 1757 corpus renders.
 
 **Source read at** PDFium commit `6f2272e1f3aa` (2026-08-28).
+**Re-verified at** `a043bed4a` (2026-09-05): the two `cpdf_devicecs.cpp` readers at `:65` and `:119` are unchanged; the `cpdf_dib.cpp` sites are one line later (`:154`, `:245`, `:323`, `:858`).
 **Host** for any observed output: Ubuntu 22.04.5 LTS, x86-64.
 **Tiebreaker**: Mozilla's pdf.js has no equivalent mode; images inside
 transparency groups convert colour the same way as at top level.

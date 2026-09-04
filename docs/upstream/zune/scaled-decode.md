@@ -5,6 +5,24 @@ the request text; nothing above it is meant to be posted.
 
 **Status:** drafted, not yet filed.
 
+**Re-checked 2026-09-05.** Someone got there first: zune-image
+[#434](https://github.com/etemesi254/zune-image/issues/434), "zune-jpeg:
+scaled decode (reduced-size IDCT, libjpeg scale_num-style) for known-small
+render targets", opened 2026-08-18 by ObjSal, open, asks for exactly this
+(a 4000×4000 JPEG at 76 MB peak against 35.6 MB scaled). **File this as a
+comment on #434 carrying our measurements, not as a new issue.** Two
+related open pull requests, #412 ("Implement resizing/downscaling support")
+and #414, do post-decode resizing, which is not the same thing. Latest
+release is 0.5.16-rc1; nothing in its notes mentions scaled decoding.
+
+**A second user since drafting.** PDFium itself replaced its Skia JPEG path
+with zune-jpeg on 2026-09-03 (`a043bed4a`, "Replace Skia JPEG decoder with
+direct Rust FFI (zune-jpeg)"). Its `decode_jpeg_to_buf` takes the same
+`scale_denom` libjpeg took and, for `scale_denom > 1`, decodes the full
+image and box-averages `scale × scale` blocks afterwards — the reduced-size
+IDCT it had from libjpeg is gone from that path. The paragraph below the
+rule that says so is new.
+
 **Why it is not fixed locally.** Reduced-resolution decoding happens *inside*
 the inverse DCT — you dequantize only the low-frequency coefficients of each
 8x8 block and run a smaller IDCT — so it cannot be reached from outside the
@@ -139,3 +157,11 @@ maintainer weighing it accordingly.
 We are happy to attempt the implementation if the direction is welcome — the
 question we cannot answer from outside is how you would want the MCU-alignment
 refusal surfaced.
+
+**Another consumer, since this was drafted.** PDFium's own JPEG path moved to
+zune-jpeg on 2026-09-03 (pdfium `a043bed4a`). Its bridge keeps libjpeg's
+`scale_denom` parameter and, when it is above 1, decodes at full size and
+box-averages afterwards — so the reduced-size IDCT that libjpeg gave PDFium
+for years is now missing from the same renderer through the same crate. A
+scaled decode inside zune-jpeg would be picked up there directly.
+

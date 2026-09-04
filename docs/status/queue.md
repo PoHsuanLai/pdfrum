@@ -730,3 +730,13 @@ not-achievable bucket. The two divergences are written up as A72 and A73 in
 
 Four PDFium rendering issues, the `EnableStdConversion` dead-mechanism
 note, one `hayro-jbig2`, one `zune-jpeg`. The user files these.
+
+Re-checked 2026-09-05 against upstream `a043bed4a` (`docs/upstream/README.md`):
+five of the eight filed issues were fixed upstream on 2026-09-03 (leap year,
+two-digit year, printd weekday, `/TR` order, `/TR` clamp), three stay open
+with their code unchanged (scand 12-hour, AFSimple avg, mirror sentinel).
+The five PDFium drafts all still apply; the single-function `/TR` one now
+has a runtime repro (`repro/tr_single_function_17_outputs.pdf` renders
+black, its two controls grey) and is observed-output. The `zune-jpeg`
+request already exists as zune-image #434 (opened 2026-08-18 by someone
+else): post ours as a comment there. `hayro-jbig2` draft stands.

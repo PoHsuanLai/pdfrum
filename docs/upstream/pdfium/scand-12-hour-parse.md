@@ -2,6 +2,8 @@
 
 **Filed** as crbug.com/pdfium/555848528 on 2026-09-02.
 
+**Still open** at checkout `a043bed4a` (2026-09-05): `bPm` is still set only on a lowercase `p` (`fx_date_helpers.cpp:406`, `:449`) and `nHour += 12` at `:557` still has no modulo — four lines later than cited, after the two-digit-year fix above it.
+
 **Confidence:** observed output.
 
 **Repro files:** `ampm.pdf, ampm.in` in `../repro/`.

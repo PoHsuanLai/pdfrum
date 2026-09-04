@@ -3,7 +3,9 @@
 Ready to file against the `hayro-jbig2` repository. Everything below the rule
 is the issue text; nothing above it is meant to be posted.
 
-**Status:** drafted, not yet filed. The corpus file it comes from is
+**Status:** drafted, not yet filed. **Re-checked 2026-09-05:** hayro-jbig2 0.3.0 is still
+the latest release, and no issue in the hayro tracker mentions segment
+lengths or truncated streams — the draft stands as written. The corpus file it comes from is
 `testing/resources/pixel/bug_867501.pdf` in the PDFium tree, which renders at
 SSIM 0.646 against PDFium's own output and is the only file in our 1675-file
 corpus whose residual is a codec gap.

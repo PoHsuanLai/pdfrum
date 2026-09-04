@@ -5,6 +5,7 @@
 **Confidence:** code-level, arguable scope.
 
 **Source read at** PDFium commit `6f2272e1f3aa` (2026-08-28).
+**Re-verified at** `a043bed4a` (2026-09-05): `cpvt_section.cpp:84` still reads `word <= 0x0094`.
 **Host** for any observed output: Ubuntu 22.04.5 LTS, x86-64.
 **Tiebreaker**: Mozilla's pdf.js, an independent implementation of the same
 specification, cited at file:line where its answer differs.
