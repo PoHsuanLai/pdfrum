@@ -36,6 +36,12 @@ pub pdfrum_edit::IdSource::Fixed([u8; 16])
 pub pdfrum_edit::IdSource::Random
 impl pdfrum_edit::IdSource
 pub fn pdfrum_edit::IdSource::tag_byte(self, u64) -> u8
+pub enum pdfrum_edit::PageBox
+pub pdfrum_edit::PageBox::Art
+pub pdfrum_edit::PageBox::Bleed
+pub pdfrum_edit::PageBox::Crop
+pub pdfrum_edit::PageBox::Media
+pub pdfrum_edit::PageBox::Trim
 pub enum pdfrum_edit::PixelFormat
 pub pdfrum_edit::PixelFormat::Cmyk8
 pub pdfrum_edit::PixelFormat::Gray8
@@ -137,11 +143,15 @@ pub fn pdfrum_edit::SaveOptions::default() -> Self
 pub struct pdfrum_edit::Subsetted
 pub pdfrum_edit::Subsetted::bytes: alloc::vec::Vec<u8>
 pub pdfrum_edit::Subsetted::gid_map: pdfrum_edit::GidMap
+pub fn pdfrum_edit::add_blank_page(&mut pdfrum_edit::EditDoc<'_>, f32, f32, u32) -> core::result::Result<pdfrum_object::object::ObjRef, pdfrum_edit::Error>
 pub fn pdfrum_edit::apply_rewrite(&mut pdfrum_edit::EditDoc<'_>, pdfrum_object::object::ObjRef, &pdfrum_object::dict::Dict, &pdfrum_edit::PageRewrite, &pdfrum_edit::ShareCounts) -> alloc::collections::btree::map::BTreeMap<usize, usize>
+pub fn pdfrum_edit::delete_pages(&mut pdfrum_edit::EditDoc<'_>, &pdfrum_edit::PageRange) -> core::result::Result<(), pdfrum_edit::Error>
 pub fn pdfrum_edit::import_pages(&mut pdfrum_edit::EditDoc<'_>, &pdfrum_parser::doc::Document, &pdfrum_edit::PageRange, &pdfrum_edit::ImportOptions) -> core::result::Result<(), pdfrum_edit::Error>
 pub fn pdfrum_edit::n_page_to_one(&mut pdfrum_edit::EditDoc<'_>, &pdfrum_parser::doc::Document, &pdfrum_edit::PageRange, &pdfrum_edit::NUpOptions) -> core::result::Result<(), pdfrum_edit::Error>
 pub fn pdfrum_edit::regenerate(&pdfrum_page::page::Page, &pdfrum_object::dict::Dict, &impl pdfrum_object::resolve::Resolve) -> core::option::Option<pdfrum_edit::PageRewrite>
 pub fn pdfrum_edit::save(&pdfrum_edit::EditDoc<'_>, &pdfrum_edit::SaveOptions, &mut impl core::io::write::Write) -> core::result::Result<(), pdfrum_edit::Error>
+pub fn pdfrum_edit::set_page_box(&mut pdfrum_edit::EditDoc<'_>, pdfrum_common::page_index::PageIndex, pdfrum_edit::PageBox, [f32; 4]) -> core::result::Result<(), pdfrum_edit::Error>
+pub fn pdfrum_edit::set_page_rotation(&mut pdfrum_edit::EditDoc<'_>, pdfrum_common::page_index::PageIndex, i32) -> core::result::Result<(), pdfrum_edit::Error>
 pub fn pdfrum_edit::shared_objects(&pdfrum_edit::EditDoc<'_>) -> pdfrum_edit::ShareCounts
 pub fn pdfrum_edit::subset(&[u8], &[u16]) -> core::result::Result<pdfrum_edit::Subsetted, pdfrum_edit::Error>
 pub fn pdfrum_edit::write_float(&mut alloc::string::String, f32)
