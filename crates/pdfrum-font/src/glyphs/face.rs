@@ -17,6 +17,7 @@ use skrifa::outline::{
     DrawSettings, Engine as HintingEngine, HintingInstance, HintingOptions, OutlinePen,
     Target as HintingTarget,
 };
+use std::collections::HashMap;
 use std::fmt;
 use std::sync::{Arc, OnceLock};
 
@@ -152,6 +153,10 @@ pub struct Face {
     /// the lock across clones, so two fonts substituted onto one face pay for
     /// the interpreter once between them.
     hinting: Arc<OnceLock<Option<HintingInstance>>>,
+    /// Glyph name → the first glyph id carrying it, built on the first name
+    /// lookup. A simple font with `/Differences` looks up hundreds of names
+    /// against one face; scanning the `post` table per name was quadratic.
+    names: Arc<OnceLock<HashMap<Box<[u8]>, u16>>>,
 }
 
 impl fmt::Debug for Face {
@@ -165,6 +170,7 @@ impl fmt::Debug for Face {
             .field("is_truetype", &self.is_truetype)
             .field("charmaps", &self.charmaps)
             .field("hinting", &self.hinting.get().map(Option::is_some))
+            .field("names", &self.names.get().map(HashMap::len))
             .finish()
     }
 }
@@ -218,6 +224,7 @@ impl Face {
             is_truetype,
             charmaps,
             hinting: Arc::default(),
+            names: Arc::default(),
         }))
     }
 
@@ -243,6 +250,7 @@ impl Face {
             is_truetype: false,
             charmaps: vec![CharmapId::UNICODE_SYNTHETIC, CharmapId::ADOBE_CUSTOM],
             hinting: Arc::default(),
+            names: Arc::default(),
         }))
     }
 
@@ -316,7 +324,7 @@ impl Face {
             // `UseType1Charmap` draws.
             let gid = match charmap {
                 Charmap::None => None,
-                Charmap::Unicode => self.cff_unicode_to_gid(&cff, code),
+                Charmap::Unicode => self.cff_unicode_to_gid(code),
                 Charmap::Index(_) => u8::try_from(code).ok().and_then(|b| cff.encoding()?.map(b)),
             };
             return gid
@@ -344,46 +352,116 @@ impl Face {
     }
 
     /// A bare CFF's synthesized Unicode charmap: glyph names through the AGL.
-    fn cff_unicode_to_gid(
-        &self,
-        cff: &read_fonts::ps::cff::CffFontRef<'_>,
-        code: u32,
-    ) -> Option<read_fonts::types::GlyphId> {
+    fn cff_unicode_to_gid(&self, code: u32) -> Option<read_fonts::types::GlyphId> {
         let ch = char::from_u32(code)?;
         let mut buf = [0u8; read_fonts::ps::agl::MAX_NAME_LEN];
         let name = read_fonts::ps::agl::char_to_name(u32::from(ch), &mut buf)?;
-        let gid = self.cff_name_index(cff, name);
+        let gid = self.name_index(name);
         (gid != 0).then(|| read_fonts::types::GlyphId::new(u32::from(gid)))
     }
 
     /// Scan a bare CFF's charset for a glyph name.
-    fn cff_name_index(&self, cff: &read_fonts::ps::cff::CffFontRef<'_>, name: &str) -> u16 {
-        let Some(charset) = cff.charset() else {
-            return 0;
+    /// One-pass twin of the per-name scan this replaced: every name the
+    /// face carries, mapped to the **first** glyph id that has it.
+    fn build_name_map(&self) -> HashMap<Box<[u8]>, u16> {
+        if let Some(cff) = self.cff() {
+            let Some(charset) = cff.charset() else {
+                return HashMap::new();
+            };
+            let mut map = HashMap::new();
+            for gid in 0..self.num_glyphs {
+                let Ok(g) = u16::try_from(gid) else { break };
+                let Ok(sid) = charset.string_id(read_fonts::types::GlyphId::new(gid)) else {
+                    continue;
+                };
+                if let Some(bytes) = cff.string(sid) {
+                    map.entry(bytes.into()).or_insert(g);
+                }
+            }
+            return map;
+        }
+        let Ok(font) = skrifa::FontRef::from_index(&self.bytes, self.index) else {
+            return HashMap::new();
         };
+        let Ok(post) = font.post() else {
+            return HashMap::new();
+        };
+        let default_names = &read_fonts::tables::post::DEFAULT_GLYPH_NAMES;
+        let mut map = HashMap::new();
+        if post.version() == read_fonts::types::Version16Dot16::VERSION_1_0 {
+            for (gid, name) in default_names
+                .iter()
+                .enumerate()
+                .take(self.num_glyphs as usize)
+            {
+                let Ok(g) = u16::try_from(gid) else { break };
+                map.entry(name.as_bytes().into()).or_insert(g);
+            }
+            return map;
+        }
+        if post.version() != read_fonts::types::Version16Dot16::VERSION_2_0 {
+            return map;
+        }
+        let Some(index) = post.glyph_name_index() else {
+            return map;
+        };
+        // The custom strings are a Pascal-string array: read it once,
+        // sequentially, instead of walking it from the start per glyph.
+        let strings: Vec<&str> = post
+            .string_data()
+            .map(|d| d.iter().map_while(Result::ok).map(|s| s.as_str()).collect())
+            .unwrap_or_default();
         for gid in 0..self.num_glyphs {
             let Ok(g) = u16::try_from(gid) else { break };
-            let id = read_fonts::types::GlyphId::new(gid);
-            let Ok(sid) = charset.string_id(id) else {
-                continue;
+            let Some(idx) = index.get(gid as usize) else {
+                break;
             };
-            if cff.string(sid) == Some(name.as_bytes()) {
-                return g;
+            let idx = usize::from(idx.get());
+            let name = if idx < default_names.len() {
+                default_names.get(idx).copied()
+            } else {
+                strings.get(idx - default_names.len()).copied()
+            };
+            if let Some(name) = name {
+                map.entry(name.as_bytes().into()).or_insert(g);
             }
         }
-        0
+        map
     }
 
     /// The glyph a name selects. Zero on a miss.
     #[must_use]
     pub fn name_index(&self, name: &str) -> u16 {
+        self.names
+            .get_or_init(|| self.build_name_map())
+            .get(name.as_bytes())
+            .copied()
+            .unwrap_or(0)
+    }
+
+    /// The scan [`Face::build_name_map`] replaced, kept as the test oracle
+    /// for it: the first glyph whose name matches, zero on a miss.
+    #[cfg(test)]
+    pub(crate) fn name_index_by_scan(&self, name: &str) -> u16 {
         if let Some(cff) = self.cff() {
-            return self.cff_name_index(&cff, name);
+            let Some(charset) = cff.charset() else {
+                return 0;
+            };
+            for gid in 0..self.num_glyphs {
+                let Ok(g) = u16::try_from(gid) else { break };
+                let id = read_fonts::types::GlyphId::new(gid);
+                let Ok(sid) = charset.string_id(id) else {
+                    continue;
+                };
+                if cff.string(sid) == Some(name.as_bytes()) {
+                    return g;
+                }
+            }
+            return 0;
         }
         let Ok(font) = skrifa::FontRef::from_index(&self.bytes, self.index) else {
             return 0;
         };
-        // `post` version 2.0 is the only format carrying per-glyph names.
         let Ok(post) = font.post() else { return 0 };
         for gid in 0..self.num_glyphs {
             let Ok(g) = u16::try_from(gid) else { break };
@@ -859,6 +937,45 @@ impl OutlinePen for PathPen {
 
 #[cfg(test)]
 mod tests {
+    /// The one-pass map answers exactly what the per-name scan answered, for
+    /// every name every fixture face carries, and zero for a name none has.
+    #[test]
+    fn the_name_map_answers_what_the_scan_answered() {
+        let fixtures = [
+            "tt_custom_40.ttf",
+            "tt_macroman_10.ttf",
+            "tt_macroman_empty.ttf",
+            "tt_named_no_cmap.ttf",
+            "tt_sjis_and_unicode.ttf",
+            "tt_symbol_30.ttf",
+            "tt_symbol_and_macroman.ttf",
+            "tt_symbol_empty.ttf",
+            "tt_unicode_03_and_symbol.ttf",
+            "tt_unicode_03.ttf",
+            "tt_unicode_31_and_symbol.ttf",
+            "tt_unicode_31.ttf",
+        ];
+        let mut named_faces = 0;
+        for fixture in fixtures {
+            let bytes: Arc<[u8]> = crate::testfonts::load(fixture).into();
+            let face = Face::new(bytes, 0).unwrap();
+            let map = face.build_name_map();
+            named_faces += usize::from(!map.is_empty());
+            for (name, gid) in &map {
+                let name = std::str::from_utf8(name).unwrap();
+                let scanned = face.name_index_by_scan(name);
+                assert_eq!(*gid, scanned, "{fixture}: {name}");
+                assert_eq!(face.name_index(name), scanned, "{fixture}: {name}");
+            }
+            assert_eq!(face.name_index("nonesuch"), 0, "{fixture}");
+            assert_eq!(face.name_index_by_scan("nonesuch"), 0, "{fixture}");
+        }
+        assert!(
+            named_faces > 0,
+            "no fixture carries glyph names; the pin proves nothing"
+        );
+    }
+
     use super::*;
 
     #[test]

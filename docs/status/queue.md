@@ -6,7 +6,9 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
 
 ## M18 — data layout pass (scoped 2026-09-04, `docs/design/dod-layout.md`) — NOT STARTED
 
-- **`Face::name_index` builds its name map once** (`pdfrum-font/src/glyphs/face.rs:379`):
+- ~~**`Face::name_index` builds its name map once**~~ — landed 2026-09-05
+  (`docs/status/M18.md` §1: `vector_en_tem` build `Ir` −75%, cold render
+  62.9 → 14.9 ms). Original row: (`pdfrum-font/src/glyphs/face.rs:379`):
   today one linear scan per name over `post.glyph_name`, itself linear —
   58% of `vector_en_tem`'s cold render by callgrind `Ir`. Same for the CFF
   charset branch. Pin: first-gid-wins against the scan, every corpus face.
