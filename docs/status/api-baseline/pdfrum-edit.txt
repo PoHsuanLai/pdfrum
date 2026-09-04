@@ -25,6 +25,7 @@ pub pdfrum_edit::Error::Io(core::io::error::Error)
 pub pdfrum_edit::Error::NoDestinationCatalog
 pub pdfrum_edit::Error::Object(pdfrum_object::error::Error)
 pub pdfrum_edit::Error::PageIndexOutOfRange(pdfrum_common::page_index::PageIndex)
+pub pdfrum_edit::Error::PasswordNotText
 pub pdfrum_edit::Error::Subset(alloc::string::String)
 pub pdfrum_edit::Error::UnrecognisedFontProgram
 pub pdfrum_edit::Error::UnrecognisedImageData
@@ -35,6 +36,7 @@ pub enum pdfrum_edit::IdSource
 pub pdfrum_edit::IdSource::Fixed([u8; 16])
 pub pdfrum_edit::IdSource::Random
 impl pdfrum_edit::IdSource
+pub fn pdfrum_edit::IdSource::entropy(self) -> [u8; 64]
 pub fn pdfrum_edit::IdSource::tag_byte(self, u64) -> u8
 pub enum pdfrum_edit::PageBox
 pub pdfrum_edit::PageBox::Art
@@ -81,6 +83,11 @@ impl pdfrum_edit::EmbeddedImage
 pub fn pdfrum_edit::EmbeddedImage::height(&self) -> u32
 pub fn pdfrum_edit::EmbeddedImage::object(&self) -> pdfrum_object::object::ObjRef
 pub fn pdfrum_edit::EmbeddedImage::width(&self) -> u32
+pub struct pdfrum_edit::Encryption
+pub pdfrum_edit::Encryption::encrypt_metadata: bool
+pub pdfrum_edit::Encryption::owner_password: alloc::vec::Vec<u8>
+pub pdfrum_edit::Encryption::permissions: pdfrum_crypt::permissions::Permissions
+pub pdfrum_edit::Encryption::user_password: alloc::vec::Vec<u8>
 pub struct pdfrum_edit::Encryptor<'a>
 impl<'a> pdfrum_edit::Encryptor<'a>
 pub fn pdfrum_edit::Encryptor<'a>::encrypt(&self, pdfrum_crypt::object::CryptClass, &[u8]) -> alloc::vec::Vec<u8>
@@ -132,6 +139,7 @@ pub fn pdfrum_edit::ResourceTable::realize_dict(&mut self, &str, &pdfrum_object:
 pub fn pdfrum_edit::ResourceTable::sweep(&mut self, &alloc::collections::btree::map::BTreeMap<alloc::string::String, alloc::collections::btree::set::BTreeSet<pdfrum_object::name::Name>>)
 pub fn pdfrum_edit::ResourceTable::to_dict(&self, &pdfrum_object::dict::Dict) -> pdfrum_object::dict::Dict
 pub struct pdfrum_edit::SaveOptions
+pub pdfrum_edit::SaveOptions::encrypt: core::option::Option<pdfrum_edit::Encryption>
 pub pdfrum_edit::SaveOptions::id_source: pdfrum_edit::IdSource
 pub pdfrum_edit::SaveOptions::keep_original: bool
 pub pdfrum_edit::SaveOptions::mode: pdfrum_edit::SaveMode

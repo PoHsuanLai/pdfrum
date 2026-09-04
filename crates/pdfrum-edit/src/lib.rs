@@ -112,4 +112,4 @@ pub use import::{ImportOptions, NUpOptions, PageRange, import_pages, n_page_to_o
 pub use pages::{PageBox, add_blank_page, delete_pages, set_page_box, set_page_rotation};
 pub use pdfrum_font::StandardFont;
 pub use write::id::{FileId, IdSource};
-pub use write::{SaveMode, SaveOptions, save};
+pub use write::{Encryption, SaveMode, SaveOptions, save};

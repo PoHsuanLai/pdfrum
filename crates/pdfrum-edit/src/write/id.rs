@@ -56,6 +56,31 @@ pub enum IdSource {
 }
 
 impl IdSource {
+    /// Sixty-four bytes for a new encryption's file key and salts: fresh
+    /// from the OS for [`IdSource::Random`], a fixed derivation of the seed
+    /// for [`IdSource::Fixed`], so a reproducible save stays reproducible.
+    #[must_use]
+    pub fn entropy(self) -> [u8; pdfrum_crypt::ENTROPY_LEN] {
+        let mut out = [0u8; pdfrum_crypt::ENTROPY_LEN];
+        for (i, chunk) in out.chunks_mut(8).enumerate() {
+            let index = u64::try_from(i).unwrap_or(u64::MAX);
+            let word = match self {
+                Self::Random => RandomState::new().hash_one(index ^ 0x5EC7_E7A1),
+                Self::Fixed(seed) => {
+                    // A hash chain over the seed and the chunk index; the
+                    // same seed always gives the same 64 bytes.
+                    let mut h = 0xcbf2_9ce4_8422_2325u64;
+                    for &b in seed.iter().chain(&index.to_le_bytes()) {
+                        h = (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3);
+                    }
+                    h
+                }
+            };
+            chunk.copy_from_slice(&word.to_le_bytes());
+        }
+        out
+    }
+
     /// A sequence of `ID_LEN` bytes. `nonce` distinguishes the two elements
     /// of one array, so a fixed source still produces two different values
     /// where the rules call for two.

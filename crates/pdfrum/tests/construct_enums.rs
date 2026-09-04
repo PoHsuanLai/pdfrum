@@ -342,6 +342,7 @@ fn construct_default_feature_variants() -> usize {
     let _ = SaveError::BadNupParams;
     let _ = SaveError::BadPageRange;
     let _ = SaveError::EncryptedSaveUnsupported;
+    let _ = SaveError::PasswordNotText;
     let _ = SaveError::Io(std::io::Error::other("construct"));
     let _ = SaveError::NoDestinationCatalog;
     let _ = SaveError::Object(ObjectError::UnresolvedRef(ObjRef::new(1, 0)));
@@ -357,7 +358,7 @@ fn construct_default_feature_variants() -> usize {
         expected: 0,
         found: 0,
     };
-    n += 15;
+    n += 16;
 
     let _ = FontEncoding::Simple;
     let _ = FontEncoding::Composite;
@@ -693,7 +694,7 @@ fn every_public_enum_variant_is_constructible_from_the_facade() {
         "constructed {constructed} default-feature variants, snapshots derive {derived}; \
          SNAPSHOT_ENUMS is the derivation index — add a construction when a variant lands"
     );
-    assert_eq!(constructed, 297, "default-feature variant count");
+    assert_eq!(constructed, 298, "default-feature variant count");
     assert_eq!(SNAPSHOT_ENUMS.len(), 32, "default-feature enum count");
 }
 

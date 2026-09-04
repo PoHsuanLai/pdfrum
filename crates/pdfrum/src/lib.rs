@@ -141,7 +141,7 @@ pub use pdfrum_edit::{EmbeddedFont, FontEncoding, StandardFont};
 #[cfg(feature = "edit")]
 pub use pdfrum_edit::{EmbeddedImage, PixelFormat};
 #[cfg(feature = "edit")]
-pub use pdfrum_edit::{IdSource, PageBox};
+pub use pdfrum_edit::{Encryption, IdSource, PageBox};
 /// The AGG-parity rasterizer, behind the `agg` feature.
 #[cfg(feature = "agg")]
 pub use pdfrum_raster_agg::AggBackend;
