@@ -98,6 +98,10 @@ pub pdfrum::FlattenMode::Print
 pub enum pdfrum::Flattened
 pub pdfrum::Flattened::Done
 pub pdfrum::Flattened::NothingToDo
+pub enum pdfrum::LinkTarget
+pub pdfrum::LinkTarget::Other
+pub pdfrum::LinkTarget::Page(pdfrum_common::page_index::PageIndex)
+pub pdfrum::LinkTarget::Uri(alloc::string::String)
 pub enum pdfrum::Rotation
 pub pdfrum::Rotation::Half
 pub pdfrum::Rotation::None
@@ -170,6 +174,7 @@ pub fn pdfrum::Document::diagnostics(&self) -> &pdfrum_common::diagnostics::Diag
 pub fn pdfrum::Document::form(&self) -> core::option::Option<pdfrum::Form<'_>>
 pub fn pdfrum::Document::from_bytes(alloc::sync::Arc<[u8]>) -> pdfrum::Result<pdfrum::Document>
 pub fn pdfrum::Document::from_bytes_with(alloc::sync::Arc<[u8]>, &pdfrum::OpenOptions) -> pdfrum::Result<pdfrum::Document>
+pub fn pdfrum::Document::id(&self) -> core::option::Option<[alloc::vec::Vec<u8>; 2]>
 pub fn pdfrum::Document::is_encrypted(&self) -> bool
 pub fn pdfrum::Document::metadata(&self) -> pdfrum::Metadata
 pub fn pdfrum::Document::open(impl core::convert::AsRef<std::path::Path>) -> pdfrum::Result<pdfrum::Document>
@@ -303,18 +308,22 @@ pub fn pdfrum::Page<'_>::thumbnail_data(&self) -> core::option::Option<alloc::ve
 pub fn pdfrum::Page<'_>::thumbnail_raw(&self) -> core::option::Option<alloc::vec::Vec<u8>>
 impl<'a> pdfrum::Page<'a>
 pub fn pdfrum::Page<'a>::annotations(&self) -> alloc::vec::Vec<pdfrum::Annotation<'a>>
+pub fn pdfrum::Page<'a>::art_box(&self) -> core::option::Option<kurbo::rect::Rect>
+pub fn pdfrum::Page<'a>::bleed_box(&self) -> core::option::Option<kurbo::rect::Rect>
 pub fn pdfrum::Page<'a>::crop_box(&self) -> kurbo::rect::Rect
 pub fn pdfrum::Page<'a>::height(&self) -> f64
 pub fn pdfrum::Page<'a>::index(&self) -> pdfrum_common::page_index::PageIndex
 pub fn pdfrum::Page<'a>::links(&self) -> alloc::vec::Vec<pdfrum_doc::nav::link::Link>
 pub fn pdfrum::Page<'a>::media_box(&self) -> kurbo::rect::Rect
 pub fn pdfrum::Page<'a>::objects(&self) -> pdfrum_page::page::Page
+pub fn pdfrum::Page<'a>::page_links(&self) -> alloc::vec::Vec<pdfrum::PageLink>
 pub fn pdfrum::Page<'a>::prepare(&self, &pdfrum::RenderOptions, &mut pdfrum::RenderSession) -> pdfrum::PreparedPage<'a>
 pub fn pdfrum::Page<'a>::render<B: pdfrum_render::device::RasterBackend>(&self, &B, &pdfrum::RenderOptions) -> pdfrum::Result<pdfrum_render::pixmap::Pixmap>
 pub fn pdfrum::Page<'a>::render_on<B: pdfrum_render::device::RasterBackend>(&self, &B, &pdfrum::RenderOptions, &mut pdfrum::RenderSession) -> pdfrum::Result<pdfrum_render::pixmap::Pixmap>
 pub fn pdfrum::Page<'a>::rotation(&self) -> pdfrum::Rotation
 pub fn pdfrum::Page<'a>::text(&self) -> pdfrum_text::TextPage
 pub fn pdfrum::Page<'a>::text_on(&self, &mut pdfrum::RenderSession) -> pdfrum_text::TextPage
+pub fn pdfrum::Page<'a>::trim_box(&self) -> core::option::Option<kurbo::rect::Rect>
 pub fn pdfrum::Page<'a>::width(&self) -> f64
 pub struct pdfrum::PageEdit
 impl pdfrum::PageEdit
@@ -336,6 +345,9 @@ pub fn pdfrum::PageEdit::push(&mut self, pdfrum_page::page::PageObject)
 pub fn pdfrum::PageEdit::remove(&mut self, usize) -> core::option::Option<pdfrum_page::page::PageObject>
 pub fn pdfrum::PageEdit::show(&mut self, usize) -> core::result::Result<(), pdfrum_page::mutate::IndexOutOfRange>
 pub fn pdfrum::PageEdit::transform(&mut self, usize, kurbo::affine::Affine) -> core::result::Result<(), pdfrum_page::mutate::IndexOutOfRange>
+pub struct pdfrum::PageLink
+pub pdfrum::PageLink::rect: kurbo::rect::Rect
+pub pdfrum::PageLink::target: pdfrum::LinkTarget
 pub struct pdfrum::PathBuilder
 pub pdfrum::PathBuilder::even_odd: bool
 pub pdfrum::PathBuilder::fill: core::option::Option<peniko::Color>

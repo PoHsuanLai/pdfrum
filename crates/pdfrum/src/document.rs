@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex};
 
 use pdfrum_common::{Diagnostics, Limits, PageIndex, PdfVersion};
 use pdfrum_crypt::Permissions;
-use pdfrum_object::{Dict, Name, Object, Resolve};
+use pdfrum_object::{Dict, Name, Object, Resolve, names};
 
 #[cfg(feature = "forms")]
 use crate::form::Form;
@@ -411,6 +411,21 @@ impl Document {
     /// has none this reader could reach.
     pub(crate) fn catalog(&self) -> Dict {
         self.inner.catalog().unwrap_or_default()
+    }
+
+    /// The trailer's `/ID` pair (ISO 32000-1 §14.4): the first element names
+    /// the document as first written, the second this revision. They are equal
+    /// when the file has never been re-saved. `None` when the trailer carries
+    /// no well-formed pair.
+    #[must_use]
+    pub fn id(&self) -> Option<[Vec<u8>; 2]> {
+        let array = self.inner.trailer().array(names::ID, &self.inner)?;
+        let element = |index| {
+            array
+                .get(index, &self.inner)
+                .and_then(|entry| entry.get().as_string().map(|s| s.bytes.to_vec()))
+        };
+        Some([element(0)?, element(1)?])
     }
 
     /// **Escape hatch — requires `pdfrum-parser`.** The parser document

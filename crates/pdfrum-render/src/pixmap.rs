@@ -803,7 +803,7 @@ impl Pixmap {
     ///
     /// # Errors
     ///
-    /// [`Error::Png`] when the encoder refuses the dimensions.
+    /// [`Error::Png`](crate::Error::Png) when the encoder refuses the dimensions.
     pub fn encode_png(&self) -> Result<Vec<u8>, crate::Error> {
         let mut out = Vec::new();
         let mut encoder = png::Encoder::new(&mut out, self.width, self.height);
@@ -819,7 +819,7 @@ impl Pixmap {
     ///
     /// # Errors
     ///
-    /// [`Error::Png`] as [`Pixmap::encode_png`], and [`Error::Io`] when the
+    /// [`Error::Png`](crate::Error::Png) as [`Pixmap::encode_png`], and [`Error::Io`](crate::Error::Io) when the
     /// file cannot be written.
     pub fn save_png(&self, path: impl AsRef<std::path::Path>) -> Result<(), crate::Error> {
         std::fs::write(path, self.encode_png()?)?;

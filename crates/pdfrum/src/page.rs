@@ -1,7 +1,7 @@
 //! One page: its geometry, its pixels, its text and its annotations.
 
 use pdfrum_common::{Diagnostics, PageIndex};
-use pdfrum_object::Name;
+use pdfrum_object::{Name, names};
 use pdfrum_page::BuildContext;
 use pdfrum_parser::PageDict;
 
@@ -95,6 +95,33 @@ impl<'a> Page<'a> {
     #[must_use]
     pub fn crop_box(&self) -> kurbo::Rect {
         self.crop_box
+    }
+
+    /// The page's `/BleedBox` (ISO 32000-1 §14.11.2), only when the page sets
+    /// one: unlike the media and crop boxes it is neither inherited nor
+    /// defaulted.
+    #[must_use]
+    pub fn bleed_box(&self) -> Option<kurbo::Rect> {
+        self.named_box(names::BLEED_BOX)
+    }
+
+    /// The page's `/TrimBox`, only when the page sets one.
+    #[must_use]
+    pub fn trim_box(&self) -> Option<kurbo::Rect> {
+        self.named_box(names::TRIM_BOX)
+    }
+
+    /// The page's `/ArtBox`, only when the page sets one.
+    #[must_use]
+    pub fn art_box(&self) -> Option<kurbo::Rect> {
+        self.named_box(names::ART_BOX)
+    }
+
+    fn named_box(&self, key: &Name) -> Option<kurbo::Rect> {
+        self.dict
+            .dict
+            .array(key, &self.doc.inner)
+            .map(|array| array.as_rect())
     }
 
     /// The page's `/Rotate`, normalized to a quarter turn.
@@ -306,6 +333,36 @@ impl<'a> Page<'a> {
             .into_iter()
             .flatten()
             .collect()
+    }
+
+    /// The page's links with where each one leads — a page of this document,
+    /// a URI, or something else — in the order of [`Page::links`].
+    #[must_use]
+    pub fn page_links(&self) -> Vec<PageLink> {
+        let mut diags = Diagnostics::default();
+        let catalog = self.doc.catalog();
+        let resolver = &self.doc.inner;
+        let links = self
+            .links()
+            .into_iter()
+            .map(|link| {
+                let rect = link.rect(resolver);
+                let uri = link
+                    .action(resolver)
+                    .filter(|action| action.kind() == pdfrum_doc::ActionKind::Uri)
+                    .map(|action| action.uri(&catalog, resolver));
+                let target = match uri {
+                    Some(uri) => LinkTarget::Uri(String::from_utf8_lossy(&uri).into_owned()),
+                    None => link
+                        .dest(&catalog, resolver, &self.doc.limits, &mut diags)
+                        .page_index(resolver, |num| self.doc.page_index_of(num), &mut diags)
+                        .map_or(LinkTarget::Other, LinkTarget::Page),
+                };
+                PageLink { rect, target }
+            })
+            .collect();
+        self.doc.note(&diags);
+        links
     }
 
     /// **Escape hatch — requires `pdfrum-page`.** The interpreted page-object
@@ -586,4 +643,25 @@ impl Document {
             .map(pdfrum_object::Name::as_bytes)
             == Some(b"R2L".as_slice())
     }
+}
+
+/// Where a link annotation leads.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum LinkTarget {
+    /// A page of this document.
+    Page(PageIndex),
+    /// A URI action (`/S /URI`).
+    Uri(String),
+    /// Anything else: a named action, a script, another file, or a
+    /// destination that names no page of this document.
+    Other,
+}
+
+/// A link annotation with its target resolved, from [`Page::page_links`].
+#[derive(Debug, Clone, PartialEq)]
+pub struct PageLink {
+    /// The link's `/Rect` in page space.
+    pub rect: kurbo::Rect,
+    /// Where it leads.
+    pub target: LinkTarget,
 }
