@@ -697,3 +697,100 @@ fn repair_optimize_and_decrypt_rewrite_the_file() {
     );
     std::fs::remove_dir_all(&dir).unwrap();
 }
+
+// ---- phase 3: the terminal -----------------------------------------------
+
+#[test]
+fn search_prints_hits_with_their_page_and_exits_1_on_none() {
+    let text = stdout(&["search", "-i", "WORLD", "fixtures/hello_world_2_pages.pdf"]).unwrap();
+    assert_eq!(text.lines().count(), 4, "{text}");
+    assert!(text.starts_with("page 1:Hello, world!"));
+    let none = run(&["search", "nonesuch", "fixtures/hello_world_2_pages.pdf"]).unwrap();
+    assert_eq!(none.status.code(), Some(1));
+    let v = json(&[
+        "search",
+        "Goodbye",
+        "fixtures/hello_world_2_pages.pdf",
+        "--json",
+    ])
+    .unwrap();
+    assert_eq!(v.as_array().map(Vec::len), Some(2));
+    assert_eq!(v[1]["page"], 2);
+    assert_eq!(v[0]["line"], "Goodbye, world!");
+    assert!(v[0]["rects"][0].is_array(), "a box per hit: {v}");
+}
+
+#[test]
+fn colour_and_hyperlinks_are_off_in_a_pipe_unless_asked_and_no_color_wins() {
+    let plain = stdout(&["search", "world", "fixtures/hello_world_2_pages.pdf"]).unwrap();
+    assert!(!plain.contains('\u{1b}'), "no escapes in a pipe: {plain:?}");
+    let painted = stdout(&[
+        "search",
+        "world",
+        "fixtures/hello_world_2_pages.pdf",
+        "--color",
+        "always",
+    ])
+    .unwrap();
+    assert!(
+        painted.contains("\u{1b}[7;33mworld\u{1b}[0m"),
+        "{painted:?}"
+    );
+    let linked = stdout(&[
+        "extract",
+        "toc",
+        "fixtures/bookmarks.pdf",
+        "--hyperlinks",
+        "always",
+    ])
+    .unwrap();
+    assert!(
+        linked.contains("\u{1b}]8;;file://") && linked.contains("#page=1\u{1b}\\"),
+        "{linked:?}"
+    );
+    let out = Command::new(env!("CARGO_BIN_EXE_pdfrum"))
+        .args([
+            "search",
+            "world",
+            "fixtures/hello_world_2_pages.pdf",
+            "--color",
+            "auto",
+        ])
+        .env("NO_COLOR", "1")
+        .current_dir(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests"))
+        .output()
+        .unwrap();
+    assert!(!String::from_utf8_lossy(&out.stdout).contains('\u{1b}'));
+}
+
+#[test]
+fn preview_draws_half_blocks_when_told_to_and_view_refuses_a_pipe() {
+    let out = run(&[
+        "preview",
+        "fixtures/hello_world_2_pages.pdf",
+        "--graphics",
+        "halfblock",
+        "--width",
+        "24",
+    ])
+    .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let text = String::from_utf8(out.stdout).unwrap();
+    let rows = text.lines().count();
+    assert!(rows >= 8, "{rows} rows of cells");
+    assert!(
+        text.lines().all(|l| l.matches('\u{2580}').count() == 24),
+        "24 cells per row"
+    );
+    assert!(text.contains("\u{1b}[38;2;"));
+    let off = run(&["preview", "fixtures/hello_world_2_pages.pdf"]).unwrap();
+    assert_eq!(off.status.code(), Some(1), "no pictures in a pipe");
+    assert!(String::from_utf8_lossy(&off.stderr).contains("render"));
+    let view = run(&["view", "fixtures/hello_world_2_pages.pdf"]).unwrap();
+    assert_eq!(view.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&view.stderr).contains("needs a terminal"));
+}

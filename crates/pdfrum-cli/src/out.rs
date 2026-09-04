@@ -1,6 +1,7 @@
 //! Opening the document and shaping output: the two things every command
 //! shares.
 
+use std::io::IsTerminal;
 use std::path::Path;
 
 use anyhow::{Context, Result};
@@ -33,11 +34,25 @@ pub fn open(file: &Path, password: Option<&str>) -> Result<Document> {
 /// [`open`] without the notice — for `doctor`, whose whole output is the
 /// notices.
 pub fn open_quietly(file: &Path, password: Option<&str>) -> Result<Document> {
-    match password {
+    let first = match password {
         Some(password) => Document::open_with_password(file, password.as_bytes()),
         None => Document::open(file),
-    }
-    .with_context(|| format!("cannot open {}", file.display()))
+    };
+    let doc = match first {
+        // No password was given, the file wants one, and a person is at the
+        // keyboard: ask once, silently, the way `ssh` does.
+        Err(pdfrum::Error::WrongPassword)
+            if password.is_none()
+                && std::io::stdin().is_terminal()
+                && std::io::stderr().is_terminal() =>
+        {
+            let typed = rpassword::prompt_password(format!("password for {}: ", file.display()))
+                .context("cannot read a password")?;
+            Document::open_with_password(file, typed.as_bytes())
+        }
+        other => other,
+    };
+    doc.with_context(|| format!("cannot open {}", file.display()))
 }
 
 /// Print `value` as one pretty JSON document.

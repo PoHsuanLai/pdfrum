@@ -14,6 +14,7 @@
 mod cmd;
 mod out;
 mod pages;
+mod term;
 
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -28,6 +29,19 @@ struct Cli {
     /// password opens it; the permissions reported are the ones it grants.
     #[arg(short, long, global = true, value_name = "PASSWORD")]
     password: Option<String>,
+
+    /// Colour in the output: on when stdout is a terminal, unless `NO_COLOR`.
+    #[arg(long, global = true, value_enum, default_value_t, value_name = "WHEN")]
+    color: term::When,
+
+    /// Clickable links (OSC 8) in the output: on when stdout is a terminal.
+    #[arg(long, global = true, value_enum, default_value_t, value_name = "WHEN")]
+    hyperlinks: term::When,
+
+    /// How `preview` and `view` draw pages: picked from the terminal's own
+    /// announcements unless told.
+    #[arg(long, global = true, value_enum, default_value_t, value_name = "MODE")]
+    graphics: term::GraphicsMode,
 
     #[command(subcommand)]
     command: Command,
@@ -57,6 +71,42 @@ enum Command {
         /// load would find is found now.
         #[arg(long)]
         scan_all: bool,
+    },
+    /// Show a page right here in the terminal.
+    Preview {
+        #[command(flatten)]
+        input: Input,
+        /// The page to show, 1-based.
+        #[arg(long, default_value_t = 1)]
+        page: u32,
+        /// Width in terminal columns; the window's width by default.
+        #[arg(long, value_name = "COLUMNS")]
+        width: Option<u16>,
+    },
+    /// Read the document in the terminal: pages, search, zoom.
+    View {
+        #[command(flatten)]
+        input: Input,
+        /// The page to open on, 1-based.
+        #[arg(long, default_value_t = 1)]
+        page: u32,
+    },
+    /// Find text, `grep`-style: every hit with its line and page.
+    Search {
+        /// What to look for.
+        #[arg(value_name = "TEXT")]
+        needle: String,
+        #[command(flatten)]
+        input: Input,
+        /// Match regardless of case.
+        #[arg(short, long)]
+        ignore_case: bool,
+        /// Pages to search, 1-based. All by default.
+        #[arg(long, value_name = "RANGE")]
+        pages: Option<String>,
+        /// One JSON document: an array of hits with page, offsets, line and boxes.
+        #[arg(long)]
+        json: bool,
     },
     /// Render pages to PNG files.
     Render {
@@ -336,6 +386,7 @@ struct Input {
 fn main() -> ExitCode {
     let cli = Cli::parse();
     let password = cli.password.as_deref();
+    let term = term::Term::detect(cli.color, cli.hyperlinks, cli.graphics);
     let outcome = match cli.command {
         Command::Info { input, json } => cmd::info::run(&input.file, password, json),
         Command::Doctor {
@@ -344,6 +395,25 @@ fn main() -> ExitCode {
             strict,
             scan_all,
         } => cmd::doctor::run(&input.file, password, json, strict, scan_all),
+        Command::Preview { input, page, width } => {
+            cmd::terminal::preview(&input.file, password, page, width, term)
+        }
+        Command::View { input, page } => cmd::terminal::view(&input.file, password, page, term),
+        Command::Search {
+            needle,
+            input,
+            ignore_case,
+            pages,
+            json,
+        } => cmd::terminal::search(
+            &input.file,
+            password,
+            &needle,
+            ignore_case,
+            pages.as_deref(),
+            json,
+            term,
+        ),
         Command::Render {
             input,
             output,
@@ -359,7 +429,7 @@ fn main() -> ExitCode {
             scale: scale.unwrap_or(dpi / 72.0),
             annotations: !no_annotations,
         }),
-        Command::Extract { what } => run_extract(what, password),
+        Command::Extract { what } => run_extract(what, password, term),
         Command::Pages { what } => run_pages(what, password),
         Command::Forms { what } => run_forms(what, password),
         Command::Repair { input, save } => cmd::file::rewrite(
@@ -391,15 +461,19 @@ fn main() -> ExitCode {
     }
 }
 
-fn run_extract(what: Extract, password: Option<&str>) -> anyhow::Result<ExitCode> {
+fn run_extract(
+    what: Extract,
+    password: Option<&str>,
+    term: term::Term,
+) -> anyhow::Result<ExitCode> {
     match what {
         Extract::Text { input, pages, json } => {
             cmd::extract::text(&input.file, password, pages.as_deref(), json)
         }
         Extract::Links { input, pages, json } => {
-            cmd::extract::links(&input.file, password, pages.as_deref(), json)
+            cmd::extract::links(&input.file, password, pages.as_deref(), json, term)
         }
-        Extract::Toc { input, json } => cmd::extract::toc(&input.file, password, json),
+        Extract::Toc { input, json } => cmd::extract::toc(&input.file, password, json, term),
         Extract::Attachments {
             input,
             output,
