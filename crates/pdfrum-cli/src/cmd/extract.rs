@@ -11,6 +11,7 @@ use serde::Serialize;
 
 use crate::out::{self, JsonRect, out, outln};
 use crate::pages;
+use crate::term::Term;
 
 // ---- text -----------------------------------------------------------------
 
@@ -76,6 +77,7 @@ pub fn links(
     password: Option<&str>,
     spec: Option<&str>,
     json: bool,
+    term: Term,
 ) -> Result<ExitCode> {
     let doc = out::open(file, password)?;
     let mut rows = Vec::new();
@@ -114,8 +116,8 @@ pub fn links(
     } else {
         for r in &rows {
             let target = match (r.kind, r.target_page, &r.uri) {
-                (_, Some(p), _) => format!("page {p}"),
-                (_, _, Some(u)) => u.clone(),
+                (_, Some(p), _) => term.link(&page_url(file, p), &format!("page {p}")),
+                (_, _, Some(u)) => term.link(u, u),
                 _ => "(action)".to_owned(),
             };
             outln!(
@@ -134,6 +136,12 @@ pub fn links(
     Ok(ExitCode::SUCCESS)
 }
 
+/// A `file://` URL opening `file` at `page`, the fragment viewers honour.
+fn page_url(file: &Path, page: u32) -> String {
+    let absolute = std::fs::canonicalize(file).unwrap_or_else(|_| file.to_path_buf());
+    format!("file://{}#page={page}", absolute.display())
+}
+
 // ---- toc ------------------------------------------------------------------
 
 #[derive(Serialize)]
@@ -144,7 +152,7 @@ struct TocRow {
     page: Option<u32>,
 }
 
-pub fn toc(file: &Path, password: Option<&str>, json: bool) -> Result<ExitCode> {
+pub fn toc(file: &Path, password: Option<&str>, json: bool, term: Term) -> Result<ExitCode> {
     let doc = out::open(file, password)?;
     let rows: Vec<TocRow> = doc
         .outline()
@@ -159,7 +167,9 @@ pub fn toc(file: &Path, password: Option<&str>, json: bool) -> Result<ExitCode> 
         out::json(&rows)?;
     } else {
         for r in &rows {
-            let page = r.page.map_or(String::new(), |p| format!("  p.{p}"));
+            let page = r.page.map_or(String::new(), |p| {
+                format!("  {}", term.link(&page_url(file, p), &format!("p.{p}")))
+            });
             outln!("{}{}{page}", "  ".repeat(r.depth), r.title);
         }
     }

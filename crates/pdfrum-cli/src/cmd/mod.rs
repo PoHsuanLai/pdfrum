@@ -7,3 +7,4 @@ pub mod forms;
 pub mod info;
 pub mod pages;
 pub mod render;
+pub mod terminal;

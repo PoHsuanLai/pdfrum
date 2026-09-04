@@ -62,6 +62,10 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
   dump|fill|flatten`, `repair`, `optimize`, `security decrypt`,
   `--deterministic`; `pdfrum-edit` page-tree edits and six facade fills the
   design had called composition.
+- ~~Phase 3 — the terminal~~ — landed 2026-09-05 (`docs/status/M19.md`):
+  `preview`, `view`, `search`, `--color|--hyperlinks|--graphics`, OSC 8 in
+  links and toc, the password prompt; `crossterm` and `rpassword` admitted,
+  `viuer` (LGPL rider), `comfy-table` and `indicatif` (no reader) declined.
 - Five phases, PLAN.md M19; the read-only core ships on `clap` + `serde_json`
   before any terminal crate is admitted.
 - **`security encrypt` kept** (user, 2026-09-05): R6 only, generation as

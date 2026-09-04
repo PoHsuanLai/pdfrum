@@ -65,12 +65,16 @@ def main [] {
     # The other half of the bound — that the core ring never reaches this tree
     # at all — is scripts/check-no-wgpu.nu, run below.
     let gpu_sys_exemptions = [renderdoc-sys wayland-sys]
+    # `linux-raw-sys` is the name's other false positive: rustix's generated
+    # Linux syscall constants, `build = false`, Rust sources only, reached
+    # through `crossterm` for `pdfrum view`. Checked 2026-09-05 (DEPS.md).
+    let pure_rust_sys = [linux-raw-sys]
     let native_build_crates = [cc cmake pkg-config bindgen]
 
     let forbidden = (^cargo tree -e normal --workspace --prefix none
         | lines | split column ' ' name | get name | uniq
         | where {|c| ($c | str ends-with '-sys') or ($c in $native_build_crates) }
-        | where {|c| $c not-in $gpu_sys_exemptions }
+        | where {|c| $c not-in $gpu_sys_exemptions and $c not-in $pure_rust_sys }
         | sort)
     if not ($forbidden | is-empty) {
         print --stderr "error: forbidden native-build crates in the dependency tree:"

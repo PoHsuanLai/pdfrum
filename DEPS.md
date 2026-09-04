@@ -276,6 +276,24 @@ other crates; no library crate depends on them), `criterion` (benches,
 `cargo-nextest` (CI tooling, not deps). `insta` was listed here once and
 never used; the CLI's tests compare against plain expected-output files.
 
+The command line's terminal crates, admitted 2026-09-05 with the pure-Rust
+check (`cargo tree -e build`: no `cc`, no `-sys` beyond `linux-raw-sys`,
+which is Rust syscall constants) and `cargo deny`:
+
+| Crate | Version | Why |
+|---|---|---|
+| `crossterm` | `=0.29.0`, `default-features = false`, `events` + `windows` | Raw mode, the alternate screen, key events and the window size for `pdfrum view`. Brings `rustix` and its `linux-raw-sys` — generated syscall constants, `build = false`, Rust only — which `scripts/ci.nu`'s name check exempts by name. |
+| `rpassword` | `=7.5.4` | The silent password prompt when an encrypted file is opened at a terminal without `--password`. |
+
+Three the design named and this table does not: **`viuer`** — its
+half-block path depends on `ansi_colours`, LGPL-3.0-or-later, which the
+allowlist above refuses, so the three picture protocols (kitty, iTerm2,
+half-blocks) are ~120 lines in `crates/pdfrum-cli/src/term.rs` with their
+own base64; **`comfy-table`** and **`indicatif`** — tables and progress bars
+only show at a terminal, which the tests never are, so they would have been
+options with no reader the tests could see; plain aligned columns serve a
+pipe and a person alike and are what the expected-output files pin.
+
 `criterion` is held at 0.5 deliberately. From 0.6 it depends unconditionally
 on `alloca`, which has a `cc` build-dependency and compiles C — which the
 pure-Rust guarantee above forbids and `cargo-deny` rejects, failing
