@@ -120,6 +120,9 @@ pub pdfrum_parser::PageDict::dict: pdfrum_object::dict::Dict
 pub pdfrum_parser::PageDict::reference: core::option::Option<pdfrum_object::object::ObjRef>
 impl pdfrum_parser::PageDict
 pub fn pdfrum_parser::PageDict::inherited(&self, &pdfrum_object::name::Name, &impl pdfrum_object::resolve::Resolve) -> core::option::Option<pdfrum_object::object::Object>
+pub struct pdfrum_parser::Section
+pub pdfrum_parser::Section::is_stream: bool
+pub pdfrum_parser::Section::offset: u64
 pub struct pdfrum_parser::Trailer
 pub pdfrum_parser::Trailer::dict: pdfrum_object::dict::Dict
 pub pdfrum_parser::Trailer::object_number: u32
@@ -134,6 +137,7 @@ pub fn pdfrum_parser::Xref::last_object_number(&self) -> u32
 pub fn pdfrum_parser::Xref::len(&self) -> usize
 pub fn pdfrum_parser::Xref::new() -> Self
 pub fn pdfrum_parser::Xref::object_numbers(&self) -> impl core::iter::traits::iterator::Iterator<Item = u32> + '_
+pub fn pdfrum_parser::Xref::sections(&self) -> &[pdfrum_parser::Section]
 pub fn pdfrum_parser::atoi64(&[u8]) -> i64
 pub fn pdfrum_parser::atoui(&[u8]) -> u32
 pub const fn pdfrum_parser::class_of(u8) -> pdfrum_parser::CharClass

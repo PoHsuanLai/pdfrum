@@ -52,4 +52,4 @@ pub use lexer::{
 pub use objstm::{ObjStm, ObjStmEntry};
 pub use store::ObjectStore;
 pub use syntax::{Indirect, Strictness, parse_indirect_object, parse_object};
-pub use xref::{Entry, Trailer, Xref, read_xref};
+pub use xref::{Entry, Section, Trailer, Xref, read_xref};
