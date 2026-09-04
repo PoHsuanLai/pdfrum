@@ -372,7 +372,21 @@ impl FontDb for TestFontDb {
 #[derive(Debug)]
 pub struct SystemFontDb {
     faces: Vec<FaceInfo>,
-    sources: Vec<(Arc<[u8]>, u32)>,
+    #[cfg(all(feature = "system-fonts", not(target_arch = "wasm32")))]
+    sources: Vec<FaceSource>,
+}
+
+/// Where a scanned face's bytes come from — read only when the face is
+/// chosen. The scan used to copy every installed face into memory and keep
+/// all of them; on a host with 490 MB of fonts that was 1.1 GB resident per
+/// substituted font, for the one face the ladder picks.
+#[cfg(all(feature = "system-fonts", not(target_arch = "wasm32")))]
+#[derive(Debug, Clone)]
+enum FaceSource {
+    /// A file on disk and the collection index within it.
+    File(PathBuf, u32),
+    /// Bytes `fontdb` already held in memory, and the index.
+    Bytes(Arc<[u8]>, u32),
 }
 
 impl SystemFontDb {
@@ -389,10 +403,7 @@ impl SystemFontDb {
     #[must_use]
     pub fn scan(extra_dirs: &[PathBuf]) -> Self {
         let _ = extra_dirs;
-        Self {
-            faces: Vec::new(),
-            sources: Vec::new(),
-        }
+        Self { faces: Vec::new() }
     }
 
     #[cfg(all(feature = "system-fonts", not(target_arch = "wasm32")))]
@@ -410,14 +421,36 @@ impl SystemFontDb {
         let mut faces = Vec::new();
         let mut sources = Vec::new();
         for face in db.faces() {
-            let Some(bytes) = face_bytes_of(&db, face) else {
-                continue;
+            // Describe the face from the bytes `fontdb` holds — a mapping for
+            // a file it enumerated — without copying them; remember only
+            // where to read the face from if the ladder chooses it.
+            let (bytes, source): (std::borrow::Cow<'_, [u8]>, FaceSource) = match &face.source {
+                fontdb::Source::Binary(data) => {
+                    let bytes: Arc<[u8]> = Arc::from(data.as_ref().as_ref());
+                    (
+                        std::borrow::Cow::Owned(bytes.to_vec()),
+                        FaceSource::Bytes(bytes, face.index),
+                    )
+                }
+                fontdb::Source::SharedFile(path, data) => (
+                    std::borrow::Cow::Borrowed(data.as_ref().as_ref()),
+                    FaceSource::File(path.clone(), face.index),
+                ),
+                fontdb::Source::File(path) => {
+                    let Ok(read) = std::fs::read(path) else {
+                        continue;
+                    };
+                    (
+                        std::borrow::Cow::Owned(read),
+                        FaceSource::File(path.clone(), face.index),
+                    )
+                }
             };
             let Some(info) = describe(face.index, &bytes) else {
                 continue;
             };
             faces.push(info);
-            sources.push((bytes, face.index));
+            sources.push(source);
         }
 
         // Sorted by face name, because the C++'s font list is a
@@ -454,18 +487,20 @@ impl FontDb for SystemFontDb {
         &self.faces
     }
 
+    #[cfg(all(feature = "system-fonts", not(target_arch = "wasm32")))]
     fn face_bytes(&self, h: FaceHandle) -> Option<(Arc<[u8]>, u32)> {
-        self.sources.get(h.0).cloned()
-    }
-}
-
-#[cfg(all(feature = "system-fonts", not(target_arch = "wasm32")))]
-fn face_bytes_of(_db: &fontdb::Database, face: &fontdb::FaceInfo) -> Option<Arc<[u8]>> {
-    match &face.source {
-        fontdb::Source::Binary(data) | fontdb::Source::SharedFile(_, data) => {
-            Some(Arc::from(data.as_ref().as_ref()))
+        match self.sources.get(h.0)? {
+            FaceSource::File(path, index) => std::fs::read(path)
+                .ok()
+                .map(|bytes| (Arc::from(bytes), *index)),
+            FaceSource::Bytes(bytes, index) => Some((bytes.clone(), *index)),
         }
-        fontdb::Source::File(path) => std::fs::read(path).ok().map(Arc::from),
+    }
+
+    #[cfg(not(all(feature = "system-fonts", not(target_arch = "wasm32"))))]
+    fn face_bytes(&self, h: FaceHandle) -> Option<(Arc<[u8]>, u32)> {
+        let _ = h;
+        None
     }
 }
 
@@ -539,7 +574,7 @@ fn face_styles(name: &str, style: &str) -> u32 {
 // (`cfx_face.cpp:1608-1633`), and is reachable only from the XFA and Android
 // font managers — never from the folder enumerator a `--font-dir` run goes
 // through, which is why this side takes the name rule.
-fn describe(index: u32, bytes: &Arc<[u8]>) -> Option<FaceInfo> {
+fn describe(index: u32, bytes: &[u8]) -> Option<FaceInfo> {
     let font = skrifa::FontRef::from_index(bytes, index).ok()?;
 
     // Name IDs **1 and 2**, which is what the enumerator asks for
