@@ -602,7 +602,11 @@ fn check_perms(p: &EncryptParams, file_key: &[u8; 32]) -> bool {
 /// The loop runs at least 64 rounds and stops once the last byte of the
 /// *whole* ciphertext — not of the digest — falls to `i - 32`, which caps it
 /// at 287.
-fn revision6_hash(password: &[u8], salt: [u8; 8], vector: Option<&[u8; 48]>) -> [u8; 32] {
+pub(crate) fn revision6_hash(
+    password: &[u8],
+    salt: [u8; 8],
+    vector: Option<&[u8; 48]>,
+) -> [u8; 32] {
     revision6_hash_counted(password, salt, vector).0
 }
 
@@ -831,7 +835,7 @@ pub(crate) fn try_password(
 /// makes the `prepped != password` test below compare the bytes that will
 /// actually be hashed, so a preparation whose only effect lies past byte 127
 /// does not buy a second identical attempt.
-fn r6_prepared(revision: i64, password: &[u8]) -> Option<Vec<u8>> {
+pub(crate) fn r6_prepared(revision: i64, password: &[u8]) -> Option<Vec<u8>> {
     if revision != 6 {
         return None;
     }

@@ -52,6 +52,7 @@
 // index with `get()` (SPEC.md §3).
 #![warn(clippy::indexing_slicing)]
 
+mod create;
 mod key;
 mod object;
 mod permissions;
@@ -63,6 +64,7 @@ mod standard;
 #[cfg(test)]
 mod test_fixtures;
 
+pub use create::{ENTROPY_LEN, standard_r6};
 pub use key::SmallKey;
 pub use object::{CryptClass, Iv};
 pub use permissions::Permissions;
