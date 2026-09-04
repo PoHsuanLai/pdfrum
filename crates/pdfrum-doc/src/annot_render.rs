@@ -898,10 +898,10 @@ mod tests {
         let normal = Dict::from_pairs(states.iter().map(|state| {
             (
                 Name::from(*state),
-                Object::Stream(pdfrum_object::Stream::new(
+                Object::Stream(Box::new(pdfrum_object::Stream::new(
                     Dict::new(),
                     pdfrum_object::ByteSpan::from(b"x".to_vec()),
-                )),
+                ))),
             )
         }));
         let mut annot = widget(field_type, ff);

@@ -36,10 +36,10 @@ impl TestStore {
     /// Store a stream over `bytes` with an empty dictionary, and return a
     /// reference to it.
     pub(crate) fn add_stream(&mut self, bytes: Vec<u8>) -> Object {
-        self.add(Object::Stream(Stream::new(
+        self.add(Object::Stream(Box::new(Stream::new(
             Dict::new(),
             ByteSpan::from(bytes),
-        )))
+        ))))
     }
 }
 

@@ -416,10 +416,10 @@ mod tests {
     // A stream's dictionary is part of the graph; its bytes are not.
     #[test]
     fn a_stream_dictionary_is_walked() {
-        let stream = Object::Stream(pdfrum_object::Stream::new(
+        let stream = Object::Stream(Box::new(pdfrum_object::Stream::new(
             Dict::from_pairs([(Name::from("Ref"), r(9))]),
             pdfrum_object::ByteSpan::empty(),
-        ));
+        )));
         let store = Store(BTreeMap::from([
             (1, dict([("S", r(2))])),
             (2, stream),

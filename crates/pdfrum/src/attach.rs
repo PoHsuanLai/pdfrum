@@ -239,10 +239,10 @@ impl DocEdit<'_> {
         let mut dict = Dict::new();
         dict.insert(Name::from("DL"), Object::Int(len));
         dict.insert(Name::from("Params"), Object::Dict(params));
-        let stream_ref = self.inner.add(Object::Stream(Stream::new(
+        let stream_ref = self.inner.add(Object::Stream(Box::new(Stream::new(
             dict,
             ByteSpan::from(bytes.to_vec()),
-        )));
+        ))));
         let mut ef = Dict::new();
         ef.insert(Name::from("F"), Object::Ref(stream_ref));
         spec.insert(Name::from("EF"), Object::Dict(ef));
@@ -299,7 +299,7 @@ impl DocEdit<'_> {
         dict.insert(Name::from("Params"), Object::Dict(params));
         self.inner.replace(
             stream_ref,
-            Object::Stream(Stream::new(dict, stream.data.clone())),
+            Object::Stream(Box::new(Stream::new(dict, stream.data.clone()))),
         );
         Ok(true)
     }

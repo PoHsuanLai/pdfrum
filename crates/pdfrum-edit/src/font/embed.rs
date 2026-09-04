@@ -355,10 +355,10 @@ fn embed_composite(
         unicode_to_gid.insert(*cp, *gid);
     }
     let w_ref = doc.add(Object::Array(create_widths_array(&widths_map)));
-    let tounicode_ref = doc.add(Object::Stream(Stream::new(
+    let tounicode_ref = doc.add(Object::Stream(Box::new(Stream::new(
         Dict::new(),
         ByteSpan::from(load_unicode(&to_unicode)),
-    )));
+    ))));
 
     let cid_subtype = match kind {
         ProgramKind::TrueType => names::CID_FONT_TYPE2.clone(),
@@ -410,14 +410,14 @@ fn embed_custom_composite(
     }
     let w_ref = doc.add(Object::Array(create_widths_array(&widths)));
 
-    let map_ref = doc.add(Object::Stream(Stream::new(
+    let map_ref = doc.add(Object::Stream(Box::new(Stream::new(
         Dict::new(),
         ByteSpan::from(cid_to_gid.to_vec()),
-    )));
-    let tounicode_ref = doc.add(Object::Stream(Stream::new(
+    ))));
+    let tounicode_ref = doc.add(Object::Stream(Box::new(Stream::new(
         Dict::new(),
         ByteSpan::from(to_unicode.as_bytes().to_vec()),
-    )));
+    ))));
 
     let mut dict = cid_font_dict(doc, &name, names::CID_FONT_TYPE2.clone(), descriptor, w_ref);
     dict.push(names::CID_TO_GID_MAP.clone(), Object::Ref(map_ref));
@@ -652,7 +652,10 @@ fn embed_program(doc: &mut EditDoc<'_>, program: &[u8], kind: ProgramKind) -> Ob
             file.program
         }
     };
-    doc.add(Object::Stream(Stream::new(dict, ByteSpan::from(bytes))))
+    doc.add(Object::Stream(Box::new(Stream::new(
+        dict,
+        ByteSpan::from(bytes),
+    ))))
 }
 
 fn font_name(glyphs: &GlyphSource) -> Vec<u8> {

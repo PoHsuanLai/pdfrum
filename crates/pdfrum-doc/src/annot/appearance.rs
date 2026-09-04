@@ -63,7 +63,7 @@ pub fn annot_ap<R: Resolve>(
     }
     let sub = ap.get(entry, r)?.get().clone();
     if let Object::Stream(stream) = sub {
-        return Some(stream);
+        return Some(*stream);
     }
     let states = sub.as_dict()?;
 
@@ -147,7 +147,10 @@ mod tests {
     }
 
     fn stream(marker: &[u8]) -> Object {
-        Object::Stream(Stream::new(Dict::new(), ByteSpan::from(marker.to_vec())))
+        Object::Stream(Box::new(Stream::new(
+            Dict::new(),
+            ByteSpan::from(marker.to_vec()),
+        )))
     }
 
     fn found(annot: &Dict, mode: ApMode, fallback: bool) -> Option<Vec<u8>> {

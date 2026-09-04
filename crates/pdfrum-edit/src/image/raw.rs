@@ -99,10 +99,10 @@ pub(super) fn embed(
         }
         PixelFormat::Rgba8 => {
             let (colour, alpha) = split_alpha(pixels);
-            let smask = doc.add(Object::Stream(Stream::new(
+            let smask = doc.add(Object::Stream(Box::new(Stream::new(
                 smask_dict(width, height),
                 ByteSpan::from(alpha),
-            )));
+            ))));
             push_space(&mut dict, format);
             dict.push(names::SMASK.clone(), Object::Ref(smask));
             colour
@@ -116,7 +116,10 @@ pub(super) fn embed(
     // No `/Filter`: the stream writer flate-encodes any stream that declares
     // none, which is the same place the subsetter leaves its font programs.
     Ok(EmbeddedImage {
-        image: doc.add(Object::Stream(Stream::new(dict, ByteSpan::from(data)))),
+        image: doc.add(Object::Stream(Box::new(Stream::new(
+            dict,
+            ByteSpan::from(data),
+        )))),
         width,
         height,
     })

@@ -94,10 +94,10 @@ pub(super) fn embed(doc: &mut EditDoc<'_>, bytes: &[u8]) -> Result<EmbeddedImage
         dict.push(names::DECODE_PARMS.clone(), Object::Dict(parms));
     }
     Ok(EmbeddedImage {
-        image: doc.add(Object::Stream(Stream::new(
+        image: doc.add(Object::Stream(Box::new(Stream::new(
             dict,
             ByteSpan::from(bytes.to_vec()),
-        ))),
+        )))),
         width: sof.width,
         height: sof.height,
     })
@@ -117,10 +117,10 @@ fn embed_jpx(doc: &mut EditDoc<'_>, bytes: &[u8]) -> Result<EmbeddedImage, Error
         Object::Name(names::JPX_DECODE.clone()),
     );
     Ok(EmbeddedImage {
-        image: doc.add(Object::Stream(Stream::new(
+        image: doc.add(Object::Stream(Box::new(Stream::new(
             dict,
             ByteSpan::from(bytes.to_vec()),
-        ))),
+        )))),
         width,
         height,
     })

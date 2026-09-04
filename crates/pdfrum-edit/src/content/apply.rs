@@ -70,10 +70,10 @@ pub fn apply_rewrite(
         match existing {
             // The element exists: rewrite it, or copy it if it is shared.
             Some(reference) if !shared.contains(&reference.num) => {
-                edit.replace(reference, Object::Stream(stream));
+                edit.replace(reference, Object::Stream(Box::new(stream)));
             }
             Some(_) => {
-                let fresh = edit.add(Object::Stream(stream));
+                let fresh = edit.add(Object::Stream(Box::new(stream)));
                 if let Some(index) = index {
                     shape = replace_element(&shape, index, fresh);
                     contents_changed = true;
@@ -81,7 +81,7 @@ pub fn apply_rewrite(
             }
             // A brand-new element, or one past the end of the array.
             None => {
-                let fresh = edit.add(Object::Stream(stream));
+                let fresh = edit.add(Object::Stream(Box::new(stream)));
                 let (_, next) = shape.with_added(fresh);
                 shape = next;
                 contents_changed = true;

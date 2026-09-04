@@ -238,10 +238,10 @@ mod tests {
 
     #[test]
     fn a_stream_needs_both_a_name_and_a_matching_embedded_entry() {
-        let stream = Object::Stream(Stream::new(
+        let stream = Object::Stream(Box::new(Stream::new(
             dict(&[("Params", Object::Dict(dict(&[("Size", Object::Int(6))])))]),
             ByteSpan::from(b"hello!".to_vec()),
-        ));
+        )));
         // A name with no `/EF` entry falls through rather than ending the
         // search.
         let spec = spec(&[

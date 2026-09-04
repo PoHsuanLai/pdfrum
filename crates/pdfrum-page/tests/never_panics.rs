@@ -286,7 +286,7 @@ fn function_eval_survives_random_definitions_and_inputs() {
         let object = if rng.next().is_multiple_of(2) {
             Object::Dict(dict)
         } else {
-            Object::Stream(Stream::new(dict, ByteSpan::from(rng.bytes(64))))
+            Object::Stream(Box::new(Stream::new(dict, ByteSpan::from(rng.bytes(64)))))
         };
         let Some(function) = cache.load(&object, &NoResolve, &limits, &mut diags) else {
             continue;

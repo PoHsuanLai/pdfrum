@@ -295,7 +295,7 @@ mod tests {
     fn one_glyph_font(proc_body: &[u8]) -> (pdfrum_font::Font, OneStream) {
         use pdfrum_object::{Array, ByteSpan, Dict, Name, Object, Stream};
         let proc = Stream::new(Dict::new(), ByteSpan::from(proc_body.to_vec()));
-        let store = OneStream(std::sync::Arc::new(Object::Stream(proc)));
+        let store = OneStream(std::sync::Arc::new(Object::Stream(Box::new(proc))));
         let font = Dict::from_pairs([
             (Name::from("Type"), Object::Name(Name::from("Font"))),
             (Name::from("Subtype"), Object::Name(Name::from("Type3"))),

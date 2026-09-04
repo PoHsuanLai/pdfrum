@@ -481,7 +481,7 @@ pub(crate) fn read_stream<R: Resolve + ?Sized>(
 
     lx.seek(data_end);
     resync_after_stream(lx, ctx);
-    Ok(Object::Stream(Stream::new(dict, data)))
+    Ok(Object::Stream(Box::new(Stream::new(dict, data))))
 }
 
 /// Read `/Length`, following one reference if that is what it holds.

@@ -436,7 +436,10 @@ fn decrypt_node(
                 CryptClass::Stream
             };
             let plain = handler.decrypt(obj, class, &s.data);
-            Object::Stream(Stream::new(dict, pdfrum_object::ByteSpan::from(plain)))
+            Object::Stream(Box::new(Stream::new(
+                dict,
+                pdfrum_object::ByteSpan::from(plain),
+            )))
         }
         other => other,
     }
@@ -559,7 +562,7 @@ fn rewrite_at(handler: &SecurityHandler, obj: ObjRef, object: Object, path: &[St
                     (k.clone(), v.clone())
                 }
             }));
-            Object::Stream(Stream::new(dict, s.data))
+            Object::Stream(Box::new(Stream::new(dict, s.data)))
         }
         (Object::Array(a), Step::Index(index)) => Object::Array(
             a.iter()

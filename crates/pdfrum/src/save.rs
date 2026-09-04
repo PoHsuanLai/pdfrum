@@ -177,10 +177,10 @@ impl Document {
                     // The generated appearance becomes a form XObject the
                     // widget's `/AP /N` names, which is the only shape a
                     // reader looks for.
-                    let stream = edit.add(Object::Stream(pdfrum_object::Stream::new(
+                    let stream = edit.add(Object::Stream(Box::new(pdfrum_object::Stream::new(
                         pdfrum_doc::ap::stream_dict(&generated),
                         generated.stream.clone().into(),
-                    )));
+                    ))));
                     let normal = pdfrum_object::Dict::from_pairs([(
                         pdfrum_object::Name::from("N"),
                         Object::Ref(stream),

@@ -491,7 +491,7 @@ trailer\n<< /Root 1 0 R /Size 4 >>\n";
     #[test]
     fn a_stream_keeps_its_bytes_and_its_filter() {
         let payload: Arc<[u8]> = Arc::from(&b"\x01\x02\x03compressed"[..]);
-        let stream = Object::Stream(Stream::new(
+        let stream = Object::Stream(Box::new(Stream::new(
             Dict::from_pairs([
                 (
                     names::FILTER.clone(),
@@ -500,7 +500,7 @@ trailer\n<< /Root 1 0 R /Size 4 >>\n";
                 (names::LENGTH.clone(), Object::Int(14)),
             ]),
             ByteSpan::whole(payload),
-        ));
+        )));
         let src = Src(BTreeMap::from([(1, dict([("S", r(2))])), (2, stream)]));
         let base = dest_doc();
         let mut dest = EditDoc::new(&base);

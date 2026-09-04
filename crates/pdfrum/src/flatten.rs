@@ -76,7 +76,7 @@ impl DocEdit<'_> {
             Object::Stream(stream) => {
                 let stream = stream.clone();
                 let reference = self.inner.add(Object::Stream(stream.clone()));
-                return Some((reference, stream));
+                return Some((reference, *stream));
             }
             Object::Dict(states) => states.clone(),
             _ => return None,
@@ -95,7 +95,7 @@ impl DocEdit<'_> {
             }
             Object::Stream(stream) => {
                 let reference = self.inner.add(Object::Stream(stream.clone()));
-                Some((reference, stream))
+                Some((reference, *stream))
             }
             _ => None,
         }
@@ -180,7 +180,7 @@ impl DocEdit<'_> {
             Some(Object::Array(a)) => array = Some((a, None)),
             Some(Object::Stream(s)) => {
                 let reference = self.inner.add(Object::Stream(s.clone()));
-                single = Some((s, reference));
+                single = Some((*s, reference));
             }
             _ => {}
         }
@@ -209,7 +209,7 @@ impl DocEdit<'_> {
             dict.remove(&Name::from("Length"));
             self.inner.replace(
                 reference,
-                Object::Stream(Stream::new(dict, ByteSpan::from(bytes))),
+                Object::Stream(Box::new(Stream::new(dict, ByteSpan::from(bytes)))),
             );
             let draw = self.raw_stream(do_text.into_bytes());
             let array_ref = self.inner.add(Object::Array(Array::of([
@@ -225,10 +225,10 @@ impl DocEdit<'_> {
 
     /// A new unfiltered stream holding `bytes`.
     fn raw_stream(&mut self, bytes: Vec<u8>) -> ObjRef {
-        self.inner.add(Object::Stream(Stream::new(
+        self.inner.add(Object::Stream(Box::new(Stream::new(
             Dict::new(),
             ByteSpan::from(bytes),
-        )))
+        ))))
     }
 
     /// The widget annotations of `page` that no other page also lists, by
@@ -424,7 +424,7 @@ impl DocEdit<'_> {
                     pdfrum_doc::ap::stream_dict(made),
                     ByteSpan::from(made.stream.clone()),
                 );
-                let reference = self.inner.add(Object::Stream(stream.clone()));
+                let reference = self.inner.add(Object::Stream(Box::new(stream.clone())));
                 Some((reference, stream))
             }
             _ => self.flatten_appearance(annot),
@@ -462,7 +462,7 @@ impl DocEdit<'_> {
         );
         self.inner.replace(
             ap_ref,
-            Object::Stream(Stream::new(ap_dict, ap_stream.data.clone())),
+            Object::Stream(Box::new(Stream::new(ap_dict, ap_stream.data.clone()))),
         );
         let name = format!("F{index}");
         xobject_dict.insert(Name::from(name.as_str()), Object::Ref(ap_ref));
@@ -576,10 +576,10 @@ impl DocEdit<'_> {
             form_dict.insert(Name::from("FormType"), Object::Int(1));
             form_dict.insert(Name::from("BBox"), rect_object(crop));
             form_dict.insert(Name::from("Resources"), Object::Dict(form_resources));
-            let form_ref = self.inner.add(Object::Stream(Stream::new(
+            let form_ref = self.inner.add(Object::Stream(Box::new(Stream::new(
                 form_dict,
                 ByteSpan::from(content.into_bytes()),
-            )));
+            ))));
             xobjects.insert(Name::from(key.as_str()), Object::Ref(form_ref));
             resources.insert(Name::from("XObject"), Object::Dict(xobjects));
             dict.insert(Name::from("Resources"), Object::Dict(resources));
