@@ -12,7 +12,8 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
   today one linear scan per name over `post.glyph_name`, itself linear —
   58% of `vector_en_tem`'s cold render by callgrind `Ir`. Same for the CFF
   charset branch. Pin: first-gid-wins against the scan, every corpus face.
-- **Zero-copy content lexer** (`pdfrum-page/src/tokenize.rs:325`): `next_word`
+- ~~**Zero-copy content lexer**~~ — landed 2026-09-05 (`docs/status/M18.md` §2:
+  `vector_paths_1751` build `Ir` −29%, parse −42%). Original row: (`pdfrum-page/src/tokenize.rs:325`): `next_word`
   returns `to_vec()` per token; numbers via `from_utf8` + `parse::<f32>` —
   47% of `vector_paths_1751`'s cold render, ~12% of it malloc/free. Number
   parse stays bit-identical (pin over every number token in the corpus).

@@ -34,13 +34,13 @@ pub(crate) const MAX_OBJECT_DEPTH: u32 = 64;
 /// unboxed, and a keyword from everything else because only a keyword can be
 /// an operator.
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) enum Element {
+pub(crate) enum Element<'a> {
     /// A numeric literal.
     Number(f32),
     /// A name, without its leading solidus, already `#`-decoded.
     Name(Name),
     /// A bare word that is none of the above: an operator, or garbage.
-    Keyword(Box<[u8]>),
+    Keyword(&'a [u8]),
     /// Anything the object grammar produced: strings, arrays, dictionaries,
     /// booleans, nulls. A delimiter that starts nothing (`]`, `)`, `>`, `{`,
     /// `}`) lands here as [`Object::Null`].
@@ -147,6 +147,12 @@ fn parse_integer(word: &[u8]) -> f32 {
 /// parsing errors". An overflow reads as infinity rather than zero, because
 /// `result_out_of_range` is one of the two codes the C++ accepts.
 fn parse_real(word: &[u8]) -> f32 {
+    parse_real_fast(word).unwrap_or_else(|| parse_real_slow(word))
+}
+
+/// The correctly-rounded parse of the numeric prefix, for the words the
+/// fast path declines.
+fn parse_real_slow(word: &[u8]) -> f32 {
     let end = numeric_prefix(word);
     let Some(prefix) = word.get(..end) else {
         return 0.0;
@@ -155,6 +161,50 @@ fn parse_real(word: &[u8]) -> f32 {
         return 0.0;
     };
     text.parse::<f32>().unwrap_or(0.0)
+}
+
+/// Exact powers of ten in `f32`: `5^10 < 2^24`, so every entry is exact.
+const POW10: [f32; 11] = [1.0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9, 1e10];
+
+/// The exact fast path for a plain decimal: mantissa and power of ten both
+/// exactly representable in `f32`, so one correctly-rounded division gives
+/// the same bits `str::parse::<f32>` would. `None` sends the word to that
+/// parse — an exponent, a mantissa past `2^24`, more than ten fractional
+/// digits — and the grammar it walks is [`numeric_prefix`]'s.
+fn parse_real_fast(word: &[u8]) -> Option<f32> {
+    let mut i = 0;
+    let neg = matches!(word.first(), Some(b'-'));
+    if matches!(word.first(), Some(b'+' | b'-')) {
+        i = 1;
+    }
+    let (mut m, mut k, mut n, mut seen_dot) = (0u64, 0usize, 0usize, false);
+    while let Some(&b) = word.get(i) {
+        match b {
+            b'0'..=b'9' => {
+                m = m.saturating_mul(10).saturating_add(u64::from(b - b'0'));
+                n += 1;
+                k += usize::from(seen_dot);
+                i += 1;
+            }
+            b'.' if !seen_dot => {
+                seen_dot = true;
+                i += 1;
+            }
+            _ => break,
+        }
+    }
+    if matches!(word.get(i), Some(b'e' | b'E')) {
+        return None;
+    }
+    if n == 0 {
+        return Some(0.0);
+    }
+    if m >= (1 << 24) || k > 10 {
+        return None;
+    }
+    #[expect(clippy::cast_precision_loss, reason = "m < 2^24 is exact in f32")]
+    let value = m as f32 / *POW10.get(k)?;
+    Some(if neg { -value } else { value })
 }
 
 /// How many bytes of `word` form a `general`-format number.
@@ -260,7 +310,7 @@ impl<'a> ContentLexer<'a> {
     }
 
     /// The next element, following `ParseNextElement`'s dispatch exactly.
-    pub(crate) fn next_element(&mut self) -> Element {
+    pub(crate) fn next_element(&mut self) -> Element<'a> {
         self.skip_blanks();
         let Some(first) = self.peek() else {
             return Element::Eof;
@@ -313,7 +363,7 @@ impl<'a> ContentLexer<'a> {
             b"false" => Element::Object(Object::Bool(false)),
             b"null" => Element::Object(Object::Null),
             _ if word.is_empty() => Element::Eof,
-            _ => Element::Keyword(word.into()),
+            _ => Element::Keyword(word),
         }
     }
 
@@ -322,14 +372,15 @@ impl<'a> ContentLexer<'a> {
     /// Returns the token bytes and whether every byte was numeric. Unlike
     /// [`Self::next_element`] this splits `<<`/`>>` from `<`/`>` and returns
     /// each other delimiter as a one-byte token.
-    fn next_word(&mut self) -> (Vec<u8>, bool) {
+    fn next_word(&mut self) -> (&'a [u8], bool) {
         self.skip_blanks();
+        let data = self.data;
         let Some(first) = self.peek() else {
-            return (Vec::new(), false);
+            return (&[], false);
         };
+        let start = self.pos;
         if is_delim(first) {
             self.pos += 1;
-            let mut word = vec![first];
             match first {
                 b'/' => {
                     // A name keeps running through regular and numeric bytes.
@@ -337,24 +388,22 @@ impl<'a> ContentLexer<'a> {
                         if is_ws(b) || is_delim(b) {
                             break;
                         }
-                        if word.len() <= MAX_WORD_LEN {
-                            word.push(b);
-                        }
                         self.pos += 1;
                     }
-                    return (word, false);
+                    // The solidus plus at most `MAX_WORD_LEN` bytes; the rest
+                    // is consumed and dropped.
+                    let len = (self.pos - start).min(MAX_WORD_LEN + 1);
+                    return (data.get(start..start + len).unwrap_or(&[]), false);
                 }
                 b'<' | b'>' => {
                     if self.peek() == Some(first) {
                         self.pos += 1;
-                        word.push(first);
                     }
-                    return (word, false);
+                    return (data.get(start..self.pos).unwrap_or(&[]), false);
                 }
-                _ => return (word, false),
+                _ => return (data.get(start..self.pos).unwrap_or(&[]), false),
             }
         }
-        let start = self.pos;
         let mut is_number = true;
         let mut len = 0usize;
         while let Some(b) = self.peek() {
@@ -367,11 +416,10 @@ impl<'a> ContentLexer<'a> {
             self.pos += 1;
             len += 1;
         }
-        let word = self
-            .data
+        let word = data
             .get(start..start + len.min(MAX_WORD_LEN))
             .unwrap_or(&[]);
-        (word.to_vec(), is_number && len > 0)
+        (word, is_number && len > 0)
     }
 
     /// A literal string, from just after the opening parenthesis.
@@ -509,21 +557,21 @@ struct ObjectReader<'r, 'a> {
     /// *after* a nested read has returned nothing, to tell "end of data" and
     /// "a closing bracket" apart from "an element that would not parse" —
     /// without reading another token, which would lose it.
-    last_word: Vec<u8>,
+    last_word: &'a [u8],
 }
 
 impl<'r, 'a> ObjectReader<'r, 'a> {
     fn new(lexer: &'r mut ContentLexer<'a>) -> Self {
         Self {
             lexer,
-            last_word: Vec::new(),
+            last_word: &[],
         }
     }
 
     /// Scan a word, remembering it.
-    fn scan_word(&mut self) -> (Vec<u8>, bool) {
+    fn scan_word(&mut self) -> (&'a [u8], bool) {
         let (word, is_number) = self.lexer.next_word();
-        self.last_word.clone_from(&word);
+        self.last_word = word;
         (word, is_number)
     }
 
@@ -545,12 +593,12 @@ impl<'r, 'a> ObjectReader<'r, 'a> {
             return Object::Null;
         }
         if is_number {
-            return match std::str::from_utf8(&word)
+            return match std::str::from_utf8(word)
                 .ok()
                 .and_then(|s| s.parse::<i64>().ok())
             {
                 Some(i) => Object::Int(i),
-                None => Object::Real(word_to_number(&word)),
+                None => Object::Real(word_to_number(word)),
             };
         }
         match word.first().copied() {
@@ -561,7 +609,7 @@ impl<'r, 'a> ObjectReader<'r, 'a> {
                 }
                 self.read_array(allow_nested_array, depth)
             }
-            _ => self.read_leaf(&word),
+            _ => self.read_leaf(word),
         }
     }
 
@@ -627,9 +675,6 @@ impl<'r, 'a> ObjectReader<'r, 'a> {
 
 #[cfg(test)]
 mod tests {
-    // Test fixtures quote the oracle's own vectors, compare floats exactly
-    // where the behaviour being pinned is exact, and index arrays whose
-    // length the fixture itself fixes.
     #![allow(
         clippy::unreadable_literal,
         clippy::float_cmp,
@@ -640,9 +685,90 @@ mod tests {
     )]
 
     use super::{ContentLexer, Element, MAX_STRING_LEN, MAX_WORD_LEN, word_to_number};
+
+    /// Every word the fast path accepts parses to the same bits the slow
+    /// path gives: 200 000 generated decimals plus the edges by hand.
+    #[test]
+    fn the_real_fast_path_agrees_with_the_parse_bit_for_bit() {
+        let mut state: u64 = 0x9E37_79B9_7F4A_7C15;
+        let mut next = move || {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            state
+        };
+        let mut accepted = 0usize;
+        let mut check = |word: &[u8]| {
+            if let Some(fast) = super::parse_real_fast(word) {
+                accepted += 1;
+                let slow = super::parse_real_slow(word);
+                assert_eq!(
+                    fast.to_bits(),
+                    slow.to_bits(),
+                    "{}: fast {fast} slow {slow}",
+                    String::from_utf8_lossy(word)
+                );
+            }
+        };
+        for _ in 0..200_000 {
+            let r = next();
+            let mut word = Vec::new();
+            match r % 4 {
+                0 => word.push(b'-'),
+                1 => word.push(b'+'),
+                _ => {}
+            }
+            let int_digits = (r >> 8) % 10;
+            let frac_digits = (r >> 16) % 13;
+            let mut digits = next();
+            for _ in 0..int_digits {
+                word.push(b'0' + (digits % 10) as u8);
+                digits /= 10;
+            }
+            if (r >> 24) % 5 != 0 || int_digits == 0 {
+                word.push(b'.');
+                let mut digits = next();
+                for _ in 0..frac_digits {
+                    word.push(b'0' + (digits % 10) as u8);
+                    digits /= 10;
+                }
+            }
+            check(&word);
+        }
+        for word in [
+            &b"-0.0"[..],
+            b"0.",
+            b".5",
+            b"-.",
+            b".",
+            b"+.25",
+            b"1.2e3",
+            b"1.2e",
+            b"16777216.0",
+            b"16777215.5",
+            b"0.00000000001",
+            b"123.4567890123",
+            b"-007.50",
+            b"1.2.3",
+            b"1.5x",
+            b"9999999.9999999",
+            b"0.1",
+            b"3.14159",
+        ] {
+            check(word);
+        }
+        assert!(
+            accepted > 50_000,
+            "the fast path accepted only {accepted} words"
+        );
+    }
+
+    // Test fixtures quote the oracle's own vectors, compare floats exactly
+    // where the behaviour being pinned is exact, and index arrays whose
+    // length the fixture itself fixes.
     use pdfrum_object::Object;
 
-    fn elements(src: &[u8]) -> Vec<Element> {
+    fn elements(src: &[u8]) -> Vec<Element<'_>> {
         let mut lexer = ContentLexer::new(src);
         let mut out = Vec::new();
         loop {
