@@ -334,8 +334,25 @@ pub fn multipage() -> Vec<&'static Doc> {
 /// `cargo run` from the workspace root does neither. A relative `corpus/`
 /// resolved correctly in exactly one of those three and panicked in the other
 /// two.
+///
+/// The compile-time path is the fallback, not the first answer: cargo reuses
+/// this crate's compiled artefact across checkouts that share a target
+/// directory, so a harness built in one worktree and run in another carries
+/// the first worktree's path — which may no longer exist (seen twice on
+/// 2026-09-06, a `save` bench panicking on a corpus file in a deleted
+/// worktree). The working directory is always inside the workspace when
+/// cargo runs a bench, so the corpus is found by walking up from it first.
 #[must_use]
 pub fn dir() -> std::path::PathBuf {
+    let marker = "text_quick_start.pdf";
+    if let Ok(cwd) = std::env::current_dir() {
+        for ancestor in cwd.ancestors() {
+            let corpus = ancestor.join("benches").join("corpus");
+            if corpus.join(marker).is_file() {
+                return corpus;
+            }
+        }
+    }
     // `benches/corpus-list` → `benches/corpus`.
     std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
