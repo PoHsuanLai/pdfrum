@@ -700,3 +700,230 @@ The cost is real and small; the loss is structural.
   The harness gives mupdf no font directory (`docs/benchmarks/README.md`),
   so some of that gap is substitution, not rasterization. Untangling them
   would need a run with matched faces.
+
+---
+
+## 8. The `U8Kernel` board — the first bullet of §7, answered
+
+**Taken 2026-09-06** on `himmel`, from a worktree at `096de3b`, by the same
+method §0 defines. This section answers §7's first bullet ("how far b1 moves
+the board") and nothing else; the other four bullets stand undetermined.
+
+### 8.0 What the switch actually is — two lines, not one
+
+§6(b) called it "one line (`crates/pdfrum-raster-vello-cpu/src/lib.rs:68-81`)".
+Measuring it found that is wrong, and the correction matters because the
+one-line version is a **silent no-op**:
+
+1. `PINNED_RENDER_MODE` (`crates/pdfrum-raster-vello-cpu/src/lib.rs:81`)
+   `OptimizeQuality` → `OptimizeSpeed`, and
+2. the workspace dependency (`Cargo.toml:112`), which pins
+   `vello_cpu = { version = "=0.2.0", default-features = false, features =
+   ["std", "f32_pipeline"] }`, must also gain `"u8_pipeline"`.
+
+Without (2) the mode is *ignored*: `SingleThreadedDispatcher::rasterize`
+selects the pipeline by `#[cfg]` first and only consults `settings.render_mode`
+when both features are on
+(`vello_cpu-0.2.0/src/dispatch/single_threaded.rs:415-470`, the same shape at
+`multi_threaded.rs:676`). With only `f32_pipeline`, every `RenderMode` lands
+on `rasterize_f32`. I made exactly that mistake first and got a board with
+zero changed rows out of 1759 — a result that looked like a clean win and was
+in fact a measurement of nothing. **Recorded because the same trap is waiting
+for whoever implements this.**
+
+A second trap, and the reason that first result was doubly empty: the
+conformance board's default backend is **`Agg`, not vello_cpu**
+(`crates/pdfrum-tool/src/render.rs:405-427`, "The analytic AGG-parity backend
+is the default"). Every board figure below was taken with
+`PDFRUM_BACKEND=vello-cpu`, and the F32 column is a fresh vello_cpu run rather
+than the committed `conformance/scoreboard.json`, which is an `Agg` board.
+
+### 8.1 What `OptimizeSpeed` changes, read from source
+
+`RenderMode` is `vello_cpu-0.2.0/src/lib.rs:186-193`; the semantics are at
+`src/render.rs:120-129`: "the only difference this makes is that when choosing
+`OptimizeSpeed`, rasterization will happen using u8/u16, while
+`OptimizeQuality` will use a f32-based pipeline." Concretely it swaps the
+`FineKernel` implementation from `F32Kernel` (`src/fine/highp/mod.rs`) to
+`U8Kernel` (`src/fine/lowp/mod.rs`), which changes three things at once:
+
+- **the fine kernel's precision** — the scratch buffer holds `u8` rather than
+  `f32` (`Numeric for u8`, `src/fine/mod.rs:81-84`);
+- **the compositing math** — `lowp` blends in integer with `div_255`
+  fixed-point (`src/fine/lowp/mod.rs:250-306`) instead of f32 multiplies;
+- **`pack`/`unpack`** — `U8Kernel::pack` is already SIMD (`simd.vectorize`
+  over `pack_block`/`pack_tail`, `src/fine/lowp/mod.rs:308-360`), where
+  `F32Kernel::pack` is the scalar loop of §1.1. In the u8 pipeline the
+  conversion mostly *disappears*: the scratch and the destination are both
+  `u8`.
+
+**Determinism is not weakened by the swap, on the face of the source.** The
+`lowp` path is integer arithmetic with no float rounding, and the SIMD level
+stays pinned at `Level::baseline()` (`pinned_level()`, `lib.rs:70-77`), which
+is the property the pin at `lib.rs:32-38` exists to protect. Tested rather
+than assumed — see 8.3.
+
+### 8.2 Marginal warm-render `Ir`, five pages
+
+§0's method exactly: `benches/compare` `child`, `--warm 4` minus `--warm 0`
+divided by 4, inclusive count on `engines::pdfrum::run`, compare binary
+rebuilt from this worktree into
+`/mnt/data2/r13921098/cargo-target/u8kernel-cmp`. The F32 column was re-taken
+here rather than copied from §0, and it reproduces §0 within 0.4% on every
+page — and reproduces `pack` = **478,367,460** and `unpack` =
+**120,926,385** *byte for byte* on the four pages §1.1 names, which is the
+check that the two runs are the same measurement.
+
+| page | F32 marginal `Ir` | U8 marginal `Ir` | U8/F32 | saved | mupdf marginal `Ir` (§0) | U8 vs mupdf |
+|---|---:|---:|---:|---:|---:|---:|
+| `text_tcpdf_063` | 249,871,906 | 132,757,007 | **0.53×** | 117,114,899 (47%) | 111,110,370 | 1.19× |
+| `vector_en_tem` | 155,446,227 | 44,807,827 | **0.29×** | 110,638,400 (71%) | 48,506,053 | **0.92×** |
+| `shading_tcpdf_058` | 258,460,496 | 195,820,747 | **0.76×** | 62,639,749 (24%) | 208,862,060 | **0.94×** |
+| `text_quick_start` | 211,122,638 | 88,545,462 | **0.42×** | 122,577,176 (58%) | 118,655,003 | **0.75×** |
+| `mixed_tcpdf_045` | 165,014,274 | 54,977,533 | **0.33×** | 110,036,741 (67%) | 47,727,304 | 1.15× |
+
+Two things to read off it. First, **the saving is 110–123 M `Ir` per render on
+four of the five pages** — within a few percent of §1.1's predicted 120 M for
+`pack` + `unpack`, which is the study's own arithmetic coming out right; on
+the shading page, where `pack` is a smaller share, it is 63 M. Second, and
+this is the headline: the u8 kernel takes pdfrum from **1.24×–3.46× mupdf's
+marginal `Ir` to 0.75×–1.19×**. On three of the five pages we would be
+*cheaper than mupdf*. The 2.5× this whole document is about is very largely
+one upstream f32 conversion.
+
+### 8.3 The full board, F32 vs U8, both under `PDFRUM_BACKEND=vello-cpu`
+
+1759 files, `--jobs 8`, this worktree, `conformance/goldens`.
+
+| | F32 (`OptimizeQuality`) | U8 (`OptimizeSpeed`) |
+|---|---:|---:|
+| pass | **1539** | **1525** |
+| fail | 220 | 234 |
+| `pixel-fail` | 44 | **58** |
+| `tierA-mismatch` | 170 | 170 |
+| `form-events` / `js-transcript` / `page-count` | 8 / 7 / 2 | 8 / 7 / 2 |
+| Tier-B byte-exact pages | **499** | **499** |
+| text pages matched | 1785/2067 | 1785/2067 |
+
+**Rows changed: 393 of 1759. Status flips: 14, all pass→fail, none
+fail→pass.** Every one of the 14 is the same file family, and every one lands
+in the same place:
+
+```
+corpus/fx/FRC_8.2.4_part1/FRC_1_8.2.4_Type_8.6_.pdf                0.990010 -> 0.989976
+corpus/fx/FRC_8.2.4_part1/FRC_2_8.2.4_Type_8.6__remove_value.pdf   0.990010 -> 0.989976
+corpus/fx/FRC_8.2.4_part1/FRC_3_8.2.4_Type_8.6__edit_.pdf          0.990010 -> 0.989976
+corpus/fx/FRC_8.2.4_part1/FRC_4_8.2.4_Schema_8.6__remove_all.pdf   0.990010 -> 0.989976
+corpus/fx/FRC_8.2.4_part1/FRC_5_8.2.4_Schema_8.6__remove_value.pdf 0.990010 -> 0.989976
+corpus/fx/FRC_8.2.4_part1/FRC_6_8.2.4_Schema_8.6__remove_obj.pdf   0.990010 -> 0.989976
+corpus/fx/FRC_8.2.4_part1/FRC_7_8.2.4_View_H.pdf                   0.990010 -> 0.989976
+corpus/fx/FRC_8.2.4_part1/FRC_8_8.2.4_View_D.pdf                   0.990010 -> 0.989976
+corpus/fx/FRC_8.2.4_part1/FRC_9_8.2.4_View_T.pdf                   0.990010 -> 0.989976
+corpus/fx/FRC_8.2.4_part1/FRC_11_8.2.4_View_edit.pdf               0.990010 -> 0.989976
+corpus/fx/FRC_8.2.4_part1/FRC_12_8.2.4_View_remove_all.pdf         0.990010 -> 0.989976
+corpus/fx/FRC_8.2.4_part1/FRC_13_8.2.4_View_remove_value.pdf       0.990010 -> 0.989976
+corpus/fx/FRC_8.2.4_part1/FRC_14_8.2.4_Sort_remove_all.pdf         0.990010 -> 0.989976
+corpus/fx/FRC_8.2.4_part1/FRC_15_8.2.4_Sort_remove_value.pdf       0.990010 -> 0.989976
+```
+
+They were sitting **one part in 10^5 above the 0.99 floor**
+(`conformance/thresholds.toml`) and the u8 kernel pushed them 3.4 parts in
+10^5 under it. That is the whole regression: not a class of pages breaking,
+one page rendered fourteen times that was already balanced on the threshold.
+
+**SSIM distribution of the moves.** 347 rows changed their Tier-B SSIM (the
+other 46 changed only `max_channel_diff`); 220 got worse, 127 got *better*.
+
+| statistic of ΔSSIM (U8 − F32) | value |
+|---|---:|
+| min (worst) | −0.000288 |
+| p1 | −0.000230 |
+| p25 | −0.000004 |
+| median | **−0.000001** |
+| p75 | +0.000002 |
+| max (best) | +0.000125 |
+
+The ten worst: `resources/pixel/transfer_function.{in,pdf}` −0.000288
+(0.999987 → 0.999699), `tcpdf/example_009` −0.000246, `tcpdf/example_042`
+−0.000213, `fx/action/123` −0.000186, `fx/image/image_foxit` −0.000176,
+`resources/bug_650` −0.000077, `fx/layer/4_36` −0.000068,
+`tcpdf/example_010` −0.000045, `resources/pixel/bug_1746` −0.000045. **No row
+falls more than 3 parts in 10^4,** and the median move is a single part in
+10^6 — i.e. the u8 pipeline is nowhere near as lossy as §6(b) assumed, and
+§6(c)'s `c3` ("8-bit compositing loses precision") is true but by about a
+thousandth of what "0.9995 against 0.975" would lead a reader to expect.
+
+**Byte-exact count is unmoved: 499 before, 499 after.** No page that was
+byte-identical to the oracle stopped being so, and none became so.
+
+**Determinism: confirmed by test, not assumed.** Two independent U8 board
+runs, separate processes, `--jobs 8`, produced **identical `per_file` arrays
+across all 1759 rows** — every status, every SSIM to six decimals, every
+`max_channel_diff`. The `lowp` path is integer arithmetic and the SIMD level
+stays pinned, so this is the expected result, but the pin at `lib.rs:32-38`
+exists precisely because that kind of expectation has been wrong before. It is
+not wrong here.
+
+### 8.4 Wall clock, 44-file corpus, pdfrum only
+
+`benches/compare run --engines pdfrum --warm 12`, warm median across the 44
+files, both binaries built from this worktree. The box was **not idle** — load
+average 14–19 throughout, from other users — so treat these as a ratio, not as
+absolutes comparable to §0's idle-box figures.
+
+| | render cold median | **render warm median** | render warm p95 | text warm | open warm | load avg (start → end) |
+|---|---:|---:|---:|---:|---:|---|
+| F32 | 51.16 ms | **11.80 ms** | 48.81 ms | 0.37 ms | 0.16 ms | 14.1 → 18.7 |
+| U8 | 47.90 ms | **7.84 ms** | 53.89 ms | 0.37 ms | 0.15 ms | 15.4 → 13.4 |
+
+**1.51× on the warm median**, against the 1.9×–3.4× the `Ir` table promises on
+the five profiled pages. The gap is itself a note on §7's fourth bullet (wall
+and `Ir` do not track), now pointing the other way: here the `Ir` win
+*over*-predicts the wall win, on a loaded box, over a corpus whose warm p95 is
+dominated by large-image files the kernel swap does not touch. A clean number
+wants an idle box.
+
+### 8.5 The ruling
+
+**b1 is out as a default, and it is a strong candidate as an option — the
+user's call, with these numbers.**
+
+Out as a default because §6's own framing decides it: the board is the floor,
+and the swap moves 14 rows pass→fail with none coming back. That the loss is
+3.4 parts in 10^5 on one repeated page does not change what it is — a
+regression against `conformance/thresholds.toml`, and this project does not
+land regressions to buy speed.
+
+But the case for *offering* it is much stronger than §6(b) expected, and every
+part of it is now measured rather than assumed:
+
+- it is **deterministic** — two full boards identical, which was the stated
+  reason the line is pinned and the objection that would have killed it
+  outright;
+- it costs **no byte-exact page** (499 → 499) and **no text page**;
+- the median SSIM move is **one part in 10^6**, and 127 rows improve;
+- it buys **1.9×–3.4× marginal `Ir`** and 1.51× warm wall on a loaded box;
+- it puts us at **0.75×–1.19× of mupdf** on the five study pages, which is the
+  entire point of this document.
+
+So the shape worth putting to the user is not "flip the pin" but "the vello_cpu
+backend gains a quality knob": `PINNED_RENDER_MODE` becoming a
+`RasterBackend`-owned, type-driven choice (an enum carried by
+`VelloCpuBackend`, not a bool and not a global `const`), defaulting to
+`OptimizeQuality` so the board and every existing caller are unmoved, with
+`OptimizeSpeed` available to a caller who has read this section. That keeps
+the pinned default honest, keeps `docs/design/backend-verification.md`'s
+per-backend board story intact (a per-mode board becomes the thing to run),
+and it is the same answer §6 gives to b2: publish the numbers and let the
+caller choose.
+
+Two conditions on that, if the user wants it. The `u8_pipeline` feature is
+non-negotiable in the same change (8.0), or the knob is inert. And the 14 FRC
+rows want a per-mode scoreboard rather than a threshold move — lowering the
+floor to make the number look better is the thing the floor exists to prevent.
+
+**Not measured here, still open:** whether the 1.51× wall holds on an idle
+box; what `OptimizeSpeed` does to the `compare throughput` and multi-threaded
+paths (`num_threads` was 0 here, and the multi-threaded dispatcher has its own
+copy of the mode switch at `multi_threaded.rs:676`); and everything in §7 that
+is not its first bullet.
