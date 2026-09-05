@@ -65,9 +65,9 @@ mod str;
 pub use cancel::{pdfrum_cancel, pdfrum_cancel_free, pdfrum_cancel_new, pdfrum_cancel_stop};
 pub use document::{
     pdfrum_close, pdfrum_document, pdfrum_document_attachments, pdfrum_document_bookmarks,
-    pdfrum_document_images, pdfrum_document_metadata, pdfrum_document_save, pdfrum_limits,
-    pdfrum_metadata, pdfrum_metadata_free, pdfrum_open, pdfrum_open_file, pdfrum_open_with,
-    pdfrum_page_count, pdfrum_save_options,
+    pdfrum_document_images, pdfrum_document_metadata, pdfrum_document_page, pdfrum_document_save,
+    pdfrum_limits, pdfrum_metadata, pdfrum_metadata_free, pdfrum_open, pdfrum_open_file,
+    pdfrum_open_with, pdfrum_page_count, pdfrum_save_options,
 };
 pub use error::{pdfrum_code, pdfrum_error, pdfrum_error_free};
 pub use form::{

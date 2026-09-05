@@ -313,6 +313,32 @@ workspace the ban walks, and 0.5 measures the same thing.
 SSIM is hand-rolled in the harness (~60 lines) — the ratchet metric must
 never shift under a dependency update.
 
+## The C library's tools (M22 phase 2) — tools, not dependencies
+
+`crates/pdfrum-capi` builds `libpdfrum.so`, `libpdfrum.a` and `pdfrum.h`, and
+it adds **no external crate to any tree**: its only dependency is `pdfrum`, the
+facade. The three things below are `~/.cargo/bin` binaries and a system
+compiler. None of them appears in a `Cargo.toml`, none is in the lock file, and
+none is compiled into anything shipped — which is why they are recorded here
+rather than in a table above.
+
+| Tool | Version | Install | Why, and what it is not |
+|---|---|---|---|
+| `cbindgen` | 0.29.4 | `cargo install cbindgen --locked` | Generates `crates/pdfrum-capi/include/pdfrum.h` from the Rust signatures, so the header cannot drift from the library. A **build-time generator run by a person**, not a build script: the header is committed, and `scripts/capi-header.nu check` fails CI when the committed one differs from a fresh generation. A contributor who never touches the C ABI never needs it. |
+| `cargo-c` | 0.10.25 | `cargo install cargo-c --locked` | `cargo cinstall` lays down the library, the header and a `pdfrum.pc` for `pkg-config`, from the `[package.metadata.capi]` section. Packaging only; nothing in the repository's own build or test path calls it. |
+| a C compiler (`cc`) | any C11 | the platform's | Compiles `crates/pdfrum-capi/ctest/test.c` against the header and links the built library. A **test-time** tool: `scripts/ci.nu` skips the stage with a printed note when `cc` is absent, exactly as it does for `cargo-deny`. |
+
+The last row is the one worth being explicit about, because it looks like an
+exception to the pure-Rust guarantee and is not. That guarantee is about what
+the **library** compiles and links: `cargo tree -e build` over
+`crates/pdfrum-capi` has no `cc`, no `cmake`, no `-sys`, and `scripts/ci.nu`'s
+name check walks this crate with every other. The C program is a *consumer* of
+the shipped library, the way any embedder would be, and the whole point of
+compiling it in CI is that no Rust test can prove a header matches a library.
+It found a real defect on its first run: `pdfrum_page` had been both a type and
+a function, which C has one namespace for, and the accessor is now
+`pdfrum_document_page`.
+
 ## Benchmark peers (M21) — never in any tree of ours
 
 The comparative benchmark, `benches/compare/`, links the competing engines

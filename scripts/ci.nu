@@ -86,6 +86,29 @@ def main [] {
     }
     print "ok: dependency tree is pure Rust"
 
+    # M22 phase 2: the C library, proved by a C program rather than by a Rust
+    # test asserting things about one. It compiles `crates/pdfrum-capi/ctest`
+    # against the generated header, links the built `libpdfrum.so`, and checks
+    # what only C can check — that the header's declarations match the
+    # library's symbols, that a `#[repr(C)]` struct reads the same from both
+    # sides, and that eight pthreads each rendering their own page of one
+    # shared document produce pixmaps identical to a single-threaded render.
+    #
+    # A C compiler is a **test-time** tool, not a build dependency. DEPS.md's
+    # pure-Rust guarantee is about what the library ships, and nothing in
+    # `pdfrum-capi`'s own build touches `cc` — the check above still walks this
+    # crate's tree and still passes. So a contributor without a C compiler gets
+    # a printed note and the rest of the gate, the same bargain `cargo deny`
+    # gets above.
+    print "==> the C test (libpdfrum)"
+    if (which cc | is-empty) {
+        print --stderr "warning: no C compiler (cc); skipping the C test"
+        print --stderr "         it is a test-time tool, not a build dependency —"
+        print --stderr "         see DEPS.md, \"Tools & tests only\""
+    } else {
+        ^./crates/pdfrum-capi/ctest/run.sh
+    }
+
     # The exemption above is only tolerable because it cannot reach an embedder
     # who did not ask for it. That is the claim, and this is the check.
     ^./scripts/check-no-wgpu.nu

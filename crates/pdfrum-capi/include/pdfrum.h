@@ -592,6 +592,29 @@ bool pdfrum_document_metadata(const pdfrum_document *document,
                               pdfrum_metadata *out,
                               pdfrum_error *error);
 
+// One page of the document, as a handle that keeps the document alive.
+//
+// Named `pdfrum_document_page` and not `pdfrum_page`, which is the *type*: C
+// has one namespace for both, so a function of that name would shadow the
+// typedef and no caller could declare a `pdfrum_page *` afterwards. The C
+// test caught exactly that.
+//
+// `index` is zero-based; one past the end fails with `PDFRUM_CODE_DOC`.
+//
+// **Threads.** The returned page is single-threaded: use it from one thread
+// at a time. Taking a page per worker from one shared document is the
+// supported way to render in parallel, and is what `ctest/test.c` proves.
+//
+// The caller closes the page with [`pdfrum_page_close`].
+//
+// # Safety
+//
+// `document` is null or a live, unclosed document handle. `error` is null or
+// points to a writable `pdfrum_error`.
+pdfrum_page *pdfrum_document_page(const pdfrum_document *document,
+                                  uint32_t index,
+                                  pdfrum_error *error);
+
 // Writes the document out to a byte buffer the caller owns.
 //
 // `options` may be null, which is the same as a zeroed `pdfrum_save_options`.
@@ -928,24 +951,6 @@ pdfrum_document *pdfrum_open_with(const uint8_t *bytes,
                                   const char *password,
                                   const pdfrum_limits *limits,
                                   pdfrum_error *error);
-
-// One page of the document, as a handle that keeps the document alive.
-//
-// `index` is zero-based; one past the end fails with `PDFRUM_CODE_DOC`.
-//
-// **Threads.** The returned page is single-threaded: use it from one thread
-// at a time. Taking a page per worker from one shared document is the
-// supported way to render in parallel, and is what `ctest/test.c` proves.
-//
-// The caller closes the page with [`pdfrum_page_close`].
-//
-// # Safety
-//
-// `document` is null or a live, unclosed document handle. `error` is null or
-// points to a writable `pdfrum_error`.
-pdfrum_page *pdfrum_page(const pdfrum_document *document,
-                         uint32_t index,
-                         pdfrum_error *error);
 
 // Closes a page.
 //
