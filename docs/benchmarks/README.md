@@ -379,8 +379,18 @@ names:
 `text_tcpdf_055` moves *down* by 0.005: the C0 run the search text dropped is
 in the char list, and the oracle's own row there is empty — the "not
 determined" residual of that document's row, now visible rather than hidden.
-`text_quick_start` is unmoved, which localises its whole 0.641 to the
-generated-space bug and not to the stream.
+`text_quick_start` is unmoved, which excludes the stream as its cause.
+
+**The integer character width does not move this column at all.** The second
+item of the same pass truncated `ladder_char_width` to an integer, as
+PDFium's `GetCharWidth` returns (`core/fpdftext/cpdf_textpage.cpp:185-208`).
+Re-measured, every one of the 44 text rows above is unchanged, and so is the
+1 759-file conformance board, byte for byte. `pdfrum-font` already truncates
+widths at the same point PDFium does, so no fractional width ever reached the
+ladder: instrumented, it fired zero times over 1 420 corpus PDFs. The numbers
+in the two tables above are therefore the state after **both** changes.
+`docs/benchmarks/losses-explained.md` carries the refutation and what it
+leaves open for `text_quick_start`.
 
 ##### Robustness — open
 
