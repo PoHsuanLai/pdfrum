@@ -111,7 +111,14 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
 - ~~Phase 2 — CLI~~ — landed 2026-09-05 (`extract words`, `inspect object
   --json`, `schema` with a test that every `--json` command has an entry);
   no facade gap.
-- Phase 3 — `--max-pixels`, `--time-limit` from the facade's `Limits`.
+- Phase 3, library half — landed 2026-09-05 (a2b809c): `Limits::max_render_pixels`,
+  `Limits::deadline` as a host-set flag (`Deadline::manual/stop`, with
+  `after`/`at` native-only so wasm32 keeps building), `LimitExceeded`,
+  `Error::Limit`, checks at the parser's rebuild scan, page load, every
+  256 operators, per render object, text extraction and each script eval;
+  `Ir` on `vector_en_tem` +0.48%, all of it heap layout from a larger
+  `Limits` (control: a padded struct alone is +0.62%); board 0 rows moved.
+  The CLI flags `--max-pixels`/`--time-limit` are in flight.
 - ~~Phase 4 — `pdfrum serve --stdio`~~ — landed 2026-09-05 (5b905ce): JSON-RPC
   over stdin/stdout, 27 methods on the commands' own JSON shapes, `--mcp`
   for `initialize`/`tools/list`/`tools/call`, `schema serve`; no new
