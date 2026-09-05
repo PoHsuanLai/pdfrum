@@ -174,6 +174,17 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
   a 1/2, 1/4, 1/8 nearest reduce straight after decode, before the
   general resample), and a fast path in `unpack` for 8-bit 1/3-component
   images that skips the bit reader.
+- **Against the oracle, same document, same scale, `Ir`:** `pdfium_test
+  --md5 --scale=2.0833` on the guide is 1.96 G against our 3.86 G (all
+  eleven pages; wall 0.78 s vs 0.94 s under load 37–58). PDFium spends
+  51% in `CStretchEngine` (0.99 G) and 19% in `CPDF_DIB::GetScanline`
+  (0.37 G, its decode and unpack); we spend 2.15 G in `to_pixmap` +
+  `reduce_to` and 0.58 G in `unpack`/`sample_bytes` for the same work,
+  and 0.58 G in the JPEG decoder against libjpeg-turbo's share inside
+  GetScanline. A decoder as fast as libjpeg-turbo would save roughly 0.3
+  G (8%); a scaled decode saves little here because the guide draws its
+  images near 1:1. The gap that matters is our own stretch and unpack
+  path, about 2× PDFium's for the same pixels — that is the pass to make.
 
 ## Feature gaps (added 2026-09-03)
 
