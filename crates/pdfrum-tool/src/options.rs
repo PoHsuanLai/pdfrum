@@ -30,7 +30,10 @@ pub enum OutputFormat {
     /// `--show-structure`: the tagged-PDF structure tree.
     Structure,
     /// `--png`, `--ppm`, `--bmp`, …: a rendered page.
-    Render(&'static str),
+    Render(
+        /// The file extension the flag named, which is also the output suffix.
+        &'static str,
+    ),
     /// `--txt`: extracted page text as UTF-32LE.
     Text,
     /// `--annot`: the per-page annotation dump.
@@ -44,7 +47,9 @@ pub enum OutputFormat {
 /// pages, so a range past the end is not an error.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PageRange {
+    /// First page index, zero-based and possibly past the document's end.
     pub first: i32,
+    /// Last page index, inclusive and equally unclamped.
     pub last: i32,
 }
 
@@ -61,11 +66,17 @@ pub struct PageRange {
 )]
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Options {
+    /// The input PDFs, in command-line order.
     pub files: Vec<PathBuf>,
+    /// What to print per page; at most one output flag may be given.
     pub format: OutputFormat,
+    /// `--show-metadata`: dump the document information dictionary.
     pub show_metadata: bool,
+    /// `--md5`: also print the `MD5:` line for each rendered page.
     pub md5: bool,
+    /// `--password=`: the user or owner password to open the files with.
     pub password: String,
+    /// `--pages=`: the page range, or every page when absent.
     pub pages: Option<PageRange>,
     /// Directories to enumerate faces from, from `--font-dir`.
     ///
@@ -158,7 +169,10 @@ pub struct Options {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ParseError {
     /// A `--flag` this tool does not know, or a duplicated one.
-    Rejected(String),
+    Rejected(
+        /// The message printed before the usage text.
+        String,
+    ),
 }
 
 /// Flags that take no value and that we accept without implementing.

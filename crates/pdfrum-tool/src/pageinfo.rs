@@ -34,9 +34,13 @@ pub const BOXES: [&Name; 5] = [
 /// A box as the dump reads it: left, bottom, right, top, unnormalized.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct BoxRect {
+    /// The array's first element, in PDF user space units.
     pub left: f32,
+    /// The array's second element, in PDF user space units.
     pub bottom: f32,
+    /// The array's third element; not guaranteed to exceed `left`.
     pub right: f32,
+    /// The array's fourth element; not guaranteed to exceed `bottom`.
     pub top: f32,
 }
 
