@@ -6,6 +6,8 @@
 
 use std::borrow::Cow;
 
+use pdfrum_common::hex_digit;
+
 use crate::string::decode_text;
 
 /// A PDF name, holding its decoded bytes without the leading `/`.
@@ -119,17 +121,6 @@ const fn is_pdf_delimiter(b: u8) -> bool {
     )
 }
 
-/// Value of a hexadecimal digit; anything else counts as zero, matching the
-/// permissive classifier a malformed `#xx` escape falls through to.
-const fn hex_value(b: u8) -> u8 {
-    match b {
-        b'0'..=b'9' => b - b'0',
-        b'A'..=b'F' => b - b'A' + 10,
-        b'a'..=b'f' => b - b'a' + 10,
-        _ => 0,
-    }
-}
-
 /// Resolve `#xx` escapes in a raw name token.
 ///
 /// An escape needs **both** following bytes to be present *and* another byte
@@ -150,7 +141,10 @@ pub fn name_decode(raw: &[u8]) -> Vec<u8> {
     let mut i = 0;
     while let Some(&b) = raw.get(i) {
         if let (b'#', Some(&hi), Some(&lo)) = (b, raw.get(i + 1), raw.get(i + 2)) {
-            out.push(hex_value(hi).wrapping_mul(16).wrapping_add(hex_value(lo)));
+            // A non-hexadecimal byte counts as zero, matching the permissive
+            // classifier a malformed `#xx` escape falls through to.
+            let digit = |b: u8| hex_digit(b).unwrap_or(0);
+            out.push(digit(hi).wrapping_mul(16).wrapping_add(digit(lo)));
             i += 3;
         } else {
             out.push(b);

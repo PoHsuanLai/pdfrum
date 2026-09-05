@@ -35,7 +35,7 @@
 
 use std::borrow::Cow;
 
-use pdfrum_common::Limits;
+use pdfrum_common::{Limits, hex_digit};
 
 /// What a byte means to the tokenizer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -556,7 +556,7 @@ impl<'a> Lexer<'a> {
             if b == b'>' {
                 break;
             }
-            let Some(nibble) = hex_value(b) else { continue };
+            let Some(nibble) = hex_digit(b) else { continue };
             match high.take() {
                 None => high = Some(nibble),
                 Some(h) => out.push((h << 4) | nibble),
@@ -625,16 +625,6 @@ fn finish(bytes: &[u8], start: usize, verbatim_end: usize, out: Option<Vec<u8>>)
 /// Keep at most `limits.max_word_len` bytes of a word.
 fn truncate<'a>(word: &'a [u8], limits: &Limits) -> &'a [u8] {
     word.get(..limits.max_word_len).unwrap_or(word)
-}
-
-/// The value of one hexadecimal digit.
-fn hex_value(b: u8) -> Option<u8> {
-    match b {
-        b'0'..=b'9' => Some(b - b'0'),
-        b'a'..=b'f' => Some(b - b'a' + 10),
-        b'A'..=b'F' => Some(b - b'A' + 10),
-        _ => None,
-    }
 }
 
 /// Which bytes may neighbour a match for it to stand alone as a word.
