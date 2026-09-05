@@ -201,9 +201,10 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
   4. Peak memory 1.5 GiB on `image_bug_583804.pdf` (peers < 1 GiB), 1.5 s
      vs mupdf's 0.16 s — decode at the reduced size (image-rows step 3
      plus the scaled JPEG decode once zune-jpeg has it).
-  5. Render losses by file — diagnosed 2026-09-06; **two fixed
-     2026-09-06** (`docs/status/pdfrum-render.md` "M21 losses"; every
-     SSIM below reproduced from `benches/compare`):
+  5. Render losses by file — diagnosed 2026-09-06; **four of the six
+     fixed 2026-09-06**, leaving one upstream-numerics bucket and one
+     file never investigated (`docs/status/pdfrum-render.md` "M21
+     losses"; every SSIM below reproduced from `benches/compare`):
      - `fx/path/transparent1.pdf` 0.984 -> **0.992, fixed** (`5ba19cd`).
        The knockout buffer now draws fill and stroke into separate
        targets and combines them with `Pixmap::knockout_replace`, so the
@@ -231,29 +232,46 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
        char proc, each restriction measured. The 833x1250 vs 833x1249
        size gap is a harness artifact (`oracle.rs` passes a truncated
        `--scale=2.0833333333`) and contributes nothing.
-     - `vector_en_system.pdf` 0.960 — **ours, narrowed 2026-09-06 to
-       mask edge coverage, not fixed.** Measured against
-       `pdfium_test --save-rendered-images`: the raw `/SMask` samples cap
-       at **102** and the oracle's 31 rendered images contain **zero**
-       alpha-255 pixels, so no correct composite of them saturates
-       (`1 - 0.6^n` is 243/255 at this page's stack depth of 6). On the
-       page we paint `#054696` at 102 976 pixels against 59 227; of the
-       48 378 excess, ~35 000 are blues within three levels of ours
-       (rounding) and **11 991 are ink where the oracle is near-white**.
-       Those form 1 039 components of **median size 3 px** across 1 118
-       rows — a one-pixel fringe tracing every glyph, not misplaced ink,
-       with 66 % of the excess 8-adjacent to oracle ink. That exonerates
-       the alpha composite and points at how a mask sample's coverage
-       resolves where it meets a zero sample. Previously ruled out by
-       measurement: the `/Matte` un-premultiply, the separate-mask path
-       (forcing it *lowers* SSIM to 0.947), the pre-reduction, the
-       downsample kernel (box and nearest simulated within 1.5 % on the
-       real mask), and stencil inversion.
-     - `image_en_fqa.pdf` 0.977 — **ours, provisional, no oracle line.**
-       276 pairs of a 2x2 base under a large 1-bit `/SMask`, all through
-       `render_masked_image` at a ~4x downscale of a binary mask.
-       Probably one root cause with `vector_en_system.pdf`; re-measure
-       both together once either moves.
+     - `vector_en_system.pdf` 0.960 -> **0.998275, fixed**
+       (`b65f89e`). **Not a mask defect at all** — the mask-edge-coverage
+       narrowing recorded here on 2026-09-06 is superseded. Rendering the
+       page with every `Do` removed reproduces the loss to the pixel
+       (SSIM 0.9588, the same 102 976 `#054696` against 59 227, the same
+       48 378 excess), so the 31 `/SMask`ed images contribute nothing;
+       the isolated first image scores 0.999849 on its own. `#054696` is
+       `0.0196 0.275 0.588 RG`, the stroke colour of the page's 53 `S`
+       operators over 1 984 closed glyph outlines at `1 w`. The cause was
+       a conflated type in the path builder: `PointKind` carried both
+       "how this point continues the path" and "this point closes the
+       subpath", so `h` on an outline that a curve had already brought
+       back to its start rewrote that curve's **third control point** into
+       a `CloseLine` — turning the curve into a line and stranding its
+       first two control points, which the next subpath's first curve
+       point then completed as a stroked diagonal between the glyphs.
+       Upstream keeps the two apart and always did
+       (`cpdf_streamcontentparser.cpp:971-981` sets `close_figure_`, not
+       the point's `Type`); `PathPoint { at, kind, closes }` now does too.
+       Wide blast radius, since outline-close-outline is what every traced
+       glyph produces: **45 board rows up, 0 down**, three fail -> pass.
+     - `image_en_fqa.pdf` 0.977 -> **0.999671, fixed** (`4667301`).
+       This one *is* the mask, but the geometry rather than the kernel, and
+       it was never one root cause with `vector_en_system.pdf`. Upstream
+       stretches onto the **outer integer rect** of the footprint and
+       derives its scale from that whole-pixel extent
+       (`cpdf_imagerenderer.cpp:658-664`, `:667-698`) — true of the
+       box-filter loop at `cstretchengine.cpp:136` exactly as of the `:106`
+       magnification branch `1_image.pdf` cited. `Placement::Snapped` had
+       been restricted away from reductions on the reasoning that
+       `reduce_to` "already applied the taps"; that does not close, because
+       `reduced_len` rounds the fractional footprint *up* and so picks a
+       different destination. Measured: a `1572x85` mask over a
+       `393.1291 x 21.2379` footprint became `394 x 22` at `(0.4837,
+       0.6594)` and scale `0.9978` — upstream's pixel count on a grid
+       offset from it by half a pixel, leaving a second bilinear resample
+       that spread every mask edge by a pixel, x276 draws.
+       `SnappedReduction` makes size and origin one decision, so the
+       reduced plane lands `Placement::Exact` with nothing left to filter.
+       Exactly **one** board row moves and none moves down.
      - `image_jpx_123.pdf` 0.987 — **neither ours nor an oracle bug.**
        A numerical-accuracy difference in the JPEG 2000 decoder:
        PDFium's bundled OpenJPEG (`mct.c:333-335`, `tcd.c:2350`,

@@ -663,7 +663,7 @@ struct Interp<'a, R: Resolve> {
     marks: ContentMarks,
     cursor: TextCursor,
     /// The path being assembled, as points with their kinds.
-    points: Vec<(Point, PointKind)>,
+    points: Vec<PathPoint>,
     /// The rule a pending `W`/`W*` will clip with, once a painting operator
     /// consumes it.
     pending_clip: FillRule,
@@ -688,13 +688,60 @@ struct Interp<'a, R: Resolve> {
 }
 
 /// How a path point continues the path.
+///
+/// The three PDF segment types and nothing else — upstream's
+/// `CFX_Path::Point::Type` (`core/fxcrt/fx_coordinates.h`) has exactly these
+/// and carries "closes the subpath" in a *separate* `close_figure_` flag
+/// (`cpdf_streamcontentparser.cpp:979`). [`PathPoint`] keeps that split.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum PointKind {
     Move,
     Line,
     Curve,
-    /// A point that also closes its subpath.
-    CloseLine,
+}
+
+/// One point of the path under construction: how it continues the path, and
+/// whether it also closes the subpath.
+///
+/// The two are independent, and conflating them is a bug rather than a
+/// simplification. `h` on a subpath whose current point already equals its
+/// start marks the point it lands on as closing
+/// (`cpdf_streamcontentparser.cpp:976-980`) — and that point is very often
+/// the **third control point of a curve**, since a glyph outline traced in
+/// Béziers ends where it began. Encoding "closes" by rewriting the kind
+/// turns that curve into a straight line and, worse, strands its first two
+/// control points in [`build_path`]'s pending buffer, where the *next*
+/// subpath's first curve point completes a bogus triple: a curve reaching
+/// back to the previous glyph. On `vector_en_system.pdf` that painted a long
+/// diagonal stroke between every pair of glyph outlines.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct PathPoint {
+    at: Point,
+    kind: PointKind,
+    /// `h`'s `close_figure_`: this point ends its subpath, which a stroke
+    /// closes back to the subpath's start.
+    closes: bool,
+}
+
+impl PathPoint {
+    /// A point that continues the path without closing it.
+    const fn new(at: Point, kind: PointKind) -> Self {
+        Self {
+            at,
+            kind,
+            closes: false,
+        }
+    }
+
+    /// A `Line` to `at` that also closes the subpath — `h`'s explicit closing
+    /// segment, and the closing edge `re` writes itself.
+    const fn closing_line(at: Point) -> Self {
+        Self {
+            at,
+            kind: PointKind::Line,
+            closes: true,
+        }
+    }
 }
 
 /// Interpret a run of operators into page objects.
@@ -831,36 +878,36 @@ impl<R: Resolve> Interp<'_, R> {
 
             // ---- Path construction ----
             Op::MoveTo(p) => {
-                self.add_point(*p, PointKind::Move);
+                self.add_point(PathPoint::new(*p, PointKind::Move));
                 self.subpath_start = *p;
             }
-            Op::LineTo(p) => self.add_point(*p, PointKind::Line),
+            Op::LineTo(p) => self.add_point(PathPoint::new(*p, PointKind::Line)),
             Op::CurveTo(a, b, c) => {
-                self.add_point(*a, PointKind::Curve);
-                self.add_point(*b, PointKind::Curve);
-                self.add_point(*c, PointKind::Curve);
+                self.add_point(PathPoint::new(*a, PointKind::Curve));
+                self.add_point(PathPoint::new(*b, PointKind::Curve));
+                self.add_point(PathPoint::new(*c, PointKind::Curve));
             }
             // The first control point is the current point.
             Op::CurveToV(b, c) => {
                 let start = self.current;
-                self.add_point(start, PointKind::Curve);
-                self.add_point(*b, PointKind::Curve);
-                self.add_point(*c, PointKind::Curve);
+                self.add_point(PathPoint::new(start, PointKind::Curve));
+                self.add_point(PathPoint::new(*b, PointKind::Curve));
+                self.add_point(PathPoint::new(*c, PointKind::Curve));
             }
             // The last point is duplicated as the second control point.
             Op::CurveToY(a, c) => {
-                self.add_point(*a, PointKind::Curve);
-                self.add_point(*c, PointKind::Curve);
-                self.add_point(*c, PointKind::Curve);
+                self.add_point(PathPoint::new(*a, PointKind::Curve));
+                self.add_point(PathPoint::new(*c, PointKind::Curve));
+                self.add_point(PathPoint::new(*c, PointKind::Curve));
             }
             Op::ClosePath() => self.close_path(),
             Op::Rectangle(x, y, w, h) => {
                 let (x, y, w, h) = (f64::from(*x), f64::from(*y), f64::from(*w), f64::from(*h));
-                self.add_point(Point::new(x, y), PointKind::Move);
-                self.add_point(Point::new(x + w, y), PointKind::Line);
-                self.add_point(Point::new(x + w, y + h), PointKind::Line);
-                self.add_point(Point::new(x, y + h), PointKind::Line);
-                self.add_point(Point::new(x, y), PointKind::CloseLine);
+                self.add_point(PathPoint::new(Point::new(x, y), PointKind::Move));
+                self.add_point(PathPoint::new(Point::new(x + w, y), PointKind::Line));
+                self.add_point(PathPoint::new(Point::new(x + w, y + h), PointKind::Line));
+                self.add_point(PathPoint::new(Point::new(x, y + h), PointKind::Line));
+                self.add_point(PathPoint::closing_line(Point::new(x, y)));
                 self.subpath_start = Point::new(x, y);
             }
 
@@ -884,7 +931,7 @@ impl<R: Resolve> Interp<'_, R> {
                 let start = self.subpath_start;
                 self.current = start;
                 if !self.points.is_empty() {
-                    self.points.push((start, PointKind::CloseLine));
+                    self.points.push(PathPoint::closing_line(start));
                 }
                 self.paint(FillRule::EvenOdd, true);
             }
@@ -1065,39 +1112,46 @@ impl<R: Resolve> Interp<'_, R> {
     }
 
     /// The three path repairs from the module docs.
-    fn add_point(&mut self, point: Point, kind: PointKind) {
-        self.current = point;
+    fn add_point(&mut self, point: PathPoint) {
+        self.current = point.at;
         match self.points.last() {
             // A `Move` onto an open `Move`: drop the duplicate, or overwrite.
-            Some((previous, PointKind::Move)) if kind == PointKind::Move => {
-                if *previous == point {
+            Some(previous) if previous.kind == PointKind::Move && point.kind == PointKind::Move => {
+                if previous.at == point.at {
                     return;
                 }
                 if let Some(last) = self.points.last_mut() {
-                    *last = (point, kind);
+                    *last = point;
                 }
                 return;
             }
             // A non-`Move` with nothing started is discarded.
-            None if kind != PointKind::Move => return,
+            None if point.kind != PointKind::Move => return,
             _ => {}
         }
-        self.points.push((point, kind));
+        self.points.push(point);
     }
 
     /// `h`: close the current subpath.
+    ///
+    /// `cpdf_streamcontentparser.cpp:971-981` verbatim: a current point that
+    /// has already returned to the subpath's start needs no closing segment,
+    /// so the point it landed on is *flagged* as closing — upstream's
+    /// `path_points_.back().close_figure_ = true` — and its own segment type
+    /// is left alone. Rewriting the type instead is what turned a glyph's
+    /// final curve into a line and stranded its control points; see
+    /// [`PathPoint`].
     fn close_path(&mut self) {
         if self.points.is_empty() {
             return;
         }
         if self.current == self.subpath_start {
-            // Already there: mark the last point as closing.
             if let Some(last) = self.points.last_mut() {
-                last.1 = PointKind::CloseLine;
+                last.closes = true;
             }
         } else {
             let start = self.subpath_start;
-            self.points.push((start, PointKind::CloseLine));
+            self.points.push(PathPoint::closing_line(start));
             self.current = start;
         }
     }
@@ -1122,17 +1176,17 @@ impl<R: Resolve> Interp<'_, R> {
                 self.state.clip.push_empty();
                 return;
             }
-            let (point, kind) = points
+            let point = points
                 .first()
                 .copied()
-                .unwrap_or((Point::ZERO, PointKind::Move));
+                .unwrap_or(PathPoint::new(Point::ZERO, PointKind::Move));
             // Only a closed move under a round cap draws anything: a dot.
-            if kind != PointKind::CloseLine || self.state.stroke_params.cap != LineCap::Round {
+            if !point.closes || self.state.stroke_params.cap != LineCap::Round {
                 return;
             }
             let mut path = BezPath::new();
-            path.move_to(point);
-            path.line_to(point);
+            path.move_to(point.at);
+            path.line_to(point.at);
             path.close_path();
             self.emit_path(path, matrix, fill_rule, stroke, clip_rule);
             return;
@@ -1140,7 +1194,7 @@ impl<R: Resolve> Interp<'_, R> {
 
         // A trailing open `Move` contributes nothing and is dropped.
         let mut points = points;
-        if matches!(points.last(), Some((_, PointKind::Move))) {
+        if matches!(points.last(), Some(last) if last.kind == PointKind::Move) {
             points.pop();
         }
         if points.is_empty() {
@@ -1976,44 +2030,52 @@ fn stroke_ctm_of(ctm: Affine) -> [f32; 4] {
 }
 
 /// Turn the point list into a path.
-fn build_path(points: &[(Point, PointKind)]) -> BezPath {
+///
+/// A point's `closes` flag is applied **after** its own segment is emitted,
+/// which is the whole distinction the flag exists for: a curve that closes
+/// its subpath is still a curve, and its two control points must reach
+/// [`BezPath::curve_to`] rather than sit in `pending` waiting for a third
+/// that the next subpath then supplies.
+fn build_path(points: &[PathPoint]) -> BezPath {
     let mut path = BezPath::new();
     let mut pending: Vec<Point> = Vec::new();
     let mut open = false;
-    for (point, kind) in points {
-        match kind {
+    // A subpath's segments are only emitted while it is open, and every
+    // subpath boundary — a `Move`, or a point that closes — drops whatever
+    // control points the previous one left incomplete. A partial curve is
+    // not geometry that any later subpath may borrow.
+    for point in points {
+        match point.kind {
             PointKind::Move => {
-                if open {
-                    // A new subpath ends the previous one.
-                    pending.clear();
-                }
-                path.move_to(*point);
+                pending.clear();
+                path.move_to(point.at);
                 open = true;
             }
             PointKind::Line => {
                 if open {
-                    path.line_to(*point);
-                }
-            }
-            PointKind::CloseLine => {
-                if open {
-                    path.line_to(*point);
-                    path.close_path();
-                    open = false;
+                    path.line_to(point.at);
                 }
             }
             PointKind::Curve => {
-                pending.push(*point);
-                if pending.len() == 3 && open {
-                    let (Some(a), Some(b), Some(c)) =
-                        (pending.first(), pending.get(1), pending.get(2))
-                    else {
-                        continue;
-                    };
-                    path.curve_to(*a, *b, *c);
+                pending.push(point.at);
+                if pending.len() == 3 {
+                    if open
+                        && let (Some(a), Some(b), Some(c)) =
+                            (pending.first(), pending.get(1), pending.get(2))
+                    {
+                        path.curve_to(*a, *b, *c);
+                    }
                     pending.clear();
                 }
             }
+        }
+        // `h`'s `close_figure_`: the subpath ends here, closed back to its
+        // start. Anything the point's own segment did not consume goes with
+        // it.
+        if point.closes && open {
+            path.close_path();
+            pending.clear();
+            open = false;
         }
     }
     path
@@ -2605,6 +2667,53 @@ mod tests {
             panic!("expected a path");
         };
         assert_eq!(path.state.clip.len(), 1);
+    }
+
+    /// `h` on a subpath that a curve already brought back to its start must
+    /// keep that curve a curve, and must not let its control points reach
+    /// the next subpath.
+    ///
+    /// This is `vector_en_system.pdf`'s whole loss, reduced to two glyph
+    /// outlines: every subpath there is a run of `c`s ending exactly on the
+    /// `m`, then `h`. Marking the closing point by rewriting its *kind*
+    /// turned that last curve into a straight line and stranded its first
+    /// two control points, which the following subpath's first curve point
+    /// then completed — painting a stroked diagonal between the two glyphs.
+    /// Upstream keeps the two apart (`cpdf_streamcontentparser.cpp:979`
+    /// sets `close_figure_`, not the point's `Type`).
+    #[test]
+    fn a_curve_that_closes_its_subpath_stays_a_curve_and_leaks_nothing() {
+        let (page, _) = build(
+            b"10 10 m 12 14 16 14 18 10 c 14 6 12 6 10 10 c h \
+              50 10 m 52 14 56 14 58 10 c 54 6 52 6 50 10 c h S",
+        );
+        let PageObject::Path(path) = &page.objects[0] else {
+            panic!("expected a path");
+        };
+        let elements: Vec<_> = path.object.path.elements().to_vec();
+        // Two subpaths, each: MoveTo, CurveTo, CurveTo, ClosePath.
+        let kinds: Vec<&str> = elements
+            .iter()
+            .map(|e| match e {
+                kurbo::PathEl::MoveTo(_) => "M",
+                kurbo::PathEl::LineTo(_) => "L",
+                kurbo::PathEl::CurveTo(..) => "C",
+                kurbo::PathEl::QuadTo(..) => "Q",
+                kurbo::PathEl::ClosePath => "Z",
+            })
+            .collect();
+        assert_eq!(kinds, ["M", "C", "C", "Z", "M", "C", "C", "Z"], "{kinds:?}");
+        // The second subpath's first curve must start from its own `m` and
+        // stay in its own x range — not reach back to the first glyph.
+        let kurbo::PathEl::CurveTo(a, b, c) = elements[5] else {
+            panic!("expected the second subpath's first curve");
+        };
+        for p in [a, b, c] {
+            assert!(
+                p.x >= 49.0,
+                "control point {p:?} leaked from the first glyph"
+            );
+        }
     }
 
     #[test]
