@@ -10,8 +10,9 @@
 #[cfg(all(feature = "system-fonts", not(target_arch = "wasm32")))]
 use super::charset::charset_for_code_page_bit;
 use super::charset::{Charset, PitchFamily};
-use super::style::{style_bits, tt_normalize};
 #[cfg(all(feature = "system-fonts", not(target_arch = "wasm32")))]
+use super::probe::{FaceProbe, ProbeError};
+use super::style::{style_bits, tt_normalize};
 use read_fonts::TableProvider;
 #[cfg(all(feature = "system-fonts", not(target_arch = "wasm32")))]
 use skrifa::MetadataProvider;
@@ -437,13 +438,36 @@ impl SystemFontDb {
                     FaceSource::File(path.clone(), face.index),
                 ),
                 fontdb::Source::File(path) => {
-                    let Ok(read) = std::fs::read(path) else {
-                        continue;
-                    };
-                    (
-                        std::borrow::Cow::Owned(read),
-                        FaceSource::File(path.clone(), face.index),
-                    )
+                    // The scan's hot path, and the reason this is not a plain
+                    // `read`: `describe` wants two small tables, and reading
+                    // every enumerated file whole cost 20.5 ms of `read` per
+                    // cold render on the oracle's 33.8 MB font set
+                    // (`docs/status/cold-start.md`). A probe fetches the table
+                    // directory and those two tables and nothing else; a file
+                    // with no directory at all — a bare CFF, a Type 1 `.pfb` —
+                    // falls back to the whole-file read it had before.
+                    match FaceProbe::read(path, face.index) {
+                        Ok(probe) => {
+                            // The probe reassembles one face, so its own index
+                            // is 0 whatever the face's index in the file was.
+                            let Some(info) = describe(0, probe.as_font_bytes()) else {
+                                continue;
+                            };
+                            faces.push(info);
+                            sources.push(FaceSource::File(path.clone(), face.index));
+                            continue;
+                        }
+                        Err(ProbeError::NotSfnt) => {
+                            let Ok(read) = std::fs::read(path) else {
+                                continue;
+                            };
+                            (
+                                std::borrow::Cow::Owned(read),
+                                FaceSource::File(path.clone(), face.index),
+                            )
+                        }
+                        Err(_) => continue,
+                    }
                 }
             };
             let Some(info) = describe(face.index, &bytes) else {
@@ -629,6 +653,109 @@ mod tests {
     // Test fixtures are fixed-size arrays with known contents.
     #![allow(clippy::indexing_slicing)]
     use super::*;
+
+    /// Every font file the machine has to offer, for the probe equivalence
+    /// test: the bundled base-14 CFFs (which are *not* sfnts, so they exercise
+    /// the fallback), the benchmark fixtures, and — when this is the box that
+    /// has it — the oracle's hermetic `test_fonts` set, which is where the
+    /// interesting faces are: a 16 MB CJK OTF with CFF outlines, a 9 MB colour
+    /// emoji TTF, and 29 others.
+    fn font_files() -> Vec<PathBuf> {
+        let mut roots = vec![
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("fontdata"),
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../benches/fixtures"),
+        ];
+        // A machine path, not a repository one: skipped silently elsewhere.
+        let oracle = PathBuf::from("/mnt/data2/pdfium/pdfium-c++/third_party/test_fonts");
+        if oracle.is_dir() {
+            roots.push(oracle);
+        }
+        let mut out = Vec::new();
+        while let Some(root) = roots.pop() {
+            let Ok(entries) = std::fs::read_dir(&root) else {
+                continue;
+            };
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    roots.push(path);
+                } else {
+                    out.push(path);
+                }
+            }
+        }
+        out.sort();
+        out
+    }
+
+    /// The probe must describe a face exactly as reading the whole file does.
+    ///
+    /// This is the whole safety argument for the bounded reader. The scan's
+    /// output feeds the substitution ladder, whose choice of face decides what
+    /// 1759 conformance files render, so "reads less" is only acceptable
+    /// alongside "parses the same". The comparison is over real files rather
+    /// than a synthesised one because the failure mode being guarded against is
+    /// a real font's layout — a `ttcf` collection, an `OTTO` face, a table the
+    /// directory lists out of order — not a hand-written edge case.
+    #[test]
+    fn a_probe_describes_a_face_exactly_as_the_whole_file_does() {
+        let files = font_files();
+        assert!(!files.is_empty(), "no font files found to compare");
+        let mut sfnts = 0;
+        let mut fallbacks = 0;
+        for path in &files {
+            let Ok(whole) = std::fs::read(path) else {
+                continue;
+            };
+            match FaceProbe::read(path, 0) {
+                Ok(probe) => {
+                    sfnts += 1;
+                    assert_eq!(
+                        describe(0, probe.as_font_bytes()),
+                        describe(0, &whole),
+                        "probe and whole-file describe disagree for {}",
+                        path.display()
+                    );
+                }
+                Err(ProbeError::NotSfnt) => {
+                    fallbacks += 1;
+                    // The fallback path: whatever `describe` said before, it
+                    // still says, because the caller still reads the file whole.
+                }
+                Err(_) => {}
+            }
+        }
+        assert!(sfnts > 0, "no sfnt files among {} candidates", files.len());
+        // The bundled base-14 are bare CFF, so the fallback is always exercised.
+        assert!(fallbacks > 0, "the non-sfnt fallback was never taken");
+    }
+
+    /// A probe reads kilobytes where the file holds megabytes.
+    ///
+    /// The point of the change, asserted rather than only measured: on the
+    /// oracle's set the two largest faces are 16.4 MB and 9.4 MB, and their
+    /// `name` and `OS/2` tables together are a few kilobytes.
+    #[test]
+    fn a_probe_is_far_smaller_than_the_file_it_came_from() {
+        for path in font_files() {
+            let Ok(probe) = FaceProbe::read(&path, 0) else {
+                continue;
+            };
+            let Ok(len) = std::fs::metadata(&path).map(|m| m.len()) else {
+                continue;
+            };
+            if len < 1024 * 1024 {
+                continue;
+            }
+            assert!(
+                (probe.as_font_bytes().len() as u64) < len / 100,
+                "probe of {} is {} bytes against a {} byte file",
+                path.display(),
+                probe.as_font_bytes().len(),
+                len
+            );
+        }
+    }
 
     fn db() -> TestFontDb {
         let mut db = TestFontDb::new();
