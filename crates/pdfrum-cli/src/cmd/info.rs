@@ -13,7 +13,7 @@ use crate::term::{Style, Term};
 
 /// The whole report, which is also the JSON schema.
 #[derive(Serialize)]
-struct Report {
+pub struct Report {
     file: String,
     version: Option<String>,
     pages: u32,
@@ -105,7 +105,8 @@ pub fn run(files: &[PathBuf], password: Option<&str>, json: bool, term: Term) ->
     Ok(out::exit(failed, ExitCode::SUCCESS))
 }
 
-fn report(doc: &Document, file: &Path) -> Report {
+/// The summary of `doc`, named `file` in the report.
+pub fn report(doc: &Document, file: &Path) -> Report {
     let p = doc.permissions();
     let m = doc.metadata();
     let page_boxes = doc

@@ -7,7 +7,7 @@ use std::path::Path;
 use std::process::ExitCode;
 
 use anyhow::{Context, Result, bail};
-use pdfrum::{Dict, Kid, ObjRef, Object, Resolve, StructTree};
+use pdfrum::{Dict, Document, Kid, ObjRef, Object, Resolve, StructTree};
 use serde::Serialize;
 
 use crate::out::{Align, Table, out, outln};
@@ -20,11 +20,40 @@ use crate::{out, syntax};
 /// with the same hints the text form prints after each top-level
 /// reference, keyed by the dictionary key.
 #[derive(Serialize)]
-struct ObjectReport {
+pub struct ObjectReport {
     object: u32,
     generation: u16,
     value: serde_json::Value,
     hints: BTreeMap<String, String>,
+}
+
+/// Object `num generation` as JSON, with its hints.
+pub fn object_report(doc: &Document, num: u32, generation: u16) -> Result<ObjectReport> {
+    let object = doc
+        .fetch(ObjRef::new(num, generation))
+        .with_context(|| format!("object {num} {generation} is not in the document"))?;
+    let entries = match &*object {
+        Object::Dict(d) => Some(d),
+        Object::Stream(s) => Some(&s.dict),
+        _ => None,
+    };
+    let hints = entries
+        .into_iter()
+        .flat_map(Dict::iter)
+        .filter_map(|(key, value)| match value {
+            Object::Ref(r) => {
+                let target = doc.fetch(*r).ok()?;
+                Some((key.as_text().into_owned(), syntax::describe(&target)))
+            }
+            _ => None,
+        })
+        .collect();
+    Ok(ObjectReport {
+        object: num,
+        generation,
+        value: syntax::json(&object),
+        hints,
+    })
 }
 
 /// What `inspect object` does with the object: prints it in PDF syntax
@@ -59,30 +88,7 @@ pub fn object(
             let data = doc.stream_data(reference)?;
             out::write_bytes(&data);
         }
-        ObjectForm::Json => {
-            let entries = match &*object {
-                Object::Dict(d) => Some(d),
-                Object::Stream(s) => Some(&s.dict),
-                _ => None,
-            };
-            let hints = entries
-                .into_iter()
-                .flat_map(Dict::iter)
-                .filter_map(|(key, value)| match value {
-                    Object::Ref(r) => {
-                        let target = doc.fetch(*r).ok()?;
-                        Some((key.as_text().into_owned(), syntax::describe(&target)))
-                    }
-                    _ => None,
-                })
-                .collect();
-            out::json(&ObjectReport {
-                object: num,
-                generation,
-                value: syntax::json(&object),
-                hints,
-            })?;
-        }
+        ObjectForm::Json => out::json(&object_report(&doc, num, generation)?)?,
         ObjectForm::Syntax => {
             let mut text = format!("{num} {generation} obj\n");
             syntax::object(&mut text, &object, 0);
@@ -151,7 +157,7 @@ struct XrefRow {
 }
 
 #[derive(Serialize)]
-struct XrefReport {
+pub struct XrefReport {
     file: String,
     rebuilt: bool,
     entries: usize,
@@ -159,8 +165,8 @@ struct XrefReport {
     rows: Vec<XrefRow>,
 }
 
-pub fn xref(file: &Path, password: Option<&str>, json: out::Json, term: Term) -> Result<ExitCode> {
-    let doc = out::open_quietly(file, password)?;
+/// The cross-reference table as the parser holds it, with the trailer.
+pub fn xref_report(doc: &Document, file: &Path) -> XrefReport {
     let parser = doc.parser();
     let table = parser.xref();
     let mut rows = Vec::with_capacity(table.len());
@@ -171,7 +177,7 @@ pub fn xref(file: &Path, password: Option<&str>, json: out::Json, term: Term) ->
                 object: num,
                 generation,
                 kind: "offset",
-                what: what(&doc, num, generation),
+                what: what(doc, num, generation),
                 offset: Some(offset),
                 stream: None,
                 index: None,
@@ -180,7 +186,7 @@ pub fn xref(file: &Path, password: Option<&str>, json: out::Json, term: Term) ->
                 object: num,
                 generation,
                 kind: "in_stream",
-                what: what(&doc, num, generation),
+                what: what(doc, num, generation),
                 offset: None,
                 stream: Some(stream.num),
                 index: Some(index),
@@ -203,13 +209,18 @@ pub fn xref(file: &Path, password: Option<&str>, json: out::Json, term: Term) ->
         &Object::Dict(syntax::effective(parser.trailer())),
         0,
     );
-    let report = XrefReport {
+    XrefReport {
         file: file.display().to_string(),
         rebuilt: doc.xref_was_rebuilt(),
         entries: rows.len(),
         trailer,
         rows,
-    };
+    }
+}
+
+pub fn xref(file: &Path, password: Option<&str>, json: out::Json, term: Term) -> Result<ExitCode> {
+    let doc = out::open_quietly(file, password)?;
+    let report = xref_report(&doc, file);
     if json == out::Json::Document {
         out::json(&report)?;
     } else if json == out::Json::Lines {
@@ -273,12 +284,25 @@ fn what(doc: &pdfrum::Document, num: u32, generation: u16) -> Option<String> {
 // ---- revisions ------------------------------------------------------------
 
 #[derive(Serialize)]
-struct RevisionRow {
+pub struct RevisionRow {
     revision: usize,
     xref_offset: u64,
     xref_stream: bool,
     /// The byte after this revision's `%%EOF`: its length as a file.
     end: usize,
+}
+
+/// The incremental-update history, one row per saved revision.
+pub fn revision_rows(doc: &Document) -> Vec<RevisionRow> {
+    doc.revisions()
+        .iter()
+        .map(|r| RevisionRow {
+            revision: r.index + 1,
+            xref_offset: r.xref_offset,
+            xref_stream: r.is_stream,
+            end: r.end,
+        })
+        .collect()
 }
 
 pub fn revisions(
@@ -288,16 +312,7 @@ pub fn revisions(
     term: Term,
 ) -> Result<ExitCode> {
     let doc = out::open(file, password)?;
-    let rows: Vec<RevisionRow> = doc
-        .revisions()
-        .iter()
-        .map(|r| RevisionRow {
-            revision: r.index + 1,
-            xref_offset: r.xref_offset,
-            xref_stream: r.is_stream,
-            end: r.end,
-        })
-        .collect();
+    let rows = revision_rows(&doc);
     if json.is_on() {
         out::items(&rows, json)?;
     } else if rows.is_empty() {
@@ -363,7 +378,7 @@ pub fn revision(
 // ---- structure ------------------------------------------------------------
 
 #[derive(Serialize)]
-struct StructRow {
+pub struct StructRow {
     page: u32,
     depth: usize,
     kind: String,
@@ -375,14 +390,9 @@ struct StructRow {
     actual_text: Option<String>,
 }
 
-pub fn structure(
-    file: &Path,
-    password: Option<&str>,
-    spec: Option<&str>,
-    json: out::Json,
-    term: Term,
-) -> Result<ExitCode> {
-    let doc = out::open(file, password)?;
+/// The structure tree of the selected pages, one row per element in
+/// depth-first order, and whether any page had one at all.
+pub fn structure_rows(doc: &Document, spec: Option<&str>) -> Result<(Vec<StructRow>, bool)> {
     let mut rows = Vec::new();
     let mut tagged = false;
     for index in crate::pages::select(spec, doc.page_count())? {
@@ -394,10 +404,22 @@ pub fn structure(
         let number = out::page_number(page.index());
         for (i, element) in tree.elements.iter().enumerate() {
             if element.parent.is_none() {
-                walk(&tree, i, 0, number, &doc, &mut rows);
+                walk(&tree, i, 0, number, doc, &mut rows);
             }
         }
     }
+    Ok((rows, tagged))
+}
+
+pub fn structure(
+    file: &Path,
+    password: Option<&str>,
+    spec: Option<&str>,
+    json: out::Json,
+    term: Term,
+) -> Result<ExitCode> {
+    let doc = out::open(file, password)?;
+    let (rows, tagged) = structure_rows(&doc, spec)?;
     if json.is_on() {
         out::items(&rows, json)?;
     } else if !tagged {
