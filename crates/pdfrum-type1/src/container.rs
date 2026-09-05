@@ -18,7 +18,7 @@
 //! of the ciphertext does not exist in the general case.
 
 use crate::error::Error;
-use pdfrum_common::{DiagKind, Diagnostics, Severity};
+use pdfrum_common::{DiagKind, Diagnostics, Severity, hex_digit};
 
 /// Which wrapper the bytes turned out to be in. Reported so callers (and
 /// tests) can tell a genuine PFA from a bare program that merely parses like
@@ -463,7 +463,7 @@ fn hex_decode(bytes: &[u8], diags: &mut Diagnostics) -> Vec<u8> {
         if b.is_ascii_whitespace() {
             continue;
         }
-        let Some(nibble) = hex_value(*b) else {
+        let Some(nibble) = hex_digit(*b) else {
             if i.saturating_add(1) < bytes.len() {
                 diags.record(
                     Severity::Recovered,
@@ -479,15 +479,6 @@ fn hex_decode(bytes: &[u8], diags: &mut Diagnostics) -> Vec<u8> {
         }
     }
     out
-}
-
-fn hex_value(b: u8) -> Option<u8> {
-    match b {
-        b'0'..=b'9' => Some(b - b'0'),
-        b'a'..=b'f' => Some(b - b'a' + 10),
-        b'A'..=b'F' => Some(b - b'A' + 10),
-        _ => None,
-    }
 }
 
 fn le_u32(b: &[u8]) -> u32 {

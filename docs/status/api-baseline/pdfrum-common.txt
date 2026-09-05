@@ -176,4 +176,5 @@ pub const pdfrum_common::PdfVersion::PDF_2_0: Self
 pub const fn pdfrum_common::PdfVersion::new(u8, u8) -> Self
 impl core::fmt::Display for pdfrum_common::PdfVersion
 pub fn pdfrum_common::PdfVersion::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub const fn pdfrum_common::hex_digit(u8) -> core::option::Option<u8>
 pub type pdfrum_common::FxBuildHasher = core::hash::BuildHasherDefault<pdfrum_common::FxHasher>
