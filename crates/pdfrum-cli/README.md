@@ -46,12 +46,30 @@ pdfrum diff v1.pdf v2.pdf --visual -o diffs/    # pixels too, changes in red
 pdfrum hash report.pdf                          # sha256, /ID, and a semantic hash
 pdfrum completions zsh > ~/.zfunc/_pdfrum
 pdfrum manpage -o man/
+
+# Composition: `-` is stdin or stdout, several files at once, one object per line.
+curl -s https://example.com/report.pdf | pdfrum info -
+pdfrum pages slice report.pdf --pages 1 -o - | pdfrum extract text -
+pdfrum info *.pdf --json | jq '.[].pages'          # one document per file
+pdfrum search "total" a.pdf b.pdf                  # a.pdf:page 2:… as grep -H does
+pdfrum extract links report.pdf --jsonl | jq -c 'select(.kind == "uri")'
+PDFRUM_PASSWORD=secret pdfrum extract text locked.pdf   # the password out of the history
+pdfrum -q optimize big.pdf -o -  > small.pdf      # no notices; errors still print
+pdfrum -v info damaged.pdf                         # every parser diagnostic, one per line
 ```
 
-Every command takes `--password` for an encrypted file and prints notices
-on stderr, never on stdout. `--json` output has `snake_case` keys that do
-not change between releases. Exit codes: 0, 1 on error, 2 for a usage
-mistake, 3 from `doctor --strict`.
+Every command takes `--password` for an encrypted file — or reads
+`PDFRUM_PASSWORD` when the flag is absent — and prints notices on stderr,
+never on stdout; `--quiet` drops the notices and `--verbose` lists every
+parser diagnostic on open. Every reading command's FILE accepts `-` for
+stdin, every writing command's `-o` accepts `-` for stdout (refused on a
+terminal), and `info`, `hash`, `doctor` and `search` take several files, a
+file that cannot be opened reported and skipped. `--json` output has
+`snake_case` keys that do not change between releases; on several files it
+is an array of the per-file documents. The commands whose answer is a list
+also take `--jsonl`, one compact object per line. Exit codes: 0, 1 on error
+(including a file among several that failed), 2 for a usage mistake, 3
+from `doctor --strict`.
 
 Human output follows `docs/design/cli-style.md`: one of four forms (a
 record of key/value lines, a table with an uppercase header row, sections

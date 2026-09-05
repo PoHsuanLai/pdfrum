@@ -41,11 +41,6 @@ fn seed(input: &[u8]) -> [u8; 16] {
     seed
 }
 
-fn stem(path: &Path) -> String {
-    path.file_stem()
-        .map_or_else(|| "output".to_owned(), |s| s.to_string_lossy().into_owned())
-}
-
 /// A `WxH` size in points, e.g. `612x792`, or the two paper names everyone
 /// types.
 pub fn parse_size(text: &str) -> Result<(f64, f64)> {
@@ -115,6 +110,7 @@ pub fn merge(
     let Some((first, rest)) = files.split_first() else {
         bail!("merge needs at least one input file");
     };
+    let sink = out::Sink::new(output, "PDF")?;
     let base = out::open(first, password)?;
     let others: Vec<Document> = rest
         .iter()
@@ -126,14 +122,14 @@ pub fn merge(
         edit.import_pages(doc, 0..doc.page_count(), at)?;
         at += doc.page_count();
     }
-    edit.save(output, &save_options(deterministic, base.bytes()))
-        .with_context(|| format!("cannot write {}", output.display()))?;
-    out::summary(
+    let mut bytes = Vec::new();
+    edit.write_to(&mut bytes, &save_options(deterministic, base.bytes()))?;
+    sink.finish(
         term,
-        output,
+        &bytes,
         &format!("{at} pages"),
         Some(&format!("from {} files", files.len())),
-    );
+    )?;
     Ok(ExitCode::SUCCESS)
 }
 
@@ -147,6 +143,9 @@ pub fn split(
     deterministic: bool,
     term: Term,
 ) -> Result<ExitCode> {
+    if out::is_stdin(dir) {
+        bail!("split writes one file per page; -o takes a directory, not -");
+    }
     let doc = out::open(file, password)?;
     let count = doc.page_count();
     let selected = pages::select(spec, count)?;
@@ -155,7 +154,7 @@ pub fn split(
     for index in selected {
         let mut edit = doc.edit();
         edit.delete_pages((0..count).filter(|&i| i != index))?;
-        let path = dir.join(format!("{}-{}.pdf", stem(file), index + 1));
+        let path = dir.join(format!("{}-{}.pdf", out::stem(file), index + 1));
         edit.save(&path, &options)
             .with_context(|| format!("cannot write {}", path.display()))?;
         outln!("{}", term.paint(Style::Ident, &path.display().to_string()));
@@ -178,6 +177,7 @@ pub struct Slice<'a> {
 
 /// Keep the selected pages in document order, rotated or cropped as asked.
 pub fn slice(req: &Slice<'_>, term: Term) -> Result<ExitCode> {
+    let sink = out::Sink::new(req.output, "PDF")?;
     let doc = out::open(req.file, req.password)?;
     let count = doc.page_count();
     let mut keep = pages::select(req.spec, count)?;
@@ -193,9 +193,9 @@ pub fn slice(req: &Slice<'_>, term: Term) -> Result<ExitCode> {
             edit.set_page_box(index, PageBox::Crop, rect)?;
         }
     }
-    edit.save(req.output, &save_options(req.deterministic, doc.bytes()))
-        .with_context(|| format!("cannot write {}", req.output.display()))?;
-    out::summary(term, req.output, &format!("{} pages", keep.len()), None);
+    let mut bytes = Vec::new();
+    edit.write_to(&mut bytes, &save_options(req.deterministic, doc.bytes()))?;
+    sink.finish(term, &bytes, &format!("{} pages", keep.len()), None)?;
     Ok(ExitCode::SUCCESS)
 }
 
@@ -210,6 +210,7 @@ pub fn reorder(
     deterministic: bool,
     term: Term,
 ) -> Result<ExitCode> {
+    let sink = out::Sink::new(output, "PDF")?;
     let doc = out::open(file, password)?;
     let order = pages::select(Some(spec), doc.page_count())?;
     if order.is_empty() {
@@ -222,9 +223,9 @@ pub fn reorder(
     // The template's own page sits after the imports; it was only ever a
     // place to hang the tree.
     edit.delete_pages([0u32])?;
-    edit.save(output, &save_options(deterministic, doc.bytes()))
-        .with_context(|| format!("cannot write {}", output.display()))?;
-    out::summary(term, output, &format!("{} pages", order.len()), None);
+    let mut bytes = Vec::new();
+    edit.write_to(&mut bytes, &save_options(deterministic, doc.bytes()))?;
+    sink.finish(term, &bytes, &format!("{} pages", order.len()), None)?;
     Ok(ExitCode::SUCCESS)
 }
 
@@ -254,21 +255,22 @@ pub fn nup(req: &Nup<'_>, term: Term) -> Result<ExitCode> {
         output,
         deterministic,
     } = *req;
+    let sink = out::Sink::new(output, "PDF")?;
     let doc = out::open(file, password)?;
     let selected = pages::select(spec, doc.page_count())?;
     let dest = Document::blank(sheet.0, sheet.1)?;
     let mut edit = dest.edit();
     edit.n_up(&doc, selected.iter().copied(), grid.0, grid.1, sheet)?;
     edit.delete_pages([0u32])?;
-    edit.save(output, &save_options(deterministic, doc.bytes()))
-        .with_context(|| format!("cannot write {}", output.display()))?;
+    let mut bytes = Vec::new();
+    edit.write_to(&mut bytes, &save_options(deterministic, doc.bytes()))?;
     let per_sheet = grid.0 * grid.1;
     let sheets = u32::try_from(selected.len())
         .unwrap_or(u32::MAX)
         .div_ceil(per_sheet.max(1));
-    out::summary(
+    sink.finish(
         term,
-        output,
+        &bytes,
         &format!("{sheets} sheets"),
         Some(&format!(
             "{}x{} from {} pages",
@@ -276,7 +278,7 @@ pub fn nup(req: &Nup<'_>, term: Term) -> Result<ExitCode> {
             grid.1,
             selected.len()
         )),
-    );
+    )?;
     Ok(ExitCode::SUCCESS)
 }
 
@@ -303,6 +305,7 @@ pub fn booklet(
     deterministic: bool,
     term: Term,
 ) -> Result<ExitCode> {
+    let sink = out::Sink::new(output, "PDF")?;
     let doc = out::open(file, password)?;
     let count = doc.page_count();
     if count == 0 {
@@ -325,11 +328,11 @@ pub fn booklet(
     let mut edit = dest.edit();
     edit.n_up(&padded, booklet_order(padded_count), 2, 1, sheet)?;
     edit.delete_pages([0u32])?;
-    edit.save(output, &save_options(deterministic, doc.bytes()))
-        .with_context(|| format!("cannot write {}", output.display()))?;
-    out::summary(
+    let mut bytes = Vec::new();
+    edit.write_to(&mut bytes, &save_options(deterministic, doc.bytes()))?;
+    sink.finish(
         term,
-        output,
+        &bytes,
         &format!("{} sheets", padded_count / 4),
         Some(&format!(
             "{} sides for {count} pages{}",
@@ -340,7 +343,7 @@ pub fn booklet(
                 String::new()
             }
         )),
-    );
+    )?;
     Ok(ExitCode::SUCCESS)
 }
 
@@ -363,6 +366,7 @@ pub fn create(
     if !(dpi.is_finite() && dpi > 0.0) {
         bail!("the resolution must be a positive number");
     }
+    let sink = out::Sink::new(output, "PDF")?;
     let decoded: Vec<Decoded> = images.iter().map(|p| decode(p)).collect::<Result<_>>()?;
     let size = |d: &Decoded| {
         (
@@ -402,18 +406,18 @@ pub fn create(
         .iter()
         .flat_map(|d| d.source.iter().copied())
         .collect();
-    edit.save_pages(
-        output,
+    let mut bytes = Vec::new();
+    edit.write_pages_to(
+        &mut bytes,
         &page_edits,
         &save_options(deterministic, &all_input),
-    )
-    .with_context(|| format!("cannot write {}", output.display()))?;
-    out::summary(
+    )?;
+    sink.finish(
         term,
-        output,
+        &bytes,
         &format!("{} pages", decoded.len()),
         Some(&format!("from {} images", images.len())),
-    );
+    )?;
     Ok(ExitCode::SUCCESS)
 }
 
