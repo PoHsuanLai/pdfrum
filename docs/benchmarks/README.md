@@ -132,7 +132,7 @@ its base-14 set, pdfium-render from the system through its `libpdfium.so`.
 That is a real difference between the engines as delivered, and it is also
 why `pdfium-render`, which *is* PDFium, does not score 1.0 on every file:
 its library is a different PDFium build (the pypdfium2 wheel MinerU installed,
-found under `/mnt/data2/r13921098/mineru-models/pdfium/`) with system fonts,
+kept outside the repo) with system fonts,
 not the oracle's build with the hermetic set.
 
 ### Pixels
@@ -196,7 +196,7 @@ engines, measured back to back on the same files, were readable there.
 **Run 3, the current reading, was taken on `himmel`** — 32 CPUs, rustc
 1.98.1, idle, load under 2 for the whole chain — and its absolute
 milliseconds can be quoted. The same box is now where the workspace ratchet
-is measured; `docs/status/M13-perf-baseline.md` §24 has that rule.
+is measured; the internal working notes has that rule.
 
 ### Losses
 
@@ -246,7 +246,7 @@ them is inflated by an unknown amount and they are kept only as history. Run
 3 is the whole chain — both corpora, the coverage matrix, both throughput
 tables, the adoption table, then the workspace bench and the ratchet — in one
 sitting on an otherwise idle 32-core box, which is what
-`docs/status/queue.md` asked for before any speed column could be quoted.
+the open work list (`docs/issues-to-file.md`) asked for before any speed column could be quoted.
 
 **The machine.** `himmel`, 32 CPUs, Linux, `rustc 1.98.1 (48a229cea
 2026-09-01)`. Load average `0.21 1.70 1.69` at the start of the chain and
@@ -256,7 +256,7 @@ own last step, not another tenant. Each table's header line below carries the
 
 **The commit.** `8a02d57b1fa7` of this repository, both harness and engine.
 It is *behind* `main`: the two render fixes recorded in
-`docs/status/pdfrum-render.md` "M21 losses" (`5ba19cd`
+the internal working notes "M21 losses" (`5ba19cd`
 `fx/path/transparent1.pdf`, `322ab67` `fx/image/1_image.pdf`) landed after
 it, so both files still appear in run 3's loss list at their old scores.
 Every other engine-side change quoted below — the image-rows pass, lazy
@@ -290,7 +290,7 @@ log CHAIN_DONE
 
 Every step exited 0 except the closing `ratchet check`, which exits non-zero
 whenever it has anything to report; its reading is
-`docs/status/M13-perf-baseline.md` §24.
+the internal working notes
 
 #### Run 3a — `benches/corpus` (44 files, the M12 measurement set)
 
@@ -298,8 +298,8 @@ whenever it has anything to report; its reading is
 
 Run `corpus44` — commit 8a02d57b1fa7 — 44 files — 150 DPI — timeout 10 s — 3 warm runs — generated 2026-09-05T18:35:48Z
 Machine: himmel (32 CPUs, rustc 1.98.1 (48a229cea 2026-09-01)). Load before: `02:35:48 up 21:54,  2 users,  load average: 0.21, 1.70, 1.69`; after: `02:38:09 up 21:56,  2 users,  load average: 1.00, 1.45, 1.59`.
-Corpus: `/home/r13921098/pdfrum/benches/corpus` — every .pdf of the recursive listing.
-Oracle: `/home/r13921098/pdfium-c++/out/Release/pdfium_test` at a043bed4a0d7 with fonts `/home/r13921098/pdfium-c++/third_party/test_fonts`.
+Corpus: `benches/corpus` — every .pdf of the recursive listing.
+Oracle: `pdfium_test` from the read-only PDFium checkout at a043bed4a0d7 with fonts the checkout's `third_party/test_fonts`.
 
 ##### Engines
 
@@ -535,8 +535,8 @@ reproduces it to within a megabyte.
 
 Run `pdfium-sample` — commit 8a02d57b1fa7 — 209 files — 150 DPI — timeout 10 s — 3 warm runs — generated 2026-09-05T18:38:09Z
 Machine: himmel (32 CPUs, rustc 1.98.1 (48a229cea 2026-09-01)). Load before: `02:38:09 up 21:56,  2 users,  load average: 1.00, 1.45, 1.59`; after: `02:42:22 up 22:00,  2 users,  load average: 0.98, 1.18, 1.44`.
-Corpus: `/home/r13921098/pdfium-c++/testing/corpus` — every 4th .pdf of the sorted recursive listing, from index 0.
-Oracle: `/home/r13921098/pdfium-c++/out/Release/pdfium_test` at a043bed4a0d7 with fonts `/home/r13921098/pdfium-c++/third_party/test_fonts`.
+Corpus: the PDFium checkout's `testing/corpus` — every 4th .pdf of the sorted recursive listing, from index 0.
+Oracle: `pdfium_test` from the read-only PDFium checkout at a043bed4a0d7 with fonts the checkout's `third_party/test_fonts`.
 
 ##### Correctness — render, page 1 at 150 DPI against `pdfium_test --png`
 
@@ -788,8 +788,8 @@ crates and 16 704 generated `unsafe` around a C++ library it does not build;
 
 Run `coverage` — commit 8a02d57b1fa7 — 22 files — 150 DPI — timeout 10 s — 3 warm runs — generated 2026-09-05T18:42:22Z
 Machine: himmel (32 CPUs, rustc 1.98.1 (48a229cea 2026-09-01)). Load before: `02:42:22 up 22:00,  2 users,  load average: 0.98, 1.18, 1.44`; after: `02:42:43 up 22:01,  2 users,  load average: 0.99, 1.17, 1.43`.
-Corpus: `/home/r13921098/pdfium-c++/testing` — the files named in /home/r13921098/pdfrum/benches/compare/coverage.json.
-Oracle: `/home/r13921098/pdfium-c++/out/Release/pdfium_test` at a043bed4a0d7 with fonts `/home/r13921098/pdfium-c++/third_party/test_fonts`.
+Corpus: the PDFium checkout's `testing/` — the files named in benches/compare/coverage.json.
+Oracle: `pdfium_test` from the read-only PDFium checkout at a043bed4a0d7 with fonts the checkout's `third_party/test_fonts`.
 
 ##### Coverage — one corpus file per feature; a cell is what the engine did with that file
 
@@ -837,7 +837,7 @@ empty on R2, JBIG2 and Type3.
 Two things moved between run 1 and run 3, and they should not be confused.
 
 **On our side, four passes landed** (landing commits in
-`docs/status/queue.md` §M21): the image-rows pass (`cd9fbdc`, `3fc710e`,
+the open work list (`docs/issues-to-file.md`) §M21): the image-rows pass (`cd9fbdc`, `3fc710e`,
 `524ddf1`, `334f277`) and lazy unpack (`048b0c7`), which took the render
 path's `Ir` down 26.3% and then a further 4.55% on the guide; the text-speed
 pass (`b0592c1`), which cached advances and glyph boxes on `Face`; the
@@ -870,8 +870,8 @@ and run 3 reproduces them. The data file is kept.*
 
 Run `corpus44` — commit 9139cd2f48f0 — 44 files — 150 DPI — timeout 10 s — 3 warm runs — generated 2026-09-05T10:11:11Z
 Machine: frieren (32 CPUs, rustc 1.97.1 (8bab26f4f 2026-07-14)). Load before: `18:11:11 up 10 days, 19:25,  4 users,  load average: 39.93, 32.73, 39.59`; after: `18:14:22 up 10 days, 19:28,  4 users,  load average: 30.60, 29.22, 36.77`.
-Corpus: `/mnt/data2/pdfium/pdfrum/.claude/worktrees/agent-a58f791ade9594178/benches/corpus` — every .pdf of the recursive listing.
-Oracle: `/mnt/data2/pdfium/pdfium-c++/out/Release/pdfium_test` at a043bed4a0d7 with fonts `/mnt/data2/pdfium/pdfium-c++/third_party/test_fonts`.
+Corpus: `benches/corpus` — every .pdf of the recursive listing.
+Oracle: `pdfium_test` from the read-only PDFium checkout at a043bed4a0d7 with fonts the checkout's `third_party/test_fonts`.
 
 ### Engines
 
@@ -1051,8 +1051,8 @@ reproducible from the rule alone.
 
 Run `pdfium-sample` — commit 9139cd2f48f0 — 209 files — 150 DPI — timeout 10 s — 3 warm runs — generated 2026-09-05T10:14:38Z
 Machine: frieren (32 CPUs, rustc 1.97.1 (8bab26f4f 2026-07-14)). Load before: `18:14:38 up 10 days, 19:29,  4 users,  load average: 34.62, 30.18, 36.96`; after: `18:21:01 up 10 days, 19:35,  4 users,  load average: 40.26, 32.96, 35.59`.
-Corpus: `/mnt/data2/pdfium/pdfium-c++/testing/corpus` — every 4th .pdf of the sorted recursive listing, from index 0.
-Oracle: `/mnt/data2/pdfium/pdfium-c++/out/Release/pdfium_test` at a043bed4a0d7 with fonts `/mnt/data2/pdfium/pdfium-c++/third_party/test_fonts`.
+Corpus: the PDFium checkout's `testing/corpus` — every 4th .pdf of the sorted recursive listing, from index 0.
+Oracle: `pdfium_test` from the read-only PDFium checkout at a043bed4a0d7 with fonts the checkout's `third_party/test_fonts`.
 
 ### Correctness — render, page 1 at 150 DPI against `pdfium_test --png`
 
