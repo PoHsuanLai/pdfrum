@@ -9,7 +9,9 @@ figures with their alternative text. An untagged PDF is read by its
 typography: the body size is the most common font size, a line at 1.6× is
 a `#` heading and at 1.3× a `##`, a short bold line is `###`, monospaced
 lines are a code fence, bullets and numbers make lists, wrapped lines join
-into paragraphs with hyphenation undone, ligatures become letters, a dot
+into paragraphs with hyphenation undone — a line that stops short of its
+column ends one, and a bold or dash-closed lead-in begins one, written
+`**Lead-in** - rest` — ligatures become letters, a dot
 leader becomes ` ... `, and the top and bottom 10% of the page lose their
 running headers, page numbers and URLs. In either tier a line's text is
 the text page's text for that line — its spacing is the contract — and a

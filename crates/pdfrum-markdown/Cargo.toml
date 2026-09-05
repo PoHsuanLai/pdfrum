@@ -19,3 +19,10 @@ pdfrum-page.workspace = true
 pdfrum-text.workspace = true
 pdfrum-doc.workspace = true
 kurbo.workspace = true
+
+[dev-dependencies]
+# The two corpus files the paragraph rules were tuned on are read through
+# the facade, the way a caller reads them; a dev-dependency on the crate
+# that depends on this one is a cycle Cargo permits, as `pdfrum-text` does
+# for its benches.
+pdfrum.workspace = true
