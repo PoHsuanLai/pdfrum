@@ -8,6 +8,7 @@ pub mod forms;
 pub mod hash;
 pub mod info;
 pub mod inspect;
+pub mod metadata;
 pub mod pages;
 pub mod render;
 #[cfg(feature = "javascript")]
