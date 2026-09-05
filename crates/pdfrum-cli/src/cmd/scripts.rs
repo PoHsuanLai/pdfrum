@@ -9,7 +9,8 @@ use pdfrum::{Diagnostics, FormSession, ScriptConfig};
 use serde::Serialize;
 
 use crate::out;
-use crate::out::out;
+use crate::out::{out, outln};
+use crate::term::{Style, Term};
 
 /// One line of the transcript, for `--json`.
 #[derive(Serialize)]
@@ -27,7 +28,13 @@ struct Line {
 ///
 /// `time` freezes the scripts' clock at that many seconds since the epoch,
 /// so `Date` and `util.printd` give the same answer every run.
-pub fn run(file: &Path, password: Option<&str>, time: Option<u64>, json: bool) -> Result<ExitCode> {
+pub fn run(
+    file: &Path,
+    password: Option<&str>,
+    time: Option<u64>,
+    json: bool,
+    term: Term,
+) -> Result<ExitCode> {
     let doc = out::open(file, password)?;
     let config = match time {
         Some(seconds) => ScriptConfig::frozen_at(seconds),
@@ -59,6 +66,16 @@ pub fn run(file: &Path, password: Option<&str>, time: Option<u64>, json: bool) -
     } else if transcript.is_empty() {
         if failures.is_empty() {
             out::none("script output");
+        }
+    } else if term.color {
+        // The same bytes a pipe gets, with the line's kind — `Alert`,
+        // `Print`, the console's — painted the way `search` paints its
+        // page prefix.
+        for line in transcript.lines() {
+            match line.split_once(": ") {
+                Some((kind, rest)) => outln!("{}: {rest}", term.paint(Style::Key, kind)),
+                None => outln!("{line}"),
+            }
         }
     } else {
         out!("{transcript}");
