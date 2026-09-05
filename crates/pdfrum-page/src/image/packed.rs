@@ -263,30 +263,75 @@ impl<'a> Unpacked<'a> {
             return Some(&self.buf);
         }
         let levels = p.depth.levels();
-        let bits = p.depth.bits() as usize;
+        // The component index cycles `0, 1, .. components-1` across the row,
+        // so it is a counter that wraps, not `i % components` on every sample.
+        // On a one-bit image the division was the larger half of the loop.
+        let table = &*p.table;
+        let line = &*self.line;
         match p.depth {
             // The byte-aligned depths are a walk, not a bit extraction: the
             // sample *is* the byte, so the row is a zip through the table.
             Depth::Eight => {
-                for (i, slot) in self.buf.iter_mut().enumerate() {
-                    let raw = self.line.get(i).copied().unwrap_or(0);
-                    let component = i % p.components;
-                    *slot = p
-                        .table
-                        .get(component * levels + usize::from(raw))
-                        .copied()
-                        .unwrap_or(0);
+                let mut base = 0usize;
+                let mut component = 0usize;
+                for (slot, &raw) in self.buf.iter_mut().zip(line) {
+                    *slot = table.get(base + usize::from(raw)).copied().unwrap_or(0);
+                    component += 1;
+                    base += levels;
+                    if component == p.components {
+                        component = 0;
+                        base = 0;
+                    }
+                }
+                // A row the stream could only partly supply keeps what it has
+                // and zeroes the rest, which is the eager pass's own tail.
+                if let Some(tail) = self.buf.get_mut(line.len()..) {
+                    tail.fill(0);
                 }
             }
-            Depth::One | Depth::Two | Depth::Four | Depth::Sixteen => {
+            // Sixteen bits is two bytes per sample, big-endian, and the table
+            // is indexed by the whole word.
+            Depth::Sixteen => {
+                let mut base = 0usize;
+                let mut component = 0usize;
                 for (i, slot) in self.buf.iter_mut().enumerate() {
-                    let raw = scanline::get_bits(&self.line, i * bits, p.depth.bits());
-                    let component = i % p.components;
-                    *slot = p
-                        .table
-                        .get(component * levels + raw as usize)
-                        .copied()
-                        .unwrap_or(0);
+                    let hi = line.get(i * 2).copied().unwrap_or(0);
+                    let lo = line.get(i * 2 + 1).copied().unwrap_or(0);
+                    let raw = usize::from(hi) * 256 + usize::from(lo);
+                    *slot = table.get(base + raw).copied().unwrap_or(0);
+                    component += 1;
+                    base += levels;
+                    if component == p.components {
+                        component = 0;
+                        base = 0;
+                    }
+                }
+            }
+            // The sub-byte depths pack several samples into a byte, MSB
+            // first. Walking the byte and shifting down through it reads each
+            // byte once, where a `get_bits` per sample re-derived the byte
+            // index and the shift every time. On the one-bit images that is
+            // the whole of this stage's cost.
+            Depth::One | Depth::Two | Depth::Four => {
+                let bits = p.depth.bits();
+                let per_byte = (8 / bits) as usize;
+                let mask = u32::from(u8::MAX) >> (8 - bits);
+                let mut base = 0usize;
+                let mut component = 0usize;
+                for (chunk, byte_index) in self.buf.chunks_mut(per_byte).zip(0usize..) {
+                    let byte = u32::from(line.get(byte_index).copied().unwrap_or(0));
+                    // `k` is a position within one byte, so at most 7.
+                    for (slot, k) in chunk.iter_mut().zip(0u32..) {
+                        let shift = 8 - bits - k * bits;
+                        let raw = ((byte >> shift) & mask) as usize;
+                        *slot = table.get(base + raw).copied().unwrap_or(0);
+                        component += 1;
+                        base += levels;
+                        if component == p.components {
+                            component = 0;
+                            base = 0;
+                        }
+                    }
                 }
             }
         }
