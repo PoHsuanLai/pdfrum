@@ -20,6 +20,12 @@
 //! not drawn at all, is the producer's second copy — faux bold, a shadow,
 //! an `/ActualText` span whose own characters the extractor already dropped
 //! as a repeat — and is kept once.
+//!
+//! A `Figure` is the image drawn under one of its marked-content ids — the
+//! first of the page's, in drawing order, when it names several — with the
+//! element's alternative text; a figure that drew no image is its
+//! alternative text alone. An image the tree puts in no figure is not
+//! read: the tree said what the page's pictures are.
 
 use std::collections::HashSet;
 
@@ -29,13 +35,23 @@ use pdfrum_object::Resolve;
 
 use crate::ast::Block;
 use crate::heuristics::{join, normalize, strip_bullet};
-use crate::lines::{McidText, Run};
+use crate::lines::{DrawnImage, McidText, Run};
+
+/// What the page drew, for the tree to read: its text by marked-content
+/// id, and its images with the ids they were drawn under.
+#[derive(Debug, Clone, Copy)]
+pub struct Drawn<'a> {
+    /// The text under each marked-content id.
+    pub text: &'a McidText,
+    /// The page's images in drawing order.
+    pub images: &'a [DrawnImage],
+}
 
 /// The blocks the tree describes, and the marked-content ids it claimed on
 /// the way — what it did not claim is the caller's to keep.
 pub fn blocks<R: Resolve>(
     tree: &StructTree,
-    text_by_mcid: &McidText,
+    drawn: Drawn<'_>,
     r: &R,
 ) -> (Vec<Block>, HashSet<i64>) {
     let mut out = Vec::new();
@@ -44,7 +60,7 @@ pub fn blocks<R: Resolve>(
     // root's `/K` slot for it was filled.
     for (index, element) in tree.elements.iter().enumerate() {
         if element.parent.is_none() {
-            visit(tree, index, 1, text_by_mcid, r, &mut out);
+            visit(tree, index, 1, drawn, r, &mut out);
         }
     }
     out.retain(|b| !b.text().trim().is_empty() || matches!(b, Block::Image { .. }));
@@ -69,13 +85,14 @@ fn visit<R: Resolve>(
     tree: &StructTree,
     index: usize,
     depth: u8,
-    text_by_mcid: &McidText,
+    drawn: Drawn<'_>,
     r: &R,
     out: &mut Vec<Block>,
 ) {
     let Some(element) = tree.elements.get(index) else {
         return;
     };
+    let text_by_mcid = drawn.text;
     let kind = String::from_utf8_lossy(&element.kind).to_ascii_uppercase();
     match kind.as_str() {
         "H1" | "H2" | "H3" | "H4" | "H5" | "H6" => {
@@ -92,7 +109,7 @@ fn visit<R: Resolve>(
         "P" | "PARA" | "BLOCKQUOTE" | "CAPTION" | "NOTE" | "INDEX" | "TOCI" => {
             out.push(Block::Paragraph(text_of(tree, element, text_by_mcid, r)));
             // A figure inside a paragraph is still a figure.
-            figures_within(tree, element, r, out);
+            figures_within(tree, element, drawn.images, r, out);
         }
         "CODE" => out.push(Block::Code(text_of(tree, element, text_by_mcid, r))),
         "L" => {
@@ -131,7 +148,7 @@ fn visit<R: Resolve>(
                 out.push(Block::Table(rows));
             }
         }
-        "FIGURE" | "FORMULA" => out.push(figure(element, r)),
+        "FIGURE" | "FORMULA" => out.push(figure(tree, element, drawn.images, r)),
         _ => {
             // A grouping element, or something unknown: the kids decide. Text
             // sitting directly on it becomes a paragraph of its own.
@@ -142,7 +159,7 @@ fn visit<R: Resolve>(
                         linked: Some(i), ..
                     } => {
                         flush_direct(&mut direct, out);
-                        visit(tree, *i, depth.saturating_add(1), text_by_mcid, r, out);
+                        visit(tree, *i, depth.saturating_add(1), drawn, r, out);
                     }
                     Kid::PageContent { content_id } | Kid::StreamContent { content_id, .. } => {
                         direct.extend(text_by_mcid.runs(*content_id).iter().map(Piece::drawn));
@@ -164,16 +181,49 @@ fn flush_direct(direct: &mut Vec<Piece>, out: &mut Vec<Block>) {
     }
 }
 
-/// A figure's block: its alternative text, else its actual text.
-fn figure<R: Resolve>(element: &StructElement, r: &R) -> Block {
+/// A figure's block: its alternative text, else its actual text, and the
+/// first of the page's images drawn under a marked-content id the figure
+/// names, when one was.
+fn figure<R: Resolve>(
+    tree: &StructTree,
+    element: &StructElement,
+    images: &[DrawnImage],
+    r: &R,
+) -> Block {
     let alt = element.alt_text(r);
     let alt = if alt.is_empty() {
         element.actual_text(r)
     } else {
         alt
     };
+    let mut ids = HashSet::new();
+    content_ids(tree, element, &mut ids);
+    let index = images
+        .iter()
+        .find(|image| image.mcid.is_some_and(|id| ids.contains(&id)))
+        .map(|image| image.index);
     Block::Image {
         alt: normalize(alt.trim()),
+        index,
+    }
+}
+
+/// Every content id `element` or anything under it names.
+fn content_ids(tree: &StructTree, element: &StructElement, out: &mut HashSet<i64>) {
+    for kid in &element.kids {
+        match kid {
+            Kid::PageContent { content_id } | Kid::StreamContent { content_id, .. } => {
+                out.insert(*content_id);
+            }
+            Kid::Element {
+                linked: Some(i), ..
+            } => {
+                if let Some(child) = tree.elements.get(*i) {
+                    content_ids(tree, child, out);
+                }
+            }
+            _ => {}
+        }
     }
 }
 
@@ -181,6 +231,7 @@ fn figure<R: Resolve>(element: &StructElement, r: &R) -> Block {
 fn figures_within<R: Resolve>(
     tree: &StructTree,
     element: &StructElement,
+    images: &[DrawnImage],
     r: &R,
     out: &mut Vec<Block>,
 ) {
@@ -196,9 +247,9 @@ fn figures_within<R: Resolve>(
         };
         if child.kind.eq_ignore_ascii_case(b"FIGURE") || child.kind.eq_ignore_ascii_case(b"FORMULA")
         {
-            out.push(figure(child, r));
+            out.push(figure(tree, child, images, r));
         } else {
-            figures_within(tree, child, r, out);
+            figures_within(tree, child, images, r, out);
         }
     }
 }

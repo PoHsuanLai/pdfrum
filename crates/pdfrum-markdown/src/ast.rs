@@ -30,6 +30,10 @@ pub enum Block {
     Image {
         /// The alternative text, possibly empty.
         alt: String,
+        /// Which of the page's images it is, by index in drawing order — the
+        /// order the facade's `Page::images` lists them in — or `None` for a
+        /// figure that drew no image, which is its alternative text alone.
+        index: Option<usize>,
     },
 }
 
@@ -48,7 +52,7 @@ impl Block {
                 .map(|row| row.join("\t"))
                 .collect::<Vec<_>>()
                 .join("\n"),
-            Self::Image { alt } => alt.clone(),
+            Self::Image { alt, .. } => alt.clone(),
         }
     }
 }

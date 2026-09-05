@@ -12,10 +12,14 @@
 //!   stands apart from the body: no line outside the band within 1.5 line
 //!   heights of it — or when it is short and within a line height of a
 //!   line that goes, so a two-line running header goes as one. A page with
-//!   fewer than four lines keeps them all. What
-//!   one page cannot see is repetition across pages — the same line in the
-//!   same band on page after page — which needs a document-level entry
-//!   point this crate does not have yet.
+//!   fewer than four lines keeps them all. What one page cannot see is
+//!   repetition across pages — the same line in the same band on page
+//!   after page — which is [`crate::running`]'s to drop before this runs.
+//! - **Images.** An image drawn at least 4 pt on each side is a picture and
+//!   becomes a [`Block::Image`], placed before the first line that lies
+//!   below its centre and overlaps it across — after every line when none
+//!   does — and ending whatever paragraph or list was open. Smaller is a
+//!   rule, a spacer or a tracking dot, and is not.
 //! - **Body size.** The font size most characters use, rounded to a half
 //!   point.
 //! - **Headings.** A line at 1.6× the body size or more is `#`; at 1.3× or
@@ -53,7 +57,7 @@
 use kurbo::Rect;
 
 use crate::ast::Block;
-use crate::lines::Line;
+use crate::lines::{DrawnImage, Line};
 
 /// The fraction of the page height at each edge that is margin.
 const MARGIN_BAND: f64 = 0.10;
@@ -84,19 +88,28 @@ const LEFT_EDGE_CHARS: f64 = 1.0;
 const LEAD_IN_MAX_WORDS: usize = 6;
 /// A run of this many dots is a leader, not an ellipsis.
 const LEADER_MIN_DOTS: usize = 5;
+/// An image drawn narrower or shorter than this many points is a rule or a
+/// spacer, not a picture.
+const IMAGE_MIN_SIDE: f64 = 4.0;
 
-/// The blocks of a page laid out inside `page` (its crop box).
+/// The blocks of a page laid out inside `page` (its crop box), `images`
+/// being what it draws besides text.
 #[must_use]
-pub fn blocks(lines: &[Line], page: Rect) -> Vec<Block> {
-    blocks_among(lines, lines, page)
+pub fn blocks(lines: &[Line], images: &[DrawnImage], page: Rect) -> Vec<Block> {
+    blocks_among(lines, lines, images, page)
 }
 
 /// The blocks of `lines`, judged among `context` — every line the page has,
 /// of which `lines` are the ones typography is to read — so a running
 /// header is recognised by its distance from a body the structure tree
-/// may have claimed.
+/// may have claimed; `images` are placed among them by height.
 #[must_use]
-pub fn blocks_among(lines: &[Line], context: &[Line], page: Rect) -> Vec<Block> {
+pub fn blocks_among(
+    lines: &[Line],
+    context: &[Line],
+    images: &[DrawnImage],
+    page: Rect,
+) -> Vec<Block> {
     let margin = margin_mask(context, page);
     // A line of `lines` is one of `context`, or a copy of one with the
     // same box: the tree's leftovers keep the box of the line they came
@@ -116,7 +129,70 @@ pub fn blocks_among(lines: &[Line], context: &[Line], page: Rect) -> Vec<Block> 
     }
     let body = body_size(&kept);
     let classified: Vec<(Class, &Line)> = kept.iter().map(|l| (classify(l, body), *l)).collect();
-    group(&classified)
+    let bodies: Vec<&Line> = classified
+        .iter()
+        .filter(|(class, _)| *class == Class::Body)
+        .map(|(_, line)| *line)
+        .collect();
+    // An image ends whatever was open: the lines on either side of it are
+    // grouped apart, against the same column edges.
+    let mut blocks = Vec::new();
+    let mut run: Vec<(Class, &Line)> = Vec::new();
+    for item in place_images(&classified, images) {
+        match item {
+            Item::Line(class, line) => run.push((class, line)),
+            Item::Image(index) => {
+                blocks.extend(group(&run, &bodies));
+                run.clear();
+                blocks.push(Block::Image {
+                    alt: String::new(),
+                    index: Some(index),
+                });
+            }
+        }
+    }
+    blocks.extend(group(&run, &bodies));
+    blocks
+}
+
+/// A line or an image, in reading order.
+#[derive(Debug, Clone, Copy)]
+enum Item<'a> {
+    Line(Class, &'a Line),
+    Image(usize),
+}
+
+/// The lines with the pictures among them — the images at least
+/// [`IMAGE_MIN_SIDE`] on each side — each before the first line that lies
+/// below its centre and overlaps it across, else before the first line
+/// below it at all, else after every line.
+fn place_images<'a>(classified: &[(Class, &'a Line)], images: &[DrawnImage]) -> Vec<Item<'a>> {
+    let mut placed: Vec<(usize, usize)> = images
+        .iter()
+        .filter(|image| image.bbox.width().min(image.bbox.height()) >= IMAGE_MIN_SIDE)
+        .map(|image| {
+            let center = f64::midpoint(image.bbox.y0, image.bbox.y1);
+            let below = |line: &Line| line.bbox.y1 < center;
+            let across = |line: &Line| line.bbox.x0 < image.bbox.x1 && image.bbox.x0 < line.bbox.x1;
+            let at = classified
+                .iter()
+                .position(|(_, line)| below(line) && across(line))
+                .or_else(|| classified.iter().position(|(_, line)| below(line)))
+                .unwrap_or(classified.len());
+            (at, image.index)
+        })
+        .collect();
+    placed.sort_unstable();
+    let mut out = Vec::with_capacity(classified.len() + placed.len());
+    let mut pictures = placed.into_iter().peekable();
+    for (at, &(class, line)) in classified.iter().enumerate() {
+        while let Some((_, index)) = pictures.next_if(|(slot, _)| *slot == at) {
+            out.push(Item::Image(index));
+        }
+        out.push(Item::Line(class, line));
+    }
+    out.extend(pictures.map(|(_, index)| Item::Image(index)));
+    out
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -454,12 +530,9 @@ fn paragraph_head(line: &Line) -> String {
     }
 }
 
-fn group(classified: &[(Class, &Line)]) -> Vec<Block> {
-    let bodies: Vec<&Line> = classified
-        .iter()
-        .filter(|(class, _)| *class == Class::Body)
-        .map(|(_, line)| *line)
-        .collect();
+/// The blocks of a run of classified lines, `bodies` being every body line
+/// of the page, which is what the ragged-right rule measures columns on.
+fn group(classified: &[(Class, &Line)], bodies: &[&Line]) -> Vec<Block> {
     let mut blocks = Vec::new();
     let mut i = 0;
     while let Some(&(class, line)) = classified.get(i) {
@@ -521,7 +594,7 @@ fn group(classified: &[(Class, &Line)]) -> Vec<Block> {
                 while let Some((Class::Body, next)) = classified.get(j).copied()
                     && classified.get(j - 1).is_some_and(|(_, prev)| {
                         continues(prev, next)
-                            && !ends_ragged(prev, next, column_right_edge(prev, &bodies))
+                            && !ends_ragged(prev, next, column_right_edge(prev, bodies))
                     })
                     && !starts_lead_in(next)
                 {
@@ -540,7 +613,7 @@ fn group(classified: &[(Class, &Line)]) -> Vec<Block> {
 mod tests {
     use super::{blocks, blocks_among, has_dash_lead_in, normalize};
     use crate::ast::Block;
-    use crate::lines::Line;
+    use crate::lines::{DrawnImage, Line};
     use kurbo::Rect;
 
     /// A line whose box has its *top* at `top`, y up.
@@ -562,6 +635,50 @@ mod tests {
             mcids: Vec::new(),
             segments: Vec::new(),
         }
+    }
+
+    #[test]
+    fn a_picture_is_placed_by_height_and_a_spacer_is_not_a_picture() {
+        let page = Rect::new(0.0, 0.0, 612.0, 792.0);
+        let lines = vec![
+            line("First paragraph line one", 700.0, 10.0, false, false),
+            line("and line two.", 688.0, 10.0, false, false),
+            line(
+                "Second paragraph, below the picture.",
+                500.0,
+                10.0,
+                false,
+                false,
+            ),
+        ];
+        let image = |index: usize, bbox: Rect| DrawnImage {
+            index,
+            mcid: None,
+            bbox,
+        };
+        let images = [
+            // A rule the width of the column, half a point tall.
+            image(0, Rect::new(72.0, 680.0, 400.0, 680.5)),
+            // The picture, between the paragraphs.
+            image(1, Rect::new(72.0, 540.0, 300.0, 660.0)),
+            // A picture below every line, in another column.
+            image(2, Rect::new(400.0, 100.0, 500.0, 200.0)),
+        ];
+        assert_eq!(
+            blocks(&lines, &images, page),
+            vec![
+                Block::Paragraph("First paragraph line one and line two.".into()),
+                Block::Image {
+                    alt: String::new(),
+                    index: Some(1),
+                },
+                Block::Paragraph("Second paragraph, below the picture.".into()),
+                Block::Image {
+                    alt: String::new(),
+                    index: Some(2),
+                },
+            ]
+        );
     }
 
     #[test]
@@ -587,7 +704,7 @@ mod tests {
             line("Bold lead", 500.0, 10.0, true, false),
             line("7", 30.0, 10.0, false, false),
         ];
-        let got = blocks(&lines, page);
+        let got = blocks(&lines, &[], page);
         assert_eq!(
             got,
             vec![
@@ -641,7 +758,7 @@ mod tests {
             body_line("A line thirty points lower starts anew.", 648.5, 657.6),
         ];
         assert_eq!(
-            blocks(&lines, page),
+            blocks(&lines, &[], page),
             vec![
                 Block::Paragraph(
                     "Many businesses need more than just PDF creation and editing. They need \
@@ -692,7 +809,7 @@ mod tests {
             column_line("& 64-bit).", 120.0, 640.0, 0),
             column_line("Windows 7 (32-bit & 64-bit).", 210.0, 628.0, 0),
         ];
-        let texts: Vec<String> = blocks(&lines, page).iter().map(Block::text).collect();
+        let texts: Vec<String> = blocks(&lines, &[], page).iter().map(Block::text).collect();
         assert_eq!(
             texts,
             [
@@ -725,7 +842,7 @@ mod tests {
             ),
         ];
         assert_eq!(
-            blocks(&lines, page),
+            blocks(&lines, &[], page),
             vec![Block::Paragraph(
                 "This paragraph is set justified, so every line but the last reaches the edge; \
                  this one is short but the next begins in lower case, as a wrapped line does."
@@ -784,7 +901,7 @@ mod tests {
                 0,
             ),
         ];
-        let texts: Vec<String> = blocks(&lines, page).iter().map(Block::text).collect();
+        let texts: Vec<String> = blocks(&lines, &[], page).iter().map(Block::text).collect();
         assert_eq!(
             texts,
             [
@@ -836,7 +953,7 @@ mod tests {
             column_line(BOLD_FIRST, 500.0, 664.0, BOLD_FIRST.len()),
             column_line(BOLD_WRAP, 500.0, 652.0, BOLD_WRAP.len()),
         ];
-        let got = blocks(&lines, page);
+        let got = blocks(&lines, &[], page);
         assert_eq!(
             got,
             vec![
@@ -870,7 +987,7 @@ mod tests {
             line("Different Views 2", 486.0, 11.0, false, false),
             line("1 / 11 www.foxitsoftware.com", 79.7, 9.0, true, false),
         ];
-        let got = blocks(&lines, page);
+        let got = blocks(&lines, &[], page);
         let texts: Vec<String> = got.iter().map(Block::text).collect();
         assert_eq!(
             texts,
@@ -898,7 +1015,7 @@ mod tests {
             line("Running footer", 30.0, 8.0, false, false),
         ];
         assert_eq!(
-            blocks(&lines, page),
+            blocks(&lines, &[], page),
             vec![
                 Block::Heading {
                     level: 1,
@@ -921,10 +1038,10 @@ mod tests {
             line("Claimed body three", 576.0, 10.0, false, false),
         ];
         let unclaimed = vec![all[0].clone()];
-        assert_eq!(blocks_among(&unclaimed, &all, page), vec![]);
+        assert_eq!(blocks_among(&unclaimed, &all, &[], page), vec![]);
         // Alone, three lines are too few to have a header.
         assert_eq!(
-            blocks(&unclaimed, page),
+            blocks(&unclaimed, &[], page),
             vec![Block::Heading {
                 level: 3,
                 text: "Running header".into()
@@ -959,7 +1076,7 @@ mod tests {
             line("2 / 11 www.foxitsoftware.com", 79.7, 9.0, true, false),
         ];
         let unclaimed = vec![all[0].clone(), all[1].clone(), all[5].clone()];
-        assert_eq!(blocks_among(&unclaimed, &all, page), vec![]);
+        assert_eq!(blocks_among(&unclaimed, &all, &[], page), vec![]);
     }
 
     #[test]
@@ -976,7 +1093,7 @@ mod tests {
             line("\u{f0b7} Another item", 588.0, 10.0, false, false),
         ];
         assert_eq!(
-            blocks(&lines, page),
+            blocks(&lines, &[], page),
             vec![Block::List {
                 ordered: false,
                 items: vec![
