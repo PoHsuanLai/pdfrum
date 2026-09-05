@@ -4,6 +4,7 @@
 use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
+use std::sync::atomic::{AtomicU8, Ordering};
 
 use anyhow::{Context, Result, bail};
 use pdfrum::{Document, OpenOptions, Rect};
@@ -11,13 +12,59 @@ use serde::Serialize;
 
 use crate::term::{Style, Term};
 
+/// How much commentary stderr gets: `--quiet` drops the notices, `--verbose`
+/// adds every parser diagnostic. Set once by `main` before any command
+/// runs, and read wherever a notice is printed, so no command carries it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Verbosity {
+    Quiet,
+    Normal,
+    Verbose,
+}
+
+static VERBOSITY: AtomicU8 = AtomicU8::new(1);
+
+pub fn set_verbosity(level: Verbosity) {
+    VERBOSITY.store(
+        match level {
+            Verbosity::Quiet => 0,
+            Verbosity::Normal => 1,
+            Verbosity::Verbose => 2,
+        },
+        Ordering::Relaxed,
+    );
+}
+
+/// Whether `--quiet` is on: notices stay unprinted, errors do not.
+pub fn quiet() -> bool {
+    VERBOSITY.load(Ordering::Relaxed) == 0
+}
+
+/// Whether `--verbose` is on.
+pub fn verbose() -> bool {
+    VERBOSITY.load(Ordering::Relaxed) == 2
+}
+
 /// Open `file`, with `password` when one was given.
 ///
 /// An encrypted file with no password is the one error a user hits most, so
-/// it names the flag that fixes it.
+/// it names the flag that fixes it. A file that needed recovery gets one
+/// notice — or, under `--verbose`, one line per diagnostic, the same list
+/// `doctor` prints — and under `--quiet` nothing.
 pub fn open(file: &Path, password: Option<&str>) -> Result<Document> {
     let doc = open_quietly(file, password)?;
-    if doc.diagnostics().is_empty() {
+    if doc.diagnostics().is_empty() || quiet() {
+        return Ok(doc);
+    }
+    if verbose() {
+        for d in doc.diagnostics().entries() {
+            let severity = match d.severity {
+                pdfrum::Severity::Recovered => "recovered",
+                pdfrum::Severity::Suspicious => "suspicious",
+            };
+            let at = d.at.map_or(String::new(), |o| format!(" at byte {o}"));
+            notice(file, &format!("{severity}{at}: {:?}", d.what));
+        }
         return Ok(doc);
     }
     let n = doc.diagnostics().len();
@@ -98,8 +145,12 @@ pub fn stem(file: &Path) -> String {
         .map_or_else(|| "output".to_owned(), |s| s.to_string_lossy().into_owned())
 }
 
-/// A notice: `pdfrum: <file>: <what happened>` on stderr, one line.
+/// A notice: `pdfrum: <file>: <what happened>` on stderr, one line; nothing
+/// under `--quiet`.
 pub fn notice(file: &Path, what: &str) {
+    if quiet() {
+        return;
+    }
     eprintln!("pdfrum: {}: {what}", file.display());
 }
 

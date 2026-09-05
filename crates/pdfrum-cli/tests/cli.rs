@@ -1864,6 +1864,57 @@ fn search_names_the_file_for_several_files_like_grep() {
     assert_eq!(v[1]["hits"].as_array().map(Vec::len), Some(0));
 }
 
+#[test]
+fn quiet_drops_the_notices_and_verbose_lists_every_diagnostic() {
+    let damaged = "fixtures/parser_rebuildxref_correct.pdf";
+    let normal = run(&["info", damaged]).unwrap();
+    assert!(
+        String::from_utf8_lossy(&normal.stderr).contains("needed recovery (4 notices"),
+        "{normal:?}"
+    );
+    let quiet = run(&["info", "-q", damaged]).unwrap();
+    assert!(quiet.status.success());
+    assert!(quiet.stderr.is_empty(), "{quiet:?}");
+    assert_eq!(quiet.stdout, normal.stdout);
+    let verbose = run(&["info", "--verbose", damaged]).unwrap();
+    let err = String::from_utf8_lossy(&verbose.stderr);
+    let lines: Vec<&str> = err.lines().collect();
+    assert_eq!(lines.len(), 4, "{err}");
+    assert!(
+        lines
+            .iter()
+            .all(|l| l.starts_with("pdfrum: fixtures/parser_rebuildxref_correct.pdf: ")),
+        "{err}"
+    );
+    assert!(
+        err.contains("recovered at byte 471: KeywordResync"),
+        "{err}"
+    );
+    assert!(
+        !err.contains("needed recovery"),
+        "the list, not the pointer"
+    );
+
+    let both = run(&["info", "-q", "-v", damaged]).unwrap();
+    assert_eq!(both.status.code(), Some(2), "they conflict");
+    let error = run(&["info", "--quiet", "fixtures/nonesuch.pdf"]).unwrap();
+    assert_eq!(error.status.code(), Some(1));
+    assert!(!error.stderr.is_empty(), "errors still print");
+    let piped = run(&[
+        "pages",
+        "slice",
+        "-q",
+        "fixtures/hello_world_2_pages.pdf",
+        "--pages",
+        "1",
+        "-o",
+        "-",
+    ])
+    .unwrap();
+    assert!(piped.stdout.starts_with(b"%PDF-"));
+    assert!(piped.stderr.is_empty(), "{piped:?}");
+}
+
 // ---- javascript (a feature, off by default) --------------------------------
 
 /// The transcript PDFium's own harness expects for a fixture, beside it.

@@ -45,6 +45,16 @@ struct Cli {
     #[arg(long, global = true, value_enum, default_value_t, value_name = "MODE")]
     graphics: term::GraphicsMode,
 
+    /// No notices on stderr: not the recovery notice, not the written-file
+    /// summaries of `render` and `-o -`. Errors still print.
+    #[arg(short, long, global = true, conflicts_with = "verbose")]
+    quiet: bool,
+
+    /// Every parser diagnostic on open, one per line on stderr — the list
+    /// `doctor` shows, as commentary on any command.
+    #[arg(short, long, global = true)]
+    verbose: bool,
+
     #[command(subcommand)]
     command: Command,
 }
@@ -620,6 +630,13 @@ struct SearchArgs {
 
 fn main() -> ExitCode {
     let cli = Cli::parse();
+    out::set_verbosity(if cli.quiet {
+        out::Verbosity::Quiet
+    } else if cli.verbose {
+        out::Verbosity::Verbose
+    } else {
+        out::Verbosity::Normal
+    });
     let password = cli.password.as_deref();
     let term = term::Term::detect(cli.color, cli.hyperlinks, cli.graphics);
     let outcome = match cli.command {
