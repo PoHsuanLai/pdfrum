@@ -2029,17 +2029,21 @@ fn render_image<B: RasterBackend>(
     );
     // A reduction is low-passed here rather than left to the backend's two-tap
     // kernel, which sees at most two of the many source pixels a shrunken
-    // destination pixel covers. `reduction_for` names the decision `prescale`
-    // makes, in the integers the cache keys on.
-    let reduction =
-        crate::stretch::reduction_for(image.width, image.height, corners.width(), corners.height());
-    let (out_w, out_h) = reduction.unwrap_or((image.width, image.height));
-    let placement = match reduction {
-        Some((new_w, new_h)) => {
-            crate::stretch::reduction_transform(placement, image.width, image.height, new_w, new_h)
-        }
-        None => placement,
-    };
+    // destination pixel covers. `Reduction` is that decision *and* the
+    // placement it implies, taken once: where upstream's device-grid snap
+    // applies the reduced pixmap already is the device pixels and never meets
+    // the backend's sampler again, and where it does not the ceiled
+    // footprint and the backend's kernel are what the draw keeps getting.
+    let reduction = crate::stretch::reduction(
+        placement,
+        image.width,
+        image.height,
+        corners.width(),
+        corners.height(),
+        ctx.type3.is_none(),
+    );
+    let (out_w, out_h) = reduction.size(image.width, image.height);
+    let placement = reduction.transform();
     // `to_pixmap` and the reduction are pure in `(image, fill, transfer, size)`
     // and were the largest single cost in the corpus, re-run on every render of
     // an image that had not changed (`docs/status/M12.md` §3.6). Cached
@@ -2054,17 +2058,16 @@ fn render_image<B: RasterBackend>(
             out_w,
             out_h,
         );
-        caches
-            .images
-            .get_or_render(object.source, key, || match reduction {
-                // The conversion and the reduction are one pull pipeline, so
-                // neither the full-size RGBA pixmap nor the two full-height
-                // intermediates are ever built.
-                Some((new_w, new_h)) => {
-                    crate::stretch::convert_and_reduce(image, fill, transfer.as_ref(), new_w, new_h)
-                }
-                None => to_pixmap(image, fill, transfer.as_ref()),
-            })
+        caches.images.get_or_render(object.source, key, || {
+            if reduction.filters() {
+                // The conversion and the reduction are one pull pipeline,
+                // so neither the full-size RGBA pixmap nor the two
+                // full-height intermediates are ever built.
+                crate::stretch::convert_and_reduce(image, fill, transfer.as_ref(), out_w, out_h)
+            } else {
+                to_pixmap(image, fill, transfer.as_ref())
+            }
+        })
     });
     let pixels = &*pixels;
     let blend = overprint_blend(None, &state.general);
