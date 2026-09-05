@@ -37,6 +37,7 @@ fn session_for<'a>(
     RenderSession {
         caches: Some(caches),
         visible: Some(visible),
+        deadline: None,
     }
 }
 
@@ -500,6 +501,41 @@ fn a_page_too_large_for_a_backend_is_an_error_not_a_panic() {
     )
     .expect_err("beyond the u16 target limit");
     assert!(matches!(err, pdfrum_render::Error::TargetTooLarge { .. }));
+}
+
+/// A spent session deadline fails the render before the target is allocated,
+/// and a generous one draws the same bytes as no deadline at all.
+#[test]
+fn a_spent_deadline_fails_the_render_and_a_generous_one_is_invisible() {
+    let objects = vec![filled(rect_path(0.0, 0.0, 10.0, 10.0), [1.0, 0.0, 0.0])];
+    let p = page(20.0, 20.0, objects);
+    let opts = RenderOptions::default();
+    let backend = VelloCpuBackend::new();
+    let no_time = pdfrum_common::Deadline::after(std::time::Duration::ZERO);
+    let spent = pdfrum_render::RenderSession {
+        deadline: Some(&no_time),
+        ..Default::default()
+    };
+    let err = render_page_with(&p, &opts, &backend, spent, &mut Diagnostics::default())
+        .expect_err("no time at all");
+    assert!(matches!(
+        err,
+        pdfrum_render::Error::Limit(pdfrum_common::LimitExceeded::Time {
+            during: pdfrum_common::Operation::Render,
+            page: None,
+            ..
+        })
+    ));
+
+    let an_hour = pdfrum_common::Deadline::after(std::time::Duration::from_hours(1));
+    let generous = pdfrum_render::RenderSession {
+        deadline: Some(&an_hour),
+        ..Default::default()
+    };
+    let timed = render_page_with(&p, &opts, &backend, generous, &mut Diagnostics::default())
+        .expect("an hour is plenty");
+    let plain = render_page(&p, &opts, &backend, &mut Diagnostics::default()).expect("render");
+    assert_eq!(timed.data(), plain.data());
 }
 
 #[test]

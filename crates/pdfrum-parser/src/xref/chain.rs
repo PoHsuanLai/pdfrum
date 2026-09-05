@@ -85,13 +85,13 @@ pub(crate) fn load(
     }
 
     diags.record(Severity::Recovered, DiagKind::XrefRebuilt, None);
-    if rebuild::rebuild(&shared, &mut xref, &mut trailer, limits, diags, &NoResolve) {
+    match rebuild::rebuild(&shared, &mut xref, &mut trailer, limits, diags, &NoResolve) {
         // A rebuilt table has no previous section to chain from: offset zero
         // is what makes an incremental save rewrite the whole table instead
         // of emitting a `/Prev` that names nothing.
-        Ok((xref, trailer, XrefShape::rebuilt()))
-    } else {
-        Err(Error::XrefBroken)
+        Ok(true) => Ok((xref, trailer, XrefShape::rebuilt())),
+        Ok(false) => Err(Error::XrefBroken),
+        Err(limit) => Err(Error::Limit(limit)),
     }
 }
 

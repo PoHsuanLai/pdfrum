@@ -22,7 +22,11 @@ pub struct OpenOptions {
     /// Both the user and the owner password are accepted; which one opened
     /// the file decides what [`Document::permissions`] reports.
     pub password: Option<Vec<u8>>,
-    /// The depth and size caps recovery enforces while reading.
+    /// The depth and size caps recovery enforces while reading, and the two
+    /// ceilings a host adds: [`Limits::max_render_pixels`] for every render
+    /// of this document, [`Limits::deadline`] for everything done with it.
+    /// There is no per-render copy — [`RenderOptions`](crate::RenderOptions)
+    /// says how a page is drawn, this says how much a document may cost.
     pub limits: Limits,
 }
 
@@ -143,11 +147,11 @@ impl Document {
     pub fn from_bytes_with(bytes: Arc<[u8]>, options: &OpenOptions) -> Result<Document> {
         let load = pdfrum_parser::LoadOptions {
             password: options.password.clone(),
-            limits: options.limits,
+            limits: options.limits.clone(),
         };
         Ok(Document {
             inner: pdfrum_parser::load(bytes, &load)?,
-            limits: options.limits,
+            limits: options.limits.clone(),
             session: Mutex::new(Diagnostics::default()),
         })
     }
@@ -185,7 +189,9 @@ impl Document {
     ///
     /// A page that will not load is skipped rather than ending the walk,
     /// which is what a viewer does: one broken page does not hide the rest of
-    /// the document. Use [`Document::page`] when you need to know.
+    /// the document. Use [`Document::page`] when you need to know — a
+    /// [`Limits::deadline`] that passes mid-walk ends it here, and only
+    /// [`Document::page`] says so.
     pub fn pages(&self) -> impl Iterator<Item = Page<'_>> + '_ {
         (0..self.page_count()).filter_map(|index| self.page(index).ok())
     }

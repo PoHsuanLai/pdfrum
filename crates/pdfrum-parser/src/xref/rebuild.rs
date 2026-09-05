@@ -27,7 +27,7 @@
 
 use std::sync::Arc;
 
-use pdfrum_common::{DiagKind, Diagnostics, Limits, Severity};
+use pdfrum_common::{DiagKind, Diagnostics, LimitExceeded, Limits, Operation, Severity};
 use pdfrum_object::{Object, Resolve, names};
 
 use crate::lexer::{Delim, Lexer, Token, atoui};
@@ -43,13 +43,22 @@ struct PendingNumber {
     at: usize,
 }
 
+/// How many tokens the scan reads between deadline checks: a chunk of the
+/// file, so the clock is read a few times per megabyte rather than per word.
+const DEADLINE_STRIDE: u32 = 4096;
+
 /// Scan `file` for object headers and trailers, producing a table.
 ///
 /// The result overlays whatever `xref` already held: entries found here win,
 /// so a partial table assembled before the scan keeps the objects the scan
-/// did not find. Succeeds only when both a trailer and at least one object
+/// did not find. `Ok(true)` only when both a trailer and at least one object
 /// turned up — a file with objects but nothing naming a catalog is not a
 /// document anyone can open.
+///
+/// # Errors
+///
+/// [`LimitExceeded::Time`] when `limits.deadline` passes during the scan,
+/// which is the one long loop an open has: the whole file, token by token.
 pub(crate) fn rebuild<R: Resolve + ?Sized>(
     file: &Arc<[u8]>,
     xref: &mut Xref,
@@ -57,7 +66,7 @@ pub(crate) fn rebuild<R: Resolve + ?Sized>(
     limits: &Limits,
     diags: &mut Diagnostics,
     store: &R,
-) -> bool {
+) -> Result<bool, LimitExceeded> {
     let mut found = Xref::new();
     let mut found_trailer = Trailer::default();
     let mut has_trailer = false;
@@ -65,8 +74,13 @@ pub(crate) fn rebuild<R: Resolve + ?Sized>(
     let mut lx = Lexer::new(file);
     // The last two numbers seen, oldest first.
     let mut numbers: Vec<PendingNumber> = Vec::with_capacity(2);
+    let mut tokens: u32 = 0;
 
     loop {
+        tokens = tokens.wrapping_add(1);
+        if tokens.is_multiple_of(DEADLINE_STRIDE) {
+            limits.check_deadline(Operation::Open)?;
+        }
         let word_start = lx.pos();
         let token = lx.next_word(limits);
         match token {
@@ -131,13 +145,13 @@ pub(crate) fn rebuild<R: Resolve + ?Sized>(
     }
 
     if !has_trailer || found.is_empty() {
-        return false;
+        return Ok(false);
     }
 
     diags.record(Severity::Recovered, DiagKind::XrefRebuilt, None);
     xref.merge_up(&found);
     merge_trailers(trailer, &found_trailer);
-    true
+    Ok(true)
 }
 
 /// Where a word began, given the lexer's position before it was read.
@@ -250,9 +264,10 @@ fn read_trailer_body<R: Resolve + ?Sized>(
 mod tests {
     use super::rebuild;
     use crate::xref::{Entry, Trailer, Xref};
-    use pdfrum_common::{DiagKind, Diagnostics, Limits};
+    use pdfrum_common::{Deadline, DiagKind, Diagnostics, LimitExceeded, Limits, Operation};
     use pdfrum_object::{NoResolve, names};
     use std::sync::Arc;
+    use std::time::Duration;
 
     fn scan(bytes: &[u8]) -> Option<(Xref, Trailer, Diagnostics)> {
         let file: Arc<[u8]> = Arc::from(bytes);
@@ -267,7 +282,49 @@ mod tests {
             &mut diags,
             &NoResolve,
         )
+        .unwrap_or(false)
         .then_some((xref, trailer, diags))
+    }
+
+    /// A scan is the one long loop an open has, so it is where the deadline
+    /// is read: every 4096 tokens, which a file of 4096 `0`s reaches.
+    #[test]
+    fn a_spent_deadline_stops_the_scan() {
+        let mut file = b"%PDF-1.7\n".to_vec();
+        file.extend(std::iter::repeat_n(b"0 ", 5000).flatten());
+        file.extend_from_slice(b"1 0 obj << >> endobj trailer << /Root 1 0 R >>");
+        let file: Arc<[u8]> = Arc::from(file);
+        let limits = Limits {
+            deadline: Some(Deadline::after(Duration::ZERO)),
+            ..Limits::default()
+        };
+        let result = rebuild(
+            &file,
+            &mut Xref::new(),
+            &mut Trailer::default(),
+            &limits,
+            &mut Diagnostics::default(),
+            &NoResolve,
+        );
+        assert!(matches!(
+            result,
+            Err(LimitExceeded::Time {
+                during: Operation::Open,
+                ..
+            })
+        ));
+        // The same file with no deadline scans through.
+        assert!(
+            rebuild(
+                &file,
+                &mut Xref::new(),
+                &mut Trailer::default(),
+                &Limits::default(),
+                &mut Diagnostics::default(),
+                &NoResolve,
+            )
+            .is_ok_and(|found| found)
+        );
     }
 
     #[test]

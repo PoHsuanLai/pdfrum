@@ -412,6 +412,7 @@ pub fn rasterize<R: Resolve>(
     let session = RenderSession {
         caches: Some(&mut caches),
         visible: Some(&visible),
+        deadline: None,
     };
     let pixmap = match backend {
         Backend::Agg => {

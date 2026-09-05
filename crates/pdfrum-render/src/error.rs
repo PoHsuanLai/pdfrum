@@ -34,6 +34,12 @@ pub enum Error {
         /// The requested height in pixels.
         height: u32,
     },
+    /// [`RenderSession::deadline`](crate::RenderSession::deadline) passed:
+    /// before the target was allocated, or during the walk, which stops at
+    /// the next object and reports here rather than handing back a page with
+    /// the rest missing.
+    #[error(transparent)]
+    Limit(pdfrum_common::LimitExceeded),
     /// A PNG could not be encoded — only with the `png` feature. The
     /// encoder's own message, since its error type is neither comparable nor
     /// cloneable and this one is both.

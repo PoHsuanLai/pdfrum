@@ -347,6 +347,16 @@ pub enum DiagKind {
     /// of the document is unaffected, and the hook takes its refusing answer
     /// for the same reason as [`DiagKind::ScriptLimitReached`].
     ScriptFailed,
+    /// `Limits::deadline` passed inside an operation that cannot fail — the
+    /// content interpreter or the text extractor — which stopped where it was
+    /// and returned what it had. The result is partial: the objects before
+    /// the stop, or an empty text page.
+    ///
+    /// Recorded once per stop. The fallible entry points (open, page load,
+    /// render) answer `LimitExceeded::Time` instead of recording this, so a
+    /// render that fails on the deadline still carries the interpreter's
+    /// record of where the build stopped.
+    TimeLimitReached,
 }
 
 /// One recorded recovery.

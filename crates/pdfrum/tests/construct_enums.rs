@@ -47,6 +47,7 @@ const SNAPSHOT_ENUMS: &[(&str, &str, &str)] = &[
         "pdfrum_common::LimitExceeded",
         "LimitExceeded",
     ),
+    ("pdfrum-common.txt", "pdfrum_common::Operation", "Operation"),
     ("pdfrum-common.txt", "pdfrum_common::Severity", "Severity"),
     ("pdfrum-doc.txt", "pdfrum_doc::Subtype", "Subtype"),
     ("pdfrum-doc.txt", "pdfrum_doc::FocusBox", "FocusBox"),
@@ -146,13 +147,31 @@ fn construct_default_feature_variants() -> usize {
     });
     n += 9;
 
-    // LimitExceeded — 1
+    // LimitExceeded — 3
     let _ = LimitExceeded::RenderPixels {
         width: 0,
         height: 0,
         allowed: 0,
     };
-    n += 1;
+    let _ = LimitExceeded::Time {
+        budget: std::time::Duration::ZERO,
+        during: Operation::Open,
+        page: None,
+    };
+    let _ = LimitExceeded::Stopped {
+        during: Operation::Open,
+        page: None,
+    };
+    n += 3;
+
+    // Operation — 6
+    let _ = Operation::Open;
+    let _ = Operation::PageLoad;
+    let _ = Operation::Interpret;
+    let _ = Operation::Render;
+    let _ = Operation::Extract;
+    let _ = Operation::Script;
+    n += 6;
 
     // pdfrum::Rotation — 4
     let _ = Rotation::None;
@@ -267,6 +286,7 @@ fn construct_default_feature_variants() -> usize {
         DiagKind::TextObjectDegenerate,
         DiagKind::TextObjectDropped,
         DiagKind::TextObjectDuplicate,
+        DiagKind::TimeLimitReached,
         DiagKind::TilingRangeOverflow,
         DiagKind::TilingStepInvalid,
         DiagKind::TintTransformDropped,
@@ -575,13 +595,23 @@ fn construct_default_feature_variants() -> usize {
     let _ = ReadError::TooDeep(0);
     let _ = ReadError::Unresolved(ObjRef::new(1, 0));
     let _ = ReadError::XrefBroken;
-    n += 7;
+    let _ = ReadError::Limit(LimitExceeded::RenderPixels {
+        width: 0,
+        height: 0,
+        allowed: 0,
+    });
+    n += 8;
 
     let _ = OpenError::Broken(String::new());
     let _ = OpenError::NotPdf;
     let _ = OpenError::UnsupportedEncryption(String::new());
     let _ = OpenError::WrongPassword;
-    n += 4;
+    let _ = OpenError::Limit(LimitExceeded::RenderPixels {
+        width: 0,
+        height: 0,
+        allowed: 0,
+    });
+    n += 5;
 
     let _ = ColorMode::Alpha;
     let _ = ColorMode::Forced(ColorScheme {
@@ -603,7 +633,12 @@ fn construct_default_feature_variants() -> usize {
         height: 0,
         limit: 0,
     };
-    n += 2;
+    let _ = RenderError::Limit(LimitExceeded::RenderPixels {
+        width: 0,
+        height: 0,
+        allowed: 0,
+    });
+    n += 3;
 
     let _ = TextAa::Grayscale;
     let _ = TextAa::LcdSubpixel;
@@ -721,8 +756,8 @@ fn every_public_enum_variant_is_constructible_from_the_facade() {
         "constructed {constructed} default-feature variants, snapshots derive {derived}; \
          SNAPSHOT_ENUMS is the derivation index — add a construction when a variant lands"
     );
-    assert_eq!(constructed, 305, "default-feature variant count");
-    assert_eq!(SNAPSHOT_ENUMS.len(), 34, "default-feature enum count");
+    assert_eq!(constructed, 317, "default-feature variant count");
+    assert_eq!(SNAPSHOT_ENUMS.len(), 35, "default-feature enum count");
 }
 
 #[test]

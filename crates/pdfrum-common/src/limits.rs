@@ -12,13 +12,19 @@
 //! and was removed rather than left defaulting to `usize::MAX` for a
 //! hardening pass nobody had scheduled.
 //!
-//! One field is **off by default** rather than PDFium-equivalent, because it
-//! is a host's ceiling on untrusted input and not a parser's: the render pixel
-//! cap. It answers with a [`LimitExceeded`] rather than a diagnostic — a
-//! caller who set a ceiling wants to hear that it was hit, not a result with
-//! a hole in it.
+//! Two fields are **off by default** rather than PDFium-equivalent, because
+//! they are a host's ceiling on untrusted input and not a parser's: the render
+//! pixel cap and the deadline. Both answer with a [`LimitExceeded`] rather
+//! than a diagnostic wherever the entry point can fail — a caller who set a
+//! ceiling wants to hear that it was hit, not a result with a hole in it —
+//! and the infallible entry points record [`DiagKind::TimeLimitReached`](crate::DiagKind::TimeLimitReached)
+//! beside the partial result they return.
 
 use std::fmt;
+use std::time::Duration;
+
+use crate::PageIndex;
+use crate::deadline::{Deadline, Operation};
 
 /// Caps applied while reading a document. Plain configuration data: pass it
 /// down, never store it in a parser struct that also owns state.
@@ -29,6 +35,7 @@ use std::fmt;
 /// CMap and name-tree caps while loading fonts and document-level trees; the
 /// script budgets by the script engine alone. [`Limits::max_render_pixels`]
 /// is read by the facade's render entry points, before a target is allocated.
+/// [`Limits::deadline`] is read at every boundary listed on that field.
 ///
 /// ```
 /// use pdfrum_common::Limits;
@@ -41,7 +48,11 @@ use std::fmt;
 // Deliberately *not* `#[non_exhaustive]`: STYLE.md §4 makes struct-update
 // syntax over `Default` the way callers configure options, and the attribute
 // forbids exactly that outside this crate. New fields are additive here.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+//
+// `Clone` and not `Copy` since M20 phase 3: a [`Deadline`] shares a stop
+// flag between its clones, and a `Copy` of an `Arc` is not a thing. Every
+// reader takes `&Limits`; the few owners clone once.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Limits {
     /// Maximum depth of nested arrays/dictionaries accepted while parsing an
     /// object body. Enforced at parse time so access code may recurse freely.
@@ -139,6 +150,42 @@ pub struct Limits {
     /// the target is allocated, so a request above the cap costs nothing;
     /// exceeding it is [`LimitExceeded::RenderPixels`].
     pub max_render_pixels: Option<u64>,
+    /// When every operation on the document must have stopped. `None` — the
+    /// default — is no limit.
+    ///
+    /// A [`Deadline`] is a stop flag any thread raises
+    /// ([`Deadline::manual`] and [`Deadline::stop`], the mechanism every
+    /// target has) and, on targets with a clock, a budget that raises it for
+    /// you ([`Deadline::after`]). A host on `wasm32` has only the flag, and
+    /// its own timer.
+    ///
+    /// Honoured cooperatively, at the boundaries the engine already has:
+    /// opening (once on entry, then every 4096 tokens of a cross-reference
+    /// rebuild scan), loading a page, interpreting a content stream (every
+    /// 256 operators), rasterizing (every object), extracting a page's text
+    /// (on entry), and running a script (on entry). The fallible entries —
+    /// open, page load, render — answer [`LimitExceeded::Time`] for a spent
+    /// budget and [`LimitExceeded::Stopped`] for a raised flag; the
+    /// infallible ones — the interpreter, the extractor — stop where they
+    /// are, record [`DiagKind::TimeLimitReached`](crate::DiagKind::TimeLimitReached) and return what they have;
+    /// a script refuses as an exhausted script budget does. PDFium has no
+    /// equivalent: a host wraps the process in a timer.
+    pub deadline: Option<Deadline>,
+}
+
+impl Limits {
+    /// `Ok` unless a deadline is set and has passed — the one call every
+    /// cooperative boundary makes. Costs one branch without a deadline.
+    ///
+    /// # Errors
+    ///
+    /// [`LimitExceeded::Time`] once the deadline has passed.
+    pub fn check_deadline(&self, during: Operation) -> Result<(), LimitExceeded> {
+        match &self.deadline {
+            Some(deadline) => deadline.check(during),
+            None => Ok(()),
+        }
+    }
 }
 
 /// A caller-set ceiling was hit. The error a render or an open answers when
@@ -160,6 +207,54 @@ pub enum LimitExceeded {
         /// The cap, in pixels.
         allowed: u64,
     },
+    /// [`Limits::deadline`] passed while `during` was under way.
+    Time {
+        /// How much time was allowed.
+        budget: Duration,
+        /// What was being done.
+        during: Operation,
+        /// The page it was being done to, where the caller knew one.
+        page: Option<PageIndex>,
+    },
+    /// [`Limits::deadline`] was raised by [`Deadline::stop`] while `during`
+    /// was under way.
+    Stopped {
+        /// What was being done.
+        during: Operation,
+        /// The page it was being done to, where the caller knew one.
+        page: Option<PageIndex>,
+    },
+}
+
+impl LimitExceeded {
+    /// The same error naming `page`, for the caller who knows which page the
+    /// engine below it was working on. Only [`LimitExceeded::Time`] has a
+    /// page; the pixel cap already names its size.
+    #[must_use]
+    pub fn on_page(self, page: PageIndex) -> LimitExceeded {
+        match self {
+            LimitExceeded::Time { budget, during, .. } => LimitExceeded::Time {
+                budget,
+                during,
+                page: Some(page),
+            },
+            LimitExceeded::Stopped { during, .. } => LimitExceeded::Stopped {
+                during,
+                page: Some(page),
+            },
+            other => other,
+        }
+    }
+}
+
+/// A budget as a person reads it: whole seconds as `5 s`, anything finer as
+/// milliseconds.
+fn budget_text(budget: Duration) -> String {
+    if budget.subsec_nanos() == 0 {
+        format!("{} s", budget.as_secs())
+    } else {
+        format!("{} ms", budget.as_millis())
+    }
 }
 
 /// `px` as megapixels with one decimal where it has one: `100`, `1.2`.
@@ -187,6 +282,19 @@ impl fmt::Display for LimitExceeded {
                 megapixels(u64::from(*width) * u64::from(*height)),
                 megapixels(*allowed),
             ),
+            LimitExceeded::Time {
+                budget,
+                during,
+                page,
+            } => write!(
+                f,
+                "time limit of {} exceeded while {}; allow more time or do less",
+                budget_text(*budget),
+                during.describe(*page),
+            ),
+            LimitExceeded::Stopped { during, page } => {
+                write!(f, "stopped by the caller while {}", during.describe(*page))
+            }
         }
     }
 }
@@ -213,13 +321,15 @@ impl Default for Limits {
             max_script_stack: 10_240,
             max_calculate_depth: 1,
             max_render_pixels: None,
+            deadline: None,
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{LimitExceeded, Limits};
+    use super::{Deadline, LimitExceeded, Limits, Operation, PageIndex};
+    use std::time::Duration;
 
     #[test]
     fn pdfium_equivalent_defaults() {
@@ -238,6 +348,77 @@ mod tests {
         assert_eq!(l.max_name_tree_depth, 32);
         assert_eq!(l.max_array_len, usize::MAX);
         assert_eq!(l.max_render_pixels, None, "the host's ceilings are off");
+        assert_eq!(l.deadline, None);
+    }
+
+    #[test]
+    fn no_deadline_is_never_exceeded_and_a_spent_one_always_is() {
+        assert_eq!(Limits::default().check_deadline(Operation::Open), Ok(()));
+        let spent = Limits {
+            deadline: Some(Deadline::after(Duration::ZERO)),
+            ..Limits::default()
+        };
+        assert!(matches!(
+            spent.check_deadline(Operation::Extract),
+            Err(LimitExceeded::Time {
+                during: Operation::Extract,
+                page: None,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn the_time_message_names_the_budget_the_work_and_the_page() {
+        let e = LimitExceeded::Time {
+            budget: Duration::from_secs(5),
+            during: Operation::Render,
+            page: Some(PageIndex::new(3)),
+        };
+        assert_eq!(
+            e.to_string(),
+            "time limit of 5 s exceeded while rendering page 3; allow more time or do less"
+        );
+        let e = LimitExceeded::Time {
+            budget: Duration::from_millis(250),
+            during: Operation::Open,
+            page: None,
+        };
+        assert_eq!(
+            e.to_string(),
+            "time limit of 250 ms exceeded while opening the document; allow more time or do less"
+        );
+        let e = LimitExceeded::Time {
+            budget: Duration::from_secs(1),
+            during: Operation::Interpret,
+            page: None,
+        };
+        assert!(e.to_string().contains("while interpreting page;"));
+        let e = LimitExceeded::Stopped {
+            during: Operation::PageLoad,
+            page: Some(PageIndex::new(7)),
+        };
+        assert_eq!(e.to_string(), "stopped by the caller while loading page 7");
+    }
+
+    #[test]
+    fn a_raised_flag_is_a_stop_and_the_page_is_added_by_the_caller() {
+        let stop = Deadline::manual();
+        let limits = Limits {
+            deadline: Some(stop.clone()),
+            ..Limits::default()
+        };
+        assert_eq!(limits.check_deadline(Operation::Render), Ok(()));
+        stop.stop();
+        assert_eq!(
+            limits
+                .check_deadline(Operation::Render)
+                .map_err(|e| e.on_page(PageIndex::new(1))),
+            Err(LimitExceeded::Stopped {
+                during: Operation::Render,
+                page: Some(PageIndex::new(1)),
+            })
+        );
     }
 
     #[test]
