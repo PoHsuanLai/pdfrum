@@ -30,6 +30,73 @@ pub struct OpenOptions {
     pub limits: Limits,
 }
 
+/// Builds an [`OpenOptions`] a setting at a time.
+///
+/// Sugar over the struct-update syntax, which still works. It earns its place
+/// on a two-field struct because of the password: `.password("secret")` takes
+/// anything byte-shaped, where the field itself is the `Option<Vec<u8>>` the
+/// format actually calls for.
+///
+/// ```
+/// use pdfrum::{Limits, OpenOptions};
+///
+/// let options = OpenOptions::builder()
+///     .password("secret")
+///     .limits(Limits::default())
+///     .build();
+///
+/// assert_eq!(options.password.as_deref(), Some(&b"secret"[..]));
+/// ```
+#[derive(Debug, Clone, Default)]
+#[must_use]
+pub struct OpenOptionsBuilder(OpenOptions);
+
+impl OpenOptionsBuilder {
+    /// The password to try — [`OpenOptions::password`].
+    ///
+    /// Takes a `&str`, a `String`, a `&[u8]` or a `Vec<u8>`: PDF passwords
+    /// are byte strings and need not be UTF-8, and this accepts both
+    /// spellings without the caller converting.
+    ///
+    /// ```
+    /// let options = pdfrum::OpenOptions::builder().password(b"\xff\xfe".as_slice()).build();
+    /// assert_eq!(options.password.as_deref(), Some(&b"\xff\xfe"[..]));
+    /// ```
+    pub fn password(mut self, password: impl AsRef<[u8]>) -> Self {
+        self.0.password = Some(password.as_ref().to_vec());
+        self
+    }
+
+    /// The caps recovery and rendering enforce — [`OpenOptions::limits`].
+    ///
+    /// ```
+    /// let options = pdfrum::OpenOptions::builder()
+    ///     .limits(pdfrum::Limits::default())
+    ///     .build();
+    /// ```
+    pub fn limits(mut self, limits: Limits) -> Self {
+        self.0.limits = limits;
+        self
+    }
+
+    /// The options as built.
+    #[must_use]
+    pub fn build(self) -> OpenOptions {
+        self.0
+    }
+}
+
+impl OpenOptions {
+    /// A builder starting from the defaults.
+    ///
+    /// ```
+    /// let options = pdfrum::OpenOptions::builder().password("secret").build();
+    /// ```
+    pub fn builder() -> OpenOptionsBuilder {
+        OpenOptionsBuilder::default()
+    }
+}
+
 /// An open PDF document.
 ///
 /// Holds the file's bytes, the cross-reference the reader recovered from
@@ -744,6 +811,47 @@ impl FontFileKind {
             Self::TrueType => "ttf",
             Self::Cff => "cff",
             Self::OpenType => "otf",
+        }
+    }
+}
+
+/// The error [`FontFileKind`]'s [`FromStr`](std::str::FromStr) returns.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("not a font program kind: {0}")]
+pub struct UnknownFontFileKind(String);
+
+impl std::fmt::Display for FontFileKind {
+    /// [`FontFileKind::name`], which round-trips through
+    /// [`FromStr`](std::str::FromStr).
+    ///
+    /// ```
+    /// assert_eq!(pdfrum::FontFileKind::OpenType.to_string(), "opentype");
+    /// ```
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
+impl std::str::FromStr for FontFileKind {
+    type Err = UnknownFontFileKind;
+
+    /// The inverse of [`Display`](std::fmt::Display), on the short name only
+    /// — not on the file extension, which is not unique (`cff` is both).
+    ///
+    /// # Errors
+    ///
+    /// [`UnknownFontFileKind`] when the string names no font program kind.
+    ///
+    /// ```
+    /// assert_eq!("truetype".parse(), Ok(pdfrum::FontFileKind::TrueType));
+    /// ```
+    fn from_str(s: &str) -> core::result::Result<FontFileKind, UnknownFontFileKind> {
+        match s {
+            "type1" => Ok(FontFileKind::Type1),
+            "truetype" => Ok(FontFileKind::TrueType),
+            "cff" => Ok(FontFileKind::Cff),
+            "opentype" => Ok(FontFileKind::OpenType),
+            other => Err(UnknownFontFileKind(other.to_owned())),
         }
     }
 }

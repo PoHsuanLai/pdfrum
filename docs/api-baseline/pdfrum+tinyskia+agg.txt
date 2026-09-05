@@ -129,14 +129,28 @@ pub pdfrum::ErrorCode::Render = 5
 pub pdfrum::ErrorCode::Save = 7
 pub pdfrum::ErrorCode::Text = 8
 pub pdfrum::ErrorCode::WrongPassword = 3
+impl pdfrum::ErrorCode
+pub fn pdfrum::ErrorCode::name(self) -> &'static str
 impl core::convert::From<pdfrum::ErrorCode> for u32
 pub fn u32::from(pdfrum::ErrorCode) -> u32
+impl core::convert::TryFrom<u32> for pdfrum::ErrorCode
+pub type pdfrum::ErrorCode::Error = pdfrum::UnknownErrorCode
+pub fn pdfrum::ErrorCode::try_from(u32) -> core::result::Result<pdfrum::ErrorCode, pdfrum::UnknownErrorCode>
+impl core::fmt::Display for pdfrum::ErrorCode
+pub fn pdfrum::ErrorCode::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub enum pdfrum::FlattenMode
 pub pdfrum::FlattenMode::Display
 pub pdfrum::FlattenMode::Print
+impl core::fmt::Display for pdfrum::FlattenMode
+pub fn pdfrum::FlattenMode::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::str::traits::FromStr for pdfrum::FlattenMode
+pub type pdfrum::FlattenMode::Err = pdfrum::UnknownFlattenMode
+pub fn pdfrum::FlattenMode::from_str(&str) -> core::result::Result<pdfrum::FlattenMode, pdfrum::UnknownFlattenMode>
 pub enum pdfrum::Flattened
 pub pdfrum::Flattened::Done
 pub pdfrum::Flattened::NothingToDo
+impl core::fmt::Display for pdfrum::Flattened
+pub fn pdfrum::Flattened::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub enum pdfrum::FontFileKind
 pub pdfrum::FontFileKind::Cff
 pub pdfrum::FontFileKind::OpenType
@@ -145,6 +159,11 @@ pub pdfrum::FontFileKind::Type1
 impl pdfrum::FontFileKind
 pub fn pdfrum::FontFileKind::extension(self) -> &'static str
 pub fn pdfrum::FontFileKind::name(self) -> &'static str
+impl core::fmt::Display for pdfrum::FontFileKind
+pub fn pdfrum::FontFileKind::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::str::traits::FromStr for pdfrum::FontFileKind
+pub type pdfrum::FontFileKind::Err = pdfrum::UnknownFontFileKind
+pub fn pdfrum::FontFileKind::from_str(&str) -> core::result::Result<pdfrum::FontFileKind, pdfrum::UnknownFontFileKind>
 pub enum pdfrum::ImageEncoding
 pub pdfrum::ImageEncoding::CcittFax
 pub pdfrum::ImageEncoding::Jbig2
@@ -152,6 +171,12 @@ pub pdfrum::ImageEncoding::Jpeg
 pub pdfrum::ImageEncoding::Jpeg2000
 impl pdfrum::ImageEncoding
 pub fn pdfrum::ImageEncoding::extension(self) -> &'static str
+pub fn pdfrum::ImageEncoding::name(self) -> &'static str
+impl core::fmt::Display for pdfrum::ImageEncoding
+pub fn pdfrum::ImageEncoding::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::str::traits::FromStr for pdfrum::ImageEncoding
+pub type pdfrum::ImageEncoding::Err = pdfrum::UnknownImageEncoding
+pub fn pdfrum::ImageEncoding::from_str(&str) -> core::result::Result<pdfrum::ImageEncoding, pdfrum::UnknownImageEncoding>
 pub enum pdfrum::LinkTarget
 pub pdfrum::LinkTarget::Other
 pub pdfrum::LinkTarget::Page(pdfrum_common::page_index::PageIndex)
@@ -165,15 +190,30 @@ impl pdfrum::Rotation
 pub fn pdfrum::Rotation::degrees(self) -> u32
 impl core::convert::From<pdfrum_page::page::Rotation> for pdfrum::Rotation
 pub fn pdfrum::Rotation::from(pdfrum_page::page::Rotation) -> pdfrum::Rotation
+impl core::fmt::Display for pdfrum::Rotation
+pub fn pdfrum::Rotation::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::str::traits::FromStr for pdfrum::Rotation
+pub type pdfrum::Rotation::Err = pdfrum::NotAQuarterTurn
+pub fn pdfrum::Rotation::from_str(&str) -> core::result::Result<pdfrum::Rotation, pdfrum::NotAQuarterTurn>
 pub enum pdfrum::StampPosition
 pub pdfrum::StampPosition::BottomLeft
 pub pdfrum::StampPosition::BottomRight
 pub pdfrum::StampPosition::Center
 pub pdfrum::StampPosition::TopLeft
 pub pdfrum::StampPosition::TopRight
+impl core::fmt::Display for pdfrum::StampPosition
+pub fn pdfrum::StampPosition::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::str::traits::FromStr for pdfrum::StampPosition
+pub type pdfrum::StampPosition::Err = pdfrum::UnknownStampPosition
+pub fn pdfrum::StampPosition::from_str(&str) -> core::result::Result<pdfrum::StampPosition, pdfrum::UnknownStampPosition>
 pub enum pdfrum::Update
 pub pdfrum::Update::Incremental
 pub pdfrum::Update::Rewrite
+impl core::fmt::Display for pdfrum::Update
+pub fn pdfrum::Update::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::str::traits::FromStr for pdfrum::Update
+pub type pdfrum::Update::Err = pdfrum::UnknownUpdate
+pub fn pdfrum::Update::from_str(&str) -> core::result::Result<pdfrum::Update, pdfrum::UnknownUpdate>
 pub struct pdfrum::Annotation<'a>
 impl pdfrum::Annotation<'_>
 pub fn pdfrum::Annotation<'_>::contents(&self) -> core::option::Option<alloc::string::String>
@@ -202,6 +242,14 @@ pub struct pdfrum::AttachmentOptions
 pub pdfrum::AttachmentOptions::description: core::option::Option<alloc::string::String>
 pub pdfrum::AttachmentOptions::mime_type: core::option::Option<alloc::string::String>
 pub pdfrum::AttachmentOptions::modified: core::option::Option<alloc::string::String>
+impl pdfrum::AttachmentOptions
+pub fn pdfrum::AttachmentOptions::builder() -> pdfrum::AttachmentOptionsBuilder
+pub struct pdfrum::AttachmentOptionsBuilder(_)
+impl pdfrum::AttachmentOptionsBuilder
+pub fn pdfrum::AttachmentOptionsBuilder::build(self) -> pdfrum::AttachmentOptions
+pub fn pdfrum::AttachmentOptionsBuilder::description(self, impl core::convert::Into<alloc::string::String>) -> Self
+pub fn pdfrum::AttachmentOptionsBuilder::mime_type(self, impl core::convert::Into<alloc::string::String>) -> Self
+pub fn pdfrum::AttachmentOptionsBuilder::modified(self, impl core::convert::Into<alloc::string::String>) -> Self
 pub struct pdfrum::Bookmark<'a>
 impl pdfrum::Bookmark<'_>
 pub fn pdfrum::Bookmark<'_>::action(&self) -> core::option::Option<pdfrum_doc::nav::action::Action>
@@ -373,9 +421,17 @@ pub pdfrum::Metadata::modification_date: core::option::Option<alloc::string::Str
 pub pdfrum::Metadata::producer: core::option::Option<alloc::string::String>
 pub pdfrum::Metadata::subject: core::option::Option<alloc::string::String>
 pub pdfrum::Metadata::title: core::option::Option<alloc::string::String>
+pub struct pdfrum::NotAQuarterTurn(_)
 pub struct pdfrum::OpenOptions
 pub pdfrum::OpenOptions::limits: pdfrum_common::limits::Limits
 pub pdfrum::OpenOptions::password: core::option::Option<alloc::vec::Vec<u8>>
+impl pdfrum::OpenOptions
+pub fn pdfrum::OpenOptions::builder() -> pdfrum::OpenOptionsBuilder
+pub struct pdfrum::OpenOptionsBuilder(_)
+impl pdfrum::OpenOptionsBuilder
+pub fn pdfrum::OpenOptionsBuilder::build(self) -> pdfrum::OpenOptions
+pub fn pdfrum::OpenOptionsBuilder::limits(self, pdfrum_common::limits::Limits) -> Self
+pub fn pdfrum::OpenOptionsBuilder::password(self, impl core::convert::AsRef<[u8]>) -> Self
 pub struct pdfrum::Outline<'a>
 impl<'a> pdfrum::Outline<'a>
 pub fn pdfrum::Outline<'a>::is_empty(&self) -> bool
@@ -532,10 +588,23 @@ pub pdfrum::RenderOptions::smooth_paths: bool
 pub pdfrum::RenderOptions::text_aa: pdfrum_render::options::TextAa
 pub pdfrum::RenderOptions::transform: kurbo::affine::Affine
 impl pdfrum::RenderOptions
+pub fn pdfrum::RenderOptions::builder() -> pdfrum::RenderOptionsBuilder
 pub fn pdfrum::RenderOptions::fit(f64, f64, u32, u32) -> pdfrum::RenderOptions
 pub fn pdfrum::RenderOptions::scaled(f64) -> pdfrum::RenderOptions
 impl core::default::Default for pdfrum::RenderOptions
 pub fn pdfrum::RenderOptions::default() -> Self
+pub struct pdfrum::RenderOptionsBuilder(_)
+impl pdfrum::RenderOptionsBuilder
+pub fn pdfrum::RenderOptionsBuilder::annotations(self, bool) -> Self
+pub fn pdfrum::RenderOptionsBuilder::background(self, peniko::Color) -> Self
+pub fn pdfrum::RenderOptionsBuilder::build(self) -> pdfrum::RenderOptions
+pub fn pdfrum::RenderOptionsBuilder::color_mode(self, pdfrum_render::options::ColorMode) -> Self
+pub fn pdfrum::RenderOptionsBuilder::grayscale(self) -> Self
+pub fn pdfrum::RenderOptionsBuilder::interpolate_images(self, bool) -> Self
+pub fn pdfrum::RenderOptionsBuilder::scale(self, f64) -> Self
+pub fn pdfrum::RenderOptionsBuilder::smooth_paths(self, bool) -> Self
+pub fn pdfrum::RenderOptionsBuilder::text_aa(self, pdfrum_render::options::TextAa) -> Self
+pub fn pdfrum::RenderOptionsBuilder::transform(self, kurbo::affine::Affine) -> Self
 pub struct pdfrum::RenderSession
 pub pdfrum::RenderSession::build: pdfrum_page::build::BuildContext
 pub pdfrum::RenderSession::caches: pdfrum_render::ctx::RenderCaches
@@ -553,6 +622,18 @@ pub pdfrum::SaveOptions::remove_security: bool
 pub pdfrum::SaveOptions::subset_new_fonts: bool
 pub pdfrum::SaveOptions::update: pdfrum::Update
 pub pdfrum::SaveOptions::version: core::option::Option<pdfrum_common::version::PdfVersion>
+impl pdfrum::SaveOptions
+pub fn pdfrum::SaveOptions::builder() -> pdfrum::SaveOptionsBuilder
+pub struct pdfrum::SaveOptionsBuilder(_)
+impl pdfrum::SaveOptionsBuilder
+pub fn pdfrum::SaveOptionsBuilder::build(self) -> pdfrum::SaveOptions
+pub fn pdfrum::SaveOptionsBuilder::encrypt(self, pdfrum_edit::write::Encryption) -> Self
+pub fn pdfrum::SaveOptionsBuilder::id_source(self, pdfrum_edit::write::id::IdSource) -> Self
+pub fn pdfrum::SaveOptionsBuilder::incremental(self) -> Self
+pub fn pdfrum::SaveOptionsBuilder::remove_security(self, bool) -> Self
+pub fn pdfrum::SaveOptionsBuilder::subset_new_fonts(self, bool) -> Self
+pub fn pdfrum::SaveOptionsBuilder::update(self, pdfrum::Update) -> Self
+pub fn pdfrum::SaveOptionsBuilder::version(self, pdfrum_common::version::PdfVersion) -> Self
 pub struct pdfrum::Signature<'a>
 impl pdfrum::Signature<'_>
 pub fn pdfrum::Signature<'_>::byte_range(&self) -> alloc::vec::Vec<i64>
@@ -569,8 +650,20 @@ pub pdfrum::StampOptions::font_size: f32
 pub pdfrum::StampOptions::margin: f64
 pub pdfrum::StampOptions::opacity: f32
 pub pdfrum::StampOptions::position: pdfrum::StampPosition
+impl pdfrum::StampOptions
+pub fn pdfrum::StampOptions::builder() -> pdfrum::StampOptionsBuilder
 impl core::default::Default for pdfrum::StampOptions
 pub fn pdfrum::StampOptions::default() -> Self
+pub struct pdfrum::StampOptionsBuilder(_)
+impl pdfrum::StampOptionsBuilder
+pub fn pdfrum::StampOptionsBuilder::angle(self, f64) -> Self
+pub fn pdfrum::StampOptionsBuilder::build(self) -> pdfrum::StampOptions
+pub fn pdfrum::StampOptionsBuilder::color(self, peniko::Color) -> Self
+pub fn pdfrum::StampOptionsBuilder::font(self, pdfrum_font::subst::standard::StandardFont) -> Self
+pub fn pdfrum::StampOptionsBuilder::font_size(self, f32) -> Self
+pub fn pdfrum::StampOptionsBuilder::margin(self, f64) -> Self
+pub fn pdfrum::StampOptionsBuilder::opacity(self, f32) -> Self
+pub fn pdfrum::StampOptionsBuilder::position(self, pdfrum::StampPosition) -> Self
 pub struct pdfrum::TextBuilder
 pub pdfrum::TextBuilder::codes: alloc::vec::Vec<u8>
 pub pdfrum::TextBuilder::fill: peniko::Color
@@ -581,6 +674,12 @@ pub pdfrum::TextBuilder::size: f32
 impl pdfrum::TextBuilder
 pub fn pdfrum::TextBuilder::build(self) -> pdfrum_page::page::PageObject
 pub fn pdfrum::TextBuilder::new(impl core::convert::Into<alloc::vec::Vec<u8>>, pdfrum_object::object::ObjRef, f32) -> Self
+pub struct pdfrum::UnknownErrorCode(pub u32)
 pub struct pdfrum::UnknownField
 pub pdfrum::UnknownField::name: alloc::string::String
+pub struct pdfrum::UnknownFlattenMode(_)
+pub struct pdfrum::UnknownFontFileKind(_)
+pub struct pdfrum::UnknownImageEncoding(_)
+pub struct pdfrum::UnknownStampPosition(_)
+pub struct pdfrum::UnknownUpdate(_)
 pub type pdfrum::Result<T> = core::result::Result<T, pdfrum::Error>

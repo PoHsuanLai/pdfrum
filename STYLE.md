@@ -159,8 +159,32 @@ flow.
   no `get_` prefixes, `iter()`/`into_iter()` conventions, `#[must_use]` on
   pure functions, `Debug` on everything public, `Clone` where cheap or
   obviously wanted.
-- Options via plain config structs with `Default` + struct-update syntax, not
-  builder ladders, unless construction is genuinely staged.
+- ~~Options via plain config structs with `Default` + struct-update syntax, not
+  builder ladders, unless construction is genuinely staged.~~
+  **Superseded for the public API surface, 2026-09-06** (user ruling: *"we can
+  update it. this should only be the api surface tho."*). The rule now reads:
+
+  - Options are still **plain config structs with `Default` and public
+    fields**, and struct-update syntax is still the shortest way to change one
+    setting. That path never goes away — it is the surface `cargo add pdfrum`
+    is held to, and removing it would be a break.
+  - On a **public, user-facing** options type, a builder **may** be added
+    *beside* it as sugar: `Type::builder().a(..).b(..).build()`, each method
+    consuming and returning `Self`, the builder type `#[must_use]`, every
+    method documented with an example. It earns its place when several
+    settings are commonly chosen together, when they are chosen
+    conditionally, when a field wants an `impl Into`/`impl AsRef` the struct
+    field itself cannot have, or when a language binding has no
+    `..Default::default()`. It does **not** earn its place on a struct whose
+    one or two plain fields already read better written out.
+  - **Internal and engine-side construction keeps the original rule.** A type
+    whose audience is another crate in this workspace — `pdfrum_render::
+    RenderOptions` and its oracle-named flags are the standing example — is a
+    different type with a different audience and gets no builder.
+
+  A builder is therefore an addition, never a replacement: if adding one would
+  require narrowing a public field or dropping `Default`, it is the wrong
+  change.
 - Public API of every crate fits in one `lib.rs` re-export block a reviewer
   can read in one screen. Internal modules named by domain (`xref`, `lexer`,
   `shading`), never `util`, `helpers`, `common`, `misc`.
