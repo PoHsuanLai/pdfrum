@@ -75,7 +75,7 @@ deny = [
     # which is a weaker guarantee than "it is not there" — so `wrappers` pins
     # the two parents that were actually verified rather than allowing
     # `pkg-config` at large. A third crate reaching for it fails the build,
-    # which is the point. docs/status/M12c.md §2 has the measurement, including
+    # which is the point. the internal working notes has the measurement, including
     # the claim it withdrew.
     { crate = "pkg-config", wrappers = ["wayland-sys", "khronos-egl"], reason = "pure-Rust guarantee: no external C library linkage. M12c: both wrappers select a feature that disables the probe (wayland-sys `dlopen`, khronos-egl `dynamic`), so nothing is located or linked" },
 ]

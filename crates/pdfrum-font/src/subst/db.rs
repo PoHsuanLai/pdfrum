@@ -443,7 +443,7 @@ impl SystemFontDb {
                     // `read`: `describe` wants two small tables, and reading
                     // every enumerated file whole cost 20.5 ms of `read` per
                     // cold render on the oracle's 33.8 MB font set
-                    // (`docs/status/cold-start.md`). A probe fetches the table
+                    // (measured 2026-09-06). A probe fetches the table
                     // directory and those two tables and nothing else; a file
                     // with no directory at all — a bare CFF, a Type 1 `.pfb` —
                     // falls back to the whole-file read it had before.

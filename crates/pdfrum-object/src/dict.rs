@@ -315,8 +315,8 @@ mod tests {
     }
 
     // From cpdf_dictionary_unittest.cpp:13-37, restated: PDFium's sorted map
-    // iterates alphabetically, we iterate in document order (divergence #3 in
-    // docs/design/pdfrum-object.md).
+    // iterates alphabetically, we iterate in document order — a stated
+    // divergence, because document order is what a round-trip must preserve.
     #[test]
     fn iteration_follows_document_order_not_sort_order() {
         let dict = Dict::from_pairs([

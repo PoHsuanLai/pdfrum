@@ -57,7 +57,7 @@ mod group {
 
     criterion_group! {
         name = benches;
-        // The suite's shared settings; docs/status/M12.md §2 has the
+        // The suite's shared settings; the internal working notes has the
         // measurement behind them.
         config = Criterion::default()
             .measurement_time(Duration::from_secs(5))

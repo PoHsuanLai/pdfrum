@@ -13,7 +13,7 @@
 //! the stream re-encoding.
 //!
 //! This is the most allocation-dominated group in the suite — hence its 5% band
-//! against the render groups' 3–4%, which `docs/status/M12.md` §2 measured
+//! against the render groups' 3–4%, which the internal working notes measured
 //! rather than chose. It has no oracle column: `pdfium_test` has no
 //! full-rewrite mode to compare against, so `save` is a ratchet-only group with
 //! no M12 target on it.
@@ -53,7 +53,7 @@ mod group {
 
     criterion_group! {
         name = benches;
-        // The suite's shared settings; docs/status/M12.md §2 has the
+        // The suite's shared settings; the internal working notes has the
         // measurement behind them.
         config = Criterion::default()
             .measurement_time(Duration::from_secs(5))

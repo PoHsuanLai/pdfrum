@@ -27,4 +27,4 @@ an inverted leap-year rule, a hardcoded two-digit-year window, noon labelled
 `am`, an operation name whose case changes the answer, a weekday always printed
 as Sunday, and the empty string reported as a number. This crate implements the
 correct behaviour, marks each divergence `// [oracle-bug]` at its site with both
-citations, and records the cost against the goldens in `docs/status/M15.md`.
+citations, and records the cost against the goldens in the internal working notes.

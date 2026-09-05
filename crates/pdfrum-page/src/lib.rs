@@ -58,9 +58,9 @@ mod pattern;
 // its entry points unconditionally and they compile to empty inline functions
 // with the feature off, but its reporting items are part of the instrument
 // rather than of the crate a `cargo add pdfrum-page` reaches. Same argument
-// and same shape as `pdfrum_render::walkprofile`, which
-// `docs/status/api-baseline/README.md` records where it declines to snapshot
-// the feature.
+// and same shape as `pdfrum_render::walkprofile`: the committed API
+// snapshots deliberately do not cover the `profiling` feature, because its
+// items are not part of the published surface.
 //
 // The two crates above this one time their own stages, so they forward a
 // `profiling` of their own and gate their call sites on it: a caller cannot

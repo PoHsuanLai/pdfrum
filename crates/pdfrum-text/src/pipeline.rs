@@ -22,8 +22,8 @@
 // untrustworthy, from the current character's width bucketed into quarters,
 // fifths and sixths. The thresholds are absolute numbers with no explanation
 // in the source and no test upstream; they are transcribed and pinned here.
-// The heuristics and their constants are inventoried in
-// `docs/design/pdfrum-text.md` §1.5–§1.9.
+// The heuristics and their constants are transcribed from the oracle and
+// pinned by the tests in this module.
 
 use crate::charinfo::{
     CharBox, CharType, LooseBoundsInput, ObjectIndex, inverse_or_zero, loose_bounds, matrix_angle,
@@ -71,9 +71,8 @@ const SIZE_EPSILON: f64 = 0.01;
 //
 // The **character record** at the same position keeps PDFium's `0x2`: A41's
 // char-list half costs 12 golden rows and stays declined
-// (`docs/status/reopened-declines.md` §2.9), so the two outputs now differ in
-// a new, deliberate way. That asymmetry is recorded beside A41 in
-// `docs/status/oracle-divergence-audit.md`.
+// deliberately, so the two outputs now differ in
+// a new, deliberate way.
 pub(crate) const SOFT_HYPHEN: u32 = 0x00AD;
 
 // `U+FFFD` REPLACEMENT CHARACTER — what the text buffer carries where a
@@ -582,8 +581,7 @@ impl<'a, R: Resolve> Builder<'a, R> {
             // faux-bold is done — and pdf.js has no dedup at all (the only
             // "identical" test in `evaluator.js` is font-state caching,
             // `:3246`). It duplicates where PDFium deletes; deletion is the
-            // unrecoverable direction. See `docs/design/pdfrum-text.md`
-            // §1.7a for the rule in full.
+            // unrecoverable direction, so we follow PDFium and dedup.
 
             for code in unicode {
                 let mut piece = info;
