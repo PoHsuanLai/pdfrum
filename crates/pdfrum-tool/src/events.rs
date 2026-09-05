@@ -136,7 +136,10 @@ pub enum Event {
 pub enum EvtError {
     /// A hard failure. Not produced by [`parse_evt`] today.
     #[error("evt: {0}")]
-    Message(String),
+    Message(
+        /// What went wrong, already phrased for the reader.
+        String,
+    ),
 }
 
 /// Parses a whole `.evt` script the way the oracle's driver walks one.
@@ -303,6 +306,7 @@ fn focus(tokens: &[String]) -> Option<Event> {
     })
 }
 
+/// The button a `left`/`right` token names; any other spelling is unknown.
 fn parse_button(name: &str) -> Option<MouseButton> {
     match name {
         "left" => Some(MouseButton::Left),
@@ -326,10 +330,12 @@ fn parse_modifiers(text: &str) -> u32 {
     modifiers
 }
 
+/// The modifier mask at `index`, or an empty mask when the line omits it.
 fn optional_modifiers(tokens: &[String], index: usize) -> u32 {
     tokens.get(index).map_or(0, |text| parse_modifiers(text))
 }
 
+/// The token at `index`, or the empty string, which `atoi` reads as zero.
 fn token(tokens: &[String], index: usize) -> &str {
     tokens.get(index).map_or("", String::as_str)
 }
@@ -377,6 +383,7 @@ fn atoi(text: &str) -> i32 {
     i32::try_from(signed.clamp(i64::from(i32::MIN), i64::from(i32::MAX))).unwrap_or(0)
 }
 
+/// C `isspace` over bytes, the leading run `atoi` skips.
 fn is_c_space(b: u8) -> bool {
     matches!(b, b' ' | b'\t' | b'\n' | b'\r' | 0x0b | 0x0c)
 }

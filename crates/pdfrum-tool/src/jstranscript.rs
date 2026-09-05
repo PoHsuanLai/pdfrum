@@ -230,9 +230,17 @@ fn report_failures(
 enum DocumentAction {
     /// `/S /JavaScript` — the source, and the name a diagnostic would use for
     /// it: its name-tree key, or the empty string for `/OpenAction`.
-    Script { whence: String, source: String },
+    Script {
+        /// The name-tree key, or the empty string for `/OpenAction`.
+        whence: String,
+        /// The JavaScript source, as `/JS` holds it.
+        source: String,
+    },
     /// `/S /Named` — the verb, as `/N` spells it.
-    Named(String),
+    Named(
+        /// The named action the embedder is asked to perform.
+        String,
+    ),
 }
 
 /// Everything the document asks for on open, in the oracle's order.

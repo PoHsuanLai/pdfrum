@@ -76,9 +76,15 @@ pub const ALL: [Mutation; 3] = [Mutation::AddRect, Mutation::RemoveFirst, Mutati
 pub enum Applied {
     /// The page was rewritten, and this many `/Contents` elements were
     /// written.
-    Rewritten { streams: usize },
+    Rewritten {
+        /// How many `/Contents` streams the regenerated page holds.
+        streams: usize,
+    },
     /// Nothing was rewritten, and why.
-    Skipped(String),
+    Skipped(
+        /// Why page 0 could not be rewritten, phrased for the printed line.
+        String,
+    ),
 }
 
 /// Apply `mutation` to page 0 of `doc`, staging the result in `edit`.
