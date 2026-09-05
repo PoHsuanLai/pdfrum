@@ -249,11 +249,8 @@ pub pdfrum_page::Pixels::Indexed::palette: alloc::boxed::Box<[pdfrum_page::Rgb]>
 pub pdfrum_page::Pixels::Rgb8(alloc::boxed::Box<[u8]>)
 pub pdfrum_page::Pixels::Stencil(pdfrum_page::BitImage)
 impl pdfrum_page::Pixels
-pub fn pdfrum_page::Pixels::byte_palette(&self) -> core::option::Option<alloc::vec::Vec<[u8; 3]>>
 pub fn pdfrum_page::Pixels::byte_size(&self) -> usize
-pub fn pdfrum_page::Pixels::color_at(&self, u32, u32, u32) -> pdfrum_page::Rgb
 pub fn pdfrum_page::Pixels::components(&self) -> usize
-pub fn pdfrum_page::Pixels::sample_bytes(&self, u32, u32, u32) -> [u8; 3]
 pub enum pdfrum_page::RequestedSize
 pub pdfrum_page::RequestedSize::Full
 pub pdfrum_page::RequestedSize::NoSamples
@@ -394,6 +391,13 @@ pub fn pdfrum_page::ContentMarks::optional_content_all(&self) -> alloc::vec::Vec
 pub fn pdfrum_page::ContentMarks::pop(&mut self) -> bool
 pub fn pdfrum_page::ContentMarks::push(&mut self, pdfrum_object::name::Name)
 pub fn pdfrum_page::ContentMarks::push_with_properties(&mut self, pdfrum_object::name::Name, &pdfrum_page::MarkProperties, impl core::ops::function::FnOnce(&pdfrum_object::name::Name) -> core::option::Option<pdfrum_object::dict::Dict>) -> bool
+pub struct pdfrum_page::Converted<'a>
+impl<'a> pdfrum_page::Converted<'a>
+pub fn pdfrum_page::Converted<'a>::new(pdfrum_page::Source<'a>, core::option::Option<pdfrum_page::Palette>) -> Self
+pub fn pdfrum_page::Converted<'a>::next_row_with(&mut self, impl core::ops::function::FnOnce(&mut [pdfrum_page::Rgba8])) -> core::option::Option<pdfrum_page::Row<'_, pdfrum_page::Rgba8>>
+impl pdfrum_page::Rows for pdfrum_page::Converted<'_>
+pub type pdfrum_page::Converted<'_>::Pixel = pdfrum_page::Rgba8
+pub fn pdfrum_page::Converted<'_>::next(&mut self) -> core::option::Option<pdfrum_page::Row<'_, pdfrum_page::Rgba8>>
 pub struct pdfrum_page::FormObject
 pub pdfrum_page::FormObject::bbox: core::option::Option<kurbo::rect::Rect>
 pub pdfrum_page::FormObject::live_edit: bool
@@ -547,6 +551,10 @@ pub fn pdfrum_page::Page::remove_object(&mut self, usize) -> core::option::Optio
 impl pdfrum_page::Page
 pub fn pdfrum_page::Page::display_size(&self) -> (f64, f64)
 pub fn pdfrum_page::Page::empty() -> Self
+pub struct pdfrum_page::Palette(_)
+impl pdfrum_page::Palette
+pub fn pdfrum_page::Palette::get(&self, u8) -> pdfrum_page::Rgb8
+pub fn pdfrum_page::Palette::new(&[pdfrum_page::Rgb]) -> Self
 pub struct pdfrum_page::Patch
 pub pdfrum_page::Patch::colors: [pdfrum_page::Rgb; 4]
 pub pdfrum_page::Patch::points: alloc::boxed::Box<[kurbo::point::Point]>
@@ -601,6 +609,11 @@ impl pdfrum_page::Rgb
 pub const pdfrum_page::Rgb::BLACK: Self
 pub fn pdfrum_page::Rgb::to_bytes(self) -> [u8; 3]
 pub fn pdfrum_page::Rgb::to_bytes_truncating(self) -> [u8; 3]
+#[repr(C)] pub struct pdfrum_page::Rgb8(pub [u8; 3])
+#[repr(C)] pub struct pdfrum_page::Rgba8(pub [u8; 4])
+pub struct pdfrum_page::Row<'a, P>(_)
+impl<'a, P> pdfrum_page::Row<'a, P>
+pub const fn pdfrum_page::Row<'a, P>::pixels(self) -> &'a [P]
 pub struct pdfrum_page::Separation
 pub pdfrum_page::Separation::alternate: core::option::Option<alloc::boxed::Box<pdfrum_page::ColorSpace>>
 pub pdfrum_page::Separation::none: bool
@@ -635,6 +648,9 @@ pub pdfrum_page::SoftMask::transfer: core::option::Option<alloc::boxed::Box<[u8;
 impl pdfrum_page::SoftMask
 pub fn pdfrum_page::SoftMask::apply_transfer(&self, u8) -> u8
 pub fn pdfrum_page::SoftMask::load<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::object::Object, kurbo::affine::Affine, &R, &mut pdfrum_page::FunctionCache, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<Self>
+pub struct pdfrum_page::Source<'a>
+impl<'a> pdfrum_page::Source<'a>
+pub fn pdfrum_page::Source<'a>::new(&'a pdfrum_page::Pixels, u32, u32) -> Self
 pub struct pdfrum_page::StateStack
 impl pdfrum_page::StateStack
 pub fn pdfrum_page::StateStack::depth(&self) -> usize
@@ -748,6 +764,12 @@ pub const pdfrum_page::DEFAULT_MEDIA_BOX: kurbo::rect::Rect
 pub const pdfrum_page::MAX_BYTES: usize
 pub const pdfrum_page::MAX_FORM_LEVEL: usize
 pub const pdfrum_page::MAX_TEXT_OBJECTS: usize
+pub trait pdfrum_page::Rows
+pub type pdfrum_page::Rows::Pixel
+pub fn pdfrum_page::Rows::next(&mut self) -> core::option::Option<pdfrum_page::Row<'_, Self::Pixel>>
+impl pdfrum_page::Rows for pdfrum_page::Converted<'_>
+pub type pdfrum_page::Converted<'_>::Pixel = pdfrum_page::Rgba8
+pub fn pdfrum_page::Converted<'_>::next(&mut self) -> core::option::Option<pdfrum_page::Row<'_, pdfrum_page::Rgba8>>
 pub fn pdfrum_page::adobe_cmyk_to_srgb(u8, u8, u8, u8) -> [u8; 3]
 pub fn pdfrum_page::apply_ext_gstate<R: pdfrum_object::resolve::Resolve>(&mut pdfrum_page::GraphicsState, &pdfrum_object::dict::Dict, impl core::ops::function::Fn(core::option::Option<&pdfrum_object::object::Object>) -> core::option::Option<alloc::sync::Arc<pdfrum_font::Font>>, &R, &mut pdfrum_page::FunctionCache, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics)
 pub fn pdfrum_page::build_form_object<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::stream::Stream, kurbo::affine::Affine, &pdfrum_page::Resources, &R, &mut pdfrum_page::BuildContext, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<pdfrum_page::PageObject>
