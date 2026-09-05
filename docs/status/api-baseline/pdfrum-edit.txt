@@ -69,7 +69,6 @@ pub fn pdfrum_edit::EditDoc<'a>::is_edited(&self, u32) -> bool
 pub fn pdfrum_edit::EditDoc<'a>::is_removed(&self, u32) -> bool
 pub fn pdfrum_edit::EditDoc<'a>::last_object_number(&self) -> u32
 pub fn pdfrum_edit::EditDoc<'a>::new(&'a pdfrum_parser::doc::Document) -> Self
-pub fn pdfrum_edit::EditDoc<'a>::next_object_number(&self) -> u32
 pub fn pdfrum_edit::EditDoc<'a>::remove(&mut self, pdfrum_object::object::ObjRef)
 pub fn pdfrum_edit::EditDoc<'a>::replace(&mut self, pdfrum_object::object::ObjRef, pdfrum_object::object::Object)
 impl pdfrum_object::resolve::Resolve for pdfrum_edit::EditDoc<'_>

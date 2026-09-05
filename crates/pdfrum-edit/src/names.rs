@@ -5,10 +5,11 @@
 
 #[expect(unused_imports, reason = "the shared keys are re-exported as one set")]
 pub(crate) use pdfrum_object::names::{
-    ART_BOX, BITS_PER_COMPONENT, BLEED_BOX, CONTENTS, COUNT, CROP_BOX, DCT_DECODE, DECODE_PARMS,
-    ENCRYPT, FILTER, FIRST, FLATE_DECODE, ID, INDEX, INFO, JPX_DECODE, KIDS, LENGTH, MEDIA_BOX,
-    METADATA, PAGE, PAGES, PARENT, PREV, RESOURCES, ROOT, ROTATE, SIZE, SUBTYPE, TRIM_BOX, TYPE,
-    VIEWER_PREFERENCES, W, WIN_ANSI_ENCODING, XML, XREF, XREF_STM,
+    ART_BOX, BBOX, BITS_PER_COMPONENT, BLEED_BOX, COLOR_SPACE, CONTENTS, COUNT, CROP_BOX,
+    DCT_DECODE, DECODE, DECODE_PARMS, ENCRYPT, EXT_G_STATE, FILTER, FIRST, FLATE_DECODE, FONT,
+    HEIGHT, ID, IMAGE_MASK, INDEX, INFO, JPX_DECODE, KIDS, LENGTH, MATRIX, MEDIA_BOX, METADATA,
+    PAGE, PAGES, PARENT, PREV, PROPERTIES, RESOURCES, ROOT, ROTATE, SIZE, SMASK, SUBTYPE, TRIM_BOX,
+    TYPE, VIEWER_PREFERENCES, W, WIDTH, WIN_ANSI_ENCODING, XML, XOBJECT, XREF, XREF_STM,
 };
 
 pdfrum_object::names! {
@@ -19,23 +20,8 @@ pdfrum_object::names! {
     /// The producing application (`/Producer`), stamped on import.
     PRODUCER = "Producer";
 
-    // ---- Resource categories the content generator maintains (table 33) ----
-
-    /// Font resources (`/Font`).
-    FONT = "Font";
-    /// External object resources — images and forms alike (`/XObject`).
-    XOBJECT = "XObject";
-    /// Graphics-state parameter dictionaries (`/ExtGState`).
-    EXT_GSTATE = "ExtGState";
-    /// Marked-content property lists (`/Properties`).
-    PROPERTIES = "Properties";
-
     // ---- Form XObjects (table 95) ----
 
-    /// The form's bounding box (`/BBox`).
-    BBOX = "BBox";
-    /// The form's own matrix (`/Matrix`).
-    MATRIX = "Matrix";
     /// Always 1 (`/FormType`).
     FORM_TYPE = "FormType";
     /// A form external object's `/Subtype` value (`/Form`).
@@ -45,18 +31,6 @@ pdfrum_object::names! {
 
     // ---- Image XObjects (table 89) ----
 
-    /// Image width in samples (`/Width`).
-    WIDTH = "Width";
-    /// Image height in samples (`/Height`).
-    HEIGHT = "Height";
-    /// The samples' colour space (`/ColorSpace`).
-    COLOR_SPACE = "ColorSpace";
-    /// Sample-value remapping (`/Decode`).
-    DECODE = "Decode";
-    /// Whether the image is a stencil mask (`/ImageMask`).
-    IMAGE_MASK = "ImageMask";
-    /// The soft mask holding this image's alpha (`/SMask`).
-    SMASK = "SMask";
     /// Whether a DCT stream's components were transformed
     /// (`/ColorTransform`).
     COLOR_TRANSFORM = "ColorTransform";

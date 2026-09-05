@@ -81,7 +81,6 @@ pub fn pdfrum_font::GlyphSource::char_index(&self, pdfrum_font::Charmap, u32) ->
 pub fn pdfrum_font::GlyphSource::charmaps(&self) -> alloc::vec::Vec<pdfrum_font::CharmapId>
 pub fn pdfrum_font::GlyphSource::default_advance(&self, pdfrum_font::Gid) -> i32
 pub fn pdfrum_font::GlyphSource::from_bytes(impl core::convert::Into<alloc::sync::Arc<[u8]>>) -> core::option::Option<Self>
-pub fn pdfrum_font::GlyphSource::gid_for_unicode(&self, u32) -> u16
 pub fn pdfrum_font::GlyphSource::is_bold(&self) -> bool
 pub fn pdfrum_font::GlyphSource::is_fixed_pitch(&self) -> bool
 pub fn pdfrum_font::GlyphSource::is_italic(&self) -> bool

@@ -104,12 +104,6 @@ impl<'a> EditDoc<'a> {
         self.overlay.contains_key(&num)
     }
 
-    /// The number one past the highest this view can name.
-    #[must_use]
-    pub fn next_object_number(&self) -> u32 {
-        self.next_num
-    }
-
     /// The highest object number in play, across the base and the overlay.
     #[must_use]
     pub fn last_object_number(&self) -> u32 {

@@ -454,12 +454,6 @@ impl GlyphSource {
             Self::None => Vec::new(),
         }
     }
-
-    /// Glyph for a Unicode codepoint through the Unicode cmap. Zero on a miss.
-    #[must_use]
-    pub fn gid_for_unicode(&self, code: u32) -> u16 {
-        self.char_index(Charmap::Unicode, code)
-    }
 }
 
 /// Drop degenerate trailing contours (`Outline_CheckEmptyContour`).

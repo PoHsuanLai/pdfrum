@@ -25,7 +25,6 @@ mod axial;
 mod function_based;
 mod mesh;
 mod radial;
-mod steps;
 
 pub use axial::Axial;
 pub use function_based::FunctionBased;
@@ -33,7 +32,6 @@ pub use mesh::{
     MAX_COMPONENTS, Mesh, MeshParams, MeshReader, Patch, Triangle, Vertex, coons_interior,
 };
 pub use radial::Radial;
-pub use steps::ColorSteps;
 
 use crate::color::{ColorSpace, Rgb};
 use crate::function::{Function, FunctionCache};
@@ -259,20 +257,6 @@ impl Shading {
             background,
             bbox,
         })
-    }
-
-    /// The 256-entry colour ramp an axial or radial shading indexes.
-    ///
-    /// `None` for a geometry that has no ramp, or when the functions produce
-    /// no outputs at all.
-    #[must_use]
-    pub fn color_steps(&self) -> Option<ColorSteps> {
-        let (t_min, t_max) = match &self.geometry {
-            Geometry::Axial(a) => (a.t_min, a.t_max),
-            Geometry::Radial(a) => (a.t_min, a.t_max),
-            _ => return None,
-        };
-        ColorSteps::sample(&self.functions, &self.space, t_min, t_max)
     }
 
     /// Evaluate the shading's functions at one parametric position,

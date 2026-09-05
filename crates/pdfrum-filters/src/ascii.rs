@@ -14,6 +14,8 @@
 //! know where `EI` begins — but it is also the sharpest way to pin these
 //! decoders' edge cases in a test, so it stays in the signature.
 
+use pdfrum_common::hex_digit;
+
 /// Bytes ISO 32000-1 §7.2.3 calls white space and both text filters skip.
 /// PDFium's predicate covers only these four; a NUL or a form feed is not
 /// white space to it, and so terminates ASCII85.
@@ -55,7 +57,7 @@ pub fn decode_ascii_hex(input: &[u8]) -> (Vec<u8>, usize) {
         if is_space(ch) {
             continue;
         }
-        let Some(digit) = hex_value(ch) else {
+        let Some(digit) = hex_digit(ch) else {
             // Not a terminator and not an error: PDFium simply ignores it.
             continue;
         };
@@ -69,15 +71,6 @@ pub fn decode_ascii_hex(input: &[u8]) -> (Vec<u8>, usize) {
         out.push(hi);
     }
     (out, consumed)
-}
-
-fn hex_value(ch: u8) -> Option<u8> {
-    match ch {
-        b'0'..=b'9' => Some(ch - b'0'),
-        b'a'..=b'f' => Some(ch - b'a' + 10),
-        b'A'..=b'F' => Some(ch - b'A' + 10),
-        _ => None,
-    }
 }
 
 /// Decode `/ASCII85Decode` data, returning the bytes and how much of `input`

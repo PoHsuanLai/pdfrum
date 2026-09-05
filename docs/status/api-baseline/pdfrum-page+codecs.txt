@@ -615,7 +615,6 @@ pub pdfrum_page::Shading::geometry: pdfrum_page::Geometry
 pub pdfrum_page::Shading::space: alloc::sync::Arc<pdfrum_page::ColorSpace>
 impl pdfrum_page::Shading
 pub fn pdfrum_page::Shading::color_at(&self, f32) -> pdfrum_page::Rgb
-pub fn pdfrum_page::Shading::color_steps(&self) -> core::option::Option<pdfrum_page::shading::steps::ColorSteps>
 pub fn pdfrum_page::Shading::kind(&self) -> pdfrum_page::ShadingKind
 pub fn pdfrum_page::Shading::load<R: pdfrum_object::resolve::Resolve>(&pdfrum_object::object::Object, core::option::Option<&pdfrum_object::dict::Dict>, pdfrum_page::ShadingSource, &R, &mut pdfrum_page::FunctionCache, &pdfrum_common::limits::Limits, &mut pdfrum_common::diagnostics::Diagnostics) -> core::option::Option<Self>
 pub struct pdfrum_page::ShadingObject
