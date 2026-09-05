@@ -63,8 +63,9 @@ pub(crate) struct HostState {
     ///
     /// A **request**, not a call: running the sweep from inside a native
     /// function would re-enter the cascade the script is already inside, which
-    /// the oracle refuses too. The caller reads the flag after the script
-    /// returns and sweeps then.
+    /// the oracle refuses too. A caller would read the flag after the script
+    /// returns and sweep then; none does yet (item 6 of
+    /// `docs/status/unwired-oracle-ports.md`).
     pub(crate) calculate_requested: bool,
     /// `Doc.baseURL` — pure JavaScript-side state.
     ///

@@ -578,9 +578,10 @@ fn parse_field_name(name: &str) -> Option<String> {
 /// `Doc.calculateNow()` — runs the recalculation sweep.
 ///
 /// The sweep itself is the `Cascade`'s, and what this can do from inside a
-/// script is ask for it: the flag is read back by the caller after the script
+/// script is ask for it: the flag is meant to be read back after the script
 /// returns, because re-entering the cascade from a native function is the
-/// re-entry the oracle refuses too.
+/// re-entry the oracle refuses too. No host reads it yet — item 6 of
+/// `docs/status/unwired-oracle-ports.md`.
 fn calculate_now(_t: &JsValue, _a: &[JsValue], context: &mut Context) -> JsResult<JsValue> {
     if let Some(host) = host(context) {
         host.borrow_mut().calculate_requested = true;
