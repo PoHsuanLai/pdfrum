@@ -304,7 +304,21 @@ board context live in PLAN.md and `conformance/scoreboard.json`.
        is specified in real arithmetic and both roundings are legal —
        bucket it, do not chase it; the only useful action is filing the
        measurement against `hayro-jpeg2000`.
-     - `vector_tcpdf_009.pdf` 0.959 — not investigated this pass.
+     - `vector_tcpdf_009.pdf` 0.959 -> **0.999960**, fixed 2026-09-06. It
+       needed no diagnosis of its own: it is `image_en_fqa`'s defect on the
+       colour path. 22 draws of a 1181x1772 JPEG reduced 2.67x-8.0x, where
+       we box-filtered to the ceiled *fractional* footprint and the backend
+       then resampled the residual scale and phase a second time. The
+       colour path now takes `SnappedReduction` too, through a `Reduction`
+       type that carries the reduction size and the placement transform as
+       one value so they cannot come apart, restricted away from type-3
+       char procs (a sub-bitmap has a grid of its own). The board also
+       turned up an ulp: an integral footprint arriving as `273.000…6`
+       ceiled to an extra column and cost `image_foxit.pdf` a pass, so
+       `snapped_for` now settles an edge within `EXACTNESS` of an integer
+       before the outer rect. **138 rows up**, four fail -> pass; three down
+       by less than 0.0002 with no status change, diagnosed in
+       `docs/status/pdfrum-render.md`.
   6. Text losses: `text_quick_start.pdf` 0.641 (dot leaders come out as
      separate lines against PDFium's one line), `text_tcpdf_055.pdf`
      0.953 where three peers are closer; nine FRC 8.2.4 pages where PDFium
