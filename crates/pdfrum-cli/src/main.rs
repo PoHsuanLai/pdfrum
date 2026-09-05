@@ -26,7 +26,8 @@ use std::time::Duration;
 
 use clap::{Args, Parser, Subcommand};
 use clap_complete::Shell;
-use pdfrum::{Deadline, Limits};
+
+use crate::cmd::serve::DocLimits;
 
 /// Inspect, render and extract from PDF files.
 #[derive(Parser)]
@@ -941,18 +942,12 @@ struct SearchArgs {
     json: JsonArgs,
 }
 
-/// The ceilings the global flags set; the deadline is armed here, once, so
-/// the budget is the whole command's.
-fn limits(cli: &Cli) -> Limits {
-    Limits {
-        max_render_pixels: cli.max_pixels,
-        deadline: cli.time_limit.map(Deadline::after),
-        ..Limits::default()
-    }
-}
-
-fn main() -> ExitCode {
-    let cli = Cli::parse();
+/// What the global flags set before any command runs: the verbosity and
+/// the run's limits, both read from `out` and carried by no command, and
+/// the terminal, which is. The deadline is armed here, once, so the budget
+/// is the whole command's — except for the session, which arms one per
+/// document at its `open` and gets the ceilings to start from.
+fn setup(cli: &Cli) -> (term::Term, DocLimits) {
     out::set_verbosity(if cli.quiet {
         out::Verbosity::Quiet
     } else if cli.verbose {
@@ -960,9 +955,21 @@ fn main() -> ExitCode {
     } else {
         out::Verbosity::Normal
     });
-    out::set_limits(limits(&cli));
-    let password = cli.password.as_deref();
+    let limits = DocLimits {
+        max_pixels: cli.max_pixels,
+        time_limit: cli.time_limit,
+    };
+    if !matches!(cli.command, Command::Serve { .. }) {
+        out::set_limits(limits.armed());
+    }
     let term = term::Term::detect(cli.color, cli.hyperlinks, cli.graphics);
+    (term, limits)
+}
+
+fn main() -> ExitCode {
+    let cli = Cli::parse();
+    let (term, limits) = setup(&cli);
+    let password = cli.password.as_deref();
     let outcome = match cli.command {
         Command::Info { inputs, json } => cmd::info::run(&inputs.files, password, json, term),
         Command::Doctor {
@@ -1039,7 +1046,14 @@ fn main() -> ExitCode {
             stdio: _,
             mcp,
             max_docs,
-        } => cmd::serve::run(&cmd::serve::Options { mcp, max_docs }, password),
+        } => cmd::serve::run(
+            &cmd::serve::Options {
+                mcp,
+                max_docs,
+                limits,
+            },
+            password,
+        ),
         Command::Schema { command } => schema::run(&command, term),
         Command::Completions { shell } => Ok(cmd::shell::completions(shell)),
         Command::Manpage { output } => cmd::shell::manpage(&output, term),

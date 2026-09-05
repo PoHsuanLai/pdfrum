@@ -26,6 +26,10 @@ pub const METHOD_NOT_FOUND: i64 = -32601;
 pub const INVALID_PARAMS: i64 = -32602;
 /// The command ran and failed; the message is what the CLI would print.
 pub const COMMAND_FAILED: i64 = -32000;
+/// A limit refused the work — `--max-pixels`, `--time-limit`, or the
+/// `limits` the document was opened with — as exit 4 does on the command
+/// line: the document is not broken, the request was too big.
+pub const LIMIT_EXCEEDED: i64 = -32001;
 
 /// A request as it came off the wire.
 #[derive(Deserialize)]
@@ -68,9 +72,15 @@ impl Error {
         Self::new(INVALID_PARAMS, what)
     }
 
-    /// The command failed: the CLI's error line, with the same causes.
+    /// The command failed: the CLI's error line, with the same causes;
+    /// under [`LIMIT_EXCEEDED`] when a limit is what refused it.
     pub fn failed(err: &anyhow::Error) -> Self {
-        Self::new(COMMAND_FAILED, out::error_line(err))
+        let code = if out::is_limit(err) {
+            LIMIT_EXCEEDED
+        } else {
+            COMMAND_FAILED
+        };
+        Self::new(code, out::error_line(err))
     }
 
     pub fn method_not_found(name: &str) -> Self {
@@ -282,6 +292,19 @@ fn session() -> Vec<Method> {
                 param(
                     "password",
                     typed("string", "for an encrypted document"),
+                    false,
+                ),
+                param(
+                    "limits",
+                    json!({
+                        "type": "object",
+                        "description": "ceilings for this document, over the session's --max-pixels and --time-limit; a call that hits one fails with code -32001",
+                        "properties": {
+                            "max_pixels": typed("integer", "the most pixels a render of it may have"),
+                            "time_limit_ms": typed("integer", "its budget in milliseconds, from this open; every later call on it stops when the budget is spent"),
+                        },
+                        "additionalProperties": false,
+                    }),
                     false,
                 ),
             ],
