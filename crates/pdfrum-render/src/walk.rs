@@ -2072,10 +2072,16 @@ fn render_image<B: RasterBackend>(
     if layered {
         device.push_layer(blend, 1.0, None);
     }
+    // The reduction lands on whole pixels, so when the placement left is a
+    // whole-pixel translation the reduced pixmap *is* the device pixels and
+    // the backend has nothing to resample. `Placement` says which case this
+    // is; `Exact` cannot reach the filtered path because it does not carry a
+    // transform to filter through.
+    let placed = crate::stretch::placement_for(placement);
     device.draw_image(
         pixels,
-        placement,
-        effective_quality(quality, placement),
+        placed.transform(),
+        placed.quality(effective_quality(quality, placement)),
         state.general.fill_alpha,
     );
     if layered {
