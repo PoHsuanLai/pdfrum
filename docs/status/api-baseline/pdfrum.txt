@@ -109,12 +109,26 @@ pub pdfrum::Error::Render(pdfrum_render::error::Error)
 pub pdfrum::Error::Save(pdfrum_edit::error::Error)
 pub pdfrum::Error::Text(pdfrum_text::error::Error)
 pub pdfrum::Error::WrongPassword
+impl pdfrum::Error
+pub fn pdfrum::Error::code(&self) -> pdfrum::ErrorCode
 impl core::convert::From<pdfrum_parser::doc::LoadError> for pdfrum::Error
 pub fn pdfrum::Error::from(pdfrum_parser::doc::LoadError) -> Self
 impl core::convert::From<pdfrum_parser::error::Error> for pdfrum::Error
 pub fn pdfrum::Error::from(pdfrum_parser::error::Error) -> Self
 impl core::convert::From<pdfrum_render::error::Error> for pdfrum::Error
 pub fn pdfrum::Error::from(pdfrum_render::error::Error) -> Self
+#[non_exhaustive] #[repr(u32)] pub enum pdfrum::ErrorCode
+pub pdfrum::ErrorCode::Doc = 6
+pub pdfrum::ErrorCode::Io = 1
+pub pdfrum::ErrorCode::Limit = 9
+pub pdfrum::ErrorCode::Open = 2
+pub pdfrum::ErrorCode::Read = 4
+pub pdfrum::ErrorCode::Render = 5
+pub pdfrum::ErrorCode::Save = 7
+pub pdfrum::ErrorCode::Text = 8
+pub pdfrum::ErrorCode::WrongPassword = 3
+impl core::convert::From<pdfrum::ErrorCode> for u32
+pub fn u32::from(pdfrum::ErrorCode) -> u32
 pub enum pdfrum::FlattenMode
 pub pdfrum::FlattenMode::Display
 pub pdfrum::FlattenMode::Print
@@ -267,6 +281,9 @@ pub fn pdfrum::Document::write_form_to(&self, &mut impl core::io::write::Write, 
 pub fn pdfrum::Document::write_pages_to(&self, &mut impl core::io::write::Write, &[pdfrum::PageEdit], &pdfrum::SaveOptions) -> pdfrum::Result<()>
 pub fn pdfrum::Document::write_to(&self, &mut impl core::io::write::Write, &pdfrum::SaveOptions) -> pdfrum::Result<()>
 impl pdfrum::Document
+pub fn pdfrum::Document::page_owned(&alloc::sync::Arc<Self>, impl core::convert::Into<pdfrum_common::page_index::PageIndex>) -> pdfrum::Result<pdfrum::OwnedPage>
+pub fn pdfrum::Document::pages_owned(&alloc::sync::Arc<Self>) -> impl core::iter::traits::iterator::Iterator<Item = pdfrum::Result<pdfrum::OwnedPage>> + 'static
+impl pdfrum::Document
 pub fn pdfrum::Document::signatures(&self) -> alloc::vec::Vec<pdfrum::Signature<'_>>
 impl pdfrum_object::resolve::Resolve for pdfrum::Document
 pub fn pdfrum::Document::fetch(&self, pdfrum_object::object::ObjRef) -> core::result::Result<alloc::sync::Arc<pdfrum_object::object::Object>, pdfrum_object::error::Error>
@@ -301,6 +318,9 @@ pub fn pdfrum::Form<'a>::need_appearances(&self) -> bool
 pub fn pdfrum::Form<'a>::set(&mut self, &str, impl core::convert::Into<alloc::string::String>) -> core::result::Result<(), pdfrum::UnknownField>
 pub fn pdfrum::Form<'a>::set_checked(&mut self, &str, bool) -> core::result::Result<(), pdfrum::UnknownField>
 pub struct pdfrum::FormSession<'a>
+impl pdfrum::FormSession<'_>
+pub fn pdfrum::FormSession<'_>::owned(alloc::sync::Arc<pdfrum::Document>) -> pdfrum::OwnedFormSession
+pub fn pdfrum::FormSession<'_>::owned_with_config(alloc::sync::Arc<pdfrum::Document>, pdfrum_form::session::SessionConfig) -> pdfrum::OwnedFormSession
 impl<'a> pdfrum::FormSession<'a>
 pub fn pdfrum::FormSession<'a>::apply(&mut self, pdfrum_form::event::Event) -> pdfrum_form::update::Response
 pub fn pdfrum::FormSession<'a>::blur(&mut self) -> pdfrum_form::update::Response
@@ -368,6 +388,59 @@ impl<'outline, 'doc: 'outline> core::iter::traits::iterator::Iterator for pdfrum
 pub type pdfrum::OutlineIter<'outline, 'doc>::Item = pdfrum::Bookmark<'doc>
 pub fn pdfrum::OutlineIter<'outline, 'doc>::next(&mut self) -> core::option::Option<Self::Item>
 pub fn pdfrum::OutlineIter<'outline, 'doc>::size_hint(&self) -> (usize, core::option::Option<usize>)
+pub struct pdfrum::OwnedFormSession
+impl pdfrum::OwnedFormSession
+pub fn pdfrum::OwnedFormSession::apply(&mut self, pdfrum_form::event::Event) -> pdfrum_form::update::Response
+pub fn pdfrum::OwnedFormSession::blur(&mut self) -> pdfrum_form::update::Response
+pub fn pdfrum::OwnedFormSession::can_redo(&self) -> bool
+pub fn pdfrum::OwnedFormSession::can_undo(&self) -> bool
+pub fn pdfrum::OwnedFormSession::character(&mut self, char, pdfrum_form::event::Modifiers) -> pdfrum_form::update::Response
+pub fn pdfrum::OwnedFormSession::choose(&mut self, pdfrum_form::session::AnnotId, usize) -> pdfrum_form::update::Response
+pub fn pdfrum::OwnedFormSession::close_popup(&mut self, pdfrum_form::session::AnnotId) -> pdfrum_form::update::Response
+pub fn pdfrum::OwnedFormSession::config(&self) -> &pdfrum_form::session::SessionConfig
+pub fn pdfrum::OwnedFormSession::document(&self) -> &alloc::sync::Arc<pdfrum::Document>
+pub fn pdfrum::OwnedFormSession::double_click(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, kurbo::point::Point, pdfrum_form::event::Modifiers) -> pdfrum_form::update::Response
+pub fn pdfrum::OwnedFormSession::focus_at(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, kurbo::point::Point, pdfrum_form::event::Modifiers) -> pdfrum_form::update::Response
+pub fn pdfrum::OwnedFormSession::focus_for_page(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>) -> core::option::Option<pdfrum_doc::ap::Focus>
+pub fn pdfrum::OwnedFormSession::focused_annot(&self) -> core::option::Option<pdfrum_form::session::AnnotId>
+pub fn pdfrum::OwnedFormSession::focused_text(&self) -> core::option::Option<alloc::string::String>
+pub fn pdfrum::OwnedFormSession::hover_for_page(&self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>) -> core::option::Option<usize>
+pub fn pdfrum::OwnedFormSession::is_index_selected(&self, usize) -> bool
+pub fn pdfrum::OwnedFormSession::key_down(&mut self, pdfrum_form::event::Key, pdfrum_form::event::Modifiers) -> pdfrum_form::update::Response
+pub fn pdfrum::OwnedFormSession::load_page(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>)
+pub fn pdfrum::OwnedFormSession::mouse_down(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, kurbo::point::Point, pdfrum_form::event::Modifiers) -> pdfrum_form::update::Response
+pub fn pdfrum::OwnedFormSession::mouse_move(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, kurbo::point::Point, pdfrum_form::event::Modifiers) -> pdfrum_form::update::Response
+pub fn pdfrum::OwnedFormSession::mouse_up(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, kurbo::point::Point, pdfrum_form::event::Modifiers) -> pdfrum_form::update::Response
+pub fn pdfrum::OwnedFormSession::mouse_wheel(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>, kurbo::point::Point, (i32, i32), pdfrum_form::event::Modifiers) -> pdfrum_form::update::Response
+pub fn pdfrum::OwnedFormSession::popup_for_page(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>) -> core::option::Option<pdfrum_form::popup::PopupView>
+pub fn pdfrum::OwnedFormSession::replace_selection(&mut self, &str) -> bool
+pub fn pdfrum::OwnedFormSession::scroll_view(&mut self, pdfrum_form::session::AnnotId) -> core::option::Option<pdfrum_form::popup::ScrollView>
+pub fn pdfrum::OwnedFormSession::selected_text(&self) -> core::option::Option<alloc::string::String>
+pub fn pdfrum::OwnedFormSession::set_index_selected(&mut self, usize, bool) -> bool
+pub fn pdfrum::OwnedFormSession::set_viewed_page(&mut self, impl core::convert::Into<pdfrum_common::page_index::PageIndex>)
+pub fn pdfrum::OwnedFormSession::viewed_page(&self) -> pdfrum_common::page_index::PageIndex
+pub struct pdfrum::OwnedPage
+impl pdfrum::OwnedPage
+pub fn pdfrum::OwnedPage::annotations(&self) -> alloc::vec::Vec<pdfrum::Annotation<'_>>
+pub fn pdfrum::OwnedPage::art_box(&self) -> core::option::Option<kurbo::rect::Rect>
+pub fn pdfrum::OwnedPage::bleed_box(&self) -> core::option::Option<kurbo::rect::Rect>
+pub fn pdfrum::OwnedPage::crop_box(&self) -> kurbo::rect::Rect
+pub fn pdfrum::OwnedPage::document(&self) -> &alloc::sync::Arc<pdfrum::Document>
+pub fn pdfrum::OwnedPage::height(&self) -> f64
+pub fn pdfrum::OwnedPage::images(&self) -> alloc::vec::Vec<pdfrum::PageImage>
+pub fn pdfrum::OwnedPage::index(&self) -> pdfrum_common::page_index::PageIndex
+pub fn pdfrum::OwnedPage::links(&self) -> alloc::vec::Vec<pdfrum_doc::nav::link::Link>
+pub fn pdfrum::OwnedPage::media_box(&self) -> kurbo::rect::Rect
+pub fn pdfrum::OwnedPage::page_links(&self) -> alloc::vec::Vec<pdfrum::PageLink>
+pub fn pdfrum::OwnedPage::render<B: pdfrum_render::device::RasterBackend>(&self, &B, &pdfrum::RenderOptions) -> pdfrum::Result<pdfrum_render::pixmap::Pixmap>
+pub fn pdfrum::OwnedPage::render_on<B: pdfrum_render::device::RasterBackend>(&self, &B, &pdfrum::RenderOptions, &mut pdfrum::RenderSession) -> pdfrum::Result<pdfrum_render::pixmap::Pixmap>
+pub fn pdfrum::OwnedPage::rotation(&self) -> pdfrum::Rotation
+pub fn pdfrum::OwnedPage::structure(&self) -> core::option::Option<pdfrum_doc::structure::StructTree>
+pub fn pdfrum::OwnedPage::text(&self) -> pdfrum_text::TextPage
+pub fn pdfrum::OwnedPage::text_on(&self, &mut pdfrum::RenderSession) -> pdfrum_text::TextPage
+pub fn pdfrum::OwnedPage::trim_box(&self) -> core::option::Option<kurbo::rect::Rect>
+pub fn pdfrum::OwnedPage::width(&self) -> f64
+pub fn pdfrum::OwnedPage::words(&self) -> alloc::vec::Vec<pdfrum_text::word::Word>
 pub struct pdfrum::Page<'a>
 impl pdfrum::Page<'_>
 pub fn pdfrum::Page<'_>::edit(&self) -> pdfrum::PageEdit
