@@ -25,8 +25,6 @@ mod classic;
 mod rebuild;
 mod stream;
 
-use std::collections::BTreeMap;
-
 use pdfrum_common::{Diagnostics, Limits};
 use pdfrum_object::{Dict, Name, Object, names};
 
@@ -85,6 +83,115 @@ impl Default for XEntry {
     }
 }
 
+/// The merged cross-reference table: which object number holds which entry.
+///
+/// # Why a slot vector and not a map
+///
+/// Object numbers are dense. A trailer `/Size` is a claim that the file's
+/// objects are numbered `0..size`, and real files honor it: the table is a
+/// near-complete range, not a sparse scattering. That makes the natural
+/// representation an array indexed by object number, where reading or
+/// writing a slot is an offset computation rather than a tree descent.
+///
+/// It was a `BTreeMap<u32, XEntry>` until 2026-09-06. Callgrind put
+/// `BTreeMap::insert` at 28% of `Document::from_bytes` and [`Xref::merge_up`]
+/// — which re-inserted every key of every section while walking `/Prev` — at
+/// a further 24%: **52% of open spent in the container alone**, for a load
+/// that writes each object's entry once per section naming it.
+/// `docs/status/open-pass.md` has the before and after.
+///
+/// What the vector removes is the per-entry cost. What it keeps is every
+/// rule about which entry wins, unchanged and applied in the same order.
+#[derive(Debug, Clone, Default)]
+struct EntryTable {
+    /// One slot per object number, `None` where the table says nothing;
+    /// `slots[n]` is object `n`. Growth is bounded by
+    /// [`Limits::max_object_number`], which every writer checks before
+    /// reaching this type.
+    slots: Vec<Option<XEntry>>,
+    /// How many slots are occupied, kept incrementally: `len` is read per
+    /// document and counting it otherwise means scanning the vector.
+    occupied: usize,
+}
+
+impl EntryTable {
+    /// The entry for `num`, if the table describes it.
+    fn lookup(&self, num: u32) -> Option<&XEntry> {
+        self.slots.get(num as usize)?.as_ref()
+    }
+
+    /// Write `entry` into `num`'s slot, growing the vector to reach it.
+    ///
+    /// The caller has already decided this entry wins, and the bounds check
+    /// against [`Limits::max_object_number`] is likewise the caller's — only
+    /// it knows whether an out-of-range number is a refusal or a skip.
+    fn put(&mut self, num: u32, entry: XEntry) {
+        let idx = num as usize;
+        if idx >= self.slots.len() {
+            self.slots.resize(idx + 1, None);
+        }
+        // The resize above guarantees the slot; `get_mut` rather than an
+        // index so the lint that forbids panicking indexing stays on.
+        if let Some(slot) = self.slots.get_mut(idx) {
+            if slot.is_none() {
+                self.occupied += 1;
+            }
+            *slot = Some(entry);
+        }
+    }
+
+    /// The entry for `num`, materialized as free when the slot is empty.
+    fn or_default(&mut self, num: u32) -> &mut XEntry {
+        if self.lookup(num).is_none() {
+            self.put(num, XEntry::default());
+        }
+        self.slots
+            .get_mut(num as usize)
+            .and_then(Option::as_mut)
+            .unwrap_or_else(|| unreachable!("the slot was just materialized"))
+    }
+
+    /// How many objects the table describes.
+    fn len(&self) -> usize {
+        self.occupied
+    }
+
+    /// Every occupied slot, in ascending object-number order.
+    fn iter(&self) -> impl Iterator<Item = (u32, &XEntry)> + '_ {
+        // Every index is an object number that was written through `put`,
+        // so it came from a `u32` and converts back; a slot past `u32::MAX`
+        // cannot exist and is skipped rather than truncated into a wrong one.
+        self.slots.iter().enumerate().filter_map(|(i, slot)| {
+            let num = u32::try_from(i).ok()?;
+            slot.as_ref().map(|e| (num, e))
+        })
+    }
+
+    /// The largest object number the table describes.
+    fn last(&self) -> u32 {
+        self.slots
+            .iter()
+            .rposition(Option::is_some)
+            .and_then(|i| u32::try_from(i).ok())
+            .unwrap_or(0)
+    }
+
+    /// Drop every slot at or past `size`.
+    fn truncate(&mut self, size: u32) {
+        let keep = size as usize;
+        if let Some(dropped) = self.slots.get(keep..) {
+            self.occupied -= dropped.iter().flatten().count();
+            self.slots.truncate(keep);
+        }
+    }
+
+    /// Forget every entry.
+    fn clear(&mut self) {
+        self.slots.clear();
+        self.occupied = 0;
+    }
+}
+
 /// The trailer dictionary plus which object it came out of.
 ///
 /// The object number matters to incremental saving: a trailer written as a
@@ -101,12 +208,13 @@ pub struct Trailer {
 
 /// Where every object in a document lives.
 ///
-/// A sorted map, because reading it in object-number order is what both the
+/// Ordered by object number, because reading it that way is what both the
 /// page walk and the writer want, and because the largest object number is a
-/// value the reader consults constantly.
+/// value the reader consults constantly. That order is an array index rather
+/// than a tree; the private `EntryTable` this wraps carries the why.
 #[derive(Debug, Clone, Default)]
 pub struct Xref {
-    entries: BTreeMap<u32, XEntry>,
+    entries: EntryTable,
     /// The cross-reference sections the load followed, oldest first: each
     /// one an incremental update's table or stream, at its byte offset.
     sections: Vec<Section>,
@@ -144,19 +252,19 @@ impl Xref {
     /// Where object `num` lives, if the table says anything about it.
     #[must_use]
     pub fn entry(&self, num: u32) -> Option<Entry> {
-        self.entries.get(&num).map(|e| e.kind)
+        self.entries.lookup(num).map(|e| e.kind)
     }
 
     /// The generation the table records for `num`.
     #[must_use]
     pub fn generation(&self, num: u32) -> u16 {
-        self.entries.get(&num).map_or(0, |e| e.generation)
+        self.entries.lookup(num).map_or(0, |e| e.generation)
     }
 
     /// Whether some entry named `num` as the object stream it lives in.
     #[must_use]
     pub fn is_object_stream(&self, num: u32) -> bool {
-        self.entries.get(&num).is_some_and(|e| e.objstm_flag)
+        self.entries.lookup(num).is_some_and(|e| e.objstm_flag)
     }
 
     /// How many objects the table describes.
@@ -168,23 +276,23 @@ impl Xref {
     /// Whether the table describes nothing.
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.entries.is_empty()
+        self.entries.len() == 0
     }
 
     /// Every object number the table describes, in ascending order.
     pub fn object_numbers(&self) -> impl Iterator<Item = u32> + '_ {
-        self.entries.keys().copied()
+        self.entries.iter().map(|(num, _)| num)
     }
 
     /// Every entry, in ascending object-number order.
     pub(crate) fn iter(&self) -> impl Iterator<Item = (u32, XEntry)> + '_ {
-        self.entries.iter().map(|(&num, &e)| (num, e))
+        self.entries.iter().map(|(num, &e)| (num, e))
     }
 
     /// The largest object number the table describes.
     #[must_use]
     pub fn last_object_number(&self) -> u32 {
-        self.entries.keys().next_back().copied().unwrap_or(0)
+        self.entries.last()
     }
 
     /// Whether `num` is a number this table could possibly describe.
@@ -219,12 +327,12 @@ impl Xref {
         if num > limits.max_object_number {
             return false;
         }
-        let flag = match self.entries.get(&num) {
+        let flag = match self.entries.lookup(num) {
             Some(existing) if existing.generation > generation => return true,
             Some(existing) => existing.objstm_flag || is_objstm,
             None => is_objstm,
         };
-        self.entries.insert(
+        self.entries.put(
             num,
             XEntry {
                 kind: Entry::Offset(pos),
@@ -255,12 +363,12 @@ impl Xref {
         if num > limits.max_object_number || archive > limits.max_object_number {
             return false;
         }
-        if let Some(existing) = self.entries.get(&num)
+        if let Some(existing) = self.entries.lookup(num)
             && (existing.generation > 0 || existing.objstm_flag)
         {
             return true;
         }
-        self.entries.insert(
+        self.entries.put(
             num,
             XEntry {
                 kind: Entry::InObjStream {
@@ -271,13 +379,13 @@ impl Xref {
                 objstm_flag: false,
             },
         );
-        self.entries.entry(archive).or_default().objstm_flag = true;
+        self.entries.or_default(archive).objstm_flag = true;
         true
     }
 
     /// Mark an object free, unconditionally.
     pub(crate) fn set_free(&mut self, num: u32, generation: u16) {
-        self.entries.insert(num, XEntry::free(generation));
+        self.entries.put(num, XEntry::free(generation));
     }
 
     /// Resize the table to describe exactly `size` objects.
@@ -292,8 +400,8 @@ impl Xref {
             self.entries.clear();
             return;
         }
-        self.entries.retain(|&num, _| num < size);
-        self.entries.entry(size - 1).or_default();
+        self.entries.truncate(size);
+        self.entries.or_default(size - 1);
     }
 
     /// Apply `top` onto `self`, with `top`'s entries winning conflicts.
@@ -303,8 +411,8 @@ impl Xref {
     /// the winner, because knowing an object is a container is information
     /// neither section can invalidate.
     pub(crate) fn merge_up(&mut self, top: &Self) {
-        for (&num, &entry) in &top.entries {
-            let merged = match (self.entries.get(&num), entry.kind) {
+        for (num, &entry) in top.entries.iter() {
+            let merged = match (self.entries.lookup(num), entry.kind) {
                 (Some(current), Entry::Offset(_))
                     if matches!(current.kind, Entry::Offset(_)) && current.objstm_flag =>
                 {
@@ -315,7 +423,7 @@ impl Xref {
                 }
                 _ => entry,
             };
-            self.entries.insert(num, merged);
+            self.entries.put(num, merged);
         }
     }
 }
