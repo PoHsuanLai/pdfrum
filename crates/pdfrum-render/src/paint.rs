@@ -322,11 +322,17 @@ fn draw_fill_stroke_knockout<B: RasterBackend>(
     {
         return false;
     }
-    let mut sub = backend.new_target(w, h, peniko::Color::TRANSPARENT);
     let offset = Affine::translate((-f64::from(rect.left), -f64::from(rect.top)));
     let aa = opts.path_aa();
+    // The two paints go to **separate** targets and are combined under
+    // knockout, which is the whole point of the buffer: upstream seeds it
+    // with a copy of the backdrop and marks the device `group_knockout`, so
+    // each paint composites against the page and neither sees the other.
+    // Drawing both into one target with ordinary source-over is what let the
+    // translucent stroke accumulate over the fill in their overlap.
+    let mut fill_target = backend.new_target(w, h, peniko::Color::TRANSPARENT);
     if !fill.is_invisible() {
-        sub.fill_path(
+        fill_target.fill_path(
             &crate::path::transform_hard_clip(offset * to_device, path),
             Affine::IDENTITY,
             &Brush::Solid(fill.to_peniko()),
@@ -334,14 +340,16 @@ fn draw_fill_stroke_knockout<B: RasterBackend>(
             aa,
         );
     }
+    let mut pixels = backend.finish(fill_target);
     if !stroke_color.is_invisible() {
+        let mut stroke_target = backend.new_target(w, h, peniko::Color::TRANSPARENT);
         // The buffer's translation composes *outermost*, after `post`, so it
         // rides on the transform argument rather than the geometry. Folding it
         // into the geometry instead would put it inside the split — the
         // rasterizer would then apply `post * offset`, and `post` carries the
         // page's y-flip, so the buffer's upward shift would come back out
         // downward and drop the stroke off the bottom of the buffer.
-        sub.stroke_path(
+        stroke_target.stroke_path(
             &hard_clip(&crate::path::nudge_degenerate_subpaths(
                 &(matrices.pre * path.clone()),
                 path,
@@ -351,8 +359,8 @@ fn draw_fill_stroke_knockout<B: RasterBackend>(
             &stroke,
             aa,
         );
+        pixels.knockout_replace(&backend.finish(stroke_target));
     }
-    let pixels = backend.finish(sub);
     device.draw_image(
         &pixels,
         Affine::translate((f64::from(rect.left), f64::from(rect.top))),

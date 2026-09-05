@@ -707,15 +707,81 @@ pub enum Placement {
     /// The reduced pixmap still needs the backend's sampler, through this
     /// transform.
     Filtered(kurbo::Affine),
+    /// An axis-aligned draw whose destination is the **outer integer rect**
+    /// of the image's device footprint, sampled on that integer grid.
+    ///
+    /// This is upstream's geometry, not a rounding convenience.
+    /// `CPDF_ImageRenderer::GetUnitRect`
+    /// (`core/fpdfapi/render/cpdf_imagerenderer.cpp:658-664`) takes
+    /// `image_matrix_.GetUnitRect().GetOuterRect()`, and
+    /// `GetDimensionsFromUnitRect` (`:667-698`) derives `dest_width` /
+    /// `dest_height` from *that integer rect's* extent — so
+    /// `CStretchEngine`'s `scale` is `src_len / integer_dest_len`, and its
+    /// source position is `dest_pixel * scale + scale / 2` counted from the
+    /// integer `left`/`top`. Carrying the fractional device transform
+    /// instead makes the sampled column drift by up to half a source pixel
+    /// across the image, which is what `fx/image/1_image.pdf` measured.
+    ///
+    /// The signs come from `GetDimensionsFromUnitRect`: a negative `a`
+    /// flips width, a **positive** `d` flips height (image space's y runs
+    /// opposite the device's), and the origin is the far edge on a flipped
+    /// axis.
+    Snapped(SnappedRect),
+}
+
+/// The integer destination rect an axis-aligned image is stretched onto.
+///
+/// A record of upstream's four `GetDimensionsFromUnitRect` outputs. `width`
+/// and `height` are signed exactly as upstream's are: the sign is the axis
+/// flip, and `left`/`top` is already the origin that flip implies, so a
+/// consumer reads the sign rather than re-deriving it from a matrix.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SnappedRect {
+    /// Device x of the destination origin, upstream's `dest_left`.
+    pub left: i32,
+    /// Device y of the destination origin, upstream's `dest_top`.
+    pub top: i32,
+    /// Signed destination width; negative mirrors the x axis.
+    pub width: i32,
+    /// Signed destination height; negative mirrors the y axis.
+    pub height: i32,
+}
+
+impl SnappedRect {
+    /// The transform mapping the source pixel grid onto this rect.
+    ///
+    /// One source pixel becomes `|width| / src_width` device pixels, placed
+    /// so that device pixel `left + d` samples source position
+    /// `d * src_width / |width| + scale / 2` — `CStretchEngine`'s
+    /// magnification rule (`cstretchengine.cpp:106-133`) expressed as an
+    /// affine, which is what the backends' nearest samplers already
+    /// evaluate at pixel centres.
+    #[must_use]
+    pub fn transform(self, src_width: u32, src_height: u32) -> kurbo::Affine {
+        if src_width == 0 || src_height == 0 {
+            return kurbo::Affine::IDENTITY;
+        }
+        let sx = f64::from(self.width) / f64::from(src_width);
+        let sy = f64::from(self.height) / f64::from(src_height);
+        kurbo::Affine::translate((f64::from(self.left), f64::from(self.top)))
+            * kurbo::Affine::scale_non_uniform(sx, sy)
+    }
 }
 
 impl Placement {
-    /// The transform a backend draws with, exact or filtered.
+    /// The transform a backend draws the `src_width` x `src_height` pixmap
+    /// with.
+    ///
+    /// The dimensions are a parameter rather than a field because only
+    /// `Snapped` needs them: its integer rect says where the pixmap lands,
+    /// and the scale that maps one onto the other is the last thing needed
+    /// to turn it back into an affine.
     #[must_use]
-    pub fn transform(self) -> kurbo::Affine {
+    pub fn transform_for(self, src_width: u32, src_height: u32) -> kurbo::Affine {
         match self {
             Self::Exact { x, y } => kurbo::Affine::translate((x, y)),
             Self::Filtered(t) => t,
+            Self::Snapped(rect) => rect.transform(src_width, src_height),
         }
     }
 
@@ -728,7 +794,9 @@ impl Placement {
     pub fn quality(self, wanted: crate::device::ImageQuality) -> crate::device::ImageQuality {
         match self {
             Self::Exact { .. } => crate::device::ImageQuality::Nearest,
-            Self::Filtered(_) => wanted,
+            // A snapped placement keeps the caller's quality: the snap fixes
+            // *where* the sampler reads, not *how* it weighs what it reads.
+            Self::Filtered(_) | Self::Snapped(_) => wanted,
         }
     }
 }
@@ -752,24 +820,103 @@ const EXACTNESS: f64 = 1e-9;
 /// because `to_device` here is already the post-reduction transform: the
 /// reduced pixmap covers the device rectangle one texel per pixel, or it does
 /// not and is filtered.
+///
+/// An axis-aligned transform that is *not* one-to-one is `Snapped` rather
+/// than `Filtered`: upstream stretches onto the outer integer rect of the
+/// footprint, so the fractional transform is not the geometry to sample
+/// through. `src_width` / `src_height` are the pixmap's own dimensions,
+/// which `to_device` maps.
 #[must_use]
 #[expect(
     clippy::many_single_char_names,
     reason = "a..f are the six affine matrix coefficients, named as in the PDF `cm` operands"
 )]
-pub fn placement_for(to_device: kurbo::Affine) -> Placement {
+pub fn placement_for(to_device: kurbo::Affine, src_width: u32, src_height: u32) -> Placement {
     let [a, b, c, d, e, f] = to_device.as_coeffs();
     let integral = |v: f64| v.is_finite() && (v - v.round()).abs() <= EXACTNESS;
     let unit = |v: f64| (v - 1.0).abs() <= EXACTNESS;
     let zero = |v: f64| v.abs() <= EXACTNESS;
     if unit(a) && zero(b) && zero(c) && unit(d) && integral(e) && integral(f) {
-        Placement::Exact {
+        return Placement::Exact {
             x: e.round(),
             y: f.round(),
-        }
-    } else {
-        Placement::Filtered(to_device)
+        };
     }
+    // Axis-aligned magnification: this is upstream's `:106` branch, and
+    // upstream stretches onto the outer integer rect rather than through the
+    // fractional matrix. `snapped_for` reproduces that rect.
+    //
+    // Restricted to magnification because that is the branch the citation
+    // covers: `CStretchEngine::CalculateWeights` takes the single-tap path
+    // only when `fabs(scale) < 1.0` (`cstretchengine.cpp:106`), where `scale`
+    // is `src_len / dest_len` — so a *reduction* runs the box-filter loop
+    // from `:136` instead, whose taps our own `reduce_to` has already
+    // applied. Snapping a reduction would move the pre-reduced pixmap onto a
+    // grid its taps were not computed for.
+    if zero(b)
+        && zero(c)
+        && a.abs() > 1.0
+        && d.abs() > 1.0
+        && let Some(rect) = snapped_for(to_device, src_width, src_height)
+    {
+        return Placement::Snapped(rect);
+    }
+    Placement::Filtered(to_device)
+}
+
+/// The integer destination rect upstream stretches an axis-aligned image onto.
+///
+/// `to_device` maps the image's **pixel grid** (0..w, 0..h) to device space,
+/// so its unit rect is that grid's footprint. Reproduces
+/// `CPDF_ImageRenderer::GetUnitRect` (`cpdf_imagerenderer.cpp:658-664`)
+/// followed by `GetDimensionsFromUnitRect` (`:667-698`).
+///
+/// Returns `None` when the rect is degenerate or would not fit the signed
+/// range upstream also rejects, leaving the caller on the filtered path.
+#[must_use]
+fn snapped_for(to_device: kurbo::Affine, src_width: u32, src_height: u32) -> Option<SnappedRect> {
+    // `a` and `d` are the two scale coefficients, named as in the PDF `cm`
+    // operands; the caller has already established that `b` and `c` are zero.
+    let [a, _, _, d, _, _] = to_device.as_coeffs();
+    if !a.is_finite() || !d.is_finite() || a == 0.0 || d == 0.0 {
+        return None;
+    }
+    if src_width == 0 || src_height == 0 {
+        return None;
+    }
+    let unit = to_device.transform_rect_bbox(kurbo::Rect::new(
+        0.0,
+        0.0,
+        f64::from(src_width),
+        f64::from(src_height),
+    ));
+    if !unit.x0.is_finite() || !unit.y0.is_finite() || !unit.x1.is_finite() || !unit.y1.is_finite()
+    {
+        return None;
+    }
+    let rect = crate::path::outer_rect(unit);
+    let (w, h) = (
+        rect.right.checked_sub(rect.left)?,
+        rect.bottom.checked_sub(rect.top)?,
+    );
+    if w <= 0 || h <= 0 {
+        return None;
+    }
+    // `GetDimensionsFromUnitRect` reads the signs off `image_matrix_`, the
+    // raw `cm`, whose y axis still runs opposite the device's — which is why
+    // upstream's y test is `d > 0` rather than `d < 0`. `to_device` here has
+    // already absorbed that flip (`walk.rs` folds `-1/height` into the
+    // placement), so the test is the plain one in both axes: the sign of the
+    // coefficient *is* the mirror, and the origin moves to the far edge of a
+    // mirrored axis.
+    let width = if a < 0.0 { -w } else { w };
+    let height = if d < 0.0 { -h } else { h };
+    Some(SnappedRect {
+        left: if width > 0 { rect.left } else { rect.right },
+        top: if height > 0 { rect.top } else { rect.bottom },
+        width,
+        height,
+    })
 }
 
 /// The largest source axis this pre-pass will process.
@@ -1274,7 +1421,7 @@ mod tests {
     fn only_a_whole_pixel_unit_placement_is_exact() {
         use crate::device::ImageQuality;
 
-        let exact = |t: Affine| matches!(placement_for(t), Placement::Exact { .. });
+        let exact = |t: Affine| matches!(placement_for(t, 8, 8), Placement::Exact { .. });
 
         assert!(exact(Affine::IDENTITY));
         assert!(exact(Affine::translate((13.0, -7.0))));
@@ -1303,16 +1450,62 @@ mod tests {
         // caller asked for and its own transform.
         let t = Affine::translate((3.0, 4.0));
         assert_eq!(
-            placement_for(t).quality(ImageQuality::Bilinear),
+            placement_for(t, 8, 8).quality(ImageQuality::Bilinear),
             ImageQuality::Nearest
         );
-        assert_eq!(placement_for(t).transform(), t);
-        let f = Affine::scale(0.5);
+        assert_eq!(placement_for(t, 8, 8).transform_for(8, 8), t);
+        // A rotation is neither exact nor axis-aligned, so it stays filtered
+        // and keeps its own transform untouched.
+        let f = Affine::rotate(0.5);
         assert_eq!(
-            placement_for(f).quality(ImageQuality::Bilinear),
+            placement_for(f, 8, 8).quality(ImageQuality::Bilinear),
             ImageQuality::Bilinear
         );
-        assert_eq!(placement_for(f).transform(), f);
+        assert_eq!(placement_for(f, 8, 8).transform_for(8, 8), f);
+    }
+
+    /// An axis-aligned stretch lands on upstream's integer rect.
+    ///
+    /// `CPDF_ImageRenderer::GetUnitRect` takes the footprint's *outer* rect
+    /// (`cpdf_imagerenderer.cpp:658-664`) and `GetDimensionsFromUnitRect`
+    /// (`:667-698`) derives the destination extent from it, so a fractional
+    /// origin is snapped outward and the scale is recomputed against the
+    /// whole-pixel width. `fx/image/1_image.pdf` is exactly this case.
+    #[test]
+    fn an_axis_aligned_stretch_snaps_to_the_outer_rect() {
+        // 140 source pixels magnified to 356.1 device pixels at x = 208.25:
+        // the outer rect is [208, 565), so upstream's destination width is
+        // 357 and not 356.
+        let t = Affine::translate((208.25, 37.0)) * Affine::scale_non_uniform(2.543_625, 4.0);
+        let Placement::Snapped(rect) = placement_for(t, 140, 140) else {
+            panic!("an axis-aligned stretch must snap");
+        };
+        assert_eq!(rect.left, 208);
+        assert_eq!(rect.width, 357);
+        // y: 37 + 4 * 140 = 597 exactly, so the outer rect is [37, 597).
+        assert_eq!(rect.top, 37);
+        assert_eq!(rect.height, 560);
+    }
+
+    /// The signs come from `GetDimensionsFromUnitRect`, not from a bbox.
+    ///
+    /// A negative `a` mirrors x and a **positive** `d` mirrors y, and the
+    /// origin moves to the far edge of the mirrored axis.
+    #[test]
+    fn a_mirrored_stretch_keeps_upstreams_signs() {
+        let t = Affine::translate((10.0, 20.0)) * Affine::scale_non_uniform(-2.0, -3.0);
+        let Placement::Snapped(rect) = placement_for(t, 4, 4) else {
+            panic!("an axis-aligned stretch must snap");
+        };
+        assert!(rect.width < 0, "a negative `a` mirrors x");
+        assert!(rect.height < 0, "a negative `d` mirrors y");
+        // The origin is the far edge on both mirrored axes: x runs back from
+        // 10 to 10 - 2 * 4 = 2, and y from 20 to 20 - 3 * 4 = 8, so the rect
+        // is [2, 10) x [8, 20) and the origin is its right-bottom corner.
+        assert_eq!(rect.left, 10);
+        assert_eq!(rect.top, 20);
+        assert_eq!(rect.width, -8);
+        assert_eq!(rect.height, -12);
     }
 
     /// The single-channel reducer is the four-channel one, byte for byte, on

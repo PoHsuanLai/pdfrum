@@ -2077,15 +2077,38 @@ fn render_image<B: RasterBackend>(
     // the backend has nothing to resample. `Placement` says which case this
     // is; `Exact` cannot reach the filtered path because it does not carry a
     // transform to filter through.
-    let placed = crate::stretch::placement_for(placement);
+    let placed = image_placement(placement, pixels, ctx.type3.is_some());
     device.draw_image(
         pixels,
-        placed.transform(),
+        placed.transform_for(pixels.width(), pixels.height()),
         placed.quality(effective_quality(quality, placement)),
         state.general.fill_alpha,
     );
     if layered {
         device.pop();
+    }
+}
+
+/// Where one image draw lands, and on which grid.
+///
+/// Wraps [`crate::stretch::placement_for`] with the one case its geometry
+/// cannot see: inside a type-3 char proc the target is a sub-bitmap whose
+/// origin is the glyph's own outer rect, not the page's. Upstream's snap is
+/// to the *device* integer grid (`cpdf_imagerenderer.cpp:658-664`), so
+/// quantising there would land on the sub-target's grid and be requantised
+/// again when that sub-target is blitted — two roundings where upstream has
+/// one. `Exact` is unaffected: it is already a whole-pixel translation in
+/// whichever target it was computed for.
+fn image_placement(
+    placement: Affine,
+    pixels: &crate::pixmap::Pixmap,
+    in_type3: bool,
+) -> crate::stretch::Placement {
+    match crate::stretch::placement_for(placement, pixels.width(), pixels.height()) {
+        crate::stretch::Placement::Snapped(_) if in_type3 => {
+            crate::stretch::Placement::Filtered(placement)
+        }
+        other => other,
     }
 }
 
