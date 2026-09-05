@@ -110,7 +110,7 @@ fn print(r: &Report, term: Term) {
     let mut rows = vec![("file", Some(r.file.clone())), ("state", Some(state))];
     if r.xref_rebuilt {
         rows.push((
-            "xref",
+            "table",
             Some(term.paint(Style::Warn, "rebuilt by scanning the file")),
         ));
     }
@@ -120,7 +120,7 @@ fn print(r: &Report, term: Term) {
     }
     let mut table = Table::new(&[
         ("SEVERITY", Align::Left),
-        ("OFFSET", Align::Right),
+        ("AT", Align::Right),
         ("WHAT", Align::Left),
     ]);
     for n in &r.notices {
@@ -130,7 +130,7 @@ fn print(r: &Report, term: Term) {
         };
         table.row(vec![
             severity,
-            n.offset.map_or(String::new(), |o| format!("@{o}")),
+            n.offset.map_or(String::new(), |o| format!("byte {o}")),
             n.what.clone(),
         ]);
     }

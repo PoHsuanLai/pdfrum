@@ -231,7 +231,7 @@ fn print(r: &Report, term: Term) {
     }
     match &r.id {
         Some(id) => {
-            row("id", Some(id.permanent.clone()));
+            row("document id", Some(id.permanent.clone()));
             row(
                 "identity",
                 Some(
@@ -244,7 +244,7 @@ fn print(r: &Report, term: Term) {
                 ),
             );
         }
-        None => row("id", None),
+        None => row("document id", None),
     }
     if r.outline_entries > 0 {
         row("outline", Some(format!("{} entries", r.outline_entries)));

@@ -76,6 +76,9 @@ pub enum Style {
     Removed,
     /// The pager's status bar.
     Bar,
+    /// Text that is a hyperlink: underlined, so it reads as one at rest and
+    /// not only on hover.
+    Link,
 }
 
 impl Style {
@@ -90,6 +93,7 @@ impl Style {
             Self::Match => "1;33",
             Self::Removed => "31",
             Self::Bar => "7",
+            Self::Link => "4;36",
         }
     }
 }
@@ -143,10 +147,13 @@ impl Term {
         }
     }
 
-    /// `text` as an OSC 8 hyperlink to `url` when hyperlinks are on.
+    /// `text` as an OSC 8 hyperlink to `url` when hyperlinks are on, and
+    /// underlined when colour is, so a terminal that only marks links on
+    /// hover still shows there is one.
     pub fn link(self, url: &str, text: &str) -> String {
         if self.hyperlinks && !url.is_empty() {
-            format!("\x1b]8;;{url}\x1b\\{text}\x1b]8;;\x1b\\")
+            let shown = self.paint(Style::Link, text);
+            format!("\x1b]8;;{url}\x1b\\{shown}\x1b]8;;\x1b\\")
         } else {
             text.to_owned()
         }

@@ -42,6 +42,7 @@ reused for a different meaning:
 | `Match` | bold yellow | the matched text in `search` |
 | `Added` / `Removed` | green / red | `diff` lines |
 | `Bar` | inverse | the pager's status bar, and nothing else |
+| `Link` | underlined cyan | the text of a hyperlink, so it reads as one at rest; terminals mostly mark OSC 8 links on hover only |
 
 No 256-colour or truecolor for text (pictures use truecolor; that is a
 picture). No background colours. No blinking. **No emoji, anywhere, ever** —
@@ -96,6 +97,12 @@ locked.pdf: encrypted, AES-256, print allowed
 
 - Lowercase throughout, except proper names (`AES-256`, `TrueType`) and
   the table header. No trailing full stops on lines.
+- **Headers and keys are plain words**, never the specification's
+  abbreviations: `OBJECT` not `OBJ`, `WHERE` and `byte 471` not `PLACE`
+  and `@471`, `CONTENT ID` not `MCID`, `document id` not `id`, `table`
+  not `xref`. Most readers have not read ISO 32000, and the ones who have
+  lose nothing. The specification's own names appear only as values — an
+  object's `/Type`, a filter's name — because there they are the fact.
 - **Nothing found is one line, `no <things>`**: `no images`, `no fonts`,
   `no attachments`, `no bookmarks`, `no form fields`, `no signatures`,
   `no annotations`, `no notices`. Exit 0 — an empty answer is an answer.

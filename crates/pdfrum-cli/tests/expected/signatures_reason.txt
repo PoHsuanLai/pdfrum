@@ -1,5 +1,5 @@
 signature 1
-  sub filter  ETSI.CAdES.detached
+  format      ETSI.CAdES.detached
   signed      D:20200624093114+02'00'
   reason      test reason
   contents    20 B

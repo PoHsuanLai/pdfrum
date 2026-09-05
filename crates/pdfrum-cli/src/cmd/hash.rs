@@ -56,9 +56,9 @@ pub fn run(file: &Path, password: Option<&str>, json: bool, term: Term) -> Resul
             term,
             &[
                 ("file", Some(report.file.clone())),
-                ("sha256", Some(report.sha256.clone())),
-                ("id", id),
-                ("semantic", Some(report.semantic.clone())),
+                ("file hash", Some(report.sha256.clone())),
+                ("document id", id),
+                ("content hash", Some(report.semantic.clone())),
                 ("objects", Some(report.objects.to_string())),
             ],
         );

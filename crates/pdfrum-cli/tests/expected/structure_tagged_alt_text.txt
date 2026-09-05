@@ -1,5 +1,5 @@
 page 1
-  ELEMENT     MCID  ALT
+  ELEMENT     CONTENT ID  ALT TEXT
   Document
     P
-      Figure  0     Black Image
+      Figure  0           Black Image
