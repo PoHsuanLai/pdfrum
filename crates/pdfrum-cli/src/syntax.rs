@@ -115,6 +115,10 @@ pub fn highlight(text: &str, term: Term) -> String {
             out.push_str(&term.paint(Style::Muted, h));
         }
     }
+    // `lines()` eats a final line break; the caller's text keeps it.
+    if text.ends_with('\n') {
+        out.push('\n');
+    }
     out
 }
 
@@ -319,6 +323,11 @@ mod tests {
             ..term
         };
         assert_eq!(highlight(text, plain), text);
+        // A trailing line break survives painting, so what follows the
+        // dump starts on its own line.
+        let block = "trailer\n<<\n  /Size 7\n>>\n";
+        assert!(highlight(block, term).ends_with(">>\n"));
+        assert!(highlight(block, plain).ends_with(">>\n"));
     }
 
     #[test]

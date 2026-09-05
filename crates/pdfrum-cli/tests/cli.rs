@@ -754,6 +754,20 @@ fn colour_and_hyperlinks_are_off_in_a_pipe_unless_asked_and_no_color_wins() {
         linked.contains("\u{1b}]8;;file://") && linked.contains("#page=1\u{1b}\\"),
         "{linked:?}"
     );
+    let shown = stdout(&[
+        "extract",
+        "toc",
+        "fixtures/bookmarks.pdf",
+        "--hyperlinks",
+        "always",
+        "--color",
+        "always",
+    ])
+    .unwrap();
+    assert!(
+        shown.contains("#page=1\u{1b}\\\u{1b}[4;36m1\u{1b}[0m\u{1b}]8;;"),
+        "a link is underlined when colour is on: {shown:?}"
+    );
     let out = Command::new(env!("CARGO_BIN_EXE_pdfrum"))
         .args([
             "search",
@@ -1445,9 +1459,9 @@ fn hash_prints_three_fingerprints_and_the_semantic_one_ignores_the_save() {
     );
 
     let text = stdout(&["hash", a.to_str().unwrap()]).unwrap();
-    assert!(text.starts_with("file      "), "{text}");
-    assert!(text.contains("\nid        "), "{text}");
-    assert!(text.contains("\nsemantic  "), "{text}");
+    assert!(text.starts_with("file          "), "{text}");
+    assert!(text.contains("\ndocument id   "), "{text}");
+    assert!(text.contains("\ncontent hash  "), "{text}");
 }
 
 #[test]

@@ -165,21 +165,18 @@ pub fn xref(file: &Path, password: Option<&str>, json: bool, term: Term) -> Resu
     if json {
         out::json(&report)?;
     } else {
-        out::record(
-            term,
-            &[
-                ("file", Some(report.file.clone())),
-                ("objects", Some(report.entries.to_string())),
-                (
-                    "xref",
-                    Some(if report.rebuilt {
-                        term.paint(Style::Warn, "rebuilt by scanning the file")
-                    } else {
-                        "as written".to_owned()
-                    }),
-                ),
-            ],
-        );
+        let mut rows = vec![
+            ("file", Some(report.file.clone())),
+            ("objects", Some(report.entries.to_string())),
+        ];
+        // Only worth a line when the file's own table could not be used.
+        if report.rebuilt {
+            rows.push((
+                "table",
+                Some(term.paint(Style::Warn, "rebuilt by scanning the file")),
+            ));
+        }
+        out::record(term, &rows);
         out::heading(term, "trailer");
         let mut trailer = String::new();
         for line in with_hints(&report.trailer, &doc).lines() {
@@ -187,20 +184,25 @@ pub fn xref(file: &Path, password: Option<&str>, json: bool, term: Term) -> Resu
         }
         out!("{}", syntax::highlight(&trailer, term));
         let mut table = Table::new(&[
-            ("OBJ", Align::Right),
-            ("GEN", Align::Right),
-            ("PLACE", Align::Left),
+            ("OBJECT", Align::Right),
+            ("GENERATION", Align::Right),
+            ("WHERE", Align::Left),
             ("WHAT", Align::Left),
         ]);
         for r in &report.rows {
             let place = match (r.offset, r.stream, r.index) {
-                (Some(o), _, _) => format!("@{o}"),
-                (_, Some(s), Some(i)) => format!("in {s} 0 R [{i}]"),
+                (Some(o), _, _) => format!("byte {o}"),
+                (_, Some(s), Some(i)) => format!("in object {s}, item {i}"),
                 _ => "free".to_owned(),
             };
             table.row(vec![
                 term.paint(Style::Ident, &r.object.to_string()),
-                r.generation.to_string(),
+                // Nearly always 0, and then the column goes.
+                if r.generation == 0 {
+                    String::new()
+                } else {
+                    r.generation.to_string()
+                },
                 place,
                 r.what.clone().unwrap_or_default(),
             ]);
@@ -246,16 +248,21 @@ pub fn revisions(file: &Path, password: Option<&str>, json: bool, term: Term) ->
         out::none("revisions");
     } else {
         let mut table = Table::new(&[
-            ("REV", Align::Right),
-            ("XREF", Align::Right),
-            ("KIND", Align::Left),
+            ("REVISION", Align::Right),
+            ("TABLE AT", Align::Right),
+            ("FORMAT", Align::Left),
             ("SIZE", Align::Right),
         ]);
         for r in &rows {
             table.row(vec![
                 term.paint(Style::Ident, &r.revision.to_string()),
-                format!("@{}", r.xref_offset),
-                if r.xref_stream { "stream" } else { "table" }.to_owned(),
+                format!("byte {}", r.xref_offset),
+                if r.xref_stream {
+                    "stream"
+                } else {
+                    "classic table"
+                }
+                .to_owned(),
                 out::bytes(r.end as u64),
             ]);
         }
@@ -342,9 +349,9 @@ pub fn structure(
     } else {
         let columns = [
             ("ELEMENT", Align::Left),
-            ("MCID", Align::Left),
-            ("ALT", Align::Left),
-            ("TEXT", Align::Left),
+            ("CONTENT ID", Align::Left),
+            ("ALT TEXT", Align::Left),
+            ("ACTUAL TEXT", Align::Left),
         ];
         let mut last_page = 0;
         let mut table = Table::new(&columns);

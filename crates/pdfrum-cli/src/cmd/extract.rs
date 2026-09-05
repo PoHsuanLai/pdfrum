@@ -160,7 +160,7 @@ pub fn links(
         let mut table = Table::new(&[
             ("PAGE", Align::Right),
             ("KIND", Align::Left),
-            ("RECT", Align::Left),
+            ("AREA", Align::Left),
             ("TARGET", Align::Left),
         ]);
         for r in &rows {
@@ -221,7 +221,7 @@ pub fn toc(file: &Path, password: Option<&str>, json: bool, term: Term) -> Resul
         let mut table = Table::new(&[("TITLE", Align::Left), ("PAGE", Align::Right)]);
         for r in &rows {
             let page = r.page.map_or(String::new(), |p| {
-                term.link(&page_url(file, p), &out::page(term, p))
+                term.link(&page_url(file, p), &p.to_string())
             });
             table.row(vec![format!("{}{}", "  ".repeat(r.depth), r.title), page]);
         }
@@ -355,8 +355,8 @@ pub fn annotations(
     } else {
         let mut table = Table::new(&[
             ("PAGE", Align::Right),
-            ("SUBTYPE", Align::Left),
-            ("RECT", Align::Left),
+            ("KIND", Align::Left),
+            ("AREA", Align::Left),
             ("FLAGS", Align::Left),
             ("TITLE", Align::Left),
             ("CONTENTS", Align::Left),
@@ -411,7 +411,7 @@ pub fn signatures(file: &Path, password: Option<&str>, json: bool, term: Term) -
         for (i, s) in rows.iter().enumerate() {
             out::heading(term, &format!("signature {}", i + 1));
             let mut record = vec![
-                ("  sub filter", s.sub_filter.clone()),
+                ("  format", s.sub_filter.clone()),
                 ("  signed", s.time.clone()),
             ];
             if let Some(r) = &s.reason {
@@ -429,7 +429,10 @@ pub fn signatures(file: &Path, password: Option<&str>, json: bool, term: Term) -
                 ),
             ));
             if s.doc_mdp_permission != 0 {
-                record.push(("  DocMDP", Some(format!("P={}", s.doc_mdp_permission))));
+                record.push((
+                    "  certification",
+                    Some(format!("level {}", s.doc_mdp_permission)),
+                ));
             }
             out::record(term, &record);
         }
@@ -554,7 +557,7 @@ pub fn images(
         let mut table = Table::new(&[
             ("IMAGE", Align::Right),
             ("PAGE", Align::Right),
-            ("OBJ", Align::Right),
+            ("OBJECT", Align::Right),
             ("PIXELS", Align::Left),
             ("FORMAT", Align::Left),
             ("USES", Align::Right),
@@ -654,7 +657,7 @@ pub fn fonts(
         let mut table = Table::new(&[
             ("NAME", Align::Left),
             ("KIND", Align::Left),
-            ("OBJ", Align::Right),
+            ("OBJECT", Align::Right),
             ("SIZE", Align::Right),
             ("WRITTEN", Align::Left),
         ]);
