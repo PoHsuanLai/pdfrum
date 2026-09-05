@@ -801,6 +801,21 @@ paid here. Once they are, `ratchet update` records the whole set.
 
 ## Performance (`docs/status/M13-perf-baseline.md`)
 
+- ~~**Warm open: the `BTreeMap` half of the xref chain**~~ — landed
+  2026-09-06 (`docs/status/open-pass.md`). The fixable 52% that
+  `docs/benchmarks/losses-explained.md`'s warm-open row named: the merged
+  table is now a slot vector indexed by object number, not a
+  `BTreeMap<u32, XEntry>`. `BTreeMap::insert` gone from the profile,
+  `merge_up` 1 087 558 → 127 989 `Ir`; open `Ir` −49.3% on
+  `text_quick_start`, −67.1% on `forms_widgets_407` (9950 objects, the
+  corpus's largest xref); render and text `Ir` improved too, so lookups did
+  not regress. Board 0 changed rows of 1759, all 770 `FRC`/`bug_*`
+  damaged-file rows unchanged. **Still open from that row:** the 14.2%
+  eager page walk stays on purpose (it buys an infallible `page_count()`
+  and the damaged-file recovery), and a wall-clock number for the harness's
+  open column is still owed — this machine ran at load 20–40 of 32 cores
+  throughout and could not resolve the change; re-run `benches/compare`
+  `--label open` on an idle box.
 - ~~`forms_combo_box` third cost~~ — landed 30c0419 (2026-09-03): an AGG
   clip push allocated, walked and cloned a page-sized coverage plane per
   appearance form; forms geomean 2.29x → 1.17x, `combo_box` 3.76x → 1.54x,
