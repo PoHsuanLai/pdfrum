@@ -529,13 +529,20 @@ enum Extract {
         json: JsonArgs,
     },
     /// Each page as Markdown: the structure tree where there is one,
-    /// typography where there is not.
+    /// typography where there is not. More than one page is read as a
+    /// document, running headers and footers dropped.
     Markdown {
         #[command(flatten)]
         input: Input,
         /// Pages to convert, 1-based. All by default.
         #[arg(long, value_name = "RANGE")]
         pages: Option<String>,
+        /// Write every image the Markdown shows into this directory — JPEG,
+        /// JPEG 2000, JBIG2 and CCITT data as it is in the file, everything
+        /// else decoded to PNG — and link it; without this every image is
+        /// `![alt](image)`.
+        #[arg(short, long, value_name = "DIR")]
+        output: Option<PathBuf>,
         /// One JSON document: an array of `{page, markdown}`.
         #[arg(long)]
         json: bool,
@@ -814,9 +821,18 @@ fn run_extract(
         Extract::Words { input, pages, json } => {
             cmd::extract::words(&input.file, password, pages.as_deref(), json.mode(), term)
         }
-        Extract::Markdown { input, pages, json } => {
-            cmd::extract::markdown(&input.file, password, pages.as_deref(), json)
-        }
+        Extract::Markdown {
+            input,
+            pages,
+            output,
+            json,
+        } => cmd::extract::markdown(
+            &input.file,
+            password,
+            pages.as_deref(),
+            output.as_deref(),
+            json,
+        ),
         Extract::Links { input, pages, json } => {
             cmd::extract::links(&input.file, password, pages.as_deref(), json.mode(), term)
         }
