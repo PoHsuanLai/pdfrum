@@ -9,7 +9,8 @@
 //! `snake_case` keys that do not change between releases. Notices — a rebuilt
 //! cross-reference table, a dropped object — go to stderr, so a pipe never
 //! sees them. Exit codes: 0, 1 for an error, 2 for a usage mistake (clap's),
-//! and 3 from `doctor --strict` when the parser had something to report.
+//! 3 from `doctor --strict` when the parser had something to report, and 4
+//! when `--max-pixels` or `--time-limit` refused the work.
 
 mod cmd;
 mod out;
@@ -21,9 +22,11 @@ mod term;
 
 use std::path::PathBuf;
 use std::process::ExitCode;
+use std::time::Duration;
 
 use clap::{Args, Parser, Subcommand};
 use clap_complete::Shell;
+use pdfrum::{Deadline, Limits};
 
 /// Inspect, render and extract from PDF files.
 #[derive(Parser)]
@@ -67,8 +70,62 @@ struct Cli {
     #[arg(short, long, global = true)]
     verbose: bool,
 
+    /// A cap on any render, in pixels: `100M`, `2G`, or a plain number. A
+    /// page that would come out larger — `render`, `preview`, `view`,
+    /// `diff --visual`, the session's `render` — is refused with exit 4
+    /// before anything is drawn.
+    #[arg(long, global = true, value_name = "N", value_parser = parse_pixels)]
+    max_pixels: Option<u64>,
+
+    /// The whole command's time budget: `500ms`, `5s`, `2m`. Work past it
+    /// stops where it is and the command exits 4. In `serve`, each
+    /// document's budget from its `open`, unless the request says otherwise.
+    #[arg(long, global = true, value_name = "DURATION", value_parser = parse_duration)]
+    time_limit: Option<Duration>,
+
     #[command(subcommand)]
     command: Command,
+}
+
+/// `--max-pixels`: digits, with `K`, `M` or `G` for thousands, millions
+/// or billions of them, so `100M` is 100 000 000. Nothing else — not `MiB`,
+/// not a sign, not a decimal — so the number a script writes is the number
+/// the cap has.
+fn parse_pixels(text: &str) -> Result<u64, String> {
+    const UNITS: [(char, u64); 3] = [('K', 1_000), ('M', 1_000_000), ('G', 1_000_000_000)];
+    let (digits, factor) = UNITS
+        .iter()
+        .find_map(|&(unit, factor)| {
+            text.strip_suffix(unit)
+                .or_else(|| text.strip_suffix(unit.to_ascii_lowercase()))
+                .map(|digits| (digits, factor))
+        })
+        .unwrap_or((text, 1));
+    let wrong = || format!("{text:?} is not a number of pixels; `100M`, `2G` or `4000000`");
+    if digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_digit()) {
+        return Err(wrong());
+    }
+    let count: u64 = digits.parse().map_err(|_| wrong())?;
+    count.checked_mul(factor).ok_or_else(wrong)
+}
+
+/// `--time-limit`: digits and a unit, `ms`, `s`, `m` or `h`. A bare number
+/// is refused rather than guessed at.
+fn parse_duration(text: &str) -> Result<Duration, String> {
+    const UNITS: [(&str, u64); 4] = [("ms", 1), ("s", 1_000), ("m", 60_000), ("h", 3_600_000)];
+    let wrong = || format!("{text:?} is not a duration; `500ms`, `5s`, `2m` or `1h`");
+    let (digits, millis) = UNITS
+        .iter()
+        .find_map(|&(unit, millis)| text.strip_suffix(unit).map(|digits| (digits, millis)))
+        .ok_or_else(wrong)?;
+    if digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_digit()) {
+        return Err(wrong());
+    }
+    let count: u64 = digits.parse().map_err(|_| wrong())?;
+    count
+        .checked_mul(millis)
+        .map(Duration::from_millis)
+        .ok_or_else(wrong)
 }
 
 #[derive(Subcommand)]
@@ -884,6 +941,16 @@ struct SearchArgs {
     json: JsonArgs,
 }
 
+/// The ceilings the global flags set; the deadline is armed here, once, so
+/// the budget is the whole command's.
+fn limits(cli: &Cli) -> Limits {
+    Limits {
+        max_render_pixels: cli.max_pixels,
+        deadline: cli.time_limit.map(Deadline::after),
+        ..Limits::default()
+    }
+}
+
 fn main() -> ExitCode {
     let cli = Cli::parse();
     out::set_verbosity(if cli.quiet {
@@ -893,6 +960,7 @@ fn main() -> ExitCode {
     } else {
         out::Verbosity::Normal
     });
+    out::set_limits(limits(&cli));
     let password = cli.password.as_deref();
     let term = term::Term::detect(cli.color, cli.hyperlinks, cli.graphics);
     let outcome = match cli.command {
@@ -980,7 +1048,7 @@ fn main() -> ExitCode {
         Ok(code) => code,
         Err(err) => {
             out::error(term, &err);
-            ExitCode::from(1)
+            out::exit_code(&err)
         }
     }
 }
@@ -1401,5 +1469,36 @@ fn run_forms(what: Forms, password: Option<&str>, term: term::Term) -> anyhow::R
             save.deterministic,
             term,
         ),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use super::{parse_duration, parse_pixels};
+
+    #[test]
+    fn a_pixel_count_takes_k_m_g_and_bare_digits_and_nothing_else() {
+        assert_eq!(parse_pixels("100M"), Ok(100_000_000));
+        assert_eq!(parse_pixels("2G"), Ok(2_000_000_000));
+        assert_eq!(parse_pixels("64k"), Ok(64_000));
+        assert_eq!(parse_pixels("4000000"), Ok(4_000_000));
+        assert_eq!(parse_pixels("0"), Ok(0));
+        for junk in ["", "M", "lots", "1.5M", "-1", "+1", "100MiB", "1e6", " 1"] {
+            assert!(parse_pixels(junk).is_err(), "{junk:?} was taken");
+        }
+        assert!(parse_pixels("99999999999G").is_err(), "overflow is refused");
+    }
+
+    #[test]
+    fn a_duration_needs_a_unit() {
+        assert_eq!(parse_duration("500ms"), Ok(Duration::from_millis(500)));
+        assert_eq!(parse_duration("5s"), Ok(Duration::from_secs(5)));
+        assert_eq!(parse_duration("2m"), Ok(Duration::from_mins(2)));
+        assert_eq!(parse_duration("1h"), Ok(Duration::from_hours(1)));
+        for junk in ["", "5", "s", "1.5s", "-1s", "5 s", "5sec", "1d"] {
+            assert!(parse_duration(junk).is_err(), "{junk:?} was taken");
+        }
     }
 }

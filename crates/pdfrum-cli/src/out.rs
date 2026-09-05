@@ -4,10 +4,11 @@
 use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
+use std::sync::OnceLock;
 use std::sync::atomic::{AtomicU8, Ordering};
 
 use anyhow::{Context, Result, bail};
-use pdfrum::{Document, OpenOptions, Rect};
+use pdfrum::{Document, Limits, OpenOptions, Rect};
 use serde::Serialize;
 
 use crate::term::{Style, Term};
@@ -45,14 +46,59 @@ pub fn verbose() -> bool {
     VERBOSITY.load(Ordering::Relaxed) == 2
 }
 
-/// Open `file`, with `password` when one was given.
+/// The ceilings `--max-pixels` and `--time-limit` put on the run. Set once
+/// by `main` before any command runs, like the verbosity, and read by
+/// every open, so no command carries them; the deadline is armed when
+/// they are set, one budget for the whole command.
+static LIMITS: OnceLock<Limits> = OnceLock::new();
+
+pub fn set_limits(limits: Limits) {
+    // Set once, before any command runs; a second set changes nothing.
+    let _ = LIMITS.set(limits);
+}
+
+/// The run's limits: what `main` set, or the defaults, which cap nothing.
+pub fn limits() -> Limits {
+    LIMITS.get().cloned().unwrap_or_default()
+}
+
+/// The exit code a refusal earns: 4 when `err` is a ceiling the run set
+/// tripping (`--max-pixels`, `--time-limit`), 1 for a broken file or
+/// anything else, so a script can tell a refused job from a bad one.
+pub fn exit_code(err: &anyhow::Error) -> ExitCode {
+    if is_limit(err) {
+        ExitCode::from(4)
+    } else {
+        ExitCode::from(1)
+    }
+}
+
+/// Whether `err` is the library's `Error::Limit`: a cap or a deadline of
+/// `Limits`, not a fault in the document.
+pub fn is_limit(err: &anyhow::Error) -> bool {
+    err.chain().any(|cause| {
+        matches!(
+            cause.downcast_ref::<pdfrum::Error>(),
+            Some(pdfrum::Error::Limit(_))
+        ) || cause.downcast_ref::<pdfrum::LimitExceeded>().is_some()
+    })
+}
+
+/// Open `file`, with `password` when one was given, under the run's
+/// [`limits`].
 ///
 /// An encrypted file with no password is the one error a user hits most, so
 /// it names the flag that fixes it. A file that needed recovery gets one
 /// notice — or, under `--verbose`, one line per diagnostic, the same list
 /// `doctor` prints — and under `--quiet` nothing.
 pub fn open(file: &Path, password: Option<&str>) -> Result<Document> {
-    let doc = open_quietly(file, password)?;
+    open_with(file, password, &limits())
+}
+
+/// [`open`] under `limits` of the caller's own: the session's, which arms
+/// a deadline per document rather than per run.
+pub fn open_with(file: &Path, password: Option<&str>, limits: &Limits) -> Result<Document> {
+    let doc = open_quietly_with(file, password, limits)?;
     if doc.diagnostics().is_empty() || quiet() {
         return Ok(doc);
     }
@@ -84,13 +130,14 @@ pub fn open(file: &Path, password: Option<&str>) -> Result<Document> {
 /// [`open`] without the notice — for `doctor`, whose whole output is the
 /// notices.
 pub fn open_quietly(file: &Path, password: Option<&str>) -> Result<Document> {
+    open_quietly_with(file, password, &limits())
+}
+
+fn open_quietly_with(file: &Path, password: Option<&str>, limits: &Limits) -> Result<Document> {
     if is_stdin(file) {
-        return open_input(password);
+        return open_input(password, limits);
     }
-    let first = match password {
-        Some(password) => Document::open_with_password(file, password.as_bytes()),
-        None => Document::open(file),
-    };
+    let first = Document::open_with(file, &options(password, limits));
     let doc = match first {
         // No password was given, the file wants one, and a person is at the
         // keyboard: ask once, silently, the way `ssh` does.
@@ -101,7 +148,7 @@ pub fn open_quietly(file: &Path, password: Option<&str>) -> Result<Document> {
         {
             let typed = rpassword::prompt_password(format!("password for {}: ", file.display()))
                 .context("cannot read a password")?;
-            Document::open_with_password(file, typed.as_bytes())
+            Document::open_with(file, &options(Some(&typed), limits))
         }
         other => other,
     };
@@ -115,24 +162,41 @@ pub fn is_stdin(file: &Path) -> bool {
 
 /// The document on stdin, read whole: a PDF's cross-reference table is at
 /// its end, so there is nothing to stream.
-fn open_input(password: Option<&str>) -> Result<Document> {
+fn open_input(password: Option<&str>, limits: &Limits) -> Result<Document> {
     use std::io::Read;
     let mut bytes = Vec::new();
     std::io::stdin()
         .lock()
         .read_to_end(&mut bytes)
         .context("cannot read stdin")?;
-    open_bytes(bytes, password).context("cannot open -")
+    open_bytes_with(bytes, password, limits).context("cannot open -")
 }
 
 /// A document from bytes already in hand — stdin, or a file this run wrote
-/// and reads back.
+/// and reads back — under the run's [`limits`].
 pub fn open_bytes(bytes: Vec<u8>, password: Option<&str>) -> Result<Document> {
-    let options = OpenOptions {
+    open_bytes_with(bytes, password, &limits())
+}
+
+/// [`open_bytes`] under `limits` of the caller's own.
+pub fn open_bytes_with(
+    bytes: Vec<u8>,
+    password: Option<&str>,
+    limits: &Limits,
+) -> Result<Document> {
+    Ok(Document::from_bytes_with(
+        bytes.into(),
+        &options(password, limits),
+    )?)
+}
+
+/// The facade's options for one open: the password, and the run's or the
+/// caller's limits.
+fn options(password: Option<&str>, limits: &Limits) -> OpenOptions {
+    OpenOptions {
         password: password.map(|p| p.as_bytes().to_vec()),
-        ..OpenOptions::default()
-    };
-    Ok(Document::from_bytes_with(bytes.into(), &options)?)
+        limits: limits.clone(),
+    }
 }
 
 /// The input's name without directory or extension, for the files a command
@@ -180,23 +244,37 @@ pub fn error_line(err: &anyhow::Error) -> String {
     line
 }
 
+/// How a run over several files went wrong, if it did, for the exit code
+/// at the end: a limit that tripped outranks a broken file, as it does
+/// for one file.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Failed {
+    Nothing,
+    File,
+    Limit,
+}
+
 /// `each` over several files the way `grep` goes: a file that fails is
 /// reported on stderr and the run continues with the next. Returns what
-/// the files that worked gave, and whether any failed — which is exit 1 at
-/// the end, after everything that could be answered was.
+/// the files that worked gave, and how the rest failed — which is the exit
+/// code at the end, after everything that could be answered was.
 pub fn per_file<T>(
     files: &[PathBuf],
     term: Term,
     mut each: impl FnMut(&Path) -> Result<T>,
-) -> (Vec<T>, bool) {
+) -> (Vec<T>, Failed) {
     let mut results = Vec::with_capacity(files.len());
-    let mut failed = false;
+    let mut failed = Failed::Nothing;
     for file in files {
         match each(file) {
             Ok(result) => results.push(result),
             Err(err) => {
                 error(term, &err);
-                failed = true;
+                failed = failed.max(if is_limit(&err) {
+                    Failed::Limit
+                } else {
+                    Failed::File
+                });
             }
         }
     }
@@ -215,9 +293,14 @@ pub fn documents<T: Serialize>(files: &[PathBuf], reports: &[T]) -> Result<()> {
     json(&reports)
 }
 
-/// Exit 1 when a file among several failed, else `otherwise`.
-pub fn exit(failed: bool, otherwise: ExitCode) -> ExitCode {
-    if failed { ExitCode::from(1) } else { otherwise }
+/// Exit 1 when a file among several failed, 4 when a limit tripped, else
+/// `otherwise`.
+pub fn exit(failed: Failed, otherwise: ExitCode) -> ExitCode {
+    match failed {
+        Failed::Nothing => otherwise,
+        Failed::File => ExitCode::from(1),
+        Failed::Limit => ExitCode::from(4),
+    }
 }
 
 /// Where a writing command's result goes: the file named, or stdout for
