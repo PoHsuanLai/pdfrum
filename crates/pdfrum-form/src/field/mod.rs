@@ -39,6 +39,16 @@ pub use toggle::{ToggleKind, ToggleState, activate};
 /// `/Ff` bit with its own meaning, and the alternative the lint suggests — a
 /// packed flag word — is exactly the design this record exists to replace,
 /// where the same bit means different things to different field kinds.
+///
+/// ```
+/// use pdfrum_form::TextConfig;
+///
+/// // The default record is the plain single-line field with no length limit;
+/// // a real field's switches come from [`TextConfig::read`].
+/// let config = TextConfig::default();
+/// assert!(!config.multi_line);
+/// assert_eq!(config.max_len, None);
+/// ```
 #[allow(clippy::struct_excessive_bools)]
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct TextConfig {
@@ -68,6 +78,22 @@ impl TextConfig {
     /// unless it is explicitly told not to, and that is true whether or not
     /// it is multiline — the two cases differ in what else they turn on, not
     /// in whether they scroll.
+    ///
+    /// ```
+    /// use pdfrum_doc::form::FieldFlags;
+    /// use pdfrum_form::TextConfig;
+    ///
+    /// // Multiline (`/Ff` bit 13) still scrolls, and a zero `/MaxLen` is no
+    /// // limit rather than a limit of nothing.
+    /// let config = TextConfig::read(FieldFlags::from_bits(1 << 12), Some(0));
+    /// assert!(config.multi_line);
+    /// assert!(config.auto_scroll);
+    /// assert_eq!(config.max_len, None);
+    /// assert!(config.undo_enabled, "undo is on for every text field");
+    ///
+    /// // Only the do-not-scroll bit (24) turns scrolling off.
+    /// assert!(!TextConfig::read(FieldFlags::from_bits(1 << 23), None).auto_scroll);
+    /// ```
     #[must_use]
     pub fn read(flags: FieldFlags, max_len: Option<u32>) -> TextConfig {
         TextConfig {
@@ -88,6 +114,15 @@ impl TextConfig {
 ///
 /// Four independent `/Ff` bits; see [`TextConfig`] for why they stay separate
 /// named fields rather than becoming a mask.
+///
+/// ```
+/// use pdfrum_form::ChoiceConfig;
+///
+/// // The default record is a plain single-select list box.
+/// let config = ChoiceConfig::default();
+/// assert!(!config.combo);
+/// assert!(!config.multi_select);
+/// ```
 #[allow(clippy::struct_excessive_bools)]
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ChoiceConfig {
@@ -103,6 +138,26 @@ pub struct ChoiceConfig {
 
 impl ChoiceConfig {
     /// Reads a choice field's configuration from its flags.
+    ///
+    /// The editable bit is a combo box's alone and the multi-select bit is a
+    /// list box's alone: the same bit set on the other kind reads as nothing,
+    /// because it does not mean that there.
+    ///
+    /// ```
+    /// use pdfrum_doc::form::FieldFlags;
+    /// use pdfrum_form::ChoiceConfig;
+    ///
+    /// // Combo (bit 18) plus editable (bit 19).
+    /// let combo = ChoiceConfig::read(FieldFlags::from_bits((1 << 17) | (1 << 18)));
+    /// assert!(combo.combo && combo.editable);
+    ///
+    /// // The same editable bit on a list box is not read as anything.
+    /// let list = ChoiceConfig::read(FieldFlags::from_bits(1 << 18));
+    /// assert!(!list.combo && !list.editable);
+    ///
+    /// // And multi-select (bit 22) is only a list box's.
+    /// assert!(ChoiceConfig::read(FieldFlags::from_bits(1 << 21)).multi_select);
+    /// ```
     #[must_use]
     pub fn read(flags: FieldFlags) -> ChoiceConfig {
         ChoiceConfig {
@@ -117,6 +172,13 @@ impl ChoiceConfig {
 }
 
 /// A field's interaction state, one variant per behaviour family.
+///
+/// ```
+/// use pdfrum_form::{ChoiceConfig, ChoiceState, FieldState};
+///
+/// let state = FieldState::Choice(ChoiceState::new(Vec::new(), ChoiceConfig::default()));
+/// assert!(matches!(state, FieldState::Choice(_)));
+/// ```
 #[derive(Debug, Clone, PartialEq)]
 pub enum FieldState {
     /// A text field, or the text half of an editable combo box.
@@ -137,6 +199,23 @@ pub enum FieldState {
 /// to remember to keep in step. `text` used to be a bare `String` beside a
 /// detached `UndoStack`, and the two could disagree — undoing moved one and
 /// not the other.
+///
+/// ```
+/// use pdfrum_doc::vt::{Config, Metrics};
+/// use pdfrum_form::{TextConfig, TextState};
+///
+/// let metrics = Metrics { width: &|_| 1000, ascent: 800, descent: -200 };
+/// let config = Config {
+///     plate: kurbo::Rect::new(0.0, 0.0, 1000.0, 20.0),
+///     font_size: 1.0,
+///     ..Default::default()
+/// };
+/// let state = TextState {
+///     edit: pdfrum_form::edit::TextEdit::new("hello", &config, &metrics, true),
+///     config: TextConfig::default(),
+/// };
+/// assert_eq!(state.text(), "hello");
+/// ```
 #[derive(Debug, Clone, PartialEq)]
 pub struct TextState {
     /// The live edit control: text, layout, caret, selection, undo.
@@ -148,6 +227,28 @@ pub struct TextState {
 impl TextState {
     /// The text as the user has it, which may differ from the field's stored
     /// value until the edit commits.
+    ///
+    /// ```
+    /// use pdfrum_doc::vt::{Config, Metrics};
+    /// use pdfrum_form::{TextConfig, TextState};
+    ///
+    /// let metrics = Metrics { width: &|_| 1000, ascent: 800, descent: -200 };
+    /// let config = Config {
+    ///     plate: kurbo::Rect::new(0.0, 0.0, 1000.0, 20.0),
+    ///     font_size: 1.0,
+    ///     ..Default::default()
+    /// };
+    /// let mut state = TextState {
+    ///     edit: pdfrum_form::edit::TextEdit::new("old", &config, &metrics, true),
+    ///     config: TextConfig::default(),
+    /// };
+    ///
+    /// // Typing moves the live text; the field's stored `/V` is untouched
+    /// // until the edit commits.
+    /// state.edit.set_caret_index(3);
+    /// pdfrum_form::edit::ops::insert_char(&mut state.edit, &config, &metrics, 'X', None);
+    /// assert_eq!(state.text(), "oldX");
+    /// ```
     #[must_use]
     pub fn text(&self) -> &str {
         &self.edit.text
@@ -155,6 +256,14 @@ impl TextState {
 }
 
 /// One row of a choice field.
+///
+/// ```
+/// use pdfrum_form::field::ChoiceOption;
+///
+/// // A row whose stored value differs from what it displays.
+/// let row = ChoiceOption { label: "Deutschland".to_string(), value: "DE".to_string() };
+/// assert_eq!(row.value, "DE");
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ChoiceOption {
     /// What the row displays.
@@ -164,6 +273,18 @@ pub struct ChoiceOption {
 }
 
 /// A combo box or list box's interaction state.
+///
+/// ```
+/// use pdfrum_form::field::{ChoiceConfig, ChoiceOption, ChoiceState, choice};
+///
+/// let rows = ["Apple", "Banana"]
+///     .map(|l| ChoiceOption { label: l.to_string(), value: l.to_string() })
+///     .to_vec();
+/// let mut state = ChoiceState::new(rows, ChoiceConfig::default());
+/// choice::select_only(&mut state, 1);
+/// assert_eq!(state.focused_text(), "Banana");
+/// assert!(!state.popup_open, "nothing a file says opens a dropdown");
+/// ```
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct ChoiceState {
     /// The rows.
@@ -220,6 +341,18 @@ pub struct ChoiceState {
 
 impl ChoiceState {
     /// A choice field with the given rows and configuration.
+    ///
+    /// Nothing is selected and nothing has been acted upon yet, so the field
+    /// reports no focused text at all.
+    ///
+    /// ```
+    /// use pdfrum_form::{ChoiceConfig, ChoiceState};
+    ///
+    /// let state = ChoiceState::new(Vec::new(), ChoiceConfig::default());
+    /// assert!(state.selected.is_empty());
+    /// assert_eq!(state.caret_index, None);
+    /// assert_eq!(state.focused_text(), "");
+    /// ```
     #[must_use]
     pub fn new(options: Vec<ChoiceOption>, config: ChoiceConfig) -> ChoiceState {
         ChoiceState {
@@ -234,6 +367,24 @@ impl ChoiceState {
     /// The row last acted upon for a choice field, which for a single-select
     /// field is the same thing as "the selected row" and for a multi-select
     /// one deliberately is not.
+    ///
+    /// ```
+    /// use pdfrum_form::field::{ChoiceConfig, ChoiceOption, ChoiceState};
+    ///
+    /// let rows = ["Apple", "Banana", "Cherry", "Date"]
+    ///     .map(|l| ChoiceOption { label: l.to_string(), value: l.to_string() })
+    ///     .to_vec();
+    /// let mut state = ChoiceState::new(rows, ChoiceConfig::default());
+    /// state.selected.insert(0);
+    /// state.selected.insert(2);
+    ///
+    /// // With nothing acted upon, the first selected row answers.
+    /// assert_eq!(state.focused_text(), "Apple");
+    ///
+    /// // Acting on a row moves it — even to a row that is not selected.
+    /// state.caret_index = Some(3);
+    /// assert_eq!(state.focused_text(), "Date");
+    /// ```
     #[must_use]
     pub fn focused_text(&self) -> String {
         // An **editable** combo box reports what is in its text half, which
@@ -259,6 +410,16 @@ impl ChoiceState {
 /// Returns `None` for the two kinds that never get interaction state at all:
 /// a signature widget, which is never given an appearance and never takes an
 /// edit, and anything the classifier could not name.
+///
+/// ```
+/// use pdfrum_doc::form::FieldKind;
+/// use pdfrum_form::field::{Family, family_of};
+///
+/// // A combo box and a list box are one family, not two.
+/// assert_eq!(family_of(FieldKind::Combo), Some(Family::Choice));
+/// assert_eq!(family_of(FieldKind::List), Some(Family::Choice));
+/// assert_eq!(family_of(FieldKind::Signature), None);
+/// ```
 #[must_use]
 pub fn family_of(kind: FieldKind) -> Option<Family> {
     match kind {
@@ -271,6 +432,14 @@ pub fn family_of(kind: FieldKind) -> Option<Family> {
 }
 
 /// The four behaviour families.
+///
+/// ```
+/// use pdfrum_doc::form::FieldKind;
+/// use pdfrum_form::field::{Family, family_of};
+///
+/// assert_eq!(family_of(FieldKind::Check), Some(Family::Toggle));
+/// assert_eq!(family_of(FieldKind::Radio), Some(Family::Toggle));
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Family {
     /// A text field.

@@ -14,6 +14,15 @@
 //! the diff here will be a recognizable one-line change rather than a mystery.
 
 /// A push button's interaction state.
+///
+/// ```
+/// use pdfrum_form::field::ButtonState;
+///
+/// let mut state = ButtonState::new();
+/// assert!(!state.pressed);
+/// state.pressed = true;
+/// assert!(state.pressed);
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ButtonState {
     /// Whether the button is showing its pressed appearance.
@@ -22,6 +31,12 @@ pub struct ButtonState {
 
 impl ButtonState {
     /// A released button.
+    ///
+    /// ```
+    /// use pdfrum_form::field::ButtonState;
+    ///
+    /// assert!(!ButtonState::new().pressed);
+    /// ```
     #[must_use]
     pub fn new() -> ButtonState {
         ButtonState::default()

@@ -20,6 +20,22 @@ use super::{ChoiceState, TextConfig};
 /// case-insensitively. **When nothing matches it returns the last row
 /// probed** rather than reporting failure — which is why consecutive
 /// characters read as independent jumps rather than as a growing prefix.
+///
+/// ```
+/// use pdfrum_form::field::choice::find_next;
+///
+/// let labels: Vec<String> =
+///     ["Apple", "Banana", "Cherry"].iter().map(|s| s.to_string()).collect();
+///
+/// // The scan is circular: from the last row it wraps to the first.
+/// assert_eq!(find_next(&labels, 2, 'a'), Some(0));
+///
+/// // Nothing starting with Z: the answer is the last row probed, not `None`.
+/// assert_eq!(find_next(&labels, 1, 'Z'), Some(1));
+///
+/// // `None` only when there are no rows at all.
+/// assert_eq!(find_next(&[], 0, 'A'), None);
+/// ```
 #[must_use]
 pub fn find_next(options: &[String], from: usize, ch: char) -> Option<usize> {
     if options.is_empty() {
@@ -43,6 +59,21 @@ pub fn find_next(options: &[String], from: usize, ch: char) -> Option<usize> {
 }
 
 /// Whether a row index names a row of this field.
+///
+/// ```
+/// use pdfrum_form::field::{ChoiceConfig, ChoiceOption, ChoiceState, choice};
+///
+/// fn rows(labels: &[&str]) -> Vec<ChoiceOption> {
+///     labels
+///         .iter()
+///         .map(|l| ChoiceOption { label: (*l).to_string(), value: (*l).to_string() })
+///         .collect()
+/// }
+///
+/// let state = ChoiceState::new(rows(&["Apple", "Banana"]), ChoiceConfig::default());
+/// assert!(choice::in_range(&state, 1));
+/// assert!(!choice::in_range(&state, 2));
+/// ```
 #[must_use]
 pub fn in_range(state: &ChoiceState, index: usize) -> bool {
     index < state.options.len()
@@ -57,6 +88,31 @@ pub fn in_range(state: &ChoiceState, index: usize) -> bool {
 /// - a combo box **rejects** every clear, whatever the row;
 /// - a list box **accepts** both, including a redundant one, and moves the
 ///   row last acted upon either way.
+///
+/// ```
+/// use pdfrum_form::field::{ChoiceConfig, ChoiceOption, ChoiceState, choice};
+///
+/// fn rows(labels: &[&str]) -> Vec<ChoiceOption> {
+///     labels
+///         .iter()
+///         .map(|l| ChoiceOption { label: (*l).to_string(), value: (*l).to_string() })
+///         .collect()
+/// }
+///
+/// let combo_config = ChoiceConfig { combo: true, ..ChoiceConfig::default() };
+/// let mut combo = ChoiceState::new(rows(&["Apple", "Banana"]), combo_config);
+/// assert!(choice::set_index_selected(&mut combo, 1, true));
+/// assert!(!choice::set_index_selected(&mut combo, 1, false), "no empty state");
+/// assert!(choice::is_index_selected(&combo, 1));
+///
+/// // A list box accepts a clear that removes nothing — and still moves the
+/// // caret, so its focused text changes.
+/// let mut list = ChoiceState::new(rows(&["Apple", "Banana"]), ChoiceConfig::default());
+/// choice::set_index_selected(&mut list, 0, true);
+/// assert!(choice::set_index_selected(&mut list, 1, false));
+/// assert!(choice::is_index_selected(&list, 0));
+/// assert_eq!(list.focused_text(), "Banana");
+/// ```
 pub fn set_index_selected(state: &mut ChoiceState, index: usize, selected: bool) -> bool {
     if !in_range(state, index) {
         return false;
@@ -88,12 +144,48 @@ pub fn set_index_selected(state: &mut ChoiceState, index: usize, selected: bool)
 }
 
 /// Whether a row is selected. An out-of-range row is not.
+///
+/// ```
+/// use pdfrum_form::field::{ChoiceConfig, ChoiceOption, ChoiceState, choice};
+///
+/// fn rows(labels: &[&str]) -> Vec<ChoiceOption> {
+///     labels
+///         .iter()
+///         .map(|l| ChoiceOption { label: (*l).to_string(), value: (*l).to_string() })
+///         .collect()
+/// }
+///
+/// let mut state = ChoiceState::new(rows(&["Apple", "Banana"]), ChoiceConfig::default());
+/// choice::select_only(&mut state, 0);
+/// assert!(choice::is_index_selected(&state, 0));
+/// assert!(!choice::is_index_selected(&state, 99));
+/// ```
 #[must_use]
 pub fn is_index_selected(state: &ChoiceState, index: usize) -> bool {
     in_range(state, index) && state.selected.contains(&index)
 }
 
 /// Selects one row by a click or a keyboard move, clearing the others.
+///
+/// Unlike a range extend, this **re-anchors**: the row it selects becomes the
+/// pivot a later shift-click measures from.
+///
+/// ```
+/// use pdfrum_form::field::{ChoiceConfig, ChoiceOption, ChoiceState, choice};
+///
+/// fn rows(labels: &[&str]) -> Vec<ChoiceOption> {
+///     labels
+///         .iter()
+///         .map(|l| ChoiceOption { label: (*l).to_string(), value: (*l).to_string() })
+///         .collect()
+/// }
+///
+/// let config = ChoiceConfig { multi_select: true, ..ChoiceConfig::default() };
+/// let mut list = ChoiceState::new(rows(&["Apple", "Banana", "Cherry"]), config);
+/// assert!(choice::select_only(&mut list, 1));
+/// assert_eq!(list.anchor, Some(1));
+/// assert!(!choice::select_only(&mut list, 9), "out of range is rejected");
+/// ```
 pub fn select_only(state: &mut ChoiceState, index: usize) -> bool {
     if !in_range(state, index) {
         return false;
@@ -110,6 +202,29 @@ pub fn select_only(state: &mut ChoiceState, index: usize) -> bool {
 ///
 /// The anchor is deliberately **not** moved, so successive shift-clicks all
 /// pivot on the row the plain click established.
+///
+/// ```
+/// use pdfrum_form::field::{ChoiceConfig, ChoiceOption, ChoiceState, choice};
+///
+/// fn rows(labels: &[&str]) -> Vec<ChoiceOption> {
+///     labels
+///         .iter()
+///         .map(|l| ChoiceOption { label: (*l).to_string(), value: (*l).to_string() })
+///         .collect()
+/// }
+///
+/// let config = ChoiceConfig { multi_select: true, ..ChoiceConfig::default() };
+/// let mut list =
+///     ChoiceState::new(rows(&["Apple", "Banana", "Cherry", "Date"]), config);
+/// choice::select_only(&mut list, 1);
+/// choice::select_range_to(&mut list, 3);
+/// assert_eq!(list.selected.iter().copied().collect::<Vec<_>>(), [1, 2, 3]);
+/// assert_eq!(list.anchor, Some(1), "the pivot did not move");
+///
+/// // So a second extend measures from row 1 again, not from row 3.
+/// choice::select_range_to(&mut list, 2);
+/// assert_eq!(list.selected.iter().copied().collect::<Vec<_>>(), [1, 2]);
+/// ```
 pub fn select_range_to(state: &mut ChoiceState, index: usize) -> bool {
     if !in_range(state, index) {
         return false;
@@ -130,6 +245,28 @@ pub fn select_range_to(state: &mut ChoiceState, index: usize) -> bool {
 
 /// Toggles one row, keeping the rest. What an accelerator-click does on a
 /// multi-select list box, and it **does** re-anchor.
+///
+/// ```
+/// use pdfrum_form::field::{ChoiceConfig, ChoiceOption, ChoiceState, choice};
+///
+/// fn rows(labels: &[&str]) -> Vec<ChoiceOption> {
+///     labels
+///         .iter()
+///         .map(|l| ChoiceOption { label: (*l).to_string(), value: (*l).to_string() })
+///         .collect()
+/// }
+///
+/// let config = ChoiceConfig { multi_select: true, ..ChoiceConfig::default() };
+/// let mut list =
+///     ChoiceState::new(rows(&["Apple", "Banana", "Cherry", "Date"]), config);
+/// choice::select_only(&mut list, 0);
+/// choice::toggle_index(&mut list, 3);
+/// assert_eq!(list.selected.iter().copied().collect::<Vec<_>>(), [0, 3]);
+/// assert_eq!(list.anchor, Some(3), "unlike a range extend, this re-anchors");
+///
+/// choice::toggle_index(&mut list, 3);
+/// assert_eq!(list.selected.iter().copied().collect::<Vec<_>>(), [0]);
+/// ```
 pub fn toggle_index(state: &mut ChoiceState, index: usize) -> bool {
     if !in_range(state, index) {
         return false;
@@ -150,6 +287,25 @@ pub fn toggle_index(state: &mut ChoiceState, index: usize) -> bool {
 /// Moves the selection one row, which is what an arrow key does.
 ///
 /// Clamps at each end rather than wrapping or failing.
+///
+/// ```
+/// use pdfrum_form::field::{ChoiceConfig, ChoiceOption, ChoiceState, choice};
+///
+/// fn rows(labels: &[&str]) -> Vec<ChoiceOption> {
+///     labels
+///         .iter()
+///         .map(|l| ChoiceOption { label: (*l).to_string(), value: (*l).to_string() })
+///         .collect()
+/// }
+///
+/// let mut list = ChoiceState::new(rows(&["Apple", "Banana"]), ChoiceConfig::default());
+/// choice::select_only(&mut list, 0);
+/// choice::move_selection(&mut list, -1);
+/// assert!(choice::is_index_selected(&list, 0), "clamped at the top");
+///
+/// choice::move_selection(&mut list, 5);
+/// assert!(choice::is_index_selected(&list, 1), "clamped at the bottom");
+/// ```
 pub fn move_selection(state: &mut ChoiceState, delta: i32) -> bool {
     if state.options.is_empty() {
         return false;
@@ -184,6 +340,36 @@ pub fn move_selection(state: &mut ChoiceState, delta: i32) -> bool {
 ///
 /// [`move_selection`] is this function with both flags clear, and is kept
 /// because that is what most callers want.
+///
+/// ```
+/// use pdfrum_form::field::{ChoiceConfig, ChoiceOption, ChoiceState, choice};
+///
+/// fn rows(labels: &[&str]) -> Vec<ChoiceOption> {
+///     labels
+///         .iter()
+///         .map(|l| ChoiceOption { label: (*l).to_string(), value: (*l).to_string() })
+///         .collect()
+/// }
+///
+/// let config = ChoiceConfig { multi_select: true, ..ChoiceConfig::default() };
+/// let mut list =
+///     ChoiceState::new(rows(&["Apple", "Banana", "Cherry", "Date"]), config);
+/// choice::select_only(&mut list, 0);
+///
+/// // Ctrl walks the caret and leaves the selection exactly as it was.
+/// choice::move_caret_by(&mut list, 1, false, true);
+/// assert_eq!(list.caret_index, Some(1));
+/// assert_eq!(list.selected.iter().copied().collect::<Vec<_>>(), [0]);
+///
+/// // Shift extends from the anchor, which is still row 0.
+/// choice::move_caret_by(&mut list, 1, true, false);
+/// assert_eq!(list.selected.iter().copied().collect::<Vec<_>>(), [0, 1, 2]);
+///
+/// // Neither: the one row, and a new anchor.
+/// choice::move_caret_by(&mut list, 1, false, false);
+/// assert_eq!(list.selected.iter().copied().collect::<Vec<_>>(), [3]);
+/// assert_eq!(list.anchor, Some(3));
+/// ```
 pub fn move_caret_by(state: &mut ChoiceState, delta: i32, shift: bool, ctrl: bool) -> bool {
     if state.options.is_empty() {
         return false;
@@ -219,6 +405,30 @@ pub fn move_caret_by(state: &mut ChoiceState, delta: i32, shift: bool, ctrl: boo
 ///
 /// Returns whether a row was landed on. The search starts from the row last
 /// acted upon, so each character is its own jump.
+///
+/// ```
+/// use pdfrum_form::field::{ChoiceConfig, ChoiceOption, ChoiceState, choice};
+///
+/// fn rows(labels: &[&str]) -> Vec<ChoiceOption> {
+///     labels
+///         .iter()
+///         .map(|l| ChoiceOption { label: (*l).to_string(), value: (*l).to_string() })
+///         .collect()
+/// }
+///
+/// let config = ChoiceConfig { combo: true, ..ChoiceConfig::default() };
+/// let mut combo = ChoiceState::new(rows(&["Apple", "Banana", "Cherry"]), config);
+///
+/// // A, then B, then C lands on Cherry — not on a row starting "ABC".
+/// choice::type_ahead(&mut combo, 'A');
+/// choice::type_ahead(&mut combo, 'B');
+/// choice::type_ahead(&mut combo, 'C');
+/// assert_eq!(combo.focused_text(), "Cherry");
+///
+/// // The match ignores case.
+/// choice::type_ahead(&mut combo, 'b');
+/// assert_eq!(combo.focused_text(), "Banana");
+/// ```
 pub fn type_ahead(state: &mut ChoiceState, ch: char) -> bool {
     let labels: Vec<String> = state.options.iter().map(|o| o.label.clone()).collect();
     let from = state
@@ -237,6 +447,23 @@ pub fn type_ahead(state: &mut ChoiceState, ch: char) -> bool {
 /// **The value wins where the two disagree**, which is asserted by a fixture
 /// built to make them disagree. The index entry is consulted only when there
 /// is no value to read.
+///
+/// ```
+/// use pdfrum_form::field::choice::initial_selection;
+///
+/// let options: Vec<String> =
+///     ["Apple", "Banana", "Cherry"].iter().map(|s| s.to_string()).collect();
+///
+/// // The index entry answers only when there is no value.
+/// assert_eq!(initial_selection(&options, &[], &[2]).into_iter().collect::<Vec<_>>(), [2]);
+///
+/// // Where the two disagree, the value wins.
+/// let values = vec!["Banana".to_string()];
+/// assert_eq!(
+///     initial_selection(&options, &values, &[2]).into_iter().collect::<Vec<_>>(),
+///     [1]
+/// );
+/// ```
 #[must_use]
 pub fn initial_selection(
     options: &[String],
@@ -262,6 +489,17 @@ pub fn initial_selection(
 /// rows showing three at a time with the last row selected leaves row *eight*
 /// at the top rather than row nine: scrolling to nine would leave two empty
 /// rows below it. Reproduced as-asserted.
+///
+/// ```
+/// use pdfrum_form::field::choice::top_visible_for;
+///
+/// // Ten rows, three visible, the last row selected: the top row is 7.
+/// assert_eq!(top_visible_for(10, 3, 9), 7);
+/// // A selection that leaves a full box below it scrolls exactly to it.
+/// assert_eq!(top_visible_for(10, 3, 4), 4);
+/// // A list that fits needs no scrolling at all.
+/// assert_eq!(top_visible_for(3, 5, 2), 0);
+/// ```
 #[must_use]
 pub fn top_visible_for(count: usize, visible_rows: usize, first_selected: usize) -> usize {
     if visible_rows == 0 || count <= visible_rows {
@@ -277,6 +515,18 @@ pub fn top_visible_for(count: usize, visible_rows: usize, first_selected: usize)
 /// and a non-editable one's is read-only — it still holds text and still
 /// supports selecting and copying it, which is how a substring of a
 /// non-editable combo's value can be selected with the mouse.
+///
+/// ```
+/// use pdfrum_form::field::choice::combo_text_config;
+///
+/// let editable = combo_text_config(true, false);
+/// assert!(!editable.read_only);
+/// assert!(!editable.multi_line);
+/// assert_eq!(editable.max_len, None, "unlimited whatever the field says");
+///
+/// // A non-editable combo's text half is read-only but still present.
+/// assert!(combo_text_config(false, false).read_only);
+/// ```
 #[must_use]
 pub fn combo_text_config(editable: bool, read_only: bool) -> TextConfig {
     TextConfig {
@@ -299,6 +549,29 @@ pub fn combo_text_config(editable: bool, read_only: bool) -> TextConfig {
 /// which are the same operation — from scrolling on every step.
 ///
 /// Answers whether the view moved.
+///
+/// ```
+/// use pdfrum_form::field::{ChoiceConfig, ChoiceOption, ChoiceState, choice};
+///
+/// fn rows(labels: &[&str]) -> Vec<ChoiceOption> {
+///     labels
+///         .iter()
+///         .map(|l| ChoiceOption { label: (*l).to_string(), value: (*l).to_string() })
+///         .collect()
+/// }
+///
+/// let labels = ["a", "b", "c", "d", "e"];
+/// let mut list = ChoiceState::new(rows(&labels), ChoiceConfig::default());
+///
+/// // Row 2 is already among the three visible rows: nothing scrolls.
+/// assert!(!choice::scroll_into_view(&mut list, 2, 3));
+/// assert_eq!(list.top_visible, 0);
+///
+/// // Row 4 is past the bottom edge, so the view moves by exactly the
+/// // overshoot and the box stays full.
+/// assert!(choice::scroll_into_view(&mut list, 4, 3));
+/// assert_eq!(list.top_visible, 2);
+/// ```
 pub fn scroll_into_view(state: &mut ChoiceState, index: usize, visible_rows: usize) -> bool {
     if visible_rows == 0 {
         return false;
@@ -333,6 +606,35 @@ pub fn scroll_into_view(state: &mut ChoiceState, index: usize, visible_rows: usi
 ///
 /// Answers whether anything was carried across, which is `false` for a combo
 /// with no current selection.
+///
+/// ```
+/// use pdfrum_form::field::{ChoiceConfig, ChoiceOption, ChoiceState, choice};
+///
+/// fn rows(labels: &[&str]) -> Vec<ChoiceOption> {
+///     labels
+///         .iter()
+///         .map(|l| ChoiceOption { label: (*l).to_string(), value: (*l).to_string() })
+///         .collect()
+/// }
+///
+/// let metrics = pdfrum_doc::vt::Metrics { width: &|_| 1000, ascent: 800, descent: -200 };
+/// let config = pdfrum_doc::vt::Config {
+///     plate: kurbo::Rect::new(0.0, 0.0, 1000.0, 20.0),
+///     font_size: 1.0,
+///     ..Default::default()
+/// };
+///
+/// let combo_config =
+///     ChoiceConfig { combo: true, editable: true, ..ChoiceConfig::default() };
+/// let mut combo = ChoiceState::new(rows(&["Apple", "Banana"]), combo_config);
+///
+/// // Nothing chosen yet: there is nothing to carry across.
+/// assert!(!choice::set_select_text(&mut combo, &config, &metrics));
+///
+/// choice::select_only(&mut combo, 1);
+/// assert!(choice::set_select_text(&mut combo, &config, &metrics));
+/// assert_eq!(combo.edit_text, "Banana");
+/// ```
 pub fn set_select_text(
     state: &mut ChoiceState,
     config: &pdfrum_doc::vt::Config,
