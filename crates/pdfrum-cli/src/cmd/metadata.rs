@@ -81,19 +81,14 @@ pub fn apply(mut metadata: Metadata, changes: &Changes) -> Result<(Metadata, usi
     Ok((metadata, set, changes.clear.len()))
 }
 
-/// `doc` with its metadata changed, as the bytes of a saved file, and how
-/// many keys were set and cleared.
-pub fn set_bytes(
-    doc: &Document,
-    changes: &Changes,
-    deterministic: bool,
-) -> Result<(Vec<u8>, usize, usize)> {
-    let (metadata, set, cleared) = apply(doc.metadata(), changes)?;
+/// `doc` with `metadata` — [`apply`]'s result — as its `/Info`, as the
+/// bytes of a saved file.
+pub fn set_bytes(doc: &Document, metadata: &Metadata, deterministic: bool) -> Result<Vec<u8>> {
     let mut edit = doc.edit();
-    edit.set_metadata(&metadata);
+    edit.set_metadata(metadata);
     let mut bytes = Vec::new();
     edit.write_to(&mut bytes, &save_options(deterministic, doc.bytes()))?;
-    Ok((bytes, set, cleared))
+    Ok(bytes)
 }
 
 /// What `metadata set` was asked for.
@@ -110,7 +105,8 @@ pub struct Set<'a> {
 pub fn set(req: &Set<'_>, term: Term) -> Result<ExitCode> {
     let sink = out::Sink::new(req.output, "PDF")?;
     let doc = out::open(req.file, req.password)?;
-    let (bytes, set, cleared) = set_bytes(&doc, req.changes, req.deterministic)?;
+    let (metadata, set, cleared) = apply(doc.metadata(), req.changes)?;
+    let bytes = set_bytes(&doc, &metadata, req.deterministic)?;
     let mut detail = Vec::new();
     if set > 0 {
         detail.push(format!("{set} key{}", if set == 1 { "" } else { "s" }));
